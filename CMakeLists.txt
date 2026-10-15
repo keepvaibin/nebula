@@ -725,6 +725,8 @@ endforeach()
 # Ray-traced reflections and their EFB composite (runtime/src/gx/rt_reflections.hlsl).
 set(galaxy_rt_reflect_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/gx/rt_reflections.hlsl")
 foreach(galaxy_rt_pass reflect_memory_cs:ReflectMemoryCS:cs_6_5 reflect_trace_cs:ReflectTraceCS:cs_6_5
+        reflect_sky_cs:SkyCaptureCS:cs_6_5 reflect_draw_clear_cs:DrawLightClearCS:cs_6_5
+        reflect_draw_cs:DrawLightCS:cs_6_5
         reflect_temporal_cs:ReflectTemporalCS:cs_6_5 reflect_filter_a_cs:ReflectFilterACS:cs_6_5
         reflect_filter_cs:ReflectFilterCS:cs_6_5
         reflect_composite_vs:ReflectCompositeVS:vs_6_0 reflect_composite_ps:ReflectCompositePS:ps_6_0

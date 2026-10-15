@@ -4,9 +4,12 @@
 
 #include "rt_reflect_composite_ps.h"
 #include "rt_reflect_composite_vs.h"
+#include "rt_reflect_draw_clear_cs.h"
+#include "rt_reflect_draw_cs.h"
 #include "rt_reflect_filter_a_cs.h"
 #include "rt_reflect_filter_cs.h"
 #include "rt_reflect_memory_cs.h"
+#include "rt_reflect_sky_cs.h"
 #include "rt_reflect_temporal_cs.h"
 #include "rt_reflect_trace_cs.h"
 #include "rt_reflect_trace_tex_cs.h"
@@ -43,7 +46,7 @@ struct RtReflectConstants {
     float reproject[3][4];
     float world_to_eye[3][4];
     float eye_to_world[3][4];
-    float classes[8][4];
+    float classes[9][4];
     float range;
     float lobe;
     std::uint32_t history_frames;
@@ -67,9 +70,13 @@ struct RtReflectConstants {
     float rough_cutoff;
     float metal_f0;
     float waves;
+    float draw_trust;
+    float sky_trust;
+    float metal_cover;
+    float pad;
     float hit[4];
     std::uint32_t texture_count;
-    std::uint32_t pad[3];
+    std::uint32_t tail[3];
 };
 static_assert(sizeof(RtReflectConstants) == RtReflections::kConstantsBytes);
 
@@ -85,12 +92,12 @@ struct RtReflectCompositeConstants {
     float near_plane;
     std::uint32_t tile_width;
     float split;
-    std::uint32_t classes[8][2];   // strength, F0, GGX alpha, cover (halves)
+    std::uint32_t classes[10][2];  // strength, F0, GGX alpha, cover (halves); 9 classes, two per row
     float water[4];
     float sun[4];
     float water2[4];   // wave slope, cover, foam, shallow caustics
 };
-static_assert(sizeof(RtReflectCompositeConstants) == 192u);
+static_assert(sizeof(RtReflectCompositeConstants) == 208u);
 
 std::uint32_t half_pair(float a, float b) {
     const auto half = [](float v) {
@@ -134,6 +141,8 @@ enum Parameter : UINT {
     kDraws,
     kSurfaceUv,
     kDrawTextures,
+    kSky,
+    kDrawLight,
     kParameterCount,
 };
 
@@ -155,6 +164,9 @@ constexpr std::uint64_t kReadbackSlotBytes = 256u;
 constexpr std::uint64_t kReadbackTicks = 128u;
 constexpr D3D12_RESOURCE_STATES kFinalRead =
     D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+
+// fill_constants: this trace starts its accumulation over (never reaches the shader's flags).
+constexpr std::uint32_t kNoHistory = 0x80000000u;
 
 constexpr std::array<float, 12> kIdentity34{1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f};
 
@@ -235,12 +247,16 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     materials_ = {};
     // The game's own shading of its shiny surfaces already carries a reflection (its environment
     // maps): the traced reflections screen over it (cover 0), so a surface is never darker than the
-    // game shows it (measured: covering Battlerock's chrome with the blurrier traced sky dulled it).
+    // game shows it. The table's metals (bare metal, class 8) are their reflection: the traced one takes the
+    // painted one's place (cover 1) where it is known, the game's own colour where it is not (ReflectTraceCS),
+    // so the lighting's shade never dulls the chrome (screened over it at half strength, Battlerock's discs did
+    // not change). Environment maps the table does not name (penguins, glassy domes) stay screened.
     // Translucent water is a surface of water (F0 0.02): little reflection looking down, most of it
     // at grazing angles.
     materials_[0] = material("GALAXY_RT_REFLECT_DIFFUSE", {0.6f, 0.04f, 0.0f, 0.0f, 0.0f});
     materials_[1] = material("GALAXY_RT_REFLECT_GLOSSY", {0.3f, 0.06f, 1.0f, 0.0f, 0.0f});
     materials_[2] = material("GALAXY_RT_REFLECT_METAL", {0.12f, 0.9f, 0.5f, 1.0f, 0.0f});
+    materials_[kBareMetalClass] = material("GALAXY_RT_REFLECT_BARE_METAL", {0.12f, 0.9f, 1.0f, 1.0f, 1.0f});
     materials_[3] = material("GALAXY_RT_REFLECT_UNLIT", {0.5f, 0.02f, 0.0f, 0.0f, 0.0f});
     // Opaque indirect-textured surfaces: ice (Freezeflame's rink and walls), pools, swamps: polished
     // and glossy (F0 above water's, so the aurora and Mario read in the ice); a white surface shows its
@@ -258,7 +274,7 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     // Cover 0.4: what the glass mirrors replaces part of it (an image with its darks and lights); screened over
     // it at cover 0, the bright canopy only lifted the Observatory fountain's glass into a flat, pale disc (v53a).
     materials_[7] = material("GALAXY_RT_REFLECT_CRYSTAL", {0.05f, 0.25f, 1.0f, 0.0f, 0.4f});
-    view_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_REFLECT_VIEW", 0.0f), 0.0f, 6.0f));
+    view_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_REFLECT_VIEW", 0.0f), 0.0f, 9.0f));
     history_frames_ =
         static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_REFLECT_HISTORY", 24.0f), 1.0f, 64.0f));
     range_ = std::clamp(env_float("GALAXY_RT_REFLECT_RANGE", 50000.0f), 100.0f, 1.0e6f);
@@ -272,10 +288,12 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     shafts_ = std::clamp(env_float("GALAXY_RT_WATER_SHAFTS", 1.0f), 0.0f, 8.0f);
     sky_fade_ = std::clamp(env_float("GALAXY_RT_REFLECT_SKY_FADE", 0.9995f), 0.0f, 1.0f);
     sky_average_ = std::clamp(env_float("GALAXY_RT_REFLECT_SKY_AVERAGE", 0.15f), 0.0f, 1.0f);
-    metal_sky_ = std::clamp(env_float("GALAXY_RT_REFLECT_METAL_SKY", 0.3f), 0.0f, 1.0f);
+    metal_sky_ = std::clamp(env_float("GALAXY_RT_REFLECT_METAL_SKY", 0.5f), 0.0f, 1.0f);
     local_gain_ = std::clamp(env_float("GALAXY_RT_REFLECT_LOCAL_GAIN", 2.0f), 0.0f, 16.0f);
     rough_cutoff_ = std::clamp(env_float("GALAXY_RT_REFLECT_ROUGH_CUTOFF", 0.65f), 0.05f, 1.2f);
     waves_ = std::clamp(env_float("GALAXY_RT_WAVES", 1.0f), 0.0f, 4.0f);
+    draw_trust_ = std::clamp(env_float("GALAXY_RT_REFLECT_DRAW_TRUST", 0.75f), 0.0f, 1.0f);
+    sky_trust_ = std::clamp(env_float("GALAXY_RT_REFLECT_SKY_TRUST", 1.0f), 0.0f, 1.0f);
     // The water body (the game's water darkened with its depth) is off: it lifted whole pictures, not only
     // the water (Honeyhive RT/game 1.32 with it, 1.00 without, lighting off: measured hha / hr2).
     water_cover_ = std::clamp(env_float("GALAXY_RT_WATER_COVER", 0.0f), 0.0f, 1.0f);
@@ -303,6 +321,11 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     if (!create_pipelines(color_format) ||
         !create_buffer(kMemoryTexels * 16u, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                        D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, memory_.resource, L"rt reflect memory") ||
+        !create_buffer(static_cast<std::uint64_t>(kSkySize) * kSkySize * 8u, D3D12_HEAP_TYPE_DEFAULT,
+                       D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, sky_.resource,
+                       L"rt reflect sky") ||
+        !create_buffer(kDrawLightEntries * 16u, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                       D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, draw_light_.resource, L"rt reflect draw light") ||
         !create_buffer(kStatsWords * 4u, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                        D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, stats_.resource, L"rt reflect stats") ||
         !create_buffer(kStatsWords * 4u, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ,
@@ -315,6 +338,8 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     }
     stats_.state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     memory_.state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    sky_.state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    draw_light_.state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     void* zero = nullptr;
     const D3D12_RANGE no_read{0, 0};
     if (FAILED(stats_zero_->Map(0, &no_read, &zero))) {
@@ -356,6 +381,9 @@ void RtReflections::shutdown() noexcept {
     filter_a_pso_.Reset();
     filter_pso_.Reset();
     memory_pso_.Reset();
+    sky_pso_.Reset();
+    draw_clear_pso_.Reset();
+    draw_light_pso_.Reset();
     composite_root_.Reset();
     composite_pso_.Reset();
     water_composite_pso_.Reset();
@@ -365,6 +393,8 @@ void RtReflections::shutdown() noexcept {
     raw_ = {};
     for (Buffer& buffer : under_) buffer = {};
     memory_ = {};
+    sky_ = {};
+    draw_light_ = {};
     stats_ = {};
     stats_zero_.Reset();
     readback_.Reset();
@@ -474,6 +504,10 @@ bool RtReflections::create_pipelines(DXGI_FORMAT color_format) {
     params[kSurfaceUv].Descriptor.ShaderRegister = 16u;
     params[kDrawTextures].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
     params[kDrawTextures].Descriptor.ShaderRegister = 17u;
+    params[kSky].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+    params[kSky].Descriptor.ShaderRegister = 9u;
+    params[kDrawLight].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+    params[kDrawLight].Descriptor.ShaderRegister = 10u;
     for (auto& param : params) {
         param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     }
@@ -521,7 +555,10 @@ bool RtReflections::create_pipelines(DXGI_FORMAT color_format) {
         !compute(g_rt_reflect_temporal_cs, sizeof(g_rt_reflect_temporal_cs), temporal_pso_) ||
         !compute(g_rt_reflect_filter_a_cs, sizeof(g_rt_reflect_filter_a_cs), filter_a_pso_) ||
         !compute(g_rt_reflect_filter_cs, sizeof(g_rt_reflect_filter_cs), filter_pso_) ||
-        !compute(g_rt_reflect_memory_cs, sizeof(g_rt_reflect_memory_cs), memory_pso_)) {
+        !compute(g_rt_reflect_memory_cs, sizeof(g_rt_reflect_memory_cs), memory_pso_) ||
+        !compute(g_rt_reflect_sky_cs, sizeof(g_rt_reflect_sky_cs), sky_pso_) ||
+        !compute(g_rt_reflect_draw_clear_cs, sizeof(g_rt_reflect_draw_clear_cs), draw_clear_pso_) ||
+        !compute(g_rt_reflect_draw_cs, sizeof(g_rt_reflect_draw_cs), draw_light_pso_)) {
         return false;
     }
 
@@ -689,7 +726,7 @@ void RtReflections::fill_constants(const RtReflectScene& scene, const Pass& pass
                                    void* constants_cpu) {
     std::array<float, 12> inverse{};
     const bool invertible = scene.camera_known && affine_inverse(scene.camera, inverse);
-    const bool history = pass.history_valid && invertible && pass.history_camera_known &&
+    const bool history = (flags & kNoHistory) == 0u && pass.history_valid && invertible && pass.history_camera_known &&
                          pass.history_width == scene.sample_width && pass.history_height == scene.sample_height &&
                          pass.history_factor == scene.factor;
     const std::array<float, 12> reproject = history ? affine_multiply(pass.history_camera, inverse) : kIdentity34;
@@ -705,7 +742,7 @@ void RtReflections::fill_constants(const RtReflectScene& scene, const Pass& pass
     c.frame = frame_++;
     c.factor = scene.factor;
     const RtReflectLights& lights = scene.lights;
-    c.flags = flags | (history ? 1u : 0u) | (scene.sums != 0u ? 4u : 0u) | (invertible ? 8u : 0u) |
+    c.flags = (flags & ~kNoHistory) | (history ? 1u : 0u) | (scene.sums != 0u ? 4u : 0u) | (invertible ? 8u : 0u) |
               (lights.emitters != 0u ? 16u : 0u) | (scene.sky_map != 0u && invertible ? 64u : 0u) |
               (scene.draws != 0u && scene.draw_count != 0u ? 128u : 0u);
     std::memcpy(c.reproject, reproject.data(), sizeof(c.reproject));
@@ -749,6 +786,9 @@ void RtReflections::fill_constants(const RtReflectScene& scene, const Pass& pass
     if (textured_ && scene.surface_uv != 0u && scene.draw_textures != 0u) {
         c.flags |= 2048u;
     }
+    c.draw_trust = draw_trust_;
+    c.sky_trust = sky_trust_;
+    c.metal_cover = materials_[kBareMetalClass].cover;
     std::memcpy(constants_cpu, &c, sizeof(c));
 }
 
@@ -761,6 +801,8 @@ void RtReflections::bind_trace(ID3D12GraphicsCommandList* list, const RtReflectS
     constexpr D3D12_RESOURCE_STATES kRead = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     to_state(list, stats_, kUav);
     to_state(list, memory_, kUav);
+    to_state(list, sky_, kUav);
+    to_state(list, draw_light_, kUav);
     to_state(list, pass.info[current], kUav);
     to_state(list, raw_, kUav);
     to_state(list, pass.history[current], kUav);
@@ -801,6 +843,8 @@ void RtReflections::bind_trace(ID3D12GraphicsCommandList* list, const RtReflectS
     list->SetComputeRootShaderResourceView(kSurfaceUv, scene.surface_uv != 0u ? scene.surface_uv : previous_info);
     list->SetComputeRootShaderResourceView(kDrawTextures,
                                            scene.draw_textures != 0u ? scene.draw_textures : previous_info);
+    list->SetComputeRootUnorderedAccessView(kSky, sky_.resource->GetGPUVirtualAddress());
+    list->SetComputeRootUnorderedAccessView(kDrawLight, draw_light_.resource->GetGPUVirtualAddress());
 }
 
 void RtReflections::accumulate(ID3D12GraphicsCommandList* list, Pass& pass, unsigned slot, UINT groups_x,
@@ -876,8 +920,15 @@ void RtReflections::trace(ID3D12GraphicsCommandList* list, const RtReflectScene&
     }
     RtReflectScene opaque = scene;
     opaque.water_tlas = 0u;
-    // A new stage: the environment memory starts over (rt_reflections.hlsl ReflectMemoryCS).
-    fill_constants(opaque, main_, std::exchange(memory_reset_, false) ? 256u : 0u, constants_cpu);
+    // A new stage: the environment memory starts over (rt_reflections.hlsl ReflectMemoryCS). Views 7 and 8:
+    // the samples show their table row or their reflection's source (kViewRow, kViewSource); view 9 cycles
+    // through the composite, both and the reflected light, without history (no frame's light is another's).
+    const std::uint32_t phase = static_cast<std::uint32_t>(serial_ + 1u) & 3u;
+    const std::uint32_t diagnostic = view_ == 7u || (view_ == 9u && phase == 1u)   ? 512u
+                                     : view_ == 8u || (view_ == 9u && phase == 2u) ? 1024u
+                                     : view_ == 9u                                 ? kNoHistory
+                                                                                   : 0u;
+    fill_constants(opaque, main_, (std::exchange(memory_reset_, false) ? 256u : 0u) | diagnostic, constants_cpu);
 
     const unsigned result = static_cast<unsigned>(serial_++ % kResultSlots);
     const bool record = !pending_[result].pending;
@@ -893,6 +944,16 @@ void RtReflections::trace(ID3D12GraphicsCommandList* list, const RtReflectScene&
     const D3D12_RESOURCE_BARRIER all_uav = uav_barrier();
     list->SetPipelineState(memory_pso_.Get());
     list->Dispatch(kMemorySize / 8u, kMemorySize / 8u, 1u);
+    list->SetPipelineState(sky_pso_.Get());
+    list->Dispatch(kSkySize / 8u, kSkySize / 8u, 1u);
+    const std::uint32_t draws = opaque.draws != 0u ? std::min(opaque.draw_count, kDrawLightEntries) : 0u;
+    if (draws != 0u) {
+        list->SetPipelineState(draw_clear_pso_.Get());
+        list->Dispatch((draws + 63u) / 64u, 1u, 1u);
+        list->ResourceBarrier(1u, &all_uav);
+        list->SetPipelineState(draw_light_pso_.Get());
+        list->Dispatch(groups_x, groups_y, 1u);
+    }
     list->ResourceBarrier(1u, &all_uav);
     list->SetPipelineState(trace_pso_.Get());
     list->Dispatch(groups_x, groups_y, 1u);
@@ -903,9 +964,10 @@ void RtReflections::trace(ID3D12GraphicsCommandList* list, const RtReflectScene&
             list->ResolveQueryData(timestamps_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, result * kTimestampsPerSlot, 2u,
                                    readback_.Get(), result * kReadbackSlotBytes + kReadbackTicks);
         }
+        // All words: the water pass, when it runs, copies its half (16-31) again after its own counts.
         to_state(list, stats_, D3D12_RESOURCE_STATE_COPY_SOURCE);
         list->CopyBufferRegion(readback_.Get(), result * kReadbackSlotBytes, stats_.resource.Get(), 0u,
-                               kStatsWords * 4u / 2u);
+                               kStatsWords * 4u);
         pending_[result] = Pending{frame_index_, true, false, false, false};
         water_result_ = static_cast<int>(result);
     }
@@ -983,10 +1045,13 @@ void RtReflections::draw_composite(ID3D12GraphicsCommandList* list, Pass& pass, 
     c.sample_size[1] = info.sample_height;
     c.factor = info.factor;
     // GALAXY_RT_REFLECT_VIEW=5: the surface classes on every other traced frame; 6: the composite, the
-    // reflected light alone (composite view 4) and its weight with the highlights (5) in turn.
+    // reflected light alone (composite view 4) and its weight with the highlights (5) in turn; 7 and 8: the
+    // samples' light alone (their table row, their reflection's source).
     static constexpr std::uint32_t kCycle[4] = {0u, 0u, 4u, 5u};
     const std::uint32_t view = view_ == 5u   ? ((info.serial & 1u) != 0u ? 2u : 0u)
                                : view_ == 6u ? kCycle[info.serial & 3u]
+                               : view_ == 9u ? ((info.serial & 3u) != 0u ? 4u : 0u)
+                               : view_ >= 7u ? 4u
                                              : view_ & 3u;
     c.flags = (reproject != 0u ? 1u : 0u) | (view << 1u);
     c.slot = slot;
@@ -1045,14 +1110,19 @@ void RtReflections::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIP
     if ((view_ == 4u && (info.serial & 1u) != 0u) || (view_ == 6u && (info.serial & 3u) == 1u)) {
         return;
     }
-    if (view_ == 4u || view_ == 6u) {
+    if (view_ == 4u || view_ == 6u || view_ == 9u) {
         // The frames with reflections carry a mark at the middle of the right edge: white the composite,
-        // red the reflected light, green its weight (VIEW=6).
-        const std::uint32_t phase = view_ == 6u ? info.serial & 3u : 0u;
-        const float colour[4] = {phase != 3u ? 1.0f : 0.0f, phase != 2u ? 1.0f : 0.0f, phase == 0u ? 1.0f : 0.0f, 1.0f};
+        // red the reflected light, green its weight (VIEW=6); white the composite, red the table rows, green
+        // the sources, blue the reflected light (VIEW=9).
+        const std::uint32_t phase = view_ != 4u ? info.serial & 3u : 0u;
+        const std::array<float, 4> colour =
+            view_ == 9u ? std::array<float, 4>{phase <= 1u ? 1.0f : 0.0f, phase == 0u || phase == 2u ? 1.0f : 0.0f,
+                                               phase == 0u || phase == 3u ? 1.0f : 0.0f, 1.0f}
+                        : std::array<float, 4>{phase != 3u ? 1.0f : 0.0f, phase != 2u ? 1.0f : 0.0f,
+                                               phase == 0u ? 1.0f : 0.0f, 1.0f};
         const D3D12_RECT mark{static_cast<LONG>(width) - 12, static_cast<LONG>(height / 2u) - 6,
                               static_cast<LONG>(width), static_cast<LONG>(height / 2u) + 6};
-        list->ClearRenderTargetView(target, colour, 1u, &mark);
+        list->ClearRenderTargetView(target, colour.data(), 1u, &mark);
     }
     // The traced frame's composite is timed; its sub-frames' cost the same.
     const bool timed = composite_timing_ >= 0 && reproject == 0u;
@@ -1175,8 +1245,8 @@ void RtReflections::report() {
                   "[rt-reflect] traces=%llu trace-ms=%.3f composite-ms=%.3f composites-per-trace=%.2f samples=%u "
                   "geometry-samples=%.0f found=%.2f%% diffuse=%.2f%% glossy=%.2f%% metal=%.2f%% unlit=%.2f%% "
                   "water=%.2f%% rays=%.0f hit-shown=%.2f%% hit-remembered=%.2f%% hit-unknown=%.2f%% "
-                  "hit-probe=%.2f%% sky-shown=%.2f%% sky-remembered=%.2f%% (map %.2f%%) sky-average=%.2f%% "
-                  "highlights=%.2f%% | "
+                  "hit-probe=%.2f%% hit-draw=%.2f%% sky-shown=%.2f%% sky-captured=%.2f%% sky-remembered=%.2f%% "
+                  "(map %.2f%%) sky-average=%.2f%% highlights=%.2f%% | "
                   "waters=%llu water-ms=%.3f water-composite-ms=%.3f on-water=%.2f%% water-rays=%.0f "
                   "hit-shown=%.2f%% hit-remembered=%.2f%% hit-unknown=%.2f%% hit-probe=%.2f%% sky-shown=%.2f%% "
                   "sky-remembered=%.2f%% (map %.2f%%) sky-average=%.2f%% highlights=%.2f%% under=%llu\n",
@@ -1185,8 +1255,8 @@ void RtReflections::report() {
                   per(static_cast<double>(window_.composites), window_.traces), samples_,
                   per(static_cast<double>(window_.stats[0]), window_.counted), pct(1u, 0u), pct(2u, 1u), pct(3u, 1u),
                   pct(4u, 1u), pct(5u, 1u), pct(6u, 1u), per(static_cast<double>(window_.stats[7]), window_.counted),
-                  pct(8u, 7u), pct(9u, 7u), pct(10u, 7u), pct(11u, 7u), pct(12u, 7u), pct(13u, 7u), pct(28u, 7u),
-                  pct(14u, 7u), pct(15u, 7u), static_cast<unsigned long long>(window_.waters),
+                  pct(8u, 7u), pct(9u, 7u), pct(10u, 7u), pct(11u, 7u), pct(30u, 7u), pct(12u, 7u), pct(31u, 7u),
+                  pct(13u, 7u), pct(28u, 7u), pct(14u, 7u), pct(15u, 7u), static_cast<unsigned long long>(window_.waters),
                   per(window_.water_ms, window_.water_timed),
                   per(window_.water_composite_ms, window_.water_composites_timed), pct(17u, 16u),
                   per(static_cast<double>(window_.stats[18]), window_.counted), pct(19u, 18u), pct(20u, 18u),

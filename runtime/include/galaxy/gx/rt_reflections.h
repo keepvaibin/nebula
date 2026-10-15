@@ -81,7 +81,7 @@ struct RtReflectScene {
 class RtReflections {
 public:
     // Constants of one trace, in an upload allocation the caller makes (256-byte aligned).
-    static constexpr std::size_t kConstantsBytes = 752u;
+    static constexpr std::size_t kConstantsBytes = 784u;
     // Results kept for the sub-frames of the game frames being interpolated (the lighting's slots).
     static constexpr unsigned kSlots = 4u;
 
@@ -128,16 +128,23 @@ public:
 private:
     static constexpr unsigned kResultSlots = 16u;
     static constexpr std::uint64_t kResultDelay = 8u;
-    // Words 0-15 the trace's, 16-31 the water's.
+    // Words 0-15 the trace's, 16-27 the water's; 28, 29 the sky map's share (trace, water); 30, 31 the
+    // trace's hits lit by their draw's colour and its captured sky.
     static constexpr unsigned kStatsWords = 32u;
     // Trace, composite, water trace, water composite: begin and end each.
     static constexpr unsigned kTimestampsPerSlot = 8u;
-    static constexpr unsigned kClasses = 8u;
+    // Surface classes (rt_surfaces.h) and the reflections' bare metal (rt_reflections.hlsl kBareMetalClass).
+    static constexpr unsigned kClasses = 9u;
+    static constexpr unsigned kBareMetalClass = 8u;
     // Class of the translucent water's surface (rt_reflections.hlsl kWaterSurface).
     static constexpr unsigned kWaterClass = 5u;
     // Environment memory: kMemorySize^2 world directions (octahedral; rt_reflections.hlsl kProbeSize).
     static constexpr unsigned kMemorySize = 64u;
     static constexpr unsigned kMemoryTexels = kMemorySize * kMemorySize;
+    // Captured sky: kSkySize^2 world directions (rt_reflections.hlsl kSkySize).
+    static constexpr unsigned kSkySize = 1024u;
+    // Draws whose mean lit colour the trace keeps (RtDraw.flags holds 16 bits of the index).
+    static constexpr std::uint32_t kDrawLightEntries = 65536u;
 
     struct Retired {
         Microsoft::WRL::ComPtr<ID3D12Resource> resource;
@@ -229,6 +236,9 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> filter_a_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> filter_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> memory_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> sky_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> draw_clear_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> draw_light_pso_;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> composite_root_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> composite_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> water_composite_pso_;
@@ -244,6 +254,8 @@ private:
     static constexpr std::uint32_t kUnderState = 13u;
     static constexpr std::uint32_t kUnderTint = 9u;   // rt_reflections.hlsl kUnderTint (4 entries)
     Buffer memory_{};
+    Buffer sky_{};          // the captured sky (rt_reflections.hlsl SkyCaptureCS)
+    Buffer draw_light_{};   // per draw its mean lit colour this frame (DrawLightCS)
     Buffer stats_{};
     Microsoft::WRL::ComPtr<ID3D12Resource> stats_zero_;
     Microsoft::WRL::ComPtr<ID3D12Resource> readback_;
@@ -268,7 +280,10 @@ private:
     // reflections on every other traced frame (A/B pairs), 5 the classes on every other frame, 6 per
     // traced frame in turn: the composite, none, the reflected light alone, its weight k (red) and
     // the highlights' luminance (green), marked at the middle of the right edge white, -, red, green
-    // (GALAXY_PRESENT_SNAPSHOT_PAIR=3 keeps each set of four).
+    // (GALAXY_PRESENT_SNAPSHOT_PAIR=3 keeps each set of four), 7 each draw's material table row (its
+    // roughness word in hexadecimal digits, one per channel), 8 where each reflection's light came from, 9 per
+    // traced frame in turn (no accumulation): the composite, 7, 8 and the reflected light alone, marked white,
+    // red, green, blue.
     std::uint32_t view_ = 0;
     std::uint32_t history_frames_ = 24;
     float range_ = 50000.0f;
@@ -285,8 +300,10 @@ private:
     float shafts_ = 1.0f;     // GALAXY_RT_WATER_SHAFTS: sunlight scattered under the water (0 none)
     float sky_fade_ = 0.9995f;  // GALAXY_RT_REFLECT_SKY_FADE: the memory of the sky kept per frame
     float sky_average_ = 0.15f; // GALAXY_RT_REFLECT_SKY_AVERAGE: confidence of the sky's average colour
-    float metal_sky_ = 0.3f;    // GALAXY_RT_REFLECT_METAL_SKY: metal's share of reflected sky over its env map
+    float metal_sky_ = 0.5f;    // GALAXY_RT_REFLECT_METAL_SKY: metal's share of a remembered or average sky
     float local_gain_ = 2.0f;   // GALAXY_RT_REFLECT_LOCAL_GAIN: the point and glow lights' highlights
+    float draw_trust_ = 0.75f;  // GALAXY_RT_REFLECT_DRAW_TRUST: confidence of a hidden hit's draw colour (0 off)
+    float sky_trust_ = 1.0f;    // GALAXY_RT_REFLECT_SKY_TRUST: confidence of the captured sky (0 off)
     bool memory_reset_ = false;
     D3D12_GPU_DESCRIPTOR_HANDLE water_scene_{};  // composite_water's scene copy while it draws
     D3D12_GPU_DESCRIPTOR_HANDLE water_opaque_{}; // ... and its copy of the frame before the water

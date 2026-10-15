@@ -180,11 +180,13 @@ cbuffer RtReflect : register(b0)
     uint g_flags;               // bit 0: previous samples usable; bit 2: picture sums usable;
                                 // bit 3: camera known (environment memory); bit 4: glow lights;
                                 // bit 5: the water pass (the EFB colour is the lit picture);
-                                // bit 6: the lighting's sky map usable
+                                // bit 6: the lighting's sky map usable; bit 9: the samples show their
+                                // draw's material table row (kViewRow); bit 10: their reflection's source
+                                // (kViewSource)
     float4 g_reproject[3];      // previous samples' eye position from this frame's (3x4 rows)
     float4 g_world_to_eye[3];   // the camera's rotation (rows)
     float4 g_eye_to_world[3];   // its inverse
-    float4 g_class[8];          // per surface class: GGX alpha, strength, F0, metal
+    float4 g_class[9];          // per surface class (and bare metal, 8): GGX alpha, strength, F0, metal
     float g_range;              // reflection ray length (eye units)
     float g_lobe;               // share of the lobe sampled (1 the whole lobe)
     uint g_history_frames;      // accumulation limit of the widest lobes
@@ -203,12 +205,16 @@ cbuffer RtReflect : register(b0)
     float g_shafts;             // under the water: the sunlight its waves scatter towards the camera
     float g_sky_fade;           // environment memory of the sky kept per frame where the camera does not look
     float g_sky_average;        // confidence of the sky's average colour where no sky is known
-    float g_metal_sky;          // metal: share of the sky's reflection over its own environment map
+    float g_metal_sky;          // metal: confidence of a remembered, mapped or average sky (blurrier than its map)
     float g_local_gain;         // the local lights' highlights (point and glow lights)
     uint g_draw_count;          // entries of g_draws (g_flags bit 7)
     float g_rough_cutoff;       // the material table's roughness above which a surface reflects nothing
     float g_metal_f0;           // Fresnel reflectance of a bare metal (metalness 1)
     float g_waves;              // water: slope of its procedural waves (0: none)
+    float g_draw_trust;         // confidence of a hit draw's mean lit colour where the frame hides the hit
+    float g_sky_trust;          // confidence of the captured sky (SkyCaptureCS) where it was seen
+    float g_metal_cover;        // the metal class's cover: bare metal is its reflection (0: screened over)
+    float g_pad;
     // High quality (g_flags bit 11): the art's level at a hit: day share, night level, day level, texture
     // detail per eye unit of distance.
     float4 g_hit;
@@ -268,6 +274,12 @@ RWStructuredBuffer<uint> g_tiles : register(u7);
 // Per sample, the picture under the translucent phases for the water's refraction: lit colour
 // (11-11-10) and eye z (0: the sky).
 RWStructuredBuffer<uint2> g_under : register(u8);
+// The sky as the stage has shown it (SkyCaptureCS): per world direction (octahedral, as the environment
+// memory's, kSkySize^2 texels) its colour (11-11-10) and the share of the texel seen (unorm16, 0 never).
+RWStructuredBuffer<uint2> g_sky : register(u9);
+// Per draw of the scene (DrawLightCS): this frame's lit colour summed over its samples (rgb in 1/64)
+// and their count; zeroed before (DrawLightClearCS).
+RWStructuredBuffer<uint4> g_draw_light : register(u10);
 
 int2 sample_pixel(uint2 s)
 {
@@ -473,6 +485,158 @@ float sky_map_light(float3 d, out float3 light)
     return sum.w / max(weight, 1e-4f);
 }
 
+// ---------------------------------------------------------------------------------------------
+// Sky capture: the backdrop is drawn around the camera (no parallax), so every frame's sky pixels
+// give its colour per world direction. Kept for the stage at about 0.2 degrees per texel, it is
+// what a mirror shows of the sky out of view (the environment memory's 64^2 texels blur it).
+// ---------------------------------------------------------------------------------------------
+
+static const uint kSkySize = 1024u;
+
+// The frame's sky at `pixel`: false where a surface nearer than the backdrops covers it.
+bool sky_pixel(float2 pixel, out float3 light)
+{
+    light = float3(0.0f, 0.0f, 0.0f);
+    if (!inside(g_viewport, pixel)) {
+        return false;
+    }
+    const int2 c = int2(pixel);
+    const float depth = g_efb_depth.Load(int3(c, 0));
+    if (!far_plane(g_depth, depth) &&
+        length(eye_position(g_projection, g_viewport, pixel, depth_to_eye_z(g_depth, depth))) < g_sky_distance) {
+        return false;
+    }
+    light = g_color.Load(int3(c, 0)).rgb;
+    return true;
+}
+
+// One thread per texel: five looks over the texel's footprint on the screen (its centre and the
+// middles of its quarters); the sky they find replaces half of what the texel held.
+[numthreads(8, 8, 1)]
+void SkyCaptureCS(uint3 id : SV_DispatchThreadID)
+{
+    if (any(id.xy >= kSkySize)) {
+        return;
+    }
+    const uint index = id.y * kSkySize + id.x;
+    uint2 stored = (g_flags & 256u) != 0u ? uint2(0u, 0u) : g_sky[index];
+    if ((g_flags & 8u) != 0u) {
+        const float2 uv = (float2(id.xy) + 0.5f) / float(kSkySize);
+        const float3 d = rotate(g_world_to_eye, octahedral_direction(uv));
+        const float3 dx = rotate(g_world_to_eye, octahedral_direction(uv + float2(0.5f / float(kSkySize), 0.0f)));
+        const float3 dy = rotate(g_world_to_eye, octahedral_direction(uv + float2(0.0f, 0.5f / float(kSkySize))));
+        if (d.z < -1e-3f && dx.z < -1e-3f && dy.z < -1e-3f) {
+            const float2 centre = eye_to_pixel(g_projection, g_viewport, d);
+            // Half a texel along each of its axes, in pixels.
+            const float2 ax = eye_to_pixel(g_projection, g_viewport, dx) - centre;
+            const float2 ay = eye_to_pixel(g_projection, g_viewport, dy) - centre;
+            float3 sum = float3(0.0f, 0.0f, 0.0f);
+            float looks = 0.0f;
+            [unroll] for (uint k = 0u; k < 5u; ++k) {
+                const float2 o = k == 4u ? float2(0.0f, 0.0f) : float2((k & 1u) != 0u ? 0.5f : -0.5f, (k & 2u) != 0u ? 0.5f : -0.5f);
+                float3 light;
+                if (sky_pixel(centre + o.x * ax + o.y * ay, light)) {
+                    sum += light;
+                    looks += 1.0f;
+                }
+            }
+            if (looks > 0.0f) {
+                const float seen = float(stored.y & 0xFFFFu) / 65535.0f;
+                const float3 now = sum / looks;
+                const float3 kept = seen > 0.0f ? lerp(unpack_r11g11b10(stored.x), now, 0.5f) : now;
+                stored = uint2(pack_r11g11b10(kept), uint(round(max(seen, looks / 5.0f) * 65535.0f)));
+            }
+        }
+    }
+    g_sky[index] = stored;
+}
+
+// The captured sky towards eye-space direction `d` (bilinear over its texels): its light and the share
+// of it seen.
+float sky_captured(float3 d, out float3 light)
+{
+    light = float3(0.0f, 0.0f, 0.0f);
+    if ((g_flags & 8u) == 0u) {
+        return 0.0f;
+    }
+    const float2 a = octahedral(rotate(g_eye_to_world, normalize(d))) * float(kSkySize) - 0.5f;
+    const int2 base = int2(floor(a));
+    const float2 f = a - float2(base);
+    float4 sum = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    [unroll] for (uint k = 0u; k < 4u; ++k) {
+        const int2 o = int2(k & 1u, k >> 1u);
+        const uint2 t = uint2(clamp(base + o, int2(0, 0), int2(kSkySize - 1u, kSkySize - 1u)));
+        const float bw = (o.x != 0 ? f.x : 1.0f - f.x) * (o.y != 0 ? f.y : 1.0f - f.y);
+        const uint2 stored = g_sky[t.y * kSkySize + t.x];
+        const float seen = float(stored.y & 0xFFFFu) / 65535.0f;
+        sum += float4(unpack_r11g11b10(stored.x), 1.0f) * (seen * bw);
+    }
+    light = sum.w > 1e-4f ? sum.rgb / sum.w : float3(0.0f, 0.0f, 0.0f);
+    return sum.w;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Draw light: each draw's mean lit colour over the samples this frame shows of it. A reflection ray
+// whose hit the frame does not show (behind the object, off screen) takes its draw's colour there.
+// ---------------------------------------------------------------------------------------------
+
+[numthreads(64, 1, 1)]
+void DrawLightClearCS(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x < g_draw_count) {
+        g_draw_light[id.x] = uint4(0u, 0u, 0u, 0u);
+    }
+}
+
+[numthreads(8, 8, 1)]
+void DrawLightCS(uint3 id : SV_DispatchThreadID)
+{
+    bool valid = false;
+    uint draw = 0u;
+    uint3 units = uint3(0u, 0u, 0u);
+    if (all(id.xy < g_sample_size)) {
+        const uint2 primary = g_primary[id.y * g_sample_size.x + id.x];
+        if (primary.x != 0u) {
+            draw = g_surfaces.Load((primary.x - 1u) * 16u + 12u) >> 16u;
+            const int2 q = sample_pixel(id.xy);
+            valid = draw < g_draw_count;
+            units = uint3(round(min(g_color.Load(int3(q, 0)).rgb * lighting_at(q), 4.0f) * 64.0f));
+        }
+    }
+    // The lanes of one draw add once: each round the first remaining lane's draw.
+    if (valid) {
+        [loop] for (;;) {
+            const uint lead = WaveReadLaneFirst(draw);
+            if (draw == lead) {
+                const uint3 sum = WaveActiveSum(units);
+                const uint n = WaveActiveCountBits(true);
+                if (WaveIsFirstLane()) {
+                    InterlockedAdd(g_draw_light[draw].x, sum.x);
+                    InterlockedAdd(g_draw_light[draw].y, sum.y);
+                    InterlockedAdd(g_draw_light[draw].z, sum.z);
+                    InterlockedAdd(g_draw_light[draw].w, n);
+                }
+                break;
+            }
+        }
+    }
+}
+
+// Draw `draw`'s mean lit colour this frame: false where the frame shows too little of it.
+bool draw_light(uint draw, out float3 light)
+{
+    light = float3(0.0f, 0.0f, 0.0f);
+    if (draw >= g_draw_count || g_draw_trust <= 0.0f) {
+        return false;
+    }
+    const uint4 sum = g_draw_light[draw];
+    if (sum.w < 4u) {
+        return false;
+    }
+    light = float3(sum.xyz) / (64.0f * float(sum.w));
+    return true;
+}
+
 // The game's distance attenuation of point light i (rt_lighting.hlsl point_falloff).
 float point_falloff(float d2, uint i)
 {
@@ -508,6 +672,10 @@ float ggx_highlight(float3 n, float3 v, float3 l, float alpha, float spread, flo
 // power; spot direction, cosine of its cone.
 static const uint kEmitStride = 48u;
 static const uint kMetalClass = 2u;
+// The reflections' own class for the material table's metals (draw_material): bare metal, whose traced
+// reflection takes its painted one's place. The GX state's metal class (an environment map the table does not
+// name: penguins, glassy domes, painted sheen) keeps its reflection screened over its look.
+static const uint kBareMetalClass = 8u;
 static const float kDielectricF0 = 0.04f;
 
 // A spot light's share along `from_light` (normalised, from the light): full inside the inner part of
@@ -705,6 +873,14 @@ static const uint kSkyShown = 4u;
 static const uint kSkyFromMemory = 5u;
 static const uint kSkyAverage = 6u;
 static const uint kSources = 7u;
+// Counted apart (stats words 30, 31): a hit the frame hides lit by its draw's colour; the captured sky.
+static const uint kFromDraw = 7u;
+static const uint kSkyCaptured = 8u;
+
+bool sky_source(uint source)
+{
+    return source >= kSkyShown && source != kFromDraw;
+}
 
 float3 hit_rgb8(uint c)
 {
@@ -835,6 +1011,7 @@ Reflected reflect_light(uint2 s, float3 dir, float3 n, float3 ng, float3 hit, fl
         float seen;
         const bool shown = x.z < -g_near && shown_at(eye_to_pixel(g_projection, g_viewport, x), r.light, seen) &&
                                  abs(seen - x_distance) < 0.03f * x_distance + 2.0f;
+        float3 drawn;
         if (shown) {
             r.confidence = 1.0f;
         } else if (hit_shade(query.CommittedInstanceID(), query.CommittedPrimitiveIndex(),
@@ -848,6 +1025,14 @@ Reflected reflect_light(uint2 s, float3 dir, float3 n, float3 ng, float3 hit, fl
             r.source = r.confidence > 0.05f ? kFromMemory : kUnknown;
             if (r.source == kFromMemory) {
                 r.light = known;
+            } else if ((g_flags & 32u) == 0u && query.CommittedInstanceID() == 0u &&
+                       draw_light(g_surfaces.Load(query.CommittedPrimitiveIndex() * 16u + 12u) >> 16u, drawn)) {
+                // The object it hit, as the frame shows it elsewhere: its colour at its distance, without its
+                // detail (the frame does not show this side of it). The late geometry (instance 1, drawn after
+                // the trace) has no records here.
+                r.source = kFromDraw;
+                r.light = drawn;
+                r.confidence = g_draw_trust;
             } else {
                 // What the camera saw along the ray's own direction (a probe at the camera: the
                 // scene's light without the parallax of the hit), else the surface keeps its own
@@ -867,8 +1052,14 @@ Reflected reflect_light(uint2 s, float3 dir, float3 n, float3 ng, float3 hit, fl
         const bool sky_shown = l.z < -1e-3f && shown_at(eye_to_pixel(g_projection, g_viewport, l), r.light, seen) &&
                                seen >= kSkyDistance;
         r.source = kSkyShown;
+        float3 captured;
+        const float captured_share = sky_shown ? 0.0f : sky_captured(l, captured);
         if (sky_shown) {
             r.confidence = 1.0f;
+        } else if (captured_share > 0.05f && g_sky_trust > 0.0f) {
+            r.source = kSkyCaptured;
+            r.light = captured;
+            r.confidence = captured_share * g_sky_trust;
         } else {
             float3 known;
             r.confidence = memory_light(l, kSkyDistance, known);
@@ -890,9 +1081,9 @@ Reflected reflect_light(uint2 s, float3 dir, float3 n, float3 ng, float3 hit, fl
             }
         }
     }
-    // Metal keeps most of the game's environment map where its reflection is only the sky: the map is
-    // the game's own sky in it (sharper than any known); what the scene puts there joins it.
-    if (params.w > 0.0f && r.source >= kSkyShown) {
+    // A mirror shows the sky as sharp as the frame or the capture holds it; the 64^2 memory, the sky map and
+    // the sky's average are blurrier than the game's painted reflection, which keeps part of their place.
+    if (params.w > 0.0f && sky_source(r.source) && r.source != kSkyShown && r.source != kSkyCaptured) {
         r.confidence *= g_metal_sky;
     }
     // The lights' highlights, weighted like the reflection (its class strength) so the
@@ -933,7 +1124,8 @@ float sample_strength(uint4 info)
 // class's, with the material table's roughness and metalness for its texture where it names them. A
 // surface rougher than g_rough_cutoff reflects nothing worth a ray; below it, metal and dielectric
 // alike (a dielectric's Fresnel term keeps its reflection to grazing views).
-float4 draw_material(uint surface_class, uint draw, out float roughness)
+// A metal the table names (its metalness) becomes bare metal (`surface_class` kBareMetalClass).
+float4 draw_material(inout uint surface_class, uint draw, out float roughness)
 {
     float4 params = g_class[surface_class];
     roughness = sqrt(params.x);
@@ -944,8 +1136,18 @@ float4 draw_material(uint surface_class, uint draw, out float roughness)
     const uint r16 = words & 0xFFFFu;
     const uint m16 = words >> 16u;
     if (m16 != 0xFFFFu) {
+        // The table's light sources (its emission: coins, the giant ? coin) keep their painted look and own
+        // glow: as bare metal their glow gave way to the dark sky they mirror (ma7 3900 ? coin 245,202,6 ->
+        // 186,133,4).
+        const uint emission = g_draws.Load(draw * 48u + 8u);
+        const bool emits = (emission & 4u) != 0u && (emission & 3u) != 0u && (emission & 8u) == 0u;
+        if (surface_class == kMetalClass && !emits) {
+            surface_class = kBareMetalClass;
+            params = g_class[kBareMetalClass];
+            roughness = sqrt(params.x);
+        }
         const float metal = float(m16) / 65534.0f;
-        params.z = lerp(surface_class == kMetalClass ? kDielectricF0 : params.z, g_metal_f0, metal);
+        params.z = lerp(surface_class == kBareMetalClass ? kDielectricF0 : params.z, g_metal_f0, metal);
         params.w = metal;
     }
     if (r16 != 0xFFFFu) {
@@ -954,6 +1156,35 @@ float4 draw_material(uint surface_class, uint draw, out float roughness)
         params.y = saturate((g_rough_cutoff - roughness) / 0.2f);
     }
     return params;
+}
+
+// Diagnostic views (GALAXY_RT_REFLECT_VIEW=7, 8): the composite shows each sample's light alone.
+static const uint kViewRow = 512u;
+static const uint kViewSource = 1024u;
+
+// GALAXY_RT_REFLECT_VIEW=7: the draw's material table roughness word as three hexadecimal digits, one per
+// channel at (digit + 0.5) / 16 (a probe table writes row k's roughness as k / 65534); black: no row.
+float3 row_colour(uint draw)
+{
+    if ((g_flags & 128u) == 0u || draw >= g_draw_count) {
+        return float3(0.0f, 0.0f, 0.0f);
+    }
+    const uint r16 = g_draws.Load(draw * 48u + 16u) & 0xFFFFu;
+    if (r16 == 0xFFFFu || r16 == 0u) {
+        return float3(0.0f, 0.0f, 0.0f);
+    }
+    return (float3(uint3(r16 >> 8u, r16 >> 4u, r16) & 15u) + 0.5f) / 16.0f;
+}
+
+// GALAXY_RT_REFLECT_VIEW=8: where a reflection's light came from (Reflected.source; the sky map apart):
+// hit shown green, remembered yellow, unknown red, probe magenta, its draw's colour orange; sky shown
+// blue, captured dark cyan, remembered cyan, mapped light blue, average white.
+float3 source_colour(uint source, bool mapped)
+{
+    const float3 colours[9] = {float3(0.0f, 1.0f, 0.0f), float3(1.0f, 1.0f, 0.0f), float3(1.0f, 0.0f, 0.0f),
+                               float3(1.0f, 0.0f, 1.0f), float3(0.0f, 0.0f, 1.0f), float3(0.0f, 1.0f, 1.0f),
+                               float3(1.0f, 1.0f, 1.0f), float3(1.0f, 0.5f, 0.0f), float3(0.0f, 0.5f, 0.5f)};
+    return mapped ? float3(0.5f, 0.5f, 1.0f) : colours[min(source, 8u)];
 }
 
 [numthreads(8, 8, 1)]
@@ -1039,7 +1270,12 @@ void ReflectTraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
                                                       : smoothstep(0.95f, 1.2f, peak);
             info.x = pack_normal(n);
             info.z = pack_material(surface_class, params.y, 1.0f - emitter, roughness, params.w);
-            if (params.y > 0.0f && emitter < 1.0f) {
+            if ((g_flags & kViewRow) != 0u) {
+                info.z = pack_material(surface_class, 1.0f, 1.0f, 0.0f, 0.0f);
+                reflected = true;
+                light = row_colour(record.w >> 16u);
+                confidence = 1.0f;
+            } else if (params.y > 0.0f && emitter < 1.0f) {
                 reflected = true;
                 const Reflected r = reflect_light(id.xy, dir, n, ng, hit, params, base, true, true);
                 light = r.light;
@@ -1049,10 +1285,21 @@ void ReflectTraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
                 // or aurora only half (rf2: Freezeflame's crystals took the dark sky at cover 0.8).
                 const bool painted = (surface_class == 0u || surface_class == 1u || surface_class == 3u) && params.w < 0.5f;
                 const bool clear = surface_class == 4u || surface_class == 7u;
-                confidence = (painted || clear) && r.source >= kSkyShown ? r.confidence * 0.5f : r.confidence;
+                confidence = (painted || clear) && sky_source(r.source) ? r.confidence * 0.5f : r.confidence;
+                // Bare metal is its reflection (the class's cover): where the traced light is unknown it shows
+                // the game's own painted reflection at the game's level, which the lighting's shade, occlusion
+                // and night level would otherwise darken (its composite multiplies the whole colour).
+                const float own = surface_class == kBareMetalClass ? g_metal_cover * params.w : 0.0f;
+                light = lerp(light, base, own * (1.0f - saturate(confidence)));
+                confidence = lerp(confidence, 1.0f, own);
                 source = r.source;
                 mapped = r.mapped;
                 info.w = asuint(r.distance);
+                if ((g_flags & kViewSource) != 0u) {
+                    light = source_colour(source, mapped);
+                    highlight = float3(0.0f, 0.0f, 0.0f);
+                    confidence = 1.0f;
+                }
             } else if (emitter < 1.0f && (g_flags & 128u) != 0u) {
                 // Too rough to reflect anything worth a ray: the lights' highlights alone (a broad
                 // sheen under the sun, a soft glint near a lamp), at the least strength that keeps the
@@ -1072,12 +1319,14 @@ void ReflectTraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
     count(0u, geometry);
     count(1u, surface_class != kNoSurface);
     [unroll] for (uint c = 0u; c < 5u; ++c) {
-        count(2u + c, surface_class == c);
+        count(2u + c, surface_class == c || (c == kMetalClass && surface_class == kBareMetalClass));
     }
     count(7u, reflected);
     [unroll] for (uint k = 0u; k < kSources; ++k) {
         count(8u + k, reflected && source == k);
     }
+    count(30u, reflected && source == kFromDraw);
+    count(31u, reflected && source == kSkyCaptured);
     count(15u, any(highlight > 0.0f));
     count(28u, mapped);
     if (active) {
@@ -1754,7 +2003,7 @@ cbuffer RtReflectComposite : register(b0)
     float m_near;
     uint m_tile_width;  // tiles of 8x8 samples per row
     float m_split;      // GALAXY_RT_SPLIT: left of it (and its line) the game's own picture
-    uint4 m_class[4];   // per surface class (two per row): strength, F0, GGX alpha, cover (halves)
+    uint4 m_class[5];   // per surface class (two per row; 8 bare metal): strength, F0, GGX alpha, cover (halves)
     float4 m_water;     // water: absorption per eye unit (rgb), share of the clear water shown (clarity)
     float4 m_sun;       // towards the sun (eye space, traced frame), caustics gain (0: none)
     float4 m_water2;    // water: wave slope, share of the game's drawn water replaced, foam, caustics
@@ -1780,7 +2029,7 @@ struct CompositeOut
 
 float4 class_params(uint c)
 {
-    const uint4 row = m_class[min(c, 7u) >> 1u];
+    const uint4 row = m_class[min(c, kBareMetalClass) >> 1u];
     const uint2 h = (c & 1u) != 0u ? row.zw : row.xy;
     return float4(f16tof32(h.x), f16tof32(h.x >> 16u), f16tof32(h.y), f16tof32(h.y >> 16u));
 }
@@ -1846,13 +2095,14 @@ Blend blend_samples(float2 pixel, float3 p, bool water)
             nearest = d;
             b.nearest_class = surface_class;
         }
-        if (surface_class < 8u) {
+        if (surface_class <= kBareMetalClass) {
             // Water seen from below has the water's material.
             const float4 c = class_params(surface_class == kWaterBelow ? kWaterSurface : surface_class);
             // The sample's own lobe and metalness (filter_sample); its strength is in its weight.
             const float rough = float((sample.z >> 4u) & 15u) / 15.0f;
             const float metal = float((sample.z >> 8u) & 15u) / 15.0f;
-            const float f0 = lerp(surface_class == kMetalClass ? kDielectricF0 : c.y, class_params(kMetalClass).y, metal);
+            const float f0 = lerp(surface_class == kMetalClass || surface_class == kBareMetalClass ? kDielectricF0 : c.y,
+                                  class_params(kMetalClass).y, metal);
             // Samples too rough to reflect (ReflectTraceCS: highlights only) take no reflected light,
             // only their glint.
             // Opaque dielectrics reflect half as much at grazing angles as Schlick has it (the bright sky
@@ -1871,8 +2121,11 @@ Blend blend_samples(float2 pixel, float3 p, bool water)
             const float3 light = min(unpack_r11g11b10(sample.x), 1.0f);
             b.sum += light * (k * bw);
             // How much of the surface's own colour the reflection takes away: all of it at cover 1
-            // (dst * (1 - k) + k * light), only its own share at cover 0 (a screen: never darker).
-            b.covered += (c.w + (1.0f - c.w) * light) * (k * bw);
+            // (dst * (1 - k) + k * light), only its own share at cover 0 (a screen: never darker). The
+            // bare metal's cover is its metalness's share (its painted look gives way to the traced
+            // reflection where that is known; k carries the confidence).
+            const float cover = surface_class == kBareMetalClass ? c.w * metal : c.w;
+            b.covered += (cover + (1.0f - cover) * light) * (k * bw);
             b.k_sum += k * bw;
             b.glint += unpack_r11g11b10(sample.w) * bw;
         }
@@ -1884,14 +2137,15 @@ Blend blend_samples(float2 pixel, float3 p, bool water)
 }
 
 // Surface classes over the picture: diffuse grey, glossy cyan, metal orange, unlit magenta, water
-// blue, translucent water light blue (from below green), crystal white, untraced black.
+// blue, translucent water light blue (from below green), crystal white, bare metal red, untraced black.
 CompositeOut class_view(uint nearest_class)
 {
-    const float3 colours[9] = {float3(0.3f, 0.3f, 0.3f), float3(0.0f, 0.86f, 1.0f), float3(1.0f, 0.67f, 0.0f),
-                               float3(1.0f, 0.0f, 1.0f), float3(0.0f, 0.3f, 1.0f), float3(0.45f, 0.8f, 1.0f),
-                               float3(0.2f, 1.0f, 0.6f), float3(1.0f, 1.0f, 1.0f), float3(0.0f, 0.0f, 0.0f)};
+    const float3 colours[10] = {float3(0.3f, 0.3f, 0.3f), float3(0.0f, 0.86f, 1.0f), float3(1.0f, 0.67f, 0.0f),
+                                float3(1.0f, 0.0f, 1.0f), float3(0.0f, 0.3f, 1.0f), float3(0.45f, 0.8f, 1.0f),
+                                float3(0.2f, 1.0f, 0.6f), float3(1.0f, 1.0f, 1.0f), float3(1.0f, 0.15f, 0.0f),
+                                float3(0.0f, 0.0f, 0.0f)};
     CompositeOut result;
-    result.add = float4(colours[min(nearest_class, 8u)] * 0.55f, 0.0f);
+    result.add = float4(colours[min(nearest_class, 9u)] * 0.55f, 0.0f);
     result.keep = float4(0.45f, 0.45f, 0.45f, 1.0f);
     return result;
 }
@@ -1911,7 +2165,7 @@ CompositeOut finish(Blend b, uint view, float3 under_add, float3 under_keep)
         result.keep = float4(0.0f, 0.0f, 0.0f, 1.0f);
     } else if (view == 3u || view == 5u) {
         result.add = view == 3u ? float4(k, k, k, 0.0f)
-                                : float4(k, luminance(highlight), float(min(b.nearest_class, 7u) + 1u) / 8.0f, 0.0f);
+                                : float4(k, luminance(highlight), float(min(b.nearest_class, 8u) + 1u) / 9.0f, 0.0f);
         result.keep = float4(0.0f, 0.0f, 0.0f, 1.0f);
     } else {
         result.add = float4(saturate((saturate(b.sum / b.weight) + under_add * kept) * (1.0f - highlight) + highlight),
