@@ -13,6 +13,7 @@
 #endif
 
 #include "galaxy/gx/texture_cache.h"
+#include "galaxy/gx/rt_materials.h"
 #include "galaxy/gx/dependency_event_capture.h"
 
 #include "galaxy/gx/render_config.h"
@@ -2268,6 +2269,12 @@ TextureHandle TextureCache::get(
             std::span<const std::byte>(guest_bytes, total_guest_size));
     }
     const auto* src = reinterpret_cast<const std::uint8_t*>(guest_bytes);
+    // The ray tracer's material table names textures by the texture-pack key of their base level.
+    std::uint16_t rt_material = 0u;
+    if (rt_materials_loaded()) {
+        rt_material = rt_material_index(texture_pack_hash(
+            src, texture_guest_byte_size(image.format, image.width, image.height, 1u)));
+    }
     std::optional<ContentKey> content_key;
     if (decoded_content_cache_enabled() &&
         !debug_invalidate_every_frame && total_guest_size != 0u &&
@@ -2338,6 +2345,7 @@ TextureHandle TextureCache::get(
                 entry.handle.from_efb_copy = false;
                 entry.handle.generated_mips = generated_mips;
                 entry.handle.guest_byte_size = total_guest_size;
+                entry.handle.rt_material = rt_material;
                 const TextureHandle handle = entry.handle;
                 if (entries_.empty()) decoded_guest_envelope_.clear();
                 decoded_guest_envelope_.include(image.guest_addr, total_guest_size);
@@ -2596,6 +2604,7 @@ TextureHandle TextureCache::get(
     handle.from_efb_copy = false;
     handle.generated_mips = generated_mips;
     handle.guest_byte_size = total_guest_size;
+    handle.rt_material = rt_material;
 
     Entry entry{};
     entry.texture = std::move(resource);

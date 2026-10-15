@@ -21,6 +21,7 @@
 #include "galaxy/frame_cadence_diagnostics.h"
 #include "galaxy/gx/enhanced_lighting.h"
 #include "galaxy/gx/line_point_raster.h"
+#include "galaxy/gx/rt_materials.h"
 #include "galaxy/gx/rt_surfaces.h"
 #include "galaxy/gx/texture_sampling.h"
 #include "galaxy/gx/uber_constants.h"
@@ -6989,6 +6990,17 @@ bool GxBackend::rt_water_draw() const noexcept {
            rt_phase_ == static_cast<std::uint8_t>(ScenePhase::AfterIndirect);
 }
 
+// The material table entry of a draw: its first mapped texture's that has one.
+std::uint16_t GxBackend::rt_material_of(std::uint32_t map_mask,
+                                        const std::array<TextureHandle, kMaxTextureMaps>& handles) noexcept {
+    for (unsigned m = 0; m < kMaxTextureMaps; ++m) {
+        if ((map_mask & (1u << m)) != 0u && handles[m].rt_material != 0u) {
+            return handles[m].rt_material;
+        }
+    }
+    return 0u;
+}
+
 // The current object's name: NameObj::mName (+4), its bytes (Shift-JIS), blanks as '_'.
 std::uint32_t GxBackend::rt_object_name(char* out, std::size_t size) {
     out[0] = 0;
@@ -7104,6 +7116,12 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
             }
         }
     }
+    // The material table (rt_materials.h) gives this texture's class where it names one.
+    if (const RtMaterial* material = rt_material(current_rt_material_);
+        material != nullptr && material->surface_class != 0xFFu) {
+        surface.surface_class = static_cast<RtSurfaceClass>(material->surface_class);
+    }
+    info.rt_material = current_rt_material_;
     if (water && surface.surface_class == RtSurfaceClass::Metal) {
         // A blended environment map is glass, not metal.
         surface.surface_class = RtSurfaceClass::Crystal;
@@ -13009,6 +13027,7 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
                 for (const auto& handle : frame_binding_it->second.texture_handles) {
                     texture_cache_.touch_cached_handle(handle);
                 }
+                current_rt_material_ = rt_material_of(texture_map_mask, frame_binding_it->second.texture_handles);
                 binding_cache_hit = true;
                 ++frame_texture_binding_cache_hits_;
             }
@@ -13169,6 +13188,7 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
                 frame_texture_binding_tables_.emplace(
                     texture_binding_key,
                     cached_tables);
+                current_rt_material_ = rt_material_of(texture_map_mask, texture_handles);
             }
         }
         current_texture_map_mask_ = texture_map_mask;

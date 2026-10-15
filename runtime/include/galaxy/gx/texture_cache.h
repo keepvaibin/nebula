@@ -121,6 +121,8 @@ struct TextureHandle {
     bool from_efb_copy = false;
     bool generated_mips = false;
     std::uint32_t guest_byte_size = 0;
+    // The ray tracer's material table entry of its base level (rt_materials.h; 0: none).
+    std::uint16_t rt_material = 0;
 };
 
 class TextureCache {

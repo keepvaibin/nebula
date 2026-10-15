@@ -808,7 +808,10 @@ private:
     void note_rt_material();
     // The current object's name (NameObj::mName) into `out`; its guest address, 0 for none.
     std::uint32_t rt_object_name(char* out, std::size_t size);
+    [[nodiscard]] static std::uint16_t rt_material_of(std::uint32_t map_mask,
+                                                      const std::array<TextureHandle, kMaxTextureMaps>& handles) noexcept;
     std::uint32_t rt_object_ = 0u;   // the last NameObj marker's object
+    std::uint16_t current_rt_material_ = 0u;  // the bound textures' material table entry (rt_materials.h)
     std::uint32_t rt_draw_buffer_ = 0xFFFFu;   // the last draw buffer marker's type (bit 16: translucent)
     // Per object name (its guest address) the class its name gives (rt_named_class), + 1.
     std::unordered_map<std::uint32_t, std::uint8_t> rt_named_;

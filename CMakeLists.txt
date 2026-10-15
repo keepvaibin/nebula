@@ -686,7 +686,8 @@ foreach(galaxy_rt_pass capture_cs:CaptureCS:cs_6_5 sky_state_cs:SkyStateCS:cs_6_
         sky_light_map_cs:SkyLightMapCS:cs_6_5 sky_light_sh_cs:SkyLightShCS:cs_6_5
         surface_emit_cs:SurfaceEmitCS:cs_6_5 bloom_down_cs:BloomDownCS:cs_6_5 bloom_blur_cs:BloomBlurCS:cs_6_5
         bloom_ps:BloomPS:ps_6_0
-        glow_emit_cs:GlowEmitCS:cs_6_5 emit_merge_cs:EmitMergeCS:cs_6_5 trace_cs:TraceCS:cs_6_5
+        glow_emit_cs:GlowEmitCS:cs_6_5 authored_emit_cs:AuthoredEmitCS:cs_6_5 emit_merge_cs:EmitMergeCS:cs_6_5
+        trace_cs:TraceCS:cs_6_5
         temporal_cs:TemporalCS:cs_6_5
         spatial_a_cs:SpatialACS:cs_6_5 spatial_m_cs:SpatialMCS:cs_6_5 spatial_b_cs:SpatialBCS:cs_6_5
         composite_vs:CompositeVS:vs_6_0
@@ -769,6 +770,7 @@ add_library(galaxy_gx STATIC
     runtime/src/gx/ray_tracing_reflections.cpp
     runtime/src/gx/ray_tracing_water.cpp
     runtime/src/gx/rt_surfaces.cpp
+    runtime/src/gx/rt_materials.cpp
     runtime/src/gx/enhanced_lighting.cpp
     ${galaxy_rt_headers}
     runtime/src/gx/streamline_bridge.cpp

@@ -84,6 +84,8 @@ struct RtDrawInfo {
     // TEV stages, texgens, indirect stages and surface features (bits 0, 8, 16, 24); the environment
     // map's colour combiner and stage (bits 24); the colour channel controls 0 and 1.
     std::array<std::uint32_t, 4> shading{};
+    // Its material table entry (rt_materials.h; 0: none).
+    std::uint16_t rt_material = 0;
 };
 
 struct RtBuffer {
@@ -271,6 +273,7 @@ private:
     static constexpr unsigned kResultSlots = 16u;
     static constexpr std::uint64_t kResultDelay = 8u;
     static constexpr std::uint32_t kEmitLogLights = 64u;
+    static constexpr std::size_t kAuthoredLights = 512u;
     static constexpr std::uint64_t kEmitLogBytes = 16u + kEmitLogLights * 32u;
     static constexpr std::uint64_t kEmitLogSums = 64u;   // the picture sums after them
     static constexpr unsigned kStatsWords = 16u;
@@ -497,6 +500,21 @@ private:
     D3D12_RESOURCE_STATES emit_tiles_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     D3D12_RESOURCE_STATES emit_list_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     std::vector<RtDraw> glow_draws_;
+    // The material table's point lights among this scene's draws: first triangle, count, colour and
+    // flags (RGBA8: kind in the low byte), intensity (relative to a Luma), range, pulse.
+    struct AuthoredLight {
+        std::uint32_t first_triangle;
+        std::uint32_t triangle_count;
+        std::uint32_t color;
+        float intensity;
+        float range;
+        float pulse;
+        std::uint32_t pad[2];
+    };
+    std::vector<AuthoredLight> authored_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> authored_emit_pso_;
+    float authored_power_ = 40000.0f;   // GALAXY_RT_AUTHORED_POWER: a Luma's light (intensity 1)
+    std::uint64_t authored_frames_ = 0u;
     std::uint32_t glow_triangles_ = 0u;
     bool glow_open_ = false;
     bool glow_base_valid_ = false;

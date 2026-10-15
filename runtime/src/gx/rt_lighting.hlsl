@@ -91,6 +91,11 @@ static const float kPi = 3.14159265f;
 static const uint kDrawLit = 8u;    // RtDraw.flags: GX-lit colour
 static const uint kDrawSunKey = 16u;    // RtDraw.flags: its GX light 0 lies along the traced sun
 static const uint kDrawPointLit = 32u;  // RtDraw.flags: lit by GX light 4 (the game's point light)
+// g_draws word 2 (SceneRayTracer::add_draw): the material table's emission, colour RGBA8 with these
+// in the low byte; word 3: its intensity.
+static const uint kEmitArea = 2u;       // low 2 bits: 1 point light, 2 area light
+static const uint kEmitNamed = 4u;      // the table names this draw's texture
+static const uint kEmitNoLight = 8u;    // never a light
 
 // ---------------------------------------------------------------------------------------------
 // Shared helpers
@@ -607,6 +612,9 @@ cbuffer RtEmit : register(b0)
     float e_near;
     uint e_reset;               // 1: forget the remembered lights
     uint e_factor;              // EFB pixels per sample side
+    float e_authored_power;     // a Luma's light (the material table's intensity 1)
+    float e_time;               // seconds (pulsing lights)
+    uint2 e_pad;
 };
 Texture2D<float4> e_color : register(t0);
 Texture2D<float> e_depth_tex : register(t1);
@@ -683,6 +691,63 @@ void GlowEmitCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
             if (index < kEmitFound) {
                 const uint at = 16u + index * 32u;
                 e_found.Store4(at, asuint(float4(transform(e_to_world, centre), radius)));
+                e_found.Store4(at + 16u, asuint(float4(power, 0.0f)));
+            }
+        }
+    }
+}
+
+// The material table's point lights (rt_materials.h: Lumas, star bits, fire and ice enemies, a
+// boss's glowing weak spot): each draw's eye-space triangles in the scene (e_triangles) give the
+// light's centre and spread; its power is the table's colour times its intensity (a Luma's:
+// e_authored_power), pulsing at its rate. One group per draw (e_draws: first triangle, count,
+// colour RGBA8, intensity; range, pulse).
+[numthreads(64, 1, 1)]
+void AuthoredEmitCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
+{
+    const uint4 entry = e_draws.Load4(group.x * 32u);
+    const float2 shape = asfloat(e_draws.Load2(group.x * 32u + 16u));
+    float4 b = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    float area_sum = 0.0f;
+    for (uint t = gi; t < entry.y; t += 64u) {
+        const uint at = (entry.x + t) * 36u;
+        const float3 v0 = asfloat(e_triangles.Load3(at));
+        const float3 v1 = asfloat(e_triangles.Load3(at + 12u));
+        const float3 v2 = asfloat(e_triangles.Load3(at + 24u));
+        const float3 c = (v0 + v1 + v2) / 3.0f;
+        const float area = 0.5f * length(cross(v1 - v0, v2 - v0));
+        if (area > 0.0f && all(abs(c) < 1.0e6f)) {
+            b += float4(c * area, dot(c, c) * area);
+            area_sum += area;
+        }
+    }
+    s_glow_b[gi] = b;
+    s_glow_area[gi] = area_sum;
+    GroupMemoryBarrierWithGroupSync();
+    [unroll] for (uint s = 32u; s > 0u; s >>= 1u) {
+        if (gi < s) {
+            s_glow_b[gi] += s_glow_b[gi + s];
+            s_glow_area[gi] += s_glow_area[gi + s];
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if (gi == 0u && s_glow_area[0] > 0.0f) {
+        const float w = s_glow_area[0];
+        const float3 centre = s_glow_b[0].xyz / w;
+        const float spread = sqrt(max(s_glow_b[0].w / w - dot(centre, centre), 0.0f));
+        const float3 color = float3(float(entry.z >> 24u), float((entry.z >> 16u) & 0xFFu),
+                                    float((entry.z >> 8u) & 0xFFu)) / 255.0f;
+        float intensity = asfloat(entry.w);
+        if (shape.y > 0.0f) {
+            intensity *= 0.75f + 0.25f * sin(6.2831853f * shape.y * e_time);
+        }
+        const float3 power = color * (intensity * e_authored_power);
+        if (luminance(power) >= 4.0f) {
+            uint index;
+            e_found.InterlockedAdd(0u, 1u, index);
+            if (index < kEmitFound) {
+                const uint at = 16u + index * 32u;
+                e_found.Store4(at, asuint(float4(transform(e_to_world, centre), max(spread, 1.0f))));
                 e_found.Store4(at + 16u, asuint(float4(power, 0.0f)));
             }
         }
@@ -1333,7 +1398,15 @@ void TraceCS(uint3 id : SV_DispatchThreadID)
             // saturated: lava, magma, fire) sends its own light, whatever the sky: it joins the
             // point lights' (not scaled by the sky's state), without contact darkening.
             const uint hit_flags = g_surfaces.Load(query.CommittedPrimitiveIndex() * 16u + 12u);
-            if ((hit_flags & kDrawLit) == 0u && g_emit.w > 0.0f) {
+            const uint2 hit_emission = g_draws.Load2(min(hit_flags >> 16u, max(g_draw_count, 1u) - 1u) * 16u + 8u);
+            if ((hit_emission.x & kEmitNamed) != 0u) {
+                // Named by the material table: an area light (lava, magma, a glowing panel) sends all of
+                // its light as it shows, times its intensity; anything else none of its own.
+                if ((hit_emission.x & 3u) == kEmitArea && g_emit.w > 0.0f) {
+                    emitted += sent * (asfloat(hit_emission.y) * (1.0f - distant));
+                    sent = float3(0.0f, 0.0f, 0.0f);
+                }
+            } else if ((hit_flags & kDrawLit) == 0u && g_emit.w > 0.0f) {
                 const float peak = max(sent.r, max(sent.g, sent.b));
                 const float low = min(sent.r, min(sent.g, sent.b));
                 const float glowing = smoothstep(0.9f, 1.6f, peak) * smoothstep(0.35f, 0.7f, (peak - low) / max(peak, 1e-3f));
