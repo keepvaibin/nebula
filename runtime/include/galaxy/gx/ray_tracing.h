@@ -748,7 +748,7 @@ private:
     float ao_night_ = 1.0f;
     float sky_ibl_ = 0.8f;          // GALAXY_RT_SKY_IBL: rays reaching the sky take the light of their
                                     // direction (0: the sky's mean colour from every direction)
-    bool post_ = true;              // GALAXY_RT_POST: the cinematic finish
+    bool post_ = false;             // GALAXY_RT_POST: the cinematic finish (off: see ray_tracing.cpp)
     // GALAXY_RT_POST_BLOOM: bloom of the picture's bright part. 0: the 8-bit picture holds no light
     // beyond white, so a threshold blooms white sand, snow and clouds; the glows' own bloom (what
     // the emitters added) runs under the finish instead.

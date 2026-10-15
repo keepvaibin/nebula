@@ -742,7 +742,10 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     ao_reach_ = std::clamp(env_float("GALAXY_RT_AO_REACH", 150.0f), 0.0f, 2000.0f);
     ao_day_ = std::clamp(env_float("GALAXY_RT_AO", 0.8f), 0.0f, 1.0f);
     ao_night_ = std::clamp(env_float("GALAXY_RT_AO_NIGHT", 1.0f), 0.0f, 1.0f);
-    post_ = env_float("GALAXY_RT_POST", 1.0f) != 0.0f;
+    // The finish (grade, depth of field, shafts, haze, star core, lenses) off by default: with it and the
+    // reflections both on, pictures came out x(1 + x) of the game (Honeyhive 1.31-1.51 per pair with the
+    // lighting off; off: 0.87-1.03, measured h5n / h5p / hhd, 2026-10-15). Cause not yet found.
+    post_ = env_float("GALAXY_RT_POST", 0.0f) != 0.0f;
     post_bloom_ = std::clamp(env_float("GALAXY_RT_POST_BLOOM", 0.0f), 0.0f, 4.0f);
     post_threshold_ = std::clamp(env_float("GALAXY_RT_POST_THRESHOLD", 0.97f), 0.0f, 0.99f);
     post_shafts_ = std::clamp(env_float("GALAXY_RT_POST_SHAFTS", 1.0f), 0.0f, 4.0f);
