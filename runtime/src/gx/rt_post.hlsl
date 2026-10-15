@@ -432,7 +432,11 @@ float4 PostPS(float4 position : SV_Position) : SV_Target0
     }
     c += quarter_at(f_bloom, position.xy) * p_bloom;
     c += quarter_at(f_shafts, position.xy);
-    c = grade(c, position.xy);
+    // The sky and backdrops keep the game's own colours: the lighting never touched them, and a grade
+    // there only shifted them (measured: Sea Slide's clouds turned warm).
+    if (distance < 6.0e4f) {
+        c = grade(c, position.xy);
+    }
     if (p_axis == 2u) {
         // GALAXY_RT_POST_VIEW: the finished picture's luminance in false colour: deep blue near
         // black, blue, green at mid grey, yellow, orange, red near white, magenta clipped.
