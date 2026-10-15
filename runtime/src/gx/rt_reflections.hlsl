@@ -739,7 +739,10 @@ bool passes_through(uint instance, uint primitive, float2 b)
         return true;
     }
 #if RT_TEXTURED
-    if (instance != 0u || (g_flags & 2048u) == 0u) {
+    // A rippled surface's rays (g_spread) read the frame over their footprint, which already holds the cut-outs
+    // as the game drew them: per ray, a lattice bar or its hole speckled Buoy Base's water (v72w). Its rays
+    // take alpha-tested draws whole; mirrors and metal test each texel.
+    if (instance != 0u || (g_flags & 2048u) == 0u || g_spread > 0.0f) {
         return false;
     }
     const uint draw = g_surfaces.Load(primitive * 16u + 12u) >> 16u;
