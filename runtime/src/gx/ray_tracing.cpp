@@ -2921,7 +2921,9 @@ void SceneRayTracer::capture_glow_lights(ID3D12GraphicsCommandList* list, const 
     }
     list->SetPipelineState(emit_merge_pso_.Get());
     list->Dispatch(1u, 1u, 1u);
-    if (emit_readback_ && !emit_log_pending_ && frame_index_ % 120u == 0u) {
+    // Every 120 frames or more: a fixed frame residue would never meet the traced frames of an A/B run
+    // (every other frame) when it falls on the other parity.
+    if (emit_readback_ && !emit_log_pending_ && frame_index_ >= emit_log_frame_ + 120u) {
         to_state(list, emit_list_.Get(), emit_list_state_, D3D12_RESOURCE_STATE_COPY_SOURCE);
         list->CopyBufferRegion(emit_readback_.Get(), 0u, emit_list_.Get(), 0u, kEmitLogBytes);
         const D3D12_RESOURCE_STATES sums_state = picture_sums_state_;
