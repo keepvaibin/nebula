@@ -324,6 +324,8 @@ std::size_t RtStageSunTable::read(std::istream& in) {
         if (source == "table" && direction && length > 1e-4f) {
             sun.source = RtStageSun::Source::Table;
             for (unsigned i = 0; i < 3u; ++i) sun.direction[i] = d[i] / length;
+        } else if (source == "none") {
+            sun.source = RtStageSun::Source::None;
         }
         float c[3]{};
         if (number(row, r_col, c[0]) && number(row, g_col, c[1]) && number(row, b_col, c[2])) {

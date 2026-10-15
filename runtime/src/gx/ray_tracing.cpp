@@ -1506,6 +1506,9 @@ void SceneRayTracer::set_camera(const std::array<float, 12>* view) noexcept {
 }
 
 bool SceneRayTracer::sun_direction(std::array<float, 3>& world, float* distance) const noexcept {
+    if (stage_sun_ != nullptr && stage_sun_->source == RtStageSun::Source::None && !sun_override_) {
+        return false;
+    }
     if (sun_override_) {
         world = sun_direction_;
         if (distance != nullptr) {
@@ -1548,6 +1551,8 @@ bool SceneRayTracer::sky_key(std::array<float, 3>& world, float& strength) const
 }
 
 void SceneRayTracer::reset_sky() noexcept {
+    // Another stage: its exposure starts from 1, not from the last stage's.
+    exposure_reset_ = true;
     sky_map_.reset();
     sky_sun_ = {};
     sky_key_ = {};

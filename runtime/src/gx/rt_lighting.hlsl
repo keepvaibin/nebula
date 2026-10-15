@@ -301,7 +301,7 @@ cbuffer RtCapture : register(b0)
     float4 c_to_world[3];    // eye to world
     float c_exposure_night;  // ... under a black sky
     float c_daylight;        // the sky's luminance that counts as bright
-    uint c_exposure;         // 1: the exposure follows the lighting; 2: its measurement starts over
+    uint c_exposure;         // 1: the exposure follows the lighting; 2: it starts over at 1 (a new stage)
     uint c_pad;
 };
 Texture2D<float4> c_color : register(t0);
@@ -544,6 +544,7 @@ void SkyStateCS()
     }
     if (c_exposure == 2u) {
         measured = uint3(0u, 0u, 0u);
+        c_sums.Store2(48u, uint2(asuint(1.0f), 1u));
     }
     // For [rt-emit]: lit and game sums, pixels.
     c_sums.Store(44u, measured.z);

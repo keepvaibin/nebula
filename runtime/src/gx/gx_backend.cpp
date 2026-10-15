@@ -7042,7 +7042,10 @@ void GxBackend::note_rt_stage() {
     renderer_.rt_set_stage_sun(sun);
     if (trace_actor_lights_enabled()) [[unlikely]] {
         std::fprintf(stderr, "[rt-stage] name=%s sun=%s\n", name[0] != 0 ? name : "?",
-                     sun == nullptr ? "none" : sun->source == RtStageSun::Source::Table ? "table" : "game");
+                     sun == nullptr                             ? "no row"
+                     : sun->source == RtStageSun::Source::Table ? "table"
+                     : sun->source == RtStageSun::Source::None  ? "none"
+                                                                : "game");
     }
 }
 
@@ -7300,7 +7303,9 @@ void GxBackend::aim_rt_scene_lights(const std::array<float, 12>* view) {
     std::array<float, 3> sky_color{};
     float sky_strength = 1.0f;
     const RtStageSun* const stage_sun = renderer_.rt_stage_sun();
-    if (rt_light_tracking_ && stage_sun != nullptr && stage_sun->source == RtStageSun::Source::Table) {
+    if (stage_sun != nullptr && stage_sun->source == RtStageSun::Source::None) {
+        // The stage has no sun or sky key (rt-suns.tsv): its own lights carry it.
+    } else if (rt_light_tracking_ && stage_sun != nullptr && stage_sun->source == RtStageSun::Source::Table) {
         // The stage's sun where its sky shows it (rt-suns.tsv): lit as the sky's own sun.
         source = 2u;
         target = {stage_sun->direction[0], stage_sun->direction[1], stage_sun->direction[2]};

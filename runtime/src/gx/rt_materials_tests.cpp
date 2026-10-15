@@ -124,9 +124,10 @@ bool stage_suns() {
         "stage\tsource\tx\ty\tz\tr\tg\tb\tstrength\tsize\tshafts\tnotes\n"
         "EggStarGalaxy\tgame\t\t\t\t1\t0.95\t0.85\t1.2\t3\t0.8\tBrightSun\n"
         "HoneyBeeKingdomGalaxy\ttable\t0\t3\t4\t\t\t\t\t\t\tsky sun\n"
-        "BadGalaxy\ttable\t0\t0\t0\t\t\t\t9\t\t\tno direction\n");
+        "BadGalaxy\ttable\t0\t0\t0\t\t\t\t9\t\t\tno direction\n"
+        "HellProminenceGalaxy\tnone\t\t\t\t\t\t\t\t\t\tlava\n");
     galaxy::gx::RtStageSunTable table;
-    bool ok = expect(table.read(file) == 3u, "three suns");
+    bool ok = expect(table.read(file) == 4u, "four suns");
     using Source = galaxy::gx::RtStageSun::Source;
     const auto* egg = table.find("EggStarGalaxy");
     ok &= expect(egg != nullptr && egg->source == Source::Game && egg->has_color && near(egg->color[2], 0.85f) &&
@@ -139,6 +140,8 @@ bool stage_suns() {
     const auto* bad = table.find("BadGalaxy");
     ok &= expect(bad != nullptr && bad->source == Source::Game && near(bad->strength, 4.0f),
                  "no direction: the game's sun; strength clamped");
+    const auto* lava = table.find("HellProminenceGalaxy");
+    ok &= expect(lava != nullptr && lava->source == Source::None, "no sun");
     ok &= expect(table.find("Missing") == nullptr, "no row");
     return ok;
 }

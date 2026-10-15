@@ -1769,7 +1769,18 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
         discard;
     }
     const uint view = (m_flags >> 1u) & 3u;
-    const Blend b = blend_samples(pixel, p, true);
+    Blend b = blend_samples(pixel, p, true);
+    // Where the samples under the pixel disagree in normal (a rounded lip between the water's top and
+    // its side wall), their reflections and glints do not belong to one surface: a line of them would
+    // trace the edge. They fade there; flat water seen at a grazing angle keeps its reflection.
+    if (b.surface > 1e-4f) {
+        const float agree = length(b.normal) / b.surface;
+        const float edge = smoothstep(0.88f, 0.98f, agree);
+        b.sum *= edge;
+        b.covered *= edge;
+        b.k_sum *= edge;
+        b.glint *= edge;
+    }
     if (view == 2u) {
         if (b.nearest_class == 15u) {
             discard;

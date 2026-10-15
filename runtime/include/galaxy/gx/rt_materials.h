@@ -78,11 +78,11 @@ private:
 //   stage  source  x  y  z  r  g  b  strength  size  shafts  (others ignored)
 // stage: the game's stage name (EggStarGalaxy). source: game (the game's visible sun, else the one its
 // sky shows: as without a row), table (x y z: the world direction towards the sun, where the sky
-// shows it). r g b: its colour (0-1); strength: its light relative to the default; size: the disc's
+// shows it), none (no sun or sky key: the stage's own lights carry it). r g b: its colour (0-1); strength: its light relative to the default; size: the disc's
 // radius in degrees; shafts: the light shafts' strength (GALAXY_RT_POST_SHAFTS). Empty fields keep
 // the defaults.
 struct RtStageSun {
-    enum class Source : std::uint8_t { Game = 0, Table = 1 };
+    enum class Source : std::uint8_t { Game = 0, Table = 1, None = 2 };
     Source source = Source::Game;
     float direction[3] = {0.0f, 1.0f, 0.0f};
     bool has_color = false;
