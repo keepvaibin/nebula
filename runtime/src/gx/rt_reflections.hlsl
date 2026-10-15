@@ -2399,10 +2399,14 @@ float3 under_at(float2 pixel, float limit, out float z, out float found)
 
 // The floor under the water at `pixel`, softened over a sample each way: water scatters, and the
 // game's thin projected caustic lines on the sand fade instead of showing as outlines. Taps with
-// nothing behind the water leave the mean; `found` is the share that had something.
-float3 under_soft(float2 pixel, float limit, out float z, out float found)
+// nothing behind the water leave the mean; `found` is the share that had something. At least 1.5 of the
+// game's own pixels each way (High's sample spacing alone left the refracted floor grainy), and `spread`
+// pixels where the ripples scatter the view of it (half the refraction's displacement, up to 12): deep or
+// wavy water shows its floor soft, as water does.
+float3 under_soft(float2 pixel, float limit, out float z, out float found, float spread = 0.0f)
 {
-    const float r = 1.5f * float(m_factor);
+    const float native = max(m_viewport.w / 456.0f, 1.0f);
+    const float r = max(1.5f * max(float(m_factor), native), min(spread, 12.0f));
     const float2 offsets[5] = {float2(0.0f, 0.0f), float2(r, r), float2(-r, r), float2(r, -r), float2(-r, -r)};
     const float weights[5] = {0.4f, 0.15f, 0.15f, 0.15f, 0.15f};
     float3 sum = float3(0.0f, 0.0f, 0.0f);
@@ -2537,10 +2541,11 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
             float bent_z;
             float bent_found;
             const float2 bent_pixel = eye_to_pixel(m_projection, m_viewport, floor_at);
-            const float3 bent_colour = under_soft(bent_pixel, p.z - 1.0f, bent_z, bent_found);
+            const float scatter = 0.5f * length(bent_pixel - pixel);
+            const float3 bent_colour = under_soft(bent_pixel, p.z - 1.0f, bent_z, bent_found, scatter);
             float straight_z;
             float straight_found;
-            const float3 straight_colour = under_soft(pixel, p.z - 1.0f, straight_z, straight_found);
+            const float3 straight_colour = under_soft(pixel, p.z - 1.0f, straight_z, straight_found, scatter);
             const float use_bent = bent_z != 0.0f ? smoothstep(0.55f, 0.95f, bent_found) : 0.0f;
             float3 floor_colour = lerp(straight_colour, bent_colour, use_bent);
             floor_at = lerp(straight, bent_z != 0.0f ? eye_position(m_projection, m_viewport, bent_pixel, bent_z) : straight,
