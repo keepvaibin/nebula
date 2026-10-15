@@ -7344,7 +7344,20 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         note_rt_unnamed_glow((state_.bp(static_cast<std::uint8_t>(bp::kTexImage3Base + bank + (map & 3u))) & 0xFFFFFFu)
                              << 5u);
     }
-    const bool water = translucent && !lens && !glow && (clear_added || rt_water_draw());
+    bool water = translucent && !lens && !glow && (clear_added || rt_water_draw());
+    // An opaque late draw the table names water or crystal (Freezeflame's ice, drawn after the indirect
+    // capture with the game's own refraction): a surface of the water pass, its reflections laid over what it
+    // drew (user: the ice reflects nothing; Mario stood on it unmirrored).
+    bool opaque_clear = false;
+    if (!water && translucent && !glow && !lens && rt_late_draw() && renderer_.rt_water_open()) {
+        const RtMaterial* const clear = rt_material(current_rt_material_);
+        const VcdType position = state_.vertex_desc(0u).position.vcd;
+        opaque_clear = clear != nullptr && !clear->particle && !clear->helper &&
+                       (clear->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Crystal) ||
+                        clear->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Water)) &&
+                       (position == VcdType::Index8 || position == VcdType::Index16);
+        water = opaque_clear;
+    }
     const bool late = translucent && !glow && !water && !lens && rt_late_draw();
     if (const RtMaterial* clear = rt_material(current_rt_material_);
         clear != nullptr && rt_log_glows() &&
@@ -7458,7 +7471,8 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         } else if (water) {
             const RtMaterial* const fall = rt_material(current_rt_material_);
             info.surface = kRtDrawWater | (static_cast<std::uint32_t>(surface.surface_class) << kRtDrawClassShift) |
-                           (fall != nullptr && fall->waterfall ? kRtDrawWaterfall : 0u);
+                           (fall != nullptr && fall->waterfall ? kRtDrawWaterfall : 0u) |
+                           (opaque_clear ? kRtDrawWaterOpaque : 0u);
         } else {
             info.surface |= static_cast<std::uint32_t>(surface.surface_class) << kRtDrawClassShift;
             if (!rt_state_eligible_) {

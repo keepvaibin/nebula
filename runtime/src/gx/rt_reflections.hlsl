@@ -1544,6 +1544,9 @@ float3 rippled(int2 q, float3 n)
 
 // RtDraw.flags bit 13 (kRtDrawWaterfall): falling water (its streaks run down it).
 static const uint kWaterfallFlag = 8192u;
+// RtDraw.flags bit 12 on a water-pass draw (kRtDrawWaterOpaque): an opaque late surface the table names water or
+// crystal, the scene the trace saw (Freezeflame's ice).
+static const uint kWaterOpaqueFlag = 4096u;
 
 // Value noise in 3D (hashed lattice corners, smooth interpolation) and its fractal sum.
 float wave_hash(float3 p)
@@ -1673,11 +1676,15 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
         query.TraceRayInline(g_water, RAY_FLAG_NONE, 0xFFu, ray);
         query.Proceed();
         // A water surface has depth below it: triangles lying on the opaque scene the trace saw
-        // (a water volume's floor, seen from inside it) are no surface.
+        // (a water volume's floor, seen from inside it) are no surface. An opaque clear surface
+        // (kWaterOpaqueFlag: Freezeflame's ice) is that scene itself.
         const uint2 under = g_under[index];
         const float floor_distance = under.y != 0u ? length(through) * -asfloat(under.y) : 1e30f;
-        if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT &&
-            floor_distance - query.CommittedRayT() > max(0.01f * query.CommittedRayT(), 8.0f)) {
+        const bool hit_water = query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
+        const bool opaque_clear =
+            hit_water && (g_water_surfaces.Load(query.CommittedPrimitiveIndex() * 16u + 12u) & kWaterOpaqueFlag) != 0u &&
+            abs(floor_distance - query.CommittedRayT()) <= max(0.01f * query.CommittedRayT(), 8.0f);
+        if (hit_water && (opaque_clear || floor_distance - query.CommittedRayT() > max(0.01f * query.CommittedRayT(), 8.0f))) {
             water = true;
             const uint tri = query.CommittedPrimitiveIndex();
             const float2 b = query.CommittedTriangleBarycentrics();

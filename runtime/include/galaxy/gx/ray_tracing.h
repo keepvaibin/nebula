@@ -74,6 +74,10 @@ inline constexpr std::uint32_t kRtDrawNoShadow = 1u << 15u;
 // RtDrawInfo.surface only (above the RtDraw.flags bits): an alpha-tested foliage card, in the traced
 // scene whole; add_draw marks its draw record (rt_lighting.hlsl kDrawTableCard).
 inline constexpr std::uint32_t kRtDrawCard = 1u << 16u;
+// A water-pass draw only (kRtDrawWater): an opaque late surface the table names water or crystal, the scene
+// the trace saw rather than a layer over it (rt_reflections.hlsl kWaterOpaqueFlag). Shares the de-lit bit,
+// which water draws never carry.
+inline constexpr std::uint32_t kRtDrawWaterOpaque = 1u << 12u;
 // RtDrawInfo.surface only: an alpha-tested opaque draw outside the foliage table (wood panels, rocks, bells,
 // Gearmos: tests that cut little or nothing), traced whole; each ray's hit counts where its texture's alpha
 // passes the draw's test (RtDrawInfo.alpha; rt_lighting.hlsl alpha_test). Cards carry the same test.
