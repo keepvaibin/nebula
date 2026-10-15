@@ -242,7 +242,7 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     materials_[kWaterClass + 1u] = materials_[kWaterClass];
     // Crystals, ice, gems and glass (named in rt_surfaces.cpp): clear dielectric, its reflection
     // white and Fresnel-weighted.
-    materials_[7] = material("GALAXY_RT_REFLECT_CRYSTAL", {0.05f, 0.05f, 1.0f, 0.0f, 0.0f});
+    materials_[7] = material("GALAXY_RT_REFLECT_CRYSTAL", {0.05f, 0.15f, 1.0f, 0.0f, 0.0f});
     view_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_REFLECT_VIEW", 0.0f), 0.0f, 5.0f));
     history_frames_ =
         static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_REFLECT_HISTORY", 24.0f), 1.0f, 64.0f));

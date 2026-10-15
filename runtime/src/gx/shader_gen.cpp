@@ -1894,23 +1894,12 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
                     tex_swz.c_str());
             }
             if (!has_indirect_cmd && ((enh_env >> texcoord) & 1u) != 0u) {
-                // Under ray-traced lighting and reflections (header bits 16-17), on a metal the material
-                // table names (bits 26-30), the painted reflection gives way to the traced one: the map's
-                // mean colour (its centre and a ring inside the sphere map's disc) stays as the tint.
-                // Elsewhere (crystals, sheen on cloth and skin) the game's map stays as drawn.
-                emit(s,
-                     "    if (enh_on && (uber_ps_header.w & 0x30000u) == 0x30000u &&\n"
-                     "        (uber_ps_header.w & 0x40000000u) != 0u && ((uber_ps_header.w >> 26) & 15u) >= 8u) {\n"
-                     "        float4 env_mean = tex[%u].SampleLevel(samp[%u], float2(0.5, 0.5), 0.0);\n"
-                     "        [unroll] for (uint env_k = 0u; env_k < 8u; ++env_k) {\n"
-                     "            const float env_a = float(env_k) * 0.785398;\n"
-                     "            env_mean += tex[%u].SampleLevel(samp[%u], 0.5 + 0.3 * float2(cos(env_a), sin(env_a)), 0.0);\n"
-                     "        }\n"
-                     "        tex_color_i = int4(round(saturate(env_mean / 9.0) * 255.0))%s;\n"
-                     "    } else if (enh_on && (uber_ps_header.w & 0x20000u) == 0u) {\n"
+                // The game's painted reflection stays as drawn under ray tracing (metals, crystals, sheen):
+                // the traced reflection screens over it (replacing chrome's map by its mean left
+                // Battlerock's disks flat grey against black space). Enhanced lighting alone scales it.
+                s << "    if (enh_on && (uber_ps_header.w & 0x20000u) == 0u) {\n"
                      "        tex_color_i.rgb = min(int3(round(float3(tex_color_i.rgb) * enh.env_gain)), int3(255,255,255));\n"
-                     "    }\n",
-                     texmap, texmap, texmap, texmap, tex_swz.c_str());
+                     "    }\n";
             }
         } else if (key.num_texgens != 0u) {
             // GX supplies white when this TEV stage disables its texture
