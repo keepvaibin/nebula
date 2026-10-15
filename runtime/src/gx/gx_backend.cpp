@@ -7413,10 +7413,13 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
 // without the game's sun from that key, and each scene's follow-camera lights go towards it;
 // without a key, or without the scene camera, they stay the game's. A key that comes or goes moves
 // them over kActorLightRampScenes scenes from or back to the game's positions, and a key that
-// changes turns over a few scenes. GALAXY_RT_ACTOR_LIGHTS=0 always leaves them; =2 moves them and
-// keys the ray tracer in odd scenes only, at once (a frame-to-frame comparison).
+// changes turns over a few scenes. GALAXY_RT_ACTOR_LIGHTS=1 moves them; =2 moves them and keys the ray tracer in
+// odd scenes only, at once (a frame-to-frame comparison). Off by default: the characters keep the game's
+// lights (moved to the key, a camera behind Mario lit his far side: penguins olive, the Toad ship's dome dull
+// and faceted, Mario and Rosalina dark; measured dg56d against dg56a, 2026-10-15); the traced shadows,
+// occlusion and lights act on top of them.
 void GxBackend::aim_rt_scene_lights(const std::array<float, 12>* view) {
-    static const std::uint64_t mode = read_env_u64("GALAXY_RT_ACTOR_LIGHTS", 1u);
+    static const std::uint64_t mode = read_env_u64("GALAXY_RT_ACTOR_LIGHTS", 0u);
     const std::array<RtWorldKey, 8> candidates = rt_world_keys_;
     const std::uint32_t candidate_count = rt_world_key_count_;
     const RtWorldKey* world = nullptr;

@@ -733,6 +733,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     emissive_ = std::clamp(env_float("GALAXY_RT_EMISSIVE", 3.0f), 0.0f, 16.0f);
     show_lighting_ = env_float("GALAXY_RT_VIEW", 0.0f) != 0.0f;
     show_term_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_VIEW", 0.0f), 0.0f, 8.0f));
+    view_cycle_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_VIEW_CYCLE", 0.0f), 0.0f, 100000.0f));
     point_radius_ = std::clamp(env_float("GALAXY_RT_POINT_RADIUS", 800.0f), 10.0f, 1.0e6f);
     point_size_ = std::clamp(env_float("GALAXY_RT_POINT_SIZE", 600.0f), 0.0f, 1.0e5f);
     point_light_ = std::clamp(env_float("GALAXY_RT_POINT_LIGHT", 2.0f), 0.0f, 8.0f);
@@ -1122,6 +1123,14 @@ bool SceneRayTracer::ensure_capacity(ID3D12GraphicsCommandList* list, std::uint3
 
 void SceneRayTracer::begin_frame(std::uint64_t frame_index) {
     frame_index_ = frame_index;
+    // GALAXY_RT_VIEW_CYCLE=N (diagnostics, documentation pictures): every N frames the next view of the lighting:
+    // the picture, the light alone, the sun, the sky and bounce, the lamps and glows, the sun's blocker distance,
+    // the contact occlusion, the day model's terms (GALAXY_RT_VIEW 0-8); the A/B mark shows its number.
+    if (view_cycle_ != 0u) {
+        static constexpr std::uint32_t kCycle[] = {0u, 1u, 2u, 3u, 4u, 6u, 7u, 8u};
+        show_term_ = kCycle[(frame_index / view_cycle_) % 8u];
+        show_lighting_ = show_term_ != 0u;
+    }
     if (!ready_) {
         return;
     }
@@ -3468,6 +3477,12 @@ void SceneRayTracer::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRI
         const float magenta[4] = {1.0f, 0.0f, 1.0f, 1.0f};
         const D3D12_RECT mark{0, 0, 6, 6};
         list->ClearRenderTargetView(target, magenta, 1u, &mark);
+        // The cycled view's number: that many white squares right of the mark.
+        const float white[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+        for (std::uint32_t i = 0; view_cycle_ != 0u && i < show_term_; ++i) {
+            const D3D12_RECT square{static_cast<LONG>(10u + 10u * i), 0, static_cast<LONG>(16u + 10u * i), 6};
+            list->ClearRenderTargetView(target, white, 1u, &square);
+        }
     }
     if (!show_lighting_) {
         reflections_.composite(list, target, depth_srv, width, height, index,

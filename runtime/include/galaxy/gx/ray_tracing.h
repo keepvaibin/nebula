@@ -854,6 +854,7 @@ private:
     bool ab_original_ = false;
     bool show_lighting_ = false;
     std::uint32_t show_term_ = 0;   // GALAXY_RT_VIEW=2 sun, 3 sky light
+    std::uint32_t view_cycle_ = 0;  // GALAXY_RT_VIEW_CYCLE: frames per view, 0 off
     bool camera_known_ = false;
     bool history_camera_known_ = false;
     bool history_valid_ = false;
