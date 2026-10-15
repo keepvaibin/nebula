@@ -610,7 +610,7 @@ void SkyStateCS()
         const float day = c_sums.Load(36u) != 0u ? saturate(asfloat(c_sums.Load(32u)) / c_daylight) : 1.0f;
         const float target = lerp(c_exposure_night, c_exposure_day, day);
         const float exposure = c_sums.Load(52u) != 0u ? asfloat(c_sums.Load(48u)) : 1.0f;
-        const float goal = clamp(ratio, 0.97f * target, 1.12f * target);
+        const float goal = clamp(ratio, lerp(0.97f, 0.9f, day) * target, 1.12f * target);
         const float next = clamp(exposure * lerp(1.0f, goal / max(ratio, 0.05f), 0.1f), 0.35f, 2.5f);
         c_sums.Store2(48u, uint2(asuint(next), 1u));
     }
@@ -694,7 +694,8 @@ void CaptureCS(uint3 id : SV_DispatchThreadID)
         // stored colour.
         const float peak = max(color.r, max(color.g, color.b));
         const float glow = smoothstep(0.72f, 1.0f, peak);
-        color *= 1.0f + c_emissive * glow * glow;
+        const float day = c_sums.Load(36u) != 0u ? saturate(asfloat(c_sums.Load(32u)) / c_daylight) : 1.0f;
+        color *= 1.0f + c_emissive * (1.0f - day) * glow * glow;
     }
     c_picture[index] = uint2(pack_r11g11b10(color), asuint(z));
     // Averages of the sky and of the scene (8-bit units, glow clipped); the EFB outside the
@@ -1926,10 +1927,14 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
     if (g_picture_sums.Load(36u) != 0u) {
         ambient *= lerp(g_ambient.x, 1.0f, saturate(asfloat(g_picture_sums.Load(32u)) / g_ambient.y));
     }
-    // Unlit and de-lit surfaces hold the game's light at its average over direction: the traced sky
-    // and sun are taken relative to theirs over a lit surface (the sky whole, the sun at a mean facing
-    // of 0.55): sunlit faces above 1, shade below, the whole near the game's level.
-    const float norm = max(g_sun_light.w + 0.55f * luminance(g_sun_light.rgb), 0.25f);
+    // Unlit and de-lit surfaces: the game painted them for full light. Under a bright sky a face
+    // square to the sun with the sky open shows its colour as drawn and shade falls to the sky's
+    // share (key to fill about 3:1, the sun carries the day); under a dark sky the light is taken
+    // against a mean facing of 0.55 (lamps and glows carry the night).
+    const float day_sky = g_picture_sums.Load(36u) != 0u
+                              ? saturate(asfloat(g_picture_sums.Load(32u)) / max(g_ambient.y, 1e-3f))
+                              : 1.0f;
+    const float norm = max(g_sun_light.w + lerp(0.55f, 1.0f, day_sky) * luminance(g_sun_light.rgb), 0.25f);
     float3 lighting = (ambient * light.sky + sun) / norm + points;
     // With the sky open: what the picture capture keeps (no feedback through the sky and bounce).
     float3 open = (ambient + sun) / norm + points;

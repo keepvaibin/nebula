@@ -505,7 +505,8 @@ float4 PostPS(float4 position : SV_Position) : SV_Target0
     }
     if (p_vignette > 0.0f) {
         const float2 at = (position.xy - p_viewport.xy) / p_viewport.zw * 2.0f - 1.0f;
-        c *= 1.0f - p_vignette * smoothstep(0.4f, 1.6f, dot(at, at));
+        const float bright = smoothstep(0.55f, 0.95f, luminance(c));
+        c *= 1.0f - p_vignette * smoothstep(0.4f, 1.6f, dot(at, at)) * (1.0f - 0.8f * bright);
     }
     if (p_axis == 2u) {
         // GALAXY_RT_POST_VIEW: the finished picture's luminance in false colour: deep blue near

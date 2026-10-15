@@ -601,6 +601,7 @@ private:
     bool emit_log_pending_ = false;
     std::uint64_t emit_log_frame_ = 0u;
     std::array<float, 3> emit_log_eye_{};
+    std::array<float, 6> emit_log_sun_{};   // sun light rgb, sky weight, keyed, strength
     // The logged scene's material-table point lights, glow draws and the glow draws the table names.
     std::array<std::uint32_t, 3> emit_log_draws_{};
     std::array<D3D12_RESOURCE_STATES, 2> light_z_state_{};
@@ -732,7 +733,7 @@ private:
     float post_bloom_ = 0.0f;
     float post_threshold_ = 0.9f;   // GALAXY_RT_POST_THRESHOLD: luminance where bloom starts
     float post_shafts_ = 1.0f;      // GALAXY_RT_POST_SHAFTS
-    float post_dof_ = 3.0f;         // GALAXY_RT_POST_DOF: largest far blur (EFB pixels at 1x; 0 none)
+    float post_dof_ = 0.0f;         // GALAXY_RT_POST_DOF: largest far blur (EFB pixels at 1x; 0 none)
     float post_grade_ = 1.0f;       // GALAXY_RT_POST_GRADE
     float post_rim_ = 0.0f;         // GALAXY_RT_POST_RIM: rim light at silhouettes (outlined everything)
     float relief_ = 3.0f;           // GALAXY_RT_RELIEF: height (eye units) of full texture brightness
@@ -740,7 +741,7 @@ private:
     float post_local_dark_ = 0.92f;    // GALAXY_RT_LOCAL_DARK: of regions below it (1: no local exposure)
     float post_haze_ = 0.12f;       // GALAXY_RT_POST_HAZE: distance haze's largest share (bright skies)
     float post_haze_distance_ = 20000.0f;  // GALAXY_RT_POST_HAZE_DISTANCE: where it reaches 63 % of it
-    float post_vignette_ = 0.18f;   // GALAXY_RT_POST_VIGNETTE: darkening towards the corners
+    float post_vignette_ = 0.1f;    // GALAXY_RT_POST_VIGNETTE: darkening towards the corners
     bool post_view_ = false;        // GALAXY_RT_POST_VIEW: the finished luminance in false colour
     bool gi_ = true;                // GALAXY_RT_GI=0: no sky occlusion or bounce (shadows and lights stay)
     float core_radius_ = 400.0f;    // GALAXY_RT_CORE_RADIUS: the star core's radius at scale 1 (first guess;

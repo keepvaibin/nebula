@@ -732,7 +732,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     post_bloom_ = std::clamp(env_float("GALAXY_RT_POST_BLOOM", 0.0f), 0.0f, 4.0f);
     post_threshold_ = std::clamp(env_float("GALAXY_RT_POST_THRESHOLD", 0.97f), 0.0f, 0.99f);
     post_shafts_ = std::clamp(env_float("GALAXY_RT_POST_SHAFTS", 1.0f), 0.0f, 4.0f);
-    post_dof_ = std::clamp(env_float("GALAXY_RT_POST_DOF", 3.0f), 0.0f, 32.0f);
+    post_dof_ = std::clamp(env_float("GALAXY_RT_POST_DOF", 0.0f), 0.0f, 32.0f);
     post_grade_ = std::clamp(env_float("GALAXY_RT_POST_GRADE", 1.0f), 0.0f, 1.0f);
     post_rim_ = std::clamp(env_float("GALAXY_RT_POST_RIM", 0.0f), 0.0f, 2.0f);
     post_haze_ = std::clamp(env_float("GALAXY_RT_POST_HAZE", 0.12f), 0.0f, 1.0f);
@@ -740,7 +740,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     post_local_dark_ = std::clamp(env_float("GALAXY_RT_LOCAL_DARK", 0.92f), 0.3f, 1.0f);
     relief_ = std::clamp(env_float("GALAXY_RT_RELIEF", 3.0f), 0.0f, 64.0f);
     post_haze_distance_ = std::clamp(env_float("GALAXY_RT_POST_HAZE_DISTANCE", 20000.0f), 100.0f, 1.0e6f);
-    post_vignette_ = std::clamp(env_float("GALAXY_RT_POST_VIGNETTE", 0.18f), 0.0f, 1.0f);
+    post_vignette_ = std::clamp(env_float("GALAXY_RT_POST_VIGNETTE", 0.1f), 0.0f, 1.0f);
     post_view_ = env_float("GALAXY_RT_POST_VIEW", 0.0f) != 0.0f;
     gi_ = env_float("GALAXY_RT_GI", 1.0f) != 0.0f;
     core_radius_ = std::clamp(env_float("GALAXY_RT_CORE_RADIUS", 400.0f), 1.0f, 100000.0f);
@@ -1181,6 +1181,10 @@ void SceneRayTracer::log_emitters() {
                       sky[0], sky[1], sky[2], sums[3], scene[0], scene[1], scene[2], sums[7], state,
                       sums[9] != 0u ? "" : "(unset)", exposure, sums[13] != 0u ? "" : "(unset)",
                       static_cast<double>(sums[14]) / std::max<double>(sums[15], 1.0), sums[11]);
+        std::cerr << line << '\n';
+        std::snprintf(line, sizeof(line), "[rt-emit] sun=%.2f,%.2f,%.2f sky-weight=%.2f keyed=%.0f strength=%.2f",
+                      emit_log_sun_[0], emit_log_sun_[1], emit_log_sun_[2], emit_log_sun_[3], emit_log_sun_[4],
+                      emit_log_sun_[5]);
         std::cerr << line << '\n';
     }
     for (std::size_t i = 0; i < std::min<std::size_t>(lights.size(), 12u); ++i) {
@@ -2335,6 +2339,8 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         c.sun[3] = std::tan((keyed && !key_shown_ ? key_size_ : disc) * 3.14159265f / 180.0f);
         // Without a sun the sky and bounce light carry the whole picture.
         c.sun_light[3] = sun_present ? 1.0f + (sky_light_ - 1.0f) * strength : 1.0f;
+        emit_log_sun_ = {c.sun_light[0], c.sun_light[1], c.sun_light[2], c.sun_light[3], keyed ? 1.0f : 0.0f,
+                         strength};
     }
     {
         // The game's point lights nearest in light to the camera, in eye space.

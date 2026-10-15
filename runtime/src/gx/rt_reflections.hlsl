@@ -2216,12 +2216,13 @@ CompositeOut UnderwaterPS(float4 position : SV_Position)
         add += sun * sum * (span / 8.0f) * (shafts * 2e-4f * phase);
     }
     // The water between the camera and what the pixel shows: its light fades with the depth of water
-    // it crosses and the light the water scatters (its teal) takes its place: murky with distance, the
-    // near seabed readable (0.22 of the lake body's absorption; 0.35 was a little too dark).
+    // it crosses and the light the water scatters takes its place: clear for the first 600 units
+    // (the player sees what they do), a light blue-teal veil over the far distance (measured: 250
+    // units and 0.0008 per unit left Beach Bowl's lagoon murky).
     {
-        const float span = max((sky ? 4000.0f : length(p)) - 250.0f, 0.0f);
-        const float3 t = exp(-float3(0.0008f, 0.00045f, 0.00035f) * span);
-        const float3 scatter = (sun * 0.4f + 0.15f) * float3(0.09f, 0.5f, 0.56f);
+        const float span = max((sky ? 4000.0f : length(p)) - 600.0f, 0.0f);
+        const float3 t = exp(-float3(0.00032f, 0.00016f, 0.00012f) * span);
+        const float3 scatter = (sun * 0.4f + 0.25f) * float3(0.16f, 0.58f, 0.72f);
         add = add * t + scatter * (1.0f - t);
         keep *= t;
     }

@@ -6582,6 +6582,10 @@ void GxBackend::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32
     if (kind == motion::kMarkerNameObj) {
         rt_object_ = a;
         rt_object_fake_shadow_ = renderer_.rt_lighting() && rt_fake_shadow_object(a);
+    } else if (kind == motion::kMarkerShapePacket) {
+        // A model from a draw buffer (its shape packet), not the shadow drawer before it: the shadow
+        // drawers draw with GX directly (measured: Gold Leaf's Chomps were hidden with their shadows).
+        rt_object_fake_shadow_ = false;
     } else if (kind == motion::kMarkerEmitter || kind == motion::kMarkerParticle) {
         rt_object_ = 0u;
         rt_object_fake_shadow_ = false;
