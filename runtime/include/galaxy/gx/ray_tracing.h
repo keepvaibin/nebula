@@ -16,6 +16,7 @@
 #include <d3d12.h>
 #include <wrl/client.h>
 
+#include "galaxy/gx/rt_materials.h"
 #include "galaxy/gx/rt_reflections.h"
 #include "galaxy/gx/rt_sky_sun.h"
 
@@ -169,7 +170,10 @@ public:
     // The game camera's view matrix (3x4 rows, world to eye) of the open scene; null when the
     // scene has none. The lighting history follows it from frame to frame.
     void set_camera(const std::array<float, 12>* view) noexcept;
-    [[nodiscard]] bool lighting_active() const noexcept { return ready_ && lighting_enabled_; }
+    [[nodiscard]] bool lighting_active() const noexcept { return ready_ && lighting_enabled_ && !ab_original_; }
+    // GALAXY_RT_AB=1 (test runs): every other renderer frame shows the game's own picture (no traced
+    // lighting, reflections or finish); the traced frames carry a mark in the EFB's top-left corner.
+    [[nodiscard]] bool ab_original() const noexcept { return ab_original_; }
     // The traced sun's world direction (towards it: GALAXY_RT_SUN, else the game's visible sun)
     // and the distance of the game's sun model (0: none); false without a sun.
     [[nodiscard]] bool sun_direction(std::array<float, 3>& world, float* distance = nullptr) const noexcept;
@@ -191,6 +195,10 @@ public:
     [[nodiscard]] bool sky_key(std::array<float, 3>& world, float& strength) const noexcept;
     // Another sky (GxBackend: a stage was loaded): the map starts over.
     void reset_sky() noexcept;
+    // The loaded stage's row of the sun table (rt_materials.h; null: none): its colour, strength,
+    // disc and shafts apply to the sun the scene is lit by.
+    void set_stage_sun(const RtStageSun* sun) noexcept { stage_sun_ = sun; }
+    [[nodiscard]] const RtStageSun* stage_sun() const noexcept { return stage_sun_; }
     // Ray-traced lighting of the last traced scene (rt_lighting.hlsl): its result slot for
     // composite(), -1 for none. The interpolated sub-frames of that game frame composite the
     // same slot.
@@ -274,7 +282,10 @@ private:
     static constexpr std::uint64_t kResultDelay = 8u;
     static constexpr std::uint32_t kEmitLogLights = 64u;
     static constexpr std::size_t kAuthoredLights = 512u;
-    static constexpr std::uint64_t kEmitLogBytes = 16u + kEmitLogLights * 32u;
+    // A light in the glow lights' lists (rt_lighting.hlsl kEmitStride): position, radius; power,
+    // frames unseen or cumulative power; spot direction, cosine of its cone (0 0 0 for a point light).
+    static constexpr std::uint32_t kEmitStride = 48u;
+    static constexpr std::uint64_t kEmitLogBytes = 16u + kEmitLogLights * kEmitStride;
     static constexpr std::uint64_t kEmitLogSums = 64u;   // the picture sums after them
     static constexpr unsigned kStatsWords = 16u;
     static constexpr std::uint32_t kMaxTriangles = 4u * 1024u * 1024u;
@@ -361,9 +372,13 @@ private:
     std::vector<RtDrawInfo> infos_;
     std::vector<RtDrawInfo> dump_infos_;
     std::vector<RtDraw> draws_;
-    // Per draw of the open scene (RtDraw.flags bits 16-31): ambient and GX light 0 colours (RGBA8)
-    // and 2 spare words, for the lighting of lit draws (rt_lighting.hlsl g_draws).
-    std::vector<std::array<std::uint32_t, 4>> draw_colors_;
+    // Per draw of the open scene (RtDraw.flags bits 16-31; rt_lighting.hlsl g_draws, kDrawStride):
+    // ambient and GX light 0 colours (RGBA8), the material table's emission (RGBA8 with its kind)
+    // and intensity; roughness and metalness (unorm16 pair, 0xFFFF: the class's), the material colour
+    // register (RGBA8), flags (kDrawTableTint), a spare word.
+    std::vector<std::array<std::uint32_t, 8>> draw_colors_;
+    // This scene's draw table in the frame's upload ring (trace_lighting), for its reflections; 0: none.
+    D3D12_GPU_VIRTUAL_ADDRESS draw_table_ = 0;
     std::array<ResultSlot, kResultSlots> slots_{};
     RtView view_{};
     D3D12_RESOURCE_STATES positions_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
@@ -428,6 +443,9 @@ private:
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kLightSlots> light_final_;
     Microsoft::WRL::ComPtr<ID3D12Resource> picture_;
     Microsoft::WRL::ComPtr<ID3D12Resource> picture_sums_;
+    // The composite's exposure measurement (lit and game luminance per bucket); always a UAV.
+    Microsoft::WRL::ComPtr<ID3D12Resource> exposure_sums_;
+    bool exposure_reset_ = true;
     // Glows (rt_lighting.hlsl GlowBaseCS, CaptureCS, GlowEmitCS, EmitMergeCS): per sample the
     // picture before the translucent phases and what they added; the glow draws' eye-space
     // triangles; this frame's glow lights; the remembered lights and their list for sampling.
@@ -501,7 +519,8 @@ private:
     D3D12_RESOURCE_STATES emit_list_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     std::vector<RtDraw> glow_draws_;
     // The material table's point lights among this scene's draws: first triangle, count, colour and
-    // flags (RGBA8: kind in the low byte), intensity (relative to a Luma), range, pulse.
+    // flags (RGBA8: kind in the low byte), intensity (relative to a Luma), range, pulse, flags
+    // (rt_lighting.hlsl kAuthored*) and the cosine of a spot light's cone.
     struct AuthoredLight {
         std::uint32_t first_triangle;
         std::uint32_t triangle_count;
@@ -509,8 +528,10 @@ private:
         float intensity;
         float range;
         float pulse;
-        std::uint32_t pad[2];
+        std::uint32_t flags;
+        float cone;
     };
+    static_assert(sizeof(AuthoredLight) == 32u);
     std::vector<AuthoredLight> authored_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> authored_emit_pso_;
     float authored_power_ = 40000.0f;   // GALAXY_RT_AUTHORED_POWER: a Luma's light (intensity 1)
@@ -592,6 +613,7 @@ private:
     std::array<float, 3> sun_color_{1.0f, 0.93f, 0.82f};
     float sun_size_ = 2.5f;     // degrees
     bool sun_override_ = false;
+    const RtStageSun* stage_sun_ = nullptr;
     bool sun_held_ = false;
     bool key_valid_ = false;    // set_key_light
     bool key_shown_ = false;
@@ -668,6 +690,8 @@ private:
     float sun_light_ = 1.0f;
     float sky_light_ = 0.5f;
     bool lighting_enabled_ = true;
+    bool ab_ = false;               // GALAXY_RT_AB
+    bool ab_original_ = false;
     bool show_lighting_ = false;
     std::uint32_t show_term_ = 0;   // GALAXY_RT_VIEW=2 sun, 3 sky light
     bool camera_known_ = false;

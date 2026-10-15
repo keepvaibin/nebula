@@ -1,0 +1,160 @@
+// SPDX-License-Identifier: GPL-3.0-only
+#include "galaxy/gx/rt_materials.h"
+#include "galaxy/gx/rt_surfaces.h"
+
+#include <cmath>
+#include <cstdint>
+#include <cstring>
+#include <iostream>
+#include <sstream>
+
+namespace {
+
+using galaxy::gx::RtEmission;
+using galaxy::gx::RtMaterial;
+using galaxy::gx::RtMaterialTable;
+using galaxy::gx::RtSurfaceClass;
+
+bool expect(bool condition, const char* message) {
+    if (!condition) {
+        std::cerr << "FAILED: " << message << '\n';
+    }
+    return condition;
+}
+
+bool near(float a, float b) { return std::fabs(a - b) < 1e-5f; }
+
+std::uint64_t hash_of(const char* text) {
+    return galaxy::gx::texture_pack_hash(reinterpret_cast<const std::uint8_t*>(text), std::strlen(text));
+}
+
+const RtMaterial* find(const RtMaterialTable& table, std::uint64_t hash) {
+    return table.material(table.index(hash));
+}
+
+bool xxh64_vectors() {
+    bool ok = true;
+    ok &= expect(hash_of("") == 0xEF46DB3751D8E999ull, "XXH64 of nothing");
+    ok &= expect(hash_of("abc") == 0x44BC2CF5AD770999ull, "XXH64 of 3 bytes");
+    ok &= expect(hash_of("Nobody inspects the spammish repetition") == 0xFBCEA83C8A378BF1ull,
+                 "XXH64 of 39 bytes (the 32-byte stripes)");
+    return ok;
+}
+
+bool columns_by_header() {
+    std::istringstream file(
+        "# surfaces\n"
+        "notes\tshadow\tmetallic\troughness\tclass\thash\n"
+        "a pipe\t1\t1\t0.35\tmetal\ttex1_64x64_00000000000000a1_14\n"
+        "glass\t0\t0\t0.05\tglass\t00000000000000A2\n"
+        "no hash\t1\t0\t0.5\tdiffuse\ttex1_8x8_xyz_14\n"
+        "sky\t0\t0\t1\tsky\ttex1_8x8_00000000000000a3_14\n");
+    RtMaterialTable table;
+    bool ok = expect(table.read(file) == 3u, "three rows read");
+    ok &= expect(table.skipped() == 1u, "the row without a hash is skipped");
+    const RtMaterial* pipe = find(table, 0xA1u);
+    ok &= expect(pipe != nullptr && pipe->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Metal) &&
+                     near(pipe->roughness, 0.35f) && near(pipe->metallic, 1.0f) && pipe->shadow,
+                 "metal row by its pack name");
+    const RtMaterial* glass = find(table, 0xA2u);
+    ok &= expect(glass != nullptr && glass->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Crystal) &&
+                     !glass->shadow && glass->emission == RtEmission::None && glass->intensity == 0.0f,
+                 "glass row by its hex alone");
+    const RtMaterial* sky = find(table, 0xA3u);
+    ok &= expect(sky != nullptr && sky->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Unlit),
+                 "sky is unlit");
+    ok &= expect(table.index(0xA4u) == 0u && find(table, 0xA4u) == nullptr, "unknown texture");
+    return ok;
+}
+
+bool lights_fill_their_fields() {
+    std::istringstream surfaces(
+        "hash\tgalaxy\tobject\tclass\troughness\tmetallic\tr\tg\tb\tintensity\trange\tpulse\tshadow\tnotes\n"
+        "tex1_32x32_00000000000000b1_14\t-\tTico\tglossy\t0.4\t0\t\t\t\t\t\t\t1\tluma body\n"
+        "tex1_32x32_00000000000000b2_14\t-\tLight\tparticle+helper\t1\t0\t\t\t\t\t\t\t0\tbeam\n");
+    std::istringstream lights(
+        "hash\tclass\tr\tg\tb\tintensity\trange\tpulse\tcone\n"
+        "tex1_32x32_00000000000000b1_14\temitter+tint\t\t\t\t\t\t0.5\t\n"
+        "tex1_32x32_00000000000000b2_14\tskip+hide+unlit-only\t\t\t\t\t\t\t\n"
+        "tex1_256x256_00000000000000b3_14\temitter\t1\t0.95\t0.8\t3\t2500\t\t28\n"
+        "tex1_256x256_m_00000000000000b4_14\temissive-area\t1\t0.4\t0.1\t1\t\t\t\n");
+    RtMaterialTable table;
+    table.read(surfaces);
+    table.read(lights);
+    bool ok = expect(table.size() == 4u, "four textures");
+    const RtMaterial* luma = find(table, 0xB1u);
+    ok &= expect(luma != nullptr && luma->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Glossy) &&
+                     near(luma->roughness, 0.4f) && luma->emission == RtEmission::Point && luma->tint &&
+                     near(luma->intensity, 1.0f) && near(luma->pulse, 0.5f) && luma->cone == 0.0f,
+                 "a lights row keeps the surface it leaves empty; emitters default to a Luma's intensity");
+    const RtMaterial* beam = find(table, 0xB2u);
+    ok &= expect(beam != nullptr && beam->helper && beam->no_light && beam->hide && beam->unlit_only && !beam->shadow,
+                 "tokens add up across files");
+    const RtMaterial* lamp = find(table, 0xB3u);
+    ok &= expect(lamp != nullptr && lamp->emission == RtEmission::Point && near(lamp->color[1], 0.95f) &&
+                     near(lamp->intensity, 3.0f) && near(lamp->range, 2500.0f) && near(lamp->cone, 28.0f) &&
+                     lamp->surface_class == 0xFFu,
+                 "a spot light without a surface row");
+    const RtMaterial* lava = find(table, 0xB4u);
+    ok &= expect(lava != nullptr && lava->emission == RtEmission::Area && near(lava->color[2], 0.1f) &&
+                     near(lava->intensity, 1.0f),
+                 "an area light");
+    return ok;
+}
+
+bool values_are_clamped() {
+    std::istringstream file(
+        "hash\tclass\troughness\tmetallic\tr\tintensity\tcone\n"
+        "00000000000000c1\temitter\t1.5\t-1\t2\t1000\t120\n"
+        "00000000000000c2\temitter\tx\tnan\t\t0\t\n");
+    RtMaterialTable table;
+    table.read(file);
+    const RtMaterial* a = find(table, 0xC1u);
+    bool ok = expect(a != nullptr && near(a->roughness, 1.0f) && near(a->metallic, 0.0f) && near(a->color[0], 1.0f) &&
+                         near(a->intensity, 100.0f) && near(a->cone, 90.0f),
+                     "out-of-range values clamp");
+    const RtMaterial* b = find(table, 0xC2u);
+    ok &= expect(b != nullptr && b->roughness < 0.0f && b->metallic < 0.0f && b->intensity == 0.0f,
+                 "unreadable numbers leave the field as it was; an explicit 0 stays 0");
+    return ok;
+}
+
+bool stage_suns() {
+    std::istringstream file(
+        "stage\tsource\tx\ty\tz\tr\tg\tb\tstrength\tsize\tshafts\tnotes\n"
+        "EggStarGalaxy\tgame\t\t\t\t1\t0.95\t0.85\t1.2\t3\t0.8\tBrightSun\n"
+        "HoneyBeeKingdomGalaxy\ttable\t0\t3\t4\t\t\t\t\t\t\tsky sun\n"
+        "BadGalaxy\ttable\t0\t0\t0\t\t\t\t9\t\t\tno direction\n");
+    galaxy::gx::RtStageSunTable table;
+    bool ok = expect(table.read(file) == 3u, "three suns");
+    using Source = galaxy::gx::RtStageSun::Source;
+    const auto* egg = table.find("EggStarGalaxy");
+    ok &= expect(egg != nullptr && egg->source == Source::Game && egg->has_color && near(egg->color[2], 0.85f) &&
+                     near(egg->strength, 1.2f) && near(egg->size, 3.0f) && near(egg->shafts, 0.8f),
+                 "a game sun with its look");
+    const auto* honey = table.find("HoneyBeeKingdomGalaxy");
+    ok &= expect(honey != nullptr && honey->source == Source::Table && near(honey->direction[1], 0.6f) &&
+                     near(honey->direction[2], 0.8f) && !honey->has_color && honey->size < 0.0f,
+                 "a table sun, its direction normalised");
+    const auto* bad = table.find("BadGalaxy");
+    ok &= expect(bad != nullptr && bad->source == Source::Game && near(bad->strength, 4.0f),
+                 "no direction: the game's sun; strength clamped");
+    ok &= expect(table.find("Missing") == nullptr, "no row");
+    return ok;
+}
+
+}  // namespace
+
+int main() {
+    bool ok = true;
+    ok &= xxh64_vectors();
+    ok &= columns_by_header();
+    ok &= lights_fill_their_fields();
+    ok &= values_are_clamped();
+    ok &= stage_suns();
+    if (!ok) {
+        return 1;
+    }
+    std::cout << "rt materials tests passed\n";
+    return 0;
+}

@@ -371,7 +371,8 @@ float3 grade(float3 c, float2 pixel)
 {
     // Filmic contrast on luminance (an S around mid grey that keeps black, white and the hue),
     // vibrance (dull colours gain more saturation than vivid ones), warm highlights against cool
-    // shadows, and a soft vignette.
+    // shadows. The lighting's exposure measures through the same shoulder and S
+    // (rt_lighting.hlsl finished_luminance).
     c = shoulder(max(c, 0.0f));
     const float l = luminance(c);
     const float lc = saturate(l + 0.7f * (l - 0.5f) * l * (1.0f - l));
@@ -382,8 +383,6 @@ float3 grade(float3 c, float2 pixel)
     const float3 shadows = float3(0.985f, 0.995f, 1.02f);
     const float3 highlights = float3(1.015f, 1.0f, 0.985f);
     g *= lerp(shadows, highlights, smoothstep(0.15f, 0.85f, lc));
-    const float2 v = (pixel - (p_viewport.xy + p_viewport.zw * 0.5f)) / (p_viewport.zw * 0.5f);
-    g *= 1.0f - 0.08f * pow(saturate(dot(v, v) * 0.5f), 1.5f);
     return lerp(c, saturate(g), p_grade);
 }
 

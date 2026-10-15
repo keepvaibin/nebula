@@ -7,13 +7,12 @@
 
 #include <algorithm>
 #include <bit>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <iostream>
-#include <mutex>
-#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -68,24 +67,6 @@ std::uint64_t texture_pack_hash(const std::uint8_t* p, std::size_t n) noexcept {
 
 namespace {
 
-struct Table {
-    std::vector<RtMaterial> materials;
-    std::unordered_map<std::uint64_t, std::uint16_t> by_hash;
-};
-
-std::string table_path() {
-    char value[MAX_PATH]{};
-    std::size_t length = 0u;
-    if (getenv_s(&length, value, sizeof(value), "GALAXY_RT_MATERIALS_FILE") == 0 && length > 1u) {
-        return value;
-    }
-    char exe[MAX_PATH]{};
-    const DWORD n = GetModuleFileNameA(nullptr, exe, MAX_PATH);
-    std::string path(exe, n);
-    const std::size_t slash = path.find_last_of("\\/");
-    return (slash == std::string::npos ? std::string(".") : path.substr(0, slash)) + "\\rt-materials.tsv";
-}
-
 std::vector<std::string> split(const std::string& line, char by) {
     std::vector<std::string> out;
     std::size_t start = 0u;
@@ -122,108 +103,262 @@ bool parse_hash(const std::string& text, std::uint64_t& hash) {
     return false;
 }
 
-float number(const std::vector<std::string>& row, int column, float fallback) {
-    if (column < 0 || static_cast<std::size_t>(column) >= row.size() || row[column].empty()) {
-        return fallback;
+// The column's number; false when the row leaves it empty (or holds no number there).
+bool number(const std::vector<std::string>& row, int column, float& out) {
+    if (column < 0 || static_cast<std::size_t>(column) >= row.size()) {
+        return false;
+    }
+    const std::string text = lower(row[static_cast<std::size_t>(column)]);
+    if (text.empty()) {
+        return false;
     }
     char* end = nullptr;
-    const float v = std::strtof(row[column].c_str(), &end);
-    return end != row[column].c_str() ? v : fallback;
+    const float v = std::strtof(text.c_str(), &end);
+    if (end == text.c_str() || !std::isfinite(v)) {
+        return false;
+    }
+    out = v;
+    return true;
 }
 
-Table load() {
-    Table table;
-    const std::string path = table_path();
-    std::ifstream file(path);
-    if (!file) {
-        return table;
+// The class tokens over `m`: a surface token sets the class, the others add their property.
+void apply_class(const std::string& text, RtMaterial& m) {
+    const auto set = [&m](RtSurfaceClass c) { m.surface_class = static_cast<std::uint8_t>(c); };
+    for (const std::string& part : split(lower(text), '+')) {
+        const std::string token = lower(part);
+        if (token == "emitter" || token == "light") m.emission = RtEmission::Point;
+        else if (token == "emissive-area" || token == "area") m.emission = RtEmission::Area;
+        else if (token == "skip" || token == "none") m.no_light = true;
+        else if (token == "helper") m.helper = true;
+        else if (token == "tint") m.tint = true;
+        else if (token == "hide") m.hide = true;
+        else if (token == "unlit-only") m.unlit_only = true;
+        else if (token == "metal") set(RtSurfaceClass::Metal);
+        else if (token == "glossy") set(RtSurfaceClass::Glossy);
+        else if (token == "glass" || token == "crystal" || token == "glass/crystal") set(RtSurfaceClass::Crystal);
+        else if (token == "ice" || token == "water") set(RtSurfaceClass::Water);
+        else if (token == "diffuse" || token == "foliage" || token == "fabric" || token == "skin") {
+            set(RtSurfaceClass::Diffuse);
+        } else if (token == "unlit" || token == "sky") {
+            set(RtSurfaceClass::Unlit);
+        }
     }
+}
+
+std::vector<std::string> table_paths() {
+    char value[4096]{};
+    std::size_t length = 0u;
+    std::vector<std::string> paths;
+    if (getenv_s(&length, value, sizeof(value), "GALAXY_RT_MATERIALS_FILE") == 0 && length > 1u) {
+        for (const std::string& path : split(value, ';')) {
+            if (!path.empty()) paths.push_back(path);
+        }
+        return paths;
+    }
+    char exe[MAX_PATH]{};
+    const DWORD n = GetModuleFileNameA(nullptr, exe, MAX_PATH);
+    std::string dir(exe, n);
+    const std::size_t slash = dir.find_last_of("\\/");
+    dir = slash == std::string::npos ? std::string(".") : dir.substr(0, slash);
+    return {dir + "\\rt-materials.tsv", dir + "\\rt-materials-lights.tsv"};
+}
+
+RtMaterialTable load() {
+    RtMaterialTable table;
+    for (const std::string& path : table_paths()) {
+        std::ifstream file(path);
+        if (!file) {
+            continue;
+        }
+        const std::size_t rows = table.read(file);
+        std::cerr << "[rt-materials] file=" << path << " rows=" << rows << " textures=" << table.size()
+                  << " skipped=" << table.skipped() << '\n';
+    }
+    return table;
+}
+
+const RtMaterialTable& table() {
+    static const RtMaterialTable loaded = load();
+    return loaded;
+}
+
+const RtStageSunTable& suns() {
+    static const RtStageSunTable loaded = [] {
+        RtStageSunTable t;
+        char value[MAX_PATH]{};
+        std::size_t length = 0u;
+        std::string path;
+        if (getenv_s(&length, value, sizeof(value), "GALAXY_RT_SUNS_FILE") == 0 && length > 1u) {
+            path = value;
+        } else {
+            char exe[MAX_PATH]{};
+            const DWORD n = GetModuleFileNameA(nullptr, exe, MAX_PATH);
+            std::string dir(exe, n);
+            const std::size_t slash = dir.find_last_of("\\/");
+            path = (slash == std::string::npos ? std::string(".") : dir.substr(0, slash)) + "\\rt-suns.tsv";
+        }
+        std::ifstream file(path);
+        if (file) {
+            const std::size_t rows = t.read(file);
+            std::cerr << "[rt-suns] file=" << path << " rows=" << rows << '\n';
+        }
+        return t;
+    }();
+    return loaded;
+}
+
+}  // namespace
+
+std::size_t RtMaterialTable::read(std::istream& in) {
     std::string line;
-    std::vector<std::string> header;
-    int hash_col = -1, class_col = -1, r_col = -1, g_col = -1, b_col = -1, intensity_col = -1, range_col = -1,
-        pulse_col = -1, shadow_col = -1;
-    std::size_t rows = 0u, skipped = 0u;
-    while (std::getline(file, line)) {
+    bool header_read = false;
+    int hash_col = -1, class_col = -1, rough_col = -1, metal_col = -1, r_col = -1, g_col = -1, b_col = -1,
+        intensity_col = -1, range_col = -1, pulse_col = -1, cone_col = -1, shadow_col = -1;
+    std::size_t rows = 0u;
+    while (std::getline(in, line)) {
         if (line.empty() || line[0] == '#') {
             continue;
         }
         const std::vector<std::string> row = split(line, '\t');
-        if (header.empty()) {
-            header = row;
-            for (std::size_t i = 0; i < header.size(); ++i) {
-                const std::string name = lower(header[i]);
-                int* const slot = name == "hash" ? &hash_col : name == "class" ? &class_col : name == "r" ? &r_col
-                                : name == "g" ? &g_col : name == "b" ? &b_col : name == "intensity" ? &intensity_col
-                                : name == "range" ? &range_col : name == "pulse" ? &pulse_col
+        if (!header_read) {
+            header_read = true;
+            for (std::size_t i = 0; i < row.size(); ++i) {
+                const std::string name = lower(row[i]);
+                int* const slot = name == "hash" ? &hash_col : name == "class" ? &class_col
+                                : name == "roughness" ? &rough_col : name == "metallic" ? &metal_col
+                                : name == "r" ? &r_col : name == "g" ? &g_col : name == "b" ? &b_col
+                                : name == "intensity" ? &intensity_col : name == "range" ? &range_col
+                                : name == "pulse" ? &pulse_col : name == "cone" ? &cone_col
                                 : name == "shadow" ? &shadow_col : nullptr;
                 if (slot != nullptr) *slot = static_cast<int>(i);
             }
             continue;
         }
         std::uint64_t hash = 0u;
-        if (hash_col < 0 || static_cast<std::size_t>(hash_col) >= row.size() || !parse_hash(row[hash_col], hash) ||
-            class_col < 0 || static_cast<std::size_t>(class_col) >= row.size()) {
-            ++skipped;
+        if (hash_col < 0 || static_cast<std::size_t>(hash_col) >= row.size() || !parse_hash(row[hash_col], hash)) {
+            ++skipped_;
             continue;
         }
-        RtMaterial m{};
-        for (const std::string& part : split(lower(row[class_col]), '+')) {
-            const std::string token = lower(part);
-            if (token == "emitter" || token == "light") m.emission = RtEmission::Point;
-            else if (token == "emissive-area" || token == "area") m.emission = RtEmission::Area;
-            else if (token == "skip" || token == "none") m.no_light = true;
-            else if (token == "metal") m.surface_class = static_cast<std::uint8_t>(RtSurfaceClass::Metal);
-            else if (token == "glossy") m.surface_class = static_cast<std::uint8_t>(RtSurfaceClass::Glossy);
-            else if (token == "glass" || token == "crystal" || token == "glass/crystal") {
-                m.surface_class = static_cast<std::uint8_t>(RtSurfaceClass::Crystal);
-            } else if (token == "ice" || token == "water") m.surface_class = static_cast<std::uint8_t>(RtSurfaceClass::Water);
-            else if (token == "diffuse") m.surface_class = static_cast<std::uint8_t>(RtSurfaceClass::Diffuse);
-            else if (token == "unlit") m.surface_class = static_cast<std::uint8_t>(RtSurfaceClass::Unlit);
+        auto it = by_hash_.find(hash);
+        if (it == by_hash_.end()) {
+            if (materials_.size() >= 0xFFFEu) {
+                ++skipped_;
+                continue;
+            }
+            materials_.emplace_back();
+            it = by_hash_.emplace(hash, static_cast<std::uint16_t>(materials_.size())).first;
         }
-        m.color[0] = std::clamp(number(row, r_col, 1.0f), 0.0f, 1.0f);
-        m.color[1] = std::clamp(number(row, g_col, 1.0f), 0.0f, 1.0f);
-        m.color[2] = std::clamp(number(row, b_col, 1.0f), 0.0f, 1.0f);
-        m.intensity = std::clamp(number(row, intensity_col, m.emission != RtEmission::None ? 1.0f : 0.0f), 0.0f, 100.0f);
-        m.range = std::clamp(number(row, range_col, 0.0f), 0.0f, 1.0e5f);
-        m.pulse = std::clamp(number(row, pulse_col, 0.0f), 0.0f, 30.0f);
-        m.shadow = number(row, shadow_col, 1.0f) != 0.0f;
-        if (table.materials.size() >= 0xFFFEu) {
-            break;
+        RtMaterial& m = materials_[it->second - 1u];
+        const RtEmission before = m.emission;
+        if (class_col >= 0 && static_cast<std::size_t>(class_col) < row.size()) {
+            apply_class(row[static_cast<std::size_t>(class_col)], m);
         }
-        // A later row for the same texture replaces the earlier one.
-        const auto [it, inserted] = table.by_hash.try_emplace(hash, static_cast<std::uint16_t>(table.materials.size() + 1u));
-        if (inserted) {
-            table.materials.push_back(m);
-        } else {
-            table.materials[it->second - 1u] = m;
+        float v = 0.0f;
+        if (number(row, rough_col, v)) m.roughness = std::clamp(v, 0.0f, 1.0f);
+        if (number(row, metal_col, v)) m.metallic = std::clamp(v, 0.0f, 1.0f);
+        if (number(row, r_col, v)) m.color[0] = std::clamp(v, 0.0f, 1.0f);
+        if (number(row, g_col, v)) m.color[1] = std::clamp(v, 0.0f, 1.0f);
+        if (number(row, b_col, v)) m.color[2] = std::clamp(v, 0.0f, 1.0f);
+        if (number(row, intensity_col, v)) {
+            m.intensity = std::clamp(v, 0.0f, 100.0f);
+        } else if (before == RtEmission::None && m.emission != RtEmission::None && m.intensity <= 0.0f) {
+            m.intensity = 1.0f;
         }
+        if (number(row, range_col, v)) m.range = std::clamp(v, 0.0f, 1.0e5f);
+        if (number(row, pulse_col, v)) m.pulse = std::clamp(v, 0.0f, 30.0f);
+        if (number(row, cone_col, v)) m.cone = std::clamp(v, 0.0f, 90.0f);
+        if (number(row, shadow_col, v)) m.shadow = v != 0.0f;
         ++rows;
     }
-    std::cerr << "[rt-materials] file=" << path << " rows=" << rows << " textures=" << table.by_hash.size()
-              << " skipped=" << skipped << '\n';
-    return table;
+    return rows;
 }
 
-const Table& table() {
-    static const Table loaded = load();
-    return loaded;
+std::uint16_t RtMaterialTable::index(std::uint64_t hash) const noexcept {
+    const auto it = by_hash_.find(hash);
+    return it != by_hash_.end() ? it->second : 0u;
 }
 
-}  // namespace
+const RtMaterial* RtMaterialTable::material(std::uint16_t index) const noexcept {
+    return index != 0u && index <= materials_.size() ? &materials_[index - 1u] : nullptr;
+}
+
+std::size_t RtStageSunTable::read(std::istream& in) {
+    std::string line;
+    bool header_read = false;
+    int stage_col = -1, source_col = -1, x_col = -1, y_col = -1, z_col = -1, r_col = -1, g_col = -1, b_col = -1,
+        strength_col = -1, size_col = -1, shafts_col = -1;
+    std::size_t rows = 0u;
+    while (std::getline(in, line)) {
+        if (line.empty() || line[0] == '#') {
+            continue;
+        }
+        const std::vector<std::string> row = split(line, '\t');
+        if (!header_read) {
+            header_read = true;
+            for (std::size_t i = 0; i < row.size(); ++i) {
+                const std::string name = lower(row[i]);
+                int* const slot = name == "stage" ? &stage_col : name == "source" ? &source_col
+                                : name == "x" ? &x_col : name == "y" ? &y_col : name == "z" ? &z_col
+                                : name == "r" ? &r_col : name == "g" ? &g_col : name == "b" ? &b_col
+                                : name == "strength" ? &strength_col : name == "size" ? &size_col
+                                : name == "shafts" ? &shafts_col : nullptr;
+                if (slot != nullptr) *slot = static_cast<int>(i);
+            }
+            continue;
+        }
+        if (stage_col < 0 || static_cast<std::size_t>(stage_col) >= row.size()) {
+            continue;
+        }
+        std::string stage = row[static_cast<std::size_t>(stage_col)];
+        while (!stage.empty() && (stage.back() == '\r' || stage.back() == ' ')) stage.pop_back();
+        if (stage.empty()) {
+            continue;
+        }
+        RtStageSun sun{};
+        const std::string source = source_col >= 0 && static_cast<std::size_t>(source_col) < row.size()
+                                       ? lower(row[static_cast<std::size_t>(source_col)])
+                                       : std::string();
+        float d[3]{};
+        const bool direction = number(row, x_col, d[0]) && number(row, y_col, d[1]) && number(row, z_col, d[2]);
+        const float length = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+        if (source == "table" && direction && length > 1e-4f) {
+            sun.source = RtStageSun::Source::Table;
+            for (unsigned i = 0; i < 3u; ++i) sun.direction[i] = d[i] / length;
+        }
+        float c[3]{};
+        if (number(row, r_col, c[0]) && number(row, g_col, c[1]) && number(row, b_col, c[2])) {
+            sun.has_color = true;
+            for (unsigned i = 0; i < 3u; ++i) sun.color[i] = std::clamp(c[i], 0.0f, 1.0f);
+        }
+        float v = 0.0f;
+        if (number(row, strength_col, v)) sun.strength = std::clamp(v, 0.0f, 4.0f);
+        if (number(row, size_col, v)) sun.size = std::clamp(v, 0.0f, 30.0f);
+        if (number(row, shafts_col, v)) sun.shafts = std::clamp(v, 0.0f, 4.0f);
+        suns_[stage] = sun;
+        ++rows;
+    }
+    return rows;
+}
+
+const RtStageSun* RtStageSunTable::find(std::string_view stage) const noexcept {
+    const auto it = suns_.find(std::string(stage));
+    return it != suns_.end() ? &it->second : nullptr;
+}
+
+const RtStageSun* rt_stage_sun(std::string_view stage) noexcept {
+    return suns().find(stage);
+}
 
 bool rt_materials_loaded() noexcept {
-    return !table().materials.empty();
+    return !table().empty();
 }
 
 std::uint16_t rt_material_index(std::uint64_t hash) noexcept {
-    const Table& t = table();
-    const auto it = t.by_hash.find(hash);
-    return it != t.by_hash.end() ? it->second : 0u;
+    return table().index(hash);
 }
 
 const RtMaterial* rt_material(std::uint16_t index) noexcept {
-    const Table& t = table();
-    return index != 0u && index <= t.materials.size() ? &t.materials[index - 1u] : nullptr;
+    return table().material(index);
 }
 
 }  // namespace galaxy::gx

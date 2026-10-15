@@ -60,6 +60,10 @@ struct RtReflectConstants {
     float sky_average;
     float metal_sky;
     float local_gain;
+    std::uint32_t draw_count;
+    float rough_cutoff;
+    float metal_f0;
+    std::uint32_t pad;
 };
 static_assert(sizeof(RtReflectConstants) == RtReflections::kConstantsBytes);
 
@@ -120,6 +124,7 @@ enum Parameter : UINT {
     kWaterSurfaces,
     kUnder,
     kSkyMap,
+    kDraws,
     kParameterCount,
 };
 
@@ -251,6 +256,7 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     sky_average_ = std::clamp(env_float("GALAXY_RT_REFLECT_SKY_AVERAGE", 0.15f), 0.0f, 1.0f);
     metal_sky_ = std::clamp(env_float("GALAXY_RT_REFLECT_METAL_SKY", 0.3f), 0.0f, 1.0f);
     local_gain_ = std::clamp(env_float("GALAXY_RT_REFLECT_LOCAL_GAIN", 2.0f), 0.0f, 16.0f);
+    rough_cutoff_ = std::clamp(env_float("GALAXY_RT_REFLECT_ROUGH_CUTOFF", 0.65f), 0.05f, 1.2f);
     {
         // Per 1000 eye units (about 10 m of the game's world): red goes first, then green.
         absorb_ = {25.0f, 4.5f, 2.6f};
@@ -438,6 +444,8 @@ bool RtReflections::create_pipelines(DXGI_FORMAT color_format) {
     params[kUnder].Descriptor.ShaderRegister = 8u;
     params[kSkyMap].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
     params[kSkyMap].Descriptor.ShaderRegister = 14u;
+    params[kDraws].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    params[kDraws].Descriptor.ShaderRegister = 15u;
     for (auto& param : params) {
         param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     }
@@ -629,7 +637,8 @@ void RtReflections::fill_constants(const RtReflectScene& scene, const Pass& pass
     c.factor = scene.factor;
     const RtReflectLights& lights = scene.lights;
     c.flags = flags | (history ? 1u : 0u) | (scene.sums != 0u ? 4u : 0u) | (invertible ? 8u : 0u) |
-              (lights.emitters != 0u ? 16u : 0u) | (scene.sky_map != 0u && invertible ? 64u : 0u);
+              (lights.emitters != 0u ? 16u : 0u) | (scene.sky_map != 0u && invertible ? 64u : 0u) |
+              (scene.draws != 0u && scene.draw_count != 0u ? 128u : 0u);
     std::memcpy(c.reproject, reproject.data(), sizeof(c.reproject));
     // The camera's rotation and its inverse (translations unused: directions only).
     std::memcpy(c.world_to_eye, scene.camera.data(), sizeof(c.world_to_eye));
@@ -662,6 +671,9 @@ void RtReflections::fill_constants(const RtReflectScene& scene, const Pass& pass
     c.sky_average = sky_average_;
     c.metal_sky = metal_sky_;
     c.local_gain = local_gain_;
+    c.draw_count = scene.draws != 0u ? scene.draw_count : 0u;
+    c.rough_cutoff = rough_cutoff_;
+    c.metal_f0 = materials_[2].f0;
     std::memcpy(constants_cpu, &c, sizeof(c));
 }
 
@@ -710,6 +722,7 @@ void RtReflections::bind_trace(ID3D12GraphicsCommandList* list, const RtReflectS
     list->SetComputeRootShaderResourceView(kWaterSurfaces, water ? scene.water_surfaces : scene.surfaces);
     list->SetComputeRootUnorderedAccessView(kUnder, under_[slot].resource->GetGPUVirtualAddress());
     list->SetComputeRootShaderResourceView(kSkyMap, scene.sky_map != 0u ? scene.sky_map : previous_info);
+    list->SetComputeRootShaderResourceView(kDraws, scene.draws != 0u ? scene.draws : previous_info);
 }
 
 void RtReflections::accumulate(ID3D12GraphicsCommandList* list, Pass& pass, unsigned slot, UINT groups_x,

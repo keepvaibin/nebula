@@ -6667,6 +6667,7 @@ void GxBackend::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint
             if (b >= kStageObjectEvents) {
                 renderer_.rt_reset_sky();
                 rt_world_held_ = {};
+                note_rt_stage();
             }
         }
         if (!history_scene_) {
@@ -6990,15 +6991,66 @@ bool GxBackend::rt_water_draw() const noexcept {
            rt_phase_ == static_cast<std::uint8_t>(ScenePhase::AfterIndirect);
 }
 
-// The material table entry of a draw: its first mapped texture's that has one.
+// The material table entry of a draw: its first mapped texture's that has one. Lookup textures
+// (environment, indirect and mask maps, shared by many models) decide only a draw that maps nothing
+// else the table names.
 std::uint16_t GxBackend::rt_material_of(std::uint32_t map_mask,
                                         const std::array<TextureHandle, kMaxTextureMaps>& handles) noexcept {
+    std::uint16_t lookup = 0u;
     for (unsigned m = 0; m < kMaxTextureMaps; ++m) {
-        if ((map_mask & (1u << m)) != 0u && handles[m].rt_material != 0u) {
+        if ((map_mask & (1u << m)) == 0u || handles[m].rt_material == 0u) {
+            continue;
+        }
+        const RtMaterial* const material = rt_material(handles[m].rt_material);
+        if (material == nullptr || !material->helper) {
             return handles[m].rt_material;
         }
+        lookup = lookup != 0u ? lookup : handles[m].rt_material;
     }
-    return 0u;
+    return lookup;
+}
+
+// The loaded stage (GameSystem's scene controller holds its name inline at +0x20) and its row of the
+// sun table.
+void GxBackend::note_rt_stage() {
+    constexpr std::uint32_t kGameSystemPointer = 0x806A1228u;
+    const auto word = [this](std::uint32_t address, std::uint32_t& out) {
+        const std::byte* p = frame_memory_ != nullptr ? resolve_guest_const_bytes(frame_memory_, address, 4u) : nullptr;
+        if (p == nullptr) {
+            return false;
+        }
+        std::memcpy(&out, p, 4u);
+        out = byte_swap_u32(out);
+        return true;
+    };
+    std::uint32_t system = 0u;
+    std::uint32_t controller = 0u;
+    char name[33]{};
+    if (word(kGameSystemPointer, system) && system >= 0x80000000u && word(system + 0x24u, controller) &&
+        controller >= 0x80000000u) {
+        for (std::uint32_t i = 0; i + 1u < sizeof(name); ++i) {
+            const std::byte* c = resolve_guest_const_bytes(frame_memory_, controller + 0x20u + i, 1u);
+            const auto v = c != nullptr ? std::to_integer<unsigned char>(*c) : 0u;
+            if (v <= 0x20u || v >= 0x7Fu) {
+                break;
+            }
+            name[i] = static_cast<char>(v);
+        }
+    }
+    const RtStageSun* const sun = name[0] != 0 ? rt_stage_sun(name) : nullptr;
+    renderer_.rt_set_stage_sun(sun);
+    if (trace_actor_lights_enabled()) [[unlikely]] {
+        std::fprintf(stderr, "[rt-stage] name=%s sun=%s\n", name[0] != 0 ? name : "?",
+                     sun == nullptr ? "none" : sun->source == RtStageSun::Source::Table ? "table" : "game");
+    }
+}
+
+bool GxBackend::rt_hidden_draw() const noexcept {
+    if (current_rt_material_ == 0u || !scene_phase_ || side_layer_ != kSceneLayer || !renderer_.rt_lighting()) {
+        return false;
+    }
+    const RtMaterial* const material = rt_material(current_rt_material_);
+    return material != nullptr && material->hide;
 }
 
 // The current object's name: NameObj::mName (+4), its bytes (Shift-JIS), blanks as '_'.
@@ -7246,7 +7298,13 @@ void GxBackend::aim_rt_scene_lights(const std::array<float, 12>* view) {
     std::array<float, 3> target{};
     std::array<float, 3> sky_color{};
     float sky_strength = 1.0f;
-    if (rt_light_tracking_ && renderer_.rt_sun_direction(target)) {
+    const RtStageSun* const stage_sun = renderer_.rt_stage_sun();
+    if (rt_light_tracking_ && stage_sun != nullptr && stage_sun->source == RtStageSun::Source::Table) {
+        // The stage's sun where its sky shows it (rt-suns.tsv): lit as the sky's own sun.
+        source = 2u;
+        target = {stage_sun->direction[0], stage_sun->direction[1], stage_sun->direction[2]};
+        rt_light_key_color_ = 0xFFF6E600u;
+    } else if (rt_light_tracking_ && renderer_.rt_sun_direction(target)) {
         source = 1u;
     } else if (rt_light_tracking_ && renderer_.rt_sky_sun(target, sky_color)) {
         source = 2u;
@@ -7510,7 +7568,11 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
             renderer_.rt_begin_scene();
             renderer_.rt_set_camera(view);
         }
-        aim_rt_scene_lights(renderer_.rt_lighting() ? view : nullptr);
+        // GALAXY_RT_AB: the game's own frames keep the aim's state and leave the lights the game's.
+        aim_rt_scene_lights(renderer_.rt_lighting() || renderer_.rt_ab_original() ? view : nullptr);
+        if (renderer_.rt_ab_original()) {
+            rt_light_aim_ = {};
+        }
     } else {
         trace_rt_scene();
         if (renderer_.rt_active() && side_layer_ == kSceneLayer) {
@@ -13271,10 +13333,12 @@ void GxBackend::flush_pending_draw_batch() {
         renderer_.note_stripe_vertices(pending_stripe_vertices_);
         pending_stripe_vertices_.clear();
     }
-    if (pending_draw_batch_.rt) {
-        renderer_.rt_note_draw(pending_draw_batch_.call, pending_draw_batch_.rt_info);
+    if (!pending_draw_batch_.hidden) {
+        if (pending_draw_batch_.rt) {
+            renderer_.rt_note_draw(pending_draw_batch_.call, pending_draw_batch_.rt_info);
+        }
+        renderer_.draw(pending_draw_batch_.call);
     }
-    renderer_.draw(pending_draw_batch_.call);
     if (time_detail) {
         frame_draw_record_us_ +=
             elapsed_us(draw_record_start, std::chrono::steady_clock::now());
@@ -14079,6 +14143,7 @@ bool GxBackend::on_cached_packet_draw_run(
     pending_draw_batch_.active = true;
     pending_draw_batch_.call = call;
     pending_draw_batch_.rt = begin_rt_batch(call, pending_draw_batch_.rt_info);
+    pending_draw_batch_.hidden = rt_hidden_draw();
     pending_draw_batch_.indexed = prim.indexed;
     pending_draw_batch_.base_vertex = prim.base_vertex;
     pending_draw_batch_.vertex_count = prim.vertex_count;
@@ -14264,6 +14329,7 @@ void GxBackend::on_cached_draw_run_draw(
     pending_draw_batch_.active = true;
     pending_draw_batch_.call = call;
     pending_draw_batch_.rt = begin_rt_batch(call, pending_draw_batch_.rt_info);
+    pending_draw_batch_.hidden = rt_hidden_draw();
     pending_draw_batch_.indexed = prim.indexed;
     pending_draw_batch_.base_vertex = prim.base_vertex;
     pending_draw_batch_.vertex_count = prim.vertex_count;
@@ -15214,6 +15280,7 @@ void GxBackend::on_draw(
         pending_draw_batch_.active = true;
         pending_draw_batch_.call = call;
         pending_draw_batch_.rt = begin_rt_batch(call, pending_draw_batch_.rt_info);
+        pending_draw_batch_.hidden = rt_hidden_draw();
         pending_draw_batch_.indexed = prim.indexed;
         pending_draw_batch_.base_vertex = prim.base_vertex;
         pending_draw_batch_.vertex_count = prim.vertex_count;

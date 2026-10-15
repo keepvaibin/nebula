@@ -4,7 +4,8 @@
 //
 // The lighting's samples (one per g_factor x g_factor EFB pixels) with the triangle its camera ray
 // met: the draw's GX surface class (rt_surfaces.h) selects the lobe width, Fresnel reflectance,
-// strength and cover, the vertex normals give the shading normal. One reflection ray samples the
+// strength and cover, which the material table's roughness and metalness for the draw's texture
+// replace (rt_materials.h), the vertex normals give the shading normal. One reflection ray samples the
 // GGX distribution of visible normals. Where it hits geometry this frame shows, it brings that
 // pixel's colour times this frame's ray-traced lighting there. Elsewhere the environment memory
 // answers: per world direction from the camera, the colour and distance the frame showed there
@@ -204,6 +205,10 @@ cbuffer RtReflect : register(b0)
     float g_sky_average;        // confidence of the sky's average colour where no sky is known
     float g_metal_sky;          // metal: share of the sky's reflection over its own environment map
     float g_local_gain;         // the local lights' highlights (point and glow lights)
+    uint g_draw_count;          // entries of g_draws (g_flags bit 7)
+    float g_rough_cutoff;       // the material table's roughness above which a surface reflects nothing
+    float g_metal_f0;           // Fresnel reflectance of a bare metal (metalness 1)
+    uint g_pad_r;
 };
 
 RaytracingAccelerationStructure g_scene : register(t0);
@@ -227,9 +232,12 @@ ByteAddressBuffer g_water_surfaces : register(t13);
 // The lighting's sky map (rt_lighting.hlsl SkyLightMapCS): per world direction (octahedral, +y the
 // pole, 32 x 32 bins) the sky's colour over the stage and whether it was seen.
 StructuredBuffer<float4> g_sky_map : register(t14);
+// Per draw (rt_lighting.hlsl g_draws, kDrawStride bytes): word 4 the material table's roughness and
+// metalness (unorm16 pair, 0xFFFF: the class's). Read when g_flags bit 7 is set.
+ByteAddressBuffer g_draws : register(t15);
 SamplerState g_linear : register(s0);
-// Per sample: packed normal, eye z (0: no surface), class (bits 0-3) and emitter-free share
-// (bits 8-15, unorm), reflection distance.
+// Per sample: packed normal, eye z (0: no surface), material (pack_material: class, strength,
+// emitter-free share, roughness, metalness), reflection distance.
 RWStructuredBuffer<uint4> g_info : register(u0);
 // Per sample: reflected light (rgb) and its confidence, the lights' highlight (rgb) (halves).
 RWStructuredBuffer<uint4> g_raw : register(u1);
@@ -481,6 +489,24 @@ float ggx_highlight(float3 n, float3 v, float3 l, float alpha, float spread, flo
     return kPi * d * visibility * nl * (f0 + (1.0f - f0) * (m2 * m2 * m));
 }
 
+// A light in the glow lights' list (rt_lighting.hlsl kEmitStride): position, radius; power, cumulative
+// power; spot direction, cosine of its cone.
+static const uint kEmitStride = 48u;
+static const uint kMetalClass = 2u;
+static const float kDielectricF0 = 0.04f;
+
+// A spot light's share along `from_light` (normalised, from the light): full inside the inner part of
+// its cone, none outside it (`spot` w: the cosine of its half angle; xyz 0: a point light).
+float spot_factor(float4 spot, float3 from_light)
+{
+    const float length2 = dot(spot.xyz, spot.xyz);
+    if (length2 < 0.25f) {
+        return 1.0f;
+    }
+    const float c = dot(spot.xyz, from_light) * rsqrt(length2);
+    return smoothstep(spot.w, lerp(spot.w, 1.0f, 0.35f), c);
+}
+
 bool lit_from(float3 origin, float3 direction, float length)
 {
     RayDesc ray;
@@ -532,8 +558,8 @@ float3 highlights(uint2 s, float3 p, float3 origin, float3 n, float3 v, float al
         // Its reach as the lighting's (rt_lighting.hlsl emit_reach2): light / (pi d^2) above
         // kGlowCutoff, at most kGlowReach; the lights beyond it add nothing here.
         [loop] for (uint j = 0u; j < emitters; ++j) {
-            const float4 la = asfloat(g_emitters.Load4(16u + j * 32u));
-            const float3 power = asfloat(g_emitters.Load3(16u + j * 32u + 16u));
+            const float4 la = asfloat(g_emitters.Load4(16u + j * kEmitStride));
+            const float3 power = asfloat(g_emitters.Load3(16u + j * kEmitStride + 16u));
             const float3 to = transform(g_world_to_eye, la.xyz) - p;
             const float d2 = dot(to, to);
             const float reach2 = min(luminance(power) / (kPi * kGlowCutoff), kGlowReach * kGlowReach);
@@ -542,7 +568,12 @@ float3 highlights(uint2 s, float3 p, float3 origin, float3 n, float3 v, float al
             }
             const float d = sqrt(d2);
             const float x = d2 / reach2;
-            const float3 c = power * ((1.0f - x * x) * (1.0f - x * x) / (kPi * (d2 + la.w * la.w))) *
+            const float4 spot = asfloat(g_emitters.Load4(16u + j * kEmitStride + 32u));
+            const float cone = spot_factor(float4(rotate(g_world_to_eye, spot.xyz), spot.w), -to / max(d, 1e-4f));
+            if (cone <= 0.0f) {
+                continue;
+            }
+            const float3 c = power * (cone * (1.0f - x * x) * (1.0f - x * x) / (kPi * (d2 + la.w * la.w))) *
                              ggx_highlight(n, v, to / max(d, 1e-4f), alpha, la.w / max(d, 1e-4f), f0);
             local += c;
             if (luminance(c) > strongest_weight) {
@@ -696,6 +727,53 @@ Reflected reflect_light(uint2 s, float3 dir, float3 n, float3 ng, float3 hit, fl
     return r;
 }
 
+// A sample's material (g_info word z): class (bits 0-3), strength (4-7, /15), emitter-free share
+// (8-15), roughness (16-23) and metalness (24-31), unorm.
+uint pack_material(uint surface_class, float strength, float emitter_free, float roughness, float metal)
+{
+    return surface_class | (uint(round(saturate(strength) * 15.0f)) << 4u) |
+           (uint(round(saturate(emitter_free) * 255.0f)) << 8u) | (uint(round(saturate(roughness) * 255.0f)) << 16u) |
+           (uint(round(saturate(metal) * 255.0f)) << 24u);
+}
+
+float sample_alpha(uint4 info)
+{
+    const float r = float((info.z >> 16u) & 255u) / 255.0f;
+    return max(r * r, 1e-3f);
+}
+
+float sample_strength(uint4 info)
+{
+    return float((info.z >> 4u) & 15u) / 15.0f;
+}
+
+// A draw's reflection parameters (GGX alpha, strength, F0, metalness) and perceptual roughness: its
+// class's, with the material table's roughness and metalness for its texture where it names them. A
+// surface rougher than g_rough_cutoff reflects nothing worth a ray; below it, metal and dielectric
+// alike (a dielectric's Fresnel term keeps its reflection to grazing views).
+float4 draw_material(uint surface_class, uint draw, out float roughness)
+{
+    float4 params = g_class[surface_class];
+    roughness = sqrt(params.x);
+    if ((g_flags & 128u) == 0u || draw >= g_draw_count) {
+        return params;
+    }
+    const uint words = g_draws.Load(draw * 32u + 16u);
+    const uint r16 = words & 0xFFFFu;
+    const uint m16 = words >> 16u;
+    if (m16 != 0xFFFFu) {
+        const float metal = float(m16) / 65534.0f;
+        params.z = lerp(surface_class == kMetalClass ? kDielectricF0 : params.z, g_metal_f0, metal);
+        params.w = metal;
+    }
+    if (r16 != 0xFFFFu) {
+        roughness = float(r16) / 65534.0f;
+        params.x = max(roughness * roughness, 1e-3f);
+        params.y = saturate((g_rough_cutoff - roughness) / 0.2f);
+    }
+    return params;
+}
+
 [numthreads(8, 8, 1)]
 void ReflectTraceCS(uint3 id : SV_DispatchThreadID)
 {
@@ -759,7 +837,8 @@ void ReflectTraceCS(uint3 id : SV_DispatchThreadID)
                           w.z * min(0.0f, dot(h0 - v2, n2)) * n2;
                 }
             }
-            const float4 params = g_class[surface_class];
+            float roughness;
+            const float4 params = draw_material(surface_class, record.w >> 16u, roughness);
             const float3 base = g_color.Load(int3(q, 0)).rgb;
             // Lamps, lava, glowing cores and what glows light keep their own colour: bright unlit
             // surfaces, bright saturated indirect ones (lava; white ice reflects), and anything lit far
@@ -771,7 +850,7 @@ void ReflectTraceCS(uint3 id : SV_DispatchThreadID)
                                 : surface_class == 4u ? smoothstep(0.75f, 1.0f, peak) * smoothstep(0.35f, 0.6f, saturation)
                                                       : smoothstep(0.95f, 1.2f, peak);
             info.x = pack_normal(n);
-            info.z = surface_class | (uint(round((1.0f - emitter) * 255.0f)) << 8u);
+            info.z = pack_material(surface_class, params.y, 1.0f - emitter, roughness, params.w);
             if (params.y > 0.0f && emitter < 1.0f) {
                 reflected = true;
                 const Reflected r = reflect_light(id.xy, dir, n, ng, hit, params, base, true);
@@ -980,7 +1059,7 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
             const float emitter = smoothstep(0.8f, 1.0f, min(base.r, min(base.g, base.b)));
             info.x = pack_normal(n);
             info.y = asuint(hit.z);
-            info.z = surface | (uint(round((1.0f - emitter) * 255.0f)) << 8u);
+            info.z = pack_material(surface, params.y, 1.0f - emitter, sqrt(params.x), params.w);
             // Under the water its surfaces (and a volume's walls) reflect nothing: the reflection of
             // the bright world above only washed the view out (measured: Beach Bowl underwater).
             if (params.y > 0.0f && emitter < 1.0f && !below) {
@@ -1011,7 +1090,7 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
 
 bool reflective(uint4 info)
 {
-    return info.y != 0u && g_class[min(info.z & 15u, 7u)].y > 0.0f && (info.z >> 8u) != 0u;
+    return info.y != 0u && ((info.z >> 4u) & 15u) != 0u && ((info.z >> 8u) & 255u) != 0u;
 }
 
 // Accumulation: the reflection's position in the previous frame (the virtual image point behind the
@@ -1031,7 +1110,7 @@ void ReflectTemporalCS(uint3 id : SV_DispatchThreadID)
         return;
     }
     const uint surface_class = info.z & 15u;
-    const float alpha = g_class[surface_class].x;
+    const float alpha = sample_alpha(info);
     const uint4 raw_words = g_raw[index];
     const float4 raw = unpack_rgb_w(raw_words.xy);
     const float3 raw_highlight = unpack_rgb_w(raw_words.zw).rgb;
@@ -1142,7 +1221,7 @@ float4 filter_input(uint index, bool first, out float3 highlight)
 float4 filtered_light(uint2 id, uint index, uint4 info, bool first, out float3 highlight)
 {
     const uint surface_class = info.z & 15u;
-    const float alpha = g_class[surface_class].x;
+    const float alpha = sample_alpha(info);
     const float4 centre = filter_input(index, first, highlight);
     float4 value = centre;
     const int step = (alpha < 0.02f ? 0 : alpha < 0.12f ? 1 : 2) * (first ? 1 : 2);
@@ -1229,18 +1308,22 @@ float3 unpack_normal_weight(uint v, out float weight)
 uint4 filter_sample(uint2 id, uint index)
 {
     const uint4 info = g_info[index];
-    const uint surface_class = info.z & 15u;
-    const uint z_class = (info.y & ~15u) | surface_class;
+    // Eye z with the composite's material in its low 12 bits: class, roughness and metalness in
+    // 4 bits each (the depth keeps 11 bits of mantissa: 0.05 % of the distance).
+    const uint z_class = (info.y & ~0xFFFu) | (info.z & 15u) |
+                         (uint(round(float((info.z >> 16u) & 255u) / 255.0f * 15.0f)) << 4u) |
+                         (uint(round(float(info.z >> 24u) / 255.0f * 15.0f)) << 8u);
     if (!reflective(info)) {
         return uint4(0u, info.y != 0u ? pack_normal_weight(unpack_normal(info.x), 0.0f) : 0u,
                      info.y != 0u ? z_class : 0u, 0u);
     }
     float3 highlight;
     const float4 value = filtered_light(id, index, info, false, highlight);
-    // The sample's weight: its confidence, without its emitter share.
-    const float weight = saturate(value.w) * float(info.z >> 8u) / 255.0f;
+    // The sample's weight: its confidence and strength, without its emitter share.
+    const float kept = float((info.z >> 8u) & 255u) / 255.0f;
+    const float weight = saturate(value.w) * kept * sample_strength(info);
     return uint4(pack_r11g11b10(value.rgb), pack_normal_weight(unpack_normal(info.x), weight), z_class,
-                 pack_r11g11b10(highlight * float(info.z >> 8u) / 255.0f));
+                 pack_r11g11b10(highlight * kept));
 }
 
 groupshared uint gs_reflects;
@@ -1360,7 +1443,7 @@ Blend blend_samples(float2 pixel, float3 p, bool water)
             continue;
         }
         const uint surface_class = sample.z & 15u;
-        const float sz = asfloat(sample.z & ~15u);
+        const float sz = asfloat(sample.z & ~0xFFFu);
         const float3 sp = eye_position(m_projection, m_viewport, float2(s * m_factor) + 0.5f, sz);
         float sample_weight;
         const float3 n = unpack_normal_weight(sample.y, sample_weight);
@@ -1374,7 +1457,11 @@ Blend blend_samples(float2 pixel, float3 p, bool water)
         if (surface_class < 8u) {
             // Water seen from below has the water's material.
             const float4 c = class_params(surface_class == kWaterBelow ? kWaterSurface : surface_class);
-            const float k = c.x * fresnel(c.y, c.z, dot(n, v)) * sample_weight;
+            // The sample's own lobe and metalness (filter_sample); its strength is in its weight.
+            const float rough = float((sample.z >> 4u) & 15u) / 15.0f;
+            const float metal = float((sample.z >> 8u) & 15u) / 15.0f;
+            const float f0 = lerp(surface_class == kMetalClass ? kDielectricF0 : c.y, class_params(kMetalClass).y, metal);
+            const float k = fresnel(f0, max(rough * rough, 1e-3f), dot(n, v)) * sample_weight;
             const float3 light = min(unpack_r11g11b10(sample.x), 1.0f);
             b.sum += light * (k * bw);
             // How much of the surface's own colour the reflection takes away: all of it at cover 1
@@ -1489,7 +1576,7 @@ float water_z(float2 pixel)
         const uint z_class = m_final[uint(s.y) * m_sample_size.x + uint(s.x)].z;
         const float bw = (o.x != 0 ? w.x : 1.0f - w.x) * (o.y != 0 ? w.y : 1.0f - w.y);
         if (z_class != 0u) {
-            sum += asfloat(z_class & ~15u) * bw;
+            sum += asfloat(z_class & ~0xFFFu) * bw;
             weight += bw;
         }
     }

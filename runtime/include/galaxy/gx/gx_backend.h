@@ -452,6 +452,8 @@ private:
         bool resident = false;
         // Ray-traced scene geometry (begin_rt_batch when the batch began).
         bool rt = false;
+        // A light effect the game fakes (rt_materials.h hide) while the traced lighting replaces it.
+        bool hidden = false;
         RtDrawInfo rt_info{};
     };
 
@@ -806,6 +808,10 @@ private:
     void trace_rt_water();
     // GALAXY_RT_MATERIALS: the census line of a scene draw (rt_surfaces.h).
     void note_rt_material();
+    // A stage was loaded: its name and its row of the sun table (rt_materials.h) for the ray tracer.
+    void note_rt_stage();
+    // The current draw is a light effect the traced lighting replaces (rt_materials.h hide).
+    [[nodiscard]] bool rt_hidden_draw() const noexcept;
     // The current object's name (NameObj::mName) into `out`; its guest address, 0 for none.
     std::uint32_t rt_object_name(char* out, std::size_t size);
     [[nodiscard]] static std::uint16_t rt_material_of(std::uint32_t map_mask,

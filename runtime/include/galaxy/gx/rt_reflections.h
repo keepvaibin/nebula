@@ -61,6 +61,10 @@ struct RtReflectScene {
     // The lighting's sky map (rt_lighting.hlsl SkyLightMapCS: 32x32 float4 by world direction); 0 none.
     D3D12_GPU_VIRTUAL_ADDRESS sky_map = 0;
     RtReflectLights lights{};
+    // Per draw (rt_lighting.hlsl g_draws, 32 bytes): the material table's roughness and metalness;
+    // 0: none (the classes' own).
+    D3D12_GPU_VIRTUAL_ADDRESS draws = 0;
+    std::uint32_t draw_count = 0;
     // The translucent water draws (trace_water): their TLAS, eye-space vertices and surface records.
     D3D12_GPU_VIRTUAL_ADDRESS water_tlas = 0;
     D3D12_GPU_VIRTUAL_ADDRESS water_positions = 0;
@@ -70,7 +74,7 @@ struct RtReflectScene {
 class RtReflections {
 public:
     // Constants of one trace, in an upload allocation the caller makes (256-byte aligned).
-    static constexpr std::size_t kConstantsBytes = 704u;
+    static constexpr std::size_t kConstantsBytes = 720u;
     // Results kept for the sub-frames of the game frames being interpolated (the lighting's slots).
     static constexpr unsigned kSlots = 4u;
 
@@ -266,6 +270,8 @@ private:
     float sky_average_ = 0.15f; // GALAXY_RT_REFLECT_SKY_AVERAGE: confidence of the sky's average colour
     float metal_sky_ = 0.3f;    // GALAXY_RT_REFLECT_METAL_SKY: metal's share of reflected sky over its env map
     float local_gain_ = 2.0f;   // GALAXY_RT_REFLECT_LOCAL_GAIN: the point and glow lights' highlights
+    float rough_cutoff_ = 0.65f; // GALAXY_RT_REFLECT_ROUGH_CUTOFF: the material table's roughness above
+                                 // which a surface traces no reflection
 
     // [rt-reflect] accumulation over the report window.
     struct Window {

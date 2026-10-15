@@ -498,6 +498,7 @@ public:
     void rt_set_view(const RtView& view) noexcept { ray_tracer_.set_view(view); }
     void rt_set_camera(const std::array<float, 12>* view) noexcept { ray_tracer_.set_camera(view); }
     [[nodiscard]] bool rt_lighting() const noexcept { return ray_tracer_.lighting_active(); }
+    [[nodiscard]] bool rt_ab_original() const noexcept { return ray_tracer_.ab_original(); }
     [[nodiscard]] bool rt_reflections_active() const noexcept { return ray_tracer_.reflections_active(); }
     [[nodiscard]] bool rt_sun_direction(std::array<float, 3>& world) const noexcept {
         return ray_tracer_.sun_direction(world);
@@ -514,6 +515,8 @@ public:
         return ray_tracer_.sky_key(world, strength);
     }
     void rt_reset_sky() noexcept { ray_tracer_.reset_sky(); }
+    void rt_set_stage_sun(const RtStageSun* sun) noexcept { ray_tracer_.set_stage_sun(sun); }
+    [[nodiscard]] const RtStageSun* rt_stage_sun() const noexcept { return ray_tracer_.stage_sun(); }
     void rt_note_draw(const DrawCall& call, const RtDrawInfo& info);
     void rt_trace_scene();
     // The scene's end: its finished picture becomes the light the next frame's rays read.
