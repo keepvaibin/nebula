@@ -643,11 +643,15 @@ PSOut main(PSIn pin) {
         uint lit_w, lit_h;
         tex[7].GetDimensions(lit_w, lit_h);
         const int2 lit_at = min(int2(pin.pos.xy * ztex_params.z), int2(lit_w, lit_h) - 1);
-        // As lit up to the knee, then a film shoulder towards white (rt_lighting.hlsl apply_light).
+        // As lit up to the knee, then a film shoulder towards white on the brightest channel, the hue
+        // kept (rt_lighting.hlsl film_light).
         const float3 lit_c = frag.rgb * clamp(tex[7].Load(int3(lit_at, 0)).rgb, 0.45, 4.0);
-        const float3 lit_knee = max(frag.rgb, 0.8);
-        const float3 lit_room = max(1.0 - lit_knee, 1e-4);
-        frag.rgb = lerp(lit_c, lit_knee + lit_room * (1.0 - exp(-(lit_c - lit_knee) / lit_room)), step(lit_knee, lit_c));
+        const float lit_peak = max(lit_c.r, max(lit_c.g, lit_c.b));
+        const float lit_knee = max(max(frag.r, max(frag.g, frag.b)), 0.8);
+        const float lit_room = max(1.0 - lit_knee, 1e-4);
+        frag.rgb = lit_peak > lit_knee
+                       ? lit_c * ((lit_knee + lit_room * (1.0 - exp(-(lit_peak - lit_knee) / lit_room))) / lit_peak)
+                       : lit_c;
     }
     float tev_alpha = saturate(frag.a);
     uint4 efb_color = uint4(round(saturate(frag) * 255.0));

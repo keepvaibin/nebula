@@ -817,6 +817,9 @@ private:
     [[nodiscard]] static std::uint16_t rt_material_of(std::uint32_t map_mask,
                                                       const std::array<TextureHandle, kMaxTextureMaps>& handles) noexcept;
     std::uint32_t rt_object_ = 0u;   // the last NameObj marker's object
+    bool rt_object_fake_shadow_ = false;  // it is one of the game's shadow drawers (rt_fake_shadow_object)
+    std::unordered_map<std::uint32_t, bool> rt_fake_shadow_cache_;
+    bool rt_fake_shadow_object(std::uint32_t object);
     std::uint16_t current_rt_material_ = 0u;  // the bound textures' material table entry (rt_materials.h)
     std::uint32_t rt_draw_buffer_ = 0xFFFFu;   // the last draw buffer marker's type (bit 16: translucent)
     // Per object name (its guest address) the class its name gives (rt_named_class), + 1.

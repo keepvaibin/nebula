@@ -7819,26 +7819,33 @@ void RendererD3D12::record_rt_bloom(int slot) {
 }
 
 D3D12_GPU_DESCRIPTOR_HANDLE RendererD3D12::rt_composite_color() {
+    return rt_copy_color(rt_color_copy_, L"rt composite colour");
+}
+
+// A copy of the EFB colour (render target state before and after) in `copy`, made or remade at its
+// size; its SRV (ALL_SHADER_RESOURCE).
+D3D12_GPU_DESCRIPTOR_HANDLE RendererD3D12::rt_copy_color(Microsoft::WRL::ComPtr<ID3D12Resource>& target,
+                                                         const wchar_t* name) {
     if (!efb_color_) {
         return {};
     }
     const D3D12_RESOURCE_DESC desc = efb_color_->GetDesc();
-    if (!rt_color_copy_ || rt_color_copy_->GetDesc().Width != desc.Width ||
-        rt_color_copy_->GetDesc().Height != desc.Height || rt_color_copy_->GetDesc().Format != desc.Format) {
-        if (rt_color_copy_) {
+    if (!target || target->GetDesc().Width != desc.Width || target->GetDesc().Height != desc.Height ||
+        target->GetDesc().Format != desc.Format) {
+        if (target) {
             wait_for_gpu();
         }
-        rt_color_copy_.Reset();
+        target.Reset();
         D3D12_HEAP_PROPERTIES hp{};
         hp.Type = D3D12_HEAP_TYPE_DEFAULT;
         D3D12_RESOURCE_DESC copy = desc;
         copy.Flags = D3D12_RESOURCE_FLAG_NONE;
         if (FAILED(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &copy,
                                                     D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, nullptr,
-                                                    IID_PPV_ARGS(&rt_color_copy_)))) {
+                                                    IID_PPV_ARGS(&target)))) {
             return {};
         }
-        rt_color_copy_->SetName(L"rt composite colour");
+        target->SetName(name);
     }
     D3D12_RESOURCE_BARRIER barriers[2]{};
     for (D3D12_RESOURCE_BARRIER& barrier : barriers) {
@@ -7849,11 +7856,11 @@ D3D12_GPU_DESCRIPTOR_HANDLE RendererD3D12::rt_composite_color() {
     barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
     barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
     // Read by the composite (pixel) and the exposure and capture passes (compute).
-    barriers[1].Transition.pResource = rt_color_copy_.Get();
+    barriers[1].Transition.pResource = target.Get();
     barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE;
     barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
     command_list_->ResourceBarrier(2u, barriers);
-    command_list_->CopyResource(rt_color_copy_.Get(), efb_color_.Get());
+    command_list_->CopyResource(target.Get(), efb_color_.Get());
     for (D3D12_RESOURCE_BARRIER& barrier : barriers) {
         std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
     }
@@ -7864,7 +7871,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE RendererD3D12::rt_composite_color() {
     view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     view.Texture2D.MipLevels = 1u;
-    device_->CreateShaderResourceView(rt_color_copy_.Get(), &view, table.cpu);
+    device_->CreateShaderResourceView(target.Get(), &view, table.cpu);
     return table.gpu;
 }
 
@@ -7921,8 +7928,9 @@ void RendererD3D12::rt_trace_water() {
     std::swap(barriers[0].Transition.StateBefore, barriers[0].Transition.StateAfter);
     command_list_->ResourceBarrier(1, &barriers[0]);
     if (slot >= 0) {
+        const D3D12_GPU_DESCRIPTOR_HANDLE scene = rt_copy_color(rt_water_copy_, L"rt water scene");
         ray_tracer_.composite_water(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_, width, desc.Height, slot,
-                                    false);
+                                    false, scene);
         if (replay_recording_) {
             replay_ops_.push_back({ReplayKind::RtWater, static_cast<std::uint32_t>(slot)});
         }
@@ -7947,8 +7955,9 @@ void RendererD3D12::record_rt_water(int slot, bool reproject) {
     barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
     command_list_->ResourceBarrier(1, &barrier);
     const D3D12_RESOURCE_DESC desc = efb_depth_->GetDesc();
+    const D3D12_GPU_DESCRIPTOR_HANDLE scene = rt_copy_color(rt_water_copy_, L"rt water scene");
     ray_tracer_.composite_water(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_,
-                                static_cast<std::uint32_t>(desc.Width), desc.Height, slot, reproject);
+                                static_cast<std::uint32_t>(desc.Width), desc.Height, slot, reproject, scene);
     std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
     command_list_->ResourceBarrier(1, &barrier);
     command_list_->SetGraphicsRootSignature(root_signature_.Get());

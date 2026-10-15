@@ -82,8 +82,9 @@ struct RtReflectCompositeConstants {
     std::uint32_t classes[8][2];   // strength, F0, GGX alpha, cover (halves)
     float water[4];
     float sun[4];
+    float water2[4];   // wave slope, cover, foam, shallow caustics
 };
-static_assert(sizeof(RtReflectCompositeConstants) == 176u);
+static_assert(sizeof(RtReflectCompositeConstants) == 192u);
 
 std::uint32_t half_pair(float a, float b) {
     const auto half = [](float v) {
@@ -135,6 +136,7 @@ enum CompositeParameter : UINT {
     kCompositeReproject,
     kCompositeTiles,
     kCompositeUnder,
+    kCompositeScene,
     kCompositeCount,
 };
 
@@ -258,6 +260,9 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     local_gain_ = std::clamp(env_float("GALAXY_RT_REFLECT_LOCAL_GAIN", 2.0f), 0.0f, 16.0f);
     rough_cutoff_ = std::clamp(env_float("GALAXY_RT_REFLECT_ROUGH_CUTOFF", 0.65f), 0.05f, 1.2f);
     waves_ = std::clamp(env_float("GALAXY_RT_WAVES", 1.0f), 0.0f, 4.0f);
+    water_cover_ = std::clamp(env_float("GALAXY_RT_WATER_COVER", 0.9f), 0.0f, 1.0f);
+    foam_ = std::clamp(env_float("GALAXY_RT_WATER_FOAM", 0.6f), 0.0f, 2.0f);
+    shallow_caustics_ = std::clamp(env_float("GALAXY_RT_WATER_SHALLOW_CAUSTICS", 1.0f), 0.0f, 4.0f);
     {
         // Per 1000 eye units (about 10 m of the game's world): red goes first, then green.
         absorb_ = {25.0f, 4.5f, 2.6f};
@@ -486,6 +491,13 @@ bool RtReflections::create_pipelines(DXGI_FORMAT color_format) {
     composite_params[kCompositeTiles].Descriptor.ShaderRegister = 3u;
     composite_params[kCompositeUnder].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
     composite_params[kCompositeUnder].Descriptor.ShaderRegister = 4u;
+    D3D12_DESCRIPTOR_RANGE scene_range{};
+    scene_range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    scene_range.NumDescriptors = 1u;
+    scene_range.BaseShaderRegister = 5u;
+    composite_params[kCompositeScene].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    composite_params[kCompositeScene].DescriptorTable.NumDescriptorRanges = 1u;
+    composite_params[kCompositeScene].DescriptorTable.pDescriptorRanges = &scene_range;
     for (auto& param : composite_params) {
         param.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     }
@@ -924,6 +936,10 @@ void RtReflections::draw_composite(ID3D12GraphicsCommandList* list, Pass& pass, 
     }
     c.water[3] = clear_;
     c.sun[3] = info.sun[3] * caustics_;
+    c.water2[0] = waves_;
+    c.water2[1] = water_cover_;
+    c.water2[2] = foam_;
+    c.water2[3] = shallow_caustics_;
     const D3D12_GPU_VIRTUAL_ADDRESS final_address = pass.final[slot].resource->GetGPUVirtualAddress();
     list->OMSetRenderTargets(1u, &target, FALSE, nullptr);
     const D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
@@ -938,6 +954,8 @@ void RtReflections::draw_composite(ID3D12GraphicsCommandList* list, Pass& pass, 
     list->SetGraphicsRootShaderResourceView(kCompositeReproject, reproject != 0u ? reproject : final_address);
     list->SetGraphicsRootShaderResourceView(kCompositeTiles, pass.tiles[slot].resource->GetGPUVirtualAddress());
     list->SetGraphicsRootShaderResourceView(kCompositeUnder, under_[slot].resource->GetGPUVirtualAddress());
+    // The water composite reads the frame with the game's water (water_scene_); the others never do.
+    list->SetGraphicsRootDescriptorTable(kCompositeScene, water_scene_.ptr != 0u ? water_scene_ : depth_srv);
     list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     list->DrawInstanced(3u, 1u, 0u, 0u);
 }
@@ -983,7 +1001,8 @@ void RtReflections::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIP
 
 void RtReflections::composite_water(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
                                     D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width, std::uint32_t height,
-                                    unsigned slot, D3D12_GPU_VIRTUAL_ADDRESS reproject, float split) {
+                                    unsigned slot, D3D12_GPU_VIRTUAL_ADDRESS reproject, float split,
+                                    D3D12_GPU_DESCRIPTOR_HANDLE scene_srv) {
     if (!ready_ || list == nullptr || slot >= kSlots || depth_srv.ptr == 0u) {
         return;
     }
@@ -999,8 +1018,10 @@ void RtReflections::composite_water(ID3D12GraphicsCommandList* list, D3D12_CPU_D
     if (timed) {
         list->EndQuery(timestamps_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, result * kTimestampsPerSlot + 6u);
     }
+    water_scene_ = scene_srv;
     draw_composite(list, water_, water_composite_pso_.Get(), target, depth_srv, width, height, slot, info, reproject,
                    split);
+    water_scene_ = {};
     // Under the water (its state from the water pass): caustics and shafts over the whole picture.
     if (caustics_ > 0.0f || shafts_ > 0.0f) {
         list->SetPipelineState(underwater_pso_.Get());

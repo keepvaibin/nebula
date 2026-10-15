@@ -112,9 +112,11 @@ public:
                      void* constants_cpu, D3D12_GPU_VIRTUAL_ADDRESS constants_gpu,
                      D3D12_GPU_DESCRIPTOR_HANDLE color_depth);
     // As composite(), the water's reflections over it.
+    // `scene_srv`: the frame with the game's water drawn (a copy; 0: the water keeps the game's look).
     void composite_water(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
                          D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width, std::uint32_t height,
-                         unsigned slot, D3D12_GPU_VIRTUAL_ADDRESS reproject, float split);
+                         unsigned slot, D3D12_GPU_VIRTUAL_ADDRESS reproject, float split,
+                         D3D12_GPU_DESCRIPTOR_HANDLE scene_srv = {});
 
 private:
     static constexpr unsigned kResultSlots = 16u;
@@ -274,6 +276,10 @@ private:
     float metal_sky_ = 0.3f;    // GALAXY_RT_REFLECT_METAL_SKY: metal's share of reflected sky over its env map
     float local_gain_ = 2.0f;   // GALAXY_RT_REFLECT_LOCAL_GAIN: the point and glow lights' highlights
     bool memory_reset_ = false;
+    D3D12_GPU_DESCRIPTOR_HANDLE water_scene_{};  // composite_water's scene copy while it draws
+    float water_cover_ = 0.9f;        // GALAXY_RT_WATER_COVER: share of the game's drawn water low-passed
+    float foam_ = 0.6f;               // GALAXY_RT_WATER_FOAM: shore foam
+    float shallow_caustics_ = 1.0f;   // GALAXY_RT_WATER_SHALLOW_CAUSTICS
     float waves_ = 1.0f;          // GALAXY_RT_WAVES: slope of the water's procedural waves (0: none)
     float rough_cutoff_ = 0.65f; // GALAXY_RT_REFLECT_ROUGH_CUTOFF: the material table's roughness above
                                  // which a surface traces no reflection

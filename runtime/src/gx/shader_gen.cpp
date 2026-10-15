@@ -2363,11 +2363,13 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
         s << "    uint lit_w, lit_h;\n";
         s << "    tex[7].GetDimensions(lit_w, lit_h);\n";
         s << "    const int2 lit_at = min(int2(pin.pos.xy * ztex_params.z), int2(lit_w, lit_h) - 1);\n";
+        // The film shoulder on the brightest channel, the hue kept (rt_lighting.hlsl film_light).
         s << "    const float3 lit_c = frag.rgb * clamp(tex[7].Load(int3(lit_at, 0)).rgb, 0.45, 4.0);\n";
-        s << "    const float3 lit_knee = max(frag.rgb, 0.8);\n";
-        s << "    const float3 lit_room = max(1.0 - lit_knee, 1e-4);\n";
-        s << "    frag.rgb = lerp(lit_c, lit_knee + lit_room * (1.0 - exp(-(lit_c - lit_knee) / lit_room)), "
-             "step(lit_knee, lit_c));\n";
+        s << "    const float lit_peak = max(lit_c.r, max(lit_c.g, lit_c.b));\n";
+        s << "    const float lit_knee = max(max(frag.r, max(frag.g, frag.b)), 0.8);\n";
+        s << "    const float lit_room = max(1.0 - lit_knee, 1e-4);\n";
+        s << "    frag.rgb = lit_peak > lit_knee ? lit_c * ((lit_knee + lit_room * (1.0 - exp(-(lit_peak - lit_knee) / "
+             "lit_room))) / lit_peak) : lit_c;\n";
     }
     if (dual_src) {
         s << "    float tev_alpha = saturate(frag.a);\n";

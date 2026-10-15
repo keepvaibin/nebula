@@ -6581,8 +6581,10 @@ void GxBackend::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32
     // its marker; emitters and particles are none.
     if (kind == motion::kMarkerNameObj) {
         rt_object_ = a;
+        rt_object_fake_shadow_ = renderer_.rt_lighting() && rt_fake_shadow_object(a);
     } else if (kind == motion::kMarkerEmitter || kind == motion::kMarkerParticle) {
         rt_object_ = 0u;
+        rt_object_fake_shadow_ = false;
     }
     if (!history_scene_) {
         return;
@@ -6667,6 +6669,7 @@ void GxBackend::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint
             rt_cut_objects_ = std::max(rt_cut_objects_, b);
             if (b >= kStageObjectEvents) {
                 renderer_.rt_reset_sky();
+                rt_fake_shadow_cache_.clear();
                 rt_world_held_ = {};
                 note_rt_stage();
             }
@@ -7049,8 +7052,37 @@ void GxBackend::note_rt_stage() {
     }
 }
 
+// The game's own shadow drawers (blob and volume shadows: 影描画[...], 板状シャドウボリューム描画): under
+// traced lighting every object casts its true shadow, so these are not drawn. Their names are read
+// once per object (cached until the next stage).
+bool GxBackend::rt_fake_shadow_object(std::uint32_t object) {
+    if (object == 0u) {
+        return false;
+    }
+    if (const auto it = rt_fake_shadow_cache_.find(object); it != rt_fake_shadow_cache_.end()) {
+        return it->second;
+    }
+    char name[48]{};
+    rt_object_name(name, sizeof(name));
+    static constexpr char kShadow[] = "\x89\x65\x95\x60\x89\xE6";           // 影描画
+    static constexpr char kPlateShadow[] = "\x94\xC2\x8F\xF3\x83\x56\x83\x83";  // 板状シャ...
+    const bool shadow = std::strncmp(name, kShadow, sizeof(kShadow) - 1u) == 0 ||
+                        std::strncmp(name, kPlateShadow, sizeof(kPlateShadow) - 1u) == 0;
+    if (rt_fake_shadow_cache_.size() > 4096u) {
+        rt_fake_shadow_cache_.clear();
+    }
+    rt_fake_shadow_cache_.emplace(object, shadow);
+    return shadow;
+}
+
 bool GxBackend::rt_hidden_draw() const noexcept {
-    if (current_rt_material_ == 0u || !scene_phase_ || side_layer_ != kSceneLayer || !renderer_.rt_lighting()) {
+    if (!scene_phase_ || side_layer_ != kSceneLayer || !renderer_.rt_lighting()) {
+        return false;
+    }
+    if (rt_object_fake_shadow_) {
+        return true;
+    }
+    if (current_rt_material_ == 0u) {
         return false;
     }
     const RtMaterial* const material = rt_material(current_rt_material_);

@@ -951,7 +951,7 @@ void ReflectTraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
                 info.z = pack_material(surface_class, 1.0f / 15.0f, 1.0f - emitter, roughness, params.w);
                 const float3 origin = hit + ng * (0.2f + abs(hit.z) * 4e-4f);
                 highlight = highlights(id.xy, hit, origin, n, -dir, params.x, params.z, true) *
-                            (1.0f - smoothstep(0.8f, 0.98f, roughness));
+                            (1.0f - smoothstep(0.55f, 0.75f, roughness));
                 if (params.w > 0.0f) {
                     const float3 tint = min(base / max(luminance(base), 0.1f), 3.0f);
                     highlight *= lerp(float3(1.0f, 1.0f, 1.0f), tint, params.w);
@@ -1635,6 +1635,8 @@ cbuffer RtReflectComposite : register(b0)
     uint4 m_class[4];   // per surface class (two per row): strength, F0, GGX alpha, cover (halves)
     float4 m_water;     // water: absorption per eye unit (rgb), share of the clear water shown (clarity)
     float4 m_sun;       // towards the sun (eye space, traced frame), caustics gain (0: none)
+    float4 m_water2;    // water: wave slope, share of the game's drawn water replaced, foam, caustics
+                        // in the shallows
 };
 StructuredBuffer<uint4> m_final : register(t0);
 Texture2D<float> m_efb_depth : register(t1);
@@ -1642,6 +1644,8 @@ StructuredBuffer<float4> m_reproject : register(t2);
 StructuredBuffer<uint> m_tiles : register(t3);
 // The picture under the translucent phases (ReflectTraceCS g_under) for the water's refraction.
 StructuredBuffer<uint2> m_under : register(t4);
+// The frame as the game drew it with its water (a copy after the water pass; the water composite only).
+Texture2D<float4> m_scene : register(t5);
 
 struct CompositeOut
 {
@@ -2002,20 +2006,12 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
     if (m_water.w > 0.0f && b.nearest_class == kWaterSurface) {
         // Seen edge-on (a side wall, the lip) the body would only band: it fades out there.
         const float share = m_water.w * b.surface / b.weight * smoothstep(0.15f, 0.4f, dot(n, -normalize(p)));
-        const uint tint_at = m_sample_size.x * m_sample_size.y + kUnderTint;
-        const uint2 d0 = m_under[tint_at];
-        const uint2 d1 = m_under[tint_at + 1u];
-        const uint2 a0 = m_under[tint_at + 2u];
-        const uint2 a1 = m_under[tint_at + 3u];
-        const bool deep_known = d1.y >= 64u;
-        const bool tint_known = deep_known || a1.y >= 64u;
-        const float3 tint = deep_known ? float3(d0.x, d0.y, d1.x) / (255.0f * float(d1.y))
-                                       : float3(a0.x, a0.y, a1.x) / (255.0f * float(max(a1.y, 1u)));
         float floor_z;
         float floor_found;
         under_at(pixel, p.z - 1.0f, floor_z, floor_found);
         float path = 4000.0f;
         float3 seen = float3(0.0f, 0.0f, 0.0f);
+        float3 floor_point = p;
         if (floor_z != 0.0f) {
             const float3 v = normalize(p);
             const float3 straight = v * (floor_z / v.z);
@@ -2036,20 +2032,67 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
             floor_at = lerp(straight, bent_z != 0.0f ? eye_position(m_projection, m_viewport, bent_pixel, bent_z) : straight,
                             use_bent);
             path = max(length(floor_at - p), 0.0f);
-            seen = floor_colour * caustic(floor_at, p, n);
+            seen = floor_colour;
+            floor_point = floor_at;
         }
-        if (tint_known) {
-            const float3 through = floor_z != 0.0f ? exp(-m_water.rgb * path) : float3(0.0f, 0.0f, 0.0f);
-            const float cover = kWaterCover * share;
-            under_add = (seen * through + tint * (1.0f - through)) * cover;
-            under_keep = (1.0f - cover).xxx;
-        } else if (floor_z != 0.0f) {
-            // No tint yet (the first frame): the seabed where seen over the game's own colour.
-            const float3 through = exp(-m_water.rgb * path);
-            const float3 deep = max(exp(-0.35f * m_water.rgb * path), float3(0.6f, 0.6f, 0.6f));
-            under_add = seen * through * share;
-            under_keep = lerp(float3(1.0f, 1.0f, 1.0f), deep * (1.0f - through), share);
+        // The game's own water as it drew it (its colours, its gradient, the seabed it shows), low-passed
+        // over about 40 world units so its tiled texture's repetition goes, refracted by the waves (the
+        // taps move with their slope), with soft caustics in the shallows and broken foam at the shore;
+        // the traced reflections and glints go over it (finish).
+        float4 to_world[3];
+        {
+            const uint s0 = m_sample_size.x * m_sample_size.y;
+            [unroll] for (uint r = 0u; r < 3u; ++r) {
+                const uint2 a = m_under[s0 + 2u + 2u * r];
+                const uint2 c = m_under[s0 + 3u + 2u * r];
+                to_world[r] = float4(asfloat(a.x), asfloat(a.y), asfloat(c.x), asfloat(c.y));
+            }
         }
+        const float frame = float(m_under[m_sample_size.x * m_sample_size.y + 1u].y);
+        const float3 wn = normalize(rotate(to_world, n));
+        const float3 t1 = normalize(abs(wn.y) < 0.9f ? cross(wn, float3(0.0f, 1.0f, 0.0f)) : cross(wn, float3(1.0f, 0.0f, 0.0f)));
+        const float3 t2 = cross(wn, t1);
+        const float3 wp = transform(to_world, p);
+        const float2 uv = float2(dot(wp, t1), dot(wp, t2));
+        const float2 slope = wave_slope(uv, frame, false) * m_water2.x;
+        // The apparent seabed moves by the slope times the water's depth (at most 120 units).
+        const float3 shift_world = (slope.x * t1 + slope.y * t2) * min(path, 120.0f) * 0.6f;
+        const float3 shift_eye = float3(dot(float3(to_world[0].x, to_world[1].x, to_world[2].x), shift_world),
+                                        dot(float3(to_world[0].y, to_world[1].y, to_world[2].y), shift_world),
+                                        dot(float3(to_world[0].z, to_world[1].z, to_world[2].z), shift_world));
+        const float2 wobble = clamp(eye_to_pixel(m_projection, m_viewport, p + shift_eye) - pixel, -24.0f, 24.0f);
+        const float px_per_unit = 0.5f * m_viewport.w * abs(m_projection.z) / max(-p.z, 1.0f);
+        const float radius = clamp(40.0f * px_per_unit, 1.5f, 28.0f);
+        const float2 lo = m_viewport.xy;
+        const float2 hi = m_viewport.xy + m_viewport.zw - 1.0f;
+        float3 water = m_scene.Load(int3(int2(clamp(position.xy + wobble, lo, hi)), 0)).rgb;
+        float taps = 1.0f;
+        [unroll] for (uint k = 0u; k < 12u; ++k) {
+            const float a = float(k) * 2.39996f;
+            const float2 o = float2(cos(a), sin(a)) * (radius * sqrt((float(k) + 0.5f) / 12.0f)) + wobble;
+            const float tz = water_z(pixel + o);
+            if (tz != 0.0f && abs(tz - p.z) <= abs(p.z) * 0.08f + 20.0f) {
+                water += m_scene.Load(int3(int2(clamp(position.xy + o, lo, hi)), 0)).rgb;
+                taps += 1.0f;
+            }
+        }
+        water /= taps;
+        // Shallows: the sunlight the waves focus on the seabed (its own caustics, moving).
+        const float shallow = floor_z != 0.0f ? exp(-path / 120.0f) : 0.0f;
+        if (shallow > 0.0f && m_water2.w > 0.0f) {
+            water *= lerp(1.0f, caustic(floor_point, p, n), saturate(shallow * m_water2.w));
+        }
+        // The shore: foam where the water is a few units deep, broken by drifting noise.
+        if (floor_z != 0.0f && m_water2.z > 0.0f) {
+            const float shore = smoothstep(20.0f, 3.0f, path);
+            const float lace = wave_noise(float3(uv * 0.07f, frame * 0.02f)) * 0.65f +
+                               wave_noise(float3(uv * 0.19f + 5.3f, frame * 0.035f)) * 0.35f;
+            const float foam = shore * smoothstep(0.45f, 0.7f, lace) * m_water2.z;
+            water = lerp(water, max(luminance(water), 0.75f).xxx * float3(1.0f, 1.0f, 1.02f), saturate(foam));
+        }
+        const float cover = m_water2.y * share;
+        under_add = water * cover;
+        under_keep = (1.0f - cover).xxx;
     }
     if (b.k_sum < 1e-4f && !any(b.glint > 0.0f) && !any(under_add > 0.0f) && !any(under_keep < 1.0f)) {
         discard;
@@ -2143,8 +2186,8 @@ CompositeOut UnderwaterPS(float4 position : SV_Position)
     // near seabed readable (0.22 of the lake body's absorption; 0.35 was a little too dark).
     {
         const float span = sky ? 4000.0f : length(p);
-        const float3 t = exp(-m_water.rgb * span * 0.22f);
-        const float3 scatter = (sun * 0.3f + 0.1f) * float3(0.08f, 0.46f, 0.54f);
+        const float3 t = exp(-m_water.rgb * span * 0.18f);
+        const float3 scatter = (sun * 0.4f + 0.15f) * float3(0.09f, 0.5f, 0.56f);
         add = add * t + scatter * (1.0f - t);
         keep *= t;
     }

@@ -114,16 +114,25 @@ static const float kLitKnee = 0.8f;
 // bloom (CaptureCS).
 static const float kExcessBloom = 0.5f;
 
-// As lit (c m) up to the knee (0.8, or the colour itself where it is brighter: the game's own
-// highlights stay as drawn), then a film shoulder towards white that never passes it, channel by
-// channel (light past white turns pale: red-hot runs through orange to yellow-white). Its slope is
-// 1 at the knee: no seam where it starts.
+// As lit (c m) up to the knee (0.8, or the colour's brightest channel where it is brighter: the
+// game's own highlights stay as drawn), then a film shoulder towards white that never passes it,
+// on the brightest channel with the hue kept (sunlit sand and grass keep their colour and detail).
+// Only light far past white (lava, fire, lamps) runs channel by channel towards white-hot.
+// Slope 1 at the knee: no seam where it starts.
 float3 film_light(float3 c, float3 m)
 {
     const float3 lit = c * m;
-    const float3 knee = max(c, kLitKnee);
-    const float3 room = max(1.0f - knee, 1e-4f);
-    return lerp(lit, knee + room * (1.0f - exp(-(lit - knee) / room)), step(knee, lit));
+    const float peak = max(lit.r, max(lit.g, lit.b));
+    const float knee = max(max(c.r, max(c.g, c.b)), kLitKnee);
+    if (peak <= knee) {
+        return lit;
+    }
+    const float room = max(1.0f - knee, 1e-4f);
+    const float3 hue = lit * ((knee + room * (1.0f - exp(-(peak - knee) / room))) / peak);
+    const float3 knees = max(c, kLitKnee);
+    const float3 rooms = max(1.0f - knees, 1e-4f);
+    const float3 channels = lerp(lit, knees + rooms * (1.0f - exp(-(lit - knees) / rooms)), step(knees, lit));
+    return lerp(hue, channels, smoothstep(1.6f, 3.5f, peak));
 }
 // Buckets of the exposure measurement (16 bytes each: lit, game, pixels, spare).
 static const uint kExposureBuckets = 16u;
@@ -663,7 +672,10 @@ void CaptureCS(uint3 id : SV_DispatchThreadID)
             // Only where the light passes the knee at all (most samples do not).
             if ((c_divide & 2u) != 0u && float(q.x) >= c_split && max(m.r, max(m.g, m.b)) > 1.0f) {
                 const float3 game = c_game.Load(int3(q, 0)).rgb;
-                const float3 excess = max(game * m - film_light(game, m), 0.0f);
+                // Hot light only (lava, fire, lamps): sunlit ground does not glow.
+                const float3 lit = game * m;
+                const float3 excess = max(lit - film_light(game, m), 0.0f) *
+                                      smoothstep(1.4f, 2.5f, max(lit.r, max(lit.g, lit.b)));
                 if (luminance(excess) > 0.004f) {
                     const float3 added = unpack_r11g11b10(c_glow[index]);
                     c_glow[index] = pack_r11g11b10(added + excess * kExcessBloom);

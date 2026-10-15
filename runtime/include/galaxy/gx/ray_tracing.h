@@ -271,9 +271,10 @@ public:
     // Blends the water reflections of `slot` into the EFB colour `target` at the depth `depth_srv`
     // holds (PIXEL_SHADER_RESOURCE); `reproject` as composite(). Leaves its own root signature and
     // pipeline bound.
+    // `scene_srv`: the frame with the game's water drawn (a copy), which the water composite low-passes.
     void composite_water(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
                          D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width, std::uint32_t height, int slot,
-                         bool reproject);
+                         bool reproject, D3D12_GPU_DESCRIPTOR_HANDLE scene_srv = {});
     // After the composite (same views): the picture before the translucent phases; with `game_srv`
     // (the composite's source: the game's own opaque picture) the exposure's measurement.
     void snapshot_glow_base(ID3D12GraphicsCommandList* list, D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table,
@@ -725,9 +726,9 @@ private:
     float post_shafts_ = 1.0f;      // GALAXY_RT_POST_SHAFTS
     float post_dof_ = 3.0f;         // GALAXY_RT_POST_DOF: largest far blur (EFB pixels at 1x; 0 none)
     float post_grade_ = 1.0f;       // GALAXY_RT_POST_GRADE
-    float post_rim_ = 0.6f;         // GALAXY_RT_POST_RIM: rim light at silhouettes
+    float post_rim_ = 0.0f;         // GALAXY_RT_POST_RIM: rim light at silhouettes (outlined everything)
     float relief_ = 3.0f;           // GALAXY_RT_RELIEF: height (eye units) of full texture brightness
-    float post_haze_ = 0.35f;       // GALAXY_RT_POST_HAZE: distance haze's largest share (bright skies)
+    float post_haze_ = 0.12f;       // GALAXY_RT_POST_HAZE: distance haze's largest share (bright skies)
     float post_haze_distance_ = 20000.0f;  // GALAXY_RT_POST_HAZE_DISTANCE: where it reaches 63 % of it
     float post_vignette_ = 0.18f;   // GALAXY_RT_POST_VIGNETTE: darkening towards the corners
     bool post_view_ = false;        // GALAXY_RT_POST_VIEW: the finished luminance in false colour
