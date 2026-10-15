@@ -110,6 +110,7 @@ static const uint kDrawStride = 32u;
 // g_draws word 6: the table gives the light source's own glow (in place of its intensity), unorm16 of
 // glow / kDrawGlowScale in the high half.
 static const uint kDrawTableGlow = 2u;
+static const uint kDrawTableFoliage = 4u;   // g_draws word 6: alpha-cut foliage cards
 static const float kDrawGlowScale = 16.0f;
 // The lighting multiplies the game's colour by at most this; the composite rolls it off on a film
 // shoulder from kLitKnee (apply_light).
@@ -1539,13 +1540,24 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
         ray.Direction = normalize(l + l1 * (r * cos(phi)) + l2 * (r * sin(phi)));
         ray.TMin = 0.0f;
         ray.TMax = g_sun_reach;
+        bool card = false;
+        if (primary.x != 0u) {
+            const uint own = g_surfaces.Load((primary.x - 1u) * 16u + 12u);
+            card = (g_draws.Load(min(own >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride + 24u) & kDrawTableFoliage) != 0u;
+        }
         RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
                  RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
         query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
         while (query.Proceed()) {
-            if ((g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u) & kDrawNoShadow) == 0u) {
-                query.CommitNonOpaqueTriangleHit();
+            const uint hit = g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u);
+            if ((hit & kDrawNoShadow) != 0u) {
+                continue;
             }
+            if (card && query.CandidateTriangleRayT() < 60.0f &&
+                (g_draws.Load(min(hit >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride + 24u) & kDrawTableFoliage) != 0u) {
+                continue;
+            }
+            query.CommitNonOpaqueTriangleHit();
         }
         sun = query.CommittedStatus() == COMMITTED_TRIANGLE_HIT ? 0.0f : facing_sun * (1.5f - 0.5f * facing_sun);
         if ((g_flags & 64u) != 0u) {
@@ -1974,7 +1986,13 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
     const bool delit = (draw_flags & kDrawDelit) != 0u;
     const bool point_lit = (draw_flags & kDrawPointLit) != 0u && g_point_count != 0u;
     if (delit) {
-        // Its colour is its material: the traced light is its light (the unlit form above).
+        // Its colour is its material: the traced light is its light (the unlit form above), with a fill
+        // towards the camera where the sun does not reach.
+        const float3 n = unpack_normal(g_normal[index]);
+        const float toward = saturate(dot(n, -normalize(sample_position(id.xy, z))));
+        const float shade = 1.0f - saturate(light.sun * 1.25f);
+        lighting += (0.3f * toward * shade).xxx;
+        open += (0.3f * toward * shade).xxx;
     } else if ((draw_flags & (kDrawLit | kDrawSunKey)) == (kDrawLit | kDrawSunKey)) {
         // Its key light lies along the traced sun: the game's shading is its ambient A plus its GX
         // light 0 colour K times n.l (and its point light), clamped to 1 like GX's accumulator; the

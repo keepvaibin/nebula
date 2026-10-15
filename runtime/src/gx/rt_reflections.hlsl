@@ -2081,7 +2081,7 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
                                         dot(float3(to_world[0].z, to_world[1].z, to_world[2].z), shift_world));
         const float2 wobble = clamp(eye_to_pixel(m_projection, m_viewport, p + shift_eye) - pixel, -8.0f, 8.0f);
         const float px_per_unit = 0.5f * m_viewport.w * abs(m_projection.z) / max(-p.z, 1.0f);
-        const float radius = clamp(40.0f * px_per_unit, 1.0f, 12.0f);
+        const float radius = clamp(40.0f * px_per_unit, 3.0f, 18.0f);
         // The seabed's light through the water: depth absorption (down and back up, red first) and the
         // shallows' caustics act on the seabed only; the game's water colour holds its own (tinting it
         // again turned the shallows neon). Where no floor was found the deep value, blended by the share
@@ -2110,7 +2110,7 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
                 const int2 q = int2(clamp(centre_at + float2(cos(a), sin(a)) * (radius * sqrt((float(k) + 0.5f) / 16.0f)), lo, hi));
                 const float3 o = m_opaque.Load(int3(q, 0)).rgb;
                 const float3 d = o - seabed;
-                const float w = exp(-dot(d, d) / 0.008f);
+                const float w = exp(-dot(d, d) / 0.03f);
                 layer += (m_scene.Load(int3(q, 0)).rgb - o) * w;
                 taps += w;
             }
@@ -2118,7 +2118,7 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
             {
                 // 30 % less saturated, fading towards the shore (the seabed shows through the shallows).
                 const float through = exp(-0.0012f * path_c);
-                layer = lerp(layer, luminance(layer).xxx, 0.3f) * lerp(1.0f, 0.45f, through);
+                layer = lerp(layer, luminance(layer).xxx, 0.1f) * lerp(1.0f, 0.8f, through);
             }
             water = max(seabed * seabed_gain + layer, 0.0f);
         } else {
