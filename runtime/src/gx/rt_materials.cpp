@@ -227,7 +227,7 @@ std::size_t RtMaterialTable::read(std::istream& in) {
     std::string line;
     bool header_read = false;
     int hash_col = -1, class_col = -1, rough_col = -1, metal_col = -1, r_col = -1, g_col = -1, b_col = -1,
-        intensity_col = -1, range_col = -1, pulse_col = -1, cone_col = -1, shadow_col = -1;
+        intensity_col = -1, range_col = -1, pulse_col = -1, cone_col = -1, shadow_col = -1, glow_col = -1;
     std::size_t rows = 0u;
     while (std::getline(in, line)) {
         if (line.empty() || line[0] == '#') {
@@ -243,7 +243,7 @@ std::size_t RtMaterialTable::read(std::istream& in) {
                                 : name == "r" ? &r_col : name == "g" ? &g_col : name == "b" ? &b_col
                                 : name == "intensity" ? &intensity_col : name == "range" ? &range_col
                                 : name == "pulse" ? &pulse_col : name == "cone" ? &cone_col
-                                : name == "shadow" ? &shadow_col : nullptr;
+                                : name == "shadow" ? &shadow_col : name == "glow" ? &glow_col : nullptr;
                 if (slot != nullptr) *slot = static_cast<int>(i);
             }
             continue;
@@ -282,6 +282,7 @@ std::size_t RtMaterialTable::read(std::istream& in) {
         if (number(row, pulse_col, v)) m.pulse = std::clamp(v, 0.0f, 30.0f);
         if (number(row, cone_col, v)) m.cone = std::clamp(v, 0.0f, 90.0f);
         if (number(row, shadow_col, v)) m.shadow = v != 0.0f;
+        if (number(row, glow_col, v)) m.glow = std::clamp(v, 0.0f, 16.0f);
         ++rows;
     }
     return rows;

@@ -581,6 +581,9 @@ private:
     };
     static_assert(sizeof(AuthoredLight) == 32u);
     std::vector<AuthoredLight> authored_;
+    // Per glow draw (glow_draws_) for GlowEmitCS, in AuthoredLight's layout: its triangles, the material
+    // table's colour and intensity for its texture where the table names it (flags kGlowTable).
+    std::vector<AuthoredLight> glow_lights_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> authored_emit_pso_;
     float authored_power_ = 40000.0f;   // GALAXY_RT_AUTHORED_POWER: a Luma's light (intensity 1)
     std::uint64_t authored_frames_ = 0u;
@@ -598,6 +601,8 @@ private:
     bool emit_log_pending_ = false;
     std::uint64_t emit_log_frame_ = 0u;
     std::array<float, 3> emit_log_eye_{};
+    // The logged scene's material-table point lights, glow draws and the glow draws the table names.
+    std::array<std::uint32_t, 3> emit_log_draws_{};
     std::array<D3D12_RESOURCE_STATES, 2> light_z_state_{};
     std::array<D3D12_RESOURCE_STATES, 2> light_history_state_{};
     std::array<D3D12_RESOURCE_STATES, kLightSlots> light_final_state_{};
@@ -740,7 +745,7 @@ private:
     bool gi_ = true;                // GALAXY_RT_GI=0: no sky occlusion or bounce (shadows and lights stay)
     float core_radius_ = 400.0f;    // GALAXY_RT_CORE_RADIUS: the star core's radius at scale 1 (first guess;
                                     // the finish measures it from depth)
-    float core_light_ = 2.5f;       // GALAXY_RT_CORE_LIGHT: its light (a point light; grows with it)
+    float core_light_ = 0.8f;       // GALAXY_RT_CORE_LIGHT: its light (a point light; grows with it)
     float bloom_strength_ = 1.4f;   // GALAXY_RT_BLOOM: the glows' bloom (0: none)
     float bloom_threshold_ = 0.15f; // GALAXY_RT_BLOOM_THRESHOLD: glow luminance that starts to bloom
     // GALAXY_RT_EXPOSURE_DAY / _NIGHT: the mean lighting the exposure holds under a bright / black

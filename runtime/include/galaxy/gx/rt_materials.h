@@ -24,7 +24,9 @@
 // emit (a lamp's glass beside its lit housing in one texture).
 // roughness: GGX perceptual 0-1; metallic 0-1; r g b: 0-1; intensity: relative to a Luma (1);
 // range: eye units (0: from the intensity); pulse: Hz (0: steady); cone: a spot light's half angle in
-// degrees around the draw's mean normal (0: all around); shadow: 0 or 1.
+// degrees around the draw's mean normal (0: all around); shadow: 0 or 1; glow: the light source's own
+// surface brightness in the intensity's units, apart from the light it sends (empty: the intensity): an
+// area light's surface brightens by it, a point light's halo takes that share of its colour.
 
 #include <cstddef>
 #include <cstdint>
@@ -58,6 +60,7 @@ struct RtMaterial {
     float range = 0.0f;
     float pulse = 0.0f;
     float cone = 0.0f;                    // degrees; 0: a point light
+    float glow = -1.0f;                   // < 0: the intensity
     // Surface relief from the texture's detail under the sun (ground, rock, bark, cloth; none on
     // skin, paint, metal, glass): the strength of the per-pixel normal its brightness gives.
     float relief = 0.0f;

@@ -179,9 +179,17 @@ constexpr std::uint32_t kEmitLights = 256u;
 constexpr std::uint32_t kGlowMaxTriangles = 65536u;
 // g_draws word 6 (rt_lighting.hlsl kDrawTableTint): the emission takes the draw's own colour.
 constexpr std::uint32_t kDrawTableTint = 1u;
+// g_draws word 6 (rt_lighting.hlsl kDrawTableGlow): the table gives the light source's own glow, in the
+// high half as unorm16 of glow / kDrawGlowScale.
+constexpr std::uint32_t kDrawTableGlow = 2u;
+constexpr float kDrawGlowScale = 16.0f;
 // AuthoredLight.flags (rt_lighting.hlsl kAuthored*): the colour the draw shows; a spot light.
 constexpr std::uint32_t kAuthoredTint = 1u;
 constexpr std::uint32_t kAuthoredSpot = 2u;
+// glow_lights_ flags (rt_lighting.hlsl kGlowTable*): the light scales by the table's intensity; it takes
+// the table's colour.
+constexpr std::uint32_t kGlowTableIntensity = 4u;
+constexpr std::uint32_t kGlowTableColor = 8u;
 
 // Two values 0-1 as unorm16 (0-65534) in one word, the first in the low half; 0xFFFF where a value
 // is negative (unset).
@@ -736,7 +744,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     post_view_ = env_float("GALAXY_RT_POST_VIEW", 0.0f) != 0.0f;
     gi_ = env_float("GALAXY_RT_GI", 1.0f) != 0.0f;
     core_radius_ = std::clamp(env_float("GALAXY_RT_CORE_RADIUS", 400.0f), 1.0f, 100000.0f);
-    core_light_ = std::clamp(env_float("GALAXY_RT_CORE_LIGHT", 2.5f), 0.0f, 16.0f);
+    core_light_ = std::clamp(env_float("GALAXY_RT_CORE_LIGHT", 0.8f), 0.0f, 16.0f);
     bloom_strength_ = std::clamp(env_float("GALAXY_RT_BLOOM", 1.4f), 0.0f, 4.0f);
     bloom_threshold_ = std::clamp(env_float("GALAXY_RT_BLOOM_THRESHOLD", 0.15f), 0.0f, 4.0f);
     exposure_ = env_float("GALAXY_RT_EXPOSURE", 1.0f) != 0.0f;
@@ -1149,9 +1157,11 @@ void SceneRayTracer::log_emitters() {
     };
     std::sort(lights.begin(), lights.end(), [&](const Entry& a, const Entry& b) { return lum(a) > lum(b); });
     char line[256];
-    std::snprintf(line, sizeof(line), "[rt-emit] frame=%llu lights=%u total=%.0f eye=%.0f,%.0f,%.0f",
+    std::snprintf(line, sizeof(line),
+                  "[rt-emit] frame=%llu lights=%u total=%.0f eye=%.0f,%.0f,%.0f table-lights=%u glow-draws=%u "
+                  "table-glows=%u",
                   static_cast<unsigned long long>(emit_log_frame_), count, total, emit_log_eye_[0], emit_log_eye_[1],
-                  emit_log_eye_[2]);
+                  emit_log_eye_[2], emit_log_draws_[0], emit_log_draws_[1], emit_log_draws_[2]);
     std::cerr << line << '\n';
     {
         // Sky and scene means (8-bit units), the sky state, the exposure and the lit / game ratio.
@@ -1432,6 +1442,7 @@ void SceneRayTracer::begin_scene() noexcept {
     light_tex_ready_ = false;
     draws_.clear();
     glow_draws_.clear();
+    glow_lights_.clear();
     authored_.clear();
     glow_triangles_ = 0u;
     glow_open_ = false;
@@ -1463,6 +1474,20 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
         if (glow_open_ && draw.triangle_count != 0u && glow_triangles_ + draw.triangle_count <= kGlowMaxTriangles) {
             RtDraw& entry = glow_draws_.emplace_back(draw);
             entry.first_triangle = glow_triangles_;
+            // A glow the table names as a light (fire, lava sparks, electricity) shines in the table's colour
+            // at its intensity's share of what the picture shows it adding; else as the picture shows it.
+            AuthoredLight light{glow_triangles_, draw.triangle_count, 0u, 1.0f, 0.0f, 0.0f, 0u, -1.0f};
+            if (material != nullptr && material->emission != RtEmission::None) {
+                const auto unit = [](float v) {
+                    return static_cast<std::uint32_t>(std::lround(std::clamp(v, 0.0f, 1.0f) * 255.0f));
+                };
+                light.color = (unit(material->color[0]) << 24u) | (unit(material->color[1]) << 16u) |
+                              (unit(material->color[2]) << 8u);
+                light.intensity = material->intensity;
+                light.pulse = material->pulse;
+                light.flags = kGlowTableIntensity | (material->tint ? 0u : kGlowTableColor);
+            }
+            glow_lights_.push_back(light);
             glow_triangles_ += draw.triangle_count;
         }
         return;
@@ -1498,6 +1523,11 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
         intensity = material->intensity;
         surface = unit_pair(material->matte ? 1.0f : material->roughness, material->metallic);
         flags = material->tint ? kDrawTableTint : 0u;
+        if (material->glow >= 0.0f) {
+            flags |= kDrawTableGlow |
+                     (static_cast<std::uint32_t>(std::lround(std::min(material->glow / kDrawGlowScale, 1.0f) * 65535.0f))
+                      << 16u);
+        }
         // A lamp's lit housing in its glass's texture: only the glass emits.
         const bool emits = !material->unlit_only || (info.surface & kRtDrawLit) == 0u;
         if (!emits) {
@@ -2861,9 +2891,14 @@ void SceneRayTracer::capture_glow_lights(ID3D12GraphicsCommandList* list, const 
     list->SetComputeRootUnorderedAccessView(kEmitList, emit_list_->GetGPUVirtualAddress());
     const D3D12_RESOURCE_BARRIER all_uav = uav_barrier(nullptr);
     if (glow_draws != 0u) {
-        list->SetPipelineState(glow_emit_pso_.Get());
-        list->Dispatch(glow_draws, 1u, 1u);
-        list->ResourceBarrier(1u, &all_uav);
+        const RtUpload lights = allocate(allocate_context, glow_lights_.size() * sizeof(AuthoredLight), 256u);
+        if (lights.cpu != nullptr && glow_lights_.size() == glow_draws_.size()) {
+            std::memcpy(lights.cpu, glow_lights_.data(), glow_lights_.size() * sizeof(AuthoredLight));
+            list->SetComputeRootShaderResourceView(kEmitDraws, lights.gpu);
+            list->SetPipelineState(glow_emit_pso_.Get());
+            list->Dispatch(glow_draws, 1u, 1u);
+            list->ResourceBarrier(1u, &all_uav);
+        }
     }
     // The material table's point lights: one group per draw over its triangles in the scene.
     if (!authored_.empty() && authored_emit_pso_ && positions_) {
@@ -2889,6 +2924,10 @@ void SceneRayTracer::capture_glow_lights(ID3D12GraphicsCommandList* list, const 
         to_state(list, picture_sums_.Get(), picture_sums_state_, sums_state);
         emit_log_pending_ = true;
         emit_log_frame_ = frame_index_;
+        emit_log_draws_ = {static_cast<std::uint32_t>(authored_.size()), glow_draws,
+                           static_cast<std::uint32_t>(std::count_if(
+                               glow_lights_.begin(), glow_lights_.end(),
+                               [](const AuthoredLight& l) { return (l.flags & kGlowTableIntensity) != 0u; }))};
         // The camera's world position: -R^T t of the world-to-eye rows.
         for (unsigned i = 0; i < 3u; ++i) {
             emit_log_eye_[i] = -(camera_[0 * 4 + i] * camera_[0 * 4 + 3] + camera_[1 * 4 + i] * camera_[1 * 4 + 3] +
