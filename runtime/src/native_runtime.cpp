@@ -2475,6 +2475,8 @@ struct RuntimeState {
     std::uint64_t vi_first_deadline_ticks{};
     bool vi_deadline_wait_active{};
     bool vi_edge_delivery_active{};
+    // VI services that found a due batch still unpublished a period late.
+    std::uint64_t vi_unpublished_backlog_retries{};
     std::atomic_bool vi_readiness_probe_requested{false};
     bool guest_write_watch_enabled =
         read_env_flag("GALAXY_TRACE_GUEST_WRITE_WATCH", false);
@@ -19214,7 +19216,9 @@ void dump_exact_vi_deadline_audit(
                << " early-publications=" << stats.early_publication_edges
                << " arithmetic-failures=" << stats.arithmetic_failures
                << " locked-rate-valid="
-               << (stats.locked_rate_valid ? 1 : 0);
+               << (stats.locked_rate_valid ? 1 : 0)
+               << " unpublished-backlog-retries="
+               << state.vi_unpublished_backlog_retries;
     }
     if (state.deadline_broker != nullptr) {
         const galaxy::timing::DeadlinePublicationStats publication =
@@ -20230,6 +20234,13 @@ bool dispatch_vi_retrace(
         // broker publishes its edge. The level consumer leaves this partial
         // batch intact and returns no event. Retry at the next safepoint;
         // competing consumers and invalid identities still throw inside it.
+        if (state.deadline_events.pending(
+                galaxy::timing::EventKind::VideoInterface) == 0u) {
+            // No edge is published a full period after its deadline: the
+            // broker worker was descheduled or its timer fired late.
+            ++state.vi_unpublished_backlog_retries;
+            state.deadline_broker->wake_worker();
+        }
         return false;
     }
     state.last_vi_delivery_ticks = observation_ticks;

@@ -1562,6 +1562,13 @@ ExactPeriodicDeadlineConsumer::consume_one_or_coalesce_level_or_throw(
             due_count);
     if (take.status ==
         PendingEventLatch::PeriodicPrefixTakeStatus::Empty) {
+        // Time may pass several deadlines before a descheduled broker publishes
+        // the first of them. Only an edge observed and then lost proves a
+        // second consumer.
+        if (observation.pending_edges == 0u) {
+            account_observation(observation);
+            return std::nullopt;
+        }
         fail(
             observation,
             "periodic deadline was consumed by a competing consumer",
