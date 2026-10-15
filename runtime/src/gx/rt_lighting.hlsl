@@ -110,10 +110,17 @@ static const uint kDrawStride = 32u;
 // g_draws word 6: the table gives the light source's own glow (in place of its intensity), unorm16 of
 // glow / kDrawGlowScale in the high half.
 static const uint kDrawTableGlow = 2u;
+static const uint kDrawTableFoliage = 4u;   // g_draws word 6: alpha-cut foliage cards
 static const float kDrawGlowScale = 16.0f;
 // The lighting multiplies the game's colour by at most this; the composite rolls it off on a film
 // shoulder from kLitKnee (apply_light).
 static const float kMaxLight = 8.0f;
+// Daytime (SpatialBCS): a cast shadow's depth, the faint sun's darkening of faces turned from it, the sky
+// occlusion's depth and the sky colour's share in shade.
+static const float kDayShadow = 0.45f;
+static const float kDayForm = 0.15f;
+static const float kDayOcclusion = 0.5f;
+static const float kDayTint = 0.25f;
 static const float kLitKnee = 0.8f;
 // The share of the light the film shoulder rolls off (lava, fire, lamps, glints) that joins the
 // bloom (CaptureCS).
@@ -652,9 +659,11 @@ void CaptureCS(uint3 id : SV_DispatchThreadID)
     const int2 q = int2(min(id.xy * c_factor, c_target_size - 1u));
     float3 color = block_color(id.xy);
     if ((c_divide & 2u) != 0u) {
+        // Under a bright sky the glows' bloom at 75 % (the game's sun glare sprites veiled daylight; star
+        // bits, Lumas and lamps keep most of their halo).
         const float day_glow = c_sums.Load(36u) != 0u ? saturate(asfloat(c_sums.Load(32u)) / c_daylight) : 1.0f;
         c_glow[index] = pack_r11g11b10(max(color - unpack_r11g11b10(c_glow_base[index]), 0.0f) *
-                                       (1.0f - 0.6f * day_glow));
+                                       (1.0f - 0.25f * day_glow));
     }
     const float depth = c_depth_tex.Load(int3(q, 0));
     const bool sky = far_plane(c_depth, depth) || !inside(c_viewport, float2(q) + 0.5f) ||
@@ -1549,13 +1558,24 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
         ray.Direction = normalize(l + l1 * (r * cos(phi)) + l2 * (r * sin(phi)));
         ray.TMin = 0.0f;
         ray.TMax = g_sun_reach;
+        bool card = false;
+        if (primary.x != 0u) {
+            const uint own = g_surfaces.Load((primary.x - 1u) * 16u + 12u);
+            card = (g_draws.Load(min(own >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride + 24u) & kDrawTableFoliage) != 0u;
+        }
         RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
                  RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
         query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
         while (query.Proceed()) {
-            if ((g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u) & kDrawNoShadow) == 0u) {
-                query.CommitNonOpaqueTriangleHit();
+            const uint hit = g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u);
+            if ((hit & kDrawNoShadow) != 0u) {
+                continue;
             }
+            if (card && query.CandidateTriangleRayT() < 60.0f &&
+                (g_draws.Load(min(hit >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride + 24u) & kDrawTableFoliage) != 0u) {
+                continue;
+            }
+            query.CommitNonOpaqueTriangleHit();
         }
         sun = query.CommittedStatus() == COMMITTED_TRIANGLE_HIT ? 0.0f : facing_sun * (1.5f - 0.5f * facing_sun);
         if ((g_flags & 64u) != 0u) {
@@ -1984,7 +2004,13 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
     const bool delit = (draw_flags & kDrawDelit) != 0u;
     const bool point_lit = (draw_flags & kDrawPointLit) != 0u && g_point_count != 0u;
     if (delit) {
-        // Its colour is its material: the traced light is its light (the unlit form above).
+        // Its colour is its material: the traced light is its light (the unlit form above), with a fill
+        // towards the camera where the sun does not reach.
+        const float3 n = unpack_normal(g_normal[index]);
+        const float toward = saturate(dot(n, -normalize(sample_position(id.xy, z))));
+        const float shade = 1.0f - saturate(light.sun * 1.25f);
+        lighting += (0.3f * toward * shade).xxx;
+        open += (0.3f * toward * shade).xxx;
     } else if ((draw_flags & (kDrawLit | kDrawSunKey)) == (kDrawLit | kDrawSunKey)) {
         // Its key light lies along the traced sun: the game's shading is its ambient A plus its GX
         // light 0 colour K times n.l (and its point light), clamped to 1 like GX's accumulator; the
@@ -2035,6 +2061,43 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
     }
     lighting *= exposure;
     open *= exposure;
+    // Daytime: the game's art as it draws it, with modern shadows on it. The art is painted for even
+    // light; a physical sun either bleached it or darkened it (user: keep the art style and direction,
+    // the sun very faint, just more shadows; research R03 ratio relighting, R14 Nintendo). Open, sunlit
+    // surfaces stay exactly as drawn; the sun's cast shadows take them to kDayShadow, the sky's
+    // occlusion darkens creases and contacts, shade takes a little of the sky's colour, and faces
+    // turned from the sun keep kDayForm of their light (a faint sun). The lamps and glows still add
+    // their light; no exposure. Under a dark sky the lit model above (the nights as they are).
+    {
+        const float day_mix = smoothstep(0.35f, 0.8f, day_sky);
+        if (day_mix > 0.0f && tri != 0u) {
+            const float3 n = unpack_normal(g_normal[index]);
+            const float nl = dot(n, g_sun.xyz);
+            const float shaped = nl > 0.0f ? nl * (1.5f - 0.5f * nl) : 0.0f;
+            // The sun's cast shadow: its traced term over its facing (faces it does not reach count as
+            // lit; the art lit them).
+            const float vis = any(g_sun_light.rgb > 0.0f) && shaped > 0.08f ? saturate(light.sun / shaped) : 1.0f;
+            const float shadow = 1.0f - kDayShadow * (1.0f - vis);
+            const float form = 1.0f - kDayForm * (1.0f - saturate(shaped / 0.8f));
+            const float sky_l = luminance(light.sky);
+            const float ao = 1.0f - kDayOcclusion * (1.0f - saturate(sky_l));
+            const float3 tint = lerp(float3(1.0f, 1.0f, 1.0f), light.sky / max(sky_l, 0.05f), kDayTint * (1.0f - vis));
+            // A de-lit draw (characters, items: their GX light averaged at a mean facing of 0.55, shader_gen)
+            // back at the level the game lights it from the front: its ambient plus its light 0 (measured
+            // wb33: Beach Bowl's seaweed 115,111,36 -> 27,52,25 against the art).
+            float3 level = float3(1.0f, 1.0f, 1.0f);
+            if (delit) {
+                const uint2 colors = g_draws.Load2(min(draw_flags >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride);
+                const float3 a = rgb8(colors.x);
+                const float3 k = rgb8(colors.y);
+                level = clamp(min(a + k, 1.0f) / max(min(a + 0.55f * k, 1.0f), 0.05f), 1.0f, 2.0f);
+            }
+            const float3 day_m = shadow * form * ao * tint * level + points;
+            const float3 day_open = (shadow * form) * level + points;
+            lighting = lerp(lighting, day_m, day_mix);
+            open = lerp(open, day_open, day_mix);
+        }
+    }
     // A small light source's halo: its share of the picture that joins the bloom (CaptureCS).
     float halo = 0.0f;
     // The sun's share of the light for the composite's per-pixel relief: its visibility (the filtered

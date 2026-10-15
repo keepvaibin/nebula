@@ -7070,8 +7070,16 @@ bool GxBackend::rt_fake_shadow_object(std::uint32_t object) {
     rt_object_name(name, sizeof(name));
     static constexpr char kShadow[] = "\x89\x65\x95\x60\x89\xE6";           // 影描画
     static constexpr char kPlateShadow[] = "\x94\xC2\x8F\xF3\x83\x56\x83\x83";  // 板状シャ...
-    const bool shadow = std::strncmp(name, kShadow, sizeof(kShadow) - 1u) == 0 ||
+    // The drop shadows only (sphere, oval, cylinder, box volumes, plates, water-surface circles): the line,
+    // electric-rail and ring-beam volumes draw effects the traced light does not replace (census: 11
+    // drawer kinds, render-fix census_*_mat.tsv).
+    static constexpr char kLine[] = "\x83\x89\x83\x43\x83\x93";       // ライン
+    static constexpr char kRail[] = "\x93\x64\x8C\x82";               // 電撃
+    static constexpr char kRing[] = "\x83\x8A\x83\x93\x83\x4F";       // リング
+    const bool drawer = std::strncmp(name, kShadow, sizeof(kShadow) - 1u) == 0 ||
                         std::strncmp(name, kPlateShadow, sizeof(kPlateShadow) - 1u) == 0;
+    const bool shadow = drawer && std::strstr(name, kLine) == nullptr && std::strstr(name, kRail) == nullptr &&
+                        std::strstr(name, kRing) == nullptr;
     if (rt_fake_shadow_cache_.size() > 4096u) {
         rt_fake_shadow_cache_.clear();
     }

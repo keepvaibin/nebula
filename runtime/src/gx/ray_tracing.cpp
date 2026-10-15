@@ -187,6 +187,8 @@ constexpr std::uint32_t kDrawTableTint = 1u;
 // g_draws word 6 (rt_lighting.hlsl kDrawTableGlow): the table gives the light source's own glow, in the
 // high half as unorm16 of glow / kDrawGlowScale.
 constexpr std::uint32_t kDrawTableGlow = 2u;
+// g_draws word 6 (rt_lighting.hlsl kDrawTableFoliage): alpha-cut leaves, grass and flower cards.
+constexpr std::uint32_t kDrawTableFoliage = 4u;
 constexpr float kDrawGlowScale = 16.0f;
 // AuthoredLight.flags (rt_lighting.hlsl kAuthored*): the colour the draw shows; a spot light.
 constexpr std::uint32_t kAuthoredTint = 1u;
@@ -769,7 +771,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     sun_color_ = env_triple("GALAXY_RT_SUN_COLOR", sun_color_);
     sun_size_ = std::clamp(env_float("GALAXY_RT_SUN_SIZE", 1.0f), 0.0f, 30.0f);
     key_size_ = std::clamp(env_float("GALAXY_RT_KEY_SIZE", 1.5f), 0.0f, 30.0f);
-    sun_min_elevation_ = std::clamp(env_float("GALAXY_RT_SUN_MIN_ELEVATION", 50.0f), 0.0f, 89.0f);
+    sun_min_elevation_ = std::clamp(env_float("GALAXY_RT_SUN_MIN_ELEVATION", 30.0f), 0.0f, 89.0f);
     sun_light_ = std::clamp(env_float("GALAXY_RT_SUN_LIGHT", 1.2f), 0.0f, 4.0f);
     sky_light_ = std::clamp(env_float("GALAXY_RT_SKY_LIGHT", 0.6f), 0.0f, 4.0f);
     if (lighting_enabled_ && !create_lighting_pipelines(color_format)) {
@@ -1551,7 +1553,7 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
                    (material->no_light ? 8u : 0u);
         intensity = material->intensity;
         surface = unit_pair(material->matte ? 1.0f : material->roughness, material->metallic);
-        flags = material->tint ? kDrawTableTint : 0u;
+        flags = (material->tint ? kDrawTableTint : 0u) | (material->foliage ? kDrawTableFoliage : 0u);
         if (material->glow >= 0.0f) {
             flags |= kDrawTableGlow |
                      (static_cast<std::uint32_t>(std::lround(std::min(material->glow / kDrawGlowScale, 1.0f) * 65535.0f))
@@ -2305,13 +2307,13 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         // Sun rays end halfway to the game's sun model (BrightSun, drawn that far out along the
         // sun's direction): it would shadow everything near the camera.
         c.sun_reach = sun_distance > 0.0f ? 0.5f * sun_distance : 1.0e6f;
-        // A sun (or key) low over the ground the camera looks at keeps its compass direction but rises to
-        // at least GALAXY_RT_SUN_MIN_ELEVATION degrees above the camera's horizon (its up: the game's
-        // camera rolls with Mario's gravity): a fixed world sun leaves the far side of every small planet
-        // and every rotated one dark (measured sv28: Dusty Dune's sand and all of Good Egg unlit; world Y
-        // is not up there). The shafts still come from the sun the sky shows (post_prepare).
-        if (sun_present && !sun_override_ && sun_min_elevation_ > 0.0f && camera_known_) {
-            const std::array<float, 3> up{camera_[4], camera_[5], camera_[6]};
+        // A sun the game placed low (a BrightSun on the horizon) keeps its compass direction but rises to
+        // at least GALAXY_RT_SUN_MIN_ELEVATION degrees over world Y. The camera's up is not the ground's:
+        // looking down at Mario under water it lies level, and a sun lifted against it came in flat and
+        // shadowed the whole seabed (measured wb31: seabed 178 -> 49). Keys (the game's world-fixed planet
+        // light) stay as the game has them. The shafts still come from the sun the sky shows.
+        if (sun_present && !keyed && !sun_override_ && sun_min_elevation_ > 0.0f) {
+            const std::array<float, 3> up{0.0f, 1.0f, 0.0f};
             const float up_length = std::sqrt(up[0] * up[0] + up[1] * up[1] + up[2] * up[2]);
             const float length = std::sqrt(l[0] * l[0] + l[1] * l[1] + l[2] * l[2]);
             const float min_e = std::sin(sun_min_elevation_ * 3.14159265f / 180.0f);

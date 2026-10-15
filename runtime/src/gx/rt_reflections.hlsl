@@ -1425,7 +1425,7 @@ void ReflectTemporalCS(uint3 id : SV_DispatchThreadID)
                 const float4 history = sum / weight;
                 const float3 clamped =
                     from_ycocg(clamp(to_ycocg(history.rgb), mean - gamma * spread, mean + gamma * spread));
-                const float limit = lerp(8.0f, float(g_history_frames), saturate(alpha * 4.0f));
+                const float limit = lerp(4.0f, float(g_history_frames), saturate(alpha * 4.0f));
                 frames = min(count_sum / weight + 1.0f, limit);
                 // Light blends by confidence (unknown light only fades the reflection); the
                 // confidence itself by the history's share.
@@ -1954,7 +1954,7 @@ float caustic(float3 floor, float3 surface, float3 plane)
     const float3 t2 = cross(world_up, t1);
     const float3 enter = transform(to_world, floor + s * (depth / rise));
     const float focus = wave_focus(float2(dot(enter, t1), dot(enter, t2)), float(m_under[n + 1u].y), depth);
-    return 1.0f + max(focus - 1.0f, 0.0f) * 0.35f * saturate(m_sun.w) * exp(-depth / 1500.0f);
+    return 1.0f + clamp(focus - 1.0f, -0.6f, 1.5f) * 0.3f * saturate(m_sun.w) * exp(-depth / 1500.0f);
 }
 
 // The translucent water's reflections (WaterTraceCS), after the water is drawn: Fresnel-weighted
@@ -2081,7 +2081,7 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
                                         dot(float3(to_world[0].z, to_world[1].z, to_world[2].z), shift_world));
         const float2 wobble = clamp(eye_to_pixel(m_projection, m_viewport, p + shift_eye) - pixel, -8.0f, 8.0f);
         const float px_per_unit = 0.5f * m_viewport.w * abs(m_projection.z) / max(-p.z, 1.0f);
-        const float radius = clamp(40.0f * px_per_unit, 1.0f, 12.0f);
+        const float radius = clamp(40.0f * px_per_unit, 3.0f, 18.0f);
         // The seabed's light through the water: depth absorption (down and back up, red first) and the
         // shallows' caustics act on the seabed only; the game's water colour holds its own (tinting it
         // again turned the shallows neon). Where no floor was found the deep value, blended by the share
@@ -2095,7 +2095,11 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
         const float2 lo = m_viewport.xy;
         const float2 hi = m_viewport.xy + m_viewport.zw - 1.0f;
         float3 water;
+        float edge = 1.0f;
         if (m_water2.y > 0.0f) {
+            const int2 own = int2(clamp(position.xy, lo, hi));
+            const float3 drawn = abs(m_scene.Load(int3(own, 0)).rgb - m_opaque.Load(int3(own, 0)).rgb);
+            edge = smoothstep(0.004f, 0.03f, drawn.r + drawn.g + drawn.b);
             // The water layer the game drew (the frame with it less the frame before it) low-passed by a
             // bilateral filter (its tiled texture goes, its colour and gradient stay), over the seabed as it
             // lies (sharp), moved by the waves' refraction where the moved point is water too.
@@ -2110,7 +2114,7 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
                 const int2 q = int2(clamp(centre_at + float2(cos(a), sin(a)) * (radius * sqrt((float(k) + 0.5f) / 16.0f)), lo, hi));
                 const float3 o = m_opaque.Load(int3(q, 0)).rgb;
                 const float3 d = o - seabed;
-                const float w = exp(-dot(d, d) / 0.008f);
+                const float w = exp(-dot(d, d) / 0.03f);
                 layer += (m_scene.Load(int3(q, 0)).rgb - o) * w;
                 taps += w;
             }
@@ -2118,7 +2122,7 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
             {
                 // 30 % less saturated, fading towards the shore (the seabed shows through the shallows).
                 const float through = exp(-0.0012f * path_c);
-                layer = lerp(layer, luminance(layer).xxx, 0.3f) * lerp(1.0f, 0.45f, through);
+                layer = lerp(layer, luminance(layer).xxx, 0.1f) * lerp(1.0f, 0.8f, through);
             }
             water = max(seabed * seabed_gain + layer, 0.0f);
         } else {
@@ -2145,7 +2149,7 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
             const float foam = shore * smoothstep(0.45f, 0.7f, lace) * m_water2.z;
             water = lerp(water, max(luminance(water), 0.75f).xxx * float3(1.0f, 1.0f, 1.02f), saturate(foam));
         }
-        const float cover = abs(m_water2.y) * share;
+        const float cover = abs(m_water2.y) * share * edge;
         under_add = water * cover;
         under_keep = (1.0f - cover).xxx;
     }
