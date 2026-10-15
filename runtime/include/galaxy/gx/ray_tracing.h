@@ -684,7 +684,7 @@ private:
     std::array<float, 3> sun_color_{1.0f, 0.93f, 0.82f};
     float sun_size_ = 1.0f;     // degrees
     bool sun_override_ = false;
-    float sun_min_elevation_ = 30.0f;  // GALAXY_RT_SUN_MIN_ELEVATION: degrees a game sun rises to at least
+    float sun_min_elevation_ = 50.0f;  // GALAXY_RT_SUN_MIN_ELEVATION: degrees a game sun rises to at least
     const RtStageSun* stage_sun_ = nullptr;
     bool sun_held_ = false;
     bool key_valid_ = false;    // set_key_light

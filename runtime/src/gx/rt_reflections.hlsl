@@ -1791,7 +1791,7 @@ CompositeOut finish(Blend b, uint view, float3 under_add, float3 under_keep)
 {
     CompositeOut result;
     const float k = saturate(b.k_sum / b.weight);
-    const float3 highlight = saturate(b.glint / b.weight);
+    const float3 highlight = min(b.glint / b.weight, 0.35f);
     const float3 kept = saturate(1.0f - b.covered / b.weight);
     if (view == 1u || view == 4u) {
         const float3 reflection = b.k_sum > 1e-4f ? b.sum / b.k_sum : float3(0.0f, 0.0f, 0.0f);

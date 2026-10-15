@@ -123,7 +123,7 @@ static const uint kClearClass = 7u;
 static const float kMaxLight = 8.0f;
 // Daytime (SpatialBCS): a cast shadow's depth, the faint sun's darkening of faces turned from it, the sky
 // occlusion's depth and the sky colour's share in shade.
-static const float kDayShadow = 0.45f;
+static const float kDayShadow = 0.35f;
 static const float kDayForm = 0.15f;
 static const float kDayOcclusion = 0.5f;
 static const float kDayTint = 0.25f;
@@ -2263,7 +2263,9 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
             // darkened faces away from it: Melty 0.78 of the game, measured rtpartner rp10).
             const float form = any(g_sun_light.rgb > 0.0f) ? 1.0f - kDayForm * (1.0f - saturate(shaped / 0.8f)) : 1.0f;
             const float sky_l = luminance(light.sky);
-            const float ao = 1.0f - kDayOcclusion * (1.0f - saturate(sky_l));
+            const bool foliage = (g_draws.Load(min(draw_flags >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride + 24u) &
+                                  kDrawTableFoliage) != 0u;
+            const float ao = 1.0f - kDayOcclusion * (foliage ? 0.5f : 1.0f) * (1.0f - saturate(sky_l));
             const float3 tint = lerp(float3(1.0f, 1.0f, 1.0f), light.sky / max(sky_l, 0.05f), kDayTint * (1.0f - vis));
             // A de-lit draw (its GX light averaged at a mean facing of 0.55, shader_gen) back at the game's own
             // shading of this face: its ambient plus its light 0 at the face's facing to it, clamped as GX's
@@ -2293,7 +2295,7 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
             // Contact occlusion on the art: in full where the sun does not reach, half where it does
             // (sunlit contacts keep their direct light).
             const float sunlit = vis * saturate(shaped / 0.5f);
-            const float day_contact = 1.0f - g_ao.y * (1.0f - contact) * (1.0f - 0.5f * sunlit);
+            const float day_contact = 1.0f - g_ao.y * (foliage ? 0.5f : 1.0f) * (1.0f - contact) * (1.0f - 0.5f * sunlit);
             const float3 day_m = min(shadow * day_form * ao * day_contact * tint * level + day_points, 1.1f * level) * kDayLevel;
             day_terms = float3(vis, shaped, saturate(sky_l));
             const float3 day_open = min((shadow * day_form) * level + day_points, 1.1f * level) * kDayLevel;

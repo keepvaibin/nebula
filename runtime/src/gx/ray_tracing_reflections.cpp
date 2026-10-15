@@ -232,7 +232,7 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     // at grazing angles.
     materials_[0] = material("GALAXY_RT_REFLECT_DIFFUSE", {0.6f, 0.04f, 0.0f, 0.0f, 0.0f});
     materials_[1] = material("GALAXY_RT_REFLECT_GLOSSY", {0.3f, 0.06f, 1.0f, 0.0f, 0.0f});
-    materials_[2] = material("GALAXY_RT_REFLECT_METAL", {0.12f, 0.9f, 1.0f, 1.0f, 0.0f});
+    materials_[2] = material("GALAXY_RT_REFLECT_METAL", {0.12f, 0.9f, 0.5f, 1.0f, 0.0f});
     materials_[3] = material("GALAXY_RT_REFLECT_UNLIT", {0.5f, 0.02f, 0.0f, 0.0f, 0.0f});
     // Opaque indirect-textured surfaces: ice (Freezeflame's rink and walls), pools, swamps: polished
     // and glossy (F0 above water's, so the aurora and Mario read in the ice); a white surface shows its
