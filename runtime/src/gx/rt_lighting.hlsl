@@ -64,6 +64,8 @@ cbuffer RtLight : register(b0)
     float4 g_self;              // the material table's emitters glowing from their own surfaces: area
                                 // lights (lava) and point lights (Lumas, star bits) per unit of
                                 // intensity; an area light's radiance on what sees it per unit
+    float4 g_ao;                // contact occlusion: reach (eye units), strength by day, strength at
+                                // night (0: off), unused
 };
 
 RaytracingAccelerationStructure g_scene : register(t6);
@@ -1955,6 +1957,47 @@ void SpatialMCS(uint3 id : SV_DispatchThreadID)
     g_history[index] = pack_light(l, 0.0f);
 }
 
+// Contact occlusion (horizon based, after GTAO, Jimenez et al. 2016): in 8 fixed screen directions,
+// 3 steps out to g_ao.x eye units (projected onto the sample grid), the highest horizon above the
+// surface's tangent plane, faded with the occluder's distance ((1 - (d / reach)^2)^2); the hidden share
+// of the cosine-weighted hemisphere is its sine squared. 1 open, 0 closed. Fixed directions and steps:
+// the same geometry gives the same value every frame (no noise to filter, no shimmer).
+float contact_occlusion(uint2 id, float3 p, float3 n)
+{
+    const float reach = g_ao.x;
+    // Eye units between samples at this depth.
+    const float spacing = abs(p.z) * 2.0f * float(g_factor) / max(abs(g_projection.x) * g_viewport.z, 1e-4f);
+    const float steps = clamp(reach / max(spacing, 1e-4f), 1.5f, 12.0f);
+    const float inv_reach2 = 1.0f / (reach * reach);
+    float hidden = 0.0f;
+    [unroll] for (uint d = 0u; d < 8u; ++d) {
+        const float angle = (float(d) + 0.5f) * (kPi / 4.0f);
+        const float2 direction = float2(cos(angle), sin(angle));
+        float horizon = 0.0f;
+        [unroll] for (uint k = 1u; k <= 3u; ++k) {
+            const int2 s = int2(id) + int2(round(direction * (steps * float(k) / 3.0f)));
+            if (any(s < 0) || any(s >= int2(g_sample_size))) {
+                continue;
+            }
+            const float sz = g_z[uint(s.y) * g_sample_size.x + uint(s.x)];
+            if (sz == 0.0f) {
+                continue;
+            }
+            const float3 v = sample_position(uint2(s), sz) - p;
+            const float d2 = dot(v, v);
+            if (d2 < 1e-4f) {
+                continue;
+            }
+            // Elevation over the tangent plane, less a small bias (smooth normals on flat faces).
+            const float elevation = saturate((dot(v, n) * rsqrt(d2) - 0.1f) / 0.9f);
+            const float x = saturate(d2 * inv_reach2);
+            horizon = max(horizon, elevation * (1.0f - x) * (1.0f - x));
+        }
+        hidden += horizon * horizon;
+    }
+    return 1.0f - hidden / 8.0f;
+}
+
 [numthreads(8, 8, 1)]
 void SpatialBCS(uint3 id : SV_DispatchThreadID)
 {
@@ -1975,6 +2018,13 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
     if ((g_flags & 128u) != 0u) {
         light.sky = float3(1.0f, 1.0f, 1.0f);  // GALAXY_RT_GI=0: the sky open, no bounce
     }
+    // Contact occlusion: corners, contacts and creases the sky and bounce light reach less of. Never on
+    // the sun or the lamps and glows (their shadows are traced).
+    float contact = 1.0f;
+    if (g_ao.x > 0.0f && (g_ao.y > 0.0f || g_ao.z > 0.0f)) {
+        contact = contact_occlusion(id.xy, sample_position(id.xy, z), unpack_normal(g_normal[index]));
+    }
+    const float3 sky_seen = light.sky * (1.0f - g_ao.z * (1.0f - contact));
     const float3 sun = light.sun * g_sun_light.rgb;
     const float3 points = light.points * g_point_light;
     // The sky and bounce light follow the sky: under a dark sky the lights carry the picture.
@@ -1990,7 +2040,7 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
                               ? saturate(asfloat(g_picture_sums.Load(32u)) / max(g_ambient.y, 1e-3f))
                               : 1.0f;
     const float norm = max(g_sun_light.w + lerp(0.55f, 1.0f, day_sky) * luminance(g_sun_light.rgb), 0.25f);
-    float3 lighting = (ambient * light.sky + sun) / norm + points;
+    float3 lighting = (ambient * sky_seen + sun) / norm + points;
     // With the sky open: what the picture capture keeps (no feedback through the sky and bounce).
     float3 open = (ambient + sun) / norm + points;
     const float exposure = g_picture_sums.Load(52u) != 0u ? asfloat(g_picture_sums.Load(48u)) : 1.0f;
@@ -2021,7 +2071,7 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
         const float3 k = rgb8(colors.y);
         const float3 sky_a = a * (ambient / max(g_sun_light.w, 1e-3f));
         float3 game = a + k * facing;
-        float3 traced = sky_a * light.sky + k * light.sun;
+        float3 traced = sky_a * sky_seen + k * light.sun;
         float3 opened = sky_a + k * light.sun;
         float3 added = points;
         if (point_lit) {
@@ -2041,10 +2091,10 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
         if (point_lit) {
             unshadowed += points_unshadowed(sample_position(id.xy, z), n, false) * g_point_light;
             added = float3(0.0f, 0.0f, 0.0f);
-            lighting = (ambient * light.sky + sun + points) / max(unshadowed, 1e-3f);
+            lighting = (ambient * sky_seen + sun + points) / max(unshadowed, 1e-3f);
             open = (ambient + sun + points) / max(unshadowed, 1e-3f);
         } else {
-            lighting = (ambient * light.sky + sun) / max(unshadowed, 1e-3f) + added;
+            lighting = (ambient * sky_seen + sun) / max(unshadowed, 1e-3f) + added;
             open = (ambient + sun) / max(unshadowed, 1e-3f) + added;
         }
     }
@@ -2066,6 +2116,9 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
     // occlusion darkens creases and contacts, shade takes a little of the sky's colour, and faces
     // turned from the sun keep kDayForm of their light (a faint sun). The lamps and glows still add
     // their light; no exposure. Under a dark sky the lit model above (the nights as they are).
+    // GALAXY_RT_VIEW=8: the day model's sun visibility, the sun's facing (shaped n.l) and the sky's
+    // luminance (black: no traced triangle under the sample, the day model left out).
+    float3 day_terms = float3(0.0f, 0.0f, 0.0f);
     {
         const float day_mix = smoothstep(0.35f, 0.8f, day_sky);
         if (day_mix > 0.0f && tri != 0u) {
@@ -2097,7 +2150,12 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
             // passes 1.1 of its art's level: no overexposed grass, sand or dirt. The light sources' own glow
             // (below) is not affected.
             const float3 day_points = points * 0.35f;
-            const float3 day_m = min(shadow * form * ao * tint * level + day_points, 1.1f * level) * kDayLevel;
+            // Contact occlusion on the art: in full where the sun does not reach, half where it does
+            // (sunlit contacts keep their direct light).
+            const float sunlit = vis * saturate(shaped / 0.5f);
+            const float day_contact = 1.0f - g_ao.y * (1.0f - contact) * (1.0f - 0.5f * sunlit);
+            const float3 day_m = min(shadow * form * ao * day_contact * tint * level + day_points, 1.1f * level) * kDayLevel;
+            day_terms = float3(vis, shaped, saturate(sky_l));
             const float3 day_open = min((shadow * form) * level + day_points, 1.1f * level) * kDayLevel;
             lighting = lerp(lighting, day_m, day_mix);
             open = lerp(open, day_open, day_mix);
@@ -2181,6 +2239,10 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
         m = light.sky;         // GALAXY_RT_VIEW=3: the sky and bounce light alone
     } else if ((g_flags & 16u) != 0u) {
         m = light.points;      // GALAXY_RT_VIEW=4: the point lights alone
+    } else if ((g_flags & 256u) != 0u) {
+        m = contact.xxx;       // GALAXY_RT_VIEW=7: the contact occlusion
+    } else if ((g_flags & 512u) != 0u) {
+        m = day_terms;         // GALAXY_RT_VIEW=8: the day model's sun visibility, facing, sky
     }
     // The picture capture divides out the sky and bounce part (no feedback through it).
     const float3 without = lerp(float3(1.0f, 1.0f, 1.0f), open, g_strength);
