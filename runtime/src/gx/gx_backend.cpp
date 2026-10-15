@@ -7050,6 +7050,7 @@ std::uint16_t GxBackend::rt_material_of(std::uint32_t map_mask,
     std::uint16_t lookup = 0u;
     unsigned lookup_map = 0xFFu;
     unsigned first = 0xFFu;
+    std::uint16_t metal_helper = 0u;
     for (unsigned m = 0; m < kMaxTextureMaps; ++m) {
         if ((map_mask & (1u << m)) == 0u) {
             continue;
@@ -7069,10 +7070,16 @@ std::uint16_t GxBackend::rt_material_of(std::uint32_t map_mask,
             lookup = handles[m].rt_material;
             lookup_map = m;
         }
+        // A material of helpers alone (Spring Mario's spring: an indirect dummy, then its environment maps) takes
+        // the helper the table names metal over a shared dummy before it.
+        if (metal_helper == 0u && material != nullptr &&
+            material->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Metal)) {
+            metal_helper = handles[m].rt_material;
+        }
     }
     // A helper (an environment or indirect map) is not the surface's colour: the first bound map is.
     map = first != 0xFFu ? first : lookup_map;
-    return lookup;
+    return metal_helper != 0u ? metal_helper : lookup;
 }
 
 // The loaded stage (GameSystem's scene controller holds its name inline at +0x20) and its row of the
