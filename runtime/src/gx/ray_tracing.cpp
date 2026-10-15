@@ -745,7 +745,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     post_bloom_ = std::clamp(env_float("GALAXY_RT_POST_BLOOM", 0.0f), 0.0f, 4.0f);
     post_threshold_ = std::clamp(env_float("GALAXY_RT_POST_THRESHOLD", 0.97f), 0.0f, 0.99f);
     post_shafts_ = std::clamp(env_float("GALAXY_RT_POST_SHAFTS", 1.0f), 0.0f, 4.0f);
-    post_dof_ = std::clamp(env_float("GALAXY_RT_POST_DOF", 0.0f), 0.0f, 32.0f);
+    post_dof_ = std::clamp(env_float("GALAXY_RT_POST_DOF", 1.5f), 0.0f, 32.0f);
     post_grade_ = std::clamp(env_float("GALAXY_RT_POST_GRADE", 1.0f), 0.0f, 1.0f);
     post_rim_ = std::clamp(env_float("GALAXY_RT_POST_RIM", 0.0f), 0.0f, 2.0f);
     post_haze_ = std::clamp(env_float("GALAXY_RT_POST_HAZE", 0.04f), 0.0f, 1.0f);

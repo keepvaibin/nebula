@@ -1286,7 +1286,7 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
                 reflected = true;
                 const Reflected r = reflect_light(id.xy, dir, n, ng, hit, params, base, true, false);
                 light = r.light;
-                highlight = min(r.highlight, 1.5f);
+                highlight = min(r.highlight, 1.5f) * (surface == kWaterSurface ? 0.5f : 1.0f);
                 // Water mirrors what stands over it in full; the sky at 0.25 of it (the bright sky
                 // bleached the far lagoon, measured wb36).
                 confidence = surface == kWaterSurface && r.source >= kSkyShown ? r.confidence * 0.25f : r.confidence;
@@ -2117,6 +2117,15 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
             // depth; read where the waves' refraction moves it. The traced reflections go over it.
             const bool moved = water_z(pixel + wobble) != 0.0f;
             const float2 centre_at = clamp(position.xy + (moved ? wobble : 0.0f), lo, hi);
+            {
+                // Derived: kept share of the game's water = deep + (1 - deep) T, T = exp(-sigma path):
+                // path 30 0.92/0.97/0.99, 150 0.68/0.87/0.94, no floor found (500) 0.39/0.70/0.83.
+                const float3 drawn_water = m_scene.Load(int3(int2(clamp(position.xy, lo, hi)), 0)).rgb;
+                const float3 through = exp(-float3(0.004f, 0.0022f, 0.0016f) * path_c);
+                const float3 deep = drawn_water * float3(0.3f, 0.55f, 0.7f);
+                water = lerp(deep, drawn_water * caustic_gain, through);
+            }
+            if (false) {
             const float wide = clamp(60.0f * px_per_unit, 8.0f, 48.0f);
             float3 tone = float3(0.0f, 0.0f, 0.0f);
             float3 floor_mean = float3(0.0f, 0.0f, 0.0f);
@@ -2141,6 +2150,7 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
             const float3 detail = clamp(seabed / max(floor_mean, 0.02f), 0.4f, 1.8f) * caustic_gain;
             const float clear = exp(-path_c / 90.0f);
             water = tone * lerp(float3(1.0f, 1.0f, 1.0f), detail, clear);
+            }
         } else {
             const float3 centre = m_scene.Load(int3(int2(clamp(position.xy + wobble, lo, hi)), 0)).rgb;
             water = centre;

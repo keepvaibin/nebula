@@ -128,7 +128,7 @@ static const float kDayOcclusion = 0.5f;
 static const float kDayTint = 0.25f;
 // Daylight's level: the art at 0.8 of the game's brightness (user: sand, grass and trees darker and
 // richer, never overexposed; the sky keeps the game's, so the land reads deep against it).
-static const float kDayLevel = 0.8f;
+static const float kDayLevel = 0.75f;
 static const float kLitKnee = 0.8f;
 // The share of the light the film shoulder rolls off (lava, fire, lamps, glints) that joins the
 // bloom (CaptureCS).
@@ -600,6 +600,9 @@ void SkyLightShCS(uint gi : SV_GroupIndex)
 [numthreads(1, 1, 1)]
 void SkyStateCS()
 {
+    if (c_exposure == 2u) {
+        c_sums.Store(36u, 0u);
+    }
     const uint4 sky = c_sums.Load4(0u);
     if (sky.w * 100u > c_sample_size.x * c_sample_size.y) {
         const float l = luminance(float3(sky.xyz) / (255.0f * float(sky.w)));
@@ -632,7 +635,7 @@ void SkyStateCS()
         const float target = lerp(c_exposure_night, c_exposure_day, day);
         const float exposure = c_sums.Load(52u) != 0u ? asfloat(c_sums.Load(48u)) : 1.0f;
         const float goal = clamp(ratio, lerp(0.97f, 0.7f, day) * target, 1.12f * target);
-        const float next = clamp(exposure * lerp(1.0f, goal / max(ratio, 0.05f), 0.1f), 0.35f, lerp(2.5f, 1.1f, day));
+        const float next = clamp(exposure * lerp(1.0f, goal / max(ratio, 0.05f), 0.1f), 0.35f, 1.0f);
         c_sums.Store2(48u, uint2(asuint(next), 1u));
     }
 }
