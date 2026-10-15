@@ -95,6 +95,9 @@ struct Effects {
     // DualSense firmware 2.24 and later and the Edge take full-range motors;
     // older firmware takes half range.
     bool full_range_rumble = true;
+    // DualSense over Bluetooth: the report's sequence number (low 4 bits),
+    // one more for every report sent.
+    std::uint8_t sequence = 0;
 };
 
 // Report length the builders return, by model and transport.

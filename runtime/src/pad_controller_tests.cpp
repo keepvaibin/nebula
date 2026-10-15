@@ -1,8 +1,10 @@
-// PlayStation and Steam controllers: input report decoding, calibration,
-// output reports, and the device list of the CONTROLS page. Reports are built
-// byte by byte from the documented layouts (SDL's hidapi PS4/PS5/Steam drivers).
+// PlayStation, Steam and generic HID controllers: input report decoding,
+// calibration, output reports, and the device list of the CONTROLS page.
+// Reports are built byte by byte from the documented layouts (SDL's hidapi
+// PS4/PS5/Steam drivers); generic values as the HID parser returns them.
 
 #include "galaxy/controller_roster.h"
+#include "galaxy/generic_hid.h"
 #include "galaxy/input_bindings.h"
 #include "galaxy/playstation_controller.h"
 #include "galaxy/steam_controller.h"
@@ -21,6 +23,7 @@ namespace {
 using namespace galaxy::input;
 namespace ps = galaxy::input::playstation;
 namespace sv = galaxy::input::steam;
+namespace gh = galaxy::input::generic_hid;
 using Bytes = std::vector<std::uint8_t>;
 
 int g_failures = 0;
@@ -427,6 +430,9 @@ void test_output_reports() {
                out[6] == 5 && out[41] == 0x04 && out[47] == 1 && out[48] == 2 && out[49] == 3,
            "DualSense Bluetooth effects");
     expect(output_crc_ok(out), "DualSense Bluetooth output CRC");
+    e.sequence = 0x1b;
+    (void)ps::build_output_report(ps::Model::DualSense, ps::Transport::Bluetooth, e, out);
+    expect(out[1] == 0xb0 && out[2] == 0x10 && output_crc_ok(out), "DualSense Bluetooth sequence in the high nibble");
 
     Bytes small(16, 0);
     expect(ps::build_output_report(ps::Model::DualSense, ps::Transport::Usb, e, small) == 0, "a short buffer is refused");
@@ -663,6 +669,114 @@ void test_device_list() {
 
 }  // namespace
 
+// A two-stick pad as cheap USB controllers describe it: X/Y/Z/Rz 0..255,
+// hat 0..7 (8 = centred), 12 buttons.
+gh::Layout usb_pad_layout() {
+    gh::Layout layout{};
+    for (const gh::Axis axis : {gh::Axis::X, gh::Axis::Y, gh::Axis::Z, gh::Axis::Rz}) {
+        layout.axes[static_cast<std::size_t>(axis)] = {true, 0, 255, 8};
+    }
+    layout.hat = {true, 0, 7, 4};
+    layout.buttons = 12;
+    return layout;
+}
+
+void test_generic() {
+    expect(gh::is_game_controller(0x01, 0x05) && gh::is_game_controller(0x01, 0x04), "game pad and joystick collections");
+    expect(!gh::is_game_controller(0x01, 0x02) && !gh::is_game_controller(0x0c, 0x01), "mice and consumer controls are not");
+    expect(gh::claimed_elsewhere(0x045e, L"hid#vid_045e&pid_02ff#7"), "Microsoft pads are XInput's");
+    expect(gh::claimed_elsewhere(0x0e6f, L"hid#vid_0e6f&pid_02a1&IG_00#8"), "XInput interfaces are skipped");
+    expect(gh::claimed_elsewhere(0x054c, L"x") && gh::claimed_elsewhere(0x28de, L"x"), "Sony and Valve have their own paths");
+    expect(!gh::claimed_elsewhere(0x0079, L"hid#vid_0079&pid_0006#7"), "an unknown pad is generic");
+
+    expect(gh::button_bit(1) == static_cast<int>(pad::kSouthBit) && gh::button_bit(2) == static_cast<int>(pad::kEastBit),
+           "buttons 1 and 2 are South and East");
+    expect(gh::button_bit(9) == static_cast<int>(pad::kBackBit) && gh::button_bit(10) == static_cast<int>(pad::kStartBit),
+           "buttons 9 and 10 are Back and Start");
+    expect(gh::button_bit(0) == -1 && gh::button_bit(20) == -1, "button 0 and buttons past 19 have no bit");
+    std::uint32_t seen = 0;
+    for (unsigned n = 1; n <= gh::kMappedButtons; ++n) seen |= 1u << static_cast<unsigned>(gh::button_bit(n));
+    expect(seen == (((1u << pad::kButtonBitCount) - 1u) & ~0xfu), "buttons 1..19 cover every unified bit but the d-pad");
+
+    const gh::Layout layout = usb_pad_layout();
+    gh::Raw raw{};
+    raw.axes = {128, 128, 128, 0, 0, 128, 0, 0};
+    raw.hat = 8;
+    switch_hid::DecodedState state{};
+    gh::map_report(layout, raw, state);
+    expect(state.normalized && state.buttons == 0u, "neutral generic pad");
+    for (std::size_t i = 0; i < 4; ++i) expect(close_to(state.axes[i], 0.0f, 0.01f), "sticks centre at the middle of the range");
+    expect(state.axes[4] == 0.0f && state.axes[5] == 0.0f, "no trigger axes: triggers rest");
+
+    raw.axes[0] = 255;  // X right
+    raw.axes[1] = 0;    // Y up
+    raw.axes[2] = 0;    // Z: right stick left
+    raw.axes[5] = 255;  // Rz: right stick down
+    raw.hat = 1;        // north-east
+    raw.buttons = (1u << 0) | (1u << 6) | (1u << 11);  // 1, 7, 12
+    gh::map_report(layout, raw, state);
+    expect(close_to(state.axes[0], 1.0f) && close_to(state.axes[1], 1.0f), "X right is +1, Y up is +1");
+    expect(close_to(state.axes[2], -1.0f) && close_to(state.axes[3], -1.0f), "Z/Rz drive the right stick");
+    expect(state.buttons == (bit(pad::kDpadUpBit) | bit(pad::kDpadRightBit) | bit(pad::kSouthBit) |
+                             bit(pad::kGripLeftBit) | bit(pad::kRightStickBit)),
+           "hat diagonal and buttons 1, 7, 12");
+
+    gh::Layout xbox_like{};
+    for (const gh::Axis axis : {gh::Axis::X, gh::Axis::Y, gh::Axis::Rx, gh::Axis::Ry}) {
+        xbox_like.axes[static_cast<std::size_t>(axis)] = {true, -32768, 32767, 16};
+    }
+    xbox_like.axes[static_cast<std::size_t>(gh::Axis::Z)] = {true, 0, 1023, 10};
+    gh::Raw signed_raw{};
+    signed_raw.axes[3] = 0x8000u;  // Rx -32768 as the 16-bit field
+    signed_raw.axes[4] = 0x7fffu;  // Ry +32767
+    signed_raw.axes[2] = 1023u;    // Z pulled
+    gh::map_report(xbox_like, signed_raw, state);
+    expect(close_to(state.axes[2], -1.0f) && close_to(state.axes[3], -1.0f), "signed Rx/Ry drive the right stick");
+    expect(close_to(state.axes[4], 1.0f) && state.axes[5] == 0.0f, "Z is the left trigger when Rx/Ry are the stick");
+    expect(gh::logical_value({true, -128, 127, 8}, 0xffu) == -1, "8-bit field 0xff is -1 in a signed range");
+    expect(gh::logical_value({true, 0, 255, 8}, 0xffu) == 255, "unsigned ranges stay unsigned");
+
+    gh::Layout four_way{};
+    four_way.hat = {true, 1, 4, 4};
+    gh::Raw hat_raw{};
+    hat_raw.hat = 3;  // third of four: south
+    gh::map_report(four_way, hat_raw, state);
+    expect(state.buttons == bit(pad::kDpadDownBit), "a four-position hat from 1: 3 is down");
+    hat_raw.hat = 0;
+    gh::map_report(four_way, hat_raw, state);
+    expect(state.buttons == 0u, "a hat value below its range is centred");
+
+    const PadSample sample = switch_hid::pad_sample_from(state, ControlScheme::Generic, {}, {}, 0.15f, 0.15f);
+    expect(sample.scheme == ControlScheme::Generic && sample.connected, "generic pads become pad samples");
+
+    // Bindings: the scheme, its names and defaults.
+    expect(std::string(control_scheme_id(ControlScheme::Generic)) == "generic", "scheme id");
+    expect(parse_control_scheme("generic") == ControlScheme::Generic, "scheme id parses");
+    expect(format_input_source(ControlScheme::Generic, {SourceKind::Button, static_cast<std::uint8_t>(pad::kSouthBit)}) ==
+               "Button1",
+           "South is Button1 on a generic pad");
+    const auto parsed = parse_input_source(ControlScheme::Generic, "Button8");
+    expect(parsed && parsed->kind == SourceKind::Button && parsed->code == pad::kGripRightBit, "Button8 parses");
+    const BindingTable defaults = default_binding_table(ControlScheme::Generic);
+    expect(defaults[WiiTarget::A][0] == InputSource{SourceKind::Button, static_cast<std::uint8_t>(pad::kSouthBit)},
+           "button 1 jumps");
+    expect(defaults[WiiTarget::Z][1] == InputSource{SourceKind::Button, static_cast<std::uint8_t>(pad::kGripLeftBit)},
+           "button 7 crouches");
+    expect(legacy_binding_table(ControlScheme::Generic) == defaults &&
+               version3_binding_table(ControlScheme::Generic) == defaults,
+           "migration never changes generic bindings");
+    for (std::size_t t = 0; t < kWiiTargetCount; ++t) {
+        for (const InputSource source : defaults.targets[t]) {
+            if (!source.empty()) {
+                expect(binding_source_allowed(ControlScheme::Generic, static_cast<WiiTarget>(t), source),
+                       "every generic default is allowed");
+            }
+        }
+    }
+    expect(!scheme_has_motion(ControlScheme::Generic) && scheme_uses_hid(ControlScheme::Generic),
+           "generic pads: HID, no motion");
+}
+
 int main() {
     test_crc();
     test_dualshock4_usb();
@@ -675,6 +789,7 @@ int main() {
     test_steam();
     test_pad_sample();
     test_device_list();
+    test_generic();
     if (g_failures != 0) {
         std::cerr << g_failures << " check(s) failed\n";
         return 1;

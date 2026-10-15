@@ -1,5 +1,6 @@
 #include "galaxy/controller_hid.h"
 #include "galaxy/content_viewport.h"
+#include "galaxy/generic_hid.h"
 #include "galaxy/playstation_controller.h"
 #include "galaxy/rumble.h"
 #include "galaxy/steam_controller.h"
@@ -44,6 +45,7 @@ namespace {
 namespace sw = input::switch_hid;
 namespace ps = input::playstation;
 namespace sv = input::steam;
+namespace gh = input::generic_hid;
 using input::ControlScheme;
 using input::ControllerLink;
 
@@ -58,6 +60,13 @@ struct HandleCloser {
     }
 };
 using UniqueHandle = std::unique_ptr<void, HandleCloser>;
+
+struct PreparsedFree {
+    void operator()(_HIDP_PREPARSED_DATA* data) const noexcept {
+        if (data != nullptr) HidD_FreePreparsedData(data);
+    }
+};
+using UniquePreparsed = std::unique_ptr<_HIDP_PREPARSED_DATA, PreparsedFree>;
 
 bool contains_ci(const std::wstring& text, const wchar_t* needle) {
     std::wstring a = text;
@@ -184,9 +193,17 @@ struct Device {
     // report that switches it to full reports is asked for again, a few times.
     unsigned ps_mode_attempts = 0;
     std::uint64_t ps_mode_next_us = 0;
+    // DualSense Bluetooth output report sequence.
+    std::uint8_t ps_sequence = 0;
     // Steam Controller.
     sv::SensorClock steam_clock{};
     std::uint64_t steam_settings_due_us = 0;
+    // Generic HID controller: the parser's description, the layout taken from
+    // it and the last values (a device may spread them over several reports).
+    UniquePreparsed preparsed;
+    gh::Layout generic_layout{};
+    gh::Raw generic_raw{};
+    std::array<USAGE, gh::kMaxButtons> generic_usages{};
     // Vibration last sent to this controller.
     bool rumble_on = false;
     std::uint8_t rumble_level = 0;
@@ -256,6 +273,41 @@ DWORD CALLBACK on_device_change(HCMNOTIFICATION, PVOID context, CM_NOTIFY_ACTION
     return ERROR_SUCCESS;
 }
 
+// A controller's product name for ControllerInfo::model (static storage):
+// the first names seen are kept for the process, then a generic one.
+const char* intern_model_name(const char* name) noexcept {
+    static std::mutex mutex;
+    static std::array<std::array<char, 40>, 32> names{};
+    static std::size_t count = 0;
+    const std::lock_guard<std::mutex> lock(mutex);
+    for (std::size_t i = 0; i < count; ++i) {
+        if (std::strcmp(names[i].data(), name) == 0) return names[i].data();
+    }
+    if (count == names.size()) return "Game controller";
+    std::array<char, 40>& entry = names[count++];
+    strncpy_s(entry.data(), entry.size(), name, _TRUNCATE);
+    return entry.data();
+}
+
+// The HID product string in printable ASCII (the overlay's character set),
+// spaces collapsed; "Game controller" when the device has none.
+const char* generic_model_name(HANDLE handle) noexcept {
+    std::array<wchar_t, 127> wide{};
+    char name[40]{};
+    std::size_t used = 0;
+    if (HidD_GetProductString(handle, wide.data(), static_cast<ULONG>((wide.size() - 1u) * sizeof(wchar_t)))) {
+        for (const wchar_t c : wide) {
+            if (c == L'\0' || used + 1u >= sizeof(name)) break;
+            const bool space = c == L' ' || c == L'\t';
+            if (space && (used == 0u || name[used - 1u] == ' ')) continue;
+            if (space || (c > 0x20 && c < 0x7f)) name[used++] = space ? ' ' : static_cast<char>(c);
+        }
+        while (used != 0u && name[used - 1u] == ' ') --used;
+        name[used] = '\0';
+    }
+    return intern_model_name(used != 0u ? name : "Game controller");
+}
+
 // A supported HID controller by vendor and product id.
 struct ProductInfo {
     ControlScheme scheme = ControlScheme::SwitchPro;
@@ -278,6 +330,111 @@ std::optional<ProductInfo> find_product(USHORT vendor, USHORT product) noexcept 
         return ProductInfo{ControlScheme::Steam, "Steam Controller", {}};
     }
     return std::nullopt;
+}
+
+// A Joystick or Game Pad collection no other path reads (generic_hid.h).
+std::optional<ProductInfo> find_generic(HANDLE probe, USHORT vendor, const std::wstring& path) noexcept {
+    if (gh::claimed_elsewhere(vendor, path.c_str())) return std::nullopt;
+    PHIDP_PREPARSED_DATA preparsed = nullptr;
+    if (!HidD_GetPreparsedData(probe, &preparsed)) return std::nullopt;
+    HIDP_CAPS caps{};
+    const bool read = HidP_GetCaps(preparsed, &caps) == HIDP_STATUS_SUCCESS;
+    HidD_FreePreparsedData(preparsed);
+    if (!read || !gh::is_game_controller(caps.UsagePage, caps.Usage)) return std::nullopt;
+    return ProductInfo{ControlScheme::Generic, generic_model_name(probe), {}};
+}
+
+// The axes, hat and buttons a generic controller's input reports carry.
+gh::Layout generic_layout(PHIDP_PREPARSED_DATA preparsed) {
+    gh::Layout layout{};
+    HIDP_CAPS caps{};
+    if (HidP_GetCaps(preparsed, &caps) != HIDP_STATUS_SUCCESS) return layout;
+    std::vector<HIDP_VALUE_CAPS> values(caps.NumberInputValueCaps);
+    USHORT value_count = caps.NumberInputValueCaps;
+    if (value_count != 0u && HidP_GetValueCaps(HidP_Input, values.data(), &value_count, preparsed) == HIDP_STATUS_SUCCESS) {
+        for (USHORT i = 0; i < value_count; ++i) {
+            const HIDP_VALUE_CAPS& value = values[i];
+            if (value.IsRange || value.ReportCount > 1u) continue;
+            const USAGE usage = value.NotRange.Usage;
+            gh::ValueRange range{true, value.LogicalMin, value.LogicalMax, value.BitSize};
+            // A field whose logical maximum overflows LONG reads as negative: take its bit range.
+            if (range.max < range.min && value.BitSize > 0u && value.BitSize < 32u) {
+                range.min = 0;
+                range.max = static_cast<std::int32_t>((1u << value.BitSize) - 1u);
+            }
+            if (value.UsagePage == gh::kUsagePageGenericDesktop) {
+                switch (usage) {
+                case gh::kUsageX: layout.axes[static_cast<std::size_t>(gh::Axis::X)] = range; break;
+                case gh::kUsageY: layout.axes[static_cast<std::size_t>(gh::Axis::Y)] = range; break;
+                case gh::kUsageZ: layout.axes[static_cast<std::size_t>(gh::Axis::Z)] = range; break;
+                case gh::kUsageRx: layout.axes[static_cast<std::size_t>(gh::Axis::Rx)] = range; break;
+                case gh::kUsageRy: layout.axes[static_cast<std::size_t>(gh::Axis::Ry)] = range; break;
+                case gh::kUsageRz: layout.axes[static_cast<std::size_t>(gh::Axis::Rz)] = range; break;
+                case gh::kUsageHatSwitch: layout.hat = range; break;
+                default: break;
+                }
+            } else if (value.UsagePage == gh::kUsagePageSimulation) {
+                if (usage == gh::kUsageAccelerator) layout.axes[static_cast<std::size_t>(gh::Axis::Accelerator)] = range;
+                if (usage == gh::kUsageBrake) layout.axes[static_cast<std::size_t>(gh::Axis::Brake)] = range;
+            }
+        }
+    }
+    std::vector<HIDP_BUTTON_CAPS> buttons(caps.NumberInputButtonCaps);
+    USHORT button_count = caps.NumberInputButtonCaps;
+    if (button_count != 0u &&
+        HidP_GetButtonCaps(HidP_Input, buttons.data(), &button_count, preparsed) == HIDP_STATUS_SUCCESS) {
+        for (USHORT i = 0; i < button_count; ++i) {
+            if (buttons[i].UsagePage != gh::kUsagePageButton) continue;
+            const USAGE last = buttons[i].IsRange ? buttons[i].Range.UsageMax : buttons[i].NotRange.Usage;
+            layout.buttons = std::max<std::uint16_t>(layout.buttons, static_cast<std::uint16_t>(last));
+        }
+    }
+    return layout;
+}
+
+// One report through the HID parser: values it carries replace the held ones.
+bool decode_generic(Device& device, std::span<const std::uint8_t> report, sw::DecodedState& decoded) noexcept {
+    _HIDP_PREPARSED_DATA* const preparsed = device.preparsed.get();
+    if (preparsed == nullptr || report.empty()) return false;
+    auto* const bytes = reinterpret_cast<PCHAR>(const_cast<std::uint8_t*>(report.data()));
+    const auto size = static_cast<ULONG>(report.size());
+    bool any = false;
+    ULONG held = static_cast<ULONG>(device.generic_usages.size());
+    const NTSTATUS buttons = HidP_GetUsages(HidP_Input, gh::kUsagePageButton, 0, device.generic_usages.data(), &held,
+                                            preparsed, bytes, size);
+    if (buttons == HIDP_STATUS_SUCCESS || buttons == HIDP_STATUS_BUFFER_TOO_SMALL) {
+        std::uint32_t mask = 0;
+        for (ULONG i = 0; i < std::min<ULONG>(held, static_cast<ULONG>(device.generic_usages.size())); ++i) {
+            const USAGE number = device.generic_usages[i];
+            if (number >= 1u && number <= gh::kMaxButtons) mask |= 1u << (number - 1u);
+        }
+        device.generic_raw.buttons = mask;
+        any = true;
+    }
+    const auto read = [&](USAGE page, USAGE usage, std::uint32_t& out) {
+        ULONG value = 0;
+        if (HidP_GetUsageValue(HidP_Input, page, 0, usage, &value, preparsed, bytes, size) == HIDP_STATUS_SUCCESS) {
+            out = value;
+            any = true;
+        }
+    };
+    constexpr std::array<std::pair<USAGE, USAGE>, gh::kAxisCount> kAxisUsages{{
+        {gh::kUsagePageGenericDesktop, gh::kUsageX},
+        {gh::kUsagePageGenericDesktop, gh::kUsageY},
+        {gh::kUsagePageGenericDesktop, gh::kUsageZ},
+        {gh::kUsagePageGenericDesktop, gh::kUsageRx},
+        {gh::kUsagePageGenericDesktop, gh::kUsageRy},
+        {gh::kUsagePageGenericDesktop, gh::kUsageRz},
+        {gh::kUsagePageSimulation, gh::kUsageAccelerator},
+        {gh::kUsagePageSimulation, gh::kUsageBrake},
+    }};
+    for (std::size_t i = 0; i < gh::kAxisCount; ++i) {
+        if (device.generic_layout.axes[i].present) read(kAxisUsages[i].first, kAxisUsages[i].second, device.generic_raw.axes[i]);
+    }
+    if (device.generic_layout.hat.present) read(gh::kUsagePageGenericDesktop, gh::kUsageHatSwitch, device.generic_raw.hat);
+    if (!any) return false;
+    gh::map_report(device.generic_layout, device.generic_raw, decoded);
+    return true;
 }
 
 struct HidCandidate {
@@ -327,15 +484,15 @@ std::vector<HidCandidate> enumerate_hid_pads() {
         detail->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA_W);
         if (!SetupDiGetDeviceInterfaceDetailW(set, &iface, detail, needed, nullptr, nullptr)) continue;
         const std::wstring path = detail->DevicePath;
-        // Cheap filter by vendor id before opening anything.
-        if (!contains_ci(path, L"057e") && !contains_ci(path, L"054c") && !contains_ci(path, L"28de")) continue;
+        // Opened without access: attributes and the top-level collection only.
         UniqueHandle probe(CreateFileW(path.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
                                        OPEN_EXISTING, 0, nullptr));
         if (probe.get() == INVALID_HANDLE_VALUE) continue;
         HIDD_ATTRIBUTES attributes{};
         attributes.Size = sizeof(attributes);
         if (!HidD_GetAttributes(probe.get(), &attributes)) continue;
-        const auto product = find_product(attributes.VendorID, attributes.ProductID);
+        auto product = find_product(attributes.VendorID, attributes.ProductID);
+        if (!product) product = find_generic(probe.get(), attributes.VendorID, path);
         if (!product) continue;
         if (sv::is_puck_product(attributes.ProductID)) {
             // Interfaces 2..5 carry controllers; the others are not game pads.
@@ -808,7 +965,8 @@ bool write_output(Device& device, const std::uint8_t* report, std::size_t built)
     return write_report(device.handle.get(), device.write_event.get(), report, static_cast<DWORD>(length), 30);
 }
 
-bool send_playstation_effects(Device& device, const ps::Effects& effects) {
+bool send_playstation_effects(Device& device, ps::Effects effects) {
+    effects.sequence = device.ps_sequence++;
     std::array<std::uint8_t, kLargestOutputReport> report{};
     const std::size_t built = ps::build_output_report(device.ps_model, device.ps_transport, effects, report);
     return write_output(device, report.data(), built);
@@ -931,7 +1089,10 @@ private:
     }
 
     void rescan_devices() {
+        const std::uint64_t scan_start = steady_us();
         const auto candidates = enumerate_hid_pads();
+        std::cerr << "[controller] scan " << candidates.size() << " controller interface(s) in "
+                  << (steady_us() - scan_start) / 1000u << " ms\n";
         // Drop devices that disappeared.
         for (auto it = devices_.begin(); it != devices_.end();) {
             const bool present = std::any_of(candidates.begin(), candidates.end(),
@@ -993,7 +1154,12 @@ private:
         HIDP_CAPS caps{};
         if (HidD_GetPreparsedData(device->handle.get(), &preparsed)) {
             (void)HidP_GetCaps(preparsed, &caps);
-            HidD_FreePreparsedData(preparsed);
+            if (device->scheme == ControlScheme::Generic) {
+                device->generic_layout = generic_layout(preparsed);
+                device->preparsed.reset(preparsed);
+            } else {
+                HidD_FreePreparsedData(preparsed);
+            }
         }
         device->buffer.resize(std::max<USHORT>(caps.InputReportByteLength, 64));
         device->output_length = std::max<USHORT>(caps.OutputReportByteLength, 2);
@@ -1015,6 +1181,17 @@ private:
         case ControlScheme::PlayStation:
             device->ps_transport = device->bluetooth ? ps::Transport::Bluetooth : ps::Transport::Usb;
             init_playstation(*device);
+            break;
+        case ControlScheme::Generic:
+            std::cerr << "[controller] generic " << device->model_name << ": "
+                      << device->generic_layout.buttons << " buttons, axes"
+                      << (device->generic_layout.axes[0].present ? " x" : "")
+                      << (device->generic_layout.axes[1].present ? " y" : "")
+                      << (device->generic_layout.axes[2].present ? " z" : "")
+                      << (device->generic_layout.axes[3].present ? " rx" : "")
+                      << (device->generic_layout.axes[4].present ? " ry" : "")
+                      << (device->generic_layout.axes[5].present ? " rz" : "")
+                      << (device->generic_layout.hat.present ? ", hat" : "") << '\n';
             break;
         default:
             break;
@@ -1185,6 +1362,8 @@ private:
             if (!sv::decode_report(report, device.steam_clock, decoded)) return false;
             if (!device.published) publish_device(device);  // a puck controller that connected before we looked
             return true;
+        case ControlScheme::Generic:
+            return decode_generic(device, report, decoded);
         default:
             return sw::decode_pro_report(report, device.imu, decoded);
         }
@@ -1333,6 +1512,7 @@ private:
         switch (device.scheme) {
         case ControlScheme::PlayStation: return service_playstation_rumble(device, level, strength, now);
         case ControlScheme::Steam: return service_steam_rumble(device, level, strength, now);
+        case ControlScheme::Generic: return false;  // no standard HID motor report
         default: return service_switch_rumble(device, level, strength, now);
         }
     }
@@ -1396,6 +1576,7 @@ private:
         effects.rumble_right = motor;
         effects.apply_rumble = true;
         effects.full_range_rumble = device.ps_full_range_rumble;
+        effects.sequence = device.ps_sequence++;
         std::array<std::uint8_t, kLargestOutputReport> report{};
         const std::size_t built = ps::build_output_report(device.ps_model, device.ps_transport, effects, report);
         if (built == 0u || built > device.output_length || device.output_length > report.size()) {

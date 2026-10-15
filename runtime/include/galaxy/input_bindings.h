@@ -2,8 +2,9 @@
 
 // Remappable controls: one model for every scheme (keyboard+mouse, Xbox via
 // XInput, Switch Pro Controller, Switch 2 Pro Controller, PlayStation
-// controllers, Steam Controller). A scheme is a controller family: DualShock 4,
-// DualSense and DualSense Edge share `playstation`. Each Wii input (target)
+// controllers, Steam Controller, generic HID game controllers). A scheme is a
+// controller family: DualShock 4, DualSense and DualSense Edge share
+// `playstation`; every generic HID controller shares `generic`. Each Wii input (target)
 // holds up to kBindingSlots physical inputs (sources). Persisted in
 // runtime_settings.ini as one `bind.<scheme>.<target>=<source>, ...` line per
 // target and `tune.<scheme>.<name>=<value>` lines for stick/motion tuning.
@@ -24,8 +25,9 @@ enum class ControlScheme : std::uint8_t {
     SwitchPro2 = 3,
     PlayStation = 4,
     Steam = 5,
+    Generic = 6,
 };
-inline constexpr std::size_t kControlSchemeCount = 6;
+inline constexpr std::size_t kControlSchemeCount = 7;
 
 enum class WiiTarget : std::uint8_t {
     A,
@@ -222,8 +224,8 @@ struct ControlsConfig {
     return s == ControlScheme::SwitchPro || s == ControlScheme::SwitchPro2 ||
            s == ControlScheme::PlayStation || s == ControlScheme::Steam;
 }
-// Switch, PlayStation and Steam controllers are read from their HID reports
-// (controller_hid.h); Xbox controllers through XInput.
+// Switch, PlayStation, Steam and generic controllers are read from their HID
+// reports (controller_hid.h); Xbox controllers through XInput.
 [[nodiscard]] constexpr bool scheme_uses_hid(ControlScheme s) noexcept {
     return s != ControlScheme::Keyboard && s != ControlScheme::Xbox;
 }
@@ -243,6 +245,7 @@ struct ControlsConfig {
     case ControlScheme::Steam:
         return kBase | kHomeCapture | kFace | kGrips | pad::bit(pad::kGripLeft2Bit) |
                pad::bit(pad::kGripRight2Bit) | pad::bit(pad::kLeftPadBit) | pad::bit(pad::kRightPadBit);
+    case ControlScheme::Generic: return (1u << pad::kButtonBitCount) - 1u;
     }
     return 0u;
 }

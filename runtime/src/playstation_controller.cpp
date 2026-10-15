@@ -276,6 +276,7 @@ std::size_t build_output_report(Model model, Transport transport, const Effects&
         std::uint8_t* effects = &out[bluetooth ? 3 : 1];
         if (bluetooth) {
             out[0] = 0x31;
+            out[1] = static_cast<std::uint8_t>((e.sequence & 0x0fu) << 4);
             out[2] = 0x10;
         } else {
             out[0] = 0x02;

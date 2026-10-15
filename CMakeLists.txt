@@ -468,6 +468,7 @@ target_link_libraries(
 
 add_library(galaxy_native_input STATIC
     runtime/src/controller_roster.cpp
+    runtime/src/generic_hid.cpp
     runtime/src/native_input.cpp
     runtime/src/playstation_controller.cpp
     runtime/src/pointer_control.cpp

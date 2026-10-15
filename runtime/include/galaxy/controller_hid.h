@@ -1,8 +1,8 @@
 #pragma once
 
 // Switch Pro Controller, Switch 2 Pro Controller, PlayStation (DualShock 4,
-// DualSense, DualSense Edge) and Steam Controller acquisition over Windows
-// HID. One worker thread blocks on an overlapped ReadFile per device plus a
+// DualSense, DualSense Edge), Steam Controller and generic game controller
+// (generic_hid.h) acquisition over Windows HID. One worker thread blocks on an overlapped ReadFile per device plus a
 // device-change event (CM_Register_Notification on the HID interface class),
 // so it costs nothing while idle and wakes at the controller's report rate.
 // The input consumer only copies the latest decoded state.

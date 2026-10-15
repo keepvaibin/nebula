@@ -70,7 +70,7 @@ void test_names_round_trip() {
     }
     // Pad names per scheme.
     for (ControlScheme scheme : {ControlScheme::Xbox, ControlScheme::SwitchPro, ControlScheme::SwitchPro2,
-                                 ControlScheme::PlayStation, ControlScheme::Steam}) {
+                                 ControlScheme::PlayStation, ControlScheme::Steam, ControlScheme::Generic}) {
         for (unsigned bit = 0; bit < pad::kButtonBitCount; ++bit) {
             const InputSource source{SourceKind::Button, static_cast<std::uint8_t>(bit)};
             const auto parsed = parse_input_source(scheme, format_input_source(scheme, source));
@@ -1301,7 +1301,7 @@ std::string bindings_text(ControlScheme scheme, WiiTarget target) {
 
 // PlayStation (DualShock 4, DualSense, DualSense Edge) and Steam Controller schemes.
 void test_playstation_and_steam_schemes() {
-    expect(kControlSchemeCount == 6, "six schemes");
+    expect(kControlSchemeCount == 7, "seven schemes (with generic)");
     expect(std::string(control_scheme_id(ControlScheme::PlayStation)) == "playstation" &&
                std::string(control_scheme_id(ControlScheme::Steam)) == "steam",
            "scheme ids");

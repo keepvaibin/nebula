@@ -47,9 +47,9 @@ constexpr std::array<const char*, kWiiTargetCount> kTargetLabels{
 };
 
 constexpr std::array<const char*, kControlSchemeCount> kSchemeIds{
-    "keyboard", "xbox", "switch_pro", "switch_pro2", "playstation", "steam"};
+    "keyboard", "xbox", "switch_pro", "switch_pro2", "playstation", "steam", "generic"};
 constexpr std::array<const char*, kControlSchemeCount> kSchemeLabels{
-    "KEYBOARD", "XBOX", "SWITCH PRO", "SWITCH 2 PRO", "PLAYSTATION", "STEAM"};
+    "KEYBOARD", "XBOX", "SWITCH PRO", "SWITCH 2 PRO", "PLAYSTATION", "STEAM", "GAMEPAD"};
 
 struct NamedKey {
     std::uint8_t vk;
@@ -95,6 +95,12 @@ constexpr std::array<const char*, pad::kButtonBitCount> kSteamButtonNames{
     "LB", "RB", "Steam", "QAM", "A", "B", "X", "Y", "L4", "R4", "C",
     "L5", "R5", "LPad", "RPad"};
 
+// Generic controllers by HID button number (generic_hid.h button_bit).
+constexpr std::array<const char*, pad::kButtonBitCount> kGenericButtonNames{
+    "DpadUp", "DpadDown", "DpadLeft", "DpadRight", "Button10", "Button9", "Button11", "Button12",
+    "Button5", "Button6", "Button13", "Button14", "Button1", "Button2", "Button3", "Button4", "Button7", "Button8",
+    "Button15", "Button16", "Button17", "Button18", "Button19"};
+
 constexpr std::array<const char*, 4> kStickAxisNames{"LX", "LY", "RX", "RY"};
 
 bool iequals(std::string_view a, std::string_view b) noexcept {
@@ -119,6 +125,7 @@ const std::array<const char*, pad::kButtonBitCount>& button_names(ControlScheme 
     switch (scheme) {
     case ControlScheme::PlayStation: return kPlayStationButtonNames;
     case ControlScheme::Steam: return kSteamButtonNames;
+    case ControlScheme::Generic: return kGenericButtonNames;
     case ControlScheme::Xbox: return kXboxButtonNames;
     default: return kSwitchButtonNames;
     }
@@ -128,7 +135,8 @@ const char* trigger_name(ControlScheme scheme, PadAxis axis) noexcept {
     const bool left = axis == PadAxis::LeftTrigger;
     switch (scheme) {
     case ControlScheme::Xbox:
-    case ControlScheme::Steam: return left ? "LT" : "RT";
+    case ControlScheme::Steam:
+    case ControlScheme::Generic: return left ? "LT" : "RT";
     case ControlScheme::PlayStation: return left ? "L2" : "R2";
     default: return left ? "ZL" : "ZR";
     }
@@ -278,10 +286,44 @@ BindingTable gyro_pad_binding_table() {
     return table;
 }
 
+// Generic controllers: the Xbox shape on the HID button numbers most pads
+// share (1 jumps, 2 backs out of menus, 5 Star Bits, 7/8 the triggers when
+// they are buttons). The scheme is newer than every migration step: all
+// versions share these.
+BindingTable generic_binding_table() {
+    BindingTable table{};
+    using T = WiiTarget;
+    set(table, T::A, {button(pad::kSouthBit)});
+    set(table, T::JumpBack, {button(pad::kEastBit)});
+    set(table, T::B, {button(pad::kLeftShoulderBit)});
+    set(table, T::Plus, {button(pad::kStartBit)});
+    set(table, T::Minus, {button(pad::kBackBit)});
+    set(table, T::Home, {button(pad::kHomeBit)});
+    set(table, T::DpadUp, {button(pad::kDpadUpBit)});
+    set(table, T::DpadDown, {button(pad::kDpadDownBit)});
+    set(table, T::DpadLeft, {button(pad::kDpadLeftBit)});
+    set(table, T::DpadRight, {button(pad::kDpadRightBit)});
+    set(table, T::StickUp, {axis_pos(PadAxis::LeftY)});
+    set(table, T::StickDown, {axis_neg(PadAxis::LeftY)});
+    set(table, T::StickLeft, {axis_neg(PadAxis::LeftX)});
+    set(table, T::StickRight, {axis_pos(PadAxis::LeftX)});
+    set(table, T::C, {button(pad::kLeftStickBit)});
+    set(table, T::Z, {axis_pos(PadAxis::LeftTrigger), button(pad::kGripLeftBit)});
+    set(table, T::Shake, {button(pad::kWestBit), button(pad::kNorthBit), axis_pos(PadAxis::RightTrigger),
+                          button(pad::kGripRightBit)});
+    set(table, T::PointerUp, {axis_pos(PadAxis::RightY)});
+    set(table, T::PointerDown, {axis_neg(PadAxis::RightY)});
+    set(table, T::PointerLeft, {axis_neg(PadAxis::RightX)});
+    set(table, T::PointerRight, {axis_pos(PadAxis::RightX)});
+    set(table, T::PointerRecenter, {button(pad::kRightStickBit)});
+    return table;
+}
+
 }  // namespace
 
 BindingTable legacy_binding_table(ControlScheme scheme) {
     if (is_gyro_pad_scheme(scheme)) return gyro_pad_binding_table();
+    if (scheme == ControlScheme::Generic) return generic_binding_table();
     BindingTable table{};
     using T = WiiTarget;
     if (scheme == ControlScheme::Keyboard) {
@@ -343,7 +385,7 @@ BindingTable legacy_binding_table(ControlScheme scheme) {
 // Default bindings of controls version 2, kept for migration.
 BindingTable version2_binding_table(ControlScheme scheme) {
     BindingTable table = legacy_binding_table(scheme);
-    if (scheme == ControlScheme::Keyboard || is_gyro_pad_scheme(scheme)) {
+    if (scheme == ControlScheme::Keyboard || scheme == ControlScheme::Generic || is_gyro_pad_scheme(scheme)) {
         return table;
     }
     using T = WiiTarget;
@@ -371,7 +413,7 @@ BindingTable version2_binding_table(ControlScheme scheme) {
 // Default bindings of controls version 3, kept for migration.
 BindingTable version3_binding_table(ControlScheme scheme) {
     BindingTable table = version2_binding_table(scheme);
-    if (scheme == ControlScheme::Keyboard || is_gyro_pad_scheme(scheme)) {
+    if (scheme == ControlScheme::Keyboard || scheme == ControlScheme::Generic || is_gyro_pad_scheme(scheme)) {
         return table;
     }
     using T = WiiTarget;
@@ -389,7 +431,7 @@ BindingTable version3_binding_table(ControlScheme scheme) {
 // Xbox: the pointer).
 BindingTable default_binding_table(ControlScheme scheme) {
     BindingTable table = version3_binding_table(scheme);
-    if (scheme == ControlScheme::Keyboard || is_gyro_pad_scheme(scheme)) {
+    if (scheme == ControlScheme::Keyboard || scheme == ControlScheme::Generic || is_gyro_pad_scheme(scheme)) {
         return table;
     }
     using T = WiiTarget;
@@ -426,6 +468,13 @@ SchemeTuning legacy_scheme_tuning(ControlScheme scheme) {
         tuning.pointer_speed = 2.4f;
         tuning.motion_shake = MotionShake::Remote;
         tuning.shake_sensitivity = 3;
+        tuning.pointer_hide_seconds = 4.0f;
+        break;
+    case ControlScheme::Generic:
+        // Uncalibrated sticks: a wider centre than the calibrated pads.
+        tuning.stick_deadzone = 0.15f;
+        tuning.pointer_deadzone = 0.15f;
+        tuning.pointer_speed = 2.4f;
         tuning.pointer_hide_seconds = 4.0f;
         break;
     }
