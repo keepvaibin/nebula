@@ -171,9 +171,11 @@ public:
     // scene has none. The lighting history follows it from frame to frame.
     void set_camera(const std::array<float, 12>* view) noexcept;
     [[nodiscard]] bool lighting_active() const noexcept { return ready_ && lighting_enabled_ && !ab_original_; }
-    // GALAXY_RT_AB=1 (test runs): every other renderer frame shows the game's own picture (no traced
+    // GALAXY_RT_AB=1 (test runs): every other present shows the game's own picture (no traced
     // lighting, reflections or finish); the traced frames carry a mark in the EFB's top-left corner.
     [[nodiscard]] bool ab_original() const noexcept { return ab_original_; }
+    // The frame about to be drawn (GxBackend at its scene's start: the present it will become).
+    void set_ab_original(bool original) noexcept { ab_original_ = ab_ && original; }
     // The traced sun's world direction (towards it: GALAXY_RT_SUN, else the game's visible sun)
     // and the distance of the game's sun model (0: none); false without a sun.
     [[nodiscard]] bool sun_direction(std::array<float, 3>& world, float* distance = nullptr) const noexcept;

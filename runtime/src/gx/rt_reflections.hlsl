@@ -526,7 +526,78 @@ bool lit_from(float3 origin, float3 direction, float length)
 // lamps, stars, fire) each by its irradiance at `p` (power / (pi (d^2 + r^2)), windowed to its reach
 // as the lighting's) times its GGX lobe, all of them, times g_local_gain; the strongest one's shadow
 // ray decides whether it counts (one ray, no noise from choosing).
-float3 highlights(uint2 s, float3 p, float3 origin, float3 n, float3 v, float alpha, float f0)
+// ---------------------------------------------------------------------------------------------
+// Tile light lists: each group of 8 x 8 samples keeps the glow lights (the highlights') whose reach meets the box
+// around its samples' surface points; its samples weigh only those. Lights beyond a tile's reach
+// add nothing to any of its samples, so the result is the same at a fraction of the work.
+// ---------------------------------------------------------------------------------------------
+
+static const uint kTileLights = 128u;
+
+groupshared uint s_tile_bounds[6];      // min x y z, max x y z (order-preserving uints)
+groupshared uint s_tile_count;
+groupshared uint s_tile_lights[kTileLights];
+
+uint ordered(float f)
+{
+    const uint u = asuint(f);
+    return (u & 0x80000000u) != 0u ? ~u : u | 0x80000000u;
+}
+
+float unordered(uint u)
+{
+    return asfloat((u & 0x80000000u) != 0u ? u & 0x7FFFFFFFu : ~u);
+}
+
+// All 64 threads of the group call it once (it holds group barriers); `valid`: the thread's sample
+// shows a surface at eye-space `p`. Lights: kEmitStride records from byte 16 of `lights` (count at
+// 0), positions in world space (`to_eye`), reach from their power (`reach2_of`).
+#define CULL_TILE_LIGHTS(lights, to_eye, gi, valid, p, reach2_of)                                       \
+    {                                                                                                    \
+        if ((gi) == 0u) {                                                                                \
+            s_tile_bounds[0] = 0xFFFFFFFFu; s_tile_bounds[1] = 0xFFFFFFFFu; s_tile_bounds[2] = 0xFFFFFFFFu; \
+            s_tile_bounds[3] = 0u; s_tile_bounds[4] = 0u; s_tile_bounds[5] = 0u;                        \
+            s_tile_count = 0u;                                                                           \
+        }                                                                                                \
+        GroupMemoryBarrierWithGroupSync();                                                               \
+        if (valid) {                                                                                     \
+            InterlockedMin(s_tile_bounds[0], ordered((p).x));                                            \
+            InterlockedMin(s_tile_bounds[1], ordered((p).y));                                            \
+            InterlockedMin(s_tile_bounds[2], ordered((p).z));                                            \
+            InterlockedMax(s_tile_bounds[3], ordered((p).x));                                            \
+            InterlockedMax(s_tile_bounds[4], ordered((p).y));                                            \
+            InterlockedMax(s_tile_bounds[5], ordered((p).z));                                            \
+        }                                                                                                \
+        GroupMemoryBarrierWithGroupSync();                                                               \
+        if (s_tile_bounds[0] != 0xFFFFFFFFu) {                                                           \
+            const float3 lo = float3(unordered(s_tile_bounds[0]), unordered(s_tile_bounds[1]),           \
+                                     unordered(s_tile_bounds[2]));                                       \
+            const float3 hi = float3(unordered(s_tile_bounds[3]), unordered(s_tile_bounds[4]),           \
+                                     unordered(s_tile_bounds[5]));                                       \
+            const uint total = (lights).Load(0u);                                                        \
+            for (uint c = (gi); c < total; c += 64u) {                                                   \
+                const float4 la = asfloat((lights).Load4(16u + c * kEmitStride));                        \
+                const float3 power = asfloat((lights).Load3(16u + c * kEmitStride + 16u));               \
+                const float3 e = transform(to_eye, la.xyz);                                              \
+                const float3 out_of_box = max(max(lo - e, e - hi), 0.0f);                                \
+                if (dot(out_of_box, out_of_box) < reach2_of(luminance(power))) {                         \
+                    uint slot;                                                                           \
+                    InterlockedAdd(s_tile_count, 1u, slot);                                              \
+                    if (slot < kTileLights) {                                                            \
+                        s_tile_lights[slot] = c;                                                         \
+                    }                                                                                    \
+                }                                                                                        \
+            }                                                                                            \
+        }                                                                                                \
+        GroupMemoryBarrierWithGroupSync();                                                               \
+    }
+
+float glow_reach2(float light)
+{
+    return min(light / (kPi * kGlowCutoff), kGlowReach * kGlowReach);
+}
+
+float3 highlights(uint2 s, float3 p, float3 origin, float3 n, float3 v, float alpha, float f0, bool tiled)
 {
     float3 sum = float3(0.0f, 0.0f, 0.0f);
     if (any(g_sun_light.rgb > 0.0f)) {
@@ -553,11 +624,13 @@ float3 highlights(uint2 s, float3 p, float3 origin, float3 n, float3 v, float al
             strongest_end = d - g_point_size;
         }
     }
-    const uint emitters = (g_flags & 16u) != 0u ? g_emitters.Load(0u) : 0u;
+    // `tiled`: the group's tile list (CULL_TILE_LIGHTS); else every light.
+    const uint emitters = (g_flags & 16u) == 0u ? 0u : tiled ? min(s_tile_count, kTileLights) : g_emitters.Load(0u);
     if (emitters != 0u) {
         // Its reach as the lighting's (rt_lighting.hlsl emit_reach2): light / (pi d^2) above
-        // kGlowCutoff, at most kGlowReach; the lights beyond it add nothing here.
-        [loop] for (uint j = 0u; j < emitters; ++j) {
+        // kGlowCutoff, at most kGlowReach; the lights beyond it add nothing here (the tile's list).
+        [loop] for (uint k = 0u; k < emitters; ++k) {
+            const uint j = tiled ? s_tile_lights[k] : k;
             const float4 la = asfloat(g_emitters.Load4(16u + j * kEmitStride));
             const float3 power = asfloat(g_emitters.Load3(16u + j * kEmitStride + 16u));
             const float3 to = transform(g_world_to_eye, la.xyz) - p;
@@ -617,7 +690,7 @@ struct Reflected
 };
 
 Reflected reflect_light(uint2 s, float3 dir, float3 n, float3 ng, float3 hit, float4 params, float3 base,
-                        bool lights)
+                        bool lights, bool tiled)
 {
     Reflected r;
     r.light = float3(0.0f, 0.0f, 0.0f);
@@ -716,7 +789,7 @@ Reflected reflect_light(uint2 s, float3 dir, float3 n, float3 ng, float3 hit, fl
     // The lights' highlights, weighted like the reflection (its class strength) so the
     // composite's Fresnel weight is divided out here.
     if (lights) {
-        r.highlight = highlights(s, hit, reflection.Origin, n, v, params.x, params.z) * params.y;
+        r.highlight = highlights(s, hit, reflection.Origin, n, v, params.x, params.z, tiled) * params.y;
     }
     if (params.w > 0.0f) {
         // Metal: the reflection takes the hue (luminance 1) of the surface's own colour.
@@ -775,13 +848,19 @@ float4 draw_material(uint surface_class, uint draw, out float roughness)
 }
 
 [numthreads(8, 8, 1)]
-void ReflectTraceCS(uint3 id : SV_DispatchThreadID)
+void ReflectTraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
 {
     const bool active = all(id.xy < g_sample_size);
     const uint index = id.y * g_sample_size.x + id.x;
     const int2 q = sample_pixel(min(id.xy, g_sample_size - 1u));
     const float depth = g_efb_depth.Load(int3(q, 0));
     const bool geometry = active && !far_plane(g_depth, depth) && inside(g_viewport, float2(q) + 0.5f);
+    {
+        const float3 at = geometry ? eye_position(g_projection, g_viewport, float2(q) + 0.5f,
+                                                  depth_to_eye_z(g_depth, depth))
+                                   : float3(0.0f, 0.0f, 0.0f);
+        CULL_TILE_LIGHTS(g_emitters, g_world_to_eye, gi, geometry && (g_flags & 16u) != 0u, at, glow_reach2)
+    }
     uint4 info = uint4(0u, 0u, kNoSurface, 0u);
     float3 light = float3(0.0f, 0.0f, 0.0f);
     float3 highlight = float3(0.0f, 0.0f, 0.0f);
@@ -853,7 +932,7 @@ void ReflectTraceCS(uint3 id : SV_DispatchThreadID)
             info.z = pack_material(surface_class, params.y, 1.0f - emitter, roughness, params.w);
             if (params.y > 0.0f && emitter < 1.0f) {
                 reflected = true;
-                const Reflected r = reflect_light(id.xy, dir, n, ng, hit, params, base, true);
+                const Reflected r = reflect_light(id.xy, dir, n, ng, hit, params, base, true, true);
                 light = r.light;
                 highlight = r.highlight;
                 confidence = r.confidence;
@@ -1064,7 +1143,7 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
             // the bright world above only washed the view out (measured: Beach Bowl underwater).
             if (params.y > 0.0f && emitter < 1.0f && !below) {
                 reflected = true;
-                const Reflected r = reflect_light(id.xy, dir, n, ng, hit, params, base, true);
+                const Reflected r = reflect_light(id.xy, dir, n, ng, hit, params, base, true, false);
                 light = r.light;
                 highlight = min(r.highlight, 3.0f);
                 confidence = r.confidence;

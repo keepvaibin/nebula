@@ -1252,17 +1252,86 @@ float3 hit_light(float3 hit, float3 fallback)
     return unpack_r11g11b10(picture.x);
 }
 
-[numthreads(8, 8, 1)]
-void TraceCS(uint3 id : SV_DispatchThreadID)
+// ---------------------------------------------------------------------------------------------
+// Tile light lists: each group of 8 x 8 samples keeps the glow lights whose reach meets the box
+// around its samples' surface points; its samples weigh only those. Lights beyond a tile's reach
+// add nothing to any of its samples, so the result is the same at a fraction of the work.
+// ---------------------------------------------------------------------------------------------
+
+static const uint kTileLights = 128u;
+
+groupshared uint s_tile_bounds[6];      // min x y z, max x y z (order-preserving uints)
+groupshared uint s_tile_count;
+groupshared uint s_tile_lights[kTileLights];
+
+uint ordered(float f)
 {
-    if (any(id.xy >= g_sample_size)) {
-        return;
+    const uint u = asuint(f);
+    return (u & 0x80000000u) != 0u ? ~u : u | 0x80000000u;
+}
+
+float unordered(uint u)
+{
+    return asfloat((u & 0x80000000u) != 0u ? u & 0x7FFFFFFFu : ~u);
+}
+
+// All 64 threads of the group call it once (it holds group barriers); `valid`: the thread's sample
+// shows a surface at eye-space `p`. Lights: kEmitStride records from byte 16 of `lights` (count at
+// 0), positions in world space (`to_eye`), reach from their power (`reach2_of`).
+#define CULL_TILE_LIGHTS(lights, to_eye, gi, valid, p, reach2_of)                                       \
+    {                                                                                                    \
+        if ((gi) == 0u) {                                                                                \
+            s_tile_bounds[0] = 0xFFFFFFFFu; s_tile_bounds[1] = 0xFFFFFFFFu; s_tile_bounds[2] = 0xFFFFFFFFu; \
+            s_tile_bounds[3] = 0u; s_tile_bounds[4] = 0u; s_tile_bounds[5] = 0u;                        \
+            s_tile_count = 0u;                                                                           \
+        }                                                                                                \
+        GroupMemoryBarrierWithGroupSync();                                                               \
+        if (valid) {                                                                                     \
+            InterlockedMin(s_tile_bounds[0], ordered((p).x));                                            \
+            InterlockedMin(s_tile_bounds[1], ordered((p).y));                                            \
+            InterlockedMin(s_tile_bounds[2], ordered((p).z));                                            \
+            InterlockedMax(s_tile_bounds[3], ordered((p).x));                                            \
+            InterlockedMax(s_tile_bounds[4], ordered((p).y));                                            \
+            InterlockedMax(s_tile_bounds[5], ordered((p).z));                                            \
+        }                                                                                                \
+        GroupMemoryBarrierWithGroupSync();                                                               \
+        if (s_tile_bounds[0] != 0xFFFFFFFFu) {                                                           \
+            const float3 lo = float3(unordered(s_tile_bounds[0]), unordered(s_tile_bounds[1]),           \
+                                     unordered(s_tile_bounds[2]));                                       \
+            const float3 hi = float3(unordered(s_tile_bounds[3]), unordered(s_tile_bounds[4]),           \
+                                     unordered(s_tile_bounds[5]));                                       \
+            const uint total = (lights).Load(0u);                                                        \
+            for (uint c = (gi); c < total; c += 64u) {                                                   \
+                const float4 la = asfloat((lights).Load4(16u + c * kEmitStride));                        \
+                const float3 power = asfloat((lights).Load3(16u + c * kEmitStride + 16u));               \
+                const float3 e = transform(to_eye, la.xyz);                                              \
+                const float3 out_of_box = max(max(lo - e, e - hi), 0.0f);                                \
+                if (dot(out_of_box, out_of_box) < reach2_of(luminance(power))) {                         \
+                    uint slot;                                                                           \
+                    InterlockedAdd(s_tile_count, 1u, slot);                                              \
+                    if (slot < kTileLights) {                                                            \
+                        s_tile_lights[slot] = c;                                                         \
+                    }                                                                                    \
+                }                                                                                        \
+            }                                                                                            \
+        }                                                                                                \
+        GroupMemoryBarrierWithGroupSync();                                                               \
     }
+
+[numthreads(8, 8, 1)]
+void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
+{
+    const bool in_range = all(id.xy < g_sample_size);
     const uint index = id.y * g_sample_size.x + id.x;
-    const int2 q = sample_pixel(id.xy);
+    const int2 q = sample_pixel(min(id.xy, g_sample_size - 1u));
     float3 p;
     // Backdrops (sky domes and distant scenery far beyond the stage) are the sky: no lighting.
-    if (!pixel_point(q, p) || !inside(g_viewport, float2(q) + 0.5f) || -p.z > g_ambient.w) {
+    const bool surface = pixel_point(q, p) && inside(g_viewport, float2(q) + 0.5f) && -p.z <= g_ambient.w;
+    CULL_TILE_LIGHTS(g_emitters, g_to_eye, gi, in_range && surface, p, emit_reach2)
+    if (!in_range) {
+        return;
+    }
+    if (!surface) {
         g_z[index] = 0.0f;
         g_normal[index] = 0u;
         g_primary[index] = uint2(0u, 0u);
@@ -1418,13 +1487,14 @@ void TraceCS(uint3 id : SV_DispatchThreadID)
     // kept in proportion to its unshadowed light here (streaming resampled importance over the
     // whole list: a Luma beside the surface wins over a brighter glow across the level), one
     // shadow ray to it. Its light joins the point lights' (their weight divided out).
-    const uint emitters = g_emitters.Load(0u);
+    const uint emitters = min(s_tile_count, kTileLights);
     if (emitters != 0u) {
         float sum = 0.0f;
         float pick = min(sample_point(id.xy, max(g_rays, 1u) + 7u).x, 0.99999f);
         float4 kept = float4(0.0f, 0.0f, 0.0f, 0.0f);
         float3 kept_power = float3(0.0f, 0.0f, 0.0f);
-        [loop] for (uint c = 0u; c < emitters; ++c) {
+        [loop] for (uint k = 0u; k < emitters; ++k) {
+            const uint c = s_tile_lights[k];
             const float4 la = asfloat(g_emitters.Load4(16u + c * kEmitStride));
             const float3 power = asfloat(g_emitters.Load3(16u + c * kEmitStride + 16u));
             const float light = luminance(power);

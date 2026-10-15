@@ -1039,7 +1039,6 @@ bool SceneRayTracer::ensure_capacity(ID3D12GraphicsCommandList* list, std::uint3
 }
 
 void SceneRayTracer::begin_frame(std::uint64_t frame_index) {
-    ab_original_ = ab_ && (frame_index & 1u) != 0u;
     frame_index_ = frame_index;
     if (!ready_) {
         return;

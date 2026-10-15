@@ -323,6 +323,8 @@ bool capture_pixel_frame_requested(std::uint64_t frame) {
 // back and written to GALAXY_PRESENT_SNAPSHOT_DIR\present_<n>.ppm, limited to
 // presents GALAXY_PRESENT_SNAPSHOT_FIRST..GALAXY_PRESENT_SNAPSHOT_LAST.
 // GALAXY_PRESENT_SNAPSHOT_PAIR=1 also writes the present after each.
+std::uint64_t g_snapshot_presents = 0u;
+
 std::string present_snapshot_path() {
     const auto read_u64 = [](const char* name, std::uint64_t fallback) {
         char value[32]{};
@@ -342,8 +344,7 @@ std::string present_snapshot_path() {
                         "GALAXY_PRESENT_SNAPSHOT_DIR") == 0 && length > 1u
             ? std::string(value) : std::string{};
     }();
-    static std::uint64_t presents = 0u;
-    ++presents;
+    const std::uint64_t presents = ++g_snapshot_presents;
     if (every == 0u || directory.empty() || presents < first || presents > last ||
         (presents % every != 0u && !(pair && presents % every == 1u % every))) {
         return {};
@@ -7561,6 +7562,8 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
     scene_phase_ = marker == FifoMarker::SceneBegin;
     if (marker == FifoMarker::SceneBegin) {
         renderer_.set_scene_view(view);
+        // GALAXY_RT_AB: the game's own picture on odd presents (the snapshots' numbering).
+        renderer_.rt_set_ab_original(((g_snapshot_presents + 1u) & 1u) != 0u);
         rt_phase_ = 0xFFu;
         rt_view_set_ = false;
         rt_scene_traced_ = !renderer_.rt_active();
