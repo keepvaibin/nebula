@@ -203,15 +203,15 @@ int main() {
     passed &= expect(key(VK_BACK) && galaxy::gx::native_settings_draft_for_tests().hud_output_resolution,
                      "undo restores the HUD resolution");
 
-    // Graphics page with no upscaler and the manual quality mode: 0 heading, 1 upscaling, 2 quality
-    // mode, 3 render resolution, 4 sharpening, 5 anti-aliasing, 6 heading, 7 interpolation, 8 frame
+    // Graphics page with no upscaler and the native quality mode: 0 heading, 1 upscaling, 2 quality
+    // mode, 3 internal resolution, 4 sharpening, 5 anti-aliasing, 6 heading, 7 interpolation, 8 frame
     // rate limit, 9 heading, 10 texture filtering, 11 mipmaps, 12 lighting.
     passed &= expect(key(VK_TAB), "Tab enters the graphics page");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
     passed &= expect(snapshot.tab == 1u && snapshot.row == 1u && snapshot.row_count == 13u,
                      "graphics page: resolution, frame rate and detail sections");
-    passed &= expect(key(VK_DOWN) && key(VK_DOWN), "down moves to the render resolution");
-    passed &= expect(key(VK_LEFT), "left lowers the render resolution in the draft");
+    passed &= expect(key(VK_DOWN) && key(VK_DOWN), "down moves to the internal resolution");
+    passed &= expect(key(VK_LEFT), "left lowers the internal resolution in the draft");
     passed &= expect(
         galaxy::gx::native_settings_draft_for_tests().efb_scale == 1u &&
             galaxy::gx::get_render_config().efb_scale == 2u &&
@@ -227,7 +227,7 @@ int main() {
     passed &= expect(key(VK_LEFT), "left below 1x selects matching the output");
     passed &= expect(
         galaxy::gx::native_settings_draft_for_tests().internal_follow_window,
-        "the lowest render resolution entry matches the output");
+        "the lowest internal resolution entry matches the output");
     passed &= expect(key(VK_BACK), "Backspace undoes the draft");
     passed &= expect(
         !galaxy::gx::native_settings_draft_for_tests().internal_follow_window &&
@@ -270,6 +270,7 @@ int main() {
                      "with FSR 1 and SMAA the page also has the SMAA quality row");
     passed &= expect(key(VK_LEFT), "left lowers the upscaler");
     passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "quality mode row is adjustable");
+    passed &= expect(key(VK_DOWN), "down passes the internal resolution");
     passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "sharpening row is adjustable");
     passed &= expect(key(VK_DOWN) && key(VK_LEFT), "anti-aliasing row is adjustable");
     passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "SMAA quality row is adjustable");
@@ -288,7 +289,7 @@ int main() {
     passed &= expect(applied.smaa_quality == 3u, "HIGH steps up to ULTRA and stops there");
     passed &= expect(applied.upscaler == 0u, "FSR 1 steps down to off");
     passed &= expect(applied.spatial_quality == 1u && applied.temporal_quality == 1u,
-                     "with no upscaler the quality mode steps MANUAL up to QUALITY; FSR 3/DLSS keep theirs");
+                     "with no upscaler the quality mode steps NATIVE up to QUALITY; FSR 3/DLSS keep theirs");
     passed &= expect(applied.sharpness == 30u, "sharpening moves in steps of ten");
     passed &= expect(applied.anisotropic_filtering == 16u, "8x anisotropic steps up to 16x");
     passed &= expect(!applied.enhanced_mipmaps, "mipmaps switch to the original ones");

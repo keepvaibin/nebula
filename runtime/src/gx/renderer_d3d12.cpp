@@ -225,10 +225,9 @@ std::vector<unsigned> available_upscalers() {
     return choices;
 }
 
-// The quality row serves every upscaler: it sets the render resolution relative to the output
-// (QUALITY 1.5x, BALANCED 1.7x, PERFORMANCE 2x, ULTRA PERFORMANCE 3x fewer pixels per axis).
-// Its first mode is the INTERNAL RES row for bilinear and FSR 1, native resolution for FSR 3
-// and DLSS.
+// The quality row serves every upscaler: it sets the render resolution relative to the INTERNAL
+// RESOLUTION row (QUALITY 1.5x, BALANCED 1.7x, PERFORMANCE 2x, ULTRA PERFORMANCE 3x fewer pixels
+// per axis). Its first mode renders at the internal resolution.
 bool temporal_quality_row_shown() {
     return true;
 }
@@ -243,6 +242,37 @@ unsigned quality_render_scale(unsigned output_scale, unsigned quality) {
 // Bilinear or FSR 1 with a quality mode: the render scale follows the output like FSR 3/DLSS.
 bool spatial_quality_mode(const RenderConfig& render) {
     return temporal_upscaler(render) == 0u && std::min(render.spatial_quality, 4u) >= 1u;
+}
+
+// DLSS's narrowest render scale for a quality and output scale (its mode's range starts above
+// ultra performance's 3x ratio at low outputs).
+unsigned dlss_min_render_scale(unsigned quality, unsigned output_scale) {
+    static std::mutex mutex;
+    static unsigned cached_quality = ~0u;
+    static unsigned cached_output = 0u;
+    static unsigned cached_scale = 1u;
+    const std::lock_guard<std::mutex> lock(mutex);
+    if (quality != cached_quality || output_scale != cached_output) {
+        const unsigned width = dlss_min_render_width(quality, kEfbWidth * output_scale, kEfbHeight * output_scale);
+        cached_quality = quality;
+        cached_output = output_scale;
+        cached_scale = std::max((width + kEfbWidth - 1u) / kEfbWidth, 1u);
+    }
+    return cached_scale;
+}
+
+// The render scale the upscaling settings give below the internal resolution `internal`.
+unsigned upscaler_render_scale(const RenderConfig& render, unsigned internal) {
+    const unsigned temporal = temporal_upscaler(render);
+    if (temporal == 0u) {
+        return spatial_quality_mode(render) ? quality_render_scale(internal, render.spatial_quality) : internal;
+    }
+    const unsigned quality = std::min(render.temporal_quality, 4u);
+    unsigned scale = quality_render_scale(internal, quality);
+    if (temporal == 3u) {
+        scale = std::max(scale, dlss_min_render_scale(quality, internal));
+    }
+    return std::clamp(scale, 1u, std::max(internal, 1u));
 }
 
 std::atomic<bool> s_pointer_focused{false};
@@ -4361,29 +4391,35 @@ void RendererD3D12::sync_post_process_settings() {
 }
 
 void RendererD3D12::apply_pending_efb_scale() {
-    unsigned wanted = std::clamp(get_render_config().efb_scale, 1u, kMaxEfbScale);
-    if (temporal_mode() || spatial_quality_mode(get_render_config())) {
-        const unsigned output_scale = output_efb_scale_for_window();
-        if (output_scale != 0u) {
-            wanted = temporal_mode() ? temporal_render_scale(output_scale)
-                                     : quality_render_scale(output_scale, get_render_config().spatial_quality);
-        }
-    }
-    wanted = std::min(wanted, display_efb_scale_cap());
-    if (wanted == efb_scale_ || !device_ || !efb_color_ || output_efb_active_) {
+    if (!device_ || !efb_color_ || output_efb_active_) {
         return;
     }
+    const RenderConfig render = get_render_config();
+    // The INTERNAL RESOLUTION row sets the frame's resolution: the upscaler's
+    // output, else the render resolution. A quality mode renders below it.
+    const unsigned internal =
+        std::min(std::clamp(render.efb_scale, 1u, kMaxEfbScale), display_efb_scale_cap());
+    const unsigned wanted = upscaler_render_scale(render, internal);
+    const unsigned live_internal = upscale_output_scale_ != 0u ? upscale_output_scale_ : efb_scale_;
+    upscale_output_scale_ = internal;
+    if (wanted == efb_scale_) {
+        return;
+    }
+    // Keeps the current targets; the setting returns to the live internal resolution.
+    const auto refuse = [&] {
+        upscale_output_scale_ = live_internal;
+        RenderConfig restored = get_render_config();
+        restored.efb_scale = live_internal;
+        set_render_config(restored);
+        stage_next_start_efb_scale(live_internal);
+        s_efb_scale_rejected.store(wanted, std::memory_order_release);
+        return restored.internal_follow_window;
+    };
     if (wanted > efb_scale_ && !efb_scale_fits_memory(wanted)) {
-        // Keep the current targets; the setting returns to what is live.
         std::cerr << "[Renderer] internal resolution " << wanted
                   << "x exceeds the video-memory budget; staying at "
                   << efb_scale_ << "x\n";
-        RenderConfig render = get_render_config();
-        render.efb_scale = efb_scale_;
-        set_render_config(render);
-        stage_next_start_efb_scale(efb_scale_);
-        s_efb_scale_rejected.store(wanted, std::memory_order_release);
-        if (render.internal_follow_window) {
+        if (refuse()) {
             follow_window_retry_ms_ = GetTickCount64() + 10'000u;
         }
         return;
@@ -4405,12 +4441,7 @@ void RendererD3D12::apply_pending_efb_scale() {
     readback_fence_value_ = 0u;
     const unsigned previous = efb_scale_;
     if (!create_efb_targets(wanted)) {
-        // The current targets are untouched; the setting returns to them.
-        RenderConfig render = get_render_config();
-        render.efb_scale = previous;
-        set_render_config(render);
-        stage_next_start_efb_scale(previous);
-        s_efb_scale_rejected.store(wanted, std::memory_order_release);
+        (void)refuse();
         return;
     }
     const unsigned applied = wanted;
@@ -5238,6 +5269,7 @@ void RendererD3D12::shutdown() {
     // Streamline shuts down before the swap chain and device it wraps go.
     retain_shutdown_failure("Streamline", [&] {
         temporal_.reset();
+        temporal_pending_ = {};
         streamline::shutdown();
     });
     if (fence_event_) { CloseHandle(fence_event_); fence_event_ = nullptr; }
@@ -6098,6 +6130,7 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
         streamline_frame_open_ = true;
     }
     apply_pending_efb_scale();
+    prepare_temporal_upscaler();
     sync_post_process_settings();
     reconcile_ray_tracing();
     {
@@ -7025,17 +7058,15 @@ bool RendererD3D12::temporal_mode() const {
     return (upscaler == 2u && fsr3_available()) || (upscaler == 3u && streamline::dlss_supported());
 }
 
-unsigned RendererD3D12::temporal_render_scale(unsigned output_scale) const {
-    return quality_render_scale(output_scale, get_render_config().temporal_quality);
-}
-
 bool RendererD3D12::ensure_motion_target() {
     if (motion_target_ && motion_target_scale_ == efb_scale_) {
         return true;
     }
     if (motion_target_) {
-        // An internal-resolution change: frames in flight may still use them.
-        wait_for_gpu();
+        // A render-scale change inside a scene: this frame's command list
+        // may still name them.
+        retired_efb_copy_textures_[frame_slot_].push_back(std::move(motion_target_));
+        retired_efb_copy_textures_[frame_slot_].push_back(std::move(reactive_target_));
     }
     motion_target_.Reset();
     reactive_target_.Reset();
@@ -7202,7 +7233,7 @@ RendererD3D12::TemporalInterpKey RendererD3D12::temporal_interp_key() const {
     key.upscaler = cfg.upscaler;
     key.quality = cfg.temporal_quality;
     key.efb_scale = output_efb_active_ ? alt_efb_.scale : efb_scale_;  // the render EFB's
-    key.output_scale = output_efb_scale_for_window();
+    key.output_scale = upscale_output_scale_;
     key.max_fps = presented_max_fps(cfg);
     key.vsync = cfg.vsync_interval;
     key.refresh_hz = display_refresh_hz_;
@@ -10081,53 +10112,83 @@ bool RendererD3D12::begin_motion_scene() {
     return true;
 }
 
-bool RendererD3D12::scene_temporal_begin(float& jitter_x, float& jitter_y) {
-    jitter_x = 0.0f;
-    jitter_y = 0.0f;
-    scene_temporal_ = false;
-    if (!temporal_mode() || output_efb_active_) {
-        temporal_.reset();
+// Command lists recorded before this point may name the old context; none is
+// open, so waiting for the GPU is enough before it goes.
+void RendererD3D12::prepare_temporal_upscaler() {
+    const unsigned render_scale = output_efb_active_ ? alt_efb_.scale : efb_scale_;
+    const unsigned output_scale = upscale_output_scale_;
+    if (!temporal_mode() || output_scale == 0u || render_scale > output_scale) {
+        if (temporal_) {
+            wait_for_gpu();
+            temporal_.reset();
+        }
+        temporal_pending_ = {};
+        temporal_render_w_ = temporal_render_h_ = 0u;
+        temporal_output_w_ = temporal_output_h_ = 0u;
         temporal_history_valid_ = false;
-        return false;
+        return;
     }
-    temporal_interp_ = ring_mode_ == RingMode::Interp;
-    const unsigned output_scale = output_efb_scale_for_window();
-    if (output_scale == 0u || efb_scale_ > output_scale) {
-        temporal_history_valid_ = false;
-        return false;
-    }
-    const unsigned rw = kEfbWidth * efb_scale_;
-    const unsigned rh = kEfbHeight * efb_scale_;
+    const unsigned rw = kEfbWidth * render_scale;
+    const unsigned rh = kEfbHeight * render_scale;
     const unsigned ow = kEfbWidth * output_scale;
     const unsigned oh = kEfbHeight * output_scale;
     const RenderConfig cfg = get_render_config();
     const unsigned kind = cfg.upscaler;
     const unsigned quality = std::min(cfg.temporal_quality, 4u);
-    if (!temporal_ || rw != temporal_render_w_ || rh != temporal_render_h_ ||
-        ow != temporal_output_w_ || oh != temporal_output_h_ || kind != temporal_kind_ ||
-        (kind == 3u && quality != temporal_quality_)) {
-        if (temporal_) {
-            // The old context's resources may still be in use by frames in flight.
-            wait_for_gpu();
-            temporal_.reset();
+    // A failed creation is not retried until its sizes or mode change.
+    if (rw == temporal_render_w_ && rh == temporal_render_h_ && ow == temporal_output_w_ &&
+        oh == temporal_output_h_ && kind == temporal_kind_ && (kind != 3u || quality == temporal_quality_)) {
+        if (temporal_pending_.valid() &&
+            temporal_pending_.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+            temporal_ = temporal_pending_.get();
+            temporal_history_valid_ = false;
+            if (temporal_) {
+                std::cout << "[Renderer] " << temporal_->name() << " " << rw << "x" << rh
+                          << " -> " << ow << "x" << oh << "\n";
+            }
         }
-        temporal_ = kind == 3u ? create_dlss_upscaler(rw, rh, ow, oh, quality)
-                               : create_fsr3_upscaler(device_.Get(), rw, rh, ow, oh);
-        temporal_kind_ = kind;
-        temporal_quality_ = quality;
-        temporal_history_valid_ = false;
-        if (!temporal_) {
-            temporal_render_w_ = temporal_render_h_ = 0u;
-            temporal_output_w_ = temporal_output_h_ = 0u;
-            return false;
-        }
-        temporal_render_w_ = rw;
-        temporal_render_h_ = rh;
-        temporal_output_w_ = ow;
-        temporal_output_h_ = oh;
+        return;
+    }
+    if (temporal_) {
+        wait_for_gpu();
+        temporal_.reset();
+    }
+    // A creation still running for older sizes is waited for and dropped.
+    temporal_pending_ = {};
+    temporal_kind_ = kind;
+    temporal_quality_ = quality;
+    temporal_history_valid_ = false;
+    temporal_render_w_ = rw;
+    temporal_render_h_ = rh;
+    temporal_output_w_ = ow;
+    temporal_output_h_ = oh;
+    if (kind != 3u) {
+        // Until it is ready the scene renders at the render scale without the upscale.
+        temporal_pending_ = std::async(std::launch::async, [device = device_, rw, rh, ow, oh] {
+            return create_fsr3_upscaler(device.Get(), rw, rh, ow, oh);
+        });
+        return;
+    }
+    temporal_ = create_dlss_upscaler(rw, rh, ow, oh, quality);
+    if (temporal_) {
         std::cout << "[Renderer] " << temporal_->name() << " " << rw << "x" << rh
                   << " -> " << ow << "x" << oh << "\n";
     }
+}
+
+bool RendererD3D12::scene_temporal_begin(float& jitter_x, float& jitter_y) {
+    jitter_x = 0.0f;
+    jitter_y = 0.0f;
+    scene_temporal_ = false;
+    const unsigned rw = kEfbWidth * efb_scale_;
+    const unsigned ow = temporal_output_w_;
+    // The context is replaced only by begin_frame (prepare_temporal_upscaler).
+    if (!temporal_ || !temporal_mode() || output_efb_active_ || rw != temporal_render_w_ ||
+        kEfbHeight * efb_scale_ != temporal_render_h_) {
+        temporal_history_valid_ = false;
+        return false;
+    }
+    temporal_interp_ = ring_mode_ == RingMode::Interp;
     if (temporal_interp_) {
         // Game frames feed the sub-frames: no jitter, and no upscale
         // (begin_output_efb). Each presented frame takes the next phase.
@@ -10257,8 +10318,10 @@ bool RendererD3D12::ensure_output_efb(unsigned scale) {
         return false;
     }
     if (alt_efb_.color) {
-        // A window resize: frames in flight may still read the old views.
-        wait_for_gpu();
+        // A new output scale (window resize or internal resolution): frames in
+        // flight and this frame's command list may still name the old targets.
+        retired_efb_copy_textures_[frame_slot_].push_back(std::move(alt_efb_.color));
+        retired_efb_copy_textures_[frame_slot_].push_back(std::move(alt_efb_.depth));
     }
     alt_efb_.color.Reset();
     alt_efb_.depth.Reset();
@@ -12905,15 +12968,20 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render) {
                         },
                         "DLSS AND FSR 3 RENDER FEWER PIXELS AND REBUILD A SHARP IMAGE"});
     }
+    const unsigned internal = std::clamp(render.efb_scale, 1u, settings_scale_cap(render));
+    const unsigned render_scale = upscaler_render_scale(render, internal);
+    const bool upscaled = temporal_upscaler(render) != 0u || spatial_quality_mode(render);
     {
         static constexpr const char* kTemporal[] = {"NATIVE AA", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE"};
         static constexpr const char* kDlss[] = {"DLAA", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE"};
-        static constexpr const char* kSpatial[] = {"MANUAL", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE"};
+        static constexpr const char* kSpatial[] = {"NATIVE", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE"};
         const bool temporal = render.upscaler >= 2u;
         const unsigned quality = temporal ? std::min(render.temporal_quality, 4u) : std::min(render.spatial_quality, 4u);
         const unsigned upscaler = std::min(render.upscaler, 3u);
-        rows.push_back({upscaler == 3u ? "DLSS MODE" : upscaler == 2u ? "FSR 3 MODE" : "QUALITY MODE",
-                        upscaler == 3u ? kDlss[quality] : upscaler == 2u ? kTemporal[quality] : kSpatial[quality],
+        std::snprintf(text, sizeof(text), "%s (%uX)",
+                      upscaler == 3u ? kDlss[quality] : upscaler == 2u ? kTemporal[quality] : kSpatial[quality],
+                      render_scale);
+        rows.push_back({upscaler == 3u ? "DLSS MODE" : upscaler == 2u ? "FSR 3 MODE" : "QUALITY MODE", text,
                         [](RenderConfig& draft, int delta) {
                             if (draft.upscaler >= 2u) {
                                 draft.temporal_quality = settings_step(std::min(draft.temporal_quality, 4u), 5u, delta);
@@ -12921,18 +12989,16 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render) {
                                 draft.spatial_quality = settings_step(std::min(draft.spatial_quality, 4u), 5u, delta);
                             }
                         },
-                        temporal ? "QUALITY RENDERS MOST PIXELS, PERFORMANCE THE FEWEST"
-                                 : "MANUAL SETS THE RENDER RESOLUTION BELOW"});
+                        "THE RENDER RESOLUTION BELOW THE INTERNAL ONE. QUALITY RENDERS THE MOST PIXELS"});
     }
-    if (temporal_upscaler(render) == 0u && !spatial_quality_mode(render)) {
+    {
         std::string value = "MATCH OUTPUT";
         if (!render.internal_follow_window) {
-            const unsigned scale = std::clamp(render.efb_scale, 1u, kMaxEfbScale);
-            std::snprintf(text, sizeof(text), "%uX %uX%u%s", scale, kEfbWidth * scale, kEfbHeight * scale,
-                          scale >= settings_scale_cap(render) ? " MAX" : "");
+            std::snprintf(text, sizeof(text), "%uX %uX%u%s", internal, kEfbWidth * internal, kEfbHeight * internal,
+                          internal >= settings_scale_cap(render) ? " MAX" : "");
             value = text;
         }
-        rows.push_back({"RENDER RESOLUTION", value,
+        rows.push_back({"INTERNAL RESOLUTION", value,
                         [](RenderConfig& draft, int delta) {
                             const unsigned cap = settings_scale_cap(draft);
                             const unsigned current = draft.internal_follow_window ? 0u
@@ -12945,7 +13011,8 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render) {
                                 draft.efb_scale = next;
                             }
                         },
-                        "MATCH OUTPUT RENDERS AT THE SCREEN RESOLUTION"});
+                        upscaled ? "THE UPSCALER'S OUTPUT. MATCH OUTPUT FOLLOWS THE SCREEN"
+                                 : "MATCH OUTPUT RENDERS AT THE SCREEN RESOLUTION"});
     }
     std::snprintf(text, sizeof(text), "%u%%", std::min(render.sharpness, 100u));
     rows.push_back({"SHARPENING", text,

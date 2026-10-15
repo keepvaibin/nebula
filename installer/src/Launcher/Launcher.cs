@@ -362,7 +362,7 @@ namespace Nebula.Launcher
             y = 16;
             Row(image, "Upscaling", upscaler, ref y);
             Row(image, "Upscaler quality", dlssQuality, ref y);
-            Row(image, "Render resolution", internalScale, ref y);
+            Row(image, "Internal resolution", internalScale, ref y);
             Label(image, "Sharpening (0-100)", 12, y + 3);
             sharpness.Location = new Point(320, y);
             sharpness.Size = new Size(120, 28);
@@ -510,9 +510,7 @@ namespace Nebula.Launcher
                     loading = false;
                 }
                 RefreshFrameRateChoices();
-                RefreshRenderResolution();
             };
-            dlssQuality.SelectedIndexChanged += delegate { if (!loading) RefreshRenderResolution(); };
             interpolation.SelectedIndexChanged += delegate
             {
                 if (loading) return;
@@ -521,7 +519,6 @@ namespace Nebula.Launcher
                     upscaler.SelectedIndex = upscalerChoices.IndexOf(3);
                 RefreshFrameRateChoices();
             };
-            RefreshRenderResolution();
             UiScale.Apply(this);
         }
 
@@ -957,16 +954,8 @@ namespace Nebula.Launcher
             frameRate.SelectedIndex = Math.Min(selected, frameRate.Items.Count - 1);
         }
 
-        // The render resolution applies without DLSS and with the MANUAL quality.
-        private void RefreshRenderResolution()
-        {
-            bool dlss = upscaler.SelectedIndex >= 0 && upscaler.SelectedIndex < upscalerChoices.Count &&
-                upscalerChoices[upscaler.SelectedIndex] == 3;
-            internalScale.Enabled = !dlss && dlssQuality.SelectedIndex <= 0;
-        }
-
-        // Internal resolution: matches the output, or 1x up to the scale that fills the selected display
-        // (the runtime applies the same limit).
+        // Internal resolution (an upscaler's output; its quality renders below it): matches the output,
+        // or 1x up to the scale that fills the selected display (the runtime applies the same limit).
         private void RefreshScaleChoices()
         {
             var screen = SelectedMonitor;

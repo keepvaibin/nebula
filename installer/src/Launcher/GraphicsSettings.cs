@@ -113,9 +113,9 @@ namespace Nebula.Launcher
             return Upscalers[Math.Max(0, Math.Min(value, Upscalers.Length - 1))];
         }
         public static readonly string[] DlssQualities = { "DLAA", "Quality", "Balanced", "Performance", "Ultra Performance" };
-        // Bilinear and FSR 1: Manual renders at the internal resolution; the others at the
-        // output resolution divided by 1.5, 1.7, 2 or 3.
-        public static readonly string[] SpatialQualities = { "Manual (internal resolution)", "Quality", "Balanced", "Performance", "Ultra Performance" };
+        // Every upscaler: the first mode renders at the internal resolution, the others at the
+        // internal resolution divided by 1.5, 1.7, 2 or 3.
+        public static readonly string[] SpatialQualities = { "Native", "Quality", "Balanced", "Performance", "Ultra Performance" };
         private const int TemporalQualityCount = 5;
         public static readonly string[] TextureFilters = { "Trilinear", "2x anisotropic", "4x anisotropic", "8x anisotropic", "16x anisotropic" };
         public static readonly string[] LightingModes = { "Enhanced", "Per pixel", "Per vertex (original)" };

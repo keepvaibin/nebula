@@ -955,7 +955,6 @@ private:
     bool create_efb_targets(unsigned efb_scale);
     void carry_over_efb_contents();
     [[nodiscard]] unsigned output_efb_scale_for_window() const;
-    [[nodiscard]] unsigned temporal_render_scale(unsigned output_scale) const;
     [[nodiscard]] bool ensure_motion_target();
     [[nodiscard]] bool record_temporal_upscale(unsigned output_scale);
     [[nodiscard]] bool ensure_output_efb(unsigned scale);
@@ -963,6 +962,12 @@ private:
     // Live internal-resolution change, applied between frames by begin_frame
     // when get_render_config().efb_scale differs from the live targets.
     void apply_pending_efb_scale();
+    // Creates, replaces or releases the temporal upscaler for the live render
+    // and output scales, from begin_frame before its command list records.
+    void prepare_temporal_upscaler();
+    // The INTERNAL RESOLUTION row's scale, taken by apply_pending_efb_scale: the
+    // temporal upscaler's output (its quality mode renders below it).
+    unsigned upscale_output_scale_ = 0;
     // With internal_follow_window, re-derive efb_scale from the settled
     // window size (see RenderConfig::internal_follow_window).
     void follow_window_internal_resolution();
@@ -1065,6 +1070,9 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> alt_efb_dsv_heap_;
     bool output_efb_active_ = false;
     std::unique_ptr<TemporalUpscaler> temporal_;
+    // An FSR 3 context being created off the render thread (its pipelines take seconds on an
+    // integrated GPU), for the sizes and mode recorded below.
+    std::future<std::unique_ptr<TemporalUpscaler>> temporal_pending_;
     unsigned temporal_kind_ = 0;       // upscaler setting it was made for (2 FSR 3, 3 DLSS)
     unsigned temporal_quality_ = 0;
     // A presented frame's Streamline markers have begun (begin_frame) and not yet ended (present).

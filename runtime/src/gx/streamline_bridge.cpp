@@ -692,6 +692,19 @@ std::unique_ptr<TemporalUpscaler> create_dlss_upscaler(unsigned render_width, un
     return std::make_unique<DlssUpscaler>(quality);
 }
 
+unsigned dlss_min_render_width(unsigned quality, unsigned output_width, unsigned output_height) noexcept {
+    if (!streamline::dlss_supported() || g_api.dlss_get_optimal_settings == nullptr || output_width == 0u ||
+        output_height == 0u) {
+        return 0u;
+    }
+    sl::DLSSOptions options{};
+    options.mode = dlss_mode(quality);
+    options.outputWidth = output_width;
+    options.outputHeight = output_height;
+    sl::DLSSOptimalSettings settings{};
+    return g_api.dlss_get_optimal_settings(options, settings) == sl::Result::eOk ? settings.renderWidthMin : 0u;
+}
+
 #else  // !GALAXY_WITH_STREAMLINE
 
 namespace streamline {
@@ -719,6 +732,8 @@ void shutdown() noexcept {}
 std::unique_ptr<TemporalUpscaler> create_dlss_upscaler(unsigned, unsigned, unsigned, unsigned, unsigned) {
     return nullptr;
 }
+
+unsigned dlss_min_render_width(unsigned, unsigned, unsigned) noexcept { return 0u; }
 
 #endif
 
