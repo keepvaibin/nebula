@@ -455,6 +455,8 @@ public:
     // The scene's anti-aliasing (post_process.h) in the render EFB at the end of the 3D scene,
     // before the 2D layer and begin_output_efb. A temporal upscaler antialiases the scene itself.
     void record_scene_aa();
+    // GALAXY_TRACE_SCENE_AA=1: the pass's GPU time per game frame, logged every 300 frames.
+    void read_scene_aa_timing();
     [[nodiscard]] bool output_efb_active() const noexcept { return output_efb_active_; }
     // Whether the targets for `scale` fit the adapter's video-memory budget
     // next to everything already resident.
@@ -1073,6 +1075,12 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> alt_efb_rtv_heap_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> alt_efb_dsv_heap_;
     bool output_efb_active_ = false;
+    Microsoft::WRL::ComPtr<ID3D12QueryHeap> scene_aa_queries_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> scene_aa_readback_;
+    std::array<std::uint8_t, kFramesInFlight> scene_aa_pending_{};  // AaRun, 0 none
+    double scene_aa_ms_sum_ = 0.0;
+    double scene_aa_ms_max_ = 0.0;
+    unsigned scene_aa_samples_ = 0;
     std::unique_ptr<TemporalUpscaler> temporal_;
     // An FSR 3 context being created off the render thread (its pipelines take seconds on an
     // integrated GPU), for the sizes and mode recorded below.

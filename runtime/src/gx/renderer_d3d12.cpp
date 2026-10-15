@@ -6290,6 +6290,7 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
         }
     }
 
+    read_scene_aa_timing();
     ray_tracer_.begin_frame(frame_index_);
 
     const auto reset_start = collect_begin_timing
@@ -10710,15 +10711,84 @@ void RendererD3D12::record_scene_aa() {
     const galaxy::ContentViewport content = galaxy::fit_content_viewport(
         static_cast<int>(s_bb_width), static_cast<int>(s_bb_height),
         aspect ? aspect->content_aspect : galaxy::kWiiContentAspect);
+    static const bool timed = [] {
+        char value[8]{};
+        std::size_t length = 0u;
+        return getenv_s(&length, value, sizeof(value), "GALAXY_TRACE_SCENE_AA") == 0 && length > 1u &&
+               value[0] == '1';
+    }();
+    const bool time_pass = timed && !replay_playing_ && timestamp_frequency_ != 0u;
+    if (time_pass && !scene_aa_queries_) {
+        D3D12_QUERY_HEAP_DESC qhd{};
+        qhd.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
+        qhd.Count = kFramesInFlight * 2u;
+        D3D12_HEAP_PROPERTIES hp{};
+        hp.Type = D3D12_HEAP_TYPE_READBACK;
+        D3D12_RESOURCE_DESC rd{};
+        rd.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        rd.Width = kFramesInFlight * 2u * sizeof(std::uint64_t);
+        rd.Height = 1;
+        rd.DepthOrArraySize = 1;
+        rd.MipLevels = 1;
+        rd.SampleDesc.Count = 1;
+        rd.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        if (FAILED(device_->CreateQueryHeap(&qhd, IID_PPV_ARGS(&scene_aa_queries_))) ||
+            FAILED(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_COPY_DEST,
+                                                    nullptr, IID_PPV_ARGS(&scene_aa_readback_)))) {
+            scene_aa_queries_.Reset();
+        }
+    }
+    if (time_pass && scene_aa_queries_) {
+        command_list_->EndQuery(scene_aa_queries_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, frame_slot_ * 2u);
+    }
     const D3D12_RESOURCE_DESC desc = efb_color_->GetDesc();
-    (void)post_process_.record_scene_aa(
+    const AaRun ran = post_process_.record_scene_aa(
         command_list_.Get(), srv_ring_, efb_color_.Get(), efb_rtv_, static_cast<unsigned>(desc.Width),
         desc.Height, kEfbWidth * efb_scale_, 456u * efb_scale_,
         static_cast<unsigned>(std::max(content.width, 1)), static_cast<unsigned>(std::max(content.height, 1)),
         split, frame_index_, kFramesInFlight);
+    if (time_pass && scene_aa_queries_ && ran != AaRun::kNone) {
+        command_list_->EndQuery(scene_aa_queries_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, frame_slot_ * 2u + 1u);
+        command_list_->ResolveQueryData(scene_aa_queries_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, frame_slot_ * 2u, 2u,
+                                        scene_aa_readback_.Get(),
+                                        static_cast<UINT64>(frame_slot_) * 2u * sizeof(std::uint64_t));
+        scene_aa_pending_[frame_slot_] = static_cast<std::uint8_t>(ran);
+    }
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
     invalidate_gx_bindings();
     bound_rt_aux_ = 0xFFu;
+}
+
+void RendererD3D12::read_scene_aa_timing() {
+    const std::uint8_t pass = scene_aa_pending_[frame_slot_];
+    if (pass == 0u || !scene_aa_readback_) {
+        return;
+    }
+    scene_aa_pending_[frame_slot_] = 0u;
+    const SIZE_T offset = static_cast<SIZE_T>(frame_slot_) * 2u * sizeof(std::uint64_t);
+    const D3D12_RANGE range{offset, offset + 2u * sizeof(std::uint64_t)};
+    void* mapped = nullptr;
+    if (FAILED(scene_aa_readback_->Map(0, &range, &mapped))) {
+        return;
+    }
+    const auto* ticks = reinterpret_cast<const std::uint64_t*>(static_cast<const std::byte*>(mapped) + offset);
+    const double ms = ticks[1] >= ticks[0]
+        ? static_cast<double>(ticks[1] - ticks[0]) * 1000.0 / static_cast<double>(timestamp_frequency_) : 0.0;
+    const D3D12_RANGE none{0, 0};
+    scene_aa_readback_->Unmap(0, &none);
+    scene_aa_ms_sum_ += ms;
+    scene_aa_ms_max_ = std::max(scene_aa_ms_max_, ms);
+    if (++scene_aa_samples_ < 300u) {
+        return;
+    }
+    const D3D12_RESOURCE_DESC desc = efb_color_ ? efb_color_->GetDesc() : D3D12_RESOURCE_DESC{};
+    std::cerr << "[scene-aa] pass=" << (pass == static_cast<std::uint8_t>(AaRun::kSmaa) ? "smaa" : "fxaa")
+              << " quality=" << unsigned(post_process_.settings().smaa_quality) << " efb=" << desc.Width << 'x'
+              << desc.Height << " gpu-ms(avg/max)=" << scene_aa_ms_sum_ / scene_aa_samples_ << '/'
+              << scene_aa_ms_max_ << " samples=" << scene_aa_samples_ << '\n';
+    scene_aa_ms_sum_ = 0.0;
+    scene_aa_ms_max_ = 0.0;
+    scene_aa_samples_ = 0u;
 }
 
 bool RendererD3D12::begin_output_efb() {
