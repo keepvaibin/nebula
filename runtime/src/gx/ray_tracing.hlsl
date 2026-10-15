@@ -37,6 +37,9 @@ RWByteAddressBuffer g_positions : register(u0);
 // Per triangle, 16 bytes: its vertices' eye-space normals (octahedral 16:16, 0 without one) and
 // the draw's flags (RtDraw.flags).
 RWByteAddressBuffer g_surfaces : register(u3);
+// High quality (g_frame_flags bit 1): per triangle, 36 bytes: its vertices' first texture coordinates (3 x 2
+// floats) and colour 0 (3 x RGBA8), for what reflection rays hit off screen (rt_reflections.hlsl hit_shade).
+RWByteAddressBuffer g_tri_uv : register(u4);
 
 RaytracingAccelerationStructure g_scene : register(t6);
 Texture2D<float> g_efb_depth : register(t7);
@@ -47,6 +50,8 @@ RWStructuredBuffer<float4> g_dump : register(u2);
 static const uint kVertexStride = 144u;
 static const uint kVertexMatrixIndex = 120u;
 static const uint kVertexNormal = 12u;
+static const uint kVertexColor = 48u;
+static const uint kVertexUv = 56u;
 static const uint kVsFlags = 200u;
 static const uint kVsPaletteBase = 204u;
 static const uint kVsInlinePosMatrix = 224u;
@@ -117,6 +122,21 @@ float3 transform_vertex(uint4 draw, uint4 draw2, uint vertex, uint vs_flags, uin
     return float3(dot(r0, p), dot(r1, p), dot(r2, p));
 }
 
+// A vertex's first texture coordinates and colour 0 (GxVertexOut).
+void vertex_uv(uint4 draw, uint vertex, out float2 uv, out uint colour)
+{
+    const uint address = draw.x + min(vertex, max(draw.z, 1u) - 1u) * kVertexStride;
+    [branch] if ((draw.y & 1u) != 0u) {
+        const uint a = min(address, g_resident_limit);
+        uv = asfloat(g_resident.Load2(a + kVertexUv));
+        colour = g_resident.Load(a + kVertexColor);
+    } else {
+        const uint a = min(address, g_vertex_ring_limit);
+        uv = asfloat(g_vertex_ring.Load2(a + kVertexUv));
+        colour = g_vertex_ring.Load(a + kVertexColor);
+    }
+}
+
 // One thread per output triangle: three eye-space vertices (36 bytes) in draw order and its
 // surface record (16 bytes). A dispatch
 // covers the draws noted since the last one (g_triangle_count triangles from g_triangle_base).
@@ -148,12 +168,21 @@ void GeometryCS(uint3 id : SV_DispatchThreadID)
     const bool wide = (draw.y & 4u) != 0u;
     float3 corners[3];
     uint normals[3];
+    float2 uvs[3];
+    uint colours[3];
     [unroll] for (uint k = 0u; k < 3u; ++k) {
         const uint i = local * 3u + k;
         const uint vertex = indexed ? load_index(draw.w, i, wide) : i;
         float3 normal;
         corners[k] = transform_vertex(draw, draw2, vertex, vs_flags, palette_base, normal);
         normals[k] = pack_vertex_normal(normal);
+        vertex_uv(draw, vertex, uvs[k], colours[k]);
+    }
+    if ((g_frame_flags & 2u) != 0u) {
+        const uint uv_address = tri * 36u;
+        g_tri_uv.Store4(uv_address, asuint(float4(uvs[0], uvs[1])));
+        g_tri_uv.Store4(uv_address + 16u, uint4(asuint(uvs[2]), colours[0], colours[1]));
+        g_tri_uv.Store(uv_address + 32u, colours[2]);
     }
     const uint out_address = tri * 36u;
     g_positions.Store3(out_address, asuint(corners[0]));

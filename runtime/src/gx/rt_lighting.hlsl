@@ -1709,16 +1709,17 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
         }
     }
 
-    // The glows (lamps, cores, Lumas, lava bursts): every light within reach of this point, one
-    // kept in proportion to its unshadowed light here (streaming resampled importance over the
-    // whole list: a Luma beside the surface wins over a brighter glow across the level), one
-    // shadow ray to it. Its light joins the point lights' (their weight divided out).
+    // The glows (lamps, cores, Lumas, star bits, lava bursts): every light within reach of this point,
+    // kept in proportion to their unshadowed light here (streams of resampled importance over the whole
+    // list: a Luma beside the surface wins over a brighter glow across the level), a shadow ray to each
+    // kept. Their light joins the point lights' (their weight divided out). High quality (g_flags 1024)
+    // keeps two (one left a crowd of star bits, a sling star and a lamp taking turns in the noise).
     const uint emitters = min(s_tile_count, kTileLights);
     if (emitters != 0u) {
         float sum = 0.0f;
-        float pick = min(sample_point(id.xy, max(g_rays, 1u) + 7u).x, 0.99999f);
-        float4 kept = float4(0.0f, 0.0f, 0.0f, 0.0f);
-        float3 kept_power = float3(0.0f, 0.0f, 0.0f);
+        float2 pick = min(sample_point(id.xy, max(g_rays, 1u) + 7u), float2(0.99999f, 0.99999f));
+        float4 kept[2] = {float4(0.0f, 0.0f, 0.0f, 0.0f), float4(0.0f, 0.0f, 0.0f, 0.0f)};
+        float3 kept_power[2] = {float3(0.0f, 0.0f, 0.0f), float3(0.0f, 0.0f, 0.0f)};
         [loop] for (uint k = 0u; k < emitters; ++k) {
             const uint c = s_tile_lights[k];
             const float4 la = asfloat(g_emitters.Load4(16u + c * kEmitStride));
@@ -1744,41 +1745,48 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
             const float x = d2 / reach2;
             const float weight = light * cone * nl * (1.0f - x * x) * (1.0f - x * x) / (d2 + la.w * la.w);
             sum += weight;
-            // One uniform number serves the stream: kept with chance weight / sum, then rescaled
+            // One uniform number serves each stream: kept with chance weight / sum, then rescaled
             // to stay uniform.
             const float chance = weight / sum;
-            if (pick < chance) {
-                kept = float4(e, la.w);
-                kept_power = power;
-                pick = pick / chance;
-            } else {
-                pick = (pick - chance) / max(1.0f - chance, 1e-6f);
+            [unroll] for (uint s = 0u; s < 2u; ++s) {
+                if (pick[s] < chance) {
+                    kept[s] = float4(e, la.w);
+                    kept_power[s] = power;
+                    pick[s] = pick[s] / chance;
+                } else {
+                    pick[s] = (pick[s] - chance) / max(1.0f - chance, 1e-6f);
+                }
             }
         }
-        const float lum = luminance(kept_power);
-        if (sum > 0.0f && lum > 0.0f) {
-            // A light behind a clear surface is reached from its inner side.
-            const bool behind = clear && dot(kept.xyz - p, ng) < 0.0f;
-            const float3 start = behind ? lifted - ng * (0.2f + abs(p.z) * 4e-4f) : origin;
-            const float3 to = kept.xyz - start;
-            const float span = length(to);
-            RayDesc ray;
-            ray.Origin = start;
-            ray.Direction = to / max(span, 1e-4f);
-            ray.TMin = 0.0f;
-            // The light fills its glow (a core, a lamp head): the ray ends at its radius.
-            ray.TMax = max(span - max(0.9f * kept.w, 2.0f + 0.01f * span), 0.0f);
-            RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
-                     RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
-            query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
-            query.Proceed();
-            if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
-                // power nl / (pi (d2 + r2)) (windowed to its reach) over its share of the weights.
-                // Bright bursts (lava eruptions, sparks) saturate softly instead of blowing out.
-                const float3 glow = kept_power / (kPi * lum) * sum * g_emit.z;
-                points += glow / (1.0f + luminance(glow) / 1.5f) / max(g_point_light, 1e-3f);
+        float3 glow = float3(0.0f, 0.0f, 0.0f);
+        const uint picks = (g_flags & 1024u) != 0u ? 2u : 1u;
+        [unroll] for (uint s = 0u; s < 2u; ++s) {
+            const float lum = luminance(kept_power[s]);
+            if (s < picks && sum > 0.0f && lum > 0.0f) {
+                // A light behind a clear surface is reached from its inner side.
+                const bool behind = clear && dot(kept[s].xyz - p, ng) < 0.0f;
+                const float3 start = behind ? lifted - ng * (0.2f + abs(p.z) * 4e-4f) : origin;
+                const float3 to = kept[s].xyz - start;
+                const float span = length(to);
+                RayDesc ray;
+                ray.Origin = start;
+                ray.Direction = to / max(span, 1e-4f);
+                ray.TMin = 0.0f;
+                // The light fills its glow (a core, a lamp head): the ray ends at its radius.
+                ray.TMax = max(span - max(0.9f * kept[s].w, 2.0f + 0.01f * span), 0.0f);
+                RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
+                         RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+                query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
+                query.Proceed();
+                if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
+                    // power nl / (pi (d2 + r2)) (windowed to its reach) over its share of the weights,
+                    // shared among the picks.
+                    glow += kept_power[s] / (kPi * lum) * (sum * g_emit.z / float(picks));
+                }
             }
         }
+        // Bright bursts (lava eruptions, sparks) saturate softly instead of blowing out.
+        points += glow / (1.0f + luminance(glow) / 1.5f) / max(g_point_light, 1e-3f);
     }
 
     const float sign_z = n.z >= 0.0f ? 1.0f : -1.0f;
@@ -2326,13 +2334,15 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
             // found 56-192 lights in Honeyhive and lifted it to 1.23 of the game, measured fc33), and nothing
             // passes 1.1 of its art's level: no overexposed grass, sand or dirt. The light sources' own glow
             // (below) is not affected.
-            // By day half their light, outside the art's cap and rolling off towards 0.35: a glowing thing lights
-            // what is near it (user: it must make a difference) without bleaching sunlit ground.
-            const float3 day_lights = points * 0.5f;
-            const float3 day_points = day_lights / (1.0f + luminance(day_lights) / 0.35f);
             // Contact occlusion on the art: in full where the sun does not reach, half where it does
             // (sunlit contacts keep their direct light).
             const float sunlit = vis * saturate(shaped / 0.5f);
+            // By day half their light, outside the art's cap, rolling off towards 0.35 on sunlit ground (no
+            // bleaching) and towards 1.0 where the sun does not reach: a star bit or a sling star lights the
+            // shade and the dark stone near it (user: glowing things not emissive onto what is around them;
+            // a star bit 100 units over shaded ground: +0.15 at the 0.35 roll-off, +0.33 at 1.0).
+            const float3 day_lights = points * 0.5f;
+            const float3 day_points = day_lights / (1.0f + luminance(day_lights) / lerp(1.0f, 0.35f, sunlit));
             const float day_contact = 1.0f - g_ao.y * occlusion_share * (1.0f - contact) * (1.0f - 0.5f * sunlit);
             // Map geometry (no GX light: ground, grass, sand, wood, trees) at the environment's level, under
             // the characters and objects the game lights: the sunlit grass no longer outshines Mario.
@@ -2552,26 +2562,21 @@ float3 star_ramp(float t)
 // A star's burning surface (the star core): the game's own fire with its heat. Its cells (the texture against
 // its neighbourhood) stand out, the ball burns white-hot at its centre and deepens through yellow and orange to
 // red at its limb (mu: the face's turn to the eye on the ball, star_mu).
-// The turn to the eye of the core's face along `pixel`'s view ray (traced frame): the ray's distance from the
-// core's centre against its radius, the centre's distance less its front surface's along the ray to it (the
-// depth at the centre; the finish measured it so). Its normals are flat (measured: a flat profile from them).
-float star_mu(float2 pixel)
+// The turn to the eye of the core's face at eye position `p` (traced frame): the ball's normal there (from its
+// centre to the surface point the depth gives) against the direction to the eye. Its vertex normals are flat
+// (measured: a flat profile from them); the radius taken from the depth at the centre's pixel failed whenever
+// something stood in front of that pixel (Rosalina, build 55: every pixel at the centre's heat, a pale disc).
+float star_mu(float3 p)
 {
     if (m_core.w == 0.0f || m_core.z >= -m_near) {
         return 0.6f;
     }
-    const float3 to_centre = normalize(m_core.xyz);
-    const int2 at = int2(eye_to_pixel(m_projection, m_viewport, m_core.xyz));
-    const float centre_z = depth_to_eye_z(m_depth, m_efb_depth.Load(int3(at, 0)));
-    const float front = centre_z / min(to_centre.z, -1e-4f);
-    const float radius = length(m_core.xyz) - front;
+    const float3 outward = p - m_core.xyz;
+    const float radius = length(outward);
     if (radius <= 1.0f) {
         return 0.6f;
     }
-    const float3 ray = normalize(pixel_direction(m_projection, m_viewport, pixel));
-    const float off = length(cross(ray, m_core.xyz));
-    const float x = off / radius;
-    return sqrt(saturate(1.0f - x * x));
+    return saturate(dot(outward / radius, -normalize(p)));
 }
 
 float3 star_surface(int2 c, float mu, float3 color)
@@ -2630,30 +2635,50 @@ CompositeOut CompositePS(float4 position : SV_Position)
         }
     }
     const float2 a = (eye_to_pixel(m_projection, m_viewport, p) - 0.5f) / float(m_factor);
-    const int2 base = int2(floor(a));
-    const float2 w = a - float2(base);
-    const float tolerance = slope * float(m_factor) * 1.5f + abs(p.z) * 0.01f + 0.25f;
+    // The surface's depth slope per pixel: on each axis the one-sided step to the neighbour nearer in depth
+    // (across a silhouette the other side's step is not this surface's).
+    float2 gradient;
+    {
+        const int2 c = int2(position.xy);
+        const float zr = depth_to_eye_z(m_depth, m_efb_depth.Load(int3(c + int2(1, 0), 0)));
+        const float zl = depth_to_eye_z(m_depth, m_efb_depth.Load(int3(c - int2(1, 0), 0)));
+        const float zd = depth_to_eye_z(m_depth, m_efb_depth.Load(int3(c + int2(0, 1), 0)));
+        const float zu = depth_to_eye_z(m_depth, m_efb_depth.Load(int3(c - int2(0, 1), 0)));
+        gradient.x = abs(zr - z) < abs(z - zl) ? zr - z : z - zl;
+        gradient.y = abs(zd - z) < abs(z - zu) ? zd - z : z - zu;
+        gradient = clamp(gradient, -abs(z) * 0.05f, abs(z) * 0.05f);
+    }
+    // The light samples around the pixel (3 x 3 about the nearest, a tent 1.5 samples wide), each weighed by
+    // its depth against this surface's plane extended to it: samples on another surface (a step's face, an
+    // object in front) drop out and those on this one blend smoothly, so a shadow or crease edge follows the
+    // geometry's full-resolution edge instead of the light's sample grid (user: shadow and depth clipping at
+    // the edges in the Observatory, build 55; the 4-tap bilinear with a flat depth test switched samples per
+    // pixel along the floor rings' steps).
+    const int2 centre = int2(floor(a + 0.5f));
+    const float tolerance = abs(p.z) * 0.004f + 0.25f + (abs(gradient.x) + abs(gradient.y)) * float(m_factor) * 0.5f;
     float3 sum = float3(0.0f, 0.0f, 0.0f);
     float relief_sum = 0.0f;
     float weight = 0.0f;
     float3 nearest = float3(1.0f, 1.0f, 1.0f);
     float nearest_dz = abs(p.z) * 0.1f;
-    [unroll] for (uint k = 0u; k < 4u; ++k) {
-        const int2 o = int2(k & 1u, k >> 1u);
-        const int2 s = clamp(base + o, int2(0, 0), int2(m_sample_size) - 1);
+    [unroll] for (uint k = 0u; k < 9u; ++k) {
+        const int2 o = int2(int(k % 3u) - 1, int(k / 3u) - 1);
+        const int2 s = clamp(centre + o, int2(0, 0), int2(m_sample_size) - 1);
         const uint4 sample = m_light[uint(s.y) * m_sample_size.x + uint(s.x)];
         const float sz = asfloat(sample.z);
         if (sz == 0.0f) {
             continue;
         }
         const float3 m = float3(f16tof32(sample.x), f16tof32(sample.x >> 16u), f16tof32(sample.y));
-        const float dz = abs(sz - p.z);
+        const float2 offset = float2(centre + o) - a;
+        const float dz = abs(sz - (p.z + dot(gradient, offset * float(m_factor))));
         if (dz < nearest_dz) {
             nearest_dz = dz;
             nearest = m;
         }
         const float d = dz / tolerance;
-        const float bw = (o.x != 0 ? w.x : 1.0f - w.x) * (o.y != 0 ? w.y : 1.0f - w.y) * exp(-d * d);
+        const float2 tent = max(1.5f - abs(offset), 0.0f);
+        const float bw = tent.x * tent.y * exp(-d * d);
         sum += m * bw;
         relief_sum += f16tof32(sample.w & 0xFFFFu) * bw;
         weight += bw;
@@ -2665,8 +2690,7 @@ CompositeOut CompositePS(float4 position : SV_Position)
     // side's difference is left out; with distance a pixel spans more than the detail and it fades.
     const float relief = weight > 1e-3f ? relief_sum / weight : 0.0f;
     if (relief < -0.5f && (m_flags & 2u) == 0u) {
-        result.color = float4(star_surface(int2(position.xy), star_mu(eye_to_pixel(m_projection, m_viewport, p)),
-                                           color), 1.0f);
+        result.color = float4(star_surface(int2(position.xy), star_mu(p), color), 1.0f);
         return result;
     }
     if (relief > 1e-3f && m_sun.w > 0.0f) {

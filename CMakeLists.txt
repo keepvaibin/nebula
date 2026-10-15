@@ -742,6 +742,19 @@ foreach(galaxy_rt_pass reflect_memory_cs:ReflectMemoryCS:cs_6_5 reflect_trace_cs
         VERBATIM)
     list(APPEND galaxy_rt_headers "${galaxy_rt_header}")
 endforeach()
+# High quality's traces: the hits' textures straight from the descriptor heap (shader model 6.6).
+foreach(galaxy_rt_pass reflect_trace_tex_cs:ReflectTraceCS water_trace_tex_cs:WaterTraceCS)
+    string(REPLACE ":" ";" galaxy_rt_pair "${galaxy_rt_pass}")
+    list(GET galaxy_rt_pair 0 galaxy_rt_name)
+    list(GET galaxy_rt_pair 1 galaxy_rt_entry)
+    set(galaxy_rt_header "${galaxy_rt_dir}/rt_${galaxy_rt_name}.h")
+    add_custom_command(OUTPUT "${galaxy_rt_header}"
+        COMMAND "${GALAXY_DXC}" -nologo -T cs_6_6 -E ${galaxy_rt_entry} -D RT_TEXTURED=1 -O3 -WX -Qstrip_debug
+            -Qstrip_reflect -Vn g_rt_${galaxy_rt_name} -Fh "${galaxy_rt_header}" "${galaxy_rt_reflect_hlsl}"
+        DEPENDS "${galaxy_rt_reflect_hlsl}"
+        VERBATIM)
+    list(APPEND galaxy_rt_headers "${galaxy_rt_header}")
+endforeach()
 
 # galaxy_gx: static lib used by NebulaRuntime and the renderer tests.
 # The public API (gx_d3d12.h) is implemented by gx_shim.cpp over GxBackend.

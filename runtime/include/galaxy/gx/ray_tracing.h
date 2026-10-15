@@ -101,6 +101,9 @@ struct RtDrawInfo {
     std::array<std::uint32_t, 4> shading{};
     // Its material table entry (rt_materials.h; 0: none).
     std::uint16_t rt_material = 0;
+    // Its material texture's view in the frame's shader-visible descriptor heap (~0: none): high quality's
+    // reflections sample it where they hit the draw off screen.
+    std::uint32_t texture = 0xFFFFFFFFu;
 };
 
 struct RtBuffer {
@@ -445,6 +448,13 @@ private:
     // register (RGBA8), flags (kDrawTableTint), the relief; GX light 0's eye-space position (3 floats) and
     // its kind (0: none or attenuated, 1: no facing term, 2: n.l) for the day model's game shading.
     std::vector<std::array<std::uint32_t, 12>> draw_colors_;
+    // Per draw for high quality's textured hits (rt_reflections.hlsl g_draw_tex): texture view, colour
+    // source (bit 0 vertex colour), its colour RGBA8; and its upload.
+    std::vector<std::array<std::uint32_t, 4>> draw_textures_;
+    D3D12_GPU_VIRTUAL_ADDRESS draw_texture_table_ = 0;
+    // High quality: per triangle its texture coordinates and colours (ray_tracing.hlsl g_tri_uv).
+    Microsoft::WRL::ComPtr<ID3D12Resource> surface_uv_;
+    D3D12_RESOURCE_STATES surface_uv_state_ = D3D12_RESOURCE_STATE_COMMON;
     // This scene's draw table in the frame's upload ring (trace_lighting), for its reflections; 0: none.
     D3D12_GPU_VIRTUAL_ADDRESS draw_table_ = 0;
     std::array<ResultSlot, kResultSlots> slots_{};
@@ -708,6 +718,7 @@ private:
     std::uint32_t picture_height_ = 0;
     std::uint32_t picture_factor_ = 0;
     std::uint32_t rays_ = 2;
+    bool high_quality_ = true;  // config rt_quality: high (every pixel, more rays) or medium
     std::uint32_t factor_override_ = 0;
     std::uint32_t history_frames_ = 16;
     std::uint32_t light_frame_ = 0;

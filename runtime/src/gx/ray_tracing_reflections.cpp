@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/gx/rt_reflections.h"
+#include "galaxy/gx/render_config.h"
 
 #include "rt_reflect_composite_ps.h"
 #include "rt_reflect_composite_vs.h"
@@ -8,9 +9,11 @@
 #include "rt_reflect_memory_cs.h"
 #include "rt_reflect_temporal_cs.h"
 #include "rt_reflect_trace_cs.h"
+#include "rt_reflect_trace_tex_cs.h"
 #include "rt_underwater_ps.h"
 #include "rt_water_composite_ps.h"
 #include "rt_water_trace_cs.h"
+#include "rt_water_trace_tex_cs.h"
 
 #include <algorithm>
 #include <bit>
@@ -64,6 +67,9 @@ struct RtReflectConstants {
     float rough_cutoff;
     float metal_f0;
     float waves;
+    float hit[4];
+    std::uint32_t texture_count;
+    std::uint32_t pad[3];
 };
 static_assert(sizeof(RtReflectConstants) == RtReflections::kConstantsBytes);
 
@@ -126,6 +132,8 @@ enum Parameter : UINT {
     kUnder,
     kSkyMap,
     kDraws,
+    kSurfaceUv,
+    kDrawTextures,
     kParameterCount,
 };
 
@@ -238,15 +246,18 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     // and glossy (F0 above water's, so the aurora and Mario read in the ice); a white surface shows its
     // reflection only where the reflection takes its place.
     materials_[4] = material("GALAXY_RT_REFLECT_WATER", {0.04f, 0.25f, 1.0f, 0.0f, 0.8f});
-    // A calm, glassy surface (roughness 0.03) with F0 0.2: what stands over the water mirrors in it (20 % looking
-    // 45 degrees down, 23 % at 60, 38 % at 75, the far sea at the 0.5 cap); cover 0.3 keeps the water's own colour;
+    // A calm, glassy surface (roughness 0.03) with F0 0.3: what stands over the water mirrors in it (30 % looking
+    // 45 degrees down, 32 % at 60, 46 % at 75, the far sea at the 0.5 cap); cover 0.3 keeps the water's own colour;
     // the sky never (WaterTraceCS). (F0 0.08 cover 0.5 left Buoy Base's tower faint, v52b; cover 0.8 turned
-    // Beach Bowl's lagoon milky, v53a; user: not reflective or modern enough.)
-    materials_[kWaterClass] = material("GALAXY_RT_WATER", {0.03f, 0.2f, 1.0f, 0.0f, 0.3f});
+    // Beach Bowl's lagoon milky, v53a; F0 0.2, build 55: user, still not reflective enough in Buoy Base and
+    // Beach Bowl.)
+    materials_[kWaterClass] = material("GALAXY_RT_WATER", {0.03f, 0.3f, 1.0f, 0.0f, 0.3f});
     materials_[kWaterClass + 1u] = materials_[kWaterClass];
     // Crystals, ice, gems and glass (named in rt_surfaces.cpp): clear dielectric, its reflection
     // white and Fresnel-weighted.
-    materials_[7] = material("GALAXY_RT_REFLECT_CRYSTAL", {0.05f, 0.25f, 1.0f, 0.0f, 0.0f});
+    // Cover 0.4: what the glass mirrors replaces part of it (an image with its darks and lights); screened over
+    // it at cover 0, the bright canopy only lifted the Observatory fountain's glass into a flat, pale disc (v53a).
+    materials_[7] = material("GALAXY_RT_REFLECT_CRYSTAL", {0.05f, 0.25f, 1.0f, 0.0f, 0.4f});
     view_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_REFLECT_VIEW", 0.0f), 0.0f, 6.0f));
     history_frames_ =
         static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_REFLECT_HISTORY", 24.0f), 1.0f, 64.0f));
@@ -459,21 +470,54 @@ bool RtReflections::create_pipelines(DXGI_FORMAT color_format) {
     params[kSkyMap].Descriptor.ShaderRegister = 14u;
     params[kDraws].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
     params[kDraws].Descriptor.ShaderRegister = 15u;
+    params[kSurfaceUv].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    params[kSurfaceUv].Descriptor.ShaderRegister = 16u;
+    params[kDrawTextures].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    params[kDrawTextures].Descriptor.ShaderRegister = 17u;
     for (auto& param : params) {
         param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     }
-    D3D12_STATIC_SAMPLER_DESC linear{};
-    linear.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-    linear.AddressU = linear.AddressV = linear.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-    linear.MaxLOD = D3D12_FLOAT32_MAX;
-    linear.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    D3D12_STATIC_SAMPLER_DESC samplers[2]{};
+    samplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+    samplers[0].AddressU = samplers[0].AddressV = samplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    samplers[0].MaxLOD = D3D12_FLOAT32_MAX;
+    samplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    // The hits' textures repeat (GX's usual wrap).
+    samplers[1] = samplers[0];
+    samplers[1].AddressU = samplers[1].AddressV = samplers[1].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    samplers[1].ShaderRegister = 1u;
+    // High quality samples the hits' textures from the frame's descriptor heap: shader model 6.6 and
+    // resource binding tier 3 (else the hits off screen stay as before).
+    {
+        D3D12_FEATURE_DATA_SHADER_MODEL model{D3D_SHADER_MODEL_6_6};
+        D3D12_FEATURE_DATA_D3D12_OPTIONS options{};
+        textured_ = get_render_config().rt_quality != 0u &&
+                    SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &model, sizeof(model))) &&
+                    model.HighestShaderModel >= D3D_SHADER_MODEL_6_6 &&
+                    SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &options, sizeof(options))) &&
+                    options.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_3 &&
+                    env_float("GALAXY_RT_TEXTURED_HITS", 1.0f) != 0.0f;
+    }
     D3D12_ROOT_SIGNATURE_DESC rsd{};
     rsd.NumParameters = kParameterCount;
     rsd.pParameters = params;
-    rsd.NumStaticSamplers = 1u;
-    rsd.pStaticSamplers = &linear;
-    if (!serialize(rsd, root_) || !compute(g_rt_reflect_trace_cs, sizeof(g_rt_reflect_trace_cs), trace_pso_) ||
-        !compute(g_rt_water_trace_cs, sizeof(g_rt_water_trace_cs), water_trace_pso_) ||
+    rsd.NumStaticSamplers = 2u;
+    rsd.pStaticSamplers = samplers;
+    rsd.Flags = textured_ ? D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED : D3D12_ROOT_SIGNATURE_FLAG_NONE;
+    if (textured_ && !serialize(rsd, root_)) {
+        textured_ = false;
+        rsd.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
+    }
+    if (textured_ && (!compute(g_rt_reflect_trace_tex_cs, sizeof(g_rt_reflect_trace_tex_cs), trace_pso_) ||
+                      !compute(g_rt_water_trace_tex_cs, sizeof(g_rt_water_trace_tex_cs), water_trace_pso_))) {
+        textured_ = false;
+        rsd.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
+        root_.Reset();
+    }
+    std::cerr << "[rt-reflect] textured hits " << (textured_ ? "on" : "off") << '\n';
+    if ((!textured_ && !serialize(rsd, root_)) ||
+        (!textured_ && !compute(g_rt_reflect_trace_cs, sizeof(g_rt_reflect_trace_cs), trace_pso_)) ||
+        (!textured_ && !compute(g_rt_water_trace_cs, sizeof(g_rt_water_trace_cs), water_trace_pso_)) ||
         !compute(g_rt_reflect_temporal_cs, sizeof(g_rt_reflect_temporal_cs), temporal_pso_) ||
         !compute(g_rt_reflect_filter_a_cs, sizeof(g_rt_reflect_filter_a_cs), filter_a_pso_) ||
         !compute(g_rt_reflect_filter_cs, sizeof(g_rt_reflect_filter_cs), filter_pso_) ||
@@ -700,6 +744,11 @@ void RtReflections::fill_constants(const RtReflectScene& scene, const Pass& pass
     c.rough_cutoff = rough_cutoff_;
     c.waves = waves_;
     c.metal_f0 = materials_[2].f0;
+    std::copy(scene.hit.begin(), scene.hit.end(), c.hit);
+    c.texture_count = scene.draw_textures != 0u ? scene.texture_count : 0u;
+    if (textured_ && scene.surface_uv != 0u && scene.draw_textures != 0u) {
+        c.flags |= 2048u;
+    }
     std::memcpy(constants_cpu, &c, sizeof(c));
 }
 
@@ -749,6 +798,9 @@ void RtReflections::bind_trace(ID3D12GraphicsCommandList* list, const RtReflectS
     list->SetComputeRootUnorderedAccessView(kUnder, under_[slot].resource->GetGPUVirtualAddress());
     list->SetComputeRootShaderResourceView(kSkyMap, scene.sky_map != 0u ? scene.sky_map : previous_info);
     list->SetComputeRootShaderResourceView(kDraws, scene.draws != 0u ? scene.draws : previous_info);
+    list->SetComputeRootShaderResourceView(kSurfaceUv, scene.surface_uv != 0u ? scene.surface_uv : previous_info);
+    list->SetComputeRootShaderResourceView(kDrawTextures,
+                                           scene.draw_textures != 0u ? scene.draw_textures : previous_info);
 }
 
 void RtReflections::accumulate(ID3D12GraphicsCommandList* list, Pass& pass, unsigned slot, UINT groups_x,

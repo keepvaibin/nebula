@@ -209,6 +209,10 @@ cbuffer RtReflect : register(b0)
     float g_rough_cutoff;       // the material table's roughness above which a surface reflects nothing
     float g_metal_f0;           // Fresnel reflectance of a bare metal (metalness 1)
     float g_waves;              // water: slope of its procedural waves (0: none)
+    // High quality (g_flags bit 11): the art's level at a hit: day share, night level, day level, texture
+    // detail per eye unit of distance.
+    float4 g_hit;
+    uint g_texture_count;       // entries of g_draw_tex
 };
 
 RaytracingAccelerationStructure g_scene : register(t0);
@@ -236,6 +240,12 @@ StructuredBuffer<float4> g_sky_map : register(t14);
 // metalness (unorm16 pair, 0xFFFF: the class's). Read when g_flags bit 7 is set.
 ByteAddressBuffer g_draws : register(t15);
 SamplerState g_linear : register(s0);
+// High quality (g_flags bit 11): per triangle its texture coordinates and colours (ray_tracing.hlsl g_tri_uv,
+// 36 bytes); per draw its material texture's view in the descriptor heap (~0: none), its colour source (bit 0:
+// the vertices' colour 0) and its colour (RGBA8, red in the top byte).
+ByteAddressBuffer g_tri_uv : register(t16);
+StructuredBuffer<uint4> g_draw_tex : register(t17);
+SamplerState g_wrap : register(s1);
 // Per sample: packed normal, eye z (0: no surface), material (pack_material: class, strength,
 // emitter-free share, roughness, metalness), reflection distance.
 RWStructuredBuffer<uint4> g_info : register(u0);
@@ -681,6 +691,76 @@ static const uint kSkyFromMemory = 5u;
 static const uint kSkyAverage = 6u;
 static const uint kSources = 7u;
 
+float3 hit_rgb8(uint c)
+{
+    return float3(float(c >> 24u), float((c >> 16u) & 0xFFu), float((c >> 8u) & 0xFFu)) / 255.0f;
+}
+
+// High quality: what a reflection ray hits where the frame does not show it, shaded by ray tracing (user: the
+// water and the metal reflect what is around them, not only what the screen holds). Its draw's material
+// texture at the hit's texture coordinates (detail by distance), times the vertices' colour 0 or the draw's
+// colour, at the art's level: by day the day model's open ground, faces turned from the sun at 0.7 and in
+// the sun's shadow at 0.65 of it (one shadow ray from the hit), by night the night level. Late geometry
+// (instance 1) has no records: false.
+bool hit_shade(uint instance, uint tri, float2 b, float3 x, float3 l, float distance, out float3 light)
+{
+    light = float3(0.0f, 0.0f, 0.0f);
+#if RT_TEXTURED
+    if ((g_flags & 2048u) == 0u || instance != 0u) {
+        return false;
+    }
+    const uint draw = g_surfaces.Load(tri * 16u + 12u) >> 16u;
+    if (draw >= g_texture_count) {
+        return false;
+    }
+    const uint4 d = g_draw_tex[draw];
+    const float3 w = float3(1.0f - b.x - b.y, b.x, b.y);
+    const uint a = tri * 36u;
+    const float4 uv01 = asfloat(g_tri_uv.Load4(a));
+    const uint4 rest = g_tri_uv.Load4(a + 16u);
+    const uint c2 = g_tri_uv.Load(a + 32u);
+    const float2 uv = uv01.xy * w.x + uv01.zw * w.y + asfloat(rest.xy) * w.z;
+    float3 albedo = hit_rgb8(d.z);
+    if ((d.y & 1u) != 0u && (rest.z | rest.w | c2) != 0u) {
+        albedo = hit_rgb8(rest.z) * w.x + hit_rgb8(rest.w) * w.y + hit_rgb8(c2) * w.z;
+    }
+    if (d.x != 0xFFFFFFFFu && all(abs(uv) < 1.0e4f)) {
+        const Texture2D<float4> map = ResourceDescriptorHeap[NonUniformResourceIndex(d.x)];
+        const float lod = clamp(log2(max(distance * g_hit.w, 1.0f)), 0.0f, 8.0f);
+        albedo *= map.SampleLevel(g_wrap, uv, lod).rgb;
+    }
+    float day_level = g_hit.z;
+    if (g_hit.x > 0.0f && any(g_sun_light.rgb > 0.0f)) {
+        const float3 v0 = asfloat(g_positions.Load3(tri * 36u));
+        const float3 v1 = asfloat(g_positions.Load3(tri * 36u + 12u));
+        const float3 v2 = asfloat(g_positions.Load3(tri * 36u + 24u));
+        float3 ng = cross(v1 - v0, v2 - v0);
+        ng = dot(ng, ng) > 1e-12f ? normalize(ng) : -l;
+        ng = dot(ng, l) > 0.0f ? -ng : ng;
+        const float nl = dot(ng, g_sun.xyz);
+        const float shaped = nl > 0.0f ? nl * (1.5f - 0.5f * nl) : 0.0f;
+        float vis = 1.0f;
+        if (shaped > 0.08f) {
+            RayDesc ray;
+            ray.Origin = x + ng * (0.5f + abs(x.z) * 4e-4f);
+            ray.Direction = g_sun.xyz;
+            ray.TMin = 0.0f;
+            ray.TMax = g_sun_light.w;
+            RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
+                     RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+            query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
+            query.Proceed();
+            vis = query.CommittedStatus() == COMMITTED_TRIANGLE_HIT ? 0.0f : 1.0f;
+        }
+        day_level *= (1.0f - 0.35f * (1.0f - vis)) * (1.0f - 0.3f * (1.0f - saturate(shaped / 0.8f)));
+    }
+    light = albedo * lerp(g_hit.y, day_level, g_hit.x);
+    return true;
+#else
+    return false;
+#endif
+}
+
 // What one reflection ray brings to a surface at `hit` (normal `n`, face `ng`, seen along `dir`):
 // light and its confidence, the lights' highlights (`lights`), the ray's length and where its light
 // came from.
@@ -738,6 +818,11 @@ Reflected reflect_light(uint2 s, float3 dir, float3 n, float3 ng, float3 hit, fl
                                  abs(seen - x_distance) < 0.03f * x_distance + 2.0f;
         if (shown) {
             r.confidence = 1.0f;
+        } else if (hit_shade(query.CommittedInstanceID(), query.CommittedPrimitiveIndex(),
+                             query.CommittedTriangleBarycentrics(), x, l, r.distance, r.light)) {
+            // High quality: shaded where it was hit (counted with the remembered).
+            r.confidence = 1.0f;
+            r.source = kFromMemory;
         } else {
             float3 known;
             r.confidence = memory_light(x, x_distance, known);
@@ -1287,9 +1372,16 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
                 const Reflected r = reflect_light(id.xy, dir, n, ng, hit, params, base, true, false);
                 light = r.light;
                 highlight = min(r.highlight, 1.5f) * (surface == kWaterSurface ? 0.5f : 1.0f);
-                // Water mirrors what stands over it in full, never the sky (the scene, not the skybox;
-                // the bright sky bleached the far lagoon, measured wb36).
-                confidence = surface == kWaterSurface && r.source >= kSkyShown ? 0.0f : r.confidence;
+                // Water mirrors what stands over it in full, and the sky at no more than the water's own
+                // brightness: the sky's hues and clouds read in it, its light adds none (the bright sky
+                // bleached the far lagoon, measured wb36; user: reflect the sky, never overexposed). The scale
+                // is the sky's average against the water's colour, so the sky keeps its own detail.
+                confidence = r.confidence;
+                if (surface == kWaterSurface && r.source >= kSkyShown) {
+                    float3 sky_average;
+                    const float sky_level = average(0u, sky_average) ? luminance(sky_average) : luminance(light);
+                    light *= min(1.0f, luminance(base) / max(sky_level, 1e-3f));
+                }
                 source = r.source;
                 mapped = r.mapped;
                 info.w = asuint(r.distance);

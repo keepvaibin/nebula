@@ -185,6 +185,10 @@ namespace Nebula.Launcher
         public int SpatialQuality = 0;
         public bool GeneratedMipmaps = false, PerPixelLighting = false, EnhancedLighting = false;
         public bool HudOutputResolution = false, RayTracing = false;
+        // Ray tracing quality (config rt_quality): 0 medium, 1 high (every pixel traced, more rays, reflections
+        // shaded where they land).
+        public int RtQuality = 1;
+        public static readonly string[] RtQualities = { "Medium quality", "High quality" };
 
         public static string ConfigPath { get { return Path.Combine(NebulaPaths.DataRoot, "config.ini"); } }
 
@@ -258,6 +262,10 @@ namespace Nebula.Launcher
             if (values.TryGetValue("enhanced_lighting", out enhanced)) settings.EnhancedLighting = enhanced.Trim() != "0";
             if (values.TryGetValue("hud_output_resolution", out hud)) settings.HudOutputResolution = hud.Trim() != "0";
             if (values.TryGetValue("ray_tracing_enabled", out rt)) settings.RayTracing = rt.Trim() != "0";
+            string quality;
+            if (values.TryGetValue("rt_quality", out quality))
+                settings.RtQuality = quality.Trim() == "0" ||
+                                     quality.Trim().Equals("medium", StringComparison.OrdinalIgnoreCase) ? 0 : 1;
             return settings;
         }
 
@@ -290,6 +298,7 @@ namespace Nebula.Launcher
             Set(lines, "enhanced_lighting", EnhancedLighting ? 1 : 0);
             Set(lines, "hud_output_resolution", HudOutputResolution ? 1 : 0);
             Set(lines, "ray_tracing_enabled", RayTracing ? 1 : 0);
+            SetText(lines, "rt_quality", RtQuality == 0 ? "medium" : "high");
             Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath));
             string temp = ConfigPath + ".tmp";
             File.WriteAllText(temp, string.Join("\n", lines) + "\n", new UTF8Encoding(false));

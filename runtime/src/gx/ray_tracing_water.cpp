@@ -184,6 +184,9 @@ int SceneRayTracer::trace_water(ID3D12GraphicsCommandList* list, const RtSources
     // The opaque scene stays readable from its trace until the next scene's geometry.
     to_state(list, positions_.Get(), positions_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     to_state(list, surfaces_.Get(), surfaces_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    if (surface_uv_) {
+        to_state(list, surface_uv_.Get(), surface_uv_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    }
     if (sky_radiance_) {
         to_state(list, sky_radiance_.Get(), sky_radiance_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     }

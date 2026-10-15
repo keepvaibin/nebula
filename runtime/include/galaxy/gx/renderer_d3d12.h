@@ -330,6 +330,16 @@ public:
     Table allocate_persistent(unsigned count);
 
     [[nodiscard]] ID3D12DescriptorHeap* heap() const { return heap_.Get(); }
+    // The heap index of a view this ring handed out (~0 for none of its own).
+    [[nodiscard]] std::uint32_t index_of(D3D12_GPU_DESCRIPTOR_HANDLE handle) const noexcept {
+        if (increment_ == 0u || handle.ptr < gpu_base_.ptr) {
+            return 0xFFFFFFFFu;
+        }
+        const std::uint64_t index = (handle.ptr - gpu_base_.ptr) / increment_;
+        const std::uint64_t size = static_cast<std::uint64_t>(persistent_descriptors_) +
+                                   static_cast<std::uint64_t>(descriptors_per_frame_) * frames_in_flight_;
+        return index < size ? static_cast<std::uint32_t>(index) : 0xFFFFFFFFu;
+    }
 
 private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> heap_;

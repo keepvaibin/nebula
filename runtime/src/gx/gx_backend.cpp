@@ -7027,18 +7027,33 @@ bool GxBackend::rt_water_draw() const noexcept {
 // (environment, indirect and mask maps, shared by many models) decide only a draw that maps nothing
 // else the table names.
 std::uint16_t GxBackend::rt_material_of(std::uint32_t map_mask,
-                                        const std::array<TextureHandle, kMaxTextureMaps>& handles) noexcept {
+                                        const std::array<TextureHandle, kMaxTextureMaps>& handles,
+                                        unsigned& map) noexcept {
     std::uint16_t lookup = 0u;
+    unsigned lookup_map = 0xFFu;
+    unsigned first = 0xFFu;
     for (unsigned m = 0; m < kMaxTextureMaps; ++m) {
-        if ((map_mask & (1u << m)) == 0u || handles[m].rt_material == 0u) {
+        if ((map_mask & (1u << m)) == 0u) {
+            continue;
+        }
+        if (first == 0xFFu && handles[m].resource != nullptr) {
+            first = m;
+        }
+        if (handles[m].rt_material == 0u) {
             continue;
         }
         const RtMaterial* const material = rt_material(handles[m].rt_material);
         if (material == nullptr || !material->helper) {
+            map = m;
             return handles[m].rt_material;
         }
-        lookup = lookup != 0u ? lookup : handles[m].rt_material;
+        if (lookup == 0u) {
+            lookup = handles[m].rt_material;
+            lookup_map = m;
+        }
     }
+    // A helper (an environment or indirect map) is not the surface's colour: the first bound map is.
+    map = first != 0xFFu ? first : lookup_map;
     return lookup;
 }
 
@@ -7304,6 +7319,11 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         }
     }
     info.rt_material = current_rt_material_;
+    // High quality's textured hits: the material texture's view in the frame's descriptor heap.
+    if (current_texture_table_.ptr != 0u && current_rt_map_ < kMaxTextureMaps) {
+        const std::uint32_t table = renderer_.srv_ring().index_of(current_texture_table_);
+        info.texture = table != 0xFFFFFFFFu ? table + current_rt_map_ : 0xFFFFFFFFu;
+    }
     if ((water && surface.surface_class == RtSurfaceClass::Metal) || clear_added) {
         // A blended environment map is glass, not metal; an added one over ice is the ice's gloss.
         surface.surface_class = RtSurfaceClass::Crystal;
@@ -13279,7 +13299,8 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
                 for (const auto& handle : frame_binding_it->second.texture_handles) {
                     texture_cache_.touch_cached_handle(handle);
                 }
-                current_rt_material_ = rt_material_of(texture_map_mask, frame_binding_it->second.texture_handles);
+                current_rt_material_ =
+                    rt_material_of(texture_map_mask, frame_binding_it->second.texture_handles, current_rt_map_);
                 binding_cache_hit = true;
                 ++frame_texture_binding_cache_hits_;
             }
@@ -13440,7 +13461,7 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
                 frame_texture_binding_tables_.emplace(
                     texture_binding_key,
                     cached_tables);
-                current_rt_material_ = rt_material_of(texture_map_mask, texture_handles);
+                current_rt_material_ = rt_material_of(texture_map_mask, texture_handles, current_rt_map_);
             }
         }
         current_texture_map_mask_ = texture_map_mask;

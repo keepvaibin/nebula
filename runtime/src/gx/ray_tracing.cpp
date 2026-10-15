@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/gx/ray_tracing.h"
 #include "galaxy/gx/rt_materials.h"
+#include "galaxy/gx/render_config.h"
 #include "galaxy/gx/gx_bitfields.h"
 
 #include <bit>
@@ -414,6 +415,7 @@ enum RootParameter : UINT {
     kRootStats,
     kRootDump,
     kRootSurfaces,
+    kRootSurfaceUv,
     kRootCount,
 };
 
@@ -616,6 +618,8 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     params[kRootDump].Descriptor.ShaderRegister = 2u;
     params[kRootSurfaces].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
     params[kRootSurfaces].Descriptor.ShaderRegister = 3u;
+    params[kRootSurfaceUv].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+    params[kRootSurfaceUv].Descriptor.ShaderRegister = 4u;
     for (auto& param : params) {
         param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     }
@@ -712,7 +716,12 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
         dump_remaining_ = static_cast<std::uint64_t>(std::max(1.0f, env_float("GALAXY_RT_DUMP_COUNT", 1.0f)));
     }
     lighting_enabled_ = env_float("GALAXY_RT_LIGHT", 1.0f) != 0.0f;
-    rays_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_RAYS", 2.0f), 1.0f, 16.0f));
+    // Quality (config rt_quality, GALAXY_RT_QUALITY): high traces every pixel up to 4K-class pictures with 4 sky
+    // and occlusion rays and two glow lights per sample; medium a share of the pixels with 2 and one (user: use
+    // the ray tracing hardware, more rays; two modes, high with everything).
+    high_quality_ = get_render_config().rt_quality != 0u;
+    rays_ = static_cast<std::uint32_t>(
+        std::clamp(env_float("GALAXY_RT_RAYS", high_quality_ ? 4.0f : 2.0f), 1.0f, 16.0f));
     range_ = std::clamp(env_float("GALAXY_RT_RANGE", 1600.0f), 10.0f, 100000.0f);
     strength_ = std::clamp(env_float("GALAXY_RT_STRENGTH", 1.0f), 0.0f, 1.0f);
     history_frames_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_HISTORY", 32.0f), 1.0f, 64.0f));
@@ -1024,8 +1033,11 @@ bool SceneRayTracer::ensure_capacity(ID3D12GraphicsCommandList* list, std::uint3
     const std::uint64_t scratch_tlas_offset = align(blas_info.ScratchDataSizeInBytes);
     const std::uint64_t scratch_bytes = scratch_tlas_offset + align(tlas_info.ScratchDataSizeInBytes);
 
+    ComPtr<ID3D12Resource> previous_uv = surface_uv_;
+    const D3D12_RESOURCE_STATES previous_uv_state = surface_uv_state_;
     retire(positions_);
     retire(surfaces_);
+    retire(surface_uv_);
     retire(blas_);
     retire(tlas_);
     retire(scratch_);
@@ -1053,6 +1065,27 @@ bool SceneRayTracer::ensure_capacity(ID3D12GraphicsCommandList* list, std::uint3
     }
     positions_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     surfaces_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    // High quality: texture coordinates and colours per triangle (36 B) for textured reflection hits.
+    if (high_quality_ &&
+        create_buffer(static_cast<std::uint64_t>(capacity) * 36u, D3D12_HEAP_TYPE_DEFAULT,
+                      D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, surface_uv_,
+                      L"rt surface uv")) {
+        surface_uv_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+        if (previous_uv && preserved != 0u && list != nullptr) {
+            D3D12_RESOURCE_BARRIER barriers[2] = {
+                transition(previous_uv.Get(), previous_uv_state, D3D12_RESOURCE_STATE_COPY_SOURCE),
+                transition(surface_uv_.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_DEST)};
+            list->ResourceBarrier(2u, barriers);
+            list->CopyBufferRegion(surface_uv_.Get(), 0u, previous_uv.Get(), 0u,
+                                   static_cast<std::uint64_t>(preserved) * 36u);
+            barriers[0] = transition(previous_uv.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, previous_uv_state);
+            barriers[1] = transition(surface_uv_.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
+                                     D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+            list->ResourceBarrier(2u, barriers);
+        }
+    } else {
+        surface_uv_.Reset();
+    }
     if (previous_surfaces && preserved != 0u && list != nullptr) {
         D3D12_RESOURCE_BARRIER barriers[2] = {
             transition(previous_surfaces.Get(), previous_surfaces_state, D3D12_RESOURCE_STATE_COPY_SOURCE),
@@ -1483,6 +1516,7 @@ void SceneRayTracer::begin_scene() noexcept {
     water_open_ = false;
     water_incomplete_ = false;
     draw_colors_.clear();
+    draw_textures_.clear();
     infos_.clear();
     triangles_ = 0u;
     flushed_draws_ = 0u;
@@ -1609,6 +1643,23 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
     const XfChannelCtrl channel = decode_xf_channel_ctrl(info.channel);
     const bool light0 = info.light_index[0] == 0u && (channel.atten_func == 0u || channel.atten_func == 2u);
     const std::uint32_t light_kind = !light0 ? 0u : channel.diffuse_func == 0u ? 1u : 2u;
+    {
+        // High quality's textured hits: the material texture's view, and the colour the texture is
+        // multiplied by: the vertices' colour 0 where channel 0 takes its material from them, else the
+        // material register; a lit draw's at its light's mean facing (0.55, as the de-lit draws).
+        std::uint32_t colour = info.material;
+        if ((info.surface & kRtDrawLit) != 0u) {
+            const auto byte = [](std::uint32_t c, unsigned shift) { return float((c >> shift) & 0xFFu) / 255.0f; };
+            const std::uint32_t light = info.light_index[0] == 0u ? info.light_color[0] : 0u;
+            colour = 0xFFu;
+            for (const unsigned shift : {24u, 16u, 8u}) {
+                const float lit = std::min(byte(info.ambient, shift) + 0.55f * byte(light, shift), 1.0f) *
+                                  byte(info.material, shift);
+                colour |= static_cast<std::uint32_t>(std::lround(std::clamp(lit, 0.0f, 1.0f) * 255.0f)) << shift;
+            }
+        }
+        draw_textures_.push_back({info.texture, channel.material_from_vertex ? 1u : 0u, colour, 0u});
+    }
     draw_colors_.push_back({info.ambient, info.light_index[0] == 0u ? info.light_color[0] : 0u, emission,
                             std::bit_cast<std::uint32_t>(intensity), surface, info.material, flags,
                             std::bit_cast<std::uint32_t>(relief), std::bit_cast<std::uint32_t>(info.light[0][0]),
@@ -1794,7 +1845,12 @@ std::uint32_t SceneRayTracer::sample_factor(std::uint32_t width, std::uint32_t h
         return factor_override_;
     }
     const std::uint64_t pixels = static_cast<std::uint64_t>(width) * height;
-    return pixels > 16'000'000u ? 4u : pixels > 6'200'000u ? 3u : 2u;
+    if (!high_quality_) {
+        return pixels > 16'000'000u ? 4u : pixels > 6'200'000u ? 3u : 2u;
+    }
+    // High: every pixel traced up to 4K-class pictures (no upsampled light: shadow and crease edges follow the
+    // geometry); past that at least 3.7 million samples (2560 x 1440).
+    return pixels > 33'200'000u ? 3u : pixels > 9'000'000u ? 2u : 1u;
 }
 
 bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
@@ -2291,6 +2347,14 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         std::memcpy(draw_table.cpu, draw_colors_.data(), draw_colors_.size() * sizeof(draw_colors_[0]));
     }
     draw_table_ = draw_colors_.empty() ? 0u : draw_table.gpu;
+    draw_texture_table_ = 0u;
+    if (surface_uv_ && !draw_textures_.empty()) {
+        const RtUpload textures = allocate(allocate_context, draw_textures_.size() * sizeof(draw_textures_[0]), 256u);
+        if (textures.cpu != nullptr) {
+            std::memcpy(textures.cpu, draw_textures_.data(), draw_textures_.size() * sizeof(draw_textures_[0]));
+            draw_texture_table_ = textures.gpu;
+        }
+    }
     RtLightConstants c{};
     c.draw_count = static_cast<std::uint32_t>(draw_count);
     c.sky_ibl = sky_ibl_;
@@ -2542,7 +2606,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     c.flags = (history ? 1u : 0u) | (picture ? 2u : 0u) | (show_term_ == 2u ? 4u : 0u) | (show_term_ == 3u ? 8u : 0u) |
               (show_term_ == 4u ? 16u : 0u) | (show_term_ == 5u ? 32u : 0u) |
               (show_term_ == 6u ? 64u : 0u) | (gi_ ? 0u : 128u) | (show_term_ == 7u ? 256u : 0u) |
-              (show_term_ == 8u ? 512u : 0u);
+              (show_term_ == 8u ? 512u : 0u) | (high_quality_ ? 1024u : 0u);
     std::memcpy(c.reproject, reproject.data(), sizeof(c.reproject));
     std::memcpy(c.picture, to_picture.data(), sizeof(c.picture));
     std::memcpy(c.to_eye, camera_.data(), sizeof(c.to_eye));
@@ -2968,6 +3032,7 @@ void SceneRayTracer::capture_glow_lights(ID3D12GraphicsCommandList* list, const 
         list->SetComputeRootShaderResourceView(kRootMatrixRing, sources.matrix_ring.base);
         list->SetComputeRootUnorderedAccessView(kRootPositions, glow_positions_->GetGPUVirtualAddress());
         list->SetComputeRootUnorderedAccessView(kRootSurfaces, glow_surfaces_->GetGPUVirtualAddress());
+        list->SetComputeRootUnorderedAccessView(kRootSurfaceUv, glow_surfaces_->GetGPUVirtualAddress());
         list->Dispatch((glow_triangles_ + 63u) / 64u, 1u, 1u);
         to_state(list, glow_positions_.Get(), glow_positions_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         lens_ready_ = lens_draws_ != 0u;
@@ -3428,6 +3493,18 @@ RtReflectScene SceneRayTracer::reflect_scene(unsigned slot) const {
     scene.positions = positions_->GetGPUVirtualAddress();
     scene.surfaces = surfaces_->GetGPUVirtualAddress();
     scene.primary = light_primary_->GetGPUVirtualAddress();
+    if (surface_uv_ && draw_texture_table_ != 0u) {
+        scene.surface_uv = surface_uv_->GetGPUVirtualAddress();
+        scene.draw_textures = draw_texture_table_;
+        scene.texture_count = static_cast<std::uint32_t>(draw_textures_.size());
+    }
+    // The art's level at a hit: by day (the stage's table, else a sun) the day model's open ground, by night
+    // its open art level.
+    {
+        const float day = stage_sun_ != nullptr && stage_sun_->day >= 0.0f ? stage_sun_->day : 1.0f;
+        const float night = night_level_ * (stage_sun_ != nullptr ? stage_sun_->ambient : 1.0f);
+        scene.hit = {std::clamp(day, 0.0f, 1.0f), night, day_environment_, 1.0f / 400.0f};
+    }
     scene.light = light_final_[slot]->GetGPUVirtualAddress();
     scene.sums = picture_valid_ ? picture_sums_->GetGPUVirtualAddress() : 0u;
     scene.sky_distance = sky_distance_;
@@ -3458,6 +3535,9 @@ void SceneRayTracer::trace_reflections(ID3D12GraphicsCommandList* list, Allocate
     // trace_lighting left the geometry readable and its per-sample primary hits (always UAV) written.
     to_state(list, positions_.Get(), positions_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     to_state(list, surfaces_.Get(), surfaces_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    if (surface_uv_) {
+        to_state(list, surface_uv_.Get(), surface_uv_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    }
     if (sky_radiance_) {
         to_state(list, sky_radiance_.Get(), sky_radiance_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     }
@@ -3554,6 +3634,7 @@ bool SceneRayTracer::transform_draws(ID3D12GraphicsCommandList* list, const RtSo
     list->SetComputeRootShaderResourceView(kRootMatrixRing, sources.matrix_ring.base);
     list->SetComputeRootUnorderedAccessView(kRootPositions, positions->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kRootSurfaces, surfaces->GetGPUVirtualAddress());
+    list->SetComputeRootUnorderedAccessView(kRootSurfaceUv, surfaces->GetGPUVirtualAddress());
     list->Dispatch((triangles + 63u) / 64u, 1u, 1u);
     const D3D12_RESOURCE_BARRIER barrier = uav_barrier(nullptr);
     list->ResourceBarrier(1u, &barrier);
@@ -3582,7 +3663,7 @@ void SceneRayTracer::flush_geometry(ID3D12GraphicsCommandList* list, const RtSou
     RtUpload frame{};
     if (table.cpu == nullptr ||
         !fill_constants(sources, allocate, allocate_context, static_cast<std::uint32_t>(draws_.size() - first), base,
-                        count, 0u, 0u, 0u, frame)) {
+                        count, 0u, 0u, surface_uv_ ? 2u : 0u, frame)) {
         ++window_.skipped;
         scene_incomplete_ = true;
         return;
@@ -3595,6 +3676,9 @@ void SceneRayTracer::flush_geometry(ID3D12GraphicsCommandList* list, const RtSou
         positions_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     }
     to_state(list, surfaces_.Get(), surfaces_state_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    if (surface_uv_) {
+        to_state(list, surface_uv_.Get(), surface_uv_state_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    }
     const D3D12_GPU_VIRTUAL_ADDRESS resident = sources.resident.base != 0u ? sources.resident.base
                                                                            : sources.vertex_ring.base;
     const int timed = begin_pass(list);
@@ -3609,6 +3693,7 @@ void SceneRayTracer::flush_geometry(ID3D12GraphicsCommandList* list, const RtSou
     list->SetComputeRootShaderResourceView(kRootMatrixRing, sources.matrix_ring.base);
     list->SetComputeRootUnorderedAccessView(kRootPositions, positions_->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kRootSurfaces, surfaces_->GetGPUVirtualAddress());
+    list->SetComputeRootUnorderedAccessView(kRootSurfaceUv, (surface_uv_ ? surface_uv_ : surfaces_)->GetGPUVirtualAddress());
     list->Dispatch((count + 63u) / 64u, 1u, 1u);
     const D3D12_RESOURCE_BARRIER barrier = uav_barrier(nullptr);
     list->ResourceBarrier(1u, &barrier);

@@ -135,6 +135,10 @@ struct RenderConfig {
     // model 6.5 and dedicated video memory; ignored elsewhere. The other rt_*
     // keys are reserved and clamped off.
     bool     ray_tracing_enabled = false;
+    // Ray tracing quality: 0 medium (lighting at a share of the pixels, 2 sky rays, one glow light per
+    // sample), 1 high (every pixel up to 4K-class pictures, 4 sky rays, two glow lights, reflections that
+    // shade what they hit off screen).
+    unsigned rt_quality          = 1;
     unsigned rt_shadow_quality   = 0;   // 0=off, 1=low, 2=medium, 3=high
     bool     rt_ao_enabled       = false;
     bool     rt_reflections      = false;

@@ -69,12 +69,19 @@ struct RtReflectScene {
     D3D12_GPU_VIRTUAL_ADDRESS water_tlas = 0;
     D3D12_GPU_VIRTUAL_ADDRESS water_positions = 0;
     D3D12_GPU_VIRTUAL_ADDRESS water_surfaces = 0;
+    // High quality: per triangle texture coordinates and colours, per draw its texture view and colour
+    // (0: none, the hits off screen stay unknown); the art's level at a hit (day share, night level, day
+    // level, texture detail per eye unit of distance).
+    D3D12_GPU_VIRTUAL_ADDRESS surface_uv = 0;
+    D3D12_GPU_VIRTUAL_ADDRESS draw_textures = 0;
+    std::uint32_t texture_count = 0;
+    std::array<float, 4> hit{};
 };
 
 class RtReflections {
 public:
     // Constants of one trace, in an upload allocation the caller makes (256-byte aligned).
-    static constexpr std::size_t kConstantsBytes = 720u;
+    static constexpr std::size_t kConstantsBytes = 752u;
     // Results kept for the sub-frames of the game frames being interpolated (the lighting's slots).
     static constexpr unsigned kSlots = 4u;
 
@@ -216,6 +223,8 @@ private:
     Microsoft::WRL::ComPtr<ID3D12RootSignature> root_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> trace_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> water_trace_pso_;
+    // The traces sample the hits' textures (shader model 6.6, the descriptor heap indexed directly).
+    bool textured_ = false;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> temporal_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> filter_a_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> filter_pso_;

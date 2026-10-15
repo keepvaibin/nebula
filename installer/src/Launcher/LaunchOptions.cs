@@ -27,8 +27,11 @@ namespace Nebula.Launcher
                 start.EnvironmentVariables.Remove(name);
             foreach (var entry in (System.Collections.IList)Json.ParseAny(File.ReadAllText(Path.Combine(app, "runtime-env.json"))))
             {
-                var pair = (Dictionary<string, object>)entry;
-                start.EnvironmentVariables[Json.Str(pair, "name")] = Json.Str(pair, "value");
+                // A nameless entry (a wrapped list, Native39's runtime-env.json) is skipped, not fatal.
+                var pair = entry as Dictionary<string, object>;
+                string name = pair != null ? Json.Str(pair, "name") : null;
+                if (string.IsNullOrEmpty(name)) continue;
+                start.EnvironmentVariables[name] = Json.Str(pair, "value") ?? "";
             }
             var env = start.EnvironmentVariables;
             env["GALAXY_NAND_ROOT"] = saves;
