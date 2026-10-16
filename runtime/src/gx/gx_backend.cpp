@@ -7123,6 +7123,13 @@ void GxBackend::note_rt_stage() {
         }
     }
     rt_materials_set_stage(name);
+    {
+        std::uint64_t h = 1469598103934665603ull;
+        for (const char* c = name; *c != 0; ++c) {
+            h = (h ^ static_cast<unsigned char>(*c)) * 1099511628211ull;
+        }
+        rt_stage_hash_ = h;
+    }
     const RtStageSun* const sun = name[0] != 0 ? rt_stage_sun(name) : nullptr;
     renderer_.rt_set_stage_sun(sun);
     if (trace_actor_lights_enabled()) [[unlikely]] {
@@ -7614,7 +7621,7 @@ void GxBackend::aim_rt_scene_lights(const std::array<float, 12>* view) {
         rt_light_key_color_ = 0xFFF6E600u;
     } else if (keying && renderer_.rt_sun_direction(target)) {
         source = 1u;
-    } else if (keying && renderer_.rt_sky_sun(target, sky_color)) {
+    } else if (keying && mode != 0u && renderer_.rt_sky_sun(target, sky_color)) {
         source = 2u;
         const auto byte = [](float v) { return static_cast<std::uint32_t>(std::clamp(v, 0.0f, 1.0f) * 255.0f + 0.5f); };
         rt_light_key_color_ = byte(sky_color[0]) << 24u | byte(sky_color[1]) << 16u | byte(sky_color[2]) << 8u;
@@ -7622,9 +7629,32 @@ void GxBackend::aim_rt_scene_lights(const std::array<float, 12>* view) {
         source = 3u;
         target = world_key->direction;
         rt_light_key_color_ = world_key->color;
-    } else if (keying && renderer_.rt_sky_key(target, sky_strength)) {
+    } else if (keying && mode != 0u && renderer_.rt_sky_key(target, sky_strength)) {
         source = 4u;
         rt_light_key_color_ = 0xFFF6E600u;   // daylight: warm white
+    } else if (keying && mode == 0u) {
+        // A stage without the game's sun or a table row: its key is the game's own world-fixed white light
+        // (700000 700000 700000, the direction it shades its characters from), decided once per stage: on when
+        // the sky detectors find a sun or a daylight sky in its first 120 scenes, fixed in the world from then
+        // on. Aimed per scene at what the camera's sky showed, the key swung with the view (user: the sun
+        // randomly changing; Rolling Gizmo re-aimed 17 times in one stop, fh72d).
+        if (rt_fixed_key_stage_ != rt_stage_hash_) {
+            rt_fixed_key_stage_ = rt_stage_hash_;
+            rt_fixed_key_on_ = false;
+            rt_fixed_key_scenes_ = 0u;
+        }
+        if (!rt_fixed_key_on_ && rt_fixed_key_scenes_ < 120u) {
+            ++rt_fixed_key_scenes_;
+            std::array<float, 3> probe{};
+            std::array<float, 3> probe_color{};
+            float probe_strength = 1.0f;
+            rt_fixed_key_on_ = renderer_.rt_sky_sun(probe, probe_color) || renderer_.rt_sky_key(probe, probe_strength);
+        }
+        if (rt_fixed_key_on_) {
+            source = 3u;
+            target = {0.57735027f, 0.57735027f, 0.57735027f};
+            rt_light_key_color_ = 0xFFF6E600u;
+        }
     }
     const bool found = source != 0u;
     const float step = mode == 2u ? 1.0f : 1.0f / kActorLightRampScenes;
@@ -10888,11 +10918,15 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             cadence_diagnostics_, cadence::TimingPhase::RenderBegin};
         {
             const RenderConfig render = get_render_config();
+            // Under ray-traced lighting the traced light replaces enhanced lighting: its de-lit characters
+            // relit by the trace washed faces out (Mario's pale face and missing eyes on the file select and the
+            // Observatory, user Native41; fe176 against fe076). Per-pixel lighting stays: the configuration every
+            // ray-traced picture was tuned and verified in.
+            const bool enhanced = render.enhanced_lighting && !renderer_.rt_lighting();
             // A lighting-mode change re-keys every lit draw's pipeline.
-            if (render.per_pixel_lighting != per_pixel_lighting_ ||
-                render.enhanced_lighting != enhanced_lighting_) {
+            if (render.per_pixel_lighting != per_pixel_lighting_ || enhanced != enhanced_lighting_) {
                 per_pixel_lighting_ = render.per_pixel_lighting;
-                enhanced_lighting_ = render.enhanced_lighting;
+                enhanced_lighting_ = enhanced;
                 shader_key_hashes_valid_ = false;
                 current_pipeline_ = nullptr;
             }

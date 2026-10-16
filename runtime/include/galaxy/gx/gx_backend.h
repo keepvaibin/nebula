@@ -812,6 +812,11 @@ private:
     [[nodiscard]] bool rt_geometry_draw() const noexcept;
     [[nodiscard]] bool rt_card_draw() const noexcept;
     [[nodiscard]] bool rt_alpha_draw() const noexcept;
+    // The loaded stage (note_rt_stage) and its fixed key (aim_rt_scene_lights): decided once per stage.
+    std::uint64_t rt_stage_hash_ = 0u;
+    std::uint64_t rt_fixed_key_stage_ = ~0ull;
+    std::uint32_t rt_fixed_key_scenes_ = 0u;
+    bool rt_fixed_key_on_ = false;
     [[nodiscard]] bool rt_glow_draw() const noexcept;
     [[nodiscard]] bool rt_late_draw() const noexcept;
     [[nodiscard]] bool rt_water_draw() const noexcept;

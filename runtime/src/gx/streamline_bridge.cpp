@@ -227,7 +227,9 @@ bool startup(const std::wstring& directory, bool frame_generation) noexcept {
         const auto installed = [&](const wchar_t* name) {
             return GetFileAttributesW((g_directory + L"\\" + name).c_str()) != INVALID_FILE_ATTRIBUTES;
         };
-        const bool dlssg = frame_generation && installed(L"sl.dlss_g.dll") && installed(L"nvngx_dlssg.dll") &&
+        // Loaded whenever it is installed, whatever the setting: frame generation then switches on and off in
+        // the settings without a restart (user: no other game needs one). Loading it does not turn it on.
+        const bool dlssg = installed(L"sl.dlss_g.dll") && installed(L"nvngx_dlssg.dll") &&
                            installed(L"sl.reflex.dll") && installed(L"sl.pcl.dll");
         if (frame_generation && !dlssg) {
             std::cerr << "[streamline] DLSS Frame Generation is not installed\n";
@@ -540,8 +542,16 @@ public:
             in.depth == nullptr || in.motion == nullptr || in.output == nullptr) {
             return false;
         }
+        // A second evaluation before the present (an interpolated sub-frame, a second scene) takes a new frame:
+        // Streamline rejects different constants under one token ("Setting different 'common' constants
+        // multiple times within the same frame", evaluate failed; user session 234656, 59 in u72).
+        static std::uint32_t evaluated = 0xFFFFFFFFu;
+        if (streamline::frame_index() == evaluated) {
+            ++g_frame_index;
+        }
         sl::FrameToken* token = nullptr;
         const std::uint32_t index = streamline::frame_index();
+        evaluated = index;
         if (g_api.get_new_frame_token(token, &index) != sl::Result::eOk || token == nullptr) {
             return failed("frame token");
         }

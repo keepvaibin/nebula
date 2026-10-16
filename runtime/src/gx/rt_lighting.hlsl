@@ -1810,8 +1810,9 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
         }
     }
 
-    // The point lights: one picked in proportion to its unshadowed light, one shadow ray to it;
-    // the estimate is that light's colour over its share.
+    // The point lights: each one's light every frame (its colour times n.l times its falloff), the
+    // strongest here shadow-tested every frame (as many as the glows' tests), the rest at their mean
+    // visibility. One picked at random per frame let them take turns (flicker; user, Native41 Observatory).
     float3 points = float3(0.0f, 0.0f, 0.0f);
     if (g_point_count != 0u) {
         float weights[8];
@@ -1828,18 +1829,33 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
             }
             total += weights[i];
         }
-        if (total > 1e-6f) {
-            float pick = sample_point(id.xy, max(g_rays, 1u) + 5u).x * total;
+        const uint point_tests = (g_flags & 1024u) != 0u ? 4u : g_rays <= 1u ? 1u : 2u;
+        float tested_total = 0.0f;
+        float seen_total = 0.0f;
+        float3 tested_light = float3(0.0f, 0.0f, 0.0f);
+        float3 all_light = float3(0.0f, 0.0f, 0.0f);
+        [unroll] for (uint i = 0u; i < 8u; ++i) {
+            if (weights[i] > 0.0f) {
+                all_light += g_points[2u * i + 1u].rgb / max(luminance(g_points[2u * i + 1u].rgb), 1e-4f) * weights[i];
+            }
+        }
+        [unroll] for (uint test = 0u; test < 4u; ++test) {
+            // The strongest light not yet tested.
             uint chosen = 0u;
+            float best = 0.0f;
             [unroll] for (uint j = 0u; j < 8u; ++j) {
-                if (weights[j] > 0.0f) {
+                if (weights[j] > best) {
+                    best = weights[j];
                     chosen = j;
-                    if (pick < weights[j]) {
-                        break;
-                    }
-                    pick -= weights[j];
                 }
             }
+            if (test >= point_tests || best <= 1e-6f) {
+                continue;
+            }
+            weights[chosen] = -weights[chosen];   // tested
+            const float3 chosen_light = g_points[2u * chosen + 1u].rgb / max(luminance(g_points[2u * chosen + 1u].rgb), 1e-4f) * best;
+            tested_total += best;
+            tested_light += chosen_light;
             const float3 to = g_points[2u * chosen].xyz - origin;
             const float span = length(to);
             RayDesc ray;
@@ -1863,23 +1879,28 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
                 }
             }
             if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
-                const float3 color = g_points[2u * chosen + 1u].rgb;
-                points = color / max(luminance(color), 1e-4f) * total;
+                points += chosen_light;
+                seen_total += best;
             }
         }
+        // The lights not tested, at the tested ones' visibility.
+        points += (all_light - tested_light) * (tested_total > 0.0f ? seen_total / tested_total : 1.0f);
     }
 
-    // The glows (lamps, cores, Lumas, star bits, lava bursts): every light within reach of this point,
-    // kept in proportion to their unshadowed light here (streams of resampled importance over the whole
-    // list: a Luma beside the surface wins over a brighter glow across the level), a shadow ray to each
-    // kept. Their light joins the point lights' (their weight divided out). High quality (g_flags 1024)
-    // keeps two (one left a crowd of star bits, a sling star and a lamp taking turns in the noise).
+    // The glows (lamps, cores, Lumas, star bits, lava bursts): every light within reach of this point adds
+    // its light every frame; the strongest here (4 on High, g_flags 1024; 2 on Medium; 1 on Low, g_rays 1) each
+    // take a shadow ray every frame, the rest their visibility's weighted mean. Picking one or two at random per
+    // frame (resampled importance) let lamps take turns: flickering lamps and shadows, a low lamp's long shadow
+    // of Rosalina in some frames, three shadows of Mario averaging in (user, Native41 Observatory).
     const uint emitters = min(s_tile_count, kTileLights);
     if (emitters != 0u) {
         float sum = 0.0f;
-        float2 pick = min(sample_point(id.xy, max(g_rays, 1u) + 7u), float2(0.99999f, 0.99999f));
-        float4 kept[2] = {float4(0.0f, 0.0f, 0.0f, 0.0f), float4(0.0f, 0.0f, 0.0f, 0.0f)};
-        float3 kept_power[2] = {float3(0.0f, 0.0f, 0.0f), float3(0.0f, 0.0f, 0.0f)};
+        float3 unshadowed = float3(0.0f, 0.0f, 0.0f);   // every light's light, unshadowed
+        float4 kept[4] = {float4(0.0f, 0.0f, 0.0f, 0.0f), float4(0.0f, 0.0f, 0.0f, 0.0f),
+                          float4(0.0f, 0.0f, 0.0f, 0.0f), float4(0.0f, 0.0f, 0.0f, 0.0f)};
+        float3 kept_light[4] = {float3(0.0f, 0.0f, 0.0f), float3(0.0f, 0.0f, 0.0f), float3(0.0f, 0.0f, 0.0f),
+                                float3(0.0f, 0.0f, 0.0f)};
+        float kept_weight[4] = {0.0f, 0.0f, 0.0f, 0.0f};
         [loop] for (uint k = 0u; k < emitters; ++k) {
             const uint c = s_tile_lights[k];
             const float4 la = asfloat(g_emitters.Load4(16u + c * kEmitStride));
@@ -1905,24 +1926,36 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
             const float x = d2 / reach2;
             const float weight = light * cone * nl * (1.0f - x * x) * (1.0f - x * x) / (d2 + la.w * la.w);
             sum += weight;
-            // One uniform number serves each stream: kept with chance weight / sum, then rescaled
-            // to stay uniform.
-            const float chance = weight / sum;
-            [unroll] for (uint s = 0u; s < 2u; ++s) {
-                if (pick[s] < chance) {
-                    kept[s] = float4(e, la.w);
-                    kept_power[s] = power;
-                    pick[s] = pick[s] / chance;
-                } else {
-                    pick[s] = (pick[s] - chance) / max(1.0f - chance, 1e-6f);
+            // Its light here: power nl / (pi (d2 + r2)), windowed to its reach.
+            const float3 here = power / (kPi * light) * (weight * g_emit.z);
+            unshadowed += here;
+            // The strongest four so far, strongest first.
+            float4 carry = float4(e, la.w);
+            float3 carry_light = here;
+            float carry_weight = weight;
+            [unroll] for (uint s = 0u; s < 4u; ++s) {
+                if (carry_weight > kept_weight[s]) {
+                    const float4 k0 = kept[s];
+                    const float3 l0 = kept_light[s];
+                    const float w0 = kept_weight[s];
+                    kept[s] = carry;
+                    kept_light[s] = carry_light;
+                    kept_weight[s] = carry_weight;
+                    carry = k0;
+                    carry_light = l0;
+                    carry_weight = w0;
                 }
             }
         }
         float3 glow = float3(0.0f, 0.0f, 0.0f);
-        const uint picks = (g_flags & 1024u) != 0u ? 2u : 1u;
-        [unroll] for (uint s = 0u; s < 2u; ++s) {
-            const float lum = luminance(kept_power[s]);
-            if (s < picks && sum > 0.0f && lum > 0.0f) {
+        const uint picks = (g_flags & 1024u) != 0u ? 4u : g_rays <= 1u ? 1u : 2u;
+        float3 tested = float3(0.0f, 0.0f, 0.0f);   // the shadow-tested lights' unshadowed light
+        float seen_weight = 0.0f;
+        float tested_weight = 0.0f;
+        [unroll] for (uint s = 0u; s < 4u; ++s) {
+            if (s < picks && kept_weight[s] > 0.0f) {
+                tested += kept_light[s];
+                tested_weight += kept_weight[s];
                 // A light behind a clear surface is reached from its inner side.
                 const bool behind = clear && dot(kept[s].xyz - p, ng) < 0.0f;
                 const float3 start = behind ? lifted - ng * (0.2f + abs(p.z) * 4e-4f) : origin;
@@ -1946,12 +1979,15 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
                     }
                 }
                 if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
-                    // power nl / (pi (d2 + r2)) (windowed to its reach) over its share of the weights,
-                    // shared among the picks.
-                    glow += kept_power[s] / (kPi * lum) * (sum * g_emit.z / float(picks));
+                    glow += kept_light[s];
+                    seen_weight += kept_weight[s];
                 }
             }
         }
+        // The lights not tested: their light at the tested ones' visibility (the occluders near this point
+        // shade them alike).
+        const float rest_seen = tested_weight > 0.0f ? seen_weight / tested_weight : 1.0f;
+        glow += (unshadowed - tested) * rest_seen;
         // Bright bursts (lava eruptions, sparks) saturate softly instead of blowing out.
         points += glow / (1.0f + luminance(glow) / 1.5f) / max(g_point_light, 1e-3f);
     }
@@ -2003,21 +2039,6 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
             const float t = query.CommittedRayT();
             float3 sent = hit_light(origin + ray.Direction * t, fallback);
             const float near = lerp(g_contact, 1.0f, saturate(t / g_contact_range));
-            // The picture shows only faces turned to the camera. The side a ray meets turned away from it (a
-            // character's underside, a ledge's soffit, a wall's back) is not the lit side the picture holds a
-            // few units off, which hit_light's depth match accepts on a small body: it sends a shaded face's
-            // light, a quarter of the scene's average. (User: penguins and animals without shadows: under a
-            // high sun their contact shade read their sunlit fronts.)
-            if (query.CommittedInstanceID() == 0u) {
-                const uint tri = query.CommittedPrimitiveIndex();
-                const float3 v0 = asfloat(g_positions.Load3(tri * 36u));
-                float3 face = cross(asfloat(g_positions.Load3(tri * 36u + 12u)) - v0,
-                                    asfloat(g_positions.Load3(tri * 36u + 24u)) - v0);
-                face = dot(face, direction) > 0.0f ? -face : face;
-                if (dot(face, -(origin + direction * t)) < 0.0f) {
-                    sent = fallback * 0.25f;
-                }
-            }
             // Distant hits fade into the open sky (the game's lighting already holds them).
             const float distant = saturate((t - 0.6f * g_range) / (0.4f * g_range));
             // A glowing surface (unlit, bright beyond its colour under the capture's emitter gain,
