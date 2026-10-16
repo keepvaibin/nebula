@@ -9,8 +9,10 @@ namespace Nebula.Launcher
 {
     /// <summary>
     /// Display and graphics keys of the runtime's config.ini (render_config.cpp).
-    /// The in-game settings menu saves the same file, so the last change made in
-    /// either place is what the next launch uses. Unknown keys are kept.
+    /// The in-game settings menu saves the same file, and a running game takes
+    /// the file's changes. Save writes only the settings changed here since Load
+    /// (SettingsFile), so a change made in the game meanwhile is kept. Unknown
+    /// keys are kept.
     /// </summary>
     internal sealed class GraphicsSettings
     {
@@ -112,39 +114,47 @@ namespace Nebula.Launcher
             if (values.TryGetValue("enhanced_mipmaps", out mipmaps)) settings.GeneratedMipmaps = mipmaps.Trim() != "0";
             if (values.TryGetValue("per_pixel_lighting", out lighting)) settings.PerPixelLighting = lighting.Trim() != "0";
             if (values.TryGetValue("hud_output_resolution", out hud)) settings.HudOutputResolution = hud.Trim() != "0";
+            settings.read = SettingsFile.Snapshot(settings.Values());
             return settings;
+        }
+
+        // The values as Load read them (or as the last Save wrote them).
+        private Dictionary<string, string> read;
+
+        private List<KeyValuePair<string, string>> Values()
+        {
+            Func<int, string> n = value => value.ToString(CultureInfo.InvariantCulture);
+            return new List<KeyValuePair<string, string>>
+            {
+                new KeyValuePair<string, string>("display_mode", n(DisplayMode)),
+                new KeyValuePair<string, string>("monitor", Monitor ?? ""),
+                new KeyValuePair<string, string>("window_width", n(WindowWidth)),
+                new KeyValuePair<string, string>("window_height", n(WindowHeight)),
+                new KeyValuePair<string, string>("fullscreen_width", n(FullscreenWidth)),
+                new KeyValuePair<string, string>("fullscreen_height", n(FullscreenHeight)),
+                new KeyValuePair<string, string>("fullscreen_refresh_hz", n(FullscreenRefresh)),
+                new KeyValuePair<string, string>("aspect", n(Aspect)),
+                new KeyValuePair<string, string>("efb_scale", n(EfbScale)),
+                new KeyValuePair<string, string>("internal_follow_window", MatchOutput ? "1" : "0"),
+                new KeyValuePair<string, string>("vsync_interval", VSync ? "1" : "0"),
+                new KeyValuePair<string, string>("max_fps", n(FrameRate)),
+                new KeyValuePair<string, string>("aa", n(AntiAliasing)),
+                new KeyValuePair<string, string>("smaa_quality", n(Quality)),
+                new KeyValuePair<string, string>("upscaler", n(Upscaler)),
+                new KeyValuePair<string, string>("temporal_quality", n(TemporalQuality)),
+                new KeyValuePair<string, string>("sharpness", n(Sharpness)),
+                new KeyValuePair<string, string>("anisotropic_filtering", n(Anisotropy[Math.Max(0, Math.Min(TextureFilter, Anisotropy.Length - 1))])),
+                new KeyValuePair<string, string>("enhanced_mipmaps", GeneratedMipmaps ? "1" : "0"),
+                new KeyValuePair<string, string>("per_pixel_lighting", PerPixelLighting ? "1" : "0"),
+                new KeyValuePair<string, string>("hud_output_resolution", HudOutputResolution ? "1" : "0"),
+            };
         }
 
         public void Save()
         {
-            var file = Read(ConfigPath);
-            var lines = file.Item1;
-            Set(lines, "display_mode", DisplayMode);
-            SetText(lines, "monitor", Monitor ?? "");
-            Set(lines, "window_width", WindowWidth);
-            Set(lines, "window_height", WindowHeight);
-            Set(lines, "fullscreen_width", FullscreenWidth);
-            Set(lines, "fullscreen_height", FullscreenHeight);
-            Set(lines, "fullscreen_refresh_hz", FullscreenRefresh);
-            Set(lines, "aspect", Aspect);
-            Set(lines, "efb_scale", EfbScale);
-            Set(lines, "internal_follow_window", MatchOutput ? 1 : 0);
-            Set(lines, "vsync_interval", VSync ? 1 : 0);
-            Set(lines, "max_fps", FrameRate);
-            Set(lines, "aa", AntiAliasing);
-            Set(lines, "smaa_quality", Quality);
-            Set(lines, "upscaler", Upscaler);
-            Set(lines, "temporal_quality", TemporalQuality);
-            Set(lines, "sharpness", Sharpness);
-            Set(lines, "anisotropic_filtering", Anisotropy[Math.Max(0, Math.Min(TextureFilter, Anisotropy.Length - 1))]);
-            Set(lines, "enhanced_mipmaps", GeneratedMipmaps ? 1 : 0);
-            Set(lines, "per_pixel_lighting", PerPixelLighting ? 1 : 0);
-            Set(lines, "hud_output_resolution", HudOutputResolution ? 1 : 0);
-            Directory.CreateDirectory(Path.GetDirectoryName(ConfigPath));
-            string temp = ConfigPath + ".tmp";
-            File.WriteAllText(temp, string.Join("\n", lines) + "\n", new UTF8Encoding(false));
-            if (File.Exists(ConfigPath)) File.Replace(temp, ConfigPath, null);
-            else File.Move(temp, ConfigPath);
+            var values = Values();
+            SettingsFile.Save(ConfigPath, values, read);
+            read = SettingsFile.Snapshot(values);
         }
 
         private static Tuple<List<string>, Dictionary<string, string>> Read(string path)
@@ -172,26 +182,6 @@ namespace Nebula.Launcher
                 !int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out value) ||
                 value < 0 || value >= count) return fallback;
             return value;
-        }
-
-        private static void Set(List<string> lines, string key, int value)
-        {
-            SetText(lines, key, value.ToString(CultureInfo.InvariantCulture));
-        }
-
-        private static void SetText(List<string> lines, string key, string value)
-        {
-            string line = key + "=" + value;
-            for (int i = 0; i < lines.Count; i++)
-            {
-                int equals = lines[i].IndexOf('=');
-                if (equals > 0 && string.Equals(lines[i].Substring(0, equals).Trim(), key, StringComparison.OrdinalIgnoreCase))
-                {
-                    lines[i] = line;
-                    return;
-                }
-            }
-            lines.Add(line);
         }
     }
 }

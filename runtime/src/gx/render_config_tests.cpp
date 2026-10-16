@@ -205,6 +205,44 @@ int main() {
             passed &= expect(galaxy::gx::get_render_config().max_fps == value.max_fps,
                 "Unicode config paths reload the exact file that was saved");
         }
+        {
+            // Nebula Settings saves config.ini while the game runs: a newer file is read over the live
+            // settings, and the game's own save is not read back.
+            const auto stamp = [&path](std::uint64_t file_time) {
+                const HANDLE file = CreateFileW(path.c_str(), FILE_WRITE_ATTRIBUTES,
+                    FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr);
+                FILETIME time{static_cast<DWORD>(file_time), static_cast<DWORD>(file_time >> 32u)};
+                const bool ok = file != INVALID_HANDLE_VALUE && SetFileTime(file, nullptr, nullptr, &time) != FALSE;
+                if (file != INVALID_HANDLE_VALUE) CloseHandle(file);
+                return ok;
+            };
+            {
+                std::ofstream file(path, std::ios::binary | std::ios::trunc);
+                file << "aa=1\nsharpness=20\n";
+            }
+            passed &= expect(stamp(133'000'000'000'000'000ull), "config fixture time set");
+            galaxy::gx::set_render_config(galaxy::gx::RenderConfig{});
+            galaxy::gx::load_render_config_from_file();
+            passed &= expect(!galaxy::gx::reload_render_config_if_changed(), "an unchanged config.ini is not re-read");
+            galaxy::gx::RenderConfig live = galaxy::gx::get_render_config();
+            live.per_pixel_lighting = true;
+            galaxy::gx::set_render_config(live);
+            {
+                std::ofstream file(path, std::ios::binary | std::ios::trunc);
+                file << "aa=3\nsharpness=50\n";
+            }
+            passed &= expect(stamp(133'000'000'000'000'000ull), "config fixture time kept");
+            passed &= expect(!galaxy::gx::reload_render_config_if_changed() &&
+                    galaxy::gx::get_render_config().aa_mode == 1u,
+                "the same last-write time keeps the live settings");
+            passed &= expect(stamp(133'000'000'100'000'000ull), "config fixture time advanced");
+            passed &= expect(galaxy::gx::reload_render_config_if_changed(), "a newer config.ini is re-read");
+            const galaxy::gx::RenderConfig reloaded = galaxy::gx::get_render_config();
+            passed &= expect(reloaded.aa_mode == 3u && reloaded.sharpness == 50u && reloaded.per_pixel_lighting,
+                "the file's settings apply over the live ones, and a setting it does not name keeps its value");
+            passed &= expect(galaxy::gx::save_render_config_to_file() && !galaxy::gx::reload_render_config_if_changed(),
+                "the game's own save is not read back");
+        }
         std::filesystem::remove_all(root);
     }
 

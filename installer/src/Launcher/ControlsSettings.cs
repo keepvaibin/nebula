@@ -406,9 +406,15 @@ namespace Nebula.Launcher
                 if (key == "controls_version") { int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out version); continue; }
                 settings.Apply(key, value);
             }
-            if (lines.Length != 0 && version < ControlsVersion) settings.MigrateLegacy(version);
+            bool migrated = lines.Length != 0 && version < ControlsVersion;
+            if (migrated) settings.MigrateLegacy(version);
+            // A migrated file is written whole, so it never mixes keys of two controls versions.
+            settings.read = migrated ? null : SettingsFile.Snapshot(settings.Lines());
             return settings;
         }
+
+        // The values as Load read them (or as the last Save wrote them); null writes every key.
+        private Dictionary<string, string> read;
 
         private void Apply(string key, string value)
         {
@@ -511,26 +517,12 @@ namespace Nebula.Launcher
             return lines;
         }
 
-        /// <summary>Replaces this model's keys and keeps every other line.</summary>
+        /// <summary>Writes the keys changed here since Load (SettingsFile) and keeps every other line.</summary>
         public void Save()
         {
-            var lines = File.Exists(SettingsPath) ? new List<string>(File.ReadAllLines(SettingsPath)) : new List<string>();
-            foreach (var pair in Lines())
-            {
-                string line = pair.Key + "=" + pair.Value;
-                bool found = false;
-                for (int i = 0; i < lines.Count && !found; i++)
-                {
-                    int eq = lines[i].IndexOf('=');
-                    if (eq > 0 && lines[i].Substring(0, eq).Trim() == pair.Key) { lines[i] = line; found = true; }
-                }
-                if (!found) lines.Add(line);
-            }
-            Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath));
-            string temp = SettingsPath + ".tmp";
-            File.WriteAllText(temp, string.Join("\n", lines) + "\n", new UTF8Encoding(false));
-            if (File.Exists(SettingsPath)) File.Replace(temp, SettingsPath, null);
-            else File.Move(temp, SettingsPath);
+            var values = Lines();
+            SettingsFile.Save(SettingsPath, values, read);
+            read = SettingsFile.Snapshot(values);
         }
     }
 

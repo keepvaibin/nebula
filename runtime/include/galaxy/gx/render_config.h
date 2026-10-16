@@ -287,4 +287,9 @@ void load_render_config_from_file();
 // are real and exposed.
 bool save_render_config_to_file();
 
+// When config.ini changed on disk since this process last read or wrote it
+// (Nebula Settings saved it while the game runs), reads it over the live
+// settings, as the in-game menu would apply them, and returns true.
+bool reload_render_config_if_changed();
+
 } // namespace galaxy::gx

@@ -361,6 +361,20 @@ namespace {
 // Last-write time of the settings file the audio keys were last read from.
 std::uint64_t s_audio_settings_write_time = 0u;
 
+// A running session never changes its input source because the file changed: a real Wii Remote, or a
+// controller that is not connected, would fail it. The source the file names (Nebula Settings may have saved
+// a new one) is written back by the game's saves unless the game changed its own source since the file was
+// last read or written. Guarded by s_settings_lock.
+RuntimeInputMode s_file_input_mode = RuntimeInputMode::Auto;
+RuntimeInputMode s_input_mode_at_sync = RuntimeInputMode::Auto;
+
+void record_input_mode_sync(RuntimeInputMode file_mode, RuntimeInputMode live_mode) {
+    AcquireSRWLockExclusive(&s_settings_lock);
+    s_file_input_mode = file_mode;
+    s_input_mode_at_sync = live_mode;
+    ReleaseSRWLockExclusive(&s_settings_lock);
+}
+
 std::uint64_t settings_file_write_time(const std::filesystem::path& path) noexcept {
     WIN32_FILE_ATTRIBUTE_DATA data{};
     if (path.empty() ||
@@ -379,9 +393,11 @@ void load_runtime_settings_from_file() {
     const std::filesystem::path path = settings_path();
     const std::uint64_t write_time = settings_file_write_time(path);
     parse_settings_file(settings, controls);
+    const RuntimeInputMode file_mode = sanitize_settings(settings).input_mode;
     apply_env_overrides(settings);
     set_runtime_settings(settings);
     input::set_controls_config(controls);
+    record_input_mode_sync(file_mode, get_runtime_settings().input_mode);
     s_audio_settings_write_time = write_time;
 }
 
@@ -394,6 +410,7 @@ bool reload_runtime_audio_settings_if_changed() noexcept {
         RuntimeSettings parsed{};
         input::ControlsConfig controls = input::default_controls_config();
         parse_settings_file(parsed, controls);
+        const RuntimeInputMode file_mode = sanitize_settings(parsed).input_mode;
         apply_env_overrides(parsed);
         RuntimeSettings settings = get_runtime_settings();
         settings.audio = parsed.audio;
@@ -401,6 +418,7 @@ bool reload_runtime_audio_settings_if_changed() noexcept {
         settings.language = parsed.language;
         set_runtime_settings(settings);
         input::set_controls_config(controls);
+        record_input_mode_sync(file_mode, settings.input_mode);
         s_audio_settings_write_time = write_time;
         return true;
     } catch (...) {
@@ -415,10 +433,14 @@ bool save_runtime_settings_to_file() {
         if (path.empty()) {
             return false;
         }
+        AcquireSRWLockShared(&s_settings_lock);
+        const RuntimeInputMode input_mode =
+            settings.input_mode == s_input_mode_at_sync ? s_file_input_mode : settings.input_mode;
+        ReleaseSRWLockShared(&s_settings_lock);
 
         std::ostringstream contents;
         contents.imbue(std::locale::classic());
-        contents << "input_mode=" << runtime_input_mode_name(settings.input_mode)
+        contents << "input_mode=" << runtime_input_mode_name(input_mode)
                  << '\n'
                  << "controls_version=" << input::kControlsVersion << '\n'
                  << std::setprecision(std::numeric_limits<float>::max_digits10)
@@ -434,7 +456,11 @@ bool save_runtime_settings_to_file() {
         if (!contents) {
             return false;
         }
-        return io::write_text_file_atomically(path, contents.str());
+        if (!io::write_text_file_atomically(path, contents.str())) {
+            return false;
+        }
+        record_input_mode_sync(input_mode, settings.input_mode);
+        return true;
     } catch (...) {
         return false;
     }

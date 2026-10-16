@@ -822,6 +822,35 @@ void revert_native_settings_draft() {
     std::cerr << "[settings] reverted\n";
 }
 
+// Nebula Settings can save config.ini while the game runs. The game takes the file's settings as the menu's
+// apply does, so the next save from the game writes them back rather than over them. Checked twice a second,
+// and not while the menu is open: its draft and display confirmation belong to the settings it opened with, and
+// a change made meanwhile lands once it closes.
+void poll_render_config_file() {
+    static std::uint64_t s_next_check_ms = 0u;
+    const std::uint64_t now = GetTickCount64();
+    if (now < s_next_check_ms) {
+        return;
+    }
+    s_next_check_ms = now + 500u;
+    const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
+    if (s_native_settings_visible.load(std::memory_order_relaxed)) {
+        return;
+    }
+    const RenderConfig before = get_render_config();
+    if (!reload_render_config_if_changed()) {
+        return;
+    }
+    RenderConfig after = get_render_config();
+    if (after.internal_follow_window) {
+        // The window decides the scale, as when the menu turns Match Output on.
+        after.efb_scale = before.efb_scale;
+        set_render_config(after);
+        s_follow_window_rearm.store(true, std::memory_order_release);
+    }
+    std::cerr << "[settings] config.ini changed outside the game; applied\n";
+}
+
 // Every overlay change is logged with its new row text.
 void adjust_native_setting_unlogged(int delta);
 
@@ -2109,6 +2138,10 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 render.window_height = static_cast<unsigned>(client.bottom);
                 set_render_config(render);
                 s_native_settings_dirty.store(true, std::memory_order_release);
+                // Saved now, not when the game closes: Nebula Settings reads the file meanwhile.
+                if (!s_native_settings_visible.load(std::memory_order_relaxed)) {
+                    flush_native_settings_if_dirty();
+                }
             }
         }
     }
@@ -5672,6 +5705,7 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
     // with no in-flight command-list recording on this renderer. Contains
     // its own full GPU-idle wait, so it belongs before any per-slot state
     // below is touched.
+    poll_render_config_file();
     reconcile_display_state();
     apply_pending_resize();
     follow_window_internal_resolution();

@@ -7,7 +7,8 @@ namespace Nebula.Launcher
 {
     /// <summary>
     /// General keys of the runtime's runtime_settings.ini (runtime_settings.cpp). The in-game GENERAL page
-    /// saves the same file; unknown keys are kept.
+    /// saves the same file, and a running game takes the file's text speed (and its language at the next
+    /// start). Save writes only the settings changed here since Load (SettingsFile); unknown keys are kept.
     /// </summary>
     internal sealed class GeneralSettings
     {
@@ -45,31 +46,27 @@ namespace Nebula.Launcher
                     if (index >= 0) settings.Language = index;
                 }
             }
+            settings.read = SettingsFile.Snapshot(settings.Values());
             return settings;
+        }
+
+        // The values as Load read them (or as the last Save wrote them).
+        private Dictionary<string, string> read;
+
+        private List<KeyValuePair<string, string>> Values()
+        {
+            return new List<KeyValuePair<string, string>>
+            {
+                new KeyValuePair<string, string>("text_speed", Math.Max(1, Math.Min(TextSpeed, 3)).ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                new KeyValuePair<string, string>("language", LanguageKeys[Math.Max(0, Math.Min(Language, LanguageKeys.Length - 1))]),
+            };
         }
 
         public void Save()
         {
-            string path = AudioSettings.SettingsPath;
-            var lines = File.Exists(path) ? new List<string>(File.ReadAllLines(path)) : new List<string>();
-            Set(lines, "text_speed", Math.Max(1, Math.Min(TextSpeed, 3)).ToString());
-            Set(lines, "language", LanguageKeys[Math.Max(0, Math.Min(Language, LanguageKeys.Length - 1))]);
-            Directory.CreateDirectory(Path.GetDirectoryName(path));
-            string temp = path + ".tmp";
-            File.WriteAllText(temp, string.Join("\n", lines) + "\n", new UTF8Encoding(false));
-            if (File.Exists(path)) File.Replace(temp, path, null);
-            else File.Move(temp, path);
-        }
-
-        private static void Set(List<string> lines, string key, string value)
-        {
-            string line = key + "=" + value;
-            for (int i = 0; i < lines.Count; i++)
-            {
-                int equals = lines[i].IndexOf('=');
-                if (equals > 0 && lines[i].Substring(0, equals).Trim() == key) { lines[i] = line; return; }
-            }
-            lines.Add(line);
+            var values = Values();
+            SettingsFile.Save(AudioSettings.SettingsPath, values, read);
+            read = SettingsFile.Snapshot(values);
         }
     }
 }

@@ -241,6 +241,41 @@ namespace Nebula.Launcher
             File.Delete(path);
         }
 
+        // Nebula Settings open while the game runs: the in-game menu saves the same files. Settings write back
+        // only what was changed in them, so the game's changes made meanwhile stay.
+        static void SharedFileCases()
+        {
+            string runtime = AudioSettings.SettingsPath, config = GraphicsSettings.ConfigPath;
+            File.WriteAllText(runtime, "input_mode=auto\naudio_master_gain=1\naudio_music_gain=1\ntext_speed=1\nlanguage=english\n");
+            File.WriteAllText(config, "aa=0\nsharpness=0\nper_pixel_lighting=0\nwindow_width=1280\nwindow_height=720\n");
+            var general = GeneralSettings.Load();
+            var audio = AudioSettings.Load();
+            var graphics = GraphicsSettings.Load();
+            // The game: 2x text, music at half, SMAA and a window dragged to 1600x900.
+            File.WriteAllText(runtime, "input_mode=auto\naudio_master_gain=1\naudio_music_gain=0.5\ntext_speed=2\nlanguage=english\n");
+            File.WriteAllText(config, "aa=1\nsharpness=0\nper_pixel_lighting=0\nwindow_width=1600\nwindow_height=900\n");
+            general.Language = 1;
+            general.Save();
+            audio.Percent[0] = 80;
+            audio.Save();
+            graphics.Sharpness = 30;
+            graphics.Save();
+            string saved = File.ReadAllText(runtime), savedConfig = File.ReadAllText(config);
+            Check(saved.Contains("language=french") && saved.Contains("text_speed=2") &&
+                  saved.Contains("audio_master_gain=0.8") && saved.Contains("audio_music_gain=0.5"),
+                  "runtime settings changed in the game meanwhile are kept beside those changed here");
+            Check(savedConfig.Contains("sharpness=30") && savedConfig.Contains("aa=1") &&
+                  savedConfig.Contains("window_width=1600") && savedConfig.Contains("window_height=900"),
+                  "graphics changed in the game meanwhile are kept beside those changed here");
+            // A second save writes nothing it did not change since the first.
+            File.WriteAllText(config, savedConfig.Replace("aa=1", "aa=3"));
+            graphics.Save();
+            Check(File.ReadAllText(config).Contains("aa=3") && File.ReadAllText(config).Contains("sharpness=30"),
+                  "saving again keeps a change the game made after the first save");
+            File.Delete(runtime);
+            File.Delete(config);
+        }
+
         static void SaveArchiveCases(string scratch)
         {
             string saves = NebulaPaths.Saves, parent = Path.GetDirectoryName(saves);
@@ -366,6 +401,7 @@ namespace Nebula.Launcher
                 string outDir = args[0];
                 WindowSizeCases();
                 GeneralCases();
+                SharedFileCases();
                 SaveArchiveCases(outDir);
                 Application.EnableVisualStyles();
                 RecordingNoticeCases(outDir);

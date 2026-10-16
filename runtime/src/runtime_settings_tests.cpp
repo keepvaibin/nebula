@@ -539,6 +539,16 @@ int main() {
                 galaxy::get_runtime_settings().input_mode ==
                     galaxy::RuntimeInputMode::KeyboardMouse,
             "reload applies audio gains only");
+        // The input source Nebula Settings saved meanwhile is the next start's, and the game's save keeps it.
+        passed &= expect(galaxy::save_runtime_settings_to_file() &&
+                read_text(settings_path).find("input_mode=controller\n") != std::string::npos,
+            "a save keeps the input source the file names");
+        galaxy::RuntimeSettings changed = galaxy::get_runtime_settings();
+        changed.input_mode = galaxy::RuntimeInputMode::Auto;
+        galaxy::set_runtime_settings(changed);
+        passed &= expect(galaxy::save_runtime_settings_to_file() &&
+                read_text(settings_path).find("input_mode=auto\n") != std::string::npos,
+            "an input source chosen in the game is saved");
     }
 
     write_text(settings_path, "text_speed=3\n");

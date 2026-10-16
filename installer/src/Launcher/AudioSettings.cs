@@ -8,8 +8,9 @@ namespace Nebula.Launcher
 {
     /// <summary>
     /// Volume keys of the runtime's runtime_settings.ini (runtime_settings.cpp),
-    /// as percentages. The in-game AUDIO page saves the same file; unknown keys
-    /// are kept.
+    /// as percentages. The in-game AUDIO page saves the same file, and a running
+    /// game takes the file's volumes. Save writes only the volumes changed here
+    /// since Load (SettingsFile); unknown keys are kept.
     /// </summary>
     internal sealed class AudioSettings
     {
@@ -37,28 +38,26 @@ namespace Nebula.Launcher
                     !float.IsNaN(gain) && !float.IsInfinity(gain))
                     settings.Percent[index] = (int)Math.Round(Math.Max(0f, Math.Min(gain, 2f)) * 100f);
             }
+            settings.read = SettingsFile.Snapshot(settings.Values());
             return settings;
+        }
+
+        // The values as Load read them (or as the last Save wrote them).
+        private Dictionary<string, string> read;
+
+        private List<KeyValuePair<string, string>> Values()
+        {
+            var values = new List<KeyValuePair<string, string>>();
+            for (int k = 0; k < Keys.Length; k++)
+                values.Add(new KeyValuePair<string, string>(Keys[k], (Percent[k] / 100f).ToString("R", CultureInfo.InvariantCulture)));
+            return values;
         }
 
         public void Save()
         {
-            var lines = File.Exists(SettingsPath) ? new List<string>(File.ReadAllLines(SettingsPath)) : new List<string>();
-            for (int k = 0; k < Keys.Length; k++)
-            {
-                string line = Keys[k] + "=" + (Percent[k] / 100f).ToString("R", CultureInfo.InvariantCulture);
-                bool found = false;
-                for (int i = 0; i < lines.Count && !found; i++)
-                {
-                    int equals = lines[i].IndexOf('=');
-                    if (equals > 0 && lines[i].Substring(0, equals).Trim() == Keys[k]) { lines[i] = line; found = true; }
-                }
-                if (!found) lines.Add(line);
-            }
-            Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath));
-            string temp = SettingsPath + ".tmp";
-            File.WriteAllText(temp, string.Join("\n", lines) + "\n", new UTF8Encoding(false));
-            if (File.Exists(SettingsPath)) File.Replace(temp, SettingsPath, null);
-            else File.Move(temp, SettingsPath);
+            var values = Values();
+            SettingsFile.Save(SettingsPath, values, read);
+            read = SettingsFile.Snapshot(values);
         }
     }
 }

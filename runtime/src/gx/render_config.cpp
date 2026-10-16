@@ -32,6 +32,17 @@ static RenderConfig s_config{};
 static unsigned s_next_start_efb_scale = 1u;
 static RenderFeatureCaps s_feature_caps{};
 static SRWLOCK      s_lock  = SRWLOCK_INIT;
+// Last-write time of config.ini when this process last read or wrote it.
+static std::uint64_t s_config_write_time = 0u;
+
+static std::uint64_t file_write_time(const std::filesystem::path& path) noexcept {
+    WIN32_FILE_ATTRIBUTE_DATA data{};
+    if (path.empty() || !GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &data)) {
+        return 0u;
+    }
+    return (static_cast<std::uint64_t>(data.ftLastWriteTime.dwHighDateTime) << 32u) |
+        data.ftLastWriteTime.dwLowDateTime;
+}
 
 // ---------------------------------------------------------------------------
 // Minimal key=value INI parser
@@ -518,6 +529,7 @@ void load_render_config_from_file() {
     RenderConfig cfg = get_render_config();
 
     const std::filesystem::path path = config_path();
+    const std::uint64_t write_time = file_write_time(path);
     if (!path.empty()) {
         FILE* f = nullptr;
         if (_wfopen_s(&f, path.c_str(), L"r") == 0 && f != nullptr) {
@@ -535,7 +547,38 @@ void load_render_config_from_file() {
     AcquireSRWLockExclusive(&s_lock);
     s_config = cfg;
     s_next_start_efb_scale = cfg.efb_scale;
+    s_config_write_time = write_time;
     ReleaseSRWLockExclusive(&s_lock);
+}
+
+bool reload_render_config_if_changed() {
+    const std::filesystem::path path = config_path();
+    const std::uint64_t write_time = file_write_time(path);
+    AcquireSRWLockShared(&s_lock);
+    const std::uint64_t known = s_config_write_time;
+    ReleaseSRWLockShared(&s_lock);
+    if (write_time == 0u || write_time == known) {
+        return false;
+    }
+    RenderConfig cfg = get_render_config();
+    FILE* f = nullptr;
+    if (_wfopen_s(&f, path.c_str(), L"r") != 0 || f == nullptr) {
+        return false;  // Being replaced; the next check reads it.
+    }
+    parse_ini(f, cfg);
+    std::fclose(f);
+    apply_env_overrides(cfg);
+    if (!experimental_frame_rate_decouple_allowed()) {
+        cfg.frame_rate_decouple = false;
+    }
+    clamp_unimplemented_features(cfg);
+
+    AcquireSRWLockExclusive(&s_lock);
+    s_config = cfg;
+    s_next_start_efb_scale = cfg.efb_scale;
+    s_config_write_time = write_time;
+    ReleaseSRWLockExclusive(&s_lock);
+    return true;
 }
 
 bool save_render_config_to_file() {
@@ -589,7 +632,15 @@ bool save_render_config_to_file() {
     if (!contents) {
         return false;
     }
-    return io::write_text_file_atomically(path, contents.str());
+    if (!io::write_text_file_atomically(path, contents.str())) {
+        return false;
+    }
+    // This process's own write is not a change to take back in.
+    const std::uint64_t write_time = file_write_time(path);
+    AcquireSRWLockExclusive(&s_lock);
+    s_config_write_time = write_time;
+    ReleaseSRWLockExclusive(&s_lock);
+    return true;
 }
 
 }  // namespace galaxy::gx
