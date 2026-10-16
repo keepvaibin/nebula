@@ -202,9 +202,6 @@ namespace Nebula.Setup
             // error. This check is the only place where that failure can be attributed.
             if (RuntimeNativeIsa == "AVX2" && !HostSupportsAvx2())
                 problems.Add("This package's runtime was built for AVX2, which this CPU does not expose. Use a package built with -NativeIsa SSE2, or install on a CPU with AVX2.");
-            ulong memory = NativeMethods.TotalPhysicalMemory();
-            if (memory < MinimumMemory)
-                problems.Add("Nebula needs 8 GB of RAM (this PC has " + FileUtil.FormatBytes((long)memory) + ").");
             try
             {
                 string fs = FileUtil.FileSystemName(installRoot);
@@ -216,6 +213,21 @@ namespace Nebula.Setup
             }
             catch (Exception error) { problems.Add("Cannot inspect the install folder: " + error.Message); }
             return problems;
+        }
+
+        /// <summary>
+        /// Less RAM than Nebula is designed for does not stop an install: the compile runs one job at a time
+        /// (DefaultCompileJobs). Setup asks first, with this text; null when the PC has enough.
+        /// </summary>
+        public static string LowMemoryWarning()
+        {
+            ulong memory = NativeMethods.TotalPhysicalMemory();
+            if (memory >= MinimumMemory) return null;
+            return "This PC has " + FileUtil.FormatBytes((long)memory) + " of RAM. Nebula is designed for 8 GB or more.\r\n\r\n" +
+                "Installing with less is experimental: compiling the game takes much longer, and the game may stutter, " +
+                "run slowly or close unexpectedly.\r\n\r\n" +
+                "If you continue, you do so at your own risk. Nebula's developer is not responsible for anything that " +
+                "happens while the game runs on this PC.";
         }
 
         /// <summary>One compiler per thread, limited to about 1 GB of RAM each beyond 3 GB for Windows.</summary>
@@ -232,6 +244,8 @@ namespace Nebula.Setup
         {
             Log("Nebula Setup " + BuildInfo.Version + " (" + BuildInfo.Commit + "), " + request.Mode);
             Log("Install folder: " + layout.Root);
+            if (LowMemoryWarning() != null)
+                Log("RAM: " + FileUtil.FormatBytes((long)NativeMethods.TotalPhysicalMemory()) + ", below the 8 GB Nebula is designed for; installing as experimental.");
             Directory.CreateDirectory(layout.Root);
             Directory.CreateDirectory(layout.Staging);
             CleanAbandonedStaging();

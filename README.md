@@ -55,7 +55,8 @@ it is the original game code, translated instruction by instruction by the recom
 - Super Mario Galaxy, USA (RMGE01), revision 0, as an ISO, RVZ or extracted folder
 - Windows 10 (version 1803 or newer) or Windows 11, 64-bit
 - A GPU with Direct3D 12 support
-- 8 GB of RAM; 16 GB of free disk space during installation, about 5.5 GB afterwards
+- 8 GB of RAM (Setup also installs on less, as an experimental install at your own risk);
+  16 GB of free disk space during installation, about 5.5 GB afterwards
 - An internet connection for the first installation
 
 The least powerful system tested so far, an Intel Core Ultra 9 185H with its integrated

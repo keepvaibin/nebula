@@ -261,6 +261,10 @@ namespace Nebula.Setup
             }
             var problems = InstallEngine.CheckRequirements(layout.Root.Length > 3 ? Path.GetDirectoryName(layout.Root) ?? layout.Root : layout.Root);
             if (problems.Count > 0) { Fail(string.Join("\r\n", problems)); return; }
+            string lowMemory = InstallEngine.LowMemoryWarning();
+            if (lowMemory != null && MessageBox.Show(this, lowMemory + "\r\n\r\nInstall anyway?", "Nebula Setup",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
+                return;
 
             var request = new InstallRequest
             {
