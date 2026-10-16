@@ -7654,12 +7654,9 @@ fn emit_direct_guest_call_with_exact_fpu(
                 "    galaxy::trace_function_async_gameplay_pointer_consumer(services, context, memory);\n",
             );
         }
-        // LodCtrl::update's camera distance (f1): the runtime scales it with
-        // the draw distance, moving the middle/low model switch (and the
-        // host-synced shadows that end there) outward.
-        if target == 0x8016_6C6C && pc == 0x8016_6B1C {
-            output.push_str(&site_hook_call(pc, "LodDistance", 0));
-        }
+        // No LodDistance hook after LodCtrl::update's distance call: which
+        // model shows is game state, so nothing may change it (the runtime
+        // keeps a no-op for modules generated before 1.0.1).
         Ok(())
     }
 

@@ -505,7 +505,7 @@ enum class SiteHookKind : std::uint32_t {
     EfbScreenWidth = 12,
     LayoutVerticalFit = 13,     // argument: lane | inverse << 8
     HomeGeometry = 14,          // argument: kind | lane << 8
-    LodDistance = 15,           // f1 holds LodCtrl::calcDistanceToCamera's result
+    LodDistance = 15,           // 1.0.0 modules only; a no-op (see site_hooks.cpp)
     MultiSceneModel = 16,       // r31 MultiSceneActor, r3 its J3DModel
 };
 
