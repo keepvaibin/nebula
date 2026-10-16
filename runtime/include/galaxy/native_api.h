@@ -19,6 +19,7 @@
 #endif
 
 #include "galaxy/ppc_float.h"
+#include "galaxy/fused_multiply_add.h"
 
 #if defined(_WIN32)
 #if defined(GALAXY_BUILDING_GAME_MODULE)
@@ -10412,7 +10413,7 @@ inline void native_psmtx_concat_804B5F3C(
         }
 
         const auto madd = [](float multiplicand, float scalar, float addend) {
-            return std::fma(multiplicand, scalar, addend);
+            return galaxy::fused_multiply_add(multiplicand, scalar, addend);
         };
         const auto multiply = [](float multiplicand, float scalar) {
             return multiplicand * scalar;
@@ -14234,8 +14235,8 @@ inline bool native_jpa_draw_particle_fast_path(
     };
     const auto normalize = [](const Vec3& value) {
         const float length_sq =
-            std::fma(value.x, value.x,
-                     std::fma(value.y, value.y, value.z * value.z));
+            galaxy::fused_multiply_add(value.x, value.x,
+                     galaxy::fused_multiply_add(value.y, value.y, value.z * value.z));
         const float inv_length = 1.0F / std::sqrt(length_sq);
         return Vec3{
             value.x * inv_length,
@@ -14311,22 +14312,22 @@ inline bool native_jpa_draw_particle_fast_path(
     }
 
     const auto affine_dot3 = [&](std::uint32_t row, std::uint32_t column) {
-        return std::fma(
+        return galaxy::fused_multiply_add(
             local[8u + column],
             base[row * 4u + 2u],
-            std::fma(
+            galaxy::fused_multiply_add(
                 local[4u + column],
                 base[row * 4u + 1u],
                 local[column] * base[row * 4u]));
     };
     const auto affine_dot4 = [&](std::uint32_t row) {
-        return std::fma(
+        return galaxy::fused_multiply_add(
             1.0F,
             base[row * 4u + 3u],
-            std::fma(
+            galaxy::fused_multiply_add(
                 local[11u],
                 base[row * 4u + 2u],
-                std::fma(
+                galaxy::fused_multiply_add(
                     local[7u],
                     base[row * 4u + 1u],
                     local[3u] * base[row * 4u])));

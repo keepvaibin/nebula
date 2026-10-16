@@ -71,6 +71,15 @@ try {
     [IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 4), (New-Object Text.UTF8Encoding $false))
     Write-Host ("Source manifest: {0} files, tree {1}" -f $files.Count, $treeHash)
 
+    # No C runtime fma in the runtime or module headers: it is a soft-float routine on CPUs
+    # without FMA3 (galaxy/fused_multiply_add.h). Tests may use it as the reference.
+    $fmaCalls = @(Get-ChildItem -LiteralPath (Join-Path $src 'runtime') -Recurse -File -Include *.cpp, *.h, *.inl |
+        Where-Object { $_.Name -notlike '*_tests.cpp' -and $_.Name -ne 'fused_multiply_add.h' } |
+        Select-String -Pattern '(std::|[^\w.])fmaf?\s*\(')
+    if ($fmaCalls.Count -ne 0) {
+        throw ("std::fma/fmaf in the runtime; use galaxy::fused_multiply_add: " + (($fmaCalls | ForEach-Object { "$($_.Path):$($_.LineNumber)" }) -join ', '))
+    }
+
     # Cargo's native compression dependencies also need the compiler environment.
     . (Join-Path $src 'tools\enter_msvc_environment.ps1')
 

@@ -12044,7 +12044,7 @@ fn emit_sharded_module_with_definition_rewrite(
          \x20       # AVX-512 is not used: the host probe only tests AVX2 and OSXSAVE.\n\
          \x20       if(galaxy_native_isa_effective STREQUAL \"AVX2\")\n\
          \x20           target_compile_options(RMGE01_game PRIVATE -mavx2)\n\
-         \x20           # FMA3 turns the explicit std::fma calls of fused guest instructions\n\
+         \x20           # FMA3 turns galaxy::fused_multiply_add (fused guest instructions)\n\
          \x20           # into single instructions. -ffp-contract=off still keeps separate\n\
          \x20           # multiplies and adds unfused. Every AVX2 CPU also has FMA3.\n\
          \x20           target_compile_options(RMGE01_game PRIVATE -mfma)\n\
@@ -19359,7 +19359,7 @@ mod tests {
         // The clang-cl branch must act on the ISA this template selects and reports. The module is compiled with
         // clang-cl, where CMAKE_CXX_COMPILER_ID is "Clang" and /arch:AVX2 is not honoured. -mavx2 must therefore be
         // present here, and /arch:AVX2 stays in the non-Clang branch. Without -mavx2 the template would announce AVX2
-        // while emitting SSE2 code. -mfma pairs with -mavx2 so explicit std::fma calls in the native float fast
+        // while emitting SSE2 code. -mfma pairs with -mavx2 so galaxy::fused_multiply_add in the native float fast
         // paths become hardware instructions. Contraction stays off. Never use -mavx512* (the host probe is the
         // AVX2+OSXSAVE test).
         assert!(cmake

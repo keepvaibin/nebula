@@ -793,6 +793,8 @@ set_source_files_properties("${CMAKE_CURRENT_BINARY_DIR}/nebula_runtime.rc" PROP
 target_include_directories(NebulaRuntime PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 add_executable(galaxy_native_thp_video_tests runtime/src/native_thp_video_tests.cpp runtime/src/native_thp_video.cpp)
 target_link_libraries(galaxy_native_thp_video_tests PRIVATE galaxy_runtime_abi)
+add_executable(galaxy_fused_multiply_add_tests runtime/src/fused_multiply_add_tests.cpp)
+target_link_libraries(galaxy_fused_multiply_add_tests PRIVATE galaxy_runtime_abi)
 add_executable(galaxy_verify_thp_native tools/dev/verify_thp_native.cpp runtime/src/native_thp_video.cpp)
 target_link_libraries(galaxy_verify_thp_native PRIVATE galaxy_runtime_abi)
 target_link_libraries(
@@ -1113,6 +1115,7 @@ if(MSVC)
         galaxy_jaudio_mixer
         galaxy_jaudio_mixer_tests
         galaxy_native_thp_video_tests
+        galaxy_fused_multiply_add_tests
         galaxy_thp_audio_worker_tests
         galaxy_owned_fifo_packet_tests
         galaxy_verify_asset_extract
@@ -1223,6 +1226,7 @@ galaxy_add_native_test(native_host_loader galaxy_native_host_tests)
 galaxy_add_native_test(
     native_audio_queue_ownership
     galaxy_native_audio_queue_tests)
+galaxy_add_native_test(fused_multiply_add galaxy_fused_multiply_add_tests)
 galaxy_add_native_test(native_thp_video
     galaxy_native_thp_video_tests)
 galaxy_add_native_test(thp_audio_worker_ownership

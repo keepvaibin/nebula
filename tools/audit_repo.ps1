@@ -67,12 +67,20 @@ foreach ($RelativePath in $TrackedFiles) {
         $Failures.Add("Unexpected tracked file larger than 5 MiB: $($File.FullName)")
     }
 
-    if ($File.Extension -in @(".cpp", ".h", ".json", ".md", ".ps1", ".rs", ".toml", ".txt", ".cs", ".xml", ".py")) {
+    if ($File.Extension -in @(".cpp", ".h", ".inl", ".json", ".md", ".ps1", ".rs", ".toml", ".txt", ".cs", ".xml", ".py")) {
         $Text = [string](Get-Content -LiteralPath $File.FullName -Raw -ErrorAction Stop)
         foreach ($Pattern in $SecretPatterns) {
             if ($Text.Contains($Pattern)) {
                 $Failures.Add("Possible API credential in $($File.FullName): pattern $Pattern")
             }
+        }
+        # On an SSE2 build std::fma is a C runtime call, a soft-float routine on CPUs
+        # without FMA3 (THP cutscenes ran at a few frames per second). Tests may use
+        # it as the reference.
+        if ($RelativePath -like 'runtime/*' -and $File.Extension -in @(".cpp", ".h", ".inl") -and
+            $RelativePath -notlike '*_tests.cpp' -and $RelativePath -ne 'runtime/include/galaxy/fused_multiply_add.h' -and
+            $Text -match '(std::|[^\w.])fmaf?\s*\(') {
+            $Failures.Add("std::fma/fmaf in $RelativePath; use galaxy::fused_multiply_add (galaxy/fused_multiply_add.h)")
         }
     }
 }
@@ -82,4 +90,4 @@ if ($Failures.Count -ne 0) {
     exit 1
 }
 
-Write-Host "[PASS] Tracked repository content contains no forbidden game content, oversized files, or API-key patterns."
+Write-Host "[PASS] Tracked repository content contains no forbidden game content, oversized files, API-key patterns, or C runtime fma calls in the runtime."

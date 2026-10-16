@@ -32190,6 +32190,27 @@ int wmain(int argc, wchar_t** argv) {
     //        [--profile-call-time] [--profile-call-self-time]
     RuntimeLaunchPaths launch_paths = default_runtime_launch_paths();
     std::cerr << "[runtime-build] " << NEBULA_RUNTIME_BUILD_IDENTITY << '\n';
+    {
+        // Which CPU, and whether fused multiply-adds are one instruction on it
+        // (galaxy/fused_multiply_add.h) or the exact SSE2 sequence.
+        int registers[4]{};
+        char brand[49]{};
+        __cpuid(registers, static_cast<int>(0x80000000u));
+        if (static_cast<unsigned>(registers[0]) >= 0x80000004u) {
+            for (int leaf = 0; leaf < 3; ++leaf) {
+                __cpuid(registers, static_cast<int>(0x80000002u) + leaf);
+                std::memcpy(brand + leaf * 16, registers, sizeof(registers));
+            }
+        }
+        for (std::size_t end = std::strlen(brand); end > 0 && brand[end - 1] == ' '; --end) brand[end - 1] = '\0';
+        const char* name = brand;
+        while (*name == ' ') ++name;
+        const bool fma3 = galaxy::host_has_fma3();
+        std::cerr << "[cpu] brand=\"" << name << "\" logical=" << std::thread::hardware_concurrency()
+                  << " fma3=" << (fma3 ? 1 : 0)
+                  << " avx2=" << (IsProcessorFeaturePresent(40 /* PF_AVX2_INSTRUCTIONS_AVAILABLE */) ? 1 : 0)
+                  << " thp-kernel=" << (fma3 ? "fma3" : "exact-sse2") << '\n';
+    }
     RuntimeState state{};
     // The idle callback ring and stage history have only diagnostic consumers.
     // Configure once before execution; routine monitoring keeps its independent
