@@ -367,7 +367,7 @@ namespace Nebula.Setup
                     string gen = Path.Combine(staging, "generated");
                     RunRecomp(new[] { "generate", inputs, "--output", gen }, null);
 
-                    Stage(0.22, 0.08, "Downloading the compiler and the Nebula source");
+                    Stage(0.22, 0.08, "Preparing the compiler");
                     waitingForDownloads = true;
                     prepare.Join();
                     waitingForDownloads = false;
