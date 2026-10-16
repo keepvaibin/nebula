@@ -23,6 +23,29 @@ namespace Nebula.Launcher
             Console.WriteLine("PASS: " + what);
         }
 
+        // The end-of-recording notice: Open folder beside OK, and the Explorer command it runs. Rendered to
+        // recording-notice.png.
+        static void RecordingNoticeCases(string outDir)
+        {
+            string zip = Path.Combine(outDir, "20261016-151013-808-example.zip");
+            using (var form = RecordingNotice.Create("Recording saved to " + zip, false, zip))
+            {
+                var buttons = All(form).OfType<Button>().ToList();
+                Check(buttons.Count == 2 && buttons.Any(b => b.Text == "Open folder") && buttons.Any(b => b.Text == "OK") &&
+                      form.AcceptButton == buttons.First(b => b.Text == "OK"), "the recording notice offers Open folder and OK, OK by default");
+                CreateHandles(form);
+                form.PerformLayout();
+                using (var bitmap = new Bitmap(form.Width, form.Height))
+                {
+                    form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.Size));
+                    bitmap.Save(Path.Combine(outDir, "recording-notice.png"), ImageFormat.Png);
+                }
+            }
+            var command = RecordingNotice.FolderCommand(zip);
+            Check(command.FileName.EndsWith("\\explorer.exe", StringComparison.OrdinalIgnoreCase) &&
+                  command.Arguments == "/select,\"" + Path.GetFullPath(zip) + "\"", "Open folder shows the recording selected in Explorer");
+        }
+
         // A form that is never shown creates no child windows; reading Handle creates them.
         static void CreateHandles(Control control)
         {
@@ -332,6 +355,7 @@ namespace Nebula.Launcher
                 GeneralCases();
                 SaveArchiveCases(outDir);
                 Application.EnableVisualStyles();
+                RecordingNoticeCases(outDir);
 
                 var first = new LaunchSession();
                 Check(!first.SetupComplete, "no settings.json: setup not complete");

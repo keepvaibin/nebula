@@ -1076,14 +1076,16 @@ namespace Nebula.Launcher
                     { "endUtc", DateTime.UtcNow.ToString("o") }
                 });
                 string result = "Recording saved to " + session;
+                string saved = session;
                 try
                 {
                     System.IO.Compression.ZipFile.CreateFromDirectory(session, session + ".zip", System.IO.Compression.CompressionLevel.Optimal, false);
                     result = "Recording saved to " + session + ".zip";
+                    saved = session + ".zip";
                 }
                 catch (Exception) { /* Logs remain available if ZIP creation fails. */ }
                 if (process.ExitCode != 0) result = "The game exited with code " + process.ExitCode + ".\r\n" + result;
-                MessageBox.Show(result, "Nebula recording", MessageBoxButtons.OK, process.ExitCode == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+                RecordingNotice.Show(result, process.ExitCode != 0, saved);
                 Environment.Exit(0);
             });
             thread.IsBackground = false;
