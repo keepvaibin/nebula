@@ -7188,15 +7188,22 @@ bool GxBackend::rt_hidden_draw() const noexcept {
     if (rt_object_fake_shadow_) {
         return true;
     }
+    // GALAXY_RT_DEBUG_HIDE_PHASE=n (diagnostics): scene phase n's draws are not drawn under the traced lighting.
+    static const std::uint64_t debug_hide_phase = read_env_u64("GALAXY_RT_DEBUG_HIDE_PHASE", 255u);
+    if (debug_hide_phase < 255u && rt_phase_ == static_cast<std::uint8_t>(debug_hide_phase)) {
+        return true;
+    }
     // The game's own mirror copies drawn after the trace (Mario's reflection under Freezeflame's ice:
     // MarioActor::drawReflectModel in the indirect phase) carry a mirrored position matrix. Under traced
     // reflections they doubled what the trace reflects (two Marios, user); GALAXY_RT_KEEP_GAME_MIRRORS=1 keeps them.
     static const bool keep_mirrors = read_env_u64("GALAXY_RT_KEEP_GAME_MIRRORS", 0u) != 0u;
     // In the translucent phases too: the Observatory glass's Mario clone (user: "a clone that goes up and down instead
     // of ray tracing"). The opaque phases keep any mirrored geometry the game builds with a negative scale.
+    // And the image-effect phase: Mario's blended copy under the Observatory glass is drawn there (isoU, phase 9).
     const bool mirror_phase = rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::AfterIndirect) ||
                               rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::Xlu) ||
-                              rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::ListXlu);
+                              rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::ListXlu) ||
+                              rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::ImageEffect);
     if (!keep_mirrors && mirror_phase && renderer_.rt_reflections_active()) {
         const std::uint32_t base = (state_.cp(cp::kMatrixIndexA) & 0x3Fu) * 4u;
         const auto m = [this, base](unsigned row, unsigned column) {
@@ -7326,6 +7333,21 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     }
     const ScaledGxViewport viewport = compute_scaled_gx_viewport(call.xf_viewport, renderer_.efb_scale());
     const bool flat = !call.has_viewport || !viewport.valid() || viewport.max_depth - viewport.min_depth < 0.5f;
+    static const bool log_viewports = read_env_u64("GALAXY_RT_LOG_VIEWPORTS", 0u) != 0u;
+    if (log_viewports) [[unlikely]] {
+        static std::unordered_set<std::uint64_t> seen;
+        const std::uint64_t key = static_cast<std::uint64_t>(current_rt_material_) |
+                                  (static_cast<std::uint64_t>(rt_phase_) << 16u) |
+                                  (static_cast<std::uint64_t>(static_cast<std::uint32_t>(viewport.x) & 0xFFFu) << 24u) |
+                                  (static_cast<std::uint64_t>(static_cast<std::uint32_t>(viewport.width) & 0xFFFu) << 36u) |
+                                  (static_cast<std::uint64_t>(static_cast<std::uint32_t>(viewport.height) & 0xFFFu) << 48u);
+        if (seen.size() < 4096u && seen.insert(key).second) {
+            std::fprintf(stderr, "[rt-vp] material=%u phase=%u buffer=%u vp=%.0f,%.0f,%.0f,%.0f depth=%.2f,%.2f\n",
+                         static_cast<unsigned>(current_rt_material_), static_cast<unsigned>(rt_phase_),
+                         static_cast<unsigned>(rt_draw_buffer_ & 0xFFFFu), viewport.x, viewport.y, viewport.width,
+                         viewport.height, viewport.min_depth, viewport.max_depth);
+        }
+    }
     // MR::clearZBuffer: a depth write through a flattened viewport puts the far plane under
     // everything drawn before (the sky and air layers); that geometry occludes nothing.
     if (flat && (render_state_key_.zmode_bits & (1u << 4u)) != 0u) {
@@ -7350,14 +7372,31 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
                        clear->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Water)) &&
                       (position == VcdType::Index8 || position == VcdType::Index16);
     }
-    const bool glow = translucent && !lens && !clear_added && (rt_glow_draw() || rt_sprite_light_draw());
+    // A blended clear model the table names glass or crystal, whatever its blend (the air bubble: source alpha over the
+    // source colour): a surface of the water pass, its reflections over what it drew.
+    bool clear_blended = false;
+    if (translucent && !lens && !clear_added && renderer_.rt_water_open() && scene_phase_ && side_layer_ == kSceneLayer &&
+        (rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::Xlu) ||
+         rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::ListXlu) ||
+         rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::AfterIndirect))) {
+        const RtMaterial* const clear = rt_material(current_rt_material_);
+        const BlendMode blend = state_.blend_mode();
+        const VcdType position = state_.vertex_desc(0u).position.vcd;
+        clear_blended = clear != nullptr && !clear->particle && !clear->helper && !clear->waterfall &&
+                        clear->emission == RtEmission::None &&
+                        clear->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Crystal) &&
+                        blend.blend_enable && !blend.logic_op_enable && !blend.subtract && blend.color_update &&
+                        blend.dst_factor != BlendFactor::One &&
+                        (position == VcdType::Index8 || position == VcdType::Index16);
+    }
+    const bool glow = translucent && !lens && !clear_added && !clear_blended && (rt_glow_draw() || rt_sprite_light_draw());
     if (glow && current_rt_material_ == 0u) {
         const unsigned map = ps_key_.stages[0].order & 7u;
         const std::uint8_t bank = map >= 4u ? bp::kTexHighBankOffset : 0u;
         note_rt_unnamed_glow((state_.bp(static_cast<std::uint8_t>(bp::kTexImage3Base + bank + (map & 3u))) & 0xFFFFFFu)
                              << 5u);
     }
-    bool water = translucent && !lens && !glow && (clear_added || rt_water_draw());
+    bool water = translucent && !lens && !glow && (clear_added || clear_blended || rt_water_draw());
     // An opaque late draw the table names water or crystal (Freezeflame's ice, drawn after the indirect
     // capture with the game's own refraction): a surface of the water pass, its reflections laid over what it
     // drew (user: the ice reflects nothing; Mario stood on it unmirrored).
@@ -7485,6 +7524,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
             const RtMaterial* const fall = rt_material(current_rt_material_);
             info.surface = kRtDrawWater | (static_cast<std::uint32_t>(surface.surface_class) << kRtDrawClassShift) |
                            (fall != nullptr && fall->waterfall ? kRtDrawWaterfall : 0u) |
+                           (fall != nullptr && fall->mirror ? kRtDrawWaterMirror : 0u) |
                            (opaque_clear ? kRtDrawWaterOpaque : 0u);
         } else {
             info.surface |= static_cast<std::uint32_t>(surface.surface_class) << kRtDrawClassShift;
@@ -12881,7 +12921,10 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
             b.dst_factor != BlendFactor::SrcColor && b.dst_factor != BlendFactor::InvSrcColor &&
             (rt_phase_ == static_cast<std::uint8_t>(ScenePhase::Xlu) ||
              rt_phase_ == static_cast<std::uint8_t>(ScenePhase::ListXlu));
-        const bool late = !b.blend_enable && !b.logic_op_enable && b.color_update &&
+        // GALAXY_RT_LIT_LATE=1: the opaque draws after the screen capture take the light texture too. Off: it turned
+        // Rosalina see-through and dark (isoLL, build 90).
+        static const bool lit_late = read_env_u64("GALAXY_RT_LIT_LATE", 0u) != 0u;
+        const bool late = lit_late && !b.blend_enable && !b.logic_op_enable && b.color_update &&
                           rt_phase_ == static_cast<std::uint8_t>(ScenePhase::AfterIndirect);
         lit_translucent_ = scene_phase_ && side_layer_ == kSceneLayer && (texture_map_mask & 0x80u) == 0u &&
                            (blended || late) && renderer_.rt_light_texture_ready() &&

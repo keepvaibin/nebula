@@ -1147,7 +1147,7 @@ void EmitMergeCS(uint gi : SV_GroupIndex)
             lc = both ? float4(normalize(lerp(lc.xyz, spot.xyz, 0.5f)), spot.w) : spot;
         } else {
             // Its place in view with nothing in front: the glow is gone. Out of view or hidden:
-            // kept, fading after 30 s.
+            // kept.
             const float3 e = transform(e_to_eye, la.xyz);
             bool gone = false;
             if (e.z < -e_near) {
@@ -1159,11 +1159,11 @@ void EmitMergeCS(uint gi : SV_GroupIndex)
                 }
             }
             lb.w += 1.0f;
-            // Out of view and too far to light anything near the camera: forgotten within seconds
-            // (the list keeps room for the lights that matter here).
+            // Out of view it keeps lighting the stage at any distance; one too far to light anything within
+            // 20000 units of the camera fades over seconds (the list keeps room for the lights that matter here).
             const float reach = sqrt(luminance(lb.rgb) / (kPi * kEmitForget));
-            const bool far = length(e) > reach + 3000.0f;
-            lb.rgb *= gone ? 0.5f : far ? 0.9f : lb.w > 1800.0f ? 0.97f : 1.0f;
+            const bool far = length(e) > reach + 20000.0f;
+            lb.rgb *= gone ? 0.5f : far ? 0.98f : 1.0f;
         }
         if (luminance(lb.rgb) < 1.0f) {
             la = float4(0.0f, 0.0f, 0.0f, 0.0f);

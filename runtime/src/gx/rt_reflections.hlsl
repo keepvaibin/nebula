@@ -963,15 +963,30 @@ float3 hit_rgb8(uint c)
     return float3(float(c >> 24u), float((c >> 16u) & 0xFFu), float((c >> 8u) & 0xFFu)) / 255.0f;
 }
 
+// The sky along `l` as the reflections hold it: the captured sky, else the lighting's sky map, else the sky's average.
+float3 sky_behind(float3 l)
+{
+    float3 light;
+    if (sky_captured(l, light) > 0.05f) {
+        return light;
+    }
+    if (sky_map_light(l, light) > 0.05f) {
+        return light;
+    }
+    return average(0u, light) ? light : float3(0.0f, 0.0f, 0.0f);
+}
+
 // High quality: what a reflection ray hits where the frame does not show it, shaded by ray tracing (user: the
 // water and the metal reflect what is around them, not only what the screen holds). Its draw's material
 // texture at the hit's texture coordinates (detail by distance), times the vertices' colour 0 or the draw's
 // colour, at the art's level: by day the day model's open ground, faces turned from the sun at 0.7 and in
 // the sun's shadow at 0.65 of it (one shadow ray from the hit), by night the night level. Late geometry
 // (instance 1) has no records: false.
-bool hit_shade(uint instance, uint tri, float2 b, float3 x, float3 l, float distance, out float3 light)
+bool hit_shade(uint instance, uint tri, float2 b, float3 x, float3 l, float distance, out float3 light,
+               out float coverage)
 {
     light = float3(0.0f, 0.0f, 0.0f);
+    coverage = 1.0f;
 #if RT_TEXTURED
     if ((g_flags & 2048u) == 0u || instance != 0u) {
         return false;
@@ -999,7 +1014,20 @@ bool hit_shade(uint instance, uint tri, float2 b, float3 x, float3 l, float dist
         // reflection of what the frame does not show (the tower below the camera) aliased into grain at lod 0.
         const float lod = clamp(log2(max(distance * g_hit.w * (1.0f + g_spread / pixel_angle + g_reflect_blur), 1.0f)),
                                 0.0f, 8.0f);
-        albedo *= map.SampleLevel(g_wrap, uv, lod).rgb;
+        float3 texel = map.SampleLevel(g_wrap, uv, lod).rgb;
+        // A cut-out (alpha-tested: d.w the alpha map and its reference): its coverage over the footprint, the
+        // alpha test's edge at full detail turning into the mip's mean alpha (the opaque share) as the footprint
+        // grows; where the colour map is the alpha map its holes' colour (black) leaves the opaque texels' colour.
+        if (d.w != 0u) {
+            const Texture2D<float4> alpha_map = ResourceDescriptorHeap[NonUniformResourceIndex(d.w & 0xFFFFFFu)];
+            const float a = alpha_map.SampleLevel(g_wrap, uv, lod).a;
+            const float reference = float(d.w >> 24u) / 255.0f;
+            coverage = saturate(lerp(smoothstep(reference - 0.12f, reference + 0.12f, a), a, saturate(lod)));
+            if ((d.w & 0xFFFFFFu) == d.x) {
+                texel = saturate(texel / max(a, 0.25f));
+            }
+        }
+        albedo *= texel;
     }
     float day_level = g_hit.z;
     if (g_hit.x > 0.0f && any(g_sun_light.rgb > 0.0f)) {
@@ -1094,14 +1122,20 @@ Reflected reflect_light(uint2 s, float3 dir, float3 n, float3 ng, float3 hit, fl
         // A rippled surface's rays spread over r.distance * g_spread around the hit: its pixels there.
         const float blur = max(g_spread > 0.0f ? min(r.distance * g_spread / pixel_size(x.z), 12.0f) : 0.0f,
                                g_reflect_blur);
+        // The late geometry (instance 1: Rosalina, drawn after the capture) has no records for the shading below:
+        // the picture shows her within her depth (the side the camera sees, not the side a mirror under her sees).
+        const float match = query.CommittedInstanceID() != 0u ? 0.08f * x_distance + 60.0f : 0.03f * x_distance + 2.0f;
         const bool shown = x.z < -g_near && shown_at(eye_to_pixel(g_projection, g_viewport, x), r.light, seen, blur) &&
-                                 abs(seen - x_distance) < 0.03f * x_distance + 2.0f;
+                                 abs(seen - x_distance) < match;
         float3 drawn;
+        float cover = 1.0f;
         if (shown) {
             r.confidence = 1.0f;
         } else if (hit_shade(query.CommittedInstanceID(), query.CommittedPrimitiveIndex(),
-                             query.CommittedTriangleBarycentrics(), x, l, r.distance, r.light)) {
-            // High quality: shaded where it was hit (counted with the remembered).
+                             query.CommittedTriangleBarycentrics(), x, l, r.distance, r.light, cover)) {
+            // High quality: shaded where it was hit (counted with the remembered); a cut-out by its coverage, the
+            // sky behind its open share.
+            r.light = cover < 0.999f ? lerp(sky_behind(l), r.light, cover) : r.light;
             r.confidence = 1.0f;
             r.source = kFromMemory;
         } else {
@@ -1214,6 +1248,18 @@ float sample_strength(uint4 info)
 // surface rougher than g_rough_cutoff reflects nothing worth a ray; below it, metal and dielectric
 // alike (a dielectric's Fresnel term keeps its reflection to grazing views).
 // A metal the table names (its metalness) becomes bare metal (`surface_class` kBareMetalClass).
+// g_draws word 6 bit 6 (ray_tracing.cpp kDrawTableMirror): the table's `mirror` on an opaque surface.
+static const uint kDrawTableMirror = 64u;
+// A mirror's metalness in the composite: Fresnel 0.75 face-on (the polished class's 0.25, 0.77 of the way to metal's
+// 0.9), its reflection over 0.8 of the painted colour (that class's cover).
+static const float kMirrorF0Share = 0.77f;
+static const uint kMirrorClass = 4u;
+
+bool mirror_draw(uint draw)
+{
+    return (g_flags & 128u) != 0u && draw < g_draw_count && (g_draws.Load(draw * 48u + 24u) & kDrawTableMirror) != 0u;
+}
+
 float4 draw_material(inout uint surface_class, uint draw, out float roughness)
 {
     float4 params = g_class[surface_class];
@@ -1346,7 +1392,20 @@ void ReflectTraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
                 }
             }
             float roughness;
-            const float4 params = draw_material(surface_class, record.w >> 16u, roughness);
+            float4 params = draw_material(surface_class, record.w >> 16u, roughness);
+            // A mirror (the table's `mirror`): clear and polished, its reflection untinted (ray_params), Fresnel 0.6
+            // face-on in the composite (its metalness share there).
+            float4 ray_params = params;
+            if (mirror_draw(record.w >> 16u)) {
+                surface_class = kMirrorClass;
+                roughness = 0.02f;
+                params = g_class[kMirrorClass];
+                params.x = roughness * roughness;
+                params.y = 1.0f;
+                ray_params = params;
+                ray_params.w = 0.0f;
+                params.w = kMirrorF0Share;
+            }
             const float3 base = g_color.Load(int3(q, 0)).rgb;
             // Lamps, lava, glowing cores and what glows light keep their own colour: bright unlit
             // surfaces, bright saturated indirect ones (lava; white ice reflects), and anything lit far
@@ -1366,7 +1425,7 @@ void ReflectTraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
                 confidence = 1.0f;
             } else if (params.y > 0.0f && emitter < 1.0f) {
                 reflected = true;
-                const Reflected r = reflect_light(id.xy, dir, n, ng, hit, params, base, true, true);
+                const Reflected r = reflect_light(id.xy, dir, n, ng, hit, ray_params, base, true, true);
                 light = r.light;
                 highlight = r.highlight;
                 // Painted dielectrics and clear ones (ice, crystal, opaque water) take the sky's reflection
@@ -1552,6 +1611,10 @@ float3 rippled(int2 q, float3 n)
 
 // RtDraw.flags bit 13 (kRtDrawWaterfall): falling water (its streaks run down it).
 static const uint kWaterfallFlag = 8192u;
+// RtDraw.flags bit 14 on a water-pass draw (kRtDrawWaterMirror): glass the table marks `mirror`.
+static const uint kWaterMirrorFlag = 16384u;
+// A mirror glass's metalness: its Fresnel 3/4 of the way from glass to metal (0.25 -> 0.74 face-on).
+static const float kMirrorMetal = 0.75f;
 // RtDraw.flags bit 12 on a water-pass draw (kRtDrawWaterOpaque): an opaque late surface the table names water or
 // crystal, the scene the trace saw (Freezeflame's ice).
 static const uint kWaterOpaqueFlag = 4096u;
@@ -1734,10 +1797,14 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
         // (kWaterOpaqueFlag: Freezeflame's ice) is that scene itself.
         const uint2 under = g_under[index];
         const float floor_distance = under.y != 0u ? length(through) * -asfloat(under.y) : 1e30f;
-        const bool opaque_clear =
-            hit_water && (g_water_surfaces.Load(water_tri * 16u + 12u) & kWaterOpaqueFlag) != 0u &&
-            abs(floor_distance - water_t) <= max(0.01f * water_t, 8.0f);
-        if (hit_water && (opaque_clear || floor_distance - water_t > max(0.01f * water_t, 8.0f))) {
+        const uint hit_flags = hit_water ? g_water_surfaces.Load(water_tri * 16u + 12u) : 0u;
+        const bool opaque_clear = hit_water && (hit_flags & kWaterOpaqueFlag) != 0u &&
+                                  abs(floor_distance - water_t) <= max(0.01f * water_t, 8.0f);
+        // Mirror glass lies on what it covers (the Observatory fountain's glass over its star plates): no depth below
+        // it, only not behind the scene.
+        const bool mirror_glass = hit_water && (hit_flags & kWaterMirrorFlag) != 0u &&
+                                  floor_distance >= water_t - max(0.002f * water_t, 2.0f);
+        if (hit_water && (opaque_clear || mirror_glass || floor_distance - water_t > max(0.01f * water_t, 8.0f))) {
             water = true;
             const uint tri = water_tri;
             const float2 b = water_b;
@@ -1756,8 +1823,9 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
             if (record.x != 0u && record.y != 0u && record.z != 0u) {
                 float3 smooth = unpack_vertex_normal(record.x) * w.x + unpack_vertex_normal(record.y) * w.y +
                                 unpack_vertex_normal(record.z) * w.z;
-                // The water's normals point out of it: seen from their back, the camera is under it.
-                below = dot(smooth, dir) > 0.0f;
+                // The water's normals point out of it: seen from their back, the camera is under it. Mirror glass
+                // has no inside.
+                below = dot(smooth, dir) > 0.0f && (record.w & kWaterMirrorFlag) == 0u;
                 smooth *= dot(smooth, ng) < 0.0f ? -1.0f : 1.0f;
                 const float smooth_length = length(smooth);
                 // Only where they lie close to the face: at a rounded lip they bend towards the side wall
@@ -1766,8 +1834,10 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
                     n = smooth / smooth_length;
                 }
             }
-            // Translucent crystal and glass draws share the pass: no ripples, no water below them.
-            const bool crystal = ((record.w >> 8u) & 15u) == kCrystal;
+            // Translucent crystal and glass draws share the pass: no ripples, no water below them. Mirror glass is
+            // glass that reflects as a mirror.
+            const bool mirror = (record.w & kWaterMirrorFlag) != 0u;
+            const bool crystal = mirror || ((record.w >> 8u) & 15u) == kCrystal;
             // The reflection is traced off the calm surface: every pixel's ray mirrors coherently, one sharp image
             // that the composite moves with the waves (water_distortion). Rays bent per pixel by the waves (up to
             // 17 degrees) scattered the image into glitter, the more the higher the resolution (user, Native42 at
@@ -1787,7 +1857,12 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
             // A waterfall is a clear sheet (no lake body under it), its streaks in its normal.
             const bool fall = (record.w & kWaterfallFlag) != 0u;
             const uint surface = crystal || fall ? kCrystal : below ? kWaterBelow : kWaterSurface;
-            const float4 params = g_class[crystal ? kCrystal : kWaterSurface];
+            float4 params = g_class[crystal ? kCrystal : kWaterSurface];
+            if (mirror) {
+                params.x = min(params.x, 0.02f);
+                params.y = 1.0f;
+                params.w = kMirrorMetal;
+            }
             const float3 base = g_color.Load(int3(q, 0)).rgb;
             const float emitter = smoothstep(0.8f, 1.0f, min(base.r, min(base.g, base.b)));
             info.x = pack_normal(n);
@@ -1807,7 +1882,9 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
                 // Water: a mirror (no lobe jitter: the composite's distortion is its roughness).
                 float4 ray_params = params;
                 ray_params.x = crystal ? params.x : 1e-4f;
-                g_reflect_blur = crystal ? 0.0f : 1.25f * max(g_viewport.z / 640.0f, 1.0f);
+                // Over at least two of the game's own 640-wide pixels: what the frame shows thinner than that (a
+                // net's cords, a fence's bars) averages out instead of reflecting as specks the waves set moving.
+                g_reflect_blur = crystal ? 0.0f : 2.0f * max(g_viewport.z / 640.0f, 1.0f);
                 const Reflected r = reflect_light(id.xy, dir, n, ng, hit, ray_params, base, false, false);
                 g_reflect_blur = 0.0f;
                 light = r.light;
@@ -2598,10 +2675,17 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
         p = eye_position(m_projection, m_viewport, pixel, z);
     }
     const float depth = m_efb_depth.Load(int3(int2(position.xy), 0));
-    if (!far_plane(m_depth, depth) && depth_to_eye_z(m_depth, depth) > here.z + abs(here.z) * 0.003f + 1.0f) {
+    const bool behind = !far_plane(m_depth, depth) && depth_to_eye_z(m_depth, depth) > here.z + abs(here.z) * 0.003f + 1.0f;
+    const uint view = (m_flags >> 1u) & 7u;
+    if (view == 3u) {
+        CompositeOut found;
+        found.add = float4(behind ? float3(0.5f, 0.5f, 0.0f) : float3(0.55f, 0.0f, 0.55f), 0.0f);
+        found.keep = float4(0.45f, 0.45f, 0.45f, 1.0f);
+        return found;
+    }
+    if (behind) {
         discard;
     }
-    const uint view = (m_flags >> 1u) & 7u;
     Blend b = blend_samples(pixel, p, true);
     // The reflected image where the waves move it (its glints and the surface's normal where they are).
     if (b.surface > 1e-4f && m_water2.x > 0.0f && b.nearest_class == kWaterSurface) {

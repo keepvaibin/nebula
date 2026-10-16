@@ -205,6 +205,8 @@ constexpr UINT kLateMask = 2u;
 constexpr std::uint32_t kDrawTableCard = 16u;
 // g_draws word 6 (rt_lighting.hlsl kDrawTableAlpha): an alpha-tested draw traced whole (kRtDrawAlphaTest).
 constexpr std::uint32_t kDrawTableAlpha = 32u;
+// g_draws word 6 (rt_reflections.hlsl kDrawTableMirror): the table's `mirror` (the Observatory fountain's plates).
+constexpr std::uint32_t kDrawTableMirror = 64u;
 constexpr float kDrawGlowScale = 16.0f;
 // AuthoredLight.flags (rt_lighting.hlsl kAuthored*): the colour the draw shows; a spot light.
 constexpr std::uint32_t kAuthoredTint = 1u;
@@ -801,8 +803,11 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     gi_ = env_float("GALAXY_RT_GI", 1.0f) != 0.0f;
     core_radius_ = std::clamp(env_float("GALAXY_RT_CORE_RADIUS", 1667.0f), 1.0f, 100000.0f);
     core_light_ = std::clamp(env_float("GALAXY_RT_CORE_LIGHT", 1.5f), 0.0f, 16.0f);
-    bloom_strength_ = std::clamp(env_float("GALAXY_RT_BLOOM", 1.4f), 0.0f, 4.0f);
-    bloom_threshold_ = std::clamp(env_float("GALAXY_RT_BLOOM_THRESHOLD", 0.15f), 0.0f, 4.0f);
+    // The glows' corona: only what an emitter adds past half the picture's range, at 0.8. From 0.15 at 1.4 the
+    // Observatory's map hologram behind Rosalina bloomed her face white and the star plate's 54 burned out (isoBl,
+    // build 89: both in the game's colours with the bloom off).
+    bloom_strength_ = std::clamp(env_float("GALAXY_RT_BLOOM", 0.8f), 0.0f, 4.0f);
+    bloom_threshold_ = std::clamp(env_float("GALAXY_RT_BLOOM_THRESHOLD", 0.5f), 0.0f, 4.0f);
     exposure_ = env_float("GALAXY_RT_EXPOSURE", 1.0f) != 0.0f;
     exposure_day_ = std::clamp(env_float("GALAXY_RT_EXPOSURE_DAY", 1.0f), 0.3f, 1.5f);
     exposure_night_ = std::clamp(env_float("GALAXY_RT_EXPOSURE_NIGHT", 1.0f), 0.3f, 1.5f);
@@ -1554,7 +1559,8 @@ void SceneRayTracer::begin_scene() noexcept {
 
 void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
     const RtMaterial* const material = rt_material(info.rt_material);
-    if ((info.surface & kRtDrawLens) != 0u) {
+    // A lens is a glow draw with the lens bit (a water draw's mirror bit is the same bit).
+    if ((info.surface & (kRtDrawGlow | kRtDrawLens)) == (kRtDrawGlow | kRtDrawLens)) {
         if (glow_open_ && draw.triangle_count != 0u && lens_draws_ < kLensSlots &&
             glow_triangles_ + draw.triangle_count <= kGlowMaxTriangles) {
             RtDraw& entry = glow_draws_.emplace_back(draw);
@@ -1637,7 +1643,8 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
         surface = unit_pair(material->matte ? 1.0f : material->roughness, material->metallic);
         flags = (material->tint ? kDrawTableTint : 0u) | (material->foliage ? kDrawTableFoliage : 0u) |
                 (material->star ? kDrawTableStar : 0u) |
-                ((info.surface & kRtDrawCard) != 0u ? kDrawTableCard : 0u);
+                ((info.surface & kRtDrawCard) != 0u ? kDrawTableCard : 0u) |
+                (material->mirror ? kDrawTableMirror : 0u);
         if (material->glow >= 0.0f) {
             flags |= kDrawTableGlow |
                      (static_cast<std::uint32_t>(std::lround(std::min(material->glow / kDrawGlowScale, 1.0f) * 65535.0f))
