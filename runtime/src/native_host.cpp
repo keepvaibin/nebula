@@ -9323,6 +9323,12 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
         script.shake || held(WiiTarget::Shake) || motion_shake_remote;
     static bool s_previous_shake = false;
     static std::uint8_t s_shake_frames = 0;
+    if (shake_pressed && !s_previous_shake) {
+        // Each shake the virtual remote reports, by its source (the session log beside [controller-motion]).
+        std::cerr << "[input-shake] vi=" << current_vi << " source="
+                  << (motion_shake_remote ? "motion" : held(WiiTarget::Shake) ? "binding" : "script")
+                  << " tilt-section=" << galaxy::input::tilt::section_name(tilt_section) << '\n';
+    }
     const bool shake_active = galaxy::input::advance_wiimote_shake_accel(
         snapshot, shake_pressed, s_previous_shake, s_shake_frames);
     static bool s_previous_nunchuk_shake = false;

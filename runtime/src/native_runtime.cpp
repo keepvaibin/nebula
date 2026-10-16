@@ -24752,6 +24752,53 @@ void apply_test_teleport(RuntimeState& state, galaxy::PpcContext* context, galax
     }
 }
 
+// The Comet Observatory's scenario for the save's progress: the game's own choice
+// (StorySequenceExecutor::calcAproposScenarioNoOnAstroGalaxy, 0x803BBB1C: 5, 3, 2, 4 or 1 by the save's events and
+// Grand Stars; it reads no member), the scenario a return from a galaxy enters.
+std::uint32_t observatory_scenario_for_save(RuntimeState& state, galaxy::PpcContext* context,
+                                            galaxy::GuestMemoryV1* memory) {
+    galaxy::coop::ThreadRegisters saved{};
+    galaxy::coop::save_thread_registers(*context, saved);
+    context->gpr[1] = (context->gpr[1] - 0x100u) & ~0xFu;
+    context->gpr[3] = 0u;
+    context->pc = 0x803BBB1Cu;
+    call_guest_impl(&state, 0x803BBB1Cu, nullptr, context, memory);
+    const std::uint32_t scenario = context->gpr[3];
+    galaxy::coop::load_thread_registers(saved, *context);
+    return scenario >= 1u && scenario <= 5u ? scenario : 1u;
+}
+
+// Grand Stars 1-count in the current save file. Grand Star n is power star 1 of a Bowser or Bowser Jr. stage (the
+// game's event flags SpecialStarGrand1-7 derive from them: GameEventFlagTable type 3, records at 0x8053BB40), recorded
+// with GameDataFunction::setGameFlagPowerStarSuccess (0x803AF8C0), the call a collected star makes. The Observatory's
+// domes and lights follow them; the game saves them with the file. The name is kept at 0x80002900, low memory beside
+// the stage names.
+void give_grand_stars(RuntimeState& state, galaxy::PpcContext* context, galaxy::GuestMemoryV1* memory,
+                      std::uint32_t count) {
+    static constexpr const char* kGrandStarStages[] = {"HeavensDoorGalaxy",   "TriLegLv1Galaxy",
+                                                       "KoopaBattleVs1Galaxy", "KoopaJrShipLv1Galaxy",
+                                                       "KoopaBattleVs2Galaxy", "FloaterOtaKingGalaxy",
+                                                       "KoopaBattleVs3Galaxy"};
+    constexpr std::uint32_t kStageName = 0x80002900u;
+    const std::uint32_t given = std::min<std::uint32_t>(count, 7u);
+    for (std::uint32_t n = 0u; n < given; ++n) {
+        const std::string_view text = kGrandStarStages[n];
+        std::array<std::byte, 32> name{};
+        std::transform(text.begin(), text.end(), name.begin(), [](char c) { return static_cast<std::byte>(c); });
+        state.address_space->copy(kStageName, name);
+        galaxy::coop::ThreadRegisters saved{};
+        galaxy::coop::save_thread_registers(*context, saved);
+        context->gpr[1] = (context->gpr[1] - 0x100u) & ~0xFu;
+        context->gpr[3] = kStageName;
+        context->gpr[4] = 1u;
+        context->gpr[5] = 1u;
+        context->pc = 0x803AF8C0u;
+        call_guest_impl(&state, 0x803AF8C0u, nullptr, context, memory);
+        galaxy::coop::load_thread_registers(saved, *context);
+    }
+    std::cerr << "[grand-stars] 1-" << given << " recorded\n";
+}
+
 // Test hook: GALAXY_TEST_GALAXY_TOUR=<file of "Stage scenario" lines> visits
 // those stages in turn with the game's own MR::requestChangeStageInGameMoving
 // (0x803F8328), GALAXY_TEST_GALAXY_TOUR_FRAMES 3D scene frames apart (default
@@ -24778,7 +24825,14 @@ void apply_test_galaxy_tour(RuntimeState& state, galaxy::PpcContext* context, ga
         std::uint32_t scenario = 0u;
         while (list >> stage >> scenario) {
             const std::uint32_t stars = galaxy::gx::galaxy_stage_stars(stage);
-            if (stars != 0u && (scenario == 0u || scenario > stars)) {
+            if (stage == galaxy::gx::kObservatoryId) {
+                // The Observatory's scenarios 1-5; 0 the save's (galaxy_select.h kObservatoryStates).
+                if (scenario <= 5u) {
+                    result.stops.emplace_back(stage, scenario);
+                } else {
+                    std::cerr << "[galaxy-tour] skipped " << stage << ' ' << scenario << ": states 0-5\n";
+                }
+            } else if (stars != 0u && (scenario == 0u || scenario > stars)) {
                 // A hidden scenario: see kGalaxyStages.
                 std::cerr << "[galaxy-tour] skipped " << stage << ' ' << scenario << ": the game enters 1-" << stars
                           << '\n';
@@ -24795,7 +24849,16 @@ void apply_test_galaxy_tour(RuntimeState& state, galaxy::PpcContext* context, ga
     }
     tour.scene_frames = 0u;
     test_tour_stop_frame = test_scene_frames;
-    const auto& [stage, scenario] = tour.stops[tour.next++];
+    const auto& [stage, listed] = tour.stops[tour.next++];
+    std::uint32_t scenario = listed;
+    // GALAXY_TEST_GRAND_STARS=n: the save file holds Grand Stars 1-n from the first stop on.
+    static const std::uint32_t grand_stars = static_cast<std::uint32_t>(read_env_u64("GALAXY_TEST_GRAND_STARS", 0u));
+    if (grand_stars != 0u) {
+        give_grand_stars(state, context, memory, grand_stars);
+    }
+    if (stage == galaxy::gx::kObservatoryId && scenario == 0u) {
+        scenario = observatory_scenario_for_save(state, context, memory);
+    }
     constexpr std::uint32_t kStageName = 0x80002800u;
     std::array<std::byte, 64> name{};
     std::transform(stage.begin(), stage.end(), name.begin(), [](char c) { return static_cast<std::byte>(c); });
@@ -24861,9 +24924,9 @@ void apply_galaxy_select(RuntimeState& state, galaxy::PpcContext* context, galax
         std::vector<std::vector<std::string>> stars;
         for (const galaxy::gx::GalaxyStage& stage : galaxy::gx::kGalaxyStages) {
             if (std::string_view(stage.id) == galaxy::gx::kObservatoryId) {
-                // Not a galaxy to the game's message lookups.
+                // Not a galaxy to the game's message lookups: its states.
                 galaxies.emplace_back(galaxy::gx::kObservatoryName);
-                stars.emplace_back(std::vector<std::string>(stage.stars));
+                stars.emplace_back(std::begin(galaxy::gx::kObservatoryStates), std::end(galaxy::gx::kObservatoryStates));
                 continue;
             }
             write_name(kLookupName, stage.id);
@@ -24880,9 +24943,22 @@ void apply_galaxy_select(RuntimeState& state, galaxy::PpcContext* context, galax
     }
     std::size_t stage = 0u;
     std::uint32_t star = 0u;
+    if (galaxy::gx::take_grand_stars()) {
+        // GRAND STARS: the flags, then the Observatory in the state they give.
+        give_grand_stars(state, context, memory, galaxy::gx::kGrandStarsGiven);
+        for (std::size_t i = 0; i < galaxy::gx::kGalaxyStageCount; ++i) {
+            if (std::string_view(galaxy::gx::kGalaxyStages[i].id) == galaxy::gx::kObservatoryId) {
+                galaxy::gx::request_galaxy_travel(i, 1u);
+            }
+        }
+    }
     if (galaxy::gx::take_galaxy_travel(stage, star)) {
         constexpr std::uint32_t kStageName = 0x80002800u;
         write_name(kStageName, galaxy::gx::kGalaxyStages[stage].id);
+        if (std::string_view(galaxy::gx::kGalaxyStages[stage].id) == galaxy::gx::kObservatoryId) {
+            // The Observatory in the save's state.
+            star = observatory_scenario_for_save(state, context, memory);
+        }
         std::cerr << "[galaxy-select] " << galaxy::gx::kGalaxyStages[stage].id << ' ' << star << '\n';
         (void)call(0x803F8328u, kStageName, star);  // MR::requestChangeStageInGameMoving
     }

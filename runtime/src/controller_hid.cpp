@@ -147,6 +147,13 @@ struct Device {
     sw::SwitchMotion motion{};
     std::uint64_t last_report_us = 0;
     std::uint64_t imu_reports = 0;
+    // Motion in the session log (log_motion): since the last summary, the peak acceleration away from 1 g and
+    // the peak turn rate, and the shakes started.
+    std::uint64_t motion_logged_us = 0;
+    float motion_peak_g = 0.0f;
+    float motion_peak_rate = 0.0f;
+    std::uint32_t motion_shakes = 0;
+    std::uint32_t motion_shakes_logged = 0;
     std::unique_ptr<WinUsbPipes> winusb;
     std::size_t slot = 0;
     // Output packet number after initialisation (0x10 rumble reports).
@@ -810,6 +817,28 @@ private:
         issue_read(device);
     }
 
+    // The session log's motion line: every shake started (at most one line a second), and every 10 s with
+    // movement a summary (the shake thresholds of the sensitivity set, the peaks seen), so a report of shakes
+    // that do nothing shows whether the controller's motion arrives and whether it starts shakes.
+    static void log_motion(Device& device, std::uint64_t now, const sw::MotionSettings& motion) {
+        const bool shook = device.motion_shakes != device.motion_shakes_logged;
+        const bool due = now - device.motion_logged_us >= (shook ? 1'000'000ull : 10'000'000ull);
+        if (!due || (!shook && device.motion_peak_g < 0.3f)) {
+            return;
+        }
+        std::fprintf(stderr,
+                     "[controller-motion] slot=%zu imu-reports=%llu shake=%s sensitivity=%u shakes=%u peak-g=%.2f "
+                     "peak-rate=%.1f threshold-g=%.2f threshold-rate=%.1f\n",
+                     device.slot, static_cast<unsigned long long>(device.imu_reports), motion.shake ? "on" : "off",
+                     static_cast<unsigned>(motion.shake_sensitivity), device.motion_shakes, device.motion_peak_g,
+                     device.motion_peak_rate, sw::SwitchMotion::shake_accel_threshold_g(motion.shake_sensitivity),
+                     sw::SwitchMotion::shake_gyro_threshold(motion.shake_sensitivity));
+        device.motion_logged_us = now;
+        device.motion_shakes_logged = device.motion_shakes;
+        device.motion_peak_g = 0.0f;
+        device.motion_peak_rate = 0.0f;
+    }
+
     void handle_report(Device& device, DWORD size) {
         const std::span<const std::uint8_t> report(device.buffer.data(), size);
         sw::DecodedState decoded{};
@@ -838,12 +867,21 @@ private:
             const std::uint64_t t = now - static_cast<std::uint64_t>((decoded.imu_count - 1u - i) * 5000u);
             const sw::SwitchMotion::Output out = device.motion.feed(decoded.imu[i], dt, t, motion);
             shake_started |= out.shake_started;
+            const sw::ImuSample& s = decoded.imu[i];
+            const float g = std::sqrt(s.accel[0] * s.accel[0] + s.accel[1] * s.accel[1] + s.accel[2] * s.accel[2]);
+            const float rate = std::sqrt(s.gyro[0] * s.gyro[0] + s.gyro[1] * s.gyro[1] + s.gyro[2] * s.gyro[2]);
+            if (std::isfinite(g) && std::isfinite(rate)) {
+                device.motion_peak_g = std::max(device.motion_peak_g, std::fabs(g - 1.0f));
+                device.motion_peak_rate = std::max(device.motion_peak_rate, rate);
+            }
+            device.motion_shakes += out.shake_started ? 1u : 0u;
             gyro_x += out.pointer_x;
             gyro_y += out.pointer_y;
         }
         if (decoded.imu_count != 0u) {
             ++device.imu_reports;
         }
+        log_motion(device, now, motion);
         AcquireSRWLockExclusive(&hub().lock);
         Published& published = hub().pads[device.slot];
         published.connected = true;

@@ -13368,6 +13368,15 @@ std::vector<SettingsRow> game_page(const RuntimeSettings& runtime) {
                             set_native_settings_visible(false);
                         },
                         "LOADS IT WITH THE GAME OWN STAGE CHANGE, FROM ANY GALAXY"});
+        rows.push_back({"GRAND STARS", "PRESS RIGHT",
+                        [](RenderConfig&, int delta) {
+                            if (delta <= 0) return;
+                            request_grand_stars();
+                            std::cerr << "[settings] grand stars\n";
+                            set_native_settings_visible(false);
+                        },
+                        "GIVES THIS SAVE FILE GRAND STARS 1-6 (EVERY DOME POWERED) AND LOADS THE OBSERVATORY. "
+                        "USE A SPARE FILE"});
     }
     return rows;
 }

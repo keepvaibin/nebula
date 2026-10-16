@@ -25,8 +25,9 @@ struct GalaxyStage {
 // its per-scenario data by the count without them (ScenarioData::getScenarioNum), so entering one directly
 // indexes past those arrays (IceVolcanoGalaxy 6 crashed in SpinDriverPathStorageScenario::setup).
 inline constexpr GalaxyStage kGalaxyStages[] = {
-    // The Comet Observatory (its first scenario: the stage change the galaxy tours enter it with). Not a galaxy
-    // to the game's name lookup: shown as kObservatoryName.
+    // The Comet Observatory in the state the save has reached (the game's own choice,
+    // StorySequenceExecutor::calcAproposScenarioNoOnAstroGalaxy). Not a galaxy to the game's name lookup: shown as
+    // kObservatoryName. Its power follows the save's Grand Stars (request_grand_stars).
     {"AstroGalaxy", 1u},
     {"EggStarGalaxy", 5u}, {"HoneyBeeKingdomGalaxy", 5u}, {"SurfingLv1Galaxy", 1u},
     {"FlipPanelExGalaxy", 1u}, {"TriLegLv1Galaxy", 1u},
@@ -48,6 +49,12 @@ inline constexpr GalaxyStage kGalaxyStages[] = {
 inline constexpr std::size_t kGalaxyStageCount = sizeof(kGalaxyStages) / sizeof(kGalaxyStages[0]);
 inline constexpr const char* kObservatoryId = "AstroGalaxy";
 inline constexpr const char* kObservatoryName = "COMET OBSERVATORY";
+// The Observatory's entry (kGalaxyStages stars): the save's state. The galaxy tour also enters its scenarios 1-5
+// (AstroGalaxyScenario ScenarioData), 0 the save's.
+inline constexpr const char* kObservatoryStates[] = {"AS IN YOUR SAVE"};
+// The Grand Stars GRAND STARS gives (SpecialStarGrand1-6: Gateway and the five Bowser and Bowser Jr. stages before
+// the last; 7, the Galaxy Reactor's, starts the ending).
+inline constexpr std::uint32_t kGrandStarsGiven = 6u;
 
 // The stars of a stage in kGalaxyStages; 0 for other stages.
 [[nodiscard]] std::uint32_t galaxy_stage_stars(std::string_view id) noexcept;
@@ -56,6 +63,8 @@ inline constexpr const char* kObservatoryName = "COMET OBSERVATORY";
 
 // Menu side.
 void request_galaxy_travel(std::size_t stage, std::uint32_t star) noexcept;
+// Grand Stars 1-kGrandStarsGiven in the current save file, then the Observatory.
+void request_grand_stars() noexcept;
 void want_galaxy_select_names() noexcept;
 // The game's names in upper case ("" until read).
 [[nodiscard]] std::string galaxy_select_name(std::size_t stage);
@@ -63,6 +72,7 @@ void want_galaxy_select_names() noexcept;
 
 // Simulation thread, at a scene's start.
 [[nodiscard]] bool take_galaxy_travel(std::size_t& stage, std::uint32_t& star) noexcept;
+[[nodiscard]] bool take_grand_stars() noexcept;
 [[nodiscard]] bool galaxy_select_names_wanted() noexcept;
 void set_galaxy_select_names(std::vector<std::string> galaxies, std::vector<std::vector<std::string>> stars);
 

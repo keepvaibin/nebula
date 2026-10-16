@@ -9,6 +9,7 @@ namespace galaxy::gx {
 namespace {
 
 std::atomic<std::uint64_t> g_travel{0u};  // stage + 1 in the low 32 bits, star in the high
+std::atomic<bool> g_grand_stars{false};
 std::atomic<bool> g_names_wanted{false};
 std::atomic<bool> g_names_known{false};
 std::mutex g_names_mutex;
@@ -41,6 +42,14 @@ void request_galaxy_travel(std::size_t stage, std::uint32_t star) noexcept {
         return;
     }
     g_travel.store((static_cast<std::uint64_t>(star) << 32u) | (stage + 1u), std::memory_order_release);
+}
+
+void request_grand_stars() noexcept {
+    g_grand_stars.store(true, std::memory_order_release);
+}
+
+bool take_grand_stars() noexcept {
+    return g_grand_stars.exchange(false, std::memory_order_acq_rel);
 }
 
 bool take_galaxy_travel(std::size_t& stage, std::uint32_t& star) noexcept {
