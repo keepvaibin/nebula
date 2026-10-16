@@ -4,7 +4,7 @@ Builds Nebula-Setup.exe from one exact source revision.
 
 .DESCRIPTION
 Exports the revision with `git archive` and records each file's SHA-256
-(Setup checks its GitHub download against it), builds nebula-recomp and the
+(Setup checks the source it installs against it), builds nebula-recomp and the
 runtime from that export, then compiles the launcher and Setup with the
 in-box C# compiler and embeds everything. -SigningKey also writes
 Nebula-Setup.exe.sig for the updater.

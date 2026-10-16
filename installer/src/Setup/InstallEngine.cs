@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -364,11 +365,11 @@ namespace Nebula.Setup
                     string gen = Path.Combine(staging, "generated");
                     RunRecomp(new[] { "generate", inputs, "--output", gen }, null);
 
-                    Stage(0.22, 0.08, "Downloading the compiler");
+                    Stage(0.22, 0.08, "Downloading the compiler and the Nebula source");
                     waitingForDownloads = true;
                     prepare.Join();
                     waitingForDownloads = false;
-                    if (prepareFailure != null) throw prepareFailure;
+                    if (prepareFailure != null) ExceptionDispatchInfo.Capture(prepareFailure).Throw();
                     Build(src, gen, app);
                 }
 

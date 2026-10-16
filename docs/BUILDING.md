@@ -82,7 +82,11 @@ ctest --test-dir D:\nebula\tests --output-on-failure
 ```
 
 Writes `dist\Nebula-Setup.exe` (with the prebuilt runtime inside), its `.sig`,
-the source zip and `build-info.json`. `Nebula-Setup.exe --source <zip>` uses a
-local source zip instead of GitHub, for testing before a push.
+the source zip `nebula-source-<commit>.zip` and `build-info.json`. Attach the
+setup, its `.sig` and the source zip to the GitHub release (tag `v<version>`).
+Setup takes the source from the zip beside it when that zip matches its manifest,
+then from the release's copy, then from GitHub's archive of the commit, so a setup
+built before a push installs from its folder in `dist`. `--source <zip|folder>`
+names a source explicitly.
 `installer/tools/pin-toolchain.ps1` re-pins the toolchain; a new toolchain
 makes updates rebuild the game modules.

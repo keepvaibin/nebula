@@ -50,6 +50,13 @@ $code = $LASTEXITCODE
 Remove-Item Env:NEBULA_DATA_ROOT
 if ($code -ne 0) { throw 'Launcher cases failed.' }
 
+# Setup's source: the zip beside it, download fallbacks and their messages.
+$setupSources = @(Get-ChildItem -LiteralPath (Join-Path $repo 'installer\src\Setup') -Filter *.cs | ForEach-Object FullName)
+& $csc /nologo /target:exe /platform:x64 /main:Nebula.Setup.SourceTreeTests "/out:$scratch\SourceTreeTests.exe" @refs @common @setupSources (Join-Path $PSScriptRoot 'SourceTreeTests.cs')
+if ($LASTEXITCODE -ne 0) { throw 'SourceTreeTests.exe compilation failed.' }
+& "$scratch\SourceTreeTests.exe" $scratch
+if ($LASTEXITCODE -ne 0) { throw 'Setup source cases failed.' }
+
 # nebula.ico: frame sizes, and the same 32 px image in every executable.
 Add-Type -AssemblyName System.Drawing
 $bytes = [IO.File]::ReadAllBytes($icon)
