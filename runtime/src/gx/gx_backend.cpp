@@ -6984,8 +6984,10 @@ bool GxBackend::rt_geometry_draw() const noexcept {
 // Late geometry: opaque draws after the screen capture (indirect-textured models: Rosalina), after the trace.
 bool GxBackend::rt_late_draw() const noexcept {
     static_assert(static_cast<std::uint8_t>(motion::ScenePhase::AfterIndirect) == kRtLatePhase);
-    return rt_state_eligible_ && scene_phase_ && side_layer_ == kSceneLayer && renderer_.rt_late_open() &&
-           rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::AfterIndirect);
+    // Alpha-tested late draws too (Rosalina's dress and eyes, obs79 outcome log: "untraced p8 [atest]"): traced whole,
+    // as the alpha-tested geometry of the other phases (rt_alpha_draw).
+    return (rt_state_eligible_ || rt_alpha_draw() || rt_card_draw()) && scene_phase_ && side_layer_ == kSceneLayer &&
+           renderer_.rt_late_open() && rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::AfterIndirect);
 }
 
 // An alpha-tested draw of the material table's foliage (grass tufts, flower carpets): traced as a card,
@@ -7190,8 +7192,12 @@ bool GxBackend::rt_hidden_draw() const noexcept {
     // MarioActor::drawReflectModel in the indirect phase) carry a mirrored position matrix. Under traced
     // reflections they doubled what the trace reflects (two Marios, user); GALAXY_RT_KEEP_GAME_MIRRORS=1 keeps them.
     static const bool keep_mirrors = read_env_u64("GALAXY_RT_KEEP_GAME_MIRRORS", 0u) != 0u;
-    if (!keep_mirrors && rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::AfterIndirect) &&
-        renderer_.rt_reflections_active()) {
+    // In the translucent phases too: the Observatory glass's Mario clone (user: "a clone that goes up and down instead
+    // of ray tracing"). The opaque phases keep any mirrored geometry the game builds with a negative scale.
+    const bool mirror_phase = rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::AfterIndirect) ||
+                              rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::Xlu) ||
+                              rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::ListXlu);
+    if (!keep_mirrors && mirror_phase && renderer_.rt_reflections_active()) {
         const std::uint32_t base = (state_.cp(cp::kMatrixIndexA) & 0x3Fu) * 4u;
         const auto m = [this, base](unsigned row, unsigned column) {
             return std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(base + row * 4u + column)));

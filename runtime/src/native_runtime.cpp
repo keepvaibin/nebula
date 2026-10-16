@@ -24860,6 +24860,12 @@ void apply_galaxy_select(RuntimeState& state, galaxy::PpcContext* context, galax
         std::vector<std::string> galaxies;
         std::vector<std::vector<std::string>> stars;
         for (const galaxy::gx::GalaxyStage& stage : galaxy::gx::kGalaxyStages) {
+            if (std::string_view(stage.id) == galaxy::gx::kObservatoryId) {
+                // Not a galaxy to the game's message lookups.
+                galaxies.emplace_back(galaxy::gx::kObservatoryName);
+                stars.emplace_back(std::vector<std::string>(stage.stars));
+                continue;
+            }
             write_name(kLookupName, stage.id);
             galaxies.push_back(read_message(call(0x803E7D78u, kLookupName, 0u)));  // getGalaxyNameOnCurrentLanguage
             std::vector<std::string> names;

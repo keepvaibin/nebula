@@ -25,6 +25,9 @@ struct GalaxyStage {
 // its per-scenario data by the count without them (ScenarioData::getScenarioNum), so entering one directly
 // indexes past those arrays (IceVolcanoGalaxy 6 crashed in SpinDriverPathStorageScenario::setup).
 inline constexpr GalaxyStage kGalaxyStages[] = {
+    // The Comet Observatory (its first scenario: the stage change the galaxy tours enter it with). Not a galaxy
+    // to the game's name lookup: shown as kObservatoryName.
+    {"AstroGalaxy", 1u},
     {"EggStarGalaxy", 5u}, {"HoneyBeeKingdomGalaxy", 5u}, {"SurfingLv1Galaxy", 1u},
     {"FlipPanelExGalaxy", 1u}, {"TriLegLv1Galaxy", 1u},
     {"StarDustGalaxy", 5u}, {"BattleShipGalaxy", 5u}, {"TamakoroExLv1Galaxy", 1u},
@@ -43,6 +46,8 @@ inline constexpr GalaxyStage kGalaxyStages[] = {
     {"TamakoroExLv2Galaxy", 1u}, {"SurfingLv2Galaxy", 1u},
 };
 inline constexpr std::size_t kGalaxyStageCount = sizeof(kGalaxyStages) / sizeof(kGalaxyStages[0]);
+inline constexpr const char* kObservatoryId = "AstroGalaxy";
+inline constexpr const char* kObservatoryName = "COMET OBSERVATORY";
 
 // The stars of a stage in kGalaxyStages; 0 for other stages.
 [[nodiscard]] std::uint32_t galaxy_stage_stars(std::string_view id) noexcept;

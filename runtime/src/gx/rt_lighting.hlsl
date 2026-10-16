@@ -1959,14 +1959,28 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
                 // A light behind a clear surface is reached from its inner side.
                 const bool behind = clear && dot(kept[s].xyz - p, ng) < 0.0f;
                 const float3 start = behind ? lifted - ng * (0.2f + abs(p.z) * 4e-4f) : origin;
-                const float3 to = kept[s].xyz - start;
+                // A point of the light's disc facing this sample (its glow radius, at most half the distance to it):
+                // the shadow's penumbra measured, filtered over frames by the lighting's temporal pass.
+                const float3 to_centre = kept[s].xyz - start;
+                const float centre_span = max(length(to_centre), 1e-4f);
+                const float3 axis = to_centre / centre_span;
+                const float az = axis.z >= 0.0f ? 1.0f : -1.0f;
+                const float aa = -1.0f / (az + axis.z);
+                const float ab = axis.x * axis.y * aa;
+                const float3 d1 = float3(1.0f + az * axis.x * axis.x * aa, az * ab, -az * axis.x);
+                const float3 d2 = float3(ab, az + axis.y * axis.y * aa, -axis.y);
+                const float2 du = sample_point(id.xy, max(g_rays, 1u) + 11u + 2u * s);
+                const float disc = min(kept[s].w, 0.5f * centre_span) * sqrt(du.x);
+                const float phi = 2.0f * kPi * du.y;
+                const float3 target = kept[s].xyz + (d1 * cos(phi) + d2 * sin(phi)) * disc;
+                const float3 to = target - start;
                 const float span = length(to);
                 RayDesc ray;
                 ray.Origin = start;
                 ray.Direction = to / max(span, 1e-4f);
                 ray.TMin = 0.0f;
                 // The light fills its glow (a core, a lamp head): the ray ends at its radius.
-                ray.TMax = max(span - max(0.9f * kept[s].w, 2.0f + 0.01f * span), 0.0f);
+                ray.TMax = max(span - max(kept[s].w, 2.0f + 0.01f * span), 0.0f);
                 RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
                          RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
                 query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);

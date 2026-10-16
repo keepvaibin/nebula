@@ -13335,7 +13335,10 @@ std::vector<SettingsRow> game_page(const RuntimeSettings& runtime) {
         const std::size_t stage = std::min(s_galaxy_select_stage, kGalaxyStageCount - 1u);
         const std::uint32_t star = std::clamp(s_galaxy_select_star, 1u, kGalaxyStages[stage].stars);
         std::string name = galaxy_select_name(stage);
-        if (name.empty()) name = upper_ascii(kGalaxyStages[stage].id);
+        if (name.empty()) {
+            name = std::string_view(kGalaxyStages[stage].id) == kObservatoryId ? std::string(kObservatoryName)
+                                                                                : upper_ascii(kGalaxyStages[stage].id);
+        }
         rows.push_back({"GALAXY SELECT", {}, nullptr, {}, true});
         rows.push_back({"GALAXY", name,
                         [](RenderConfig&, int delta) {

@@ -267,7 +267,14 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     // replaces the water's colour where it shows, as a mirror's does; the sky's part never brighter than the water
     // (WaterTraceCS), so nothing bleaches. (Cover 0.8 turned Beach Bowl's lagoon milky with the sky uncapped, v53a;
     // F0 0.2 and 0.3, builds 55-60: user, the water must reflect what is around it much more.)
-    materials_[kWaterClass] = material("GALAXY_RT_WATER", {0.03f, 0.5f, 1.0f, 0.0f, 0.6f});
+    // By quality (user: Low very little water reflection, Medium some, High a realistic mirror): F0 and cover
+    // 0.2 / 0.3 (Low), 0.35 / 0.45 (Medium), 0.5 / 0.6 (High); the composite caps it at 1.6 F0 (0.32, 0.56, 0.8).
+    {
+        const unsigned quality = get_render_config().rt_quality;   // 0 medium, 1 high, 2 low
+        const float f0 = quality == 1u ? 0.5f : quality == 2u ? 0.2f : 0.35f;
+        const float cover = quality == 1u ? 0.6f : quality == 2u ? 0.3f : 0.45f;
+        materials_[kWaterClass] = material("GALAXY_RT_WATER", {0.03f, f0, 1.0f, 0.0f, cover});
+    }
     materials_[kWaterClass + 1u] = materials_[kWaterClass];
     // Crystals, ice, gems and glass (named in rt_surfaces.cpp): clear dielectric, its reflection
     // white and Fresnel-weighted.

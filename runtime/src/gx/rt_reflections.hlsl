@@ -368,6 +368,10 @@ bool average(uint offset, out float3 light)
 // The angle a reflection ray of this sample may stray by from its neighbours' (radians): the water's ripples
 // and waves bend each pixel's normal its own way (WaterTraceCS); 0 elsewhere.
 static float g_spread = 0.0f;
+// The least footprint a reflection reads the frame over (EFB pixels): water's, one of the game's own 640-wide pixels,
+// so its mirror never aliases the scenery's fine texture (lattice bars, grass) into per-pixel grain, the same at any
+// resolution; 0 elsewhere (WaterTraceCS).
+static float g_reflect_blur = 0.0f;
 
 // The frame's colour at `pixel`, averaged over a footprint `blur` pixels wide (8 taps): what a rippled
 // surface's rays scatter across, not the one texel a single ray lands on.
@@ -742,7 +746,7 @@ bool passes_through(uint instance, uint primitive, float2 b)
     // A rippled surface's rays (g_spread) read the frame over their footprint, which already holds the cut-outs
     // as the game drew them: per ray, a lattice bar or its hole speckled Buoy Base's water (v72w). Its rays
     // take alpha-tested draws whole; mirrors and metal test each texel.
-    if (instance != 0u || (g_flags & 2048u) == 0u || g_spread > 0.0f) {
+    if (instance != 0u || (g_flags & 2048u) == 0u || g_spread > 0.0f || g_reflect_blur > 0.0f) {
         return false;
     }
     const uint draw = g_surfaces.Load(primitive * 16u + 12u) >> 16u;
@@ -1085,7 +1089,8 @@ Reflected reflect_light(uint2 s, float3 dir, float3 n, float3 ng, float3 hit, fl
         const float x_distance = length(x);
         float seen;
         // A rippled surface's rays spread over r.distance * g_spread around the hit: its pixels there.
-        const float blur = g_spread > 0.0f ? min(r.distance * g_spread / pixel_size(x.z), 12.0f) : 0.0f;
+        const float blur = max(g_spread > 0.0f ? min(r.distance * g_spread / pixel_size(x.z), 12.0f) : 0.0f,
+                               g_reflect_blur);
         const bool shown = x.z < -g_near && shown_at(eye_to_pixel(g_projection, g_viewport, x), r.light, seen, blur) &&
                                  abs(seen - x_distance) < 0.03f * x_distance + 2.0f;
         float3 drawn;
@@ -1127,8 +1132,8 @@ Reflected reflect_light(uint2 s, float3 dir, float3 n, float3 ng, float3 hit, fl
     } else {
         float seen;
         // The sky lies at infinity: a rippled surface's rays spread over g_spread of it, its pixels that angle.
-        const float sky_blur = g_spread > 0.0f
-            ? min(g_spread * max(abs(g_projection.x) * g_viewport.z, 1e-4f) * 0.5f, 12.0f) : 0.0f;
+        const float sky_blur = max(g_spread > 0.0f
+            ? min(g_spread * max(abs(g_projection.x) * g_viewport.z, 1e-4f) * 0.5f, 12.0f) : 0.0f, g_reflect_blur);
         const bool sky_shown = l.z < -1e-3f &&
                                shown_at(eye_to_pixel(g_projection, g_viewport, l), r.light, seen, sky_blur) &&
                                seen >= kSkyDistance;
@@ -1625,9 +1630,11 @@ float3 water_detail(float3 n, float3 hit, bool flow)
         t2 = cross(wn, t1);
     }
     const float3 wp = transform(g_eye_to_world, hit);
-    // Off where a pixel spans the finest waves (23 units): far water and water seen edge-on, whose waves
-    // would alias into a different slope per pixel.
-    const float footprint = pixel_size(hit.z) / max(abs(dot(n, normalize(hit))), 0.1f);
+    // Off where one of the game's own 640-wide pixels spans the finest waves (23 units): far water and water seen
+    // edge-on, whose waves would alias into a different slope per pixel. The game's pixel, not the render's: the
+    // same waves at any internal resolution.
+    const float native = max(g_viewport.z / 640.0f, 1.0f);
+    const float footprint = pixel_size(hit.z) * native / max(abs(dot(n, normalize(hit))), 0.1f);
     const float fade = saturate(1.5f - length(hit) / 6000.0f) * saturate(2.0f - footprint / 12.0f);
     const float2 s = wave_slope(float2(dot(wp, t1), dot(wp, t2)), float(g_frame), flow) * (g_waves * fade);
     const float3 wd = normalize(wn - s.x * t1 - s.y * t2);
@@ -1715,16 +1722,21 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
             }
             // Translucent crystal and glass draws share the pass: no ripples, no water below them.
             const bool crystal = ((record.w >> 8u) & 15u) == kCrystal;
-            const float3 calm = n;
+            // The reflection is traced off the calm surface: every pixel's ray mirrors coherently, one sharp image
+            // that the composite moves with the waves (water_distortion). Rays bent per pixel by the waves (up to
+            // 17 degrees) scattered the image into glitter, the more the higher the resolution (user, Native42 at
+            // 6x: "barely any reflection and so much flicker"). The waves shape the glints only.
+            float3 wave = n;
             if (!crystal) {
-                n = rippled(q, n);
-                n = water_detail(n, dir * query.CommittedRayT(), (record.w & kWaterfallFlag) != 0u);
+                wave = water_detail(rippled(q, n), dir * query.CommittedRayT(), (record.w & kWaterfallFlag) != 0u);
             }
-            // The reflection strays by up to twice the normal's bend: the footprint its rays average over.
-            g_spread = crystal ? 0.0f : 2.0f * length(cross(n, calm));
             if (dot(n, -dir) < 0.02f) {
                 n = ng;
             }
+            if (dot(wave, -dir) < 0.02f) {
+                wave = n;
+            }
+            g_spread = 0.0f;
             const float3 hit = dir * query.CommittedRayT();
             // A waterfall is a clear sheet (no lake body under it), its streaks in its normal.
             const bool fall = (record.w & kWaterfallFlag) != 0u;
@@ -1744,9 +1756,20 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
             // the bright world above only washed the view out (measured: Beach Bowl underwater).
             if (params.y > 0.0f && emitter < 1.0f && !below) {
                 reflected = true;
-                const Reflected r = reflect_light(id.xy, dir, n, ng, hit, params, base, true, false);
+                // Water: a mirror (no lobe jitter: the composite's distortion is its roughness).
+                float4 ray_params = params;
+                ray_params.x = crystal ? params.x : 1e-4f;
+                g_reflect_blur = crystal ? 0.0f : 1.25f * max(g_viewport.z / 640.0f, 1.0f);
+                const Reflected r = reflect_light(id.xy, dir, n, ng, hit, ray_params, base, false, false);
+                g_reflect_blur = 0.0f;
                 light = r.light;
-                highlight = min(r.highlight, 1.5f) * (surface == kWaterSurface ? 0.5f : 1.0f);
+                // The lights' glints off the waves, their lobe widened by the waves' spread over the pixel (specular
+                // anti-aliasing, highlights), weighted like the reflection.
+                g_spread = crystal ? 0.0f : 2.0f * length(cross(wave, n));
+                const float3 glint_origin = hit + ng * (0.2f + abs(hit.z) * 4e-4f);
+                const float3 glints = highlights(id.xy, hit, glint_origin, wave, -dir, params.x, params.z, false) * params.y;
+                g_spread = 0.0f;
+                highlight = min(glints, 1.5f) * (surface == kWaterSurface ? 0.5f : 1.0f);
                 // Water mirrors what stands over it in full, and the sky at no more than the water's own
                 // brightness: the sky's hues and clouds read in it, its light adds none (the bright sky
                 // bleached the far lagoon, measured wb36; user: reflect the sky, never overexposed). The scale
@@ -2031,8 +2054,7 @@ float4 filtered_light(uint2 id, uint index, uint4 info, bool first, out float3 h
             highlight = highlight_sum / shape_sum;
         }
         if (water_light && neighbours >= 3u && light_known > 1e-4f) {
-            const float3 kept = clamp(value.rgb, light_low, light_high);
-            value.rgb = lerp(kept, light_sum / light_known, 0.5f);
+            value.rgb = clamp(value.rgb, light_low, light_high);
         }
     }
     return value;
@@ -2247,7 +2269,7 @@ Blend blend_samples(float2 pixel, float3 p, bool water)
             // clearly (user: water reflects everything around it; 0.5 left Buoy Base's and Beach Bowl's water
             // looking unreflective). The sky in it never outshines the water (WaterTraceCS): no bleaching.
             if (surface_class == kWaterSurface) {
-                k = min(k, 0.8f * sample_weight);
+                k = min(k, min(0.8f, 1.6f * c.y) * sample_weight);
             }
             const float3 light = min(unpack_r11g11b10(sample.x), 1.0f);
             b.sum += light * (k * bw);
@@ -2466,6 +2488,36 @@ float caustic(float3 floor, float3 surface, float3 plane)
     return 1.0f + clamp(focus - 1.0f, -0.6f, 1.5f) * 0.3f * saturate(m_sun.w) * exp(-depth / 1500.0f);
 }
 
+// Where the waves move the reflected image of water at eye-space `p` (normal `n`, at traced-frame pixel `pixel`):
+// a surface tilted by slope s shows what stands about 150 units over it moved by s times that, projected to the
+// screen, at most 1.2 % of the viewport's height: one smooth, animated wobble at any resolution.
+float2 water_distortion(float3 p, float3 n, float2 pixel)
+{
+    const uint s0 = m_sample_size.x * m_sample_size.y;
+    float4 to_world[3];
+    [unroll] for (uint r = 0u; r < 3u; ++r) {
+        const uint2 a = m_under[s0 + 2u + 2u * r];
+        const uint2 c = m_under[s0 + 3u + 2u * r];
+        to_world[r] = float4(asfloat(a.x), asfloat(a.y), asfloat(c.x), asfloat(c.y));
+    }
+    const float frame = float(m_under[s0 + 1u].y);
+    const float3 wn = normalize(rotate(to_world, n));
+    const float3 t1 = normalize(abs(wn.y) < 0.9f ? cross(wn, float3(0.0f, 1.0f, 0.0f)) : cross(wn, float3(1.0f, 0.0f, 0.0f)));
+    const float3 t2 = cross(wn, t1);
+    const float3 wp = transform(to_world, p);
+    const float2 slope = wave_slope(float2(dot(wp, t1), dot(wp, t2)), frame, false) * m_water2.x;
+    const float3 shift_world = (slope.x * t1 + slope.y * t2) * 150.0f;
+    const float3 shift_eye = float3(dot(float3(to_world[0].x, to_world[1].x, to_world[2].x), shift_world),
+                                    dot(float3(to_world[0].y, to_world[1].y, to_world[2].y), shift_world),
+                                    dot(float3(to_world[0].z, to_world[1].z, to_world[2].z), shift_world));
+    const float3 moved = p + shift_eye;
+    if (moved.z >= -m_near) {
+        return float2(0.0f, 0.0f);
+    }
+    const float limit = 0.012f * m_viewport.w;
+    return clamp(eye_to_pixel(m_projection, m_viewport, moved) - pixel, -limit, limit);
+}
+
 // The translucent water's reflections (WaterTraceCS), after the water is drawn: Fresnel-weighted
 // reflection and highlights over the water's body, which shows the floor through the rippled surface
 // (refracted, lit by the sun the ripples focus) and deepens the game's water colour towards blue with
@@ -2503,6 +2555,17 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
     }
     const uint view = (m_flags >> 1u) & 7u;
     Blend b = blend_samples(pixel, p, true);
+    // The reflected image where the waves move it (its glints and the surface's normal where they are).
+    if (b.surface > 1e-4f && m_water2.x > 0.0f && b.nearest_class == kWaterSurface) {
+        const float2 moved = pixel + water_distortion(p, normalize(b.normal), pixel);
+        const Blend r = blend_samples(moved, p, true);
+        if (r.k_sum > 1e-4f && r.weight > 1e-4f) {
+            const float scale = b.weight / r.weight;
+            b.sum = r.sum * scale;
+            b.covered = r.covered * scale;
+            b.k_sum = r.k_sum * scale;
+        }
+    }
     // Where the samples under the pixel disagree in normal (a rounded lip between the water's top and
     // its side wall), their reflections and glints do not belong to one surface: a line of them would
     // trace the edge. They fade there; flat water seen at a grazing angle keeps its reflection.
