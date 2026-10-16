@@ -223,6 +223,8 @@ namespace Nebula.Launcher
         private readonly List<MonitorEntry> monitors = DisplayInfo.Enumerate();
         private GraphicsSettings graphics = GraphicsSettings.Load();
         private AudioSettings audio = AudioSettings.Load();
+        private GeneralSettings general = GeneralSettings.Load();
+        private readonly ComboBox textSpeed = new ComboBox();
         private readonly ControlsSettings controls = ControlsSettings.Load();
         private bool loading;
         private readonly ComboBox inputSource = new ComboBox(), editScheme = new ComboBox(), motion = new ComboBox(),
@@ -286,8 +288,9 @@ namespace Nebula.Launcher
             var image = new TabPage("Graphics");
             var sound = new TabPage("Audio");
             var input = new TabPage("Controls");
+            var generalPage = new TabPage("General");
             var advanced = new TabPage("Advanced");
-            tabs.TabPages.AddRange(new[] { display, image, input, sound, advanced });
+            tabs.TabPages.AddRange(new[] { display, image, input, sound, generalPage, advanced });
             Controls.Add(tabs);
 
             int y = 16;
@@ -350,6 +353,10 @@ namespace Nebula.Launcher
             }
 
             BuildControlsTab(input);
+
+            y = 16;
+            Row(generalPage, "Text speed", textSpeed, ref y);
+            textSpeed.Items.AddRange(GeneralSettings.TextSpeeds);
 
             y = 16;
             Label(advanced, "Game content", 12, y + 3);
@@ -727,6 +734,7 @@ namespace Nebula.Launcher
                 volumes[i].Value = Math.Max(0, Math.Min(200, audio.Percent[i]));
                 volumeValues[i].Text = volumes[i].Value + "%";
             }
+            textSpeed.SelectedIndex = Math.Max(0, Math.Min(general.TextSpeed - 1, GeneralSettings.TextSpeeds.Length - 1));
             recording.SelectedIndex = (int)session.Recording;
             contentLabel.Text = session.Content;
             windowSize = new Size(graphics.WindowWidth, graphics.WindowHeight);
@@ -863,6 +871,8 @@ namespace Nebula.Launcher
                 graphics.Save();
                 for (int i = 0; i < volumes.Length; i++) audio.Percent[i] = volumes[i].Value;
                 audio.Save();
+                general.TextSpeed = Math.Max(0, textSpeed.SelectedIndex) + 1;
+                general.Save();
                 EndCapture();
                 if (controls.InputMode != ControlsSettings.ModeRealWiimote) controls.InputMode = Math.Max(0, inputSource.SelectedIndex);
                 controls.Save();

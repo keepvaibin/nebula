@@ -50,8 +50,7 @@ namespace galaxy::gx {
 
 std::string native_settings_row_text(
     unsigned tab, unsigned row,
-    const RenderConfig& render, const RuntimeSettings& runtime,
-    const RenderFeatureCaps& caps);
+    const RenderConfig& render, const RuntimeSettings& runtime);
 
 bool detail::ConversionRtvSlot::bind(
     ID3D12Device* device, ID3D12Resource* resource,
@@ -676,7 +675,7 @@ unsigned native_settings_row_count(unsigned tab) {
     case 1: return fsr3_available() ? 9u : 8u;
     case 2: return controls_row_count();
     case 3: return 6u;
-    case 4: return 6u;
+    case 4: return 1u;
     default: return 0u;
     }
 }
@@ -820,8 +819,7 @@ void adjust_native_setting(int delta) {
     const unsigned row = s_native_settings_row.load(std::memory_order_relaxed);
     const auto text = [tab, row] {
         return native_settings_row_text(tab, row, s_settings_draft,
-                                        get_runtime_settings(),
-                                        get_render_feature_caps());
+                                        get_runtime_settings());
     };
     const std::string before = text();
     adjust_native_setting_unlogged(delta);
@@ -1095,6 +1093,15 @@ void adjust_native_setting_unlogged(int delta) {
         const float next = step_gain(*gains[row], delta);
         if (next != *gains[row]) {
             *gains[row] = next;
+            set_runtime_settings(settings);
+            s_native_settings_dirty.store(true, std::memory_order_release);
+        }
+    }
+    if (tab == 4u && row == 0u) {
+        // Text speed changes live (no apply).
+        const unsigned next = step(std::clamp(settings.text_speed, 1u, 3u) - 1u, 3u) + 1u;
+        if (next != settings.text_speed) {
+            settings.text_speed = next;
             set_runtime_settings(settings);
             s_native_settings_dirty.store(true, std::memory_order_release);
         }
@@ -9207,10 +9214,6 @@ std::string percent_text(float value) {
     return text;
 }
 
-const char* exposed_text(const RenderFeatureStatus& status) {
-    return status.settings_exposed ? "READY" : "HIDDEN";
-}
-
 std::string upper_ascii(std::string text) {
     for (char& ch : text) {
         if (ch >= 'a' && ch <= 'z') ch = static_cast<char>(ch - 'a' + 'A');
@@ -9220,8 +9223,7 @@ std::string upper_ascii(std::string text) {
 
 std::string native_settings_row_text(
     unsigned tab, unsigned row,
-    const RenderConfig& render, const RuntimeSettings& runtime,
-    const RenderFeatureCaps& caps) {
+    const RenderConfig& render, const RuntimeSettings& runtime) {
     char text[128]{};
     switch (tab % kNativeSettingsTabCount) {
     case 0: {
@@ -9402,31 +9404,11 @@ std::string native_settings_row_text(
         default: return {};
         }
     case 4:
-        switch (row) {
-        case 0:
-            std::snprintf(
-                text,
-                sizeof(text),
-                "DXR: TIER %u %s",
-                caps.dxr_raytracing_tier,
-                exposed_text(caps.dxr));
+        if (row == 0u) {
+            std::snprintf(text, sizeof(text), "TEXT SPEED: %uX", std::clamp(runtime.text_speed, 1u, 3u));
             return text;
-        case 1:
-            return std::string("STREAMLINE: ") +
-                   exposed_text(caps.streamline);
-        case 2:
-            return std::string("REFLEX: ") + exposed_text(caps.reflex);
-        case 3:
-            return std::string("DLSS: ") +
-                   exposed_text(caps.dlss_super_resolution);
-        case 4:
-            return std::string("DLFG: ") +
-                   exposed_text(caps.dlss_frame_generation);
-        case 5:
-            return post_process_caps_text(get_post_process_status());
-        default:
-            return {};
         }
+        return {};
     default:
         return {};
     }
@@ -9500,7 +9482,7 @@ void draw_native_settings_overlay(RendererD3D12& renderer) {
         "SETTINGS",
         text);
 
-    const char* tabs[] = {"DISPLAY", "GRAPHICS", "CONTROLS", "AUDIO", "CAPS"};
+    const char* tabs[] = {"DISPLAY", "GRAPHICS", "CONTROLS", "AUDIO", "GENERAL"};
     static_assert(std::size(tabs) == kNativeSettingsTabCount);
     int tab_x = panel_x + 28;
     // Five labels share the panel width; the longest is eight 6-unit glyphs
@@ -9523,7 +9505,6 @@ void draw_native_settings_overlay(RendererD3D12& renderer) {
     expire_controls_capture();
     const RenderConfig row_render = s_settings_draft;
     const RuntimeSettings row_runtime = get_runtime_settings();
-    const RenderFeatureCaps row_caps = get_render_feature_caps();
     const unsigned row_count = native_settings_row_count(tab);
     const unsigned selected_row =
         std::min(s_native_settings_row.load(std::memory_order_relaxed),
@@ -9560,7 +9541,7 @@ void draw_native_settings_overlay(RendererD3D12& renderer) {
             panel_x + 70,
             y,
             scale,
-            native_settings_row_text(tab, row, row_render, row_runtime, row_caps),
+            native_settings_row_text(tab, row, row_render, row_runtime),
             text);
     }
 

@@ -28,6 +28,8 @@ struct RuntimeAudioSettings {
 struct RuntimeSettings {
     RuntimeInputMode input_mode = RuntimeInputMode::Auto;
     RuntimeAudioSettings audio{};
+    // Steps of dialogue text revealed per frame: 1 the game's pace, 2 or 3.
+    unsigned text_speed = 1u;
 };
 
 // A coherent input-source snapshot. The generation changes only when the selected input mode changes,

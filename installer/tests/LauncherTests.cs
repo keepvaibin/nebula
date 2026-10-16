@@ -189,6 +189,22 @@ namespace Nebula.Launcher
             return path;
         }
 
+        static void GeneralCases()
+        {
+            string path = AudioSettings.SettingsPath;
+            if (File.Exists(path)) File.Delete(path);
+            Check(GeneralSettings.Load().TextSpeed == 1, "text speed starts at the game's pace");
+            File.WriteAllText(path, "audio_master_gain=0.5\ntext_speed=7\n");
+            Check(GeneralSettings.Load().TextSpeed == 1, "an unknown text speed reads as 1x");
+            var general = GeneralSettings.Load();
+            general.TextSpeed = 3;
+            general.Save();
+            string saved = File.ReadAllText(path);
+            Check(saved.Contains("text_speed=3") && saved.Contains("audio_master_gain=0.5") && GeneralSettings.Load().TextSpeed == 3,
+                  "text speed is saved beside the other runtime settings");
+            File.Delete(path);
+        }
+
         static void SaveArchiveCases(string scratch)
         {
             string saves = NebulaPaths.Saves, parent = Path.GetDirectoryName(saves);
@@ -313,6 +329,7 @@ namespace Nebula.Launcher
                 Check(!string.IsNullOrEmpty(dataRoot) && NebulaPaths.DataRoot == dataRoot, "NEBULA_DATA_ROOT replaces the user data root");
                 string outDir = args[0];
                 WindowSizeCases();
+                GeneralCases();
                 SaveArchiveCases(outDir);
                 Application.EnableVisualStyles();
 

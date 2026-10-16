@@ -155,6 +155,7 @@ int main() {
     _putenv_s("GALAXY_AUDIO_EFFECTS_GAIN", "");
     _putenv_s("GALAXY_AUDIO_VOICE_GAIN", "");
     _putenv_s("GALAXY_AUDIO_AMBIENCE_GAIN", "");
+    _putenv_s("GALAXY_TEXT_SPEED", "");
     std::filesystem::remove(settings_path);
     galaxy::load_runtime_settings_from_file();
     passed &= expect(
@@ -538,6 +539,21 @@ int main() {
                     galaxy::RuntimeInputMode::KeyboardMouse,
             "reload applies audio gains only");
     }
+
+    write_text(settings_path, "text_speed=3\n");
+    galaxy::load_runtime_settings_from_file();
+    passed &= expect(galaxy::get_runtime_settings().text_speed == 3u, "text speed 3x loads");
+    write_text(settings_path, "text_speed=9\n");
+    galaxy::load_runtime_settings_from_file();
+    passed &= expect(galaxy::get_runtime_settings().text_speed == 1u, "an unknown text speed keeps the game's pace");
+    _putenv_s("GALAXY_TEXT_SPEED", "2");
+    galaxy::load_runtime_settings_from_file();
+    passed &= expect(galaxy::get_runtime_settings().text_speed == 2u, "text speed has an environment override");
+    _putenv_s("GALAXY_TEXT_SPEED", "");
+    passed &= expect(
+        galaxy::save_runtime_settings_to_file() &&
+            read_text(settings_path).find("text_speed=2") != std::string::npos,
+        "text speed is saved with the other settings");
 
     std::filesystem::remove_all(root);
 

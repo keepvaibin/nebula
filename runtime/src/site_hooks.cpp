@@ -5,7 +5,9 @@
 #include "galaxy/layout_aspect_cinema.h"
 #include "galaxy/layout_aspect_fits.h"
 #include "galaxy/layout_aspect_home.h"
+#include "galaxy/runtime_settings.h"
 
+#include <algorithm>
 #include <bit>
 #include <stdexcept>
 #include <string>
@@ -142,6 +144,23 @@ void dispatch_site_hook(
         fit_rmge01_scenario_sky(context, memory, services, guest_pc);
         fit_rmge01_scenario_camera(memory, services, guest_pc);
         return;
+    case SiteHookKind::TextStep: {
+        // Text speed 2x/3x: the same step again while text is still appearing
+        // (TalkTextFormer::isTextAppearedAll 0x802A368C, updateTalking 0x802A367C).
+        const unsigned extra = std::clamp(get_runtime_settings().text_speed, 1u, 3u) - 1u;
+        if (extra == 0u) return;
+        const std::uint32_t former = argument == 0u
+            ? guest_load_u32(memory, context->gpr[31] + 0x24u, services, guest_pc)
+            : context->gpr[30] + 0x24u;
+        for (unsigned i = 0; i < extra; ++i) {
+            context->gpr[3] = former;
+            services->call_guest(services->user, 0x802A368Cu, context, memory);
+            if ((context->gpr[3] & 0xFFu) != 0u) return;
+            context->gpr[3] = former;
+            services->call_guest(services->user, 0x802A367Cu, context, memory);
+        }
+        return;
+    }
     case SiteHookKind::LodDistance:
         // LodCtrl::update keeps the game's distances: which model shows is
         // also game state (MR::isHiddenModel).

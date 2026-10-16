@@ -56,16 +56,16 @@ namespace Nebula.Setup
 
         /// <summary>
         /// Raised when generated module code changes in a way a relink cannot deliver (a relink keeps the
-        /// compiled objects); see ModulesNeedRebuild. 2: fused multiply-adds without the C runtime
-        /// (galaxy/fused_multiply_add.h). An SSE2 module of generation 1 calls the C runtime's fma, a
-        /// soft-float routine on CPUs without FMA3, for every fused guest instruction.
+        /// compiled objects); an update recompiles installed modules of a lower generation. 2 (1.0.1): the
+        /// text speed setting's TextStep site hook; fused multiply-adds without the C runtime (a 1.0.0 SSE2
+        /// module calls its soft-float fma for every fused guest instruction); no LodDistance hook.
         /// </summary>
         public const int ModuleGeneration = 2;
 
         /// <summary>Installed modules an update must recompile rather than relink.</summary>
         private static bool ModulesNeedRebuild(InstalledInfo current)
         {
-            return current.ModuleGeneration < 2 && current.ModuleIsa == "SSE2";
+            return current.ModuleGeneration < ModuleGeneration;
         }
 
         /// <summary>Module build recipe; part of the module compatibility key.</summary>

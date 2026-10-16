@@ -48,7 +48,9 @@ it is the original game code, translated instruction by instruction by the recom
 - Anti-aliasing (SMAA, FXAA), AMD FidelityFX FSR 1 upscaling, anisotropic filtering and
   optional per-pixel lighting.
 - In-game settings menu (F1, View + Menu on Xbox, Minus + Plus on Switch).
-- Saves stored in `%LOCALAPPDATA%\Nebula\saves`.
+- Text speed: dialogue and Rosalina's storybook at the original pace, 2x or 3x.
+- Saves stored in `%LOCALAPPDATA%\Nebula\saves`, with export, import and Dolphin saves
+  (see [Saves](#saves)).
 
 ## Requirements
 

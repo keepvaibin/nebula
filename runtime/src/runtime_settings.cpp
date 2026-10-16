@@ -55,6 +55,7 @@ RuntimeSettings sanitize_settings(RuntimeSettings settings) {
     settings.audio.voice = sanitize_gain(settings.audio.voice);
     settings.audio.ambience = sanitize_gain(settings.audio.ambience);
     settings.audio.cutscene = sanitize_gain(settings.audio.cutscene);
+    settings.text_speed = std::clamp(settings.text_speed, 1u, 3u);
     return settings;
 }
 
@@ -139,6 +140,10 @@ void apply_kv(RuntimeSettings& settings, const char* key, const char* value) {
         settings.audio.ambience = parse_gain(value, settings.audio.ambience);
     } else if (std::strcmp(key, "audio_cutscene_gain") == 0) {
         settings.audio.cutscene = parse_gain(value, settings.audio.cutscene);
+    } else if (std::strcmp(key, "text_speed") == 0) {
+        if (value[0] >= '1' && value[0] <= '3' && value[1] == '\0') {
+            settings.text_speed = static_cast<unsigned>(value[0] - '0');
+        }
     }
 }
 
@@ -272,6 +277,7 @@ void apply_env_overrides(RuntimeSettings& settings) {
         settings, "GALAXY_AUDIO_AMBIENCE_GAIN", "audio_ambience_gain");
     apply_env(
         settings, "GALAXY_AUDIO_CUTSCENE_GAIN", "audio_cutscene_gain");
+    apply_env(settings, "GALAXY_TEXT_SPEED", "text_speed");
 }
 
 }  // namespace
@@ -350,6 +356,7 @@ bool reload_runtime_audio_settings_if_changed() noexcept {
         apply_env_overrides(parsed);
         RuntimeSettings settings = get_runtime_settings();
         settings.audio = parsed.audio;
+        settings.text_speed = parsed.text_speed;
         set_runtime_settings(settings);
         input::set_controls_config(controls);
         s_audio_settings_write_time = write_time;
@@ -379,6 +386,7 @@ bool save_runtime_settings_to_file() {
                  << "audio_voice_gain=" << settings.audio.voice << '\n'
                  << "audio_ambience_gain=" << settings.audio.ambience << '\n'
                  << "audio_cutscene_gain=" << settings.audio.cutscene << '\n'
+                 << "text_speed=" << settings.text_speed << '\n'
                  << input::format_controls_settings(input::get_controls_config());
         if (!contents) {
             return false;

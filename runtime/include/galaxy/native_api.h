@@ -507,6 +507,9 @@ enum class SiteHookKind : std::uint32_t {
     HomeGeometry = 14,          // argument: kind | lane << 8
     LodDistance = 15,           // 1.0.0 modules only; a no-op (see site_hooks.cpp)
     MultiSceneModel = 16,       // r31 MultiSceneActor, r3 its J3DModel
+    // One step of dialogue text was revealed (TalkTextFormer::updateTalking); the value matches the
+    // development line's.
+    TextStep = 28,              // argument 0: TalkBalloon in r31; 1: RosettaMonologue in r30
 };
 
 inline void site_hook(

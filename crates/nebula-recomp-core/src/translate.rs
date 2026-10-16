@@ -7657,6 +7657,14 @@ fn emit_direct_guest_call_with_exact_fpu(
         // No LodDistance hook after LodCtrl::update's distance call: which
         // model shows is game state, so nothing may change it (the runtime
         // keeps a no-op for modules generated before 1.0.1).
+        // TalkTextFormer::updateTalking reveals one step of a talk balloon's
+        // (TalkBalloon, former at r31 + 0x24) or Rosalina's storybook text
+        // (RosettaMonologue, former at r30 + 0x24) per frame; the runtime
+        // repeats it for the text speed setting. Movie subtitles keep the
+        // movie's pace.
+        if target == 0x802A_367C && (pc == 0x8029_D1A8 || pc == 0x8028_2B38) {
+            output.push_str(&site_hook_call(pc, "TextStep", u32::from(pc == 0x8028_2B38)));
+        }
         Ok(())
     }
 

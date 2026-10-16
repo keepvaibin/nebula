@@ -99,7 +99,7 @@ int main() {
     passed &= expect(!snapshot.visible, "overlay starts hidden");
     passed &= expect(!snapshot.dirty, "overlay starts clean");
     passed &= expect(!snapshot.save_error, "overlay starts without a save error");
-    passed &= expect(snapshot.tab_count == 5u, "display/graphics/controls/audio/caps tabs exist");
+    passed &= expect(snapshot.tab_count == 5u, "display/graphics/controls/audio/general tabs exist");
     passed &= expect(snapshot.tab == 0u && snapshot.row == 0u, "display row zero is selected");
     passed &= expect(
         snapshot.row_count == 8u,
@@ -386,9 +386,14 @@ int main() {
         0.95f,
         "audio page decreases cutscene gain");
 
-    passed &= expect(key(VK_TAB), "Tab enters the capability page");
+    passed &= expect(key(VK_TAB), "Tab enters the general page");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
-    passed &= expect(snapshot.tab == 4u && snapshot.row_count == 6u, "capability page has six status rows");
+    passed &= expect(snapshot.tab == 4u && snapshot.row_count == 1u, "general page has the text speed row only");
+    passed &= expect(galaxy::get_runtime_settings().text_speed == 1u, "text speed starts at the game's pace");
+    passed &= expect(key(VK_RIGHT) && galaxy::get_runtime_settings().text_speed == 2u, "right raises text speed live");
+    passed &= expect(key(VK_RIGHT) && key(VK_RIGHT) && galaxy::get_runtime_settings().text_speed == 3u,
+                     "text speed stops at 3x");
+    passed &= expect(key(VK_LEFT) && galaxy::get_runtime_settings().text_speed == 2u, "left lowers text speed");
     passed &= expect(key(VK_TAB), "Tab navigation wraps");
     passed &= expect(
         galaxy::gx::native_settings_overlay_snapshot().tab == 0u,
@@ -435,7 +440,7 @@ int main() {
                 tiny_caps.footer_y &&
             tiny_caps.footer_y + 2 * 18 + 7 <=
                 tiny_caps.panel_y + tiny_caps.panel_height,
-        "427x240 capability rows do not overlap the compact footer");
+        "427x240 general rows do not overlap the compact footer");
     const auto compact =
         galaxy::gx::compute_native_settings_layout(854u, 480u, 4u);
     passed &= expect(
@@ -445,7 +450,7 @@ int main() {
                 compact.footer_y &&
             compact.footer_y + 2 * 28 + 14 <=
                 compact.panel_y + compact.panel_height,
-        "854x480 capability layout stays inside the backbuffer without footer overlap");
+        "854x480 general layout stays inside the backbuffer without footer overlap");
     const auto ultra_hd =
         galaxy::gx::compute_native_settings_layout(3840u, 2160u, 4u);
     passed &= expect(
