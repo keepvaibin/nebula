@@ -54,6 +54,20 @@ namespace Nebula.Setup
         /// <summary>Bump when nebula-recomp package-content output changes shape.</summary>
         public const int ContentFormatVersion = 1;
 
+        /// <summary>
+        /// Raised when generated module code changes in a way a relink cannot deliver (a relink keeps the
+        /// compiled objects); see ModulesNeedRebuild. 2: fused multiply-adds without the C runtime
+        /// (galaxy/fused_multiply_add.h). An SSE2 module of generation 1 calls the C runtime's fma, a
+        /// soft-float routine on CPUs without FMA3, for every fused guest instruction.
+        /// </summary>
+        public const int ModuleGeneration = 2;
+
+        /// <summary>Installed modules an update must recompile rather than relink.</summary>
+        private static bool ModulesNeedRebuild(InstalledInfo current)
+        {
+            return current.ModuleGeneration < 2 && current.ModuleIsa == "SSE2";
+        }
+
         /// <summary>Module build recipe; part of the module compatibility key.</summary>
         private static readonly string[] ModuleRecipe =
         {
@@ -267,6 +281,12 @@ namespace Nebula.Setup
                         try { ModuleCompatibility.Validate(current.Directory, Json.Parse(Payload.ReadText("module-compatibility.json"))); }
                         catch (InvalidDataException error) { preservingModules = false; Log("Module validation requires rebuild fallback: " + error.Message); }
                         catch (InvalidOperationException error) { preservingModules = false; Log("Module ABI requires rebuild fallback: " + error.Message); }
+                    }
+                    if (preservingModules && ModulesNeedRebuild(current))
+                    {
+                        preservingModules = false;
+                        Log("The installed " + current.ModuleIsa + " game modules are generation " + current.ModuleGeneration +
+                            "; this release needs " + ModuleGeneration + " (a relink cannot update their code). Rebuilding them.");
                     }
                     if (preservingModules && current.ModuleKey != ModuleKey &&
                         !File.Exists(Path.Combine(current.Directory, "relink-cache", "manifest.json")))
@@ -567,6 +587,7 @@ namespace Nebula.Setup
                 // machine code, so a recorded session must show which pair it measured instead of inferring it from file hashes.
                 { "runtimeIsa", RuntimeNativeIsa },
                 { "moduleIsa", preservingModules ? current.ModuleIsa : NativeIsa },
+                { "moduleGeneration", preservingModules ? current.ModuleGeneration : ModuleGeneration },
                 { "installedUtc", DateTime.UtcNow.ToString("o") },
                 { "files", files }
             });
