@@ -995,7 +995,10 @@ bool hit_shade(uint instance, uint tri, float2 b, float3 x, float3 l, float dist
         const Texture2D<float4> map = ResourceDescriptorHeap[NonUniformResourceIndex(d.x)];
         // Coarser where a rippled surface's rays spread (g_spread over the pixel's own angle).
         const float pixel_angle = 2.0f / max(abs(g_projection.x) * g_viewport.z, 1e-4f);
-        const float lod = clamp(log2(max(distance * g_hit.w * (1.0f + g_spread / pixel_angle), 1.0f)), 0.0f, 8.0f);
+        // Water's reflections over their footprint of the game's own pixels too (g_reflect_blur, EFB pixels): the
+        // reflection of what the frame does not show (the tower below the camera) aliased into grain at lod 0.
+        const float lod = clamp(log2(max(distance * g_hit.w * (1.0f + g_spread / pixel_angle + g_reflect_blur), 1.0f)),
+                                0.0f, 8.0f);
         albedo *= map.SampleLevel(g_wrap, uv, lod).rgb;
     }
     float day_level = g_hit.z;
@@ -1643,6 +1646,20 @@ float3 water_detail(float3 n, float3 hit, bool flow)
                             dot(float3(g_eye_to_world[0].z, g_eye_to_world[1].z, g_eye_to_world[2].z), wd)));
 }
 
+// Whether the water triangle `tri` at barycentrics `b` faces a camera ray along `dir`: its vertex normals (the side
+// out of the water) against the ray; triangles without normals count as facing.
+bool water_faces(uint tri, float2 b, float3 dir)
+{
+    const uint4 record = g_water_surfaces.Load4(tri * 16u);
+    if (record.x == 0u || record.y == 0u || record.z == 0u) {
+        return true;
+    }
+    const float3 w = float3(1.0f - b.x - b.y, b.x, b.y);
+    const float3 smooth = unpack_vertex_normal(record.x) * w.x + unpack_vertex_normal(record.y) * w.y +
+                          unpack_vertex_normal(record.z) * w.z;
+    return dot(smooth, dir) < 0.0f;
+}
+
 // Translucent water (seas, lakes, pools drawn blended after the trace) and clear crystals and glass
 // drawn the same way: the camera ray meets the
 // water draws' own triangles in front of the surface the EFB holds behind them; the vertex normals
@@ -1679,22 +1696,51 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
         // In front of what the EFB holds (the water itself where it writes depth).
         ray.TMax = far_plane(g_depth, depth) ? 4.0f * g_range
                                               : length(through) * -depth_to_eye_z(g_depth, depth) * 1.003f + 1.0f;
-        RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
-        query.TraceRayInline(g_water, RAY_FLAG_NONE, 0xFFu, ray);
-        query.Proceed();
+        // The water layer facing the camera: a swimmable surface is drawn twice at the same height, its top
+        // (normals up) and its underside (normals down); the nearer of the two by rounding flipped per pixel
+        // between the reflecting top and the non-reflecting underside, the dots on the water at any resolution and
+        // setting. Any layer only where none faces the camera (from under the water).
+        bool hit_water = false;
+        float water_t = 0.0f;
+        uint water_tri = 0u;
+        float2 water_b = float2(0.0f, 0.0f);
+        {
+            RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> facing;
+            facing.TraceRayInline(g_water, RAY_FLAG_NONE, 0xFFu, ray);
+            while (facing.Proceed()) {
+                if (water_faces(facing.CandidatePrimitiveIndex(), facing.CandidateTriangleBarycentrics(), dir)) {
+                    facing.CommitNonOpaqueTriangleHit();
+                }
+            }
+            if (facing.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
+                hit_water = true;
+                water_t = facing.CommittedRayT();
+                water_tri = facing.CommittedPrimitiveIndex();
+                water_b = facing.CommittedTriangleBarycentrics();
+            } else {
+                RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> any_layer;
+                any_layer.TraceRayInline(g_water, RAY_FLAG_NONE, 0xFFu, ray);
+                any_layer.Proceed();
+                if (any_layer.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
+                    hit_water = true;
+                    water_t = any_layer.CommittedRayT();
+                    water_tri = any_layer.CommittedPrimitiveIndex();
+                    water_b = any_layer.CommittedTriangleBarycentrics();
+                }
+            }
+        }
         // A water surface has depth below it: triangles lying on the opaque scene the trace saw
         // (a water volume's floor, seen from inside it) are no surface. An opaque clear surface
         // (kWaterOpaqueFlag: Freezeflame's ice) is that scene itself.
         const uint2 under = g_under[index];
         const float floor_distance = under.y != 0u ? length(through) * -asfloat(under.y) : 1e30f;
-        const bool hit_water = query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
         const bool opaque_clear =
-            hit_water && (g_water_surfaces.Load(query.CommittedPrimitiveIndex() * 16u + 12u) & kWaterOpaqueFlag) != 0u &&
-            abs(floor_distance - query.CommittedRayT()) <= max(0.01f * query.CommittedRayT(), 8.0f);
-        if (hit_water && (opaque_clear || floor_distance - query.CommittedRayT() > max(0.01f * query.CommittedRayT(), 8.0f))) {
+            hit_water && (g_water_surfaces.Load(water_tri * 16u + 12u) & kWaterOpaqueFlag) != 0u &&
+            abs(floor_distance - water_t) <= max(0.01f * water_t, 8.0f);
+        if (hit_water && (opaque_clear || floor_distance - water_t > max(0.01f * water_t, 8.0f))) {
             water = true;
-            const uint tri = query.CommittedPrimitiveIndex();
-            const float2 b = query.CommittedTriangleBarycentrics();
+            const uint tri = water_tri;
+            const float2 b = water_b;
             const float3 w = float3(1.0f - b.x - b.y, b.x, b.y);
             const uint a = tri * 36u;
             const float3 v0 = asfloat(g_water_positions.Load3(a));
@@ -1728,7 +1774,7 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
             // 6x: "barely any reflection and so much flicker"). The waves shape the glints only.
             float3 wave = n;
             if (!crystal) {
-                wave = water_detail(rippled(q, n), dir * query.CommittedRayT(), (record.w & kWaterfallFlag) != 0u);
+                wave = water_detail(rippled(q, n), dir * water_t, (record.w & kWaterfallFlag) != 0u);
             }
             if (dot(n, -dir) < 0.02f) {
                 n = ng;
@@ -1737,7 +1783,7 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
                 wave = n;
             }
             g_spread = 0.0f;
-            const float3 hit = dir * query.CommittedRayT();
+            const float3 hit = dir * water_t;
             // A waterfall is a clear sheet (no lake body under it), its streaks in its normal.
             const bool fall = (record.w & kWaterfallFlag) != 0u;
             const uint surface = crystal || fall ? kCrystal : below ? kWaterBelow : kWaterSurface;
@@ -1750,11 +1796,13 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
             if (surface == kWaterSurface && emitter < 1.0f) {
                 tint_rgb = uint3(round(saturate(base) * 255.0f));
                 tint_all = 1u;
-                tint_deep = floor_distance - query.CommittedRayT() > 300.0f ? 1u : 0u;
+                tint_deep = floor_distance - water_t > 300.0f ? 1u : 0u;
             }
             // Under the water its surfaces (and a volume's walls) reflect nothing: the reflection of
             // the bright world above only washed the view out (measured: Beach Bowl underwater).
-            if (params.y > 0.0f && emitter < 1.0f && !below) {
+            // Falling water is turbulent: no mirror image in it (the island mirrored in Beach Bowl's waterfall, x81bb);
+            // the game's own streaks and foam stay.
+            if (params.y > 0.0f && emitter < 1.0f && !below && !fall) {
                 reflected = true;
                 // Water: a mirror (no lobe jitter: the composite's distortion is its roughness).
                 float4 ray_params = params;

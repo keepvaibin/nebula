@@ -857,23 +857,46 @@ void GlowEmitCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
         const float3 c = (v0 + v1 + v2) / 3.0f;
         const float area = 0.5f * length(cross(v1 - v0, v2 - v0));
         if (c.z < -e_near && area > 0.0f && all(abs(c) < 1.0e6f)) {
-            const float2 q = eye_to_pixel(e_projection, e_viewport, c);
-            const int2 s = int2(floor(q / float(e_factor)));
-            if (all(s >= 0) && all(s < int2(e_sample_size))) {
+            // The glow's mean added light over the triangle (the centroid, three points towards the corners and three
+            // towards the edges' middles): a far glow, mipmapped into a small dim blob, keeps its total light where its
+            // centre dims, so its light does not fade with the camera's distance.
+            static const float3 kTaps[7] = {float3(0.333333f, 0.333333f, 0.333334f), float3(0.7f, 0.15f, 0.15f),
+                                            float3(0.15f, 0.7f, 0.15f), float3(0.15f, 0.15f, 0.7f),
+                                            float3(0.45f, 0.45f, 0.1f), float3(0.1f, 0.45f, 0.45f),
+                                            float3(0.45f, 0.1f, 0.45f)};
+            float3 hue_sum = float3(0.0f, 0.0f, 0.0f);
+            float l_sum = 0.0f;
+            uint taps = 0u;
+            [unroll] for (uint k = 0u; k < 7u; ++k) {
+                const float3 at_tap = v0 * kTaps[k].x + v1 * kTaps[k].y + v2 * kTaps[k].z;
+                if (at_tap.z >= -e_near) {
+                    continue;
+                }
+                const float2 q = eye_to_pixel(e_projection, e_viewport, at_tap);
+                const int2 s = int2(floor(q / float(e_factor)));
+                if (any(s < 0) || any(s >= int2(e_sample_size))) {
+                    continue;
+                }
+                ++taps;
                 const float3 added = unpack_r11g11b10(e_added[uint(s.y) * e_sample_size.x + uint(s.x)]);
                 const float l = luminance(added);
-                if (l > 0.02f) {
+                if (l > 0.005f) {
                     // Over a bright background the added light loses the channels the background had
                     // already filled (white fire over orange lava measures blue): where the picture
                     // reaches white its colour is the one shown.
                     const float3 shown = e_color.Load(int3(clamp(int2(q), int2(0, 0), int2(e_target_size) - 1), 0)).rgb;
                     const float filled = smoothstep(0.8f, 1.0f, max(shown.r, max(shown.g, shown.b)));
-                    const float3 hue = lerp(added / l, shown / max(luminance(shown), 1e-3f), filled);
-                    const float w = l * area;
-                    a += float4(hue * w, w);
-                    b += float4(c * w, dot(c, c) * w);
-                    area_sum += area;
+                    hue_sum += lerp(added / l, shown / max(luminance(shown), 1e-3f), filled) * l;
+                    l_sum += l;
                 }
+            }
+            const float l_mean = taps != 0u ? l_sum / float(taps) : 0.0f;
+            if (l_mean > 0.005f) {
+                const float3 hue = hue_sum / l_sum;
+                const float w = l_mean * area;
+                a += float4(hue * w, w);
+                b += float4(c * w, dot(c, c) * w);
+                area_sum += area;
             }
         }
     }
