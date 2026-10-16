@@ -154,10 +154,38 @@ inline float narrow_sum_rounded_to_odd(double product, double addend) noexcept {
     return _mm_cvtsd_f64(_mm_fmadd_sd(_mm_set_sd(a), _mm_set_sd(b), _mm_set_sd(c)));
 }
 
+namespace fused_detail {
+
+// FMA3 and the OS saving the AVX state (CPUID.1:ECX FMA, OSXSAVE, AVX; XCR0 SSE|AVX).
+[[nodiscard]] inline bool detect_fma3() noexcept {
+#if defined(_MSC_VER)
+    int registers[4]{};
+    __cpuid(registers, 0);
+    if (registers[0] < 1) return false;
+    __cpuid(registers, 1);
+    constexpr int kRequired = (1 << 12) | (1 << 27) | (1 << 28);
+    if ((registers[2] & kRequired) != kRequired) return false;
+    return (_xgetbv(0) & 0x6u) == 0x6u;
+#else
+    __builtin_cpu_init();
+    return __builtin_cpu_supports("fma") && __builtin_cpu_supports("avx");
+#endif
+}
+
+// Read on every fused operation of an SSE2 build: a plain load, set once when the image loads.
+inline const bool kHostHasFma3 = detect_fma3();
+
+} // namespace fused_detail
+
+[[nodiscard]] inline bool host_has_fma3() noexcept { return fused_detail::kHostHasFma3; }
+
+// An SSE2 build still runs the instruction on a CPU that has FMA3 (AMD FX and A-series have FMA3 but
+// no AVX2, so their game modules are SSE2 builds); the exact sequence runs only where there is none.
 [[nodiscard]] inline float fused_multiply_add(float a, float b, float c) noexcept {
 #if GALAXY_FUSED_MULTIPLY_ADD_IS_FMA3
     return fused_multiply_add_fma3(a, b, c);
 #else
+    if (fused_detail::kHostHasFma3) return fused_multiply_add_fma3(a, b, c);
     return fused_multiply_add_sse2(a, b, c);
 #endif
 }
@@ -166,27 +194,9 @@ inline float narrow_sum_rounded_to_odd(double product, double addend) noexcept {
 #if GALAXY_FUSED_MULTIPLY_ADD_IS_FMA3
     return fused_multiply_add_fma3(a, b, c);
 #else
+    if (fused_detail::kHostHasFma3) return fused_multiply_add_fma3(a, b, c);
     return fused_multiply_add_sse2(a, b, c);
 #endif
-}
-
-// FMA3 and the OS saving the AVX state (CPUID.1:ECX FMA, OSXSAVE, AVX; XCR0 SSE|AVX).
-[[nodiscard]] inline bool host_has_fma3() noexcept {
-    static const bool supported = [] {
-#if defined(_MSC_VER)
-        int registers[4]{};
-        __cpuid(registers, 0);
-        if (registers[0] < 1) return false;
-        __cpuid(registers, 1);
-        constexpr int kRequired = (1 << 12) | (1 << 27) | (1 << 28);
-        if ((registers[2] & kRequired) != kRequired) return false;
-        return (_xgetbv(0) & 0x6u) == 0x6u;
-#else
-        __builtin_cpu_init();
-        return __builtin_cpu_supports("fma") && __builtin_cpu_supports("avx");
-#endif
-    }();
-    return supported;
 }
 
 } // namespace galaxy
