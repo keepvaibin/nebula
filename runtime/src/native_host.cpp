@@ -22107,6 +22107,7 @@ enum class NandAdoption {
     failed,
 };
 NandAdoption adopt_foreign_nand_tree(const std::filesystem::path& root);
+void recover_interrupted_nand_adoption(const std::filesystem::path& root);
 
 std::uint32_t isfs_error_from_host_error(DWORD error) noexcept {
     switch (error) {
@@ -25230,6 +25231,7 @@ NativeNandRootProbe probe_native_nand_root() {
         return {root, kIsfsErrUnknown};
     }
     root = *extended_root;
+    recover_interrupted_nand_adoption(root);
     std::error_code error;
     std::filesystem::create_directories(root, error);
     if (error) {
@@ -26629,6 +26631,20 @@ bool rename_nand_tree(const std::filesystem::path& from, const std::filesystem::
     }
 }
 
+// An adoption stopped between its two renames (power loss) leaves the rebuilt tree, complete and validated before
+// either rename, beside a missing root. It becomes the root again; the previous tree stays where it was set aside.
+void recover_interrupted_nand_adoption(const std::filesystem::path& root) {
+    std::error_code error;
+    std::filesystem::path staging = root;
+    staging += L".adopt";
+    if (std::filesystem::exists(root, error) || error || !std::filesystem::is_directory(staging, error)) {
+        return;
+    }
+    if (rename_nand_tree(staging, root)) {
+        std::cerr << "[nand] saves folder restored from an interrupted rebuild\n";
+    }
+}
+
 NandAdoption adopt_foreign_nand_tree(const std::filesystem::path& root) {
     // An empty root without streams is a first start; a root emptied by hand keeps its own stream and is rebuilt.
     if (native_nand_root_is_empty_and_stream_free(root) ||
@@ -26649,22 +26665,21 @@ NandAdoption adopt_foreign_nand_tree(const std::filesystem::path& root) {
         std::filesystem::remove_all(staging, error);
         return NandAdoption::failed;
     }
+    // The previous tree goes to a name nothing else uses, so no earlier copy is ever replaced.
+    const std::wstring suffix =
+        (salvage.unaccounted ? L"-rejected-" : L".replaced-") + nand_local_timestamp();
     std::filesystem::path displaced = root;
-    if (salvage.unaccounted) {
-        displaced += L"-rejected-" + nand_local_timestamp();
-        for (int attempt = 2; std::filesystem::exists(displaced, error) && attempt < 100; ++attempt) {
-            displaced = root;
-            displaced += L"-rejected-" + nand_local_timestamp() + L"-" + std::to_wstring(attempt);
-        }
-    } else {
-        displaced += L".replaced";
-        std::filesystem::remove_all(displaced, error);
+    displaced += suffix;
+    for (int attempt = 2; std::filesystem::exists(displaced, error) && attempt < 100; ++attempt) {
+        displaced = root;
+        displaced += suffix + L"-" + std::to_wstring(attempt);
     }
     const bool displaced_root = rename_nand_tree(root, displaced);
     if (!displaced_root || !rename_nand_tree(staging, root)) {
-        if (displaced_root) (void)rename_nand_tree(displaced, root);
+        // The rebuilt tree is deleted only once the previous one is back; otherwise the next start puts it in place.
+        const bool restored = !displaced_root || rename_nand_tree(displaced, root);
         std::cerr << "[nand] saves folder not adopted: the replacement could not be put in place\n";
-        std::filesystem::remove_all(staging, error);
+        if (restored) std::filesystem::remove_all(staging, error);
         return NandAdoption::failed;
     }
     std::cerr << "[nand] saves folder rebuilt: GameData "
