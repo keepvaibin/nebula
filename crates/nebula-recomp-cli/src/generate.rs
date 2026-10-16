@@ -104,6 +104,11 @@ pub fn release_module_options() -> ModuleTranslationOptions {
 /// files (Home Menu, DSP) come first so they start first.
 const BUILD_CMAKE: &str = r#"cmake_minimum_required(VERSION 3.24)
 project(NebulaGenerated LANGUAGES CXX)
+# Below MSVC 19.0 CMake defines no -std: flag for clang-cl, and the build
+# fails deep in the C++ headers instead of here.
+if(CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC" AND CMAKE_CXX_SIMULATE_VERSION VERSION_LESS 19.30)
+    message(FATAL_ERROR "clang-cl is emulating MSVC ${CMAKE_CXX_SIMULATE_VERSION}; C++20 needs 19.30 or newer (-fms-compatibility-version).")
+endif()
 add_subdirectory(home)
 add_subdirectory(dsp)
 add_subdirectory(game)
