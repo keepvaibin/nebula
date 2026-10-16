@@ -237,6 +237,15 @@ namespace Nebula.Setup
         /// Less RAM than Nebula is designed for does not stop an install: the compile runs one job at a time
         /// (DefaultCompileJobs). Setup asks first, with this text; null when the PC has enough.
         /// </summary>
+        /// <summary>
+        /// The Microsoft C++ Build Tools license is asked for only when this install downloads the compiler: not
+        /// when the install folder has it already, and not for an update (its first install accepted it).
+        /// </summary>
+        public static bool BuildToolsLicenseRequired(InstallMode mode, Toolchain toolchain)
+        {
+            return mode != InstallMode.Update && !toolchain.IsReady;
+        }
+
         public static string LowMemoryWarning()
         {
             ulong memory = NativeMethods.TotalPhysicalMemory();
@@ -466,7 +475,17 @@ namespace Nebula.Setup
             Json.Save(Path.Combine(target, "inputs.json"), hashes);
         }
 
-        private bool RetainedInputsValid()
+        /// <summary>The game files an install keeps (its inputs and packed content) are intact, so an update or repair needs no game.</summary>
+        public static bool RetainedGameValid(InstallLayout layout)
+        {
+            return RetainedInputsValid(layout) && ContentValid(layout);
+        }
+
+        private bool RetainedInputsValid() { return RetainedInputsValid(layout); }
+
+        private bool ContentValid() { return ContentValid(layout); }
+
+        private static bool RetainedInputsValid(InstallLayout layout)
         {
             string manifest = Path.Combine(layout.GameInputs, "inputs.json");
             if (!File.Exists(manifest)) return false;
@@ -483,7 +502,7 @@ namespace Nebula.Setup
             catch (Exception) { return false; }
         }
 
-        private bool ContentValid()
+        private static bool ContentValid(InstallLayout layout)
         {
             string marker = Path.Combine(layout.Content, "content.json");
             if (!File.Exists(marker) || !File.Exists(Path.Combine(layout.Content, "game.pak"))) return false;

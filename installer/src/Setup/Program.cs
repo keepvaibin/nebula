@@ -55,8 +55,10 @@ namespace Nebula.Setup
                     DesktopShortcut = options.ContainsKey("desktop-shortcut"),
                     CompileJobs = options.ContainsKey("jobs") ? int.Parse(options["jobs"]) : 0
                 };
-                if (request.Mode != InstallMode.Update && !options.ContainsKey("accept-build-tools-license"))
-                    throw new InvalidOperationException("Unattended installs must pass --accept-build-tools-license.");
+                if (InstallEngine.BuildToolsLicenseRequired(request.Mode,
+                        new Toolchain(Json.Parse(Payload.ReadText("toolchain.json")), layout.Toolchains)) &&
+                    !options.ContainsKey("accept-build-tools-license"))
+                    throw new InvalidOperationException("Unattended installs that download the compiler must pass --accept-build-tools-license.");
                 var engine = new InstallEngine(request, new SilentProgress(), CancellationToken.None);
                 engine.Run();
                 return 0;

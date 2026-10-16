@@ -17,6 +17,10 @@ namespace Nebula.Setup
         private readonly Panel choose = new Panel(), work = new Panel();
         private readonly TextBox input = new TextBox(), root = new TextBox(), log = new TextBox();
         private readonly CheckBox desktop = new CheckBox(), license = new CheckBox();
+        private readonly LinkLabel licenseLink = new LinkLabel();
+        private Dictionary<string, object> toolchainPins;
+        private long toolchainDownloadBytes;
+        private int summaryTopBelowLicense;
         private readonly RadioButton modeRepair = new RadioButton(), modeRestore = new RadioButton(), modeUninstall = new RadioButton(), modeInstall = new RadioButton();
         private readonly Label summary = new Label(), step = new Label(), elapsed = new Label();
         private readonly ProgressBar overall = new ProgressBar(), stepBar = new ProgressBar();
@@ -46,6 +50,8 @@ namespace Nebula.Setup
             Controls.Add(work);
             work.Visible = false;
             UiScale.Apply(this);
+            summaryTopBelowLicense = summary.Top;
+            UpdateChoices();
             clockTimer.Interval = 1000;
             clockTimer.Tick += delegate { elapsed.Text = "Elapsed " + clock.Elapsed.ToString(@"hh\:mm\:ss"); };
             Shown += delegate
@@ -54,6 +60,35 @@ namespace Nebula.Setup
                 if (options.ContainsKey("update")) CheckForUpdate();
                 else if (options.ContainsKey("apply-update") && installed != null) { modeRepair.Checked = true; StartWork(InstallMode.Update); }
             };
+        }
+
+        /// <summary>
+        /// Follows the chosen action and install folder: the start button names the action, and the license row
+        /// shows only when Start would ask for it (InstallEngine.BuildToolsLicenseRequired), an install or repair
+        /// into a folder without the compiler. Hidden, the text below takes its place.
+        /// </summary>
+        private void UpdateChoices()
+        {
+            InstallMode mode = installed == null ? InstallMode.Install : InstallIntent.ForPackage(installed.Version, BuildInfo.Version);
+            start.Text = installed == null ? "Install" : modeRestore.Checked ? "Restore" : modeUninstall.Checked ? "Uninstall" :
+                mode == InstallMode.Update ? "Update" : "Repair";
+
+            Toolchain toolchain = null;
+            try { toolchain = new Toolchain(toolchainPins, new InstallLayout(root.Text.Trim()).Toolchains); }
+            catch (ArgumentException) { }
+            catch (NotSupportedException) { }
+            catch (IOException) { }
+            bool ready = toolchain != null && toolchain.IsReady;
+            bool installing = installed == null || modeRepair.Checked;
+            bool needed = installing && mode != InstallMode.Update && !ready;
+            license.Visible = licenseLink.Visible = needed;
+            summary.Top = needed ? summaryTopBelowLicense : license.Top;
+            summary.Text = (ready
+                    ? "Setup compiles the game from your copy with the C++ compiler already installed."
+                    : "Setup compiles the game from your copy and downloads a C++ compiler (" +
+                      FileUtil.FormatBytes(toolchainDownloadBytes) + ") when needed.") + "\r\n\r\n" +
+                "Requires Windows 10 or 11 (64-bit), 8 GB of RAM, " + FileUtil.FormatBytes(InstallEngine.RequiredFreeBytes) +
+                " of free disk space and a DirectX 12 GPU.";
         }
 
         private Label AddLabel(Control parent, string text, int x, int y, int width, int height)
@@ -79,11 +114,11 @@ namespace Nebula.Setup
                     ? "Update to Nebula " + BuildInfo.Version + " (keeps saves and settings)"
                     : "Install or repair Nebula " + BuildInfo.Version;
                 modeRepair.Checked = true;
-                modeRestore.Text = "Restore the previous version" + (installed.Previous != null ? " (" + installed.Previous + ")" : " (none available)");
-                modeRestore.Enabled = installed.Previous != null;
+                modeRestore.Text = "Restore the previous version (" + installed.Previous + ")";
                 modeUninstall.Text = "Uninstall (keeps saves and settings)";
                 foreach (var radio in new[] { modeRepair, modeRestore, modeUninstall })
                 {
+                    if (radio == modeRestore && installed.Previous == null) continue;
                     radio.Location = new Point(28, y);
                     radio.Size = new Size(710, 24);
                     choose.Controls.Add(radio);
@@ -99,42 +134,55 @@ namespace Nebula.Setup
                 modeInstall.Checked = true;
             }
 
-            AddLabel(choose, "Your game: ISO, RVZ or extracted folder.", 20, y, 720, 22);
-            y += 24;
-            input.Location = new Point(20, y);
-            input.Size = new Size(470, 26);
-            choose.Controls.Add(input);
-            var file = new Button { Text = "Image file…", Location = new Point(498, y - 1), Size = new Size(116, 28) };
-            file.Click += delegate
+            // An installed copy keeps the game it was compiled from; it is asked for only when that copy is gone.
+            if (installed == null || !InstallEngine.RetainedGameValid(layout))
             {
-                using (var dialog = new OpenFileDialog { Title = "Choose your Super Mario Galaxy disc image", Filter = "Wii disc images (*.iso;*.rvz;*.wia;*.wbfs;*.ciso;*.gcz)|*.iso;*.rvz;*.wia;*.wbfs;*.ciso;*.gcz|All files (*.*)|*.*" })
-                    if (dialog.ShowDialog(this) == DialogResult.OK) input.Text = dialog.FileName;
-            };
-            var folder = new Button { Text = "Folder…", Location = new Point(620, y - 1), Size = new Size(116, 28) };
-            folder.Click += delegate
-            {
-                using (var dialog = new FolderBrowserDialog { Description = "Choose the extracted game folder" })
-                    if (dialog.ShowDialog(this) == DialogResult.OK) input.Text = dialog.SelectedPath;
-            };
-            choose.Controls.Add(file);
-            choose.Controls.Add(folder);
-            y += 38;
+                AddLabel(choose, installed == null ? "Your game: ISO, RVZ or extracted folder."
+                                                   : "Your game: ISO, RVZ or extracted folder (the copy Setup kept is missing).",
+                         20, y, 720, 22);
+                y += 24;
+                input.Location = new Point(20, y);
+                input.Size = new Size(470, 26);
+                choose.Controls.Add(input);
+                var file = new Button { Text = "Image file…", Location = new Point(498, y - 1), Size = new Size(116, 28) };
+                file.Click += delegate
+                {
+                    using (var dialog = new OpenFileDialog { Title = "Choose your Super Mario Galaxy disc image", Filter = "Wii disc images (*.iso;*.rvz;*.wia;*.wbfs;*.ciso;*.gcz)|*.iso;*.rvz;*.wia;*.wbfs;*.ciso;*.gcz|All files (*.*)|*.*" })
+                        if (dialog.ShowDialog(this) == DialogResult.OK) input.Text = dialog.FileName;
+                };
+                var folder = new Button { Text = "Folder…", Location = new Point(620, y - 1), Size = new Size(116, 28) };
+                folder.Click += delegate
+                {
+                    using (var dialog = new FolderBrowserDialog { Description = "Choose the extracted game folder" })
+                        if (dialog.ShowDialog(this) == DialogResult.OK) input.Text = dialog.SelectedPath;
+                };
+                choose.Controls.Add(file);
+                choose.Controls.Add(folder);
+                y += 38;
+            }
 
-            AddLabel(choose, "Install folder:", 20, y, 720, 22);
-            y += 24;
             root.Text = layout.Root;
-            root.Location = new Point(20, y);
-            root.Size = new Size(594, 26);
-            root.Enabled = installed == null;
-            choose.Controls.Add(root);
-            var browse = new Button { Text = "Browse…", Location = new Point(620, y - 1), Size = new Size(116, 28), Enabled = installed == null };
-            browse.Click += delegate
+            if (installed == null)
             {
-                using (var dialog = new FolderBrowserDialog { Description = "Choose where to install Nebula" })
-                    if (dialog.ShowDialog(this) == DialogResult.OK) root.Text = Path.Combine(dialog.SelectedPath, "Nebula");
-            };
-            choose.Controls.Add(browse);
-            y += 38;
+                AddLabel(choose, "Install folder:", 20, y, 720, 22);
+                y += 24;
+                root.Location = new Point(20, y);
+                root.Size = new Size(594, 26);
+                choose.Controls.Add(root);
+                var browse = new Button { Text = "Browse…", Location = new Point(620, y - 1), Size = new Size(116, 28) };
+                browse.Click += delegate
+                {
+                    using (var dialog = new FolderBrowserDialog { Description = "Choose where to install Nebula" })
+                        if (dialog.ShowDialog(this) == DialogResult.OK) root.Text = Path.Combine(dialog.SelectedPath, "Nebula");
+                };
+                choose.Controls.Add(browse);
+                y += 38;
+            }
+            else
+            {
+                AddLabel(choose, "Install folder: " + layout.Root, 20, y, 720, 22);
+                y += 32;
+            }
 
             desktop.Text = "Create a desktop shortcut";
             desktop.Location = new Point(20, y);
@@ -142,25 +190,27 @@ namespace Nebula.Setup
             choose.Controls.Add(desktop);
             y += 28;
 
-            var toolchain = new Toolchain(Json.Parse(Payload.ReadText("toolchain.json")), layout.Toolchains);
+            toolchainPins = Json.Parse(Payload.ReadText("toolchain.json"));
+            var toolchain = new Toolchain(toolchainPins, layout.Toolchains);
+            toolchainDownloadBytes = toolchain.DownloadBytes;
             license.Text = "I accept the Microsoft Visual Studio Build Tools license";
             license.Location = new Point(20, y);
             license.Size = new Size(620, 24);
             choose.Controls.Add(license);
-            var link = new LinkLabel { Text = "Read license", Location = new Point(644, y + 3), Size = new Size(100, 22) };
-            link.LinkClicked += delegate { Process.Start(toolchain.LicenseUrl); };
-            choose.Controls.Add(link);
+            licenseLink.Text = "Read license";
+            licenseLink.Location = new Point(644, y + 3);
+            licenseLink.Size = new Size(100, 22);
+            licenseLink.LinkClicked += delegate { Process.Start(toolchain.LicenseUrl); };
+            choose.Controls.Add(licenseLink);
             y += 32;
 
             summary.Location = new Point(20, y);
             summary.Size = new Size(720, 170);
-            summary.Text =
-                "Setup compiles the game from your copy and downloads a C++ compiler (" + FileUtil.FormatBytes(toolchain.DownloadBytes) + ") when needed.\r\n\r\n" +
-                "Requires Windows 10 or 11 (64-bit), 8 GB of RAM, " + FileUtil.FormatBytes(InstallEngine.RequiredFreeBytes) + " of free disk space and a DirectX 12 GPU.";
             choose.Controls.Add(summary);
+            root.TextChanged += delegate { UpdateChoices(); };
+            foreach (var radio in new[] { modeRepair, modeRestore, modeUninstall })
+                radio.CheckedChanged += delegate { UpdateChoices(); };
 
-            start.Text = installed == null ? "Install" :
-                (InstallIntent.ForPackage(installed.Version, BuildInfo.Version) == InstallMode.Update ? "Update" : "Continue");
             start.Location = new Point(530, 596);
             start.Size = new Size(100, 32);
             start.Click += delegate { OnStart(); };
@@ -254,9 +304,9 @@ namespace Nebula.Setup
             if (game.Length == 0) game = null;
             if (mode == InstallMode.Install && game == null) { Fail("Choose your Super Mario Galaxy ISO, RVZ or extracted folder."); return; }
             if (game != null && !File.Exists(game) && !Directory.Exists(game)) { Fail("The selected game was not found: " + game); return; }
-            var toolchain = new Toolchain(Json.Parse(Payload.ReadText("toolchain.json")), layout.Toolchains);
-            if (mode != InstallMode.Update && !toolchain.IsReady && !license.Checked)
+            if (InstallEngine.BuildToolsLicenseRequired(mode, new Toolchain(toolchainPins, layout.Toolchains)) && !license.Checked)
             {
+                UpdateChoices();
                 Fail("Accept the Microsoft Visual Studio Build Tools license to continue."); return;
             }
             var problems = InstallEngine.CheckRequirements(layout.Root.Length > 3 ? Path.GetDirectoryName(layout.Root) ?? layout.Root : layout.Root);
