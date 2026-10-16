@@ -207,8 +207,9 @@ until released.
 | `Esc` | B or Menu/Plus | Close; an unapplied draft is discarded |
 
 On Switch controllers the overlay uses the console's meaning: A changes, B
-closes. Pages: DISPLAY, GRAPHICS, CONTROLS, AUDIO and GENERAL (text speed);
-AUDIO and GENERAL changes apply live. Settings files are written through flushed sibling temporaries
+closes. Pages: DISPLAY, GRAPHICS, CONTROLS, AUDIO and GENERAL (text speed,
+language). AUDIO and text speed changes apply live; a new language applies when
+Nebula next starts, as the game reads it once at boot. Settings files are written through flushed sibling temporaries
 and atomically replaced; a failed save stays dirty and is retried on the next
 close or at shutdown.
 

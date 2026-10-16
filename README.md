@@ -49,6 +49,7 @@ it is the original game code, translated instruction by instruction by the recom
   optional per-pixel lighting.
 - In-game settings menu (F1, View + Menu on Xbox, Minus + Plus on Switch).
 - Text speed: dialogue and Rosalina's storybook at the original pace, 2x or 3x.
+- The game in English, French or Spanish, the three languages of the USA release.
 - Saves stored in `%LOCALAPPDATA%\Nebula\saves`, with export, import and Dolphin saves
   (see [Saves](#saves)).
 
