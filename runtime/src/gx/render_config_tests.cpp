@@ -154,6 +154,27 @@ int main() {
                 "malformed and unsafe FPS text preserves the prior cap");
         }
         ScopedEnv fps("GALAXY_MAX_FPS", "");
+        {
+            // The GPU chosen in Nebula Settings: its identity survives a save and a load.
+            passed &= expect(galaxy::gx::gpu_identity(0x10DEu, 0x2B85u, 0x89EF1043u) == "10de:2b85:89ef1043" &&
+                    galaxy::gx::gpu_identity(0x1002u, 0x13C0u, 0x7E491462u) == "1002:13c0:7e491462",
+                "a GPU's identity is its vendor, device and subsystem id in lowercase hex");
+            galaxy::gx::RenderConfig chosen{};
+            const std::string identity = galaxy::gx::gpu_identity(0x1002u, 0x13C0u, 0x7E491462u);
+            std::memcpy(chosen.gpu.data(), identity.c_str(), identity.size() + 1u);
+            galaxy::gx::set_render_config(chosen);
+            passed &= expect(galaxy::gx::save_render_config_to_file(), "the chosen GPU saves");
+            galaxy::gx::set_render_config(galaxy::gx::RenderConfig{});
+            galaxy::gx::load_render_config_from_file();
+            passed &= expect(std::string(galaxy::gx::get_render_config().gpu.data()) == identity,
+                "the chosen GPU loads as it was saved");
+            {
+                std::ofstream file(path, std::ios::binary | std::ios::trunc);
+                file << "gpu=\n";
+            }
+            galaxy::gx::load_render_config_from_file();
+            passed &= expect(galaxy::gx::get_render_config().gpu[0] == '\0', "an empty gpu is the automatic choice");
+        }
         for (float invalid : {std::numeric_limits<float>::quiet_NaN(),
                 std::numeric_limits<float>::infinity(), -1.0f, 0.00001f, 10000000.0f}) {
             galaxy::gx::RenderConfig direct{};

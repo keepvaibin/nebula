@@ -29,21 +29,31 @@ namespace Nebula.Launcher
         public static bool DlssInstalled() { return DlssPackage.Installed(); }
         // The upscaler setting values offered, in list order. DLSS is listed (before it is
         // downloaded too) when the game runs on an NVIDIA RTX GPU.
-        public static List<int> UpscalerChoices()
+        public static List<int> UpscalerChoices(string gpu)
         {
             var choices = new List<int> { 0, 1 };
-            if (DlssAdapter()) choices.Add(3);
+            if (DlssAdapter(gpu)) choices.Add(3);
             return choices;
         }
 
         /// <summary>
-        /// The GPU the game runs on is an NVIDIA RTX GPU. The runtime records its adapter in
-        /// adapter.ini beside config.ini with the GPU preference it started with; a record from
-        /// another preference (another package) or no record yet falls back to this package's
-        /// preference: the integrated GPU never, otherwise any RTX adapter in the machine.
+        /// The GPU the game will run on for the gpu setting: the chosen GPU, or the automatic choice when
+        /// it is empty or not present (GpuAdapters.Resolve). Null when DXGI cannot list the GPUs.
         /// </summary>
-        public static bool DlssAdapter()
+        public static GpuAdapter TargetAdapter(string gpu)
         {
+            return GpuAdapters.Resolve(GpuAdapters.List(PackagePrefersIntegratedGpu()), gpu);
+        }
+
+        /// <summary>
+        /// The GPU the game will run on is an NVIDIA RTX GPU. Without DXGI's list, the runtime's record of
+        /// its last run (adapter.ini, written with this package's GPU preference) decides; with no record,
+        /// any RTX adapter in the machine, unless this package prefers the integrated GPU.
+        /// </summary>
+        public static bool DlssAdapter(string gpu)
+        {
+            GpuAdapter target = TargetAdapter(gpu);
+            if (target != null) return target.IsNvidiaRtx;
             bool lowPower = PackagePrefersIntegratedGpu();
             var values = AdapterRecord(lowPower);
             string vendor, description;
@@ -55,18 +65,27 @@ namespace Nebula.Launcher
         }
 
         /// <summary>
-        /// The game's GPU runs Nebula's ray tracing (DXR 1.1, shader model 6.5, dedicated memory), as
-        /// recorded by the runtime in adapter.ini; unknown until the game has run once.
+        /// The GPU the game will run on runs Nebula's ray tracing (DXR 1.1, shader model 6.5, dedicated
+        /// memory). The runtime records whether the GPU it ran on does (adapter.ini); a GPU it has not run on
+        /// yet does when it is an NVIDIA RTX GPU, and is otherwise offered after its first run.
         /// </summary>
-        public static bool RayTracingAdapter()
+        public static bool RayTracingAdapter(string gpu)
         {
+            GpuAdapter target = TargetAdapter(gpu);
+            string rt, id;
+            if (target != null)
+            {
+                var record = AdapterRecord(null);
+                if (record != null && record.TryGetValue("id", out id) && id == target.Id)
+                    return record.TryGetValue("ray_tracing", out rt) && rt == "1";
+                return target.IsNvidiaRtx;
+            }
             var values = AdapterRecord(PackagePrefersIntegratedGpu());
-            string rt;
             return values != null && values.TryGetValue("ray_tracing", out rt) && rt == "1";
         }
 
-        // adapter.ini when it was written with this package's GPU preference; otherwise null.
-        private static Dictionary<string, string> AdapterRecord(bool lowPower)
+        // adapter.ini when it was written with the given GPU preference (any, for null); otherwise null.
+        private static Dictionary<string, string> AdapterRecord(bool? lowPower)
         {
             string path = Path.Combine(NebulaPaths.DataRoot, "adapter.ini");
             try
@@ -79,7 +98,8 @@ namespace Nebula.Launcher
                     if (equals > 0) values[line.Substring(0, equals).Trim()] = line.Substring(equals + 1).Trim();
                 }
                 string preference;
-                return values.TryGetValue("gpu_preference", out preference) && (preference == "low") == lowPower
+                return lowPower == null ||
+                       (values.TryGetValue("gpu_preference", out preference) && (preference == "low") == lowPower.Value)
                     ? values : null;
             }
             catch (IOException) { }
@@ -172,6 +192,8 @@ namespace Nebula.Launcher
 
         public int DisplayMode = 1;
         public string Monitor = "";
+        // The GPU the game renders on (GpuAdapter.Id); empty chooses automatically.
+        public string Gpu = "";
         public int WindowWidth = 1280, WindowHeight = 720;
         public int FullscreenWidth = 0, FullscreenHeight = 0, FullscreenRefresh = 0;
         public int Aspect = 0;
@@ -229,6 +251,8 @@ namespace Nebula.Launcher
             settings.DisplayMode = Math.Min(Choice(values, "display_mode", 3, settings.DisplayMode), 1);
             string monitor;
             if (values.TryGetValue("monitor", out monitor)) settings.Monitor = monitor.Trim();
+            string gpu;
+            if (values.TryGetValue("gpu", out gpu)) settings.Gpu = gpu.Trim().ToLowerInvariant();
             settings.WindowWidth = Choice(values, "window_width", 65536, settings.WindowWidth);
             settings.WindowHeight = Choice(values, "window_height", 65536, settings.WindowHeight);
             settings.FullscreenWidth = Choice(values, "fullscreen_width", 16385, 0);
@@ -279,6 +303,7 @@ namespace Nebula.Launcher
             var lines = file.Item1;
             Set(lines, "display_mode", DisplayMode);
             SetText(lines, "monitor", Monitor ?? "");
+            SetText(lines, "gpu", Gpu ?? "");
             Set(lines, "window_width", WindowWidth);
             Set(lines, "window_height", WindowHeight);
             Set(lines, "fullscreen_width", FullscreenWidth);

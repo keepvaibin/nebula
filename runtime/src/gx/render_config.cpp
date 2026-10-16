@@ -215,6 +215,10 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
         cfg.monitor.fill('\0');
         const std::size_t length = std::min(std::strlen(val), cfg.monitor.size() - 1u);
         std::memcpy(cfg.monitor.data(), val, length);
+    } else if (std::strcmp(key, "gpu") == 0) {
+        cfg.gpu.fill('\0');
+        const std::size_t length = std::min(std::strlen(val), cfg.gpu.size() - 1u);
+        std::memcpy(cfg.gpu.data(), val, length);
     }
     else if (std::strcmp(key, "fullscreen_width") == 0) cfg.fullscreen_width = std::min(parse_uint(val, 0u), 16384u);
     else if (std::strcmp(key, "fullscreen_height") == 0) cfg.fullscreen_height = std::min(parse_uint(val, 0u), 16384u);
@@ -303,6 +307,7 @@ static void apply_env_overrides(RenderConfig& cfg) {
     }
     apply_env(cfg, "GALAXY_DISPLAY_MODE", "display_mode");
     apply_env(cfg, "GALAXY_MONITOR", "monitor");
+    apply_env(cfg, "GALAXY_GPU", "gpu");
     apply_env(cfg, "GALAXY_ASPECT", "aspect");
 }
 
@@ -334,6 +339,7 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.display_mode = std::min(cfg.display_mode, kDisplayBorderless);
     cfg.aspect_mode = std::min(cfg.aspect_mode, kAspectModeCount - 1u);
     cfg.monitor.back() = '\0';
+    cfg.gpu.back() = '\0';
     cfg.msaa_samples = 1;
     cfg.taa_enabled = false;
     cfg.rt_shadow_quality = 0;
@@ -617,6 +623,7 @@ bool save_render_config_to_file() {
              << "window_height=" << cfg.window_height << '\n'
              << "display_mode=" << cfg.display_mode << '\n'
              << "monitor=" << cfg.monitor.data() << '\n'
+             << "gpu=" << cfg.gpu.data() << '\n'
              << "fullscreen_width=" << cfg.fullscreen_width << '\n'
              << "fullscreen_height=" << cfg.fullscreen_height << '\n'
              << "fullscreen_refresh_hz=" << cfg.fullscreen_refresh_hz << '\n'
@@ -627,8 +634,14 @@ bool save_render_config_to_file() {
     return io::write_text_file_atomically(path, contents.str());
 }
 
+std::string gpu_identity(unsigned vendor_id, unsigned device_id, unsigned subsys_id) {
+    char text[32]{};
+    std::snprintf(text, sizeof(text), "%04x:%04x:%08x", vendor_id & 0xFFFFu, device_id & 0xFFFFu, subsys_id);
+    return text;
+}
+
 void record_render_adapter(const wchar_t* description, unsigned vendor_id, unsigned device_id,
-                           bool low_power_preference, bool ray_tracing) noexcept {
+                           unsigned subsys_id, bool low_power_preference, bool ray_tracing) noexcept {
     try {
         const std::filesystem::path config = config_path();
         if (config.empty() || description == nullptr) {
@@ -645,6 +658,7 @@ void record_render_adapter(const wchar_t* description, unsigned vendor_id, unsig
         contents << "description=" << name << '\n'
                  << "vendor_id=" << vendor_id << '\n'
                  << "device_id=" << device_id << '\n'
+                 << "id=" << gpu_identity(vendor_id, device_id, subsys_id) << '\n'
                  << "gpu_preference=" << (low_power_preference ? "low" : "high") << '\n'
                  << "ray_tracing=" << (ray_tracing ? 1 : 0) << '\n';
         static_cast<void>(io::write_text_file_atomically(config.parent_path() / L"adapter.ini", contents.str()));

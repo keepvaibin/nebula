@@ -4759,8 +4759,36 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
             device_ = std::move(candidate_device);
             return true;
         };
+        // The GPU chosen in Nebula Settings (config.ini gpu) comes first. Windows' own GPU preference
+        // (Graphics settings, the NVIDIA control panel) orders only the automatic choice below, so a
+        // chosen GPU is used whatever it says. One that is not present or cannot create a device leaves
+        // the automatic choice. Windows can list a GPU twice (a virtual display adds an entry); the
+        // entries are searched in the automatic choice's order, so it takes the one Windows prefers.
         ComPtr<IDXGIFactory6> preferred_factory;
-        if (SUCCEEDED(factory.As(&preferred_factory))) {
+        const bool preference_order = SUCCEEDED(factory.As(&preferred_factory));
+        const auto enumerate = [&](UINT index, ComPtr<IDXGIAdapter1>& candidate) {
+            return preference_order
+                ? preferred_factory->EnumAdapterByGpuPreference(index, adapter_preference(), IID_PPV_ARGS(&candidate))
+                : factory->EnumAdapters1(index, &candidate);
+        };
+        const std::string chosen_gpu = get_render_config().gpu.data();
+        if (!chosen_gpu.empty()) {
+            for (UINT index = 0u;; ++index) {
+                ComPtr<IDXGIAdapter1> candidate;
+                if (FAILED(enumerate(index, candidate))) {
+                    break;
+                }
+                DXGI_ADAPTER_DESC1 description{};
+                if (SUCCEEDED(candidate->GetDesc1(&description)) &&
+                    gpu_identity(description.VendorId, description.DeviceId, description.SubSysId) == chosen_gpu &&
+                    try_adapter(candidate.Get())) {
+                    break;
+                }
+            }
+            std::cout << "[gpu] chosen " << chosen_gpu
+                      << (adapter ? " in use" : " not present or unusable; choosing automatically") << '\n';
+        }
+        if (!adapter && preference_order) {
             for (UINT index = 0u;; ++index) {
                 ComPtr<IDXGIAdapter1> candidate;
                 const HRESULT result = preferred_factory->EnumAdapterByGpuPreference(
@@ -4893,7 +4921,8 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
                 shader_model.HighestShaderModel >= D3D_SHADER_MODEL_6_5 && !adapter_is_unified_memory();
             s_ray_tracing_offered.store(offered, std::memory_order_relaxed);
             record_render_adapter(adapter_desc.Description, adapter_desc.VendorId, adapter_desc.DeviceId,
-                                  adapter_preference() == DXGI_GPU_PREFERENCE_MINIMUM_POWER, offered);
+                                  adapter_desc.SubSysId, adapter_preference() == DXGI_GPU_PREFERENCE_MINIMUM_POWER,
+                                  offered);
         }
         RenderFeatureCaps caps{};
         caps.d3d12_device_created = true;

@@ -14,6 +14,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -156,6 +157,9 @@ struct RenderConfig {
     // GDI device name of the monitor (UTF-8, e.g. \\.\DISPLAY2); empty or
     // unknown selects the primary monitor.
     std::array<char, 64> monitor{};
+    // The GPU to render on, as gpu_identity() writes it ("10de:2b85:89ef1043"); empty, or a GPU that
+    // is not present, picks one automatically (GALAXY_GPU_PREFERENCE). Read at start-up.
+    std::array<char, 32> gpu{};
     unsigned fullscreen_width    = 0;
     unsigned fullscreen_height   = 0;
     unsigned fullscreen_refresh_hz = 0;
@@ -331,10 +335,15 @@ void load_render_config_from_file();
 // are real and exposed.
 bool save_render_config_to_file();
 
+// A GPU's identity in config.ini's gpu key: PCI vendor, device and subsystem id in lowercase hex,
+// "vvvv:dddd:ssssssss". The subsystem tells two boards of the same chip apart.
+std::string gpu_identity(unsigned vendor_id, unsigned device_id, unsigned subsys_id);
+
 // Records the adapter the renderer runs on (adapter.ini beside config.ini) for the launcher,
-// which offers DLSS only on an NVIDIA RTX adapter: description, PCI vendor and device id and
-// the GPU preference the runtime started with (low: integrated first).
+// which offers DLSS only on an NVIDIA RTX adapter: description, PCI vendor and device id, its
+// gpu_identity(), the GPU preference the runtime started with (low: integrated first) and
+// whether it runs Nebula's ray tracing.
 void record_render_adapter(const wchar_t* description, unsigned vendor_id, unsigned device_id,
-                           bool low_power_preference, bool ray_tracing) noexcept;
+                           unsigned subsys_id, bool low_power_preference, bool ray_tracing) noexcept;
 
 } // namespace galaxy::gx

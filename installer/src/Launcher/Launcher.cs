@@ -293,8 +293,11 @@ namespace Nebula.Launcher
         private readonly List<int> interpolationChoices = new List<int>();
         private readonly NumericUpDown sharpness = new NumericUpDown();
         private readonly CheckBox mipmaps = new CheckBox(), hudOutput = new CheckBox(), rayTracing = new CheckBox();
-        // Offered once the game has run on a GPU with DXR 1.1 and dedicated memory.
-        private readonly bool rayTracingOffered = GraphicsSettings.RayTracingAdapter();
+        // The GPUs the game can run on, the automatic choice first; the Graphics card row shows with two or more.
+        private readonly List<GpuAdapter> gpus = GpuAdapters.List(GraphicsSettings.PackagePrefersIntegratedGpu()) ?? new List<GpuAdapter>();
+        private readonly ComboBox gpuBox = new ComboBox();
+        // Ray tracing and DLSS follow the GPU the game will run on (RefreshGpuOptions).
+        private bool rayTracingOffered;
         private readonly TrackBar[] volumes = new TrackBar[AudioSettings.Names.Length];
         private readonly Label[] volumeValues = new Label[AudioSettings.Names.Length];
         private readonly ComboBox recording = new ComboBox();
@@ -304,11 +307,26 @@ namespace Nebula.Launcher
         private Size windowSize;
         private readonly List<int> refreshChoices = new List<int>();
         private readonly List<int> frameRateChoices = new List<int>();
-        private readonly List<int> upscalerChoices = GraphicsSettings.UpscalerChoices();
+        private List<int> upscalerChoices;
+        // The upscaler shown before the current change (DLSS download, quality list).
+        private int upscalerShown;
+
+        // The selected GPU's id; empty for Automatic (the gpu key).
+        private string SelectedGpuId
+        {
+            get
+            {
+                if (gpus.Count < 2) return graphics.Gpu;
+                int index = gpuBox.SelectedIndex;
+                return index >= 1 && index <= gpus.Count ? gpus[index - 1].Id : "";
+            }
+        }
 
         public SettingsForm(LaunchSession session)
         {
             this.session = session;
+            upscalerChoices = GraphicsSettings.UpscalerChoices(graphics.Gpu);
+            rayTracingOffered = GraphicsSettings.RayTracingAdapter(graphics.Gpu);
             bool firstRun = !session.SetupComplete;
 #if NEBULA_SETTINGS_APP
             Text = "Nebula settings";
@@ -341,6 +359,17 @@ namespace Nebula.Launcher
             Controls.Add(tabs);
 
             int y = 16;
+            if (gpus.Count >= 2)
+            {
+                Row(display, "Graphics card", gpuBox, ref y);
+                gpuBox.Items.Add("Automatic (" + gpus[0].Name + ")");
+                foreach (var gpu in gpus)
+                {
+                    // Two of the same model are told apart by their place in the list.
+                    var same = gpus.FindAll(g => g.Name == gpu.Name);
+                    gpuBox.Items.Add(same.Count > 1 ? gpu.Name + " #" + (same.IndexOf(gpu) + 1) : gpu.Name);
+                }
+            }
             Row(display, "Monitor", monitor, ref y);
             Row(display, "Display mode", mode, ref y);
             Row(display, "Resolution", resolution, ref y);
@@ -485,9 +514,10 @@ namespace Nebula.Launcher
                 RefreshRefreshChoices();
             };
             refresh.SelectedIndexChanged += delegate { if (!loading) RefreshFrameRateChoices(); };
+            gpuBox.SelectedIndexChanged += delegate { if (!loading) RefreshGpuOptions(); };
             // Choosing DLSS before it is downloaded opens the download; closing it without
             // installing goes back to the previous choice.
-            int upscalerShown = upscaler.SelectedIndex;
+            upscalerShown = upscaler.SelectedIndex;
             upscaler.SelectedIndexChanged += delegate
             {
                 if (loading) return;
@@ -823,6 +853,12 @@ namespace Nebula.Launcher
         private void LoadValues()
         {
             loading = true;
+            if (gpus.Count >= 2)
+            {
+                // A chosen GPU that is not present shows as Automatic, which is what the game then uses.
+                int chosen = gpus.FindIndex(g => g.Id == graphics.Gpu);
+                gpuBox.SelectedIndex = chosen >= 0 ? chosen + 1 : 0;
+            }
             var current = DisplayInfo.Find(monitors, graphics.Monitor);
             monitor.SelectedIndex = Math.Max(0, monitors.IndexOf(current));
             mode.SelectedIndex = Math.Max(0, Math.Min(graphics.DisplayMode, GraphicsSettings.DisplayModes.Length - 1));
@@ -934,6 +970,41 @@ namespace Nebula.Launcher
             }
         }
 
+        // Another GPU: DLSS, DLSS Frame Generation and ray tracing follow what it runs. A choice it does not
+        // run falls back (DLSS to FSR 1, Frame Generation to Native); the others are kept.
+        private void RefreshGpuOptions()
+        {
+            string gpu = SelectedGpuId;
+            int shownUpscaler = upscaler.SelectedIndex >= 0 && upscaler.SelectedIndex < upscalerChoices.Count
+                ? upscalerChoices[upscaler.SelectedIndex] : graphics.Upscaler;
+            if (shownUpscaler == 3) graphics.TemporalQuality = Math.Max(0, dlssQuality.SelectedIndex);
+            else graphics.SpatialQuality = Math.Max(0, dlssQuality.SelectedIndex);
+            int shownInterpolation = SelectedInterpolation;
+
+            loading = true;
+            upscalerChoices = GraphicsSettings.UpscalerChoices(gpu);
+            upscaler.Items.Clear();
+            foreach (int value in upscalerChoices) upscaler.Items.Add(GraphicsSettings.UpscalerName(value));
+            upscaler.SelectedIndex = upscalerChoices.Contains(shownUpscaler) ? upscalerChoices.IndexOf(shownUpscaler) : upscalerChoices.IndexOf(1);
+            upscalerShown = upscaler.SelectedIndex;
+
+            interpolationChoices.Clear();
+            interpolationChoices.Add(0);
+            interpolationChoices.Add(1);
+            if (upscalerChoices.Contains(3)) interpolationChoices.Add(2);
+            interpolation.Items.Clear();
+            foreach (int value in interpolationChoices) interpolation.Items.Add(GraphicsSettings.InterpolationModes[value]);
+            interpolation.SelectedIndex = interpolationChoices.Contains(shownInterpolation)
+                ? interpolationChoices.IndexOf(shownInterpolation) : interpolationChoices.IndexOf(1);
+
+            rayTracingOffered = GraphicsSettings.RayTracingAdapter(gpu);
+            rayTracing.Visible = rtQuality.Visible = rayTracingOffered;
+            loading = false;
+
+            ShowUpscalerQuality();
+            RefreshFrameRateChoices();
+        }
+
         // The frame rate row for the interpolation chosen: its limit (30 or 60) without one, else its
         // target (the rates below the display's and the display's own).
         private void RefreshFrameRateChoices()
@@ -983,6 +1054,7 @@ namespace Nebula.Launcher
             {
                 var screen = SelectedMonitor;
                 graphics.Monitor = screen != null ? screen.Device : "";
+                graphics.Gpu = SelectedGpuId;
                 graphics.DisplayMode = Math.Max(0, mode.SelectedIndex);
                 if (resolution.SelectedIndex >= 0 && resolution.SelectedIndex < resolutionChoices.Count)
                 {

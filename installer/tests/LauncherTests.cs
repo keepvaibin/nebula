@@ -58,6 +58,113 @@ namespace Nebula.Launcher
             }
         }
 
+        static object Private(object target, string name)
+        {
+            return target.GetType().GetField(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(target);
+        }
+
+        // The GPU picker: the GPUs DXGI lists, the GPU the game will run on for a gpu setting, and the DLSS and ray
+        // tracing that follow it. A laptop: an NVIDIA RTX GPU (DXGI's high-performance first) and an integrated one.
+        static readonly GpuAdapter Rtx = new GpuAdapter { Name = "NVIDIA GeForce RTX 4070 Laptop GPU", VendorId = 0x10DE, DeviceId = 0x2860, SubSysId = 0x3FA1103C };
+        static readonly GpuAdapter Integrated = new GpuAdapter { Name = "AMD Radeon(TM) Graphics", VendorId = 0x1002, DeviceId = 0x1681, SubSysId = 0x3FA1103C };
+
+        static void GpuCases()
+        {
+            var real = GpuAdapters.List(false);
+            Check(real != null && real.Count >= 1 && real.Select(g => g.Id).Distinct().Count() == real.Count, "DXGI lists this PC's GPUs, each once: " +
+                  (real == null ? "none" : string.Join(", ", real.Select(g => g.Name + " " + g.Id))));
+            Check(Rtx.Id == "10de:2860:3fa1103c" && Rtx.IsNvidiaRtx && !Integrated.IsNvidiaRtx,
+                  "a GPU's id is the runtime's gpu_identity, and an NVIDIA RTX GPU is recognised");
+
+            var original = GpuAdapters.Source;
+            GpuAdapters.Source = lowPower => lowPower ? new List<GpuAdapter> { Integrated, Rtx } : new List<GpuAdapter> { Rtx, Integrated };
+            string adapterIni = Path.Combine(NebulaPaths.DataRoot, "adapter.ini");
+            try
+            {
+                if (File.Exists(adapterIni)) File.Delete(adapterIni);
+                Check(GraphicsSettings.TargetAdapter("") == Rtx && GraphicsSettings.TargetAdapter(Integrated.Id) == Integrated &&
+                      GraphicsSettings.TargetAdapter("dead:beef:00000000") == Rtx,
+                      "the game runs on the chosen GPU, or automatically when none is chosen or it is not present");
+                Check(GraphicsSettings.UpscalerChoices("").Contains(3) && GraphicsSettings.UpscalerChoices(Rtx.Id).Contains(3) &&
+                      !GraphicsSettings.UpscalerChoices(Integrated.Id).Contains(3),
+                      "DLSS is offered for the RTX GPU and not for the integrated one");
+                Check(GraphicsSettings.RayTracingAdapter(Rtx.Id) && !GraphicsSettings.RayTracingAdapter(Integrated.Id),
+                      "before any run, ray tracing is offered for an RTX GPU only");
+                File.WriteAllText(adapterIni, "description=" + Integrated.Name + "\nid=" + Integrated.Id + "\ngpu_preference=high\nray_tracing=1\n");
+                Check(GraphicsSettings.RayTracingAdapter(Integrated.Id) && GraphicsSettings.RayTracingAdapter(Rtx.Id),
+                      "a GPU the game has run on is offered ray tracing as the game recorded it");
+                File.WriteAllText(adapterIni, "description=" + Rtx.Name + "\nid=" + Rtx.Id + "\ngpu_preference=high\nray_tracing=0\n");
+                Check(!GraphicsSettings.RayTracingAdapter(Rtx.Id), "the game's record wins over the RTX rule");
+                File.Delete(adapterIni);
+
+                File.WriteAllText(GraphicsSettings.ConfigPath, "gpu=1002:1681:3FA1103C\n");
+                var settings = GraphicsSettings.Load();
+                Check(settings.Gpu == Integrated.Id, "the gpu key loads as an id: " + settings.Gpu);
+                settings.Gpu = Rtx.Id;
+                settings.Save();
+                Check(File.ReadAllText(GraphicsSettings.ConfigPath).Contains("gpu=" + Rtx.Id) && GraphicsSettings.Load().Gpu == Rtx.Id,
+                      "the chosen GPU saves for the game");
+                settings.Gpu = "";
+                settings.Save();
+                Check(GraphicsSettings.Load().Gpu == "", "Automatic saves as an empty gpu");
+            }
+            finally
+            {
+                GpuAdapters.Source = original;
+                if (File.Exists(adapterIni)) File.Delete(adapterIni);
+            }
+        }
+
+        // The settings window on the laptop: the Graphics card row, and the options switching with it.
+        static void GpuFormCases(LaunchSession session, string outDir)
+        {
+            var original = GpuAdapters.Source;
+            GpuAdapters.Source = lowPower => new List<GpuAdapter> { Rtx, Integrated };
+            File.WriteAllText(GraphicsSettings.ConfigPath, "gpu=" + Integrated.Id + "\n");
+            try
+            {
+                using (var form = new SettingsForm(session))
+                {
+                    CreateHandles(form);
+                    var gpuBox = (ComboBox)Private(form, "gpuBox");
+                    var upscaler = (ComboBox)Private(form, "upscaler");
+                    var interpolation = (ComboBox)Private(form, "interpolation");
+                    Check(gpuBox.Parent != null && gpuBox.Parent.Text == "Display" && gpuBox.Items.Count == 3 &&
+                          (string)gpuBox.Items[0] == "Automatic (" + Rtx.Name + ")" && (string)gpuBox.Items[1] == Rtx.Name &&
+                          (string)gpuBox.Items[2] == Integrated.Name,
+                          "with two GPUs the Display tab has a Graphics card list: Automatic (the GPU it picks), then each GPU");
+                    Func<bool> dlssListed = () => upscaler.Items.Cast<string>().Any(i => i.StartsWith("NVIDIA DLSS"));
+                    Func<bool> frameGenerationListed = () => interpolation.Items.Cast<string>().Contains("DLSS Frame Generation");
+                    Check(gpuBox.SelectedIndex == 2 && !dlssListed() && !frameGenerationListed() && !(bool)Private(form, "rayTracingOffered"),
+                          "the saved integrated GPU is selected, without DLSS, Frame Generation or ray tracing");
+                    gpuBox.SelectedIndex = 1;
+                    Check(dlssListed() && frameGenerationListed() && (bool)Private(form, "rayTracingOffered") && upscaler.SelectedIndex >= 0,
+                          "choosing the RTX GPU offers DLSS, Frame Generation and ray tracing at once");
+                    gpuBox.SelectedIndex = 0;
+                    Check(dlssListed() && (bool)Private(form, "rayTracingOffered"), "Automatic offers what the GPU it picks runs");
+                    gpuBox.SelectedIndex = 2;
+                    Check(!dlssListed() && !frameGenerationListed() && !(bool)Private(form, "rayTracingOffered") &&
+                          upscaler.SelectedIndex >= 0 && interpolation.SelectedIndex >= 0,
+                          "back on the integrated GPU they are withdrawn and every list keeps a selection");
+                    gpuBox.SelectedIndex = 1;
+                    form.GetType().GetMethod("Commit", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).Invoke(form, null);
+                    Check(GraphicsSettings.Load().Gpu == Rtx.Id, "Save stores the chosen GPU for the game");
+                    var tabs = form.Controls.OfType<TabControl>().Single();
+                    tabs.SelectedIndex = 0;
+                    using (var bitmap = new Bitmap(form.Width, form.Height))
+                    {
+                        form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.Size));
+                        bitmap.Save(Path.Combine(outDir, "gpu-display.png"), ImageFormat.Png);
+                    }
+                }
+            }
+            finally
+            {
+                GpuAdapters.Source = original;
+                File.Delete(GraphicsSettings.ConfigPath);
+            }
+        }
+
         // Windowed sizes for a fixed aspect, and the size chosen when the aspect changes.
         static void WindowSizeCases()
         {
@@ -373,6 +480,8 @@ namespace Nebula.Launcher
                     Check(form.Text == "Nebula settings", "later title: " + form.Text);
                     Render(form, form.Controls.OfType<TabControl>().Single(), outDir, "later");
                 }
+                GpuCases();
+                GpuFormCases(later, outDir);
 
                 // TryLaunch starts <App>\NebulaRuntime.exe, here a stub that records its arguments.
                 string marker = Path.Combine(later.App, "stub-launch.txt");
