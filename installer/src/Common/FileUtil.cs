@@ -113,10 +113,18 @@ namespace Nebula
                 count = needed;
                 if (NativeMethods.RmGetList(session, out needed, ref count, info, ref reasons) != 0) return "";
                 var names = new List<string>();
-                for (int i = 0; i < count; i++) names.Add(info[i].AppName + " (" + info[i].Process.ProcessId + ")");
+                for (int i = 0; i < count; i++) names.Add(ProcessName(info[i]) + " (" + info[i].Process.ProcessId + ")");
                 return string.Join(", ", names);
             }
             finally { NativeMethods.RmEndSession(session); }
+        }
+
+        // The Restart Manager names only processes with a window or a service; a scanner is usually neither.
+        private static string ProcessName(NativeMethods.RmProcessInfo info)
+        {
+            if (!string.IsNullOrWhiteSpace(info.AppName)) return info.AppName.Trim();
+            try { return System.Diagnostics.Process.GetProcessById(info.Process.ProcessId).ProcessName + ".exe"; }
+            catch (Exception) { return "process"; }
         }
 
         public static bool IsReparsePoint(string path)

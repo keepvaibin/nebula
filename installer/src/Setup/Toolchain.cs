@@ -138,7 +138,7 @@ namespace Nebula.Setup
             if (sdkFailure != null) throw sdkFailure;
             foreach (var msi in Directory.GetFiles(Path.Combine(staging, "sdk"), "*.msi")) File.Delete(msi);
 
-            Directory.Move(staging, root);
+            FileUtil.MoveDirectory(staging, root, log);
             if (!Locate(true)) throw new InvalidOperationException("The unpacked toolchain is incomplete.");
             Json.Save(Marker, new Dictionary<string, object> { { "id", Id }, { "sdk", SdkVersion }, { "createdUtc", DateTime.UtcNow.ToString("o") } });
             FileUtil.DeleteTree(downloads);

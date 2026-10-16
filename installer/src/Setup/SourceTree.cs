@@ -108,7 +108,7 @@ namespace Nebula.Setup
                 if (string.IsNullOrEmpty(overridePath)) File.Delete(zip);
             }
             Verify(staging);
-            Directory.Move(staging, target);
+            FileUtil.MoveDirectory(staging, target, log);
             log("Verified " + files.Count + " source files of revision " + Commit + ".");
             return target;
         }

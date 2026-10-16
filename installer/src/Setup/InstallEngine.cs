@@ -597,7 +597,7 @@ namespace Nebula.Setup
             if (Directory.Exists(versionDir))
             {
                 replaced = versionDir + ".replaced-" + Guid.NewGuid().ToString("N").Substring(0, 8);
-                Directory.Move(versionDir, replaced);
+                FileUtil.MoveDirectory(versionDir, replaced, Log);
             }
             FileUtil.MoveDirectory(app, versionDir, Log);
 
@@ -605,14 +605,14 @@ namespace Nebula.Setup
             if (Directory.Exists(newContent))
             {
                 Json.Save(Path.Combine(newContent, "content.json"), new Dictionary<string, object> { { "formatVersion", ContentFormatVersion }, { "createdUtc", DateTime.UtcNow.ToString("o") } });
-                if (Directory.Exists(layout.Content)) Directory.Move(layout.Content, Path.Combine(staging, "content-old"));
-                Directory.Move(newContent, layout.Content);
+                if (Directory.Exists(layout.Content)) FileUtil.MoveDirectory(layout.Content, Path.Combine(staging, "content-old"), Log);
+                FileUtil.MoveDirectory(newContent, layout.Content, Log);
             }
             string newInputs = Path.Combine(staging, "game-inputs");
             if (Directory.Exists(newInputs))
             {
-                if (Directory.Exists(layout.GameInputs)) Directory.Move(layout.GameInputs, Path.Combine(staging, "game-inputs-old"));
-                Directory.Move(newInputs, layout.GameInputs);
+                if (Directory.Exists(layout.GameInputs)) FileUtil.MoveDirectory(layout.GameInputs, Path.Combine(staging, "game-inputs-old"), Log);
+                FileUtil.MoveDirectory(newInputs, layout.GameInputs, Log);
             }
 
             string previous = current != null && current.Version != BuildInfo.Version ? current.Version : (current != null ? current.Previous : null);
