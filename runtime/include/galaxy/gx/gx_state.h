@@ -251,6 +251,9 @@ private:
     // write/dirty pass. Keep unchecked application inaccessible to callers.
     void apply_validated_xf(std::uint16_t base, const std::uint32_t* values,
         std::uint16_t count);
+    // A transfer with unknown addresses (release builds): only its known words.
+    void apply_known_xf(std::uint16_t base, const std::uint32_t* values,
+        std::uint16_t count);
     std::array<std::uint32_t, 0x100> cp_{};
     std::array<std::uint32_t, 0x2000> xf_{};
     std::array<std::uint32_t, 0x100> bp_{};
@@ -271,5 +274,12 @@ private:
     mutable bool dependency_shape_hash_valid_ = false;
     std::uint64_t dependency_shape_revision_ = 1u;
 };
+
+// A CP, XF or BP write the state does not model, or a TMEM load. Release builds skip it (the command's
+// length is known, so the stream stays in step and the write changes nothing; a frame may draw wrongly
+// where the game used to close) and log each register once. Fatal when GALAXY_GX_STRICT=1, and in
+// tests that set it.
+[[nodiscard]] bool unknown_gx_commands_fatal() noexcept;
+void set_unknown_gx_commands_fatal(bool fatal) noexcept;
 
 }  // namespace galaxy::gx

@@ -1947,6 +1947,8 @@ public:
 }  // namespace galaxy::gx
 
 int main() {
+    // These cases check that unknown commands are refused.
+    galaxy::gx::set_unknown_gx_commands_fatal(true);
     if (!expect(galaxy::gx::GxBackendMemorySnapshotTestAccess::
         storage_index_preserves_linear_alias_selection(),
         "snapshot storage preserves exact aliases, first-free slots, growth, small reuse, and moves")) return 1;

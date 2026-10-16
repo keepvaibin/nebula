@@ -3,22 +3,67 @@
 // Mutators are called only by FifoParser. Consumers are GxBackend methods that build
 // shader keys, pipeline state and constant buffers.
 //
-// Unknown CP/XF/BP state writes are fatal. Accepting a self-delimiting command would
-// continue with stale or incomplete rendering state.
+// Unknown CP/XF/BP state writes and TMEM loads change no state. Release builds skip them
+// and log each register once (unknown_gx_commands_fatal); with GALAXY_GX_STRICT=1 they are
+// fatal, as accepting one leaves a frame drawn with stale or incomplete state.
 
 #include "galaxy/gx/gx_state.h"
 
+#include "galaxy/crash_notes.h"
 #include "galaxy/gx/fifo_parser.h"
 #include "galaxy/gx/uber_constants.h"
 
 #include <algorithm>
+#include <array>
+#include <atomic>
 #include <bit>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 namespace galaxy::gx {
 
 namespace {
+
+std::atomic<int> s_unknown_commands_fatal{-1};
+
+}  // namespace
+
+bool unknown_gx_commands_fatal() noexcept {
+    int fatal = s_unknown_commands_fatal.load(std::memory_order_relaxed);
+    if (fatal < 0) {
+        char value[8]{};
+        std::size_t length = 0u;
+        fatal = getenv_s(&length, value, sizeof(value), "GALAXY_GX_STRICT") == 0 && length == 2u &&
+                value[0] == '1' ? 1 : 0;
+        s_unknown_commands_fatal.store(fatal, std::memory_order_relaxed);
+    }
+    return fatal != 0;
+}
+
+void set_unknown_gx_commands_fatal(bool fatal) noexcept {
+    s_unknown_commands_fatal.store(fatal ? 1 : 0, std::memory_order_relaxed);
+}
+
+namespace {
+
+// One bit per register already reported; the parsers run on two threads.
+std::array<std::atomic<std::uint64_t>, 4> s_bp_reported{};
+std::array<std::atomic<std::uint64_t>, 4> s_cp_reported{};
+std::array<std::atomic<std::uint64_t>, 1024> s_xf_reported{};
+std::array<std::atomic<std::uint64_t>, 1> s_tmem_reported{};
+
+// Throws when unknown commands are fatal; otherwise logs the first of each register.
+template <std::size_t Words>
+void reject(const char* message, std::uint8_t opcode,
+            std::array<std::atomic<std::uint64_t>, Words>& reported, std::uint32_t index) {
+    if (unknown_gx_commands_fatal()) throw GxFatalError(message, 0u, opcode);
+    index = std::min<std::uint32_t>(index, Words * 64u - 1u);
+    const std::uint64_t bit = std::uint64_t{1} << (index & 63u);
+    if ((reported[index >> 6u].fetch_or(bit, std::memory_order_relaxed) & bit) != 0u) return;
+    std::fprintf(stderr, "%s; skipped, later writes of this register are not logged\n", message);
+    crash_notes::note(message);
+}
 
 // Bit span covering palette chunks `first`..`last` inclusive. Callers guarantee
 // last < 64 (52 chunks exist) and first <= last, so the shift is never wide.
@@ -28,7 +73,7 @@ namespace {
         ~((std::uint64_t{1} << first) - 1u);
 }
 
-[[noreturn]] void throw_unknown_cp_write(
+void reject_unknown_cp_write(
     std::uint8_t reg,
     std::uint32_t value) {
     char message[192]{};
@@ -40,10 +85,10 @@ namespace {
         static_cast<unsigned>(op::kLoadCpReg),
         static_cast<unsigned>(reg),
         static_cast<unsigned>(value));
-    throw GxFatalError(message, 0u, op::kLoadCpReg);
+    reject(message, op::kLoadCpReg, s_cp_reported, reg);
 }
 
-[[noreturn]] void throw_unknown_xf_write(
+void reject_unknown_xf_write(
     std::uint8_t opcode,
     std::uint16_t base,
     std::uint16_t count,
@@ -61,10 +106,10 @@ namespace {
         static_cast<unsigned>(value),
         static_cast<unsigned>(base),
         static_cast<unsigned>(count));
-    throw GxFatalError(message, 0u, opcode);
+    reject(message, opcode, s_xf_reported, address);
 }
 
-[[noreturn]] void throw_unknown_bp_write(
+void reject_unknown_bp_write(
     std::uint8_t reg,
     std::uint32_t value,
     std::uint32_t command) {
@@ -79,10 +124,10 @@ namespace {
         static_cast<unsigned>(reg),
         static_cast<unsigned>(value),
         static_cast<unsigned>(command));
-    throw GxFatalError(message, 0u, op::kLoadBpReg);
+    reject(message, op::kLoadBpReg, s_bp_reported, reg);
 }
 
-[[noreturn]] void throw_tmem_load(std::uint32_t value, std::uint32_t command) {
+void reject_tmem_load(std::uint32_t value, std::uint32_t command) {
     char message[224]{};
     std::snprintf(
         message,
@@ -93,7 +138,7 @@ namespace {
         static_cast<unsigned>(bp::kTexLoadStart),
         static_cast<unsigned>(value),
         static_cast<unsigned>(command));
-    throw GxFatalError(message, 0u, op::kLoadBpReg);
+    reject(message, op::kLoadBpReg, s_tmem_reported, 0u);
 }
 
 [[nodiscard]] constexpr bool in_u16_range(
@@ -141,7 +186,9 @@ namespace {
         in_u16_range(address, xf::kPostTexGenBase, 0x1058u);
 }
 
-void validate_xf_write(
+// True when every address of the transfer is known. Otherwise each unknown address is rejected
+// (fatal, or logged once in release builds) and the caller applies only the known words.
+[[nodiscard]] bool validate_xf_write(
     std::uint8_t opcode,
     std::uint16_t base,
     const std::uint32_t* values,
@@ -158,20 +205,23 @@ void validate_xf_write(
          end <= xf::kNormalMatricesBase + 0x0060u) ||
         (base >= xf::kPostMatricesBase &&
          end <= xf::kLightsBase + 0x0080u)) {
-        return;
+        return true;
     }
+    bool all_known = true;
     for (std::uint32_t i = 0; i < count; ++i) {
         const std::uint32_t address = static_cast<std::uint32_t>(base) + i;
         if (address > 0xFFFFu ||
             !is_classified_xf_address(static_cast<std::uint16_t>(address))) {
-            throw_unknown_xf_write(
+            reject_unknown_xf_write(
                 opcode,
                 base,
                 count,
                 address,
                 values[i]);
+            all_known = false;
         }
     }
+    return all_known;
 }
 
 [[nodiscard]] constexpr bool is_classified_bp_register(
@@ -476,7 +526,8 @@ void GxState::load_cp(std::uint8_t reg, std::uint32_t value) {
                 reg < cp::kArrayStrideBase + 16u)) {
         dirty = kDirtyVcd;
     } else {
-        throw_unknown_cp_write(reg, value);
+        reject_unknown_cp_write(reg, value);
+        return;
     }
 
     if (cp_[reg] != value) {
@@ -498,8 +549,23 @@ void GxState::load_xf(
     std::uint16_t base,
     const std::uint32_t* values,
     std::uint16_t count) {
-    validate_xf_write(op::kLoadXfReg, base, values, count);
-    apply_validated_xf(base, values, count);
+    if (validate_xf_write(op::kLoadXfReg, base, values, count)) {
+        apply_validated_xf(base, values, count);
+    } else {
+        apply_known_xf(base, values, count);
+    }
+}
+
+void GxState::apply_known_xf(
+    std::uint16_t base,
+    const std::uint32_t* values,
+    std::uint16_t count) {
+    for (std::uint32_t i = 0; i < count; ++i) {
+        const std::uint32_t address = static_cast<std::uint32_t>(base) + i;
+        if (address <= 0xFFFFu && is_classified_xf_address(static_cast<std::uint16_t>(address))) {
+            apply_validated_xf(static_cast<std::uint16_t>(address), values + i, 1u);
+        }
+    }
 }
 
 void GxState::apply_validated_xf(
@@ -591,10 +657,13 @@ void GxState::load_xf_indexed(
     std::uint16_t count) {
     // This mutator does not receive the A-D selector. kLoadIndxA identifies the LOAD_INDX
     // opcode family in fatal metadata.
-    validate_xf_write(op::kLoadIndxA, xf_addr, values, count);
-    // Already validated with the indexed opcode's failure metadata. Reuses the application
+    // Validated with the indexed opcode's failure metadata, then the shared application
     // without a second classification pass.
-    apply_validated_xf(xf_addr, values, count);
+    if (validate_xf_write(op::kLoadIndxA, xf_addr, values, count)) {
+        apply_validated_xf(xf_addr, values, count);
+    } else {
+        apply_known_xf(xf_addr, values, count);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -605,9 +674,10 @@ void GxState::load_bp(std::uint32_t command) {
     const std::uint32_t val = command & 0x00FFFFFFu;
 
     // Rejects before the one-shot mask is applied or reset, and before any register bank
-    // changes. Continuing with stale state is never a valid fallback.
+    // changes: a skipped write leaves every register, the mask and the dirty state as they were.
     if (!is_classified_bp_register(reg)) {
-        throw_unknown_bp_write(reg, val, command);
+        reject_unknown_bp_write(reg, val, command);
+        return;
     }
 
     // 0xFE is the one-shot write mask register. It arms the mask but does not write bp_[].
@@ -617,9 +687,10 @@ void GxState::load_bp(std::uint32_t command) {
     }
 
     // A TMEM load of nothing (GXTexModeSync) leaves every register and texture as it was;
-    // textures are read from main memory, so only a load of lines would need TMEM.
+    // textures are read from main memory, so only a load of lines would need TMEM. Release
+    // builds treat a load of lines the same way.
     if (reg == bp::kTexLoadStart && (val & bp_mask_) != 0u) {
-        throw_tmem_load(val, command);
+        reject_tmem_load(val, command);
     }
 
     // Applies the current write mask. TEV color registers 0xE0-0xE7: data bit 23 routes the
