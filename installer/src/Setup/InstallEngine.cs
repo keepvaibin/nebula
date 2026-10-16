@@ -43,6 +43,8 @@ namespace Nebula.Setup
         /// <summary>Overall fraction 0..1, current step description, step fraction (negative = unknown).</summary>
         void Report(double overall, string step, double stepFraction);
         void Log(string line);
+        /// <summary>Shows <paramref name="message"/> and waits; true to check again, false to give up.</summary>
+        bool AskToClose(string message);
     }
 
     /// <summary>
@@ -627,30 +629,22 @@ namespace Nebula.Setup
 
         private void Commit(string app, InstalledInfo current)
         {
-            Running.RequireClosed(layout.Root);
             string versionDir = layout.VersionDir(BuildInfo.Version);
+            WaitUntilClosed(Directory.Exists(versionDir),
+                Directory.Exists(Path.Combine(staging, "content")) || Directory.Exists(Path.Combine(staging, "game-inputs")));
             Directory.CreateDirectory(layout.Versions);
-            string replaced = null;
-            if (Directory.Exists(versionDir))
-            {
-                replaced = versionDir + ".replaced-" + Guid.NewGuid().ToString("N").Substring(0, 8);
-                FileUtil.MoveDirectory(versionDir, replaced, Log);
-            }
-            FileUtil.MoveDirectory(app, versionDir, Log);
+            string replaced = versionDir + ".replaced-" + Guid.NewGuid().ToString("N").Substring(0, 8);
+            Swap(app, versionDir, replaced, Log);
 
             string newContent = Path.Combine(staging, "content");
             if (Directory.Exists(newContent))
             {
                 Json.Save(Path.Combine(newContent, "content.json"), new Dictionary<string, object> { { "formatVersion", ContentFormatVersion }, { "createdUtc", DateTime.UtcNow.ToString("o") } });
-                if (Directory.Exists(layout.Content)) FileUtil.MoveDirectory(layout.Content, Path.Combine(staging, "content-old"), Log);
-                FileUtil.MoveDirectory(newContent, layout.Content, Log);
+                Swap(newContent, layout.Content, Path.Combine(staging, "content-old"), Log);
             }
             string newInputs = Path.Combine(staging, "game-inputs");
             if (Directory.Exists(newInputs))
-            {
-                if (Directory.Exists(layout.GameInputs)) FileUtil.MoveDirectory(layout.GameInputs, Path.Combine(staging, "game-inputs-old"), Log);
-                FileUtil.MoveDirectory(newInputs, layout.GameInputs, Log);
-            }
+                Swap(newInputs, layout.GameInputs, Path.Combine(staging, "game-inputs-old"), Log);
 
             string previous = current != null && current.Version != BuildInfo.Version ? current.Version : (current != null ? current.Previous : null);
             Json.Save(layout.Current, new Dictionary<string, object>
@@ -658,20 +652,80 @@ namespace Nebula.Setup
                 { "version", BuildInfo.Version },
                 { "previous", previous }
             });
-            if (replaced != null) FileUtil.DeleteTree(replaced);
-            // Keep exactly one previous version for rollback.
+            // Nebula is installed from here on: what follows is tidying and shortcuts, and does not fail the install.
+            // Keep exactly one previous version for rollback; a folder still held is removed by a later install.
             foreach (var dir in Directory.GetDirectories(layout.Versions))
             {
                 string name = Path.GetFileName(dir);
-                if (name != BuildInfo.Version && name != previous) { try { FileUtil.DeleteTree(dir); } catch (IOException) { } }
+                if (name != BuildInfo.Version && name != previous)
+                {
+                    try { FileUtil.DeleteTree(dir); }
+                    catch (IOException error) { Log("Could not remove " + dir + ": " + error.Message); }
+                    catch (UnauthorizedAccessException error) { Log("Could not remove " + dir + ": " + error.Message); }
+                }
             }
             string self = Assembly.GetExecutingAssembly().Location;
             if (!string.Equals(Path.GetFullPath(self), layout.SetupCopy, StringComparison.OrdinalIgnoreCase))
-                File.Copy(self, layout.SetupCopy, true);
+                CopySetup(self);
             foreach (var failure in Integration.Register(layout, BuildInfo.Version, request.DesktopShortcut))
                 Log("Could not create the shortcut " + failure + "; Nebula.exe is in " + versionDir + ".");
             InstalledVersionDir = versionDir;
             Log("Installed " + BuildInfo.Version + " to " + versionDir + (previous != null ? "; kept " + previous + " for rollback." : "."));
+        }
+
+        /// <summary>
+        /// An update installs beside the running version, so the launcher it was started from (or the game) may stay
+        /// open. Nebula has to close only when this install replaces the folder it runs from (a repair), or the game
+        /// files the game reads. Setup then asks and waits; unattended, it fails.
+        /// </summary>
+        private void WaitUntilClosed(bool replacingVersion, bool replacingGameFiles)
+        {
+            while (true)
+            {
+                string running = replacingVersion ? Running.Find(layout.VersionDir(BuildInfo.Version), Running.Programs) : null;
+                if (running == null && replacingGameFiles) running = Running.Find(layout.Root, "NebulaRuntime");
+                if (running == null) return;
+                Log("Waiting for " + running + " to close.");
+                if (!progress.AskToClose("Nebula is running (" + running + "). Close the game, the Nebula launcher and Nebula " +
+                        "Settings, then choose Retry to finish installing Nebula " + BuildInfo.Version + "."))
+                    throw new InvalidOperationException("Nebula is running. Close the game, the Nebula launcher and Nebula Settings, then try again.");
+            }
+        }
+
+        /// <summary>
+        /// Puts <paramref name="fresh"/>, built in staging, at <paramref name="destination"/>. What is there is
+        /// renamed to <paramref name="aside"/> first, never copied (a copy would then delete it file by file, and
+        /// stop half way at a file another program holds), and renamed back if the new tree cannot be moved in.
+        /// </summary>
+        internal static void Swap(string fresh, string destination, string aside, Action<string> log)
+        {
+            bool existed = Directory.Exists(destination);
+            if (existed) FileUtil.MoveDirectoryInPlace(destination, aside);
+            try { FileUtil.MoveDirectory(fresh, destination, log); }
+            catch (Exception)
+            {
+                if (existed)
+                {
+                    try { FileUtil.MoveDirectoryInPlace(aside, destination); }
+                    catch (Exception error) { log("Could not put " + destination + " back from " + aside + ": " + error.Message); }
+                }
+                throw;
+            }
+        }
+
+        /// <summary>The Start menu's Update and Setup shortcuts run this copy. A held file is retried, then logged.</summary>
+        private void CopySetup(string self)
+        {
+            for (int attempt = 0; ; attempt++)
+            {
+                try { File.Copy(self, layout.SetupCopy, true); return; }
+                catch (Exception error)
+                {
+                    if (!(error is IOException) && !(error is UnauthorizedAccessException)) throw;
+                    if (attempt >= 20) { Log("Could not copy Setup to " + layout.SetupCopy + ": " + error.Message); return; }
+                    Thread.Sleep(500);
+                }
+            }
         }
 
         private void CleanAbandonedStaging()

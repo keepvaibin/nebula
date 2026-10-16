@@ -135,13 +135,17 @@ namespace Nebula.Setup
                 else if (item.Kind == "ninja") ZipFile.ExtractToDirectory(item.File, Path.Combine(staging, "ninja"));
             }
             sdk.Join();
-            if (sdkFailure != null) throw sdkFailure;
-            foreach (var msi in Directory.GetFiles(Path.Combine(staging, "sdk"), "*.msi")) File.Delete(msi);
+            if (sdkFailure != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(sdkFailure).Throw();
+            // msiexec leaves a copy of each package; a scanner may still be reading one, and a leftover costs only space.
+            foreach (var msi in Directory.GetFiles(Path.Combine(staging, "sdk"), "*.msi"))
+                try { File.Delete(msi); } catch (IOException) { } catch (UnauthorizedAccessException) { }
 
             FileUtil.MoveDirectory(staging, root, log);
             if (!Locate(true)) throw new InvalidOperationException("The unpacked toolchain is incomplete.");
             Json.Save(Marker, new Dictionary<string, object> { { "id", Id }, { "sdk", SdkVersion }, { "createdUtc", DateTime.UtcNow.ToString("o") } });
-            FileUtil.DeleteTree(downloads);
+            try { FileUtil.DeleteTree(downloads); }
+            catch (IOException error) { log("Could not remove the toolchain downloads: " + error.Message); }
+            catch (UnauthorizedAccessException error) { log("Could not remove the toolchain downloads: " + error.Message); }
             // Toolchains of earlier versions are never used again.
             foreach (var dir in Directory.GetDirectories(Path.GetDirectoryName(root)))
                 if (!string.Equals(dir, root, StringComparison.OrdinalIgnoreCase))

@@ -95,6 +95,9 @@ namespace Nebula
         /// <summary>Directory.Move, retried for about ten seconds while it is refused; the last refusal, or null.</summary>
         private static Exception RetryMove(string source, string destination)
         {
+            // Never merged into an existing folder: the copy fallback would mix the two, and its cleanup delete both.
+            if (Directory.Exists(destination) || File.Exists(destination))
+                throw new IOException("Cannot move " + source + " to " + destination + ", which already exists.");
             Exception refused = null;
             for (int attempt = 0; attempt < 20; attempt++)
             {

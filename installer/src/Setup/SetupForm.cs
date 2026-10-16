@@ -359,5 +359,13 @@ namespace Nebula.Setup
                 log.AppendText(line + "\r\n");
             });
         }
+
+        public bool AskToClose(string message)
+        {
+            return (bool)Invoke((Func<bool>)delegate
+            {
+                return MessageBox.Show(this, message, "Nebula Setup", MessageBoxButtons.RetryCancel, MessageBoxIcon.Warning) == DialogResult.Retry;
+            });
+        }
     }
 }

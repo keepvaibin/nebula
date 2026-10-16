@@ -93,20 +93,34 @@ namespace Nebula.Setup
 
     internal static class Running
     {
-        /// <summary>Fail with an actionable message while Nebula runs from this install.</summary>
-        public static void RequireClosed(string root)
+        /// <summary>The game, the launcher and Nebula Settings.</summary>
+        public static readonly string[] Programs = { "NebulaRuntime", "Nebula", "NebulaSettings" };
+
+        /// <summary>The first of <paramref name="names"/> running from inside <paramref name="folder"/>, as "Nebula.exe (pid)"; null when none.</summary>
+        public static string Find(string folder, params string[] names)
         {
-            string prefix = Path.GetFullPath(root).TrimEnd('\\') + "\\";
-            foreach (var name in new[] { "NebulaRuntime", "Nebula" })
+            string prefix = Path.GetFullPath(folder).TrimEnd('\\') + "\\";
+            foreach (var name in names)
             {
                 foreach (var process in Process.GetProcessesByName(name))
                 {
-                    string path = null;
-                    try { path = process.MainModule.FileName; } catch (Exception) { }
-                    if (path != null && path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                        throw new InvalidOperationException("Nebula is running. Close the game and the Nebula launcher, then try again.");
+                    using (process)
+                    {
+                        string path = null;
+                        try { path = process.MainModule.FileName; } catch (Exception) { }
+                        if (path != null && path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                            return name + ".exe (" + process.Id + ")";
+                    }
                 }
             }
+            return null;
+        }
+
+        /// <summary>Fail with an actionable message while Nebula runs from this install.</summary>
+        public static void RequireClosed(string root)
+        {
+            if (Find(root, Programs) != null)
+                throw new InvalidOperationException("Nebula is running. Close the game, the Nebula launcher and Nebula Settings, then try again.");
         }
     }
 
@@ -187,17 +201,29 @@ namespace Nebula.Setup
         public static void Uninstall(InstallLayout layout, bool removeUserData)
         {
             Running.RequireClosed(layout.Root);
+            // Files first: if one is held, the Add/Remove Programs entry and shortcuts are still there to try again.
+            string self = Path.GetFullPath(Assembly.GetExecutingAssembly().Location);
+            foreach (var entry in Directory.GetFileSystemEntries(layout.Root))
+            {
+                if (string.Equals(Path.GetFullPath(entry), self, StringComparison.OrdinalIgnoreCase)) continue;
+                try
+                {
+                    if (Directory.Exists(entry)) FileUtil.DeleteTree(entry); else File.Delete(entry);
+                }
+                catch (Exception error)
+                {
+                    if (!(error is IOException) && !(error is UnauthorizedAccessException)) throw;
+                    string holders = Directory.Exists(entry) ? FileUtil.Holders(Directory.GetFiles(entry, "*", SearchOption.AllDirectories))
+                        : FileUtil.Holders(new[] { entry });
+                    throw new IOException("Could not remove " + entry + ": " + error.Message +
+                        (holders.Length != 0 ? " In use by: " + holders + "." : "") + " Close it and uninstall again.", error);
+                }
+            }
             if (Directory.Exists(StartMenuFolder)) FileUtil.DeleteTree(StartMenuFolder);
             string desktopLink = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Nebula.lnk");
             if (File.Exists(desktopLink)) File.Delete(desktopLink);
             Registry.CurrentUser.DeleteSubKeyTree(UninstallKey, false);
             Registry.CurrentUser.DeleteSubKeyTree(@"Software\Nebula", false);
-            string self = Path.GetFullPath(Assembly.GetExecutingAssembly().Location);
-            foreach (var entry in Directory.GetFileSystemEntries(layout.Root))
-            {
-                if (string.Equals(Path.GetFullPath(entry), self, StringComparison.OrdinalIgnoreCase)) continue;
-                if (Directory.Exists(entry)) FileUtil.DeleteTree(entry); else File.Delete(entry);
-            }
             if (removeUserData && Directory.Exists(NebulaPaths.DataRoot)) FileUtil.DeleteTree(NebulaPaths.DataRoot);
             // The running setup copy deletes itself and the folder after exit.
             if (self.StartsWith(Path.GetFullPath(layout.Root), StringComparison.OrdinalIgnoreCase))

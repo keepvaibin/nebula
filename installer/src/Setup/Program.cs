@@ -79,6 +79,7 @@ namespace Nebula.Setup
         {
             public void Report(double overall, string step, double stepFraction) { }
             public void Log(string line) { }
+            public bool AskToClose(string message) { return false; }
         }
     }
 }

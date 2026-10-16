@@ -138,7 +138,8 @@ namespace Nebula.Setup
                         cancel);
                     Unpack(zip, staging, progress);
                     Verify(staging);
-                    File.Delete(zip);
+                    // A scanner may still be reading the fresh download; a leftover zip costs only space.
+                    try { File.Delete(zip); } catch (IOException) { } catch (UnauthorizedAccessException) { }
                     return;
                 }
                 catch (System.Net.WebException error) { lastFailure = error.Message; log("Not available: " + error.Message); }
