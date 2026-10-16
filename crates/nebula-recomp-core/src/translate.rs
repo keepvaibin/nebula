@@ -7665,6 +7665,11 @@ fn emit_direct_guest_call_with_exact_fpu(
         if target == 0x802A_367C && (pc == 0x8029_D1A8 || pc == 0x8028_2B38) {
             output.push_str(&site_hook_call(pc, "TextStep", u32::from(pc == 0x8028_2B38)));
         }
+        // SCGetLanguage (every caller calls it directly): the runtime answers r3 with the
+        // language setting, so the game, its HOME Menu and its message files follow it.
+        if target == 0x804D_0830 {
+            output.push_str(&site_hook_call(pc, "Language", 0));
+        }
         Ok(())
     }
 

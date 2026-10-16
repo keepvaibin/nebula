@@ -225,6 +225,19 @@ namespace Nebula.Launcher
             string saved = File.ReadAllText(path);
             Check(saved.Contains("text_speed=3") && saved.Contains("audio_master_gain=0.5") && GeneralSettings.Load().TextSpeed == 3,
                   "text speed is saved beside the other runtime settings");
+            Check(GeneralSettings.Load().Language == 0 && GeneralSettings.Languages.Length == 3 &&
+                  GeneralSettings.Languages[1] == "Français" && GeneralSettings.Languages[2] == "Español",
+                  "the game's languages are listed in their own names, English first");
+            general = GeneralSettings.Load();
+            general.Language = 2;
+            general.Save();
+            saved = File.ReadAllText(path);
+            Check(saved.Contains("language=spanish") && saved.Contains("text_speed=3") && GeneralSettings.Load().Language == 2,
+                  "the language is saved for the runtime");
+            File.WriteAllText(path, "language=FRENCH\n");
+            Check(GeneralSettings.Load().Language == 1, "the runtime's language values read in any case");
+            File.WriteAllText(path, "language=klingon\n");
+            Check(GeneralSettings.Load().Language == 0, "an unknown language reads as English");
             File.Delete(path);
         }
 

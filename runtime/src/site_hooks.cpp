@@ -161,6 +161,11 @@ void dispatch_site_hook(
         }
         return;
     }
+    case SiteHookKind::Language:
+        // The game, its HOME Menu and its message files all follow SCGetLanguage. The answer is
+        // fixed at the first question of the session (game_language_for_boot).
+        context->gpr[3] = static_cast<std::uint32_t>(game_language_for_boot());
+        return;
     case SiteHookKind::LodDistance:
         // LodCtrl::update keeps the game's distances: which model shows is
         // also game state (MR::isHiddenModel).

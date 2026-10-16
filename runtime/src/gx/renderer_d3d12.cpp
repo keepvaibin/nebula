@@ -226,6 +226,19 @@ std::uint32_t s_handled_key_normalized = 0u;
 std::atomic<std::uint64_t> s_pending_resize_extent{0};
 
 constexpr unsigned kNativeSettingsTabCount = 5;
+
+// The GENERAL page's languages, in the order LEFT/RIGHT steps through them.
+constexpr GameLanguage kGameLanguages[] = {GameLanguage::English, GameLanguage::French, GameLanguage::Spanish};
+
+// Each language in its own name; the UTF-8 Ç and Ñ are drawn by ui_text.
+const char* game_language_name(GameLanguage language) {
+    switch (language) {
+    case GameLanguage::French: return "FRAN\xC3\x87" "AIS";
+    case GameLanguage::Spanish: return "ESPA\xC3\x91" "OL";
+    case GameLanguage::English: break;
+    }
+    return "ENGLISH";
+}
 // Rows the panel shows at once; longer pages scroll.
 constexpr unsigned kNativeSettingsVisibleRows = 9u;
 
@@ -676,7 +689,7 @@ unsigned native_settings_row_count(unsigned tab) {
     case 1: return fsr3_available() ? 9u : 8u;
     case 2: return controls_row_count();
     case 3: return 6u;
-    case 4: return 1u;
+    case 4: return 2u;
     default: return 0u;
     }
 }
@@ -1103,6 +1116,18 @@ void adjust_native_setting_unlogged(int delta) {
         const unsigned next = step(std::clamp(settings.text_speed, 1u, 3u) - 1u, 3u) + 1u;
         if (next != settings.text_speed) {
             settings.text_speed = next;
+            set_runtime_settings(settings);
+            s_native_settings_dirty.store(true, std::memory_order_release);
+        }
+    }
+    if (tab == 4u && row == 1u) {
+        // Saved at once; the game takes it at its next start (footer note).
+        const unsigned index = static_cast<unsigned>(
+            std::find(std::begin(kGameLanguages), std::end(kGameLanguages), settings.language) -
+            std::begin(kGameLanguages));
+        const GameLanguage next = kGameLanguages[step(std::min(index, 2u), 3u)];
+        if (next != settings.language) {
+            settings.language = next;
             set_runtime_settings(settings);
             s_native_settings_dirty.store(true, std::memory_order_release);
         }
@@ -9110,6 +9135,10 @@ void RendererD3D12::debug_log_readback() {
 // present
 // ---------------------------------------------------------------------------
 
+// The two accented capitals the language names need, as ui_glyph codes.
+constexpr char kGlyphCCedilla = '\x01';
+constexpr char kGlyphNTilde = '\x02';
+
 std::array<std::uint8_t, 7> ui_glyph(char ch) {
     if (ch >= 'a' && ch <= 'z') {
         ch = static_cast<char>(ch - 'a' + 'A');
@@ -9163,6 +9192,8 @@ std::array<std::uint8_t, 7> ui_glyph(char ch) {
     case '(': return {0x02u, 0x04u, 0x08u, 0x08u, 0x08u, 0x04u, 0x02u};
     case ')': return {0x08u, 0x04u, 0x02u, 0x02u, 0x02u, 0x04u, 0x08u};
     case '>': return {0x08u, 0x04u, 0x02u, 0x01u, 0x02u, 0x04u, 0x08u};
+    case kGlyphCCedilla: return {0x0Eu, 0x11u, 0x10u, 0x10u, 0x11u, 0x0Eu, 0x04u};
+    case kGlyphNTilde: return {0x0Du, 0x11u, 0x19u, 0x15u, 0x13u, 0x11u, 0x11u};
     default: return {0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u};
     }
 }
@@ -9191,10 +9222,17 @@ void ui_text(
     const std::string& text,
     const std::array<float, 4>& color) {
     int cursor_x = x;
-    for (const char ch : text) {
+    for (std::size_t i = 0; i < text.size(); ++i) {
+        char ch = text[i];
         if (ch == ' ') {
             cursor_x += 4 * scale;
             continue;
+        }
+        // UTF-8 Ç/ç and Ñ/ñ (C3 87/A7, C3 91/B1); any other two-byte letter draws as one blank cell.
+        if (static_cast<unsigned char>(ch) == 0xC3u && i + 1u < text.size()) {
+            const auto next = static_cast<unsigned char>(text[++i]);
+            ch = next == 0x87u || next == 0xA7u ? kGlyphCCedilla
+               : next == 0x91u || next == 0xB1u ? kGlyphNTilde : '\0';
         }
         const std::array<std::uint8_t, 7> rows = ui_glyph(ch);
         std::uint64_t bitmap = 0u;
@@ -9414,6 +9452,7 @@ std::string native_settings_row_text(
             std::snprintf(text, sizeof(text), "TEXT SPEED: %uX", std::clamp(runtime.text_speed, 1u, 3u));
             return text;
         }
+        if (row == 1u) return std::string("LANGUAGE: ") + game_language_name(runtime.language);
         return {};
     default:
         return {};
@@ -9588,6 +9627,9 @@ void draw_native_settings_overlay(RendererD3D12& renderer) {
         status_color = accent;
     } else if (s_settings_applied_ms != 0u && now_ms - s_settings_applied_ms < 2500u) {
         status = "APPLIED";
+        status_color = accent;
+    } else if (GameLanguage running{}; tab == 4u && running_game_language(running) && running != row_runtime.language) {
+        status = "THE NEW LANGUAGE APPLIES WHEN NEBULA RESTARTS";
         status_color = accent;
     }
     if (!status.empty()) {

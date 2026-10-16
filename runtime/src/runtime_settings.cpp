@@ -8,6 +8,7 @@
 #include <Shlobj.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cerrno>
 #include <cctype>
 #include <clocale>
@@ -56,6 +57,9 @@ RuntimeSettings sanitize_settings(RuntimeSettings settings) {
     settings.audio.ambience = sanitize_gain(settings.audio.ambience);
     settings.audio.cutscene = sanitize_gain(settings.audio.cutscene);
     settings.text_speed = std::clamp(settings.text_speed, 1u, 3u);
+    if (settings.language != GameLanguage::French && settings.language != GameLanguage::Spanish) {
+        settings.language = GameLanguage::English;
+    }
     return settings;
 }
 
@@ -143,6 +147,10 @@ void apply_kv(RuntimeSettings& settings, const char* key, const char* value) {
     } else if (std::strcmp(key, "text_speed") == 0) {
         if (value[0] >= '1' && value[0] <= '3' && value[1] == '\0') {
             settings.text_speed = static_cast<unsigned>(value[0] - '0');
+        }
+    } else if (std::strcmp(key, "language") == 0) {
+        for (const GameLanguage language : {GameLanguage::English, GameLanguage::French, GameLanguage::Spanish}) {
+            if (_stricmp(value, game_language_key(language)) == 0) settings.language = language;
         }
     }
 }
@@ -278,6 +286,7 @@ void apply_env_overrides(RuntimeSettings& settings) {
     apply_env(
         settings, "GALAXY_AUDIO_CUTSCENE_GAIN", "audio_cutscene_gain");
     apply_env(settings, "GALAXY_TEXT_SPEED", "text_speed");
+    apply_env(settings, "GALAXY_LANGUAGE", "language");
 }
 
 }  // namespace
@@ -287,6 +296,38 @@ RuntimeSettings get_runtime_settings() {
     const RuntimeSettings copy = s_settings;
     ReleaseSRWLockShared(&s_settings_lock);
     return copy;
+}
+
+namespace {
+// 0 until the game first asks for its language, then that language's SC code.
+std::atomic<std::uint8_t> s_running_language{0u};
+}  // namespace
+
+GameLanguage game_language_for_boot() noexcept {
+    std::uint8_t running = s_running_language.load(std::memory_order_acquire);
+    if (running == 0u) {
+        std::uint8_t expected = 0u;
+        const auto chosen = static_cast<std::uint8_t>(get_runtime_settings().language);
+        running = s_running_language.compare_exchange_strong(expected, chosen, std::memory_order_acq_rel)
+            ? chosen : expected;
+    }
+    return static_cast<GameLanguage>(running);
+}
+
+bool running_game_language(GameLanguage& language) noexcept {
+    const std::uint8_t running = s_running_language.load(std::memory_order_acquire);
+    if (running == 0u) return false;
+    language = static_cast<GameLanguage>(running);
+    return true;
+}
+
+const char* game_language_key(GameLanguage language) noexcept {
+    switch (language) {
+    case GameLanguage::French: return "french";
+    case GameLanguage::Spanish: return "spanish";
+    case GameLanguage::English: break;
+    }
+    return "english";
 }
 
 RuntimeInputModeState get_runtime_input_mode_state() {
@@ -357,6 +398,7 @@ bool reload_runtime_audio_settings_if_changed() noexcept {
         RuntimeSettings settings = get_runtime_settings();
         settings.audio = parsed.audio;
         settings.text_speed = parsed.text_speed;
+        settings.language = parsed.language;
         set_runtime_settings(settings);
         input::set_controls_config(controls);
         s_audio_settings_write_time = write_time;
@@ -387,6 +429,7 @@ bool save_runtime_settings_to_file() {
                  << "audio_ambience_gain=" << settings.audio.ambience << '\n'
                  << "audio_cutscene_gain=" << settings.audio.cutscene << '\n'
                  << "text_speed=" << settings.text_speed << '\n'
+                 << "language=" << game_language_key(settings.language) << '\n'
                  << input::format_controls_settings(input::get_controls_config());
         if (!contents) {
             return false;

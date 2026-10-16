@@ -57,8 +57,9 @@ namespace Nebula.Setup
         /// <summary>
         /// Raised when generated module code changes in a way a relink cannot deliver (a relink keeps the
         /// compiled objects); an update recompiles installed modules of a lower generation. 2 (1.0.1): the
-        /// text speed setting's TextStep site hook; fused multiply-adds without the C runtime (a 1.0.0 SSE2
-        /// module calls its soft-float fma for every fused guest instruction); no LodDistance hook.
+        /// site hooks of the text speed (TextStep) and language (Language) settings; fused multiply-adds
+        /// without the C runtime (a 1.0.0 SSE2 module calls its soft-float fma for every fused guest
+        /// instruction); no LodDistance hook.
         /// </summary>
         public const int ModuleGeneration = 2;
 

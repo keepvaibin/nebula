@@ -510,6 +510,9 @@ enum class SiteHookKind : std::uint32_t {
     // One step of dialogue text was revealed (TalkTextFormer::updateTalking); the value matches the
     // development line's.
     TextStep = 28,              // argument 0: TalkBalloon in r31; 1: RosettaMonologue in r30
+    // SCGetLanguage returned (r3); the runtime answers with the language setting. 29 is the
+    // development line's SunCenter.
+    Language = 30,
 };
 
 inline void site_hook(
