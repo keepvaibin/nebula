@@ -886,6 +886,9 @@ add_executable(galaxy_native_api_tests runtime/src/native_api_tests.cpp)
 target_link_libraries(galaxy_native_api_tests PRIVATE galaxy_runtime_abi galaxy_ppc_float)
 add_executable(galaxy_native_fast_float_tests runtime/src/native_fast_float_tests.cpp)
 target_compile_definitions(galaxy_native_fast_float_tests PRIVATE GALAXY_FAST_FLOAT=1)
+# MSVC 19.44's optimizer (c2.dll) overflows its own stack inlining this test's float helpers at
+# /Ob2 and /Ob3 (0xC00000FD, no diagnostic). The test checks results, not inlining.
+target_compile_options(galaxy_native_fast_float_tests PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/Ob1>)
 target_link_libraries(galaxy_native_fast_float_tests PRIVATE galaxy_runtime_abi galaxy_ppc_float)
 add_executable(galaxy_native_hw_float_conversion_tests runtime/src/native_hw_float_conversion_tests.cpp)
 target_compile_definitions(galaxy_native_hw_float_conversion_tests PRIVATE GALAXY_FAST_FLOAT=1)
