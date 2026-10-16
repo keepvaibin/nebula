@@ -9193,7 +9193,8 @@ std::array<std::uint8_t, 7> ui_glyph(char ch) {
     case ')': return {0x08u, 0x04u, 0x02u, 0x02u, 0x02u, 0x04u, 0x08u};
     case '>': return {0x08u, 0x04u, 0x02u, 0x01u, 0x02u, 0x04u, 0x08u};
     case kGlyphCCedilla: return {0x0Eu, 0x11u, 0x10u, 0x10u, 0x11u, 0x0Eu, 0x04u};
-    case kGlyphNTilde: return {0x0Du, 0x11u, 0x19u, 0x15u, 0x13u, 0x11u, 0x11u};
+    // A full N; ui_text draws the tilde above the cell.
+    case kGlyphNTilde: return {0x11u, 0x19u, 0x15u, 0x13u, 0x11u, 0x11u, 0x11u};
     default: return {0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u};
     }
 }
@@ -9234,16 +9235,23 @@ void ui_text(
             ch = next == 0x87u || next == 0xA7u ? kGlyphCCedilla
                : next == 0x91u || next == 0xB1u ? kGlyphNTilde : '\0';
         }
-        const std::array<std::uint8_t, 7> rows = ui_glyph(ch);
-        std::uint64_t bitmap = 0u;
-        for (unsigned row = 0; row < 7u; ++row) {
-            for (unsigned col = 0; col < 5u; ++col) {
-                if ((rows[row] & (1u << (4u - col))) != 0u) {
-                    bitmap |= UINT64_C(1) << (row * 5u + col);
+        const auto bitmap_of = [](const std::array<std::uint8_t, 7>& rows) {
+            std::uint64_t bitmap = 0u;
+            for (unsigned row = 0; row < 7u; ++row) {
+                for (unsigned col = 0; col < 5u; ++col) {
+                    if ((rows[row] & (1u << (4u - col))) != 0u) {
+                        bitmap |= UINT64_C(1) << (row * 5u + col);
+                    }
                 }
             }
+            return bitmap;
+        };
+        if (ch == kGlyphNTilde) {
+            // Two rows of tilde, one row clear of the N: squeezed into the cell, it read as a plain N.
+            static const std::uint64_t tilde = bitmap_of({0x0Du, 0x16u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u});
+            renderer.draw_ui_glyph(cursor_x, y - 3 * scale, scale, tilde, color);
         }
-        renderer.draw_ui_glyph(cursor_x, y, scale, bitmap, color);
+        renderer.draw_ui_glyph(cursor_x, y, scale, bitmap_of(ui_glyph(ch)), color);
         cursor_x += 6 * scale;
     }
 }
