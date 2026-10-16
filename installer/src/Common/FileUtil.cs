@@ -63,14 +63,8 @@ namespace Nebula
         /// </summary>
         public static void MoveDirectory(string source, string destination, Action<string> log)
         {
-            Exception refused = null;
-            for (int attempt = 0; attempt < 20; attempt++)
-            {
-                try { Directory.Move(source, destination); return; }
-                catch (IOException error) { refused = error; }
-                catch (UnauthorizedAccessException error) { refused = error; }
-                System.Threading.Thread.Sleep(500);
-            }
+            Exception refused = RetryMove(source, destination);
+            if (refused == null) return;
             log("Could not move " + source + " (" + refused.Message + "); copying it instead.");
             try
             {
@@ -84,6 +78,32 @@ namespace Nebula
                 throw new IOException(refused.Message + (holders.Length != 0 ? " In use by: " + holders + "." : ""), error);
             }
             try { DeleteTree(source); } catch (Exception) { }
+        }
+
+        /// <summary>
+        /// MoveDirectory without the copy, for trees whose folders carry streams of their own (saves: a copy would
+        /// drop them). After about ten seconds of refusals it fails, naming the holders; nothing has moved.
+        /// </summary>
+        public static void MoveDirectoryInPlace(string source, string destination)
+        {
+            Exception refused = RetryMove(source, destination);
+            if (refused == null) return;
+            string holders = Holders(Directory.GetFiles(source, "*", SearchOption.AllDirectories));
+            throw new IOException(refused.Message + (holders.Length != 0 ? " In use by: " + holders + "." : ""), refused);
+        }
+
+        /// <summary>Directory.Move, retried for about ten seconds while it is refused; the last refusal, or null.</summary>
+        private static Exception RetryMove(string source, string destination)
+        {
+            Exception refused = null;
+            for (int attempt = 0; attempt < 20; attempt++)
+            {
+                if (attempt != 0) System.Threading.Thread.Sleep(500);
+                try { Directory.Move(source, destination); return null; }
+                catch (IOException error) { refused = error; }
+                catch (UnauthorizedAccessException error) { refused = error; }
+            }
+            return refused;
         }
 
         public static void CopyTree(string source, string destination)

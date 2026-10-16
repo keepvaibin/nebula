@@ -74,6 +74,30 @@ graphics and 16 GB of RAM, runs the game at a locked 60 FPS at 1440p (16:10).
 Setup also updates, repairs, restores the previous version and uninstalls. Updates are signed;
 Setup checks the signature against the public key built into it before installing.
 
+## Saves
+
+Saves are kept in `%LOCALAPPDATA%\Nebula\saves`, laid out like the Wii's internal memory: the
+game's save is `title\00010000\524d4745\data\GameData.bin`, next to its `banner.bin`. Each file and
+folder also carries the Wii's file information in a hidden NTFS stream, which a plain copy or zip
+drops, so move saves with the launcher's **Advanced** tab:
+
+- **Export saves…** writes `Nebula-Saves-<date>.zip` with everything the game reads.
+- **Import saves…** takes such a zip, another zip or folder of Nebula saves, or a save from Dolphin.
+  Your current saves are moved to `saves-backup-<date>` beside them first. Close the game before
+  importing or exporting.
+
+To bring a save over from Dolphin:
+
+1. In Dolphin, right-click Super Mario Galaxy and choose **Open Wii Save Folder**. It holds
+   `GameData.bin` and `banner.bin` (in Dolphin's user folder,
+   `Wii\title\00010000\524d4745\data`).
+2. In Nebula, choose **Advanced**, **Import saves…**, **From a folder…**, and select that folder.
+
+Only saves of the USA version (RMGE01) apply; the game itself can come from an ISO or an RVZ, as
+Nebula and Dolphin use the same save format. A `GameData.bin` copied into the saves folder by hand
+also works: at the next start Nebula rebuilds the folder around it, and keeps the previous folder
+as `saves-rejected-<date>` if anything in it could not be carried over.
+
 ## Building from source
 
 [docs/BUILDING.md](docs/BUILDING.md) covers the tools, building the recompiler, runtime and game
@@ -82,7 +106,7 @@ modules by hand, running the tests and building the installer.
 ## Testing
 
 - Recompiler: more than 500 tests (`cargo test --workspace`).
-- Runtime: 70 test programs (`ctest`) covering floating-point operations (checked against
+- Runtime: 71 test programs (`ctest`) covering floating-point operations (checked against
   Berkeley SoftFloat), GX command parsing and texture decoding, input mapping, the audio queue
   and DSP, and settings files.
 - `tools/dev/verify_thp_native.cpp` compares the native movie decoder with the game's own

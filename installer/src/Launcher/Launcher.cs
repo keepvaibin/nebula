@@ -926,7 +926,7 @@ namespace Nebula.Launcher
             }
             else
             {
-                using (var dialog = new FolderBrowserDialog { Description = "Choose a saves folder.", ShowNewFolderButton = false })
+                using (var dialog = new FolderBrowserDialog { Description = "Choose a Nebula saves folder, or Dolphin's save folder for Super Mario Galaxy (the folder that holds GameData.bin; in Dolphin, right-click the game and choose Open Wii Save Folder).", ShowNewFolderButton = false })
                     if (dialog.ShowDialog(this) == DialogResult.OK) source = dialog.SelectedPath;
             }
             if (source == null) return;
