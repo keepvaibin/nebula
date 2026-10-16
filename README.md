@@ -125,7 +125,11 @@ Floating-point results are close to, but not bit-exact with, the Wii.
 - Some areas, for example the Gateway Galaxy, drop below 60 FPS on weaker CPUs.
 - Some lighting and bloom effects in the Comet Observatory differ from the original.
 
-Report problems on the [issue tracker](https://github.com/keepvaibin/nebula/issues).
+Report problems on the [issue tracker](https://github.com/keepvaibin/nebula/issues). If Nebula
+closed unexpectedly, attach its crash log: in Nebula Settings choose **Advanced**, **Open
+diagnostics**, then the newest file in `crash-logs`. It is a few lines of text about what failed;
+for more detail, choose **Detailed recording** under **Recording (next launch)** and reproduce the
+problem.
 
 ## License
 

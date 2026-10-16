@@ -1,4 +1,5 @@
 #include "galaxy/gx/renderer_d3d12.h"
+#include "galaxy/crash_notes.h"
 #include "galaxy/gx/display_modes.h"
 
 #include "galaxy/content_viewport.h"
@@ -4391,6 +4392,11 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
                       << " vendor=0x" << std::hex << adapter_desc.VendorId
                       << " device=0x" << adapter_desc.DeviceId << std::dec
                       << '\n';
+            char gpu[256]{};
+            std::snprintf(gpu, sizeof(gpu), "\"%s\" vram-mb=%llu vendor=0x%04X device=0x%04X", narrow,
+                          static_cast<unsigned long long>(adapter_desc.DedicatedVideoMemory / (1024 * 1024)),
+                          static_cast<unsigned>(adapter_desc.VendorId), static_cast<unsigned>(adapter_desc.DeviceId));
+            galaxy::crash_notes::set(galaxy::crash_notes::Fixed::Gpu, gpu);
         }
 
         // Live debug-layer message callback (opt-in, same GALAXY_D3D_DEBUG

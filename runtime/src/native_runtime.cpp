@@ -1,4 +1,5 @@
 #include "galaxy/native_api.h"
+#include "galaxy/crash_notes.h"
 #include "nebula_build_identity.h"
 #include "galaxy/ai_dma_timing.h"
 #include "galaxy/checkpoint_gate.h"
@@ -55,6 +56,8 @@
 #include "galaxy/frame_timeline.h"
 
 #include <algorithm>
+#include <cstdarg>
+#include <cwchar>
 #include <array>
 #include <atomic>
 #include <condition_variable>
@@ -31403,24 +31406,12 @@ static_assert(!parse_unsigned_decimal(L" 1") && !parse_unsigned_decimal(L"1ms"))
 static_assert(!parse_unsigned_decimal(L""));
 
 static wchar_t g_crash_dump_dir[MAX_PATH]{};
+static wchar_t g_crash_log_dir[MAX_PATH]{};
 static bool g_crash_dump_full = false;
+static ULONGLONG g_process_start_ms = 0;
+static char g_terminate_message[512]{};
 
-// Resolved and created once at startup so the filter neither depends on the
-// working directory nor has to create a directory tree while the process is
-// failing. GALAXY_CRASH_DUMP_DIR wins (the launcher points it at the recording
-// folder); otherwise %LOCALAPPDATA%\Nebula\crashdumps.
-static void prepare_crash_dump_directory() {
-    wchar_t buffer[MAX_PATH]{};
-    std::wstring dir;
-    DWORD len = GetEnvironmentVariableW(L"GALAXY_CRASH_DUMP_DIR", buffer, MAX_PATH);
-    if (len > 0 && len < MAX_PATH) {
-        dir.assign(buffer, len);
-    } else {
-        len = GetEnvironmentVariableW(L"LOCALAPPDATA", buffer, MAX_PATH);
-        dir = (len > 0 && len < MAX_PATH)
-            ? std::wstring(buffer, len) + L"\\Nebula\\crashdumps"
-            : std::wstring(L"crashdumps");
-    }
+static void create_directory_tree(const std::wstring& dir) {
     // CreateDirectoryW creates one level; create every component in turn.
     for (std::size_t i = 1; i <= dir.size(); ++i) {
         if (i == dir.size() || dir[i] == L'\\' || dir[i] == L'/') {
@@ -31428,7 +31419,51 @@ static void prepare_crash_dump_directory() {
             if (prefix.back() != L':') (void)CreateDirectoryW(prefix.c_str(), nullptr);
         }
     }
+}
+
+// Resolved and created once at startup so the filter neither depends on the
+// working directory nor has to create a directory tree while the process is
+// failing. GALAXY_CRASH_DUMP_DIR wins (the launcher points it at the recording
+// folder); otherwise %LOCALAPPDATA%\Nebula\crashdumps for minidumps and
+// %LOCALAPPDATA%\Nebula\sessions\crash-logs, which the launcher's Open
+// diagnostics shows, for crash logs. The newest 20 crash logs are kept.
+static void prepare_crash_dump_directory() {
+    g_process_start_ms = GetTickCount64();
+    wchar_t buffer[MAX_PATH]{};
+    std::wstring dir;
+    std::wstring logs;
+    DWORD len = GetEnvironmentVariableW(L"GALAXY_CRASH_DUMP_DIR", buffer, MAX_PATH);
+    if (len > 0 && len < MAX_PATH) {
+        dir.assign(buffer, len);
+        logs = dir;
+    } else {
+        len = GetEnvironmentVariableW(L"LOCALAPPDATA", buffer, MAX_PATH);
+        const std::wstring root = (len > 0 && len < MAX_PATH)
+            ? std::wstring(buffer, len) + L"\\Nebula" : std::wstring(L".");
+        dir = root + L"\\crashdumps";
+        logs = root + L"\\sessions\\crash-logs";
+    }
+    create_directory_tree(dir);
+    create_directory_tree(logs);
     wcsncpy_s(g_crash_dump_dir, dir.c_str(), _TRUNCATE);
+    wcsncpy_s(g_crash_log_dir, logs.c_str(), _TRUNCATE);
+    {
+        // Names sort by time (crash-YYYYMMDD-HHMMSS-pid.txt).
+        std::vector<std::wstring> kept;
+        WIN32_FIND_DATAW found{};
+        const HANDLE search = FindFirstFileW((logs + L"\\crash-*.txt").c_str(), &found);
+        if (search != INVALID_HANDLE_VALUE) {
+            do {
+                if ((found.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0u) kept.emplace_back(found.cFileName);
+            } while (FindNextFileW(search, &found));
+            FindClose(search);
+        }
+        std::sort(kept.begin(), kept.end());
+        constexpr std::size_t kCrashLogsKept = 20u;
+        for (std::size_t i = 0; i + kCrashLogsKept < kept.size(); ++i) {
+            (void)DeleteFileW((logs + L"\\" + kept[i]).c_str());
+        }
+    }
     g_crash_dump_full = read_env_flag("GALAXY_CRASH_DUMP_FULL", false);
     char narrow[MAX_PATH * 3]{};
     (void)WideCharToMultiByte(CP_UTF8, 0, g_crash_dump_dir, -1, narrow,
@@ -31436,6 +31471,93 @@ static void prepare_crash_dump_directory() {
     std::fprintf(stderr, "[crash-dump] dir=%s full-memory=%d\n", narrow,
                  g_crash_dump_full ? 1 : 0);
 }
+
+// A short text log of a failure (crash-<time>-<pid>.txt in g_crash_log_dir): what failed and where, the
+// guest function and call chain, the build, CPU and GPU, and the last notable events. The [crash] lines also
+// go to stderr, as before. It uses no heap and costs nothing until the process fails.
+class CrashLog {
+public:
+    CrashLog() noexcept {
+        if (g_crash_log_dir[0] == L'\0') return;
+        SYSTEMTIME now{};
+        GetLocalTime(&now);
+        swprintf_s(path_, L"%s\\crash-%04u%02u%02u-%02u%02u%02u-%lu.txt", g_crash_log_dir, now.wYear, now.wMonth,
+                   now.wDay, now.wHour, now.wMinute, now.wSecond, GetCurrentProcessId());
+        file_ = CreateFileW(path_, GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (file_ == INVALID_HANDLE_VALUE) return;
+        const ULONGLONG uptime_ms = GetTickCount64() - g_process_start_ms;
+        file_line("Nebula crash log");
+        file_line("time: %04u-%02u-%02u %02u:%02u:%02u, %llu.%01llu s after start", now.wYear, now.wMonth, now.wDay,
+                  now.wHour, now.wMinute, now.wSecond, uptime_ms / 1000u, (uptime_ms % 1000u) / 100u);
+    }
+    ~CrashLog() {
+        if (file_ == INVALID_HANDLE_VALUE) return;
+        file_line("");
+        file_line("recent events:");
+        bool any = false;
+        galaxy::crash_notes::for_each_recent([&](const char* note) {
+            file_line("  %s", note);
+            any = true;
+        });
+        if (!any) file_line("  (none)");
+        FlushFileBuffers(file_);
+        CloseHandle(file_);
+        char narrow[MAX_PATH * 3]{};
+        (void)WideCharToMultiByte(CP_UTF8, 0, path_, -1, narrow, static_cast<int>(sizeof(narrow)), nullptr, nullptr);
+        std::fprintf(stderr, "[crash] log=%s\n", narrow);
+        std::fflush(stderr);
+    }
+    CrashLog(const CrashLog&) = delete;
+    CrashLog& operator=(const CrashLog&) = delete;
+
+    // What failed, then the build, CPU and GPU.
+    void what(const char* format, ...) noexcept {
+        char text[768];
+        va_list arguments;
+        va_start(arguments, format);
+        (void)_vsnprintf_s(text, sizeof(text), _TRUNCATE, format, arguments);
+        va_end(arguments);
+        file_line("what: %s", text);
+        file_line("build: %s", galaxy::crash_notes::g_fixed[0].data());
+        file_line("cpu: %s", galaxy::crash_notes::g_fixed[1].data());
+        file_line("gpu: %s", galaxy::crash_notes::g_fixed[2].data());
+        file_line("thread: %lu", static_cast<unsigned long>(GetCurrentThreadId()));
+        file_line("");
+    }
+
+    // A line for stderr and the log.
+    void line(const char* format, ...) noexcept {
+        char text[768];
+        va_list arguments;
+        va_start(arguments, format);
+        (void)_vsnprintf_s(text, sizeof(text), _TRUNCATE, format, arguments);
+        va_end(arguments);
+        std::fprintf(stderr, "%s\n", text);
+        write(text);
+    }
+
+    // A line for the log only.
+    void file_line(const char* format, ...) noexcept {
+        if (file_ == INVALID_HANDLE_VALUE) return;
+        char text[768];
+        va_list arguments;
+        va_start(arguments, format);
+        (void)_vsnprintf_s(text, sizeof(text), _TRUNCATE, format, arguments);
+        va_end(arguments);
+        write(text);
+    }
+
+private:
+    void write(const char* text) noexcept {
+        if (file_ == INVALID_HANDLE_VALUE) return;
+        DWORD written = 0;
+        (void)WriteFile(file_, text, static_cast<DWORD>(std::strlen(text)), &written, nullptr);
+        (void)WriteFile(file_, "\r\n", 2u, &written, nullptr);
+    }
+
+    HANDLE file_ = INVALID_HANDLE_VALUE;
+    wchar_t path_[MAX_PATH]{};
+};
 
 // The simulation thread's guest CPU, for crash reports. Registers are as of
 // their last write-back to the context.
@@ -31461,7 +31583,9 @@ static std::uint32_t crash_guest_u32(std::uint32_t address) noexcept {
 // The translated guest function that holds a crashing host instruction, and
 // the guest call chain from the simulation thread's stack pointer (each
 // frame's back chain at +0, the caller's saved LR at +4 of the next frame).
-static void print_guest_crash_report(const void* host_address, HMODULE crash_module) noexcept {
+// `context` defaults to the simulation thread's, while it runs.
+static void print_guest_crash_report(const void* host_address, HMODULE crash_module, CrashLog& log,
+                                     const galaxy::PpcContext* context = g_crash_guest_context) noexcept {
     if (g_module_function_record_count != 0u && crash_module != nullptr) {
         HMODULE records_module = nullptr;
         if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
@@ -31479,27 +31603,43 @@ static void print_guest_crash_report(const void* host_address, HMODULE crash_mod
                 }
             }
             if (owner_entry != 0u) {
-                std::fprintf(stderr, "[crash] guest-function=0x%08X host-offset=0x%llx\n", owner,
-                             static_cast<unsigned long long>(rip - owner_entry));
+                log.line("[crash] guest-function=0x%08X host-offset=0x%llx", owner,
+                         static_cast<unsigned long long>(rip - owner_entry));
             }
         }
     }
-    const galaxy::PpcContext* const context = g_crash_guest_context;
     if (context == nullptr) return;
-    std::fprintf(stderr,
+    log.line(
         "[crash] guest pc=0x%08X lr=0x%08X ctr=0x%08X r1=0x%08X r3=0x%08X r4=0x%08X r5=0x%08X r6=0x%08X "
-        "r29=0x%08X r30=0x%08X r31=0x%08X\n",
+        "r29=0x%08X r30=0x%08X r31=0x%08X",
         context->pc, context->lr, context->ctr, context->gpr[1], context->gpr[3], context->gpr[4],
         context->gpr[5], context->gpr[6], context->gpr[29], context->gpr[30], context->gpr[31]);
-    std::fprintf(stderr, "[crash] guest-stack");
+    char stack[16 + 32 * 11]{};
+    int used = std::snprintf(stack, sizeof(stack), "[crash] guest-stack");
     std::uint32_t frame = context->gpr[1];
     for (int depth = 0; depth < 32 && frame != 0u && (frame & 3u) == 0u; ++depth) {
         const std::uint32_t next = crash_guest_u32(frame);
         if (next <= frame || next - frame > 0x10000u) break;
-        std::fprintf(stderr, " 0x%08X", crash_guest_u32(next + 4u));
+        used += std::snprintf(stack + used, sizeof(stack) - static_cast<std::size_t>(used), " 0x%08X",
+                              crash_guest_u32(next + 4u));
         frame = next;
     }
-    std::fprintf(stderr, "\n");
+    log.line("%s", stack);
+}
+
+static const char* exception_name(DWORD code) noexcept {
+    switch (code) {
+    case EXCEPTION_ACCESS_VIOLATION: return "access violation";
+    case EXCEPTION_STACK_OVERFLOW: return "stack overflow";
+    case EXCEPTION_ILLEGAL_INSTRUCTION: return "illegal instruction (an instruction this CPU lacks)";
+    case EXCEPTION_INT_DIVIDE_BY_ZERO: return "integer division by zero";
+    case EXCEPTION_PRIV_INSTRUCTION: return "privileged instruction";
+    case EXCEPTION_IN_PAGE_ERROR: return "in-page error (a file could not be read)";
+    case 0xC0000409u: return "fail-fast (stack buffer overrun or invalid parameter)";
+    case 0xE06D7363u: return "unhandled C++ exception";
+    case 0xE0000001u: return "std::terminate";
+    default: return "exception";
+    }
 }
 
 // Silent-crash harness, run before any other CRT init via wmain. It disables all modal dialogs: assertion,
@@ -31511,6 +31651,31 @@ static LONG WINAPI galaxy_unhandled_exception_filter(
     EXCEPTION_POINTERS* exception_info) {
     // A crash never leaves a controller vibrating (bounded writes).
     galaxy::host::stop_all_rumble();
+    const EXCEPTION_RECORD& record = *exception_info->ExceptionRecord;
+    HMODULE crash_module = nullptr;
+    wchar_t crash_module_path[MAX_PATH]{};
+    if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                           static_cast<LPCWSTR>(record.ExceptionAddress), &crash_module) &&
+        crash_module != nullptr) {
+        GetModuleFileNameW(crash_module, crash_module_path, MAX_PATH);
+    }
+    const wchar_t* const module_name = std::wcsrchr(crash_module_path, L'\\') != nullptr
+        ? std::wcsrchr(crash_module_path, L'\\') + 1 : crash_module_path;
+    const auto module_offset = static_cast<unsigned long long>(
+        reinterpret_cast<std::uintptr_t>(record.ExceptionAddress) - reinterpret_cast<std::uintptr_t>(crash_module));
+    CrashLog log;
+    if (record.ExceptionCode == EXCEPTION_ACCESS_VIOLATION && record.NumberParameters >= 2u) {
+        const ULONG_PTR kind = record.ExceptionInformation[0];
+        log.what("%s %s 0x%p in %ls+0x%llx", exception_name(record.ExceptionCode),
+                 kind == 0u ? "reading" : kind == 8u ? "executing" : "writing",
+                 reinterpret_cast<void*>(record.ExceptionInformation[1]), module_name, module_offset);
+    } else if (record.ExceptionCode == 0xE0000001u) {
+        log.what("%s: %s", exception_name(record.ExceptionCode), g_terminate_message);
+    } else {
+        log.what("%s 0x%08lX in %ls+0x%llx", exception_name(record.ExceptionCode),
+                 static_cast<unsigned long>(record.ExceptionCode), module_name, module_offset);
+    }
+
     const std::wstring dir = g_crash_dump_dir[0] != L'\0'
         ? std::wstring(g_crash_dump_dir) : std::wstring(L".");
     wchar_t path[MAX_PATH]{};
@@ -31542,66 +31707,62 @@ static LONG WINAPI galaxy_unhandled_exception_filter(
         const DWORD dump_error = written ? ERROR_SUCCESS : GetLastError();
         CloseHandle(file);
         if (written) {
-            std::fprintf(stderr,
-                "[crash] unhandled exception 0x%08lX at 0x%p -- wrote minidump %ls\n",
-                exception_info->ExceptionRecord->ExceptionCode,
-                exception_info->ExceptionRecord->ExceptionAddress, path);
+            log.line(
+                "[crash] unhandled exception 0x%08lX at 0x%p -- wrote minidump %ls",
+                record.ExceptionCode, record.ExceptionAddress, path);
         } else {
-            std::fprintf(stderr,
-                "[crash] unhandled exception 0x%08lX at 0x%p -- minidump failed error=%lu path=%ls\n",
-                exception_info->ExceptionRecord->ExceptionCode,
-                exception_info->ExceptionRecord->ExceptionAddress, dump_error, path);
+            log.line(
+                "[crash] unhandled exception 0x%08lX at 0x%p -- minidump failed error=%lu path=%ls",
+                record.ExceptionCode, record.ExceptionAddress, dump_error, path);
         }
     } else {
         const DWORD create_error = GetLastError();
-        std::fprintf(stderr,
-            "[crash] unhandled exception 0x%08lX at 0x%p -- minidump create failed error=%lu path=%ls\n",
-            exception_info->ExceptionRecord->ExceptionCode,
-            exception_info->ExceptionRecord->ExceptionAddress, create_error, path);
+        log.line(
+            "[crash] unhandled exception 0x%08lX at 0x%p -- minidump create failed error=%lu path=%ls",
+            record.ExceptionCode, record.ExceptionAddress, create_error, path);
     }
     {
         const auto faults = galaxy::host::flat_guest_memory::fault_stats();
-        const auto* code = reinterpret_cast<const unsigned char*>(
-            exception_info->ExceptionRecord->ExceptionAddress);
-        HMODULE crash_module = nullptr;
-        wchar_t crash_module_path[MAX_PATH]{};
-        if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                               static_cast<LPCWSTR>(exception_info->ExceptionRecord->ExceptionAddress), &crash_module) &&
-            crash_module != nullptr) {
-            GetModuleFileNameW(crash_module, crash_module_path, MAX_PATH);
-        }
-        std::fprintf(stderr, "[crash] module=%ls offset=0x%llx rcx=0x%llx rdx=0x%llx r8=0x%llx r9=0x%llx rax=0x%llx\n",
+        const auto* code = reinterpret_cast<const unsigned char*>(record.ExceptionAddress);
+        log.line("[crash] module=%ls offset=0x%llx rcx=0x%llx rdx=0x%llx r8=0x%llx r9=0x%llx rax=0x%llx",
             crash_module_path,
-            static_cast<unsigned long long>(
-                reinterpret_cast<std::uintptr_t>(exception_info->ExceptionRecord->ExceptionAddress) -
-                reinterpret_cast<std::uintptr_t>(crash_module)),
+            module_offset,
             static_cast<unsigned long long>(exception_info->ContextRecord->Rcx),
             static_cast<unsigned long long>(exception_info->ContextRecord->Rdx),
             static_cast<unsigned long long>(exception_info->ContextRecord->R8),
             static_cast<unsigned long long>(exception_info->ContextRecord->R9),
             static_cast<unsigned long long>(exception_info->ContextRecord->Rax));
         for (std::size_t i = 0; i < 8u && faults.hot_counts[i] != 0u; ++i) {
-            std::fprintf(stderr, "[crash] fastmem-hot-page guest=0x%08X faults=%llu\n",
+            log.line("[crash] fastmem-hot-page guest=0x%08X faults=%llu",
                 static_cast<unsigned>(faults.hot_pages[i] << 12u),
                 static_cast<unsigned long long>(faults.hot_counts[i]));
         }
         for (std::size_t i = 0; i < 16u && faults.hot_address_counts[i] != 0u; ++i) {
-            std::fprintf(stderr, "[crash] fastmem-hot-address guest=0x%08X faults=%llu\n",
+            log.line("[crash] fastmem-hot-address guest=0x%08X faults=%llu",
                 static_cast<unsigned>(faults.hot_addresses[i]),
                 static_cast<unsigned long long>(faults.hot_address_counts[i]));
         }
-        std::fprintf(stderr,
-            "[crash] fastmem handled-reads=%llu handled-writes=%llu unhandled=%llu last=\"%s\" code=%02X %02X %02X %02X %02X %02X %02X %02X fault-address=0x%p thread=%lu\n",
+        // The faulting code bytes, only when the address is readable (a jump to a bad
+        // address must not fault again here).
+        unsigned char bytes[8]{};
+        MEMORY_BASIC_INFORMATION region{};
+        if (VirtualQuery(code, &region, sizeof(region)) == sizeof(region) && region.State == MEM_COMMIT &&
+            (region.Protect & (PAGE_NOACCESS | PAGE_GUARD)) == 0u &&
+            reinterpret_cast<const unsigned char*>(region.BaseAddress) + region.RegionSize >= code + sizeof(bytes)) {
+            std::memcpy(bytes, code, sizeof(bytes));
+        }
+        log.line(
+            "[crash] fastmem handled-reads=%llu handled-writes=%llu unhandled=%llu last=\"%s\" code=%02X %02X %02X %02X %02X %02X %02X %02X fault-address=0x%p thread=%lu",
             static_cast<unsigned long long>(faults.handled_reads),
             static_cast<unsigned long long>(faults.handled_writes),
             static_cast<unsigned long long>(faults.unhandled),
             galaxy::host::flat_guest_memory::last_unhandled_fault_message(),
-            code[0], code[1], code[2], code[3], code[4], code[5], code[6], code[7],
-            exception_info->ExceptionRecord->NumberParameters >= 2u
-                ? reinterpret_cast<void*>(exception_info->ExceptionRecord->ExceptionInformation[1])
+            bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+            record.NumberParameters >= 2u
+                ? reinterpret_cast<void*>(record.ExceptionInformation[1])
                 : nullptr,
             static_cast<unsigned long>(GetCurrentThreadId()));
-        print_guest_crash_report(exception_info->ExceptionRecord->ExceptionAddress, crash_module);
+        print_guest_crash_report(record.ExceptionAddress, crash_module, log);
     }
     std::fflush(stderr);
     return EXCEPTION_EXECUTE_HANDLER;
@@ -31611,23 +31772,21 @@ static LONG WINAPI galaxy_unhandled_exception_filter(
 // noexcept function, one thrown during stack unwinding, ...) calls abort()
 // by default, which does NOT go through SetUnhandledExceptionFilter -- it
 // raises SIGABRT and the CRT tears the process down directly. Catch this
-// case separately so it also leaves a minidump and, where there is an
-// active exception, its what() message, instead of silently vanishing.
+// case separately so it also leaves a minidump, a crash log and, where there
+// is an active exception, its what() message, instead of silently vanishing.
 static void galaxy_terminate_handler() {
-    std::fprintf(stderr, "[crash] std::terminate() called");
+    std::snprintf(g_terminate_message, sizeof(g_terminate_message),
+                  "no active exception (noexcept violation, double exception, or a raw abort() call)");
     if (const std::exception_ptr eptr = std::current_exception()) {
         try {
             std::rethrow_exception(eptr);
         } catch (const std::exception& e) {
-            std::fprintf(stderr, " -- active exception: %s", e.what());
+            std::snprintf(g_terminate_message, sizeof(g_terminate_message), "active exception: %s", e.what());
         } catch (...) {
-            std::fprintf(stderr, " -- active exception of unknown type");
+            std::snprintf(g_terminate_message, sizeof(g_terminate_message), "active exception of unknown type");
         }
-    } else {
-        std::fprintf(stderr, " -- no active exception (noexcept violation, "
-                              "double exception, or a raw abort() call)");
     }
-    std::fprintf(stderr, "\n");
+    std::fprintf(stderr, "[crash] std::terminate() called -- %s\n", g_terminate_message);
     std::fflush(stderr);
 
     CONTEXT ctx{};
@@ -31639,6 +31798,14 @@ static void galaxy_terminate_handler() {
     EXCEPTION_POINTERS pointers{&record, &ctx};
     galaxy_unhandled_exception_filter(&pointers);
     std::abort();
+}
+
+// A failure the runtime caught (a fatal error, not a hardware exception): the same crash log, with the
+// guest registers as of the failure.
+static void write_failure_crash_log(const char* kind, const char* message, const galaxy::PpcContext& context) noexcept {
+    CrashLog log;
+    log.what("%s: %s", kind, message);
+    print_guest_crash_report(nullptr, nullptr, log, &context);
 }
 
 static void disable_runtime_dialogs() {
@@ -32206,10 +32373,14 @@ int wmain(int argc, wchar_t** argv) {
         const char* name = brand;
         while (*name == ' ') ++name;
         const bool fma3 = galaxy::host_has_fma3();
-        std::cerr << "[cpu] brand=\"" << name << "\" logical=" << std::thread::hardware_concurrency()
-                  << " fma3=" << (fma3 ? 1 : 0)
-                  << " avx2=" << (IsProcessorFeaturePresent(40 /* PF_AVX2_INSTRUCTIONS_AVAILABLE */) ? 1 : 0)
-                  << " thp-kernel=" << (fma3 ? "fma3" : "exact-sse2") << '\n';
+        char line[192]{};
+        std::snprintf(line, sizeof(line), "brand=\"%s\" logical=%u fma3=%d avx2=%d thp-kernel=%s", name,
+                      std::thread::hardware_concurrency(), fma3 ? 1 : 0,
+                      IsProcessorFeaturePresent(40 /* PF_AVX2_INSTRUCTIONS_AVAILABLE */) ? 1 : 0,
+                      fma3 ? "fma3" : "exact-sse2");
+        std::cerr << "[cpu] " << line << '\n';
+        galaxy::crash_notes::set(galaxy::crash_notes::Fixed::Cpu, line);
+        galaxy::crash_notes::set(galaxy::crash_notes::Fixed::Build, NEBULA_RUNTIME_BUILD_IDENTITY);
     }
     RuntimeState state{};
     // The idle callback ring and stage history have only diagnostic consumers.
@@ -33533,6 +33704,7 @@ int wmain(int argc, wchar_t** argv) {
         const FailureWorkerQuiescenceEvidence failure_quiescence =
             quiesce_workers_for_terminal_failure(state);
         std::fprintf(stderr, "[boot] Runtime failure: %s\n", e.what());
+        write_failure_crash_log("runtime failure", e.what(), context);
         std::fflush(stderr);
         try {
             dump_failure_worker_quiescence(
@@ -33941,6 +34113,7 @@ int wmain(int argc, wchar_t** argv) {
         const FailureWorkerQuiescenceEvidence failure_quiescence =
             quiesce_workers_for_terminal_failure(state);
         std::fprintf(stderr, "[boot] Unhandled exception: %s\n", e.what());
+        write_failure_crash_log("unhandled error", e.what(), context);
         std::fflush(stderr);
         try {
             dump_failure_worker_quiescence(
