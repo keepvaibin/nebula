@@ -8,10 +8,9 @@ using System.Threading;
 
 namespace Nebula.Setup
 {
-    // Setup without a game: where it gets the exact Nebula source (--source, the zip beside Nebula-Setup.exe, then each
-    // download address in turn), and folder moves while another program holds a file. Run by run-launcher-tests.ps1
-    // with a scratch folder. Downloads come from a local HttpListener on http.sys's Temporary_Listen_Addresses, which
-    // needs no administrator.
+    // Setup without a game: where it gets the exact Nebula source (--source, the copy embedded in it, the download),
+    // and folder moves while another program holds a file. Run by run-launcher-tests.ps1 with a scratch folder.
+    // Downloads come from a local HttpListener on http.sys's Temporary_Listen_Addresses, which needs no administrator.
     internal static class SetupTests
     {
         const string Commit = "0123456789abcdef0123456789abcdef01234567";
@@ -27,16 +26,23 @@ namespace Nebula.Setup
             Console.WriteLine("PASS: " + what);
         }
 
-        static SourceTree Tree(string setupDirectory, params string[] urls)
+        static SourceTree NewTree()
         {
             var files = new Dictionary<string, object>();
             foreach (var pair in Files) files[pair.Key] = FileUtil.Sha256Text(pair.Value);
-            var tree = new SourceTree(new Dictionary<string, object>
+            return new SourceTree(new Dictionary<string, object>
             {
                 { "commit", Commit }, { "repository", "keepvaibin/nebula" }, { "version", "9.9.9" }, { "files", files },
             });
-            tree.SetupDirectory = setupDirectory;
-            tree.DownloadUrls = urls;
+        }
+
+        // <paramref name="embedded"/>: the zip a release setup carries; null for a setup compiled by hand.
+        // Without <paramref name="url"/> any download fails at once (nothing listens on port 9).
+        static SourceTree Tree(byte[] embedded, string url = "http://127.0.0.1:9/never")
+        {
+            SourceTree tree = NewTree();
+            tree.EmbeddedArchive = delegate { return embedded == null ? null : new MemoryStream(embedded, false); };
+            tree.DownloadUrl = url;
             return tree;
         }
 
@@ -86,40 +92,29 @@ namespace Nebula.Setup
             try
             {
                 string scratch = Path.Combine(args[0], "source-tree");
-                string setupDir = Path.Combine(scratch, "setup");
-                string emptyDir = Path.Combine(scratch, "empty");
-                Directory.CreateDirectory(setupDir);
-                Directory.CreateDirectory(emptyDir);
-                var probe = Tree(setupDir);
-                Check(probe.ArchiveName == "nebula-source-0123456789ab.zip" &&
-                      probe.ReleaseArchiveUrl == "https://github.com/keepvaibin/nebula/releases/download/v9.9.9/nebula-source-0123456789ab.zip" &&
-                      new SourceTree(new Dictionary<string, object> { { "commit", Commit }, { "version", "9.9.9" }, { "repository", "keepvaibin/nebula" },
-                          { "files", new Dictionary<string, object> { { "a", "b" } } } }).DownloadUrls[0] == probe.ReleaseArchiveUrl,
-                      "the source zip is named as build-release.ps1 names it, and the release's copy is tried first");
+                Directory.CreateDirectory(scratch);
+                Check(SourceTree.EmbeddedArchiveName == "nebula-source.zip" &&
+                      NewTree().DownloadUrl == "https://codeload.github.com/keepvaibin/nebula/zip/" + Commit,
+                      "the embedded source has the resource name build-release.ps1 gives it, and the download is GitHub's archive of the commit");
 
-                // A setup built before a push: the zip beside it is the source.
-                File.WriteAllBytes(Path.Combine(setupDir, probe.ArchiveName), Zip(null));
+                // A release setup carries its source and needs no download (any would fail here).
                 var log = new List<string>();
-                string installed = Ensure(Tree(setupDir), Path.Combine(scratch, "sources-a"), null, log);
-                Check(Installed(installed) && Logged(log, "Using the source archive"), "the source zip beside Setup is used without a download");
+                string installed = Ensure(Tree(Zip(null)), Path.Combine(scratch, "sources-a"), null, log);
+                Check(Installed(installed) && Logged(log, "Using the source embedded in Setup") && !Logged(log, "Downloading") &&
+                      Directory.GetFiles(Path.Combine(scratch, "sources-a")).Length == 0,
+                      "the source embedded in Setup installs without a download and leaves no file behind");
                 log.Clear();
-                Check(Ensure(Tree(setupDir), Path.Combine(scratch, "sources-a"), null, log) == installed && Logged(log, "Using the verified source"),
-                      "a verified source is reused");
+                Check(Ensure(Tree(null), Path.Combine(scratch, "sources-a"), null, log) == installed && Logged(log, "Using the verified source"),
+                      "a source verified earlier is reused");
 
-                // A zip beside Setup that does not match is not used, and with nowhere to download from the
-                // message says what to do.
-                File.WriteAllBytes(Path.Combine(setupDir, probe.ArchiveName), Zip("CMakeLists.txt"));
-                log.Clear();
-                string sourcesB = Path.Combine(scratch, "sources-b");
-                Expect<InvalidOperationException>(() => Ensure(Tree(setupDir), sourcesB, null, log),
-                    e => e.Message.Contains("9.9.9") && e.Message.Contains(probe.ArchiveName) && Logged(log, "is not this release's source") &&
-                         !Directory.Exists(Path.Combine(sourcesB, "0123456789ab")),
-                    "a changed zip beside Setup is rejected, and the failure names the zip to download");
-                Expect<InvalidDataException>(() => Ensure(Tree(emptyDir), sourcesB, Path.Combine(setupDir, probe.ArchiveName), log),
-                    e => true, "an explicit --source that does not match fails instead of downloading");
-                Check(Installed(Ensure(Tree(emptyDir), Path.Combine(scratch, "sources-c"), installed, log)), "--source takes a source folder");
+                // --source is used or rejected, never replaced by another source.
+                string changed = Path.Combine(scratch, "changed.zip");
+                File.WriteAllBytes(changed, Zip("CMakeLists.txt"));
+                Expect<InvalidDataException>(() => Ensure(Tree(Zip(null)), Path.Combine(scratch, "sources-b"), changed, log),
+                    e => true, "an explicit --source that does not match fails instead of using another source");
+                Check(Installed(Ensure(Tree(null), Path.Combine(scratch, "sources-c"), installed, log)), "--source takes a source folder");
 
-                DownloadCases(scratch, emptyDir);
+                DownloadCases(scratch);
                 MoveCases(Path.Combine(args[0], "moves"));
                 return 0;
             }
@@ -175,10 +170,9 @@ namespace Nebula.Setup
             Check(Holds(installed, "new") && Holds(Path.Combine(root, "installed-old"), "old"), "a swap keeps the replaced tree aside");
         }
 
-        // The 1.0.1 test report: GitHub answered 404 for the commit, Setup retried it and then showed only
-        // "(404) Not Found". A missing file is asked for once, the next address is tried, and the last
-        // failure names the source zip.
-        static void DownloadCases(string scratch, string emptyDir)
+        // A setup without a matching embedded source downloads it. The 1.0.1 test report: GitHub answered 404
+        // for an unpushed commit, and Setup retried it, then showed only "(404) Not Found".
+        static void DownloadCases(string scratch)
         {
             WebRequest.DefaultWebProxy = null;
             string path = "/Temporary_Listen_Addresses/nebula-" + Guid.NewGuid().ToString("N") + "/";
@@ -217,15 +211,19 @@ namespace Nebula.Setup
             {
                 string url = "http://127.0.0.1:80" + path;
                 var log = new List<string>();
-                string installed = Ensure(Tree(emptyDir, url + "missing.zip", url + "good.zip"), Path.Combine(scratch, "sources-d"), null, log);
-                Check(Installed(installed) && requests["missing.zip"] == 1 && requests["good.zip"] == 1,
-                      "a 404 is asked for once and the next address supplies the source");
+                Check(Installed(Ensure(Tree(null, url + "good.zip"), Path.Combine(scratch, "sources-d"), null, log)) &&
+                      requests["good.zip"] == 1 && Directory.GetFiles(Path.Combine(scratch, "sources-d")).Length == 0,
+                      "a setup without an embedded source downloads it and keeps no zip");
+                log.Clear();
+                Check(Installed(Ensure(Tree(Zip("CMakeLists.txt"), url + "good.zip"), Path.Combine(scratch, "sources-e"), null, log)) &&
+                      Logged(log, "does not match this release") && requests["good.zip"] == 2,
+                      "an embedded source that does not match is replaced by the download");
                 log.Clear();
                 Expect<InvalidOperationException>(
-                    () => Ensure(Tree(emptyDir, url + "missing.zip", url + "gone.zip"), Path.Combine(scratch, "sources-e"), null, log),
-                    e => e.Message.Contains("404") && e.Message.Contains("nebula-source-0123456789ab.zip") && requests["missing.zip"] == 2 &&
-                         requests["gone.zip"] == 1,
-                    "when every address answers 404 Setup stops at once and says to put the source zip beside it");
+                    () => Ensure(Tree(null, url + "missing.zip"), Path.Combine(scratch, "sources-f"), null, log),
+                    e => e.Message.Contains("9.9.9") && e.Message.Contains("404") && e.Message.Contains("Check the internet connection") &&
+                         requests["missing.zip"] == 1,
+                    "a 404 is asked for once, and the failure names the version and what to do");
             }
             finally { listener.Close(); }
         }

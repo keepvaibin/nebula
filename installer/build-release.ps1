@@ -50,8 +50,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Source revision $resolved has no Git tree" }
     Write-Host "Building Nebula $Version from $type $resolved"
 
-    # 1. Exact source export and manifest.
-    $zip = Join-Path $OutputDirectory ("nebula-source-" + $resolved.Substring(0, 12) + '.zip')
+    # 1. Exact source export and manifest. Setup carries the zip.
+    $zip = Join-Path $work 'nebula-source.zip'
     Invoke-Checked git @('-C', $repo, '-c', 'core.autocrlf=false', '-c', 'core.eol=lf', 'archive', '--format=zip', "--prefix=nebula-$resolved/", '-o', $zip, $resolved)
     $src = Join-Path $work 'src'
     Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -163,6 +163,8 @@ namespace Nebula
         'toolchain.json' = (Join-Path $src 'installer\toolchain.json'); 'runtime-env.json' = (Join-Path $src 'installer\runtime-env.json')
         'runtime-isa.txt' = $runtimeIsaPath
         'LICENSE' = (Join-Path $src 'LICENSE'); 'THIRD-PARTY-NOTICES.md' = (Join-Path $src 'THIRD-PARTY-NOTICES.md'); 'README.md' = (Join-Path $src 'README.md')
+        # The exact source (SourceTree.EmbeddedArchiveName): Setup never needs GitHub for it.
+        'nebula-source.zip' = $zip
     }
     $apiText = Get-Content -LiteralPath (Join-Path $src 'runtime/include/galaxy/native_api.h') -Raw
     $dspText = Get-Content -LiteralPath (Join-Path $src 'runtime/include/galaxy/dsp_context.h') -Raw
@@ -225,7 +227,7 @@ namespace Nebula
         version = $Version; revision = $resolved; revisionType = $type; repository = $Repository
         setupSha256 = $setupHash; nebulaRecompSha256 = (Get-FileHash -LiteralPath $recomp -Algorithm SHA256).Hash.ToLowerInvariant()
         launcherSha256 = (Get-FileHash -LiteralPath $launcher -Algorithm SHA256).Hash.ToLowerInvariant()
-        sourceTreeSha256 = $treeHash; sourceZip = (Split-Path -Leaf $zip); builtUtc = [DateTime]::UtcNow.ToString('o')
+        sourceTreeSha256 = $treeHash; builtUtc = [DateTime]::UtcNow.ToString('o')
         runtimeNativeIsa = ($effectiveIsas -join '+'); requestedNativeIsa = $NativeIsa
         rustc = (& (Join-Path (Split-Path $cargo) 'rustc.exe') --version) 2>$null
     }

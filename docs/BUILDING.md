@@ -81,12 +81,13 @@ ctest --test-dir D:\nebula\tests --output-on-failure
 .\installer\build-release.ps1 -Version <version> -Revision <commit> -SigningKey <private key>
 ```
 
-Writes `dist\Nebula-Setup.exe` (with the prebuilt runtime inside), its `.sig`,
-the source zip `nebula-source-<commit>.zip` and `build-info.json`. Attach the
-setup, its `.sig` and the source zip to the GitHub release (tag `v<version>`).
-Setup takes the source from the zip beside it when that zip matches its manifest,
-then from the release's copy, then from GitHub's archive of the commit, so a setup
-built before a push installs from its folder in `dist`. `--source <zip|folder>`
-names a source explicitly.
+Writes `dist\Nebula-Setup.exe`, its `.sig` and `build-info.json`; attach the
+setup and its `.sig` to the GitHub release (tag `v<version>`). Setup carries the
+prebuilt runtime and the exact source revision it was built from, checked file by
+file against its manifest, so it never needs GitHub for the source and a setup
+built before a push installs as it is. A setup without that copy (compiled by hand)
+downloads GitHub's archive of the commit; `--source <zip|folder>` names a source
+explicitly. The compiler toolchain is downloaded at the first install: its
+Microsoft C++ and Windows SDK files may only be distributed by Microsoft.
 `installer/tools/pin-toolchain.ps1` re-pins the toolchain; a new toolchain
 makes updates rebuild the game modules.

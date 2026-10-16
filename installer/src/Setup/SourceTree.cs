@@ -2,18 +2,23 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
+using System.Net;
+using System.Reflection;
 using System.Threading;
 
 namespace Nebula.Setup
 {
     /// <summary>
-    /// The exact Nebula source revision this setup was built from. It comes from
-    /// the source zip beside the setup, the release's copy of that zip or GitHub's
-    /// archive of the commit, and is accepted only when every file matches the
+    /// The exact Nebula source revision this setup was built from; the game modules are compiled against
+    /// it. A release setup carries it (build-release.ps1 embeds it). A setup without a matching copy
+    /// downloads GitHub's archive of the commit instead. Either is accepted only when every file matches the
     /// SHA-256 manifest embedded in the setup executable.
     /// </summary>
     internal sealed class SourceTree
     {
+        /// <summary>The resource name build-release.ps1 embeds the source zip under.</summary>
+        public const string EmbeddedArchiveName = "nebula-source.zip";
+
         private readonly Dictionary<string, object> manifest;
         private readonly Dictionary<string, object> files;
 
@@ -23,8 +28,8 @@ namespace Nebula.Setup
             files = Json.Obj(manifest, "files");
             if (string.IsNullOrEmpty(Commit) || files == null || files.Count == 0)
                 throw new InvalidDataException("The setup's source manifest is incomplete.");
-            SetupDirectory = AppDomain.CurrentDomain.BaseDirectory;
-            DownloadUrls = new[] { ReleaseArchiveUrl, ArchiveUrl };
+            EmbeddedArchive = delegate { return Assembly.GetExecutingAssembly().GetManifestResourceStream(EmbeddedArchiveName); };
+            DownloadUrl = "https://codeload.github.com/" + Repository + "/zip/" + Commit;
         }
 
         public string Commit { get { return Json.Str(manifest, "commit"); } }
@@ -33,24 +38,11 @@ namespace Nebula.Setup
         public string TreeSha256 { get { return Json.Str(manifest, "treeSha256"); } }
         private string ShortCommit { get { return Commit.Substring(0, Math.Min(12, Commit.Length)); } }
 
-        /// <summary>The zip build-release.ps1 writes beside Nebula-Setup.exe; the release carries it too.</summary>
-        public string ArchiveName { get { return "nebula-source-" + ShortCommit + ".zip"; } }
+        /// <summary>Opens the embedded source zip; null in a setup without one (compiled by hand).</summary>
+        public Func<Stream> EmbeddedArchive { get; set; }
 
-        public string ArchiveUrl
-        {
-            get { return "https://codeload.github.com/" + Repository + "/zip/" + Commit; }
-        }
-
-        public string ReleaseArchiveUrl
-        {
-            get { return "https://github.com/" + Repository + "/releases/download/v" + Version + "/" + ArchiveName; }
-        }
-
-        /// <summary>Where <see cref="ArchiveName"/> is looked for before downloading: the setup's folder.</summary>
-        public string SetupDirectory { get; set; }
-
-        /// <summary>Tried in order when no verified source is at hand.</summary>
-        public string[] DownloadUrls { get; set; }
+        /// <summary>GitHub's archive of the commit, for a setup that carries no matching source.</summary>
+        public string DownloadUrl { get; set; }
 
         /// <summary>SHA-256 over a subset of the manifest, used for compatibility keys.</summary>
         public string SubsetSha256(params string[] prefixes)
@@ -73,10 +65,9 @@ namespace Nebula.Setup
         }
 
         /// <summary>
-        /// Make the verified source available under <paramref name="sourcesDirectory"/>.
-        /// <paramref name="overridePath"/> (a zip or folder) replaces every other source;
-        /// otherwise <see cref="ArchiveName"/> beside the setup is used when it verifies,
-        /// and then each of <see cref="DownloadUrls"/> in turn.
+        /// Make the verified source available under <paramref name="sourcesDirectory"/>: a copy verified
+        /// earlier, else <paramref name="overridePath"/> (--source: a zip or folder, used or rejected), else
+        /// the embedded copy, else the download.
         /// </summary>
         public string Ensure(string sourcesDirectory, string overridePath, Action<string, double> progress,
             Action<string> log, CancellationToken cancel)
@@ -87,14 +78,15 @@ namespace Nebula.Setup
                 try { Verify(target); log("Using the verified source at " + target + "."); return target; }
                 catch (InvalidDataException) { FileUtil.DeleteTree(target); }
             }
+            Directory.CreateDirectory(sourcesDirectory);
             string staging = target + ".partial";
             if (!string.IsNullOrEmpty(overridePath))
             {
-                // An explicit --source is used or rejected, never replaced by a download.
                 Unpack(overridePath, staging, progress);
                 Verify(staging);
+                log("Using the source at " + overridePath + ".");
             }
-            else if (!TryArchiveBesideSetup(staging, progress, log))
+            else if (!TryEmbedded(staging, progress, log))
             {
                 Download(sourcesDirectory, staging, progress, log, cancel);
             }
@@ -103,65 +95,62 @@ namespace Nebula.Setup
             return target;
         }
 
-        private bool TryArchiveBesideSetup(string staging, Action<string, double> progress, Action<string> log)
+        private bool TryEmbedded(string staging, Action<string, double> progress, Action<string> log)
         {
-            if (string.IsNullOrEmpty(SetupDirectory)) return false;
-            string zip = Path.Combine(SetupDirectory, ArchiveName);
-            if (!File.Exists(zip)) return false;
+            Stream embedded = EmbeddedArchive();
+            if (embedded == null) return false;
             try
             {
-                Unpack(zip, staging, progress);
+                progress("Unpacking the Nebula source", 0);
+                using (var archive = new ZipArchive(embedded, ZipArchiveMode.Read))
+                    Extract(archive, staging);
                 Verify(staging);
-                log("Using the source archive " + zip + ".");
+                log("Using the source embedded in Setup.");
                 return true;
             }
-            catch (InvalidDataException error) { log(zip + " is not this release's source (" + error.Message + ")."); }
-            catch (IOException error) { log("Could not read " + zip + ": " + error.Message); }
-            catch (UnauthorizedAccessException error) { log("Could not read " + zip + ": " + error.Message); }
+            catch (InvalidDataException error) { log("The source embedded in Setup does not match this release (" + error.Message + ")."); }
+            catch (IOException error) { log("Could not unpack the source embedded in Setup: " + error.Message); }
+            catch (UnauthorizedAccessException error) { log("Could not unpack the source embedded in Setup: " + error.Message); }
             return false;
         }
 
         private void Download(string sourcesDirectory, string staging, Action<string, double> progress,
             Action<string> log, CancellationToken cancel)
         {
-            Directory.CreateDirectory(sourcesDirectory);
-            string lastFailure = null;
-            for (int i = 0; i < DownloadUrls.Length; i++)
+            string zip = Path.Combine(sourcesDirectory, "nebula-" + Commit + ".zip");
+            log("Downloading the Nebula source from " + DownloadUrl);
+            try
             {
-                // One file per address: a partial transfer resumes only from the address it came from.
-                string zip = Path.Combine(sourcesDirectory, "nebula-" + Commit + "-" + i + ".zip");
-                try
-                {
-                    log("Downloading the Nebula source from " + DownloadUrls[i]);
-                    Downloader.Fetch(DownloadUrls[i], zip, null, 0,
-                        delegate(long bytes) { progress("Downloading the Nebula source (" + FileUtil.FormatBytes(bytes) + ")", 0); },
-                        cancel);
-                    Unpack(zip, staging, progress);
-                    Verify(staging);
-                    // A scanner may still be reading the fresh download; a leftover zip costs only space.
-                    try { File.Delete(zip); } catch (IOException) { } catch (UnauthorizedAccessException) { }
-                    return;
-                }
-                catch (System.Net.WebException error) { lastFailure = error.Message; log("Not available: " + error.Message); }
-                catch (InvalidDataException error) { lastFailure = error.Message; log("Rejected: " + error.Message); }
-                catch (IOException error) { lastFailure = error.Message; log("Failed: " + error.Message); }
-                cancel.ThrowIfCancellationRequested();
-                try { File.Delete(zip); } catch (IOException) { }
+                Downloader.Fetch(DownloadUrl, zip, null, 0,
+                    delegate(long bytes) { progress("Downloading the Nebula source (" + FileUtil.FormatBytes(bytes) + ")", 0); },
+                    cancel);
+                Unpack(zip, staging, progress);
+                Verify(staging);
             }
-            throw new InvalidOperationException(
-                "Setup could not get the Nebula " + Version + " source (revision " + ShortCommit + ") from GitHub" +
-                (lastFailure != null ? ": " + lastFailure : ".") + "\r\n\r\n" +
-                "Check the internet connection and run Setup again. Without internet access, download " + ArchiveName +
-                " from the Nebula " + Version + " release and put it next to Nebula-Setup.exe.");
+            catch (WebException error) { throw Unavailable(error.Message); }
+            catch (InvalidDataException error) { DeleteQuietly(zip); throw Unavailable(error.Message); }
+            DeleteQuietly(zip);
+        }
+
+        private InvalidOperationException Unavailable(string reason)
+        {
+            return new InvalidOperationException("Setup could not get the Nebula " + Version + " source (revision " +
+                ShortCommit + ") from GitHub: " + reason + "\r\n\r\nCheck the internet connection and run Setup again.");
+        }
+
+        // A scanner may still be reading a fresh download; a leftover costs only space.
+        private static void DeleteQuietly(string path)
+        {
+            try { File.Delete(path); } catch (IOException) { } catch (UnauthorizedAccessException) { }
         }
 
         /// <summary>Copies a source folder, or unpacks a source zip, into an empty <paramref name="staging"/>.</summary>
         private void Unpack(string path, string staging, Action<string, double> progress)
         {
-            if (Directory.Exists(staging)) FileUtil.DeleteTree(staging);
             if (Directory.Exists(path))
             {
                 progress("Copying the Nebula source", 0);
+                if (Directory.Exists(staging)) FileUtil.DeleteTree(staging);
                 foreach (var key in files.Keys)
                 {
                     string source = Path.Combine(path, key.Replace('/', '\\'));
@@ -174,19 +163,24 @@ namespace Nebula.Setup
             }
             progress("Unpacking the Nebula source", 0);
             using (var archive = ZipFile.OpenRead(path))
+                Extract(archive, staging);
+        }
+
+        /// <summary>The archive's files below its top folder (git archive --prefix, GitHub's archive) into an empty <paramref name="staging"/>.</summary>
+        private void Extract(ZipArchive archive, string staging)
+        {
+            if (Directory.Exists(staging)) FileUtil.DeleteTree(staging);
+            foreach (var entry in archive.Entries)
             {
-                foreach (var entry in archive.Entries)
-                {
-                    string name = entry.FullName.Replace('\\', '/');
-                    int slash = name.IndexOf('/');
-                    if (slash < 0 || name.EndsWith("/")) continue;
-                    string relative = name.Substring(slash + 1);
-                    if (!files.ContainsKey(relative))
-                        throw new InvalidDataException("The source archive contains an unexpected file: " + relative);
-                    string destination = Toolchain.SafeJoin(staging, relative);
-                    Directory.CreateDirectory(Path.GetDirectoryName(destination));
-                    entry.ExtractToFile(destination, false);
-                }
+                string name = entry.FullName.Replace('\\', '/');
+                int slash = name.IndexOf('/');
+                if (slash < 0 || name.EndsWith("/")) continue;
+                string relative = name.Substring(slash + 1);
+                if (!files.ContainsKey(relative))
+                    throw new InvalidDataException("The source archive contains an unexpected file: " + relative);
+                string destination = Toolchain.SafeJoin(staging, relative);
+                Directory.CreateDirectory(Path.GetDirectoryName(destination));
+                entry.ExtractToFile(destination, false);
             }
         }
 
