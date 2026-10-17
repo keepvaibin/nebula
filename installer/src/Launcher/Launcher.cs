@@ -255,6 +255,11 @@ namespace Nebula.Launcher
         private readonly ComboBox textSpeed = new ComboBox(), languageBox = new ComboBox();
         private readonly ControlsSettings controls = ControlsSettings.Load();
         private bool loading;
+        // The player chose the upscaler, its quality, the interpolation or the frame rate. Without that, a save
+        // while the game runs leaves them as the game has them: a GPU chosen for the next start falls back from
+        // what it does not run (RefreshGpuOptions), and the running game, still on its own GPU, would take that.
+        private bool frameRowsChosen;
+        private bool gpuRefresh;
 
         // The quality row's list and choice for the selected upscaler.
         private void ShowUpscalerQuality()
@@ -540,12 +545,15 @@ namespace Nebula.Launcher
             };
             refresh.SelectedIndexChanged += delegate { if (!loading) RefreshFrameRateChoices(); };
             gpuBox.SelectedIndexChanged += delegate { if (!loading) RefreshGpuOptions(); };
+            dlssQuality.SelectedIndexChanged += delegate { if (!loading && !gpuRefresh) frameRowsChosen = true; };
+            frameRate.SelectedIndexChanged += delegate { if (!loading && !gpuRefresh) frameRowsChosen = true; };
             // Choosing DLSS before it is downloaded opens the download; closing it without
             // installing goes back to the previous choice.
             upscalerShown = upscaler.SelectedIndex;
             upscaler.SelectedIndexChanged += delegate
             {
                 if (loading) return;
+                frameRowsChosen = true;
                 int index = upscaler.SelectedIndex;
                 if (index >= 0 && upscalerChoices[index] == 3 && !GraphicsSettings.DlssInstalled())
                 {
@@ -574,6 +582,7 @@ namespace Nebula.Launcher
             interpolation.SelectedIndexChanged += delegate
             {
                 if (loading) return;
+                frameRowsChosen = true;
                 // Frame generation selects DLSS (its download when it is not installed yet).
                 if (SelectedInterpolation == 2 && upscalerChoices[Math.Max(0, upscaler.SelectedIndex)] != 3)
                     upscaler.SelectedIndex = upscalerChoices.IndexOf(3);
@@ -1018,8 +1027,16 @@ namespace Nebula.Launcher
         }
 
         // Another GPU: DLSS, DLSS Frame Generation and ray tracing follow what it runs. A choice it does not
-        // run falls back (DLSS to FSR 1, Frame Generation to Native); the others are kept.
+        // run falls back (DLSS to FSR 1, Frame Generation to Native); the others are kept. While the game runs
+        // the fallbacks wait for its next start (Commit).
         private void RefreshGpuOptions()
+        {
+            gpuRefresh = true;
+            try { ShowGpuOptions(); }
+            finally { gpuRefresh = false; }
+        }
+
+        private void ShowGpuOptions()
         {
             string gpu = SelectedGpuId;
             int shownUpscaler = upscaler.SelectedIndex >= 0 && upscaler.SelectedIndex < upscalerChoices.Count
@@ -1113,17 +1130,20 @@ namespace Nebula.Launcher
                 graphics.MatchOutput = internalScale.SelectedIndex <= 0;
                 if (!graphics.MatchOutput) graphics.EfbScale = internalScale.SelectedIndex;
                 graphics.VSync = vsync.Checked;
-                if (frameRate.SelectedIndex >= 0 && frameRate.SelectedIndex < frameRateChoices.Count)
-                    graphics.FrameRate = frameRateChoices[frameRate.SelectedIndex];
+                if (frameRowsChosen || !LaunchSession.RuntimeLeaseHeld())
+                {
+                    if (frameRate.SelectedIndex >= 0 && frameRate.SelectedIndex < frameRateChoices.Count)
+                        graphics.FrameRate = frameRateChoices[frameRate.SelectedIndex];
+                    if (upscaler.SelectedIndex >= 0 && upscaler.SelectedIndex < upscalerChoices.Count)
+                        graphics.Upscaler = upscalerChoices[upscaler.SelectedIndex];
+                    graphics.FrameGeneration = SelectedInterpolation == 2 ? 1 : 0;
+                    if (upscaler.SelectedIndex >= 0 && upscalerChoices[upscaler.SelectedIndex] == 3)
+                        graphics.TemporalQuality = Math.Max(0, dlssQuality.SelectedIndex);
+                    else
+                        graphics.SpatialQuality = Math.Max(0, dlssQuality.SelectedIndex);
+                }
                 graphics.AntiAliasing = antiAliasing.SelectedIndex;
                 graphics.Quality = aaQuality.SelectedIndex;
-                if (upscaler.SelectedIndex >= 0 && upscaler.SelectedIndex < upscalerChoices.Count)
-                    graphics.Upscaler = upscalerChoices[upscaler.SelectedIndex];
-                graphics.FrameGeneration = SelectedInterpolation == 2 ? 1 : 0;
-                if (upscaler.SelectedIndex >= 0 && upscalerChoices[upscaler.SelectedIndex] == 3)
-                    graphics.TemporalQuality = Math.Max(0, dlssQuality.SelectedIndex);
-                else
-                    graphics.SpatialQuality = Math.Max(0, dlssQuality.SelectedIndex);
                 graphics.Sharpness = (int)sharpness.Value;
                 graphics.TextureFilter = textureFilter.SelectedIndex;
                 graphics.EnhancedLighting = lighting.SelectedIndex == 0;

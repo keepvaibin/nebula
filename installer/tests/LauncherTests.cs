@@ -298,6 +298,52 @@ namespace Nebula.Launcher
                     form.GetType().GetMethod("Commit", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).Invoke(form, null);
                     Check(GraphicsSettings.Load().Gpu == Rtx.Id, "Save stores the chosen GPU for the game");
                 }
+                // While the game runs (its lease held by another thread), a GPU without DLSS chosen for the next start
+                // leaves the running game's upscaler, Frame Generation and frame rate in config.ini; the player's own
+                // choice of upscaler is saved.
+                File.WriteAllText(GraphicsSettings.ConfigPath, "gpu=" + Rtx.Id + "\nupscaler=3\nframe_generation=1\nmax_fps=120\n");
+                using (var held = new ManualResetEvent(false))
+                using (var release = new ManualResetEvent(false))
+                {
+                    var holder = new Thread(() =>
+                    {
+                        using (var lease = new Mutex(true, @"Local\Nebula.RMGE01.NativeRuntime"))
+                        {
+                            held.Set();
+                            release.WaitOne();
+                            lease.ReleaseMutex();
+                        }
+                    });
+                    holder.Start();
+                    held.WaitOne();
+                    try
+                    {
+                        Check(LaunchSession.RuntimeLeaseHeld(), "the test's lease reads as a running game");
+                        using (var form = new SettingsForm(session))
+                        {
+                            CreateHandles(form);
+                            var gpuBox = (ComboBox)Private(form, "gpuBox");
+                            var upscaler = (ComboBox)Private(form, "upscaler");
+                            var commit = form.GetType().GetMethod("Commit", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                            gpuBox.SelectedIndex = 2;
+                            Check((string)upscaler.SelectedItem == GraphicsSettings.UpscalerName(1),
+                                  "the integrated GPU chosen while the game runs: the list shows its fallback, FSR 1");
+                            commit.Invoke(form, null);
+                            var saved = GraphicsSettings.Load();
+                            Check(saved.Gpu == Integrated.Id && saved.Upscaler == 3 && saved.FrameGeneration == 1 && saved.FrameRate == 120,
+                                  "saved while the game runs: the GPU for the next start; the game's DLSS, Frame Generation and 120 fps kept");
+                            upscaler.SelectedIndex = upscaler.Items.IndexOf(GraphicsSettings.UpscalerName(0));
+                            commit.Invoke(form, null);
+                            Check(GraphicsSettings.Load().Upscaler == 0, "an upscaler the player picks while the game runs is saved");
+                        }
+                    }
+                    finally
+                    {
+                        release.Set();
+                        holder.Join();
+                    }
+                }
+                Check(!LaunchSession.RuntimeLeaseHeld(), "the test's lease is released");
                 // One GPU: no Graphics card row and no notice; the Monitor row is the first.
                 GpuAdapters.Source = lowPower => new List<GpuAdapter> { Gpu(Rtx, mainMonitor) };
                 using (var form = new SettingsForm(session))
