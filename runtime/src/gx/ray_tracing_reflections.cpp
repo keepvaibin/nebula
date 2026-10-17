@@ -222,6 +222,11 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
         return false;
     }
     device_ = device;
+    if (history_device_ != device_) {
+        memory_ = {};
+        sky_ = {};
+        history_device_ = device_;
+    }
     // GALAXY_RT_REFLECT_<CLASS>=roughness,F0,strength[,metal[,cover]] per surface class (rt_surfaces.h);
     // GALAXY_RT_WATER the same for translucent water.
     const auto material = [](const char* name, Material fallback) {
@@ -324,13 +329,19 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
             }
         }
     }
-    // Committed resources start zeroed: an empty environment memory.
+    // Committed resources start zeroed: a new environment memory and captured sky are empty. Kept ones (ray
+    // tracing turned off and on in the stage) hold what the stage has shown: started empty, the reflections took
+    // the sky they had remembered since the stage began from its average instead (Ghostly Galaxy's dome).
+    const bool new_memory = memory_.resource == nullptr;
+    const bool new_sky = sky_.resource == nullptr;
     if (!create_pipelines(color_format) ||
-        !create_buffer(kMemoryTexels * 16u, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-                       D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, memory_.resource, L"rt reflect memory") ||
-        !create_buffer(static_cast<std::uint64_t>(kSkySize) * kSkySize * 8u, D3D12_HEAP_TYPE_DEFAULT,
-                       D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, sky_.resource,
-                       L"rt reflect sky") ||
+        (new_memory &&
+         !create_buffer(kMemoryTexels * 16u, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                        D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, memory_.resource, L"rt reflect memory")) ||
+        (new_sky &&
+         !create_buffer(static_cast<std::uint64_t>(kSkySize) * kSkySize * 8u, D3D12_HEAP_TYPE_DEFAULT,
+                        D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+                        sky_.resource, L"rt reflect sky")) ||
         !create_buffer(kDrawLightEntries * 16u, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                        D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, draw_light_.resource, L"rt reflect draw light") ||
         !create_buffer(kStatsWords * 4u, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
@@ -344,8 +355,12 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
         return false;
     }
     stats_.state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-    memory_.state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-    sky_.state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    if (new_memory) {
+        memory_.state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    }
+    if (new_sky) {
+        sky_.state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    }
     draw_light_.state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     void* zero = nullptr;
     const D3D12_RANGE no_read{0, 0};
@@ -399,8 +414,6 @@ void RtReflections::shutdown() noexcept {
     water_ = {};
     raw_ = {};
     for (Buffer& buffer : under_) buffer = {};
-    memory_ = {};
-    sky_ = {};
     draw_light_ = {};
     stats_ = {};
     stats_zero_.Reset();

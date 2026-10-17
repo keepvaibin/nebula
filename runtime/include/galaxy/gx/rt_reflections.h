@@ -92,6 +92,8 @@ public:
 
     // GALAXY_RT_REFLECT=0 leaves it off. False when a pipeline cannot be created.
     bool initialize(ID3D12Device5* device, std::uint64_t timestamp_frequency, DXGI_FORMAT color_format);
+    // Keeps the environment memory and the captured sky (the stage's; reset_memory clears them): started again on
+    // the same device, the reflections continue from what the stage has shown.
     void shutdown() noexcept;
     [[nodiscard]] bool ready() const noexcept { return ready_; }
 
@@ -255,6 +257,7 @@ private:
     static constexpr std::uint32_t kUnderTint = 9u;   // rt_reflections.hlsl kUnderTint (4 entries)
     Buffer memory_{};
     Buffer sky_{};          // the captured sky (rt_reflections.hlsl SkyCaptureCS)
+    Microsoft::WRL::ComPtr<ID3D12Device5> history_device_;   // the device memory_ and sky_ were made on
     Buffer draw_light_{};   // per draw its mean lit colour this frame (DrawLightCS)
     Buffer stats_{};
     Microsoft::WRL::ComPtr<ID3D12Resource> stats_zero_;
