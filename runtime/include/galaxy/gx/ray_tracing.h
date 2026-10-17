@@ -694,6 +694,22 @@ private:
     std::array<std::uint32_t, kStarSlots> star_first_{};
     std::array<std::uint32_t, kStarSlots> star_count_{};
     std::uint32_t star_draws_ = 0u;
+    // The balls read back for the star core's light (it follows its ball): a few frames' copies of the result's
+    // kStarSlots balls and the stars' colour over time (rt_lighting.hlsl kStarColour), each with the frame it was
+    // taken (+1; 0: free) and whether the colour was copied.
+    static constexpr unsigned kBallReadbacks = 4u;
+    static constexpr unsigned kBallReadbackBytes = kStarSlots * 16u + 16u;
+    Microsoft::WRL::ComPtr<ID3D12Resource> ball_readback_;
+    std::array<std::uint64_t, kBallReadbacks> ball_readback_frame_{};
+    std::array<bool, kBallReadbacks> ball_readback_colour_{};
+    unsigned ball_readback_next_ = 0;
+    std::uint64_t ball_read_frame_ = 0;
+    float core_ball_radius_ = 0.0f;   // the largest star ball of the newest frame read (eye units; 0: none)
+    // The stars' colour as the game draws them (their samples' mean over time; unknown until one is seen on the
+    // stage): the star core's light takes its hue.
+    std::array<float, 3> core_colour_{};
+    bool core_colour_known_ = false;
+    std::uint64_t star_colour_from_frame_ = ~0ull;   // copies taken after it hold this stage's colour
     Microsoft::WRL::ComPtr<ID3D12PipelineState> star_sphere_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> authored_emit_pso_;
     float authored_power_ = 40000.0f;   // GALAXY_RT_AUTHORED_POWER: a Luma's light (intensity 1)
@@ -874,6 +890,7 @@ private:
     float night_shadow_ = 0.6f;
     float night_lights_ = 2.0f;
     float night_lights_cap_ = 1.0f;
+    float sun_cap_ = 2.5f;          // GALAXY_RT_SUN_CAP: the night lights' soft cap where the star core's light rules
     // The night key (moon, a stage's red star) adds its light on the faces it reaches (GALAXY_RT_NIGHT_KEY,
     // its strength per stage in rt-suns.tsv); by day the environment's art level (GALAXY_RT_DAY_ENVIRONMENT,
     // map geometry; characters and objects stay at kDayLevel).
@@ -901,7 +918,7 @@ private:
     bool gi_ = true;                // GALAXY_RT_GI=0: no sky occlusion or bounce (shadows and lights stay)
     // GALAXY_RT_CORE_RADIUS: the star core light's half distance at scale 1, over 1.2 (it reaches the plaza)
     float core_radius_ = 1667.0f;
-    float core_light_ = 1.5f;       // GALAXY_RT_CORE_LIGHT: its light (a point light; grows with it)
+    float core_light_ = 8.0f;       // GALAXY_RT_CORE_LIGHT: its light at full revival (by its ball's surface)
     float bloom_strength_ = 1.4f;   // GALAXY_RT_BLOOM: the glows' bloom (0: none)
     float bloom_threshold_ = 0.15f; // GALAXY_RT_BLOOM_THRESHOLD: glow luminance that starts to bloom
     // GALAXY_RT_EXPOSURE_DAY / _NIGHT: the mean lighting the exposure holds under a bright / black

@@ -347,25 +347,20 @@ float3 lighting_at(int2 pixel)
 
 // The stars' balls (rt_lighting.hlsl StarSphereCS: centre and radius, eye space) follow the lighting's samples.
 static const uint kStarSlots = 8u;
+// The stars' colour in the previous picture's sums (rt_lighting.hlsl kStarSums, kStarColour): per star slot the
+// game's own colour of its samples, r g b n (x 1/255), then over time, rgb (float) and known.
+static const uint kStarSums = 64u;
+static const uint kStarColour = kStarSums + kStarSlots * 16u;
 
-// rt_lighting.hlsl star_ramp: the fire's colour by its heat, red through orange and yellow to white.
-float3 star_ramp(float t)
-{
-    const float3 red = float3(0.85f, 0.18f, 0.03f);
-    const float3 orange = float3(1.0f, 0.52f, 0.12f);
-    const float3 yellow = float3(1.0f, 0.86f, 0.45f);
-    const float3 white = float3(1.0f, 0.98f, 0.92f);
-    return t < 0.4f ? lerp(red, orange, t / 0.4f) : t < 0.75f ? lerp(orange, yellow, (t - 0.4f) / 0.35f)
-                                                             : lerp(yellow, white, saturate((t - 0.75f) / 0.25f));
-}
-
-// A star's burning ball where a reflection ray along `l` meets it at `x` (rt_lighting.hlsl star_surface without
-// its cells): white-hot where the ray meets the ball face on, deepening to red at its limb. The ball is the one
-// whose surface passes nearest `x`.
-float3 star_reflected(float3 x, float3 l)
+// A star's ball where a reflection ray along `l` meets it at `x`, as the composite shades it without its cells
+// (rt_lighting.hlsl star_surface): the game's own colour of that star, brighter where the ray meets the ball face
+// on. The ball is the one whose surface passes nearest `x`; its colour the previous picture's, else the stars'
+// over time, else `seen` (the frame's colour there).
+float3 star_reflected(float3 x, float3 l, float3 seen)
 {
     float3 normal = -l;
     float nearest = 1.0e30f;
+    uint star = kStarSlots;
     [unroll] for (uint k = 0u; k < kStarSlots; ++k) {
         const float4 ball = asfloat(g_light[g_sample_size.x * g_sample_size.y + k]);
         if (ball.w > 0.0f) {
@@ -373,12 +368,24 @@ float3 star_reflected(float3 x, float3 l)
             if (off < nearest) {
                 nearest = off;
                 normal = normalize(x - ball.xyz);
+                star = k;
             }
         }
     }
+    float3 colour = seen;
+    if ((g_flags & 4u) != 0u) {
+        const uint4 own = star < kStarSlots ? g_sums.Load4(kStarSums + star * 16u) : uint4(0u, 0u, 0u, 0u);
+        const uint4 known = g_sums.Load4(kStarColour);
+        if (own.w >= 4u) {
+            colour = float3(own.xyz) / (255.0f * float(own.w));
+        } else if (known.w != 0u) {
+            colour = asfloat(known.xyz);
+        }
+    }
     const float mu = saturate(dot(normal, -l));
-    const float3 fire = star_ramp(saturate(0.1f + 0.75f * mu * mu)) * (0.6f + 0.5f * mu);
-    return saturate(fire + max(max(fire.r, max(fire.g, fire.b)) - 1.0f, 0.0f) * 0.25f);
+    const float3 lit = colour * (1.15f * (0.8f + 0.4f * mu));
+    const float peak = max(lit.r, max(lit.g, lit.b));
+    return saturate(lit / max(peak, 1.0f) + max(peak - 1.0f, 0.0f) * 0.2f);
 }
 
 // ray_tracing.hlsl pack_vertex_normal: octahedral, 1-65535 per axis.
@@ -1168,9 +1175,8 @@ Reflected reflect_light(uint2 s, float3 dir, float3 n, float3 ng, float3 hit, fl
         float3 drawn;
         float cover = 1.0f;
         if ((g_flags & 128u) != 0u && hit_draw < g_draw_count && (g_draws.Load(hit_draw * 48u + 24u) & 8u) != 0u) {
-            // A star's burning ball: its fire as the composite shades it, not the frame's colour there (the game
-            // draws the lit Observatory's core cyan; through the ring's gold that read olive).
-            r.light = star_reflected(x, l);
+            // A star's burning ball as the composite shades it: the frame shows it before the lighting brightens it.
+            r.light = star_reflected(x, l, shown ? r.light : float3(1.0f, 0.72f, 0.38f));
             r.confidence = 1.0f;
         } else if (shown) {
             r.confidence = 1.0f;

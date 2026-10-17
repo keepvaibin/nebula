@@ -72,6 +72,9 @@ cbuffer RtLight : register(b0)
     float4 g_night2;            // the night key's gain on what it reaches; by day the environment's level
     uint4 g_star_first[2];      // the material table's stars among the scene draws (kStarSlots): first
     uint4 g_star_count[2];      // triangle and count in g_positions (0: none)
+    uint g_core_point;          // the star core's light among g_points (~0: none)
+    float g_sun_cap;            // the night's soft cap on added light where the core's light rules
+    uint2 g_core_pad;
 };
 
 RaytracingAccelerationStructure g_scene : register(t6);
@@ -132,6 +135,10 @@ static const uint kDrawTableStar = 8u;      // g_draws word 6: a star's burning 
 // Stars whose balls StarSphereCS fits (g_star_first): one float4 each (eye-space centre, radius; 0: none)
 // after the samples in the results (g_final, m_light).
 static const uint kStarSlots = 8u;
+// The picture sums (CaptureCS c_sums): per star slot the game's own colour of its samples, r g b n (x 1/255,
+// cleared per capture), then the stars' colour over time, rgb (float) and known (SkyStateCS).
+static const uint kStarSums = 64u;
+static const uint kStarColour = kStarSums + kStarSlots * 16u;
 // Scene instance masks (ray_tracing.cpp kSceneMask): the frame's geometry. The late geometry (instance 1:
 // drawn after the trace, Rosalina) has no records in g_positions or g_surfaces: shadow, sky and reflection
 // rays meet it as an occluder.
@@ -386,7 +393,8 @@ cbuffer RtCapture : register(b0)
     float c_emissive;        // extra light of the brightest pixels
     uint c_divide;           // bit 0: this frame's lighting (c_final) is divided out; bit 1: what
                              // the translucent phases added since c_glow_base goes to c_glow;
-                             // bit 2: the sky's colour goes to c_sky by world direction
+                             // bit 2: the sky's colour goes to c_sky by world direction; bit 3: a
+                             // new stage (SkyStateCS forgets the stars' colour)
     float c_strength;
     float c_split;           // GALAXY_RT_SPLIT: pixels left of it kept the game's own colour
     float c_surface_gain;    // a glowing surface's light per unit of colour and eye-space area
@@ -637,6 +645,21 @@ void SkyStateCS()
         const float state = c_sums.Load(36u) != 0u ? lerp(asfloat(c_sums.Load(32u)), l, 0.05f) : l;
         c_sums.Store2(32u, uint2(asuint(state), 1u));
     }
+    // The stars' colour over time (the star core's light; a star's reflection where none is in view): the
+    // game's own colour of this frame's star samples, followed a tenth of the way per frame.
+    if ((c_divide & 8u) != 0u) {
+        c_sums.Store(kStarColour + 12u, 0u);
+    }
+    uint4 stars = uint4(0u, 0u, 0u, 0u);
+    [unroll] for (uint s = 0u; s < kStarSlots; ++s) {
+        stars += c_sums.Load4(kStarSums + s * 16u);
+    }
+    if (stars.w >= 4u) {
+        const float3 seen = float3(stars.xyz) / (255.0f * float(stars.w));
+        const float3 state = c_sums.Load(kStarColour + 12u) != 0u
+                                 ? lerp(asfloat(c_sums.Load3(kStarColour)), seen, 0.1f) : seen;
+        c_sums.Store4(kStarColour, uint4(asuint(state), 1u));
+    }
     // The exposure guards the picture's brightness: the ratio of the lit picture's mean luminance
     // (with its reflections, as the finish will tone it) to the game's own on the same pixels
     // (GlowBaseCS) is left alone inside a band around its target (0.97-1.12 of it) and moves back
@@ -719,6 +742,19 @@ void CaptureCS(uint3 id : SV_DispatchThreadID)
             // Without this frame's sky and bounce light (no feedback through it); the sun's
             // light stays, for the bounce it sends.
             const uint4 f = c_final[index];
+            // A star's sample (its relief share carries the mark, TraceCS), one in four: the game's own colour.
+            const float mark = f16tof32(f.w & 0xFFFFu);
+            if (mark < -0.5f && ((id.x | id.y) & 1u) == 0u && float(q.x) >= c_split) {
+                const uint star = uint(round(-mark - 1.0f));
+                if (star < kStarSlots) {
+                    const uint3 own = uint3(round(saturate(c_game.Load(int3(q, 0)).rgb) * 255.0f));
+                    const uint at = kStarSums + star * 16u;
+                    c_sums.InterlockedAdd(at, own.r);
+                    c_sums.InterlockedAdd(at + 4u, own.g);
+                    c_sums.InterlockedAdd(at + 8u, own.b);
+                    c_sums.InterlockedAdd(at + 12u, 1u);
+                }
+            }
             float keep = abs(f16tof32(f.y >> 16u));
             const float3 m = float3(f16tof32(f.x), f16tof32(f.x >> 16u), f16tof32(f.y));
             const float lit = luminance(m);
@@ -2638,7 +2674,25 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
                 // The key (moon, a red star) lights the faces it reaches: its light by the shaped facing and
                 // its traced visibility, with the lamps under the soft cap.
                 const float3 lights = points * g_night.w + g_sun_light.rgb * (shaped * vis * g_night2.x);
-                const float3 added = lights / (1.0f + luminance(lights) / max(g_ao.w, 1e-3f));
+                // Where the star core's light rules (its share of the point lights' unshadowed light here) the cap
+                // rises towards g_sun_cap: the core lights its surroundings as a sun, the lamps keep their cap.
+                float cap = g_ao.w;
+                if (g_core_point < g_point_count) {
+                    const float3 sp = sample_position(id.xy, z);
+                    const float3 sn = unpack_normal(g_normal[index]);
+                    float core_weight = 0.0f;
+                    float all_weight = 0.0f;
+                    [loop] for (uint i = 0u; i < g_point_count; ++i) {
+                        const float3 to = g_points[2u * i].xyz - sp;
+                        const float d2 = dot(to, to);
+                        const float w = luminance(g_points[2u * i + 1u].rgb) *
+                                        saturate(dot(sn, to) * rsqrt(max(d2, 1e-6f))) * point_falloff(d2, i);
+                        all_weight += w;
+                        core_weight += i == g_core_point ? w : 0.0f;
+                    }
+                    cap = lerp(g_ao.w, max(g_sun_cap, g_ao.w), all_weight > 0.0f ? core_weight / all_weight : 0.0f);
+                }
+                const float3 added = lights / (1.0f + luminance(lights) / max(cap, 1e-3f));
                 const float3 art = night_shadow * day_form * tint * level * g_night.x;
                 day_m = lerp(art * occlusion * night_contact + added, day_m, day_share);
                 day_open = lerp(night_shadow * day_form * level * g_night.x + added, day_open, day_share);
@@ -2940,20 +2994,6 @@ float3 apply_light(float3 c, float3 m)
     return film_light(c, m);
 }
 
-// A star's colour at temperature t (0 deep red .. 1 white-hot).
-float3 star_ramp(float t)
-{
-    const float3 red = float3(0.85f, 0.18f, 0.03f);
-    const float3 orange = float3(1.0f, 0.52f, 0.12f);
-    const float3 yellow = float3(1.0f, 0.86f, 0.45f);
-    const float3 white = float3(1.0f, 0.98f, 0.92f);
-    return t < 0.4f ? lerp(red, orange, t / 0.4f) : t < 0.75f ? lerp(orange, yellow, (t - 0.4f) / 0.35f)
-                                                             : lerp(yellow, white, saturate((t - 0.75f) / 0.25f));
-}
-
-// A star's burning surface (the star core, the suns): the game's own fire with its heat. Its cells (the texture
-// against its neighbourhood) stand out, the ball burns white-hot at its centre and deepens through yellow and
-// orange to red at its limb (mu: the ball's turn to the eye, star_mu).
 // The turn to the eye of star `star`'s ball at eye position `p` (traced frame): the ball's normal where the eye
 // ray first meets it (StarSphereCS's sphere through its vertices) against the direction to the eye. Its model's
 // faces are flat and so are its vertex normals: a turn taken from either is constant over each face (user: the
@@ -2979,36 +3019,38 @@ float star_mu(float3 p, uint star)
     return saturate(dot(normalize(s - ball.xyz), -d));
 }
 
+// A star's burning surface (the star core, the suns): the game's own colour at each stage (the Observatory's core
+// runs from red to blue as the domes revive it), a little brighter and with its texture twice as deep (the colour
+// against its neighbourhood, per channel: where the game's colour is at full brightness in some channel, the lit
+// core's green and blue, a brightness ratio clipped away and left it flatter than the game's, s.d. 6.4 against
+// 9.5). The ball brightens towards its centre and dims at its limb (mu: the ball's turn to the eye, star_mu). Past
+// full brightness it keeps its hue and the excess whitens it a little.
+static const float kStarDetail = 1.0f;
+
 float3 star_surface(int2 c, float z, float mu, float3 color)
 {
-    const float l = luminance(color);
     // Its neighbourhood 3 game pixels around at every internal resolution (3 EFB pixels were half a game pixel
     // at 6x: no contrast, the fire's texture washed out under the heat, user: suns without their texture), on
     // its own surface only (what stands in front, a ring or a character, drew a bright or dark line along it).
     const int r = max(int(round(3.0f * m_efb_scale)), 1);
     const int2 ring[8] = {int2(-1, -1), int2(0, -1), int2(1, -1), int2(-1, 0), int2(1, 0), int2(-1, 1), int2(0, 1), int2(1, 1)};
     const float limit = abs(z) * 0.02f + 2.0f;
-    float around = 0.0f;
+    float3 around = float3(0.0f, 0.0f, 0.0f);
     float count = 0.0f;
     [unroll] for (uint k = 0u; k < 8u; ++k) {
         const int2 q = c + ring[k] * r;
         if (abs(depth_to_eye_z(m_depth, m_efb_depth.Load(int3(q, 0))) - z) < limit) {
-            around += luminance(m_color.Load(int3(q, 0)).rgb);
+            around += m_color.Load(int3(q, 0)).rgb;
             count += 1.0f;
         }
     }
-    const float cells = count > 0.0f ? clamp(l / max(around / count, 0.03f), 0.6f, 1.5f) : 1.0f;
-    // Centre (mu 1) t 0.85: white-yellow; mu 0.8 t 0.58: yellow-orange; mu 0.6 t 0.37: orange; limb (mu 0.2)
-    // t 0.13: deep red-orange. Over the disc it averages close to the game's own colour (a Melty Molten sun at 6x:
-    // 230, 160, 85 against 228, 146, 47): hotter at the centre, deeper at the limb. The hot cells burn whiter, the
-    // lanes deeper.
-    const float t = saturate((0.1f + 0.75f * mu * mu) * (0.85f + 0.15f * cells));
-    const float3 fire = star_ramp(t) * (0.6f + 0.5f * mu) * pow(cells, 0.8f);
-    const float3 hot = saturate(fire + max(max(fire.r, max(fire.g, fire.b)) - 1.0f, 0.0f) * 0.25f);
-    // A fifth of the fire's own brightness, in the star's colour: a core the game draws in another hue (the lit
-    // Observatory's is cyan) keeps the star's (cyan through orange read lime).
-    const float3 own = saturate(hot * (l / max(luminance(hot), 1e-3f)));
-    return lerp(own, hot, 0.8f);
+    const float3 detail = count > 0.0f ? color - around / count : float3(0.0f, 0.0f, 0.0f);
+    // Limb (mu 0.2) 1.01 of the game's colour, centre 1.38; over the disc about 1.2. The detail joins after the
+    // brightness is brought back under full: scaled with it, the lanes of a nearly full colour rose towards its
+    // cells (s.d. 8.6 against the game's 9.5).
+    const float3 lit = color * (1.15f * (0.8f + 0.4f * mu));
+    const float peak = max(lit.r, max(lit.g, lit.b));
+    return saturate(lit / max(peak, 1.0f) + max(peak - 1.0f, 0.0f) * 0.2f + detail * kStarDetail);
 }
 
 float4 CompositeVS(uint id : SV_VertexID) : SV_Position

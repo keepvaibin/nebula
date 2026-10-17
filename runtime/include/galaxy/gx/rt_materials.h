@@ -55,8 +55,8 @@ struct RtMaterial {
     bool lens = false;                    // a black hole's lens draw: the finish bends light around it
     bool matte = false;                   // foliage, cloth: absorbs light, no highlight or reflection
     bool sky = false;                     // a sky or backdrop mesh: drawn, never in the traced scene
-    bool star = false;                    // a star's burning surface (the star core): white-hot at its
-                                          // centre, red at its limb (rt_lighting.hlsl CompositePS)
+    bool star = false;                    // a star's burning surface (the star core, the suns): its own colour,
+                                          // brighter and more textured (rt_lighting.hlsl CompositePS)
     bool shadow = true;
     float roughness = -1.0f;              // < 0: the class's
     float metallic = -1.0f;               // < 0: the class's

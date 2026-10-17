@@ -118,8 +118,11 @@ struct RtLightConstants {
     float night2[4];
     std::uint32_t star_first[8];   // the stars' triangles (StarSphereCS): first, count (0: none)
     std::uint32_t star_count[8];
+    std::uint32_t core_point;      // the star core's light among points (~0: none)
+    float sun_cap;                 // the soft cap of the night's added light where the core's light dominates
+    std::uint32_t core_pad[2];
 };
-static_assert(sizeof(RtLightConstants) == 736u);
+static_assert(sizeof(RtLightConstants) == 752u);
 
 // Mirrors cbuffer RtPost in rt_post.hlsl (root constants).
 struct RtPostConstants {
@@ -334,9 +337,14 @@ enum EmitParameter : UINT {
 constexpr D3D12_RESOURCE_STATES kLightRead =
     D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 // Sky r g b n, scene r g b n (cleared per capture); the sky's luminance over time, known (kept);
-// the lighting's luminance sum (x 256) and count (cleared); the exposure, known (kept).
-constexpr UINT64 kPictureSumsBytes = 64u;
+// the lighting's luminance sum (x 256) and count (cleared); the exposure, known (kept); per star slot
+// (SceneRayTracer::kStarSlots) its samples' game colour r g b n (cleared); the stars' colour over time
+// r g b, known (kept) (rt_lighting.hlsl kStarSums, kStarColour).
 constexpr UINT64 kPictureSumsCleared = 32u;
+constexpr UINT64 kPictureStarSlots = 8u;
+constexpr UINT64 kPictureStarSums = 64u;
+constexpr UINT64 kPictureStarColour = kPictureStarSums + kPictureStarSlots * 16u;
+constexpr UINT64 kPictureSumsBytes = kPictureStarColour + 16u;
 // The composite's exposure measurement (rt_lighting.hlsl kExposureBuckets x 16 bytes). Always
 // in UNORDERED_ACCESS: the composite (pixel) adds, the capture (compute) reads and clears.
 constexpr UINT64 kExposureSumsBytes = 16u * 16u;
@@ -665,7 +673,9 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
         !create_buffer(kStatsWords * 4u, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ,
                        D3D12_RESOURCE_FLAG_NONE, stats_zero_, L"rt stats zero") ||
         !create_buffer(kResultSlots * kReadbackSlotBytes, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST,
-                       D3D12_RESOURCE_FLAG_NONE, readback_, L"rt readback")) {
+                       D3D12_RESOURCE_FLAG_NONE, readback_, L"rt readback") ||
+        !create_buffer(kBallReadbacks * kBallReadbackBytes, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST,
+                       D3D12_RESOURCE_FLAG_NONE, ball_readback_, L"rt star balls readback")) {
         shutdown();
         return false;
     }
@@ -781,6 +791,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     night_shadow_ = std::clamp(env_float("GALAXY_RT_NIGHT_SHADOW", 0.6f), 0.0f, 1.0f);
     night_lights_ = std::clamp(env_float("GALAXY_RT_NIGHT_LIGHTS", 2.0f), 0.0f, 8.0f);
     night_lights_cap_ = std::clamp(env_float("GALAXY_RT_NIGHT_LIGHTS_CAP", 1.0f), 0.05f, 8.0f);
+    sun_cap_ = std::clamp(env_float("GALAXY_RT_SUN_CAP", 2.5f), 0.05f, 8.0f);
     night_key_ = std::clamp(env_float("GALAXY_RT_NIGHT_KEY", 0.5f), 0.0f, 4.0f);
     day_environment_ = std::clamp(env_float("GALAXY_RT_DAY_ENVIRONMENT", 0.92f), 0.3f, 1.2f);
     // The finish (grade, depth of field, shafts, haze, star core, lenses) off by default: with it and the
@@ -804,7 +815,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     post_view_ = env_float("GALAXY_RT_POST_VIEW", 0.0f) != 0.0f;
     gi_ = env_float("GALAXY_RT_GI", 1.0f) != 0.0f;
     core_radius_ = std::clamp(env_float("GALAXY_RT_CORE_RADIUS", 1667.0f), 1.0f, 100000.0f);
-    core_light_ = std::clamp(env_float("GALAXY_RT_CORE_LIGHT", 1.5f), 0.0f, 16.0f);
+    core_light_ = std::clamp(env_float("GALAXY_RT_CORE_LIGHT", 8.0f), 0.0f, 16.0f);
     // The glows' corona: only what an emitter adds past half the picture's range, at 0.8. From 0.15 at 1.4 the
     // Observatory's map hologram behind Rosalina bloomed her face white and the star plate's 54 burned out (isoBl,
     // build 89: both in the game's colours with the bloom off).
@@ -871,6 +882,13 @@ void SceneRayTracer::shutdown() noexcept {
     stats_.Reset();
     stats_zero_.Reset();
     readback_.Reset();
+    ball_readback_.Reset();
+    ball_readback_frame_ = {};
+    ball_readback_colour_ = {};
+    ball_read_frame_ = 0u;
+    core_ball_radius_ = 0.0f;
+    core_colour_known_ = false;
+    star_colour_from_frame_ = ~0ull;
     sky_bins_.Reset();
     sky_zero_.Reset();
     sky_readback_.Reset();
@@ -1196,6 +1214,42 @@ void SceneRayTracer::begin_frame(std::uint64_t frame_index) {
         }
         const D3D12_RANGE no_write{0, 0};
         readback_->Unmap(0, &no_write);
+    }
+    for (unsigned k = 0; ball_readback_ && k < kBallReadbacks; ++k) {
+        const std::uint64_t taken = ball_readback_frame_[k];
+        if (taken == 0u || taken + kResultDelay > frame_index) {
+            continue;
+        }
+        ball_readback_frame_[k] = 0u;
+        const D3D12_RANGE range{k * kBallReadbackBytes, (k + 1u) * kBallReadbackBytes};
+        void* mapped = nullptr;
+        if (taken <= ball_read_frame_ || FAILED(ball_readback_->Map(0, &range, &mapped))) {
+            continue;
+        }
+        float balls[kStarSlots * 4u]{};
+        std::uint32_t colour[4]{};
+        std::memcpy(balls, static_cast<const std::byte*>(mapped) + range.Begin, sizeof(balls));
+        std::memcpy(colour, static_cast<const std::byte*>(mapped) + range.Begin + sizeof(balls), sizeof(colour));
+        const D3D12_RANGE no_write{0, 0};
+        ball_readback_->Unmap(0, &no_write);
+        // Taken after the stage's first capture (which forgot the last stage's colour).
+        if (ball_readback_colour_[k] && taken > star_colour_from_frame_ && colour[3] != 0u) {
+            std::array<float, 3> rgb{};
+            std::memcpy(rgb.data(), colour, sizeof(rgb));
+            if (std::isfinite(rgb[0]) && std::isfinite(rgb[1]) && std::isfinite(rgb[2])) {
+                core_colour_ = rgb;
+                core_colour_known_ = true;
+            }
+        }
+        float largest = 0.0f;
+        for (unsigned s = 0; s < kStarSlots; ++s) {
+            const float radius = balls[s * 4u + 3u];
+            if (std::isfinite(radius) && radius > largest && radius < 1.0e6f) {
+                largest = radius;
+            }
+        }
+        core_ball_radius_ = largest;
+        ball_read_frame_ = taken;
     }
     if (emit_log_pending_ && emit_log_frame_ + kResultDelay <= frame_index) {
         emit_log_pending_ = false;
@@ -1837,8 +1891,10 @@ bool SceneRayTracer::sky_key(std::array<float, 3>& world, float& strength) const
 
 void SceneRayTracer::reset_sky() noexcept {
     // Another stage: its exposure starts from 1, not from the last stage's; its reflections remember
-    // nothing of the last stage.
+    // nothing of the last stage, its star core's light nothing of the last stage's stars.
     exposure_reset_ = true;
+    core_colour_known_ = false;
+    star_colour_from_frame_ = ~0ull;
     reflections_.reset_memory();
     late_built_ = 0u;
     sky_map_.reset();
@@ -2686,6 +2742,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
             std::array<float, 3> eye;
             std::array<float, 3> color;
             float half;
+            bool core = false;
         };
         std::array<Candidate, 32> candidates{};
         std::size_t used = 0u;
@@ -2711,22 +2768,39 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
             const float half = lights[i].half_distance > 1.0f ? lights[i].half_distance : point_radius_;
             const float distance2 = e[0] * e[0] + e[1] * e[1] + e[2] * e[2];
             const float importance = l0 / (1.0f + distance2 / (144.0f * half * half));
-            candidates[used++] = {importance, e, rgb, half};
+            candidates[used++] = {importance, e, rgb, half, false};
         }
-        // The star core: the brightest light of the Comet Observatory, growing with it. Its light halves
-        // at 1.2 core radii from its centre: warm at its foot, an accent across the night plaza.
+        // The star core: the brightest light of the Comet Observatory, a burning ball whose light grows with its
+        // surface as the domes revive it. Its size is its fitted ball (StarSphereCS, read back): the actor's scale
+        // stays 1 while the revival animations grow the ball, and an unrevived core draws none and lights nothing.
+        // Its light halves at 1.2 ball radii from its centre.
         {
             std::array<float, 3> core{};
             float scale = 0.0f;
-            if (camera_known_ && core_light_ > 0.0f && used < candidates.size() && star_core(core, scale, 500u)) {
+            if (camera_known_ && core_light_ > 0.0f && core_ball_radius_ > 0.0f && used < candidates.size() &&
+                star_core(core, scale, 500u)) {
                 std::array<float, 3> e{};
                 for (unsigned r = 0; r < 3u; ++r) {
                     e[r] = camera_[r * 4u] * core[0] + camera_[r * 4u + 1u] * core[1] + camera_[r * 4u + 2u] * core[2] +
                            camera_[r * 4u + 3u];
                 }
-                const float grow = std::clamp(0.4f + 0.35f * scale, 0.5f, 2.5f);
-                const float l = core_light_ * grow;
-                candidates[used++] = {1.0e6f, e, {1.0f * l, 0.72f * l, 0.38f * l}, core_radius_ * scale * 1.2f};
+                // Its ball at full revival (six domes) is 600 units across its radius: the game's own sizes run
+                // from 100 to 600 with the domes (behaviour understood from the Petari decompilation, SMGCommunity:
+                // AstroCore's sensor table), and the fitted balls measure 102 and 599.
+                constexpr float kRevivedRadius = 600.0f;
+                const float size = std::min(core_ball_radius_ / kRevivedRadius, 1.5f);
+                const float l = core_light_ * size * size;
+                // In the core's own colour as the game draws it (red through blue as the domes revive it) at the
+                // luminance of a warm white, which it keeps until the core has been seen on the stage.
+                std::array<float, 3> hue{1.0f, 0.72f, 0.38f};
+                const float warm = 0.2126f * hue[0] + 0.7152f * hue[1] + 0.0722f * hue[2];
+                const float seen = 0.2126f * core_colour_[0] + 0.7152f * core_colour_[1] + 0.0722f * core_colour_[2];
+                if (core_colour_known_ && seen > 1e-3f) {
+                    for (unsigned k = 0; k < 3u; ++k) {
+                        hue[k] = core_colour_[k] * warm / seen;
+                    }
+                }
+                candidates[used++] = {1.0e6f, e, {hue[0] * l, hue[1] * l, hue[2] * l}, core_ball_radius_ * 1.2f, true};
             }
         }
         std::sort(candidates.begin(), candidates.begin() + static_cast<std::ptrdiff_t>(used),
@@ -2734,6 +2808,13 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         c.point_count = static_cast<std::uint32_t>(std::min<std::size_t>(used, 8u));
         c.point_light = point_light_;
         c.point_size = point_size_;
+        c.core_point = ~0u;
+        c.sun_cap = sun_cap_;
+        for (std::uint32_t i = 0; i < c.point_count; ++i) {
+            if (candidates[i].core) {
+                c.core_point = i;
+            }
+        }
         for (std::uint32_t i = 0; i < c.point_count; ++i) {
             for (unsigned k = 0; k < 3u; ++k) {
                 c.points[2u * i][k] = candidates[i].eye[k];
@@ -2880,6 +2961,22 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     list->SetComputeRootUnorderedAccessView(kLightHistory, light_normal_->GetGPUVirtualAddress());
     list->SetPipelineState(spatial_b_pso_.Get());
     list->Dispatch(groups_x, groups_y, 1u);
+    // The stars' balls for the star core's light, read a few frames later (begin_frame).
+    if (ball_readback_ && ball_readback_frame_[ball_readback_next_] == 0u) {
+        const UINT64 at = static_cast<UINT64>(ball_readback_next_) * kBallReadbackBytes;
+        to_state(list, light_final_[slot].Get(), light_final_state_[slot], D3D12_RESOURCE_STATE_COPY_SOURCE);
+        list->CopyBufferRegion(ball_readback_.Get(), at, light_final_[slot].Get(),
+                               static_cast<UINT64>(sample_width) * sample_height * 16u, kStarSlots * 16u);
+        ball_readback_colour_[ball_readback_next_] = picture_valid_;
+        if (picture_valid_) {
+            to_state(list, picture_sums_.Get(), picture_sums_state_, D3D12_RESOURCE_STATE_COPY_SOURCE);
+            list->CopyBufferRegion(ball_readback_.Get(), at + kStarSlots * 16u, picture_sums_.Get(),
+                                   kPictureStarColour, 16u);
+            to_state(list, picture_sums_.Get(), picture_sums_state_, kRead);
+        }
+        ball_readback_frame_[ball_readback_next_] = frame_index_ + 1u;
+        ball_readback_next_ = (ball_readback_next_ + 1u) % kBallReadbacks;
+    }
     to_state(list, light_final_[slot].Get(), light_final_state_[slot], kLightRead);
 
     LightSlot& info = light_slots_[slot];
@@ -3016,6 +3113,11 @@ void SceneRayTracer::capture_picture(ID3D12GraphicsCommandList* list, const RtSo
     c.exposure_night = exposure_night_;
     c.daylight = daylight_;
     c.exposure = !exposure_ ? 0u : exposure_reset_ ? 2u : 1u;
+    if (exposure_reset_) {
+        // A new stage: SkyStateCS forgets the stars' colour; the copies taken after this frame read it again.
+        c.divide |= 8u;
+        star_colour_from_frame_ = frame_index_ + 1u;
+    }
     exposure_reset_ = false;
     std::copy(view_.projection.begin(), view_.projection.end(), c.projection);
     std::memcpy(c.to_world, to_world.data(), sizeof(c.to_world));
@@ -3030,6 +3132,10 @@ void SceneRayTracer::capture_picture(ID3D12GraphicsCommandList* list, const RtSo
     list->CopyBufferRegion(picture_sums_.Get(), 0u, stats_zero_.Get(), 0u, kPictureSumsCleared);
     list->CopyBufferRegion(picture_sums_.Get(), 40u, stats_zero_.Get(), 0u, 8u);
     list->CopyBufferRegion(picture_sums_.Get(), 56u, stats_zero_.Get(), 0u, 8u);
+    static_assert(kPictureStarSlots == kStarSlots && kPictureStarSlots * 16u % (kStatsWords * 4u) == 0u);
+    for (UINT64 at = kPictureStarSums; at < kPictureStarColour; at += kStatsWords * 4u) {
+        list->CopyBufferRegion(picture_sums_.Get(), at, stats_zero_.Get(), 0u, kStatsWords * 4u);
+    }
     to_state(list, picture_sums_.Get(), picture_sums_state_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     list->SetComputeRootSignature(capture_root_.Get());
     list->SetPipelineState(capture_pso_.Get());
