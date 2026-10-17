@@ -446,7 +446,10 @@ int main() {
     passed &= expect(key(VK_UP) && galaxy::gx::native_settings_overlay_snapshot().row == 0u, "up returns to text speed");
     passed &= expect(key(VK_TAB), "Tab enters the system page");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
-    passed &= expect(snapshot.tab == 5u && snapshot.row_count == 6u, "system page has six status rows");
+    passed &= expect(snapshot.tab == 5u && snapshot.row_count == 7u, "system page has the graphics card and six status rows");
+    passed &= expect(snapshot.row == 0u && key(VK_RIGHT) && key(VK_LEFT) &&
+                         galaxy::gx::native_settings_overlay_snapshot().pending_changes == 0u,
+                     "the graphics card row cannot be changed in game");
     passed &= expect(key(VK_TAB), "Tab navigation wraps");
     passed &= expect(
         galaxy::gx::native_settings_overlay_snapshot().tab == 0u,

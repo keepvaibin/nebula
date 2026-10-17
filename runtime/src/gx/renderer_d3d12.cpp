@@ -1159,6 +1159,7 @@ void poll_render_config_file() {
         return;
     }
     const RenderConfig before = get_render_config();
+    const std::string gpu_before = next_start_gpu();
     if (!reload_render_config_if_changed()) {
         return;
     }
@@ -1170,6 +1171,16 @@ void poll_render_config_file() {
         s_follow_window_rearm.store(true, std::memory_order_release);
     }
     std::cerr << "[settings] config.ini changed outside the game; applied\n";
+    if (const std::string gpu = next_start_gpu(); gpu != gpu_before) {
+        std::cerr << "[settings] gpu=" << gpu << " applies at the next start\n";
+    }
+}
+
+// A GPU chosen in Nebula Settings during the session that is not the one the game runs on.
+bool gpu_change_pending(const RenderConfig& render, const RenderFeatureCaps& caps) {
+    const std::string next = next_start_gpu();
+    return next != render.gpu.data() &&
+           next != gpu_identity(caps.adapter_vendor_id, caps.adapter_device_id, caps.adapter_subsys_id);
 }
 
 // Every overlay change is logged with its new row text.
@@ -13592,6 +13603,12 @@ std::vector<SettingsRow> game_page(const RuntimeSettings& runtime) {
 
 std::vector<SettingsRow> system_page(const RenderFeatureCaps& caps) {
     std::vector<SettingsRow> rows;
+    {
+        std::string name = upper_ascii(caps.adapter_description.data());
+        if (name.size() > 24u) name.resize(24u);
+        while (!name.empty() && name.back() == ' ') name.pop_back();
+        rows.push_back({"GRAPHICS CARD", name, nullptr, "CHOSEN IN NEBULA SETTINGS. A CHANGE APPLIES AT THE NEXT START"});
+    }
     char text[64]{};
     std::snprintf(text, sizeof(text), "TIER %u %s", caps.dxr_raytracing_tier, exposed_text(caps.dxr));
     rows.push_back({"RAY TRACING HARDWARE", text, nullptr, "DIRECTX RAYTRACING ON THIS GPU"});
@@ -13960,6 +13977,9 @@ void draw_native_settings_overlay(RendererD3D12& renderer) {
         status_color = accent;
     } else if (GameLanguage running{}; tab == 4u && running_game_language(running) && running != row_runtime.language) {
         status = "THE NEW LANGUAGE APPLIES WHEN NEBULA RESTARTS";
+        status_color = accent;
+    } else if (tab == 5u && gpu_change_pending(row_render, row_caps)) {
+        status = "THE NEW GRAPHICS CARD APPLIES WHEN NEBULA RESTARTS";
         status_color = accent;
     } else if (!help.empty()) {
         status = help;
