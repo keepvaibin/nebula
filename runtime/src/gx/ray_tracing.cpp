@@ -480,11 +480,19 @@ std::uint64_t g_game_sun_updates = 0u;
 // The game's lights by position (a light that moves takes a new entry; old ones age out).
 struct NotedLight {
     GameLight light{};
+    std::chrono::steady_clock::time_point first{};   // since when it has lit without a gap
     std::chrono::steady_clock::time_point seen{};
     std::uint32_t id = 0u;
     bool used = false;
 };
+// A light fades in over its first kLightFadeIn and out over the kLightFadeOut before it ages out: one that starts or
+// stops (a Luma the game stops updating far off) never pops. A gap longer than kLightGap starts it over.
+constexpr std::chrono::duration<float, std::milli> kLightFadeIn{200.0f};
+constexpr std::chrono::duration<float, std::milli> kLightFadeOut{300.0f};
+constexpr std::chrono::milliseconds kLightGap{500};
 std::mutex g_game_lights_mutex;
+// The last point light request (note_game_point_request); guarded by g_game_lights_mutex.
+std::chrono::steady_clock::time_point g_point_request_seen{};
 std::array<NotedLight, 32> g_point_lights{};
 std::array<NotedLight, 16> g_world_lights{};
 
@@ -495,6 +503,7 @@ void note_light(std::array<NotedLight, N>& lights, const std::array<float, 3>& p
     const auto now = std::chrono::steady_clock::now();
     const std::lock_guard<std::mutex> lock(g_game_lights_mutex);
     NotedLight* slot = &lights[0];
+    bool found = false;
     for (NotedLight& entry : lights) {
         const bool same = id != 0u ? entry.id == id
                                    : std::abs(entry.light.position[0] - position[0]) +
@@ -502,11 +511,15 @@ void note_light(std::array<NotedLight, N>& lights, const std::array<float, 3>& p
                                              std::abs(entry.light.position[2] - position[2]) < 100.0f;
         if (entry.used && same) {
             slot = &entry;
+            found = true;
             break;
         }
         if (!entry.used || (slot->used && entry.seen < slot->seen)) {
             slot = &entry;
         }
+    }
+    if (!found || now - slot->seen > kLightGap) {
+        slot->first = now;
     }
     slot->light = {position, color, half_distance};
     slot->id = id;
@@ -519,11 +532,18 @@ std::size_t active_lights(const std::array<NotedLight, N>& lights, std::span<Gam
     const auto now = std::chrono::steady_clock::now();
     const std::lock_guard<std::mutex> lock(g_game_lights_mutex);
     std::size_t count = 0u;
+    const std::chrono::milliseconds limit(max_age_ms);
     for (const NotedLight& entry : lights) {
         const auto& c = entry.light.color;
-        if (count < out.size() && entry.used && now - entry.seen <= std::chrono::milliseconds(max_age_ms) &&
-            c[0] + c[1] + c[2] > 0.01f) {
-            out[count++] = entry.light;
+        const auto age = now - entry.seen;
+        if (count < out.size() && entry.used && age <= limit && c[0] + c[1] + c[2] > 0.01f) {
+            const float in = std::min((now - entry.first) / kLightFadeIn, 1.0f);
+            const float fade = std::clamp((limit - age) / kLightFadeOut, 0.0f, 1.0f);
+            GameLight& light = out[count++];
+            light = entry.light;
+            for (float& v : light.color) {
+                v *= in * fade;
+            }
         }
     }
     return count;
@@ -565,7 +585,24 @@ std::uint64_t game_sun_updates() noexcept {
 
 void note_game_point_light(std::uint32_t info, const std::array<float, 3>& position,
                            const std::array<float, 3>& color, float half_distance) noexcept {
+    {
+        // The requests carry every light; this one copies the nearest requester's (a module without the request
+        // site never sends them).
+        const std::lock_guard<std::mutex> lock(g_game_lights_mutex);
+        if (std::chrono::steady_clock::now() - g_point_request_seen < std::chrono::seconds(1)) {
+            return;
+        }
+    }
     note_light(g_point_lights, position, color, half_distance, info);
+}
+
+void note_game_point_request(std::uint32_t actor, const std::array<float, 3>& position,
+                             const std::array<float, 3>& color, float half_distance) noexcept {
+    {
+        const std::lock_guard<std::mutex> lock(g_game_lights_mutex);
+        g_point_request_seen = std::chrono::steady_clock::now();
+    }
+    note_light(g_point_lights, position, color, half_distance, actor);
 }
 
 void note_game_world_light(const std::array<float, 3>& position, const std::array<float, 3>& color) noexcept {
@@ -2828,6 +2865,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         // GALAXY_TRACE_LIGHTS=1: the lights of every 240th traced scene (diagnostics).
         static const bool trace_lights = env_float("GALAXY_TRACE_LIGHTS", 0.0f) != 0.0f;
         if (trace_lights && light_frame_ % 240u == 1u) {
+            std::fprintf(stderr, "[rt-light] points %u of %zu candidates\n", c.point_count, used);
             for (std::uint32_t i = 0; i < c.point_count; ++i) {
                 std::fprintf(stderr,
                              "[rt-light] point %u eye=(%.0f %.0f %.0f) color=(%.2f %.2f %.2f) half=%.0f importance=%.4f\n",

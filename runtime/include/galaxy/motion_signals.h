@@ -65,6 +65,9 @@ enum class LightSite : std::uint32_t {
     PointLight = 2,
     AllWhite = 3,
     Player = 4,
+    // MR::requestPointLight entry: r3 the actor, r4 its position, r5 its colour, f1 its brightness at the
+    // reference distance. Not a GX light load (no host marker).
+    PointRequest = 5,
 };
 
 // SiteHookKind::Layout2D arguments.

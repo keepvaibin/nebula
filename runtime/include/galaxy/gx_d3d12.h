@@ -154,6 +154,11 @@ void set_star_core(const std::array<float, 3>& position, float scale) noexcept;
 void note_game_point_light(std::uint32_t info, const std::array<float, 3>& position,
                            const std::array<float, 3>& color, float half_distance) noexcept;
 void note_game_world_light(const std::array<float, 3>& position, const std::array<float, 3>& color) noexcept;
+// Simulation thread: an actor asking for the game's one point light this frame (MR::requestPointLight: Lumas,
+// Power Stars, item blocks, fireballs, Boos), as its own light. While requests arrive, the one light the game hands
+// to the requester nearest the player (note_game_point_light) is not noted again.
+void note_game_point_request(std::uint32_t actor, const std::array<float, 3>& position,
+                             const std::array<float, 3>& color, float half_distance) noexcept;
 struct GameLight {
     std::array<float, 3> position{};
     std::array<float, 3> color{};

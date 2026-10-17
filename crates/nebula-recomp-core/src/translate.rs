@@ -8003,7 +8003,8 @@ fn draw_identity_site(address: u32, function_end: u32, pc: u32, word: u32) -> Op
 /// - MirrorPass: GameScene::drawMirror after its isDrawMirror test (argument
 ///   0) and before its MR::clearZBuffer (argument 1).
 /// - LightLoad: LightFunction::loadActorLightInfo (r3 ActorLightInfo),
-///   loadLightInfoCoin, loadPointLightInfo, loadAllLightWhite, MR::loadLightPlayer.
+///   loadLightInfoCoin, loadPointLightInfo, loadAllLightWhite, MR::loadLightPlayer;
+///   MR::requestPointLight (5: r3 actor, r4 position, r5 colour, f1 brightness).
 /// - Layout2D (the 2D layer): GameScene::draw2D entry (0) and epilogue after
 ///   its WipeLayout category (1); nw4r::lyt::Pane::Draw after its visibility
 ///   test (2, r3 pane); LayoutActor::draw after MR::isExecuteDrawLayout (3,
@@ -8053,6 +8054,7 @@ fn motion_signal_site(address: u32, function_end: u32, pc: u32, word: u32) -> Op
         (0x8018_8998, 0x8018_8A4C, 0x8018_8998, 0x9421_FFA0) => Some(("LightLoad", 2)),
         (0x8018_8A4C, 0x8018_8B0C, 0x8018_8A4C, 0x9421_FF80) => Some(("LightLoad", 3)),
         (0x803D_8A44, 0x803D_8A70, 0x803D_8A44, 0x9421_FFF0) => Some(("LightLoad", 4)),
+        (0x803D_8A88, 0x803D_8B14, 0x803D_8A88, 0x9421_FFC0) => Some(("LightLoad", 5)),
         _ => None,
     }
 }

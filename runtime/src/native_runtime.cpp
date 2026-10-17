@@ -10439,6 +10439,32 @@ void trace_game_light(RuntimeState& state, std::uint32_t site, std::uint32_t inf
     std::cerr << line;
 }
 
+// MR::requestPointLight (r3 the actor, r4 its position, r5 its colour, f1 its brightness at the reference distance):
+// every actor that asks for the game's one point light this frame. LightPointCtrl hands that light to the requester
+// nearest the player, so the ray tracer, which noted only it, lit Lumas and Power Stars one at a time near Mario
+// (user: lights switch on only near the camera and jump between them). Each request is a light of its own, set up
+// as LightPointCtrl sets it: brightness 0.95-0.999999 at reference distance 15, steep attenuation (GX_DA_STEEP,
+// 1 / (1 + k2 d^2), halved at the reference distance times sqrt(b / (1 - b))). Behaviour understood from the Petari
+// decompilation (SMGCommunity).
+void note_point_request(RuntimeState& state, const galaxy::PpcContext& context) {
+    auto* mem = state.address_space;
+    const std::uint32_t position = context.gpr[4];
+    const std::uint32_t color = context.gpr[5];
+    if (mem == nullptr || !mapped_guest_range(mem, position, 12u) || !mapped_guest_range(mem, color, 4u)) {
+        return;
+    }
+    const auto f = [&](std::uint32_t address) { return std::bit_cast<float>(mem->read_u32(address)); };
+    const std::uint32_t rgba = mem->read_u32(color);
+    const double requested = std::bit_cast<double>(context.fpr_bits[1]);
+    const float brightness = std::isfinite(requested) ? std::clamp(static_cast<float>(requested), 0.95f, 0.999999f) : 0.95f;
+    constexpr float kReferenceDistance = 15.0f;
+    galaxy::gx::note_game_point_request(
+        context.gpr[3], {f(position), f(position + 4u), f(position + 8u)},
+        {static_cast<float>(rgba >> 24u) / 255.0f, static_cast<float>((rgba >> 16u) & 0xFFu) / 255.0f,
+         static_cast<float>((rgba >> 8u) & 0xFFu) / 255.0f},
+        kReferenceDistance * std::sqrt(brightness / (1.0f - brightness)));
+}
+
 // The ray tracer lights the scene with the game's lights: each point light it loads
 // (PointLightInfo: position +0, colour +0xC) and each world-fixed light of an ActorLightInfo
 // (LightInfo A +0 and B +0x14: colour +0, position +4, follow-camera flag +0x10).
@@ -10567,6 +10593,10 @@ void handle_motion_signal(RuntimeState& state, std::uint32_t kind, std::uint32_t
         }
         return;
     case galaxy::SiteHookKind::LightLoad:
+        if (argument == static_cast<std::uint32_t>(galaxy::motion::LightSite::PointRequest)) {
+            note_point_request(state, context);
+            return;
+        }
         trace_game_light(state, argument, context.gpr[3]);
         note_game_light(state, argument, context.gpr[3]);
         if (state.draw_identity_scene && state.address_space != nullptr &&
