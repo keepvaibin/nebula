@@ -315,6 +315,11 @@ set_target_properties(galaxy_test_module PROPERTIES PREFIX "")
 add_executable(galaxy_runtime_smoke runtime/src/runtime_smoke.cpp)
 target_link_libraries(galaxy_runtime_smoke PRIVATE galaxy_runtime_abi)
 
+add_library(galaxy_output_relay STATIC runtime/src/output_relay.cpp)
+target_link_libraries(galaxy_output_relay PUBLIC galaxy_runtime_abi)
+add_executable(galaxy_output_relay_tests runtime/src/output_relay_tests.cpp)
+target_link_libraries(galaxy_output_relay_tests PRIVATE galaxy_output_relay)
+
 add_library(galaxy_atomic_file STATIC runtime/src/atomic_file.cpp)
 target_link_libraries(galaxy_atomic_file PUBLIC galaxy_runtime_abi)
 add_executable(galaxy_atomic_file_tests runtime/src/atomic_file_tests.cpp)
@@ -937,6 +942,7 @@ target_link_libraries(
         galaxy_runtime_timeline
         galaxy_jaudio_mixer)
 target_link_libraries(NebulaRuntime PRIVATE galaxy_runtime_instance)
+target_link_libraries(NebulaRuntime PRIVATE galaxy_output_relay)
 target_link_libraries(NebulaRuntime PRIVATE xinput9_1_0)
 target_link_libraries(NebulaRuntime PRIVATE dbghelp)
 if(MSVC)
@@ -1238,6 +1244,8 @@ if(MSVC)
         galaxy_runtime_settings_tests
         galaxy_atomic_file
         galaxy_atomic_file_tests
+        galaxy_output_relay
+        galaxy_output_relay_tests
         galaxy_runtime_instance
         galaxy_runtime_instance_tests
         galaxy_runtime_timeline
@@ -1354,6 +1362,7 @@ galaxy_add_native_test(native_zero_span_publication galaxy_native_zero_tests)
 galaxy_add_native_test(native_yaz0_span_publication galaxy_native_yaz0_span_tests)
 galaxy_add_native_test(vs_constant_preparation_cache galaxy_vs_constants_tests)
 galaxy_add_native_test(atomic_settings_file galaxy_atomic_file_tests)
+galaxy_add_native_test(output_relay galaxy_output_relay_tests)
 galaxy_add_native_test(runtime_instance_lease galaxy_runtime_instance_tests)
 galaxy_add_native_test(runtime_settings_helpers galaxy_runtime_settings_tests)
 galaxy_add_native_test(runtime_timeline_helpers galaxy_runtime_timeline_tests)

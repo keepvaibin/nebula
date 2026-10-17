@@ -1,5 +1,6 @@
 #include "galaxy/native_api.h"
 #include "galaxy/crash_notes.h"
+#include "galaxy/output_relay.h"
 #include "nebula_build_identity.h"
 #include "galaxy/ai_dma_timing.h"
 #include "galaxy/checkpoint_gate.h"
@@ -32540,7 +32541,7 @@ public:
         char narrow[MAX_PATH * 3]{};
         (void)WideCharToMultiByte(CP_UTF8, 0, path_, -1, narrow, static_cast<int>(sizeof(narrow)), nullptr, nullptr);
         std::fprintf(stderr, "[crash] log=%s\n", narrow);
-        std::fflush(stderr);
+        galaxy::output::drain_relay(std::chrono::milliseconds(1000));
     }
     CrashLog(const CrashLog&) = delete;
     CrashLog& operator=(const CrashLog&) = delete;
@@ -32799,7 +32800,7 @@ static LONG WINAPI galaxy_unhandled_exception_filter(
             static_cast<unsigned long>(GetCurrentThreadId()));
         print_guest_crash_report(record.ExceptionAddress, crash_module, log);
     }
-    std::fflush(stderr);
+    galaxy::output::drain_relay(std::chrono::milliseconds(1000));
     return EXCEPTION_EXECUTE_HANDLER;
 }
 
@@ -33311,6 +33312,8 @@ static void print_runtime_usage() {
 int wmain(int argc, wchar_t** argv) {
     // First statement: before any allocation or assertion.
     disable_runtime_dialogs();
+    // Before any output or thread: a slow log reader never stalls the game (galaxy/output_relay.h).
+    galaxy::output::start_relay();
     // Every aspect setting, 4:3 included, runs through the live aspect path
     // so it can change during play. Set before any module loads; explicit
     // aspect variables (tests, older launchers) are kept.
@@ -34134,6 +34137,7 @@ int wmain(int argc, wchar_t** argv) {
     auto finish_process = [](UINT exit_code) {
         std::cout.flush();
         std::cerr.flush();
+        galaxy::output::drain_relay(std::chrono::milliseconds(2000));
         ExitProcess(exit_code);
     };
 
