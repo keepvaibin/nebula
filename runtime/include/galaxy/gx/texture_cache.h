@@ -73,6 +73,10 @@ void generate_rgba8_mip_level(const std::vector<RGBA8>& source,
                              std::uint32_t source_width, std::uint32_t source_height,
                              std::vector<RGBA8>& dest,
                              std::uint32_t dest_width, std::uint32_t dest_height);
+// A level of at least 4x4 texels that alternates two values on every texel is a dither the game painted for
+// the Wii's 6-bit framebuffer (the sky's DotNoise, the white and red plastics). In 8-bit colour it only shows,
+// magnified, as a grid of dots; it becomes the two values' rounded average. Returns whether it was one.
+bool flatten_texel_checker(std::vector<RGBA8>& pixels, std::uint32_t width, std::uint32_t height);
 // Caller validates the complete block-rounded source footprint. Edge tiles
 // advance by all 64 source bytes but write only pixels inside width/height.
 void decode_rgba8_tiles(const std::uint8_t* src, std::uint32_t width,

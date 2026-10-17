@@ -17,6 +17,7 @@
 #include "galaxy/gx/dependency_event_capture.h"
 
 #include "galaxy/gx/render_config.h"
+#include "galaxy/gx/shader_keys.h"
 #include "galaxy/windows_power.h"
 
 #include <algorithm>
@@ -396,6 +397,29 @@ static inline void rgb5a3x8_to_rgba(__m128i v, RGBA8* row0, RGBA8* row1) noexcep
 }
 
 }  // namespace
+
+bool detail::flatten_texel_checker(std::vector<RGBA8>& pixels, std::uint32_t width, std::uint32_t height) {
+    if (width < 4u || height < 4u || pixels.size() < static_cast<std::size_t>(width) * height) {
+        return false;
+    }
+    const RGBA8 even = pixels[0];
+    const RGBA8 odd = pixels[1];
+    const auto same = [](RGBA8 a, RGBA8 b) { return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a; };
+    if (same(even, odd)) {
+        return false;
+    }
+    for (std::uint32_t y = 0; y < height; ++y) {
+        for (std::uint32_t x = 0; x < width; ++x) {
+            if (!same(pixels[static_cast<std::size_t>(y) * width + x], ((x + y) & 1u) == 0u ? even : odd)) {
+                return false;
+            }
+        }
+    }
+    const auto mean = [](std::uint8_t a, std::uint8_t b) { return static_cast<std::uint8_t>((a + b + 1u) >> 1u); };
+    const RGBA8 flat{mean(even.r, odd.r), mean(even.g, odd.g), mean(even.b, odd.b), mean(even.a, odd.a)};
+    std::fill_n(pixels.begin(), static_cast<std::size_t>(width) * height, flat);
+    return true;
+}
 
 void detail::generate_rgba8_mip_level(
     const std::vector<RGBA8>& source,
@@ -1112,6 +1136,9 @@ static void decode_texture_levels(
         default:
             throw std::runtime_error(
                 "[TextureCache] get: unhandled TexFormat");
+        }
+        if (efb_true_color()) {
+            detail::flatten_texel_checker(level_pixels[l], lw, lh);
         }
         src += tex_data_size(format, lw, lh);
     }

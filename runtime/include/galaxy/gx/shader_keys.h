@@ -335,7 +335,8 @@ struct MemoizedPsoKeyHasher {
 // Key builders: the only construction path outside tests. Each applies the canonicalization rule against
 // the current register state.
 // RGBA6 colour precision: 8-bit (the default) or the hardware 6-bit colour with its 2x2 dither
-// (GALAXY_EFB_TRUE_COLOR=0).
+// (GALAXY_EFB_TRUE_COLOR=0). 8-bit colour also flattens the game's checker dither textures
+// (detail::flatten_texel_checker).
 [[nodiscard]] bool efb_true_color() noexcept;
 [[nodiscard]] PixelShaderKey build_pixel_shader_key(
     const GxState& state, unsigned efb_scale, bool true_color);
