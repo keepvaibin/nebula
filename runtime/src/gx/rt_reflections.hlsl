@@ -219,6 +219,13 @@ cbuffer RtReflect : register(b0)
     // detail per eye unit of distance.
     float4 g_hit;
     uint g_texture_count;       // entries of g_draw_tex
+    // The lighting's night model of the point lights (rt_lighting.hlsl g_night.w, g_ao.w, g_sun_cap, g_core_point)
+    // for the light on a shaded hit: their weight, the soft cap of what they add, the cap's rise where the star
+    // core's light rules, the core's index among g_points (~0: none).
+    float g_hit_night_lights;
+    float g_hit_cap;
+    float g_hit_sun_cap;
+    uint g_hit_core;
 };
 
 RaytracingAccelerationStructure g_scene : register(t0);
@@ -1023,8 +1030,8 @@ float3 sky_behind(float3 l)
 // water and the metal reflect what is around them, not only what the screen holds). Its draw's material
 // texture at the hit's texture coordinates (detail by distance), times the vertices' colour 0 or the draw's
 // colour, at the art's level: by day the day model's open ground, faces turned from the sun at 0.7 and in
-// the sun's shadow at 0.65 of it (one shadow ray from the hit), by night the night level. Late geometry
-// (instance 1) has no records: false.
+// the sun's shadow at 0.65 of it (one shadow ray from the hit), by night the night level; the point lights add
+// their light as the lighting adds it. Late geometry (instance 1) has no records: false.
 bool hit_shade(uint instance, uint tri, float2 b, float3 x, float3 l, float distance, out float3 light,
                out float coverage)
 {
@@ -1072,14 +1079,15 @@ bool hit_shade(uint instance, uint tri, float2 b, float3 x, float3 l, float dist
         }
         albedo *= texel;
     }
+    const float3 v0 = asfloat(g_positions.Load3(tri * 36u));
+    const float3 v1 = asfloat(g_positions.Load3(tri * 36u + 12u));
+    const float3 v2 = asfloat(g_positions.Load3(tri * 36u + 24u));
+    float3 ng = cross(v1 - v0, v2 - v0);
+    ng = dot(ng, ng) > 1e-12f ? normalize(ng) : -l;
+    ng = dot(ng, l) > 0.0f ? -ng : ng;
     float day_level = g_hit.z;
+    float sunlit = 0.0f;
     if (g_hit.x > 0.0f && any(g_sun_light.rgb > 0.0f)) {
-        const float3 v0 = asfloat(g_positions.Load3(tri * 36u));
-        const float3 v1 = asfloat(g_positions.Load3(tri * 36u + 12u));
-        const float3 v2 = asfloat(g_positions.Load3(tri * 36u + 24u));
-        float3 ng = cross(v1 - v0, v2 - v0);
-        ng = dot(ng, ng) > 1e-12f ? normalize(ng) : -l;
-        ng = dot(ng, l) > 0.0f ? -ng : ng;
         const float nl = dot(ng, g_sun.xyz);
         const float shaped = nl > 0.0f ? nl * (1.5f - 0.5f * nl) : 0.0f;
         float vis = 1.0f;
@@ -1096,8 +1104,30 @@ bool hit_shade(uint instance, uint tri, float2 b, float3 x, float3 l, float dist
             vis = query.CommittedStatus() == COMMITTED_TRIANGLE_HIT ? 0.0f : 1.0f;
         }
         day_level *= (1.0f - 0.35f * (1.0f - vis)) * (1.0f - 0.3f * (1.0f - saturate(shaped / 0.8f)));
+        sunlit = vis * saturate(shaped / 0.5f);
     }
-    light = albedo * lerp(g_hit.y, day_level, g_hit.x);
+    // The point lights on the hit, unshadowed, as the lighting adds them (rt_lighting.hlsl SpatialBCS): by night
+    // under the soft cap that rises where the star core's light rules, by day half of them rolling off on sunlit
+    // ground (user: the gold ring beside the star core mirrored a flat, unlit floor).
+    float3 points = float3(0.0f, 0.0f, 0.0f);
+    float core_weight = 0.0f;
+    float all_weight = 0.0f;
+    [loop] for (uint i = 0u; i < g_point_count; ++i) {
+        const float3 to = g_points[2u * i].xyz - x;
+        const float d2 = dot(to, to);
+        const float3 c = g_points[2u * i + 1u].rgb *
+                         (saturate(dot(ng, to) * rsqrt(max(d2, 1e-6f))) * point_falloff(d2, i));
+        points += c;
+        all_weight += luminance(c);
+        core_weight += i == g_hit_core ? luminance(c) : 0.0f;
+    }
+    points *= g_point_light;
+    const float cap = lerp(g_hit_cap, max(g_hit_sun_cap, g_hit_cap), all_weight > 0.0f ? core_weight / all_weight : 0.0f);
+    const float3 night_lights = points * g_hit_night_lights;
+    const float3 night = g_hit.y + night_lights / (1.0f + luminance(night_lights) / max(cap, 1e-3f));
+    const float3 day_lights = points * 0.5f;
+    const float3 day = day_level + day_lights / (1.0f + luminance(day_lights) / lerp(1.0f, 0.35f, sunlit));
+    light = albedo * lerp(night, day, g_hit.x);
     return true;
 #else
     return false;
@@ -1116,6 +1146,22 @@ struct Reflected
     uint source;
     bool mapped;    // the sky from the lighting's map
 };
+
+// What a metal (metalness `metal`) reflects of `light` in its surface's colour (the hue of `base`, luminance 1): a pale
+// metal (silver, steel) the world's own colours through its hue, a strongly coloured one (gold, Bowser's green
+// arches) the world's brightness in its hue, as the game draws them (an intensity environment map times the material
+// colour; a product with a world of the opposite colour went dark and muddy: the gold ring mirrored an olive night,
+// the green arches turned brown), towards white at grazing angles (Schlick; `vm` the cosine between the eye and the
+// reflecting facet).
+float3 metal_reflect(float3 light, float3 base, float vm, float metal)
+{
+    const float3 hue = min(base / max(luminance(base), 0.1f), 3.0f);
+    const float top = max(hue.r, max(hue.g, hue.b));
+    const float saturation = top > 1e-3f ? (top - min(hue.r, min(hue.g, hue.b))) / top : 0.0f;
+    const float3 coloured = lerp(light * hue, luminance(light) * hue, saturation);
+    const float graze = 1.0f - saturate(vm);
+    return lerp(light, lerp(coloured, light, graze * graze * graze * graze * graze), metal);
+}
 
 Reflected reflect_light(uint2 s, float3 dir, float3 n, float3 ng, float3 hit, float4 params, float3 base,
                         bool lights, bool tiled)
@@ -1136,7 +1182,8 @@ Reflected reflect_light(uint2 s, float3 dir, float3 n, float3 ng, float3 hit, fl
     const float2 u = sample_point(s);
     const float3 h = sample_vndf(float3(dot(v, t1), dot(v, t2), max(dot(v, n), 1e-4f)), params.x,
                                  float2(u.x * g_lobe, u.y));
-    float3 l = reflect(-v, t1 * h.x + t2 * h.y + n * h.z);
+    const float3 facet = t1 * h.x + t2 * h.y + n * h.z;
+    float3 l = reflect(-v, facet);
     if (dot(l, n) <= 1e-3f) {
         l = reflect(-v, n);
     }
@@ -1264,10 +1311,9 @@ Reflected reflect_light(uint2 s, float3 dir, float3 n, float3 ng, float3 hit, fl
         r.highlight = highlights(s, hit, reflection.Origin, n, v, params.x, params.z, tiled) * params.y;
     }
     if (params.w > 0.0f) {
-        // Metal: the reflection takes the hue (luminance 1) of the surface's own colour.
-        const float3 tint = min(base / max(luminance(base), 0.1f), 3.0f);
-        r.light *= lerp(float3(1.0f, 1.0f, 1.0f), tint, params.w);
-        r.highlight *= lerp(float3(1.0f, 1.0f, 1.0f), tint, params.w);
+        // Metal: the reflection in the surface's colour (metal_reflect).
+        r.light = metal_reflect(r.light, base, dot(v, facet), params.w);
+        r.highlight = metal_reflect(r.highlight, base, dot(v, facet), params.w);
     }
     return r;
 }
@@ -1506,8 +1552,7 @@ void ReflectTraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
                 highlight = highlights(id.xy, hit, origin, n, -dir, params.x, params.z, true) *
                             (1.0f - smoothstep(0.55f, 0.75f, roughness));
                 if (params.w > 0.0f) {
-                    const float3 tint = min(base / max(luminance(base), 0.1f), 3.0f);
-                    highlight *= lerp(float3(1.0f, 1.0f, 1.0f), tint, params.w);
+                    highlight = metal_reflect(highlight, base, dot(n, -dir), params.w);
                 }
                 info.w = asuint(g_range);
             }
@@ -1849,11 +1894,11 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
         const uint hit_flags = hit_water ? g_water_surfaces.Load(water_tri * 16u + 12u) : 0u;
         const bool opaque_clear = hit_water && (hit_flags & kWaterOpaqueFlag) != 0u &&
                                   abs(floor_distance - water_t) <= max(0.01f * water_t, 8.0f);
-        // Mirror glass lies on what it covers (the Observatory fountain's glass over its star plates): no depth below
-        // it, only not behind the scene.
-        const bool mirror_glass = hit_water && (hit_flags & kWaterMirrorFlag) != 0u &&
-                                  floor_distance >= water_t - max(0.002f * water_t, 2.0f);
-        if (hit_water && (opaque_clear || mirror_glass || floor_distance - water_t > max(0.01f * water_t, 8.0f))) {
+        // Mirror glass and a metal coat lie on what they cover (the Observatory fountain's glass over its star plates,
+        // the gold rings' coat over their base): no depth below them, only not behind the scene.
+        const bool lying = hit_water && ((hit_flags & kWaterMirrorFlag) != 0u || ((hit_flags >> 8u) & 15u) == kMetalClass) &&
+                           floor_distance >= water_t - max(0.002f * water_t, 2.0f);
+        if (hit_water && (opaque_clear || lying || floor_distance - water_t > max(0.01f * water_t, 8.0f))) {
             water = true;
             const uint tri = water_tri;
             const float2 b = water_b;
@@ -1874,7 +1919,8 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
                                 unpack_vertex_normal(record.z) * w.z;
                 // The water's normals point out of it: seen from their back, the camera is under it. Mirror glass
                 // has no inside.
-                below = dot(smooth, dir) > 0.0f && (record.w & kWaterMirrorFlag) == 0u;
+                below = dot(smooth, dir) > 0.0f && (record.w & kWaterMirrorFlag) == 0u &&
+                        ((record.w >> 8u) & 15u) != kMetalClass;
                 smooth *= dot(smooth, ng) < 0.0f ? -1.0f : 1.0f;
                 const float smooth_length = length(smooth);
                 // Only where they lie close to the face: at a rounded lip they bend towards the side wall
@@ -1884,15 +1930,16 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
                 }
             }
             // Translucent crystal and glass draws share the pass: no ripples, no water below them. Mirror glass is
-            // glass that reflects as a mirror.
+            // glass that reflects as a mirror; a metal coat is bare metal (its tint the colour it drew).
             const bool mirror = (record.w & kWaterMirrorFlag) != 0u;
+            const bool coat = ((record.w >> 8u) & 15u) == kMetalClass;
             const bool crystal = mirror || ((record.w >> 8u) & 15u) == kCrystal;
             // The reflection is traced off the calm surface: every pixel's ray mirrors coherently, one sharp image
             // that the composite moves with the waves (water_distortion). Rays bent per pixel by the waves (up to
             // 17 degrees) scattered the image into glitter, the more the higher the resolution (user, Native42 at
             // 6x: "barely any reflection and so much flicker"). The waves shape the glints only.
             float3 wave = n;
-            if (!crystal) {
+            if (!crystal && !coat) {
                 wave = water_detail(rippled(q, n), dir * water_t, (record.w & kWaterfallFlag) != 0u);
             }
             if (dot(n, -dir) < 0.02f) {
@@ -1905,12 +1952,16 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
             const float3 hit = dir * water_t;
             // A waterfall is a clear sheet (no lake body under it), its streaks in its normal.
             const bool fall = (record.w & kWaterfallFlag) != 0u;
-            const uint surface = crystal || fall ? kCrystal : below ? kWaterBelow : kWaterSurface;
-            float4 params = g_class[crystal ? kCrystal : kWaterSurface];
+            const uint surface = coat ? kBareMetalClass : crystal || fall ? kCrystal : below ? kWaterBelow : kWaterSurface;
+            float4 params = g_class[coat ? kBareMetalClass : crystal ? kCrystal : kWaterSurface];
             if (mirror) {
                 params.x = min(params.x, 0.02f);
                 params.y = 1.0f;
                 params.w = kMirrorMetal;
+            }
+            if (coat) {
+                params.z = g_metal_f0;
+                params.w = 1.0f;
             }
             const float3 base = g_color.Load(int3(q, 0)).rgb;
             const float emitter = smoothstep(0.8f, 1.0f, min(base.r, min(base.g, base.b)));
@@ -1930,16 +1981,16 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
                 reflected = true;
                 // Water: a mirror (no lobe jitter: the composite's distortion is its roughness).
                 float4 ray_params = params;
-                ray_params.x = crystal ? params.x : 1e-4f;
+                ray_params.x = crystal || coat ? params.x : 1e-4f;
                 // Over at least two of the game's own 640-wide pixels: what the frame shows thinner than that (a
                 // net's cords, a fence's bars) averages out instead of reflecting as specks the waves set moving.
-                g_reflect_blur = crystal ? 0.0f : 2.0f * max(g_viewport.z / 640.0f, 1.0f);
+                g_reflect_blur = crystal || coat ? 0.0f : 2.0f * max(g_viewport.z / 640.0f, 1.0f);
                 const Reflected r = reflect_light(id.xy, dir, n, ng, hit, ray_params, base, false, false);
                 g_reflect_blur = 0.0f;
                 light = r.light;
                 // The lights' glints off the waves, their lobe widened by the waves' spread over the pixel (specular
                 // anti-aliasing, highlights), weighted like the reflection.
-                g_spread = crystal ? 0.0f : 2.0f * length(cross(wave, n));
+                g_spread = crystal || coat ? 0.0f : 2.0f * length(cross(wave, n));
                 const float3 glint_origin = hit + ng * (0.2f + abs(hit.z) * 4e-4f);
                 const float3 glints = highlights(id.xy, hit, glint_origin, wave, -dir, params.x, params.z, false) * params.y;
                 g_spread = 0.0f;

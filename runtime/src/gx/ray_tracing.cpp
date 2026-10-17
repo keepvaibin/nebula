@@ -2877,6 +2877,10 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     reflect_lights_.point_count = c.point_count;
     reflect_lights_.point_light = c.point_light;
     reflect_lights_.point_size = c.point_size;
+    reflect_lights_.night_lights = c.night[3];
+    reflect_lights_.night_cap = c.ao[3];
+    reflect_lights_.sun_cap = c.sun_cap;
+    reflect_lights_.core_point = c.core_point;
 
     const unsigned current = light_parity_;
     const unsigned previous = current ^ 1u;

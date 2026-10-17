@@ -24,7 +24,8 @@
 
 namespace galaxy::gx {
 
-// The lights the lighting traced (rt_lighting.hlsl RtLight, eye space), for specular highlights.
+// The lights the lighting traced (rt_lighting.hlsl RtLight, eye space), for specular highlights and the light
+// on high quality's shaded hits.
 struct RtReflectLights {
     std::array<float, 4> sun{};               // towards the sun (xyz), tangent of its radius (w)
     std::array<float, 4> sun_light{};         // sun light (rgb), how far its shadow rays reach (w)
@@ -34,6 +35,12 @@ struct RtReflectLights {
     float point_light = 0.0f;                 // the point lights' weight
     float point_size = 0.0f;                  // radius of the emitter around a point light
     D3D12_GPU_VIRTUAL_ADDRESS emitters = 0;   // glow lights (rt_lighting.hlsl g_emitters), 0 for none
+    // The night model's point light (rt_lighting.hlsl g_night.w, g_ao.w, g_sun_cap, g_core_point): their weight,
+    // the soft cap of what they add, its rise where the star core's light rules, the core's index (~0: none).
+    float night_lights = 0.0f;
+    float night_cap = 1.0f;
+    float sun_cap = 1.0f;
+    std::uint32_t core_point = ~0u;
 };
 
 // A traced scene, as the reflections read it. They take the lighting's samples: one per factor x
@@ -81,7 +88,7 @@ struct RtReflectScene {
 class RtReflections {
 public:
     // Constants of one trace, in an upload allocation the caller makes (256-byte aligned).
-    static constexpr std::size_t kConstantsBytes = 784u;
+    static constexpr std::size_t kConstantsBytes = 800u;
     // Results kept for the sub-frames of the game frames being interpolated (the lighting's slots).
     static constexpr unsigned kSlots = 4u;
 

@@ -76,6 +76,10 @@ struct RtReflectConstants {
     float pad;
     float hit[4];
     std::uint32_t texture_count;
+    float night_lights;
+    float night_cap;
+    float sun_cap;
+    std::uint32_t core_point;
     std::uint32_t tail[3];
 };
 static_assert(sizeof(RtReflectConstants) == RtReflections::kConstantsBytes);
@@ -283,9 +287,11 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     materials_[kWaterClass + 1u] = materials_[kWaterClass];
     // Crystals, ice, gems and glass (named in rt_surfaces.cpp): clear dielectric, its reflection
     // white and Fresnel-weighted.
-    // Cover 0.4: what the glass mirrors replaces part of it (an image with its darks and lights); screened over
-    // it at cover 0, the bright canopy only lifted the Observatory fountain's glass into a flat, pale disc (v53a).
-    materials_[7] = material("GALAXY_RT_REFLECT_CRYSTAL", {0.05f, 0.25f, 1.0f, 0.0f, 0.4f});
+    // F0 0.45 and cover 0.8: what the glass mirrors replaces most of it (an image with its darks and lights), 45 %
+    // face on and nearly all of it at grazing angles (user: glass, crystal and water must be fully reflective; at
+    // 0.25 / 0.4 Melty Molten's glass spheres looked as the game draws them). Screened over it at cover 0, the bright
+    // canopy only lifted the Observatory fountain's glass into a flat, pale disc (v53a).
+    materials_[7] = material("GALAXY_RT_REFLECT_CRYSTAL", {0.05f, 0.45f, 1.0f, 0.0f, 0.8f});
     view_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_REFLECT_VIEW", 0.0f), 0.0f, 9.0f));
     history_frames_ =
         static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_REFLECT_HISTORY", 24.0f), 1.0f, 64.0f));
@@ -792,6 +798,10 @@ void RtReflections::fill_constants(const RtReflectScene& scene, const Pass& pass
     c.point_count = std::min(lights.point_count, 8u);
     c.point_light = lights.point_light;
     c.point_size = lights.point_size;
+    c.night_lights = lights.night_lights;
+    c.night_cap = lights.night_cap;
+    c.sun_cap = lights.sun_cap;
+    c.core_point = lights.core_point;
     c.shafts = shafts_;
     c.sky_fade = sky_fade_;
     c.sky_average = sky_average_;

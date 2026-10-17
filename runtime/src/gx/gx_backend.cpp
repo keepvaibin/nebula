@@ -7390,8 +7390,18 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     }
     // A helper row (an environment map) is the draw's own surface when it is the only texture the draw samples: the
     // crystal blocks' and the Observatory's rotating platforms' clear material is a highlight map alone (user: the
-    // green platforms should reflect like glass).
-    const bool own_helper = std::popcount(current_texture_map_mask_) == 1;
+    // green platforms should reflect like glass). So is it when every texture the draw samples is a helper: Melty
+    // Molten's glass spheres map an indirect lens and an environment map (user: the glass balls must reflect).
+    bool own_helper = std::popcount(current_texture_map_mask_) == 1;
+    if (!own_helper && current_texture_map_mask_ != 0u) {
+        own_helper = true;
+        for (unsigned m = 0; m < kMaxTextureMaps && own_helper; ++m) {
+            if ((current_texture_map_mask_ & (1u << m)) != 0u) {
+                const RtMaterial* const helper = rt_material(current_texture_handles_[m].rt_material);
+                own_helper = helper != nullptr && helper->helper;
+            }
+        }
+    }
     // A blended clear model the table names glass or crystal, whatever its blend (the air bubble: source alpha over the
     // source colour): a surface of the water pass, its reflections over what it drew. One the table also names an
     // emitter (the rotating steps' soft glow) stays glass: blended, it is in no traced geometry that could emit.
@@ -7409,14 +7419,30 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
                         blend.dst_factor != BlendFactor::One &&
                         (position == VcdType::Index8 || position == VcdType::Index16);
     }
-    const bool glow = translucent && !lens && !clear_added && !clear_blended && (rt_glow_draw() || rt_sprite_light_draw());
+    // A blended coat the table names metal (the Observatory's gold rings: an environment-mapped layer the translucent
+    // phase draws over the model's dark base, after the composite): a surface of the water pass, its traced reflection
+    // in place of the game's painted one (user: the metal rings around the core look matte).
+    bool metal_coat = false;
+    if (translucent && !lens && !clear_added && !clear_blended && renderer_.rt_water_open() && scene_phase_ &&
+        side_layer_ == kSceneLayer &&
+        (rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::Xlu) ||
+         rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::ListXlu))) {
+        const RtMaterial* const metal = rt_material(current_rt_material_);
+        const BlendMode blend = state_.blend_mode();
+        const VcdType position = state_.vertex_desc(0u).position.vcd;
+        metal_coat = metal != nullptr && !metal->particle && (!metal->helper || own_helper) && metal->metallic >= 0.5f &&
+                     metal->emission == RtEmission::None && blend.blend_enable && !blend.logic_op_enable &&
+                     !blend.subtract && blend.color_update && (position == VcdType::Index8 || position == VcdType::Index16);
+    }
+    const bool glow = translucent && !lens && !clear_added && !clear_blended && !metal_coat &&
+                      (rt_glow_draw() || rt_sprite_light_draw());
     if (glow && current_rt_material_ == 0u) {
         const unsigned map = ps_key_.stages[0].order & 7u;
         const std::uint8_t bank = map >= 4u ? bp::kTexHighBankOffset : 0u;
         note_rt_unnamed_glow((state_.bp(static_cast<std::uint8_t>(bp::kTexImage3Base + bank + (map & 3u))) & 0xFFFFFFu)
                              << 5u);
     }
-    bool water = translucent && !lens && !glow && (clear_added || clear_blended || rt_water_draw());
+    bool water = translucent && !lens && !glow && (clear_added || clear_blended || metal_coat || rt_water_draw());
     // An opaque late draw the table names water or crystal (Freezeflame's ice, drawn after the indirect
     // capture with the game's own refraction): a surface of the water pass, its reflections laid over what it
     // drew (user: the ice reflects nothing; Mario stood on it unmirrored).
@@ -7507,11 +7533,13 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     if (current_texture_table_.ptr != 0u && current_rt_map_ < kMaxTextureMaps) {
         info.texture = rt_texture_source(current_rt_map_);
     }
-    if ((water && surface.surface_class == RtSurfaceClass::Metal) || clear_added) {
-        // A blended environment map is glass, not metal; an added one over ice is the ice's gloss.
+    if ((water && !metal_coat && surface.surface_class == RtSurfaceClass::Metal) || clear_added) {
+        // A blended environment map is glass, not metal (unless the table names it a metal coat); an added one over
+        // ice is the ice's gloss.
         surface.surface_class = RtSurfaceClass::Crystal;
     }
-    if (water && surface.surface_class != RtSurfaceClass::Water && surface.surface_class != RtSurfaceClass::Crystal) {
+    if (water && !metal_coat && surface.surface_class != RtSurfaceClass::Water &&
+        surface.surface_class != RtSurfaceClass::Crystal) {
         return false;
     }
     info.shading = {ps_key_.num_tev_stages | (static_cast<std::uint32_t>(vs_key_.num_texgens) << 8u) |
@@ -7542,7 +7570,8 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
             info.surface = kRtDrawGlow;
         } else if (water) {
             const RtMaterial* const fall = rt_material(current_rt_material_);
-            info.surface = kRtDrawWater | (static_cast<std::uint32_t>(surface.surface_class) << kRtDrawClassShift) |
+            const RtSurfaceClass water_class = metal_coat ? RtSurfaceClass::Metal : surface.surface_class;
+            info.surface = kRtDrawWater | (static_cast<std::uint32_t>(water_class) << kRtDrawClassShift) |
                            (fall != nullptr && fall->waterfall ? kRtDrawWaterfall : 0u) |
                            (fall != nullptr && fall->mirror ? kRtDrawWaterMirror : 0u) |
                            (opaque_clear ? kRtDrawWaterOpaque : 0u);
