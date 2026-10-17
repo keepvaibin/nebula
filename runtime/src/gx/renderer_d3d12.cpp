@@ -42,7 +42,9 @@
 #include <iostream>
 #include <iterator>
 #include <limits>
+#include <condition_variable>
 #include <mutex>
+#include <thread>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
@@ -310,6 +312,26 @@ std::uint64_t s_settings_applied_ms = 0u;
 constexpr std::uint64_t kDisplayConfirmMs = 15000u;
 std::atomic<bool> s_quit_requested{false};
 
+// The display driver's monitors and modes, read at start and again when Windows reports a display change
+// (WM_DISPLAYCHANGE): reading them takes the driver tens of milliseconds on some PCs, which opening the
+// settings menu (under the lock the render thread takes) must not wait on.
+std::mutex s_monitor_cache_mutex;
+std::vector<MonitorInfo> s_monitor_cache;
+
+void store_monitor_cache(std::vector<MonitorInfo> monitors) {
+    const std::lock_guard<std::mutex> lock(s_monitor_cache_mutex);
+    s_monitor_cache = std::move(monitors);
+}
+
+std::vector<MonitorInfo> cached_monitors() {
+    const std::lock_guard<std::mutex> lock(s_monitor_cache_mutex);
+    if (s_monitor_cache.empty()) {
+        // Before the renderer has started (tests), the list is read now.
+        s_monitor_cache = enumerate_monitors();
+    }
+    return s_monitor_cache;
+}
+
 // CONTROLS page (tab 2): a draft of the bindings/tuning and of the input
 // source, applied together with the other pages. The edited scheme only
 // selects which table the rows show. A binding row waiting for an input is
@@ -446,9 +468,10 @@ PostProcessSettings post_process_settings_from(const RenderConfig& cfg) noexcept
     return post;
 }
 
-bool flush_native_settings_if_dirty() {
-    const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
-    if (!s_native_settings_dirty.load(std::memory_order_acquire)) {
+// Writes both settings files when something changed. Each atomic replace flushes the disk, which a busy or
+// scanned disk can hold for tens of milliseconds and more.
+bool write_dirty_settings_files() {
+    if (!s_native_settings_dirty.exchange(false, std::memory_order_acq_rel)) {
         return true;
     }
     bool runtime_saved = false;
@@ -464,6 +487,7 @@ bool flush_native_settings_if_dirty() {
         render_saved = false;
     }
     if (!runtime_saved || !render_saved) {
+        s_native_settings_dirty.store(true, std::memory_order_release);
         const bool already_reported =
             s_native_settings_save_error.exchange(
                 true,
@@ -475,9 +499,63 @@ bool flush_native_settings_if_dirty() {
         }
         return false;
     }
-    s_native_settings_dirty.store(false, std::memory_order_release);
     s_native_settings_save_error.store(false, std::memory_order_release);
     return true;
+}
+
+// Saves run on a worker: the menu, the window thread and the render thread hold the settings lock while they
+// ask for one, and the render thread takes that lock every frame the menu is open.
+std::mutex s_settings_save_mutex;
+std::condition_variable s_settings_save_changed;
+bool s_settings_save_requested = false;  // guarded by s_settings_save_mutex
+bool s_settings_save_running = false;    // guarded by s_settings_save_mutex
+
+void settings_save_worker() {
+    SetThreadDescription(GetCurrentThread(), L"Nebula Settings Save");
+    for (;;) {
+        {
+            std::unique_lock<std::mutex> lock(s_settings_save_mutex);
+            s_settings_save_changed.wait(lock, [] { return s_settings_save_requested; });
+            s_settings_save_requested = false;
+            s_settings_save_running = true;
+        }
+        (void)write_dirty_settings_files();
+        {
+            const std::lock_guard<std::mutex> lock(s_settings_save_mutex);
+            s_settings_save_running = false;
+        }
+        s_settings_save_changed.notify_all();
+    }
+}
+
+bool settings_save_pending() {
+    const std::lock_guard<std::mutex> lock(s_settings_save_mutex);
+    return s_settings_save_requested || s_settings_save_running;
+}
+
+// Queues a save of the settings files when something changed; never waits on the disk.
+void flush_native_settings_if_dirty() {
+    if (!s_native_settings_dirty.load(std::memory_order_acquire)) {
+        return;
+    }
+    static std::once_flag started;
+    std::call_once(started, [] { std::thread(settings_save_worker).detach(); });
+    {
+        const std::lock_guard<std::mutex> lock(s_settings_save_mutex);
+        s_settings_save_requested = true;
+    }
+    s_settings_save_changed.notify_all();
+}
+
+// Exit paths: waits for a queued or running save (at most 5 s), then writes what is still unsaved here.
+void save_native_settings_now() {
+    {
+        std::unique_lock<std::mutex> lock(s_settings_save_mutex);
+        s_settings_save_changed.wait_for(lock, std::chrono::seconds(5), [] {
+            return !s_settings_save_requested && !s_settings_save_running;
+        });
+    }
+    (void)write_dirty_settings_files();
 }
 
 float step_gain(float current, int delta) {
@@ -1072,6 +1150,10 @@ void poll_render_config_file() {
         return;
     }
     s_next_check_ms = now + 500u;
+    // A save of the game's own still in flight would read back as a change made outside it.
+    if (settings_save_pending()) {
+        return;
+    }
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
     if (s_native_settings_visible.load(std::memory_order_relaxed)) {
         return;
@@ -1289,7 +1371,7 @@ void set_native_settings_visible(bool visible) {
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
     if (visible && !s_native_settings_visible.load(std::memory_order_relaxed)) {
         // A fresh draft and monitor list each time the menu opens.
-        s_settings_monitors = enumerate_monitors();
+        s_settings_monitors = cached_monitors();
         s_settings_draft = get_render_config();
         reset_controls_draft();
         settle_native_settings_row();
@@ -2208,6 +2290,9 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         (void)handle_native_settings_key(wp, false, true);
         return 0;
     }
+    if (msg == WM_DISPLAYCHANGE) {
+        store_monitor_cache(enumerate_monitors());
+    }
     if (msg == kPlaceWindowMessage) {
         const auto* placement = reinterpret_cast<const WindowPlacement*>(lp);
         if (placement != nullptr) {
@@ -2479,13 +2564,13 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     }
     if (msg == WM_CLOSE) {
-        flush_native_settings_if_dirty();
+        save_native_settings_now();
         s_quit_requested.store(true, std::memory_order_release);
         DestroyWindow(hwnd);
         return 0;
     }
     if (msg == WM_DESTROY) {
-        flush_native_settings_if_dirty();
+        save_native_settings_now();
         s_quit_requested.store(true, std::memory_order_release);
         hold_display_on(false);
         invalidate_pointer_focus_once();
@@ -4627,6 +4712,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
         ? kDisplayWindowed : std::min(start_config.display_mode, kDisplayExclusive);
     const bool fullscreen_window = start_mode != kDisplayWindowed;
     const std::vector<MonitorInfo> start_monitors = enumerate_monitors();
+    store_monitor_cache(start_monitors);
     const MonitorInfo* start_monitor =
         find_monitor(start_monitors, widen_utf8(start_config.monitor.data()));
     int actual_window_width = window_width;
@@ -5295,6 +5381,8 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
 
         // Ray tracing (config ray_tracing_enabled, GALAXY_RAY_TRACING=1) where offered.
         reconcile_ray_tracing();
+        // The settings menu's pipeline compiles its shaders: here, not inside the frame that first opens it.
+        ensure_native_settings_solid_pipeline_loaded();
 
         if (trace_renderer_startup_enabled()) {
             std::cout << "[Renderer] OK  EFB=" << kEfbWidth * efb_scale_
@@ -5329,7 +5417,7 @@ void RendererD3D12::shutdown() {
         };
 
     retain_shutdown_failure("settings flush", [&] {
-        flush_native_settings_if_dirty();
+        save_native_settings_now();
     });
     if (queue_ && fence_) {
         retain_shutdown_failure("GPU drain", [&] { wait_for_gpu(); });
@@ -14968,6 +15056,11 @@ void native_settings_post_key(std::uintptr_t virtual_key) noexcept {
         (void)PostMessageW(window, kSettingsKeyMessage,
                            static_cast<WPARAM>(virtual_key), 0);
     }
+}
+
+void native_settings_wait_saved_for_tests() {
+    std::unique_lock<std::mutex> save_lock(s_settings_save_mutex);
+    s_settings_save_changed.wait(save_lock, [] { return !s_settings_save_requested && !s_settings_save_running; });
 }
 
 RenderConfig native_settings_draft_for_tests() {

@@ -525,6 +525,7 @@ int main() {
         "GALAXY_RUNTIME_SETTINGS_PATH",
         (blocking_parent / "runtime.ini").string().c_str());
     passed &= expect(key(VK_ESCAPE), "Escape closes the overlay");
+    galaxy::gx::native_settings_wait_saved_for_tests();
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
     passed &= expect(
         !snapshot.visible && snapshot.dirty && snapshot.save_error,
@@ -539,6 +540,7 @@ int main() {
         "GALAXY_RUNTIME_SETTINGS_PATH",
         recovered_runtime.string().c_str());
     passed &= expect(key(VK_F1) && key(VK_F1), "a later close retries dirty settings");
+    galaxy::gx::native_settings_wait_saved_for_tests();
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
     passed &= expect(
         !snapshot.visible && !snapshot.dirty && !snapshot.save_error &&

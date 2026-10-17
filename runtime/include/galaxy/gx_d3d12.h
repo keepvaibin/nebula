@@ -313,6 +313,8 @@ native_settings_overlay_snapshot() noexcept;
     std::uintptr_t virtual_key,
     bool was_down);
 void native_settings_reset_overlay_state_for_tests() noexcept;
+// Waits until the settings files the overlay queued are written (saves run on a worker).
+void native_settings_wait_saved_for_tests();
 // The settings the menu would apply (its draft), for tests.
 [[nodiscard]] RenderConfig native_settings_draft_for_tests();
 // Delivers an overlay key to the window thread (controller navigation).
