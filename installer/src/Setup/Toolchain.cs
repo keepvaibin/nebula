@@ -45,6 +45,23 @@ namespace Nebula.Setup
         public bool IsReady { get { return File.Exists(Marker) && Locate(false); } }
 
         public string MsvcDir { get; private set; }
+
+        /// <summary>
+        /// The cl.exe version that ships with the bundled MSVC toolset: toolset
+        /// 14.x.y is compiler 19.x.y. The toolchain has no cl.exe for clang-cl
+        /// to read this from, so it is passed as -fms-compatibility-version.
+        /// </summary>
+        public string MsvcCompilerVersion
+        {
+            get
+            {
+                Version toolset;
+                if (MsvcDir == null || !Version.TryParse(Path.GetFileName(MsvcDir), out toolset) || toolset.Major != 14 || toolset.Build < 0)
+                    throw new InvalidDataException("The toolchain's MSVC folder has no 14.x.y version: " + MsvcDir);
+                return "19." + toolset.Minor + "." + toolset.Build;
+            }
+        }
+
         public string SdkDir { get; private set; }
         public string SdkVersion { get; private set; }
         public string RedistDir { get; private set; }
@@ -118,13 +135,17 @@ namespace Nebula.Setup
                 else if (item.Kind == "ninja") ZipFile.ExtractToDirectory(item.File, Path.Combine(staging, "ninja"));
             }
             sdk.Join();
-            if (sdkFailure != null) throw sdkFailure;
-            foreach (var msi in Directory.GetFiles(Path.Combine(staging, "sdk"), "*.msi")) File.Delete(msi);
+            if (sdkFailure != null) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(sdkFailure).Throw();
+            // msiexec leaves a copy of each package; a scanner may still be reading one, and a leftover costs only space.
+            foreach (var msi in Directory.GetFiles(Path.Combine(staging, "sdk"), "*.msi"))
+                try { File.Delete(msi); } catch (IOException) { } catch (UnauthorizedAccessException) { }
 
-            Directory.Move(staging, root);
+            FileUtil.MoveDirectory(staging, root, log);
             if (!Locate(true)) throw new InvalidOperationException("The unpacked toolchain is incomplete.");
             Json.Save(Marker, new Dictionary<string, object> { { "id", Id }, { "sdk", SdkVersion }, { "createdUtc", DateTime.UtcNow.ToString("o") } });
-            FileUtil.DeleteTree(downloads);
+            try { FileUtil.DeleteTree(downloads); }
+            catch (IOException error) { log("Could not remove the toolchain downloads: " + error.Message); }
+            catch (UnauthorizedAccessException error) { log("Could not remove the toolchain downloads: " + error.Message); }
             // Toolchains of earlier versions are never used again.
             foreach (var dir in Directory.GetDirectories(Path.GetDirectoryName(root)))
                 if (!string.Equals(dir, root, StringComparison.OrdinalIgnoreCase))
@@ -325,15 +346,24 @@ namespace Nebula.Setup
             {
                 Path.Combine(MsvcDir, "lib", "x64"), Path.Combine(lib, "ucrt", "x64"), Path.Combine(lib, "um", "x64")
             });
+            // Without this, clang-cl and lld-link search the machine (Visual Studio's
+            // setup API, then the registry) for a Visual C++ and use its version. A
+            // legacy one such as VC++ 2013 makes clang-cl emulate MSVC 18: C++11,
+            // and CMake then adds no -std:c++20 flag.
+            env["VCToolsInstallDir"] = MsvcDir + "\\";
             return env;
         }
 
         /// <summary>CMake cache arguments that pin every tool to this toolchain.</summary>
         public List<string> CMakeToolArguments()
         {
+            Locate(true);
             return new List<string>
             {
                 "-DCMAKE_CXX_COMPILER=" + ClangCl.Replace('\\', '/'),
+                // Seen by CMake's compiler identification as well as every compile,
+                // so CMake picks the standard flags for the MSVC these headers are from.
+                "-DCMAKE_CXX_FLAGS_INIT=-fms-compatibility-version=" + MsvcCompilerVersion,
                 "-DCMAKE_LINKER=" + LldLink.Replace('\\', '/'),
                 "-DCMAKE_RC_COMPILER=" + Rc.Replace('\\', '/'),
                 "-DCMAKE_MT=" + Mt.Replace('\\', '/'),

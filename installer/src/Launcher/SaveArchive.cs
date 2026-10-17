@@ -329,17 +329,17 @@ namespace Nebula.Launcher
                     string stamp = target + "-backup-" + DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
                     backup = stamp;
                     for (int number = 2; Directory.Exists(backup) || File.Exists(backup); number++) backup = stamp + "-" + number;
-                    Directory.Move(target, backup);
+                    FileUtil.MoveDirectoryInPlace(target, backup);
                 }
                 else Directory.Delete(target);
             }
             try
             {
-                Directory.Move(staging, target);
+                FileUtil.MoveDirectoryInPlace(staging, target);
             }
             catch
             {
-                if (backup != null && !Directory.Exists(target)) Directory.Move(backup, target);
+                if (backup != null && !Directory.Exists(target)) FileUtil.MoveDirectoryInPlace(backup, target);
                 throw;
             }
             return backup;

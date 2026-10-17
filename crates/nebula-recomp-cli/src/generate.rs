@@ -36,15 +36,14 @@ use std::{fs, path::Path};
 //     return synchronization, the module checkpoint gate, per-site indirect
 //     call caches and the profile-ordered function layout; regenerate every
 //     module.
-// 19: draw identity site hooks (J3D shape packets, NameObj draws, JPA emitters
-//     and particles) for frame interpolation and motion vectors.
-// 20: motion signal site hooks (camera force-change, object resets and new
-//     lives, emitter inits, draw categories and scene phases, stripe
-//     particles, mirror pass, light loads); needs a runtime that knows
-//     SiteHookKind 21-26.
-// 21: dialogue text steps for the text speed setting; needs a runtime that
-//     knows SiteHookKind 28.
-pub const GENERATION_VERSION: u32 = 21;
+// 19 (1.0.1): fused multiply-adds without the C runtime, no LodDistance hook,
+//     dialogue text steps for the text speed setting (SiteHookKind 28) and the
+//     language setting's answer to SCGetLanguage (SiteHookKind 30); regenerate
+//     every module.
+// 20: draw identity, motion signals, the 2D layer and the visible sun's centre
+//     (SiteHookKind 17-27, 29) for interpolation, motion vectors and ray
+//     tracing; regenerate every module.
+pub const GENERATION_VERSION: u32 = 20;
 
 /// Shard size and per-shard source budget of the qualified module build.
 pub const MODULE_SHARD_SIZE: usize = 64;
@@ -112,6 +111,11 @@ pub fn release_module_options() -> ModuleTranslationOptions {
 /// files (Home Menu, DSP) come first so they start first.
 const BUILD_CMAKE: &str = r#"cmake_minimum_required(VERSION 3.24)
 project(NebulaGenerated LANGUAGES CXX)
+# Below MSVC 19.0 CMake defines no -std: flag for clang-cl, and the build
+# fails deep in the C++ headers instead of here.
+if(CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC" AND CMAKE_CXX_SIMULATE_VERSION VERSION_LESS 19.30)
+    message(FATAL_ERROR "clang-cl is emulating MSVC ${CMAKE_CXX_SIMULATE_VERSION}; C++20 needs 19.30 or newer (-fms-compatibility-version).")
+endif()
 add_subdirectory(home)
 add_subdirectory(dsp)
 add_subdirectory(game)

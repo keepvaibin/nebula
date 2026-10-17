@@ -882,11 +882,10 @@ std::array<std::uint64_t, 2> host_file_identity_for_test(
     };
 }
 
-// Folders a rebuilt NAND root leaves beside it for the contents it did not carry over.
-std::vector<std::filesystem::path> rejected_nand_copies_for_test(
-    const std::filesystem::path& root) {
+std::vector<std::filesystem::path> nand_siblings_for_test(
+    const std::filesystem::path& root, const wchar_t* marker) {
     std::vector<std::filesystem::path> copies;
-    const std::wstring prefix = root.filename().wstring() + L"-rejected-";
+    const std::wstring prefix = root.filename().wstring() + marker;
     std::error_code error;
     for (const auto& entry :
          std::filesystem::directory_iterator(root.parent_path(), error)) {
@@ -897,11 +896,26 @@ std::vector<std::filesystem::path> rejected_nand_copies_for_test(
     return copies;
 }
 
+// Folders a rebuilt NAND root leaves beside it for the contents it did not carry over.
+std::vector<std::filesystem::path> rejected_nand_copies_for_test(
+    const std::filesystem::path& root) {
+    return nand_siblings_for_test(root, L"-rejected-");
+}
+
+// The previous tree of a rebuild that carried everything; removed once the rebuild is in place.
+std::vector<std::filesystem::path> replaced_nand_copies_for_test(
+    const std::filesystem::path& root) {
+    return nand_siblings_for_test(root, L".replaced");
+}
+
 // Later fixtures use the shared root itself as a NAND root; a copy left in it would be a foreign tree there.
 void remove_nand_root_for_test(const std::filesystem::path& root) {
     std::error_code error;
     std::filesystem::remove_all(root, error);
     for (const std::filesystem::path& copy : rejected_nand_copies_for_test(root)) {
+        std::filesystem::remove_all(copy, error);
+    }
+    for (const std::filesystem::path& copy : replaced_nand_copies_for_test(root)) {
         std::filesystem::remove_all(copy, error);
     }
 }
@@ -3973,7 +3987,7 @@ bool native_nand_pre_ads_legacy_cohort_startup_works(
             "legacy startup rebuilds a tree whose required root sentinel is missing");
         passed &= expect(
             rejected_nand_copies_for_test(missing_root).empty() &&
-                !std::filesystem::exists(missing_root.native() + L".replaced") &&
+                replaced_nand_copies_for_test(missing_root).empty() &&
                 !std::filesystem::exists(missing_root / L"GameData.bin") &&
                 galaxy::host::read_binary_file(
                     file_paths_for(missing_root)[4]) == fixture.game_data,
@@ -4509,7 +4523,7 @@ bool native_nand_foreign_tree_adoption_works(
     };
     const auto leftovers = [](const std::filesystem::path& root) {
         return std::filesystem::exists(root.native() + L".adopt") ||
-            std::filesystem::exists(root.native() + L".replaced");
+            !replaced_nand_copies_for_test(root).empty();
     };
 
     const std::vector<std::byte> game_data = valid_rmge_game_data_for_test();
@@ -4562,6 +4576,15 @@ bool native_nand_foreign_tree_adoption_works(
                 galaxy::host::read_binary_file(gis3_of(save)).size() == 18u &&
                 rejected_nand_copies_for_test(plain_root).empty(),
             "a truncated metadata stream is replaced by default metadata and the save is kept");
+
+        // A rebuild stopped between setting the previous tree aside and moving the new one in.
+        std::filesystem::rename(plain_root, plain_root.native() + L".adopt");
+        passed &= expect(
+            cold_open() &&
+                galaxy::host::read_binary_file(save) == game_data &&
+                host_file_stream_exists_for_test(gis3_of(save)) &&
+                !leftovers(plain_root),
+            "the next start puts the tree of an interrupted rebuild in place with the save");
     }
     remove_nand_root_for_test(plain_root);
 

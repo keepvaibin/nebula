@@ -44,8 +44,8 @@ namespace Nebula.Setup
         public string Commit { get { return Json.Str(install, "commit"); } }
         public string ModuleSourceCommit { get { return Json.Str(install, "moduleSourceCommit") ?? Commit; } }
         public string ModuleIsa { get { return Json.Str(install, "moduleIsa") ?? "SSE2"; } }
-        /// <summary>Generator version of the installed game code; 0 before Setup recorded it (1.0.0 and older).</summary>
-        public long Generation { get { return Json.Long(install, "generation"); } }
+        /// <summary>InstallEngine.ModuleGeneration of the installed modules; 1 before it was recorded.</summary>
+        public long ModuleGeneration { get { return Math.Max(1L, Json.Long(install, "moduleGeneration")); } }
 
         public static InstalledInfo Read(InstallLayout layout)
         {
@@ -93,20 +93,34 @@ namespace Nebula.Setup
 
     internal static class Running
     {
-        /// <summary>Fail with an actionable message while Nebula runs from this install.</summary>
-        public static void RequireClosed(string root)
+        /// <summary>The game, the launcher and Nebula Settings.</summary>
+        public static readonly string[] Programs = { "NebulaRuntime", "Nebula", "NebulaSettings" };
+
+        /// <summary>The first of <paramref name="names"/> running from inside <paramref name="folder"/>, as "Nebula.exe (pid)"; null when none.</summary>
+        public static string Find(string folder, params string[] names)
         {
-            string prefix = Path.GetFullPath(root).TrimEnd('\\') + "\\";
-            foreach (var name in new[] { "NebulaRuntime", "Nebula" })
+            string prefix = Path.GetFullPath(folder).TrimEnd('\\') + "\\";
+            foreach (var name in names)
             {
                 foreach (var process in Process.GetProcessesByName(name))
                 {
-                    string path = null;
-                    try { path = process.MainModule.FileName; } catch (Exception) { }
-                    if (path != null && path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                        throw new InvalidOperationException("Nebula is running. Close the game and the Nebula launcher, then try again.");
+                    using (process)
+                    {
+                        string path = null;
+                        try { path = process.MainModule.FileName; } catch (Exception) { }
+                        if (path != null && path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                            return name + ".exe (" + process.Id + ")";
+                    }
                 }
             }
+            return null;
+        }
+
+        /// <summary>Fail with an actionable message while Nebula runs from this install.</summary>
+        public static void RequireClosed(string root)
+        {
+            if (Find(root, Programs) != null)
+                throw new InvalidOperationException("Nebula is running. Close the game, the Nebula launcher and Nebula Settings, then try again.");
         }
     }
 
@@ -120,17 +134,28 @@ namespace Nebula.Setup
             get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Nebula"); }
         }
 
-        public static void Register(InstallLayout layout, string version, bool desktop)
+        /// <summary>
+        /// Shortcuts, the install-root key and the Add/Remove Programs entry. A shortcut that cannot be written (Wine's
+        /// Mono has no late-bound COM for WScript.Shell) is returned as a failure, not thrown: Nebula runs without it,
+        /// and the registry entries still follow.
+        /// </summary>
+        public static IList<string> Register(InstallLayout layout, string version, bool desktop)
         {
             string app = layout.VersionDir(version);
+            var failures = new List<string>();
+            Action<string, string, string, string, string> link = (path, target, arguments, directory, description) =>
+            {
+                try { Shortcut(path, target, arguments, directory, description); }
+                catch (Exception error) { failures.Add(Path.GetFileName(path) + ": " + error.Message); }
+            };
             Directory.CreateDirectory(StartMenuFolder);
-            Shortcut(Path.Combine(StartMenuFolder, "Nebula.lnk"), Path.Combine(app, "Nebula.exe"), "", app, "Play Nebula");
-            Shortcut(Path.Combine(StartMenuFolder, "Nebula Settings.lnk"), Path.Combine(app, "NebulaSettings.exe"), "", app, "Display, graphics, audio and game files");
-            Shortcut(Path.Combine(StartMenuFolder, "Update Nebula.lnk"), layout.SetupCopy, "--update", layout.Root, "Check for and install Nebula updates");
-            Shortcut(Path.Combine(StartMenuFolder, "Nebula Setup.lnk"), layout.SetupCopy, "", layout.Root, "Repair, restore or uninstall Nebula");
+            link(Path.Combine(StartMenuFolder, "Nebula.lnk"), Path.Combine(app, "Nebula.exe"), "", app, "Play Nebula");
+            link(Path.Combine(StartMenuFolder, "Nebula Settings.lnk"), Path.Combine(app, "NebulaSettings.exe"), "", app, "Display, graphics, audio and game files");
+            link(Path.Combine(StartMenuFolder, "Update Nebula.lnk"), layout.SetupCopy, "--update", layout.Root, "Check for and install Nebula updates");
+            link(Path.Combine(StartMenuFolder, "Nebula Setup.lnk"), layout.SetupCopy, "", layout.Root, "Repair, restore or uninstall Nebula");
             string desktopLink = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Nebula.lnk");
             if (desktop || File.Exists(desktopLink))
-                Shortcut(desktopLink, Path.Combine(app, "Nebula.exe"), "", app, "Play Nebula");
+                link(desktopLink, Path.Combine(app, "Nebula.exe"), "", app, "Play Nebula");
 
             using (var key = Registry.CurrentUser.CreateSubKey(@"Software\Nebula")) key.SetValue("InstallRoot", layout.Root);
             using (var key = Registry.CurrentUser.CreateSubKey(UninstallKey))
@@ -145,6 +170,7 @@ namespace Nebula.Setup
                 key.SetValue("URLInfoAbout", "https://github.com/" + BuildInfo.Repository);
                 key.SetValue("NoRepair", 0, RegistryValueKind.DWord);
             }
+            return failures;
         }
 
         private static void Shortcut(string path, string target, string arguments, string workingDirectory, string description)
@@ -175,17 +201,29 @@ namespace Nebula.Setup
         public static void Uninstall(InstallLayout layout, bool removeUserData)
         {
             Running.RequireClosed(layout.Root);
+            // Files first: if one is held, the Add/Remove Programs entry and shortcuts are still there to try again.
+            string self = Path.GetFullPath(Assembly.GetExecutingAssembly().Location);
+            foreach (var entry in Directory.GetFileSystemEntries(layout.Root))
+            {
+                if (string.Equals(Path.GetFullPath(entry), self, StringComparison.OrdinalIgnoreCase)) continue;
+                try
+                {
+                    if (Directory.Exists(entry)) FileUtil.DeleteTree(entry); else File.Delete(entry);
+                }
+                catch (Exception error)
+                {
+                    if (!(error is IOException) && !(error is UnauthorizedAccessException)) throw;
+                    string holders = Directory.Exists(entry) ? FileUtil.Holders(Directory.GetFiles(entry, "*", SearchOption.AllDirectories))
+                        : FileUtil.Holders(new[] { entry });
+                    throw new IOException("Could not remove " + entry + ": " + error.Message +
+                        (holders.Length != 0 ? " In use by: " + holders + "." : "") + " Close it and uninstall again.", error);
+                }
+            }
             if (Directory.Exists(StartMenuFolder)) FileUtil.DeleteTree(StartMenuFolder);
             string desktopLink = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Nebula.lnk");
             if (File.Exists(desktopLink)) File.Delete(desktopLink);
             Registry.CurrentUser.DeleteSubKeyTree(UninstallKey, false);
             Registry.CurrentUser.DeleteSubKeyTree(@"Software\Nebula", false);
-            string self = Path.GetFullPath(Assembly.GetExecutingAssembly().Location);
-            foreach (var entry in Directory.GetFileSystemEntries(layout.Root))
-            {
-                if (string.Equals(Path.GetFullPath(entry), self, StringComparison.OrdinalIgnoreCase)) continue;
-                if (Directory.Exists(entry)) FileUtil.DeleteTree(entry); else File.Delete(entry);
-            }
             if (removeUserData && Directory.Exists(NebulaPaths.DataRoot)) FileUtil.DeleteTree(NebulaPaths.DataRoot);
             // The running setup copy deletes itself and the folder after exit.
             if (self.StartsWith(Path.GetFullPath(layout.Root), StringComparison.OrdinalIgnoreCase))

@@ -252,7 +252,7 @@ namespace Nebula.Launcher
         private GraphicsSettings graphics = GraphicsSettings.Load();
         private AudioSettings audio = AudioSettings.Load();
         private GeneralSettings general = GeneralSettings.Load();
-        private readonly ComboBox textSpeed = new ComboBox();
+        private readonly ComboBox textSpeed = new ComboBox(), languageBox = new ComboBox();
         private readonly ControlsSettings controls = ControlsSettings.Load();
         private bool loading;
 
@@ -353,7 +353,7 @@ namespace Nebula.Launcher
             var image = new TabPage("Graphics");
             var sound = new TabPage("Audio");
             var input = new TabPage("Controls");
-            var generalPage = new TabPage("Game");
+            var generalPage = new TabPage("General");
             var advanced = new TabPage("Advanced");
             tabs.TabPages.AddRange(new[] { display, image, input, sound, generalPage, advanced });
             Controls.Add(tabs);
@@ -454,6 +454,13 @@ namespace Nebula.Launcher
             y = 16;
             Row(generalPage, "Text speed", textSpeed, ref y);
             textSpeed.Items.AddRange(GeneralSettings.TextSpeeds);
+            Row(generalPage, "Language", languageBox, ref y);
+            languageBox.Items.AddRange(GeneralSettings.Languages);
+            generalPage.Controls.Add(new Label
+            {
+                Text = "The game starts in this language. While it is running, a change applies the next time it starts.",
+                Location = new Point(12, y + 3), Size = new Size(700, 26), ForeColor = SystemColors.GrayText
+            });
 
             y = 16;
             Label(advanced, "Game content", 12, y + 3);
@@ -886,6 +893,7 @@ namespace Nebula.Launcher
                 volumeValues[i].Text = volumes[i].Value + "%";
             }
             textSpeed.SelectedIndex = Math.Max(0, Math.Min(general.TextSpeed - 1, GeneralSettings.TextSpeeds.Length - 1));
+            languageBox.SelectedIndex = Math.Max(0, Math.Min(general.Language, GeneralSettings.Languages.Length - 1));
             recording.SelectedIndex = (int)session.Recording;
             contentLabel.Text = session.Content;
             windowSize = new Size(graphics.WindowWidth, graphics.WindowHeight);
@@ -1091,6 +1099,7 @@ namespace Nebula.Launcher
                 for (int i = 0; i < volumes.Length; i++) audio.Percent[i] = volumes[i].Value;
                 audio.Save();
                 general.TextSpeed = Math.Max(0, textSpeed.SelectedIndex) + 1;
+                general.Language = Math.Max(0, languageBox.SelectedIndex);
                 general.Save();
                 EndCapture();
                 if (controls.InputMode != ControlsSettings.ModeRealWiimote) controls.InputMode = Math.Max(0, inputSource.SelectedIndex);
@@ -1155,7 +1164,7 @@ namespace Nebula.Launcher
             }
             else
             {
-                using (var dialog = new FolderBrowserDialog { Description = "Choose a saves folder.", ShowNewFolderButton = false })
+                using (var dialog = new FolderBrowserDialog { Description = "Choose a Nebula saves folder, or Dolphin's save folder for Super Mario Galaxy (the folder that holds GameData.bin; in Dolphin, right-click the game and choose Open Wii Save Folder).", ShowNewFolderButton = false })
                     if (dialog.ShowDialog(this) == DialogResult.OK) source = dialog.SelectedPath;
             }
             if (source == null) return;
@@ -1295,14 +1304,16 @@ namespace Nebula.Launcher
                     { "endUtc", DateTime.UtcNow.ToString("o") }
                 });
                 string result = "Recording saved to " + session;
+                string saved = session;
                 try
                 {
                     System.IO.Compression.ZipFile.CreateFromDirectory(session, session + ".zip", System.IO.Compression.CompressionLevel.Optimal, false);
                     result = "Recording saved to " + session + ".zip";
+                    saved = session + ".zip";
                 }
                 catch (Exception) { /* Logs remain available if ZIP creation fails. */ }
                 if (process.ExitCode != 0) result = "The game exited with code " + process.ExitCode + ".\r\n" + result;
-                MessageBox.Show(result, "Nebula recording", MessageBoxButtons.OK, process.ExitCode == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+                RecordingNotice.Show(result, process.ExitCode != 0, saved);
                 Environment.Exit(0);
             });
             thread.IsBackground = false;

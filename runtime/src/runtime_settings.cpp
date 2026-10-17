@@ -8,6 +8,7 @@
 #include <Shlobj.h>
 
 #include <algorithm>
+#include <atomic>
 #include <cerrno>
 #include <cctype>
 #include <clocale>
@@ -59,6 +60,9 @@ RuntimeSettings sanitize_settings(RuntimeSettings settings) {
         ? std::clamp(settings.audio.wiimote_speaker, 0.0f, 4.0f)
         : 0.0f;
     settings.text_speed = std::clamp(settings.text_speed, 1u, 3u);
+    if (settings.language != GameLanguage::French && settings.language != GameLanguage::Spanish) {
+        settings.language = GameLanguage::English;
+    }
     return settings;
 }
 
@@ -148,6 +152,10 @@ void apply_kv(RuntimeSettings& settings, const char* key, const char* value) {
     } else if (std::strcmp(key, "text_speed") == 0) {
         if (value[0] >= '1' && value[0] <= '3' && value[1] == '\0') {
             settings.text_speed = static_cast<unsigned>(value[0] - '0');
+        }
+    } else if (std::strcmp(key, "language") == 0) {
+        for (const GameLanguage language : {GameLanguage::English, GameLanguage::French, GameLanguage::Spanish}) {
+            if (_stricmp(value, game_language_key(language)) == 0) settings.language = language;
         }
     }
 }
@@ -285,6 +293,7 @@ void apply_env_overrides(RuntimeSettings& settings) {
     apply_env(
         settings, "GALAXY_AUDIO_WIIMOTE_SPEAKER_GAIN", "audio_wiimote_speaker_gain");
     apply_env(settings, "GALAXY_TEXT_SPEED", "text_speed");
+    apply_env(settings, "GALAXY_LANGUAGE", "language");
 }
 
 }  // namespace
@@ -294,6 +303,38 @@ RuntimeSettings get_runtime_settings() {
     const RuntimeSettings copy = s_settings;
     ReleaseSRWLockShared(&s_settings_lock);
     return copy;
+}
+
+namespace {
+// 0 until the game first asks for its language, then that language's SC code.
+std::atomic<std::uint8_t> s_running_language{0u};
+}  // namespace
+
+GameLanguage game_language_for_boot() noexcept {
+    std::uint8_t running = s_running_language.load(std::memory_order_acquire);
+    if (running == 0u) {
+        std::uint8_t expected = 0u;
+        const auto chosen = static_cast<std::uint8_t>(get_runtime_settings().language);
+        running = s_running_language.compare_exchange_strong(expected, chosen, std::memory_order_acq_rel)
+            ? chosen : expected;
+    }
+    return static_cast<GameLanguage>(running);
+}
+
+bool running_game_language(GameLanguage& language) noexcept {
+    const std::uint8_t running = s_running_language.load(std::memory_order_acquire);
+    if (running == 0u) return false;
+    language = static_cast<GameLanguage>(running);
+    return true;
+}
+
+const char* game_language_key(GameLanguage language) noexcept {
+    switch (language) {
+    case GameLanguage::French: return "french";
+    case GameLanguage::Spanish: return "spanish";
+    case GameLanguage::English: break;
+    }
+    return "english";
 }
 
 RuntimeInputModeState get_runtime_input_mode_state() {
@@ -327,6 +368,20 @@ namespace {
 // Last-write time of the settings file the audio keys were last read from.
 std::uint64_t s_audio_settings_write_time = 0u;
 
+// A running session never changes its input source because the file changed: a real Wii Remote, or a
+// controller that is not connected, would fail it. The source the file names (Nebula Settings may have saved
+// a new one) is written back by the game's saves unless the game changed its own source since the file was
+// last read or written. Guarded by s_settings_lock.
+RuntimeInputMode s_file_input_mode = RuntimeInputMode::Auto;
+RuntimeInputMode s_input_mode_at_sync = RuntimeInputMode::Auto;
+
+void record_input_mode_sync(RuntimeInputMode file_mode, RuntimeInputMode live_mode) {
+    AcquireSRWLockExclusive(&s_settings_lock);
+    s_file_input_mode = file_mode;
+    s_input_mode_at_sync = live_mode;
+    ReleaseSRWLockExclusive(&s_settings_lock);
+}
+
 std::uint64_t settings_file_write_time(const std::filesystem::path& path) noexcept {
     WIN32_FILE_ATTRIBUTE_DATA data{};
     if (path.empty() ||
@@ -345,9 +400,11 @@ void load_runtime_settings_from_file() {
     const std::filesystem::path path = settings_path();
     const std::uint64_t write_time = settings_file_write_time(path);
     parse_settings_file(settings, controls);
+    const RuntimeInputMode file_mode = sanitize_settings(settings).input_mode;
     apply_env_overrides(settings);
     set_runtime_settings(settings);
     input::set_controls_config(controls);
+    record_input_mode_sync(file_mode, get_runtime_settings().input_mode);
     s_audio_settings_write_time = write_time;
 }
 
@@ -360,12 +417,15 @@ bool reload_runtime_audio_settings_if_changed() noexcept {
         RuntimeSettings parsed{};
         input::ControlsConfig controls = input::default_controls_config();
         parse_settings_file(parsed, controls);
+        const RuntimeInputMode file_mode = sanitize_settings(parsed).input_mode;
         apply_env_overrides(parsed);
         RuntimeSettings settings = get_runtime_settings();
         settings.audio = parsed.audio;
         settings.text_speed = parsed.text_speed;
+        settings.language = parsed.language;
         set_runtime_settings(settings);
         input::set_controls_config(controls);
+        record_input_mode_sync(file_mode, settings.input_mode);
         s_audio_settings_write_time = write_time;
         return true;
     } catch (...) {
@@ -380,10 +440,14 @@ bool save_runtime_settings_to_file() {
         if (path.empty()) {
             return false;
         }
+        AcquireSRWLockShared(&s_settings_lock);
+        const RuntimeInputMode input_mode =
+            settings.input_mode == s_input_mode_at_sync ? s_file_input_mode : settings.input_mode;
+        ReleaseSRWLockShared(&s_settings_lock);
 
         std::ostringstream contents;
         contents.imbue(std::locale::classic());
-        contents << "input_mode=" << runtime_input_mode_name(settings.input_mode)
+        contents << "input_mode=" << runtime_input_mode_name(input_mode)
                  << '\n'
                  << "controls_version=" << input::kControlsVersion << '\n'
                  << std::setprecision(std::numeric_limits<float>::max_digits10)
@@ -395,11 +459,16 @@ bool save_runtime_settings_to_file() {
                  << "audio_cutscene_gain=" << settings.audio.cutscene << '\n'
                  << "audio_wiimote_speaker_gain=" << settings.audio.wiimote_speaker << '\n'
                  << "text_speed=" << settings.text_speed << '\n'
+                 << "language=" << game_language_key(settings.language) << '\n'
                  << input::format_controls_settings(input::get_controls_config());
         if (!contents) {
             return false;
         }
-        return io::write_text_file_atomically(path, contents.str());
+        if (!io::write_text_file_atomically(path, contents.str())) {
+            return false;
+        }
+        record_input_mode_sync(input_mode, settings.input_mode);
+        return true;
     } catch (...) {
         return false;
     }

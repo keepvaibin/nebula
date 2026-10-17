@@ -894,6 +894,8 @@ bool test_unchanged_display_list_replays_prepared_packet_runs() {
 }
 
 int main(int argc, char** argv) try {
+    // Strict (GALAXY_GX_STRICT=1) unless a case below selects the release behaviour.
+    galaxy::gx::set_unknown_gx_commands_fatal(true);
     if (const std::uint64_t digest = bp_write_observation_digest(); digest != 0x38ae405df5b176beull) {
         std::cerr << "BP write observation regression: digest 0x" << std::hex << digest << std::dec << '\n';
         return 1;
@@ -1438,6 +1440,58 @@ int main(int argc, char** argv) try {
                 "unknown BP write consumed the one-shot write mask")) {
             return 1;
         }
+    }
+
+    {
+        // Release builds: an unknown CP, XF or BP write and a TMEM load of lines are skipped
+        // without changing any register, the write mask or the dirty state, and a transfer that
+        // mixes known and unknown XF addresses keeps its known words.
+        galaxy::gx::set_unknown_gx_commands_fatal(false);
+        GxState state;
+        state.load_cp(galaxy::gx::cp::kMatrixIndexA, 0x12345678u);
+        state.load_bp((0x41u << 24u) | 0x000018u);
+        state.load_bp((static_cast<std::uint32_t>(galaxy::gx::bp::kBpMask) << 24u) | 0x000007u);
+        (void)state.consume_dirty();
+        bool threw = false;
+        try {
+            state.load_cp(0x31u, 0xA5A5A5A5u);
+            state.load_bp((0x05u << 24u) | 0x00ABCDEFu);
+            state.load_bp((0x05u << 24u) | 0x00ABCDEFu);  // a repeat is skipped silently
+        } catch (const GxFatalError&) {
+            threw = true;
+        }
+        if (!expect(!threw, "release builds skip unknown CP and BP writes") ||
+            !expect(state.cp(0x31u) == 0u && state.bp(0x05u) == 0u &&
+                        state.cp(galaxy::gx::cp::kMatrixIndexA) == 0x12345678u && state.consume_dirty() == 0u,
+                    "a skipped write changes no register or dirty state")) {
+            return 1;
+        }
+        state.load_bp((0x41u << 24u) | 0x000001u);
+        if (!expect(state.bp(0x41u) == 0x000019u, "a skipped BP write leaves the one-shot mask armed")) return 1;
+
+        // 0x1057 is the last post-texgen register; 0x1058 is not modelled.
+        const std::uint32_t mixed[2] = {0x00000123u, 0xDEADBEEFu};
+        const std::uint16_t known_xf = static_cast<std::uint16_t>(galaxy::gx::xf::kPostTexGenBase + 7u);
+        threw = false;
+        try {
+            state.load_xf(known_xf, mixed, 2u);
+        } catch (const GxFatalError&) {
+            threw = true;
+        }
+        if (!expect(!threw, "release builds skip unknown XF addresses") ||
+            !expect(state.xf(known_xf) == 0x00000123u && state.xf(static_cast<std::uint16_t>(known_xf + 1u)) == 0u,
+                    "a mixed XF transfer keeps its known word and drops the unknown one")) {
+            return 1;
+        }
+
+        threw = false;
+        try {
+            state.load_bp((static_cast<std::uint32_t>(galaxy::gx::bp::kTexLoadStart) << 24u) | 0x000010u);
+        } catch (const GxFatalError&) {
+            threw = true;
+        }
+        if (!expect(!threw, "release builds skip a TMEM load of lines")) return 1;
+        galaxy::gx::set_unknown_gx_commands_fatal(true);
     }
 
     {

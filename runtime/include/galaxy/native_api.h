@@ -19,6 +19,7 @@
 #endif
 
 #include "galaxy/ppc_float.h"
+#include "galaxy/fused_multiply_add.h"
 
 #if defined(_WIN32)
 #if defined(GALAXY_BUILDING_GAME_MODULE)
@@ -504,9 +505,9 @@ enum class SiteHookKind : std::uint32_t {
     EfbScreenWidth = 12,
     LayoutVerticalFit = 13,     // argument: lane | inverse << 8
     HomeGeometry = 14,          // argument: kind | lane << 8
-    LodDistance = 15,           // f1 holds LodCtrl::calcDistanceToCamera's result
+    LodDistance = 15,           // 1.0.0 modules only; a no-op (see site_hooks.cpp)
     MultiSceneModel = 16,       // r31 MultiSceneActor, r3 its J3DModel
-    // Draw identity (generation 19): the object whose GX commands follow.
+    // Draw identity (generation 20): the object whose GX commands follow.
     DrawShapePacket = 17,       // r3 J3DShapePacket (prepareDraw entry)
     DrawNameObj = 18,           // r4 NameObj (const category-list delegator)
     DrawEmitter = 19,           // r3 JPAResource, r4 JPAEmitterWorkData; argument 1 = child pass
@@ -520,11 +521,13 @@ enum class SiteHookKind : std::uint32_t {
     LightLoad = 26,             // argument: MotionLightSite; r3 the light info
     // 2D layer (generation 20): GameScene::draw2D bounds and layout identity.
     Layout2D = 27,              // argument: galaxy::motion::Layout2DSite
-    // Generation 21: one step of dialogue text was revealed (TalkTextFormer::updateTalking).
+    // Generation 19: one step of dialogue text was revealed (TalkTextFormer::updateTalking).
     TextStep = 28,              // argument 0: TalkBalloon in r31; 1: RosettaMonologue in r30
-    // Generation 22: BrightSun::control set the visible sun's centre (r31 + 0xC; the camera
+    // Generation 20: BrightSun::control set the visible sun's centre (r31 + 0xC; the camera
     // position it was placed from at r1 + 8).
     SunCenter = 29,
+    // Generation 19: SCGetLanguage returned (r3); the runtime answers with the language setting.
+    Language = 30,
 };
 
 inline void site_hook(
@@ -10431,7 +10434,7 @@ inline void native_psmtx_concat_804B5F3C(
         }
 
         const auto madd = [](float multiplicand, float scalar, float addend) {
-            return std::fma(multiplicand, scalar, addend);
+            return galaxy::fused_multiply_add(multiplicand, scalar, addend);
         };
         const auto multiply = [](float multiplicand, float scalar) {
             return multiplicand * scalar;
@@ -14253,8 +14256,8 @@ inline bool native_jpa_draw_particle_fast_path(
     };
     const auto normalize = [](const Vec3& value) {
         const float length_sq =
-            std::fma(value.x, value.x,
-                     std::fma(value.y, value.y, value.z * value.z));
+            galaxy::fused_multiply_add(value.x, value.x,
+                     galaxy::fused_multiply_add(value.y, value.y, value.z * value.z));
         const float inv_length = 1.0F / std::sqrt(length_sq);
         return Vec3{
             value.x * inv_length,
@@ -14330,22 +14333,22 @@ inline bool native_jpa_draw_particle_fast_path(
     }
 
     const auto affine_dot3 = [&](std::uint32_t row, std::uint32_t column) {
-        return std::fma(
+        return galaxy::fused_multiply_add(
             local[8u + column],
             base[row * 4u + 2u],
-            std::fma(
+            galaxy::fused_multiply_add(
                 local[4u + column],
                 base[row * 4u + 1u],
                 local[column] * base[row * 4u]));
     };
     const auto affine_dot4 = [&](std::uint32_t row) {
-        return std::fma(
+        return galaxy::fused_multiply_add(
             1.0F,
             base[row * 4u + 3u],
-            std::fma(
+            galaxy::fused_multiply_add(
                 local[11u],
                 base[row * 4u + 2u],
-                std::fma(
+                galaxy::fused_multiply_add(
                     local[7u],
                     base[row * 4u + 1u],
                     local[3u] * base[row * 4u])));

@@ -60,9 +60,14 @@ namespace Nebula.Setup
                     // A corrupt transfer was discarded; fetch it once more from the start.
                     if (attempt >= 2) throw;
                 }
-                catch (WebException)
+                catch (WebException error)
                 {
-                    if (attempt >= 4 || cancel.IsCancellationRequested) throw;
+                    if (cancel.IsCancellationRequested) throw;
+                    // A missing file stays missing; other failures may be a passing network fault.
+                    bool missing = IsMissing(error);
+                    if (missing || attempt >= 4)
+                        throw new WebException("Could not download " + DisplayName(url) + " from " + new Uri(url).Host + ": " +
+                            error.Message, error, error.Status, error.Response);
                     Thread.Sleep(2000 * attempt);
                 }
                 catch (IOException)
@@ -71,6 +76,18 @@ namespace Nebula.Setup
                     Thread.Sleep(2000 * attempt);
                 }
             }
+        }
+
+        internal static bool IsMissing(WebException error)
+        {
+            var response = error.Response as HttpWebResponse;
+            return response != null && (response.StatusCode == HttpStatusCode.NotFound || response.StatusCode == HttpStatusCode.Gone);
+        }
+
+        private static string DisplayName(string url)
+        {
+            var segments = new Uri(url).Segments;
+            return Uri.UnescapeDataString(segments[segments.Length - 1].TrimEnd('/'));
         }
 
         private static void Transfer(string url, string partial, long expectedSize, Action<long> onBytes, CancellationToken cancel)

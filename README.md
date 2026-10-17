@@ -48,14 +48,18 @@ it is the original game code, translated instruction by instruction by the recom
 - Anti-aliasing (SMAA, FXAA), AMD FidelityFX FSR 1 upscaling, anisotropic filtering and
   optional per-pixel lighting.
 - In-game settings menu (F1, View + Menu on Xbox, Minus + Plus on Switch).
-- Saves stored in `%LOCALAPPDATA%\Nebula\saves`.
+- Text speed: dialogue and Rosalina's storybook at the original pace, 2x or 3x.
+- The game in English, French or Spanish, the three languages of the USA release.
+- Saves stored in `%LOCALAPPDATA%\Nebula\saves`, with export, import and Dolphin saves
+  (see [Saves](#saves)).
 
 ## Requirements
 
 - Super Mario Galaxy, USA (RMGE01), revision 0, as an ISO, RVZ or extracted folder
 - Windows 10 (version 1803 or newer) or Windows 11, 64-bit
 - A GPU with Direct3D 12 support
-- 8 GB of RAM; 16 GB of free disk space during installation, about 5.5 GB afterwards
+- 8 GB of RAM (Setup also installs on less, as an experimental install at your own risk);
+  16 GB of free disk space during installation, about 5.5 GB afterwards
 - An internet connection for the first installation
 
 The least powerful system tested so far, an Intel Core Ultra 9 185H with its integrated
@@ -73,6 +77,30 @@ graphics and 16 GB of RAM, runs the game at a locked 60 FPS at 1440p (16:10).
 Setup also updates, repairs, restores the previous version and uninstalls. Updates are signed;
 Setup checks the signature against the public key built into it before installing.
 
+## Saves
+
+Saves are kept in `%LOCALAPPDATA%\Nebula\saves`, laid out like the Wii's internal memory: the
+game's save is `title\00010000\524d4745\data\GameData.bin`, next to its `banner.bin`. Each file and
+folder also carries the Wii's file information in a hidden NTFS stream, which a plain copy or zip
+drops, so move saves with the launcher's **Advanced** tab:
+
+- **Export saves…** writes `Nebula-Saves-<date>.zip` with everything the game reads.
+- **Import saves…** takes such a zip, another zip or folder of Nebula saves, or a save from Dolphin.
+  Your current saves are moved to `saves-backup-<date>` beside them first. Close the game before
+  importing or exporting.
+
+To bring a save over from Dolphin:
+
+1. In Dolphin, right-click Super Mario Galaxy and choose **Open Wii Save Folder**. It holds
+   `GameData.bin` and `banner.bin` (in Dolphin's user folder,
+   `Wii\title\00010000\524d4745\data`).
+2. In Nebula, choose **Advanced**, **Import saves…**, **From a folder…**, and select that folder.
+
+Only saves of the USA version (RMGE01) apply; the game itself can come from an ISO or an RVZ, as
+Nebula and Dolphin use the same save format. A `GameData.bin` copied into the saves folder by hand
+also works: at the next start Nebula rebuilds the folder around it, and keeps the previous folder
+as `saves-rejected-<date>` if anything in it could not be carried over.
+
 ## Building from source
 
 [docs/BUILDING.md](docs/BUILDING.md) covers the tools, building the recompiler, runtime and game
@@ -81,7 +109,7 @@ modules by hand, running the tests and building the installer.
 ## Testing
 
 - Recompiler: more than 500 tests (`cargo test --workspace`).
-- Runtime: 70 test programs (`ctest`) covering floating-point operations (checked against
+- Runtime: 71 test programs (`ctest`) covering floating-point operations (checked against
   Berkeley SoftFloat), GX command parsing and texture decoding, input mapping, the audio queue
   and DSP, and settings files.
 - `tools/dev/verify_thp_native.cpp` compares the native movie decoder with the game's own
@@ -98,7 +126,11 @@ Floating-point results are close to, but not bit-exact with, the Wii.
 - Some areas, for example the Gateway Galaxy, drop below 60 FPS on weaker CPUs.
 - Some lighting and bloom effects in the Comet Observatory differ from the original.
 
-Report problems on the [issue tracker](https://github.com/keepvaibin/nebula/issues).
+Report problems on the [issue tracker](https://github.com/keepvaibin/nebula/issues). If Nebula
+closed unexpectedly, attach its crash log: in Nebula Settings choose **Advanced**, **Open
+diagnostics**, then the newest file in `crash-logs`. It is a few lines of text about what failed;
+for more detail, choose **Detailed recording** under **Recording (next launch)** and reproduce the
+problem.
 
 ## License
 

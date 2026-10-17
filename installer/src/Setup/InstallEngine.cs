@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -44,6 +45,8 @@ namespace Nebula.Setup
         /// <summary>Overall fraction 0..1, current step description, step fraction (negative = unknown).</summary>
         void Report(double overall, string step, double stepFraction);
         void Log(string line);
+        /// <summary>Shows <paramref name="message"/> and waits; true to check again, false to give up.</summary>
+        bool AskToClose(string message);
     }
 
     /// <summary>
@@ -55,6 +58,22 @@ namespace Nebula.Setup
     {
         /// <summary>Bump when nebula-recomp package-content output changes shape.</summary>
         public const int ContentFormatVersion = 1;
+
+        /// <summary>
+        /// Raised when generated module code changes in a way a relink cannot deliver (a relink keeps the
+        /// compiled objects); an update recompiles installed modules of a lower generation. 2 (1.0.1): the
+        /// site hooks of the text speed (TextStep) and language (Language) settings; fused multiply-adds
+        /// without the C runtime (a 1.0.0 SSE2 module calls its soft-float fma for every fused guest
+        /// instruction); no LodDistance hook. 3: the draw identity, motion signal, 2D layer and visible sun
+        /// site hooks of interpolation, motion vectors and ray tracing (generator version 20).
+        /// </summary>
+        public const int ModuleGeneration = 3;
+
+        /// <summary>Installed modules an update must recompile rather than relink.</summary>
+        private static bool ModulesNeedRebuild(InstalledInfo current)
+        {
+            return current.ModuleGeneration < ModuleGeneration;
+        }
 
         /// <summary>Module build recipe; part of the module compatibility key.</summary>
         private static readonly string[] ModuleRecipe =
@@ -181,12 +200,6 @@ namespace Nebula.Setup
         public string DlssFailure { get; private set; }
         public TimeSpan Elapsed { get { return clock.Elapsed; } }
 
-        /// <summary>Generator version of the game code this setup builds (module-compatibility.json).</summary>
-        public static long Generation
-        {
-            get { return Json.Long(Json.Parse(Payload.ReadText("module-compatibility.json")), "generation"); }
-        }
-
         /// <summary>Everything compiled modules depend on: generator, runtime, toolchain and recipe.</summary>
         public string ModuleKey
         {
@@ -213,9 +226,6 @@ namespace Nebula.Setup
             // error. This check is the only place where that failure can be attributed.
             if (RuntimeNativeIsa == "AVX2" && !HostSupportsAvx2())
                 problems.Add("This package's runtime was built for AVX2, which this CPU does not expose. Use a package built with -NativeIsa SSE2, or install on a CPU with AVX2.");
-            ulong memory = NativeMethods.TotalPhysicalMemory();
-            if (memory < MinimumMemory)
-                problems.Add("Nebula needs 8 GB of RAM (this PC has " + FileUtil.FormatBytes((long)memory) + ").");
             try
             {
                 string fs = FileUtil.FileSystemName(installRoot);
@@ -227,6 +237,30 @@ namespace Nebula.Setup
             }
             catch (Exception error) { problems.Add("Cannot inspect the install folder: " + error.Message); }
             return problems;
+        }
+
+        /// <summary>
+        /// Less RAM than Nebula is designed for does not stop an install: the compile runs one job at a time
+        /// (DefaultCompileJobs). Setup asks first, with this text; null when the PC has enough.
+        /// </summary>
+        /// <summary>
+        /// The Microsoft C++ Build Tools license is asked for only when this install downloads the compiler: not
+        /// when the install folder has it already, and not for an update (its first install accepted it).
+        /// </summary>
+        public static bool BuildToolsLicenseRequired(InstallMode mode, Toolchain toolchain)
+        {
+            return mode != InstallMode.Update && !toolchain.IsReady;
+        }
+
+        public static string LowMemoryWarning()
+        {
+            ulong memory = NativeMethods.TotalPhysicalMemory();
+            if (memory >= MinimumMemory) return null;
+            return "This PC has " + FileUtil.FormatBytes((long)memory) + " of RAM. Nebula is designed for 8 GB or more.\r\n\r\n" +
+                "Installing with less is experimental: compiling the game takes much longer, and the game may stutter, " +
+                "run slowly or close unexpectedly.\r\n\r\n" +
+                "If you continue, you do so at your own risk. Nebula's developer is not responsible for anything that " +
+                "happens while the game runs on this PC.";
         }
 
         /// <summary>One compiler per thread, limited to about 1 GB of RAM each beyond 3 GB for Windows.</summary>
@@ -243,6 +277,8 @@ namespace Nebula.Setup
         {
             Log("Nebula Setup " + BuildInfo.Version + " (" + BuildInfo.Commit + "), " + request.Mode);
             Log("Install folder: " + layout.Root);
+            if (LowMemoryWarning() != null)
+                Log("RAM: " + FileUtil.FormatBytes((long)NativeMethods.TotalPhysicalMemory()) + ", below the 8 GB Nebula is designed for; installing as experimental.");
             Directory.CreateDirectory(layout.Root);
             Directory.CreateDirectory(layout.Staging);
             CleanAbandonedStaging();
@@ -287,11 +323,11 @@ namespace Nebula.Setup
                         catch (InvalidDataException error) { preservingModules = false; Log("Module validation requires rebuild fallback: " + error.Message); }
                         catch (InvalidOperationException error) { preservingModules = false; Log("Module ABI requires rebuild fallback: " + error.Message); }
                     }
-                    if (preservingModules && !ModuleCompatibility.SameGeneration(current.Generation, Generation))
+                    if (preservingModules && ModulesNeedRebuild(current))
                     {
                         preservingModules = false;
-                        Log("The game code changed in this release (generation " + (current.Generation > 0 ? current.Generation.ToString() : "18 or older") +
-                            " to " + Generation + "). Recompiling it from the retained game files.");
+                        Log("The installed " + current.ModuleIsa + " game modules are generation " + current.ModuleGeneration +
+                            "; this release needs " + ModuleGeneration + " (a relink cannot update their code). Rebuilding them.");
                     }
                     if (preservingModules && current.ModuleKey != ModuleKey &&
                         !File.Exists(Path.Combine(current.Directory, "relink-cache", "manifest.json")))
@@ -368,11 +404,11 @@ namespace Nebula.Setup
                     string gen = Path.Combine(staging, "generated");
                     RunRecomp(new[] { "generate", inputs, "--output", gen }, null);
 
-                    Stage(0.22, 0.08, "Downloading the compiler");
+                    Stage(0.22, 0.08, "Preparing the compiler");
                     waitingForDownloads = true;
                     prepare.Join();
                     waitingForDownloads = false;
-                    if (prepareFailure != null) throw prepareFailure;
+                    if (prepareFailure != null) ExceptionDispatchInfo.Capture(prepareFailure).Throw();
                     Build(src, gen, app);
                 }
 
@@ -475,7 +511,17 @@ namespace Nebula.Setup
             Json.Save(Path.Combine(target, "inputs.json"), hashes);
         }
 
-        private bool RetainedInputsValid()
+        /// <summary>The game files an install keeps (its inputs and packed content) are intact, so an update or repair needs no game.</summary>
+        public static bool RetainedGameValid(InstallLayout layout)
+        {
+            return RetainedInputsValid(layout) && ContentValid(layout);
+        }
+
+        private bool RetainedInputsValid() { return RetainedInputsValid(layout); }
+
+        private bool ContentValid() { return ContentValid(layout); }
+
+        private static bool RetainedInputsValid(InstallLayout layout)
         {
             string manifest = Path.Combine(layout.GameInputs, "inputs.json");
             if (!File.Exists(manifest)) return false;
@@ -492,7 +538,7 @@ namespace Nebula.Setup
             catch (Exception) { return false; }
         }
 
-        private bool ContentValid()
+        private static bool ContentValid(InstallLayout layout)
         {
             string marker = Path.Combine(layout.Content, "content.json");
             if (!File.Exists(marker) || !File.Exists(Path.Combine(layout.Content, "game.pak"))) return false;
@@ -592,7 +638,6 @@ namespace Nebula.Setup
                 { "commit", source.Commit },
                 { "repository", source.Repository },
                 { "moduleKey", preservingModules ? current.ModuleKey : ModuleKey },
-                { "generation", preservingModules ? current.Generation : Generation },
                 { "moduleSourceCommit", preservingModules ? current.ModuleSourceCommit : source.Commit },
                 { "toolchain", toolchain.Id },
                 { "contentFormatVersion", ContentFormatVersion },
@@ -601,6 +646,7 @@ namespace Nebula.Setup
                 // machine code, so a recorded session must show which pair it measured instead of inferring it from file hashes.
                 { "runtimeIsa", RuntimeNativeIsa },
                 { "moduleIsa", preservingModules ? current.ModuleIsa : NativeIsa },
+                { "moduleGeneration", preservingModules ? current.ModuleGeneration : ModuleGeneration },
                 { "installedUtc", DateTime.UtcNow.ToString("o") },
                 { "files", files }
             });
@@ -638,30 +684,22 @@ namespace Nebula.Setup
 
         private void Commit(string app, InstalledInfo current)
         {
-            Running.RequireClosed(layout.Root);
             string versionDir = layout.VersionDir(BuildInfo.Version);
+            WaitUntilClosed(Directory.Exists(versionDir),
+                Directory.Exists(Path.Combine(staging, "content")) || Directory.Exists(Path.Combine(staging, "game-inputs")));
             Directory.CreateDirectory(layout.Versions);
-            string replaced = null;
-            if (Directory.Exists(versionDir))
-            {
-                replaced = versionDir + ".replaced-" + Guid.NewGuid().ToString("N").Substring(0, 8);
-                Directory.Move(versionDir, replaced);
-            }
-            Directory.Move(app, versionDir);
+            string replaced = versionDir + ".replaced-" + Guid.NewGuid().ToString("N").Substring(0, 8);
+            Swap(app, versionDir, replaced, Log);
 
             string newContent = Path.Combine(staging, "content");
             if (Directory.Exists(newContent))
             {
                 Json.Save(Path.Combine(newContent, "content.json"), new Dictionary<string, object> { { "formatVersion", ContentFormatVersion }, { "createdUtc", DateTime.UtcNow.ToString("o") } });
-                if (Directory.Exists(layout.Content)) Directory.Move(layout.Content, Path.Combine(staging, "content-old"));
-                Directory.Move(newContent, layout.Content);
+                Swap(newContent, layout.Content, Path.Combine(staging, "content-old"), Log);
             }
             string newInputs = Path.Combine(staging, "game-inputs");
             if (Directory.Exists(newInputs))
-            {
-                if (Directory.Exists(layout.GameInputs)) Directory.Move(layout.GameInputs, Path.Combine(staging, "game-inputs-old"));
-                Directory.Move(newInputs, layout.GameInputs);
-            }
+                Swap(newInputs, layout.GameInputs, Path.Combine(staging, "game-inputs-old"), Log);
 
             string previous = current != null && current.Version != BuildInfo.Version ? current.Version : (current != null ? current.Previous : null);
             Json.Save(layout.Current, new Dictionary<string, object>
@@ -669,19 +707,80 @@ namespace Nebula.Setup
                 { "version", BuildInfo.Version },
                 { "previous", previous }
             });
-            if (replaced != null) FileUtil.DeleteTree(replaced);
-            // Keep exactly one previous version for rollback.
+            // Nebula is installed from here on: what follows is tidying and shortcuts, and does not fail the install.
+            // Keep exactly one previous version for rollback; a folder still held is removed by a later install.
             foreach (var dir in Directory.GetDirectories(layout.Versions))
             {
                 string name = Path.GetFileName(dir);
-                if (name != BuildInfo.Version && name != previous) { try { FileUtil.DeleteTree(dir); } catch (IOException) { } }
+                if (name != BuildInfo.Version && name != previous)
+                {
+                    try { FileUtil.DeleteTree(dir); }
+                    catch (IOException error) { Log("Could not remove " + dir + ": " + error.Message); }
+                    catch (UnauthorizedAccessException error) { Log("Could not remove " + dir + ": " + error.Message); }
+                }
             }
             string self = Assembly.GetExecutingAssembly().Location;
             if (!string.Equals(Path.GetFullPath(self), layout.SetupCopy, StringComparison.OrdinalIgnoreCase))
-                File.Copy(self, layout.SetupCopy, true);
-            Integration.Register(layout, BuildInfo.Version, request.DesktopShortcut);
+                CopySetup(self);
+            foreach (var failure in Integration.Register(layout, BuildInfo.Version, request.DesktopShortcut))
+                Log("Could not create the shortcut " + failure + "; Nebula.exe is in " + versionDir + ".");
             InstalledVersionDir = versionDir;
             Log("Installed " + BuildInfo.Version + " to " + versionDir + (previous != null ? "; kept " + previous + " for rollback." : "."));
+        }
+
+        /// <summary>
+        /// An update installs beside the running version, so the launcher it was started from (or the game) may stay
+        /// open. Nebula has to close only when this install replaces the folder it runs from (a repair), or the game
+        /// files the game reads. Setup then asks and waits; unattended, it fails.
+        /// </summary>
+        private void WaitUntilClosed(bool replacingVersion, bool replacingGameFiles)
+        {
+            while (true)
+            {
+                string running = replacingVersion ? Running.Find(layout.VersionDir(BuildInfo.Version), Running.Programs) : null;
+                if (running == null && replacingGameFiles) running = Running.Find(layout.Root, "NebulaRuntime");
+                if (running == null) return;
+                Log("Waiting for " + running + " to close.");
+                if (!progress.AskToClose("Nebula is running (" + running + "). Close the game, the Nebula launcher and Nebula " +
+                        "Settings, then choose Retry to finish installing Nebula " + BuildInfo.Version + "."))
+                    throw new InvalidOperationException("Nebula is running. Close the game, the Nebula launcher and Nebula Settings, then try again.");
+            }
+        }
+
+        /// <summary>
+        /// Puts <paramref name="fresh"/>, built in staging, at <paramref name="destination"/>. What is there is
+        /// renamed to <paramref name="aside"/> first, never copied (a copy would then delete it file by file, and
+        /// stop half way at a file another program holds), and renamed back if the new tree cannot be moved in.
+        /// </summary>
+        internal static void Swap(string fresh, string destination, string aside, Action<string> log)
+        {
+            bool existed = Directory.Exists(destination);
+            if (existed) FileUtil.MoveDirectoryInPlace(destination, aside);
+            try { FileUtil.MoveDirectory(fresh, destination, log); }
+            catch (Exception)
+            {
+                if (existed)
+                {
+                    try { FileUtil.MoveDirectoryInPlace(aside, destination); }
+                    catch (Exception error) { log("Could not put " + destination + " back from " + aside + ": " + error.Message); }
+                }
+                throw;
+            }
+        }
+
+        /// <summary>The Start menu's Update and Setup shortcuts run this copy. A held file is retried, then logged.</summary>
+        private void CopySetup(string self)
+        {
+            for (int attempt = 0; ; attempt++)
+            {
+                try { File.Copy(self, layout.SetupCopy, true); return; }
+                catch (Exception error)
+                {
+                    if (!(error is IOException) && !(error is UnauthorizedAccessException)) throw;
+                    if (attempt >= 20) { Log("Could not copy Setup to " + layout.SetupCopy + ": " + error.Message); return; }
+                    Thread.Sleep(500);
+                }
+            }
         }
 
         private void CleanAbandonedStaging()

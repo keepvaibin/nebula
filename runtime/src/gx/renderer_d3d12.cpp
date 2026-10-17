@@ -1,5 +1,6 @@
 #include "galaxy/gx/renderer_d3d12.h"
 #include "galaxy/gx/rt_materials.h"
+#include "galaxy/crash_notes.h"
 #include "galaxy/gx/display_modes.h"
 
 #include "galaxy/content_viewport.h"
@@ -338,6 +339,20 @@ std::uint32_t s_handled_key_normalized = 0u;
 std::atomic<std::uint64_t> s_pending_resize_extent{0};
 
 constexpr unsigned kNativeSettingsTabCount = 6;
+
+// The GENERAL page's languages, in the order LEFT/RIGHT steps through them.
+constexpr GameLanguage kGameLanguages[] = {GameLanguage::English, GameLanguage::French, GameLanguage::Spanish};
+
+// Each language in its own name; the UTF-8 Ç and Ñ are drawn by ui_text.
+const char* game_language_name(GameLanguage language) {
+    switch (language) {
+    case GameLanguage::French: return "FRAN\xC3\x87" "AIS";
+    case GameLanguage::Spanish: return "ESPA\xC3\x91" "OL";
+    case GameLanguage::English: break;
+    }
+    return "ENGLISH";
+}
+
 // Rows the panel shows at once; longer pages scroll.
 constexpr unsigned kNativeSettingsVisibleRows = 9u;
 
@@ -1044,6 +1059,35 @@ void revert_native_settings_draft() {
     s_settings_draft = get_render_config();
     reset_controls_draft();
     std::cerr << "[settings] reverted\n";
+}
+
+// Nebula Settings can save config.ini while the game runs. The game takes the file's settings as the menu's
+// apply does, so the next save from the game writes them back rather than over them. Checked twice a second,
+// and not while the menu is open: its draft and display confirmation belong to the settings it opened with, and
+// a change made meanwhile lands once it closes.
+void poll_render_config_file() {
+    static std::uint64_t s_next_check_ms = 0u;
+    const std::uint64_t now = GetTickCount64();
+    if (now < s_next_check_ms) {
+        return;
+    }
+    s_next_check_ms = now + 500u;
+    const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
+    if (s_native_settings_visible.load(std::memory_order_relaxed)) {
+        return;
+    }
+    const RenderConfig before = get_render_config();
+    if (!reload_render_config_if_changed()) {
+        return;
+    }
+    RenderConfig after = get_render_config();
+    if (after.internal_follow_window) {
+        // The window decides the scale, as when the menu turns Match Output on.
+        after.efb_scale = before.efb_scale;
+        set_render_config(after);
+        s_follow_window_rearm.store(true, std::memory_order_release);
+    }
+    std::cerr << "[settings] config.ini changed outside the game; applied\n";
 }
 
 // Every overlay change is logged with its new row text.
@@ -2206,6 +2250,10 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 render.window_height = static_cast<unsigned>(client.bottom);
                 set_render_config(render);
                 s_native_settings_dirty.store(true, std::memory_order_release);
+                // Saved now, not when the game closes: Nebula Settings reads the file meanwhile.
+                if (!s_native_settings_visible.load(std::memory_order_relaxed)) {
+                    flush_native_settings_if_dirty();
+                }
             }
         }
     }
@@ -4854,6 +4902,11 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
                       << " vendor=0x" << std::hex << adapter_desc.VendorId
                       << " device=0x" << adapter_desc.DeviceId << std::dec
                       << '\n';
+            char gpu[256]{};
+            std::snprintf(gpu, sizeof(gpu), "\"%s\" vram-mb=%llu vendor=0x%04X device=0x%04X", narrow,
+                          static_cast<unsigned long long>(adapter_desc.DedicatedVideoMemory / (1024 * 1024)),
+                          static_cast<unsigned>(adapter_desc.VendorId), static_cast<unsigned>(adapter_desc.DeviceId));
+            galaxy::crash_notes::set(galaxy::crash_notes::Fixed::Gpu, gpu);
         }
 
         // Live debug-layer message callback (opt-in, same GALAXY_D3D_DEBUG
@@ -6145,6 +6198,7 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
     // with no in-flight command-list recording on this renderer. Contains
     // its own full GPU-idle wait, so it belongs before any per-slot state
     // below is touched.
+    poll_render_config_file();
     reconcile_display_state();
     apply_pending_resize();
     follow_window_internal_resolution();
@@ -12902,6 +12956,10 @@ void RendererD3D12::debug_log_readback() {
 // present
 // ---------------------------------------------------------------------------
 
+// The two accented capitals the language names need, as ui_glyph codes.
+constexpr char kGlyphCCedilla = '\x01';
+constexpr char kGlyphNTilde = '\x02';
+
 std::array<std::uint8_t, 7> ui_glyph(char ch) {
     if (ch >= 'a' && ch <= 'z') {
         ch = static_cast<char>(ch - 'a' + 'A');
@@ -12956,6 +13014,9 @@ std::array<std::uint8_t, 7> ui_glyph(char ch) {
     case '(': return {0x02u, 0x04u, 0x08u, 0x08u, 0x08u, 0x04u, 0x02u};
     case ')': return {0x08u, 0x04u, 0x02u, 0x02u, 0x02u, 0x04u, 0x08u};
     case '>': return {0x08u, 0x04u, 0x02u, 0x01u, 0x02u, 0x04u, 0x08u};
+    case kGlyphCCedilla: return {0x0Eu, 0x11u, 0x10u, 0x10u, 0x11u, 0x0Eu, 0x04u};
+    // A full N; ui_text draws the tilde above the cell.
+    case kGlyphNTilde: return {0x11u, 0x19u, 0x15u, 0x13u, 0x11u, 0x11u, 0x11u};
     default: return {0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u};
     }
 }
@@ -12984,21 +13045,35 @@ void ui_text(
     const std::string& text,
     const std::array<float, 4>& color) {
     int cursor_x = x;
-    for (const char ch : text) {
+    for (std::size_t i = 0; i < text.size(); ++i) {
+        char ch = text[i];
         if (ch == ' ') {
             cursor_x += 4 * scale;
             continue;
         }
-        const std::array<std::uint8_t, 7> rows = ui_glyph(ch);
-        std::uint64_t bitmap = 0u;
-        for (unsigned row = 0; row < 7u; ++row) {
-            for (unsigned col = 0; col < 5u; ++col) {
-                if ((rows[row] & (1u << (4u - col))) != 0u) {
-                    bitmap |= UINT64_C(1) << (row * 5u + col);
+        // UTF-8 Ç/ç and Ñ/ñ (C3 87/A7, C3 91/B1); any other two-byte letter draws as one blank cell.
+        if (static_cast<unsigned char>(ch) == 0xC3u && i + 1u < text.size()) {
+            const auto next = static_cast<unsigned char>(text[++i]);
+            ch = next == 0x87u || next == 0xA7u ? kGlyphCCedilla
+               : next == 0x91u || next == 0xB1u ? kGlyphNTilde : '\0';
+        }
+        const auto bitmap_of = [](const std::array<std::uint8_t, 7>& rows) {
+            std::uint64_t bitmap = 0u;
+            for (unsigned row = 0; row < 7u; ++row) {
+                for (unsigned col = 0; col < 5u; ++col) {
+                    if ((rows[row] & (1u << (4u - col))) != 0u) {
+                        bitmap |= UINT64_C(1) << (row * 5u + col);
+                    }
                 }
             }
+            return bitmap;
+        };
+        if (ch == kGlyphNTilde) {
+            // Two rows of tilde, one row clear of the N: squeezed into the cell, it read as a plain N.
+            static const std::uint64_t tilde = bitmap_of({0x0Du, 0x16u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u});
+            renderer.draw_ui_glyph(cursor_x, y - 3 * scale, scale, tilde, color);
         }
-        renderer.draw_ui_glyph(cursor_x, y, scale, bitmap, color);
+        renderer.draw_ui_glyph(cursor_x, y, scale, bitmap_of(ui_glyph(ch)), color);
         cursor_x += 6 * scale;
     }
 }
@@ -13359,6 +13434,23 @@ std::vector<SettingsRow> game_page(const RuntimeSettings& runtime) {
                         }
                     },
                     "HOW FAST DIALOGUE TEXT APPEARS"});
+    rows.push_back({"LANGUAGE", game_language_name(runtime.language),
+                    [](RenderConfig&, int delta) {
+                        // Saved now; the game switches at the next start (game_language_for_boot).
+                        RuntimeSettings settings = get_runtime_settings();
+                        std::size_t index = 0u;
+                        for (std::size_t i = 0; i < std::size(kGameLanguages); ++i) {
+                            if (kGameLanguages[i] == settings.language) index = i;
+                        }
+                        const GameLanguage next = kGameLanguages[settings_step(
+                            static_cast<unsigned>(index), static_cast<unsigned>(std::size(kGameLanguages)), delta)];
+                        if (next != settings.language) {
+                            settings.language = next;
+                            set_runtime_settings(settings);
+                            s_native_settings_dirty.store(true, std::memory_order_release);
+                        }
+                    },
+                    "THE GAME'S TEXT AND MENUS"});
     if (galaxy_select_enabled()) {
         want_galaxy_select_names();
         const std::size_t stage = std::min(s_galaxy_select_stage, kGalaxyStageCount - 1u);
@@ -13641,7 +13733,7 @@ void draw_native_settings_overlay(RendererD3D12& renderer) {
         "SETTINGS",
         text);
 
-    const char* tabs[] = {"DISPLAY", "GRAPHICS", "CONTROLS", "AUDIO", "GAME", "SYSTEM"};
+    const char* tabs[] = {"DISPLAY", "GRAPHICS", "CONTROLS", "AUDIO", "GENERAL", "SYSTEM"};
     static_assert(std::size(tabs) == kNativeSettingsTabCount);
     int tab_x = panel_x + 28;
     // The labels share the panel width; the longest is eight 6-unit glyphs
@@ -13777,6 +13869,9 @@ void draw_native_settings_overlay(RendererD3D12& renderer) {
         status_color = accent;
     } else if (s_settings_applied_ms != 0u && now_ms - s_settings_applied_ms < 2500u) {
         status = "APPLIED";
+        status_color = accent;
+    } else if (GameLanguage running{}; tab == 4u && running_game_language(running) && running != row_runtime.language) {
+        status = "THE NEW LANGUAGE APPLIES WHEN NEBULA RESTARTS";
         status_color = accent;
     } else if (!help.empty()) {
         status = help;

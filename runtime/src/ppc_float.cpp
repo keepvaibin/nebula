@@ -951,7 +951,7 @@ bool native_f64_ternary_fast(
     const double adjusted_addend =
         ternary_subtracts(operation) ? -addend_value : addend_value;
     const double rounded =
-        std::fma(multiplicand_value, multiplier_value, adjusted_addend);
+        galaxy::fused_multiply_add(multiplicand_value, multiplier_value, adjusted_addend);
     std::uint64_t rounded_bits = std::bit_cast<std::uint64_t>(rounded);
     if (!f64_is_normal_or_zero_result(rounded_bits)) {
         return false;

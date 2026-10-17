@@ -23,6 +23,29 @@ namespace Nebula.Launcher
             Console.WriteLine("PASS: " + what);
         }
 
+        // The end-of-recording notice: Open folder beside OK, and the Explorer command it runs. Rendered to
+        // recording-notice.png.
+        static void RecordingNoticeCases(string outDir)
+        {
+            string zip = Path.Combine(outDir, "20261016-151013-808-example.zip");
+            using (var form = RecordingNotice.Create("Recording saved to " + zip, false, zip))
+            {
+                var buttons = All(form).OfType<Button>().ToList();
+                Check(buttons.Count == 2 && buttons.Any(b => b.Text == "Open folder") && buttons.Any(b => b.Text == "OK") &&
+                      form.AcceptButton == buttons.First(b => b.Text == "OK"), "the recording notice offers Open folder and OK, OK by default");
+                CreateHandles(form);
+                form.PerformLayout();
+                using (var bitmap = new Bitmap(form.Width, form.Height))
+                {
+                    form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.Size));
+                    bitmap.Save(Path.Combine(outDir, "recording-notice.png"), ImageFormat.Png);
+                }
+            }
+            var command = RecordingNotice.FolderCommand(zip);
+            Check(command.FileName.EndsWith("\\explorer.exe", StringComparison.OrdinalIgnoreCase) &&
+                  command.Arguments == "/select,\"" + Path.GetFullPath(zip) + "\"", "Open folder shows the recording selected in Explorer");
+        }
+
         // A form that is never shown creates no child windows; reading Handle creates them.
         static void CreateHandles(Control control)
         {
@@ -185,22 +208,6 @@ namespace Nebula.Launcher
             Check(small[GraphicsSettings.SnapWindowSize(small, new Size(1920, 1080))] == small[small.Count - 1], "a size taller than the screen allows snaps to the largest");
         }
 
-        static void GeneralCases()
-        {
-            string path = AudioSettings.SettingsPath;
-            if (File.Exists(path)) File.Delete(path);
-            Check(GeneralSettings.Load().TextSpeed == 1, "text speed starts at the game's pace");
-            File.WriteAllText(path, "audio_master_gain=0.5\ntext_speed=7\n");
-            Check(GeneralSettings.Load().TextSpeed == 1, "an unknown text speed reads as 1x");
-            var general = GeneralSettings.Load();
-            general.TextSpeed = 3;
-            general.Save();
-            string saved = File.ReadAllText(path);
-            Check(saved.Contains("text_speed=3") && saved.Contains("audio_master_gain=0.5") && GeneralSettings.Load().TextSpeed == 3,
-                  "text speed is saved beside the other runtime settings");
-            File.Delete(path);
-        }
-
         static void AudioCases()
         {
             string path = AudioSettings.SettingsPath;
@@ -325,6 +332,70 @@ namespace Nebula.Launcher
             using (var writer = new StreamWriter(archive.CreateEntry("nebula-saves.json").Open()))
                 writer.Write(manifest);
             return path;
+        }
+
+        static void GeneralCases()
+        {
+            string path = AudioSettings.SettingsPath;
+            if (File.Exists(path)) File.Delete(path);
+            Check(GeneralSettings.Load().TextSpeed == 1, "text speed starts at the game's pace");
+            File.WriteAllText(path, "audio_master_gain=0.5\ntext_speed=7\n");
+            Check(GeneralSettings.Load().TextSpeed == 1, "an unknown text speed reads as 1x");
+            var general = GeneralSettings.Load();
+            general.TextSpeed = 3;
+            general.Save();
+            string saved = File.ReadAllText(path);
+            Check(saved.Contains("text_speed=3") && saved.Contains("audio_master_gain=0.5") && GeneralSettings.Load().TextSpeed == 3,
+                  "text speed is saved beside the other runtime settings");
+            Check(GeneralSettings.Load().Language == 0 && GeneralSettings.Languages.Length == 3 &&
+                  GeneralSettings.Languages[1] == "Français" && GeneralSettings.Languages[2] == "Español",
+                  "the game's languages are listed in their own names, English first");
+            general = GeneralSettings.Load();
+            general.Language = 2;
+            general.Save();
+            saved = File.ReadAllText(path);
+            Check(saved.Contains("language=spanish") && saved.Contains("text_speed=3") && GeneralSettings.Load().Language == 2,
+                  "the language is saved for the runtime");
+            File.WriteAllText(path, "language=FRENCH\n");
+            Check(GeneralSettings.Load().Language == 1, "the runtime's language values read in any case");
+            File.WriteAllText(path, "language=klingon\n");
+            Check(GeneralSettings.Load().Language == 0, "an unknown language reads as English");
+            File.Delete(path);
+        }
+
+        // Nebula Settings open while the game runs: the in-game menu saves the same files. Settings write back
+        // only what was changed in them, so the game's changes made meanwhile stay.
+        static void SharedFileCases()
+        {
+            string runtime = AudioSettings.SettingsPath, config = GraphicsSettings.ConfigPath;
+            File.WriteAllText(runtime, "input_mode=auto\naudio_master_gain=1\naudio_music_gain=1\ntext_speed=1\nlanguage=english\n");
+            File.WriteAllText(config, "aa=0\nsharpness=0\nper_pixel_lighting=0\nwindow_width=1280\nwindow_height=720\n");
+            var general = GeneralSettings.Load();
+            var audio = AudioSettings.Load();
+            var graphics = GraphicsSettings.Load();
+            // The game: 2x text, music at half, SMAA and a window dragged to 1600x900.
+            File.WriteAllText(runtime, "input_mode=auto\naudio_master_gain=1\naudio_music_gain=0.5\ntext_speed=2\nlanguage=english\n");
+            File.WriteAllText(config, "aa=1\nsharpness=0\nper_pixel_lighting=0\nwindow_width=1600\nwindow_height=900\n");
+            general.Language = 1;
+            general.Save();
+            audio.Percent[0] = 80;
+            audio.Save();
+            graphics.Sharpness = 30;
+            graphics.Save();
+            string saved = File.ReadAllText(runtime), savedConfig = File.ReadAllText(config);
+            Check(saved.Contains("language=french") && saved.Contains("text_speed=2") &&
+                  saved.Contains("audio_master_gain=0.8") && saved.Contains("audio_music_gain=0.5"),
+                  "runtime settings changed in the game meanwhile are kept beside those changed here");
+            Check(savedConfig.Contains("sharpness=30") && savedConfig.Contains("aa=1") &&
+                  savedConfig.Contains("window_width=1600") && savedConfig.Contains("window_height=900"),
+                  "graphics changed in the game meanwhile are kept beside those changed here");
+            // A second save writes nothing it did not change since the first.
+            File.WriteAllText(config, savedConfig.Replace("aa=1", "aa=3"));
+            graphics.Save();
+            Check(File.ReadAllText(config).Contains("aa=3") && File.ReadAllText(config).Contains("sharpness=30"),
+                  "saving again keeps a change the game made after the first save");
+            File.Delete(runtime);
+            File.Delete(config);
         }
 
         static void SaveArchiveCases(string scratch)
@@ -453,8 +524,10 @@ namespace Nebula.Launcher
                 WindowSizeCases();
                 AudioCases();
                 GeneralCases();
+                SharedFileCases();
                 SaveArchiveCases(outDir);
                 Application.EnableVisualStyles();
+                RecordingNoticeCases(outDir);
 
                 var first = new LaunchSession();
                 Check(!first.SetupComplete, "no settings.json: setup not complete");

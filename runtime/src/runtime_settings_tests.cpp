@@ -155,6 +155,8 @@ int main() {
     _putenv_s("GALAXY_AUDIO_EFFECTS_GAIN", "");
     _putenv_s("GALAXY_AUDIO_VOICE_GAIN", "");
     _putenv_s("GALAXY_AUDIO_AMBIENCE_GAIN", "");
+    _putenv_s("GALAXY_TEXT_SPEED", "");
+    _putenv_s("GALAXY_LANGUAGE", "");
     std::filesystem::remove(settings_path);
     galaxy::load_runtime_settings_from_file();
     passed &= expect(
@@ -572,7 +574,72 @@ int main() {
                 galaxy::get_runtime_settings().input_mode ==
                     galaxy::RuntimeInputMode::KeyboardMouse,
             "reload applies audio gains only");
+        // The input source Nebula Settings saved meanwhile is the next start's, and the game's save keeps it.
+        passed &= expect(galaxy::save_runtime_settings_to_file() &&
+                read_text(settings_path).find("input_mode=controller\n") != std::string::npos,
+            "a save keeps the input source the file names");
+        galaxy::RuntimeSettings changed = galaxy::get_runtime_settings();
+        changed.input_mode = galaxy::RuntimeInputMode::Auto;
+        galaxy::set_runtime_settings(changed);
+        passed &= expect(galaxy::save_runtime_settings_to_file() &&
+                read_text(settings_path).find("input_mode=auto\n") != std::string::npos,
+            "an input source chosen in the game is saved");
     }
+
+    write_text(settings_path, "text_speed=3\n");
+    galaxy::load_runtime_settings_from_file();
+    passed &= expect(galaxy::get_runtime_settings().text_speed == 3u, "text speed 3x loads");
+    write_text(settings_path, "text_speed=9\n");
+    galaxy::load_runtime_settings_from_file();
+    passed &= expect(galaxy::get_runtime_settings().text_speed == 1u, "an unknown text speed keeps the game's pace");
+    _putenv_s("GALAXY_TEXT_SPEED", "2");
+    galaxy::load_runtime_settings_from_file();
+    passed &= expect(galaxy::get_runtime_settings().text_speed == 2u, "text speed has an environment override");
+    _putenv_s("GALAXY_TEXT_SPEED", "");
+    passed &= expect(
+        galaxy::save_runtime_settings_to_file() &&
+            read_text(settings_path).find("text_speed=2") != std::string::npos,
+        "text speed is saved with the other settings");
+
+    using galaxy::GameLanguage;
+    write_text(settings_path, "language=french\n");
+    galaxy::load_runtime_settings_from_file();
+    passed &= expect(galaxy::get_runtime_settings().language == GameLanguage::French, "French loads");
+    write_text(settings_path, "language=SPANISH\n");
+    galaxy::load_runtime_settings_from_file();
+    passed &= expect(galaxy::get_runtime_settings().language == GameLanguage::Spanish, "a language name in any case loads");
+    write_text(settings_path, "language=german\n");
+    galaxy::load_runtime_settings_from_file();
+    passed &= expect(galaxy::get_runtime_settings().language == GameLanguage::English,
+                     "a language the disc does not carry starts the game in English");
+    _putenv_s("GALAXY_LANGUAGE", "french");
+    galaxy::load_runtime_settings_from_file();
+    passed &= expect(galaxy::get_runtime_settings().language == GameLanguage::French, "language has an environment override");
+    _putenv_s("GALAXY_LANGUAGE", "");
+    passed &= expect(
+        galaxy::save_runtime_settings_to_file() &&
+            read_text(settings_path).find("language=french") != std::string::npos,
+        "language is saved with the other settings");
+    galaxy::RuntimeSettings odd = galaxy::get_runtime_settings();
+    odd.language = static_cast<GameLanguage>(2);
+    galaxy::set_runtime_settings(odd);
+    passed &= expect(galaxy::get_runtime_settings().language == GameLanguage::English,
+                     "a language code outside the three is replaced by English");
+
+    // The game's first question fixes the language for the session.
+    GameLanguage running{};
+    passed &= expect(!galaxy::running_game_language(running), "no language is fixed before the game asks");
+    galaxy::RuntimeSettings spanish = galaxy::get_runtime_settings();
+    spanish.language = GameLanguage::Spanish;
+    galaxy::set_runtime_settings(spanish);
+    passed &= expect(galaxy::game_language_for_boot() == GameLanguage::Spanish, "the game starts in the chosen language");
+    galaxy::RuntimeSettings french = galaxy::get_runtime_settings();
+    french.language = GameLanguage::French;
+    galaxy::set_runtime_settings(french);
+    passed &= expect(galaxy::game_language_for_boot() == GameLanguage::Spanish &&
+                         galaxy::running_game_language(running) && running == GameLanguage::Spanish &&
+                         galaxy::get_runtime_settings().language == GameLanguage::French,
+                     "a change while playing is saved but the session keeps its language");
 
     std::filesystem::remove_all(root);
 

@@ -702,26 +702,26 @@ GALAXY_ALWAYS_INLINE float binary_op_f32(float left, float right) noexcept {
 template <PpcFloatTernaryOperation Operation>
 GALAXY_ALWAYS_INLINE double ternary_op(double a, double c, double b) noexcept {
     if constexpr (Operation == PpcFloatTernaryOperation::MultiplyAdd) {
-        return std::fma(a, c, b);
+        return galaxy::fused_multiply_add(a, c, b);
     } else if constexpr (Operation == PpcFloatTernaryOperation::MultiplySubtract) {
-        return std::fma(a, c, -b);
+        return galaxy::fused_multiply_add(a, c, -b);
     } else if constexpr (Operation == PpcFloatTernaryOperation::NegativeMultiplyAdd) {
-        return -std::fma(a, c, b);
+        return -galaxy::fused_multiply_add(a, c, b);
     } else {
-        return -std::fma(a, c, -b);
+        return -galaxy::fused_multiply_add(a, c, -b);
     }
 }
 
 template <PpcFloatTernaryOperation Operation>
 GALAXY_ALWAYS_INLINE float ternary_op_f32(float a, float c, float b) noexcept {
     if constexpr (Operation == PpcFloatTernaryOperation::MultiplyAdd) {
-        return std::fmaf(a, c, b);
+        return galaxy::fused_multiply_add(a, c, b);
     } else if constexpr (Operation == PpcFloatTernaryOperation::MultiplySubtract) {
-        return std::fmaf(a, c, -b);
+        return galaxy::fused_multiply_add(a, c, -b);
     } else if constexpr (Operation == PpcFloatTernaryOperation::NegativeMultiplyAdd) {
-        return -std::fmaf(a, c, b);
+        return -galaxy::fused_multiply_add(a, c, b);
     } else {
-        return -std::fmaf(a, c, -b);
+        return -galaxy::fused_multiply_add(a, c, -b);
     }
 }
 
@@ -1071,7 +1071,7 @@ GALAXY_ALWAYS_INLINE Pair binary_pair(Pair left, Pair right) noexcept {
 // a*c+b, a*c-b, -(a*c+b), -(a*c-b): the same results as ternary_op per lane.
 template <PpcFloatTernaryOperation Operation>
 GALAXY_ALWAYS_INLINE Pair ternary_pair(Pair a, Pair c, Pair b) noexcept {
-#if defined(__FMA__) || defined(__AVX2__)
+#if GALAXY_FUSED_MULTIPLY_ADD_IS_FMA3
     if constexpr (Operation == PpcFloatTernaryOperation::MultiplyAdd) {
         return _mm_fmadd_pd(a, c, b);
     } else if constexpr (Operation == PpcFloatTernaryOperation::MultiplySubtract) {
@@ -1118,7 +1118,7 @@ GALAXY_ALWAYS_INLINE SinglePair binary_single_pair(SinglePair left, SinglePair r
 template <PpcFloatTernaryOperation Operation>
 GALAXY_ALWAYS_INLINE SinglePair ternary_single_pair(
     SinglePair a, SinglePair c, SinglePair b) noexcept {
-#if defined(__FMA__) || defined(__AVX2__)
+#if GALAXY_FUSED_MULTIPLY_ADD_IS_FMA3
     if constexpr (Operation == PpcFloatTernaryOperation::MultiplyAdd) {
         return _mm_fmadd_ps(a, c, b);
     } else if constexpr (Operation == PpcFloatTernaryOperation::MultiplySubtract) {

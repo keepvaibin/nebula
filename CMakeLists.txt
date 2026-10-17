@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(NebulaRuntime VERSION 1.0.0 LANGUAGES C CXX)
+project(NebulaRuntime VERSION 1.0.1 LANGUAGES C CXX)
 
 if(NOT WIN32)
     message(FATAL_ERROR "The first runtime milestone targets Windows x64 only.")
@@ -921,6 +921,8 @@ set_source_files_properties("${CMAKE_CURRENT_BINARY_DIR}/nebula_runtime.rc" PROP
 target_include_directories(NebulaRuntime PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 add_executable(galaxy_native_thp_video_tests runtime/src/native_thp_video_tests.cpp runtime/src/native_thp_video.cpp)
 target_link_libraries(galaxy_native_thp_video_tests PRIVATE galaxy_runtime_abi)
+add_executable(galaxy_fused_multiply_add_tests runtime/src/fused_multiply_add_tests.cpp)
+target_link_libraries(galaxy_fused_multiply_add_tests PRIVATE galaxy_runtime_abi)
 add_executable(galaxy_verify_thp_native tools/dev/verify_thp_native.cpp runtime/src/native_thp_video.cpp)
 target_link_libraries(galaxy_verify_thp_native PRIVATE galaxy_runtime_abi)
 target_link_libraries(
@@ -1012,6 +1014,9 @@ add_executable(galaxy_native_api_tests runtime/src/native_api_tests.cpp)
 target_link_libraries(galaxy_native_api_tests PRIVATE galaxy_runtime_abi galaxy_ppc_float)
 add_executable(galaxy_native_fast_float_tests runtime/src/native_fast_float_tests.cpp)
 target_compile_definitions(galaxy_native_fast_float_tests PRIVATE GALAXY_FAST_FLOAT=1)
+# MSVC 19.44's optimizer (c2.dll) overflows its own stack inlining this test's float helpers at
+# /Ob2 and /Ob3 (0xC00000FD, no diagnostic). The test checks results, not inlining.
+target_compile_options(galaxy_native_fast_float_tests PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/Ob1>)
 target_link_libraries(galaxy_native_fast_float_tests PRIVATE galaxy_runtime_abi galaxy_ppc_float)
 add_executable(galaxy_native_hw_float_conversion_tests runtime/src/native_hw_float_conversion_tests.cpp)
 target_compile_definitions(galaxy_native_hw_float_conversion_tests PRIVATE GALAXY_FAST_FLOAT=1)
@@ -1266,6 +1271,7 @@ if(MSVC)
         galaxy_jaudio_mixer
         galaxy_jaudio_mixer_tests
         galaxy_native_thp_video_tests
+        galaxy_fused_multiply_add_tests
         galaxy_thp_audio_worker_tests
         galaxy_owned_fifo_packet_tests
         galaxy_verify_asset_extract
@@ -1383,6 +1389,7 @@ galaxy_add_native_test(native_host_loader galaxy_native_host_tests)
 galaxy_add_native_test(
     native_audio_queue_ownership
     galaxy_native_audio_queue_tests)
+galaxy_add_native_test(fused_multiply_add galaxy_fused_multiply_add_tests)
 galaxy_add_native_test(native_thp_video
     galaxy_native_thp_video_tests)
 galaxy_add_native_test(thp_audio_worker_ownership

@@ -55,6 +55,101 @@ namespace Nebula
             }
         }
 
+        /// <summary>
+        /// Moves a directory. A file in it that another process holds open for a moment (a virus scanner or indexer
+        /// reading freshly written programs) refuses the move: it is retried for about ten seconds, then the tree is
+        /// copied instead (a reader's handle still allows that). A failure names the processes the Restart Manager
+        /// reports holding its files.
+        /// </summary>
+        public static void MoveDirectory(string source, string destination, Action<string> log)
+        {
+            Exception refused = RetryMove(source, destination);
+            if (refused == null) return;
+            log("Could not move " + source + " (" + refused.Message + "); copying it instead.");
+            try
+            {
+                CopyTree(source, destination);
+            }
+            catch (Exception error)
+            {
+                if (!(error is IOException) && !(error is UnauthorizedAccessException)) throw;
+                try { DeleteTree(destination); } catch (Exception) { }
+                string holders = Holders(Directory.GetFiles(source, "*", SearchOption.AllDirectories));
+                throw new IOException(refused.Message + (holders.Length != 0 ? " In use by: " + holders + "." : ""), error);
+            }
+            try { DeleteTree(source); } catch (Exception) { }
+        }
+
+        /// <summary>
+        /// MoveDirectory without the copy, for trees whose folders carry streams of their own (saves: a copy would
+        /// drop them). After about ten seconds of refusals it fails, naming the holders; nothing has moved.
+        /// </summary>
+        public static void MoveDirectoryInPlace(string source, string destination)
+        {
+            Exception refused = RetryMove(source, destination);
+            if (refused == null) return;
+            string holders = Holders(Directory.GetFiles(source, "*", SearchOption.AllDirectories));
+            throw new IOException(refused.Message + (holders.Length != 0 ? " In use by: " + holders + "." : ""), refused);
+        }
+
+        /// <summary>Directory.Move, retried for about ten seconds while it is refused; the last refusal, or null.</summary>
+        private static Exception RetryMove(string source, string destination)
+        {
+            // Never merged into an existing folder: the copy fallback would mix the two, and its cleanup delete both.
+            if (Directory.Exists(destination) || File.Exists(destination))
+                throw new IOException("Cannot move " + source + " to " + destination + ", which already exists.");
+            Exception refused = null;
+            for (int attempt = 0; attempt < 20; attempt++)
+            {
+                if (attempt != 0) System.Threading.Thread.Sleep(500);
+                try { Directory.Move(source, destination); return null; }
+                catch (IOException error) { refused = error; }
+                catch (UnauthorizedAccessException error) { refused = error; }
+            }
+            return refused;
+        }
+
+        public static void CopyTree(string source, string destination)
+        {
+            string from = Path.GetFullPath(source).TrimEnd(Path.DirectorySeparatorChar);
+            string to = Path.GetFullPath(destination);
+            Directory.CreateDirectory(to);
+            foreach (var dir in Directory.GetDirectories(from, "*", SearchOption.AllDirectories))
+                Directory.CreateDirectory(Path.Combine(to, dir.Substring(from.Length + 1)));
+            foreach (var file in Directory.GetFiles(from, "*", SearchOption.AllDirectories))
+                File.Copy(file, Path.Combine(to, file.Substring(from.Length + 1)), true);
+        }
+
+        /// <summary>The processes holding any of the files open, as "name (pid)"; "" when none or unknown.</summary>
+        public static string Holders(string[] files)
+        {
+            uint session;
+            if (files.Length == 0 || NativeMethods.RmStartSession(out session, 0, new StringBuilder(64)) != 0) return "";
+            try
+            {
+                if (NativeMethods.RmRegisterResources(session, (uint)files.Length, files, 0, null, 0, null) != 0) return "";
+                uint needed, count = 0, reasons = 0;
+                const int ErrorMoreData = 234;
+                if (NativeMethods.RmGetList(session, out needed, ref count, null, ref reasons) != ErrorMoreData || needed == 0)
+                    return "";
+                var info = new NativeMethods.RmProcessInfo[needed];
+                count = needed;
+                if (NativeMethods.RmGetList(session, out needed, ref count, info, ref reasons) != 0) return "";
+                var names = new List<string>();
+                for (int i = 0; i < count; i++) names.Add(ProcessName(info[i]) + " (" + info[i].Process.ProcessId + ")");
+                return string.Join(", ", names);
+            }
+            finally { NativeMethods.RmEndSession(session); }
+        }
+
+        // The Restart Manager names only processes with a window or a service; a scanner is usually neither.
+        private static string ProcessName(NativeMethods.RmProcessInfo info)
+        {
+            if (!string.IsNullOrWhiteSpace(info.AppName)) return info.AppName.Trim();
+            try { return System.Diagnostics.Process.GetProcessById(info.Process.ProcessId).ProcessName + ".exe"; }
+            catch (Exception) { return "process"; }
+        }
+
         public static bool IsReparsePoint(string path)
         {
             var attributes = File.GetAttributes(path);
@@ -268,6 +363,40 @@ namespace Nebula
 
     internal static class NativeMethods
     {
+        // Restart Manager (FileUtil.Holders).
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct RmUniqueProcess
+        {
+            public int ProcessId;
+            public System.Runtime.InteropServices.ComTypes.FILETIME StartTime;
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        internal struct RmProcessInfo
+        {
+            public RmUniqueProcess Process;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)] public string AppName;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)] public string ServiceShortName;
+            public int ApplicationType;
+            public uint AppStatus;
+            public uint TSSessionId;
+            [MarshalAs(UnmanagedType.Bool)] public bool Restartable;
+        }
+
+        [DllImport("rstrtmgr.dll", CharSet = CharSet.Unicode)]
+        internal static extern int RmStartSession(out uint session, int flags, StringBuilder key);
+
+        [DllImport("rstrtmgr.dll")]
+        internal static extern int RmEndSession(uint session);
+
+        [DllImport("rstrtmgr.dll", CharSet = CharSet.Unicode)]
+        internal static extern int RmRegisterResources(uint session, uint fileCount, string[] files, uint processCount,
+            RmUniqueProcess[] processes, uint serviceCount, string[] services);
+
+        [DllImport("rstrtmgr.dll")]
+        internal static extern int RmGetList(uint session, out uint needed, ref uint count, [In, Out] RmProcessInfo[] info,
+            ref uint rebootReasons);
+
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         public static extern SafeFileHandle CreateFileW(string path, uint access, uint share, IntPtr security, uint disposition, uint flags, IntPtr template);
 

@@ -345,5 +345,9 @@ std::string gpu_identity(unsigned vendor_id, unsigned device_id, unsigned subsys
 // whether it runs Nebula's ray tracing.
 void record_render_adapter(const wchar_t* description, unsigned vendor_id, unsigned device_id,
                            unsigned subsys_id, bool low_power_preference, bool ray_tracing) noexcept;
+// When config.ini changed on disk since this process last read or wrote it
+// (Nebula Settings saved it while the game runs), reads it over the live
+// settings, as the in-game menu would apply them, and returns true.
+bool reload_render_config_if_changed();
 
 } // namespace galaxy::gx

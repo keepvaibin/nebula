@@ -4,7 +4,7 @@ Builds Nebula-Setup.exe from one exact source revision.
 
 .DESCRIPTION
 Exports the revision with `git archive` and records each file's SHA-256
-(Setup checks its GitHub download against it), builds nebula-recomp and the
+(Setup checks the source it installs against it), builds nebula-recomp and the
 runtime from that export, then compiles the launcher and Setup with the
 in-box C# compiler and embeds everything. -SigningKey also writes
 Nebula-Setup.exe.sig for the updater.
@@ -50,8 +50,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Source revision $resolved has no Git tree" }
     Write-Host "Building Nebula $Version from $type $resolved"
 
-    # 1. Exact source export and manifest.
-    $zip = Join-Path $OutputDirectory ("nebula-source-" + $resolved.Substring(0, 12) + '.zip')
+    # 1. Exact source export and manifest. Setup carries the zip.
+    $zip = Join-Path $work 'nebula-source.zip'
     Invoke-Checked git @('-C', $repo, '-c', 'core.autocrlf=false', '-c', 'core.eol=lf', 'archive', '--format=zip', "--prefix=nebula-$resolved/", '-o', $zip, $resolved)
     $src = Join-Path $work 'src'
     Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -70,6 +70,15 @@ try {
     $manifestPath = Join-Path $work 'source-manifest.json'
     [IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 4), (New-Object Text.UTF8Encoding $false))
     Write-Host ("Source manifest: {0} files, tree {1}" -f $files.Count, $treeHash)
+
+    # No C runtime fma in the runtime or module headers: it is a soft-float routine on CPUs
+    # without FMA3 (galaxy/fused_multiply_add.h). Tests may use it as the reference.
+    $fmaCalls = @(Get-ChildItem -LiteralPath (Join-Path $src 'runtime') -Recurse -File -Include *.cpp, *.h, *.inl |
+        Where-Object { $_.Name -notlike '*_tests.cpp' -and $_.Name -ne 'fused_multiply_add.h' } |
+        Select-String -Pattern '(std::|[^\w.])fmaf?\s*\(')
+    if ($fmaCalls.Count -ne 0) {
+        throw ("std::fma/fmaf in the runtime; use galaxy::fused_multiply_add: " + (($fmaCalls | ForEach-Object { "$($_.Path):$($_.LineNumber)" }) -join ', '))
+    }
 
     # Cargo's native compression dependencies also need the compiler environment.
     . (Join-Path $src 'tools\enter_msvc_environment.ps1')
@@ -92,7 +101,7 @@ try {
     $effectiveIsas = @()
     foreach ($isa in $isaBuilds) {
         $rt = Join-Path $work ('runtime-' + $isa.ToLowerInvariant())
-        $configureLog = & cmake @('-S', $src, '-B', $rt, '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release', "-DGALAXY_NATIVE_ISA=$isa", '-DNEBULA_DSP_MODULE=ON', "-DNEBULA_SOURCE_REVISION=$resolved", "-DNEBULA_SOURCE_REVISION_KIND=$type", "-DNEBULA_SOURCE_GIT_TREE=$gitTree", "-DNEBULA_SOURCE_TREE_SHA256=$treeHash", '-DNEBULA_SOURCE_DIRTY=0') 2>&1
+        $configureLog = & cmake @('-S', $src, '-B', $rt, '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release', "-DGALAXY_NATIVE_ISA=$isa", '-DNEBULA_DSP_MODULE=ON', '-DGALAXY_FIDELITYFX_SDK=', '-DGALAXY_WITH_STREAMLINE_BRIDGE=OFF', "-DNEBULA_SOURCE_REVISION=$resolved", "-DNEBULA_SOURCE_REVISION_KIND=$type", "-DNEBULA_SOURCE_GIT_TREE=$gitTree", "-DNEBULA_SOURCE_TREE_SHA256=$treeHash", '-DNEBULA_SOURCE_DIRTY=0') 2>&1
         $configureLog | ForEach-Object { Write-Host $_ }
         if ($LASTEXITCODE -ne 0) { throw "cmake configure failed with exit code $LASTEXITCODE" }
         $effectiveIsa = $null
@@ -154,6 +163,8 @@ namespace Nebula
         'toolchain.json' = (Join-Path $src 'installer\toolchain.json'); 'runtime-env.json' = (Join-Path $src 'installer\runtime-env.json')
         'runtime-isa.txt' = $runtimeIsaPath
         'LICENSE' = (Join-Path $src 'LICENSE'); 'THIRD-PARTY-NOTICES.md' = (Join-Path $src 'THIRD-PARTY-NOTICES.md'); 'README.md' = (Join-Path $src 'README.md')
+        # The exact source (SourceTree.EmbeddedArchiveName): Setup never needs GitHub for it.
+        'nebula-source.zip' = $zip
     }
     $apiText = Get-Content -LiteralPath (Join-Path $src 'runtime/include/galaxy/native_api.h') -Raw
     $dspText = Get-Content -LiteralPath (Join-Path $src 'runtime/include/galaxy/dsp_context.h') -Raw
@@ -166,12 +177,8 @@ namespace Nebula
         $dspText -notmatch 'kDspGeneratedProbeRequiredCapabilities\s*=\s*kDspGeneratedProbeCapabilitySelectionPublication\s*\|\s*kDspGeneratedProbeCapabilitySelectedChannelBranch\s*;') {
         throw 'Module ABI contract changed; update the installer compatibility contract explicitly.'
     }
-    # A different generation means different game code: Setup recompiles it instead of reusing the installed modules.
-    $generateText = Get-Content -LiteralPath (Join-Path $src 'crates/nebula-recomp-cli/src/generate.rs') -Raw
-    $generation = [regex]::Match($generateText, 'GENERATION_VERSION:\s*u32\s*=\s*(\d+)').Groups[1].Value
-    if (-not $generation) { throw 'GENERATION_VERSION not found in generate.rs.' }
     $compatibilityPath = Join-Path $work 'module-compatibility.json'
-    [ordered]@{nativeAbi=[uint32]$nativeAbi;rsoAbi=[uint32]$rsoAbi;dspProbeVersion=[uint32]$dspVersion;dspCapabilities=3;generation=[uint32]$generation} |
+    [ordered]@{nativeAbi=[uint32]$nativeAbi;rsoAbi=[uint32]$rsoAbi;dspProbeVersion=[uint32]$dspVersion;dspCapabilities=3} |
         ConvertTo-Json | Set-Content -LiteralPath $compatibilityPath -Encoding utf8
     $resources['module-compatibility.json'] = $compatibilityPath
     foreach ($pair in $runtimeFiles.GetEnumerator()) { $resources[$pair.Key] = $pair.Value }
@@ -220,7 +227,7 @@ namespace Nebula
         version = $Version; revision = $resolved; revisionType = $type; repository = $Repository
         setupSha256 = $setupHash; nebulaRecompSha256 = (Get-FileHash -LiteralPath $recomp -Algorithm SHA256).Hash.ToLowerInvariant()
         launcherSha256 = (Get-FileHash -LiteralPath $launcher -Algorithm SHA256).Hash.ToLowerInvariant()
-        sourceTreeSha256 = $treeHash; sourceZip = (Split-Path -Leaf $zip); builtUtc = [DateTime]::UtcNow.ToString('o')
+        sourceTreeSha256 = $treeHash; builtUtc = [DateTime]::UtcNow.ToString('o')
         runtimeNativeIsa = ($effectiveIsas -join '+'); requestedNativeIsa = $NativeIsa
         rustc = (& (Join-Path (Split-Path $cargo) 'rustc.exe') --version) 2>$null
     }

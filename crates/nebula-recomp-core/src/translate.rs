@@ -7660,11 +7660,21 @@ fn emit_direct_guest_call_with_exact_fpu(
                 "    galaxy::trace_function_async_gameplay_pointer_consumer(services, context, memory);\n",
             );
         }
-        // LodCtrl::update's camera distance (f1): the runtime scales it with
-        // the draw distance, moving the middle/low model switch (and the
-        // host-synced shadows that end there) outward.
-        if target == 0x8016_6C6C && pc == 0x8016_6B1C {
-            output.push_str(&site_hook_call(pc, "LodDistance", 0));
+        // No LodDistance hook after LodCtrl::update's distance call: which
+        // model shows is game state, so nothing may change it (the runtime
+        // keeps a no-op for modules generated before 1.0.1).
+        // TalkTextFormer::updateTalking reveals one step of a talk balloon's
+        // (TalkBalloon, former at r31 + 0x24) or Rosalina's storybook text
+        // (RosettaMonologue, former at r30 + 0x24) per frame; the runtime
+        // repeats it for the text speed setting. Movie subtitles keep the
+        // movie's pace.
+        if target == 0x802A_367C && (pc == 0x8029_D1A8 || pc == 0x8028_2B38) {
+            output.push_str(&site_hook_call(pc, "TextStep", u32::from(pc == 0x8028_2B38)));
+        }
+        // SCGetLanguage (every caller calls it directly): the runtime answers r3 with the
+        // language setting, so the game, its HOME Menu and its message files follow it.
+        if target == 0x804D_0830 {
+            output.push_str(&site_hook_call(pc, "Language", 0));
         }
         // TalkTextFormer::updateTalking reveals one step of a talk balloon's
         // (TalkBalloon, former at r31 + 0x24) or Rosalina's storybook text
@@ -12159,7 +12169,7 @@ fn emit_sharded_module_with_definition_rewrite(
          \x20       # AVX-512 is not used: the host probe only tests AVX2 and OSXSAVE.\n\
          \x20       if(galaxy_native_isa_effective STREQUAL \"AVX2\")\n\
          \x20           target_compile_options(RMGE01_game PRIVATE -mavx2)\n\
-         \x20           # FMA3 turns the explicit std::fma calls of fused guest instructions\n\
+         \x20           # FMA3 turns galaxy::fused_multiply_add (fused guest instructions)\n\
          \x20           # into single instructions. -ffp-contract=off still keeps separate\n\
          \x20           # multiplies and adds unfused. Every AVX2 CPU also has FMA3.\n\
          \x20           target_compile_options(RMGE01_game PRIVATE -mfma)\n\
@@ -19474,7 +19484,7 @@ mod tests {
         // The clang-cl branch must act on the ISA this template selects and reports. The module is compiled with
         // clang-cl, where CMAKE_CXX_COMPILER_ID is "Clang" and /arch:AVX2 is not honoured. -mavx2 must therefore be
         // present here, and /arch:AVX2 stays in the non-Clang branch. Without -mavx2 the template would announce AVX2
-        // while emitting SSE2 code. -mfma pairs with -mavx2 so explicit std::fma calls in the native float fast
+        // while emitting SSE2 code. -mfma pairs with -mavx2 so galaxy::fused_multiply_add in the native float fast
         // paths become hardware instructions. Contraction stays off. Never use -mavx512* (the host probe is the
         // AVX2+OSXSAVE test).
         assert!(cmake

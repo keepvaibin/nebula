@@ -427,14 +427,23 @@ int main() {
         0.05f,
         "audio page raises Wiimote sounds");
 
-    passed &= expect(key(VK_TAB), "Tab enters the game page");
+    passed &= expect(key(VK_TAB), "Tab enters the general page");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
-    passed &= expect(snapshot.tab == 4u && snapshot.row_count == 1u, "game page has the text speed row");
+    passed &= expect(snapshot.tab == 4u && snapshot.row_count == 2u, "general page has text speed and language");
     passed &= expect(galaxy::get_runtime_settings().text_speed == 1u, "text speed starts at the game's pace");
     passed &= expect(key(VK_RIGHT) && galaxy::get_runtime_settings().text_speed == 2u, "right raises text speed live");
     passed &= expect(key(VK_RIGHT) && key(VK_RIGHT) && galaxy::get_runtime_settings().text_speed == 3u,
                      "text speed stops at 3x");
     passed &= expect(key(VK_LEFT) && galaxy::get_runtime_settings().text_speed == 2u, "left lowers text speed");
+    passed &= expect(key(VK_DOWN) && galaxy::gx::native_settings_overlay_snapshot().row == 1u, "down selects language");
+    passed &= expect(galaxy::get_runtime_settings().language == galaxy::GameLanguage::English, "language starts as English");
+    passed &= expect(key(VK_RIGHT) && galaxy::get_runtime_settings().language == galaxy::GameLanguage::French,
+                     "right chooses French");
+    passed &= expect(key(VK_RIGHT) && key(VK_RIGHT) && galaxy::get_runtime_settings().language == galaxy::GameLanguage::Spanish,
+                     "language stops at Spanish");
+    passed &= expect(key(VK_LEFT) && key(VK_LEFT) && galaxy::get_runtime_settings().language == galaxy::GameLanguage::English,
+                     "left returns to English");
+    passed &= expect(key(VK_UP) && galaxy::gx::native_settings_overlay_snapshot().row == 0u, "up returns to text speed");
     passed &= expect(key(VK_TAB), "Tab enters the system page");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
     passed &= expect(snapshot.tab == 5u && snapshot.row_count == 6u, "system page has six status rows");
@@ -484,7 +493,7 @@ int main() {
                 tiny_caps.footer_y &&
             tiny_caps.footer_y + 2 * 18 + 7 <=
                 tiny_caps.panel_y + tiny_caps.panel_height,
-        "427x240 capability rows do not overlap the compact footer");
+        "427x240 general rows do not overlap the compact footer");
     const auto compact =
         galaxy::gx::compute_native_settings_layout(854u, 480u, 4u);
     passed &= expect(
@@ -494,7 +503,7 @@ int main() {
                 compact.footer_y &&
             compact.footer_y + 2 * 28 + 14 <=
                 compact.panel_y + compact.panel_height,
-        "854x480 capability layout stays inside the backbuffer without footer overlap");
+        "854x480 general layout stays inside the backbuffer without footer overlap");
     const auto ultra_hd =
         galaxy::gx::compute_native_settings_layout(3840u, 2160u, 4u);
     passed &= expect(
