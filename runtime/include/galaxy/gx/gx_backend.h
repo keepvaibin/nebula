@@ -1916,6 +1916,10 @@ private:
     // (see on_efb_copy).
     bool efb_seeded_ = false;
 
+    // The last display copy came from the output EFB and nothing has drawn or cleared since: an EFB-to-texture
+    // copy now takes that picture (RendererD3D12::copy_output_efb_to_texture), not the render EFB's scene.
+    bool display_copy_on_output_ = false;
+
     // Bring-up stats, reported every 300 frames.
     std::uint64_t stat_draws_issued_ = 0;
     std::uint64_t stat_draws_no_pso_ = 0;

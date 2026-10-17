@@ -11118,6 +11118,16 @@ void RendererD3D12::end_output_efb() {
     }
 }
 
+bool RendererD3D12::copy_output_efb_to_texture(const EfbCopyParams& params, TextureCache& textures) {
+    if (output_efb_active_ || !alt_efb_.color) {
+        return copy_efb_to_texture(params, textures, false);
+    }
+    swap_efb_sets();
+    const bool updated = copy_efb_to_texture(params, textures, false);
+    swap_efb_sets();
+    return updated;
+}
+
 // ---------------------------------------------------------------------------
 // EFB binding and clearing
 // ---------------------------------------------------------------------------

@@ -462,6 +462,9 @@ public:
     // covers the window.
     [[nodiscard]] bool begin_output_efb();
     void end_output_efb();
+    // An EFB-to-texture copy from the output EFB after end_output_efb: the picture its display copy took (the
+    // scene with the 2D layer), which the console's single EFB still holds until something draws.
+    [[nodiscard]] bool copy_output_efb_to_texture(const EfbCopyParams& params, TextureCache& textures);
     // The scene's anti-aliasing (post_process.h) in the render EFB at the end of the 3D scene,
     // before the 2D layer and begin_output_efb. A temporal upscaler antialiases the scene itself.
     void record_scene_aa();

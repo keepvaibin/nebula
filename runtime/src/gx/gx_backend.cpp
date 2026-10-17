@@ -8083,6 +8083,7 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
     // Scene end: the 2D layer renders into the output-resolution EFB. A new
     // scene that begins before a display copy restores the render EFB.
     bool switched = false;
+    display_copy_on_output_ = false;
     if (marker == FifoMarker::SceneEnd) {
         renderer_.record_scene_aa();
         switched = renderer_.begin_output_efb();
@@ -14868,6 +14869,7 @@ void GxBackend::on_draw(
             cursor.command_offset,
             0xFFu);
     }
+    display_copy_on_output_ = false;
     if (cached_draw_run_active_) {
         on_cached_draw_run_draw(primitive, vtxfmt, cursor);
         return;
@@ -15908,6 +15910,7 @@ void GxBackend::on_efb_copy(std::uint32_t exec_command) {
             renderer_.copy_efb_to_xfb(params, *xfb);
             // The display copy ends the 2D layer: later work and the next
             // frame use the render-resolution EFB again.
+            display_copy_on_output_ = renderer_.output_efb_active() && !params.clear;
             if (renderer_.output_efb_active()) {
                 renderer_.end_output_efb();
                 efb_copies_.set_efb_scale(renderer_.efb_scale());
@@ -15981,11 +15984,14 @@ void GxBackend::on_efb_copy(std::uint32_t exec_command) {
         // Depth-source copy when the PE pixel format is Z24 at copy time
         // (Dolphin BPStructs: is_depth_copy = zcontrol.pixel_format == Z24).
         const bool is_depth_copy = state_.pe_control().pixel_format == 3u;
-        const bool alias_updated =
-            renderer_.copy_efb_to_texture(
-                params,
-                texture_cache_,
-                is_depth_copy);
+        // A colour copy right after a display copy takes the picture it showed (with the 2D layer), as the
+        // console's single EFB holds it: a level start captured the scene behind the game's black cover there and
+        // showed it for two frames (DLSS, HUD at output resolution).
+        const bool from_display = display_copy_on_output_ && !is_depth_copy && !params.clear;
+        display_copy_on_output_ = display_copy_on_output_ && !params.clear;
+        const bool alias_updated = from_display
+            ? renderer_.copy_output_efb_to_texture(params, texture_cache_)
+            : renderer_.copy_efb_to_texture(params, texture_cache_, is_depth_copy);
         if (alias_updated) {
             ++frame_efb_alias_updates_;
             // The same guest address may alternate between format-keyed GPU
