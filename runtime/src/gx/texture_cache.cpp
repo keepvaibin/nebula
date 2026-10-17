@@ -421,6 +421,73 @@ bool detail::flatten_texel_checker(std::vector<RGBA8>& pixels, std::uint32_t wid
     return true;
 }
 
+bool detail::remove_texel_checker(std::vector<RGBA8>& pixels, std::uint32_t width, std::uint32_t height) {
+    const std::size_t count = static_cast<std::size_t>(width) * height;
+    if (width < 4u || height < 4u || pixels.size() < count) {
+        return false;
+    }
+    const auto at = [&](std::uint32_t x, std::uint32_t y) -> const RGBA8& {
+        return pixels[static_cast<std::size_t>(y) * width + x];
+    };
+    // Four times a value against the sum of its four neighbours (clamped at the edges), signed by the checker.
+    const auto checker_detail = [&](std::uint32_t x, std::uint32_t y, auto channel) {
+        const std::int32_t sum = channel(at(x > 0u ? x - 1u : x, y)) + channel(at(x + 1u < width ? x + 1u : x, y)) +
+                                 channel(at(x, y > 0u ? y - 1u : y)) + channel(at(x, y + 1u < height ? y + 1u : y));
+        const std::int32_t d = 4 * channel(at(x, y)) - sum;
+        return ((x + y) & 1u) == 0u ? d : -d;
+    };
+    // Luminance x 256 (Rec. 709 weights).
+    const auto luma = [](const RGBA8& p) {
+        return 54 * static_cast<std::int32_t>(p.r) + 183 * static_cast<std::int32_t>(p.g) + 19 * static_cast<std::int32_t>(p.b);
+    };
+    std::size_t strong = 0u;
+    std::int64_t phase = 0;
+    for (std::uint32_t y = 0; y < height; ++y) {
+        for (std::uint32_t x = 0; x < width; ++x) {
+            const std::int32_t d = checker_detail(x, y, luma);
+            if (d >= 8 * 256 || d <= -8 * 256) {
+                ++strong;
+                phase += d > 0 ? 1 : -1;
+            }
+        }
+    }
+    if (strong * 5u < count || static_cast<std::size_t>(phase < 0 ? -phase : phase) * 100u < strong * 95u) {
+        return false;
+    }
+    std::vector<std::int32_t> detail(count);
+    std::vector<RGBA8> out(pixels.begin(), pixels.begin() + static_cast<std::ptrdiff_t>(count));
+    const auto remove = [&](auto channel, auto store) {
+        for (std::uint32_t y = 0; y < height; ++y) {
+            for (std::uint32_t x = 0; x < width; ++x) {
+                detail[static_cast<std::size_t>(y) * width + x] = checker_detail(x, y, channel);
+            }
+        }
+        for (std::uint32_t y = 0; y < height; ++y) {
+            for (std::uint32_t x = 0; x < width; ++x) {
+                std::int32_t sum = 0;
+                for (std::uint32_t sy = y > 0u ? y - 1u : y; sy <= std::min(y + 1u, height - 1u); ++sy) {
+                    for (std::uint32_t sx = x > 0u ? x - 1u : x; sx <= std::min(x + 1u, width - 1u); ++sx) {
+                        sum += detail[static_cast<std::size_t>(sy) * width + sx];
+                    }
+                }
+                // The checker's amplitude: the mean signed detail (four times twice the amplitude) over the 3x3 texels
+                // within the level.
+                const std::int32_t taps = static_cast<std::int32_t>((std::min(x + 1u, width - 1u) - (x > 0u ? x - 1u : x) + 1u) *
+                                                                    (std::min(y + 1u, height - 1u) - (y > 0u ? y - 1u : y) + 1u));
+                const std::int32_t scale = 8 * taps;
+                const std::int32_t amplitude = (sum >= 0 ? sum + scale / 2 : sum - scale / 2) / scale;
+                const std::int32_t value = channel(at(x, y)) - (((x + y) & 1u) == 0u ? amplitude : -amplitude);
+                store(out[static_cast<std::size_t>(y) * width + x], static_cast<std::uint8_t>(std::clamp(value, 0, 255)));
+            }
+        }
+    };
+    remove([](const RGBA8& p) { return static_cast<std::int32_t>(p.r); }, [](RGBA8& p, std::uint8_t v) { p.r = v; });
+    remove([](const RGBA8& p) { return static_cast<std::int32_t>(p.g); }, [](RGBA8& p, std::uint8_t v) { p.g = v; });
+    remove([](const RGBA8& p) { return static_cast<std::int32_t>(p.b); }, [](RGBA8& p, std::uint8_t v) { p.b = v; });
+    std::copy(out.begin(), out.end(), pixels.begin());
+    return true;
+}
+
 void detail::generate_rgba8_mip_level(
     const std::vector<RGBA8>& source,
     std::uint32_t source_width,
@@ -1137,8 +1204,8 @@ static void decode_texture_levels(
             throw std::runtime_error(
                 "[TextureCache] get: unhandled TexFormat");
         }
-        if (efb_true_color()) {
-            detail::flatten_texel_checker(level_pixels[l], lw, lh);
+        if (efb_true_color() && !detail::flatten_texel_checker(level_pixels[l], lw, lh)) {
+            detail::remove_texel_checker(level_pixels[l], lw, lh);
         }
         src += tex_data_size(format, lw, lh);
     }
