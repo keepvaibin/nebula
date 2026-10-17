@@ -208,6 +208,14 @@ namespace Nebula.Launcher
             Check(small[GraphicsSettings.SnapWindowSize(small, new Size(1920, 1080))] == small[small.Count - 1], "a size taller than the screen allows snaps to the largest");
         }
 
+        static void RecordingEncodingCases(string app)
+        {
+            var plain = LaunchOptions.Create(app, "content", "saves", RecordingMode.None);
+            var recorded = LaunchOptions.Create(app, "content", "saves", RecordingMode.Detailed);
+            Check(plain.StandardErrorEncoding == null && recorded.StandardOutputEncoding.CodePage == 65001 &&
+                recorded.StandardErrorEncoding.CodePage == 65001, "a recording reads the runtime's output as UTF-8");
+        }
+
         static void AudioCases()
         {
             string path = AudioSettings.SettingsPath;
@@ -555,6 +563,7 @@ namespace Nebula.Launcher
                 }
                 GpuCases();
                 GpuFormCases(later, outDir);
+                RecordingEncodingCases(later.App);
 
                 // TryLaunch starts <App>\NebulaRuntime.exe, here a stub that records its arguments.
                 string marker = Path.Combine(later.App, "stub-launch.txt");

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
 
 namespace Nebula.Launcher
 {
@@ -23,6 +24,8 @@ namespace Nebula.Launcher
             start.CreateNoWindow = true;
             start.WorkingDirectory = app;
             start.RedirectStandardOutput = start.RedirectStandardError = recording != RecordingMode.None;
+            // The runtime's narrow output is UTF-8 (its manifest sets the process code page).
+            if (start.RedirectStandardOutput) start.StandardOutputEncoding = start.StandardErrorEncoding = Encoding.UTF8;
             foreach (var name in start.EnvironmentVariables.Keys.Cast<string>().Where(n => n.StartsWith("GALAXY_", StringComparison.OrdinalIgnoreCase)).ToList())
                 start.EnvironmentVariables.Remove(name);
             foreach (var entry in (System.Collections.IList)Json.ParseAny(File.ReadAllText(Path.Combine(app, "runtime-env.json"))))
