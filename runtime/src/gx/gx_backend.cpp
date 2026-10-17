@@ -3214,6 +3214,7 @@ void GxBackend::reset_fifo_session_state() {
     cpu_vs_constants_ = {};
     current_ps_constants_ = 0u;
     current_texture_table_ = {};
+    current_texture_handles_ = {};
     current_sampler_table_ = {};
     current_matrix_palette_ = 0u;
     matrix_palette_stale_ = true;
@@ -6990,6 +6991,16 @@ bool GxBackend::rt_late_draw() const noexcept {
            renderer_.rt_late_open() && rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::AfterIndirect);
 }
 
+RtTextureSource GxBackend::rt_texture_source(unsigned map) const noexcept {
+    const TextureHandle& handle = current_texture_handles_[map];
+    if (handle.resource == nullptr) {
+        return {};
+    }
+    D3D12_CPU_DESCRIPTOR_HANDLE view = texture_cache_.srv_cpu_base();
+    view.ptr += static_cast<SIZE_T>(handle.srv_index) * texture_cache_.srv_descriptor_stride();
+    return {view, handle.resource};
+}
+
 // An alpha-tested draw of the material table's foliage (grass tufts, flower carpets): traced as a card,
 // whole (kRtDrawCard: the lighting counts its hits where the raster drew it). GALAXY_RT_CARDS=0 leaves
 // cards out of the traced scene.
@@ -7492,10 +7503,9 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         }
     }
     info.rt_material = current_rt_material_;
-    // High quality's textured hits: the material texture's view in the frame's descriptor heap.
+    // High quality's textured hits: the material texture (the scene keeps its own view of it).
     if (current_texture_table_.ptr != 0u && current_rt_map_ < kMaxTextureMaps) {
-        const std::uint32_t table = renderer_.srv_ring().index_of(current_texture_table_);
-        info.texture = table != 0xFFFFFFFFu ? table + current_rt_map_ : 0xFFFFFFFFu;
+        info.texture = rt_texture_source(current_rt_map_);
     }
     if ((water && surface.surface_class == RtSurfaceClass::Metal) || clear_added) {
         // A blended environment map is glass, not metal; an added one over ice is the ice's gloss.
@@ -7551,10 +7561,8 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
                 }
                 const unsigned map = ps_key_.stages[0].order & 7u;
                 if (from != 0u && from <= 255u && current_texture_table_.ptr != 0u && map < kMaxTextureMaps) {
-                    const std::uint32_t table = renderer_.srv_ring().index_of(current_texture_table_);
-                    if (table != 0xFFFFFFFFu && table + map < 0xFFFFFFu) {
-                        info.alpha = (from << 24u) | (table + map);
-                    }
+                    info.alpha = rt_texture_source(map);
+                    info.alpha_from = info.alpha.resource != nullptr ? from : 0u;
                 }
             }
             // The table's shadow 0 was read but never applied: Good Egg's planet shells blocked its
@@ -13553,6 +13561,7 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
                 frame_binding_it != frame_texture_binding_tables_.end()) {
                 current_texture_table_ =
                     frame_binding_it->second.texture_table;
+                current_texture_handles_ = frame_binding_it->second.texture_handles;
                 current_sampler_table_ =
                     frame_binding_it->second.sampler_table;
                 for (const auto& handle : frame_binding_it->second.texture_handles) {
@@ -13720,6 +13729,7 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
                 frame_texture_binding_tables_.emplace(
                     texture_binding_key,
                     cached_tables);
+                current_texture_handles_ = texture_handles;
                 current_rt_material_ = rt_material_of(texture_map_mask, texture_handles, current_rt_map_);
             }
         }

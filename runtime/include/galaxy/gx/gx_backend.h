@@ -812,6 +812,8 @@ private:
     [[nodiscard]] bool rt_geometry_draw() const noexcept;
     [[nodiscard]] bool rt_card_draw() const noexcept;
     [[nodiscard]] bool rt_alpha_draw() const noexcept;
+    // Texture map `map` of the bound table as the ray tracer copies it (none for an empty map).
+    [[nodiscard]] RtTextureSource rt_texture_source(unsigned map) const noexcept;
     // The loaded stage (note_rt_stage) and its fixed key (aim_rt_scene_lights): decided once per stage.
     std::uint64_t rt_stage_hash_ = 0u;
     std::uint64_t rt_fixed_key_stage_ = ~0ull;
@@ -1658,6 +1660,8 @@ private:
     bool current_pipeline_is_uber_ = false;
     D3D12_GPU_VIRTUAL_ADDRESS current_ps_constants_ = 0;
     D3D12_GPU_DESCRIPTOR_HANDLE current_texture_table_{};
+    // The textures current_texture_table_ holds (texture cache handles; empty maps have no resource).
+    std::array<TextureHandle, kMaxTextureMaps> current_texture_handles_{};
     D3D12_GPU_DESCRIPTOR_HANDLE current_sampler_table_{};
     D3D12_GPU_VIRTUAL_ADDRESS current_matrix_palette_ = 0;
     bool matrix_palette_stale_ = true;

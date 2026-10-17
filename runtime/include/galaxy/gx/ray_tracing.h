@@ -24,6 +24,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <unordered_map>
 #include <vector>
 
 namespace galaxy::gx {
@@ -92,6 +93,12 @@ inline constexpr std::uint32_t kRtDrawClassMask = 0xFu << kRtDrawClassShift;
 // textured models (Rosalina, glassy NPCs) come after the trace. Their opaque draws are the late geometry.
 inline constexpr std::uint32_t kRtLatePhase = 8u;
 
+// A texture a draw samples: its view in the texture cache's CPU descriptor heap and its resource (null: none).
+struct RtTextureSource {
+    D3D12_CPU_DESCRIPTOR_HANDLE view{};
+    ID3D12Resource* resource = nullptr;
+};
+
 // Diagnostics for GALAXY_RT_DUMP: the draw's GX projection (A-F), viewport depth range, cull
 // mode and SceneFunction phase; colour channel 0 (XF control word, ambient and material RGBA8)
 // and the first two lights of its mask (index, eye-space position and direction, RGBA8).
@@ -115,12 +122,12 @@ struct RtDrawInfo {
     std::array<std::uint32_t, 4> shading{};
     // Its material table entry (rt_materials.h; 0: none).
     std::uint16_t rt_material = 0;
-    // Its material texture's view in the frame's shader-visible descriptor heap (~0: none): high quality's
-    // reflections sample it where they hit the draw off screen.
-    std::uint32_t texture = 0xFFFFFFFFu;
-    // An alpha-tested draw (kRtDrawAlphaTest, kRtDrawCard): its alpha map's view (low 24 bits) and the alpha
-    // its test passes from (high 8 bits, 1-255); 0: none (solid).
-    std::uint32_t alpha = 0u;
+    // Its material texture: high quality's reflections sample it where they hit the draw off screen.
+    RtTextureSource texture{};
+    // An alpha-tested draw (kRtDrawAlphaTest, kRtDrawCard): its alpha map and the alpha its test passes from
+    // (1-255; 0: none, solid).
+    RtTextureSource alpha{};
+    std::uint32_t alpha_from = 0u;
 };
 
 struct RtBuffer {
@@ -171,6 +178,16 @@ public:
 
     // Start of a renderer frame: results of frames the GPU has finished are collected.
     void begin_frame(std::uint64_t frame_index);
+    // The scenes' texture views: kTextureViewScenes * kTextureViewsPerScene descriptors of the frame's
+    // shader-visible heap from heap index `first` (CPU handle `cpu`), which only the ray tracer writes.
+    static constexpr std::uint32_t kTextureViewsPerScene = 4096u;
+    static constexpr unsigned kTextureViewScenes = 4u;
+    void set_texture_views(D3D12_CPU_DESCRIPTOR_HANDLE cpu, std::uint32_t first, UINT increment) noexcept;
+    // The fence value the next scene's texture views wait for before begin_scene (0: none; ~0: they are still in
+    // unsubmitted work, and that scene draws untextured).
+    [[nodiscard]] std::uint64_t texture_views_fence() const noexcept;
+    // A renderer frame was submitted with this fence value: the scenes closed before it are done with it then.
+    void note_submission(std::uint64_t fence_value) noexcept;
     void begin_scene() noexcept;
     void add_draw(const RtDraw& draw, const RtDrawInfo& info);
     void set_view(const RtView& view) noexcept;
@@ -466,8 +483,33 @@ private:
     // its kind (0: none or attenuated, 1: no facing term, 2: n.l) for the day model's game shading.
     std::vector<std::array<std::uint32_t, 12>> draw_colors_;
     // Per draw for high quality's textured hits (rt_reflections.hlsl g_draw_tex): texture view, colour
-    // source (bit 0 vertex colour), its colour RGBA8; and its upload.
+    // source (bit 0 vertex colour), its colour RGBA8, alpha test (the alpha it passes from in the high 8 bits,
+    // the alpha map's view); and its upload.
     std::vector<std::array<std::uint32_t, 4>> draw_textures_;
+    // The views g_draw_tex names: each scene's own block (set_texture_views), copied from the texture cache as
+    // its draws arrive and kept until the GPU is done with the scene. The frame's descriptor ring rewinds its
+    // tables at every renderer frame, while a scene's traces read its draws' textures renderer frames later
+    // (measured: the lit Observatory's alpha-tested occluder read alpha 0 on single frames, its shadow and the
+    // core's highlight under it flashing).
+    struct TextureViewBlock {
+        std::uint64_t fence = 0;   // the submission after its scene closed (0: none)
+        bool closed = false;       // its scene closed, not yet submitted
+        std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>> resources;
+    };
+    struct TextureViewSlot {
+        std::uint32_t index = 0;
+        ID3D12Resource* resource = nullptr;
+    };
+    [[nodiscard]] std::uint32_t texture_view(const RtTextureSource& source);
+    D3D12_CPU_DESCRIPTOR_HANDLE texture_view_cpu_{};
+    std::uint32_t texture_view_first_ = 0;
+    UINT texture_view_increment_ = 0;
+    unsigned texture_view_scene_ = 0;
+    std::uint32_t texture_view_count_ = 0;
+    bool texture_views_usable_ = false;
+    bool texture_view_full_logged_ = false;
+    std::array<TextureViewBlock, kTextureViewScenes> texture_view_blocks_{};
+    std::unordered_map<SIZE_T, TextureViewSlot> texture_view_slots_;
     D3D12_GPU_VIRTUAL_ADDRESS draw_texture_table_ = 0;
     // High quality: per triangle its texture coordinates and colours (ray_tracing.hlsl g_tri_uv).
     Microsoft::WRL::ComPtr<ID3D12Resource> surface_uv_;

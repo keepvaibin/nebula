@@ -849,6 +849,10 @@ void SceneRayTracer::shutdown() noexcept {
     ready_ = false;
     scene_open_ = false;
     draws_.clear();
+    texture_view_blocks_ = {};
+    texture_view_slots_.clear();
+    texture_view_count_ = 0u;
+    texture_views_usable_ = false;
     retired_.clear();
     slots_ = {};
     window_ = {};
@@ -1525,7 +1529,70 @@ void SceneRayTracer::collect_passes(std::uint64_t frame_index) {
     }
 }
 
+void SceneRayTracer::set_texture_views(D3D12_CPU_DESCRIPTOR_HANDLE cpu, std::uint32_t first, UINT increment) noexcept {
+    texture_view_cpu_ = cpu;
+    texture_view_first_ = first;
+    texture_view_increment_ = increment;
+    texture_view_blocks_ = {};
+    texture_view_slots_.clear();
+    texture_view_count_ = 0u;
+    texture_views_usable_ = false;
+}
+
+std::uint64_t SceneRayTracer::texture_views_fence() const noexcept {
+    const TextureViewBlock& next = texture_view_blocks_[(texture_view_scene_ + 1u) % kTextureViewScenes];
+    return next.closed ? ~0ull : next.fence;
+}
+
+void SceneRayTracer::note_submission(std::uint64_t fence_value) noexcept {
+    for (TextureViewBlock& block : texture_view_blocks_) {
+        if (block.closed) {
+            block.closed = false;
+            block.fence = fence_value;
+        }
+    }
+}
+
+std::uint32_t SceneRayTracer::texture_view(const RtTextureSource& source) {
+    if (!texture_views_usable_ || source.resource == nullptr || source.view.ptr == 0u || !device_) {
+        return 0xFFFFFFFFu;
+    }
+    if (const auto found = texture_view_slots_.find(source.view.ptr);
+        found != texture_view_slots_.end() && found->second.resource == source.resource) {
+        return found->second.index;
+    }
+    if (texture_view_count_ >= kTextureViewsPerScene) {
+        if (!texture_view_full_logged_) {
+            texture_view_full_logged_ = true;
+            std::cerr << "[rt] a scene samples more than " << kTextureViewsPerScene
+                      << " textures: the rest are traced untextured\n";
+        }
+        return 0xFFFFFFFFu;
+    }
+    const std::uint32_t slot = texture_view_scene_ * kTextureViewsPerScene + texture_view_count_++;
+    D3D12_CPU_DESCRIPTOR_HANDLE destination = texture_view_cpu_;
+    destination.ptr += static_cast<SIZE_T>(slot) * texture_view_increment_;
+    device_->CopyDescriptorsSimple(1u, destination, source.view, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    texture_view_blocks_[texture_view_scene_].resources.emplace_back(source.resource);
+    const std::uint32_t index = texture_view_first_ + slot;
+    texture_view_slots_[source.view.ptr] = {index, source.resource};
+    return index;
+}
+
 void SceneRayTracer::begin_scene() noexcept {
+    // The closing scene's views stay in use until the renderer frame being recorded is done (its water trace can
+    // be in it). This scene takes the next block, which the renderer waited for (texture_views_fence); a block
+    // still in unsubmitted work is left alone and this scene's draws are traced untextured.
+    texture_view_blocks_[texture_view_scene_].closed = texture_view_increment_ != 0u;
+    texture_view_scene_ = (texture_view_scene_ + 1u) % kTextureViewScenes;
+    TextureViewBlock& views = texture_view_blocks_[texture_view_scene_];
+    texture_views_usable_ = texture_view_increment_ != 0u && !views.closed;
+    if (texture_views_usable_) {
+        views.resources.clear();
+        views.fence = 0u;
+    }
+    texture_view_slots_.clear();
+    texture_view_count_ = 0u;
     light_tex_ready_ = false;
     draws_.clear();
     glow_draws_.clear();
@@ -1696,7 +1763,9 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
                 colour |= static_cast<std::uint32_t>(std::lround(std::clamp(lit, 0.0f, 1.0f) * 255.0f)) << shift;
             }
         }
-        draw_textures_.push_back({info.texture, channel.material_from_vertex ? 1u : 0u, colour, info.alpha});
+        const std::uint32_t alpha = info.alpha_from != 0u ? texture_view(info.alpha) : 0xFFFFFFFFu;
+        draw_textures_.push_back({texture_view(info.texture), channel.material_from_vertex ? 1u : 0u, colour,
+                                  alpha <= 0xFFFFFFu ? (info.alpha_from << 24u) | alpha : 0u});
     }
     draw_colors_.push_back({info.ambient, info.light_index[0] == 0u ? info.light_color[0] : 0u, emission,
                             std::bit_cast<std::uint32_t>(intensity), surface, info.material,

@@ -3778,7 +3778,9 @@ static constexpr unsigned    kSrvPerFrame = 32768u;
 // their two views outside the rewound frame segments instead of copying a
 // descriptor into the frame ring for every EFB conversion. TextureCache's own
 // SRV indices are independent of this prefix.
-static constexpr unsigned    kPersistentSrvDescriptors = 6u;  // EFB, output EFB and sub-frame EFB conversion sources
+// EFB, output EFB and sub-frame EFB conversion sources; the ray-traced scenes' texture views.
+static constexpr unsigned    kRtTextureViews = SceneRayTracer::kTextureViewScenes * SceneRayTracer::kTextureViewsPerScene;
+static constexpr unsigned    kPersistentSrvDescriptors = 6u + kRtTextureViews;
 
 void RendererD3D12::wait_for_gpu() {
     const std::uint64_t val = ++next_fence_value_;
@@ -5348,6 +5350,11 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
         if (!matrix_ring_  .initialize(device_.Get(), "matrix",   mtx_per_frame_bytes(), kFramesInFlight,
                                        mtx_per_frame_bytes() * kMostSegments)) return false;
         if (!srv_ring_.initialize(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, kSrvPerFrame, kInterpSegments, kPersistentSrvDescriptors)) return false;
+        {
+            const DescriptorRing::Table views = srv_ring_.allocate_persistent(kRtTextureViews);
+            ray_tracer_.set_texture_views(views.cpu, srv_ring_.index_of(views.gpu),
+                                          device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV));
+        }
 
         // Conversion sources occupy the descriptor ring's immutable prefix.
         if (!create_conversion_pipeline()) return false;
@@ -7113,6 +7120,7 @@ std::uint64_t RendererD3D12::end_frame(
     const std::uint64_t submitted_frame = frame_index_ + 1u;
     const std::uint64_t submitted_fence = ++next_fence_value_;
     fence_values_[frame_slot_] = submitted_fence;
+    ray_tracer_.note_submission(submitted_fence);
     if (ring_mode_ == RingMode::Interp) {
         ring_segment_fence_[ring_segment_] = submitted_fence;
     } else if (matrix_segments_ != kFramesInFlight) {
@@ -7876,6 +7884,16 @@ void RendererD3D12::rt_note_draw(const DrawCall& call, const RtDrawInfo& info) {
     }
     draw.triangle_count = call.index_count / 3u;
     ray_tracer_.add_draw(draw, info);
+}
+
+void RendererD3D12::rt_begin_scene() {
+    // The scene's texture views take the block of the scene kTextureViewScenes back: its GPU work completes first
+    // (submitted game frames ago, normally long done).
+    const std::uint64_t views = ray_tracer_.texture_views_fence();
+    if (views != 0u && views != ~0ull) {
+        wait_for_fence_value(views);
+    }
+    ray_tracer_.begin_scene();
 }
 
 void RendererD3D12::rt_trace_scene() {
