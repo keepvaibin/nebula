@@ -345,6 +345,42 @@ float3 lighting_at(int2 pixel)
     return float3(f16tof32(m.x), f16tof32(m.x >> 16u), f16tof32(m.y));
 }
 
+// The stars' balls (rt_lighting.hlsl StarSphereCS: centre and radius, eye space) follow the lighting's samples.
+static const uint kStarSlots = 8u;
+
+// rt_lighting.hlsl star_ramp: the fire's colour by its heat, red through orange and yellow to white.
+float3 star_ramp(float t)
+{
+    const float3 red = float3(0.85f, 0.18f, 0.03f);
+    const float3 orange = float3(1.0f, 0.52f, 0.12f);
+    const float3 yellow = float3(1.0f, 0.86f, 0.45f);
+    const float3 white = float3(1.0f, 0.98f, 0.92f);
+    return t < 0.4f ? lerp(red, orange, t / 0.4f) : t < 0.75f ? lerp(orange, yellow, (t - 0.4f) / 0.35f)
+                                                             : lerp(yellow, white, saturate((t - 0.75f) / 0.25f));
+}
+
+// A star's burning ball where a reflection ray along `l` meets it at `x` (rt_lighting.hlsl star_surface without
+// its cells): white-hot where the ray meets the ball face on, deepening to red at its limb. The ball is the one
+// whose surface passes nearest `x`.
+float3 star_reflected(float3 x, float3 l)
+{
+    float3 normal = -l;
+    float nearest = 1.0e30f;
+    [unroll] for (uint k = 0u; k < kStarSlots; ++k) {
+        const float4 ball = asfloat(g_light[g_sample_size.x * g_sample_size.y + k]);
+        if (ball.w > 0.0f) {
+            const float off = abs(length(x - ball.xyz) - ball.w);
+            if (off < nearest) {
+                nearest = off;
+                normal = normalize(x - ball.xyz);
+            }
+        }
+    }
+    const float mu = saturate(dot(normal, -l));
+    const float3 fire = star_ramp(saturate(0.1f + 0.75f * mu * mu)) * (0.6f + 0.5f * mu);
+    return saturate(fire + max(max(fire.r, max(fire.g, fire.b)) - 1.0f, 0.0f) * 0.25f);
+}
+
 // ray_tracing.hlsl pack_vertex_normal: octahedral, 1-65535 per axis.
 float3 unpack_vertex_normal(uint v)
 {
@@ -1127,9 +1163,16 @@ Reflected reflect_light(uint2 s, float3 dir, float3 n, float3 ng, float3 hit, fl
         const float match = query.CommittedInstanceID() != 0u ? 0.08f * x_distance + 60.0f : 0.03f * x_distance + 2.0f;
         const bool shown = x.z < -g_near && shown_at(eye_to_pixel(g_projection, g_viewport, x), r.light, seen, blur) &&
                                  abs(seen - x_distance) < match;
+        const uint hit_draw = query.CommittedInstanceID() == 0u
+                                  ? g_surfaces.Load(query.CommittedPrimitiveIndex() * 16u + 12u) >> 16u : 0xFFFFu;
         float3 drawn;
         float cover = 1.0f;
-        if (shown) {
+        if ((g_flags & 128u) != 0u && hit_draw < g_draw_count && (g_draws.Load(hit_draw * 48u + 24u) & 8u) != 0u) {
+            // A star's burning ball: its fire as the composite shades it, not the frame's colour there (the game
+            // draws the lit Observatory's core cyan; through the ring's gold that read olive).
+            r.light = star_reflected(x, l);
+            r.confidence = 1.0f;
+        } else if (shown) {
             r.confidence = 1.0f;
         } else if (hit_shade(query.CommittedInstanceID(), query.CommittedPrimitiveIndex(),
                              query.CommittedTriangleBarycentrics(), x, l, r.distance, r.light, cover)) {

@@ -2851,11 +2851,10 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
                                                                         : positions_->GetGPUVirtualAddress());
     list->SetComputeRootShaderResourceView(kLightDrawTextures,
                                            draw_texture_table_ != 0u ? draw_texture_table_ : draw_table.gpu);
-    // The stars' balls, after the samples in the result (the composite shades the stars on them).
-    if (star_draws_ != 0u) {
-        list->SetPipelineState(star_sphere_pso_.Get());
-        list->Dispatch(star_draws_, 1u, 1u);
-    }
+    // The stars' balls, after the samples in the result (the composite shades the stars on them, reflections that
+    // meet a star find its ball): every slot each frame, one without a star this frame written empty.
+    list->SetPipelineState(star_sphere_pso_.Get());
+    list->Dispatch(kStarSlots, 1u, 1u);
     list->SetPipelineState(trace_pso_.Get());
     list->Dispatch(groups_x, groups_y, 1u);
     const D3D12_RESOURCE_BARRIER all_uav = uav_barrier(nullptr);
