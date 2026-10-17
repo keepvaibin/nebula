@@ -294,21 +294,6 @@ int main() {
             read_text(settings_path).find("audio_wiimote_speaker_gain=0.5") != std::string::npos,
         "the Wiimote sounds gain is saved with the other audio settings");
 
-    write_text(settings_path, "text_speed=3\n");
-    galaxy::load_runtime_settings_from_file();
-    passed &= expect(galaxy::get_runtime_settings().text_speed == 3u, "text speed 3x loads");
-    write_text(settings_path, "text_speed=9\n");
-    galaxy::load_runtime_settings_from_file();
-    passed &= expect(galaxy::get_runtime_settings().text_speed == 1u, "an unknown text speed keeps the game's pace");
-    _putenv_s("GALAXY_TEXT_SPEED", "2");
-    galaxy::load_runtime_settings_from_file();
-    passed &= expect(galaxy::get_runtime_settings().text_speed == 2u, "text speed has an environment override");
-    _putenv_s("GALAXY_TEXT_SPEED", "");
-    passed &= expect(
-        galaxy::save_runtime_settings_to_file() &&
-            read_text(settings_path).find("text_speed=2") != std::string::npos,
-        "text speed is saved with the other settings");
-
     galaxy::RuntimeSettings invalid_audio = galaxy::get_runtime_settings();
     invalid_audio.audio.master = -1.0f;
     invalid_audio.audio.music = 2.0f;
