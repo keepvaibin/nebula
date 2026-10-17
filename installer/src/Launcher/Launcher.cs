@@ -298,6 +298,11 @@ namespace Nebula.Launcher
         private readonly ComboBox gpuBox = new ComboBox();
         // Ray tracing and DLSS follow the GPU the game will run on (RefreshGpuOptions).
         private bool rayTracingOffered;
+        private TabPage displayPage;
+        // Under the Monitor row while the GPU the game will run on is not the one the display is connected to
+        // (GpuAdapters.DisplayNotice); the rows below it move down by displayNoticeShift.
+        private readonly Label displayNotice = new Label();
+        private int displayNoticeShift;
         private readonly TrackBar[] volumes = new TrackBar[AudioSettings.Names.Length];
         private readonly Label[] volumeValues = new Label[AudioSettings.Names.Length];
         private readonly ComboBox recording = new ComboBox();
@@ -359,18 +364,25 @@ namespace Nebula.Launcher
             Controls.Add(tabs);
 
             int y = 16;
+            displayPage = display;
             if (gpus.Count >= 2)
             {
                 Row(display, "Graphics card", gpuBox, ref y);
                 gpuBox.Items.Add("Automatic (" + gpus[0].Name + ")");
-                foreach (var gpu in gpus)
+                foreach (var gpu in gpus) gpuBox.Items.Add(GpuAdapters.Label(gpus, gpu));
+                display.Controls.Add(new Label
                 {
-                    // Two of the same model are told apart by their place in the list.
-                    var same = gpus.FindAll(g => g.Name == gpu.Name);
-                    gpuBox.Items.Add(same.Count > 1 ? gpu.Name + " #" + (same.IndexOf(gpu) + 1) : gpu.Name);
-                }
+                    Text = "The game starts on this graphics card. While it is running, a change applies the next time it starts.",
+                    Location = new Point(12, y - 8), Size = new Size(700, 26), ForeColor = SystemColors.GrayText
+                });
+                y += 28;
             }
             Row(display, "Monitor", monitor, ref y);
+            displayNotice.Location = new Point(12, y - 8);
+            displayNotice.Size = new Size(700, 26);
+            displayNotice.ForeColor = SystemColors.GrayText;
+            displayNotice.Visible = false;
+            display.Controls.Add(displayNotice);
             Row(display, "Display mode", mode, ref y);
             Row(display, "Resolution", resolution, ref y);
             Row(display, "Refresh rate", refresh, ref y);
@@ -510,7 +522,13 @@ namespace Nebula.Launcher
 #endif
 
             LoadValues();
-            monitor.SelectedIndexChanged += delegate { if (!loading) { graphics.FullscreenWidth = graphics.FullscreenHeight = graphics.FullscreenRefresh = 0; RefreshDisplayChoices(); } };
+            monitor.SelectedIndexChanged += delegate
+            {
+                if (loading) return;
+                graphics.FullscreenWidth = graphics.FullscreenHeight = graphics.FullscreenRefresh = 0;
+                RefreshDisplayChoices();
+                RefreshDisplayNotice();
+            };
             mode.SelectedIndexChanged += delegate { if (!loading) RefreshDisplayChoices(); };
             aspect.SelectedIndexChanged += delegate { if (!loading) RefreshDisplayChoices(); };
             resolution.SelectedIndexChanged += delegate
@@ -562,6 +580,8 @@ namespace Nebula.Launcher
                 RefreshFrameRateChoices();
             };
             UiScale.Apply(this);
+            // After scaling: the notice moves the rows below it by its measured height.
+            RefreshDisplayNotice();
         }
 
         // ---- Controls -----------------------------------------------------------
@@ -901,6 +921,25 @@ namespace Nebula.Launcher
             RefreshDisplayChoices();
         }
 
+        private void RefreshDisplayNotice()
+        {
+            var screen = SelectedMonitor;
+            string text = screen != null ? GpuAdapters.DisplayNotice(gpus, SelectedGpuId, screen.Device) : null;
+            int shift = 0;
+            if (text != null)
+            {
+                displayNotice.Height = TextRenderer.MeasureText(text, displayNotice.Font, new Size(displayNotice.Width, 0),
+                                                                TextFormatFlags.WordBreak).Height;
+                shift = displayNotice.Height;
+            }
+            displayNotice.Text = text ?? "";
+            displayNotice.Visible = text != null;
+            if (shift == displayNoticeShift) return;
+            foreach (Control control in displayPage.Controls)
+                if (control != displayNotice && control.Top >= displayNotice.Top) control.Top += shift - displayNoticeShift;
+            displayNoticeShift = shift;
+        }
+
         // Resolution: the desktop (borderless), or window sizes that fit the
         // monitor's work area. With a fixed aspect the window sizes have that
         // shape, and the selection moves to the smallest one at least as tall as
@@ -1011,6 +1050,7 @@ namespace Nebula.Launcher
 
             ShowUpscalerQuality();
             RefreshFrameRateChoices();
+            RefreshDisplayNotice();
         }
 
         // The frame rate row for the interpolation chosen: its limit (30 or 60) without one, else its

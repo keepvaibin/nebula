@@ -9,12 +9,19 @@ namespace Nebula.Launcher
     {
         public string Name;
         public uint VendorId, DeviceId, SubSysId;
+        // GDI device names (\\.\DISPLAY1) of the displays connected to this GPU (DXGI_OUTPUT_DESC.DeviceName).
+        public List<string> Outputs = new List<string>();
 
         /// <summary>The game's gpu key (render_config.cpp gpu_identity): vendor, device and subsystem id in lowercase hex.</summary>
         public string Id { get { return string.Format("{0:x4}:{1:x4}:{2:x8}", VendorId & 0xFFFF, DeviceId & 0xFFFF, SubSysId); } }
 
         /// <summary>An NVIDIA RTX GPU: DLSS, and Nebula's ray tracing (DXR 1.1, shader model 6.5, its own memory).</summary>
         public bool IsNvidiaRtx { get { return VendorId == 0x10DE && Name.IndexOf("RTX", StringComparison.OrdinalIgnoreCase) >= 0; } }
+
+        public bool Drives(string device)
+        {
+            return Outputs.Exists(output => string.Equals(output, device, StringComparison.OrdinalIgnoreCase));
+        }
     }
 
     /// <summary>
@@ -24,7 +31,7 @@ namespace Nebula.Launcher
     internal static class GpuAdapters
     {
         /// <summary>Replaced by tests; null when DXGI cannot be asked.</summary>
-        internal static Func<bool, List<GpuAdapter>> Source = Enumerate;
+        internal static Func<bool, List<GpuAdapter>> Source = lowPowerFirst => Enumerate(lowPowerFirst, false);
 
         public static List<GpuAdapter> List(bool lowPowerFirst)
         {
@@ -45,10 +52,32 @@ namespace Nebula.Launcher
             return adapters[0];
         }
 
+        /// <summary>The GPU's name in the Graphics card list; two of the same model are told apart by their place in it.</summary>
+        public static string Label(List<GpuAdapter> adapters, GpuAdapter gpu)
+        {
+            var same = adapters.FindAll(g => g.Name == gpu.Name);
+            return same.Count > 1 ? gpu.Name + " #" + (same.IndexOf(gpu) + 1) : gpu.Name;
+        }
+
+        /// <summary>
+        /// The line under the Monitor row when the GPU the game will run on is not the one the display is connected
+        /// to; null when it is, or when no listed GPU names the display as its output.
+        /// </summary>
+        public static string DisplayNotice(List<GpuAdapter> adapters, string gpu, string monitorDevice)
+        {
+            GpuAdapter target = Resolve(adapters, gpu);
+            if (target == null || string.IsNullOrEmpty(monitorDevice) || target.Drives(monitorDevice)) return null;
+            GpuAdapter connected = adapters.Find(adapter => adapter.Drives(monitorDevice));
+            if (connected == null) return null;
+            return string.Format("This display is connected to the {0}, so each frame is copied to it from the {1}.",
+                                 Label(adapters, connected), Label(adapters, target));
+        }
+
         private const uint SoftwareAdapter = 2; // DXGI_ADAPTER_FLAG_SOFTWARE
         private const int HighPerformance = 2, MinimumPower = 1; // DXGI_GPU_PREFERENCE
 
-        private static List<GpuAdapter> Enumerate(bool lowPowerFirst)
+        // Software adapters (WARP, the Microsoft Basic Render Driver) are never the game's; tests list them.
+        internal static List<GpuAdapter> Enumerate(bool lowPowerFirst, bool software)
         {
             Guid factoryId = typeof(IDXGIFactory1).GUID;
             object created;
@@ -69,21 +98,42 @@ namespace Nebula.Launcher
                     try
                     {
                         DxgiAdapterDesc1 desc;
-                        if (adapter.GetDesc1(out desc) != 0 || (desc.Flags & SoftwareAdapter) != 0) continue;
+                        if (adapter.GetDesc1(out desc) != 0 || (!software && (desc.Flags & SoftwareAdapter) != 0)) continue;
                         var gpu = new GpuAdapter
                         {
                             Name = (desc.Description ?? "").Trim(),
-                            VendorId = desc.VendorId, DeviceId = desc.DeviceId, SubSysId = desc.SubSysId
+                            VendorId = desc.VendorId, DeviceId = desc.DeviceId, SubSysId = desc.SubSysId,
+                            Outputs = OutputNames(adapter)
                         };
                         // Windows can list one GPU more than once (a virtual or remote display adds an entry with its
-                        // own LUID). It is one choice; the game takes the first entry in this order.
-                        if (!adapters.Exists(listed => listed.Id == gpu.Id)) adapters.Add(gpu);
+                        // own LUID). It is one choice; the game takes the first entry in this order. The displays
+                        // of every entry are that GPU's.
+                        var listed = adapters.Find(other => other.Id == gpu.Id);
+                        if (listed == null) adapters.Add(gpu);
+                        else listed.Outputs.AddRange(gpu.Outputs.FindAll(output => !listed.Drives(output)));
                     }
                     finally { Marshal.ReleaseComObject(adapter); }
                 }
             }
             finally { Marshal.ReleaseComObject(created); }
             return adapters;
+        }
+
+        private static List<string> OutputNames(IDXGIAdapter1 adapter)
+        {
+            var outputs = new List<string>();
+            for (uint index = 0; ; index++)
+            {
+                IDXGIOutput output;
+                if (adapter.EnumOutputs(index, out output) != 0) break; // DXGI_ERROR_NOT_FOUND ends the list
+                try
+                {
+                    DxgiOutputDesc desc;
+                    if (output.GetDesc(out desc) == 0 && !string.IsNullOrEmpty(desc.DeviceName)) outputs.Add(desc.DeviceName);
+                }
+                finally { Marshal.ReleaseComObject(output); }
+            }
+            return outputs;
         }
 
         private static int EnumAdapters1(IDXGIFactory1 factory, uint index, out object adapter)
@@ -108,6 +158,16 @@ namespace Nebula.Launcher
             public uint Flags;
         }
 
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        private struct DxgiOutputDesc
+        {
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)] public string DeviceName;
+            public int Left, Top, Right, Bottom;
+            public int AttachedToDesktop;
+            public int Rotation;
+            public IntPtr Monitor;
+        }
+
         // Only the methods used are declared; _VtblGap entries keep the others' slots.
         [ComImport, Guid("770aae78-f26f-4dba-a829-253c83d1b387"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
         private interface IDXGIFactory1
@@ -127,8 +187,17 @@ namespace Nebula.Launcher
         [ComImport, Guid("29038f61-3839-4626-91fd-086879011a05"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
         private interface IDXGIAdapter1
         {
-            void _VtblGap1_7(); // IDXGIObject (4), IDXGIAdapter (3)
+            void _VtblGap1_4(); // IDXGIObject (4)
+            [PreserveSig] int EnumOutputs(uint index, out IDXGIOutput output);
+            void _VtblGap2_2(); // IDXGIAdapter GetDesc, CheckInterfaceSupport
             [PreserveSig] int GetDesc1(out DxgiAdapterDesc1 desc);
+        }
+
+        [ComImport, Guid("ae02eedb-c735-4690-8d52-5a8dc20213aa"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        private interface IDXGIOutput
+        {
+            void _VtblGap1_4(); // IDXGIObject (4)
+            [PreserveSig] int GetDesc(out DxgiOutputDesc desc);
         }
     }
 }
