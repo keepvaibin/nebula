@@ -7550,8 +7550,12 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
             // The table's shadow 0 was read but never applied: Good Egg's planet shells blocked its
             // sun everywhere (measured sb29: every surface blocked 100-200 units out).
             // A helper row (an environment map, a mask) speaks for its texture, not for the draw.
+            // A clear dielectric (crystal, ice, glass) passes about 91 % of the light ((1 - F)^2 at F0 0.047):
+            // it casts no traced shadow. Opaque, the Star Festival's crystal cages shadowed the floor black,
+            // and it showed through their highlight shells as a dark rim.
             if (const RtMaterial* shade = rt_material(current_rt_material_);
-                shade != nullptr && !shade->shadow && !shade->helper) {
+                (shade != nullptr && !shade->shadow && !shade->helper) ||
+                surface.surface_class == RtSurfaceClass::Crystal) {
                 info.surface |= kRtDrawNoShadow;
             }
         }

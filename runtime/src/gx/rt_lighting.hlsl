@@ -2008,10 +2008,12 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
                          RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
                 query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
                 while (query.Proceed()) {
-                    if (query.CandidateInstanceID() != 0u ||
-                        card_blocks(query.CandidatePrimitiveIndex(),
-                                    g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u),
-                                    start + ray.Direction * query.CandidateTriangleRayT(), salt + 3u + s)) {
+                    // Late geometry (instance 1) has no records: it blocks. The table's shadow 0 lets the light through.
+                    const bool late_hit = query.CandidateInstanceID() != 0u;
+                    const uint hit = late_hit ? 0u : g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u);
+                    if (late_hit || ((hit & kDrawNoShadow) == 0u &&
+                                     card_blocks(query.CandidatePrimitiveIndex(), hit,
+                                                 start + ray.Direction * query.CandidateTriangleRayT(), salt + 3u + s))) {
                         query.CommitNonOpaqueTriangleHit();
                     }
                 }
