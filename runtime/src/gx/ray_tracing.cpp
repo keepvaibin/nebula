@@ -104,7 +104,7 @@ struct RtLightConstants {
     float point_light;
     float point_size;
     float sun_reach;
-    float points[16][4];
+    float points[2u * kRtPointLights][4];
     float to_eye[3][4];
     float ambient[4];
     float point_saturation;
@@ -122,7 +122,7 @@ struct RtLightConstants {
     float sun_cap;                 // the soft cap of the night's added light where the core's light dominates
     std::uint32_t core_pad[2];
 };
-static_assert(sizeof(RtLightConstants) == 752u);
+static_assert(sizeof(RtLightConstants) == 1008u);
 
 // Mirrors cbuffer RtPost in rt_post.hlsl (root constants).
 struct RtPostConstants {
@@ -2842,7 +2842,10 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         }
         std::sort(candidates.begin(), candidates.begin() + static_cast<std::ptrdiff_t>(used),
                   [](const Candidate& a, const Candidate& b) { return a.importance > b.importance; });
-        c.point_count = static_cast<std::uint32_t>(std::min<std::size_t>(used, 8u));
+        c.point_count = static_cast<std::uint32_t>(std::min<std::size_t>(used, kRtPointLights));
+        // More lights than the budget: those near the cut fade with their importance's margin over the first one
+        // left out, so a light crossing the cut as the camera moves dims in or out instead of switching.
+        const float cut = used > c.point_count ? candidates[c.point_count].importance : 0.0f;
         c.point_light = point_light_;
         c.point_size = point_size_;
         c.core_point = ~0u;
@@ -2853,9 +2856,12 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
             }
         }
         for (std::uint32_t i = 0; i < c.point_count; ++i) {
+            const float fade = cut > 0.0f && !candidates[i].core
+                                   ? std::clamp((candidates[i].importance - cut) / (0.5f * cut), 0.0f, 1.0f)
+                                   : 1.0f;
             for (unsigned k = 0; k < 3u; ++k) {
                 c.points[2u * i][k] = candidates[i].eye[k];
-                c.points[2u * i + 1u][k] = candidates[i].color[k];
+                c.points[2u * i + 1u][k] = candidates[i].color[k] * fade;
             }
             // Reach: twelve half distances (1/145 of the light, windowed to 0).
             c.points[2u * i][3] = 12.0f * candidates[i].half;
@@ -2909,7 +2915,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     // The same lights give the reflections their highlights.
     std::copy(std::begin(c.sun), std::end(c.sun), reflect_lights_.sun.begin());
     reflect_lights_.sun_light = {c.sun_light[0], c.sun_light[1], c.sun_light[2], c.sun_reach};
-    for (unsigned i = 0; i < 16u; ++i) {
+    for (unsigned i = 0; i < 2u * kRtPointLights; ++i) {
         std::copy(std::begin(c.points[i]), std::end(c.points[i]), reflect_lights_.points[i].begin());
     }
     reflect_lights_.point_count = c.point_count;

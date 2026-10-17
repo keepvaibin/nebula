@@ -57,7 +57,7 @@ struct RtReflectConstants {
     float sky_distance;
     float sun[4];
     float sun_light[4];
-    float points[16][4];
+    float points[2u * kRtPointLights][4];
     std::uint32_t point_count;
     float point_light;
     float point_size;
@@ -792,10 +792,10 @@ void RtReflections::fill_constants(const RtReflectScene& scene, const Pass& pass
     c.sky_distance = scene.sky_distance > 0.0f ? scene.sky_distance : 1.0e9f;
     std::copy(lights.sun.begin(), lights.sun.end(), c.sun);
     std::copy(lights.sun_light.begin(), lights.sun_light.end(), c.sun_light);
-    for (unsigned i = 0; i < 16u; ++i) {
+    for (unsigned i = 0; i < 2u * kRtPointLights; ++i) {
         std::copy(lights.points[i].begin(), lights.points[i].end(), c.points[i]);
     }
-    c.point_count = std::min(lights.point_count, 8u);
+    c.point_count = std::min(lights.point_count, kRtPointLights);
     c.point_light = lights.point_light;
     c.point_size = lights.point_size;
     c.night_lights = lights.night_lights;

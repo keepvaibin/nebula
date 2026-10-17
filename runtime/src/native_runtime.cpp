@@ -2286,6 +2286,17 @@ struct RuntimeState {
     std::uint32_t motion_object_events{};     // epoch bumps since the previous scene marker
     std::uint64_t motion_scene_serial{};      // SceneBegin markers seen
     std::uint32_t astro_core{};               // the Comet Observatory's AstroCore while it lives
+    // The actors that asked for the game's point light (note_point_request), each with its last request: its light
+    // stays while the game clips the actor (keep_point_requests).
+    struct PointRequester {
+        std::uint32_t actor{};
+        std::uint32_t vtable{};               // its first word when it asked (another object there: gone)
+        std::array<float, 3> position{};
+        std::array<float, 3> color{};
+        float half_distance{};
+        std::uint64_t vi{};                   // the VI of its last request
+    };
+    std::vector<PointRequester> point_requesters;
     std::array<std::uint64_t, 8> motion_object_counts{};
     std::uint64_t motion_camera_cuts{};
     std::uint64_t motion_category_markers{};
@@ -10446,6 +10457,11 @@ void trace_game_light(RuntimeState& state, std::uint32_t site, std::uint32_t inf
 // as LightPointCtrl sets it: brightness 0.95-0.999999 at reference distance 15, steep attenuation (GX_DA_STEEP,
 // 1 / (1 + k2 d^2), halved at the reference distance times sqrt(b / (1 - b))). Behaviour understood from the Petari
 // decompilation (SMGCommunity).
+// Requesters kept (the Observatory's terrace has 7); VIs without a request before an actor counts as silent (a game
+// running at 30 fps asks every other VI).
+constexpr std::size_t kPointRequesters = 64u;
+constexpr std::uint64_t kPointRequestGap = 4u;
+
 void note_point_request(RuntimeState& state, const galaxy::PpcContext& context) {
     auto* mem = state.address_space;
     const std::uint32_t position = context.gpr[4];
@@ -10458,11 +10474,59 @@ void note_point_request(RuntimeState& state, const galaxy::PpcContext& context) 
     const double requested = std::bit_cast<double>(context.fpr_bits[1]);
     const float brightness = std::isfinite(requested) ? std::clamp(static_cast<float>(requested), 0.95f, 0.999999f) : 0.95f;
     constexpr float kReferenceDistance = 15.0f;
-    galaxy::gx::note_game_point_request(
-        context.gpr[3], {f(position), f(position + 4u), f(position + 8u)},
-        {static_cast<float>(rgba >> 24u) / 255.0f, static_cast<float>((rgba >> 16u) & 0xFFu) / 255.0f,
-         static_cast<float>((rgba >> 8u) & 0xFFu) / 255.0f},
-        kReferenceDistance * std::sqrt(brightness / (1.0f - brightness)));
+    RuntimeState::PointRequester request{};
+    request.actor = context.gpr[3];
+    request.position = {f(position), f(position + 4u), f(position + 8u)};
+    request.color = {static_cast<float>(rgba >> 24u) / 255.0f, static_cast<float>((rgba >> 16u) & 0xFFu) / 255.0f,
+                     static_cast<float>((rgba >> 8u) & 0xFFu) / 255.0f};
+    request.half_distance = kReferenceDistance * std::sqrt(brightness / (1.0f - brightness));
+    request.vi = state.vi_retrace_count;
+    galaxy::gx::note_game_point_request(request.actor, request.position, request.color, request.half_distance);
+    if (!mapped_guest_range(mem, request.actor, 0x70u)) {
+        return;
+    }
+    request.vtable = mem->read_u32(request.actor);
+    auto& requesters = state.point_requesters;
+    const auto known = std::find_if(requesters.begin(), requesters.end(),
+                                    [&](const RuntimeState::PointRequester& r) { return r.actor == request.actor; });
+    if (known != requesters.end()) {
+        *known = request;
+    } else if (requesters.size() < kPointRequesters) {
+        requesters.push_back(request);
+    } else {
+        *std::min_element(requesters.begin(), requesters.end(),
+                          [](const RuntimeState::PointRequester& a, const RuntimeState::PointRequester& b) {
+                              return a.vi < b.vi;
+                          }) = request;
+    }
+}
+
+// Once per VI: an actor that has asked for no light for kPointRequestGap VIs keeps its light while the game clips it.
+// A clipped actor runs no control, which is where it asks: a Luma behind the camera or round a corner went dark and
+// stopped lighting what the camera sees (user: every light source must keep projecting). Clipping also hides the
+// model (measured: every clipped Luma had its hidden flag set), so only a clipped actor keeps its light. One that
+// died or no longer exists (its first word changed) lets its light fade out, and so does one the game still runs
+// that stopped asking. LiveActor flags at +0x68: dead +0, clipped +7 (Petari LiveActorFlag, SMGCommunity).
+void keep_point_requests(RuntimeState& state) {
+    auto* mem = state.address_space;
+    if (mem == nullptr || state.point_requesters.empty()) {
+        return;
+    }
+    std::erase_if(state.point_requesters, [&](const RuntimeState::PointRequester& r) {
+        if (state.vi_retrace_count - r.vi <= kPointRequestGap) {
+            return false;
+        }
+        if (!mapped_guest_range(mem, r.actor, 0x70u) || mem->read_u32(r.actor) != r.vtable) {
+            return true;
+        }
+        const bool dead = (mem->read_u32(r.actor + 0x68u) >> 24u) != 0u;
+        const bool clipped = (mem->read_u32(r.actor + 0x6Cu) & 0xFFu) != 0u;
+        if (dead || !clipped) {
+            return true;
+        }
+        galaxy::gx::note_game_point_request(r.actor, r.position, r.color, r.half_distance);
+        return false;
+    });
 }
 
 // The ray tracer lights the scene with the game's lights: each point light it loads
@@ -20558,6 +20622,7 @@ bool finalize_vi_retrace(
     }
 
     ++state.vi_retrace_count;
+    keep_point_requests(state);
     state.main_frame_trace_active.store(
         trace_main_frame_vi_window(state), std::memory_order_relaxed);
     if (trace_runtime_scaffolding() &&

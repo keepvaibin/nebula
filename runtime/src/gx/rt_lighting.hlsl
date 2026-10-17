@@ -16,6 +16,9 @@
 // game camera's motion and pass two edge-aware filters. The composite reads them at each
 // pixel's own depth; interpolated sub-frames first move the pixel to the traced frame's camera.
 
+// Point lights per frame (rt_reflections.h kRtPointLights; g_points holds two float4 each).
+static const uint kPointLights = 16u;
+
 cbuffer RtLight : register(b0)
 {
     float4 g_projection;        // GX projection A, B, C, D
@@ -42,11 +45,11 @@ cbuffer RtLight : register(b0)
     float g_fallback;           // light of a hit the previous picture did not show
     float4 g_sun;               // towards the sun in eye space (xyz), tangent of its radius (w)
     float4 g_sun_light;         // sun light (rgb), weight of the sky and bounce light (w)
-    uint g_point_count;         // point lights in g_points (0-8)
+    uint g_point_count;         // point lights in g_points (0-kPointLights)
     float g_point_light;        // their weight
     float g_point_size;         // radius of the geometry around a light (its emitter)
     float g_sun_reach;          // length of a sun ray (eye units)
-    float4 g_points[16];        // per light: eye position (xyz), reach (w); colour (rgb),
+    float4 g_points[32];        // per light (kPointLights): eye position (xyz), reach (w); colour (rgb),
                                 // 1 / its half-light distance squared (w)
     float4 g_to_eye[3];         // world to eye (the glow lights' positions)
     float4 g_ambient;           // the sky and bounce light under a black sky (relative), the sky's
@@ -1879,9 +1882,9 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
     // visibility. One picked at random per frame let them take turns (flicker; user, Native41 Observatory).
     float3 points = float3(0.0f, 0.0f, 0.0f);
     if (g_point_count != 0u) {
-        float weights[8];
+        float weights[kPointLights];
         float total = 0.0f;
-        [unroll] for (uint i = 0u; i < 8u; ++i) {
+        [unroll] for (uint i = 0u; i < kPointLights; ++i) {
             weights[i] = 0.0f;
             if (i < g_point_count) {
                 const float3 to = g_points[2u * i].xyz - p;
@@ -1898,7 +1901,7 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
         float seen_total = 0.0f;
         float3 tested_light = float3(0.0f, 0.0f, 0.0f);
         float3 all_light = float3(0.0f, 0.0f, 0.0f);
-        [unroll] for (uint i = 0u; i < 8u; ++i) {
+        [unroll] for (uint i = 0u; i < kPointLights; ++i) {
             if (weights[i] > 0.0f) {
                 all_light += g_points[2u * i + 1u].rgb / max(luminance(g_points[2u * i + 1u].rgb), 1e-4f) * weights[i];
             }
@@ -1907,7 +1910,7 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
             // The strongest light not yet tested.
             uint chosen = 0u;
             float best = 0.0f;
-            [unroll] for (uint j = 0u; j < 8u; ++j) {
+            [unroll] for (uint j = 0u; j < kPointLights; ++j) {
                 if (weights[j] > best) {
                     best = weights[j];
                     chosen = j;

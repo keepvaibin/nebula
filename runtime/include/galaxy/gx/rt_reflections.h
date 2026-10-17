@@ -24,13 +24,16 @@
 
 namespace galaxy::gx {
 
+// Point lights the lighting traces per frame (rt_lighting.hlsl and rt_reflections.hlsl g_points: two float4 each).
+inline constexpr std::uint32_t kRtPointLights = 16u;
+
 // The lights the lighting traced (rt_lighting.hlsl RtLight, eye space), for specular highlights and the light
 // on high quality's shaded hits.
 struct RtReflectLights {
     std::array<float, 4> sun{};               // towards the sun (xyz), tangent of its radius (w)
     std::array<float, 4> sun_light{};         // sun light (rgb), how far its shadow rays reach (w)
     // Per point light: position, reach; colour, 1 / its half-light distance squared.
-    std::array<std::array<float, 4>, 16> points{};
+    std::array<std::array<float, 4>, 2u * kRtPointLights> points{};
     std::uint32_t point_count = 0;
     float point_light = 0.0f;                 // the point lights' weight
     float point_size = 0.0f;                  // radius of the emitter around a point light
@@ -88,7 +91,7 @@ struct RtReflectScene {
 class RtReflections {
 public:
     // Constants of one trace, in an upload allocation the caller makes (256-byte aligned).
-    static constexpr std::size_t kConstantsBytes = 800u;
+    static constexpr std::size_t kConstantsBytes = 1056u;
     // Results kept for the sub-frames of the game frames being interpolated (the lighting's slots).
     static constexpr unsigned kSlots = 4u;
 

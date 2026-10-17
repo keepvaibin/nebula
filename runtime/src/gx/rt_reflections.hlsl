@@ -198,7 +198,8 @@ cbuffer RtReflect : register(b0)
     // The lighting's lights (rt_lighting.hlsl RtLight) for the highlights.
     float4 g_sun;               // towards the sun (xyz), tangent of its radius (w)
     float4 g_sun_light;         // sun light (rgb), how far its shadow rays reach (w)
-    float4 g_points[16];        // per point light: position, reach; colour, 1 / half-light distance^2
+    float4 g_points[32];        // per point light (rt_reflections.h kRtPointLights): position, reach; colour,
+                                // 1 / half-light distance^2
     uint g_point_count;
     float g_point_light;        // the point lights' weight
     float g_point_size;         // radius of the emitter around a point light
