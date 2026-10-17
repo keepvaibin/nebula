@@ -3364,8 +3364,26 @@ bool native_hid_cadence_epochs_reject_stale_samples() {
         threw = true;
     }
     passed &= expect(
-        threw && cadence.stats().out_of_order_deliveries == 1u,
-        "native HID cadence rejects stale pre-reset samples");
+        !threw && cadence.stats().out_of_order_deliveries == 1u &&
+            cadence.stats().delivered_samples == 0u &&
+            !cadence.stats().exact_cadence_valid,
+        "native HID cadence counts and skips stale pre-reset samples");
+
+    galaxy::input::NativeHidReportCadence strict_cadence(
+        true, galaxy::input::kQualifiedTestHidTimingProfile);
+    strict_cadence.arm(origin);
+    const auto strict_stale = strict_cadence.collect_latest_due(origin);
+    strict_cadence.disarm(true);
+    strict_cadence.arm(origin + 100u);
+    bool strict_threw = false;
+    try {
+        strict_cadence.note_delivery(*strict_stale, origin + 100u);
+    } catch (const std::runtime_error&) {
+        strict_threw = true;
+    }
+    passed &= expect(
+        strict_threw && strict_cadence.stats().out_of_order_deliveries == 1u,
+        "strict native HID proof hard-fails stale pre-reset samples");
     cadence.note_delivery(*current, current->deadline_ticks);
     passed &= expect(
         cadence.stats().disconnect_resets == 1u &&

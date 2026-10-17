@@ -21958,6 +21958,9 @@ constexpr std::wstring_view kNandMetadataPendingStream =
     L":galaxy.isfs.meta.pending";
 constexpr std::wstring_view kNandProvisionalStream =
     L":galaxy.isfs.provisional";
+// Marks a sidecar file that stands in for a named stream under Wine (see
+// nand_uses_sidecar_streams).
+constexpr std::wstring_view kNandSidecarStreamMarker = L"~nebula-ads~";
 constexpr std::array<std::byte, 4> kNandMetadataMagic{
     std::byte{'G'}, std::byte{'I'}, std::byte{'S'}, std::byte{'3'}};
 constexpr std::array<std::byte, 4> kNandProvisionalMagic{
@@ -22005,7 +22008,8 @@ std::optional<std::filesystem::path> extended_length_nand_root(
     constexpr std::size_t kMaximumPidSequenceChars = 10u + 1u + 20u;
     constexpr std::size_t kMaximumDerivedPathChars =
         (kIsfsPathBufferSize - 1u) + kMaximumInternalMarkerChars +
-        kMaximumPidSequenceChars + kNandMetadataPendingStream.size() + 1u;
+        kMaximumPidSequenceChars + kNandMetadataPendingStream.size() +
+        kNandSidecarStreamMarker.size() + 1u;
     const auto with_derived_path_headroom = [](std::filesystem::path value)
         -> std::optional<std::filesystem::path> {
         return value.native().size() <=
@@ -22334,9 +22338,201 @@ std::string_view isfs_parent_path(std::string_view path) {
     return slash == 0u ? std::string_view{"/"} : path.substr(0u, slash);
 }
 
+// Wine has no NTFS named streams. Under Wine each stream lives in a sidecar
+// file instead: a file's streams beside it, a directory's inside it, so a
+// directory carries its own streams when it moves. Sidecar names are longer
+// than any ISFS name (12 characters), so the guest can never reach one, and
+// every NAND rename, delete and directory scan below goes through the
+// nand_* wrappers, which move, delete or skip the sidecars as NTFS would.
+// NEBULA_NAND_SIDECAR_STREAMS=1 or 0 forces the choice (tests on Windows).
+constexpr std::array<std::wstring_view, 3> kNandSidecarStreamNames{
+    kNandMetadataStream, kNandMetadataPendingStream, kNandProvisionalStream};
+
+bool nand_uses_sidecar_streams() {
+    static const bool sidecar = [] {
+        std::array<wchar_t, 4> value{};
+        const DWORD length = GetEnvironmentVariableW(
+            L"NEBULA_NAND_SIDECAR_STREAMS",
+            value.data(),
+            static_cast<DWORD>(value.size()));
+        if (length == 1u) return value[0] == L'1';
+        const HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+        return ntdll != nullptr &&
+            GetProcAddress(ntdll, "wine_get_version") != nullptr;
+    }();
+    return sidecar;
+}
+
+bool is_nand_sidecar_stream_path(const std::filesystem::path& path) {
+    return path.filename().native().find(kNandSidecarStreamMarker) !=
+        std::wstring::npos;
+}
+
+bool is_nand_sidecar_entry(const std::filesystem::path& path) {
+    return nand_uses_sidecar_streams() && is_nand_sidecar_stream_path(path);
+}
+
+std::filesystem::path nand_sidecar_stream_path(
+    const std::filesystem::path& host_path,
+    std::wstring_view stream_name,
+    bool directory) {
+    std::wstring name(kNandSidecarStreamMarker);
+    name.append(stream_name.substr(1u));
+    if (directory) return host_path / name;
+    std::wstring sidecar = host_path.native();
+    sidecar.push_back(L'.');
+    sidecar.append(name);
+    return std::filesystem::path(std::move(sidecar));
+}
+
+bool nand_host_path_is_directory(const std::filesystem::path& host_path) {
+    const DWORD attributes = GetFileAttributesW(host_path.c_str());
+    return attributes != INVALID_FILE_ATTRIBUTES &&
+        (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u;
+}
+
+// Deletes the streams of a file that no longer exists at host_path.
+void delete_nand_file_sidecars(const std::filesystem::path& host_path) {
+    if (!nand_uses_sidecar_streams() || is_nand_sidecar_stream_path(host_path)) {
+        return;
+    }
+    for (const std::wstring_view stream : kNandSidecarStreamNames) {
+        (void)DeleteFileW(
+            nand_sidecar_stream_path(host_path, stream, false).c_str());
+    }
+}
+
+// The file's streams follow it from `from` to `to`; with
+// MOVEFILE_REPLACE_EXISTING the replaced file's streams go, as on NTFS.
+BOOL nand_move_file_ex(LPCWSTR from, LPCWSTR to, DWORD flags) {
+    const std::filesystem::path source(from);
+    if (!nand_uses_sidecar_streams() || is_nand_sidecar_stream_path(source)) {
+        return MoveFileExW(from, to, flags);
+    }
+    const DWORD attributes = GetFileAttributesW(from);
+    const bool file = attributes != INVALID_FILE_ATTRIBUTES &&
+        (attributes & FILE_ATTRIBUTE_DIRECTORY) == 0u;
+    if (MoveFileExW(from, to, flags) == FALSE) return FALSE;
+    if (file) {
+        const std::filesystem::path target(to);
+        for (const std::wstring_view stream : kNandSidecarStreamNames) {
+            const std::filesystem::path source_sidecar =
+                nand_sidecar_stream_path(source, stream, false);
+            const std::filesystem::path target_sidecar =
+                nand_sidecar_stream_path(target, stream, false);
+            if (GetFileAttributesW(source_sidecar.c_str()) !=
+                INVALID_FILE_ATTRIBUTES) {
+                (void)MoveFileExW(
+                    source_sidecar.c_str(),
+                    target_sidecar.c_str(),
+                    MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+            } else {
+                (void)DeleteFileW(target_sidecar.c_str());
+            }
+        }
+    }
+    SetLastError(ERROR_SUCCESS);
+    return TRUE;
+}
+
+// NTFS streams belong to the file, not the name, so a hard link shares them;
+// the sidecars are hard-linked alongside.
+BOOL nand_create_hard_link(LPCWSTR link, LPCWSTR existing) {
+    if (CreateHardLinkW(link, existing, nullptr) == FALSE) return FALSE;
+    if (!nand_uses_sidecar_streams()) return TRUE;
+    const std::filesystem::path link_path(link);
+    const std::filesystem::path existing_path(existing);
+    for (const std::wstring_view stream : kNandSidecarStreamNames) {
+        const std::filesystem::path existing_sidecar =
+            nand_sidecar_stream_path(existing_path, stream, false);
+        if (GetFileAttributesW(existing_sidecar.c_str()) ==
+            INVALID_FILE_ATTRIBUTES) {
+            continue;
+        }
+        if (CreateHardLinkW(
+                nand_sidecar_stream_path(link_path, stream, false).c_str(),
+                existing_sidecar.c_str(),
+                nullptr) == FALSE) {
+            const DWORD error = GetLastError();
+            (void)DeleteFileW(link);
+            delete_nand_file_sidecars(link_path);
+            SetLastError(error);
+            return FALSE;
+        }
+    }
+    SetLastError(ERROR_SUCCESS);
+    return TRUE;
+}
+
+BOOL nand_delete_file(LPCWSTR path) {
+    if (DeleteFileW(path) == FALSE) return FALSE;
+    delete_nand_file_sidecars(std::filesystem::path(path));
+    SetLastError(ERROR_SUCCESS);
+    return TRUE;
+}
+
+// A directory holding only its own sidecars is empty, as one holding only
+// named streams is on NTFS.
+BOOL nand_remove_directory(LPCWSTR path) {
+    if (!nand_uses_sidecar_streams()) return RemoveDirectoryW(path);
+    const std::filesystem::path directory(path);
+    std::error_code error;
+    std::vector<std::filesystem::path> sidecars;
+    std::filesystem::directory_iterator iterator(directory, error);
+    for (; !error && iterator != std::filesystem::directory_iterator{};
+         iterator.increment(error)) {
+        if (!is_nand_sidecar_stream_path(iterator->path())) {
+            SetLastError(ERROR_DIR_NOT_EMPTY);
+            return FALSE;
+        }
+        sidecars.push_back(iterator->path());
+    }
+    if (!error) {
+        for (const std::filesystem::path& sidecar : sidecars) {
+            (void)DeleteFileW(sidecar.c_str());
+        }
+    }
+    return RemoveDirectoryW(path);
+}
+
+std::uintmax_t nand_remove_all(
+    const std::filesystem::path& path,
+    std::error_code& error) {
+    const bool file = nand_uses_sidecar_streams() &&
+        GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES &&
+        !nand_host_path_is_directory(path);
+    const std::uintmax_t removed = std::filesystem::remove_all(path, error);
+    if (file && !error) delete_nand_file_sidecars(path);
+    return removed;
+}
+
+// Directory scans skip sidecars, which stand in for named streams.
+template <class Iterator>
+void skip_nand_sidecars(Iterator& iterator, std::error_code& error) {
+    while (!error && iterator != Iterator{} &&
+           is_nand_sidecar_entry(iterator->path())) {
+        iterator.increment(error);
+    }
+}
+
+bool nand_directory_is_empty(
+    const std::filesystem::path& path,
+    std::error_code& error) {
+    std::filesystem::directory_iterator iterator(path, error);
+    skip_nand_sidecars(iterator, error);
+    return !error && iterator == std::filesystem::directory_iterator{};
+}
+
 std::filesystem::path nand_metadata_stream_path(
     const std::filesystem::path& host_path,
     std::wstring_view stream_name = kNandMetadataStream) {
+    if (nand_uses_sidecar_streams()) {
+        return nand_sidecar_stream_path(
+            host_path,
+            stream_name,
+            host_path.filename().empty() ||
+                nand_host_path_is_directory(host_path));
+    }
     std::wstring stream_path = host_path.native();
     stream_path.append(stream_name);
     return std::filesystem::path(std::move(stream_path));
@@ -22496,7 +22692,7 @@ std::uint32_t write_nand_metadata_stream(
     }
     if (error != ERROR_SUCCESS) {
         if (disposition == CREATE_NEW) {
-            (void)DeleteFileW(stream_path.c_str());
+            (void)nand_delete_file(stream_path.c_str());
         }
         return isfs_error_from_host_error(error);
     }
@@ -22505,7 +22701,7 @@ std::uint32_t write_nand_metadata_stream(
     if (verified.status != NandMetadataLoadStatus::ok ||
         verified.metadata != metadata) {
         if (disposition == CREATE_NEW) {
-            (void)DeleteFileW(stream_path.c_str());
+            (void)nand_delete_file(stream_path.c_str());
         }
         return kIsfsErrUnknown;
     }
@@ -22543,7 +22739,7 @@ NandMetadataLoadResult recover_nand_metadata(
             final.metadata != pending.metadata) {
             return {NandMetadataLoadStatus::invalid, {}, ERROR_INVALID_DATA};
         }
-        if (DeleteFileW(pending_stream.c_str()) == FALSE) {
+        if (nand_delete_file(pending_stream.c_str()) == FALSE) {
             const DWORD error = GetLastError();
             if (error != ERROR_FILE_NOT_FOUND) {
                 return {NandMetadataLoadStatus::access_error, {}, error};
@@ -22718,7 +22914,9 @@ native_nand_raw_object_identity_from_handle(HANDLE object) {
         (information.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u ||
         information.nNumberOfLinks == 0u ||
         (case_queried == FALSE && case_error != ERROR_INVALID_PARAMETER &&
-         case_error != ERROR_NOT_SUPPORTED) ||
+         case_error != ERROR_NOT_SUPPORTED &&
+         // Wine does not implement the case-sensitivity query.
+         case_error != ERROR_CALL_NOT_IMPLEMENTED) ||
         (case_queried != FALSE &&
          (case_information.Flags & FILE_CS_FLAG_CASE_SENSITIVE_DIR) != 0u)) {
         (void)query_error;
@@ -22922,7 +23120,7 @@ std::uint32_t write_nand_provisional_marker(
         error = GetLastError();
     }
     if (error != ERROR_SUCCESS) {
-        (void)DeleteFileW(stream_path.c_str());
+        (void)nand_delete_file(stream_path.c_str());
         return isfs_error_from_host_error(error);
     }
     const NandProvisionalLoadResult verified =
@@ -22939,7 +23137,7 @@ std::uint32_t remove_nand_provisional_marker(
     const std::filesystem::path& host_path) {
     const std::filesystem::path stream_path =
         nand_metadata_stream_path(host_path, kNandProvisionalStream);
-    if (DeleteFileW(stream_path.c_str()) == FALSE) {
+    if (nand_delete_file(stream_path.c_str()) == FALSE) {
         const DWORD error = GetLastError();
         if (error != ERROR_FILE_NOT_FOUND && error != ERROR_PATH_NOT_FOUND) {
             return isfs_error_from_host_error(error);
@@ -23055,6 +23253,9 @@ bool delete_exact_nand_file_and_verify_missing(
         &disposition,
         sizeof(disposition));
     const BOOL closed = CloseHandle(object);
+    if (deleted != FALSE && !current->is_directory) {
+        delete_nand_file_sidecars(path);
+    }
     return deleted != FALSE && closed != FALSE &&
         nand_path_is_definitely_missing(path);
 }
@@ -23352,7 +23553,7 @@ std::uint32_t write_nand_rename_journal(
         }
         return kIsfsErrAccess;
     }
-    if (MoveFileExW(
+    if (nand_move_file_ex(
             candidate.c_str(), path.c_str(), MOVEFILE_WRITE_THROUGH) == FALSE) {
         const DWORD move_error = GetLastError();
         if (!delete_exact_nand_file_and_verify_missing(
@@ -23597,6 +23798,7 @@ std::optional<DWORD> nand_volume_serial(
 
 bool nand_volume_supports_named_streams(
     const std::filesystem::path& existing_path) {
+    if (nand_uses_sidecar_streams()) return true;
     std::array<wchar_t, MAX_PATH> volume_root{};
     if (GetVolumePathNameW(
             existing_path.c_str(),
@@ -24022,7 +24224,7 @@ bool apply_nand_rename_recovery_plan(
         }
         break;
     case NandRenameRecoveryState::rollback_with_backup:
-        if (MoveFileExW(
+        if (nand_move_file_ex(
                 plan.backup->c_str(),
                 target.c_str(),
                 MOVEFILE_WRITE_THROUGH) == FALSE ||
@@ -24075,6 +24277,10 @@ bool recover_nand_internal_temps(const std::filesystem::path& root) {
     std::filesystem::recursive_directory_iterator iterator(root, error);
     const std::filesystem::recursive_directory_iterator end;
     while (!error && iterator != end) {
+        if (is_nand_sidecar_entry(iterator->path())) {
+            iterator.increment(error);
+            continue;
+        }
         const std::filesystem::path path = iterator->path();
         const std::string name = path.filename().string();
         const NandInternalNameKind kind = classify_nand_internal_name(name);
@@ -24192,7 +24398,7 @@ bool recover_nand_internal_temps(const std::filesystem::path& root) {
         }
         if (entry.is_directory) {
             std::error_code remove_error;
-            (void)std::filesystem::remove_all(entry.path, remove_error);
+            (void)nand_remove_all(entry.path, remove_error);
             if (remove_error || !nand_path_is_definitely_missing(entry.path)) {
                 return false;
             }
@@ -24265,6 +24471,33 @@ struct StartupNandStreamInventory {
 StartupNandStreamInventory inspect_startup_nand_streams(
     const std::filesystem::path& path) {
     StartupNandStreamInventory result;
+    if (nand_uses_sidecar_streams()) {
+        // Sidecars hold only known stream names, except a provisional
+        // marker, which a named-stream scan would also report as unknown.
+        if (GetFileAttributesW(path.c_str()) == INVALID_FILE_ATTRIBUTES) {
+            return result;
+        }
+        if (GetFileAttributesW(
+                nand_metadata_stream_path(path, kNandProvisionalStream)
+                    .c_str()) != INVALID_FILE_ATTRIBUTES) {
+            return result;
+        }
+        result.exact_names = true;
+        result.pending = load_nand_metadata_stream(
+            nand_metadata_stream_path(path, kNandMetadataPendingStream));
+        result.final =
+            load_nand_metadata_stream(nand_metadata_stream_path(path));
+        result.has_pending =
+            result.pending.status != NandMetadataLoadStatus::missing;
+        result.has_final =
+            result.final.status != NandMetadataLoadStatus::missing;
+        result.valid =
+            (!result.has_pending ||
+             result.pending.status == NandMetadataLoadStatus::ok) &&
+            (!result.has_final ||
+             result.final.status == NandMetadataLoadStatus::ok);
+        return result;
+    }
     WIN32_FIND_STREAM_DATA stream{};
     HANDLE search = FindFirstStreamW(
         path.c_str(), FindStreamInfoStandard, &stream, 0u);
@@ -24382,7 +24615,7 @@ bool repair_startup_nand_torn_metadata(
     }
     const std::filesystem::path stream =
         nand_metadata_stream_path(path, stream_name);
-    if (DeleteFileW(stream.c_str()) == FALSE) return false;
+    if (nand_delete_file(stream.c_str()) == FALSE) return false;
     const NandMetadataLoadResult absent = load_nand_metadata_stream(stream);
     if (absent.status != NandMetadataLoadStatus::missing ||
         !is_exact_missing_host_error(absent.host_error)) {
@@ -24486,6 +24719,10 @@ bool startup_nand_inventory_is_exact(
     std::filesystem::recursive_directory_iterator iterator(root, error);
     const std::filesystem::recursive_directory_iterator end;
     while (!error && iterator != end) {
+        if (is_nand_sidecar_entry(iterator->path())) {
+            iterator.increment(error);
+            continue;
+        }
         const std::filesystem::path path = iterator->path();
         const std::filesystem::path relative = path.lexically_relative(root);
         const std::wstring name = relative.generic_wstring();
@@ -24500,8 +24737,7 @@ bool startup_nand_inventory_is_exact(
         return false;
     }
     const std::filesystem::path tmp = root / L"tmp";
-    std::filesystem::directory_iterator tmp_iterator(tmp, error);
-    return !error && tmp_iterator == std::filesystem::directory_iterator{};
+    return nand_directory_is_empty(tmp, error);
 }
 
 std::optional<StartupNandPlan> classify_startup_nand_plan(
@@ -24849,8 +25085,7 @@ bool native_nand_root_is_empty_and_stream_free(
         inspect_startup_nand_streams(root);
     if (!streams.valid || streams.has_pending || streams.has_final) return false;
     std::error_code error;
-    const std::filesystem::directory_iterator iterator(root, error);
-    return !error && iterator == std::filesystem::directory_iterator{};
+    return nand_directory_is_empty(root, error);
 }
 
 struct PreRecoveryNandScan {
@@ -24866,6 +25101,10 @@ PreRecoveryNandScan scan_nand_before_recovery(
     std::filesystem::recursive_directory_iterator iterator(root, error);
     const std::filesystem::recursive_directory_iterator end;
     while (!error && iterator != end) {
+        if (is_nand_sidecar_entry(iterator->path())) {
+            iterator.increment(error);
+            continue;
+        }
         const std::filesystem::path path = iterator->path();
         const NandInternalNameKind internal =
             classify_nand_internal_name(path.filename().string());
@@ -24914,6 +25153,10 @@ bool validate_fresh_nand_transaction_inventory(
     std::filesystem::recursive_directory_iterator iterator(root, error);
     const std::filesystem::recursive_directory_iterator end;
     while (!error && iterator != end) {
+        if (is_nand_sidecar_entry(iterator->path())) {
+            iterator.increment(error);
+            continue;
+        }
         const std::filesystem::path relative =
             iterator->path().lexically_relative(root);
         const std::wstring name = relative.generic_wstring();
@@ -25009,8 +25252,7 @@ bool validate_fresh_nand_transaction_inventory(
         }
     }
     if (observed.contains(L"tmp")) {
-        std::filesystem::directory_iterator tmp_iterator(root / L"tmp", error);
-        if (error || tmp_iterator != std::filesystem::directory_iterator{}) {
+        if (!nand_directory_is_empty(root / L"tmp", error)) {
             return false;
         }
     }
@@ -25094,14 +25336,17 @@ bool fresh_nand_commit_plan_is_stable(
     std::filesystem::recursive_directory_iterator iterator(plan.root, error);
     const std::filesystem::recursive_directory_iterator end;
     while (!error && iterator != end) {
+        if (is_nand_sidecar_entry(iterator->path())) {
+            iterator.increment(error);
+            continue;
+        }
         const std::wstring relative =
             iterator->path().lexically_relative(plan.root).generic_wstring();
         if (relative.empty() || !observed.insert(relative).second) return false;
         iterator.increment(error);
     }
     if (error || observed != expected) return false;
-    std::filesystem::directory_iterator tmp_iterator(plan.root / L"tmp", error);
-    if (error || tmp_iterator != std::filesystem::directory_iterator{}) {
+    if (!nand_directory_is_empty(plan.root / L"tmp", error)) {
         return false;
     }
     for (const FreshNandLeaseEntry& entry : plan.entries) {
@@ -25268,8 +25513,7 @@ NativeNandRootProbe probe_native_nand_root() {
     if (initial_root_phase == StartupNandMetadataPhase::torn_pending &&
         !initial_scan.has_internal && !initial_scan.has_provisional) {
         const auto root_identity = native_nand_raw_object_identity(root);
-        std::filesystem::directory_iterator iterator(root, error);
-        if (!error && iterator == std::filesystem::directory_iterator{} &&
+        if (nand_directory_is_empty(root, error) &&
             root_identity.has_value() && root_identity->is_directory &&
             root_identity->link_count == 1u) {
             if (!repair_startup_nand_torn_metadata(
@@ -25449,14 +25693,14 @@ std::uint32_t provision_native_nand_directory(
             const std::uint32_t metadata_result =
                 write_nand_metadata(candidate, current_metadata, false);
             if (metadata_result != 0u) {
-                (void)RemoveDirectoryW(candidate.c_str());
+                (void)nand_remove_directory(candidate.c_str());
                 return metadata_result;
             }
-            if (MoveFileExW(
+            if (nand_move_file_ex(
                     candidate.c_str(), host.c_str(), MOVEFILE_WRITE_THROUGH) ==
                 FALSE) {
                 const DWORD move_error = GetLastError();
-                (void)RemoveDirectoryW(candidate.c_str());
+                (void)nand_remove_directory(candidate.c_str());
                 return isfs_error_from_host_error(move_error);
             }
             const NandMetadataLoadResult verified = load_nand_metadata(host);
@@ -25780,6 +26024,10 @@ bool validate_native_nand_subtree(
         std::filesystem::directory_iterator iterator(host, error);
         const std::filesystem::directory_iterator end;
         while (!error && iterator != end) {
+            if (is_nand_sidecar_entry(iterator->path())) {
+                iterator.increment(error);
+                continue;
+            }
             const std::filesystem::path child = iterator->path();
             const std::string name = child.filename().string();
             const NandInternalNameKind internal =
@@ -26065,7 +26313,7 @@ std::uint32_t recover_durable_provisional_file(
     // now or by exact-marker startup recovery.
     const std::filesystem::path tombstone = make_internal_nand_path(
         host, L".__galaxy_isfs_deleted__.");
-    if (MoveFileExW(host.c_str(), tombstone.c_str(), MOVEFILE_WRITE_THROUGH) ==
+    if (nand_move_file_ex(host.c_str(), tombstone.c_str(), MOVEFILE_WRITE_THROUGH) ==
         FALSE) {
         const DWORD move_error = GetLastError();
         return move_error == ERROR_ACCESS_DENIED ? kIsfsErrInUse
@@ -26097,7 +26345,7 @@ std::uint32_t recover_durable_provisional_file(
         try_read_file(tombstone, moved_bytes) && moved_bytes.empty() &&
         original_absent;
     if (!moved_valid) {
-        if (MoveFileExW(
+        if (nand_move_file_ex(
                 tombstone.c_str(), host.c_str(), MOVEFILE_WRITE_THROUGH) ==
             FALSE) {
             throw std::runtime_error(
@@ -26131,7 +26379,7 @@ std::uint32_t recover_durable_provisional_file(
         }
         return kIsfsErrAccess;
     }
-    if (DeleteFileW(tombstone.c_str()) == FALSE) {
+    if (nand_delete_file(tombstone.c_str()) == FALSE) {
         const DWORD purge_error = GetLastError();
         if (purge_error != ERROR_FILE_NOT_FOUND &&
             purge_error != ERROR_PATH_NOT_FOUND) {
@@ -26197,32 +26445,32 @@ std::uint32_t publish_new_native_nand_file(
         host_error = GetLastError();
     }
     if (host_error != ERROR_SUCCESS) {
-        (void)DeleteFileW(candidate.c_str());
+        (void)nand_delete_file(candidate.c_str());
         return isfs_error_from_host_error(host_error);
     }
     std::vector<std::byte> verified;
     if (!try_read_file(candidate, verified) ||
         !std::ranges::equal(verified, bytes)) {
-        (void)DeleteFileW(candidate.c_str());
+        (void)nand_delete_file(candidate.c_str());
         return kIsfsErrUnknown;
     }
     const std::uint32_t metadata_result =
         write_nand_metadata(candidate, metadata, false);
     if (metadata_result != 0u) {
-        (void)DeleteFileW(candidate.c_str());
+        (void)nand_delete_file(candidate.c_str());
         return metadata_result;
     }
     const std::optional<NativeNandObjectIdentity> candidate_identity =
         native_nand_object_identity(candidate);
     if (!candidate_identity.has_value() || candidate_identity->is_directory) {
-        (void)DeleteFileW(candidate.c_str());
+        (void)nand_delete_file(candidate.c_str());
         return kIsfsErrAccess;
     }
-    if (MoveFileExW(
+    if (nand_move_file_ex(
             candidate.c_str(), destination.c_str(), MOVEFILE_WRITE_THROUGH) ==
         FALSE) {
         const DWORD move_error = GetLastError();
-        (void)DeleteFileW(candidate.c_str());
+        (void)nand_delete_file(candidate.c_str());
         return isfs_error_from_host_error(move_error);
     }
     verified.clear();
@@ -26311,13 +26559,13 @@ std::uint32_t initialize_native_nand_layout(
         if (!tmp_reparse.has_value() || *tmp_reparse) return kIsfsErrAccess;
         const std::filesystem::path tombstone = make_internal_nand_path(
             tmp, L".__galaxy_isfs_deleted__.");
-        if (MoveFileExW(
+        if (nand_move_file_ex(
                 tmp.c_str(), tombstone.c_str(), MOVEFILE_WRITE_THROUGH) ==
             FALSE) {
             return isfs_error_from_host_error(GetLastError());
         }
         std::error_code remove_error;
-        (void)std::filesystem::remove_all(tombstone, remove_error);
+        (void)nand_remove_all(tombstone, remove_error);
         // Cleanup may be completed by exact-marker recovery after a crash or a transient host lock; the guest-visible
         // /tmp deletion is committed.
     } else if (tmp_attributes == INVALID_FILE_ATTRIBUTES) {
@@ -26468,6 +26716,10 @@ bool nand_tree_awaits_recovery(const std::filesystem::path& root) {
     std::filesystem::recursive_directory_iterator iterator(root, error);
     const std::filesystem::recursive_directory_iterator end;
     while (!error && iterator != end) {
+        if (is_nand_sidecar_entry(iterator->path())) {
+            iterator.increment(error);
+            continue;
+        }
         if (entry_awaits_recovery(iterator->path())) return true;
         iterator.increment(error);
     }
@@ -26515,6 +26767,7 @@ NandSalvage scan_nand_for_salvage(const std::filesystem::path& root) {
     std::filesystem::recursive_directory_iterator iterator(root, error);
     const std::filesystem::recursive_directory_iterator end;
     for (; !error && iterator != end; iterator.increment(error)) {
+        if (is_nand_sidecar_entry(iterator->path())) continue;
         const std::filesystem::path path = iterator->path();
         const DWORD attributes = GetFileAttributesW(path.c_str());
         if (attributes == INVALID_FILE_ATTRIBUTES) {
@@ -26567,7 +26820,7 @@ bool build_adopted_nand_tree(
     const std::filesystem::path& staging, const NandSalvage& salvage) {
     try {
         std::error_code error;
-        std::filesystem::remove_all(staging, error);
+        nand_remove_all(staging, error);
         if (error ||
             !std::filesystem::create_directory(staging, error) || error) {
             return false;
@@ -26622,7 +26875,7 @@ std::wstring nand_local_timestamp() {
 // Scanners and indexers briefly open files that were just written; a folder rename fails while they hold one.
 bool rename_nand_tree(const std::filesystem::path& from, const std::filesystem::path& to) {
     for (int attempt = 0;; ++attempt) {
-        if (MoveFileExW(from.c_str(), to.c_str(), MOVEFILE_WRITE_THROUGH) != FALSE) return true;
+        if (nand_move_file_ex(from.c_str(), to.c_str(), MOVEFILE_WRITE_THROUGH) != FALSE) return true;
         const DWORD error = GetLastError();
         if ((error != ERROR_ACCESS_DENIED && error != ERROR_SHARING_VIOLATION) || attempt == 40) {
             return false;
@@ -26662,7 +26915,7 @@ NandAdoption adopt_foreign_nand_tree(const std::filesystem::path& root) {
     staging += L".adopt";
     if (!build_adopted_nand_tree(staging, salvage)) {
         std::cerr << "[nand] saves folder not adopted: the replacement could not be built\n";
-        std::filesystem::remove_all(staging, error);
+        nand_remove_all(staging, error);
         return NandAdoption::failed;
     }
     // The previous tree goes to a name nothing else uses, so no earlier copy is ever replaced.
@@ -26679,7 +26932,7 @@ NandAdoption adopt_foreign_nand_tree(const std::filesystem::path& root) {
         // The rebuilt tree is deleted only once the previous one is back; otherwise the next start puts it in place.
         const bool restored = !displaced_root || rename_nand_tree(displaced, root);
         std::cerr << "[nand] saves folder not adopted: the replacement could not be put in place\n";
-        if (restored) std::filesystem::remove_all(staging, error);
+        if (restored) nand_remove_all(staging, error);
         return NandAdoption::failed;
     }
     std::cerr << "[nand] saves folder rebuilt: GameData "
@@ -26688,7 +26941,7 @@ NandAdoption adopt_foreign_nand_tree(const std::filesystem::path& root) {
     if (salvage.unaccounted) {
         std::cerr << "; previous contents kept in " << nand_log_path(displaced);
     } else {
-        std::filesystem::remove_all(displaced, error);
+        nand_remove_all(displaced, error);
     }
     std::cerr << '\n';
     return NandAdoption::adopted;
@@ -26989,7 +27242,7 @@ std::uint32_t GuestAddressSpace::persist_nand_file_at(
         if (persist_error != ERROR_SUCCESS) {
             log_nand_persist_failure(
                 file.guest_path, failed_stage, persist_error);
-            (void)DeleteFileW(temporary.c_str());
+            (void)nand_delete_file(temporary.c_str());
             return isfs_error_from_host_error(persist_error);
         }
 
@@ -26998,7 +27251,7 @@ std::uint32_t GuestAddressSpace::persist_nand_file_at(
             !std::ranges::equal(verified_candidate, file.data)) {
             log_nand_persist_failure(
                 file.guest_path, "verify-candidate", ERROR_CRC);
-            (void)DeleteFileW(temporary.c_str());
+            (void)nand_delete_file(temporary.c_str());
             return kIsfsErrUnknown;
         }
 
@@ -27017,7 +27270,7 @@ std::uint32_t GuestAddressSpace::persist_nand_file_at(
             if (metadata_result != 0u) {
                 log_nand_persist_failure(
                     file.guest_path, "metadata", metadata_result);
-                (void)DeleteFileW(temporary.c_str());
+                (void)nand_delete_file(temporary.c_str());
                 return metadata_result;
             }
         }
@@ -27027,7 +27280,7 @@ std::uint32_t GuestAddressSpace::persist_nand_file_at(
             candidate_identity->is_directory) {
             log_nand_persist_failure(
                 file.guest_path, "verify-candidate-identity", ERROR_INVALID_DATA);
-            (void)DeleteFileW(temporary.c_str());
+            (void)nand_delete_file(temporary.c_str());
             return kIsfsErrAccess;
         }
         if (publish_durable_provisional) {
@@ -27046,7 +27299,7 @@ std::uint32_t GuestAddressSpace::persist_nand_file_at(
                 marker.file_index != candidate_identity->file_index) {
                 log_nand_persist_failure(
                     file.guest_path, "provisional-marker", marker_result);
-                (void)DeleteFileW(temporary.c_str());
+                (void)nand_delete_file(temporary.c_str());
                 return marker_result != 0u ? marker_result : kIsfsErrAccess;
             }
         }
@@ -27055,12 +27308,12 @@ std::uint32_t GuestAddressSpace::persist_nand_file_at(
         if (replace_existing) {
             move_flags |= MOVEFILE_REPLACE_EXISTING;
         }
-        if (MoveFileExW(
+        if (nand_move_file_ex(
                 temporary.c_str(), host.c_str(), move_flags) == FALSE) {
             const DWORD replace_error = GetLastError();
             log_nand_persist_failure(
                 file.guest_path, "replace", replace_error);
-            (void)DeleteFileW(temporary.c_str());
+            (void)nand_delete_file(temporary.c_str());
             // MoveFileEx reports ERROR_ACCESS_DENIED when the live target is open without FILE_SHARE_DELETE. At the ISFS
             // boundary that is an object-in-use failure, not a permissions failure.
             return replace_existing && replace_error == ERROR_ACCESS_DENIED
@@ -27127,7 +27380,7 @@ std::uint32_t GuestAddressSpace::persist_nand_file_at(
             (void)CloseHandle(candidate);
         }
         if (candidate_created && !temporary.empty()) {
-            (void)DeleteFileW(temporary.c_str());
+            (void)nand_delete_file(temporary.c_str());
         }
         log_nand_persist_failure(file.guest_path, "exception", ERROR_GEN_FAILURE);
         return kIsfsErrAccess;
@@ -27572,7 +27825,7 @@ bool GuestAddressSpace::handle_fs_ioctl(
         const std::filesystem::path tombstone = make_internal_nand_path(
             host, L".__galaxy_isfs_deleted__.");
         std::uint32_t delete_result = 0u;
-        if (MoveFileExW(
+        if (nand_move_file_ex(
                 host.c_str(), tombstone.c_str(), MOVEFILE_WRITE_THROUGH) ==
             FALSE) {
             delete_result = isfs_error_from_host_error(GetLastError());
@@ -27586,7 +27839,7 @@ bool GuestAddressSpace::handle_fs_ioctl(
                      : validate_native_nand_subtree(
                            nand_root_, tombstone, path));
             if (!moved_valid) {
-                if (MoveFileExW(
+                if (nand_move_file_ex(
                         tombstone.c_str(), host.c_str(),
                         MOVEFILE_WRITE_THROUGH) == FALSE ||
                     (provisional_valid
@@ -27600,8 +27853,8 @@ bool GuestAddressSpace::handle_fs_ioctl(
             } else {
                 std::error_code purge_error;
                 if (is_directory) {
-                    (void)std::filesystem::remove_all(tombstone, purge_error);
-                } else if (DeleteFileW(tombstone.c_str()) == FALSE) {
+                    (void)nand_remove_all(tombstone, purge_error);
+                } else if (nand_delete_file(tombstone.c_str()) == FALSE) {
                     purge_error = std::error_code(
                         static_cast<int>(GetLastError()),
                         std::system_category());
@@ -27697,7 +27950,7 @@ bool GuestAddressSpace::handle_fs_ioctl(
         const std::uint32_t metadata_result =
             write_nand_metadata(candidate, metadata, false);
         if (metadata_result != 0u) {
-            (void)RemoveDirectoryW(candidate.c_str());
+            (void)nand_remove_directory(candidate.c_str());
             reply_ios_request(physical_request, metadata_result);
             return true;
         }
@@ -27709,15 +27962,15 @@ bool GuestAddressSpace::handle_fs_ioctl(
             !candidate_identity->is_directory ||
             candidate_metadata.status != NandMetadataLoadStatus::ok ||
             candidate_metadata.metadata != metadata) {
-            (void)RemoveDirectoryW(candidate.c_str());
+            (void)nand_remove_directory(candidate.c_str());
             reply_ios_request(physical_request, kIsfsErrAccess);
             return true;
         }
-        if (MoveFileExW(
+        if (nand_move_file_ex(
                 candidate.c_str(), host.c_str(), MOVEFILE_WRITE_THROUGH) ==
             FALSE) {
             const DWORD move_error = GetLastError();
-            (void)RemoveDirectoryW(candidate.c_str());
+            (void)nand_remove_directory(candidate.c_str());
             reply_ios_request(
                 physical_request, isfs_error_from_host_error(move_error));
             return true;
@@ -27731,13 +27984,13 @@ bool GuestAddressSpace::handle_fs_ioctl(
             published_metadata.status != NandMetadataLoadStatus::ok ||
             published_metadata.metadata != metadata ||
             GetFileAttributesW(candidate.c_str()) != INVALID_FILE_ATTRIBUTES) {
-            if (MoveFileExW(
+            if (nand_move_file_ex(
                     host.c_str(), candidate.c_str(), MOVEFILE_WRITE_THROUGH) ==
                 FALSE) {
                 throw std::runtime_error(
                     "native NAND CreateDir verification and rollback failed");
             }
-            (void)RemoveDirectoryW(candidate.c_str());
+            (void)nand_remove_directory(candidate.c_str());
             reply_ios_request(physical_request, kIsfsErrAccess);
             return true;
         }
@@ -27975,10 +28228,9 @@ bool GuestAddressSpace::handle_fs_ioctl(
             rename_transaction = std::move(paths);
             rename_record = std::move(record);
 
-            if (CreateHardLinkW(
+            if (nand_create_hard_link(
                     rename_transaction->backup.c_str(),
-                    host_to.c_str(),
-                    nullptr) == FALSE) {
+                    host_to.c_str()) == FALSE) {
                 const DWORD link_error = GetLastError();
                 const NandRenameRecoveryPlan journal_only{
                     rename_transaction->journal,
@@ -28054,7 +28306,7 @@ bool GuestAddressSpace::handle_fs_ioctl(
 
         DWORD move_flags = MOVEFILE_WRITE_THROUGH;
         if (to_exists) move_flags |= MOVEFILE_REPLACE_EXISTING;
-        const BOOL moved = MoveFileExW(
+        const BOOL moved = nand_move_file_ex(
             host_from.c_str(), host_to.c_str(), move_flags);
         const DWORD move_error = moved == FALSE ? GetLastError() : ERROR_SUCCESS;
         const std::uint32_t rename_result = moved != FALSE
@@ -28115,7 +28367,7 @@ bool GuestAddressSpace::handle_fs_ioctl(
                      known_native_nand_file_contents_are_valid(to, host_to));
             }
             if (!postverify_ok) {
-                if (MoveFileExW(
+                if (nand_move_file_ex(
                         host_to.c_str(),
                         host_from.c_str(),
                         MOVEFILE_WRITE_THROUGH) == FALSE) {
@@ -28123,7 +28375,7 @@ bool GuestAddressSpace::handle_fs_ioctl(
                         "native NAND Rename postverify rollback failed");
                 }
                 if (rename_transaction.has_value()) {
-                    if (MoveFileExW(
+                    if (nand_move_file_ex(
                             rename_transaction->backup.c_str(),
                             host_to.c_str(),
                             MOVEFILE_WRITE_THROUGH) == FALSE) {
@@ -28363,6 +28615,7 @@ bool GuestAddressSpace::handle_fs_ioctlv(
         std::filesystem::directory_iterator iterator(host, ec);
         const std::filesystem::directory_iterator end;
         for (; !ec && iterator != end; iterator.increment(ec)) {
+            if (is_nand_sidecar_entry(iterator->path())) continue;
             const auto& entry = *iterator;
             const std::string name = entry.path().filename().string();
             const NandInternalNameKind internal =
@@ -28458,6 +28711,10 @@ bool GuestAddressSpace::handle_fs_ioctlv(
         std::filesystem::recursive_directory_iterator iterator(host, scan_error);
         const std::filesystem::recursive_directory_iterator end;
         while (!scan_error && iterator != end) {
+            if (is_nand_sidecar_entry(iterator->path())) {
+                iterator.increment(scan_error);
+                continue;
+            }
             const std::string name = iterator->path().filename().string();
             if (is_nand_internal_temp_name(name) ||
                 is_legacy_host_nand_artifact(

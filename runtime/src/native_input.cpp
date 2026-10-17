@@ -1194,6 +1194,9 @@ void NativeHidReportCadence::note_delivery(
             stats_.out_of_order_deliveries, 1u,
             "native HID out-of-order counter overflow");
         stats_.exact_cadence_valid = false;
+        // Outside a strict proof the cadence is telemetry: the sample is
+        // counted and left out of the timing statistics.
+        if (!stats_.strict_proof) return;
         throw std::runtime_error(
             "native HID delivered a stale or unknown cadence sample");
     }
@@ -1210,6 +1213,9 @@ void NativeHidReportCadence::note_delivery(
             stats_.out_of_order_deliveries, 1u,
             "native HID out-of-order counter overflow");
         stats_.exact_cadence_valid = false;
+        // Outside a strict proof the cadence is telemetry: the sample is
+        // counted and left out of the timing statistics.
+        if (!stats_.strict_proof) return;
         throw std::runtime_error(
             "native HID delivered a sample outside its hardware deadline");
     }
@@ -1229,6 +1235,9 @@ void NativeHidReportCadence::note_delivery(
             stats_.out_of_order_deliveries, 1u,
             "native HID out-of-order counter overflow");
         stats_.exact_cadence_valid = false;
+        // Outside a strict proof the cadence is telemetry: the sample is
+        // counted and left out of the timing statistics.
+        if (!stats_.strict_proof) return;
         throw std::runtime_error(
             "native HID delivery sequence moved backward");
     }
