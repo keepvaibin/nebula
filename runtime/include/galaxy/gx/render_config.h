@@ -157,8 +157,9 @@ struct RenderConfig {
     // GDI device name of the monitor (UTF-8, e.g. \\.\DISPLAY2); empty or
     // unknown selects the primary monitor.
     std::array<char, 64> monitor{};
-    // The GPU to render on, as gpu_identity() writes it ("10de:2b85:89ef1043"); empty, or a GPU that
-    // is not present, picks one automatically (GALAXY_GPU_PREFERENCE). Read at start-up.
+    // The GPU this session renders on, as gpu_identity() writes it ("10de:2b85:89ef1043"); empty, or a
+    // GPU that is not present, picks one automatically (GALAXY_GPU_PREFERENCE). Set at start-up from
+    // config.ini (GALAXY_GPU overrides) and kept for the session; see next_start_gpu().
     std::array<char, 32> gpu{};
     unsigned fullscreen_width    = 0;
     unsigned fullscreen_height   = 0;
@@ -338,6 +339,11 @@ bool save_render_config_to_file();
 // A GPU's identity in config.ini's gpu key: PCI vendor, device and subsystem id in lowercase hex,
 // "vvvv:dddd:ssssssss". The subsystem tells two boards of the same chip apart.
 std::string gpu_identity(unsigned vendor_id, unsigned device_id, unsigned subsys_id);
+
+// The gpu config.ini names, which the next start renders on. Nebula Settings owns the key: a reload
+// takes it here and leaves RenderConfig::gpu as the session started, and every save writes the value
+// the file has at that moment (this one when it cannot be read), never GALAXY_GPU.
+std::string next_start_gpu();
 
 // Records the adapter the renderer runs on (adapter.ini beside config.ini) for the launcher,
 // which offers DLSS only on an NVIDIA RTX adapter: description, PCI vendor and device id, its

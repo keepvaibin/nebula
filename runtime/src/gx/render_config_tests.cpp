@@ -155,22 +155,72 @@ int main() {
         }
         ScopedEnv fps("GALAXY_MAX_FPS", "");
         {
-            // The GPU chosen in Nebula Settings: its identity survives a save and a load.
+            // The GPU chosen in Nebula Settings (config.ini gpu): the game starts on it and keeps it for the
+            // session; a GPU chosen while it runs is kept in the file for the next start.
             passed &= expect(galaxy::gx::gpu_identity(0x10DEu, 0x2B85u, 0x89EF1043u) == "10de:2b85:89ef1043" &&
                     galaxy::gx::gpu_identity(0x1002u, 0x13C0u, 0x7E491462u) == "1002:13c0:7e491462",
                 "a GPU's identity is its vendor, device and subsystem id in lowercase hex");
-            galaxy::gx::RenderConfig chosen{};
-            const std::string identity = galaxy::gx::gpu_identity(0x1002u, 0x13C0u, 0x7E491462u);
-            std::memcpy(chosen.gpu.data(), identity.c_str(), identity.size() + 1u);
-            galaxy::gx::set_render_config(chosen);
-            passed &= expect(galaxy::gx::save_render_config_to_file(), "the chosen GPU saves");
+            const std::string started = galaxy::gx::gpu_identity(0x1002u, 0x13C0u, 0x7E491462u);
+            const std::string chosen = galaxy::gx::gpu_identity(0x10DEu, 0x2B85u, 0x89EF1043u);
+            const auto write = [&path](const std::string& text, std::uint64_t file_time) {
+                {
+                    std::ofstream file(path, std::ios::binary | std::ios::trunc);
+                    file << text;
+                }
+                const HANDLE file = CreateFileW(path.c_str(), FILE_WRITE_ATTRIBUTES,
+                    FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr);
+                FILETIME time{static_cast<DWORD>(file_time), static_cast<DWORD>(file_time >> 32u)};
+                const bool ok = file != INVALID_HANDLE_VALUE && SetFileTime(file, nullptr, nullptr, &time) != FALSE;
+                if (file != INVALID_HANDLE_VALUE) CloseHandle(file);
+                return ok;
+            };
+            const auto saved_gpu = [&path] {
+                std::ifstream file(path, std::ios::binary);
+                std::string line;
+                while (std::getline(file, line)) {
+                    if (line.rfind("gpu=", 0) == 0) return line.substr(4u);
+                }
+                return std::string("<none>");
+            };
+            const auto session_gpu = [] { return std::string(galaxy::gx::get_render_config().gpu.data()); };
+
+            passed &= expect(write("gpu=" + started + "\naa=1\n", 132'000'000'000'000'000ull), "gpu fixture written");
             galaxy::gx::set_render_config(galaxy::gx::RenderConfig{});
             galaxy::gx::load_render_config_from_file();
-            passed &= expect(std::string(galaxy::gx::get_render_config().gpu.data()) == identity,
-                "the chosen GPU loads as it was saved");
+            passed &= expect(session_gpu() == started && galaxy::gx::next_start_gpu() == started,
+                "the game starts on the GPU config.ini names");
+            passed &= expect(galaxy::gx::save_render_config_to_file() && saved_gpu() == started,
+                "the game's save keeps it");
+
+            passed &= expect(write("gpu=" + chosen + "\naa=2\n", 132'000'000'100'000'000ull), "gpu fixture rewritten");
+            passed &= expect(galaxy::gx::reload_render_config_if_changed() && galaxy::gx::get_render_config().aa_mode == 2u &&
+                    session_gpu() == started && galaxy::gx::next_start_gpu() == chosen,
+                "a GPU chosen while the game runs is read for the next start; the session keeps its GPU");
+            passed &= expect(galaxy::gx::save_render_config_to_file() && saved_gpu() == chosen,
+                "the game's save keeps the GPU chosen during the session");
+
+            // While the in-game menu is open the game does not re-read config.ini; its own save still keeps
+            // the gpu the file has.
+            passed &= expect(write("gpu=\naa=2\n", 132'000'000'200'000'000ull), "gpu fixture set to automatic");
+            galaxy::gx::RenderConfig live = galaxy::gx::get_render_config();
+            live.sharpness = 40u;
+            galaxy::gx::set_render_config(live);
+            passed &= expect(galaxy::gx::save_render_config_to_file() && saved_gpu().empty() &&
+                    galaxy::gx::next_start_gpu().empty() && session_gpu() == started,
+                "a save that follows a change Nebula Settings made unread keeps that change's gpu");
+            passed &= expect(write("gpu=" + chosen + "\n", 132'000'000'300'000'000ull), "gpu fixture rewritten again");
+            live.gpu.fill('\0');
+            std::memcpy(live.gpu.data(), started.c_str(), started.size());
+            galaxy::gx::set_render_config(live);
+            passed &= expect(galaxy::gx::save_render_config_to_file() && saved_gpu() == chosen,
+                "the game's own gpu is never what it saves");
             {
-                std::ofstream file(path, std::ios::binary | std::ios::trunc);
-                file << "gpu=\n";
+                ScopedEnv override_gpu("GALAXY_GPU", started.c_str());
+                passed &= expect(write("aa=1\n", 132'000'000'400'000'000ull), "gpu fixture without the key");
+                galaxy::gx::load_render_config_from_file();
+                passed &= expect(session_gpu() == started && galaxy::gx::next_start_gpu().empty() &&
+                        galaxy::gx::save_render_config_to_file() && saved_gpu().empty(),
+                    "GALAXY_GPU chooses this session's GPU and is not saved; a file without the key is automatic");
             }
             galaxy::gx::load_render_config_from_file();
             passed &= expect(galaxy::gx::get_render_config().gpu[0] == '\0', "an empty gpu is the automatic choice");

@@ -81,6 +81,33 @@ namespace Nebula.Launcher
             }
         }
 
+        // A PNG of the form with each visible drop-down's selection drawn into it (DrawToBitmap leaves them blank).
+        static void Shot(Form form, string path)
+        {
+            using (var bitmap = new Bitmap(form.Width, form.Height))
+            {
+                form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.Size));
+                using (var graphics = Graphics.FromImage(bitmap))
+                {
+                    // The bitmap holds the whole window: the client area starts after the border and the caption.
+                    int border = (form.Width - form.ClientSize.Width) / 2;
+                    int caption = form.Height - form.ClientSize.Height - border;
+                    var tabs = form.Controls.OfType<TabControl>().Single();
+                    foreach (var combo in All(tabs.SelectedTab).OfType<ComboBox>().Where(c => c.SelectedItem != null))
+                    {
+                        Point at = form.PointToClient(combo.Parent.PointToScreen(combo.Location));
+                        var box = new Rectangle(at.X + border, at.Y + caption, combo.Width, combo.Height);
+                        box.Inflate(-6, 0);
+                        box.Width -= box.Height;
+                        TextRenderer.DrawText(graphics, combo.SelectedItem.ToString(), combo.Font, box,
+                            combo.Enabled ? SystemColors.WindowText : SystemColors.GrayText,
+                            TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+                    }
+                }
+                bitmap.Save(path, ImageFormat.Png);
+            }
+        }
+
         static object Private(object target, string name)
         {
             return target.GetType().GetField(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(target);
@@ -138,11 +165,88 @@ namespace Nebula.Launcher
             }
         }
 
+        static GpuAdapter Gpu(GpuAdapter model, params string[] outputs)
+        {
+            return new GpuAdapter { Name = model.Name, VendorId = model.VendorId, DeviceId = model.DeviceId, SubSysId = model.SubSysId,
+                                    Outputs = new List<string>(outputs) };
+        }
+
+        // The notice under the Monitor row, from adapter and display lists: which GPU each display is connected
+        // to (DXGI's outputs), against the GPU the game will run on.
+        static void DisplayNoticeCases()
+        {
+            const string panel = @"\\.\DISPLAY1", hdmi = @"\\.\DISPLAY2";
+            var desktop = new List<GpuAdapter> { Gpu(Rtx, panel, hdmi) };
+            Check(GpuAdapters.DisplayNotice(desktop, "", panel) == null && GpuAdapters.DisplayNotice(desktop, Rtx.Id, hdmi) == null,
+                  "one GPU driving every display: no notice");
+
+            // A hybrid laptop: the built-in panel hangs off the integrated GPU, the NVIDIA GPU has no outputs.
+            var hybrid = new List<GpuAdapter> { Gpu(Rtx), Gpu(Integrated, panel) };
+            string copied = "This display is connected to the " + Integrated.Name + ", so each frame is copied to it from the " + Rtx.Name + ".";
+            Check(GpuAdapters.DisplayNotice(hybrid, "", panel) == copied && GpuAdapters.DisplayNotice(hybrid, Rtx.Id, panel) == copied,
+                  "hybrid laptop, NVIDIA GPU (chosen or Automatic): " + copied);
+            Check(GpuAdapters.DisplayNotice(hybrid, Integrated.Id, panel) == null, "hybrid laptop, integrated GPU: no notice");
+            Check(GpuAdapters.DisplayNotice(hybrid, "dead:beef:00000000", panel) == copied,
+                  "a chosen GPU that is not present is Automatic here too");
+            Check(GpuAdapters.DisplayNotice(hybrid, Rtx.Id, @"\\.\display1") == copied, "GDI device names compare without case");
+
+            // The same laptop with an external display on the NVIDIA GPU's HDMI port.
+            var docked = new List<GpuAdapter> { Gpu(Rtx, hdmi), Gpu(Integrated, panel) };
+            Check(GpuAdapters.DisplayNotice(docked, Rtx.Id, hdmi) == null &&
+                  GpuAdapters.DisplayNotice(docked, Integrated.Id, hdmi) ==
+                      "This display is connected to the " + Rtx.Name + ", so each frame is copied to it from the " + Integrated.Name + ".",
+                  "an external display on the NVIDIA GPU: notice only with the integrated GPU chosen");
+            Check(GpuAdapters.DisplayNotice(docked, Rtx.Id, @"\\.\DISPLAY9") == null && GpuAdapters.DisplayNotice(docked, Rtx.Id, "") == null,
+                  "a display no listed GPU names (USB, remote) has no notice");
+            Check(GpuAdapters.DisplayNotice(new List<GpuAdapter>(), "", panel) == null, "no GPUs listed: no notice");
+
+            var twins = new List<GpuAdapter> { Gpu(Rtx, panel), new GpuAdapter { Name = Rtx.Name, VendorId = Rtx.VendorId, DeviceId = Rtx.DeviceId, SubSysId = 0x12345678 } };
+            Check(GpuAdapters.DisplayNotice(twins, twins[1].Id, panel) ==
+                      "This display is connected to the " + Rtx.Name + " #1, so each frame is copied to it from the " + Rtx.Name + " #2.",
+                  "two GPUs of one model are named as in the Graphics card list");
+
+            // This PC through DXGI. Software adapters are listed here only (the game never renders on them): the
+            // Microsoft Basic Render Driver has no outputs, so choosing it shows the notice on real lists.
+            var all = GpuAdapters.Enumerate(false, true);
+            var monitors = DisplayInfo.Enumerate();
+            Console.WriteLine("INFO: DXGI adapters with software: " + string.Join("; ", all.Select(g => g.Name + " " + g.Id + " outputs=[" + string.Join(",", g.Outputs) + "]")));
+            Console.WriteLine("INFO: monitors: " + string.Join("; ", monitors.Select(m => m.Device + (m.Primary ? " (main)" : ""))));
+            Check(monitors.All(m => all.Count(g => g.Drives(m.Device)) <= 1), "every monitor is an output of at most one GPU");
+            var hardware = GpuAdapters.List(false);
+            Check(hardware != null && hardware.All(h => all.Exists(g => g.Id == h.Id)) && hardware.Count < all.Count,
+                  "the game's list leaves out software adapters");
+            foreach (var m in monitors)
+                foreach (var g in hardware)
+                {
+                    var connected = all.Find(other => other.Drives(m.Device));
+                    string text = GpuAdapters.DisplayNotice(hardware, g.Id, m.Device);
+                    Check(connected == null || g.Drives(m.Device) ? text == null
+                              : text == "This display is connected to the " + GpuAdapters.Label(hardware, connected) +
+                                        ", so each frame is copied to it from the " + GpuAdapters.Label(hardware, g) + ".",
+                          "real lists, " + g.Name + " and " + m.Device + ": " + (text ?? "no notice"));
+                }
+            var main = DisplayInfo.Find(monitors, "");
+            var basic = all.Find(g => g.VendorId == 0x1414 && g.Outputs.Count == 0);
+            var driver = main == null ? null : all.Find(g => g.Drives(main.Device));
+            if (basic == null || driver == null)
+            {
+                Console.WriteLine("SKIP: real lists (no software adapter without outputs, or no GPU names the main monitor)");
+                return;
+            }
+            Check(GpuAdapters.DisplayNotice(all, driver.Id, main.Device) == null,
+                  "real lists: the GPU the main monitor is connected to has no notice (" + driver.Name + ")");
+            string real = GpuAdapters.DisplayNotice(all, basic.Id, main.Device);
+            Check(real == "This display is connected to the " + driver.Name + ", so each frame is copied to it from the " + basic.Name + ".",
+                  "real lists, " + basic.Name + " chosen: " + real);
+        }
+
         // The settings window on the laptop: the Graphics card row, and the options switching with it.
         static void GpuFormCases(LaunchSession session, string outDir)
         {
             var original = GpuAdapters.Source;
-            GpuAdapters.Source = lowPower => new List<GpuAdapter> { Rtx, Integrated };
+            // The integrated GPU drives this PC's main monitor, the RTX GPU none: the hybrid laptop's layout.
+            string mainMonitor = DisplayInfo.Find(DisplayInfo.Enumerate(), "").Device;
+            GpuAdapters.Source = lowPower => new List<GpuAdapter> { Gpu(Rtx), Gpu(Integrated, mainMonitor) };
             File.WriteAllText(GraphicsSettings.ConfigPath, "gpu=" + Integrated.Id + "\n");
             try
             {
@@ -152,10 +256,31 @@ namespace Nebula.Launcher
                     var gpuBox = (ComboBox)Private(form, "gpuBox");
                     var upscaler = (ComboBox)Private(form, "upscaler");
                     var interpolation = (ComboBox)Private(form, "interpolation");
+                    var monitor = (ComboBox)Private(form, "monitor");
+                    var mode = (ComboBox)Private(form, "mode");
+                    var notice = (Label)Private(form, "displayNotice");
+                    var tabs = form.Controls.OfType<TabControl>().Single();
+                    tabs.SelectedIndex = 0;
                     Check(gpuBox.Parent != null && gpuBox.Parent.Text == "Display" && gpuBox.Items.Count == 3 &&
                           (string)gpuBox.Items[0] == "Automatic (" + Rtx.Name + ")" && (string)gpuBox.Items[1] == Rtx.Name &&
                           (string)gpuBox.Items[2] == Integrated.Name,
                           "with two GPUs the Display tab has a Graphics card list: Automatic (the GPU it picks), then each GPU");
+                    Check(gpuBox.Parent.Controls.OfType<Label>().Any(l => l.Text.StartsWith("The game starts on this graphics card. While it is running")),
+                          "the Graphics card row says a change made while the game runs applies at its next start");
+                    int rowStep = mode.Top - monitor.Top;
+                    Check(notice.Text == "" && notice.Top > monitor.Bottom && notice.Top < mode.Top,
+                          "the integrated GPU drives the monitor: no notice; its place is between the Monitor and Display mode rows");
+                    Shot(form, Path.Combine(outDir, "gpu-display-match.png"));
+                    gpuBox.SelectedIndex = 1;
+                    Check(notice.Text == "This display is connected to the " + Integrated.Name + ", so each frame is copied to it from the " + Rtx.Name + "." &&
+                          mode.Top - monitor.Top == rowStep + notice.Height && notice.Bottom <= mode.Top,
+                          "the RTX GPU chosen: the notice shows directly below the Monitor row and the rows below move down");
+                    Shot(form, Path.Combine(outDir, "gpu-display-notice.png"));
+                    gpuBox.SelectedIndex = 0;
+                    Check(notice.Text.EndsWith("from the " + Rtx.Name + ".") && mode.Top - monitor.Top == rowStep + notice.Height,
+                          "Automatic (the RTX GPU) shows the same notice");
+                    gpuBox.SelectedIndex = 2;
+                    Check(notice.Text == "" && mode.Top - monitor.Top == rowStep, "back on the integrated GPU the notice is gone and the rows move back");
                     Func<bool> dlssListed = () => upscaler.Items.Cast<string>().Any(i => i.StartsWith("NVIDIA DLSS"));
                     Func<bool> frameGenerationListed = () => interpolation.Items.Cast<string>().Contains("DLSS Frame Generation");
                     Check(gpuBox.SelectedIndex == 2 && !dlssListed() && !frameGenerationListed() && !(bool)Private(form, "rayTracingOffered"),
@@ -172,13 +297,49 @@ namespace Nebula.Launcher
                     gpuBox.SelectedIndex = 1;
                     form.GetType().GetMethod("Commit", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).Invoke(form, null);
                     Check(GraphicsSettings.Load().Gpu == Rtx.Id, "Save stores the chosen GPU for the game");
-                    var tabs = form.Controls.OfType<TabControl>().Single();
-                    tabs.SelectedIndex = 0;
-                    using (var bitmap = new Bitmap(form.Width, form.Height))
-                    {
-                        form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.Size));
-                        bitmap.Save(Path.Combine(outDir, "gpu-display.png"), ImageFormat.Png);
-                    }
+                }
+                // One GPU: no Graphics card row and no notice; the Monitor row is the first.
+                GpuAdapters.Source = lowPower => new List<GpuAdapter> { Gpu(Rtx, mainMonitor) };
+                using (var form = new SettingsForm(session))
+                {
+                    CreateHandles(form);
+                    var monitor = (ComboBox)Private(form, "monitor");
+                    var mode = (ComboBox)Private(form, "mode");
+                    var resolution = (ComboBox)Private(form, "resolution");
+                    Check(((ComboBox)Private(form, "gpuBox")).Parent == null && ((Label)Private(form, "displayNotice")).Text == "" &&
+                          mode.Top - monitor.Top == resolution.Top - mode.Top &&
+                          monitor.Parent.Controls.OfType<ComboBox>().All(c => c.Top >= monitor.Top),
+                          "with one GPU the Display tab starts with the Monitor row, without a Graphics card row or notice");
+                }
+                // This PC's own lists: a GPU the main monitor is not connected to, when it has one.
+                GpuAdapters.Source = original;
+                var real = GpuAdapters.List(false);
+                var main = DisplayInfo.Find(DisplayInfo.Enumerate(), "");
+                var other = real == null ? null : real.Find(g => !g.Drives(main.Device));
+                if (real == null || real.Count < 2 || other == null || !real.Exists(g => g.Drives(main.Device)))
+                {
+                    Console.WriteLine("SKIP: real Display tab with a notice (this PC has no second GPU besides the main monitor's)");
+                    return;
+                }
+                var driver = real.Find(g => g.Drives(main.Device));
+                File.WriteAllText(GraphicsSettings.ConfigPath, "gpu=" + driver.Id + "\nmonitor=" + main.Device + "\n");
+                using (var form = new SettingsForm(session))
+                {
+                    CreateHandles(form);
+                    Check(((Label)Private(form, "displayNotice")).Text == "",
+                          "real lists, " + driver.Name + " chosen for " + main.Device + ": no notice");
+                    form.Controls.OfType<TabControl>().Single().SelectedIndex = 0;
+                    Shot(form, Path.Combine(outDir, "real-display-match.png"));
+                }
+                File.WriteAllText(GraphicsSettings.ConfigPath, "gpu=" + other.Id + "\nmonitor=" + main.Device + "\n");
+                using (var form = new SettingsForm(session))
+                {
+                    CreateHandles(form);
+                    var notice = (Label)Private(form, "displayNotice");
+                    Check(notice.Text == GpuAdapters.DisplayNotice(real, other.Id, main.Device) && notice.Text.Contains(other.Name),
+                          "real lists, " + other.Name + " chosen for " + main.Device + ": " + notice.Text);
+                    form.Controls.OfType<TabControl>().Single().SelectedIndex = 0;
+                    Shot(form, Path.Combine(outDir, "real-display-notice.png"));
                 }
             }
             finally
@@ -562,6 +723,7 @@ namespace Nebula.Launcher
                     Render(form, form.Controls.OfType<TabControl>().Single(), outDir, "later");
                 }
                 GpuCases();
+                DisplayNoticeCases();
                 GpuFormCases(later, outDir);
                 RecordingEncodingCases(later.App);
 

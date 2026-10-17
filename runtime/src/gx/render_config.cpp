@@ -34,6 +34,8 @@ static RenderFeatureCaps s_feature_caps{};
 static SRWLOCK      s_lock  = SRWLOCK_INIT;
 // Last-write time of config.ini when this process last read or wrote it.
 static std::uint64_t s_config_write_time = 0u;
+// The gpu config.ini named when this process last read or wrote it (next_start_gpu).
+static std::array<char, 32> s_file_gpu{};
 
 static std::uint64_t file_write_time(const std::filesystem::path& path) noexcept {
     WIN32_FILE_ATTRIBUTE_DATA data{};
@@ -561,6 +563,8 @@ void set_render_feature_caps(const RenderFeatureCaps& caps) {
 
 void load_render_config_from_file() {
     RenderConfig cfg = get_render_config();
+    // A file without the key is the automatic choice.
+    cfg.gpu.fill('\0');
 
     const std::filesystem::path path = config_path();
     const std::uint64_t write_time = file_write_time(path);
@@ -571,6 +575,8 @@ void load_render_config_from_file() {
             std::fclose(f);
         }
     }
+    std::array<char, 32> file_gpu = cfg.gpu;
+    file_gpu.back() = '\0';
 
     apply_env_overrides(cfg);
     if (!experimental_frame_rate_decouple_allowed()) {
@@ -582,6 +588,7 @@ void load_render_config_from_file() {
     s_config = cfg;
     s_next_start_efb_scale = cfg.efb_scale;
     s_config_write_time = write_time;
+    s_file_gpu = file_gpu;
     ReleaseSRWLockExclusive(&s_lock);
 }
 
@@ -599,9 +606,15 @@ bool reload_render_config_if_changed() {
     if (_wfopen_s(&f, path.c_str(), L"r") != 0 || f == nullptr) {
         return false;  // Being replaced; the next check reads it.
     }
+    // The device was created on the session's GPU; a new choice is for the next start.
+    const std::array<char, 32> session_gpu = cfg.gpu;
+    cfg.gpu.fill('\0');
     parse_ini(f, cfg);
     std::fclose(f);
+    std::array<char, 32> file_gpu = cfg.gpu;
+    file_gpu.back() = '\0';
     apply_env_overrides(cfg);
+    cfg.gpu = session_gpu;
     if (!experimental_frame_rate_decouple_allowed()) {
         cfg.frame_rate_decouple = false;
     }
@@ -611,6 +624,7 @@ bool reload_render_config_if_changed() {
     s_config = cfg;
     s_next_start_efb_scale = cfg.efb_scale;
     s_config_write_time = write_time;
+    s_file_gpu = file_gpu;
     ReleaseSRWLockExclusive(&s_lock);
     return true;
 }
@@ -619,11 +633,25 @@ bool save_render_config_to_file() {
     AcquireSRWLockShared(&s_lock);
     RenderConfig cfg = s_config;
     const unsigned next_start_efb_scale = s_next_start_efb_scale;
+    std::array<char, 32> gpu = s_file_gpu;
     ReleaseSRWLockShared(&s_lock);
     clamp_unimplemented_features(cfg);
     const std::filesystem::path path = config_path();
     if (path.empty()) {
         return false;
+    }
+    // The game never chooses the GPU: it writes back the gpu the file names now, which Nebula Settings may
+    // have changed since the game last read it (the in-game menu was open, or the change is younger than
+    // the next check).
+    {
+        FILE* f = nullptr;
+        if (_wfopen_s(&f, path.c_str(), L"r") == 0 && f != nullptr) {
+            RenderConfig file{};
+            parse_ini(f, file);
+            std::fclose(f);
+            gpu = file.gpu;
+        }
+        gpu.back() = '\0';
     }
 
     std::ostringstream contents;
@@ -666,7 +694,7 @@ bool save_render_config_to_file() {
              << "window_height=" << cfg.window_height << '\n'
              << "display_mode=" << cfg.display_mode << '\n'
              << "monitor=" << cfg.monitor.data() << '\n'
-             << "gpu=" << cfg.gpu.data() << '\n'
+             << "gpu=" << gpu.data() << '\n'
              << "fullscreen_width=" << cfg.fullscreen_width << '\n'
              << "fullscreen_height=" << cfg.fullscreen_height << '\n'
              << "fullscreen_refresh_hz=" << cfg.fullscreen_refresh_hz << '\n'
@@ -681,6 +709,7 @@ bool save_render_config_to_file() {
     const std::uint64_t write_time = file_write_time(path);
     AcquireSRWLockExclusive(&s_lock);
     s_config_write_time = write_time;
+    s_file_gpu = gpu;
     ReleaseSRWLockExclusive(&s_lock);
     return true;
 }
@@ -689,6 +718,13 @@ std::string gpu_identity(unsigned vendor_id, unsigned device_id, unsigned subsys
     char text[32]{};
     std::snprintf(text, sizeof(text), "%04x:%04x:%08x", vendor_id & 0xFFFFu, device_id & 0xFFFFu, subsys_id);
     return text;
+}
+
+std::string next_start_gpu() {
+    AcquireSRWLockShared(&s_lock);
+    const std::array<char, 32> gpu = s_file_gpu;
+    ReleaseSRWLockShared(&s_lock);
+    return gpu.data();
 }
 
 void record_render_adapter(const wchar_t* description, unsigned vendor_id, unsigned device_id,
