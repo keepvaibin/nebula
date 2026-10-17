@@ -424,21 +424,10 @@ bool trace_renderer_startup_enabled() {
     return enabled;
 }
 
+// The tier as major x 10 + minor (D3D12_RAYTRACING_TIER_1_1 is 11), 0 without ray tracing. The tiers are
+// enumerators, so later ones read the same way without naming them.
 unsigned raytracing_tier_code(D3D12_RAYTRACING_TIER tier) {
-    switch (tier) {
-    case D3D12_RAYTRACING_TIER_1_0:
-        return 10;
-#ifdef D3D12_RAYTRACING_TIER_1_1
-    case D3D12_RAYTRACING_TIER_1_1:
-        return 11;
-#endif
-#ifdef D3D12_RAYTRACING_TIER_1_2
-    case D3D12_RAYTRACING_TIER_1_2:
-        return 12;
-#endif
-    default:
-        return 0;
-    }
+    return tier >= D3D12_RAYTRACING_TIER_1_0 ? static_cast<unsigned>(tier) : 0u;
 }
 
 void copy_adapter_description(
@@ -13620,7 +13609,12 @@ std::vector<SettingsRow> system_page(const RenderFeatureCaps& caps) {
         rows.push_back({"GRAPHICS CARD", name, nullptr, "CHOSEN IN NEBULA SETTINGS. A CHANGE APPLIES AT THE NEXT START"});
     }
     char text[64]{};
-    std::snprintf(text, sizeof(text), "TIER %u %s", caps.dxr_raytracing_tier, exposed_text(caps.dxr));
+    if (caps.dxr_raytracing_tier != 0u) {
+        std::snprintf(text, sizeof(text), "TIER %u.%u %s", caps.dxr_raytracing_tier / 10u, caps.dxr_raytracing_tier % 10u,
+                      exposed_text(caps.dxr));
+    } else {
+        std::snprintf(text, sizeof(text), "NONE");
+    }
     rows.push_back({"RAY TRACING HARDWARE", text, nullptr, "DIRECTX RAYTRACING ON THIS GPU"});
     rows.push_back({"NVIDIA STREAMLINE", exposed_text(caps.streamline), nullptr, "LOADS DLSS FROM THE NVIDIA DOWNLOAD"});
     rows.push_back({"NVIDIA REFLEX", exposed_text(caps.reflex), nullptr, "LOW LATENCY WITH FRAME GENERATION"});
