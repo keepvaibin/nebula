@@ -7188,6 +7188,11 @@ bool GxBackend::rt_hidden_draw() const noexcept {
     if (rt_object_fake_shadow_) {
         return true;
     }
+    // The alpha-shadow phase draws one object, Mario's drop shadow (MarioActor::drawShadow, the only member of
+    // MR::DrawType_AlphaShadow): under the traced shadows it was a second, crisp shadow straight under him in the air.
+    if (rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::AlphaShadow)) {
+        return true;
+    }
     // GALAXY_RT_DEBUG_HIDE_PHASE=n (diagnostics): scene phase n's draws are not drawn under the traced lighting.
     static const std::uint64_t debug_hide_phase = read_env_u64("GALAXY_RT_DEBUG_HIDE_PHASE", 255u);
     if (debug_hide_phase < 255u && rt_phase_ == static_cast<std::uint8_t>(debug_hide_phase)) {
