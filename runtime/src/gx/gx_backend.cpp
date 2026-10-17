@@ -7377,8 +7377,13 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
                        clear->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Water)) &&
                       (position == VcdType::Index8 || position == VcdType::Index16);
     }
+    // A helper row (an environment map) is the draw's own surface when it is the only texture the draw samples: the
+    // crystal blocks' and the Observatory's rotating platforms' clear material is a highlight map alone (user: the
+    // green platforms should reflect like glass).
+    const bool own_helper = std::popcount(current_texture_map_mask_) == 1;
     // A blended clear model the table names glass or crystal, whatever its blend (the air bubble: source alpha over the
-    // source colour): a surface of the water pass, its reflections over what it drew.
+    // source colour): a surface of the water pass, its reflections over what it drew. One the table also names an
+    // emitter (the rotating steps' soft glow) stays glass: blended, it is in no traced geometry that could emit.
     bool clear_blended = false;
     if (translucent && !lens && !clear_added && renderer_.rt_water_open() && scene_phase_ && side_layer_ == kSceneLayer &&
         (rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::Xlu) ||
@@ -7387,8 +7392,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         const RtMaterial* const clear = rt_material(current_rt_material_);
         const BlendMode blend = state_.blend_mode();
         const VcdType position = state_.vertex_desc(0u).position.vcd;
-        clear_blended = clear != nullptr && !clear->particle && !clear->helper && !clear->waterfall &&
-                        clear->emission == RtEmission::None &&
+        clear_blended = clear != nullptr && !clear->particle && (!clear->helper || own_helper) && !clear->waterfall &&
                         clear->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Crystal) &&
                         blend.blend_enable && !blend.logic_op_enable && !blend.subtract && blend.color_update &&
                         blend.dst_factor != BlendFactor::One &&
@@ -7409,7 +7413,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     if (!water && translucent && !glow && !lens && rt_late_draw() && renderer_.rt_water_open()) {
         const RtMaterial* const clear = rt_material(current_rt_material_);
         const VcdType position = state_.vertex_desc(0u).position.vcd;
-        opaque_clear = clear != nullptr && !clear->particle && !clear->helper &&
+        opaque_clear = clear != nullptr && !clear->particle && (!clear->helper || own_helper) &&
                        (clear->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Crystal) ||
                         clear->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Water)) &&
                        (position == VcdType::Index8 || position == VcdType::Index16);
@@ -7428,13 +7432,14 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
             const VcdType position = state_.vertex_desc(0u).position.vcd;
             std::fprintf(stderr,
                          "[rt-clear] material=%u class=%u phase=%u blend=%d src=%u dst=%u indexed=%d geometry=%d "
-                         "water-eligible=%d glow=%d water=%d late=%d water-open=%d scene-layer=%d\n",
+                         "water-eligible=%d glow=%d water=%d late=%d water-open=%d scene-layer=%d maps=%02X\n",
                          static_cast<unsigned>(current_rt_material_), static_cast<unsigned>(clear->surface_class),
                          static_cast<unsigned>(rt_phase_), blend.blend_enable ? 1 : 0,
                          static_cast<unsigned>(blend.src_factor), static_cast<unsigned>(blend.dst_factor),
                          position == VcdType::Index8 || position == VcdType::Index16 ? 1 : 0, translucent ? 0 : 1,
                          rt_water_eligible_ ? 1 : 0, glow ? 1 : 0, water ? 1 : 0, late ? 1 : 0,
-                         renderer_.rt_water_open() ? 1 : 0, side_layer_ == kSceneLayer ? 1 : 0);
+                         renderer_.rt_water_open() ? 1 : 0, side_layer_ == kSceneLayer ? 1 : 0,
+                         static_cast<unsigned>(current_texture_map_mask_));
         }
     }
     outcome(translucent ? (glow ? "glow" : water ? "water" : lens ? "lens" : late ? "late" : "untraced")
