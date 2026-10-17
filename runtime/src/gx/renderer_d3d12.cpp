@@ -7918,7 +7918,7 @@ void RendererD3D12::rt_trace_scene() {
     if (depth && slot >= 0) {
         game_srv = rt_composite_color();
         ray_tracer_.composite(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_, game_srv, width,
-                              desc.Height, slot, false);
+                              desc.Height, slot, false, efb_scale_);
         ray_tracer_.write_light_texture(command_list_.Get(), slot);
         if (replay_recording_) {
             replay_ops_.push_back({ReplayKind::RtComposite, static_cast<std::uint32_t>(slot)});
@@ -8203,7 +8203,7 @@ void RendererD3D12::record_rt_composite(int slot, bool reproject) {
     command_list_->ResourceBarrier(1, &barrier);
     const D3D12_RESOURCE_DESC desc = efb_depth_->GetDesc();
     ray_tracer_.composite(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_, rt_composite_color(),
-                          static_cast<std::uint32_t>(desc.Width), desc.Height, slot, reproject);
+                          static_cast<std::uint32_t>(desc.Width), desc.Height, slot, reproject, efb_scale_);
     std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
     command_list_->ResourceBarrier(1, &barrier);
     // The sub-frame's frame before its translucent phases (its water composite's seabed).

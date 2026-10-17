@@ -695,6 +695,7 @@ foreach(galaxy_rt_pass capture_cs:CaptureCS:cs_6_5 sky_state_cs:SkyStateCS:cs_6_
         trace_cs:TraceCS:cs_6_5
         temporal_cs:TemporalCS:cs_6_5
         spatial_a_cs:SpatialACS:cs_6_5 spatial_m_cs:SpatialMCS:cs_6_5 spatial_b_cs:SpatialBCS:cs_6_5
+        star_sphere_cs:StarSphereCS:cs_6_5
         composite_vs:CompositeVS:vs_6_0
         composite_ps:CompositePS:ps_6_0 light_texture_ps:LightTexturePS:ps_6_0)
     string(REPLACE ":" ";" galaxy_rt_pair "${galaxy_rt_pass}")

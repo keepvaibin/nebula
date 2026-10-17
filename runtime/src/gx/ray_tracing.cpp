@@ -34,6 +34,7 @@
 #include "rt_spatial_a_cs.h"
 #include "rt_spatial_b_cs.h"
 #include "rt_spatial_m_cs.h"
+#include "rt_star_sphere_cs.h"
 #include "rt_temporal_cs.h"
 #include "rt_trace_cs.h"
 #include "rt_trace_tex_cs.h"
@@ -115,8 +116,10 @@ struct RtLightConstants {
     float ao[4];
     float night[4];
     float night2[4];
+    std::uint32_t star_first[8];   // the stars' triangles (StarSphereCS): first, count (0: none)
+    std::uint32_t star_count[8];
 };
-static_assert(sizeof(RtLightConstants) == 672u);
+static_assert(sizeof(RtLightConstants) == 736u);
 
 // Mirrors cbuffer RtPost in rt_post.hlsl (root constants).
 struct RtPostConstants {
@@ -265,12 +268,11 @@ struct RtCompositeConstants {
     std::uint32_t slot;
     float near_plane;
     float split;
-    std::uint32_t pad;
+    float efb_scale;     // EFB pixels per game pixel
     float sun[4];        // towards the traced sun (eye space, traced frame); relief height (eye units)
     float sun_light[4];  // its light (rgb)
-    float core[4];       // the star core's centre (eye space, traced frame), known (w)
 };
-static_assert(sizeof(RtCompositeConstants) == 128u);
+static_assert(sizeof(RtCompositeConstants) == 112u);
 
 enum LightParameter : UINT {
     kLightFrame = 0,
@@ -886,6 +888,7 @@ void SceneRayTracer::shutdown() noexcept {
     spatial_a_pso_.Reset();
     spatial_m_pso_.Reset();
     spatial_b_pso_.Reset();
+    star_sphere_pso_.Reset();
     light_root_.Reset();
     capture_pso_.Reset();
     capture_root_.Reset();
@@ -1528,6 +1531,9 @@ void SceneRayTracer::begin_scene() noexcept {
     glow_draws_.clear();
     lens_draws_ = 0u;
     lens_ready_ = false;
+    star_first_ = {};
+    star_count_ = {};
+    star_draws_ = 0u;
     glow_lights_.clear();
     authored_.clear();
     glow_triangles_ = 0u;
@@ -1641,6 +1647,11 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
                    (material->no_light ? 8u : 0u);
         intensity = material->intensity;
         surface = unit_pair(material->matte ? 1.0f : material->roughness, material->metallic);
+        if (material->star && star_draws_ < kStarSlots) {
+            star_first_[star_draws_] = entry.first_triangle;
+            star_count_[star_draws_] = entry.triangle_count;
+            ++star_draws_;
+        }
         flags = (material->tint ? kDrawTableTint : 0u) | (material->foliage ? kDrawTableFoliage : 0u) |
                 (material->star ? kDrawTableStar : 0u) |
                 ((info.surface & kRtDrawCard) != 0u ? kDrawTableCard : 0u) |
@@ -1964,7 +1975,8 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
         !compute(light_root_.Get(), g_rt_temporal_cs, sizeof(g_rt_temporal_cs), temporal_pso_) ||
         !compute(light_root_.Get(), g_rt_spatial_a_cs, sizeof(g_rt_spatial_a_cs), spatial_a_pso_) ||
         !compute(light_root_.Get(), g_rt_spatial_m_cs, sizeof(g_rt_spatial_m_cs), spatial_m_pso_) ||
-        !compute(light_root_.Get(), g_rt_spatial_b_cs, sizeof(g_rt_spatial_b_cs), spatial_b_pso_)) {
+        !compute(light_root_.Get(), g_rt_spatial_b_cs, sizeof(g_rt_spatial_b_cs), spatial_b_pso_) ||
+        !compute(light_root_.Get(), g_rt_star_sphere_cs, sizeof(g_rt_star_sphere_cs), star_sphere_pso_)) {
         return false;
     }
 
@@ -2348,7 +2360,7 @@ bool SceneRayTracer::ensure_lighting_buffers(std::uint32_t samples) {
         light_history_state_[i] = state;
     }
     for (unsigned i = 0; ok && i < kLightSlots; ++i) {
-        ok = make(n * 16u, light_final_[i], L"rt light result");
+        ok = make((n + kStarSlots) * 16u, light_final_[i], L"rt light result");
         light_final_state_[i] = state;
     }
     picture_state_ = state;
@@ -2442,6 +2454,8 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     c.night[3] = night_lights_;
     c.night2[0] = night_key_;
     c.night2[1] = day_environment_;
+    std::copy(star_first_.begin(), star_first_.end(), c.star_first);
+    std::copy(star_count_.begin(), star_count_.end(), c.star_count);
     // The stage's day model share (rt-suns.tsv day); < 0: by its sky's brightness.
     c.self[3] = stage_sun_ != nullptr && stage_sun_->day >= 0.0f ? stage_sun_->day : -1.0f;
     c.point_saturation = point_saturation_;
@@ -2768,6 +2782,11 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
                                                                         : positions_->GetGPUVirtualAddress());
     list->SetComputeRootShaderResourceView(kLightDrawTextures,
                                            draw_texture_table_ != 0u ? draw_texture_table_ : draw_table.gpu);
+    // The stars' balls, after the samples in the result (the composite shades the stars on them).
+    if (star_draws_ != 0u) {
+        list->SetPipelineState(star_sphere_pso_.Get());
+        list->Dispatch(star_draws_, 1u, 1u);
+    }
     list->SetPipelineState(trace_pso_.Get());
     list->Dispatch(groups_x, groups_y, 1u);
     const D3D12_RESOURCE_BARRIER all_uav = uav_barrier(nullptr);
@@ -2808,15 +2827,6 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     for (unsigned i = 0; i < 3u; ++i) {
         info.sun[i] = c.sun[i];
         info.sun_light[i] = c.sun_light[i];
-    }
-    {
-        std::array<float, 3> core{};
-        float scale = 0.0f;
-        info.core_known = camera_known_ && star_core(core, scale, 500u);
-        for (unsigned r = 0; info.core_known && r < 3u; ++r) {
-            info.core[r] = camera_[r * 4u] * core[0] + camera_[r * 4u + 1u] * core[1] + camera_[r * 4u + 2u] * core[2] +
-                           camera_[r * 4u + 3u];
-        }
     }
     history_camera_ = camera_;
     history_camera_known_ = camera_known_;
@@ -3508,7 +3518,7 @@ void SceneRayTracer::bloom(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR
 
 void SceneRayTracer::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
                                D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, D3D12_GPU_DESCRIPTOR_HANDLE color_srv,
-                               std::uint32_t width, std::uint32_t height, int slot, bool reproject) {
+                               std::uint32_t width, std::uint32_t height, int slot, bool reproject, unsigned efb_scale) {
     if (list == nullptr || slot < 0 || slot >= static_cast<int>(kLightSlots) || !composite_pso_ ||
         depth_srv.ptr == 0u || color_srv.ptr == 0u) {
         return;
@@ -3540,10 +3550,7 @@ void SceneRayTracer::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRI
         c.sun_light[i] = info.sun_light[i];
     }
     c.sun[3] = relief_;
-    for (unsigned i = 0; i < 3u; ++i) {
-        c.core[i] = info.core[i];
-    }
-    c.core[3] = info.core_known ? 1.0f : 0.0f;
+    c.efb_scale = static_cast<float>(std::max(efb_scale, 1u));
     const int timed = begin_pass(list);
     list->OMSetRenderTargets(1u, &target, FALSE, nullptr);
     const D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};

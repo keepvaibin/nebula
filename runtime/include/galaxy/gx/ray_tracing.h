@@ -251,11 +251,11 @@ public:
     // Multiplies the EFB colour `target` (width x height, the size the slot was traced at) by
     // lighting result `slot` at the depth `depth_srv` holds (PIXEL_SHADER_RESOURCE, in the bound
     // descriptor heap), then blends in the slot's reflections. `reproject`: the depth is an
-    // interpolated sub-frame's, whose camera write_reprojection gave. Leaves its own root
-    // signature and pipeline bound.
+    // interpolated sub-frame's, whose camera write_reprojection gave; `efb_scale`: the internal
+    // resolution (EFB pixels per game pixel). Leaves its own root signature and pipeline bound.
     void composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
                    D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, D3D12_GPU_DESCRIPTOR_HANDLE color_srv, std::uint32_t width,
-                   std::uint32_t height, int slot, bool reproject);
+                   std::uint32_t height, int slot, bool reproject, unsigned efb_scale);
     // Before a sub-frame's replay: its camera (world to eye at t), for the composites it runs.
     void write_reprojection(ID3D12GraphicsCommandList* list, const std::array<float, 12>& camera_t);
     // The end of the scene: its finished picture (EFB colour and depth, NON_PIXEL_SHADER_RESOURCE,
@@ -517,8 +517,6 @@ private:
         bool camera_known = false;
         std::array<float, 3> sun{};        // towards the traced sun (eye space)
         std::array<float, 3> sun_light{};  // its light
-        std::array<float, 3> core{};       // the star core's centre (eye space; core_known)
-        bool core_known = false;
     };
     Microsoft::WRL::ComPtr<ID3D12RootSignature> light_root_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> trace_pso_;
@@ -647,6 +645,14 @@ private:
     bool lens_ready_ = false;
     float lens_strength_ = 1.0f;      // GALAXY_RT_LENS: the bending (0: none)
     bool lens_view_ = false;          // GALAXY_RT_LENS_VIEW: rings at the found sizes
+    // The material table's stars among the scene draws (`star`: the Observatory's core, Melty Molten's suns):
+    // their first triangle and count in the scene's triangles; StarSphereCS fits each one's ball into the
+    // lighting result after its samples (rt_lighting.hlsl kStarSlots).
+    static constexpr std::uint32_t kStarSlots = 8u;
+    std::array<std::uint32_t, kStarSlots> star_first_{};
+    std::array<std::uint32_t, kStarSlots> star_count_{};
+    std::uint32_t star_draws_ = 0u;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> star_sphere_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> authored_emit_pso_;
     float authored_power_ = 40000.0f;   // GALAXY_RT_AUTHORED_POWER: a Luma's light (intensity 1)
     std::uint64_t authored_frames_ = 0u;

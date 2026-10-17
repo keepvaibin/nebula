@@ -70,6 +70,8 @@ cbuffer RtLight : register(b0)
     float4 g_night;             // night model: the open art's level, the sky occlusion's depth, the cast
                                 // shadows' depth, the traced lights' gain
     float4 g_night2;            // the night key's gain on what it reaches; by day the environment's level
+    uint4 g_star_first[2];      // the material table's stars among the scene draws (kStarSlots): first
+    uint4 g_star_count[2];      // triangle and count in g_positions (0: none)
 };
 
 RaytracingAccelerationStructure g_scene : register(t6);
@@ -127,6 +129,9 @@ static const uint kDrawStride = 48u;
 static const uint kDrawTableGlow = 2u;
 static const uint kDrawTableFoliage = 4u;   // g_draws word 6: alpha-cut foliage cards
 static const uint kDrawTableStar = 8u;      // g_draws word 6: a star's burning surface (the star core)
+// Stars whose balls StarSphereCS fits (g_star_first): one float4 each (eye-space centre, radius; 0: none)
+// after the samples in the results (g_final, m_light).
+static const uint kStarSlots = 8u;
 // Scene instance masks (ray_tracing.cpp kSceneMask): the frame's geometry. The late geometry (instance 1:
 // drawn after the trace, Rosalina) has no records in g_positions or g_surfaces: shadow, sky and reflection
 // rays meet it as an occluder.
@@ -2701,11 +2706,16 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
             }
         }
     }
-    // A star's burning surface: the composite shades it from its own fire (CompositePS star_surface); its
-    // relief share carries the mark (-1), its light (above) how hot it burns.
+    // A star's burning surface: the composite shades it from its own fire on its ball (CompositePS star_surface);
+    // its relief share carries the mark, -1 less its star slot (StarSphereCS; -1 - kStarSlots: no ball), its light
+    // (above) how hot it burns.
     if (tri != 0u &&
         (g_draws.Load(min(draw_flags >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride + 24u) & kDrawTableStar) != 0u) {
-        relief = -1.0f;
+        uint star = 0u;
+        while (star < kStarSlots && tri - 1u - g_star_first[star >> 2u][star & 3u] >= g_star_count[star >> 2u][star & 3u]) {
+            ++star;
+        }
+        relief = -1.0f - float(star);
     }
     // Metal shows the world in its painted reflection: under the diffuse light it darkens half as much (measured
     // mb0: the giant ? coin 209,188,39 -> 179,140,30, Bubble Blast's gold frame darker).
@@ -2762,6 +2772,112 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
                            f32tof16(relief) | (f32tof16(halo) << 16u));
 }
 
+groupshared float4 s_star_a[64];
+groupshared float4 s_star_b[64];
+groupshared float4 s_star_c[64];
+
+void star_reduce(uint gi)
+{
+    GroupMemoryBarrierWithGroupSync();
+    [unroll] for (uint s = 32u; s > 0u; s >>= 1u) {
+        if (gi < s) {
+            s_star_a[gi] += s_star_a[gi + s];
+            s_star_b[gi] += s_star_b[gi + s];
+            s_star_c[gi] += s_star_c[gi + s];
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+}
+
+// A star's ball (the material table's `star` draws: the Observatory's core, Melty Molten's suns): the sphere
+// through its eye-space vertices, the least-squares fit of |q|^2 = 2 q.c + d (Pratt 1987), exact for any part of
+// a ball. Its model is a low-poly ball whose flat faces the depth shows; the composite shades the round ball the
+// faces approximate (CompositePS star_mu). The vertices are taken about their mean, in units of their mean
+// distance from it, so the sums keep their precision far from the camera. One group per star slot; written
+// after the samples (kStarSlots), radius 0 where its triangles give no ball.
+[numthreads(64, 1, 1)]
+void StarSphereCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
+{
+    const uint star = group.x;
+    const uint first = g_star_first[star >> 2u][star & 3u];
+    const uint count = g_star_count[star >> 2u][star & 3u];
+    float4 sum = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    for (uint t = gi; t < count; t += 64u) {
+        [unroll] for (uint k = 0u; k < 3u; ++k) {
+            const float3 v = asfloat(g_positions.Load3((first + t) * 36u + k * 12u));
+            if (all(abs(v) < 1.0e6f)) {
+                sum += float4(v, 1.0f);
+            }
+        }
+    }
+    s_star_a[gi] = sum;
+    s_star_b[gi] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    s_star_c[gi] = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    star_reduce(gi);
+    const float n = s_star_a[0].w;
+    const float3 mean = n > 0.0f ? s_star_a[0].xyz / n : float3(0.0f, 0.0f, 0.0f);
+    GroupMemoryBarrierWithGroupSync();
+    float spread = 0.0f;
+    for (uint t = gi; t < count; t += 64u) {
+        [unroll] for (uint k = 0u; k < 3u; ++k) {
+            const float3 v = asfloat(g_positions.Load3((first + t) * 36u + k * 12u));
+            if (all(abs(v) < 1.0e6f)) {
+                spread += length(v - mean);
+            }
+        }
+    }
+    s_star_a[gi] = float4(spread, 0.0f, 0.0f, 0.0f);
+    star_reduce(gi);
+    const float scale = n > 0.0f ? s_star_a[0].x / n : 0.0f;
+    GroupMemoryBarrierWithGroupSync();
+    // Per vertex q (about the mean, in units of scale): q q^T (xx xy xz yy | yz zz), q |q|^2, |q|^2.
+    float4 a = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    float4 b = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    float4 c = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    if (scale > 0.0f) {
+        for (uint t = gi; t < count; t += 64u) {
+            [unroll] for (uint k = 0u; k < 3u; ++k) {
+                const float3 v = asfloat(g_positions.Load3((first + t) * 36u + k * 12u));
+                if (all(abs(v) < 1.0e6f)) {
+                    const float3 q = (v - mean) / scale;
+                    const float qq = dot(q, q);
+                    a += float4(q.x * q.x, q.x * q.y, q.x * q.z, q.y * q.y);
+                    b += float4(q.y * q.z, q.z * q.z, qq, 0.0f);
+                    c += float4(q * qq, 0.0f);
+                }
+            }
+        }
+    }
+    s_star_a[gi] = a;
+    s_star_b[gi] = b;
+    s_star_c[gi] = c;
+    star_reduce(gi);
+    if (gi != 0u) {
+        return;
+    }
+    float4 ball = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    if (scale > 0.0f && n >= 12.0f) {
+        // About the mean the sum of q vanishes: 4 S c = 2 sum(q |q|^2) and d = mean |q|^2, radius^2 = d + |c|^2.
+        const float3 r0 = float3(s_star_a[0].x, s_star_a[0].y, s_star_a[0].z) / n;
+        const float3 r1 = float3(s_star_a[0].y, s_star_a[0].w, s_star_b[0].x) / n;
+        const float3 r2 = float3(s_star_a[0].z, s_star_b[0].x, s_star_b[0].y) / n;
+        const float3 rhs = 0.5f * s_star_c[0].xyz / n;
+        const float3 c0 = cross(r1, r2);
+        const float3 c1 = cross(r2, r0);
+        const float3 c2 = cross(r0, r1);
+        const float det = dot(r0, c0);
+        // A ball's vertices spread on every axis (det near 1/27); a flat or linear set gives none.
+        if (det > 1e-4f) {
+            const float3 centre = (c0 * rhs.x + c1 * rhs.y + c2 * rhs.z) / det;
+            const float radius2 = s_star_b[0].z / n + dot(centre, centre);
+            if (radius2 > 0.0f) {
+                ball = float4(mean + centre * scale, sqrt(radius2) * scale);
+            }
+        }
+    }
+    g_final[g_sample_size.x * g_sample_size.y + star] = asuint(ball);
+}
+
 // ---------------------------------------------------------------------------------------------
 // The lighting as a texture for the translucent draws after the trace (one texel per sample).
 // ---------------------------------------------------------------------------------------------
@@ -2805,10 +2921,9 @@ cbuffer RtComposite : register(b0)
     uint m_slot;
     float m_near;
     float m_split;  // GALAXY_RT_SPLIT: left of it the game's own picture (a dark line between)
-    uint m_pad;
+    float m_efb_scale;  // EFB pixels per game pixel (the internal resolution)
     float4 m_sun;        // towards the traced sun (eye space, traced frame); relief height (eye units)
     float4 m_sun_light;  // its light (rgb)
-    float4 m_core;       // the star core's centre (eye space, traced frame), known (w)
 };
 StructuredBuffer<uint4> m_light : register(t0);
 Texture2D<float> m_efb_depth : register(t1);
@@ -2836,73 +2951,64 @@ float3 star_ramp(float t)
                                                              : lerp(yellow, white, saturate((t - 0.75f) / 0.25f));
 }
 
-// A star's burning surface (the star core): the game's own fire with its heat. Its cells (the texture against
-// its neighbourhood) stand out, the ball burns white-hot at its centre and deepens through yellow and orange to
-// red at its limb (mu: the face's turn to the eye on the ball, star_mu).
-// The turn to the eye of the core's face at eye position `p` (traced frame): the ball's normal there (from its
-// centre to the surface point the depth gives) against the direction to the eye. Its vertex normals are flat
-// (measured: a flat profile from them); the radius taken from the depth at the centre's pixel failed whenever
-// something stood in front of that pixel (Rosalina, build 55: every pixel at the centre's heat, a pale disc).
-float star_mu(float3 p)
+// A star's burning surface (the star core, the suns): the game's own fire with its heat. Its cells (the texture
+// against its neighbourhood) stand out, the ball burns white-hot at its centre and deepens through yellow and
+// orange to red at its limb (mu: the ball's turn to the eye, star_mu).
+// The turn to the eye of star `star`'s ball at eye position `p` (traced frame): the ball's normal where the eye
+// ray first meets it (StarSphereCS's sphere through its vertices) against the direction to the eye. Its model's
+// faces are flat and so are its vertex normals: a turn taken from either is constant over each face (user: the
+// suns show square facets, Native44). The actor's position is not the ball's centre (build 60). Where the ray
+// passes the fitted sphere (a model not quite round) the surface point the depth gives; 0.6 without a ball.
+float star_mu(float3 p, uint star)
 {
-    if (m_core.w == 0.0f || m_core.z >= -m_near) {
+    if (star >= kStarSlots) {
         return 0.6f;
     }
-    const float3 outward = p - m_core.xyz;
-    const float radius = length(outward);
-    if (radius <= 1.0f) {
+    const float4 ball = asfloat(m_light[m_sample_size.x * m_sample_size.y + star]);
+    if (ball.w <= 0.0f) {
         return 0.6f;
     }
-    return saturate(dot(outward / radius, -normalize(p)));
+    const float3 d = normalize(p);
+    const float along = dot(ball.xyz, d);
+    const float3 off = ball.xyz - along * d;
+    const float h = ball.w * ball.w - dot(off, off);
+    float3 s = p;
+    if (h > 0.0f && along - sqrt(h) > 0.0f) {
+        s = (along - sqrt(h)) * d;
+    }
+    return saturate(dot(normalize(s - ball.xyz), -d));
 }
 
-// The turn to the eye of the surface at pixel c (eye position here) from the depth: the face the depth slopes
-// show (each axis the neighbour nearer in depth). Exact at the ball's limb whatever its centre (the actor's
-// position is not the ball's centre: the centre-based turn read 0.8 at the visible limb, build 60); -1 where a
-// neighbour lies off the surface.
-float star_mu_depth(int2 c, float3 here)
-{
-    const float z = here.z;
-    const float zr = depth_to_eye_z(m_depth, m_efb_depth.Load(int3(c + int2(1, 0), 0)));
-    const float zl = depth_to_eye_z(m_depth, m_efb_depth.Load(int3(c - int2(1, 0), 0)));
-    const float zd = depth_to_eye_z(m_depth, m_efb_depth.Load(int3(c + int2(0, 1), 0)));
-    const float zu = depth_to_eye_z(m_depth, m_efb_depth.Load(int3(c - int2(0, 1), 0)));
-    const bool right = abs(zr - z) < abs(z - zl);
-    const bool down = abs(zd - z) < abs(z - zu);
-    const float limit = abs(z) * 0.05f + 2.0f;
-    if (min(abs(zr - z), abs(z - zl)) > limit || min(abs(zd - z), abs(z - zu)) > limit) {
-        return -1.0f;
-    }
-    const float2 px = float2(c) + 0.5f;
-    const float3 ex = right ? eye_position(m_projection, m_viewport, px + float2(1.0f, 0.0f), zr) - here
-                            : here - eye_position(m_projection, m_viewport, px - float2(1.0f, 0.0f), zl);
-    const float3 ey = down ? eye_position(m_projection, m_viewport, px + float2(0.0f, 1.0f), zd) - here
-                           : here - eye_position(m_projection, m_viewport, px - float2(0.0f, 1.0f), zu);
-    float3 n = cross(ex, ey);
-    const float len = length(n);
-    if (len < 1e-8f) {
-        return -1.0f;
-    }
-    n /= len;
-    const float3 v = -normalize(here);
-    return abs(dot(n, v));
-}
-
-float3 star_surface(int2 c, float mu, float3 color)
+float3 star_surface(int2 c, float z, float mu, float3 color)
 {
     const float l = luminance(color);
-    const float around = 0.25f * (luminance(m_color.Load(int3(c + int2(3, 0), 0)).rgb) +
-                                  luminance(m_color.Load(int3(c - int2(3, 0), 0)).rgb) +
-                                  luminance(m_color.Load(int3(c + int2(0, 3), 0)).rgb) +
-                                  luminance(m_color.Load(int3(c - int2(0, 3), 0)).rgb));
-    const float cells = clamp(l / max(around, 0.03f), 0.6f, 1.5f);
+    // Its neighbourhood 3 game pixels around at every internal resolution (3 EFB pixels were half a game pixel
+    // at 6x: no contrast, the fire's texture washed out under the heat, user: suns without their texture), on
+    // its own surface only (what stands in front, a ring or a character, drew a bright or dark line along it).
+    const int r = max(int(round(3.0f * m_efb_scale)), 1);
+    const int2 ring[8] = {int2(-1, -1), int2(0, -1), int2(1, -1), int2(-1, 0), int2(1, 0), int2(-1, 1), int2(0, 1), int2(1, 1)};
+    const float limit = abs(z) * 0.02f + 2.0f;
+    float around = 0.0f;
+    float count = 0.0f;
+    [unroll] for (uint k = 0u; k < 8u; ++k) {
+        const int2 q = c + ring[k] * r;
+        if (abs(depth_to_eye_z(m_depth, m_efb_depth.Load(int3(q, 0))) - z) < limit) {
+            around += luminance(m_color.Load(int3(q, 0)).rgb);
+            count += 1.0f;
+        }
+    }
+    const float cells = count > 0.0f ? clamp(l / max(around / count, 0.03f), 0.6f, 1.5f) : 1.0f;
     // Centre (mu 1) t 0.85: white-yellow; mu 0.8 t 0.58: yellow-orange; mu 0.6 t 0.37: orange; limb (mu 0.2)
-    // t 0.13: deep red-orange. Over the disc it averages the game's own orange (about 212, 120, 43 against
-    // 220, 107, 45): hotter at the centre, deeper at the limb. The hot cells burn whiter, the lanes deeper.
+    // t 0.13: deep red-orange. Over the disc it averages close to the game's own colour (a Melty Molten sun at 6x:
+    // 230, 160, 85 against 228, 146, 47): hotter at the centre, deeper at the limb. The hot cells burn whiter, the
+    // lanes deeper.
     const float t = saturate((0.1f + 0.75f * mu * mu) * (0.85f + 0.15f * cells));
     const float3 fire = star_ramp(t) * (0.6f + 0.5f * mu) * pow(cells, 0.8f);
-    const float3 hot = fire + max(max(fire.r, max(fire.g, fire.b)) - 1.0f, 0.0f) * 0.25f;
-    return lerp(color, saturate(hot), 0.8f);
+    const float3 hot = saturate(fire + max(max(fire.r, max(fire.g, fire.b)) - 1.0f, 0.0f) * 0.25f);
+    // A fifth of the fire's own brightness, in the star's colour: a core the game draws in another hue (the lit
+    // Observatory's is cyan) keeps the star's (cyan through orange read lime).
+    const float3 own = saturate(hot * (l / max(luminance(hot), 1e-3f)));
+    return lerp(own, hot, 0.8f);
 }
 
 float4 CompositeVS(uint id : SV_VertexID) : SV_Position
@@ -2969,6 +3075,7 @@ CompositeOut CompositePS(float4 position : SV_Position)
     float relief_sum = 0.0f;
     float weight = 0.0f;
     float3 nearest = float3(1.0f, 1.0f, 1.0f);
+    float nearest_relief = 0.0f;
     float nearest_dz = abs(p.z) * 0.1f;
     [unroll] for (uint k = 0u; k < 9u; ++k) {
         const int2 o = int2(int(k % 3u) - 1, int(k / 3u) - 1);
@@ -2984,6 +3091,7 @@ CompositeOut CompositePS(float4 position : SV_Position)
         if (dz < nearest_dz) {
             nearest_dz = dz;
             nearest = m;
+            nearest_relief = f16tof32(sample.w & 0xFFFFu);
         }
         const float d = dz / tolerance;
         const float2 tent = max(1.5f - abs(offset), 0.0f);
@@ -2998,11 +3106,10 @@ CompositeOut CompositePS(float4 position : SV_Position)
     // sun's light follows the bent normal where the sample sees the sun. Across a depth edge that
     // side's difference is left out; with distance a pixel spans more than the detail and it fades.
     const float relief = weight > 1e-3f ? relief_sum / weight : 0.0f;
-    if (relief < -0.5f && (m_flags & 2u) == 0u) {
-        // The depth's turn where the surface is continuous (true limb darkening), the centre's elsewhere.
-        const float mu_depth = star_mu_depth(int2(position.xy), here);
-        const float mu = mu_depth >= 0.0f ? mu_depth : star_mu(p);
-        result.color = float4(star_surface(int2(position.xy), mu, color), 1.0f);
+    // A star (its mark and slot from the sample on this surface: blending would mix the slots).
+    if (nearest_relief < -0.5f && (m_flags & 2u) == 0u) {
+        const float mu = star_mu(p, uint(round(-nearest_relief - 1.0f)));
+        result.color = float4(star_surface(int2(position.xy), z, mu, color), 1.0f);
         return result;
     }
     if (relief > 1e-3f && m_sun.w > 0.0f) {
