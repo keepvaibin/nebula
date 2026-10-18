@@ -485,6 +485,73 @@ public:
 
     // instruction comments to make it easier to identify each bit
     struct MovementStates {
+#ifdef TARGET_PC
+        // Code reads these as words (mMovementStates_HIGH_WORD and the others): fields from the least significant value
+        // bit up in each word, so each has the console's bit (CodeWarrior allocates from the most significant bit).
+        unsigned _1F : 1;
+        unsigned digitalJump : 1;  // _1E
+        unsigned _1D : 1;
+        unsigned _1C : 1;
+        unsigned _1B : 1;
+        unsigned _1A : 1;        // extrwi rX, rX, 1, 26
+        unsigned _19 : 1;        // extrwi rX, rX, 1, 25
+        unsigned _18 : 1;        // rlwinm rX, rX, 0, 25, 23
+        unsigned _17 : 1;        // extrwi rX, rX, 1, 23
+        unsigned debugMode : 1;  // _16
+        unsigned _15 : 1;
+        unsigned _14 : 1;
+        unsigned _13 : 1;
+        unsigned _12 : 1;
+        unsigned _11 : 1;
+        unsigned _10 : 1;  // rlwinm rX, rX, 0, 17, 15
+        unsigned _F : 1;
+        unsigned _E : 1;
+        unsigned _D : 1;
+        unsigned _C : 1;
+        unsigned _B : 1;
+        unsigned _A : 1;  // extrwi rX, rX, 1, 10
+        unsigned _9 : 1;
+        unsigned _8 : 1;
+        unsigned _7 : 1;
+        unsigned _6 : 1;
+        unsigned _5 : 1;
+        unsigned _4 : 1;
+        unsigned turning : 1;  // _3
+        unsigned _2 : 1;
+        unsigned _1 : 1;       // extrwi rX, rX, 1, 1
+        unsigned jumping : 1;  // _0 (srwi rX, rX, 31)
+        unsigned _3E : 2;  // clrrwi rX, rX, 2
+        unsigned _3D : 1;
+        unsigned _3C : 1;
+        unsigned _3B : 1;
+        unsigned _3A : 1;
+        unsigned _39 : 1;
+        unsigned _38 : 1;  // rlwimi rX, rX, 7, 24, 24
+        unsigned _37 : 1;
+        unsigned _36 : 1;
+        unsigned _35 : 1;
+        unsigned _34 : 1;
+        unsigned _33 : 1;
+        unsigned _32 : 1;
+        unsigned _31 : 1;
+        unsigned _30 : 1;
+        unsigned _2F : 1;
+        unsigned _2E : 1;
+        unsigned _2D : 1;
+        unsigned _2C : 1;
+        unsigned _2B : 1;
+        unsigned _2A : 1;
+        unsigned _29 : 1;
+        unsigned _28 : 1;
+        unsigned _27 : 1;
+        unsigned _26 : 1;
+        unsigned _25 : 1;
+        unsigned _24 : 1;
+        unsigned _23 : 1;  // extrwi rX, rX, 1, 3
+        unsigned _22 : 1;
+        unsigned _21 : 1;
+        unsigned _20 : 1;
+#else
         /* 0x00 */
         unsigned jumping : 1;  // _0 (srwi rX, rX, 31)
         unsigned _1 : 1;       // extrwi rX, rX, 1, 1
@@ -550,8 +617,45 @@ public:
         unsigned _3C : 1;
         unsigned _3D : 1;
         unsigned _3E : 2;  // clrrwi rX, rX, 2
+#endif
     };
     struct DrawStates {
+#ifdef TARGET_PC
+        // Code reads these as a word (_1C_WORD masks): fields from the least significant value bit up, so each has
+        // the console's bit (CodeWarrior allocates bitfields from the most significant bit).
+        unsigned _1F : 1;
+        unsigned _1E : 1;
+        unsigned _1D : 1;
+        unsigned _1C : 1;
+        unsigned _1B : 1;
+        unsigned _1A : 1;
+        unsigned _19 : 1;
+        unsigned _18 : 1;
+        unsigned _17 : 1;
+        unsigned _16 : 1;
+        unsigned _15 : 1;
+        unsigned _14 : 1;
+        unsigned _13 : 1;
+        unsigned mIsUnderwater : 1;
+        unsigned _11 : 1;
+        unsigned _10 : 1;
+        unsigned _F : 1;
+        unsigned _E : 1;
+        unsigned _D : 1;
+        unsigned _C : 1;
+        unsigned _B : 1;
+        unsigned _A : 1;
+        unsigned _9 : 1;
+        unsigned _8 : 1;
+        unsigned _7 : 1;
+        unsigned _6 : 1;
+        unsigned _5 : 1;
+        unsigned _4 : 1;
+        unsigned _3 : 1;
+        unsigned _2 : 1;
+        unsigned _1 : 1;
+        unsigned _0 : 1;
+#else
         unsigned _0 : 1;
         unsigned _1 : 1;
         unsigned _2 : 1;
@@ -584,6 +688,7 @@ public:
         unsigned _1D : 1;
         unsigned _1E : 1;
         unsigned _1F : 1;
+#endif
     };
 
     inline const MovementStates& getMovementStates() const {

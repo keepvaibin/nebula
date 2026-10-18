@@ -30,7 +30,7 @@ void JUTDirectPrint::erase(int x, int y, int width, int height) {
         height = height << 1;
     }
 
-    u16* pixel = mFrameBuffer + mStride * y + x;
+    NEBULA_BE(u16)* pixel = mFrameBuffer + mStride * y + x;
     for (int i = 0; i < height; i++) {
         for (int j = 0; j < width; j++) {
             *pixel = 0x1080;
@@ -81,7 +81,7 @@ void JUTDirectPrint::drawChar(int position_x, int position_y, int ch) {
     int scale_x = (mFrameBufferWidth < 400) ? 1 : 2;
     int scale_y = (mFrameBufferHeight < 300) ? 1 : 2;
 
-    u16* pixel = mFrameBuffer + mStride * position_y * scale_y + position_x * scale_x;
+    NEBULA_BE(u16)* pixel = mFrameBuffer + mStride * position_y * scale_y + position_x * scale_x;
     for (int y = 0; y < 7; y++) {
         u32 data = *font_data++ << col_index;
 
@@ -121,7 +121,7 @@ void JUTDirectPrint::drawChar(int position_x, int position_y, int ch) {
 
 void JUTDirectPrint::changeFrameBuffer(void* frameBuffer, u16 width, u16 height) {
     this->field_0x00 = frameBuffer;
-    mFrameBuffer = static_cast< u16* >(frameBuffer);
+    mFrameBuffer = static_cast< NEBULA_BE(u16)* >(frameBuffer);
     mFrameBufferWidth = width;
     mFrameBufferHeight = height;
     mStride = ALIGN_NEXT(width & 0xFFFF, 16);

@@ -34,7 +34,8 @@ public:
     u16 field_0x0A;
     size_t mFrameBufferSize;
     u8 field_0x10[4];
-    u16* mFrameBuffer;
+    // YUV pixel pairs of the external frame buffer, in the console's byte order (video reads them).
+    NEBULA_BE(u16)* mFrameBuffer;
     JUtility::TColor mCharColor;
     u16 mCharColor_Y;
     u16 mCharColor_Cb;

@@ -17,9 +17,16 @@ public:
     /* 0x20 */ union {
         u32 _20;
         struct {
+#ifdef TARGET_PC
+            // _20 is read by shifts: fields from the least significant bit up, so each has the console's bits.
+            u32 _8 : 24;
+            u32 mDamageType : 4;
+            u32 _0 : 4;
+#else
             u32 _0 : 4;
             u32 mDamageType : 4;
             u32 _8 : 24;
+#endif
         } mFlags;
     };
 };

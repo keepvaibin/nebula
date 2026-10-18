@@ -753,7 +753,8 @@ void NormalMapBase::createGradTexture() {
         f32 ratio = value / 255.0f;
         value = mAmbColor + ratio * (mMatColor - mAmbColor);
         for (u32 y = 0; y < height; y++) {
-            static_cast< u16* >(mImagePtr)[y * width + x] = value;
+            // IA8 texels for GX, in the console's byte order (tileConversion16 reads them the same way).
+            static_cast< NEBULA_BE(u16)* >(mImagePtr)[y * width + x] = value;
         }
     }
 
@@ -783,7 +784,8 @@ void NormalMapBase::createGradTexture() {
             f32 ratio = value / 255.0f;
             value = mAmbColor + ratio * (mMatColor - mAmbColor);
             for (u32 x = 0; x < width; x++) {
-                static_cast< u16* >(mImagePtr)[y * width + x] |= value << 8;
+                NEBULA_BE(u16)& texel = static_cast< NEBULA_BE(u16)* >(mImagePtr)[y * width + x];
+                texel = texel | (value << 8);
             }
         }
     }

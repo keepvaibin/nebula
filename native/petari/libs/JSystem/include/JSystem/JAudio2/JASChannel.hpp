@@ -74,9 +74,17 @@ public:
     union MixConfig {
         u16 whole;
         struct {
+#ifdef TARGET_PC
+            // whole is set as one u16 (0x150: bus 1, mode 5): fields from the least significant bit up, so each has the
+            // console's bits.
+            u8 lower1 : 4;
+            u8 lower0 : 4;
+            u8 upper : 8;
+#else
             u8 upper : 8;
             u8 lower0 : 4;
             u8 lower1 : 4;
+#endif
         };
     };
 

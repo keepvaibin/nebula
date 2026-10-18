@@ -65,11 +65,23 @@ public:
     /* 0x15C */ HitInfo mRoofInfo;
     /* 0x1E8 */ f32 _1E8;
     /* 0x1EC */ struct {
+#ifdef TARGET_PC
+        // MR:: utilities mask this as a byte (0x80 is _0): fields from the least significant bit up, so each has the
+        // console's bit.
+        u8 : 2;
+        u8 _5 : 1;
+        u8 _4 : 1;
+        u8 _3 : 1;
+        u8 _2 : 1;
+        u8 _1 : 1;
+        u8 _0 : 1;
+#else
         u8 _0 : 1;
         u8 _1 : 1;
         u8 _2 : 1;
         u8 _3 : 1;
         u8 _4 : 1;
         u8 _5 : 1;
+#endif
     } _1EC;
 };
