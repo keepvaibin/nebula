@@ -30,11 +30,9 @@ void nebula_vlog(const char* format, va_list args);
 void nebula_fatal(const char* format, ...) __attribute__((noreturn));
 
 /* The OS core (os/os_native.c). */
-typedef void (*NebulaInterruptHandler)(void);
-/* A device's interrupt: raise it from any host thread; its handler runs on the game's simulation thread at the next
-   point interrupts are enabled, with the scheduler disabled, as the console's __OSDispatchInterrupt runs them. */
-int nebula_register_interrupt(NebulaInterruptHandler handler);
-void nebula_raise_interrupt(int id);
+/* A device interrupt by its SDK number (__OS_INTERRUPT_*), from any host thread: the handler registered with
+   __OSSetInterruptHandler runs on the simulation thread at the next point interrupts are enabled. */
+void nebula_raise_interrupt(int interrupt);
 /* Wakes the simulation thread if it is idle (new host event). */
 void nebula_signal_simulation(void);
 /* The console's time base: OSGetTime ticks (60.75 MHz) since boot. */

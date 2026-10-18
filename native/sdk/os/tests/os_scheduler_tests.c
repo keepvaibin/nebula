@@ -53,6 +53,77 @@ static void expect(const char* what, const char* got, const char* want) {
     }
 }
 
+/* Costs of the hot OS paths and the decrementer's lateness, printed for docs/NATIVE_PERFORMANCE.md (not pass/fail). */
+static volatile OSTime sAlarmFiredAt;
+static OSMutex sMutex;
+
+static double ticks_to_ns(OSTime ticks) {
+    return (double)ticks * 1e9 / (double)OS_TIMER_CLOCK;
+}
+
+static void late_handler(OSAlarm* alarm, OSContext* context) {
+    (void)alarm;
+    (void)context;
+    sAlarmFiredAt = OSGetTime();
+}
+
+static void measure(void) {
+    enum { kPairs = 10000000 };
+    OSTime start = OSGetTime();
+    for (int i = 0; i < kPairs; i++) {
+        OSRestoreInterrupts(OSDisableInterrupts());
+    }
+    printf("perf: OSDisableInterrupts+OSRestoreInterrupts %.2f ns\n",
+           ticks_to_ns(OSGetTime() - start) / kPairs);
+
+    OSInitMutex(&sMutex);
+    start = OSGetTime();
+    for (int i = 0; i < kPairs; i++) {
+        OSLockMutex(&sMutex);
+        OSUnlockMutex(&sMutex);
+    }
+    printf("perf: OSLockMutex+OSUnlockMutex %.2f ns\n", ticks_to_ns(OSGetTime() - start) / kPairs);
+
+    start = OSGetTime();
+    for (int i = 0; i < kPairs; i++) {
+        (void)OSGetTime();
+    }
+    printf("perf: OSGetTime %.2f ns\n", ticks_to_ns(OSGetTime() - start) / kPairs);
+
+    /* Alarm lateness while the thread is busy (re-enabling interrupts as game code does, with and without reading the
+       clock) and while it sleeps. */
+    static const char* const kModes[] = {"busy", "busy reading OSGetTime", "asleep"};
+    for (int mode = 0; mode < 3; mode++) {
+        double worst = 0, sum = 0;
+        enum { kRuns = 50 };
+        for (int run = 0; run < kRuns; run++) {
+            OSAlarm alarm;
+            OSCreateAlarm(&alarm);
+            sAlarmFiredAt = 0;
+            const OSTime due = OSGetTime() + OSMicrosecondsToTicks(1000);
+            OSSetAlarm(&alarm, OSMicrosecondsToTicks(1000), late_handler);
+            while (sAlarmFiredAt == 0) {
+                if (mode == 2) {
+                    OSSleepTicks(OSMicrosecondsToTicks(5000));
+                    continue;
+                }
+                for (int i = 0; i < 100; i++) {
+                    OSRestoreInterrupts(OSDisableInterrupts());
+                }
+                if (mode == 1) {
+                    (void)OSGetTime();
+                }
+            }
+            const double late = ticks_to_ns(sAlarmFiredAt - due) / 1000.0;
+            sum += late;
+            if (late > worst) {
+                worst = late;
+            }
+        }
+        printf("perf: 1 ms alarm, thread %s: late mean %.1f us, worst %.1f us\n", kModes[mode], sum / kRuns, worst);
+    }
+}
+
 static void game_main(void) {
     OSInitMessageQueue(&sQueue, sQueueSlots, 4);
     OSCreateThread(&sHigh, high_main, 0, sHighStack + sizeof(sHighStack), sizeof(sHighStack), 10, 0);
@@ -88,6 +159,8 @@ static void game_main(void) {
             sFailures++;
         }
     }
+
+    measure();
 
     printf(sFailures ? "%d failures\n" : "all passed\n", sFailures);
     fflush(stdout);
