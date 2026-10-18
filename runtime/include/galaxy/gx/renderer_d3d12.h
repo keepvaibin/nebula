@@ -37,6 +37,7 @@
 #include "galaxy/gx_d3d12.h"
 
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <future>
@@ -741,6 +742,14 @@ private:
     double follow_window_aspect_ = 0.0;
     // A scale refused for the memory budget is tried again at this tick.
     std::uint64_t follow_window_retry_ms_ = 0;
+    // Match Output's GPU budget: the frame command lists' measured GPU time over 2 s windows. When it stays above
+    // kGpuBudgetBusy of the wall time for two windows, the internal resolution Match Output may pick is capped one step
+    // lower for the session, so a GPU too slow for the window's resolution keeps every frame.
+    void update_gpu_budget();
+    double gpu_budget_ms_ = 0.0;
+    std::chrono::steady_clock::time_point gpu_budget_window_start_{};
+    unsigned gpu_budget_over_windows_ = 0;
+    unsigned gpu_budget_cap_ = 0;  // 0: none
     // (Re)creates the EFB color/depth conversion SRVs in their fixed slots.
     void refresh_efb_conversion_source_views();
     bool create_root_signature();

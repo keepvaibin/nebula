@@ -1600,6 +1600,8 @@ std::uint32_t crc32_update_raw(
     return crc;
 }
 
+// Frame GPU timestamps (two queries and a resolve per command list) are always on: Match Output's GPU budget reads
+// them. GALAXY_GPU_TIMESTAMPS=0 turns them off, and the budget with them.
 bool gpu_timestamps_enabled() {
     static const bool enabled = [] {
         char value[16]{};
@@ -1610,7 +1612,7 @@ bool gpu_timestamps_enabled() {
             length > 1) {
             return value[0] != '0' && value[0] != 'n' && value[0] != 'N';
         }
-        return trace_present_stats_enabled();
+        return true;
     }();
     return enabled;
 }
@@ -4021,6 +4023,42 @@ void RendererD3D12::refresh_efb_conversion_source_views() {
     conv_efb_depth_srv_ = depth_gpu;
 }
 
+// The share of wall time the GPU may spend on the frame's command lists before Match Output steps down: the rest is
+// headroom for heavier frames than the window's average, the compositor and other processes.
+constexpr double kGpuBudgetBusy = 0.80;
+
+void RendererD3D12::update_gpu_budget() {
+    const auto now = std::chrono::steady_clock::now();
+    if (gpu_budget_window_start_ == std::chrono::steady_clock::time_point{}) {
+        gpu_budget_window_start_ = now;
+        gpu_budget_ms_ = 0.0;
+        return;
+    }
+    const double window_ms = std::chrono::duration<double, std::milli>(now - gpu_budget_window_start_).count();
+    if (window_ms < 2000.0) {
+        return;
+    }
+    const double busy = gpu_budget_ms_ / window_ms;
+    gpu_budget_window_start_ = now;
+    gpu_budget_ms_ = 0.0;
+    if (!get_render_config().internal_follow_window || efb_scale_ <= 1u || output_efb_active_) {
+        gpu_budget_over_windows_ = 0u;
+        return;
+    }
+    if (busy <= kGpuBudgetBusy) {
+        gpu_budget_over_windows_ = 0u;
+        return;
+    }
+    if (++gpu_budget_over_windows_ < 2u) {
+        return;
+    }
+    gpu_budget_over_windows_ = 0u;
+    gpu_budget_cap_ = efb_scale_ - 1u;
+    follow_window_width_ = 0u;  // re-derive the scale under the cap at this frame boundary
+    std::cerr << "[Renderer] GPU busy " << static_cast<int>(busy * 100.0 + 0.5) << "% at internal resolution "
+              << efb_scale_ << "x; Match Output capped at " << gpu_budget_cap_ << "x\n";
+}
+
 void RendererD3D12::follow_window_internal_resolution() {
     // Dynamic aspect latches a new window shape at a later VI boundary than
     // the swap-chain resize, so the content aspect is part of the key.
@@ -4058,8 +4096,11 @@ void RendererD3D12::follow_window_internal_resolution() {
     // The launcher's Match Output rule: cover the picture on both axes.
     const double needed = std::max(content.width / static_cast<double>(kEfbWidth),
                                    content.height / 456.0);
-    const unsigned scale = std::clamp(
+    unsigned scale = std::clamp(
         static_cast<unsigned>(std::ceil(needed - 1e-6)), 1u, kMaxEfbScale);
+    if (gpu_budget_cap_ != 0u) {
+        scale = std::min(scale, gpu_budget_cap_);
+    }
     if (scale != render.efb_scale) {
         render.efb_scale = scale;
         set_render_config(render);
@@ -5754,6 +5795,7 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
     poll_render_config_file();
     reconcile_display_state();
     apply_pending_resize();
+    update_gpu_budget();
     follow_window_internal_resolution();
     apply_pending_efb_scale();
     sync_post_process_settings();
@@ -5880,6 +5922,7 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
                     static_cast<double>(timestamps[1] - timestamps[0]) *
                     1000.0 / static_cast<double>(timestamp_frequency_);
                 telemetry_gpu_ms_ += gpu_ms;
+                gpu_budget_ms_ += gpu_ms;
                 ++telemetry_gpu_samples_;
             }
             const D3D12_RANGE no_write{0, 0};

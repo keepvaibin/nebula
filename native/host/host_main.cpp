@@ -577,17 +577,58 @@ void svc_log(void*, const char* text) {
 }
 
 #if defined(_WIN32)
-// Tests (GALAXY_TRACE_THREAD_CPU=1): each thread's CPU time over the last second, by name (or, unnamed, the module and
-// offset it started at), busiest first; threads under 0.5 ms/s are counted in the total only. The report's own cost
-// (a snapshot of every thread in the system) is left out of the reporting thread's figure.
+// Tests (GALAXY_TRACE_THREAD_CPU=1): each thread's CPU time and context switches over the last second, by name (or,
+// unnamed, the module and offset it started at), busiest first; threads under 0.5 ms/s are counted in the total only.
+// The report's own cost (a snapshot of every thread in the system) is left out of the reporting thread's figure.
 void report_thread_cpu(double tsc_hz) {
     static std::unordered_map<DWORD, uint64_t> last;
+    static std::unordered_map<DWORD, uint32_t> last_switches;
     static uint64_t report_cycles = 0;
     ULONG64 report_start = 0;
     QueryThreadCycleTime(GetCurrentThread(), &report_start);
-    const HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
-    if (snapshot == INVALID_HANDLE_VALUE) {
+    // The process's threads and their context switches: NtQuerySystemInformation(SystemProcessInformation). On x64
+    // each process record is 0x100 bytes followed by 0x50-byte thread records (thread id at +0x30, switches at +0x40).
+    using SystemQueryFn = LONG(WINAPI*)(int, void*, ULONG, ULONG*);
+    static const auto system_query = reinterpret_cast<SystemQueryFn>(
+        reinterpret_cast<void*>(GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "NtQuerySystemInformation")));
+    static std::vector<uint8_t> buffer(4u << 20);
+    struct ThreadSample {
+        DWORD id;
+        uint32_t switches;
+    };
+    std::vector<ThreadSample> threads;
+    ULONG needed = 0;
+    LONG status = system_query != nullptr ? system_query(5, buffer.data(), (ULONG)buffer.size(), &needed) : -1;
+    if (status == (LONG)0xC0000004 /* STATUS_INFO_LENGTH_MISMATCH */ && needed != 0) {
+        buffer.resize(needed + (1u << 20));
+        status = system_query(5, buffer.data(), (ULONG)buffer.size(), &needed);
+    }
+    if (status != 0) {
         return;
+    }
+    const DWORD pid = GetCurrentProcessId();
+    for (size_t offset = 0;;) {
+        const uint8_t* process = buffer.data() + offset;
+        uint32_t next = 0, count = 0;
+        uintptr_t process_id = 0;
+        std::memcpy(&next, process, 4);
+        std::memcpy(&count, process + 4, 4);
+        std::memcpy(&process_id, process + 0x50, sizeof(process_id));
+        if (process_id == pid) {
+            for (uint32_t i = 0; i < count; ++i) {
+                const uint8_t* thread = process + 0x100 + i * 0x50;
+                uintptr_t thread_id = 0;
+                uint32_t switches = 0;
+                std::memcpy(&thread_id, thread + 0x30, sizeof(thread_id));
+                std::memcpy(&switches, thread + 0x40, 4);
+                threads.push_back({(DWORD)thread_id, switches});
+            }
+            break;
+        }
+        if (next == 0) {
+            break;
+        }
+        offset += next;
     }
     using QueryFn = LONG(WINAPI*)(HANDLE, int, void*, ULONG, ULONG*);
     static const auto query = reinterpret_cast<QueryFn>(
@@ -595,24 +636,20 @@ void report_thread_cpu(double tsc_hz) {
     struct Row {
         double ms;
         std::string name;
+        uint32_t switches;
     };
     std::vector<Row> rows;
     double total = 0.0;
-    const DWORD pid = GetCurrentProcessId();
     const DWORD self = GetCurrentThreadId();
-    THREADENTRY32 entry{};
-    entry.dwSize = sizeof(entry);
-    for (BOOL more = Thread32First(snapshot, &entry); more; more = Thread32Next(snapshot, &entry)) {
-        if (entry.th32OwnerProcessID != pid) {
-            continue;
-        }
-        const HANDLE thread = OpenThread(THREAD_QUERY_INFORMATION, FALSE, entry.th32ThreadID);
+    for (const ThreadSample& sample : threads) {
+        const DWORD thread_id = sample.id;
+        const HANDLE thread = OpenThread(THREAD_QUERY_INFORMATION, FALSE, thread_id);
         if (thread == nullptr) {
             continue;
         }
         ULONG64 cycles = 0;
         QueryThreadCycleTime(thread, &cycles);
-        if (entry.th32ThreadID == self) {
+        if (thread_id == self) {
             cycles = report_start - report_cycles;
         }
         std::string name;
@@ -637,23 +674,25 @@ void report_thread_cpu(double tsc_hz) {
                 std::snprintf(where, sizeof(where), "%s+0x%llx", file != nullptr ? file + 1 : "?",
                               (unsigned long long)(static_cast<char*>(start) - reinterpret_cast<char*>(owner)));
             }
-            name = "tid " + std::to_string(entry.th32ThreadID) + " " + where;
+            name = "tid " + std::to_string(thread_id) + " " + where;
         }
         CloseHandle(thread);
-        uint64_t& before = last[entry.th32ThreadID];
+        uint64_t& before = last[thread_id];
         const double ms = (double)(cycles - before) * 1000.0 / tsc_hz;
         before = cycles;
         total += ms;
+        uint32_t& switches_before = last_switches[thread_id];
+        const uint32_t switches = sample.switches - switches_before;
+        switches_before = sample.switches;
         if (ms >= 0.5) {
-            rows.push_back({ms, std::move(name)});
+            rows.push_back({ms, std::move(name), switches});
         }
     }
-    CloseHandle(snapshot);
     std::sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) { return a.ms > b.ms; });
     std::string line = "total " + std::to_string((int)(total + 0.5)) + " ms/s";
     for (const Row& row : rows) {
-        char item[128];
-        std::snprintf(item, sizeof(item), "; %s %.1f", row.name.c_str(), row.ms);
+        char item[160];
+        std::snprintf(item, sizeof(item), "; %s %.1f (%u sw)", row.name.c_str(), row.ms, row.switches);
         line += item;
     }
     log_line("cpu:", line.c_str());
