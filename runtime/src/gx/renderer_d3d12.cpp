@@ -226,57 +226,6 @@ bool trace_present_luma_frame(std::uint64_t frame) {
            frame % trace_present_luma_interval() == 0u;
 }
 
-bool realtime_vi_paces_present() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length, value, sizeof(value), "GALAXY_REALTIME_VI") != 0 ||
-            length <= 1) {
-            return true;
-        }
-        return value[0] != '0' && value[0] != 'n' && value[0] != 'N';
-    }();
-    return enabled;
-}
-
-bool smooth_realtime_present_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length,
-                value,
-                sizeof(value),
-                "GALAXY_SMOOTH_REALTIME_PRESENT") != 0 ||
-            length <= 1) {
-            return true;
-        }
-        return value[0] != '0' && value[0] != 'n' && value[0] != 'N';
-    }();
-    return enabled;
-}
-
-std::uint64_t smooth_realtime_present_max_wait_us() {
-    static const std::uint64_t wait_us = [] {
-        char value[32]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length,
-                value,
-                sizeof(value),
-                "GALAXY_SMOOTH_REALTIME_PRESENT_MAX_WAIT_US") != 0 ||
-            length <= 1) {
-            return std::uint64_t{2000};
-        }
-        return std::clamp<std::uint64_t>(
-            std::strtoull(value, nullptr, 10),
-            0u,
-            8000u);
-    }();
-    return wait_us;
-}
-
 enum class BackbufferPreBlitClearMode {
     Disabled,
     Black,
@@ -2413,8 +2362,8 @@ void RendererD3D12::shutdown() {
     invalidate_gx_bindings();
     last_latency_wait_us_ = last_frame_slot_wait_us_ =
         last_timestamp_read_us_ = last_begin_reset_us_ = 0;
-    telemetry_window_start_qpc_ = last_present_qpc_ =
-        last_paced_present_qpc_ = 0;
+    telemetry_window_start_qpc_ = last_present_qpc_ = 0;
+    present_pacer_.reset();
     telemetry_first_serial_start_ = telemetry_xfb_copy_start_ = 0;
     has_presented_swap_chain_ = window_shown_ = false;
     telemetry_present_count_ = telemetry_adjacent_serial_transition_count_ = 0;
@@ -2430,10 +2379,6 @@ void RendererD3D12::shutdown() {
     fence_.Reset(); queue_.Reset(); device_.Reset();
     host_window::close_game_window(window_owner_);
     window_ = nullptr;
-    if (pace_timer_ != nullptr) {
-        CloseHandle(pace_timer_);
-        pace_timer_ = nullptr;
-    }
     if (shutdown_failure != nullptr) {
         std::rethrow_exception(shutdown_failure);
     }
@@ -3438,106 +3383,6 @@ UINT RendererD3D12::present_sync_interval(unsigned configured, float max_fps) {
     return 1u;
 }
 
-// The present pacer spins (yields) only for its last 0.2 ms: Battlerock 1080p, render thread 197 ms/s with the
-// yield loop for the whole wait, 99 ms/s with the timer alone (median worst interval 16.82 -> 17.18 ms).
-constexpr double kPaceSpinMs = 0.2;
-
-void RendererD3D12::pace_present_if_needed(
-    unsigned vsync_interval,
-    float max_fps) {
-    // Runtime gameplay is paced by the native VI scheduler. A tiny bounded
-    // render-thread delay can still smooth the handoff to DXGI when the VI edge
-    // arrives a little early; keep it capped so it cannot become a producer
-    // throttle or hide missing XFBs with duplicated presents.
-    const bool realtime_paced = realtime_vi_paces_present();
-    const std::uint64_t realtime_wait_cap_us =
-        realtime_paced && smooth_realtime_present_enabled()
-            ? smooth_realtime_present_max_wait_us()
-            : 0u;
-    if ((realtime_paced && realtime_wait_cap_us == 0u) ||
-        vsync_interval != 0u ||
-        max_fps <= 0.0f ||
-        qpc_frequency_.QuadPart <= 0) {
-        last_paced_present_qpc_ = 0;
-        return;
-    }
-
-    LARGE_INTEGER now{};
-    QueryPerformanceCounter(&now);
-    if (last_paced_present_qpc_ == 0) {
-        last_paced_present_qpc_ = now.QuadPart;
-        return;
-    }
-
-    const auto wait_start_qpc = now.QuadPart;
-    const double ticks_per_frame =
-        static_cast<double>(qpc_frequency_.QuadPart) /
-        static_cast<double>(max_fps);
-    const auto target =
-        last_paced_present_qpc_ +
-        static_cast<std::int64_t>(ticks_per_frame + 0.5);
-    const std::int64_t wait_cap_ticks =
-        realtime_paced
-            ? static_cast<std::int64_t>(
-                  (static_cast<double>(qpc_frequency_.QuadPart) *
-                   static_cast<double>(realtime_wait_cap_us)) /
-                  1'000'000.0)
-            : std::numeric_limits<std::int64_t>::max();
-    const std::int64_t wait_limit =
-        realtime_paced ? now.QuadPart + wait_cap_ticks
-                       : std::numeric_limits<std::int64_t>::max();
-    while (now.QuadPart < target) {
-        if (realtime_paced && now.QuadPart >= wait_limit) {
-            break;
-        }
-        const std::int64_t capped_target =
-            realtime_paced ? std::min<std::int64_t>(target, wait_limit)
-                           : target;
-        const double remaining_ms =
-            static_cast<double>(capped_target - now.QuadPart) * 1000.0 /
-            static_cast<double>(qpc_frequency_.QuadPart);
-        if (!pace_timer_tried_) {
-            pace_timer_tried_ = true;
-            pace_timer_ = CreateWaitableTimerExW(
-                nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
-        }
-        if (pace_timer_ != nullptr && remaining_ms > kPaceSpinMs) {
-            // Sleep to kPaceSpinMs before the target (the timer wakes up to a few hundred microseconds late), then
-            // yield for the rest: the spin is at most kPaceSpinMs a frame. Due time in 100 ns units, relative.
-            LARGE_INTEGER due{};
-            due.QuadPart = -std::max<LONGLONG>(1, static_cast<LONGLONG>((remaining_ms - kPaceSpinMs) * 10000.0));
-            if (SetWaitableTimer(pace_timer_, &due, 0, nullptr, nullptr, FALSE)) {
-                WaitForSingleObject(pace_timer_, INFINITE);
-            } else {
-                SwitchToThread();
-            }
-        } else if (pace_timer_ != nullptr) {
-            SwitchToThread();
-        } else if (remaining_ms >= 2.0) {
-            Sleep(static_cast<DWORD>(remaining_ms - 1.0));
-        } else {
-            SwitchToThread();
-        }
-        QueryPerformanceCounter(&now);
-    }
-
-    if (trace_present_stats_enabled()) {
-        const double wait_ms =
-            static_cast<double>(now.QuadPart - wait_start_qpc) * 1000.0 /
-            static_cast<double>(qpc_frequency_.QuadPart);
-        telemetry_pace_wait_ms_ += wait_ms;
-        telemetry_pace_wait_max_ms_ =
-            std::max(telemetry_pace_wait_max_ms_, wait_ms);
-    }
-
-    const auto max_lag =
-        static_cast<std::int64_t>(ticks_per_frame * 2.0);
-    last_paced_present_qpc_ =
-        (now.QuadPart < target && realtime_paced)
-            ? now.QuadPart
-            : ((now.QuadPart - target > max_lag) ? now.QuadPart : target);
-}
-
 void RendererD3D12::present_to_swap_chain() {
     const bool stall_watch = trace_stall_watch_enabled();
     const RenderConfig cfg = get_render_config();
@@ -3548,7 +3393,11 @@ void RendererD3D12::present_to_swap_chain() {
     const auto stall_watch_pace_start = stall_watch
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
-    pace_present_if_needed(cfg.vsync_interval, cfg.max_fps);
+    const double pace_wait_ms = present_pacer_.pace(cfg.vsync_interval, cfg.max_fps);
+    if (trace_present_stats_enabled()) {
+        telemetry_pace_wait_ms_ += pace_wait_ms;
+        telemetry_pace_wait_max_ms_ = std::max(telemetry_pace_wait_max_ms_, pace_wait_ms);
+    }
     if (stall_watch) {
         const double stall_watch_ms =
             std::chrono::duration<double, std::milli>(
@@ -3556,7 +3405,7 @@ void RendererD3D12::present_to_swap_chain() {
                 stall_watch_pace_start).count();
         if (stall_watch_ms > 12.0) {
             std::ostringstream message;
-            message << "[stall-watch] pace_present_if_needed took "
+            message << "[stall-watch] present pacing took "
                       << stall_watch_ms
                       << "ms vsync=" << cfg.vsync_interval
                       << " max-fps=" << cfg.max_fps << '\n';

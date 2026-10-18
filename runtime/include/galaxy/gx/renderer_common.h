@@ -138,6 +138,37 @@ static_assert(sizeof(UiSolidQuadConstants) == 13u * sizeof(std::uint32_t));
     const EfbPeekSamplingGeometry& sampling,
     EfbPeekKind kind) noexcept;
 
+// Present pacing (environment, read once): the VI paces presents in real time (GALAXY_REALTIME_VI, on), with a
+// bounded smoothing wait before each VI-paced present (GALAXY_SMOOTH_REALTIME_PRESENT, on;
+// GALAXY_SMOOTH_REALTIME_PRESENT_MAX_WAIT_US, 2000, at most 8000).
+[[nodiscard]] bool realtime_vi_paces_present();
+[[nodiscard]] bool smooth_realtime_present_enabled();
+[[nodiscard]] std::uint64_t smooth_realtime_present_max_wait_us();
+
+#if defined(_WIN32)
+// Holds each present to the frame-rate cap when the display does not (vsync off), and smooths a VI-paced present
+// that arrives early by at most the smoothing wait: a high-resolution waitable timer to 0.2 ms before the target,
+// then yields.
+class PresentPacer {
+public:
+    PresentPacer() noexcept;
+    ~PresentPacer();
+    PresentPacer(const PresentPacer&) = delete;
+    PresentPacer& operator=(const PresentPacer&) = delete;
+    // Waits for this present's turn; the milliseconds waited.
+    double pace(unsigned vsync_interval, float max_fps);
+    void reset() noexcept;
+
+private:
+    std::int64_t frequency_ = 0;
+    std::int64_t last_qpc_ = 0;
+    // A high-resolution waitable timer (Windows 10 1803+): it sleeps to the target instead of spinning on
+    // SwitchToThread, which cost the render thread about 100 ms of CPU a second. Null: Sleep and yield.
+    void* timer_ = nullptr;
+    bool timer_tried_ = false;
+};
+#endif
+
 // One fully resolved draw.  The renderer sets PSO / root arguments only when
 // they differ from the previous draw (cheap CPU-side batching).
 struct DrawCall {
