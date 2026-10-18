@@ -101,6 +101,8 @@ enum {
     NEBULA_TEST_PLACE_PLAYER,     /* MR::setPlayerPos(position) */
     NEBULA_TEST_KILL_PLAYER,      /* MR::forceKillPlayerByAbyss: a miss, then retry or game over */
     NEBULA_TEST_START_MOVIE,      /* MR::startMovie(scenario): where the stage has a movie sequence */
+    NEBULA_TEST_GET_STAR,         /* the star `scenario` is collected (its result sent, the get demo requested) */
+    NEBULA_TEST_GET_GRAND_STAR,   /* the same with the Grand Star's demo */
 };
 
 /* The picture's shape as the game draws it (__NebulaDisplay), from the output's shape the host latches at each retrace

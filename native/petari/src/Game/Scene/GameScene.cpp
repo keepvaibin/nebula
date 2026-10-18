@@ -179,6 +179,15 @@ void GameScene::update() {
 void GameScene::draw() const {
 #ifdef TARGET_PC
     // Hidden test runs (the host's GALAXY_TEST_GALAXY_TOUR and GALAXY_TEST_TELEPORT): through the game's own calls.
+    // A star taken in a test waits for play (the galaxy's opening camera and starter end in SceneAction, and would
+    // replace the get demo); then what PowerStar::exeStageClearDemo does when the player takes it.
+    static u32 sPendingStar;
+    static s32 sPendingStarId;
+    if (sPendingStar != 0 && isNerve(GET_NERVE(GameScene, GameSceneAction))) {
+        MR::sendStageResultSequenceParam(sPendingStarId);
+        sPendingStar == NEBULA_TEST_GET_GRAND_STAR ? MR::requestGrandStarGetDemo() : MR::requestPowerStarGetDemo();
+        sPendingStar = 0;
+    }
     NebulaTestAction action;
     if (__NebulaTestSceneFrame(&action)) {
         static char sStage[sizeof(action.stage)];  // the stage change keeps a pointer to the name
@@ -189,6 +198,9 @@ void GameScene::draw() const {
             MR::setPlayerPos(TVec3f(action.position[0], action.position[1], action.position[2]));
         } else if (action.kind == NEBULA_TEST_KILL_PLAYER) {
             MR::forceKillPlayerByAbyss();
+        } else if (action.kind == NEBULA_TEST_GET_STAR || action.kind == NEBULA_TEST_GET_GRAND_STAR) {
+            sPendingStar = action.kind;
+            sPendingStarId = action.scenario;
         } else if (action.kind == NEBULA_TEST_START_MOVIE) {
             if (MR::isExistSceneObj(SceneObj_MoviePlayingSequenceHolder)) {
                 MR::startMovie(action.scenario);

@@ -1189,7 +1189,8 @@ int svc_hbm(void*, uint32_t what, uint32_t) {
 //     player settles there); counted from the latest tour stop when touring.
 //   GALAXY_TEST_EVENTS=kind@frame[/kind@frame...]: once at that scene frame (from the latest stop when touring): kill (a
 //     miss: MR::forceKillPlayerByAbyss), movieN (MR::startMovie(N), in a stage with a movie sequence), wait (nothing:
-//     keeps a tour's last stop running until then).
+//     keeps a tour's last stop running until then), star / grandstar (the stop's star is collected: its result, the get
+//     demo, the save and what follows, the ending after KoopaBattleVs3Galaxy).
 std::atomic<bool> gTourDone{false};
 
 int svc_test_scene_frame(void*, NebulaTestAction* action) {
@@ -1246,6 +1247,10 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
                     const uint64_t frame = std::strtoull(entry.c_str() + at + 1, nullptr, 10);
                     if (kind == "kill") {
                         events.push_back({NEBULA_TEST_KILL_PLAYER, frame, 0});
+                    } else if (kind == "star") {
+                        events.push_back({NEBULA_TEST_GET_STAR, frame, -1});
+                    } else if (kind == "grandstar") {
+                        events.push_back({NEBULA_TEST_GET_GRAND_STAR, frame, -1});
                     } else if (kind == "wait") {
                         events.push_back({0, frame, 0});
                     } else if (kind.rfind("movie", 0) == 0) {
@@ -1307,7 +1312,7 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
     for (const Event& event : events) {
         if (frame == event.frame && event.kind != 0) {
             action->kind = event.kind;
-            action->scenario = event.value;
+            action->scenario = event.value >= 0 ? event.value : (next > 0 ? stops[next - 1].scenario : 1);
             char text[64];
             std::snprintf(text, sizeof(text), "event %u at frame %llu", event.kind, static_cast<unsigned long long>(frame));
             log_line("test:", text);
