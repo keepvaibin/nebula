@@ -1,4 +1,10 @@
 #include "Game/Scene/GameScene.hpp"
+#ifdef TARGET_PC
+#include "Game/Util/PlayerUtil.hpp"
+#include "Game/Util/SequenceUtil.hpp"
+#include <cstring>
+#include <nebula_game_api.h>
+#endif
 #include "Game/AudioLib/AudSceneMgr.hpp"
 #include "Game/AudioLib/AudWrap.hpp"
 #include "Game/LiveActor/AllLiveActorGroup.hpp"
@@ -171,6 +177,19 @@ void GameScene::update() {
 }
 
 void GameScene::draw() const {
+#ifdef TARGET_PC
+    // Hidden test runs (the host's GALAXY_TEST_GALAXY_TOUR and GALAXY_TEST_TELEPORT): through the game's own calls.
+    NebulaTestAction action;
+    if (__NebulaTestSceneFrame(&action)) {
+        static char sStage[sizeof(action.stage)];  // the stage change keeps a pointer to the name
+        if (action.kind == NEBULA_TEST_CHANGE_STAGE) {
+            strcpy(sStage, action.stage);
+            MR::requestChangeStageInGameMoving(sStage, action.scenario);
+        } else if (action.kind == NEBULA_TEST_PLACE_PLAYER) {
+            MR::setPlayerPos(TVec3f(action.position[0], action.position[1], action.position[2]));
+        }
+    }
+#endif
     MR::drawInit();
     LightFunction::initLightRegisterAll();
     drawOdhCapture();

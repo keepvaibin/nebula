@@ -952,6 +952,92 @@ int svc_hbm(void*, uint32_t what, uint32_t) {
 #endif
 }
 
+// Test hooks for hidden runs, as v1.0.1's runtime has them; the game performs them with its own calls each scene frame.
+//   GALAXY_TEST_GALAXY_TOUR=<file of "Stage scenario" lines>: each stop in turn, GALAXY_TEST_GALAXY_TOUR_FRAMES scene
+//     frames apart (default 1200), through MR::requestChangeStageInGameMoving.
+//   GALAXY_TEST_TELEPORT=x,y,z,frame[/x,y,z,frame...]: MR::setPlayerPos at those scene frames, held 30 frames (the
+//     player settles there); counted from the latest tour stop when touring.
+int svc_test_scene_frame(void*, NebulaTestAction* action) {
+    struct Stop {
+        std::string stage;
+        int32_t scenario;
+    };
+    struct Teleport {
+        float x, y, z;
+        uint64_t frame;
+    };
+    static std::vector<Stop> stops;
+    static std::vector<Teleport> teleports;
+    static uint64_t tour_frames = 1200;
+    static bool touring = false;
+    static bool loaded = false;
+    static size_t next = 0;
+    static uint64_t scene_frames = 0, since_stop = 0, stop_frame = 0;
+    if (!loaded) {
+        loaded = true;
+        if (const char* tour = std::getenv("GALAXY_TEST_GALAXY_TOUR")) {
+            if (FILE* file = std::fopen(tour, "r")) {
+                char stage[64];
+                int scenario = 0;
+                while (std::fscanf(file, "%63s %d", stage, &scenario) == 2) {
+                    stops.push_back({stage, scenario});
+                }
+                std::fclose(file);
+            }
+            touring = true;
+            if (const char* frames = std::getenv("GALAXY_TEST_GALAXY_TOUR_FRAMES")) {
+                tour_frames = std::max<uint64_t>(std::strtoull(frames, nullptr, 10), 60u);
+            }
+            char text[64];
+            std::snprintf(text, sizeof(text), "stops %zu, %llu frames apart", stops.size(),
+                          static_cast<unsigned long long>(tour_frames));
+            log_line("tour:", text);
+        }
+        if (const char* list = std::getenv("GALAXY_TEST_TELEPORT")) {
+            std::string entries = list;
+            size_t start = 0;
+            while (start < entries.size()) {
+                const size_t end = std::min(entries.find('/', start), entries.size());
+                Teleport t{};
+                unsigned long long frame = 0;
+                if (std::sscanf(entries.substr(start, end - start).c_str(), "%f,%f,%f,%llu", &t.x, &t.y, &t.z,
+                                &frame) == 4) {
+                    t.frame = frame;
+                    teleports.push_back(t);
+                }
+                start = end + 1;
+            }
+        }
+    }
+    ++scene_frames;
+    if (touring && next < stops.size() && ++since_stop >= tour_frames) {
+        since_stop = 0;
+        stop_frame = scene_frames;
+        const Stop& stop = stops[next++];
+        action->kind = NEBULA_TEST_CHANGE_STAGE;
+        action->scenario = stop.scenario;
+        std::snprintf(action->stage, sizeof(action->stage), "%s", stop.stage.c_str());
+        char text[128];
+        std::snprintf(text, sizeof(text), "%zu/%zu %s %d", next, stops.size(), stop.stage.c_str(), stop.scenario);
+        log_line("tour:", text);
+        return 1;
+    }
+    if (teleports.empty() || (touring && stop_frame == 0)) {
+        return 0;
+    }
+    const uint64_t frame = scene_frames - stop_frame;
+    for (const Teleport& t : teleports) {
+        if (frame >= t.frame && frame < t.frame + 30u) {
+            action->kind = NEBULA_TEST_PLACE_PLAYER;
+            action->position[0] = t.x;
+            action->position[1] = t.y;
+            action->position[2] = t.z;
+            return 1;
+        }
+    }
+    return 0;
+}
+
 // A restart starts this executable again with the same arguments (the game's boot, as the console's reset); the
 // other power events close the game.
 [[noreturn]] void svc_power(void*, uint32_t what) {
@@ -1107,6 +1193,7 @@ int main(int argc, char** argv) {
     services.gpu_coherent = svc_gpu_coherent;
     services.game_context = svc_game_context;
     services.power = svc_power;
+    services.test_scene_frame = svc_test_scene_frame;
 #if defined(NEBULA_HOST_RENDERER)
     // The player's settings and display configuration (GALAXY_RUNTIME_SETTINGS_PATH / GALAXY_RENDER_CONFIG_PATH in
     // tests), loaded before the window as v1.0.1 does; the settings overlay reads its frame art from the game files.

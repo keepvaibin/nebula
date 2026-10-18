@@ -88,6 +88,19 @@ enum {
     NEBULA_HBM_CLOSE,    /* closed at once (a reset or power event) */
 };
 
+/* A test request (test_scene_frame). */
+typedef struct {
+    uint32_t kind;     /* NEBULA_TEST_* */
+    int32_t scenario;  /* NEBULA_TEST_CHANGE_STAGE */
+    float position[3]; /* NEBULA_TEST_PLACE_PLAYER */
+    char stage[64];    /* NEBULA_TEST_CHANGE_STAGE */
+} NebulaTestAction;
+
+enum {
+    NEBULA_TEST_CHANGE_STAGE = 1, /* MR::requestChangeStageInGameMoving(stage, scenario) */
+    NEBULA_TEST_PLACE_PLAYER,     /* MR::setPlayerPos(position) */
+};
+
 /* Audio interface requests (ai_control). */
 enum {
     NEBULA_AI_START = 1, /* the DMA engine runs the latched blocks */
@@ -182,6 +195,10 @@ typedef struct NebulaHostServices {
 
     /* The game ends (NEBULA_POWER_*): OSShutdownSystem, OSRestart, OSReturnToMenu, OSRebootSystem. Does not return. */
     void (*power)(void* user, uint32_t what);
+
+    /* Tests: once per game scene frame (before its 3D), what a hidden run asks of the game (GALAXY_TEST_*): returns 1
+       with `action` filled, or 0. */
+    int (*test_scene_frame)(void* user, NebulaTestAction* action);
 } NebulaHostServices;
 
 enum {

@@ -58,6 +58,8 @@ extern "C" {
 u32 __NebulaToPhysical(const void* addr);
 // Game state the host's controls follow (NEBULA_CONTEXT_* in nebula_game_api.h).
 void __NebulaGameContext(u32 what, s32 value);
+// Tests: what a hidden run asks of the game this scene frame (NebulaTestAction in nebula_game_api.h).
+int __NebulaTestSceneFrame(void* action);
 void* __NebulaFromPhysical(u32 paddr);
 #ifdef __cplusplus
 }
