@@ -524,6 +524,7 @@ target_link_libraries(
         galaxy_runtime_settings
         galaxy_native_input
         galaxy_native_dsp
+        galaxy_jaudio_mixer
         galaxy_frame_cadence_diagnostics
         galaxy_ai_pcm_identity
         bcrypt
@@ -552,6 +553,7 @@ target_link_libraries(
         galaxy_runtime_settings
         galaxy_native_input
         galaxy_native_dsp
+        galaxy_jaudio_mixer
         galaxy_frame_cadence_diagnostics
         galaxy_ai_pcm_identity
         bcrypt

@@ -3,6 +3,7 @@
 #include "galaxy/ai_dma_timing.h"
 #include "galaxy/native_audio_anomaly.h"
 #include "galaxy/native_audio_queue.h"
+#include "galaxy/jaudio_host_mixer.h"
 #include "galaxy/controller_hid.h"
 #include "galaxy/input_bindings.h"
 #include "galaxy/native_input.h"
@@ -10353,6 +10354,88 @@ void native_game_wiimote_calibration(
 
 std::vector<std::byte> native_game_empty_mii_database() {
     return create_empty_rfl_database();
+}
+
+struct NativeGameAudio::State {
+    JAudioHostMixer mixer;
+    NativeAudioSink sink;
+};
+
+NativeGameAudio::NativeGameAudio() : state_(std::make_unique<State>()) {}
+NativeGameAudio::~NativeGameAudio() = default;
+
+namespace {
+// A guest address's bytes in the native game's regions (the arena's physical, cached and uncached views, and the
+// module image).
+std::byte* native_game_resolve(void* user, std::uint32_t address, std::uint32_t size) {
+    const auto& memory = *static_cast<const GuestMemoryV1*>(user);
+    const GuestMemoryFastRegionV1& fast = memory.fast_regions[address >> 28u];
+    const std::uint32_t offset = address & 0x0FFF'FFFFu;
+    if (fast.host_base != nullptr && offset <= fast.size && size <= fast.size - offset) {
+        return fast.host_base + offset;
+    }
+    for (std::uint32_t i = 0; i < memory.region_count; ++i) {
+        const GuestMemoryRegionV1& region = memory.regions[i];
+        if (address - region.guest_base < region.size && size <= region.size - (address - region.guest_base)) {
+            return region.host_base + (address - region.guest_base);
+        }
+    }
+    return nullptr;
+}
+}  // namespace
+
+bool NativeGameAudio::dsp_command(const std::uint32_t* words, std::uint32_t count, const GuestMemoryV1& memory) {
+    const JAudioGuestMemory guest{const_cast<GuestMemoryV1*>(&memory), &native_game_resolve};
+    JAudioHostMixer& mixer = state_->mixer;
+    const auto word = [&](std::uint32_t index) { return index < count ? words[index] : 0u; };
+    if (count == 0u) {
+        return mixer.release_halt(words[0], guest);
+    }
+    switch (words[0] >> 24u) {
+    case 0x81u:
+        if (count >= 5u) {
+            mixer.setup(words[0], word(1u), word(2u), word(3u), word(4u), guest);
+        } else {
+            mixer.note_ignored_command();
+        }
+        break;
+    case 0x8Eu:
+        mixer.set_varam(word(1u));
+        break;
+    case 0x82u:
+        mixer.sync_frame(words[0], word(1u), word(2u), word(3u), word(4u), guest);
+        break;
+    default:
+        mixer.note_ignored_command();
+        break;
+    }
+    return false;
+}
+
+bool NativeGameAudio::play(std::span<const std::byte> block, std::uint32_t sample_rate) {
+    return state_->sink.submit_pcm16_be_stereo(block, sample_rate, 0u, 0u);
+}
+
+unsigned NativeGameAudio::queued_blocks() const {
+    return state_->sink.queued_buffers();
+}
+
+bool NativeGameAudio::output_available() const {
+    return state_->sink.output_available();
+}
+
+std::string NativeGameAudio::stats_line() const {
+    const JAudioHostMixerStats& s = state_->mixer.stats();
+    std::ostringstream line;
+    line << "setups=" << s.setups << " frames=" << s.frames << " subframes=" << s.subframes
+         << " channel-renders=" << s.channel_renders << " adpcm-blocks=" << s.adpcm_blocks << " pcm=" << s.pcm_renders
+         << " streams=" << s.stream_renders << " oscillators=" << s.oscillator_renders << " fir=" << s.fir_renders
+         << " iir=" << s.iir_renders << " auto-mixer=" << s.auto_mixer_renders
+         << " fx-line-subframes=" << s.fx_line_subframes << " unresolved=" << s.unresolved_reads
+         << " unsupported-osc=" << s.unsupported_oscillators << " ignored=" << s.ignored_commands
+         << " stray=" << s.stray_releases << " varam=0x" << std::hex << state_->mixer.varam() << std::dec
+         << " mix-ms=" << s.mix_ns / 1000000u;
+    return line.str();
 }
 
 GamePaths locate_game(const std::filesystem::path& input) {

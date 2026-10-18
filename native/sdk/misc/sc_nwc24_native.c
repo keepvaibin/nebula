@@ -38,6 +38,10 @@ u8 SCGetEuRgb60Mode(void) {
     return setting(NEBULA_SC_EURGB60_MODE);
 }
 
+u8 SCGetScreenSaverMode(void) {
+    return setting(NEBULA_SC_SCREEN_SAVER_MODE);
+}
+
 NWC24Err NWC24OpenLib(void* work) {
     (void)work;
     return NWC24_OK;

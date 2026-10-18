@@ -105,6 +105,9 @@ const JASDriver::MixFunc JASDriver::sMixFuncs[4] = {
 
 volatile u32 JASDriver::sSubFrameCounter;
 
+// The DAC buffers hold the AI's samples as the DSP program writes them: natively in the console's byte order.
+typedef NEBULA_BE(s16) DacSample;
+
 void JASDriver::updateDac() {
     static u32 dacp = 0;
     s16* r30 = lastRspMadep;
@@ -240,7 +243,7 @@ void JASDriver::mixMonoTrack(s16* buffer, u32 param_1, MixCallback callback) {
         return;
     }
     JASProbe::stop(5);
-    s16* pTrack = buffer;
+    DacSample* pTrack = (DacSample*)buffer;
     s16* r28 = r26;
     for (u32 i = param_1; i != 0; i--) {
         s32 src = pTrack[0];
@@ -262,7 +265,7 @@ void JASDriver::mixMonoTrackWide(s16* buffer, u32 param_1, MixCallback callback)
         return;
     }
     JASProbe::stop(5);
-    s16* pTrack = buffer;
+    DacSample* pTrack = (DacSample*)buffer;
     s16* r28 = r26;
     for (u32 i = param_1; i != 0; i--) {
         s32 src = pTrack[0];
@@ -285,7 +288,7 @@ void JASDriver::mixExtraTrack(s16* buffer, u32 param_1, MixCallback callback) {
     }
     JASProbe::stop(5);
     JASProbe::start(6, "MIXING");
-    s16* pTrack = buffer;
+    DacSample* pTrack = (DacSample*)buffer;
     s16* r29 = r27;
     s16* r28 = r27 + getFrameSamples();
     for (u32 i = param_1; i != 0; i--) {
@@ -306,7 +309,7 @@ void JASDriver::mixInterleaveTrack(s16* buffer, u32 param_1, MixCallback callbac
     if (!r31) {
         return;
     }
-    s16* pTrack = buffer;
+    DacSample* pTrack = (DacSample*)buffer;
     s16* r30 = r31;
     for (u32 i = param_1 * 2; i != 0; i--) {
         s32 r26 = pTrack[0] + r30[0];

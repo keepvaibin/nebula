@@ -59,6 +59,7 @@ enum {
     NEBULA_SC_DPD_SENSITIVITY,      /* 1..5 */
     NEBULA_SC_SPEAKER_VOLUME,       /* 0..127 */
     NEBULA_SC_MOTOR_MODE,           /* 0 rumble off, 1 on */
+    NEBULA_SC_SCREEN_SAVER_MODE,    /* 0 off, 1 on: the screen dims after 5 idle minutes (the game lowers its volume) */
 };
 
 /* A Wii Remote's connection: its EEPROM's first 0x2A bytes (DPD and accelerometer calibration), the attached extension

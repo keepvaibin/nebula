@@ -5,6 +5,7 @@
    callback, and VIWaitForRetrace's waiters waking. */
 #include <revolution/gx.h>
 #include <revolution/os.h>
+#include <revolution/sc.h>
 #include <revolution/vi.h>
 
 #include <nebula_game_api.h>
@@ -26,7 +27,13 @@ static BOOL sNextBlack = TRUE;
 static void* sCurrentFrameBuffer;
 static BOOL sCurrentBlack = TRUE;
 static BOOL sFlushed;
-static BOOL sDimming = TRUE;
+
+/* Screen dimming, as the console's VI counts it: retraces since the remotes' last input (WPAD calls __VIResetRFIdle)
+   reach the dimming time while dimming is enabled, which needs SYSCONF's screen saver on. The game then lowers its
+   volume (AudSystem::screenSaverProcess). A PC display dims itself: the picture is not darkened. */
+enum { kTimeToDimming = 18000 }; /* VI_DM_DEFAULT: 5 minutes of NTSC fields */
+static BOOL sDimming;
+static u32 sIdleRetraces;
 
 NEBULA_GAME_API void nebula_game_vi_retrace(void) {
     nebula_raise_interrupt(__OS_INTERRUPT_PI_VI);
@@ -36,6 +43,11 @@ static void retrace_interrupt(__OSInterrupt interrupt, OSContext* context) {
     (void)interrupt;
     OSContext exceptionContext;
     sRetraceCount++;
+    if (!sDimming) {
+        sIdleRetraces = 0;
+    } else if (sIdleRetraces < kTimeToDimming) {
+        sIdleRetraces++;
+    }
     OSClearContext(&exceptionContext);
     OSSetCurrentContext(&exceptionContext);
     if (sPreCallback != NULL) {
@@ -146,18 +158,24 @@ u32 VIGetDTVStatus(void) {
     return 1;
 }
 
-/* The console dims an idle screen; a PC display has its own power management. */
 BOOL VIEnableDimming(BOOL enable) {
     const BOOL previous = sDimming;
-    sDimming = enable;
+    sDimming = enable && SCGetScreenSaverMode() != 0;
     return previous;
 }
 
+/* Retraces left before the screen dims; 0 once it has. */
 u32 VIGetDimmingCount(void) {
-    return 0;
+    return kTimeToDimming - sIdleRetraces;
 }
 
 BOOL VIResetDimmingCount(void) {
+    sIdleRetraces = 0;
+    return TRUE;
+}
+
+BOOL __VIResetRFIdle(void) {
+    sIdleRetraces = 0;
     return TRUE;
 }
 

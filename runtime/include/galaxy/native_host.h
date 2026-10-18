@@ -2191,6 +2191,33 @@ void native_game_wiimote_calibration(
 // A valid, empty Mii database (RFL_DB.dat) for a NAND that has none, as v1.0.1 creates.
 [[nodiscard]] std::vector<std::byte> native_game_empty_mii_database();
 
+// The native game's sound: the JAudio DSP program on the host (JAudioHostMixer, as v1.0.1 runs it) over the game's
+// DSP memory, which the native game keeps in the console's byte order, and the audio interface's blocks played on the
+// output device (the 1.0.1 sink: XAudio2, master volume, WAV dump, device recovery).
+class NativeGameAudio {
+public:
+    NativeGameAudio();
+    ~NativeGameAudio();
+    NativeGameAudio(const NativeGameAudio&) = delete;
+    NativeGameAudio& operator=(const NativeGameAudio&) = delete;
+
+    // The command words the game mails to the DSP (count 0: one word, a halted subframe's release), with physical
+    // addresses resolved in `memory`. True when the words completed a subframe (the DSP's AUDIOMSG_DSP mail).
+    bool dsp_command(const std::uint32_t* words, std::uint32_t count, const GuestMemoryV1& memory);
+    // One AI block: 16-bit samples, right then left, big-endian, as the console's DMA engine reads them. Call from one
+    // thread; the first call opens the device.
+    bool play(std::span<const std::byte> block, std::uint32_t sample_rate);
+    // Blocks submitted to the device and not yet played.
+    [[nodiscard]] unsigned queued_blocks() const;
+    [[nodiscard]] bool output_available() const;
+    // The DSP program's counters, as v1.0.1 logs them ([jaudio] ...).
+    [[nodiscard]] std::string stats_line() const;
+
+private:
+    struct State;
+    std::unique_ptr<State> state_;
+};
+
 void load_boot_image(
     GuestAddressSpace& address_space,
     const BootImage& image);

@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include <revolution/os.h>
+#include <revolution/vi.h>
 #include <revolution/wpad.h>
 
 #include <nebula_game_api.h>
@@ -47,6 +48,7 @@ typedef struct {
     f32 calibX, calibY, centerX, centerY, rolag;
     WPADInfo info;
     WPADCLStatus status; /* the largest status: WPADRead copies the part its format uses */
+    u16 accSettle, stickSettle; /* reports an analog change has persisted (IsControllerDataChanged) */
     WPADSamplingCallback samplingCallback;
     WPADConnectCallback connectCallback;
     WPADExtensionCallback extensionCallback;
@@ -328,6 +330,31 @@ static void decode(Channel* c, const u8* d) {
             s->obj[i].traceId = (u8)i;
         }
     }
+    /* Input keeps the screen from dimming (WPADiCheckContInputs' IsControllerDataChanged): a button at once, the
+       accelerometer moving more than 12 and the Nunchuk stick more than 2 once the change has held for a few
+       reports. */
+    const WPADStatus* old = (const WPADStatus*)&c->status;
+    BOOL changed = s->button != old->button;
+    const int ax = s->accX - old->accX, ay = s->accY - old->accY, az = s->accZ - old->accZ;
+    if (ax > 12 || ax < -12 || ay > 12 || ay < -12 || az > 12 || az < -12) {
+        changed |= ++c->accSettle > 3;
+    } else {
+        c->accSettle = 0;
+    }
+    if (id == 0x37 && c->devType == WPAD_DEV_FREESTYLE) {
+        const WPADFSStatus* oldFs = (const WPADFSStatus*)&c->status;
+        const int sx = fs->fsStickX - oldFs->fsStickX, sy = fs->fsStickY - oldFs->fsStickY;
+        if (sx > 2 || sx < -2 || sy > 2 || sy < -2) {
+            changed |= ++c->stickSettle > 3;
+        } else {
+            c->stickSettle = 0;
+        }
+    }
+    if (changed) {
+        c->accSettle = 0;
+        c->stickSettle = 0;
+        __VIResetRFIdle();
+    }
     c->status = full;
 }
 
@@ -357,6 +384,7 @@ static void controller_interrupt(__OSInterrupt interrupt, OSContext* context) {
             c->info = c->pendingInfo;
             apply_device_calibration(c);
             c->devType = WPAD_DEV_CORE;
+            __VIResetRFIdle();
             if (!wasConnected && c->connectCallback != NULL) {
                 c->connectCallback(chan, WPAD_ERR_NONE);
             }

@@ -29,6 +29,7 @@
 #include <filesystem>
 #include <functional>
 #include <mutex>
+#include <span>
 #include <string>
 #include <thread>
 #include <vector>
@@ -49,6 +50,29 @@ namespace fs = std::filesystem;
 namespace {
 
 using Clock = std::chrono::steady_clock;
+
+// Sleeps until `when` on a high-resolution waitable timer (Windows 10 1803+; the scheduler tick otherwise), so the
+// retrace, the audio interface and the remotes keep their periods to well under a millisecond.
+void sleep_until_precise(Clock::time_point when) {
+#if defined(_WIN32)
+    thread_local HANDLE timer = CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,
+                                                       TIMER_ALL_ACCESS);
+    const auto now = Clock::now();
+    if (when <= now) {
+        return;
+    }
+    if (timer == nullptr) {
+        std::this_thread::sleep_until(when);
+        return;
+    }
+    LARGE_INTEGER due;
+    due.QuadPart = -static_cast<LONGLONG>((std::chrono::duration_cast<std::chrono::nanoseconds>(when - now).count() + 99) / 100);
+    SetWaitableTimer(timer, &due, 0, nullptr, nullptr, FALSE);
+    WaitForSingleObject(timer, INFINITE);
+#else
+    std::this_thread::sleep_until(when);
+#endif
+}
 const Clock::time_point kStart = Clock::now();
 
 void log_line(const char* tag, const char* text) {
@@ -446,24 +470,51 @@ int32_t fs_run(const NebulaFsRequest& r) {
 std::mutex gAiLock;
 std::condition_variable gAiWake;
 uint32_t gAiLatchedSize = 0;
+uint32_t gAiLatchedStart = 0;
 uint32_t gAiRate = 32000;
 bool gAiRunning = false;
+
+#if defined(NEBULA_HOST_RENDERER)
+const std::byte* guest_bytes(uint32_t address, uint32_t size);
+extern galaxy::host::NativeGameAudio* gAudio;
+#endif
 
 void ai_thread() {
     for (;;) {
         uint32_t size = 0;
+        uint32_t start = 0;
         uint32_t rate = 32000;
         {
             std::unique_lock<std::mutex> lock(gAiLock);
             gAiWake.wait(lock, [] { return gAiRunning && gAiLatchedSize != 0; });
             size = gAiLatchedSize;
+            start = gAiLatchedStart;
             rate = gAiRate;
         }
-        const auto start = Clock::now();
+        const auto begin = Clock::now();
+#if defined(NEBULA_HOST_RENDERER)
+        // The block the DMA engine takes now goes to the output device, whose clock then sets the pace: the next
+        // block is taken once fewer than two wait there (the engine latches one block ahead of the one playing).
+        bool played = false;
+        if (const std::byte* samples = guest_bytes(start, size)) {
+            played = gAudio->play(std::span<const std::byte>(samples, size), rate);
+        }
+#else
+        (void)start;
+#endif
         gAiBlocks.fetch_add(1, std::memory_order_relaxed);
         gModule.ai_interrupt();
-        // One block: 4 bytes per stereo sample.
-        std::this_thread::sleep_until(start + std::chrono::nanoseconds((uint64_t)size / 4 * 1000000000ull / rate));
+#if defined(NEBULA_HOST_RENDERER)
+        if (played && gAudio->output_available()) {
+            const auto block = std::chrono::nanoseconds((uint64_t)size / 4 * 1000000000ull / rate);
+            while (gAudio->queued_blocks() >= 2) {
+                sleep_until_precise(Clock::now() + block / 8);
+            }
+            continue;
+        }
+#endif
+        // No device: the block's length on the host clock (4 bytes per stereo sample).
+        sleep_until_precise(begin + std::chrono::nanoseconds((uint64_t)size / 4 * 1000000000ull / rate));
     }
 }
 
@@ -473,7 +524,7 @@ void vi_thread() {
     const auto period = std::chrono::nanoseconds(1001000000000ull / 60000);
     auto next = Clock::now() + period;
     for (;;) {
-        std::this_thread::sleep_until(next);
+        sleep_until_precise(next);
         gModule.vi_retrace();
         next += period;
         const auto now = Clock::now();
@@ -531,6 +582,8 @@ void native_pe_token(void*, uint16_t token, bool) {
     gModule.gx_event(0, token);
 }
 
+galaxy::host::NativeGameAudio* gAudio = nullptr;
+
 void setup_renderer_memory() {
     NebulaGameMemoryRegion regions[8];
     const int count = gModule.memory_regions(regions, 8);
@@ -550,6 +603,23 @@ void setup_renderer_memory() {
     gNative.fatal = native_fatal;
     gNative.gx_pe_finish = native_pe_finish;
     gNative.gx_pe_token = native_pe_token;
+}
+
+std::once_flag gMemoryOnce;
+
+void ensure_guest_memory() {
+    std::call_once(gMemoryOnce, setup_renderer_memory);
+}
+
+// `size` bytes at a guest address, in the module's arena or image.
+const std::byte* guest_bytes(uint32_t address, uint32_t size) {
+    ensure_guest_memory();
+    for (const galaxy::GuestMemoryRegionV1& region : gRegions) {
+        if (address - region.guest_base < region.size && size <= region.size - (address - region.guest_base)) {
+            return region.host_base + (address - region.guest_base);
+        }
+    }
+    return nullptr;
 }
 
 // Takes the receipts of finished submissions, in order (each is consumed once).
@@ -578,9 +648,7 @@ void submit_frame(bool present, uint32_t xfb) {
 void svc_gx_submit(void*, const uint8_t* bytes, size_t size) {
     gGxBytes.fetch_add(size, std::memory_order_relaxed);
 #if defined(NEBULA_HOST_RENDERER)
-    if (gRegions.empty()) {
-        setup_renderer_memory();
-    }
+    ensure_guest_memory();
     if (gPendingSize == 0) {
         gPending = bytes;
     } else if (bytes != gPending + gPendingSize && bytes + kGxRingSize != gPending + gPendingSize) {
@@ -706,6 +774,8 @@ uint32_t svc_sc_get(void*, uint32_t item) {
         return 3;
     case NEBULA_SC_SPEAKER_VOLUME:
         return 0x58;
+    case NEBULA_SC_SCREEN_SAVER_MODE:
+        return 1;  // IPL.SSV
     case NEBULA_SC_MOTOR_MODE:
         return 1;
     default:
@@ -745,7 +815,7 @@ void wpad_thread() {
     const auto period = std::chrono::milliseconds(10);
     auto next = Clock::now() + period;
     for (;;) {
-        std::this_thread::sleep_until(next);
+        sleep_until_precise(next);
         next += period;
         const uint8_t id = static_cast<uint8_t>(gWpadReport.load(std::memory_order_relaxed));
         const auto snapshot = galaxy::host::native_game_wiimote_snapshot(id, gRetraces.load(std::memory_order_relaxed),
@@ -785,16 +855,22 @@ void svc_wpad_control(void*, uint32_t chan, uint32_t what, uint32_t value) {
 }
 void svc_wpad_speaker_data(void*, uint32_t, const uint8_t*, uint32_t) {}
 
-// The JAudio DSP program finishes a subframe when the CPU releases its last channel group (JASDSPChannel::updateAll's
-// releaseHalt(3), a one-word command); the mixing itself is not done headless.
+// The JAudio DSP program: v1.0.1's host version mixes each subframe when the CPU releases its last channel group
+// (JASDSPChannel::updateAll's releaseHalt(3), a one-word command). Headless, the subframe completes unmixed.
 int svc_audio_dsp(void*, const uint32_t* words, uint32_t count) {
+#if defined(NEBULA_HOST_RENDERER)
+    ensure_guest_memory();
+    const int subframe = gAudio->dsp_command(words, count, gMemory) ? 1 : 0;
+#else
     const int subframe = count == 0 && (words[0] >> 16) == 3;
+#endif
     gDspFrames.fetch_add(subframe, std::memory_order_relaxed);
     return subframe;
 }
 
-void svc_ai_dma(void*, uint32_t, uint32_t size) {
+void svc_ai_dma(void*, uint32_t start, uint32_t size) {
     std::lock_guard<std::mutex> lock(gAiLock);
+    gAiLatchedStart = start;
     gAiLatchedSize = size;
     gAiWake.notify_one();
 }
@@ -892,6 +968,7 @@ int main(int argc, char** argv) {
         die("the renderer did not start");
     }
     galaxy::gx::set_indexed_load_host_order(true);
+    gAudio = new galaxy::host::NativeGameAudio();  // lives as long as the process (the AI thread is detached)
 #endif
     if (gModule.attach(&services) != NEBULA_GAME_API_VERSION) {
         die("the game module's API version differs from the host's (%u)", NEBULA_GAME_API_VERSION);
@@ -932,6 +1009,9 @@ int main(int argc, char** argv) {
                           gDiscReads.load(std::memory_order_relaxed), gFsOps.load(std::memory_order_relaxed),
                           gAiBlocks.load(std::memory_order_relaxed), gDspFrames.load(std::memory_order_relaxed));
 #if defined(NEBULA_HOST_RENDERER)
+            if (retraces / 60 % 30 == 0) {
+                log_line("host:", ("jaudio " + gAudio->stats_line()).c_str());
+            }
             const size_t length = std::strlen(text);
             std::snprintf(text + length, sizeof(text) - length, ", renderer frames %llu",
                           (unsigned long long)gSubmissions.load(std::memory_order_relaxed));
