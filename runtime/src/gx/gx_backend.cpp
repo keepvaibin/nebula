@@ -7529,6 +7529,13 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         }
     }
     info.rt_material = current_rt_material_;
+    // (An untextured draw's map register holds an earlier draw's texture: not logged.)
+    if (current_rt_material_ == 0u && !glow && current_texture_map_mask_ != 0u && rt_log_glows()) {
+        const unsigned map = ps_key_.stages[0].order & 7u;
+        const std::uint8_t bank = map >= 4u ? bp::kTexHighBankOffset : 0u;
+        note_rt_unnamed_surface((state_.bp(static_cast<std::uint8_t>(bp::kTexImage3Base + bank + (map & 3u))) & 0xFFFFFFu)
+                                << 5u);
+    }
     // High quality's textured hits: the material texture (the scene keeps its own view of it).
     if (current_texture_table_.ptr != 0u && current_rt_map_ < kMaxTextureMaps) {
         info.texture = rt_texture_source(current_rt_map_);

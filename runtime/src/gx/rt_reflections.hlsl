@@ -86,6 +86,15 @@ float luminance(float3 c)
     return dot(c, float3(0.2126f, 0.7152f, 0.0722f));
 }
 
+// Strong light rolled off softly: c ln(1 + l / c) in luminance, its hue kept. Weak light passes unchanged and strong
+// light keeps a falloff all the way to its source. The rational l / (1 + l / c) it replaced flattened a lamp's light
+// into a disc with a rim (user, 2026-10-17: a harsh, clear radius around the lights).
+float3 soft_light(float3 light, float c)
+{
+    const float l = luminance(light);
+    return l > 1e-6f ? light * (c * log(1.0f + l / c) / l) : light;
+}
+
 // Octahedral map of directions to [0, 1]^2.
 float2 octahedral(float3 d)
 {
@@ -1125,7 +1134,7 @@ bool hit_shade(uint instance, uint tri, float2 b, float3 x, float3 l, float dist
     points *= g_point_light;
     const float cap = lerp(g_hit_cap, max(g_hit_sun_cap, g_hit_cap), all_weight > 0.0f ? core_weight / all_weight : 0.0f);
     const float3 night_lights = points * g_hit_night_lights;
-    const float3 night = g_hit.y + night_lights / (1.0f + luminance(night_lights) / max(cap, 1e-3f));
+    const float3 night = g_hit.y + soft_light(night_lights, max(cap, 1e-3f));
     const float3 day_lights = points * 0.5f;
     const float3 day = day_level + day_lights / (1.0f + luminance(day_lights) / lerp(1.0f, 0.35f, sunlit));
     light = albedo * lerp(night, day, g_hit.x);

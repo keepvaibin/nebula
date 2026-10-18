@@ -344,13 +344,16 @@ public:
 private:
     static constexpr unsigned kResultSlots = 16u;
     static constexpr std::uint64_t kResultDelay = 8u;
-    static constexpr std::uint32_t kEmitLogLights = 64u;
+    static constexpr std::uint32_t kEmitLogLights = 512u;   // the whole list (ray_tracing.cpp kEmitLights)
     static constexpr std::size_t kAuthoredLights = 512u;
     // A light in the glow lights' lists (rt_lighting.hlsl kEmitStride): position, radius; power,
     // frames unseen or cumulative power; spot direction, cosine of its cone (0 0 0 for a point light).
     static constexpr std::uint32_t kEmitStride = 48u;
     static constexpr std::uint64_t kEmitLogBytes = 16u + kEmitLogLights * kEmitStride;
     static constexpr std::uint64_t kEmitLogSums = 64u;   // the picture sums after them
+    // Then this frame's found lights (rt_lighting.hlsl kEmitFound) with each one's source (kEmitSource*).
+    static constexpr std::uint32_t kEmitFound = 2048u;
+    static constexpr std::uint64_t kEmitFoundBytes = 16u + std::uint64_t{kEmitFound} * (kEmitStride + 4u);
     static constexpr unsigned kStatsWords = 16u;
     static constexpr std::uint32_t kMaxTriangles = 4u * 1024u * 1024u;
     // Translucent water triangles of one scene.
@@ -387,6 +390,8 @@ private:
         kPassBloom,
         kPassLights,        // inside the capture: the glow and table lights found and merged
         kPassBloomBlur,     // inside the capture: the bloom's downsample and blurs
+        kPassEmit,          // inside the lights: the glow and table light passes
+        kPassMerge,         // inside the lights: the merge into the remembered lights
         kPassCount
     };
     struct PassEntry {
@@ -678,6 +683,16 @@ private:
     // Per glow draw (glow_draws_) for GlowEmitCS, in AuthoredLight's layout: its triangles, the material
     // table's colour and intensity for its texture where the table names it (flags kGlowTable).
     std::vector<AuthoredLight> glow_lights_;
+    // Their material table entries (the emitter log names a light's source by them).
+    std::vector<std::uint16_t> authored_materials_;
+    std::vector<std::uint16_t> glow_materials_;
+    std::vector<std::uint16_t> emit_log_authored_materials_;
+    std::vector<std::uint16_t> emit_log_glow_materials_;
+    // Per material the table names a light source, what became of its draws since the last emitter log
+    // (EmitterOutcome): a light, a glow draw, drawn after the trace, or left out of the scene.
+    enum EmitterOutcome : unsigned { kOutcomeLight, kOutcomeGlow, kOutcomeLate, kOutcomeClosed, kOutcomes };
+    std::unordered_map<std::uint16_t, std::array<std::uint32_t, kOutcomes>> emitter_outcomes_;
+    std::unordered_map<std::uint16_t, std::array<std::uint32_t, kOutcomes>> emit_log_outcomes_;
     // Black holes' lens draws among the glow draws (kRtDrawLens): first triangle and count in the glow
     // triangles; lens_ready_ once this frame's glow geometry holds them.
     static constexpr std::uint32_t kLensSlots = 4u;
@@ -712,7 +727,11 @@ private:
     std::uint64_t star_colour_from_frame_ = ~0ull;   // copies taken after it hold this stage's colour
     Microsoft::WRL::ComPtr<ID3D12PipelineState> star_sphere_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> authored_emit_pso_;
-    float authored_power_ = 40000.0f;   // GALAXY_RT_AUTHORED_POWER: a Luma's light (intensity 1)
+    // GALAXY_RT_AUTHORED_POWER: a Luma's light (intensity 1). At 40000, under the old rational soft caps, a Luma, a
+    // lamp or a firefly lit the Observatory garden by +4 to +25 % and the lit plaza read 0.81 of the game's picture
+    // (user: the lights light nothing). 60000 with the logarithmic roll-off (rt_lighting.hlsl soft_light): the
+    // garden's posts +61 %, the Luma +69 %, the plaza at 0.96 of the game's picture.
+    float authored_power_ = 60000.0f;
     std::uint64_t authored_frames_ = 0u;
     std::uint32_t glow_triangles_ = 0u;
     bool glow_open_ = false;

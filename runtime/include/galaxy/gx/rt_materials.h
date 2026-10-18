@@ -143,10 +143,11 @@ private:
 [[nodiscard]] std::uint16_t rt_material_index(std::uint64_t hash) noexcept;
 [[nodiscard]] const RtMaterial* rt_material(std::uint16_t index) noexcept;
 // GALAXY_RT_LOG_GLOWS=1: the texture-pack name of each texture as uploaded, kept by guest address, and
-// printed ([rt-glow]) for glow draws the table does not name.
+// printed for the glow draws ([rt-glow]) and the traced surfaces ([rt-surface]) the table does not name.
 void note_rt_texture(std::uint32_t guest_addr, std::uint64_t pack, std::uint32_t width, std::uint32_t height,
                      std::uint32_t format);
 void note_rt_unnamed_glow(std::uint32_t guest_addr);
+void note_rt_unnamed_surface(std::uint32_t guest_addr);
 [[nodiscard]] bool rt_log_glows() noexcept;
 // The loaded stage: its rows of the table (RtMaterialTable::stage_materials) take effect.
 void rt_materials_set_stage(std::string_view stage);

@@ -191,8 +191,7 @@ struct RtEmitConstants {
     std::uint32_t pad[2];
 };
 static_assert(sizeof(RtEmitConstants) == 192u);
-constexpr std::uint32_t kEmitMaxTiles = 1024u;
-constexpr std::uint32_t kEmitLights = 256u;
+constexpr std::uint32_t kEmitLights = 512u;     // remembered glow lights (rt_lighting.hlsl kEmitLights)
 constexpr std::uint32_t kGlowMaxTriangles = 65536u;
 // g_draws word 6 (rt_lighting.hlsl kDrawTableTint): the emission takes the draw's own colour.
 constexpr std::uint32_t kDrawTableTint = 1u;
@@ -800,7 +799,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     point_saturation_ = std::clamp(env_float("GALAXY_RT_POINT_SATURATION", 0.4f), 0.0f, 1.0f);
     split_ = std::clamp(env_float("GALAXY_RT_SPLIT", 0.0f), 0.0f, 1.0f);
     emission_ = std::clamp(env_float("GALAXY_RT_EMISSION", 40.0f), 0.0f, 256.0f);
-    authored_power_ = std::clamp(env_float("GALAXY_RT_AUTHORED_POWER", 40000.0f), 0.0f, 1.0e7f);
+    authored_power_ = std::clamp(env_float("GALAXY_RT_AUTHORED_POWER", 60000.0f), 0.0f, 1.0e7f);
     log_emitters_ = env_float("GALAXY_RT_LOG_EMITTERS", 0.0f) != 0.0f;
     ab_ = env_float("GALAXY_RT_AB", 0.0f) != 0.0f;
     glow_cutoff_ = std::clamp(env_float("GALAXY_RT_GLOW_CUTOFF", 0.004f), 1e-5f, 1.0f);
@@ -1303,9 +1302,11 @@ void SceneRayTracer::begin_frame(std::uint64_t frame_index) {
 }
 
 // [rt-emit]: the glow lights' count and total power, then the strongest (world position, radius,
-// distance from the camera, power luminance and colour).
+// distance from the camera, power luminance and colour), the nearest the camera, and this frame's found
+// lights nearest the camera with their source: the pass that found them and the material table entry of
+// their draw.
 void SceneRayTracer::log_emitters() {
-    const D3D12_RANGE range{0, kEmitLogBytes + kEmitLogSums};
+    const D3D12_RANGE range{0, kEmitLogBytes + kEmitLogSums + kEmitFoundBytes};
     void* mapped = nullptr;
     if (!emit_readback_ || FAILED(emit_readback_->Map(0, &range, &mapped))) {
         return;
@@ -1327,6 +1328,18 @@ void SceneRayTracer::log_emitters() {
     }
     std::uint32_t sums[16]{};
     std::memcpy(sums, bytes + kEmitLogBytes, sizeof(sums));
+    const std::byte* const found_bytes = bytes + kEmitLogBytes + kEmitLogSums;
+    std::uint32_t found_count = 0u;
+    std::memcpy(&found_count, found_bytes, 4u);
+    struct Found {
+        Entry light;
+        std::uint32_t source;
+    };
+    std::vector<Found> found(std::min(found_count, kEmitFound));
+    for (std::size_t i = 0; i < found.size(); ++i) {
+        std::memcpy(&found[i].light, found_bytes + 16u + i * kEmitStride, sizeof(Entry));
+        std::memcpy(&found[i].source, found_bytes + 16u + std::size_t{kEmitFound} * kEmitStride + i * 4u, 4u);
+    }
     const D3D12_RANGE no_write{0, 0};
     emit_readback_->Unmap(0, &no_write);
     const auto lum = [](const Entry& e) {
@@ -1364,16 +1377,54 @@ void SceneRayTracer::log_emitters() {
                       emit_log_sun_[5]);
         std::cerr << line << '\n';
     }
-    for (std::size_t i = 0; i < std::min<std::size_t>(lights.size(), 12u); ++i) {
-        const Entry& e = lights[i];
+    const auto distance = [&](const Entry& e) {
         const float dx = e.p[0] - emit_log_eye_[0];
         const float dy = e.p[1] - emit_log_eye_[1];
         const float dz = e.p[2] - emit_log_eye_[2];
+        return std::sqrt(dx * dx + dy * dy + dz * dz);
+    };
+    const auto print = [&](const char* kind, const Entry& e) {
         const float l = std::max(lum(e), 1e-6f);
         std::snprintf(line, sizeof(line),
-                      "[rt-emit]   at=%.0f,%.0f,%.0f r=%.0f dist=%.0f power=%.0f rgb=%.2f,%.2f,%.2f spot=%.2f,%.2f,%.2f/%.3f",
-                      e.p[0], e.p[1], e.p[2], e.p[3], std::sqrt(dx * dx + dy * dy + dz * dz), l, e.power[0] / l,
-                      e.power[1] / l, e.power[2] / l, e.spot[0], e.spot[1], e.spot[2], e.spot[3]);
+                      "[rt-emit]   %s at=%.0f,%.0f,%.0f r=%.0f dist=%.0f power=%.0f rgb=%.2f,%.2f,%.2f "
+                      "spot=%.2f,%.2f,%.2f/%.3f",
+                      kind, e.p[0], e.p[1], e.p[2], e.p[3], distance(e), l, e.power[0] / l, e.power[1] / l,
+                      e.power[2] / l, e.spot[0], e.spot[1], e.spot[2], e.spot[3]);
+        std::cerr << line << '\n';
+    };
+    for (std::size_t i = 0; i < std::min<std::size_t>(lights.size(), 12u); ++i) {
+        print("strong", lights[i]);
+    }
+    // Then the nearest the camera: the lights that light what it sees.
+    std::sort(lights.begin(), lights.end(), [&](const Entry& a, const Entry& b) { return distance(a) < distance(b); });
+    for (std::size_t i = 0; i < std::min<std::size_t>(lights.size(), 16u); ++i) {
+        print("near", lights[i]);
+    }
+    // This frame's found lights nearest the camera, by source (rt_lighting.hlsl kEmitSource*): a glowing surface of
+    // the picture, a glow draw or a material-table light, with its draw's material table entry.
+    std::sort(found.begin(), found.end(),
+              [&](const Found& a, const Found& b) { return distance(a.light) < distance(b.light); });
+    std::snprintf(line, sizeof(line), "[rt-emit] found=%u", found_count);
+    std::cerr << line << '\n';
+    for (std::size_t i = 0; i < std::min<std::size_t>(found.size(), 24u); ++i) {
+        const std::uint32_t kind = found[i].source >> 30u;
+        const std::uint32_t draw = found[i].source & 0x3FFFFFFFu;
+        const std::vector<std::uint16_t>& materials =
+            kind == 2u ? emit_log_glow_materials_ : emit_log_authored_materials_;
+        const unsigned material = (kind == 2u || kind == 3u) && draw < materials.size() ? materials[draw] : 0u;
+        char kind_name[32];
+        std::snprintf(kind_name, sizeof(kind_name), "%s m%u", kind == 1u ? "surface" : kind == 2u ? "glow" : "table",
+                      material);
+        print(kind_name, found[i].light);
+    }
+    // What became of the table's light sources' draws over the logged interval.
+    std::vector<std::pair<std::uint16_t, std::array<std::uint32_t, kOutcomes>>> outcomes(emit_log_outcomes_.begin(),
+                                                                                         emit_log_outcomes_.end());
+    std::sort(outcomes.begin(), outcomes.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+    for (const auto& [material, counts] : outcomes) {
+        std::snprintf(line, sizeof(line), "[rt-emit]   table-draws m%u light=%u glow=%u late=%u closed=%u",
+                      static_cast<unsigned>(material), counts[kOutcomeLight], counts[kOutcomeGlow],
+                      counts[kOutcomeLate], counts[kOutcomeClosed]);
         std::cerr << line << '\n';
     }
 }
@@ -1538,7 +1589,7 @@ void SceneRayTracer::report() {
         double passes_ms = 0.0;
         // The capture's inner passes (lights, bloom blur) are inside its own time.
         for (unsigned p = 0; p < kPassCount; ++p) {
-            if (p != kPassLights && p != kPassBloomBlur) passes_ms += ms[p];
+            if (p != kPassLights && p != kPassBloomBlur && p != kPassEmit && p != kPassMerge) passes_ms += ms[p];
         }
         const double scene_ms = per(window_.build_ms, window_.timed) + per(window_.light_ms, window_.timed) +
                                 per(passes_ms, window_.scenes);
@@ -1548,14 +1599,14 @@ void SceneRayTracer::report() {
                       "[rt-pass] scenes=%llu geometry-ms=%.3f geometry-flushes=%.2f composite-ms=%.3f "
                       "composites=%.2f glow-base-ms=%.3f capture-ms=%.3f captures=%.2f post-copy-ms=%.3f "
                       "post-bright-ms=%.3f post-focus-ms=%.3f post-shafts-ms=%.3f post-blur-ms=%.3f "
-                      "post-finish-ms=%.3f posts=%.2f bloom-ms=%.3f blooms=%.2f lights-ms=%.3f bloom-blur-ms=%.3f "
-                      "dropped=%llu gpu-ms-per-scene=%.3f\n",
+                      "post-finish-ms=%.3f posts=%.2f bloom-ms=%.3f blooms=%.2f lights-ms=%.3f (emit %.3f merge %.3f) "
+                      "bloom-blur-ms=%.3f dropped=%llu gpu-ms-per-scene=%.3f\n",
                       static_cast<unsigned long long>(window_.scenes), per(ms[kPassGeometry], window_.scenes),
                       calls(kPassGeometry), call_ms(kPassComposite), calls(kPassComposite), call_ms(kPassGlowBase),
                       call_ms(kPassCapture), calls(kPassCapture), call_ms(kPassPostCopy), call_ms(kPassPostBright),
                       call_ms(kPassPostFocus), call_ms(kPassPostShafts), call_ms(kPassPostBlur),
                       call_ms(kPassPostFinish), calls(kPassPostFinish), call_ms(kPassBloom), calls(kPassBloom),
-                      call_ms(kPassLights), call_ms(kPassBloomBlur),
+                      call_ms(kPassLights), call_ms(kPassEmit), call_ms(kPassMerge), call_ms(kPassBloomBlur),
                       static_cast<unsigned long long>(window_.passes_dropped), scene_ms);
         std::cerr << line;
     }
@@ -1694,6 +1745,8 @@ void SceneRayTracer::begin_scene() noexcept {
     star_draws_ = 0u;
     glow_lights_.clear();
     authored_.clear();
+    glow_materials_.clear();
+    authored_materials_.clear();
     glow_triangles_ = 0u;
     glow_open_ = false;
     glow_base_valid_ = false;
@@ -1723,6 +1776,12 @@ void SceneRayTracer::begin_scene() noexcept {
 
 void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
     const RtMaterial* const material = rt_material(info.rt_material);
+    // The emitter log's count of what became of the table's light sources' draws.
+    const auto outcome = [&](EmitterOutcome kind) {
+        if (log_emitters_ && material != nullptr && material->emission != RtEmission::None) {
+            ++emitter_outcomes_[info.rt_material][kind];
+        }
+    };
     // A lens is a glow draw with the lens bit (a water draw's mirror bit is the same bit).
     if ((info.surface & (kRtDrawGlow | kRtDrawLens)) == (kRtDrawGlow | kRtDrawLens)) {
         if (glow_open_ && draw.triangle_count != 0u && lens_draws_ < kLensSlots &&
@@ -1730,6 +1789,7 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
             RtDraw& entry = glow_draws_.emplace_back(draw);
             entry.first_triangle = glow_triangles_;
             glow_lights_.push_back({glow_triangles_, draw.triangle_count, 0u, 0.0f, 0.0f, 0.0f, kGlowLens, -1.0f});
+            glow_materials_.push_back(info.rt_material);
             lens_first_[lens_draws_] = glow_triangles_;
             lens_count_[lens_draws_] = draw.triangle_count;
             ++lens_draws_;
@@ -1761,6 +1821,8 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
                 light.flags = kGlowEffect;
             }
             glow_lights_.push_back(light);
+            glow_materials_.push_back(info.rt_material);
+            outcome(kOutcomeGlow);
             glow_triangles_ += draw.triangle_count;
         }
         return;
@@ -1774,6 +1836,7 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
         return;
     }
     if (!scene_open_ && info.phase == kRtLatePhase) {
+        outcome(kOutcomeLate);
         // Shadow, sky and reflection rays meet it; nothing reads its draw record (no lights, no emission).
         if (late_open_ && draw.triangle_count != 0u && late_triangles_ + draw.triangle_count <= kLateMaxTriangles) {
             RtDraw& entry = late_draws_.emplace_back(draw);
@@ -1784,6 +1847,7 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
         return;
     }
     if (!scene_open_ || draw.triangle_count == 0u || triangles_ + draw.triangle_count > kMaxTriangles) {
+        outcome(kOutcomeClosed);
         return;
     }
     RtDraw& entry = draws_.emplace_back(draw);
@@ -1832,6 +1896,8 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
                                  (material->tint ? kAuthoredTint : 0u) | (spot ? kAuthoredSpot : 0u) |
                                      (material->star ? kAuthoredStar : 0u),
                                  spot ? std::cos(material->cone * 3.14159265f / 180.0f) : -1.0f});
+            authored_materials_.push_back(info.rt_material);
+            outcome(kOutcomeLight);
         }
     }
     const float relief = material != nullptr && !material->particle ? material->relief : 0.0f;
@@ -2460,13 +2526,14 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
         !create_buffer(static_cast<std::uint64_t>(kGlowMaxTriangles) * 16u, D3D12_HEAP_TYPE_DEFAULT,
                        D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
                        glow_surfaces_, L"rt glow surfaces") ||
-        !create_buffer(16u + kEmitMaxTiles * kEmitStride, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+        !create_buffer(kEmitFoundBytes, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                        D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, emit_tiles_, L"rt glow lights") ||
         !create_buffer(kEmitLights * kEmitStride, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                        D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, emit_lights_, L"rt emitters") ||
         !create_buffer(16u + kEmitLights * kEmitStride, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                        D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, emit_list_, L"rt emitter list") ||
-        (log_emitters_ && !create_buffer(kEmitLogBytes + kEmitLogSums, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST,
+        (log_emitters_ && !create_buffer(kEmitLogBytes + kEmitLogSums + kEmitFoundBytes, D3D12_HEAP_TYPE_READBACK,
+                                         D3D12_RESOURCE_STATE_COPY_DEST,
                                          D3D12_RESOURCE_FLAG_NONE, emit_readback_, L"rt emitter log"))) {
         return false;
     }
@@ -3404,6 +3471,7 @@ void SceneRayTracer::capture_glow_lights(ID3D12GraphicsCommandList* list, const 
     list->SetComputeRootUnorderedAccessView(kEmitLightsSlot, emit_lights_->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kEmitList, emit_list_->GetGPUVirtualAddress());
     const D3D12_RESOURCE_BARRIER all_uav = uav_barrier(nullptr);
+    const int emit_timed = begin_pass(list);
     if (glow_draws != 0u) {
         const RtUpload lights = allocate(allocate_context, glow_lights_.size() * sizeof(AuthoredLight), 256u);
         if (lights.cpu != nullptr && glow_lights_.size() == glow_draws_.size()) {
@@ -3427,8 +3495,11 @@ void SceneRayTracer::capture_glow_lights(ID3D12GraphicsCommandList* list, const 
             list->ResourceBarrier(1u, &all_uav);
         }
     }
+    end_pass(list, emit_timed, kPassEmit);
+    const int merge_timed = begin_pass(list);
     list->SetPipelineState(emit_merge_pso_.Get());
     list->Dispatch(1u, 1u, 1u);
+    end_pass(list, merge_timed, kPassMerge);
     // Every 120 frames or more: a fixed frame residue would never meet the traced frames of an A/B run
     // (every other frame) when it falls on the other parity.
     if (emit_readback_ && !emit_log_pending_ && frame_index_ >= emit_log_frame_ + 120u) {
@@ -3438,6 +3509,13 @@ void SceneRayTracer::capture_glow_lights(ID3D12GraphicsCommandList* list, const 
         to_state(list, picture_sums_.Get(), picture_sums_state_, D3D12_RESOURCE_STATE_COPY_SOURCE);
         list->CopyBufferRegion(emit_readback_.Get(), kEmitLogBytes, picture_sums_.Get(), 0u, kEmitLogSums);
         to_state(list, picture_sums_.Get(), picture_sums_state_, sums_state);
+        to_state(list, emit_tiles_.Get(), emit_tiles_state_, D3D12_RESOURCE_STATE_COPY_SOURCE);
+        list->CopyBufferRegion(emit_readback_.Get(), kEmitLogBytes + kEmitLogSums, emit_tiles_.Get(), 0u, kEmitFoundBytes);
+        to_state(list, emit_tiles_.Get(), emit_tiles_state_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        emit_log_authored_materials_ = authored_materials_;
+        emit_log_glow_materials_ = glow_materials_;
+        emit_log_outcomes_ = std::move(emitter_outcomes_);
+        emitter_outcomes_.clear();
         emit_log_pending_ = true;
         emit_log_frame_ = frame_index_;
         emit_log_draws_ = {static_cast<std::uint32_t>(authored_.size()), glow_draws,

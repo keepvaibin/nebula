@@ -435,17 +435,30 @@ bool rt_log_glows() noexcept {
     return log_glows();
 }
 
-void note_rt_unnamed_glow(std::uint32_t guest_addr) {
-    if (!log_glows() || !g_glows_logged.emplace(guest_addr, true).second) {
+namespace {
+
+// Once per texture and kind (the key: its 32-byte-aligned guest address, bit 0 the kind).
+void note_unnamed(const char* kind, std::uint32_t guest_addr, std::uint32_t key) {
+    if (!log_glows() || !g_glows_logged.emplace(key, true).second) {
         return;
     }
     const auto it = g_texture_names.find(guest_addr);
     if (it == g_texture_names.end()) {
-        std::fprintf(stderr, "[rt-glow] unnamed addr=%08X (not hashed)\n", guest_addr);
+        std::fprintf(stderr, "[rt-%s] unnamed addr=%08X (not hashed)\n", kind, guest_addr);
         return;
     }
-    std::fprintf(stderr, "[rt-glow] unnamed addr=%08X tex1_%ux%u_%016llx_%u\n", guest_addr, it->second.width,
+    std::fprintf(stderr, "[rt-%s] unnamed addr=%08X tex1_%ux%u_%016llx_%u\n", kind, guest_addr, it->second.width,
                  it->second.height, static_cast<unsigned long long>(it->second.pack), it->second.format);
+}
+
+}  // namespace
+
+void note_rt_unnamed_glow(std::uint32_t guest_addr) {
+    note_unnamed("glow", guest_addr, guest_addr);
+}
+
+void note_rt_unnamed_surface(std::uint32_t guest_addr) {
+    note_unnamed("surface", guest_addr, guest_addr | 1u);
 }
 
 void rt_materials_set_stage(std::string_view stage) {

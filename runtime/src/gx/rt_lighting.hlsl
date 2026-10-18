@@ -199,6 +199,20 @@ static const uint kExposureBuckets = 16u;
 // A light of the glow lights' lists: position, radius; power, frames unseen or cumulative power; spot
 // direction (world; 0 0 0 a point light), cosine of its cone.
 static const uint kEmitStride = 48u;
+// Found lights per frame (ray_tracing.cpp kEmitMaxTiles). After them the found list holds each one's source
+// for the emitter log (GALAXY_RT_LOG_EMITTERS): its pass, and for the emitter passes its draw.
+static const uint kEmitFound = 2048u;
+// A particle's light: a fifth of a Luma or less (glow_light's cap on the table's particles), as a share of
+// e_authored_power. Sparkles spawn and die every frame: such a light follows them slowly (EmitMergeCS).
+static const float kParticleLight = 0.2f * 1.01f;
+static const uint kEmitSourceSurface = 1u << 30u;
+static const uint kEmitSourceGlow = 2u << 30u;
+static const uint kEmitSourceTable = 3u << 30u;
+
+uint emit_source_at(uint index)
+{
+    return 16u + kEmitFound * kEmitStride + index * 4u;
+}
 // A found spot light whose faces were not seen this frame (which way they face is unknown): the cosine
 // field holds kSpotUnknown + its cone's cosine.
 static const float kSpotUnknown = -4.0f;
@@ -252,6 +266,15 @@ float3 transform(float4 rows[3], float3 p)
 float luminance(float3 c)
 {
     return dot(c, float3(0.2126f, 0.7152f, 0.0722f));
+}
+
+// Strong light rolled off softly: c ln(1 + l / c) in luminance, its hue kept. Weak light passes unchanged and strong
+// light keeps a falloff all the way to its source. The rational l / (1 + l / c) it replaced flattened a lamp's light
+// into a disc with a rim (user, 2026-10-17: a harsh, clear radius around the lights).
+float3 soft_light(float3 light, float c)
+{
+    const float l = luminance(light);
+    return l > 1e-6f ? light * (c * log(1.0f + l / c) / l) : light;
 }
 
 uint pack_normal(float3 n)
@@ -516,10 +539,11 @@ void SurfaceEmitCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
         if (luminance(power) >= 4.0f) {
             uint at;
             c_found.InterlockedAdd(0u, 1u, at);
-            if (at < 1024u) {
+            if (at < kEmitFound) {
                 c_found.Store4(16u + at * kEmitStride, asuint(float4(transform(c_to_world, centre), max(spread, 1.0f))));
                 c_found.Store4(16u + at * kEmitStride + 16u, asuint(float4(power, 0.0f)));
                 c_found.Store4(16u + at * kEmitStride + 32u, uint4(0u, 0u, 0u, 0u));
+                c_found.Store(emit_source_at(at), kEmitSourceSurface);
             }
         }
     }
@@ -854,15 +878,209 @@ RWStructuredBuffer<float4> e_lights : register(u1);   // per light: position, ra
 RWByteAddressBuffer e_list : register(u2);            // count, total; per light position, radius;
                                                       // power, cumulative power; spot
 
-static const uint kEmitLights = 256u;
+static const uint kEmitLights = 512u;          // ray_tracing.cpp kEmitLights
 static const float kEmitLargest = 700.0f;      // eye units: a glow wider than this is no light
 static const float kEmitForget = 0.004f;       // a light no longer seen that cannot reach the camera's
                                                // surroundings (its light there below this) fades fast
-static const uint kEmitFound = 1024u;
 
 groupshared float4 s_glow_a[64];
 groupshared float4 s_glow_b[64];
 groupshared float s_glow_area[64];
+
+// Emitter clusters. One draw can hold many separate light sources: a model's lamp heads, a particle system's
+// fireflies, the sparkles round a Luma. As one light they sat at their common centre, often in mid-air, and a
+// spread-out set (fireflies over a garden) was taken for an atmosphere and lit nothing (user, 2026-10-17: every
+// light source emits). Each emitter pass groups a draw's triangles by the world cell their centre lies in
+// (kClusterCell units a side, up to kClusters cells; beyond that cells share a slot by hash), then joins cells
+// whose extents come within kClusterGap of each other, so a light straddling a cell edge stays one light. Each
+// joined set is one light, at the draw's full table intensity; a draw that was one light (a lamp, a Luma) still is.
+// The first pass notes each triangle's slot (s_cluster_tri); each claimed slot then sums its own triangles in a
+// fixed order (the same light every frame: summing by atomic adds in arrival order made the lights jitter).
+static const uint kClusters = 64u;
+static const float kClusterCell = 120.0f;
+static const float kClusterGap = 30.0f;
+static const uint kClusterNoted = 1024u;        // triangles whose slot is noted; a larger draw's further ones look it up
+
+groupshared uint s_cluster_key[kClusters];      // per slot: its cell (cluster_key), 0 free
+groupshared uint s_cluster_tri[kClusterNoted / 4u];   // per triangle: its slot + 1 (a byte; 0: no light)
+groupshared uint s_cluster_used[kClusters];     // the claimed slots in order
+groupshared uint s_cluster_count;
+groupshared float4 s_cluster_a[kClusters];      // per claimed slot (by order): glows' power rgb, weight;
+                                                // table lights' colour seen, area seen
+groupshared float4 s_cluster_b[kClusters];      // weighted centre, weighted |centre|^2
+groupshared float4 s_cluster_n[kClusters];      // table lights: face normal sum, facing evidence
+groupshared float s_cluster_w[kClusters];       // the centre's weight (glows: power; table lights: area)
+groupshared float s_cluster_area[kClusters];
+groupshared float4 s_cluster_sphere[kClusters]; // centre, radius (negative: no light)
+groupshared uint2 s_cluster_adj[kClusters];     // per slot (by order): the slots it joins, a bit each
+groupshared uint s_cluster_root[kClusters];     // per slot (by order): the lowest slot of its joined set
+
+// The cell of world position `w`, never 0.
+uint cluster_key(float3 w)
+{
+    const int3 cell = int3(floor(w / kClusterCell));
+    return ((uint(cell.x) & 0x3FFu) | ((uint(cell.y) & 0x3FFu) << 10u) | ((uint(cell.z) & 0x3FFu) << 20u)) + 1u;
+}
+
+uint cluster_home(uint key)
+{
+    return (key * 2654435761u) >> 26u;   // kClusters slots
+}
+
+// The slot holding the cell, a free one it claims, or with every slot taken its home slot.
+uint cluster_claim(uint key)
+{
+    const uint home = cluster_home(key);
+    [loop] for (uint i = 0u; i < kClusters; ++i) {
+        const uint slot = (home + i) & (kClusters - 1u);
+        uint previous;
+        InterlockedCompareExchange(s_cluster_key[slot], 0u, key, previous);
+        if (previous == 0u || previous == key) {
+            return slot;
+        }
+    }
+    return home;
+}
+
+// After every claim: the slot a cell's triangles add to.
+uint cluster_find(uint key)
+{
+    const uint home = cluster_home(key);
+    [loop] for (uint i = 0u; i < kClusters; ++i) {
+        const uint slot = (home + i) & (kClusters - 1u);
+        if (s_cluster_key[slot] == key) {
+            return slot;
+        }
+    }
+    return home;
+}
+
+// Every thread: before the claims (`count`: the draw's triangles; only their notes are cleared).
+void cluster_begin(uint gi, uint count)
+{
+    if (gi < kClusters) {
+        s_cluster_key[gi] = 0u;
+    }
+    for (uint i = gi; i < (min(count, kClusterNoted) + 3u) / 4u; i += 64u) {
+        s_cluster_tri[i] = 0u;
+    }
+    GroupMemoryBarrierWithGroupSync();
+}
+
+// The first pass: triangle `t` of the draw (key: its cell, 0 for none) claims its slot and, among the first
+// kClusterNoted, notes it.
+void cluster_note(uint t, uint key)
+{
+    if (key == 0u) {
+        return;
+    }
+    const uint slot = cluster_claim(key);
+    if (t < kClusterNoted) {
+        InterlockedOr(s_cluster_tri[t >> 2u], (slot + 1u) << ((t & 3u) * 8u));
+    }
+}
+
+// After the claims: triangle `t`'s slot, kClusters for none (`key`: its cell, needed past kClusterNoted).
+uint cluster_slot_of(uint t, uint key)
+{
+    if (t < kClusterNoted) {
+        const uint noted = (s_cluster_tri[t >> 2u] >> ((t & 3u) * 8u)) & 0xFFu;
+        return noted != 0u ? noted - 1u : kClusters;
+    }
+    return key != 0u ? cluster_find(key) : kClusters;
+}
+
+// Every thread: after the claims, the claimed slots in order (s_cluster_used, s_cluster_count).
+void cluster_list(uint gi)
+{
+    GroupMemoryBarrierWithGroupSync();
+    if (gi == 0u) {
+        uint n = 0u;
+        for (uint k = 0u; k < kClusters; ++k) {
+            if (s_cluster_key[k] != 0u) {
+                s_cluster_used[n] = k;
+                ++n;
+            }
+        }
+        s_cluster_count = n;
+    }
+    GroupMemoryBarrierWithGroupSync();
+}
+
+bool mask_test(uint2 mask, uint i)
+{
+    return ((i < 32u ? mask.x >> i : mask.y >> (i - 32u)) & 1u) != 0u;
+}
+
+uint2 mask_bit(uint i)
+{
+    return i < 32u ? uint2(1u << i, 0u) : uint2(0u, 1u << (i - 32u));
+}
+
+// Every thread, after the slots' sums: each slot's sphere (its weighted centre and the larger of its spread and half
+// its area's side); slots whose spheres come within kClusterGap join, tested in parallel; thread 0 labels the joined
+// sets (s_cluster_root: each set's lowest slot).
+void cluster_join(uint gi, uint count)
+{
+    if (gi < count) {
+        const float w = s_cluster_w[gi];
+        if (w > 0.0f) {
+            const float3 centre = s_cluster_b[gi].xyz / w;
+            const float spread = sqrt(max(s_cluster_b[gi].w / w - dot(centre, centre), 0.0f));
+            s_cluster_sphere[gi] = float4(centre, max(spread, 0.5f * sqrt(s_cluster_area[gi])));
+        } else {
+            s_cluster_sphere[gi] = float4(0.0f, 0.0f, 0.0f, -1.0f);
+        }
+    }
+    GroupMemoryBarrierWithGroupSync();
+    if (gi < count) {
+        const float4 si = s_cluster_sphere[gi];
+        uint2 adjacent = uint2(0u, 0u);
+        if (si.w >= 0.0f) {
+            for (uint j = 0u; j < count; ++j) {
+                const float4 sj = s_cluster_sphere[j];
+                if (j != gi && sj.w >= 0.0f && distance(si.xyz, sj.xyz) < si.w + sj.w + kClusterGap) {
+                    adjacent |= mask_bit(j);
+                }
+            }
+        }
+        s_cluster_adj[gi] = adjacent;
+    }
+    GroupMemoryBarrierWithGroupSync();
+    if (gi == 0u) {
+        uint2 visited = uint2(0u, 0u);
+        for (uint i = 0u; i < count; ++i) {
+            if (mask_test(visited, i)) {
+                continue;
+            }
+            uint2 set = mask_bit(i);
+            uint2 frontier = set;
+            [loop] while (any(frontier != 0u)) {
+                uint2 next = uint2(0u, 0u);
+                for (uint word = 0u; word < 2u; ++word) {
+                    uint bits = word == 0u ? frontier.x : frontier.y;
+                    [loop] while (bits != 0u) {
+                        const uint k = firstbitlow(bits);
+                        bits &= bits - 1u;
+                        next |= s_cluster_adj[word * 32u + k];
+                    }
+                }
+                frontier = next & ~set;
+                set |= next;
+            }
+            for (uint word = 0u; word < 2u; ++word) {
+                uint bits = word == 0u ? set.x : set.y;
+                [loop] while (bits != 0u) {
+                    const uint k = firstbitlow(bits);
+                    bits &= bits - 1u;
+                    s_cluster_root[word * 32u + k] = i;
+                }
+            }
+            visited |= set;
+        }
+    }
+    GroupMemoryBarrierWithGroupSync();
+}
 
 // e_draws records of the glow draws (SceneRayTracer::glow_lights_, 32 bytes): first triangle, count, the
 // table's colour (RGBA8), its intensity; spare, pulse, flags, spare. Flags: the light scales by the
@@ -881,72 +1099,9 @@ float light_size(float radius, float limit)
     return clamp(s * s, 1.0f, limit);
 }
 
-// One group per glow draw.
-[numthreads(64, 1, 1)]
-void GlowEmitCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
+// The sums of 64 threads' s_glow_a, s_glow_b and s_glow_area in their first entries; every thread calls it.
+void glow_reduce(uint gi)
 {
-    const uint4 entry = e_draws.Load4(group.x * 32u);
-    if ((e_draws.Load(group.x * 32u + 24u) & kGlowLens) != 0u) {
-        return;
-    }
-    const uint2 range = entry.xy;   // first triangle, count
-    float4 a = float4(0.0f, 0.0f, 0.0f, 0.0f);   // power rgb, weight (luminance x area)
-    float4 b = float4(0.0f, 0.0f, 0.0f, 0.0f);   // weighted centre, weighted |centre|^2
-    float area_sum = 0.0f;
-    for (uint t = gi; t < range.y; t += 64u) {
-        const uint at = (range.x + t) * 36u;
-        const float3 v0 = asfloat(e_triangles.Load3(at));
-        const float3 v1 = asfloat(e_triangles.Load3(at + 12u));
-        const float3 v2 = asfloat(e_triangles.Load3(at + 24u));
-        const float3 c = (v0 + v1 + v2) / 3.0f;
-        const float area = 0.5f * length(cross(v1 - v0, v2 - v0));
-        if (c.z < -e_near && area > 0.0f && all(abs(c) < 1.0e6f)) {
-            // The glow's mean added light over the triangle (the centroid, three points towards the corners and three
-            // towards the edges' middles): a far glow, mipmapped into a small dim blob, keeps its total light where its
-            // centre dims, so its light does not fade with the camera's distance.
-            static const float3 kTaps[7] = {float3(0.333333f, 0.333333f, 0.333334f), float3(0.7f, 0.15f, 0.15f),
-                                            float3(0.15f, 0.7f, 0.15f), float3(0.15f, 0.15f, 0.7f),
-                                            float3(0.45f, 0.45f, 0.1f), float3(0.1f, 0.45f, 0.45f),
-                                            float3(0.45f, 0.1f, 0.45f)};
-            float3 hue_sum = float3(0.0f, 0.0f, 0.0f);
-            float l_sum = 0.0f;
-            uint taps = 0u;
-            [unroll] for (uint k = 0u; k < 7u; ++k) {
-                const float3 at_tap = v0 * kTaps[k].x + v1 * kTaps[k].y + v2 * kTaps[k].z;
-                if (at_tap.z >= -e_near) {
-                    continue;
-                }
-                const float2 q = eye_to_pixel(e_projection, e_viewport, at_tap);
-                const int2 s = int2(floor(q / float(e_factor)));
-                if (any(s < 0) || any(s >= int2(e_sample_size))) {
-                    continue;
-                }
-                ++taps;
-                const float3 added = unpack_r11g11b10(e_added[uint(s.y) * e_sample_size.x + uint(s.x)]);
-                const float l = luminance(added);
-                if (l > 0.005f) {
-                    // Over a bright background the added light loses the channels the background had
-                    // already filled (white fire over orange lava measures blue): where the picture
-                    // reaches white its colour is the one shown.
-                    const float3 shown = e_color.Load(int3(clamp(int2(q), int2(0, 0), int2(e_target_size) - 1), 0)).rgb;
-                    const float filled = smoothstep(0.8f, 1.0f, max(shown.r, max(shown.g, shown.b)));
-                    hue_sum += lerp(added / l, shown / max(luminance(shown), 1e-3f), filled) * l;
-                    l_sum += l;
-                }
-            }
-            const float l_mean = taps != 0u ? l_sum / float(taps) : 0.0f;
-            if (l_mean > 0.005f) {
-                const float3 hue = hue_sum / l_sum;
-                const float w = l_mean * area;
-                a += float4(hue * w, w);
-                b += float4(c * w, dot(c, c) * w);
-                area_sum += area;
-            }
-        }
-    }
-    s_glow_a[gi] = a;
-    s_glow_b[gi] = b;
-    s_glow_area[gi] = area_sum;
     GroupMemoryBarrierWithGroupSync();
     [unroll] for (uint s = 32u; s > 0u; s >>= 1u) {
         if (gi < s) {
@@ -956,56 +1111,222 @@ void GlowEmitCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
         }
         GroupMemoryBarrierWithGroupSync();
     }
-    if (gi == 0u && s_glow_a[0].w > 0.0f) {
-        const float w = s_glow_a[0].w;
-        const float3 centre = s_glow_b[0].xyz / w;
-        const float spread = sqrt(max(s_glow_b[0].w / w - dot(centre, centre), 0.0f));
-        const float radius = max(spread, 0.5f * sqrt(s_glow_area[0]));
-        // A glow's texture covers about a quarter of its quad.
-        float3 power = s_glow_a[0].rgb * (0.25f * e_gain);
-        const uint flags = e_draws.Load(group.x * 32u + 24u);
-        if ((flags & kGlowTableIntensity) != 0u) {
-            // A light the table names sends the table's light (its intensity in Lumas), whatever the size of
-            // the sprite that shows it: in the table's colour (fire is orange, not the white its sprites clip
-            // to), or the colour the picture shows for a tinted row.
-            const float3 tint = (flags & kGlowTableColor) != 0u
-                                    ? float3(float(entry.z >> 24u), float((entry.z >> 16u) & 0xFFu),
-                                             float((entry.z >> 8u) & 0xFFu)) / 255.0f
-                                    : power;
-            float intensity = asfloat(entry.w);
-            const float pulse = asfloat(e_draws.Load(group.x * 32u + 20u));
-            if (pulse > 0.0f) {
-                intensity *= 0.75f + 0.25f * sin(6.2831853f * pulse * e_time);
-            }
-            power = tint / max(luminance(tint), 1e-6f) * (intensity * e_authored_power) * light_size(radius, 64.0f);
-        } else if ((flags & kGlowEffect) != 0u) {
-            // The table's particles are effects: they light what is near them as the picture shows them, at most
-            // a fifth of a Luma (an Octoomba's head light, sparks, a flame; user: anything that glows lights its
-            // surroundings). Uncapped, the sparkles around a Luma summed to 0.4-0.9e6 per light, 10-22 Lumas
-            // (rp13 Observatory [rt-emit]); a fifth of a Luma is 8000.
-            power *= min(1.0f, 0.2f * e_authored_power / max(luminance(power), 1e-6f));
-        } else {
-            // Any other glow (a lamp's, a model's) lights what is near it as the picture shows it, at most half
-            // a Luma: everything that glows lights its surroundings.
-            power *= min(1.0f, 0.5f * e_authored_power / max(luminance(power), 1e-6f));
+}
+
+// A found light: position (world), radius; power, colour unknown; spot (kEmitStride); its source (kEmitSource*).
+void emit_found(float4 at_radius, float4 power, float4 spot, uint source)
+{
+    uint index;
+    e_found.InterlockedAdd(0u, 1u, index);
+    if (index < kEmitFound) {
+        const uint at = 16u + index * kEmitStride;
+        e_found.Store4(at, asuint(at_radius));
+        e_found.Store4(at + 16u, asuint(power));
+        e_found.Store4(at + 32u, asuint(spot));
+        e_found.Store(emit_source_at(index), source);
+    }
+}
+
+// An emitter draw's eye-space triangle (e_triangles); false for a degenerate or runaway one.
+bool emit_triangle(uint index, out float3 v0, out float3 v1, out float3 v2)
+{
+    const uint at = index * 36u;
+    v0 = asfloat(e_triangles.Load3(at));
+    v1 = asfloat(e_triangles.Load3(at + 12u));
+    v2 = asfloat(e_triangles.Load3(at + 24u));
+    const float3 face = cross(v1 - v0, v2 - v0);
+    return dot(face, face) > 0.0f && all(abs((v0 + v1 + v2) / 3.0f) < 1.0e6f);
+}
+
+// Thread 0: a glow light from its triangles' sums (power rgb, weight; weighted centre, weighted |centre|^2;
+// area). `record`: the draw's e_draws record.
+void glow_light(float4 a, float4 b, float area_sum, uint record)
+{
+    const uint4 entry = e_draws.Load4(record);
+    const uint flags = e_draws.Load(record + 24u);
+    const float w = a.w;
+    const float3 centre = b.xyz / w;
+    const float spread = sqrt(max(b.w / w - dot(centre, centre), 0.0f));
+    const float radius = max(spread, 0.5f * sqrt(area_sum));
+    // A glow's texture covers about a quarter of its quad.
+    float3 power = a.rgb * (0.25f * e_gain);
+    if ((flags & kGlowTableIntensity) != 0u) {
+        // A light the table names sends the table's light (its intensity in Lumas), whatever the size of
+        // the sprite that shows it: in the table's colour (fire is orange, not the white its sprites clip
+        // to), or the colour the picture shows for a tinted row.
+        const float3 tint = (flags & kGlowTableColor) != 0u
+                                ? float3(float(entry.z >> 24u), float((entry.z >> 16u) & 0xFFu),
+                                         float((entry.z >> 8u) & 0xFFu)) / 255.0f
+                                : power;
+        float intensity = asfloat(entry.w);
+        const float pulse = asfloat(e_draws.Load(record + 20u));
+        if (pulse > 0.0f) {
+            intensity *= 0.75f + 0.25f * sin(6.2831853f * pulse * e_time);
         }
-        // The largest glows are atmospheres and halos around planets and the sky, not lights.
-        if (luminance(power) >= 4.0f && radius <= kEmitLargest) {
-            uint index;
-            e_found.InterlockedAdd(0u, 1u, index);
-            if (index < kEmitFound) {
-                const uint at = 16u + index * kEmitStride;
-                e_found.Store4(at, asuint(float4(transform(e_to_world, centre), radius)));
-                e_found.Store4(at + 16u, asuint(float4(power, 0.0f)));
-                e_found.Store4(at + 32u, uint4(0u, 0u, 0u, 0u));
+        power = tint / max(luminance(tint), 1e-6f) * (intensity * e_authored_power) * light_size(radius, 64.0f);
+    } else if ((flags & kGlowEffect) != 0u) {
+        // The table's particles are effects: they light what is near them as the picture shows them, at most
+        // a fifth of a Luma (an Octoomba's head light, sparks, a flame; user: anything that glows lights its
+        // surroundings). Uncapped, the sparkles around a Luma summed to 0.4-0.9e6 per light, 10-22 Lumas
+        // (rp13 Observatory [rt-emit]); a fifth of a Luma is 8000.
+        power *= min(1.0f, 0.2f * e_authored_power / max(luminance(power), 1e-6f));
+    } else {
+        // Any other glow (a lamp's, a model's) lights what is near it as the picture shows it, at most half
+        // a Luma: everything that glows lights its surroundings.
+        power *= min(1.0f, 0.5f * e_authored_power / max(luminance(power), 1e-6f));
+    }
+    // The light is as large as its sprite: its light spreads softly from the whole glow. (At half the sprite, a lamp's
+    // light fell to a sharp hot spot that jittered as the sprite moved: plaza flicker 0.36 -> 0.51.)
+    if (luminance(power) >= 4.0f && radius <= kEmitLargest) {
+        emit_found(float4(transform(e_to_world, centre), radius), float4(power, 0.0f), float4(0.0f, 0.0f, 0.0f, 0.0f),
+                   kEmitSourceGlow | (record / 32u));
+    }
+}
+
+// The glow's mean added light over an eye-space triangle (the centroid, three points towards the corners and three
+// towards the edges' middles): a far glow, mipmapped into a small dim blob, keeps its total light where its centre
+// dims, so its light does not fade with the camera's distance. Its colour (rgb) and mean luminance (w).
+float4 glow_seen(float3 v0, float3 v1, float3 v2)
+{
+    static const float3 kTaps[7] = {float3(0.333333f, 0.333333f, 0.333334f), float3(0.7f, 0.15f, 0.15f),
+                                    float3(0.15f, 0.7f, 0.15f), float3(0.15f, 0.15f, 0.7f),
+                                    float3(0.45f, 0.45f, 0.1f), float3(0.1f, 0.45f, 0.45f),
+                                    float3(0.45f, 0.1f, 0.45f)};
+    float3 hue_sum = float3(0.0f, 0.0f, 0.0f);
+    float l_sum = 0.0f;
+    uint taps = 0u;
+    [unroll] for (uint k = 0u; k < 7u; ++k) {
+        const float3 at_tap = v0 * kTaps[k].x + v1 * kTaps[k].y + v2 * kTaps[k].z;
+        if (at_tap.z >= -e_near) {
+            continue;
+        }
+        const float2 q = eye_to_pixel(e_projection, e_viewport, at_tap);
+        const int2 s = int2(floor(q / float(e_factor)));
+        if (any(s < 0) || any(s >= int2(e_sample_size))) {
+            continue;
+        }
+        ++taps;
+        const float3 added = unpack_r11g11b10(e_added[uint(s.y) * e_sample_size.x + uint(s.x)]);
+        const float l = luminance(added);
+        if (l > 0.005f) {
+            // Over a bright background the added light loses the channels the background had
+            // already filled (white fire over orange lava measures blue): where the picture
+            // reaches white its colour is the one shown.
+            const float3 shown = e_color.Load(int3(clamp(int2(q), int2(0, 0), int2(e_target_size) - 1), 0)).rgb;
+            const float filled = smoothstep(0.8f, 1.0f, max(shown.r, max(shown.g, shown.b)));
+            hue_sum += lerp(added / l, shown / max(luminance(shown), 1e-3f), filled) * l;
+            l_sum += l;
+        }
+    }
+    const float l_mean = taps != 0u ? l_sum / float(taps) : 0.0f;
+    return l_mean > 0.005f ? float4(hue_sum / l_sum, l_mean) : float4(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+// A glow draw's triangle `t`'s cell (0: behind the camera or degenerate).
+uint glow_key(uint first, uint t, out float3 v0, out float3 v1, out float3 v2)
+{
+    if (!emit_triangle(first + t, v0, v1, v2)) {
+        return 0u;
+    }
+    const float3 c = (v0 + v1 + v2) / 3.0f;
+    return c.z < -e_near ? cluster_key(transform(e_to_world, c)) : 0u;
+}
+
+// Adds glow draw triangle `t` to the sums when it lies in `slot`.
+void glow_add(uint first, uint t, uint slot, inout float4 a, inout float4 b, inout float area_sum)
+{
+    float3 v0 = float3(0.0f, 0.0f, 0.0f), v1 = v0, v2 = v0;
+    const uint key = t < kClusterNoted ? 1u : glow_key(first, t, v0, v1, v2);
+    if (cluster_slot_of(t, key) != slot || !emit_triangle(first + t, v0, v1, v2)) {
+        return;
+    }
+    const float4 seen = glow_seen(v0, v1, v2);
+    if (seen.w > 0.0f) {
+        const float3 c = (v0 + v1 + v2) / 3.0f;
+        const float area = 0.5f * length(cross(v1 - v0, v2 - v0));
+        const float w = seen.w * area;
+        a += float4(seen.rgb * w, w);
+        b += float4(c * w, dot(c, c) * w);
+        area_sum += area;
+    }
+}
+
+// One group per glow draw; one light per cluster of its glowing triangles.
+[numthreads(64, 1, 1)]
+void GlowEmitCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
+{
+    const uint record = group.x * 32u;
+    const uint2 range = e_draws.Load2(record);   // first triangle, count
+    if ((e_draws.Load(record + 24u) & kGlowLens) != 0u) {
+        return;
+    }
+    cluster_begin(gi, range.y);
+    for (uint t = gi; t < range.y; t += 64u) {
+        float3 v0, v1, v2;
+        cluster_note(t, glow_key(range.x, t, v0, v1, v2));
+    }
+    cluster_list(gi);
+    const uint count = s_cluster_count;
+    // The group sums each slot in turn, in a fixed order.
+    for (uint u = 0u; u < count; ++u) {
+        float4 a = float4(0.0f, 0.0f, 0.0f, 0.0f);   // power rgb, weight (luminance x area)
+        float4 b = float4(0.0f, 0.0f, 0.0f, 0.0f);   // weighted centre, weighted |centre|^2
+        float area_sum = 0.0f;
+        for (uint t = gi; t < range.y; t += 64u) {
+            glow_add(range.x, t, s_cluster_used[u], a, b, area_sum);
+        }
+        s_glow_a[gi] = a;
+        s_glow_b[gi] = b;
+        s_glow_area[gi] = area_sum;
+        glow_reduce(gi);
+        if (gi == 0u) {
+            s_cluster_a[u] = s_glow_a[0];
+            s_cluster_b[u] = s_glow_b[0];
+            s_cluster_w[u] = s_glow_a[0].w;
+            s_cluster_area[u] = s_glow_area[0];
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+    // The largest glows are atmospheres and halos around planets and the sky, not lights: a draw whose glowing
+    // area is wider than kEmitLargest lights nothing, though its parts would each pass.
+    float lit_area = 0.0f;
+    for (uint i = 0u; i < count; ++i) {
+        lit_area += s_cluster_area[i];
+    }
+    if (lit_area > 4.0f * kEmitLargest * kEmitLargest) {
+        return;
+    }
+    if (count > 1u) {
+        cluster_join(gi, count);
+    } else if (gi == 0u) {
+        s_cluster_root[0] = 0u;
+    }
+    if (gi != 0u) {
+        return;
+    }
+    for (uint r = 0u; r < count; ++r) {
+        if (s_cluster_root[r] != r) {
+            continue;
+        }
+        float4 a = float4(0.0f, 0.0f, 0.0f, 0.0f);
+        float4 b = float4(0.0f, 0.0f, 0.0f, 0.0f);
+        float area_sum = 0.0f;
+        for (uint m = r; m < count; ++m) {
+            if (s_cluster_root[m] == r) {
+                a += s_cluster_a[m];
+                b += s_cluster_b[m];
+                area_sum += s_cluster_area[m];
             }
+        }
+        if (a.w > 0.0f) {
+            glow_light(a, b, area_sum, record);
         }
     }
 }
 
 // The material table's point and spot lights (rt_materials.h: Lumas, star bits, fire and ice
-// enemies, a boss's glowing weak spot, a headlamp): each draw's eye-space triangles in the scene
-// (e_triangles) give the light's centre and spread; its power is the table's colour times its
+// enemies, a boss's glowing weak spot, a headlamp): each cluster of a draw's eye-space triangles in
+// the scene (e_triangles) gives a light's centre and spread; its power is the table's colour times its
 // intensity (a Luma's: e_authored_power), pulsing at its rate. A tinted light takes the colour its
 // draw shows where the picture shows it (its triangles' centres at the depth there); a spot light
 // shines along its faces' mean normal (a lens or a cup: a closed shape's normals cancel out and it
@@ -1019,45 +1340,10 @@ static const uint kAuthoredStar = 4u;   // a star: its power by its size (light_
 groupshared float4 s_authored_n[64];   // face normal sum (twice the area), facing evidence (area)
 groupshared float4 s_authored_c[64];   // colour seen (times area), area seen
 
-[numthreads(64, 1, 1)]
-void AuthoredEmitCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
+// The sums of 64 threads' s_glow_b, s_glow_area, s_authored_n and s_authored_c in their first entries;
+// every thread calls it.
+void authored_reduce(uint gi)
 {
-    const uint4 entry = e_draws.Load4(group.x * 32u);
-    const float4 shape = asfloat(e_draws.Load4(group.x * 32u + 16u));
-    const uint flags = asuint(shape.z);
-    float4 b = float4(0.0f, 0.0f, 0.0f, 0.0f);
-    float4 normals = float4(0.0f, 0.0f, 0.0f, 0.0f);
-    float4 seen = float4(0.0f, 0.0f, 0.0f, 0.0f);
-    float area_sum = 0.0f;
-    for (uint t = gi; t < entry.y; t += 64u) {
-        const uint at = (entry.x + t) * 36u;
-        const float3 v0 = asfloat(e_triangles.Load3(at));
-        const float3 v1 = asfloat(e_triangles.Load3(at + 12u));
-        const float3 v2 = asfloat(e_triangles.Load3(at + 24u));
-        const float3 c = (v0 + v1 + v2) / 3.0f;
-        const float3 face = cross(v1 - v0, v2 - v0);
-        const float area = 0.5f * length(face);
-        if (area > 0.0f && all(abs(c) < 1.0e6f)) {
-            b += float4(c * area, dot(c, c) * area);
-            area_sum += area;
-            normals.xyz += face;
-            if ((flags & (kAuthoredTint | kAuthoredSpot)) != 0u && c.z < -e_near) {
-                const float2 q = eye_to_pixel(e_projection, e_viewport, c);
-                if (inside(e_viewport, q) && all(q >= 0.0f) && all(q < float2(e_target_size))) {
-                    const float depth = e_depth_tex.Load(int3(int2(q), 0));
-                    if (!far_plane(e_depth, depth) &&
-                        abs(depth_to_eye_z(e_depth, depth) - c.z) < 0.02f * abs(c.z) + 2.0f) {
-                        seen += float4(e_color.Load(int3(int2(q), 0)).rgb * area, area);
-                        normals.w += dot(face, -c) > 0.0f ? area : -area;
-                    }
-                }
-            }
-        }
-    }
-    s_glow_b[gi] = b;
-    s_glow_area[gi] = area_sum;
-    s_authored_n[gi] = normals;
-    s_authored_c[gi] = seen;
     GroupMemoryBarrierWithGroupSync();
     [unroll] for (uint s = 32u; s > 0u; s >>= 1u) {
         if (gi < s) {
@@ -1068,56 +1354,155 @@ void AuthoredEmitCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
         }
         GroupMemoryBarrierWithGroupSync();
     }
-    if (gi == 0u && s_glow_area[0] > 0.0f) {
-        const float w = s_glow_area[0];
-        const float3 centre = s_glow_b[0].xyz / w;
-        const float spread = sqrt(max(s_glow_b[0].w / w - dot(centre, centre), 0.0f));
-        float3 color = float3(float(entry.z >> 24u), float((entry.z >> 16u) & 0xFFu),
-                              float((entry.z >> 8u) & 0xFFu)) / 255.0f;
-        // power.w 1: the colour is unknown this frame (the light keeps the one it had).
-        float unknown = 0.0f;
-        if ((flags & kAuthoredTint) != 0u) {
-            const float4 c = s_authored_c[0];
-            const float3 shown = c.w > 0.0f ? c.rgb / c.w : float3(0.0f, 0.0f, 0.0f);
-            const float peak = max(shown.r, max(shown.g, shown.b));
-            if (peak > 0.02f) {
-                color *= shown / peak;
+}
+
+// Thread 0: a table light from its triangles' sums (area-weighted centre and |centre|^2; area; face normals
+// and facing evidence; colour seen and area seen). `record`: the draw's e_draws record.
+void authored_light(float4 b, float w, float4 n, float4 seen, uint record)
+{
+    const uint4 entry = e_draws.Load4(record);
+    const float4 shape = asfloat(e_draws.Load4(record + 16u));
+    const uint flags = asuint(shape.z);
+    const float3 centre = b.xyz / w;
+    const float spread = sqrt(max(b.w / w - dot(centre, centre), 0.0f));
+    float3 color = float3(float(entry.z >> 24u), float((entry.z >> 16u) & 0xFFu),
+                          float((entry.z >> 8u) & 0xFFu)) / 255.0f;
+    // power.w 1: the colour is unknown this frame (the light keeps the one it had).
+    float unknown = 0.0f;
+    if ((flags & kAuthoredTint) != 0u) {
+        const float3 shown = seen.w > 0.0f ? seen.rgb / seen.w : float3(0.0f, 0.0f, 0.0f);
+        const float peak = max(shown.r, max(shown.g, shown.b));
+        if (peak > 0.02f) {
+            color *= shown / peak;
+        } else {
+            unknown = 1.0f;
+        }
+    }
+    float intensity = asfloat(entry.w);
+    if (shape.y > 0.0f) {
+        intensity *= 0.75f + 0.25f * sin(6.2831853f * shape.y * e_time);
+    }
+    const float3 power =
+        color * (intensity * e_authored_power) * ((flags & kAuthoredStar) != 0u ? light_size(spread, 400.0f) : 1.0f);
+    float4 spot = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    float3 at_point = centre;
+    if ((flags & kAuthoredSpot) != 0u) {
+        const float agree = length(n.xyz) / max(2.0f * w, 1e-6f);
+        if (agree > 0.3f) {
+            const float3 eye_dir = n.xyz / length(n.xyz);
+            if (n.w != 0.0f) {
+                const float3 out_dir = n.w > 0.0f ? eye_dir : -eye_dir;
+                spot = float4(normalize(rotate3(e_to_world, out_dir)), shape.w);
+                // In front of its lens: the lamp's own body does not shadow it.
+                at_point = centre + out_dir * max(spread, 1.0f);
             } else {
-                unknown = 1.0f;
+                spot = float4(0.0f, 0.0f, 0.0f, kSpotUnknown + shape.w);
             }
         }
-        float intensity = asfloat(entry.w);
-        if (shape.y > 0.0f) {
-            intensity *= 0.75f + 0.25f * sin(6.2831853f * shape.y * e_time);
-        }
-        const float3 power =
-            color * (intensity * e_authored_power) * ((flags & kAuthoredStar) != 0u ? light_size(spread, 400.0f) : 1.0f);
-        float4 spot = float4(0.0f, 0.0f, 0.0f, 0.0f);
-        float3 at_point = centre;
-        if ((flags & kAuthoredSpot) != 0u) {
-            const float4 n = s_authored_n[0];
-            const float agree = length(n.xyz) / max(2.0f * w, 1e-6f);
-            if (agree > 0.3f) {
-                const float3 eye_dir = n.xyz / length(n.xyz);
-                if (n.w != 0.0f) {
-                    const float3 out_dir = n.w > 0.0f ? eye_dir : -eye_dir;
-                    spot = float4(normalize(rotate3(e_to_world, out_dir)), shape.w);
-                    // In front of its lens: the lamp's own body does not shadow it.
-                    at_point = centre + out_dir * max(spread, 1.0f);
-                } else {
-                    spot = float4(0.0f, 0.0f, 0.0f, kSpotUnknown + shape.w);
-                }
+    }
+    if (luminance(power) >= 4.0f) {
+        emit_found(float4(transform(e_to_world, at_point), max(spread, 1.0f)), float4(power, unknown), spot,
+                   kEmitSourceTable | (record / 32u));
+    }
+}
+
+// A table light draw's triangle `t`'s cell (0: degenerate).
+uint authored_key(uint first, uint t, out float3 v0, out float3 v1, out float3 v2)
+{
+    return emit_triangle(first + t, v0, v1, v2) ? cluster_key(transform(e_to_world, (v0 + v1 + v2) / 3.0f)) : 0u;
+}
+
+// Adds table light draw triangle `t` to the sums when it lies in `slot`: area-weighted centre and |centre|^2, area,
+// face normals and facing evidence, colour seen and area seen (`flags`: the draw's).
+void authored_add(uint first, uint t, uint slot, uint flags, inout float4 b, inout float area_sum,
+                  inout float4 normals, inout float4 seen)
+{
+    float3 v0 = float3(0.0f, 0.0f, 0.0f), v1 = v0, v2 = v0;
+    const uint key = t < kClusterNoted ? 1u : authored_key(first, t, v0, v1, v2);
+    if (cluster_slot_of(t, key) != slot || !emit_triangle(first + t, v0, v1, v2)) {
+        return;
+    }
+    const float3 c = (v0 + v1 + v2) / 3.0f;
+    const float3 face = cross(v1 - v0, v2 - v0);
+    const float area = 0.5f * length(face);
+    b += float4(c * area, dot(c, c) * area);
+    area_sum += area;
+    normals.xyz += face;
+    if ((flags & (kAuthoredTint | kAuthoredSpot)) != 0u && c.z < -e_near) {
+        const float2 q = eye_to_pixel(e_projection, e_viewport, c);
+        if (inside(e_viewport, q) && all(q >= 0.0f) && all(q < float2(e_target_size))) {
+            const float depth = e_depth_tex.Load(int3(int2(q), 0));
+            if (!far_plane(e_depth, depth) &&
+                abs(depth_to_eye_z(e_depth, depth) - c.z) < 0.02f * abs(c.z) + 2.0f) {
+                seen += float4(e_color.Load(int3(int2(q), 0)).rgb * area, area);
+                normals.w += dot(face, -c) > 0.0f ? area : -area;
             }
         }
-        if (luminance(power) >= 4.0f) {
-            uint index;
-            e_found.InterlockedAdd(0u, 1u, index);
-            if (index < kEmitFound) {
-                const uint at = 16u + index * kEmitStride;
-                e_found.Store4(at, asuint(float4(transform(e_to_world, at_point), max(spread, 1.0f))));
-                e_found.Store4(at + 16u, asuint(float4(power, unknown)));
-                e_found.Store4(at + 32u, asuint(spot));
+    }
+}
+
+[numthreads(64, 1, 1)]
+void AuthoredEmitCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
+{
+    const uint record = group.x * 32u;
+    const uint2 range = e_draws.Load2(record);   // first triangle, count
+    const uint flags = e_draws.Load(record + 24u);
+    cluster_begin(gi, range.y);
+    for (uint t = gi; t < range.y; t += 64u) {
+        float3 v0, v1, v2;
+        cluster_note(t, authored_key(range.x, t, v0, v1, v2));
+    }
+    cluster_list(gi);
+    const uint count = s_cluster_count;
+    // The group sums each slot in turn, in a fixed order.
+    for (uint u = 0u; u < count; ++u) {
+        float4 b = float4(0.0f, 0.0f, 0.0f, 0.0f);
+        float4 normals = float4(0.0f, 0.0f, 0.0f, 0.0f);
+        float4 seen = float4(0.0f, 0.0f, 0.0f, 0.0f);
+        float area_sum = 0.0f;
+        for (uint t = gi; t < range.y; t += 64u) {
+            authored_add(range.x, t, s_cluster_used[u], flags, b, area_sum, normals, seen);
+        }
+        s_glow_b[gi] = b;
+        s_glow_area[gi] = area_sum;
+        s_authored_n[gi] = normals;
+        s_authored_c[gi] = seen;
+        authored_reduce(gi);
+        if (gi == 0u) {
+            s_cluster_a[u] = s_authored_c[0];
+            s_cluster_b[u] = s_glow_b[0];
+            s_cluster_n[u] = s_authored_n[0];
+            s_cluster_w[u] = s_glow_area[0];
+            s_cluster_area[u] = s_glow_area[0];
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if (count > 1u) {
+        cluster_join(gi, count);
+    } else if (gi == 0u) {
+        s_cluster_root[0] = 0u;
+    }
+    if (gi != 0u) {
+        return;
+    }
+    for (uint r = 0u; r < count; ++r) {
+        if (s_cluster_root[r] != r) {
+            continue;
+        }
+        float4 b = float4(0.0f, 0.0f, 0.0f, 0.0f);
+        float4 normals = float4(0.0f, 0.0f, 0.0f, 0.0f);
+        float4 seen = float4(0.0f, 0.0f, 0.0f, 0.0f);
+        float area_sum = 0.0f;
+        for (uint m = r; m < count; ++m) {
+            if (s_cluster_root[m] == r) {
+                b += s_cluster_b[m];
+                normals += s_cluster_n[m];
+                seen += s_cluster_a[m];
+                area_sum += s_cluster_area[m];
             }
+        }
+        if (area_sum > 0.0f) {
+            authored_light(b, area_sum, normals, seen, record);
         }
     }
 }
@@ -1130,7 +1515,7 @@ groupshared float2 s_emit_scan[kEmitLights];
 
 // One group: the remembered lights take this frame's glow lights (each the nearest light within
 // reach of both), the others take free slots, unseen lights fade, then the list for sampling.
-[numthreads(256, 1, 1)]
+[numthreads(kEmitLights, 1, 1)]
 void EmitMergeCS(uint gi : SV_GroupIndex)
 {
     const uint found = min(e_found.Load(0u), kEmitFound);
@@ -1182,9 +1567,13 @@ void EmitMergeCS(uint gi : SV_GroupIndex)
             }
         }
         if (centre.w > 0.0f) {
-            // Seen: brighter at once, dimmer slowly (a partly hidden glow shows less of itself).
-            lb.rgb = lerp(lb.rgb, power, luminance(power) > lb_l ? 0.25f : 0.08f);
-            la = float4(lerp(la.xyz, centre.xyz / centre.w, 0.5f), lerp(la.w, radius, 0.5f));
+            // Seen: brighter at once, dimmer slowly (a partly hidden glow shows less of itself). A particle's light
+            // (sparkles, stardust) is their steady mean: following each sparkle that appeared or died, it lit the
+            // Observatory plaza's floor in patches that changed every frame.
+            const bool particle = max(luminance(power), lb_l) <= kParticleLight * e_authored_power;
+            lb.rgb = lerp(lb.rgb, power, particle ? 0.05f : luminance(power) > lb_l ? 0.25f : 0.08f);
+            const float follow = particle ? 0.1f : 0.5f;
+            la = float4(lerp(la.xyz, centre.xyz / centre.w, follow), lerp(la.w, radius, follow));
             lb.w = 0.0f;
             // A spot turns smoothly; one seen as a point light is one.
             const bool both = spot_known && dot(lc.xyz, lc.xyz) > 0.25f;
@@ -1205,9 +1594,12 @@ void EmitMergeCS(uint gi : SV_GroupIndex)
             lb.w += 1.0f;
             // Out of view it keeps lighting the stage at any distance; one too far to light anything within
             // 20000 units of the camera fades over seconds (the list keeps room for the lights that matter here).
+            // A particle's light (a fifth of a Luma or less: sparkles, stardust) fades over about a second once
+            // unseen: kept like a lamp's, the passing sparkles of the Observatory garden filled all kEmitLights.
             const float reach = sqrt(luminance(lb.rgb) / (kPi * kEmitForget));
             const bool far = length(e) > reach + 20000.0f;
-            lb.rgb *= gone ? 0.5f : far ? 0.98f : 1.0f;
+            const bool particle = luminance(lb.rgb) <= kParticleLight * e_authored_power;
+            lb.rgb *= gone ? 0.5f : far ? 0.98f : particle ? 0.95f : 1.0f;
         }
         if (luminance(lb.rgb) < 1.0f) {
             la = float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -1233,7 +1625,10 @@ void EmitMergeCS(uint gi : SV_GroupIndex)
                 const uint slot = s_emit_free[k];
                 const float4 fs = asfloat(e_found.Load4(16u + n * kEmitStride + 32u));
                 e_lights[slot * 3u] = asfloat(e_found.Load4(16u + n * kEmitStride));
-                e_lights[slot * 3u + 1u] = float4(asfloat(e_found.Load3(16u + n * kEmitStride + 16u)), 0.0f);
+                // A particle's light fades in as it does when seen again.
+                const float3 power = asfloat(e_found.Load3(16u + n * kEmitStride + 16u));
+                const bool particle = luminance(power) <= kParticleLight * e_authored_power;
+                e_lights[slot * 3u + 1u] = float4(particle ? power * 0.05f : power, 0.0f);
                 e_lights[slot * 3u + 2u] = fs.w < kSpotUnknown + 2.0f ? float4(0.0f, 0.0f, 0.0f, 0.0f) : fs;
             }
         }
@@ -2071,8 +2466,8 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
         // shade them alike).
         const float rest_seen = tested_weight > 0.0f ? seen_weight / tested_weight : 1.0f;
         glow += (unshadowed - tested) * rest_seen;
-        // Bright bursts (lava eruptions, sparks) saturate softly instead of blowing out.
-        points += glow / (1.0f + luminance(glow) / 1.5f) / max(g_point_light, 1e-3f);
+        // Bright bursts (lava eruptions, sparks) roll off softly instead of blowing out.
+        points += soft_light(glow, 1.5f) / max(g_point_light, 1e-3f);
     }
 
     const float sign_z = n.z >= 0.0f ? 1.0f : -1.0f;
@@ -2695,7 +3090,7 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
                     }
                     cap = lerp(g_ao.w, max(g_sun_cap, g_ao.w), all_weight > 0.0f ? core_weight / all_weight : 0.0f);
                 }
-                const float3 added = lights / (1.0f + luminance(lights) / max(cap, 1e-3f));
+                const float3 added = soft_light(lights, max(cap, 1e-3f));
                 const float3 art = night_shadow * day_form * tint * level * g_night.x;
                 day_m = lerp(art * occlusion * night_contact + added, day_m, day_share);
                 day_open = lerp(night_shadow * day_form * level * g_night.x + added, day_open, day_share);
