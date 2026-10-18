@@ -4,6 +4,8 @@
 #include "Game/Screen/LayoutPaneCtrl.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include <cstring>
+#include <nebula_game_api.h>
+#include <revolution/os.h>
 #include <nw4r/lyt/layout.h>
 #include <nw4r/lyt/pane.h>
 
@@ -82,6 +84,12 @@ namespace {
         {"PauseMenu", "BG", FitWidth | FitHeight},
         {"PauseMenu", "PicStagebase", FitWidth | FitExtendUp},
         {"PauseMenu", "PicStagebase1", FitWidth | FitExtendDown},
+        // The pause menu's counters sit where the HUD's do, so they follow the same edges (v1.0.1 kept them in the
+        // 16:9 middle with the menu, and they moved in from the HUD's corners on pausing).
+        {"PauseMenu", "Star", FitLeft},
+        {"PauseMenu", "Mario", FitLeft},
+        {"PauseMenu", "Coin", FitRight},
+        {"PauseMenu", "Piece", FitRight},
         {"PeachLetter", "BG", FitWidth | FitHeight},
         {"PictureBook", "Base", FitWidth | FitHeight},
         {"PictureBook", "PicToneDown", FitWidth | FitHeight},
@@ -185,6 +193,21 @@ namespace {
         pPane->mGlbMtx._11 *= k;
         pPane->mGlbMtx._12 *= k;
         pPane->mGlbMtx._13 = inner + (m13 - inner) * k;
+    }
+
+    // Tests (NEBULA_OPTION_TEST_DUMP_LAYOUTS): the authored tree, one line per pane: depth, name, translation, size,
+    // base position (0-8, row-major), visibility.
+    void dumpPane(const char* pLayout, const nw4r::lyt::Pane* pPane, s32 depth) {
+        if (depth > 16) {
+            return;
+        }
+        OSReport("layout %s: %*s%s t=(%.1f,%.1f) size=(%.1f,%.1f) base=%u %s\n", pLayout, depth * 2, "", pPane->mName,
+                 pPane->mTranslate.x, pPane->mTranslate.y, pPane->mSize.width, pPane->mSize.height,
+                 (u32)pPane->mBasePosition, pPane->IsVisible() ? "" : "hidden");
+        nw4r::lyt::PaneList& children = const_cast< nw4r::lyt::Pane* >(pPane)->GetChildList();
+        for (nw4r::lyt::PaneList::Iterator it = children.GetBeginIter(); it != children.GetEndIter(); ++it) {
+            dumpPane(pLayout, &*it, depth + 1);
+        }
     }
 
     // True when the branch moved, so the copied matrices need copying again.
@@ -308,10 +331,16 @@ namespace LayoutAspect {
 
         // This layout's rules and panes, looked up once.
         if (pManager->mFitRuleCount < 0) {
+            if (__NebulaOption(NEBULA_OPTION_TEST_DUMP_LAYOUTS) != 0) {
+                dumpPane(pManager->mLayoutName != nullptr ? pManager->mLayoutName : "?", pRoot, 0);
+            }
             pManager->mFitRuleCount = 0;
             for (u32 i = 0; i < sizeof(cFitRules) / sizeof(cFitRules[0]); i++) {
                 if (pManager->mLayoutName == nullptr || strcmp(cFitRules[i].mLayout, pManager->mLayoutName) != 0) {
                     continue;
+                }
+                if (pManager->mFitRuleCount == (s32)(sizeof(pManager->mFitPanes) / sizeof(pManager->mFitPanes[0]))) {
+                    break;  // a layout's rules are contiguous and at most mFitPanes' size
                 }
                 if (pManager->mFitRuleCount == 0) {
                     pManager->mFitRules = &cFitRules[i];

@@ -1206,6 +1206,13 @@ uint32_t svc_option(void*, uint32_t what) {
 #else
         return 1;
 #endif
+    case NEBULA_OPTION_TEST_DUMP_LAYOUTS: {
+        static const bool dump = [] {
+            const char* value = std::getenv("GALAXY_TEST_DUMP_LAYOUTS");
+            return value != nullptr && value[0] == '1';
+        }();
+        return dump ? 1u : 0u;
+    }
     default:
         return 0;
     }
