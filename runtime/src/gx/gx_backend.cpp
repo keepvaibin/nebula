@@ -10751,8 +10751,9 @@ bool GxBackend::on_cached_simple_draw_run(
     std::size_t base_offset,
     std::span<const CachedDrawPacket> packets) {
     ++frame_replay_simple_batches_;
+    // A captured frame logs every draw: its runs take the per-draw path.
     if (frame_dependency_event_sink_ != nullptr ||
-        packets.size() <= 1u || cached_draw_run_active_) {
+        packets.size() <= 1u || cached_draw_run_active_ || capture_draws_) {
         return false;
     }
 
@@ -10862,7 +10863,7 @@ bool GxBackend::on_cached_prepared_draw_run(
     std::uint8_t opcode,
     std::size_t source_draw_count) {
     ++frame_replay_prepared_batches_;
-    if (source_draw_count <= 1u || cached_draw_run_active_) {
+    if (source_draw_count <= 1u || cached_draw_run_active_ || capture_draws_) {
         return false;
     }
     if (prepared_payload.size() < 2u) {
@@ -10932,7 +10933,7 @@ bool GxBackend::on_cached_packet_draw_run(
     std::uint32_t total_indices,
     std::span<const std::uint16_t> precomputed_indices) {
     ++frame_replay_packet_batches_;
-    if (packets.size() <= 1u || cached_draw_run_active_) {
+    if (packets.size() <= 1u || cached_draw_run_active_ || capture_draws_) {
         return false;
     }
 

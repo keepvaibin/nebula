@@ -513,6 +513,7 @@ NativeServicesV1 gNative{};
 const uint8_t* gPending = nullptr;
 size_t gPendingSize = 0;
 std::deque<galaxy::gx::FramePeCompletionToken> gTokens;
+std::atomic<uint64_t> gSubmissions{0};  // render_frame calls with commands: the renderer's frame index
 
 void native_log(void*, LogLevelV1, const char* text) {
     log_line("renderer:", text);
@@ -564,6 +565,7 @@ void submit_frame(bool present, uint32_t xfb) {
                                                 present, xfb);
     if (token) {
         gTokens.push_back(token);
+        gSubmissions.fetch_add(1, std::memory_order_relaxed);
     }
     if (size != 0) {
         gPendingSize = 0;
@@ -889,6 +891,7 @@ int main(int argc, char** argv) {
     if (!galaxy::gx::initialize(1280, 720)) {
         die("the renderer did not start");
     }
+    galaxy::gx::set_indexed_load_host_order(true);
 #endif
     if (gModule.attach(&services) != NEBULA_GAME_API_VERSION) {
         die("the game module's API version differs from the host's (%u)", NEBULA_GAME_API_VERSION);
@@ -923,11 +926,16 @@ int main(int argc, char** argv) {
         next_report += std::chrono::seconds(1);
         const uint32_t retraces = gRetraces.load(std::memory_order_relaxed);
         if (retraces != reported) {
-            char text[192];
+            char text[256];
             std::snprintf(text, sizeof(text), "retrace %u, xfb 0x%08X, gx %.2f MB, disc reads %u, nand ops %u, ai blocks %u, dsp subframes %u",
                           retraces, gXfb.load(std::memory_order_relaxed), gGxBytes.load(std::memory_order_relaxed) / 1048576.0,
                           gDiscReads.load(std::memory_order_relaxed), gFsOps.load(std::memory_order_relaxed),
                           gAiBlocks.load(std::memory_order_relaxed), gDspFrames.load(std::memory_order_relaxed));
+#if defined(NEBULA_HOST_RENDERER)
+            const size_t length = std::strlen(text);
+            std::snprintf(text + length, sizeof(text) - length, ", renderer frames %llu",
+                          (unsigned long long)gSubmissions.load(std::memory_order_relaxed));
+#endif
             log_line("host:", text);
             reported = retraces;
         }

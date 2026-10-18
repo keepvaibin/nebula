@@ -165,6 +165,10 @@ void scan_pe_events(
 
 void install_guest_dirty_tracker(GuestMemoryV1* memory) noexcept;
 
+// The native game computes the arrays indexed loads read (matrices, lights) in host byte order: before its first
+// frame, its host makes LOAD_INDX read them that way. Everything else the GPU reads stays big-endian.
+void set_indexed_load_host_order(bool host_order) noexcept;
+
 void notify_guest_memory_write(
     std::uint32_t address,
     std::uint32_t size) noexcept;

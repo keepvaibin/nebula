@@ -2,6 +2,8 @@
 
 #include "galaxy/gx_d3d12.h"
 
+#include <atomic>
+
 #include "galaxy/gx/gx_backend.h"
 
 namespace galaxy::gx {
@@ -109,6 +111,11 @@ void scan_pe_events(
     const NativeServicesV1* services) {
     backend().scan_pe_events_on_sim_thread(
         fifo_data, fifo_size, memory, services);
+}
+
+void set_indexed_load_host_order(bool host_order) noexcept {
+    extern std::atomic<bool> g_indexed_load_host_order;
+    g_indexed_load_host_order.store(host_order, std::memory_order_relaxed);
 }
 
 void install_guest_dirty_tracker(GuestMemoryV1* memory) noexcept {

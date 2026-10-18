@@ -541,6 +541,18 @@ void swap16_block(
 }
 
 // ---------------------------------------------------------------------------
+// The arrays LOAD_INDX reads (matrices, lights) are what the CPU computes: big-endian from the console's CPU, in host
+// order from the native game (set_indexed_load_host_order), where data from files stays big-endian.
+std::atomic<bool> g_indexed_load_host_order{false};
+
+void read_indexed_values(const std::byte* src, std::uint32_t* dst, std::size_t count) {
+    if (g_indexed_load_host_order.load(std::memory_order_relaxed)) {
+        std::memcpy(dst, src, count * sizeof(std::uint32_t));
+    } else {
+        swap32_block(src, dst, count);
+    }
+}
+
 // swap32_block: byte-swap `count` big-endian 32-bit values from `src` into
 // `dst`.  Uses SSSE3 pshufb to process 4 values (16 bytes) per iteration.
 // ---------------------------------------------------------------------------
@@ -1734,7 +1746,7 @@ void FifoParser::replay_cached_display_list(
                     memory, guest_addr, byte_size, replay_context);
 
                 std::array<std::uint32_t, 16> values{};
-                swap32_block(
+                read_indexed_values(
                     guest_window.data(), values.data(), command.length);
                 state.load_xf_indexed(
                     command.xf_addr, values.data(), command.length);
@@ -2063,7 +2075,7 @@ void FifoParser::run_window(
                     resolve_guest(memory, guest_addr, byte_size, cursor);
 
                 std::array<std::uint32_t, 16> values{};
-                swap32_block(guest_window.data(), values.data(), length);
+                read_indexed_values(guest_window.data(), values.data(), length);
                 state.load_xf_indexed(xf_addr, values.data(), length);
             }
             if (recording != nullptr && recording->cacheable) {

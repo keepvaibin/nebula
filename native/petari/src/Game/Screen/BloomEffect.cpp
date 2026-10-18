@@ -247,14 +247,6 @@ void BloomEffect::initBlurMtx(Mtx* pMtx, u32 count, f32 radius, f32 offset) cons
                    radius * JMASinRadian(offset + i * JMath::TAngleConstant_< f32 >::RADIAN_DEG360() / count), 0.0f);
     }
 
-#ifdef TARGET_PC
-    // Only GX reads these (GX_TEX_MTX_ARRAY), and in the console's byte order.
-    for (u32 i = 0; i < count * 12; i++) {
-        const f32 value = reinterpret_cast< f32* >(pMtx)[i];
-        reinterpret_cast< BE< f32 >* >(pMtx)[i] = value;
-    }
-#endif
-
     DCStoreRangeNoSync(pMtx, sizeof(Mtx) * count);
 }
 
