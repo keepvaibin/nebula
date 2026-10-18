@@ -106,7 +106,13 @@ void LogoScene::init() {
         initNerve(GET_NERVE_ANON(LogoSceneCensorshipFadein));
     } else
 #endif
+#ifdef TARGET_PC
+        // The strap screen covered the system archive's load and asked for a button press. Natively the load runs
+        // behind black (the fader starts blank) and the title follows as soon as it and the save data are ready.
+        initNerve(GET_NERVE_ANON(LogoSceneWaitReadDoneSystemArchive));
+#else
         initNerve(GET_NERVE_ANON(LogoSceneStrapFadein));
+#endif
 
     SceneFunction::createHioBasicNode(this);
     SceneFunction::initForNameObj();

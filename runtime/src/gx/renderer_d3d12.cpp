@@ -4042,7 +4042,8 @@ void RendererD3D12::update_gpu_budget() {
     const double busy = gpu_budget_ms_ / window_ms;
     gpu_budget_window_start_ = now;
     gpu_budget_ms_ = 0.0;
-    if (!get_render_config().internal_follow_window || efb_scale_ <= 1u || output_efb_active_) {
+    const RenderConfig cfg = get_render_config();
+    if (!cfg.gpu_budget || !cfg.internal_follow_window || efb_scale_ <= 1u || output_efb_active_) {
         gpu_budget_over_windows_ = 0u;
         return;
     }

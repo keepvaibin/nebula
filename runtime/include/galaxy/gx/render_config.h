@@ -99,7 +99,12 @@ struct RenderConfig {
     // during an edge drag), efb_scale becomes the smallest scale that covers
     // the window's game picture, as the launcher's "Match Output" does at
     // start. The renderer re-creates its targets once, at a frame boundary.
-    bool     internal_follow_window = true;
+    // Off by default: the internal resolution is the player's setting (1x until they change it; the user's
+    // direction, 2026-10-18).
+    bool     internal_follow_window = false;
+    // Match Output may step its scale down when the GPU stays above 80% busy (RendererD3D12::update_gpu_budget).
+    // Off by default: it would change what the player chose.
+    bool     gpu_budget = false;
     // The 2D layer (HUD, menus, text) renders at the window's resolution over
     // the resampled 3D scene when the internal resolution is lower. Off by
     // default: the scene then takes two resamples (to the integer output
