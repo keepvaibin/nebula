@@ -94,7 +94,7 @@ bool JASWaveArc::sendLoadCmd() {
 
     _5A++;
 
-    if (JASDvd::getThreadPointer()->sendCmdMsg(loadToAramCallback, &commandInfo, 0x10) == 0) {
+    if (JASDvd::getThreadPointer()->sendCmdMsg(loadToAramCallback, &commandInfo, sizeof(commandInfo)) == 0) {
         mHeap.free();
         return false;
     }

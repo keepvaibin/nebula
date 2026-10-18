@@ -68,11 +68,11 @@ THPSimplePlayerWrapper::THPSimplePlayerWrapper(const char* pName)
 #if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
     MR::zeroMemory(&mTextureSet, sizeof(mTextureSet));
 #else
-    MR::zeroMemory(&mTextureSet[0], 0x10);
-    MR::zeroMemory(&mTextureSet[1], 0x10);
+    MR::zeroMemory(&mTextureSet[0], sizeof(mTextureSet[0]));
+    MR::zeroMemory(&mTextureSet[1], sizeof(mTextureSet[1]));
 #endif
 
-    MR::zeroMemory(mAudioBuffer, 0xF0);
+    MR::zeroMemory(mAudioBuffer, sizeof(mAudioBuffer));
     initNerve(GET_NERVE(THPSimplePlayerWrapper, HostTypeWait));
 }
 
@@ -780,11 +780,11 @@ void THPSimplePlayerWrapper::mixAudio(s16* pDest, u32 sample) {
             s32 idx1 = (mAudioOutputIndex + 1) % 0x14;
             s32 idx2 = (mAudioOutputIndex + 2) % 0x14;
             if (!mAudioBuffer[idx1].validSample || !mAudioBuffer[idx2].validSample) {
-                MR::zeroMemory(pDest, sample * sizeof(s16*));
+                MR::zeroMemory(pDest, sample * 2 * sizeof(s16));
                 return;
             }
         } else if (!mAudioBuffer[(mAudioOutputIndex + 1) % 0x14].validSample) {
-            MR::zeroMemory(pDest, sample * sizeof(s16*));
+            MR::zeroMemory(pDest, sample * 2 * sizeof(s16));
             return;
         }
 
@@ -876,20 +876,20 @@ void THPSimplePlayerWrapper::mixAudio(s16* pDest, u32 sample) {
                 if (sample == 0)
                     break;
             } else {
-                MR::zeroMemory(pDest, sample * sizeof(s16*));
+                MR::zeroMemory(pDest, sample * 2 * sizeof(s16));
                 return;
             }
         } while (true);
 
     } else {
-        MR::zeroMemory(pDest, sample * sizeof(s16*));
+        MR::zeroMemory(pDest, sample * 2 * sizeof(s16));
     }
 }
 
 void THPSimplePlayerWrapper::resetAudioParams() {
     mAudioDecodeIndex = 0;
     mAudioOutputIndex = 0;
-    MR::zeroMemory(mAudioBuffer, 0xF0);
+    MR::zeroMemory(mAudioBuffer, sizeof(mAudioBuffer));
 
     for (s32 i = 0; i < 20; i++) {
         mAudioBuffer[i].validSample = 0;

@@ -17,12 +17,14 @@ case "$(uname -s)" in
     MINGW*|MSYS*|CYGWIN*) LIBS="-lwinmm"; EXE=.exe ;;
     *) LIBS="-lpthread"; EXE= ;;
 esac
-OS="$N/sdk/os/os_native.c $N/sdk/os/context_switch.c $N/sdk/memory.c"
+OS="$N/sdk/os/os_native.c $N/sdk/os/context_switch.c $N/sdk/memory.c $N/msl/src/msl_runtime.c"
 SDK="$P/src/RVL_SDK/os/OSThread.c $P/src/RVL_SDK/os/OSMutex.c $P/src/RVL_SDK/os/OSMessage.c $P/src/RVL_SDK/os/OSAlarm.c
      $P/src/RVL_SDK/os/OSTime.c $P/src/RVL_SDK/os/OSArena.c"
 $CC $FL "$N/sdk/os/tests/context_switch_tests.c" "$N/sdk/os/context_switch.c" -o "$OUT/context_switch_tests$EXE"
 $CC $FL "$N/sdk/os/tests/os_scheduler_tests.c" $OS $SDK $LIBS -o "$OUT/os_scheduler_tests$EXE"
 $CC $FL "$N/sdk/mtx/tests/mtx_tests.c" "$N/sdk/mtx/mtx_native.c" -o "$OUT/mtx_tests$EXE"
+$CC $FL "$N/msl/tests/msl_runtime_tests.c" "$N/msl/src/msl_runtime.c" -o "$OUT/msl_runtime_tests$EXE"
 "$OUT/context_switch_tests$EXE"
 "$OUT/os_scheduler_tests$EXE"
 "$OUT/mtx_tests$EXE"
+"$OUT/msl_runtime_tests$EXE"

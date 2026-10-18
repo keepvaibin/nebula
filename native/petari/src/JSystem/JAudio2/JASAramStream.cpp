@@ -117,7 +117,7 @@ bool JASAramStream::prepare(s32 param_0, int param_1) {
     data.stream = this;
     data._4 = _14C;
     data._8 = param_1;
-    if (!sLoadThread->sendCmdMsg(headerLoadTask, &data, 0xc)) {
+    if (!sLoadThread->sendCmdMsg(headerLoadTask, &data, sizeof(data))) {
         JASDriver::rejectCallback(channelProcCallback, this);
         return false;
     }
@@ -186,7 +186,7 @@ void JASAramStream::firstLoadTask(void* i_data) {
 
     if (data->_4 != 0) {
         data->_4--;
-        if (!sLoadThread->sendCmdMsg(firstLoadTask, data, 0xc)) {
+        if (!sLoadThread->sendCmdMsg(firstLoadTask, data, sizeof(*data))) {
             UNK_BOOL_B = true;
         }
 
@@ -264,7 +264,7 @@ bool JASAramStream::headerLoad(u32 param_0, int param_1) {
     data.stream = this;
     data._4 = _108 - 1;
     data._8 = param_1;
-    if (!sLoadThread->sendCmdMsg(firstLoadTask, &data, 0xc)) {
+    if (!sLoadThread->sendCmdMsg(firstLoadTask, &data, sizeof(data))) {
         UNK_BOOL_B = true;
         return false;
     }

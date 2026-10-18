@@ -18,7 +18,12 @@ typedef struct _GXColorS10 {
 } GXColorS10;
 
 typedef struct _GXTexObj {
+#ifdef TARGET_PC
+    // GX's record (GXTexObjInt) holds an 8-byte pointer natively: 40 bytes, 8-byte aligned (GXTexture.c checks).
+    u64 dummy[5];
+#else
     u32 dummy[8];
+#endif
 } GXTexObj;
 
 typedef struct _GXTlutObj {

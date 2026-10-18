@@ -474,10 +474,17 @@ static BOOL __attribute__((noinline)) deliver_from_disabled(void) {
     return FALSE;
 }
 
+/* Work that arrived while interrupts were enabled is delivered before they are disabled: on the console it would have
+   interrupted the code before this point, not run at the end of the critical section that follows. */
 BOOL OSDisableInterrupts(void) {
-    const BOOL previous = sInterruptsEnabled;
+    if (!sInterruptsEnabled) {
+        return FALSE;
+    }
+    if (work_pending()) {
+        deliver_interrupts();
+    }
     sInterruptsEnabled = FALSE;
-    return previous;
+    return TRUE;
 }
 
 BOOL OSEnableInterrupts(void) {
@@ -491,6 +498,9 @@ BOOL OSEnableInterrupts(void) {
 BOOL OSRestoreInterrupts(BOOL level) {
     const BOOL previous = sInterruptsEnabled;
     if (!level) {
+        if (previous && work_pending()) {
+            deliver_interrupts();
+        }
         sInterruptsEnabled = FALSE;
         return previous;
     }
@@ -594,6 +604,33 @@ static void thread_main(void* arg) {
     enable_and_deliver();
     OSExitThread(start.func(start.param));
     nebula_fatal("OSExitThread returned");
+}
+
+/* A diagnostic for the host's reports: every game thread's state and the addresses into the module's image found on
+   its stack, newest first, as offsets from the image base (symbolize them with the module's PDB). The stack of the
+   thread running now is read where it stands; a reading taken while the game runs is approximate. */
+extern OSThreadQueue __OSActiveThreadQueue;
+
+NEBULA_GAME_API void nebula_game_debug_dump(void) {
+    uintptr_t image, size;
+    nebula_image_range(&image, &size);
+    nebula_log("threads (current %p):\n", (void*)OSGetCurrentThread());
+    for (OSThread* t = __OSActiveThreadQueue.head; t != NULL; t = t->linkActive.next) {
+        char line[512];
+        int at = snprintf(line, sizeof(line), "  %p prio %d/%d state %u suspend %d queue %p mutex %p:", (void*)t, t->priority, t->base,
+                          t->state, t->suspend, (void*)t->queue, (void*)t->mutex);
+        const uintptr_t* sp = (const uintptr_t*)t->context.nativeSp;
+        const uintptr_t* top = (const uintptr_t*)t->stackBase;
+        int found = 0;
+        for (int i = 0; sp != NULL && sp + i < top && i < 8192 && found < 14 && at < (int)sizeof(line) - 16; i++) {
+            const uintptr_t v = sp[i];
+            if (v - image < size) {
+                at += snprintf(line + at, sizeof(line) - (size_t)at, " +%llx", (unsigned long long)(v - image));
+                found++;
+            }
+        }
+        nebula_log("%s\n", line);
+    }
 }
 
 void* __NebulaPrepareThread(void* (*func)(void*), void* param, void* stackTop, u32 stackSize) {

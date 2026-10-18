@@ -102,3 +102,10 @@ else()
     target_link_options(smg_game PRIVATE -Wl,-Bsymbolic -Wl,-z,now)
     target_link_libraries(smg_game PRIVATE pthread)
 endif()
+
+# The native game's host (host/host_main.cpp): loads the module and serves it. Built with the host's own C++ library.
+add_executable(nebula_native_host host/host_main.cpp)
+target_include_directories(nebula_native_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_compile_features(nebula_native_host PRIVATE cxx_std_20)
+target_compile_definitions(nebula_native_host PRIVATE _CRT_SECURE_NO_WARNINGS)
+add_dependencies(nebula_native_host smg_game)

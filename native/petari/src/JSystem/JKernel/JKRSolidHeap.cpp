@@ -12,6 +12,11 @@ JKRSolidHeap* JKRSolidHeap::create(u32 size, JKRHeap* heap, bool useErrorHandler
     if (size == -1) {
         size = heap->getMaxAllocatableSize(0x10);
     }
+#ifdef TARGET_PC
+    else {
+        size = JKRNativeHeapSize(size, heap, 0x10);
+    }
+#endif
 
     u32 alignedSize = ALIGN_PREV(size, 0x10);
     if (alignedSize < solidHeapSize)

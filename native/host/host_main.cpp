@@ -1,0 +1,648 @@
+// The native game's host (docs/NATIVE_PORT.md, "Module layout"): loads the game module (smg_game.dll), gives it
+// Nebula's services (nebula_game_api.h) and runs it. This first host is headless: the GX stream is released as it
+// arrives and PE events answered at once, audio is paced but not played, no remotes connect.
+//
+//   nebula_native_host --pak <game.pak> --nand <dir> [--module <smg_game.dll>] [--seconds N]
+#include <nebula_game_api.h>
+
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <cstdarg>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <deque>
+#include <filesystem>
+#include <functional>
+#include <mutex>
+#include <string>
+#include <thread>
+#include <vector>
+
+#if defined(_WIN32)
+#define NOMINMAX
+#include <windows.h>
+#else
+#include <dlfcn.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
+
+namespace fs = std::filesystem;
+
+namespace {
+
+using Clock = std::chrono::steady_clock;
+const Clock::time_point kStart = Clock::now();
+
+void log_line(const char* tag, const char* text) {
+    const double t = std::chrono::duration<double>(Clock::now() - kStart).count();
+    std::fprintf(stdout, "[%9.3f] %s %s\n", t, tag, text);
+    std::fflush(stdout);
+}
+
+[[noreturn]] void die(const char* format, ...) {
+    char text[1024];
+    va_list args;
+    va_start(args, format);
+    std::vsnprintf(text, sizeof(text), format, args);
+    va_end(args);
+    log_line("fatal:", text);
+    std::fflush(stdout);
+    std::_Exit(3);
+}
+
+uint32_t load_be32(const uint8_t* p) {
+    return (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3];
+}
+
+// The module's entry points.
+struct Module {
+    decltype(&nebula_game_attach) attach;
+    decltype(&nebula_game_run) run;
+    decltype(&nebula_game_disc_complete) disc_complete;
+    decltype(&nebula_game_vi_retrace) vi_retrace;
+    decltype(&nebula_game_fs_complete) fs_complete;
+    decltype(&nebula_game_ai_interrupt) ai_interrupt;
+    decltype(&nebula_game_gx_event) gx_event;
+    decltype(&nebula_game_gx_release) gx_release;
+    void (*debug_dump)();  // optional: the module's thread report
+};
+Module gModule;
+
+// Progress counters for the host's log.
+std::atomic<uint64_t> gGxBytes{0};
+std::atomic<uint32_t> gDiscReads{0};
+std::atomic<uint32_t> gFsOps{0};
+std::atomic<uint32_t> gAiBlocks{0};
+std::atomic<uint32_t> gDspFrames{0};
+
+void* find_symbol(void* module, const char* name) {
+#if defined(_WIN32)
+    void* p = reinterpret_cast<void*>(GetProcAddress(static_cast<HMODULE>(module), name));
+#else
+    void* p = dlsym(module, name);
+#endif
+    if (p == nullptr) {
+        die("the game module has no %s", name);
+    }
+    return p;
+}
+
+void load_module(const fs::path& path) {
+#if defined(_WIN32)
+    void* module = LoadLibraryW(path.wstring().c_str());
+#else
+    void* module = dlopen(path.string().c_str(), RTLD_NOW | RTLD_LOCAL);
+#endif
+    if (module == nullptr) {
+        die("cannot load the game module %s", path.string().c_str());
+    }
+    gModule.attach = reinterpret_cast<decltype(gModule.attach)>(find_symbol(module, "nebula_game_attach"));
+    gModule.run = reinterpret_cast<decltype(gModule.run)>(find_symbol(module, "nebula_game_run"));
+    gModule.disc_complete = reinterpret_cast<decltype(gModule.disc_complete)>(find_symbol(module, "nebula_game_disc_complete"));
+    gModule.vi_retrace = reinterpret_cast<decltype(gModule.vi_retrace)>(find_symbol(module, "nebula_game_vi_retrace"));
+    gModule.fs_complete = reinterpret_cast<decltype(gModule.fs_complete)>(find_symbol(module, "nebula_game_fs_complete"));
+    gModule.ai_interrupt = reinterpret_cast<decltype(gModule.ai_interrupt)>(find_symbol(module, "nebula_game_ai_interrupt"));
+    gModule.gx_event = reinterpret_cast<decltype(gModule.gx_event)>(find_symbol(module, "nebula_game_gx_event"));
+    gModule.gx_release = reinterpret_cast<decltype(gModule.gx_release)>(find_symbol(module, "nebula_game_gx_release"));
+#if defined(_WIN32)
+    gModule.debug_dump = reinterpret_cast<void (*)()>(GetProcAddress(static_cast<HMODULE>(module), "nebula_game_debug_dump"));
+#else
+    gModule.debug_dump = reinterpret_cast<void (*)()>(dlsym(module, "nebula_game_debug_dump"));
+#endif
+}
+
+// The game partition: Setup's game.pak, the decrypted partition data at its disc offsets (boot.bin at 0, main.dol
+// and the file table where boot.bin says), mapped read-only.
+struct Pak {
+    const uint8_t* data = nullptr;
+    uint64_t size = 0;
+    const uint8_t* fst = nullptr;
+    size_t fst_size = 0;
+    const uint8_t* dol = nullptr;
+    size_t dol_size = 0;
+};
+Pak gPak;
+
+void open_pak(const fs::path& path) {
+#if defined(_WIN32)
+    HANDLE file = CreateFileW(path.wstring().c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+                              FILE_ATTRIBUTE_NORMAL, nullptr);
+    LARGE_INTEGER size{};
+    if (file == INVALID_HANDLE_VALUE || !GetFileSizeEx(file, &size)) {
+        die("cannot open %s", path.string().c_str());
+    }
+    HANDLE mapping = CreateFileMappingW(file, nullptr, PAGE_READONLY, 0, 0, nullptr);
+    const void* view = mapping != nullptr ? MapViewOfFile(mapping, FILE_MAP_READ, 0, 0, 0) : nullptr;
+    if (view == nullptr) {
+        die("cannot map %s", path.string().c_str());
+    }
+    gPak.data = static_cast<const uint8_t*>(view);
+    gPak.size = static_cast<uint64_t>(size.QuadPart);
+#else
+    const int fd = open(path.c_str(), O_RDONLY);
+    struct stat st {};
+    if (fd < 0 || fstat(fd, &st) != 0) {
+        die("cannot open %s", path.c_str());
+    }
+    void* view = mmap(nullptr, (size_t)st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    if (view == MAP_FAILED) {
+        die("cannot map %s", path.c_str());
+    }
+    gPak.data = static_cast<const uint8_t*>(view);
+    gPak.size = (uint64_t)st.st_size;
+#endif
+    if (gPak.size < 0x440) {
+        die("%s is too short for a game partition", path.string().c_str());
+    }
+    // Wii partition offsets are words: boot.bin holds them divided by 4.
+    const uint64_t dol = (uint64_t)load_be32(gPak.data + 0x420) << 2;
+    const uint64_t fst = (uint64_t)load_be32(gPak.data + 0x424) << 2;
+    const uint64_t fst_size = (uint64_t)load_be32(gPak.data + 0x428) << 2;
+    if (dol + 0x100 > gPak.size || fst + fst_size > gPak.size) {
+        die("%s: boot.bin points past the partition", path.string().c_str());
+    }
+    gPak.fst = gPak.data + fst;
+    gPak.fst_size = (size_t)fst_size;
+    gPak.dol = gPak.data + dol;
+    uint64_t end = 0x100;
+    for (int s = 0; s < 18; s++) {
+        const uint64_t section_end = (uint64_t)load_be32(gPak.dol + s * 4) + load_be32(gPak.dol + 0x90 + s * 4);
+        if (load_be32(gPak.dol + 0x90 + s * 4) != 0 && section_end > end) {
+            end = section_end;
+        }
+    }
+    if (dol + end > gPak.size) {
+        die("%s: main.dol runs past the partition", path.string().c_str());
+    }
+    gPak.dol_size = (size_t)end;
+}
+
+// A worker thread taking jobs in order.
+class Worker {
+public:
+    template <typename F>
+    void post(F&& job) {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            jobs_.emplace_back(std::forward<F>(job));
+        }
+        ready_.notify_one();
+    }
+
+    void start() {
+        thread_ = std::thread([this] {
+            for (;;) {
+                std::function<void()> job;
+                {
+                    std::unique_lock<std::mutex> lock(mutex_);
+                    ready_.wait(lock, [this] { return !jobs_.empty(); });
+                    job = std::move(jobs_.front());
+                    jobs_.pop_front();
+                }
+                job();
+            }
+        });
+        thread_.detach();
+    }
+
+private:
+    std::mutex mutex_;
+    std::condition_variable ready_;
+    std::deque<std::function<void()>> jobs_;
+    std::thread thread_;
+};
+
+Worker gDisc;
+Worker gFs;
+
+// NAND: the console's absolute paths under the host's NAND root, in the Wii's layout.
+fs::path gNandRoot;
+
+struct OpenFile {
+    std::FILE* file = nullptr;
+    fs::path path;
+    fs::path temp;  // a safe open's copy, moved over `path` at the safe close
+};
+std::vector<OpenFile> gFiles(16);
+
+constexpr int32_t kNandOk = 0;
+constexpr int32_t kNandAccess = -1;
+constexpr int32_t kNandExists = -6;
+constexpr int32_t kNandInvalid = -8;
+constexpr int32_t kNandMaxFd = -10;
+constexpr int32_t kNandNoExists = -12;
+constexpr int32_t kNandNotEmpty = -13;
+
+bool nand_path(const char* path, fs::path* out) {
+    if (path == nullptr || path[0] != '/') {
+        return false;
+    }
+    fs::path result = gNandRoot;
+    for (const fs::path& part : fs::path(path + 1)) {
+        if (part == ".." || part == ".") {
+            return false;
+        }
+        result /= part;
+    }
+    *out = result;
+    return true;
+}
+
+std::FILE* open_file(const fs::path& path, uint32_t mode) {
+    // NAND_ACCESS_READ 1, WRITE 2, RW 3: the file must exist.
+#if defined(_WIN32)
+    return _wfopen(path.wstring().c_str(), mode == 1 ? L"rb" : L"r+b");
+#else
+    return std::fopen(path.c_str(), mode == 1 ? "rb" : "r+b");
+#endif
+}
+
+int32_t fs_run(const NebulaFsRequest& r) {
+    std::error_code error;
+    fs::path path;
+    auto file_at = [](int32_t fd) -> OpenFile* {
+        return fd >= 0 && fd < (int32_t)gFiles.size() && gFiles[fd].file != nullptr ? &gFiles[fd] : nullptr;
+    };
+    switch (r.op) {
+    case NEBULA_FS_OPEN:
+    case NEBULA_FS_SAFE_OPEN: {
+        if (!nand_path(r.path, &path)) {
+            return kNandInvalid;
+        }
+        if (!fs::is_regular_file(path, error)) {
+            return kNandNoExists;
+        }
+        int32_t fd = 0;
+        while (fd < (int32_t)gFiles.size() && gFiles[fd].file != nullptr) {
+            fd++;
+        }
+        if (fd == (int32_t)gFiles.size()) {
+            return kNandMaxFd;
+        }
+        OpenFile entry;
+        entry.path = path;
+        if (r.op == NEBULA_FS_SAFE_OPEN && r.mode != 1) {
+            entry.temp = path;
+            entry.temp += L".nebula-safe";
+            fs::copy_file(path, entry.temp, fs::copy_options::overwrite_existing, error);
+            if (error) {
+                return kNandAccess;
+            }
+            entry.file = open_file(entry.temp, r.mode);
+        } else {
+            entry.file = open_file(path, r.mode);
+        }
+        if (entry.file == nullptr) {
+            return kNandAccess;
+        }
+        gFiles[fd] = std::move(entry);
+        return fd;
+    }
+    case NEBULA_FS_CLOSE:
+    case NEBULA_FS_SAFE_CLOSE: {
+        OpenFile* f = file_at(r.fd);
+        if (f == nullptr) {
+            return kNandInvalid;
+        }
+        std::fflush(f->file);
+        std::fclose(f->file);
+        f->file = nullptr;
+        if (!f->temp.empty()) {
+            fs::rename(f->temp, f->path, error);
+            f->temp.clear();
+            if (error) {
+                return kNandAccess;
+            }
+        }
+        return kNandOk;
+    }
+    case NEBULA_FS_READ: {
+        OpenFile* f = file_at(r.fd);
+        return f == nullptr ? kNandInvalid : (int32_t)std::fread(r.buffer, 1, r.size, f->file);
+    }
+    case NEBULA_FS_WRITE: {
+        OpenFile* f = file_at(r.fd);
+        return f == nullptr ? kNandInvalid : (int32_t)std::fwrite(r.buffer, 1, r.size, f->file);
+    }
+    case NEBULA_FS_SEEK: {
+        OpenFile* f = file_at(r.fd);
+        if (f == nullptr || std::fseek(f->file, r.offset, r.whence == 0 ? SEEK_SET : r.whence == 1 ? SEEK_CUR : SEEK_END) != 0) {
+            return kNandInvalid;
+        }
+        return (int32_t)std::ftell(f->file);
+    }
+    case NEBULA_FS_LENGTH: {
+        OpenFile* f = file_at(r.fd);
+        if (f == nullptr) {
+            return kNandInvalid;
+        }
+        const long at = std::ftell(f->file);
+        std::fseek(f->file, 0, SEEK_END);
+        const long length = std::ftell(f->file);
+        std::fseek(f->file, at, SEEK_SET);
+        return (int32_t)length;
+    }
+    case NEBULA_FS_CREATE:
+    case NEBULA_FS_CREATE_DIR: {
+        if (!nand_path(r.path, &path)) {
+            return kNandInvalid;
+        }
+        if (fs::exists(path, error)) {
+            return kNandExists;
+        }
+        if (!fs::is_directory(path.parent_path(), error)) {
+            return kNandNoExists;
+        }
+        if (r.op == NEBULA_FS_CREATE_DIR) {
+            return fs::create_directory(path, error) ? kNandOk : kNandAccess;
+        }
+#if defined(_WIN32)
+        std::FILE* f = _wfopen(path.wstring().c_str(), L"wb");
+#else
+        std::FILE* f = std::fopen(path.c_str(), "wb");
+#endif
+        if (f == nullptr) {
+            return kNandAccess;
+        }
+        std::fclose(f);
+        return kNandOk;
+    }
+    case NEBULA_FS_DELETE: {
+        if (!nand_path(r.path, &path)) {
+            return kNandInvalid;
+        }
+        if (!fs::exists(path, error)) {
+            return kNandNoExists;
+        }
+        fs::remove_all(path, error);
+        return error ? kNandAccess : kNandOk;
+    }
+    case NEBULA_FS_RENAME: {
+        fs::path to;
+        if (!nand_path(r.path, &path) || !nand_path(r.path2, &to)) {
+            return kNandInvalid;
+        }
+        if (!fs::exists(path, error)) {
+            return kNandNoExists;
+        }
+        if (fs::is_directory(to, error) && !fs::is_empty(to, error)) {
+            return kNandNotEmpty;
+        }
+        fs::rename(path, to, error);
+        return error ? kNandAccess : kNandOk;
+    }
+    }
+    return kNandInvalid;
+}
+
+// Audio interface pacing: the AI takes a latched block at each block's end, as the console's DMA engine does when
+// its count runs out, and raises the AI interrupt for the game to latch the next.
+std::mutex gAiLock;
+std::condition_variable gAiWake;
+uint32_t gAiLatchedSize = 0;
+uint32_t gAiRate = 32000;
+bool gAiRunning = false;
+
+void ai_thread() {
+    for (;;) {
+        uint32_t size = 0;
+        uint32_t rate = 32000;
+        {
+            std::unique_lock<std::mutex> lock(gAiLock);
+            gAiWake.wait(lock, [] { return gAiRunning && gAiLatchedSize != 0; });
+            size = gAiLatchedSize;
+            rate = gAiRate;
+        }
+        const auto start = Clock::now();
+        gAiBlocks.fetch_add(1, std::memory_order_relaxed);
+        gModule.ai_interrupt();
+        // One block: 4 bytes per stereo sample.
+        std::this_thread::sleep_until(start + std::chrono::nanoseconds((uint64_t)size / 4 * 1000000000ull / rate));
+    }
+}
+
+// The display's retrace: NTSC fields at 60000/1001 Hz. A late wake-up skips the fields it missed, as a display does,
+// rather than delivering them back to back.
+void vi_thread() {
+    const auto period = std::chrono::nanoseconds(1001000000000ull / 60000);
+    auto next = Clock::now() + period;
+    for (;;) {
+        std::this_thread::sleep_until(next);
+        gModule.vi_retrace();
+        next += period;
+        const auto now = Clock::now();
+        if (now >= next) {
+            next = now + period;
+        }
+    }
+}
+
+// Services
+
+void svc_log(void*, const char* text) {
+    log_line("game:", text);
+}
+
+void svc_fatal(void*, const char* text) {
+    log_line("fatal:", text);
+    std::fflush(stdout);
+    std::_Exit(3);
+}
+
+void svc_gx_submit(void*, const uint8_t*, size_t size) {
+    gGxBytes.fetch_add(size, std::memory_order_relaxed);
+    gModule.gx_release(size);
+}
+
+void svc_gx_pe_marker(void*, int finish, uint16_t token) {
+    gModule.gx_event(finish, token);
+}
+
+uint32_t svc_gx_peek_efb(void*, uint16_t, uint16_t, uint32_t) {
+    return 0;
+}
+
+const uint8_t* svc_disc_fst(void*, size_t* size) {
+    *size = gPak.fst_size;
+    return gPak.fst;
+}
+
+void svc_disc_read(void*, uint64_t offset, uint32_t size, void* dst, uint32_t slot) {
+    gDiscReads.fetch_add(1, std::memory_order_relaxed);
+    gDisc.post([=] {
+        if (offset > gPak.size || gPak.size - offset < size) {
+            gModule.disc_complete(slot, -1);
+            return;
+        }
+        std::memcpy(dst, gPak.data + offset, size);
+        gModule.disc_complete(slot, (int32_t)size);
+    });
+}
+
+const uint8_t* svc_disc_dol(void*, size_t* size) {
+    *size = gPak.dol_size;
+    return gPak.dol;
+}
+
+std::atomic<uint32_t> gRetraces{0};
+std::atomic<uint32_t> gXfb{0};
+
+void svc_vi_frame(void*, uint32_t xfb, int, uint32_t retrace) {
+    gXfb.store(xfb, std::memory_order_relaxed);
+    gRetraces.store(retrace, std::memory_order_relaxed);
+}
+
+void svc_fs_request(void*, const NebulaFsRequest* request, uint32_t slot) {
+    gFsOps.fetch_add(1, std::memory_order_relaxed);
+    const NebulaFsRequest r = *request;
+    gFs.post([r, slot] { gModule.fs_complete(slot, fs_run(r)); });
+}
+
+uint32_t svc_sc_get(void*, uint32_t item) {
+    switch (item) {
+    case NEBULA_SC_LANGUAGE:
+        return 1;  // English
+    case NEBULA_SC_SOUND_MODE:
+        return 1;  // stereo
+    case NEBULA_SC_ASPECT_RATIO:
+        return 1;  // 16:9
+    case NEBULA_SC_PROGRESSIVE_MODE:
+        return 1;
+    case NEBULA_SC_DPD_SENSITIVITY:
+        return 3;
+    case NEBULA_SC_SPEAKER_VOLUME:
+        return 0x58;
+    case NEBULA_SC_MOTOR_MODE:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
+void svc_wpad_control(void*, uint32_t, uint32_t, uint32_t) {}
+void svc_wpad_speaker_data(void*, uint32_t, const uint8_t*, uint32_t) {}
+
+// The JAudio DSP program finishes a subframe when the CPU releases its last channel group (JASDSPChannel::updateAll's
+// releaseHalt(3), a one-word command); the mixing itself is not done headless.
+int svc_audio_dsp(void*, const uint32_t* words, uint32_t count) {
+    const int subframe = count == 0 && (words[0] >> 16) == 3;
+    gDspFrames.fetch_add(subframe, std::memory_order_relaxed);
+    return subframe;
+}
+
+void svc_ai_dma(void*, uint32_t, uint32_t size) {
+    std::lock_guard<std::mutex> lock(gAiLock);
+    gAiLatchedSize = size;
+    gAiWake.notify_one();
+}
+
+void svc_ai_control(void*, uint32_t what, uint32_t value) {
+    std::lock_guard<std::mutex> lock(gAiLock);
+    if (what == NEBULA_AI_START) {
+        gAiRunning = true;
+    } else if (what == NEBULA_AI_STOP) {
+        gAiRunning = false;
+    } else if (what == NEBULA_AI_RATE) {
+        gAiRate = value;
+    }
+    gAiWake.notify_one();
+}
+
+int svc_hbm(void*, uint32_t what, uint32_t) {
+    return what == NEBULA_HBM_POLL ? -1 : 0;
+}
+
+int32_t svc_thp_video_decode(void*, const void*, void*, void*, void*) {
+    return 0;
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+    fs::path pak, nand, module;
+    double seconds = 0;
+    for (int i = 1; i + 1 < argc; i += 2) {
+        const std::string key = argv[i];
+        if (key == "--pak") {
+            pak = argv[i + 1];
+        } else if (key == "--nand") {
+            nand = argv[i + 1];
+        } else if (key == "--module") {
+            module = argv[i + 1];
+        } else if (key == "--seconds") {
+            seconds = std::atof(argv[i + 1]);
+        } else {
+            die("unknown option %s", key.c_str());
+        }
+    }
+    if (pak.empty() || nand.empty()) {
+        die("usage: nebula_native_host --pak <game.pak> --nand <dir> [--module <smg_game.dll>] [--seconds N]");
+    }
+    if (module.empty()) {
+        module = fs::path(argv[0]).parent_path() / "smg_game.dll";
+    }
+    gNandRoot = nand;
+    std::error_code error;
+    fs::create_directories(gNandRoot / "title/00010000/524d4745/data", error);
+
+    open_pak(pak);
+    load_module(module);
+
+    static NebulaHostServices services{};
+    services.version = NEBULA_GAME_API_VERSION;
+    services.size = sizeof(services);
+    services.log = svc_log;
+    services.fatal = svc_fatal;
+    services.gx_submit = svc_gx_submit;
+    services.gx_pe_marker = svc_gx_pe_marker;
+    services.gx_peek_efb = svc_gx_peek_efb;
+    services.disc_fst = svc_disc_fst;
+    services.disc_read = svc_disc_read;
+    services.disc_dol = svc_disc_dol;
+    services.vi_frame = svc_vi_frame;
+    services.fs_request = svc_fs_request;
+    services.sc_get = svc_sc_get;
+    services.wpad_control = svc_wpad_control;
+    services.wpad_speaker_data = svc_wpad_speaker_data;
+    services.audio_dsp = svc_audio_dsp;
+    services.ai_dma = svc_ai_dma;
+    services.ai_control = svc_ai_control;
+    services.hbm = svc_hbm;
+    services.thp_video_decode = svc_thp_video_decode;
+    if (gModule.attach(&services) != NEBULA_GAME_API_VERSION) {
+        die("the game module's API version differs from the host's (%u)", NEBULA_GAME_API_VERSION);
+    }
+
+    gDisc.start();
+    gFs.start();
+    std::thread(ai_thread).detach();
+    std::thread(vi_thread).detach();
+    std::thread([] { gModule.run(); }).detach();
+
+    const auto end = Clock::now() + std::chrono::duration<double>(seconds > 0 ? seconds : 1e9);
+    uint32_t reported = 0;
+    while (Clock::now() < end) {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        const uint32_t retraces = gRetraces.load(std::memory_order_relaxed);
+        if (retraces != reported) {
+            char text[192];
+            std::snprintf(text, sizeof(text), "retrace %u, xfb 0x%08X, gx %.2f MB, disc reads %u, nand ops %u, ai blocks %u, dsp subframes %u",
+                          retraces, gXfb.load(std::memory_order_relaxed), gGxBytes.load(std::memory_order_relaxed) / 1048576.0,
+                          gDiscReads.load(std::memory_order_relaxed), gFsOps.load(std::memory_order_relaxed),
+                          gAiBlocks.load(std::memory_order_relaxed), gDspFrames.load(std::memory_order_relaxed));
+            log_line("host:", text);
+            reported = retraces;
+        }
+    }
+    log_line("host:", "time limit reached");
+    if (gModule.debug_dump != nullptr) {
+        gModule.debug_dump();
+    }
+    std::fflush(stdout);
+    std::_Exit(0);
+}

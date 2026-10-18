@@ -75,7 +75,13 @@ FunctionAsyncExecutor::FunctionAsyncExecutor() : mMainThreadExec(nullptr), mHold
     }
 
     mMainThreadExec = new FunctionAsyncExecutorOnMainThread(OSGetCurrentThread());
+#ifdef TARGET_PC
+    // Units of the native record (0x34 bytes on the console), as many as the console's heap held.
+    _410 = JKRUnitHeap::create(sizeof(FunctionAsyncExecInfo), 0x34A8 / 0x34 * ALIGN_NEXT(sizeof(FunctionAsyncExecInfo), 4), 4,
+                               MR::getCurrentHeap(), false);
+#else
     _410 = JKRUnitHeap::create(0x34, 0x34A8, 4, MR::getCurrentHeap(), false);
+#endif
     _414 = JKRExpHeap::create(0x2800, MR::getCurrentHeap(), false);
 }
 
@@ -145,6 +151,15 @@ bool FunctionAsyncExecutor::isEnd(const char* pName) const {
         cur++;
     }
 
+#ifdef TARGET_PC
+    // The console read past the list's end here; natively a missing name is reported.
+    if (cur == lst) {
+        for (FunctionAsyncExecInfo* const* p = mHolders.begin(); p != lst; p++) {
+            OSReport("  async function %p \"%s\" end %d\n", (*p)->mName, (*p)->mName, (*p)->mIsEnd);
+        }
+        OSPanic(__FILE__, __LINE__, "isEnd: no async function %p \"%s\" among %d", pName, pName, (int)mHolders.size());
+    }
+#endif
     FunctionAsyncExecInfo* info = *cur;
     OSUnlockMutex(&MR::MutexHolder< 2 >::sMutex);
     return info->mIsEnd;

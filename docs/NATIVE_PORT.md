@@ -109,7 +109,7 @@ Complete over every compiled unit (1,874), with the compiler as the checker. An 
   - material IDs (`mDiffFlag`), now the console's address values.
   The rest are sizes and differences inside one allocation, hashes and report output.
 - Pointer/32-bit casts the cast errors miss (`reinterpret_cast<T*>(u32)`, `(u32)(uintptr_t)p`; clang-query, `native/tools/query_sites.py`): 52 sites (M). Sentinels compared with themselves, small message values, ARAM offsets. JUTException's crash screen walks PowerPC frames and reads module tables at console addresses; natively a panic is `OSPanic`.
-- Diagnostics `-Wno-everything` hid (`native/tools/warnings.py`, M):
+- Diagnostics `-Wno-everything` hid (`native/tools/diagnostics.py`, M):
   - 13 C calls without a prototype; `GXGetTexObjAll` received a pointer through an implicit `int`.
   - Undefined behaviour: 6 returns of a local's address, 8 matrix reads past a row's end, a `va_list` copied by dereference (a `char*` natively; the message tags' numbers and strings, ReplaceTagProcessor), an array deleted through an incomplete type (DrawBufferHolder).
   - DrawSyncManager's stop message (0x10000) passed the native pointer test.
@@ -120,6 +120,14 @@ Complete over every compiled unit (1,874), with the compiler as the checker. An 
 - Every `TARGET_PC` block of the fork, both branches (324, `native/tools/target_blocks.py`), read against the console code, paired-single assembly included (D). Fixed:
   - KCL conversion left the last position's and the last normal's y and z big-endian; all 1,016 collision files on the disc use both (M, `port/tools/kcl_check.py`).
   - A message tag's string argument lived in a side table keyed by the slot's address, lost when the text was copied; it is now the string's console address in the slot, the console's bytes.
+- First native runs (`native/host`, headless, the installed game.pak): the game boots to the Logo scene and runs its frame loop with audio pacing (M, 2026-10-18). What the runs found, all fixed:
+  - Object sizes the game fixed for 32-bit pointers: the root heap's header (0x90), fixed heap sizes (JKRNativeHeapSize gives twice the room where the parent has it), FunctionAsyncExecutor's unit heap units, copies and messages sized by console struct sizes (wave archive and stream tasks, oscillator copies, movie audio buffers), GXTexObj too small for GX's record (now 40 bytes; every GX record asserted to fit).
+  - operator new memory 16-byte aligned (the compiler zeroes new objects with aligned SSE stores).
+  - The unit heap's allocation table read as little-endian words (two objects in one unit).
+  - MSL's narrow formatter natively too: the host's printed "(null)" for a null string, which broke archive paths.
+  - A layout name pointing into a buffer whose scope had ended (LayoutManager).
+  - Interrupts that arrive while enabled are delivered before the next disable as well as at the next enable, as the console takes them when they arrive (M: 1.47-1.60 ns per disable/restore pair, unchanged).
+- `nebula_game_debug_dump` reports every game thread with the module addresses on its stack (`native/tools/symbolize_dump.py` names them).
 - The arena is aligned to its size (512 MB): an arena pointer's low 29 bits are its physical address, so values the game derives from an address's low bits (J3DDrawBuffer's hash slots) are the console's (M, `os_scheduler_tests`).
 
 ## Byte order

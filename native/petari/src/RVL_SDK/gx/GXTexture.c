@@ -7,6 +7,15 @@
 #include "revolution/gx/GXRegs.h"
 #include "revolution/os.h"
 
+#ifdef TARGET_PC
+// The public records hold GX's own natively too.
+_Static_assert(sizeof(GXTexObjInt) <= sizeof(GXTexObj) && _Alignof(GXTexObj) >= _Alignof(GXTexObjInt), "GXTexObj");
+_Static_assert(sizeof(GXTlutObjInt) <= sizeof(GXTlutObj) && _Alignof(GXTlutObj) >= _Alignof(GXTlutObjInt), "GXTlutObj");
+_Static_assert(sizeof(GXTexRegionInt) <= sizeof(GXTexRegion) && _Alignof(GXTexRegion) >= _Alignof(GXTexRegionInt), "GXTexRegion");
+_Static_assert(sizeof(GXTlutRegionInt) <= sizeof(GXTlutRegion) && _Alignof(GXTlutRegion) >= _Alignof(GXTlutRegionInt), "GXTlutRegion");
+_Static_assert(sizeof(GXLightObjInt) <= sizeof(GXLightObj) && _Alignof(GXLightObj) >= _Alignof(GXLightObjInt), "GXLightObj");
+#endif
+
 #define __GX_FLUSH_TEX_STATE() __GXFlushTextureState()
 
 #define IsCITexFmt(fmt) (fmt == GX_TF_C4 || fmt == GX_TF_C8 || fmt == GX_TF_C14X2)

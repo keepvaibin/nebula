@@ -12,7 +12,12 @@ extern "C" {
 typedef void (*GXBreakPtCallback)(void);
 
 typedef struct _GXFifoObj {
+#ifdef TARGET_PC
+    // GX's record (__GXFifoObj) holds pointers natively: 8-byte aligned (gx_fifo.c checks).
+    u64 pad[16];
+#else
     u8 pad[128];
+#endif
 } GXFifoObj;
 
 typedef struct __GXFifoObj {

@@ -61,8 +61,8 @@ void JASTrack::init() {
     initTimed();
     mRegisterParam.init();
 
-    memcpy(mOscParam, &sEnvOsc, 0x18);
-    memcpy(mOscParam + 1, &sPitchEnvOsc, 0x18);
+    memcpy(mOscParam, &sEnvOsc, sizeof(sEnvOsc));
+    memcpy(mOscParam + 1, &sPitchEnvOsc, sizeof(sPitchEnvOsc));
     for (int i = 0; i < 4; i++) {
         mOscPoint[i] = sDefaultAdsr[i];
     }
@@ -542,7 +542,7 @@ void JASTrack::setOscTable(u32 a, const JASOscillator::Point* point) {
 }
 
 void JASTrack::setOscAdsr(s16 attack, s16 delay, s16 sustain, s16 release, u16 e) {
-    memcpy(mOscParam, &sEnvOsc, 0x18);
+    memcpy(mOscParam, &sEnvOsc, sizeof(sEnvOsc));
     mOscPoint[0]._2 = attack;
     mOscParam[0].mTable = mOscPoint;
     mOscPoint[1]._2 = delay;

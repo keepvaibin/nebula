@@ -17,6 +17,13 @@ static void expect_wide(const wchar_t* got, const char* want, int count, int wan
     }
 }
 
+static void expect_narrow(const char* got, const char* want, int count, int want_count, const char* what) {
+    if (strcmp(got, want) != 0 || count != want_count) {
+        printf("FAIL %s: \"%s\" count %d (want \"%s\", %d)\n", what, got, count, want, want_count);
+        ++failures;
+    }
+}
+
 int main(void) {
     wchar_t buf[64];
     int n;
@@ -86,6 +93,31 @@ int main(void) {
         if (__fpclassifyf(nan_f) != 1 || __fpclassifyf(1.0f) != 4 || __fpclassifyf(0.0f) != 3 ||
             __fpclassifyf(1e-40f) != 5) {
             printf("FAIL fpclassify codes\n");
+            ++failures;
+        }
+    }
+
+    /* The narrow formatter, as MSL_C/printf.c: a null string prints as nothing, %ld is 32 bits, %#s is a Pascal
+       string, %c writes a NUL byte, the count is the whole output's even when it does not fit. */
+    {
+        char text[64];
+        const char* none = 0;
+        int count = sprintf(text, "[%s]/%s", none, "x");
+        expect_narrow(text, "[]/x", count, 4, "null %s");
+        count = sprintf(text, "%ld|%5.2s|%-3d|", 7L, "abcd", 2);
+        expect_narrow(text, "7|   ab|2  |", count, 12, "%ld, precision, left");
+        count = sprintf(text, "%#s", "\003abcdef");
+        expect_narrow(text, "abc", count, 3, "Pascal string");
+        count = snprintf(text, 4, "%d", 123456);
+        expect_narrow(text, "123", count, 6, "truncation keeps the whole count");
+        count = sprintf(text, "%02d:%02d", 3, 7);
+        expect_narrow(text, "03:07", count, 5, "zero fill");
+        count = sprintf(text, "a%qb%d", 1);
+        expect_narrow(text, "a%qb%d", count, 6, "invalid conversion");
+        count = sprintf(text, "%s%d", "/anim", 3);
+        expect_narrow(text, "/anim3", count, 6, "path");
+        if (sprintf(text, "%c", 0) != 1 || text[0] != 0) {
+            printf("FAIL %%c NUL\n");
             ++failures;
         }
     }

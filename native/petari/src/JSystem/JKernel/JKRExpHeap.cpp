@@ -19,8 +19,15 @@ JKRExpHeap* JKRExpHeap::createRoot(int heapNum, bool errorFlag) {
         char* arena;
         u32 arenaSize;
         JKRHeap::initArena(&arena, &arenaSize, heapNum);
+#ifdef TARGET_PC
+        // The heap's own object first: 0x90 bytes on the console, larger natively (pointer members).
+        const u32 headerSize = ALIGN_NEXT(sizeof(JKRExpHeap), 0x10);
+        char* area = arena + headerSize;
+        u32 size = arenaSize - headerSize;
+#else
         char* area = arena + 0x90;
         u32 size = arenaSize - 0x90;
+#endif
         heap = new (arena) JKRExpHeap(area, size, nullptr, errorFlag);
         JKRHeap::sRootHeap = heap;
     }
@@ -37,11 +44,21 @@ JKRExpHeap* JKRExpHeap::create(u32 size, JKRHeap* pParent, bool errorFlag) {
     if (size == 0xFFFFFFFF) {
         size = pParent->getMaxAllocatableSize(0x10);
     }
+#ifdef TARGET_PC
+    else {
+        size = JKRNativeHeapSize(size, pParent, 0x10);
+    }
+#endif
 
     u32 alignedSize = ALIGN_PREV(size, 0x10);
     u32 heapSize = ALIGN_NEXT(sizeof(JKRExpHeap), 0x10);
 
+#ifdef TARGET_PC
+    // The heap's object and one block header (0xA0 on the console).
+    if (alignedSize < heapSize + 0x10) {
+#else
     if (alignedSize < 0xA0) {
+#endif
         return nullptr;
     }
 

@@ -33,6 +33,11 @@ uint8_t* nebula_arena_base(void) {
     return sArena;
 }
 
+void nebula_image_range(uintptr_t* base, uintptr_t* size) {
+    *base = sImageBase;
+    *size = sImageSize;
+}
+
 void nebula_memory_regions(NebulaMemoryRegion* out, int* count) {
     out[0].physical = kMem1Physical;
     out[0].size = kMem1Size;

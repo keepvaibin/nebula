@@ -39,6 +39,9 @@
 
 const NebulaHostServices* nebula_host(void);
 
+_Static_assert(sizeof(__GXFifoObj) <= sizeof(GXFifoObj) && _Alignof(GXFifoObj) >= _Alignof(__GXFifoObj),
+               "GXFifoObj holds GX's FIFO record");
+
 /* The register blocks the SDK addresses (CP, PE, PI, MEM; GXInit.c's pointers): plain memory natively, set up with
    the FIFOs (GXInit's first register access follows __GXFifoInit). */
 static u16 sCpRegs[0x80];

@@ -161,9 +161,17 @@ HeapMemoryWatcher::HeapMemoryWatcher()
     createHeaps();
 }
 
+#ifdef TARGET_PC
+// Natively the report names the heap and the request, for the host's crash report.
+void HeapMemoryWatcher::memoryErrorCallback(void* pHeap, u32 size, int alignment) {
+    OSPanic(__FILE__, 537, "out of memory: heap %p (%d bytes free), %u bytes, alignment %d", pHeap,
+            static_cast< JKRHeap* >(pHeap)->getFreeSize(), size, alignment);
+}
+#else
 void HeapMemoryWatcher::memoryErrorCallback(void*, u32, int) {
     OSPanic(__FILE__, 537, "");
 }
+#endif
 
 void HeapMemoryWatcher::checkRestMemory() {
 }

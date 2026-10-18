@@ -1,7 +1,7 @@
 /* Force-included first in every unit of the game module (Petari's code, built natively).
 
    The console game linked its own C library, MSL. The game module keeps MSL's interface: the host C library where
-   the two agree, msl_runtime.c where they do not (16-bit wchar_t strings and MSL's wide formatter, MSL's
+   the two agree, msl_runtime.c where they do not (16-bit wchar_t strings and MSL's formatters, MSL's
    floating-point class codes, "C"-locale case-insensitive compares, abs taking int only). The host headers are
    included here, before any game header, so the renames below never reach their declarations. */
 #ifndef NEBULA_PRELUDE_H
@@ -40,6 +40,10 @@ wchar_t* nebula_msl_wcsncpy(wchar_t* dst, const wchar_t* src, size_t n);
 wchar_t* nebula_msl_wcschr(const wchar_t* s, wchar_t c);
 int nebula_msl_swprintf(wchar_t* s, size_t n, const wchar_t* format, ...);
 int nebula_msl_vswprintf(wchar_t* s, size_t n, const wchar_t* format, va_list arg);
+int nebula_msl_sprintf(char* s, const char* format, ...);
+int nebula_msl_snprintf(char* s, size_t n, const char* format, ...);
+int nebula_msl_vsprintf(char* s, const char* format, va_list arg);
+int nebula_msl_vsnprintf(char* s, size_t n, const char* format, va_list arg);
 int nebula_msl_fpclassifyf(float x);
 int nebula_msl_fpclassifyd(double x);
 
@@ -84,6 +88,11 @@ static inline int nebula_msl_stricmp(const char* s1, const char* s2) {
 #define wcschr nebula_msl_wcschr
 #define swprintf nebula_msl_swprintf
 #define vswprintf nebula_msl_vswprintf
+/* MSL's narrow formatter too: a null string prints as nothing (the host's prints "(null)"), and long is 32 bits. */
+#define sprintf nebula_msl_sprintf
+#define snprintf nebula_msl_snprintf
+#define vsprintf nebula_msl_vsprintf
+#define vsnprintf nebula_msl_vsnprintf
 #define __fpclassifyf nebula_msl_fpclassifyf
 #define __fpclassifyd nebula_msl_fpclassifyd
 

@@ -4,12 +4,31 @@
 
 static const u8 bitTable[] = {0x80, 0x40, 0x20, 0x10, 0x08, 0x04, 0x02, 0x01};
 
+// The allocation table is bytes, unit 0 in the first byte's top bit, scanned a word at a time: natively the word as the
+// console's big-endian load read it, so a word's top bit stays the first unit.
+#ifdef TARGET_PC
+#include <nebula_endian.h>
+static inline u32 batWord(const u32* p) {
+    return nebula_load_be32(p);
+}
+#else
+static inline u32 batWord(const u32* p) {
+    return *p;
+}
+#endif
+
 #pragma push
 #pragma optimization_level 3
 JKRUnitHeap* JKRUnitHeap::create(u32 unitSize, u32 size, u32 alignment, JKRHeap* parent, bool errorFlag) {
     if (alignment == 0) {
         alignment = 4;
     }
+#ifdef TARGET_PC
+    // Units 16-byte aligned natively (JKRHeap::alloc).
+    if (alignment < 16) {
+        alignment = 16;
+    }
+#endif
     if (alignment > unitSize) {
         unitSize = alignment;
     }
@@ -21,6 +40,11 @@ JKRUnitHeap* JKRUnitHeap::create(u32 unitSize, u32 size, u32 alignment, JKRHeap*
     if (size == 0xFFFFFFFF) {
         size = parent->getMaxAllocatableSize(8);
     }
+#ifdef TARGET_PC
+    else {
+        size = JKRNativeHeapSize(size, parent, 8);
+    }
+#endif
     if (size < sizeof(JKRUnitHeap)) {
         return nullptr;
     }
@@ -97,7 +121,7 @@ s32 JKRUnitHeap::find1FreeBlock(int direction) {
         u32 word;
         u32* words = reinterpret_cast< u32* >(mBat);
         for (u32 index = 0; index < wordCount; ++index, ++words) {
-            word = *words;
+            word = batWord(words);
             if (word != 0xFFFFFFFF) {
                 for (int bit = 0; bit < 32; ++bit) {
                     if (!(word & (0x80000000 >> bit))) {
@@ -110,7 +134,7 @@ s32 JKRUnitHeap::find1FreeBlock(int direction) {
         u32 word;
         u32* words = reinterpret_cast< u32* >(mBat + ALIGN_NEXT(mUnitCount, 32) / 8) - 1;
         for (int index = (mUnitCount + 31) / 32 - 1; index >= 0; --index, --words) {
-            word = *words;
+            word = batWord(words);
             if (word != 0xFFFFFFFF) {
                 for (int bit = 31; bit >= 0; --bit) {
                     if (!(word & (0x80000000 >> bit))) {
@@ -145,7 +169,7 @@ s32 JKRUnitHeap::findFreeBlock_fromHead(u32 count) {
     u32* end = begin + (mUnitCount + 31) / 32;
 
     for (u32* words = begin; words <= end; ++words) {
-        u32 word = words != end ? *words : 0xFFFFFFFF;
+        u32 word = words != end ? batWord(words) : 0xFFFFFFFF;
         if (word == 0) {
             if (!inFreeRun) {
                 runStart = (words - reinterpret_cast< u32* >(mBat)) * 32;
@@ -204,7 +228,7 @@ s32 JKRUnitHeap::findFreeBlock_fromTail(u32 count) {
     s32 bestLength = 0xFFFF;
 
     for (u32* words = begin + (mUnitCount + 31) / 32 - 1; words >= end; --words) {
-        u32 word = words != end ? *words : 0xFFFFFFFF;
+        u32 word = words != end ? batWord(words) : 0xFFFFFFFF;
         if (word == 0) {
             if (!inFreeRun) {
                 runStart = (words - reinterpret_cast< u32* >(mBat)) * 32 + 31;
@@ -359,7 +383,7 @@ void JKRUnitHeap::state_register(TState* state, u32 id) const {
     setState_uUsedSize_(state, mSize - const_cast< JKRUnitHeap* >(this)->getTotalFreeSize());
     u32 checkCode = 0;
     for (u32* word = reinterpret_cast< u32* >(mBat); word < reinterpret_cast< u32* >(mUnits); ++word) {
-        checkCode += *word;
+        checkCode += batWord(word);
     }
     setState_u32CheckCode_(state, checkCode);
 }

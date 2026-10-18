@@ -131,8 +131,10 @@ namespace {
 LayoutManager::LayoutManager(const char* pLayoutName, bool useArchiveNamePrefix, u32 rootPaneAnimLayerNum, u32 textBoxBufferLength)
     : mLayoutHolder(), mLayout(), mAnimTransList(), mDrawInfo(), mIsScreenHidden(), _61(true), mIndDummyTexMap(), mPaneCount(), mPaneInfoList(),
       mGroupCtrlCount(), mGroupCtrlList(), mLayoutName() {
+    // pLayoutName points into fileNameWithoutExtension below, so it lives as long as the constructor (the original declared
+    // it in the if block: a dangling pointer once the block ends).
+    char fileNameWithoutExtension[0x60];
     if (useArchiveNamePrefix) {
-        char fileNameWithoutExtension[0x60];
         char fileNameFromPrefix[0x80];
         MR::makeLayoutArchiveFileNameFromPrefix(fileNameFromPrefix, sizeof(fileNameFromPrefix), pLayoutName, true);
         MR::removeExtensionString(fileNameWithoutExtension, sizeof(fileNameWithoutExtension), fileNameFromPrefix);
