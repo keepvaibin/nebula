@@ -117,6 +117,9 @@ Complete over every compiled unit (1,874), with the compiler as the checker. An 
   - 24 include paths differ in case from the file (case-sensitive file systems).
   - printf-style functions now carry format attributes: 47 mismatches, all pointers printed with `%x` in diagnostics. No class object passes through varargs (clang-query), so no `BE<T>` value reaches a format.
   - Reviewed, nothing native-specific: values left uninitialised on paths the original also left undefined (52), deletes through `void*` (4), `offsetof` on non-standard layouts, shifts into the sign bit, enum range compares (clang does not assume enum ranges without `-fstrict-enums`).
+- Every `TARGET_PC` block of the fork, both branches (324, `native/tools/target_blocks.py`), read against the console code, paired-single assembly included (D). Fixed:
+  - KCL conversion left the last position's and the last normal's y and z big-endian; all 1,016 collision files on the disc use both (M, `port/tools/kcl_check.py`).
+  - A message tag's string argument lived in a side table keyed by the slot's address, lost when the text was copied; it is now the string's console address in the slot, the console's bytes.
 - The arena is aligned to its size (512 MB): an arena pointer's low 29 bits are its physical address, so values the game derives from an address's low bits (J3DDrawBuffer's hash slots) are the console's (M, `os_scheduler_tests`).
 
 ## Byte order
