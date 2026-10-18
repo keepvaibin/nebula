@@ -93,7 +93,8 @@ target_compile_options(smg_game PRIVATE
     -Werror=implicit-function-declaration -Werror=implicit-int -Werror=int-conversion
     -Werror=incompatible-function-pointer-types -Werror=return-stack-address -Werror=array-bounds
     "SHELL:-include nebula_prelude.h"
-    $<$<COMPILE_LANGUAGE:CXX>:-nostdinc++ -fno-rtti -fno-exceptions -fno-sized-deallocation -fno-aligned-allocation>
+    $<$<COMPILE_LANGUAGE:CXX>:-nostdinc++ -fno-rtti -fno-exceptions -fno-sized-deallocation -fno-aligned-allocation
+        -fno-threadsafe-statics>
     -Wno-register -Wno-c++11-narrowing)
 
 if(WIN32)
