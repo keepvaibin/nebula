@@ -23,6 +23,8 @@ int nebula_memory_init(void);
 uint8_t* nebula_arena_base(void);
 /* The module's own image (its code and data), for diagnostics. */
 void nebula_image_range(uintptr_t* base, uintptr_t* size);
+/* Integer division traps in the game module finish with the console CPU's result (os/divide_native.c). */
+void nebula_divide_init(void);
 void nebula_memory_regions(NebulaMemoryRegion* out, int* count);
 void nebula_memory_arenas(void** mem1Lo, void** mem1Hi, void** mem2Lo, void** mem2Hi);
 /* Game memory written for the GPU (the host's gpu_coherent service); ranges outside the arena and image are ignored. */

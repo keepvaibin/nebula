@@ -807,9 +807,9 @@ uint32_t svc_sc_get(void*, uint32_t item) {
     }
 }
 
-#if defined(NEBULA_HOST_RENDERER)
 // Remote 0: Nebula's controls (v1.0.1's bindings, keyboard and mouse, controllers) as a Wii Remote with a Nunchuk,
-// connected when the game starts WPAD and reporting 100 times a second in the format the game asks for.
+// connected when the game starts WPAD and reporting 100 times a second in the format the game asks for. Headless, the
+// same remote at rest: the game sees a connected controller (no "connect the Wii Remote" pause) and no input.
 std::atomic<int> gWpadStarted{0};
 std::atomic<uint32_t> gWpadReport{0x30};
 std::atomic<int> gWpadDpd{0};
@@ -827,12 +827,58 @@ uint8_t report_id_for_format(uint32_t format) {
     }
 }
 
+#if !defined(NEBULA_HOST_RENDERER)
+// v1.0.1's virtual remote (native_host.cpp): its EEPROM calibration (IR, then the accelerometer's 0 g and 1 g, each
+// twice) and its Nunchuk's (accelerometer 0 g and 1 g, stick maximum, minimum and centre).
+void idle_wiimote_calibration(uint8_t (&eeprom)[0x2A], uint8_t (&nunchuk)[32]) {
+    static const uint8_t ir[11] = {0x7f, 0xa2, 0x8b, 0x80, 0xa2, 0x80, 0x5d, 0x30, 0x7f, 0x5d, 0x0c};
+    static const uint8_t accel[10] = {0x80, 0x80, 0x80, 0x00, 0x99, 0x99, 0x99, 0x00, 0x00, 0xa0};
+    static const uint8_t extension[16] = {0x7d, 0x7e, 0x7a, 0x3c, 0xb1, 0xaf, 0xae, 0x1b,
+                                          0xe0, 0x15, 0x7b, 0xe6, 0x1d, 0x81, 0x23, 0x78};
+    std::memset(eeprom, 0, sizeof(eeprom));
+    std::memset(nunchuk, 0, sizeof(nunchuk));
+    std::memcpy(eeprom, ir, sizeof(ir));
+    std::memcpy(eeprom + 0x0B, ir, sizeof(ir));
+    std::memcpy(eeprom + 0x16, accel, sizeof(accel));
+    std::memcpy(eeprom + 0x20, accel, sizeof(accel));
+    std::memcpy(nunchuk, extension, sizeof(extension));
+}
+
+// A report from the remote at rest, from its id: no buttons, the accelerometer at 1 g on Z, no IR points, the Nunchuk
+// level with its stick at the calibrated centre and C and Z up.
+size_t idle_wiimote_report(uint8_t id, uint8_t* report) {
+    std::memset(report, 0, 22);
+    report[0] = id;
+    if (id == 0x30) {
+        return 3;
+    }
+    report[3] = 0x80;
+    report[4] = 0x80;
+    report[5] = 0x99;
+    if (id == 0x31) {
+        return 6;
+    }
+    if (id == 0x33) {
+        std::memset(report + 6, 0xFF, 12);
+        return 18;
+    }
+    std::memset(report + 6, 0xFF, 10);
+    static const uint8_t nunchuk[6] = {0x7b, 0x81, 0x7d, 0x7e, 0xae, 0x03};
+    std::memcpy(report + 16, nunchuk, sizeof(nunchuk));
+    return 22;
+}
+#endif
+
 void wpad_thread() {
     while (!gWpadStarted.load(std::memory_order_acquire)) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     NebulaWiimoteConnection connection{};
+#if defined(NEBULA_HOST_RENDERER)
     galaxy::host::native_game_wiimote_calibration(connection.eeprom, connection.extension_calibration);
+#else
+    idle_wiimote_calibration(connection.eeprom, connection.extension_calibration);
+#endif
     connection.extension = 1;  // WPAD_DEV_FREESTYLE: the Nunchuk
     connection.battery = 0xC0;
     gModule.wpad_connect(0, 1, &connection);
@@ -842,6 +888,11 @@ void wpad_thread() {
         sleep_until_precise(next);
         next += period;
         const uint8_t id = static_cast<uint8_t>(gWpadReport.load(std::memory_order_relaxed));
+#if !defined(NEBULA_HOST_RENDERER)
+        uint8_t idle[22];
+        gModule.wpad_report(0, idle, idle_wiimote_report(id, idle));
+        continue;
+#else
         const int32_t mode = gStarPointerMode.load(std::memory_order_relaxed);
         const auto snapshot = galaxy::host::native_game_wiimote_snapshot(
             id, gRetraces.load(std::memory_order_relaxed), gWpadDpd.load(std::memory_order_relaxed) != 0, mode,
@@ -853,12 +904,11 @@ void wpad_thread() {
         if (built.status == galaxy::input::WiimoteReportBuildStatus::Ok && built.size > 1) {
             gModule.wpad_report(0, report + 1, built.size - 1);  // from the report id, past the HID header
         }
+#endif
     }
 }
-#endif
 
 void svc_wpad_control(void*, uint32_t chan, uint32_t what, uint32_t value) {
-#if defined(NEBULA_HOST_RENDERER)
     if (chan != 0) {
         return;
     }
@@ -874,16 +924,13 @@ void svc_wpad_control(void*, uint32_t chan, uint32_t what, uint32_t value) {
         break;
     case NEBULA_WPAD_MOTOR:
         gMotor.store(value != 0, std::memory_order_relaxed);
+#if defined(NEBULA_HOST_RENDERER)
         galaxy::host::native_game_rumble(value != 0, gStarPointerMode.load(std::memory_order_relaxed));
+#endif
         break;
     default:
         break;
     }
-#else
-    (void)chan;
-    (void)what;
-    (void)value;
-#endif
 }
 void svc_wpad_speaker_data(void*, uint32_t, const uint8_t*, uint32_t) {}
 
@@ -1247,9 +1294,7 @@ int main(int argc, char** argv) {
     gFs.start();
     std::thread(ai_thread).detach();
     std::thread(vi_thread).detach();
-#if defined(NEBULA_HOST_RENDERER)
     std::thread(wpad_thread).detach();
-#endif
     std::thread([] { gModule.run(); }).detach();
 
     const auto end = Clock::now() + std::chrono::duration<double>(seconds > 0 ? seconds : 1e9);
