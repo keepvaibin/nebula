@@ -30,6 +30,9 @@ else:
                 "build/RMGE01/include"]
     defines = ["VERSION=1", "RMGJ01=0", "RMGE01=1", "RMGP01=2", "RMGK01=3"]
 libs = ["src/Game", "src/JSystem", "src/nw4r", "src/RVLFaceLib"]
+# NEBULA_CENSUS_SDK=gx,gd,...: also the RVL SDK parts the native SDK layer reuses.
+if os.environ.get("NEBULA_CENSUS_SDK"):
+    libs = ["src/RVL_SDK/" + d for d in os.environ["NEBULA_CENSUS_SDK"].split(",")]
 units = []
 for lib in libs:
     for d, _, files in os.walk(os.path.join(root, lib)):
