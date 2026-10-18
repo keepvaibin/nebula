@@ -1,7 +1,4 @@
 /* The native SDK layer's core: the module's entry points (nebula_game_api.h) and what a missing piece does. */
-#include <stdio.h>
-#include <stdlib.h>
-
 #include <nebula_game_api.h>
 
 #include "nebula_sdk.h"
@@ -26,6 +23,7 @@ NEBULA_GAME_API void nebula_game_run(void) {
     if (sHost == NULL) {
         nebula_fatal("nebula_game_run before nebula_game_attach");
     }
+    nebula_load_dol_data();
     nebula_os_boot(nebula_game_main);
 }
 
@@ -44,7 +42,5 @@ NEBULA_GAME_API int nebula_game_memory_regions(NebulaGameMemoryRegion* out, int 
 /* An SDK function the native layer does not implement yet (sdk/stubs). The game reaching one is a gap to fill,
    never something to step over. */
 void nebula_sdk_missing(const char* name) {
-    fprintf(stderr, "Nebula: the game called %s, which the native SDK layer does not implement yet.\n", name);
-    fflush(stderr);
-    abort();
+    nebula_fatal("the game called %s, which the native SDK layer does not implement yet", name);
 }

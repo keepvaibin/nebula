@@ -14,10 +14,6 @@ if(NOT EXISTS "${NEBULA_PETARI_DIR}/src/Game/System/GameSystem.cpp")
 endif()
 set(NEBULA_GAME_VERSION "RMGE01" CACHE STRING "Game release")
 set_property(CACHE NEBULA_GAME_VERSION PROPERTY STRINGS RMGE01)
-if(NOT EXISTS "${NEBULA_PETARI_DIR}/build/${NEBULA_GAME_VERSION}/include/assets")
-    message(FATAL_ERROR "Run Petari's configure.py and `ninja build/${NEBULA_GAME_VERSION}/config.json` with the "
-                        "user's main.dol first: the DOL's data tables are extracted into build/${NEBULA_GAME_VERSION}/include.")
-endif()
 
 set(petari "${NEBULA_PETARI_DIR}")
 file(GLOB_RECURSE game_sources CONFIGURE_DEPENDS
@@ -57,7 +53,6 @@ target_include_directories(smg_game BEFORE PRIVATE
     "${petari}/libs/RVLFaceLib/include"
     "${petari}/libs/RVL_SDK/include"
     "${petari}/libs/nw4r/include"
-    "${petari}/build/${NEBULA_GAME_VERSION}/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/sdk"
     "${CMAKE_CURRENT_SOURCE_DIR}/include")
 

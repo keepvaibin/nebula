@@ -9,6 +9,11 @@
 
 #include "nebula_sdk.h"
 
+/* No host: the log goes to stderr. */
+const struct NebulaHostServices* nebula_host(void) {
+    return 0;
+}
+
 static char sOrder[64];
 static int sOrderLength;
 static OSMessageQueue sQueue;

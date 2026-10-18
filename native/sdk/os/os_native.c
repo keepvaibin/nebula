@@ -18,6 +18,8 @@
 
 #include <revolution/os.h>
 
+#include <nebula_game_api.h>
+
 #include "nebula_sdk.h"
 
 #if defined(_WIN32)
@@ -39,11 +41,43 @@ void OSSetMEM1ArenaLo(void*);
 void OSSetMEM1ArenaHi(void*);
 void OSSetMEM2ArenaLo(void*);
 
-/* Log */
+/* Log: whole lines to the host's log (stderr before the host attaches); a report without its newline yet waits for
+   the rest of its line, as the console's output did. */
+
+static char sLogLine[1024];
+static size_t sLogLength;
+static atomic_flag sLogLock = ATOMIC_FLAG_INIT;
+
+static void log_emit(void) {
+    const NebulaHostServices* host = nebula_host();
+    sLogLine[sLogLength] = '\0';
+    if (host != NULL && host->log != NULL) {
+        host->log(host->user, sLogLine);
+    } else {
+        fputs(sLogLine, stderr);
+        fputc('\n', stderr);
+        fflush(stderr);
+    }
+    sLogLength = 0;
+}
 
 void nebula_vlog(const char* format, va_list args) {
-    vfprintf(stderr, format, args);
-    fflush(stderr);
+    char text[1024];
+    const int n = vsnprintf(text, sizeof(text), format, args);
+    const size_t length = n < 0 ? 0 : ((size_t)n < sizeof(text) ? (size_t)n : sizeof(text) - 1);
+    while (atomic_flag_test_and_set_explicit(&sLogLock, memory_order_acquire)) {
+    }
+    for (size_t i = 0; i < length; i++) {
+        if (text[i] == '\n') {
+            log_emit();
+            continue;
+        }
+        if (sLogLength == sizeof(sLogLine) - 1) {
+            log_emit();
+        }
+        sLogLine[sLogLength++] = text[i];
+    }
+    atomic_flag_clear_explicit(&sLogLock, memory_order_release);
 }
 
 void nebula_log(const char* format, ...) {
@@ -53,15 +87,23 @@ void nebula_log(const char* format, ...) {
     va_end(args);
 }
 
-void nebula_fatal(const char* format, ...) {
-    va_list args;
-    fputs("Nebula: fatal: ", stderr);
-    va_start(args, format);
-    vfprintf(stderr, format, args);
-    va_end(args);
-    fputc('\n', stderr);
+static void __attribute__((noreturn)) fatal_text(const char* text) {
+    const NebulaHostServices* host = nebula_host();
+    if (host != NULL && host->fatal != NULL) {
+        host->fatal(host->user, text);
+    }
+    fprintf(stderr, "Nebula: fatal: %s\n", text);
     fflush(stderr);
     abort();
+}
+
+void nebula_fatal(const char* format, ...) {
+    char text[1024];
+    va_list args;
+    va_start(args, format);
+    vsnprintf(text, sizeof(text), format, args);
+    va_end(args);
+    fatal_text(text);
 }
 
 /* Time base: 60.75 MHz (the console's bus clock / 4), counted from boot. The host counter is scaled by a 64.64
@@ -654,14 +696,14 @@ void OSVReport(const char* format, va_list args) {
 }
 
 void OSPanic(const char* file, int line, const char* format, ...) {
+    char message[768];
+    char text[1024];
     va_list args;
-    fprintf(stderr, "Nebula: the game stopped (OSPanic) at %s:%d: ", file, line);
     va_start(args, format);
-    vfprintf(stderr, format, args);
+    vsnprintf(message, sizeof(message), format, args);
     va_end(args);
-    fputc('\n', stderr);
-    fflush(stderr);
-    abort();
+    snprintf(text, sizeof(text), "the game stopped (OSPanic) at %s:%d: %s", file, line, message);
+    fatal_text(text);
 }
 
 /* Boot */

@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 2u
+#define NEBULA_GAME_API_VERSION 3u
 
 /* A physical range of the game's memory and where it is in the host process: what the GPU's addresses resolve to. */
 typedef struct NebulaGameMemoryRegion {
@@ -114,6 +114,9 @@ typedef struct NebulaHostServices {
 
     /* One line of the game's reports (OSReport) or the native layer's log, without a trailing newline. */
     void (*log)(void* user, const char* text);
+    /* The game cannot go on (an OSPanic, a JUTException panic, a native-layer error): the host reports `text` with
+       its own diagnostics and ends the process. Does not return. */
+    void (*fatal)(void* user, const char* text);
 
     /* GX: the game's command stream (the console's main FIFO), in order, as spans of the module's command ring. A
        span is contiguous, ends where the game flushed (GXFlush, a draw sync, a draw done: a command boundary) and
@@ -131,6 +134,9 @@ typedef struct NebulaHostServices {
     /* Reads `size` bytes at byte `offset` of the game partition's data into `dst` (game memory) without blocking;
        the host calls nebula_game_disc_complete(slot, bytes read or -1) from any thread when done. */
     void (*disc_read)(void* user, uint64_t offset, uint32_t size, void* dst, uint32_t slot);
+    /* The game partition's main.dol as on the disc, valid for the process's life: the module reads the data tables
+       the game keeps in its executable from it at boot (sdk/dol_data.c). */
+    const uint8_t* (*disc_dol)(void* user, size_t* size);
 
     /* Video: at each retrace, the frame buffer the display shows from now (its physical address; 0 before the first),
        whether the output is black, and the retrace count. Called on the simulation thread; the host only records it. */

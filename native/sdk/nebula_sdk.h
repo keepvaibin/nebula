@@ -24,10 +24,16 @@ uint8_t* nebula_arena_base(void);
 void nebula_memory_regions(NebulaMemoryRegion* out, int* count);
 void nebula_memory_arenas(void** mem1Lo, void** mem1Hi, void** mem2Lo, void** mem2Hi);
 
-/* Log lines and fatal errors (stderr until the host's log is attached). */
-void nebula_log(const char* format, ...);
-void nebula_vlog(const char* format, va_list args);
-void nebula_fatal(const char* format, ...) __attribute__((noreturn));
+/* The host's services (sdk/core.c); NULL before nebula_game_attach. */
+const struct NebulaHostServices* nebula_host(void);
+
+/* Log lines and fatal errors, through the host's log and fatal services (stderr before the host attaches). */
+void nebula_log(const char* format, ...) __attribute__((format(printf, 1, 2)));
+void nebula_vlog(const char* format, va_list args) __attribute__((format(printf, 1, 0)));
+void nebula_fatal(const char* format, ...) __attribute__((noreturn, format(printf, 1, 2)));
+
+/* The data tables the game keeps in main.dol, read from the user's disc (dol_data.c). */
+void nebula_load_dol_data(void);
 
 /* The OS core (os/os_native.c). */
 /* A device interrupt by its SDK number (__OS_INTERRUPT_*), from any host thread: the handler registered with
