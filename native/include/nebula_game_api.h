@@ -32,6 +32,48 @@ typedef struct NebulaGameMemoryRegion {
     uint8_t* host;
 } NebulaGameMemoryRegion;
 
+/* A NAND file system operation (nand_native.c), on the console's absolute paths ("/title/00010000/524d4745/data/..."). */
+enum {
+    NEBULA_FS_OPEN = 1,     /* path, mode = NAND access type -> fd */
+    NEBULA_FS_CLOSE,        /* fd */
+    NEBULA_FS_READ,         /* fd, buffer, size -> bytes */
+    NEBULA_FS_WRITE,        /* fd, buffer, size -> bytes */
+    NEBULA_FS_SEEK,         /* fd, offset, whence (0 set, 1 current, 2 end) -> position */
+    NEBULA_FS_LENGTH,       /* fd -> length */
+    NEBULA_FS_CREATE,       /* path, mode = permission, attribute */
+    NEBULA_FS_CREATE_DIR,   /* path, mode = permission, attribute */
+    NEBULA_FS_DELETE,       /* path (a file, or a directory with what it holds) */
+    NEBULA_FS_RENAME,       /* path -> path2 */
+    NEBULA_FS_SAFE_OPEN,    /* path, mode -> fd: writes go to a copy that NEBULA_FS_SAFE_CLOSE puts in place atomically */
+    NEBULA_FS_SAFE_CLOSE,   /* fd */
+};
+
+/* System settings (SCGet*), with the SDK's values (SC_LANGUAGE_*, SC_SOUND_MODE_*, SC_ASPECT_RATIO_*...). */
+enum {
+    NEBULA_SC_LANGUAGE = 1,
+    NEBULA_SC_SOUND_MODE,
+    NEBULA_SC_ASPECT_RATIO,
+    NEBULA_SC_PROGRESSIVE_MODE,
+    NEBULA_SC_EURGB60_MODE,
+    NEBULA_SC_SENSOR_BAR_POSITION,  /* 0 below the screen, 1 above */
+    NEBULA_SC_DPD_SENSITIVITY,      /* 1..5 */
+    NEBULA_SC_SPEAKER_VOLUME,       /* 0..127 */
+    NEBULA_SC_MOTOR_MODE,           /* 0 rumble off, 1 on */
+};
+
+typedef struct NebulaFsRequest {
+    uint32_t op;
+    const char* path;
+    const char* path2;
+    int32_t fd;
+    void* buffer;
+    uint32_t size;
+    int32_t offset;
+    int32_t whence;
+    uint32_t mode;
+    uint32_t attribute;
+} NebulaFsRequest;
+
 typedef struct NebulaHostServices {
     uint32_t version;
     uint32_t size;
@@ -50,6 +92,23 @@ typedef struct NebulaHostServices {
     void (*gx_pe_marker)(void* user, int finish, uint16_t token);
     /* An EFB pixel (type 0: colour, 1: depth), as GXPeekARGB/GXPeekZ read it. */
     uint32_t (*gx_peek_efb)(void* user, uint16_t x, uint16_t y, uint32_t type);
+
+    /* Disc: the game partition's file table as on the disc (big-endian), valid for the process's life. */
+    const uint8_t* (*disc_fst)(void* user, size_t* size);
+    /* Reads `size` bytes at byte `offset` of the game partition's data into `dst` (game memory) without blocking;
+       the host calls nebula_game_disc_complete(slot, bytes read or -1) from any thread when done. */
+    void (*disc_read)(void* user, uint64_t offset, uint32_t size, void* dst, uint32_t slot);
+
+    /* Video: at each retrace, the frame buffer the display shows from now (its physical address; 0 before the first),
+       whether the output is black, and the retrace count. Called on the simulation thread; the host only records it. */
+    void (*vi_frame)(void* user, uint32_t xfb, int black, uint32_t retrace);
+
+    /* NAND: starts `request` without blocking (its strings and buffer stay valid until completion); the host calls
+       nebula_game_fs_complete(slot, result) from any thread with the result above or a NAND_RESULT_* code. */
+    void (*fs_request)(void* user, const NebulaFsRequest* request, uint32_t slot);
+
+    /* A system setting (NEBULA_SC_*). */
+    uint32_t (*sc_get)(void* user, uint32_t item);
 } NebulaHostServices;
 
 /* Returns NEBULA_GAME_API_VERSION, or 0 if the host's services are too old. */
@@ -64,6 +123,12 @@ NEBULA_GAME_API void nebula_game_gx_event(int finish, uint16_t token);
    the ring may reuse them. The host must release without waiting on further progress of the game, which may itself be
    waiting for room. */
 NEBULA_GAME_API void nebula_game_gx_release(size_t size);
+/* A disc read finished: `result` is the bytes read, or -1 on a read error. */
+NEBULA_GAME_API void nebula_game_disc_complete(uint32_t slot, int32_t result);
+/* A video retrace (the display clock: one per field at 59.94 Hz, or the host's presentation pace). */
+NEBULA_GAME_API void nebula_game_vi_retrace(void);
+/* A NAND operation finished. */
+NEBULA_GAME_API void nebula_game_fs_complete(uint32_t slot, int32_t result);
 
 #ifdef __cplusplus
 }

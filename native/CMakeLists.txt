@@ -26,13 +26,16 @@ file(GLOB_RECURSE game_sources CONFIGURE_DEPENDS
     "${petari}/src/nw4r/*.cpp" "${petari}/src/nw4r/*.c"
     "${petari}/src/RVLFaceLib/*.c" "${petari}/src/RVLFaceLib/*.cpp")
 # The SDK code the native layer reuses (docs/NATIVE_PORT.md, "Platform boundary"): GX but its FIFO (sdk/gx/gx_fifo.c),
-# display-list building, the MEM heaps, KPAD's processing, and the OS's scheduler, alarms, synchronisation and arenas
+# display-list building, the MEM heaps, KPAD's processing, the disc's file system (dvdfs.c), U8 archives (arc.c), the Wii Remote speaker's encoder (wenc.c), and the OS's scheduler, alarms, synchronisation and arenas
 # on the native OS core (sdk/os/os_native.c).
 file(GLOB sdk_sources CONFIGURE_DEPENDS
     "${petari}/src/RVL_SDK/gx/*.c"
     "${petari}/src/RVL_SDK/gd/*.c"
     "${petari}/src/RVL_SDK/mem/*.c"
-    "${petari}/src/RVL_SDK/kpad/*.c")
+    "${petari}/src/RVL_SDK/kpad/*.c"
+    "${petari}/src/RVL_SDK/dvd/dvdfs.c"
+    "${petari}/src/RVL_SDK/arc/arc.c"
+    "${petari}/src/RVL_SDK/wenc/wenc.c")
 list(REMOVE_ITEM sdk_sources "${petari}/src/RVL_SDK/gx/GXFifo.c")
 foreach(unit OSThread OSMutex OSMessage OSAlarm OSTime OSArena OSAlloc)
     list(APPEND sdk_sources "${petari}/src/RVL_SDK/os/${unit}.c")
