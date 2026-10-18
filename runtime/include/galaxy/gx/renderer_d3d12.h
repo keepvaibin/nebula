@@ -1124,6 +1124,13 @@ private:
     double telemetry_latency_wait_ms_ = 0.0;
     double telemetry_latency_wait_max_ms_ = 0.0;
     double telemetry_gpu_ms_ = 0.0;
+    // GPU time by a command list's place in its frame (0: the first list after a present; the last place collects
+    // the rest), for present-stats' gpu-by-list-ms.
+    static constexpr unsigned kGpuListPlaces = 6;
+    std::array<std::uint8_t, kFramesInFlight> timestamp_list_place_{};
+    unsigned list_in_frame_ = 0;
+    std::array<double, kGpuListPlaces> telemetry_gpu_by_place_{};
+    std::array<unsigned, kGpuListPlaces> telemetry_gpu_by_place_count_{};
     std::uint64_t telemetry_gpu_samples_ = 0;
     std::uint64_t telemetry_no_xfb_present_count_ = 0;
     std::uint64_t telemetry_backbuffer_clear_count_ = 0;

@@ -5927,6 +5927,8 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
                     1000.0 / static_cast<double>(timestamp_frequency_);
                 telemetry_gpu_ms_ += gpu_ms;
                 gpu_budget_ms_ += gpu_ms;
+                telemetry_gpu_by_place_[timestamp_list_place_[frame_slot_]] += gpu_ms;
+                ++telemetry_gpu_by_place_count_[timestamp_list_place_[frame_slot_]];
                 ++telemetry_gpu_samples_;
             }
             const D3D12_RANGE no_write{0, 0};
@@ -6470,6 +6472,14 @@ void RendererD3D12::present_to_swap_chain() {
             message
                 << " gpu-samples=" << telemetry_gpu_samples_
                 << " gpu-total-ms=" << telemetry_gpu_ms_
+                << " gpu-by-list-ms=";
+            for (unsigned place = 0; place < kGpuListPlaces; ++place) {
+                message << (place == 0 ? "" : "/")
+                        << (telemetry_gpu_by_place_count_[place] != 0u
+                                ? telemetry_gpu_by_place_[place] / telemetry_gpu_by_place_count_[place]
+                                : 0.0);
+            }
+            message
                 << " gpu-scope=completed-renderer-command-lists"
                 << " no-xfb-presents="
                 << telemetry_no_xfb_present_count_
@@ -6506,6 +6516,8 @@ void RendererD3D12::present_to_swap_chain() {
             telemetry_latency_wait_ms_ = 0.0;
             telemetry_latency_wait_max_ms_ = 0.0;
             telemetry_gpu_ms_ = 0.0;
+            telemetry_gpu_by_place_.fill(0.0);
+            telemetry_gpu_by_place_count_.fill(0u);
             telemetry_gpu_samples_ = 0;
             telemetry_no_xfb_present_count_ = 0;
             telemetry_backbuffer_clear_count_ = 0;
@@ -6542,6 +6554,8 @@ std::uint64_t RendererD3D12::end_frame(
 
     timestamp_pending_[frame_slot_] =
         timestamp_query_heap_ != nullptr && timestamp_readback_ != nullptr;
+    timestamp_list_place_[frame_slot_] = static_cast<std::uint8_t>(std::min(list_in_frame_, kGpuListPlaces - 1u));
+    list_in_frame_ = present_swap_chain ? 0u : list_in_frame_ + 1u;
 
     const std::uint64_t submitted_frame = frame_index_ + 1u;
     const std::uint64_t submitted_fence = ++next_fence_value_;
