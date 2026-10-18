@@ -92,6 +92,10 @@ std::string lower(std::string s) {
 
 // The 16 hex digits of a texture-pack name (or the hex alone).
 bool parse_hash(const std::string& text, std::uint64_t& hash) {
+    if (lower(text) == "untextured") {
+        hash = kRtUntexturedHash;
+        return true;
+    }
     for (const std::string& part : split(text, '_')) {
         const std::string token = lower(part);
         if (token.size() == 16u &&
@@ -137,6 +141,7 @@ void apply_class(const std::string& text, RtMaterial& m) {
         else if (token == "lens") m.lens = true;
         else if (token == "mirror") m.mirror = true;
         else if (token == "star") m.star = true;
+        else if (token == "strip") m.strip = true;
         else if (token == "waterfall") {
             m.waterfall = true;
             set(RtSurfaceClass::Water);
@@ -405,6 +410,8 @@ std::uint16_t rt_material_index(std::uint64_t hash) noexcept {
 namespace {
 // The loaded stage's own materials (rt_materials_set_stage), by material index.
 std::vector<std::pair<std::uint16_t, const RtMaterial*>> g_stage_materials;
+// Its untextured surfaces' material (0: none).
+std::uint16_t g_stage_untextured = 0u;
 }  // namespace
 
 namespace {
@@ -461,8 +468,20 @@ void note_rt_unnamed_surface(std::uint32_t guest_addr) {
     note_unnamed("surface", guest_addr, guest_addr | 1u);
 }
 
+std::uint16_t rt_stage_untextured_material() noexcept {
+    return g_stage_untextured;
+}
+
 void rt_materials_set_stage(std::string_view stage) {
     g_stage_materials = table().stage_materials(stage);
+    // Only a stage row names untextured surfaces: elsewhere they stay as the GX state shows them.
+    const std::uint16_t untextured = table().index(kRtUntexturedHash);
+    g_stage_untextured = 0u;
+    for (const auto& [index, material] : g_stage_materials) {
+        if (index == untextured) {
+            g_stage_untextured = index;
+        }
+    }
     if (!g_stage_materials.empty()) {
         std::cerr << "[rt-materials] stage=" << stage << " rows=" << g_stage_materials.size();
         for (const auto& [index, material] : g_stage_materials) {

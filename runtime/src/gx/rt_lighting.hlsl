@@ -78,6 +78,13 @@ cbuffer RtLight : register(b0)
     uint g_core_point;          // the star core's light among g_points (~0: none)
     float g_sun_cap;            // the night's soft cap on added light where the core's light rules
     uint2 g_core_pad;
+    float4 g_point_radius[kPointLights / 4u];   // per point light (4 a vector): its emitter's radius
+    uint g_reference_bounces;   // the reference's bounces (ReferenceCS)
+    float g_reference_exposure; // its exposure over the geometric mean of its light
+    uint g_reference_reset;     // 1: it starts again this frame (the camera moved)
+    uint g_reference_pad;
+    float4 g_history_projection;   // the previous samples' projection (their frame's jitter)
+    float4 g_picture_projection;   // the previous picture's
 };
 
 RaytracingAccelerationStructure g_scene : register(t6);
@@ -112,6 +119,9 @@ RWStructuredBuffer<uint4> g_raw : register(u2);
 RWStructuredBuffer<uint4> g_history : register(u3);
 RWStructuredBuffer<uint4> g_final : register(u4);
 RWStructuredBuffer<uint2> g_primary : register(u5);      // triangle + 1 (0: none), barycentrics
+// The reference (ReferenceCS): per sample its summed light and paths, then its depth at the start; after the samples
+// its exposure.
+RWStructuredBuffer<float4> g_reference : register(u6);
 
 static const float kPi = 3.14159265f;
 static const uint kDrawLit = 8u;    // RtDraw.flags: GX-lit colour
@@ -199,8 +209,9 @@ static const uint kExposureBuckets = 16u;
 // A light of the glow lights' lists: position, radius; power, frames unseen or cumulative power; spot
 // direction (world; 0 0 0 a point light), cosine of its cone.
 static const uint kEmitStride = 48u;
-// Found lights per frame (ray_tracing.cpp kEmitMaxTiles). After them the found list holds each one's source
-// for the emitter log (GALAXY_RT_LOG_EMITTERS): its pass, and for the emitter passes its draw.
+// Found lights per frame (ray_tracing.cpp kEmitMaxTiles). After them the found list holds, per found light, its
+// source for the emitter log (GALAXY_RT_LOG_EMITTERS: its pass, and for the emitter passes its draw) and its
+// identity across frames (emit_identity: its material and cluster cell; 0 none), which EmitMergeCS matches.
 static const uint kEmitFound = 2048u;
 // A particle's light: a fifth of a Luma or less (glow_light's cap on the table's particles), as a share of
 // e_authored_power. Sparkles spawn and die every frame: such a light follows them slowly (EmitMergeCS).
@@ -211,7 +222,15 @@ static const uint kEmitSourceTable = 3u << 30u;
 
 uint emit_source_at(uint index)
 {
-    return 16u + kEmitFound * kEmitStride + index * 4u;
+    return 16u + kEmitFound * kEmitStride + index * 8u;
+}
+
+// A light's identity from its draw's material table entry and its cluster's cell: the same lamp, Luma or star from
+// frame to frame while it stays in its cell (never 0).
+uint emit_identity(uint material, uint cell)
+{
+    const uint h = (material * 0x9E3779B1u) ^ (cell * 0x85EBCA6Bu);
+    return h != 0u ? h : 1u;
 }
 // A found spot light whose faces were not seen this frame (which way they face is unknown): the cosine
 // field holds kSpotUnknown + its cone's cosine.
@@ -543,7 +562,7 @@ void SurfaceEmitCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
                 c_found.Store4(16u + at * kEmitStride, asuint(float4(transform(c_to_world, centre), max(spread, 1.0f))));
                 c_found.Store4(16u + at * kEmitStride + 16u, asuint(float4(power, 0.0f)));
                 c_found.Store4(16u + at * kEmitStride + 32u, uint4(0u, 0u, 0u, 0u));
-                c_found.Store(emit_source_at(at), kEmitSourceSurface);
+                c_found.Store2(emit_source_at(at), uint2(kEmitSourceSurface, 0u));
             }
         }
     }
@@ -873,8 +892,9 @@ ByteAddressBuffer e_triangles : register(t3);         // their eye-space triangl
 StructuredBuffer<uint> e_added : register(t4);        // per sample: light the glows added
 RWByteAddressBuffer e_found : register(u0);           // count; per glow light (kEmitStride) position,
                                                       // radius; power, colour unknown; spot
-RWStructuredBuffer<float4> e_lights : register(u1);   // per light: position, radius; power, frames unseen;
-                                                      // spot direction, cosine of its cone
+RWStructuredBuffer<float4> e_lights : register(u1);   // per light (kEmitLightVectors): position, radius; power,
+                                                      // frames unseen; spot direction, cosine of its cone;
+                                                      // identity (emit_identity), spare
 RWByteAddressBuffer e_list : register(u2);            // count, total; per light position, radius;
                                                       // power, cumulative power; spot
 
@@ -1113,8 +1133,9 @@ void glow_reduce(uint gi)
     }
 }
 
-// A found light: position (world), radius; power, colour unknown; spot (kEmitStride); its source (kEmitSource*).
-void emit_found(float4 at_radius, float4 power, float4 spot, uint source)
+// A found light: position (world), radius; power, colour unknown; spot (kEmitStride); its source (kEmitSource*)
+// and identity (emit_identity).
+void emit_found(float4 at_radius, float4 power, float4 spot, uint source, uint identity)
 {
     uint index;
     e_found.InterlockedAdd(0u, 1u, index);
@@ -1123,7 +1144,7 @@ void emit_found(float4 at_radius, float4 power, float4 spot, uint source)
         e_found.Store4(at, asuint(at_radius));
         e_found.Store4(at + 16u, asuint(power));
         e_found.Store4(at + 32u, asuint(spot));
-        e_found.Store(emit_source_at(index), source);
+        e_found.Store2(emit_source_at(index), uint2(source, identity));
     }
 }
 
@@ -1139,8 +1160,8 @@ bool emit_triangle(uint index, out float3 v0, out float3 v1, out float3 v2)
 }
 
 // Thread 0: a glow light from its triangles' sums (power rgb, weight; weighted centre, weighted |centre|^2;
-// area). `record`: the draw's e_draws record.
-void glow_light(float4 a, float4 b, float area_sum, uint record)
+// area). `record`: the draw's e_draws record; `cell`: its cluster's (emit_identity).
+void glow_light(float4 a, float4 b, float area_sum, uint record, uint cell)
 {
     const uint4 entry = e_draws.Load4(record);
     const uint flags = e_draws.Load(record + 24u);
@@ -1179,7 +1200,7 @@ void glow_light(float4 a, float4 b, float area_sum, uint record)
     // light fell to a sharp hot spot that jittered as the sprite moved: plaza flicker 0.36 -> 0.51.)
     if (luminance(power) >= 4.0f && radius <= kEmitLargest) {
         emit_found(float4(transform(e_to_world, centre), radius), float4(power, 0.0f), float4(0.0f, 0.0f, 0.0f, 0.0f),
-                   kEmitSourceGlow | (record / 32u));
+                   kEmitSourceGlow | (record / 32u), emit_identity(e_draws.Load(record + 16u), cell));
     }
 }
 
@@ -1319,7 +1340,7 @@ void GlowEmitCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
             }
         }
         if (a.w > 0.0f) {
-            glow_light(a, b, area_sum, record);
+            glow_light(a, b, area_sum, record, s_cluster_key[s_cluster_used[r]]);
         }
     }
 }
@@ -1336,6 +1357,9 @@ void GlowEmitCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
 static const uint kAuthoredTint = 1u;
 static const uint kAuthoredSpot = 2u;
 static const uint kAuthoredStar = 4u;   // a star: its power by its size (light_size)
+// A long emitter (a power cable): every cell its own light, none joined. A chain of lights along it lights what lies
+// beside it as the tube does; joined, a cable crossing the Observatory was one light at its middle, on the ground.
+static const uint kAuthoredStrip = 8u;
 
 groupshared float4 s_authored_n[64];   // face normal sum (twice the area), facing evidence (area)
 groupshared float4 s_authored_c[64];   // colour seen (times area), area seen
@@ -1357,8 +1381,8 @@ void authored_reduce(uint gi)
 }
 
 // Thread 0: a table light from its triangles' sums (area-weighted centre and |centre|^2; area; face normals
-// and facing evidence; colour seen and area seen). `record`: the draw's e_draws record.
-void authored_light(float4 b, float w, float4 n, float4 seen, uint record)
+// and facing evidence; colour seen and area seen). `record`: the draw's e_draws record; `cell`: its cluster's.
+void authored_light(float4 b, float w, float4 n, float4 seen, uint record, uint cell)
 {
     const uint4 entry = e_draws.Load4(record);
     const float4 shape = asfloat(e_draws.Load4(record + 16u));
@@ -1370,10 +1394,21 @@ void authored_light(float4 b, float w, float4 n, float4 seen, uint record)
     // power.w 1: the colour is unknown this frame (the light keeps the one it had).
     float unknown = 0.0f;
     if ((flags & kAuthoredTint) != 0u) {
+        // Its hue as the picture shows it, at the table's brightness: the shown colour's brightness changes with the
+        // light reaching it, not with the light the source sends.
         const float3 shown = seen.w > 0.0f ? seen.rgb / seen.w : float3(0.0f, 0.0f, 0.0f);
         const float peak = max(shown.r, max(shown.g, shown.b));
         if (peak > 0.02f) {
-            color *= shown / peak;
+            const float3 tinted = color * (shown / peak);
+            color = tinted * (luminance(color) / max(luminance(tinted), 1e-6f));
+        } else if (seen.w > 0.0f) {
+            // Seen dark: unlit (a power cable of a dome without power), it sends no light.
+            return;
+        } else if ((flags & kAuthoredStrip) != 0u) {
+            // A strip's stretch not seen this frame reports nothing (its remembered light keeps its colour and fades
+            // out of view): every stretch of the Observatory's cables reporting, 2,436 lights overflowed the 2,048
+            // the frame holds, and the visible ones were dropped.
+            return;
         } else {
             unknown = 1.0f;
         }
@@ -1401,8 +1436,12 @@ void authored_light(float4 b, float w, float4 n, float4 seen, uint record)
         }
     }
     if (luminance(power) >= 4.0f) {
-        emit_found(float4(transform(e_to_world, at_point), max(spread, 1.0f)), float4(power, unknown), spot,
-                   kEmitSourceTable | (record / 32u));
+        // A strip's stretch is a light as wide as half its cell: the chain of lights along a cable overlaps into one
+        // glow (as points a few units wide, the light along the garden cable lay in separate beads), and its shadows
+        // soften as a tube that size casts them.
+        const float radius = (flags & kAuthoredStrip) != 0u ? max(spread, 0.5f * kClusterCell) : max(spread, 1.0f);
+        emit_found(float4(transform(e_to_world, at_point), radius), float4(power, unknown), spot,
+                   kEmitSourceTable | (record / 32u), emit_identity(asuint(shape.x), cell));
     }
 }
 
@@ -1477,10 +1516,13 @@ void AuthoredEmitCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
         }
         GroupMemoryBarrierWithGroupSync();
     }
-    if (count > 1u) {
+    if (count > 1u && (flags & kAuthoredStrip) == 0u) {
         cluster_join(gi, count);
-    } else if (gi == 0u) {
-        s_cluster_root[0] = 0u;
+    } else {
+        if (gi < count) {
+            s_cluster_root[gi] = gi;
+        }
+        GroupMemoryBarrierWithGroupSync();
     }
     if (gi != 0u) {
         return;
@@ -1502,7 +1544,7 @@ void AuthoredEmitCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
             }
         }
         if (area_sum > 0.0f) {
-            authored_light(b, area_sum, normals, seen, record);
+            authored_light(b, area_sum, normals, seen, record, s_cluster_key[s_cluster_used[r]]);
         }
     }
 }
@@ -1513,15 +1555,22 @@ groupshared uint s_emit_free_count;
 groupshared uint s_emit_taken;
 groupshared float2 s_emit_scan[kEmitLights];
 
-// One group: the remembered lights take this frame's glow lights (each the nearest light within
-// reach of both), the others take free slots, unseen lights fade, then the list for sampling.
+static const uint kEmitLightVectors = 4u;   // float4s per remembered light (ray_tracing.cpp kEmitLightBytes)
+
+// One group: the remembered lights take this frame's glow lights (each the remembered light of its identity, else
+// the nearest within reach of both), the others take free slots, unseen lights fade, then the list for sampling.
+// Matched by distance alone, a lamp's light went to a sparkle beside it in some frames while its own faded as
+// gone: the planter lamps of the Observatory plaza flashed (210 -> 151 -> 208 levels on the stone beside one).
 [numthreads(kEmitLights, 1, 1)]
 void EmitMergeCS(uint gi : SV_GroupIndex)
 {
     const uint found = min(e_found.Load(0u), kEmitFound);
-    float4 la = e_reset != 0u ? float4(0.0f, 0.0f, 0.0f, 0.0f) : e_lights[gi * 3u];
-    float4 lb = e_reset != 0u ? float4(0.0f, 0.0f, 0.0f, 0.0f) : e_lights[gi * 3u + 1u];
-    float4 lc = e_reset != 0u ? float4(0.0f, 0.0f, 0.0f, 0.0f) : e_lights[gi * 3u + 2u];
+    const uint at = gi * kEmitLightVectors;
+    float4 la = e_reset != 0u ? float4(0.0f, 0.0f, 0.0f, 0.0f) : e_lights[at];
+    float4 lb = e_reset != 0u ? float4(0.0f, 0.0f, 0.0f, 0.0f) : e_lights[at + 1u];
+    float4 lc = e_reset != 0u ? float4(0.0f, 0.0f, 0.0f, 0.0f) : e_lights[at + 2u];
+    float4 ld = e_reset != 0u ? float4(0.0f, 0.0f, 0.0f, 0.0f) : e_lights[at + 3u];
+    const uint identity = asuint(ld.x);
     const bool active = luminance(lb.rgb) > 0.0f;
     for (uint i = gi; i < found; i += kEmitLights) {
         s_emit_best[i] = 0xFFFFFFFFu;
@@ -1531,12 +1580,19 @@ void EmitMergeCS(uint gi : SV_GroupIndex)
         s_emit_taken = 0u;
     }
     GroupMemoryBarrierWithGroupSync();
+    // The match key (the lowest wins): its own identity first (key = slot), else the distance with the slot in its low
+    // 9 bits.
     if (active) {
         [loop] for (uint t = 0u; t < found; ++t) {
+            const uint found_identity = e_found.Load(emit_source_at(t) + 4u);
+            if (identity != 0u && found_identity == identity) {
+                InterlockedMin(s_emit_best[t], gi);
+                continue;
+            }
             const float4 f = asfloat(e_found.Load4(16u + t * kEmitStride));
             const float d = distance(f.xyz, la.xyz);
             if (d < 2.0f * (la.w + f.w)) {
-                InterlockedMin(s_emit_best[t], (asuint(d) & 0xFFFFFF00u) | gi);
+                InterlockedMin(s_emit_best[t], max(asuint(d) & 0xFFFFFE00u, 0x200u) | gi);
             }
         }
     }
@@ -1549,7 +1605,7 @@ void EmitMergeCS(uint gi : SV_GroupIndex)
         bool spot_known = false;
         const float lb_l = luminance(lb.rgb);
         [loop] for (uint t = 0u; t < found; ++t) {
-            if (s_emit_best[t] != 0xFFFFFFFFu && (s_emit_best[t] & 0xFFu) == gi) {
+            if (s_emit_best[t] != 0xFFFFFFFFu && (s_emit_best[t] & 0x1FFu) == gi) {
                 const float4 fa = asfloat(e_found.Load4(16u + t * kEmitStride));
                 const float4 fp = asfloat(e_found.Load4(16u + t * kEmitStride + 16u));
                 const float4 fs = asfloat(e_found.Load4(16u + t * kEmitStride + 32u));
@@ -1567,13 +1623,24 @@ void EmitMergeCS(uint gi : SV_GroupIndex)
             }
         }
         if (centre.w > 0.0f) {
-            // Seen: brighter at once, dimmer slowly (a partly hidden glow shows less of itself). A particle's light
-            // (sparkles, stardust) is their steady mean: following each sparkle that appeared or died, it lit the
-            // Observatory plaza's floor in patches that changed every frame.
+            // Seen. What a light measures jitters from frame to frame (a sprite's animation, the pixels a Luma shows,
+            // its centre over the triangles in view), and a light near a surface turns that into flicker. Jitter is
+            // held: a change in brightness under a quarter, a move under a quarter of its radius, follows at 5% a
+            // frame; larger changes are real (a glow switching, a light moving) and follow at once: brighter at
+            // once, dimmer slowly (a partly hidden glow shows less of itself), moves halfway a frame. A particle's
+            // light (sparkles, stardust) is their steady mean.
             const bool particle = max(luminance(power), lb_l) <= kParticleLight * e_authored_power;
-            lb.rgb = lerp(lb.rgb, power, particle ? 0.05f : luminance(power) > lb_l ? 0.25f : 0.08f);
-            const float follow = particle ? 0.1f : 0.5f;
-            la = float4(lerp(la.xyz, centre.xyz / centre.w, follow), lerp(la.w, radius, follow));
+            const float p_l = luminance(power);
+            const bool jitter = abs(p_l - lb_l) < 0.25f * max(lb_l, 1e-6f);
+            const float rate = particle || jitter ? 0.05f : p_l > lb_l ? 0.25f : 0.08f;
+            // Its colour follows slowly whatever its brightness does (a Luma's shown colour changes with its pose).
+            const float3 hue = lerp(lb.rgb / max(lb_l, 1e-6f), power / max(p_l, 1e-6f), 0.05f);
+            const float l = lerp(lb_l, p_l, rate);
+            lb.rgb = hue / max(luminance(hue), 1e-6f) * l;
+            const float3 seen_at = centre.xyz / centre.w;
+            const bool still = distance(seen_at, la.xyz) < 0.25f * max(la.w, 1.0f) && abs(radius - la.w) < 0.25f * la.w;
+            const float follow = particle ? 0.1f : still ? 0.05f : 0.5f;
+            la = float4(lerp(la.xyz, seen_at, follow), lerp(la.w, radius, follow));
             lb.w = 0.0f;
             // A spot turns smoothly; one seen as a point light is one.
             const bool both = spot_known && dot(lc.xyz, lc.xyz) > 0.25f;
@@ -1599,17 +1666,22 @@ void EmitMergeCS(uint gi : SV_GroupIndex)
             const float reach = sqrt(luminance(lb.rgb) / (kPi * kEmitForget));
             const bool far = length(e) > reach + 20000.0f;
             const bool particle = luminance(lb.rgb) <= kParticleLight * e_authored_power;
-            lb.rgb *= gone ? 0.5f : far ? 0.98f : particle ? 0.95f : 1.0f;
+            // Gone only after three frames missed in view (one missed match is no reason to drop a lamp), then fading
+            // over about 0.2 s rather than halving each frame, so a light missed for a few frames (a cable's stretch at
+            // the picture's edge) dims and returns without a step.
+            lb.rgb *= gone && lb.w >= 3.0f ? 0.8f : far ? 0.98f : particle ? 0.95f : 1.0f;
         }
         if (luminance(lb.rgb) < 1.0f) {
             la = float4(0.0f, 0.0f, 0.0f, 0.0f);
             lb = float4(0.0f, 0.0f, 0.0f, 0.0f);
             lc = float4(0.0f, 0.0f, 0.0f, 0.0f);
+            ld = float4(0.0f, 0.0f, 0.0f, 0.0f);
         }
     }
-    e_lights[gi * 3u] = la;
-    e_lights[gi * 3u + 1u] = lb;
-    e_lights[gi * 3u + 2u] = lc;
+    e_lights[at] = la;
+    e_lights[at + 1u] = lb;
+    e_lights[at + 2u] = lc;
+    e_lights[at + 3u] = ld;
     if (luminance(lb.rgb) <= 0.0f) {
         uint slot;
         InterlockedAdd(s_emit_free_count, 1u, slot);
@@ -1622,22 +1694,30 @@ void EmitMergeCS(uint gi : SV_GroupIndex)
             uint k;
             InterlockedAdd(s_emit_taken, 1u, k);
             if (k < s_emit_free_count) {
-                const uint slot = s_emit_free[k];
+                const uint slot = s_emit_free[k] * kEmitLightVectors;
                 const float4 fs = asfloat(e_found.Load4(16u + n * kEmitStride + 32u));
-                e_lights[slot * 3u] = asfloat(e_found.Load4(16u + n * kEmitStride));
-                // A particle's light fades in as it does when seen again.
+                // A tinted light whose colour was never seen (a cable behind the camera) starts none: dark when its
+                // colour is dark, never the table's white.
+                if (asfloat(e_found.Load(16u + n * kEmitStride + 28u)) > 0.5f) {
+                    continue;
+                }
+                e_lights[slot] = asfloat(e_found.Load4(16u + n * kEmitStride));
+                // A new light fades in: a particle's as it does when seen again, any other from a quarter of its power
+                // (about 8 frames to full). At full power at once, a cable's stretch at the picture's edge, seen in
+                // one frame and not the next, popped in as a glow over the garden's cliff.
                 const float3 power = asfloat(e_found.Load3(16u + n * kEmitStride + 16u));
                 const bool particle = luminance(power) <= kParticleLight * e_authored_power;
-                e_lights[slot * 3u + 1u] = float4(particle ? power * 0.05f : power, 0.0f);
-                e_lights[slot * 3u + 2u] = fs.w < kSpotUnknown + 2.0f ? float4(0.0f, 0.0f, 0.0f, 0.0f) : fs;
+                e_lights[slot + 1u] = float4(power * (particle ? 0.05f : 0.25f), 0.0f);
+                e_lights[slot + 2u] = fs.w < kSpotUnknown + 2.0f ? float4(0.0f, 0.0f, 0.0f, 0.0f) : fs;
+                e_lights[slot + 3u] = float4(asfloat(e_found.Load(emit_source_at(n) + 4u)), 0.0f, 0.0f, 0.0f);
             }
         }
     }
     AllMemoryBarrierWithGroupSync();
     // The list: the lights in slot order with their cumulative power.
-    const float4 fa = e_lights[gi * 3u];
-    const float4 fb = e_lights[gi * 3u + 1u];
-    const float4 fc = e_lights[gi * 3u + 2u];
+    const float4 fa = e_lights[at];
+    const float4 fb = e_lights[at + 1u];
+    const float4 fc = e_lights[at + 2u];
     const float lum = luminance(fb.rgb);
     s_emit_scan[gi] = float2(lum, lum > 0.0f ? 1.0f : 0.0f);
     GroupMemoryBarrierWithGroupSync();
@@ -1911,7 +1991,7 @@ float3 hit_light(float3 hit, float3 fallback)
     if (previous.z >= -g_near) {
         return fallback;
     }
-    const float2 s = (eye_to_pixel(g_projection, g_viewport, previous) - 0.5f) / float(g_factor) + 0.5f;
+    const float2 s = (eye_to_pixel(g_picture_projection, g_viewport, previous) - 0.5f) / float(g_factor) + 0.5f;
     if (any(s < 0.0f) || any(s >= float2(g_sample_size))) {
         return fallback;
     }
@@ -2044,14 +2124,17 @@ bool card_blocks(uint primitive, uint flags, float3 h, uint salt)
 // ---------------------------------------------------------------------------------------------
 // Tile light lists: each group of 8 x 8 samples keeps the glow lights whose reach meets the box
 // around its samples' surface points; its samples weigh only those. Lights beyond a tile's reach
-// add nothing to any of its samples, so the result is the same at a fraction of the work.
+// add nothing to any of its samples, so the result is the same at a fraction of the work. The list
+// is a bit per light of the frame's list, walked in its order: a list of the first 128 lights the
+// threads happened to add dropped different lights each frame where more were in reach (a tile over
+// a depth edge reaches many), flashing tile-shaped blocks on the Observatory plaza's walkways.
 // ---------------------------------------------------------------------------------------------
 
-static const uint kTileLights = 128u;
+static const uint kTileWords = kEmitLights / 32u;
 
 groupshared uint s_tile_bounds[6];      // min x y z, max x y z (order-preserving uints)
-groupshared uint s_tile_count;
-groupshared uint s_tile_lights[kTileLights];
+groupshared uint s_tile_count;          // lights in the tile's list
+groupshared uint s_tile_mask[kTileWords];
 
 uint ordered(float f)
 {
@@ -2074,6 +2157,9 @@ float unordered(uint u)
             s_tile_bounds[3] = 0u; s_tile_bounds[4] = 0u; s_tile_bounds[5] = 0u;                        \
             s_tile_count = 0u;                                                                           \
         }                                                                                                \
+        if ((gi) < kTileWords) {                                                                         \
+            s_tile_mask[(gi)] = 0u;                                                                      \
+        }                                                                                                \
         GroupMemoryBarrierWithGroupSync();                                                               \
         if (valid) {                                                                                     \
             InterlockedMin(s_tile_bounds[0], ordered((p).x));                                            \
@@ -2089,23 +2175,204 @@ float unordered(uint u)
                                      unordered(s_tile_bounds[2]));                                       \
             const float3 hi = float3(unordered(s_tile_bounds[3]), unordered(s_tile_bounds[4]),           \
                                      unordered(s_tile_bounds[5]));                                       \
-            const uint total = (lights).Load(0u);                                                        \
+            const uint total = min((lights).Load(0u), kTileWords * 32u);                                 \
             for (uint c = (gi); c < total; c += 64u) {                                                   \
                 const float4 la = asfloat((lights).Load4(16u + c * kEmitStride));                        \
                 const float3 power = asfloat((lights).Load3(16u + c * kEmitStride + 16u));               \
                 const float3 e = transform(to_eye, la.xyz);                                              \
                 const float3 out_of_box = max(max(lo - e, e - hi), 0.0f);                                \
                 if (dot(out_of_box, out_of_box) < reach2_of(luminance(power))) {                         \
-                    uint slot;                                                                           \
-                    InterlockedAdd(s_tile_count, 1u, slot);                                              \
-                    if (slot < kTileLights) {                                                            \
-                        s_tile_lights[slot] = c;                                                         \
-                    }                                                                                    \
+                    InterlockedOr(s_tile_mask[c >> 5u], 1u << (c & 31u));                                \
+                    InterlockedAdd(s_tile_count, 1u);                                                    \
                 }                                                                                        \
             }                                                                                            \
         }                                                                                                \
         GroupMemoryBarrierWithGroupSync();                                                               \
     }
+
+// Shadow tests: a sample's strongest lights take a shadow ray each, the rest their visibility's weighted mean.
+// Where two lights' weights cross, the tested set changes: a light leaving it went at once from its own shadow
+// to the others' visibility, a step in the picture that moved with every change in their light (flicker). A
+// tested light counts by its lead over the strongest untested one (`next`): fully from twice its weight, not at
+// all where they cross, so either side of a crossing is the same picture.
+static const float kRankLead = 0.5f;
+// The untested lights' visibility also takes this share of the tested lights' plain mean: where every tested
+// light is level with the next, none would count.
+static const float kRankFloor = 0.05f;
+
+float rank_confidence(float weight, float next)
+{
+    return saturate((weight - next) / (kRankLead * weight));
+}
+
+// The untested share's visibility from the tested lights' weights seen and tested, by confidence and plain.
+float rest_visibility(float seen, float tested, float plain_seen, float plain)
+{
+    const float d = tested + kRankFloor * plain;
+    return d > 0.0f ? (seen + kRankFloor * plain_seen) / d : 1.0f;
+}
+
+// The surface a sample shows (TraceCS, ReferenceCS): the triangle the camera ray meets at the raster depth gives the
+// face normal, the shading normal from its vertex normals, and a ray origin lifted off the flat face where those
+// normals bend away from it (the shadow terminator, Hanika 2021). Geometry the scene leaves out (blended and indirect
+// draws) takes the normal from the depth.
+struct Surface {
+    float3 n;          // shading normal
+    float3 ng;         // face normal, towards the camera
+    float3 lifted;     // the point lifted off the face
+    uint2 primary;     // the triangle + 1 (0: none), barycentrics (halves)
+    // A clear crystal or glass surface (surface class 7) lets the lights behind it through: the star bits inside a
+    // crystal light it from within.
+    bool clear;
+};
+
+// The shading normal at barycentrics `w` of triangle `tri` (eye-space vertices v0-v2, face normal `ng` on the side
+// seen) from its vertex normals, and the point the shading normals lift the face to (Hanika 2021); `n` stays `ng`
+// without vertex normals or where they turn away from the face.
+void smooth_surface(uint tri, float3 w, float3 v0, float3 v1, float3 v2, float3 ng, out float3 n, inout float3 lifted)
+{
+    n = ng;
+    const uint4 surface = g_surfaces.Load4(tri * 16u);
+    if (surface.x != 0u && surface.y != 0u && surface.z != 0u) {
+        float3 n0 = unpack_vertex_normal(surface.x);
+        float3 n1 = unpack_vertex_normal(surface.y);
+        float3 n2 = unpack_vertex_normal(surface.z);
+        float3 smooth = n0 * w.x + n1 * w.y + n2 * w.z;
+        // The vertex normals of the side seen.
+        const float side = dot(smooth, ng) < 0.0f ? -1.0f : 1.0f;
+        smooth *= side;
+        const float smooth_length = length(smooth);
+        if (smooth_length > 1e-3f && dot(smooth, ng) > 0.05f * smooth_length) {
+            n = smooth / smooth_length;
+            n0 *= side;
+            n1 *= side;
+            n2 *= side;
+            const float3 h = lifted;
+            lifted = h - w.x * min(0.0f, dot(h - v0, n0)) * n0 - w.y * min(0.0f, dot(h - v1, n1)) * n1 -
+                     w.z * min(0.0f, dot(h - v2, n2)) * n2;
+        }
+    }
+}
+
+Surface primary_surface(int2 q, float3 p)
+{
+    Surface s;
+    s.n = surface_normal(q, p);
+    s.ng = s.n;
+    s.lifted = p;
+    s.primary = uint2(0u, 0u);
+    s.clear = false;
+    const float span = length(p);
+    RayDesc ray;
+    ray.Origin = float3(0.0f, 0.0f, 0.0f);
+    ray.Direction = p / span;
+    ray.TMin = 0.0f;
+    ray.TMax = span * 1.02f + 2.0f;
+    RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+    query.TraceRayInline(g_scene, RAY_FLAG_NONE, kSceneMask, ray);
+    while (query.Proceed()) {
+        // A foliage card is the surface only where the raster drew it (at this pixel's depth).
+        const uint candidate = g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u);
+        if (abs(query.CandidateTriangleRayT() - span) <= span * 0.002f + 0.5f ||
+            !(traced_card(candidate) || alpha_draw(candidate))) {
+            query.CommitNonOpaqueTriangleHit();
+        }
+    }
+    if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT && abs(query.CommittedRayT() - span) < span * 0.01f + 2.0f) {
+        const uint tri = query.CommittedPrimitiveIndex();
+        const float2 b = query.CommittedTriangleBarycentrics();
+        const float3 w = float3(1.0f - b.x - b.y, b.x, b.y);
+        const float3 v0 = asfloat(g_positions.Load3(tri * 36u));
+        const float3 v1 = asfloat(g_positions.Load3(tri * 36u + 12u));
+        const float3 v2 = asfloat(g_positions.Load3(tri * 36u + 24u));
+        const float3 face = cross(v1 - v0, v2 - v0);
+        const float face_length = length(face);
+        if (face_length > 1e-12f) {
+            s.ng = face / face_length;
+            s.ng = dot(s.ng, p) > 0.0f ? -s.ng : s.ng;
+            s.lifted = v0 * w.x + v1 * w.y + v2 * w.z;
+            s.primary = uint2(tri + 1u, f32tof16(b.x) | (f32tof16(b.y) << 16u));
+            s.clear = ((g_surfaces.Load(tri * 16u + 12u) >> 8u) & 15u) == kClearClass;
+            smooth_surface(tri, w, v0, v1, v2, s.ng, s.n, s.lifted);
+        }
+    }
+    return s;
+}
+
+// Whether an emitter of `radius` around `centre` is seen from `start`: one ray to a point of its disc facing `start`
+// (`du` picks it; at most half the distance wide), ending at the emitter's surface. Late geometry (instance 1) has no
+// records: it blocks. A card blocks where the raster drew it; the table's shadow 0 lets the light through.
+bool emitter_visible(float3 start, float3 centre, float radius, float2 du, uint salt)
+{
+    const float3 to_centre = centre - start;
+    const float centre_span = max(length(to_centre), 1e-4f);
+    const float3 axis = to_centre / centre_span;
+    const float az = axis.z >= 0.0f ? 1.0f : -1.0f;
+    const float aa = -1.0f / (az + axis.z);
+    const float ab = axis.x * axis.y * aa;
+    const float3 d1 = float3(1.0f + az * axis.x * axis.x * aa, az * ab, -az * axis.x);
+    const float3 d2 = float3(ab, az + axis.y * axis.y * aa, -axis.y);
+    const float disc = min(radius, 0.5f * centre_span) * sqrt(du.x);
+    const float phi = 2.0f * kPi * du.y;
+    const float3 to = centre + (d1 * cos(phi) + d2 * sin(phi)) * disc - start;
+    const float span = length(to);
+    RayDesc ray;
+    ray.Origin = start;
+    ray.Direction = to / max(span, 1e-4f);
+    ray.TMin = 0.0f;
+    ray.TMax = max(span - max(radius, 2.0f + 0.01f * span), 0.0f);
+    RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES>
+        query;
+    query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
+    while (query.Proceed()) {
+        const bool late_hit = query.CandidateInstanceID() != 0u;
+        const uint hit = late_hit ? 0u : g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u);
+        if (late_hit || ((hit & kDrawNoShadow) == 0u &&
+                         card_blocks(query.CandidatePrimitiveIndex(), hit,
+                                     start + ray.Direction * query.CandidateTriangleRayT(), salt))) {
+            query.CommitNonOpaqueTriangleHit();
+        }
+    }
+    return query.CommittedStatus() != COMMITTED_TRIANGLE_HIT;
+}
+
+// Whether the sun is seen from `origin` along `direction` (a point inside its disc); the blocker's distance in
+// `blocker` (0: open). `card`: the sample lies on a foliage card, which the cards close beside it do not shade.
+bool sun_visible(float3 origin, float3 direction, bool card, uint salt, out float blocker)
+{
+    blocker = 0.0f;
+    RayDesc ray;
+    ray.Origin = origin;
+    ray.Direction = direction;
+    ray.TMin = 0.0f;
+    ray.TMax = g_sun_reach;
+    RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+    query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
+    while (query.Proceed()) {
+        if (query.CandidateInstanceID() != 0u) {
+            query.CommitNonOpaqueTriangleHit();
+            continue;
+        }
+        const uint hit = g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u);
+        if ((hit & kDrawNoShadow) != 0u) {
+            continue;
+        }
+        if (card && query.CandidateTriangleRayT() < 60.0f &&
+            (g_draws.Load(min(hit >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride + 24u) & kDrawTableFoliage) != 0u) {
+            continue;
+        }
+        if (!card_blocks(query.CandidatePrimitiveIndex(), hit, origin + direction * query.CandidateTriangleRayT(),
+                         salt)) {
+            continue;
+        }
+        query.CommitNonOpaqueTriangleHit();
+    }
+    if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
+        blocker = clamp(query.CommittedRayT(), 1e-2f, 6.0e4f);
+        return false;
+    }
+    return true;
+}
 
 [numthreads(8, 8, 1)]
 void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
@@ -2127,74 +2394,12 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
         g_raw[index] = pack_light(kOpenSky, 0.0f);
         return;
     }
-    // The surface: the triangle the camera ray meets at the raster depth gives the face normal,
-    // the shading normal from its vertex normals, and a ray origin lifted off the flat face
-    // where those normals bend away from it (the shadow terminator, Hanika 2021). Geometry the
-    // scene leaves out (blended and indirect draws) takes the normal from the depth.
-    float3 n = surface_normal(q, p);
-    float3 ng = n;
-    float3 lifted = p;
-    uint2 primary = uint2(0u, 0u);
-    // A clear crystal or glass surface (surface class 7) lets the lights behind it through: the star bits
-    // inside a crystal light it from within.
-    bool clear = false;
-    {
-        const float span = length(p);
-        RayDesc ray;
-        ray.Origin = float3(0.0f, 0.0f, 0.0f);
-        ray.Direction = p / span;
-        ray.TMin = 0.0f;
-        ray.TMax = span * 1.02f + 2.0f;
-        RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
-        query.TraceRayInline(g_scene, RAY_FLAG_NONE, kSceneMask, ray);
-        while (query.Proceed()) {
-            // A foliage card is the surface only where the raster drew it (at this pixel's depth).
-            const uint candidate = g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u);
-            if (abs(query.CandidateTriangleRayT() - span) <= span * 0.002f + 0.5f ||
-                !(traced_card(candidate) || alpha_draw(candidate))) {
-                query.CommitNonOpaqueTriangleHit();
-            }
-        }
-        if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT &&
-            abs(query.CommittedRayT() - span) < span * 0.01f + 2.0f) {
-            const uint tri = query.CommittedPrimitiveIndex();
-            const float2 b = query.CommittedTriangleBarycentrics();
-            const float3 w = float3(1.0f - b.x - b.y, b.x, b.y);
-            const float3 v0 = asfloat(g_positions.Load3(tri * 36u));
-            const float3 v1 = asfloat(g_positions.Load3(tri * 36u + 12u));
-            const float3 v2 = asfloat(g_positions.Load3(tri * 36u + 24u));
-            const float3 face = cross(v1 - v0, v2 - v0);
-            const float face_length = length(face);
-            if (face_length > 1e-12f) {
-                ng = face / face_length;
-                ng = dot(ng, p) > 0.0f ? -ng : ng;
-                n = ng;
-                lifted = v0 * w.x + v1 * w.y + v2 * w.z;
-                primary = uint2(tri + 1u, f32tof16(b.x) | (f32tof16(b.y) << 16u));
-                const uint4 surface = g_surfaces.Load4(tri * 16u);
-                clear = ((surface.w >> 8u) & 15u) == kClearClass;
-                if (surface.x != 0u && surface.y != 0u && surface.z != 0u) {
-                    float3 n0 = unpack_vertex_normal(surface.x);
-                    float3 n1 = unpack_vertex_normal(surface.y);
-                    float3 n2 = unpack_vertex_normal(surface.z);
-                    float3 smooth = n0 * w.x + n1 * w.y + n2 * w.z;
-                    // The vertex normals of the side the camera sees.
-                    const float side = dot(smooth, ng) < 0.0f ? -1.0f : 1.0f;
-                    smooth *= side;
-                    const float smooth_length = length(smooth);
-                    if (smooth_length > 1e-3f && dot(smooth, ng) > 0.05f * smooth_length) {
-                        n = smooth / smooth_length;
-                        n0 *= side;
-                        n1 *= side;
-                        n2 *= side;
-                        const float3 h = lifted;
-                        lifted = h - w.x * min(0.0f, dot(h - v0, n0)) * n0 - w.y * min(0.0f, dot(h - v1, n1)) * n1 -
-                                 w.z * min(0.0f, dot(h - v2, n2)) * n2;
-                    }
-                }
-            }
-        }
-    }
+    const Surface surf = primary_surface(q, p);
+    const float3 n = surf.n;
+    const float3 ng = surf.ng;
+    const float3 lifted = surf.lifted;
+    const uint2 primary = surf.primary;
+    const bool clear = surf.clear;
     const float3 origin = lifted + ng * (0.2f + abs(p.z) * 4e-4f);
     // Decides card hits out of view (card_blocks), per sample, frame and ray.
     const uint salt = index * 32u + g_frame * 0x632BE5ABu;
@@ -2219,49 +2424,27 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
         // High (g_flags bit 10): four shadow rays spread over the sun's disc, the sun's light their open
         // share (the penumbra measured per sample, not only filtered); medium one.
         const uint sun_rays = (g_flags & 1024u) != 0u ? 4u : 1u;
-        RayDesc ray;
-        ray.Origin = origin;
-        ray.Direction = l;
-        ray.TMin = 0.0f;
-        ray.TMax = g_sun_reach;
         uint open = 0u;
         for (uint k = 0u; k < sun_rays; ++k) {
             const float2 u = sample_point(id.xy, max(g_rays, 1u) + 3u + 8u * k);
             const float r = sqrt(u.x) * g_sun.w;
             const float phi = 2.0f * kPi * u.y;
-            ray.Direction = normalize(l + l1 * (r * cos(phi)) + l2 * (r * sin(phi)));
-            RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
-            query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
-            while (query.Proceed()) {
-                if (query.CandidateInstanceID() != 0u) {
-                    query.CommitNonOpaqueTriangleHit();
-                    continue;
-                }
-                const uint hit = g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u);
-                if ((hit & kDrawNoShadow) != 0u) {
-                    continue;
-                }
-                if (card && query.CandidateTriangleRayT() < 60.0f &&
-                    (g_draws.Load(min(hit >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride + 24u) & kDrawTableFoliage) != 0u) {
-                    continue;
-                }
-                if (!card_blocks(query.CandidatePrimitiveIndex(), hit,
-                                 origin + ray.Direction * query.CandidateTriangleRayT(), salt + 1u + 2u * k)) {
-                    continue;
-                }
-                query.CommitNonOpaqueTriangleHit();
-            }
-            if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
-                const float t = clamp(query.CommittedRayT(), 1e-2f, 6.0e4f);
-                blocker = blocker == 0.0f ? t : min(blocker, t);
-            } else {
+            float t;
+            if (sun_visible(origin, normalize(l + l1 * (r * cos(phi)) + l2 * (r * sin(phi))), card,
+                            salt + 1u + 2u * k, t)) {
                 ++open;
+            } else {
+                blocker = blocker == 0.0f ? t : min(blocker, t);
             }
         }
         sun = facing_sun * (1.5f - 0.5f * facing_sun) * (float(open) / float(sun_rays));
         if ((g_flags & 64u) != 0u) {
             // GALAXY_RT_VIEW=6: the nearest blocker's distance up to 1e6, past the sun's reach,
             // 0.1 + 0.9 log10(t) / 6 (0: none).
+            RayDesc ray;
+            ray.Origin = origin;
+            ray.Direction = l;
+            ray.TMin = 0.0f;
             RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> nearest;
             ray.TMax = 1.0e6f;
             nearest.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
@@ -2292,17 +2475,16 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
             total += weights[i];
         }
         const uint point_tests = (g_flags & 1024u) != 0u ? 4u : g_rays <= 1u ? 1u : 2u;
-        float tested_total = 0.0f;
-        float seen_total = 0.0f;
-        float3 tested_light = float3(0.0f, 0.0f, 0.0f);
-        float3 all_light = float3(0.0f, 0.0f, 0.0f);
+        float3 rest = float3(0.0f, 0.0f, 0.0f);   // the light not counted as tested (rank_confidence)
         [unroll] for (uint i = 0u; i < kPointLights; ++i) {
             if (weights[i] > 0.0f) {
-                all_light += g_points[2u * i + 1u].rgb / max(luminance(g_points[2u * i + 1u].rgb), 1e-4f) * weights[i];
+                rest += g_points[2u * i + 1u].rgb / max(luminance(g_points[2u * i + 1u].rgb), 1e-4f) * weights[i];
             }
         }
-        [unroll] for (uint test = 0u; test < 4u; ++test) {
-            // The strongest light not yet tested.
+        // The strongest point_tests lights, then the strongest of the others (their confidence).
+        uint picked[4] = {0u, 0u, 0u, 0u};
+        float picked_weight[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+        [unroll] for (uint pick = 0u; pick < 4u; ++pick) {
             uint chosen = 0u;
             float best = 0.0f;
             [unroll] for (uint j = 0u; j < kPointLights; ++j) {
@@ -2311,42 +2493,44 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
                     chosen = j;
                 }
             }
-            if (test >= point_tests || best <= 1e-6f) {
+            if (pick < point_tests && best > 1e-6f) {
+                weights[chosen] = -best;   // tested
+                picked[pick] = chosen;
+                picked_weight[pick] = best;
+            }
+        }
+        float next = 0.0f;
+        [unroll] for (uint j = 0u; j < kPointLights; ++j) {
+            next = max(next, weights[j]);
+        }
+        float seen_weight = 0.0f;
+        float tested_weight = 0.0f;
+        float plain_seen = 0.0f;
+        float plain_weight = 0.0f;
+        [unroll] for (uint test = 0u; test < 4u; ++test) {
+            const float best = picked_weight[test];
+            if (best <= 0.0f) {
                 continue;
             }
-            weights[chosen] = -weights[chosen];   // tested
+            const uint chosen = picked[test];
+            const float confidence = rank_confidence(best, next);
             const float3 chosen_light = g_points[2u * chosen + 1u].rgb / max(luminance(g_points[2u * chosen + 1u].rgb), 1e-4f) * best;
-            tested_total += best;
-            tested_light += chosen_light;
-            const float3 to = g_points[2u * chosen].xyz - origin;
-            const float span = length(to);
-            RayDesc ray;
-            ray.Origin = origin;
-            ray.Direction = to / max(span, 1e-4f);
-            ray.TMin = 0.0f;
-            // The light sits inside its own emitter (a lamp, a glowing core): the shadow ray
-            // ends at that surface.
-            ray.TMax = max(span - g_point_size, 0.0f);
-            RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
-                     RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
-            query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
-            while (query.Proceed()) {
-                // Late geometry (instance 1) has no records: it blocks. A card blocks where the raster drew it.
-                const bool late_hit = query.CandidateInstanceID() != 0u;
-                const uint hit = late_hit ? 0u : g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u);
-                if (late_hit || ((hit & kDrawNoShadow) == 0u &&
-                                 card_blocks(query.CandidatePrimitiveIndex(), hit,
-                                             origin + ray.Direction * query.CandidateTriangleRayT(), salt + 2u))) {
-                    query.CommitNonOpaqueTriangleHit();
-                }
-            }
-            if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
-                points += chosen_light;
-                seen_total += best;
+            rest -= chosen_light * confidence;
+            tested_weight += best * confidence;
+            plain_weight += best;
+            // An area light: a shadow ray to a point of its emitter's disc, a new point each frame, so its shadows have
+            // the penumbra of a light that size (the star core is a ball of up to 600 units' radius: aimed at its
+            // centre, its shadows were cut-outs).
+            const float2 du = sample_point(id.xy, max(g_rays, 1u) + 31u + 2u * test);
+            if (emitter_visible(origin, g_points[2u * chosen].xyz, g_point_radius[chosen >> 2u][chosen & 3u], du,
+                                salt + 2u)) {
+                points += chosen_light * confidence;
+                seen_weight += best * confidence;
+                plain_seen += best;
             }
         }
         // The lights not tested, at the tested ones' visibility.
-        points += (all_light - tested_light) * (tested_total > 0.0f ? seen_total / tested_total : 1.0f);
+        points += max(rest, 0.0f) * rest_visibility(seen_weight, tested_weight, plain_seen, plain_weight);
     }
 
     // The glows (lamps, cores, Lumas, star bits, lava bursts): every light within reach of this point adds
@@ -2354,8 +2538,7 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
     // take a shadow ray every frame, the rest their visibility's weighted mean. Picking one or two at random per
     // frame (resampled importance) let lamps take turns: flickering lamps and shadows, a low lamp's long shadow
     // of Rosalina in some frames, three shadows of Mario averaging in (user, Native41 Observatory).
-    const uint emitters = min(s_tile_count, kTileLights);
-    if (emitters != 0u) {
+    if (s_tile_count != 0u) {
         float sum = 0.0f;
         float3 unshadowed = float3(0.0f, 0.0f, 0.0f);   // every light's light, unshadowed
         float4 kept[4] = {float4(0.0f, 0.0f, 0.0f, 0.0f), float4(0.0f, 0.0f, 0.0f, 0.0f),
@@ -2363,8 +2546,10 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
         float3 kept_light[4] = {float3(0.0f, 0.0f, 0.0f), float3(0.0f, 0.0f, 0.0f), float3(0.0f, 0.0f, 0.0f),
                                 float3(0.0f, 0.0f, 0.0f)};
         float kept_weight[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-        [loop] for (uint k = 0u; k < emitters; ++k) {
-            const uint c = s_tile_lights[k];
+        float fifth = 0.0f;   // the strongest light not kept
+        [loop] for (uint word = 0u; word < kTileWords; ++word) {
+        [loop] for (uint bits = s_tile_mask[word]; bits != 0u; bits &= bits - 1u) {
+            const uint c = word * 32u + firstbitlow(bits);
             const float4 la = asfloat(g_emitters.Load4(16u + c * kEmitStride));
             const float3 power = asfloat(g_emitters.Load3(16u + c * kEmitStride + 16u));
             const float light = luminance(power);
@@ -2408,64 +2593,40 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
                     carry_weight = w0;
                 }
             }
+            fifth = max(fifth, carry_weight);
+        }
         }
         float3 glow = float3(0.0f, 0.0f, 0.0f);
         const uint picks = (g_flags & 1024u) != 0u ? 4u : g_rays <= 1u ? 1u : 2u;
-        float3 tested = float3(0.0f, 0.0f, 0.0f);   // the shadow-tested lights' unshadowed light
+        const float next = picks < 4u ? kept_weight[picks] : fifth;   // the strongest untested light
+        float3 tested = float3(0.0f, 0.0f, 0.0f);   // the shadow-tested lights' unshadowed light, by confidence
         float seen_weight = 0.0f;
         float tested_weight = 0.0f;
+        float plain_seen = 0.0f;
+        float plain_weight = 0.0f;
         [unroll] for (uint s = 0u; s < 4u; ++s) {
             if (s < picks && kept_weight[s] > 0.0f) {
-                tested += kept_light[s];
-                tested_weight += kept_weight[s];
+                const float confidence = rank_confidence(kept_weight[s], next);
+                tested += kept_light[s] * confidence;
+                tested_weight += kept_weight[s] * confidence;
+                plain_weight += kept_weight[s];
                 // A light behind a clear surface is reached from its inner side.
                 const bool behind = clear && dot(kept[s].xyz - p, ng) < 0.0f;
                 const float3 start = behind ? lifted - ng * (0.2f + abs(p.z) * 4e-4f) : origin;
-                // A point of the light's disc facing this sample (its glow radius, at most half the distance to it):
-                // the shadow's penumbra measured, filtered over frames by the lighting's temporal pass.
-                const float3 to_centre = kept[s].xyz - start;
-                const float centre_span = max(length(to_centre), 1e-4f);
-                const float3 axis = to_centre / centre_span;
-                const float az = axis.z >= 0.0f ? 1.0f : -1.0f;
-                const float aa = -1.0f / (az + axis.z);
-                const float ab = axis.x * axis.y * aa;
-                const float3 d1 = float3(1.0f + az * axis.x * axis.x * aa, az * ab, -az * axis.x);
-                const float3 d2 = float3(ab, az + axis.y * axis.y * aa, -axis.y);
+                // A point of the light's disc facing this sample (its glow radius): the shadow's penumbra measured,
+                // filtered over frames by the lighting's temporal pass. The light fills its glow (a core, a lamp head):
+                // the ray ends at its radius.
                 const float2 du = sample_point(id.xy, max(g_rays, 1u) + 11u + 2u * s);
-                const float disc = min(kept[s].w, 0.5f * centre_span) * sqrt(du.x);
-                const float phi = 2.0f * kPi * du.y;
-                const float3 target = kept[s].xyz + (d1 * cos(phi) + d2 * sin(phi)) * disc;
-                const float3 to = target - start;
-                const float span = length(to);
-                RayDesc ray;
-                ray.Origin = start;
-                ray.Direction = to / max(span, 1e-4f);
-                ray.TMin = 0.0f;
-                // The light fills its glow (a core, a lamp head): the ray ends at its radius.
-                ray.TMax = max(span - max(kept[s].w, 2.0f + 0.01f * span), 0.0f);
-                RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH |
-                         RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
-                query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
-                while (query.Proceed()) {
-                    // Late geometry (instance 1) has no records: it blocks. The table's shadow 0 lets the light through.
-                    const bool late_hit = query.CandidateInstanceID() != 0u;
-                    const uint hit = late_hit ? 0u : g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u);
-                    if (late_hit || ((hit & kDrawNoShadow) == 0u &&
-                                     card_blocks(query.CandidatePrimitiveIndex(), hit,
-                                                 start + ray.Direction * query.CandidateTriangleRayT(), salt + 3u + s))) {
-                        query.CommitNonOpaqueTriangleHit();
-                    }
-                }
-                if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
-                    glow += kept_light[s];
-                    seen_weight += kept_weight[s];
+                if (emitter_visible(start, kept[s].xyz, kept[s].w, du, salt + 3u + s)) {
+                    glow += kept_light[s] * confidence;
+                    seen_weight += kept_weight[s] * confidence;
+                    plain_seen += kept_weight[s];
                 }
             }
         }
         // The lights not tested: their light at the tested ones' visibility (the occluders near this point
         // shade them alike).
-        const float rest_seen = tested_weight > 0.0f ? seen_weight / tested_weight : 1.0f;
-        glow += (unshadowed - tested) * rest_seen;
+        glow += max(unshadowed - tested, 0.0f) * rest_visibility(seen_weight, tested_weight, plain_seen, plain_weight);
         // Bright bursts (lava eruptions, sparks) roll off softly instead of blowing out.
         points += soft_light(glow, 1.5f) / max(g_point_light, 1e-3f);
     }
@@ -2555,6 +2716,396 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
     g_raw[index] = pack_light(make_light(light / float(rays), sun, points), blocker);
 }
 
+// ---------------------------------------------------------------------------------------------
+// Reference (GALAXY_RT_REFERENCE=1, g_flags bit 13): a path tracer for a still camera, the image the real-time passes
+// are measured against; not a player setting. Per sample and frame one path. At every vertex: the sun (a shadow ray
+// inside its disc), and one light of all the game's point lights and glow lights, chosen in proportion to its
+// unshadowed light there, with a shadow ray to a point of its emitter (the sum of all over the chance of the one
+// chosen: unbiased). Then a cosine-sampled bounce, shaded where it hits from the scene (its draw's texture times its
+// vertex or draw colour, the table's area emission), up to g_reference_bounces, or the sky's light where it leaves
+// (past the backdrop distance as well). The lights are the real-time passes' own: the sun's light by the cosine, the
+// game's attenuation, the glow lights' power / (pi (d^2 + r^2)) to their reach without the soft cap, the sky light's
+// harmonics; every colour is decoded from the display encoding to linear light. The result is the irradiance over pi
+// that a white surface would show (1: as drawn), summed in float32 per sample while the camera holds still; a sample
+// whose depth changes (an actor moving through it) starts again on its own. Late geometry (instance 1: Rosalina)
+// has no records: a path that meets it ends there.
+// ---------------------------------------------------------------------------------------------
+
+static const uint kReferenceFlag = 8192u;
+
+// The sRGB transfer functions (IEC 61966-2-1).
+float3 srgb_to_linear(float3 c)
+{
+    c = max(c, 0.0f);
+    return lerp(pow((c + 0.055f) / 1.055f, 2.4f), c / 12.92f, step(c, 0.04045f));
+}
+
+float3 linear_to_srgb(float3 c)
+{
+    c = max(c, 0.0f);
+    return lerp(1.055f * pow(c, 1.0f / 2.4f) - 0.055f, 12.92f * c, step(c, 0.0031308f));
+}
+
+// A light's colour decoded to linear light at its own peak (its brightness kept: light colours past 1 are intensities).
+float3 linear_hue(float3 c)
+{
+    const float peak = max(c.r, max(c.g, c.b));
+    return peak > 1e-6f ? srgb_to_linear(c / peak) * peak : float3(0.0f, 0.0f, 0.0f);
+}
+
+uint pcg_hash(uint v)
+{
+    const uint state = v * 747796405u + 2891336453u;
+    const uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+    return (word >> 22u) ^ word;
+}
+
+float random(inout uint seed)
+{
+    seed = pcg_hash(seed);
+    return float(seed >> 8u) * (1.0f / 16777216.0f);
+}
+
+float2 random2(inout uint seed)
+{
+    const float a = random(seed);
+    return float2(a, random(seed));
+}
+
+// The sky and bounce light's level under the sky's state (SpatialBCS's `ambient`).
+float reference_ambient()
+{
+    float ambient = g_sun_light.w;
+    if (g_picture_sums.Load(36u) != 0u) {
+        ambient *= lerp(g_ambient.x, 1.0f, saturate(asfloat(g_picture_sums.Load(32u)) / g_ambient.y));
+    }
+    return ambient;
+}
+
+// Game point light `i` at `p` (normal `n`): its light by the game's attenuation (TraceCS with g_point_light), its
+// emitter's centre and radius.
+bool reference_point(uint i, float3 p, float3 n, out float3 light, out float3 centre, out float radius)
+{
+    centre = g_points[2u * i].xyz;
+    radius = g_point_radius[i >> 2u][i & 3u];
+    light = float3(0.0f, 0.0f, 0.0f);
+    const float3 to = centre - p;
+    const float d2 = dot(to, to);
+    const float nl = dot(n, to) * rsqrt(max(d2, 1e-6f));
+    if (nl <= 0.0f) {
+        return false;
+    }
+    light = linear_hue(g_points[2u * i + 1u].rgb) * (nl * point_falloff(d2, i) * g_point_light);
+    return luminance(light) > 0.0f;
+}
+
+// Glow light `c` of the frame's list at `p` (normal `n`): power / (pi (d^2 + r^2)) windowed to its reach, its cone
+// (TraceCS without the soft cap), its centre and radius.
+bool reference_glow(uint c, float3 p, float3 n, out float3 light, out float3 centre, out float radius)
+{
+    const float4 la = asfloat(g_emitters.Load4(16u + c * kEmitStride));
+    const float3 power = asfloat(g_emitters.Load3(16u + c * kEmitStride + 16u));
+    centre = transform(g_to_eye, la.xyz);
+    radius = la.w;
+    light = float3(0.0f, 0.0f, 0.0f);
+    const float3 to = centre - p;
+    const float d2 = dot(to, to);
+    const float reach2 = emit_reach2(luminance(power));
+    if (d2 >= reach2) {
+        return false;
+    }
+    const float inv_d = rsqrt(max(d2, 1e-6f));
+    const float nl = dot(n, to) * inv_d;
+    if (nl <= 0.0f) {
+        return false;
+    }
+    const float4 spot = asfloat(g_emitters.Load4(16u + c * kEmitStride + 32u));
+    const float cone = spot_factor(float4(rotate3(g_to_eye, spot.xyz), spot.w), -to * inv_d);
+    if (cone <= 0.0f) {
+        return false;
+    }
+    const float x = d2 / reach2;
+    light = linear_hue(power) * (cone * nl * (1.0f - x * x) * (1.0f - x * x) * g_emit.z / (kPi * (d2 + la.w * la.w)));
+    return luminance(light) > 0.0f;
+}
+
+// The lights' light at `p` (normal `n`, rays from `start`): one light chosen in proportion to its light here, its
+// shadow ray, over its chance. `tiled`: the group's tile list holds every glow light in reach of `p` (the primary
+// surface); else the whole list.
+float3 reference_lights(float3 start, float3 p, float3 n, bool tiled, inout uint seed, uint salt)
+{
+    const uint glows = min(g_emitters.Load(0u), kTileWords * 32u);
+    float total = 0.0f;
+    float3 light;
+    float3 centre;
+    float radius;
+    [loop] for (uint i = 0u; i < g_point_count; ++i) {
+        if (reference_point(i, p, n, light, centre, radius)) {
+            total += luminance(light);
+        }
+    }
+    [loop] for (uint word = 0u; word < kTileWords && word * 32u < glows; ++word) {
+        const uint left = glows - word * 32u;
+        [loop] for (uint bits = tiled ? s_tile_mask[word] : left >= 32u ? 0xFFFFFFFFu : (1u << left) - 1u; bits != 0u;
+                    bits &= bits - 1u) {
+            if (reference_glow(word * 32u + firstbitlow(bits), p, n, light, centre, radius)) {
+                total += luminance(light);
+            }
+        }
+    }
+    if (total <= 0.0f) {
+        return float3(0.0f, 0.0f, 0.0f);
+    }
+    // The light where the running sum passes the pick.
+    float pick = random(seed) * total;
+    bool found = false;
+    float3 chosen = float3(0.0f, 0.0f, 0.0f);
+    float3 chosen_centre = float3(0.0f, 0.0f, 0.0f);
+    float chosen_radius = 0.0f;
+    [loop] for (uint i = 0u; i < g_point_count && !found; ++i) {
+        if (reference_point(i, p, n, light, centre, radius)) {
+            pick -= luminance(light);
+            if (pick <= 0.0f) {
+                found = true;
+                chosen = light;
+                chosen_centre = centre;
+                chosen_radius = radius;
+            }
+        }
+    }
+    [loop] for (uint word = 0u; word < kTileWords && word * 32u < glows && !found; ++word) {
+        const uint left = glows - word * 32u;
+        [loop] for (uint bits = tiled ? s_tile_mask[word] : left >= 32u ? 0xFFFFFFFFu : (1u << left) - 1u;
+                    bits != 0u && !found; bits &= bits - 1u) {
+            if (reference_glow(word * 32u + firstbitlow(bits), p, n, light, centre, radius)) {
+                pick -= luminance(light);
+                if (pick <= 0.0f) {
+                    found = true;
+                    chosen = light;
+                    chosen_centre = centre;
+                    chosen_radius = radius;
+                }
+            }
+        }
+    }
+    if (!found || !emitter_visible(start, chosen_centre, chosen_radius, random2(seed), salt)) {
+        return float3(0.0f, 0.0f, 0.0f);
+    }
+    return chosen * (total / max(luminance(chosen), 1e-8f));
+}
+
+// The sun's light at a point facing `n` from `origin`: its light by the cosine where one ray inside its disc reaches it.
+float3 reference_sun(float3 origin, float3 n, bool card, inout uint seed, uint salt)
+{
+    const float facing = dot(n, g_sun.xyz);
+    if (facing <= 0.0f || !any(g_sun_light.rgb > 0.0f)) {
+        return float3(0.0f, 0.0f, 0.0f);
+    }
+    const float3 l = g_sun.xyz;
+    const float lz = l.z >= 0.0f ? 1.0f : -1.0f;
+    const float la = -1.0f / (lz + l.z);
+    const float lb = l.x * l.y * la;
+    const float3 l1 = float3(1.0f + lz * l.x * l.x * la, lz * lb, -lz * l.x);
+    const float3 l2 = float3(lb, lz + l.y * l.y * la, -l.y);
+    const float2 u = random2(seed);
+    const float r = sqrt(u.x) * g_sun.w;
+    const float phi = 2.0f * kPi * u.y;
+    float blocker;
+    return sun_visible(origin, normalize(l + l1 * (r * cos(phi)) + l2 * (r * sin(phi))), card, salt, blocker)
+               ? linear_hue(g_sun_light.rgb) * facing
+               : float3(0.0f, 0.0f, 0.0f);
+}
+
+// What a ray hits on triangle `tri` (barycentrics `b`): its draw's texture at the hit's texture coordinates times the
+// vertices' colour 0 or the draw's colour (rt_reflections.hlsl hit_shade), and the table's area emission, in linear light.
+void reference_material(uint tri, float2 b, out float3 albedo, out float3 emission)
+{
+    albedo = float3(0.5f, 0.5f, 0.5f);
+    emission = float3(0.0f, 0.0f, 0.0f);
+    const uint draw = g_surfaces.Load(tri * 16u + 12u) >> 16u;
+#if RT_TEXTURED
+    uint count;
+    uint stride;
+    g_draw_tex.GetDimensions(count, stride);
+    if (draw < count) {
+        const uint4 d = g_draw_tex[draw];
+        const float3 w = float3(1.0f - b.x - b.y, b.x, b.y);
+        const uint a = tri * 36u;
+        const float4 uv01 = asfloat(g_tri_uv.Load4(a));
+        const uint4 rest = g_tri_uv.Load4(a + 16u);
+        const uint c2 = g_tri_uv.Load(a + 32u);
+        albedo = rgb8(d.z);
+        if ((d.y & 1u) != 0u && (rest.z | rest.w | c2) != 0u) {
+            albedo = rgb8(rest.z) * w.x + rgb8(rest.w) * w.y + rgb8(c2) * w.z;
+        }
+        const float2 uv = uv01.xy * w.x + uv01.zw * w.y + asfloat(rest.xy) * w.z;
+        if (d.x != 0xFFFFFFFFu && all(abs(uv) < 1.0e4f)) {
+            const Texture2D<float4> map = ResourceDescriptorHeap[NonUniformResourceIndex(d.x)];
+            albedo *= map.SampleLevel(g_wrap_point, uv, 0.0f).rgb;
+        }
+    }
+#endif
+    albedo = srgb_to_linear(saturate(albedo));
+    const uint2 table = g_draws.Load2(min(draw, max(g_draw_count, 1u) - 1u) * kDrawStride + 8u);
+    if ((table.x & kEmitNamed) != 0u && (table.x & 3u) == kEmitArea && g_emit.w > 0.0f) {
+        emission = srgb_to_linear(rgb8(table.x)) * (g_self.z * asfloat(table.y) * g_emit.w);
+    }
+}
+
+[numthreads(8, 8, 1)]
+void ReferenceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
+{
+    const bool in_range = all(id.xy < g_sample_size);
+    const uint index = id.y * g_sample_size.x + id.x;
+    const int2 q = sample_pixel(min(id.xy, g_sample_size - 1u));
+    float3 p;
+    const bool surface = pixel_point(q, p) && inside(g_viewport, float2(q) + 0.5f) && -p.z <= g_ambient.w;
+    CULL_TILE_LIGHTS(g_emitters, g_to_eye, gi, in_range && surface, p, emit_reach2)
+    if (!in_range) {
+        return;
+    }
+    float4 sum = g_reference[2u * index];
+    float4 at = g_reference[2u * index + 1u];
+    const float z = surface ? p.z : 0.0f;
+    if (g_reference_reset != 0u || abs(at.x - z) > 0.01f * abs(z) + 0.5f) {
+        sum = float4(0.0f, 0.0f, 0.0f, 0.0f);
+        at = float4(z, 0.0f, 0.0f, 0.0f);
+    }
+    if (!surface) {
+        g_reference[2u * index] = sum;
+        g_reference[2u * index + 1u] = at;
+        return;
+    }
+    const Surface s = primary_surface(q, p);
+    uint seed = pcg_hash(index ^ pcg_hash(g_frame * 0x9E3779B9u + 0x7F4A7C15u));
+    const uint salt = index * 32u + g_frame * 0x632BE5ABu;
+    const float3 tint = sky_tint();
+    float3 sky_sh[9];
+    const bool sky_known = sky_light_load(sky_sh);
+    const float ambient = reference_ambient();
+    bool card = false;
+    if (s.primary.x != 0u) {
+        const uint own = g_surfaces.Load((s.primary.x - 1u) * 16u + 12u);
+        card = (g_draws.Load(min(own >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride + 24u) & kDrawTableFoliage) != 0u;
+    }
+    float3 position = s.lifted + s.ng * (0.2f + abs(p.z) * 4e-4f);
+    float3 at_point = p;
+    float3 n = s.n;
+    float3 ng = s.ng;
+    float3 throughput = float3(1.0f, 1.0f, 1.0f);
+    float3 light = float3(0.0f, 0.0f, 0.0f);
+    [loop] for (uint bounce = 0u; bounce <= g_reference_bounces; ++bounce) {
+        light += throughput * (reference_sun(position, n, card, seed, salt + 1u + 4u * bounce) +
+                               reference_lights(position, at_point, n, bounce == 0u, seed, salt + 2u + 4u * bounce));
+        if (bounce == g_reference_bounces) {
+            break;
+        }
+        // A cosine-weighted direction about the shading normal, never into the face.
+        const float sign_z = n.z >= 0.0f ? 1.0f : -1.0f;
+        const float ta = -1.0f / (sign_z + n.z);
+        const float tb = n.x * n.y * ta;
+        const float3 t1 = float3(1.0f + sign_z * n.x * n.x * ta, sign_z * tb, -sign_z * n.x);
+        const float3 t2 = float3(tb, sign_z + n.y * n.y * ta, -n.y);
+        const float2 u = random2(seed);
+        const float r = sqrt(u.x);
+        const float phi = 2.0f * kPi * u.y;
+        float3 direction = t1 * (r * cos(phi)) + t2 * (r * sin(phi)) + n * sqrt(max(0.0f, 1.0f - u.x));
+        const float below = dot(direction, ng);
+        direction = below < 0.0f ? direction - 2.0f * below * ng : direction;
+        RayDesc ray;
+        ray.Origin = position;
+        ray.Direction = direction;
+        ray.TMin = 0.0f;
+        ray.TMax = 1.0e6f;
+        RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+        query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
+        while (query.Proceed()) {
+            const bool late_hit = query.CandidateInstanceID() != 0u;
+            const uint hit = late_hit ? 0u : g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u);
+            if (late_hit || ((hit & kDrawNoShadow) == 0u &&
+                             card_blocks(query.CandidatePrimitiveIndex(), hit,
+                                         position + direction * query.CandidateTriangleRayT(), salt + 3u + 4u * bounce))) {
+                query.CommitNonOpaqueTriangleHit();
+            }
+        }
+        const float3 x = position + direction * query.CommittedRayT();
+        if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT || length(x) > g_ambient.w) {
+            light += throughput * linear_hue(sky_light(direction, tint, sky_sh, sky_known)) * ambient;
+            break;
+        }
+        if (query.CommittedInstanceID() != 0u) {
+            break;
+        }
+        const uint tri = query.CommittedPrimitiveIndex();
+        const float2 b = query.CommittedTriangleBarycentrics();
+        float3 albedo;
+        float3 emission;
+        reference_material(tri, b, albedo, emission);
+        light += throughput * emission;
+        throughput *= albedo;
+        // Russian roulette after the first bounce, by what is left to carry.
+        if (bounce >= 1u) {
+            const float keep = clamp(max(throughput.r, max(throughput.g, throughput.b)), 0.05f, 1.0f);
+            if (random(seed) >= keep) {
+                break;
+            }
+            throughput /= keep;
+        }
+        const float3 v0 = asfloat(g_positions.Load3(tri * 36u));
+        const float3 v1 = asfloat(g_positions.Load3(tri * 36u + 12u));
+        const float3 v2 = asfloat(g_positions.Load3(tri * 36u + 24u));
+        const float3 face = cross(v1 - v0, v2 - v0);
+        if (dot(face, face) <= 1e-24f) {
+            break;
+        }
+        ng = normalize(face);
+        ng = dot(ng, direction) > 0.0f ? -ng : ng;
+        const float3 w = float3(1.0f - b.x - b.y, b.x, b.y);
+        float3 lifted = v0 * w.x + v1 * w.y + v2 * w.z;
+        smooth_surface(tri, w, v0, v1, v2, ng, n, lifted);
+        at_point = x;
+        position = lifted + ng * (0.2f + abs(x.z) * 4e-4f);
+        card = false;
+    }
+    sum += float4(light, 1.0f);
+    g_reference[2u * index] = sum;
+    g_reference[2u * index + 1u] = at;
+}
+
+// One group after ReferenceCS: the exposure that brings the geometric mean of the reference's light to 1 (times
+// g_reference_exposure), within 1/64-64, after the samples (SpatialBCS reads it).
+groupshared float s_exposure_sum[1024];
+groupshared float s_exposure_count[1024];
+
+[numthreads(1024, 1, 1)]
+void ReferenceExposureCS(uint gi : SV_GroupIndex)
+{
+    const uint total = g_sample_size.x * g_sample_size.y;
+    float sum = 0.0f;
+    float count = 0.0f;
+    for (uint i = gi; i < total; i += 1024u) {
+        const float4 a = g_reference[2u * i];
+        if (a.w > 0.0f) {
+            sum += log(max(luminance(a.rgb / a.w), 1e-4f));
+            count += 1.0f;
+        }
+    }
+    s_exposure_sum[gi] = sum;
+    s_exposure_count[gi] = count;
+    GroupMemoryBarrierWithGroupSync();
+    [unroll] for (uint step = 512u; step > 0u; step >>= 1u) {
+        if (gi < step) {
+            s_exposure_sum[gi] += s_exposure_sum[gi + step];
+            s_exposure_count[gi] += s_exposure_count[gi + step];
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if (gi == 0u) {
+        const float mean = s_exposure_count[0] > 0.0f ? s_exposure_sum[0] / s_exposure_count[0] : 0.0f;
+        g_reference[2u * total] = float4(clamp(g_reference_exposure * exp(-mean), 1.0f / 64.0f, 64.0f), 0.0f, 0.0f, 0.0f);
+    }
+}
+
 // Accumulation: the sample's point in the previous frame, bilinear over the previous samples on
 // its plane, weighted towards the history up to g_history_frames (the direct lights' shadows
 // keep at most five frames: their casters move).
@@ -2580,7 +3131,7 @@ void TemporalCS(uint3 id : SV_DispatchThreadID)
         const float3 normal = normalize(float3(dot(g_reproject[0].xyz, n), dot(g_reproject[1].xyz, n),
                                                dot(g_reproject[2].xyz, n)));
         if (previous.z < -g_near) {
-            const float2 a = (eye_to_pixel(g_projection, g_viewport, previous) - 0.5f) / float(g_factor);
+            const float2 a = (eye_to_pixel(g_history_projection, g_viewport, previous) - 0.5f) / float(g_factor);
             const int2 base = int2(floor(a));
             const float2 w = a - float2(base);
             const float tolerance = 0.5f + abs(previous.z) * 0.01f;
@@ -2595,7 +3146,9 @@ void TemporalCS(uint3 id : SV_DispatchThreadID)
                 }
                 const uint si = uint(s.y) * g_sample_size.x + uint(s.x);
                 const float sz = g_prev_z[si];
-                if (sz == 0.0f || abs(dot(normal, sample_position(uint2(s), sz) - previous)) > tolerance) {
+                if (sz == 0.0f ||
+                    abs(dot(normal, eye_position(g_history_projection, g_viewport, sample_centre(uint2(s)), sz) - previous)) >
+                        tolerance) {
                     continue;
                 }
                 const float bw = (o.x != 0 ? w.x : 1.0f - w.x) * (o.y != 0 ? w.y : 1.0f - w.y);
@@ -2879,6 +3432,31 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
     const float z = g_z[index];
     if (z == 0.0f) {
         g_final[index] = uint4(f32tof16(1.0f) | (f32tof16(1.0f) << 16u), f32tof16(1.0f) | (f32tof16(1.0f) << 16u), 0u, 0u);
+        return;
+    }
+    if ((g_flags & kReferenceFlag) != 0u) {
+        // The reference's light at its exposure, in linear light (the composite's m_flags bit 2). A light source's
+        // own surface glows over it as the lit model's does: an area light by its glow, a point light's at 1 + 0.3 x
+        // its intensity.
+        const float4 sum = g_reference[2u * index];
+        float3 m = (sum.w > 0.0f ? sum.rgb / sum.w : float3(0.0f, 0.0f, 0.0f)) *
+                   g_reference[2u * g_sample_size.x * g_sample_size.y].x;
+        const uint tri = g_primary[index].x;
+        if (tri != 0u) {
+            const uint record = min(g_surfaces.Load((tri - 1u) * 16u + 12u) >> 16u, max(g_draw_count, 1u) - 1u) *
+                                kDrawStride;
+            const uint2 emission = g_draws.Load2(record + 8u);
+            if ((emission.x & kEmitNamed) != 0u && (emission.x & 3u) != 0u && (emission.x & kEmitNoLight) == 0u) {
+                const uint table_flags = g_draws.Load(record + 24u);
+                const float intensity = (table_flags & kDrawTableGlow) != 0u
+                                            ? float(table_flags >> 16u) / 65535.0f * kDrawGlowScale
+                                            : asfloat(emission.y);
+                m += ((emission.x & 3u) == kEmitArea ? g_self.x * intensity : 0.3f * min(intensity, 3.0f)).xxx;
+            }
+        }
+        m = min(m, kMaxLight);
+        g_final[index] = uint4(f32tof16(m.r) | (f32tof16(m.g) << 16u), f32tof16(m.b) | (f32tof16(1.0f) << 16u), asuint(z),
+                               0u);
         return;
     }
     Light light = filtered(id.xy, 4, true);
@@ -3187,7 +3765,7 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
     if ((draw_flags & kDrawLit) == 0u && (g_flags & 2u) != 0u) {
         const float3 previous = transform(g_picture, sample_position(id.xy, z));
         if (previous.z < -g_near) {
-            const float2 s = (eye_to_pixel(g_projection, g_viewport, previous) - 0.5f) / float(g_factor) + 0.5f;
+            const float2 s = (eye_to_pixel(g_picture_projection, g_viewport, previous) - 0.5f) / float(g_factor) + 0.5f;
             if (all(s >= 0.0f) && all(s < float2(g_sample_size))) {
                 const uint si = uint(s.y) * g_sample_size.x + uint(s.x);
                 const float pz = asfloat(g_picture_in[si].y);
@@ -3369,7 +3947,7 @@ cbuffer RtComposite : register(b0)
     uint2 m_sample_size;
     uint m_factor;
     uint m_flags;   // bit 0: move the point to the traced frame's camera (m_reproject[m_slot]);
-                    // bit 1: show the lighting alone
+                    // bit 1: show the lighting alone; bit 2: light in linear light (the reference)
     uint m_slot;
     float m_near;
     float m_split;  // GALAXY_RT_SPLIT: left of it the game's own picture (a dark line between)
@@ -3601,6 +4179,11 @@ CompositeOut CompositePS(float4 position : SV_Position)
     }
     if ((m_flags & 2u) != 0u) {
         result.color = float4(m * 0.5f, 1.0f);
+        return result;
+    }
+    if ((m_flags & 4u) != 0u) {
+        // The reference: the colour decoded to linear light, lit, the film shoulder, encoded for display.
+        result.color = float4(linear_to_srgb(film_light(srgb_to_linear(color), m)), 1.0f);
         return result;
     }
     result.color = float4(apply_light(color, m), 1.0f);

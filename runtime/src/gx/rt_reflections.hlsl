@@ -859,14 +859,16 @@ bool lit_from(float3 origin, float3 direction, float length)
 // ---------------------------------------------------------------------------------------------
 // Tile light lists: each group of 8 x 8 samples keeps the glow lights (the highlights') whose reach meets the box
 // around its samples' surface points; its samples weigh only those. Lights beyond a tile's reach
-// add nothing to any of its samples, so the result is the same at a fraction of the work.
+// add nothing to any of its samples, so the result is the same at a fraction of the work. A bit per
+// light of the frame's list, walked in its order (rt_lighting.hlsl: a list of the first 128 lights
+// added dropped different lights each frame).
 // ---------------------------------------------------------------------------------------------
 
-static const uint kTileLights = 128u;
+static const uint kTileWords = 16u;   // a bit per light of the frame's list (rt_lighting.hlsl kEmitLights)
 
 groupshared uint s_tile_bounds[6];      // min x y z, max x y z (order-preserving uints)
-groupshared uint s_tile_count;
-groupshared uint s_tile_lights[kTileLights];
+groupshared uint s_tile_count;          // lights in the tile's list
+groupshared uint s_tile_mask[kTileWords];
 
 uint ordered(float f)
 {
@@ -889,6 +891,9 @@ float unordered(uint u)
             s_tile_bounds[3] = 0u; s_tile_bounds[4] = 0u; s_tile_bounds[5] = 0u;                        \
             s_tile_count = 0u;                                                                           \
         }                                                                                                \
+        if ((gi) < kTileWords) {                                                                         \
+            s_tile_mask[(gi)] = 0u;                                                                      \
+        }                                                                                                \
         GroupMemoryBarrierWithGroupSync();                                                               \
         if (valid) {                                                                                     \
             InterlockedMin(s_tile_bounds[0], ordered((p).x));                                            \
@@ -904,18 +909,15 @@ float unordered(uint u)
                                      unordered(s_tile_bounds[2]));                                       \
             const float3 hi = float3(unordered(s_tile_bounds[3]), unordered(s_tile_bounds[4]),           \
                                      unordered(s_tile_bounds[5]));                                       \
-            const uint total = (lights).Load(0u);                                                        \
+            const uint total = min((lights).Load(0u), kTileWords * 32u);                                 \
             for (uint c = (gi); c < total; c += 64u) {                                                   \
                 const float4 la = asfloat((lights).Load4(16u + c * kEmitStride));                        \
                 const float3 power = asfloat((lights).Load3(16u + c * kEmitStride + 16u));               \
                 const float3 e = transform(to_eye, la.xyz);                                              \
                 const float3 out_of_box = max(max(lo - e, e - hi), 0.0f);                                \
                 if (dot(out_of_box, out_of_box) < reach2_of(luminance(power))) {                         \
-                    uint slot;                                                                           \
-                    InterlockedAdd(s_tile_count, 1u, slot);                                              \
-                    if (slot < kTileLights) {                                                            \
-                        s_tile_lights[slot] = c;                                                         \
-                    }                                                                                    \
+                    InterlockedOr(s_tile_mask[c >> 5u], 1u << (c & 31u));                                \
+                    InterlockedAdd(s_tile_count, 1u);                                                    \
                 }                                                                                        \
             }                                                                                            \
         }                                                                                                \
@@ -925,6 +927,26 @@ float unordered(uint u)
 float glow_reach2(float light)
 {
     return min(light / (kPi * kGlowCutoff), kGlowReach * kGlowReach);
+}
+
+// A local light's highlight: its light, the direction to it and where its shadow ray ends.
+struct Highlight {
+    float3 light;
+    float weight;
+    float3 to;
+    float end;
+};
+
+// Keeps the three strongest highlights, strongest first.
+void keep_highlight(inout Highlight top[3], Highlight h)
+{
+    [unroll] for (uint s = 0u; s < 3u; ++s) {
+        if (h.weight > top[s].weight) {
+            const Highlight t = top[s];
+            top[s] = h;
+            h = t;
+        }
+    }
 }
 
 float3 highlights(uint2 s, float3 p, float3 origin, float3 n, float3 v, float alpha, float f0, bool tiled)
@@ -941,30 +963,36 @@ float3 highlights(uint2 s, float3 p, float3 origin, float3 n, float3 v, float al
         }
     }
     float3 local = float3(0.0f, 0.0f, 0.0f);
-    float3 strongest = float3(0.0f, 0.0f, 0.0f);
-    float strongest_weight = 0.0f;
-    float3 strongest_to = float3(0.0f, 0.0f, 1.0f);
-    float strongest_end = 0.0f;
+    Highlight top[3];
+    [unroll] for (uint t = 0u; t < 3u; ++t) {
+        top[t].light = float3(0.0f, 0.0f, 0.0f);
+        top[t].weight = 0.0f;
+        top[t].to = float3(0.0f, 0.0f, 1.0f);
+        top[t].end = 0.0f;
+    }
     [loop] for (uint i = 0u; i < g_point_count; ++i) {
         const float3 to = g_points[2u * i].xyz - p;
         const float d = length(to);
         const float3 c = g_points[2u * i + 1u].rgb * (point_falloff(d * d, i) * g_point_light) *
                          ggx_highlight(n, v, to / max(d, 1e-4f), alpha, g_point_size / max(d, 1e-4f), f0);
         local += c;
-        if (luminance(c) > strongest_weight) {
-            strongest_weight = luminance(c);
-            strongest = c;
-            strongest_to = to;
-            strongest_end = d - g_point_size;
-        }
+        Highlight h;
+        h.light = c;
+        h.weight = luminance(c);
+        h.to = to;
+        h.end = d - g_point_size;
+        keep_highlight(top, h);
     }
     // `tiled`: the group's tile list (CULL_TILE_LIGHTS); else every light.
-    const uint emitters = (g_flags & 16u) == 0u ? 0u : tiled ? min(s_tile_count, kTileLights) : g_emitters.Load(0u);
-    if (emitters != 0u) {
+    const uint total = (g_flags & 16u) == 0u ? 0u : min(g_emitters.Load(0u), kTileWords * 32u);
+    if (total != 0u && (!tiled || s_tile_count != 0u)) {
         // Its reach as the lighting's (rt_lighting.hlsl emit_reach2): light / (pi d^2) above
         // kGlowCutoff, at most kGlowReach; the lights beyond it add nothing here (the tile's list).
-        [loop] for (uint k = 0u; k < emitters; ++k) {
-            const uint j = tiled ? s_tile_lights[k] : k;
+        [loop] for (uint word = 0u; word < kTileWords && word * 32u < total; ++word) {
+        const uint left = total - word * 32u;
+        [loop] for (uint bits = tiled ? s_tile_mask[word] : left >= 32u ? 0xFFFFFFFFu : (1u << left) - 1u; bits != 0u;
+                    bits &= bits - 1u) {
+            const uint j = word * 32u + firstbitlow(bits);
             const float4 la = asfloat(g_emitters.Load4(16u + j * kEmitStride));
             const float3 power = asfloat(g_emitters.Load3(16u + j * kEmitStride + 16u));
             const float3 to = transform(g_world_to_eye, la.xyz) - p;
@@ -983,18 +1011,26 @@ float3 highlights(uint2 s, float3 p, float3 origin, float3 n, float3 v, float al
             const float3 c = power * (cone * (1.0f - x * x) * (1.0f - x * x) / (kPi * (d2 + la.w * la.w))) *
                              ggx_highlight(n, v, to / max(d, 1e-4f), alpha, la.w / max(d, 1e-4f), f0);
             local += c;
-            if (luminance(c) > strongest_weight) {
-                strongest_weight = luminance(c);
-                strongest = c;
-                strongest_to = to;
-                strongest_end = d - max(0.9f * la.w, 2.0f + 0.01f * d);
-            }
+            Highlight h;
+            h.light = c;
+            h.weight = luminance(c);
+            h.to = to;
+            h.end = d - max(0.9f * la.w, 2.0f + 0.01f * d);
+            keep_highlight(top, h);
+        }
         }
     }
-    if (strongest_weight > 0.0f) {
-        const float span = length(strongest_to);
-        if (!lit_from(origin, strongest_to / max(span, 1e-4f), strongest_end)) {
-            local -= strongest;
+    // The two strongest each take a shadow ray, counted by their lead over the third (as the lighting's
+    // rank_confidence); the rest are unshadowed. One ray for the strongest alone switched a highlight's shadow on
+    // and off where two lights' highlights crossed.
+    [unroll] for (uint r = 0u; r < 2u; ++r) {
+        const float confidence = top[r].weight > 0.0f ? saturate((top[r].weight - top[2].weight) / (0.5f * top[r].weight))
+                                                      : 0.0f;
+        if (confidence > 0.0f) {
+            const float span = length(top[r].to);
+            if (!lit_from(origin, top[r].to / max(span, 1e-4f), top[r].end)) {
+                local -= top[r].light * confidence;
+            }
         }
     }
     return sum + max(local, 0.0f) * g_local_gain;

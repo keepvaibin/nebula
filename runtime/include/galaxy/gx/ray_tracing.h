@@ -230,6 +230,8 @@ public:
     [[nodiscard]] bool ab_original() const noexcept { return ab_original_; }
     // The frame about to be drawn (GxBackend at its scene's start: the present it will become).
     void set_ab_original(bool original) noexcept { ab_original_ = ab_ && original; }
+    // The present the scene being drawn will be shown in (the snapshots' numbering).
+    void set_presents(std::uint64_t presents) noexcept { presents_ = presents; }
     // The traced sun's world direction (towards it: GALAXY_RT_SUN, else the game's visible sun)
     // and the distance of the game's sun model (0: none); false without a sun.
     [[nodiscard]] bool sun_direction(std::array<float, 3>& world, float* distance = nullptr) const noexcept;
@@ -351,9 +353,9 @@ private:
     static constexpr std::uint32_t kEmitStride = 48u;
     static constexpr std::uint64_t kEmitLogBytes = 16u + kEmitLogLights * kEmitStride;
     static constexpr std::uint64_t kEmitLogSums = 64u;   // the picture sums after them
-    // Then this frame's found lights (rt_lighting.hlsl kEmitFound) with each one's source (kEmitSource*).
+    // Then this frame's found lights (rt_lighting.hlsl kEmitFound) with each one's source (kEmitSource*) and identity.
     static constexpr std::uint32_t kEmitFound = 2048u;
-    static constexpr std::uint64_t kEmitFoundBytes = 16u + std::uint64_t{kEmitFound} * (kEmitStride + 4u);
+    static constexpr std::uint64_t kEmitFoundBytes = 16u + std::uint64_t{kEmitFound} * (kEmitStride + 8u);
     static constexpr unsigned kStatsWords = 16u;
     static constexpr std::uint32_t kMaxTriangles = 4u * 1024u * 1024u;
     // Translucent water triangles of one scene.
@@ -429,6 +431,7 @@ private:
                              void* allocate_context, D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table,
                              std::uint32_t width, std::uint32_t height, std::uint32_t factor, bool glow);
     bool ensure_lighting_buffers(std::uint32_t samples);
+    bool ensure_reference_buffer(std::uint32_t samples);
     // EFB pixels per sample side for a width x height target.
     [[nodiscard]] std::uint32_t sample_factor(std::uint32_t width, std::uint32_t height) const noexcept;
     void trace_lighting(ID3D12GraphicsCommandList* list, Allocate allocate, void* allocate_context,
@@ -571,6 +574,24 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> spatial_a_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> spatial_m_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> spatial_b_pso_;
+    // The reference (GALAXY_RT_REFERENCE, ReferenceCS): its passes, its sums and when it starts again.
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> reference_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> reference_exposure_pso_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> reference_buffer_;
+    std::uint32_t reference_samples_ = 0;
+    std::uint32_t reference_width_ = 0;
+    std::uint32_t reference_height_ = 0;
+    std::array<float, 12> reference_camera_{};
+    bool reference_camera_known_ = false;
+    bool reference_reset_ = true;
+    bool reference_ = false;
+    std::uint32_t reference_bounces_ = 3;
+    float reference_exposure_ = 1.0f;
+    std::uint64_t reference_frames_ = 0;     // since the last report
+    std::uint64_t reference_from_ = 0;       // the present it starts at (GALAXY_RT_REFERENCE_FROM)
+    bool reference_active_ = false;          // it ran this frame
+    std::uint64_t presents_ = 0;
+    std::uint64_t reference_restarts_ = 0;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> capture_root_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> capture_pso_;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> composite_root_;
@@ -673,7 +694,7 @@ private:
         std::uint32_t triangle_count;
         std::uint32_t color;
         float intensity;
-        float range;
+        std::uint32_t material;   // its draw's material table entry, a strip's piece above bit 16 (its lights' identity)
         float pulse;
         std::uint32_t flags;
         float cone;
@@ -810,6 +831,9 @@ private:
     std::array<float, 12> camera_{};
     std::array<float, 12> history_camera_{};
     std::array<float, 12> picture_camera_{};
+    // Their projections (each frame's own jitter).
+    std::array<float, 4> history_projection_{};
+    std::array<float, 4> picture_projection_{};
     std::uint32_t light_samples_ = 0;
     std::uint32_t history_width_ = 0;
     std::uint32_t history_height_ = 0;

@@ -17,7 +17,8 @@
 // class: '+'-joined tokens. Surfaces: diffuse, glossy, metal, glass, crystal, ice, water, foliage,
 // fabric, skin, unlit, sky, particle (never traced geometry or water). Lights: emitter (point light; a spot light with a cone),
 // emissive-area (area light), tint (the emission takes the colour the draw shows: Luma and star-bit
-// colours live in the game's colour registers, not in the shared texture). helper: a lookup texture
+// colours live in the game's colour registers, not in the shared texture), strip (a long emitter, a power cable: a
+// light per 120-unit stretch along it instead of one for the whole object). helper: a lookup texture
 // (environment, indirect or mask map) that never decides a draw's material. skip: never a light.
 // hide: a light effect the game fakes (a beam, a cone, a flare) that the traced light replaces; not
 // drawn while the ray-traced lighting is on. unlit-only: only the draws the game does not light
@@ -55,6 +56,7 @@ struct RtMaterial {
     bool lens = false;                    // a black hole's lens draw: the finish bends light around it
     bool matte = false;                   // foliage, cloth: absorbs light, no highlight or reflection
     bool sky = false;                     // a sky or backdrop mesh: drawn, never in the traced scene
+    bool strip = false;                   // a long emitter (a cable): a light per stretch of it
     bool star = false;                    // a star's burning surface (the star core, the suns): its own colour,
                                           // brighter and more textured (rt_lighting.hlsl CompositePS)
     bool shadow = true;
@@ -141,6 +143,11 @@ private:
 [[nodiscard]] bool rt_materials_loaded() noexcept;
 // 0: not in the table; else its index + 1.
 [[nodiscard]] std::uint16_t rt_material_index(std::uint64_t hash) noexcept;
+// The hash a row keyed `untextured` takes: on the stage its row names, surfaces without texture coordinates
+// (vertex-coloured models: the Observatory's power cables) take that row; no texture row can name them.
+inline constexpr std::uint64_t kRtUntexturedHash = 0xFFFFFFFFFFFFFFFFull;
+// The loaded stage's material for its untextured surfaces (0: the stage has no `untextured` row).
+[[nodiscard]] std::uint16_t rt_stage_untextured_material() noexcept;
 [[nodiscard]] const RtMaterial* rt_material(std::uint16_t index) noexcept;
 // GALAXY_RT_LOG_GLOWS=1: the texture-pack name of each texture as uploaded, kept by guest address, and
 // printed for the glow draws ([rt-glow]) and the traced surfaces ([rt-surface]) the table does not name.

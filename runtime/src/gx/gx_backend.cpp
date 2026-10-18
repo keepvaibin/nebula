@@ -7300,6 +7300,18 @@ void GxBackend::note_rt_material() {
 }
 
 bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
+    // An untextured surface (no texture coordinates) takes its stage's `untextured` row, for this draw only: the
+    // texture binding that sets current_rt_material_ runs only when the textures change.
+    struct RestoreMaterial {
+        std::uint16_t& slot;
+        std::uint16_t value;
+        ~RestoreMaterial() { slot = value; }
+    } restore_material{current_rt_material_, current_rt_material_};
+    if (vs_key_.num_texgens == 0u && rt_geometry_draw()) {
+        if (const std::uint16_t untextured = rt_stage_untextured_material(); untextured != 0u) {
+            current_rt_material_ = untextured;
+        }
+    }
     if (rt_material_census() && scene_phase_ && side_layer_ == kSceneLayer &&
         state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u) [[unlikely]] {
         note_rt_material();
@@ -7637,6 +7649,19 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         constexpr float kFarEps = 1.0f - 1e-7f;
         RtView view{};
         view.projection = {projection(0u), projection(1u), projection(2u), projection(3u)};
+        // The scene's depth is drawn with the temporal upscaler's jitter (apply_scene_jitter: clip x + jx w, so the
+        // projection's x offset B becomes B - jx; y likewise). The ray tracer rebuilds every sample's position from
+        // that depth: with the projection without the jitter each sample sat up to half a pixel off its surface, a
+        // different half each frame, and creases and edges alternated between their two surfaces' shading.
+        if (temporal_scene_ && state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u) {
+            const float scale = static_cast<float>(renderer_.efb_scale());
+            const float width = 2.0f * std::fabs(std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(xf::kViewportBase)))) * scale;
+            const float height = 2.0f * std::fabs(std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(xf::kViewportBase + 1u)))) * scale;
+            if (width > 0.0f && height > 0.0f) {
+                view.projection[1] -= 2.0f * scene_jitter_px_[0] / width;
+                view.projection[3] -= -2.0f * scene_jitter_px_[1] / height;
+            }
+        }
         view.z_scale = -projection(4u) * kFarEps;
         view.z_offset = -projection(5u) * kFarEps;
         view.viewport = {viewport.x, viewport.y, viewport.width, viewport.height};
@@ -8007,6 +8032,7 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
         renderer_.set_scene_view(view);
         // GALAXY_RT_AB: the game's own picture on odd presents (the snapshots' numbering).
         renderer_.rt_set_ab_original(((g_snapshot_presents + 1u) & 1u) != 0u);
+        renderer_.rt_set_presents(g_snapshot_presents + 1u);
         rt_phase_ = 0xFFu;
         rt_view_set_ = false;
         rt_scene_traced_ = !renderer_.rt_active();
