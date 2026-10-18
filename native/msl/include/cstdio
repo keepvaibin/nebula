@@ -1,0 +1,7 @@
+/* MSL's <cstdio>, which also exposed <cstring> and va_list. */
+#ifndef NEBULA_MSL_CSTDIO
+#define NEBULA_MSL_CSTDIO
+#include <stdarg.h>
+#include <stdio.h>
+#include <cstring>
+#endif

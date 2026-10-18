@@ -1,0 +1,6 @@
+/* MSL's <cstddef>. */
+#ifndef NEBULA_MSL_CSTDDEF
+#define NEBULA_MSL_CSTDDEF
+#include <stddef.h>
+#include <stdint.h>
+#endif

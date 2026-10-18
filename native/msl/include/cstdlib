@@ -1,0 +1,5 @@
+/* MSL's <cstdlib>. abs is MSL's (the prelude maps it). */
+#ifndef NEBULA_MSL_CSTDLIB
+#define NEBULA_MSL_CSTDLIB
+#include <stdlib.h>
+#endif

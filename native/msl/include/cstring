@@ -1,0 +1,6 @@
+/* MSL's <cstring>. strcasecmp is MSL's (the prelude maps it). */
+#ifndef NEBULA_MSL_CSTRING
+#define NEBULA_MSL_CSTRING
+#include <stddef.h>
+#include <string.h>
+#endif

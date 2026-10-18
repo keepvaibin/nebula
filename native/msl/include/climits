@@ -1,0 +1,5 @@
+/* MSL's <climits>. */
+#ifndef NEBULA_MSL_CLIMITS
+#define NEBULA_MSL_CLIMITS
+#include <limits.h>
+#endif

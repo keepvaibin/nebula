@@ -1,0 +1,11 @@
+/* MSL's <cmath>: the C math library (double functions, no C++ overloads) and MSL's float constants and macros. */
+#ifndef NEBULA_MSL_CMATH
+#define NEBULA_MSL_CMATH
+#include <float.h>
+#include <math.h>
+#undef M_PI
+#define M_PI 3.14159265358979323846f
+#define M_SQRT3 1.73205f
+#define DEG_TO_RAD(degrees) (degrees * (M_PI / 180.0f))
+#define RAD_TO_DEG(radians) (radians * (180.0f / M_PI))
+#endif

@@ -1,0 +1,21 @@
+// MSL's <new>: placement new. The game's other operator new and delete are JKRHeap's.
+#ifndef NEBULA_MSL_NEW
+#define NEBULA_MSL_NEW
+#include <stddef.h>
+#ifndef __PLACEMENT_NEW_INLINE
+#define __PLACEMENT_NEW_INLINE
+inline void* operator new(size_t, void* p) noexcept {
+    return p;
+}
+inline void operator delete(void*, void*) noexcept {
+}
+#endif
+#ifndef __PLACEMENT_VEC_NEW_INLINE
+#define __PLACEMENT_VEC_NEW_INLINE
+inline void* operator new[](size_t, void* p) noexcept {
+    return p;
+}
+inline void operator delete[](void*, void*) noexcept {
+}
+#endif
+#endif

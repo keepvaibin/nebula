@@ -1,0 +1,5 @@
+/* MSL's <cstdarg>. */
+#ifndef NEBULA_MSL_CSTDARG
+#define NEBULA_MSL_CSTDARG
+#include <stdarg.h>
+#endif
