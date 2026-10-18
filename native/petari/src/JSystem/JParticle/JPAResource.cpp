@@ -102,7 +102,7 @@ void JPAResource::init(JKRHeap* heap) {
     }
 
     if (mpCalcEmitterFuncListNum != 0) {
-        mpCalcEmitterFuncList = (EmitterFunc*)JKRAllocFromHeap(heap, mpCalcEmitterFuncListNum * 4, 4);
+        mpCalcEmitterFuncList = (EmitterFunc*)JKRAllocFromHeap(heap, mpCalcEmitterFuncListNum * sizeof(EmitterFunc), 4);
     }
 
     int func_no = 0;
@@ -198,7 +198,7 @@ void JPAResource::init(JKRHeap* heap) {
     }
 
     if (mpCalcParticleFuncListNum != 0) {
-        mpCalcParticleFuncList = (ParticleFunc*)JKRAllocFromHeap(heap, mpCalcParticleFuncListNum * 4, 4);
+        mpCalcParticleFuncList = (ParticleFunc*)JKRAllocFromHeap(heap, mpCalcParticleFuncListNum * sizeof(ParticleFunc), 4);
     }
 
     func_no = 0;
@@ -316,7 +316,7 @@ void JPAResource::init(JKRHeap* heap) {
     }
 
     if (mpCalcParticleChildFuncListNum != 0) {
-        mpCalcParticleChildFuncList = (ParticleFunc*)JKRAllocFromHeap(heap, mpCalcParticleChildFuncListNum * 4, 4);
+        mpCalcParticleChildFuncList = (ParticleFunc*)JKRAllocFromHeap(heap, mpCalcParticleChildFuncListNum * sizeof(ParticleFunc), 4);
     }
 
     func_no = 0;
@@ -359,7 +359,7 @@ void JPAResource::init(JKRHeap* heap) {
     }
 
     if (mpDrawEmitterFuncListNum != 0) {
-        mpDrawEmitterFuncList = (EmitterFunc*)JKRAllocFromHeap(heap, mpDrawEmitterFuncListNum * 4, 4);
+        mpDrawEmitterFuncList = (EmitterFunc*)JKRAllocFromHeap(heap, mpDrawEmitterFuncListNum * sizeof(EmitterFunc), 4);
     }
 
     func_no = 0;
@@ -455,7 +455,7 @@ void JPAResource::init(JKRHeap* heap) {
     }
 
     if (mpDrawEmitterChildFuncListNum != 0) {
-        mpDrawEmitterChildFuncList = (EmitterFunc*)JKRAllocFromHeap(heap, mpDrawEmitterChildFuncListNum * 4, 4);
+        mpDrawEmitterChildFuncList = (EmitterFunc*)JKRAllocFromHeap(heap, mpDrawEmitterChildFuncListNum * sizeof(EmitterFunc), 4);
     }
 
     func_no = 0;
@@ -501,7 +501,7 @@ void JPAResource::init(JKRHeap* heap) {
     }
 
     if (mpDrawParticleFuncListNum != 0) {
-        mpDrawParticleFuncList = (ParticleFunc*)JKRAllocFromHeap(heap, mpDrawParticleFuncListNum * 4, 4);
+        mpDrawParticleFuncList = (ParticleFunc*)JKRAllocFromHeap(heap, mpDrawParticleFuncListNum * sizeof(ParticleFunc), 4);
     }
 
     func_no = 0;
@@ -603,7 +603,7 @@ void JPAResource::init(JKRHeap* heap) {
     }
 
     if (mpDrawParticleChildFuncListNum != 0) {
-        mpDrawParticleChildFuncList = (ParticleFunc*)JKRAllocFromHeap(heap, mpDrawParticleChildFuncListNum * 4, 4);
+        mpDrawParticleChildFuncList = (ParticleFunc*)JKRAllocFromHeap(heap, mpDrawParticleChildFuncListNum * sizeof(ParticleFunc), 4);
     }
 
     func_no = 0;

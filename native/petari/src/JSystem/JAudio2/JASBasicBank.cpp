@@ -2,7 +2,7 @@
 #include "JSystem/JAudio2/JASCalc.hpp"
 
 JASBasicBank::JASBasicBank() {
-    JASCalc::bzero(&mInstTable, INST_NUM_MAX * 4);
+    JASCalc::bzero(&mInstTable, sizeof(mInstTable));
 }
 
 bool JASBasicBank::getInstParam(int prg_no, int pitch, int velocity, JASInstParam* o_param) const {

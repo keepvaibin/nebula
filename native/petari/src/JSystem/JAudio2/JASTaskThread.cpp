@@ -1,4 +1,5 @@
 #include "JSystem/JAudio2/JASTaskThread.hpp"
+#include <stddef.h>
 #include "JSystem/JAudio2/JASCalc.hpp"
 #include "JSystem/JAudio2/JASCriticalSection.hpp"
 #include "JSystem/JKernel/JKRSolidHeap.hpp"
@@ -22,7 +23,7 @@ JASTaskThread::~JASTaskThread() {
 
 void* JASTaskThread::allocCallStack(JASThreadCallback callback, const void* msg, u32 msgSize) {
     ThreadMemPool* heap;
-    u32 size = msgSize + 8;
+    u32 size = offsetof(JASThreadCallStack, msg) + msgSize;
     JASThreadCallStack* callStack = (JASThreadCallStack*)JASKernel::getCommandHeap()->alloc(size);
     if (callStack == NULL) {
         return NULL;
@@ -36,7 +37,7 @@ void* JASTaskThread::allocCallStack(JASThreadCallback callback, const void* msg,
 
 void* JASTaskThread::allocCallStack(JASThreadCallback callback, void* msg) {
     JASThreadCallStack* callStack;
-    callStack = (JASThreadCallStack*)JASKernel::getCommandHeap()->alloc(12);
+    callStack = (JASThreadCallStack*)JASKernel::getCommandHeap()->alloc(offsetof(JASThreadCallStack, msg) + sizeof(void*));
     if (callStack == NULL) {
         return NULL;
     }

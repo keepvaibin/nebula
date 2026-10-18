@@ -56,7 +56,12 @@ namespace nw4r {
             };
 
             inline const char* GetStrTableStr(const void* pTable, int idx) {
+#ifdef TARGET_PC
+                // The table is the resource's: big-endian offsets.
+                const NEBULA_BE(u32)* offs = static_cast< const NEBULA_BE(u32)* >(pTable);
+#else
                 const u32* offs = static_cast< const u32* >(pTable);
+#endif
                 const char* pool = static_cast< const char* >(pTable);
                 return &pool[offs[idx]];
             }

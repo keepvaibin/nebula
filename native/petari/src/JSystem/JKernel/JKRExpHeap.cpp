@@ -2,6 +2,9 @@
 #include "JSystem/JUtility/JUTConsole.hpp"
 #include "JSystem/JUtility/JUTException.hpp"
 #include <new>
+#ifdef TARGET_PC
+#include <stdlib.h>
+#endif
 
 extern "C" void JUTWarningConsole(const char*);
 extern "C" void JUTReportConsole(const char*);
@@ -767,6 +770,86 @@ bool JKRExpHeap::check() {
     unlock();
     return ok;
 }
+
+#ifdef TARGET_PC
+void JKRExpHeap::reportBlocks() {
+    lock();
+    enum { kTop = 16 };
+    CMemBlock* top[kTop] = {};
+    u32 usedCount = 0, usedBytes = 0;
+    for (CMemBlock* block = mHeadUsedList; block != nullptr; block = block->mNext) {
+        usedCount++;
+        usedBytes += block->mSize;
+        for (int i = 0; i < kTop; i++) {
+            if (top[i] == nullptr || block->mSize > top[i]->mSize) {
+                for (int j = kTop - 1; j > i; j--) {
+                    top[j] = top[j - 1];
+                }
+                top[i] = block;
+                break;
+            }
+        }
+    }
+    u32 freeCount = 0, freeBytes = 0;
+    for (CMemBlock* block = mHeadFreeList; block != nullptr; block = block->mNext) {
+        freeCount++;
+        freeBytes += block->mSize;
+    }
+    OSReport("heap %p (%s, %u bytes): %u used blocks, %u bytes; %u free blocks, %u bytes; header %u bytes; largest:\n", this, "EXPH",
+             mSize, usedCount, usedBytes, freeCount, freeBytes, (u32)sizeof(CMemBlock));
+    for (int i = 0; i < kTop && top[i] != nullptr; i++) {
+        OSReport("  %p  %u bytes  group %u\n", top[i]->getContent(), top[i]->mSize, top[i]->mGroupId);
+    }
+    for (JSUTree< JKRHeap >* child = mChildTree.getFirstChild(); child != nullptr; child = child->getNextChild()) {
+        JKRHeap* heap = child->getObject();
+        const u32 type = heap->getHeapType();
+        OSReport("  child heap %p '%c%c%c%c' %u bytes, %d free\n", heap, (char)(type >> 24), (char)(type >> 16), (char)(type >> 8),
+                 (char)type, (u32)((u8*)heap->getEndAddr() - (u8*)heap->getStartAddr()), heap->getFreeSize());
+    }
+    // Memory in neither list: the largest stretches between blocks, by address.
+    const u32 count = usedCount + freeCount;
+    uintptr_t* spans = static_cast< uintptr_t* >(::malloc(sizeof(uintptr_t) * 2 * count));
+    if (spans != nullptr) {
+        u32 n = 0;
+        for (int list = 0; list < 2; list++) {
+            for (CMemBlock* block = list == 0 ? mHeadUsedList : mHeadFreeList; block != nullptr; block = block->mNext) {
+                spans[2 * n] = reinterpret_cast< uintptr_t >(block) - block->getAlignment();
+                spans[2 * n + 1] = reinterpret_cast< uintptr_t >(block->getContent()) + block->mSize;
+                n++;
+            }
+        }
+        qsort(spans, n, sizeof(uintptr_t) * 2, [](const void* a, const void* b) -> int {
+            const uintptr_t x = *static_cast< const uintptr_t* >(a), y = *static_cast< const uintptr_t* >(b);
+            return x < y ? -1 : (x > y ? 1 : 0);
+        });
+        uintptr_t at = reinterpret_cast< uintptr_t >(mStart);
+        u64 lost = 0, doubled = 0;
+        int overlaps = 0;
+        for (u32 i = 0; i <= n; i++) {
+            const uintptr_t next = i < n ? spans[2 * i] : reinterpret_cast< uintptr_t >(mEnd);
+            if (next > at + 64) {
+                lost += next - at;
+                OSReport("  gap %p..%p (%u bytes)\n", reinterpret_cast< void* >(at), reinterpret_cast< void* >(next), (u32)(next - at));
+            }
+            if (i < n && next < at) {
+                const uintptr_t end = spans[2 * i + 1] < at ? spans[2 * i + 1] : at;
+                doubled += end - next;
+                if (overlaps++ < 12) {
+                    OSReport("  overlap: block %p..%p inside the block before it (which ends %p)\n", reinterpret_cast< void* >(next),
+                             reinterpret_cast< void* >(spans[2 * i + 1]), reinterpret_cast< void* >(at));
+                }
+            }
+            if (i < n && spans[2 * i + 1] > at) {
+                at = spans[2 * i + 1];
+            }
+        }
+        OSReport("  %llu bytes in gaps; %d overlaps, %llu bytes counted twice\n", (unsigned long long)lost, overlaps,
+                 (unsigned long long)doubled);
+        ::free(spans);
+    }
+    unlock();
+}
+#endif
 
 bool JKRExpHeap::dump() {
     lock();

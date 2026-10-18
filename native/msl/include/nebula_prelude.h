@@ -7,6 +7,16 @@
 #ifndef NEBULA_PRELUDE_H
 #define NEBULA_PRELUDE_H
 
+/* Code that manages memory itself (the game's heaps), left uninstrumented in AddressSanitizer test builds. */
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define NEBULA_NO_ASAN __attribute__((no_sanitize("address")))
+#endif
+#endif
+#ifndef NEBULA_NO_ASAN
+#define NEBULA_NO_ASAN
+#endif
+
 #include <errno.h>
 #include <float.h>
 #include <limits.h>

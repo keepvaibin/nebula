@@ -44,6 +44,10 @@ public:
     virtual bool check();
     virtual bool dump_sort();
     virtual bool dump();
+#ifdef TARGET_PC
+    // The largest used blocks and the child heaps, through OSReport (for out-of-memory reports).
+    void reportBlocks();
+#endif
     virtual void do_destroy();
     virtual void* do_alloc(u32, int);
     virtual void do_free(void*);

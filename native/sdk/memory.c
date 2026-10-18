@@ -23,6 +23,7 @@ enum {
     kMem2Size = 0x10000000u, /* 256 MB (the console's 64 MB plus room) */
     kReserveSize = 0x20000000u,
     kImageWindow = 0x20000000u, /* the module image, up to the 32-bit limit */
+    kStackPoolSize = 0x02000000u, /* 32 MB at the top of MEM2: game threads' native stacks */
 };
 
 static uint8_t* sArena;
@@ -133,12 +134,30 @@ void* __NebulaFromPhysical(uint32_t paddr) {
 }
 
 /* The arena the OS hands out (OSGetMEM1ArenaLo etc.): MEM1 past low memory, the boot stack and the console's
-   reserved first part; MEM2 entirely. */
+   reserved first part; MEM2 below the stack pool. */
 void nebula_memory_arenas(void** mem1Lo, void** mem1Hi, void** mem2Lo, void** mem2Hi) {
     *mem1Lo = sArena + 0x00100000u;
     *mem1Hi = sArena + kMem1Physical + kMem1Size;
     *mem2Lo = sArena + kMem2Physical;
-    *mem2Hi = sArena + kMem2Physical + kMem2Size;
+    *mem2Hi = sArena + kMem2Physical + kMem2Size - kStackPoolSize;
+}
+
+uint8_t* nebula_stack_pool(size_t* size) {
+    *size = kStackPoolSize;
+    return sArena + kMem2Physical + kMem2Size - kStackPoolSize;
+}
+
+void nebula_memory_guard(void* p, size_t size) {
+#if defined(_WIN32)
+    DWORD old;
+    if (!VirtualProtect(p, size, PAGE_NOACCESS, &old)) {
+        nebula_fatal("could not guard %p (+%zu)", p, size);
+    }
+#else
+    if (mprotect(p, size, PROT_NONE) != 0) {
+        nebula_fatal("could not guard %p (+%zu)", p, size);
+    }
+#endif
 }
 
 /* Data cache maintenance has nothing to do natively, except DCZeroRange, which zeroes whole 32-byte blocks as the

@@ -914,10 +914,18 @@ void Tamakoro::updateMoment() {
         TVec3f moment;
         const TVec3f* up;
         // TVec3f tmpVec;
+#ifdef TARGET_PC
+        // Read through up past the else block, so it lives for the whole branch.
+        TVec3f tmpVec;
+#endif
         if (MR::isBindedGround(this)) {
             up = MR::getGroundNormal(this);
         } else {
+#ifdef TARGET_PC
+            tmpVec = -mGravity;
+#else
             TVec3f tmpVec(-mGravity);
+#endif
             up = &tmpVec;
         }
 

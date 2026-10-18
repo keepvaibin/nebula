@@ -33,6 +33,19 @@
 void* nebula_prepare_stack(void* top, size_t size, void (*entry)(void*), void* arg);
 void nebula_switch_stack(void** from_sp, void* to_sp);
 
+/* AddressSanitizer test builds: every stack switch is a fiber switch it is told of. */
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#include <sanitizer/common_interface_defs.h>
+#define NEBULA_ASAN_START(save, bottom, size) __sanitizer_start_switch_fiber((save), (bottom), (size))
+#define NEBULA_ASAN_FINISH(save) __sanitizer_finish_switch_fiber((save), NULL, NULL)
+#endif
+#endif
+#ifndef NEBULA_ASAN_START
+#define NEBULA_ASAN_START(save, bottom, size) ((void)0)
+#define NEBULA_ASAN_FINISH(save) ((void)0)
+#endif
+
 extern volatile u32 RunQueueBits;
 void __OSThreadInit(void);
 void __OSInitAlarm(void);
@@ -581,7 +594,8 @@ void OSFillFPUContext(OSContext* context) {
     (void)context;
 }
 
-uintptr_t OSGetStackPointer(void) {
+/* Its own frame, just below the caller's stack pointer; never inlined, so never the caller's frame. */
+uintptr_t __attribute__((noinline)) OSGetStackPointer(void) {
     return (uintptr_t)__builtin_frame_address(0);
 }
 
@@ -600,6 +614,7 @@ void nebula_thread_start(void (*entry)(void*), void* arg) {
 /* A new thread starts with interrupts enabled, as a new OSContext does, and ends in OSExitThread with its function's
    result. */
 static void thread_main(void* arg) {
+    NEBULA_ASAN_FINISH(NULL);
     const ThreadStart start = *(const ThreadStart*)arg;
     enable_and_deliver();
     OSExitThread(start.func(start.param));
@@ -611,7 +626,7 @@ static void thread_main(void* arg) {
    thread running now is read where it stands; a reading taken while the game runs is approximate. */
 extern OSThreadQueue __OSActiveThreadQueue;
 
-NEBULA_GAME_API void nebula_game_debug_dump(void) {
+NEBULA_GAME_API NEBULA_NO_ASAN void nebula_game_debug_dump(void) { /* reads raw stacks */
     uintptr_t image, size;
     nebula_image_range(&image, &size);
     nebula_log("threads (current %p):\n", (void*)OSGetCurrentThread());
@@ -629,7 +644,13 @@ NEBULA_GAME_API void nebula_game_debug_dump(void) {
                 found++;
             }
         }
-        nebula_log("%s\n", line);
+        /* the deepest the stack has been: its lowest nonzero word (stacks start zeroed) */
+        const uintptr_t* low = (const uintptr_t*)(t->stackEnd + 2);
+        while (low < top && *low == 0) {
+            low++;
+        }
+        nebula_log("%s\n    stack %u of %u bytes used\n", line, (unsigned)((const u8*)top - (const u8*)low),
+                   (unsigned)((const u8*)t->stackBase - (const u8*)t->stackEnd));
     }
 }
 
@@ -641,8 +662,78 @@ void* __NebulaPrepareThread(void* (*func)(void*), void* param, void* stackTop, u
     return nebula_prepare_stack(top, stackSize - 48, thread_main, start);
 }
 
+/* Native stacks. A game thread runs on a stack from the pool at the top of MEM2 (in the arena, where the GPU can read
+   stack data the game gives GX), not on the buffer the game gives OSCreateThread: that is sized for the console's
+   code, and x64 frames are larger (an AddressSanitizer build's larger still, with exceptions dispatched on the current
+   stack). A guard below each stack makes an overflow fault instead of overwriting the heap. A slot is reused once its
+   thread has exited or been cancelled. */
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define NEBULA_STACK_MIN 0x100000u /* AddressSanitizer frames are several times larger */
+#endif
+#endif
+#ifndef NEBULA_STACK_MIN
+#define NEBULA_STACK_MIN 0x40000u /* 256 KB: the deepest measured (boot to the title screen) is 13.5 KB */
+#endif
+enum { kStackGuard = 0x4000u, kStackMin = NEBULA_STACK_MIN, kStackSlots = 64 };
+
+typedef struct {
+    OSThread* owner;
+    uint8_t* end;
+    u32 size;
+} StackSlot;
+
+static StackSlot sStackSlots[kStackSlots];
+static int sStackSlotCount;
+static uint8_t* sStackNext;
+
+void* __NebulaThreadStack(OSThread* thread, u32 requested, u32* size) {
+    const u32 want = (requested > kStackMin ? (requested + 0xFFFFu) & ~0xFFFFu : kStackMin);
+    StackSlot* slot = NULL;
+    for (int i = 0; i < sStackSlotCount; i++) {
+        if (sStackSlots[i].owner == thread) {
+            sStackSlots[i].owner = NULL; /* a thread object created again */
+        }
+    }
+    for (int i = 0; i < sStackSlotCount && slot == NULL; i++) {
+        if (sStackSlots[i].owner == NULL && sStackSlots[i].size >= want) {
+            slot = &sStackSlots[i];
+        }
+    }
+    if (slot == NULL) {
+        size_t poolSize;
+        uint8_t* pool = nebula_stack_pool(&poolSize);
+        if (sStackNext == NULL) {
+            sStackNext = pool;
+        }
+        if (sStackSlotCount == kStackSlots || sStackNext + kStackGuard + want > pool + poolSize) {
+            nebula_fatal("no native stack left for a thread (%d stacks, %u bytes wanted)", sStackSlotCount, want);
+        }
+        nebula_memory_guard(sStackNext, kStackGuard);
+        slot = &sStackSlots[sStackSlotCount++];
+        slot->end = sStackNext + kStackGuard;
+        slot->size = want;
+        sStackNext += kStackGuard + want;
+    }
+    slot->owner = thread;
+    *size = slot->size;
+    return slot->end + slot->size;
+}
+
+void __NebulaReleaseThreadStack(OSThread* thread) {
+    for (int i = 0; i < sStackSlotCount; i++) {
+        if (sStackSlots[i].owner == thread) {
+            sStackSlots[i].owner = NULL;
+        }
+    }
+}
+
 void __NebulaSwitchThread(OSContext* from, OSContext* to) {
+    void* fake = NULL;
+    const OSThread* next = (const OSThread*)to; /* the context is the thread's first member */
+    NEBULA_ASAN_START(&fake, next->stackEnd, (size_t)((const u8*)next->stackBase - (const u8*)next->stackEnd));
     nebula_switch_stack(&from->nativeSp, to->nativeSp);
+    NEBULA_ASAN_FINISH(fake);
 }
 
 /* The boot thread runs on a stack in MEM1 below the arena, as the console's main stack is. */
@@ -750,6 +841,7 @@ static void* sHostStack;
 
 static void boot_thread(void* arg) {
     (void)arg;
+    NEBULA_ASAN_FINISH(NULL);
     void *mem1Lo, *mem1Hi, *mem2Lo, *mem2Hi;
     nebula_memory_arenas(&mem1Lo, &mem1Hi, &mem2Lo, &mem2Hi);
     OSSetMEM1ArenaLo(mem1Lo);
@@ -783,6 +875,8 @@ void nebula_os_boot(void (*gameMain)(void)) {
     }
     sGameMain = gameMain;
     void* sp = nebula_prepare_stack(__NebulaBootStackBase(), kBootStackSize, boot_thread, NULL);
+    void* fake = NULL;
+    NEBULA_ASAN_START(&fake, __NebulaBootStackEnd(), kBootStackSize);
     nebula_switch_stack(&sHostStack, sp);
     nebula_fatal("the boot thread returned to the host stack");
 }

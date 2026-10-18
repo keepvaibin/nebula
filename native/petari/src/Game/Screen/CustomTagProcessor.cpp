@@ -548,7 +548,14 @@ CustomTagProcessor::Operation CustomTagProcessor::exeSoundGroup(nw4r::ut::Rect* 
 CustomTagProcessor::Operation CustomTagProcessor::exePictureGroup(nw4r::ut::Rect* rect, const MessageEditorMessageTag& tag, ContextType* context) {
     nw4r::ut::TextWriterBase< wchar_t > writer = *context->writer;
     writer.SetFont(*MR::getPictureFontNW4R());
+#ifdef TARGET_PC
+    // The text writer reads one character past the length it is given (its loop's next read precedes the bound
+    // check); a terminator keeps that read inside the buffer.
+    const wchar_t pictureText[2] = {static_cast< wchar_t >(tag.getTag() + L'0'), 0};
+    const wchar_t& picture = pictureText[0];
+#else
     wchar_t picture = tag.getTag() + L'0';
+#endif
     f32 width = writer.CalcStringWidth(&picture, 1) + writer.GetCharSpace();
     context->writer->MoveCursorX(width);
 

@@ -1,5 +1,8 @@
 #include "Game/Util/SystemUtil.hpp"
 #include "Game/NameObj/NameObjHolder.hpp"
+#ifdef TARGET_PC
+#include "Game/NameObj/NameObj.hpp"  // complete for NameObjMethod's ABI size
+#endif
 #include "Game/System/AudSystemWrapper.hpp"
 #include "Game/System/FunctionAsyncExecutor.hpp"
 #include "Game/System/GameDataFunction.hpp"

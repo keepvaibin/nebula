@@ -70,6 +70,9 @@ void JKRAram::checkOkAddress(u8* addr, u32 size, JKRAramBlock* block, u32 param_
     }
 }
 
+#ifdef TARGET_PC
+NEBULA_NO_ASAN  // writes the heap block's header
+#endif
 void JKRAram::changeGroupIdIfNeed(u8* data, int groupId) {
     JKRHeap* currentHeap = JKRGetCurrentHeap();
     if (currentHeap->getHeapType() == 'EXPH' && groupId >= 0) {

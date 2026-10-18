@@ -92,6 +92,9 @@ target_compile_options(smg_game PRIVATE
     "-ffile-prefix-map=${petari}=petari" "-ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=native"
     $<$<COMPILE_LANGUAGE:CXX>:-nostdinc++ -fno-rtti -fno-exceptions -fno-sized-deallocation -fno-aligned-allocation
         -fno-threadsafe-statics>
+    # The Microsoft C++ ABI sizes a member pointer by its class's inheritance, known only where the class is complete;
+    # a unit seeing just a declaration would use another size than its callers (NameObj methods once did).
+    $<$<AND:$<PLATFORM_ID:Windows>,$<COMPILE_LANGUAGE:CXX>>:-fcomplete-member-pointers>
     -Wno-register -Wno-c++11-narrowing)
 
 if(WIN32)
@@ -103,9 +106,29 @@ else()
     target_link_libraries(smg_game PRIVATE pthread)
 endif()
 
+# Sanitizer builds (tests only): e.g. -DNEBULA_SANITIZE=address for the module and the host.
+set(NEBULA_SANITIZE "" CACHE STRING "Sanitizers for a test build (clang -fsanitize=...)")
+if(NEBULA_SANITIZE)
+    target_compile_options(smg_game PRIVATE -fsanitize=${NEBULA_SANITIZE} -fno-omit-frame-pointer)
+    # The module's operator new/delete are JKRHeap's; the sanitizer runtime's own definitions give way.
+    target_link_options(smg_game PRIVATE -fsanitize=${NEBULA_SANITIZE} $<$<PLATFORM_ID:Windows>:LINKER:/force:multiple>)
+    if(NEBULA_SANITIZE MATCHES "address")
+        # The game's heaps manage their own memory: built uninstrumented, they keep what is free poisoned and unpoison
+        # what they hand out (JKRHeap.cpp), so overflows and uses after free inside them are reported too.
+        set(heaps "${petari}/src/JSystem/JKernel")
+        set_source_files_properties("${heaps}/JKRHeap.cpp" "${heaps}/JKRExpHeap.cpp" "${heaps}/JKRSolidHeap.cpp"
+                                    "${heaps}/JKRUnitHeap.cpp" PROPERTIES COMPILE_OPTIONS "-fno-sanitize=address")
+        set_source_files_properties("${heaps}/JKRHeap.cpp" PROPERTIES COMPILE_DEFINITIONS NEBULA_ASAN_HEAPS=1)
+    endif()
+endif()
+
 # The native game's host (host/host_main.cpp): loads the module and serves it. Built with the host's own C++ library.
 add_executable(nebula_native_host host/host_main.cpp)
 target_include_directories(nebula_native_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_compile_features(nebula_native_host PRIVATE cxx_std_20)
 target_compile_definitions(nebula_native_host PRIVATE _CRT_SECURE_NO_WARNINGS)
 add_dependencies(nebula_native_host smg_game)
+if(NEBULA_SANITIZE)
+    target_compile_options(nebula_native_host PRIVATE -fsanitize=${NEBULA_SANITIZE} -fno-omit-frame-pointer)
+    target_link_options(nebula_native_host PRIVATE -fsanitize=${NEBULA_SANITIZE})
+endif()

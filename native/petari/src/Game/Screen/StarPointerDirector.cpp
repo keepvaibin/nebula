@@ -138,8 +138,19 @@ namespace {
     static f32 mtx_identity[3][4] = {{1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f}};
 };  // namespace
 
+#ifdef TARGET_PC
+namespace {
+    // The projection is a 4x4 copy; the console read the 3x4 identity and the 16 bytes after it (a vtable).
+    static f32 proj_identity[4][4] = {
+        {1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 0.0f, 1.0f}};
+};  // namespace
+
+StarPointerTransformHolder::StarPointerTransformHolder() : mViewMtx(mtx_identity), mProjMtx(proj_identity) {
+}
+#else
 StarPointerTransformHolder::StarPointerTransformHolder() : mViewMtx(mtx_identity), mProjMtx(mtx_identity) {
 }
+#endif
 
 void StarPointerTransformHolder::movement() {
     f32 fovyRad = PI_180 * getFovy();

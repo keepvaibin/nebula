@@ -53,6 +53,9 @@ namespace {
     const u8 sUnitMask[] = {0x80, 0x40, 0x20, 0x10, 8, 4, 2, 1};
 };  // namespace
 
+#ifdef TARGET_PC
+NEBULA_NO_ASAN
+#endif
 void* JKRUnitHeap::do_alloc(u32 size, int alignment) {
     u32 bit;
     u8* pBat;
@@ -90,6 +93,9 @@ void* JKRUnitHeap::do_alloc(u32 size, int alignment) {
     return pResult;
 }
 
+#ifdef TARGET_PC
+NEBULA_NO_ASAN
+#endif
 void JKRUnitHeap::do_free(void* pMemory) {
     lock();
     s32 index = addressToIndex(pMemory);
@@ -108,6 +114,9 @@ void JKRUnitHeap::do_free(void* pMemory) {
 void JKRSolidHeap::do_free(void* pMemory) {
 }
 
+#ifdef TARGET_PC
+NEBULA_NO_ASAN
+#endif
 s32 JKRExpHeap::adjustSize() {
     CMemBlock* pNext;
     JKRHeap* pParent = mChildTree.getParent()->getObject();
@@ -161,6 +170,9 @@ s32 JKRExpHeap::adjustSize() {
     return size;
 }
 
+#ifdef TARGET_PC
+NEBULA_NO_ASAN
+#endif
 u32 JKRHeap::getMaxAllocatableSize(int alignment) {
     u32 address = (u32)reinterpret_cast< uintptr_t >(getMaxFreeBlock());
     return ~(alignment - 1) & (getFreeSize() - ((alignment - 1) & (alignment - (address & 0xF))));

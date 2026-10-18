@@ -39,7 +39,12 @@ JKRThread::~JKRThread() {
 
 void JKRThread::setCommon_mesgQueue(JKRHeap* pHeap, int msgCount) {
     mMessageCount = msgCount;
+#ifdef TARGET_PC
+    // OSMessage is a pointer: 8 bytes natively.
+    mMesgBuffer = reinterpret_cast< OSMessage* >(JKRHeap::alloc(mMessageCount * sizeof(OSMessage), 0, pHeap));
+#else
     mMesgBuffer = reinterpret_cast< OSMessage* >(JKRHeap::alloc(mMessageCount * 4, 0, pHeap));
+#endif
     OSInitMessageQueue(&mMessageQueue, mMesgBuffer, mMessageCount);
     sThreadList.append(&mThreadListLink);
     mCurrentHeap = nullptr;

@@ -16,6 +16,8 @@ static void OSClearStack(u8);
 void* __NebulaBootStackBase(void);
 void* __NebulaBootStackEnd(void);
 void* __NebulaPrepareThread(void* (*func)(void*), void* param, void* stackTop, u32 stackSize);
+void* __NebulaThreadStack(OSThread* thread, u32 requested, u32* size);
+void __NebulaReleaseThreadStack(OSThread* thread);
 void __NebulaSwitchThread(OSContext* from, OSContext* to);
 void __NebulaIdle(void);
 #endif
@@ -429,10 +431,15 @@ BOOL OSCreateThread(OSThread* thread, void* (*func)(void*), void* param, void* s
     OSInitMutexQueue(&thread->queueMutex);
 
 #ifdef TARGET_PC
-    OSClearContext(&thread->context);
-    thread->context.nativeSp = __NebulaPrepareThread(func, param, stack, stackSize);
-    thread->stackBase = (u8*)stack;
-    thread->stackEnd = (u32*)((u8*)stack - stackSize);
+    // A native stack (os_native.c), not the console-sized buffer given here.
+    {
+        u32 nativeSize;
+        u8* top = (u8*)__NebulaThreadStack(thread, stackSize, &nativeSize);
+        OSClearContext(&thread->context);
+        thread->context.nativeSp = __NebulaPrepareThread(func, param, top, nativeSize);
+        thread->stackBase = top;
+        thread->stackEnd = (u32*)(top - nativeSize);
+    }
 #else
     sp = (u32)stack;
     sp = TRUNC(sp, 8);
@@ -487,6 +494,10 @@ void OSExitThread(void* val) {
         currentThread->state = 8;
         currentThread->value = val;
     }
+#ifdef TARGET_PC
+    // Free for the next thread created; this one never runs on it again past the switch below.
+    __NebulaReleaseThreadStack(currentThread);
+#endif
 
     __OSUnlockAllMutex(currentThread);
     OSWakeupThread(&currentThread->queueJoin);
@@ -530,6 +541,9 @@ void OSCancelThread(OSThread* thread) {
     } else {
         thread->state = 8;
     }
+#ifdef TARGET_PC
+    __NebulaReleaseThreadStack(thread);
+#endif
 
     __OSUnlockAllMutex(thread);
     OSWakeupThread(&thread->queueJoin);
@@ -689,9 +703,17 @@ static void OSClearStack(u8 val) {
     pattern = ((u32)val << 24) | ((u32)val << 16) | ((u32)val << 8) | (u32)val;
     sp = OSGetStackPointer();
 
+#ifdef TARGET_PC
+    // Volatile stores: the loop must not become a memset call, whose own frame lies in the range cleared below sp.
+    for (volatile u32* q = __OSCurrentThread->stackEnd + 1; q < (volatile u32*)sp; ++q) {
+        *q = pattern;
+    }
+    (void)p;
+#else
     for (p = __OSCurrentThread->stackEnd + 1; p < (u32*)sp; ++p) {
         *p = pattern;
     }
+#endif
 }
 
 BOOL OSSetThreadPriority(OSThread* thread, OSPriority priority) {

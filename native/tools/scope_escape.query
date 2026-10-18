@@ -1,0 +1,12 @@
+# Assignments that store a block-scoped local's address where it outlives the block (tools/escape_audit.py covers calls).
+# clang-query -p <build> -f scope_escape.query <files>
+set output diag
+set bind-root false
+let blkLocal varDecl(hasLocalStorage(), unless(parmVarDecl()), hasParent(declStmt(hasParent(compoundStmt().bind("blk"))))).bind("local")
+let rawAddr expr(anyOf(declRefExpr(to(blkLocal), hasType(arrayType())), unaryOperator(hasOperatorName("&"), hasUnaryOperand(ignoringParenImpCasts(anyOf(declRefExpr(to(blkLocal)), arraySubscriptExpr(hasBase(ignoringParenImpCasts(declRefExpr(to(blkLocal)))))))))))
+let underRhs anyOf(equalsBoundNode("rhs"), hasAncestor(expr(equalsBoundNode("rhs"))))
+let blocker expr(anyOf(callExpr(), cxxConstructExpr(), arraySubscriptExpr(), memberExpr(), unaryOperator(hasOperatorName("*")), unaryExprOrTypeTraitExpr(), binaryOperator(anyOf(hasOperatorName("=="), hasOperatorName("!="), hasOperatorName("<"), hasOperatorName(">"), hasOperatorName("<="), hasOperatorName(">="), hasOperatorName("&&"), hasOperatorName("||")))), underRhs)
+let flowAddr expr(rawAddr, unless(hasAncestor(blocker)))
+let inBlk varDecl(hasAncestor(compoundStmt(equalsBoundNode("blk"))))
+let otherLhs expr(anyOf(memberExpr(unless(hasObjectExpression(ignoringParenImpCasts(declRefExpr(to(inBlk)))))), unaryOperator(hasOperatorName("*")), arraySubscriptExpr(unless(hasBase(ignoringParenImpCasts(declRefExpr(to(inBlk)))))), declRefExpr(to(varDecl(hasGlobalStorage())))))
+match binaryOperator(isAssignmentOperator(), hasRHS(expr().bind("rhs")), hasRHS(anyOf(flowAddr, forEachDescendant(flowAddr))), hasLHS(ignoringParenImpCasts(anyOf(declRefExpr(to(varDecl(unless(hasAncestor(compoundStmt(equalsBoundNode("blk")))), hasLocalStorage()).bind("outer"))), otherLhs.bind("other"))))).bind("esc")

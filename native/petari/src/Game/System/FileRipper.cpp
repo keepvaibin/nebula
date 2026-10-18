@@ -51,8 +51,14 @@ void* FileRipper::loadToMainRAM(const char* fpath, u8* dest, bool decompress, JK
         OSPanic(__FILE__, 0x77, "DVDOpen() failed");
     }
 
+#ifdef TARGET_PC
+    // The header buffer is read again past its block (copySrc), so it lives for the whole function.
+    u8 buf[0x60];
+#endif
     if (decompress) {
+#ifndef TARGET_PC
         u8 buf[0x60];
+#endif
         copySrc = (u8*)((uintptr_t)(buf + 0x3f) / 0x40 * 0x40);
         while (true) {
             s32 result = DVDReadPrio(&fileInfo, copySrc, 0x20, 0, 2);

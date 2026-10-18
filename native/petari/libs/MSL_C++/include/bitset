@@ -66,14 +66,14 @@ namespace std {
     template < size_t N >
     bool __bitset_base< N >::test(size_t pos) const {
         size_t i = pos / (sizeof(size_t) * 8);
-        size_t mask = 1 << (pos % (sizeof(size_t) * 8));
+        size_t mask = static_cast< size_t >(1) << (pos % (sizeof(size_t) * 8));
         return data[i] & mask;
     }
 
     template < size_t N >
     const __bitset_base< N >& __bitset_base< N >::set(size_t pos, bool val) {
         size_t i = pos / (sizeof(size_t) * 8);
-        size_t mask = 1 << (pos % (sizeof(size_t) * 8));
+        size_t mask = static_cast< size_t >(1) << (pos % (sizeof(size_t) * 8));
         if (val) {
             data[i] |= mask;
         } else {
@@ -85,7 +85,7 @@ namespace std {
     template < size_t N >
     const __bitset_base< N >& __bitset_base< N >::reset(size_t pos) {
         size_t i = pos / (sizeof(size_t) * 8);
-        size_t mask = 1 << (pos % (sizeof(size_t) * 8));
+        size_t mask = static_cast< size_t >(1) << (pos % (sizeof(size_t) * 8));
         data[i] &= ~mask;
         return *this;
     }

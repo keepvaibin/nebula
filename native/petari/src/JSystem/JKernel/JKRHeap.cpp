@@ -19,11 +19,33 @@ static bool byte_806B26D8 = true;
 // The DSP's ARAM-in-MEM2 base; natively the MEM2 arena address HeapMemoryWatcher sets before the DSP boots.
 uintptr_t ARALT_AramStartAdr = 0x90000000;
 
+#ifdef NEBULA_ASAN_HEAPS
+// AddressSanitizer test builds: a heap's free space and block headers are poisoned and each block it hands out is
+// unpoisoned, so the game's overflows and uses after free inside its own heaps are reported. The heaps themselves are
+// built uninstrumented (CMakeLists.txt).
+#include <sanitizer/asan_interface.h>
+
+static void heapPoison(const void* p, s32 n) {
+    if (p != nullptr && n > 0) {
+        __asan_poison_memory_region(p, (size_t)n);
+    }
+}
+
+static void heapUnpoison(const void* p, s32 n) {
+    if (p != nullptr && n > 0) {
+        __asan_unpoison_memory_region(p, (size_t)n);
+    }
+}
+#endif
+
 JKRHeap::JKRHeap(void* data, u32 size, JKRHeap* parent, bool error) : JKRDisposer(), mChildTree(this), mDisposerList() {
     OSInitMutex(&mMutex);
     mSize = size;
     mStart = (u8*)data;
     mEnd = (u8*)data + size;
+#ifdef NEBULA_ASAN_HEAPS
+    heapPoison(mStart, (s32)mSize);
+#endif
 
     if (parent == nullptr) {
         JKRHeap::sSystemHeap = this;
@@ -143,7 +165,16 @@ static inline int nativeAlignment(int align) {
 }
 
 void* JKRHeap::alloc(u32 size, int align) {
+#ifdef NEBULA_ASAN_HEAPS
+    void* p = do_alloc(size, nativeAlignment(align));
+    if (p != nullptr) {
+        const s32 block = do_getSize(p);
+        heapUnpoison(p, block > 0 ? block : (s32)size);
+    }
+    return p;
+#else
     return do_alloc(size, nativeAlignment(align));
+#endif
 }
 #else
 void* JKRHeap::alloc(u32 size, int align) {
@@ -160,11 +191,22 @@ void JKRHeap::free(void* pData, JKRHeap* pHeap) {
         }
     }
 
+#ifdef NEBULA_ASAN_HEAPS
+    pHeap->free(pData);
+#else
     pHeap->do_free(pData);
+#endif
 }
 
 void JKRHeap::free(void* pData) {
+#ifdef NEBULA_ASAN_HEAPS
+    // A solid heap frees nothing block by block.
+    const s32 block = getHeapType() != 'SLID' && pData != nullptr ? do_getSize(pData) : 0;
     do_free(pData);
+    heapPoison(pData, block);
+#else
+    do_free(pData);
+#endif
 }
 
 void JKRHeap::callAllDisposer() {
@@ -175,6 +217,9 @@ void JKRHeap::callAllDisposer() {
 
 void JKRHeap::freeAll() {
     do_freeAll();
+#ifdef NEBULA_ASAN_HEAPS
+    heapPoison(mStart, (s32)mSize);
+#endif
 }
 
 void JKRHeap::freeTail() {
@@ -182,7 +227,20 @@ void JKRHeap::freeTail() {
 }
 
 s32 JKRHeap::resize(void* pData, u32 size) {
+#ifdef NEBULA_ASAN_HEAPS
+    const s32 before = do_getSize(pData);
+    const s32 result = do_resize(pData, size);
+    const s32 after = do_getSize(pData);
+    if (after > 0) {
+        heapUnpoison(pData, after);
+        if (before > after) {
+            heapPoison((u8*)pData + after, before - after);
+        }
+    }
+    return result;
+#else
     return do_resize(pData, size);
+#endif
 }
 
 s32 JKRHeap::getFreeSize() {
