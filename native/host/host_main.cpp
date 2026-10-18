@@ -17,6 +17,10 @@
 #include "galaxy/native_host.h"
 #include "galaxy/native_input.h"
 #include "galaxy/native_thp_video.h"
+#include "galaxy/runtime_settings.h"
+#include "galaxy/gx/render_config.h"
+
+#include <crtdbg.h>
 #endif
 
 #include <atomic>
@@ -1025,6 +1029,17 @@ int32_t svc_thp_video_decode(void*, const void*, uint32_t, void*, void*, void*) 
 }  // namespace
 
 int main(int argc, char** argv) {
+#if defined(NEBULA_HOST_RENDERER)
+    // As v1.0.1 starts: physical-pixel DPI awareness before any window (sizes and mouse coordinates in pixels), and
+    // CRT assertion and error reports to stderr instead of dialogs.
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
+    _CrtSetReportMode(_CRT_ERROR, _CRTDBG_MODE_FILE);
+    _CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
+    _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+    SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX | SEM_NOGPFAULTERRORBOX);
+#endif
     fs::path pak, nand, module;
     double seconds = 0;
     for (int i = 1; i + 1 < argc; i += 2) {
@@ -1093,7 +1108,18 @@ int main(int argc, char** argv) {
     services.game_context = svc_game_context;
     services.power = svc_power;
 #if defined(NEBULA_HOST_RENDERER)
-    if (!galaxy::gx::initialize(1280, 720)) {
+    // The player's settings and display configuration (GALAXY_RUNTIME_SETTINGS_PATH / GALAXY_RENDER_CONFIG_PATH in
+    // tests), loaded before the window as v1.0.1 does; the settings overlay reads its frame art from the game files.
+    try {
+        galaxy::load_runtime_settings_from_file();
+        galaxy::gx::load_render_config_from_file();
+    } catch (const std::exception& failure) {
+        die("the settings did not load: %s", failure.what());
+    }
+    galaxy::gx::set_native_settings_content_root(galaxy::host::locate_game(pak).content_root.string());
+    const galaxy::gx::RenderConfig render_config = galaxy::gx::get_render_config();
+    if (!galaxy::gx::initialize(static_cast<int>(render_config.window_width),
+                                static_cast<int>(render_config.window_height))) {
         die("the renderer did not start");
     }
     galaxy::gx::set_indexed_load_host_order(true);
