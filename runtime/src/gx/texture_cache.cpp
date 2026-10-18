@@ -1513,7 +1513,7 @@ void TextureCache::shutdown() {
     finish_pending_decodes_noexcept();
     decode_pool_.reset();
     {
-        const PlacedTextureAllocator::Stats heap = backend_.heap_stats();
+        const auto heap = backend_.heap_stats();
         std::cerr << "[texture-heap] heaps=" << heap.heaps << " heap-bytes=" << heap.heap_bytes
                   << " used-bytes=" << heap.used_bytes << " placed=" << heap.placed
                   << " committed-fallbacks=" << heap.committed_fallbacks << '\n';

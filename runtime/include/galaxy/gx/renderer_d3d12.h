@@ -33,6 +33,7 @@
 #include "galaxy/gx/placed_texture_allocator.h"
 #include "galaxy/gx/gx_bitfields.h"
 #include "galaxy/gx/gpu_types.h"
+#include "galaxy/gx/renderer_common.h"
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx/window_owner.h"
 #include "galaxy/gx_d3d12.h"
@@ -60,11 +61,6 @@ struct TextureHandle;
 [[nodiscard]] bool validate_efb_conversion_shader(
     std::string& diagnostics) noexcept;
 
-inline constexpr unsigned kFramesInFlight = 2;
-// Ring segments in temporal and interpolation modes (see RendererD3D12::
-// begin_frame): two more than the frames in flight.
-inline constexpr unsigned kRingSegments = kFramesInFlight + 2u;
-inline constexpr unsigned kSamplerHeapSlots = 2048;
 
 namespace detail {
 
@@ -90,58 +86,6 @@ private:
 
 }  // namespace detail
 
-struct SamplerTableKey {
-    std::array<std::uint32_t, 8> samplers{};
-    std::uint32_t config = 0;
-    bool operator==(const SamplerTableKey&) const = default;
-};
-struct SamplerTableKeyHasher {
-    [[nodiscard]] std::size_t operator()(const SamplerTableKey& key) const noexcept;
-};
-[[nodiscard]] SamplerTableKey make_sampler_table_key(
-    const std::uint32_t keys[8], const RenderConfig& cfg) noexcept;
-
-// One cache describes one physical sampler heap. reset(config) starts a new
-// frame only after that heap's GPU fence completes. Unchanged tables survive;
-// every lookup pins its index for this frame, including pending draw batches.
-// At capacity, only a table not used this frame may be replaced. Thus history
-// cannot exhaust a legal frame, and no recorded draw's descriptors are changed.
-// A replacement reports created=true so the caller writes all eight samplers.
-// Configuration changes and unconditional reset invalidate all retained tables.
-class SamplerTableCache {
-public:
-    struct Allocation { unsigned index; bool created; };
-    [[nodiscard]] Allocation get_or_allocate(const SamplerTableKey& key);
-    void reset(std::uint32_t config_key) noexcept {
-        if (config_key != config_key_ || frame_ == UINT64_MAX) {
-            reset();
-            config_key_ = config_key;
-        }
-        ++frame_;
-    }
-    // Unconditional clear for teardown paths, where the heap contents must not
-    // be assumed valid again.
-    void reset() noexcept {
-        tables_.clear();
-        cursor_ = 8u;
-        config_key_ = 0u;
-        frame_ = 0u;
-        eviction_cursor_ = 0u;
-    }
-private:
-    std::unordered_map<SamplerTableKey, unsigned, SamplerTableKeyHasher> tables_;
-    unsigned cursor_ = 8u;
-    std::uint32_t config_key_ = 0u;
-    static constexpr unsigned kDynamicTables = (kSamplerHeapSlots - 8u) / 8u;
-    // A bounded clock scan avoids repeatedly scanning all previously pinned
-    // entries for each miss. Reverse keys allow exception-safe map replacement.
-    std::array<SamplerTableKey, kDynamicTables> slot_keys_{};
-    std::array<std::uint64_t, kDynamicTables> slot_frames_{};
-    std::uint64_t frame_ = 0u;
-    unsigned eviction_cursor_ = 0u;
-};
-inline constexpr unsigned kEfbWidth = 640;
-inline constexpr unsigned kEfbHeight = 528;
 inline constexpr DXGI_FORMAT kEfbColorFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 // Motion vectors for temporal upscaling: render pixels, current -> previous.
 inline constexpr DXGI_FORMAT kMotionVectorFormat = DXGI_FORMAT_R16G16_FLOAT;
@@ -154,13 +98,6 @@ inline constexpr DXGI_FORMAT kEfbDepthSrvFormat =
     DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
 inline constexpr DXGI_FORMAT kBackbufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 
-struct EfbClearValues {
-    std::array<float, 4> color{};
-    float reversed_depth = 0.0f;
-};
-[[nodiscard]] EfbClearValues make_efb_clear_values(
-    std::uint32_t ar, std::uint32_t gb, std::uint32_t z24,
-    std::uint8_t pixel_format) noexcept;
 
 // Builds the exact GX graphics root signature used by RendererD3D12. Root
 // CBV b0 is visible to both VS and GS because native GX line/point expansion
@@ -169,35 +106,6 @@ struct EfbClearValues {
     ID3D12Device* device,
     ID3D12RootSignature** root_signature) noexcept;
 
-// Exact 16-dword root-constant payload consumed by the EFB conversion shader.
-// Exposed so device-only validation can exercise the production shader and
-// the production clamp/coefficient setup without creating a game window.
-struct EfbConversionShaderConstants {
-    std::array<float, 16> values{};
-};
-
-[[nodiscard]] std::string_view efb_conversion_shader_source() noexcept;
-[[nodiscard]] EfbConversionShaderConstants make_efb_conversion_constants(
-    const EfbCopyParams& params,
-    bool is_depth_copy,
-    bool intensity,
-    bool keep_alpha,
-    std::uint8_t copy_format,
-    float src_x,
-    float src_y,
-    float step_x,
-    float step_y,
-    float filter_row_offset,
-    unsigned efb_scale,
-    unsigned logical_efb_height,
-    unsigned reduction_width = 0u) noexcept;
-
-// Builds the production 1x1 GXPeek conversion payload. Color peeks box-reduce
-// the complete scaled logical-pixel block; depth peeks address the exact
-// point-selected physical texel recorded in EfbPeekSamplingGeometry.
-[[nodiscard]] EfbConversionShaderConstants make_efb_peek_conversion_constants(
-    const EfbPeekSamplingGeometry& sampling,
-    EfbPeekKind kind) noexcept;
 
 [[nodiscard]] D3D12_SAMPLER_DESC build_sampler_desc_from_key(
     std::uint32_t key,
@@ -356,33 +264,6 @@ struct UploadBuffer {
     explicit operator bool() const noexcept { return resource != nullptr; }
 };
 
-// One fully resolved draw.  The renderer sets PSO / root arguments only when
-// they differ from the previous draw (cheap CPU-side batching).
-struct DrawCall {
-    gpu::Pipeline* pipeline = nullptr;
-    gpu::Address vs_constants = 0;   // root CBV b0
-    gpu::Address ps_constants = 0;   // root CBV b1
-    gpu::Table texture_table{};      // t0-t7
-    gpu::Table sampler_table{};      // s0-s7
-    gpu::Address matrix_palette = 0; // root SRV t0,space1
-    gpu::VertexView vertex_view{};
-    gpu::IndexView index_view{};
-    std::uint32_t index_count = 0;
-    gpu::Topology topology = gpu::kTopologyTriangleList;
-    gpu::Rect scissor{};
-    // Raw XF viewport registers 0x101A-0x101F in hardware order:
-    // [0]=wd (w/2), [1]=ht (-h/2), [2]=zRange ((f-n)*(2^24-1)),
-    // [3]=xOrig (cx+342), [4]=yOrig (cy+342), [5]=farZ (f*(2^24-1)).
-    // has_viewport=false (XF regs not yet written) falls back to full EFB.
-    float xf_viewport[6]{};
-    bool  has_viewport = false;
-    // Render target 1 in temporal scenes: 1 the motion target (opaque
-    // motion writers), 2 the reactive mask (blended draws), 0 none.
-    std::uint8_t aux_target = 0;
-    // Interpolated redraw: the scene transform record whose VS constants a
-    // sub-frame replaces, -1 for draws outside the 3D scene.
-    std::int32_t replay_record = -1;
-};
 
 class RendererD3D12 {
 public:

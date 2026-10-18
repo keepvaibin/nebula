@@ -2672,186 +2672,6 @@ static constexpr char kClearPs[] =
     "cbuffer C:register(b0){float4 clear_color;};"
     "float4 main():SV_Target{return clear_color;}";
 
-// EFB-copy conversion pixel shader. Operation order on hardware: quantize source samples to
-// bytes -> integer 3-row filter -> gamma -> optional RGB-to-YUV conversion -> destination-format
-// channel mapping. The filter applies to color and packed depth RGB alike; alpha is always the
-// unfiltered center sample. The depth buffer is reversed, so guest z24 is reconstructed from
-// 1 - sampled depth before filtering its three bytes.
-//
-// Root constants (b0):
-//   src_xform = src origin.xy, src texels per dest pixel .zw (scaled EFB px)
-//   modes     = intensity, gamma, is_depth, keep_alpha
-//   filt      = integer filter upper/middle/lower (1/64 units), clamp_y min
-//   filt2     = clamp_y max, decoded EFB-copy format (15 = XFB), scaled
-//               one-logical-row filter offset, EFB-peek reduction width
-static constexpr char kConvPs[] = R"HLSL(
-cbuffer C : register(b0) {
-    float4 src_xform;
-    float4 modes;
-    float4 filt;
-    float4 filt2;
-};
-Texture2D srctex : register(t0);
-SamplerState s_lin : register(s0);
-SamplerState s_pt  : register(s1);
-struct V { float4 pos : SV_Position; float2 uv : TEXCOORD0; };
-uint4 pack_depth(float depth_sample) {
-    uint z24 = uint(clamp(
-        (1.0 - depth_sample) * 16777216.0, 0.0, 16777215.0));
-    return uint4(
-        (z24 >> 16) & 255u,
-        (z24 >> 8) & 255u,
-        z24 & 255u,
-        255u);
-}
-uint4 sample_efb(float2 sample_pos, float2 inv) {
-    // A destination texel covering more than 2x2 source texels (a native-size
-    // effect copy of a scaled EFB) averages the central half of its
-    // footprint. At 1x each EFB pixel is one sample at its centre; when the
-    // game minifies a texture 4:1 into the bloom workspace that sample is a
-    // bilinear 2x2 of each 4x4 block, and the bloom threshold that follows is
-    // tuned to that sparse coverage. The central half reproduces it (a full
-    // footprint average dims small glows below the threshold) while still
-    // averaging many scaled samples. Bilinear taps cover 2x2 texel groups.
-    const float2 step = src_xform.zw;
-    float4 tex_sample;
-    [branch] if (max(step.x, step.y) > 2.0) {
-        const float2 footprint = 0.5 * step;
-        const uint2 taps = uint2(clamp(ceil(footprint * 0.5), 1.0, 16.0));
-        const float2 origin = sample_pos - 0.5 * footprint;
-        const float2 pitch = footprint / float2(taps);
-        tex_sample = 0.0;
-        [loop] for (uint ty = 0u; ty < taps.y; ++ty) {
-            [loop] for (uint tx = 0u; tx < taps.x; ++tx) {
-                tex_sample += srctex.SampleLevel(
-                    s_lin, (origin + (float2(tx, ty) + 0.5) * pitch) * inv, 0);
-            }
-        }
-        tex_sample /= float(taps.x * taps.y);
-    } else {
-        tex_sample = srctex.SampleLevel(s_lin, sample_pos * inv, 0);
-    }
-    if (modes.z != 0.0) {
-        return pack_depth(tex_sample.r);
-    }
-    return uint4(saturate(tex_sample) * 255.0);
-}
-float4 main(V v) : SV_Target {
-    float2 dims;
-    srctex.GetDimensions(dims.x, dims.y);
-    float2 inv = 1.0 / dims;
-    float2 sp = src_xform.xy + v.pos.xy * src_xform.zw;
-    uint reduction_width = filt2.w < 0.0 ? 1u : uint(filt2.w + 0.5);
-    uint4 texcol_raw;
-    if (reduction_width != 0u || filt2.w < 0.0) {
-        if (modes.z != 0.0) {
-            // Depth peeks are point reads. src_xform.xy is the exact physical
-            // texel selected by the CPU geometry policy; Load prevents the
-            // multi-texel blend that linear sampling produced at scaled EFB sizes.
-            texcol_raw = pack_depth(
-                srctex.Load(int3(
-                    filt2.w < 0.0 ? int2(src_xform.xy + floor(v.pos.xy) * src_xform.zw)
-                                 : int2(src_xform.xy), 0)).r);
-        } else {
-            // Color peeks reduce the complete scaled logical-pixel block.
-            float4 sum = 0.0;
-            int2 origin = int2(src_xform.xy);
-            [loop] for (uint py = 0u; py < reduction_width; ++py) {
-                [loop] for (uint px = 0u; px < reduction_width; ++px) {
-                    sum += srctex.Load(int3(origin + int2(px, py), 0));
-                }
-            }
-            float4 reduced = sum / float(reduction_width * reduction_width);
-            texcol_raw = uint4(round(saturate(reduced) * 255.0));
-        }
-    } else {
-        float ylo = filt.w, yhi = filt2.x;
-        float filter_offset = max(filt2.z, 1.0);
-        uint3 coefficients = uint3(filt.xyz + 0.5);
-        uint4 current_row = sample_efb(
-            float2(sp.x, clamp(sp.y, ylo, yhi)), inv);
-        uint3 combined_rows = current_row.rgb * coefficients.y;
-        [branch] if (coefficients.x != 0u) {
-            uint4 prev_row = sample_efb(
-                float2(sp.x, clamp(sp.y - filter_offset, ylo, yhi)), inv);
-            combined_rows += prev_row.rgb * coefficients.x;
-        }
-        [branch] if (coefficients.z != 0u) {
-            uint4 next_row = sample_efb(
-                float2(sp.x, clamp(sp.y + filter_offset, ylo, yhi)), inv);
-            combined_rows += next_row.rgb * coefficients.z;
-        }
-        texcol_raw = uint4(combined_rows >> 6, current_row.a);
-        if (coefficients.x + coefficients.y + coefficients.z >= 128u) {
-            texcol_raw &= 0x1ffu;
-        }
-        texcol_raw = min(texcol_raw, uint4(255u, 255u, 255u, 255u));
-    }
-    if (modes.y != 1.0) {
-        texcol_raw = uint4(round(
-            pow(abs(float4(texcol_raw) / 255.0),
-                float4(1.0 / modes.y, 1.0 / modes.y, 1.0 / modes.y, 1.0)) *
-            255.0));
-    }
-    if (modes.x != 0.0) {
-        int3 rgb = int3(texcol_raw.rgb);
-        uint3 yuv = uint3(
-            66 * rgb.r + 129 * rgb.g + 25 * rgb.b + 4096,
-            -38 * rgb.r - 74 * rgb.g + 112 * rgb.b + 32768,
-            112 * rgb.r - 94 * rgb.g - 18 * rgb.b + 32768);
-        texcol_raw.rgb = (yuv >> 8) + ((yuv >> 7) & 1u);
-    }
-
-    // The GPU alias represents the texture after the EFB copy bytes are
-    // decoded again, not the unencoded render target. Apply the copy format's
-    // channel/precision behavior here so direct aliases match a RAM roundtrip.
-    uint fmt = uint(filt2.y + 0.5);
-    if (fmt == 0u) {             // R4 -> I4
-        uint i = (texcol_raw.r & 0xF0u) | (texcol_raw.r >> 4);
-        texcol_raw = uint4(i, i, i, i);
-    } else if (fmt == 1u || fmt == 8u) { // R8 -> I8
-        texcol_raw = texcol_raw.rrrr;
-    } else if (fmt == 2u) {      // RA4 -> IA4
-        uint i = (texcol_raw.r & 0xF0u) | (texcol_raw.r >> 4);
-        uint a = (texcol_raw.a & 0xF0u) | (texcol_raw.a >> 4);
-        texcol_raw = uint4(i, i, i, a);
-    } else if (fmt == 3u) {      // RA8 -> IA8
-        texcol_raw = texcol_raw.rrra;
-    } else if (fmt == 4u) {      // RGB565
-        texcol_raw.r = (texcol_raw.r & 0xF8u) | (texcol_raw.r >> 5);
-        texcol_raw.g = (texcol_raw.g & 0xFCu) | (texcol_raw.g >> 6);
-        texcol_raw.b = (texcol_raw.b & 0xF8u) | (texcol_raw.b >> 5);
-        texcol_raw.a = 255u;
-    } else if (fmt == 5u) {      // RGB5A3
-        if (texcol_raw.a > 224u) {
-            texcol_raw.r = (texcol_raw.r & 0xF8u) | (texcol_raw.r >> 5);
-            texcol_raw.g = (texcol_raw.g & 0xF8u) | (texcol_raw.g >> 5);
-            texcol_raw.b = (texcol_raw.b & 0xF8u) | (texcol_raw.b >> 5);
-            texcol_raw.a = 255u;
-        } else {
-            texcol_raw.r = (texcol_raw.r & 0xF0u) | (texcol_raw.r >> 4);
-            texcol_raw.g = (texcol_raw.g & 0xF0u) | (texcol_raw.g >> 4);
-            texcol_raw.b = (texcol_raw.b & 0xF0u) | (texcol_raw.b >> 4);
-            texcol_raw.a =
-                (texcol_raw.a & 0xE0u) | (texcol_raw.a >> 3) |
-                (texcol_raw.a >> 6);
-        }
-    } else if (fmt == 7u) {      // A8 bytes are loaded as I8
-        texcol_raw = texcol_raw.aaaa;
-    } else if (fmt == 9u) {      // G8 -> I8
-        texcol_raw = texcol_raw.gggg;
-    } else if (fmt == 10u) {     // B8 -> I8
-        texcol_raw = texcol_raw.bbbb;
-    } else if (fmt == 11u) {     // RG8 -> IA8
-        texcol_raw = texcol_raw.rrrg;
-    } else if (fmt == 12u) {     // GB8 -> IA8
-        texcol_raw = texcol_raw.gggb;
-    } else if (fmt == 15u) {     // XFB: full RGB precision, opaque alpha
-        texcol_raw.a = 255u;
-    }
-    return float4(texcol_raw) / 255.0;
-}
-)HLSL";
 
 }  // namespace
 
@@ -2862,7 +2682,7 @@ void set_native_settings_content_root(const std::string& utf8_path) {
 bool validate_efb_conversion_shader(std::string& diagnostics) noexcept {
     try {
         const ComPtr<ID3DBlob> code = compile_hlsl(
-            kConvPs, sizeof(kConvPs) - 1u, "ps_5_0", "main");
+            efb_conversion_shader_source().data(), efb_conversion_shader_source().size(), "ps_5_0", "main");
         diagnostics.clear();
         return code != nullptr;
     } catch (const std::exception& error) {
@@ -2874,90 +2694,6 @@ bool validate_efb_conversion_shader(std::string& diagnostics) noexcept {
     }
 }
 
-std::string_view efb_conversion_shader_source() noexcept {
-    return std::string_view{kConvPs, sizeof(kConvPs) - 1u};
-}
-
-EfbConversionShaderConstants make_efb_conversion_constants(
-    const EfbCopyParams& params,
-    bool is_depth_copy,
-    bool intensity,
-    bool keep_alpha,
-    std::uint8_t copy_format,
-    float src_x,
-    float src_y,
-    float step_x,
-    float step_y,
-    float filter_row_offset,
-    unsigned efb_scale,
-    unsigned logical_efb_height,
-    unsigned reduction_width) noexcept {
-    const float scale = static_cast<float>(
-        std::clamp(efb_scale, 1u, kMaxEfbScale));
-    float fw_up = static_cast<float>(params.filter_upper());
-    float fw_mid = static_cast<float>(params.filter_middle());
-    float fw_low = static_cast<float>(params.filter_lower());
-    if (fw_up == 0.0f && fw_mid == 0.0f && fw_low == 0.0f) {
-        // Preserve the existing startup behavior when GXInit has not yet
-        // programmed BP 0x53/0x54.
-        fw_mid = 64.0f;
-    }
-
-    const float copy_y0 = static_cast<float>(params.src_y) * scale;
-    const float copy_y1 =
-        copy_y0 + static_cast<float>(params.src_height) * scale;
-    const float full_y1 =
-        static_cast<float>(std::max(logical_efb_height, 1u)) * scale;
-    const float clamp_y_min =
-        (params.clamp_top ? copy_y0 : 0.0f) + 0.5f;
-    const float clamp_y_max = std::max(
-        clamp_y_min,
-        (params.clamp_bottom ? copy_y1 : full_y1) - 0.5f);
-    static constexpr float kGammaLut[4] = {1.0f, 1.7f, 2.2f, 2.2f};
-
-    return EfbConversionShaderConstants{{
-        src_x, src_y, step_x, step_y,
-        intensity ? 1.0f : 0.0f,
-        kGammaLut[params.gamma & 3u],
-        is_depth_copy ? 1.0f : 0.0f,
-        keep_alpha ? 1.0f : 0.0f,
-        fw_up, fw_mid, fw_low, clamp_y_min,
-        clamp_y_max,
-        static_cast<float>(copy_format),
-        filter_row_offset,
-        static_cast<float>(reduction_width),
-    }};
-}
-
-EfbConversionShaderConstants make_efb_peek_conversion_constants(
-    const EfbPeekSamplingGeometry& sampling,
-    EfbPeekKind kind) noexcept {
-    const bool is_depth = kind == EfbPeekKind::Depth;
-    const float src_x = is_depth
-        ? static_cast<float>(sampling.depth_texel_x)
-        : sampling.src_x;
-    const float src_y = is_depth
-        ? static_cast<float>(sampling.depth_texel_y)
-        : sampling.src_y;
-    return EfbConversionShaderConstants{{
-        src_x,
-        src_y,
-        sampling.step,
-        sampling.step,
-        0.0f,
-        1.0f,
-        is_depth ? 1.0f : 0.0f,
-        1.0f,
-        0.0f,
-        64.0f,
-        0.0f,
-        sampling.center_y,
-        sampling.center_y,
-        255.0f,
-        sampling.step,
-        sampling.step,
-    }};
-}
 
 // ---------------------------------------------------------------------------
 // UploadRing
@@ -3658,24 +3394,6 @@ HRESULT create_gx_root_signature(
         IID_PPV_ARGS(root_signature));
 }
 
-EfbClearValues make_efb_clear_values(std::uint32_t ar, std::uint32_t gb,
-    std::uint32_t z24, std::uint8_t pixel_format) noexcept {
-    std::uint32_t r = ar & 255u, g = (gb >> 8u) & 255u;
-    std::uint32_t b = gb & 255u, a = (ar >> 8u) & 255u;
-    const auto expand6 = [](std::uint32_t v) { return (v & 0xfcu) | (v >> 6u); };
-    const auto expand5 = [](std::uint32_t v) { return (v & 0xf8u) | (v >> 5u); };
-    if (pixel_format == 1u) {
-        r = expand6(r); g = expand6(g); b = expand6(b); a = expand6(a);
-    } else {
-        if (pixel_format == 2u) { r = expand5(r); g = expand6(g); b = expand5(b); }
-        a = 255u;
-    }
-    z24 &= 0xffffffu;
-    if (pixel_format == 2u) z24 = (z24 & 0xffff00u) | (z24 >> 16u);
-    return {{{static_cast<float>(r) / 255.0f, static_cast<float>(g) / 255.0f,
-              static_cast<float>(b) / 255.0f, static_cast<float>(a) / 255.0f}},
-            1.0f - static_cast<float>(z24) / 16777216.0f};
-}
 
 bool RendererD3D12::create_root_signature() {
     d3d_check(
@@ -3749,66 +3467,6 @@ D3D12_SAMPLER_DESC build_sampler_desc_from_key(
     return desc;
 }
 
-std::size_t SamplerTableKeyHasher::operator()(const SamplerTableKey& key) const noexcept {
-    std::uint64_t hash = 0xCBF29CE484222325ull;
-    const auto mix = [&hash](std::uint32_t value) {
-        for (unsigned byte = 0u; byte < 4u; ++byte) {
-            hash ^= (value >> (byte * 8u)) & 0xffu;
-            hash *= 0x100000001B3ull;
-        }
-    };
-    for (const auto sampler : key.samplers) mix(sampler);
-    mix(key.config);
-    return static_cast<std::size_t>(hash);
-}
-
-static std::uint32_t sampler_config_key(const RenderConfig& cfg) noexcept {
-    return ((std::clamp(cfg.anisotropic_filtering, 1u, 16u) & 0x1fu) << 8u) |
-        (std::clamp(cfg.texture_lod_bias, 0u, 8u) & 0xfu);
-}
-
-SamplerTableKey make_sampler_table_key(const std::uint32_t keys[8], const RenderConfig& cfg) noexcept {
-    SamplerTableKey key{};
-    std::copy_n(keys, key.samplers.size(), key.samplers.begin());
-    key.config = sampler_config_key(cfg);
-    return key;
-}
-
-SamplerTableCache::Allocation SamplerTableCache::get_or_allocate(const SamplerTableKey& key) {
-    if (const auto it = tables_.find(key); it != tables_.end()) {
-        slot_frames_[(it->second - 8u) / 8u] = frame_;
-        return {it->second, false};
-    }
-    const bool fresh_slot = cursor_ + 8u <= kSamplerHeapSlots;
-    unsigned slot = fresh_slot ? (cursor_ - 8u) / 8u : eviction_cursor_;
-    if (!fresh_slot) {
-        unsigned checked = 0u;
-        while (checked < kDynamicTables && slot_frames_[slot] == frame_) {
-            slot = (slot + 1u) % kDynamicTables;
-            ++checked;
-        }
-        if (checked == kDynamicTables) {
-            throw std::runtime_error(
-                "[Renderer] sampler heap exhausted: more than 255 distinct "
-                "sampler configurations used within one frame");
-        }
-    }
-    const unsigned index = 8u + slot * 8u;
-    // Insert before retiring the old mapping: an allocation failure leaves
-    // all resident descriptors discoverable. Do not hold a victim iterator
-    // across insertion, which may rehash the map.
-    const auto [it, inserted] = tables_.emplace(key, index);
-    if (inserted) {
-        if (fresh_slot) cursor_ += 8u;
-        else {
-            tables_.erase(slot_keys_[slot]);
-            eviction_cursor_ = (slot + 1u) % kDynamicTables;
-        }
-        slot_keys_[slot] = key;
-        slot_frames_[slot] = frame_;
-    }
-    return {it->second, inserted};
-}
 
 bool RendererD3D12::create_sampler_heap() {
     default_sampler_valid_.fill(false);
@@ -3961,7 +3619,7 @@ bool RendererD3D12::create_conversion_pipeline() {
         const ComPtr<ID3DBlob> vs =
             compile_hlsl(kBlitVs, sizeof(kBlitVs) - 1, "vs_5_1", "main");
         const ComPtr<ID3DBlob> ps =
-            compile_hlsl(kConvPs, sizeof(kConvPs) - 1, "ps_5_1", "main");
+            compile_hlsl(efb_conversion_shader_source().data(), efb_conversion_shader_source().size(), "ps_5_1", "main");
 
         D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
         pd.pRootSignature = s_conv_root_sig.Get();
