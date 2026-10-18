@@ -179,7 +179,17 @@ typedef struct NebulaHostServices {
 
     /* Game state the host's controls follow (NEBULA_CONTEXT_*), reported when it changes. */
     void (*game_context)(void* user, uint32_t what, int32_t value);
+
+    /* The game ends (NEBULA_POWER_*): OSShutdownSystem, OSRestart, OSReturnToMenu, OSRebootSystem. Does not return. */
+    void (*power)(void* user, uint32_t what);
 } NebulaHostServices;
+
+enum {
+    NEBULA_POWER_SHUTDOWN = 1, /* the console turns off: the game closes */
+    NEBULA_POWER_RESTART,      /* the game starts again from its boot */
+    NEBULA_POWER_MENU,         /* back to the Wii Menu: the game closes */
+    NEBULA_POWER_REBOOT,       /* the console restarts: the game closes */
+};
 
 enum {
     NEBULA_CONTEXT_STAR_POINTER_MODE = 1, /* StarPointerOnOffController's mode (-1 none): menus and play */

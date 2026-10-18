@@ -262,6 +262,14 @@ struct XfbMeasurementCadenceStats {
 };
 
 [[nodiscard]] bool native_settings_overlay_visible() noexcept;
+
+// The native game's HOME Menu: Nebula's panel with the console menu's choices, drawn over the frame and taking the
+// keyboard, controllers and mouse while open. The game opens it (HBMInit) and polls each frame: -1 nothing chosen yet,
+// 0 return to the game, 1 Wii Menu (leave the game), 2 reset.
+void home_menu_open() noexcept;
+[[nodiscard]] int home_menu_poll() noexcept;
+void home_menu_close() noexcept;
+[[nodiscard]] bool home_menu_visible() noexcept;
 [[nodiscard]] bool native_window_input_captured() noexcept;
 [[nodiscard]] NativeSettingsOverlaySnapshot
 native_settings_overlay_snapshot() noexcept;

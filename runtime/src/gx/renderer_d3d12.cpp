@@ -179,6 +179,49 @@ std::atomic<bool> s_move_size_active{false};
 std::recursive_mutex s_native_settings_mutex;
 
 std::atomic<bool> s_native_settings_visible{false};
+// The HOME Menu (home_menu_open): its row and the choice the game polls (-1 none yet).
+std::atomic<bool> s_home_menu_visible{false};
+std::atomic<unsigned> s_home_menu_row{0};
+std::atomic<int> s_home_menu_choice{-1};
+constexpr unsigned kHomeMenuRows = 3;
+// Rows top to bottom and the choice each makes (the console menu's order: close, Wii Menu, reset).
+constexpr const char* kHomeMenuRowText[kHomeMenuRows] = {"RETURN TO GAME", "WII MENU", "RESET"};
+constexpr int kHomeMenuRowChoice[kHomeMenuRows] = {0, 1, 2};
+
+void choose_home_menu_row(unsigned row) {
+    s_home_menu_choice.store(kHomeMenuRowChoice[row % kHomeMenuRows], std::memory_order_release);
+    s_home_menu_visible.store(false, std::memory_order_release);
+}
+
+// Keys while the HOME Menu is open (controllers arrive as these keys too: D-pad, A as Right, Y as Return, B as
+// Escape). Every key is the menu's: the game and the settings overlay wait.
+bool handle_home_menu_key(WPARAM key, bool was_down) {
+    if (was_down && key != VK_UP && key != VK_DOWN) {
+        return true;
+    }
+    const unsigned row = s_home_menu_row.load(std::memory_order_relaxed);
+    switch (key) {
+    case VK_UP:
+        s_home_menu_row.store((row + kHomeMenuRows - 1u) % kHomeMenuRows, std::memory_order_relaxed);
+        break;
+    case VK_DOWN:
+        s_home_menu_row.store((row + 1u) % kHomeMenuRows, std::memory_order_relaxed);
+        break;
+    case VK_RETURN:
+    case VK_RIGHT:
+    case VK_SPACE:
+        choose_home_menu_row(row);
+        break;
+    case VK_ESCAPE:
+    case VK_BACK:
+    case VK_HOME:
+        choose_home_menu_row(0u);
+        break;
+    default:
+        break;
+    }
+    return true;
+}
 std::atomic<bool> s_native_settings_dirty{false};
 std::atomic<bool> s_native_settings_save_error{false};
 std::atomic<unsigned> s_native_settings_tab{0};
@@ -1285,6 +1328,9 @@ bool handle_controls_key(WPARAM key, bool was_down, bool from_pad) {
 }
 
 bool handle_native_settings_key(WPARAM key, bool was_down, bool from_pad = false) {
+    if (s_home_menu_visible.load(std::memory_order_acquire)) {
+        return handle_home_menu_key(key, was_down);
+    }
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
     if (!native_settings_ui_enabled()) {
         return false;
@@ -9694,6 +9740,55 @@ void draw_native_settings_overlay(RendererD3D12& renderer) {
         muted);
 }
 
+// The HOME Menu panel, centred over the frame. The mouse picks a row by hovering and chooses with a click.
+void draw_home_menu(RendererD3D12& renderer) {
+    static bool s_left_was_down = true;
+    if (!s_home_menu_visible.load(std::memory_order_acquire)) {
+        s_left_was_down = true;
+        return;
+    }
+    const int bb_w = static_cast<int>(s_bb_width);
+    const int bb_h = static_cast<int>(s_bb_height);
+    const int scale = bb_h >= 1440 ? 4 : (bb_h >= 720 ? 3 : 2);
+    const int row_h = 15 * scale;
+    const int w = std::min(bb_w - 8 * scale, 140 * scale);
+    const int h = 26 * scale + row_h * static_cast<int>(kHomeMenuRows) + 14 * scale;
+    const int x = (bb_w - w) / 2;
+    const int y = (bb_h - h) / 2;
+    const int rows_y = y + 24 * scale;
+    const std::array<float, 4> panel{0.02f, 0.025f, 0.035f, 1.0f};
+    const std::array<float, 4> rail{0.0f, 0.42f, 0.62f, 1.0f};
+    const std::array<float, 4> text{0.88f, 0.94f, 0.96f, 1.0f};
+    const std::array<float, 4> muted{0.42f, 0.48f, 0.50f, 1.0f};
+    const std::array<float, 4> highlight{0.10f, 0.18f, 0.22f, 1.0f};
+
+    const HostPointerState pointer = poll_host_pointer_state();
+    if (pointer.absolute_valid && pointer.inside_client && pointer.client_width > 0 && pointer.client_height > 0) {
+        const int px = pointer.client_x * bb_w / pointer.client_width;
+        const int py = pointer.client_y * bb_h / pointer.client_height;
+        if (px >= x && px < x + w && py >= rows_y && py < rows_y + row_h * static_cast<int>(kHomeMenuRows)) {
+            const unsigned hovered = static_cast<unsigned>((py - rows_y) / row_h);
+            s_home_menu_row.store(hovered, std::memory_order_relaxed);
+            if (pointer.left_button && !s_left_was_down) {
+                choose_home_menu_row(hovered);
+            }
+        }
+    }
+    s_left_was_down = pointer.left_button;
+
+    ui_rect(renderer, x, y, w, h, panel);
+    ui_rect(renderer, x, y, 6, h, rail);
+    ui_text(renderer, x + 14 * scale, y + 8 * scale, scale, "HOME MENU", text);
+    const unsigned selected = s_home_menu_row.load(std::memory_order_relaxed) % kHomeMenuRows;
+    for (unsigned row = 0; row < kHomeMenuRows; ++row) {
+        const int ry = rows_y + static_cast<int>(row) * row_h;
+        if (row == selected) {
+            ui_rect(renderer, x + 6, ry, w - 6, row_h, highlight);
+        }
+        ui_text(renderer, x + 14 * scale, ry + 4 * scale, scale, kHomeMenuRowText[row], row == selected ? text : muted);
+    }
+}
+
 // For the first seconds of a session, until the overlay is first opened, a
 // one-line hint names the keys that open it.
 void draw_native_settings_hint(RendererD3D12& renderer) {
@@ -9965,6 +10060,7 @@ bool RendererD3D12::present(
             : std::chrono::steady_clock::time_point{};
         draw_native_settings_overlay(*this);
         draw_native_settings_hint(*this);
+        draw_home_menu(*this);
         if (stall_watch_overlay) {
             const double stall_watch_ms =
                 std::chrono::duration<double, std::milli>(
@@ -10629,6 +10725,7 @@ bool native_settings_overlay_visible() noexcept {
 
 bool native_window_input_captured() noexcept {
     return s_native_settings_visible.load(std::memory_order_relaxed) ||
+        s_home_menu_visible.load(std::memory_order_relaxed) ||
         s_system_menu_active.load(std::memory_order_acquire) ||
         s_move_size_active.load(std::memory_order_acquire);
 }
@@ -10736,6 +10833,24 @@ bool native_settings_handle_window_key(
     return handle_native_settings_key(
         static_cast<WPARAM>(virtual_key),
         was_down);
+}
+
+void home_menu_open() noexcept {
+    s_home_menu_row.store(0u, std::memory_order_relaxed);
+    s_home_menu_choice.store(-1, std::memory_order_relaxed);
+    s_home_menu_visible.store(true, std::memory_order_release);
+}
+
+int home_menu_poll() noexcept {
+    return s_home_menu_choice.load(std::memory_order_acquire);
+}
+
+void home_menu_close() noexcept {
+    s_home_menu_visible.store(false, std::memory_order_release);
+}
+
+bool home_menu_visible() noexcept {
+    return s_home_menu_visible.load(std::memory_order_acquire);
 }
 
 void native_settings_post_key(std::uintptr_t virtual_key) noexcept {

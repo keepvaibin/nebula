@@ -806,21 +806,28 @@ void OSProtectRange(u32 channel, void* addr, u32 nBytes, u32 control) {
     (void)control;
 }
 
-void OSShutdownSystem(void) {
+/* Power: the host ends or restarts the game (the module never returns from these). */
+static void power(u32 what) {
+    const NebulaHostServices* host = nebula_host();
+    host->power(host->user, what);
     exit(0);
+}
+
+void OSShutdownSystem(void) {
+    power(NEBULA_POWER_SHUTDOWN);
 }
 
 void OSRestart(u32 resetCode) {
     (void)resetCode;
-    exit(0);
+    power(NEBULA_POWER_RESTART);
 }
 
 void OSReturnToMenu(void) {
-    exit(0);
+    power(NEBULA_POWER_MENU);
 }
 
 void OSRebootSystem(void) {
-    exit(0);
+    power(NEBULA_POWER_REBOOT);
 }
 
 BOOL __DVDTestAlarm(const OSAlarm* alarm) {

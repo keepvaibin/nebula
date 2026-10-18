@@ -916,7 +916,59 @@ void svc_ai_control(void*, uint32_t what, uint32_t value) {
 }
 
 int svc_hbm(void*, uint32_t what, uint32_t) {
-    return what == NEBULA_HBM_POLL ? -1 : 0;
+#if defined(NEBULA_HOST_RENDERER)
+    switch (what) {
+    case NEBULA_HBM_OPEN:
+        galaxy::gx::home_menu_open();
+        return 0;
+    case NEBULA_HBM_POLL: {
+        // Tests (hidden window): GALAXY_TEST_HOME_ROW=<row>:<polls> picks a row by the keys a player would press.
+        static const char* test = std::getenv("GALAXY_TEST_HOME_ROW");
+        static unsigned polls = 0;
+        if (test != nullptr && galaxy::gx::home_menu_visible()) {
+            unsigned row = 0, after = 0;
+            if (std::sscanf(test, "%u:%u", &row, &after) == 2 && ++polls == after) {
+                for (unsigned i = 0; i < row; ++i) {
+                    galaxy::gx::native_settings_post_key(VK_DOWN);
+                }
+                galaxy::gx::native_settings_post_key(VK_RETURN);
+            }
+        }
+        return galaxy::gx::home_menu_poll();
+    }
+    case NEBULA_HBM_CLOSE:
+        galaxy::gx::home_menu_close();
+        return 0;
+    default:
+        return 0;
+    }
+#else
+    (void)what;
+    return 0;  // headless: the menu closes at once
+#endif
+}
+
+// A restart starts this executable again with the same arguments (the game's boot, as the console's reset); the
+// other power events close the game.
+[[noreturn]] void svc_power(void*, uint32_t what) {
+    log_line("host:", what == NEBULA_POWER_RESTART ? "restart" : "the game ended");
+    std::fflush(stdout);
+#if defined(_WIN32)
+    if (what == NEBULA_POWER_RESTART) {
+        wchar_t path[MAX_PATH];
+        if (GetModuleFileNameW(nullptr, path, MAX_PATH) != 0) {
+            STARTUPINFOW startup{};
+            startup.cb = sizeof(startup);
+            PROCESS_INFORMATION process{};
+            std::wstring command = GetCommandLineW();
+            if (CreateProcessW(path, command.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startup, &process)) {
+                CloseHandle(process.hThread);
+                CloseHandle(process.hProcess);
+            }
+        }
+    }
+#endif
+    std::_Exit(0);
 }
 
 #if defined(NEBULA_HOST_RENDERER)
@@ -1039,12 +1091,40 @@ int main(int argc, char** argv) {
     services.thp_video_decode = svc_thp_video_decode;
     services.gpu_coherent = svc_gpu_coherent;
     services.game_context = svc_game_context;
+    services.power = svc_power;
 #if defined(NEBULA_HOST_RENDERER)
     if (!galaxy::gx::initialize(1280, 720)) {
         die("the renderer did not start");
     }
     galaxy::gx::set_indexed_load_host_order(true);
     gAudio = new galaxy::host::NativeGameAudio();  // lives as long as the process (the AI thread is detached)
+    // The live controls' links to the window, as v1.0.1 installs them: the mouse as the pointer, keyboard capture and
+    // controller navigation while the settings overlay or the HOME Menu is open.
+    galaxy::host::install_host_pointer_provider([]() noexcept {
+        galaxy::host::HostPointerState state{};
+        const galaxy::gx::HostPointerState pointer = galaxy::gx::poll_host_pointer_state();
+        state.window_focused = pointer.window_focused;
+        state.inside_client = pointer.inside_client;
+        state.absolute_valid = pointer.absolute_valid && pointer.client_width > 1 && pointer.client_height > 1;
+        state.left_button = pointer.left_button;
+        state.right_button = pointer.right_button;
+        state.client_x = pointer.client_x;
+        state.client_y = pointer.client_y;
+        state.client_width = pointer.client_width;
+        state.client_height = pointer.client_height;
+        state.absolute_sequence = pointer.absolute_sequence;
+        state.absolute_acquired_ms = pointer.absolute_acquired_ms;
+        state.debug_flags = pointer.debug_flags;
+        state.debug_error = pointer.debug_error;
+        state.debug_window = pointer.debug_window;
+        return state;
+    });
+    galaxy::host::install_host_pointer_transition_provider(
+        [](std::uint64_t after) noexcept { return galaxy::gx::poll_host_pointer_transition(after); });
+    galaxy::host::install_native_keyboard_capture_provider([]() noexcept { return galaxy::gx::native_window_input_captured(); });
+    galaxy::host::install_native_settings_pad_hooks(
+        []() noexcept { return galaxy::gx::native_settings_overlay_visible() || galaxy::gx::home_menu_visible(); },
+        [](std::uintptr_t key) noexcept { galaxy::gx::native_settings_post_key(key); });
 #endif
     if (gModule.attach(&services) != NEBULA_GAME_API_VERSION) {
         die("the game module's API version differs from the host's (%u)", NEBULA_GAME_API_VERSION);
