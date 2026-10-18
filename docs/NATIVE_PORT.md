@@ -204,6 +204,11 @@ Complete over every compiled unit (1,874), with the compiler as the checker. An 
   - GD (display-list building) is Petari's C code with one reservation per command.
 - **Audio**: JAudio2 drives the DSP directly, not through AX (D). NebulaNative runs v1.0.1's host version of the JAudio DSP program (`runtime/src/jaudio_host_mixer.cpp`) on the command words (`galaxy::host::NativeGameAudio`) and plays each AI block through v1.0.1's sink (XAudio2, master volume, WAV dump). The output device's clock paces the AI: the next block is taken once fewer than two wait there.
 - **Video timing**: the retrace, the AI and the remotes run on high-resolution waitable timers. Screen dimming is counted as on the console (idle fields since WPAD's last input or connection, 18000 with SYSCONF's screen saver on); the picture is not darkened, as a PC display dims itself.
+- **Controls**: Nebula's live controls build the remote's reports (v1.0.1's snapshot builder); the mouse is the pointer through v1.0.1's input providers. What v1.0.1 read from the console's memory for its control mapping the native game reports as it changes (`game_context`): StarPointerOnOffController's mode (menu or play mapping, rumble held in menus) and the ride Mario is bound to (Star Ball or Ray: tilt steering). The game's motor bit drives the controller in use.
+- **HOME Menu**: the HOME button library is a PowerPC module on the disc; natively the game's entry points open Nebula's panel over the frame (return to the game, Wii Menu, reset), driven by keyboard, controllers and mouse. Nintendo's own menu natively would need its library (wii-ipl's CC0 decompilation is a later version than SMG's) and a substitute for the IPL ROM font.
+- **Power**: OSShutdownSystem, OSRestart, OSReturnToMenu and OSRebootSystem reach the host (`power`), which closes the game or starts it again. The game's own reset (HOME Menu, reset button) goes back to its boot sequence in place.
+- **Movies**: each THP frame's video component goes to v1.0.1's decoder with its size from the frame header (THP's entropy data is not byte-stuffed, so nothing else bounds a frame).
+- **Tests**: `GALAXY_TEST_GALAXY_TOUR` and `GALAXY_TEST_TELEPORT` as in v1.0.1; the host decides, the game acts through `MR::requestChangeStageInGameMoving` and `MR::setPlayerPos` once per scene frame (`test_scene_frame`). `GALAXY_TEST_HOME_ROW` picks a HOME Menu row by its keys.
 - **Threads**: the console runs one thread at a time, by priority, and the game relies on it (`OSDisableInterrupts` used as a lock). All game threads run on one host thread with the SDK's own scheduler, and a thread switch is a stack switch (`native/sdk/os`). Parallelism lives in the host: renderer, audio mixer, input, disc.
 
 ## Open
@@ -214,7 +219,9 @@ Complete over every compiled unit (1,874), with the compiler as the checker. An 
 | 274 US data sections not yet compared byte for byte (`us_data_unverified.csv`) | H: symbol naming; verify against the matching build |
 | Heap sizes: pointers double in size natively, so fixed JKRHeap sizes need a 64-bit allowance | open |
 | `nw4r::ut::RomFont`: the console's system font comes from the IPL ROM, not the disc | open |
-| THP movies (prologue, endings, final battle): Petari's decoder is paired-single assembly | video through the host's native decoder (`thp_video_decode`), audio in `native/sdk/thp` |
+| THP movies (prologue, endings, final battle): Petari's decoder is paired-single assembly | video through v1.0.1's decoder with each frame's size, audio in `native/sdk/thp`; a route that reaches a movie is still to run |
 | Mii data (RFL) without a console NAND | an empty database (RFL_DB.dat) is created, as v1.0.1 does |
-| Volume categories (music, effects, voices) and the remote speaker natively | open: v1.0.1 reads them from game memory; the native game will report them |
+| Volume categories (music, effects, voices) natively | open: v1.0.1 classifies channels from game memory; the native game will report each channel's category |
+| The remote speaker's sound | not in v1.0.1 (a v2 feature on wt-motion); the game's speaker data reaches the host and is dropped |
+| Crash dumps, the single-instance lease and the launcher for NebulaNative | open (release, P7) |
 | aarch64 and LP64 sysroots for the compile census on Linux, Android and macOS | not on this machine |
