@@ -1544,6 +1544,10 @@ int main(int argc, char** argv) {
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX | SEM_NOGPFAULTERRORBOX);
 #endif
 #if defined(_WIN32)
+    // Tests: the logical processors the process may use (hex mask; 0xF = two cores with SMT, a 2C/4T laptop's shape).
+    if (const char* mask = std::getenv("GALAXY_TEST_CPU_AFFINITY")) {
+        SetProcessAffinityMask(GetCurrentProcess(), static_cast<DWORD_PTR>(std::strtoull(mask, nullptr, 16)));
+    }
     install_crash_reporter();
     // Validation of the crash path, as v1.0.1's: a host thread faults once the game has started.
     if (const char* test = std::getenv("GALAXY_CRASH_TEST"); test != nullptr && test[0] == '1') {
