@@ -662,6 +662,117 @@ void report_thread_cpu(double tsc_hz) {
     report_cycles += report_end - report_start;
 }
 
+// Tests (GALAXY_PROFILE_THREAD=<thread name>): samples that thread's instruction pointer about every millisecond and
+// logs its busiest functions every 10 s ("profile:", from the process's symbols through dbghelp, loaded here). Only the
+// instruction pointer is read while the thread is suspended: an unwind could wait on a lock the thread holds.
+void profile_thread_main(std::wstring target_name) {
+    name_thread(L"Nebula Host Profiler");
+    HANDLE target = nullptr;
+    while (target == nullptr) {
+        const HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+        THREADENTRY32 entry{};
+        entry.dwSize = sizeof(entry);
+        for (BOOL more = snapshot != INVALID_HANDLE_VALUE && Thread32First(snapshot, &entry); more && target == nullptr;
+             more = Thread32Next(snapshot, &entry)) {
+            if (entry.th32OwnerProcessID != GetCurrentProcessId()) {
+                continue;
+            }
+            const HANDLE thread = OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE,
+                                             entry.th32ThreadID);
+            PWSTR description = nullptr;
+            if (thread != nullptr && SUCCEEDED(GetThreadDescription(thread, &description)) && description != nullptr &&
+                target_name == description) {
+                target = thread;
+            } else if (thread != nullptr) {
+                CloseHandle(thread);
+            }
+            LocalFree(description);
+        }
+        if (snapshot != INVALID_HANDLE_VALUE) {
+            CloseHandle(snapshot);
+        }
+        if (target == nullptr) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
+    using SymInitializeFn = BOOL(WINAPI*)(HANDLE, PCSTR, BOOL);
+    using SymSetOptionsFn = DWORD(WINAPI*)(DWORD);
+    using SymFromAddrFn = BOOL(WINAPI*)(HANDLE, DWORD64, PDWORD64, PSYMBOL_INFO);
+    const HMODULE dbghelp = LoadLibraryW(L"dbghelp.dll");
+    const auto sym_initialize =
+        dbghelp != nullptr ? reinterpret_cast<SymInitializeFn>(GetProcAddress(dbghelp, "SymInitialize")) : nullptr;
+    const auto sym_set_options =
+        dbghelp != nullptr ? reinterpret_cast<SymSetOptionsFn>(GetProcAddress(dbghelp, "SymSetOptions")) : nullptr;
+    const auto sym_from_addr =
+        dbghelp != nullptr ? reinterpret_cast<SymFromAddrFn>(GetProcAddress(dbghelp, "SymFromAddr")) : nullptr;
+    bool symbols = false;
+    std::unordered_map<uint64_t, uint32_t> counts;
+    uint64_t samples = 0;
+    const HANDLE timer = CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
+    auto next_report = Clock::now() + std::chrono::seconds(10);
+    for (;;) {
+        LARGE_INTEGER due;
+        due.QuadPart = -10000;  // 1 ms
+        if (timer != nullptr && SetWaitableTimer(timer, &due, 0, nullptr, nullptr, FALSE)) {
+            WaitForSingleObject(timer, INFINITE);
+        } else {
+            Sleep(1);
+        }
+        if (SuspendThread(target) == static_cast<DWORD>(-1)) {
+            return;
+        }
+        CONTEXT context{};
+        context.ContextFlags = CONTEXT_CONTROL;
+        const bool ok = GetThreadContext(target, &context) != FALSE;
+        ResumeThread(target);
+        if (ok) {
+            counts[context.Rip]++;
+            samples++;
+        }
+        if (Clock::now() < next_report || samples == 0) {
+            continue;
+        }
+        next_report += std::chrono::seconds(10);
+        if (!symbols && sym_initialize != nullptr && sym_set_options != nullptr) {
+            sym_set_options(0x00000002 /* SYMOPT_UNDNAME */ | 0x00000004 /* SYMOPT_DEFERRED_LOADS */);
+            symbols = sym_initialize(GetCurrentProcess(), nullptr, TRUE) != FALSE;
+        }
+        std::unordered_map<std::string, uint32_t> functions;
+        for (const auto& [address, count] : counts) {
+            std::string name;
+            alignas(SYMBOL_INFO) char storage[sizeof(SYMBOL_INFO) + 256] = {};
+            auto* symbol = reinterpret_cast<SYMBOL_INFO*>(storage);
+            symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+            symbol->MaxNameLen = 255;
+            DWORD64 displacement = 0;
+            if (symbols && sym_from_addr != nullptr && sym_from_addr(GetCurrentProcess(), address, &displacement, symbol)) {
+                name = symbol->Name;
+            } else {
+                HMODULE owner = nullptr;
+                char path[MAX_PATH] = "?";
+                if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                       reinterpret_cast<LPCWSTR>(address), &owner)) {
+                    GetModuleFileNameA(owner, path, sizeof(path));
+                }
+                const char* file = std::strrchr(path, '\\');
+                name = file != nullptr ? file + 1 : path;
+            }
+            functions[name] += count;
+        }
+        std::vector<std::pair<std::string, uint32_t>> rows(functions.begin(), functions.end());
+        std::sort(rows.begin(), rows.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
+        char text[320];
+        std::snprintf(text, sizeof(text), "%ls: %llu samples", target_name.c_str(), (unsigned long long)samples);
+        log_line("profile:", text);
+        for (size_t i = 0; i < rows.size() && i < 30; ++i) {
+            std::snprintf(text, sizeof(text), "  %5.1f%%  %s", 100.0 * rows[i].second / (double)samples,
+                          rows[i].first.c_str());
+            log_line("profile:", text);
+        }
+        counts.clear();
+        samples = 0;
+    }
+}
 #endif
 
 #if defined(_WIN32)
@@ -1549,6 +1660,9 @@ int main(int argc, char** argv) {
         SetProcessAffinityMask(GetCurrentProcess(), static_cast<DWORD_PTR>(std::strtoull(mask, nullptr, 16)));
     }
     install_crash_reporter();
+    if (const wchar_t* name = _wgetenv(L"GALAXY_PROFILE_THREAD"); name != nullptr && name[0] != 0) {
+        std::thread(profile_thread_main, std::wstring(name)).detach();
+    }
     // Validation of the crash path, as v1.0.1's: a host thread faults once the game has started.
     if (const char* test = std::getenv("GALAXY_CRASH_TEST"); test != nullptr && test[0] == '1') {
         std::thread([] {
