@@ -39,15 +39,16 @@
 
 const NebulaHostServices* nebula_host(void);
 
-/* The register blocks the SDK addresses (CP, PE, PI, MEM): plain memory natively. */
+/* The register blocks the SDK addresses (CP, PE, PI, MEM; GXInit.c's pointers): plain memory natively, set up with
+   the FIFOs (GXInit's first register access follows __GXFifoInit). */
 static u16 sCpRegs[0x80];
 static u16 sPeRegs[0x80];
 static u32 sPiRegs[0x40];
 static u16 sMemRegs[0x80];
-volatile void* __cpReg = sCpRegs;
-volatile void* __peReg = sPeRegs;
-volatile void* __piReg = sPiRegs;
-volatile void* __memReg = sMemRegs;
+extern volatile void* __cpReg;
+extern volatile void* __peReg;
+extern volatile void* __piReg;
+extern volatile void* __memReg;
 
 NebulaGXWriter __NebulaGXWriter;
 
@@ -406,6 +407,10 @@ GXBool __GXIsGPFifoReady(void) {
 }
 
 void __GXFifoInit(void) {
+    __cpReg = sCpRegs;
+    __peReg = sPeRegs;
+    __piReg = sPiRegs;
+    __memReg = sMemRegs;
     if (sRing == NULL) {
         sRing = map_ring();
         if (sRing == NULL) {

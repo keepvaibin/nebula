@@ -87,7 +87,7 @@ target_compile_options(smg_game PRIVATE
 
 if(WIN32)
     # The DLL's own operator new/delete are JKRHeap's; the host process keeps its own.
-    target_link_options(smg_game PRIVATE -fuse-ld=lld)
+    target_link_options(smg_game PRIVATE -fuse-ld=lld "LINKER:/errorlimit:0")
     target_link_libraries(smg_game PRIVATE winmm)
 else()
     target_link_options(smg_game PRIVATE -Wl,-Bsymbolic -Wl,-z,now)
