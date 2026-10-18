@@ -59,3 +59,12 @@ The renderer interface GxBackend uses has 75 methods; about half are diagnostics
 7. V6: macOS (MoltenVK, arm64 context switch) and Android (NDK, APK, arm64) builds.
 
 Each phase: pictures compared with D3D12 on the same route, CPU and GPU measured, evidence on the dashboard.
+
+## State
+
+- V0 done: GxBackend, TextureCache and EfbCopyManager are API-neutral; the window, input and settings UI are shared
+  (host_window_win32.cpp, UiCanvas). D3D12 frames identical after each step.
+- Shader path (M): every shader the Vulkan backend uses compiles through glslang to SPIR-V that passes the validator,
+  each descriptor at its layout's binding (`galaxy_vk_shader_tests`): the uber shaders' variants, line/point geometry,
+  EFB conversion, and the game's own 229 vertex and 719 pixel shaders captured over the 102-stop tour.
+- Next: TextureBackendVk, RendererVk and PipelineCacheVk; NebulaNativeVk on Windows; pictures against D3D12.

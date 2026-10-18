@@ -88,6 +88,35 @@ bool trace_gx_stalls_enabled() {
     return enabled;
 }
 
+// GALAXY_TEST_SHADER_KEY_CAPTURE=<file>: appends each shader key the session resolves, once ('V' or 'P', then the
+// key's bytes), for galaxy_vk_shader_tests to compile through the Vulkan path. Render thread only.
+std::FILE* shader_key_capture_file() {
+    static std::FILE* const file = []() -> std::FILE* {
+        wchar_t path[1024]{};
+        std::size_t length = 0;
+        if (_wgetenv_s(&length, path, std::size(path), L"GALAXY_TEST_SHADER_KEY_CAPTURE") != 0 || length <= 1) {
+            return nullptr;
+        }
+        return _wfsopen(path, L"ab", _SH_DENYWR);
+    }();
+    return file;
+}
+
+void capture_shader_keys(const PixelShaderKey& ps_key, const VertexShaderKey& vs_key) {
+    static std::unordered_set<std::uint64_t> vs_seen;
+    static std::unordered_set<std::uint64_t> ps_seen;
+    std::FILE* const file = shader_key_capture_file();
+    if (vs_seen.insert(vs_key.hash()).second) {
+        std::fputc('V', file);
+        std::fwrite(&vs_key, sizeof(vs_key), 1, file);
+    }
+    if (ps_seen.insert(ps_key.hash()).second) {
+        std::fputc('P', file);
+        std::fwrite(&ps_key, sizeof(ps_key), 1, file);
+    }
+    std::fflush(file);
+}
+
 std::uint64_t read_env_u64(const char* name, std::uint64_t fallback) {
     char value[32]{};
     std::size_t length = 0;
@@ -882,6 +911,9 @@ ID3D12PipelineState* PipelineCache::get(
         }
     }
     const std::uint64_t key_hash = memoized.hash;
+    if (shader_key_capture_file() != nullptr) [[unlikely]] {
+        capture_shader_keys(ps_key, vs_key);
+    }
     if (in_flight_.find(memoized) != in_flight_.end()) {
         // A worker that finished after begin_frame()'s drain left its result on the lock-free
         // completion queue, which the probe above cannot see. Drain here. get() is render-thread

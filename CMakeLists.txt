@@ -1291,3 +1291,41 @@ add_executable(galaxy_frame_telemetry_tests
 target_include_directories(galaxy_frame_telemetry_tests PRIVATE runtime/include)
 target_compile_features(galaxy_frame_telemetry_tests PRIVATE cxx_std_20)
 add_test(NAME galaxy_frame_telemetry_tests COMMAND galaxy_frame_telemetry_tests)
+
+# The Vulkan GX backend (docs/VULKAN.md): its shader path and tests now, galaxy_gx_vk and NebulaNativeVk as they
+# land. Off by default; the dependencies are checkouts named by the cache paths below.
+option(NEBULA_VULKAN "Build the Vulkan GX backend" OFF)
+if(NEBULA_VULKAN)
+    set(NEBULA_VULKAN_HEADERS_DIR "" CACHE PATH "Vulkan-Headers checkout (include/vulkan)")
+    set(NEBULA_VOLK_DIR "" CACHE PATH "volk checkout (volk.h)")
+    set(NEBULA_VMA_DIR "" CACHE PATH "VulkanMemoryAllocator checkout (include/vk_mem_alloc.h)")
+    set(NEBULA_GLSLANG_DIR "" CACHE PATH "glslang release (include, lib)")
+    add_library(nebula_vulkan_deps INTERFACE)
+    target_include_directories(nebula_vulkan_deps INTERFACE
+        "${NEBULA_VULKAN_HEADERS_DIR}/include" "${NEBULA_VOLK_DIR}" "${NEBULA_VMA_DIR}/include"
+        "${NEBULA_GLSLANG_DIR}/include")
+    target_compile_definitions(nebula_vulkan_deps INTERFACE
+        NEBULA_GPU_VULKAN VK_NO_PROTOTYPES $<$<PLATFORM_ID:Windows>:VK_USE_PLATFORM_WIN32_KHR NOMINMAX>)
+    set(nebula_glslang_libs glslang MachineIndependent GenericCodeGen OSDependent SPIRV SPIRV-Tools-opt SPIRV-Tools
+        glslang-default-resource-limits)
+    foreach(lib IN LISTS nebula_glslang_libs)
+        find_library(nebula_glslang_${lib} NAMES ${lib} PATHS "${NEBULA_GLSLANG_DIR}/lib" NO_DEFAULT_PATH REQUIRED)
+        target_link_libraries(nebula_vulkan_deps INTERFACE "${nebula_glslang_${lib}}")
+    endforeach()
+
+    add_executable(galaxy_vk_shader_tests
+        runtime/src/gx/vk/shader_compile_vk_tests.cpp
+        runtime/src/gx/vk/shader_compile_vk.cpp
+        runtime/src/gx/vk/vk_context.cpp
+        runtime/src/gx/vk/vk_libraries.cpp
+        runtime/src/gx/shader_gen.cpp
+        runtime/src/gx/uber_shaders.cpp
+        ${galaxy_uber_embed_cpp}
+        runtime/src/gx/renderer_common.cpp
+        runtime/src/gx/efb_copy.cpp
+        runtime/src/gx/render_config.cpp)
+    target_include_directories(galaxy_vk_shader_tests PRIVATE runtime/include)
+    target_compile_features(galaxy_vk_shader_tests PRIVATE cxx_std_20)
+    target_link_libraries(galaxy_vk_shader_tests PRIVATE nebula_vulkan_deps galaxy_runtime_abi galaxy_runtime_settings)
+    add_test(NAME galaxy_vk_shader_tests COMMAND galaxy_vk_shader_tests)
+endif()
