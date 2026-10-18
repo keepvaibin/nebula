@@ -35,6 +35,18 @@ int __NebulaTestSceneFrame(void* action) {
     return sHost->test_scene_frame(sHost->user, (NebulaTestAction*)action);
 }
 
+/* The console's hardware registers, which some kept code still names (private/flipper.h): plain memory natively. */
+vu16 __VIRegs[0x3B];
+vu32 __PIRegs[0xC];
+vu16 __DSPRegs[0x20];
+vu32 __AIRegs[0x8];
+vu32 __EXIRegs[0x10];
+vu16 __MEMRegs[0x40];
+vu32 __DIRegs[16];
+vu32 __SIRegs[64];
+vu32 __ACRRegs[89];
+vu32 __IPCRegs[4];
+
 void __NebulaSceneSurround(f32 intensity) {
     sHost->scene_surround(sHost->user, intensity);
 }

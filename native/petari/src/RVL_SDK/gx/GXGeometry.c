@@ -2,6 +2,10 @@
 #include "revolution/gx.h"
 #include "revolution/gx/GXRegs.h"
 
+#ifdef TARGET_PC
+// Local to this unit: a C99 inline definition alone leaves calls it does not inline unresolved.
+static
+#endif
 inline void __GXSetAmbMat(u32 amState) {
     if (amState & 0x100) {
         GX_WRITE_XF_REG(0x100A, gx->ambColor[0], 0);
@@ -42,6 +46,9 @@ inline void __GXSetLightChan(u32 chState) {
     }
 }
 
+#ifdef TARGET_PC
+static
+#endif
 inline void __GXSetTexGen(u32 tgState) {
     u32 d, i, tgIndx = 0x1040;
     u32 dtgIndx = 0x1050;

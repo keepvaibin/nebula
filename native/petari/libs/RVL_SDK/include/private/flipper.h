@@ -14,6 +14,24 @@ vu32 __DIRegs[16] : 0xCD006000;
 vu32 __SIRegs[64] : 0xCD006400;
 vu32 __ACRRegs[89] : 0xCD000000;
 vu32 __IPCRegs[4] : (0xC000 << 16) + 0x0d000000;
+#elif defined(TARGET_PC)
+// Natively plain memory, as the platform layer serves the hardware: declared here, defined once (native/sdk/core.c).
+#ifdef __cplusplus
+extern "C" {
+#endif
+extern vu16 __VIRegs[0x3B];
+extern vu32 __PIRegs[0xC];
+extern vu16 __DSPRegs[0x20];
+extern vu32 __AIRegs[0x8];
+extern vu32 __EXIRegs[0x10];
+extern vu16 __MEMRegs[0x40];
+extern vu32 __DIRegs[16];
+extern vu32 __SIRegs[64];
+extern vu32 __ACRRegs[89];
+extern vu32 __IPCRegs[4];
+#ifdef __cplusplus
+}
+#endif
 #else
 vu16 __VIRegs[0x3B];
 vu32 __PIRegs[0xC];

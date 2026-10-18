@@ -1445,7 +1445,13 @@ int main(int argc, char** argv) {
         die("usage: nebula_native_host --pak <game.pak> --nand <dir> [--module <smg_game.dll>] [--seconds N]");
     }
     if (module.empty()) {
+#if defined(_WIN32)
         module = fs::path(argv[0]).parent_path() / "smg_game.dll";
+#elif defined(__APPLE__)
+        module = fs::path(argv[0]).parent_path() / "libsmg_game.dylib";
+#else
+        module = fs::path(argv[0]).parent_path() / "libsmg_game.so";
+#endif
     }
     gNandRoot = nand;
     std::error_code error;
