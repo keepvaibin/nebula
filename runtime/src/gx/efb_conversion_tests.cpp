@@ -1493,7 +1493,7 @@ V main(uint id : SV_VertexID) {
             IID_PPV_ARGS(&allocator)), "Create allocation budget allocator");
         check_hr(device_->CreateCommandList(0u, D3D12_COMMAND_LIST_TYPE_DIRECT,
             allocator.Get(), nullptr, IID_PPV_ARGS(&list)), "Create allocation budget list");
-        cache.set_upload_list(list.Get());
+        cache.backend().set_upload_list(list.Get());
         // 256x256 CMPR: 32 KB of guest bytes, 256 KB decoded, so 18 of them
         // exceed the 1 MB test budget whatever the placement alignment.
         constexpr std::uint32_t address = 0x10000000u;
@@ -1567,7 +1567,7 @@ V main(uint id : SV_VertexID) {
             static_cast<unsigned long long>(stats.evicted_bytes));
         // No lists are submitted here. Production waits each owning slot's
         // fence before begin_frame reclaims its descriptors and resources.
-        cache.set_upload_list(nullptr);
+        cache.backend().set_upload_list(nullptr);
         cache.shutdown();
         passed &= expect(cache.decoded_map_stats().resident_bytes == 0u &&
             cache.decoded_entry_guest_bytes() == 0u, "shutdown resets both accounting domains");
@@ -1589,7 +1589,7 @@ V main(uint id : SV_VertexID) {
             IID_PPV_ARGS(&allocator)), "Create content identity allocator");
         check_hr(device_->CreateCommandList(0u, D3D12_COMMAND_LIST_TYPE_DIRECT,
             allocator.Get(), nullptr, IID_PPV_ARGS(&list)), "Create content identity command list");
-        cache.set_upload_list(list.Get());
+        cache.backend().set_upload_list(list.Get());
         constexpr std::uint32_t address = 0x10000000u;
         std::array<std::byte, 1024> bytes{};
         galaxy::GuestMemoryRegionV1 region{
@@ -1649,7 +1649,7 @@ V main(uint id : SV_VertexID) {
             unchanged_palette.resource == indexed.resource,
             "changed captured palette bytes separate content without losing unrelated palette reuse");
         // Resource/identity fixture only; no command list is submitted.
-        cache.set_upload_list(nullptr);
+        cache.backend().set_upload_list(nullptr);
         cache.shutdown();
         return passed;
     }
@@ -1703,7 +1703,7 @@ V main(uint id : SV_VertexID) {
                 IID_PPV_ARGS(&allocator)), "Create async decode allocator");
             check_hr(device_->CreateCommandList(0u, D3D12_COMMAND_LIST_TYPE_DIRECT,
                 allocator.Get(), nullptr, IID_PPV_ARGS(&list)), "Create async decode list");
-            cache.set_upload_list(list.Get());
+            cache.backend().set_upload_list(list.Get());
             // 256-entry palette in slot 0 from guest bytes at +0x8000.
             (void)cache.load_tlut((address + 0x8000u) >> 5u, 16u << 10u, &memory);
             cache.set_async_decode_allowed(async);
@@ -1797,7 +1797,7 @@ V main(uint id : SV_VertexID) {
                 readbacks[i]->Unmap(0u, &no_write);
                 pixels.push_back(std::move(image));
             }
-            cache.set_upload_list(nullptr);
+            cache.backend().set_upload_list(nullptr);
             cache.shutdown();
             return pixels;
         };
@@ -1845,7 +1845,7 @@ V main(uint id : SV_VertexID) {
             IID_PPV_ARGS(&allocator)), "Create retirement allocator");
         check_hr(device_->CreateCommandList(0u, D3D12_COMMAND_LIST_TYPE_DIRECT,
             allocator.Get(), nullptr, IID_PPV_ARGS(&list)), "Create retirement command list");
-        cache.set_upload_list(list.Get());
+        cache.backend().set_upload_list(list.Get());
         constexpr std::uint32_t address = 0x10000000u;
         std::array<std::byte, 512> bytes{};
         // Distinct content prevents the optional decoded-content cache from
@@ -1899,7 +1899,7 @@ V main(uint id : SV_VertexID) {
             !cache.srv_index_retired(reclaimed.srv_index) &&
             cache.retirement_revision() == initial_revision + 1u,
             "owning slot reclaims the descriptor without another retirement");
-        cache.set_upload_list(nullptr);
+        cache.backend().set_upload_list(nullptr);
         cache.shutdown();
         return passed;
     }
@@ -1919,7 +1919,7 @@ V main(uint id : SV_VertexID) {
             IID_PPV_ARGS(&allocator)), "Create oversized texture allocator");
         check_hr(device_->CreateCommandList(0u, D3D12_COMMAND_LIST_TYPE_DIRECT,
             allocator.Get(), nullptr, IID_PPV_ARGS(&list)), "Create oversized texture command list");
-        cache.set_upload_list(list.Get());
+        cache.backend().set_upload_list(list.Get());
         constexpr std::uint32_t address = 0x10000000u;
         constexpr std::uint16_t width = 1024u, height = 512u;
         constexpr std::uint32_t size = width * height * 4u;
@@ -1962,7 +1962,7 @@ V main(uint id : SV_VertexID) {
             after_fence.srv_index == reused.srv_index &&
             cache.retirement_revision() == revision + 3u,
             "content retention survives decoded-resource fence reclamation");
-        cache.set_upload_list(nullptr);
+        cache.backend().set_upload_list(nullptr);
         cache.shutdown();
         return passed;
     }
@@ -1982,7 +1982,7 @@ V main(uint id : SV_VertexID) {
             IID_PPV_ARGS(&allocator)), "Create texture cache allocator");
         check_hr(device_->CreateCommandList(0u, D3D12_COMMAND_LIST_TYPE_DIRECT,
             allocator.Get(), nullptr, IID_PPV_ARGS(&list)), "Create texture cache command list");
-        cache.set_upload_list(list.Get());
+        cache.backend().set_upload_list(list.Get());
         constexpr std::uint32_t address = 0x10000000u;
         std::array<std::byte, 2048> bytes{};
         galaxy::GuestMemoryRegionV1 region{address, static_cast<std::uint32_t>(bytes.size()), bytes.data()};
@@ -2175,7 +2175,7 @@ V main(uint id : SV_VertexID) {
         passed &= expect(rejected, "null alias is rejected before retiring live entry");
         passed &= expect(cache.get(image, mode, TlutRef{}, &memory).resource == alias.Get(),
             "rejected alias leaves the previous resource owned and bindable");
-        cache.set_upload_list(nullptr);
+        cache.backend().set_upload_list(nullptr);
         cache.shutdown();
         return passed;
     }

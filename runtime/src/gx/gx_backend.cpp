@@ -8203,7 +8203,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             entry.hash = 0u;
         }
         // New decoded textures upload through this frame's command list.
-        texture_cache_.set_upload_list(renderer_.command_list());
+        renderer_.attach_texture_uploads(texture_cache_);
     }
     // Workers may be filling this frame's texture staging from the chunk's
     // memory snapshot; no exit from this function may leave them running.

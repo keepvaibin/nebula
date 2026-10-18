@@ -399,6 +399,8 @@ public:
     // The frame's table of `count` texture descriptors for the draw's maps (null SRVs where a handle is empty).
     [[nodiscard]] gpu::Table texture_table_for(
         const TextureHandle* handles, unsigned count, const TextureCache& cache);
+    // The texture cache records its uploads into this frame's command list.
+    void attach_texture_uploads(TextureCache& cache);
     void drain_gpu();               // wait while keeping renderer resources alive
     void pump_messages();           // compatibility hook; owner pumps independently
     [[nodiscard]] bool quit_requested() const noexcept;

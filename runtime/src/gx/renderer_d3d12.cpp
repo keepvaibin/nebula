@@ -4947,16 +4947,20 @@ UploadBuffer RendererD3D12::create_upload_buffer(std::size_t bytes, const wchar_
     return out;
 }
 
+void RendererD3D12::attach_texture_uploads(TextureCache& cache) {
+    cache.backend().set_upload_list(command_list_.Get());
+}
+
 gpu::Table RendererD3D12::texture_table_for(
     const TextureHandle* handles, unsigned count, const TextureCache& cache) {
     DescriptorRing::Table table = srv_ring_.allocate(count);
     D3D12_CPU_DESCRIPTOR_HANDLE sources[kMaxTextureMaps]{};
-    const auto heap_start = cache.srv_cpu_base();
-    const UINT stride = cache.srv_descriptor_stride();
+    const auto heap_start = cache.backend().srv_cpu_base();
+    const UINT stride = cache.backend().srv_descriptor_stride();
     for (unsigned m = 0; m < count; ++m) {
         sources[m] = handles[m].resource != nullptr
             ? D3D12_CPU_DESCRIPTOR_HANDLE{heap_start.ptr + static_cast<SIZE_T>(handles[m].srv_index) * stride}
-            : cache.null_srv();
+            : cache.backend().null_srv();
     }
     // CPU-only sources, one contiguous frame-owned table.
     const UINT destination_size = count;

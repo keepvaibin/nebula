@@ -23,12 +23,10 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
-#include <d3d12.h>
-#include <wrl/client.h>
 
 #include "galaxy/gx/gx_bitfields.h"
 #include "galaxy/gx/guest_range_envelope.h"
-#include "galaxy/gx/placed_texture_allocator.h"
+#include "galaxy/gx/texture_backend.h"
 #include "galaxy/gx/shader_keys.h"  // fnv1a64
 #include "galaxy/gx/texture_decode_pool.h"
 #include "galaxy/native_api.h"
@@ -111,7 +109,7 @@ void decode_c14x2_tiles(const std::uint8_t* src,
 
 // What a draw needs to bind one texture map.
 struct TextureHandle {
-    ID3D12Resource* resource = nullptr;
+    gpu::TextureObject* resource = nullptr;
     // Index into the cache's CPU-side SRV heap; the renderer stages it into
     // the frame's shader-visible table.
     std::uint32_t srv_index = 0;
@@ -130,7 +128,7 @@ public:
         std::uint32_t size = 0;
     };
 
-    bool initialize(ID3D12Device* device);
+    bool initialize(gpu::Device* device);
     bool preallocate_upload_arenas(unsigned frames_in_flight);
     void shutdown();
 
@@ -162,7 +160,7 @@ public:
     [[nodiscard]] bool register_efb_copy(
         std::uint32_t guest_addr,
         const EfbCopyParams& params,
-        Microsoft::WRL::ComPtr<ID3D12Resource> texture);
+        gpu::TextureRef texture);
 
     // GXInvalidateTexAll(): drop every decoded entry. EFB-copy aliases survive, because their
     // content lives on the GPU, not in guest memory.
@@ -177,10 +175,9 @@ public:
     // Debug: treat every frame as invalidated (A/B fidelity testing).
     bool debug_invalidate_every_frame = false;
 
-    [[nodiscard]] ID3D12DescriptorHeap* srv_heap() const;
-    [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE srv_cpu_base() const noexcept { return srv_cpu_base_; }
-    [[nodiscard]] UINT srv_descriptor_stride() const noexcept { return srv_stride_; }
-    [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE null_srv() const noexcept { return null_srv_; }
+    // The GPU side: views by srv_index, upload staging, textures (texture_backend.h).
+    [[nodiscard]] const TextureBackend& backend() const noexcept { return backend_; }
+    [[nodiscard]] TextureBackend& backend() noexcept { return backend_; }
     // Render-thread-only lifetime epoch. Raw handles remain valid for this
     // frame, but cross-frame handle caches must drop them after retirement.
     [[nodiscard]] std::uint64_t retirement_revision() const noexcept {
@@ -217,9 +214,6 @@ public:
     // barrier to PIXEL_SHADER_RESOURCE).  Set by GxBackend each frame before
     // parsing; decoded textures are DEFAULT-heap Texture2D resources, so the
     // staged copy must ride the frame's command list.
-    void set_upload_list(ID3D12GraphicsCommandList* list) {
-        upload_list_ = list;
-    }
     // Scoped to one opt-in render parse. Null in the normal rendering path.
     void set_dependency_event_sink(DependencyEventSink* sink) noexcept {
         dependency_event_sink_ = sink;
@@ -272,7 +266,7 @@ private:
         }
     };
     struct Entry {
-        Microsoft::WRL::ComPtr<ID3D12Resource> texture;
+        gpu::TextureRef texture;
         TextureHandle handle;
         std::uint64_t allocation_bytes = 0;
     };
@@ -311,7 +305,7 @@ private:
     };
     [[nodiscard]] static std::size_t hash_content_key(const ContentKey& key);
     struct ContentEntry {
-        Microsoft::WRL::ComPtr<ID3D12Resource> texture;
+        gpu::TextureRef texture;
         std::uint64_t bytes = 0;
         std::uint64_t allocation_bytes = 0;
         std::list<ContentKey>::iterator lru;
@@ -351,24 +345,19 @@ private:
     void decoded_lru_evict_to_budget();
     void release_upload_arenas();
     struct UploadAllocation {
-        ID3D12Resource* resource = nullptr;
+        const TextureBackend::UploadChunk* chunk = nullptr;
         std::uint8_t* cpu_base = nullptr;
-        UINT64 offset = 0;
-    };
-    struct UploadArenaChunk {
-        Microsoft::WRL::ComPtr<ID3D12Resource> resource;
-        std::uint8_t* cpu_base = nullptr;
-        UINT64 size = 0;
+        std::uint64_t offset = 0;
     };
     struct UploadArenaFrame {
-        std::vector<UploadArenaChunk> chunks;
+        std::vector<TextureBackend::UploadChunk> chunks;
         std::size_t active_chunk = 0;
-        UINT64 cursor = 0;
+        std::uint64_t cursor = 0;
     };
-    void append_upload_arena_chunk(UploadArenaFrame& frame, UINT64 min_size);
+    void append_upload_arena_chunk(UploadArenaFrame& frame, std::uint64_t min_size);
     [[nodiscard]] UploadAllocation allocate_upload_bytes(
-        UINT64 size,
-        UINT64 alignment);
+        std::uint64_t size,
+        std::uint64_t alignment);
     [[nodiscard]] std::uint32_t allocate_srv_index();
 
     std::unordered_map<Key, Entry, KeyHasher> entries_;
@@ -400,7 +389,7 @@ private:
     // flush, so a GPU-idle retired texture of the same size and mip count is reused instead. RGBA8 2D, no
     // flags, PSR state.
     struct PooledTexture {
-        Microsoft::WRL::ComPtr<ID3D12Resource> texture;
+        gpu::TextureRef texture;
         std::uint32_t width = 0;
         std::uint32_t height = 0;
         std::uint32_t levels = 0;
@@ -413,7 +402,7 @@ private:
     void pool_retired_texture(Entry& entry);
     bool take_pooled_texture(
         std::uint32_t width, std::uint32_t height, unsigned levels,
-        Microsoft::WRL::ComPtr<ID3D12Resource>& texture, std::uint64_t& allocation_bytes);
+        gpu::TextureRef& texture, std::uint64_t& allocation_bytes);
     std::vector<UploadArenaFrame> upload_arenas_;
     // Render-thread scratch storage for first-use texture decode/upload.
     // Keeping capacity between misses avoids heap churn during gameplay while
@@ -421,21 +410,14 @@ private:
     std::vector<std::vector<RGBA8>> level_pixels_scratch_;
     std::unique_ptr<TextureDecodePool> decode_pool_;
     // Decoded textures are placed in shared heaps (placed_texture_allocator.h).
-    PlacedTextureAllocator texture_heap_{
-        D3D12_HEAP_FLAG_ALLOW_ONLY_NON_RT_DS_TEXTURES, 64ull << 20};
     bool async_decode_allowed_ = false;
     bool async_decode_pending_ = false;
     std::uint64_t async_decode_jobs_ = 0;
-    std::vector<UINT64> level_offsets_scratch_;
-    std::vector<UINT> level_pitches_scratch_;
+    std::vector<std::uint64_t> level_offsets_scratch_;
+    std::vector<std::uint32_t> level_pitches_scratch_;
     unsigned current_frame_slot_ = 0;
 
-    Microsoft::WRL::ComPtr<ID3D12Device> device_;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> srv_heap_;
-    D3D12_CPU_DESCRIPTOR_HANDLE srv_cpu_base_{};
-    UINT srv_stride_ = 0u;
-    D3D12_CPU_DESCRIPTOR_HANDLE null_srv_{};
-    ID3D12GraphicsCommandList* upload_list_ = nullptr;
+    TextureBackend backend_;
     std::uint32_t next_srv_index_ = 0;
     std::vector<std::uint32_t> free_srv_indices_;
     // Heap size and retirement bitmap must describe the same index domain.

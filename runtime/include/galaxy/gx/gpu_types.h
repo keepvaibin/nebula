@@ -80,6 +80,10 @@ namespace galaxy::gx::gpu {
 
 // An owned texture: the last reference frees it once the GPU is done with it (vk_context.h).
 using TextureRef = std::shared_ptr<vk::Texture>;
+using TextureObject = vk::Texture;
+[[nodiscard]] inline TextureObject* raw(const TextureRef& texture) noexcept { return texture.get(); }
+// Another reference to a texture a handle names (vk::Texture derives from enable_shared_from_this).
+[[nodiscard]] TextureRef texture_ref(TextureObject* texture);
 // A render target view: the texture's image view, recorded as the handle's bits.
 struct CpuDescriptor {
     std::uint64_t ptr = 0;
@@ -113,6 +117,10 @@ namespace galaxy::gx::gpu {
 using Device = ID3D12Device;
 using DeviceRef = Microsoft::WRL::ComPtr<ID3D12Device>;
 using TextureRef = Microsoft::WRL::ComPtr<ID3D12Resource>;
+using TextureObject = ID3D12Resource;
+[[nodiscard]] inline TextureObject* raw(const TextureRef& texture) noexcept { return texture.Get(); }
+// Another reference to a texture a handle names.
+[[nodiscard]] inline TextureRef texture_ref(TextureObject* texture) { return TextureRef{texture}; }
 using CpuDescriptor = D3D12_CPU_DESCRIPTOR_HANDLE;
 inline constexpr unsigned kMaxTexture2DDimension = D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION;
 using Pipeline = ID3D12PipelineState;

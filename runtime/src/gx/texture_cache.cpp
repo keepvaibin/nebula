@@ -36,7 +36,6 @@
 #include <thread>
 #include <vector>
 
-using Microsoft::WRL::ComPtr;
 
 namespace galaxy::gx {
 
@@ -46,7 +45,7 @@ namespace galaxy::gx {
 
 namespace {
 
-static constexpr UINT64 kUploadArenaChunkBytes = 16ull << 20;
+static constexpr std::uint64_t kUploadArenaChunkBytes = 16ull << 20;
 static constexpr std::uint64_t kContentCacheBudgetBytes = 64ull << 20;
 static constexpr std::size_t kContentCacheMaxEntries = 4096u;
 
@@ -100,7 +99,7 @@ bool decoded_content_cache_enabled() {
     return enabled;
 }
 
-UINT64 align_up(UINT64 value, UINT64 alignment) {
+std::uint64_t align_up(std::uint64_t value, std::uint64_t alignment) {
     return (value + alignment - 1u) & ~(alignment - 1u);
 }
 
@@ -227,18 +226,6 @@ std::uint64_t elapsed_us(
             end - start).count());
 }
 
-// Throw a std::runtime_error with a D3D12 HRESULT decorated message.
-[[noreturn]] static void d3d_fail(HRESULT hr, const char* label) {
-    std::ostringstream ss;
-    ss << "[TextureCache] " << label
-       << " HRESULT=0x" << std::hex << std::uppercase
-       << std::bit_cast<std::uint32_t>(static_cast<std::int32_t>(hr));
-    throw std::runtime_error(ss.str());
-}
-
-static void d3d_check(HRESULT hr, const char* label) {
-    if (FAILED(hr)) { d3d_fail(hr, label); }
-}
 
 // ---------------------------------------------------------------------------
 // Guest memory access. An unmapped range throws std::runtime_error, which the caller
@@ -1139,8 +1126,8 @@ static void write_staging_levels(
     std::uint32_t w,
     std::uint32_t h,
     unsigned levels,
-    const UINT64* level_offset,
-    const UINT* level_pitch,
+    const std::uint64_t* level_offset,
+    const std::uint32_t* level_pitch,
     const std::vector<std::vector<RGBA8>>& level_pixels) {
     for (unsigned l = 0; l < levels; ++l) {
         const std::uint32_t lw = std::max<std::uint32_t>(1u, w >> l);
@@ -1231,36 +1218,13 @@ std::uint32_t efb_copy_guest_byte_size(const EfbCopyParams& params) {
     return static_cast<std::uint32_t>(span);
 }
 
-bool TextureCache::initialize(ID3D12Device* device) {
-    device_ = device;
-    texture_heap_.initialize(device);
+bool TextureCache::initialize(gpu::Device* device) {
     next_srv_index_ = 0u;
     free_srv_indices_.clear();
     retired_srv_indices_.reset();
     texture_pool_.clear();
     texture_pool_bytes_ = 0;
-
-    D3D12_DESCRIPTOR_HEAP_DESC dhd{};
-    dhd.Type           = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    // Permanent null SRV is outside the allocatable texture slots.
-    dhd.NumDescriptors = kSrvHeapCapacity + 1u;
-    dhd.Flags          = D3D12_DESCRIPTOR_HEAP_FLAG_NONE; // CPU-visible only
-    dhd.NodeMask       = 0;
-    if (FAILED(device->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&srv_heap_)))) {
-        return false;
-    }
-    srv_stride_ = device->GetDescriptorHandleIncrementSize(
-        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    srv_cpu_base_ = srv_heap_->GetCPUDescriptorHandleForHeapStart();
-    null_srv_ = srv_cpu_base_;
-    null_srv_.ptr += static_cast<SIZE_T>(kSrvHeapCapacity) * srv_stride_;
-    D3D12_SHADER_RESOURCE_VIEW_DESC null_desc{};
-    null_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    null_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    null_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    null_desc.Texture2D.MipLevels = 1u;
-    device->CreateShaderResourceView(nullptr, &null_desc, null_srv_);
-    return true;
+    return backend_.initialize(device, kSrvHeapCapacity);
 }
 
 void TextureCache::finish_pending_decodes() {
@@ -1317,7 +1281,7 @@ void TextureCache::begin_frame(
 }
 
 bool TextureCache::preallocate_upload_arenas(unsigned frames_in_flight) {
-    if (device_ == nullptr || frames_in_flight == 0u) {
+    if (!backend_.ready() || frames_in_flight == 0u) {
         return false;
     }
     try {
@@ -1488,25 +1452,22 @@ void TextureCache::pool_retired_texture(Entry& entry) {
         ++texture_pool_drops_;
         return;
     }
-    const D3D12_RESOURCE_DESC desc = entry.texture->GetDesc();
-    if (desc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D ||
-        desc.Format != DXGI_FORMAT_R8G8B8A8_UNORM ||
-        desc.Flags != D3D12_RESOURCE_FLAG_NONE || desc.DepthOrArraySize != 1u ||
-        desc.SampleDesc.Count != 1u) {
+    std::uint32_t width = 0, height = 0, levels = 0;
+    if (!TextureBackend::poolable(gpu::raw(entry.texture), width, height, levels)) {
         return;
     }
     texture_pool_.push_back(PooledTexture{
         std::move(entry.texture),
-        static_cast<std::uint32_t>(desc.Width),
-        static_cast<std::uint32_t>(desc.Height),
-        static_cast<std::uint32_t>(desc.MipLevels),
+        width,
+        height,
+        levels,
         entry.allocation_bytes});
     texture_pool_bytes_ += entry.allocation_bytes;
 }
 
 bool TextureCache::take_pooled_texture(
     std::uint32_t width, std::uint32_t height, unsigned levels,
-    Microsoft::WRL::ComPtr<ID3D12Resource>& texture, std::uint64_t& allocation_bytes) {
+    gpu::TextureRef& texture, std::uint64_t& allocation_bytes) {
     for (std::size_t i = 0; i < texture_pool_.size(); ++i) {
         PooledTexture& pooled = texture_pool_[i];
         if (pooled.width != width || pooled.height != height || pooled.levels != levels) {
@@ -1542,11 +1503,8 @@ void TextureCache::retire(Entry&& entry) {
 
 void TextureCache::release_upload_arenas() {
     for (UploadArenaFrame& frame : upload_arenas_) {
-        for (UploadArenaChunk& chunk : frame.chunks) {
-            if (chunk.resource && chunk.cpu_base != nullptr) {
-                chunk.resource->Unmap(0, nullptr);
-                chunk.cpu_base = nullptr;
-            }
+        for (TextureBackend::UploadChunk& chunk : frame.chunks) {
+            TextureBackend::release_upload_chunk(chunk);
         }
     }
 }
@@ -1555,7 +1513,7 @@ void TextureCache::shutdown() {
     finish_pending_decodes_noexcept();
     decode_pool_.reset();
     {
-        const PlacedTextureAllocator::Stats heap = texture_heap_.stats();
+        const PlacedTextureAllocator::Stats heap = backend_.heap_stats();
         std::cerr << "[texture-heap] heaps=" << heap.heaps << " heap-bytes=" << heap.heap_bytes
                   << " used-bytes=" << heap.used_bytes << " placed=" << heap.placed
                   << " committed-fallbacks=" << heap.committed_fallbacks << '\n';
@@ -1610,57 +1568,29 @@ void TextureCache::shutdown() {
     level_pixels_scratch_.clear();
     level_offsets_scratch_.clear();
     level_pitches_scratch_.clear();
-    srv_heap_.Reset();
-    srv_cpu_base_ = {};
-    srv_stride_ = 0u;
-    null_srv_ = {};
-    device_.Reset();
+    backend_.shutdown();
     next_srv_index_ = 0u;
     free_srv_indices_.clear();
 }
 
 void TextureCache::append_upload_arena_chunk(
     UploadArenaFrame& frame,
-    UINT64 min_size) {
-    const UINT64 chunk_size = align_up(
-        std::max(kUploadArenaChunkBytes, min_size),
-        D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
-    UploadArenaChunk chunk{};
-    chunk.size = chunk_size;
-
-    D3D12_HEAP_PROPERTIES hp{};
-    hp.Type = D3D12_HEAP_TYPE_UPLOAD;
-    D3D12_RESOURCE_DESC rd{};
-    rd.Dimension        = D3D12_RESOURCE_DIMENSION_BUFFER;
-    rd.Width            = chunk_size;
-    rd.Height           = 1;
-    rd.DepthOrArraySize = 1;
-    rd.MipLevels        = 1;
-    rd.Format           = DXGI_FORMAT_UNKNOWN;
-    rd.SampleDesc.Count = 1;
-    rd.Layout           = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    d3d_check(device_->CreateCommittedResource(
-        &hp, D3D12_HEAP_FLAG_NONE, &rd,
-        D3D12_RESOURCE_STATE_GENERIC_READ,
-        nullptr, IID_PPV_ARGS(&chunk.resource)),
-        "create texture upload arena");
-    D3D12_RANGE no_read{0, 0};
-    void* mapped = nullptr;
-    d3d_check(
-        chunk.resource->Map(0, &no_read, &mapped),
-        "map texture upload arena");
-    chunk.cpu_base = static_cast<std::uint8_t*>(mapped);
+    std::uint64_t min_size) {
+    const std::uint64_t chunk_size = align_up(
+        std::max<std::uint64_t>(kUploadArenaChunkBytes, min_size),
+        TextureBackend::kPlacementAlignment);
+    TextureBackend::UploadChunk chunk = backend_.create_upload_chunk(chunk_size);
     try {
         frame.chunks.push_back(std::move(chunk));
     } catch (...) {
-        chunk.resource->Unmap(0, nullptr);
+        TextureBackend::release_upload_chunk(chunk);
         throw;
     }
 }
 
 TextureCache::UploadAllocation TextureCache::allocate_upload_bytes(
-    UINT64 size,
-    UINT64 alignment) {
+    std::uint64_t size,
+    std::uint64_t alignment) {
     if (size == 0u || alignment == 0u || (alignment & (alignment - 1u)) != 0u) {
         throw std::runtime_error("[TextureCache] invalid upload arena request");
     }
@@ -1675,20 +1605,16 @@ TextureCache::UploadAllocation TextureCache::allocate_upload_bytes(
             append_upload_arena_chunk(frame, size);
         }
 
-        UploadArenaChunk& chunk = frame.chunks[frame.active_chunk];
-        const UINT64 offset = align_up(frame.cursor, alignment);
+        TextureBackend::UploadChunk& chunk = frame.chunks[frame.active_chunk];
+        const std::uint64_t offset = align_up(frame.cursor, alignment);
         if (offset + size <= chunk.size) {
             frame.cursor = offset + size;
-            return {chunk.resource.Get(), chunk.cpu_base, offset};
+            return {&chunk, chunk.cpu_base, offset};
         }
 
         ++frame.active_chunk;
         frame.cursor = 0;
     }
-}
-
-ID3D12DescriptorHeap* TextureCache::srv_heap() const {
-    return srv_heap_.Get();
 }
 
 std::uint32_t TextureCache::allocate_srv_index() {
@@ -1780,21 +1706,17 @@ bool TextureCache::load_tlut(
 bool TextureCache::register_efb_copy(
     std::uint32_t guest_addr,
     const EfbCopyParams& params,
-    ComPtr<ID3D12Resource> texture) {
+    gpu::TextureRef texture) {
     // Validate before evicting a still-owned alias or consuming an SRV slot.
-    if (!device_ || !srv_heap_ || !texture) {
+    if (!backend_.ready() || !texture) {
         throw std::runtime_error("[TextureCache] invalid EFB alias resource");
     }
     const std::uint32_t guest_byte_size = efb_copy_guest_byte_size(params);
     if (static_cast<std::uint64_t>(guest_addr) + guest_byte_size > (1ull << 32u)) {
         throw std::runtime_error("[TextureCache] EFB alias address overflow");
     }
-    const D3D12_RESOURCE_DESC resource_desc = texture->GetDesc();
-    if (resource_desc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D ||
-        resource_desc.Format != DXGI_FORMAT_R8G8B8A8_UNORM ||
-        resource_desc.DepthOrArraySize != 1u || resource_desc.SampleDesc.Count != 1u ||
-        resource_desc.Width == 0u || resource_desc.Width > UINT16_MAX ||
-        resource_desc.Height == 0u || resource_desc.Height > UINT16_MAX) {
+    std::uint32_t resource_width = 0, resource_height = 0;
+    if (!TextureBackend::alias_compatible(gpu::raw(texture), resource_width, resource_height)) {
         throw std::runtime_error("[TextureCache] incompatible EFB alias resource");
     }
     const std::uint16_t alias_width = static_cast<std::uint16_t>(
@@ -1896,36 +1818,21 @@ bool TextureCache::register_efb_copy(
             dependency_event_sink_->alias_copy(
                 DependencyAliasKey{alias_key.guest_addr, alias_key.width,
                                    alias_key.height, alias_key.format},
-                reinterpret_cast<std::uintptr_t>(texture.Get()));
+                reinterpret_cast<std::uintptr_t>(gpu::raw(texture)));
         }
         return evicted_overlap || footprint_changed;
     }
 
-    const UINT srv_idx = allocate_srv_index();
+    const std::uint32_t srv_idx = allocate_srv_index();
 
-    // Describe as a 2D texture SRV: the resource passed in is a Texture2D
-    // (created by the EFB copy path in RendererD3D12).
-    D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc{};
-    srv_desc.Format                        = DXGI_FORMAT_R8G8B8A8_UNORM;
-    srv_desc.ViewDimension                 = D3D12_SRV_DIMENSION_TEXTURE2D;
-    srv_desc.Shader4ComponentMapping       = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    srv_desc.Texture2D.MipLevels           = 1;
-    srv_desc.Texture2D.MostDetailedMip     = 0;
-    srv_desc.Texture2D.PlaneSlice          = 0;
-    srv_desc.Texture2D.ResourceMinLODClamp = 0.0f;
+    // A 2D texture view: the resource passed in is a Texture2D (created by the renderer's EFB copy path).
+    backend_.write_view(srv_idx, gpu::raw(texture), 1u);
 
-    const UINT increment = srv_stride_;
-    D3D12_CPU_DESCRIPTOR_HANDLE cpu = srv_cpu_base_;
-    cpu.ptr += static_cast<SIZE_T>(srv_idx) * increment;
-
-    device_->CreateShaderResourceView(texture.Get(), &srv_desc, cpu);
-
-    const D3D12_RESOURCE_DESC& rd = resource_desc;
     TextureHandle handle{};
-    handle.resource      = texture.Get();
+    handle.resource      = gpu::raw(texture);
     handle.srv_index     = srv_idx;
-    handle.width         = static_cast<std::uint16_t>(rd.Width);
-    handle.height        = static_cast<std::uint16_t>(rd.Height);
+    handle.width         = static_cast<std::uint16_t>(resource_width);
+    handle.height        = static_cast<std::uint16_t>(resource_height);
     handle.mip_levels    = 1u;
     handle.from_efb_copy = true;
     handle.generated_mips = false;
@@ -2274,18 +2181,8 @@ TextureHandle TextureCache::get(
                 content_lru_.splice(
                     content_lru_.begin(), content_lru_, it->second.lru);
                 it->second.lru = content_lru_.begin();
-                const UINT srv_idx = allocate_srv_index();
-                D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc{};
-                srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-                srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-                srv_desc.Shader4ComponentMapping =
-                    D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-                srv_desc.Texture2D.MipLevels = static_cast<UINT>(levels);
-                const UINT increment = srv_stride_;
-                D3D12_CPU_DESCRIPTOR_HANDLE cpu = srv_cpu_base_;
-                cpu.ptr += static_cast<SIZE_T>(srv_idx) * increment;
-                device_->CreateShaderResourceView(
-                    it->second.texture.Get(), &srv_desc, cpu);
+                const std::uint32_t srv_idx = allocate_srv_index();
+                backend_.write_view(srv_idx, gpu::raw(it->second.texture), levels);
 
                 Entry entry{};
                 entry.texture = it->second.texture;
@@ -2375,7 +2272,7 @@ TextureHandle TextureCache::get(
     // (row pitch 256-aligned). It is copied into a DEFAULT-heap Texture2D with MipLevels=N through
     // the frame command list. The shader samples Texture2D, so the bound resource must be a real
     // texture. A buffer SRV in a Texture2D slot is undefined behavior and hangs the GPU.
-    if (upload_list_ == nullptr) {
+    if (!backend_.has_upload_list()) {
         throw std::runtime_error(
             "[TextureCache] get: no upload command list set");
     }
@@ -2389,23 +2286,23 @@ TextureHandle TextureCache::get(
     }
     auto& level_offset = level_offsets_scratch_;
     auto& level_pitch = level_pitches_scratch_;
-    UINT64 staging_size = 0;
+    std::uint64_t staging_size = 0;
     for (unsigned l = 0; l < levels; ++l) {
         const std::uint32_t lw = std::max<std::uint32_t>(1u, w >> l);
         const std::uint32_t lh = std::max<std::uint32_t>(1u, h >> l);
         staging_size =
-            (staging_size + D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT - 1u) &
-            ~static_cast<UINT64>(D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT - 1u);
+            (staging_size + TextureBackend::kPlacementAlignment - 1u) &
+            ~static_cast<std::uint64_t>(TextureBackend::kPlacementAlignment - 1u);
         level_offset[l] = staging_size;
         level_pitch[l] =
-            (lw * 4u + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u) &
-            ~(D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u);
-        staging_size += static_cast<UINT64>(level_pitch[l]) * lh;
+            (lw * 4u + TextureBackend::kPitchAlignment - 1u) &
+            ~(TextureBackend::kPitchAlignment - 1u);
+        staging_size += static_cast<std::uint64_t>(level_pitch[l]) * lh;
     }
 
     const UploadAllocation staging = allocate_upload_bytes(
         staging_size,
-        D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
+        TextureBackend::kPlacementAlignment);
     if (staging.cpu_base == nullptr) {
         throw std::runtime_error(
             "[TextureCache] upload arena is not mapped");
@@ -2421,8 +2318,8 @@ TextureHandle TextureCache::get(
                 galaxy::host::name_current_thread(L"Nebula Texture Decode");
             });
         }
-        std::vector<UINT64> offsets(level_offset.begin(), level_offset.begin() + levels);
-        std::vector<UINT> pitches(level_pitch.begin(), level_pitch.begin() + levels);
+        std::vector<std::uint64_t> offsets(level_offset.begin(), level_offset.begin() + levels);
+        std::vector<std::uint32_t> pitches(level_pitch.begin(), level_pitch.begin() + levels);
         // The palette bank can be reloaded later in this frame; the job owns
         // the exact entries this texture was keyed with.
         std::vector<std::uint8_t> palette;
@@ -2464,82 +2361,21 @@ TextureHandle TextureCache::get(
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
 
-    ComPtr<ID3D12Resource> resource;
+    gpu::TextureRef resource;
     std::uint64_t allocation_bytes = 0;
     const bool reused_resource = take_pooled_texture(w, h, levels, resource, allocation_bytes);
-    if (reused_resource) {
-        // A retired texture rests in the shader-resource state; the copies
-        // below expect the copy-destination state.
-        D3D12_RESOURCE_BARRIER bar{};
-        bar.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        bar.Transition.pResource   = resource.Get();
-        bar.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-        bar.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-        bar.Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_DEST;
-        upload_list_->ResourceBarrier(1, &bar);
-    } else {
-        D3D12_RESOURCE_DESC rd{};
-        rd.Dimension        = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        rd.Width            = w;
-        rd.Height           = h;
-        rd.DepthOrArraySize = 1;
-        rd.MipLevels        = static_cast<UINT16>(levels);
-        rd.Format           = DXGI_FORMAT_R8G8B8A8_UNORM;
-        rd.SampleDesc.Count = 1;
-        rd.Layout           = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-        d3d_check(texture_heap_.create(
-            rd, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, resource, allocation_bytes),
-            "create default texture");
+    if (!reused_resource) {
+        resource = backend_.create_texture(w, h, levels, allocation_bytes);
     }
     const auto resource_end = trace_stalls
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
 
-    for (unsigned l = 0; l < levels; ++l) {
-        const std::uint32_t lw = std::max<std::uint32_t>(1u, w >> l);
-        const std::uint32_t lh = std::max<std::uint32_t>(1u, h >> l);
+    backend_.record_upload(gpu::raw(resource), reused_resource, *staging.chunk, staging.offset, w, h, levels,
+                           level_offset.data(), level_pitch.data());
 
-        D3D12_TEXTURE_COPY_LOCATION copy_dst{};
-        copy_dst.pResource        = resource.Get();
-        copy_dst.Type             = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-        copy_dst.SubresourceIndex = l;
-
-        D3D12_TEXTURE_COPY_LOCATION copy_src{};
-        copy_src.pResource                          = staging.resource;
-        copy_src.Type                               = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-        copy_src.PlacedFootprint.Offset             = staging.offset + level_offset[l];
-        copy_src.PlacedFootprint.Footprint.Format   = DXGI_FORMAT_R8G8B8A8_UNORM;
-        copy_src.PlacedFootprint.Footprint.Width    = lw;
-        copy_src.PlacedFootprint.Footprint.Height   = lh;
-        copy_src.PlacedFootprint.Footprint.Depth    = 1;
-        copy_src.PlacedFootprint.Footprint.RowPitch = level_pitch[l];
-
-        upload_list_->CopyTextureRegion(&copy_dst, 0, 0, 0, &copy_src, nullptr);
-    }
-
-    {
-        D3D12_RESOURCE_BARRIER bar{};
-        bar.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        bar.Transition.pResource   = resource.Get();
-        bar.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-        bar.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-        bar.Transition.StateAfter  = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-        upload_list_->ResourceBarrier(1, &bar);
-    }
-
-    const UINT srv_idx = allocate_srv_index();
-
-    D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc{};
-    srv_desc.Format                    = DXGI_FORMAT_R8G8B8A8_UNORM;
-    srv_desc.ViewDimension             = D3D12_SRV_DIMENSION_TEXTURE2D;
-    srv_desc.Shader4ComponentMapping   = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    srv_desc.Texture2D.MipLevels       = static_cast<UINT>(levels);
-
-    const UINT increment = srv_stride_;
-    D3D12_CPU_DESCRIPTOR_HANDLE cpu = srv_cpu_base_;
-    cpu.ptr += static_cast<SIZE_T>(srv_idx) * increment;
-
-    device_->CreateShaderResourceView(resource.Get(), &srv_desc, cpu);
+    const std::uint32_t srv_idx = allocate_srv_index();
+    backend_.write_view(srv_idx, gpu::raw(resource), levels);
     const auto upload_record_end = trace_stalls
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
@@ -2548,7 +2384,7 @@ TextureHandle TextureCache::get(
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
     TextureHandle handle{};
-    handle.resource      = resource.Get();
+    handle.resource      = gpu::raw(resource);
     handle.srv_index     = srv_idx;
     handle.width         = static_cast<std::uint16_t>(w);
     handle.height        = static_cast<std::uint16_t>(h);
@@ -2653,7 +2489,7 @@ TextureHandle TextureCache::get(
                     // A budget eviction may already have removed this entry.
                     // Its returned resource remains owned through the frame's
                     // retirement fence; retain it without another map lookup.
-                    ComPtr<ID3D12Resource>{result.resource},
+                    gpu::texture_ref(result.resource),
                     retained_bytes,
                     allocation_bytes,
                     content_lru_.begin()});
