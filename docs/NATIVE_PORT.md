@@ -6,12 +6,12 @@ in this tree. **D**: read from the RMGE01 assembly or source. **H**: hypothesis,
 
 ## Game core
 
-- Petari (SMGCommunity, CC0-1.0) is forked at `D:/NebulaWork/petari`, branch `nebula`.
+- Petari (SMGCommunity, CC0-1.0) is forked into `native/petari`: the files the module compiles and includes, credited (its README, THIRD-PARTY-NOTICES.md). Its history up to 92263da is the local fork's (`D:/NebulaWork/petari`, branch `nebula`); changes continue in this tree.
   - The fork is Nebula's own code: it is optimised for native speed and need not match the console's object code.
     It will live in Nebula's repository, credited to SMGCommunity. Nothing goes back upstream: Petari does not accept
     AI-generated changes. With every function decompiled there is nothing to track.
   - Changes stay behind `TARGET_PC` where the console build should stay buildable.
-  - Publishing it is the owner's call.
+  - It becomes public with Nebula's repository; pushing is the owner's call.
 - Version: RMGE01. The test disc's `main.dol` SHA1 is 9A71008AE1EE9010E267FA67D1F0B0D4F0E895DD, which equals Petari's `config/RMGE01/build.sha1` (M).
 - 99.90% of RMGE01 functions match the DOL byte for byte (decomp.dev). Of the 42 that don't (`D:/NebulaWork/agents/petari-audit/RMGE01_UNMATCHED.md`):
   - one has no source: `StarPointerFunction::forceOutsideScreenEdge`, now written from the assembly (D);
