@@ -1681,8 +1681,70 @@ int32_t svc_thp_video_decode(void*, const void*, uint32_t, void*, void*, void*) 
 
 }  // namespace
 
+#if defined(NEBULA_HOST_RENDERER)
+// v1.0.1's renderer as it shipped: the package's runtime-env.json values for every setting this executable reads (41),
+// applied where the environment does not set them. Frames are identical with and without (Battlerock, 4 frames
+// compared); the render thread's present pacer was the difference (2026-10-18). Smooth present stays on: its wait is
+// now a timer, and it keeps the present intervals even.
+void apply_shipped_renderer_defaults() {
+    static const struct {
+        const char* name;
+        const char* value;
+    } kDefaults[] = {
+        {"GALAXY_ALLOW_TEARING", "0"},
+        {"GALAXY_ASYNC_RENDER_THREAD", "1"},
+        {"GALAXY_CAPTURE_MOUSE_BUTTONS", "1"},
+        {"GALAXY_D3D_DEBUG", "0"},
+        {"GALAXY_DISPLAY_LIST_DIRTY_INVALIDATE", "0"},
+        {"GALAXY_FLIP_DISCARD", "1"},
+        {"GALAXY_FRAME_RATE_DECOUPLE", "0"},
+        {"GALAXY_FRAME_TELEMETRY", "1"},
+        {"GALAXY_GPU_TIMESTAMPS", "1"},
+        {"GALAXY_GX_DECODED_VERTEX_CACHE", "1"},
+        {"GALAXY_GX_FRAME_TIMING_SAMPLE", "0"},
+        {"GALAXY_GX_PSO_CYCLES", "0"},
+        {"GALAXY_GX_SORTED_VERTEX_INVALIDATION", "1"},
+        {"GALAXY_GX_UBER", "1"},
+        {"GALAXY_HIDE_OS_CURSOR", "1"},
+        {"GALAXY_MOUSE_IR_ABSOLUTE_X_SCALE", "1.0"},
+        {"GALAXY_MOUSE_IR_ABSOLUTE_Y_SCALE", "1.0"},
+        {"GALAXY_MOUSE_IR_CURSOR_POLL", "auto"},
+        {"GALAXY_MOUSE_IR_HOLD_MS", "500"},
+        {"GALAXY_MOUSE_IR_MESSAGE_RECENT_MS", "120"},
+        {"GALAXY_NATIVE_BLOOM_WORKSPACE", "1"},
+        {"GALAXY_PE_EVENTS_GPU_FENCE", "1"},
+        {"GALAXY_PSO_PREWARM", "1"},
+        {"GALAXY_PSO_PREWARM_BLOCKING", "1"},
+        {"GALAXY_PSO_PREWARM_BLOCKING_MS", "30000"},
+        {"GALAXY_PSO_PREWARM_LIMIT", "4096"},
+        {"GALAXY_REALTIME_VI", "1"},
+        {"GALAXY_RENDER_IMMUTABLE_RANGE_OWNERSHIP", "0"},
+        {"GALAXY_RENDER_LIVE_MEMORY", "1"},
+        {"GALAXY_RENDER_LIVE_MEMORY_WAIT", "0"},
+        {"GALAXY_RENDER_MEMORY_SNAPSHOT", "0"},
+        {"GALAXY_RENDER_MEMORY_SNAPSHOT_COMPACT", "1"},
+        {"GALAXY_RENDER_QUEUE_DEPTH", "2"},
+        {"GALAXY_RENDER_WORKER_MEMORY_SNAPSHOT", "0"},
+        {"GALAXY_SKIP_DUPLICATE_XFB_PRESENTS", "1"},
+        {"GALAXY_SMOOTH_REALTIME_PRESENT", "1"},
+        {"GALAXY_SMOOTH_REALTIME_PRESENT_MAX_WAIT_US", "2000"},
+        {"GALAXY_SWAP_CHAIN_FRAME_LATENCY", "1"},
+        {"GALAXY_VI_RENDER_FIFO_WAIT", "0"},
+        {"GALAXY_WAIT_FOR_FRAME_LATENCY", "0"},
+        {"GALAXY_XFB_MAX_PRESERVE_AGE", "30"},
+    };
+    for (const auto& setting : kDefaults) {
+        size_t length = 0;
+        if (getenv_s(&length, nullptr, 0, setting.name) != 0 || length == 0) {
+            _putenv_s(setting.name, setting.value);
+        }
+    }
+}
+#endif
+
 int main(int argc, char** argv) {
 #if defined(NEBULA_HOST_RENDERER)
+    apply_shipped_renderer_defaults();
     // As v1.0.1 starts: physical-pixel DPI awareness before any window (sizes and mouse coordinates in pixels), and
     // CRT assertion and error reports to stderr instead of dialogs.
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);

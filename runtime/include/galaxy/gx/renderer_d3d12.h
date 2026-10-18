@@ -1105,6 +1105,10 @@ private:
     std::uint64_t telemetry_first_serial_start_ = 0;
     std::uint64_t telemetry_xfb_copy_start_ = 0;
     std::int64_t last_paced_present_qpc_ = 0;
+    // The present pacer's high-resolution waitable timer (Windows 10 1803+): it sleeps to the target instead of
+    // spinning on SwitchToThread, which cost the render thread about 100 ms of CPU a second. Null: Sleep and yield.
+    HANDLE pace_timer_ = nullptr;
+    bool pace_timer_tried_ = false;
     bool has_presented_swap_chain_ = false;
     bool window_shown_ = false;
     std::uint64_t telemetry_present_count_ = 0;

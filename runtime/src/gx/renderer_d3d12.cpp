@@ -5093,6 +5093,10 @@ void RendererD3D12::shutdown() {
     s_pointer_hwnd.store(0u, std::memory_order_release);
     window_ = nullptr;
     UnregisterClassW(kWindowClass, GetModuleHandleW(nullptr));
+    if (pace_timer_ != nullptr) {
+        CloseHandle(pace_timer_);
+        pace_timer_ = nullptr;
+    }
     if (shutdown_failure != nullptr) {
         std::rethrow_exception(shutdown_failure);
     }
@@ -6124,6 +6128,10 @@ UINT RendererD3D12::present_sync_interval(unsigned configured, float max_fps) {
     return 1u;
 }
 
+// The present pacer spins (yields) only for its last 0.2 ms: Battlerock 1080p, render thread 197 ms/s with the
+// yield loop for the whole wait, 99 ms/s with the timer alone (median worst interval 16.82 -> 17.18 ms).
+constexpr double kPaceSpinMs = 0.2;
+
 void RendererD3D12::pace_present_if_needed(
     unsigned vsync_interval,
     float max_fps) {
@@ -6178,7 +6186,24 @@ void RendererD3D12::pace_present_if_needed(
         const double remaining_ms =
             static_cast<double>(capped_target - now.QuadPart) * 1000.0 /
             static_cast<double>(qpc_frequency_.QuadPart);
-        if (remaining_ms >= 2.0) {
+        if (!pace_timer_tried_) {
+            pace_timer_tried_ = true;
+            pace_timer_ = CreateWaitableTimerExW(
+                nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
+        }
+        if (pace_timer_ != nullptr && remaining_ms > kPaceSpinMs) {
+            // Sleep to kPaceSpinMs before the target (the timer wakes up to a few hundred microseconds late), then
+            // yield for the rest: the spin is at most kPaceSpinMs a frame. Due time in 100 ns units, relative.
+            LARGE_INTEGER due{};
+            due.QuadPart = -std::max<LONGLONG>(1, static_cast<LONGLONG>((remaining_ms - kPaceSpinMs) * 10000.0));
+            if (SetWaitableTimer(pace_timer_, &due, 0, nullptr, nullptr, FALSE)) {
+                WaitForSingleObject(pace_timer_, INFINITE);
+            } else {
+                SwitchToThread();
+            }
+        } else if (pace_timer_ != nullptr) {
+            SwitchToThread();
+        } else if (remaining_ms >= 2.0) {
             Sleep(static_cast<DWORD>(remaining_ms - 1.0));
         } else {
             SwitchToThread();
