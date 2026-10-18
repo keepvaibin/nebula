@@ -1,3 +1,4 @@
+#include <revolution/os.h>
 #include "Game/Util/SystemUtil.hpp"
 #include "Game/NameObj/NameObjHolder.hpp"
 #ifdef TARGET_PC
@@ -74,6 +75,9 @@ namespace MR {
 
     void waitEndChangeArchivePlayer() {
         while (!GameSystemFunction::isEndChangeArchivePlayer()) {
+#ifdef TARGET_PC
+            __NebulaPoll();
+#endif
         }
     }
 

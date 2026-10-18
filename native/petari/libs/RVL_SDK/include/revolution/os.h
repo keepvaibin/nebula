@@ -66,6 +66,9 @@ const struct NebulaDisplay* __NebulaDisplay(void);
 void __NebulaSceneSurround(f32 intensity);
 // A Nebula option (NEBULA_OPTION_* in nebula_game_api.h).
 u32 __NebulaOption(u32 what);
+// A wait on another thread's work (a busy loop the console's interrupts preempt): runs what is pending, or sleeps until
+// a host thread raises something.
+void __NebulaPoll(void);
 void* __NebulaFromPhysical(u32 paddr);
 #ifdef __cplusplus
 }

@@ -1,3 +1,4 @@
+#include <revolution/os.h>
 #include "Game/Scene/GameScene.hpp"
 #ifdef TARGET_PC
 #include "Game/Util/PlayerUtil.hpp"
@@ -149,6 +150,9 @@ void GameScene::init() {
         SleepControlFunc::initSyncSleepController();
 
         while (!GameSceneFunction::isLoadDoneScenarioWaveData()) {
+#ifdef TARGET_PC
+            __NebulaPoll();
+#endif
         }
     }
 }

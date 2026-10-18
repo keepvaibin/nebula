@@ -1,3 +1,4 @@
+#include <revolution/os.h>
 #include "Game/System/MainLoopFramework.hpp"
 #include "Game/System/DrawSyncManager.hpp"
 #include "Game/Util/BothDirList.hpp"
@@ -173,6 +174,11 @@ void MainLoopFramework::exchangeXfb_triple() {
         if (nextIdx >= 3 || nextIdx < 0) {
             nextIdx = 0;
         }
+#ifdef TARGET_PC
+        if (nextIdx == ::getDisplayingXfbIndex()) {
+            __NebulaPoll();
+        }
+#endif
     } while (nextIdx == ::getDisplayingXfbIndex());
     pXfbMgr->mDrawingXfbIndex = nextIdx;
 }

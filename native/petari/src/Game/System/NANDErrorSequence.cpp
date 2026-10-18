@@ -1,3 +1,4 @@
+#include <revolution/os.h>
 #include "Game/System/NANDErrorSequence.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/SysInfoWindow.hpp"
@@ -179,6 +180,9 @@ void NANDErrorSequence::exeErrorToFreeze() {
     }
 
     for (;;) {
+#ifdef TARGET_PC
+        __NebulaPoll();
+#endif
     }
 }
 

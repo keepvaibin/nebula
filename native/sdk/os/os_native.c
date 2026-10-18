@@ -576,6 +576,27 @@ __OSExceptionHandler __OSGetExceptionHandler(__OSException exception) {
     return sExceptionHandlers[exception];
 }
 
+/* A thread spinning until another thread's work is done (a load-done flag, the displayed XFB): on the console the
+   interrupt that completes the work, and the thread it wakes, preempt the spin. Natively the spin makes no OS call, so
+   it polls here: what is pending is delivered (which may switch to the woken thread), and with nothing pending the
+   simulation thread sleeps until a host thread raises something instead of spinning. The VI raises every retrace, so
+   a wait on state a host thread writes without raising lasts at most one. */
+void __NebulaPoll(void) {
+    if (!sInterruptsEnabled) {
+        return;
+    }
+    if (!work_pending()) {
+        atomic_store(&sIdle, 1);
+        if ((atomic_load(&sPending) & ~(uint64_t)sInterruptMask) == 0) {
+            sleep_for_work();
+        }
+        atomic_store(&sIdle, 0);
+    }
+    if (work_pending()) {
+        deliver_interrupts();
+    }
+}
+
 /* No thread can run (SelectThread, interrupts disabled): deliver interrupts and sleep until one can. */
 void __NebulaIdle(void) {
     while (RunQueueBits == 0) {

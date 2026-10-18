@@ -1,3 +1,4 @@
+#include <revolution/os.h>
 #include "JSystem/JAudio2/JASDriverIF.hpp"
 #include "JSystem/JAudio2/JASAiCtrl.hpp"
 #include "JSystem/JAudio2/JASDspInterface.hpp"
@@ -30,6 +31,9 @@ void JASDriver::waitSubFrame() {
     u32 r31 = getSubFrameCounter();
     do {
         OSYieldThread();
+#ifdef TARGET_PC
+        __NebulaPoll();
+#endif
     } while (r31 == getSubFrameCounter());
 }
 

@@ -1,3 +1,4 @@
+#include <revolution/os.h>
 #include "RVLFaceLibInternal.h"
 #include <cstdio>
 #include <revolution/mem.h>
@@ -221,6 +222,11 @@ static RFLErrcode RFLWaitAsync(void) {
 
     do {
         status = RFLGetAsyncStatus();
+#ifdef TARGET_PC
+        if (status == RFLErrcode_Busy) {
+            __NebulaPoll();
+        }
+#endif
     } while (status == RFLErrcode_Busy);
 
     return status;

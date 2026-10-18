@@ -859,7 +859,15 @@ const uint8_t* svc_disc_fst(void*, size_t* size) {
 
 void svc_disc_read(void*, uint64_t offset, uint32_t size, void* dst, uint32_t slot) {
     gDiscReads.fetch_add(1, std::memory_order_relaxed);
+    // Tests: a slow drive (each read takes this long), so waits on loads are exercised.
+    static const uint32_t test_delay_us = [] {
+        const char* value = std::getenv("GALAXY_TEST_DISC_DELAY_US");
+        return value != nullptr ? static_cast<uint32_t>(std::strtoul(value, nullptr, 10)) : 0u;
+    }();
     gDisc.post([=] {
+        if (test_delay_us != 0) {
+            std::this_thread::sleep_for(std::chrono::microseconds(test_delay_us));
+        }
         if (offset > gPak.size || gPak.size - offset < size) {
             gModule.disc_complete(slot, -1);
             return;
