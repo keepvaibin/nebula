@@ -127,7 +127,22 @@ Complete over every compiled unit (1,874), with the compiler as the checker. An 
   - MSL's narrow formatter natively too: the host's printed "(null)" for a null string, which broke archive paths.
   - A layout name pointing into a buffer whose scope had ended (LayoutManager).
   - Interrupts that arrive while enabled are delivered before the next disable as well as at the next enable, as the console takes them when they arrive (M: 1.47-1.60 ns per disable/restore pair, unchanged).
-- `nebula_game_debug_dump` reports every game thread with the module addresses on its stack (`native/tools/symbolize_dump.py` names them).
+- AddressSanitizer (`-DNEBULA_SANITIZE=address`, `port/tools/build_asan.ps1`): stack switches are fiber switches it is told of; the JKR heaps, built uninstrumented, keep their free space and block headers poisoned and unpoison each block they hand out, so overflows and uses after free inside the game's own heaps are reported too. Boot to the title screen and 60 s of its loop run clean (M, 2026-10-18). Found and fixed:
+  - `OSClearStack` cleared below its own frame through a `memset` call whose frame was in the cleared range (volatile stores now).
+  - `JKRThread`'s message buffers were `count * 4` bytes for 8-byte messages: every JKR thread's queue overran the next allocation.
+  - MSL's `std::sort` placed its pivots at `len / sizeof(iterator)`: 8 natively put the second pivot past the end of short ranges, and its swaps overwrote the next heap header (the stationed heap lost its 10.7 MB tail). Now the console's 4.
+  - A 4x4 projection constructed from a 3x4 identity read 16 bytes past it (StarPointerDirector).
+  - Layout animations' file names: the string table's offsets read in host order (`GetStrTableStr`).
+  - A buffer read past its block (FileRipper's header) and a single-character string read one past its end by the text writer's look-ahead (picture glyphs).
+- Whole-program audits with libclang (`native/tools/*_audit.py`, by symbol, every unit; each lists its sites for review; M, all reviewed):
+  - Addresses of locals kept past their lifetime, through stores, returns and calls by parameter position, virtual overrides and `this` (`escape_audit.py`, 38,697 functions; `scope_escape.query` for block scopes): 74 sites; one real (Tamakoro's up vector, read past its block). The rest are the console's own patterns (GD display-list cursors, synchronous DVD/ARAM requests, interrupt contexts).
+  - Sizes written as numbers for types larger natively (`size_audit.py`: allocations, copies, clears, byte-offset casts): JPA's seven function-pointer tables (`count * 4`), JASBasicBank's instrument table cleared by half, JASTaskThread's call-stack headers.
+  - Raw memory viewed as host-order numbers (`endian_audit.py`, 191 casts) and objects reached through `void*` then read at console offsets (`void_flow_audit.py`, flow to a fixpoint over 2,318 slots): XanimeResource read a `J3DAnmBase`'s attribute and frame count at the console's byte offsets 4 and 6, inside the 8-byte vtable pointer.
+  - 3x4 matrices given 4x4 parameters (`mtx_rows_audit.py`, by declared type): none left.
+  - `sizeof` of a pointer used as a number, and `int` shifts widened to 64 bits: MSL's `bitset` masks (`1 << n` for bits 32-63).
+- The Microsoft ABI sizes a member pointer by its class's inheritance where the class is complete: SystemUtil defined `callMethodAllSceneNameObj` with `NameObj` incomplete, a different size from its callers. `-fcomplete-member-pointers` now makes any such site an error (one existed).
+- Game threads run on native stacks from a pool at the top of MEM2 (256 KB each, 1 MB under ASan; guarded): the buffers the game gives are sized for PowerPC frames. The deepest measured, boot to the title screen, is 13.5 KB (M).
+- `nebula_game_debug_dump` reports every game thread with the module addresses on its stack and how deep the stack has been (`native/tools/symbolize_dump.py` names them). An out-of-memory panic lists the heap's largest blocks, children and uncovered spans.
 - The arena is aligned to its size (512 MB): an arena pointer's low 29 bits are its physical address, so values the game derives from an address's low bits (J3DDrawBuffer's hash slots) are the console's (M, `os_scheduler_tests`).
 
 ## Byte order
