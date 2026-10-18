@@ -29,11 +29,13 @@
 #include <chrono>
 #include <cmath>
 #include <condition_variable>
+#include <csignal>
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <deque>
+#include <exception>
 #include <filesystem>
 #include <functional>
 #include <mutex>
@@ -925,11 +927,40 @@ LONG CALLBACK crash_handler(EXCEPTION_POINTERS* info) {
     report_fatal_exception(info, owner);
 }
 
+// abort(), which std::terminate calls for an uncaught C++ exception: no exception filter sees it. Logs what was
+// thrown, when that is why, and writes the dump from the aborting thread's context.
+void abort_handler(int) {
+    const char* text = "abort";
+    std::string what;
+    if (const std::exception_ptr active = std::current_exception()) {
+        try {
+            std::rethrow_exception(active);
+        } catch (const std::exception& error) {
+            what = std::string("uncaught exception: ") + error.what();
+            text = what.c_str();
+        } catch (...) {
+            text = "uncaught exception of unknown type";
+        }
+    }
+    log_line("crash:", text);
+    if (gCrashing.exchange(1) == 0) {
+        CONTEXT context{};
+        RtlCaptureContext(&context);
+        EXCEPTION_RECORD record{};
+        record.ExceptionCode = 0xE0000003u;  // not a system code: marks the dump as an abort
+        record.ExceptionAddress = _ReturnAddress();
+        EXCEPTION_POINTERS pointers{&record, &context};
+        report_crash(&pointers);
+    }
+    std::_Exit(3);
+}
+
 void install_crash_reporter() {
     gCrashRequest = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     gCrashDone = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     std::thread(crash_writer).detach();
     AddVectoredExceptionHandler(0, crash_handler);  // last: the module's own handlers (division, stack guards) first
+    std::signal(SIGABRT, abort_handler);            // process-wide in the UCRT, unlike set_terminate
 }
 #endif
 
