@@ -14,6 +14,8 @@
 #if defined(NEBULA_HOST_RENDERER)
 #include "galaxy/gx_d3d12.h"
 #include "galaxy/native_api.h"
+#include "galaxy/native_host.h"
+#include "galaxy/native_input.h"
 #endif
 
 #include <atomic>
@@ -81,6 +83,8 @@ struct Module {
     decltype(&nebula_game_gx_event) gx_event;
     decltype(&nebula_game_gx_release) gx_release;
     decltype(&nebula_game_memory_regions) memory_regions;
+    decltype(&nebula_game_wpad_connect) wpad_connect;
+    decltype(&nebula_game_wpad_report) wpad_report;
     void (*debug_dump)();  // optional: the module's thread report
 };
 Module gModule;
@@ -126,6 +130,8 @@ void load_module(const fs::path& path) {
     gModule.gx_event = reinterpret_cast<decltype(gModule.gx_event)>(find_symbol(module, "nebula_game_gx_event"));
     gModule.gx_release = reinterpret_cast<decltype(gModule.gx_release)>(find_symbol(module, "nebula_game_gx_release"));
     gModule.memory_regions = reinterpret_cast<decltype(gModule.memory_regions)>(find_symbol(module, "nebula_game_memory_regions"));
+    gModule.wpad_connect = reinterpret_cast<decltype(gModule.wpad_connect)>(find_symbol(module, "nebula_game_wpad_connect"));
+    gModule.wpad_report = reinterpret_cast<decltype(gModule.wpad_report)>(find_symbol(module, "nebula_game_wpad_report"));
 #if defined(_WIN32)
     gModule.debug_dump = reinterpret_cast<void (*)()>(GetProcAddress(static_cast<HMODULE>(module), "nebula_game_debug_dump"));
 #else
@@ -689,7 +695,76 @@ uint32_t svc_sc_get(void*, uint32_t item) {
     }
 }
 
-void svc_wpad_control(void*, uint32_t, uint32_t, uint32_t) {}
+#if defined(NEBULA_HOST_RENDERER)
+// Remote 0: Nebula's controls (v1.0.1's bindings, keyboard and mouse, controllers) as a Wii Remote with a Nunchuk,
+// connected when the game starts WPAD and reporting 100 times a second in the format the game asks for.
+std::atomic<int> gWpadStarted{0};
+std::atomic<uint32_t> gWpadReport{0x30};
+std::atomic<int> gWpadDpd{0};
+
+uint8_t report_id_for_format(uint32_t format) {
+    switch (format) {
+    case 0:
+        return 0x30;  // WPAD_FMT_CORE
+    case 1:
+        return 0x31;  // WPAD_FMT_CORE_ACC
+    case 2:
+        return 0x33;  // WPAD_FMT_CORE_ACC_DPD
+    default:
+        return 0x37;  // the Nunchuk formats: core, accelerometer, IR and extension
+    }
+}
+
+void wpad_thread() {
+    while (!gWpadStarted.load(std::memory_order_acquire)) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    NebulaWiimoteConnection connection{};
+    galaxy::host::native_game_wiimote_calibration(connection.eeprom, connection.extension_calibration);
+    connection.extension = 1;  // WPAD_DEV_FREESTYLE: the Nunchuk
+    connection.battery = 0xC0;
+    gModule.wpad_connect(0, 1, &connection);
+    const auto period = std::chrono::milliseconds(10);
+    auto next = Clock::now() + period;
+    for (;;) {
+        std::this_thread::sleep_until(next);
+        next += period;
+        const uint8_t id = static_cast<uint8_t>(gWpadReport.load(std::memory_order_relaxed));
+        const auto snapshot = galaxy::host::native_game_wiimote_snapshot(id, gRetraces.load(std::memory_order_relaxed),
+                                                                        gWpadDpd.load(std::memory_order_relaxed) != 0);
+        uint8_t report[galaxy::input::kMaxWiimoteInputReportBytes];
+        const auto built = galaxy::input::build_wiimote_input_report(id, snapshot, report);
+        if (built.status == galaxy::input::WiimoteReportBuildStatus::Ok && built.size > 1) {
+            gModule.wpad_report(0, report + 1, built.size - 1);  // from the report id, past the HID header
+        }
+    }
+}
+#endif
+
+void svc_wpad_control(void*, uint32_t chan, uint32_t what, uint32_t value) {
+#if defined(NEBULA_HOST_RENDERER)
+    if (chan != 0) {
+        return;
+    }
+    switch (what) {
+    case NEBULA_WPAD_INIT:
+        gWpadStarted.store(1, std::memory_order_release);
+        break;
+    case NEBULA_WPAD_FORMAT:
+        gWpadReport.store(report_id_for_format(value), std::memory_order_relaxed);
+        break;
+    case NEBULA_WPAD_DPD:
+        gWpadDpd.store(value != 0, std::memory_order_relaxed);
+        break;
+    default:
+        break;
+    }
+#else
+    (void)chan;
+    (void)what;
+    (void)value;
+#endif
+}
 void svc_wpad_speaker_data(void*, uint32_t, const uint8_t*, uint32_t) {}
 
 // The JAudio DSP program finishes a subframe when the CPU releases its last channel group (JASDSPChannel::updateAll's
@@ -793,6 +868,9 @@ int main(int argc, char** argv) {
     gFs.start();
     std::thread(ai_thread).detach();
     std::thread(vi_thread).detach();
+#if defined(NEBULA_HOST_RENDERER)
+    std::thread(wpad_thread).detach();
+#endif
     std::thread([] { gModule.run(); }).detach();
 
     const auto end = Clock::now() + std::chrono::duration<double>(seconds > 0 ? seconds : 1e9);

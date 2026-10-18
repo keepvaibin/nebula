@@ -10334,6 +10334,23 @@ std::uint32_t align_up(std::uint32_t value, std::uint32_t alignment) {
 
 }  // namespace
 
+galaxy::input::WiimoteInputSnapshot native_game_wiimote_snapshot(
+    std::uint8_t report_mode,
+    std::uint64_t current_vi,
+    bool ir_enabled) {
+    return build_native_hid_input_snapshot(
+        report_mode, current_vi, galaxy::get_runtime_input_mode_state(), std::nullopt, ir_enabled);
+}
+
+void native_game_wiimote_calibration(
+    std::uint8_t (&eeprom)[0x2A],
+    std::uint8_t (&nunchuk_calibration)[32]) {
+    const auto bytes = create_virtual_wiimote_eeprom();
+    std::memcpy(eeprom, bytes.data(), sizeof(eeprom));
+    const auto registers = create_virtual_nunchuk_registers(true);
+    std::memcpy(nunchuk_calibration, registers.data() + 0x20u, sizeof(nunchuk_calibration));
+}
+
 GamePaths locate_game(const std::filesystem::path& input) {
     if (std::filesystem::is_regular_file(input)) {
         if (input.filename() == L"game.pak") {

@@ -2178,6 +2178,17 @@ private:
     GuestMemoryV1 memory_{};
 };
 
+// The native game's host (native/host): the live controls (bindings, keyboard and mouse, controllers) as one
+// Wii Remote input snapshot for `report_mode` (0x30..0x37), and the virtual remote's EEPROM (DPD and
+// accelerometer calibration) and Nunchuk calibration for its connection.
+[[nodiscard]] galaxy::input::WiimoteInputSnapshot native_game_wiimote_snapshot(
+    std::uint8_t report_mode,
+    std::uint64_t current_vi,
+    bool ir_enabled);
+void native_game_wiimote_calibration(
+    std::uint8_t (&eeprom)[0x2A],
+    std::uint8_t (&nunchuk_calibration)[32]);
+
 void load_boot_image(
     GuestAddressSpace& address_space,
     const BootImage& image);
