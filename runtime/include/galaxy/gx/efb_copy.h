@@ -18,8 +18,7 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
-#include <d3d12.h>
-#include <wrl/client.h>
+#include "galaxy/gx/gpu_types.h"
 
 #include "galaxy/gx/gx_bitfields.h"
 // kMaxEfbScale lives in render_config.h and std::clamp lives in <algorithm>.
@@ -36,7 +35,7 @@
 namespace galaxy::gx {
 
 struct XfbTexture {
-    Microsoft::WRL::ComPtr<ID3D12Resource> texture;  // RGBA8
+    gpu::TextureRef texture;  // RGBA8
     std::uint32_t guest_addr = 0;
     // Physical GPU dimensions after EFB scaling. The guest address/stride and
     // VI selection remain in logical Wii units and are never multiplied.
@@ -52,7 +51,7 @@ struct XfbTexture {
     // counts the first presentation of each copy without an unbounded set of serials.
     mutable std::uint64_t last_accounted_present_serial =
         ~std::uint64_t{0};
-    D3D12_CPU_DESCRIPTOR_HANDLE rtv{};
+    gpu::CpuDescriptor rtv{};
     bool presentable = false;
     bool rtv_valid = false;
 };
@@ -264,7 +263,7 @@ struct EfbPeekSamplingGeometry {
 
 class EfbCopyManager {
 public:
-    bool initialize(ID3D12Device* device, unsigned efb_scale);
+    bool initialize(gpu::Device* device, unsigned efb_scale);
     void shutdown();
     // Live internal-resolution change: later acquisitions re-create any XFB
     // texture whose physical extent no longer matches.
@@ -292,20 +291,20 @@ public:
 
 private:
     struct PooledTexture {
-        Microsoft::WRL::ComPtr<ID3D12Resource> texture;
+        gpu::TextureRef texture;
         std::uint16_t width = 0;
         std::uint16_t height = 0;
     };
     void retire_texture(XfbTexture& texture);
     void recycle_retired_textures(unsigned frame_slot);
-    [[nodiscard]] Microsoft::WRL::ComPtr<ID3D12Resource>
+    [[nodiscard]] gpu::TextureRef
         acquire_idle_texture(std::uint16_t width, std::uint16_t height);
 
     std::unordered_map<std::uint32_t, XfbTexture> registry_;
     std::uint32_t latest_addr_ = 0;
     std::uint64_t next_copy_serial_ = 1;
     bool has_latest_ = false;
-    Microsoft::WRL::ComPtr<ID3D12Device> device_;
+    gpu::DeviceRef device_;
     std::vector<std::vector<PooledTexture>> retired_textures_;
     std::vector<PooledTexture> idle_textures_;
     unsigned current_frame_slot_ = 0;

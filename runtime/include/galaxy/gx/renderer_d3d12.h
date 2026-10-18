@@ -1278,4 +1278,7 @@ private:
 
 };
 
+// The renderer GxBackend builds against (renderer_vk.h defines it for Vulkan).
+using Renderer = RendererD3D12;
+
 }  // namespace galaxy::gx

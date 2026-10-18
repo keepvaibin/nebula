@@ -138,7 +138,7 @@ constexpr std::size_t kMaxIdleXfbTextures = 8u;
 
 // initialize / shutdown
 
-bool EfbCopyManager::initialize(ID3D12Device* device, unsigned efb_scale) {
+bool EfbCopyManager::initialize(gpu::Device* device, unsigned efb_scale) {
     device_ = device;
     efb_scale_ = std::clamp(efb_scale, 1u, kMaxEfbScale);
     return device_ != nullptr;
@@ -203,7 +203,7 @@ void EfbCopyManager::recycle_retired_textures(unsigned frame_slot) {
     retired.clear();
 }
 
-Microsoft::WRL::ComPtr<ID3D12Resource> EfbCopyManager::acquire_idle_texture(
+gpu::TextureRef EfbCopyManager::acquire_idle_texture(
     std::uint16_t width,
     std::uint16_t height) {
     for (auto it = idle_textures_.begin(); it != idle_textures_.end(); ++it) {
@@ -268,8 +268,7 @@ ScaledEfbCopyExtent compute_scaled_efb_copy_extent(
     std::uint16_t logical_height,
     unsigned efb_scale) noexcept {
     const unsigned scale = std::clamp(efb_scale, 1u, kMaxEfbScale);
-    constexpr unsigned kMaxTextureDimension =
-        D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION;
+    constexpr unsigned kMaxTextureDimension = gpu::kMaxTexture2DDimension;
     const unsigned width = std::min(
         static_cast<unsigned>(logical_width) * scale,
         kMaxTextureDimension);
@@ -426,52 +425,12 @@ XfbTexture* EfbCopyManager::acquire_xfb(
         return &entry;
     }
 
-    D3D12_HEAP_PROPERTIES heap_props{};
-    heap_props.Type = D3D12_HEAP_TYPE_DEFAULT;
-
-    D3D12_RESOURCE_DESC desc{};
-    desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    desc.Alignment          = 0;
-    desc.Width              = wanted_w;
-    desc.Height             = wanted_h;
-    desc.DepthOrArraySize   = 1;
-    desc.MipLevels          = 1;
-    desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;
-    desc.SampleDesc.Count   = 1;
-    desc.SampleDesc.Quality = 0;
-    desc.Layout             = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-    // ALLOW_RENDER_TARGET so copy_efb_to_xfb can blit into it.
-    desc.Flags              = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-
-    // Initial state is PIXEL_SHADER_RESOURCE: the present blit reads it before the first EFB
-    // copy transitions it to RENDER_TARGET.
-    const D3D12_RESOURCE_STATES initial_state =
-        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-
-    // Clear value for the render target allocation hint (optional but avoids
-    // debug-layer warnings when the texture is first used as an RTV).
-    D3D12_CLEAR_VALUE clear_val{};
-    clear_val.Format   = DXGI_FORMAT_R8G8B8A8_UNORM;
-    clear_val.Color[0] = 0.0f;
-    clear_val.Color[1] = 0.0f;
-    clear_val.Color[2] = 0.0f;
-    clear_val.Color[3] = 1.0f;
-
-    const HRESULT hr = device_->CreateCommittedResource(
-        &heap_props,
-        D3D12_HEAP_FLAG_NONE,
-        &desc,
-        initial_state,
-        &clear_val,
-        IID_PPV_ARGS(entry.texture.ReleaseAndGetAddressOf()));
-
-    if (FAILED(hr)) {
+    entry.texture = gpu::create_render_texture(device_.Get(), wanted_w, wanted_h);
+    if (!entry.texture) {
         std::ostringstream message;
         message << "[EfbCopyManager] XFB texture allocation failed"
                 << " addr=0x" << std::hex << registry_addr
-                << " size=" << std::dec << wanted_w << 'x' << wanted_h
-                << " hr=0x" << std::hex
-                << static_cast<unsigned long>(hr);
+                << " size=" << std::dec << wanted_w << "x" << wanted_h;
         throw std::runtime_error(message.str());
     }
 
@@ -511,3 +470,44 @@ const XfbTexture* EfbCopyManager::find_xfb(
 }
 
 }  // namespace galaxy::gx
+
+#if !defined(NEBULA_GPU_VULKAN)
+namespace galaxy::gx::gpu {
+
+TextureRef create_render_texture(Device* device, std::uint32_t width, std::uint32_t height) {
+    D3D12_HEAP_PROPERTIES heap_props{};
+    heap_props.Type = D3D12_HEAP_TYPE_DEFAULT;
+    D3D12_RESOURCE_DESC desc{};
+    desc.Dimension          = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    desc.Alignment          = 0;
+    desc.Width              = width;
+    desc.Height             = height;
+    desc.DepthOrArraySize   = 1;
+    desc.MipLevels          = 1;
+    desc.Format             = DXGI_FORMAT_R8G8B8A8_UNORM;
+    desc.SampleDesc.Count   = 1;
+    desc.SampleDesc.Quality = 0;
+    desc.Layout             = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    // ALLOW_RENDER_TARGET so copy_efb_to_xfb can blit into it.
+    desc.Flags              = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+    // Initial state is PIXEL_SHADER_RESOURCE: the present blit reads it before the first EFB
+    // copy transitions it to RENDER_TARGET.
+    const D3D12_RESOURCE_STATES initial_state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    // Clear value for the render target allocation hint (optional but avoids
+    // debug-layer warnings when the texture is first used as an RTV).
+    D3D12_CLEAR_VALUE clear_val{};
+    clear_val.Format   = DXGI_FORMAT_R8G8B8A8_UNORM;
+    clear_val.Color[0] = 0.0f;
+    clear_val.Color[1] = 0.0f;
+    clear_val.Color[2] = 0.0f;
+    clear_val.Color[3] = 1.0f;
+    TextureRef texture;
+    if (FAILED(device->CreateCommittedResource(&heap_props, D3D12_HEAP_FLAG_NONE, &desc, initial_state, &clear_val,
+                                               IID_PPV_ARGS(texture.ReleaseAndGetAddressOf())))) {
+        return {};
+    }
+    return texture;
+}
+
+}  // namespace galaxy::gx::gpu
+#endif

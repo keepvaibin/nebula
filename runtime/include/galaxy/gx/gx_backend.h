@@ -36,8 +36,13 @@
 #include "galaxy/gx/efb_copy.h"
 #include "galaxy/gx/fifo_parser.h"
 #include "galaxy/gx/gx_state.h"
+#if defined(NEBULA_GPU_VULKAN)
+#include "galaxy/gx/vk/pipeline_cache_vk.h"
+#include "galaxy/gx/vk/renderer_vk.h"
+#else
 #include "galaxy/gx/pipeline_cache.h"
 #include "galaxy/gx/renderer_d3d12.h"
+#endif
 #include "galaxy/gx/resident_vertex_arena.h"
 #include "galaxy/gx/shader_keys.h"
 #include "galaxy/gx/texture_cache.h"
@@ -796,7 +801,7 @@ private:
     PipelineCache pipeline_cache_;
     TextureCache texture_cache_;
     EfbCopyManager efb_copies_;
-    RendererD3D12 renderer_;
+    Renderer renderer_;
     // A VI retrace is not a GX command boundary. Preserve only an incomplete
     // top-level command tail and prepend the next capture chunk.
     // (Render-thread state, like everything below it down to the stats.)
