@@ -10351,6 +10351,10 @@ void native_game_wiimote_calibration(
     std::memcpy(nunchuk_calibration, registers.data() + 0x20u, sizeof(nunchuk_calibration));
 }
 
+std::vector<std::byte> native_game_empty_mii_database() {
+    return create_empty_rfl_database();
+}
+
 GamePaths locate_game(const std::filesystem::path& input) {
     if (std::filesystem::is_regular_file(input)) {
         if (input.filename() == L"game.pak") {

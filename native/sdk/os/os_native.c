@@ -176,12 +176,30 @@ int64_t nebula_time_base(void) {
 
 static int64_t game_time(void);
 
+/* The time base counts from the local calendar time at boot (ticks since 2000-01-01), as the console's does: the
+   system sets it from the clock at boot, so OSGetTime is the date (the game stamps saves with it). */
+static int64_t sCalendarBase;
+
+static void calendar_init(void) {
+    const time_t now = time(NULL);
+    struct tm local;
+#if defined(_WIN32)
+    localtime_s(&local, &now);
+    const time_t fields = _mkgmtime(&local);
+#else
+    localtime_r(&now, &local);
+    const time_t fields = timegm(&local);
+#endif
+    const int64_t unixTo2000 = 946684800;
+    sCalendarBase = ((int64_t)fields - unixTo2000) * OS_TIMER_CLOCK;
+}
+
 OSTime OSGetTime(void) {
-    return game_time();
+    return game_time() + sCalendarBase;
 }
 
 OSTick OSGetTick(void) {
-    return (OSTick)game_time();
+    return (OSTick)(game_time() + sCalendarBase);
 }
 
 /* Pending work and waking the simulation thread
@@ -849,12 +867,9 @@ static void boot_thread(void* arg) {
     OSSetMEM2ArenaLo(mem2Lo);
     OSSetMEM2ArenaHi(mem2Hi);
 
-    /* The offset from the time base to calendar time (seconds since 2000-01-01) in low memory. */
-    {
-        const int64_t unixTo2000 = 946684800;
-        const int64_t now = (int64_t)time(NULL) - unixTo2000;
-        *(OSTime*)OSPhysicalToCached(0x30D8) = now * OS_TIMER_CLOCK - nebula_time_base();
-    }
+    /* The system time's bias from the time base (__OSGetSystemTime): none, since the time base is already calendar
+       time. */
+    *(OSTime*)OSPhysicalToCached(0x30D8) = 0;
 
     sInterruptsEnabled = FALSE;
     __OSThreadInit();
@@ -869,6 +884,7 @@ void nebula_os_boot(void (*gameMain)(void)) {
     sWake = CreateEventW(NULL, FALSE, FALSE, NULL);
 #endif
     time_init();
+    calendar_init();
     clock_start();
     if (!nebula_memory_init()) {
         nebula_fatal("could not reserve the game's memory");

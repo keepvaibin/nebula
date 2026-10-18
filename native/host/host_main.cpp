@@ -671,9 +671,21 @@ void svc_vi_frame(void*, uint32_t xfb, int black, uint32_t retrace) {
 void svc_fs_request(void*, const NebulaFsRequest* request, uint32_t slot) {
     gFsOps.fetch_add(1, std::memory_order_relaxed);
     const NebulaFsRequest r = *request;
-    gFs.post([r, slot] { gModule.fs_complete(slot, fs_run(r)); });
+    gFs.post([r, slot] {
+        const int32_t result = fs_run(r);
+        static const bool trace = std::getenv("NEBULA_TRACE_NAND") != nullptr;
+        if (trace) {
+            char text[400];
+            std::snprintf(text, sizeof(text), "nand op %u path %s path2 %s fd %d size %u mode %u -> %d", r.op,
+                          r.path != nullptr ? r.path : "-", r.path2 != nullptr ? r.path2 : "-", r.fd, r.size, r.mode, result);
+            log_line("host:", text);
+        }
+        gModule.fs_complete(slot, result);
+    });
 }
 
+// The system settings v1.0.1's SYSCONF gives the game (native_host.cpp, create_default_sysconf_file): its pointer
+// mapping (native_input's virtual sensor bar) assumes the bar above the screen.
 uint32_t svc_sc_get(void*, uint32_t item) {
     switch (item) {
     case NEBULA_SC_LANGUAGE:
@@ -683,7 +695,11 @@ uint32_t svc_sc_get(void*, uint32_t item) {
     case NEBULA_SC_ASPECT_RATIO:
         return 1;  // 16:9
     case NEBULA_SC_PROGRESSIVE_MODE:
+        return 0;
+    case NEBULA_SC_EURGB60_MODE:
         return 1;
+    case NEBULA_SC_SENSOR_BAR_POSITION:
+        return 1;  // above the screen
     case NEBULA_SC_DPD_SENSITIVITY:
         return 3;
     case NEBULA_SC_SPEAKER_VOLUME:
@@ -829,6 +845,20 @@ int main(int argc, char** argv) {
     gNandRoot = nand;
     std::error_code error;
     fs::create_directories(gNandRoot / "title/00010000/524d4745/data", error);
+    fs::create_directories(gNandRoot / "tmp", error);  // where saves stage their banner before moving it
+#if defined(NEBULA_HOST_RENDERER)
+    // The system's Mii database, which every console has: an empty one when this NAND has none (the game treats a
+    // missing database as a NAND error when it saves).
+    const fs::path mii_database = gNandRoot / "shared2/menu/FaceLib/RFL_DB.dat";
+    if (!fs::exists(mii_database, error)) {
+        fs::create_directories(mii_database.parent_path(), error);
+        const std::vector<std::byte> bytes = galaxy::host::native_game_empty_mii_database();
+        if (FILE* file = std::fopen(mii_database.string().c_str(), "wb")) {
+            std::fwrite(bytes.data(), 1, bytes.size(), file);
+            std::fclose(file);
+        }
+    }
+#endif
 
     open_pak(pak);
     load_module(module);

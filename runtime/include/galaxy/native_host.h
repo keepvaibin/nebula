@@ -2188,6 +2188,8 @@ private:
 void native_game_wiimote_calibration(
     std::uint8_t (&eeprom)[0x2A],
     std::uint8_t (&nunchuk_calibration)[32]);
+// A valid, empty Mii database (RFL_DB.dat) for a NAND that has none, as v1.0.1 creates.
+[[nodiscard]] std::vector<std::byte> native_game_empty_mii_database();
 
 void load_boot_image(
     GuestAddressSpace& address_space,
