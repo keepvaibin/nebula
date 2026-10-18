@@ -327,6 +327,7 @@ static void clock_start(void) {
         nebula_fatal("could not start the decrementer's clock thread");
     }
     SetThreadPriority(thread, THREAD_PRIORITY_TIME_CRITICAL);
+    SetThreadDescription(thread, L"Nebula Decrementer");
     CloseHandle(thread);
 }
 
@@ -391,6 +392,11 @@ static void clock_start(void) {
     if (pthread_create(&thread, &threadAttr, clock_main, NULL) != 0) {
         nebula_fatal("could not start the decrementer's clock thread");
     }
+#if defined(__APPLE__)
+    (void)thread;
+#else
+    pthread_setname_np(thread, "nebula-dec");
+#endif
     pthread_attr_destroy(&threadAttr);
 }
 

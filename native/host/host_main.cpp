@@ -40,6 +40,7 @@
 #include <span>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 #if defined(_WIN32)
@@ -47,9 +48,11 @@
 #include <windows.h>
 #include <intrin.h>
 #include <dbghelp.h>
+#include <tlhelp32.h>
 #else
 #include <dlfcn.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -258,9 +261,26 @@ void open_pak(const fs::path& path) {
     gPak.dol_size = (size_t)end;
 }
 
+// The calling thread's name, as profilers, debuggers and the CPU report show it.
+void name_thread(const wchar_t* name) {
+#if defined(_WIN32)
+    SetThreadDescription(GetCurrentThread(), name);
+#else
+    char narrow[16];
+    std::snprintf(narrow, sizeof(narrow), "%ls", name);
+#if defined(__APPLE__)
+    pthread_setname_np(narrow);
+#else
+    pthread_setname_np(pthread_self(), narrow);
+#endif
+#endif
+}
+
 // A worker thread taking jobs in order.
 class Worker {
 public:
+    explicit Worker(const wchar_t* name) : name_(name) {}
+
     template <typename F>
     void post(F&& job) {
         {
@@ -272,6 +292,7 @@ public:
 
     void start() {
         thread_ = std::thread([this] {
+            name_thread(name_);
             for (;;) {
                 std::function<void()> job;
                 {
@@ -291,10 +312,11 @@ private:
     std::condition_variable ready_;
     std::deque<std::function<void()>> jobs_;
     std::thread thread_;
+    const wchar_t* name_;
 };
 
-Worker gDisc;
-Worker gFs;
+Worker gDisc(L"Nebula Host Disc");
+Worker gFs(L"Nebula Host NAND");
 
 // NAND: the console's absolute paths under the host's NAND root, in the Wii's layout.
 fs::path gNandRoot;
@@ -491,6 +513,7 @@ extern galaxy::host::NativeGameAudio* gAudio;
 #endif
 
 void ai_thread() {
+    name_thread(L"Nebula Host AI");
     for (;;) {
         uint32_t size = 0;
         uint32_t start = 0;
@@ -533,6 +556,7 @@ void ai_thread() {
 // a 60 Hz display. A late wake-up skips the fields it missed, as a display does, rather than delivering them back to
 // back.
 void vi_thread() {
+    name_thread(L"Nebula Host VI");
     const auto period = std::chrono::nanoseconds(1000000000ull / 60);
     auto next = Clock::now() + period;
     for (;;) {
@@ -551,6 +575,94 @@ void vi_thread() {
 void svc_log(void*, const char* text) {
     log_line("game:", text);
 }
+
+#if defined(_WIN32)
+// Tests (GALAXY_TRACE_THREAD_CPU=1): each thread's CPU time over the last second, by name (or, unnamed, the module and
+// offset it started at), busiest first; threads under 0.5 ms/s are counted in the total only. The report's own cost
+// (a snapshot of every thread in the system) is left out of the reporting thread's figure.
+void report_thread_cpu(double tsc_hz) {
+    static std::unordered_map<DWORD, uint64_t> last;
+    static uint64_t report_cycles = 0;
+    ULONG64 report_start = 0;
+    QueryThreadCycleTime(GetCurrentThread(), &report_start);
+    const HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+    if (snapshot == INVALID_HANDLE_VALUE) {
+        return;
+    }
+    using QueryFn = LONG(WINAPI*)(HANDLE, int, void*, ULONG, ULONG*);
+    static const auto query = reinterpret_cast<QueryFn>(
+        reinterpret_cast<void*>(GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "NtQueryInformationThread")));
+    struct Row {
+        double ms;
+        std::string name;
+    };
+    std::vector<Row> rows;
+    double total = 0.0;
+    const DWORD pid = GetCurrentProcessId();
+    const DWORD self = GetCurrentThreadId();
+    THREADENTRY32 entry{};
+    entry.dwSize = sizeof(entry);
+    for (BOOL more = Thread32First(snapshot, &entry); more; more = Thread32Next(snapshot, &entry)) {
+        if (entry.th32OwnerProcessID != pid) {
+            continue;
+        }
+        const HANDLE thread = OpenThread(THREAD_QUERY_INFORMATION, FALSE, entry.th32ThreadID);
+        if (thread == nullptr) {
+            continue;
+        }
+        ULONG64 cycles = 0;
+        QueryThreadCycleTime(thread, &cycles);
+        if (entry.th32ThreadID == self) {
+            cycles = report_start - report_cycles;
+        }
+        std::string name;
+        PWSTR description = nullptr;
+        if (SUCCEEDED(GetThreadDescription(thread, &description)) && description != nullptr && description[0] != 0) {
+            char narrow[64];
+            WideCharToMultiByte(CP_UTF8, 0, description, -1, narrow, sizeof(narrow), nullptr, nullptr);
+            name = narrow;
+        }
+        LocalFree(description);
+        void* start = nullptr;
+        HMODULE owner = nullptr;
+        if (name.empty()) {
+            // ThreadQuerySetWin32StartAddress (9).
+            char where[160] = "?";
+            if (query != nullptr && query(thread, 9, &start, sizeof(start), nullptr) == 0 &&
+                GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                   static_cast<LPCWSTR>(start), &owner)) {
+                char path[MAX_PATH];
+                const DWORD length = GetModuleFileNameA(owner, path, sizeof(path));
+                const char* file = length != 0 ? std::strrchr(path, '\\') : nullptr;
+                std::snprintf(where, sizeof(where), "%s+0x%llx", file != nullptr ? file + 1 : "?",
+                              (unsigned long long)(static_cast<char*>(start) - reinterpret_cast<char*>(owner)));
+            }
+            name = "tid " + std::to_string(entry.th32ThreadID) + " " + where;
+        }
+        CloseHandle(thread);
+        uint64_t& before = last[entry.th32ThreadID];
+        const double ms = (double)(cycles - before) * 1000.0 / tsc_hz;
+        before = cycles;
+        total += ms;
+        if (ms >= 0.5) {
+            rows.push_back({ms, std::move(name)});
+        }
+    }
+    CloseHandle(snapshot);
+    std::sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) { return a.ms > b.ms; });
+    std::string line = "total " + std::to_string((int)(total + 0.5)) + " ms/s";
+    for (const Row& row : rows) {
+        char item[128];
+        std::snprintf(item, sizeof(item), "; %s %.1f", row.name.c_str(), row.ms);
+        line += item;
+    }
+    log_line("cpu:", line.c_str());
+    ULONG64 report_end = 0;
+    QueryThreadCycleTime(GetCurrentThread(), &report_end);
+    report_cycles += report_end - report_start;
+}
+
+#endif
 
 #if defined(_WIN32)
 // Crash reports. A fatal exception in the game module or the host, or the game's own fatal call, writes a minidump to
@@ -1061,6 +1173,7 @@ size_t idle_wiimote_report(uint8_t id, uint8_t* report) {
 #endif
 
 void wpad_thread() {
+    name_thread(L"Nebula Host WPAD");
     while (!gWpadStarted.load(std::memory_order_acquire)) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
@@ -1259,6 +1372,8 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
                         events.push_back({NEBULA_TEST_GET_STAR, frame, -1});
                     } else if (kind == "grandstar") {
                         events.push_back({NEBULA_TEST_GET_GRAND_STAR, frame, -1});
+                    } else if (kind == "mario" || kind == "luigi") {
+                        events.push_back({NEBULA_TEST_SET_PLAYER, frame, kind == "luigi" ? 1 : 0});
                     } else if (kind == "wait") {
                         events.push_back({0, frame, 0});
                     } else if (kind.rfind("movie", 0) == 0) {
@@ -1570,18 +1685,24 @@ int main(int argc, char** argv) {
         die("the game module's API version differs from the host's (%u)", NEBULA_GAME_API_VERSION);
     }
 
+    name_thread(L"Nebula Host Main");
     gDisc.start();
     gFs.start();
     std::thread(ai_thread).detach();
     std::thread(vi_thread).detach();
     std::thread(wpad_thread).detach();
-    std::thread game([] { gModule.run(); });
+    std::thread game([] {
+        name_thread(L"Nebula Game");
+        gModule.run();
+    });
 #if defined(_WIN32)
     // The simulation thread's CPU time, reported each second (the game and everything it calls on that thread).
     HANDLE game_thread = nullptr;  // its own handle: detach() closes the thread object's
     DuplicateHandle(GetCurrentProcess(), static_cast<HANDLE>(game.native_handle()), GetCurrentProcess(), &game_thread,
                     THREAD_QUERY_LIMITED_INFORMATION, FALSE, 0);
     uint64_t game_cycles_last = 0;
+    const char* trace_env = std::getenv("GALAXY_TRACE_THREAD_CPU");
+    const bool trace_thread_cpu = trace_env != nullptr && trace_env[0] == '1';
     // Thread cycles count at the time-stamp counter's rate, measured here against the performance counter.
     const double tsc_hz = [] {
         LARGE_INTEGER f, a, b;
@@ -1631,6 +1752,9 @@ int main(int argc, char** argv) {
                           gMovieFrames.load(std::memory_order_relaxed));
 #endif
 #if defined(_WIN32)
+            if (trace_thread_cpu) {
+                report_thread_cpu(tsc_hz);
+            }
             ULONG64 cycles = 0;
             if (QueryThreadCycleTime(game_thread, &cycles)) {
                 const size_t used = std::strlen(text);

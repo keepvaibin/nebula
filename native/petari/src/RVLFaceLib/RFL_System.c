@@ -1,5 +1,5 @@
-#include <revolution/os.h>
 #include "RVLFaceLibInternal.h"
+#include <revolution/os.h>
 #include <cstdio>
 #include <revolution/mem.h>
 #include <revolution/types.h>

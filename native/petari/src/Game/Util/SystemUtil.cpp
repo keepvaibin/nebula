@@ -1,5 +1,5 @@
-#include <revolution/os.h>
 #include "Game/Util/SystemUtil.hpp"
+#include <revolution/os.h>
 #include "Game/NameObj/NameObjHolder.hpp"
 #ifdef TARGET_PC
 #include "Game/NameObj/NameObj.hpp"  // complete for NameObjMethod's ABI size

@@ -1,5 +1,5 @@
-#include <revolution/os.h>
 #include "Game/System/NANDErrorSequence.hpp"
+#include <revolution/os.h>
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/SysInfoWindow.hpp"
 #include "Game/System/GameSystemFunction.hpp"

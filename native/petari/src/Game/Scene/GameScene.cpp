@@ -1,10 +1,13 @@
-#include <revolution/os.h>
 #include "Game/Scene/GameScene.hpp"
 #ifdef TARGET_PC
+#include "Game/System/GameDataFunction.hpp"
+#include "Game/System/GameDataHolder.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SequenceUtil.hpp"
+#include <cstdio>
 #include <cstring>
 #include <nebula_game_api.h>
+#include <revolution/os.h>
 #endif
 #include "Game/AudioLib/AudSceneMgr.hpp"
 #include "Game/AudioLib/AudWrap.hpp"
@@ -205,6 +208,10 @@ void GameScene::draw() const {
         } else if (action.kind == NEBULA_TEST_GET_STAR || action.kind == NEBULA_TEST_GET_GRAND_STAR) {
             sPendingStar = action.kind;
             sPendingStarId = action.scenario;
+        } else if (action.kind == NEBULA_TEST_SET_PLAYER) {
+            // GameDataHolder::isDataMario reads the file's name ("mario1" or "luigi1").
+            snprintf(GameDataFunction::getCurrentGameDataHolder()->mName, sizeof(GameDataHolder::mName), "%s1",
+                     action.scenario != 0 ? "luigi" : "mario");
         } else if (action.kind == NEBULA_TEST_START_MOVIE) {
             if (MR::isExistSceneObj(SceneObj_MoviePlayingSequenceHolder)) {
                 MR::startMovie(action.scenario);

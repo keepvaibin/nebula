@@ -1,5 +1,5 @@
-#include <revolution/os.h>
 #include "Game/System/MainLoopFramework.hpp"
+#include <revolution/os.h>
 #include "Game/System/DrawSyncManager.hpp"
 #include "Game/Util/BothDirList.hpp"
 #include "Game/Util/SchedulerUtil.hpp"
