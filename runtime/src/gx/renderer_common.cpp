@@ -190,6 +190,150 @@ float4 main(V v) : SV_Target {
 }
 )HLSL";
 
+namespace {
+
+// Fullscreen triangle with UV. No vertex buffer needed.
+constexpr char kBlitVs[] =
+    "struct V { float4 pos:SV_Position; float2 uv:TEXCOORD0; };"
+    "V main(uint id:SV_VertexID){"
+    " V o;"
+    " o.uv = float2(id==1?2:0, id==2?2:0);"
+    " o.pos = float4(o.uv.x*2-1, 1-o.uv.y*2, 0.5, 1);"
+    " return o;"
+    "}";
+
+constexpr char kBlitPs[] =
+    "Texture2D t:register(t0);"
+    "SamplerState s:register(s0);"
+    "struct V{float4 p:SV_Position;float2 uv:TEXCOORD0;};"
+    "float4 main(V v):SV_Target{return t.Sample(s,v.uv);}";
+
+// Native settings overlay corner decoration: one small textured quad in
+// screen-pixel coordinates. Root constants (b0, all-stage-visible):
+//   rect      = x, y, w, h in backbuffer pixels
+//   uv_minmax = u0, v0, u1, v1 (lets one square corner texture be mirrored
+//               per panel corner instead of needing four textures)
+//   tint      = RGBA multiplier (alpha also modulates the overlay's own
+//               translucency)
+//   screen    = backbuffer width, height (for the pixel->NDC divide)
+constexpr char kUiTexturedQuadVs[] = R"HLSL(
+cbuffer C : register(b0) {
+    float4 rect;
+    float4 uv_minmax;
+    float4 tint;
+    float2 screen;
+};
+struct V { float4 pos:SV_Position; float2 uv:TEXCOORD0; };
+V main(uint id : SV_VertexID) {
+    V o;
+    float2 corner = float2(float(id & 1u), float((id >> 1u) & 1u));
+    float2 px = rect.xy + corner * rect.zw;
+    float2 ndc = float2(px.x / screen.x * 2.0 - 1.0, 1.0 - px.y / screen.y * 2.0);
+    o.pos = float4(ndc, 0.5, 1.0);
+    o.uv = lerp(uv_minmax.xy, uv_minmax.zw, corner);
+    return o;
+}
+)HLSL";
+
+constexpr char kUiTexturedQuadPs[] = R"HLSL(
+cbuffer C : register(b0) {
+    float4 rect;
+    float4 uv_minmax;
+    float4 tint;
+    float2 screen;
+};
+Texture2D t : register(t0);
+SamplerState s : register(s0);
+struct V { float4 p:SV_Position; float2 uv:TEXCOORD0; };
+float4 main(V v) : SV_Target { return t.Sample(s, v.uv) * tint; }
+)HLSL";
+
+// Flat-colored quad, draw-call based. Used by the native settings overlay's
+// panel background and text glyphs instead of a rect-limited
+// ClearRenderTargetView -- see ensure_native_settings_solid_pipeline_loaded.
+constexpr char kUiSolidQuadVs[] = R"HLSL(
+cbuffer C : register(b0) {
+    int4 rect;
+    float4 color;
+    uint2 screen;
+    uint2 glyph_mask;
+    uint glyph_mode;
+};
+struct V { float4 pos:SV_Position; };
+V main(uint id : SV_VertexID, uint cell : SV_InstanceID) {
+    V o;
+    float2 corner = float2(float(id & 1u), float((id >> 1u) & 1u));
+    float2 px = float2(rect.xy) + corner * float2(rect.zw);
+    if (glyph_mode != 0u) {
+        uint mask_word = cell < 32u ? glyph_mask.x : glyph_mask.y;
+        uint bit = (mask_word >> (cell & 31u)) & 1u;
+        // Match the old CPU integer cell placement/clipping before conversion.
+        int2 cell_min = rect.xy + int2(cell % 5u, cell / 5u) * rect.zw;
+        int2 cell_max = clamp(cell_min + rect.zw, int2(0, 0), int2(screen));
+        cell_min = clamp(cell_min, int2(0, 0), int2(screen));
+        px = float2(cell_min) + corner * float2(cell_max - cell_min) * float(bit);
+    }
+    float2 ndc = float2(px.x / screen.x * 2.0 - 1.0, 1.0 - px.y / screen.y * 2.0);
+    o.pos = float4(ndc, 0.5, 1.0);
+    return o;
+}
+)HLSL";
+
+constexpr char kUiSolidQuadPs[] = R"HLSL(
+cbuffer C : register(b0) {
+    int4 rect;
+    float4 color;
+    uint2 screen;
+    uint2 glyph_mask;
+    uint glyph_mode;
+};
+float4 main() : SV_Target { return color; }
+)HLSL";
+
+
+constexpr char kClearPs[] =
+    "cbuffer C:register(b0){float4 clear_color;};"
+    "float4 main():SV_Target{return clear_color;}";
+constexpr char kDepthCarryPs[] =
+    "Texture2D<float> t:register(t0);"
+    "SamplerState s:register(s0);"
+    "struct V{float4 p:SV_Position;float2 uv:TEXCOORD0;};"
+    "float main(V v):SV_Depth{return t.SampleLevel(s,v.uv,0);}";
+
+}  // namespace
+
+std::string_view blit_vertex_shader_source() noexcept {
+    return {kBlitVs, sizeof(kBlitVs) - 1u};
+}
+
+std::string_view blit_pixel_shader_source() noexcept {
+    return {kBlitPs, sizeof(kBlitPs) - 1u};
+}
+
+std::string_view ui_textured_quad_vertex_shader_source() noexcept {
+    return {kUiTexturedQuadVs, sizeof(kUiTexturedQuadVs) - 1u};
+}
+
+std::string_view ui_textured_quad_pixel_shader_source() noexcept {
+    return {kUiTexturedQuadPs, sizeof(kUiTexturedQuadPs) - 1u};
+}
+
+std::string_view ui_solid_quad_vertex_shader_source() noexcept {
+    return {kUiSolidQuadVs, sizeof(kUiSolidQuadVs) - 1u};
+}
+
+std::string_view ui_solid_quad_pixel_shader_source() noexcept {
+    return {kUiSolidQuadPs, sizeof(kUiSolidQuadPs) - 1u};
+}
+
+std::string_view clear_pixel_shader_source() noexcept {
+    return {kClearPs, sizeof(kClearPs) - 1u};
+}
+
+std::string_view depth_carry_pixel_shader_source() noexcept {
+    return {kDepthCarryPs, sizeof(kDepthCarryPs) - 1u};
+}
+
 std::string_view efb_conversion_shader_source() noexcept {
     return std::string_view{kConvPs, sizeof(kConvPs) - 1u};
 }

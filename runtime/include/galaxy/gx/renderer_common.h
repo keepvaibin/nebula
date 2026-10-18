@@ -95,6 +95,27 @@ struct EfbConversionShaderConstants {
 };
 
 [[nodiscard]] std::string_view efb_conversion_shader_source() noexcept;
+
+// The renderers' utility shaders (HLSL; the Vulkan backend annotates and compiles the same source): the
+// fullscreen-triangle blit, the EFB colour-channel clear, the depth carry after a resolution change, and the
+// overlay's textured and solid quads (root constants / push constants b0).
+[[nodiscard]] std::string_view blit_vertex_shader_source() noexcept;
+[[nodiscard]] std::string_view blit_pixel_shader_source() noexcept;
+[[nodiscard]] std::string_view clear_pixel_shader_source() noexcept;
+[[nodiscard]] std::string_view depth_carry_pixel_shader_source() noexcept;
+[[nodiscard]] std::string_view ui_textured_quad_vertex_shader_source() noexcept;
+[[nodiscard]] std::string_view ui_textured_quad_pixel_shader_source() noexcept;
+[[nodiscard]] std::string_view ui_solid_quad_vertex_shader_source() noexcept;
+[[nodiscard]] std::string_view ui_solid_quad_pixel_shader_source() noexcept;
+// The solid quad's constants; glyph mode draws a 5x7 bitmap as instanced cells.
+struct UiSolidQuadConstants {
+    std::int32_t rect[4];
+    float color[4];
+    std::uint32_t screen[2];
+    std::uint32_t glyph_mask[2];
+    std::uint32_t glyph_mode;
+};
+static_assert(sizeof(UiSolidQuadConstants) == 13u * sizeof(std::uint32_t));
 [[nodiscard]] EfbConversionShaderConstants make_efb_conversion_constants(
     const EfbCopyParams& params,
     bool is_depth_copy,
