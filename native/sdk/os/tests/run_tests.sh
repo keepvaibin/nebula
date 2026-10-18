@@ -1,5 +1,5 @@
 #!/bin/sh
-# Builds and runs the OS core tests (context switch, the SDK scheduler on the native core) with the game module's
+# Builds and runs the native layer's tests (context switch, the SDK scheduler on the native core, the MTX library) with the game module's
 # C flags. Usage: native/sdk/os/tests/run_tests.sh <petari checkout> <output dir> [clang]
 set -e
 P=$1
@@ -20,5 +20,7 @@ SDK="$P/src/RVL_SDK/os/OSThread.c $P/src/RVL_SDK/os/OSMutex.c $P/src/RVL_SDK/os/
      $P/src/RVL_SDK/os/OSTime.c $P/src/RVL_SDK/os/OSArena.c"
 $CC $FL "$N/sdk/os/tests/context_switch_tests.c" "$N/sdk/os/context_switch.c" -o "$OUT/context_switch_tests$EXE"
 $CC $FL "$N/sdk/os/tests/os_scheduler_tests.c" $OS $SDK $LIBS -o "$OUT/os_scheduler_tests$EXE"
+$CC $FL "$N/sdk/mtx/tests/mtx_tests.c" "$N/sdk/mtx/mtx_native.c" -o "$OUT/mtx_tests$EXE"
 "$OUT/context_switch_tests$EXE"
 "$OUT/os_scheduler_tests$EXE"
+"$OUT/mtx_tests$EXE"

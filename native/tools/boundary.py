@@ -9,7 +9,7 @@ import sys
 
 objdir, out = sys.argv[1], sys.argv[2]
 bin_ = r"C:\Program Files\LLVM\bin"
-objs = sorted(os.path.join(objdir, f) for f in os.listdir(objdir) if f.endswith(".o"))
+objs = sorted(os.path.join(b, f) for b, _, fs in os.walk(objdir) for f in fs if f.endswith((".o", ".obj")))
 defined, refs = set(), collections.defaultdict(set)
 for i in range(0, len(objs), 200):
     chunk = objs[i:i + 200]
