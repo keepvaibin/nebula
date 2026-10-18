@@ -15,9 +15,19 @@ BOOL THPInit(void) {
     return TRUE;
 }
 
+/* The frame's video component and its size (from the frame header, as the game's player reads it). */
+s32 __NebulaTHPVideoDecode(void* file, u32 size, void* tileY, void* tileU, void* tileV) {
+    return nebula_host()->thp_video_decode(nebula_host()->user, file, size, tileY, tileU, tileV);
+}
+
+/* Without the size the frame cannot be bounded (see __NebulaTHPVideoDecode). */
 s32 THPVideoDecode(void* file, void* tileY, void* tileU, void* tileV, void* work) {
+    (void)file;
+    (void)tileY;
+    (void)tileU;
+    (void)tileV;
     (void)work;
-    return nebula_host()->thp_video_decode(nebula_host()->user, file, tileY, tileU, tileV);
+    return -1;
 }
 
 typedef struct {

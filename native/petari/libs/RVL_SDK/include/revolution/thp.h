@@ -142,6 +142,10 @@ void __THPHuffDecodeDCTCompU(THPFileInfo *, THPCoeff *);
 void __THPHuffDecodeDCTCompV(THPFileInfo *, THPCoeff *);
 
 s32 THPVideoDecode(void *file, void *tileY, void *tileU, void *tileV, void *work);
+#ifdef TARGET_PC
+// The video component with its size: THP's entropy data is not byte-stuffed, so only the size bounds a frame.
+s32 __NebulaTHPVideoDecode(void *file, u32 size, void *tileY, void *tileU, void *tileV);
+#endif
 u32 THPAudioDecode(s16 *, u8 *, s32);
 
 BOOL THPInit(void);

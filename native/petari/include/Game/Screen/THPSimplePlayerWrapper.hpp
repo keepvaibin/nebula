@@ -31,7 +31,11 @@ public:
     bool getVideoInfo(THPVideoInfo*) const;
     f32 getFrameRate() const;
     s32 getTotalFrame() const;
+#ifdef TARGET_PC
+    bool videoDecode(u8*, u32);  // with the component's size (__NebulaTHPVideoDecode)
+#else
     bool videoDecode(u8*);
+#endif
     void readFrameAsync();
     void checkPrefetch();
     void dvdCallBack(s32);

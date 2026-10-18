@@ -167,9 +167,10 @@ typedef struct NebulaHostServices {
     /* The HOME Menu (NEBULA_HBM_*). */
     int (*hbm)(void* user, uint32_t what, uint32_t value);
 
-    /* THP: one movie frame's video data (the game's THPVideoDecode) into its Y, U and V planes in game memory, which
-       must hold the result before the renderer reads them; 0 on success, as THPVideoDecode returns. */
-    int32_t (*thp_video_decode)(void* user, const void* frame, void* y, void* u, void* v);
+    /* THP: one movie frame's video component (`size` bytes, one JPEG whose entropy data is not byte-stuffed, so only
+       the size bounds it) into its Y, U and V planes in game memory, which must hold the result before the renderer
+       reads them; 0 on success, as THPVideoDecode returns. */
+    int32_t (*thp_video_decode)(void* user, const void* frame, uint32_t size, void* y, void* u, void* v);
 
     /* The game wrote [physical, physical + size) for the GPU: the console's cache flushes (DCFlushRange,
        DCStoreRange) and DMA copies. The renderer drops what it holds of that memory. Called on the simulation

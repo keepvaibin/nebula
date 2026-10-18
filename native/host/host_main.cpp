@@ -16,6 +16,7 @@
 #include "galaxy/native_api.h"
 #include "galaxy/native_host.h"
 #include "galaxy/native_input.h"
+#include "galaxy/native_thp_video.h"
 #endif
 
 #include <atomic>
@@ -918,9 +919,56 @@ int svc_hbm(void*, uint32_t what, uint32_t) {
     return what == NEBULA_HBM_POLL ? -1 : 0;
 }
 
-int32_t svc_thp_video_decode(void*, const void*, void*, void*, void*) {
+#if defined(NEBULA_HOST_RENDERER)
+// The physical address of a host pointer into the game's memory (0 outside it).
+uint32_t physical_of(const void* pointer) {
+    const auto* p = static_cast<const std::byte*>(pointer);
+    for (const galaxy::GuestMemoryRegionV1& region : gRegions) {
+        if (region.guest_base < 0x80000000u && p >= region.host_base && p < region.host_base + region.size) {
+            return region.guest_base + static_cast<uint32_t>(p - region.host_base);
+        }
+    }
     return 0;
 }
+
+// A THP frame's video component is one baseline JPEG whose SOF0 gives the movie's size; v1.0.1's decoder writes its
+// planes in GX's I8 tiling. The planes are then the renderer's to re-read, as after the console's decode.
+int32_t svc_thp_video_decode(void*, const void* frame, uint32_t size, void* y, void* u, void* v) {
+    ensure_guest_memory();
+    const auto* p = static_cast<const uint8_t*>(frame);
+    if (size < 4 || p[0] != 0xFF || p[1] != 0xD8) {
+        return -1;
+    }
+    uint16_t width = 0, height = 0;
+    for (size_t i = 2; i + 9 <= size && p[i] == 0xFF && p[i + 1] != 0xDA;
+         i += 2 + ((size_t(p[i + 2]) << 8) | p[i + 3])) {
+        if (p[i + 1] == 0xC0) {
+            height = static_cast<uint16_t>((p[i + 5] << 8) | p[i + 6]);
+            width = static_cast<uint16_t>((p[i + 7] << 8) | p[i + 8]);
+        }
+    }
+    if (width == 0 || height == 0) {
+        return -1;
+    }
+    const size_t end = size;
+    const auto plane = [](size_t w, size_t h) { return ((w + 7) / 8) * ((h + 3) / 4) * 32; };
+    const size_t luma = plane(width, height);
+    const size_t chroma = plane((width + 1u) / 2u, (height + 1u) / 2u);
+    const int32_t result = galaxy::thp::decode_video(
+        {p, end}, width, height, {static_cast<uint8_t*>(y), luma}, {static_cast<uint8_t*>(u), chroma},
+        {static_cast<uint8_t*>(v), chroma});
+    for (const auto& [plane_pointer, size] : {std::pair{y, luma}, std::pair{u, chroma}, std::pair{v, chroma}}) {
+        if (const uint32_t physical = physical_of(plane_pointer)) {
+            galaxy::gx::notify_guest_memory_write(physical, static_cast<uint32_t>(size));
+        }
+    }
+    return result;
+}
+#else
+int32_t svc_thp_video_decode(void*, const void*, uint32_t, void*, void*, void*) {
+    return 0;
+}
+#endif
 
 }  // namespace
 
