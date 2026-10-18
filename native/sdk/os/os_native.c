@@ -738,7 +738,11 @@ void* __NebulaThreadStack(OSThread* thread, u32 requested, u32* size) {
     return slot->end + slot->size;
 }
 
-void __NebulaReleaseThreadStack(OSThread* thread) {
+/* An exiting thread still runs on its stack (the reschedule, the idle wait and the interrupts it delivers, which may
+   create threads) until the switch away: its slot is freed by that switch, not here. */
+static OSThread* sReleasing;
+
+static void release_slot(const OSThread* thread) {
     for (int i = 0; i < sStackSlotCount; i++) {
         if (sStackSlots[i].owner == thread) {
             sStackSlots[i].owner = NULL;
@@ -746,12 +750,45 @@ void __NebulaReleaseThreadStack(OSThread* thread) {
     }
 }
 
+void __NebulaReleaseThreadStack(OSThread* thread) {
+    if (thread == (OSThread*)OSGetCurrentThread()) {
+        if (sReleasing != NULL) {
+            release_slot(sReleasing); /* an earlier exit, left behind: this thread runs now */
+        }
+        sReleasing = thread;
+    } else {
+        release_slot(thread);
+    }
+}
+
+/* A thread that has come within 8 KB of its guard is reported once (an overflow into the guard leaves no stack to
+   report from): the switching thread's stack pointer is its depth at this point. */
+static void check_stack_depth(const OSThread* thread, const void* sp) {
+    static int sWarned;
+    if (thread->stackEnd != NULL && (const u8*)sp - (const u8*)thread->stackEnd < 0x2000 && !sWarned) {
+        sWarned = 1;
+        nebula_log("thread %p is within %d bytes of its stack's end\n", (const void*)thread,
+                   (int)((const u8*)sp - (const u8*)thread->stackEnd));
+    }
+}
+
+extern OSContext IdleContext; /* OSThread.c: the context of no thread, while the scheduler waits */
+
 void __NebulaSwitchThread(OSContext* from, OSContext* to) {
     void* fake = NULL;
     const OSThread* next = (const OSThread*)to; /* the context is the thread's first member */
+    const OSThread* self = from != &IdleContext ? (const OSThread*)from : NULL;
+    if (self != NULL) {
+        check_stack_depth(self, __builtin_frame_address(0));
+    }
     NEBULA_ASAN_START(&fake, next->stackEnd, (size_t)((const u8*)next->stackBase - (const u8*)next->stackEnd));
     nebula_switch_stack(&from->nativeSp, to->nativeSp);
     NEBULA_ASAN_FINISH(fake);
+    /* Running again (self), on another thread's switch: the exiting thread that switch left is off its stack now. */
+    if (sReleasing != NULL && sReleasing != self) {
+        release_slot(sReleasing);
+        sReleasing = NULL;
+    }
 }
 
 /* The boot thread runs on a stack in MEM1 below the arena, as the console's main stack is. */

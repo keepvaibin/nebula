@@ -187,6 +187,8 @@ void GameScene::draw() const {
             MR::requestChangeStageInGameMoving(sStage, action.scenario);
         } else if (action.kind == NEBULA_TEST_PLACE_PLAYER) {
             MR::setPlayerPos(TVec3f(action.position[0], action.position[1], action.position[2]));
+        } else if (action.kind == NEBULA_TEST_KILL_PLAYER) {
+            MR::forceKillPlayerByAbyss();
         }
     }
 #endif

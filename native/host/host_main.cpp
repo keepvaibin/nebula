@@ -12,6 +12,7 @@
 #include <nebula_game_api.h>
 
 #if defined(NEBULA_HOST_RENDERER)
+#include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/gx_d3d12.h"
 #include "galaxy/native_api.h"
 #include "galaxy/native_host.h"
@@ -23,8 +24,10 @@
 #include <crtdbg.h>
 #endif
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <condition_variable>
 #include <cstdarg>
 #include <cstdio>
@@ -42,6 +45,7 @@
 #if defined(_WIN32)
 #define NOMINMAX
 #include <windows.h>
+#include <dbghelp.h>
 #else
 #include <dlfcn.h>
 #include <fcntl.h>
@@ -128,6 +132,7 @@ std::atomic<uint32_t> gDiscReads{0};
 std::atomic<uint32_t> gFsOps{0};
 std::atomic<uint32_t> gAiBlocks{0};
 std::atomic<uint32_t> gDspFrames{0};
+std::atomic<uint32_t> gMovieFrames{0};
 
 void* find_symbol(void* module, const char* name) {
 #if defined(_WIN32)
@@ -523,10 +528,11 @@ void ai_thread() {
     }
 }
 
-// The display's retrace: NTSC fields at 60000/1001 Hz. A late wake-up skips the fields it missed, as a display does,
-// rather than delivering them back to back.
+// The display's retrace at 60 Hz, as v1.0.1 paces the game: the console's NTSC 59.94 would repeat a frame every 17 s on
+// a 60 Hz display. A late wake-up skips the fields it missed, as a display does, rather than delivering them back to
+// back.
 void vi_thread() {
-    const auto period = std::chrono::nanoseconds(1001000000000ull / 60000);
+    const auto period = std::chrono::nanoseconds(1000000000ull / 60);
     auto next = Clock::now() + period;
     for (;;) {
         sleep_until_precise(next);
@@ -545,8 +551,132 @@ void svc_log(void*, const char* text) {
     log_line("game:", text);
 }
 
+#if defined(_WIN32)
+// Crash reports. A fatal exception in the game module or the host, or the game's own fatal call, writes a minidump to
+// GALAXY_CRASH_DUMP_DIR, else %LOCALAPPDATA%\Nebula\crashes for the player's executable and crashes\ in the working
+// directory for the headless test host, from a thread kept for it (the failing thread's stack may be what failed), logs
+// where it happened and the game's threads, and ends the process.
+using MiniDumpWriteDumpFn = decltype(&MiniDumpWriteDump);  // loaded at the crash: dbghelp.dll is not linked
+
+HANDLE gCrashRequest;
+HANDLE gCrashDone;
+EXCEPTION_POINTERS* gCrashInfo;
+DWORD gCrashThread;
+std::atomic<int> gCrashing{0};
+
+void crash_writer() {
+    for (;;) {
+        WaitForSingleObject(gCrashRequest, INFINITE);
+        wchar_t dir[MAX_PATH] = {};
+        if (GetEnvironmentVariableW(L"GALAXY_CRASH_DUMP_DIR", dir, MAX_PATH) == 0) {
+#if defined(NEBULA_HOST_RENDERER)
+            wchar_t local[MAX_PATH] = {};
+            GetEnvironmentVariableW(L"LOCALAPPDATA", local, MAX_PATH);
+            std::swprintf(dir, MAX_PATH, L"%ls\\Nebula\\crashes", local);
+#else
+            std::swprintf(dir, MAX_PATH, L"crashes");
+#endif
+        }
+        std::error_code ignored;
+        fs::create_directories(dir, ignored);
+        SYSTEMTIME now;
+        GetLocalTime(&now);
+        wchar_t path[MAX_PATH];
+        std::swprintf(path, MAX_PATH, L"%ls\\nebula-native-%04u%02u%02u-%02u%02u%02u-%lu.dmp", dir, now.wYear, now.wMonth,
+                      now.wDay, now.wHour, now.wMinute, now.wSecond, GetCurrentProcessId());
+        const HMODULE dbghelp = LoadLibraryW(L"dbghelp.dll");
+        const auto write = dbghelp != nullptr
+                               ? reinterpret_cast<MiniDumpWriteDumpFn>(GetProcAddress(dbghelp, "MiniDumpWriteDump"))
+                               : nullptr;
+        const HANDLE file = CreateFileW(path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (write != nullptr && file != INVALID_HANDLE_VALUE) {
+            MINIDUMP_EXCEPTION_INFORMATION exception{gCrashThread, gCrashInfo, FALSE};
+            // Stacks and what they point at (the module's data segments would add its half-gigabyte image window).
+            const auto type = static_cast<MINIDUMP_TYPE>(MiniDumpWithIndirectlyReferencedMemory | MiniDumpWithThreadInfo);
+            const BOOL ok = write(GetCurrentProcess(), GetCurrentProcessId(), file, type,
+                                  gCrashInfo != nullptr ? &exception : nullptr, nullptr, nullptr);
+            char text[MAX_PATH + 32];
+            std::snprintf(text, sizeof(text), "%s %ls", ok ? "minidump" : "minidump failed:", path);
+            log_line("crash:", text);
+        }
+        if (file != INVALID_HANDLE_VALUE) {
+            CloseHandle(file);
+        }
+        SetEvent(gCrashDone);
+    }
+}
+
+void report_crash(EXCEPTION_POINTERS* info) {
+    if (gCrashRequest == nullptr) {
+        return;
+    }
+    gCrashInfo = info;
+    gCrashThread = GetCurrentThreadId();
+    SetEvent(gCrashRequest);
+    WaitForSingleObject(gCrashDone, 60000);
+    if (gModule.debug_dump != nullptr) {
+        gModule.debug_dump();
+    }
+    std::fflush(stdout);
+}
+
+// The report, out of line: the filter below runs for every exception in the process and keeps its frame small.
+[[noreturn]] __declspec(noinline) void report_fatal_exception(EXCEPTION_POINTERS* info, HMODULE owner) {
+    const DWORD code = info->ExceptionRecord->ExceptionCode;
+    const void* address = info->ExceptionRecord->ExceptionAddress;
+    wchar_t name[MAX_PATH] = {};
+    GetModuleFileNameW(owner, name, MAX_PATH);
+    char text[MAX_PATH + 160];
+    std::snprintf(text, sizeof(text), "exception 0x%08lX at %ls+0x%llx (thread %lu), address 0x%llx", code,
+                  fs::path(name).filename().c_str(),
+                  static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(address) - reinterpret_cast<uintptr_t>(owner)),
+                  GetCurrentThreadId(),
+                  static_cast<unsigned long long>(info->ExceptionRecord->NumberParameters >= 2
+                                                      ? info->ExceptionRecord->ExceptionInformation[1]
+                                                      : 0));
+    log_line("crash:", text);
+    report_crash(info);
+    std::_Exit(4);
+}
+
+#if defined(__clang__)
+__attribute__((no_sanitize("address", "undefined")))
+#endif
+LONG CALLBACK crash_handler(EXCEPTION_POINTERS* info) {
+    const DWORD code = info->ExceptionRecord->ExceptionCode;
+    if (code != EXCEPTION_ACCESS_VIOLATION && code != EXCEPTION_ILLEGAL_INSTRUCTION && code != EXCEPTION_PRIV_INSTRUCTION &&
+        code != EXCEPTION_STACK_OVERFLOW && code != EXCEPTION_INT_DIVIDE_BY_ZERO && code != EXCEPTION_INT_OVERFLOW &&
+        code != EXCEPTION_IN_PAGE_ERROR) {
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+    // Only faults in the game module or this executable: drivers and system libraries handle their own.
+    HMODULE owner = nullptr;
+    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                            static_cast<LPCWSTR>(info->ExceptionRecord->ExceptionAddress), &owner) ||
+        (owner != GetModuleHandleW(nullptr) && owner != GetModuleHandleW(L"smg_game.dll"))) {
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+    if (gCrashing.exchange(1) != 0) {
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+    report_fatal_exception(info, owner);
+}
+
+void install_crash_reporter() {
+    gCrashRequest = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+    gCrashDone = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+    std::thread(crash_writer).detach();
+    AddVectoredExceptionHandler(0, crash_handler);  // last: the module's own handlers (division, stack guards) first
+}
+#endif
+
 void svc_fatal(void*, const char* text) {
     log_line("fatal:", text);
+#if defined(_WIN32)
+    if (gCrashing.exchange(1) == 0) {
+        report_crash(nullptr);
+    }
+#endif
     std::fflush(stdout);
     std::_Exit(3);
 }
@@ -757,9 +887,57 @@ void svc_vi_frame(void*, uint32_t xfb, int black, uint32_t retrace) {
     if (!gRegions.empty()) {
         submit_frame(true, xfb == 0 || black ? galaxy::gx::kNoDisplayedXfbAddr : xfb);
     }
+    // The output's shape (the window's, or the chosen aspect) is latched once this retrace's picture is presented, as
+    // v1.0.1 does: queued frames finish first, so a picture is never fitted with the next frame's camera and layouts.
+    if (galaxy::experimental_dynamic_aspect_requested()) {
+        const auto client = galaxy::gx::aspect_latch_extent();
+        if (client.width > 1 && client.height > 1 &&
+            galaxy::experimental_dynamic_aspect_change_pending(client.width, client.height)) {
+            galaxy::gx::wait_for_render_idle();
+            const auto settled = galaxy::gx::aspect_latch_extent();
+            if (settled.width > 1 && settled.height > 1) {
+                galaxy::experimental_latch_dynamic_aspect(settled.width, settled.height);
+            }
+        }
+    }
 #else
     (void)black;
 #endif
+}
+
+// The shape the game draws for (display_native.c makes v1.0.1's policy of it): the latched output shape, or a fixed
+// GALAXY_EXPERIMENTAL_ULTRAWIDE_ASPECT; headless, the Wii's 16:9.
+uint32_t svc_display_extent(void*) {
+#if defined(NEBULA_HOST_RENDERER)
+    if (galaxy::experimental_dynamic_aspect_requested()) {
+        return static_cast<uint32_t>(galaxy::g_experimental_dynamic_aspect_word.load(std::memory_order_acquire));
+    }
+    if (const auto& fixed = galaxy::experimental_ultrawide_aspect_from_env(); fixed && !galaxy::native_four_three(*fixed)) {
+        return static_cast<uint32_t>(std::lround(fixed->content_aspect * 1000.0)) << 16 | 1000u;
+    }
+#endif
+    return 0;
+}
+
+void svc_scene_surround(void*, float intensity) {
+#if defined(NEBULA_HOST_RENDERER)
+    galaxy::gx::set_safety_scene_surround(intensity);
+#else
+    (void)intensity;
+#endif
+}
+
+uint32_t svc_option(void*, uint32_t what) {
+    switch (what) {
+    case NEBULA_OPTION_TEXT_SPEED:
+#if defined(NEBULA_HOST_RENDERER)
+        return std::clamp(galaxy::get_runtime_settings().text_speed, 1u, 3u);
+#else
+        return 1;
+#endif
+    default:
+        return 0;
+    }
 }
 
 void svc_fs_request(void*, const NebulaFsRequest* request, uint32_t slot) {
@@ -783,7 +961,11 @@ void svc_fs_request(void*, const NebulaFsRequest* request, uint32_t slot) {
 uint32_t svc_sc_get(void*, uint32_t item) {
     switch (item) {
     case NEBULA_SC_LANGUAGE:
+#if defined(NEBULA_HOST_RENDERER)
+        return static_cast<uint32_t>(galaxy::game_language_for_boot());  // the language setting, fixed at boot
+#else
         return 1;  // English
+#endif
     case NEBULA_SC_SOUND_MODE:
         return 1;  // stereo
     case NEBULA_SC_ASPECT_RATIO:
@@ -1004,6 +1186,8 @@ int svc_hbm(void*, uint32_t what, uint32_t) {
 //     frames apart (default 1200), through MR::requestChangeStageInGameMoving.
 //   GALAXY_TEST_TELEPORT=x,y,z,frame[/x,y,z,frame...]: MR::setPlayerPos at those scene frames, held 30 frames (the
 //     player settles there); counted from the latest tour stop when touring.
+//   GALAXY_TEST_EVENTS=kind@frame[/kind@frame...]: once at that scene frame (from the latest stop when touring): kill (a
+//     miss: MR::forceKillPlayerByAbyss).
 int svc_test_scene_frame(void*, NebulaTestAction* action) {
     struct Stop {
         std::string stage;
@@ -1015,6 +1199,11 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
     };
     static std::vector<Stop> stops;
     static std::vector<Teleport> teleports;
+    struct Event {
+        uint32_t kind;
+        uint64_t frame;
+    };
+    static std::vector<Event> events;
     static uint64_t tour_frames = 1200;
     static bool touring = false;
     static bool loaded = false;
@@ -1039,6 +1228,23 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
             std::snprintf(text, sizeof(text), "stops %zu, %llu frames apart", stops.size(),
                           static_cast<unsigned long long>(tour_frames));
             log_line("tour:", text);
+        }
+        if (const char* list = std::getenv("GALAXY_TEST_EVENTS")) {
+            std::string entries = list;
+            size_t start = 0;
+            while (start < entries.size()) {
+                const size_t end = std::min(entries.find('/', start), entries.size());
+                const std::string entry = entries.substr(start, end - start);
+                const size_t at = entry.find('@');
+                if (at != std::string::npos) {
+                    const std::string kind = entry.substr(0, at);
+                    const uint64_t frame = std::strtoull(entry.c_str() + at + 1, nullptr, 10);
+                    if (kind == "kill") {
+                        events.push_back({NEBULA_TEST_KILL_PLAYER, frame});
+                    }
+                }
+                start = end + 1;
+            }
         }
         if (const char* list = std::getenv("GALAXY_TEST_TELEPORT")) {
             std::string entries = list;
@@ -1069,10 +1275,19 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
         log_line("tour:", text);
         return 1;
     }
-    if (teleports.empty() || (touring && stop_frame == 0)) {
+    if (touring && stop_frame == 0) {
         return 0;
     }
     const uint64_t frame = scene_frames - stop_frame;
+    for (const Event& event : events) {
+        if (frame == event.frame) {
+            action->kind = event.kind;
+            char text[64];
+            std::snprintf(text, sizeof(text), "event %u at frame %llu", event.kind, static_cast<unsigned long long>(frame));
+            log_line("test:", text);
+            return 1;
+        }
+    }
     for (const Teleport& t : teleports) {
         if (frame >= t.frame && frame < t.frame + 30u) {
             action->kind = NEBULA_TEST_PLACE_PLAYER;
@@ -1123,6 +1338,7 @@ uint32_t physical_of(const void* pointer) {
 // A THP frame's video component is one baseline JPEG whose SOF0 gives the movie's size; v1.0.1's decoder writes its
 // planes in GX's I8 tiling. The planes are then the renderer's to re-read, as after the console's decode.
 int32_t svc_thp_video_decode(void*, const void* frame, uint32_t size, void* y, void* u, void* v) {
+    gMovieFrames.fetch_add(1, std::memory_order_relaxed);
     ensure_guest_memory();
     const auto* p = static_cast<const uint8_t*>(frame);
     if (size < 4 || p[0] != 0xFF || p[1] != 0xD8) {
@@ -1172,6 +1388,16 @@ int main(int argc, char** argv) {
     _CrtSetReportFile(_CRT_ERROR, _CRTDBG_FILE_STDERR);
     _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX | SEM_NOGPFAULTERRORBOX);
+#endif
+#if defined(_WIN32)
+    install_crash_reporter();
+    // Validation of the crash path, as v1.0.1's: a host thread faults once the game has started.
+    if (const char* test = std::getenv("GALAXY_CRASH_TEST"); test != nullptr && test[0] == '1') {
+        std::thread([] {
+            std::this_thread::sleep_for(std::chrono::seconds(5));
+            *static_cast<volatile int*>(nullptr) = 1;
+        }).detach();
+    }
 #endif
     fs::path pak, nand, module;
     double seconds = 0;
@@ -1241,7 +1467,16 @@ int main(int argc, char** argv) {
     services.game_context = svc_game_context;
     services.power = svc_power;
     services.test_scene_frame = svc_test_scene_frame;
+    services.display_extent = svc_display_extent;
+    services.scene_surround = svc_scene_surround;
+    services.option = svc_option;
 #if defined(NEBULA_HOST_RENDERER)
+    // Every aspect follows the output's shape through the live aspect path, as v1.0.1 sets it; explicit aspect
+    // variables (tests) are kept. Before the renderer starts: it reads the choice once.
+    if (std::getenv("GALAXY_EXPERIMENTAL_DYNAMIC_ASPECT") == nullptr && std::getenv("GALAXY_EXPERIMENTAL_NATIVE_4_3") == nullptr &&
+        std::getenv("GALAXY_EXPERIMENTAL_ULTRAWIDE_ASPECT") == nullptr) {
+        _putenv_s("GALAXY_EXPERIMENTAL_DYNAMIC_ASPECT", "1");
+    }
     // The player's settings and display configuration (GALAXY_RUNTIME_SETTINGS_PATH / GALAXY_RENDER_CONFIG_PATH in
     // tests), loaded before the window as v1.0.1 does; the settings overlay reads its frame art from the game files.
     try {
@@ -1327,8 +1562,9 @@ int main(int argc, char** argv) {
                 log_line("host:", ("jaudio " + gAudio->stats_line()).c_str());
             }
             const size_t length = std::strlen(text);
-            std::snprintf(text + length, sizeof(text) - length, ", renderer frames %llu",
-                          (unsigned long long)gSubmissions.load(std::memory_order_relaxed));
+            std::snprintf(text + length, sizeof(text) - length, ", renderer frames %llu, movie frames %u",
+                          (unsigned long long)gSubmissions.load(std::memory_order_relaxed),
+                          gMovieFrames.load(std::memory_order_relaxed));
 #endif
             log_line("host:", text);
             reported = retraces;

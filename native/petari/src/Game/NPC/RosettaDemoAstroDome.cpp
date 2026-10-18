@@ -1,4 +1,7 @@
 #include "Game/NPC/RosettaDemoAstroDome.hpp"
+#ifdef TARGET_PC
+#include <nebula_game_api.h>
+#endif
 #include "Game/Demo/DemoFunction.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/NPC/Rosetta.hpp"
@@ -82,6 +85,12 @@ void RosettaMonologue::control() {
     }
 
     mTextFormer.updateTalking();
+#ifdef TARGET_PC
+    // Nebula's text speed, for Rosalina's storybook too.
+    for (u32 speed = __NebulaOption(NEBULA_OPTION_TEXT_SPEED); speed > 1 && !mTextFormer.isTextAppearedAll(); speed--) {
+        mTextFormer.updateTalking();
+    }
+#endif
 
     if (!mTextFormer.isTextAppearedAll()) {
         return;

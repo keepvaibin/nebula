@@ -8,6 +8,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
+#include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SchedulerUtil.hpp"
 #include <JSystem/J3DGraphBase/J3DShape.hpp>
 #include <JSystem/J3DGraphBase/J3DSys.hpp>
@@ -443,7 +444,13 @@ void CollisionShadow::drawAndCaptureTex(J3DModelX* pModel, const TVec3f& rPositi
     }
 
     if (!(_308 & 4)) {
+#ifdef TARGET_PC
+        MR::beginWiiScreenWidth();
+#endif
         TDDraw::setup(0, 1, 2);
+#ifdef TARGET_PC
+        MR::endWiiScreenWidth();
+#endif
         GXSetColorUpdate(GX_FALSE);
         GXSetAlphaUpdate(GX_TRUE);
         GXSetBlendMode(GX_BM_BLEND, GX_BL_DSTALPHA, GX_BL_ZERO, GX_LO_NOOP);
@@ -451,7 +458,13 @@ void CollisionShadow::drawAndCaptureTex(J3DModelX* pModel, const TVec3f& rPositi
         f32 y = _2FE / 2;
         f32 x = 608 - _2FC / 2;
         TVec3f center(x, y, 0.0f);
+#ifdef TARGET_PC
+        MR::beginWiiScreenWidth();
+#endif
         TDDraw::fix2Dpos(&center);
+#ifdef TARGET_PC
+        MR::endWiiScreenWidth();
+#endif
         TDDraw::drawFillCircle(center, _2FC / 2, 0xFFFFFFC0, 0, 16);
         const ResTIMG* image = _300->getTexInfo();
         void* destination = const_cast< u8* >(reinterpret_cast< const u8* >(image) + image->mImageDataOffset);

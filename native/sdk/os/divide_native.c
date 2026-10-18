@@ -59,7 +59,8 @@ static int decode_divide(const uint8_t* ip, int* wide, int* is_signed) {
     return length;
 }
 
-static LONG CALLBACK divide_handler(EXCEPTION_POINTERS* info) {
+/* Every exception in the process passes here, an AddressSanitizer build's own included: uninstrumented. */
+__attribute__((no_sanitize("address", "undefined"))) static LONG CALLBACK divide_handler(EXCEPTION_POINTERS* info) {
     const DWORD code = info->ExceptionRecord->ExceptionCode;
     if (code != EXCEPTION_INT_DIVIDE_BY_ZERO && code != EXCEPTION_INT_OVERFLOW) {
         return EXCEPTION_CONTINUE_SEARCH;

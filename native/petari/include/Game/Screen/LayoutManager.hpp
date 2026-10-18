@@ -93,4 +93,10 @@ public:
     /* 0x70 */ u32 mGroupCtrlCount;
     /* 0x74 */ LayoutGroupCtrl** mGroupCtrlList;
     /* 0x78 */ char* mLayoutName;
+#ifdef TARGET_PC
+    // LayoutAspect::fit's rules for this layout and their panes (count -1 until looked up).
+    const void* mFitRules;
+    s32 mFitRuleCount;
+    nw4r::lyt::Pane* mFitPanes[8];
+#endif
 };

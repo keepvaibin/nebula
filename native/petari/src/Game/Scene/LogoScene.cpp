@@ -10,6 +10,41 @@
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/GamePadUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
+#ifdef TARGET_PC
+#include "Game/Screen/LayoutManager.hpp"
+#include <cstring>
+#include <nw4r/lyt/layout.h>
+#include <nw4r/lyt/pane.h>
+
+namespace {
+    // The strap screen's white backing (PicBG) as it shows, under the fader's black (LogoFader::draw blends its rate as
+    // a byte): the grey of the borders around a fitted picture, as v1.0.1 draws them.
+    f32 getStrapSurround(const SimpleLayout* pStrap, const LogoFader* pFader) {
+        if (pStrap == nullptr || pFader == nullptr || pStrap->mFlag.mIsDead || pStrap->mFlag.mIsHidden) {
+            return 0.0f;
+        }
+        const nw4r::lyt::Pane* pRoot = pStrap->mLayoutManager->mLayout->mpRootPane;
+        if (pRoot == nullptr || strcmp(pRoot->mName, "RootPane") != 0) {
+            return 0.0f;
+        }
+        bool identified = false;
+        const nw4r::lyt::Pane* pBacking = nullptr;
+        for (nw4r::lyt::PaneList::ConstIterator it = pRoot->GetChildList().GetBeginIter(); it != pRoot->GetChildList().GetEndIter(); ++it) {
+            identified |= strcmp(it->mName, "WiiRemoteStrap") == 0;
+            if (strcmp(it->mName, "PicBG") == 0) {
+                pBacking = &*it;
+            }
+        }
+        if (!identified || pBacking == nullptr) {
+            return 0.0f;
+        }
+        f32 rate = !pFader->mFlag.mIsDead && !pFader->mFlag.mIsHidden ? pFader->mRate : 0.0f;
+        rate = rate < 0.0f ? 0.0f : rate > 1.0f ? 1.0f : rate;
+        const u32 fade = static_cast< u32 >(rate * 255.0f);
+        return (pBacking->mGlbAlpha / 255.0f) * ((255 - fade) / 255.0f);
+    }
+};  // namespace
+#endif
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
@@ -92,6 +127,9 @@ void LogoScene::calcAnim() {
 }
 
 void LogoScene::draw() const {
+#ifdef TARGET_PC
+    __NebulaSceneSurround(getStrapSurround(mStrapLayout, mLogoFader));
+#endif
     MR::drawInit();
 
     GXColor color;

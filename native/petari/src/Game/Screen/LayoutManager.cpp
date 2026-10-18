@@ -1,4 +1,7 @@
 #include "Game/Screen/LayoutManager.hpp"
+#ifdef TARGET_PC
+#include "Game/Screen/LayoutAspect.hpp"
+#endif
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include "Game/Screen/LayoutGroupCtrl.hpp"
 #include "Game/Screen/LayoutPaneCtrl.hpp"
@@ -131,6 +134,10 @@ namespace {
 LayoutManager::LayoutManager(const char* pLayoutName, bool useArchiveNamePrefix, u32 rootPaneAnimLayerNum, u32 textBoxBufferLength)
     : mLayoutHolder(), mLayout(), mAnimTransList(), mDrawInfo(), mIsScreenHidden(), _61(true), mIndDummyTexMap(), mPaneCount(), mPaneInfoList(),
       mGroupCtrlCount(), mGroupCtrlList(), mLayoutName() {
+#ifdef TARGET_PC
+    mFitRules = nullptr;
+    mFitRuleCount = -1;
+#endif
     // pLayoutName points into fileNameWithoutExtension below, so it lives as long as the constructor (the original declared
     // it in the if block: a dangling pointer once the block ends).
     char fileNameWithoutExtension[0x60];
@@ -468,6 +475,9 @@ void LayoutManager::calcAnimWithoutLocationAdjust(const nw4r::lyt::DrawInfo& rDr
         return;
     }
 
+#ifdef TARGET_PC
+    LayoutAspect::extendBackings(this);
+#endif
     mLayout->CalculateMtx(rDrawInfo);
     for (u32 i = 0; i < mPaneCount; i++) {
         if (mPaneInfoList[i].mPaneCtrl != nullptr) {
@@ -483,6 +493,9 @@ void LayoutManager::calcAnimWithoutLocationAdjust(const nw4r::lyt::DrawInfo& rDr
             }
         }
     }
+#ifdef TARGET_PC
+    LayoutAspect::fit(this);
+#endif
 }
 
 nw4r::lyt::Group* LayoutManager::getGroup(const char* pName) const {

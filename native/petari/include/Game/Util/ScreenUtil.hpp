@@ -3,6 +3,11 @@
 #include <JSystem/JGeometry/TVec.hpp>
 #include <JSystem/JUtility/JUTVideo.hpp>
 #include <revolution/types.h>
+#ifdef TARGET_PC
+#include "Game/Util/SystemUtil.hpp"
+#include <nebula_game_api.h>
+#include <revolution/os.h>
+#endif
 
 struct ResTIMG;
 
@@ -10,6 +15,17 @@ namespace MR {
     u32 getViWidth();
     f32 getSafetyVIScreenWidthRatio();
     s32 getScreenWidth();
+#ifdef TARGET_PC
+    // The picture's shape, as v1.0.1's dynamic aspect: the host latches the output's shape at each retrace, and the
+    // screen width, the camera's aspect and the layout canvas follow it (wide == 0: the Wii's 16:9).
+    inline const NebulaDisplay& getDisplay() {
+        return *__NebulaDisplay();
+    }
+    // Between these, getScreenWidth keeps the Wii's 832: CollisionShadow sizes its softening circle in screen units but
+    // draws it into a fixed 160x160 region.
+    void beginWiiScreenWidth();
+    void endWiiScreenWidth();
+#endif
     inline s32 getScreenHeight() NO_INLINE {
         return JUTVideo::getManager()->getEfbHeight();
     }

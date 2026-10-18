@@ -99,6 +99,22 @@ typedef struct {
 enum {
     NEBULA_TEST_CHANGE_STAGE = 1, /* MR::requestChangeStageInGameMoving(stage, scenario) */
     NEBULA_TEST_PLACE_PLAYER,     /* MR::setPlayerPos(position) */
+    NEBULA_TEST_KILL_PLAYER,      /* MR::forceKillPlayerByAbyss: a miss, then retry or game over */
+};
+
+/* The picture's shape as the game draws it (__NebulaDisplay), from the output's shape the host latches at each retrace
+   (display_extent), as v1.0.1's dynamic aspect: the camera, the 2D screen and the layouts widen with it. */
+typedef struct NebulaDisplay {
+    int32_t wide;          /* 0: the Wii's 16:9, nothing changes */
+    float content_aspect;  /* width / height, 4:3 to 32:9 */
+    int32_t screen_width;  /* MR::getScreenWidth in the 16:9 mode (832 at 16:9) */
+    float canvas_width;    /* the NW4R layout canvas (608 at 16:9 and narrower) */
+    float vertical_fit;    /* the layouts' height scale under 16:9 (1 at 16:9 and wider) */
+} NebulaDisplay;
+
+/* Nebula options the game follows (option). */
+enum {
+    NEBULA_OPTION_TEXT_SPEED = 1, /* 1 to 3: text steps revealed per frame */
 };
 
 /* Audio interface requests (ai_control). */
@@ -199,6 +215,15 @@ typedef struct NebulaHostServices {
     /* Tests: once per game scene frame (before its 3D), what a hidden run asks of the game (GALAXY_TEST_*): returns 1
        with `action` filled, or 0. */
     int (*test_scene_frame)(void* user, NebulaTestAction* action);
+
+    /* The output's shape latched at this retrace, after vi_frame: width << 16 | height (only the ratio counts), or 0
+       for the Wii's 16:9. */
+    uint32_t (*display_extent)(void* user);
+    /* The borders around a fitted picture take this grey (0 black to 1 white) for the scene being drawn: the Wii Remote
+       strap screen's white backing, as it fades. */
+    void (*scene_surround)(void* user, float intensity);
+    /* A Nebula option (NEBULA_OPTION_*), read when the game needs it. */
+    uint32_t (*option)(void* user, uint32_t what);
 } NebulaHostServices;
 
 enum {

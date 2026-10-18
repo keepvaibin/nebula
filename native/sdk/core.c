@@ -35,6 +35,14 @@ int __NebulaTestSceneFrame(void* action) {
     return sHost->test_scene_frame(sHost->user, (NebulaTestAction*)action);
 }
 
+void __NebulaSceneSurround(f32 intensity) {
+    sHost->scene_surround(sHost->user, intensity);
+}
+
+u32 __NebulaOption(u32 what) {
+    return sHost->option(sHost->user, what);
+}
+
 NEBULA_GAME_API int nebula_game_memory_regions(NebulaGameMemoryRegion* out, int max) {
     NebulaMemoryRegion regions[4];
     int count = 0;

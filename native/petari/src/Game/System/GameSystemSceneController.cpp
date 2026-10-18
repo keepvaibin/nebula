@@ -251,6 +251,10 @@ void GameSystemSceneController::drawScene() {
     Scene* pScene = getCurrentSceneForExecute();
 
     if (pScene != nullptr) {
+#ifdef TARGET_PC
+        // Black borders around a fitted picture unless the scene says otherwise (LogoScene's strap screen).
+        __NebulaSceneSurround(0.0f);
+#endif
         pScene->draw();
         mPlayTimerScene->draw();
         mScenarioSelectScene->draw();

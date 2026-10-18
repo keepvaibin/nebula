@@ -60,6 +60,7 @@ static void retrace_interrupt(__OSInterrupt interrupt, OSContext* context) {
     }
     nebula_host()->vi_frame(nebula_host()->user, sCurrentFrameBuffer != NULL ? OSCachedToPhysical(sCurrentFrameBuffer) : 0,
                             sCurrentBlack, sRetraceCount);
+    nebula_display_refresh();
     if (sPostCallback != NULL) {
         OSClearContext(&exceptionContext);
         sPostCallback(sRetraceCount);

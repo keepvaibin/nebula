@@ -38,6 +38,11 @@ const TPos3f& CameraContext::getInvViewMtx() const {
 
 f32 CameraContext::getAspect() const {
     if (MR::isScreen16Per9()) {
+#ifdef TARGET_PC
+        if (MR::getDisplay().wide) {
+            return MR::getDisplay().content_aspect;
+        }
+#endif
         return 16.0f / 9.0f;
     } else {
         return static_cast< f32 >(MR::getScreenWidth()) / MR::getScreenHeight();

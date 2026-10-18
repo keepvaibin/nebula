@@ -113,6 +113,13 @@ namespace MR {
     void setupDrawForNW4RLayout(f32 scale, bool) {
         f32 height = MR::getScreenHeight();
         f32 width = 608.0f;
+#ifdef TARGET_PC
+        // The layout canvas widens with the picture; under 16:9 the layouts keep their width and gain height.
+        if (MR::isScreen16Per9() && MR::getDisplay().wide) {
+            height *= MR::getDisplay().vertical_fit;
+            width = MR::getDisplay().canvas_width;
+        }
+#endif
         f32 halfWidth = width / 2.0f;
         height *= 0.5f;
         halfWidth *= scale;

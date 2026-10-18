@@ -60,6 +60,12 @@ u32 __NebulaToPhysical(const void* addr);
 void __NebulaGameContext(u32 what, s32 value);
 // Tests: what a hidden run asks of the game this scene frame (NebulaTestAction in nebula_game_api.h).
 int __NebulaTestSceneFrame(void* action);
+// The picture's shape the game draws for (NebulaDisplay in nebula_game_api.h), latched at each retrace.
+const struct NebulaDisplay* __NebulaDisplay(void);
+// The grey of the borders around the picture for the scene being drawn (0 black, 1 white).
+void __NebulaSceneSurround(f32 intensity);
+// A Nebula option (NEBULA_OPTION_* in nebula_game_api.h).
+u32 __NebulaOption(u32 what);
 void* __NebulaFromPhysical(u32 paddr);
 #ifdef __cplusplus
 }
