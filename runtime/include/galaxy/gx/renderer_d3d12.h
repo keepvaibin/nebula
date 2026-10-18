@@ -35,6 +35,7 @@
 #include "galaxy/gx/gpu_types.h"
 #include "galaxy/gx/renderer_common.h"
 #include "galaxy/gx/render_config.h"
+#include "galaxy/gx/ui_canvas.h"
 #include "galaxy/gx/window_owner.h"
 #include "galaxy/gx_d3d12.h"
 
@@ -265,7 +266,7 @@ struct UploadBuffer {
 };
 
 
-class RendererD3D12 {
+class RendererD3D12 final : public UiCanvas {
 public:
     // Creates the Win32 window, device, queue, swap chain, EFB targets at
     // kEfbWidth x kEfbHeight x efb_scale, the shared GX root signature, the
@@ -555,7 +556,7 @@ public:
     // free-function draw_native_settings_overlay() (see renderer_d3d12.cpp)
     // once it knows the panel layout, hence public rather than a private
     // detail of this class alone.
-    void ensure_native_settings_corner_texture_loaded();
+    void ensure_native_settings_corner_texture_loaded() override;
     // Draws one textured quad (screen pixel coordinates) using the
     // extracted-game-asset texture, with UV min/max so the same texture can
     // be flipped/mirrored for each panel corner without four separate
@@ -563,7 +564,7 @@ public:
     void draw_ui_textured_quad(
         int x, int y, int w, int h,
         float u0, float v0, float u1, float v1,
-        const std::array<float, 4>& tint);
+        const std::array<float, 4>& tint) override;
 
     // Lazily creates the solid-fill quad root signature/PSO. Unlike the corner texture,
     // this never depends on game assets, so it always succeeds once the device exists.
@@ -577,11 +578,11 @@ public:
     // create device resources) until first called after the device exists.
     void draw_ui_solid_quad(
         int x, int y, int w, int h,
-        const std::array<float, 4>& color);
+        const std::array<float, 4>& color) override;
     // Packed row-major 5x7 bitmap, drawn with one instanced submission.
     void draw_ui_glyph(
         int x, int y, int scale, std::uint64_t bitmap,
-        const std::array<float, 4>& color);
+        const std::array<float, 4>& color) override;
 
 private:
     void invalidate_gx_bindings();

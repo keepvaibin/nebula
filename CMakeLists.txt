@@ -669,6 +669,7 @@ add_library(galaxy_gx STATIC
     runtime/src/gx/gx_state.cpp
     runtime/src/gx/frame_completion.cpp
     runtime/src/gx/render_config.cpp
+    runtime/src/gx/host_window_win32.cpp
     runtime/src/gx/renderer_d3d12.cpp
     runtime/src/gx/renderer_common.cpp
     runtime/src/gx/window_owner.cpp
