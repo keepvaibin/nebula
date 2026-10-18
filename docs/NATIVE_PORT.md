@@ -6,9 +6,12 @@ in this tree. **D**: read from the RMGE01 assembly or source. **H**: hypothesis,
 
 ## Game core
 
-- Petari (SMGCommunity, CC0-1.0) is forked at `D:/NebulaWork/petari`, branch `nebula`, with remote `upstream`.
-  - Every change is either behind `TARGET_PC` or reads identically to CodeWarrior, so upstream merges stay clean.
-  - The fork is local only. Publishing it to GitHub is the owner's call.
+- Petari (SMGCommunity, CC0-1.0) is forked at `D:/NebulaWork/petari`, branch `nebula`.
+  - The fork is Nebula's own code: it is optimised for native speed and need not match the console's object code.
+    It will live in Nebula's repository, credited to SMGCommunity. Nothing goes back upstream: Petari does not accept
+    AI-generated changes. With every function decompiled there is nothing to track.
+  - Changes stay behind `TARGET_PC` where the console build should stay buildable.
+  - Publishing it is the owner's call.
 - Version: RMGE01. The test disc's `main.dol` SHA1 is 9A71008AE1EE9010E267FA67D1F0B0D4F0E895DD, which equals Petari's `config/RMGE01/build.sha1` (M).
 - 99.90% of RMGE01 functions match the DOL byte for byte (decomp.dev). Of the 42 that don't (`D:/NebulaWork/agents/petari-audit/RMGE01_UNMATCHED.md`):
   - one has no source: `StarPointerFunction::forceOutsideScreenEdge`, now written from the assembly (D);
@@ -27,6 +30,8 @@ clang 22 on every host, with the same flags everywhere:
 | `native/msl/include`, force-included `nebula_prelude.h` | MSL's C interface: the host C library where the two behave the same, renames where they don't (see below). |
 | `-fsigned-char`, `-fshort-wchar` | Console `char`; 16-bit `wchar_t` for the UTF-16 disc text and the game's wide strings. |
 | `-fno-strict-aliasing` | The decompiled code type-puns through pointer casts throughout. |
+| `-fno-math-errno` | No kept code reads `errno` (M). With it, `sqrtf` is one instruction instead of a compare and a library call on the negative path (M, assembly). |
+| `-fno-stack-protector` | Pinned off for every toolchain (some distribution compilers enable it by default), so the module performs the same everywhere. |
 | `-fno-strict-float-cast-overflow` | Float-to-int casts saturate (`llvm.fpto[su]i.sat`, M). Unsigned conversions equal the console's `__cvt_fp2unsigned` (D). Signed ones differ only for NaN (0 here, 0x80000000 there). 8- and 16-bit targets saturate where the console wrapped after an int32 conversion, which matters only for out-of-range values. |
 | `-fno-rtti -fno-exceptions -fno-sized-deallocation -fno-aligned-allocation` | CodeWarrior's model. JKRHeap's `operator new`/`delete` take every allocation; no kept code uses `dynamic_cast` or `typeid` (M). |
 | `-fno-ms-compatibility -fno-delayed-template-parsing`; `-Wno-everything` then `-Werror=return-type` and the pointer/int truncation casts as errors | Windows reports the errors every other host reports. Strict mode found 15 lookup/goto sites hidden by the MSVC-compatible defaults (M). `-w` would also silence the `-Werror=` checks (M); with them on, 129 lines cast pointers to or from 32-bit integers (M), see below. No function falls off its end (M). |
@@ -67,7 +72,14 @@ Every console-only construct was found by tool, not by reading:
 
 - Paired-single assembly with no native alternative (`native/tools/find_console_only.py`): 31 functions became empty or returned garbage natively (M). Among them were `TVec3<f32>::operator=` (every vector assignment), `TVec3::dot`, `J3DCalcZValue`, `J3DTextureSRTInfo::operator=` and the Hermite interpolators.
 - Each now has native code following the assembly's operations in their order (D). Quantized stores follow the Broadway rules: NaN to the maximum, saturate, truncate toward zero.
-- Roots taken through `frsqrte` (one refinement step, or none) are now the root itself.
+- Roots taken through `frsqrte` alone (`JMAFastSqrt`, `MR::fastSqrtf`, `JMASqrt`) are `sqrtss`. `__frsqrte` followed by the game's own Newton step is the host's estimate (`rsqrtss`; on AArch64 `frsqrte` plus one step). That has half the latency of `1/sqrtf` and the same accuracy after the step (`NATIVE_PERFORMANCE.md`).
+- Every preprocessor branch on the compiler or target (180, `native/tools/compiler_branches.py`) was compared with the console's branch. Those whose native side did less (M):
+  - `FAST_GPFLAGSET`/`FAST_FLAG_SET`: the field inserts behind all 756 `SC_*_SET_*` GX register macros were empty, so no GX register field was ever set. They are now `rlwimi` in C.
+  - `ATTRIBUTE_ALIGN`/`ATTRIBUTE_PACKED` were empty, dropping the 32-byte alignment of 38 texture, display-list and DMA buffers. GX addresses those in 32-byte units.
+  - Intrusive lists named their node's offset as 0 (nw4r layout panes, groups, animations, fonts; JUTConsole) or as the console's literal (`JASTrack` -0x248, `AudMeTrack` -384). They now use `offsetof`, through `T::nebulaListNodeOffset()` where the list is named inside an incomplete `T`.
+  - Header-defined nerve singletons relied on weak symbols; they are inline variables (`ATTRIBUTE_WEAK_DEF`).
+  - `NO_INLINE` forced 499 functions out of line for matching; it is empty natively.
+- The GX SDK, compiled natively for the first time, read `GXColor`/`GXColorS10` as 32-bit words (TEV, channel, light and fog colours) and the TEV op tables' bitfields as words. On a little-endian host both reverse the register bytes. They are now built explicitly (`GX_COLOR_WORD`, shift macros). `GXInit` no longer points the register blocks at hardware addresses.
 - Assembly-only `#else` declarations (link errors, not silent): the TVec3/JMathInlineVEC helpers are now native.
 - Petari's audit flagged 23 of these independently; all are covered.
 - GQR set-up (`OSInitFastCast`, `J3DSys`) is a no-op natively. Nothing executes quantized loads.
@@ -99,7 +111,7 @@ Every console-only construct was found by tool, not by reading:
 - `OSCachedToPhysical` and `OSPhysicalToCached` map arena pointers to the same 32-bit physical addresses the console used. The game module's image gets a second mapped window, for the static display lists and arrays the game hands to GX.
 - Game threads run on stacks allocated in the arena.
 - Nebula's FIFO parser already resolves physical addresses through a region table (`GuestMemoryV1`). The native build gives it the arena and module regions, so the v1.0.1 renderer is reused unchanged.
-- Petari's GX SDK (byte-matching the console) writes the console's command stream, as big-endian stores into a host FIFO buffer. FIFO management and draw sync are native.
+- Petari's GX SDK writes the console's command stream as big-endian stores into the command ring (`native/sdk/gx/gx_fifo.c`). The ring is host memory mapped twice in a row, so every span is contiguous. At each flush the host gets a span and parses it in place, then releases it; no copy is made. Draw-sync tokens and draw done reach the host as markers at their stream position, with no pre-parse. Display lists are recorded into game memory as on the console.
 - ARAM ("alternate ARAM" in MEM2 on the Wii): ARAM addresses stay 32-bit offsets from its base. The main-memory side of a transfer is a pointer.
 
 ## Platform boundary
@@ -131,10 +143,10 @@ Every console-only construct was found by tool, not by reading:
 - 2,480 of the DOL's 2,911 SDK functions are never reached and are not implemented (`droppable_functions.csv`). That includes all of AX, AXFX, MIX, SYN, SEQ, PAD, SI, EXI, BTE, WUD, IPC, ES, USB, NET and EUART.
 - 19 externals are used only by code absent from the DOL (dead-only). They get stubs that stop with a message if ever reached.
 - **GX**: the game's GX calls write the hardware's FIFO format, which J3D's display lists already use. Nebula's D3D12 backend (`runtime/src/gx`) parses it.
-  - Registers that carry addresses use 64-bit extension commands: CP array bases, texture and TLUT images, display-list calls, copy destinations.
-  - GD (display-list building) is Petari's C code, unchanged.
+  - Addresses in commands (CP array bases, texture and TLUT images, display-list calls, copy destinations) are the arena's 32-bit physical addresses, as on the console.
+  - GD (display-list building) is Petari's C code with one reservation per command.
 - **Audio**: JAudio2 drives the DSP directly, not through AX (D). The DSP task layer maps onto Nebula's host mixer (`runtime/src/jaudio_host_mixer.cpp`).
-- **Threads**: the console runs one thread at a time, by priority, and the game relies on it (`OSDisableInterrupts` used as a lock). The first implementation is host threads with one runnable at a time; true parallelism comes only where shown safe.
+- **Threads**: the console runs one thread at a time, by priority, and the game relies on it (`OSDisableInterrupts` used as a lock). All game threads run on one host thread with the SDK's own scheduler, and a thread switch is a stack switch (`native/sdk/os`). Parallelism lives in the host: renderer, audio mixer, input, disc.
 
 ## Open
 

@@ -25,12 +25,20 @@ file(GLOB_RECURSE game_sources CONFIGURE_DEPENDS
     "${petari}/src/JSystem/*.cpp" "${petari}/src/JSystem/*.c"
     "${petari}/src/nw4r/*.cpp" "${petari}/src/nw4r/*.c"
     "${petari}/src/RVLFaceLib/*.c" "${petari}/src/RVLFaceLib/*.cpp")
-# The SDK code the native layer reuses as it is: display-list building, the MEM heaps, KPAD's processing.
+# The SDK code the native layer reuses (docs/NATIVE_PORT.md, "Platform boundary"): GX but its FIFO (sdk/gx/gx_fifo.c),
+# display-list building, the MEM heaps, KPAD's processing, and the OS's scheduler, alarms, synchronisation and arenas
+# on the native OS core (sdk/os/os_native.c).
 file(GLOB sdk_sources CONFIGURE_DEPENDS
+    "${petari}/src/RVL_SDK/gx/*.c"
     "${petari}/src/RVL_SDK/gd/*.c"
     "${petari}/src/RVL_SDK/mem/*.c"
     "${petari}/src/RVL_SDK/kpad/*.c")
+list(REMOVE_ITEM sdk_sources "${petari}/src/RVL_SDK/gx/GXFifo.c")
+foreach(unit OSThread OSMutex OSMessage OSAlarm OSTime OSArena OSAlloc)
+    list(APPEND sdk_sources "${petari}/src/RVL_SDK/os/${unit}.c")
+endforeach()
 file(GLOB_RECURSE layer_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/sdk/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/sdk/*.c")
+list(FILTER layer_sources EXCLUDE REGEX "/tests/")
 
 add_library(smg_game SHARED
     ${game_sources}
@@ -47,21 +55,25 @@ target_include_directories(smg_game BEFORE PRIVATE
     "${petari}/libs/RVL_SDK/include"
     "${petari}/libs/nw4r/include"
     "${petari}/build/${NEBULA_GAME_VERSION}/include"
-    "${CMAKE_CURRENT_SOURCE_DIR}/sdk")
+    "${CMAKE_CURRENT_SOURCE_DIR}/sdk"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 set(version_ids RMGJ01=0 RMGE01=1 RMGP01=2 RMGK01=3)
 string(REGEX MATCH "${NEBULA_GAME_VERSION}=([0-9])" _ "${version_ids}")
-target_compile_definitions(smg_game PRIVATE VERSION=${CMAKE_MATCH_1} ${version_ids} TARGET_PC=1)
+target_compile_definitions(smg_game PRIVATE VERSION=${CMAKE_MATCH_1} ${version_ids} TARGET_PC=1 NEBULA_GAME_MODULE=1)
 
 set_target_properties(smg_game PROPERTIES
     C_STANDARD 11 C_EXTENSIONS ON
     CXX_STANDARD 17 CXX_EXTENSIONS ON
     C_VISIBILITY_PRESET hidden CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
 
-# docs/NATIVE_PORT.md, "Build of the game code", has the reason for each.
+# docs/NATIVE_PORT.md, "Build of the game code", has the reason for each, and docs/NATIVE_PERFORMANCE.md the cost:
+# -fno-math-errno (the game never reads errno; sqrtf and friends stay single instructions), -fno-stack-protector
+# (pinned off for every toolchain: distribution compilers turn it on by default).
 target_compile_options(smg_game PRIVATE
     -fsigned-char -fshort-wchar
-    -fno-strict-aliasing -fno-strict-float-cast-overflow
+    -fno-strict-aliasing -fno-strict-float-cast-overflow -fno-math-errno -fno-stack-protector
+    $<$<NOT:$<PLATFORM_ID:Windows>>:-fno-plt>
     -fno-ms-compatibility -fno-delayed-template-parsing
     -Wno-everything
     -Werror=return-type -Werror=pointer-to-int-cast -Werror=void-pointer-to-int-cast
@@ -73,6 +85,8 @@ target_compile_options(smg_game PRIVATE
 if(WIN32)
     # The DLL's own operator new/delete are JKRHeap's; the host process keeps its own.
     target_link_options(smg_game PRIVATE -fuse-ld=lld)
+    target_link_libraries(smg_game PRIVATE winmm)
 else()
-    target_link_options(smg_game PRIVATE -Wl,-Bsymbolic)
+    target_link_options(smg_game PRIVATE -Wl,-Bsymbolic -Wl,-z,now)
+    target_link_libraries(smg_game PRIVATE pthread)
 endif()
