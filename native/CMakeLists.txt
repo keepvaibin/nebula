@@ -77,7 +77,12 @@ endif()
 # docs/NATIVE_PORT.md, "Build of the game code", has the reason for each, and docs/NATIVE_PERFORMANCE.md the cost:
 # -fno-math-errno (the game never reads errno; sqrtf and friends stay single instructions), -fno-stack-protector
 # (pinned off for every toolchain: distribution compilers turn it on by default).
+# The same language on every platform: clang enables Microsoft extensions by default only when targeting Windows
+# (__declspec, a static definition after an extern declaration); glibc's GNU interfaces (dladdr, memfd_create, the
+# signal context's registers) are declared only under _GNU_SOURCE, which must precede the prelude's first include.
+target_compile_definitions(smg_game PRIVATE $<$<PLATFORM_ID:Linux,Android>:_GNU_SOURCE>)
 target_compile_options(smg_game PRIVATE
+    $<$<NOT:$<PLATFORM_ID:Windows>>:-fms-extensions>
     -fsigned-char -fshort-wchar
     -fno-strict-aliasing -fno-strict-float-cast-overflow -fno-math-errno -fno-stack-protector
     $<$<NOT:$<PLATFORM_ID:Windows>>:-fno-plt>

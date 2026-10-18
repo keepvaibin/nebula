@@ -1188,7 +1188,8 @@ int svc_hbm(void*, uint32_t what, uint32_t) {
 //   GALAXY_TEST_TELEPORT=x,y,z,frame[/x,y,z,frame...]: MR::setPlayerPos at those scene frames, held 30 frames (the
 //     player settles there); counted from the latest tour stop when touring.
 //   GALAXY_TEST_EVENTS=kind@frame[/kind@frame...]: once at that scene frame (from the latest stop when touring): kill (a
-//     miss: MR::forceKillPlayerByAbyss), movieN (MR::startMovie(N), in a stage with a movie sequence).
+//     miss: MR::forceKillPlayerByAbyss), movieN (MR::startMovie(N), in a stage with a movie sequence), wait (nothing:
+//     keeps a tour's last stop running until then).
 std::atomic<bool> gTourDone{false};
 
 int svc_test_scene_frame(void*, NebulaTestAction* action) {
@@ -1245,6 +1246,8 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
                     const uint64_t frame = std::strtoull(entry.c_str() + at + 1, nullptr, 10);
                     if (kind == "kill") {
                         events.push_back({NEBULA_TEST_KILL_PLAYER, frame, 0});
+                    } else if (kind == "wait") {
+                        events.push_back({0, frame, 0});
                     } else if (kind.rfind("movie", 0) == 0) {
                         events.push_back({NEBULA_TEST_START_MOVIE, frame, std::atoi(kind.c_str() + 5)});
                     }
@@ -1302,7 +1305,7 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
     }
     const uint64_t frame = scene_frames - stop_frame;
     for (const Event& event : events) {
-        if (frame == event.frame) {
+        if (frame == event.frame && event.kind != 0) {
             action->kind = event.kind;
             action->scenario = event.value;
             char text[64];

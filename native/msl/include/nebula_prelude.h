@@ -111,5 +111,9 @@ static inline int nebula_msl_stricmp(const char* s1, const char* s2) {
 static inline int __nebula_divw(int a, int b) {
     return b == 0 || (a == (int)0x80000000 && b == -1) ? (a < 0 ? -1 : 0) : a / b;
 }
+/* PowerPC's divwu: a zero divisor gives 0. */
+static inline unsigned __nebula_divwu(unsigned a, unsigned b) {
+    return b == 0 ? 0 : a / b;
+}
 
 #endif

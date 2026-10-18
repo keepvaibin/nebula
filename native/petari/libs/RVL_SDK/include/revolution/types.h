@@ -247,6 +247,9 @@ static inline f32 __frsqrte(f32 x) { return 1.0f / sqrtf(x); }
 #endif
 static inline u32 __cntlzw(u32 x) { return x != 0u ? (u32)__builtin_clz(x) : 32u; }
 static inline s32 __abs(s32 x) { return x < 0 ? -x : x; }
+// glibc declares its own __fabsf and __fabs (math.h, included above): the console's intrinsics take other names.
+#define __fabsf __nebula_fabsf
+#define __fabs __nebula_fabs
 static inline f32 __fabsf(f32 x) { return fabsf(x); }
 static inline f64 __fabs(f64 x) { return fabs(x); }
 static inline void* __memcpy(void* d, const void* s, int n) { return memcpy(d, s, (size_t)n); }
