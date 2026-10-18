@@ -39,6 +39,14 @@ The renderer interface GxBackend uses has 75 methods; about half are diagnostics
 - **arm64** (Android, Apple silicon) needs its own context switch (`context_switch.c` is x86-64 assembly) and its own
   division semantics check (arm64 does not trap; `__nebula_divw` already gives PowerPC's results).
 
+## Android controls (the user's design, 2026-10-18)
+
+- The touch screen is the IR canvas: a touch points the Wii Remote there (Star Bits by sweeping a finger, menus by
+  tapping).
+- On-screen controls: a stick (Nunchuk) on the left; A, B, spin, Z, C and pause on the right; movable and resizable.
+- Motion: a shake also spins; the accelerometer drives the tilt sections, with a stick fallback.
+- Controllers through SDL3 with the PC mapping; the right stick points when no touch does.
+
 ## Phases
 
 1. V0: GxBackend's D3D12 sites behind RendererD3D12 methods; frames identical, CPU unchanged (A/B).
