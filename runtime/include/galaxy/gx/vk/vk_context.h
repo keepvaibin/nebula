@@ -15,6 +15,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -74,8 +75,11 @@ public:
     static Context& get() noexcept;
 
     // `prefer_integrated`: GALAXY_GPU_PREFERENCE=low picks the integrated GPU first. `validation` loads the Khronos
-    // validation layer when present.
-    bool initialize(bool prefer_integrated, bool validation, std::vector<const char*> instance_extensions);
+    // validation layer when present. `create_surface`, when given, makes the window's surface once the instance
+    // exists (returned in `surface`); the device chosen then presents to it.
+    bool initialize(bool prefer_integrated, bool validation, std::vector<const char*> instance_extensions,
+                    const std::function<VkSurfaceKHR(VkInstance)>& create_surface = {},
+                    VkSurfaceKHR* surface = nullptr);
     void shutdown() noexcept;
     [[nodiscard]] bool ready() const noexcept { return device_ != VK_NULL_HANDLE; }
 
@@ -93,10 +97,11 @@ public:
     [[nodiscard]] bool sampler_anisotropy() const noexcept { return sampler_anisotropy_; }
     [[nodiscard]] bool bc_textures() const noexcept { return bc_textures_; }
 
-    // Submits one command buffer (waiting on `wait_semaphore` at `wait_stage` and signalling `signal_semaphore` when
-    // given) and returns its fence value.
-    std::uint64_t submit(VkCommandBuffer commands, VkSemaphore wait_semaphore = VK_NULL_HANDLE,
+    // Submits command buffers in order (waiting on `wait_semaphore` at `wait_stage` and signalling `signal_semaphore`
+    // when given) and returns their fence value.
+    std::uint64_t submit(std::span<const VkCommandBuffer> commands, VkSemaphore wait_semaphore = VK_NULL_HANDLE,
                          VkPipelineStageFlags wait_stage = 0, VkSemaphore signal_semaphore = VK_NULL_HANDLE);
+    std::uint64_t submit(VkCommandBuffer commands) { return submit(std::span<const VkCommandBuffer>(&commands, 1u)); }
     // The highest fence value the GPU has passed.
     [[nodiscard]] std::uint64_t completed_value();
     // Waits until the GPU has passed `value`; false on a timeout or a lost device.
@@ -117,6 +122,10 @@ public:
     [[nodiscard]] MappedBuffer create_mapped_buffer(std::uint64_t size, VkBufferUsageFlags usage, const char* name);
     // A mapped buffer with a GX address.
     [[nodiscard]] std::shared_ptr<Buffer> create_buffer(std::uint64_t size, VkBufferUsageFlags usage, const char* name);
+    // A mapped transfer-destination buffer in cached host memory, which the CPU reads (readbacks); no GX address.
+    [[nodiscard]] std::shared_ptr<Buffer> create_readback_buffer(std::uint64_t size, const char* name);
+    // Makes the GPU's writes to a readback buffer visible to the CPU (after its fence).
+    void invalidate(const Buffer& buffer) const noexcept;
     void destroy_buffer(MappedBuffer& buffer) noexcept;
     void set_name(VkObjectType type, std::uint64_t handle, const char* name) const noexcept;
 

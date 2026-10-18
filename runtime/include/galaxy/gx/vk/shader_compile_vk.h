@@ -32,10 +32,18 @@ struct RegisterBinding {
 // Inserts the Vulkan attribute before every resource declared with a mapped register.
 [[nodiscard]] std::string annotate(std::string_view hlsl, std::span<const RegisterBinding> bindings);
 
+struct CompileOptions {
+    // Run the SPIR-V validator and fail on any message (the tests; the runtime trusts its sources).
+    bool validate = false;
+    // The pixel shader's SV_Target1 is the second source of dual-source blending: Vulkan reads it at location 0,
+    // index 1, while glslang places it at location 1 and ignores location attributes on output-struct members, so
+    // the module's decorations are rewritten.
+    bool dual_source = false;
+};
+
 // SPIR-V for `entry` of `hlsl`; empty with `error` set when it does not compile. `defines` are NAME=VALUE.
-// `validate` runs the SPIR-V validator and fails on any message (the tests; the runtime trusts its sources).
 [[nodiscard]] std::vector<std::uint32_t> compile_hlsl(std::string_view hlsl, ShaderStage stage, const char* entry,
                                                       std::initializer_list<const char*> defines, std::string& error,
-                                                      bool validate = false);
+                                                      CompileOptions options = {});
 
 }  // namespace galaxy::gx::vk

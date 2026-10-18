@@ -84,10 +84,10 @@ std::string check_bindings(const std::vector<std::uint32_t>& spirv, std::span<co
 }
 
 void expect(const char* what, std::string_view hlsl, ShaderStage stage, std::span<const RegisterBinding> bindings,
-            std::initializer_list<const char*> defines = {}) {
+            std::initializer_list<const char*> defines = {}, bool dual_source = false) {
     std::string error;
     const std::vector<std::uint32_t> spirv =
-        compile_hlsl(annotate(hlsl, bindings), stage, "main", defines, error, true);
+        compile_hlsl(annotate(hlsl, bindings), stage, "main", defines, error, {true, dual_source});
     if (spirv.empty()) {
         ++failures;
         std::printf("FAIL %s\n%s\n", what, error.c_str());
@@ -107,11 +107,16 @@ void expect(const char* what, std::string_view hlsl, ShaderStage stage, std::spa
 int main(int argc, char** argv) {
     const auto gx = gx_draw_bindings();
     expect("uber vs", uber_vs_source(), ShaderStage::Vertex, gx);
-    expect("uber ps early-depth", uber_ps_source(), ShaderStage::Fragment, gx, {"UBER_EARLY_DEPTH=1"});
-    expect("uber ps late-depth", uber_ps_source(), ShaderStage::Fragment, gx, {"UBER_EARLY_DEPTH=0"});
-    expect("uber ps dual-source", uber_ps_source(), ShaderStage::Fragment, gx, {"UBER_DUAL_SRC=1"});
-    expect("uber ps depth export", uber_ps_source(), ShaderStage::Fragment, gx,
-           {"UBER_EXPORT_DEPTH=1", "UBER_EARLY_DEPTH=0"});
+    // The six output variants, defined as PipelineCacheVk defines them.
+    for (unsigned variant = 0; variant < kUberPsVariants; ++variant) {
+        const std::string label = "uber ps variant " + std::to_string(variant);
+        const bool dual = uber_ps_variant_dual_source(variant);
+        expect(label.c_str(), uber_ps_source(), ShaderStage::Fragment, gx,
+               {dual ? "UBER_DUAL_SRC=1" : "UBER_DUAL_SRC=0",
+                uber_ps_variant_export_depth(variant) ? "UBER_EXPORT_DEPTH=1" : "UBER_EXPORT_DEPTH=0",
+                uber_ps_variant_early_depth(variant) ? "UBER_EARLY_DEPTH=1" : "UBER_EARLY_DEPTH=0"},
+               dual);
+    }
     expect("line gs", ShaderGenerator::line_geometry_shader_source(), ShaderStage::Geometry, gx);
     expect("point gs", ShaderGenerator::point_geometry_shader_source(), ShaderStage::Geometry, gx);
 
@@ -136,7 +141,8 @@ int main(int argc, char** argv) {
                 expect(label.c_str(), generator.generate_vs(vs), ShaderStage::Vertex, gx);
             } else if (tag == 'P' && std::fread(&ps, sizeof(ps), 1, file) == 1) {
                 const std::string label = "captured ps " + std::to_string(ps_count++);
-                expect(label.c_str(), generator.generate_ps(ps), ShaderStage::Fragment, gx);
+                expect(label.c_str(), generator.generate_ps(ps), ShaderStage::Fragment, gx, {},
+                       (ps.flags & 0x80u) != 0u);
             } else {
                 ++failures;
                 std::printf("FAIL %s is truncated or malformed\n", argv[1]);

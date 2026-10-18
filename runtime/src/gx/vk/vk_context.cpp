@@ -108,7 +108,8 @@ Context& Context::get() noexcept {
     return context;
 }
 
-bool Context::initialize(bool prefer_integrated, bool validation, std::vector<const char*> instance_extensions) {
+bool Context::initialize(bool prefer_integrated, bool validation, std::vector<const char*> instance_extensions,
+                         const std::function<VkSurfaceKHR(VkInstance)>& create_surface, VkSurfaceKHR* surface) {
     if (device_ != VK_NULL_HANDLE) {
         return true;
     }
@@ -149,8 +150,34 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
         vkCreateDebugUtilsMessengerEXT(instance_, &messenger, nullptr, &messenger_);
     }
     debug_names_ = debug_utils;
+    VkSurfaceKHR window_surface = VK_NULL_HANDLE;
+    // Every failure from here leaves no instance, device or surface behind.
+    const auto fail = [&](const char* message) {
+        std::fprintf(stderr, "[vulkan] %s\n", message);
+        if (window_surface != VK_NULL_HANDLE) {
+            if (device_ != VK_NULL_HANDLE) {
+                vkDeviceWaitIdle(device_);
+            }
+            vkDestroySurfaceKHR(instance_, window_surface, nullptr);
+            if (surface != nullptr) {
+                *surface = VK_NULL_HANDLE;
+            }
+        }
+        shutdown();
+        return false;
+    };
+    if (create_surface) {
+        window_surface = create_surface(instance_);
+        if (window_surface == VK_NULL_HANDLE) {
+            return fail("the window's surface could not be created");
+        }
+        if (surface != nullptr) {
+            *surface = window_surface;
+        }
+    }
 
-    // The first device of the preferred kind with a graphics queue and the swapchain extension.
+    // The first device of the preferred kind with a graphics queue (that presents to the surface) and the swapchain
+    // extension.
     std::uint32_t count = 0;
     vkEnumeratePhysicalDevices(instance_, &count, nullptr);
     std::vector<VkPhysicalDevice> devices(count);
@@ -172,7 +199,12 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
         std::vector<VkQueueFamilyProperties> props(families);
         vkGetPhysicalDeviceQueueFamilyProperties(candidate, &families, props.data());
         for (std::uint32_t i = 0; i < families; ++i) {
-            if ((props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0u) {
+            VkBool32 presents = VK_TRUE;
+            if (window_surface != VK_NULL_HANDLE &&
+                vkGetPhysicalDeviceSurfaceSupportKHR(candidate, i, window_surface, &presents) != VK_SUCCESS) {
+                presents = VK_FALSE;
+            }
+            if ((props[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) != 0u && presents == VK_TRUE) {
                 physical_ = candidate;
                 queue_family_ = i;
                 break;
@@ -183,9 +215,7 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
         }
     }
     if (physical_ == VK_NULL_HANDLE) {
-        std::fprintf(stderr, "[vulkan] no device with a graphics queue and swapchains\n");
-        shutdown();
-        return false;
+        return fail("no device with a graphics queue that presents to the window, and swapchains");
     }
     vkGetPhysicalDeviceProperties(physical_, &properties_);
     device_name_ = properties_.deviceName;
@@ -218,9 +248,8 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
     device_info.ppEnabledExtensionNames = device_extensions;
     device_info.pEnabledFeatures = &enabled;
     if (vkCreateDevice(physical_, &device_info, nullptr, &device_) != VK_SUCCESS) {
-        std::fprintf(stderr, "[vulkan] vkCreateDevice failed\n");
-        shutdown();
-        return false;
+        device_ = VK_NULL_HANDLE;
+        return fail("vkCreateDevice failed");
     }
     volkLoadDevice(device_);
     vkGetDeviceQueue(device_, queue_family_, 0, &queue_);
@@ -235,9 +264,8 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
     allocator_info.instance = instance_;
     allocator_info.pVulkanFunctions = &functions;
     if (vmaCreateAllocator(&allocator_info, &allocator_) != VK_SUCCESS) {
-        std::fprintf(stderr, "[vulkan] vmaCreateAllocator failed\n");
-        shutdown();
-        return false;
+        allocator_ = nullptr;
+        return fail("vmaCreateAllocator failed");
     }
     std::fprintf(stderr, "[vulkan] device=\"%s\" api=%u.%u driver=0x%x validation=%d\n", device_name_.c_str(),
                  VK_API_VERSION_MAJOR(properties_.apiVersion), VK_API_VERSION_MINOR(properties_.apiVersion),
@@ -287,8 +315,8 @@ void Context::shutdown() noexcept {
     queue_ = VK_NULL_HANDLE;
 }
 
-std::uint64_t Context::submit(VkCommandBuffer commands, VkSemaphore wait_semaphore, VkPipelineStageFlags wait_stage,
-                              VkSemaphore signal_semaphore) {
+std::uint64_t Context::submit(std::span<const VkCommandBuffer> commands, VkSemaphore wait_semaphore,
+                              VkPipelineStageFlags wait_stage, VkSemaphore signal_semaphore) {
     std::lock_guard<std::mutex> lock(submit_mutex_);
     VkFence fence = VK_NULL_HANDLE;
     // A free fence may still be in a wait() that read it before it signalled; reset none while one is.
@@ -301,8 +329,8 @@ std::uint64_t Context::submit(VkCommandBuffer commands, VkSemaphore wait_semapho
         check(vkCreateFence(device_, &fence_info, nullptr, &fence), "vkCreateFence");
     }
     VkSubmitInfo submit{VK_STRUCTURE_TYPE_SUBMIT_INFO};
-    submit.commandBufferCount = commands != VK_NULL_HANDLE ? 1u : 0u;
-    submit.pCommandBuffers = &commands;
+    submit.commandBufferCount = static_cast<std::uint32_t>(commands.size());
+    submit.pCommandBuffers = commands.data();
     if (wait_semaphore != VK_NULL_HANDLE) {
         submit.waitSemaphoreCount = 1;
         submit.pWaitSemaphores = &wait_semaphore;
@@ -476,6 +504,34 @@ std::shared_ptr<Buffer> Context::create_buffer(std::uint64_t size, VkBufferUsage
         return {};  // the reference's release destroys the buffer
     }
     return buffer;
+}
+
+std::shared_ptr<Buffer> Context::create_readback_buffer(std::uint64_t size, const char* name) {
+    VkBufferCreateInfo buffer_info{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+    buffer_info.size = size;
+    buffer_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    // Cached host memory: the CPU reads every byte, which uncached write-combined memory makes slow.
+    VmaAllocationCreateInfo alloc_info{};
+    alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
+    alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+    auto buffer = std::make_shared<Buffer>();
+    VmaAllocationInfo allocated{};
+    if (vmaCreateBuffer(allocator_, &buffer_info, &alloc_info, &buffer->buffer, &buffer->allocation, &allocated) !=
+        VK_SUCCESS) {
+        buffer->buffer = VK_NULL_HANDLE;
+        return {};
+    }
+    buffer->mapped = static_cast<std::byte*>(allocated.pMappedData);
+    buffer->size = size;
+    if (name != nullptr) {
+        set_name(VK_OBJECT_TYPE_BUFFER, reinterpret_cast<std::uint64_t>(buffer->buffer), name);
+    }
+    return buffer;
+}
+
+void Context::invalidate(const Buffer& buffer) const noexcept {
+    vmaInvalidateAllocation(allocator_, buffer.allocation, 0, VK_WHOLE_SIZE);
 }
 
 std::uint64_t Context::register_address(VkBuffer buffer) {

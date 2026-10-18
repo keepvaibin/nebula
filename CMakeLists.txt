@@ -1302,10 +1302,11 @@ if(NEBULA_VULKAN)
     set(NEBULA_VOLK_DIR "" CACHE PATH "volk checkout (volk.h)")
     set(NEBULA_VMA_DIR "" CACHE PATH "VulkanMemoryAllocator checkout (include/vk_mem_alloc.h)")
     set(NEBULA_GLSLANG_DIR "" CACHE PATH "glslang release (include, lib)")
+    set(NEBULA_SPIRV_TOOLS_DIR "" CACHE PATH "SPIRV-Tools checkout (include/spirv-tools: the validator's C API)")
     add_library(nebula_vulkan_deps INTERFACE)
     target_include_directories(nebula_vulkan_deps INTERFACE
         "${NEBULA_VULKAN_HEADERS_DIR}/include" "${NEBULA_VOLK_DIR}" "${NEBULA_VMA_DIR}/include"
-        "${NEBULA_GLSLANG_DIR}/include")
+        "${NEBULA_GLSLANG_DIR}/include" "${NEBULA_SPIRV_TOOLS_DIR}/include")
     target_compile_definitions(nebula_vulkan_deps INTERFACE
         NEBULA_GPU_VULKAN VK_NO_PROTOTYPES $<$<PLATFORM_ID:Windows>:VK_USE_PLATFORM_WIN32_KHR NOMINMAX>)
     set(nebula_glslang_libs glslang MachineIndependent GenericCodeGen OSDependent SPIRV SPIRV-Tools-opt SPIRV-Tools
