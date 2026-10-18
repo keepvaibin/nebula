@@ -34,7 +34,7 @@ clang 22 on every host, with the same flags everywhere:
 | `-fno-stack-protector` | Pinned off for every toolchain (some distribution compilers enable it by default), so the module performs the same everywhere. |
 | `-fno-strict-float-cast-overflow` | Float-to-int casts saturate (`llvm.fpto[su]i.sat`, M). Unsigned conversions equal the console's `__cvt_fp2unsigned` (D). Signed ones differ only for NaN (0 here, 0x80000000 there). 8- and 16-bit targets saturate where the console wrapped after an int32 conversion, which matters only for out-of-range values. |
 | `-fno-rtti -fno-exceptions -fno-sized-deallocation -fno-aligned-allocation` | CodeWarrior's model. JKRHeap's `operator new`/`delete` take every allocation; no kept code uses `dynamic_cast` or `typeid` (M). |
-| `-fno-ms-compatibility -fno-delayed-template-parsing`; `-Wno-everything` then `-Werror=return-type` and the pointer/int truncation casts as errors | Windows reports the errors every other host reports. Strict mode found 15 lookup/goto sites hidden by the MSVC-compatible defaults (M). `-w` would also silence the `-Werror=` checks (M); with them on, 129 lines cast pointers to or from 32-bit integers (M), see below. No function falls off its end (M). |
+| `-fno-ms-compatibility -fno-delayed-template-parsing`; `-Wno-everything` then, as errors, `return-type`, the pointer/int truncation casts, calls without a prototype, int/pointer conversions, mismatched function pointer types, returned addresses of locals and constant out-of-bounds indexes | Windows reports the errors every other host reports. Strict mode found 15 lookup/goto sites hidden by the MSVC-compatible defaults (M). `-w` would also silence the `-Werror=` checks (M). Each error class is one the audits found silently miscompiled natively (see Audits). No function falls off its end (M). |
 | floating-point contraction on (default) | CodeWarrior contracts to `fmadds`. Results aren't bit-exact with the console in any case. |
 
 Status:
@@ -95,6 +95,29 @@ Every console-only construct was found by tool, not by reading:
 - They are separate modules because MSL's `std::` templates and the host's mangle identically: one `std::sort` or `std::pair<int,int>` would silently replace the other in a shared image.
 - JKRHeap's global `operator new` stays module-local: a DLL's own definition on Windows, hidden visibility on ELF and Mach-O.
 
+## Audits
+
+Complete over every compiled unit (1,874), with the compiler as the checker. An audit build sets `NEBULA_AUDIT_FLAGS` in place of `-Wno-everything` (`port/tools/audit_build.ps1`: `-Weverything` minus style-only diagnostics).
+
+- 64-to-32-bit narrowing (`-Wshorten-64-to-32`, `native/tools/narrowing.py`): 1,187 warnings at 186 sites (M). Truncated addresses, fixed:
+  - the gravity requester (an actor's own gravity was never excluded);
+  - a particle emitter's user work (EffectSystemUtil keeps a pointer there);
+  - the DSP's ARAM-in-MEM2 base;
+  - the Mii database's callback argument;
+  - `ComparePtr`'s sign;
+  - material IDs (`mDiffFlag`), now the console's address values.
+  The rest are sizes and differences inside one allocation, hashes and report output.
+- Pointer/32-bit casts the cast errors miss (`reinterpret_cast<T*>(u32)`, `(u32)(uintptr_t)p`; clang-query, `native/tools/query_sites.py`): 52 sites (M). Sentinels compared with themselves, small message values, ARAM offsets. JUTException's crash screen walks PowerPC frames and reads module tables at console addresses; natively a panic is `OSPanic`.
+- Diagnostics `-Wno-everything` hid (`native/tools/warnings.py`, M):
+  - 13 C calls without a prototype; `GXGetTexObjAll` received a pointer through an implicit `int`.
+  - Undefined behaviour: 6 returns of a local's address, 8 matrix reads past a row's end, a `va_list` copied by dereference (a `char*` natively; the message tags' numbers and strings, ReplaceTagProcessor), an array deleted through an incomplete type (DrawBufferHolder).
+  - DrawSyncManager's stop message (0x10000) passed the native pointer test.
+  - JKRDvdRipper tested `isErrorRetry`'s address instead of calling it.
+  - 24 include paths differ in case from the file (case-sensitive file systems).
+  - printf-style functions now carry format attributes: 47 mismatches, all pointers printed with `%x` in diagnostics. No class object passes through varargs (clang-query), so no `BE<T>` value reaches a format.
+  - Reviewed, nothing native-specific: values left uninitialised on paths the original also left undefined (52), deletes through `void*` (4), `offsetof` on non-standard layouts, shifts into the sign bit, enum range compares (clang does not assume enum ranges without `-fstrict-enums`).
+- The arena is aligned to its size (512 MB): an arena pointer's low 29 bits are its physical address, so values the game derives from an address's low bits (J3DDrawBuffer's hash slots) are the console's (M, `os_scheduler_tests`).
+
 ## Byte order
 
 - Data whose layout the console's files or hardware define keeps the console's byte order in memory; CPU-only state is native. That covers structs laid over loaded files, saves, display lists, vertex arrays and textures. The disc-data audit (`agents/petari-audit/DISC_DATA.md`) found 246 overlay structs with 1,557 fields in 31 formats (M).
@@ -152,10 +175,10 @@ Every console-only construct was found by tool, not by reading:
 
 | item | state |
 |---|---|
-| Disc data byte order and 64-bit pointers (archives, J3D, JPA, KCL, JMap, BMG, layouts, audio banks; `JKRMemArchive` writes pointers into 32-bit file fields, D) | audit in progress |
+| Disc data byte order and 64-bit pointers (archives, J3D, JPA, KCL, JMap, BMG, layouts, audio banks; `JKRMemArchive` writes pointers into 32-bit file fields, D) | done: every kept unit compiles and links (M) |
 | 274 US data sections not yet compared byte for byte (`us_data_unverified.csv`) | H: symbol naming; verify against the matching build |
 | Heap sizes: pointers double in size natively, so fixed JKRHeap sizes need a 64-bit allowance | open |
 | `nw4r::ut::RomFont`: the console's system font comes from the IPL ROM, not the disc | open |
-| THP movies (prologue, endings, final battle): Petari's decoder is paired-single assembly; Nebula has a native THP decoder | planned |
+| THP movies (prologue, endings, final battle): Petari's decoder is paired-single assembly | video through the host's native decoder (`thp_video_decode`), audio in `native/sdk/thp` |
 | Mii data (RFL) without a console NAND | open |
 | aarch64 and LP64 sysroots for the compile census on Linux, Android and macOS | not on this machine |

@@ -64,19 +64,33 @@ static void find_image(void) {
     }
 }
 
+/* The arena is aligned to its own size, so an arena pointer's low 29 bits are its physical address: what the game
+   derives from an address's low bits (hash slots, alignment tests) has the console's value. The reservation is address
+   space only. */
 int nebula_memory_init(void) {
 #if defined(_WIN32)
-    sArena = (uint8_t*)VirtualAlloc(NULL, kReserveSize, MEM_RESERVE, PAGE_NOACCESS);
-    if (sArena == NULL || VirtualAlloc(sArena + kMem1Physical, kMem1Size, MEM_COMMIT, PAGE_READWRITE) == NULL ||
+    uint8_t* base = (uint8_t*)VirtualAlloc(NULL, 2 * (SIZE_T)kReserveSize, MEM_RESERVE, PAGE_NOACCESS);
+    if (base == NULL) {
+        return 0;
+    }
+    sArena = (uint8_t*)(((uintptr_t)base + kReserveSize - 1) & ~(uintptr_t)(kReserveSize - 1));
+    if (VirtualAlloc(sArena + kMem1Physical, kMem1Size, MEM_COMMIT, PAGE_READWRITE) == NULL ||
         VirtualAlloc(sArena + kMem2Physical, kMem2Size, MEM_COMMIT, PAGE_READWRITE) == NULL) {
         return 0;
     }
 #else
-    void* p = mmap(NULL, kReserveSize, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
-    if (p == MAP_FAILED) {
+    const size_t span = 2 * (size_t)kReserveSize;
+    uint8_t* base = (uint8_t*)mmap(NULL, span, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+    if (base == (uint8_t*)MAP_FAILED) {
         return 0;
     }
-    sArena = (uint8_t*)p;
+    sArena = (uint8_t*)(((uintptr_t)base + kReserveSize - 1) & ~(uintptr_t)(kReserveSize - 1));
+    if (sArena > base) {
+        munmap(base, (size_t)(sArena - base));
+    }
+    if (base + span > sArena + kReserveSize) {
+        munmap(sArena + kReserveSize, (size_t)(base + span - (sArena + kReserveSize)));
+    }
     if (mprotect(sArena + kMem1Physical, kMem1Size, PROT_READ | PROT_WRITE) != 0 ||
         mprotect(sArena + kMem2Physical, kMem2Size, PROT_READ | PROT_WRITE) != 0) {
         return 0;

@@ -124,7 +124,25 @@ static void measure(void) {
     }
 }
 
+/* The arena is aligned to its size: an arena pointer's low 29 bits are its physical address, and the console address
+   (NEBULA_CONSOLE_ADDRESS) is the console's cached-region one. */
+static void check_arena(void) {
+    u8* const mem1 = (u8*)OSGetMEM1ArenaLo();
+    u8* const mem2 = (u8*)OSGetMEM2ArenaLo();
+    if (((uintptr_t)mem1 & 0x1FFFFFFF) != OSCachedToPhysical(mem1) || ((uintptr_t)mem2 & 0x1FFFFFFF) != OSCachedToPhysical(mem2) ||
+        OSPhysicalToCached(OSCachedToPhysical(mem2 + 0x123)) != mem2 + 0x123) {
+        printf("FAIL arena: MEM1 %p (physical 0x%08X), MEM2 %p (physical 0x%08X)\n", (void*)mem1, OSCachedToPhysical(mem1),
+               (void*)mem2, OSCachedToPhysical(mem2));
+        sFailures++;
+    }
+    if (NEBULA_CONSOLE_ADDRESS(mem2) != 0x90000000u || NEBULA_CONSOLE_ADDRESS(mem1) != 0x80100000u) {
+        printf("FAIL console address: MEM1 0x%08X, MEM2 0x%08X\n", NEBULA_CONSOLE_ADDRESS(mem1), NEBULA_CONSOLE_ADDRESS(mem2));
+        sFailures++;
+    }
+}
+
 static void game_main(void) {
+    check_arena();
     OSInitMessageQueue(&sQueue, sQueueSlots, 4);
     OSCreateThread(&sHigh, high_main, 0, sHighStack + sizeof(sHighStack), sizeof(sHighStack), 10, 0);
     OSCreateThread(&sLow, low_main, 0, sLowStack + sizeof(sLowStack), sizeof(sLowStack), 20, 0);

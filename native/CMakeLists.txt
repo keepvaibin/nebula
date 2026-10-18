@@ -70,6 +70,15 @@ set_target_properties(smg_game PROPERTIES
     CXX_STANDARD 17 CXX_EXTENSIONS ON
     C_VISIBILITY_PRESET hidden CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN ON)
 
+# Audit builds (docs/NATIVE_PORT.md, "Audits"), not for shipping: these diagnostics in place of -Wno-everything
+# (which no later -W option undoes), e.g. -Wshorten-64-to-32 for tools/narrowing.py.
+set(NEBULA_AUDIT_FLAGS "" CACHE STRING "Diagnostics for an audit build")
+if(NEBULA_AUDIT_FLAGS)
+    separate_arguments(diagnostics UNIX_COMMAND "${NEBULA_AUDIT_FLAGS}")
+else()
+    set(diagnostics -Wno-everything)
+endif()
+
 # docs/NATIVE_PORT.md, "Build of the game code", has the reason for each, and docs/NATIVE_PERFORMANCE.md the cost:
 # -fno-math-errno (the game never reads errno; sqrtf and friends stay single instructions), -fno-stack-protector
 # (pinned off for every toolchain: distribution compilers turn it on by default).
@@ -78,9 +87,11 @@ target_compile_options(smg_game PRIVATE
     -fno-strict-aliasing -fno-strict-float-cast-overflow -fno-math-errno -fno-stack-protector
     $<$<NOT:$<PLATFORM_ID:Windows>>:-fno-plt>
     -fno-ms-compatibility -fno-delayed-template-parsing
-    -Wno-everything
+    ${diagnostics}
     -Werror=return-type -Werror=pointer-to-int-cast -Werror=void-pointer-to-int-cast
     -Werror=int-to-pointer-cast -Werror=pointer-to-enum-cast
+    -Werror=implicit-function-declaration -Werror=implicit-int -Werror=int-conversion
+    -Werror=incompatible-function-pointer-types -Werror=return-stack-address -Werror=array-bounds
     "SHELL:-include nebula_prelude.h"
     $<$<COMPILE_LANGUAGE:CXX>:-nostdinc++ -fno-rtti -fno-exceptions -fno-sized-deallocation -fno-aligned-allocation>
     -Wno-register -Wno-c++11-narrowing)
