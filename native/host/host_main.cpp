@@ -1187,7 +1187,9 @@ int svc_hbm(void*, uint32_t what, uint32_t) {
 //   GALAXY_TEST_TELEPORT=x,y,z,frame[/x,y,z,frame...]: MR::setPlayerPos at those scene frames, held 30 frames (the
 //     player settles there); counted from the latest tour stop when touring.
 //   GALAXY_TEST_EVENTS=kind@frame[/kind@frame...]: once at that scene frame (from the latest stop when touring): kill (a
-//     miss: MR::forceKillPlayerByAbyss).
+//     miss: MR::forceKillPlayerByAbyss), movieN (MR::startMovie(N), in a stage with a movie sequence).
+std::atomic<bool> gTourDone{false};
+
 int svc_test_scene_frame(void*, NebulaTestAction* action) {
     struct Stop {
         std::string stage;
@@ -1202,6 +1204,7 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
     struct Event {
         uint32_t kind;
         uint64_t frame;
+        int32_t value;
     };
     static std::vector<Event> events;
     static uint64_t tour_frames = 1200;
@@ -1240,7 +1243,9 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
                     const std::string kind = entry.substr(0, at);
                     const uint64_t frame = std::strtoull(entry.c_str() + at + 1, nullptr, 10);
                     if (kind == "kill") {
-                        events.push_back({NEBULA_TEST_KILL_PLAYER, frame});
+                        events.push_back({NEBULA_TEST_KILL_PLAYER, frame, 0});
+                    } else if (kind.rfind("movie", 0) == 0) {
+                        events.push_back({NEBULA_TEST_START_MOVIE, frame, std::atoi(kind.c_str() + 5)});
                     }
                 }
                 start = end + 1;
@@ -1263,6 +1268,22 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
         }
     }
     ++scene_frames;
+    // The last stop stays for its frames, or until 20 s after the last test event, then the run ends.
+    static const uint64_t last_frame = [] {
+        uint64_t last = 0;
+        for (const Event& event : events) {
+            last = std::max(last, event.frame + 1200u);
+        }
+        for (const Teleport& t : teleports) {
+            last = std::max(last, t.frame + 1200u);
+        }
+        return last;
+    }();
+    if (touring && next == stops.size() && !gTourDone.load(std::memory_order_relaxed) &&
+        ++since_stop >= std::max(tour_frames, last_frame)) {
+        gTourDone.store(true, std::memory_order_relaxed);  // the run ends once the last stop has had its frames
+        log_line("tour:", "done");
+    }
     if (touring && next < stops.size() && ++since_stop >= tour_frames) {
         since_stop = 0;
         stop_frame = scene_frames;
@@ -1282,6 +1303,7 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
     for (const Event& event : events) {
         if (frame == event.frame) {
             action->kind = event.kind;
+            action->scenario = event.value;
             char text[64];
             std::snprintf(text, sizeof(text), "event %u at frame %llu", event.kind, static_cast<unsigned long long>(frame));
             log_line("test:", text);
@@ -1535,7 +1557,7 @@ int main(int argc, char** argv) {
     const auto end = Clock::now() + std::chrono::duration<double>(seconds > 0 ? seconds : 1e9);
     uint32_t reported = 0;
     auto next_report = Clock::now() + std::chrono::seconds(1);
-    while (Clock::now() < end) {
+    while (Clock::now() < end && !gTourDone.load(std::memory_order_relaxed)) {
 #if defined(NEBULA_HOST_RENDERER)
         // The window's messages, on the thread that created it.
         MsgWaitForMultipleObjects(0, nullptr, FALSE, 4, QS_ALLINPUT);

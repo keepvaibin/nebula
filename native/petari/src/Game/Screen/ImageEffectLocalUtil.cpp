@@ -16,12 +16,6 @@ namespace {
         GXLoadTexMtxImm(transMtx.toMtxPtr(), GX_TEXMTX0, GX_MTX2x4);
     }
 
-#ifdef TARGET_PC
-    // The console's divw: no trap; a zero divisor gives 0, or -1 for a negative dividend.
-    s32 divw(s32 a, s32 b) {
-        return b == 0 ? (a < 0 ? -1 : 0) : a / b;
-    }
-#endif
 };  // namespace
 
 void MR::connectToSceneImageEffect(NameObj* pObj) {
@@ -35,9 +29,9 @@ void MR::connectToSceneImageEffectMovement(NameObj* pObj) {
 void ImageEffectLocalUtil::capture(JUTTexture* pTexture, s32 divisions, s32 tile, GXTexFmt format, bool clear, u8 filter) {
 #ifdef TARGET_PC
     // FallOutFieldDraw::draw passes 0 divisions each frame it draws; x86 division would trap there.
-    const s32 row = divw(tile, divisions);
-    pTexture->capture(divw((tile - row * divisions) * MR::getFrameBufferWidth(), divisions),
-                      divw(row * MR::getFrameBufferHeight(), divisions), format, clear, filter);
+    const s32 row = __nebula_divw(tile, divisions);
+    pTexture->capture(__nebula_divw((tile - row * divisions) * MR::getFrameBufferWidth(), divisions),
+                      __nebula_divw(row * MR::getFrameBufferHeight(), divisions), format, clear, filter);
 #else
     pTexture->capture((tile % divisions) * MR::getFrameBufferWidth() / divisions, (tile / divisions) * MR::getFrameBufferHeight() / divisions, format,
                       clear, filter);

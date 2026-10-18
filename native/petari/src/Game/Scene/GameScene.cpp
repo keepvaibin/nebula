@@ -189,6 +189,12 @@ void GameScene::draw() const {
             MR::setPlayerPos(TVec3f(action.position[0], action.position[1], action.position[2]));
         } else if (action.kind == NEBULA_TEST_KILL_PLAYER) {
             MR::forceKillPlayerByAbyss();
+        } else if (action.kind == NEBULA_TEST_START_MOVIE) {
+            if (MR::isExistSceneObj(SceneObj_MoviePlayingSequenceHolder)) {
+                MR::startMovie(action.scenario);
+            } else {
+                OSReport("test: no movie sequence in this stage\n");
+            }
         }
     }
 #endif
