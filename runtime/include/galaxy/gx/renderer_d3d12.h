@@ -28,7 +28,7 @@
 
 #include "galaxy/gx/efb_copy.h"
 #include "galaxy/gx/temporal_upscaler.h"
-#include "galaxy/gx/immutable_upload.h"
+#include "galaxy/gx/upload_ring.h"
 #include "galaxy/gx/post_process.h"
 #include "galaxy/gx/placed_texture_allocator.h"
 #include "galaxy/gx/gx_bitfields.h"
@@ -112,87 +112,6 @@ inline constexpr DXGI_FORMAT kBackbufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
     std::uint32_t key,
     const RenderConfig& cfg) noexcept;
 
-// Linear per-frame allocator over one persistently mapped UPLOAD resource,
-// partitioned into kFramesInFlight segments so frame N never overwrites
-// memory the GPU is still reading for frame N-1.
-class UploadRing {
-public:
-    // Caller must have retired all GPU references to this resource.
-    void reset() noexcept;
-    struct Allocation {
-        std::byte* cpu = nullptr;
-        D3D12_GPU_VIRTUAL_ADDRESS gpu = 0;
-        std::size_t offset = 0;     // within the whole resource
-    };
-
-    bool initialize(
-        ID3D12Device* device,
-        const char* name,
-        std::size_t bytes_per_frame,
-        unsigned frames_in_flight);
-    void begin_frame(unsigned frame_slot);
-
-    // Bump-allocates within the current frame segment. Exhaustion is a GxFatalError:
-    // geometry is never dropped silently.
-    // Alignment must be a nonzero power of two. Rejected requests do not
-    // consume bytes or advance the segment's content generation.
-    Allocation allocate(std::size_t size, std::size_t alignment);
-
-    Allocation upload_immutable(
-        const void* source, std::size_t size, std::size_t alignment,
-        ImmutableUploadToken& token);
-    [[nodiscard]] std::uint64_t reused_bytes() const { return reused_bytes_; }
-    [[nodiscard]] std::uint64_t copied_bytes() const { return copied_bytes_; }
-    // Number of upload_immutable() calls this frame. reused_bytes() and copied_bytes()
-    // are only meaningful relative to this count: both are zero for a frame in which
-    // the immutable path was never entered, which looks the same on the timing line as
-    // a frame in which it was entered and classified every byte as a copy. The call
-    // count is the field that separates "the reuse path is not reached" from "the
-    // counters are not observed". The increment costs one add on a path that already
-    // does a memcpy or a map lookup.
-    [[nodiscard]] std::uint64_t immutable_upload_calls() const {
-        return immutable_upload_calls_;
-    }
-
-    // Peak bytes used within a single frame segment, and the segment size. These show
-    // whether the ring's configured size is resident memory or only reserved address
-    // space. The rings are D3D12_HEAP_TYPE_UPLOAD committed buffers mapped for the life
-    // of the process, so the reservation is bytes_per_frame * frames_in_flight (240 MiB
-    // by default). Physical pages are committed only for the parts that were written,
-    // so the physical cost tracks the peak cursor rather than the reservation. Exhaustion
-    // is fatal, so the floor for any reduction is peak_bytes_per_frame().
-    [[nodiscard]] std::size_t peak_bytes_per_frame() const {
-        return peak_bytes_per_frame_;
-    }
-    [[nodiscard]] std::size_t bytes_per_frame() const { return bytes_per_frame_; }
-    [[nodiscard]] std::size_t cursor() const { return cursor_; }
-
-    [[nodiscard]] ID3D12Resource* resource() const { return buffer_.Get(); }
-    [[nodiscard]] D3D12_GPU_VIRTUAL_ADDRESS gpu_base() const { return gpu_base_; }
-    // The persistent mapping (the whole resource, all segments).
-    [[nodiscard]] std::byte* mapped() const { return mapped_; }
-
-private:
-    Microsoft::WRL::ComPtr<ID3D12Resource> buffer_;
-    const char* name_ = "";
-    std::byte* mapped_ = nullptr;
-    // This committed buffer keeps its address until it is replaced by initialize.
-    D3D12_GPU_VIRTUAL_ADDRESS gpu_base_ = 0;
-    std::size_t bytes_per_frame_ = 0;
-    std::size_t segment_base_ = 0;
-    std::size_t cursor_ = 0;
-    unsigned frames_in_flight_ = 0;
-    unsigned active_slot_ = 0;
-    bool frame_ready_ = false;
-    bool segment_allocation_pending_ = true;
-    std::uint64_t resource_identity_ = 0;
-    std::vector<std::uint64_t> slot_generations_;
-    std::uint64_t reused_bytes_ = 0;
-    std::uint64_t copied_bytes_ = 0;
-    std::uint64_t immutable_upload_calls_ = 0;
-    std::size_t peak_bytes_per_frame_ = 0;
-};
-
 // Shader-visible descriptor allocator with the same per-frame segmentation.
 class DescriptorRing {
 public:
@@ -257,14 +176,6 @@ void record_efb_identity_copy(
 
 }  // namespace detail
 
-// A mapped upload buffer that lives until it is released (GxBackend's resident decoded vertices).
-struct UploadBuffer {
-    Microsoft::WRL::ComPtr<ID3D12Resource> resource;
-    std::byte* cpu = nullptr;
-    gpu::Address gpu = 0;
-    explicit operator bool() const noexcept { return resource != nullptr; }
-};
-
 
 class RendererD3D12 final : public UiCanvas {
 public:
@@ -277,7 +188,7 @@ public:
     void create_first_use_resources();
     void shutdown();                // full GPU drain, then release
     // A persistently mapped upload buffer; empty when it cannot be created.
-    [[nodiscard]] UploadBuffer create_upload_buffer(std::size_t bytes, const wchar_t* name);
+    [[nodiscard]] UploadBuffer create_upload_buffer(std::size_t bytes, const char* name);
     // The frame's table of `count` texture descriptors for the draw's maps (null SRVs where a handle is empty).
     [[nodiscard]] gpu::Table texture_table_for(
         const TextureHandle* handles, unsigned count, const TextureCache& cache);

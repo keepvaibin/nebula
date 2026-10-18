@@ -74,12 +74,16 @@ inline constexpr Topology kTopologyPointList = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
 
 namespace galaxy::gx::vk {
 struct Texture;  // vk/vk_context.h
+struct Buffer;
 }
 
 namespace galaxy::gx::gpu {
 
 // An owned texture: the last reference frees it once the GPU is done with it (vk_context.h).
 using TextureRef = std::shared_ptr<vk::Texture>;
+// An owned buffer, freed as a texture is.
+using BufferRef = std::shared_ptr<vk::Buffer>;
+[[nodiscard]] Resource* raw(const BufferRef& buffer) noexcept;
 using TextureObject = vk::Texture;
 [[nodiscard]] inline TextureObject* raw(const TextureRef& texture) noexcept { return texture.get(); }
 // Another reference to a texture a handle names (vk::Texture derives from enable_shared_from_this).
@@ -109,6 +113,12 @@ inline constexpr unsigned kMaxTexture2DDimension = 4096u;
 
 }  // namespace galaxy::gx::gpu
 #else
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <d3d12.h>
 #include <wrl/client.h>
 
@@ -117,6 +127,7 @@ namespace galaxy::gx::gpu {
 using Device = ID3D12Device;
 using DeviceRef = Microsoft::WRL::ComPtr<ID3D12Device>;
 using TextureRef = Microsoft::WRL::ComPtr<ID3D12Resource>;
+using BufferRef = Microsoft::WRL::ComPtr<ID3D12Resource>;
 using TextureObject = ID3D12Resource;
 [[nodiscard]] inline TextureObject* raw(const TextureRef& texture) noexcept { return texture.Get(); }
 // Another reference to a texture a handle names.
@@ -172,3 +183,18 @@ inline constexpr Topology kTopologyPointList = D3D_PRIMITIVE_TOPOLOGY_POINTLIST;
 
 }  // namespace galaxy::gx::gpu
 #endif
+
+namespace galaxy::gx::gpu {
+
+// A persistently mapped buffer the CPU writes and the GPU reads: the upload rings and GxBackend's resident vertices.
+struct UploadMemory {
+    BufferRef buffer;
+    std::byte* cpu = nullptr;
+    Address gpu = 0;
+    explicit operator bool() const noexcept { return cpu != nullptr; }
+};
+
+// `bytes` of upload memory, mapped for its lifetime; empty when it cannot be created.
+[[nodiscard]] UploadMemory create_upload_memory(Device* device, std::size_t bytes, const char* name);
+
+}  // namespace galaxy::gx::gpu

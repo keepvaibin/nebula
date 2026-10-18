@@ -18,7 +18,7 @@
 #include "galaxy/gx/fifo_parser.h"
 #include "galaxy/gx/gx_bitfields.h"
 #include "galaxy/gx/gx_state.h"
-#include "galaxy/gx/renderer_d3d12.h"
+#include "galaxy/gx/upload_ring.h"
 #include "galaxy/native_api.h"
 
 #include <emmintrin.h>

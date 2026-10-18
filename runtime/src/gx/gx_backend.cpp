@@ -5233,7 +5233,7 @@ bool GxBackend::ensure_resident_vertex_buffer() {
     resident_vertex_device_ = device;
     UploadBuffer buffer = renderer_.create_upload_buffer(
         static_cast<std::size_t>(kResidentDecodedVertexCapacity) * sizeof(GxVertexOut),
-        L"GX resident decoded vertices");
+        "GX resident decoded vertices");
     if (!buffer) {
         // Not fatal: every hit keeps using the per-frame ring upload.
         resident_vertex_buffer_failed_ = true;

@@ -672,6 +672,7 @@ add_library(galaxy_gx STATIC
     runtime/src/gx/host_window_win32.cpp
     runtime/src/gx/renderer_d3d12.cpp
     runtime/src/gx/renderer_common.cpp
+    runtime/src/gx/upload_ring.cpp
     runtime/src/gx/window_owner.cpp
     runtime/src/gx/texture_cache.cpp
     runtime/src/gx/texture_backend_d3d12.cpp
