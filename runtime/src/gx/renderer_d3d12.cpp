@@ -8,6 +8,7 @@
 #include "galaxy/gx/game_asset_extract.h"
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx/texture_cache.h"
+#include "galaxy/gx/uber_constants.h"
 #include "galaxy/runtime_settings.h"
 #include "galaxy/scope_exit.h"
 #include "galaxy/native_host.h"
@@ -4910,6 +4911,57 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
         return false;
     }
     return true;
+}
+
+UploadBuffer RendererD3D12::create_upload_buffer(std::size_t bytes, const wchar_t* name) {
+    UploadBuffer out;
+    if (!device_) {
+        return out;
+    }
+    D3D12_HEAP_PROPERTIES hp{};
+    hp.Type = D3D12_HEAP_TYPE_UPLOAD;
+    D3D12_RESOURCE_DESC rd{};
+    rd.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    rd.Width = static_cast<UINT64>(bytes);
+    rd.Height = 1;
+    rd.DepthOrArraySize = 1;
+    rd.MipLevels = 1;
+    rd.Format = DXGI_FORMAT_UNKNOWN;
+    rd.SampleDesc.Count = 1;
+    rd.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    Microsoft::WRL::ComPtr<ID3D12Resource> buffer;
+    void* mapped = nullptr;
+    const D3D12_RANGE no_read{0, 0};
+    if (FAILED(device_->CreateCommittedResource(
+            &hp, D3D12_HEAP_FLAG_NONE, &rd,
+            D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+            IID_PPV_ARGS(&buffer))) ||
+        FAILED(buffer->Map(0, &no_read, &mapped)) || mapped == nullptr) {
+        return out;
+    }
+    buffer->SetName(name);
+    out.cpu = static_cast<std::byte*>(mapped);
+    out.gpu = buffer->GetGPUVirtualAddress();
+    out.resource = std::move(buffer);
+    return out;
+}
+
+gpu::Table RendererD3D12::texture_table_for(
+    const TextureHandle* handles, unsigned count, const TextureCache& cache) {
+    DescriptorRing::Table table = srv_ring_.allocate(count);
+    D3D12_CPU_DESCRIPTOR_HANDLE sources[kMaxTextureMaps]{};
+    const auto heap_start = cache.srv_cpu_base();
+    const UINT stride = cache.srv_descriptor_stride();
+    for (unsigned m = 0; m < count; ++m) {
+        sources[m] = handles[m].resource != nullptr
+            ? D3D12_CPU_DESCRIPTOR_HANDLE{heap_start.ptr + static_cast<SIZE_T>(handles[m].srv_index) * stride}
+            : cache.null_srv();
+    }
+    // CPU-only sources, one contiguous frame-owned table.
+    const UINT destination_size = count;
+    device_->CopyDescriptors(1, &table.cpu, &destination_size, count, sources, nullptr,
+                             D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    return table.gpu;
 }
 
 void RendererD3D12::shutdown() {

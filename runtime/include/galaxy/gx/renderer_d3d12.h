@@ -32,6 +32,7 @@
 #include "galaxy/gx/post_process.h"
 #include "galaxy/gx/placed_texture_allocator.h"
 #include "galaxy/gx/gx_bitfields.h"
+#include "galaxy/gx/gpu_types.h"
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx/window_owner.h"
 #include "galaxy/gx_d3d12.h"
@@ -52,6 +53,7 @@
 namespace galaxy::gx {
 
 class TextureCache;
+struct TextureHandle;
 
 // Deterministic, device-free validation used by native tests so changes to the
 // runtime-compiled EFB conversion shader cannot ship with HLSL syntax errors.
@@ -258,6 +260,8 @@ public:
 
     [[nodiscard]] ID3D12Resource* resource() const { return buffer_.Get(); }
     [[nodiscard]] D3D12_GPU_VIRTUAL_ADDRESS gpu_base() const { return gpu_base_; }
+    // The persistent mapping (the whole resource, all segments).
+    [[nodiscard]] std::byte* mapped() const { return mapped_; }
 
 private:
     Microsoft::WRL::ComPtr<ID3D12Resource> buffer_;
@@ -344,21 +348,28 @@ void record_efb_identity_copy(
 
 }  // namespace detail
 
+// A mapped upload buffer that lives until it is released (GxBackend's resident decoded vertices).
+struct UploadBuffer {
+    Microsoft::WRL::ComPtr<ID3D12Resource> resource;
+    std::byte* cpu = nullptr;
+    gpu::Address gpu = 0;
+    explicit operator bool() const noexcept { return resource != nullptr; }
+};
+
 // One fully resolved draw.  The renderer sets PSO / root arguments only when
 // they differ from the previous draw (cheap CPU-side batching).
 struct DrawCall {
-    ID3D12PipelineState* pipeline = nullptr;
-    D3D12_GPU_VIRTUAL_ADDRESS vs_constants = 0;   // root CBV b0
-    D3D12_GPU_VIRTUAL_ADDRESS ps_constants = 0;   // root CBV b1
-    D3D12_GPU_DESCRIPTOR_HANDLE texture_table{};  // t0-t7
-    D3D12_GPU_DESCRIPTOR_HANDLE sampler_table{};  // s0-s7
-    D3D12_GPU_VIRTUAL_ADDRESS matrix_palette = 0; // root SRV t0,space1
-    D3D12_VERTEX_BUFFER_VIEW vertex_view{};
-    D3D12_INDEX_BUFFER_VIEW index_view{};
+    gpu::Pipeline* pipeline = nullptr;
+    gpu::Address vs_constants = 0;   // root CBV b0
+    gpu::Address ps_constants = 0;   // root CBV b1
+    gpu::Table texture_table{};      // t0-t7
+    gpu::Table sampler_table{};      // s0-s7
+    gpu::Address matrix_palette = 0; // root SRV t0,space1
+    gpu::VertexView vertex_view{};
+    gpu::IndexView index_view{};
     std::uint32_t index_count = 0;
-    D3D12_PRIMITIVE_TOPOLOGY topology =
-        D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-    D3D12_RECT scissor{};
+    gpu::Topology topology = gpu::kTopologyTriangleList;
+    gpu::Rect scissor{};
     // Raw XF viewport registers 0x101A-0x101F in hardware order:
     // [0]=wd (w/2), [1]=ht (-h/2), [2]=zRange ((f-n)*(2^24-1)),
     // [3]=xOrig (cx+342), [4]=yOrig (cy+342), [5]=farZ (f*(2^24-1)).
@@ -383,6 +394,11 @@ public:
     // use stalled the first frame that showed the pointer.
     void create_first_use_resources();
     void shutdown();                // full GPU drain, then release
+    // A persistently mapped upload buffer; empty when it cannot be created.
+    [[nodiscard]] UploadBuffer create_upload_buffer(std::size_t bytes, const wchar_t* name);
+    // The frame's table of `count` texture descriptors for the draw's maps (null SRVs where a handle is empty).
+    [[nodiscard]] gpu::Table texture_table_for(
+        const TextureHandle* handles, unsigned count, const TextureCache& cache);
     void drain_gpu();               // wait while keeping renderer resources alive
     void pump_messages();           // compatibility hook; owner pumps independently
     [[nodiscard]] bool quit_requested() const noexcept;

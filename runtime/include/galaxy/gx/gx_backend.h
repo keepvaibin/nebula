@@ -393,8 +393,8 @@ private:
     // GxVsConstants/GxPsConstants into the constant ring, snapshots the XF
     // matrix palette into the matrix ring, and refreshes the texture table
     // for the enabled TEV maps.  Returns the resolved pipeline for the draw.
-    ID3D12PipelineState* flush_draw_state(
-        D3D12_PRIMITIVE_TOPOLOGY_TYPE primitive_topology_type);
+    gpu::Pipeline* flush_draw_state(
+        gpu::TopologyType primitive_topology_type);
 
     struct PendingDrawBatch {
         bool active = false;
@@ -626,8 +626,8 @@ private:
     std::uint8_t current_pipeline_aux_ = 0;
     // Root SRV for draws: the palette snapshot, or the matrix ring base in
     // temporal scenes (palettes then addressed by mtx_palette_base).
-    D3D12_GPU_VIRTUAL_ADDRESS draw_matrix_palette_ = 0;
-    D3D12_GPU_VIRTUAL_ADDRESS temporal_vs_palette_va_ = 0;
+    gpu::Address draw_matrix_palette_ = 0;
+    gpu::Address temporal_vs_palette_va_ = 0;
     TransformHistory transform_history_;
     // The scene records transforms (temporal upscaling or interpolation).
     bool history_scene_ = false;
@@ -691,7 +691,7 @@ private:
     bool interp_log_waiting_ = false;
     std::uint32_t interp_log_xfb_ = 0;
     void start_interp_sequence(std::uint32_t xfb_addr);
-    std::vector<D3D12_GPU_VIRTUAL_ADDRESS> interp_record_vas_;
+    std::vector<gpu::Address> interp_record_vas_;
     std::uint64_t interp_presented_ = 0;
     std::uint64_t interp_dropped_ = 0;
     std::uint64_t interp_failed_ = 0;     // sub-frames that could not be recorded
@@ -1076,10 +1076,10 @@ private:
         static_cast<std::uint32_t>(
             kDecodedPacketRunCacheMaxBytes / sizeof(GxVertexOut));
     ResidentVertexArena resident_vertices_;
-    Microsoft::WRL::ComPtr<ID3D12Resource> resident_vertex_buffer_;
+    UploadBuffer resident_vertex_buffer_;
     std::byte* resident_vertex_mapped_ = nullptr;
-    D3D12_GPU_VIRTUAL_ADDRESS resident_vertex_gpu_ = 0;
-    ID3D12Device* resident_vertex_device_ = nullptr;
+    gpu::Address resident_vertex_gpu_ = 0;
+    gpu::Device* resident_vertex_device_ = nullptr;
     bool resident_vertex_buffer_failed_ = false;
     std::uint64_t frame_resident_vertex_hits_ = 0;
     std::uint64_t frame_resident_vertex_bytes_ = 0;
@@ -1151,7 +1151,7 @@ private:
     bool per_pixel_lighting_ = true;
     PsoKey current_pso_key_{};
     bool current_pso_key_valid_ = false;
-    ID3D12PipelineState* current_pipeline_ = nullptr;
+    gpu::Pipeline* current_pipeline_ = nullptr;
     // Frame-scoped memo of recent (PsoKey -> pipeline) resolutions. Busy frames run 1k-36k draws through
     // flush_draw_state and reuse a few hundred material variants, so the same keys resolve many times per
     // frame. PipelineCache::published_ changes only on this render thread (in get(), and in
@@ -1169,22 +1169,22 @@ private:
     static constexpr std::size_t kPipelineMemoMask = kPipelineMemoSlots - 1u;
     struct PipelineMemoEntry {
         std::uint64_t hash = 0u;
-        ID3D12PipelineState* pipeline = nullptr;
+        gpu::Pipeline* pipeline = nullptr;
         PsoKey key{};
     };
     std::array<PipelineMemoEntry, kPipelineMemoSlots> pipeline_memo_{};
     // Hash of `current_pso_key_`, kept beside it so the memo probe never
     // re-derives the fold for a key it already hashed once.
     std::uint64_t current_pso_key_hash_ = 0u;
-    D3D12_GPU_VIRTUAL_ADDRESS current_vs_constants_ = 0;
+    gpu::Address current_vs_constants_ = 0;
     VsConstantsCpuCache cpu_vs_constants_{};
     // current_pipeline_ is an uber pipeline standing in for a specialization
     // that is still compiling: resolve the key again on the next draw.
     bool current_pipeline_is_uber_ = false;
-    D3D12_GPU_VIRTUAL_ADDRESS current_ps_constants_ = 0;
-    D3D12_GPU_DESCRIPTOR_HANDLE current_texture_table_{};
-    D3D12_GPU_DESCRIPTOR_HANDLE current_sampler_table_{};
-    D3D12_GPU_VIRTUAL_ADDRESS current_matrix_palette_ = 0;
+    gpu::Address current_ps_constants_ = 0;
+    gpu::Table current_texture_table_{};
+    gpu::Table current_sampler_table_{};
+    gpu::Address current_matrix_palette_ = 0;
     bool matrix_palette_stale_ = true;
     // Requirement of the last resolved VS. A palette-free draw can reuse its
     // bindings while retaining stale palette debt for a later palette user.
@@ -1372,8 +1372,8 @@ private:
         }
     };
     struct TextureBindingTables {
-        D3D12_GPU_DESCRIPTOR_HANDLE texture_table{};
-        D3D12_GPU_DESCRIPTOR_HANDLE sampler_table{};
+        gpu::Table texture_table{};
+        gpu::Table sampler_table{};
         std::array<TextureBindingDependency, kMaxTextureMaps>
             dependencies{};
         std::uint8_t dependency_count = 0;
@@ -1385,7 +1385,7 @@ private:
     };
     std::unordered_map<
         TextureTableKey,
-        D3D12_GPU_DESCRIPTOR_HANDLE,
+        gpu::Table,
         TextureTableKeyHash>
         frame_texture_tables_;
     std::unordered_map<

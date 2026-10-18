@@ -2640,10 +2640,8 @@ void trace_thp_draw_state(
     trace_thp_plane_stats("U", state.tex_image(1), memory);
     trace_thp_plane_stats("V", state.tex_image(2), memory);
 
-    void* ring_cpu = nullptr;
-    const D3D12_RANGE no_read{0, 0};
-    if (FAILED(vertex_ring.resource()->Map(0, &no_read, &ring_cpu)) ||
-        ring_cpu == nullptr) {
+    void* ring_cpu = vertex_ring.mapped();
+    if (ring_cpu == nullptr) {
         std::fprintf(stderr, "[thpdraw] vertices unavailable\n");
         return;
     }
@@ -2661,7 +2659,6 @@ void trace_thp_draw_state(
             verts[v].color0, verts[v].mtx_indices[0],
             verts[v].mtx_indices[1], verts[v].mtx_indices[2]);
     }
-    vertex_ring.resource()->Unmap(0, &no_read);
 }
 
 // Converts the raw XF projection registers to a column-major 4x4 matrix stored row-major (HLSL
@@ -2832,19 +2829,19 @@ void fill_ps_constants(const GxState& state, GxPsConstants& out) {
 
 void gx_topology_for_primitive(
     PrimitiveClass primitive,
-    D3D12_PRIMITIVE_TOPOLOGY& topology,
-    D3D12_PRIMITIVE_TOPOLOGY_TYPE& topology_type) {
-    topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-    topology_type = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    gpu::Topology& topology,
+    gpu::TopologyType& topology_type) {
+    topology = gpu::kTopologyTriangleList;
+    topology_type = gpu::kTopologyTypeTriangle;
     switch (primitive) {
     case PrimitiveClass::Lines:
     case PrimitiveClass::LineStrip:
-        topology = D3D_PRIMITIVE_TOPOLOGY_LINELIST;
-        topology_type = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
+        topology = gpu::kTopologyLineList;
+        topology_type = gpu::kTopologyTypeLine;
         break;
     case PrimitiveClass::Points:
-        topology = D3D_PRIMITIVE_TOPOLOGY_POINTLIST;
-        topology_type = D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT;
+        topology = gpu::kTopologyPointList;
+        topology_type = gpu::kTopologyTypePoint;
         break;
     case PrimitiveClass::Quads:
     case PrimitiveClass::Quads2:
@@ -5221,7 +5218,7 @@ bool GxBackend::decoded_packet_run_dependencies_match(
 }
 
 bool GxBackend::ensure_resident_vertex_buffer() {
-    ID3D12Device* const device = renderer_.device();
+    gpu::Device* const device = renderer_.device();
     if (device == nullptr) {
         return false;
     }
@@ -5234,36 +5231,19 @@ bool GxBackend::ensure_resident_vertex_buffer() {
     // A different device means the old one was shut down (drained) first.
     release_resident_vertex_buffer();
     resident_vertex_device_ = device;
-    D3D12_HEAP_PROPERTIES hp{};
-    hp.Type = D3D12_HEAP_TYPE_UPLOAD;
-    D3D12_RESOURCE_DESC rd{};
-    rd.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    rd.Width = static_cast<UINT64>(kResidentDecodedVertexCapacity) *
-        sizeof(GxVertexOut);
-    rd.Height = 1;
-    rd.DepthOrArraySize = 1;
-    rd.MipLevels = 1;
-    rd.Format = DXGI_FORMAT_UNKNOWN;
-    rd.SampleDesc.Count = 1;
-    rd.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    Microsoft::WRL::ComPtr<ID3D12Resource> buffer;
-    void* mapped = nullptr;
-    const D3D12_RANGE no_read{0, 0};
-    if (FAILED(device->CreateCommittedResource(
-            &hp, D3D12_HEAP_FLAG_NONE, &rd,
-            D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-            IID_PPV_ARGS(&buffer))) ||
-        FAILED(buffer->Map(0, &no_read, &mapped)) || mapped == nullptr) {
+    UploadBuffer buffer = renderer_.create_upload_buffer(
+        static_cast<std::size_t>(kResidentDecodedVertexCapacity) * sizeof(GxVertexOut),
+        L"GX resident decoded vertices");
+    if (!buffer) {
         // Not fatal: every hit keeps using the per-frame ring upload.
         resident_vertex_buffer_failed_ = true;
         std::cerr << "[gx-resident-vertices] buffer creation failed; "
                      "decoded vertices stay on the frame ring\n";
         return false;
     }
-    buffer->SetName(L"GX resident decoded vertices");
+    resident_vertex_mapped_ = buffer.cpu;
+    resident_vertex_gpu_ = buffer.gpu;
     resident_vertex_buffer_ = std::move(buffer);
-    resident_vertex_mapped_ = static_cast<std::byte*>(mapped);
-    resident_vertex_gpu_ = resident_vertex_buffer_->GetGPUVirtualAddress();
     resident_vertices_.reset(kResidentDecodedVertexCapacity, kFramesInFlight);
     return true;
 }
@@ -5272,7 +5252,7 @@ void GxBackend::release_resident_vertex_buffer() noexcept {
     // Callers guarantee the GPU no longer reads the buffer (session reset
     // before renderer initialization, or shutdown after drain_gpu()). The
     // arena reset bumps its epoch, so every entry's block becomes invalid.
-    resident_vertex_buffer_.Reset();
+    resident_vertex_buffer_ = {};
     resident_vertex_mapped_ = nullptr;
     resident_vertex_gpu_ = 0;
     resident_vertex_device_ = nullptr;
@@ -6284,7 +6264,7 @@ void GxBackend::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants
     if (temporal_scene_) {
         apply_scene_jitter(cpu, upload, jitter_ndc);
     }
-    const D3D12_GPU_VIRTUAL_ADDRESS ring_base = renderer_.matrix_ring().gpu_base();
+    const gpu::Address ring_base = renderer_.matrix_ring().gpu_base();
     const std::uint32_t palette_offset = current_matrix_palette_ != 0u
         ? static_cast<std::uint32_t>((current_matrix_palette_ - ring_base) / 16u)
         : kNoPaletteOffset;
@@ -6838,7 +6818,7 @@ bool GxBackend::render_interp_subframe(float t) {
     }
     const std::size_t count = scene.constants.size();
     const Affine34& camera = scene.camera;
-    const D3D12_GPU_VIRTUAL_ADDRESS ring_base = renderer_.matrix_ring().gpu_base();
+    const gpu::Address ring_base = renderer_.matrix_ring().gpu_base();
     constexpr std::size_t kWords = kMatrixPaletteWords;
     interp_record_vas_.assign(count, 0u);
     alignas(16) static thread_local std::uint32_t palette[kMatrixPaletteWords];
@@ -9930,8 +9910,8 @@ void GxBackend::prune_dirty_texture_binding_tables() {
     dirty_texture_aliases_.clear();
 }
 
-ID3D12PipelineState* GxBackend::flush_draw_state(
-    D3D12_PRIMITIVE_TOPOLOGY_TYPE primitive_topology_type) {
+gpu::Pipeline* GxBackend::flush_draw_state(
+    gpu::TopologyType primitive_topology_type) {
     // Per-frame decision, hoisted out of the per-draw path.
     const bool time_detail = frame_time_detail_;
     // Always-on, clock-free. This is the denominator for every *_us field below. Without it, a
@@ -10039,7 +10019,7 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
     // the line and point geometry shaders do not carry.
     {
         const bool ppl = per_pixel_lighting_ && (vs_key_.flags & 0x02u) != 0u &&
-            topology_key == static_cast<std::uint8_t>(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+            topology_key == static_cast<std::uint8_t>(gpu::kTopologyTypeTriangle);
         if (((vs_key_.flags & kVsKeyPerPixelLighting) != 0u) != ppl) {
             vs_key_.flags ^= kVsKeyPerPixelLighting;
             current_vs_hash_ = vs_key_.hash();
@@ -10064,7 +10044,7 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
     if (motion_scene_ || motion_bits_set_) [[unlikely]] {
         const std::uint32_t bb = render_state_key_.blend_bits;
         const bool candidate = motion_scene_ &&
-            topology_key == static_cast<std::uint8_t>(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE) &&
+            topology_key == static_cast<std::uint8_t>(gpu::kTopologyTypeTriangle) &&
             (bb & ((1u << 8) | (1u << 27))) == 0u && (bb & (1u << 25)) != 0u;
         const bool writer = candidate && (bb & 1u) == 0u;
         const bool reactive = candidate && (bb & 1u) != 0u;
@@ -10138,7 +10118,7 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
             // few others), and the published map cannot change between
             // begin_frame()'s drain_completions() and the last draw of the
             // frame, so a hit here returns exactly what get() would return.
-            ID3D12PipelineState* resolved = nullptr;
+            gpu::Pipeline* resolved = nullptr;
             // One indexed probe. The hash picks the victim; the exact key
             // confirms the hit, so a collision is a miss, never a wrong
             // pipeline.
@@ -10365,8 +10345,6 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
         std::uint64_t texture_get_us = 0;
         std::uint64_t texture_table_us = 0;
         std::uint64_t sampler_table_us = 0;
-        ID3D12Device* dev = renderer_.device();
-        const UINT srv_stride = texture_cache_.srv_descriptor_stride();
         if (texture_bindings_dirty_) {
             prune_dirty_texture_binding_tables();
         }
@@ -10468,32 +10446,9 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
                     // Reserve one SRV slot per texture map regardless of
                     // stage count, so the root table has a stable size
                     // matching the root signature.
-                    const unsigned num_maps = kMaxTextureMaps;
-                    DescriptorRing::Table tbl =
-                        renderer_.srv_ring().allocate(num_maps);
-
-                    D3D12_CPU_DESCRIPTOR_HANDLE sources[kMaxTextureMaps]{};
-                    const auto heap_start =
-                        texture_cache_.srv_cpu_base();
-                    for (unsigned m = 0; m < num_maps; ++m) {
-                        const TextureHandle& th = texture_handles[m];
-                        if (th.resource != nullptr) {
-                            sources[m] = D3D12_CPU_DESCRIPTOR_HANDLE{
-                                heap_start.ptr
-                                + static_cast<SIZE_T>(th.srv_index) *
-                                    srv_stride
-                            };
-                        } else {
-                            sources[m] = texture_cache_.null_srv();
-                        }
-                    }
-                    // CPU-only sources, one contiguous frame-owned table.
-                    const UINT destination_size = num_maps;
-                    dev->CopyDescriptors(1, &tbl.cpu, &destination_size,
-                        num_maps, sources, nullptr,
-                        D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-                    current_texture_table_ = tbl.gpu;
-                    frame_texture_tables_.emplace(table_key, tbl.gpu);
+                    current_texture_table_ = renderer_.texture_table_for(
+                        texture_handles.data(), kMaxTextureMaps, texture_cache_);
+                    frame_texture_tables_.emplace(table_key, current_texture_table_);
                 }
                 if (time_detail) {
                     texture_table_us = elapsed_us(
@@ -10668,8 +10623,8 @@ bool GxBackend::begin_cached_draw_run(
         return false;
     }
 
-    D3D12_PRIMITIVE_TOPOLOGY topology{};
-    D3D12_PRIMITIVE_TOPOLOGY_TYPE topology_type{};
+    gpu::Topology topology{};
+    gpu::TopologyType topology_type{};
     gx_topology_for_primitive(primitive, topology, topology_type);
 
     const EfbScissor efb_sc = state_.efb_scissor();
@@ -10694,7 +10649,7 @@ bool GxBackend::begin_cached_draw_run(
         return true;
     }
 
-    ID3D12PipelineState* pso = nullptr;
+    gpu::Pipeline* pso = nullptr;
     {
         ScopedFlushTiming flush_timing{
             frame_flush_timed_calls_,
@@ -10708,11 +10663,8 @@ bool GxBackend::begin_cached_draw_run(
         return true;
     }
 
-    D3D12_RECT scissor_rect{};
-    scissor_rect.left   = static_cast<LONG>(sc.x0 < 0 ? 0 : sc.x0);
-    scissor_rect.top    = static_cast<LONG>(sc.y0 < 0 ? 0 : sc.y0);
-    scissor_rect.right  = static_cast<LONG>(sc.x1 + 1);
-    scissor_rect.bottom = static_cast<LONG>(sc.y1 + 1);
+    const gpu::Rect scissor_rect = gpu::rect(
+        sc.x0 < 0 ? 0 : sc.x0, sc.y0 < 0 ? 0 : sc.y0, sc.x1 + 1, sc.y1 + 1);
 
     cached_draw_run_state_call_.pipeline       = pso;
     cached_draw_run_state_call_.vs_constants   = current_vs_constants_;
@@ -11376,24 +11328,15 @@ bool GxBackend::on_cached_packet_draw_run(
         return true;
     }
 
-    D3D12_VERTEX_BUFFER_VIEW vbv{};
-    vbv.BufferLocation =
-        (batch_resident ? resident_vertex_gpu_
-                        : renderer_.vertex_ring().gpu_base())
-        + prim.vertex_byte_offset;
-    vbv.SizeInBytes =
-        prim.vertex_count * static_cast<UINT>(sizeof(GxVertexOut));
-    vbv.StrideInBytes = static_cast<UINT>(sizeof(GxVertexOut));
+    const gpu::VertexView vbv = gpu::vertex_view(
+        (batch_resident ? resident_vertex_gpu_ : renderer_.vertex_ring().gpu_base()) + prim.vertex_byte_offset,
+        prim.vertex_count * static_cast<std::uint32_t>(sizeof(GxVertexOut)), static_cast<std::uint32_t>(sizeof(GxVertexOut)));
 
-    D3D12_INDEX_BUFFER_VIEW ibv{};
+    gpu::IndexView ibv{};
     if (prim.indexed) {
-        ibv.BufferLocation =
-            renderer_.index_ring().gpu_base()
-            + static_cast<std::size_t>(prim.first_index) *
-                  sizeof(std::uint16_t);
-        ibv.SizeInBytes =
-            prim.index_count * static_cast<UINT>(sizeof(std::uint16_t));
-        ibv.Format = DXGI_FORMAT_R16_UINT;
+        ibv = gpu::index_view(
+            renderer_.index_ring().gpu_base() + static_cast<std::size_t>(prim.first_index) * sizeof(std::uint16_t),
+            prim.index_count * static_cast<std::uint32_t>(sizeof(std::uint16_t)));
     }
 
     DrawCall call = cached_draw_run_state_call_;
@@ -11561,23 +11504,15 @@ void GxBackend::on_cached_draw_run_draw(
         return;
     }
 
-    D3D12_VERTEX_BUFFER_VIEW vbv{};
-    vbv.BufferLocation =
-        renderer_.vertex_ring().gpu_base()
-        + prim.vertex_byte_offset;
-    vbv.SizeInBytes =
-        prim.vertex_count * static_cast<UINT>(sizeof(GxVertexOut));
-    vbv.StrideInBytes = static_cast<UINT>(sizeof(GxVertexOut));
+    const gpu::VertexView vbv = gpu::vertex_view(
+        renderer_.vertex_ring().gpu_base() + prim.vertex_byte_offset,
+        prim.vertex_count * static_cast<std::uint32_t>(sizeof(GxVertexOut)), static_cast<std::uint32_t>(sizeof(GxVertexOut)));
 
-    D3D12_INDEX_BUFFER_VIEW ibv{};
+    gpu::IndexView ibv{};
     if (prim.indexed) {
-        ibv.BufferLocation =
-            renderer_.index_ring().gpu_base()
-            + static_cast<std::size_t>(prim.first_index) *
-                  sizeof(std::uint16_t);
-        ibv.SizeInBytes =
-            prim.index_count * static_cast<UINT>(sizeof(std::uint16_t));
-        ibv.Format = DXGI_FORMAT_R16_UINT;
+        ibv = gpu::index_view(
+            renderer_.index_ring().gpu_base() + static_cast<std::size_t>(prim.first_index) * sizeof(std::uint16_t),
+            prim.index_count * static_cast<std::uint32_t>(sizeof(std::uint16_t)));
     }
 
     DrawCall call = cached_draw_run_state_call_;
@@ -11623,8 +11558,8 @@ void GxBackend::on_draw(
     const unsigned draw_index = capture_draw_idx_;
     // Per-frame decision, hoisted out of the per-draw path.
     const bool time_detail = frame_time_detail_;
-    D3D12_PRIMITIVE_TOPOLOGY topology{};
-    D3D12_PRIMITIVE_TOPOLOGY_TYPE topology_type{};
+    gpu::Topology topology{};
+    gpu::TopologyType topology_type{};
     gx_topology_for_primitive(primitive, topology, topology_type);
 
     const EfbScissor efb_sc = state_.efb_scissor();
@@ -11653,7 +11588,7 @@ void GxBackend::on_draw(
             (static_cast<std::uint16_t>(cursor.data[cursor.offset]) << 8) |
             static_cast<std::uint16_t>(cursor.data[cursor.offset + 1]));
 
-    ID3D12PipelineState* pso = nullptr;
+    gpu::Pipeline* pso = nullptr;
     {
         ScopedFlushTiming flush_timing{
             frame_flush_timed_calls_,
@@ -11683,11 +11618,8 @@ void GxBackend::on_draw(
     }
 
     // Map scissor from GX state.
-    D3D12_RECT scissor_rect{};
-    scissor_rect.left   = static_cast<LONG>(sc.x0 < 0 ? 0 : sc.x0);
-    scissor_rect.top    = static_cast<LONG>(sc.y0 < 0 ? 0 : sc.y0);
-    scissor_rect.right  = static_cast<LONG>(sc.x1 + 1);
-    scissor_rect.bottom = static_cast<LONG>(sc.y1 + 1);
+    const gpu::Rect scissor_rect = gpu::rect(
+        sc.x0 < 0 ? 0 : sc.x0, sc.y0 < 0 ? 0 : sc.y0, sc.x1 + 1, sc.y1 + 1);
 
     DrawCall state_call{};
     state_call.pipeline       = pso;
@@ -11794,23 +11726,15 @@ void GxBackend::on_draw(
 
     // Build the vertex / index buffer views from the loaded primitive's ring
     // offsets.  Both rings are persistently mapped upload buffers.
-    D3D12_VERTEX_BUFFER_VIEW vbv{};
-    vbv.BufferLocation =
-        renderer_.vertex_ring().gpu_base()
-        + prim.vertex_byte_offset;
-    vbv.SizeInBytes    =
-        prim.vertex_count * static_cast<UINT>(sizeof(GxVertexOut));
-    vbv.StrideInBytes  = static_cast<UINT>(sizeof(GxVertexOut));
+    const gpu::VertexView vbv = gpu::vertex_view(
+        renderer_.vertex_ring().gpu_base() + prim.vertex_byte_offset,
+        prim.vertex_count * static_cast<std::uint32_t>(sizeof(GxVertexOut)), static_cast<std::uint32_t>(sizeof(GxVertexOut)));
 
-    D3D12_INDEX_BUFFER_VIEW ibv{};
+    gpu::IndexView ibv{};
     if (prim.indexed) {
-        ibv.BufferLocation =
-            renderer_.index_ring().gpu_base()
-            + static_cast<std::size_t>(prim.first_index) *
-                  sizeof(std::uint16_t);
-        ibv.SizeInBytes =
-            prim.index_count * static_cast<UINT>(sizeof(std::uint16_t));
-        ibv.Format = DXGI_FORMAT_R16_UINT;
+        ibv = gpu::index_view(
+            renderer_.index_ring().gpu_base() + static_cast<std::size_t>(prim.first_index) * sizeof(std::uint16_t),
+            prim.index_count * static_cast<std::uint32_t>(sizeof(std::uint16_t)));
     }
 
     DrawCall call = state_call;
@@ -12095,10 +12019,8 @@ void GxBackend::on_draw(
             }
         }
         if (capture_detail) {
-            void* ring_cpu = nullptr;
-            const D3D12_RANGE no_read{0, 0};
-            if (SUCCEEDED(renderer_.vertex_ring().resource()->Map(
-                    0, &no_read, &ring_cpu)) && ring_cpu != nullptr) {
+            void* ring_cpu = renderer_.vertex_ring().mapped();
+            if (ring_cpu != nullptr) {
                 const auto* verts = reinterpret_cast<const GxVertexOut*>(
                     static_cast<const std::byte*>(ring_cpu) +
                     prim.vertex_byte_offset);
@@ -12221,15 +12143,12 @@ void GxBackend::on_draw(
                         verts[v].mtx_indices[1],
                         verts[v].mtx_indices[2]);
                 }
-                renderer_.vertex_ring().resource()->Unmap(0, &no_read);
             }
         }
 
         if (draw_index == capture_readback_draw_) {
-            void* ring_cpu = nullptr;
-            const D3D12_RANGE no_read{0, 0};
-            if (SUCCEEDED(renderer_.vertex_ring().resource()->Map(
-                    0, &no_read, &ring_cpu)) && ring_cpu != nullptr) {
+            void* ring_cpu = renderer_.vertex_ring().mapped();
+            if (ring_cpu != nullptr) {
                 const auto* vertices = reinterpret_cast<const GxVertexOut*>(
                     static_cast<const std::byte*>(ring_cpu) +
                     prim.vertex_byte_offset);
@@ -12296,7 +12215,6 @@ void GxBackend::on_draw(
                         clip[0] * inv_w, clip[1] * inv_w,
                         clip[2] * inv_w);
                 }
-                renderer_.vertex_ring().resource()->Unmap(0, &no_read);
             }
         }
     }
