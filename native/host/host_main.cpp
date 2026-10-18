@@ -45,6 +45,7 @@
 #if defined(_WIN32)
 #define NOMINMAX
 #include <windows.h>
+#include <intrin.h>
 #include <dbghelp.h>
 #else
 #include <dlfcn.h>
@@ -1552,7 +1553,26 @@ int main(int argc, char** argv) {
     std::thread(ai_thread).detach();
     std::thread(vi_thread).detach();
     std::thread(wpad_thread).detach();
-    std::thread([] { gModule.run(); }).detach();
+    std::thread game([] { gModule.run(); });
+#if defined(_WIN32)
+    // The simulation thread's CPU time, reported each second (the game and everything it calls on that thread).
+    HANDLE game_thread = nullptr;  // its own handle: detach() closes the thread object's
+    DuplicateHandle(GetCurrentProcess(), static_cast<HANDLE>(game.native_handle()), GetCurrentProcess(), &game_thread,
+                    THREAD_QUERY_LIMITED_INFORMATION, FALSE, 0);
+    uint64_t game_cycles_last = 0;
+    // Thread cycles count at the time-stamp counter's rate, measured here against the performance counter.
+    const double tsc_hz = [] {
+        LARGE_INTEGER f, a, b;
+        QueryPerformanceFrequency(&f);
+        QueryPerformanceCounter(&a);
+        const uint64_t t0 = __rdtsc();
+        do {
+            QueryPerformanceCounter(&b);
+        } while (b.QuadPart - a.QuadPart < f.QuadPart / 20);
+        return (double)(__rdtsc() - t0) * (double)f.QuadPart / (double)(b.QuadPart - a.QuadPart);
+    }();
+#endif
+    game.detach();
 
     const auto end = Clock::now() + std::chrono::duration<double>(seconds > 0 ? seconds : 1e9);
     uint32_t reported = 0;
@@ -1574,7 +1594,7 @@ int main(int argc, char** argv) {
         next_report += std::chrono::seconds(1);
         const uint32_t retraces = gRetraces.load(std::memory_order_relaxed);
         if (retraces != reported) {
-            char text[256];
+            char text[384];
             std::snprintf(text, sizeof(text), "retrace %u, xfb 0x%08X, gx %.2f MB, disc reads %u, nand ops %u, ai blocks %u, dsp subframes %u",
                           retraces, gXfb.load(std::memory_order_relaxed), gGxBytes.load(std::memory_order_relaxed) / 1048576.0,
                           gDiscReads.load(std::memory_order_relaxed), gFsOps.load(std::memory_order_relaxed),
@@ -1587,6 +1607,15 @@ int main(int argc, char** argv) {
             std::snprintf(text + length, sizeof(text) - length, ", renderer frames %llu, movie frames %u",
                           (unsigned long long)gSubmissions.load(std::memory_order_relaxed),
                           gMovieFrames.load(std::memory_order_relaxed));
+#endif
+#if defined(_WIN32)
+            ULONG64 cycles = 0;
+            if (QueryThreadCycleTime(game_thread, &cycles)) {
+                const size_t used = std::strlen(text);
+                std::snprintf(text + used, sizeof(text) - used, ", game cpu %.1f ms/s",
+                              (double)(cycles - game_cycles_last) * 1000.0 / tsc_hz);
+                game_cycles_last = cycles;
+            }
 #endif
             log_line("host:", text);
             reported = retraces;
