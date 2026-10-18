@@ -29,6 +29,8 @@ enum {
 };
 
 static u32* sFst;
+/* Wii discs store positions in 4-byte units already (dvdfs.c shifts by this). */
+u32 __DVDLayoutFormat = 0;
 
 const void* __NebulaDVDFST(void) {
     return sFst;
