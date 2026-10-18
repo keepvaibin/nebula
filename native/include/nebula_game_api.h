@@ -61,6 +61,25 @@ enum {
     NEBULA_SC_MOTOR_MODE,           /* 0 rumble off, 1 on */
 };
 
+/* A Wii Remote's connection: its EEPROM's first 0x2A bytes (DPD and accelerometer calibration), the attached extension
+   (0 none, 1 Nunchuk: the SDK's WPAD_DEV_* values) with its 32-byte calibration block, and the battery level. */
+typedef struct NebulaWiimoteConnection {
+    uint8_t eeprom[0x2A];
+    uint8_t extension_calibration[32];
+    uint32_t extension;
+    uint8_t battery;
+} NebulaWiimoteConnection;
+
+/* What the game asks of a remote (wpad_control). */
+enum {
+    NEBULA_WPAD_INIT = 1,   /* the game started WPAD */
+    NEBULA_WPAD_FORMAT,     /* value: WPAD_FMT_*, which selects the input report the host sends */
+    NEBULA_WPAD_DPD,        /* value: 0 IR camera off, else on */
+    NEBULA_WPAD_MOTOR,      /* value: 0 stop, 1 rumble */
+    NEBULA_WPAD_SPEAKER,    /* value: the WPADControlSpeaker command (0 off, 1 on, 2 mute, 3 unmute, 4 play) */
+    NEBULA_WPAD_DISCONNECT,
+};
+
 typedef struct NebulaFsRequest {
     uint32_t op;
     const char* path;
@@ -109,6 +128,10 @@ typedef struct NebulaHostServices {
 
     /* A system setting (NEBULA_SC_*). */
     uint32_t (*sc_get)(void* user, uint32_t item);
+
+    /* Wii Remotes: a request to remote `chan` (NEBULA_WPAD_*), and speaker data (the game's encoded ADPCM). */
+    void (*wpad_control)(void* user, uint32_t chan, uint32_t what, uint32_t value);
+    void (*wpad_speaker_data)(void* user, uint32_t chan, const uint8_t* data, uint32_t size);
 } NebulaHostServices;
 
 /* Returns NEBULA_GAME_API_VERSION, or 0 if the host's services are too old. */
@@ -129,6 +152,11 @@ NEBULA_GAME_API void nebula_game_disc_complete(uint32_t slot, int32_t result);
 NEBULA_GAME_API void nebula_game_vi_retrace(void);
 /* A NAND operation finished. */
 NEBULA_GAME_API void nebula_game_fs_complete(uint32_t slot, int32_t result);
+/* A Wii Remote connected (with its calibration) or disconnected. */
+NEBULA_GAME_API void nebula_game_wpad_connect(uint32_t chan, int connected, const NebulaWiimoteConnection* connection);
+/* A Wii Remote input report, from its id (0x30, 0x31, 0x33 or 0x37 as the data format asks), extension bytes decrypted;
+   one per report the remote sends (100 per second). */
+NEBULA_GAME_API void nebula_game_wpad_report(uint32_t chan, const uint8_t* report, size_t size);
 
 #ifdef __cplusplus
 }
