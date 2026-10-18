@@ -45,6 +45,7 @@ namespace {
         {"AllStarList", "PicTitleBase", FitWidth | FitExtendUp},
         {"AllStarList", "PicButtonbase", FitWidth | FitExtendDown},
         {"BackButton", "Back", FitLeft | FitBottom},
+        {"BallGuidance", "BallGuidance", FitRight},  // PlayerActionGuidance's name for it
         {"BallGuidanceReplace", "BallGuidance", FitRight},
         {"BatteryInfo", "BatteryInfo", FitLeft},
         {"BrosButton", "BrosButton", FitRight},
@@ -104,6 +105,7 @@ namespace {
         {"ScenarioSelect", "BG", FitWidth | FitHeight},
         {"ScenarioSelect", "FrameU", FitWidth | FitExtendUp},
         {"ScenarioSelect", "FrameD", FitWidth | FitExtendDown},
+        {"SpinGuidance", "SpinGuidance", FitRight},  // PlayerActionGuidance's name for it
         {"SpinGuidanceReplace", "SpinGuidance", FitRight},
         {"StaffRollPicture", "PicBG", FitWidth | FitHeight},
         {"StaffRollTitle", "PicFlash", FitWidth | FitHeight},
@@ -114,6 +116,7 @@ namespace {
         {"SuddenDeathMeter", "MoveMeter", FitRight | FitTop},
         {"SysInfoWindow", "BG", FitWidth | FitHeight},
         {"SysInfoWindowMini", "BG", FitWidth | FitHeight},
+        {"TiltGuidance", "TiltGuidance", FitRight},  // the game's name for it
         {"TiltGuidanceReplace", "TiltGuidance", FitRight},
     };
 
