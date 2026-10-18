@@ -8,7 +8,9 @@
 
 #include <volk.h>
 
+#include <array>
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -44,12 +46,14 @@ struct Texture : std::enable_shared_from_this<Texture> {
     ~Texture();
 };
 
-// An owned host-visible, persistently mapped buffer; the last reference defers its destruction as Texture's.
+// An owned host-visible, persistently mapped buffer with a GX address (gpu::Address, Context::resolve); the last
+// reference defers its destruction as Texture's.
 struct Buffer {
     VkBuffer buffer = VK_NULL_HANDLE;
     VmaAllocation_T* allocation = nullptr;
-    std::uint8_t* mapped = nullptr;
+    std::byte* mapped = nullptr;
     std::uint64_t size = 0;
+    std::uint64_t address = 0;
 
     Buffer() = default;
     Buffer(const Buffer&) = delete;
@@ -61,7 +65,7 @@ struct Buffer {
 struct MappedBuffer {
     VkBuffer buffer = VK_NULL_HANDLE;
     VmaAllocation_T* allocation = nullptr;
-    std::uint8_t* mapped = nullptr;
+    std::byte* mapped = nullptr;
     std::uint64_t size = 0;
 };
 
@@ -111,11 +115,32 @@ public:
                                                           VkFormat format, VkImageUsageFlags usage,
                                                           bool render_target, const char* name);
     [[nodiscard]] MappedBuffer create_mapped_buffer(std::uint64_t size, VkBufferUsageFlags usage, const char* name);
+    // A mapped buffer with a GX address.
     [[nodiscard]] std::shared_ptr<Buffer> create_buffer(std::uint64_t size, VkBufferUsageFlags usage, const char* name);
     void destroy_buffer(MappedBuffer& buffer) noexcept;
     void set_name(VkObjectType type, std::uint64_t handle, const char* name) const noexcept;
 
+    // The GX address space (gpu::Address): an address's top bits name a buffer and its low kAddressShift bits a byte
+    // in it, so the shared code's address arithmetic works; draws turn addresses back into (buffer, offset).
+    static constexpr unsigned kAddressShift = 40;
+    struct BufferOffset {
+        VkBuffer buffer = VK_NULL_HANDLE;
+        VkDeviceSize offset = 0;
+    };
+    [[nodiscard]] BufferOffset resolve(std::uint64_t address) const noexcept {
+        const std::uint64_t id = address >> kAddressShift;
+        if (id == 0u || id >= kAddressSlots) {
+            return {};
+        }
+        return {address_slots_[id].load(std::memory_order_acquire),
+                address & ((std::uint64_t{1} << kAddressShift) - 1u)};
+    }
+    // Frees a buffer's address once nothing recorded can name it (the buffer's deferred destruction).
+    void release_address(std::uint64_t address) noexcept;
+
 private:
+    static constexpr std::size_t kAddressSlots = 4096;
+    [[nodiscard]] std::uint64_t register_address(VkBuffer buffer);
     struct Deferred {
         std::uint64_t value;
         std::function<void()> destroy;
@@ -147,6 +172,10 @@ private:
     std::uint32_t waiters_ = 0;  // wait() calls between reading a fence and waiting on it
     std::mutex deferred_mutex_;
     std::vector<Deferred> deferred_;
+    std::array<std::atomic<VkBuffer>, kAddressSlots> address_slots_{};
+    std::mutex address_mutex_;
+    std::vector<std::uint32_t> free_address_ids_;
+    std::uint32_t next_address_id_ = 1;  // 0 is the null address
 };
 
 // Throws std::runtime_error naming `what` when `result` is an error.

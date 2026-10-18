@@ -48,6 +48,7 @@ std::string check_bindings(const std::vector<std::uint32_t>& spirv, std::span<co
         at += count;
     }
     std::string problems;
+    std::map<std::pair<std::uint32_t, std::uint32_t>, std::uint32_t> taken;  // (set, binding) -> variable
     for (const auto& [id, cls] : storage) {
         if (cls == kStoragePushConstant) {
             bool declared = false;
@@ -65,6 +66,10 @@ std::string check_bindings(const std::vector<std::uint32_t>& spirv, std::span<co
         if (!sets.contains(id) || !slots.contains(id)) {
             problems += "%" + std::to_string(id) + " has no set/binding; ";
             continue;
+        }
+        if (const auto [it, inserted] = taken.emplace(std::pair{sets[id], slots[id]}, id); !inserted) {
+            problems += "%" + std::to_string(id) + " and %" + std::to_string(it->second) + " share (" +
+                std::to_string(sets[id]) + ", " + std::to_string(slots[id]) + "); ";
         }
         bool found = false;
         for (const RegisterBinding& binding : bindings) {
@@ -145,6 +150,17 @@ int main(int argc, char** argv) {
 
     constexpr RegisterBinding conversion[] = {{"b0", 0, 0, true}, {"t0", 0, 0}, {"s0", 0, 1}, {"s1", 0, 2}};
     expect("efb conversion ps", efb_conversion_shader_source(), ShaderStage::Fragment, conversion);
+
+    // The utility passes: one texture and sampler, constants as push constants.
+    constexpr RegisterBinding utility[] = {{"b0", 0, 0, true}, {"t0", 0, 0}, {"s0", 0, 1}};
+    expect("blit vs", blit_vertex_shader_source(), ShaderStage::Vertex, utility);
+    expect("blit ps", blit_pixel_shader_source(), ShaderStage::Fragment, utility);
+    expect("clear ps", clear_pixel_shader_source(), ShaderStage::Fragment, utility);
+    expect("depth carry ps", depth_carry_pixel_shader_source(), ShaderStage::Fragment, utility);
+    expect("ui textured vs", ui_textured_quad_vertex_shader_source(), ShaderStage::Vertex, utility);
+    expect("ui textured ps", ui_textured_quad_pixel_shader_source(), ShaderStage::Fragment, utility);
+    expect("ui solid vs", ui_solid_quad_vertex_shader_source(), ShaderStage::Vertex, utility);
+    expect("ui solid ps", ui_solid_quad_pixel_shader_source(), ShaderStage::Fragment, utility);
 
     std::printf("%s: %d failure(s)\n", failures == 0 ? "PASS" : "FAIL", failures);
     return failures == 0 ? 0 : 1;

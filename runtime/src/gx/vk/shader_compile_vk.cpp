@@ -41,60 +41,57 @@ std::span<const RegisterBinding> gx_draw_bindings() noexcept {
 }
 
 std::string annotate(std::string_view hlsl, std::span<const RegisterBinding> bindings) {
-    // A resource declaration is one line ending in ": register(<reg>)" (then ";" or " {"): the attribute goes before
-    // the declaration, after the line's indentation.
+    // Each resource declaration names its register as ": register(<reg>)"; the attribute goes at the start of that
+    // declaration (after the previous ';', '{', '}' or line break and any blanks). Several declarations may share a
+    // line.
     std::string out;
     out.reserve(hlsl.size() + 256u);
-    std::size_t pos = 0;
-    while (pos < hlsl.size()) {
-        std::size_t end = hlsl.find('\n', pos);
-        end = end == std::string_view::npos ? hlsl.size() : end + 1u;
-        const std::string_view line = hlsl.substr(pos, end - pos);
-        pos = end;
-        const std::size_t reg_at = line.find("register(");
+    std::size_t copied = 0;  // hlsl[0, copied) is in `out`
+    for (std::size_t reg_at = hlsl.find("register("); reg_at != std::string_view::npos;
+         reg_at = hlsl.find("register(", reg_at + 9u)) {
+        const std::size_t open = reg_at + 9u;
+        const std::size_t close = hlsl.find(')', open);
+        if (close == std::string_view::npos) {
+            break;
+        }
+        // Normalise the spacing around a comma ("t0,space1" -> "t0, space1").
+        std::string reg;
+        for (const char c : hlsl.substr(open, close - open)) {
+            if (c == ' ' || c == '\t') {
+                continue;
+            }
+            reg += c;
+            if (c == ',') {
+                reg += ' ';
+            }
+        }
         const RegisterBinding* mapped = nullptr;
-        if (reg_at != std::string_view::npos) {
-            const std::size_t open = reg_at + 9u;
-            const std::size_t close = line.find(')', open);
-            if (close != std::string_view::npos) {
-                // Normalise the spacing around a comma ("t0,space1" -> "t0, space1").
-                std::string reg;
-                for (const char c : line.substr(open, close - open)) {
-                    if (c == ' ' || c == '\t') {
-                        continue;
-                    }
-                    reg += c;
-                    if (c == ',') {
-                        reg += ' ';
-                    }
-                }
-                for (const RegisterBinding& binding : bindings) {
-                    if (reg == binding.reg) {
-                        mapped = &binding;
-                        break;
-                    }
-                }
+        for (const RegisterBinding& binding : bindings) {
+            if (reg == binding.reg) {
+                mapped = &binding;
+                break;
             }
         }
         if (mapped == nullptr) {
-            out += line;
             continue;
         }
-        const std::size_t indent = line.find_first_not_of(" \t");
-        out += line.substr(0, indent);
+        std::size_t start = hlsl.find_last_of(";{}\n", reg_at);
+        start = start == std::string_view::npos ? 0u : start + 1u;
+        start = hlsl.find_first_not_of(" \t\r", start);
+        out.append(hlsl.substr(copied, start - copied));
         if (mapped->push_constant) {
             // A push-constant block takes no binding: the register goes too, or glslang decorates one.
-            const std::size_t colon = line.rfind(':', reg_at);
-            const std::size_t cut = colon != std::string_view::npos && colon >= indent ? colon : reg_at;
-            const std::size_t close = line.find(')', reg_at);
+            const std::size_t colon = hlsl.rfind(':', reg_at);
+            const std::size_t cut = colon != std::string_view::npos && colon >= start ? colon : reg_at;
             out += "[[vk::push_constant]] ";
-            out += line.substr(indent, cut - indent);
-            out += line.substr(close + 1u);
+            out.append(hlsl.substr(start, cut - start));
+            copied = close + 1u;
             continue;
         }
         out += "[[vk::binding(" + std::to_string(mapped->binding) + ", " + std::to_string(mapped->set) + ")]] ";
-        out += line.substr(indent);
+        copied = start;
     }
+    out.append(hlsl.substr(copied));
     return out;
 }
 

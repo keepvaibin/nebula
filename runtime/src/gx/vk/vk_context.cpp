@@ -95,7 +95,12 @@ Buffer::~Buffer() {
     VmaAllocator_T* const allocator = context.allocator();
     const VkBuffer buffer_handle = buffer;
     VmaAllocation_T* const allocation_handle = allocation;
-    context.defer([=] { vmaDestroyBuffer(allocator, buffer_handle, allocation_handle); });
+    const std::uint64_t address_base = address;
+    Context* const owner = &context;
+    context.defer([=] {
+        owner->release_address(address_base);
+        vmaDestroyBuffer(allocator, buffer_handle, allocation_handle);
+    });
 }
 
 Context& Context::get() noexcept {
@@ -440,14 +445,15 @@ MappedBuffer Context::create_mapped_buffer(std::uint64_t size, VkBufferUsageFlag
     buffer_info.size = size;
     buffer_info.usage = usage;
     buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    // Host memory the GPU reads across the bus, as D3D12's upload heap: written once, read once per frame.
     VmaAllocationCreateInfo alloc_info{};
-    alloc_info.usage = VMA_MEMORY_USAGE_AUTO;
+    alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
     alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
     VmaAllocationInfo allocated{};
     if (vmaCreateBuffer(allocator_, &buffer_info, &alloc_info, &out.buffer, &out.allocation, &allocated) != VK_SUCCESS) {
         return {};
     }
-    out.mapped = static_cast<std::uint8_t*>(allocated.pMappedData);
+    out.mapped = static_cast<std::byte*>(allocated.pMappedData);
     out.size = size;
     if (name != nullptr) {
         set_name(VK_OBJECT_TYPE_BUFFER, reinterpret_cast<std::uint64_t>(out.buffer), name);
@@ -465,7 +471,37 @@ std::shared_ptr<Buffer> Context::create_buffer(std::uint64_t size, VkBufferUsage
     buffer->allocation = made.allocation;
     buffer->mapped = made.mapped;
     buffer->size = made.size;
+    buffer->address = register_address(made.buffer);
+    if (buffer->address == 0u) {
+        return {};  // the reference's release destroys the buffer
+    }
     return buffer;
+}
+
+std::uint64_t Context::register_address(VkBuffer buffer) {
+    std::lock_guard<std::mutex> lock(address_mutex_);
+    std::uint32_t id = 0;
+    if (!free_address_ids_.empty()) {
+        id = free_address_ids_.back();
+        free_address_ids_.pop_back();
+    } else if (next_address_id_ < kAddressSlots) {
+        id = next_address_id_++;
+    } else {
+        std::fprintf(stderr, "[vulkan] GX address space exhausted (%zu buffers)\n", kAddressSlots - 1u);
+        return 0u;
+    }
+    address_slots_[id].store(buffer, std::memory_order_release);
+    return static_cast<std::uint64_t>(id) << kAddressShift;
+}
+
+void Context::release_address(std::uint64_t address) noexcept {
+    const std::uint64_t id = address >> kAddressShift;
+    if (id == 0u || id >= kAddressSlots) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(address_mutex_);
+    address_slots_[id].store(VK_NULL_HANDLE, std::memory_order_release);
+    free_address_ids_.push_back(static_cast<std::uint32_t>(id));
 }
 
 void Context::destroy_buffer(MappedBuffer& buffer) noexcept {
@@ -492,6 +528,31 @@ namespace galaxy::gx::gpu {
 
 TextureRef texture_ref(TextureObject* texture) {
     return texture != nullptr ? texture->shared_from_this() : TextureRef{};
+}
+
+Resource* raw(const BufferRef& buffer) noexcept {
+    return buffer != nullptr ? buffer->buffer : VK_NULL_HANDLE;
+}
+
+UploadMemory create_upload_memory(Device*, std::size_t bytes, const char* name) {
+    vk::Context& context = vk::Context::get();
+    if (!context.ready() || bytes == 0u) {
+        return {};
+    }
+    // One buffer serves any ring: vertices, indices, constants (uniform) and matrix palettes (storage).
+    std::shared_ptr<vk::Buffer> buffer = context.create_buffer(
+        bytes,
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT |
+            VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        name);
+    if (!buffer) {
+        return {};
+    }
+    UploadMemory out;
+    out.cpu = buffer->mapped;
+    out.gpu = buffer->address;
+    out.buffer = std::move(buffer);
+    return out;
 }
 
 TextureRef create_render_texture(Device*, std::uint32_t width, std::uint32_t height) {
