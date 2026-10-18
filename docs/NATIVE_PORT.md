@@ -144,6 +144,10 @@ Complete over every compiled unit (1,874), with the compiler as the checker. An 
 - Game threads run on native stacks from a pool at the top of MEM2 (256 KB each, 1 MB under ASan; guarded): the buffers the game gives are sized for PowerPC frames. The deepest measured, boot to the title screen, is 13.5 KB (M).
 - `nebula_game_debug_dump` reports every game thread with the module addresses on its stack and how deep the stack has been (`native/tools/symbolize_dump.py` names them). An out-of-memory panic lists the heap's largest blocks, children and uncovered spans.
 - The arena is aligned to its size (512 MB): an arena pointer's low 29 bits are its physical address, so values the game derives from an address's low bits (J3DDrawBuffer's hash slots) are the console's (M, `os_scheduler_tests`).
+- Memory a device reads, by the type the CPU wrote it as (`gpu_data_audit.py`: every pointer handed to GX, GD, J3DGD, the DSP, the AI or a cache operation; 371 sites, M). Fixed: `clearZTexData`, the Z24X8 texture that clears depth each frame, was a `u32` array, so the GPU read far as near and all gameplay 3D failed the depth test; NormalMapBase's IA8 gradient texels; JUTDirectPrint's frame-buffer pixels.
+- Bitfields whose words code also reads (`bitfield_audit.py`: casts, unions, byte copies; 457 sites, M). CodeWarrior allocates from the most significant bit, clang from the least. Fixed: J3DModelX's flags (directDraw picks display list *i* by bit *i*: Mario's shadow silhouette drew black into the frame), Mario's movement and draw states (word masks), RushEndInfo's damage type (shifts), JASChannel's mix config (`0x150` gave bus 0x50), Binder's collision flags (byte masks).
+- SDK answers the game turns into logic: `VIGetDimmingCount` returned 0, the console's "screen dimmed", so AudSystem lowered the music to a third from boot. The VI now counts idle fields as the console does (below).
+- Parity with v1.0.1 on the same input route (`port/tools/route_star_festival.txt`, v1.0.1 = the Native47 package): Star Festival frames match after the fixes above; the title music, aligned by cross-correlation, matches in RMS (1895.6 against 1890.6) and per band within 3 % from 20 Hz to 16 kHz except 4-8 kHz (effects timing), correlation 0.93 (M, 2026-10-18).
 
 ## Byte order
 
@@ -151,14 +155,17 @@ Complete over every compiled unit (1,874), with the compiler as the checker. An 
 - Such fields are `BE<T>`, a byte swap per access, and 32-bit offsets are `BEOffset<T>` (`native/msl/include/nebula_be.hpp`). Dusklight ships this approach.
   - Slots the console overwrote with a pointer in place (RARC file entries, KCL, BRFNT, TPL, rhythm tables) hold `SelfRel<T>`: the target's distance from the slot, which fits in the slot's 4 bytes.
   - `NEBULA_BE(T)`/`NEBULA_OFFSET(T)` read as the plain types for CodeWarrior.
-- Everything the GPU reads stays big-endian, as on the console. That includes the vertex arrays and textures the game builds at run time (ocean, flags, skinning buffers, the fur map), which are written big-endian. Nebula's FIFO parser and renderer then read every source alike.
+- Everything the GPU reads stays big-endian, as on the console. That includes the vertex arrays and textures the game builds at run time (ocean, flags, skinning buffers, the fur map, the depth-clear texture), which are written big-endian. Nebula's FIFO parser and renderer then read every source alike. One exception: the arrays indexed loads read (position, normal and texture matrices) are CPU state the game also reads, so they stay in host order and NebulaNative tells the parser (`set_indexed_load_host_order`).
+- The JAudio DSP program's memory is device memory too: CH_BUF's channel records, FX_BUF, DSPRES_FILTER, the output planes and the AI's DAC buffers are in the console's byte order and layout (FX_BUF's delay-line slot holds the 32-bit physical address), so v1.0.1's host DSP program reads them unchanged.
+- Bitfields: where code also reads a bitfield's word, the native declaration lists the fields from the least significant value bit up, with explicit padding, so each field has the console's bit.
 - Saves keep the Wii format (big-endian, chunk payload at offset 12), so existing saves load.
 - CPU-only file data may be converted once at load where every consumer is CPU code, such as BMG message text.
 
 ## Memory and the GPU's addresses
 
 - The game's memory is one host arena in the console's physical layout: MEM1 at physical 0, MEM2 at 0x10000000, enlarged for 8-byte pointers.
-- `OSCachedToPhysical` and `OSPhysicalToCached` map arena pointers to the same 32-bit physical addresses the console used. The game module's image gets a second mapped window, for the static display lists and arrays the game hands to GX.
+- `OSCachedToPhysical` and `OSPhysicalToCached` map arena pointers to the same 32-bit physical addresses the console used. The game module's image is a second window at physical 0x08000000 (between MEM1 and MEM2, up to 128 MB), for the static display lists, arrays and textures the game hands to GX: every GPU address stays below 512 MB, as GX's 29-bit array bases and 24-bit texture bases need.
+- Coherency is the console's: what the CPU flushes or stores (`DCFlushRange`, `DCStoreRange`, `DCZeroRange`), DMA (`ARStartDMA`) and disc reads are reported to the renderer (`gpu_coherent`, API 4), which invalidates what it cached from those bytes.
 - Game threads run on stacks allocated in the arena.
 - Nebula's FIFO parser already resolves physical addresses through a region table (`GuestMemoryV1`). The native build gives it the arena and module regions, so the v1.0.1 renderer is reused unchanged.
 - Petari's GX SDK writes the console's command stream as big-endian stores into the command ring (`native/sdk/gx/gx_fifo.c`). The ring is host memory mapped twice in a row, so every span is contiguous. At each flush the host gets a span and parses it in place, then releases it; no copy is made. Draw-sync tokens and draw done reach the host as markers at their stream position, with no pre-parse. Display lists are recorded into game memory as on the console.
@@ -195,7 +202,8 @@ Complete over every compiled unit (1,874), with the compiler as the checker. An 
 - **GX**: the game's GX calls write the hardware's FIFO format, which J3D's display lists already use. Nebula's D3D12 backend (`runtime/src/gx`) parses it.
   - Addresses in commands (CP array bases, texture and TLUT images, display-list calls, copy destinations) are the arena's 32-bit physical addresses, as on the console.
   - GD (display-list building) is Petari's C code with one reservation per command.
-- **Audio**: JAudio2 drives the DSP directly, not through AX (D). The DSP task layer maps onto Nebula's host mixer (`runtime/src/jaudio_host_mixer.cpp`).
+- **Audio**: JAudio2 drives the DSP directly, not through AX (D). NebulaNative runs v1.0.1's host version of the JAudio DSP program (`runtime/src/jaudio_host_mixer.cpp`) on the command words (`galaxy::host::NativeGameAudio`) and plays each AI block through v1.0.1's sink (XAudio2, master volume, WAV dump). The output device's clock paces the AI: the next block is taken once fewer than two wait there.
+- **Video timing**: the retrace, the AI and the remotes run on high-resolution waitable timers. Screen dimming is counted as on the console (idle fields since WPAD's last input or connection, 18000 with SYSCONF's screen saver on); the picture is not darkened, as a PC display dims itself.
 - **Threads**: the console runs one thread at a time, by priority, and the game relies on it (`OSDisableInterrupts` used as a lock). All game threads run on one host thread with the SDK's own scheduler, and a thread switch is a stack switch (`native/sdk/os`). Parallelism lives in the host: renderer, audio mixer, input, disc.
 
 ## Open
@@ -207,5 +215,6 @@ Complete over every compiled unit (1,874), with the compiler as the checker. An 
 | Heap sizes: pointers double in size natively, so fixed JKRHeap sizes need a 64-bit allowance | open |
 | `nw4r::ut::RomFont`: the console's system font comes from the IPL ROM, not the disc | open |
 | THP movies (prologue, endings, final battle): Petari's decoder is paired-single assembly | video through the host's native decoder (`thp_video_decode`), audio in `native/sdk/thp` |
-| Mii data (RFL) without a console NAND | open |
+| Mii data (RFL) without a console NAND | an empty database (RFL_DB.dat) is created, as v1.0.1 does |
+| Volume categories (music, effects, voices) and the remote speaker natively | open: v1.0.1 reads them from game memory; the native game will report them |
 | aarch64 and LP64 sysroots for the compile census on Linux, Android and macOS | not on this machine |
