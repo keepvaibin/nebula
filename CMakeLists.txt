@@ -686,6 +686,7 @@ add_library(galaxy_gx STATIC
     runtime/src/gx/uber_shaders.cpp
     ${galaxy_uber_embed_cpp}
     runtime/src/gx/post_process.cpp
+    runtime/src/gx/post_process_settings.cpp
     ${galaxy_post_headers}
     runtime/src/gx/temporal_upscaler.cpp
     runtime/src/gx/transform_history.cpp

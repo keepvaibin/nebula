@@ -15,6 +15,7 @@
 
 #include "galaxy/gx/display_modes.h"
 #include "galaxy/gx/ui_canvas.h"
+#include "galaxy/gx/window_owner.h"
 
 #include <atomic>
 #include <cstdint>
@@ -72,6 +73,16 @@ void poll_render_config_file();
 // The window's outer rect for a windowed client size on a monitor.
 [[nodiscard]] RECT windowed_rect_on_monitor(const MonitorInfo& monitor, unsigned width, unsigned height);
 LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+// The game window at the renderer's start: the configured monitor and display mode (a hidden test window stays
+// windowed), owned by `owner`'s thread. Sets backbuffer_width/height, settings_window and borderless_active; a null
+// window (logged) when it cannot be created.
+struct OpenedWindow {
+    HWND window = nullptr;
+    bool shown = false;
+};
+[[nodiscard]] OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_height);
+// Ends the window's thread and unregisters its class (the renderer's shutdown).
+void close_game_window(WindowOwner& owner) noexcept;
 void draw_native_settings_overlay(UiCanvas& renderer);
 void draw_home_menu(UiCanvas& renderer);
 void draw_native_settings_hint(UiCanvas& renderer);

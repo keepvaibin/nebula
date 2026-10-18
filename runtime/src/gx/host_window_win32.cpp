@@ -5,10 +5,9 @@
 #include "galaxy/gx/host_window_win32.h"
 
 #include "galaxy/gx/display_modes.h"
-#include "galaxy/gx/post_process.h"
+#include "galaxy/gx/post_process_settings.h"
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx/renderer_common.h"
-#include "galaxy/gx/temporal_upscaler.h"
 #include "galaxy/gx_d3d12.h"
 #include "galaxy/native_host.h"
 #include "galaxy/runtime_settings.h"
@@ -1969,6 +1968,128 @@ RECT windowed_rect_on_monitor(const MonitorInfo& monitor, unsigned width,
     const long left = monitor.work_area.left + std::max(0L, (work_w - outer_w) / 2);
     const long top = monitor.work_area.top + std::max(0L, (work_h - outer_h) / 2);
     return RECT{left, top, left + outer_w, top + outer_h};
+}
+
+OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_height) {
+    OpenedWindow opened;
+    quit_request.store(false, std::memory_order_release);
+    const bool hidden_window = hidden_window_mode_enabled();
+    // The configured monitor and display mode. Exclusive fullscreen starts as
+    // borderless on that monitor; the first frame's display check switches
+    // the mode once the swap chain exists. Hidden test windows stay windowed.
+    const RenderConfig start_config = get_render_config();
+    const unsigned start_mode = hidden_window
+        ? kDisplayWindowed : std::min(start_config.display_mode, kDisplayExclusive);
+    const bool fullscreen_window = start_mode != kDisplayWindowed;
+    const std::vector<MonitorInfo> start_monitors = enumerate_monitors();
+    const MonitorInfo* start_monitor =
+        find_monitor(start_monitors, widen_utf8(start_config.monitor.data()));
+    int actual_window_width = window_width;
+    int actual_window_height = window_height;
+    int window_x = CW_USEDEFAULT;
+    int window_y = CW_USEDEFAULT;
+    DWORD window_style = kWindowStyle;
+
+    if (fullscreen_window && start_monitor != nullptr) {
+        const RECT& bounds = start_monitor->bounds;
+        window_x = bounds.left;
+        window_y = bounds.top;
+        actual_window_width = static_cast<int>(bounds.right - bounds.left);
+        actual_window_height = static_cast<int>(bounds.bottom - bounds.top);
+        if (actual_window_width <= 0 || actual_window_height <= 0) {
+            std::cerr << "[Renderer] invalid monitor dimensions\n";
+            return {};
+        }
+        window_style = WS_POPUP;
+    } else if (!hidden_window && start_monitor != nullptr && window_width > 0 &&
+               window_height > 0) {
+        // Windowed: limited to the monitor's work area and centered on it.
+        const RECT outer = windowed_rect_on_monitor(
+            *start_monitor, static_cast<unsigned>(window_width),
+            static_cast<unsigned>(window_height));
+        RECT frame{0, 0, 0, 0};
+        (void)AdjustWindowRectExForDpi(&frame, kWindowStyle, FALSE, WS_EX_APPWINDOW,
+                                       GetDpiForSystem());
+        window_x = outer.left;
+        window_y = outer.top;
+        actual_window_width = static_cast<int>(
+            (outer.right - outer.left) - (frame.right - frame.left));
+        actual_window_height = static_cast<int>(
+            (outer.bottom - outer.top) - (frame.bottom - frame.top));
+    }
+
+    if (actual_window_width <= 0 || actual_window_height <= 0) {
+        std::cerr << "[Renderer] invalid client dimensions\n";
+        return {};
+    }
+
+    backbuffer_width   = static_cast<UINT>(actual_window_width);
+    backbuffer_height  = static_cast<UINT>(actual_window_height);
+
+    // Win32 window.
+    {
+        WNDCLASSEXW wc{};
+        wc.cbSize        = sizeof(wc);
+        wc.style         = CS_HREDRAW | CS_VREDRAW;
+        wc.lpfnWndProc   = wnd_proc;
+        wc.hInstance     = GetModuleHandleW(nullptr);
+        // Keep a normal class cursor whenever the unfocused window receives
+        // hit testing. WM_SETCURSOR hides it only while this game owns focus.
+        wc.hCursor       = LoadCursorA(nullptr, IDC_ARROW);
+        wc.hIcon         = static_cast<HICON>(LoadImageW(wc.hInstance, MAKEINTRESOURCEW(1), IMAGE_ICON,
+            GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), LR_DEFAULTCOLOR));
+        wc.hIconSm       = static_cast<HICON>(LoadImageW(wc.hInstance, MAKEINTRESOURCEW(1), IMAGE_ICON,
+            GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_DEFAULTCOLOR));
+        wc.lpszClassName = kWindowClass;
+        RegisterClassExW(&wc);
+
+        RECT frame{0, 0, 0, 0};
+        if (!fullscreen_window) {
+            if (!AdjustWindowRectExForDpi(&frame, window_style, FALSE, WS_EX_APPWINDOW, GetDpiForSystem())) {
+                std::cerr << "[Renderer] AdjustWindowRect failed\n";
+                return {};
+            }
+        }
+        const std::int64_t outer_width =
+            static_cast<std::int64_t>(actual_window_width) +
+            static_cast<std::int64_t>(frame.right) - frame.left;
+        const std::int64_t outer_height =
+            static_cast<std::int64_t>(actual_window_height) +
+            static_cast<std::int64_t>(frame.bottom) - frame.top;
+        if (outer_width <= 0 || outer_height <= 0 ||
+            outer_width > std::numeric_limits<int>::max() ||
+            outer_height > std::numeric_limits<int>::max()) {
+            std::cerr << "[Renderer] adjusted window dimensions exceed Win32 limits\n";
+            return {};
+        }
+        const DWORD ex_style =
+            hidden_window ? (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE)
+                          : WS_EX_APPWINDOW;
+        opened.window = owner.start({
+            kWindowClass, L"Nebula", window_style, ex_style,
+            window_x, window_y, static_cast<int>(outer_width),
+            static_cast<int>(outer_height), !hidden_window});
+        if (opened.window == nullptr) {
+            std::cerr << "[Renderer] CreateWindow failed\n";
+            return {};
+        }
+        settings_window.store(
+            reinterpret_cast<std::uintptr_t>(opened.window), std::memory_order_release);
+        borderless_active.store(fullscreen_window, std::memory_order_release);
+        // A centered geometry seed is not evidence that the OS cursor is in
+        // the client. The first real message or authoritative cursor poll
+        // acquires visibility.
+        // The owner publishes real geometry/input through WM_SIZE/WM_SETFOCUS.
+        // Do not reseed from this thread after it has begun processing messages.
+        opened.shown = !hidden_window;
+    }
+    return opened;
+}
+
+void close_game_window(WindowOwner& owner) noexcept {
+    owner.stop();
+    pointer_hwnd.store(0u, std::memory_order_release);
+    UnregisterClassW(kWindowClass, GetModuleHandleW(nullptr));
 }
 
 LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {

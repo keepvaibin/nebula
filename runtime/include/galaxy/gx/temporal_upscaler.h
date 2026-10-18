@@ -9,6 +9,8 @@
 #include <Windows.h>
 #include <d3d12.h>
 
+#include "galaxy/gx/post_process_settings.h"
+
 #include <cstdint>
 #include <memory>
 
@@ -62,6 +64,5 @@ public:
     unsigned max_render_width, unsigned max_render_height,
     unsigned max_output_width, unsigned max_output_height);
 
-[[nodiscard]] bool fsr3_available() noexcept;
 
 }  // namespace galaxy::gx
