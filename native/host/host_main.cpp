@@ -1,9 +1,20 @@
 // The native game's host (docs/NATIVE_PORT.md, "Module layout"): loads the game module (smg_game.dll), gives it
-// Nebula's services (nebula_game_api.h) and runs it. This first host is headless: the GX stream is released as it
-// arrives and PE events answered at once, audio is paced but not played, no remotes connect.
+// Nebula's services (nebula_game_api.h) and runs it. Built two ways:
+//   - nebula_native_host (native/CMakeLists.txt): headless. The GX stream is released as it arrives and PE events
+//     answered at once; audio is paced but not played; no remotes connect.
+//   - NebulaNative (the top-level build, NEBULA_HOST_RENDERER): the stream goes to Nebula's D3D12 renderer, which
+//     raises the PE events and presents the frame buffer the game displays.
 //
-//   nebula_native_host --pak <game.pak> --nand <dir> [--module <smg_game.dll>] [--seconds N]
+//   <host> --pak <game.pak> --nand <dir> [--module <smg_game.dll>] [--seconds N]
+#if defined(_WIN32)
+#define NOMINMAX
+#endif
 #include <nebula_game_api.h>
+
+#if defined(NEBULA_HOST_RENDERER)
+#include "galaxy/gx_d3d12.h"
+#include "galaxy/native_api.h"
+#endif
 
 #include <atomic>
 #include <chrono>
@@ -69,9 +80,14 @@ struct Module {
     decltype(&nebula_game_ai_interrupt) ai_interrupt;
     decltype(&nebula_game_gx_event) gx_event;
     decltype(&nebula_game_gx_release) gx_release;
+    decltype(&nebula_game_memory_regions) memory_regions;
     void (*debug_dump)();  // optional: the module's thread report
 };
 Module gModule;
+
+// The GX command ring's size (sdk/gx/gx_fifo.c), mapped twice in a row: a span past the first mapping's end
+// continues in the second.
+constexpr size_t kGxRingSize = 16u << 20;
 
 // Progress counters for the host's log.
 std::atomic<uint64_t> gGxBytes{0};
@@ -109,12 +125,31 @@ void load_module(const fs::path& path) {
     gModule.ai_interrupt = reinterpret_cast<decltype(gModule.ai_interrupt)>(find_symbol(module, "nebula_game_ai_interrupt"));
     gModule.gx_event = reinterpret_cast<decltype(gModule.gx_event)>(find_symbol(module, "nebula_game_gx_event"));
     gModule.gx_release = reinterpret_cast<decltype(gModule.gx_release)>(find_symbol(module, "nebula_game_gx_release"));
+    gModule.memory_regions = reinterpret_cast<decltype(gModule.memory_regions)>(find_symbol(module, "nebula_game_memory_regions"));
 #if defined(_WIN32)
     gModule.debug_dump = reinterpret_cast<void (*)()>(GetProcAddress(static_cast<HMODULE>(module), "nebula_game_debug_dump"));
 #else
     gModule.debug_dump = reinterpret_cast<void (*)()>(dlsym(module, "nebula_game_debug_dump"));
 #endif
 }
+
+#if defined(NEBULA_HOST_RENDERER)
+void svc_gpu_coherent(void*, uint32_t physical, uint32_t size);
+
+// Host writes into game memory (disc DMA): the renderer drops what it holds of it. `dst` is in one of the game's
+// regions.
+void mark_written(const void* dst, uint32_t size) {
+    NebulaGameMemoryRegion regions[8];
+    const int count = gModule.memory_regions(regions, 8);
+    const auto* p = static_cast<const uint8_t*>(dst);
+    for (int i = 0; i < count; i++) {
+        if (p >= regions[i].host && p < regions[i].host + regions[i].size) {
+            galaxy::gx::notify_guest_memory_write(regions[i].physical + (uint32_t)(p - regions[i].host), size);
+            return;
+        }
+    }
+}
+#endif
 
 // The game partition: Setup's game.pak, the decrypted partition data at its disc offsets (boot.bin at 0, main.dol
 // and the file table where boot.bin says), mapped read-only.
@@ -454,17 +489,136 @@ void svc_fatal(void*, const char* text) {
     std::_Exit(3);
 }
 
-void svc_gx_submit(void*, const uint8_t*, size_t size) {
+#if defined(NEBULA_HOST_RENDERER)
+// The renderer. The game's memory is its guest memory: the module's physical regions and the cached and uncached
+// mirrors of MEM1 and MEM2 (virtual addresses in display lists). The command stream reaches it in frames: the spans
+// since the last submission, contiguous in the ring's double mapping, go to render_frame at a PE marker (draw sync,
+// draw done) or at the retrace, which also presents; render_frame copies them, so they are released at once. The
+// renderer raises PE events through gNative's callbacks when its parse and the GPU reach them. All of this runs on
+// the simulation thread, where the game makes these calls.
+using galaxy::GuestMemoryRegionV1;
+using galaxy::GuestMemoryV1;
+using galaxy::LogLevelV1;
+using galaxy::NativeServicesV1;
+
+GuestMemoryV1 gMemory{};
+std::vector<GuestMemoryRegionV1> gRegions;
+NativeServicesV1 gNative{};
+const uint8_t* gPending = nullptr;
+size_t gPendingSize = 0;
+std::deque<galaxy::gx::FramePeCompletionToken> gTokens;
+
+void native_log(void*, LogLevelV1, const char* text) {
+    log_line("renderer:", text);
+}
+
+void native_fatal(void*, uint32_t, const char* text) {
+    die("renderer: %s", text);
+}
+
+void native_pe_finish(void*) {
+    gModule.gx_event(1, 0);
+}
+
+void native_pe_token(void*, uint16_t token, bool) {
+    gModule.gx_event(0, token);
+}
+
+void setup_renderer_memory() {
+    NebulaGameMemoryRegion regions[8];
+    const int count = gModule.memory_regions(regions, 8);
+    for (int i = 0; i < count; i++) {
+        const NebulaGameMemoryRegion& r = regions[i];
+        std::byte* const host = reinterpret_cast<std::byte*>(r.host);
+        for (const uint32_t mirror : {0x00000000u, 0x80000000u, 0xC0000000u}) {
+            gRegions.push_back({r.physical | mirror, r.size, host});
+            if ((r.physical & 0x0FFFFFFFu) == 0) {
+                gMemory.fast_regions[(r.physical | mirror) >> 28] = {r.size, host};
+            }
+        }
+    }
+    gMemory.regions = gRegions.data();
+    gMemory.region_count = static_cast<uint32_t>(gRegions.size());
+    gNative.log = native_log;
+    gNative.fatal = native_fatal;
+    gNative.gx_pe_finish = native_pe_finish;
+    gNative.gx_pe_token = native_pe_token;
+}
+
+// Takes the receipts of finished submissions, in order (each is consumed once).
+void take_finished_tokens() {
+    while (!gTokens.empty() && galaxy::gx::wait_for_frame_pe_completion_for(gTokens.front(), 0)) {
+        gTokens.pop_front();
+    }
+}
+
+void submit_frame(bool present, uint32_t xfb) {
+    const size_t size = gPendingSize;
+    const auto token = galaxy::gx::render_frame(reinterpret_cast<const std::byte*>(gPending), size, &gMemory, &gNative,
+                                                present, xfb);
+    if (token) {
+        gTokens.push_back(token);
+    }
+    if (size != 0) {
+        gPendingSize = 0;
+        gModule.gx_release(size);
+    }
+    take_finished_tokens();
+}
+#endif
+
+void svc_gx_submit(void*, const uint8_t* bytes, size_t size) {
     gGxBytes.fetch_add(size, std::memory_order_relaxed);
+#if defined(NEBULA_HOST_RENDERER)
+    if (gRegions.empty()) {
+        setup_renderer_memory();
+    }
+    if (gPendingSize == 0) {
+        gPending = bytes;
+    } else if (bytes != gPending + gPendingSize && bytes + kGxRingSize != gPending + gPendingSize) {
+        die("a GX span does not continue the last (%p after %p + %zu)", (const void*)bytes, (const void*)gPending, gPendingSize);
+    }
+    gPendingSize += size;
+#else
+    (void)bytes;
     gModule.gx_release(size);
+#endif
 }
 
 void svc_gx_pe_marker(void*, int finish, uint16_t token) {
+#if defined(NEBULA_HOST_RENDERER)
+    (void)finish;
+    (void)token;
+    submit_frame(false, 0);
+#else
     gModule.gx_event(finish, token);
+#endif
 }
 
-uint32_t svc_gx_peek_efb(void*, uint16_t, uint16_t, uint32_t) {
+uint32_t svc_gx_peek_efb(void*, uint16_t x, uint16_t y, uint32_t type) {
+#if defined(NEBULA_HOST_RENDERER)
+    const auto kind = type == 0 ? galaxy::gx::EfbPeekKind::Color : galaxy::gx::EfbPeekKind::Depth;
+    uint32_t value = 0;
+    if (!galaxy::gx::peek_efb_published(x, y, kind, value)) {
+        submit_frame(false, 0);
+        (void)galaxy::gx::peek_efb(x, y, kind, value);
+    }
+    return value;
+#else
+    (void)x;
+    (void)y;
+    (void)type;
     return 0;
+#endif
+}
+
+void svc_gpu_coherent(void*, uint32_t physical, uint32_t size) {
+#if defined(NEBULA_HOST_RENDERER)
+    galaxy::gx::notify_guest_memory_write(physical, size);
+#else
+    (void)physical;
+    (void)size;
+#endif
 }
 
 const uint8_t* svc_disc_fst(void*, size_t* size) {
@@ -480,6 +634,10 @@ void svc_disc_read(void*, uint64_t offset, uint32_t size, void* dst, uint32_t sl
             return;
         }
         std::memcpy(dst, gPak.data + offset, size);
+#if defined(NEBULA_HOST_RENDERER)
+        // The console's disc DMA writes memory the GPU sees.
+        mark_written(dst, size);
+#endif
         gModule.disc_complete(slot, (int32_t)size);
     });
 }
@@ -492,9 +650,16 @@ const uint8_t* svc_disc_dol(void*, size_t* size) {
 std::atomic<uint32_t> gRetraces{0};
 std::atomic<uint32_t> gXfb{0};
 
-void svc_vi_frame(void*, uint32_t xfb, int, uint32_t retrace) {
+void svc_vi_frame(void*, uint32_t xfb, int black, uint32_t retrace) {
     gXfb.store(xfb, std::memory_order_relaxed);
     gRetraces.store(retrace, std::memory_order_relaxed);
+#if defined(NEBULA_HOST_RENDERER)
+    if (!gRegions.empty()) {
+        submit_frame(true, xfb == 0 || black ? galaxy::gx::kNoDisplayedXfbAddr : xfb);
+    }
+#else
+    (void)black;
+#endif
 }
 
 void svc_fs_request(void*, const NebulaFsRequest* request, uint32_t slot) {
@@ -614,6 +779,12 @@ int main(int argc, char** argv) {
     services.ai_control = svc_ai_control;
     services.hbm = svc_hbm;
     services.thp_video_decode = svc_thp_video_decode;
+    services.gpu_coherent = svc_gpu_coherent;
+#if defined(NEBULA_HOST_RENDERER)
+    if (!galaxy::gx::initialize(1280, 720)) {
+        die("the renderer did not start");
+    }
+#endif
     if (gModule.attach(&services) != NEBULA_GAME_API_VERSION) {
         die("the game module's API version differs from the host's (%u)", NEBULA_GAME_API_VERSION);
     }
@@ -626,8 +797,22 @@ int main(int argc, char** argv) {
 
     const auto end = Clock::now() + std::chrono::duration<double>(seconds > 0 ? seconds : 1e9);
     uint32_t reported = 0;
+    auto next_report = Clock::now() + std::chrono::seconds(1);
     while (Clock::now() < end) {
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+#if defined(NEBULA_HOST_RENDERER)
+        // The window's messages, on the thread that created it.
+        MsgWaitForMultipleObjects(0, nullptr, FALSE, 4, QS_ALLINPUT);
+        galaxy::gx::pump_messages();
+        if (galaxy::gx::quit_requested()) {
+            break;
+        }
+        if (Clock::now() < next_report) {
+            continue;
+        }
+#else
+        std::this_thread::sleep_until(next_report);
+#endif
+        next_report += std::chrono::seconds(1);
         const uint32_t retraces = gRetraces.load(std::memory_order_relaxed);
         if (retraces != reported) {
             char text[192];
@@ -639,7 +824,7 @@ int main(int argc, char** argv) {
             reported = retraces;
         }
     }
-    log_line("host:", "time limit reached");
+    log_line("host:", Clock::now() < end ? "the window was closed" : "time limit reached");
     if (gModule.debug_dump != nullptr) {
         gModule.debug_dump();
     }

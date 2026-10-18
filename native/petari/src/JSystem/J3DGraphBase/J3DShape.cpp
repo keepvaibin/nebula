@@ -123,7 +123,12 @@ void J3DLoadCPCmd(u8 addr, u32 val) {
 
 static void J3DLoadArrayBasePtr(GXAttr attr, void* data) {
     u32 idx = (attr == GX_VA_NBT) ? 1 : (attr - GX_VA_POS);
+#ifdef TARGET_PC
+    // The console masked its cached address to the physical one; natively that is the arena's physical address.
+    J3DLoadCPCmd(0xA0 + idx, OSCachedToPhysical(data));
+#else
     J3DLoadCPCmd(0xA0 + idx, ((uintptr_t)data & 0x7FFFFFFF));
+#endif
 }
 
 void J3DShape::loadVtxArray() const {

@@ -136,8 +136,10 @@ void ARStartDMA(u32 type, uintptr_t src, uintptr_t dst, u32 length) {
     OSDisableScheduler();
     if (type == 0) {
         memcpy((void*)(sARBase + dst), (const void*)src, length);
+        nebula_gpu_coherent((const void*)(sARBase + dst), length);
     } else if (type == 1) {
         memcpy((void*)dst, (const void*)(sARBase + src), length);
+        nebula_gpu_coherent((const void*)dst, length);
     }
     OSEnableScheduler();
     if (sARCallback != NULL) {

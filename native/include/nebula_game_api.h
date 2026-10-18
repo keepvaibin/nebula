@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 3u
+#define NEBULA_GAME_API_VERSION 4u
 
 /* A physical range of the game's memory and where it is in the host process: what the GPU's addresses resolve to. */
 typedef struct NebulaGameMemoryRegion {
@@ -169,6 +169,11 @@ typedef struct NebulaHostServices {
     /* THP: one movie frame's video data (the game's THPVideoDecode) into its Y, U and V planes in game memory, which
        must hold the result before the renderer reads them; 0 on success, as THPVideoDecode returns. */
     int32_t (*thp_video_decode)(void* user, const void* frame, void* y, void* u, void* v);
+
+    /* The game wrote [physical, physical + size) for the GPU: the console's cache flushes (DCFlushRange,
+       DCStoreRange) and DMA copies. The renderer drops what it holds of that memory. Called on the simulation
+       thread; the host's own writes to game memory (disc reads) need no call. */
+    void (*gpu_coherent)(void* user, uint32_t physical, uint32_t size);
 } NebulaHostServices;
 
 /* Returns NEBULA_GAME_API_VERSION, or 0 if the host's services are too old. */

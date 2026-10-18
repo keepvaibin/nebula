@@ -1113,11 +1113,13 @@ private:
     // MEM2 0x10000000), while the CPU can write through cached/uncached
     // aliases. Dirty notifications are normalized to this physical window.
     static constexpr std::uint32_t kMem1PhysicalBase = 0x00000000u;
-    static constexpr std::uint32_t kMem1Size = 0x01800000u;
+    // The native game's memory (docs/NATIVE_PORT.md): MEM1 and MEM2 enlarged for 8-byte pointers; the console's
+    // 24 and 64 MB fit inside.
+    static constexpr std::uint32_t kMem1Size = 0x04000000u;
     static constexpr std::uint32_t kMem2PhysicalBase = 0x10000000u;
-    static constexpr std::uint32_t kMem2Size = 0x04000000u;
+    static constexpr std::uint32_t kMem2Size = 0x10000000u;
     static constexpr std::uint32_t kDirtyTrackedBase = 0x00000000u;
-    static constexpr std::uint32_t kDirtyTrackedSize = 0x14000000u;
+    static constexpr std::uint32_t kDirtyTrackedSize = 0x20000000u;
     // GX copy destinations and tiled rows use 32-byte units. Coarser pages
     // falsely retire GPU-only EFB contents when adjacent heap data is written.
     static constexpr std::uint32_t kDirtyPageShift = 5u;

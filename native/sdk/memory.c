@@ -1,10 +1,13 @@
 /* The game's memory (docs/NATIVE_PORT.md, "Memory and the GPU's addresses"): one host reservation in the console's
    physical layout, MEM1 at physical 0 and MEM2 at 0x10000000, each larger than the console's to allow for 8-byte
    pointers. OSCachedToPhysical/OSPhysicalToCached map arena pointers to those physical addresses; the game module's
-   own image (static display lists and arrays the game gives GX) is a second window from kImageWindow up. */
+   own image (static display lists and arrays the game gives GX) is a second window, in the unused span between MEM1
+   and MEM2, so every address the GPU sees stays below 512 MB (a texture's base is 24 bits of address >> 5). */
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+
+#include <nebula_game_api.h>
 
 #include "nebula_sdk.h"
 
@@ -22,7 +25,8 @@ enum {
     kMem2Physical = 0x10000000u,
     kMem2Size = 0x10000000u, /* 256 MB (the console's 64 MB plus room) */
     kReserveSize = 0x20000000u,
-    kImageWindow = 0x20000000u, /* the module image, up to the 32-bit limit */
+    kImageWindow = 0x08000000u, /* the module image, between MEM1's end and MEM2 */
+    kImageWindowSize = 0x08000000u,
     kStackPoolSize = 0x02000000u, /* 32 MB at the top of MEM2: game threads' native stacks */
 };
 
@@ -62,11 +66,11 @@ static void find_image(void) {
     if (dladdr((void*)&find_image, &info) != 0) {
         sImageBase = (uintptr_t)info.dli_fbase;
     }
-    /* The whole first gigabyte past the load address at most; the window only needs to cover the image. */
-    sImageSize = 0x0FFFFFFFu;
+    /* The window's whole span; it only needs to cover the image. */
+    sImageSize = kImageWindowSize;
 #endif
-    if (sImageSize > 0xFFFFFFFFu - kImageWindow) {
-        sImageSize = 0xFFFFFFFFu - kImageWindow;
+    if (sImageSize > kImageWindowSize) {
+        nebula_fatal("the module image (%llu bytes) is larger than its physical window", (unsigned long long)sImageSize);
     }
 }
 
@@ -123,11 +127,11 @@ uint32_t __NebulaToPhysical(const void* addr) {
 }
 
 void* __NebulaFromPhysical(uint32_t paddr) {
-    if (paddr < kReserveSize) {
-        return sArena + paddr;
-    }
     if (paddr - kImageWindow < sImageSize) {
         return (void*)(sImageBase + (paddr - kImageWindow));
+    }
+    if (paddr < kReserveSize) {
+        return sArena + paddr;
     }
     nebula_fatal("OSPhysicalToCached: physical address 0x%08X has no mapping", paddr);
     return NULL;
@@ -160,19 +164,30 @@ void nebula_memory_guard(void* p, size_t size) {
 #endif
 }
 
-/* Data cache maintenance has nothing to do natively, except DCZeroRange, which zeroes whole 32-byte blocks as the
-   console's dcbz does. */
+/* Data cache maintenance. Natively no cache needs flushing, but the game flushes every range it writes for the GPU
+   (display lists, vertex and texture data) before the GPU reads it, as the console requires: each flush tells the
+   renderer to drop what it holds of that memory. Invalidation has nothing to do; DCZeroRange zeroes whole 32-byte
+   blocks as the console's dcbz does. */
+void nebula_gpu_coherent(const void* addr, uint32_t nBytes) {
+    const NebulaHostServices* host = nebula_host();
+    if (nBytes == 0 || host == NULL || host->gpu_coherent == NULL) {
+        return;
+    }
+    const uintptr_t a = (uintptr_t)addr;
+    if (a - (uintptr_t)sArena < kReserveSize) {
+        host->gpu_coherent(host->user, (uint32_t)(a - (uintptr_t)sArena), nBytes);
+    } else if (a - sImageBase < sImageSize) {
+        host->gpu_coherent(host->user, kImageWindow + (uint32_t)(a - sImageBase), nBytes);
+    }
+}
 void DCFlushRange(void* addr, u32 nBytes) {
-    (void)addr;
-    (void)nBytes;
+    nebula_gpu_coherent(addr, nBytes);
 }
 void DCStoreRange(void* addr, u32 nBytes) {
-    (void)addr;
-    (void)nBytes;
+    nebula_gpu_coherent(addr, nBytes);
 }
 void DCStoreRangeNoSync(void* addr, u32 nBytes) {
-    (void)addr;
-    (void)nBytes;
+    nebula_gpu_coherent(addr, nBytes);
 }
 void DCInvalidateRange(void* addr, u32 nBytes) {
     (void)addr;
@@ -183,6 +198,7 @@ void DCZeroRange(void* addr, u32 nBytes) {
     const uintptr_t end = ((uintptr_t)addr + nBytes + 31) & ~(uintptr_t)31;
     if (nBytes != 0) {
         memset((void*)start, 0, end - start);
+        nebula_gpu_coherent((const void*)start, (uint32_t)(end - start));
     }
 }
 void LCEnable(void) {

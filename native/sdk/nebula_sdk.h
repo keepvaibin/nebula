@@ -25,6 +25,8 @@ uint8_t* nebula_arena_base(void);
 void nebula_image_range(uintptr_t* base, uintptr_t* size);
 void nebula_memory_regions(NebulaMemoryRegion* out, int* count);
 void nebula_memory_arenas(void** mem1Lo, void** mem1Hi, void** mem2Lo, void** mem2Hi);
+/* Game memory written for the GPU (the host's gpu_coherent service); ranges outside the arena and image are ignored. */
+void nebula_gpu_coherent(const void* addr, uint32_t size);
 /* The arena span game threads' native stacks come from (above the MEM2 arena the OS hands out). */
 uint8_t* nebula_stack_pool(size_t* size);
 /* Makes [p, p + size) inaccessible (a stack's guard), whole pages. */

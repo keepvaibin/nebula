@@ -791,6 +791,14 @@ END
 target_sources(NebulaRuntime PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/nebula_runtime.rc")
 set_source_files_properties("${CMAKE_CURRENT_BINARY_DIR}/nebula_runtime.rc" PROPERTIES OBJECT_DEPENDS "${NEBULA_ICON}")
 target_include_directories(NebulaRuntime PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+# The native game's windowed host (native/host): runs the game module that native/CMakeLists.txt builds with clang
+# (smg_game.dll, beside the executable or --module) on Nebula's renderer.
+add_executable(NebulaNative native/host/host_main.cpp)
+target_include_directories(NebulaNative PRIVATE native/include runtime/include)
+target_compile_definitions(NebulaNative PRIVATE NEBULA_HOST_RENDERER=1 _CRT_SECURE_NO_WARNINGS)
+target_compile_features(NebulaNative PRIVATE cxx_std_20)
+target_link_libraries(NebulaNative PRIVATE galaxy_gx)
+
 add_executable(galaxy_native_thp_video_tests runtime/src/native_thp_video_tests.cpp runtime/src/native_thp_video.cpp)
 target_link_libraries(galaxy_native_thp_video_tests PRIVATE galaxy_runtime_abi)
 add_executable(galaxy_fused_multiply_add_tests runtime/src/fused_multiply_add_tests.cpp)
