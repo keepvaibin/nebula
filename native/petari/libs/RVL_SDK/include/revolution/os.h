@@ -56,6 +56,8 @@ void* OSPhysicalToUncached(u32);
 extern "C" {
 #endif
 u32 __NebulaToPhysical(const void* addr);
+// Game state the host's controls follow (NEBULA_CONTEXT_* in nebula_game_api.h).
+void __NebulaGameContext(u32 what, s32 value);
 void* __NebulaFromPhysical(u32 paddr);
 #ifdef __cplusplus
 }

@@ -27,6 +27,10 @@ NEBULA_GAME_API void nebula_game_run(void) {
     nebula_os_boot(nebula_game_main);
 }
 
+void __NebulaGameContext(u32 what, s32 value) {
+    sHost->game_context(sHost->user, what, value);
+}
+
 NEBULA_GAME_API int nebula_game_memory_regions(NebulaGameMemoryRegion* out, int max) {
     NebulaMemoryRegion regions[4];
     int count = 0;

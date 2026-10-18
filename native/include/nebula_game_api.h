@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 4u
+#define NEBULA_GAME_API_VERSION 5u
 
 /* A physical range of the game's memory and where it is in the host process: what the GPU's addresses resolve to. */
 typedef struct NebulaGameMemoryRegion {
@@ -175,7 +175,15 @@ typedef struct NebulaHostServices {
        DCStoreRange) and DMA copies. The renderer drops what it holds of that memory. Called on the simulation
        thread; the host's own writes to game memory (disc reads) need no call. */
     void (*gpu_coherent)(void* user, uint32_t physical, uint32_t size);
+
+    /* Game state the host's controls follow (NEBULA_CONTEXT_*), reported when it changes. */
+    void (*game_context)(void* user, uint32_t what, int32_t value);
 } NebulaHostServices;
+
+enum {
+    NEBULA_CONTEXT_STAR_POINTER_MODE = 1, /* StarPointerOnOffController's mode (-1 none): menus and play */
+    NEBULA_CONTEXT_TILT_SECTION,          /* 0 none, 1 Mario on a Star Ball, 2 on a Ray: tilt steers */
+};
 
 /* Returns NEBULA_GAME_API_VERSION, or 0 if the host's services are too old. */
 NEBULA_GAME_API uint32_t nebula_game_attach(const NebulaHostServices* host);

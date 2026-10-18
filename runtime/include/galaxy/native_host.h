@@ -2181,10 +2181,17 @@ private:
 // The native game's host (native/host): the live controls (bindings, keyboard and mouse, controllers) as one
 // Wii Remote input snapshot for `report_mode` (0x30..0x37), and the virtual remote's EEPROM (DPD and
 // accelerometer calibration) and Nunchuk calibration for its connection.
+// `star_pointer_mode` (-1 none) and `tilt_section` (0 none, 1 Star Ball, 2 Ray) are what the game reports: the
+// control mapping's menu or play context and the tilt steering, which v1.0.1 reads from the console's memory.
 [[nodiscard]] galaxy::input::WiimoteInputSnapshot native_game_wiimote_snapshot(
     std::uint8_t report_mode,
     std::uint64_t current_vi,
-    bool ir_enabled);
+    bool ir_enabled,
+    std::int32_t star_pointer_mode,
+    std::uint8_t tilt_section);
+// The game's motor bit to the controller in use, held off in menus (the HOME Menu, pause, error) as v1.0.1 does.
+// Renew it with every input report: a motor whose state goes stale stops.
+void native_game_rumble(bool motor_on, std::int32_t star_pointer_mode) noexcept;
 void native_game_wiimote_calibration(
     std::uint8_t (&eeprom)[0x2A],
     std::uint8_t (&nunchuk_calibration)[32]);

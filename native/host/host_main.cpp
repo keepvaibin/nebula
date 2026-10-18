@@ -688,6 +688,25 @@ uint32_t svc_gx_peek_efb(void*, uint16_t x, uint16_t y, uint32_t type) {
 #endif
 }
 
+std::atomic<int32_t> gStarPointerMode{-1};
+std::atomic<uint32_t> gTiltSection{0};
+std::atomic<bool> gMotor{false};
+
+void svc_game_context(void*, uint32_t what, int32_t value) {
+    char text[64];
+    if (what == NEBULA_CONTEXT_STAR_POINTER_MODE) {
+        if (gStarPointerMode.exchange(value, std::memory_order_relaxed) != value) {
+            std::snprintf(text, sizeof(text), "star pointer mode %d", static_cast<int>(value));
+            log_line("context:", text);
+        }
+    } else if (what == NEBULA_CONTEXT_TILT_SECTION) {
+        if (gTiltSection.exchange(static_cast<uint32_t>(value), std::memory_order_relaxed) != static_cast<uint32_t>(value)) {
+            std::snprintf(text, sizeof(text), "tilt section %d", static_cast<int>(value));
+            log_line("context:", text);
+        }
+    }
+}
+
 void svc_gpu_coherent(void*, uint32_t physical, uint32_t size) {
 #if defined(NEBULA_HOST_RENDERER)
     galaxy::gx::notify_guest_memory_write(physical, size);
@@ -818,8 +837,12 @@ void wpad_thread() {
         sleep_until_precise(next);
         next += period;
         const uint8_t id = static_cast<uint8_t>(gWpadReport.load(std::memory_order_relaxed));
-        const auto snapshot = galaxy::host::native_game_wiimote_snapshot(id, gRetraces.load(std::memory_order_relaxed),
-                                                                        gWpadDpd.load(std::memory_order_relaxed) != 0);
+        const int32_t mode = gStarPointerMode.load(std::memory_order_relaxed);
+        const auto snapshot = galaxy::host::native_game_wiimote_snapshot(
+            id, gRetraces.load(std::memory_order_relaxed), gWpadDpd.load(std::memory_order_relaxed) != 0, mode,
+            static_cast<uint8_t>(gTiltSection.load(std::memory_order_relaxed)));
+        // Every report renews the motor's state (a stale one stops), as the console's remote keeps its motor bit.
+        galaxy::host::native_game_rumble(gMotor.load(std::memory_order_relaxed), mode);
         uint8_t report[galaxy::input::kMaxWiimoteInputReportBytes];
         const auto built = galaxy::input::build_wiimote_input_report(id, snapshot, report);
         if (built.status == galaxy::input::WiimoteReportBuildStatus::Ok && built.size > 1) {
@@ -843,6 +866,10 @@ void svc_wpad_control(void*, uint32_t chan, uint32_t what, uint32_t value) {
         break;
     case NEBULA_WPAD_DPD:
         gWpadDpd.store(value != 0, std::memory_order_relaxed);
+        break;
+    case NEBULA_WPAD_MOTOR:
+        gMotor.store(value != 0, std::memory_order_relaxed);
+        galaxy::host::native_game_rumble(value != 0, gStarPointerMode.load(std::memory_order_relaxed));
         break;
     default:
         break;
@@ -963,6 +990,7 @@ int main(int argc, char** argv) {
     services.hbm = svc_hbm;
     services.thp_video_decode = svc_thp_video_decode;
     services.gpu_coherent = svc_gpu_coherent;
+    services.game_context = svc_game_context;
 #if defined(NEBULA_HOST_RENDERER)
     if (!galaxy::gx::initialize(1280, 720)) {
         die("the renderer did not start");

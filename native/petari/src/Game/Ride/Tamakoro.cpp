@@ -1,4 +1,7 @@
 #include "Game/Ride/Tamakoro.hpp"
+#ifdef TARGET_PC
+#include <nebula_game_api.h>
+#endif
 #include "Game/GameAudio/AudTamakoroBgmCtrl.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -276,6 +279,9 @@ bool Tamakoro::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pRe
 
 bool Tamakoro::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isMsgAutoRushBegin(msg) && requestBind(pSender)) {
+#ifdef TARGET_PC
+        __NebulaGameContext(NEBULA_CONTEXT_TILT_SECTION, 1);
+#endif
         return true;
     }
 

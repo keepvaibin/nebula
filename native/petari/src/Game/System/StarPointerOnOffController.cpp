@@ -1,4 +1,7 @@
 #include "Game/System/StarPointerOnOffController.hpp"
+#ifdef TARGET_PC
+#include <nebula_game_api.h>
+#endif
 #include "Game/Screen/StarPointerDirector.hpp"
 #include "Game/Screen/StarPointerLayout.hpp"
 #include "Game/System/NerveExecutor.hpp"
@@ -327,6 +330,9 @@ void StarPointerOnOffController::updateMode() {
         if (mModeCounter[mode] > 0 || mRequested[mode]) {
             if (mode != mMode) {
                 mMode = mode;
+#ifdef TARGET_PC
+                __NebulaGameContext(NEBULA_CONTEXT_STAR_POINTER_MODE, mMode);
+#endif
 
                 switch (mMode) {
                 case StarPointerMode_HomeButton:
@@ -414,6 +420,9 @@ void StarPointerOnOffController::updateMode() {
     }
 
     mMode = -1;
+#ifdef TARGET_PC
+    __NebulaGameContext(NEBULA_CONTEXT_STAR_POINTER_MODE, mMode);
+#endif
     setupBase();
 }
 

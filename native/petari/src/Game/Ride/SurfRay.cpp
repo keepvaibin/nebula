@@ -1,4 +1,7 @@
 #include "Game/Ride/SurfRay.hpp"
+#ifdef TARGET_PC
+#include <nebula_game_api.h>
+#endif
 #include "Game/LiveActor/ActorJointCtrl.hpp"
 #include "Game/LiveActor/MaterialCtrl.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -488,6 +491,9 @@ bool SurfRay::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver)
         }
 
         mRider = MR::getSensorHost(pSender);
+#ifdef TARGET_PC
+        __NebulaGameContext(NEBULA_CONTEXT_TILT_SECTION, 2);
+#endif
         MR::startStarPointerMode1PInvalid2PValid(this);
         MR::invalidateClipping(this);
         mRayTilt = 0.0f;

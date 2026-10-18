@@ -6717,6 +6717,7 @@ struct RumbleHost {
 };
 RumbleHost g_rumble_host{};
 void publish_rumble_state(const GuestAddressSpace& space, bool motor_on) noexcept;
+void publish_rumble_for_mode(bool motor_on, std::optional<std::uint32_t> star_pointer_mode) noexcept;
 
 // `right_deadzone` is radial (pointer_control.h); the right stick must arrive
 // without a per-axis dead zone.
@@ -10338,9 +10339,25 @@ std::uint32_t align_up(std::uint32_t value, std::uint32_t alignment) {
 galaxy::input::WiimoteInputSnapshot native_game_wiimote_snapshot(
     std::uint8_t report_mode,
     std::uint64_t current_vi,
-    bool ir_enabled) {
+    bool ir_enabled,
+    std::int32_t star_pointer_mode,
+    std::uint8_t tilt_section) {
+    const galaxy::input::PlayContext context =
+        star_pointer_mode >= 0 && static_cast<std::uint32_t>(star_pointer_mode) < galaxy::input::kStarPointerModeCount
+        ? galaxy::input::play_context_from_star_pointer_mode(static_cast<std::uint32_t>(star_pointer_mode))
+        : galaxy::input::PlayContext::Play;
+    const galaxy::input::tilt::Section section = tilt_section == 1u ? galaxy::input::tilt::Section::StarBall
+        : tilt_section == 2u ? galaxy::input::tilt::Section::Ray
+        : galaxy::input::tilt::Section::None;
     return build_native_hid_input_snapshot(
-        report_mode, current_vi, galaxy::get_runtime_input_mode_state(), std::nullopt, ir_enabled);
+        report_mode, current_vi, galaxy::get_runtime_input_mode_state(), std::nullopt, ir_enabled, nullptr, context,
+        section);
+}
+
+void native_game_rumble(bool motor_on, std::int32_t star_pointer_mode) noexcept {
+    publish_rumble_for_mode(
+        motor_on, star_pointer_mode >= 0 ? std::optional<std::uint32_t>(static_cast<std::uint32_t>(star_pointer_mode))
+                                         : std::nullopt);
 }
 
 void native_game_wiimote_calibration(
@@ -31950,6 +31967,10 @@ galaxy::input::tilt::Section read_tilt_section(const GuestAddressSpace& space) n
 // (StarPointerOnOffController modes 0, 2 and 7) or the Nebula settings
 // overlay is open.
 void publish_rumble_state(const GuestAddressSpace& space, bool motor_on) noexcept {
+    publish_rumble_for_mode(motor_on, read_star_pointer_mode(space));
+}
+
+void publish_rumble_for_mode(bool motor_on, std::optional<std::uint32_t> star_pointer_mode) noexcept {
     static galaxy::input::rumble::MotorEnvelope s_motor{};
     RumbleRequest request{};
     request.motor_on = motor_on;
@@ -31958,7 +31979,7 @@ void publish_rumble_state(const GuestAddressSpace& space, bool motor_on) noexcep
     request.target = g_rumble_host.target;
     request.strength = g_rumble_host.strength;
     request.focused = g_rumble_host.focused;
-    const std::optional<std::uint32_t> mode = read_star_pointer_mode(space);
+    const std::optional<std::uint32_t>& mode = star_pointer_mode;
     const bool menu = mode.has_value() && (*mode == 0u || *mode == 2u || *mode == 7u);
     const NativeSettingsVisibleProvider overlay = g_native_settings_visible.load(std::memory_order_acquire);
     request.paused = menu || (overlay != nullptr && overlay());
