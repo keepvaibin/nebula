@@ -80,6 +80,20 @@ enum {
     NEBULA_WPAD_DISCONNECT,
 };
 
+/* The HOME Menu (hbm). NEBULA_HBM_POLL returns the choice so far: -1 none yet, 0 close, 1 leave the game, 2 reset. */
+enum {
+    NEBULA_HBM_OPEN = 1, /* value: 1 on a 16:9 screen */
+    NEBULA_HBM_POLL,
+    NEBULA_HBM_CLOSE,    /* closed at once (a reset or power event) */
+};
+
+/* Audio interface requests (ai_control). */
+enum {
+    NEBULA_AI_START = 1, /* the DMA engine runs the latched blocks */
+    NEBULA_AI_STOP,
+    NEBULA_AI_RATE,      /* value: the output rate in Hz (32000 or 48000) */
+};
+
 typedef struct NebulaFsRequest {
     uint32_t op;
     const char* path;
@@ -132,6 +146,23 @@ typedef struct NebulaHostServices {
     /* Wii Remotes: a request to remote `chan` (NEBULA_WPAD_*), and speaker data (the game's encoded ADPCM). */
     void (*wpad_control)(void* user, uint32_t chan, uint32_t what, uint32_t value);
     void (*wpad_speaker_data)(void* user, uint32_t chan, const uint8_t* data, uint32_t size);
+
+    /* Audio. The JAudio DSP program: `count` command words as the game mails them to the DSP (count 0: one word,
+       the release of a halted subframe), run at once on the simulation thread; returns 1 when the words completed a
+       subframe (the DSP's AUDIOMSG_DSP mail). Addresses in the words are physical; the channel records and buffers
+       the program reads are in host byte order, the wave data big-endian. */
+    int (*audio_dsp)(void* user, const uint32_t* words, uint32_t count);
+    /* The AI's next DMA block: `size` bytes of interleaved 16-bit stereo (host order) at physical `start`, latched to
+       play after the current block; the host calls nebula_game_ai_interrupt when it takes it. */
+    void (*ai_dma)(void* user, uint32_t start, uint32_t size);
+    void (*ai_control)(void* user, uint32_t what, uint32_t value);
+
+    /* The HOME Menu (NEBULA_HBM_*). */
+    int (*hbm)(void* user, uint32_t what, uint32_t value);
+
+    /* THP: one movie frame's video data (the game's THPVideoDecode) into its Y, U and V planes in game memory, which
+       must hold the result before the renderer reads them; 0 on success, as THPVideoDecode returns. */
+    int32_t (*thp_video_decode)(void* user, const void* frame, void* y, void* u, void* v);
 } NebulaHostServices;
 
 /* Returns NEBULA_GAME_API_VERSION, or 0 if the host's services are too old. */
@@ -152,6 +183,8 @@ NEBULA_GAME_API void nebula_game_disc_complete(uint32_t slot, int32_t result);
 NEBULA_GAME_API void nebula_game_vi_retrace(void);
 /* A NAND operation finished. */
 NEBULA_GAME_API void nebula_game_fs_complete(uint32_t slot, int32_t result);
+/* The AI took the latched DMA block (the console's AI DMA interrupt): the game prepares the next. */
+NEBULA_GAME_API void nebula_game_ai_interrupt(void);
 /* A Wii Remote connected (with its calibration) or disconnected. */
 NEBULA_GAME_API void nebula_game_wpad_connect(uint32_t chan, int connected, const NebulaWiimoteConnection* connection);
 /* A Wii Remote input report, from its id (0x30, 0x31, 0x33 or 0x37 as the data format asks), extension bytes decrypted;
