@@ -1,0 +1,16 @@
+#pragma once
+
+#include "Game/Gravity/PlanetGravity.hpp"
+#include "Game/Util/Array.hpp"
+
+class WireGravity : public PlanetGravity {
+public:
+    WireGravity();
+
+    virtual bool calcOwnGravityVector(TVec3f* pDest, f32* pScalar, const TVec3f& rPosition) const;
+
+    void setPointListSize(u32);
+    void addPoint(const TVec3f&);
+
+    /* 0x28 */ MR::Vector< MR::AssignableArray< TVec3f > > mPoints;
+};

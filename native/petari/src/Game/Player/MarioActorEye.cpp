@@ -1,0 +1,105 @@
+#include "Game/Player/MarioActor.hpp"
+#include "Game/Player/MarioAnimator.hpp"
+#include "Game/System/ResourceHolder.hpp"
+#include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/MathUtil.hpp"
+#include "Game/Util/ModelUtil.hpp"
+#include <JSystem/J3DGraphAnimator/J3DAnimation.hpp>
+
+static u8 sBlinkStates[] = {0, 1, 2, 2, 2, 2, 1, 1, 0, 0};
+
+void MarioActor::initBlink() {
+    _B72 = 0;
+    _B74 = 0;
+    _B68 = 0;
+    mEyeRes = nullptr;
+}
+
+void MarioActor::setBlink(const char* pName) {
+    if (pName == nullptr) {
+        mEyeRes = nullptr;
+
+        return;
+    }
+
+    if (MR::getResourceHolder(this)->mBtpResTable->isExistRes(pName)) {
+        J3DAnmTexPattern* pPattern = static_cast< J3DAnmTexPattern* >(MR::getResourceHolder(this)->mBtpResTable->getRes(pName));
+        mEyeRes = pPattern;
+        mEyeRes->mFrame = 0.0f;
+
+        return;
+    }
+
+    mEyeRes = nullptr;
+}
+
+void MarioActor::updateBlink() {
+    if (mCurrModel == 1) {
+        return;
+    }
+
+    J3DAnmTexPattern* pPattern = mEyeRes;
+    if (pPattern != nullptr) {
+        f32 frame;
+
+        if (pPattern->mAttribute == 2) {
+            const f32 currentFrame = pPattern->mFrame;
+            frame = currentFrame;
+            frame += 1.0f;
+
+            if (frame >= pPattern->mFrameMax - 1.0f) {
+                frame = 0.0f;
+            }
+        } else {
+            frame = mMarioAnim->getFrame();
+        }
+
+        mEyeRes->mFrame = frame;
+
+        u16 eyeLidMaterial = MR::getMaterialNo(MR::getJ3DModelData(this), "EyeLid_v");
+
+        for (u16 i = 0; i < mEyeRes->mUpdateMaterialNum; i++) {
+            u16 texNo;
+            mEyeRes->getTexNo(i, &texNo);
+
+            u16 materialID = mEyeRes->mUpdateMaterialID[i];
+            if (materialID == eyeLidMaterial) {
+                _B6A = texNo - _B70;
+                _B68 = 1;
+                return;
+            }
+        }
+    }
+
+    if (isNerve(GET_NERVE(MarioActor, MarioActorNrvGameOver)) && mEyeRes == nullptr) {
+        if (mMario->isAnimationTerminate(nullptr)) {
+            _B6A = 2;
+        } else {
+            _B6A = 1;
+        }
+
+        return;
+    }
+
+    if (_B68) {
+        _B68 = 0;
+        _B72 = 0;
+        _B74 = MR::getRandom(60L, 360L);
+        _B6A = 0;
+    }
+
+    if (_B72) {
+        _B72--;
+        _B6A = ::sBlinkStates[9 - _B72];
+        _B74 = MR::getRandom(60L, 360L);
+        return;
+    }
+
+    if (_B74 != 0) {
+        _B74--;
+    }
+
+    if (_B74 == 0) {
+        _B72 = 10;
+    }
+}

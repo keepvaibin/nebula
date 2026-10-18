@@ -1,0 +1,44 @@
+#pragma once
+
+#include "Game/Util/Color.hpp"
+#include <JSystem/JGeometry/TVec.hpp>
+
+class JMapInfoIter;
+
+class AutoEffectInfo {
+public:
+    enum Flag {
+        /* 0x01 */ FLAG_FOLLOW_TRANS = 1 << 0,
+        /* 0x02 */ FLAG_FOLLOW_ROTATE = 1 << 1,
+        /* 0x04 */ FLAG_FOLLOW_SCALE = 1 << 2,
+        /* 0x08 */ FLAG_AFFECT_TRANS = 1 << 3,
+        /* 0x10 */ FLAG_AFFECT_ROTATE = 1 << 4,
+        /* 0x20 */ FLAG_AFFECT_SCALE = 1 << 5,
+        /* 0x40 */ FLAG_CONTINUE_ANIM_END = 1 << 6,
+    };
+
+    /// @brief Creates a new `AutoEffectInfo`.
+    AutoEffectInfo();
+
+    void init(const JMapInfoIter& rIter);
+    const char* getName() const;
+
+    /* 0x00 */ const char* mGroupName;
+    /* 0x04 */ const char* mAnimName;
+    /* 0x08 */ const char* mUniqueName;
+    /* 0x0C */ const char* mEffectName;
+    /* 0x10 */ const char* mParentName;
+    /* 0x14 */ const char* mJointName;
+    /* 0x18 */ u16 mFlag;
+    /* 0x1C */ Color8 mPrmColor;
+    /* 0x20 */ bool mIsValidPrmColor;
+    /* 0x24 */ Color8 mEnvColor;
+    /* 0x28 */ bool mIsValidEnvColor;
+    /* 0x2C */ TVec3f mOffset;
+    /* 0x38 */ s32 mStartFrame;
+    /* 0x3C */ s32 mEndFrame;
+    /* 0x40 */ f32 mScaleValue;
+    /* 0x44 */ f32 mRateValue;
+    /* 0x48 */ f32 mLightAffectValue;
+    /* 0x4C */ s32 mDrawOrder;
+};

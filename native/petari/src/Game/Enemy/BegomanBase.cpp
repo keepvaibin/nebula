@@ -1,0 +1,1102 @@
+#include "Game/Enemy/BegomanBase.hpp"
+#include "Game/Enemy/AnimScaleController.hpp"
+#include "Game/Enemy/BegomanBaby.hpp"
+#include "Game/Enemy/WalkerStateBindStarPointer.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/Map/WaterInfo.hpp"
+#include "Game/MapObj/ElectricRailHolder.hpp"
+#include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/Util/ActorMovementUtil.hpp"
+#include "Game/Util/ActorSensorUtil.hpp"
+#include "Game/Util/ActorShadowUtil.hpp"
+#include "Game/Util/ActorStateUtil.hpp"
+#include "Game/Util/ActorSwitchUtil.hpp"
+#include "Game/Util/AreaObjUtil.hpp"
+#include "Game/Util/EffectUtil.hpp"
+#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/JointController.hpp"
+#include "Game/Util/JointUtil.hpp"
+#include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/MapUtil.hpp"
+#include "Game/Util/MathUtil.hpp"
+#include "Game/Util/ModelUtil.hpp"
+#include "Game/Util/MtxUtil.hpp"
+#include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/PlayerUtil.hpp"
+#include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/StarPointerUtil.hpp"
+#include <JSystem/JMath/JMATrigonometric.hpp>
+
+ void BegomanBase_FORCE_MATCH_SDATA2() {
+    (void) 1.0f;
+    (void) 0.0f;
+    (void) 0.5f;
+    (void) 3.0f;
+    (void) -1.0f;
+    (void) 2.0f;
+ }
+
+namespace {
+    const MR::ActorMoveParam hReturnWaitParam = {0.0f, 1.0f, 0.95f, 0.0f};
+    const MR::ActorMoveParam hReturnMoveParam = {0.2f, 1.0f, 0.95f, 3.0f};
+    const MR::ActorMoveParam hBrakeParam = {0.0f, 1.0f, 0.7f, 3.0f};
+    const MR::ActorMoveParam hBrakeOnAirParam = {0.0f, 1.0f, 0.95f, 3.0f};
+    const MR::ActorMoveParam hKeepDistanceFarParam = {0.35f, 1.0f, 0.95f, 3.0f};
+    const MR::ActorMoveParam hKeepDistanceNearParam = {-0.22f, 1.0f, 0.95f, 3.0f};
+    const MR::ActorMoveParam hKeepDistanceWaitParam = {0.0f, 1.0f, 0.95f, 3.0f};
+    // static const _32 hElectricPushAwayVel = _;
+    // static const _32 hElectricPushFromPosVel = _;
+    // static const _32 hElectricFarPushAwayVel = _;
+    // static const _32 hElectricFarPushFromPosVel = _;
+    static const s32 hElectricTouchTime = 40;
+    // static const _32 hReboundGroundVel = _;
+    static const f32 hReboundWallAddVel = 5.0f;
+    // static const _32 hReboundRailRatio = _;
+    // static const _32 hDiscoverRange = _;
+    static const f32 hNoCalcWaitRotate = 0.15f;
+    static const f32 hBlendGravityRate = 0.1f;
+    static const f32 hRailPushH = 10.0f;
+    static const f32 hRailPushJump = 20.0f;
+    static const f32 hRailPushHBoss = 30.0f;
+    static const f32 hRailPushJumpBoss = 30.0f;
+    static const f32 hTurnStartDegree = 3;
+    static const f32 hTurnEndDegree = 10;
+    static const f32 hIsFaceToPlayerDegree = 30;
+    static const f32 hPursueRange = 2000.0f;
+    static const s32 hPursueLimitTime = 180;
+    static const s32 hPursueAnimFrame = 10;
+    static const s32 hPursueDashFrame = 18;
+    static const f32 hPursueDashVelocity = 15.0f;
+    static const s32 hTurnTime = 60;
+    static const s32 hTurnTimeCanNotAttack = 30;
+    static const s32 hBrakeTime = 50;
+    // static const _32 hBrakeBackVel = _;
+    static const s32 hProvokeTime = 120;
+    // static const _32 hTiredBeginCount = _;
+    // static const s32 hTiredTime = _;
+    static const s32 hReturnWaitTime = 180;
+    // static const _32 hReturnEndDistance = _;
+    static const f32 hKeepDistanceToWaitDist = 1200.0f;
+    static const f32 hKeepDistSideVel = 0.6f;
+    // static const _32 hLaunchGravity = _;
+    // static const _32 hLaunchDampVelGround = _;
+    static const s32 hReceiveLimitTime = 2;
+    static const s32 hPermitLimitTime = 30;
+    static const BegomanSound sound_baby = {"SE_EM_LV_BABYBEGO_DASH"};
+    static const BegomanSound sound_normal = {"SE_EM_LV_BEGOMAN_DASH"};
+    static const BegomanSound sound_boss = {"SE_BM_LV_BBEGO_DASH"};
+};  // namespace
+
+namespace NrvBegomanAttackPermitter {
+    NEW_NERVE(HostTypeNrvWait, BegomanAttackPermitter, Wait);
+    NEW_NERVE(HostTypeNrvReceive, BegomanAttackPermitter, Receive);
+    NEW_NERVE(HostTypeNrvPermit, BegomanAttackPermitter, Permit);
+};  // namespace NrvBegomanAttackPermitter
+
+BegomanBase::BegomanBase(const char* pName)
+    : LiveActor(pName), mBaseDelegator(), mFaceVec(0.0f, 0.0f, 1.0f), mTargetVec(0.0f, 0.0f, 1.0f), _A8(0.0f, 0.0f, -1.0f), _B4(1.0f, 1.0f, 1.0f),
+      _C0(0, 0, 0, 1), _D0(0, 0, 0, 1), mTiredCounter(), mElectricCounter(), mInitPos(0.0f, 0.0f, 0.0f), mScaleControler(), mStarPointBind(),
+      mCanTrySetReturn() {
+}
+
+// needed to get a string to show up in .data, should be deadstripped.
+const BegomanSound* BegomanBase::getSoundBaby() {
+    return &::sound_baby;
+}
+
+const BegomanSound* BegomanBase::getSoundNormal() {
+    return &::sound_normal;
+}
+
+const BegomanSound* BegomanBase::getSoundBoss() {
+    return &::sound_boss;
+}
+
+void BegomanBase::initCore(const JMapInfoIter& rIter, const char* pModelArcName, bool a1) {
+    MR::createSceneObj(SceneObj_BegomanAttackPermitter);
+    MR::useStageSwitchWriteDead(this, rIter);
+    MR::useStageSwitchReadA(this, rIter);
+    initModelManagerWithAnm(pModelArcName, nullptr, false);
+
+    if (MR::isValidInfo(rIter)) {
+        MR::initDefaultPos(this, rIter);
+        mInitPos.set(mPosition);
+        MR::setGroupClipping(this, rIter, 0x10);
+        s32 arg0 = -1;
+        MR::getJMapInfoArg0NoInit(rIter, &arg0);
+        if (arg0 == -1) {
+            mCanTrySetReturn = false;
+        } else {
+            mCanTrySetReturn = true;
+        }
+    }
+
+    MR::connectToSceneEnemy(this);
+
+    mBaseDelegator = MR::createJointDelegatorWithNullChildFunc(this, &BegomanBase::calcJointLocator1, "Locator1");
+    MR::onCalcGravity(this);
+    MR::initLightCtrl(this);
+
+    _C0.setEulerDegree(mRotation.x, mRotation.y, mRotation.z);
+    _C0.getZDir(mFaceVec);
+    mRotation.set(0.0f);
+}
+
+void BegomanBase::initEffectAndStarPointerBind() {
+    initEffect(1);
+    MR::startAction(this, "Wait");
+    calcAnim();
+
+    f32 modelBoundingRadius;
+    MR::calcModelBoundingRadius(&modelBoundingRadius, this);
+
+    modelBoundingRadius *= 0.75f;
+    MR::initStarPointerTarget(this, modelBoundingRadius, TVec3f(0.0f, 0.5f * modelBoundingRadius, 0.0f));
+
+    mScaleControler = new AnimScaleController(nullptr);
+    mScaleControler->setParamTight();
+    mStarPointBind = new WalkerStateBindStarPointer(this, mScaleControler);
+}
+
+void BegomanBase::initAfterPlacement() {
+    MR::trySetMoveLimitCollision(this);
+}
+
+void BegomanBase::initShadow(f32 radius, const char* pJointName) {
+    MR::initShadowVolumeSphere(this, radius);
+
+    TVec3f zeroVec = TVec3f(0.0f, 0.0f, 0.0f);
+    MR::setShadowDropPositionAtJoint(this, nullptr, pJointName, zeroVec);
+}
+
+void BegomanBase::initEffect(s32 extraEffectNum) {
+    initEffectKeeper(extraEffectNum + 3, nullptr, false);
+
+    MR::addEffect(this, "BegomanSpark");
+    MR::addEffect(this, "BegomanHit");
+    MR::addEffect(this, "BegomanFailureHit");
+
+    MR::setEffectHostSRT(this, "BegomanSpark", nullptr, nullptr, nullptr);
+    MR::setEffectHostSRT(this, "BegomanHit", nullptr, nullptr, nullptr);
+    MR::setEffectHostSRT(this, "BegomanFailureHit", nullptr, nullptr, nullptr);
+
+    MR::setEffectName(this, "BegomanSpark", "Spark");
+    MR::setEffectName(this, "BegomanHit", "Hit");
+    MR::setEffectName(this, "BegomanFailureHit", "FailureHit");
+}
+
+void BegomanBase::initSensor(s32 extraSensorNum, f32 radius, f32 pushedRailRadius, const char* pSensorJointName) {
+    f32 yScale = mScale.y;
+    initHitSensor(extraSensorNum + 3);
+
+    MR::addHitSensor(this, "check", ATYPE_EYE, 1, radius * yScale, TVec3f(0.0f, 0.5f * radius * yScale, 1.5f * radius * yScale));
+    MR::addHitSensorAtJoint(this, "body", pSensorJointName, ATYPE_BEGOMAN, 32, radius * yScale, TVec3f(0.0f, 0.5f * radius * yScale, 0.0f));
+    MR::addHitSensorAtJoint(this, "pushed_rail", pSensorJointName, ATYPE_EYE, 32, pushedRailRadius * yScale,
+                            TVec3f(0.0f, 0.5f * pushedRailRadius * yScale, 0.0f));
+}
+
+void BegomanBase::initUseSwitchB(const JMapInfoIter& rIter, const MR::FunctorBase& rFunctor) {
+    if (MR::isValidInfo(rIter) && MR::useStageSwitchReadB(this, rIter)) {
+        MR::listenStageSwitchOnB(this, rFunctor);
+    }
+}
+
+void BegomanBase::makeActorDead() {
+    LiveActor::makeActorDead();
+}
+
+void BegomanBase::appear() {
+    LiveActor::appear();
+    MR::onBind(this);
+    MR::onCalcGravity(this);
+    getSensor("body")->validate();
+}
+
+void BegomanBase::kill() {
+    LiveActor::kill();
+
+    if (MR::isValidSwitchDead(this)) {
+        MR::onSwitchDead(this);
+    }
+}
+
+void BegomanBase::control() {
+    if (mScaleControler != nullptr) {
+        mScaleControler->updateNerve();
+    }
+
+    updateTargetVec();
+
+    TVec3f upVec;
+    MR::calcUpVec(&upVec, this);
+
+    TVec3f blendVec;
+    TQuat4f yRotationQuat;
+
+    MR::vecBlend(upVec, -mGravity, &blendVec, ::hBlendGravityRate);
+    MR::normalizeOrZero(&blendVec);
+
+    if (MR::isNearZero(blendVec)) {
+        blendVec.set(upVec);
+    }
+
+    MR::makeQuatUpFront(&_C0, blendVec, mFaceVec);
+    _A8.set(mGravity);
+
+    yRotationQuat.setRotate(0.0f, 1.0f, 0.0f, mRotation.y);
+    PSQUATMultiply(&yRotationQuat, &_D0, &_D0);
+}
+
+void BegomanBase::startClipped() {
+    LiveActor::startClipped();
+}
+
+void BegomanBase::exeNoCalcWaitCore(f32 tolerance, const Nerve* pNerve) {
+    if (MR::isFirstStep(this)) {
+        MR::offBind(this);
+        MR::offCalcGravity(this);
+        MR::validateClipping(this);
+    }
+
+    updateRotateY(::hNoCalcWaitRotate, tolerance);
+    // has to be zero because it sets z first.
+    mVelocity.zero();
+    // incorrectly inlined
+    TVec3f playerPos(*MR::getPlayerPos());
+    playerPos.sub(mPosition);
+    f32 f2 = playerPos.squared();
+
+    if (pNerve != nullptr) {
+        if (MR::calcDistanceToPlayer(mPosition) < 1000.0f) {
+            if (!MR::isValidSwitchA(this) || MR::isOnSwitchA(this)) {
+                MR::onBind(this);
+                MR::onCalcGravity(this);
+                setNerve(pNerve);
+            }
+        }
+    }
+}
+
+void BegomanBase::finishNoCalcWait() {
+    MR::onBind(this);
+    MR::onCalcGravity(this);
+    MR::invalidateClipping(this);
+}
+
+void BegomanBase::exeWaitCore(const MR::ActorMoveParam& rMoveParam, const Nerve* pNerve1, const Nerve* pNerve2, const Nerve* pNerve3) {
+    if (MR::isFirstStep(this)) {
+        MR::startAction(this, "Wait");
+    }
+
+    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, rMoveParam._0, rMoveParam._4, rMoveParam._8, rMoveParam._C);
+    reboundWallAndGround(&mFaceVec, false);
+
+    if (!isNearInitPos()) {
+        if (trySetReturnNerve()) {
+            return;
+        }
+    }
+
+    if (MR::calcDistanceToPlayer(mPosition) < 1000.0f) {
+        if (MR::isValidSwitchA(this)) {
+            if (!MR::isOnSwitchA(this)) {
+                return;
+            }
+        }
+
+        if (!isFallNextMove(150.0f, 150.0f)) {
+            TVec3f touchRailVec;
+
+            if (!ElectricRailFunction::isTouchRail(getSensor("check"), &touchRailVec, nullptr)) {
+                if (requestAttack()) {
+                    setNerve(pNerve1);
+                    return;
+                } else {
+                    setNerve(pNerve2);
+                    return;
+                }
+            }
+
+            TVec3f touchRailToSensor(touchRailVec);
+            touchRailToSensor.sub(getSensor("check")->mPosition);
+            MR::normalizeOrZero(&touchRailToSensor);
+
+            if (!MR::isNearZero(touchRailToSensor)) {
+                if (!(0.5f < touchRailToSensor.dot(mFaceVec))) {
+                    if (requestAttack()) {
+                        setNerve(pNerve1);
+                    } else {
+                        setNerve(pNerve2);
+                    }
+                }
+            }
+        }
+    } else {
+        if (MR::isOnGround(this)) {
+            setNerve(pNerve3);
+        }
+    }
+}
+
+void BegomanBase::exeSignAttackCore(const MR::ActorMoveParam& rMoveParam, const Nerve* pNerve) {
+    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, rMoveParam._0, rMoveParam._4, rMoveParam._8, rMoveParam._C);
+    reboundWallAndGround(&mFaceVec, false);
+
+    if (!requestAttack()) {
+        if (!trySetReturnNerve()) {
+            setNerve(getNerveWait());
+        }
+    } else {
+        if (MR::isActionEnd(this)) {
+            setNerve(pNerve);
+        }
+    }
+}
+
+void BegomanBase::exePursueCore(const MR::ActorMoveParam& rMoveParam, const Nerve* pNerve1, const Nerve* pNerve2, const BegomanSound& rSound,
+                                f32 f1) {
+    if (MR::isStep(this, ::hPursueAnimFrame)) {
+        MR::startAction(this, "Attack");
+    }
+
+    if (MR::isGreaterEqualStep(this, ::hPursueAnimFrame)) {
+        MR::startLevelSound(this, rSound.mSound);
+    }
+
+    if (MR::isStep(this, ::hPursueDashFrame)) {
+        mVelocity = mFaceVec * ::hPursueDashVelocity * f1;
+    }
+
+    if (isFallNextMove(150.0f, 150.0f)) {
+        setNerve(pNerve1);
+        return;
+    }
+
+    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, rMoveParam._0 * f1, rMoveParam._4, rMoveParam._8, rMoveParam._C);
+
+    if (MR::isGreaterStep(this, ::hPursueDashFrame)) {
+        reboundWallAndGround(&mFaceVec, false);
+    } else {
+        reboundWallAndGround(&mFaceVec, true);
+    }
+
+    if (!requestAttack()) {
+        if (!trySetReturnNerve()) {
+            setNerve(getNerveWait());
+        }
+
+        return;
+    }
+
+    if (ElectricRailFunction::isTouchRail(getSensor("check"), nullptr, nullptr)) {
+        setNerve(pNerve1);
+        return;
+    }
+
+    if (!MR::isFaceToPlayerHorizontalDegree(this, mFaceVec, ::hIsFaceToPlayerDegree)) {
+        MR::startAction(this, "Turn");
+        setNerve(pNerve2);
+        return;
+    }
+
+    if (MR::isGreaterStep(this, ::hPursueLimitTime)) {
+        MR::turnDirection(this, &mFaceVec, mTargetVec, 3.0f);
+        MR::startAction(this, "Turn");
+        setNerve(pNerve2);
+    }
+
+    if (!trySetReturnNerve()) {
+        if (::hPursueRange < MR::calcDistanceToPlayer(mPosition) && !trySetReturnNerve()) {
+            setNerve(getNerveWait());
+        }
+    }
+}
+
+void BegomanBase::exeTurnCore(const MR::ActorMoveParam& rMoveParam, const Nerve* pNerve1, const Nerve* pNerve2, bool notCheckRail) {
+    if (MR::isOnGround(this) && isFallNextMove(150.0f, 150.0f)) {
+        setNerve(pNerve1);
+        return;
+    }
+
+    f32 nerveValue = MR::calcNerveValue(this, ::hTurnTime, ::hTurnStartDegree, ::hTurnEndDegree);
+    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, rMoveParam._0, rMoveParam._4, rMoveParam._8, nerveValue);
+    reboundWallAndGround(&mFaceVec, true);
+
+    if (!notCheckRail) {
+        if (ElectricRailFunction::isTouchRail(getSensor("check"), nullptr, nullptr)) {
+            setNerve(pNerve1);
+            return;
+        }
+    }
+
+    if (!trySetReturnNerve()) {
+        bool attackRequested = requestAttack();
+
+        if (!attackRequested && MR::isGreaterStep(this, ::hTurnTimeCanNotAttack)) {
+            if (!trySetReturnNerve()) {
+                setNerve(getNerveWait());
+            }
+
+            return;
+        }
+
+        if (MR::isGreaterStep(this, ::hTurnTime)) {
+            if (attackRequested && MR::isFaceToPlayerHorizontalDegree(this, mFaceVec, ::hIsFaceToPlayerDegree)) {
+                setNerve(pNerve2);
+                return;
+            }
+
+            if (2000.0f < MR::calcDistanceToPlayer(mPosition) && !trySetReturnNerve()) {
+                setNerve(getNerveWait());
+            }
+        }
+    }
+}
+
+void BegomanBase::exeBrakeCore(const Nerve* pNerve) {
+    if (MR::isFirstStep(this)) {
+        MR::startAction(this, "Brake");
+        MR::vecKillElement(mVelocity, mFaceVec, &mVelocity);
+    }
+
+    if (MR::isOnGround(this)) {
+        MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::hBrakeParam._0, ::hBrakeParam._4, ::hBrakeParam._8, ::hBrakeParam._C);
+    } else {
+        MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, ::hBrakeOnAirParam._0, ::hBrakeOnAirParam._4, ::hBrakeOnAirParam._8,
+                                   ::hBrakeOnAirParam._C);
+    }
+
+    reboundWallAndGround(&mFaceVec, true);
+
+    if (isFallNextMove(150.0f, 150.0f)) {
+        MR::addVelocityLimit(this, (-mFaceVec) * 0.0f);
+    } else {
+        if (!ElectricRailFunction::isTouchRail(getSensor("check"), nullptr, nullptr) && MR::isGreaterStep(this, ::hBrakeTime)) {
+            MR::startAction(this, "Brake");
+            setNerve(pNerve);
+        }
+    }
+}
+
+void BegomanBase::exeStepBackCore(const MR::ActorMoveParam& rMoveParam, const Nerve* pNerve) {
+    if (MR::isFirstStep(this)) {
+    }
+
+    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, rMoveParam._0, rMoveParam._4, rMoveParam._8, rMoveParam._C);
+    if (MR::isOnGround(this)) {
+        setNerve(pNerve);
+    }
+}
+
+void BegomanBase::exeProvokeCore(const MR::ActorMoveParam& rMoveParam, const Nerve* pNerve) {
+    if (MR::isFirstStep(this)) {
+        MR::startAction(this, "Provoke");
+    }
+
+    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, rMoveParam._0, rMoveParam._4, rMoveParam._8, rMoveParam._C);
+    reboundWallAndGround(&mFaceVec, false);
+
+    TVec3f* gravity;
+    gravity = &mGravity;
+    mVelocity.scale(gravity->dot(mVelocity), *gravity);
+
+    if (MR::isGreaterStep(this, ::hProvokeTime)) {
+        setNerve(pNerve);
+    }
+}
+
+void BegomanBase::exeHitReactionCore(const MR::ActorMoveParam& rMoveParam, const Nerve* pNerve) {
+    if (MR::isFirstStep(this)) {
+        MR::startAction(this, "HitReaction");
+    }
+
+    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, rMoveParam._0, rMoveParam._4, rMoveParam._8, rMoveParam._C);
+    reboundWallAndGround(&mFaceVec, false);
+
+    if (MR::isActionEnd(this)) {
+        setNerve(pNerve);
+    }
+}
+
+void BegomanBase::exeTiredCore(const MR::ActorMoveParam& rMoveParam, const Nerve* pNerve) {
+    if (MR::isFirstStep(this)) {
+        MR::startAction(this, "Tired");
+    }
+
+    MR::moveAndTurnToDirection(this, &mFaceVec, mTargetVec, rMoveParam._0, rMoveParam._4, rMoveParam._8, rMoveParam._C);
+    reboundWallAndGround(&mFaceVec, false);
+
+    if (MR::isGreaterStep(this, 120)) {
+        setNerve(pNerve);
+    }
+}
+
+void BegomanBase::exeReturnCore(const Nerve* pNerve) {
+    if (MR::isFirstStep(this)) {
+        MR::startAction(this, "Brake");
+    }
+
+    if (MR::isLessStep(this, ::hReturnWaitTime)) {
+        MR::moveAndTurnToTarget(this, &mFaceVec, mInitPos, ::hReturnWaitParam._0, ::hReturnWaitParam._4, ::hReturnWaitParam._8,
+                                ::hReturnWaitParam._C);
+    } else {
+        MR::moveAndTurnToTarget(this, &mFaceVec, mInitPos, ::hReturnMoveParam._0, ::hReturnMoveParam._4, ::hReturnMoveParam._8,
+                                ::hReturnMoveParam._C);
+    }
+
+    reboundWallAndGround(&mFaceVec, false);
+
+    if (isNearInitPos()) {
+        setNerve(pNerve);
+    }
+}
+
+void BegomanBase::exeKeepDistanceCore(const Nerve* pNerve1, const Nerve* pNerve2, const Nerve* pNerve3, f32 farDist, f32 nearDist) {
+    if (MR::isFirstStep(this)) {
+        MR::startAction(this, "Brake");
+    }
+
+    f32 distToPlayer = MR::calcDistanceToPlayer(mPosition);
+    if (::hKeepDistanceToWaitDist < distToPlayer) {
+        setNerve(pNerve1);
+        return;
+    }
+
+    if (farDist < distToPlayer) {
+        MR::moveAndTurnToPlayer(this, &mFaceVec, ::hKeepDistanceFarParam._0, ::hKeepDistanceFarParam._4, ::hKeepDistanceFarParam._8,
+                                ::hKeepDistanceFarParam._C);
+    } else if (distToPlayer < nearDist) {
+        MR::moveAndTurnToPlayer(this, &mFaceVec, ::hKeepDistanceNearParam._0, ::hKeepDistanceNearParam._4, ::hKeepDistanceNearParam._8,
+                                ::hKeepDistanceNearParam._C);
+        addVelocityEscapeToSide(::hKeepDistSideVel);
+    } else {
+        MR::moveAndTurnToPlayer(this, &mFaceVec, ::hKeepDistanceWaitParam._0, ::hKeepDistanceWaitParam._4, ::hKeepDistanceWaitParam._8,
+                                ::hKeepDistanceWaitParam._C);
+    }
+
+    if (isFallNextMove(150.0f, 150.0f)) {
+        setNerve(pNerve3);
+        return;
+    }
+
+    reboundWallAndGround(&mFaceVec, false);
+    if (requestAttack()) {
+        setNerve(pNerve2);
+        return;
+    }
+
+    trySetReturnNerve();
+}
+
+void BegomanBase::addVelocityEscapeToSide(f32 velocity) {
+    TVec3f sideVec;
+    MR::calcSideVec(&sideVec, this);
+
+    if (mInvertSideVec) {
+        sideVec.scale(-1.0f);
+    }
+
+    if (0.0f < mTargetVec.dot(sideVec) || 0.0f < sideVec.dot(*MR::getPlayerVelocity())) {
+        mInvertSideVec = !mInvertSideVec;
+    }
+
+    sideVec.setLength(velocity);
+    MR::addVelocity(this, sideVec);
+}
+
+void BegomanBase::exeLaunch() {
+    if (MR::isFirstStep(this)) {
+        MR::invalidateHitSensors(this);
+    }
+
+    MR::applyVelocityDampAndGravity(this, 0.98f, 0.98f, 0.98f, 0.98f, 1.0f);
+
+    if (MR::isOnGround(this)) {
+        MR::validateHitSensors(this);
+        setNerve(getNerveWait());
+    }
+}
+
+void BegomanBase::exeBindStarPointer() {
+    if (MR::updateActorStateAndNextNerve(this, mStarPointBind, getNerveWait())) {
+        return;
+    }
+}
+
+void BegomanBase::finishBindStarPointer() {
+    mStarPointBind->kill();
+}
+
+bool BegomanBase::tryAndSetStarPointerBind(const Nerve* pNerve) {
+    if (mStarPointBind->tryStartPointBind()) {
+        setNerve(pNerve);
+
+        return true;
+    }
+
+    return false;
+}
+
+bool BegomanBase::isNearInitPos() const {
+    return mInitPos.squared(mPosition) < 40000.0f;
+}
+
+bool BegomanBase::trySetReturnNerve() {
+    if (MR::isValidSwitchA(this) && !MR::isOnSwitchA(this) && mCanTrySetReturn) {
+        setNerveReturn();
+
+        return true;
+    }
+
+    return false;
+}
+
+bool BegomanBase::incAndCheckTiredCounter() {
+    if (mTiredCounter < 180) {
+        mTiredCounter++;
+    }
+
+    return mTiredCounter == 180;
+}
+
+#pragma push
+#pragma opt_propagation off
+void BegomanBase::launchBegomanCore(LiveActor* pActor, BegomanBase** pBegomanArray, s32 numBegoman, f32 radius, f32 velH, f32 velV,
+                                    const TVec3f* pVec) {
+    TVec3f vec2;
+    TVec3f vec1;
+    if (pVec == nullptr) {
+        MR::calcFrontVec(&vec1, pActor);
+        MR::calcSideVec(&vec2, pActor);
+    } else {
+        vec1.set(*pVec);
+        PSVECCrossProduct(pActor->getGravity(), &vec1, &vec2);
+        PSVECCrossProduct(&vec2, pActor->getGravity(), &vec1);
+    }
+
+    f32 angle = 0.0f;
+
+    for (int i = 0; i < numBegoman; i++) {
+        if (!MR::isDead(pBegomanArray[i])) {
+            continue;
+        }
+
+        TVec3f directionFromLauncher(vec2);
+        directionFromLauncher.scale(MR::cos(angle));
+
+        directionFromLauncher += (vec1 * MR::sin(angle));
+
+        TVec3f& rPosition = pBegomanArray[i]->mPosition;
+        rPosition.set(*pActor->getPosition() + directionFromLauncher * radius);
+        TVec3f& rVelocity = pBegomanArray[i]->mVelocity;
+        rVelocity.set(directionFromLauncher * velH - *pActor->getGravity() * velV);
+        pBegomanArray[i]->mFaceVec.set(directionFromLauncher);
+
+        angle += TWO_PI / (numBegoman);
+    }
+}
+#pragma pop
+
+void BegomanBase::launchBegoman(LiveActor* pActor, BegomanBase** pBegomanArray, s32 numBegoman, f32 radius, f32 velH, f32 velV, const TVec3f* pVec) {
+    launchBegomanCore(pActor, pBegomanArray, numBegoman, radius, velH, velV, pVec);
+
+    for (int i = 0; i < numBegoman; i++) {
+        pBegomanArray[i]->appear();
+        pBegomanArray[i]->setNerveLaunch();
+    }
+}
+
+void BegomanBase::launchBegomanBabyFromGuarder(LiveActor* pActor, BegomanBaby** pBabyArray, s32 numBegoman, f32 radius, f32 velH, f32 velV,
+                                               const TVec3f* pVec) {
+    launchBegomanCore(pActor, (BegomanBase**)pBabyArray, numBegoman, radius, velH, velV, pVec);
+
+    for (int i = 0; i < numBegoman; i++) {
+        pBabyArray[i]->appearFromGuarder();
+    }
+}
+
+void BegomanBase::launchBegomanBabyLauncher(LiveActor* pActor, BegomanBaby** pBabyArray, s32 numBegoman, f32 radius, f32 velH, f32 velV,
+                                            const TVec3f* pVec) {
+    launchBegomanCore(pActor, (BegomanBase**)pBabyArray, numBegoman, radius, velH, velV, pVec);
+
+    for (int i = 0; i < numBegoman; i++) {
+        pBabyArray[i]->appearFromLaunch(pActor->mPosition, -pActor->mGravity);
+    }
+}
+
+void BegomanBase::setNerveLaunch() {
+}
+
+void BegomanBase::updateRotateY(f32 target, f32 tolerance) {
+    f32 difference = target - mRotation.y;
+    if (0.0f < difference) {
+        mRotation.y = MR::min(tolerance + mRotation.y, target);
+    } else {
+        mRotation.y = MR::max(mRotation.y - tolerance, target);
+    }
+}
+
+void BegomanBase::updateTargetVec() {
+    mTargetVec.set(*MR::getPlayerCenterPos());
+    mTargetVec.sub(mPosition);
+    MR::turnDirectionToGround(this, &mTargetVec);
+}
+
+bool BegomanBase::reboundPlaneWithEffect(const TVec3f& rVec, f32 f1, f32 f2, const char* pEffectName) {
+    bool reflected = MR::calcReflectionVector(&mVelocity, rVec, f1, f2);
+
+    if (pEffectName != nullptr && reflected) {
+        TVec3f bodySensorPos(getSensor("body")->mPosition);
+
+        bodySensorPos.sub(rVec * getSensor("body")->mRadius);
+        MR::emitEffectHit(this, bodySensorPos, pEffectName);
+    }
+
+    return reflected;
+}
+
+void BegomanBase::reboundWallAndGround(TVec3f* pOut, bool emitEffect) {
+    if (MR::isOnGround(this)) {
+        TVec3f groundNormal(*MR::getGroundNormal(this));
+
+        if (emitEffect) {
+            MR::calcReflectionVector(&mVelocity, groundNormal, 0.0f, 0.0f);
+            MR::emitEffect(this, "OnGroundSpark");
+        } else {
+            MR::calcReflectionVector(&mVelocity, groundNormal, 0.5f, 100.0);
+            MR::deleteEffect(this, "OnGroundSpark");
+        }
+    } else {
+        MR::deleteEffect(this, "OnGroundSpark");
+    }
+
+    if (MR::isBindedWallOfMap(this)) {
+        TVec3f wallNormal(*MR::getWallNormal(this));
+        bool reboundWall = reboundPlaneWithEffect(wallNormal, 0.0f, 0.0f, "Spark");
+        mVelocity.add(wallNormal * ::hReboundWallAddVel);
+
+        if (reboundWall) {
+            MR::startLevelSound(this, "SE_EM_LV_BEGOMAN_COLLI_WALL");
+        }
+
+        if (pOut != nullptr) {
+            if (!MR::isNearZero(mVelocity)) {
+                pOut->set(mVelocity);
+                MR::normalize(pOut);
+            }
+        }
+    }
+}
+
+bool BegomanBase::isFallNextMove(f32 f1, f32 f2) {
+    if (MR::isNearZero(MR::getVelocityHorizon(this))) {
+        f32 scaledBinderRadius = MR::getBinderRadius(this);
+        scaledBinderRadius = scaledBinderRadius * mScale.y * 2.0f;
+
+        return MR::isFallNextMove(mPosition, mFaceVec, mGravity, f1, scaledBinderRadius, f2, nullptr);
+    } else {
+        f32 scaledBinderRadius = MR::getBinderRadius(this);
+        scaledBinderRadius = scaledBinderRadius * mScale.y * 2.0f;
+
+        return MR::isFallNextMove(this, f1, scaledBinderRadius, f2, nullptr);
+    }
+}
+
+f32 BegomanBase::getRailPushVelHBoss() const {
+    return ::hRailPushHBoss;
+}
+
+f32 BegomanBase::getRailPushJumpBoss() const {
+    return ::hRailPushJumpBoss;
+}
+
+void BegomanBase::calcDirectionAwayFromRail(TVec3f* pOut, const TVec3f& rVec1, const TVec3f& rVec2) {
+    TVec3f vec1(rVec2);
+
+    if (MR::isNearZero(vec1)) {
+        vec1.set(-mFaceVec);
+    } else {
+        MR::rotateVecDegree(&vec1, mGravity, 90.0f);
+    }
+
+    TVec3f vec2(rVec1);
+    vec2.sub(getSensor("body")->mPosition);
+
+    if (0.0f < vec2.dot(vec1)) {
+        vec1 = -vec1;
+    }
+
+    MR::vecKillElement(vec1, mGravity, &vec1);
+    MR::normalizeOrZero(&vec1);
+    pOut->set(vec1);
+}
+
+void BegomanBase::addVelocityOnPushedFromElectricRail(const TVec3f& rVec1, const TVec3f& rVec2) {
+    TVec3f directionAwayFromRail;
+    calcDirectionAwayFromRail(&directionAwayFromRail, rVec1, rVec2);
+
+    directionAwayFromRail.setLength(::hRailPushH);
+    MR::addVelocityLimit(this, directionAwayFromRail);
+    MR::addVelocityLimit(this, mGravity * -::hRailPushJump);
+}
+
+bool BegomanBase::checkTouchElectricRail(bool notCheckPush) {
+    TVec3f vec1;
+    TVec3f vec2;
+    bool ret = false;
+
+    if (!notCheckPush) {
+        if (ElectricRailFunction::isTouchRail(getSensor("pushed_rail"), &vec1, &vec2)) {
+            pushedFromElectricRail(getSensor("pushed_rail"), vec1, vec2, 0.5f, 0.5f, true);
+            TVec3f sideVec;
+            MR::calcSideVec(&sideVec, this);
+
+            if (mInvertSideVec) {
+                sideVec.scale(-1.0f);
+            }
+
+            if (0.0f < sideVec.dot(vec1 - mPosition)) {
+                mInvertSideVec = !mInvertSideVec;
+            }
+        }
+    }
+
+    if (ElectricRailFunction::isTouchRail(getSensor("body"), &vec1, &vec2)) {
+        ret = onTouchElectric(vec1, vec2);
+    }
+
+    if (mIsTouchElectricRail) {
+        mIsTouchElectricRail = false;
+        mElectricCounter++;
+    } else {
+        mElectricCounter = 0;
+    }
+
+    return ret;
+}
+
+bool BegomanBase::onTouchElectric(const TVec3f& rVec1, const TVec3f& rVec2) {
+    mIsTouchElectricRail = true;
+
+    if (mElectricCounter > ::hElectricTouchTime) {
+        MR::emitEffectHit(this, rVec1, "FailureHit");
+        addVelocityOnPushedFromElectricRail(rVec1, rVec2);
+
+        mElectricCounter = 0;
+        return true;
+    } else {
+        pushedFromElectricRail(getSensor("body"), rVec1, rVec2, 8.0f, 8.0f, true);
+        return false;
+    }
+}
+
+void BegomanBase::pushedFromElectricRail(HitSensor* pSensor, const TVec3f& rVec1, const TVec3f& rVec2, f32 f1, f32 f2, bool limit) {
+    TVec3f directionAwayFromRail;
+    calcDirectionAwayFromRail(&directionAwayFromRail, rVec1, rVec2);
+
+    TVec3f vec(pSensor->mPosition);
+
+    vec.sub(rVec1);
+    MR::vecKillElement(vec, mGravity, &vec);
+    vec.setLength(f2);
+
+    if (limit) {
+        MR::addVelocityLimit(this, directionAwayFromRail * f1);
+        MR::addVelocityLimit(this, vec);
+    } else {
+        MR::addVelocity(this, directionAwayFromRail * f1);
+        MR::addVelocity(this, vec);
+    }
+}
+
+void BegomanBase::preventSwingby(f32 f1) {
+    if (!MR::isOnGround(this)) {
+        f32 mag = (mGravity - _A8).length();
+        mag *= 0.5f;
+        dampingVerticalAndParallelVelocity(f1, mag);
+    }
+}
+
+void BegomanBase::preventSlopeBlow(f32 f1) {
+    if (MR::isOnGround(this)) {
+        TVec3f gravityMinusNormal(mGravity);
+        gravityMinusNormal.sub(-*MR::getGroundNormal(this));
+
+        f32 mag = gravityMinusNormal.length();
+        mag *= 0.5f;
+        dampingVerticalAndParallelVelocity(f1, mag);
+    }
+}
+
+void BegomanBase::dampingVerticalAndParallelVelocity(f32 f1, f32 f2) {
+    TVec3f* velocityPointer = &mVelocity;
+    TVec3f* gravityPointer = &mGravity;
+    // no reason to set these, as the values are overwritten anyway
+    TVec3f verticalVelocity(*velocityPointer);
+    TVec3f parallelVelocity(*velocityPointer);
+
+    verticalVelocity.scale(gravityPointer->dot(*velocityPointer), *gravityPointer);
+    MR::vecKillElement(*velocityPointer, *gravityPointer, &parallelVelocity);
+
+    if (verticalVelocity.dot(*gravityPointer) < 0.0f) {
+        verticalVelocity.scale(f2 * f1 + (1 - f2));
+    }
+
+    parallelVelocity.scale(f2 * f1 + (1 - f2));
+    mVelocity.set(verticalVelocity + parallelVelocity);
+}
+
+bool BegomanBase::isInWaterAndSetWaterNerve(const Nerve* pWaterNerve, TPos3f* pPos) {
+    WaterInfo info;
+    if (MR::getWaterAreaObj(&info, mPosition) != nullptr) {
+        MR::getWaterAreaInfo(&info, mPosition, mGravity, false);
+        setNerve(pWaterNerve);
+        MR::makeMtxUpNoSupportPos(pPos, info.mSurfaceNormal, info.mSurfacePos);
+        MR::emitEffect(this, "WaterColumn");
+        return true;
+    } else {
+        return false;
+    }
+}
+
+void BegomanBase::calcBlowReaction(const TVec3f& rVec1, const TVec3f& rVec2, f32 blowStrengthParallel, f32 blowStrengthVertical) {
+    TVec3f blowDirection(rVec2 - rVec1);
+    TVec3f effectVec(-blowDirection);
+    f32 sensorRadius = getSensor("body")->mRadius;
+
+    effectVec.setLength(sensorRadius);
+    effectVec.add(getSensor("body")->mPosition);
+
+    MR::emitEffectHit(this, effectVec, "Hit");
+    MR::startSound(this, "SE_EM_BEGOMAN_KNOCK_SUCCESS");
+    MR::vecKillElement(blowDirection, mGravity, &blowDirection);
+    MR::normalizeOrZero(&blowDirection);
+
+    if (MR::isNearZero(blowDirection)) {
+        MR::calcFrontVec(&mFaceVec, this);
+    } else {
+        mFaceVec.set(blowDirection);
+    }
+
+    blowDirection.scale(blowStrengthParallel);
+    blowDirection.sub(mGravity * blowStrengthVertical);
+    mVelocity.set(blowDirection);
+}
+
+void BegomanBase::calcAnimCore(TPos3f* pPos) {
+    LiveActor::calcAnim();
+    pPos->setInline(MR::getJointMtx(this, "Center"));
+
+    TVec3f yDir;
+    pPos->getYDir(yDir);
+
+    if (!MR::isSameDirection(yDir, mTargetVec)) {
+        MR::makeMtxUpFront(pPos, yDir, mTargetVec);
+    }
+}
+
+bool BegomanBase::calcJointLocator1(TPos3f* pPos, const JointControllerInfo& rJointInfo) {
+    TPos3f v9;
+    TQuat4f rotation(_D0);
+    v9.makeQuat(rotation);
+    pPos->concat(*pPos, v9);
+    return true;
+}
+
+void BegomanBase::calcAndSetBaseMtx() {
+    MR::setBaseTRMtx(this, _C0);
+
+    if (mScaleControler != nullptr) {
+        TVec3f scale;
+
+        scale.set(mScaleControler->_C);
+        _B4.set(scale);
+        scale *= mScale;
+        MR::setBaseScale(this, scale);
+    }
+
+    mBaseDelegator->registerCallBack();
+}
+
+bool BegomanBase::requestAttack() {
+    return MR::getSceneObj< BegomanAttackPermitter >(SceneObj_BegomanAttackPermitter)->requestAttack(this);
+}
+
+BegomanAttackPermitter::BegomanAttackPermitter(const char* pName) : LiveActor(pName), _8C(), mBegoman(), mDistToPlayer(99999.0f), _98() {
+}
+
+void BegomanAttackPermitter::init(const JMapInfoIter& rIter) {
+    MR::connectToSceneEnemyDecorationMovement(this);
+    MR::invalidateClipping(this);
+    makeActorAppeared();
+    initNerve(GET_NERVE(BegomanAttackPermitter, HostTypeNrvWait));
+}
+
+void BegomanAttackPermitter::control() {
+    _98 = false;
+}
+
+bool BegomanAttackPermitter::requestAttack(BegomanBase* pBegoman) {
+    if (MR::isValidSwitchA(pBegoman) && !MR::isOnSwitchA(pBegoman)) {
+        return false;
+    }
+
+    if (pBegoman->getKind() == 0) {
+        return !isNerve(GET_NERVE(BegomanAttackPermitter, HostTypeNrvPermit));
+    }
+
+    _98 = true;
+
+    if (isNerve(GET_NERVE(BegomanAttackPermitter, HostTypeNrvReceive)) || isNerve(GET_NERVE(BegomanAttackPermitter, HostTypeNrvWait))) {
+        if (mBegoman == nullptr) {
+            mBegoman = pBegoman;
+            mDistToPlayer = MR::calcDistanceToPlayer(pBegoman->mPosition);
+
+            if (isNerve(GET_NERVE(BegomanAttackPermitter, HostTypeNrvWait))) {
+                setNerve(GET_NERVE(BegomanAttackPermitter, HostTypeNrvReceive));
+            }
+        } else {
+            f32 distToPlayerPBegoman = MR::calcDistanceToPlayer(pBegoman->mPosition);
+            if (distToPlayerPBegoman < mDistToPlayer) {
+                mDistToPlayer = distToPlayerPBegoman;
+                mBegoman = pBegoman;
+            }
+        }
+    }
+
+    if (isNerve(GET_NERVE(BegomanAttackPermitter, HostTypeNrvPermit))) {
+        _8C = mBegoman;
+        if (mBegoman == pBegoman) {
+            // nerve is already HostTypeNrvPermit if code gets here??
+            setNerve(GET_NERVE(BegomanAttackPermitter, HostTypeNrvPermit));
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void BegomanAttackPermitter::exeWait() {
+    if (MR::isFirstStep(this)) {
+        _8C = nullptr;
+        mBegoman = nullptr;
+        mDistToPlayer = 99999.0f;
+    }
+}
+
+void BegomanAttackPermitter::exeReceive() {
+    if (!_98) {
+        setNerve(GET_NERVE(BegomanAttackPermitter, HostTypeNrvWait));
+    } else if (MR::isGreaterStep(this, ::hReceiveLimitTime)) {
+        setNerve(GET_NERVE(BegomanAttackPermitter, HostTypeNrvPermit));
+    }
+}
+
+void BegomanAttackPermitter::exePermit() {
+    if (MR::isFirstStep(this)) {
+    }
+
+    if (MR::isGreaterStep(this, ::hPermitLimitTime)) {
+        setNerve(GET_NERVE(BegomanAttackPermitter, HostTypeNrvWait));
+    }
+}

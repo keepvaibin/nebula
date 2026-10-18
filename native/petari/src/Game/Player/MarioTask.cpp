@@ -1,0 +1,380 @@
+#include "Game/LiveActor/HitSensor.hpp"
+#include "Game/Player/Mario.hpp"
+#include "Game/Player/MarioActor.hpp"
+#include "Game/Player/MarioState.hpp"
+#include "Game/Util/MathUtil.hpp"
+#include <revolution/mtx.h>
+#include <revolution/types.h>
+
+static const f32 sOne = 1.0f;
+static const f32 sZero = 0.0f;
+static const f32 sSameDirEpsilon = 0.01f;
+static const f32 sNearZeroEpsilon = 0.001f;
+static const f32 sHipDropSlideAngle = 0.7853982f;
+static const f32 sHipDropSlideRot = 0.10471976f;
+static const f32 sHipDropSlideLen = 10.0f;
+static const f32 sJumpDropSlideDotMin = 0.1f;
+static const f32 sHopperJumpSlideDotMin = 0.707f;
+
+void Mario::delTask(MarioModuleTask* pTask) {
+    MarioModuleTask* next = pTask->mNext;
+    if (next == nullptr) {
+        return;
+    }
+
+    MarioModuleTask* head = _974;
+    if (head == pTask) {
+        if (next == pTask) {
+            _974 = nullptr;
+        } else {
+            _974 = next;
+        }
+
+        pTask->mNext = nullptr;
+        pTask->end();
+        return;
+    }
+
+    while (true) {
+        if (head == nullptr) {
+            return;
+        }
+
+        MarioModuleTask* headNext = head->mNext;
+        if (headNext == pTask) {
+            if (next == pTask) {
+                head->mNext = head;
+            } else {
+                head->mNext = next;
+            }
+
+            pTask->mNext = nullptr;
+            pTask->end();
+            return;
+        }
+
+        if (headNext == head) {
+            return;
+        }
+    }
+}
+
+void Mario::execTask() {
+    MarioModuleTask* task = _974;
+
+    while (true) {
+        if (task == nullptr) {
+            return;
+        }
+
+        MarioModuleTask* next = task->mNext;
+        if (!task->exec()) {
+            delTask(task);
+        }
+
+        if (next == task) {
+            return;
+        }
+
+        task = next;
+    }
+}
+
+void Mario::drawTask() const {
+    MarioModuleTask* task = _974;
+
+    while (true) {
+        if (task == nullptr) {
+            return;
+        }
+
+        MarioModuleTask* next = task->mNext;
+        task->draw();
+        if (next == task) {
+            return;
+        }
+
+        task = next;
+    }
+}
+
+void Mario::initTask() {
+    for (u32 i = 0; i < ARRAY_SIZE(_984); i++) {
+        _984[i] = nullptr;
+    }
+
+    _974 = nullptr;
+}
+
+bool Mario::isActiveTask(Task task) {
+    for (u32 i = 0; i < ARRAY_SIZE(_984); i++) {
+        if (_984[i] == task) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool Mario::isActiveTaskID(u32 id) {
+    for (u32 i = 0; i < ARRAY_SIZE(_984); i++) {
+        if (_984[i] != nullptr) {
+            if (_A08[i] & id) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+bool Mario::pushTask(Task task, u32 flags) {
+    if (isActiveTask(task)) {
+        return false;
+    }
+
+    u32 index = 0;
+    for (; index < ARRAY_SIZE(_984); index++) {
+        if (_984[index] == nullptr) {
+            break;
+        }
+    }
+
+    _984[index] = task;
+    _A08[index] = flags;
+    return true;
+}
+
+void Mario::popTask(Task task) {
+    for (u32 i = 0; i < ARRAY_SIZE(_984); i++) {
+        if (_984[i] == task) {
+            _984[i] = nullptr;
+            return;
+        }
+    }
+}
+
+void Mario::callExtraTasks(u32 flags) {
+    execTask();
+
+    for (u32 i = 0; i < ARRAY_SIZE(_984); i++) {
+        if (_984[i] == nullptr) {
+            continue;
+        }
+
+        if (flags != 0 && !(flags & _A08[i])) {
+            continue;
+        }
+
+        if (!(this->*_984[i])(_A08[i])) {
+            Task task = _984[i];
+            popTask(task);
+        }
+    }
+}
+
+void Mario::startHandy() {
+    pushTask(&Mario::taskOnHandy, 0x40);
+}
+
+bool Mario::taskOnHandy(u32) {
+    if (!mActor->_468) {
+        stopEffect("\202\242\202\242\212\276" /* いい汗 */);
+        return false;
+    }
+
+    if (mTargetWalkSpeedIndex > 2) {
+        playEffect("\202\242\202\242\212\276" /* いい汗 */);
+    } else {
+        stopEffect("\202\242\202\242\212\276" /* いい汗 */);
+    }
+
+    return true;
+}
+
+void Mario::startHipDropBlur() {
+    if (isPlayerModeHopper()) {
+        if (gIsLuigi) {
+            playEffect("\203\172\203\142\203\160\201\133\220\113\227\216\203\213\203\103\201\133\203\127" /* ホッパー尻落ルイージ */);
+        } else {
+            playEffect("\203\172\203\142\203\160\201\133\220\113\227\216" /* ホッパー尻落 */);
+        }
+
+        pushTask(&Mario::taskOnHipDropBlurHopper, 0x80);
+        return;
+    }
+
+    if (gIsLuigi) {
+        playEffect("\220\113\227\216\203\213\203\103\201\133\203\127" /* 尻落ルイージ */);
+    } else {
+        playEffect("\220\113\227\216" /* 尻落 */);
+    }
+
+    pushTask(&Mario::taskOnHipDropBlur, 0x80);
+}
+
+bool Mario::taskOnHipDropBlurHopper(u32) {
+    if (!getPlayer()->mMovementStates._B || mMovementStates._1 || isStatusActive(MarioStatus_Swim)) {
+        if (gIsLuigi) {
+            stopEffect("\203\172\203\142\203\160\201\133\220\113\227\216\203\213\203\103\201\133\203\127" /* ホッパー尻落ルイージ */);
+        } else {
+            stopEffect("\203\172\203\142\203\160\201\133\220\113\227\216" /* ホッパー尻落 */);
+        }
+
+        return false;
+    }
+
+    return true;
+}
+
+bool Mario::taskOnHipDropBlur(u32) {
+    if (!getPlayer()->mMovementStates._B || mMovementStates._1 || isStatusActive(MarioStatus_Swim)) {
+        if (gIsLuigi) {
+            stopEffect("\220\113\227\216\203\213\203\103\201\133\203\127" /* 尻落ルイージ */);
+        } else {
+            stopEffect("\220\113\227\216" /* 尻落 */);
+        }
+
+        return false;
+    }
+
+    return true;
+}
+
+bool Mario::taskOnHipDropSlide(u32 flags) {
+    if (flags == 0x100) {
+        if (!getPlayer()->mMovementStates._B) {
+            return false;
+        }
+    }
+
+    if (MR::diffAngleAbs(_70C, getAirGravityVec()) > sHipDropSlideAngle) {
+        return false;
+    }
+
+    if (getPlayer()->mMovementStates._1 || !getPlayer()->mMovementStates.jumping || isStatusActive(MarioStatus_Swim)) {
+        return false;
+    }
+
+    HitSensor* sensor = _A68;
+    bool enabled = sensor->mValidByHost != 0 && sensor->mValidBySystem != 0;
+
+    if (!enabled) {
+        return false;
+    }
+
+    TVec3f dir(mPosition);
+    dir -= _A4C;
+    dir.setLength(_A64);
+
+    TVec3f dirCopy(dir);
+    MR::normalizeOrZero(&dir);
+
+    TVec3f reverseGravity = -_70C;
+    if (dir.dot(reverseGravity) <= sZero) {
+        return false;
+    }
+
+    Mtx rot;
+    PSMTXRotAxisRad(rot, &_A58, sHipDropSlideRot);
+    PSMTXMultVecSR(rot, &dir, &dir);
+    dir.setLength(_A64);
+    dir -= dirCopy;
+    dir.setLength(sHipDropSlideLen);
+
+    cutGravityElementFromJumpVec(true);
+    cutVecElementFromJumpVec(_70C);
+    addVelocity(dir);
+
+    dirCopy.setLength(sOne);
+    addVelocity(dirCopy);
+    return true;
+}
+
+bool Mario::taskOnFreezeEnd(u32) {
+    return mActor->finalizeFreezeModel();
+}
+
+void Mario::startHipDropSlide(const HitSensor* pSensor) {
+    if (isActiveTaskID(0x100)) {
+        return;
+    }
+
+    if (isActiveTaskID(0x200)) {
+        return;
+    }
+
+    pushTask(&Mario::taskOnHipDropSlide, 0x100);
+
+    TVec3f dir(mPosition - pSensor->mPosition);
+
+    if (MR::isSameDirection(dir, getAirGravityVec(), sSameDirEpsilon) || MR::isNearZero(dir, sNearZeroEpsilon)) {
+        dir = -mFrontVec;
+    }
+
+    MR::normalizeOrZero(&dir);
+
+    _A58.cross(-getAirGravityVec(), dir);
+    MR::normalizeOrZero(&_A58);
+
+    _A68 = const_cast< HitSensor* >(pSensor);
+    _A4C = pSensor->mPosition;
+    _A64 = pSensor->mRadius;
+    _70C = getAirGravityVec();
+
+    changeAnimation("\203\161\203\142\203\166\203\150\203\215\203\142\203\166\212\212\202\350" /* ヒップドロップ滑り */);
+}
+
+void Mario::startJumpDropSlide(const HitSensor* pSensor) {
+    if (isActiveTaskID(0x100)) {
+        return;
+    }
+
+    if (isActiveTaskID(0x200)) {
+        return;
+    }
+
+    TVec3f dir(mPosition - pSensor->mPosition);
+    MR::normalizeOrZero(&dir);
+
+    f32 dot = dir.dot(-getAirGravityVec());
+    if (dot <= sJumpDropSlideDotMin) {
+        return;
+    }
+
+    pushTask(&Mario::taskOnHipDropSlide, 0x200);
+
+    TVec3f slideDir(mPosition - pSensor->mPosition);
+
+    if (MR::isSameDirection(slideDir, getAirGravityVec(), sSameDirEpsilon) || MR::isNearZero(slideDir, sNearZeroEpsilon)) {
+        slideDir = -mFrontVec;
+    }
+
+    MR::normalizeOrZero(&slideDir);
+
+    _A58.cross(-getAirGravityVec(), slideDir);
+    MR::normalizeOrZero(&_A58);
+
+    _A68 = const_cast< HitSensor* >(pSensor);
+    _A4C = pSensor->mPosition;
+    _A64 = pSensor->mRadius;
+    _70C = getAirGravityVec();
+
+    bool changeSlideAnimation = !isPlayerModeHopper();
+    if (changeSlideAnimation) {
+        if (dot > sHopperJumpSlideDotMin) {
+            f32 frontDot = mFrontVec.dot(slideDir);
+            if (frontDot > sZero) {
+                changeAnimation("\203\127\203\203\203\223\203\166\217\207\212\212\202\350" /* ジャンプ順滑り */);
+            } else {
+                changeAnimation("\203\127\203\203\203\223\203\166\213\164\212\212\202\350" /* ジャンプ逆滑り */);
+            }
+        }
+    }
+
+    mJumpVec.zero();
+}
+
+void Mario::startFreezeEnd() {
+    pushTask(&Mario::taskOnFreezeEnd, 0x800);
+}

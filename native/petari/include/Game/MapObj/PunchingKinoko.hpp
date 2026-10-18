@@ -1,0 +1,66 @@
+#pragma once
+
+#include "Game/Enemy/AnimScaleController.hpp"
+#include "Game/LiveActor/LiveActor.hpp"
+#include "Game/Map/GroundChecker.hpp"
+#include "Game/Util/JointController.hpp"
+
+class PunchingKinoko : public LiveActor {
+public:
+    PunchingKinoko(const char*);
+
+    virtual ~PunchingKinoko();
+    virtual void init(const JMapInfoIter&);
+    virtual void makeActorAppeared();
+    virtual void kill();
+    virtual void makeActorDead();
+    virtual void control();
+    virtual void calcAndSetBaseMtx();
+    virtual void attackSensor(HitSensor*, HitSensor*);
+    virtual bool receiveMsgPush(HitSensor*, HitSensor*);
+    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
+    virtual bool receiveMsgEnemyAttack(u32, HitSensor*, HitSensor*);
+
+    void initShadow();
+    void initSensor();
+    void initCamera(const JMapInfoIter&);
+    void initJointControl();
+
+    bool requestPunch(HitSensor*, HitSensor*);
+    bool requestEnemyBlow(HitSensor*, HitSensor*);
+    bool requestTrample(HitSensor*, HitSensor*);
+    bool requestCrush();
+
+    void exeWait();
+    void exeSwing();
+    void exePointSnaped();
+    void exePunched();
+    void exePunchedBrake();
+    void exeHitted();
+    void exeCrushed();
+    void exeCrushedEnd();
+
+    bool ballMtxCallBack(TPos3f*, const JointControllerInfo&);
+
+    // some callers will only match if these are marked NO_INLINE, even though they aren't being inlined (???)
+    bool isEnablePunched() const;
+    bool isEnableHitPlayer() const NO_INLINE;
+    bool isEnableEnemyAttack() const;
+    bool isEnableCrushed() const;
+    bool isEnableTrample() const;
+    bool isEnableBlowed() const NO_INLINE;
+    bool isCrushed() const NO_INLINE;
+
+    void addVelocityKeepHeight();
+
+private:
+    /* 0x8C */ GroundChecker* mGroundChecker;
+    /* 0x90 */ AnimScaleController* mScaleController;
+    /* 0x94 */ JointControlDelegator< PunchingKinoko >* mDelegator;
+    /* 0x98 */ s32 _98;
+    /* 0x9C */ TVec3f _9C;
+    /* 0xA8 */ TVec3f _A8;
+    /* 0xB4 */ s32 mStarPointerHitCoolDown;
+    /* 0xB8 */ bool _B8;
+    /* 0xBC */ s32 mInvincibleHitCoolDown;
+};

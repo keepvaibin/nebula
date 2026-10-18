@@ -18,6 +18,10 @@ be redistributed. The author is the GitHub user `keepvaibin`.
 | SMAA | MIT | Anti-aliasing shaders and lookup textures |
 | AMD FidelityFX FSR 1 | MIT | Upscaling and sharpening shaders |
 
+The game core is vendored too: [Petari](https://github.com/SMGCommunity/Petari) (CC0 1.0),
+SMGCommunity's decompilation of Super Mario Galaxy, in `native/petari` with Nebula's native
+changes (its README has the base revision).
+
 The optional FSR 3 path builds against the AMD FidelityFX SDK (MIT), which is not stored in this
 repository. Rust dependencies are fetched by Cargo; their licenses are collected in
 [docs/licenses/rust-dependencies.txt](licenses/rust-dependencies.txt).

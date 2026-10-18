@@ -1,0 +1,558 @@
+#include "Game/MapObj/PunchingKinoko.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/Util.hpp"
+#include "JSystem/JGeometry/TVec.hpp"
+#include <revolution.h>
+
+void PunchingKinoko_FORCE_EMIT_SCALE() {
+    TVec3f vec;
+    vec.scale(0.0f);
+}
+
+namespace NrvPunchingKinoko {
+    NEW_NERVE(PunchingKinokoNrvWait, PunchingKinoko, Wait);
+    NEW_NERVE(PunchingKinokoNrvSwing, PunchingKinoko, Swing);
+    NEW_NERVE(PunchingKinokoNrvPunched, PunchingKinoko, Punched);
+    NEW_NERVE(PunchingKinokoNrvPunchedBrake, PunchingKinoko, PunchedBrake);
+    NEW_NERVE(PunchingKinokoNrvHitted, PunchingKinoko, Hitted);
+    NEW_NERVE(PunchingKinokoNrvPointSnaped, PunchingKinoko, PointSnaped);
+    NEW_NERVE(PunchingKinokoNrvCrushed, PunchingKinoko, Crushed);
+    NEW_NERVE(PunchingKinokoNrvCrushedEnd, PunchingKinoko, CrushedEnd);
+};  // namespace NrvPunchingKinoko
+
+PunchingKinoko::PunchingKinoko(const char* pName)
+    : LiveActor(pName), mGroundChecker(nullptr), mScaleController(nullptr), mDelegator(nullptr), _98(-1), _9C(0, 0, 0), _A8(0, 1, 0) {
+    mStarPointerHitCoolDown = 0;
+    _B8 = true;
+    mInvincibleHitCoolDown = -1;
+}
+
+void PunchingKinoko::init(const JMapInfoIter& rIter) {
+    MR::initDefaultPos(this, rIter);
+    initModelManagerWithAnm("PunchingKinoko", nullptr, false);
+    MR::connectToSceneNoSilhouettedMapObj(this);
+    MR::calcGravity(this);
+    _9C.set(mPosition);
+
+    mGroundChecker = new GroundChecker("\223\252\203\122\203\212\203\127\203\207\203\223" /* 頭コリジョン */, 70.0f, 0.0f);
+    MR::calcPositionUpOffset(&mGroundChecker->mPosition, this, 130.0f);
+    MR::resetPosition(mGroundChecker);
+    MR::onCalcGravity(mGroundChecker);
+
+    mScaleController = new AnimScaleController(nullptr);
+
+    TVec3f* groundCheckerPos = &mGroundChecker->mPosition;
+    MR::initStarPointerTargetAtPos(this, 70.0f, groundCheckerPos, TVec3f(0, 0, 0));
+
+    initShadow();
+    initSensor();
+    initEffectKeeper(0, nullptr, false);
+    initSound(4, false);
+    initCamera(rIter);
+    initJointControl();
+    initNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvWait));
+
+    makeActorAppeared();
+
+    if (MR::useStageSwitchReadB(this, rIter) != 0) {
+        MR::listenStageSwitchOnB(this, MR::Functor(this, &PunchingKinoko::kill));
+    }
+    MR::useStageSwitchSleep(this, rIter);
+}
+
+void PunchingKinoko::initSensor() {
+    initHitSensor(2);
+    MR::addHitSensorAtJointEnemy(this, "Head", "Ball", 16, 70.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensorEnemy(this, "Body", 16, 30.0f, TVec3f(0.0f, 30.0f, 0.0f));
+}
+
+void PunchingKinoko::initShadow() {
+    MR::initShadowController(this, 3);
+    MR::addShadowVolumeSphere(this, "\221\314" /* 体 */, 10.0f);
+    MR::onCalcShadowOneTime(this, "\221\314" /* 体 */);
+    MR::addShadowVolumeSphere(this, "\223\252" /* 頭 */, 70.0f);
+    MR::setShadowDropPositionPtr(this, "\223\252" /* 頭 */, &mGroundChecker->mPosition);
+    MR::setShadowDropDirectionPtr(this, "\223\252" /* 頭 */, &mGroundChecker->mGravity);
+    MR::addShadowVolumeLine(this, "\202\302\202\275" /* つた */, this, "\221\314" /* 体 */, 10.0f, this, "\223\252" /* 頭 */, 10.0f);
+}
+
+void PunchingKinoko::initCamera(const JMapInfoIter& rIter) {
+    MR::getJMapInfoArg7WithInit(rIter, &_98);
+    if (_98 != -1) {
+        MR::declareCameraRegisterVec(this, _98, &_9C);
+    }
+}
+
+void PunchingKinoko::initJointControl() {
+    mDelegator = MR::createJointDelegatorWithNullChildFunc(this, &PunchingKinoko::ballMtxCallBack, "Ball");
+}
+
+bool PunchingKinoko::ballMtxCallBack(TPos3f* pMtx, const JointControllerInfo& joint) {
+    TVec3f stack_8;
+    stack_8.sub(mGroundChecker->mPosition, mPosition);
+    MR::orthogonalize(pMtx);
+    if (!MR::normalizeOrZero(&stack_8)) {
+        MR::turnMtxToYDirRate(pMtx, stack_8, 1.0f);
+    }
+
+    TPos3f stack_14;
+    stack_14.identity();
+
+    MR::scaleMtxToDir(&stack_14, _A8, mScaleController->_C);
+    pMtx->concat(stack_14, *pMtx);
+    pMtx->setTrans(mGroundChecker->mPosition);
+
+    return true;
+}
+
+void PunchingKinoko::makeActorAppeared() {
+    LiveActor::makeActorAppeared();
+    mGroundChecker->makeActorAppeared();
+}
+
+void PunchingKinoko::kill() {
+    LiveActor::kill();
+}
+
+void PunchingKinoko::makeActorDead() {
+    LiveActor::makeActorDead();
+    mGroundChecker->makeActorDead();
+}
+
+void PunchingKinoko::control() {
+    if (mStarPointerHitCoolDown > 0) {
+        mStarPointerHitCoolDown -= 1;
+    }
+    mScaleController->update();
+    mGroundChecker->movement();
+    MR::reboundVelocityFromCollision(mGroundChecker, 0.0f, 0.0f, 1.0f);
+    if (mInvincibleHitCoolDown >= 0) {
+        mInvincibleHitCoolDown -= 1;
+    }
+}
+
+void PunchingKinoko::calcAndSetBaseMtx() {
+    TPos3f stack_14;
+    TVec3f stack_8;
+    stack_8.negate(mGravity);
+    MR::makeMtxUpNoSupportPos(&stack_14, stack_8, mPosition);
+    MR::setBaseTRMtx(this, stack_14);
+    mDelegator->registerCallBack();
+}
+
+void PunchingKinoko::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
+    if (!isCrushed()) {
+        if (pSender == getSensor("Body")) {
+            if (isNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvWait))) {
+                MR::sendMsgPush(pReceiver, pSender);
+            }
+        } else if (!isNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvCrushedEnd)) || !MR::isSensorPlayer(pReceiver) ||
+                   !MR::sendMsgEnemyAttackFlipWeakJump(pReceiver, pSender)) {
+            TVec3f stack_3C;
+            TVec3f stack_30;
+            f32 stack_8;
+            MR::separateScalarAndDirection(&stack_8, &stack_3C, mGroundChecker->mVelocity);
+            bool hit = false;
+            if (MR::isSensorPlayer(pReceiver)) {
+                if (isEnableHitPlayer()) {
+                    if (stack_8 >= 30.0f) {
+                        if (stack_8 >= 45.0f) {
+                            hit = MR::sendMsgEnemyAttackFlipMaximumToDir(pReceiver, pSender, stack_3C.multInLine(70.0f));
+                        } else {
+                            hit = MR::sendMsgEnemyAttackFlipToDir(pReceiver, pSender, stack_3C * 70.0f);
+                        }
+                        if (hit) {
+                            MR::startSoundPlayer("SE_PM_WALL_HIT_BODY");
+                            MR::scatterStarPiecePlayer(10);
+                        }
+                    } else {
+                        if (stack_8 >= 15.0f) {
+                            hit = MR::sendMsgEnemyAttackFlipWeak(pReceiver, pSender);
+                        } else {
+                            MR::sendMsgPush(pReceiver, pSender);
+                        }
+                    }
+                } else {
+                    MR::sendMsgPush(pReceiver, pSender);
+                }
+            } else {
+                if (isEnableEnemyAttack()) {
+                    hit = MR::sendMsgToEnemyAttackBlow(pReceiver, pSender);
+                }
+                if (!hit) {
+                    MR::sendMsgPush(pReceiver, pSender);
+                }
+            }
+            if (hit) {
+                MR::emitEffectHitBetweenSensors(this, pSender, pReceiver, 0.0f, "Hit");
+                MR::calcSensorDirectionNormalize(&stack_30, pReceiver, pSender);
+                f32 dot = mGroundChecker->mVelocity.dot(stack_30) * 1.6f;
+                mGroundChecker->mVelocity -= stack_30 * dot;
+                mGroundChecker->mVelocity.mult(0.3f);
+                setNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvWait));
+            }
+        }
+    }
+}
+
+bool PunchingKinoko::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    if (isCrushed()) {
+        return false;
+    }
+
+    if (pReceiver == getSensor("Body")) {
+        return false;
+    }
+
+    if (MR::isMsgInvincibleAttack(msg)) {
+        if (mInvincibleHitCoolDown < 0) {
+            MR::startBlowHitSound(this);
+            mInvincibleHitCoolDown = 10;
+        }
+
+        return requestEnemyBlow(pSender, pReceiver);
+    }
+
+    if (MR::isMsgPlayerHipDrop(msg)) {
+        return requestCrush();
+    }
+
+    if (MR::isMsgLockOnStarPieceShoot(msg)) {
+        return true;
+    }
+
+    if (MR::isMsgStarPieceAttack(msg)) {
+        TVec3f stack_14;
+        MR::calcSensorDirectionNormalize(&stack_14, pSender, pReceiver);
+        f32 dot = mGroundChecker->mVelocity.dot(stack_14);
+
+        if (dot < 15.0f) {
+            mGroundChecker->mVelocity.add(stack_14 * 15.0f);
+        }
+
+        MR::startSound(this, "SE_OJ_PNC_KINOKO_BOUND");
+        return true;
+    }
+
+    if (MR::isMsgPlayerSpinAttack(msg)) {
+        return requestPunch(pSender, pReceiver);
+    }
+
+    if (MR::isMsgPlayerTrample(msg)) {
+        return requestTrample(pSender, pReceiver);
+    }
+
+    return false;
+}
+
+bool PunchingKinoko::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    if (isCrushed()) {
+        return false;
+    }
+
+    if (pReceiver == getSensor("Body")) {
+        return false;
+    }
+
+    if (MR::isMsgToEnemyAttackTrample(msg)) {
+        return requestCrush();
+    }
+
+    if (MR::isMsgToEnemyAttackBlow(msg)) {
+        return requestEnemyBlow(pSender, pReceiver);
+    }
+
+    return false;
+}
+
+bool PunchingKinoko::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
+    if (isCrushed()) {
+        return false;
+    }
+
+    if (pReceiver == getSensor("Body")) {
+        return false;
+    }
+
+    TVec3f stack_14;
+    MR::calcSensorHorizonNormalize(&stack_14, mGravity, pSender, pReceiver);
+    f32 fVar1 = stack_14.dot(mGroundChecker->mVelocity);
+    if (fVar1 < 0.0f) {
+        fVar1 = 3.0f;
+    } else {
+        fVar1 = 3.0f - fVar1;
+    }
+
+    if (fVar1 > 0.0f) {
+        mGroundChecker->mVelocity.add(stack_14 * fVar1);
+        return true;
+    }
+
+    return false;
+}
+
+bool PunchingKinoko::requestPunch(HitSensor* pOtherSensor, HitSensor* pMySensor) {
+    if (isCrushed()) {
+        return false;
+    }
+
+    if (pMySensor == getSensor("Body")) {
+        return false;
+    }
+
+    if (isEnablePunched()) {
+        MR::invalidateClipping(this);
+        TVec3f stack_14;
+        MR::calcSensorHorizonNormalize(&stack_14, mGravity, pOtherSensor, pMySensor);
+        mGroundChecker->mVelocity.add(stack_14 * 50.0f);
+        MR::startSpinHitSound(this);
+        MR::startBlowHitSound(this);
+        MR::tryRumblePadStrong(this, WPAD_CHAN0);
+        MR::stopScene(5);
+        setNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvPunched));
+
+        return true;
+    }
+
+    return false;
+}
+
+bool PunchingKinoko::requestEnemyBlow(HitSensor* pOtherSensor, HitSensor* pMySensor) {
+    if (!isEnableBlowed()) {
+        return false;
+    }
+
+    MR::invalidateClipping(this);
+    TVec3f stack_14;
+    MR::calcSensorHorizonNormalize(&stack_14, mGravity, pOtherSensor, pMySensor);
+    mGroundChecker->mVelocity.add(stack_14 * 25.0f);
+    MR::startSound(this, "SE_OJ_PNC_KINOKO_HIT_SELF");
+    setNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvWait));
+
+    return true;
+}
+
+bool PunchingKinoko::requestTrample(HitSensor* pOtherSensor, HitSensor* pMySensor) {
+    if (isEnableTrample()) {
+        TVec3f stack_14;
+        MR::calcSensorDirectionNormalize(&stack_14, pOtherSensor, pMySensor);
+
+        mGroundChecker->mVelocity.add(stack_14 * 5.0f);
+        return true;
+    }
+    return false;
+}
+
+bool PunchingKinoko::requestCrush() {
+    if (isEnableCrushed()) {
+        MR::invalidateClipping(this);
+        setNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvCrushed));
+        return true;
+    }
+    return false;
+}
+
+void PunchingKinoko::exeWait() {
+    if (MR::isFirstStep(this)) {
+        MR::startBrk(this, "Normal");
+        MR::validateClipping(this);
+        _B8 = true;
+    }
+
+    TVec3f stack_38;
+    MR::calcPositionUpOffset(&stack_38, this, 130.0f);
+    MR::addVelocity(mGroundChecker, (stack_38 - mGroundChecker->mPosition) * 0.008f);
+    MR::attenuateVelocity(mGroundChecker, 0.94f);
+
+    if (MR::isStarPointerPointing2POnPressButton(this, nullptr, false, false)) {
+        if (mStarPointerHitCoolDown == 0 && !_B8 && MR::getStarPointerScreenSpeed(1) > 5.0f) {
+            TVec3f stack_2C(0.0f, 0.0f, 0.0f);
+            if (MR::calcStarPointerWorldVelocityDirectionOnPlane(&stack_2C, mGroundChecker->mPosition, mGravity, 1)) {
+                mGroundChecker->mVelocity.add(stack_2C * 35.0f);
+                MR::startBlowHitSound(this);
+                MR::start2PAttackAssistSound();
+                MR::tryRumblePadWeak(this, WPAD_CHAN1);
+                mStarPointerHitCoolDown = 30;
+                setNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvPointSnaped));
+                return;
+            }
+        }
+        _B8 = true;
+    } else {
+        _B8 = false;
+    }
+    MR::vecBlend(_9C, mPosition, &_9C, 0.05f);
+}
+
+void PunchingKinoko::exeSwing() {
+    f32 var2 = MR::calcVelocityLength(mGroundChecker);
+    TVec3f stack_20;
+    MR::calcPositionUpOffset(&stack_20, this, 130.0f);
+
+    TVec3f stack_14 = stack_20 - mGroundChecker->mPosition;
+    MR::addVelocity(mGroundChecker, stack_14 * 0.008f);
+    MR::attenuateVelocity(mGroundChecker, 0.97f);
+    f32 var3 = MR::calcVelocityLength(mGroundChecker);
+
+    const f32 f0 = 20.0f;
+    if (var2 < f0 && var3 >= f0) {
+        MR::startSound(this, "SE_OJ_PNC_KINOKO_BOUND");
+    }
+
+    MR::vecBlend(_9C, mPosition, &_9C, 0.05f);
+
+    if (var3 < 40.0f && stack_14.length() < 50.0f) {
+        setNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvWait));
+    }
+}
+
+void PunchingKinoko::exePointSnaped() {
+    MR::startLevelSound(this, "SE_OJ_LV_PNC_KINOKO_PUNCHED");
+    addVelocityKeepHeight();
+    MR::attenuateVelocity(mGroundChecker, 0.99f);
+    if (MR::isGreaterStep(this, 6)) {
+        setNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvSwing));
+    }
+}
+
+void PunchingKinoko::exePunched() {
+    if (MR::isFirstStep(this)) {
+    }
+
+    MR::startLevelSound(this, "SE_OJ_LV_PNC_KINOKO_PUNCHED");
+    addVelocityKeepHeight();
+    MR::attenuateVelocity(mGroundChecker, 0.99f);
+    HitSensor* sensor = getSensor("Head");
+    MR::sendMsgEnemyAttackToBindedSensor(mGroundChecker, sensor);
+    _9C.set(mGroundChecker->mPosition);
+
+    if (MR::isGreaterStep(this, 5)) {
+        setNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvPunchedBrake));
+    }
+}
+
+void PunchingKinoko::exePunchedBrake() {
+    addVelocityKeepHeight();
+    MR::attenuateVelocity(mGroundChecker, 0.9f);
+    MR::startLevelSound(this, "SE_OJ_LV_PNC_KINOKO_PUNCHED");
+    _9C.set(mGroundChecker->mPosition);
+    if (!MR::isGreaterStep(this, 40)) {
+        HitSensor* sensor = getSensor("Head");
+        if (!MR::sendMsgEnemyAttackToBindedSensor(mGroundChecker, sensor)) {
+            return;
+        }
+    }
+    MR::startSound(this, "SE_OJ_PNC_KINOKO_RETURN");
+    setNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvSwing));
+}
+
+void PunchingKinoko::exeHitted() {
+    if (MR::isFirstStep(this)) {
+        MR::startSound(this, "SE_OJ_PNC_KINOKO_HIT_SELF");
+    }
+    addVelocityKeepHeight();
+    MR::attenuateVelocity(mGroundChecker, 0.99f);
+    if (MR::isGreaterStep(this, 5)) {
+        setNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvWait));
+    }
+}
+
+void PunchingKinoko::exeCrushed() {
+    if (MR::isFirstStep(this)) {
+        MR::startBrk(this, "Press");
+
+        if (MR::isShadowProjected(this, "\223\252" /* 頭 */)) {
+            MR::getShadowProjectionNormal(this, "\223\252" /* 頭 */, &_A8);
+            MR::getShadowProjectionPos(this, "\223\252" /* 頭 */, &mGroundChecker->mPosition);
+            mGroundChecker->mPosition.add(_A8 * 20.0f);
+        } else {
+            _A8.set(mGravity);
+        }
+
+        MR::offBind(mGroundChecker);
+        mScaleController->startCrush();
+        MR::startSound(this, "SE_OJ_PNC_KINOKO_CRASH");
+    }
+
+    MR::zeroVelocity(mGroundChecker);
+
+    if (MR::isGreaterStep(this, 180)) {
+        setNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvCrushedEnd));
+    }
+}
+
+void PunchingKinoko::exeCrushedEnd() {
+    if (MR::isFirstStep(this)) {
+    }
+
+    if (MR::isStep(this, 10)) {
+        MR::startBrk(this, "Revival");
+        mScaleController->startAnim();
+        MR::startSound(this, "SE_OJ_PNC_KINOKO_RECOVER");
+    }
+
+    TVec3f stack_20;
+    MR::calcPositionUpOffset(&stack_20, this, 130.0f);
+    MR::addVelocity(mGroundChecker, (stack_20 - mGroundChecker->mPosition) * 0.008f);
+    MR::attenuateVelocity(mGroundChecker, 0.94f);
+
+    if (MR::isGreaterStep(this, 60)) {
+        setNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvWait));
+        MR::onBind(mGroundChecker);
+    }
+}
+
+void PunchingKinoko::addVelocityKeepHeight() {
+    if (MR::isShadowProjected(this, "\223\252" /* 頭 */)) {
+        TVec3f stack_8;
+        MR::getShadowProjectionPos(this, "\223\252" /* 頭 */, &stack_8);
+        MR::addVelocityKeepHeight(mGroundChecker, stack_8, 130.0f, 0.5f, 60.0f);
+    }
+}
+
+bool PunchingKinoko::isEnablePunched() const {
+    if (isNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvWait)) || isNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvSwing))) {
+        return true;
+    }
+    return false;
+}
+
+bool PunchingKinoko::isEnableHitPlayer() const {
+    return isNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvSwing));
+}
+
+bool PunchingKinoko::isEnableEnemyAttack() const {
+    if (isNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvSwing)) || isNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvPunched)) ||
+        isNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvPunchedBrake)) || isNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvPointSnaped))) {
+        return true;
+    }
+
+    return false;
+}
+
+bool PunchingKinoko::isEnableCrushed() const {
+    if (isNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvWait)) || isNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvCrushedEnd))) {
+        return true;
+    }
+
+    return false;
+}
+
+bool PunchingKinoko::isEnableTrample() const {
+    if (isNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvCrushed)) || isNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvCrushedEnd))) {
+        return false;
+    }
+
+    return true;
+}
+
+bool PunchingKinoko::isEnableBlowed() const {
+    return isNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvWait));
+}
+
+bool PunchingKinoko::isCrushed() const {
+    return isNerve(GET_NERVE(PunchingKinoko, PunchingKinokoNrvCrushed));
+}
+
+PunchingKinoko::~PunchingKinoko() {
+}

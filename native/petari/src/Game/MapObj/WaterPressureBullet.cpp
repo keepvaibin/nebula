@@ -1,0 +1,287 @@
+#include "Game/MapObj/WaterPressureBullet.hpp"
+#include "Game/LiveActor/ActorCameraInfo.hpp"
+#include "Game/LiveActor/HitSensor.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/Util.hpp"
+#include "Game/Util/ActorMovementUtil.hpp"
+#include <JSystem/JMath/JMATrigonometric.hpp>
+#include <JSystem/JMath/JMath.hpp>
+
+namespace NrvWaterPressureBullet {
+    NEW_NERVE(WaterPressureBulletNrvFly, WaterPressureBullet, Fly);
+    NEW_NERVE(WaterPressureBulletNrvSpinKill, WaterPressureBullet, SpinKill);
+};  // namespace NrvWaterPressureBullet
+
+WaterPressureBullet::WaterPressureBullet(const char* pName) : LiveActor(pName) {
+    _8C.x = 0.0f;
+    _8C.y = 0.0f;
+    _8C.z = 0.0f;
+    _98.x = 0.0f;
+    _98.y = 0.0f;
+    _98.z = 0.0f;
+    _A4 = 0;
+    _A8 = 0.0f;
+    mHostActor = nullptr;
+    _B0 = false;
+    _B1 = false;
+    _B2 = false;
+    mCameraInfo = nullptr;
+}
+
+void WaterPressureBullet::init(const JMapInfoIter& rIter) {
+    initModelManagerWithAnm("WaterBullet", nullptr, false);
+    MR::connectToSceneMapObjStrongLight(this);
+    initHitSensor(2);
+    MR::addHitSensor(this, "body", ATYPE_WATER_PRESSURE_BULLET, 4, 100.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::addHitSensor(this, "binder", ATYPE_WATER_PRESSURE_BULLET_BIND, 4, 100.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    initBinder(100.0f, 0.0f, 0);
+    initEffectKeeper(0, nullptr, false);
+    initSound(6, false);
+    MR::initStarPointerTarget(this, 100.0f, TVec3f(0, 0, 0));
+    MR::initShadowVolumeSphere(this, 75.0f);
+    MR::setShadowDropLength(this, nullptr, 1500.0f);
+    MR::registerDemoSimpleCastAll(this);
+    initNerve(GET_NERVE(WaterPressureBullet, WaterPressureBulletNrvFly));
+    makeActorDead();
+}
+
+void WaterPressureBullet::kill() {
+    if (MR::isPlayerInRush() && mHostActor != nullptr) {
+        MR::startBckPlayer("GCaptureBreak", 0L);
+        MR::endBindAndPlayerJumpWithRollLanding(this, mVelocity, 0);
+        mHostActor = nullptr;
+        endHostCamera();
+    }
+
+    MR::emitEffect(this, "Break");
+    MR::startSound(this, "SE_OJ_W_PRESS_BUBBLE_BREAK");
+    LiveActor::kill();
+}
+
+#pragma push
+#pragma opt_propagation off
+void WaterPressureBullet::control() {
+    if (isNotBound() && MR::isStarPointerPointing2POnTriggerButton(this, "\216\343" /* 弱 */, true, false)) {
+        kill();
+    } else {
+        TVec3f stack_8;
+
+        if (MR::isNearZero(mVelocity)) {
+            stack_8.set(*getGravity());
+        } else {
+            stack_8.set(*getVelocity());
+        }
+
+        MR::turnVecToVecCosOnPlane(&_8C, stack_8, _98, MR::cosDegree(2.5f));
+    }
+}
+#pragma pop
+
+void WaterPressureBullet::calcAndSetBaseMtx() {
+    TPos3f pos;
+    MR::makeMtxFrontSidePos(&pos, _8C, _98, mPosition);
+    MR::setBaseTRMtx(this, pos);
+}
+
+void WaterPressureBullet::shotWaterBullet(LiveActor* pActor, const TPos3f& rPos, f32 a3, bool a4, bool a5, bool a6, ActorCameraInfo** pInfo) {
+    _A8 = a3;
+    _A4 = pActor;
+    _B0 = a4;
+    _B1 = a5;
+    _B2 = a6;
+    mCameraInfo = pInfo;
+    rPos.getZDir(_8C);
+    mVelocity.scale(_A8, _8C);
+    rPos.getTrans(mPosition);
+    rPos.getXDir(_98);
+    mRotation.zero();
+    makeActorAppeared();
+    MR::validateHitSensors(this);
+    MR::invalidateClipping(this);
+    MR::setShadowDropLength(this, nullptr, 1500.0f);
+
+    if (!_B0) {
+        MR::onCalcGravity(this);
+    }
+
+    setNerve(GET_NERVE(WaterPressureBullet, WaterPressureBulletNrvFly));
+}
+
+void WaterPressureBullet::exeFly() {
+    if (MR::isFirstStep(this)) {
+        MR::startBck(this, "Shot");
+    }
+
+    if (MR::isBckOneTimeAndStopped(this)) {
+        MR::startBck(this, "Move");
+    }
+
+    if (isBound() && MR::isBckOneTimeAndStopped(mHostActor)) {
+        MR::startBckPlayer("WaterBulletWait");
+    }
+
+    if (isBound()) {
+        MR::startLevelSound(this, "SE_OJ_LV_W_PRESS_BUBBLE_SUS");
+    }
+
+    if (!_B0) {
+        mVelocity.scaleAdd(0.4f, mGravity, mVelocity);
+    }
+
+    if (MR::isPadSwing(WPAD_CHAN0) && isBound() && !_B2) {
+        MR::startSound(mHostActor, "SE_PV_TWIST_START");
+        MR::startSound(mHostActor, "SE_PM_SPIN_ATTACK");
+        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+        setNerve(GET_NERVE(WaterPressureBullet, WaterPressureBulletNrvSpinKill));
+        return;
+    }
+
+    bool v2 = false;
+
+    if (MR::isBinded(this) || MR::isInWater(this, TVec3f(0.0f, 0.0f, 0.0f))) {
+        v2 = true;
+    }
+
+    if (v2) {
+        if (_B1 && isBound() && MR::isBindedGroundSand(this)) {
+            const TVec3f& vel = mVelocity;
+            const TVec3f& grav = mGravity;
+            mVelocity.scaleAdd(-grav.dot(vel), grav, vel);
+        } else {
+            kill();
+            return;
+        }
+    }
+
+    if (!_B2 && MR::isGreaterEqualStep(this, 180) || _B2 && MR::isGreaterEqualStep(this, 300)) {
+        kill();
+    }
+}
+
+void WaterPressureBullet::exeSpinKill() {
+    if (MR::isFirstStep(this)) {
+        MR::startBckPlayer("Spin2nd", 0L);
+        mVelocity.zero();
+        MR::invalidateHitSensors(this);
+
+        if (MR::isPlayerInRush()) {
+            if (isBound()) {
+                MR::endBindAndPlayerJump(this, mVelocity, 0);
+                mHostActor = nullptr;
+                endHostCamera();
+            }
+        }
+    }
+
+    kill();
+}
+
+void WaterPressureBullet::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
+    if (MR::isSensorMapObj(pReceiver)) {
+        kill();
+    }
+}
+
+bool WaterPressureBullet::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    if (MR::isMsgFireBallAttack(msg)) {
+        kill();
+        return true;
+    }
+
+    return false;
+}
+
+bool WaterPressureBullet::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    if (MR::isDead(this)) {
+        return false;
+    }
+
+    if (MR::isMsgAutoRushBegin(msg) && MR::isSensorPlayer(pSender) && !isBound()) {
+        if (MR::isDemoActive()) {
+            kill();
+
+            return false;
+        }
+
+        if (!inviteMario(pSender)) {
+            return false;
+        } else {
+            MR::startSound(this, "SE_OJ_W_PRESS_BUBBLE_IN");
+            MR::startSound(mHostActor, "SE_PV_CATCH");
+
+            return true;
+        }
+    } else if (msg == ACTMES_IS_RUSH_TAKEOVER) {
+        return true;
+    } else if (msg == ACTMES_RUSH_CANCEL) {
+        kill();
+
+        return true;
+    } else if (msg == ACTMES_UPDATE_BASEMTX && isBound()) {
+        updateSuffererMtx();
+
+        return true;
+    }
+
+    return false;
+}
+
+bool WaterPressureBullet::startHostCamera() const {
+    if (_A4 != nullptr && mCameraInfo != nullptr) {
+        MR::startActorCameraNoTarget(_A4, *mCameraInfo);
+        return true;
+    }
+
+    return false;
+}
+
+bool WaterPressureBullet::endHostCamera() const {
+    if (_A4 != nullptr && mCameraInfo != nullptr) {
+        MR::endActorCamera(_A4, *mCameraInfo, true);
+        return true;
+    }
+
+    return false;
+}
+
+bool WaterPressureBullet::inviteMario(HitSensor* pSensor) {
+    MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+
+    if (MR::isOnGroundPlayer() && MR::isNearAngleDegree(mVelocity, mGravity, 60.0f)) {
+        if (_B1) {
+            MR::killVelocityVertical(this);
+        } else {
+            kill();
+            MR::sendArbitraryMsg(ACTMES_ENEMY_ATTACK_FLIP_VERYWEAK, pSensor, getSensor("body"));
+
+            return false;
+        }
+    }
+
+    mHostActor = pSensor->mHost;
+    MR::startBckWithInterpole(this, "Touch", 0);
+    MR::startBckPlayer("WaterBulletStart", 2L);
+    startHostCamera();
+    MR::setShadowDropLength(this, nullptr, 2000.0f);
+
+    return true;
+}
+
+void WaterPressureBullet::updateSuffererMtx() {
+    TPos3f pos;
+    pos.identity();
+
+    if (isNerve(GET_NERVE(WaterPressureBullet, WaterPressureBulletNrvSpinKill))) {
+        TVec3f front;
+        MR::calcFrontVec(&front, mHostActor);
+        MR::calcMtxFromGravityAndZAxis(&pos, mHostActor, mGravity, front);
+    } else {
+        MtxPtr mtx = getBaseMtx();
+        pos.setInline(mtx);
+    }
+
+    MR::setBaseTRMtx(mHostActor, pos);
+}
+
+WaterPressureBullet::~WaterPressureBullet() {
+}

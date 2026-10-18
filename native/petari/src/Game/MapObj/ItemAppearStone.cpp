@@ -1,0 +1,54 @@
+#include "Game/MapObj/ItemAppearStone.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/Util.hpp"
+#include "Game/Util/ActorSensorUtil.hpp"
+#include "Game/Util/ActorSwitchUtil.hpp"
+#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/JointUtil.hpp"
+#include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/SoundUtil.hpp"
+
+namespace NrvItemAppearStone {
+    NEW_NERVE(HostTypeWait, ItemAppearStone, Wait);
+};  // namespace NrvItemAppearStone
+
+ItemAppearStone::ItemAppearStone(const char* pName) : LiveActor(pName) {
+}
+
+void ItemAppearStone::init(const JMapInfoIter& rIter) {
+    MR::initDefaultPos(this, rIter);
+    const char* model_name = 0;
+    MR::getObjectName(&model_name, rIter);
+    initModelManagerWithAnm(model_name, 0, false);
+    MR::connectToSceneMapObj(this);
+    initEffectKeeper(0, 0, false);
+    initSound(4, false);
+    initHitSensor(1);
+    HitSensor* sensor = MR::addBodyMessageSensorMapObjMoveCollision(this);
+    MR::initCollisionParts(this, model_name, sensor, MR::getJointMtx(this, "Move"));
+    MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
+    MR::needStageSwitchReadB(this, rIter);
+    initNerve(GET_NERVE(ItemAppearStone, HostTypeWait));
+    makeActorAppeared();
+    MR::startBck(this, model_name);
+}
+
+void ItemAppearStone::kill() {
+    LiveActor::kill();
+}
+
+void ItemAppearStone::calcAndSetBaseMtx() {
+}
+
+void ItemAppearStone::exeWait() {
+    MR::startLevelSound(this, "SE_OJ_LV_ITEM_APR_STONE_MV");
+
+    if (MR::isOnSwitchB(this)) {
+        MR::startSound(this, "SE_OJ_ITEM_APR_STONE_BREAK");
+        kill();
+    }
+}
+
+ItemAppearStone::~ItemAppearStone() {
+}

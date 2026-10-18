@@ -1,0 +1,118 @@
+#include "JSystem/JAudio2/JASSeqCtrl.hpp"
+#include "JSystem/JAudio2/JASTrack.hpp"
+
+JASSeqParser JASSeqCtrl::sDefaultParser = JASSeqParser();
+
+JASSeqCtrl::JASSeqCtrl() {
+    mParser = &sDefaultParser;
+    mTimer = 0;
+    mCursorSwap = nullptr;
+    _48 = 0;
+    _4C = 0;
+    _4E = 0;
+    mIntTimer = 0;
+    _51 = false;
+    _54 = 0;
+    _58 = 0;
+    mReader.init();
+}
+
+void JASSeqCtrl::init() {
+    mReader.init();
+    mParser = &sDefaultParser;
+    mTimer = 0;
+    mCursorSwap = nullptr;
+    _48 = 0;
+    _4C = 0;
+    _4E = 0;
+    mIntTimer = 0;
+    _54 = 0;
+    _58 = 0;
+    _51 = false;
+}
+
+void JASSeqCtrl::start(void* buffer, u32 offset) {
+    mReader.init(buffer);
+    mReader.mSeqCursor = (u8*)(mReader.mSeqBuff) + offset;
+}
+
+int JASSeqCtrl::tickProc(JASTrack* track) {
+    if (!mReader.mSeqBuff)
+        return 0;
+    interrupt(JASSeqCtrl::INTRTYPE_VALUE_6);
+    timerProcess();
+    if (_51) {
+        if (!track->checkNoteStop(0))
+            return 0;
+        _51 = false;
+    }
+    if (mTimer > 0)
+        mTimer--;
+    checkIntr();
+
+    while ((!mTimer || mCursorSwap) && !_51) {
+        if (mParser->parse(track) < 0)
+            return -1;
+    }
+
+    return 0;
+}
+
+void JASSeqCtrl::interrupt(JASSeqCtrl::IntrType interrupt) {
+    u32 mask = 1 << interrupt;
+    if (!(_4E & mask))
+        return;
+    _4C |= mask;
+}
+
+void JASSeqCtrl::setIntrMask(u32 mask) {
+    _4E |= mask;
+}
+
+void JASSeqCtrl::clrIntrMask(u32 mask) {
+    _4E &= ~mask;
+}
+
+bool JASSeqCtrl::retIntr() {
+    if (!mCursorSwap)
+        return false;
+    mReader.mSeqCursor = (u8*)mCursorSwap;
+    mCursorSwap = nullptr;
+    return true;
+}
+
+s32 JASSeqCtrl::findIntr() {
+    u32 intr = _4E & _4C;
+    for (u32 i = 0; intr != 0; i++) {
+        if (intr & 1) {
+            _4C &= ~(1 << i);
+            return i;
+        } else
+            intr >>= 1;
+    }
+    return -1;
+}
+
+void JASSeqCtrl::checkIntr() {
+    s32 intr;
+    if (!mCursorSwap && (intr = findIntr()) >= 0) {
+        intr = intr * 3 + _48;
+        u32 offset = get24(intr);
+        mCursorSwap = mReader.mSeqCursor;
+        mReader.mSeqCursor = (u8*)mReader.mSeqBuff + offset;
+    }
+}
+
+void JASSeqCtrl::timerProcess() {
+    if (_54 != 0) {
+        if (!--_54) {
+            interrupt(INTRTYPE_VALUE_5);
+            if (mIntTimer) {
+                if (--mIntTimer) {
+                    _54 = _58;
+                }
+            } else
+                _54 = _58;
+        }
+    }
+}

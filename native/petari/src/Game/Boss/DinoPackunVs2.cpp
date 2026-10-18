@@ -1,0 +1,159 @@
+#include "Game/Boss/DinoPackunVs2.hpp"
+#include "Game/Boss/DinoPackun.hpp"
+#include "Game/Boss/DinoPackunBall.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/LiveActor/PartsModel.hpp"
+#include "Game/Util/ActorStateUtil.hpp"
+#include "Game/Util/EffectUtil.hpp"
+#include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/NerveUtil.hpp"
+#include "Game/Util/ObjUtil.hpp"
+
+namespace NrvDinoPackunVs2 {
+    NEW_NERVE(DinoPackunVs2NrvWaitStart, DinoPackunVs2, WaitStart);
+    NEW_NERVE(DinoPackunVs2NrvOpeningDemo, DinoPackunVs2, OpeningDemo);
+    NEW_NERVE(DinoPackunVs2NrvBattleEgg, DinoPackunVs2, BattleEgg);
+    NEW_NERVE(DinoPackunVs2NrvCryDemo, DinoPackunVs2, CryDemo);
+    NEW_NERVE(DinoPackunVs2NrvBattleLv1, DinoPackunVs2, BattleLv1);
+    NEW_NERVE(DinoPackunVs2NrvAngryDemo, DinoPackunVs2, AngryDemo);
+    NEW_NERVE(DinoPackunVs2NrvBattleLv2, DinoPackunVs2, BattleLv2);
+    NEW_NERVE(DinoPackunVs2NrvBattleLv3, DinoPackunVs2, BattleLv3);
+    NEW_NERVE(DinoPackunVs2NrvDownDemo, DinoPackunVs2, DownDemo);
+};  // namespace NrvDinoPackunVs2
+
+DinoPackunVs2::DinoPackunVs2(DinoPackun* pPackun) : DinoPackunSequencer("\203\146\203\102\203\155\203\160\203\142\203\116\203\2232\220\355\226\332\220\151\215\163" /* ディノパックン2戦目進行 */, pPackun) {
+    mDemo = nullptr;
+    mEgg = nullptr;
+    mBattleLv1 = nullptr;
+    mTrackFireHolder = nullptr;
+}
+
+void DinoPackunVs2::init() {
+    initNerve(GET_NERVE(DinoPackunVs2, DinoPackunVs2NrvWaitStart));
+    mTrackFireHolder = new DinoPackunTrackFireHolder(64);
+    mFireHolder = new DinoPackunFireHolder(16);
+    mDemo = new DinoPackunDemo(mParent);
+    mDemo->init();
+    mEgg = new DinoPackunBattleEggVs2(mParent);
+    mEgg->setTrackFire(mTrackFireHolder);
+    mEgg->init();
+    mBattleLv1 = new DinoPackunBattleVs2Lv1(mParent);
+    mBattleLv1->setTrackFire(mTrackFireHolder);
+    mBattleLv1->setFireBall(mFireHolder);
+    mBattleLv1->init();
+    mParent->mBall->_124 = 1;
+    MR::declareStarPiece(mParent, 24);
+}
+
+void DinoPackunVs2::start() {
+    if (isNerve(GET_NERVE(DinoPackunVs2, DinoPackunVs2NrvWaitStart))) {
+        setNerve(GET_NERVE(DinoPackunVs2, DinoPackunVs2NrvOpeningDemo));
+    }
+}
+
+void DinoPackunVs2::exeOpeningDemo() {
+    if (MR::isFirstStep(this)) {
+        mCurrentAction = nullptr;
+        mDemo->startOpeningDemo();
+        MR::startBrk(mParent, "Awake");
+        MR::emitEffect(mParent->getBallModel(), "TailFire");
+        MR::startBrk(mParent->getBallModel(), "Heat");
+    }
+
+    MR::updateActorStateAndNextNerve(this, mDemo, GET_NERVE(DinoPackunVs2, DinoPackunVs2NrvBattleEgg));
+}
+
+void DinoPackunVs2::exeBattleEgg() {
+    if (MR::isFirstStep(this)) {
+        mCurrentAction = mEgg;
+    }
+
+    MR::updateActorStateAndNextNerve(this, mEgg, GET_NERVE(DinoPackunVs2, DinoPackunVs2NrvCryDemo));
+}
+
+void DinoPackunVs2::exeCryDemo() {
+    if (MR::isFirstStep(this)) {
+        mCurrentAction = nullptr;
+        mDemo->startCryDemo();
+    }
+
+    MR::updateActorStateAndNextNerve(this, mDemo, GET_NERVE(DinoPackunVs2, DinoPackunVs2NrvBattleLv1));
+}
+
+void DinoPackunVs2::exeBattleLv1() {
+    if (MR::isFirstStep(this)) {
+        mParent->appearStarPiece(8);
+        mBattleLv1->_38 = 0;
+        mBattleLv1->_39 = 0;
+        mBattleLv1->_3D = 0;
+        mBattleLv1->_3B = 0;
+        mBattleLv1->_3A = 0;
+        mBattleLv1->setMiddleBattle();
+        mBattleLv1->_3C = 0;
+        mCurrentAction = mBattleLv1;
+    }
+
+    MR::updateActorStateAndNextNerve(this, mBattleLv1, GET_NERVE(DinoPackunVs2, DinoPackunVs2NrvAngryDemo));
+}
+
+void DinoPackunVs2::exeAngryDemo() {
+    if (MR::isFirstStep(this)) {
+        mCurrentAction = nullptr;
+        mDemo->startAngryDemo();
+        MR::emitEffect(mParent->getBallModel(), "TailFire");
+        MR::startBrk(mParent->getBallModel(), "Heat");
+    }
+
+    MR::updateActorStateAndNextNerve(this, mDemo, GET_NERVE(DinoPackunVs2, DinoPackunVs2NrvBattleLv2));
+}
+
+void DinoPackunVs2::exeBattleLv2() {
+    if (MR::isFirstStep(this)) {
+        mParent->appearStarPiece(8);
+        mBattleLv1->_38 = 1;
+        mBattleLv1->_39 = 0;
+        mBattleLv1->_3D = 0;
+        mBattleLv1->_3B = 1;
+        mBattleLv1->_3A = 1;
+        mBattleLv1->setMiddleBattle();
+        mBattleLv1->_3C = 1;
+        mCurrentAction = mBattleLv1;
+    }
+
+    MR::updateActorStateAndNextNerve(this, mBattleLv1, GET_NERVE(DinoPackunVs2, DinoPackunVs2NrvBattleLv3));
+}
+
+void DinoPackunVs2::exeBattleLv3() {
+    if (MR::isFirstStep(this)) {
+        mParent->appearStarPiece(8);
+        mBattleLv1->_38 = 1;
+        mBattleLv1->_39 = 1;
+        mBattleLv1->_3D = 1;
+        mBattleLv1->_3B = 1;
+        mBattleLv1->_3A = 1;
+        mBattleLv1->setLastBattle();
+        mBattleLv1->_3C = 0;
+        mCurrentAction = mBattleLv1;
+    }
+
+    MR::updateActorStateAndNextNerve(this, mBattleLv1, GET_NERVE(DinoPackunVs2, DinoPackunVs2NrvDownDemo));
+}
+
+void DinoPackunVs2::exeDownDemo() {
+    if (MR::isFirstStep(this)) {
+        mCurrentAction = nullptr;
+        mDemo->startDownDemo();
+    }
+
+    if (MR::updateActorState(this, mDemo)) {
+        return;
+    }
+}
+
+void DinoPackunVs2::exeWaitStart() {
+    return;
+}
+
+DinoPackunVs2::~DinoPackunVs2() {
+    
+}

@@ -1,0 +1,48 @@
+#pragma once
+
+#include "Game/LiveActor/PartsModel.hpp"
+
+class LodCtrl;
+class NameObjArchiveListCollector;
+
+#define ITEM_TYPE_COIN 0
+#define ITEM_TYPE_KINOPIO 1
+#define ITEM_TYPE_STARPIECE 4
+#define ITEM_TYPE_POWER_STAR 7
+#define ITEM_TYPE_GRAND_STAR 13
+
+struct DummyDisplayModelInfo {
+    /* 0x00 */ const char* mName;
+    /* 0x04 */ Vec _4;
+    /* 0x10 */ u32 _10;
+    /* 0x14 */ const char* mAnim;
+    /* 0x18 */ bool mHasColorChange;
+};
+
+class DummyDisplayModel : public PartsModel {
+public:
+    DummyDisplayModel(LiveActor*, const DummyDisplayModelInfo*, int, s32, s32);
+
+    virtual void init(const JMapInfoIter&);
+    virtual void makeActorAppeared();
+    virtual void makeActorDead();
+    virtual void control();
+    virtual void calcAndSetBaseMtx();
+
+    /* 0x9C */ const DummyDisplayModelInfo* mModelInfo;
+    /* 0xA0 */ s32 mItemType;
+    /* 0xA4 */ s32 _A4;
+    /* 0xA8 */ LodCtrl* _A8;
+    /* 0xAC */ bool _AC;
+};
+
+namespace MR {
+    DummyDisplayModel* createDummyDisplayModel(LiveActor*, const JMapInfoIter&, s32, const TVec3f&, const TVec3f&);
+    DummyDisplayModel* createDummyDisplayModel(LiveActor*, const JMapInfoIter&, const char*, s32);
+    DummyDisplayModel* createDummyDisplayModel(LiveActor*, const JMapInfoIter&, MtxPtr, s32, const TVec3f&, const TVec3f&);
+    DummyDisplayModel* createDummyDisplayModelCrystalItem(LiveActor*, const JMapInfoIter&, const TVec3f&, const TVec3f&);
+    DummyDisplayModel* createDummyDisplayModelCrystalItem(LiveActor*, s32, const TVec3f&, const TVec3f&);
+    s32 getDummyDisplayModelId(const JMapInfoIter&, s32);
+    s32 getDummyDisplayModelId(const LiveActor*);
+    void makeArchiveListDummyDisplayModel(NameObjArchiveListCollector*, const JMapInfoIter&);
+};  // namespace MR

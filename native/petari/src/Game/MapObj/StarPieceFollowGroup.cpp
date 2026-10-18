@@ -1,0 +1,245 @@
+#include "Game/MapObj/StarPieceFollowGroup.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/MapObj/StarPiece.hpp"
+#include "Game/Util.hpp"
+#include "Game/Util/ActorSwitchUtil.hpp"
+#include "Game/Util/EventUtil.hpp"
+#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/MathUtil.hpp"
+#include "Game/Util/MtxUtil.hpp"
+#include "Game/Util/NerveUtil.hpp"
+#include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/PlayerUtil.hpp"
+#include "Game/Util/SceneUtil.hpp"
+#include "math_types.hpp"
+#include <JSystem/JGeometry/TMatrix.hpp>
+#include <revolution/mtx.h>
+
+void StarPieceFollowGroup_DUMMY() {
+    TVec3f a;
+    a *= 1.0f;
+}
+
+namespace NrvStarPieceFollowGroup {
+    NEW_NERVE(HostTypeNrvFollowToPlayer, StarPieceFollowGroup, FollowToPlayer);
+    NEW_NERVE(HostTypeNrvFollowEnd, StarPieceFollowGroup, FollowEnd);
+};  // namespace NrvStarPieceFollowGroup
+
+StarPieceFollowGroup::StarPieceFollowGroup(const char* pName)
+    : LiveActor(pName), mPieces(nullptr), _90(nullptr), mNumPiecesTotal(6), mNumPiecesUse(0), mRadius(350.0f), mAngle(0.0f), mTimeLimit(1200) {
+}
+
+void StarPieceFollowGroup::init(const JMapInfoIter& rIter) {
+    MR::initDefaultPos(this, rIter);
+    s32 arg0 = -1;
+    MR::getJMapInfoArg0NoInit(rIter, &arg0);
+    if (arg0 != -1) {
+        mNumPiecesTotal = arg0;
+    }
+
+    MR::getJMapInfoArg1NoInit(rIter, &mTimeLimit);
+    MR::getJMapInfoArg2NoInit(rIter, &mRadius);
+
+    initNerve(GET_NERVE(StarPieceFollowGroup, HostTypeNrvFollowEnd));
+
+    mPieces = new StarPiece*[mNumPiecesTotal];
+    _90 = new TVec3f[mNumPiecesTotal];
+    for (int i = 0; i < mNumPiecesTotal; i++) {
+        mPieces[i] = new StarPiece("\203\164\203\110\203\215\201\133\203\130\203\136\201\133\203\163\201\133\203\130" /* フォロースターピース */);
+        mPieces[i]->initWithoutIter();
+        mPieces[i]->makeActorDead();
+    }
+
+    MR::needStageSwitchWriteA(this, rIter);
+    MR::listenStageSwitchOnA(this, MR::Functor(this, &StarPieceFollowGroup::onSwitchA));
+    MR::useStageSwitchReadB(this, rIter);
+
+    MR::connectToSceneMapObjMovement(this);
+    MR::invalidateClipping(this);
+    kill();
+}
+
+bool StarPieceFollowGroup::beginFollowPieces() {
+    if (MR::isValidSwitchB(this) && MR::isOnSwitchB(this)) {
+        return false;
+    }
+
+    if (MR::isStageStarPieceFollowGroupLimit()) {
+        if (MR::getStarPieceNum() >= 100) {
+            return false;
+        }
+
+        s32 starPieceNumLeft = MR::getStarPieceNum();
+        starPieceNumLeft = 100 - starPieceNumLeft;
+        s32 numPiecesToUse;
+        if (mNumPiecesTotal >= starPieceNumLeft) {
+            numPiecesToUse = starPieceNumLeft;
+        } else {
+            numPiecesToUse = mNumPiecesTotal;
+        }
+
+        mNumPiecesUse = numPiecesToUse;
+    } else {
+        mNumPiecesUse = mNumPiecesTotal;
+    }
+
+    for (int i = 0; i < (u32)mNumPiecesUse; i++) {
+        mPieces[i]->setFollowPlayerAndAppear();
+    }
+
+    placementPiece(mNumPiecesUse);
+    return true;
+}
+
+void StarPieceFollowGroup::placementPiece(s32 numPlace) {
+    TPos3f mtxTRS;
+    MR::makeMtxTRS(mtxTRS.toMtxPtr(), this);
+
+    TVec3f zDir;
+    TVec3f xDir;
+
+    mtxTRS.getXDir(xDir);
+    mtxTRS.getZDir(zDir);
+
+    TVec3f position(mPosition);
+    f32 currentAngle = 0.0f;
+    f32 angleBetweenPieces = TWO_PI / numPlace;
+    for (u32 i = 0; i < numPlace; i++) {
+        f32 zMag = MR::cos(currentAngle) * mRadius;
+        f32 xMag = MR::sin(currentAngle) * mRadius;
+
+        mPieces[i]->mPosition = zDir * zMag + xDir * xMag + position;
+        currentAngle += angleBetweenPieces;
+    }
+}
+
+void StarPieceFollowGroup::updateAxises(const TVec3f& rVec1, const TVec3f& rVec2, const TVec3f& rVec3, f32 angle) {
+    TQuat4f quat;
+    quat.setRotate(mLocalXAxis, rVec1, angle);
+    quat.rotate(mLocalXAxis);
+
+    quat.setRotate(mLocalZAxis, rVec2, angle);
+    quat.rotate(mLocalZAxis);
+
+    quat.setRotate(mLocalYAxis, rVec3, angle);
+    quat.rotate(mLocalYAxis);
+}
+
+void StarPieceFollowGroup::followPieces() {
+    TVec3f playerSideVec;
+    TVec3f playerFrontVec;
+    TVec3f playerUpVec;
+
+    MR::getPlayerSideVec(&playerSideVec);
+    MR::getPlayerFrontVec(&playerFrontVec);
+    MR::getPlayerUpVec(&playerUpVec);
+
+    updateAxises(playerSideVec, playerFrontVec, playerUpVec, 0.25f);
+
+    TVec3f playerPos(*MR::getPlayerPos());
+    TVec3f playerVelocity(*MR::getPlayerVelocity());
+
+    playerPos.add(mLocalYAxis.multInLine(0.0f));
+    playerPos.add(playerVelocity * 10.0f);
+
+    s32 numPiecesNotFollowingAnymore = 0;
+    f32 currentAngle = mAngle;
+    f32 angleBetweenPieces = TWO_PI / mNumPiecesUse;
+    for (u32 i = 0; i < mNumPiecesUse; i++) {
+        StarPiece* currentPiece = mPieces[i];
+        currentAngle += angleBetweenPieces;
+        if (!currentPiece->isFollowing()) {
+            numPiecesNotFollowingAnymore++;
+            if (numPiecesNotFollowingAnymore == (mNumPiecesUse - 1)) {
+                kill();
+            }
+            continue;
+        }
+
+        f32 cos = MR::cos(currentAngle);
+        f32 sin = MR::sin(currentAngle);
+        f32 cos2 = 1.0f + 0.25f * MR::cos(3.0f * currentAngle);
+
+        TVec3f vec2(playerPos);
+        TVec3f vec(0.0f, 0.0f, 0.0f);
+
+        vec.add(mLocalXAxis * cos * mRadius);
+        vec.add(mLocalZAxis * sin * mRadius);
+
+        _90[i].set(vec);
+
+        vec2.add(vec * cos2);
+        currentPiece->mVelocity.set(vec2);
+        currentPiece->mVelocity.sub(currentPiece->mPosition);
+        currentPiece->mVelocity.mult(1.0f);
+    }
+}
+
+void StarPieceFollowGroup::allKillPieces() {
+    for (int i = 0; i < (u32)mNumPiecesUse; i++) {
+        StarPiece* currentPiece = mPieces[i];
+        if (!MR::isDead(currentPiece)) {
+            currentPiece->makeActorDead();
+        }
+    }
+}
+
+void StarPieceFollowGroup::onSwitchA() {
+    if (beginFollowPieces()) {
+        setNerve(GET_NERVE(StarPieceFollowGroup, HostTypeNrvFollowToPlayer));
+        appear();
+    } else {
+        kill();
+    }
+}
+
+void StarPieceFollowGroup::exeFollowToPlayer() {
+    if (MR::isFirstStep(this)) {
+        MR::getPlayerSideVec(&mLocalXAxis);
+        MR::getPlayerFrontVec(&mLocalZAxis);
+        MR::getPlayerUpVec(&mLocalYAxis);
+    }
+
+    followPieces();
+    mAngle += 0.025f;
+
+    if (MR::isGreaterStep(this, mTimeLimit)) {
+        setNerve(GET_NERVE(StarPieceFollowGroup, HostTypeNrvFollowEnd));
+    }
+}
+
+void StarPieceFollowGroup::exeFollowEnd() {
+    bool doSomeExtraTVecStuff = false;
+    if (MR::isGreaterStep(this, 20)) {
+        doSomeExtraTVecStuff = true;
+    }
+
+    s32 numPiecesNotFollowingAnymore = 0;
+    for (int i = 0; i < (u32)mNumPiecesUse; i++) {
+        StarPiece* currentPiece = mPieces[i];
+        if (!currentPiece->isFollowing()) {
+            numPiecesNotFollowingAnymore++;
+            if (numPiecesNotFollowingAnymore == mNumPiecesUse - 1) {
+                kill();
+            }
+            continue;
+        }
+
+        if (doSomeExtraTVecStuff) {
+            const f32 SCALE = 0.05f;
+            currentPiece->mVelocity += (_90[i] * SCALE);
+        }
+
+        TVec3f vec2(*MR::getPlayerVelocity());
+        MR::normalizeOrZero(&vec2);
+        const f32 TEN = 10.0f;
+        currentPiece->mVelocity += (vec2 * TEN);
+    }
+
+    if (MR::isGreaterStep(this, 120)) {
+        kill();
+        MR::offSwitchA(this);
+        allKillPieces();
+    }
+}

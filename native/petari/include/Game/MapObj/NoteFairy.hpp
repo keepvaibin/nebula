@@ -1,0 +1,53 @@
+#pragma once
+
+#include "Game/LiveActor/LiveActor.hpp"
+
+class ActorCameraInfo;
+class Note;
+
+class NoteFairy : public LiveActor {
+public:
+    NoteFairy(const char*);
+
+    virtual ~NoteFairy();
+    virtual void init(const JMapInfoIter&);
+    virtual void kill();
+    virtual void control();
+    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
+
+    void killAllNotes();
+    void exeHide();
+    void exeStartAppearDemo();
+    void exeRailMoveStart();
+    void exeDemoAppear();
+    void exeAppearNoteBloom();
+    void exeAppearNote();
+    void exeEndWait();
+    void exeSuccessDemo();
+    void exeSuccess();
+    void enterDemoAppear(const Nerve*, bool);
+    bool isDeadAllNotes();
+    void setLastGotNote(Note*);
+    f32 getNoteCoord(s32);
+
+    /* 0x8C */ TVec3f _8C;
+    /* 0x98 */ TVec3f _98;
+    /* 0xA4 */ f32 mAppearanceSpeed;
+    /* 0xA8 */ s32 mTimeLimit;
+    /* 0xAC */ s32 mMelodyNoteNum;
+    /* 0xB0 */ s32 _B0;
+    /* 0xB4 */ s32 mSong;
+    /* 0xB8 */ s32 mCompletionJingle;
+    /* 0xBC */ f32 mNoteCoord;
+    /* 0xC0 */ Note** mNoteArray;
+    /* 0xC4 */ Note* mLastGotNote;
+    /* 0xC8 */ s32 mAppearanceType;
+    /* 0xCC */ bool _CC;
+    /* 0xCD */ bool _CD;
+    /* 0xCE */ bool mHasDemo;
+    /* 0xCF */ bool _CF;
+    /* 0xD0 */ bool _D0;
+    /* 0xD1 */ bool _D1;
+    /* 0xD4 */ s32 mPowerStarSpawnType;
+    /* 0xD8 */ ActorCameraInfo* mCameraInfo;
+};

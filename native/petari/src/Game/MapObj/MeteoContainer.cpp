@@ -1,0 +1,99 @@
+#include "Game/MapObj/MeteoContainer.hpp"
+#include "Game/LiveActor/HitSensor.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/Util.hpp"
+#include "Game/Util/ActorSensorUtil.hpp"
+#include "Game/Util/ActorShadowUtil.hpp"
+#include "Game/Util/ActorSwitchUtil.hpp"
+#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/SoundUtil.hpp"
+
+namespace NrvMeteoContainer {
+    NEW_NERVE(MeteoContainerNrvWait, MeteoContainer, Wait);
+    NEW_NERVE(MeteoContainerNrvDestroy, MeteoContainer, Destroy);
+};  // namespace NrvMeteoContainer
+
+MeteoContainer::MeteoContainer(const char* pName) : LiveActor(pName) {
+}
+
+void MeteoContainer::init(const JMapInfoIter& rIter) {
+    const char* objName = nullptr;
+
+    if (!MR::getObjectName(&objName, rIter)) {
+        objName = "MeteoContainer";
+    }
+
+    MR::initDefaultPos(this, rIter);
+    initModelManagerWithAnm(objName, nullptr, false);
+    MR::connectToSceneEnemy(this);
+    initHitSensor(1);
+    TVec3f sensorOffs;
+    sensorOffs.x = 0.0f;
+    sensorOffs.y = 150.0f;
+    sensorOffs.z = 0.0f;
+    MR::addHitSensorMapObj(this, "body", 16, 150.0f, sensorOffs);
+    initSound(4, false);
+    initNerve(GET_NERVE(MeteoContainer, MeteoContainerNrvWait));
+    MR::initShadowVolumeSphere(this, 150.0f);
+    MR::onCalcShadowOneTime(this, nullptr);
+    MR::needStageSwitchWriteDead(this, rIter);
+    initEffectKeeper(1, nullptr, false);
+    appear();
+}
+
+void MeteoContainer::appear() {
+    LiveActor::appear();
+    setNerve(GET_NERVE(MeteoContainer, MeteoContainerNrvWait));
+}
+
+void MeteoContainer::kill() {
+    MR::startSound(this, "SE_OJ_MTO_CONTAINER_BREAK");
+    if (MR::isValidSwitchDead(this)) {
+        MR::onSwitchDead(this);
+        MR::startSystemSE("SE_SY_READ_RIDDLE_S");
+    }
+
+    LiveActor::kill();
+}
+
+void MeteoContainer::control() {
+}
+
+void MeteoContainer::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
+    if (MR::isSensorPlayer(pReceiver)) {
+        pReceiver->receiveMessage(ACTMES_PUSH, pSender);
+    }
+}
+
+bool MeteoContainer::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
+    return MR::isSensorPlayer(pSender);
+}
+
+bool MeteoContainer::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    if (msg == ACTMES_TORNADO_ATTACK && isNerve(GET_NERVE(MeteoContainer, MeteoContainerNrvWait))) {
+        setNerve(GET_NERVE(MeteoContainer, MeteoContainerNrvDestroy));
+
+        return true;
+    }
+
+    return false;
+}
+
+void MeteoContainer::exeWait() {
+}
+
+void MeteoContainer::exeDestroy() {
+    if (MR::isStep(this, 2)) {
+        MR::stopScene(10);
+    }
+
+    if (MR::isStep(this, 3)) {
+        MR::shakeCameraNormal();
+        kill();
+    }
+}
+
+MeteoContainer::~MeteoContainer() {
+}

@@ -1,0 +1,130 @@
+#include "Game/Screen/BombTimerLayout.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/Util/LayoutUtil.hpp"
+#include "Game/Util/ObjUtil.hpp"
+
+namespace {
+    static const s32 sDangerTransFrame = 600;
+};  // namespace
+
+namespace NrvBombTimerLayout {
+    NEW_NERVE(BombTimerLayoutNrvAppear, BombTimerLayout, Appear);
+    NEW_NERVE(BombTimerLayoutNrvWait, BombTimerLayout, Wait);
+    NEW_NERVE(BombTimerLayoutNrvDanger, BombTimerLayout, Danger);
+    NEW_NERVE(BombTimerLayoutNrvEnd, BombTimerLayout, End);
+};  // namespace NrvBombTimerLayout
+
+BombTimerLayout::BombTimerLayout(bool isConnectToScene)
+    : LayoutActor("\203\173\203\200\203\136\203\103\203\175\201\133\203\214\203\103\203\101\203\105\203\147" /* ボムタイマーレイアウト */, true), mDangerTransFrame(::sDangerTransFrame), mFrame(), mIsSuspend() {
+    if (isConnectToScene) {
+        MR::connectToSceneLayout(this);
+    }
+}
+
+void BombTimerLayout::init(const JMapInfoIter& rIter) {
+    initLayoutManager("BombTimer", 2);
+    initNerve(GET_NERVE(BombTimerLayout, BombTimerLayoutNrvAppear));
+    kill();
+}
+
+void BombTimerLayout::appear() {
+    mFrame = 0;
+
+    LayoutActor::appear();
+    setNerve(GET_NERVE(BombTimerLayout, BombTimerLayoutNrvAppear));
+}
+
+void BombTimerLayout::setTimeLimit(u32 timeLimit) {
+    mTimeLimit = timeLimit;
+
+    updateTextBox();
+}
+
+void BombTimerLayout::suspend() {
+    mIsSuspend = true;
+}
+
+void BombTimerLayout::resume() {
+    mIsSuspend = false;
+}
+
+bool BombTimerLayout::isReadyToTimeUp() const {
+    return mFrame < mTimeLimit == false;
+}
+
+void BombTimerLayout::addFrame() {
+    if (isReadyToTimeUp()) {
+        return;
+    }
+
+    mFrame++;
+
+    updateTextBox();
+}
+
+bool BombTimerLayout::update() {
+    if (mIsSuspend) {
+        return false;
+    }
+
+    addFrame();
+
+    if (isReadyToTimeUp()) {
+        setNerve(GET_NERVE(BombTimerLayout, BombTimerLayoutNrvEnd));
+
+        return true;
+    }
+
+    return false;
+}
+
+u32 BombTimerLayout::getRestTime() const {
+    return mTimeLimit - mFrame;
+}
+
+void BombTimerLayout::updateTextBox() {
+    MR::setTextBoxNumberRecursive(this, "Counter", (getRestTime() + 59) / 60);
+}
+
+void BombTimerLayout::exeAppear() {
+    if (MR::isFirstStep(this)) {
+        MR::startAnim(this, "Appear", 0);
+    }
+
+    update();
+
+    if (MR::isAnimStopped(this, 0)) {
+        setNerve(GET_NERVE(BombTimerLayout, BombTimerLayoutNrvWait));
+    }
+}
+
+void BombTimerLayout::exeWait() {
+    if (MR::isFirstStep(this)) {
+        MR::startAnim(this, "Wait", 0);
+    }
+
+    update();
+
+    if (getRestTime() < mDangerTransFrame) {
+        setNerve(GET_NERVE(BombTimerLayout, BombTimerLayoutNrvDanger));
+    }
+}
+
+void BombTimerLayout::exeDanger() {
+    if (MR::isFirstStep(this)) {
+        MR::startAnim(this, "Danger", 0);
+        MR::startAnim(this, "Blink", 1);
+    }
+
+    update();
+}
+
+void BombTimerLayout::exeEnd() {
+    if (MR::isFirstStep(this)) {
+        MR::startAnim(this, "End", 0);
+    }
+
+    if (MR::isAnimStopped(this, 0)) {
+        kill();
+    }
+}

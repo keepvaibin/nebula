@@ -1,0 +1,327 @@
+#include "Game/NPC/TicoComet.hpp"
+#include "Game/Demo/AstroDemoFunction.hpp"
+#include "Game/Enemy/AnimScaleController.hpp"
+#include "Game/LiveActor/HitSensor.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/LiveActor/PartsModel.hpp"
+#include "Game/MapObj/StarPieceDirector.hpp"
+#include "Game/NPC/NPCActorItem.hpp"
+#include "Game/NPC/TalkMessageFunc.hpp"
+#include "Game/Screen/GalaxyMapController.hpp"
+#include "Game/Util/ActorSensorUtil.hpp"
+#include "Game/Util/CameraUtil.hpp"
+#include "Game/Util/EventUtil.hpp"
+#include "Game/Util/JointUtil.hpp"
+#include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/MathUtil.hpp"
+#include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/ScreenUtil.hpp"
+#include "Game/Util/SoundUtil.hpp"
+#include <JSystem/JMath/JMath.hpp>
+
+namespace NrvTicoEat {
+    NEW_NERVE(TicoEatNrvEatPre, TicoEat, EatPre);
+    NEW_NERVE(TicoEatNrvEatNow, TicoEat, EatNow);
+    NEW_NERVE(TicoEatNrvEatPst, TicoEat, EatPst);
+    NEW_NERVE(TicoEatNrvEatEnd, TicoEat, EatEnd);
+    NEW_NERVE(TicoEatNrvReaction, TicoEat, Reaction);
+};  // namespace NrvTicoEat
+
+namespace NrvTicoComet {
+    NEW_NERVE(TicoCometNrvDemoAnim, TicoComet, DemoAnim);
+    NEW_NERVE(TicoCometNrvDemoFade, TicoComet, DemoFade);
+    NEW_NERVE(TicoCometNrvDemoEnd, TicoComet, DemoEnd);
+};  // namespace NrvTicoComet
+
+namespace {
+    class TicoEatParam : public AnimScaleParam {
+    public:
+        TicoEatParam();
+    };
+
+    TicoEatParam::TicoEatParam() : AnimScaleParam() {
+        _20 = 0.12f;
+        _24 = 0.12f;
+        _28 = 0.9f;
+    }
+
+    static TicoEatParam sParam;
+};  // namespace
+
+TicoEat::TicoEat(const char* pName) : Tico(pName) {
+    _190 = 0;
+    _194 = 0;
+    _198 = 0;
+}
+
+void TicoEat::init(const JMapInfoIter& rIter) {
+    mScaleController = new AnimScaleController(&::sParam);
+    mReactionNerve = GET_NERVE(TicoEat, TicoEatNrvReaction);
+    _178 = MR::getJointMtx(this, "Center");
+    mParam.setMoveAction("Wait", "Wait");
+    mParam.setTalkAction("Talk", "Talk");
+    mParam._4 = 3000.0f;
+    setDefaults();
+    _12C = 1000.0f;
+}
+
+void TicoEat::control() {
+    if (MR::isBckPlaying(this, "Joy2")) {
+        MR::startLevelSound(this, "SE_SM_LV_TICOFAT_GLAD", 0);
+    }
+
+    Tico::control();
+}
+
+bool TicoEat::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    if (MR::isMsgStarPieceGift(msg)) {
+        if (_198 == _194) {
+            MR::startAction(this, "Eat0");
+            MR::startBva(this, "Big0");
+        }
+
+        f32 val = (0.66f * _194);
+        if (_198 == (s32)val) {
+            f32 frame = MR::getBckFrame(this);
+            MR::startAction(this, "Eat1");
+            MR::startBva(this, "Big1");
+            MR::setBckFrame(this, frame);
+            mScaleController->startHitReaction();
+        }
+
+        val = (0.33f * _194);
+        if (_198 == (s32)val) {
+            f32 frame = MR::getBckFrame(this);
+            MR::startAction(this, "Eat2");
+            MR::startBva(this, "Big2");
+            MR::setBckFrame(this, frame);
+            mScaleController->startHitReaction();
+        }
+
+        _198--;
+        return true;
+    }
+
+    return Tico::receiveMsgPlayerAttack(msg, pSender, pReceiver);
+}
+
+void TicoEat::initStarPiece(s32 num) {
+    _194 = num;
+    _198 = num;
+    MR::declareStarPieceReceiver(this, num);
+}
+
+bool TicoEat::tryEat() {
+    if (isEmptyNerve()) {
+        pushNerve(GET_NERVE(TicoEat, TicoEatNrvEatPre));
+    }
+
+    if (isNerve(GET_NERVE(TicoEat, TicoEatNrvEatEnd))) {
+        popNerve();
+        return true;
+    }
+
+    return false;
+}
+
+bool TicoEat::hasEnoughStarPiece() const {
+    return MR::getStarPieceNum() >= _194;
+}
+
+bool TicoEat::eventFunc(u32 event) {
+    if (event == 0) {
+        return tryEat();
+    }
+
+    if (event == 1) {
+        MR::forceAppearStarPieceCounterForTicoFat();
+    }
+
+    if (event == 2) {
+        MR::disappearStarPieceCounterForTicoFat();
+    }
+
+    return true;
+}
+
+void TicoEat::exeReaction() {
+    if (MR::isFirstStep(this) && (_D8 || _DB)) {
+        mScaleController->startHitReaction();
+    }
+
+    startReactionSound();
+
+    if (MR::tryStartReactionAndPopNerve(this)) {
+        return;
+    }
+}
+
+void TicoEat::exeEatPre() {
+    if (MR::isFirstStep(this)) {
+        MR::startAction(this, "Excite");
+        MR::startBva(this, "Big0");
+    }
+
+    if (MR::turnQuatZDirRad(&_A0, _A0, -MR::getCamZdir(), MR::toRadian(2.0f))) {
+        popAndPushNerve(GET_NERVE(TicoEat, TicoEatNrvEatNow));
+    }
+}
+
+void TicoEat::exeEatNow() {
+    if (MR::isFirstStep(this)) {
+    }
+
+    if (_198 != 0 && MR::isIntervalStep(this, 100 / _194)) {
+        MR::giftStarPieceToTarget(getSensor("Mouth"), 1);
+    }
+
+    MR::startLevelSound(this, "SE_SM_LV_TICOFAT_ABSORB");
+    MR::startLevelSound(this, "SE_SM_LV_TICOFAT_EATING");
+    MR::startLevelSound(this, "SE_SM_LV_TICOFAT_EATING", 0);
+
+    if (_198 == 0) {
+        popAndPushNerve(GET_NERVE(TicoEat, TicoEatNrvEatPst));
+    }
+}
+
+void TicoEat::exeEatPst() {
+    if (MR::isGreaterEqualStep(this, 4)) {
+        mParam._1C = "Joy2";
+        mParam._20 = "Joy2";
+        popAndPushNerve(GET_NERVE(TicoEat, TicoEatNrvEatEnd));
+    }
+}
+
+void TicoEat::exeEatEnd() {
+}
+
+TicoComet::TicoComet(const char* pName) : TicoEat(pName) {
+}
+
+void TicoComet::init(const JMapInfoIter& rIter) {
+    NPCActorCaps caps("TicoComet");
+    NPCActorItem item("TicoComet");
+    caps.setDefault();
+    caps.mSensorSize = 100.0f;
+    caps.mSensorOffset.y = 100.0f;
+    caps.mUseShadow = true;
+    caps.mSoundSize = 6;
+    caps.mSensorMax = 2;
+    caps.mSensorJoint = "Center";
+    caps._6C = "Center";
+    caps.mBinder = 0;
+    initialize(rIter, caps);
+    MR::addHitSensorAtJointEye(this, "Mouth", "Mouth", 8, 30.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::getNPCItemData(&item, 0);
+    equipment(item, true);
+    MR::startAction(_94, "LeftRotate");
+    MR::startAction(_98, "RightRotate");
+    MR::startBtk(this, "TicoComet");
+    _194 = 20;
+    _198 = 20;
+    MR::declareStarPieceReceiver(this, 20);
+    MR::setMessageArg(mMsgCtrl, _194);
+    MR::registerBranchFunc(getMsgCtrl(), TalkMessageFunc(this, &TicoComet::branchFunc));
+    MR::registerEventFunc(getMsgCtrl(), TalkMessageFunc(this, &TicoComet::eventFunc));
+    MR::setDistanceToTalk(mMsgCtrl, 350.0f);
+    if (!MR::isRosettaTalkTrickComet()) {
+        makeActorDead();
+    }
+
+    AstroDemoFunction::tryRegisterSimpleCastIfAstroGalaxy(this);
+    MR::startBva(this, "Small0");
+    MR::startBrk(this, "Normal");
+    MR::setBrkFrameAndStop(this, 0.0f);
+    TicoEat::init(rIter);
+    _17C.set(0xC8, 0, 0xFF, 0xFF);
+}
+
+bool TicoComet::branchFunc(u32 val) {
+    return MR::getStarPieceNum() >= _194;
+}
+
+bool TicoComet::tryDemo() {
+    if (isEmptyNerve()) {
+        pushNerve(GET_NERVE(TicoComet, TicoCometNrvDemoAnim));
+    }
+
+    if (isNerve(GET_NERVE(TicoComet, TicoCometNrvDemoEnd))) {
+        popNerve();
+        return true;
+    }
+
+    return false;
+}
+
+bool TicoComet::eventFunc(u32 event) {
+    if (event < 3) {
+        return TicoEat::eventFunc(event);
+    }
+
+    if (event == 3) {
+        return tryDemo();
+    }
+
+    return true;
+}
+
+void TicoComet::startReactionSound() {
+    if (_D8) {
+        MR::startSound(this, "SE_SM_NPC_TRAMPLED");
+        MR::startSound(this, "SE_SV_TICOCOMET_TRAMPLED");
+    }
+
+    if (isPointingSe()) {
+        MR::startDPDHitSound();
+        MR::startSound(this, "SE_SV_TICOCOMET_POINT");
+    }
+
+    if (_D9) {
+        MR::startSound(this, "SE_SM_TICOCOMET_SPIN");
+    }
+
+    if (_DB) {
+        MR::startSound(this, "SE_SV_TICOCOMET_STAR_PIECE_HIT");
+    }
+}
+
+void TicoComet::exeDemoAnim() {
+    if (MR::isFirstStep(this)) {
+        MR::startAction(this, "Demo");
+        MR::startSound(this, "SE_SM_TICOFAT_META_ITEM");
+        MR::startSound(this, "SE_SM_TICOFAT_META");
+    }
+
+    if (MR::isGreaterEqualStep(this, 90)) {
+        MR::startSound(this, "SE_SM_METAMORPHOSE_SMOKE");
+        MR::startSystemSE("SE_DM_TICOFAT_MORPH_WIPE_IN");
+        popAndPushNerve(GET_NERVE(TicoComet, TicoCometNrvDemoFade));
+    }
+}
+
+void TicoComet::exeDemoFade() {
+    if (MR::isFirstStep(this)) {
+        MR::closeWipeWhiteFade(30);
+        MR::startSystemSE("SE_DM_TICOFAT_MORPH_WIPE_OUT");
+    }
+
+    if (!MR::isWipeActive()) {
+        mParam._1C = "Talk";
+        mParam._20 = "Talk";
+        MR::forceOpenWipeWhiteFade();
+        MR::forceToNextStateGalaxyCometScheduler();
+        MR::startGalaxyMapLayoutForTicoComet();
+        MR::startBva(this, "Small0");
+        MR::startAction(this, "Wait");
+        MR::startBckNoInterpole(this, "Wait");
+        MR::clearGotCountStarPieceReceiver(this);
+        _198 = _194;
+        popAndPushNerve(GET_NERVE(TicoComet, TicoCometNrvDemoEnd));
+    }
+}
+
+void TicoComet::exeDemoEnd() {
+}
+
+void TicoEat::startReactionSound() {
+}

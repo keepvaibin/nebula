@@ -1,0 +1,685 @@
+#include "Game/Screen/GalaxyMapController.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/NPC/TalkDirector.hpp"
+#include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/Screen/BackButton.hpp"
+#include "Game/Screen/GalaxyMap.hpp"
+#include "Game/Screen/GalaxyMapBackground.hpp"
+#include "Game/Screen/GalaxyMapSelectButton.hpp"
+#include "Game/Screen/PowerStarList.hpp"
+#include "Game/Screen/WipeFade.hpp"
+#include "Game/Util/DrawUtil.hpp"
+#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/LayoutUtil.hpp"
+#include "Game/Util/MemoryUtil.hpp"
+#include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/ScreenUtil.hpp"
+#include "Game/Util/SequenceUtil.hpp"
+#include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/SystemUtil.hpp"
+#include <JSystem/JKernel/JKRSolidHeap.hpp>
+#include <JSystem/JUtility/JUTTexture.hpp>
+#include <JSystem/JUtility/JUTVideo.hpp>
+#include <nw4r/lyt/drawInfo.h>
+
+namespace {
+    static const s32 sDisplayKeepFrame = 30;
+    static const s32 sMapFadeinoutFrame = 12;
+    static const s32 sTicoCometFadeinoutFrame = 60;
+    static const s32 sTicoCometWaitFrame = 60;
+    static const s32 sWaitForNewGalaxyDiscoverPhaseAstroMap = 1;
+    // static const s32 sCaptureWidth = _;
+    // static const s32 sCaptureHeight = _;
+};  // namespace
+
+namespace {
+    NEW_NERVE(GalaxyMapControllerReadyModeMap, GalaxyMapController, ReadyModeMap);
+    NEW_NERVE(GalaxyMapControllerFadeinModeMap, GalaxyMapController, FadeinModeMap);
+    NEW_NERVE(GalaxyMapControllerAppearGalaxyMap, GalaxyMapController, AppearGalaxyMap);
+    NEW_NERVE(GalaxyMapControllerDisplayGalaxyMap, GalaxyMapController, DisplayGalaxyMap);
+    NEW_NERVE(GalaxyMapControllerAppearAstroMap, GalaxyMapController, AppearAstroMap);
+    NEW_NERVE(GalaxyMapControllerDisplayAstroMap, GalaxyMapController, DisplayAstroMap);
+    NEW_NERVE(GalaxyMapControllerReadyPowerStarList, GalaxyMapController, ReadyPowerStarList);
+    NEW_NERVE(GalaxyMapControllerAppearPowerStarList, GalaxyMapController, AppearPowerStarList);
+    NEW_NERVE(GalaxyMapControllerDisplayPowerStarList, GalaxyMapController, DisplayPowerStarList);
+    NEW_NERVE(GalaxyMapControllerDisappearPowerStarList, GalaxyMapController, DisappearPowerStarList);
+    NEW_NERVE(GalaxyMapControllerNewGalaxyDiscoverPhaseAstroMap, GalaxyMapController, NewGalaxyDiscoverPhaseAstroMap);
+    NEW_NERVE(GalaxyMapControllerNewGalaxyDiscoverPhaseAppearGalaxyMap, GalaxyMapController, NewGalaxyDiscoverPhaseAppearGalaxyMap);
+    NEW_NERVE(GalaxyMapControllerNewGalaxyDiscoverPhaseDisplayGalaxyMap, GalaxyMapController, NewGalaxyDiscoverPhaseDisplayGalaxyMap);
+    NEW_NERVE(GalaxyMapControllerNewTicoGalaxyDiscoverPhaseAstroMap, GalaxyMapController, NewTicoGalaxyDiscoverPhaseAstroMap);
+    NEW_NERVE(GalaxyMapControllerNewDomeDiscoverPhaseAstroMap, GalaxyMapController, NewDomeDiscoverPhaseAstroMap);
+    NEW_NERVE(GalaxyMapControllerTicoCometFadeoutWhite, GalaxyMapController, TicoCometFadeoutWhite);
+    NEW_NERVE(GalaxyMapControllerTicoCometWaitWhite, GalaxyMapController, TicoCometWaitWhite);
+    NEW_NERVE(GalaxyMapControllerTicoCometPray, GalaxyMapController, TicoCometPray);
+    NEW_NERVE(GalaxyMapControllerChallengeGalaxyDiscoverPhaseAstroMap, GalaxyMapController, ChallengeGalaxyDiscoverPhaseAstroMap);
+    NEW_NERVE(GalaxyMapControllerFadeout, GalaxyMapController, Fadeout);
+    NEW_NERVE(GalaxyMapControllerReadyGame, GalaxyMapController, ReadyGame);
+};  // namespace
+
+namespace {
+    GalaxyMapController* getGalaxyMapController() {
+        return MR::getSceneObj< GalaxyMapController >(SceneObj_GalaxyMapController);
+    }
+};  // namespace
+
+GalaxyMapController::GalaxyMapController()
+    : LayoutActor("GalaxyMapController", true), mMap(), mMapBackground(), mPowerStarList(), mBackButton(), mWipe(), _38(), mMode(),
+      mWipeFrame(::sMapFadeinoutFrame) {
+}
+
+namespace {
+    u16 getFbWidth() {
+        const u16& rWidth = JUTGetVideoManager()->getFbWidth();
+        return rWidth;
+    }
+};  // namespace
+
+void GalaxyMapController::init(const JMapInfoIter& rIter) {
+    MR::connectToSceneLayoutOnPause(this);
+
+    mMap = new GalaxyMap();
+    mMap->initWithoutIter();
+    mMap->kill();
+
+    mPowerStarList = new PowerStarList();
+    mPowerStarList->initWithoutIter();
+    mPowerStarList->kill();
+
+    mBackButton = new BackButton("\226\337\202\351" /* 戻る */, 0);
+    mBackButton->initWithoutIter();
+    mBackButton->kill();
+
+    mMapSelectButton = new GalaxyMapSelectButton();
+    mMapSelectButton->initWithoutIter();
+    mMapSelectButton->kill();
+
+    mMapBackground = new GalaxyMapBackground();
+
+    mWipe = new WipeFade("\203\164\203\106\201\133\203\150\203\217\203\103\203\166" /* フェードワイプ */, Color8(0, 0, 0, 255));
+    mWipe->initWithoutIter();
+
+    {
+        MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeapGDDR3());
+
+        _38 = new JUTTexture(getFbWidth() / 2, MR::getScreenHeight() / 2, GX_TF_RGB565);
+    }
+
+    if (MR::startFunctionAsyncExecuteOnMainThread(MR::Functor(this, &GalaxyMapController::capture), "GalaxyMapController::capture")) {
+        MR::waitForEndFunctionAsyncExecute("GalaxyMapController::capture");
+    }
+
+    initNerve(GET_NERVE_ANON(GalaxyMapControllerDisplayAstroMap));
+    kill();
+}
+
+void GalaxyMapController::appear() {
+    LayoutActor::appear();
+}
+
+void GalaxyMapController::kill() {
+    LayoutActor::kill();
+    killAllLayout();
+    mWipe->kill();
+}
+
+void GalaxyMapController::movement() {
+    LayoutActor::movement();
+    mMap->movement();
+    mMapBackground->movement();
+
+    if (!isNerve(GET_NERVE_ANON(GalaxyMapControllerDisappearPowerStarList))) {
+        mPowerStarList->movement();
+    }
+
+    if (!mPowerStarList->isExecCapture() && !mMap->isShowDetail()) {
+        mBackButton->movement();
+    }
+
+    mWipe->movement();
+
+    if (!mMap->isShowDetail()) {
+        mMapSelectButton->movement();
+    }
+}
+
+void GalaxyMapController::calcAnim() {
+    LayoutActor::calcAnim();
+    mMap->calcAnim();
+    mMapBackground->calcAnim();
+    mPowerStarList->calcAnim();
+    mBackButton->calcAnim();
+    mWipe->calcAnim();
+    mMapSelectButton->calcAnim();
+}
+
+void GalaxyMapController::draw() const {
+    if (MR::isDead(this)) {
+        return;
+    }
+
+    mMapBackground->draw();
+    mMap->draw();
+    mPowerStarList->draw();
+    mBackButton->draw();
+    mMapSelectButton->draw();
+    mMap->drawGalaxyInfo();
+
+    if (isNerve(GET_NERVE_ANON(GalaxyMapControllerReadyGame)) && MR::isFirstStep(this)) {
+        const_cast< GalaxyMapController* >(this)->capture();
+    }
+
+    mWipe->draw();
+}
+
+void GalaxyMapController::drawForCapture() {
+    killAllLayout();
+    mMapBackground->appear();
+    mMap->setModeCapture();
+    mMap->movementForCapture();
+
+    nw4r::lyt::DrawInfo drawInfo = nw4r::lyt::DrawInfo();
+
+    MR::copyLayoutDrawInfoWithAspect(&drawInfo, mMap, true);
+    mMapBackground->calcAnim();
+    mMap->calcAnim();
+    MR::calcAnimLayoutWithDrawInfo(mMapBackground, drawInfo);
+    mMap->calcAnimForCapture(drawInfo);
+    MR::drawLayoutWithDrawInfoWithoutProjectionSetup(mMapBackground, drawInfo);
+    mMap->drawForCapture(drawInfo);
+}
+
+static const GXColor sWipeColor = {0, 0, 0, 255};
+
+void GalaxyMapController::startGalaxyMap() {
+    appear();
+    mMap->setModeNormal();
+    setFaderParam(sWipeColor, ::sMapFadeinoutFrame);
+
+    mMode = Mode_GalaxyMap;
+
+    setNerve(GET_NERVE_ANON(GalaxyMapControllerReadyModeMap));
+}
+
+void GalaxyMapController::startAstroMap() {
+    appear();
+    mMap->setModeNormal();
+    setFaderParam(sWipeColor, ::sMapFadeinoutFrame);
+
+    mMode = Mode_AstroMap;
+
+    setNerve(GET_NERVE_ANON(GalaxyMapControllerReadyModeMap));
+}
+
+void GalaxyMapController::startNewGalaxyDiscover() {
+    appear();
+    mMap->setModeNewGalaxyDiscover();
+    setFaderParam(sWipeColor, ::sMapFadeinoutFrame);
+
+    mMode = Mode_NewGalaxyDiscover;
+
+    setNerve(GET_NERVE_ANON(GalaxyMapControllerReadyModeMap));
+}
+
+void GalaxyMapController::startNewTicoGalaxyDiscover() {
+    appear();
+
+    mMap->setModeNewTicoGalaxyDiscover();
+    setFaderParam(sWipeColor, ::sMapFadeinoutFrame);
+
+    mMode = Mode_NewTicoGalaxyDiscover;
+
+    setNerve(GET_NERVE_ANON(GalaxyMapControllerReadyModeMap));
+}
+
+void GalaxyMapController::startNewDomeDiscover() {
+    appear();
+
+    mMap->setModeNewDomeDiscover();
+    setFaderParam(sWipeColor, ::sMapFadeinoutFrame);
+
+    mMode = Mode_NewDomeDiscover;
+
+    mWipe->forceClose();
+
+    setNerve(GET_NERVE_ANON(GalaxyMapControllerFadeinModeMap));
+}
+
+static const GXColor sTicoCometPrayWipeColor = {255, 255, 255, 255};
+
+void GalaxyMapController::startTicoCometPray() {
+    appear();
+
+    mMap->setModeTicoCometPray();
+    setFaderParam(sTicoCometPrayWipeColor, ::sTicoCometFadeinoutFrame);
+
+    mMode = Mode_TicoCometPray;
+
+    mWipe->forceClose();
+
+    setNerve(GET_NERVE_ANON(GalaxyMapControllerTicoCometWaitWhite));
+}
+
+void GalaxyMapController::startChallengeGalaxyDiscover() {
+    appear();
+
+    mMap->setModeNewGalaxyDiscover();
+    setFaderParam(sWipeColor, ::sMapFadeinoutFrame);
+
+    mMode = Mode_ChallengeGalaxyDiscover;
+
+    setNerve(GET_NERVE_ANON(GalaxyMapControllerReadyModeMap));
+}
+
+void GalaxyMapController::exeReadyModeMap() {
+    if (MR::isFirstStep(this)) {
+        mWipe->forceOpen();
+        mWipe->wipe(mWipeFrame);
+    }
+
+    if (mWipe->isClose()) {
+        setNerve(GET_NERVE_ANON(GalaxyMapControllerFadeinModeMap));
+    }
+}
+
+void GalaxyMapController::exeFadeinModeMap() {
+    if (MR::isFirstStep(this)) {
+        mWipe->forceClose();
+        mWipe->wipe(mWipeFrame);
+
+        switch (mMode) {
+        case Mode_AstroMap:
+            mBackButton->appear();
+            mMapSelectButton->startAstroMap();
+        case Mode_NewGalaxyDiscover:
+        case Mode_NewTicoGalaxyDiscover:
+        case Mode_NewDomeDiscover:
+        case Mode_ChallengeGalaxyDiscover:
+            mMap->forceToAstroMap();
+            break;
+        case Mode_GalaxyMap:
+            mBackButton->appear();
+            mMapSelectButton->startAstroMap();
+        case Mode_TicoCometPray:
+            mMap->forceToGalaxyMap();
+            break;
+        }
+
+        mMapBackground->appear();
+        MR::deactivateGameSceneDraw3D();
+    }
+
+    if (mWipe->isOpen()) {
+        switch (mMode) {
+        case Mode_AstroMap:
+            setNerve(GET_NERVE_ANON(GalaxyMapControllerDisplayAstroMap));
+            break;
+        case Mode_GalaxyMap:
+            setNerve(GET_NERVE_ANON(GalaxyMapControllerDisplayGalaxyMap));
+            break;
+        case Mode_NewGalaxyDiscover:
+            setNerve(GET_NERVE_ANON(GalaxyMapControllerNewGalaxyDiscoverPhaseAstroMap));
+            break;
+        case Mode_NewTicoGalaxyDiscover:
+            setNerve(GET_NERVE_ANON(GalaxyMapControllerNewTicoGalaxyDiscoverPhaseAstroMap));
+            break;
+        case Mode_NewDomeDiscover:
+            setNerve(GET_NERVE_ANON(GalaxyMapControllerNewDomeDiscoverPhaseAstroMap));
+            break;
+        case Mode_TicoCometPray:
+            setNerve(GET_NERVE_ANON(GalaxyMapControllerTicoCometPray));
+            break;
+        case Mode_ChallengeGalaxyDiscover:
+            setNerve(GET_NERVE_ANON(GalaxyMapControllerChallengeGalaxyDiscoverPhaseAstroMap));
+            break;
+        }
+    }
+}
+
+void GalaxyMapController::exeAppearGalaxyMap() {
+    if (tryAppearGalaxyMap()) {
+        setNerve(GET_NERVE_ANON(GalaxyMapControllerDisplayGalaxyMap));
+    }
+}
+
+void GalaxyMapController::exeDisplayGalaxyMap() {
+    if (MR::isFirstStep(this)) {
+        mMap->_71 = true;
+    }
+
+    if (!mMap->isShowDetail() && tryPushBackButton()) {
+        setNerve(GET_NERVE_ANON(GalaxyMapControllerFadeout));
+    } else if (tryChangeMode()) {
+        setNerveAccordingToNextModeFromMap();
+    }
+}
+
+void GalaxyMapController::exeAppearAstroMap() {
+    if (MR::isFirstStep(this)) {
+        mMap->changeToAstroMap();
+    }
+
+    if (mMap->isTransition()) {
+        return;
+    }
+
+    setNerve(GET_NERVE_ANON(GalaxyMapControllerDisplayAstroMap));
+}
+
+void GalaxyMapController::exeDisplayAstroMap() {
+    if (MR::isFirstStep(this)) {
+        mMap->_71 = true;
+    }
+
+    if (!mMap->isShowDetail() && tryPushBackButton()) {
+        setNerve(GET_NERVE_ANON(GalaxyMapControllerFadeout));
+    } else if (tryChangeMode()) {
+        setNerveAccordingToNextModeFromMap();
+    }
+}
+
+void GalaxyMapController::exeReadyPowerStarList() {
+    if (MR::isFirstStep(this)) {
+        mWipe->forceOpen();
+        mWipe->wipe(::sMapFadeinoutFrame);
+        mMap->_71 = false;
+
+        mMapSelectButton->changeToStarList();
+    }
+
+    if (mWipe->isClose()) {
+        setNerve(GET_NERVE_ANON(GalaxyMapControllerAppearPowerStarList));
+    }
+}
+
+void GalaxyMapController::exeAppearPowerStarList() {
+    if (MR::isFirstStep(this)) {
+        mWipe->forceClose();
+        mWipe->wipe(::sMapFadeinoutFrame);
+        mPowerStarList->appear();
+        mMap->kill();
+    }
+
+    if (mPowerStarList->isAppearing()) {
+        return;
+    }
+
+    if (mWipe->isOpen()) {
+        setNerve(GET_NERVE_ANON(GalaxyMapControllerDisplayPowerStarList));
+    }
+}
+
+void GalaxyMapController::exeDisplayPowerStarList() {
+    if (!mPowerStarList->isExecCapture() && tryPushBackButton()) {
+        mMode = Mode_AstroMap;
+
+        setNerve(GET_NERVE_ANON(GalaxyMapControllerDisappearPowerStarList));
+    } else if (tryChangeMode()) {
+        setNerve(GET_NERVE_ANON(GalaxyMapControllerDisappearPowerStarList));
+    }
+}
+
+void GalaxyMapController::exeDisappearPowerStarList() {
+    if (MR::isFirstStep(this)) {
+        mWipe->forceOpen();
+        mWipe->wipe(::sMapFadeinoutFrame);
+    }
+
+    if (mWipe->isClose()) {
+        mMapSelectButton->startAstroMap();
+        mPowerStarList->kill();
+
+        switch (mMode) {
+        case Mode_AstroMap:
+            mMap->forceToAstroMap();
+            break;
+        case Mode_GalaxyMap:
+            mMap->forceToGalaxyMap();
+            break;
+        }
+
+        setNerve(GET_NERVE_ANON(GalaxyMapControllerFadeinModeMap));
+    }
+}
+
+void GalaxyMapController::exeNewGalaxyDiscoverPhaseAstroMap() {
+    if (MR::isGreaterStep(this, ::sWaitForNewGalaxyDiscoverPhaseAstroMap)) {
+        mMode = Mode_GalaxyMap;
+
+        setNerve(GET_NERVE_ANON(GalaxyMapControllerNewGalaxyDiscoverPhaseAppearGalaxyMap));
+    }
+}
+
+void GalaxyMapController::exeNewGalaxyDiscoverPhaseAppearGalaxyMap() {
+    if (tryAppearGalaxyMap()) {
+        setNerve(GET_NERVE_ANON(GalaxyMapControllerNewGalaxyDiscoverPhaseDisplayGalaxyMap));
+    }
+}
+
+void GalaxyMapController::exeNewGalaxyDiscoverPhaseDisplayGalaxyMap() {
+    tryDisplayAndKeyWait();
+    MR::startSystemLevelSE("SE_SY_LV_GALAMAP_BLINK_NEW");
+}
+
+void GalaxyMapController::exeNewTicoGalaxyDiscoverPhaseAstroMap() {
+    tryDisplayAndKeyWait();
+    MR::startSystemLevelSE("SE_SY_LV_GALAMAP_BLINK_FAT");
+}
+
+void GalaxyMapController::exeNewDomeDiscoverPhaseAstroMap() {
+    tryDisplayAndKeyWait();
+    MR::startSystemLevelSE("SE_SY_LV_GALAMAP_BLINK_DOME");
+}
+
+void GalaxyMapController::exeTicoCometFadeoutWhite() {
+    if (MR::isFirstStep(this)) {
+        mWipe->forceOpen();
+        mWipe->wipe(mWipeFrame);
+
+        MR::startSystemSE("SE_DM_TICOCOMET_MORPH_WIPE_OUT");
+    }
+
+    if (mWipe->isClose()) {
+        setNerve(GET_NERVE_ANON(GalaxyMapControllerTicoCometWaitWhite));
+    }
+}
+
+void GalaxyMapController::exeTicoCometWaitWhite() {
+    MR::setNerveAtStep(this, GET_NERVE_ANON(GalaxyMapControllerFadeinModeMap), ::sTicoCometWaitFrame);
+}
+
+void GalaxyMapController::exeTicoCometPray() {
+    tryDisplayAndKeyWait();
+}
+
+void GalaxyMapController::exeChallengeGalaxyDiscoverPhaseAstroMap() {
+    tryDisplayAndKeyWait();
+    MR::startSystemLevelSE("SE_SY_LV_GALAMAP_BLINK_NEW");
+}
+
+void GalaxyMapController::exeFadeout() {
+    if (MR::isFirstStep(this)) {
+        mWipe->setColor(sWipeColor);
+        mWipe->forceOpen();
+        mWipe->wipe(::sMapFadeinoutFrame);
+    }
+
+    if (mWipe->isClose()) {
+        setNerve(GET_NERVE_ANON(GalaxyMapControllerReadyGame));
+    }
+}
+
+void GalaxyMapController::exeReadyGame() {
+    if (MR::isFirstStep(this)) {
+        MR::balloonOffTalkDirector();
+        killAllLayout();
+        MR::activateGameSceneDraw3D();
+        mWipe->forceClose();
+        mWipe->wipe(::sMapFadeinoutFrame);
+    }
+
+    if (mWipe->isOpen()) {
+        kill();
+    }
+}
+
+void GalaxyMapController::killAllLayout() {
+    mMap->kill();
+    mMapBackground->kill();
+    mPowerStarList->kill();
+    mBackButton->kill();
+    mMapSelectButton->kill();
+}
+
+bool GalaxyMapController::tryPushBackButton() {
+    bool isTriggerB = MR::testSystemTriggerB();
+
+    if (mBackButton->_24 || isTriggerB) {
+        if (isTriggerB) {
+            MR::startSystemSE("SE_SY_GALAXY_DECIDE_CANCEL");
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
+bool GalaxyMapController::tryChangeMode() {
+    if (mMapSelectButton->isDecidedList()) {
+        mMode = Mode_PowerStarList;
+
+        return true;
+    }
+
+    if (!mMapSelectButton->isPointingAnything() && !mMap->isPointingAnything() && !mBackButton->isPointing() && MR::testCorePadTriggerA(WPAD_CHAN0)) {
+        switch (mMode) {
+        case Mode_AstroMap:
+            MR::startSystemSE("SE_SY_GALAMAP_PAGE_CHANGE");
+            MR::startSystemSE("SE_SY_GALAMAP_CH_PITCH_UP");
+            break;
+        case Mode_GalaxyMap:
+            MR::startSystemSE("SE_SY_GALAMAP_PAGE_CHANGE");
+            MR::startSystemSE("SE_SY_GALAMAP_CH_PITCH_DOWN");
+            break;
+        }
+
+        switch (mMode) {
+        case Mode_AstroMap:
+            mMode = Mode_GalaxyMap;
+            return true;
+        case Mode_GalaxyMap:
+            mMode = Mode_AstroMap;
+            return true;
+        case Mode_PowerStarList:
+            break;
+        }
+    }
+
+    return false;
+}
+
+bool GalaxyMapController::tryAppearGalaxyMap() {
+    if (MR::isFirstStep(this)) {
+        mMap->changeToGalaxyMap();
+    }
+
+    if (!mMap->isTransition()) {
+        return true;
+    }
+
+    return false;
+}
+
+bool GalaxyMapController::tryDisplayAndKeyWait() {
+    if (MR::isFirstStep(this)) {
+        mMap->_71 = false;
+    }
+
+#if (VERSION == RMGK01)
+    if (MR::isStep(this, ::sDisplayKeepFrame)) {
+        mMap->dispIconAButton();
+    }
+#endif
+
+    if (MR::isGreaterStep(this, ::sDisplayKeepFrame) && MR::testCorePadTriggerA(WPAD_CHAN0)) {
+        setNerve(GET_NERVE_ANON(GalaxyMapControllerFadeout));
+
+        return true;
+    }
+
+    return false;
+}
+
+void GalaxyMapController::setNerveAccordingToNextModeFromMap() {
+    switch (mMode) {
+    case Mode_PowerStarList:
+        setNerve(GET_NERVE_ANON(GalaxyMapControllerReadyPowerStarList));
+        break;
+    case Mode_GalaxyMap:
+        setNerve(GET_NERVE_ANON(GalaxyMapControllerAppearGalaxyMap));
+        break;
+    case Mode_AstroMap:
+        setNerve(GET_NERVE_ANON(GalaxyMapControllerAppearAstroMap));
+        break;
+    }
+}
+
+void GalaxyMapController::setFaderParam(GXColor color, int frame) {
+    mWipe->setColor(color);
+    mWipeFrame = frame;
+}
+
+void GalaxyMapController::capture() {
+    Mtx44 projectionMtx;
+    f32 halfHeight = MR::getScreenHeight() * 0.5f;
+    f32 halfWidth = 304.0f;
+    C_MTXOrtho(projectionMtx, halfHeight, -halfHeight, -halfWidth, halfWidth, -1000.0f, 1000.0f);
+    GXSetProjection(projectionMtx, GX_ORTHOGRAPHIC);
+    drawForCapture();
+    _38->capture(0, 0, GX_TF_RGB565, true, 0);
+}
+
+namespace MR {
+    void startGalaxyMapLayout() {
+        MR::requestShowGalaxyMap();
+        ::getGalaxyMapController()->startGalaxyMap();
+    }
+
+    void startAstroMapLayout() {
+        MR::requestShowGalaxyMap();
+        ::getGalaxyMapController()->startAstroMap();
+    }
+
+    void startAstroMapLayoutForNewGalaxyDiscover() {
+        MR::requestShowGalaxyMap();
+        ::getGalaxyMapController()->startNewGalaxyDiscover();
+    }
+
+    void startAstroMapLayoutForNewTicoGalaxyDiscover() {
+        MR::requestShowGalaxyMap();
+        ::getGalaxyMapController()->startNewTicoGalaxyDiscover();
+    }
+
+    void startAstroMapLayoutForNewDomeDiscover() {
+        MR::requestShowGalaxyMap();
+        ::getGalaxyMapController()->startNewDomeDiscover();
+    }
+
+    void startGalaxyMapLayoutForTicoComet() {
+        MR::requestShowGalaxyMap();
+        ::getGalaxyMapController()->startTicoCometPray();
+    }
+
+    void startAstroMapLayoutForChallengeGalaxyDiscover() {
+        MR::requestShowGalaxyMap();
+        ::getGalaxyMapController()->startChallengeGalaxyDiscover();
+    }
+
+    bool isActiveGalaxyMapLayout() {
+        return !MR::isDead(::getGalaxyMapController());
+    }
+
+    const ResTIMG* getGalaxyMapResTIMG() {
+        return ::getGalaxyMapController()->_38->mTIMG;
+    }
+};  // namespace MR

@@ -1,0 +1,89 @@
+#include "Game/NPC/PenguinMaster.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/Util/ActorSensorUtil.hpp"
+#include "Game/Util/NPCUtil.hpp"
+#include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/TalkUtil.hpp"
+
+namespace NrvPenguinMaster {
+    NEW_NERVE(PenguinMasterNrvWait, PenguinMaster, Wait);
+    NEW_NERVE(PenguinMasterNrvReaction, PenguinMaster, Reaction);
+};  // namespace NrvPenguinMaster
+
+PenguinMaster::PenguinMaster(const char* pName) : NPCActor(pName) {
+}
+
+void PenguinMaster::init(const JMapInfoIter& rIter) {
+    NPCActorCaps caps = "PenguinMaster";
+    caps.setDefault();
+    caps.mSensor = false;
+    caps.mShadowSize = 130.0f;
+    caps.mMessageOffset = TVec3f(0.0f, 430.0f, 0.0f);
+    caps.mPointerSize = 180.0f;
+    caps.mStarPointerOffs.x = 0.0f;
+    caps.mStarPointerOffs.y = 200.0f;
+    caps.mStarPointerOffs.z = 80.0f;
+    caps.mWaitNerve = GET_NERVE(PenguinMaster, PenguinMasterNrvWait);
+    LiveActor::initHitSensor(2);
+    MR::addHitSensorPush(this, "body", 8, 150.0f, TVec3f(0.0f, 100.0f, 0.0f));
+    MR::addHitSensorPush(this, "head", 8, 150.0f, TVec3f(0.0f, 260.0f, 100.0f));
+    initialize(rIter, caps);
+    const char* talk = "Talk";
+    mParam._14 = "Wait";
+    mParam._1C = talk;
+    mParam._18 = nullptr;
+    mParam._20 = nullptr;
+    mParam._0 = false;
+    mParam._1 = false;
+    _134 = "Trampled";
+    _13C = "Reaction";
+    _130 = "Reaction";
+    _138 = "Pointing";
+
+    if (mMsgCtrl != nullptr) {
+        MR::setDistanceToTalk(mMsgCtrl, 350.0f);
+    }
+}
+
+bool PenguinMaster::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    if (MR::isMsgPlayerSpinAttack(msg)) {
+        _E3 = true;
+
+        return true;
+    }
+
+    return NPCActor::receiveMsgPlayerAttack(msg, pSender, pReceiver);
+}
+
+void PenguinMaster::exeWait() {
+    MR::tryTalkNearPlayerAndStartTalkAction(this);
+    MR::tryStartReactionAndPushNerve(this, GET_NERVE(PenguinMaster, PenguinMasterNrvReaction));
+}
+
+void PenguinMaster::exeReaction() {
+    if (_D8) {
+        MR::startSound(this, "SE_SV_PENGUIN_OLD_TRAMPLED");
+        MR::startSound(this, "SE_SM_PENGUIN_TRAMPLED");
+    }
+
+    if (isPointingSe()) {
+        MR::startSound(this, "SE_SV_PENGUIN_OLD_POINTED_2P");
+        MR::startDPDHitSound();
+    }
+
+    if (_D9) {
+        MR::startSound(this, "SE_SV_PENGUIN_OLD_SPIN_HIT");
+    }
+
+    if (_DB) {
+        MR::startSound(this, "SE_SV_PENGUIN_OLD_STAR_PIECE");
+    }
+
+    if (MR::tryStartReactionAndPopNerve(this)) {
+        return;
+    }
+
+    if (MR::tryStartReactionAndPopNerve(this)) {
+        return;
+    }
+}

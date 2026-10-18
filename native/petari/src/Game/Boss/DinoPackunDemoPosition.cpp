@@ -1,0 +1,62 @@
+#include "Game/Boss/DinoPackunDemoPosition.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/Util/JointUtil.hpp"
+#include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/PlayerUtil.hpp"
+
+namespace {
+    static const s32 sLandMotionStartTime = 28;
+    static const s32 sJumpBackTime = 56;
+};  // namespace
+
+namespace NrvDinoPackunDemo {
+    NEW_NERVE(DinoPackunDemoPositionNrvOpeningDemo, DinoPackunDemoPosition, OpeningDemo);
+};  // namespace NrvDinoPackunDemo
+
+DinoPackunDemoPosition::DinoPackunDemoPosition(const char* pName) : LiveActor(pName) {
+}
+
+void DinoPackunDemoPosition::init(const JMapInfoIter& rIter) {
+    MR::initDefaultPos(this, rIter);
+    initNerve(GET_NERVE(DinoPackunDemo, DinoPackunDemoPositionNrvOpeningDemo));
+    initModelManagerWithAnm("DinoPackunDemoPosition", nullptr, false);
+    MR::invalidateClipping(this);
+    makeActorDead();
+}
+
+void DinoPackunDemoPosition::control() {
+    return;
+}
+
+void DinoPackunDemoPosition::startOpeningDemo() {
+    setNerve(GET_NERVE(DinoPackunDemo, DinoPackunDemoPositionNrvOpeningDemo));
+    makeActorAppeared();
+}
+
+void DinoPackunDemoPosition::endDemo() {
+    makeActorDead();
+}
+
+void DinoPackunDemoPosition::exeOpeningDemo() {
+    if (MR::isFirstStep(this)) {
+        MR::startBck(this, "OpeningDemo");
+    }
+
+    if (MR::isStep(this, 0)) {
+        MR::startBckPlayer("CocoonFly");
+    }
+
+    if (MR::isStep(this, ::sLandMotionStartTime)) {
+        MR::startBckPlayer("LandStiffen");
+    }
+
+    if (MR::isStep(this, ::sJumpBackTime)) {
+        MR::startBckPlayer("JumpBack");
+    }
+
+    calcAnim();
+    MR::setPlayerBaseMtx(MR::getJointMtx(this, "MarioPosition"));
+}
+
+DinoPackunDemoPosition::~DinoPackunDemoPosition() {
+}

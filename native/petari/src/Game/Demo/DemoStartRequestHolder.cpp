@@ -1,0 +1,219 @@
+#include "Game/Demo/DemoStartRequestHolder.hpp"
+#include "Game/Demo/DemoStartRequestUtil.hpp"
+#include "Game/NameObj/NameObj.hpp"
+#include "Game/Util/StringUtil.hpp"
+#include <revolution/types.h>
+
+#ifdef TARGET_PC
+// Defined below; declared before this file's first use instantiates them.
+template <>
+void MR::FixedRingBuffer< const DemoStartInfo*, 16 >::push_back(const DemoStartInfo* const& rValue);
+template <>
+void MR::FixedRingBuffer< const DemoStartInfo*, 16 >::iterator::operator++();
+#endif
+
+DemoStartInfo::DemoStartInfo() {
+    _0 = nullptr;
+    _4 = nullptr;
+    _8 = nullptr;
+    _C = nullptr;
+    _10 = nullptr;
+    mDemoExecutor = nullptr;
+    mDemoName = nullptr;
+    _1C = nullptr;
+    _20 = nullptr;
+    _24 = 0;
+    mDemoType = DemoType_0;
+    mFrameType = CinemaFrameType_0;
+    mPointerType = StarPointerType_0;
+    mDeleteEffectType = DeleteEffectType_0;
+}
+
+DemoStartInfo& DemoStartInfo::operator=(const DemoStartInfo& rOther) {
+    _0 = rOther._0;
+    _4 = rOther._4;
+    _8 = rOther._8;
+    _C = rOther._C;
+    _10 = rOther._10;
+    mDemoExecutor = rOther.mDemoExecutor;
+    mDemoName = rOther.mDemoName;
+    _1C = rOther._1C;
+    _20 = rOther._20;
+    _24 = rOther._24;
+    mDemoType = rOther.mDemoType;
+    mFrameType = rOther.mFrameType;
+    mPointerType = rOther.mPointerType;
+    mDeleteEffectType = rOther.mDeleteEffectType;
+    return *this;
+}
+
+void DemoStartRequestHolder::pushRequest(LiveActor* pActor, const char* pName) {
+    const DemoStartInfo* pInfo = find(pActor, pName);
+    if (pInfo == nullptr) {
+        pInfo = findEmpty();
+    }
+
+    mRequestBuffer.push_back(pInfo);
+}
+
+void DemoStartRequestHolder::pushRequest(LayoutActor* pActor, const char* pName) {
+    const DemoStartInfo* pInfo = find(pActor, pName);
+    if (pInfo == nullptr) {
+        pInfo = findEmpty();
+    }
+
+    mRequestBuffer.push_back(pInfo);
+}
+
+void DemoStartRequestHolder::pushRequest(NerveExecutor* pExecutor, const char* pName) {
+    const DemoStartInfo* pInfo = find(pExecutor, pName);
+    if (pInfo == nullptr) {
+        pInfo = findEmpty();
+    }
+
+    mRequestBuffer.push_back(pInfo);
+}
+
+void DemoStartRequestHolder::pushRequest(NameObj* pObj, const char* pName) {
+    const DemoStartInfo* pInfo = find(pObj, pName);
+    if (pInfo == nullptr) {
+        pInfo = findEmpty();
+    }
+
+    mRequestBuffer.push_back(pInfo);
+}
+
+void DemoStartRequestHolder::popRequest() {
+    DemoStartInfo** pIter = mStartInfos;
+    const DemoStartInfo** pCurReqPtr = mRequestBuffer.mHead.mHead;
+    DemoStartInfo** pEnd = &mStartInfos[mNumInfos];
+
+    goto check;
+    do {
+        pIter++;
+    check:
+        if (pIter == pEnd) {
+            break;
+        }
+    } while (*pIter != *pCurReqPtr);
+
+    if (pIter != pEnd) {
+        DemoStartInfo* pFound = *pIter;
+        DemoStartInfo emptyInfo;
+        *pFound = emptyInfo;
+    }
+
+    if (mRequestBuffer.mCount != 0) {
+        ++mRequestBuffer.mHead;
+        mRequestBuffer.mCount--;
+    }
+}
+
+bool DemoStartRequestHolder::isExistRequest() const {
+    return mRequestBuffer.mCount != 0;
+}
+
+const DemoStartInfo* DemoStartRequestHolder::getCurrentInfo() const {
+    if (mRequestBuffer.mCount == 0) {
+        return nullptr;
+    }
+
+    return *mRequestBuffer.mHead.mHead;
+}
+
+void DemoStartRequestHolder::registerStartDemoInfo(const DemoStartInfo& rInfo) {
+    DemoStartInfo* pEmpty = findEmpty();
+    *pEmpty = rInfo;
+}
+
+DemoStartInfo* DemoStartRequestHolder::find(const LiveActor* pActor, const char* pName) const {
+    for (DemoStartInfo* const* pIter = mStartInfos; pIter != &mStartInfos[mNumInfos]; pIter++) {
+        if ((*pIter)->_0 == pActor && MR::isEqualString((*pIter)->mDemoName, pName)) {
+            return *pIter;
+        }
+    }
+
+    return nullptr;
+}
+
+DemoStartInfo* DemoStartRequestHolder::find(const LayoutActor* pActor, const char* pName) const {
+    for (DemoStartInfo* const* pIter = mStartInfos; pIter != &mStartInfos[mNumInfos]; pIter++) {
+        if ((*pIter)->_4 == pActor && MR::isEqualString((*pIter)->mDemoName, pName)) {
+            return *pIter;
+        }
+    }
+
+    return nullptr;
+}
+
+DemoStartInfo* DemoStartRequestHolder::find(const NerveExecutor* pExecutor, const char* pName) const {
+    for (DemoStartInfo* const* pIter = mStartInfos; pIter != &mStartInfos[mNumInfos]; pIter++) {
+        if ((*pIter)->_8 == pExecutor && MR::isEqualString((*pIter)->mDemoName, pName)) {
+            return *pIter;
+        }
+    }
+
+    return nullptr;
+}
+
+DemoStartInfo* DemoStartRequestHolder::find(const NameObj* pObj, const char* pName) const {
+    for (DemoStartInfo* const* pIter = mStartInfos; pIter != &mStartInfos[mNumInfos]; pIter++) {
+        if ((*pIter)->_C == pObj && MR::isEqualString((*pIter)->mDemoName, pName)) {
+            return *pIter;
+        }
+    }
+
+    return nullptr;
+}
+
+DemoStartInfo* DemoStartRequestHolder::findEmpty() const {
+    DemoStartInfo* pFound;
+    for (DemoStartInfo* const* pIter = mStartInfos; pIter != &mStartInfos[mNumInfos]; pIter++) {
+        if (DemoStartRequestUtil::isEmpty(*pIter)) {
+            pFound = *pIter;
+            DemoStartInfo emptyInfo;
+            *pFound = emptyInfo;
+            return *pIter;
+        }
+    }
+
+    return nullptr;
+}
+
+DemoStartRequestHolder::DemoStartRequestHolder() : mNumInfos(), mRequestBuffer(mRequestBuffer.mBuffer, mRequestBuffer.mBuffer) {
+    mProxyObj = new NameObj("\221\343\227\235\220\154" /* 代理人 */);
+    for (u32 i = 0; i < ARRAY_SIZE(mStartInfos); i++) {
+        DemoStartInfo* pInfo = new DemoStartInfo();
+        s32 idx = mNumInfos;
+        mNumInfos = idx + 1;
+        mStartInfos[idx] = pInfo;
+    }
+}
+
+template <>
+MR::FixedRingBuffer< const DemoStartInfo*, 16 >::iterator::iterator(const DemoStartInfo** pHead, const DemoStartInfo** pTail) {
+    mHead = pHead;
+    mTail = pTail;
+    mEnd = pTail + 16;
+}
+
+template <>
+void MR::FixedRingBuffer< const DemoStartInfo*, 16 >::push_back(const DemoStartInfo* const& rValue) {
+    if ((u32)mCount >= 16) {
+        return;
+    }
+
+    *mEnd.mHead = rValue;
+    ++mEnd;
+    mCount++;
+}
+
+template <>
+void MR::FixedRingBuffer< const DemoStartInfo*, 16 >::iterator::operator++() {
+    const DemoStartInfo** pEnd = mEnd;
+    mHead++;
+
+    if (pEnd <= mHead) {
+        mHead = mTail;
+    }
+}

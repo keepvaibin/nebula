@@ -1,0 +1,184 @@
+#include "Game/Demo/DemoKoopaJrShip.hpp"
+#include "Game/Demo/DemoFunction.hpp"
+#include "Game/LiveActor/ActorCameraInfo.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/NPC/KoopaJr.hpp"
+#include "Game/Util/ActorCameraUtil.hpp"
+#include "Game/Util/ActorMovementUtil.hpp"
+#include "Game/Util/DemoUtil.hpp"
+#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/JointUtil.hpp"
+#include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/PlayerUtil.hpp"
+#include "Game/Util/SoundUtil.hpp"
+
+namespace {
+    struct Anim {
+        /* 0x00 */ const char* mEntryAnimName;
+        /* 0x04 */ const char* mLeaveAnimName;
+    };
+
+    static const Vec sKoopaJrPos = {135.0f, 188.0f, 0.0f};
+    static const char* sPartName = "\203\116\203\142\203\160\202\151\202\222\201\104\203\146\203\202" /* クッパＪｒ．デモ */;
+    static const char* sJointNameKoopaJrPos = "obj";
+    static const s32 sBgmStartStep = 309;
+    static const Anim sAnim[] = {
+        {
+            "KoopaJrEntryTriPodDemo",
+            "KoopaJrLeaveTriPodDemo",
+        },
+        {
+            "KoopaJrEntryOtaKingDemo",
+            "KoopaJrLeaveOtaKingDemo",
+        },
+    };
+
+    NEW_NERVE(DemoKoopaJrShipNrvAppear, DemoKoopaJrShip, Appear);
+    NEW_NERVE(DemoKoopaJrShipNrvTalk, DemoKoopaJrShip, Talk);
+    NEW_NERVE(DemoKoopaJrShipNrvFlyAway, DemoKoopaJrShip, FlyAway);
+};  // namespace
+
+DemoKoopaJrShip::DemoKoopaJrShip(const char* pName) : LiveActor(pName), mKoopaJrObj(), mAnimCameraIndex(-1) {
+}
+
+void DemoKoopaJrShip::init(const JMapInfoIter& rIter) {
+    MR::initDefaultPos(this, rIter);
+    initModelManagerWithAnm("KoopaJrShip", nullptr, false);
+    initAnimID(rIter);
+    MR::connectToSceneNpc(this);
+    initEffectKeeper(0, nullptr, false);
+    initSound(8, false);
+    MR::invalidateClipping(this);
+    createKoopaJrObj(rIter);
+    MR::tryRegisterDemoCast(this, rIter);
+    initNerve(GET_NERVE_ANON(DemoKoopaJrShipNrvAppear));
+    makeActorDead();
+}
+
+void DemoKoopaJrShip::appear() {
+    LiveActor::appear();
+    setNerve(GET_NERVE_ANON(DemoKoopaJrShipNrvAppear));
+    mKoopaJrObj->mPosition.set(::sKoopaJrPos);
+}
+
+void DemoKoopaJrShip::exeAppear() {
+    if (MR::isFirstStep(this)) {
+        mKoopaJrObj->appear();
+        mKoopaJrObj->setStateShipBattleAppear();
+        startEntryAnim();
+        MR::stopStageBGM(60);
+        MR::startSound(this, "SE_BM_KOOPAJR_SHIP_ENTER");
+        MR::hideModel(this);
+    }
+
+    if (MR::isGreaterEqualStep(this, 1) && MR::isHiddenModel(this)) {
+        MR::showModel(this);
+    }
+
+    if (MR::isStep(this, ::sBgmStartStep)) {
+        MR::startSubBGM("BGM_KOOPA_JR_APPEAR", false);
+    }
+
+    MR::startLevelSound(this, "SE_BM_LV_KOOPAJR_SHIP_MOVE");
+
+    if (MR::isBckStopped(this)) {
+        setNerve(GET_NERVE_ANON(DemoKoopaJrShipNrvTalk));
+    } else if (tryDemoEnd()) {
+        return;
+    }
+}
+
+void DemoKoopaJrShip::exeTalk() {
+    if (MR::isFirstStep(this)) {
+        mKoopaJrObj->startShipBattleTalk();
+        MR::startBck(this, "Wait");
+    }
+
+    MR::startLevelSound(this, "SE_BM_LV_KOOPAJR_SHIP_MOVE");
+
+    if (!DemoFunction::isPauseTimeKeepDemo(this)) {
+        setNerve(GET_NERVE_ANON(DemoKoopaJrShipNrvFlyAway));
+    } else if (tryDemoEnd()) {
+        return;
+    }
+}
+
+void DemoKoopaJrShip::exeFlyAway() {
+    if (MR::isFirstStep(this)) {
+        MR::startSound(mKoopaJrObj, "SE_BV_KOOPAJR_LAUGH_LEAVE");
+        MR::stopSubBGM(120);
+        startLeaveAnim();
+    }
+
+    MR::startLevelSound(this, "SE_BM_LV_KOOPAJR_SHIP_MOVE");
+
+    if (tryDemoEnd()) {
+        if (mAnimCameraIndex >= 0) {
+            ActorCameraInfo cameraInfo = ActorCameraInfo();
+        }
+
+        mKoopaJrObj->kill();
+        kill();
+    }
+}
+
+void DemoKoopaJrShip::control() {
+    TMtx34f jointMtx;
+    jointMtx.setInline(MR::getJointMtx(this, ::sJointNameKoopaJrPos));
+
+    MR::faceToPoint(jointMtx, *MR::getPlayerPos(), 5.0f);
+
+    jointMtx.mult(::sKoopaJrPos, mKoopaJrObj->mPosition);
+}
+
+void DemoKoopaJrShip::initAnimID(const JMapInfoIter& rIter) {
+    MR::getJMapInfoArg0NoInit(rIter, &mAnimCameraIndex);
+
+    u32 animNum = ARRAY_SIZE(::sAnim);
+
+    if (mAnimCameraIndex >= animNum) {
+        mAnimCameraIndex = -1;
+    }
+
+    if (mAnimCameraIndex >= 0) {
+        ActorCameraInfo cameraInfo = ActorCameraInfo();
+
+        MR::initAnimCamera(this, &cameraInfo, ::sAnim[mAnimCameraIndex].mEntryAnimName);
+        MR::initAnimCamera(this, &cameraInfo, ::sAnim[mAnimCameraIndex].mLeaveAnimName);
+    }
+}
+
+void DemoKoopaJrShip::createKoopaJrObj(const JMapInfoIter& rIter) {
+    mKoopaJrObj = new KoopaJr("\203\116\203\142\203\160Jr" /* クッパJr */);
+    mKoopaJrObj->init(rIter);
+    mKoopaJrObj->makeActorDead();
+}
+
+bool DemoKoopaJrShip::tryDemoEnd() {
+    return MR::isDemoPartLastStep(::sPartName);
+}
+
+void DemoKoopaJrShip::startEntryAnim() {
+    if (mAnimCameraIndex == -1) {
+        MR::startBck(this, "Arrival");
+    } else {
+        MR::startBck(this, ::sAnim[mAnimCameraIndex].mEntryAnimName);
+
+        ActorCameraInfo cameraInfo = ActorCameraInfo();
+        MR::startAnimCameraTargetSelf(this, &cameraInfo, ::sAnim[mAnimCameraIndex].mEntryAnimName, 0, 1.0f);
+    }
+}
+
+void DemoKoopaJrShip::startLeaveAnim() {
+    if (mAnimCameraIndex == -1) {
+        MR::startBck(this, "Arrival");
+        MR::setBckFrame(this, MR::getBckCtrl(this)->getEnd() - 1.0f);
+        MR::setBckRate(this, -1.0f);
+    } else {
+        MR::startBck(this, ::sAnim[mAnimCameraIndex].mLeaveAnimName);
+
+        ActorCameraInfo cameraInfo = ActorCameraInfo();
+        MR::startAnimCameraTargetSelf(this, &cameraInfo, ::sAnim[mAnimCameraIndex].mLeaveAnimName, 0, 1.0f);
+    }
+}

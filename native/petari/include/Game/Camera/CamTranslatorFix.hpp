@@ -1,0 +1,14 @@
+#pragma once
+
+#include "Game/Camera/CameraFix.hpp"
+
+class CamTranslatorFix : public CamTranslatorBase {
+public:
+    CamTranslatorFix(CameraFix* pCamera) : mCamera(pCamera) {
+    }
+
+    virtual void setParam(const CameraParamChunk*);
+    virtual Camera* getCamera() const;
+
+    /* 0x4 */ CameraFix* mCamera;
+};

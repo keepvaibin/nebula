@@ -1,0 +1,1397 @@
+#pragma once
+
+#include "Inline.hpp"
+#include "JSystem/JGeometry/TUtil.hpp"
+#include "JSystem/JMath/JMATrigonometric.hpp"
+#include "JSystem/JMath/JMath.hpp"
+#include <math_types.hpp>
+#include <revolution/mtx.h>
+#include <revolution/types.h>
+
+namespace JGeometry {
+#ifdef __MWERKS__
+    inline void negateInternal(register const f32* rSrc, register f32* rDest) {
+        register f32 xy;
+        __asm {
+            psq_l xy, 0(rSrc), 0, 0
+            ps_neg xy, xy
+            psq_st xy, 0(rDest), 0, 0
+        }
+
+        rDest[2] = -rSrc[2];
+    }
+
+#elif defined(TARGET_PC)
+    inline void negateInternal(const f32* rSrc, f32* rDest) {
+        rDest[0] = -rSrc[0];
+        rDest[1] = -rSrc[1];
+        rDest[2] = -rSrc[2];
+    }
+#else
+    inline void negateInternal(const f32* rSrc, f32* rDest);
+#endif
+
+#ifdef __MWERKS__
+    inline static void subInternal(register const f32* vec1, register const f32* vec2, register f32* dst) {
+        register f32 xy2, z1, xy1, z2;
+        __asm {
+            psq_l xy1, 0(vec1), 0, 0
+            psq_l xy2, 0(vec2), 0, 0
+            psq_l z1, 8(vec1), 1, 0
+            ps_sub xy1, xy1, xy2
+            psq_st xy1, 0(dst), 0, 0
+            psq_l z2, 8(vec2), 1, 0
+            ps_sub z1, z2, z1
+            psq_st z1, 8(dst), 1, 0
+        }
+    }
+
+#elif defined(TARGET_PC)
+    // As the original: x and y are vec1 - vec2, z is vec2 - vec1.
+    inline static void subInternal(const f32* vec1, const f32* vec2, f32* dst) {
+        const f32 z = vec2[2] - vec1[2];
+        dst[0] = vec1[0] - vec2[0];
+        dst[1] = vec1[1] - vec2[1];
+        dst[2] = z;
+    }
+#else
+    static void subInternal(const f32* vec1, const f32* vec2, f32* dst);
+#endif
+
+#ifdef __MWERKS__
+    ALWAYS_INLINE inline void mulInternal(register const f32* vec1, register const f32* vec2, register f32* dst) {
+        register f32 xy1, xy2, res;
+        __asm {
+                psq_l xy1, 0(vec1), 0, 0
+                psq_l xy2, 0(vec2), 0, 0
+                ps_mul res, xy1, xy2
+                psq_st res, 0(dst), 0, 0
+        }
+
+        dst[2] = vec1[2] * vec2[2];
+    }
+
+#elif defined(TARGET_PC)
+    inline void mulInternal(const f32* vec1, const f32* vec2, f32* dst) {
+        dst[0] = vec1[0] * vec2[0];
+        dst[1] = vec1[1] * vec2[1];
+        dst[2] = vec1[2] * vec2[2];
+    }
+#else
+    void mulInternal(const f32* vec1, const f32* vec2, f32* dst);
+#endif
+
+    template < typename T >
+    struct TVec2 {
+    public:
+        /* Constructors */
+        inline TVec2() {
+        }
+
+        template < typename A >
+        TVec2(A _x, A _y) {
+            x = _x;
+            y = _y;
+        }
+
+        void add(const TVec2< T >& other) {
+            x += other.x;
+            y += other.y;
+        }
+
+        inline TVec2& addInline(const TVec2< T >& other) const {
+            TVec2 ret(*this);
+            ret.add(other);
+            return ret;
+        }
+
+        inline const TVec2& addOperatorInline(const TVec2& rOther) const {
+            TVec2 ret(*this);
+            ret.x += rOther.x;
+            ret.y += rOther.y;
+            return ret;
+        }
+
+        /* General operations */
+        template < typename A >
+        void set(const JGeometry::TVec2< A >& rSrc) NO_INLINE {
+            x = rSrc.x;
+            y = rSrc.y;
+        }
+
+        void set(T v) {
+            y = x = v;
+        }
+
+        template < typename U >
+        void set(const U x, const U y) {
+            this->x = x;
+            this->y = y;
+        }
+
+        void setMin(const TVec2< f32 >& min) {
+            if (x >= min.x) {
+                x = min.x;
+            }
+
+            if (y >= min.y) {
+                y = min.y;
+            }
+        }
+
+        void setMax(const TVec2< f32 >& max) {
+            if (x <= max.x) {
+                x = max.x;
+            }
+
+            if (y <= max.y) {
+                y = max.y;
+            }
+        }
+
+        inline bool isAbove(const TVec2< T >& other) const {
+            return (x >= other.x) && (y >= other.y) ? true : false;
+        }
+
+        inline bool isZero() const {
+            return dot(*this) <= JGeometry::TUtil< f32 >::epsilon();
+        }
+
+        void sub(const TVec2< T >& rOther) {
+            x = x - rOther.x;
+            y = y - rOther.y;
+        }
+
+        void sub(const TVec2< T >& rA, const TVec2< T >& rB) {
+            x = rA.x - rB.x;
+            y = rA.y - rB.y;
+        }
+
+        inline TVec2 subInline(const TVec2< T >& other) const {
+            TVec2 ret = *this;
+            ret.sub(other);
+            return ret;
+        }
+
+        inline const TVec2& subOperatorInline(const TVec2& rOther) const {
+            TVec2 ret(*this);
+            ret.x -= rOther.x;
+            ret.y -= rOther.y;
+            return ret;
+        }
+
+        T length() const {
+            return JGeometry::TUtil< T >::sqrt(squared());
+        }
+
+        T squared() const {
+            return dot(*this);
+        };
+
+        T squared(const TVec2< T >& rOther) const;  //{ return (x - rOther.x) * (x - rOther.x) + (y - rOther.y) * (y - rOther.y); };
+
+        T dot(const TVec2< T >& rOther) const {
+            return x * rOther.x + y * rOther.y;
+        }
+
+        T distance(const TVec2< T >& rOther) const {
+            return JGeometry::TUtil< T >::sqrt(squareDist(rOther));
+        }
+
+        void zero() {
+            x = y = 0.0f;
+        }
+
+        inline T squareDist(const TVec2< T >& rOther) const {
+            return ((x - rOther.x) * (x - rOther.x)) + ((y - rOther.y) * (y - rOther.y));
+        }
+
+        void scale(f32 scalar) {
+            x *= scalar;
+            y *= scalar;
+        }
+
+        inline TVec2& scaleInline(f32 scalar) {
+            TVec2 ret(*this);
+            ret.scale(scalar);
+            return ret;
+        }
+
+        /* Operators */
+        TVec2< T > operator+(const TVec2< T >& rOther) const {
+            TVec2 ret(*this);
+            ret.x += rOther.x;
+            ret.y += rOther.y;
+            return ret;
+        }
+
+        TVec2< T > operator-(const TVec2< T >& rOther) const {
+            TVec2 ret(*this);
+            ret.x -= rOther.x;
+            ret.y -= rOther.y;
+            return ret;
+        }
+
+        TVec2< T > operator*(f32 scale) const {
+            TVec2 ret(*this);
+            ret.x *= scale;
+            ret.y *= scale;
+            return ret;
+        }
+
+        inline void operator+=(const TVec2< T >& rOther) {
+            x = x + rOther.x;
+            y = y + rOther.y;
+        }
+
+        inline void operator-=(const TVec2< T >& rOther) {
+            x = x - rOther.x;
+            y = y - rOther.y;
+        }
+
+        f32 setLength(f32 newlength) {
+            f32 oldlength = squared();
+
+            if (oldlength <= JGeometry::TUtil< f32 >::epsilon()) {
+                return 0.0f;
+            }
+
+            f32 lengthinv = JGeometry::TUtil< f32 >::inv_sqrt(oldlength);
+            scale(lengthinv * newlength);
+            return lengthinv * oldlength;
+        };
+
+        f32 normalize() {
+            f32 lengthSq = squared();
+
+            if (lengthSq <= JGeometry::TUtil< f32 >::epsilon()) {
+                return 0.0f;
+            }
+
+            f32 invLength = JGeometry::TUtil< f32 >::inv_sqrt(lengthSq);
+            scale(invLength);
+            return invLength * lengthSq;
+        }
+
+        T x, y;
+    };
+
+    template <>
+    inline TVec2< f32 >::TVec2() {
+    }
+
+#ifdef TARGET_PC
+    template < typename T >
+    struct TVec3IntArg {
+        typedef int Type;
+    };
+
+    template <>
+    struct TVec3IntArg< int > {
+        struct Type {};
+    };
+#endif
+
+    template < typename T >
+    struct TVec3 {
+        T x;
+        T y;
+        T z;
+
+        TVec3() {
+        }
+
+        TVec3< T >(T _x, T _y, T _z) {
+            x = _x;
+            y = _y;
+            z = _z;
+        }
+
+#ifdef TARGET_PC
+        // The game's member template TVec3<f32>::TVec3<int>(int, int, int): each component converted. TVec3<int>
+        // has it as (T, T, T), where s32 is int.
+        TVec3< T >(typename TVec3IntArg< T >::Type _x, typename TVec3IntArg< T >::Type _y, typename TVec3IntArg< T >::Type _z) {
+            x = _x;
+            y = _y;
+            z = _z;
+        }
+#else
+        TVec3< T >(int x, int y, int Z);
+#endif
+
+        inline TVec3(T val) {
+            x = val;
+            y = val;
+            z = val;
+        }
+
+        void set(T x_, T y_, T z_) {
+            x = x_;
+            y = y_;
+            z = z_;
+        }
+
+        template < typename J >
+        TVec3(J _x, J _y, J _z) {
+            x = _x;
+            y = _y;
+            z = _z;
+        }
+    };
+
+    template <>
+    struct TVec3< s16 > {
+        s16 x, y, z;
+
+        TVec3() {
+            x = x;  // TODO: This shouldn't be here, but it's the only way to get a Ctor generated in OceanRingPipe.cpp
+        }
+
+        template < typename J >
+        TVec3(J x, J y, J z) {
+            set(x, y, z);
+        }
+
+        TVec3& operator=(const TVec3& b) {
+            // Force copies to use lwz/lha
+            *((s32*)this) = *((s32*)&b);
+            z = b.z;
+            return *this;
+        }
+
+        void set(s16 x_, s16 y_, s16 z_) {
+            x = x_;
+            y = y_;
+            z = z_;
+        }
+    };
+
+    template <>
+    struct TVec3< f32 > : public Vec {
+#ifdef __MWERKS__
+        TVec3(const Vec& vec) {
+            const register Vec* v_a = &vec;
+            register Vec* v_b = this;
+
+            register f32 b_x;
+            register f32 a_x;
+
+            asm {
+                psq_l a_x, 0(v_a), 0, 0
+                lfs b_x, 8(v_a)
+                psq_st a_x, 0(v_b), 0, 0
+                stfs b_x, 8(v_b)
+            }
+            ;
+        }
+
+#elif defined(TARGET_PC)
+        TVec3(const Vec& vec) {
+            x = vec.x;
+            y = vec.y;
+            z = vec.z;
+        }
+#else
+        TVec3(const Vec& vec);
+#endif
+#ifdef __MWERKS__
+        // Used inlined and non-inlined?
+        TVec3(const TVec3< f32 >& vec) {
+            const register Vec* v_a = &vec;
+            register Vec* v_b = this;
+
+            register f32 b_x;
+            register f32 a_x;
+
+            asm {
+                psq_l a_x, 0(v_a), 0, 0
+                lfs b_x, 8(v_a)
+                psq_st a_x, 0(v_b), 0, 0
+                stfs b_x, 8(v_b)
+            }
+            ;
+        }
+
+#elif defined(TARGET_PC)
+        TVec3(const TVec3< f32 >& vec) {
+            x = vec.x;
+            y = vec.y;
+            z = vec.z;
+        }
+#else
+        TVec3(const TVec3< f32 >& vec);
+#endif
+
+        template < typename T >
+        TVec3(T _x, T _y, T _z) {
+            x = _x;
+            y = _y;
+            z = _z;
+        }
+
+        TVec3(f32 xz, f32 _y) {
+            x = xz;
+            y = _y;
+            z = xz;
+        }
+
+        TVec3(f32 val) {
+            set(val, val, val);
+        }
+
+        template < typename T >
+        inline TVec3(const TVec2< T >& rVec) {
+            x = rVec.x;
+            y = rVec.y;
+            z = 0;
+        }
+
+        inline TVec3() {
+        }
+
+        operator Vec*() {
+            return (Vec*)&x;
+        }
+
+        operator const Vec*() const {
+            return (Vec*)&x;
+        }
+
+        operator const TVec2< f32 >&() const {
+            return *reinterpret_cast< const TVec2< f32 >* >(this);
+        }
+
+        void operator=(const TVec3& vec) {
+#ifdef TARGET_PC
+            x = vec.x;
+            y = vec.y;
+            z = vec.z;
+#elif defined(__MWERKS__)
+            const register Vec* v_a = &vec;
+            register Vec* v_b = this;
+
+            register f32 b_x;
+            register f32 a_x;
+
+            asm {
+            psq_l a_x, 0(v_a), 0, 0
+            lfs b_x, 8(v_a)
+            psq_st a_x, 0(v_b), 0, 0
+            stfs b_x, 8(v_b)
+            }
+            ;
+#endif
+        }
+
+        template < typename T >
+        void set(const TVec3< T >& rVec) {
+            x = rVec.x;
+            y = rVec.y;
+            z = rVec.z;
+        }
+
+        template < typename T >
+        void set(T _x, T _y, T _z) NO_INLINE {
+            x = _x;
+            y = _y;
+            z = _z;
+        }
+
+        void set(f32 x_, f32 y_, f32 z_) {
+            x = x_;
+            y = y_;
+            z = z_;
+        }
+
+        void set(const Vec& rVec) {
+            x = rVec.x;
+            y = rVec.y;
+            z = rVec.z;
+        }
+
+        inline void set(f32 val) {
+            x = val;
+            y = val;
+            z = val;
+        }
+
+        template < typename T >
+        void setAll(f32 value) NO_INLINE {
+            x = value;
+            y = value;
+            z = value;
+        }
+
+        void setTrans(MtxPtr mtx) {
+            set< f32 >(mtx[0][3], mtx[1][3], mtx[2][3]);
+        }
+
+        TVec3 operator+(const TVec3& op) const {
+            TVec3 ret(*this);
+            ret += op;
+            return ret;
+        }
+
+        void operator+=(const TVec3& op) {
+            add(op);
+        }
+
+        void add(const TVec3< f32 >& b) {
+            JMathInlineVEC::PSVECAdd(this, &b, this);
+        }
+
+        void add(const TVec3& a, const TVec3& b) {
+            JMathInlineVEC::PSVECAdd(&a, &b, this);
+        }
+
+        TVec3 operator-(const TVec3& op) const {
+            TVec3 ret(*this);
+            ret -= op;
+            return ret;
+        }
+
+        void operator-=(const TVec3& op) {
+            sub(op);
+        }
+
+        void sub(const TVec3< f32 >& b) {
+            JMathInlineVEC::PSVECSubtract(this, &b, this);
+        }
+
+        void sub(const TVec3& a, const TVec3& b) {
+            JMathInlineVEC::PSVECSubtract(&a, &b, this);
+        }
+
+        TVec3 operator*(f32 scalar) const {
+            TVec3 ret(*this);
+            ret *= scalar;
+            return ret;
+        }
+
+        TVec3 operator/(f32 div) const {
+            TVec3 ret(*this);
+            f32 reciprocal = 1.0f / div;
+            ret *= reciprocal;
+            return ret;
+        }
+
+        void operator*=(f32 scalar) {
+            scale(scalar);
+        }
+
+        void operator/=(f32 scalar) {
+            scale(1.0f / scalar);
+        }
+
+        // appears to be needed in RingBeam to match stack in some places
+        TVec3 scaleInline(f32 scalar) const {
+            const TVec3& rSelf = *this;
+            TVec3 ret(rSelf);
+            ret.scale(scalar);
+            return ret;
+        }
+
+        void scale(f32 scalar) {
+            this->x = this->x * scalar;
+            this->y = this->y * scalar;
+            this->z = this->z * scalar;
+        }
+
+        void scale(f32 scalar, const TVec3& rVec) NO_INLINE {
+            this->x = rVec.x * scalar;
+            this->y = rVec.y * scalar;
+            this->z = rVec.z * scalar;
+        }
+
+        // needed in StarPieceFollowGroup???
+        inline TVec3 multInLine(f32 val) const {
+            TVec3 ret(*this);
+            ret.x *= val;
+            ret.y *= val;
+            ret.z *= val;
+            return ret;
+        }
+
+        // in cases where multInline is used twice in the same instruction path
+        inline TVec3 multInLine2(f32 val) const {
+            TVec3 ret(*this);
+            ret.mult(val);
+            return ret;
+        }
+
+        inline void mult(f32 val) {
+            x *= val;
+            y *= val;
+            z *= val;
+        }
+
+        // Vec-Vec mult
+        TVec3 operator*(const TVec3& rOther) const {
+            TVec3 ret;
+            mulInternal(&this->x, &rOther.x, &ret.x);
+            return ret;
+        }
+
+        void operator*=(const TVec3& op) {
+            mulInternal(&this->x, &op.x, &this->x);
+        }
+
+        void mul(const TVec3& a) {
+            mulInternal(&this->x, &a.x, &this->x);
+        }
+
+        void mul(const TVec3& a, const TVec3& b) {
+            mulInternal(&a.x, &b.x, &this->x);
+        }
+
+        inline void lerp(const TVec3& a, const TVec3& b, f32 t) {
+            JMAVECLerp(&a, &b, this, t);
+        }
+
+        bool operator==(const TVec3& rVec) const {
+            return TUtil< f32 >::epsilonEquals(x, rVec.x, JGeometry::TUtil< f32 >::epsilon()) &&
+                   TUtil< f32 >::epsilonEquals(y, rVec.y, JGeometry::TUtil< f32 >::epsilon()) &&
+                   TUtil< f32 >::epsilonEquals(z, rVec.z, JGeometry::TUtil< f32 >::epsilon());
+        }
+
+        bool operator!=(const TVec3& rVec) const {
+            return !(*this == rVec);
+        }
+
+        TVec3 operator-() const {
+            TVec3 ret;
+            ret.negate(*this);
+            return ret;
+        }
+
+        void negate() {
+            JGeometry::negateInternal(&this->x, &this->x);
+        }
+
+        void negate(const TVec3& rVec) {
+            JGeometry::negateInternal(&rVec.x, &this->x);
+        }
+
+#ifdef JGEOMETRY_VEC3_ZERO_NOINLINE
+        void zero() NO_INLINE {
+#else
+        void zero() {
+#endif
+            x = y = z = 0;
+        }
+
+#ifdef __MWERKS__
+        inline void setPSZeroVec() {
+            const register Vec* v_a = &gZeroVec;
+            register Vec* v_b = this;
+
+            register f32 b_x;
+            register f32 a_x;
+
+            asm {
+                psq_l a_x, 0(v_a), 0, 0
+                lfs b_x, 8(v_a)
+                psq_st a_x, 0(v_b), 0, 0
+                stfs b_x, 8(v_b)
+            }
+            ;
+        }
+
+#elif defined(TARGET_PC)
+        inline void setPSZeroVec() {
+            x = gZeroVec.x;
+            y = gZeroVec.y;
+            z = gZeroVec.z;
+        }
+#else
+        void setPSZeroVec();
+#endif
+        f32 dot(const TVec3& rOther) const NO_INLINE {
+            // TODO: this is *never* uninlined except in the specific
+            // case of TQuat4f::setRotate(const TVec3f&, const TVec3f&)
+#ifdef TARGET_PC
+            return (x * rOther.x + y * rOther.y) + z * rOther.z;
+#elif defined(__MWERKS__)
+            const register Vec* b = &rOther;
+            const register Vec* a = this;
+
+            register f32 _fp5, _fp4, _fp3, _fp2, _fp1;
+
+            asm {
+
+                psq_l    _fp2, 4(a), 0, 0;
+                psq_l    _fp3, 4(b), 0, 0;
+
+                ps_mul   _fp2, _fp2, _fp3;
+
+                psq_l    _fp5, 0(a), 0, 0;
+                psq_l    _fp4, 0(b), 0, 0;
+
+                ps_madd  _fp3, _fp5, _fp4, _fp2;
+                ps_sum0  _fp1, _fp3, _fp2, _fp2;
+            }
+
+            return _fp1;
+#endif
+        }
+
+        bool epsilonEquals(const TVec3< f32 >& a1, f32 a2) const {
+            bool ret = false;
+
+            if (JGeometry::TUtil< f32 >::epsilonEquals(x, a1.x, a2)) {
+                if (JGeometry::TUtil< f32 >::epsilonEquals(y, a1.y, a2)) {
+                    if (JGeometry::TUtil< f32 >::epsilonEquals(z, a1.z, a2)) {
+                        ret = true;
+                    }
+                }
+            }
+
+            return ret;
+        }
+
+        void scaleAdd(register f32 scale, const TVec3& src) {
+#ifdef __MWERKS__
+            register TVec3* dest = this;
+            register const TVec3* source = &src;
+            register f32 srcXY, destXY, srcZ, destZ;
+
+            asm {
+                psq_l srcXY, 0(source), 0, 0
+                psq_l srcZ, 8(source), 1, 0
+                psq_l destXY, 0(dest), 0, 0
+                psq_l destZ, 8(dest), 1, 0
+                ps_madds0 destXY, srcXY, scale, destXY
+                ps_madds0 destZ, srcZ, scale, destZ
+                psq_st destXY, 0(dest), 0, 0
+                psq_st destZ, 8(dest), 1, 0
+            }
+
+#else
+            x += src.x * scale;
+            y += src.y * scale;
+            z += src.z * scale;
+#endif
+        }
+
+        void scaleAdd(f32 sc, const TVec3& a, const TVec3& b) {
+            JMAVECScaleAdd(a, b, this, sc);
+        }
+
+        TVec3 killElement(const TVec3& rKillDir) const {
+            TVec3 ret;
+            ret.killElement(*this, rKillDir);
+            return ret;
+        }
+
+        void killElement(const TVec3& rVec, const TVec3& rKillDir) {
+            const TVec3& kill = rKillDir;
+            JMAVECScaleAdd(kill, rVec, this, -kill.dot(rVec));
+        }
+
+        void killElement2(const TVec3& rVec, const TVec3& rKillDir) {
+            // TODO: sometimes this pattern specifically is used?
+            // is this just written directly instead?
+            JMAVECScaleAdd(rKillDir, rVec, this, -rKillDir.dot(rVec));
+        }
+
+        void orthogonalize(const TVec3& rKillDir) {
+            const TVec3& kill = rKillDir;
+            JMAVECScaleAdd(kill, this, this, -kill.dot(*this));
+        }
+
+        void orthogonalize2(const TVec3& rKillDir) {
+            // TODO: sometimes this pattern specifically is used?
+            // is this just written directly instead?
+            JMAVECScaleAdd(rKillDir, this, this, -rKillDir.dot(*this));
+        }
+
+        TVec3 getOrthogonal(const TVec3& rVec) const {
+            TVec3 ret;
+            ret.killElement(rVec, *this);
+            return ret;
+        }
+
+        f32 normalize() {
+            f32 magnitude = length();
+            PSVECNormalize(this, this);
+            return magnitude;
+        }
+
+        f32 normalize(const TVec3& rSrc) {
+            set(rSrc);
+            return normalize();
+        }
+
+        void cross(const TVec3< f32 >& a, const TVec3< f32 >& b) {
+            PSVECCrossProduct(a, b, *this);
+        }
+
+        TVec3 cross(const TVec3& b) const {
+            TVec3 ret;
+            PSVECCrossProduct(this, &b, &ret);
+            return ret;
+        }
+
+        f32 squared() const {
+            return JMathInlineVEC::PSVECSquareMag(this);
+        };
+
+        operator f32*(void) {
+            return reinterpret_cast< f32* >(this);
+        }
+
+        operator const f32*(void) const {
+            return reinterpret_cast< const f32* >(this);
+        }
+
+#ifdef __MWERKS__
+        // this theoretically should just forward JMathInlineVEC::PSVECSquareDistance,
+        // however using the exact same asm causes mismatches. Keeping it here instead
+        // keeps the exact matches, and even allows for more use cases that match.
+        f32 squared(const TVec3& rB) const {
+            const register Vec* a = this;
+            const register Vec* b = &rB;
+
+            register f32 sqdist, dxy, dyz;
+            register f32 v1xy, v0xy, v1yz, v0yz;
+
+            asm
+            {
+                psq_l    v0yz, 4(a), 0, 0 
+                psq_l    v1yz, 4(b), 0, 0
+                ps_sub   dyz, v0yz, v1yz
+            
+                psq_l    v0xy, 0(a), 0, 0
+                psq_l    v1xy, 0(b), 0, 0
+                
+                ps_mul   dyz, dyz, dyz
+                ps_sub   dxy, v0xy, v1xy
+            
+                ps_madd  sqdist, dxy, dxy, dyz
+                ps_sum0  sqdist, sqdist, dyz, dyz
+            }
+
+            return sqdist;
+        };
+#elif defined(TARGET_PC)
+        f32 squared(const TVec3& rB) const {
+            const f32 dx = x - rB.x, dy = y - rB.y, dz = z - rB.z;
+            return (dx * dx + dy * dy) + dz * dz;
+        }
+#else
+        f32 squared(const TVec3& rB) const;
+#endif
+
+        bool isZero() const {
+            return squared() <= JGeometry::TUtil< f32 >::epsilon();
+        }
+
+        f32 setLength(f32 newlength) {
+            f32 oldlength = squared();
+
+            if (oldlength <= JGeometry::TUtil< f32 >::epsilon()) {
+                return 0.0f;
+            }
+
+            f32 lengthinv = JGeometry::TUtil< f32 >::inv_sqrt(oldlength);
+            scale(lengthinv * newlength);
+            return lengthinv * oldlength;
+        };
+
+        f32 setLength(const TVec3& rVec, f32 newlength) {
+            f32 oldlength = rVec.squared();
+
+            if (oldlength <= JGeometry::TUtil< f32 >::epsilon()) {
+                zero();
+                return 0.0f;
+            }
+
+            f32 lengthinv = JGeometry::TUtil< f32 >::inv_sqrt(oldlength);
+            scale(lengthinv * newlength, rVec);
+            return lengthinv * oldlength;
+        };
+
+        f32 length() const {
+            return PSVECMag(this);
+        }
+
+        inline f32 distance(const TVec3& rOther) const {
+            return PSVECDistance(this, &rOther);
+        }
+
+        template < typename T >
+        void cubic(const TVec3& rP0, const TVec3& rV0, const TVec3& rV1, const TVec3& rP1, T t) {
+            // cubic hermite spline interpolation over a unit interval
+            // p(t) = h00(t) * p0 + h01(t) * p1 + h10(t) * v0 + h11(t) * v1
+
+            T h00, h01, h10, h11;
+
+            T t2 = t * t;
+            T t3 = t2 * t;
+            h00 = 2 * t3 - 3 * t2 + 1;
+            h01 = -2 * t3 + 3 * t2;
+            h10 = t3 - 2 * t2 + t;
+            h11 = t3 - t2;
+
+            x = h00 * rP0.x + h01 * rP1.x + h10 * rV0.x + h11 * rV1.x;
+            y = h00 * rP0.y + h01 * rP1.y + h10 * rV0.y + h11 * rV1.y;
+            z = h00 * rP0.z + h01 * rP1.z + h10 * rV0.z + h11 * rV1.z;
+        }
+
+        f32 angle(const TVec3& rB) const {
+            f32 crossPart = cross(rB).length();
+            f32 dotPart = dot(rB);
+            return __fabsf(JMAATan2(crossPart, dotPart));
+        }
+
+        f32 turnRate(const TVec3& rB, f32 maxAngle) const {
+            f32 a = angle(rB);
+            f32 rate = 1.0f;
+            if (a > maxAngle) {
+                rate = maxAngle / a;
+            }
+
+            return rate;
+        }
+
+        inline TVec3 copy() const {
+            TVec3 ret(*this);
+            return ret;
+        }
+
+        // required for CameraCharmedVecRegTower.
+        // TODO: better name
+        inline bool orientation(const TVec3& rA, const TVec3& rB) const {
+            return rA.cross(rB).dot(*this) < 0.0f;
+        }
+    };
+
+    template < typename T >
+    class TVec4 : public Quaternion {
+    public:
+        /* Constructors */
+        inline TVec4() {
+        }
+
+        template < typename A >
+        TVec4(A _x, A _y, A _z, A _h) {
+            x = _x;
+            y = _y;
+            z = _z;
+            w = _h;
+        }
+
+        /* General operations */
+        template < typename A >
+        void set(const JGeometry::TVec4< A >& rVec) {
+            this->x = rVec.x;
+            this->y = rVec.y;
+            this->z = rVec.z;
+            this->w = rVec.w;
+        }
+
+        template < typename A >
+        void set(A _x, A _y, A _z, A _w) NO_INLINE {
+            x = _x;
+            y = _y;
+            z = _z;
+            w = _w;
+        }
+
+        void scale(T val) NO_INLINE {
+            x *= val;
+            y *= val;
+            z *= val;
+            w *= val;
+        }
+
+        inline TVec3< T >* toTVec3() {
+            return (TVec3< T >*)this;
+        }
+
+        operator Quaternion*() {
+            return (Quaternion*)&x;
+        }
+
+        operator const Quaternion*() const {
+            return (Quaternion*)&x;
+        }
+    };
+
+    template < typename T >
+    struct TQuat4 : public TVec4< T > {
+    public:
+        /* Constructors */
+        inline TQuat4() {
+        }
+
+        inline TQuat4(T xyz, T _w) {
+            this->x = xyz;
+            this->y = xyz;
+            this->z = xyz;
+            this->w = _w;
+        }
+
+        template < typename A >
+        TQuat4(A _x, A _y, A _z, A _w) {
+            this->x = _x;
+            this->y = _y;
+            this->z = _z;
+            this->w = _w;
+        }
+
+        TQuat4(const Quaternion& rOther) {
+            this->x = rOther.x;
+            this->y = rOther.y;
+            this->z = rOther.z;
+            this->w = rOther.w;
+        }
+
+        inline TVec3< T >* toTvec() {
+            return (TVec3< T >*)this;
+        }
+
+        /* General operations */
+        void normalize() {
+            f32 length = squared();
+
+            if (length <= JGeometry::TUtil< f32 >::epsilon()) {
+                TVec4< T >::template set< T >(0.0f, 0.0f, 0.0f, 1.0f);
+                return;
+            }
+
+            f32 lengthinv = JGeometry::TUtil< f32 >::inv_sqrt(length);
+            TVec4< T >::scale(lengthinv);
+        }
+
+        void normalize(const TQuat4< T >& rSrc) NO_INLINE {
+            f32 length = rSrc.squared();
+
+            if (length <= TUtil< f32 >::epsilon()) {
+                this->template set< f32 >(0.0f, 0.0f, 0.0f, 1.0f);
+            } else {
+                f32 inverse;
+
+                if (length <= 0.0f) {
+                    inverse = length;
+                } else {
+                    f32 estimate = __frsqrte(length);
+                    inverse = (0.5f * estimate) * (3.0f - length * (estimate * estimate));
+                }
+
+                this->x = rSrc.x * inverse;
+                this->y = rSrc.y * inverse;
+                this->z = rSrc.z * inverse;
+                this->w = rSrc.w * inverse;
+            }
+        }
+
+        void getXDir(TVec3< T >& rDest) const {
+            rDest.template set< T >(1.0f - this->y * this->y * 2.0f - this->z * this->z * 2.0f, this->x * this->y * 2.0f + this->w * this->z * 2.0f,
+                                    this->x * this->z * 2.0f - this->w * this->y * 2.0f);
+        }
+
+        void getYDir(TVec3< T >& rDest) const {
+            rDest.template set< T >(this->x * this->y * 2.0f - this->w * this->z * 2.0f, 1.0f - this->x * this->x * 2.0f - this->z * this->z * 2.0f,
+                                    this->y * this->z * 2.0f + this->w * this->x * 2.0f);
+        }
+
+        void getZDir(TVec3< T >& rDest) const {
+            rDest.template set< T >(this->x * this->z * 2.0f + this->w * this->y * 2.0f, this->y * this->z * 2.0f - this->w * this->x * 2.0f,
+                                    1.0f - this->x * this->x * 2.0f - this->y * this->y * 2.0f);
+        }
+
+        void getEuler(TVec3< T >& rDest) const NO_INLINE {
+            f32 m20 = 2.0f * (this->x * this->z - this->w * this->y);
+
+            if (m20 - 1.0f >= -TUtil< f32 >::epsilon()) {
+                f32 numerator = 2.0f * (this->x * this->y - this->w * this->z);
+                rDest.x = JMAATan2(-numerator, 1.0f - 2.0f * (this->x * this->x + this->z * this->z));
+                rDest.y = -JMath::TAngleConstant_< f32 >::RADIAN_DEG090();
+                rDest.z = 0.0f;
+            } else if (1.0f + m20 <= TUtil< f32 >::epsilon()) {
+                f32 numerator = 2.0f * (this->x * this->y - this->w * this->z);
+                rDest.x = JMAATan2(numerator, 1.0f - 2.0f * (this->x * this->x + this->z * this->z));
+                rDest.y = JMath::TAngleConstant_< f32 >::RADIAN_DEG090();
+                rDest.z = 0.0f;
+            } else {
+                f32 m10 = 2.0f * (this->x * this->y + this->w * this->z);
+                f32 numerator = 2.0f * (this->y * this->z + this->w * this->x);
+                f32 denominator = 1.0f - 2.0f * (this->x * this->x + this->y * this->y);
+                f32 m00 = 1.0f - 2.0f * (this->y * this->y + this->z * this->z);
+                rDest.x = JMAATan2(numerator, denominator);
+                rDest.y = JMath::sAsinAcosTable.asin_(-m20);
+                rDest.z = JMAATan2(m10, m00);
+            }
+        }
+
+        void setEuler(T _x, T _y, T _z) NO_INLINE {
+            f32 cx = cos(0.5f * _x);
+            f32 cy = cos(0.5f * _y);
+            f32 cz = cos(0.5f * _z);
+            f32 sx = sin(0.5f * _x);
+            f32 sy = sin(0.5f * _y);
+            f32 sz = sin(0.5f * _z);
+            f32 cycz = cy * cz;
+            f32 sycz = sy * cz;
+            f32 cysz = cy * sz;
+            f32 sysz = sy * sz;
+            this->x = cycz * sx - sysz * cx;
+            this->y = sycz * cx + cysz * sx;
+            this->z = cysz * cx - sycz * sx;
+            this->w = cycz * cx + sysz * sx;
+        }
+
+        void setEuler(const TVec3< T >& rpy) {
+            setEuler(rpy.x, rpy.y, rpy.z);
+        }
+
+        void setEulerDegree(T _x, T _y, T _z) {
+            setEuler(_x * PI_180, _y * PI_180, _z * PI_180);
+        }
+
+        void setEulerX(T _x) {
+            f32 s = sin(_x * 0.5f);
+            f32 c = cos(_x * 0.5f);
+            this->x = s;
+            this->y = 0.0f;
+            this->z = 0.0f;
+            this->w = c;
+        }
+
+        void setEulerY(T _y) {
+            f32 s = sin(_y * 0.5f);
+            f32 c = cos(_y * 0.5f);
+            this->x = 0.0f;
+            this->y = s;
+            this->z = 0.0f;
+            this->w = c;
+        }
+
+        void setEulerZ(T _z) {
+            f32 s = sin(_z * 0.5f);
+            f32 c = cos(_z * 0.5f);
+            this->x = 0.0f;
+            this->y = 0.0f;
+            this->z = s;
+            this->w = c;
+        };
+
+        f32 getRotate(TVec3< T >& rAxis) {
+            f32 length = toTvec()->squared();
+            f32 angle;
+
+            if (length <= JGeometry::TUtil< f32 >::epsilon()) {
+                angle = 0.0f;
+                rAxis.zero();
+            } else {
+                f32 lengthinv = JGeometry::TUtil< f32 >::inv_sqrt(length);
+                rAxis.scale(lengthinv, *toTvec());
+                angle = JGeometry::TUtil< f32 >::acos(this->w) * 2.0f;
+            }
+
+            return angle;
+        }
+
+        void setRotate(const TVec3< f32 >& rA, const TVec3< f32 >& rB, f32 ratio) {
+            TVec3< f32 > dir = rA.cross(rB);
+            f32 crossPart = dir.length();
+
+            if (crossPart <= JGeometry::TUtil< f32 >::epsilon()) {
+                this->template set< f32 >(0.0f, 0.0f, 0.0f, 1.0f);
+            } else {
+                f32 dotPart = rA.dot(rB);
+                f32 halfAngle = ratio * (JMAATan2(crossPart, dotPart) * 0.5f);
+                toTvec()->scale((f32)sin(halfAngle) / crossPart, dir);
+                this->w = cos(halfAngle);
+            }
+        }
+
+        void setRotate(const TVec3< T >& rA, const TVec3< T >& rB) NO_INLINE {
+            TVec3< T > dir = rA.cross(rB);
+            f32 crossPart = dir.length();
+
+            if (crossPart <= TUtil< f32 >::epsilon()) {
+                this->template set< f32 >(0.0f, 0.0f, 0.0f, 1.0f);
+            } else {
+                f32 dotPart = JMathInlineVEC::PSVECDotProduct(&rA, &rB);
+                f32 halfAngle = 0.5f * JMAATan2(crossPart, dotPart);
+                f32 scale = static_cast< f32 >(sin(halfAngle)) / crossPart;
+                this->x = dir.x * scale;
+                this->y = dir.y * scale;
+                this->z = dir.z * scale;
+                this->w = cos(halfAngle);
+            }
+        }
+
+        void setRotate(const TVec3< T >& pVec, f32 pAngle) {
+            f32 halfAngle = pAngle * 0.5f;
+            toTvec()->scale(sin(halfAngle), pVec);
+            this->w = cos(halfAngle);
+        }
+
+        // used in BegoManBase to get the TVec constructor inlined
+        void setRotate(f32 x, f32 y, f32 z, f32 pAngle) {
+            TVec3< T > pVec(x, y, z);
+            setRotate(pVec, pAngle);
+        }
+
+        void rotate(TVec3< T >& v) const {
+            transform(v, v);
+        }
+
+        void slerp(const TQuat4< T >& a1, const TQuat4< T >& a2, T a3) {
+            this->x = a1.x;
+            this->y = a1.y;
+            this->z = a1.z;
+            this->w = a1.w;
+            this->slerp(a2, a3);
+        }
+
+        void scale(f32 scalar, const TVec3< T >& rVec) {
+            TVec3< T >::scale(scalar, rVec);
+        }
+
+        void slerp(const TQuat4< T >& rOther, T ratio) NO_INLINE {
+            TQuat4< T > a;
+            TQuat4< T > b;
+            a.normalize(*this);
+            b.normalize(rOther);
+            f32 product = a.dot(b);
+            bool reverse;
+
+            if (product < 0.0f) {
+                product = -product;
+                reverse = true;
+            } else {
+                reverse = false;
+            }
+
+            f32 weight;
+
+            if (1.0f - product <= TUtil< f32 >::epsilon()) {
+                weight = 1.0f - ratio;
+            } else {
+                f32 angle = JMath::sAsinAcosTable.acos_(product);
+                f32 sinAngle = sin(angle);
+                weight = (f32)sin((1.0f - ratio) * angle) / sinAngle;
+                ratio = (f32)sin(ratio * angle) / sinAngle;
+            }
+
+            if (reverse) {
+                ratio = -ratio;
+            }
+
+            this->template set< f32 >(weight * a.x + ratio * b.x, weight * a.y + ratio * b.y, weight * a.z + ratio * b.z, weight * a.w + ratio * b.w);
+        }
+
+        void transform(const TVec3< T >& v, TVec3< T >& rDest) const {
+            // transformation via hamiltonian multiplication of a unit quaternion
+            // q*v*q`
+            // where v is the input vector converted into a quaternion with w=0
+            // and q` is the multiplicative inverse of q
+            // (eg: q = w + xi + yj + zk, q` = w - xi - yj - zk)
+
+            TQuat4< T > r;
+            r.x = (this->y * v.z) - (this->z * v.y) + (this->w * v.x);
+            r.y = (-this->x * v.z) + (this->z * v.x) + (this->w * v.y);
+            r.z = (this->x * v.y) - (this->y * v.x) + (this->w * v.z);
+            r.w = (-this->x * v.x) - (this->y * v.y) - (this->z * v.z);
+
+            rDest.template set< T >(r.x * this->w + r.y * -this->z - r.z * -this->y + r.w * -this->x,
+                                    -r.x * -this->z + r.y * this->w + r.z * -this->x + r.w * -this->y,
+                                    r.x * -this->y - r.y * -this->x + r.z * this->w + r.w * -this->z);
+        }
+
+        void transform(TVec3< T >& v) const {
+            transform(v, v);
+        }
+
+        void mult(const TQuat4& q) {
+            PSQUATMultiply(&q, this, this);
+        }
+
+        void mult(const TQuat4& q1, const TQuat4& q2) {
+            PSQUATMultiply(q1, q2, this);
+        }
+
+        f32 dot(const TQuat4& q) const {
+            return PSQUATDotProduct(this, &q);
+        }
+
+        f32 squared() const {
+            return PSQUATDotProduct(this, this);
+        }
+
+        void makeMtx(MtxPtr pMtx) const {
+            f32 yy = 2.0f * this->y * this->y;
+            f32 zz = 2.0f * this->z * this->z;
+            f32 xx = 2.0f * this->x * this->x;
+
+            f32 xy = 2.0f * this->x * this->y;
+            f32 xz = 2.0f * this->x * this->z;
+            f32 yz = 2.0f * this->y * this->z;
+
+            f32 wx = 2.0f * this->w * this->x;
+            f32 wy = 2.0f * this->w * this->y;
+            f32 wz = 2.0f * this->w * this->z;
+
+            pMtx[0][0] = 1.0f - yy - zz;
+            pMtx[0][1] = xy - wz;
+            pMtx[0][2] = xz + wy;
+
+            pMtx[1][0] = xy + wz;
+            pMtx[1][1] = 1.0f - xx - zz;
+            pMtx[1][2] = yz - wx;
+
+            pMtx[2][0] = xz - wy;
+            pMtx[2][1] = yz + wx;
+            pMtx[2][2] = 1.0f - xx - yy;
+        }
+
+        /* Operators */
+        TQuat4< T >& operator=(const TQuat4< T >& rSrc) {
+            this->x = rSrc.x;
+            this->y = rSrc.y;
+            this->z = rSrc.z;
+            this->w = rSrc.w;
+            return *this;
+        }
+    };
+
+};  // namespace JGeometry
+
+#ifdef TARGET_PC
+#include "nebula_disc.hpp"
+
+// Vectors in files (JPA blocks): big-endian components.
+template <>
+struct BEData< JGeometry::TVec3< f32 > > {
+    BE< f32 > x, y, z;
+
+    operator JGeometry::TVec3< f32 >() const {
+        JGeometry::TVec3< f32 > v;
+        v.x = x;
+        v.y = y;
+        v.z = z;
+        return v;
+    }
+};
+
+template <>
+struct BEData< JGeometry::TVec3< s16 > > {
+    BE< s16 > x, y, z;
+
+    operator JGeometry::TVec3< s16 >() const {
+        return JGeometry::TVec3< s16 >((s16)x, (s16)y, (s16)z);
+    }
+};
+#endif
+
+typedef JGeometry::TVec2< s16 > TVec2s;
+typedef JGeometry::TVec2< f32 > TVec2f;
+typedef JGeometry::TVec3< f32 > TVec3f;
+typedef JGeometry::TVec3< s8 > TVec3Sc;
+typedef JGeometry::TVec3< s16 > TVec3s;
+typedef JGeometry::TVec4< f32 > TVec4f;
+typedef JGeometry::TQuat4< f32 > TQuat4f;

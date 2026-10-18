@@ -1,0 +1,160 @@
+#include "Game/MapObj/DriftWood.hpp"
+#include "Game/LiveActor/HitSensor.hpp"
+#include "Game/MapObj/MapObjActorInitInfo.hpp"
+#include "Game/Util.hpp"
+#include "Game/Util/ActorMovementUtil.hpp"
+#include "Game/Util/ActorSensorUtil.hpp"
+#include "Game/Util/EffectUtil.hpp"
+#include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/MathUtil.hpp"
+#include "Game/Util/ModelUtil.hpp"
+#include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/RailUtil.hpp"
+#include "Game/Util/SoundUtil.hpp"
+#include <JSystem/JMath/JMath.hpp>
+#include <revolution/mtx.h>
+#include <revolution/types.h>
+
+struct SinCosPair {
+    f32 sin;
+    f32 cos;
+};
+
+extern SinCosPair lbl_8060FC80[];
+
+DriftWood::DriftWood(const char* pName)
+    : MapObjActor(pName), mRailDirection(0.0f, 0.0f, 1.0f), mRailClipping(0.0f, 0.0f, 0.0f), mVibrateOffset(0.0f, 0.0f, 0.0f), mWaveSoundTimer() {
+}
+
+namespace NrvDriftWood {
+    NEW_NERVE(DriftWoodNrvWait, DriftWood, Wait);
+    NEW_NERVE(DriftWoodNrvWaitLand, DriftWood, Wait);
+    NEW_NERVE(DriftWoodNrvVibrateLand, DriftWood, Vibrate);
+    NEW_NERVE(DriftWoodNrvVibrateTakeOff, DriftWood, Vibrate);
+};  // namespace NrvDriftWood
+
+void DriftWood::init(const JMapInfoIter& rIter) {
+    MapObjActor::init(rIter);
+    MapObjActorInitInfo info;
+    info.setupHioNode("\222\156\214\140\203\111\203\165\203\127\203\106" /* 地形オブジェ */);
+    info.setupDefaultPos();
+    info.setupConnectToScene();
+    info.setupHitSensor();
+    info.setupHitSensorParam(8, 300.0f, TVec3f(0.0f, -60.0f, 0.0f));
+    info.setupEffect(nullptr);
+    info.setupSound(4);
+    info.setupNerve(GET_NERVE(DriftWood, DriftWoodNrvWait));
+    initialize(rIter, info);
+    MR::moveCoordAndTransToNearestRailPos(this);
+    mRailDirection.set(MR::getRailDirection(this));
+    getSensor(nullptr)->setType(ATYPE_EYE);
+    mWaveSoundTimer = MR::getRandom(30l, 90l);
+    f32 radius = 0.0f;
+    MR::calcModelBoundingRadius(&radius, this);
+    MR::initAndSetRailClipping(&mRailClipping, this, 100.0f, radius);
+    MR::tryCreateMirrorActor(this, mObjectName);
+}
+
+void DriftWood::exeWait() {
+    if (MR::isFirstStep(this) && !MR::isEffectValid(this, "Ripple")) {
+        MR::emitEffect(this, "Ripple");
+    }
+
+    MR::moveCoordAndFollowTrans(this, 3.0f);
+    MR::rotateVecDegree(&mRailDirection, mGravity, 0.05f);
+
+    tryVibrate();
+
+    if (mWaveSoundTimer <= 0) {
+        MR::startSound(this, "SE_OJ_DRIFT_WOOD_WAVE");
+        mWaveSoundTimer = MR::getRandom(30l, 90l);
+    } else {
+        mWaveSoundTimer--;
+    }
+}
+
+// required to match
+// TODO remove
+#pragma push
+#pragma opt_propagation off
+void DriftWood::exeVibrate() {
+    if (MR::isFirstStep(this)) {
+        MR::startSound(this, "SE_OJ_DRIFT_WOOD_PLAYER_ON");
+        mVibrateOffset.zero();
+    }
+
+    MR::moveCoord(this, 3.0f);
+
+    f32 step = 30.0f * MR::sinDegree(16.0f * getNerveStep());
+    f32 nerveValue = MR::calcNerveValue(this, 45, 0.1f, 1.0f);
+
+    mVibrateOffset.scale((1.0f - nerveValue) * step, *getGravity());
+    mPosition.add(MR::getRailPos(this), mVibrateOffset);
+
+    if (!tryVibrate()) {
+        if (MR::isGreaterEqualStep(this, 45)) {
+            mVibrateOffset.zero();
+
+            if (MR::isOnPlayer(this)) {
+                setNerve(GET_NERVE(DriftWood, DriftWoodNrvWaitLand));
+            } else {
+                setNerve(GET_NERVE(DriftWood, DriftWoodNrvWait));
+            }
+        }
+    }
+}
+#pragma pop
+
+void DriftWood::connectToScene(const MapObjActorInitInfo&) {
+    MR::connectToSceneCollisionMapObj(this);
+}
+
+void DriftWood::calcAndSetBaseMtx() {
+    TPos3f mtx;
+    MR::calcMtxFromGravityAndZAxis(&mtx, this, mGravity, mRailDirection);
+    MR::setBaseTRMtx(this, mtx);
+}
+
+void DriftWood::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
+    if (MR::isSensorPlayer(pReceiver)) {
+        TVec3f delta;
+        delta.sub(pSender->mPosition, pReceiver->mPosition);
+
+        TVec3f upVec;
+        MR::calcUpVec(&upVec, this);
+
+        TVec3f result = delta.killElement(upVec);
+
+        f32 radius = pReceiver->mRadius;
+        f32 magnitude = result.length();
+        f32 threshold = 140.0f + radius;
+
+        if (magnitude > threshold) {
+        } else {
+            LiveActor* mHost = pReceiver->mHost;
+
+            if (!MR::isInWater(mHost, TVec3f(0.0f, 0.0f, 0.0f))) {
+                MR::sendMsgEnemyAttackFlip(pReceiver, pSender);
+                MR::startSound(this, "SE_OJ_DRIFT_WOOD_ATTACK");
+            }
+        }
+    } else if (MR::isSensorMapObj(pReceiver) && MR::sendMsgEnemyAttack(pReceiver, pSender) && MR::isOnPlayer(this)) {
+        MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+    }
+}
+
+bool DriftWood::tryVibrate() {
+    if (MR::isOnPlayer(this)) {
+        if (isNerve(GET_NERVE(DriftWood, DriftWoodNrvVibrateTakeOff)) || isNerve(GET_NERVE(DriftWood, DriftWoodNrvWait))) {
+            setNerve(GET_NERVE(DriftWood, DriftWoodNrvVibrateLand));
+            return true;
+        }
+    } else {
+        if (isNerve(GET_NERVE(DriftWood, DriftWoodNrvWaitLand)) || isNerve(GET_NERVE(DriftWood, DriftWoodNrvWaitLand))) {
+            setNerve(GET_NERVE(DriftWood, DriftWoodNrvVibrateTakeOff));
+            return true;
+        }
+    }
+
+    return false;
+}

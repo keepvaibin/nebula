@@ -1,0 +1,46 @@
+#pragma once
+
+#include "Game/Map/LightZoneDataHolder.hpp"
+#include <JSystem/JGeometry/TBox.hpp>
+
+class AreaObj;
+class AreaObjContainer;
+class AreaObjMgr;
+class AreaCubeBoundingBox;
+class WaterInfo;
+
+namespace MR {
+    void calcSpherePos(TVec3f*, const AreaObj*);
+    f32 getSphereRadius(const AreaObj*);
+    AreaObjMgr* getAreaObjManager(const char*);
+    AreaObj* getAreaObj(const char*, const TVec3f&);
+    bool isInAreaObj(const char*, const TVec3f&);
+    s32 getAreaObjArg(const AreaObj*, s32);
+    void tryToUpdatePlayerRestartIdInfo(const TVec3f&);
+
+    bool calcAreaMoveVelocity(TVec3f* pVelocity, const TVec3f& rPos);
+
+    void calcCylinderPos(TVec3f*, const AreaObj*);
+    void calcCylinderCenterPos(TVec3f*, const AreaObj*);
+
+    void calcCylinderUpVec(TVec3f*, const AreaObj*);
+    f32 getCylinderRadius(const AreaObj*);
+
+    void calcCubeWorldBox(TDirBox3f* pBox, const AreaObj* pArea);
+    void calcCubePos(const AreaObj*, TVec3f*);
+    void calcCubeAxisZ(const AreaObj*, TVec3f*);
+    void calcCubeLocalPos(TVec3f*, const AreaObj*, const TVec3f&);
+
+    void calcCubeRotate(const AreaObj*, TVec3f*);
+
+    bool calcWhirlPoolAccelInfo(const TVec3f&, TVec3f*);
+
+    TBox3f* getCubeLocalBox(const AreaObj*);
+
+    AreaObj* getCurrentAstroOverlookAreaObj();
+
+    AreaObj* getAreaIn(const char*, const TVec3f&);
+
+    bool getWaterAreaObj(WaterInfo*, const TVec3f&);
+    bool getWaterAreaInfo(WaterInfo* pInfo, const TVec3f& rPos, const TVec3f& rGravity, bool skipConnectedArea);
+};  // namespace MR

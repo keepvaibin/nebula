@@ -1,0 +1,332 @@
+#include "Game/Boss/SkeletalFishBaby.hpp"
+#include "Game/Boss/SkeletalFishJointCalc.hpp"
+#include "Game/Boss/SkeletalFishRailControl.hpp"
+#include "Game/Enemy/AnimScaleController.hpp"
+#include "Game/LiveActor/HitSensor.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/MapObj/AirBubbleHolder.hpp"
+#include "Game/Util/ActorSensorUtil.hpp"
+#include "Game/Util/ActorShadowUtil.hpp"
+#include "Game/Util/ActorSwitchUtil.hpp"
+#include "Game/Util/EffectUtil.hpp"
+#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/JointController.hpp"
+#include "Game/Util/JointUtil.hpp"
+#include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/RailUtil.hpp"
+#include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/StarPointerUtil.hpp"
+#include <JSystem/J3DGraphAnimator/J3DJoint.hpp>
+#include <cstdio>
+
+namespace {
+    static const char* sStarPointerTargetJoint[] = {"Joint00", "Joint01", "Joint02", "Joint03"};
+    static const Vec sStarPointerTargetOffset[] = {{
+                                                       0.0f,
+                                                       0.0f,
+                                                       150.0f,
+                                                   },
+                                                   {0.0f, 0.0f, 0.0f},
+                                                   {0.0f, 0.0f, 0.0f},
+                                                   {0.0f, 0.0f, 0.0f}};
+    static const f32 sStarPointerTargetSize[] = {220.0f, 150.0f, 120.0f, 120.0f};
+    static const f32 sSensorRadius = 190.0f;
+    static const f32 sBustSensorRadius = 120.0f;
+    static const f32 sWaistSensorRadius = 120.0f;
+    static const f32 sTailSensorRadius = 100.0f;
+    static const f32 sSpeed = 20.0f;
+    // static const f32 sOpenRadius = _;
+    // static const f32 sCloseRadius = _;
+    // static const f32 sShadowOffDegree = _;
+    // static const f32 sLength = _;
+    // static const f32 sScaleTest = _;
+    static const s32 sStarPieceNum = 10;
+    static const f32 sAccel = 0.1f;
+};  // namespace
+
+namespace {
+    NEW_NERVE(SkeletalFishBabyNrvSwim, SkeletalFishBaby, Swim);
+    NEW_NERVE_ONEND(SkeletalFishBabyNrvBind, SkeletalFishBaby, Bind, Bind);
+    NEW_NERVE(SkeletalFishBabyNrvBreak, SkeletalFishBaby, Break);
+    NEW_NERVE(SkeletalFishBabyNrvDead, SkeletalFishBaby, Dead);
+};  // namespace
+
+SkeletalFishBaby::SkeletalFishBaby(const char* pName)
+    : LiveActor(pName), mJointIndicies(), mSpeedMax(::sSpeed), mSpeed(::sSpeed), mRailControl(new SkeletalFishRailControl()), mObjArg1(3000.0f),
+      mScaleController(new AnimScaleController(nullptr)) {
+    for (s32 i = 0; i < ARRAY_SIZE(mControllers); i++) {
+        mControllers[i] = nullptr;
+    }
+
+    _AC.identity();
+}
+
+void SkeletalFishBaby::init(const JMapInfoIter& rIter) {
+    MR::createAirBubbleHolder();
+    MR::initDefaultPos(this, rIter);
+
+    if (rIter.isValid()) {
+        MR::getJMapInfoArg0NoInit(rIter, &mSpeedMax);
+        MR::getJMapInfoArg1NoInit(rIter, &mObjArg1);
+    }
+
+    mSpeed = mSpeedMax;
+    initModelManagerWithAnm("SnakeFish", nullptr, false);
+    initRail(rIter);
+    initJoint();
+    initNerve(GET_NERVE_ANON(SkeletalFishBabyNrvSwim));
+    initSensor();
+    MR::setClippingTypeSphere(this, 500.0f);
+    MR::addToAttributeGroupSearchTurtle(this);
+    MR::connectToSceneEnemy(this);
+    MR::initLightCtrl(this);
+    initSound(6, false);
+    MR::initShadowFromCSV(this, "Shadow");
+    MR::setGroupClipping(this, rIter, 32);
+    initEffectKeeper(0, nullptr, false);
+
+    if (MR::useStageSwitchReadAppear(this, rIter)) {
+        MR::syncStageSwitchAppear(this);
+        makeActorDead();
+    } else {
+        makeActorAppeared();
+    }
+
+    MR::useStageSwitchWriteDead(this, rIter);
+    MR::declareStarPiece(this, ::sStarPieceNum);
+    MR::onCalcGravity(this);
+
+    for (u32 i = 0; i < ARRAY_SIZE(mStarPieceTargets); i++) {
+        mStarPieceTargets[i] = new LiveActor("StarPointerTargetDummy");
+        mStarPieceTargets[i]->makeActorDead();
+
+        TVec3f ptrTarget(::sStarPointerTargetOffset[i]);
+        MR::initStarPointerTargetAtMtx(mStarPieceTargets[i], ::sStarPointerTargetSize[i], MR::getJointMtx(this, ::sStarPointerTargetJoint[i]),
+                                       ptrTarget);
+    }
+}
+
+void SkeletalFishBaby::makeActorAppeared() {
+    LiveActor::makeActorAppeared();
+    MR::startBck(this, "Swim");
+    setNerve(GET_NERVE_ANON(SkeletalFishBabyNrvSwim));
+    MR::validateClipping(this);
+}
+
+void SkeletalFishBaby::appear() {
+    LiveActor::appear();
+}
+
+void SkeletalFishBaby::kill() {
+    LiveActor::kill();
+    MR::startSound(this, "SE_EM_EXPLODE_UNDER_WATER");
+
+    if (MR::isValidSwitchDead(this)) {
+        MR::onSwitchDead(this);
+    }
+}
+
+void SkeletalFishBaby::control() {
+    mRailControl->_14 = mSpeed;
+    mRailControl->update();
+    mRailControl->getPos(&mPosition, 0.0f);
+    mScaleController->updateNerve();
+
+    if (isNerve(GET_NERVE_ANON(SkeletalFishBabyNrvSwim))) {
+        MR::startLevelSound(this, "SE_EM_LV_SNAKEFISH_SWIM");
+    }
+}
+
+void SkeletalFishBaby::calcAnim() {
+    LiveActor::calcAnim();
+}
+
+void SkeletalFishBaby::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
+    if (MR::isSensorPlayerOrRide(pReceiver)) {
+        if (isAttackable() && MR::sendMsgEnemyAttackStrong(pReceiver, pSender)) {
+            MR::shakeCameraStrong();
+        } else {
+            MR::sendMsgPush(pReceiver, pSender);
+        }
+    }
+}
+
+bool SkeletalFishBaby::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    if (MR::isMsgJetTurtleAttack(msg)) {
+        return damage(pSender->mPosition, true);
+    }
+
+    if (MR::isMsgStarPieceReflect(msg)) {
+        mScaleController->startHitReaction();
+        return true;
+    }
+
+    return false;
+}
+
+bool SkeletalFishBaby::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    return false;
+}
+
+bool SkeletalFishBaby::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    switch (msg) {
+    case ACTMES_SKELETAL_FISH_BOSS_BATTLE_START:
+        MR::invalidateClipping(this);
+        return true;
+    case ACTMES_SKELETAL_FISH_BOSS_BATTLE_END:
+        MR::validateClipping(this);
+        return true;
+    default:
+        return false;
+    }
+}
+
+void SkeletalFishBaby::exeSwim() {
+    if (MR::isFirstStep(this)) {
+        MR::startBck(this, "Swim");
+    }
+
+    mSpeed += ::sAccel;
+
+    if (mSpeed > mSpeedMax) {
+        mSpeed = mSpeedMax;
+    }
+
+    if (isStarPointerPointing()) {
+        setNerve(GET_NERVE_ANON(SkeletalFishBabyNrvBind));
+    }
+}
+
+void SkeletalFishBaby::exeBind() {
+    if (MR::isFirstStep(this)) {
+        mScaleController->startDpdHitVibration();
+        MR::startDPDHitSound();
+        mSpeed = 0.0f;
+        MR::emitEffect(this, "StarPointerHold");
+    }
+
+    MR::startDPDFreezeLevelSound(this);
+
+    if (!isStarPointerPointing()) {
+        setNerve(GET_NERVE_ANON(SkeletalFishBabyNrvSwim));
+    }
+}
+
+void SkeletalFishBaby::endBind() {
+    mScaleController->startAnim();
+    MR::deleteEffect(this, "StarPointerHold");
+}
+
+void SkeletalFishBaby::exeBreak() {
+    if (MR::isFirstStep(this)) {
+        MR::startBck(this, "Death");
+        MR::startSound(this, "SE_EM_EXPLODE_UNDER_WATER");
+        MR::startSound(this, "SE_EV_SNAKEHEAD_DAMAGE");
+        MR::invalidateClipping(this);
+    }
+
+    if (MR::isBckStopped(this)) {
+        setNerve(GET_NERVE_ANON(SkeletalFishBabyNrvDead));
+    }
+}
+
+void SkeletalFishBaby::exeDead() {
+    if (MR::isFirstStep(this)) {
+        TVec3f jointPos;
+        MR::copyJointPos(this, "Center", &jointPos);
+        MR::appearStarPiece(this, jointPos, ::sStarPieceNum, 10.0f, 40.0f, false);
+        MR::startSound(this, "SE_OJ_STAR_PIECE_BURST_W_F");
+        kill();
+    }
+}
+
+bool SkeletalFishBaby::calcJoint(TPos3f* pJointPos, const JointControllerInfo& rInfo) {
+    if (mJointIndicies[rInfo.mJoint->getJntNo()] == -1) {
+        return false;
+    }
+
+    SkeletalFishJointCalc::calcJoint(pJointPos, &_AC, mRailControl, rInfo);
+    return true;
+}
+
+bool SkeletalFishBaby::damage(const TVec3f& rAirBubblePos, bool shakeCameraNormal) {
+    bool isDeadOrBroke = isNerve(GET_NERVE_ANON(SkeletalFishBabyNrvDead)) || isNerve(GET_NERVE_ANON(SkeletalFishBabyNrvBreak));
+
+    if (!isDeadOrBroke) {
+        if (shakeCameraNormal) {
+            MR::shakeCameraNormal();
+        } else {
+            MR::shakeCameraWeak();
+        }
+
+        MR::appearAirBubble(rAirBubblePos, -1);
+        setNerve(GET_NERVE_ANON(SkeletalFishBabyNrvBreak));
+        return true;
+    }
+
+    return false;
+}
+
+void SkeletalFishBaby::calcAndSetBaseMtx() {
+    if (mRailControl->_8 != nullptr) {
+        for (u32 i = 0; i < ARRAY_SIZE(mControllers); i++) {
+            mControllers[i]->registerCallBack();
+        }
+
+        TPos3f railMtx;
+        mRailControl->getMtx(&railMtx, 0.0f);
+        MR::setBaseTRMtx(this, railMtx);
+        _AC.set(railMtx);
+        _AC.invert(_AC);
+        TVec3f scale = mScaleController->_C * mScale;
+        MR::setBaseScale(this, scale);
+    }
+}
+
+void SkeletalFishBaby::initRail(const JMapInfoIter& rIter) {
+    if (rIter.isValid()) {
+        initRailRider(rIter);
+        mRailControl->setRailActor(this, nullptr, true);
+        mRailControl->_14 = mSpeed;
+        MR::moveCoordToNearestPos(this, mPosition);
+    }
+}
+
+void SkeletalFishBaby::initJoint() {
+    mJointIndicies = new s32[MR::getJointNum(this)];
+
+    for (u32 i = 0; i < MR::getJointNum(this); i++) {
+        mJointIndicies[i] = -1;
+    }
+
+    for (s32 i = 0; i < ARRAY_SIZE(mControllers); i++) {
+        char jointName[16];
+        snprintf(jointName, sizeof(jointName), "Joint%02d", i);
+        mControllers[i] = MR::createJointDelegatorWithNullMtxFunc(this, &SkeletalFishBaby::calcJoint, jointName);
+        mJointIndicies[MR::getJointIndex(this, jointName)] = i;
+    }
+}
+
+void SkeletalFishBaby::initSensor() {
+    initHitSensor(4);
+    MR::addHitSensorAtJointEnemy(this, "head", "Joint00", 16, ::sSensorRadius, TVec3f(0.0f, 20.0f, 100.0f));
+    MR::addHitSensorAtJointEnemy(this, "bust", "Joint01", 16, ::sBustSensorRadius, TVec3f(0.0f, 00.0f, 30.0f));
+    MR::addHitSensorAtJointEnemy(this, "waist", "Joint02", 16, ::sWaistSensorRadius, TVec3f(0.0f, 00.0f, 20.0f));
+    MR::addHitSensorAtJointEnemy(this, "tail", "Joint03", 16, ::sTailSensorRadius, TVec3f(0.0f, 0.0f, 0.0f));
+}
+
+bool SkeletalFishBaby::isAttackable() const {
+    return !isNerve(GET_NERVE_ANON(SkeletalFishBabyNrvDead)) && !isNerve(GET_NERVE_ANON(SkeletalFishBabyNrvBreak)) &&
+           !isNerve(GET_NERVE_ANON(SkeletalFishBabyNrvBind));
+}
+
+bool SkeletalFishBaby::isStarPointerPointing() const {
+    for (u32 i = 0; i < ARRAY_SIZE(mStarPieceTargets); i++) {
+        if (MR::isStarPointerPointing2POnPressButton(mStarPieceTargets[i], "\216\343" /* 弱 */, true, false)) {
+            return true;
+        }
+    }
+
+    return false;
+}

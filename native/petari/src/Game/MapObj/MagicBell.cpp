@@ -1,0 +1,189 @@
+#include "Game/MapObj/MagicBell.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/Util.hpp"
+
+namespace NrvMagicBell {
+    NEW_NERVE(MagicBellNrvWait, MagicBell, Wait);
+    NEW_NERVE(MagicBellNrvRing, MagicBell, Ring);
+};  // namespace NrvMagicBell
+
+MagicBell::MagicBell(const char* pName) : LiveActor(pName) {
+    mBellSwinger = nullptr;
+    mSurface1Mtx = nullptr;
+    mSurface2Mtx = nullptr;
+    mBellRodSwinger = nullptr;
+    mSurface1Mtx = nullptr;
+    mHitMarkPosition.x = 0.0f;
+    mHitMarkPosition.y = 0.0f;
+    mHitMarkPosition.z = 0.0f;
+}
+
+void MagicBell::init(const JMapInfoIter& rIter) {
+    MR::initDefaultPos(this, rIter);
+    initModelManagerWithAnm("Bell", nullptr, false);
+    mSurface2Mtx = MR::getJointMtx(this, "polySurface2");
+    mSurface1Mtx = MR::getJointMtx(this, "polySurface1");
+    MR::connectToSceneMapObjNoCalcAnim(this);
+    initHitSensor(1);
+    MR::addHitSensorMapObj(this, "body", 8, 70.0f, TVec3f(0.0f, -80.0f, 0.0f));
+    initEffectKeeper(1, nullptr, false);
+    MR::addEffect(this, "StarWandHitMark");
+    MR::setEffectHostSRT(this, "StarWandHitMark", &mHitMarkPosition, nullptr, nullptr);
+    initSound(4, false);
+    initNerve(GET_NERVE(MagicBell, MagicBellNrvWait));
+    MR::initShadowVolumeSphere(this, 100.0f);
+    MR::useStageSwitchWriteA(this, rIter);
+    MR::initStarPointerTarget(this, 100.0f, TVec3f(0.0f, -80.0f, 0.0f));
+    TMtx34f mtx;
+    mtx.identity();
+    MR::makeMtxTR(mtx.toMtxPtr(), this);
+    MR::calcGravity(this);
+    mBellSwinger = new Swinger(&mPosition, mtx.toMtxPtr(), 100.0f, 0.60f, 0.99f, &mGravity);
+    mBellRodSwinger = new Swinger(&mPosition, mtx.toMtxPtr(), 50.0f, 0.3f, 0.95f, &mGravity);
+    makeActorAppeared();
+}
+
+void MagicBell::exeWait() {
+    if (MR::isFirstStep(this)) {
+    }
+
+    if (!tryRing()) {
+        PSMTXCopy(mBellSwinger->_60.toMtxPtr(), mSurface2Mtx);
+        PSMTXCopy(mBellRodSwinger->_60.toMtxPtr(), mSurface1Mtx);
+        TVec3f v3(0.0f, 0.0f, 0.0f);
+        MR::setMtxTrans(mSurface2Mtx, v3.x, v3.y, v3.z);
+        TVec3f v2(0.0f, 0.0f, 0.0f);
+        MR::setMtxTrans(mSurface1Mtx, v2.x, v2.y, v2.z);
+        PSMTXScaleApply(mSurface2Mtx, mSurface2Mtx, mScale.x, mScale.y, mScale.z);
+        PSMTXScaleApply(mSurface1Mtx, mSurface1Mtx, mScale.x, mScale.y, mScale.z);
+        MR::setMtxTrans(mSurface2Mtx, mPosition.x, mPosition.y, mPosition.z);
+        MR::setMtxTrans(mSurface1Mtx, mPosition.x, mPosition.y, mPosition.z);
+    }
+}
+
+void MagicBell::exeRing() {
+    if (MR::isFirstStep(this)) {
+        if (MR::isValidSwitchA(this) && !MR::isOnSwitchA(this)) {
+            MR::onSwitchA(this);
+            MR::startSound(this, "SE_OJ_HAPPY_BELL_SWITCH_ON");
+        }
+
+        MR::startSound(this, "SE_OJ_HAPPY_BELL_RING");
+    }
+
+    mBellSwinger->update();
+    mBellRodSwinger->update();
+
+    if (mBellSwinger->_20.dot(mBellRodSwinger->_20) < 0.95f) {
+        TVec3f v17(mBellSwinger->_20);
+        v17.sub(mBellRodSwinger->_20);
+        f32 v3 = mBellRodSwinger->_20.dot(v17);
+        v17.x -= v3 * mBellRodSwinger->_20.x;
+        v17.y -= v3 * mBellRodSwinger->_20.y;
+        v17.z -= v3 * mBellRodSwinger->_20.z;
+        MR::normalizeOrZero(&v17);
+        f32 v4 = mBellSwinger->mAcceleration.dot(v17);
+        f32 v5 = mBellRodSwinger->mAcceleration.dot(v17);
+
+        f32 v6 = v5 >= 0.0f ? 0.0f : v5;
+
+        if (v4 - v6 > 0.0f) {
+            f32 v7 = v5 >= 0.0f ? 0.0f : v5;
+
+            v17.scale(v4 - v7);
+            v17.sub(mBellRodSwinger->mAcceleration);
+            mBellRodSwinger->accel(v17);
+            mHitMarkPosition.set(mBellRodSwinger->_8);
+        }
+    }
+    PSMTXCopy(mBellSwinger->_60.toMtxPtr(), mSurface2Mtx);
+    PSMTXCopy(mBellRodSwinger->_60.toMtxPtr(), mSurface1Mtx);
+    TVec3f v16(0.0f, 0.0f, 0.0f);
+    MR::setMtxTrans(mSurface2Mtx, v16.x, v16.y, v16.z);
+    TVec3f v15(0.0f, 0.0f, 0.0f);
+    MR::setMtxTrans(mSurface1Mtx, v15.x, v15.y, v15.z);
+    PSMTXScaleApply(mSurface2Mtx, mSurface2Mtx, mScale.x, mScale.y, mScale.z);
+    PSMTXScaleApply(mSurface1Mtx, mSurface1Mtx, mScale.x, mScale.y, mScale.z);
+    MR::setMtxTrans(mSurface2Mtx, mPosition.x, mPosition.y, mPosition.z);
+    MR::setMtxTrans(mSurface1Mtx, mPosition.x, mPosition.y, mPosition.z);
+
+    if (MR::isGreaterStep(this, 10) && tryRing()) {
+        return;
+    }
+
+    if (!(mBellSwinger->_20.y < -0.99f)) {
+        return;
+    }
+
+    if (!(mBellSwinger->mAcceleration.squared() < 0.1f * 0.1f)) {
+        return;
+    }
+
+    MR::deleteEffect(this, "Ring");
+    setNerve(GET_NERVE(MagicBell, MagicBellNrvWait));
+}
+
+void MagicBell::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
+    if (MR::isSensorPlayer(pReceiver)) {
+        MR::sendMsgPush(pReceiver, pSender);
+    }
+}
+
+bool MagicBell::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    if (MR::isMsgLockOnStarPieceShoot(msg)) {
+        return false;
+    }
+
+    if (isNerve(GET_NERVE(MagicBell, MagicBellNrvWait)) || (isNerve(GET_NERVE(MagicBell, MagicBellNrvRing)) && MR::isGreaterStep(this, 10))) {
+        TVec3f v15(mPosition);
+        v15.sub(*MR::getPlayerPos());
+        v15.y += 100.0f;
+        MR::normalizeOrZero(&v15);
+        TVec3f v14(v15 * -200.0f);
+        v14.add(mPosition);
+        startRing(v15, v14);
+        return true;
+    }
+
+    return false;
+}
+
+bool MagicBell::tryRing() {
+    if (!MR::isExecScenarioStarter() && MR::isStarPointerPointing(this, 0, 0, "\216\343" /* 弱 */)) {
+        TVec2f* v4(MR::getStarPointerScreenVelocity(0));
+        if (((v4->x * v4->x) + (v4->y * v4->y)) > 64.0f) {
+            TVec3f v12;
+            MR::getStarPointerWorldVelocityDirection(&v12, 0);
+            if (MR::isNearZero(v12)) {
+                v12.set(MR::getRandom(-1.0f, 1.0f), MR::getRandom(-1.0f, 1.0f), MR::getRandom(-1.0f, 1.0f));
+                if (MR::isNearZero(v12)) {
+                    v12.set(1.0f, 0.0f, 0.0f);
+                } else {
+                    MR::normalize(&v12);
+                }
+            }
+            TVec3f v11;
+            MR::calcStarPointerWorldPointingPos(&v11, mPosition, 0);
+            startRing(v12, v11);
+            return true;
+        }
+    }
+    return false;
+}
+
+void MagicBell::startRing(const TVec3f& a1, const TVec3f& a2) {
+    f32 v10 = mBellSwinger->mAcceleration.length();
+    mBellSwinger->accel(mBellSwinger->mAcceleration * -1.0f);
+    mBellSwinger->accel(a1 * (5.0f + v10));
+    mHitMarkPosition.set(a2);
+    MR::emitEffect(this, "StarWandHitMark");
+    MR::emitEffect(this, "Ring");
+    setNerve(GET_NERVE(MagicBell, MagicBellNrvRing));
+}
+
+MagicBell::~MagicBell() {
+}
+
+MtxPtr MagicBell::getBaseMtx() const {
+    return mSurface2Mtx;
+}

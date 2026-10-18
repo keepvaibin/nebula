@@ -1,0 +1,959 @@
+#include "Game/Screen/THPSimplePlayerWrapper.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/Util/MemoryUtil.hpp"
+#include "Game/Util/NerveUtil.hpp"
+#include <JSystem/JAudio2/JASAiCtrl.hpp>
+#include <JSystem/JKernel/JKRHeap.hpp>
+#include <cstring>
+
+static u16 VolumeTable[] = {0,     2,     8,     18,    32,    50,    73,    99,    130,   164,   203,   245,   292,   343,   398,   457,
+                            520,   587,   658,   733,   812,   895,   983,   1074,  1170,  1269,  1373,  1481,  1592,  1708,  1828,  1952,
+                            2080,  2212,  2348,  2488,  2632,  2781,  2933,  3090,  3250,  3415,  3583,  3756,  3933,  4114,  4298,  4487,
+                            4680,  4877,  5079,  5284,  5493,  5706,  5924,  6145,  6371,  6600,  6834,  7072,  7313,  7559,  7809,  8063,
+                            8321,  8583,  8849,  9119,  9394,  9672,  9954,  10241, 10531, 10826, 11125, 11427, 11734, 12045, 12360, 12679,
+                            13002, 13329, 13660, 13995, 14335, 14678, 15025, 15377, 15732, 16092, 16456, 16823, 17195, 17571, 17951, 18335,
+                            18723, 19115, 19511, 19911, 20316, 20724, 21136, 21553, 21974, 22398, 22827, 23260, 23696, 24137, 24582, 25031,
+                            25484, 25941, 26402, 26868, 27337, 27810, 28288, 28769, 29255, 29744, 30238, 30736, 31238, 31744, 32254, 32768};
+
+static s32 WorkBuffer[16] ATTRIBUTE_ALIGN(32);
+
+#if (VERSION == RMGK01)
+THPSimplePlayerStaticAudio THPSimplePlayerWrapper::mStaticAudioPlayer;
+THPSimplePlayerWrapper* THPSimplePlayerStaticAudio::mPlayer;
+#endif
+
+namespace NrvTHPSimplePlayerWrapper {
+    NEW_NERVE(HostTypeWait, THPSimplePlayerWrapper, Wait);
+    NEW_NERVE(HostTypeReadHeader, THPSimplePlayerWrapper, ReadHeader);
+    NEW_NERVE(HostTypeReadFrameComp, THPSimplePlayerWrapper, ReadFrameComp);
+    NEW_NERVE(HostTypeReadVideoComp, THPSimplePlayerWrapper, ReadVideoComp);
+    NEW_NERVE(HostTypeReadAudioComp, THPSimplePlayerWrapper, ReadAudioComp);
+    NEW_NERVE(HostTypeReadPreLoad, THPSimplePlayerWrapper, ReadPreLoad);
+};  // namespace NrvTHPSimplePlayerWrapper
+
+#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
+THPSimplePlayerStaticAudio THPSimplePlayerWrapper::mStaticAudioPlayer;
+THPSimplePlayerWrapper* THPSimplePlayerStaticAudio::mPlayer;
+#endif
+
+namespace {
+    void dvdCallBackFunc(s32 a1, DVDFileInfo* pFileInfo) {
+        THPSimplePlayerWrapper* player = (THPSimplePlayerWrapper*)pFileInfo->cb.userData;
+        player->dvdCallBack(a1);
+    }
+};  // namespace
+
+THPSimplePlayerWrapper::THPSimplePlayerWrapper(const char* pName)
+    : NerveExecutor(pName), _8(), _9(), _C(), _10(), mTHPWork(), mOpen(), mPreFetchState(), mAudioState(), mLoop(), mAudioExist(), mCurOffset(),
+      mDvdError(), mReadProgress(), mNextDecodeIndex(), mReadIndex(), mReadSize(), mTotalReadFrame(), mCurrentVolume(), mTargetVolume(),
+      mDeltaVolume(), mRampCount(), mAudioDecodeIndex(), mAudioOutputIndex(), _2F0(), _2F4(1.0f), _2F8(), _2FC(), mSoundBufferIndex(), _30C()
+#if (VERSION == RMGK01)
+      ,
+      _310()
+#endif
+{
+    mSoundBuffer[0] = new (32) s32[0x230];
+    mSoundBuffer[1] = new (32) s32[0x230];
+    MR::zeroMemory(mSoundBuffer[0], 0x8C0);
+    MR::zeroMemory(mSoundBuffer[1], 0x8C0);
+    DCFlushRange(mSoundBuffer[0], 0x8C0);
+    DCFlushRange(mSoundBuffer[1], 0x8C0);
+    MR::zeroMemory(&mFileInfo, sizeof(mFileInfo));
+    MR::zeroMemory(&mHeader, sizeof(mHeader));
+    MR::zeroMemory(&mFrameComp, sizeof(mFrameComp));
+    MR::zeroMemory(&mVideoInfo, sizeof(mVideoInfo));
+    MR::zeroMemory(&mAudioInfo, sizeof(mAudioInfo));
+    MR::zeroMemory(mReadBuffer, sizeof(mReadBuffer));
+
+#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
+    MR::zeroMemory(&mTextureSet, sizeof(mTextureSet));
+#else
+    MR::zeroMemory(&mTextureSet[0], 0x10);
+    MR::zeroMemory(&mTextureSet[1], 0x10);
+#endif
+
+    MR::zeroMemory(mAudioBuffer, 0xF0);
+    initNerve(GET_NERVE(THPSimplePlayerWrapper, HostTypeWait));
+}
+
+bool THPSimplePlayerWrapper::init(s32 audio) {
+    LCEnable();
+    if (!THPInit()) {
+        return false;
+    }
+
+    s32 old = OSDisableInterrupts();
+    mSoundBufferIndex = 0;
+    initAudio();
+    OSRestoreInterrupts(old);
+    MR::zeroMemory(mSoundBuffer[0], 0x8C0);
+    MR::zeroMemory(mSoundBuffer[1], 0x8C0);
+    DCFlushRange(mSoundBuffer[0], 0x8C0);
+    DCFlushRange(mSoundBuffer[1], 0x8C0);
+    _2F0 = 0;
+    _2F4 = 1.0f;
+    _2F8 = 0.0f;
+    _2FC = 0;
+    _8 = 1;
+    return true;
+}
+
+void THPSimplePlayerWrapper::quit() {
+    LCDisable();
+    JASDriver::registerMixCallback(nullptr, (JASMixMode)3);
+    THPSimplePlayerStaticAudio::mPlayer = nullptr;
+    _8 = 0;
+}
+
+bool THPSimplePlayerWrapper::open(const char* pName) {
+    if (!tryDvdOpen(pName)) {
+        return false;
+    }
+
+    setNerve(GET_NERVE(THPSimplePlayerWrapper, HostTypeReadHeader));
+    return true;
+}
+
+bool THPSimplePlayerWrapper::close() {
+    if (mOpen) {
+        if (mPreFetchState == 0) {
+            if (mAudioExist) {
+                if (mAudioState == 1) {
+                    return false;
+                }
+            } else {
+                mAudioState = 0;
+            }
+
+            if (!mReadProgress) {
+                mOpen = 0;
+                DVDClose(&mFileInfo);
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+s32 THPSimplePlayerWrapper::getUseTextureCount() const {
+    return 2;
+}
+
+u32 THPSimplePlayerWrapper::calcNeedMemory() {
+    if (!mOpen) {
+        return 0;
+    }
+
+#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
+    u32 size = OSRoundUp32B(mHeader.bufSize) * 20;
+    size += OSRoundUp32B(mVideoInfo.xSize * mVideoInfo.ySize);
+    size += OSRoundUp32B(mVideoInfo.xSize * mVideoInfo.ySize / 4);
+    size += OSRoundUp32B(mVideoInfo.xSize * mVideoInfo.ySize / 4);
+#else
+    u32 size = OSRoundUp32B(mHeader.bufSize) * 20;
+    size += OSRoundUp32B(mVideoInfo.xSize * mVideoInfo.ySize * 2);
+    size += OSRoundUp32B(mVideoInfo.xSize * mVideoInfo.ySize / 2 & 0x7FFFFFFE);
+    size += OSRoundUp32B(mVideoInfo.xSize * mVideoInfo.ySize / 2 & 0x7FFFFFFE);
+#endif
+
+    if (mAudioExist) {
+        size += (OSRoundUp32B(mHeader.audioMaxSamples * 4) * 20);
+    }
+
+    size += 0x1000;
+    return size;
+}
+
+// FIXME: JPN AND USA
+bool THPSimplePlayerWrapper::setBuffer(u8* pBuffer) {
+    if (mOpen && !mPreFetchState) {
+        if (mAudioState == 1) {
+            return false;
+        }
+
+        u32 ysize = OSRoundUp32B(mVideoInfo.xSize * mVideoInfo.ySize);
+        u32 uvsize = OSRoundUp32B(mVideoInfo.xSize * mVideoInfo.ySize / 4);
+
+#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
+        mTextureSet.ytexture = pBuffer;
+        DCInvalidateRange(pBuffer, ysize);
+        pBuffer += ysize;
+        mTextureSet.utexture = pBuffer;
+        DCInvalidateRange(pBuffer, uvsize);
+        pBuffer += uvsize;
+        mTextureSet.vtexture = pBuffer;
+        DCInvalidateRange(pBuffer, uvsize);
+        pBuffer += uvsize;
+#else
+        mTextureSet[0].ytexture = pBuffer;
+        DCInvalidateRange(pBuffer, ysize);
+        pBuffer += ysize;
+        mTextureSet[0].utexture = pBuffer;
+        DCInvalidateRange(pBuffer, uvsize);
+        pBuffer += uvsize;
+        mTextureSet[0].vtexture = pBuffer;
+        DCInvalidateRange(pBuffer, uvsize);
+        pBuffer += uvsize;
+        mTextureSet[1].ytexture = pBuffer;
+        DCInvalidateRange(pBuffer, ysize);
+        pBuffer += ysize;
+        mTextureSet[1].utexture = pBuffer;
+        DCInvalidateRange(pBuffer, uvsize);
+        pBuffer += uvsize;
+        mTextureSet[1].vtexture = pBuffer;
+        DCInvalidateRange(pBuffer, uvsize);
+        pBuffer += uvsize;
+#endif
+
+        for (s32 i = 0; i < 20; i++) {
+            mReadBuffer[i].ptr = pBuffer;
+            pBuffer += OSRoundUp32B(mHeader.bufSize);
+            mReadBuffer[i].isValid = 0;
+        }
+
+        if (mAudioExist) {
+            for (s32 i = 0; i < 20; i++) {
+                mAudioBuffer[i].buffer = (s16*)pBuffer;
+                mAudioBuffer[i].curPtr = (s16*)pBuffer;
+                mAudioBuffer[i].validSample = 0;
+                pBuffer += OSRoundUp32B(mHeader.audioMaxSamples * 4);
+            }
+        }
+
+        mTHPWork = (void*)pBuffer;
+    }
+
+    return true;
+}
+
+bool THPSimplePlayerWrapper::preLoad(s32 loop) {
+    if (!mOpen || mPreFetchState) {
+        return false;
+    }
+
+    mLoop = loop;
+    _314 = 20;
+    if (!mLoop && mHeader.numFrames < 0x14) {
+        _314 = mHeader.numFrames;
+    }
+
+    setNerve(GET_NERVE(THPSimplePlayerWrapper, HostTypeReadPreLoad));
+    return true;
+}
+
+// FIXME: JPN AND USA
+bool THPSimplePlayerWrapper::loadStop() {
+    if (mOpen && !mAudioState) {
+        mPreFetchState = 0;
+
+        if (mReadProgress) {
+            DVDCancel(&mFileInfo.cb);
+            mReadProgress = 0;
+        }
+
+        for (s32 i = 0; i < 0x14; i++) {
+            mReadBuffer[i].isValid = 0;
+        }
+
+        for (s32 i = 0; i < 0x14; i++) {
+            mAudioBuffer[i].validSample = 0;
+        }
+
+#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
+        mTextureSet.frameNumber = -1;
+#else
+        mTextureSet[0].frameNumber = -1;
+        mTextureSet[1].frameNumber = -1;
+#endif
+
+        mCurOffset = mHeader.movieDataOffsets;
+        mReadSize = mHeader.firstFrameSize;
+        mReadIndex = 0;
+        mTotalReadFrame = 0;
+        mDvdError = 0;
+        mNextDecodeIndex = 0;
+        mAudioDecodeIndex = 0;
+        mAudioOutputIndex = 0;
+        mCurrentVolume = mTargetVolume;
+        mRampCount = 0;
+
+#if (VERSION == RMGK01)
+        _310 = 0;
+#endif
+        return true;
+    }
+
+    return false;
+}
+
+s32 THPSimplePlayerWrapper::decode(s32 audio) {
+    bool isValid = mReadBuffer[mNextDecodeIndex].isValid == true;
+    if (isValid) {
+        NEBULA_BE(u32)* compSize = (NEBULA_BE(u32)*)mReadBuffer[mNextDecodeIndex].ptr + 2;
+        u8* ptr = mReadBuffer[mNextDecodeIndex].ptr + mFrameComp.numComponents * 4 + 8;
+
+        if (mAudioExist) {
+            if (audio < 0 || audio >= mAudioInfo.sndNumTracks) {
+                return 4;
+            }
+
+            if (mAudioBuffer[mAudioDecodeIndex].validSample == 0) {
+                for (s32 i = 0; i < mFrameComp.numComponents; i++) {
+                    switch (mFrameComp.frameComp[i]) {
+                    case 0:
+                        if (!videoDecode(ptr)) {
+                            return 1;
+                        }
+                        break;
+                    case 1:
+                        u32 sample = THPAudioDecode(mAudioBuffer[mAudioDecodeIndex].buffer, ptr + (*compSize) * audio, 0);
+                        s32 interrupt = OSDisableInterrupts();
+                        mAudioBuffer[mAudioDecodeIndex].validSample = sample;
+                        mAudioBuffer[mAudioDecodeIndex].curPtr = mAudioBuffer[mAudioDecodeIndex].buffer;
+                        OSRestoreInterrupts(interrupt);
+                        mAudioDecodeIndex++;
+
+                        if (mAudioDecodeIndex >= 20) {
+                            mAudioDecodeIndex = 0;
+                        }
+
+                        break;
+                    }
+
+                    ptr += *compSize;
+                    compSize++;
+                }
+            } else {
+                return 3;
+            }
+        } else {
+            for (s32 i = 0; i < mFrameComp.numComponents; i++) {
+                switch (mFrameComp.frameComp[i]) {
+                case 0:
+                    if (!videoDecode(ptr)) {
+                        return 1;
+                    }
+                    break;
+                }
+
+                ptr += *compSize;
+                compSize++;
+            }
+        }
+
+        mReadBuffer[mNextDecodeIndex].isValid = 0;
+        mNextDecodeIndex = getNextBuffer(mNextDecodeIndex);
+        checkPrefetch();
+        return 0;
+    }
+
+    return 2;
+}
+
+#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
+s32 THPSimplePlayerWrapper::drawCurrentFrame(_GXRenderModeObj* rmode, u32 x, u32 y, u32 polyW, u32 polyH) {
+    if (mTextureSet.frameNumber < 0) {
+        return -1;
+    }
+
+    THPGXYuv2RgbSetup(rmode);
+    THPGXYuv2RgbDraw(mTextureSet.ytexture, mTextureSet.utexture, mTextureSet.vtexture, x, y, mVideoInfo.xSize, mVideoInfo.ySize, polyW, polyH);
+    THPGXRestore();
+
+    return mTextureSet.frameNumber;
+}
+#else
+s32 THPSimplePlayerWrapper::drawCurrentFrame(_GXRenderModeObj* rmode, u32 x, u32 y, u32 polyW, u32 polyH) {
+    if (mTextureSet[_310].frameNumber < 0) {
+        return -1;
+    }
+
+    THPGXYuv2RgbSetup(rmode);
+    THPGXYuv2RgbDraw(mTextureSet[_310].ytexture, mTextureSet[_310].utexture, mTextureSet[_310].vtexture, x, y, mVideoInfo.xSize, mVideoInfo.ySize,
+                     polyW, polyH);
+    THPGXRestore();
+    s32 ret = mTextureSet[_310].frameNumber;
+    _310 = _310 == 0;
+    return ret;
+}
+#endif
+
+bool THPSimplePlayerWrapper::getVideoInfo(THPVideoInfo* pInfo) const {
+    if (!mOpen) {
+        return false;
+    }
+
+    memcpy(pInfo, &mVideoInfo, sizeof(mVideoInfo));
+    return true;
+}
+
+f32 THPSimplePlayerWrapper::getFrameRate() const {
+    if (mOpen) {
+        return mHeader.frameRate;
+    }
+
+    return 0.0f;
+}
+
+s32 THPSimplePlayerWrapper::getTotalFrame() const {
+    if (mOpen) {
+        return mHeader.numFrames;
+    }
+
+    return 0;
+}
+
+#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
+bool THPSimplePlayerWrapper::videoDecode(u8* pFile) {
+    if (THPVideoDecode(pFile, mTextureSet.ytexture, mTextureSet.utexture, mTextureSet.vtexture, mTHPWork)) {
+        return false;
+    }
+
+    mTextureSet.frameNumber = mReadBuffer[mNextDecodeIndex].frameNumber;
+    return true;
+}
+#else
+bool THPSimplePlayerWrapper::videoDecode(u8* pFile) {
+    if (THPVideoDecode(pFile, mTextureSet[_310].ytexture, mTextureSet[_310].utexture, mTextureSet[_310].vtexture, mTHPWork)) {
+        return false;
+    }
+
+    mTextureSet[_310].frameNumber = mReadBuffer[mNextDecodeIndex].frameNumber;
+    return true;
+}
+#endif
+
+void THPSimplePlayerWrapper::readFrameAsync() {
+    if (!mDvdError && mPreFetchState != 0) {
+        if (mTotalReadFrame > mHeader.numFrames - 1) {
+            if (mLoop == 1) {
+                mTotalReadFrame = 0;
+                mCurOffset = mHeader.movieDataOffsets;
+                mReadSize = mHeader.firstFrameSize;
+            } else {
+                return;
+            }
+        }
+
+        mReadProgress = 1;
+        mFileInfo.cb.userData = this;
+
+        if (DVDReadAsyncPrio(&mFileInfo, mReadBuffer[mReadIndex].ptr, mReadSize, mCurOffset, ::dvdCallBackFunc, 2) != 1) {
+            mReadProgress = 0;
+            mDvdError = 1;
+        }
+    }
+
+    return;
+}
+
+void THPSimplePlayerWrapper::checkPrefetch() {
+    BOOL in = OSDisableInterrupts();
+    bool isValid = mReadBuffer[mReadIndex].isValid == true;
+    if (!isValid && !mReadProgress) {
+        readFrameAsync();
+    }
+
+    OSRestoreInterrupts(in);
+}
+
+void THPSimplePlayerWrapper::dvdCallBack(s32 result) {
+    if (result == -1) {
+        mDvdError = 1;
+        return;
+    } else if (result == -3) {
+        return;
+    }
+
+    mReadProgress = 0;
+    mReadBuffer[mReadIndex].frameNumber = mTotalReadFrame;
+    mTotalReadFrame++;
+    mReadBuffer[mReadIndex].isValid = 1;
+    mCurOffset += mReadSize;
+    mReadSize = *(NEBULA_BE(u32)*)mReadBuffer[mReadIndex].ptr;
+    int index = mReadIndex;
+    index = getNextBuffer(index);
+    mReadIndex = index;
+
+    bool valid = mReadBuffer[index].isValid == TRUE;
+
+    if (!valid) {
+        readFrameAsync();
+    }
+}
+
+void THPSimplePlayerWrapper::readAsyncCallBack(s32 a1) {
+    if (a1 < 0) {
+        if (!isNerve(GET_NERVE(THPSimplePlayerWrapper, HostTypeReadHeader)) && !isNerve(GET_NERVE(THPSimplePlayerWrapper, HostTypeReadFrameComp)) &&
+            !isNerve(GET_NERVE(THPSimplePlayerWrapper, HostTypeReadVideoComp)) &&
+            !isNerve(GET_NERVE(THPSimplePlayerWrapper, HostTypeReadAudioComp))) {
+            isNerve(GET_NERVE(THPSimplePlayerWrapper, HostTypeReadPreLoad));
+        }
+
+        DVDClose(&mFileInfo);
+        return;
+    }
+
+    if (isNerve(GET_NERVE(THPSimplePlayerWrapper, HostTypeReadHeader))) {
+        endReadHeader();
+        setNerve(GET_NERVE(THPSimplePlayerWrapper, HostTypeReadFrameComp));
+        return;
+    }
+
+    if (isNerve(GET_NERVE(THPSimplePlayerWrapper, HostTypeReadFrameComp))) {
+        _10 = 0;
+        endReadFrameComp();
+        checkComponentsInFrame(_10);
+        return;
+    }
+
+    if (isNerve(GET_NERVE(THPSimplePlayerWrapper, HostTypeReadVideoComp))) {
+        endReadVideoComp();
+        if (tryFinishDvdOpen()) {
+            return;
+        }
+
+        checkComponentsInFrame(_10);
+        return;
+    }
+
+    if (isNerve(GET_NERVE(THPSimplePlayerWrapper, HostTypeReadAudioComp))) {
+        endReadAudioComp();
+        if (tryFinishDvdOpen()) {
+            return;
+        }
+
+        checkComponentsInFrame(_10);
+        return;
+    }
+
+    if (isNerve(GET_NERVE(THPSimplePlayerWrapper, HostTypeReadPreLoad))) {
+        endReadPreLoadOne();
+        setNerve(GET_NERVE(THPSimplePlayerWrapper, HostTypeReadPreLoad));
+    }
+}
+
+s32 THPSimplePlayerWrapper::getNextBuffer(u32 idx) const {
+    return ((idx) + 1 >= 0x14 ? 0 : (idx) + 1);
+}
+
+bool THPSimplePlayerWrapper::tryDvdOpen(const char* pFileName) {
+    if (!_8) {
+        return false;
+    }
+
+    if (mOpen) {
+        return false;
+    }
+
+    MR::zeroMemory(&mVideoInfo, sizeof(THPVideoInfo));
+    MR::zeroMemory(&mAudioInfo, sizeof(THPAudioInfo));
+
+    if (!DVDOpen(pFileName, &mFileInfo)) {
+        return false;
+    }
+
+    _C = 0;
+    _9 = 0;
+    return true;
+}
+
+void THPSimplePlayerWrapper::setupParams() {
+    mCurOffset = mHeader.movieDataOffsets;
+    mReadSize = mHeader.firstFrameSize;
+    mReadIndex = 0;
+    mTotalReadFrame = 0;
+    mDvdError = 0;
+#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
+    mTextureSet.frameNumber = -1;
+#else
+    mTextureSet[0].frameNumber = -1;
+    mTextureSet[1].frameNumber = -1;
+#endif
+    mNextDecodeIndex = 0;
+    mPreFetchState = 0;
+    mAudioState = 0;
+    mLoop = 0;
+    mOpen = 1;
+#if (VERSION == RMGK01)
+    _310 = 0;
+#endif
+    resetAudioParams();
+}
+
+namespace {
+    void readAsyncCallBackFunc(s32 a1, DVDFileInfo* pInfo) {
+        THPSimplePlayerWrapper* player = (THPSimplePlayerWrapper*)pInfo->cb.userData;
+        player->readAsyncCallBack(a1);
+    }
+};  // namespace
+
+void THPSimplePlayerWrapper::exeWait() {
+}
+
+void THPSimplePlayerWrapper::exeReadHeader() {
+    if (MR::isFirstStep(this)) {
+        mFileInfo.cb.userData = this;
+        DVDReadAsyncPrio(&mFileInfo, WorkBuffer, 64, _C, ::readAsyncCallBackFunc, 2);
+    }
+}
+
+void THPSimplePlayerWrapper::exeReadFrameComp() {
+    if (MR::isFirstStep(this)) {
+        mFileInfo.cb.userData = this;
+        _C = mHeader.compInfoDataOffsets;
+        DVDReadAsyncPrio(&mFileInfo, WorkBuffer, 32, _C, ::readAsyncCallBackFunc, 2);
+    }
+}
+
+void THPSimplePlayerWrapper::exeReadVideoComp() {
+    if (MR::isFirstStep(this)) {
+        mFileInfo.cb.userData = this;
+        DVDReadAsyncPrio(&mFileInfo, WorkBuffer, 32, _C, ::readAsyncCallBackFunc, 2);
+    }
+}
+
+void THPSimplePlayerWrapper::exeReadAudioComp() {
+    if (MR::isFirstStep(this)) {
+        mFileInfo.cb.userData = this;
+        DVDReadAsyncPrio(&mFileInfo, WorkBuffer, 32, _C, ::readAsyncCallBackFunc, 2);
+    }
+}
+
+#ifdef TARGET_PC
+namespace {
+    // THP headers are big-endian 32-bit words (copied into the player's host-order structs here).
+    void swapWords(void* p, u32 size) {
+        u32* words = static_cast< u32* >(p);
+        for (u32 i = 0; i < size / sizeof(u32); i++) {
+            words[i] = __builtin_bswap32(words[i]);
+        }
+    }
+}  // namespace
+#endif
+
+void THPSimplePlayerWrapper::endReadHeader() {
+    memcpy(&mHeader, WorkBuffer, sizeof(mHeader));
+#ifdef TARGET_PC
+    swapWords(&mHeader.version, sizeof(mHeader) - sizeof(mHeader.magic));
+#endif
+    if (strcmp(mHeader.magic, "THP")) {
+        DVDClose(&mFileInfo);
+        return;
+    }
+
+    if (mHeader.version != 0x11000) {
+        DVDClose(&mFileInfo);
+    }
+}
+
+void THPSimplePlayerWrapper::endReadFrameComp() {
+    memcpy(&mFrameComp, WorkBuffer, sizeof(mFrameComp));
+#ifdef TARGET_PC
+    swapWords(&mFrameComp.numComponents, sizeof(mFrameComp.numComponents));
+#endif
+    mAudioExist = 0;
+    _C += 0x14;
+}
+
+void THPSimplePlayerWrapper::endReadVideoComp() {
+    memcpy(&mVideoInfo, WorkBuffer, sizeof(mVideoInfo));
+#ifdef TARGET_PC
+    swapWords(&mVideoInfo, sizeof(mVideoInfo));
+#endif
+    _C += 12;
+    _10++;
+}
+
+void THPSimplePlayerWrapper::endReadAudioComp() {
+    memcpy(&mAudioInfo, WorkBuffer, sizeof(mAudioInfo));
+#ifdef TARGET_PC
+    swapWords(&mAudioInfo, sizeof(mAudioInfo));
+#endif
+    mAudioExist = 1;
+    _C += 0x10;
+    _10++;
+}
+
+void THPSimplePlayerWrapper::exeReadPreLoad() {
+    if (MR::isFirstStep(this)) {
+        DVDReadAsyncPrio(&mFileInfo, mReadBuffer[mReadIndex].ptr, mReadSize, mCurOffset, ::readAsyncCallBackFunc, 2);
+    }
+
+    if (!_314) {
+        mPreFetchState = 1;
+        setNerve(GET_NERVE(THPSimplePlayerWrapper, HostTypeWait));
+    }
+}
+
+void THPSimplePlayerWrapper::endReadPreLoadOne() {
+    mCurOffset += mReadSize;
+    // Each frame starts with the next frame's size (big-endian).
+    mReadSize = *(NEBULA_BE(s32)*)mReadBuffer[mReadIndex].ptr;
+    mReadBuffer[mReadIndex].isValid = 1;
+    mReadBuffer[mReadIndex].frameNumber = mTotalReadFrame;
+    mReadIndex = getNextBuffer(mReadIndex);
+    mTotalReadFrame++;
+
+    if (mTotalReadFrame > mHeader.numFrames - 1 && mLoop == 1) {
+        mTotalReadFrame = 0;
+        mCurOffset = mHeader.movieDataOffsets;
+        mReadSize = mHeader.firstFrameSize;
+    }
+
+    _314--;
+}
+
+bool THPSimplePlayerWrapper::checkComponentsInFrame(s32 comp) {
+    if (comp < 0 || mFrameComp.numComponents <= comp) {
+        return false;
+    }
+
+    switch (mFrameComp.frameComp[comp]) {
+    case 0:
+        setNerve(GET_NERVE(THPSimplePlayerWrapper, HostTypeReadVideoComp));
+        return true;
+    case 1:
+        setNerve(GET_NERVE(THPSimplePlayerWrapper, HostTypeReadAudioComp));
+        return true;
+    }
+
+    return false;
+}
+
+bool THPSimplePlayerWrapper::tryFinishDvdOpen() {
+    if (_10 < mFrameComp.numComponents) {
+        return false;
+    }
+
+    setupParams();
+    _9 = 1;
+    setNerve(GET_NERVE(THPSimplePlayerWrapper, HostTypeWait));
+    return true;
+}
+
+void THPSimplePlayerWrapper::initAudio() {
+    if (!SCGetSoundMode()) {
+        _30C = 1;
+    } else {
+        _30C = 0;
+    }
+
+    THPSimplePlayerStaticAudio::mPlayer = this;
+    JASDriver::registerMixCallback(THPSimplePlayerStaticAudio::audioCallback, (JASMixMode)3);
+}
+
+bool THPSimplePlayerWrapper::isAudioProcessValid() {
+    if (mOpen && mAudioExist) {
+        return true;
+    }
+
+    return false;
+}
+
+s16* THPSimplePlayerWrapper::audioCallback(s32 sample) {
+    if (!isAudioProcessValid()) {
+        return nullptr;
+    }
+
+    s32 en = OSEnableInterrupts();
+    mSoundBufferIndex ^= 1;
+    mixAudio((s16*)mSoundBuffer[mSoundBufferIndex], sample);
+    OSRestoreInterrupts(en);
+    return (s16*)mSoundBuffer[mSoundBufferIndex];
+}
+
+void THPSimplePlayerWrapper::mixAudio(s16* pDest, u32 sample) {
+    u32 sampleNum, requestSample;
+    s32 mix;
+    s16 *libsrc, *thpsrc;
+    u16 attenuation;
+
+    if (isAudioProcessValid()) {
+        if (_2F0) {
+            _2F0 = 0;
+            _2F4 = 0.0f;
+            _2F8 = 0.001f;
+            _2FC = 4800;
+
+            s32 idx1 = (mAudioOutputIndex + 1) % 0x14;
+            s32 idx2 = (mAudioOutputIndex + 2) % 0x14;
+            if (!mAudioBuffer[idx1].validSample || !mAudioBuffer[idx2].validSample) {
+                MR::zeroMemory(pDest, sample * sizeof(s16*));
+                return;
+            }
+        } else if (!mAudioBuffer[(mAudioOutputIndex + 1) % 0x14].validSample) {
+            MR::zeroMemory(pDest, sample * sizeof(s16*));
+            return;
+        }
+
+        do {
+            if (mAudioBuffer[mAudioOutputIndex].validSample) {
+                if (mAudioBuffer[mAudioOutputIndex].validSample >= sample) {
+                    sampleNum = sample;
+                } else {
+                    sampleNum = mAudioBuffer[mAudioOutputIndex].validSample;
+                }
+
+                thpsrc = mAudioBuffer[mAudioOutputIndex].curPtr;
+
+                for (u32 i = 0; i < sampleNum; i++) {
+                    if (mRampCount) {
+                        mRampCount--;
+                        mCurrentVolume += mDeltaVolume;
+                    } else {
+                        mCurrentVolume = mTargetVolume;
+                    }
+
+                    f32 vol = mCurrentVolume;
+
+                    if (_2FC > 0) {
+                        s32 v19 = _2FC - 1;
+                        vol = 0.0f;
+                        _2FC = v19;
+                        if (v19 < 0) {
+                            _2FC = 0;
+                        }
+                    } else if (_2F4 < 1.0f) {
+                        vol = mCurrentVolume * _2F4;
+                        f32 v20 = _2F4 + _2F8;
+                        _2F4 += _2F8;
+
+                        if (v20 >= 1.0f) {
+                            _2F4 = 1.0f;
+                            _2F8 = 0.0f;
+                        }
+                    }
+
+                    attenuation = VolumeTable[(s32)vol];
+                    mix = ((attenuation * (*thpsrc)) >> 15);
+
+                    if (mix < -32768) {
+                        mix = -32768;
+                    }
+
+                    if (mix > 32767) {
+                        mix = 32767;
+                    }
+
+                    *pDest = (s16)mix;
+                    *thpsrc = 0;
+                    pDest++;
+                    thpsrc++;
+
+                    mix = ((attenuation * (*thpsrc)) >> 15);
+
+                    if (mix < -32768) {
+                        mix = -32768;
+                    }
+                    if (mix > 32767) {
+                        mix = 32767;
+                    }
+
+                    *pDest = (s16)mix;
+                    *thpsrc = 0;
+                    pDest++;
+                    thpsrc++;
+
+                    if (_30C) {
+                        s32 diff = *(pDest - 2) + (*(pDest - 1));
+                        f32 v16 = (diff / 2);
+                        *(pDest - 1) = *(pDest - 2) = 0.707f * v16;
+                    }
+                }
+
+                sample -= sampleNum;
+                mAudioBuffer[mAudioOutputIndex].validSample -= sampleNum;
+                mAudioBuffer[mAudioOutputIndex].curPtr = thpsrc;
+
+                if (mAudioBuffer[mAudioOutputIndex].validSample == 0) {
+                    mAudioOutputIndex++;
+                    if (mAudioOutputIndex >= 0x14) {
+                        mAudioOutputIndex = 0;
+                    }
+                }
+                if (sample == 0)
+                    break;
+            } else {
+                MR::zeroMemory(pDest, sample * sizeof(s16*));
+                return;
+            }
+        } while (true);
+
+    } else {
+        MR::zeroMemory(pDest, sample * sizeof(s16*));
+    }
+}
+
+void THPSimplePlayerWrapper::resetAudioParams() {
+    mAudioDecodeIndex = 0;
+    mAudioOutputIndex = 0;
+    MR::zeroMemory(mAudioBuffer, 0xF0);
+
+    for (s32 i = 0; i < 20; i++) {
+        mAudioBuffer[i].validSample = 0;
+    }
+
+    mRampCount = 0;
+    mCurrentVolume = 127.0f;
+    mTargetVolume = 127.0f;
+}
+
+bool THPSimplePlayerWrapper::setVolume(s32 volume, s32 time) {
+    if (!isAudioProcessValid()) {
+        return false;
+    }
+
+    if (volume > 127) {
+        volume = 127;
+    }
+
+    if (volume < 0) {
+        volume = 0;
+    }
+
+    if (time > 60000) {
+        time = 60000;
+    }
+
+    if (time < 0) {
+        time = 0;
+    }
+
+    s32 en = OSEnableInterrupts();
+    mTargetVolume = (f32)volume;
+
+    if (time > 0) {
+        mRampCount = 32 * time;
+        mDeltaVolume = (mTargetVolume - mCurrentVolume) / (f32)mRampCount;
+    } else {
+        mRampCount = 0;
+        mCurrentVolume = mTargetVolume;
+    }
+
+    OSRestoreInterrupts(en);
+    return true;
+}
+
+bool THPSimplePlayerWrapper::isPreLoading() const {
+    return isNerve(GET_NERVE(THPSimplePlayerWrapper, HostTypeReadPreLoad));
+}
+
+void THPSimplePlayerWrapper::setUnpauseFrameFlag() {
+    s32 en = OSDisableInterrupts();
+    _2F0 = 1;
+    OSRestoreInterrupts(en);
+}
+
+s16* THPSimplePlayerStaticAudio::audioCallback(s32 audio) {
+    THPSimplePlayerWrapper* player = THPSimplePlayerStaticAudio::mPlayer;
+    if (player == nullptr) {
+        return nullptr;
+    }
+
+    return player->audioCallback(audio);
+}
+
+THPSimplePlayerStaticAudio::THPSimplePlayerStaticAudio() {
+}

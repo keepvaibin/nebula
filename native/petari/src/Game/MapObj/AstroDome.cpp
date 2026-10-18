@@ -1,0 +1,92 @@
+#include "Game/MapObj/AstroDome.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/Map/SphereSelector.hpp"
+#include "Game/MapObj/AstroMapObjFunction.hpp"
+#include "Game/MapObj/MapObjActorInitInfo.hpp"
+#include "Game/Util/DemoUtil.hpp"
+#include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/ModelUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
+
+namespace NrvAstroDome {
+    NEW_NERVE(AstroDomeNrvWait, AstroDome, Wait);
+    NEW_NERVE(AstroDomeNrvDisappear, AstroDome, Disappear);
+    NEW_NERVE(AstroDomeNrvAppear, AstroDome, Appear);
+};  // namespace NrvAstroDome
+
+AstroDome::AstroDome(const char* pName) : MapObjActor(pName) {
+}
+
+void AstroDome::init(const JMapInfoIter& rIter) {
+    MapObjActorInitInfo info;
+    info.setupModelName(AstroMapObjFunction::getModelName("AstroDome", AstroMapObjFunction::getDomeIdFromArg0(rIter)));
+    info.setupNerve(GET_NERVE(AstroDome, AstroDomeNrvWait));
+    MapObjActorUtil::setupInitInfoSimpleMapObj(&info);
+    info.setupNoAppearRiddleSE();
+    initialize(rIter, info);
+    MR::invalidateClipping(this);
+    SphereSelectorFunction::registerTarget(this);
+    MR::registerDemoSimpleCastAll(this);
+    makeActorAppeared();
+}
+
+void AstroDome::appear() {
+    MapObjActor::appear();
+    setNerve(GET_NERVE(AstroDome, AstroDomeNrvAppear));
+}
+
+void AstroDome::exeWait() {
+    if (MR::isFirstStep(this)) {
+        MR::startBrk(this, "Appear");
+        MR::setAllAnimFrameAtEnd(this, "Appear");
+    }
+}
+
+void AstroDome::exeDisappear() {
+    if (MR::isFirstStep(this)) {
+        MR::startBrk(this, "Disappear");
+        MR::invalidateCollisionParts(this);
+    }
+
+    if (MR::isBrkStopped(this)) {
+        kill();
+    }
+}
+
+void AstroDome::exeAppear() {
+    if (MR::isFirstStep(this)) {
+        MR::showModel(this);
+        MR::startBrk(this, "Appear");
+        MR::validateCollisionParts(this);
+    }
+
+    if (MR::isBrkStopped(this)) {
+        setNerve(GET_NERVE(AstroDome, AstroDomeNrvWait));
+    }
+}
+
+void AstroDome::control() {
+    if (!MR::isEqualString(mObjectName, "AstroDomeObservatory")) {
+        return;
+    }
+
+    if (MR::isTimeKeepDemoActive()) {
+        MR::hideMaterial(this, "Z_SpotLight_v");
+    } else {
+        MR::showMaterial(this, "Z_SpotLight_v");
+    }
+}
+
+bool AstroDome::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    if (SphereSelectorFunction::isMsgSelectStart(msg)) {
+        setNerve(GET_NERVE(AstroDome, AstroDomeNrvDisappear));
+        return true;
+    }
+
+    if (SphereSelectorFunction::isMsgSelectEnd(msg)) {
+        appear();
+        return true;
+    }
+
+    return false;
+}

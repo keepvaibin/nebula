@@ -1,0 +1,68 @@
+#include "Game/Scene/StopSceneController.hpp"
+#include "Game/NameObj/NameObjGroup.hpp"
+#include "Game/Scene/SceneFunction.hpp"
+#include "Game/Util/ObjUtil.hpp"
+
+StopSceneDelayRequest::StopSceneDelayRequest() : NameObj("\203\126\201\133\203\223\215\144\222\274\222\170\211\204\224\255\215\163" /* シーン硬直遅延発行 */), mFrame(), mDelay() {
+    MR::connectToScene(this, MR::MovementType_StopSceneDelayRequest, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
+}
+
+StopSceneController::StopSceneController() : NameObj("StopSceneController"), mDelayRequestArray(), mFrame() {
+    mDelayRequestArray = new NameObjGroup("\203\126\201\133\203\223\215\144\222\274\222\170\211\204\224\255\215\163\216\322\202\314\212\307\227\235" /* シーン硬直遅延発行者の管理 */, 16);
+
+    for (s32 i = 0; i < 16; i++) {
+        StopSceneDelayRequest* delayRequest = new StopSceneDelayRequest();
+        delayRequest->initWithoutIter();
+        mDelayRequestArray->registerObj(delayRequest);
+    }
+}
+
+void StopSceneDelayRequest::movement() {
+    if (mDelay == 0) {
+        return;
+    }
+
+    mDelay--;
+
+    if (mDelay != 0) {
+        return;
+    }
+
+    MR::stopScene(mFrame);
+}
+
+void StopSceneController::requestStopScene(s32 frame) {
+    if (isSceneStopped()) {
+        if (mFrame < frame) {
+            mFrame = frame;
+        }
+    } else {
+        mFrame = frame;
+    }
+}
+
+void StopSceneController::requestStopSceneDelay(s32 frame, s32 delay) {
+    NameObjGroup* pGroup = mDelayRequestArray;
+    s32 count = pGroup->getObjNum();
+    for (s32 i = 0; i < count; i++) {
+        StopSceneDelayRequest* delayRequest = static_cast< StopSceneDelayRequest* >(pGroup->getObj(i));
+
+        if (delayRequest->mDelay != 0) {
+            continue;
+        }
+
+        delayRequest->mFrame = frame;
+        delayRequest->mDelay = delay;
+        return;
+    }
+}
+
+void StopSceneController::movement() {
+    if (mFrame > 0) {
+        mFrame--;
+    }
+}
+
+bool StopSceneController::isSceneStopped() const {
+    return mFrame > 0;
+}

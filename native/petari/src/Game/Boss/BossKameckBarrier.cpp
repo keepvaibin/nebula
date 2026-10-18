@@ -1,0 +1,34 @@
+#include "Game/Boss/BossKameckBarrier.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/Util/ActorSensorUtil.hpp"
+#include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/ObjUtil.hpp"
+
+namespace NrvBossKameckBarrier {
+    NEW_NERVE(BossKameckBarrierNrvWait, BossKameckBarrier, Wait);
+};  // namespace NrvBossKameckBarrier
+
+BossKameckBarrier::BossKameckBarrier(const char* pName, const char* pModelName) : LiveActor(pName), mModelName(pModelName) {
+}
+
+void BossKameckBarrier::init(const JMapInfoIter& rIter) {
+    MR::initDefaultPos(this, rIter);
+    initModelManagerWithAnm(mModelName, nullptr, false);
+    MR::connectToSceneEnemy(this);
+    initHitSensor(1);
+    MR::addHitSensor(this, "body", ATYPE_KAMECK_BARRIER, 0, 0.0f, TVec3f(0.0f, 0.0f, 0.0f));
+    MR::initCollisionParts(this, mModelName, getSensor("body"), nullptr);
+    initNerve(GET_NERVE(BossKameckBarrier, BossKameckBarrierNrvWait));
+    MR::invalidateClipping(this);
+    makeActorDead();
+}
+
+void BossKameckBarrier::control() {
+}
+
+void BossKameckBarrier::exeWait() {
+    if (MR::isFirstStep(this)) {
+        MR::startBrk(this, "Wait");
+        MR::startBtk(this, "Wait");
+    }
+}

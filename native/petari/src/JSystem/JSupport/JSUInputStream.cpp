@@ -1,0 +1,35 @@
+#include "JSystem/JSupport/JSURandomInputStream.hpp"
+
+s32 JSUInputStream::read(void* pDest, s32 length) {
+    s32 read = readData(pDest, length);
+    if (read != length) {
+        setState(IO_ERROR);
+    }
+    return read;
+}
+
+s32 JSUInputStream::skip(s32 amount) {
+    s32 skipCount;
+    for (skipCount = 0; skipCount < amount; skipCount++) {
+        u8 buffer;
+        if (readData(&buffer, sizeof(buffer)) != sizeof(buffer)) {
+            setState(IO_ERROR);
+            break;
+        }
+    }
+    return skipCount;
+}
+
+s32 JSURandomInputStream::skip(s32 amount) {
+    s32 read = seekPos(amount, SEEK_FROM_POSITION);
+    if (read != amount) {
+        setState(IO_ERROR);
+    }
+    return read;
+}
+
+s32 JSURandomInputStream::seek(s32 offset, JSUStreamSeekFrom whence) {
+    s32 read = seekPos(offset, whence);
+    mState &= ~IO_ERROR;
+    return read;
+}

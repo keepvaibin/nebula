@@ -1,0 +1,22 @@
+#pragma once
+
+#include "Game/Util/Array.hpp"
+
+class LayoutActor;
+class LiveActor;
+class NameObj;
+
+class DemoSimpleCastHolder {
+public:
+    DemoSimpleCastHolder(s32, s32, s32);
+
+    void registerActor(LiveActor*);
+    void registerActor(LayoutActor*);
+    void registerNameObj(NameObj*);
+    void movementOnAllCasts();
+
+private:
+    /* 0x00 */ MR::Vector< MR::AssignableArray< LiveActor* > > mLiveActors;
+    /* 0x0C */ MR::Vector< MR::AssignableArray< LayoutActor* > > mLayoutActors;
+    /* 0x18 */ MR::Vector< MR::AssignableArray< NameObj* > > mNameObjs;
+};

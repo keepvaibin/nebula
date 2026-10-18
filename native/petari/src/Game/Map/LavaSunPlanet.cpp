@@ -1,0 +1,66 @@
+#include "Game/Map/LavaSunPlanet.hpp"
+#include "Game/LiveActor/LodCtrl.hpp"
+#include "Game/LiveActor/MaterialCtrl.hpp"
+#include "Game/LiveActor/ModelObj.hpp"
+#include "Game/MapObj/MapPartsRotator.hpp"
+#include "Game/Util/ActorSensorUtil.hpp"
+#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/ModelUtil.hpp"
+#include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
+
+LavaSunPlanet::LavaSunPlanet(const char* pName) : LiveActor(pName), mRotator(), mObjName(), mLodCtrl() {
+}
+
+void LavaSunPlanet::control() {
+    if (mRotator != nullptr) {
+        mRotator->movement();
+    }
+
+    mLodCtrl->update();
+}
+
+void LavaSunPlanet::calcAndSetBaseMtx() {
+    if (mRotator == nullptr) {
+        LiveActor::calcAndSetBaseMtx();
+    } else {
+        TPos3f mtx;
+        mtx.set(mRotator->getRotateMtx());
+        mtx.setTrans(mPosition);
+        MR::setBaseTRMtx(this, mtx);
+    }
+}
+
+void LavaSunPlanet::init(const JMapInfoIter& rIter) {
+    MR::initDefaultPos(this, rIter);
+    MR::getObjectName(&mObjName, rIter);
+    initModelManagerWithAnm(mObjName, nullptr, true);
+    ProjmapEffectMtxSetter* planetEffect = MR::initDLMakerProjmapEffectMtxSetter(this);
+    MR::newDifferedDLBuffer(this);
+    MR::connectToScenePlanet(this);
+    initHitSensor(1);
+    MR::initCollisionParts(this, mObjName, MR::addBodyMessageSensorMapObj(this), nullptr);
+    MR::setClippingTypeSphereContainsModelBoundingBox(this, 100.0f);
+    MR::setClippingFarMax(this);
+    mLodCtrl = MR::createLodCtrlPlanet(this, rIter, -1.0f, -1);
+    ProjmapEffectMtxSetter* lodEffect = MR::initDLMakerProjmapEffectMtxSetter(mLodCtrl->_10);
+
+    if (MR::isExistAnim(this, mObjName)) {
+        MR::startAllAnim(this, mObjName);
+    } else if (!MR::isExistEffectTexMtx(this)) {
+        calcAnim();
+        MR::offCalcAnim(this);
+    }
+
+    if (MR::isEqualString(mObjName, "LavaRotatePlanet")) {
+        mRotator = new MapPartsRotator(this);
+        mRotator->init(rIter);
+        mRotator->start();
+        mLodCtrl->syncJointAnimation();
+    }
+
+    makeActorAppeared();
+    planetEffect->updateMtxUseBaseMtx();
+    lodEffect->updateMtxUseBaseMtx();
+}

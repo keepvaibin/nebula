@@ -1,0 +1,123 @@
+#include "Game/Screen/LuigiLetter.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/NameObj/NameObjArchiveListCollector.hpp"
+#include "Game/Screen/IconAButton.hpp"
+#include "Game/Util/EventUtil.hpp"
+#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/LayoutUtil.hpp"
+#include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/SoundUtil.hpp"
+#include <cstdio>
+
+namespace NrvLuigiLetter {
+    NEW_NERVE(HostTypeNrvAppear, LuigiLetter, Appear);
+    NEW_NERVE(HostTypeNrvWait, LuigiLetter, Wait);
+    NEW_NERVE(HostTypeNrvEnd, LuigiLetter, End);
+};  // namespace NrvLuigiLetter
+
+LuigiLetter::LuigiLetter(bool param1, const char* pParam2)
+    : LayoutActor("\203\213\203\103\201\133\203\127\202\314\216\350\216\206" /* ルイージの手紙 */, true), mTexture(nullptr), mAButtonIcon(nullptr), _28(pParam2), _2C(param1) {
+}
+
+void LuigiLetter::init(const JMapInfoIter& rIter) {
+    char archiveName[256];
+    char textureName[256];
+
+    initLayoutManager("LuigiLetter", 1);
+    initNerve(GET_NERVE(LuigiLetter, HostTypeNrvAppear));
+    snprintf(archiveName, sizeof(archiveName), "LuigiPicture%s.arc", _28);
+    snprintf(textureName, sizeof(textureName), "LuigiPicture%s.bti", _28);
+
+    mTexture = MR::createLytTexMap(archiveName, textureName);
+
+    MR::replacePaneTexture(this, "PicDummy", mTexture, 0);
+
+    mAButtonIcon = new IconAButton(false, false);
+    mAButtonIcon->initWithoutIter();
+    mAButtonIcon->setFollowActorPane(this, "AButtonPosition");
+
+    if (_2C) {
+        MR::connectToSceneTalkLayoutNoMovement(this);
+        MR::connectToSceneTalkLayoutNoMovement(mAButtonIcon);
+    } else {
+        MR::connectToSceneLayoutOnPauseMovementCalcAnim(this);
+        MR::connectToSceneLayoutOnPauseNoMovement(mAButtonIcon);
+    }
+
+    kill();
+}
+
+void LuigiLetter::appear() {
+    LayoutActor::appear();
+    setNerve(GET_NERVE(LuigiLetter, HostTypeNrvAppear));
+}
+
+void LuigiLetter::movement() {
+    LayoutActor::movement();
+    mAButtonIcon->movement();
+}
+
+void LuigiLetter::exeAppear() {
+    if (MR::isFirstStep(this)) {
+        MR::startAnim(this, "Appear", 0);
+        MR::startSystemSE("SE_SY_LETTER_APPEAR");
+    }
+
+    if (MR::isAnimStopped(this, 0)) {
+        MR::startSystemSE("SE_SV_LUIGI_MAIL");
+        setNerve(GET_NERVE(LuigiLetter, HostTypeNrvWait));
+    }
+}
+
+void LuigiLetter::exeWait() {
+    if (MR::isFirstStep(this)) {
+        MR::startAnim(this, "Wait", 0);
+        mAButtonIcon->openWithoutMessage();
+    }
+
+    if (mAButtonIcon->isWait() && MR::testCorePadButtonA(WPAD_CHAN0)) {
+        MR::startSystemSE("SE_SY_TALK_OK");
+        setNerve(GET_NERVE(LuigiLetter, HostTypeNrvEnd));
+    }
+}
+
+void LuigiLetter::exeEnd() {
+    if (MR::isFirstStep(this)) {
+        MR::startAnim(this, "End", 0);
+        mAButtonIcon->term();
+    }
+
+    if (MR::isAnimStopped(this, 0)) {
+        kill();
+    }
+}
+
+void LuigiLetter::makeArchiveListForNPC(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+    LuigiLetter::makeArchiveListCommon(pCollector, MR::getLuigiLetterGalaxyNameForNPC());
+}
+
+void LuigiLetter::makeArchiveListForMenu(NameObjArchiveListCollector* pCollector, const JMapInfoIter& rIter) {
+    LuigiLetter::makeArchiveListCommon(pCollector, MR::getLuigiLetterGalaxyName());
+}
+
+void LuigiLetter::makeArchiveListCommon(NameObjArchiveListCollector* pCollector, const char* pGalaxyName) {
+    if (pGalaxyName == nullptr) {
+        return;
+    }
+
+    char archiveName[256];
+    snprintf(archiveName, sizeof(archiveName), "LuigiPicture%s", pGalaxyName);
+
+    pCollector->addArchive("LuigiLetter");
+    pCollector->addArchive(archiveName);
+}
+
+namespace MR {
+    LuigiLetter* createLuigiLetterForTalk() {
+        return new LuigiLetter(true, MR::getLuigiLetterGalaxyNameForNPC());
+    }
+
+    LuigiLetter* createLuigiLetterForMenu() {
+        return new LuigiLetter(false, MR::getLuigiLetterGalaxyName());
+    }
+};  // namespace MR

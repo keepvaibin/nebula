@@ -1,0 +1,86 @@
+#pragma once
+
+#include "Game/NPC/NPCActor.hpp"
+
+class ActorCameraInfo;
+class BenefitItemObj;
+class FullnessMeter;
+class SpinDriverShootPath;
+
+class TicoFat : public NPCActor {
+public:
+    TicoFat(const char*);
+
+    virtual ~TicoFat();
+    virtual void init(const JMapInfoIter&);
+    virtual void initAfterPlacement();
+    virtual void kill();
+    virtual void control();
+    virtual void calcAndSetBaseMtx();
+    virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
+    virtual void shootStarPiece();
+    virtual void receiveStarPiece(s32);
+    virtual void startEat();
+    virtual bool enableAppear();
+    virtual void initStarPieceSaveData(const JMapInfoIter&);
+    virtual void addStarPieceSaveData(s32);
+    virtual void disappear(bool);
+    virtual void appearInformation() const;
+
+    static void makeArchiveList(NameObjArchiveListCollector*, const JMapInfoIter&);
+
+    const char* getActionName(const char*);
+    void setCameraParam();
+    bool eventFunc(u32);
+    f32 calcScale();
+    void setScale(f32);
+    void setMessage(s32);
+    bool tryMetamorphosis();
+    void emitScreenEffect();
+    void updateScreenEffect();
+    s32 getDanceSeTranspose() const;
+    void startAbsorbSound();
+    void updateGuidance();
+    void updatePointing();
+    void updateGoods();
+    void exeReaction();
+    void exePrep();
+    void exeWait();
+    void exePoint();
+    void exeEat();
+    void exeChem();
+    void exeTest();
+    void exeFullness();
+    void exeMeta();
+    void exeDemo();
+    void exeFly();
+    void exeWipeOut();
+    void exeWipeIn();
+    void exeInfo();
+    void exeAfter();
+
+    /* 0x15C */ ActorCameraInfo* mCameraInfo;
+    /* 0x160 */ BenefitItemObj* mItem;
+    /* 0x164 */ FullnessMeter* mMeter;
+    /* 0x168 */ SpinDriverShootPath* mShootPath;
+    /* 0x16C */ TalkMessageCtrl* _16C;
+    /* 0x170 */ u8 _170;
+    /* 0x171 */ bool mStartEat;
+    /* 0x172 */ u8 _172;
+    /* 0x173 */ u8 _173;
+    /* 0x174 */ s32 _174;
+    /* 0x178 */ s32 _178;
+    /* 0x17C */ TPos3f _17C;
+    /* 0x1AC */ TPos3f _1AC;
+    /* 0x1DC */ s32 _1DC;
+    /* 0x1E0 */ s32 _1E0;
+    /* 0x1E4 */ s32 _1E4;
+    /* 0x1E8 */ s32 mCurrentFed;
+    /* 0x1EC */ s32 _1EC;
+    /* 0x1F0 */ u32 _1F0;
+    /* 0x1F4 */ s32 _1F4;
+    /* 0x1F8 */ f32 _1F8;
+    /* 0x1FC */ f32 _1FC;
+    /* 0x200 */ s32 _200;
+    /* 0x204 */ s32 _204;
+};

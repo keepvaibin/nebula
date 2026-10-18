@@ -1,0 +1,54 @@
+#pragma once
+
+#include <JSystem/JGeometry/TVec.hpp>
+#include <revolution.h>
+
+struct LightInfo {
+    /* 0x00 */ GXColor mColor;
+    /* 0x04 */ Vec mPos;
+    /* 0x10 */ bool mIsFollowCamera;
+};
+
+struct LightInfoCoin {
+    /* 0x00 */ LightInfo base;
+    struct {
+        /* 0x14 */ GXColor _14;
+        /* 0x18 */ f32 _18;
+    };
+};
+
+struct ActorLightInfo {
+    /* 0x00 */ LightInfo mInfo0;
+    /* 0x14 */ LightInfo mInfo1;
+    /* 0x28 */ u8 mAlpha2;
+    /* 0x29 */ GXColor mColor;
+};
+
+struct AreaLightInfo {
+    /* 0x00 */ const char* mAreaLightName;
+    /* 0x04 */ s32 mInterpolate;
+    /* 0x08 */ bool mFix;
+    /* 0x0C */ ActorLightInfo mPlayerLight;
+    /* 0x3C */ ActorLightInfo mStrongLight;
+    /* 0x6C */ ActorLightInfo mWeakLight;
+    /* 0x9C */ ActorLightInfo mPlanetLight;
+};
+
+class LightDataHolder {
+public:
+    LightDataHolder();
+
+    void initLightData();
+
+    AreaLightInfo* findAreaLight(const char*) const;
+    const char* getDefaultAreaLightName() const;
+    s32 getDefaultStepInterpolate() const;
+
+    inline AreaLightInfo* getLightInfo(s32 idx) const {
+        return &mLights[idx];
+    }
+
+    /* 0x00 */ s32 mLightCount;
+    /* 0x04 */ AreaLightInfo* mLights;
+    /* 0x08 */ LightInfoCoin _8;
+};

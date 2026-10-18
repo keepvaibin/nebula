@@ -1,0 +1,266 @@
+#include "Game/MapObj/AstroMapObj.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/MapObj/AstroMapObjFunction.hpp"
+#include "Game/MapObj/MapObjActorInitInfo.hpp"
+#include "Game/Screen/GalaxyNamePlate.hpp"
+#include "Game/Util/DemoUtil.hpp"
+#include "Game/Util/EffectUtil.hpp"
+#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
+
+namespace {
+    s32 sAstroPathAppearStep = 90;
+};  // namespace
+
+namespace {
+    bool checkStrings(const char* arg1) {
+        return MR::isEqualString(arg1, "AstroDomeEntrance") || MR::isEqualString(arg1, "AstroLibrary");
+    }
+
+    bool checkOtherStrings(const char* arg1) {
+        return MR::isEqualString(arg1, "AstroRotateStepA") || MR::isEqualString(arg1, "AstroRotateStepB") ||
+               MR::isEqualString(arg1, "AstroDecoratePartsA");
+    }
+
+    bool moreInlines(const char* arg1) {
+        return MR::isEqualString(arg1, "AstroDomeEntrance") || MR::isEqualString(arg1, "AstroLibrary") || MR::isEqualString(arg1, "AstroChildRoom") ||
+               MR::isEqualString(arg1, "AstroParking");
+    }
+};  // namespace
+
+namespace NrvAstroMapObj {
+    NEW_NERVE(AstroMapObjNrvDead, AstroMapObj, Wait);
+    NEW_NERVE(AstroMapObjNrvAlive, AstroMapObj, Wait);
+    NEW_NERVE(AstroMapObjNrvAliveAfterDemo, AstroMapObj, Wait);
+    NEW_NERVE(AstroMapObjNrvRevival, AstroMapObj, Revival);
+    NEW_NERVE(AstroMapObjNrvOpen, AstroMapObj, Open);
+};  // namespace NrvAstroMapObj
+
+AstroMapObj::AstroMapObj(const char* pName) : MapObjActor(pName) {
+    _C4 = 0;
+    _C8 = 0;
+    _CC = 0;
+    _D0 = 0;
+    _D4 = 0;
+    _D8 = -1;
+}
+
+void AstroMapObj::init(const JMapInfoIter& rIter) {  // Pain
+    MR::getObjectName(&_CC, rIter);
+    MapObjActorInitInfo mapObjInitInfo = MapObjActorInitInfo();
+    _D8 = AstroMapObjFunction::getDomeIdFromArg0(rIter);
+    mapObjInitInfo.setupHioNode("\222\156\214\140\203\111\203\165\203\127\203\106" /* 地形オブジェ */);
+    mapObjInitInfo.setupDefaultPos();
+    mapObjInitInfo.setupModelName(AstroMapObjFunction::getModelName(_CC, _D8));
+    mapObjInitInfo.setupConnectToScene();
+    mapObjInitInfo.setupFarClipping(-1.0f);
+    mapObjInitInfo.setupEffect(_CC);
+    mapObjInitInfo.setupSound(4);
+    mapObjInitInfo.setupNerve(GET_NERVE(AstroMapObj, AstroMapObjNrvDead));
+
+    if (::checkOtherStrings(_CC)) {
+        mapObjInitInfo.setupRotator();
+    }
+
+    if (::checkStrings(_CC)) {
+        mapObjInitInfo.setupHitSensor();
+    }
+
+    initialize(rIter, mapObjInitInfo);
+    selectNrvWait();
+
+    if (MR::isDemoCast(this, nullptr)) {
+        MR::registerDemoActionFunctor(this, MR::Functor(this, &AstroMapObj::startDemo), nullptr);
+    }
+
+    AstroMapObjFunction::tryRegisterMultiDemoAndFunction(_CC, this, rIter, MR::Functor(this, &AstroMapObj::startDemo));
+    MR::registerDemoSimpleCastAll(this);
+
+    if (::moreInlines(_CC)) {
+        _C4 = AstroMapObjFunction::createAstroNamePlateParser();
+        _C8 = new GalaxyNamePlate(nullptr, true);
+        _C8->initWithoutIter();
+    }
+
+    if (::checkStrings(_CC)) {
+        _D0 = MR::createCollisionPartsFromLiveActor(this, "Close", getSensor("body"), MR::CollisionScaleType_Unk2);
+        _D4 = MR::createCollisionPartsFromLiveActor(this, "Open", getSensor("body"), MR::CollisionScaleType_Unk2);
+    }
+
+    AstroMapObjFunction::initilizePeculiar(_CC, this, rIter);
+}
+
+void AstroMapObj::exeWait() {
+    if (MR::isFirstStep(this)) {
+        if (LiveActor::isNerve(GET_NERVE(AstroMapObj, AstroMapObjNrvDead))) {
+            setStateDead();
+        } else if (LiveActor::isNerve(GET_NERVE(AstroMapObj, AstroMapObjNrvAlive))) {
+            setStateAlive();
+        }
+    }
+    if (AstroMapObj::isPlayMachineSE() &&
+        (isNerve(GET_NERVE(AstroMapObj, AstroMapObjNrvAlive)) || isNerve(GET_NERVE(AstroMapObj, AstroMapObjNrvAliveAfterDemo)))) {
+        if (MR::isEqualString(_CC, "AstroRotateStepA")) {
+            MR::startLevelSound(this, "SE_OJ_LV_ASTRO_ENGINE_1");
+        } else if (MR::isEqualString(_CC, "AstroRotateStepB")) {
+            MR::startLevelSound(this, "SE_OJ_LV_ASTRO_ENGINE_2");
+        }
+    }
+}
+
+void AstroMapObj::exeRevival() {
+    if (MR::isFirstStep(this)) {
+        tryStartAllAnimAndEffect("Revival");
+        if (MR::isEqualString(_CC, "AstroStarPlate")) {
+            MR::startSound(this, "SE_OJ_ASTRO_PLATE_REVIVAL");
+        } else if (MR::isEqualString(mObjectName, "AstroRotateStepA")) {
+            MR::startSound(this, "SE_OJ_ASTRO_STEP_REVIVAL");
+        } else if (MR::isEqualString(mObjectName, "AstroRotateStepB")) {
+            MR::startSound(this, "SE_OJ_ASTRO_STEP_REVIVAL");
+        }
+    }
+    if (MR::isEqualString(_CC, "AstroRotateStepA")) {
+        MR::startLevelSound(this, "SE_OJ_LV_ASTRO_ENGINE_1");
+    } else if (MR::isEqualString(_CC, "AstroRotateStepB")) {
+        MR::startLevelSound(this, "SE_OJ_LV_ASTRO_ENGINE_2");
+    } else if (MR::isEqualString(_CC, "AstroStarPlate") && MR::isGreaterStep(this, ::sAstroPathAppearStep)) {
+        MR::startAtmosphereLevelSE("SE_AT_LV_ASTRO_PATH_APPEAR");
+    }
+    if (AstroMapObj::isEndRevival()) {
+        setNerve(GET_NERVE(AstroMapObj, AstroMapObjNrvAlive));
+    }
+}
+
+void AstroMapObj::exeOpen() {
+    if (MR::isFirstStep(this)) {
+        tryStartAllAnimAndEffect("Open");
+        if (MR::isEqualString(_CC, "AstroDomeEntrance")) {
+            MR::startSound(this, "SE_OJ_ASTRO_ENTRANCE_OPEN");
+        }
+    }
+    if (MR::isBtkStopped(this)) {
+        MR::validateCollisionParts(_D4);
+        MR::invalidateCollisionParts(_D0);
+        setNerve(GET_NERVE(AstroMapObj, AstroMapObjNrvAliveAfterDemo));
+    }
+}
+
+void AstroMapObj::control() {
+    MapObjActor::control();
+    if (_C8) {
+        AstroMapObjFunction::trySetAndShowNamePlate(_C8, _C4, mPosition, _CC, _D8, ::checkStrings(_CC));
+    }
+}
+
+bool AstroMapObj::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    return false;
+}
+
+void AstroMapObj::setStateDead() {
+    setStateDoorOpenOrClose();
+    MR::tryStartAllAnim(this, "Revival");
+    MR::setAllAnimFrameAndStop(this, "Revival", 0.0f);
+    setStateDoorOpenOrClose();
+    if (mRotator) {
+        endMapPartsFunctions();
+    }
+}
+
+void AstroMapObj::setStateAlive() {
+    MR::tryStartAllAnim(this, "Revival");
+    MR::setAllAnimFrameAtEnd(this, "Revival");
+    setStateDoorOpenOrClose();
+    tryStartAllAnimAndEffect("AliveWait");
+    if (mRotator) {
+        startMapPartsFunctions();
+    }
+}
+
+void AstroMapObj::setStateDoorOpenOrClose() {
+    if (!isNerve(GET_NERVE(AstroMapObj, AstroMapObjNrvAliveAfterDemo))) {
+        if (::checkStrings(_CC)) {
+            if (AstroMapObjFunction::isAlreadyOpen(_CC, _D8)) {
+                MR::tryStartAllAnim(this, "Open");
+                MR::setAllAnimFrameAtEnd(this, "Open");
+                MR::validateCollisionParts(_D4);
+                MR::invalidateCollisionParts(_D0);
+            } else {
+                if (!LiveActor::isNerve(GET_NERVE(AstroMapObj, AstroMapObjNrvDead))) {
+                    MR::tryStartAllAnim(this, "Open");
+                    MR::setAllAnimFrameAndStop(this, "Open", 0.0f);
+                }
+                MR::invalidateCollisionParts(_D4);
+                MR::validateCollisionParts(_D0);
+            }
+        }
+    }
+}
+
+void AstroMapObj::selectNrvWait() {
+    if (AstroMapObjFunction::isAlreadyRevival(_CC, _D8)) {
+        setNerve(GET_NERVE(AstroMapObj, AstroMapObjNrvAlive));
+    } else {
+        setNerve(GET_NERVE(AstroMapObj, AstroMapObjNrvDead));
+    }
+}
+
+void AstroMapObj::startDemo() {
+    if (isNerve(GET_NERVE(AstroMapObj, AstroMapObjNrvDead))) {
+        if (AstroMapObjFunction::isEnableRevival(_CC, _D8)) {
+            setNerve(GET_NERVE(AstroMapObj, AstroMapObjNrvRevival));
+        }
+    } else if (AstroMapObjFunction::isEnableOpen(_CC, _D8)) {
+        setNerve(GET_NERVE(AstroMapObj, AstroMapObjNrvOpen));
+    }
+}
+
+void AstroMapObj::tryStartAllAnimAndEffect(const char* v1) {
+    if (MapObjActor::isObjectName("AstroDomeEntranceKitchen") && MR::isEqualString(v1, "AliveWait")) {
+        MR::emitEffect(this, "KitchenSmoke");
+    }
+    if (MR::isRegisteredEffect(this, v1)) {
+        MR::emitEffect(this, v1);
+    }
+    MR::tryStartAllAnim(this, v1);
+}
+
+bool AstroMapObj::isEndRevival() const {
+    if (MR::isExistBck(this, 0)) {
+        return MR::isBckStopped(this);
+    }
+    if (MR::isExistBrk(this, 0)) {
+        return MR::isBrkStopped(this);
+    }
+    return true;
+}
+
+bool AstroMapObj::isPlayMachineSE() const {
+    if (MR::isDemoActive("\203\215\203\133\203\142\203\136\217\363\213\265\220\340\226\276\203\146\203\202" /* ロゼッタ状況説明デモ */) && MR::isDemoPartActive("\217\363\213\265\220\340\226\276[\212\107\226\173\225\134\216\246]" /* 状況説明[絵本表示] */)) {
+        return false;
+    }
+    if (MR::isDemoActive("\203\117\203\211\203\223\203\150\203\130\203\136\201\133\213\101\212\322[\202\121\211\361\226\332\210\310\215\176]" /* グランドスター帰還[２回目以降] */)) {
+        return false;
+    }
+    return MR::isDemoActive("\203\160\203\217\201\133\203\130\203\136\201\133\213\101\212\322" /* パワースター帰還 */) == 0;
+}
+
+AstroSimpleObj::AstroSimpleObj(const char* pName) : SimpleMapObjFarMax(pName) {
+    _C4 = 0;
+    _C8 = 0;
+}
+
+void AstroSimpleObj::init(const JMapInfoIter& rIter) {
+    SimpleMapObjFarMax::init(rIter);
+    _C4 = AstroMapObjFunction::createAstroNamePlateParser();
+    _C8 = new GalaxyNamePlate(0, 1);
+    _C8->initWithoutIter();
+}
+
+void AstroSimpleObj::control() {
+    MapObjActor::control();
+    if (_C8) {
+        AstroMapObjFunction::trySetAndShowNamePlate(_C8, _C4, mPosition, mObjectName, -1, false);
+    }
+}

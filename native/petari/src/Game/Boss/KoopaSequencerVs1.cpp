@@ -1,0 +1,184 @@
+#include "Game/Boss/KoopaSequencerVs1.hpp"
+#include "Game/Boss/Koopa.hpp"
+#include "Game/Boss/KoopaBattleMain.hpp"
+#include "Game/Boss/KoopaBattleStairsVs1.hpp"
+#include "Game/Boss/KoopaDemoJumpToPlanet.hpp"
+#include "Game/Boss/KoopaFunction.hpp"
+#include "Game/Boss/KoopaPlanetShadow.hpp"
+#include "Game/Boss/KoopaSubSequenceBattle.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/Map/KoopaBattleMapPlanet.hpp"
+#include "Game/Util/ActorShadowUtil.hpp"
+#include "Game/Util/ActorStateUtil.hpp"
+#include "Game/Util/ActorSwitchUtil.hpp"
+#include "Game/Util/CameraUtil.hpp"
+#include "Game/Util/DemoUtil.hpp"
+#include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/NerveUtil.hpp"
+#include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/PlayerUtil.hpp"
+#include "Game/Util/SoundUtil.hpp"
+
+namespace {
+    static const s32 sKoopaFallVoiceStep = 20;
+};  // namespace
+
+namespace NrvKoopaSequencerVs1 {
+    NEW_NERVE(KoopaSequencerVs1NrvBattleStairs, KoopaSequencerVs1, BattleStairs);
+    NEW_NERVE(KoopaSequencerVs1NrvDemoBattleStart, KoopaSequencerVs1, DemoBattleStart);
+    NEW_NERVE(KoopaSequencerVs1NrvDemoJumpToPlanet, KoopaSequencerVs1, DemoJumpToPlanet);
+    NEW_NERVE(KoopaSequencerVs1NrvBattle, KoopaSequencerVs1, Battle);
+    NEW_NERVE(KoopaSequencerVs1NrvWaitDemoBattleEnd, KoopaSequencerVs1, WaitDemoBattleEnd);
+    NEW_NERVE(KoopaSequencerVs1NrvDemoBattleEnd, KoopaSequencerVs1, DemoBattleEnd);
+    NEW_NERVE(KoopaSequencerVs1NrvWaitDemo, KoopaSequencerVs1, WaitDemo);
+};  // namespace NrvKoopaSequencerVs1
+
+KoopaSequencerVs1::KoopaSequencerVs1() : KoopaSequencer("\203\116\203\142\203\160\220\355\201\151\202\165\202\223\202\120\220\151\215\163\226\360\201\152" /* クッパ戦（Ｖｓ１進行役） */, 1), mSubSequenceBattle(), mBattleMain() {
+}
+
+void KoopaSequencerVs1::init(Koopa* pKoopa, const JMapInfoIter& rIter) {
+    KoopaSequencer::init(pKoopa, rIter);
+    initNerve(GET_NERVE(KoopaSequencerVs1, KoopaSequencerVs1NrvBattleStairs));
+    KoopaFunction::initKoopaPartsVs1(mKoopa);
+
+    mBattleStairs = new KoopaBattleStairsVs1(mKoopa);
+
+    mBattleMain = new KoopaBattleMain("\203\116\203\142\203\160\220\355\223\254\201\151\202\165\202\223\202\120\201\152" /* クッパ戦闘（Ｖｓ１） */, mKoopa);
+    mBattleMain->init();
+
+    mSubSequenceBattle = new KoopaSubSequenceBattle(mKoopa, this, mBattleMain);
+    mSubSequenceBattle->init();
+
+    MR::initDemoSheetTalkAnim(mKoopa, rIter, "\203\116\203\142\203\160\202\165\202\223\202\120\226\173\220\355\212\112\216\156" /* クッパＶｓ１本戦開始 */, "DemoKoopaVs1Start", nullptr);
+    MR::initDemoSheetTalkAnim(mKoopa, rIter, "\203\116\203\142\203\160\202\165\202\223\202\120\203\137\203\105\203\223" /* クッパＶｓ１ダウン */, "DemoKoopaVs1Down", nullptr);
+
+    MR::declareStarPiece(mKoopa, 30);
+}
+
+void KoopaSequencerVs1::exeBattleStairs() {
+    if (MR::isFirstStep(this)) {
+        KoopaFunction::setKoopaPos(mKoopa, "\212\113\222\151\202\314\220\355\202\242\202\117\201\151\203\116\203\142\203\160\201\152" /* 階段の戦い０（クッパ） */);
+    }
+
+    mBattleStairs->update();
+
+    if (MR::isOnSwitchA(mKoopa)) {
+        mBattleStairs->end();
+
+        setNerve(GET_NERVE(KoopaSequencerVs1, KoopaSequencerVs1NrvWaitDemo));
+
+        KoopaFunction::setKoopaPos(mKoopa, "\203\146\203\202\222\206\220\123" /* デモ中心 */);
+        MR::setPlayerPosAndWait("\203\146\203\202\222\206\220\123" /* デモ中心 */);
+
+        MR::requestStartTimeKeepDemoMarioPuppetable(this, mKoopa, "\203\116\203\142\203\160\202\165\202\223\202\120\226\173\220\355\212\112\216\156" /* クッパＶｓ１本戦開始 */,
+                                                    GET_NERVE(KoopaSequencerVs1, KoopaSequencerVs1NrvDemoBattleStart), nullptr, nullptr);
+
+        MR::overlayWithPreviousScreen(2);
+    }
+}
+
+void KoopaSequencerVs1::exeDemoBattleStart() {
+    if (MR::isFirstStep(this)) {
+        KoopaFunction::endFaceCtrl(mKoopa, -1);
+
+        MR::invalidateShadowGroup(mKoopa, "\220\355\223\254\227\160" /* 戦闘用 */);
+        MR::validateShadowGroup(mKoopa, "\203\146\203\202\227\160" /* デモ用 */);
+    }
+
+    if (MR::isDemoLastStep()) {
+        MR::validateShadowGroup(mKoopa, "\220\355\223\254\227\160" /* 戦闘用 */);
+        MR::invalidateShadowGroup(mKoopa, "\203\146\203\202\227\160" /* デモ用 */);
+
+        KoopaFunction::startFaceCtrl(mKoopa);
+
+        mJumpToPlanet->startReady();
+
+        setNerve(GET_NERVE(KoopaSequencerVs1, KoopaSequencerVs1NrvDemoJumpToPlanet));
+    }
+}
+
+void KoopaSequencerVs1::exeDemoJumpToPlanet() {
+    MR::updateActorStateAndNextNerve(this, mJumpToPlanet, GET_NERVE(KoopaSequencerVs1, KoopaSequencerVs1NrvBattle));
+}
+
+void KoopaSequencerVs1::exeBattle() {
+    MR::updateActorStateAndNextNerve(this, mSubSequenceBattle, GET_NERVE(KoopaSequencerVs1, KoopaSequencerVs1NrvWaitDemoBattleEnd));
+}
+
+void KoopaSequencerVs1::exeWaitDemoBattleEnd() {
+    if (MR::isFirstStep(this)) {
+        KoopaFunction::getKoopaPlanetShadow(mKoopa)->kill();
+
+        KoopaFunction::setKoopaPos(mKoopa, "\203\146\203\202\222\206\220\123" /* デモ中心 */);
+
+        setNerve(GET_NERVE(KoopaSequencerVs1, KoopaSequencerVs1NrvWaitDemo));
+
+        MR::requestStartTimeKeepDemoMarioPuppetable(this, mKoopa, "\203\116\203\142\203\160\202\165\202\223\202\120\203\137\203\105\203\223" /* クッパＶｓ１ダウン */,
+                                                    GET_NERVE(KoopaSequencerVs1, KoopaSequencerVs1NrvDemoBattleEnd), nullptr, nullptr);
+    }
+}
+
+void KoopaSequencerVs1::exeDemoBattleEnd() {
+    if (MR::isFirstStep(this)) {
+        MR::startAtmosphereSE("SE_AT_KOOPA_FALLDOWN_LV1");
+        MR::stopStageBGM(180);
+
+        KoopaFunction::endFaceCtrl(mKoopa, -1);
+
+        MR::startBrk(KoopaFunction::getKoopaPlanet(mKoopa), "Death");
+    }
+
+    if (MR::isStep(this, ::sKoopaFallVoiceStep)) {
+        MR::startSound(mKoopa, "SE_BV_KOOPA_BATTLE_END_FALL");
+    }
+
+    if (MR::isDemoLastStep()) {
+        MR::overlayWithPreviousScreen(3);
+
+        TVec3f namePos;
+        MR::findNamePos("\203\146\203\202\222\206\220\123" /* デモ中心 */, &namePos, nullptr);
+
+        MR::startAfterBossBGM();
+
+        MR::requestAppearPowerStar(mKoopa, namePos);
+        KoopaFunction::startKoopaPlateDamageAnimPowerStarAppear(mKoopa);
+
+        mKoopa->kill();
+    }
+}
+
+void KoopaSequencerVs1::exeWaitDemo() {
+}
+
+void KoopaSequencerVs1::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
+    if (isNerve(GET_NERVE(KoopaSequencerVs1, KoopaSequencerVs1NrvBattle)) && !mSubSequenceBattle->isDemo()) {
+        mBattleMain->attackSensor(pSender, pReceiver);
+    }
+}
+
+bool KoopaSequencerVs1::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    if (isNerve(GET_NERVE(KoopaSequencerVs1, KoopaSequencerVs1NrvBattleStairs))) {
+        return mBattleStairs->receiveMsgPlayerAttack(msg, pSender, pReceiver);
+    }
+
+    if (isNerve(GET_NERVE(KoopaSequencerVs1, KoopaSequencerVs1NrvBattle)) && !mSubSequenceBattle->isDemo()) {
+        return mBattleMain->receiveMsgPlayerAttack(msg, pSender, pReceiver);
+    }
+
+    return false;
+}
+
+bool KoopaSequencerVs1::receiveMsgEnemyAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    return false;
+}
+
+bool KoopaSequencerVs1::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    if (isNerve(GET_NERVE(KoopaSequencerVs1, KoopaSequencerVs1NrvBattle)) && !mSubSequenceBattle->isDemo()) {
+        return mBattleMain->receiveOtherMsg(msg, pSender, pReceiver);
+    }
+
+    return false;
+}
+
+KoopaSequencerVs1::~KoopaSequencerVs1() {
+}

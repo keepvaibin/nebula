@@ -1,0 +1,217 @@
+#include "Game/Player/MarioSlider.hpp"
+#include "Game/Enemy/KarikariDirector.hpp"
+#include "Game/Map/HitInfo.hpp"
+#include "Game/Player/Mario.hpp"
+#include "Game/Player/MarioActor.hpp"
+#include "Game/Player/MarioConst.hpp"
+#include "Game/Util/MathUtil.hpp"
+
+bool Mario::isSliderFloor() const {
+    return _960 == 9;
+}
+
+bool Mario::checkSliderMode() const {
+    if (!mMovementStates.jumping && mMovementStates._1) {
+        if (isSliderFloor()) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+MarioSlider::MarioSlider(MarioActor* pActor) : MarioState(pActor, MarioStatus_Slider) {
+    _14.zero();
+    _20.zero();
+    _2C.zero();
+    _40 = 0;
+    _38 = 0.0f;
+    _3C = 0.0f;
+}
+
+void MarioSlider::calcGroundAccel() {
+    TVec3f* val = &getPlayer()->_368;
+    TVec3f v6 = val->cross(*getPlayer()->getGravityVec());
+    MR::normalizeOrZero(&v6);
+    _2C.cross(v6, *val);
+    MR::normalizeOrZero(&_2C);
+}
+
+bool MarioSlider::postureCtrl(MtxPtr) {
+    Mtx rotMtx;
+    TVec3f& frontVec = getFrontVec();
+    PSMTXRotAxisRad(rotMtx, &frontVec, 0.2f * (MR::pi() * _3C / 2.0f));
+
+    TVec3f newHeadVec;
+    PSMTXMultVec(rotMtx, &getPlayer()->_368, &newHeadVec);
+
+    MarioConst* pConst = mActor->mConst;
+    Mario* pPlayer = getPlayer();
+    MR::vecBlendSphere(getPlayer()->_1FC, newHeadVec, &pPlayer->_1FC, pConst->getTable()->mSliderHeadRotateRatio);
+    return false;
+}
+
+void MarioSlider::calcWallHit() {
+    if (getPlayer()->mMovementStates._1A) {
+        TVec3f stack_50(_14);
+        f32 sideDot = MR::vecKillElement(stack_50, *getPlayer()->mSideWallTriangle->getNormal(0), &stack_50);
+
+        if (sideDot < 0.0f) {
+            if (-sideDot < 10.0f) {
+                sideDot = -10.0f;
+            }
+
+            _14 = stack_50 - *getPlayer()->mSideWallTriangle->getNormal(0) * sideDot;
+        }
+    }
+
+    if (getPlayer()->mMovementStates._8) {
+        TVec3f stack_44(_14);
+        f32 frontDot = MR::vecKillElement(stack_44, *getPlayer()->mFrontWallTriangle->getNormal(0), &stack_44);
+
+        if (frontDot < 0.0f) {
+            if (-frontDot < 10.0f) {
+                frontDot = -10.0f;
+            }
+
+            f32 frontScale = 0.5f * frontDot;
+            _14 = stack_44 - *getPlayer()->mFrontWallTriangle->getNormal(0) * frontScale;
+
+            TVec3f stack_38(_14);
+            MR::normalize(&stack_38);
+            getPlayer()->setFrontVecKeepUp(stack_38);
+        }
+    }
+}
+
+void Mario::startSlider() {
+    if (!isStatusActive(mSlider->mStatusId)) {
+        if (getPlayer()->mMovementStates._B) {
+            if (getPlayer()->mMovementStates.jumping) {
+                mDrawStates._14 = true;
+                playSound("\220\113\203\150\203\215\203\142\203\166\222\205\222\156" /* 尻ドロップ着地 */);
+                playSound("\220\272\220\113\203\150\203\215\203\142\203\166\222\205\222\156" /* 声尻ドロップ着地 */);
+                playEffectRT("\221\256\220\253\220\113\203\150\203\215\203\142\203\166" /* 属性尻ドロップ */, _368, mPosition);
+                startPadVib("\215\305\213\255" /* 最強 */);
+                startCamVib(0);
+                MR::removeAllClingingKarikari();
+            }
+        }
+
+        stopWalk();
+        stopJump();
+        changeStatus(mSlider);
+    }
+}
+
+bool MarioSlider::start() {
+    _14 = getPlayer()->_16C;
+    MR::vecKillElement(_14, getPlayer()->_368, &_14);
+    _20 = getFrontVec();
+    getPlayer()->cancelSquatMode();
+    changeAnimation("\203\130\203\211\203\103\203\137\201\133\220\113" /* スライダー尻 */, "\203\130\203\211\203\103\203\137\201\133\220\113" /* スライダー尻 */);
+    _40 = 10;
+    _38 = 0.0f;
+    _3C = 0.0f;
+    return true;
+}
+
+bool MarioSlider::update() {
+    if (!getPlayer()->checkSliderMode()) {
+        if (getPlayer()->mMovementStates._1 != 0) {
+            if (isSlipPolygon(getGroundPolygon())) {
+                Mario* player = getPlayer();
+                player->_8F8 = _14;
+                player->_8F0 = 10.0f;
+                return false;
+            }
+        }
+
+        _40--;
+        if (_40 == 0) {
+            getPlayer()->tryDrop();
+            getPlayer()->mJumpVec = mActor->getLastMove();
+            return false;
+        }
+    } else {
+        _40 = 10;
+    }
+
+    calcGroundAccel();
+
+    if (checkTrgA()) {
+        getPlayer()->mWalkSpeed = (_14.length() / mActor->mConst->getTable()->mJumpFrontSpeed);
+        getPlayer()->tryJump();
+        return false;
+    } else {
+        f32 stickY = -getStickY();
+        f32 stickX = getStickX();
+        _38 = (stickY * (1.0f - mActor->getConst().getTable()->mSliderBrakeIne)) + (_38 * mActor->mConst->getTable()->mSliderBrakeIne);
+        MarioConstTable* tbl = mActor->mConst->getTable();
+        _3C = (stickX * (1.0f - tbl->mSliderWeightIne)) + (_3C * tbl->mSliderWeightIne);
+        f32 v18 = _14.length();
+        v18 -= mActor->mConst->getTable()->mSliderBrakePow;
+
+        if (v18 > 20.0f) {
+            v18 = (v18 * (1.0f - (0.1f * _38)));
+        }
+
+        TVec3f v48(_14);
+
+        if (MR::isNearZero(v48)) {
+            v48 = _2C * mActor->mConst->getTable()->mSliderSlopePow;
+        }
+
+        if (MR::isNearZero(v48)) {
+            return false;
+        } else {
+            MR::normalize(&v48);
+            TVec3f v47(getPlayer()->_368);
+            TVec3f v46 = v48.cross(v47);
+            MR::vecKillElement(v46, getPlayer()->_368, &v46);
+            MR::normalize(&v46);
+            _14.setLength(v18);
+            _14 += _2C * mActor->mConst->getTable()->mSliderSlopePow;
+
+            _14 += v46 * _3C * mActor->mConst->getTable()->mSliderWeightPow;
+            MR::vecKillElement(_14, getPlayer()->_368, &_14);
+            if (_14.length() > mActor->mConst->getTable()->mSliderMaxSpeed) {
+                _14.setLength(mActor->mConst->getTable()->mSliderMaxSpeed);
+            }
+
+            addVelocity(_14);
+
+            TVec3f v45(-getPlayer()->_368 * 15.0f);
+
+            MR::vecKillElement(v45, getFrontVec(), &v45);
+            addVelocity(v45);
+
+            TVec3f v44(getPlayer()->mFrontVec);
+            TVec3f v43;
+            MR::vecKillElement(_14, *getPlayer()->getGravityVec(), &v43);
+
+            if (!MR::isNearZero(v43)) {
+                MR::normalize(&v43);
+                getPlayer()->setFrontVecKeepUp(v43, mActor->mConst->getTable()->mSliderFrontTurnRatio);
+            }
+
+            calcWallHit();
+            playSound("\215\342\212\212\202\350" /* 坂滑り */);
+            return true;
+        }
+    }
+
+    return true;
+}
+
+bool MarioSlider::close() {
+    if (getPlayer()->isSwimming()) {
+        stopAnimation("\203\130\203\211\203\103\203\137\201\133\220\113" /* スライダー尻 */);
+    } else if (getPlayer()->mMovementStates.jumping) {
+        stopAnimation("\203\130\203\211\203\103\203\137\201\133\220\113" /* スライダー尻 */, "\227\216\211\272" /* 落下 */);
+    } else {
+        stopAnimation("\203\130\203\211\203\103\203\137\201\133\220\113" /* スライダー尻 */, "\212\356\226\173" /* 基本 */);
+    }
+
+    return true;
+}

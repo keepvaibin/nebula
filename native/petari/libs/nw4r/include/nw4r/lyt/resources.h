@@ -1,0 +1,403 @@
+#pragma once
+
+#include "nebula_disc.hpp"
+#include "nw4r/lyt/types.h"
+#include "nw4r/math/types.h"
+#include <revolution.h>
+
+// BRLYT/BRLAN, read in place: big-endian fields; the vector, size and SRT values the layout copies into its panes and
+// materials are NEBULA_DISC twins.
+#ifdef TARGET_PC
+template <>
+struct BEData< nw4r::math::VEC2 > {
+    BE< f32 > x, y;
+
+    operator nw4r::math::VEC2() const {
+        return nw4r::math::VEC2(x, y);
+    }
+};
+
+template <>
+struct BEData< nw4r::math::VEC3 > {
+    BE< f32 > x, y, z;
+
+    operator nw4r::math::VEC3() const {
+        return nw4r::math::VEC3(x, y, z);
+    }
+};
+
+template <>
+struct BEData< nw4r::lyt::Size > {
+    BE< f32 > width, height;
+
+    operator nw4r::lyt::Size() const {
+        return nw4r::lyt::Size(width, height);
+    }
+};
+
+template <>
+struct BEData< nw4r::lyt::InflationLRTB > {
+    BE< f32 > l, r, t, b;
+
+    operator nw4r::lyt::InflationLRTB() const {
+        nw4r::lyt::InflationLRTB v = {l, r, t, b};
+        return v;
+    }
+};
+
+template <>
+struct BEData< nw4r::lyt::TexSRT > {
+    BEData< nw4r::math::VEC2 > translate;
+    BE< f32 > rotate;
+    BEData< nw4r::math::VEC2 > scale;
+
+    operator nw4r::lyt::TexSRT() const {
+        nw4r::lyt::TexSRT v;
+        v.translate = translate;
+        v.rotate = rotate;
+        v.scale = scale;
+        return v;
+    }
+};
+#endif
+
+namespace nw4r {
+    namespace lyt {
+        namespace res {
+            const u32 FILESIGNATURE_RLYT = 'RLYT';
+
+            const u32 DATABLOCKKIND_LAYOUT = 'lyt1';
+            const u32 DATABLOCKKIND_PANE = 'pan1';
+            const u32 DATABLOCKKIND_PANEBEGIN = 'pas1';
+            const u32 DATABLOCKKIND_PANEEND = 'pae1';
+            const u32 DATABLOCKKIND_PICTURE = 'pic1';
+            const u32 DATABLOCKKIND_TEXTBOX = 'txt1';
+            const u32 DATABLOCKKIND_WINDOW = 'wnd1';
+            const u32 DATABLOCKKIND_BOUNDING = 'bnd1';
+            const u32 DATABLOCKKIND_GROUP = 'grp1';
+            const u32 DATABLOCKKIND_GROUPBEGIN = 'grs1';
+            const u32 DATABLOCKKIND_GROUPEND = 'gre1';
+            const u32 DATABLOCKKIND_FONTLIST = 'fnl1';
+            const u32 DATABLOCKKIND_TEXTURELIST = 'txl1';
+            const u32 DATABLOCKKIND_MATERIALLIST = 'mat1';
+            const u32 DATABLOCKKIND_USERDATALIST = 'usd1';
+
+            const u32 FILESIGNATURE_RLAN = 'RLAN';
+
+            const u32 ANIMATIONTYPE_RLPA = 'RLPA';
+            const u32 ANIMATIONTYPE_RLVI = 'RLVI';
+            const u32 ANIMATIONTYPE_RLVC = 'RLVC';
+            const u32 ANIMATIONTYPE_RLMC = 'RLMC';
+            const u32 ANIMATIONTYPE_RLTS = 'RLTS';
+            const u32 ANIMATIONTYPE_RLTP = 'RLTP';
+            const u32 ANIMATIONTYPE_RLIM = 'RLIM';
+
+            const u32 DATABLOCKKIND_PANEANIMTAG = 'pat1';
+            const u32 DATABLOCKKIND_PANEANIMSHARE = 'pah1';
+            const u32 DATABLOCKKIND_PANEANIMINFO = 'pai1';
+
+            const u32 RESOURCETYPE_LAYOUT = 'blyt';
+            const u32 RESOURCETYPE_ANIMATION = 'anim';
+            const u32 RESOURCETYPE_TEXTURE = 'timg';
+            const u32 RESOURCETYPE_FONT = 'font';
+            const u32 RESOURCETYPE_ARCHIVEFONT = 'fnta';
+
+            struct BinaryFileHeader {
+                char signature[4];
+                NEBULA_BE(u16) byteOrder;
+                NEBULA_BE(u16) version;
+                NEBULA_BE(u32) fileSize;
+                NEBULA_BE(u16) headerSize;
+                NEBULA_BE(u16) dataBlocks;
+            };
+
+            struct DataBlockHeader {
+                char kind[4];
+                NEBULA_BE(u32) size;
+            };
+
+            struct Layout {
+                DataBlockHeader blockHeader;
+                u8 originType;
+                u8 padding[3];
+                NEBULA_DISC(Size) layoutSize;
+            };
+
+            struct Font {
+                NEBULA_BE(u32) nameStrOffset;
+                u8 type;
+                u8 padding[3];
+            };
+
+            struct FontList {
+                DataBlockHeader blockHeader;
+                NEBULA_BE(u16) fontNum;
+                u8 padding[2];
+            };
+
+            struct Texture {
+                NEBULA_BE(u32) nameStrOffset;
+                u8 type;
+                u8 padding[3];
+            };
+
+            struct TextureList {
+                DataBlockHeader blockHeader;
+                NEBULA_BE(u16) texNum;
+                u8 padding[2];
+            };
+
+            struct TexMap {
+                TexMap() : texIdx(0), wrapSflt(0), wrapTflt(0) {
+                }
+
+                GXTexWrapMode GetWarpModeS() const {
+                    return GXTexWrapMode(detail::GetBits(wrapSflt, 0, 2));
+                }
+
+                GXTexWrapMode GetWarpModeT() const {
+                    return GXTexWrapMode(detail::GetBits(wrapTflt, 0, 2));
+                }
+
+                GXTexFilter GetMinFilter() const {
+                    const int bitLen = 3;
+                    const u8 bitData = detail::GetBits(wrapSflt, 2, bitLen);
+                    return GXTexFilter(detail::GetBits(bitData + GX_LINEAR, 0, bitLen));
+                }
+
+                GXTexFilter GetMagFilter() const {
+                    const int bitLen = 1;
+                    const u8 bitData = detail::GetBits(wrapTflt, 2, bitLen);
+                    return GXTexFilter(detail::GetBits(bitData + GX_LINEAR, 0, bitLen));
+                }
+
+                void SetWarpModeS(GXTexWrapMode value) {
+                    detail::SetBits(&wrapSflt, 0, 2, u8(value));
+                }
+
+                void SetWarpModeT(GXTexWrapMode value) {
+                    detail::SetBits(&wrapTflt, 0, 2, u8(value));
+                }
+
+                void SetMinFilter(GXTexFilter value) {
+                    const int bitLen = 3;
+                    const u8 bitData = u8(detail::GetBits(value - GX_LINEAR, 0, bitLen));  // Set to zero when (value = GX_LINEAR)
+                    detail::SetBits(&wrapSflt, 2, bitLen, bitData);
+                }
+
+                void SetMagFilter(GXTexFilter value) {
+                    const int bitLen = 1;
+                    const u8 bitData = u8(detail::GetBits(value - GX_LINEAR, 0, bitLen));
+                    detail::SetBits(&wrapTflt, 2, bitLen, bitData);
+                }
+
+                NEBULA_BE(u16) texIdx;
+                u8 wrapSflt;
+                u8 wrapTflt;
+            };
+
+            struct MaterialList {
+                DataBlockHeader blockHeader;
+                NEBULA_BE(u16) materialNum;
+                u8 padding[2];
+            };
+
+            struct Pane {
+                DataBlockHeader blockHeader;
+                u8 flag;
+                u8 basePosition;
+                u8 alpha;
+                u8 padding;
+                char name[16];
+                char userData[8];
+                NEBULA_DISC(math::VEC3) translate;
+                NEBULA_DISC(math::VEC3) rotate;
+                NEBULA_DISC(math::VEC2) scale;
+                NEBULA_DISC(Size) size;
+            };
+
+            struct Picture : Pane {
+                NEBULA_BE(u32) vtxCols[4];
+                NEBULA_BE(u16) materialIdx;
+                u8 texCoordNum;
+                u8 padding[1];
+            };
+
+            struct TextBox : Pane {
+                NEBULA_BE(u16) textBufBytes;
+                NEBULA_BE(u16) textStrBytes;
+                NEBULA_BE(u16) materialIdx;
+                NEBULA_BE(u16) fontIdx;
+                u8 textPosition;
+                u8 textAlignment;
+                u8 padding[2];
+                NEBULA_BE(u32) textStrOffset;
+                NEBULA_BE(u32) textCols[2];
+                NEBULA_DISC(Size) fontSize;
+                NEBULA_BE(f32) charSpace;
+                NEBULA_BE(f32) lineSpace;
+            };
+
+            struct WindowFrame {
+                NEBULA_BE(u16) materialIdx;
+                u8 textureFlip;
+                u8 padding1;
+            };
+
+            struct WindowContent {
+                NEBULA_BE(u32) vtxCols[4];
+                NEBULA_BE(u16) materialIdx;
+                u8 texCoordNum;
+                u8 padding[1];
+            };
+
+            struct Window : Pane {
+                NEBULA_DISC(InflationLRTB) inflation;
+                u8 frameNum;
+                u8 padding1;
+                u8 padding2;
+                u8 padding3;
+                NEBULA_BE(u32) contentOffset;
+                NEBULA_BE(u32) frameOffsetTableOffset;
+            };
+
+            struct Bounding : Pane {};
+
+            struct ExtUserDataList {
+                DataBlockHeader blockHeader;
+                detail::ResU16 num;
+                u8 padding[2];
+            };
+
+            struct Group {
+                DataBlockHeader blockHeader;
+                char name[16];
+                NEBULA_BE(u16) paneNum;
+                u8 padding[2];
+            };
+
+            struct MaterialResourceNum {
+                u8 GetTexMapNum() const NO_INLINE {
+                    return u8(detail::GetBits(u32(bits), 0, 4));
+                }
+
+                u8 GetTexSRTNum() const NO_INLINE {
+                    return u8(detail::GetBits(u32(bits), 4, 4));
+                }
+
+                u8 GetTexCoordGenNum() const NO_INLINE {
+                    return u8(detail::GetBits(u32(bits), 8, 4));
+                }
+
+                bool HasTevSwapTable() const NO_INLINE {
+                    return detail::TestBit(u32(bits), 12);
+                }
+
+                u8 GetIndTexSRTNum() const NO_INLINE {
+                    return u8(detail::GetBits(u32(bits), 13, 2));
+                }
+
+                u8 GetIndTexStageNum() const NO_INLINE {
+                    return u8(detail::GetBits(u32(bits), 15, 3));
+                }
+
+                u8 GetTevStageNum() const NO_INLINE {
+                    return u8(detail::GetBits(u32(bits), 18, 5));
+                }
+
+                bool HasAlphaCompare() const NO_INLINE {
+                    return detail::TestBit(u32(bits), 23);
+                }
+
+                bool HasBlendMode() const NO_INLINE {
+                    return detail::TestBit(u32(bits), 24);
+                }
+
+                u8 GetChanCtrlNum() const NO_INLINE {
+                    return u8(detail::GetBits(u32(bits), 25, 1));
+                }
+
+                u8 GetMatColNum() const NO_INLINE {
+                    return u8(detail::GetBits(u32(bits), 27, 1));
+                }
+
+                NEBULA_BE(u32) bits;
+            };
+
+            struct Material {
+                char name[20];
+                NEBULA_DISC(GXColorS10) tevCols[3];
+                GXColor tevKCols[4];
+                MaterialResourceNum resNum;
+            };
+
+            struct AnimationTagBlock {
+                DataBlockHeader blockHeader;
+                detail::ResU16 tagOrder;
+                detail::ResU16 groupNum;
+                detail::ResU32 nameOffset;
+                detail::ResU32 groupsOffset;
+                detail::ResS16 startFrame;
+                detail::ResS16 endFrame;
+                u8 flag;
+                u8 padding[3];
+            };
+
+            struct AnimationShareBlock {
+                DataBlockHeader blockHeader;
+                detail::ResU32 animShareInfoOffset;
+                detail::ResU16 shareNum;
+                u8 padding[2];
+            };
+
+            struct AnimationBlock {
+                DataBlockHeader blockHeader;
+                NEBULA_BE(u16) frameSize;
+                u8 loop;
+                u8 padding1;
+                NEBULA_BE(u16) fileNum;
+                NEBULA_BE(u16) animContNum;
+                NEBULA_BE(u32) animContOffsetsOffset;
+            };
+
+            struct AnimationContent {
+                char name[MaterialNameStrMax];
+
+                u8 num;
+                u8 type;
+                u8 padding[2];
+            };
+
+            struct AnimationInfo {
+                NEBULA_BE(u32) kind;
+
+                u8 num;
+                u8 padding[3];
+            };
+
+            struct AnimationTarget {
+                u8 id;
+                u8 target;
+                u8 curveType;
+                u8 padding1;
+
+                NEBULA_BE(u16) keyNum;
+                u8 padding2[2];
+
+                NEBULA_BE(u32) keysOffset;
+            };
+
+            struct HermiteKey {
+                NEBULA_BE(f32) frame;
+                NEBULA_BE(f32) value;
+                NEBULA_BE(f32) slope;
+            };
+
+            struct StepKey {
+                NEBULA_BE(f32) frame;
+                NEBULA_BE(u16) value;
+                NEBULA_BE(u16) pad;
+            };
+        };  // namespace res
+    };  // namespace lyt
+};  // namespace nw4r

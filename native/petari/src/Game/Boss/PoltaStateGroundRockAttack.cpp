@@ -1,0 +1,78 @@
+#include "Game/Boss/PoltaStateGroundRockAttack.hpp"
+#include "Game/Boss/Polta.hpp"
+#include "Game/Boss/PoltaFunction.hpp"
+#include "Game/Boss/PoltaStateAttackGround.hpp"
+#include "Game/LiveActor/ActorStateBase.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/Util/ActorMovementUtil.hpp"
+#include "Game/Util/LayoutUtil.hpp"
+#include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/NerveUtil.hpp"
+#include "Game/Util/PlayerUtil.hpp"
+#include "Game/Util/SoundUtil.hpp"
+
+namespace NrvPoltaStateGenerateBombTeresa {
+    NEW_NERVE(PoltaStateGroundRockAttackNrvSign, PoltaStateGroundRockAttack, Sign);
+    NEW_NERVE(PoltaStateGroundRockAttackNrvGenerate, PoltaStateGroundRockAttack, Generate);
+    NEW_NERVE(PoltaStateGroundRockAttackNrvEnd, PoltaStateGroundRockAttack, End);
+};  // namespace NrvPoltaStateGenerateBombTeresa
+
+PoltaStateGroundRockAttack::PoltaStateGroundRockAttack(Polta* pPolta)
+    : ActorStateBase< Polta >("[state]\203\174\203\213\203\136\222\156\226\312\212\342\215\125\214\202" /* [state]ポルタ地面岩攻撃 */, pPolta), _10(4), _14(false) {
+    initNerve(GET_NERVE(PoltaStateGenerateBombTeresa, PoltaStateGroundRockAttackNrvSign));
+}
+
+void PoltaStateGroundRockAttack::appear() {
+    mIsDead = false;
+    setNerve(GET_NERVE(PoltaStateGenerateBombTeresa, PoltaStateGroundRockAttackNrvSign));
+}
+
+void PoltaStateGroundRockAttack::exeSign() {
+    if (MR::isFirstStep(this)) {
+        PoltaFunction::requestStartControllArm(getHost());
+        PoltaFunction::startAction(getHost(), "GenerateGroundRockSign", true);
+        MR::startSound(getHost(), "SE_BV_POLTA_PREP_GND_ROCK");
+    }
+    getHost()->rotateToPlayer();
+    if (MR::isActionEnd(getHost())) {
+        setNerve(GET_NERVE(PoltaStateGenerateBombTeresa, PoltaStateGroundRockAttackNrvGenerate));
+    }
+}
+
+void PoltaStateGroundRockAttack::exeGenerate() {
+    if (MR::isFirstStep(this)) {
+        PoltaFunction::startAction(getHost(), "GenerateGroundRockStart", true);
+        MR::zeroVelocity(getHost());
+        _14 = MR::isClockwiseToDir(getHost(), *MR::getPlayerLastMove(), *MR::getPlayerPos() - getHost()->mPosition);
+    }
+
+    if (MR::isBckOneTimeAndStopped(getHost())) {
+        PoltaFunction::startAction(getHost(), "GenerateGroundRock", true);
+        MR::startSound(getHost(), "SE_BV_POLTA_GEN_GND_ROCK");
+        MR::startSound(getHost(), "SE_BM_POLTA_GEN_GND_ROCK");
+    }
+    if (MR::isLessEqualStep(this, 15 * (_10 - 1)) && MR::isIntervalStep(this, 15)) {
+        s32 v14 = getNerveStep() / 15;
+        s32 v16 = v14 % 4;
+
+        if (v14 > 0 && !v16) {
+            _14 = !_14;
+        }
+        PoltaFunction::appearGroundRock(getHost(), (850.0f + (400.0f * v16)), _14 ? 20.0f : -20.0f);
+    }
+    if (MR::isGreaterStep(this, 15 * _10 + 90)) {
+        setNerve(GET_NERVE(PoltaStateGenerateBombTeresa, PoltaStateGroundRockAttackNrvEnd));
+    }
+}
+
+void PoltaStateGroundRockAttack::exeEnd() {
+    if (MR::isFirstStep(this)) {
+        PoltaFunction::startAction(getHost(), "GenerateGroundRockEnd", true);
+    }
+    if (MR::isActionEnd(getHost())) {
+        kill();
+    }
+}
+
+PoltaStateGroundRockAttack::~PoltaStateGroundRockAttack() {
+}

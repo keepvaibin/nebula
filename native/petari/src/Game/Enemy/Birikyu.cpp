@@ -1,0 +1,323 @@
+#include "Game/Enemy/Birikyu.hpp"
+#include "Game/LiveActor/HitSensor.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/Util/ActorSensorUtil.hpp"
+#include "Game/Util/ActorShadowUtil.hpp"
+#include "Game/Util/EffectUtil.hpp"
+#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/MathUtil.hpp"
+#include "Game/Util/MtxUtil.hpp"
+#include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/RailUtil.hpp"
+#include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/StarPointerUtil.hpp"
+
+namespace NrvBirikyu {
+    NEW_NERVE(HostTypeMove, Birikyu, Move);
+    NEW_NERVE(HostTypeMoveCircle, Birikyu, MoveCircle);
+    NEW_NERVE(HostTypeAttack, Birikyu, Attack);
+    NEW_NERVE(HostTypeAttackWait, Birikyu, AttackWait);
+    NEW_NERVE(HostTypeWaitAtEdge, Birikyu, WaitAtEdge);
+    NEW_NERVE(HostTypeStopPointing, Birikyu, StopPointing);
+};  // namespace NrvBirikyu
+
+void Birikyu_FORCE_MATCH(const TVec3f& rVec) {
+    TVec3f vec(rVec);
+    vec * 1.0f;
+    vec + TVec3f(1.0f);
+}
+
+Birikyu::Birikyu(const char* pName)
+    : LiveActor(pName), _8C(), _90(gZeroVec), _9C(gZeroVec), _A8(), _A9(), _AC(0.0f, 1.0f, 0.0f), _B8(0.0f, 0.0f, 1.0f), _C4(), _C8(10.0f) {
+}
+
+void Birikyu::init(const JMapInfoIter& rIter) {
+    MR::getObjectName(&_8C, rIter);
+    initModelManagerWithAnm(_8C, nullptr, false);
+    MR::connectToSceneEnemy(this);
+    initFromJmpArgs(rIter);
+    initRail(rIter);
+    MR::initDefaultPos(this, rIter);
+    initCollision();
+    initShadow();
+    initEffectKeeper(0, nullptr, false);
+    MR::setGroupClipping(this, rIter, 64);
+    MR::joinToGroupArray(this, rIter, nullptr, 64);
+    initSound(4, false);
+    TVec3f offset;
+    offset.x = 0.0f;
+    offset.y = 0.0f;
+    offset.z = 0.0f;
+    MR::initStarPointerTarget(this, 100.0f, offset);
+
+    if (_A9) {
+        initNerve(GET_NERVE(Birikyu, HostTypeMove));
+    } else {
+        initNerve(GET_NERVE(Birikyu, HostTypeMoveCircle));
+    }
+
+    appear();
+}
+
+void Birikyu::initAfterPlacement() {
+    if (_A9) {
+        MR::moveCoordAndTransToNearestRailPos(this);
+    } else {
+        _9C.set(mPosition);
+        TPos3f matrix;
+        matrix.identity();
+        MR::makeMtxRotate(matrix.toMtxPtr(), mRotation);
+        matrix.getYDir(_AC);
+        MR::normalize(&_AC);
+        matrix.getZDir(_B8);
+        MR::normalize(&_B8);
+        mPosition.set(_9C + _B8 * 400.0f);
+    }
+}
+
+void Birikyu::appear() {
+    LiveActor::appear();
+    MR::emitEffect(this, _8C);
+}
+
+f32 Birikyu::getHitRadius() const {
+    return 120.0f;
+}
+
+char* Birikyu::getCenterJointName() const {
+    return "Root";
+}
+
+void Birikyu::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
+    if (MR::isSensorPlayerOrRide(pReceiver) || MR::isSensorEnemy(pReceiver)) {
+        if (MR::sendMsgEnemyAttackElectric(pReceiver, pSender)) {
+            MR::sendMsgToGroupMember(ACTMES_GROUP_MOVE_STOP, this, getSensor("body"), "body");
+            setNerve(GET_NERVE(Birikyu, HostTypeAttack));
+        } else {
+            MR::sendMsgPush(pReceiver, pSender);
+        }
+    }
+}
+
+bool Birikyu::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    return MR::isMsgStarPieceReflect(msg);
+}
+
+bool Birikyu::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    if (msg == ACTMES_GROUP_MOVE_STOP) {
+        bool bool4 = isNerve(GET_NERVE(Birikyu, HostTypeMove)) || isNerve(GET_NERVE(Birikyu, HostTypeMoveCircle));
+
+        if (bool4) {
+            setNerve(GET_NERVE(Birikyu, HostTypeAttackWait));
+
+            return true;
+        }
+    }
+
+    if (msg == ACTMES_GROUP_MOVE_START) {
+        bool bool5 = isNerve(GET_NERVE(Birikyu, HostTypeMove)) || isNerve(GET_NERVE(Birikyu, HostTypeMoveCircle));
+
+        if (!bool5) {
+            goMove();
+
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void Birikyu::startClipped() {
+    LiveActor::startClipped();
+    MR::forceDeleteEffect(this, _8C);
+}
+
+void Birikyu::endClipped() {
+    LiveActor::endClipped();
+    MR::emitEffect(this, _8C);
+}
+
+void Birikyu::initFromJmpArgs(const JMapInfoIter& rIter) {
+    MR::getJMapInfoArg0NoInit(rIter, &_C8);
+    s32 num = -1;
+    MR::getJMapInfoArg2NoInit(rIter, &num);
+    _A8 = num == true;
+}
+
+void Birikyu::initRail(const JMapInfoIter& rIter) {
+    bool result = MR::isConnectedWithRail(rIter);
+    _A9 = result;
+    if (_A9) {
+        initRailRider(rIter);
+        MR::initAndSetRailClipping(&_90, this, 100.0f, 500.0f);
+    }
+}
+
+void Birikyu::initCollision() {
+    initHitSensor(1);
+    TVec3f offset(0.0f, 0.0f, 0.0f);
+    f32 radius = getHitRadius();
+    radius *= mScale.x;
+    MR::addHitSensorAtJointEnemy(this, "body", getCenterJointName(), 16, radius, offset);
+}
+
+void Birikyu::initShadow() {
+    if (_A8) {
+        f32 num = getHitRadius();
+        MR::initShadowVolumeSphere(this, (0.8f * (num * mScale.x)));
+        MR::onCalcShadowDropPrivateGravity(this, nullptr);
+        MR::onCalcShadow(this, nullptr);
+        MR::onCalcGravity(this);
+        MR::setShadowDropPositionPtr(this, nullptr, &getSensor("body")->mPosition);
+    }
+}
+
+bool Birikyu::tryStopPointing() {
+    if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+        MR::sendMsgToGroupMember(ACTMES_GROUP_MOVE_STOP, this, getSensor("body"), "body");
+        setNerve(GET_NERVE(Birikyu, HostTypeStopPointing));
+
+        return true;
+    }
+
+    return false;
+}
+
+void Birikyu::goMove() {
+    if (_A9) {
+        setNerve(GET_NERVE(Birikyu, HostTypeMove));
+    } else {
+        setNerve(GET_NERVE(Birikyu, HostTypeMoveCircle));
+    }
+}
+
+void Birikyu::exeMove() {
+    MR::startLevelSound(this, "SE_OJ_LV_BIRIKYU_MOVE");
+
+    if (!tryStopPointing()) {
+        if (MR::isRailReachedGoal(this)) {
+            MR::reverseRailDirection(this);
+            s32 arg = 0;
+            MR::getCurrentRailPointArg0NoInit(this, &arg);
+
+            if (arg > 0) {
+                setNerve(GET_NERVE(Birikyu, HostTypeWaitAtEdge));
+                return;
+            } else {
+                MR::emitEffect(this, "Clash");
+            }
+        }
+
+        MR::moveCoordAndFollowTrans(this, _C8);
+    }
+}
+
+void Birikyu::exeMoveCircle() {
+    MR::startLevelSound(this, "SE_OJ_LV_BIRIKYU_MOVE");
+    if (!tryStopPointing()) {
+        _C4 = MR::repeat(_C4 + (_C8 / 400.0f), 0.0f, TWO_PI);
+        TPos3f matrix;
+        matrix.identity();
+        matrix.makeRotate(_AC, _C4);
+        TVec3f temp = _B8 * 400.0f;
+        matrix.mult(temp, temp);
+        TVec3f matrix2 = (_9C + temp);
+        mPosition.set(matrix2);
+    }
+}
+
+void Birikyu::exeWaitAtEdge() {
+    MR::startLevelSound(this, "SE_OJ_LV_BIRIKYU_MOVE");
+    s32 arg = 0;
+    MR::getCurrentRailPointArg0NoInit(this, &arg);
+
+    if (MR::isStep(this, arg)) {
+        setNerve(GET_NERVE(Birikyu, HostTypeMove));
+    }
+}
+
+void Birikyu::exeAttack() {
+    if (MR::isFirstStep(this)) {
+        mVelocity.zero();
+        MR::emitEffect(this, "Hit");
+    }
+
+    MR::startLevelSound(this, "SE_OJ_LV_BIRIKYU_MOVE");
+
+    if (MR::isStep(this, 90)) {
+        MR::sendMsgToGroupMember(ACTMES_GROUP_MOVE_START, this, getSensor("body"), "body");
+        goMove();
+    }
+}
+
+void Birikyu::exeAttackWait() {
+}
+
+void Birikyu::exeStopPointing() {
+    if (MR::isFirstStep(this)) {
+        MR::startDPDHitSound();
+        if (MR::isRegisteredEffect(this, "Touch")) {
+            MR::emitEffect(this, "Touch");
+        }
+    }
+
+    MR::startDPDFreezeLevelSound(this);
+
+    if (!MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+        if (MR::isRegisteredEffect(this, "Touch")) {
+            MR::deleteEffect(this, "Touch");
+        }
+
+        MR::sendMsgToGroupMember(ACTMES_GROUP_MOVE_START, this, getSensor("body"), "body");
+        goMove();
+    }
+}
+
+BirikyuWithFace::BirikyuWithFace(const char* pName) : Birikyu(pName) {
+    _CC = false;
+}
+
+void BirikyuWithFace::init(const JMapInfoIter& rIter) {
+    Birikyu::init(rIter);
+    s32 num = -1;
+    MR::getJMapInfoArg1NoInit(rIter, &num);
+    _CC = num == 1;
+}
+
+void BirikyuWithFace::calcAndSetBaseMtx() {
+    TPos3f vec3;
+    vec3.identity();
+    if (_A9) {
+        TVec3f vec(MR::getRailDirection(this));
+        if (_CC) {
+            vec.negate();
+        }
+
+        if (!MR::isRailGoingToEnd(this)) {
+            vec.negate();
+        }
+
+        TVec3f vec2(_AC);
+        if (MR::isSameDirection(vec2, vec)) {
+            MR::makeMtxSideFront(&vec3, vec, _B8);
+        } else {
+            MR::makeMtxSideUp(&vec3, vec, vec2);
+        }
+    } else {
+        vec3.makeRotate(_AC, _C4);
+    }
+
+    vec3.mMtx[0][3] = mPosition.x;
+    vec3.mMtx[1][3] = mPosition.y;
+    vec3.mMtx[2][3] = mPosition.z;
+    MR::setBaseTRMtx(this, vec3);
+}
+
+f32 BirikyuWithFace::getHitRadius() const {
+    return 50.0f;
+}
+
+char* BirikyuWithFace::getCenterJointName() const {
+    return "Center";
+}

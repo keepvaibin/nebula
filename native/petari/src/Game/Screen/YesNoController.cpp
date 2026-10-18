@@ -1,0 +1,189 @@
+#include "Game/Screen/YesNoController.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/Screen/ButtonPaneController.hpp"
+#include "Game/Util/EffectUtil.hpp"
+#include "Game/Util/LayoutUtil.hpp"
+#include "Game/Util/NerveUtil.hpp"
+#include "Game/Util/SoundUtil.hpp"
+
+namespace {
+    static const char* sDefaultCursorSE = "SE_SY_TALK_FOCUS_ITEM";
+    static const char* sDefaultYesSE = "SE_SY_TALK_SELECT_YES";
+    static const char* sDefaultNoSE = "SE_SY_TALK_SELECT_NO";
+};  // namespace
+
+namespace NrvYesNoController {
+    NEW_NERVE(YesNoControllerNrvSelecting, YesNoController, Selecting);
+    NEW_NERVE(YesNoControllerNrvDecided, YesNoController, Decided);
+    NEW_NERVE(YesNoControllerNrvDisappear, YesNoController, Disappear);
+    NEW_NERVE(YesNoControllerNrvSelected, YesNoController, Selected);
+    NEW_NERVE(YesNoControllerNrvNotSelected, YesNoController, NotSelected);
+};  // namespace NrvYesNoController
+
+YesNoController::YesNoController(LayoutActor* pHost)
+    : NerveExecutor("\202\315\202\242\201\136\202\242\202\242\202\246\221\111\221\360\220\247\214\344" /* はい／いいえ選択制御 */), mHost(pHost), _C(), mButtonYesPaneCtrl(), mButtonNoPaneCtrl(), mCursorSE(), mYesSE(), mNoSE() {
+    mButtonYesPaneCtrl = new ButtonPaneController(mHost, "Right", "BoxRight", 0, true);
+    mButtonYesPaneCtrl->_22 = false;
+
+    mButtonNoPaneCtrl = new ButtonPaneController(mHost, "Left", "BoxLeft", 0, true);
+    mButtonNoPaneCtrl->_22 = false;
+
+    initNerve(GET_NERVE(YesNoController, YesNoControllerNrvSelecting));
+}
+
+void YesNoController::appear() {
+    _C = true;
+
+    setNerve(GET_NERVE(YesNoController, YesNoControllerNrvSelecting));
+}
+
+void YesNoController::kill() {
+    _C = false;
+
+    setNerve(GET_NERVE(YesNoController, YesNoControllerNrvNotSelected));
+}
+
+void YesNoController::update() {
+    if (_C) {
+        updateNerve();
+        mButtonYesPaneCtrl->update();
+        mButtonNoPaneCtrl->update();
+    }
+}
+
+bool YesNoController::isSelected() const {
+    return isNerve(GET_NERVE(YesNoController, YesNoControllerNrvSelected));
+}
+
+bool YesNoController::isSelectedYes() const {
+    return mButtonYesPaneCtrl->mIsSelected;
+}
+
+bool YesNoController::isDisappearStart() const {
+    return isNerve(GET_NERVE(YesNoController, YesNoControllerNrvDisappear)) && MR::isFirstStep(this);
+}
+
+void YesNoController::setSE(const char* pCursorSE, const char* pYesSE, const char* pNoSE) {
+    mCursorSE = pCursorSE;
+    mYesSE = pYesSE;
+    mNoSE = pNoSE;
+}
+
+bool YesNoController::trySelect() {
+    if (mButtonYesPaneCtrl->trySelect()) {
+        return true;
+    }
+
+    return mButtonNoPaneCtrl->trySelect();
+}
+
+void YesNoController::emitEffectIfExist(const char* pEffectName) {
+    if (MR::isExistEffectKeeper(mHost)) {
+        MR::emitEffect(mHost, pEffectName);
+    }
+}
+
+void YesNoController::deleteEffectIfExist(const char* pEffectName) {
+    if (MR::isExistEffectKeeper(mHost)) {
+        MR::deleteEffect(mHost, pEffectName);
+    }
+}
+
+void YesNoController::forceDeleteEffectAllIfExist() {
+    if (MR::isExistEffectKeeper(mHost)) {
+        MR::forceDeleteEffect(mHost, "LeftText");
+        MR::forceDeleteEffect(mHost, "RightText");
+    }
+}
+
+void YesNoController::exeSelecting() {
+    if (MR::isFirstStep(this)) {
+        mButtonYesPaneCtrl->appear();
+        mButtonNoPaneCtrl->appear();
+    }
+
+    if (mButtonYesPaneCtrl->isPointingTrigger()) {
+        if (mCursorSE != nullptr) {
+            MR::startSystemSE(mCursorSE);
+        } else {
+            MR::startSystemSE(::sDefaultCursorSE);
+        }
+
+        forceDeleteEffectAllIfExist();
+        emitEffectIfExist("RightText");
+    }
+
+    if (mButtonNoPaneCtrl->isPointingTrigger()) {
+        if (mCursorSE != nullptr) {
+            MR::startSystemSE(mCursorSE);
+        } else {
+            MR::startSystemSE(::sDefaultCursorSE);
+        }
+
+        forceDeleteEffectAllIfExist();
+        emitEffectIfExist("LeftText");
+    }
+
+    if (!mButtonYesPaneCtrl->isPointing()) {
+        deleteEffectIfExist("RightText");
+    }
+
+    if (!mButtonNoPaneCtrl->isPointing()) {
+        deleteEffectIfExist("LeftText");
+    }
+
+    if (trySelect()) {
+        setNerve(GET_NERVE(YesNoController, YesNoControllerNrvDecided));
+    }
+}
+
+void YesNoController::exeDecided() {
+    const bool isSelectedYes = mButtonYesPaneCtrl->mIsSelected;
+
+    if (MR::isFirstStep(this)) {
+        deleteEffectIfExist("LeftText");
+        deleteEffectIfExist("RightText");
+        MR::startCSSound("CS_CLICK_CLOSE", nullptr, 0);
+
+        if (isSelectedYes) {
+            if (mYesSE != nullptr) {
+                MR::startSystemSE(mYesSE);
+            } else {
+                MR::startSystemSE(::sDefaultYesSE);
+            }
+        } else {
+            if (mNoSE != nullptr) {
+                MR::startSystemSE(mNoSE);
+            } else {
+                MR::startSystemSE(::sDefaultNoSE);
+            }
+        }
+    }
+
+    if ((isSelectedYes && mButtonYesPaneCtrl->isDecidedWait()) || (!isSelectedYes && mButtonNoPaneCtrl->isDecidedWait())) {
+        setNerve(GET_NERVE(YesNoController, YesNoControllerNrvDisappear));
+    }
+}
+
+void YesNoController::exeDisappear() {
+    if (MR::isFirstStep(this)) {
+        mButtonYesPaneCtrl->disappear();
+        mButtonNoPaneCtrl->disappear();
+    }
+
+    if (mButtonYesPaneCtrl->isHidden() && mButtonNoPaneCtrl->isHidden()) {
+        if (mButtonYesPaneCtrl->mIsSelected || mButtonNoPaneCtrl->mIsSelected) {
+            setNerve(GET_NERVE(YesNoController, YesNoControllerNrvSelected));
+        } else {
+            setNerve(GET_NERVE(YesNoController, YesNoControllerNrvNotSelected));
+        }
+    }
+}
+
+void YesNoController::exeSelected() {
+    _C = false;
+}
+
+void YesNoController::exeNotSelected() {
+    _C = false;
+}

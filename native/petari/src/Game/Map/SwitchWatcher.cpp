@@ -1,0 +1,55 @@
+#include "Game/Map/SwitchWatcher.hpp"
+#include "Game/Map/ActorAppearSwitchListener.hpp"
+#include "Game/Map/StageSwitch.hpp"
+
+SwitchWatcher::SwitchWatcher(const StageSwitchCtrl* pSwitchCtrl)
+    : NameObj("\203\130\203\103\203\142\203\140\212\304\216\213" /* スイッチ監視 */), mFlags(), mSwitchCtrl(pSwitchCtrl), mSwitchListenerA(), mSwitchListenerB(), mSwitchListenerAppear() {
+}
+
+void SwitchWatcher::movement() {
+    if (mSwitchListenerA != nullptr) {
+        checkSwitch(mSwitchListenerA, 1, mSwitchCtrl->isOnSwitchA());
+    }
+
+    if (mSwitchListenerB != nullptr) {
+        checkSwitch(mSwitchListenerB, 2, mSwitchCtrl->isOnSwitchB());
+    }
+
+    if (mSwitchListenerAppear != nullptr) {
+        checkSwitch(mSwitchListenerAppear, 4, mSwitchCtrl->isOnSwitchAppear());
+    }
+}
+
+void SwitchWatcher::checkSwitch(SwitchEventListener* pListener, u32 type, bool isOn) {
+    if (isOn) {
+        if ((mFlags & type) == 0) {
+            pListener->listenSwitchOnEvent();
+        }
+
+        mFlags |= type;
+    } else {
+        if ((mFlags & type) != 0) {
+            pListener->listenSwitchOffEvent();
+        }
+
+        mFlags &= ~type;
+    }
+}
+
+bool SwitchWatcher::isSameSwitch(const StageSwitchCtrl* pSwitchCtrl) const {
+    return mSwitchCtrl == pSwitchCtrl;
+}
+
+void SwitchWatcher::addSwitchListener(SwitchEventListener* pListener, u32 type) {
+    switch (type) {
+    case 1:
+        mSwitchListenerA = pListener;
+        break;
+    case 2:
+        mSwitchListenerB = pListener;
+        break;
+    case 4:
+        mSwitchListenerAppear = pListener;
+        break;
+    }
+}

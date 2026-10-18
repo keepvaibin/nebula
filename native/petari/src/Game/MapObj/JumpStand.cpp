@@ -1,0 +1,263 @@
+#include "Game/MapObj/JumpStand.hpp"
+#include "Game/LiveActor/HitSensor.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/Util.hpp"
+#include "Game/Util/MathUtil.hpp"
+#include "Game/Util/PlayerUtil.hpp"
+#include "JSystem/JGeometry/TVec.hpp"
+#include "revolution/wpad.h"
+
+namespace NrvJumpStand {
+    NEW_NERVE(JumpStandNrvWait, JumpStand, Wait);
+    NEW_NERVE(JumpStandNrvTrampleBound, JumpStand, TrampleBound);
+    NEW_NERVE(JumpStandNrvHipDropBound, JumpStand, HipDropBound);
+    NEW_NERVE(JumpStandNrvStarPieceBound, JumpStand, StarPieceBound);
+};  // namespace NrvJumpStand
+
+JumpStand::JumpStand(const char* pName) : LiveActor(pName), mBindedActor(), mIsMarioJumpingHigh() {
+    _90.identity();
+}
+
+void JumpStand::init(const JMapInfoIter& rIter) {
+    MR::initDefaultPos(this, rIter);
+    initModelManagerWithAnm("JumpStand", nullptr, false);
+    MR::connectToSceneMapObjStrongLight(this);
+    MR::initLightCtrl(this);
+    initHitSensor(2);
+    MR::addBodyMessageSensorMapObj(this);
+    TVec3f binderOffs;
+    binderOffs.set(0.0f, 100.0f, 0.0f);
+    MR::addHitSensorPriorBinder(this, "binder", 4, 200.0f, binderOffs);
+    MR::invalidateHitSensor(this, "binder");
+    _90.set(MR::getJointMtx(this, "JumpStandJoint03"));
+    MR::initCollisionParts(this, "JumpStand", getSensor("body"), _90);
+    initEffectKeeper(0, nullptr, false);
+    initSound(4, false);
+    MR::setGroupClipping(this, rIter, 16);
+    MR::initShadowFromCSV(this, "Shadow");
+    MR::onCalcGravity(this);
+    initNerve(GET_NERVE(JumpStand, JumpStandNrvWait));
+    makeActorAppeared();
+}
+
+void JumpStand::exeWait() {
+    if (MR::isFirstStep(this)) {
+        MR::validateClipping(this);
+        MR::startBck(this, "Wait");
+    }
+}
+
+void JumpStand::exeTrampleBound() {
+    if (MR::isFirstStep(this)) {
+        MR::startBck(this, "Bound");
+        MR::startSound(this, "SE_OJ_JUMP_STAND_LAND_S");
+    }
+
+    if (MR::isLessEqualStep(this, 5) && MR::testCorePadTriggerA(0)) {
+        mIsMarioJumpingHigh = true;
+        MR::startBck(this, "BoundJump");
+        MR::setBckFrame(this, getNerveStep());
+    }
+
+    if (MR::isStep(this, 5)) {
+        if (mIsMarioJumpingHigh) {
+            MR::startSound(this, "SE_OJ_JUMP_STAND_BOUND_M");
+            MR::startSoundPlayer("SE_PV_JUMP_L");
+        } else {
+            MR::startSound(this, "SE_OJ_JUMP_STAND_BOUND_S");
+            MR::startSoundPlayer("SE_PV_JUMP_M");
+        }
+
+        if (mIsMarioJumpingHigh) {
+            endBindAndShootUp(32.0f, Jump_Middle);
+        } else {
+            endBindAndShootUp(26.0f, Jump_Low);
+        }
+
+        MR::validateCollisionParts(this);
+    }
+
+    if (MR::isStep(this, 10)) {
+        MR::validateCollisionParts(this);
+    }
+
+    if (MR::isBckStopped(this)) {
+        mIsMarioJumpingHigh = false;
+        setNerve(GET_NERVE(JumpStand, JumpStandNrvWait));
+    }
+}
+
+void JumpStand::exeHipDropBound() {
+    if (MR::isFirstStep(this)) {
+        MR::startBck(this, "BoundHipDrop");
+        MR::stopSound(mBindedActor, "SE_PM_HIPDROP", 0);
+        MR::startSound(this, "SE_OJ_JUMP_STAND_LAND_L");
+    }
+
+    if (MR::isLessStep(this, 15) && mBindedActor != nullptr) {
+        f32 v2 = (6.0f - MR::calcNerveEaseOutRate(this, 15));
+        TVec3f v3;
+        MR::calcUpVec(&v3, this);
+        mBindedActor->mPosition.scaleAdd(-v2, v3, mBindedActor->mPosition);
+    }
+
+    if (MR::isStep(this, 15)) {
+        MR::startSound(this, "SE_OJ_JUMP_STAND_BOUND_L");
+        MR::startSoundPlayer("SE_PV_JUMP_JOY");
+        endBindAndShootUp(43.0f, Jump_High);
+    }
+
+    if (MR::isStep(this, 20)) {
+        MR::validateCollisionParts(this);
+    }
+
+    if (MR::isBckStopped(this)) {
+        MR::validateCollisionParts(this);
+        setNerve(GET_NERVE(JumpStand, JumpStandNrvWait));
+    }
+}
+
+void JumpStand::exeStarPieceBound() {
+    if (MR::isFirstStep(this)) {
+        MR::startBck(this, "Bound");
+        MR::startSound(this, "SE_OJ_JUMP_STAND_LAND_S");
+    }
+
+    if (MR::isBckStopped(this)) {
+        setNerve(GET_NERVE(JumpStand, JumpStandNrvWait));
+    }
+}
+
+void JumpStand::control() {
+    TVec3f pos;
+    MR::copyJointPos(this, "JumpStandJoint03", &pos);
+    _90.setTrans(pos);
+}
+
+bool JumpStand::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    if (isNerve(GET_NERVE(JumpStand, JumpStandNrvTrampleBound))) {
+        return false;
+    }
+
+    if (isNerve(GET_NERVE(JumpStand, JumpStandNrvHipDropBound))) {
+        return false;
+    }
+
+    if (MR::isMsgStarPieceAttack(msg)) {
+        setNerve(GET_NERVE(JumpStand, JumpStandNrvStarPieceBound));
+        return true;
+    }
+
+    return false;
+}
+
+bool JumpStand::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    if (MR::isMsgUpdateBaseMtx(msg) && mBindedActor != nullptr) {
+        updateBindActorMtx();
+        return true;
+    }
+
+    if (MR::isMsgFloorTouch(msg)) {
+        MR::validateHitSensor(this, "binder");
+        return true;
+    }
+
+    if (!MR::isMsgAutoRushBegin(msg)) {
+        return false;
+    }
+
+    if (!MR::isSensorPlayer(pSender)) {
+        return false;
+    }
+
+    if (!MR::isOnPlayer(getSensor("body"))) {
+        return false;
+    } else {
+        if (!MR::isPlayerHipDropLand()) {
+            if (!tryToStartBind(pSender)) {
+                return false;
+            } else {
+                setNerve(GET_NERVE(JumpStand, JumpStandNrvTrampleBound));
+                return true;
+            }
+
+        } else if (MR::isPlayerHipDropLand()) {
+            if (!tryToStartBind(pSender)) {
+                return false;
+            } else {
+                setNerve(GET_NERVE(JumpStand, JumpStandNrvHipDropBound));
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+bool JumpStand::tryToStartBind(HitSensor* pSensor) {
+    if (mBindedActor != nullptr) {
+        return false;
+    }
+
+    MR::tryRumblePadMiddle(this, WPAD_CHAN0);
+    MR::invalidateCollisionParts(this);
+    MR::invalidateClipping(this);
+    mBindedActor = pSensor->mHost;
+    MR::offBind(mBindedActor);
+    return true;
+}
+
+void JumpStand::updateBindActorMtx() {
+    TPos3f v6;
+    v6.identity();
+    TVec3f v5;
+    MR::calcPlayerWorldPadDir(&v5, MR::getSubPadStickX(0), MR::getSubPadStickY(0));
+    MR::calcMtxFromGravityAndZAxis(&v6, mBindedActor, mGravity, v5);
+    MR::blendMtxRotate(mBindedActor->getBaseMtx(), v6, 0.40f, v6);
+    v6.setTrans(mBindedActor->mPosition);
+    MR::setBaseTRMtx(mBindedActor, v6);
+}
+
+void JumpStand::endBindAndShootUp(f32 v1, JumpType type) {
+    TVec3f v28;
+
+    if (MR::isPlayerInRush()) {
+        if (type == Jump_High) {
+            MR::calcUpVec(&v28, this);
+        } else {
+            v28.negate(mGravity);
+        }
+
+        v28 *= v1;
+        f32 stickLen = MR::sqrt(MR::getSubPadStickX(WPAD_CHAN0) * MR::getSubPadStickX(WPAD_CHAN0) +
+                                MR::getSubPadStickY(WPAD_CHAN0) * MR::getSubPadStickY(WPAD_CHAN0));
+        TVec3f v27;
+        if (stickLen > 0.1f) {
+            MR::normalize(v28, &v27);
+            TVec3f v26;
+            MR::calcPlayerWorldPadDir(&v26, MR::getSubPadStickX(WPAD_CHAN0), MR::getSubPadStickY(WPAD_CHAN0));
+            TVec3f v25;
+            v25.scale(3.0f * stickLen, v26);
+            v25.orthogonalize(v27);
+            v28.add(v25);
+        }
+
+        if (type == Jump_Low) {
+            MR::startBckPlayer("TrampolineJumpLow");
+        } else if (type == Jump_Middle) {
+            MR::startBckPlayer("TrampolineJumpMiddle");
+        } else if (type == Jump_High) {
+            MR::startBckPlayer("TrampolineJumpHigh");
+        }
+
+        MR::endBindAndPlayerJump(this, v28, 0);
+
+        if (type != Jump_High) {
+            MR::becomePlayerNormalJumpStatus();
+        }
+
+        MR::invalidateHitSensor(this, "binder");
+    }
+
+    mBindedActor = nullptr;
+}

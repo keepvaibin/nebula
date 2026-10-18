@@ -1,0 +1,34 @@
+#pragma once
+
+#include "Game/NameObj/NameObj.hpp"
+#include <JSystem/JGeometry/TVec.hpp>
+
+class JMapLinkInfo;
+
+/// @brief Class that contains the NamePos attributes. NamePos defines the spawn location of other actors (ie Power Stars)
+class NamePosInfo {
+public:
+    NamePosInfo();
+
+    /* 0x00 */ const char* mName;         ///< The name of the NamePos.
+    /* 0x04 */ TVec3f mPosition;          ///< The position of the NamePos.
+    /* 0x10 */ TVec3f mRotation;         ///< The rotation of the NamePos.
+    /* 0x1C */ JMapLinkInfo* mLinkInfo;  ///< The information to link this NamePos to other objects.
+    /* 0x20 */ const NameObj* _20;
+};
+
+/// @brief Class that contains the array of NamePosInfo instances.
+class NamePosHolder : public NameObj {
+public:
+    NamePosHolder();
+
+    bool tryRegisterLinkObj(const NameObj*, const JMapInfoIter&);
+    bool find(const NameObj*, const char*, TVec3f*, TVec3f*) const;
+
+    /* 0x0C */ s32 mPosNum;           ///< The number of NamePosInfo instances.
+    /* 0x10 */ NamePosInfo* mInfos;  ///< The array of NamePosInfo instances.
+};
+
+namespace MR {
+    NamePosHolder* getNamePosHolder();
+};  // namespace MR

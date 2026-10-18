@@ -1,0 +1,245 @@
+#include "Game/Map/LightFunction.hpp"
+#include "Game/AreaObj/LightAreaHolder.hpp"
+#include "Game/Map/LightDirector.hpp"
+#include "Game/Map/LightPointCtrl.hpp"
+#include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/Util/CameraUtil.hpp"
+#include "Game/Util/MathUtil.hpp"
+#include "Game/Util/ObjUtil.hpp"
+#include <cstdio>
+
+const GXLightID cLightDataIDs[8] = {GX_LIGHT0, GX_LIGHT1, GX_LIGHT2, GX_LIGHT3, GX_LIGHT4, GX_LIGHT5, GX_LIGHT6, GX_LIGHT7};
+
+namespace {};  // namespace
+
+void LightFunction::initLightRegisterAll() {
+    const GXLightID cLightDataIDs[8] = {GX_LIGHT0, GX_LIGHT1, GX_LIGHT2, GX_LIGHT3, GX_LIGHT4, GX_LIGHT5, GX_LIGHT6, GX_LIGHT7};
+    Color8 c(255, 255, 255, 255);
+
+    for (s32 i = 0; i < 8; i++) {
+        GXLightObj obj;
+        GXInitLightColor(&obj, c);
+        GXInitLightPos(&obj, 0.0f, 0.0f, 0.0f);
+        GXInitLightDir(&obj, 0.0f, -1.0f, 0.0f);
+        GXInitLightAttn(&obj, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f);
+        GXInitSpecularDir(&obj, 0.0f, -1.0f, 0.0f);
+        GXInitSpecularDirHA(&obj, 0.0f, -1.0f, 0.0f, 0.0f, -1.0f, 0.0f);
+        GXInitLightAttn(&obj, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f);
+        GXLoadLightObjImm(&obj, cLightDataIDs[i]);
+    }
+}
+
+void LightFunction::initLightData() {
+    MR::getSceneObj< LightDirector >(SceneObj_LightDirector)->initData();
+}
+
+ResourceHolder* LightFunction::loadLightArchive() {
+    char buf[0x100];
+    snprintf(buf, sizeof(buf), "LightData.arc");
+    return MR::createAndAddResourceHolder(buf);
+}
+
+s32 LightFunction::createLightDataParser(JMapInfo** pOut) {
+    ResourceHolder* holder = MR::getSceneObj< LightDirector >(SceneObj_LightDirector)->mResourceHolder;
+    JMapInfo* info = MR::tryCreateCsvParser(holder, "LightData.bcsv");
+    *pOut = info;
+    if (info->mData != nullptr) {
+        return info->mData->mNumEntries;
+    }
+
+    return 0;
+}
+
+s32 LightFunction::createZoneDataParser(const char* pZone, JMapInfo** pOut) {
+    ResourceHolder* holder = MR::getSceneObj< LightDirector >(SceneObj_LightDirector)->mResourceHolder;
+    JMapInfo* info = MR::tryCreateCsvParser(holder, "Light%s.bcsv", pZone);
+    *pOut = info;
+
+    if (info != nullptr) {
+        if (info->mData != nullptr) {
+            return info->mData->mNumEntries;
+        }
+
+        return 0;
+    }
+
+    return 0;
+}
+
+namespace {
+    void getDataLightInfo(JMapInfo* pInfo, int id, LightInfo* pLightInfo, const char* pName) {
+        char colorBuf[256];
+        snprintf(colorBuf, sizeof(colorBuf), "%sColor", pName);
+        MR::getCsvDataColor(&pLightInfo->mColor, pInfo, colorBuf, id);
+        char posBuf[256];
+        snprintf(posBuf, sizeof(posBuf), "%sPos", pName);
+        MR::getCsvDataVec(&pLightInfo->mPos, pInfo, posBuf, id);
+        char camBuf[128];
+        snprintf(camBuf, sizeof(camBuf), "%sFollowCamera", pName);
+        MR::getCsvDataBool(&pLightInfo->mIsFollowCamera, pInfo, camBuf, id);
+    }
+
+    void getDataActorLightInfo(JMapInfo* pInfo, int lightID, ActorLightInfo* pActorInfo, const char* pName) {
+        char lightBuf[256];
+        snprintf(lightBuf, sizeof(lightBuf), "%sLight%d", pName, 0);
+        getDataLightInfo(pInfo, lightID, &pActorInfo->mInfo0, lightBuf);
+        snprintf(lightBuf, sizeof(lightBuf), "%sLight%d", pName, 1);
+        getDataLightInfo(pInfo, lightID, &pActorInfo->mInfo1, lightBuf);
+        char alphaBuf[256];
+        snprintf(alphaBuf, sizeof(alphaBuf), "%sAlpha2", pName);
+        MR::getCsvDataU8(&pActorInfo->mAlpha2, pInfo, alphaBuf, lightID);
+        char ambBuf[256];
+        snprintf(ambBuf, sizeof(ambBuf), "%sAmbient", pName);
+        MR::getCsvDataColor(&pActorInfo->mColor, pInfo, ambBuf, lightID);
+    }
+};  // namespace
+
+void LightFunction::getAreaLightLightData(JMapInfo* pInfo, int idx, AreaLightInfo* pLightInfo) {
+    MR::getCsvDataStr(&pLightInfo->mAreaLightName, pInfo, "AreaLightName", idx);
+    MR::getCsvDataS32(&pLightInfo->mInterpolate, pInfo, "Interpolate", idx);
+    ::getDataActorLightInfo(pInfo, idx, &pLightInfo->mPlayerLight, "Player");
+    ::getDataActorLightInfo(pInfo, idx, &pLightInfo->mStrongLight, "Strong");
+    ::getDataActorLightInfo(pInfo, idx, &pLightInfo->mWeakLight, "Weak");
+    ::getDataActorLightInfo(pInfo, idx, &pLightInfo->mPlanetLight, "Planet");
+    MR::getCsvDataBool(&pLightInfo->mFix, pInfo, "Fix", idx);
+}
+
+const char* LightFunction::getDefaultAreaLightName() {
+    return MR::getSceneObj< LightDirector >(SceneObj_LightDirector)->mDataHolder->getDefaultAreaLightName();
+}
+
+s32 LightFunction::getDefaultStepInterpolate() {
+    return MR::getSceneObj< LightDirector >(SceneObj_LightDirector)->mDataHolder->getDefaultStepInterpolate();
+}
+
+void LightFunction::registerPlayerLightCtrl(const ActorLightCtrl* pCtrl) {
+    MR::getSceneObj< LightDirector >(SceneObj_LightDirector)->_1C = pCtrl;
+}
+
+void LightFunction::registerLightAreaHolder(LightAreaHolder* pHolder) {
+    MR::getSceneObj< LightDirector >(SceneObj_LightDirector)->_C = pHolder;
+}
+
+bool LightFunction::tryFindNewAreaLightID(const TVec3f& rPos, ZoneLightID* pId) {
+    return MR::getSceneObj< LightDirector >(SceneObj_LightDirector)->_C->tryFindLightID(rPos, pId);
+}
+
+AreaLightInfo* LightFunction::getAreaLightInfo(const ZoneLightID& rId) {
+    const char* name = MR::getSceneObj< LightDirector >(SceneObj_LightDirector)->mZoneDataHolder->getAreaLightNameInZoneData(rId);
+    return MR::getSceneObj< LightDirector >(SceneObj_LightDirector)->mDataHolder->findAreaLight(name);
+}
+
+namespace {
+    void blendActorLightPos(const LightInfo& rFrom, const LightInfo& rTo, LightInfo* pResult, f32 rate) {
+        if (pResult->mIsFollowCamera) {
+            if (rFrom.mIsFollowCamera) {
+                MR::blendVec(&pResult->mPos, rFrom.mPos, rTo.mPos, rate);
+            } else {
+                TVec3f pos(rFrom.mPos);
+                MR::getCameraViewMtx().mult(pos, pos);
+                MR::blendVec(&pResult->mPos, pos, rTo.mPos, rate);
+            }
+        } else if (rFrom.mIsFollowCamera) {
+            TVec3f pos(rFrom.mPos);
+            MR::getCameraInvViewMtx().mult(pos, pos);
+            MR::blendVec(&pResult->mPos, pos, rTo.mPos, rate);
+        } else {
+            MR::blendVec(&pResult->mPos, rFrom.mPos, rTo.mPos, rate);
+        }
+    }
+};  // namespace
+
+void LightFunction::blendActorLightInfo(ActorLightInfo* pResult, const ActorLightInfo& rFrom, const ActorLightInfo& rTo, f32 rate) {
+    MR::blendColor(&pResult->mInfo0.mColor, rFrom.mInfo0.mColor, rTo.mInfo0.mColor, rate);
+    MR::blendColor(&pResult->mInfo1.mColor, rFrom.mInfo1.mColor, rTo.mInfo1.mColor, rate);
+    MR::blendColor(&pResult->mColor, rFrom.mColor, rTo.mColor, rate);
+    ::blendActorLightPos(rFrom.mInfo0, rTo.mInfo0, &pResult->mInfo0, rate);
+    ::blendActorLightPos(rFrom.mInfo1, rTo.mInfo1, &pResult->mInfo1, rate);
+    pResult->mAlpha2 = MR::getInterpolateValue(rate, rFrom.mAlpha2, rTo.mAlpha2);
+}
+
+namespace {
+    void loadLightDiffuse(GXColor color, const TVec3f& rPos, GXLightID lightID) NO_INLINE {
+        GXLightObj lightObj;
+
+        GXInitLightPos(&lightObj, rPos.x, rPos.y, rPos.z);
+        GXInitLightAttn(&lightObj, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f);
+
+        GXColor new_color(color);
+        GXInitLightColor(&lightObj, new_color);
+        GXLoadLightObjImm(&lightObj, lightID);
+    }
+
+    inline void loadCameraLight(const LightInfo& rInfo, GXLightID lightID) {
+        TVec3f position(rInfo.mPos);
+        ::loadLightDiffuse(GXColor(rInfo.mColor), position, lightID);
+    }
+
+    void loadLightInfoDiffuse(const LightInfo& rInfo, GXLightID lightID) NO_INLINE {
+        if (rInfo.mIsFollowCamera) {
+            ::loadCameraLight(rInfo, lightID);
+        } else {
+            TVec3f v14(rInfo.mPos);
+            MR::getCameraViewMtx().mult(v14, v14);
+            ::loadLightDiffuse(GXColor(rInfo.mColor), v14, lightID);
+        }
+    }
+};  // namespace
+
+void LightFunction::loadActorLightInfo(const ActorLightInfo* pInfo) {
+    ::loadLightInfoDiffuse(pInfo->mInfo0, GX_LIGHT0);
+    ::loadLightInfoDiffuse(pInfo->mInfo1, GX_LIGHT1);
+
+    u8 alpha = pInfo->mAlpha2;
+    GXColor c = {0, 0, 0, alpha};
+    ::loadLightDiffuse(c, TVec3f(0.0f, 0.0f, 0.0f), GX_LIGHT2);
+    GXSetChanAmbColor(GX_COLOR0A0, GXColor(pInfo->mColor));
+}
+
+void LightFunction::loadLightInfoCoin(const LightInfoCoin* pInfo) {
+    ::loadLightInfoDiffuse(pInfo->base, GX_LIGHT0);
+    TVec3f v7(0.0f, 0.0f, -1.0f);
+    GXLightObj obj;
+    f32 v = pInfo->_18;
+    GXInitLightColor(&obj, GXColor(pInfo->_14));
+    GXInitSpecularDir(&obj, v7.x, v7.y, v7.z);
+    GXInitLightAttn(&obj, 0.0f, 0.0f, 1.0f, (v / 2.0f), 0.0f, (1.0f - (v / 2.0f)));
+    GXLoadLightObjImm(&obj, GX_LIGHT3);
+}
+
+void LightFunction::loadPointLightInfo(const PointLightInfo* pInfo) {
+    TVec3f v7(pInfo->mPos);
+    MR::getCameraViewMtx().mult(v7, v7);
+    GXLightObj obj;
+    GXInitLightPos(&obj, v7.x, v7.y, v7.z);
+    GXInitLightDistAttn(&obj, pInfo->mRefDistance, pInfo->mRefBrightness, pInfo->mDistAttnFn);
+    GXInitLightSpot(&obj, 0.0, GX_SP_OFF);
+    GXInitLightColor(&obj, pInfo->mColor);
+    GXLoadLightObjImm(&obj, GX_LIGHT4);
+}
+
+void LightFunction::loadAllLightWhite() {
+    const GXLightID cLightDataIDs[8] = {GX_LIGHT0, GX_LIGHT1, GX_LIGHT2, GX_LIGHT3, GX_LIGHT4, GX_LIGHT5, GX_LIGHT6, GX_LIGHT7};
+
+    for (u32 i = 0; i < ARRAY_SIZE(cLightDataIDs); i++) {
+        GXLightObj lightObj;
+        GXInitLightPos(&lightObj, 0.0f, 0.0f, 0.0f);
+
+        GXColor color = {255, 255, 255, 255};
+        GXInitLightColor(&lightObj, color);
+        GXLoadLightObjImm(&lightObj, cLightDataIDs[i]);
+    }
+}
+
+void LightFunction::calcLightWorldPos(TVec3f* pPos, const LightInfo& rInfo) {
+    pPos->x = rInfo.mPos.x;
+    pPos->y = rInfo.mPos.y;
+    pPos->z = rInfo.mPos.z;
+
+    if (rInfo.mIsFollowCamera) {
+        TPos3f mtx;
+        mtx.setInline(MR::getCameraViewMtx());
+        mtx.invert(mtx);
+        mtx.mult(*pPos, *pPos);
+    }
+}

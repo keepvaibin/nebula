@@ -1,0 +1,145 @@
+#include "Game/Boss/BossStinkBugActionSequencer.hpp"
+#include "Game/Boss/BossStinkBug.hpp"
+#include "Game/Boss/BossStinkBugActionFlyHigh.hpp"
+#include "Game/Boss/BossStinkBugActionFlyLow.hpp"
+#include "Game/Boss/BossStinkBugActionGround.hpp"
+#include "Game/Boss/BossStinkBugAngryDemo.hpp"
+#include "Game/Boss/BossStinkBugFinishDemo.hpp"
+#include "Game/Boss/BossStinkBugFlyDemo.hpp"
+#include "Game/Boss/BossStinkBugOpeningDemo.hpp"
+#include "Game/LiveActor/HitSensor.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/System/NerveExecutor.hpp"
+#include "Game/Util/ActorStateUtil.hpp"
+#include "Game/Util/NerveUtil.hpp"
+#include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/SoundUtil.hpp"
+#include <revolution/types.h>
+
+namespace NrvBossStinkBugActionSequencer {
+    NEW_NERVE(BossStinkBugActionSequencerNrvWaitStart, BossStinkBugActionSequencer, WaitStart);
+    NEW_NERVE(BossStinkBugActionSequencerNrvOpeningDemo, BossStinkBugActionSequencer, OpeningDemo);
+    NEW_NERVE(BossStinkBugActionSequencerNrvGround, BossStinkBugActionSequencer, Ground);
+    NEW_NERVE(BossStinkBugActionSequencerNrvFlyDemo, BossStinkBugActionSequencer, FlyDemo);
+    NEW_NERVE(BossStinkBugActionSequencerNrvFlyLow, BossStinkBugActionSequencer, FlyLow);
+    NEW_NERVE(BossStinkBugActionSequencerNrvAngryDemo, BossStinkBugActionSequencer, AngryDemo);
+    NEW_NERVE(BossStinkBugActionSequencerNrvFlyHigh, BossStinkBugActionSequencer, FlyHigh);
+    NEW_NERVE(BossStinkBugActionSequencerNrvFinishDemo, BossStinkBugActionSequencer, FinishDemo);
+    NEW_NERVE(BossStinkBugActionSequencerNrvEnd, BossStinkBugActionSequencer, End);
+};  // namespace NrvBossStinkBugActionSequencer
+
+BossStinkBugActionSequencer::BossStinkBugActionSequencer(BossStinkBug* pStinkBug, const JMapInfoIter& rIter)
+    : NerveExecutor("\203\173\203\130\203\112\203\201\203\200\203\126\203\101\203\116\203\126\203\207\203\223\212\307\227\235" /* ボスカメムシアクション管理 */), mStinkBug(pStinkBug), mCurrentAction(nullptr), mOpeningDemo(nullptr), mActionGround(nullptr),
+      mFlyDemo(nullptr), mActionFlyLow(nullptr), mAngryDemo(nullptr), mActionFlyHigh(nullptr), mFinishDemo(nullptr) {
+    mOpeningDemo = new BossStinkBugOpeningDemo(pStinkBug, rIter);
+    mActionGround = new BossStinkBugActionGround(pStinkBug);
+    mFlyDemo = new BossStinkBugFlyDemo(pStinkBug, rIter);
+    mActionFlyLow = new BossStinkBugActionFlyLow(pStinkBug);
+    mAngryDemo = new BossStinkBugAngryDemo(pStinkBug, rIter);
+    mActionFlyHigh = new BossStinkBugActionFlyHigh(pStinkBug);
+    mFinishDemo = new BossStinkBugFinishDemo(pStinkBug, rIter);
+    initNerve(GET_NERVE(BossStinkBugActionSequencer, BossStinkBugActionSequencerNrvWaitStart));
+    MR::declareStarPiece(mStinkBug, 24);
+}
+
+bool BossStinkBugActionSequencer::isValidFollowId(s32 id) const {
+    if (id == -1) {
+        return true;
+    }
+
+    if (mCurrentAction != nullptr) {
+        return mCurrentAction->isValidFollowId(id);
+    }
+
+    return false;
+}
+
+void BossStinkBugActionSequencer::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
+    if (mCurrentAction != nullptr) {
+        mCurrentAction->attackSensor(pSender, pReceiver);
+    }
+}
+
+bool BossStinkBugActionSequencer::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    if (mCurrentAction != nullptr) {
+        return mCurrentAction->receiveMsgPlayerAttack(msg, pSender, pReceiver);
+    } else {
+        return false;
+    }
+}
+
+bool BossStinkBugActionSequencer::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    if (mCurrentAction != nullptr) {
+        return mCurrentAction->receiveOtherMsg(msg, pSender, pReceiver);
+    } else {
+        return false;
+    }
+}
+
+bool BossStinkBugActionSequencer::startAction() {
+    if (isNerve(GET_NERVE(BossStinkBugActionSequencer, BossStinkBugActionSequencerNrvWaitStart))) {
+        setNerve(GET_NERVE(BossStinkBugActionSequencer, BossStinkBugActionSequencerNrvOpeningDemo));
+        return true;
+    } else {
+        return false;
+    }
+}
+
+void BossStinkBugActionSequencer::exeWaitStart() {
+}
+
+void BossStinkBugActionSequencer::exeOpeningDemo() {
+    if (MR::isFirstStep(this)) {
+        mCurrentAction = mOpeningDemo;
+    }
+    MR::updateActorStateAndNextNerve(this, mOpeningDemo, GET_NERVE(BossStinkBugActionSequencer, BossStinkBugActionSequencerNrvGround));
+}
+
+void BossStinkBugActionSequencer::exeGround() {
+    if (MR::isFirstStep(this)) {
+        MR::startBossBGM(MR::BossBgmID_StinkBugA);
+        mCurrentAction = mActionGround;
+    }
+    MR::updateActorStateAndNextNerve(this, mActionGround, GET_NERVE(BossStinkBugActionSequencer, BossStinkBugActionSequencerNrvFlyDemo));
+}
+
+void BossStinkBugActionSequencer::exeFlyDemo() {
+    if (MR::isFirstStep(this)) {
+        mCurrentAction = mFlyDemo;
+    }
+    MR::updateActorStateAndNextNerve(this, mFlyDemo, GET_NERVE(BossStinkBugActionSequencer, BossStinkBugActionSequencerNrvFlyLow));
+}
+
+void BossStinkBugActionSequencer::exeFlyLow() {
+    if (MR::isFirstStep(this)) {
+        mStinkBug->appearStarPiece(8);
+        MR::startBossBGM(MR::BossBgmID_StinkBugB);
+        mCurrentAction = mActionFlyLow;
+    }
+    MR::updateActorStateAndNextNerve(this, mActionFlyLow, GET_NERVE(BossStinkBugActionSequencer, BossStinkBugActionSequencerNrvAngryDemo));
+}
+
+void BossStinkBugActionSequencer::exeAngryDemo() {
+    if (MR::isFirstStep(this)) {
+        mCurrentAction = mAngryDemo;
+    }
+    MR::updateActorStateAndNextNerve(this, mAngryDemo, GET_NERVE(BossStinkBugActionSequencer, BossStinkBugActionSequencerNrvFlyHigh));
+}
+
+void BossStinkBugActionSequencer::exeFlyHigh() {
+    if (MR::isFirstStep(this)) {
+        mStinkBug->appearStarPiece(16);
+        mCurrentAction = mActionFlyHigh;
+    }
+    MR::updateActorStateAndNextNerve(this, mActionFlyHigh, GET_NERVE(BossStinkBugActionSequencer, BossStinkBugActionSequencerNrvFinishDemo));
+}
+
+void BossStinkBugActionSequencer::exeFinishDemo() {
+    if (MR::isFirstStep(this)) {
+        mCurrentAction = mFinishDemo;
+    }
+    MR::updateActorStateAndNextNerve(this, mFinishDemo, GET_NERVE(BossStinkBugActionSequencer, BossStinkBugActionSequencerNrvEnd));
+}
+
+void BossStinkBugActionSequencer::exeEnd() {
+}

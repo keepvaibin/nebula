@@ -1,0 +1,71 @@
+#include "Game/Boss/TombSpiderGland.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/Scene/SceneFunction.hpp"
+#include "Game/Util/LiveActorUtil.hpp"
+
+namespace NrvTombSpiderGland {
+    NEW_NERVE(TombSpiderGlandNrvWait, TombSpiderGland, Wait);
+    NEW_NERVE(TombSpiderGlandNrvActiveWait, TombSpiderGland, ActiveWait);
+    NEW_NERVE(TombSpiderGlandNrvDamageStart, TombSpiderGland, DamageStart);
+    NEW_NERVE(TombSpiderGlandNrvDamageWait, TombSpiderGland, DamageWait);
+};  // namespace NrvTombSpiderGland
+
+TombSpiderGland::TombSpiderGland(LiveActor* pActor, const char* pName, const TVec3f& rPos, const TVec3f& a1, const char* pJointName)
+    : PartsModel(pActor, pName, "TombSpiderGland", nullptr, MR::DrawBufferType_Enemy, false) {
+    MR::initLightCtrl(this);
+    initFixedPosition(rPos, a1, pJointName);
+}
+
+void TombSpiderGland::init(const JMapInfoIter& rIter) {
+    PartsModel::init(rIter);
+    MR::startBrk(this, "Battle1st");
+    initNerve(GET_NERVE(TombSpiderGland, TombSpiderGlandNrvWait));
+}
+
+void TombSpiderGland::startActive() {
+    MR::startBrk(this, "Battle2nd");
+    setNerve(GET_NERVE(TombSpiderGland, TombSpiderGlandNrvActiveWait));
+}
+
+void TombSpiderGland::startDamage() {
+    setNerve(GET_NERVE(TombSpiderGland, TombSpiderGlandNrvDamageStart));
+}
+
+bool TombSpiderGland::isActive() const {
+    return isNerve(GET_NERVE(TombSpiderGland, TombSpiderGlandNrvActiveWait));
+}
+
+bool TombSpiderGland::isDamage() const {
+    if (isNerve(GET_NERVE(TombSpiderGland, TombSpiderGlandNrvDamageStart)) || isNerve(GET_NERVE(TombSpiderGland, TombSpiderGlandNrvDamageWait))) {
+        return true;
+    }
+    return false;
+}
+
+void TombSpiderGland::exeWait() {
+    if (MR::isFirstStep(this)) {
+        MR::startBck(this, "Wait");
+    }
+}
+
+void TombSpiderGland::exeActiveWait() {
+    if (MR::isFirstStep(this)) {
+        MR::startBck(this, "Wait");
+    }
+}
+
+void TombSpiderGland::exeDamageStart() {
+    if (MR::isFirstStep(this)) {
+        MR::startBck(this, "DamageStart");
+    }
+
+    if (MR::isBckStopped(this)) {
+        setNerve(GET_NERVE(TombSpiderGland, TombSpiderGlandNrvDamageWait));
+    }
+}
+
+void TombSpiderGland::exeDamageWait() {
+    if (MR::isFirstStep(this)) {
+        MR::startBck(this, "DamageWait");
+    }
+}

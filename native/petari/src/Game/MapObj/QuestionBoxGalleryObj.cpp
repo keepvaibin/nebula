@@ -1,0 +1,135 @@
+#include "Game/MapObj/QuestionBoxGalleryObj.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/MapObj/MapObjActorInitInfo.hpp"
+#include "Game/MapObj/StageEffectDataTable.hpp"
+#include "Game/Util/ActorSwitchUtil.hpp"
+#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/MapPartsUtil.hpp"
+#include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
+
+namespace NrvQuestionBoxGalleryObj {
+    NEW_NERVE(QuestionBoxGalleryObjNrvOnStart, QuestionBoxGalleryObj, OnStart);
+    NEW_NERVE(QuestionBoxGalleryObjNrvOnWait, QuestionBoxGalleryObj, OnWait);
+    NEW_NERVE(QuestionBoxGalleryObjNrvOffStart, QuestionBoxGalleryObj, OffStart);
+    NEW_NERVE(QuestionBoxGalleryObjNrvOffWait, QuestionBoxGalleryObj, OffWait);
+};  // namespace NrvQuestionBoxGalleryObj
+
+QuestionBoxGalleryObj::QuestionBoxGalleryObj(const char* pName) : MapObjActor(pName) {
+}
+
+void QuestionBoxGalleryObj::init(const JMapInfoIter& rIter) {
+    MapObjActor::init(rIter);
+    MapObjActorInitInfo rInitInfo;
+
+    if (MR::isEqualSubString(mObjectName, "Planet")) {
+        rInitInfo.setupHioNode("\230\146\220\257" /* 惑星 */);
+    } else {
+        rInitInfo.setupHioNode("\222\156\214\140\203\111\203\165\203\127\203\106" /* 地形オブジェ */);
+    }
+
+    rInitInfo.setupDefaultPos();
+    rInitInfo.setupConnectToScene();
+    rInitInfo.setupGroupClipping(8);
+    rInitInfo.setupEffect(nullptr);
+    rInitInfo.setupSound(4);
+
+    if (MR::isEqualSubString(mObjectName, "PlanetA")) {
+        rInitInfo.setupFarClipping(-1.0f);
+    } else {
+        rInitInfo.setupFarClipping(100.0f);
+    }
+
+    f32 rotateSpeed = FLOAT_MAX;
+    MR::getMapPartsArgRotateSpeed(&rotateSpeed, rIter);
+
+    if (MR::isConnectedWithRail(rIter)) {
+        rInitInfo.setupRailMover();
+    } else if (rotateSpeed != 0.0f && rotateSpeed != FLOAT_MAX) {
+        rInitInfo.setupRotator();
+        rInitInfo.setupProjmapMtx(false);
+    }
+
+    initialize(rIter, rInitInfo);
+    startMapPartsFunctions();
+
+    bool arg0 = false;
+    MR::getJMapInfoArg0NoInit(rIter, &arg0);
+
+    if (arg0) {
+        initNerve(GET_NERVE(QuestionBoxGalleryObj, QuestionBoxGalleryObjNrvOnWait));
+    } else {
+        initNerve(GET_NERVE(QuestionBoxGalleryObj, QuestionBoxGalleryObjNrvOffWait));
+    }
+}
+
+void QuestionBoxGalleryObj::exeOnStart() {
+    if (MR::isFirstStep(this)) {
+        MR::startAllAnim(this, "On");
+    }
+
+    if (MR::isBckStopped(this)) {
+        setNerve(GET_NERVE(QuestionBoxGalleryObj, QuestionBoxGalleryObjNrvOnWait));
+    }
+}
+
+void QuestionBoxGalleryObj::exeOnWait() {
+    if (MR::isFirstStep(this)) {
+        MR::startAllAnim(this, "On");
+        MR::setBckFrameAndStop(this, MR::getBckFrameMax(this));
+    }
+}
+
+void QuestionBoxGalleryObj::exeOffStart() {
+    if (MR::isFirstStep(this)) {
+        MR::startAllAnim(this, "Off");
+    }
+
+    if (MR::isBckStopped(this)) {
+        setNerve(GET_NERVE(QuestionBoxGalleryObj, QuestionBoxGalleryObjNrvOffWait));
+    }
+}
+
+void QuestionBoxGalleryObj::exeOffWait() {
+    if (MR::isFirstStep(this)) {
+        MR::startAllAnim(this, "Off");
+        MR::setBckFrameAndStop(this, MR::getBckFrameMax(this));
+    }
+}
+
+void QuestionBoxGalleryObj::initCaseUseSwitchA(const MapObjActorInitInfo& pInitInfo) {
+    MR::listenStageSwitchOnA(this, MR::Functor(this, &QuestionBoxGalleryObj::startSwitchOn));
+}
+
+void QuestionBoxGalleryObj::initCaseUseSwitchB(const MapObjActorInitInfo& pInitInfo) {
+    MR::listenStageSwitchOnB(this, MR::Functor(this, &QuestionBoxGalleryObj::startSwitchOff));
+}
+
+void QuestionBoxGalleryObj::control() {
+    MapObjActor::control();
+
+    if (mRotator && MapObjActorUtil::isRotatorMoving(this)) {
+        MR::StageEffect::tryStageEffectMoving(this, mObjectName);
+    }
+
+    if (mRailMover) {
+        if (MapObjActorUtil::isRailMoverWorking(this)) {
+            MR::StageEffect::tryStageEffectMoving(this, mObjectName);
+        }
+
+        if (MapObjActorUtil::isRailMoverReachedEnd(this)) {
+            MR::StageEffect::tryStageEffectStop(this, mObjectName);
+        }
+    }
+}
+
+void QuestionBoxGalleryObj::startSwitchOn() {
+    MR::startSound(this, "SE_OJ_Q_BOX_LIGHT_ON");
+    setNerve(GET_NERVE(QuestionBoxGalleryObj, QuestionBoxGalleryObjNrvOnStart));
+}
+
+void QuestionBoxGalleryObj::startSwitchOff() {
+    MR::startSound(this, "SE_OJ_Q_BOX_LIGHT_OFF");
+    setNerve(GET_NERVE(QuestionBoxGalleryObj, QuestionBoxGalleryObjNrvOffStart));
+}

@@ -1,0 +1,145 @@
+#include "Game/Boss/DinoPackunBattleEgg.hpp"
+#include "Game/Boss/DinoPackun.hpp"
+#include "Game/Boss/DinoPackunStateDamage.hpp"
+#include "Game/Boss/DinoPackunTail.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/Util.hpp"
+#include "Game/Util/PlayerUtil.hpp"
+#include <JSystem/JGeometry/TVec.hpp>
+
+namespace {
+    inline void removeVelocity(DinoPackun* pHost, const TVec3f& rDir) {
+        TVec3f* pVelocity = &pHost->mVelocity;
+        pHost->mVelocity.scaleAdd(-rDir.dot(*pVelocity), rDir, *pVelocity);
+    }
+
+    static TVec3f sEggOutPosition = TVec3f(0.0f, 60.0f, -320.0f);
+};  // namespace
+
+namespace NrvDinoPackunBattleEgg {
+    NEW_NERVE(DinoPackunBattleEggNrvTurn, DinoPackunBattleEgg, Turn);
+    NEW_NERVE(DinoPackunBattleEggNrvWalk, DinoPackunBattleEgg, Walk);
+    NEW_NERVE(DinoPackunBattleEggNrvDamage, DinoPackunBattleEgg, Damage);
+};  // namespace NrvDinoPackunBattleEgg
+
+DinoPackunBattleEgg::DinoPackunBattleEgg(DinoPackun* pParent) : DinoPackunAction("1\211\361\220\355\227\221\203\157\203\147\203\213" /* 1回戦卵バトル */, pParent) {
+    mStateDamage = nullptr;
+    _18 = 1.0f;
+}
+
+void DinoPackunBattleEgg::init() {
+    initNerve(GET_NERVE(DinoPackunBattleEgg, DinoPackunBattleEggNrvTurn));
+    mStateDamage = new DinoPackunStateDamage(getHost());
+    mStateDamage->setDamageEgg();
+}
+
+void DinoPackunBattleEgg::appear() {
+    mIsDead = false;
+    getHost()->mTail->lockNodePosition(1);
+    setNerve(GET_NERVE(DinoPackunBattleEgg, DinoPackunBattleEggNrvTurn));
+}
+
+void DinoPackunBattleEgg::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
+    if (getHost()->isSensorEgg(pSender)) {
+        if (MR::isSensorPlayer(pReceiver)) {
+            MR::sendMsgPush(pReceiver, pSender);
+        }
+    }
+}
+
+bool DinoPackunBattleEgg::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    if (!getHost()->isSensorEgg(pReceiver)) {
+        return false;
+    }
+
+    if (MR::isMsgPlayerSpinAttack(msg)) {
+    }
+
+    return MR::isMsgStarPieceReflect(msg);
+}
+
+// an attempt was made
+bool DinoPackunBattleEgg::receiveMsgPush(HitSensor* pSender, HitSensor* pReceiver) {
+    if (!getHost()->isSensorEgg(pReceiver)) {
+        return false;
+    }
+
+    if ((isNerve(GET_NERVE(DinoPackunBattleEgg, DinoPackunBattleEggNrvWalk)) ||
+         isNerve(GET_NERVE(DinoPackunBattleEgg, DinoPackunBattleEggNrvTurn))) &&
+        getHost()->isSensorEgg(pReceiver) && MR::isSensorMapObj(pSender)) {
+        TVec3f v11;
+        MR::calcSensorHorizonNormalize(&v11, getHost()->mGravity, pSender, pReceiver);
+
+        if (getHost()->mVelocity.dot(v11) < 0.0f) {
+            removeVelocity(getHost(), v11);
+        }
+
+        if (isNerve(GET_NERVE(DinoPackunBattleEgg, DinoPackunBattleEggNrvWalk)) && getHost()->_E8.dot(v11) < 0.0f) {
+            TVec3f v10;
+            MR::calcSideVec(&v10, getHost());
+
+            f32 v9;
+
+            if (v10.dot(v11) > 0.0f) {
+                v9 = 1.0f;
+            } else {
+                v9 = -1.0f;
+            }
+
+            _18 = v9;
+            setNerve(GET_NERVE(DinoPackunBattleEgg, DinoPackunBattleEggNrvTurn));
+        }
+
+        return true;
+    }
+
+    return false;
+}
+
+bool DinoPackunBattleEgg::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    if (isNerve(GET_NERVE(DinoPackunBattleEgg, DinoPackunBattleEggNrvDamage))) {
+        return mStateDamage->receiveOtherMsg(msg, pSender, pReceiver);
+    }
+
+    if (mStateDamage->isDamageMessage(msg)) {
+        setNerve(GET_NERVE(DinoPackunBattleEgg, DinoPackunBattleEggNrvDamage));
+        return true;
+    }
+
+    return false;
+}
+
+void DinoPackunBattleEgg::exeTurn() {
+    if (MR::isFirstStep(this)) {
+        MR::startBck(getHost(), "EggWalk");
+        MR::startSound(getHost(), "SE_BV_D_PAKKUN_EGG_WALK");
+        MR::startSound(getHost(), "SE_BM_D_PAKKUN_SLAVER");
+    }
+
+    getHost()->adjustTailRootPosition(::sEggOutPosition, 1.0f);
+
+    if (updateTurn(120, 0.30f)) {
+        setNerve(GET_NERVE(DinoPackunBattleEgg, DinoPackunBattleEggNrvWalk));
+    }
+}
+
+void DinoPackunBattleEgg::exeWalk() {
+    if (MR::isFirstStep(this)) {
+        MR::startBck(getHost(), "EggWalk");
+    }
+
+    getHost()->adjustTailRootPosition(::sEggOutPosition, 1.0f);
+
+    if (updateWalk(300, 0.5f, 91)) {
+        setNerve(GET_NERVE(DinoPackunBattleEgg, DinoPackunBattleEggNrvTurn));
+    }
+}
+
+DinoPackunBattleEgg::~DinoPackunBattleEgg() {
+}
+
+void DinoPackunBattleEgg::exeDamage() {
+    if (MR::updateActorState(this, mStateDamage)) {
+        kill();
+    }
+}

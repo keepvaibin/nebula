@@ -1,0 +1,14 @@
+#pragma once
+
+#include "Game/Camera/CameraParallel.hpp"
+
+class CamTranslatorParallel : public CamTranslatorBase {
+public:
+    CamTranslatorParallel(CameraParallel* pCamera) : mCamera(pCamera) {
+    }
+
+    virtual void setParam(const CameraParamChunk*);
+    virtual Camera* getCamera() const;
+
+    /* 0x4 */ CameraParallel* mCamera;
+};

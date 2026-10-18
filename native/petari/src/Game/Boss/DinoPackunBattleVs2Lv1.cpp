@@ -1,0 +1,456 @@
+#include "Game/Boss/DinoPackunBattleVs2Lv1.hpp"
+#include "Game/Boss/DinoPackun.hpp"
+#include "Game/Boss/DinoPackunBall.hpp"
+#include "Game/Boss/DinoPackunFire.hpp"
+#include "Game/Boss/DinoPackunStateAwake.hpp"
+#include "Game/Boss/DinoPackunStateDamage.hpp"
+#include "Game/Boss/DinoPackunStateFire.hpp"
+#include "Game/Boss/DinoPackunTail.hpp"
+#include "Game/Boss/DinoPackunTrackFire.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/Util/ActorMovementUtil.hpp"
+#include "Game/Util/ActorSensorUtil.hpp"
+#include "Game/Util/ActorStateUtil.hpp"
+#include "Game/Util/EffectUtil.hpp"
+#include "Game/Util/JointUtil.hpp"
+#include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/MathUtil.hpp"
+#include "Game/Util/NerveUtil.hpp"
+#include "Game/Util/SoundUtil.hpp"
+
+void DinoPackunBattleVs2Lv1_FORCE_MATCH_SDATA2() {
+    (void)1.05e+03f;
+    (void)6e+01f;
+    (void)1.5f;
+    (void)1.1f;
+    (void)1.2f;
+    (void)4e+01f;
+    (void)8e+01f;
+    (void)32.0f;
+    (void)132.0f;
+    (void)2e+03f;
+    (void)45.0f;
+    (void)1.4f;
+    (void)1.9f;
+    (void)1.6e+03f;
+    (void)1.8f;
+    (void)5e+01f;
+    (void)3e+01f;
+    (void)1.2e+02f;
+    (void)1.5e+02f;
+}
+
+namespace {
+    static TVec3f sShotMouthFireOffset = TVec3f(150.0f, 150.0f, 0.0f);
+};  // namespace
+
+namespace NrvDinoPackunBattleVs2Lv1 {
+    NEW_NERVE(DinoPackunBattleVs2Lv1NrvTurn, DinoPackunBattleVs2Lv1, Turn);
+    NEW_NERVE_ONEND(DinoPackunBattleVs2Lv1NrvWalk, DinoPackunBattleVs2Lv1, Walk, Walk);
+    NEW_NERVE(DinoPackunBattleVs2Lv1NrvFindCrazy, DinoPackunBattleVs2Lv1, FindCrazy);
+    NEW_NERVE_ONEND(DinoPackunBattleVs2Lv1NrvCrazy, DinoPackunBattleVs2Lv1, Crazy, Crazy);
+    NEW_NERVE_ONEND(DinoPackunBattleVs2Lv1NrvChase, DinoPackunBattleVs2Lv1, Chase, Chase);
+    NEW_NERVE_ONEND(DinoPackunBattleVs2Lv1NrvAwake, DinoPackunBattleVs2Lv1, Awake, Awake);
+    NEW_NERVE(DinoPackunBattleVs2Lv1NrvAttackHit, DinoPackunBattleVs2Lv1, AttackHit);
+    NEW_NERVE(DinoPackunBattleVs2Lv1NrvDamage, DinoPackunBattleVs2Lv1, Damage);
+};  // namespace NrvDinoPackunBattleVs2Lv1
+
+DinoPackunBattleVs2Lv1::DinoPackunBattleVs2Lv1(DinoPackun* pPackun) : DinoPackunAction("\203\211\203\130\203\147" /* ラスト */, pPackun) {
+    mStateDamage = nullptr;
+    mStateAwake = nullptr;
+    mTrackFireHolder = nullptr;
+    mFireHolder = nullptr;
+    mStateFire = nullptr;
+    _28.x = 0.0f;
+    _28.y = 0.0f;
+    _28.z = 0.0f;
+    _34 = 0;
+    _38 = 0;
+    _39 = 0;
+    _3A = 0;
+    _3B = 0;
+    _3C = 0;
+    _3D = 0;
+}
+
+void DinoPackunBattleVs2Lv1::setTrackFire(DinoPackunTrackFireHolder* pHolder) {
+    mTrackFireHolder = pHolder;
+}
+
+void DinoPackunBattleVs2Lv1::setFireBall(DinoPackunFireHolder* pHolder) {
+    mFireHolder = pHolder;
+}
+
+void DinoPackunBattleVs2Lv1::setMiddleBattle() {
+    mStateDamage->setDamageNormal();
+}
+
+void DinoPackunBattleVs2Lv1::setLastBattle() {
+    mStateDamage->setDamageLast();
+}
+
+void DinoPackunBattleVs2Lv1::init() {
+    initNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvAwake));
+    mStateDamage = new DinoPackunStateDamage(getHost());
+    mStateDamage->setDamageLast();
+    mStateDamage->init();
+    mStateAwake = new DinoPackunStateAwake(getHost());
+    mStateAwake->init();
+    mStateFire = new DinoPackunStateFire(getHost());
+    mStateFire->init();
+}
+
+void DinoPackunBattleVs2Lv1::appear() {
+    if (MR::isDead(getHost())) {
+        getHost()->makeActorAppeared();
+    }
+
+    mIsDead = false;
+    if (_3C) {
+        mStateFire->requestFireDirect();
+    }
+
+    if (_3D) {
+        setNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvFindCrazy));
+    } else {
+        setNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvAwake));
+    }
+}
+
+void DinoPackunBattleVs2Lv1::control() {
+    mStateFire->update();
+}
+
+void DinoPackunBattleVs2Lv1::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
+    if (MR::isSensorPlayer(pReceiver)) {
+        bool v6 = isNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvChase)) ||
+                  isNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvWalk)) ||
+                  isNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvCrazy));
+
+        if (v6) {
+            if (sendBlowAttackMessage(pSender, pReceiver, mStateFire->isFire())) {
+                if (_3D) {
+                    return;
+                }
+
+                setNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvAttackHit));
+                return;
+            }
+        }
+
+        bool v8 = isNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvTurn)) ||
+                  isNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvAwake));
+
+        if (v8 && sendHitAttackMessage(pSender, pReceiver, mStateFire->isFire())) {
+            if (!_3D) {
+                setNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvAttackHit));
+            }
+        } else {
+            MR::sendMsgPush(pReceiver, pSender);
+        }
+    } else {
+        bool v10 = isNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvChase)) ||
+                   isNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvWalk)) ||
+                   isNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvCrazy));
+
+        if (v10) {
+            MR::sendMsgEnemyAttack(pReceiver, pSender);
+        }
+    }
+}
+
+bool DinoPackunBattleVs2Lv1::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    if (MR::isMsgStarPieceReflect(msg)) {
+        getHost()->startHitReaction();
+        return true;
+    } else if (MR::isMsgPlayerSpinAttack(msg) && MR::sendMsgEnemyAttackFlipWeakJump(pSender, pReceiver)) {
+        MR::emitEffectHitBetweenSensors(getHost(), pSender, pReceiver, 0.0f, "InvalidHitMark");
+        return false;
+    }
+
+    return false;
+}
+
+bool DinoPackunBattleVs2Lv1::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    if (isNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvDamage))) {
+        if (mStateDamage->receiveOtherMsg(msg, pSender, pReceiver)) {
+            mStateFire->requestCool();
+            return true;
+        }
+    } else if (mStateDamage->isDamageMessage(msg)) {
+        mTrackFireHolder->killAll();
+        mFireHolder->killAll();
+        setNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvDamage));
+        return true;
+    }
+
+    return false;
+}
+
+bool DinoPackunBattleVs2Lv1::tryAwake() {
+    if (MR::isInSightConePlayer(getHost(), getHost()->_E8, 1050.0f, 60.0f)) {
+        setNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvAwake));
+        return true;
+    }
+
+    return false;
+}
+
+void DinoPackunBattleVs2Lv1::exeWalk() {
+    if (MR::isFirstStep(this)) {
+        MR::startAction(getHost(), _3B ? "AngryWalk" : "Walk");
+        _34 = _34 == 0;
+    }
+
+    f32 val = MR::calcNerveValue(this, 30, 1.0f, 1.5f);
+    getHost()->mTail->_C = val;
+
+    if (!tryAwake()) {
+        s32 v3 = _3B ? 75 : 100;
+        s32 v4 = _3B ? 15 : 20;
+        f32 v5 = _3B ? 1.1f : 1.2f;
+
+        MR::rotateDirectionGravityDegree(getHost(), &getHost()->_E8, (v5 * ((getNerveStep() / v3) % 2 == _34 ? -1.0f : 1.0f)));
+        updateOnOffFireTail(v3, v4, 20);
+
+        s32 v8 = _3A ? 500 : 610;
+        if (updateWalk(v8, 1.0f, 50)) {
+            if (!_34) {
+                _10 = 1.0f;
+            } else {
+                _10 = -1.0f;
+            }
+
+            setNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvTurn));
+        }
+    }
+}
+
+void DinoPackunBattleVs2Lv1::endWalk() {
+    getHost()->mTail->_C = 1.0f;
+}
+
+void DinoPackunBattleVs2Lv1::exeTurn() {
+    if (MR::isFirstStep(this)) {
+        if (_10 > 0.0f) {
+            MR::startAction(getHost(), "TurnRight");
+        } else {
+            MR::startAction(getHost(), "TurnLeft");
+        }
+
+        MR::startSound(getHost(), "SE_BV_D_PAKKUN_EGG_WALK");
+        MR::startSound(getHost(), "SE_BM_D_PAKKUN_SLAVER");
+    }
+
+    emitFireTail();
+
+    if (updateTurn(60, 3.0f)) {
+        setNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvWalk));
+    } else if (MR::isInSightFanPlayer(getHost(), getHost()->_E8, 1050.0f, 40.0f, 80.0f)) {
+        setNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvAwake));
+    }
+}
+
+void DinoPackunBattleVs2Lv1::exeFindCrazy() {
+    if (MR::isFirstStep(this)) {
+        MR::startAction(getHost(), "Find");
+        MR::startSound(getHost(), "SE_BV_D_PAKKUN_CHASE");
+        MR::startSound(getHost(), "SE_BM_D_PAKKUN_SLAVER");
+        mStateFire->requestFire();
+    }
+
+    MR::turnDirectionToPlayerDegree(getHost(), &getHost()->_E8, 3.0f);
+    MR::calcNerveRate(this, 45);
+    MR::addVelocityMoveToDirection(getHost(), getHost()->_E8, 0.0f);
+    getHost()->updateNormalVelocity();
+    if (MR::isActionEnd(getHost())) {
+        setNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvCrazy));
+    }
+}
+
+void DinoPackunBattleVs2Lv1::exeCrazy() {
+    if (MR::isFirstStep(this)) {
+        MR::startAction(getHost(), _39 ? "FireChase" : "Chase");
+        MR::startSound(getHost(), "SE_BV_D_PAKKUN_CHASE");
+        MR::startSound(getHost(), "SE_BM_D_PAKKUN_SLAVER");
+        mStateFire->requestFire();
+    }
+
+    if (MR::checkPassBckFrame(getHost(), 32.0f) || MR::checkPassBckFrame(getHost(), 132.0f)) {
+        emitFireMouth();
+    }
+
+    f32 val = MR::calcNerveValue(this, 30, 1.0f, 1.5f);
+    getHost()->mTail->_C = val;
+
+    if (MR::isLessStep(this, 60) || MR::isInSightConePlayer(getHost(), getHost()->_E8, 2000.0f, 45.0f)) {
+        MR::turnDirectionToPlayerDegree(getHost(), &getHost()->_E8, 1.2f);
+    } else {
+        s32 step = getNerveStep();
+        s32 div = (step / 60);
+        f32 v4;
+
+        if (div % 2 != 0) {
+            v4 = -1.0f;
+        } else {
+            v4 = 1.0f;
+        }
+
+        MR::rotateDirectionGravityDegree(getHost(), &getHost()->_E8, (1.4f * v4));
+    }
+
+    getHost()->updateFootPrintNerve(getNerveStep(), 46);
+    updateOnOffFireTail(60, 10, 15);
+    f32 rate = MR::calcNerveRate(this, 30);
+    MR::addVelocityMoveToDirection(getHost(), getHost()->_E8, (1.9f * rate));
+    getHost()->updateRunVelocity();
+
+    if (MR::isGreaterStep(this, 240)) {
+        if (MR::isInSightConePlayer(getHost(), getHost()->_E8, 1600.0f, 45.0f)) {
+            setNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvFindCrazy));
+        }
+    }
+}
+
+void DinoPackunBattleVs2Lv1::endCrazy() {
+    getHost()->mTail->_C = 1.0f;
+}
+
+void DinoPackunBattleVs2Lv1::exeChase() {
+    if (MR::isFirstStep(this)) {
+        const char* action = (_39) ? "FireChase" : "Chase";
+        MR::startAction(getHost(), action);
+        MR::startSound(getHost(), "SE_BV_D_PAKKUN_CHASE");
+        MR::startSound(getHost(), "SE_BM_D_PAKKUN_SLAVER");
+        mStateFire->requestFire();
+    }
+
+    if (MR::checkPassBckFrame(getHost(), 32.0f) || MR::checkPassBckFrame(getHost(), 132.0f)) {
+        emitFireMouth();
+    }
+
+    f32 val = MR::calcNerveValue(this, 30, 1.0f, 1.5f);
+    getHost()->mTail->_C = val;
+    if (MR::isInSightConePlayer(getHost(), getHost()->_E8, 2000.0f, 60.0f)) {
+        MR::turnDirectionToPlayerDegree(getHost(), &getHost()->_E8, 1.0f);
+    } else {
+        s32 step = getNerveStep();
+        s32 div = (step / 60);
+        f32 v4;
+
+        if (div % 2 != 0) {
+            v4 = -1.0f;
+        } else {
+            v4 = 1.0f;
+        }
+
+        MR::rotateDirectionGravityDegree(getHost(), &getHost()->_E8, (2.0f * v4));
+    }
+
+    getHost()->updateFootPrintNerve(getNerveStep(), 46);
+    emitFireTail();
+    f32 rate = MR::calcNerveRate(this, 45);
+    MR::addVelocityMoveToDirection(getHost(), getHost()->_E8, (1.8f * rate));
+    getHost()->updateRunVelocity();
+
+    if (MR::isGreaterStep(this, 120)) {
+        if (!MR::isInSightConePlayer(getHost(), getHost()->_E8, 2000.0f, 60.0f)) {
+            setNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvWalk));
+        }
+    }
+}
+
+void DinoPackunBattleVs2Lv1::endChase() {
+    getHost()->mTail->_C = 1.0f;
+}
+
+void DinoPackunBattleVs2Lv1::exeAttackHit() {
+    if (MR::isFirstStep(this)) {
+        mStateFire->requestFire();
+    }
+
+    if (updateAttackHit()) {
+        setNerve(GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvTurn));
+    }
+}
+
+void DinoPackunBattleVs2Lv1::updateOnOffFireTail(s32 a1, s32 a2, s32 a3) {
+    s32 v8 = 2 * a1;
+    s32 v9 = getNerveStep() % (2 * a1);
+
+    if (v9 < a1 - a2) {
+        mStateFire->requestFire();
+
+    } else {
+        if (v9 >= v8 - a3) {
+            mStateFire->requestFireSign();
+        } else {
+            mStateFire->requestCool();
+        }
+    }
+
+    if (mStateFire->isFire()) {
+        emitFireTail();
+    }
+}
+
+bool DinoPackunBattleVs2Lv1::emitFireMouth() {
+    if (!_39) {
+        return false;
+    }
+
+    DinoPackunFire* fire = mFireHolder->getDeadMember();
+
+    if (fire == nullptr) {
+        return false;
+    }
+
+    TPos3f v17;
+    v17.set(MR::getJointMtx(getHost(), "DownMouth1"));
+    TVec3f v16;
+    v17.mult(::sShotMouthFireOffset, v16);
+    TVec3f v15;
+    v17.getXDir(v15);
+    MR::normalizeOrZero(&v15);
+    fire->appearShot(v16, v15 * 50.0f);
+    MR::addVelocityJump(fire, 30.0f);
+    MR::addVelocity(fire, getHost()->mVelocity);
+    return true;
+}
+
+bool DinoPackunBattleVs2Lv1::emitFireTail() {
+    if (!_38) {
+        return false;
+    }
+
+    DinoPackunTrackFire* fire = mTrackFireHolder->getDeadMember();
+
+    if (fire != nullptr) {
+        TVec3f v7(getHost()->mBall->mPosition);
+        if (_28.distance(v7) >= 120.0f) {
+            _28 = v7;
+            fire->appearAndSetPos(v7);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+DinoPackunBattleVs2Lv1::~DinoPackunBattleVs2Lv1() {
+    return;
+}
+
+void DinoPackunBattleVs2Lv1::exeDamage() {
+    if (MR::updateActorState(this, mStateDamage)) {
+        kill();
+    }
+}
+
+void DinoPackunBattleVs2Lv1::exeAwake() {
+    MR::updateActorStateAndNextNerve(this, mStateAwake, GET_NERVE(DinoPackunBattleVs2Lv1, DinoPackunBattleVs2Lv1NrvChase));
+}
+
+void DinoPackunBattleVs2Lv1::endAwake() {
+    mStateAwake->kill();
+}

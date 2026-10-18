@@ -1,0 +1,240 @@
+#include "Game/NWC24/NWC24SendThread.hpp"
+#include "Game/NWC24/NWC24Function.hpp"
+#include "Game/NWC24/UTF16Util.hpp"
+#include "Game/Util/MemoryUtil.hpp"
+#include <JSystem/JKernel/JKRHeap.hpp>
+
+#define STACK_SIZE 0x8000
+
+OSMessage* NWC24SendThread::mMessage;
+s32 NWC24SendThread::mMessageMax = 1;
+OSMessageQueue NWC24SendThread::mMessageQueue;
+
+NWC24SendThread::NWC24SendThread(s32 priority, JKRHeap* pHeap) {
+    if (pHeap == nullptr) {
+        pHeap = MR::getCurrentHeap();
+    }
+
+    mMessage = new (pHeap, 0) OSMessage[mMessageMax];
+
+    initMsgSendStatus();
+    OSInitMessageQueue(&mMessageQueue, mMessage, mMessageMax);
+
+    u8* pStackBase = new (pHeap, 0) u8[STACK_SIZE];
+
+    OSCreateThread(this, &NWC24SendThread::threadProc, nullptr, &pStackBase[STACK_SIZE], STACK_SIZE, priority, 1 /* OS_THREAD_ATTR_DETACH */);
+    OSResumeThread(this);
+}
+
+#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01 || VERSION == RMGP01)
+bool NWC24SendThread::requestSend(const u16* pText, const u16* pAltName, const u8* pLetter, u32 letterSize, const u8* pPicture, u32 pictureSize) {
+#else
+bool NWC24SendThread::requestSend(const u16* pText, const u16* pAltName, const u8* pLetter, u32 letterSize, const u8* pPicture, u32 pictureSize,
+                                  u16 tag, bool isMsgLedPattern, u8 delayHours) {
+#endif
+    BOOL status = OSDisableInterrupts();
+
+    if (mMessageQueue.usedCount >= mMessageQueue.msgCount) {
+        OSRestoreInterrupts(status);
+
+        return false;
+    }
+
+    mMsgSendStatus.mText = pText;
+    mMsgSendStatus.mAltName = pAltName;
+    mMsgSendStatus.mLetter = pLetter;
+    mMsgSendStatus.mLetterSize = letterSize;
+    mMsgSendStatus.mPicture = pPicture;
+    mMsgSendStatus.mPictureSize = pictureSize;
+    mMsgSendStatus._18 = false;
+#if (VERSION == RMGK01)
+    mMsgSendStatus.mIsMsgLedPattern = isMsgLedPattern;
+#endif
+    mMsgSendStatus.mSentErr = NWC24_OK;
+    mMsgSendStatus.mSentSize = 0;
+#if (VERSION == RMGK01)
+    mMsgSendStatus.mTag = tag;
+    mMsgSendStatus.mDelayHours = delayHours;
+#endif
+
+    OSSendMessage(&mMessageQueue, &mMsgSendStatus, OS_MESSAGE_NOBLOCK);
+    OSRestoreInterrupts(status);
+
+    return true;
+}
+
+bool NWC24SendThread::isDone(NWC24Err* pErr, u32* pSize) {
+    BOOL status = OSDisableInterrupts();
+
+    if (mMsgSendStatus._18) {
+        *pErr = mMsgSendStatus.mSentErr;
+        *pSize = mMsgSendStatus.mSentSize;
+
+        OSRestoreInterrupts(status);
+
+        return true;
+    } else {
+        *pErr = NWC24_OK;
+
+        OSRestoreInterrupts(status);
+
+        return false;
+    }
+}
+
+void* NWC24SendThread::threadProc(void*) {
+    while (true) {
+        MsgSendStatus* pMsgSendStatus = nullptr;
+        OSReceiveMessage(&mMessageQueue, reinterpret_cast< void** >(&pMsgSendStatus), OS_MESSAGE_BLOCK);
+
+        pMsgSendStatus->mSentErr = sendMessage(pMsgSendStatus, &pMsgSendStatus->mSentSize);
+        pMsgSendStatus->_18 = true;
+    }
+}
+
+void NWC24SendThread::initMsgSendStatus() {
+    mMsgSendStatus.mText = nullptr;
+    mMsgSendStatus.mAltName = nullptr;
+    mMsgSendStatus.mLetter = nullptr;
+    mMsgSendStatus.mLetterSize = 0;
+    mMsgSendStatus.mPicture = nullptr;
+    mMsgSendStatus.mPictureSize = 0;
+    mMsgSendStatus._18 = true;
+#if (VERSION == RMGK01)
+    mMsgSendStatus.mIsMsgLedPattern = false;
+#endif
+    mMsgSendStatus.mSentErr = NWC24_OK;
+#if (VERSION == RMGK01)
+    mMsgSendStatus.mTag = 0;
+    mMsgSendStatus.mDelayHours = 0;
+#endif
+}
+
+NWC24Err NWC24SendThread::sendMessage(MsgSendStatus* pMsgSendStatus, u32* pMsgSize) {
+    NWC24Err err;
+    NWC24MsgObj msgObj;
+
+    err = NWC24InitMsgObj(&msgObj, NWC24_MSGTYPE_RVL_MENU);
+
+    if (err != NWC24_OK) {
+        return err;
+    }
+
+    err = setToMyself(&msgObj);
+
+    if (err != NWC24_OK) {
+        return err;
+    }
+
+    const u16* pAltName = pMsgSendStatus->mAltName;
+
+    if (pAltName != nullptr) {
+        err = NWC24SetMsgAltName(&msgObj, pAltName, MR::strlenUTF16(pAltName) + 1);
+
+        if (err != NWC24_OK) {
+            return err;
+        }
+    }
+#if (VERSION == RMGK01)
+    err = NWC24SetMsgTag(&msgObj, pMsgSendStatus->mTag);
+
+    if (err != NWC24_OK) {
+        return err;
+    }
+
+    if (pMsgSendStatus->mDelayHours != 0) {
+        err = NWC24SetMsgMBDelay(&msgObj, pMsgSendStatus->mDelayHours);
+
+        if (err != NWC24_OK) {
+            return err;
+        }
+    }
+#endif
+    const u16* pText = pMsgSendStatus->mText;
+    u32 textLength = MR::strlenUTF16(pText);
+    err = NWC24SetMsgText(&msgObj, reinterpret_cast< const char* >(pText), textLength * sizeof(u16), NWC24_UTF_16, NWC24_ENC_8BIT);
+
+    if (err != NWC24_OK) {
+        return err;
+    }
+
+    if (pMsgSendStatus->mLetter != nullptr) {
+        err = NWC24SetMsgAttached(&msgObj, reinterpret_cast< const char* >(pMsgSendStatus->mLetter), pMsgSendStatus->mLetterSize,
+                                  NWC24_APP_WII_MSGBOARD);
+
+        if (err != NWC24_OK) {
+            return err;
+        }
+    }
+
+    if (pMsgSendStatus->mPicture != nullptr) {
+        err = NWC24SetMsgAttached(&msgObj, reinterpret_cast< const char* >(pMsgSendStatus->mPicture), pMsgSendStatus->mPictureSize,
+                                  NWC24_IMG_WII_PICTURE);
+
+        if (err != NWC24_OK) {
+            return err;
+        }
+    }
+#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01 || VERSION == RMGP01)
+    err = NWC24SetMsgLedPattern(&msgObj, NWC24_LED_APP_DEFAULT);
+
+    if (err != NWC24_OK) {
+        return err;
+    }
+#else
+                                      if (pMsgSendStatus->mIsMsgLedPattern) {
+                                          err = NWC24SetMsgLedPattern(&msgObj, NWC24_LED_APP_DEFAULT);
+
+                                          if (err != NWC24_OK) {
+                                              return err;
+                                          }
+                                      }
+#endif
+    err = NWC24SetMsgMBNoReply(&msgObj, true);
+
+    if (err != NWC24_OK) {
+        return err;
+    }
+
+    if (!checkTotalSize(pMsgSendStatus)) {
+        return NWC24_ERR_FULL;
+    }
+
+    err = NWC24CommitMsg(&msgObj);
+
+    NWC24GetMsgSize(&msgObj, pMsgSize);
+
+    return err;
+}
+
+bool NWC24SendThread::checkTotalSize(MsgSendStatus* pMsgSendStatus) {
+    u32 letterSize;
+    u32 pictureSize;
+
+    if (pMsgSendStatus->mLetter == nullptr) {
+        letterSize = 0;
+    } else {
+        letterSize = pMsgSendStatus->mLetterSize;
+    }
+
+    if (pMsgSendStatus->mPicture == nullptr) {
+        pictureSize = 0;
+    } else {
+        pictureSize = pMsgSendStatus->mPictureSize;
+    }
+
+    return MR::checkWiiMailLimit(MR::calcWiiMailSize(pMsgSendStatus->mAltName, pMsgSendStatus->mText, pictureSize, letterSize));
+}
+
+NWC24Err NWC24SendThread::setToMyself(NWC24MsgObj* pMsgObj) {
+    NWC24Err err;
+    NWC24UserId userId;
+
+    err = NWC24GetMyUserId(&userId);
+
+    if (err != NWC24_OK) {
+        return err;
+    }
+
+    return NWC24SetMsgToId(pMsgObj, userId);
+}

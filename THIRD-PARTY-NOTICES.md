@@ -47,6 +47,15 @@ CC0 does not require attribution; this entry records the source. Dusklight's CC0
 covers its contributors' own work, not its separately licensed submodules (its `extern/aurora`
 submodule is Aurora, above) or the Nintendo material its decompiled sources are based on.
 
+## Petari (CC0 1.0 Universal)
+
+- Upstream: <https://github.com/SMGCommunity/Petari>, by SMGCommunity and its contributors
+- Revision used: `86ae7a3`, with Nebula's changes, in `native/petari` (see its README)
+- License: CC0 1.0 Universal, `native/petari/LICENSE`
+
+Nebula's game core is Petari's decompilation of Super Mario Galaxy. CC0 does not require
+attribution; this entry records the source and credits its authors.
+
 ## WiiCompiled (GPL-3.0)
 
 - Upstream: <https://github.com/patchzyy/Wiicompiled>
@@ -144,5 +153,6 @@ Nebula was developed under the name GalaxyRecomp. Revisions before the change to
 ## Nintendo content
 
 None of the licenses above apply to Nintendo software, game code, game assets, disc images or
-trademarks. Nebula is not affiliated with or endorsed by Nintendo and does not distribute that
-material.
+trademarks. Nebula is not affiliated with or endorsed by Nintendo. It distributes no Nintendo
+binaries, assets, disc images or data taken from them: the game's files, and the data tables
+in its `main.dol`, are read from the user's own disc.

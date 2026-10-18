@@ -1,0 +1,606 @@
+#include "Game/Util/ScreenUtil.hpp"
+#include "Game/Scene/GameSceneFunction.hpp"
+#include "Game/Scene/PlayTimerScene.hpp"
+#include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/Screen/BloomEffect.hpp"
+#include "Game/Screen/BloomEffectSimple.hpp"
+#include "Game/Screen/CaptureScreenDirector.hpp"
+#include "Game/Screen/CenterScreenBlur.hpp"
+#include "Game/Screen/CinemaFrame.hpp"
+#include "Game/Screen/CounterLayoutController.hpp"
+#include "Game/Screen/DepthOfFieldBlur.hpp"
+#include "Game/Screen/GameSceneLayoutHolder.hpp"
+#include "Game/Screen/ImageEffectDirector.hpp"
+#include "Game/Screen/ImageEffectSystemHolder.hpp"
+#include "Game/Screen/InformationMessage.hpp"
+#include "Game/Screen/LensFlare.hpp"
+#include "Game/Screen/MoviePlayerSimple.hpp"
+#include "Game/Screen/PurpleCoinCounter.hpp"
+#include "Game/Screen/SceneWipeHolder.hpp"
+#include "Game/Screen/ScreenBlurEffect.hpp"
+#include "Game/Screen/StarCounter.hpp"
+#include "Game/Screen/StarPieceCounter.hpp"
+#include "Game/Screen/SystemWipeHolder.hpp"
+#include "Game/Screen/YesNoController.hpp"
+#include "Game/Screen/YesNoLayout.hpp"
+#include "Game/System/GameSystem.hpp"
+#include "Game/System/GameSystemObjHolder.hpp"
+#include "Game/System/GameSystemSceneController.hpp"
+#include "Game/System/RenderMode.hpp"
+#include "Game/Util/LayoutUtil.hpp"
+#include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/SingletonHolder.hpp"
+#include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/SystemUtil.hpp"
+
+
+namespace {
+    char sWipeCircle[] = "\211\176\203\217\203\103\203\166" /* 円ワイプ */;
+    char sWipeFade[] = "\203\164\203\106\201\133\203\150\203\217\203\103\203\166" /* フェードワイプ */;
+    char sWipeWhiteFade[] = "\224\222\203\164\203\106\201\133\203\150\203\217\203\103\203\166" /* 白フェードワイプ */;
+    char sWipeGameOver[] = "\203\121\201\133\203\200\203\111\201\133\203\157\201\133" /* ゲームオーバー */;
+    char sWipeKoopa[] = "\203\116\203\142\203\160" /* クッパ */;
+    char sSoundOneUp[] = "SE_SY_1UP";
+
+    CaptureScreenDirector* getCaptureScreenDirector() NO_INLINE {
+        return SingletonHolder< GameSystem >::get()->mObjHolder->mCaptureScreenDirector;
+    }
+
+    PlayTimerScene* getPlayTimerScene() NO_INLINE {
+        return SingletonHolder< GameSystem >::get()->mSceneController->mPlayTimerScene;
+    }
+
+    void appearInformationMessage(bool hasButtonLayout, bool isCenter) {
+        if (isCenter) {
+            MR::getGameSceneLayoutHolder()->mInformationMessage->setCenter(true);
+        } else {
+            MR::getGameSceneLayoutHolder()->mInformationMessage->setCenter(false);
+        }
+
+        if (hasButtonLayout) {
+            MR::getGameSceneLayoutHolder()->mInformationMessage->appearWithButtonLayout();
+        } else {
+            MR::getGameSceneLayoutHolder()->mInformationMessage->appear();
+        }
+    }
+
+    StarCounter* getStarCounter() NO_INLINE {
+        return MR::getGameSceneLayoutHolder()->mCounterLayoutCtrl->mStarCounter;
+    }
+
+    StarPieceCounter* getStarPieceCounter() NO_INLINE {
+        return MR::getGameSceneLayoutHolder()->mCounterLayoutCtrl->mStarPieceCounter;
+    }
+
+    SystemWipeHolder* getSystemWipeHolder() {
+        return SingletonHolder< GameSystem >::get()->mSystemWipeHolder;
+    }
+
+    BloomEffect* getNormalBloom() {
+        return MR::getSceneObj< BloomEffect >(SceneObj_BloomEffect);
+    }
+
+    CinemaFrame* getCinemaFrame() {
+        return MR::getSceneObj< CinemaFrame >(SceneObj_CinemaFrame);
+    }
+
+    MoviePlayerSimple* getMoviePlayer() {
+        return MR::getSceneObj< MoviePlayerSimple >(SceneObj_MoviePlayerSimple);
+    }
+};  // namespace
+
+void ScreenUtil_FORCE_MATCH_SDATA2() {
+    (void)0.87f;
+    (void)0.844f;
+}
+namespace MR {
+    u32 getViWidth() {
+        return SingletonHolder< GameSystem >::get()->mObjHolder->getRenderModeObj()->viWidth;
+    }
+
+    f32 getSafetyVIScreenWidthRatio() {
+        if (isScreen16Per9()) {
+            return 0.87f;
+        } else {
+            return 0.844f;
+        }
+    }
+
+    s32 getScreenWidth() {
+        return isScreen16Per9() ? 832 : 608;
+    }
+
+    s32 getSafetyFrameWidth() {
+        s32 viWidthMax = static_cast< u16 >(RenderModeObj::getViWidthMax());
+        f32 safetyFrameWidthRatio = viWidthMax * getSafetyVIScreenWidthRatio();
+        s32 screenWidth = getScreenWidth();
+        f32 viWidthRatio = static_cast< f32 >(screenWidth) / static_cast< s32 >(getViWidth());
+
+        return safetyFrameWidthRatio * viWidthRatio + 0.5f;
+    }
+
+    s32 getSafetyFrameLeft() {
+        return (getScreenWidth() - getSafetyFrameWidth()) / 2;
+    }
+
+    s32 getSafetyFrameRight() {
+        return (getScreenWidth() + getSafetyFrameWidth()) / 2;
+    }
+
+    void convertFrameBufferPosToScreenPos(TVec2f* pScreenPos, const TVec2f& rFrameBufferPos) {
+        f32 posRatio = rFrameBufferPos.x / getFrameBufferWidth();
+
+        pScreenPos->set(posRatio * getScreenWidth(), rFrameBufferPos.y);
+    }
+
+    void convertScreenPosToFrameBufferPos(TVec2f* pFrameBufferPos, const TVec2f& rScreenPos) {
+        f32 posRatio = rScreenPos.x / getScreenWidth();
+
+        pFrameBufferPos->set(posRatio * getFrameBufferWidth(), rScreenPos.y);
+    }
+
+    void startToCaptureScreen(const char* pParam1) {
+        ::getCaptureScreenDirector()->requestCaptureTiming(pParam1);
+    }
+
+    void endToCaptureScreen(const char* pParam1) {
+        ::getCaptureScreenDirector()->invalidateCaptureTiming(pParam1);
+    }
+
+    void captureScreenIfAllow(const char* pParam1) {
+        ::getCaptureScreenDirector()->captureIfAllow(pParam1);
+    }
+
+    const ResTIMG* getScreenResTIMG() {
+        return ::getCaptureScreenDirector()->getResTIMG();
+    }
+
+    u8* getScreenTexImage() {
+        return ::getCaptureScreenDirector()->getTexImage();
+    }
+
+    void closeWipeCircle(s32 frame) {
+        SceneWipeHolderFunction::closeWipe(::sWipeCircle, frame);
+    }
+
+    void forceOpenWipeCircle() {
+        SceneWipeHolderFunction::forceOpenWipe(::sWipeCircle);
+    }
+
+    void forceCloseWipeCircle() {
+        SceneWipeHolderFunction::forceCloseWipe(::sWipeCircle);
+    }
+
+    void closeWipeFade(s32 frame) {
+        SceneWipeHolderFunction::closeWipe(::sWipeFade, frame);
+    }
+
+    void forceOpenWipeFade() {
+        SceneWipeHolderFunction::forceOpenWipe(::sWipeFade);
+    }
+
+    void forceCloseWipeFade() {
+        SceneWipeHolderFunction::forceCloseWipe(::sWipeFade);
+    }
+
+    void closeWipeWhiteFade(s32 frame) {
+        SceneWipeHolderFunction::closeWipe(::sWipeWhiteFade, frame);
+    }
+
+    void forceOpenWipeWhiteFade() {
+        SceneWipeHolderFunction::forceOpenWipe(::sWipeWhiteFade);
+    }
+
+    void forceCloseWipeWhiteFade() {
+        SceneWipeHolderFunction::forceCloseWipe(::sWipeWhiteFade);
+    }
+
+    bool isWipeActive() {
+        return SceneWipeHolderFunction::getSceneWipeHolder()->isWipeIn() || SceneWipeHolderFunction::getSceneWipeHolder()->isWipeOut();
+    }
+
+    bool isWipeBlank() {
+        return SceneWipeHolderFunction::getSceneWipeHolder()->isClose();
+    }
+
+    bool isWipeOpen() {
+        return SceneWipeHolderFunction::getSceneWipeHolder()->isOpen();
+    }
+
+    void closeSystemWipeCircle(s32 frame) {
+        ::getSystemWipeHolder()->forceOpen(::sWipeCircle);
+        ::getSystemWipeHolder()->wipe(nullptr, frame);
+    }
+
+    void openSystemWipeFade(s32 frame) {
+        ::getSystemWipeHolder()->forceClose(::sWipeFade);
+        ::getSystemWipeHolder()->wipe(nullptr, frame);
+    }
+
+    void closeSystemWipeFade(s32 frame) {
+        ::getSystemWipeHolder()->forceOpen(::sWipeFade);
+        ::getSystemWipeHolder()->wipe(nullptr, frame);
+    }
+
+    void forceOpenSystemWipeFade() {
+        ::getSystemWipeHolder()->forceOpen(::sWipeFade);
+    }
+
+    void openSystemWipeWhiteFade(s32 frame) {
+        ::getSystemWipeHolder()->forceClose(::sWipeWhiteFade);
+        ::getSystemWipeHolder()->wipe(nullptr, frame);
+    }
+
+    void closeSystemWipeWhiteFade(s32 frame) {
+        ::getSystemWipeHolder()->forceOpen(::sWipeWhiteFade);
+        ::getSystemWipeHolder()->wipe(nullptr, frame);
+    }
+
+    void forceCloseSystemWipeWhiteFade() {
+        ::getSystemWipeHolder()->forceClose(::sWipeWhiteFade);
+    }
+
+    bool isSystemWipeActive() {
+        return ::getSystemWipeHolder()->isWipeIn() || ::getSystemWipeHolder()->isWipeOut();
+    }
+
+    void closeSystemWipeCircleWithCaptureScreen(s32 frame) {
+        closeSystemWipeCircle(frame);
+        ::getSystemWipeHolder()->startGameScreenCapture();
+    }
+
+    void closeSystemWipeFadeWithCaptureScreen(s32 frame) {
+        closeSystemWipeFade(frame);
+        ::getSystemWipeHolder()->startGameScreenCapture();
+    }
+
+    void setWipeCircleCenterPos(const TVec3f& rCenterPos) {
+        ::getSystemWipeHolder()->setWipeRingCenter(rCenterPos);
+    }
+
+    void requestMovementOnImageEffect() {
+        if (isExistSceneObj(SceneObj_ImageEffectSystemHolder)) {
+            getImageEffectSystemHolder()->pauseOff();
+        }
+
+        if (isExistSceneObj(SceneObj_BloomEffect)) {
+            requestMovementOn(::getNormalBloom());
+        }
+
+        if (isExistSceneObj(SceneObj_BloomEffectSimple)) {
+            requestMovementOn(getSceneObj< BloomEffectSimple >(SceneObj_BloomEffectSimple));
+        }
+
+        if (isExistSceneObj(SceneObj_ScreenBlurEffect)) {
+            requestMovementOn(getSceneObj< ScreenBlurEffect >(SceneObj_ScreenBlurEffect));
+        }
+
+        if (isExistSceneObj(SceneObj_DepthOfFieldBlur)) {
+            requestMovementOn(getSceneObj< DepthOfFieldBlur >(SceneObj_DepthOfFieldBlur));
+        }
+    }
+
+    void setImageEffectControlAuto() {
+        getImageEffectDirector()->setAuto();
+    }
+
+    void turnOffDOFInSubjective() {
+        if (isExistImageEffectDirector()) {
+            getImageEffectDirector()->turnOffDOFInSubjective();
+        }
+    }
+
+    void turnOnDOFInSubjective() {
+        if (isExistImageEffectDirector()) {
+            getImageEffectDirector()->turnOnDOFInSubjective();
+        }
+    }
+
+    void turnOnNormalBloom() {
+        getImageEffectDirector()->turnOnNormal();
+    }
+
+    void turnOnDepthOfField(bool param1) {
+        getImageEffectDirector()->turnOnDepthOfField(param1);
+    }
+
+    void turnOffImageEffect() {
+        getImageEffectDirector()->turnOff();
+    }
+
+    void forceOffImageEffect() {
+        getImageEffectDirector()->forceOff();
+    }
+
+    void createNormalBloom() {
+        createSceneObj(SceneObj_BloomEffect);
+    }
+
+    bool isNormalBloomOn() {
+        return isExistSceneObj(SceneObj_BloomEffect) && ::getNormalBloom()->isSomething();
+    }
+
+    bool isNormalBloomForEachModel() {
+        return isExistSceneObj(SceneObj_BloomEffect) && ::getNormalBloom()->isForEachModel();
+    }
+
+    void setNormalBloomIntensity(u8 intensity) {
+        getImageEffectDirector()->setNormalBloomIntensity(intensity);
+    }
+
+    void setNormalBloomThreshold(u8 threshold) {
+        getImageEffectDirector()->setNormalBloomThreshold(threshold);
+    }
+
+    void setNormalBloomBlurIntensity1(u8 intensity1) {
+        getImageEffectDirector()->setNormalBloomBlurIntensity1(intensity1);
+    }
+
+    void setNormalBloomBlurIntensity2(u8 intensity2) {
+        getImageEffectDirector()->setNormalBloomBlurIntensity2(intensity2);
+    }
+
+    void createSimpleBloom() {
+        createSceneObj(SceneObj_BloomEffectSimple);
+    }
+
+    void createScreenBlur() {
+        createSceneObj(SceneObj_ScreenBlurEffect);
+    }
+
+    void createDepthOfFieldBlur() {
+        createSceneObj(SceneObj_DepthOfFieldBlur);
+    }
+
+    void setDepthOfFieldBlurIntensity(f32 intensity) {
+        getImageEffectDirector()->setDepthOfFieldIntensity(intensity);
+    }
+
+    void createCenterScreenBlur() {
+        createSceneObj(SceneObj_CenterScreenBlur);
+    }
+
+    void startCenterScreenBlur(s32 time, f32 offset, u8 alpha, s32 fadeIn, s32 fadeOut) {
+        getSceneObj< CenterScreenBlur >(SceneObj_CenterScreenBlur)->start(time, offset, alpha, fadeIn, fadeOut);
+    }
+
+    void startGlobalTimer() {
+    }
+
+    void resetGlobalTimer() {
+        ::getPlayTimerScene()->stop();
+    }
+
+    bool isGlobalTimerEnd() {
+        return ::getPlayTimerScene()->isEndGlobalTimer();
+    }
+
+    void startGlobalTimerTimeUp() {
+        ::getPlayTimerScene()->startTimeUp();
+    }
+
+    void requestPowerUpHPMeter() {
+        getGameSceneLayoutHolder()->requestPowerUpHPMeter();
+    }
+
+    void requestForceAppearHPMeter() {
+        getGameSceneLayoutHolder()->requestForceAppearHPMeter();
+    }
+
+    void startMissLayout() {
+        getGameSceneLayoutHolder()->startMiss();
+    }
+
+    bool isMissLayoutAnimEnd() {
+        return getGameSceneLayoutHolder()->isMissAnimEnd();
+    }
+
+    void activateDefaultGameLayout() {
+        getGameSceneLayoutHolder()->activateDefaultGameLayout();
+    }
+
+    void deactivateDefaultGameLayout() {
+        getGameSceneLayoutHolder()->deactivateDefaultGameLayout();
+    }
+
+    bool isActiveDefaultGameLayout() {
+        return getGameSceneLayoutHolder()->mIsActiveDefaultGameLayout;
+    }
+
+    void forceAppearDefaultGameLayout() {
+        getGameSceneLayoutHolder()->activateDefaultGameLayout();
+        getGameSceneLayoutHolder()->mCounterLayoutCtrl->forceAppear();
+    }
+
+    void pauseOffLensFlare() {
+        if (!isExistSceneObj(SceneObj_LensFlareDirector)) {
+            return;
+        }
+
+        getSceneObj< LensFlareDirector >(SceneObj_LensFlareDirector)->pauseOff();
+    }
+
+    void tryScreenToFrameCinemaFrame() {
+        ::getCinemaFrame()->tryScreenToFrame();
+    }
+
+    void tryFrameToBlankCinemaFrame() {
+        ::getCinemaFrame()->tryFrameToBlank();
+    }
+
+    void tryBlankToFrameCinemaFrame() {
+        ::getCinemaFrame()->tryBlankToFrame();
+    }
+
+    void tryFrameToScreenCinemaFrame() {
+        ::getCinemaFrame()->tryFrameToScreen();
+    }
+
+    void forceToScreenCinemaFrame() {
+        ::getCinemaFrame()->forceToScreen();
+    }
+
+    void forceToFrameCinemaFrame() {
+        ::getCinemaFrame()->forceToFrame();
+    }
+
+    void forceToBlankCinemaFrame() {
+        ::getCinemaFrame()->forceToBlank();
+    }
+
+    bool isStopCinemaFrame() {
+        return ::getCinemaFrame()->isStop();
+    }
+
+    void appearInformationMessage(const char* pMessageId, bool hasButtonLayout) {
+        getGameSceneLayoutHolder()->mInformationMessage->setMessage(pMessageId);
+        ::appearInformationMessage(hasButtonLayout, false);
+    }
+
+    void appearInformationMessageCenter(const char* pMessageId, bool hasButtonLayout) {
+        getGameSceneLayoutHolder()->mInformationMessage->setMessage(pMessageId);
+        ::appearInformationMessage(hasButtonLayout, true);
+    }
+
+    void appearInformationMessage(const wchar_t* pMessage, bool hasButtonLayout) {
+        getGameSceneLayoutHolder()->mInformationMessage->setMessage(pMessage);
+        ::appearInformationMessage(hasButtonLayout, false);
+    }
+
+    void setInformationMessageReplaceString(const wchar_t* pMessage, s32 param2) {
+        getGameSceneLayoutHolder()->mInformationMessage->setReplaceString(pMessage, param2);
+    }
+
+    void disappearInformationMessage() {
+        getGameSceneLayoutHolder()->mInformationMessage->disappear();
+    }
+
+    bool isDeadInformationMessage() {
+        return isDead(getGameSceneLayoutHolder()->mInformationMessage);
+    }
+
+    void appearYesNoSelector(const char* pRightMessageId, const char* pLeftMessageId, const char* pInformationMessageId) {
+        getGameSceneLayoutHolder()->mYesNoLayout->appear();
+        getGameSceneLayoutHolder()->mYesNoLayout->setSelectMessage(pRightMessageId, pLeftMessageId);
+
+        if (pInformationMessageId == nullptr) {
+            return;
+        }
+
+        getGameSceneLayoutHolder()->mYesNoLayout->setInformationMessage(pInformationMessageId);
+    }
+
+    bool isYesNoSelected() {
+        return getGameSceneLayoutHolder()->mYesNoLayout->mController->isSelected();
+    }
+
+    bool isYesNoSelectedYes() {
+        return getGameSceneLayoutHolder()->mYesNoLayout->mController->isSelectedYes();
+    }
+
+    void setYesNoSelectorSE(const char* pCursorSE, const char* pYesSE, const char* pNoSE) {
+        getGameSceneLayoutHolder()->mYesNoLayout->mController->setSE(pCursorSE, pYesSE, pNoSE);
+    }
+
+    void resetYesNoSelectorSE() {
+        getGameSceneLayoutHolder()->mYesNoLayout->mController->setSE(nullptr, nullptr, nullptr);
+    }
+
+    void startMoviePlayer(const char* pName) {
+        ::getMoviePlayer()->startMovie(pName, false);
+        GameSceneFunction::requestPlayMovieDemo();
+    }
+
+    void stopMoviePlayer() {
+        ::getMoviePlayer()->stopMovie();
+    }
+
+    bool isActiveMoviePlayer() {
+        if (!isExistSceneObj(SceneObj_MoviePlayerSimple)) {
+            return false;
+        }
+
+        return ::getMoviePlayer()->isMovieActive();
+    }
+
+    bool isMoviePlayerPlaying() {
+        if (!isActiveMoviePlayer()) {
+            return false;
+        }
+
+        return ::getMoviePlayer()->isMoviePlaying();
+    }
+
+    s32 getMovieCurrentFrame() {
+        if (!isActiveMoviePlayer()) {
+            return -1;
+        }
+
+        return ::getMoviePlayer()->getCurrentFrame();
+    }
+
+    u32 getMovieTotalFrame() {
+        return ::getMoviePlayer()->getTotalFrame();
+    }
+
+    void setMovieVolume(f32 volume, s32 step) {
+        ::getMoviePlayer()->setVolume(volume, step);
+    }
+
+    void appearStarCounter() {
+        ::getStarCounter()->appear();
+    }
+
+    void disappearStarCounter() {
+        ::getStarCounter()->disappear();
+    }
+
+    void forceSyncStarPieceCounter() {
+        ::getStarPieceCounter()->forceSync();
+    }
+
+    void forceAppearStarPieceCounterForTicoFat() {
+        ::getStarPieceCounter()->forceAppear(true);
+    }
+
+    void disappearStarPieceCounterForTicoFat() {
+        ::getStarPieceCounter()->disappear(true);
+    }
+
+    void createPurpleCoinCounter() {
+        getGameSceneLayoutHolder()->createPurpleCoinCounter();
+    }
+
+    void validatePurpleCoinCounter() {
+        getGameSceneLayoutHolder()->getPurpleCoinCounter()->validate();
+    }
+
+    void requestCounterLayoutAppearanceForTicoEat(bool param1) {
+        getGameSceneLayoutHolder()->mCounterLayoutCtrl->requestedTicoEat(param1);
+    }
+
+    void openWipeCircle(s32 frame) {
+        SceneWipeHolderFunction::openWipe(::sWipeCircle, frame);
+    }
+
+    void openWipeFade(s32 frame) {
+        SceneWipeHolderFunction::openWipe(::sWipeFade, frame);
+    }
+
+    void openWipeWhiteFade(s32 frame) {
+        SceneWipeHolderFunction::openWipe(::sWipeWhiteFade, frame);
+    }
+
+    void startGameOverWipe() {
+        SceneWipeHolderFunction::getSceneWipeHolder()->wipe(::sWipeGameOver, -1);
+    }
+
+    void startDownWipe() {
+        SceneWipeHolderFunction::getSceneWipeHolder()->wipe(::sWipeKoopa, -1);
+    }
+
+    void requestOneUp() {
+        startSystemSE(::sSoundOneUp);
+        getGameSceneLayoutHolder()->requestOneUp(1);
+    }
+};  // namespace MR

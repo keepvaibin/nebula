@@ -1,0 +1,256 @@
+#include "Game/Screen/MiiSelectIcon.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/Map/FileSelectIconID.hpp"
+#include "Game/NPC/MiiFaceIcon.hpp"
+#include "Game/NPC/MiiFaceRecipe.hpp"
+#include "Game/Scene/SceneFunction.hpp"
+#include "Game/Screen/ButtonPaneController.hpp"
+#include "Game/Util/LayoutUtil.hpp"
+#include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/SoundUtil.hpp"
+#include <nw4r/lyt/texMap.h>
+
+void MiiSelectIcon_FORCE_MATCH_SDATA2() {
+    (void)5.0f;
+}
+
+namespace {
+    static const f32 sCharacterTexFrame[] = {
+        0.0f, 4.0f, 3.0f, 2.0f, 1.0f,
+    };
+
+    NEW_NERVE(MiiSelectIconNrvCreate, MiiSelectIcon, Create);
+    NEW_NERVE(MiiSelectIconNrvWait, MiiSelectIcon, Wait);
+    NEW_NERVE(MiiSelectIconNrvSelected, MiiSelectIcon, Selected);
+    NEW_NERVE(MiiSelectIconNrvDisappear, MiiSelectIcon, Disappear);
+    NEW_NERVE(MiiSelectIconNrvInvalid, MiiSelectIcon, Invalid);
+};  // namespace
+
+MiiSelectIcon::MiiSelectIcon(int movementType, int calcAnimType, int drawType, const char* pName)
+    : LayoutActor(pName, true), _20(), _24(), _28(), mIcon(), mMiiTexMap(), mFellowTexMap(), mIconID(new FileSelectIconID()), mIsMiiDummy(),
+      _3D(true) {
+    initLayoutManager("MiiIcon", 1);
+    MR::createAndAddPaneCtrl(this, "MarioIcon", 3);
+    MR::createAndAddPaneCtrl(this, "MiiIcon", 3);
+    MR::invalidateParentAnim(this);
+    createButton();
+    createFaceImageObj();
+    initNerve(GET_NERVE_ANON(MiiSelectIconNrvCreate));
+
+    if (movementType < 0) {
+        movementType = MR::MovementType_Layout;
+    }
+
+    if (calcAnimType < 0) {
+        calcAnimType = MR::CalcAnimType_Layout;
+    }
+
+    if (drawType < 0) {
+        drawType = MR::DrawType_LayoutDecoration;
+    }
+
+    MR::connectToScene(this, movementType, calcAnimType, MR::DrawBufferType_None, drawType);
+}
+
+void MiiSelectIcon::appear(const FileSelectIconID& rIconID) {
+    if (MR::isDead(this)) {
+        appear();
+    }
+
+    mIconID->set(rIconID);
+
+    if (rIconID.isFellow()) {
+        MR::showLayout(this);
+        MR::startAnim(this, "Character", 0);
+        MR::setAnimFrameAndStop(this, ::sCharacterTexFrame[rIconID.getFellowID()], 0);
+        MR::startPaneAnim(this, "MarioIcon", "Character", 1);
+        MR::setPaneAnimFrameAndStop(this, "MarioIcon", ::sCharacterTexFrame[rIconID.getFellowID()], 1);
+
+        _20 = _24;
+
+        MR::hidePane(this, "MiiIcon");
+        MR::showPane(this, "MarioIcon");
+        setNerve(GET_NERVE_ANON(MiiSelectIconNrvWait));
+    } else if (rIconID.isMii()) {
+        MR::hideLayout(this);
+        mIcon->setIndex(rIconID.getMiiIndex());
+
+        nw4r::lyt::TexMap* pTexMap = mMiiTexMap;
+
+        MR::replacePaneTexture(this, "ShaMii", pTexMap, 0);
+        MR::replacePaneTexture(this, "PicMii", pTexMap, 0);
+        MR::replacePaneTexture(this, "PicMiiShine", pTexMap, 0);
+
+        _20 = _28;
+
+        MR::hidePane(this, "MarioIcon");
+        MR::showPane(this, "MiiIcon");
+        setNerve(GET_NERVE_ANON(MiiSelectIconNrvCreate));
+    }
+
+    mIsMiiDummy = false;
+
+    MR::startPaneAnim(this, "MarioIcon", "Hide", 2);
+    MR::setPaneAnimFrameAndStop(this, "MarioIcon", 0.0f, 2);
+    MR::startPaneAnim(this, "MiiIcon", "Hide", 2);
+    MR::setPaneAnimFrameAndStop(this, "MiiIcon", 0.0f, 2);
+}
+
+void MiiSelectIcon::appearMiiDummy() {
+    if (MR::isDead(this)) {
+        appear();
+    }
+
+    MR::showLayout(this);
+    MR::startAnim(this, "Character", 0);
+    MR::setAnimFrameAndStop(this, 5.0f, 0);
+    MR::startPaneAnim(this, "MarioIcon", "Character", 1);
+    MR::setPaneAnimFrameAndStop(this, "MarioIcon", 5.0f, 1);
+    _20 = _24;
+    MR::hidePane(this, "MiiIcon");
+    MR::showPane(this, "MarioIcon");
+    setNerve(GET_NERVE_ANON(MiiSelectIconNrvWait));
+    mIsMiiDummy = true;
+    MR::startPaneAnim(this, "MarioIcon", "Hide", 2);
+    MR::setPaneAnimFrameAndStop(this, "MarioIcon", 0.0f, 2);
+    MR::startPaneAnim(this, "MiiIcon", "Hide", 2);
+    MR::setPaneAnimFrameAndStop(this, "MiiIcon", 0.0f, 2);
+}
+
+void MiiSelectIcon::validate() {
+    if (isNerve(GET_NERVE_ANON(MiiSelectIconNrvSelected)) || isNerve(GET_NERVE_ANON(MiiSelectIconNrvInvalid))) {
+        _24->forceToWait();
+        _28->forceToWait();
+        setNerve(GET_NERVE_ANON(MiiSelectIconNrvWait));
+    }
+
+    _3D = true;
+}
+
+void MiiSelectIcon::invalidate() {
+    if (isNerve(GET_NERVE_ANON(MiiSelectIconNrvSelected))) {
+        setNerve(GET_NERVE_ANON(MiiSelectIconNrvInvalid));
+    }
+
+    _3D = false;
+}
+
+void MiiSelectIcon::prohibit() {
+    invalidate();
+    MR::startPaneAnim(this, "MarioIcon", "Hide", 2);
+    MR::setPaneAnimFrameAndStop(this, "MarioIcon", 1.0f, 2);
+    MR::startPaneAnim(this, "MiiIcon", "Hide", 2);
+    MR::setPaneAnimFrameAndStop(this, "MiiIcon", 1.0f, 2);
+}
+
+bool MiiSelectIcon::isSelected() const {
+    return isNerve(GET_NERVE_ANON(MiiSelectIconNrvSelected));
+}
+
+bool MiiSelectIcon::isMiiDummy() const {
+    return mIsMiiDummy;
+}
+
+void MiiSelectIcon::copyIconID(FileSelectIconID* pIconID) {
+    pIconID->set(*mIconID);
+}
+
+nw4r::lyt::TexMap* MiiSelectIcon::getTexMap() {
+    if (mIconID->isFellow()) {
+        GXTexObj texObj;
+
+        MR::getLytTexMap(this, "PicMario", 0)->Get(&texObj);
+        mFellowTexMap->Set(texObj);
+
+        return mFellowTexMap;
+    }
+
+    return mMiiTexMap;
+}
+
+bool MiiSelectIcon::isPointing() const {
+    return _20->isPointing();
+}
+
+void MiiSelectIcon::exeCreate() {
+    if (MR::isFirstStep(this)) {
+        mIcon->requestToMakeIcon();
+    }
+
+    if (mIcon->mIsCreated) {
+        setNerve(GET_NERVE_ANON(MiiSelectIconNrvWait));
+    }
+}
+
+void MiiSelectIcon::exeWait() {
+    if (MR::isFirstStep(this)) {
+        MR::showLayout(this);
+        _20->appear();
+    }
+
+    if (_3D) {
+        _20->trySelect();
+    }
+
+    if (_20->isPointingTrigger()) {
+        MR::startSystemSE("SE_SY_BUTTON_CURSOR_ON");
+    }
+
+    if (_20->mIsSelected) {
+        setNerve(GET_NERVE_ANON(MiiSelectIconNrvSelected));
+    }
+}
+
+void MiiSelectIcon::exeSelected() {
+}
+
+void MiiSelectIcon::exeDisappear() {
+    if (_20->isHidden()) {
+        if (_20 == _24) {
+            _28->forceToHide();
+        } else {
+            _24->forceToHide();
+        }
+
+        kill();
+    }
+}
+
+void MiiSelectIcon::exeInvalid() {
+}
+
+void MiiSelectIcon::appear() {
+    LayoutActor::appear();
+}
+
+void MiiSelectIcon::control() {
+    _24->update();
+    _28->update();
+}
+
+void MiiSelectIcon::createButton() {
+    _24 = new ButtonPaneController(this, "MarioIcon", "PicMario", 0, true);
+    _24->_22 = false;
+
+    _28 = new ButtonPaneController(this, "MiiIcon", "PicMii", 0, true);
+    _28->_22 = false;
+}
+
+void MiiSelectIcon::createFaceImageObj() {
+    nw4r::lyt::TexMap* pTexMap;
+
+    mIcon =
+        new MiiFaceIcon(128, 128, MiiFaceRecipe(RFLDataSource_Official, 0, RFLResolution_256, RFLExpFlag_Normal | RFLExpFlag_Blink), "Mii\203\101\203\103\203\122\203\223" /* Miiアイコン */);
+    mIcon->initWithoutIter();
+
+    GXTexObj texObj;
+    MR::getLytTexMap(this, "PicMario", 0)->Get(&texObj);
+
+    mFellowTexMap = new nw4r::lyt::TexMap(texObj);
+    mMiiTexMap = MR::createLytTexMap(reinterpret_cast< ResTIMG* >(mIcon->mImageBuffer));
+    pTexMap = mMiiTexMap;
+
+    MR::replacePaneTexture(this, "ShaMii", pTexMap, 0);
+    MR::replacePaneTexture(this, "PicMii", pTexMap, 0);
+    MR::replacePaneTexture(this, "PicMiiShine", pTexMap, 0);
+}

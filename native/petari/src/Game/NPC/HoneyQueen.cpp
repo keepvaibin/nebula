@@ -1,0 +1,221 @@
+#include "Game/NPC/HoneyQueen.hpp"
+#include "Game/LiveActor/LodCtrl.hpp"
+#include "Game/LiveActor/ModelObj.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/Map/CollisionParts.hpp"
+#include "Game/Util/ActorMovementUtil.hpp"
+#include "Game/Util/ActorSensorUtil.hpp"
+#include "Game/Util/ActorShadowUtil.hpp"
+#include "Game/Util/ActorSwitchUtil.hpp"
+#include "Game/Util/DemoUtil.hpp"
+#include "Game/Util/JointUtil.hpp"
+#include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/PlayerUtil.hpp"
+#include "Game/Util/ScreenUtil.hpp"
+#include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/TalkUtil.hpp"
+
+namespace {
+    static const f32 sTalkBalloonOffset = 950.0f;
+};  // namespace
+
+namespace NrvHoneyQueen {
+    NEW_NERVE(HoneyQueenNrvWait, HoneyQueen, Wait);
+    NEW_NERVE(HoneyQueenNrvReady, HoneyQueen, Ready);
+    NEW_NERVE(HoneyQueenNrvDemo, HoneyQueen, Demo);
+    NEW_NERVE(HoneyQueenNrvFade, HoneyQueen, Fade);
+    NEW_NERVE(HoneyQueenNrvTalk, HoneyQueen, Talk);
+    NEW_NERVE(HoneyQueenNrvItch, HoneyQueen, Itch);
+    NEW_NERVE(HoneyQueenNrvEvent, HoneyQueen, Event);
+    NEW_NERVE(HoneyQueenNrvAfter, HoneyQueen, After);
+};  // namespace NrvHoneyQueen
+
+HoneyQueen::HoneyQueen(const char* pName) : NPCActor(pName), mWing() {
+}
+
+void HoneyQueen::init(const JMapInfoIter& rIter) {
+    NPCActorCaps caps = "HoneyQueen";
+    caps.setDefault();
+    caps.mWaitNerve = GET_NERVE(HoneyQueen, HoneyQueenNrvWait);
+    caps.mUseShadow = true;
+    caps.mMessageOffset.x = 0.0f;
+    caps.mMessageOffset.y = ::sTalkBalloonOffset;
+    caps.mMessageOffset.z = 0.0f;
+    caps.mSensorJoint = "Center";
+    caps.mMakeActor = 0;
+    caps.mSensorMax = 2;
+    NPCActor::initialize(rIter, caps);
+
+    mCollisionParts[0] =
+        MR::createCollisionPartsFromLiveActor(this, "Center", getSensor("Body"), MR::getJointMtx(this, "Center"), MR::CollisionScaleType_Unk2);
+    mCollisionParts[1] =
+        MR::createCollisionPartsFromLiveActor(this, "CenterFur", getSensor("Body"), MR::getJointMtx(this, "Center"), MR::CollisionScaleType_Unk2);
+    mCollisionParts[2] =
+        MR::createCollisionPartsFromLiveActor(this, "Face", getSensor("Body"), MR::getJointMtx(this, "Face"), MR::CollisionScaleType_Unk2);
+    mCollisionParts[3] =
+        MR::createCollisionPartsFromLiveActor(this, "LArm01", getSensor("Body"), MR::getJointMtx(this, "LArm01"), MR::CollisionScaleType_Unk2);
+    mCollisionParts[4] =
+        MR::createCollisionPartsFromLiveActor(this, "LArm02", getSensor("Body"), MR::getJointMtx(this, "LArm02"), MR::CollisionScaleType_Unk2);
+    mCollisionParts[5] =
+        MR::createCollisionPartsFromLiveActor(this, "LFoot001", getSensor("Body"), MR::getJointMtx(this, "LFoot001"), MR::CollisionScaleType_Unk2);
+    mCollisionParts[6] =
+        MR::createCollisionPartsFromLiveActor(this, "RArm01", getSensor("Body"), MR::getJointMtx(this, "RArm01"), MR::CollisionScaleType_Unk2);
+    mCollisionParts[7] =
+        MR::createCollisionPartsFromLiveActor(this, "RArm02", getSensor("Body"), MR::getJointMtx(this, "RArm02"), MR::CollisionScaleType_Unk2);
+    mCollisionParts[8] =
+        MR::createCollisionPartsFromLiveActor(this, "RFoot001", getSensor("Body"), MR::getJointMtx(this, "RFoot001"), MR::CollisionScaleType_Unk2);
+    mCollisionParts[9] =
+        MR::createCollisionPartsFromLiveActor(this, "Tactile", getSensor("Body"), MR::getJointMtx(this, "Tactile"), MR::CollisionScaleType_Unk2);
+
+    MR::excludeCalcShadowToActorAll(this, this);
+
+    mWing = MR::createModelObjNpc("\211\110" /* 羽 */, "HoneyQueenWing", MR::getJointMtx(this, "Center"));
+    mWing->makeActorAppeared();
+    MR::startBck(mWing, "HoneyQueenWing");
+    MR::startBtk(mWing, "HoneyQueenWing");
+
+    for (s32 i = 0; i < ARRAY_SIZE(mCollisionParts); i++) {
+        MR::validateCollisionParts(mCollisionParts[i]);
+    }
+
+    if (MR::tryRegisterDemoCast(this, rIter)) {
+        MR::registerDemoActionFunctor(this, MR::Functor(this, &HoneyQueen::fadeOut), "\203\164\203\106\201\133\203\150\203\101\203\105\203\147" /* フェードアウト */);
+        MR::registerDemoActionFunctor(this, MR::Functor(this, &HoneyQueen::fadeIn), "\203\164\203\106\201\133\203\150\203\103\203\223" /* フェードイン */);
+        MR::registerDemoActionFunctor(this, MR::Functor(this, &HoneyQueen::talkEntry), "\211\171\214\251" /* 謁見 */);
+        MR::tryRegisterDemoCast(mWing, rIter);
+
+        _188 = 1;
+    } else {
+        _188 = 0;
+    }
+
+    if (_188 == 1) {
+        setNerve(GET_NERVE(HoneyQueen, HoneyQueenNrvDemo));
+        MR::listenStageSwitchOnA(this, MR::Functor(this, &HoneyQueen::switchFunc));
+        MR::needStageSwitchWriteB(this, rIter);
+    } else {
+        MR::useStageSwitchWriteA(this, rIter);
+    }
+
+    mLodCtrl->setDistanceToLow(10000.0f);
+    mLodCtrl->setDistanceToMiddle(5000.0f);
+    mLodCtrl->setFarClipping(-1.0f);
+    mLodCtrl->setClippingTypeSphereContainsModelBoundingBox(100.0f);
+
+    MR::setDistanceToTalk(mMsgCtrl, 0.0f);
+
+    MR::initFur(this);
+    MR::initFur(mLodCtrl->_10);
+    MR::initFur(mLodCtrl->_14);
+
+    makeActorAppeared();
+}
+
+void HoneyQueen::control() {
+    NPCActor::control();
+    MR::startLevelSound(this, "SE_SM_LV_HONEYQUEEN_FLY");
+}
+
+void HoneyQueen::calcAnim() {
+    LiveActor::calcAnim();
+
+    for (s32 i = 0; i < ARRAY_SIZE(mCollisionParts); i++) {
+        mCollisionParts[i]->setMtx();
+    }
+}
+
+void HoneyQueen::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
+    if (MR::isSensorPlayer(pReceiver)) {
+        if (MR::isSensor(pSender, "TouchJump")) {
+            MR::sendMsgTouchJump(pReceiver, pSender);
+        }
+    }
+}
+
+bool HoneyQueen::receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
+    if (MR::isMsgPlayerSpinAttack(msg)) {
+        return false;
+    }
+
+    return NPCActor::receiveMsgPlayerAttack(msg, pSender, pReceiver);
+}
+
+void HoneyQueen::fadeOut() {
+    MR::setPlayerStateWait();
+    MR::closeWipeFade();
+}
+
+void HoneyQueen::fadeIn() {
+    MR::openWipeFade();
+    setNerve(GET_NERVE(HoneyQueen, HoneyQueenNrvFade));
+}
+
+void HoneyQueen::talkEntry() {
+    MR::tryStartBckAndBtp(this, "Talk", nullptr);
+    MR::tryTalkTimeKeepDemoMarioPuppetable(mMsgCtrl);
+    setNerve(GET_NERVE(HoneyQueen, HoneyQueenNrvTalk));
+}
+
+void HoneyQueen::switchFunc() {
+    setNerve(GET_NERVE(HoneyQueen, HoneyQueenNrvEvent));
+}
+
+void HoneyQueen::exeWait() {
+    if (MR::tryTalkNearPlayerAtEnd(mMsgCtrl)) {
+        setNerve(GET_NERVE(HoneyQueen, HoneyQueenNrvReady));
+    }
+
+    if (MR::isTalkTalking(mMsgCtrl)) {
+        MR::tryStartBckAndBtp(this, "Talk", nullptr);
+    } else {
+        MR::tryStartBckAndBtp(this, "Wait", nullptr);
+    }
+}
+
+void HoneyQueen::exeReady() {
+    if (!MR::isNearPlayer(mMsgCtrl, -1.0f)) {
+        setNerve(GET_NERVE(HoneyQueen, HoneyQueenNrvWait));
+    }
+}
+
+void HoneyQueen::exeDemo() {
+    if (MR::isFirstStep(this)) {
+        MR::tryStartBckAndBtp(this, "Wait", nullptr);
+    }
+}
+
+void HoneyQueen::exeFade() {
+    NPCActor::turnToPlayer();
+}
+
+void HoneyQueen::exeTalk() {
+    if (MR::isFirstStep(this)) {
+        MR::tryStartBckAndBtp(this, "Talk", nullptr);
+    }
+
+    if (MR::isDemoLastStep()) {
+        setNerve(GET_NERVE(HoneyQueen, HoneyQueenNrvItch));
+    }
+}
+
+void HoneyQueen::exeItch() {
+    if (MR::isFirstStep(this)) {
+        MR::tryStartBckAndBtp(this, "EventWait", nullptr);
+    }
+
+    TVec3f vec;
+    _B0.getZDir(vec);
+    MR::faceToVector(&_A0, vec, 0.2f);
+    MR::tryTalkNearPlayer(mMsgCtrl);
+}
+
+void HoneyQueen::exeEvent() {
+    if (MR::tryTalkForceAtEnd(mMsgCtrl)) {
+        MR::onSwitchB(this);
+        setNerve(GET_NERVE(HoneyQueen, HoneyQueenNrvAfter));
+    }
+}
+
+void HoneyQueen::exeAfter() {
+    MR::tryTalkNearPlayer(mMsgCtrl);
+}

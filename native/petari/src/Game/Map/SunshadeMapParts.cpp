@@ -1,0 +1,30 @@
+#include "Game/Map/SunshadeMapParts.hpp"
+#include "Game/Map/SunshadeMapHolder.hpp"
+#include "Game/Util/LiveActorUtil.hpp"
+
+SunshadeMapParts::SunshadeMapParts(const char* pName) : GeneralMapParts(pName) {
+    mCollision = nullptr;
+}
+
+void SunshadeMapParts::calcAnim() {
+    LiveActor::calcAnim();
+
+    if (mCollision != nullptr) {
+        MR::setCollisionMtx(this, mCollision);
+    }
+}
+
+namespace MR {
+    NameObj* createSunshadeMapParts(const char* pName) {
+        return new SunshadeMapParts(pName);
+    }
+};  // namespace MR
+
+SunshadeMapParts::~SunshadeMapParts() {
+}
+
+void SunshadeMapParts::init(const JMapInfoIter& rIter) {
+    GeneralMapParts::init(rIter);
+    MR::createSunshadeMapHolder();
+    mCollision = MR::tryCreateCollisionSunshade(this, getSensor("body"));
+}

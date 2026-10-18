@@ -1,0 +1,16 @@
+#pragma once
+
+#include "Game/LiveActor/LiveActor.hpp"
+
+class MapPartsAppearController;
+
+class MercatorFixParts : public LiveActor {
+public:
+    MercatorFixParts(const char*);
+
+    virtual ~MercatorFixParts();
+    virtual void init(const JMapInfoIter&);
+    virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
+
+    /* 0x8C */ MapPartsAppearController* mAppearController;
+};

@@ -1,0 +1,130 @@
+#include "Game/Boss/DinoPackunStateFire.hpp"
+#include "Game/Boss/DinoPackun.hpp"
+#include "Game/Boss/DinoPackunBall.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/LiveActor/PartsModel.hpp"
+#include "Game/Util/EffectUtil.hpp"
+#include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/NerveUtil.hpp"
+#include "Game/Util/SoundUtil.hpp"
+
+namespace NrvDinoPackunStateFire {
+    NEW_NERVE(DinoPackunStateFireNrvNormal, DinoPackunStateFire, Normal);
+    NEW_NERVE(DinoPackunStateFireNrvFireSign, DinoPackunStateFire, FireSign);
+    NEW_NERVE(DinoPackunStateFireNrvFire, DinoPackunStateFire, Fire);
+    NEW_NERVE(DinoPackunStateFireNrvCool, DinoPackunStateFire, Cool);
+};  // namespace NrvDinoPackunStateFire
+
+DinoPackunStateFire::DinoPackunStateFire(DinoPackun* pBoss) : ActorStateBase< DinoPackun >("\203\146\203\102\203\155\203\160\203\142\203\116\203\223\202\314\211\212\217\363\221\324\212\307\227\235" /* ディノパックンの炎状態管理 */, pBoss) {
+}
+
+void DinoPackunStateFire::init() {
+    initNerve(GET_NERVE(DinoPackunStateFire, DinoPackunStateFireNrvNormal));
+    appear();
+}
+
+void DinoPackunStateFire::appear() {
+    mIsDead = false;
+    setNerve(GET_NERVE(DinoPackunStateFire, DinoPackunStateFireNrvNormal));
+}
+
+void DinoPackunStateFire::exeNormal() {
+    if (MR::isFirstStep(this)) {
+        MR::startBrk(getHost(), "Normal");
+        MR::startBrk(getHost()->getBallModel(), "Normal");
+        getHost()->mBall->setDamageNone();
+    }
+}
+
+void DinoPackunStateFire::exeFireSign() {
+    if (MR::isFirstStep(this)) {
+        MR::emitEffect(getHost()->getBallModel(), "TailFire");
+        getHost()->mBall->setDamageNone();
+    }
+}
+
+void DinoPackunStateFire::exeCool() {
+    if (MR::isFirstStep(this)) {
+        MR::startBrk(getHost(), "Cool");
+        MR::startBrk(getHost()->getBallModel(), "Cool");
+        MR::deleteEffect(getHost(), "HeadFire");
+        MR::deleteEffect(getHost(), "BodyFire");
+        MR::deleteEffect(getHost()->getBallModel(), "TailFire");
+        MR::emitEffect(getHost()->getBallModel(), "TailFireMisFire");
+        getHost()->mBall->setDamageNone();
+    }
+
+    if (MR::isBrkStopped(getHost())) {
+        setNerve(GET_NERVE(DinoPackunStateFire, DinoPackunStateFireNrvNormal));
+    }
+}
+
+void DinoPackunStateFire::requestFire() {
+    if (!isFire()) {
+        setFire();
+        setNerve(GET_NERVE(DinoPackunStateFire, DinoPackunStateFireNrvFire));
+    }
+}
+
+void DinoPackunStateFire::requestFireDirect() {
+    setFireDirect();
+    setNerve(GET_NERVE(DinoPackunStateFire, DinoPackunStateFireNrvFire));
+}
+
+void DinoPackunStateFire::requestFireSign() {
+    if (isEnableFire()) {
+        setNerve(GET_NERVE(DinoPackunStateFire, DinoPackunStateFireNrvFireSign));
+    }
+}
+
+void DinoPackunStateFire::requestCool() {
+    if (isEnableCool()) {
+        MR::startSound(getHost()->getBallModel(), "SE_BM_D_PAKKUN_TAIL_FIRE_OFF");
+        setNerve(GET_NERVE(DinoPackunStateFire, DinoPackunStateFireNrvCool));
+    }
+}
+
+void DinoPackunStateFire::setFire() {
+    MR::emitEffect(getHost()->getBallModel(), "TailFire");
+    MR::emitEffect(getHost(), "HeadFire");
+    MR::emitEffect(getHost(), "BodyFire");
+    MR::startBrk(getHost(), "Awake");
+    MR::startBrk(getHost()->getBallModel(), "Heat");
+    MR::startSound(getHost()->getBallModel(), "SE_BM_D_PAKKUN_TAIL_FIRE_ON");
+    getHost()->mBall->setDamageFire();
+}
+
+void DinoPackunStateFire::setFireDirect() {
+    setFire();
+    MR::setBrkFrameEndAndStop(getHost());
+    MR::setBrkFrameEndAndStop(getHost()->getBallModel());
+}
+
+bool DinoPackunStateFire::isFire() const {
+    return isNerve(GET_NERVE(DinoPackunStateFire, DinoPackunStateFireNrvFire));
+}
+
+bool DinoPackunStateFire::isEnableFire() const {
+    if (isNerve(GET_NERVE(DinoPackunStateFire, DinoPackunStateFireNrvNormal)) ||
+        isNerve(GET_NERVE(DinoPackunStateFire, DinoPackunStateFireNrvCool))) {
+        return true;
+    }
+
+    return false;
+}
+
+bool DinoPackunStateFire::isEnableCool() const {
+    if (isNerve(GET_NERVE(DinoPackunStateFire, DinoPackunStateFireNrvFireSign)) ||
+        isNerve(GET_NERVE(DinoPackunStateFire, DinoPackunStateFireNrvFire))) {
+        return true;
+    }
+
+    return false;
+}
+
+void DinoPackunStateFire::exeFire() {
+    return;
+}
+
+DinoPackunStateFire::~DinoPackunStateFire() {
+}

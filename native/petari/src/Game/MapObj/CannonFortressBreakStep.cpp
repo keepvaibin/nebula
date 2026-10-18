@@ -1,0 +1,78 @@
+#include "Game/MapObj/CannonFortressBreakStep.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/MapObj/MapObjActorInitInfo.hpp"
+#include "Game/Util.hpp"
+
+namespace {
+    static const f32 sFallSpeed = 15.0f;
+    static const s32 sStepForFall = 350;
+};  // namespace
+
+namespace NrvCannonFortressBreakStep {
+    NEW_NERVE(CannonFortressBreakStepNrvWait, CannonFortressBreakStep, Wait);
+    NEW_NERVE(CannonFortressBreakStepNrvFallStart, CannonFortressBreakStep, FallStart);
+    NEW_NERVE(CannonFortressBreakStepNrvFall, CannonFortressBreakStep, Fall);
+    NEW_NERVE(CannonFortressBreakStepNrvBreak, CannonFortressBreakStep, Break);
+};  // namespace NrvCannonFortressBreakStep
+
+CannonFortressBreakStep::CannonFortressBreakStep(const char* pName) : MapObjActor(pName) {
+}
+
+void CannonFortressBreakStep::init(const JMapInfoIter& rIter) {
+    MapObjActor::init(rIter);
+    MapObjActorInitInfo info;
+    info.setupHioNode("\222\156\214\140\203\111\203\165\203\127\203\106" /* 地形オブジェ */);
+    info.setupDefaultPos();
+    info.setupConnectToScene();
+    info.setupRotator();
+    info.setupEffect(nullptr);
+    info.setupSound(6);
+    info.setupNerve(GET_NERVE(CannonFortressBreakStep, CannonFortressBreakStepNrvWait));
+    initialize(rIter, info);
+    MapObjActorUtil::startAllMapPartsFunctions(this);
+}
+
+void CannonFortressBreakStep::exeWait() {
+    if (!MR::isEqualString("CannonFortressBreakStep", mObjectName)) {
+        MR::startLevelSound(this, "SE_OJ_LV_CNFORT_BKSTEP_ROT");
+    }
+}
+
+void CannonFortressBreakStep::exeFallStart() {
+    if (MR::isFirstStep(this)) {
+        MR::startSound(this, "SE_OJ_CNFORT_BKSTEP_FALL_ST");
+    }
+
+    setNerve(GET_NERVE(CannonFortressBreakStep, CannonFortressBreakStepNrvFall));
+}
+
+void CannonFortressBreakStep::exeFall() {
+    TVec3f upVec;
+    MR::calcUpVec(&upVec, this);
+    mVelocity.scale(-::sFallSpeed, upVec);
+
+    MR::startLevelSound(this, "SE_OJ_LV_CNFORT_BKSTEP_FALL");
+
+    if (MR::isStep(this, ::sStepForFall)) {
+        setNerve(GET_NERVE(CannonFortressBreakStep, CannonFortressBreakStepNrvBreak));
+    }
+}
+
+void CannonFortressBreakStep::exeBreak() {
+    if (MR::isFirstStep(this)) {
+        MR::startSound(this, "SE_OJ_CNFORT_BKSTEP_FALL_ED");
+    }
+
+    kill();
+}
+
+void CannonFortressBreakStep::startFall() {
+    setNerve(GET_NERVE(CannonFortressBreakStep, CannonFortressBreakStepNrvFallStart));
+}
+
+void CannonFortressBreakStep::initCaseUseSwitchB(const MapObjActorInitInfo& rInfo) {
+    MR::listenStageSwitchOnB(this, MR::Functor(this, &CannonFortressBreakStep::startFall));
+}
+
+void CannonFortressBreakStep::initCaseNoUseSwitchB(const MapObjActorInitInfo&) {
+}

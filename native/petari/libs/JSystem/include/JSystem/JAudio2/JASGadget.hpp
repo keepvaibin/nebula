@@ -1,0 +1,78 @@
+#pragma once
+
+#include <mem.h>
+#include <revolution/types.h>
+
+template < typename T >
+class JASPtrListAdaptor {
+public:
+    // TEMP NO_INLINE
+    JASPtrListAdaptor(T* pData) NO_INLINE : mNext(), mData(pData) {};
+
+    ~JASPtrListAdaptor() {};
+
+    JASPtrListAdaptor< T >* getNext() const {
+        return mNext;
+    }
+
+    T* get() const {
+        return mData;
+    }
+
+    /* 0x0 */ JASPtrListAdaptor< T >* mNext;
+    /* 0x4 */ T* mData;
+};
+
+template < typename T >
+class JASPtrList {
+public:
+    JASPtrList() : mList() {};
+
+    JASPtrList(JASPtrListAdaptor< T >* pAdapter) {
+        mList = pAdapter;
+    }
+
+    bool isEmpty() const {
+        return mList == nullptr;
+    }
+
+    ~JASPtrList() NO_INLINE {};
+
+    JASPtrListAdaptor< T >* begin() const {
+        return mList;
+    }
+
+    /* 0x0 */ JASPtrListAdaptor< T >* mList;
+};
+
+template < typename T >
+class JASPtrTable {
+public:
+    JASPtrTable(T** ptrTable, u32 len) : mPtrTable(ptrTable), mLen(len) {
+        memset(mPtrTable, 0, len * sizeof(T*));
+    }
+
+    T* get(u32 idx) const {
+        if (idx >= mLen) {
+            return nullptr;
+        }
+
+        return mPtrTable[idx];
+    }
+
+    void set(u32 idx, T* value) {
+        mPtrTable[idx] = value;
+    }
+
+    /* 0x0 */ T** mPtrTable;
+    /* 0x4 */ u32 mLen;
+};
+
+template < typename T, u32 LEN >
+class JASPtrArray : public JASPtrTable< T > {
+public:
+    JASPtrArray() : JASPtrTable< T >(mPtrArray, LEN) {
+    }
+
+    /* 0x8 */ T* mPtrArray[LEN];
+};

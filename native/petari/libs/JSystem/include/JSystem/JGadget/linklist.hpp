@@ -1,0 +1,281 @@
+#pragma once
+
+#include <cstddef>
+#include <revolution/types.h>
+
+#include "JSystem/JGadget/predicate.hpp"
+
+#include "Inline.hpp"
+
+#ifndef JGADGET_LINKLIST_NOINLINE
+#define JGADGET_LINKLIST_NOINLINE
+#endif
+
+#define JGADGET_LINK_LIST(type, node) JGadget::TLinkList< type, -offsetof(type, node) >
+
+namespace std {
+
+    struct input_iterator_tag {};
+    struct forward_iterator_tag : public input_iterator_tag {};
+    struct bidirectional_iterator_tag : public forward_iterator_tag {};
+
+    template < typename Category, typename T, typename Distance = s32, typename Pointer = T*, typename Reference = T& >
+    class iterator {
+    public:
+        typedef Category iterator_category;
+        typedef T value_type;
+        typedef Distance difference_type;
+        typedef Pointer pointer;
+        typedef Reference reference;
+        iterator& operator=(const iterator& rOther) NO_INLINE {
+            return *this;
+        }
+    };
+
+}  // namespace std
+
+namespace JGadget {
+
+    template < typename Category, typename T, typename Distance = s32, typename Pointer = T*, typename Reference = T& >
+    class TIterator : std::iterator< Category, T, Distance, Pointer, Reference > {
+    public:
+        const TIterator& operator=(const TIterator& rOther) NO_INLINE {
+            std::iterator< Category, T, Distance, Pointer, Reference >::operator=(rOther);
+            return *this;
+        }
+    };
+
+    class TLinkListNode {
+    public:
+        TLinkListNode() : mPrev(), mNext() {
+        }
+
+        TLinkListNode* getNext() const {
+            return mNext;
+        }
+
+        TLinkListNode* getPrev() const {
+            return mPrev;
+        }
+
+        TLinkListNode* mNext;
+        TLinkListNode* mPrev;
+    };
+
+    class TNodeLinkList {
+    public:
+        struct iterator {
+            iterator() {};
+            explicit iterator(TLinkListNode* node) : curr(node) {};
+            iterator& operator=(const iterator& other) {
+                curr = other.curr;
+                return *this;
+            }
+
+            friend bool operator==(iterator a, iterator b) {
+                return a.curr == b.curr;
+            }
+
+            friend bool operator!=(iterator a, iterator b) {
+                return !(a == b);
+            }
+
+            iterator& operator++() {
+                curr = curr->getNext();
+                return *this;
+            }
+
+            TLinkListNode* operator->() const {
+                return curr;
+            }
+
+            TLinkListNode& operator*() const {
+                return *curr;
+            }
+
+            iterator operator--(int) {
+                const iterator old(*this);
+                (void)--*this;
+                return old;
+            }
+
+            iterator& operator--() {
+                curr = curr->getPrev();
+                return *this;
+            }
+
+            TLinkListNode* curr;
+        };
+
+        TNodeLinkList() : mEnd() {
+            Initialize_();
+        }
+
+        ~TNodeLinkList();
+
+        void Initialize_() JGADGET_LINKLIST_NOINLINE {
+            mLen = 0;
+            mEnd.mNext = &mEnd;
+            mEnd.mPrev = &mEnd;
+        }
+
+        iterator begin() {
+            return iterator(mEnd.getNext());
+        }
+
+        iterator end() {
+            return iterator(&mEnd);
+        }
+
+        iterator Insert(iterator, TLinkListNode*);
+        iterator Erase(TLinkListNode*);
+        void Remove(TLinkListNode*);
+        void splice(iterator, TNodeLinkList&, iterator);
+
+        template < typename T >
+        inline void Remove_if(T p, TNodeLinkList& removed) {
+            iterator it = begin();
+            iterator dest = removed.end();
+            iterator stop = end();
+
+            while (it != stop) {
+                iterator prev = it;
+
+                if (p(*it)) {
+                    ++it;
+                    removed.splice(dest, *this, prev);
+                } else {
+                    ++it;
+                }
+            }
+        }
+
+        u32 size() const {
+            return mLen;
+        }
+
+        template < typename T >
+        inline void remove_if(T p) {
+            TNodeLinkList removed;
+            Remove_if(p, removed);
+        }
+
+        u32 mLen;
+        TLinkListNode mEnd;
+    };
+
+#ifdef TARGET_PC
+    // NODE_OFFSET for a list named inside its element's own class: the offset (minus the node's offset in T) is then
+    // T::nebulaListNodeOffset(), taken where the list's functions are compiled and T is complete.
+    enum { NEBULA_NODE_OFFSET_OF_T = -0x7FFFFFFF - 1 };
+#endif
+
+    template < typename T, int NODE_OFFSET >
+    class TLinkList : public TNodeLinkList {
+    public:
+#ifdef TARGET_PC
+        static int nodeOffset() {
+            if constexpr (NODE_OFFSET == NEBULA_NODE_OFFSET_OF_T) {
+                return T::nebulaListNodeOffset();
+            } else {
+                return NODE_OFFSET;
+            }
+        }
+#else
+        static int nodeOffset() {
+            return NODE_OFFSET;
+        }
+#endif
+
+        struct iterator : public TIterator< std::bidirectional_iterator_tag, T >, public TNodeLinkList::iterator {
+            iterator() {};
+
+            iterator(TLinkListNode* iter) : TNodeLinkList::iterator(iter) {};
+
+            explicit iterator(TNodeLinkList::iterator iter) : TNodeLinkList::iterator(iter) {};
+
+            const iterator& operator=(const iterator& rOther) {
+                TIterator< std::bidirectional_iterator_tag, T >::operator=(rOther);
+                curr = rOther.curr;
+                return *this;
+            }
+
+            iterator& operator++() {
+                TNodeLinkList::iterator::operator++();
+                return *this;
+            }
+
+            friend bool operator==(iterator a, iterator b) {
+                return (TNodeLinkList::iterator&)a == (TNodeLinkList::iterator&)b;
+            }
+
+            friend bool operator!=(iterator a, iterator b) {
+                return !(a == b);
+            }
+
+            T* operator->() const {
+                return TLinkList< T, NODE_OFFSET >::Element_toValue(TNodeLinkList::iterator::operator->());
+            }
+
+            T* operator*() const {
+                return operator->();
+            }
+
+            iterator& operator--() {
+                TNodeLinkList::iterator::operator--();
+                return *this;
+            }
+
+            iterator operator--(int) {
+                const iterator old(*this);
+                --*this;
+                return old;
+            }
+        };
+
+        TLinkList() : TNodeLinkList() {
+        }
+
+        iterator begin() {
+            return iterator(TNodeLinkList::begin());
+        }
+
+        iterator end() NO_INLINE {
+            return iterator(TNodeLinkList::end());
+        }
+
+        void Push_back(T* element) NO_INLINE {
+            Insert(end(), element);
+        }
+
+        void Push_front(T* element) {
+            Insert(begin(), element);
+        }
+
+        iterator Insert(iterator pos, T* element) {
+            return iterator(TNodeLinkList::Insert((TNodeLinkList::iterator&)pos, Element_toNode(element)));
+        }
+
+        static TLinkListNode* Element_toNode(T* element) {
+            return (TLinkListNode*)((u8*)element - nodeOffset());
+        }
+
+        static T* Element_toValue(TLinkListNode* element) {
+            return (T*)((u8*)element + nodeOffset());
+        }
+
+        T& front() {
+            return *begin();
+        }
+
+        T& back() {
+            return *--end();
+        }
+
+        void Remove(T* element) {
+            TNodeLinkList::Remove(Element_toNode(element));
+        }
+    };
+}  // namespace JGadget
+
+#undef JGADGET_LINKLIST_NOINLINE

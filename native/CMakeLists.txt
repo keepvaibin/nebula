@@ -8,7 +8,7 @@ if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_FRONTEND_VAR
     message(FATAL_ERROR "The game module is built with clang's GNU driver (clang++, not clang-cl).")
 endif()
 
-set(NEBULA_PETARI_DIR "" CACHE PATH "Petari checkout on the nebula branch")
+set(NEBULA_PETARI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/petari" CACHE PATH "The game core: Nebula's Petari fork (native/petari)")
 if(NOT EXISTS "${NEBULA_PETARI_DIR}/src/Game/System/GameSystem.cpp")
     message(FATAL_ERROR "NEBULA_PETARI_DIR must point at a Petari checkout (src/Game not found in '${NEBULA_PETARI_DIR}')")
 endif()
@@ -88,6 +88,8 @@ target_compile_options(smg_game PRIVATE
     -Werror=implicit-function-declaration -Werror=implicit-int -Werror=int-conversion
     -Werror=incompatible-function-pointer-types -Werror=return-stack-address -Werror=array-bounds
     "SHELL:-include nebula_prelude.h"
+    # Source paths in the module (assertion messages) relative to the tree, not the build machine.
+    "-ffile-prefix-map=${petari}=petari" "-ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=native"
     $<$<COMPILE_LANGUAGE:CXX>:-nostdinc++ -fno-rtti -fno-exceptions -fno-sized-deallocation -fno-aligned-allocation
         -fno-threadsafe-statics>
     -Wno-register -Wno-c++11-narrowing)

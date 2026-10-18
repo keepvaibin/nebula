@@ -1,0 +1,320 @@
+#include "Game/NPC/TeresaRacer.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/Map/RaceRail.hpp"
+#include "Game/MapObj/GCapture.hpp"
+#include "Game/NPC/TalkMessageFunc.hpp"
+#include "Game/Util/ActorCameraUtil.hpp"
+#include "Game/Util/ActorMovementUtil.hpp"
+#include "Game/Util/CameraUtil.hpp"
+#include "Game/Util/EventUtil.hpp"
+#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/MathUtil.hpp"
+#include "Game/Util/MtxUtil.hpp"
+#include "Game/Util/NPCUtil.hpp"
+#include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/PlayerUtil.hpp"
+#include "Game/Util/RailUtil.hpp"
+#include "Game/Util/SoundUtil.hpp"
+
+namespace {
+    static const f32 sSpeed = 20.0f;
+    static const f32 sAccele = 0.1f;
+    static const f32 sCameraDirScale = 0.4f;
+    static const s32 sBgmChangeStep = 480;
+    static const s32 sNearBgm_Fadetime = 90;
+    static const s32 sFarBgm_Fadetime = 150;
+    static const f32 sNearBgmDist = 3000.0f;
+    static const f32 sNearGoalDist = 500.0f;
+    static const f32 sRasterParamMax = 2500.0f;
+    static const s32 sRasterParamX = 300;
+    static const s32 sRasterParamTime = 16;
+    static const s32 sRasterParamY = 1000;
+};  // namespace
+
+namespace NrvTeresaRacer {
+    NEW_NERVE(TeresaRacerNrvWait, TeresaRacer, Wait);
+    NEW_NERVE(TeresaRacerNrvPre, TeresaRacer, Pre);
+    NEW_NERVE(TeresaRacerNrvReady, TeresaRacer, Ready);
+    NEW_NERVE(TeresaRacerNrvMove, TeresaRacer, Move);
+    NEW_NERVE(TeresaRacerNrvGoal, TeresaRacer, Goal);
+    NEW_NERVE(TeresaRacerNrvPost, TeresaRacer, Post);
+    NEW_NERVE(TeresaRacerNrvTalk, TeresaRacer, Talk);
+    NEW_NERVE(TeresaRacerNrvTakeOutStar, TeresaRacer, TakeOutStar);
+};  // namespace NrvTeresaRacer
+
+TeresaRacer::TeresaRacer(const char* pName) : NPCActor(pName), mTakeOutStar(), mCameraInfo(), mIsGoal(), mBgmState() {
+}
+
+void TeresaRacer::init(const JMapInfoIter& rIter) {
+    NPCActorCaps caps("TeresaRacer");
+    caps.setDefault();
+    caps.setIndirect();
+    caps.mLodCtrl = false;
+    caps.mUseShadow = true;
+    caps.mSensorSize = 220.0f;
+    caps.mSensorOffset.x = 0.0f;
+    caps.mSensorOffset.y = 25.0f;
+    caps.mSensorOffset.z = 40.0f;
+    caps.mWaitNerve = GET_NERVE(TeresaRacer, TeresaRacerNrvWait);
+
+    initialize(rIter, caps);
+
+    MR::getJMapInfoArg0WithInit(rIter, &mRacerId);
+    if (mRacerId == 0 && MR::isPlayerLuigi()) {
+        makeActorDead();
+    } else if (mRacerId == 1 && !MR::isPlayerLuigi()) {
+        makeActorDead();
+    } else {
+        MR::declarePowerStar(this);
+
+        MR::registerBranchFunc(getMsgCtrl(), TalkMessageFunc(this, &TeresaRacer::branchFunc));
+        MR::registerAnimeFunc(getMsgCtrl(), TalkMessageFunc(this, &TeresaRacer::animeFunc));
+        MR::registerEventFunc(getMsgCtrl(), TalkMessageFunc(this, &TeresaRacer::eventFunc));
+
+        MR::setDistanceToTalk(getMsgCtrl(), 500.0f);
+        RaceManagerFunction::entryRacerOthers(this);
+        MR::initMultiActorCamera(this, rIter, &mCameraInfo, "\211\357\230\142" /* 会話 */);  // conversation
+
+        mParam.setMoveAction("WaitOpen", "WaitOpen");
+        mParam.setTalkAction("WaitOpenTalk", "WaitOpenTalk");
+        setTalkAction("Chase");
+        mParam._8 = 1.5f;
+        _10C = ::sSpeed;
+        _110 = ::sAccele;
+        _114 = 0.05f;
+        mParam._4 = 3000.0f;
+
+        mTakeOutStar = new TakeOutStar(this, "TakeOutStarTeresaRacer", "TakeOutStarTeresaRacer", GET_NERVE(TeresaRacer, TeresaRacerNrvTakeOutStar));
+    }
+}
+
+void TeresaRacer::control() {
+    if (_D8) {
+        MR::startSound(this, "SE_SM_TERERACER_TRAMPLE");
+    }
+    NPCActor::control();
+}
+
+bool TeresaRacer::branchFunc(u32 state) {
+    return RaceManagerFunction::getRaceRank() == 1;
+}
+
+bool TeresaRacer::animeFunc(u32 anime) {
+    if (!isNerve(GET_NERVE(TeresaRacer, TeresaRacerNrvReady))) {
+        pushNerve(GET_NERVE(TeresaRacer, TeresaRacerNrvReady));
+    }
+
+    if (MR::isBckOneTimeAndStopped(this)) {
+        popNerve();
+        return true;
+    }
+
+    switch (anime) {
+    case 0:
+        MR::tryStartAction(this, "Close");
+
+        mParam.setTalkAction("CloseTalk", "CloseTalk");
+        mParam.setMoveAction("CloseTalk", "CloseTalk");
+        break;
+    case 1:
+        mParam.setMoveAction("Defeat", "Defeat");
+        mParam.setTalkAction("Defeat", "Defeat");
+        popNerve();
+        return true;
+    case 2:
+        MR::tryStartAction(this, "Open");
+        mParam.setTalkAction("WaitOpenTalk", "WaitOpenTalk");
+        mParam.setMoveAction("WaitOpen", "WaitOpen");
+        break;
+    case 3:
+        MR::tryStartAction(this, "Open");
+        mParam.setTalkAction("WaitOpenTalk", "WaitOpenTalk");
+        mParam.setMoveAction("WaitOpen", "WaitOpen");
+        break;
+    default:
+        break;
+    }
+
+    return false;
+}
+
+bool TeresaRacer::eventFunc(u32 state) {
+    return mTakeOutStar->takeOut();
+}
+
+void TeresaRacer::exeWait() {
+    if (MR::tryTalkNearPlayerAndStartTalkAction(this)) {
+        if (mRacerId == -1) {
+            MR::startMultiActorCameraTargetSelf(this, mCameraInfo, "\211\357\230\142" /* 会話 */);
+        }
+        setNerve(GET_NERVE(TeresaRacer, TeresaRacerNrvPre));
+    }
+}
+
+void TeresaRacer::exePre() {
+    if (MR::isFirstStep(this)) {
+        MR::resetGCapture();
+    }
+
+    if (!MR::isActionContinuous(this) && MR::tryTalkNearPlayerAtEndAndStartTalkAction(this)) {
+        if (MR::tryTalkSelectLeft(getMsgCtrl())) {
+            RaceManagerFunction::startRaceWithWipe();
+            setNerve(GET_NERVE(TeresaRacer, TeresaRacerNrvReady));
+        } else {
+            if (mRacerId == -1) {
+                MR::endMultiActorCamera(this, mCameraInfo, "\211\357\230\142" /* 会話 */, false);
+            }
+            setNerve(GET_NERVE(TeresaRacer, TeresaRacerNrvWait));
+        }
+    }
+}
+
+void TeresaRacer::exeReady() {
+}
+
+void TeresaRacer::exePost() {
+    if (!MR::isActionContinuous(this) && MR::tryTalkForceAtEndAndStartTalkAction(this)) {
+        MR::endMultiActorCamera(this, mCameraInfo, "\211\357\230\142" /* 会話 */, true);
+        if (RaceManagerFunction::getRaceRank() == 1) {
+            setNerve(GET_NERVE(TeresaRacer, TeresaRacerNrvTalk));
+        } else {
+            MR::forceKillPlayerByGroundRace();
+            setNerve(GET_NERVE(TeresaRacer, TeresaRacerNrvReady));
+        }
+    }
+}
+
+void TeresaRacer::exeMove() {
+    if (MR::isRailReachedNearGoal(this, ::sNearGoalDist) || !MR::isRailGoingToEnd(this)) {
+        setNerve(GET_NERVE(TeresaRacer, TeresaRacerNrvGoal));
+    } else {
+        MR::getCurrentRailPointArg0NoInit(this, &_10C);  // speed
+        TVec3f up;
+        MR::extractMtxYDir(getBaseMtx(), &up);
+        MR::adjustmentRailCoordSpeed(this, _10C, _110);
+        MR::moveRailRider(this);
+        if (mRacerId == -1) {
+            MR::decidePose(this, up, MR::getRailDirection(this), MR::getRailPos(this), 1.0f, 0.05f, 0.1f);
+        } else {
+            TVec3f dir = MR::getRailDirection(this) + -MR::getCamZdir() * ::sCameraDirScale;
+
+            if (!MR::normalizeOrZero(&dir)) {
+                MR::decidePose(this, up, dir, MR::getRailPos(this), 1.0f, 0.05f, 0.1f);
+            }
+        }
+    }
+
+    if (mRacerId != -1 && MR::calcDistanceToPlayer(this) < ::sRasterParamMax) {
+        MR::setRasterScroll(::sRasterParamTime, ::sRasterParamX, ::sRasterParamY);
+        MR::startAtmosphereLevelSE("SE_AT_LV_DEATH_PROM_RASTER");
+    }
+    changeBgmState();
+}
+
+void TeresaRacer::exeGoal() {
+    if (MR::isFirstStep(this)) {
+        mParam._0 = true;
+        _10C = 0.0f;
+        mParam._1 = true;
+    }
+
+    if (MR::getRailCoordSpeed(this) < 1.0f) {
+        MR::tryStartMoveTurnAction(this);
+    } else {
+        MR::tryStartTurnAction(this);
+    }
+
+    if (mRacerId != -1 && MR::calcDistanceToPlayer(this) < ::sRasterParamMax) {
+        MR::setRasterScroll(::sRasterParamTime, ::sRasterParamX, ::sRasterParamY);
+        MR::startAtmosphereLevelSE("SE_AT_LV_DEATH_PROM_RASTER");
+    }
+    changeBgmState();
+}
+
+void TeresaRacer::exeTalk() {
+    MR::tryTalkNearPlayerAndStartTalkAction(this);
+}
+
+void TeresaRacer::exeTakeOutStar() {
+}
+
+void TeresaRacer::initRacer() {
+    AbstractRacer::initRacer();
+}
+
+void TeresaRacer::prepRacer(const RaceManager* pRaceManager) {
+    MR::invalidateClipping(this);
+    MR::moveCoordToStartPos(this);
+    MR::setRailCoordSpeed(this, 0.0f);
+    MR::followRailPose(this, 1.0f, 1.0f);
+    MR::requestMovementOn(this);
+    MR::startAction(this, "Chase");
+    mParam._0 = false;
+    mParam._1 = false;
+}
+
+void TeresaRacer::startRacer() {
+    mIsGoal = false;
+    mBgmState = 0;
+    setNerve(GET_NERVE(TeresaRacer, TeresaRacerNrvMove));
+}
+
+bool TeresaRacer::updateRacer(const RaceManager* pRaceManager) {
+    f32 coord = MR::calcNearestRailCoord(pRaceManager->mPlayerRacer, mPosition);
+    f32 length = MR::getRailTotalLength(pRaceManager->mPlayerRacer);
+    mPrevPosition.set(mCurrPosition);
+    mCurrPosition.set(mPosition);
+    if (MR::fabs(mRailCoord - coord) < 2000.0f) {
+        mRailCoord = coord;
+    }
+
+    if (MR::fabs(mRailCoord - length) < 100.0f) {
+        mIsGoal = pRaceManager->isGoal(this);
+        return mIsGoal;
+    }
+
+    return false;
+}
+
+bool TeresaRacer::goalRacer() {
+    return false;
+}
+
+void TeresaRacer::loseRacer() {
+}
+
+void TeresaRacer::resetRacer(const RaceManager* pRaceManager) {
+    if (pRaceManager->mCurrentRace == RaceID_TeresaPhantom) {
+        MR::setDefaultPose(this);
+    } else {
+        MR::setNPCActorPos(this, "\203\214\201\133\203\130\217\111\227\271\214\343\210\312\222\165\203\145\203\214\203\124" /* レース終了後位置テレサ */);
+        setInitPose();
+    }
+
+    turnToPlayer(180.0f);
+    setNerve(GET_NERVE(TeresaRacer, TeresaRacerNrvPost));
+    MR::startMultiActorCameraTargetSelf(this, mCameraInfo, "\211\357\230\142" /* 会話 */);
+    mParam._0 = true;
+    mParam._1 = true;
+}
+
+void TeresaRacer::exitRacer() {
+    MR::validateClipping(this);
+}
+
+void TeresaRacer::changeBgmState() {
+    if (!MR::isLessStep(this, ::sBgmChangeStep) && !mIsGoal) {
+        if (MR::calcDistanceToPlayer(this) < ::sNearBgmDist) {
+            if (mBgmState != 2) {
+                MR::setStageBGMState(2, ::sNearBgm_Fadetime);
+            }
+            mBgmState = 2;
+        } else {
+            if (mBgmState != 1) {
+                MR::setStageBGMState(1, ::sFarBgm_Fadetime);
+            }
+            mBgmState = 1;
+        }
+    }
+}

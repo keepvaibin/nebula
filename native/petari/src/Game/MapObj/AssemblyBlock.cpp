@@ -1,0 +1,277 @@
+#include "Game/MapObj/AssemblyBlock.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/LiveActor/PartsModel.hpp"
+#include "Game/Util/ActorMovementUtil.hpp"
+#include "Game/Util/ActorSensorUtil.hpp"
+#include "Game/Util/EffectUtil.hpp"
+#include "Game/Util/JMapUtil.hpp"
+#include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/MapPartsUtil.hpp"
+#include "Game/Util/MathUtil.hpp"
+#include "Game/Util/ModelUtil.hpp"
+#include "Game/Util/MtxUtil.hpp"
+#include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/PlayerUtil.hpp"
+#include "Game/Util/SoundUtil.hpp"
+#include "Game/Util/StarPointerUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
+
+namespace {
+    static const s32 sDefaultTimer = 300;
+    static const s32 sStepForAssemble = 10;
+    static const s32 sStepForReturn = 10;
+    static const s32 sFlashTime = 100;
+    static const f32 sReturnOffset = 50.0f;
+    // static const f32 sFloatAccelMax = _;
+    // static const f32 sFloatCycleTune = _;
+    static const f32 sFloatRotSpeedNoSign = 0.1f;
+    static const char* const sReturnPosName = "\215\207\221\314\203\165\203\215\203\142\203\116\214\314\213\275\223\137" /* 合体ブロック故郷点 */;
+};  // namespace
+
+namespace NrvAssemblyBlock {
+    NEW_NERVE(AssemblyBlockNrvWait, AssemblyBlock, Wait);
+    NEW_NERVE(AssemblyBlockNrvAssemble, AssemblyBlock, Assemble);
+    NEW_NERVE(AssemblyBlockNrvAssembleWait, AssemblyBlock, AssembleWait);
+    NEW_NERVE(AssemblyBlockNrvReturn, AssemblyBlock, Return);
+    NEW_NERVE(AssemblyBlockNrvTimer, AssemblyBlock, Timer);
+};  // namespace NrvAssemblyBlock
+
+AssemblyBlock::AssemblyBlock(const char* pName)
+    : LiveActor(pName), mObjArg7(-1), mPlayerSearchDistance(-1.0f), _124(0.0f, 0.0f, 0.0f), mFloatRotateSpeed(), mTimer(::sDefaultTimer),
+      mBloomModel(), _13C() {
+    _8C.identity();
+    _BC.identity();
+    _EC.identity();
+}
+
+void AssemblyBlock::init(const JMapInfoIter& rIter) {
+    TVec3f stack_3C;
+    TVec3f stack_30;
+    TVec3f stack_24;
+    TVec3f stack_18;
+    char name[256];
+
+    MR::initDefaultPos(this, rIter);
+    MR::tryRegisterNamePosLinkObj(this, rIter);
+
+    if (!MR::tryFindLinkNamePos(this, ::sReturnPosName, _EC.toMtxPtr())) {
+        stack_18.x = 0.0f;
+        stack_18.y = 1000.0f;
+        stack_18.z = 1000.0f;
+        stack_3C.add(mPosition, stack_18);
+        _EC.setTrans(stack_3C);
+    }
+
+    MR::getMapPartsObjectNameIfExistShapeID(name, sizeof(name), rIter);
+    initModelManagerWithAnm(name, nullptr, false);
+
+    if (MR::isEqualString(name, "AssemblyBlockPartsTimerA")) {
+        _13C = true;
+    } else {
+        _13C = false;
+    }
+
+    _BC.set(getBaseMtx());
+    _8C.set(_EC);
+    MR::setBaseTRMtx(this, _8C);
+
+    if (MR::isEqualSubString(name, "PartsIce")) {
+        MR::connectToSceneIndirectMapObj(this);
+    } else {
+        MR::connectToSceneMapObj(this);
+    }
+
+    initHitSensor(1);
+    MR::addBodyMessageSensorMapObj(this);
+    MR::initCollisionPartsAutoEqualScaleOne(this, name, getSensor(nullptr), nullptr);
+
+    _BC.getTrans(stack_30);
+    _EC.getTrans(stack_24);
+    _124.add(stack_30, stack_24);
+    _124.x *= 0.5f;
+    _124.y *= 0.5f;
+    _124.z *= 0.5f;
+    f32 boundingRadius;
+    MR::calcModelBoundingRadius(&boundingRadius, this);
+    MR::setClippingTypeSphere(this, boundingRadius + _124.distance(stack_24), &_124);
+    MR::getJMapInfoArg0NoInit(rIter, &mPlayerSearchDistance);
+
+    if (mPlayerSearchDistance <= 0.0f) {
+        mPlayerSearchDistance = boundingRadius * 2.0f;
+    }
+
+    MR::getJMapInfoArg1NoInit(rIter, &mTimer);
+    MR::getJMapInfoArg7NoInit(rIter, &mObjArg7);
+
+    if (MR::getRandom(0l, 2l)) {
+        mFloatRotateSpeed = ::sFloatRotSpeedNoSign;
+    } else {
+        mFloatRotateSpeed = -::sFloatRotSpeedNoSign;
+    }
+
+    if (mObjArg7 == -1) {
+        initEffectKeeper(0, "AssemblyBlock", false);
+    } else {
+        initEffectKeeper(0, nullptr, false);
+    }
+
+    initSound(4, false);
+    MR::initStarPointerTarget(this, boundingRadius, TVec3f(0.0f, 0.0f, 0.0f));
+
+    if (MR::isEqualString(name, "AssemblyBlockPartsTimerA")) {
+        mBloomModel = MR::createBloomModel(this, getBaseMtx());
+    }
+
+    MR::tryStartAllAnim(this, "Wait");
+    initNerve(GET_NERVE(AssemblyBlock, AssemblyBlockNrvWait));
+    makeActorAppeared();
+}
+
+void AssemblyBlock::exeWait() {
+    if (MR::isFirstStep(this)) {
+        if (MR::isEffectValid(this, "Blur")) {
+            MR::deleteEffect(this, "Blur");
+        }
+
+        MR::validateCollisionParts(this);
+        MR::validateHitSensors(this);
+    }
+
+    MR::rotateMtxLocalXDegree(_8C.toMtxPtr(), mFloatRotateSpeed);
+    MR::rotateMtxLocalYDegree(_8C.toMtxPtr(), mFloatRotateSpeed);
+    MR::rotateMtxLocalZDegree(_8C.toMtxPtr(), mFloatRotateSpeed);
+
+    f32 scalar = MR::sinDegree(getNerveStep());
+
+    TVec3f trans;
+    _8C.getTrans(trans);
+    trans.scaleAdd(scalar, mGravity, trans);
+    _8C.setTrans(trans);
+
+    tryStartAssemble();
+}
+
+void AssemblyBlock::exeAssemble() {
+    if (MR::isFirstStep(this)) {
+        MR::emitEffect(this, "Blur");
+
+        if (_13C) {
+            MR::startSound(this, "SE_OJ_ASSEMBLE_BLOCK_ST_F");
+        } else {
+            MR::startSound(this, "SE_OJ_ASSEMBLE_BLOCK_START");
+        }
+
+        MR::invalidateCollisionParts(this);
+        MR::invalidateHitSensors(this);
+    }
+
+    MR::blendMtx(_EC.toMtxPtr(), _BC.toMtxPtr(), MR::calcNerveRate(this, ::sStepForAssemble), _8C.toMtxPtr());
+
+    if (MR::isStep(this, ::sStepForAssemble)) {
+        if (_13C) {
+            MR::startSound(this, "SE_OJ_ASSEMBLE_BLOCK_ED_F");
+        } else {
+            MR::startSound(this, "SE_OJ_ASSEMBLE_BLOCK_END");
+        }
+
+        setNerve(GET_NERVE(AssemblyBlock, AssemblyBlockNrvAssembleWait));
+    }
+}
+
+void AssemblyBlock::exeAssembleWait() {
+    if (MR::isFirstStep(this)) {
+        if (MR::isEffectValid(this, "Blur")) {
+            MR::deleteEffect(this, "Blur");
+        }
+
+        MR::tryRumblePadWeak(this, WPAD_CHAN0);
+        MR::validateCollisionParts(this);
+        MR::validateHitSensors(this);
+    }
+
+    if (mObjArg7 == 0) {
+        setNerve(GET_NERVE(AssemblyBlock, AssemblyBlockNrvTimer));
+    } else {
+        tryStartReturn();
+    }
+}
+
+void AssemblyBlock::exeReturn() {
+    if (MR::isFirstStep(this)) {
+        MR::tryRumblePadWeak(this, WPAD_CHAN0);
+        MR::emitEffect(this, "Blur");
+
+        if (_13C) {
+            MR::startSound(this, "SE_OJ_ASSEMBLE_BLOCK_RET_F");
+        } else {
+            MR::startSound(this, "SE_OJ_ASSEMBLE_BLOCK_RETURN");
+        }
+
+        MR::invalidateCollisionParts(this);
+        MR::invalidateHitSensors(this);
+    }
+
+    MR::blendMtx(_BC.toMtxPtr(), _EC.toMtxPtr(), MR::calcNerveRate(this, ::sStepForReturn), _8C.toMtxPtr());
+
+    if (MR::isStep(this, ::sStepForReturn)) {
+        setNerve(GET_NERVE(AssemblyBlock, AssemblyBlockNrvWait));
+    }
+}
+
+void AssemblyBlock::exeTimer() {
+    if (MR::isStep(this, mTimer - ::sFlashTime)) {
+        MR::tryStartAllAnim(this, "Disappear");
+    }
+
+    if (MR::isStep(this, mTimer)) {
+        if (_13C) {
+            MR::startSound(this, "SE_OJ_ASSEMBLE_BLOCK_VAN_F");
+        } else {
+            MR::startSound(this, "SE_OJ_ASSEMBLE_BLOCK_VANISH");
+        }
+
+        if (mBloomModel) {
+            mBloomModel->kill();
+        }
+
+        kill();
+    }
+}
+
+void AssemblyBlock::calcAndSetBaseMtx() {
+    MR::setBaseTRMtx(this, _8C);
+}
+
+bool AssemblyBlock::tryStartAssemble() {
+    bool isNotNear = !MR::isNearPlayerAnyTime(this, mPlayerSearchDistance);
+
+    if (isNotNear) {
+        return false;
+    }
+
+    if (MR::isPlayerDead()) {
+        return false;
+    }
+
+    setNerve(GET_NERVE(AssemblyBlock, AssemblyBlockNrvAssemble));
+
+    return true;
+}
+
+bool AssemblyBlock::tryStartReturn() {
+    if (MR::isStarPointerPointing2POnPressButton(this, "\216\343" /* 弱 */, true, false)) {
+        return false;
+    }
+
+    if (MR::isNearPlayerAnyTime(this, mPlayerSearchDistance + ::sReturnOffset)) {
+        return false;
+    }
+
+    if (MR::isPlayerDead()) {
+        return false;
+    }
+
+    setNerve(GET_NERVE(AssemblyBlock, AssemblyBlockNrvReturn));
+
+    return true;
+}

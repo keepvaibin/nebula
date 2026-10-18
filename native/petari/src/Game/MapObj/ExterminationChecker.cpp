@@ -1,0 +1,154 @@
+#include "Game/MapObj/ExterminationChecker.hpp"
+#include "Game/Boss/SkeletalFishBaby.hpp"
+#include "Game/Enemy/Kuribo.hpp"
+#include "Game/Enemy/Meramera.hpp"
+#include "Game/LiveActor/LiveActorGroup.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/MapObj/KeySwitch.hpp"
+#include "Game/Util.hpp"
+
+namespace NrvExterminationChecker {
+    NEW_NERVE(ExterminationCheckerNrvWatching, ExterminationChecker, Watching);
+    NEW_NERVE(ExterminationCheckerNrvTryStartDemoAppear, ExterminationChecker, TryStartDemoAppear);
+    NEW_NERVE(ExterminationCheckerNrvAppearStar, ExterminationChecker, AppearStar);
+    NEW_NERVE(ExterminationCheckerNrvAppearKeySwitch, ExterminationChecker, AppearKeySwitch);
+};  // namespace NrvExterminationChecker
+
+namespace {
+    template < typename T >
+    LiveActor* createLiveActor(const char* pName) {
+        return new T(pName);
+    }
+
+    static const ExterminationEntry sCreateTable[] = {{"ChildKuribo", MR::createNoItemKuriboActor},
+                                                      {"ChildSkeletalFishBaby", createLiveActor< SkeletalFishBaby >},
+                                                      {"ChildMeramera", createLiveActor< Meramera >}};
+
+    CreationFunc findEntry(const char* pName) {
+        for (s32 j = 0; j < ARRAY_SIZE(::sCreateTable); j++) {
+            if (::sCreateTable[j].mChildName != nullptr && MR::isEqualStringCase(::sCreateTable[j].mChildName, pName)) {
+                return ::sCreateTable[j].mCreationFunc;
+            }
+        }
+
+        return nullptr;
+    }
+};  // namespace
+
+ExterminationChecker::ExterminationChecker(const char* pName) : LiveActor(pName) {
+    mGroup = nullptr;
+    mKeySwitch = nullptr;
+    mKeySwitchPos.x = 0.0f;
+    mKeySwitchPos.y = 0.0f;
+    mKeySwitchPos.z = 0.0f;
+    _A0 = 1;
+    _A1 = 0;
+}
+
+void ExterminationChecker::init(const JMapInfoIter& rIter) {
+    MR::connectToSceneMapObjMovement(this);
+    s32 objNum = MR::getChildObjNum(rIter);
+    mGroup = new LiveActorGroup("\203\101\203\116\203\136\201\133\212\307\227\235" /* アクター管理 */, objNum);
+
+    for (s32 i = 0; i < objNum; i++) {
+        const char* objName = nullptr;
+        MR::getChildObjName(&objName, rIter, i);
+        LiveActor* actor = ::findEntry(objName)(MR::getJapaneseObjectName(objName));
+        MR::initChildObj(actor, rIter, i);
+        mGroup->registerActor(actor);
+    }
+
+    MR::invalidateClipping(this);
+    MR::useStageSwitchSleep(this, rIter);
+
+    if (_A1) {
+        mKeySwitch = new KeySwitch("\221\123\226\305\227\160\203\114\201\133\203\130\203\103\203\142\203\140" /* 全滅用キースイッチ */);
+        mKeySwitch->initKeySwitchByOwner(rIter);
+    }
+
+    if (_A0) {
+        MR::declarePowerStar(this);
+    }
+
+    initNerve(GET_NERVE(ExterminationChecker, ExterminationCheckerNrvWatching));
+
+    if (MR::useStageSwitchReadAppear(this, rIter)) {
+        MR::syncStageSwitchAppear(this);
+        makeActorDead();
+    } else {
+        makeActorAppeared();
+    }
+}
+
+void ExterminationChecker::control() {
+}
+
+void ExterminationChecker::exeWatching() {
+    for (s32 i = 0; i < mGroup->getObjNum(); i++) {
+        if (MR::isDead(mGroup->getActor(i))) {
+            continue;
+        }
+
+        mKeySwitchPos.set(mGroup->getActor(i)->mPosition);
+        return;
+    }
+
+    if (_A0) {
+        setNerve(GET_NERVE(ExterminationChecker, ExterminationCheckerNrvTryStartDemoAppear));
+    }
+
+    if (_A1) {
+        setNerve(GET_NERVE(ExterminationChecker, ExterminationCheckerNrvAppearKeySwitch));
+    }
+}
+
+void ExterminationChecker::exeTryStartDemoAppear() {
+    if (MR::isFirstStep(this)) {
+        MR::stopStageBGM(10);
+    }
+
+    if (MR::isGreaterStep(this, 5)) {
+        if (MR::tryStartDemo(this, "\221\123\226\305\203\130\203\136\201\133\217\157\214\273" /* 全滅スター出現 */)) {
+            setNerve(GET_NERVE(ExterminationChecker, ExterminationCheckerNrvAppearStar));
+        }
+    }
+}
+
+void ExterminationChecker::exeAppearStar() {
+    if (MR::isStep(this, 0)) {
+        MR::startSystemSE("SE_SY_TOTAL_COMPLETE");
+    }
+
+    if (MR::isStep(this, 120)) {
+        MR::endDemo(this, "\221\123\226\305\203\130\203\136\201\133\217\157\214\273" /* 全滅スター出現 */);
+        MR::startAfterBossBGM();
+        MR::requestAppearPowerStar(this);
+        kill();
+    }
+}
+
+void ExterminationChecker::exeAppearKeySwitch() {
+    if (MR::isStep(this, 30)) {
+        mKeySwitch->appearKeySwitch(mKeySwitchPos);
+        kill();
+    }
+}
+
+namespace MR {
+    NameObj* createExterminationPowerStar(const char* pName) {
+        ExterminationChecker* checker = new ExterminationChecker(pName);
+        checker->_A0 = 1;
+        checker->_A1 = 0;
+        return checker;
+    }
+
+    NameObj* createExterminationKeySwitch(const char* pName) {
+        ExterminationChecker* checker = new ExterminationChecker(pName);
+        checker->_A0 = 0;
+        checker->_A1 = 1;
+        return checker;
+    }
+};  // namespace MR
+
+ExterminationChecker::~ExterminationChecker() {
+}

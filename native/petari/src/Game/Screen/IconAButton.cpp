@@ -1,0 +1,131 @@
+#include "Game/Screen/IconAButton.hpp"
+#include "Game/LiveActor/Nerve.hpp"
+#include "Game/Util/LayoutUtil.hpp"
+#include "Game/Util/ObjUtil.hpp"
+#include <cstdio>
+
+namespace NrvIconAButton {
+    NEW_NERVE(IconAButtonNrvOpen, IconAButton, Open);
+    NEW_NERVE(IconAButtonNrvWait, IconAButton, Wait);
+    NEW_NERVE(IconAButtonNrvTerm, IconAButton, Term);
+};  // namespace NrvIconAButton
+
+IconAButton::IconAButton(bool connectToScene, bool connectToPause) : LayoutActor("A\203\173\203\136\203\223\203\101\203\103\203\122\203\223" /* Aボタンアイコン */, true), mFollowPos(0.0f, 0.0f), mFollowActor() {
+    if (connectToScene) {
+        if (connectToPause) {
+            MR::connectToSceneLayoutOnPause(this);
+        } else {
+            MR::connectToSceneTalkLayout(this);
+        }
+    }
+
+    mFollowPaneName[0] = '\0';
+}
+
+void IconAButton::init(const JMapInfoIter& rIter) {
+    initLayoutManager("IconAButton", 1);
+    initNerve(GET_NERVE(IconAButton, IconAButtonNrvOpen));
+    MR::startAnim(this, "Appear", 0);
+    MR::setAnimFrameAndStop(this, 0.0f, 0);
+    kill();
+}
+
+void IconAButton::setFollowActorPane(LayoutActor* pActor, const char* pName) {
+    mFollowActor = pActor;
+
+    snprintf(mFollowPaneName, sizeof(mFollowPaneName), "%s", pName);
+    MR::setFollowPos(&mFollowPos, this, nullptr);
+}
+
+bool IconAButton::isOpen() {
+    return !MR::isDead(this);
+}
+
+bool IconAButton::isWait() {
+    return isNerve(GET_NERVE(IconAButton, IconAButtonNrvWait));
+}
+
+void IconAButton::open() {
+    appear();
+    updateFollowPos();
+    MR::showPane(this, "PicPlate");
+    setNerve(GET_NERVE(IconAButton, IconAButtonNrvOpen));
+}
+
+void IconAButton::openWithTalk() {
+    open();
+    MR::setTextBoxLayoutMessageRecursive(this, "IconAButton", "Layout_SystemTalk");
+}
+
+void IconAButton::openWithRead() {
+    open();
+    MR::setTextBoxLayoutMessageRecursive(this, "IconAButton", "Layout_SystemRead");
+}
+
+void IconAButton::openWithNext() {
+    open();
+    MR::setTextBoxLayoutMessageRecursive(this, "IconAButton", "Layout_SystemNext");
+}
+
+void IconAButton::openWithTerm() {
+    open();
+    MR::setTextBoxLayoutMessageRecursive(this, "IconAButton", "Layout_SystemTerm");
+}
+
+void IconAButton::openWithDecide() {
+    open();
+    MR::setTextBoxLayoutMessageRecursive(this, "IconAButton", "Layout_SystemDecide");
+}
+
+void IconAButton::openWithTurn() {
+    open();
+    MR::setTextBoxLayoutMessageRecursive(this, "IconAButton", "Layout_SystemTurn");
+}
+
+void IconAButton::openWithoutMessage() {
+    open();
+    MR::hidePane(this, "PicPlate");
+    MR::clearTextBoxMessageRecursive(this, "IconAButton");
+}
+
+void IconAButton::term() {
+    if (isOpen() && (isNerve(GET_NERVE(IconAButton, IconAButtonNrvWait)) || isNerve(GET_NERVE(IconAButton, IconAButtonNrvOpen)))) {
+        setNerve(GET_NERVE(IconAButton, IconAButtonNrvTerm));
+    }
+}
+
+void IconAButton::exeOpen() {
+    if (MR::isFirstStep(this)) {
+        MR::startAnim(this, "Appear", 0);
+    }
+
+    if (MR::isAnimStopped(this, 0)) {
+        setNerve(GET_NERVE(IconAButton, IconAButtonNrvWait));
+    }
+}
+
+void IconAButton::exeWait() {
+    if (MR::isFirstStep(this)) {
+        MR::startAnim(this, "Press", 0);
+    }
+}
+
+void IconAButton::exeTerm() {
+    if (MR::isFirstStep(this)) {
+        MR::startAnim(this, "End", 0);
+    }
+
+    if (MR::isAnimStopped(this, 0)) {
+        kill();
+    }
+}
+
+void IconAButton::control() {
+    updateFollowPos();
+}
+
+void IconAButton::updateFollowPos() {
+    if (mFollowActor != nullptr) {
+        MR::copyPaneTrans(&mFollowPos, mFollowActor, mFollowPaneName);
+    }
+}
