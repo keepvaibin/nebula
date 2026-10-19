@@ -667,8 +667,7 @@ bool save_render_config_to_file() {
     // have changed since the game last read it (the in-game menu was open, or the change is younger than
     // the next check).
     {
-        FILE* f = nullptr;
-        if (_wfopen_s(&f, path.c_str(), L"r") == 0 && f != nullptr) {
+        if (FILE* f = galaxy::open_path(path, "r"); f != nullptr) {
             RenderConfig file{};
             parse_ini(f, file);
             std::fclose(f);
@@ -758,9 +757,9 @@ void record_render_adapter(const wchar_t* description, unsigned vendor_id, unsig
         if (config.empty() || description == nullptr) {
             return;
         }
-        char name[256]{};
-        WideCharToMultiByte(CP_UTF8, 0, description, -1, name, static_cast<int>(sizeof(name) - 1), nullptr,
-                            nullptr);
+        const std::u8string utf8 = std::filesystem::path(description).u8string();
+        std::string name(utf8.begin(), utf8.end());
+        name.resize(std::min<std::size_t>(name.size(), 255u));
         for (char& c : name) {
             if (c == '\r' || c == '\n') c = ' ';
         }

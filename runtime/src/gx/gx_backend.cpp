@@ -561,6 +561,15 @@ bool trace_actor_lights_enabled() {
     return actor_light_trace_level() != 0u;
 }
 
+// The light trace's cycle counter: the TSC on x86, the monotonic clock's nanoseconds elsewhere.
+std::uint64_t trace_cycles() noexcept {
+#if defined(_M_X64) || defined(__x86_64__)
+    return __rdtsc();
+#else
+    return static_cast<std::uint64_t>(galaxy::qpc_now());
+#endif
+}
+
 // GALAXY_LIGHTING_CENSUS=1: each scene material's lighting state once ([light-census]) and the
 // enhanced-lighting flushes every 300 frames ([enh-stats]).
 bool lighting_census_enabled() {
@@ -7900,8 +7909,8 @@ void GxBackend::aim_rt_scene_lights(const std::array<float, 12>* view) {
         static const std::uint64_t pair = [] {
             std::uint64_t total = 0u;
             for (unsigned i = 0; i < 4096u; ++i) {
-                const std::uint64_t a = __rdtsc();
-                total += __rdtsc() - a;
+                const std::uint64_t a = trace_cycles();
+                total += trace_cycles() - a;
             }
             return total / 4096u;
         }();
@@ -7917,7 +7926,8 @@ void GxBackend::aim_rt_scene_lights(const std::array<float, 12>* view) {
                      static_cast<unsigned long long>(rt_light_cycles_),
                      static_cast<unsigned long long>(rt_light_regions_), static_cast<unsigned long long>(pair),
                      static_cast<unsigned long long>(rt_snapshot_count_),
-                     static_cast<unsigned long long>(rt_snapshot_cycles_), static_cast<unsigned long long>(__rdtsc()),
+                     static_cast<unsigned long long>(rt_snapshot_cycles_),
+                     static_cast<unsigned long long>(trace_cycles()),
                      static_cast<long long>(ns.count()), rt_light_blend_);
     }
 }
@@ -7945,11 +7955,11 @@ void GxBackend::write_rt_lights(std::uint32_t* palette) noexcept {
     if (!rt_light_aim_.valid) {
         return;
     }
-    const std::uint64_t start = trace_actor_lights_enabled() ? __rdtsc() : 0u;
+    const std::uint64_t start = trace_actor_lights_enabled() ? trace_cycles() : 0u;
     aim_actor_lights(palette, state_.xf_raw(), static_cast<std::uint8_t>(rt_draw_lights_ & 0x01u),
                      static_cast<std::uint8_t>(rt_draw_lights_ & 0x02u), rt_light_aim_);
     if (start != 0u) [[unlikely]] {
-        rt_light_cycles_ += __rdtsc() - start;
+        rt_light_cycles_ += trace_cycles() - start;
         ++rt_light_regions_;
     }
 }
@@ -8383,7 +8393,7 @@ void GxBackend::interp_event(const char* what, std::uint64_t a, std::uint64_t b)
         std::pair<std::uint64_t, std::uint64_t> r{1u, 0u};
         if (getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_EVENTS") == 0 && length > 1u) {
             unsigned long long first = 0, last = 0;
-            if (sscanf_s(value, "%llu,%llu", &first, &last) == 2) r = {first, last};
+            if (std::sscanf(value, "%llu,%llu", &first, &last) == 2) r = {first, last};
         }
         return r;
     }();
@@ -13499,7 +13509,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
     // light load's positions are taken at the first draw after it; a lit draw's world-fixed key
     // light is counted.
     if (rt_light_tracking_ || rt_palette_lights_ != 0u) [[unlikely]] {
-        const std::uint64_t start = trace_actor_lights_enabled() ? __rdtsc() : 0u;
+        const std::uint64_t start = trace_actor_lights_enabled() ? trace_cycles() : 0u;
         for (unsigned n = 0; n < 2u; ++n) {
             if ((rt_light_pending_ & (1u << n)) != 0u) {
                 std::memcpy(rt_light_words_[n].data(),
@@ -13521,7 +13531,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         rt_draw_lights_ = lights;
         static unsigned traced = 0u;
         if (start != 0u) [[unlikely]] {
-            rt_light_cycles_ += __rdtsc() - start;
+            rt_light_cycles_ += trace_cycles() - start;
             ++rt_light_regions_;
         }
         if (start != 0u && (lights & 0xFFu) != 0u && traced < 24u) [[unlikely]] {
@@ -13560,12 +13570,12 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             (state_.xf_palette_dirty() | ~xf_palette_valid_) &
             xf_palette_chunk_mask;
         if (palette_todo != 0u) {
-            const std::uint64_t snapshot_start = trace_actor_lights_enabled() ? __rdtsc() : 0u;
+            const std::uint64_t snapshot_start = trace_actor_lights_enabled() ? trace_cycles() : 0u;
             mtx_alloc =
                 renderer_.matrix_ring().allocate(palette_bytes, /*alignment=*/256u);
             std::memcpy(mtx_alloc.cpu, state_.xf_raw(), palette_bytes);
             if (snapshot_start != 0u) [[unlikely]] {
-                rt_snapshot_cycles_ += __rdtsc() - snapshot_start;
+                rt_snapshot_cycles_ += trace_cycles() - snapshot_start;
                 ++rt_snapshot_count_;
             }
             current_matrix_palette_ = mtx_alloc.gpu;
