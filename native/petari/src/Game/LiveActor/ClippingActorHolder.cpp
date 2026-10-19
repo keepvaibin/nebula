@@ -23,6 +23,9 @@ void ClippingActorHolder::movement() {
 
     for (s32 i = 0; i < _10->_4; i++) {
         _10->mClippingActorList[i]->judgeClipping();
+#ifdef TARGET_PC
+        _10->mClippingActorList[i]->judgeShadowDraw();
+#endif
     }
 }
 

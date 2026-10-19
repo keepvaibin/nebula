@@ -200,6 +200,12 @@ void vertex_blend(inout VSIn v, uint id) {
     }
 }
 
+// A vertex colour with its baked light removed: its hue at full brightness (black stays black).
+float3 nebula_debake(float3 c) {
+    const float m = max(c.r, max(c.g, c.b));
+    return m > (1.0 / 255.0) ? c / m : c;
+}
+
 VSOut main(VSIn v, uint vertex_id : SV_VertexID) {
     vertex_blend(v, vertex_id);
     const uint key_texgens = uber_vs_header.x;
@@ -239,6 +245,9 @@ VSOut main(VSIn v, uint vertex_id : SV_VertexID) {
         float((v.color1 >> 16u) & 0xFFu) / 255.0,
         float((v.color1 >>  8u) & 0xFFu) / 255.0,
         float((v.color1       ) & 0xFFu) / 255.0);
+    // Physical ray tracing (flags bits 2-3): an unlit channel's vertex colour is the art's baked light.
+    if ((flags & 4u) != 0u) vtx_col0.rgb = nebula_debake(vtx_col0.rgb);
+    if ((flags & 8u) != 0u) vtx_col1.rgb = nebula_debake(vtx_col1.rgb);
 
     bool lighting_used = false;
     [unroll] for (uint lc = 0u; lc < 2u; ++lc) {

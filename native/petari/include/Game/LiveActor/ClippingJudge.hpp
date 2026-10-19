@@ -15,6 +15,13 @@ public:
     bool isJudgedToClipFrustum(const TVec3f&, f32) const;
     bool isJudgedToClipFrustum(const TVec3f&, f32, s32) const;
     void calcViewingVolume(THex3f*, f32);
+#ifdef TARGET_PC
+    // Nebula, ray-traced shadows (NEBULA_OPTION_RT_SHADOW_CASTERS): whether a ball at `rCenter`, swept along the stage's
+    // key light as far as its clip level draws (`index`, as isJudgedToClipFrustum), can reach that level's frustum.
+    bool isShadowCasterInView(const TVec3f& rCenter, f32 radius, s32 index) const;
+    // The key light's direction of travel this frame (none: the option is off or the stage has no light).
+    void updateShadowCasters();
+#endif
 
     /* 0x0C */ THex3f mFrustum;
     /* 0x06C */ THex3f mClipFrustums[0x8];

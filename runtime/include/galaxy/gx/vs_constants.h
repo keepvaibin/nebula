@@ -207,6 +207,21 @@ inline void fill_vs_constants(
     return snorm(x) | (snorm(y) << 16u);
 }
 
+// An octahedral word (encode_octahedral) back to a unit vector.
+inline void decode_octahedral(std::uint32_t word, float out[3]) noexcept {
+    const float x = static_cast<float>(static_cast<std::int16_t>(word & 0xFFFFu)) / 32767.0f;
+    const float y = static_cast<float>(static_cast<std::int16_t>(word >> 16u)) / 32767.0f;
+    float v[3] = {x, y, 1.0f - std::fabs(x) - std::fabs(y)};
+    if (v[2] < 0.0f) {
+        v[0] = (1.0f - std::fabs(y)) * (x >= 0.0f ? 1.0f : -1.0f);
+        v[1] = (1.0f - std::fabs(x)) * (y >= 0.0f ? 1.0f : -1.0f);
+    }
+    const float length = std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+    for (unsigned i = 0; i < 3u; ++i) {
+        out[i] = length > 0.0f ? v[i] / length : (i == 1u ? 1.0f : 0.0f);
+    }
+}
+
 struct VsConstantsCpuCache {
     GxVsConstants constants{};
     unsigned efb_scale = 0u;
@@ -214,6 +229,8 @@ struct VsConstantsCpuCache {
     // The scene's sky up (GxVsConstants::sky_up, sky_up_known), kept across fills.
     std::uint32_t sky_up = 0u;
     std::uint32_t sky_up_known = 0u;
+    // GxVsConstants::flags bits 2-3: the vertices' colour 0 / 1 is de-baked (GxBackend::debake_channels).
+    std::uint32_t debake = 0u;
 
     const GxVsConstants& update(const GxState& state, std::uint32_t dirty,
         unsigned current_scale, bool frame_bindings_dirty) {
@@ -229,6 +246,7 @@ struct VsConstantsCpuCache {
         }
         constants.sky_up = sky_up;
         constants.sky_up_known = sky_up_known;
+        constants.flags = (constants.flags & ~0xCu) | debake;
         return constants;
     }
 };

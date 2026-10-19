@@ -4227,6 +4227,10 @@ std::uint64_t RendererD3D12::end_frame(
         ray_tracer_.flush_late(command_list_.Get(), rt_sources(), &RendererD3D12::rt_allocate, this);
         bound_pipeline_ = nullptr;
     }
+    if (ray_tracer_.sky_open()) {
+        ray_tracer_.flush_sky(command_list_.Get(), rt_sources(), &RendererD3D12::rt_allocate, this);
+        bound_pipeline_ = nullptr;
+    }
     if (timestamp_query_heap_ && timestamp_readback_) {
         command_list_->EndQuery(
             timestamp_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
@@ -4894,7 +4898,10 @@ void RendererD3D12::rt_note_draw(const DrawCall& call, const RtDrawInfo& info) {
         }
         draw.flags |= kRtDrawResident;
     }
-    draw.vertex_count = call.vertex_view.SizeInBytes / call.vertex_view.StrideInBytes;
+    draw.vertex_count = std::min<std::uint32_t>(call.vertex_view.SizeInBytes / call.vertex_view.StrideInBytes,
+                                                kRtVertexCountMask) |
+                        (info.texgen < 8u ? (info.texgen + 1u) << kRtTexGenShift : 0u) |
+                        (info.texgen2 < 8u ? (info.texgen2 + 1u) << kRtTexGen2Shift : 0u);
     if (call.index_view.BufferLocation != 0u) {
         if (!offset_in(call.index_view.BufferLocation, call.index_view.SizeInBytes, index_ring_.gpu_base(),
                        index_ring_.total_bytes(), draw.index_offset)) {

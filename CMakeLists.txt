@@ -727,6 +727,7 @@ foreach(galaxy_rt_pass capture_cs:CaptureCS:cs_6_5 sky_state_cs:SkyStateCS:cs_6_
         temporal_cs:TemporalCS:cs_6_5
         spatial_a_cs:SpatialACS:cs_6_5 spatial_m_cs:SpatialMCS:cs_6_5 spatial_b_cs:SpatialBCS:cs_6_5
         star_sphere_cs:StarSphereCS:cs_6_5 reference_exposure_cs:ReferenceExposureCS:cs_6_5
+        sky_trace_sh_cs:SkyTraceShCS:cs_6_5
         composite_vs:CompositeVS:vs_6_0
         composite_ps:CompositePS:ps_6_0 light_texture_ps:LightTexturePS:ps_6_0)
     string(REPLACE ":" ";" galaxy_rt_pair "${galaxy_rt_pass}")
@@ -737,7 +738,7 @@ foreach(galaxy_rt_pass capture_cs:CaptureCS:cs_6_5 sky_state_cs:SkyStateCS:cs_6_
     add_custom_command(OUTPUT "${galaxy_rt_header}"
         COMMAND "${GALAXY_DXC}" -nologo -T ${galaxy_rt_profile} -E ${galaxy_rt_entry} -O3 -WX -Qstrip_debug
             -Qstrip_reflect -Vn g_rt_${galaxy_rt_name} -Fh "${galaxy_rt_header}" "${galaxy_rt_light_hlsl}"
-        DEPENDS "${galaxy_rt_light_hlsl}"
+        DEPENDS "${galaxy_rt_light_hlsl}" "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/gx/rt_tev.hlsli"
         VERBATIM)
     list(APPEND galaxy_rt_headers "${galaxy_rt_header}")
 endforeach()
@@ -797,7 +798,7 @@ endforeach()
 
 # The lighting's trace testing alpha-tested geometry by its alpha maps from the descriptor heap (shader model 6.6),
 # and the reference path tracer, which shades its hits from their textures (GALAXY_RT_REFERENCE).
-foreach(galaxy_rt_pass trace_tex_cs:TraceCS reference_tex_cs:ReferenceCS)
+foreach(galaxy_rt_pass trace_tex_cs:TraceCS reference_tex_cs:ReferenceCS sky_probe_tex_cs:SkyProbeCS)
     string(REPLACE ":" ";" galaxy_rt_pair "${galaxy_rt_pass}")
     list(GET galaxy_rt_pair 0 galaxy_rt_name)
     list(GET galaxy_rt_pair 1 galaxy_rt_entry)
@@ -805,7 +806,7 @@ foreach(galaxy_rt_pass trace_tex_cs:TraceCS reference_tex_cs:ReferenceCS)
     add_custom_command(OUTPUT "${galaxy_rt_header}"
         COMMAND "${GALAXY_DXC}" -nologo -T cs_6_6 -E ${galaxy_rt_entry} -D RT_TEXTURED=1 -O3 -WX -Qstrip_debug
             -Qstrip_reflect -Vn g_rt_${galaxy_rt_name} -Fh "${galaxy_rt_header}" "${galaxy_rt_light_hlsl}"
-        DEPENDS "${galaxy_rt_light_hlsl}"
+        DEPENDS "${galaxy_rt_light_hlsl}" "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/gx/rt_tev.hlsli"
         VERBATIM)
     list(APPEND galaxy_rt_headers "${galaxy_rt_header}")
 endforeach()

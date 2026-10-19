@@ -48,6 +48,9 @@ void ClippingInfoGroup::startClippedAll() {
     for (s32 i = 0; i < _10; i++) {
         if (!MR::isDead(_14[i]->mActor) && !MR::isClipped(_14[i]->mActor)) {
             _14[i]->mActor->startClipped();
+#ifdef TARGET_PC
+            _14[i]->mShadowDrawn = false;
+#endif
         }
     }
 }
@@ -78,6 +81,11 @@ void ClippingGroupHolder::movement() {
                 group->endClippedAll();
             }
         }
+#ifdef TARGET_PC
+        for (s32 j = 0; j < group->_10; j++) {
+            group->_14[j]->judgeShadowDraw();
+        }
+#endif
     }
 }
 

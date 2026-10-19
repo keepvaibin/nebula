@@ -87,8 +87,16 @@ public:
     [[nodiscard]] bool water_open() const noexcept { return water_open_; }
     // From the trace to the scene's end: opaque draws after the screen capture (kRtLatePhase) are noted.
     [[nodiscard]] bool late_open() const noexcept { return late_open_; }
+    // From the 3D scene's start to its trace, under physical lighting: the game's sky lists' draws (kRtDrawSky) are
+    // noted for the traced sky.
+    [[nodiscard]] bool sky_open() const noexcept { return sky_open_; }
+    void begin_sky() noexcept;
+    // The player's up in eye space by the game's gravity (the scene marker; else the view's up): the physical camera's
+    // exposure is set for the ground under the player.
+    void set_scene_up(const std::array<float, 3>& up) noexcept { scene_up_ = up; }
     [[nodiscard]] bool accepts(const RtDrawInfo& info) const noexcept {
-        return (info.surface & kRtDrawGlow) != 0u ? glow_open_
+        return (info.surface & kRtDrawSky) != 0u ? sky_open_
+               : (info.surface & kRtDrawGlow) != 0u ? glow_open_
                : (info.surface & kRtDrawWater) != 0u ? water_open_
                : info.phase == kRtLatePhase && !scene_open_ ? late_open_
                                                             : scene_open_;
@@ -206,6 +214,9 @@ public:
     // Transforms the late draws noted since the last flush (as flush_water).
     void flush_late(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
                     void* allocate_context);
+    // Transforms the sky draws noted since the last flush (as flush_water).
+    void flush_sky(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
+                   void* allocate_context);
     // After the translucent phases: the water draws noted since the trace become their own
     // acceleration structure and the reflections trace the water's surface from the picture (EFB
     // colour then depth, NON_PIXEL_SHADER_RESOURCE, two consecutive SRVs at `color_depth_table`).
@@ -303,15 +314,21 @@ private:
     void log_emitters();
     bool create_lighting_pipelines(DXGI_FORMAT color_format);
     // The geometry pass over `count` draws (triangles from `triangle_base`) into `positions` and
-    // `surfaces`.
+    // `surfaces`, and their texture coordinates and colours into `uv` where given.
     bool transform_draws(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
                          void* allocate_context, const RtDraw* draws, std::size_t count, std::uint32_t triangle_base,
                          std::uint32_t triangles, ID3D12Resource* positions, D3D12_RESOURCE_STATES& positions_state,
-                         ID3D12Resource* surfaces, D3D12_RESOURCE_STATES& surfaces_state);
+                         ID3D12Resource* surfaces, D3D12_RESOURCE_STATES& surfaces_state, ID3D12Resource* uv = nullptr,
+                         D3D12_RESOURCE_STATES* uv_state = nullptr);
     // The reflections' view of the scene traced into lighting slot `slot`.
     [[nodiscard]] RtReflectScene reflect_scene(unsigned slot) const;
     bool ensure_water_buffers();
     bool ensure_late_buffers();
+    bool ensure_sky_buffers();
+    // Ends the sky window: the sky draws noted this scene become sky_blas_ in sky_tlas_ (sky_built_; none: the
+    // traced sky is off this frame).
+    void finish_sky(ID3D12GraphicsCommandList4* list, const RtSources& sources, Allocate allocate,
+                    void* allocate_context);
     // Ends the late window: the late draws noted this scene become late_blas_ (none: no late instance).
     void finish_late(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
                      void* allocate_context);
@@ -628,7 +645,17 @@ private:
     // kStarSlots balls and the stars' colour over time (rt_lighting.hlsl kStarColour), each with the frame it was
     // taken (+1; 0: free) and whether the colour was copied.
     static constexpr unsigned kBallReadbacks = 4u;
-    static constexpr unsigned kBallReadbackBytes = kStarSlots * 16u + 16u;
+    // Then the pixel probe's two records (GALAXY_RT_PROBE: rt_lighting.hlsl TraceCS).
+    static constexpr unsigned kProbeRecords = 2u;
+    static constexpr unsigned kBallReadbackBytes = kStarSlots * 16u + 16u + kProbeRecords * 16u;
+    // GALAXY_RT_PROBE=x,y (diagnostics): an EFB pixel whose sample reports, once a second, the draw the camera sees and
+    // what stops the sun's centre ray from it (draw record, material table entry, distance, instance).
+    bool probe_ = false;
+    std::array<std::uint32_t, 2> probe_pixel_{};
+    std::array<std::uint32_t, 2> probe_sample_{};
+    std::uint64_t probe_printed_ = 0u;
+    std::vector<std::uint16_t> draw_materials_;   // per draw record of the scene: its material table entry
+    std::array<std::vector<std::uint16_t>, kBallReadbacks> probe_materials_{};
     Microsoft::WRL::ComPtr<ID3D12Resource> ball_readback_;
     std::array<std::uint64_t, kBallReadbacks> ball_readback_frame_{};
     std::array<bool, kBallReadbacks> ball_readback_colour_{};
@@ -715,6 +742,51 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> late_scratch_;
     D3D12_RESOURCE_STATES late_positions_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     D3D12_RESOURCE_STATES late_surfaces_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    // The traced sky (physical lighting): the game's sky lists' draws (kRtDrawSky) in a structure of their own, which
+    // the sky probe traces from the camera each frame into the sky's light by direction (sky_probe_map_:
+    // rt_lighting.hlsl SkyProbeCS) and its spherical harmonics (SkyTraceShCS).
+    static constexpr std::uint32_t kSkyMaxTriangles = 64u * 1024u;
+    static constexpr std::uint32_t kSkyMapSize = 64u;   // rt_lighting.hlsl kSkyMapSize
+    std::vector<RtDraw> sky_draws_;
+    // Per sky draw (RtDraw.flags bits 16-31): its texture view, flags (bit 0: the vertices' colour is the material;
+    // bits 1-10: RtDrawInfo.blend), material colour and alpha test (rt_lighting.hlsl sky_layer).
+    std::vector<std::array<std::uint32_t, 4>> sky_records_;
+    // Per draw of the scene and of the sky: its TEV record (RtTevMaterial, its maps' views) and the stages after them
+    // (rt_tev.hlsli g_tev).
+    std::vector<RtTevMaterial> tev_records_;
+    std::vector<RtTevStage> tev_stages_;
+    std::vector<RtTevMaterial> sky_tev_records_;
+    std::vector<RtTevStage> sky_tev_stages_;
+    void note_tev(const RtDrawInfo& info, std::vector<RtTevMaterial>& records, std::vector<RtTevStage>& stages);
+    // The records, then the stages (each record's stage_offset in bytes), for g_tev; 0 for none.
+    D3D12_GPU_VIRTUAL_ADDRESS upload_tev(const std::vector<RtTevMaterial>& records, const std::vector<RtTevStage>& stages,
+                                         Allocate allocate, void* allocate_context);
+    std::uint32_t sky_triangles_ = 0u;
+    std::size_t sky_flushed_draws_ = 0u;
+    std::uint32_t sky_flushed_triangles_ = 0u;
+    bool sky_open_ = false;
+    bool sky_incomplete_ = false;
+    std::uint32_t sky_built_ = 0u;   // triangles in sky_blas_ this scene (0: none)
+    std::array<float, 3> scene_up_{0.0f, 1.0f, 0.0f};
+    std::uint64_t sky_scratch_tlas_ = 0u;   // the TLAS build's offset in sky_scratch_
+    Microsoft::WRL::ComPtr<ID3D12Resource> sky_positions_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> sky_surfaces_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> sky_uv_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> sky_blas_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> sky_tlas_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> sky_scratch_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> sky_probe_map_;
+    D3D12_RESOURCE_STATES sky_positions_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    D3D12_RESOURCE_STATES sky_surfaces_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    D3D12_RESOURCE_STATES sky_uv_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    D3D12_RESOURCE_STATES sky_probe_map_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> sky_probe_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> sky_trace_sh_pso_;
+    // GALAXY_RT_SKY_DUMP=<frame> (diagnostics): the traced sky's map at that frame, as sky_probe_<frame>.ppm (in units
+    // of the stage's full light, display-encoded, 4x) in the snapshot directory, and its harmonics in the log.
+    std::uint64_t sky_dump_at_ = 0u;
+    std::uint64_t sky_dump_taken_ = 0u;
+    Microsoft::WRL::ComPtr<ID3D12Resource> sky_dump_readback_;
     // Per slot the traced frame's eye position from a sub-frame's (3 rows), copied in from a
     // ring of upload entries before each sub-frame's replay.
     Microsoft::WRL::ComPtr<ID3D12Resource> reproject_;

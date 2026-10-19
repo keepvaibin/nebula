@@ -37,8 +37,8 @@ RWByteAddressBuffer g_positions : register(u0);
 // Per triangle, 16 bytes: its vertices' eye-space normals (octahedral 16:16, 0 without one) and
 // the draw's flags (RtDraw.flags).
 RWByteAddressBuffer g_surfaces : register(u3);
-// High quality (g_frame_flags bit 1): per triangle, 36 bytes: its vertices' first texture coordinates (3 x 2
-// floats) and colour 0 (3 x RGBA8), for what reflection rays hit off screen (rt_reflections.hlsl hit_shade).
+// g_frame_flags bit 1: per triangle, 72 bytes (rt_types.h kRtTriUvStride): its vertices' coordinates in the draw's
+// two texture slots (3 x 2 floats each), colour 0 and colour 1 (3 x RGBA8 each), for what rays hit (rt_tev.hlsli).
 RWByteAddressBuffer g_tri_uv : register(u4);
 
 RaytracingAccelerationStructure g_scene : register(t6);
@@ -55,6 +55,14 @@ static const uint kVertexUv = 56u;
 static const uint kVsFlags = 200u;
 static const uint kVsPaletteBase = 204u;
 static const uint kVsInlinePosMatrix = 224u;
+// GxVsConstants (uber_constants.h): the texture generators' matrices and post matrices, and the vertex key's flags
+// (bit 2: dual texture transforms), per-vertex texture matrices, texture generators and post generators.
+static const uint kVsInlineTexMatrices = 272u;
+static const uint kVsInlinePostMatrices = 656u;
+static const uint kVsKeyFlags = 1080u;
+static const uint kVsKeyTexMatrixMask = 1084u;
+static const uint kVsKeyTexGen = 1088u;
+static const uint kVsKeyPostTexGen = 1120u;
 
 uint load_index(uint index_offset, uint i, bool wide)
 {
@@ -86,7 +94,7 @@ uint pack_vertex_normal(float3 n)
 // cofactors; the determinant's sign keeps mirrored matrices facing out).
 float3 transform_vertex(uint4 draw, uint4 draw2, uint vertex, uint vs_flags, uint palette_base, out float3 normal)
 {
-    const uint address = draw.x + min(vertex, max(draw.z, 1u) - 1u) * kVertexStride;
+    const uint address = draw.x + min(vertex, max(draw.z & 0xFFFFFFu, 1u) - 1u) * kVertexStride;
     float3 position;
     uint matrix_index;
     [branch] if ((draw.y & 1u) != 0u) {
@@ -125,7 +133,7 @@ float3 transform_vertex(uint4 draw, uint4 draw2, uint vertex, uint vs_flags, uin
 // A vertex's first texture coordinates and colour 0 (GxVertexOut).
 void vertex_uv(uint4 draw, uint vertex, out float2 uv, out uint colour)
 {
-    const uint address = draw.x + min(vertex, max(draw.z, 1u) - 1u) * kVertexStride;
+    const uint address = draw.x + min(vertex, max(draw.z & 0xFFFFFFu, 1u) - 1u) * kVertexStride;
     [branch] if ((draw.y & 1u) != 0u) {
         const uint a = min(address, g_resident_limit);
         uv = asfloat(g_resident.Load2(a + kVertexUv));
@@ -135,6 +143,61 @@ void vertex_uv(uint4 draw, uint vertex, out float2 uv, out uint colour)
         uv = asfloat(g_vertex_ring.Load2(a + kVertexUv));
         colour = g_vertex_ring.Load(a + kVertexColor);
     }
+}
+
+// The texture coordinates texture generator `gen` gives a vertex, as the uber vertex shader makes them (uber_vs.hlsl):
+// its source (the position, the normal or a texture coordinate; the colour, emboss and binormal sources keep the first
+// coordinates), its matrix (inline or the vertex's palette row), the dual transform, then the projection's divide.
+float2 texgen_uv(uint4 draw, uint4 draw2, uint vertex, uint gen, uint palette_base)
+{
+    const bool resident = (draw.y & 1u) != 0u;
+    const uint address = draw.x + min(vertex, max(draw.z & 0xFFFFFFu, 1u) - 1u) * kVertexStride;
+    const uint a = min(address, resident ? g_resident_limit : g_vertex_ring_limit);
+    const uint constants = min(draw2.z, g_constant_ring_limit);
+    const uint tg = g_constant_ring.Load(constants + kVsKeyTexGen + gen * 4u);
+    const uint row = (tg >> 7u) & 31u;
+    const uint source = row == 0u ? 0u : row == 1u ? kVertexNormal : row >= 5u && row <= 12u ? kVertexUv + (row - 5u) * 8u
+                                                                                              : kVertexUv;
+    float4 coord = float4(0.0f, 0.0f, 1.0f, 1.0f);
+    if (row <= 1u) {
+        coord.xyz = asfloat(resident ? g_resident.Load3(a + source) : g_vertex_ring.Load3(a + source));
+    } else {
+        coord.xy = asfloat(resident ? g_resident.Load2(a + source) : g_vertex_ring.Load2(a + source));
+    }
+    if (((tg >> 2u) & 1u) == 0u) {
+        coord.z = 1.0f;
+    }
+    const bool stq = ((tg >> 1u) & 1u) != 0u;
+    float4 r0, r1, r2;
+    [branch] if (((g_constant_ring.Load(constants + kVsKeyTexMatrixMask) >> gen) & 1u) != 0u) {
+        const uint3 indices = resident ? g_resident.Load3(a + kVertexMatrixIndex) : g_vertex_ring.Load3(a + kVertexMatrixIndex);
+        const uint packed = gen < 3u ? indices.x : gen < 7u ? indices.y : indices.z;
+        const uint shift = gen < 3u ? 8u + 8u * gen : gen < 7u ? 8u * (gen - 3u) : 0u;
+        const uint m = min(draw2.w + (palette_base + min((packed >> shift) & 0xFFu, 61u)) * 16u, g_matrix_ring_limit);
+        r0 = asfloat(g_matrix_ring.Load4(m));
+        r1 = asfloat(g_matrix_ring.Load4(m + 16u));
+        r2 = asfloat(g_matrix_ring.Load4(m + 32u));
+    } else {
+        const uint c = constants + kVsInlineTexMatrices + gen * 48u;
+        r0 = asfloat(g_constant_ring.Load4(c));
+        r1 = asfloat(g_constant_ring.Load4(c + 16u));
+        r2 = asfloat(g_constant_ring.Load4(c + 32u));
+    }
+    float3 res = float3(dot(coord, r0), dot(coord, r1), stq ? dot(coord, r2) : 1.0f);
+    if ((g_constant_ring.Load(constants + kVsKeyFlags) & 4u) != 0u) {
+        if (((g_constant_ring.Load(constants + kVsKeyPostTexGen + gen * 4u) >> 8u) & 1u) != 0u && dot(res, res) > 0.0f) {
+            res = normalize(res);
+        }
+        const uint p = constants + kVsInlinePostMatrices + gen * 48u;
+        const float4 p0 = asfloat(g_constant_ring.Load4(p));
+        const float4 p1 = asfloat(g_constant_ring.Load4(p + 16u));
+        const float4 p2 = asfloat(g_constant_ring.Load4(p + 32u));
+        res = float3(dot(p0.xyz, res) + p0.w, dot(p1.xyz, res) + p1.w, dot(p2.xyz, res) + p2.w);
+    }
+    if (res.z == 0.0f) {
+        res.xy = clamp(res.xy * 0.5f, -1.0f, 1.0f);
+    }
+    return stq && res.z != 0.0f ? res.xy / res.z : res.xy;
 }
 
 // One thread per output triangle: three eye-space vertices (36 bytes) in draw order and its
@@ -170,6 +233,8 @@ void GeometryCS(uint3 id : SV_DispatchThreadID)
     uint normals[3];
     float2 uvs[3];
     uint colours[3];
+    float2 uvs2[3];
+    uint colours2[3] = {0u, 0u, 0u};
     [unroll] for (uint k = 0u; k < 3u; ++k) {
         const uint i = local * 3u + k;
         const uint vertex = indexed ? load_index(draw.w, i, wide) : i;
@@ -177,12 +242,27 @@ void GeometryCS(uint3 id : SV_DispatchThreadID)
         corners[k] = transform_vertex(draw, draw2, vertex, vs_flags, palette_base, normal);
         normals[k] = pack_vertex_normal(normal);
         vertex_uv(draw, vertex, uvs[k], colours[k]);
+        // The texture slots' own coordinates (RtDraw.vertex_count bits 24-27 and 28-31: their generators + 1).
+        uvs2[k] = uvs[k];
+        if ((g_frame_flags & 2u) != 0u) {
+            const uint slot0 = (draw.z >> 24u) & 0xFu;
+            const uint slot1 = draw.z >> 28u;
+            if (slot0 != 0u) {
+                uvs[k] = texgen_uv(draw, draw2, vertex, slot0 - 1u, palette_base);
+            }
+            uvs2[k] = slot1 != 0u ? texgen_uv(draw, draw2, vertex, slot1 - 1u, palette_base) : uvs[k];
+            const uint address = draw.x + min(vertex, max(draw.z & 0xFFFFFFu, 1u) - 1u) * kVertexStride;
+            colours2[k] = (draw.y & 1u) != 0u ? g_resident.Load(min(address, g_resident_limit) + kVertexColor + 4u)
+                                              : g_vertex_ring.Load(min(address, g_vertex_ring_limit) + kVertexColor + 4u);
+        }
     }
     if ((g_frame_flags & 2u) != 0u) {
-        const uint uv_address = tri * 36u;
+        const uint uv_address = tri * 72u;
         g_tri_uv.Store4(uv_address, asuint(float4(uvs[0], uvs[1])));
-        g_tri_uv.Store4(uv_address + 16u, uint4(asuint(uvs[2]), colours[0], colours[1]));
-        g_tri_uv.Store(uv_address + 32u, colours[2]);
+        g_tri_uv.Store4(uv_address + 16u, asuint(float4(uvs[2], uvs2[0])));
+        g_tri_uv.Store4(uv_address + 32u, asuint(float4(uvs2[1], uvs2[2])));
+        g_tri_uv.Store4(uv_address + 48u, uint4(colours[0], colours[1], colours[2], colours2[0]));
+        g_tri_uv.Store2(uv_address + 64u, uint2(colours2[1], colours2[2]));
     }
     const uint out_address = tri * 36u;
     g_positions.Store3(out_address, asuint(corners[0]));

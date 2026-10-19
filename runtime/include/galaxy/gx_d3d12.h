@@ -137,6 +137,9 @@ void attach_scene_view(const float view[12], const float* up = nullptr, const ch
 // Simulation thread, at each SceneBegin: whether the renderer reads
 // draw-identity markers (frame interpolation or motion vectors are on).
 [[nodiscard]] bool draw_identity_wanted() noexcept;
+// Simulation thread: whether the game keeps clipped actors whose shadows can reach the view drawn (the ray tracer
+// lights the scene; GALAXY_RT_OFFSCREEN_CASTERS=0 never).
+[[nodiscard]] bool rt_shadow_casters_wanted() noexcept;
 // Simulation thread (BrightSun::control): the world direction towards the game's visible sun and
 // the distance of its model from the camera. The ray tracer lights the scene from it while it
 // keeps arriving.

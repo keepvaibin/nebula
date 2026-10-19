@@ -21,6 +21,11 @@ public:
     void setFarClipLevel(s32 level) {
         mFarClipLevel = level;
     }
+#ifdef TARGET_PC
+    // Nebula, ray-traced shadows: a clipped actor whose shadow can reach the view stays drawn as the game left it (its
+    // movement, animation and sensors stop as the game's clipping stops them; the camera still places its model).
+    void judgeShadowDraw();
+#endif
 
     /* 0x00 */ LiveActor* mActor;
     /* 0x04 */ const TVec3f* _4;
@@ -29,6 +34,9 @@ public:
     /* 0x10 */ s16 mFarClipLevel;
     /* 0x12 */ s16 _12;
     /* 0x14 */ ViewGroupCtrlDataEntry* _14;
+#ifdef TARGET_PC
+    bool mShadowDrawn;   // judgeShadowDraw keeps it in the draw lists while the game clips it
+#endif
 };
 
 class ClippingActorInfoList {

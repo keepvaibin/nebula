@@ -1,0 +1,321 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// A draw's own TEV program at a ray hit: the GX colour and alpha combiners as the uber pixel shader runs them
+// (uber_ps.hlsl, integer arithmetic, Dolphin's formulation), over the hit's texture coordinates, its vertices'
+// colours and the draw's registers. Indirect stages are not evaluated (their stages sample the plain coordinates).
+//
+// The including shader declares, with RT_TEXTURED (shader model 6.6, the descriptor heap):
+//   ByteAddressBuffer g_tev       per draw a 128-byte record (RtTevMaterial, rt_types.h), then the stages
+//   ByteAddressBuffer g_tri_uv    per triangle kTriUvStride bytes (ray_tracing.hlsl GeometryCS)
+//   SamplerState g_wrap_point
+
+static const uint kTevRecordBytes = 128u;
+static const uint kTevStageBytes = 32u;
+// Per triangle: its vertices' coordinates in the draw's two texture slots (3 x float2 each), colour 0 and colour 1
+// (3 x RGBA8 each).
+static const uint kTriUvStride = 72u;
+
+int4 tev_rgba8(uint c)
+{
+    return int4(int(c >> 24u), int((c >> 16u) & 0xFFu), int((c >> 8u) & 0xFFu), int(c & 0xFFu));
+}
+
+float4 tev_rgba8f(uint c)
+{
+    return float4(tev_rgba8(c)) / 255.0f;
+}
+
+int4 tev_swizzle(int4 v, uint codes)
+{
+    return int4(v[codes & 3u], v[(codes >> 2u) & 3u], v[(codes >> 4u) & 3u], v[(codes >> 6u) & 3u]);
+}
+
+int3 tev_u8(int3 v)
+{
+    return v & int3(255, 255, 255);
+}
+
+int3 tev_color_arg(uint sel, int4 prev, int4 c0, int4 c1, int4 c2, int4 texc, int4 rasc, int4 kon)
+{
+    switch (sel) {
+    case 0u: return prev.rgb;
+    case 1u: return prev.aaa;
+    case 2u: return c0.rgb;
+    case 3u: return c0.aaa;
+    case 4u: return c1.rgb;
+    case 5u: return c1.aaa;
+    case 6u: return c2.rgb;
+    case 7u: return c2.aaa;
+    case 8u: return texc.rgb;
+    case 9u: return texc.aaa;
+    case 10u: return rasc.rgb;
+    case 11u: return rasc.aaa;
+    case 12u: return int3(255, 255, 255);
+    case 13u: return int3(128, 128, 128);
+    case 14u: return kon.rgb;
+    default: return int3(0, 0, 0);
+    }
+}
+
+int tev_alpha_arg(uint sel, int4 prev, int4 c0, int4 c1, int4 c2, int4 texc, int4 rasc, int4 kon)
+{
+    switch (sel) {
+    case 0u: return prev.a;
+    case 1u: return c0.a;
+    case 2u: return c1.a;
+    case 3u: return c2.a;
+    case 4u: return texc.a;
+    case 5u: return rasc.a;
+    case 6u: return kon.a;
+    default: return 0;
+    }
+}
+
+// A vertex colour with its baked light removed: its hue at full brightness (black stays black).
+float3 tev_debake(float3 c)
+{
+    const float m = max(c.r, max(c.g, c.b));
+    return m > (1.0f / 255.0f) ? c / m : c;
+}
+
+int tev_fixed_konst(uint k)
+{
+    return k < 4u ? int(255u - 32u * k) : int(256u - 32u * k);
+}
+
+// The konstant colour selection (kcsel) and alpha selection (kasel) over K0-K3 (RGBA8 words at `record` + 24).
+int4 tev_konst(uint record, uint kcsel, uint kasel)
+{
+    int3 rgb = int3(0, 0, 0);
+    if (kcsel <= 7u) {
+        const int f = tev_fixed_konst(kcsel);
+        rgb = int3(f, f, f);
+    } else if (kcsel >= 12u && kcsel <= 15u) {
+        rgb = tev_rgba8(g_tev.Load(record + 24u + (kcsel - 12u) * 4u)).rgb;
+    } else if (kcsel >= 16u) {
+        const int c = tev_rgba8(g_tev.Load(record + 24u + ((kcsel - 16u) % 4u) * 4u))[(kcsel - 16u) / 4u];
+        rgb = int3(c, c, c);
+    }
+    int a = 0;
+    if (kasel <= 7u) {
+        a = tev_fixed_konst(kasel);
+    } else if (kasel >= 16u) {
+        a = tev_rgba8(g_tev.Load(record + 24u + ((kasel - 16u) % 4u) * 4u))[(kasel - 16u) / 4u];
+    }
+    return int4(rgb, a);
+}
+
+int4 tev_register(uint record, uint r)
+{
+    const uint2 halves = g_tev.Load2(record + 40u + r * 8u);
+    const float4 v = float4(f16tof32(halves.x), f16tof32(halves.x >> 16u), f16tof32(halves.y), f16tof32(halves.y >> 16u));
+    return int4(round(v * 255.0f));
+}
+
+bool tev_alpha_compare(uint comp, int value, int reference)
+{
+    switch (comp) {
+    case 0u: return false;
+    case 1u: return value < reference;
+    case 2u: return value == reference;
+    case 3u: return value <= reference;
+    case 4u: return value > reference;
+    case 5u: return value != reference;
+    case 6u: return value >= reference;
+    default: return true;
+    }
+}
+
+// Draw `draw`'s TEV output at triangle `tri`, barycentrics `b` (display-encoded RGBA, 0-1), and whether its alpha
+// passes the draw's alpha compare. A draw without a record (`count` records) is white and passes.
+float4 tev_evaluate(uint draw, uint count, uint tri, float2 b, out bool alpha_pass)
+{
+    alpha_pass = true;
+    if (draw >= count) {
+        return float4(1.0f, 1.0f, 1.0f, 1.0f);
+    }
+    const uint record = draw * kTevRecordBytes;
+    const uint header = g_tev.Load(record);
+    const uint stages = min(header & 0x1Fu, 16u);
+    const uint stage_base = g_tev.Load(record + 104u);
+    // The hit's coordinates in both slots and its rasterised colours (channel material x its light).
+    const float3 w = float3(1.0f - b.x - b.y, b.x, b.y);
+    const uint a = tri * kTriUvStride;
+    const float4 uv0_01 = asfloat(g_tri_uv.Load4(a));
+    const float2 uv0_2 = asfloat(g_tri_uv.Load2(a + 16u));
+    const float4 uv1_01 = asfloat(g_tri_uv.Load4(a + 24u));
+    const float2 uv1_2 = asfloat(g_tri_uv.Load2(a + 40u));
+    const uint3 col0 = g_tri_uv.Load3(a + 48u);
+    const uint3 col1 = g_tri_uv.Load3(a + 60u);
+    const float2 uv[2] = {uv0_01.xy * w.x + uv0_01.zw * w.y + uv0_2 * w.z, uv1_01.xy * w.x + uv1_01.zw * w.y + uv1_2 * w.z};
+    float4 v0[3] = {tev_rgba8f(col0.x), tev_rgba8f(col0.y), tev_rgba8f(col0.z)};
+    float4 v1[3] = {tev_rgba8f(col1.x), tev_rgba8f(col1.y), tev_rgba8f(col1.z)};
+    // Bits 5-6: the baked light of the vertices' colour removed per vertex, as the vertex shaders do.
+    [unroll] for (uint k = 0u; k < 3u; ++k) {
+        if ((header & 0x20u) != 0u) v0[k].rgb = tev_debake(v0[k].rgb);
+        if ((header & 0x40u) != 0u) v1[k].rgb = tev_debake(v1[k].rgb);
+    }
+    const float4 vertex0 = v0[0] * w.x + v0[1] * w.y + v0[2] * w.z;
+    const float4 vertex1 = v1[0] * w.x + v1[1] * w.y + v1[2] * w.z;
+    const uint4 channels = g_tev.Load4(record + 8u);   // colour 0 material, its light, colour 1 material, its light
+    float4 ras0 = tev_rgba8f(channels.x);
+    float4 ras1 = tev_rgba8f(channels.z);
+    if ((header & (1u << 24u)) != 0u) ras0.rgb = vertex0.rgb;
+    if ((header & (1u << 25u)) != 0u) ras0.a = vertex0.a;
+    if ((header & (1u << 26u)) != 0u) ras1.rgb = vertex1.rgb;
+    if ((header & (1u << 27u)) != 0u) ras1.a = vertex1.a;
+    const int4 ras_in0 = int4(round(saturate(ras0 * tev_rgba8f(channels.y)) * 255.0f));
+    const int4 ras_in1 = int4(round(saturate(ras1 * tev_rgba8f(channels.w)) * 255.0f));
+
+    int4 prev = tev_register(record, 0u);
+    int4 c0 = tev_register(record, 1u);
+    int4 c1 = tev_register(record, 2u);
+    int4 c2 = tev_register(record, 3u);
+    int4 texc = int4(0, 0, 0, 0);
+    int4 rasc = int4(0, 0, 0, 0);
+    [loop] for (uint s = 0u; s < stages; ++s) {
+        const uint at = stage_base + s * kTevStageBytes;
+        const uint4 packed = g_tev.Load4(at);
+        const float2 scale = asfloat(g_tev.Load2(at + 16u));
+        const uint color_env = packed.x;
+        const uint alpha_env = packed.y;
+        const uint order = packed.z;
+        const uint ksel = packed.w;
+        const uint texmap = order & 7u;
+        const uint texcoord = (order >> 3u) & 7u;
+        const bool tex_enable = ((order >> 6u) & 1u) != 0u;
+        const uint ras_channel = (order >> 7u) & 7u;
+        const uint tex_swizzle = (ksel >> 18u) & 0xFFu;
+        const uint ras_swizzle = (ksel >> 10u) & 0xFFu;
+
+        // As the raster: a stage without coordinates (the draw has no texture generators) reads zero, a disabled one
+        // white.
+        const uint texgens = header >> 28u;
+        if (tex_enable && texgens != 0u) {
+            texc = int4(255, 255, 255, 255);
+#if RT_TEXTURED
+            const uint view = g_tev.Load(record + 72u + texmap * 4u);
+            const float2 coords = uv[(header >> (8u + 2u * texcoord)) & 1u] * scale;
+            if (view != 0xFFFFFFFFu && all(abs(coords) < 1.0e4f)) {
+                const Texture2D<float4> map = ResourceDescriptorHeap[NonUniformResourceIndex(view)];
+                texc = tev_swizzle(int4(round(saturate(map.SampleLevel(g_wrap_point, coords, 0.0f)) * 255.0f)),
+                                   tex_swizzle);
+            }
+#endif
+        } else {
+            texc = texgens != 0u ? int4(255, 255, 255, 255) : int4(0, 0, 0, 0);
+        }
+        rasc = ras_channel == 0u ? tev_swizzle(ras_in0, ras_swizzle)
+               : ras_channel == 1u ? tev_swizzle(ras_in1, ras_swizzle)
+                                   : int4(0, 0, 0, 0);
+        const int4 kon = tev_konst(record, ksel & 0x1Fu, (ksel >> 5u) & 0x1Fu);
+
+        const uint color_bias = (color_env >> 16u) & 3u;
+        const bool color_sub = ((color_env >> 18u) & 1u) != 0u;
+        const uint color_scale = (color_env >> 20u) & 3u;
+        const int3 ca = tev_color_arg((color_env >> 12u) & 0xFu, prev, c0, c1, c2, texc, rasc, kon);
+        const int3 cb = tev_color_arg((color_env >> 8u) & 0xFu, prev, c0, c1, c2, texc, rasc, kon);
+        const int3 cc = tev_color_arg((color_env >> 4u) & 0xFu, prev, c0, c1, c2, texc, rasc, kon);
+        const int3 cd = tev_color_arg(color_env & 0xFu, prev, c0, c1, c2, texc, rasc, kon);
+        const int3 cmp_a = tev_u8(ca);
+        const int3 cmp_b = tev_u8(cb);
+        int3 color_out;
+        if (color_bias == 3u) {
+            const int3 ci = tev_u8(cc);
+            int3 cmp;
+            if (color_scale == 0u) {
+                cmp = (color_sub ? cmp_a.x == cmp_b.x : cmp_a.x > cmp_b.x) ? ci : int3(0, 0, 0);
+            } else if (color_scale == 1u) {
+                const int av = cmp_a.x + (cmp_a.y << 8);
+                const int bv = cmp_b.x + (cmp_b.y << 8);
+                cmp = (color_sub ? av == bv : av > bv) ? ci : int3(0, 0, 0);
+            } else if (color_scale == 2u) {
+                const int av = cmp_a.x + (cmp_a.y << 8) + (cmp_a.z << 16);
+                const int bv = cmp_b.x + (cmp_b.y << 8) + (cmp_b.z << 16);
+                cmp = (color_sub ? av == bv : av > bv) ? ci : int3(0, 0, 0);
+            } else {
+                cmp = color_sub ? (int3(1, 1, 1) - sign(abs(cmp_a - cmp_b))) * ci : max(sign(cmp_a - cmp_b), int3(0, 0, 0)) * ci;
+            }
+            color_out = cd + cmp;
+        } else {
+            const int3 ai = cmp_a;
+            const int3 bi = cmp_b;
+            const int3 ci = tev_u8(cc);
+            const uint left = color_scale == 1u ? 1u : color_scale == 2u ? 2u : 0u;
+            const int3 lhs = (cd + (color_bias == 1u ? 128 : color_bias == 2u ? -128 : 0)) << left;
+            int3 mixv = ((ai << 8) + (bi - ai) * (ci + (ci >> 7))) << left;
+            mixv = color_scale != 3u ? (mixv + (color_sub ? 127 : 128)) >> 8 : mixv >> 8;
+            color_out = color_sub ? lhs - mixv : lhs + mixv;
+            if (color_scale == 3u) {
+                color_out = color_out >> 1;
+            }
+        }
+        color_out = ((color_env >> 19u) & 1u) != 0u ? clamp(color_out, 0, 255) : clamp(color_out, -1024, 1023);
+
+        const uint alpha_bias = (alpha_env >> 16u) & 3u;
+        const bool alpha_sub = ((alpha_env >> 18u) & 1u) != 0u;
+        const uint alpha_scale = (alpha_env >> 20u) & 3u;
+        const int aa = tev_alpha_arg((alpha_env >> 13u) & 7u, prev, c0, c1, c2, texc, rasc, kon);
+        const int ab = tev_alpha_arg((alpha_env >> 10u) & 7u, prev, c0, c1, c2, texc, rasc, kon);
+        const int ac = tev_alpha_arg((alpha_env >> 7u) & 7u, prev, c0, c1, c2, texc, rasc, kon);
+        const int ad = tev_alpha_arg((alpha_env >> 4u) & 7u, prev, c0, c1, c2, texc, rasc, kon);
+        int alpha_out;
+        if (alpha_bias == 3u) {
+            bool cmp;
+            if (alpha_scale == 3u) {
+                cmp = alpha_sub ? (aa & 255) == (ab & 255) : (aa & 255) > (ab & 255);
+            } else if (alpha_scale == 0u) {
+                cmp = alpha_sub ? cmp_a.x == cmp_b.x : cmp_a.x > cmp_b.x;
+            } else if (alpha_scale == 1u) {
+                const int av = cmp_a.x + (cmp_a.y << 8);
+                const int bv = cmp_b.x + (cmp_b.y << 8);
+                cmp = alpha_sub ? av == bv : av > bv;
+            } else {
+                const int av = cmp_a.x + (cmp_a.y << 8) + (cmp_a.z << 16);
+                const int bv = cmp_b.x + (cmp_b.y << 8) + (cmp_b.z << 16);
+                cmp = alpha_sub ? av == bv : av > bv;
+            }
+            alpha_out = ad + (cmp ? (ac & 255) : 0);
+        } else {
+            const int ai = aa & 255;
+            const int bi = ab & 255;
+            const int ci = ac & 255;
+            const uint left = alpha_scale == 1u ? 1u : alpha_scale == 2u ? 2u : 0u;
+            const int lhs = (ad + (alpha_bias == 1u ? 128 : alpha_bias == 2u ? -128 : 0)) << left;
+            int mixv = ((ai << 8) + (bi - ai) * (ci + (ci >> 7))) << left;
+            mixv = alpha_scale != 3u ? (mixv + (alpha_sub ? 127 : 128)) >> 8 : mixv >> 8;
+            alpha_out = alpha_sub ? lhs - mixv : lhs + mixv;
+            if (alpha_scale == 3u) {
+                alpha_out = alpha_out >> 1;
+            }
+        }
+        alpha_out = ((alpha_env >> 19u) & 1u) != 0u ? clamp(alpha_out, 0, 255) : clamp(alpha_out, -1024, 1023);
+
+        switch ((color_env >> 22u) & 3u) {
+        case 0u: prev.rgb = color_out; break;
+        case 1u: c0.rgb = color_out; break;
+        case 2u: c1.rgb = color_out; break;
+        default: c2.rgb = color_out; break;
+        }
+        switch ((alpha_env >> 22u) & 3u) {
+        case 0u: prev.a = alpha_out; break;
+        case 1u: c0.a = alpha_out; break;
+        case 2u: c1.a = alpha_out; break;
+        default: c2.a = alpha_out; break;
+        }
+        // The last stage's destination reaches the pixel engine.
+        if (s + 1u == stages) {
+            const uint color_dest = (color_env >> 22u) & 3u;
+            const uint alpha_dest = (alpha_env >> 22u) & 3u;
+            prev.rgb = color_dest == 1u ? c0.rgb : color_dest == 2u ? c1.rgb : color_dest == 3u ? c2.rgb : prev.rgb;
+            prev.a = alpha_dest == 1u ? c0.a : alpha_dest == 2u ? c1.a : alpha_dest == 3u ? c2.a : prev.a;
+        }
+    }
+    const int4 fragment = prev & int4(255, 255, 255, 255);
+    // The alpha compare (ref0 | ref1 << 8 | comp0 << 16 | comp1 << 19 | logic << 22).
+    const uint test = g_tev.Load(record + 4u);
+    const bool test0 = tev_alpha_compare((test >> 16u) & 7u, fragment.a, int(test & 0xFFu));
+    const bool test1 = tev_alpha_compare((test >> 19u) & 7u, fragment.a, int((test >> 8u) & 0xFFu));
+    const uint logic = (test >> 22u) & 3u;
+    alpha_pass = logic == 0u ? test0 && test1 : logic == 1u ? test0 || test1 : logic == 2u ? test0 != test1 : test0 == test1;
+    return float4(fragment) / 255.0f;
+}

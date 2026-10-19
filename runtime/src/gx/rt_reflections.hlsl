@@ -818,7 +818,7 @@ bool passes_through(uint instance, uint primitive, float2 b)
         return false;
     }
     const float3 w = float3(1.0f - b.x - b.y, b.x, b.y);
-    const uint a = primitive * 36u;
+    const uint a = primitive * 72u;
     const float4 uv01 = asfloat(g_tri_uv.Load4(a));
     const float2 uv2 = asfloat(g_tri_uv.Load2(a + 16u));
     const float2 uv = uv01.xy * w.x + uv01.zw * w.y + uv2 * w.z;
@@ -1093,14 +1093,13 @@ bool hit_shade(uint instance, uint tri, float2 b, float3 x, float3 l, float dist
     }
     const uint4 d = g_draw_tex[draw];
     const float3 w = float3(1.0f - b.x - b.y, b.x, b.y);
-    const uint a = tri * 36u;
+    const uint a = tri * 72u;   // rt_types.h kRtTriUvStride
     const float4 uv01 = asfloat(g_tri_uv.Load4(a));
-    const uint4 rest = g_tri_uv.Load4(a + 16u);
-    const uint c2 = g_tri_uv.Load(a + 32u);
-    const float2 uv = uv01.xy * w.x + uv01.zw * w.y + asfloat(rest.xy) * w.z;
+    const float2 uv = uv01.xy * w.x + uv01.zw * w.y + asfloat(g_tri_uv.Load2(a + 16u)) * w.z;
+    const uint3 colours = g_tri_uv.Load3(a + 48u);
     float3 albedo = hit_rgb8(d.z);
-    if ((d.y & 1u) != 0u && (rest.z | rest.w | c2) != 0u) {
-        albedo = hit_rgb8(rest.z) * w.x + hit_rgb8(rest.w) * w.y + hit_rgb8(c2) * w.z;
+    if ((d.y & 1u) != 0u && (colours.x | colours.y | colours.z) != 0u) {
+        albedo = hit_rgb8(colours.x) * w.x + hit_rgb8(colours.y) * w.y + hit_rgb8(colours.z) * w.z;
     }
     if (d.x != 0xFFFFFFFFu && all(abs(uv) < 1.0e4f)) {
         const Texture2D<float4> map = ResourceDescriptorHeap[NonUniformResourceIndex(d.x)];

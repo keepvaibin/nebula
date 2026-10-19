@@ -263,6 +263,9 @@ public:
         }
         producer_scene_view_valid_ = false;
     }
+    [[nodiscard]] bool rt_shadow_casters_wanted() const noexcept {
+        return rt_shadow_casters_wanted_.load(std::memory_order_relaxed);
+    }
     [[nodiscard]] bool draw_identity_wanted() const noexcept {
         return draw_identity_wanted_.load(std::memory_order_relaxed);
     }
@@ -733,6 +736,7 @@ private:
     bool scene_phase_ = false;
     // Render thread -> simulation thread: emit draw-identity markers.
     std::atomic<bool> draw_identity_wanted_{false};
+    std::atomic<bool> rt_shadow_casters_wanted_{false};
     // Draw identity (on_host_marker): the key of the marker in force in the
     // open scene and the matrix-write count at it. A transform record's
     // identity is that key with the matrix writes since. Repeated markers of
@@ -909,6 +913,21 @@ private:
     std::uint16_t current_rt_material_ = 0u;  // the bound textures' material table entry (rt_materials.h)
     unsigned current_rt_map_ = 0xFFu;  // its texture map (else the first bound one; 0xFF none)
     std::uint32_t rt_draw_buffer_ = 0xFFFFu;   // the last draw buffer marker's type (bit 16: translucent)
+    bool rt_sky_buffer_ = false;  // the draws are the game's sky lists' (kRtDrawSky) until the next category marker
+    // The draws are the game's own shadows (CategoryList::execute of MR::DrawType ShadowSurface 0x26, ShadowVolume 0x27,
+    // AlphaShadow 0x29) until the next category marker: hidden under traced lighting (rt_hidden_draw).
+    bool rt_fake_shadow_list_ = false;
+    // The texture generator of the first TEV stage sampling texture map `map` (0xFF: none).
+    [[nodiscard]] unsigned rt_texgen_of_map(unsigned map) const noexcept;
+    // A draw of the game's sky lists: its record for the traced sky (kRtDrawSky).
+    void begin_rt_sky_batch(RtDrawInfo& info);
+    // The draw's TEV program, registers, colour channels (lit ones at `facing` of their lights) and textures for ray
+    // hits (RtDrawInfo.tev); its two texture slots.
+    void fill_rt_tev(RtDrawInfo& info, float facing);
+    // Physical ray tracing: the colour channels (bit 0: channel 0, bit 1: channel 1) whose colour is the art's baked
+    // light: unlit and taken from the vertices, in an opaque scene phase, outside the sky lists and the material table's
+    // emitters (whose colour is their light). GALAXY_RT_DEBAKE=0: none.
+    [[nodiscard]] std::uint32_t debake_channels() const;
     // Per object name (its guest address) the class its name gives (rt_named_class), + 1.
     std::unordered_map<std::uint32_t, std::uint8_t> rt_named_;
     // Whether a batch starting with `call` is traced geometry; the scene's first one also gives

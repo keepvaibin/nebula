@@ -1,6 +1,19 @@
 #include "Game/LiveActor/ClippingJudge.hpp"
 #include "Game/LiveActor/ClippingDirector.hpp"
 #include "Game/Util.hpp"
+#ifdef TARGET_PC
+#include "Game/Map/LightDataHolder.hpp"
+#include "Game/Map/LightDirector.hpp"
+#include "Game/Scene/SceneObjHolder.hpp"
+#include <nebula_game_api.h>
+#include <revolution/os.h>
+
+namespace {
+    // The stage key light's direction of travel (from the light), when ray-traced shadows want clipped casters.
+    TVec3f sShadowDirection;
+    bool sShadowCasters;
+};  // namespace
+#endif
 
 void ClippingJudge_FORCE_MATCH_SDATA2() {
     0.0f;
@@ -30,7 +43,56 @@ void ClippingJudge::movement() {
     for (u32 i = 1; i < 8; i++) {
         calcViewingVolume(&mClipFrustums[i], mClipDistances[i]);
     }
+#ifdef TARGET_PC
+    updateShadowCasters();
+#endif
 }
+
+#ifdef TARGET_PC
+void ClippingJudge::updateShadowCasters() {
+    sShadowCasters = false;
+    if (__NebulaOption(NEBULA_OPTION_RT_SHADOW_CASTERS) == 0 || !MR::isExistSceneObj(SceneObj_LightDirector)) {
+        return;
+    }
+    const LightDirector* director = MR::getSceneObj< LightDirector >(SceneObj_LightDirector);
+    if (director->mDefaultAreaLight == nullptr) {
+        return;
+    }
+    // Towards the key light as the ray tracer takes it: a world light's position from the origin, a camera light's
+    // from the eye, turned into the world.
+    const LightInfo& key = director->mDefaultAreaLight->mPlanetLight.mInfo0;
+    TVec3f toward(key.mPos.x, key.mPos.y, key.mPos.z);
+    if (key.mIsFollowCamera) {
+        TPos3f camera;
+        camera.setPositionFromLookAt(MR::getCameraViewMtx());
+        camera.mult33(toward);
+    }
+    const f32 length = __builtin_sqrtf(toward.dot(toward));
+    if (!(length > 1e-3f)) {
+        return;
+    }
+    sShadowDirection.set(-toward.x / length, -toward.y / length, -toward.z / length);
+    sShadowCasters = true;
+}
+
+bool ClippingJudge::isShadowCasterInView(const TVec3f& rCenter, f32 radius, s32 index) const {
+    if (!sShadowCasters) {
+        return false;
+    }
+    const THex3f& frustum = index == 0 ? mFrustum : mClipFrustums[index];
+    const f32 reach = index == 0 ? MR::getFarZ() : mClipDistances[index];
+    TVec3f end;
+    end.scaleAdd(reach, sShadowDirection, rCenter);
+    // The swept ball (a capsule) lies outside the frustum when both ends lie outside one of its planes.
+    for (s32 i = 0; i < 6; i++) {
+        const JGeometry::TPartition3< f32 >& plane = frustum.mPlanes[i];
+        if (plane.mNormal.dot(rCenter) - plane.mDot < -radius && plane.mNormal.dot(end) - plane.mDot < -radius) {
+            return false;
+        }
+    }
+    return true;
+}
+#endif
 
 bool ClippingJudge::isJudgedToClipFrustum(const TVec3f& rVec, f32 a2) const {
     return !mFrustum.mayIntersectBall3(rVec, a2);

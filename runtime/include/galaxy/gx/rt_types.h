@@ -13,6 +13,8 @@ namespace galaxy::gx {
 struct RtDraw {
     std::uint32_t vertex_offset = 0;
     std::uint32_t flags = 0;
+    // Vertex count (bits 0-23); the texture generators of the draw's two texture slots + 1 (bits 24-27 and 28-31; 0:
+    // the vertices' first texture coordinates as they are).
     std::uint32_t vertex_count = 0;
     std::uint32_t index_offset = 0;
     std::uint32_t first_triangle = 0;
@@ -66,6 +68,44 @@ inline constexpr std::uint32_t kRtDrawWaterOpaque = 1u << 12u;
 // Gearmos: tests that cut little or nothing), traced whole; each ray's hit counts where its texture's alpha
 // passes the draw's test (RtDrawInfo.alpha; rt_lighting.hlsl alpha_test). Cards carry the same test.
 inline constexpr std::uint32_t kRtDrawAlphaTest = 1u << 17u;
+// RtDrawInfo.surface only: a draw of the game's sky lists (MR::DrawBufferType Sky, Air, Sun and AstroDomeSky, from its
+// draw-buffer markers): the traced sky's geometry (SceneRayTracer's sky probe), never in the scene.
+inline constexpr std::uint32_t kRtDrawSky = 1u << 18u;
+// RtDraw.vertex_count: the vertex count's bits and the texture slots' generator (+ 1) shifts.
+inline constexpr std::uint32_t kRtVertexCountMask = 0xFFFFFFu;
+inline constexpr std::uint32_t kRtTexGenShift = 24u;
+inline constexpr std::uint32_t kRtTexGen2Shift = 28u;
+// Per triangle (ray_tracing.hlsl g_tri_uv): its vertices' coordinates in the draw's two texture slots (3 x 2 floats
+// each), colour 0 and colour 1 (3 x RGBA8 each).
+inline constexpr std::uint32_t kRtTriUvStride = 72u;
+
+// A draw's TEV program for ray hits (rt_tev.hlsli): its stages as the uber pixel shader reads them (TevStagePacked)
+// with each stage's coordinate scale (the texture coordinate's GX scale over its map's size), and one record.
+inline constexpr unsigned kRtTevMaxStages = 16u;
+struct RtTevStage {
+    std::uint32_t color_env = 0u;
+    std::uint32_t alpha_env = 0u;
+    std::uint32_t order = 0u;
+    std::uint32_t ksel = 0u;
+    float scale_s = 1.0f;
+    float scale_t = 1.0f;
+    std::uint32_t pad[2]{};
+};
+static_assert(sizeof(RtTevStage) == 32u);
+struct RtTevMaterial {
+    // Stages (bits 0-4); the vertices' colour 0 / 1 de-baked (bits 5-6); per texture coordinate 0-7 its slot (bits
+    // 8 + 2n); colour 0, alpha 0, colour 1, alpha 1 from the vertices (bits 24-27); texture generators (bits 28-31).
+    std::uint32_t header = 0u;
+    std::uint32_t alpha_test = 0u;   // ref0 | ref1 << 8 | comp0 << 16 | comp1 << 19 | logic << 22
+    // Colour channels 0 and 1: material (RGBA8) and the light that lights it (RGBA8, white unlit).
+    std::uint32_t channel[4]{};
+    std::uint32_t konst[4]{};        // K0-K3, RGBA8
+    std::uint32_t regs[8]{};         // PREV, C0-C2: half floats (r | g << 16, b | a << 16), value / 255
+    std::uint32_t maps[8]{};         // texture views (SceneRayTracer: 0xFFFFFFFF none)
+    std::uint32_t stage_offset = 0u; // SceneRayTracer: its first stage
+    std::uint32_t pad[5]{};
+};
+static_assert(sizeof(RtTevMaterial) == 128u);
 // Bits 8-11: the draw's surface class (rt_surfaces.h).
 inline constexpr std::uint32_t kRtDrawClassShift = 8u;
 inline constexpr std::uint32_t kRtDrawClassMask = 0xFu << kRtDrawClassShift;
@@ -109,6 +149,17 @@ struct RtDrawInfo {
     // (1-255; 0: none, solid).
     RtTextureSource alpha{};
     std::uint32_t alpha_from = 0u;
+    // The texture generators (0-7) of its two texture slots (0xFF: the vertices' first coordinates): the material
+    // texture's stage's, then the next one its stages read (GxBackend::fill_rt_tev).
+    std::uint32_t texgen = 0xFFu;
+    std::uint32_t texgen2 = 0xFFu;
+    // Its TEV program for ray hits, and the textures its maps hold.
+    RtTevMaterial tev{};
+    std::array<RtTevStage, kRtTevMaxStages> tev_stages{};
+    std::array<RtTextureSource, 8> tev_maps{};
+    // kRtDrawSky: how the raster blends it: blending (bit 0), the source and destination factors (GX BlendFactor,
+    // bits 1-3 and 4-6), subtract (bit 7), colour writes (bit 8), a logic op (bit 9).
+    std::uint32_t blend = 0u;
 };
 
 // The scene camera, for rays through EFB pixels and depth reconstruction: GX projection A-D,

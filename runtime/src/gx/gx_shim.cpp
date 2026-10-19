@@ -86,6 +86,10 @@ bool draw_identity_wanted() noexcept {
     return backend().draw_identity_wanted();
 }
 
+bool rt_shadow_casters_wanted() noexcept {
+    return backend().rt_shadow_casters_wanted();
+}
+
 void attach_stripe_particle(std::size_t stream_offset, std::uint32_t particle, std::uint32_t age_lifetime,
                             std::uint8_t strip) {
     backend().attach_stripe_particle({stream_offset, particle, age_lifetime, strip});

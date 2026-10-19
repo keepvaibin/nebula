@@ -2,6 +2,9 @@
 #include "Game/LiveActor/ClippingJudge.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/ViewGroupCtrl.hpp"
+#ifdef TARGET_PC
+#include "Game/NameObj/NameObjExecuteHolder.hpp"
+#endif
 #include "Game/Util.hpp"
 
 ClippingActorInfo::ClippingActorInfo(LiveActor* pActor) {
@@ -12,6 +15,9 @@ ClippingActorInfo::ClippingActorInfo(LiveActor* pActor) {
     mFarClipLevel = 6;
     _12 = -1;
     _14 = 0;
+#ifdef TARGET_PC
+    mShadowDrawn = false;
+#endif
     setTypeToSphere(300.0f, 0);
 }
 
@@ -19,6 +25,9 @@ void ClippingActorInfo::judgeClipping() {
     if (isJudgedToClip()) {
         if (!MR::isClipped(mActor)) {
             mActor->startClipped();
+#ifdef TARGET_PC
+            mShadowDrawn = false;
+#endif
         }
     } else {
         if (MR::isClipped(mActor)) {
@@ -37,6 +46,27 @@ bool ClippingActorInfo::isJudgedToClip() const {
     ClippingJudge* judge = MR::getClippingJudge();
     return judge->isJudgedToClipFrustum(*_4, val, farClipLevel);
 }
+
+#ifdef TARGET_PC
+void ClippingActorInfo::judgeShadowDraw() {
+    const s32 level = _14->_0 == 1 ? 0 : mFarClipLevel;
+    const bool keep = MR::isClipped(mActor) && !MR::isDead(mActor) && !MR::isNoEntryDrawBuffer(mActor) &&
+                      MR::getClippingJudge()->isShadowCasterInView(*_4, _8, level);
+    if (keep == mShadowDrawn) {
+        return;
+    }
+    mShadowDrawn = keep;
+    // An actor the game shows again (endClipped) is back in the draw lists already.
+    if (!MR::isClipped(mActor)) {
+        return;
+    }
+    if (keep) {
+        MR::connectToDrawTemporarily(mActor);
+    } else {
+        MR::disconnectToDrawTemporarily(mActor);
+    }
+}
+#endif
 
 bool ClippingActorInfo::isGroupClipping() const {
     return mInfo;

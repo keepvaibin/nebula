@@ -151,6 +151,9 @@ public:
     [[nodiscard]] bool rt_glow_open() const noexcept { return false; }
     [[nodiscard]] bool rt_water_open() const noexcept { return false; }
     [[nodiscard]] bool rt_late_open() const noexcept { return false; }
+    [[nodiscard]] bool rt_sky_open() const noexcept { return false; }
+    void rt_begin_sky() noexcept {}
+    void rt_set_scene_up(const std::array<float, 3>&) noexcept {}
     [[nodiscard]] bool rt_lighting() const noexcept { return false; }
     [[nodiscard]] bool rt_ab_original() const noexcept { return false; }
     void rt_set_ab_original(bool) noexcept {}

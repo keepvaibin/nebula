@@ -6670,6 +6670,13 @@ void GxBackend::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint
     switch (kind) {
     case motion::kMarkerCategory: {
         ++motion_category_markers_;
+        // The game's sky lists (MR::DrawBufferType Sky 1, Air 2, Sun 3, AstroDomeSky 0x23) until the next list, draw
+        // type or phase.
+        rt_sky_buffer_ = (aux == motion::kCategoryBufferOpa || aux == motion::kCategoryBufferXlu) &&
+                         ((a & 0xFFFFu) == 1u || (a & 0xFFFFu) == 2u || (a & 0xFFFFu) == 3u || (a & 0xFFFFu) == 0x23u);
+        // The game's shadow lists (MR::DrawType ShadowSurface 0x26, ShadowVolume 0x27, AlphaShadow 0x29).
+        rt_fake_shadow_list_ = aux == motion::kCategoryDrawType &&
+                               ((a & 0xFFFFu) == 0x26u || (a & 0xFFFFu) == 0x27u || (a & 0xFFFFu) == 0x29u);
         if (aux == motion::kCategoryPhase) {
             note_rt_phase(static_cast<std::uint8_t>(a));
         }
@@ -7033,6 +7040,198 @@ bool GxBackend::rt_late_draw() const noexcept {
            renderer_.rt_late_open() && rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::AfterIndirect);
 }
 
+unsigned GxBackend::rt_texgen_of_map(unsigned map) const noexcept {
+    for (unsigned s = 0; s < ps_key_.num_tev_stages && s < 16u; ++s) {
+        const std::uint32_t order = ps_key_.stages[s].order;   // texmap 0-2, texcoord 3-5, enable 6
+        if ((order & (1u << 6u)) != 0u && (order & 7u) == map) {
+            const unsigned coord = (order >> 3u) & 7u;
+            return coord < vs_key_.num_texgens ? coord : 0xFFu;
+        }
+    }
+    return 0xFFu;
+}
+
+void GxBackend::begin_rt_sky_batch(RtDrawInfo& info) {
+    info = RtDrawInfo{};
+    info.surface = kRtDrawSky;
+    info.phase = rt_phase_;
+    info.channel = state_.xf(xf::kChannelCtrlBase);
+    info.ambient = state_.xf(xf::kAmbientColorBase);
+    info.material = state_.xf(xf::kMaterialColorBase);
+    // The first TEV stage's texture (as the hits' material texture).
+    for (unsigned s = 0; s < ps_key_.num_tev_stages && s < 16u; ++s) {
+        const std::uint32_t order = ps_key_.stages[s].order;
+        if ((order & (1u << 6u)) == 0u) {
+            continue;
+        }
+        const unsigned map = order & 7u;
+        if (current_texture_table_.ptr != 0u && (current_texture_map_mask_ & (1u << map)) != 0u) {
+            info.texture = rt_texture_source(map);
+            info.texgen = rt_texgen_of_map(map);
+        }
+        break;
+    }
+    // Its alpha test (as alpha-tested geometry: the first GREATER or GEQUAL compare).
+    const AlphaCompare test = state_.alpha_compare();
+    if (test.comp0 == CompareFunc::Greater || test.comp0 == CompareFunc::GEqual) {
+        info.alpha_from = test.ref0 + (test.comp0 == CompareFunc::Greater ? 1u : 0u);
+    } else if (test.comp1 == CompareFunc::Greater || test.comp1 == CompareFunc::GEqual) {
+        info.alpha_from = test.ref1 + (test.comp1 == CompareFunc::Greater ? 1u : 0u);
+    }
+    info.alpha_from = std::min(info.alpha_from, 255u);
+    const BlendMode blend = state_.blend_mode();
+    info.blend = (blend.blend_enable ? 1u : 0u) | (static_cast<std::uint32_t>(blend.src_factor) << 1u) |
+                 (static_cast<std::uint32_t>(blend.dst_factor) << 4u) | (blend.subtract ? 0x80u : 0u) |
+                 (blend.color_update ? 0x100u : 0u) | (blend.logic_op_enable ? 0x200u : 0u);
+    fill_rt_tev(info, 1.0f);
+}
+
+std::uint32_t GxBackend::debake_channels() const {
+    static const bool enabled = read_env_u64("GALAXY_RT_DEBAKE", 1u) != 0u;
+    using motion::ScenePhase;
+    if (!enabled || (enhanced_ps_flags_ & kEnhancedRtPhysical) == 0u || rt_sky_buffer_ || !scene_phase_ ||
+        side_layer_ != kSceneLayer || state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) != 0u ||
+        !(rt_phase_ == static_cast<std::uint8_t>(ScenePhase::OpaBeforeVolumeShadow) ||
+          rt_phase_ == static_cast<std::uint8_t>(ScenePhase::OpaBeforeSilhouette) ||
+          rt_phase_ == static_cast<std::uint8_t>(ScenePhase::Opa) ||
+          rt_phase_ == static_cast<std::uint8_t>(ScenePhase::ListOpa))) {
+        return 0u;
+    }
+    if (const RtMaterial* const material = rt_material(current_rt_material_);
+        material != nullptr && material->emission != RtEmission::None) {
+        return 0u;
+    }
+    std::uint32_t channels = 0u;
+    const unsigned count = std::min<unsigned>(state_.gen_mode().num_color_chans, 2u);
+    for (unsigned c = 0; c < count; ++c) {
+        const XfChannelCtrl ctrl = state_.channel_ctrl(c);
+        if (!ctrl.lighting_enable && ctrl.material_from_vertex) {
+            channels |= 1u << c;
+        }
+    }
+    return channels;
+}
+
+void GxBackend::fill_rt_tev(RtDrawInfo& info, float facing) {
+    RtTevMaterial& tev = info.tev;
+    tev = RtTevMaterial{};
+    const unsigned stages = std::min<unsigned>(ps_key_.num_tev_stages, kRtTevMaxStages);
+    const unsigned texgens = std::min<unsigned>(vs_key_.num_texgens, 8u);
+    // The two texture slots: the material texture's coordinates, then the next ones a stage reads (the raster's rule:
+    // coordinates past the draw's generators read generator 0).
+    unsigned slot0 = info.texgen < texgens ? info.texgen : 0xFFu;
+    unsigned slot1 = 0xFFu;
+    for (unsigned s = 0; s < stages; ++s) {
+        const std::uint32_t order = ps_key_.stages[s].order;
+        if ((order & (1u << 6u)) == 0u || texgens == 0u) {
+            continue;
+        }
+        const unsigned coord = ((order >> 3u) & 7u) < texgens ? (order >> 3u) & 7u : 0u;
+        if (slot0 == 0xFFu) {
+            slot0 = coord;
+        } else if (coord != slot0 && slot1 == 0xFFu) {
+            slot1 = coord;
+        }
+    }
+    info.texgen = slot0;
+    info.texgen2 = slot1;
+    // Bits 5-6: the vertices' colour 0 / 1 keeps only its hue, as the raster's (debake_channels; never the sky's).
+    tev.header = stages | (texgens << 28u) | ((info.surface & kRtDrawSky) != 0u ? 0u : debake_channels() << 5u);
+    for (unsigned t = 0; t < 8u; ++t) {
+        const unsigned coord = t < texgens ? t : 0u;
+        tev.header |= (coord == slot1 ? 1u : 0u) << (8u + 2u * t);
+    }
+    for (unsigned s = 0; s < stages; ++s) {
+        const TevStagePacked& packed = ps_key_.stages[s];
+        RtTevStage& stage = info.tev_stages[s];
+        stage.color_env = packed.color_env;
+        stage.alpha_env = packed.alpha_env;
+        stage.order = packed.order;
+        stage.ksel = packed.ksel;
+        // The raster's coordinate scale: the texture coordinate's GX scale over its map's size.
+        const unsigned map = packed.order & 7u;
+        const unsigned coord = (packed.order >> 3u) & 7u;
+        const TexImage image = state_.tex_image(map);
+        const std::uint32_t s_scale = state_.bp(static_cast<std::uint8_t>(bp::kTexCoordSizeBase + coord * 2u));
+        const std::uint32_t t_scale = state_.bp(static_cast<std::uint8_t>(bp::kTexCoordSizeBase + coord * 2u + 1u));
+        stage.scale_s = static_cast<float>((s_scale & 0xFFFFu) + 1u) / static_cast<float>(std::max<unsigned>(image.width, 1u));
+        stage.scale_t = static_cast<float>((t_scale & 0xFFFFu) + 1u) / static_cast<float>(std::max<unsigned>(image.height, 1u));
+    }
+    const AlphaCompare test = state_.alpha_compare();
+    tev.alpha_test = static_cast<std::uint32_t>(test.ref0) | (static_cast<std::uint32_t>(test.ref1) << 8u) |
+                     (static_cast<std::uint32_t>(test.comp0) << 16u) | (static_cast<std::uint32_t>(test.comp1) << 19u) |
+                     (static_cast<std::uint32_t>(test.logic) << 22u);
+    // Colour channels 0 and 1 (colour and alpha controls 0-3): the material register or the vertices' colour, lit at
+    // `facing` of every light in its mask over its ambient register, clamped as GX's channel.
+    const unsigned channels = std::min<unsigned>(state_.gen_mode().num_color_chans, 2u);
+    for (unsigned c = 0; c < 2u; ++c) {
+        if (c >= channels) {
+            tev.channel[c * 2u] = 0u;
+            tev.channel[c * 2u + 1u] = 0xFFFFFFFFu;
+            continue;
+        }
+        const XfChannelCtrl color = state_.channel_ctrl(c);
+        const XfChannelCtrl alpha = state_.channel_ctrl(2u + c);
+        tev.channel[c * 2u] = state_.xf(static_cast<std::uint16_t>(xf::kMaterialColorBase + c));
+        tev.header |= (color.material_from_vertex ? 1u : 0u) << (24u + 2u * c);
+        tev.header |= (alpha.material_from_vertex ? 1u : 0u) << (25u + 2u * c);
+        const std::uint32_t ambient = state_.xf(static_cast<std::uint16_t>(xf::kAmbientColorBase + c));
+        std::uint32_t light = 0u;
+        for (unsigned k = 0; k < 4u; ++k) {
+            const XfChannelCtrl& ctrl = k < 3u ? color : alpha;
+            const unsigned shift = 24u - 8u * k;
+            float sum = 1.0f;
+            if (ctrl.lighting_enable) {
+                sum = static_cast<float>((ambient >> shift) & 0xFFu) / 255.0f;
+                for (unsigned n = 0; n < 8u; ++n) {
+                    if ((ctrl.light_mask & (1u << n)) != 0u) {
+                        const std::uint32_t lc = state_.xf(static_cast<std::uint16_t>(xf::kLightsBase + 16u * n + 3u));
+                        sum += facing * static_cast<float>((lc >> shift) & 0xFFu) / 255.0f;
+                    }
+                }
+            }
+            light |= static_cast<std::uint32_t>(std::lround(std::clamp(sum, 0.0f, 1.0f) * 255.0f)) << shift;
+        }
+        tev.channel[c * 2u + 1u] = light;
+    }
+    const auto konst = state_.tev_konst_colors();
+    for (unsigned k = 0; k < 4u; ++k) {
+        tev.konst[k] = konst[k];
+    }
+    const auto regs = state_.tev_register_values();
+    const auto half = [](float v) {
+        // IEEE half, round to nearest (registers are -1024..1023 over 255).
+        const std::uint32_t bits = std::bit_cast<std::uint32_t>(v);
+        const std::uint32_t sign = (bits >> 16u) & 0x8000u;
+        const int exponent = static_cast<int>((bits >> 23u) & 0xFFu) - 127 + 15;
+        if (exponent <= 0) {
+            return sign;
+        }
+        if (exponent >= 31) {
+            return sign | 0x7C00u;
+        }
+        std::uint32_t h = sign | (static_cast<std::uint32_t>(exponent) << 10u) | ((bits >> 13u) & 0x3FFu);
+        if ((bits & 0x1000u) != 0u) {
+            ++h;
+        }
+        return h;
+    };
+    for (unsigned r = 0; r < 4u; ++r) {
+        tev.regs[r * 2u] = half(static_cast<float>(regs[r][0]) / 255.0f) |
+                           (half(static_cast<float>(regs[r][1]) / 255.0f) << 16u);
+        tev.regs[r * 2u + 1u] = half(static_cast<float>(regs[r][2]) / 255.0f) |
+                                (half(static_cast<float>(regs[r][3]) / 255.0f) << 16u);
+    }
+    info.tev_maps = {};
+    if (current_texture_table_.ptr != 0u) {
+        for (unsigned m = 0; m < kMaxTextureMaps && m < 8u; ++m) {
+            if ((current_texture_map_mask_ & (1u << m)) != 0u) {
+                info.tev_maps[m] = rt_texture_source(m);
+            }
+        }
+    }
+}
+
 RtTextureSource GxBackend::rt_texture_source(unsigned map) const noexcept {
     const TextureHandle& handle = current_texture_handles_[map];
     if (handle.resource == nullptr) {
@@ -7251,7 +7450,9 @@ bool GxBackend::rt_hidden_draw() const noexcept {
     if (!scene_phase_ || side_layer_ != kSceneLayer || !renderer_.rt_lighting()) {
         return false;
     }
-    if (rt_object_fake_shadow_) {
+    // The game's own shadows: its shadow lists by their draw type (every drawer the game files there: blob and volume
+    // shadows of items, enemies and objects), and the drawers known by name.
+    if (rt_fake_shadow_list_ || rt_object_fake_shadow_) {
         return true;
     }
     // The alpha-shadow phase draws one object, Mario's drop shadow (MarioActor::drawShadow, the only member of
@@ -7416,7 +7617,11 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         }
     };
     note_scene_ao_view(call);
-    if (!scene_phase_ || !(renderer_.rt_scene_open() || renderer_.rt_glow_open() || renderer_.rt_water_open() ||
+    // The game's sky lists: the traced sky's geometry, whatever their viewport (the sky and air layers draw at the far
+    // plane through a flattened one).
+    const bool sky = rt_sky_buffer_ && scene_phase_ && side_layer_ == kSceneLayer && renderer_.rt_sky_open() &&
+                     state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u && !rt_hidden_draw();
+    if (!scene_phase_ || !(sky || renderer_.rt_scene_open() || renderer_.rt_glow_open() || renderer_.rt_water_open() ||
                            renderer_.rt_late_open())) {
         outcome("closed");
         return false;
@@ -7450,7 +7655,13 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     if (flat && (render_state_key_.zmode_bits & (1u << 4u)) != 0u) {
         renderer_.rt_begin_scene();
         rt_view_set_ = false;
-        return false;
+        if (!sky) {
+            return false;
+        }
+    }
+    if (sky) {
+        begin_rt_sky_batch(info);
+        return true;
     }
     if (flat) {
         outcome("flat");
@@ -7620,6 +7831,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     // High quality's textured hits: the material texture (the scene keeps its own view of it).
     if (current_texture_table_.ptr != 0u && current_rt_map_ < kMaxTextureMaps) {
         info.texture = rt_texture_source(current_rt_map_);
+        info.texgen = rt_texgen_of_map(current_rt_map_);
     }
     if ((water && !metal_coat && surface.surface_class == RtSurfaceClass::Metal) || clear_added) {
         // A blended environment map is glass, not metal (unless the table names it a metal coat); an added one over
@@ -7681,6 +7893,23 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
                     info.alpha = rt_texture_source(map);
                     info.alpha_from = info.alpha.resource != nullptr ? from : 0u;
                 }
+                if (log_outcome) [[unlikely]] {
+                    static std::unordered_set<std::uint32_t> logged_alpha;
+                    if (logged_alpha.insert(current_rt_material_).second) {
+                        const std::uint32_t order = ps_key_.stages[0].order;
+                        std::fprintf(stderr,
+                                     "[rt-alpha] material=%u card=%d comp0=%u ref0=%u comp1=%u ref1=%u logic=%u from=%u "
+                                     "map=%u coord=%u enable=%d mask=%02X texgens=%u stages=%u alpha-map=%d rt-map=%u\n",
+                                     static_cast<unsigned>(current_rt_material_), rt_card_draw() ? 1 : 0,
+                                     static_cast<unsigned>(test.comp0), static_cast<unsigned>(test.ref0),
+                                     static_cast<unsigned>(test.comp1), static_cast<unsigned>(test.ref1),
+                                     static_cast<unsigned>(test.logic), from, map, (order >> 3u) & 7u,
+                                     (order >> 6u) & 1u, static_cast<unsigned>(current_texture_map_mask_),
+                                     static_cast<unsigned>(vs_key_.num_texgens),
+                                     static_cast<unsigned>(ps_key_.num_tev_stages), info.alpha.resource != nullptr ? 1 : 0,
+                                     current_rt_map_);
+                    }
+                }
             }
             // The table's shadow 0 was read but never applied: Good Egg's planet shells blocked its
             // sun everywhere (measured sb29: every surface blocked 100-200 units out).
@@ -7713,6 +7942,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
             ++found;
         }
     }
+    fill_rt_tev(info, renderer_.rt_physical() ? 1.0f : 0.55f);
     if (!rt_view_set_) {
         renderer_.rt_set_view(scene_depth_view(viewport));
         rt_view_set_ = true;
@@ -8157,6 +8387,14 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
             cpu_vs_constants_.sky_up_known = known;
             sky_up_dirty_ = true;
         }
+        // The same up for the ray tracer's physical camera (the ground under the player).
+        {
+            float up[3] = {0.0f, 1.0f, 0.0f};
+            if (sky_up_known) {
+                decode_octahedral(sky_up, up);
+            }
+            renderer_.rt_set_scene_up({up[0], up[1], up[2]});
+        }
         rt_mirror_pass_ = false;
         renderer_.set_scene_view(view);
         // GALAXY_RT_AB: the game's own picture on odd presents (the snapshots' numbering).
@@ -8165,8 +8403,11 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
         rt_phase_ = 0xFFu;
         rt_view_set_ = false;
         rt_scene_traced_ = !renderer_.rt_active();
+        rt_sky_buffer_ = false;
+        rt_fake_shadow_list_ = false;
         if (!rt_scene_traced_) {
             renderer_.rt_begin_scene();
+            renderer_.rt_begin_sky();
             renderer_.rt_set_camera(view);
         }
         // GALAXY_RT_AB: the game's own frames keep the aim's state and leave the lights the game's.
@@ -11478,6 +11719,9 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             if (draw_identity_wanted_.load(std::memory_order_relaxed) != wanted) {
                 draw_identity_wanted_.store(wanted, std::memory_order_relaxed);
             }
+            // Traced shadows from what the game clips (GALAXY_RT_OFFSCREEN_CASTERS=0: never).
+            static const bool offscreen_casters = read_env_u64("GALAXY_RT_OFFSCREEN_CASTERS", 1u) != 0u;
+            rt_shadow_casters_wanted_.store(offscreen_casters && renderer_.rt_lighting(), std::memory_order_relaxed);
             interp_scenes_in_chunk_ = 0u;
         }
         // begin_frame() applies a pending internal-resolution change, so copies must use the scale the
@@ -13451,6 +13695,11 @@ gpu::Pipeline* GxBackend::flush_draw_state(
     // Per-pixel and enhanced lighting need the extra position/normal
     // interpolants, which the line and point geometry shaders do not carry.
     const bool triangles = topology_key == static_cast<std::uint8_t>(gpu::kTopologyTypeTriangle);
+    // Physical ray tracing: the vertex shaders keep only the hue of a channel's baked vertex light (flags bits 2-3).
+    if (const std::uint32_t debake = triangles ? debake_channels() << 2u : 0u; cpu_vs_constants_.debake != debake) {
+        cpu_vs_constants_.debake = debake;
+        sky_up_dirty_ = true;   // the scene constants' upload
+    }
     bool enhanced = false;
     bool enhanced_changed = false;
     {
@@ -13469,7 +13718,11 @@ gpu::Pipeline* GxBackend::flush_draw_state(
                                   rt_phase_ == static_cast<std::uint8_t>(ScenePhase::OpaBeforeSilhouette) ||
                                   rt_phase_ == static_cast<std::uint8_t>(ScenePhase::Opa) ||
                                   rt_phase_ == static_cast<std::uint8_t>(ScenePhase::ListOpa);
-        const bool gate = (enhanced_lighting_ || (delight && opaque_phase && (enhanced_ps_flags_ & kEnhancedRtLighting) != 0u)) &&
+        // Ray tracing in the game's light units (kEnhancedRtPhysical) needs every lit opaque draw at its full light
+        // (the albedo the traced light multiplies), whatever the lighting setting.
+        const bool physical = opaque_phase && (enhanced_ps_flags_ & kEnhancedRtPhysical) != 0u;
+        const bool gate = (enhanced_lighting_ || physical ||
+                           (delight && opaque_phase && (enhanced_ps_flags_ & kEnhancedRtLighting) != 0u)) &&
                           triangles &&
                           scene_phase_ && side_layer_ == kSceneLayer &&
                           state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u;

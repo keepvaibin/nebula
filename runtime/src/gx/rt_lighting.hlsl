@@ -85,11 +85,16 @@ cbuffer RtLight : register(b0)
     uint g_reference_pad;
     float4 g_history_projection;   // the previous samples' projection (their frame's jitter)
     float4 g_picture_projection;   // the previous picture's
-    float4 g_sky_radiance;         // kPhysicalFlag: the sky's radiance in the game's light units (rgb)
+    float4 g_sky_radiance;         // kPhysicalFlag: the sky's radiance in units of the stage's full light (rgb)
+    float4 g_full_light;           // 1 / the stage's full light in linear light (rgb); 1: g_sky_map holds the traced sky (w)
+    uint4 g_tev_info;              // TEV records (g_tev) of the scene's draws, of the sky's draws (the sky probe)
+    float4 g_up;                   // the player's up in eye space by the game's gravity (else the view's up)
+    uint4 g_probe;                 // GALAXY_RT_PROBE: the probed sample (x, y), on (z)
 };
 
-// g_flags bit 14: the game's light units (GALAXY_RT_PHYSICAL): g_sky_radiance is the sky, g_sun_light the sun's
-// irradiance over pi, and the reference keeps them as they are (no exposure).
+// g_flags bit 14: the game's light units (GALAXY_RT_PHYSICAL), relative to the stage's full light (ambient + key):
+// g_sky_radiance is the sky, g_sun_light the sun's irradiance over pi, and the reference keeps them as they are (no
+// exposure).
 static const uint kPhysicalFlag = 16384u;
 
 RaytracingAccelerationStructure g_scene : register(t6);
@@ -100,6 +105,9 @@ RaytracingAccelerationStructure g_scene : register(t6);
 ByteAddressBuffer g_tri_uv : register(t20);
 StructuredBuffer<uint4> g_draw_tex : register(t21);
 SamplerState g_wrap_point : register(s0);
+// Per draw its TEV program for ray hits (rt_tev.hlsli; g_tev_info.x records of the scene, .y of the sky in the probe).
+ByteAddressBuffer g_tev : register(t23);
+#include "rt_tev.hlsli"
 #endif
 Texture2D<float> g_efb_depth : register(t7);
 StructuredBuffer<float> g_prev_z : register(t8);
@@ -127,6 +135,12 @@ RWStructuredBuffer<uint2> g_primary : register(u5);      // triangle + 1 (0: non
 // The reference (ReferenceCS): per sample its summed light and paths, then its depth at the start; after the samples
 // its exposure.
 RWStructuredBuffer<float4> g_reference : register(u6);
+// The traced sky (kPhysicalFlag, g_full_light.w): octahedral over world directions, +y the pole, kSkyMapSize^2 texels of
+// the sky's light in units of the stage's full light (linear), then its 9 spherical-harmonic coefficients (rgb).
+// SkyProbeCS and SkyTraceShCS write it (g_reference's slot).
+StructuredBuffer<float4> g_sky_map : register(t22);
+static const uint kSkyMapSize = 64u;
+static const uint kSkyLayers = 8u;     // the sky's layers a probe ray composites, at most
 
 static const float kPi = 3.14159265f;
 static const uint kDrawLit = 8u;    // RtDraw.flags: GX-lit colour
@@ -455,7 +469,8 @@ cbuffer RtCapture : register(b0)
     float c_exposure_night;  // ... under a black sky
     float c_daylight;        // the sky's luminance that counts as bright
     uint c_exposure;         // SkyStateCS: 1 the exposure follows the lighting, 2 it starts over at 1
-                             // (a new stage); GlowBaseCS: bit 0 measure it, bit 2 through the finish's tone
+                             // (a new stage) (bits 0-1); GlowBaseCS: bit 0 measure it, bit 2 through the finish's
+                             // tone; both: bit 3 physical (eye adaptation in linear light)
     float c_grade;           // the finish's grade strength (rt_post.hlsl grade)
 };
 Texture2D<float4> c_color : register(t0);
@@ -687,7 +702,7 @@ void SkyLightShCS(uint gi : SV_GroupIndex)
 [numthreads(1, 1, 1)]
 void SkyStateCS()
 {
-    if (c_exposure == 2u) {
+    if ((c_exposure & 3u) == 2u) {
         c_sums.Store(36u, 0u);
     }
     const uint4 sky = c_sums.Load4(0u);
@@ -721,7 +736,7 @@ void SkyStateCS()
         measured += c_exposure_sums.Load3(b * 16u);
         c_exposure_sums.Store3(b * 16u, uint3(0u, 0u, 0u));
     }
-    if (c_exposure == 2u) {
+    if ((c_exposure & 3u) == 2u) {
         measured = uint3(0u, 0u, 0u);
         c_sums.Store2(48u, uint2(asuint(1.0f), 1u));
     }
@@ -729,7 +744,10 @@ void SkyStateCS()
     c_sums.Store(44u, measured.z);
     c_sums.Store2(56u, measured.xy);
     const uint grid = max(((c_sample_size.x + 7u) / 8u) * ((c_sample_size.y + 7u) / 8u), 1u);
-    if (c_exposure == 0u) {
+    if ((c_exposure & 3u) == 0u) {
+        c_sums.Store2(48u, uint2(asuint(1.0f), 0u));
+    } else if ((c_exposure & 8u) != 0u) {
+        // Physical (bit 3): the exposure is the camera's own (physical_exposure); the measurement stays for [rt-emit].
         c_sums.Store2(48u, uint2(asuint(1.0f), 0u));
     } else if (measured.z * 50u > grid && measured.y != 0u) {
         const float ratio = float(measured.x) / float(measured.y);
@@ -1944,6 +1962,85 @@ bool sky_light_load(out float3 sh[9])
     return known;
 }
 
+// The traced sky's map: a texel's world direction from its map position `uv` (0-1), and back.
+float3 sky_map_direction(float2 uv)
+{
+    const float2 e = uv * 2.0f - 1.0f;
+    float3 v = float3(e.x, 1.0f - abs(e.x) - abs(e.y), e.y);
+    if (v.y < 0.0f) {
+        v.xz = (1.0f - abs(v.zx)) * float2(v.x >= 0.0f ? 1.0f : -1.0f, v.z >= 0.0f ? 1.0f : -1.0f);
+    }
+    return normalize(v);
+}
+
+float2 sky_map_uv(float3 d)
+{
+    d /= max(abs(d.x) + abs(d.y) + abs(d.z), 1e-20f);
+    float2 e = d.xz;
+    if (d.y < 0.0f) {
+        e = (1.0f - abs(d.zx)) * float2(d.x >= 0.0f ? 1.0f : -1.0f, d.z >= 0.0f ? 1.0f : -1.0f);
+    }
+    return e * 0.5f + 0.5f;
+}
+
+float3 eye_to_world(float3 d)
+{
+    return normalize(d.x * g_to_eye[0].xyz + d.y * g_to_eye[1].xyz + d.z * g_to_eye[2].xyz);
+}
+
+// kPhysicalFlag: the traced sky's level. The sky model is drawn as a backdrop (its picture says nothing of how much
+// light it gives); the stage's ambient says how much the open sky lights a surface: the traced sky keeps its colours
+// and their distribution over the sphere at the ambient's luminance (its mean radiance equal to it).
+float physical_sky_scale()
+{
+    const float mean = luminance(g_sky_map[kSkyMapSize * kSkyMapSize].rgb * 0.282095f);
+    return mean > 1e-4f ? luminance(g_sky_radiance.rgb) / mean : 0.0f;
+}
+
+// kPhysicalFlag: the sky's radiance towards eye-space direction `d`: the traced sky's (bilinear in its map, at the
+// stage's ambient level), else the ambient from every direction.
+float3 physical_sky(float3 d)
+{
+    if (g_full_light.w == 0.0f || physical_sky_scale() == 0.0f) {
+        return g_sky_radiance.rgb;
+    }
+    const float2 p = sky_map_uv(eye_to_world(d)) * float(kSkyMapSize) - 0.5f;
+    const float2 f = frac(p);
+    const int2 i = int2(floor(p));
+    float3 radiance = float3(0.0f, 0.0f, 0.0f);
+    [unroll] for (uint k = 0u; k < 4u; ++k) {
+        const int2 t = clamp(i + int2(k & 1u, k >> 1u), 0, int(kSkyMapSize) - 1);
+        const float w = ((k & 1u) != 0u ? f.x : 1.0f - f.x) * ((k & 2u) != 0u ? f.y : 1.0f - f.y);
+        radiance += g_sky_map[uint(t.y) * kSkyMapSize + uint(t.x)].rgb * w;
+    }
+    return radiance * physical_sky_scale();
+}
+
+// kPhysicalFlag: the open sky's irradiance over pi on a surface facing eye-space `n` (the traced sky's spherical
+// harmonics convolved with the cosine: bands 1, 2/3, 1/4, at the stage's ambient level), else the ambient.
+float3 physical_sky_irradiance(float3 n)
+{
+    if (g_full_light.w == 0.0f || physical_sky_scale() == 0.0f) {
+        return g_sky_radiance.rgb;
+    }
+    float basis[9];
+    sh9(eye_to_world(n), basis);
+    float3 irradiance = float3(0.0f, 0.0f, 0.0f);
+    [unroll] for (uint b = 0u; b < 9u; ++b) {
+        irradiance += g_sky_map[kSkyMapSize * kSkyMapSize + b].rgb *
+                      (basis[b] * (b == 0u ? 1.0f : b < 4u ? 2.0f / 3.0f : 0.25f));
+    }
+    return max(irradiance, 0.0f) * physical_sky_scale();
+}
+
+// kPhysicalFlag: the camera's exposure: a white surface facing the player's up (the ground under the player, by the
+// game's gravity; g_up), lit by the open sky and the sun at its angle, shows at the game's full light.
+float physical_exposure()
+{
+    const float sun = max(dot(g_up.xyz, g_sun.xyz), 0.0f);
+    return 1.0f / max(luminance(physical_sky_irradiance(g_up.xyz)) + luminance(g_sun_light.rgb) * sun, 1e-3f);
+}
+
 // The game's distance attenuation (1 / (1 + d^2 / half^2)), windowed to 0 at the light's reach.
 float point_falloff(float d2, uint i)
 {
@@ -2040,22 +2137,17 @@ bool alpha_draw(uint flags)
     return (g_draws.Load(min(flags >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride + 24u) & kDrawTableAlpha) != 0u;
 }
 
-// The alpha test of a hit at eye-space `h` on `primitive` (its g_surfaces flags word `flags`): 1 where its
-// texture's alpha passes the draw's test (it stops the ray), 0 where the test cuts the texel (the ray goes on
-// through a lattice's hole, between a fern's fronds), -1 untested (no alpha map or no tables: solid, or the
-// card's own rule). The texture coordinates from the hit's barycentrics on its eye-space triangle.
+// The alpha test of a hit at eye-space `h` on `primitive` (its g_surfaces flags word `flags`): 1 where the draw's
+// own TEV program and alpha compare keep the texel (it stops the ray), 0 where the test cuts it (the ray goes on
+// through a lattice's hole, between a fern's fronds), -1 untested (not an alpha-tested draw, or no TEV records:
+// solid, or the card's own rule). The coordinates from the hit's barycentrics on its eye-space triangle. (The draw's
+// record count comes from g_tev_info: a root descriptor has no size, and GetDimensions on g_draw_tex read 0, which
+// left every alpha-tested hit to the card's rule: off screen, half the rays through the whole card.)
 int alpha_test(uint primitive, uint flags, float3 h)
 {
 #if RT_TEXTURED
-    if ((g_flags & 4096u) == 0u) {
-        return -1;
-    }
     const uint draw = flags >> 16u;
-    uint count;
-    uint stride;
-    g_draw_tex.GetDimensions(count, stride);
-    const uint alpha = draw < count ? g_draw_tex[draw].w : 0u;
-    if (alpha == 0u) {
+    if (draw >= g_tev_info.x || !(traced_card(flags) || alpha_draw(flags))) {
         return -1;
     }
     const float3 v0 = asfloat(g_positions.Load3(primitive * 36u));
@@ -2073,15 +2165,12 @@ int alpha_test(uint primitive, uint flags, float3 h)
     const float d2 = dot(d, e2);
     const float b1 = (d22 * d1 - d12 * d2) / denominator;
     const float b2 = (d11 * d2 - d12 * d1) / denominator;
-    const uint a = primitive * 36u;
-    const float4 uv01 = asfloat(g_tri_uv.Load4(a));
-    const float2 uv2 = asfloat(g_tri_uv.Load2(a + 16u));
-    const float2 uv = uv01.xy * (1.0f - b1 - b2) + uv01.zw * b1 + uv2 * b2;
-    if (any(abs(uv) > 1.0e4f) || any(isnan(uv))) {
+    if (any(isnan(float2(b1, b2)))) {
         return -1;
     }
-    const Texture2D<float4> map = ResourceDescriptorHeap[NonUniformResourceIndex(alpha & 0xFFFFFFu)];
-    return map.SampleLevel(g_wrap_point, uv, 0.0f).a * 255.0f >= float(alpha >> 24u) - 0.5f ? 1 : 0;
+    bool pass;
+    tev_evaluate(draw, g_tev_info.x, primitive, float2(b1, b2), pass);
+    return pass ? 1 : 0;
 #else
     return -1;
 #endif
@@ -2411,6 +2500,39 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
     const float3 origin = lifted + ng * (0.2f + abs(p.z) * 4e-4f);
     // Decides card hits out of view (card_blocks), per sample, frame and ray.
     const uint salt = index * 32u + g_frame * 0x632BE5ABu;
+    // GALAXY_RT_PROBE (diagnostics): at the probed sample, what the camera sees (triangle + 1, draw record) and what
+    // stops the sun's centre ray from it (triangle + 1, draw record; distance, instance; the sample's eye z, its
+    // facing to the sun), after the samples and the stars in g_final (SceneRayTracer reads them back).
+    if (g_probe.z != 0u && all(id.xy == g_probe.xy)) {
+        RayDesc probe_ray;
+        probe_ray.Origin = origin;
+        probe_ray.Direction = g_sun.xyz;
+        probe_ray.TMin = 0.0f;
+        probe_ray.TMax = g_sun_reach;
+        RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> probe_query;
+        probe_query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, probe_ray);
+        while (probe_query.Proceed()) {
+            if (probe_query.CandidateInstanceID() != 0u) {
+                probe_query.CommitNonOpaqueTriangleHit();
+                continue;
+            }
+            const uint hit = g_surfaces.Load(probe_query.CandidatePrimitiveIndex() * 16u + 12u);
+            if ((hit & kDrawNoShadow) == 0u &&
+                card_blocks(probe_query.CandidatePrimitiveIndex(), hit,
+                            origin + g_sun.xyz * probe_query.CandidateTriangleRayT(), salt)) {
+                probe_query.CommitNonOpaqueTriangleHit();
+            }
+        }
+        const bool blocked = probe_query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
+        const uint blocker_tri = blocked ? probe_query.CommittedPrimitiveIndex() : 0u;
+        const uint instance = blocked ? probe_query.CommittedInstanceID() : 0xFFFFFFFFu;
+        const uint blocker_draw = blocked && instance == 0u ? g_surfaces.Load(blocker_tri * 16u + 12u) >> 16u : 0xFFFFFFFFu;
+        const uint seen_draw = primary.x != 0u ? g_surfaces.Load((primary.x - 1u) * 16u + 12u) >> 16u : 0xFFFFFFFFu;
+        const uint base = g_sample_size.x * g_sample_size.y + kStarSlots;
+        g_final[base] = uint4(primary.x, seen_draw, blocked ? blocker_tri + 1u : 0u, blocker_draw);
+        g_final[base + 1u] = uint4(asuint(blocked ? probe_query.CommittedRayT() : 0.0f), instance, asuint(p.z),
+                                   asuint(dot(n, g_sun.xyz)));
+    }
 
     // The sun: one shadow ray inside its disc, to its nearest blocker (its distance sizes the
     // penumbra the first filter gives the shadow, SpatialACS).
@@ -2691,7 +2813,7 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
             // only blocks.
             const float3 x = origin + direction * query.CommittedRayT();
             if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT || length(x) > g_ambient.w) {
-                light += g_sky_radiance.rgb;
+                light += physical_sky(direction);
             } else if (query.CommittedInstanceID() == 0u) {
                 light += physical_hit(query.CommittedPrimitiveIndex(), query.CommittedTriangleBarycentrics(), x,
                                       direction, salt + 9u + i);
@@ -2940,33 +3062,18 @@ float3 reference_sun(float3 origin, float3 n, bool card, inout uint seed, uint s
                : float3(0.0f, 0.0f, 0.0f);
 }
 
-// What a ray hits on triangle `tri` (barycentrics `b`): its draw's texture at the hit's texture coordinates times the
-// vertices' colour 0 or the draw's colour (rt_reflections.hlsl hit_shade), and the table's area emission, in linear light.
+// What a ray hits on triangle `tri` (barycentrics `b`): its draw's TEV output at the hit (rt_tev.hlsli), and the table's
+// area emission, in linear light.
 void reference_material(uint tri, float2 b, out float3 albedo, out float3 emission)
 {
     albedo = float3(0.5f, 0.5f, 0.5f);
     emission = float3(0.0f, 0.0f, 0.0f);
     const uint draw = g_surfaces.Load(tri * 16u + 12u) >> 16u;
 #if RT_TEXTURED
-    uint count;
-    uint stride;
-    g_draw_tex.GetDimensions(count, stride);
-    if (draw < count) {
-        const uint4 d = g_draw_tex[draw];
-        const float3 w = float3(1.0f - b.x - b.y, b.x, b.y);
-        const uint a = tri * 36u;
-        const float4 uv01 = asfloat(g_tri_uv.Load4(a));
-        const uint4 rest = g_tri_uv.Load4(a + 16u);
-        const uint c2 = g_tri_uv.Load(a + 32u);
-        albedo = rgb8(d.z);
-        if ((d.y & 1u) != 0u && (rest.z | rest.w | c2) != 0u) {
-            albedo = rgb8(rest.z) * w.x + rgb8(rest.w) * w.y + rgb8(c2) * w.z;
-        }
-        const float2 uv = uv01.xy * w.x + uv01.zw * w.y + asfloat(rest.xy) * w.z;
-        if (d.x != 0xFFFFFFFFu && all(abs(uv) < 1.0e4f)) {
-            const Texture2D<float4> map = ResourceDescriptorHeap[NonUniformResourceIndex(d.x)];
-            albedo *= map.SampleLevel(g_wrap_point, uv, 0.0f).rgb;
-        }
+    // The draw's own TEV program at the hit (its colour channels at full light under kPhysicalFlag).
+    if (draw < g_tev_info.x) {
+        bool pass;
+        albedo = tev_evaluate(draw, g_tev_info.x, tri, b, pass).rgb;
     }
 #endif
     albedo = srgb_to_linear(saturate(albedo));
@@ -3004,7 +3111,139 @@ float3 physical_hit(uint tri, float2 b, float3 x, float3 direction, uint salt)
             sun = g_sun_light.rgb * nl;
         }
     }
-    return albedo * (sun + g_sky_radiance.rgb) + emission;
+    return albedo * (sun + physical_sky_irradiance(n)) + emission;
+}
+
+#if RT_TEXTURED
+
+// A GX blend factor (BlendFactor) on the source side (its colour factors name the destination) or the destination's.
+// The frame's alpha under the sky counts as full.
+float3 sky_blend_factor(uint f, float4 src, float3 dst, bool source_side)
+{
+    const float3 other = source_side ? dst : src.rgb;
+    return f == 0u   ? float3(0.0f, 0.0f, 0.0f)
+           : f == 1u ? float3(1.0f, 1.0f, 1.0f)
+           : f == 2u ? other
+           : f == 3u ? 1.0f - other
+           : f == 4u ? src.aaa
+           : f == 5u ? 1.0f - src.aaa
+           : f == 6u ? float3(1.0f, 1.0f, 1.0f)
+                     : float3(0.0f, 0.0f, 0.0f);
+}
+
+// The traced sky (kPhysicalFlag): per map texel four rays from the camera through the game's sky lists' geometry alone
+// (the sky probe's slots: g_scene the sky's structure, g_surfaces, g_tri_uv, g_draw_tex and g_tev its draws'), every
+// layer a ray meets shaded by its own TEV program and composited in the order the game drew them with the game's own
+// blending, display-encoded as the raster does, then averaged in linear light in units of the stage's full light
+// (g_reference: the map).
+[numthreads(8, 8, 1)]
+void SkyProbeCS(uint3 id : SV_DispatchThreadID)
+{
+    if (any(id.xy >= kSkyMapSize)) {
+        return;
+    }
+    float3 sum = float3(0.0f, 0.0f, 0.0f);
+    [loop] for (uint s = 0u; s < 4u; ++s) {
+        const float2 uv = (float2(id.xy) + float2((s & 1u) != 0u ? 0.75f : 0.25f, (s & 2u) != 0u ? 0.75f : 0.25f)) /
+                          float(kSkyMapSize);
+        const float3 world = sky_map_direction(uv);
+        RayDesc ray;
+        ray.Origin = float3(0.0f, 0.0f, 0.0f);
+        ray.Direction = float3(dot(g_to_eye[0].xyz, world), dot(g_to_eye[1].xyz, world), dot(g_to_eye[2].xyz, world));
+        ray.TMin = 0.0f;
+        ray.TMax = 1.0e30f;
+        RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+        query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
+        uint tris[kSkyLayers];
+        float2 bary[kSkyLayers];
+        uint n = 0u;
+        while (query.Proceed()) {
+            // In the order drawn (the sky's triangles are noted in draw order).
+            const uint tri = query.CandidatePrimitiveIndex();
+            const float2 b = query.CandidateTriangleBarycentrics();
+            if (n < kSkyLayers) {
+                uint k = n;
+                [loop] while (k > 0u && tris[k - 1u] > tri) {
+                    tris[k] = tris[k - 1u];
+                    bary[k] = bary[k - 1u];
+                    --k;
+                }
+                tris[k] = tri;
+                bary[k] = b;
+                ++n;
+            }
+        }
+        float3 c = float3(0.0f, 0.0f, 0.0f);
+        [loop] for (uint i = 0u; i < n; ++i) {
+            // The layer's own TEV program and alpha compare (g_tev: the sky's records), blended as its draw's
+            // record says (g_draw_tex: RtDrawInfo.blend).
+            const uint record = g_surfaces.Load(tris[i] * 16u + 12u) >> 16u;
+            const uint blend = g_draw_tex[record].y >> 1u;
+            if ((blend & 0x100u) == 0u || (blend & 0x200u) != 0u) {
+                continue;
+            }
+            bool pass;
+            const float4 src = tev_evaluate(record, g_tev_info.y, tris[i], bary[i], pass);
+            if (!pass) {
+                continue;
+            }
+            if ((blend & 1u) == 0u) {
+                c = src.rgb;
+            } else if ((blend & 0x80u) != 0u) {
+                c = saturate(c - src.rgb);
+            } else {
+                c = saturate(src.rgb * sky_blend_factor((blend >> 1u) & 7u, src, c, true) +
+                             c * sky_blend_factor((blend >> 4u) & 7u, src, c, false));
+            }
+        }
+        sum += srgb_to_linear(c);
+    }
+    g_reference[id.y * kSkyMapSize + id.x] = float4(sum * 0.25f * g_full_light.rgb, 1.0f);
+}
+#endif
+
+groupshared float s_sky_trace[64][28];
+
+// The traced sky's spherical harmonics (after its map in g_reference): each texel by its solid angle (the octahedron's
+// area element over the cube of its point's distance), normalised to the sphere.
+[numthreads(64, 1, 1)]
+void SkyTraceShCS(uint gi : SV_GroupIndex)
+{
+    float sums[28];
+    [unroll] for (uint k = 0u; k < 28u; ++k) {
+        sums[k] = 0.0f;
+    }
+    for (uint t = gi; t < kSkyMapSize * kSkyMapSize; t += 64u) {
+        const float2 e = (float2(t % kSkyMapSize, t / kSkyMapSize) + 0.5f) / float(kSkyMapSize) * 2.0f - 1.0f;
+        float3 v = float3(e.x, 1.0f - abs(e.x) - abs(e.y), e.y);
+        if (v.y < 0.0f) {
+            v.xz = (1.0f - abs(v.zx)) * float2(v.x >= 0.0f ? 1.0f : -1.0f, v.z >= 0.0f ? 1.0f : -1.0f);
+        }
+        const float l = length(v);
+        const float solid = 1.0f / (l * l * l);
+        const float3 radiance = g_reference[t].rgb;
+        float basis[9];
+        sh9(v / l, basis);
+        [unroll] for (uint b = 0u; b < 9u; ++b) {
+            sums[b * 3u + 0u] += radiance.r * basis[b] * solid;
+            sums[b * 3u + 1u] += radiance.g * basis[b] * solid;
+            sums[b * 3u + 2u] += radiance.b * basis[b] * solid;
+        }
+        sums[27] += solid;
+    }
+    [unroll] for (uint j = 0u; j < 28u; ++j) {
+        s_sky_trace[gi][j] = sums[j];
+    }
+    GroupMemoryBarrierWithGroupSync();
+    if (gi < 9u) {
+        float3 coefficient = float3(0.0f, 0.0f, 0.0f);
+        float area = 0.0f;
+        for (uint w = 0u; w < 64u; ++w) {
+            coefficient += float3(s_sky_trace[w][gi * 3u], s_sky_trace[w][gi * 3u + 1u], s_sky_trace[w][gi * 3u + 2u]);
+            area += s_sky_trace[w][27];
+        }
+        g_reference[kSkyMapSize * kSkyMapSize + gi] = float4(coefficient * (4.0f * kPi / max(area, 1e-20f)), 0.0f);
+    }
 }
 
 [numthreads(8, 8, 1)]
@@ -3086,7 +3325,7 @@ void ReferenceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
         const float3 x = position + direction * query.CommittedRayT();
         if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT || length(x) > g_ambient.w) {
             light += throughput * ((g_flags & kPhysicalFlag) != 0u
-                                       ? g_sky_radiance.rgb
+                                       ? physical_sky(direction)
                                        : linear_hue(sky_light(direction, tint, sky_sh, sky_known)) * ambient);
             break;
         }
@@ -3159,7 +3398,7 @@ void ReferenceExposureCS(uint gi : SV_GroupIndex)
     }
     if (gi == 0u) {
         const float mean = s_exposure_count[0] > 0.0f ? s_exposure_sum[0] / s_exposure_count[0] : 0.0f;
-        const float exposure = (g_flags & kPhysicalFlag) != 0u ? g_reference_exposure
+        const float exposure = (g_flags & kPhysicalFlag) != 0u ? g_reference_exposure * physical_exposure()
                                                                : clamp(g_reference_exposure * exp(-mean), 1.0f / 64.0f, 64.0f);
         g_reference[2u * total] = float4(exposure, 0.0f, 0.0f, 0.0f);
     }
@@ -3523,7 +3762,7 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
         // The game's light units: the sky and bounce light, the sun's (its irradiance over pi times N.L and its
         // visibility) and the point lights', summed; the composite multiplies the full-light colour by it in linear
         // light. A light source's own surface glows over it as the reference's does.
-        float3 m = light.sky + g_sun_light.rgb * light.sun + light.points * g_point_light;
+        float3 m = (light.sky + g_sun_light.rgb * light.sun + light.points * g_point_light) * physical_exposure();
         const uint tri = g_primary[index].x;
         if (tri != 0u) {
             const uint record = min(g_surfaces.Load((tri - 1u) * 16u + 12u) >> 16u, max(g_draw_count, 1u) - 1u) *

@@ -39,6 +39,8 @@
 #include "rt_trace_cs.h"
 #include "rt_trace_tex_cs.h"
 #include "rt_reference_tex_cs.h"
+#include "rt_sky_probe_tex_cs.h"
+#include "rt_sky_trace_sh_cs.h"
 #include "rt_reference_exposure_cs.h"
 #include "rt_geometry_cs.h"
 #include "rt_validate_cs.h"
@@ -130,9 +132,13 @@ struct RtLightConstants {
     std::uint32_t reference_pad;
     float history_projection[4];          // the previous samples' projection (their frame's jitter)
     float picture_projection[4];          // the previous picture's
-    float sky_radiance[4];                // GALAXY_RT_PHYSICAL: the sky's radiance in the game's units (rgb)
+    float sky_radiance[4];                // GALAXY_RT_PHYSICAL: the sky's radiance in units of the stage's full light
+    float full_light[4];                  // 1 / the stage's full light in linear light (rgb); 1: the traced sky (w)
+    std::uint32_t tev_info[4];            // TEV records of the scene's draws, of the sky's (rt_tev.hlsli)
+    float up[4];                          // the player's up in eye space (the game's gravity; else the view's up)
+    std::uint32_t probe[4];               // GALAXY_RT_PROBE: its sample (x, y), on (z)
 };
-static_assert(sizeof(RtLightConstants) == 1136u);
+static_assert(sizeof(RtLightConstants) == 1200u);
 
 // Mirrors cbuffer RtPost in rt_post.hlsl (root constants).
 struct RtPostConstants {
@@ -323,6 +329,8 @@ enum LightParameter : UINT {
     kLightSurfaceUv,
     kLightDrawTextures,
     kLightReference,
+    kLightSkyMap,
+    kLightTev,
     kLightCount,
 };
 
@@ -650,6 +658,16 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     // that brings its light's geometric mean to 1.
     reference_ = env_float("GALAXY_RT_REFERENCE", 0.0f) != 0.0f;
     physical_ = env_float("GALAXY_RT_PHYSICAL", 0.0f) != 0.0f;
+    sky_dump_at_ = static_cast<std::uint64_t>(std::max(env_float("GALAXY_RT_SKY_DUMP", 0.0f), 0.0f));
+    {
+        char value[32]{};
+        std::size_t length = 0u;
+        unsigned x = 0u;
+        unsigned y = 0u;
+        probe_ = getenv_s(&length, value, sizeof(value), "GALAXY_RT_PROBE") == 0 && length > 1u &&
+                 sscanf_s(value, "%u,%u", &x, &y) == 2;
+        probe_pixel_ = {x, y};
+    }
     reference_bounces_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_REFERENCE_BOUNCES", 3.0f), 0.0f, 8.0f));
     reference_exposure_ = std::clamp(env_float("GALAXY_RT_REFERENCE_EXPOSURE", 1.0f), 1.0f / 64.0f, 64.0f);
     // _FROM: the present it starts at (before it the real-time lighting alone, at full speed).
@@ -785,6 +803,19 @@ void SceneRayTracer::shutdown() noexcept {
     late_surfaces_.Reset();
     late_blas_.Reset();
     late_scratch_.Reset();
+    sky_draws_.clear();
+    sky_records_.clear();
+    sky_open_ = false;
+    sky_built_ = 0u;
+    sky_positions_.Reset();
+    sky_surfaces_.Reset();
+    sky_uv_.Reset();
+    sky_blas_.Reset();
+    sky_tlas_.Reset();
+    sky_scratch_.Reset();
+    sky_probe_map_.Reset();
+    sky_probe_pso_.Reset();
+    sky_trace_sh_pso_.Reset();
     stats_.Reset();
     stats_zero_.Reset();
     readback_.Reset();
@@ -1012,9 +1043,9 @@ bool SceneRayTracer::ensure_capacity(ID3D12GraphicsCommandList* list, std::uint3
     }
     positions_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     surfaces_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-    // Texture coordinates and colours per triangle (36 B): the alpha tests (both qualities) and high quality's
-    // textured reflection hits.
-    if (create_buffer(static_cast<std::uint64_t>(capacity) * 36u, D3D12_HEAP_TYPE_DEFAULT,
+    // Texture coordinates and colours per triangle (kRtTriUvStride): the alpha tests, the hits' TEV programs (both
+    // qualities) and high quality's textured reflection hits.
+    if (create_buffer(static_cast<std::uint64_t>(capacity) * kRtTriUvStride, D3D12_HEAP_TYPE_DEFAULT,
                       D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, surface_uv_,
                       L"rt surface uv")) {
         surface_uv_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
@@ -1024,7 +1055,7 @@ bool SceneRayTracer::ensure_capacity(ID3D12GraphicsCommandList* list, std::uint3
                 transition(surface_uv_.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_DEST)};
             list->ResourceBarrier(2u, barriers);
             list->CopyBufferRegion(surface_uv_.Get(), 0u, previous_uv.Get(), 0u,
-                                   static_cast<std::uint64_t>(preserved) * 36u);
+                                   static_cast<std::uint64_t>(preserved) * kRtTriUvStride);
             barriers[0] = transition(previous_uv.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE, previous_uv_state);
             barriers[1] = transition(surface_uv_.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
                                      D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -1121,6 +1152,44 @@ void SceneRayTracer::begin_frame(std::uint64_t frame_index) {
         const D3D12_RANGE no_write{0, 0};
         readback_->Unmap(0, &no_write);
     }
+    if (sky_dump_taken_ != 0u && sky_dump_taken_ + kResultDelay <= frame_index && sky_dump_readback_) {
+        const UINT64 texels = static_cast<UINT64>(kSkyMapSize) * kSkyMapSize;
+        const D3D12_RANGE range{0, static_cast<SIZE_T>((texels + 16u) * 16u)};
+        void* mapped = nullptr;
+        if (SUCCEEDED(sky_dump_readback_->Map(0, &range, &mapped))) {
+            const float* map = static_cast<const float*>(mapped);
+            const auto encode = [](float v) {
+                v = std::clamp(v, 0.0f, 1.0f);
+                v = v <= 0.0031308f ? v * 12.92f : 1.055f * std::pow(v, 1.0f / 2.4f) - 0.055f;
+                return static_cast<unsigned char>(std::lround(v * 255.0f));
+            };
+            char dir[512]{};
+            std::size_t dir_length = 0u;
+            const bool dir_set = getenv_s(&dir_length, dir, sizeof(dir), "GALAXY_PRESENT_SNAPSHOT_DIR") == 0 && dir_length > 1u;
+            const std::string path = std::string(dir_set ? dir : ".") + "/sky_probe_" +
+                                     std::to_string(sky_dump_taken_ - 1u) + ".ppm";
+            std::ofstream out(path, std::ios::binary);
+            constexpr unsigned kScale = 4u;
+            out << "P6\n" << kSkyMapSize * kScale << ' ' << kSkyMapSize * kScale << "\n255\n";
+            for (unsigned y = 0; y < kSkyMapSize * kScale; ++y) {
+                for (unsigned x = 0; x < kSkyMapSize * kScale; ++x) {
+                    const float* t = map + ((y / kScale) * kSkyMapSize + x / kScale) * 4u;
+                    const unsigned char px[3]{encode(t[0]), encode(t[1]), encode(t[2])};
+                    out.write(reinterpret_cast<const char*>(px), 3);
+                }
+            }
+            std::cerr << "[rt-sky] sh";
+            for (unsigned b = 0; b < 9u; ++b) {
+                const float* c = map + (texels + b) * 4u;
+                std::cerr << ' ' << c[0] << ',' << c[1] << ',' << c[2];
+            }
+            std::cerr << " -> " << path << '\n';
+            const D3D12_RANGE no_write{0, 0};
+            sky_dump_readback_->Unmap(0, &no_write);
+        }
+        sky_dump_taken_ = 0u;
+        sky_dump_at_ = 0u;
+    }
     for (unsigned k = 0; ball_readback_ && k < kBallReadbacks; ++k) {
         const std::uint64_t taken = ball_readback_frame_[k];
         if (taken == 0u || taken + kResultDelay > frame_index) {
@@ -1134,8 +1203,30 @@ void SceneRayTracer::begin_frame(std::uint64_t frame_index) {
         }
         float balls[kStarSlots * 4u]{};
         std::uint32_t colour[4]{};
+        std::uint32_t probe[kProbeRecords * 4u]{};
         std::memcpy(balls, static_cast<const std::byte*>(mapped) + range.Begin, sizeof(balls));
         std::memcpy(colour, static_cast<const std::byte*>(mapped) + range.Begin + sizeof(balls), sizeof(colour));
+        std::memcpy(probe, static_cast<const std::byte*>(mapped) + range.Begin + sizeof(balls) + sizeof(colour),
+                    sizeof(probe));
+        if (probe_ && taken >= probe_printed_ + 60u) {
+            probe_printed_ = taken;
+            const std::vector<std::uint16_t>& materials = probe_materials_[k];
+            const auto material = [&](std::uint32_t record) {
+                return record < materials.size() ? static_cast<int>(materials[record]) : -1;
+            };
+            float t = 0.0f;
+            float z = 0.0f;
+            float facing = 0.0f;
+            std::memcpy(&t, &probe[4], 4u);
+            std::memcpy(&z, &probe[6], 4u);
+            std::memcpy(&facing, &probe[7], 4u);
+            std::fprintf(stderr,
+                         "[rt-probe] frame=%llu pixel=%u,%u seen-tri=%u draw=%d material=%d sun-blocker-tri=%u draw=%d "
+                         "material=%d t=%.1f instance=%d z=%.1f facing-sun=%.3f\n",
+                         static_cast<unsigned long long>(taken), probe_pixel_[0], probe_pixel_[1], probe[0],
+                         static_cast<int>(probe[1]), material(probe[1]), probe[2], static_cast<int>(probe[3]),
+                         material(probe[3]), t, static_cast<int>(probe[5]), z, facing);
+        }
         const D3D12_RANGE no_write{0, 0};
         ball_readback_->Unmap(0, &no_write);
         // Taken after the stage's first capture (which forgot the last stage's colour).
@@ -1384,11 +1475,11 @@ void SceneRayTracer::write_dump() {
     report << "\ndraw first triangles flags vertices proj(A B C D E F) depth(min max) cull phase | "
               "bg bg-hit match0.1 match1 nearer farther miss outside | channel ambient material "
               "light(index px py pz dx dy dz color) x2 | surface(class features) ind/texgens/stages "
-              "env-stage/combiner chan0 chan1\n";
+              "env-stage/combiner chan0 chan1 | material tev-header channel0 light0\n";
     for (std::size_t d = 0; d < dump_draws_.size(); ++d) {
         const RtDraw& draw = dump_draws_[d];
         report << d << ' ' << draw.first_triangle << ' ' << draw.triangle_count << ' ' << draw.flags << ' '
-               << draw.vertex_count;
+               << (draw.vertex_count & kRtVertexCountMask);
         if (d < dump_infos_.size()) {
             const RtDrawInfo& info = dump_infos_[d];
             for (float p : info.projection) report << ' ' << p;
@@ -1411,6 +1502,15 @@ void SceneRayTracer::write_dump() {
                           (info.surface & kRtDrawClassMask) >> kRtDrawClassShift, info.shading[0] >> 24u,
                           info.shading[0] & 0xFFFFFFu, info.shading[1], info.shading[2], info.shading[3]);
             report << words;
+            // The material table entry; the TEV record's header and colour channel 0 (material, light).
+            std::snprintf(words, sizeof(words), " | %u %08x %08x %08x", static_cast<unsigned>(info.rt_material),
+                          info.tev.header, info.tev.channel[0], info.tev.channel[1]);
+            report << words;
+            for (unsigned s = 0; s < std::min(info.tev.header & 0x1Fu, 4u); ++s) {
+                std::snprintf(words, sizeof(words), " %06x/%06x/%03x", info.tev_stages[s].color_env & 0xFFFFFFu,
+                              info.tev_stages[s].alpha_env & 0xFFFFFFu, info.tev_stages[s].order & 0x3FFu);
+                report << words;
+            }
         }
         report << '\n';
     }
@@ -1637,6 +1737,9 @@ void SceneRayTracer::begin_scene() noexcept {
     water_incomplete_ = false;
     draw_colors_.clear();
     draw_textures_.clear();
+    draw_materials_.clear();
+    tev_records_.clear();
+    tev_stages_.clear();
     infos_.clear();
     triangles_ = 0u;
     flushed_draws_ = 0u;
@@ -1653,7 +1756,70 @@ void SceneRayTracer::begin_scene() noexcept {
     late_incomplete_ = false;
 }
 
+void SceneRayTracer::note_tev(const RtDrawInfo& info, std::vector<RtTevMaterial>& records,
+                              std::vector<RtTevStage>& stages) {
+    RtTevMaterial record = info.tev;
+    record.stage_offset = static_cast<std::uint32_t>(stages.size());
+    const unsigned count = std::min(record.header & 0x1Fu, kRtTevMaxStages);
+    stages.insert(stages.end(), info.tev_stages.begin(), info.tev_stages.begin() + count);
+    for (unsigned m = 0; m < 8u; ++m) {
+        record.maps[m] = info.tev_maps[m].resource != nullptr ? texture_view(info.tev_maps[m]) : 0xFFFFFFFFu;
+    }
+    records.push_back(record);
+}
+
+D3D12_GPU_VIRTUAL_ADDRESS SceneRayTracer::upload_tev(const std::vector<RtTevMaterial>& records,
+                                                     const std::vector<RtTevStage>& stages, Allocate allocate,
+                                                     void* allocate_context) {
+    if (records.empty()) {
+        return 0u;
+    }
+    const std::size_t record_bytes = records.size() * sizeof(RtTevMaterial);
+    const std::size_t stage_bytes = std::max<std::size_t>(stages.size(), 1u) * sizeof(RtTevStage);
+    const RtUpload upload = allocate(allocate_context, record_bytes + stage_bytes, 256u);
+    if (upload.cpu == nullptr) {
+        return 0u;
+    }
+    auto* const out = static_cast<RtTevMaterial*>(upload.cpu);
+    for (std::size_t i = 0; i < records.size(); ++i) {
+        out[i] = records[i];
+        out[i].stage_offset = static_cast<std::uint32_t>(record_bytes + records[i].stage_offset * sizeof(RtTevStage));
+    }
+    if (!stages.empty()) {
+        std::memcpy(static_cast<std::byte*>(upload.cpu) + record_bytes, stages.data(), stages.size() * sizeof(RtTevStage));
+    }
+    return upload.gpu;
+}
+
+void SceneRayTracer::begin_sky() noexcept {
+    sky_draws_.clear();
+    sky_records_.clear();
+    sky_tev_records_.clear();
+    sky_tev_stages_.clear();
+    sky_triangles_ = 0u;
+    sky_flushed_draws_ = 0u;
+    sky_flushed_triangles_ = 0u;
+    sky_incomplete_ = false;
+    sky_built_ = 0u;
+    sky_open_ = physical_ && lighting_active() && sky_probe_pso_ && sky_trace_sh_pso_;
+}
+
 void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
+    // The game's sky lists: the traced sky's geometry, its record in sky_records_.
+    if ((info.surface & kRtDrawSky) != 0u) {
+        if (sky_open_ && draw.triangle_count != 0u && sky_triangles_ + draw.triangle_count <= kSkyMaxTriangles &&
+            sky_records_.size() < 0xFFFFu) {
+            RtDraw& entry = sky_draws_.emplace_back(draw);
+            entry.first_triangle = sky_triangles_;
+            entry.flags = (entry.flags & 0xFFFFu) | (static_cast<std::uint32_t>(sky_records_.size()) << 16u);
+            sky_triangles_ += draw.triangle_count;
+            const XfChannelCtrl channel = decode_xf_channel_ctrl(info.channel);
+            sky_records_.push_back({texture_view(info.texture), (channel.material_from_vertex ? 1u : 0u) | (info.blend << 1u),
+                                    info.material, info.alpha_from});
+            note_tev(info, sky_tev_records_, sky_tev_stages_);
+        }
+        return;
+    }
     const RtMaterial* const material = rt_material(info.rt_material);
     // The emitter log's count of what became of the table's light sources' draws.
     const auto outcome = [&](EmitterOutcome kind) {
@@ -1792,14 +1958,16 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
     {
         // High quality's textured hits: the material texture's view, and the colour the texture is
         // multiplied by: the vertices' colour 0 where channel 0 takes its material from them, else the
-        // material register; a lit draw's at its light's mean facing (0.55, as the de-lit draws).
+        // material register; a lit draw's at its light's mean facing (0.55, as the de-lit draws), in the game's
+        // light units (physical) at its full light, as the raster's albedo.
         std::uint32_t colour = info.material;
         if ((info.surface & kRtDrawLit) != 0u) {
             const auto byte = [](std::uint32_t c, unsigned shift) { return float((c >> shift) & 0xFFu) / 255.0f; };
             const std::uint32_t light = info.light_index[0] == 0u ? info.light_color[0] : 0u;
+            const float facing = physical_active_ ? 1.0f : 0.55f;
             colour = 0xFFu;
             for (const unsigned shift : {24u, 16u, 8u}) {
-                const float lit = std::min(byte(info.ambient, shift) + 0.55f * byte(light, shift), 1.0f) *
+                const float lit = std::min(byte(info.ambient, shift) + facing * byte(light, shift), 1.0f) *
                                   byte(info.material, shift);
                 colour |= static_cast<std::uint32_t>(std::lround(std::clamp(lit, 0.0f, 1.0f) * 255.0f)) << shift;
             }
@@ -1814,6 +1982,8 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
                             std::bit_cast<std::uint32_t>(relief), std::bit_cast<std::uint32_t>(info.light[0][0]),
                             std::bit_cast<std::uint32_t>(info.light[0][1]),
                             std::bit_cast<std::uint32_t>(info.light[0][2]), light_kind});
+    note_tev(info, tev_records_, tev_stages_);
+    draw_materials_.push_back(info.rt_material);
     if (dump_scene_ != 0u && scene_serial_ == dump_scene_) {
         infos_.push_back(info);
     }
@@ -2045,9 +2215,15 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
     params[kLightSurfaceUv].Descriptor.ShaderRegister = 20u;
     params[kLightDrawTextures].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
     params[kLightDrawTextures].Descriptor.ShaderRegister = 21u;
-    // The reference's sums (u6; a stand-in when it is off).
+    // The reference's sums (u6; a stand-in when it is off; the traced sky's map in the sky probe).
     params[kLightReference].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
     params[kLightReference].Descriptor.ShaderRegister = 6u;
+    // The traced sky's map (t22; a stand-in without one).
+    params[kLightSkyMap].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    params[kLightSkyMap].Descriptor.ShaderRegister = 22u;
+    // The draws' TEV records for ray hits (t23; a stand-in without them).
+    params[kLightTev].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    params[kLightTev].Descriptor.ShaderRegister = 23u;
     for (auto& param : params) {
         param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     }
@@ -2102,6 +2278,13 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
         reference_ = false;
         reference_pso_.Reset();
         reference_exposure_pso_.Reset();
+    }
+    // The traced sky reads its draws' textures from the descriptor heap: only with the textured trace.
+    if (!light_textured_ ||
+        !compute(light_root_.Get(), g_rt_sky_probe_tex_cs, sizeof(g_rt_sky_probe_tex_cs), sky_probe_pso_) ||
+        !compute(light_root_.Get(), g_rt_sky_trace_sh_cs, sizeof(g_rt_sky_trace_sh_cs), sky_trace_sh_pso_)) {
+        sky_probe_pso_.Reset();
+        sky_trace_sh_pso_.Reset();
     }
     if (env_float("GALAXY_RT_REFERENCE", 0.0f) != 0.0f) {
         std::cerr << "[rt] reference " << (reference_ ? "on" : "unavailable (needs shader model 6.6 and binding tier 3)")
@@ -2505,7 +2688,7 @@ bool SceneRayTracer::ensure_lighting_buffers(std::uint32_t samples) {
         light_history_state_[i] = state;
     }
     for (unsigned i = 0; ok && i < kLightSlots; ++i) {
-        ok = make((n + kStarSlots) * 16u, light_final_[i], L"rt light result");
+        ok = make((n + kStarSlots + kProbeRecords) * 16u, light_final_[i], L"rt light result");
         light_final_state_[i] = state;
     }
     picture_state_ = state;
@@ -2578,8 +2761,18 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
             draw_texture_table_ = textures.gpu;
         }
     }
+    // The draws' TEV records for ray hits (scene; the sky's with the traced sky).
+    const D3D12_GPU_VIRTUAL_ADDRESS tev_table = upload_tev(tev_records_, tev_stages_, allocate, allocate_context);
+    D3D12_GPU_VIRTUAL_ADDRESS sky_tev_table = 0u;
     RtLightConstants c{};
     c.draw_count = static_cast<std::uint32_t>(draw_count);
+    c.tev_info[0] = tev_table != 0u ? static_cast<std::uint32_t>(tev_records_.size()) : 0u;
+    if (probe_) {
+        probe_sample_ = {probe_pixel_[0] / factor, probe_pixel_[1] / factor};
+        c.probe[0] = probe_sample_[0];
+        c.probe[1] = probe_sample_[1];
+        c.probe[2] = probe_sample_[0] < sample_width && probe_sample_[1] < sample_height ? 1u : 0u;
+    }
     c.sky_ibl = sky_ibl_;
     c.fill = fill_;
     c.emit[0] = glow_cutoff_;
@@ -2754,12 +2947,14 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
                          strength};
     }
     // GALAXY_RT_PHYSICAL: the game's own light units. Its planet light lights a surface as material x min(ambient + key
-    // x N.L, 1) in display-encoded colour, so in linear light the ambient is the sky's radiance and min(ambient + key,
-    // 1) less the ambient the sun's irradiance over pi: a surface facing the sun unshadowed shows its full-light colour
-    // as the game draws it, one in shade the ambient's share. The sun comes from the key light's position, where the game
+    // x N.L, 1) in display-encoded colour. Every traced surface's colour is its colour at that full light (lit draws:
+    // header bit 31; unlit draws are drawn at it), so the light is in units of the stage's full light, in linear light:
+    // the sky's radiance the ambient's share of it, the sun's irradiance over pi the rest. A surface facing the sun
+    // unshadowed shows its colour as the game draws it, one in shade the ambient's share. The sun comes from the key light's position, where the game
     // lights from (the visible BrightSun is its lens flare: on Good Egg it stands on the horizon while the key is 35
     // degrees up).
     GameAreaLight area{};
+    RtUpload sky_record_table{};
     physical_active_ = physical_ && game_area_light(GameAreaLightKind::Stage, area, 2000u);
     if (physical_active_) {
         const auto lin = [](float v) {
@@ -2767,11 +2962,26 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
             return v <= 0.04045f ? v / 12.92f : std::pow((v + 0.055f) / 1.055f, 2.4f);
         };
         for (unsigned i = 0; i < 3u; ++i) {
-            const float sky = lin(area.ambient[i]);
+            const float full = lin(area.ambient[i] + area.lights[0].color[i]);
+            const float sky = full > 1e-4f ? lin(area.ambient[i]) / full : 1.0f;
             c.sky_radiance[i] = sky;
-            c.sun_light[i] = lin(area.ambient[i] + area.lights[0].color[i]) - sky;
+            c.sun_light[i] = 1.0f - sky;
+            c.full_light[i] = 1.0f / std::max(full, 1e-3f);
+        }
+        // The traced sky: the sky's draws of this scene, each one's record for the probe.
+        if (sky_built_ != 0u && sky_probe_pso_ && sky_trace_sh_pso_ && sky_probe_map_ && !sky_records_.empty()) {
+            sky_record_table = allocate(allocate_context, sky_records_.size() * sizeof(sky_records_[0]), 256u);
+            sky_tev_table = upload_tev(sky_tev_records_, sky_tev_stages_, allocate, allocate_context);
+            if (sky_record_table.cpu != nullptr && sky_tev_table != 0u) {
+                std::memcpy(sky_record_table.cpu, sky_records_.data(), sky_records_.size() * sizeof(sky_records_[0]));
+                c.full_light[3] = 1.0f;
+                c.tev_info[1] = static_cast<std::uint32_t>(sky_tev_records_.size());
+            }
         }
         c.sun_light[3] = 1.0f;
+        // The real sun's disc (0.533 degrees across): penumbrae as wide as distance from the caster makes them.
+        c.sun[3] = std::tan(0.2665f * 3.14159265f / 180.0f);
+        std::copy(scene_up_.begin(), scene_up_.end(), c.up);
         const std::array<float, 3>& key = area.lights[0].position;
         const std::array<float, 3> eye =
             area.lights[0].follows_camera
@@ -3026,6 +3236,50 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
                                            draw_texture_table_ != 0u ? draw_texture_table_ : draw_table.gpu);
     list->SetComputeRootUnorderedAccessView(kLightReference, reference ? reference_buffer_->GetGPUVirtualAddress()
                                                                        : light_raw_->GetGPUVirtualAddress());
+    // The traced sky (kPhysicalFlag): the probe traces the sky's own geometry from the camera into its map and the
+    // map's spherical harmonics, with the sky's buffers in the scene's slots, before the traces read them.
+    const bool sky_traced = c.full_light[3] != 0.0f;
+    if (sky_traced) {
+        to_state(list, sky_probe_map_.Get(), sky_probe_map_state_, kUav);
+        list->SetComputeRootShaderResourceView(kLightScene, sky_tlas_->GetGPUVirtualAddress());
+        list->SetComputeRootShaderResourceView(kLightPositions, sky_positions_->GetGPUVirtualAddress());
+        list->SetComputeRootShaderResourceView(kLightSurfaces, sky_surfaces_->GetGPUVirtualAddress());
+        list->SetComputeRootShaderResourceView(kLightSurfaceUv, sky_uv_->GetGPUVirtualAddress());
+        list->SetComputeRootShaderResourceView(kLightDrawTextures, sky_record_table.gpu);
+        list->SetComputeRootUnorderedAccessView(kLightReference, sky_probe_map_->GetGPUVirtualAddress());
+        list->SetComputeRootShaderResourceView(kLightSkyMap, positions_->GetGPUVirtualAddress());
+        list->SetComputeRootShaderResourceView(kLightTev, sky_tev_table);
+        list->SetPipelineState(sky_probe_pso_.Get());
+        list->Dispatch(kSkyMapSize / 8u, kSkyMapSize / 8u, 1u);
+        const D3D12_RESOURCE_BARRIER probe_uav = uav_barrier(sky_probe_map_.Get());
+        list->ResourceBarrier(1u, &probe_uav);
+        list->SetPipelineState(sky_trace_sh_pso_.Get());
+        list->Dispatch(1u, 1u, 1u);
+        list->ResourceBarrier(1u, &probe_uav);
+        const UINT64 map_bytes = (static_cast<UINT64>(kSkyMapSize) * kSkyMapSize + 16u) * 16u;
+        if (sky_dump_at_ != 0u && frame_index_ >= sky_dump_at_ && sky_dump_taken_ == 0u &&
+            (sky_dump_readback_ || create_buffer(map_bytes, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST,
+                                                 D3D12_RESOURCE_FLAG_NONE, sky_dump_readback_, L"rt sky dump"))) {
+            to_state(list, sky_probe_map_.Get(), sky_probe_map_state_, D3D12_RESOURCE_STATE_COPY_SOURCE);
+            list->CopyBufferRegion(sky_dump_readback_.Get(), 0u, sky_probe_map_.Get(), 0u, map_bytes);
+            sky_dump_taken_ = frame_index_ + 1u;
+            std::cerr << "[rt-sky] dump frame=" << frame_index_ << " draws=" << sky_records_.size()
+                      << " triangles=" << sky_built_ << '\n';
+        }
+        to_state(list, sky_probe_map_.Get(), sky_probe_map_state_, kRead);
+        list->SetComputeRootShaderResourceView(kLightScene, tlas_->GetGPUVirtualAddress());
+        list->SetComputeRootShaderResourceView(kLightPositions, positions_->GetGPUVirtualAddress());
+        list->SetComputeRootShaderResourceView(kLightSurfaces, surfaces_->GetGPUVirtualAddress());
+        list->SetComputeRootShaderResourceView(kLightSurfaceUv, surface_uv_ ? surface_uv_->GetGPUVirtualAddress()
+                                                                            : positions_->GetGPUVirtualAddress());
+        list->SetComputeRootShaderResourceView(kLightDrawTextures,
+                                               draw_texture_table_ != 0u ? draw_texture_table_ : draw_table.gpu);
+        list->SetComputeRootUnorderedAccessView(kLightReference, reference ? reference_buffer_->GetGPUVirtualAddress()
+                                                                           : light_raw_->GetGPUVirtualAddress());
+    }
+    list->SetComputeRootShaderResourceView(kLightSkyMap, sky_traced ? sky_probe_map_->GetGPUVirtualAddress()
+                                                                    : positions_->GetGPUVirtualAddress());
+    list->SetComputeRootShaderResourceView(kLightTev, tev_table != 0u ? tev_table : draw_table.gpu);
     // The stars' balls, after the samples in the result (the composite shades the stars on them, reflections that
     // meet a star find its ball): every slot each frame, one without a star this frame written empty.
     list->SetPipelineState(star_sphere_pso_.Get());
@@ -3070,6 +3324,12 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         to_state(list, light_final_[slot].Get(), light_final_state_[slot], D3D12_RESOURCE_STATE_COPY_SOURCE);
         list->CopyBufferRegion(ball_readback_.Get(), at, light_final_[slot].Get(),
                                static_cast<UINT64>(sample_width) * sample_height * 16u, kStarSlots * 16u);
+        if (probe_) {
+            list->CopyBufferRegion(ball_readback_.Get(), at + kStarSlots * 16u + 16u, light_final_[slot].Get(),
+                                   (static_cast<UINT64>(sample_width) * sample_height + kStarSlots) * 16u,
+                                   kProbeRecords * 16u);
+            probe_materials_[ball_readback_next_] = draw_materials_;
+        }
         ball_readback_colour_[ball_readback_next_] = picture_valid_;
         if (picture_valid_) {
             to_state(list, picture_sums_.Get(), picture_sums_state_, D3D12_RESOURCE_STATE_COPY_SOURCE);
@@ -3216,7 +3476,7 @@ void SceneRayTracer::capture_picture(ID3D12GraphicsCommandList* list, const RtSo
     c.exposure_day = exposure_day_;
     c.exposure_night = exposure_night_;
     c.daylight = daylight_;
-    c.exposure = !exposure_ ? 0u : exposure_reset_ ? 2u : 1u;
+    c.exposure = (!exposure_ ? 0u : exposure_reset_ ? 2u : 1u) | (physical_active_ ? 8u : 0u);
     if (exposure_reset_) {
         // A new stage: SkyStateCS forgets the stars' colour; the copies taken after this frame read it again.
         c.divide |= 8u;
@@ -4011,17 +4271,21 @@ bool SceneRayTracer::transform_draws(ID3D12GraphicsCommandList* list, const RtSo
                                      void* allocate_context, const RtDraw* draws, std::size_t count,
                                      std::uint32_t triangle_base, std::uint32_t triangles, ID3D12Resource* positions,
                                      D3D12_RESOURCE_STATES& positions_state, ID3D12Resource* surfaces,
-                                     D3D12_RESOURCE_STATES& surfaces_state) {
+                                     D3D12_RESOURCE_STATES& surfaces_state, ID3D12Resource* uv,
+                                     D3D12_RESOURCE_STATES* uv_state) {
     const std::size_t table_bytes = count * sizeof(RtDraw);
     const RtUpload table = allocate(allocate_context, table_bytes, 256u);
     RtUpload frame{};
     if (table.cpu == nullptr || !fill_constants(sources, allocate, allocate_context, static_cast<std::uint32_t>(count),
-                                                triangle_base, triangles, 0u, 0u, 0u, frame)) {
+                                                triangle_base, triangles, 0u, 0u, uv != nullptr ? 2u : 0u, frame)) {
         return false;
     }
     std::memcpy(table.cpu, draws, table_bytes);
     to_state(list, positions, positions_state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     to_state(list, surfaces, surfaces_state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    if (uv != nullptr && uv_state != nullptr) {
+        to_state(list, uv, *uv_state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    }
     const D3D12_GPU_VIRTUAL_ADDRESS resident = sources.resident.base != 0u ? sources.resident.base
                                                                            : sources.vertex_ring.base;
     list->SetComputeRootSignature(root_.Get());
@@ -4035,7 +4299,7 @@ bool SceneRayTracer::transform_draws(ID3D12GraphicsCommandList* list, const RtSo
     list->SetComputeRootShaderResourceView(kRootMatrixRing, sources.matrix_ring.base);
     list->SetComputeRootUnorderedAccessView(kRootPositions, positions->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kRootSurfaces, surfaces->GetGPUVirtualAddress());
-    list->SetComputeRootUnorderedAccessView(kRootSurfaceUv, surfaces->GetGPUVirtualAddress());
+    list->SetComputeRootUnorderedAccessView(kRootSurfaceUv, (uv != nullptr ? uv : surfaces)->GetGPUVirtualAddress());
     list->Dispatch((triangles + 63u) / 64u, 1u, 1u);
     const D3D12_RESOURCE_BARRIER barrier = uav_barrier(nullptr);
     list->ResourceBarrier(1u, &barrier);
@@ -4204,6 +4468,148 @@ void SceneRayTracer::finish_late(ID3D12GraphicsCommandList* list, const RtSource
     window_.late_triangles += late_triangles_;
 }
 
+void SceneRayTracer::flush_sky(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
+                               void* allocate_context) {
+    if (!sky_open_ || list == nullptr || allocate == nullptr || sky_flushed_draws_ >= sky_draws_.size()) {
+        return;
+    }
+    const std::size_t first = sky_flushed_draws_;
+    const std::uint32_t base = sky_flushed_triangles_;
+    sky_flushed_draws_ = sky_draws_.size();
+    sky_flushed_triangles_ = sky_triangles_;
+    if (!ensure_sky_buffers() ||
+        !transform_draws(list, sources, allocate, allocate_context, sky_draws_.data() + first, sky_draws_.size() - first,
+                         base, sky_triangles_ - base, sky_positions_.Get(), sky_positions_state_, sky_surfaces_.Get(),
+                         sky_surfaces_state_, sky_uv_.Get(), &sky_uv_state_)) {
+        sky_incomplete_ = true;
+    }
+}
+
+bool SceneRayTracer::ensure_sky_buffers() {
+    if (sky_blas_) {
+        return true;
+    }
+    D3D12_RAYTRACING_GEOMETRY_DESC geometry{};
+    geometry.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+    geometry.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
+    geometry.Triangles.VertexCount = kSkyMaxTriangles * 3u;
+    geometry.Triangles.VertexBuffer.StrideInBytes = 12u;
+    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS bottom{};
+    bottom.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+    bottom.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD;
+    bottom.NumDescs = 1u;
+    bottom.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+    bottom.pGeometryDescs = &geometry;
+    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO bottom_info{};
+    device_->GetRaytracingAccelerationStructurePrebuildInfo(&bottom, &bottom_info);
+    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS top{};
+    top.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
+    top.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+    top.NumDescs = 1u;
+    top.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+    D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO top_info{};
+    device_->GetRaytracingAccelerationStructurePrebuildInfo(&top, &top_info);
+    if (bottom_info.ResultDataMaxSizeInBytes == 0u || top_info.ResultDataMaxSizeInBytes == 0u) {
+        return false;
+    }
+    constexpr D3D12_RESOURCE_STATES kUav = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    constexpr D3D12_RESOURCE_STATES kStructure = D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE;
+    constexpr D3D12_RESOURCE_FLAGS kUavFlag = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    sky_scratch_tlas_ = (std::max<std::uint64_t>(bottom_info.ScratchDataSizeInBytes, 256u) + 255u) & ~255ull;
+    if (!create_buffer(static_cast<std::uint64_t>(kSkyMaxTriangles) * 36u, D3D12_HEAP_TYPE_DEFAULT, kUav, kUavFlag,
+                       sky_positions_, L"rt sky triangles") ||
+        !create_buffer(static_cast<std::uint64_t>(kSkyMaxTriangles) * 16u, D3D12_HEAP_TYPE_DEFAULT, kUav, kUavFlag,
+                       sky_surfaces_, L"rt sky surfaces") ||
+        !create_buffer(static_cast<std::uint64_t>(kSkyMaxTriangles) * kRtTriUvStride, D3D12_HEAP_TYPE_DEFAULT, kUav,
+                       kUavFlag, sky_uv_, L"rt sky coordinates") ||
+        !create_buffer(bottom_info.ResultDataMaxSizeInBytes, D3D12_HEAP_TYPE_DEFAULT, kStructure, kUavFlag, sky_blas_,
+                       L"rt sky blas") ||
+        !create_buffer(top_info.ResultDataMaxSizeInBytes, D3D12_HEAP_TYPE_DEFAULT, kStructure, kUavFlag, sky_tlas_,
+                       L"rt sky tlas") ||
+        !create_buffer(sky_scratch_tlas_ + std::max<std::uint64_t>(top_info.ScratchDataSizeInBytes, 256u),
+                       D3D12_HEAP_TYPE_DEFAULT, kUav, kUavFlag, sky_scratch_, L"rt sky scratch") ||
+        !create_buffer((static_cast<std::uint64_t>(kSkyMapSize) * kSkyMapSize + 16u) * 16u, D3D12_HEAP_TYPE_DEFAULT,
+                       kUav, kUavFlag, sky_probe_map_, L"rt sky map")) {
+        sky_positions_.Reset();
+        sky_surfaces_.Reset();
+        sky_uv_.Reset();
+        sky_blas_.Reset();
+        sky_tlas_.Reset();
+        sky_scratch_.Reset();
+        sky_probe_map_.Reset();
+        return false;
+    }
+    sky_positions_state_ = kUav;
+    sky_surfaces_state_ = kUav;
+    sky_uv_state_ = kUav;
+    sky_probe_map_state_ = kUav;
+    std::cerr << "[rt] sky triangles=" << kSkyMaxTriangles << " blas-kb=" << (bottom_info.ResultDataMaxSizeInBytes >> 10u)
+              << '\n';
+    return true;
+}
+
+void SceneRayTracer::finish_sky(ID3D12GraphicsCommandList4* list, const RtSources& sources, Allocate allocate,
+                                void* allocate_context) {
+    if (!sky_open_) {
+        return;
+    }
+    flush_sky(list, sources, allocate, allocate_context);
+    sky_open_ = false;
+    sky_built_ = 0u;
+    if (list == nullptr || sky_incomplete_ || sky_triangles_ == 0u || !sky_blas_) {
+        return;
+    }
+    const RtUpload instance_upload = allocate(allocate_context, sizeof(D3D12_RAYTRACING_INSTANCE_DESC), 256u);
+    if (instance_upload.cpu == nullptr) {
+        return;
+    }
+    constexpr D3D12_RESOURCE_STATES kRead = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    to_state(list, sky_positions_.Get(), sky_positions_state_, kRead);
+    to_state(list, sky_surfaces_.Get(), sky_surfaces_state_, kRead);
+    to_state(list, sky_uv_.Get(), sky_uv_state_, kRead);
+    D3D12_RESOURCE_BARRIER barrier = uav_barrier(nullptr);
+    list->ResourceBarrier(1u, &barrier);
+    // Every layer of the sky is a candidate (none opaque): the probe composites them in the order they were drawn.
+    D3D12_RAYTRACING_GEOMETRY_DESC geometry{};
+    geometry.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+    geometry.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
+    geometry.Triangles.VertexCount = sky_triangles_ * 3u;
+    geometry.Triangles.VertexBuffer.StartAddress = sky_positions_->GetGPUVirtualAddress();
+    geometry.Triangles.VertexBuffer.StrideInBytes = 12u;
+    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC build{};
+    build.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+    build.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD;
+    build.Inputs.NumDescs = 1u;
+    build.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+    build.Inputs.pGeometryDescs = &geometry;
+    build.DestAccelerationStructureData = sky_blas_->GetGPUVirtualAddress();
+    build.ScratchAccelerationStructureData = sky_scratch_->GetGPUVirtualAddress();
+    list->BuildRaytracingAccelerationStructure(&build, 0u, nullptr);
+    barrier = uav_barrier(sky_blas_.Get());
+    list->ResourceBarrier(1u, &barrier);
+    D3D12_RAYTRACING_INSTANCE_DESC instance{};
+    instance.Transform[0][0] = 1.0f;
+    instance.Transform[1][1] = 1.0f;
+    instance.Transform[2][2] = 1.0f;
+    instance.InstanceMask = 0xFFu;
+    instance.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_TRIANGLE_CULL_DISABLE |
+                     D3D12_RAYTRACING_INSTANCE_FLAG_FORCE_NON_OPAQUE;
+    instance.AccelerationStructure = sky_blas_->GetGPUVirtualAddress();
+    std::memcpy(instance_upload.cpu, &instance, sizeof(instance));
+    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC top{};
+    top.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
+    top.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+    top.Inputs.NumDescs = 1u;
+    top.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+    top.Inputs.InstanceDescs = instance_upload.gpu;
+    top.DestAccelerationStructureData = sky_tlas_->GetGPUVirtualAddress();
+    top.ScratchAccelerationStructureData = sky_scratch_->GetGPUVirtualAddress() + sky_scratch_tlas_;
+    list->BuildRaytracingAccelerationStructure(&top, 0u, nullptr);
+    barrier = uav_barrier(sky_tlas_.Get());
+    list->ResourceBarrier(1u, &barrier);
+    sky_built_ = sky_triangles_;
+}
+
 bool SceneRayTracer::build_tlas(ID3D12GraphicsCommandList4* list, Allocate allocate, void* allocate_context) {
     // The late geometry of this scene (the water's trace) or the last one (moved to this camera: a frame late).
     std::array<float, 12> inverse{};
@@ -4330,6 +4736,7 @@ bool SceneRayTracer::trace_scene(ID3D12GraphicsCommandList* list, const RtSource
         ++window_.skipped;
         return false;
     }
+    finish_sky(list4.Get(), sources, allocate, allocate_context);
     if (record_results && timestamps_) {
         list->EndQuery(timestamps_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, slot * kTimestampsPerSlot + 1u);
     }
