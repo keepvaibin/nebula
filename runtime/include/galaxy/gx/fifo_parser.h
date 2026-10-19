@@ -87,9 +87,9 @@ private:
 };
 
 // ---------------------------------------------------------------------------
-// Bulk big-endian -> little-endian conversion kernels.  Implementations use
-// SSSE3 pshufb over 16-byte blocks with a scalar tail; vertex arrays are the
-// hot path and must never go through per-byte scalar reads.
+// Bulk big-endian -> little-endian conversion kernels: 16-byte vectors
+// (galaxy/simd128.h) with a scalar tail; vertex arrays are the hot path and
+// must never go through per-byte scalar reads.
 // ---------------------------------------------------------------------------
 
 // Swaps `count` 16-bit values from src into dst (may not alias).

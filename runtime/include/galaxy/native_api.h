@@ -16269,5 +16269,9 @@ inline GALAXY_MODULE_EXPORT std::uint32_t galaxy_module_memory_flags() {
 // Shared guarded math after the complete ABI and guest helper declarations.
 #include "galaxy/ppc_float_native_inline.h"
 // Native fast paths for the generated module (flat RAM, native float, direct
-// dispatch). Declared last because they shadow the helpers above.
+// dispatch). Declared last because they shadow the helpers above. The
+// translator emits x86-64 modules only; on other CPUs the native game uses
+// none of this.
+#if defined(_M_X64) || defined(__x86_64__)
 #include "galaxy/native_fast_paths.h"
+#endif

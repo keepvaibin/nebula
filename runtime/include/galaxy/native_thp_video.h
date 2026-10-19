@@ -45,6 +45,7 @@ private:
 
 // The decoder's fused multiply-adds: Automatic uses FMA3 when the CPU has it.
 // Both kernels give identical planes; Fma3 on a CPU without it is an error.
+// Fma3: the hardware fused multiply-add (FMA3 on x86, the base fmadd on AArch64).
 enum class VideoKernel : std::uint8_t { Automatic, ExactSse2, Fma3 };
 
 // Bounded native THP subsystem boundary. Outputs use GX I8 8x4 tiling.

@@ -124,3 +124,7 @@ target_include_directories(main PRIVATE "${nebula_root}/native/include" "${nebul
 target_compile_definitions(main PRIVATE NEBULA_HOST_RENDERER=1 NEBULA_HOST_SDL=1)
 target_include_directories(main PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(main PRIVATE galaxy_gx_vk SDL3::SDL3)
+
+# The vector kernels against their references on this platform's CPU (NEON on AArch64).
+add_executable(nebula_simd_kernel_tests "${nebula_root}/runtime/src/gx/simd_kernel_tests.cpp")
+target_link_libraries(nebula_simd_kernel_tests PRIVATE galaxy_gx_vk)

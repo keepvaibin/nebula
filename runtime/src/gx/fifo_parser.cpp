@@ -13,7 +13,7 @@
 #include "galaxy/gx/fifo_parser.h"
 #include "galaxy/gx/snapshot_region_lookup.h"
 
-#include <immintrin.h>  // SSSE3 pshufb
+#include "galaxy/simd128.h"
 
 #include <algorithm>
 #include <array>
@@ -510,26 +510,18 @@ bool append_cached_packet_indices(
 
 // ---------------------------------------------------------------------------
 // swap16_block: byte-swap `count` big-endian 16-bit values from `src` into
-// `dst`.  Uses SSSE3 pshufb to process 8 values (16 bytes) per iteration.
+// `dst`, 8 values (16 bytes) per vector.
 // ---------------------------------------------------------------------------
 void swap16_block(
     const std::byte* src,
     std::uint16_t* dst,
     std::size_t count) {
-    // Shuffle mask: swap every pair of bytes within each 16-bit lane.
-    // 8 lanes x 2 bytes = 16 bytes per iteration.
-    const __m128i mask = _mm_set_epi8(
-        14, 15, 12, 13, 10, 11,  8,  9,
-         6,  7,  4,  5,  2,  3,  0,  1);
-
     const std::byte* in  = src;
     std::uint8_t*    out = reinterpret_cast<std::uint8_t*>(dst);
 
     std::size_t i = 0;
     for (; i + 8 <= count; i += 8, in += 16, out += 16) {
-        __m128i v = _mm_loadu_si128(reinterpret_cast<const __m128i*>(in));
-        v = _mm_shuffle_epi8(v, mask);
-        _mm_storeu_si128(reinterpret_cast<__m128i*>(out), v);
+        simd::store(out, simd::byteswap16(simd::load(in)));
     }
     // Scalar tail.
     for (; i < count; ++i) {
@@ -554,25 +546,18 @@ void read_indexed_values(const std::byte* src, std::uint32_t* dst, std::size_t c
 }
 
 // swap32_block: byte-swap `count` big-endian 32-bit values from `src` into
-// `dst`.  Uses SSSE3 pshufb to process 4 values (16 bytes) per iteration.
+// `dst`, 4 values (16 bytes) per vector.
 // ---------------------------------------------------------------------------
 void swap32_block(
     const std::byte* src,
     std::uint32_t* dst,
     std::size_t count) {
-    // Shuffle mask: reverse every group of 4 bytes within each 32-bit lane.
-    const __m128i mask = _mm_set_epi8(
-        12, 13, 14, 15,  8,  9, 10, 11,
-         4,  5,  6,  7,  0,  1,  2,  3);
-
     const std::byte* in  = src;
     std::uint8_t*    out = reinterpret_cast<std::uint8_t*>(dst);
 
     std::size_t i = 0;
     for (; i + 4 <= count; i += 4, in += 16, out += 16) {
-        __m128i v = _mm_loadu_si128(reinterpret_cast<const __m128i*>(in));
-        v = _mm_shuffle_epi8(v, mask);
-        _mm_storeu_si128(reinterpret_cast<__m128i*>(out), v);
+        simd::store(out, simd::byteswap32(simd::load(in)));
     }
     // Scalar tail.
     for (; i < count; ++i) {

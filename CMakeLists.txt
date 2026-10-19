@@ -1034,6 +1034,9 @@ add_executable(galaxy_vertex_loader_tests
     runtime/src/gx/vertex_loader_tests.cpp)
 target_link_libraries(galaxy_vertex_loader_tests PRIVATE galaxy_gx)
 
+add_executable(galaxy_simd_kernel_tests runtime/src/gx/simd_kernel_tests.cpp)
+target_link_libraries(galaxy_simd_kernel_tests PRIVATE galaxy_gx)
+
 add_executable(galaxy_vs_constants_tests runtime/src/gx/vs_constants_tests.cpp)
 target_link_libraries(galaxy_vs_constants_tests PRIVATE galaxy_gx)
 

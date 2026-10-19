@@ -21,7 +21,7 @@
 #include <algorithm>
 #include <array>
 #include <bit>
-#include <immintrin.h>  // SSE2 + SSSE3 pshufb decode kernels
+#include "galaxy/simd128.h"
 #include <cassert>
 #include <cerrno>
 #include <chrono>
@@ -263,69 +263,67 @@ static const std::byte* resolve_guest_tex(
 // Big-endian 16-bit read from an arbitrary byte pointer (TLUT / texture data).
 // ---------------------------------------------------------------------------
 
-// --- SSE2/SSSE3 tile kernels ----------------------------------------------
+// --- Tile kernels (galaxy/simd128.h: SSE on x86, NEON on AArch64) --------
 // Each kernel decodes one complete (unclipped) tile with exactly the scalar
 // arithmetic; clipped edge tiles keep the scalar loops. RGBA8 is stored as
 // bytes r,g,b,a, i.e. little-endian u32 r | g<<8 | b<<16 | a<<24.
-[[nodiscard]] static inline __m128i load_tile16(const std::uint8_t* p) noexcept {
-    return _mm_loadu_si128(reinterpret_cast<const __m128i*>(p));
+using simd::v128;
+[[nodiscard]] static inline v128 load_tile16(const std::uint8_t* p) noexcept {
+    return simd::load(p);
 }
-static inline void store_pixels4(RGBA8* p, __m128i v) noexcept {
-    _mm_storeu_si128(reinterpret_cast<__m128i*>(p), v);
-}
-[[nodiscard]] static inline __m128i byteswap16x8(__m128i v) noexcept {
-    return _mm_or_si128(_mm_slli_epi16(v, 8), _mm_srli_epi16(v, 8));
+static inline void store_pixels4(RGBA8* p, v128 v) noexcept {
+    simd::store(p, v);
 }
 // Bit replication of a narrow channel held in u16 lanes.
-[[nodiscard]] static inline __m128i expand5(__m128i x) noexcept {
-    return _mm_or_si128(_mm_slli_epi16(x, 3), _mm_srli_epi16(x, 2));
+[[nodiscard]] static inline v128 expand5(v128 x) noexcept {
+    return simd::or_(simd::shl16<3>(x), simd::shr16<2>(x));
 }
-[[nodiscard]] static inline __m128i expand6(__m128i x) noexcept {
-    return _mm_or_si128(_mm_slli_epi16(x, 2), _mm_srli_epi16(x, 4));
+[[nodiscard]] static inline v128 expand6(v128 x) noexcept {
+    return simd::or_(simd::shl16<2>(x), simd::shr16<4>(x));
 }
-[[nodiscard]] static inline __m128i expand4(__m128i x) noexcept {
-    return _mm_or_si128(_mm_slli_epi16(x, 4), x);
+[[nodiscard]] static inline v128 expand4(v128 x) noexcept {
+    return simd::or_(simd::shl16<4>(x), x);
 }
 // 8 RGB565 words (native order) -> two rows of 4 RGBA8 pixels.
-static inline void rgb565x8_to_rgba(__m128i v, RGBA8* row0, RGBA8* row1) noexcept {
-    const __m128i m5 = _mm_set1_epi16(0x1F);
-    const __m128i m6 = _mm_set1_epi16(0x3F);
-    const __m128i r = expand5(_mm_srli_epi16(v, 11));
-    const __m128i g = expand6(_mm_and_si128(_mm_srli_epi16(v, 5), m6));
-    const __m128i b = expand5(_mm_and_si128(v, m5));
-    const __m128i rg = _mm_or_si128(r, _mm_slli_epi16(g, 8));
-    const __m128i ba = _mm_or_si128(b, _mm_set1_epi16(static_cast<short>(0xFF00)));
-    store_pixels4(row0, _mm_unpacklo_epi16(rg, ba));
-    store_pixels4(row1, _mm_unpackhi_epi16(rg, ba));
+static inline void rgb565x8_to_rgba(v128 v, RGBA8* row0, RGBA8* row1) noexcept {
+    const v128 m5 = simd::splat16(0x1F);
+    const v128 m6 = simd::splat16(0x3F);
+    const v128 r = expand5(simd::shr16<11>(v));
+    const v128 g = expand6(simd::and_(simd::shr16<5>(v), m6));
+    const v128 b = expand5(simd::and_(v, m5));
+    const v128 rg = simd::or_(r, simd::shl16<8>(g));
+    const v128 ba = simd::or_(b, simd::splat16(0xFF00));
+    store_pixels4(row0, simd::interleave_low16(rg, ba));
+    store_pixels4(row1, simd::interleave_high16(rg, ba));
 }
 // 8 RGB5A3 words (native order) -> two rows of 4 RGBA8 pixels.
-static inline void rgb5a3x8_to_rgba(__m128i v, RGBA8* row0, RGBA8* row1) noexcept {
-    const __m128i m3 = _mm_set1_epi16(0x07);
-    const __m128i m4 = _mm_set1_epi16(0x0F);
-    const __m128i m5 = _mm_set1_epi16(0x1F);
-    const __m128i opaque = _mm_cmplt_epi16(v, _mm_setzero_si128());  // bit 15
-    const __m128i r555 = expand5(_mm_and_si128(_mm_srli_epi16(v, 10), m5));
-    const __m128i g555 = expand5(_mm_and_si128(_mm_srli_epi16(v, 5), m5));
-    const __m128i b555 = expand5(_mm_and_si128(v, m5));
-    const __m128i a3 = _mm_and_si128(_mm_srli_epi16(v, 12), m3);
-    const __m128i r4 = expand4(_mm_and_si128(_mm_srli_epi16(v, 8), m4));
-    const __m128i g4 = expand4(_mm_and_si128(_mm_srli_epi16(v, 4), m4));
-    const __m128i b4 = expand4(_mm_and_si128(v, m4));
-    const __m128i a8 = _mm_or_si128(
-        _mm_or_si128(_mm_slli_epi16(a3, 5), _mm_slli_epi16(a3, 2)),
-        _mm_srli_epi16(a3, 1));
-    const auto select = [opaque](__m128i when_opaque, __m128i otherwise) {
-        return _mm_or_si128(_mm_and_si128(opaque, when_opaque),
-                            _mm_andnot_si128(opaque, otherwise));
+static inline void rgb5a3x8_to_rgba(v128 v, RGBA8* row0, RGBA8* row1) noexcept {
+    const v128 m3 = simd::splat16(0x07);
+    const v128 m4 = simd::splat16(0x0F);
+    const v128 m5 = simd::splat16(0x1F);
+    const v128 opaque = simd::sign_mask16(v);  // bit 15
+    const v128 r555 = expand5(simd::and_(simd::shr16<10>(v), m5));
+    const v128 g555 = expand5(simd::and_(simd::shr16<5>(v), m5));
+    const v128 b555 = expand5(simd::and_(v, m5));
+    const v128 a3 = simd::and_(simd::shr16<12>(v), m3);
+    const v128 r4 = expand4(simd::and_(simd::shr16<8>(v), m4));
+    const v128 g4 = expand4(simd::and_(simd::shr16<4>(v), m4));
+    const v128 b4 = expand4(simd::and_(v, m4));
+    const v128 a8 = simd::or_(
+        simd::or_(simd::shl16<5>(a3), simd::shl16<2>(a3)),
+        simd::shr16<1>(a3));
+    const auto select = [opaque](v128 when_opaque, v128 otherwise) {
+        return simd::or_(simd::and_(opaque, when_opaque),
+                         simd::andnot(opaque, otherwise));
     };
-    const __m128i r = select(r555, r4);
-    const __m128i g = select(g555, g4);
-    const __m128i b = select(b555, b4);
-    const __m128i a = select(_mm_set1_epi16(0xFF), a8);
-    const __m128i rg = _mm_or_si128(r, _mm_slli_epi16(g, 8));
-    const __m128i ba = _mm_or_si128(b, _mm_slli_epi16(a, 8));
-    store_pixels4(row0, _mm_unpacklo_epi16(rg, ba));
-    store_pixels4(row1, _mm_unpackhi_epi16(rg, ba));
+    const v128 r = select(r555, r4);
+    const v128 g = select(g555, g4);
+    const v128 b = select(b555, b4);
+    const v128 a = select(simd::splat16(0xFF), a8);
+    const v128 rg = simd::or_(r, simd::shl16<8>(g));
+    const v128 ba = simd::or_(b, simd::shl16<8>(a));
+    store_pixels4(row0, simd::interleave_low16(rg, ba));
+    store_pixels4(row1, simd::interleave_high16(rg, ba));
 }
 
 [[nodiscard]] static inline std::uint16_t read_be16(const std::uint8_t* p) {
@@ -551,30 +549,30 @@ void decode_intensity_tiles_impl(
                 if (rows == block_height && columns == block_width) {
                     RGBA8* dst = out + static_cast<std::size_t>(base_y) * width + base_x;
                     const std::size_t stride = width;
-                    const __m128i rows01 = load_tile16(src);
-                    const __m128i rows23 = load_tile16(src + 16u);
+                    const v128 rows01 = load_tile16(src);
+                    const v128 rows23 = load_tile16(src + 16u);
                     if constexpr (Format == TexFormat::I8) {
                         // 8 bytes per row; replicate each intensity 4 times.
-                        const __m128i q0 = _mm_setr_epi8(0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3);
-                        const __m128i q1 = _mm_setr_epi8(4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7);
-                        const __m128i q2 = _mm_setr_epi8(8, 8, 8, 8, 9, 9, 9, 9, 10, 10, 10, 10, 11, 11, 11, 11);
-                        const __m128i q3 = _mm_setr_epi8(12, 12, 12, 12, 13, 13, 13, 13, 14, 14, 14, 14, 15, 15, 15, 15);
-                        store_pixels4(dst, _mm_shuffle_epi8(rows01, q0));
-                        store_pixels4(dst + 4u, _mm_shuffle_epi8(rows01, q1));
-                        store_pixels4(dst + stride, _mm_shuffle_epi8(rows01, q2));
-                        store_pixels4(dst + stride + 4u, _mm_shuffle_epi8(rows01, q3));
-                        store_pixels4(dst + 2u * stride, _mm_shuffle_epi8(rows23, q0));
-                        store_pixels4(dst + 2u * stride + 4u, _mm_shuffle_epi8(rows23, q1));
-                        store_pixels4(dst + 3u * stride, _mm_shuffle_epi8(rows23, q2));
-                        store_pixels4(dst + 3u * stride + 4u, _mm_shuffle_epi8(rows23, q3));
+                        const v128 q0 = simd::bytes(0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3);
+                        const v128 q1 = simd::bytes(4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7);
+                        const v128 q2 = simd::bytes(8, 8, 8, 8, 9, 9, 9, 9, 10, 10, 10, 10, 11, 11, 11, 11);
+                        const v128 q3 = simd::bytes(12, 12, 12, 12, 13, 13, 13, 13, 14, 14, 14, 14, 15, 15, 15, 15);
+                        store_pixels4(dst, simd::shuffle_bytes(rows01, q0));
+                        store_pixels4(dst + 4u, simd::shuffle_bytes(rows01, q1));
+                        store_pixels4(dst + stride, simd::shuffle_bytes(rows01, q2));
+                        store_pixels4(dst + stride + 4u, simd::shuffle_bytes(rows01, q3));
+                        store_pixels4(dst + 2u * stride, simd::shuffle_bytes(rows23, q0));
+                        store_pixels4(dst + 2u * stride + 4u, simd::shuffle_bytes(rows23, q1));
+                        store_pixels4(dst + 3u * stride, simd::shuffle_bytes(rows23, q2));
+                        store_pixels4(dst + 3u * stride + 4u, simd::shuffle_bytes(rows23, q3));
                     } else {
                         // (A, I) byte pairs -> I, I, I, A.
-                        const __m128i lo = _mm_setr_epi8(1, 1, 1, 0, 3, 3, 3, 2, 5, 5, 5, 4, 7, 7, 7, 6);
-                        const __m128i hi = _mm_setr_epi8(9, 9, 9, 8, 11, 11, 11, 10, 13, 13, 13, 12, 15, 15, 15, 14);
-                        store_pixels4(dst, _mm_shuffle_epi8(rows01, lo));
-                        store_pixels4(dst + stride, _mm_shuffle_epi8(rows01, hi));
-                        store_pixels4(dst + 2u * stride, _mm_shuffle_epi8(rows23, lo));
-                        store_pixels4(dst + 3u * stride, _mm_shuffle_epi8(rows23, hi));
+                        const v128 lo = simd::bytes(1, 1, 1, 0, 3, 3, 3, 2, 5, 5, 5, 4, 7, 7, 7, 6);
+                        const v128 hi = simd::bytes(9, 9, 9, 8, 11, 11, 11, 10, 13, 13, 13, 12, 15, 15, 15, 14);
+                        store_pixels4(dst, simd::shuffle_bytes(rows01, lo));
+                        store_pixels4(dst + stride, simd::shuffle_bytes(rows01, hi));
+                        store_pixels4(dst + 2u * stride, simd::shuffle_bytes(rows23, lo));
+                        store_pixels4(dst + 3u * stride, simd::shuffle_bytes(rows23, hi));
                     }
                     src += 32u;
                     continue;
@@ -641,8 +639,8 @@ static void decode_color_tiles_impl(
             if (rows == 4u && columns == 4u) {
                 RGBA8* dst = out + static_cast<std::size_t>(base_y) * width + base_x;
                 const std::size_t stride = width;
-                const __m128i rows01 = byteswap16x8(load_tile16(src));
-                const __m128i rows23 = byteswap16x8(load_tile16(src + 16u));
+                const v128 rows01 = simd::byteswap16(load_tile16(src));
+                const v128 rows23 = simd::byteswap16(load_tile16(src + 16u));
                 if constexpr (Format == TlutFormat::RGB565) {
                     rgb565x8_to_rgba(rows01, dst, dst + stride);
                     rgb565x8_to_rgba(rows23, dst + 2u * stride, dst + 3u * stride);
@@ -714,19 +712,19 @@ void detail::decode_rgba8_tiles(
             if (rows == 4u && columns == 4u) {
                 // unpack(AR, GB) gives bytes A,R,G,B per pixel; rotate each
                 // pixel right by one byte to R,G,B,A.
-                const auto rotate = [](__m128i x) {
-                    return _mm_or_si128(_mm_srli_epi32(x, 8), _mm_slli_epi32(x, 24));
+                const auto rotate = [](v128 x) {
+                    return simd::or_(simd::shr32<8>(x), simd::shl32<24>(x));
                 };
-                const __m128i ar01 = load_tile16(src);
-                const __m128i ar23 = load_tile16(src + 16u);
-                const __m128i gb01 = load_tile16(src + 32u);
-                const __m128i gb23 = load_tile16(src + 48u);
+                const v128 ar01 = load_tile16(src);
+                const v128 ar23 = load_tile16(src + 16u);
+                const v128 gb01 = load_tile16(src + 32u);
+                const v128 gb23 = load_tile16(src + 48u);
                 RGBA8* dst = out + static_cast<std::size_t>(base_y) * width + base_x;
                 const std::size_t stride = width;
-                store_pixels4(dst, rotate(_mm_unpacklo_epi16(ar01, gb01)));
-                store_pixels4(dst + stride, rotate(_mm_unpackhi_epi16(ar01, gb01)));
-                store_pixels4(dst + 2u * stride, rotate(_mm_unpacklo_epi16(ar23, gb23)));
-                store_pixels4(dst + 3u * stride, rotate(_mm_unpackhi_epi16(ar23, gb23)));
+                store_pixels4(dst, rotate(simd::interleave_low16(ar01, gb01)));
+                store_pixels4(dst + stride, rotate(simd::interleave_high16(ar01, gb01)));
+                store_pixels4(dst + 2u * stride, rotate(simd::interleave_low16(ar23, gb23)));
+                store_pixels4(dst + 3u * stride, rotate(simd::interleave_high16(ar23, gb23)));
                 src += 64u;
                 continue;
             }

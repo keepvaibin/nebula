@@ -21,7 +21,7 @@
 #include "galaxy/gx/upload_ring.h"
 #include "galaxy/native_api.h"
 
-#include <emmintrin.h>
+#include "galaxy/simd128.h"
 
 #include <algorithm>
 #include <array>
@@ -1135,19 +1135,17 @@ bool detail::rebase_cached_indices(std::span<const std::uint16_t> source,
     if (bias > std::numeric_limits<std::uint16_t>::max()) return false;
     std::size_t i = 0u;
     if (source.size() >= 8u) {
-        const __m128i offsets = _mm_set1_epi16(
-            std::bit_cast<std::int16_t>(static_cast<std::uint16_t>(bias)));
+        const simd::v128 offsets = simd::splat16(static_cast<std::uint16_t>(bias));
         do {
-            const __m128i indices = _mm_loadu_si128(
-                reinterpret_cast<const __m128i*>(source.data() + i));
-            const __m128i wrapped = _mm_add_epi16(indices, offsets);
-            const __m128i saturated = _mm_adds_epu16(indices, offsets);
+            const simd::v128 indices = simd::load(source.data() + i);
+            const simd::v128 wrapped = simd::add16(indices, offsets);
+            const simd::v128 saturated = simd::add_saturate_u16(indices, offsets);
             // Both additions agree exactly through 65535. Above it the saturating
             // result is 65535 and the wrapped result is smaller, in any lane.
-            if (_mm_movemask_epi8(_mm_cmpeq_epi16(wrapped, saturated)) != 0xffff) {
+            if (!simd::all_equal16(wrapped, saturated)) {
                 return false;
             }
-            _mm_storeu_si128(reinterpret_cast<__m128i*>(destination + i), wrapped);
+            simd::store(destination + i, wrapped);
             i += 8u;
         } while (source.size() - i >= 8u);
     }

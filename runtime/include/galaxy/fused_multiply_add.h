@@ -10,8 +10,9 @@
 // instead of about 1 ms, and every cutscene ran at a few frames per second.
 // tools/audit_repo.ps1 rejects std::fma in the runtime outside this header.
 //
-// FMA3 builds (clang -mfma, MSVC /arch:AVX2) use vfmadd. SSE2 builds use the
-// exact sequences below. Both give the same bits for every operand the
+// AArch64 has the instruction in its base set (fmadd) and always uses it. FMA3
+// builds (clang -mfma, MSVC /arch:AVX2) use vfmadd. SSE2 builds use the exact
+// sequences below, which are plain binary64 arithmetic on any CPU. Both give the same bits for every operand the
 // sequences admit; the rest go to std::fma, see fused_multiply_add_sse2(double).
 //
 // binary32: the product of two binary32 values is exact in binary64, so only
@@ -33,10 +34,15 @@
 #include <bit>
 #include <cmath>
 #include <cstdint>
+#if defined(__aarch64__) || defined(_M_ARM64)
+#define GALAXY_FUSED_MULTIPLY_ADD_IS_BASE 1
+#else
+#define GALAXY_FUSED_MULTIPLY_ADD_IS_BASE 0
 #include <emmintrin.h>
 #include <immintrin.h>
 #if defined(_MSC_VER)
 #include <intrin.h>
+#endif
 #endif
 
 #if defined(__FMA__) || (defined(_MSC_VER) && !defined(__clang__) && defined(__AVX2__))
@@ -145,6 +151,29 @@ inline float narrow_sum_rounded_to_odd(double product, double addend) noexcept {
     return sum_high + fused_detail::add_rounded_to_odd(sum_low, product_low);
 }
 
+#if GALAXY_FUSED_MULTIPLY_ADD_IS_BASE
+
+// The x86 extension; AArch64's fmadd needs no check.
+[[nodiscard]] inline bool host_has_fma3() noexcept { return false; }
+
+[[nodiscard]] inline float fused_multiply_add(float a, float b, float c) noexcept {
+#if defined(_MSC_VER) && !defined(__clang__)
+    return std::fma(a, b, c);
+#else
+    return __builtin_fmaf(a, b, c);
+#endif
+}
+
+[[nodiscard]] inline double fused_multiply_add(double a, double b, double c) noexcept {
+#if defined(_MSC_VER) && !defined(__clang__)
+    return std::fma(a, b, c);
+#else
+    return __builtin_fma(a, b, c);
+#endif
+}
+
+#else
+
 // The instruction. A caller not compiled for FMA3 must check host_has_fma3()
 // first, and in clang it is inlined only into GALAXY_FMA3_TARGET functions.
 [[nodiscard]] GALAXY_FMA3_TARGET inline float fused_multiply_add_fma3(float a, float b, float c) noexcept {
@@ -198,5 +227,7 @@ inline const bool kHostHasFma3 = detect_fma3();
     return fused_multiply_add_sse2(a, b, c);
 #endif
 }
+
+#endif
 
 } // namespace galaxy

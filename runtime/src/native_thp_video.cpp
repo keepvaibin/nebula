@@ -513,14 +513,21 @@ void write_block(u8* output, u16 width, u16 height, u16 blockX, u16 blockY, cons
 }
 
 // One instantiation of native_thp_video_idct.inl per fused multiply-add, both
-// bit-identical to the console's paired-single decoder. A CPU with FMA3 runs
-// the instruction; any other runs the exact SSE2 sequence. Neither calls the C
-// runtime's fma, which is a soft-float routine on CPUs without FMA3.
+// bit-identical to the console's paired-single decoder. AArch64 and an x86 CPU
+// with FMA3 run the instruction; any other runs the exact SSE2 sequence.
+// Neither calls the C runtime's fma, which is a soft-float routine on x86 CPUs
+// without FMA3.
 namespace exact_sse2 {
 [[nodiscard]] inline float madd(float a, float b, float c) noexcept { return galaxy::fused_multiply_add_sse2(a, b, c); }
 #include "native_thp_video_idct.inl"
 } // namespace exact_sse2
 
+#if GALAXY_FUSED_MULTIPLY_ADD_IS_BASE
+namespace fma3 {
+[[nodiscard]] inline float madd(float a, float b, float c) noexcept { return galaxy::fused_multiply_add(a, b, c); }
+#include "native_thp_video_idct.inl"
+} // namespace fma3
+#else
 #if defined(__clang__)
 #pragma clang attribute push(__attribute__((target("fma"))), apply_to = function)
 #endif
@@ -530,6 +537,7 @@ namespace fma3 {
 } // namespace fma3
 #if defined(__clang__)
 #pragma clang attribute pop
+#endif
 #endif
 } // namespace
 
@@ -554,8 +562,9 @@ s32 decode_video(std::span<const u8> file, u16 width, u16 height, std::span<u8> 
   const auto chromaSize = plane_size(static_cast<u16>((width + 1) / 2), static_cast<u16>((height + 1) / 2));
   if (tileY.size() < plane_size(width, height) || tileU.size() < chromaSize || tileV.size() < chromaSize) return kNoOutput;
 
-  const bool fma = kernel == VideoKernel::Fma3 || (kernel == VideoKernel::Automatic && galaxy::host_has_fma3());
-  if (fma && !galaxy::host_has_fma3()) return kNoOutput;
+  const bool instruction = GALAXY_FUSED_MULTIPLY_ADD_IS_BASE || galaxy::host_has_fma3();
+  const bool fma = kernel == VideoKernel::Fma3 || (kernel == VideoKernel::Automatic && instruction);
+  if (fma && !instruction) return kNoOutput;
   return fma ? fma3::decode_scan(file, context, tileY.data(), tileU.data(), tileV.data())
              : exact_sse2::decode_scan(file, context, tileY.data(), tileU.data(), tileV.data());
 }
