@@ -63,6 +63,12 @@ void __NebulaGameStage(const char* name) {
     sHost->game_stage(sHost->user, name);
 }
 
+uint32_t __NebulaObjectId(const void* object); /* memory.c */
+
+void __NebulaObjectName(const void* object, const char* name) {
+    sHost->object_name(sHost->user, __NebulaObjectId(object), name);
+}
+
 NEBULA_GAME_API int nebula_game_memory_regions(NebulaGameMemoryRegion* out, int max) {
     NebulaMemoryRegion regions[4];
     int count = 0;

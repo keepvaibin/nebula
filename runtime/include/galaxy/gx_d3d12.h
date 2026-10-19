@@ -158,6 +158,10 @@ void set_star_core(const std::array<float, 3>& position, float scale) noexcept;
 void note_game_point_light(std::uint32_t info, const std::array<float, 3>& position,
                            const std::array<float, 3>& color, float half_distance) noexcept;
 void note_game_world_light(const std::array<float, 3>& position, const std::array<float, 3>& color) noexcept;
+// Simulation thread (native game): a game object's name (NameObj::mName) by the id its host markers carry.
+void note_object_name(std::uint32_t id, const char* name) noexcept;
+// Any thread: that name into `out` (NUL-terminated, cut to `size`); false when the game never named `id`.
+bool game_object_name(std::uint32_t id, char* out, std::size_t size) noexcept;
 // Simulation thread: an actor asking for the game's one point light this frame (MR::requestPointLight: Lumas,
 // Power Stars, item blocks, fireballs, Boos), as its own light. While requests arrive, the one light the game hands
 // to the requester nearest the player (note_game_point_light) is not noted again.

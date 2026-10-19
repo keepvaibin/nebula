@@ -844,6 +844,7 @@ add_library(galaxy_gx STATIC
     runtime/src/gx/temporal_upscaler.cpp
     runtime/src/gx/ray_tracing.cpp
     runtime/src/gx/game_lights.cpp
+    runtime/src/gx/game_objects.cpp
     runtime/src/gx/ray_tracing_reflections.cpp
     runtime/src/gx/ray_tracing_water.cpp
     runtime/src/gx/rt_surfaces.cpp
@@ -1580,6 +1581,7 @@ if(NEBULA_VULKAN)
         runtime/src/gx/fifo_parser.cpp
         runtime/src/gx/gx_backend.cpp
         runtime/src/gx/game_lights.cpp
+        runtime/src/gx/game_objects.cpp
         runtime/src/gx/galaxy_select.cpp
         runtime/src/gx/frame_interpolation.cpp
         runtime/src/gx/interp_gpu.cpp

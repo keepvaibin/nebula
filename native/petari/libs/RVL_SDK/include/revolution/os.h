@@ -70,6 +70,8 @@ u32 __NebulaOption(u32 what);
 void __NebulaGameLight(u32 kind, u32 id, const f32* values);
 // The stage being played, before each 3D scene (game_stage in nebula_game_api.h).
 void __NebulaGameStage(const char* name);
+// A game object's name for the renderer (object_name in nebula_game_api.h).
+void __NebulaObjectName(const void* pObject, const char* pName);
 // A wait on another thread's work (a busy loop the console's interrupts preempt): runs what is pending, or sleeps until
 // a host thread raises something.
 void __NebulaPoll(void);

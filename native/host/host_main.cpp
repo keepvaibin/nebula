@@ -1188,6 +1188,15 @@ void svc_game_stage(void*, const char* name) {
     }
 }
 
+void svc_object_name(void*, uint32_t id, const char* name) {
+#if defined(NEBULA_HOST_RENDERER)
+    galaxy::gx::note_object_name(id, name);
+#else
+    (void)id;
+    (void)name;
+#endif
+}
+
 void svc_gx_scene_marker(void*, uint32_t marker, const float* view) {
     if (marker == NEBULA_SCENE_3D_BEGIN) {
         gSceneBegins.fetch_add(1, std::memory_order_relaxed);
@@ -2080,6 +2089,7 @@ int main(int argc, char** argv) {
     services.option = svc_option;
     services.game_light = svc_game_light;
     services.game_stage = svc_game_stage;
+    services.object_name = svc_object_name;
 #if defined(NEBULA_HOST_RENDERER)
     // Every aspect follows the output's shape through the live aspect path, as v1.0.1 sets it; explicit aspect
     // variables (tests) are kept. Before the renderer starts: it reads the choice once.

@@ -10,6 +10,7 @@
 NameObj::NameObj(const char* pName) : mName(pName), mFlag(), mExecutorIdx(-1) {
 #ifdef TARGET_PC
     mMotionEpoch = 0;
+    __NebulaObjectName(this, pName);
 #endif
     SingletonHolder< NameObjRegister >::get()->add(this);
 }
@@ -41,6 +42,9 @@ void NameObj::initWithoutIter() {
 
 void NameObj::setName(const char* pName) {
     mName = pName;
+#ifdef TARGET_PC
+    __NebulaObjectName(this, pName);
+#endif
 }
 
 void NameObj::executeMovement() {

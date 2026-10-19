@@ -7294,10 +7294,23 @@ bool GxBackend::rt_hidden_draw() const noexcept {
     return material != nullptr && material->hide;
 }
 
-// The current object's name: NameObj::mName (+4), its bytes (Shift-JIS), blanks as '_'.
+// The current object's name, Shift-JIS bytes with blanks as '_': as the native game reported it (game_object_name),
+// else NameObj::mName (+4) in the recompiled game's memory. Returns a key for the name (0 for none).
 std::uint32_t GxBackend::rt_object_name(char* out, std::size_t size) {
     out[0] = 0;
-    if (rt_object_ == 0u || frame_memory_ == nullptr) {
+    if (rt_object_ == 0u) {
+        return 0u;
+    }
+    if (game_object_name(rt_object_, out, size)) {
+        for (char* c = out; *c != 0; ++c) {
+            const auto v = static_cast<unsigned char>(*c);
+            if (v <= 0x20u || v == 0x7Fu) {
+                *c = '_';
+            }
+        }
+        return rt_object_;
+    }
+    if (frame_memory_ == nullptr) {
         return 0u;
     }
     const std::byte* field = resolve_guest_const_bytes(frame_memory_, rt_object_ + 4u, 4u);
