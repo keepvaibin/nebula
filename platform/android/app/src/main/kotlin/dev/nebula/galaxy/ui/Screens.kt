@@ -65,6 +65,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -463,6 +464,21 @@ private fun SettingsScreen(model: LauncherModel, onChoose: () -> Unit, onShareLo
                     }
                     ChoiceRow("Match the screen", "The smallest that covers this display", graphics.matchScreen) {
                         model.updateGraphics(graphics.copy(matchScreen = true))
+                    }
+                    val refresh = LocalView.current.display?.refreshRate?.roundToInt() ?: 60
+                    if (refresh > 61) {
+                        HorizontalDivider(color = Night.GlassEdge, modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
+                        Text(
+                            "Frame rate",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(start = 20.dp, top = 10.dp, end = 20.dp),
+                        )
+                        ChoiceRow("60 fps", "The game's own rate", !graphics.displayRate) {
+                            model.updateGraphics(graphics.copy(displayRate = false))
+                        }
+                        ChoiceRow("$refresh fps", "Frames in between are drawn from the game's motion. More power.", graphics.displayRate) {
+                            model.updateGraphics(graphics.copy(displayRate = true))
+                        }
                     }
                     HorizontalDivider(color = Night.GlassEdge, modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
                     SwitchRow("VSync", "Frames wait for the display. Off lowers latency.", graphics.vsync) {

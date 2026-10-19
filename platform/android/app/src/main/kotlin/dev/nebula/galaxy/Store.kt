@@ -65,10 +65,11 @@ object Storage {
 }
 
 /** The renderer's settings, config.ini in the data folder (runtime/src/gx/render_config.cpp reads it). */
-data class GraphicsSettings(val scale: Int, val matchScreen: Boolean, val vsync: Boolean) {
+data class GraphicsSettings(val scale: Int, val matchScreen: Boolean, val vsync: Boolean, val displayRate: Boolean) {
     companion object {
-        // The runtime's defaults: 1x, VSYNC on.
-        val Default = GraphicsSettings(scale = 1, matchScreen = false, vsync = true)
+        // The runtime's defaults: 1x, VSYNC on, 60 fps (displayRate: the display's own rate, frames in between drawn
+        // from the game's motion).
+        val Default = GraphicsSettings(scale = 1, matchScreen = false, vsync = true, displayRate = false)
         const val MAX_SCALE = 4
 
         fun read(context: Context): GraphicsSettings {
@@ -77,6 +78,7 @@ data class GraphicsSettings(val scale: Int, val matchScreen: Boolean, val vsync:
                 scale = values["efb_scale"]?.toIntOrNull()?.coerceIn(1, MAX_SCALE) ?: Default.scale,
                 matchScreen = values["internal_follow_window"]?.let { it == "1" } ?: Default.matchScreen,
                 vsync = values["vsync_interval"]?.let { it != "0" } ?: Default.vsync,
+                displayRate = values["max_fps"]?.toFloatOrNull()?.let { it == 0f } ?: Default.displayRate,
             )
         }
 
@@ -100,6 +102,7 @@ data class GraphicsSettings(val scale: Int, val matchScreen: Boolean, val vsync:
         values["efb_scale"] = scale.toString()
         values["internal_follow_window"] = if (matchScreen) "1" else "0"
         values["vsync_interval"] = if (vsync) "1" else "0"
+        values["max_fps"] = if (displayRate) "0" else "60"
         file.parentFile?.mkdirs()
         val temporary = File(file.parentFile, ".config.ini.writing")
         temporary.writeText(values.entries.joinToString("\n", postfix = "\n") { "${it.key}=${it.value}" })

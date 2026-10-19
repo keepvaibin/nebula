@@ -28,8 +28,8 @@ android {
         applicationId = "dev.nebula.galaxy"
         minSdk = 31
         targetSdk = 36
-        versionCode = 6
-        versionName = "1.0.0-test6"
+        versionCode = 7
+        versionName = "1.0.0-test7"
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
         }
