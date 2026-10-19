@@ -251,6 +251,10 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
     queue_info.queueCount = 1;
     queue_info.pQueuePriorities = &priority;
     std::vector<const char*> device_extensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+    // A device that is a portability subset (MoltenVK) must have it enabled; Nebula uses nothing it leaves out.
+    if (has_device_extension(physical_, "VK_KHR_portability_subset")) {
+        device_extensions.push_back("VK_KHR_portability_subset");
+    }
     // The driver's per-heap budget (the internal-resolution memory check), where it reports one.
     memory_budget_ = has_device_extension(physical_, VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
     if (memory_budget_) {
