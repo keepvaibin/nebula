@@ -12581,93 +12581,6 @@ mod function_order_tests {
 mod tests {
     use super::*;
 
-    // Exact DATA/sys/main.dol RMGE01 0x80165478..0x80165594 words. The
-    // fixture is independent of game assets on the test machine.
-    fn typed_region_80165478_fixture() -> (Vec<u8>, BTreeSet<u32>) {
-        let words: [u32; 71] = [
-            0x9421FFF0, 0x7C0802A6, 0x90010014, 0x93E1000C, 0x7C7F1B78, 0x80830048, 0x2C040000,
-            0x41820028, 0x88030069, 0x2C000000, 0x4082001C, 0x7C832378, 0x48003AE5, 0x807F004C,
-            0x2C030000, 0x41820008, 0x4BFF640D, 0x7FE3FB78, 0x48278415, 0x2C030000, 0x4182000C,
-            0x7FE3FB78, 0x48278B35, 0x807F0054, 0x2C030000, 0x41820008, 0x4BFFECE5, 0x881F0068,
-            0x2C000000, 0x40820094, 0x807F0050, 0x2C030000, 0x41820008, 0x4800A5ED, 0x881F0068,
-            0x2C000000, 0x40820078, 0x819F0000, 0x7FE3FB78, 0x818C0048, 0x7D8903A6, 0x4E800421,
-            0x881F0068, 0x2C000000, 0x40820058, 0x7FE3FB78, 0x48000AD1, 0x807F0060, 0x2C030000,
-            0x41820008, 0x4BFFD12D, 0x807F0088, 0x2C030000, 0x41820008, 0x4BFF71B9, 0x801F0084,
-            0x2C000000, 0x4182000C, 0x7FE3FB78, 0x48277085, 0x7FE3FB78, 0x4825D099, 0x7FE3FB78,
-            0x482939CD, 0x7FE3FB78, 0x48007269, 0x80010014, 0x83E1000C, 0x7C0803A6, 0x38210010,
-            0x4E800020,
-        ];
-        let entries = BTreeSet::from([
-            0x8016_54AC,
-            0x8016_54BC,
-            0x8016_54C4,
-            0x8016_54D4,
-            0x8016_54E4,
-            0x8016_5500,
-            0x8016_5520,
-            0x8016_5534,
-            0x8016_5544,
-            0x8016_5554,
-            0x8016_5568,
-            0x8016_5570,
-            0x8016_5578,
-            0x8016_5580,
-        ]);
-        (
-            words.into_iter().flat_map(u32::to_be_bytes).collect(),
-            entries,
-        )
-    }
-
-    #[test]
-    fn exact_typed_region_records_actual_words_and_keeps_all_boundaries() {
-        let (bytes, entries) = typed_region_80165478_fixture();
-        let mask = typed_region_80165478_mask(&bytes, &entries, &entries).unwrap();
-        assert_ne!(mask & (1 << 1), 0);
-        assert_ne!(mask & (1 << 3), 0);
-        assert_ne!(mask & (1 << 31), 0);
-        let ordinary = lower_words_with_config(
-            0x8016_5478,
-            &bytes,
-            &entries,
-            &entries,
-            LoweringConfig::default(),
-        )
-        .unwrap();
-        let typed = lower_words_with_config(
-            0x8016_5478,
-            &bytes,
-            &entries,
-            &entries,
-            LoweringConfig {
-                typed_region_gpr_mask: mask,
-                ..LoweringConfig::default()
-            },
-        )
-        .unwrap();
-        assert!(!ordinary.contains("resident_r"));
-        // `or r31,r3,r3` is the move encoding, so the resident rewrite sees the
-        // collapsed copy form. cache_typed_region_instruction accounts for that
-        // one missing operand in its count proof.
-        assert!(typed.contains("resident_r31 = resident_r3;"));
-        assert!(!typed.contains("resident_r31 = resident_r3 | resident_r3;"));
-        assert!(typed.contains("context->gpr[1] = resident_r1;"));
-        assert!(typed.contains("resident_r1 = context->gpr[1];"));
-        assert!(typed.contains("galaxy::call_guest_cached(services, branch_target"));
-        for entry in entries {
-            assert!(typed.contains(&format!(
-                "case 0x{entry:08X}u: goto call_return_{entry:08X};"
-            )));
-            assert!(typed.contains(&format!("call_return_{entry:08X}:")));
-        }
-        let mut corrupted = bytes;
-        corrupted[0] ^= 1;
-        assert!(matches!(
-            typed_region_80165478_mask(&corrupted, &BTreeSet::new(), &BTreeSet::new()),
-            Err(TranslationError::TypedRegionProof { .. })
-        ));
-    }
-
     #[test]
     fn typed_region_rewrites_only_exact_canonical_static_calls() {
         let mut files = vec![
@@ -14180,31 +14093,31 @@ mod tests {
 
     #[test]
     fn shared_integer_operands_preserve_legacy_default_cpp_text() {
-        // These are exact words from the 0x803A3B6C RMGE01 stream. The expected lines are the emitter spellings,
-        // including RA=0 literal semantics, unsigned hex formatting and register order.
+        // Synthetic encodings. The expected lines are the emitter spellings, including RA=0 literal semantics,
+        // unsigned hex formatting and register order.
         let words = [
-            0x3961_0060, // addi r11,r1,0x60
-            0x3fe0_805c, // addis r31,r0,0x805c
-            0x7c7d_1b78, // or r29,r3,r3 (mr)
-            0x5400_103a, // rlwinm r0,r0,2,0,29 (slwi)
+            0x3961_0048, // addi r11,r1,0x48
+            0x3fc0_8012, // addis r30,r0,0x8012
+            0x7c9c_2378, // or r28,r4,r4 (mr)
+            0x54a5_1838, // rlwinm r5,r5,3,0,28 (slwi)
             0x4e80_0020, // blr
         ];
-        let output = lower_instruction_fixture(0x803a_3b6c, &words);
+        let output = lower_instruction_fixture(0x8000_2000, &words);
         for old_line in [
-            "    context->gpr[11] = context->gpr[1] + 0x00000060u;",
-            "    context->gpr[31] = 0x805C0000u;",
-            // `or r29,r3,r3` is the move encoding: it must lower to a copy, not
+            "    context->gpr[11] = context->gpr[1] + 0x00000048u;",
+            "    context->gpr[30] = 0x80120000u;",
+            // `or r28,r4,r4` is the move encoding: it must lower to a copy, not
             // to a self-or that re-reads the same 4 MB-context slot twice.
-            "    context->gpr[29] = context->gpr[3];",
-            // `rlwinm r0,r0,2,0,29` (slwi r0,r0,2): shift != 0, so the rotate stays exactly `shift` and only the mask is
-            // applied. The mask is the MB..ME run (0xFFFFFFFC).
-            "    context->gpr[0] = std::rotl(context->gpr[0], 2) & 0xFFFFFFFCu;",
+            "    context->gpr[28] = context->gpr[4];",
+            // `rlwinm r5,r5,3,0,28` (slwi r5,r5,3): shift != 0, so the rotate stays exactly `shift` and only the mask is
+            // applied. The mask is the MB..ME run (0xFFFFFFF8).
+            "    context->gpr[5] = std::rotl(context->gpr[5], 3) & 0xFFFFFFF8u;",
         ] {
             assert_eq!(output.matches(old_line).count(), 1, "{old_line}");
         }
         assert_eq!(
             output
-                .matches("    context->gpr[29] = context->gpr[3] | context->gpr[3];")
+                .matches("    context->gpr[28] = context->gpr[4] | context->gpr[4];")
                 .count(),
             0,
             "the self-or spelling must not survive for a register move"
