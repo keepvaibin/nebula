@@ -72,6 +72,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.nebula.galaxy.BuildConfig
 import dev.nebula.galaxy.ControlsSettings
+import dev.nebula.galaxy.DisplayRate
 import dev.nebula.galaxy.GraphicsSettings
 import dev.nebula.galaxy.ImportState
 import dev.nebula.galaxy.Imports
@@ -465,7 +466,7 @@ private fun SettingsScreen(model: LauncherModel, onChoose: () -> Unit, onShareLo
                     ChoiceRow("Match the screen", "The smallest that covers this display", graphics.matchScreen) {
                         model.updateGraphics(graphics.copy(matchScreen = true))
                     }
-                    val refresh = LocalView.current.display?.refreshRate?.roundToInt() ?: 60
+                    val refresh = LocalView.current.display?.let { DisplayRate.fastestMode(it).refreshRate.roundToInt() } ?: 60
                     if (refresh > 61) {
                         HorizontalDivider(color = Night.GlassEdge, modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
                         Text(
