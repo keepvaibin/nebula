@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- The renderer: Vulkan 1.1. -->
+    <uses-feature android:name="android.hardware.vulkan.version" android:version="0x401000" android:required="true" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-feature android:name="android.hardware.gamepad" android:required="false" />
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+    <uses-feature android:name="android.hardware.usb.host" android:required="false" />
+    <uses-feature android:name="android.hardware.type.pc" android:required="false" />
+
+    <!-- Controller rumble and the touch controls' feedback. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Setup copies the game from the disc image in a foreground service, with its progress as a notification. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <application
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:theme="@style/Theme.Nebula"
+        android:appCategory="game"
+        android:allowBackup="false"
+        android:hasFragileUserData="true"
+        android:enableOnBackInvokedCallback="false"
+        android:hardwareAccelerated="true">
+
+        <!-- The launcher: setup, play, settings. Standard launch mode: the app's icon brings back a running game
+             rather than clearing it. -->
+        <activity
+            android:name=".LauncherActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Nebula.Launcher"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density|keyboard|keyboardHidden|navigation|uiMode"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- The game, in its own process: one run per process (the native game starts once). -->
+        <activity
+            android:name=".GameActivity"
+            android:exported="false"
+            android:process=":game"
+            android:theme="@style/Theme.Nebula.Game"
+            android:screenOrientation="sensorLandscape"
+            android:resizeableActivity="true"
+            android:preferMinimalPostProcessing="true"
+            android:configChanges="layoutDirection|locale|grammaticalGender|fontScale|fontWeightAdjustment|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation|density" />
+
+        <service
+            android:name=".ImportService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/shared_files" />
+        </provider>
+    </application>
+
+</manifest>

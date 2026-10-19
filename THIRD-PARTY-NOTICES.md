@@ -109,6 +109,45 @@ liblzma (0BSD) and bzip2 (bzip2 license). Their license texts are in
 [docs/licenses/rust-dependencies.txt](docs/licenses/rust-dependencies.txt), which is installed with
 Nebula. The `nod` and `powerpc` crates ship no license file; both declare `MIT OR Apache-2.0`.
 
+## Vulkan renderer libraries
+
+The Vulkan renderer (`runtime/src/gx/vk`, every platform but Windows' D3D12 build) links these,
+unmodified, compiled from source:
+
+- glslang 16.6.0, <https://github.com/KhronosGroup/glslang>: BSD-3-Clause for its core, with
+  parts under BSD-2-Clause, MIT, Apache-2.0 and the other licenses its `LICENSE.txt` names.
+- SPIRV-Tools, revision `ef96ed763b43b59b33b31b362f09a02b729fa1c9` (glslang's `known_good.json`),
+  <https://github.com/KhronosGroup/SPIRV-Tools>: Apache-2.0.
+- SPIRV-Headers, revision `496543121ce6419f23d6fa5d7194ba66c36212d2`,
+  <https://github.com/KhronosGroup/SPIRV-Headers>: MIT. Copyright (c) 2015-2024 The Khronos Group Inc.
+- Vulkan-Headers vulkan-sdk-1.4.350.1, <https://github.com/KhronosGroup/Vulkan-Headers>:
+  Apache-2.0 OR MIT. Copyright 2015-2023 The Khronos Group Inc.
+- volk vulkan-sdk-1.4.350.1, <https://github.com/zeux/volk>: MIT. Copyright (c) 2018-2026
+  Arseny Kapoulkine.
+- Vulkan Memory Allocator 3.4.0, <https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator>:
+  MIT. Copyright (c) 2017-2026 Advanced Micro Devices, Inc.
+
+Their license files ship with each build that uses them.
+
+## SDL (Zlib)
+
+SDL 3.4.18, <https://github.com/libsdl-org/SDL>, is the window, input and sound layer of the
+SDL platforms (`platform/sdl`: Android, Linux, macOS), and its Java half is the Android app's
+game activity. Copyright (C) 1997-2026 Sam Lantinga. License: Zlib, its `LICENSE.txt`.
+
+## Android app
+
+- AndroidX Core, Activity, Lifecycle and Jetpack Compose (UI, Foundation, Animation, Material 3,
+  Material Icons), <https://developer.android.com/jetpack/androidx>: Apache-2.0. Copyright The
+  Android Open Source Project.
+- The Kotlin standard library and kotlinx.coroutines, <https://github.com/JetBrains/kotlin>,
+  <https://github.com/Kotlin/kotlinx.coroutines>: Apache-2.0. Copyright JetBrains s.r.o. and
+  Kotlin Programming Language contributors.
+- `libnebula_import.so` (`crates/nebula-import`, setup from the player's disc image) links `nod`
+  and 52 other crates; their license texts are in
+  [docs/licenses/rust-dependencies-android.txt](docs/licenses/rust-dependencies-android.txt)
+  (`tools/rust_licenses.py`), which the app shows under Open source licenses.
+
 ## Tools downloaded by Setup
 
 Setup downloads these from their publishers and checks pinned SHA-256 hashes. Nebula does not

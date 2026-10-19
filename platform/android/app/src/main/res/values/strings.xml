@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Nebula</string>
+    <string name="import_channel">Setup</string>
+    <string name="import_notification_title">Setting up Nebula</string>
+</resources>

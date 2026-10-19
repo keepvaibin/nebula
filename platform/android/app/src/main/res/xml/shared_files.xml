@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What the launcher may share (the game's log, on the player's request). -->
+<paths>
+    <files-path name="logs" path="logs/" />
+</paths>
