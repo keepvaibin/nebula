@@ -28,6 +28,7 @@ namespace MR {
     f32 getNearZ();
     f32 getFarZ();
     f32 getFovy();
+    f32 getRenderFovy();  // CameraContext::getRenderFovy
     void setCameraViewMtx(const TPos3f&, bool, bool, const TVec3f&);
     void setNearZ(f32);
     void setFovy(f32);

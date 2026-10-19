@@ -22,4 +22,9 @@ VkSurfaceKHR create_vulkan_surface(VkInstance instance, NativeWindow window) {
     return surface;
 }
 
+// The Windows drivers report through the validation layers, not a log of their own.
+std::string driver_log() {
+    return {};
+}
+
 }  // namespace galaxy::gx::host_window

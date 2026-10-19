@@ -305,22 +305,25 @@ VSOut main(VSIn v, uint vertex_id : SV_VertexID) {
     o.col0 = chan_out[0];
     o.col1 = chan_out[1];
 
-    float2 in_uv[8];
-    [unroll] for (uint k = 0u; k < 8u; ++k) {
-        in_uv[k] = v.uv[k];
-    }
-    float3 uvs[8];
-    [unroll] for (uint z = 0u; z < 8u; ++z) {
-        uvs[z] = float3(0.0, 0.0, 0.0);
-    }
+    // The texture coordinates are read and written by switch, never by a dynamic array index, as in Dolphin's uber
+    // vertex shader: the Adreno 840's compiler (512.842) fails on dynamically indexed coordinate arrays here.
+    float3 uv0 = float3(0.0, 0.0, 0.0);
+    float3 uv1 = float3(0.0, 0.0, 0.0);
+    float3 uv2 = float3(0.0, 0.0, 0.0);
+    float3 uv3 = float3(0.0, 0.0, 0.0);
+    float3 uv4 = float3(0.0, 0.0, 0.0);
+    float3 uv5 = float3(0.0, 0.0, 0.0);
+    float3 uv6 = float3(0.0, 0.0, 0.0);
+    float3 uv7 = float3(0.0, 0.0, 0.0);
 
     [loop] for (uint i = 0u; i < key_texgens && i < 8u; ++i) {
         const uint tg = key_texgen(i);
         const uint type = (tg >> 4u) & 7u;
+        float3 res;
         if (type == 2u) {
-            uvs[i] = float3(o.col0.rg, 1.0);
+            res = float3(o.col0.rg, 1.0);
         } else if (type == 3u) {
-            uvs[i] = float3(o.col1.rg, 1.0);
+            res = float3(o.col1.rg, 1.0);
         } else if (type == 1u) {
             uint emboss_base = 0x400u + 3u * (pn_row & 31u);
             float3x3 emboss_matrix = float3x3(
@@ -335,7 +338,18 @@ VSOut main(VSIn v, uint vertex_id : SV_VertexID) {
             float3 emboss_delta = float3(emboss_l2.zw, emboss_l3.x) - wpos.xyz;
             float emboss_dist2 = dot(emboss_delta, emboss_delta);
             float3 emboss_ldir = (emboss_dist2 > 0.0) ? emboss_delta * rsqrt(emboss_dist2) : float3(0,0,0);
-            uvs[i] = uvs[(tg >> 12u) & 7u] + float3(dot(emboss_ldir, emboss_tangent), dot(emboss_ldir, emboss_binormal), 0.0);
+            float3 emboss_source;
+            [branch] switch ((tg >> 12u) & 7u) {
+            case 0u: emboss_source = uv0; break;
+            case 1u: emboss_source = uv1; break;
+            case 2u: emboss_source = uv2; break;
+            case 3u: emboss_source = uv3; break;
+            case 4u: emboss_source = uv4; break;
+            case 5u: emboss_source = uv5; break;
+            case 6u: emboss_source = uv6; break;
+            default: emboss_source = uv7; break;
+            }
+            res = emboss_source + float3(dot(emboss_ldir, emboss_tangent), dot(emboss_ldir, emboss_binormal), 0.0);
         } else {
             const uint source_row = (tg >> 7u) & 31u;
             float4 coord = float4(0.0, 0.0, 1.0, 1.0);
@@ -348,13 +362,23 @@ VSOut main(VSIn v, uint vertex_id : SV_VertexID) {
             } else if (source_row == 4u) {
                 coord.xyz = v.binormal;
             } else if (source_row >= 5u && source_row <= 12u) {
-                coord = float4(in_uv[source_row - 5u], 1.0, 1.0);
+                float2 raw;
+                [branch] switch (source_row - 5u) {
+                case 0u: raw = v.uv[0]; break;
+                case 1u: raw = v.uv[1]; break;
+                case 2u: raw = v.uv[2]; break;
+                case 3u: raw = v.uv[3]; break;
+                case 4u: raw = v.uv[4]; break;
+                case 5u: raw = v.uv[5]; break;
+                case 6u: raw = v.uv[6]; break;
+                default: raw = v.uv[7]; break;
+                }
+                coord = float4(raw, 1.0, 1.0);
             }
             if (((tg >> 2u) & 1u) == 0u) {
                 coord.z = 1.0;
             }
             const bool stq = ((tg >> 1u) & 1u) != 0u;
-            float3 res;
             if (((key_texmtx_mask >> i) & 1u) != 0u) {
                 uint packed;
                 uint shift;
@@ -394,11 +418,25 @@ VSOut main(VSIn v, uint vertex_id : SV_VertexID) {
                              dot(P2.xyz, res) + P2.w);
             }
             if (res.z == 0.0) res.xy = clamp(res.xy * 0.5, -1.0, 1.0);
-            uvs[i] = res;
+        }
+        [branch] switch (i) {
+        case 0u: uv0 = res; break;
+        case 1u: uv1 = res; break;
+        case 2u: uv2 = res; break;
+        case 3u: uv3 = res; break;
+        case 4u: uv4 = res; break;
+        case 5u: uv5 = res; break;
+        case 6u: uv6 = res; break;
+        default: uv7 = res; break;
         }
     }
-    [unroll] for (uint w = 0u; w < 8u; ++w) {
-        o.uv[w] = uvs[w];
-    }
+    o.uv[0] = uv0;
+    o.uv[1] = uv1;
+    o.uv[2] = uv2;
+    o.uv[3] = uv3;
+    o.uv[4] = uv4;
+    o.uv[5] = uv5;
+    o.uv[6] = uv6;
+    o.uv[7] = uv7;
     return o;
 }

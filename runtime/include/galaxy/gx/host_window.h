@@ -78,6 +78,10 @@ void close_game_window(WindowOwner& owner) noexcept;
 void show_window(NativeWindow window) noexcept;
 // The refresh rate of the display the window is on, or 0 when unknown.
 [[nodiscard]] double display_refresh_hz(NativeWindow window) noexcept;
+// Where the game's retrace follows the display's vsync (Android): the latest retrace, the retrace period, the
+// display's vsync interval and now (CLOCK_MONOTONIC nanoseconds), for presents timed to it; else false.
+[[nodiscard]] bool present_grid(std::int64_t& retrace_ns, std::int64_t& period_ns, std::int64_t& vsync_ns,
+                                std::int64_t& now_ns) noexcept;
 
 void draw_native_settings_overlay(UiCanvas& renderer);
 void draw_home_menu(UiCanvas& renderer);
@@ -87,6 +91,9 @@ void draw_native_settings_hint(UiCanvas& renderer);
 // The instance extensions the window's surface needs, and the surface (VK_NULL_HANDLE when it cannot be made).
 [[nodiscard]] std::vector<const char*> vulkan_instance_extensions();
 [[nodiscard]] VkSurfaceKHR create_vulkan_surface(VkInstance instance, NativeWindow window);
+// What the graphics driver wrote to the platform's log from this process (Android: its log lines other than the
+// game's own; elsewhere nothing), for a report when the driver refuses something.
+[[nodiscard]] std::string driver_log();
 #endif
 
 }  // namespace galaxy::gx::host_window

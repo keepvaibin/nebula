@@ -18,6 +18,13 @@ import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.Arrays;
+import java.util.List;
+
 import org.libsdl.app.SDLActivity;
 import org.libsdl.app.SDLSurface;
 
@@ -57,6 +64,46 @@ public class GameActivity extends SDLActivity {
         };
     }
 
+    // The pipelines the whole game uses and their precompiled shaders (assets/vk_seed_*.bin) beside the pipeline cache,
+    // which builds them in the background from the first launch and then deletes them, keeping only what this GPU
+    // uses (PipelineCacheVk). Installed once per app update.
+    private void installPipelineSeed() {
+        final SharedPreferences prefs = getSharedPreferences("pipeline_seed", MODE_PRIVATE);
+        try {
+            final long installed = getPackageManager().getPackageInfo(getPackageName(), 0).lastUpdateTime;
+            if (prefs.getLong("installed_for", 0L) == installed) {
+                return;
+            }
+            final File dir = new File(GameFiles.data(this), "shadercache/RMGE01");
+            if (!dir.isDirectory() && !dir.mkdirs()) {
+                return;
+            }
+            final List<String> shipped = Arrays.asList(getAssets().list(""));
+            for (final String name : new String[] {"vk_seed_shaders.bin", "vk_seed_keys.bin"}) {
+                // A seed of an earlier version goes; this version's, if it has one, replaces it.
+                new File(dir, name).delete();
+                if (!shipped.contains(name)) {
+                    continue;
+                }
+                final File partial = new File(dir, name + ".tmp");
+                try (InputStream in = getAssets().open(name);
+                     OutputStream out = new FileOutputStream(partial)) {
+                    final byte[] buffer = new byte[1 << 16];
+                    for (int read; (read = in.read(buffer)) > 0; ) {
+                        out.write(buffer, 0, read);
+                    }
+                }
+                if (!partial.renameTo(new File(dir, name))) {
+                    partial.delete();
+                    return;
+                }
+            }
+            prefs.edit().putLong("installed_for", installed).apply();
+        } catch (Exception e) {
+            Log.w(TAG, "pipeline seed not installed", e);
+        }
+    }
+
     @Override
     protected SDLSurface createSDLSurface(Context context) {
         return new GameSurface(context);
@@ -71,6 +118,7 @@ public class GameActivity extends SDLActivity {
             Log.e(TAG, "NEBULA_DATA_DIR not set", e);
         }
         GameFiles.lastError(this).delete();
+        installPipelineSeed();
         super.onCreate(savedInstanceState);
         if (mBrokenLibraries || mLayout == null) {
             return;

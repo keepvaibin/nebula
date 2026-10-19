@@ -251,7 +251,7 @@ void expect(const char* what, std::string_view hlsl, ShaderStage stage, std::spa
             std::initializer_list<const char*> defines = {}, bool dual_source = false) {
     std::string error;
     const std::vector<std::uint32_t> spirv =
-        compile_hlsl(annotate(hlsl, bindings), stage, "main", defines, error, {true, dual_source});
+        compile_hlsl(annotate(hlsl, bindings), stage, "main", defines, error, {true, dual_source, true});
     if (spirv.empty()) {
         ++failures;
         std::printf("FAIL %s\n%s\n", what, error.c_str());
@@ -328,10 +328,23 @@ int main(int argc, char** argv) {
     expect("point gs", ShaderGenerator::point_geometry_shader_source(), ShaderStage::Geometry, gx);
 
     const ShaderGenerator generator;
+    // The forms PipelineCacheVk generates: per-component byte masks always, constant TEV zeros on Qualcomm.
+    ShaderGenerator scalar_masks, constant_zero;
+    {
+        ShaderGenOptions options;
+        options.scalar_byte_masks = true;
+        scalar_masks.set_options(options);
+        options.tev_zero_from_constant = true;
+        constant_zero.set_options(options);
+    }
     VertexShaderKey vs{};
     PixelShaderKey ps{};
     expect("generated vs (default key)", generator.generate_vs(vs), ShaderStage::Vertex, gx);
     expect("generated ps (default key)", generator.generate_ps(ps), ShaderStage::Fragment, gx);
+    expect("generated ps (scalar masks)", scalar_masks.generate_ps(ps), ShaderStage::Fragment, gx);
+    expect("generated vs (point size)", with_point_size(generator.generate_vs(vs)), ShaderStage::Vertex, gx);
+    expect("uber vs (point size)", with_point_size(uber_vs_source()), ShaderStage::Vertex, gx);
+    expect("generated ps (constant TEV zero)", constant_zero.generate_ps(ps), ShaderStage::Fragment, gx);
 
     // argv[1]: keys a session captured (GALAXY_TEST_SHADER_KEY_CAPTURE): 'V' or 'P', then the key's bytes.
     if (argc > 1) {
@@ -348,8 +361,12 @@ int main(int argc, char** argv) {
                 expect(label.c_str(), generator.generate_vs(vs), ShaderStage::Vertex, gx);
             } else if (tag == 'P' && std::fread(&ps, sizeof(ps), 1, file) == 1) {
                 const std::string label = "captured ps " + std::to_string(ps_count++);
-                expect(label.c_str(), generator.generate_ps(ps), ShaderStage::Fragment, gx, {},
-                       (ps.flags & 0x80u) != 0u);
+                const bool dual = (ps.flags & 0x80u) != 0u;
+                expect(label.c_str(), generator.generate_ps(ps), ShaderStage::Fragment, gx, {}, dual);
+                expect((label + " scalar masks").c_str(), scalar_masks.generate_ps(ps), ShaderStage::Fragment, gx,
+                       {}, dual);
+                expect((label + " constant TEV zero").c_str(), constant_zero.generate_ps(ps), ShaderStage::Fragment,
+                       gx, {}, dual);
             } else {
                 ++failures;
                 std::printf("FAIL %s is truncated or malformed\n", argv[1]);
@@ -369,6 +386,8 @@ int main(int argc, char** argv) {
     expect("blit vs", blit_vertex_shader_source(), ShaderStage::Vertex, utility);
     expect("blit ps", blit_pixel_shader_source(), ShaderStage::Fragment, utility);
     expect("clear ps", clear_pixel_shader_source(), ShaderStage::Fragment, utility);
+    expect("clear depth ps", clear_depth_pixel_shader_source(), ShaderStage::Fragment, utility);
+    expect("depth carry by load ps", depth_carry_load_pixel_shader_source(), ShaderStage::Fragment, utility);
     expect("depth carry ps", depth_carry_pixel_shader_source(), ShaderStage::Fragment, utility);
     expect("ui textured vs", ui_textured_quad_vertex_shader_source(), ShaderStage::Vertex, utility);
     expect("ui textured ps", ui_textured_quad_pixel_shader_source(), ShaderStage::Fragment, utility);

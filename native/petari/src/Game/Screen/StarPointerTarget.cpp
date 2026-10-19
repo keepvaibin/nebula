@@ -76,7 +76,7 @@ void StarPointerTarget::calcPosition(TVec3f* pWorldPos) const {
 }
 
 f32 StarPointerTarget::calcRadius2d(f32 radius3d, f32 margin, f32 z) const {
-    f32 fovyRad = MR::getFovy() * PI_180;
+    f32 fovyRad = MR::getRenderFovy() * PI_180;
     f32 radius2d = (radius3d * ((MR::getScreenHeight() * 0.5f) / MR::tan(fovyRad * 0.5f)) / z);
     return radius2d + margin;
 }

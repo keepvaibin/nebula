@@ -73,7 +73,7 @@ fun Mark(size: Dp) {
         Canvas(Modifier.size(size)) {
             drawCircle(Brush.radialGradient(listOf(Color(0x66B9A4FF), Color(0x00000000))), radius = this.size.minDimension / 2f)
         }
-        Image(painterResource(R.drawable.ic_launcher_foreground), contentDescription = null, modifier = Modifier.size(size))
+        Image(painterResource(R.drawable.nebula_mark), contentDescription = null, modifier = Modifier.size(size))
     }
 }
 

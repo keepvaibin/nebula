@@ -31,6 +31,7 @@
 #include "galaxy/gx/upload_ring.h"
 #include "galaxy/gx/interp_gpu.h"
 #include "galaxy/gx/post_process.h"
+#include "galaxy/gx/interp_types.h"
 #include "galaxy/gx/ray_tracing.h"
 #include "galaxy/gx/placed_texture_allocator.h"
 #include "galaxy/gx/gx_bitfields.h"
@@ -195,6 +196,7 @@ public:
     // kEfbWidth x kEfbHeight x efb_scale, the shared GX root signature, the
     // present-blit pipeline, and all rings.
     bool initialize(int window_width, int window_height, unsigned efb_scale);
+    [[nodiscard]] std::string startup_failure() const { return {}; }
     // Creates the EFB-peek and pointer-depth resources up front. Creating them on first
     // use stalled the first frame that showed the pointer.
     void create_first_use_resources();
@@ -391,35 +393,15 @@ public:
     // in a renderer-owned XFB. present_replay_subframe evaluates the sequence's
     // program at t and executes that replay. False when the log is gone or has
     // no display copy (the sequence then shows its real frame only).
-    struct ReplaySequence {
-        interp_gpu::Layout layout{};
-        std::span<const std::int32_t> record_vs_slot;       // per scene record, -1 none
-        std::span<const std::int32_t> record_palette_slot;  // per scene record, -1 none
-        std::span<const std::int32_t> ps_slot;              // per pixel-constant record, -1 none
-        std::span<const std::uint32_t> palette_source;      // per palette slot: float4 offset in the matrix ring
-        const interp_gpu::Program* program = nullptr;
-        bool vertex_blend = false;
-    };
+    using ReplaySequence = gx::ReplaySequence;  // interp_types.h
     bool begin_replay_sequence(const ReplaySequence& sequence);
     // A stripe particle's vertex in the draw logged next (JPA stripes, two
     // vertices per particle): interpolated per particle between game frames.
-    struct StripeVertex {
-        std::uint32_t vertex = 0;        // in the draw's vertex buffer
-        std::uint32_t particle = 0;      // JPABaseParticle
-        std::uint32_t age_lifetime = 0;  // age << 16 | lifetime
-        std::uint8_t strip = 0;          // JPADrawStripe 0, JPADrawStripeX passes 1-2
-        std::uint8_t side = 0;           // the particle's first or second vertex
-    };
+    using StripeVertex = gx::StripeVertex;  // renderer_common.h
     void note_stripe_vertices(std::span<const StripeVertex> vertices);
     // A presented frame of the sequence: t, the t of the frame presented before
     // it (motion vectors) and its jitter in render pixels (temporal upscaling).
-    struct SubframeTime {
-        float t = 0.0f;
-        float t_prev = 0.0f;
-        float jitter_x = 0.0f;
-        float jitter_y = 0.0f;
-        bool reset = false;   // the upscaler's history starts again (cut, gap)
-    };
+    using SubframeTime = gx::SubframeTime;  // interp_types.h
     bool present_replay_subframe(const SubframeTime& time, const Affine34& camera_t, const Affine34& camera_prev);
     // The temporal upscaler upscales the replays (every presented frame), not the game frames.
     [[nodiscard]] bool temporal_interpolation() const noexcept { return temporal_interp_; }
@@ -502,12 +484,7 @@ public:
     // Sub-frame copy redirection since the last call: copies written to
     // redirect targets, tables patched, read-before-write snapshots taken by
     // real frames, logs that fell back to the guard (a table was not kept).
-    struct CopyRedirectStats {
-        std::uint64_t redirected = 0;
-        std::uint64_t patched_tables = 0;
-        std::uint64_t snapshots = 0;
-        std::uint64_t fallback_logs = 0;
-    };
+    using CopyRedirectStats = gx::CopyRedirectStats;  // interp_types.h
     [[nodiscard]] CopyRedirectStats take_copy_redirect_stats() noexcept {
         return std::exchange(copy_redirect_stats_, CopyRedirectStats{});
     }

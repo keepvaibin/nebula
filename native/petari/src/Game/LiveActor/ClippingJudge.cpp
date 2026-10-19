@@ -47,7 +47,7 @@ void ClippingJudge::calcViewingVolume(THex3f* pVolume, f32 farClip) {
     }
 
     f32 aspect = MR::getAspect();
-    f32 fovy = MR::getFovy();
+    f32 fovy = MR::getRenderFovy();
     TPos3f cameraMtx;
     cameraMtx.setPositionFromLookAt(MR::getCameraViewMtx());
     f32 height = nearClip * static_cast< f32 >(tan(fovy * (JGeometry::TUtil< f32 >::PI() / 360.0f)));

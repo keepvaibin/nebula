@@ -2866,6 +2866,10 @@ void show_window(NativeWindow window) noexcept {
     ShowWindowAsync(window, SW_SHOWNORMAL);
 }
 
+bool present_grid(std::int64_t&, std::int64_t&, std::int64_t&, std::int64_t&) noexcept {
+    return false;  // the presents pace themselves (present_pacer)
+}
+
 double display_refresh_hz(NativeWindow window) noexcept {
     const HMONITOR monitor = MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST);
     MONITORINFOEXW info{};
@@ -3552,8 +3556,9 @@ HostClientExtent aspect_latch_extent() noexcept {
         return client;
     }
     const double aspect = static_cast<double>(client.width) / client.height;
-    if (aspect < 4.0 / 3.0) {
-        return {480, 360};
+    // Every shape from 9:21 (narrower than 4:3: Vert+, make_experimental_ultrawide_aspect) to 32:9.
+    if (aspect < 9.0 / 21.0) {
+        return {900, 2100};
     }
     if (aspect > 32.0 / 9.0) {
         return {3840, 1080};

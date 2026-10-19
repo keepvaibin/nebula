@@ -22,6 +22,7 @@
 #include "galaxy/native_host.h"
 #include "galaxy/native_input.h"
 #include "galaxy/native_thp_video.h"
+#include "galaxy/perf_hint.h"
 #include "galaxy/runtime_settings.h"
 #include "galaxy/gx/render_config.h"
 
@@ -589,23 +590,56 @@ void ai_thread() {
 
 // The display's retrace at 60 Hz, as v1.0.1 paces the game: the console's NTSC 59.94 would repeat a frame every 17 s on
 // a 60 Hz display. A late wake-up skips the fields it missed, as a display does, rather than delivering them back to
-// back.
+// back. On Android the retrace follows the display's own vsync (every second one at 120 Hz), so frames never drift
+// against it and each stays on screen for the same time; the host's clock takes over where the display gives none.
 void vi_thread() {
     name_thread(L"Nebula Host VI");
     const auto period = std::chrono::nanoseconds(1000000000ull / 60);
     auto next = Clock::now() + period;
+#if defined(NEBULA_HOST_SDL)
+    int64_t vsync_ns = 0;
+    uint32_t on_vsync = 0;
+    uint32_t retraces = 0;
+    int64_t work_sum = 0;
+    int64_t work_max = 0;
+#endif
     for (;;) {
+#if defined(NEBULA_HOST_SDL)
+        const bool vsync = galaxy::sdl::wait_display_retrace(period.count(), vsync_ns);
+        if (!vsync) {
+            sleep_until_precise(next);
+        }
+#else
         sleep_until_precise(next);
+#endif
         if (wait_while_suspended()) {
             next = Clock::now() + period;
             continue;
         }
+        // The last frame's work (the game and render threads' CPU time), to the performance hints (Android).
+        [[maybe_unused]] const int64_t work = galaxy::host::perf_hint_retrace();
         gModule.vi_retrace();
         next += period;
         const auto now = Clock::now();
         if (now >= next) {
             next = now + period;
         }
+#if defined(NEBULA_HOST_SDL)
+        if (vsync) {
+            next = now + period;  // the host's clock continues from the display's
+            ++on_vsync;
+        }
+        // Every 10 s: how the retraces were paced, and the frame work (the busier of the game and render threads).
+        work_sum += work;
+        work_max = std::max(work_max, work);
+        if (++retraces == 600u) {
+            std::fprintf(stderr, "[pacing] %u retraces, %u on the display's vsync (%.1f Hz); frame work %.2f ms average, "
+                         "%.2f ms longest\n", retraces, on_vsync, galaxy::sdl::display_refresh_hz(),
+                         static_cast<double>(work_sum) / retraces / 1e6, static_cast<double>(work_max) / 1e6);
+            retraces = on_vsync = 0u;
+            work_sum = work_max = 0;
+        }
+#endif
     }
 }
 
@@ -1832,6 +1866,10 @@ void apply_shipped_renderer_defaults() {
         {"GALAXY_VI_RENDER_FIFO_WAIT", "0"},
         {"GALAXY_WAIT_FOR_FRAME_LATENCY", "0"},
         {"GALAXY_XFB_MAX_PRESERVE_AGE", "30"},
+#if defined(NEBULA_HOST_SDL)
+        // The picture takes the display's shape, any shape (the Windows launcher sets it from its aspect setting).
+        {"GALAXY_EXPERIMENTAL_DYNAMIC_ASPECT", "1"},
+#endif
     };
     for (const auto& setting : kDefaults) {
         size_t length = 0;
@@ -1979,7 +2017,8 @@ int main(int argc, char** argv) {
     const galaxy::gx::RenderConfig render_config = galaxy::gx::get_render_config();
     if (!galaxy::gx::initialize(static_cast<int>(render_config.window_width),
                                 static_cast<int>(render_config.window_height))) {
-        die("the renderer did not start");
+        const std::string reason = galaxy::gx::startup_failure();
+        die("the renderer did not start%s%s", reason.empty() ? "" : ": ", reason.c_str());
     }
     galaxy::gx::set_indexed_load_host_order(true);
     gAudio = new galaxy::host::NativeGameAudio();  // lives as long as the process (the AI thread is detached)
@@ -2021,8 +2060,12 @@ int main(int argc, char** argv) {
     std::thread(ai_thread).detach();
     std::thread(vi_thread).detach();
     std::thread(wpad_thread).detach();
+#if defined(NEBULA_HOST_SDL)
+    galaxy::sdl::start_thread_sampler();
+#endif
     std::thread game([] {
         name_thread(L"Nebula Game");
+        galaxy::host::perf_hint_add_current_thread();
         gModule.run();
     });
 #if defined(_WIN32)

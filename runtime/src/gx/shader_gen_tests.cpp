@@ -1085,6 +1085,38 @@ int main() {
                        "ps_konst_alpha_fixed_eighth");
     }
 
+    {   // Driver-workaround forms (ShaderGenOptions): off by default (the D3D12 shaders unchanged); on, the byte
+        // masks go per component and zero colour inputs A/B come from the constants.
+        PixelShaderKey k{};
+        std::memset(&k, 0, sizeof(k));
+        k.num_tev_stages = 1;
+        k.num_texgens = 1;
+        k.alpha_comp0 = 7;
+        k.alpha_comp1 = 7;
+        k.stages[0] = basic_stage();
+        k.stages[0].color_env = (0u) | (14u << 4) | (15u << 8) | (15u << 12) | (1u << 19);  // a = b = Zero
+        const ShaderGenerator plain;
+        const std::string plain_src = plain.generate_ps(k);
+        check_contains(plain_src, "int3 ai = int3(int3(0,0,0)) & int3(255,255,255);", "ps_default_vector_mask");
+        if (plain_src.find("gx_u8") != std::string::npos || plain_src.find("uber_ps_header") != std::string::npos) {
+            ++g_failures;
+            std::printf("FAILED: ps_default_unchanged\n");
+        } else {
+            std::printf("ok: ps_default_unchanged\n");
+        }
+        ShaderGenerator worked;
+        ShaderGenOptions options;
+        options.scalar_byte_masks = true;
+        options.tev_zero_from_constant = true;
+        worked.set_options(options);
+        const std::string src = worked.generate_ps(k);
+        check_contains(src, "int3 ai = gx_u8(int3(int3(uber_ps_header.www)));", "ps_tev_zero_from_constant_a");
+        check_contains(src, "int3 bi = gx_u8(int3(int3(uber_ps_header.www)));", "ps_tev_zero_from_constant_b");
+        check_contains(src, "uint4    uber_ps_header;", "ps_tev_zero_constant_declared");
+        check_contains(src, "int4 frag_i = gx_u8(tev_prev_i);", "ps_scalar_frag_mask");
+        check_compiles(src, "ps_5_1", "ps_workaround_forms_compile");
+    }
+
     {   // RGBA6 with 8-bit colour: no colour quantization, no dither, 6-bit alpha.
         PixelShaderKey k{};
         std::memset(&k, 0, sizeof(k));

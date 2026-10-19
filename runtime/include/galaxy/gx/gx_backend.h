@@ -45,6 +45,9 @@
 #include "galaxy/gx/renderer_d3d12.h"
 #endif
 #include "galaxy/gx/resident_vertex_arena.h"
+#include "galaxy/gx/renderer_common.h"
+#include "galaxy/gx/rt_sky_sun.h"
+#include "galaxy/gx/rt_types.h"
 #include "galaxy/gx/shader_keys.h"
 #include "galaxy/gx/texture_cache.h"
 #include "galaxy/gx/frame_interpolation.h"
@@ -209,6 +212,7 @@ public:
     // --- Frozen public surface (mirrors gx_d3d12.h) -------------------------
 
     bool initialize(int width, int height);
+    [[nodiscard]] std::string startup_failure() const { return renderer_.startup_failure(); }
     [[nodiscard]] FramePeCompletionToken render_frame(
         const std::byte* fifo_data,
         std::size_t fifo_size,
@@ -685,8 +689,8 @@ private:
     // recording), and the stripe vertices of the pending draw batch.
     std::span<const StripeParticleMark> parse_stripes_{};
     std::size_t parse_stripe_next_ = 0;
-    std::vector<RendererD3D12::StripeVertex> pending_stripe_vertices_;
-    std::vector<RendererD3D12::StripeVertex> draw_stripe_vertices_;
+    std::vector<StripeVertex> pending_stripe_vertices_;
+    std::vector<StripeVertex> draw_stripe_vertices_;
     void take_attached_stripe_particles(FrameChunk& chunk, std::size_t fifo_size);
     // Render thread, after a chunk's parse: trace of the stripe-particle marks.
     void note_stripe_particles(const FrameChunk& chunk);

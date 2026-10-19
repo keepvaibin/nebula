@@ -43,7 +43,7 @@ void ScreenBlurEffect::drawBlur() const {
     }
 
     TProj3f projectionMtx;
-    projectionMtx.makePerspective(MR::getFovy(), MR::getAspect(), MR::getNearZ(), MR::getFarZ());
+    projectionMtx.makePerspective(MR::getRenderFovy(), MR::getAspect(), MR::getNearZ(), MR::getFarZ());
     GXSetProjection(projectionMtx, GX_PERSPECTIVE);
 
     GXClearVtxDesc();
@@ -92,7 +92,7 @@ void ScreenBlurEffect::drawBlur() const {
     _14->load(GX_TEXMAP0);
     _18->load(GX_TEXMAP1);
 
-    f32 y = MR::tanDegree(MR::getFovy() * 0.5f) * mScale;
+    f32 y = MR::tanDegree(MR::getRenderFovy() * 0.5f) * mScale;
     f32 x = MR::getAspect() * y;
 
     GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, 4);

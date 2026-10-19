@@ -181,6 +181,10 @@ namespace MR {
         return ::getCameraContext()->mFovy;
     }
 
+    f32 getRenderFovy() {
+        return ::getCameraContext()->getRenderFovy();
+    }
+
     void setNearZ(f32 nearZ) {
         ::getCameraContext()->setNearZ(nearZ);
     }

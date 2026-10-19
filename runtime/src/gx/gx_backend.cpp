@@ -23,6 +23,7 @@
 #endif
 #include "galaxy/platform_time.h"
 #include "galaxy/platform_paths.h"
+#include "galaxy/perf_hint.h"
 
 #include "galaxy/gx/gx_backend.h"
 #include "galaxy/gx/dependency_draw_memo.h"
@@ -7024,9 +7025,13 @@ RtTextureSource GxBackend::rt_texture_source(unsigned map) const noexcept {
     if (handle.resource == nullptr) {
         return {};
     }
+#if defined(NEBULA_GPU_VULKAN)
+    return {};  // no ray tracing on Vulkan yet
+#else
     D3D12_CPU_DESCRIPTOR_HANDLE view = texture_cache_.backend().srv_cpu_base();
     view.ptr += static_cast<SIZE_T>(handle.srv_index) * texture_cache_.backend().srv_descriptor_stride();
-    return {view, handle.resource};
+    return {static_cast<std::uintptr_t>(view.ptr), handle.resource};
+#endif
 }
 
 // An alpha-tested draw of the material table's foliage (grass tufts, flower carpets): traced as a card,
@@ -8940,7 +8945,7 @@ void GxBackend::report_interp_stats() {
     const double presented = static_cast<double>(interp_presented_);
     std::uint64_t real_only = 0u;
     for (const std::uint64_t count : interp_real_only_) real_only += count;
-    const RendererD3D12::CopyRedirectStats redirect = renderer_.take_copy_redirect_stats();
+    const Renderer::CopyRedirectStats redirect = renderer_.take_copy_redirect_stats();
     std::array<double, 3> path_ms{};
     std::array<std::uint64_t, 3> path_samples{};
     renderer_.take_subframe_path_gpu_ms(path_ms, path_samples);
@@ -9390,7 +9395,7 @@ bool GxBackend::render_interp_subframe(float t) {
     // The frame presented before: earlier in this sequence, or this sequence's
     // t = 0 when it was the scene before at t = 1. Anything else (a frame
     // presented alone, a cut, a gap) starts the upscaler's history again.
-    RendererD3D12::SubframeTime time{};
+    Renderer::SubframeTime time{};
     time.t = t;
     time.t_prev = t;
     if (interp_shown_serial_ == interp_sequence_serial_ && interp_shown_t_ < t) {
@@ -9534,7 +9539,7 @@ bool GxBackend::prepare_interp_sequence(const InterpScene& scene, const InterpSc
     }
     interp_program_ops_ += interp_program_.ops.size();
     interp_program_words_ += interp_program_.payload.size();
-    RendererD3D12::ReplaySequence sequence{};
+    Renderer::ReplaySequence sequence{};
     sequence.layout = layout;
     sequence.record_vs_slot = interp_vs_slot_;
     sequence.record_palette_slot = interp_record_palette_slot_;
@@ -9776,6 +9781,7 @@ void GxBackend::present_cached_xfb(
 // frames are drained before a stop so the last presents land.
 void GxBackend::render_thread_main() {
     galaxy::host::name_current_thread(L"Nebula GX Render");
+    galaxy::host::perf_hint_add_current_thread();
 #if defined(_WIN32)
     SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
 #endif
@@ -13445,9 +13451,17 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         }
     }
     if (current_pipeline_ == nullptr) {
-        // Required pipeline creation failed. Stop instead of dropping the draw.
-        throw std::runtime_error(
-            "[GxBackend] failed to create required graphics pipeline");
+        // The driver refused the pipeline in every form and no uber stand-in exists (the pipeline cache logged why):
+        // the draw is skipped. GALAXY_STRICT_PIPELINES=1 stops instead (tests that must see every draw).
+        static const bool strict = [] {
+            char value[8]{};
+            std::size_t length = 0;
+            return getenv_s(&length, value, sizeof(value), "GALAXY_STRICT_PIPELINES") == 0 && value[0] == '1';
+        }();
+        if (strict) {
+            throw std::runtime_error("[GxBackend] failed to create required graphics pipeline");
+        }
+        return nullptr;
     }
     current_pipeline_aux_ = current_pipeline_is_uber_ ? 0u
         : (render_state_key_.blend_bits & kRenderStateMotionTarget) != 0u ? 1u

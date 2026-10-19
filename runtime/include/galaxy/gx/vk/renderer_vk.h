@@ -18,7 +18,12 @@
 
 #include "galaxy/gx/efb_copy.h"
 #include "galaxy/gx/gpu_types.h"
+#include "galaxy/gx/interp_types.h"
 #include "galaxy/gx/renderer_common.h"
+#include "galaxy/gx/rt_materials.h"
+#include "galaxy/gx/rt_sky_sun.h"
+#include "galaxy/gx/rt_types.h"
+#include "galaxy/gx/transform_history.h"
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx/ui_canvas.h"
 #include "galaxy/gx/upload_ring.h"
@@ -52,6 +57,9 @@ struct GxLayout {
     VkPipelineLayout layout = VK_NULL_HANDLE;
     std::array<VkDescriptorSetLayout, 3> sets{};
     VkRenderPass efb_pass = VK_NULL_HANDLE;
+    // The same pass clearing both targets as it begins (a whole-EFB copy-clear): nothing loaded from memory, which a
+    // tiled GPU otherwise reads back at the full internal resolution. Compatible with efb_pass (load ops only).
+    VkRenderPass efb_pass_clear = VK_NULL_HANDLE;
     VkFormat depth_format = VK_FORMAT_UNDEFINED;
     bool geometry_shaders = false;
     bool dual_source_blend = false;
@@ -69,9 +77,90 @@ public:
     static constexpr std::size_t kAsyncPeekFieldChannels = 4u;
 
     bool initialize(int window_width, int window_height, unsigned efb_scale);
+    // Why initialize failed, when the device said.
+    [[nodiscard]] std::string startup_failure() const { return vk::Context::get().failure(); }
     void create_first_use_resources();
     void shutdown();
     [[nodiscard]] UploadBuffer create_upload_buffer(std::size_t bytes, const char* name);
+
+    // ---- Frame interpolation, scene AA and ray tracing: D3D12 only for now, inert here (gx_backend's paths for
+    // them see nothing running: no replays, no traced scene). Same signatures as RendererD3D12's.
+    using ReplaySequence = gx::ReplaySequence;
+    using SubframeTime = gx::SubframeTime;
+    using CopyRedirectStats = gx::CopyRedirectStats;
+    using StripeVertex = gx::StripeVertex;
+    [[nodiscard]] std::uint64_t playing_serial() const noexcept { return 0u; }
+    void prepare_vertex_blend(std::span<const std::int32_t>) {}
+    [[nodiscard]] std::span<const std::int32_t> ps_record_pairs() const noexcept { return {}; }
+    void record_scene_aa() {}
+    [[nodiscard]] unsigned replay_reject() const noexcept { return 0u; }
+    void reset_subframe_gpu_ema() noexcept {}
+    [[nodiscard]] double subframe_gpu_ema_ms() const noexcept { return 0.0; }
+    void suspend_temporal_interpolation(double) {}
+    [[nodiscard]] bool temporal_interpolation() const noexcept { return false; }
+    bool begin_replay_sequence(const ReplaySequence&) { return false; }
+    bool present_replay_subframe(const SubframeTime&, const Affine34&, const Affine34&) { return false; }
+    void note_stripe_vertices(std::span<const StripeVertex>) {}
+    [[nodiscard]] CopyRedirectStats take_copy_redirect_stats() noexcept { return {}; }
+    void set_subframe_copy_redirect(int) noexcept {}
+    [[nodiscard]] std::uint64_t take_log_gap_ops() noexcept { return 0u; }
+    [[nodiscard]] std::uint64_t take_vertex_blend_draws() noexcept { return 0u; }
+    void take_sequence_record_ms(double& total_ms, std::uint64_t& samples, std::uint64_t& replays) noexcept {
+        total_ms = 0.0;
+        samples = replays = 0u;
+    }
+    [[nodiscard]] std::uint64_t take_subframe_guarded() noexcept { return 0u; }
+    void take_subframe_path_gpu_ms(std::array<double, 3>& total_ms, std::array<std::uint64_t, 3>& samples) noexcept {
+        total_ms = {};
+        samples = {};
+    }
+    [[nodiscard]] std::array<double, 3> take_subframe_phase_ms() noexcept { return {}; }
+    void take_subframe_record_ms(double& total_ms, std::uint64_t& samples) noexcept {
+        total_ms = 0.0;
+        samples = 0u;
+    }
+    void set_capture_waits(bool) noexcept {}
+    void set_resident_vertices(gpu::Address, std::uint64_t) noexcept {}
+    void set_scene_view(const std::array<float, 12>*) noexcept {}
+    [[nodiscard]] bool rt_active() const noexcept { return false; }
+    [[nodiscard]] bool rt_scene_open() const noexcept { return false; }
+    [[nodiscard]] bool rt_glow_open() const noexcept { return false; }
+    [[nodiscard]] bool rt_water_open() const noexcept { return false; }
+    [[nodiscard]] bool rt_late_open() const noexcept { return false; }
+    [[nodiscard]] bool rt_lighting() const noexcept { return false; }
+    [[nodiscard]] bool rt_ab_original() const noexcept { return false; }
+    void rt_set_ab_original(bool) noexcept {}
+    [[nodiscard]] bool rt_reflections_active() const noexcept { return false; }
+    void rt_begin_scene() {}
+    void rt_capture_picture() {}
+    void rt_trace_scene() {}
+    void rt_trace_water() {}
+    void rt_hold_sun(bool) noexcept {}
+    void rt_reset_sky() noexcept {}
+    void rt_set_camera(const std::array<float, 12>*) noexcept {}
+    void rt_set_view(const RtView&) noexcept {}
+    void rt_set_presents(std::uint64_t) noexcept {}
+    void rt_set_key_light(bool, const std::array<float, 3>&, const std::array<float, 3>&, float, bool) noexcept {}
+    void rt_set_stage_sun(const RtStageSun*) noexcept {}
+    [[nodiscard]] const RtStageSun* rt_stage_sun() const noexcept { return nullptr; }
+    [[nodiscard]] bool rt_sky_key(std::array<float, 3>&, float&) const noexcept { return false; }
+    [[nodiscard]] bool rt_sky_sun(std::array<float, 3>&, std::array<float, 3>&) const noexcept { return false; }
+    [[nodiscard]] bool rt_sun_direction(std::array<float, 3>&) const noexcept { return false; }
+    void rt_note_draw(const DrawCall&, const RtDrawInfo&) {}
+    [[nodiscard]] float rt_glow_exposure(bool = false) const noexcept { return 1.0f; }
+    [[nodiscard]] float rt_glow_spill(bool) const noexcept { return 0.0f; }
+    [[nodiscard]] const void* rt_light_texture() const noexcept { return nullptr; }
+    [[nodiscard]] bool rt_light_texture_ready() const noexcept { return false; }
+    [[nodiscard]] float rt_light_texture_scale() const noexcept { return 1.0f; }
+    [[nodiscard]] unsigned replay_hold_segment() const noexcept { return 0u; }
+    void request_eval_readback() noexcept {}
+    [[nodiscard]] bool take_eval_readback(std::vector<std::uint32_t>&, float&) { return false; }
+    [[nodiscard]] bool temporal_mode() const { return false; }
+    // No output-resolution EFB without temporal upscaling: the EFB itself.
+    [[nodiscard]] bool copy_output_efb_to_texture(const EfbCopyParams& params, TextureCache& textures) {
+        return copy_efb_to_texture(params, textures, false);
+    }
+
     [[nodiscard]] gpu::Table texture_table_for(const TextureHandle* handles, unsigned count, const TextureCache& cache,
                                                bool lit_table = false);  // no ray tracing on Vulkan yet
     void attach_texture_uploads(TextureCache& cache);
@@ -92,7 +181,8 @@ public:
     void draw(const DrawCall& call);
     void copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& dest);
     [[nodiscard]] bool copy_efb_to_texture(const EfbCopyParams& params, TextureCache& textures, bool is_depth_copy);
-    bool present(const XfbTexture* source, bool capture_backbuffer = false);
+    // `black`: the frame is presented black (the pass clears; the XFB is not drawn).
+    bool present(const XfbTexture* source, bool capture_backbuffer = false, bool black = false);
 
     // Not on Vulkan yet: the HUD split, temporal upscaling and interpolated redraw.
     [[nodiscard]] bool begin_output_efb() noexcept { return false; }
@@ -203,6 +293,7 @@ private:
         VkExtent2D image{};
         VkSurfaceTransformFlagBitsKHR transform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
         VkPresentModeKHR mode = VK_PRESENT_MODE_FIFO_KHR;
+        bool copyable = false;  // transfer source (test snapshots of the backbuffer)
         std::vector<VkImage> images;
         std::vector<VkImageView> views;
         std::vector<VkFramebuffer> framebuffers;
@@ -253,7 +344,8 @@ private:
     [[nodiscard]] VkShaderModule utility_module(std::string_view hlsl, vk::ShaderStage stage, bool conversion);
 
     // Frame recording.
-    void begin_efb_pass();
+    // `clear`: begins with both targets cleared to it (efb_pass_clear).
+    void begin_efb_pass(const EfbClearValues* clear = nullptr);
     void end_efb_pass();
     void reset_gx_bindings() noexcept;
     [[nodiscard]] VkDescriptorSet allocate_frame_set(VkDescriptorSetLayout layout);
@@ -308,6 +400,7 @@ private:
     // The EFB.
     unsigned efb_scale_ = 1;
     VkFormat depth_format_ = VK_FORMAT_UNDEFINED;
+    bool depth_linear_ = true;  // depth_format_ can be sampled with linear filtering
     gpu::TextureRef efb_color_;
     gpu::TextureRef efb_depth_;  // its sampled view is the depth aspect alone
     VkFramebuffer efb_framebuffer_ = VK_NULL_HANDLE;
@@ -316,12 +409,16 @@ private:
     VkDescriptorSet efb_color_source_ = VK_NULL_HANDLE;  // conversion inputs
     VkDescriptorSet efb_depth_source_ = VK_NULL_HANDLE;
     bool efb_pass_open_ = false;
+    bool present_black_ = false;  // present()'s `black`, for present_xfb
     bool efb_seeded_ = false;
 
     // Pipelines the renderer owns.
     VkPipeline conversion_pipeline_ = VK_NULL_HANDLE;
     VkPipeline clear_rgb_pipeline_ = VK_NULL_HANDLE;
     VkPipeline clear_alpha_pipeline_ = VK_NULL_HANDLE;
+    // Whole-colour and depth clears as draws (DeviceQuirks::clear_with_draw only).
+    VkPipeline clear_rgba_pipeline_ = VK_NULL_HANDLE;
+    VkPipeline clear_depth_pipeline_ = VK_NULL_HANDLE;
     VkPipeline blit_pipeline_ = VK_NULL_HANDLE;
     VkPipeline ui_solid_pipeline_ = VK_NULL_HANDLE;
     VkPipeline ui_textured_pipeline_ = VK_NULL_HANDLE;
@@ -374,6 +471,8 @@ private:
     // Peeks.
     gpu::TextureRef peek_target_;  // 1x1, and the 640x528 pointer field below
     gpu::TextureRef field_target_;
+    // Each peek target's linear twin (DeviceQuirks::linear_readback), made on first use.
+    std::unordered_map<const vk::Texture*, gpu::TextureRef> linear_twins_;
     Readback peek_readback_;
     static constexpr std::size_t kPointerDepthRing = 3u;
     std::array<Readback, kPointerDepthRing> pointer_depth_ring_;
@@ -420,6 +519,36 @@ private:
     std::int64_t gpu_budget_window_qpc_ = 0;
     unsigned gpu_budget_over_windows_ = 0;
     PresentPacer present_pacer_;
+    // VK_GOOGLE_display_timing (Android), as Swappy paces: each frame gets the retrace slot after the previous
+    // frame's on the display's vsync grid (host_window::present_grid), two retraces after the latest retrace at
+    // first (one of pipelining) and later only when the frame itself is late, and asks for half a vsync before it,
+    // so the compositor shows it at that vsync for exactly one retrace period. The past presentation times report
+    // how many were ([present-timing], every 600 frames).
+    struct PresentTiming {
+        std::uint32_t next_id = 0;
+        std::int64_t last_slot = 0;
+        std::int64_t vsync_ns = 0;  // the display's vsync interval (Choreographer)
+        std::array<std::int64_t, 64> requested{};  // each presentID's slot, by presentID % 64
+        std::int64_t refresh_ns = 0;
+        std::int64_t last_actual = 0;
+        unsigned frames = 0;
+        unsigned on_slot = 0;
+        unsigned late = 0;
+        unsigned unrequested = 0;
+        unsigned even = 0;  // shown one retrace period after the frame before
+    };
+    PresentTiming present_timing_;
+    void report_present_timing();
+    // Every 600 frames ([vk-gpu]): the GPU's frame time (timestamps), and how often the EFB pass reopened (each
+    // reopening loads and stores the whole EFB on a tiled GPU) and the EFB was copied.
+    struct GpuWindow {
+        double ms = 0.0;
+        double max_ms = 0.0;
+        unsigned frames = 0;
+        std::uint64_t passes = 0;
+        std::uint64_t copies = 0;
+    };
+    GpuWindow gpu_window_;
     struct PresentStats {
         std::int64_t window_start_qpc = 0;
         std::int64_t last_present_qpc = 0;

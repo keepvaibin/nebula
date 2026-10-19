@@ -36,6 +36,18 @@ cbuffer GxPsConstants : register(b1) {
 Texture2D    tex[8] : register(t0);
 SamplerState samp[8] : register(s0);
 
+// TEV byte masks: one component at a time on Vulkan (Mali returns the constant vector of a vector AND,
+// device_quirks_vk.cpp), the vector AND on D3D12.
+#if defined(NEBULA_VULKAN)
+int3 gx_u8(int3 v) { return int3(v.x & 255, v.y & 255, v.z & 255); }
+int4 gx_u8(int4 v) { return int4(v.x & 255, v.y & 255, v.z & 255, v.w & 255); }
+int2 gx_bit0(int2 v) { return int2(v.x & 1, v.y & 1); }
+#else
+int3 gx_u8(int3 v) { return v & int3(255,255,255); }
+int4 gx_u8(int4 v) { return v & int4(255,255,255,255); }
+int2 gx_bit0(int2 v) { return v & 1; }
+#endif
+
 struct PSIn {
     float4   pos      : SV_Position;
     float4   col0     : COLOR0;
@@ -420,13 +432,13 @@ PSOut main(PSIn pin) {
         const int3 cb = color_arg(color_b, tev_prev_i, tev_c_i[0], tev_c_i[1], tev_c_i[2], tex_color_i, ras_color_i, konst_i);
         const int3 cc = color_arg(color_c, tev_prev_i, tev_c_i[0], tev_c_i[1], tev_c_i[2], tex_color_i, ras_color_i, konst_i);
         const int3 cd = color_arg(color_d, tev_prev_i, tev_c_i[0], tev_c_i[1], tev_c_i[2], tex_color_i, ras_color_i, konst_i);
-        const int3 alpha_compare_a = ca & int3(255,255,255);
-        const int3 alpha_compare_b = cb & int3(255,255,255);
+        const int3 alpha_compare_a = gx_u8(ca);
+        const int3 alpha_compare_b = gx_u8(cb);
         int3 color_out;
         if (color_bias == 3u) {
-            int3 ca_i = ca & int3(255,255,255);
-            int3 cb_i = cb & int3(255,255,255);
-            int3 cc_i = cc & int3(255,255,255);
+            int3 ca_i = gx_u8(ca);
+            int3 cb_i = gx_u8(cb);
+            int3 cc_i = gx_u8(cc);
             int3 cd_i = cd;
             int3 cmp_i;
             if (color_scale == 0u) {
@@ -448,9 +460,9 @@ PSOut main(PSIn pin) {
             }
             color_out = cd_i + cmp_i;
         } else {
-            int3 ai = ca & int3(255,255,255);
-            int3 bi = cb & int3(255,255,255);
-            int3 ci = cc & int3(255,255,255);
+            int3 ai = gx_u8(ca);
+            int3 bi = gx_u8(cb);
+            int3 ci = gx_u8(cc);
             int3 di = cd;
             const uint left = color_scale == 1u ? 1u : color_scale == 2u ? 2u : 0u;
             int3 lhs = (di + tev_bias_i3(color_bias)) << left;
@@ -547,7 +559,7 @@ PSOut main(PSIn pin) {
         if (last_alpha_dest != 0u) tev_prev_i.a = tev_c_i[last_alpha_dest - 1u].a;
     }
 
-    int4 frag_i = tev_prev_i & int4(255,255,255,255);
+    int4 frag_i = gx_u8(tev_prev_i);
     float4 frag = float4(frag_i) / 255.0;
 
     {
@@ -573,12 +585,12 @@ PSOut main(PSIn pin) {
         int3 dither_rgb = int3(round(saturate(frag.rgb) * 255.0));
         int2 dither_xy;
         if (efb_scale_minus_one == 0xFFu) {
-            dither_xy = int2(pin.pos.xy * ztex_params.y) & 1;
+            dither_xy = gx_bit0(int2(pin.pos.xy * ztex_params.y));
         } else if (efb_scale_minus_one == 0u) {
-            dither_xy = int2(pin.pos.xy) & 1;
+            dither_xy = gx_bit0(int2(pin.pos.xy));
         } else {
             // Legacy keys: min(scale - 1, kMaxEfbScale - 1) + 1.
-            dither_xy = (int2(pin.pos.xy) / int(min(efb_scale_minus_one, 15u) + 1u)) & 1;
+            dither_xy = gx_bit0(int2(pin.pos.xy) / int(min(efb_scale_minus_one, 15u) + 1u));
         }
         dither_rgb = (dither_rgb - (dither_rgb >> 6)) + (dither_xy.x ^ dither_xy.y) * 2 + dither_xy.y;
         frag.rgb = float3(dither_rgb) / 255.0;

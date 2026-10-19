@@ -25,12 +25,11 @@ void nebula_display_refresh(void) {
     if (w <= 1 || h <= 1) {
         return;
     }
-    /* 4:3 to 32:9; the screen width in even units from the game's 832 at 16:9 (608 is the game's own 4:3 mode). */
-    const double aspect = (double)w / h;
-    if (aspect < 4.0 / 3.0 - 1e-9 || aspect > 32.0 / 9.0) {
-        return;
-    }
-    const long width = lround(832.0 * (aspect / WII_ASPECT) * 0.5) * 2;
+    /* Every shape, held to 9:21 .. 32:9 (the presentation fits the rest). The screen width in even units from the
+       game's 832 at 16:9 (608 is the game's own 4:3 mode); below 4:3 it stays 4:3's 624 and the picture grows taller
+       (Vert+: CameraContext::getRenderFovy, the layouts' vertical_fit). */
+    const double aspect = fmin(fmax((double)w / h, 9.0 / 21.0), 32.0 / 9.0);
+    const long width = lround(832.0 * (fmax(aspect, 4.0 / 3.0) / WII_ASPECT) * 0.5) * 2;
     if (width <= 608 || width > 1664) {
         return;
     }

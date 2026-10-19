@@ -813,6 +813,7 @@ add_library(galaxy_gx STATIC
     ${galaxy_post_headers}
     runtime/src/gx/temporal_upscaler.cpp
     runtime/src/gx/ray_tracing.cpp
+    runtime/src/gx/game_lights.cpp
     runtime/src/gx/ray_tracing_reflections.cpp
     runtime/src/gx/ray_tracing_water.cpp
     runtime/src/gx/rt_surfaces.cpp
@@ -827,6 +828,7 @@ add_library(galaxy_gx STATIC
     runtime/src/gx/fifo_parser.cpp
     runtime/src/gx/gx_backend.cpp
     runtime/src/frame_telemetry.cpp
+    runtime/src/perf_hint.cpp
     runtime/src/gx/game_asset_extract.cpp
 )
 # AMD FidelityFX FSR 3.1 (MIT): the FidelityFX SDK 1.1.4 `sdk` directory
@@ -1507,6 +1509,7 @@ if(NEBULA_VULKAN)
         runtime/src/gx/vk/shader_compile_vk_tests.cpp
         runtime/src/gx/vk/shader_compile_vk.cpp
         runtime/src/gx/vk/vk_context.cpp
+        runtime/src/gx/vk/device_quirks_vk.cpp
         runtime/src/gx/vk/vk_libraries.cpp
         runtime/src/gx/shader_gen.cpp
         runtime/src/gx/uber_shaders.cpp
@@ -1542,13 +1545,24 @@ if(NEBULA_VULKAN)
         runtime/src/gx/display_modes.cpp
         runtime/src/gx/fifo_parser.cpp
         runtime/src/gx/gx_backend.cpp
+        runtime/src/gx/game_lights.cpp
+        runtime/src/gx/galaxy_select.cpp
+        runtime/src/gx/frame_interpolation.cpp
+        runtime/src/gx/interp_gpu.cpp
+        runtime/src/gx/rt_surfaces.cpp
+        runtime/src/gx/rt_materials.cpp
+        runtime/src/gx/enhanced_lighting.cpp
+        runtime/src/gx/streamline_bridge.cpp
         runtime/src/frame_telemetry.cpp
+        runtime/src/perf_hint.cpp
         runtime/src/gx/game_asset_extract.cpp
         runtime/src/gx/vk/vk_context.cpp
+        runtime/src/gx/vk/device_quirks_vk.cpp
         runtime/src/gx/vk/vk_libraries.cpp
         runtime/src/gx/vk/shader_compile_vk.cpp
         runtime/src/gx/vk/texture_backend_vk.cpp
         runtime/src/gx/vk/pipeline_cache_vk.cpp
+        runtime/src/gx/vk/compile_journal.cpp
         runtime/src/gx/vk/renderer_vk.cpp
         runtime/src/gx/vk/renderer_vk_efb.cpp
         runtime/src/gx/vk/surface_win32.cpp)
@@ -1574,4 +1588,8 @@ if(NEBULA_VULKAN)
         target_compile_options(NebulaNativeVk PRIVATE /Zi)
         target_link_options(NebulaNativeVk PRIVATE /DEBUG /OPT:REF /OPT:ICF /PDBALTPATH:NebulaNativeVk.pdb)
     endif()
+
+    # The Android app's precompiled shaders (platform/android/vk_seed_shaders.bin) from its seed keys.
+    add_executable(vk_shader_seed tools/dev/vk_shader_seed.cpp)
+    target_link_libraries(vk_shader_seed PRIVATE galaxy_gx_vk)
 endif()

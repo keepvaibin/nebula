@@ -123,17 +123,22 @@ bool RendererVk::create_efb_targets(unsigned scale) {
     }
     const VkDescriptorImageInfo color_info{VK_NULL_HANDLE, efb_color_->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
     const VkDescriptorImageInfo depth_info{VK_NULL_HANDLE, efb_depth_->view, kDepthSampleLayout};
-    VkWriteDescriptorSet writes[2]{};
-    for (unsigned i = 0; i < 2u; ++i) {
+    // The conversion's filtering sampler: nearest for a depth format the device cannot filter linearly.
+    const VkDescriptorImageInfo color_sampler{linear_clamp_, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_UNDEFINED};
+    const VkDescriptorImageInfo depth_sampler{depth_linear_ ? linear_clamp_ : point_clamp_, VK_NULL_HANDLE,
+                                              VK_IMAGE_LAYOUT_UNDEFINED};
+    VkWriteDescriptorSet writes[4]{};
+    for (unsigned i = 0; i < 4u; ++i) {
+        const bool color = (i & 1u) == 0u;
         writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writes[i].dstSet = i == 0u ? efb_color_source_ : efb_depth_source_;
-        writes[i].dstBinding = 0;
+        writes[i].dstSet = color ? efb_color_source_ : efb_depth_source_;
+        writes[i].dstBinding = i < 2u ? 0u : 1u;
         writes[i].descriptorCount = 1;
-        writes[i].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-        writes[i].pImageInfo = i == 0u ? &color_info : &depth_info;
+        writes[i].descriptorType = i < 2u ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : VK_DESCRIPTOR_TYPE_SAMPLER;
+        writes[i].pImageInfo = i < 2u ? (color ? &color_info : &depth_info) : (color ? &color_sampler : &depth_sampler);
     }
     // A set in a submitted, unfinished frame may still read the old views: the GPU must be idle (callers ensure it).
-    vkUpdateDescriptorSets(device, 2, writes, 0, nullptr);
+    vkUpdateDescriptorSets(device, 4, writes, 0, nullptr);
     return true;
 }
 
@@ -271,17 +276,25 @@ void RendererVk::carry_over_efb_contents() {
     reset_gx_bindings();
 }
 
-void RendererVk::begin_efb_pass() {
+void RendererVk::begin_efb_pass(const EfbClearValues* clear) {
     if (efb_pass_open_) {
         return;
     }
     const VkCommandBuffer commands = frames_[frame_slot_].commands;
     VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
-    begin.renderPass = gx_layout_.efb_pass;
+    begin.renderPass = clear != nullptr ? gx_layout_.efb_pass_clear : gx_layout_.efb_pass;
     begin.framebuffer = efb_framebuffer_;
     begin.renderArea = {{0, 0}, {kEfbWidth * efb_scale_, kEfbHeight * efb_scale_}};
+    VkClearValue values[2]{};
+    if (clear != nullptr) {
+        std::memcpy(values[0].color.float32, clear->color.data(), sizeof(float) * 4u);
+        values[1].depthStencil = {clear->reversed_depth, 0u};  // reversed-Z, as clear_efb's
+        begin.clearValueCount = 2;
+        begin.pClearValues = values;
+    }
     vkCmdBeginRenderPass(commands, &begin, VK_SUBPASS_CONTENTS_INLINE);
     efb_pass_open_ = true;
+    ++gpu_window_.passes;
     // Dynamic state and bindings outlive the pass, but the renderer's own passes in between changed them.
     if (bound_.viewport_valid) {
         vkCmdSetViewport(commands, 0, 1, &bound_.viewport);
@@ -348,15 +361,33 @@ void RendererVk::clear_efb(std::uint32_t clear_ar, std::uint32_t clear_gb, std::
                         {static_cast<std::uint32_t>(scaled.right - scaled.left),
                          static_cast<std::uint32_t>(scaled.bottom - scaled.top)}};
     }
+    const EfbClearValues clear = make_efb_clear_values(clear_ar, clear_gb, clear_z24, pixel_format);
+    // The whole EFB, every channel, while the pass is closed (a copy-clear): the pass begins cleared.
+    if (!efb_pass_open_ && color_enable && (alpha_enable || pixel_format != 1u) && depth_enable && rect.offset.x == 0 &&
+        rect.offset.y == 0 && rect.extent.width == static_cast<std::uint32_t>(efb_w) &&
+        rect.extent.height == static_cast<std::uint32_t>(efb_h)) {
+        begin_efb_pass(&clear);
+        return;
+    }
     begin_efb_pass();
     const VkCommandBuffer commands = frames_[frame_slot_].commands;
-    const EfbClearValues clear = make_efb_clear_values(clear_ar, clear_gb, clear_z24, pixel_format);
     const VkClearRect clear_rect{rect, 0, 1};
     if (color_enable || alpha_enable) {
         if (pixel_format != 1u) {
             alpha_enable = true;
         }
-        if (color_enable && alpha_enable) {
+        if (color_enable && alpha_enable && clear_rgba_pipeline_ != VK_NULL_HANDLE) {
+            // Drawn: vkCmdClearAttachments races with draws on this driver (DeviceQuirks::clear_with_draw).
+            const VkViewport viewport{0.0f, static_cast<float>(efb_h), static_cast<float>(efb_w),
+                                      -static_cast<float>(efb_h), 0.0f, 1.0f};
+            vkCmdSetViewport(commands, 0, 1, &viewport);
+            vkCmdSetScissor(commands, 0, 1, &rect);
+            vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, clear_rgba_pipeline_);
+            vkCmdPushConstants(commands, utility_layout_, kPushStages, 0, sizeof(float) * 4u, clear.color.data());
+            vkCmdDraw(commands, 3, 1, 0, 0);
+            reset_gx_bindings();
+            bind_efb(nullptr);
+        } else if (color_enable && alpha_enable) {
             VkClearAttachment attachment{};
             attachment.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
             attachment.colorAttachment = 0;
@@ -376,7 +407,18 @@ void RendererVk::clear_efb(std::uint32_t clear_ar, std::uint32_t clear_gb, std::
             bind_efb(nullptr);
         }
     }
-    if (depth_enable) {
+    if (depth_enable && clear_depth_pipeline_ != VK_NULL_HANDLE) {
+        const VkViewport viewport{0.0f, static_cast<float>(efb_h), static_cast<float>(efb_w),
+                                  -static_cast<float>(efb_h), 0.0f, 1.0f};
+        const float value[4] = {clear.reversed_depth, 0.0f, 0.0f, 0.0f};
+        vkCmdSetViewport(commands, 0, 1, &viewport);
+        vkCmdSetScissor(commands, 0, 1, &rect);
+        vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, clear_depth_pipeline_);
+        vkCmdPushConstants(commands, utility_layout_, kPushStages, 0, sizeof(value), value);
+        vkCmdDraw(commands, 3, 1, 0, 0);
+        reset_gx_bindings();
+        bind_efb(nullptr);
+    } else if (depth_enable) {
         // Reversed-Z: GX's farthest (0xFFFFFF) clears to about 0.
         VkClearAttachment attachment{};
         attachment.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
@@ -785,6 +827,7 @@ void RendererVk::copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& dest) 
 }
 
 bool RendererVk::copy_efb_to_texture(const EfbCopyParams& params, TextureCache& textures, bool is_depth_copy) {
+    ++gpu_window_.copies;
     // The game composites its picture from EFB->texture copies; half_scale halves both dimensions (a 2x2 box).
     const unsigned dw_unscaled = params.half_scale ? std::max(1u, params.src_width / 2u) : params.src_width;
     const unsigned dh_unscaled = params.half_scale ? std::max(1u, params.src_height / 2u) : params.src_height;
@@ -941,7 +984,32 @@ void RendererVk::record_peek_field(VkCommandBuffer commands, vk::Texture& target
     VkBufferImageCopy region{};
     region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
     region.imageExtent = {width, height, 1};
-    vkCmdCopyImageToBuffer(commands, target.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, readback, 1, &region);
+    VkImage copy_source = target.image;
+    if (vk::Context::get().quirks().linear_readback) {
+        // Through a linear image the size of the target (Dolphin's VKStagingTexture on Qualcomm).
+        gpu::TextureRef& twin = linear_twins_[&target];
+        if (!twin) {
+            twin = vk::Context::get().create_linear_image(target.width, target.height, target.format, "peek linear");
+            std::fprintf(stderr, "[vk-compat] %ux%u readbacks through a linear image: %s\n", target.width,
+                         target.height, twin ? "yes" : "no linear transfers for the format");
+        }
+        if (twin) {
+            image_barrier(commands, twin->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                          VK_ACCESS_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT);
+            VkImageCopy copy{};
+            copy.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            copy.dstSubresource = copy.srcSubresource;
+            copy.extent = {width, height, 1};
+            vkCmdCopyImage(commands, target.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, twin->image,
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
+            image_barrier(commands, twin->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                          VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                          VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT);
+            copy_source = twin->image;
+        }
+    }
+    vkCmdCopyImageToBuffer(commands, copy_source, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, readback, 1, &region);
     VkBufferMemoryBarrier host{VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER};
     host.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
     host.dstAccessMask = VK_ACCESS_HOST_READ_BIT;

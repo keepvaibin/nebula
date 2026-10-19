@@ -32,6 +32,10 @@ struct RegisterBinding {
 // Inserts the Vulkan attribute before every resource declared with a mapped register.
 [[nodiscard]] std::string annotate(std::string_view hlsl, std::span<const RegisterBinding> bindings);
 
+// A GX vertex shader (VSOut, `VSOut o = (VSOut)0;`) that also writes a one-pixel point size: Vulkan points drawn
+// without the expanding geometry shader need the vertex stage to write PointSize.
+[[nodiscard]] std::string with_point_size(std::string_view vertex_hlsl);
+
 struct CompileOptions {
     // Run the SPIR-V validator and fail on any message (the tests; the runtime trusts its sources).
     bool validate = false;
@@ -39,10 +43,12 @@ struct CompileOptions {
     // index 1, while glslang places it at location 1 and ignores location attributes on output-struct members, so
     // the module's decorations are rewritten.
     bool dual_source = false;
+    // Keep the debug names (the tests read constant-buffer member names); the runtime strips them (Adreno).
+    bool keep_names = false;
 };
 
 // Changes with anything that changes compile_hlsl's output for the same source (cached SPIR-V is keyed on it).
-inline constexpr std::uint32_t kCompilerRevision = 3;
+inline constexpr std::uint32_t kCompilerRevision = 4;  // 4: debug names stripped (Adreno)
 
 // SPIR-V for `entry` of `hlsl`; empty with `error` set when it does not compile. `defines` are NAME=VALUE. Stage
 // inputs and outputs sit at their semantics' locations, so stages and the vertex layout match as D3D12's do by name:

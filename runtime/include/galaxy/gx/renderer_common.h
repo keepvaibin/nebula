@@ -85,6 +85,16 @@ private:
     unsigned eviction_cursor_ = 0u;
 };
 
+// A stripe particle's vertex in the draw logged next (JPA stripes, two vertices per particle): interpolated per
+// particle between game frames (RendererD3D12::note_stripe_vertices).
+struct StripeVertex {
+    std::uint32_t vertex = 0;        // in the draw's vertex buffer
+    std::uint32_t particle = 0;      // JPABaseParticle
+    std::uint32_t age_lifetime = 0;  // age << 16 | lifetime
+    std::uint8_t strip = 0;          // JPADrawStripe 0, JPADrawStripeX passes 1-2
+    std::uint8_t side = 0;           // the particle's first or second vertex
+};
+
 struct EfbClearValues {
     std::array<float, 4> color{};
     float reversed_depth = 0.0f;
@@ -108,6 +118,10 @@ struct EfbConversionShaderConstants {
 [[nodiscard]] std::string_view blit_vertex_shader_source() noexcept;
 [[nodiscard]] std::string_view blit_pixel_shader_source() noexcept;
 [[nodiscard]] std::string_view clear_pixel_shader_source() noexcept;
+// Depth clear as a draw (Vulkan drivers whose vkCmdClearAttachments races with draws): writes clear_value.x.
+[[nodiscard]] std::string_view clear_depth_pixel_shader_source() noexcept;
+// The depth carry by texel loads, for a depth format the device cannot filter linearly.
+[[nodiscard]] std::string_view depth_carry_load_pixel_shader_source() noexcept;
 [[nodiscard]] std::string_view depth_carry_pixel_shader_source() noexcept;
 [[nodiscard]] std::string_view ui_textured_quad_vertex_shader_source() noexcept;
 [[nodiscard]] std::string_view ui_textured_quad_pixel_shader_source() noexcept;

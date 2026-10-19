@@ -12,7 +12,36 @@
 #include <stdexcept>
 #include <string>
 
+#if !defined(_WIN32)
+#include <time.h>
+#endif
+
 namespace galaxy::gx::vk {
+
+namespace {
+std::array<std::atomic<std::int64_t>, static_cast<unsigned>(DriverCall::Count)> g_driver_cpu{};
+}  // namespace
+
+std::int64_t thread_cpu_ns() noexcept {
+#if defined(_WIN32)
+    return 0;
+#else
+    timespec now{};
+    return clock_gettime(CLOCK_THREAD_CPUTIME_ID, &now) == 0 ? std::int64_t{now.tv_sec} * 1000000000 + now.tv_nsec : 0;
+#endif
+}
+
+void note_driver_cpu(DriverCall call, std::int64_t ns) noexcept {
+    g_driver_cpu[static_cast<unsigned>(call)].fetch_add(ns, std::memory_order_relaxed);
+}
+
+std::array<std::int64_t, static_cast<unsigned>(DriverCall::Count)> take_driver_cpu() noexcept {
+    std::array<std::int64_t, static_cast<unsigned>(DriverCall::Count)> taken{};
+    for (unsigned i = 0; i < taken.size(); ++i) {
+        taken[i] = g_driver_cpu[i].exchange(0, std::memory_order_relaxed);
+    }
+    return taken;
+}
 
 void check(VkResult result, const char* what) {
     if (result < VK_SUCCESS) {
@@ -114,8 +143,10 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
     if (device_ != VK_NULL_HANDLE) {
         return true;
     }
+    failure_.clear();
     if (volkInitialize() != VK_SUCCESS) {
         std::fprintf(stderr, "[vulkan] no Vulkan loader\n");
+        failure_ = "no Vulkan driver";
         return false;
     }
     std::vector<const char*> layers;
@@ -162,6 +193,7 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
     // Every failure from here leaves no instance, device or surface behind.
     const auto fail = [&](const char* message) {
         std::fprintf(stderr, "[vulkan] %s\n", message);
+        failure_ = message;
         if (window_surface != VK_NULL_HANDLE) {
             if (device_ != VK_NULL_HANDLE) {
                 vkDeviceWaitIdle(device_);
@@ -198,8 +230,16 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
         vkGetPhysicalDeviceProperties(b, &pb);
         return (pa.deviceType == wanted) > (pb.deviceType == wanted);
     });
+    bool vulkan_1_0_only = false;
     for (const VkPhysicalDevice candidate : devices) {
         if (!has_device_extension(candidate, VK_KHR_SWAPCHAIN_EXTENSION_NAME)) {
+            continue;
+        }
+        // Vulkan 1.1 at least (the memory allocator's and the device queries' entry points).
+        VkPhysicalDeviceProperties candidate_properties{};
+        vkGetPhysicalDeviceProperties(candidate, &candidate_properties);
+        if (candidate_properties.apiVersion < VK_API_VERSION_1_1) {
+            vulkan_1_0_only = true;
             continue;
         }
         std::uint32_t families = 0;
@@ -223,10 +263,13 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
         }
     }
     if (physical_ == VK_NULL_HANDLE) {
-        return fail("no device with a graphics queue that presents to the window, and swapchains");
+        return fail(vulkan_1_0_only ? "the GPU's Vulkan driver is version 1.0; Nebula needs Vulkan 1.1"
+                                    : "no device with a graphics queue that presents to the window, and swapchains");
     }
     vkGetPhysicalDeviceProperties(physical_, &properties_);
     device_name_ = properties_.deviceName;
+    identity_ = identify(physical_, has_device_extension(physical_, VK_KHR_DRIVER_PROPERTIES_EXTENSION_NAME));
+    quirks_ = quirks_for(identity_);
     VkPhysicalDeviceFeatures available{};
     vkGetPhysicalDeviceFeatures(physical_, &available);
     VkPhysicalDeviceFeatures enabled{};
@@ -249,6 +292,16 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
     queue_info.queueCount = 1;
     queue_info.pQueuePriorities = &priority;
     std::vector<const char*> device_extensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+    // A device that is a portability subset (MoltenVK) must have it enabled; Nebula uses nothing it leaves out.
+    if (has_device_extension(physical_, "VK_KHR_portability_subset")) {
+        device_extensions.push_back("VK_KHR_portability_subset");
+    }
+    // Presents at a requested display time (Android's swapchain implements it for every driver): the frame pacing of
+    // RendererVk::end_frame.
+    display_timing_ = has_device_extension(physical_, VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME);
+    if (display_timing_) {
+        device_extensions.push_back(VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME);
+    }
     // The driver's per-heap budget (the internal-resolution memory check), where it reports one.
     memory_budget_ = has_device_extension(physical_, VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
     if (memory_budget_) {
@@ -304,6 +357,13 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
     std::fprintf(stderr, "[vulkan] device=\"%s\" api=%u.%u driver=0x%x validation=%d\n", device_name_.c_str(),
                  VK_API_VERSION_MAJOR(properties_.apiVersion), VK_API_VERSION_MINOR(properties_.apiVersion),
                  properties_.driverVersion, layers.empty() ? 0 : 1);
+    std::fprintf(stderr, "[vulkan] driver: %s; workarounds: %s\n", describe(identity_).c_str(),
+                 describe(quirks_).c_str());
+    std::fprintf(stderr,
+                 "[vulkan] features: dual-source=%d logic-op=%d geometry=%d depth-clamp=%d depth-clip=%d bc=%d "
+                 "anisotropy=%d display-timing=%d\n",
+                 dual_source_blend_, logic_op_, geometry_shader_, depth_clamp_, depth_clip_enable_, bc_textures_,
+                 sampler_anisotropy_, display_timing_);
     return true;
 }
 
@@ -374,7 +434,9 @@ std::uint64_t Context::submit(std::span<const VkCommandBuffer> commands, VkSemap
         submit.signalSemaphoreCount = 1;
         submit.pSignalSemaphores = &signal_semaphore;
     }
+    const std::int64_t cpu_start = thread_cpu_ns();
     const VkResult result = vkQueueSubmit(queue_, 1, &submit, fence);
+    note_driver_cpu(DriverCall::Submit, thread_cpu_ns() - cpu_start);
     if (result != VK_SUCCESS) {
         free_fences_.push_back(fence);
         check(result, "vkQueueSubmit");
@@ -388,11 +450,13 @@ std::uint64_t Context::submit(std::span<const VkCommandBuffer> commands, VkSemap
 std::uint64_t Context::completed_value() {
     std::lock_guard<std::mutex> lock(submit_mutex_);
     std::size_t done = 0;
+    const std::int64_t cpu_start = thread_cpu_ns();
     while (done < pending_.size() && vkGetFenceStatus(device_, pending_[done].fence) == VK_SUCCESS) {
         completed_ = pending_[done].value;
         free_fences_.push_back(pending_[done].fence);
         ++done;
     }
+    note_driver_cpu(DriverCall::Poll, thread_cpu_ns() - cpu_start);
     pending_.erase(pending_.begin(), pending_.begin() + static_cast<std::ptrdiff_t>(done));
     return completed_;
 }
@@ -415,7 +479,9 @@ bool Context::wait(std::uint64_t value, std::uint64_t timeout_ns) {
         }
         ++waiters_;
     }
+    const std::int64_t cpu_start = thread_cpu_ns();
     const VkResult result = vkWaitForFences(device_, 1, &fence, VK_TRUE, timeout_ns);
+    note_driver_cpu(DriverCall::Wait, thread_cpu_ns() - cpu_start);
     {
         std::lock_guard<std::mutex> lock(submit_mutex_);
         --waiters_;
@@ -460,6 +526,41 @@ void Context::collect() {
     for (Deferred& deferred : due) {
         deferred.destroy();
     }
+}
+
+std::shared_ptr<Texture> Context::create_linear_image(std::uint32_t width, std::uint32_t height, VkFormat format,
+                                                     const char* name) {
+    VkFormatProperties properties{};
+    vkGetPhysicalDeviceFormatProperties(physical_, format, &properties);
+    constexpr VkFormatFeatureFlags kNeeded = VK_FORMAT_FEATURE_TRANSFER_SRC_BIT | VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
+    if ((properties.linearTilingFeatures & kNeeded) != kNeeded) {
+        return {};
+    }
+    auto texture = std::make_shared<Texture>();
+    VkImageCreateInfo image_info{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+    image_info.imageType = VK_IMAGE_TYPE_2D;
+    image_info.format = format;
+    image_info.extent = {width, height, 1};
+    image_info.mipLevels = 1;
+    image_info.arrayLayers = 1;
+    image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    image_info.tiling = VK_IMAGE_TILING_LINEAR;
+    image_info.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    VmaAllocationCreateInfo alloc_info{};
+    alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+    VmaAllocationInfo allocated{};
+    if (vmaCreateImage(allocator_, &image_info, &alloc_info, &texture->image, &texture->allocation, &allocated) !=
+        VK_SUCCESS) {
+        return {};
+    }
+    texture->format = format;
+    texture->width = width;
+    texture->height = height;
+    texture->allocation_bytes = allocated.size;
+    set_name(VK_OBJECT_TYPE_IMAGE, reinterpret_cast<std::uint64_t>(texture->image), name);
+    return texture;
 }
 
 std::shared_ptr<Texture> Context::create_texture(std::uint32_t width, std::uint32_t height, std::uint32_t levels,
@@ -582,10 +683,15 @@ std::shared_ptr<Buffer> Context::create_readback_buffer(std::uint64_t size, cons
     buffer_info.size = size;
     buffer_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    // Cached host memory: the CPU reads every byte, which uncached write-combined memory makes slow.
+    // Cached host memory: the CPU reads every byte, which uncached write-combined memory makes slow. Where cached
+    // memory's invalidation costs more (Mali, Adreno), coherent memory, cached as well where the device has such a type.
     VmaAllocationCreateInfo alloc_info{};
     alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
     alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+    if (quirks_.coherent_readback) {
+        alloc_info.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        alloc_info.preferredFlags = VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
+    }
     auto buffer = std::make_shared<Buffer>();
     VmaAllocationInfo allocated{};
     if (vmaCreateBuffer(allocator_, &buffer_info, &alloc_info, &buffer->buffer, &buffer->allocation, &allocated) !=

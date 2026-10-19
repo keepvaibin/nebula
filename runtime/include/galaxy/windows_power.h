@@ -144,8 +144,23 @@ inline unsigned pin_current_thread_to_performance_cores() noexcept {
 
 }  // namespace galaxy::host
 #else
+#include <pthread.h>
+
+#include <cstddef>
+
 namespace galaxy::host {
-inline void name_current_thread(const wchar_t*) noexcept {}
+// The thread's name in the platform's tools (top, perf, debuggers): its first 15 characters, as Linux keeps.
+inline void name_current_thread(const wchar_t* name) noexcept {
+    char narrow[16]{};
+    for (std::size_t i = 0; name[i] != L'\0' && i + 1u < sizeof(narrow); ++i) {
+        narrow[i] = name[i] < 0x80 ? static_cast<char>(name[i]) : '?';
+    }
+#if defined(__APPLE__)
+    (void)pthread_setname_np(narrow);
+#else
+    (void)pthread_setname_np(pthread_self(), narrow);
+#endif
+}
 inline void opt_out_of_power_throttling_process() noexcept {}
 inline void opt_out_of_power_throttling_thread() noexcept {}
 inline unsigned pin_current_thread_to_performance_cores() noexcept { return 0u; }

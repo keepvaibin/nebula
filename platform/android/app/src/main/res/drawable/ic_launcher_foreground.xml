@@ -1,53 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Nebula's mark: a four-point sparkle inside a tilted orbit. -->
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:aapt="http://schemas.android.com/aapt"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <group
-        android:pivotX="54"
-        android:pivotY="54"
-        android:rotation="-24">
-        <path
-            android:pathData="M24,54 A30,11 0 1,1 84,54 A30,11 0 1,1 24,54 Z"
-            android:strokeWidth="2.2"
-            android:fillColor="#00000000">
-            <aapt:attr name="android:strokeColor">
-                <gradient
-                    android:type="linear"
-                    android:startX="24"
-                    android:startY="54"
-                    android:endX="84"
-                    android:endY="54">
-                    <item android:offset="0" android:color="#3384B6FF" />
-                    <item android:offset="0.5" android:color="#FFB9A4FF" />
-                    <item android:offset="1" android:color="#3384B6FF" />
-                </gradient>
-            </aapt:attr>
-        </path>
-    </group>
-    <path android:pathData="M54,25 C55.6,44.5 62.5,52.4 81,54 C62.5,55.6 55.6,63.5 54,83 C52.4,63.5 45.5,55.6 27,54 C45.5,52.4 52.4,44.5 54,25 Z">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:type="radial"
-                android:centerX="54"
-                android:centerY="54"
-                android:gradientRadius="30">
-                <item android:offset="0" android:color="#FFFFFFFF" />
-                <item android:offset="0.35" android:color="#FFFFF1B8" />
-                <item android:offset="1" android:color="#FFFFC24D" />
-            </gradient>
-        </aapt:attr>
-    </path>
-    <path
-        android:fillColor="#CCFFFFFF"
-        android:pathData="M78,32 m-1.6,0 a1.6,1.6 0 1,0 3.2,0 a1.6,1.6 0 1,0 -3.2,0" />
-    <path
-        android:fillColor="#99FFFFFF"
-        android:pathData="M33,76 m-1.2,0 a1.2,1.2 0 1,0 2.4,0 a1.2,1.2 0 1,0 -2.4,0" />
-    <path
-        android:fillColor="#88B9A4FF"
-        android:pathData="M36,36 m-1,0 a1,1 0 1,0 2,0 a1,1 0 1,0 -2,0" />
-</vector>
+<!-- Nebula's mark (the Windows icon's nebula, from its 819 px source) inside the adaptive icon's safe zone. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/nebula_mark"
+    android:inset="12dp" />

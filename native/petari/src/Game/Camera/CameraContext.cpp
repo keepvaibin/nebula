@@ -3,6 +3,8 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
 
+#include <cmath>
+
 CameraContext::~CameraContext() {
 }
 
@@ -49,6 +51,22 @@ f32 CameraContext::getAspect() const {
     }
 }
 
+// The vertical field of view the picture is drawn with: the camera's, and below 4:3 (TARGET_PC's wide shapes) widened
+// so the view keeps 4:3's width and grows taller (Vert+). What projects as the picture does (particles, clipping,
+// blur, the pointer) uses it; the cameras' own framing keeps mFovy.
+f32 CameraContext::getRenderFovy() const {
+#ifdef TARGET_PC
+    if (MR::isScreen16Per9() && MR::getDisplay().wide) {
+        const f32 aspect = MR::getDisplay().content_aspect;
+        if (aspect < 4.0f / 3.0f - 1e-4f) {
+            const f32 halfTan = tanf(mFovy * (0.5f * PI / 180.0f)) * (4.0f / 3.0f) / aspect;
+            return 2.0f * atanf(halfTan) * (180.0f / PI);
+        }
+    }
+#endif
+    return mFovy;
+}
+
 void CameraContext::setViewMtx(const TPos3f& rMtx, bool b1, bool b2, const TVec3f& rVec) {
     mView.set(rMtx);
     mViewInv.invert(rMtx);
@@ -75,7 +93,7 @@ void CameraContext::setShakeOffset(f32 x, f32 y) {
 }
 
 void CameraContext::updateProjectionMtx() {
-    mProjection.makePerspective(mFovy, getAspect(), mNearZ, mFarZ);
+    mProjection.makePerspective(getRenderFovy(), getAspect(), mNearZ, mFarZ);
 
     TProj3f trans;
     trans.makeTrans(mShakeOffset.x, mShakeOffset.y);

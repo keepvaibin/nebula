@@ -7,6 +7,7 @@
 
 #include "galaxy/gx/display_modes.h"
 #include "galaxy/gx/host_window.h"
+#include "galaxy/gx/vk/vk_context.h"
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx_d3d12.h"
 #include "galaxy/native_host.h"
@@ -383,7 +384,40 @@ void run_requests() {
 
 void pump_events(int timeout_ms) noexcept {
     SDL_Event event;
+    // Every 10 s: this thread's CPU time and how much SDL's event wait took (a wait that polls rather than sleeps).
+    static std::int64_t report_cpu = 0;
+    static std::int64_t wait_cpu = 0;
+    static std::uint32_t waits = 0;
+    static auto report_time = std::chrono::steady_clock::now();
+    const std::int64_t wait_start = galaxy::gx::vk::thread_cpu_ns();
+#if defined(__ANDROID__)
+    // SDL's timed event wait polls without sleeping on Android (98% of a core, measured): the events are pumped here
+    // and the thread sleeps between pumps.
+    SDL_PumpEvents();
+    bool any = SDL_PollEvent(&event);
+    if (!any && timeout_ms > 0) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(timeout_ms));
+        SDL_PumpEvents();
+        any = SDL_PollEvent(&event);
+    }
+#else
     bool any = SDL_WaitEventTimeout(&event, timeout_ms);
+#endif
+    wait_cpu += galaxy::gx::vk::thread_cpu_ns() - wait_start;
+    ++waits;
+    if (const auto now = std::chrono::steady_clock::now(); now - report_time >= std::chrono::seconds(10)) {
+        const std::int64_t cpu = galaxy::gx::vk::thread_cpu_ns();
+        const double seconds = std::chrono::duration<double>(now - report_time).count();
+        if (report_cpu != 0) {
+            std::fprintf(stderr, "[host-events] %u waits; main thread %.1f ms/s, %.1f ms/s of it in the event wait\n",
+                         waits, static_cast<double>(cpu - report_cpu) / 1e6 / seconds,
+                         static_cast<double>(wait_cpu) / 1e6 / seconds);
+        }
+        report_cpu = cpu;
+        report_time = now;
+        wait_cpu = 0;
+        waits = 0;
+    }
     {
     std::lock_guard<std::mutex> lock(g_input_mutex);
     while (any) {
@@ -680,6 +714,11 @@ double display_refresh_hz(NativeWindow window) noexcept {
     return mode != nullptr && mode->refresh_rate > 1.0f ? static_cast<double>(mode->refresh_rate) : 0.0;
 }
 
+bool present_grid(std::int64_t& retrace_ns, std::int64_t& period_ns, std::int64_t& vsync_ns,
+                  std::int64_t& now_ns) noexcept {
+    return galaxy::sdl::display_grid(retrace_ns, period_ns, vsync_ns, now_ns);
+}
+
 // The overlay, the HOME Menu and the hint are the platform's own screens on SDL platforms (Android: the activity's).
 void draw_native_settings_overlay(UiCanvas&) {}
 void draw_home_menu(UiCanvas&) {}
@@ -689,6 +728,30 @@ std::vector<const char*> vulkan_instance_extensions() {
     Uint32 count = 0;
     const char* const* names = SDL_Vulkan_GetInstanceExtensions(&count);
     return names != nullptr ? std::vector<const char*>(names, names + count) : std::vector<const char*>{};
+}
+
+std::string driver_log() {
+#if defined(__ANDROID__)
+    // An app reads its own log lines (logcat shows a process only its own uid's). The game's lines are in game.log
+    // already; the rest from this process are the driver's and the system's.
+    char command[96];
+    std::snprintf(command, sizeof(command), "logcat -d -v brief --pid=%d -t 600 2>/dev/null", static_cast<int>(getpid()));
+    std::FILE* pipe = popen(command, "r");
+    if (pipe == nullptr) {
+        return {};
+    }
+    std::string text;
+    char line[1024];
+    while (std::fgets(line, sizeof(line), pipe) != nullptr) {
+        if (std::strstr(line, "/Nebula(") == nullptr && std::strstr(line, "/SDL(") == nullptr) {
+            text += line;
+        }
+    }
+    pclose(pipe);
+    return text;
+#else
+    return {};
+#endif
 }
 
 VkSurfaceKHR create_vulkan_surface(VkInstance instance, NativeWindow window) {

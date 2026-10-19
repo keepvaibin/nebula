@@ -1479,12 +1479,24 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
     const bool reactive = !motion && (key.reserved & kPsKeyReactive) != 0u;
     const std::uint32_t enh_env = enhanced ? key.ind_reserved & kEnhancedEnvCoordMask : 0u;
     const bool enh_lit = enhanced && (key.ind_reserved & kEnhancedLit) != 0u;
-    if (enhanced) {
-        // The split column and the ray tracer's state ride in the uber header's last word.
+    const bool scalar_masks = options_.scalar_byte_masks;
+    if (enhanced || options_.tev_zero_from_constant) {
+        // The uber header's last word: zero for the TEV zero inputs (tev_zero_from_constant); enhanced, the split
+        // column and the ray tracer's state.
         s << insert_before_close(kPsConstantsDef, "    uint4    uber_ps_header;\n", false);
     } else {
         s << kPsConstantsDef;
     }
+    if (scalar_masks) {
+        s << "int3 gx_u8(int3 v) { return int3(v.x & 255, v.y & 255, v.z & 255); }\n"
+             "int4 gx_u8(int4 v) { return int4(v.x & 255, v.y & 255, v.z & 255, v.w & 255); }\n"
+             "int2 gx_bit0(int2 v) { return int2(v.x & 1, v.y & 1); }\n";
+    }
+    // `int3(expr) & 255` per component, in the form the options ask for.
+    const auto u8 = [&](const char* expr) {
+        return scalar_masks ? "gx_u8(int3(" + std::string(expr) + "))"
+                            : "int3(" + std::string(expr) + ") & int3(255,255,255)";
+    };
     if (motion) {
         s << insert_before_close(ppl_inputs ? kPsStructsPpl : kPsStructs, kMotionInterpolants, true);
     } else {
@@ -1996,14 +2008,31 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
         // TEV color combiner.
         const char* ca = color_arg_rgb(color_a);
         const char* cb = color_arg_rgb(color_b);
+        if (options_.tev_zero_from_constant) {
+            static constexpr const char* kConstantZero = "int3(uber_ps_header.www)";
+            if (color_a == TevColorArg::Zero) {
+                ca = kConstantZero;
+            }
+            if (color_b == TevColorArg::Zero) {
+                cb = kConstantZero;
+            }
+        }
         const char* cc = color_arg_rgb(color_c);
         const char* cd = color_arg_rgb(color_d);
         const char* dest_c = tev_dest_name(color_dest);
         // Color and alpha combiners observe the same stage-entry registers.
         // The alpha R8/GR16/BGR24 comparisons reuse COLOR A/B selectors.
         if (alpha_bias == TevBias::Compare && alpha_scale != TevScale::Half) {
-            emit(s, enhanced ? "    int3 alpha_compare_a_%u = tev_in3(int3(%s));\n" : "    int3 alpha_compare_a_%u = int3(%s) & int3(255,255,255);\n", st, ca);
-            emit(s, enhanced ? "    int3 alpha_compare_b_%u = tev_in3(int3(%s));\n" : "    int3 alpha_compare_b_%u = int3(%s) & int3(255,255,255);\n", st, cb);
+            if (enhanced) {
+                emit(s, "    int3 alpha_compare_a_%u = tev_in3(int3(%s));\n", st, ca);
+            } else {
+                emit(s, "    int3 alpha_compare_a_%u = %s;\n", st, u8(ca).c_str());
+            }
+            if (enhanced) {
+                emit(s, "    int3 alpha_compare_b_%u = tev_in3(int3(%s));\n", st, cb);
+            } else {
+                emit(s, "    int3 alpha_compare_b_%u = %s;\n", st, u8(cb).c_str());
+            }
         }
 
         if (color_bias == TevBias::Compare) {
@@ -2016,9 +2045,21 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
                 static_cast<TevCompareKind>(static_cast<unsigned>(color_scale));
             const bool is_eq = color_sub;  // SUB bit: 0 = GT, 1 = EQ
             s << "    {\n";
-            emit(s, enhanced ? "        int3 ca_i = tev_in3(int3(%s));\n" : "        int3 ca_i = int3(%s) & int3(255,255,255);\n", ca);
-            emit(s, enhanced ? "        int3 cb_i = tev_in3(int3(%s));\n" : "        int3 cb_i = int3(%s) & int3(255,255,255);\n", cb);
-            emit(s, enhanced ? "        int3 cc_i = tev_in3(int3(%s));\n" : "        int3 cc_i = int3(%s) & int3(255,255,255);\n", cc);
+            if (enhanced) {
+                emit(s, "        int3 ca_i = tev_in3(int3(%s));\n", ca);
+            } else {
+                emit(s, "        int3 ca_i = %s;\n", u8(ca).c_str());
+            }
+            if (enhanced) {
+                emit(s, "        int3 cb_i = tev_in3(int3(%s));\n", cb);
+            } else {
+                emit(s, "        int3 cb_i = %s;\n", u8(cb).c_str());
+            }
+            if (enhanced) {
+                emit(s, "        int3 cc_i = tev_in3(int3(%s));\n", cc);
+            } else {
+                emit(s, "        int3 cc_i = %s;\n", u8(cc).c_str());
+            }
             emit(s, "        int3 cd_i = int3(%s);\n", cd);
             switch (kind) {
             case TevCompareKind::R8:
@@ -2069,9 +2110,21 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
             // final >>8.  Keeping the stage in int space preserves dark eye
             // and UI-detail materials that float lerp over-brightens.
             s << "    {\n";
-            emit(s, enhanced ? "        int3 ai = tev_in3(int3(%s));\n" : "        int3 ai = int3(%s) & int3(255,255,255);\n", ca);
-            emit(s, enhanced ? "        int3 bi = tev_in3(int3(%s));\n" : "        int3 bi = int3(%s) & int3(255,255,255);\n", cb);
-            emit(s, enhanced ? "        int3 ci = tev_in3(int3(%s));\n" : "        int3 ci = int3(%s) & int3(255,255,255);\n", cc);
+            if (enhanced) {
+                emit(s, "        int3 ai = tev_in3(int3(%s));\n", ca);
+            } else {
+                emit(s, "        int3 ai = %s;\n", u8(ca).c_str());
+            }
+            if (enhanced) {
+                emit(s, "        int3 bi = tev_in3(int3(%s));\n", cb);
+            } else {
+                emit(s, "        int3 bi = %s;\n", u8(cb).c_str());
+            }
+            if (enhanced) {
+                emit(s, "        int3 ci = tev_in3(int3(%s));\n", cc);
+            } else {
+                emit(s, "        int3 ci = %s;\n", u8(cc).c_str());
+            }
             emit(s, "        int3 di = int3(%s);\n", cd);
             emit(s, "        int3 lhs = (di + int3(%s,%s,%s))%s;\n",
                  tev_bias_i(color_bias), tev_bias_i(color_bias),
@@ -2200,9 +2253,13 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
     // intermediates, but alpha compare, fog/colour output and the alpha==1 blend quirk see only the low 8 bits.
     // Under ray-traced lighting (enhanced keys, header bit 17) the final result clamps like the inputs
     // (measured rtpartner dy28: Good Egg's wood rim 255,255,102 -> 11,219,101, green streaks).
-    s << (enhanced ? "\n    int4 frag_i = (uber_ps_header.w & 0x20000u) != 0u ? clamp(tev_prev_i, 0, 255)"
-                     " : (tev_prev_i & int4(255,255,255,255));\n"
-                   : "\n    int4 frag_i = tev_prev_i & int4(255,255,255,255);\n");
+    if (enhanced) {
+        s << "\n    int4 frag_i = (uber_ps_header.w & 0x20000u) != 0u ? clamp(tev_prev_i, 0, 255)"
+             " : (tev_prev_i & int4(255,255,255,255));\n";
+    } else {
+        s << (scalar_masks ? "\n    int4 frag_i = gx_u8(tev_prev_i);\n"
+                           : "\n    int4 frag_i = tev_prev_i & int4(255,255,255,255);\n");
+    }
     s << "    float4 frag = float4(frag_i) / 255.0;\n\n";
     if (enhanced) {
         if ((key.ind_reserved & kEnhancedReflective) != 0u) {
@@ -2272,13 +2329,16 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
             // same logical pixel after a float reciprocal/multiply: at the
             // supported scales/extents, rounding cannot cross a boundary.
             // Keep legacy key branches unchanged for persistent DXBC reuse.
-            s << "    int2 dither_xy = int2(pin.pos.xy * ztex_params.y) & 1;\n";
+            s << (scalar_masks ? "    int2 dither_xy = gx_bit0(int2(pin.pos.xy * ztex_params.y));\n"
+                               : "    int2 dither_xy = int2(pin.pos.xy * ztex_params.y) & 1;\n");
         } else if (efb_scale == 1u) {
             // Keep the native-resolution shader byte-for-byte equivalent.
-            s << "    int2 dither_xy = int2(pin.pos.xy) & 1;\n";
+            s << (scalar_masks ? "    int2 dither_xy = gx_bit0(int2(pin.pos.xy));\n"
+                               : "    int2 dither_xy = int2(pin.pos.xy) & 1;\n");
         } else {
             emit(s,
-                "    int2 dither_xy = (int2(pin.pos.xy) / %u) & 1;\n",
+                scalar_masks ? "    int2 dither_xy = gx_bit0(int2(pin.pos.xy) / %u);\n"
+                             : "    int2 dither_xy = (int2(pin.pos.xy) / %u) & 1;\n",
                 efb_scale);
         }
         s << "    dither_rgb = (dither_rgb - (dither_rgb >> 6))"

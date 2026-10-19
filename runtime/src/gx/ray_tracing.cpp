@@ -486,169 +486,7 @@ D3D12_RESOURCE_BARRIER uav_barrier(ID3D12Resource* resource) {
     return barrier;
 }
 
-std::mutex g_game_sun_mutex;
-std::mutex g_star_core_mutex;
-std::array<float, 3> g_star_core{};
-float g_star_core_scale = 0.0f;
-std::chrono::steady_clock::time_point g_star_core_time{};
-std::array<float, 3> g_game_sun{};
-float g_game_sun_distance = 0.0f;
-std::chrono::steady_clock::time_point g_game_sun_time{};
-bool g_game_sun_known = false;
-std::uint64_t g_game_sun_updates = 0u;
-
-// The game's lights by position (a light that moves takes a new entry; old ones age out).
-struct NotedLight {
-    GameLight light{};
-    std::chrono::steady_clock::time_point first{};   // since when it has lit without a gap
-    std::chrono::steady_clock::time_point seen{};
-    std::uint32_t id = 0u;
-    bool used = false;
-};
-// A light fades in over its first kLightFadeIn and out over the kLightFadeOut before it ages out: one that starts or
-// stops (a Luma the game stops updating far off) never pops. A gap longer than kLightGap starts it over.
-constexpr std::chrono::duration<float, std::milli> kLightFadeIn{200.0f};
-constexpr std::chrono::duration<float, std::milli> kLightFadeOut{300.0f};
-constexpr std::chrono::milliseconds kLightGap{500};
-std::mutex g_game_lights_mutex;
-// The last point light request (note_game_point_request); guarded by g_game_lights_mutex.
-std::chrono::steady_clock::time_point g_point_request_seen{};
-std::array<NotedLight, 32> g_point_lights{};
-std::array<NotedLight, 16> g_world_lights{};
-
-// A light is its guest info (id) when it has one, else its position.
-template <std::size_t N>
-void note_light(std::array<NotedLight, N>& lights, const std::array<float, 3>& position,
-                const std::array<float, 3>& color, float half_distance = 0.0f, std::uint32_t id = 0u) {
-    const auto now = std::chrono::steady_clock::now();
-    const std::lock_guard<std::mutex> lock(g_game_lights_mutex);
-    NotedLight* slot = &lights[0];
-    bool found = false;
-    for (NotedLight& entry : lights) {
-        const bool same = id != 0u ? entry.id == id
-                                   : std::abs(entry.light.position[0] - position[0]) +
-                                             std::abs(entry.light.position[1] - position[1]) +
-                                             std::abs(entry.light.position[2] - position[2]) < 100.0f;
-        if (entry.used && same) {
-            slot = &entry;
-            found = true;
-            break;
-        }
-        if (!entry.used || (slot->used && entry.seen < slot->seen)) {
-            slot = &entry;
-        }
-    }
-    if (!found || now - slot->seen > kLightGap) {
-        slot->first = now;
-    }
-    slot->light = {position, color, half_distance};
-    slot->id = id;
-    slot->seen = now;
-    slot->used = true;
-}
-
-template <std::size_t N>
-std::size_t active_lights(const std::array<NotedLight, N>& lights, std::span<GameLight> out, std::uint64_t max_age_ms) {
-    const auto now = std::chrono::steady_clock::now();
-    const std::lock_guard<std::mutex> lock(g_game_lights_mutex);
-    std::size_t count = 0u;
-    const std::chrono::milliseconds limit(max_age_ms);
-    for (const NotedLight& entry : lights) {
-        const auto& c = entry.light.color;
-        const auto age = now - entry.seen;
-        if (count < out.size() && entry.used && age <= limit && c[0] + c[1] + c[2] > 0.01f) {
-            const float in = std::min((now - entry.first) / kLightFadeIn, 1.0f);
-            const float fade = std::clamp((limit - age) / kLightFadeOut, 0.0f, 1.0f);
-            GameLight& light = out[count++];
-            light = entry.light;
-            for (float& v : light.color) {
-                v *= in * fade;
-            }
-        }
-    }
-    return count;
-}
-
 }  // namespace
-
-void set_star_core(const std::array<float, 3>& position, float scale) noexcept {
-    const std::lock_guard<std::mutex> lock(g_star_core_mutex);
-    g_star_core = position;
-    g_star_core_scale = scale;
-    g_star_core_time = std::chrono::steady_clock::now();
-}
-
-bool star_core(std::array<float, 3>& position, float& scale, std::uint64_t max_age_ms) noexcept {
-    const std::lock_guard<std::mutex> lock(g_star_core_mutex);
-    if (g_star_core_scale <= 0.0f ||
-        std::chrono::steady_clock::now() - g_star_core_time > std::chrono::milliseconds(max_age_ms)) {
-        return false;
-    }
-    position = g_star_core;
-    scale = g_star_core_scale;
-    return true;
-}
-
-void set_game_sun(const std::array<float, 3>& direction, float distance) noexcept {
-    const std::lock_guard<std::mutex> lock(g_game_sun_mutex);
-    g_game_sun = direction;
-    g_game_sun_distance = distance;
-    g_game_sun_time = std::chrono::steady_clock::now();
-    g_game_sun_known = true;
-    ++g_game_sun_updates;
-}
-
-std::uint64_t game_sun_updates() noexcept {
-    const std::lock_guard<std::mutex> lock(g_game_sun_mutex);
-    return g_game_sun_updates;
-}
-
-void note_game_point_light(std::uint32_t info, const std::array<float, 3>& position,
-                           const std::array<float, 3>& color, float half_distance) noexcept {
-    {
-        // The requests carry every light; this one copies the nearest requester's (a module without the request
-        // site never sends them).
-        const std::lock_guard<std::mutex> lock(g_game_lights_mutex);
-        if (std::chrono::steady_clock::now() - g_point_request_seen < std::chrono::seconds(1)) {
-            return;
-        }
-    }
-    note_light(g_point_lights, position, color, half_distance, info);
-}
-
-void note_game_point_request(std::uint32_t actor, const std::array<float, 3>& position,
-                             const std::array<float, 3>& color, float half_distance) noexcept {
-    {
-        const std::lock_guard<std::mutex> lock(g_game_lights_mutex);
-        g_point_request_seen = std::chrono::steady_clock::now();
-    }
-    note_light(g_point_lights, position, color, half_distance, actor);
-}
-
-void note_game_world_light(const std::array<float, 3>& position, const std::array<float, 3>& color) noexcept {
-    note_light(g_world_lights, position, color);
-}
-
-std::size_t game_point_lights(std::span<GameLight> out, std::uint64_t max_age_ms) noexcept {
-    return active_lights(g_point_lights, out, max_age_ms);
-}
-
-std::size_t game_world_lights(std::span<GameLight> out, std::uint64_t max_age_ms) noexcept {
-    return active_lights(g_world_lights, out, max_age_ms);
-}
-
-bool game_sun(std::array<float, 3>& direction, std::uint64_t max_age_ms, float* distance) noexcept {
-    const std::lock_guard<std::mutex> lock(g_game_sun_mutex);
-    if (!g_game_sun_known ||
-        std::chrono::steady_clock::now() - g_game_sun_time > std::chrono::milliseconds(max_age_ms)) {
-        return false;
-    }
-    direction = g_game_sun;
-    if (distance != nullptr) {
-        *distance = g_game_sun_distance;
-    }
-    return true;
-}
 
 bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_frequency, bool validate,
                                 DXGI_FORMAT color_format) {
@@ -1732,11 +1570,12 @@ void SceneRayTracer::note_submission(std::uint64_t fence_value) noexcept {
 }
 
 std::uint32_t SceneRayTracer::texture_view(const RtTextureSource& source) {
-    if (!texture_views_usable_ || source.resource == nullptr || source.view.ptr == 0u || !device_) {
+    if (!texture_views_usable_ || source.resource == nullptr || source.view == 0u || !device_) {
         return 0xFFFFFFFFu;
     }
-    if (const auto found = texture_view_slots_.find(source.view.ptr);
-        found != texture_view_slots_.end() && found->second.resource == source.resource) {
+    auto* const resource = static_cast<ID3D12Resource*>(source.resource);
+    if (const auto found = texture_view_slots_.find(source.view);
+        found != texture_view_slots_.end() && found->second.resource == resource) {
         return found->second.index;
     }
     if (texture_view_count_ >= kTextureViewsPerScene) {
@@ -1750,10 +1589,11 @@ std::uint32_t SceneRayTracer::texture_view(const RtTextureSource& source) {
     const std::uint32_t slot = texture_view_scene_ * kTextureViewsPerScene + texture_view_count_++;
     D3D12_CPU_DESCRIPTOR_HANDLE destination = texture_view_cpu_;
     destination.ptr += static_cast<SIZE_T>(slot) * texture_view_increment_;
-    device_->CopyDescriptorsSimple(1u, destination, source.view, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    texture_view_blocks_[texture_view_scene_].resources.emplace_back(source.resource);
+    device_->CopyDescriptorsSimple(1u, destination, D3D12_CPU_DESCRIPTOR_HANDLE{source.view},
+                                   D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    texture_view_blocks_[texture_view_scene_].resources.emplace_back(resource);
     const std::uint32_t index = texture_view_first_ + slot;
-    texture_view_slots_[source.view.ptr] = {index, source.resource};
+    texture_view_slots_[source.view] = {index, resource};
     return index;
 }
 

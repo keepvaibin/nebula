@@ -15,8 +15,21 @@
 
 namespace galaxy::gx {
 
+// Forms of the pixel shaders for drivers that compile the default form wrongly (vk/device_quirks_vk.h). The defaults
+// are the D3D12 shaders, unchanged.
+struct ShaderGenOptions {
+    // TEV byte masks (x & 255) one component at a time, never one vector AND (Mali returns the constant vector).
+    bool scalar_byte_masks = false;
+    // A zero TEV colour input A or B read from the constants (uber_ps_header.w, always zero) instead of a literal
+    // (Qualcomm folds the literal wrongly).
+    bool tev_zero_from_constant = false;
+};
+
 class ShaderGenerator {
 public:
+    void set_options(const ShaderGenOptions& options) noexcept { options_ = options; }
+    [[nodiscard]] const ShaderGenOptions& options() const noexcept { return options_; }
+
     // Transforms position/normal through the per-vertex matrix index and applies
     // the key's channel lighting and texgens.
     [[nodiscard]] std::string generate_vs(const VertexShaderKey& key) const;
@@ -34,6 +47,9 @@ public:
     // source and used in pipeline-cache log lines.
     [[nodiscard]] static std::string describe(const PixelShaderKey& key);
     [[nodiscard]] static std::string describe(const VertexShaderKey& key);
+
+private:
+    ShaderGenOptions options_;
 };
 
 }  // namespace galaxy::gx
