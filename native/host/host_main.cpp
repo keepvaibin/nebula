@@ -32,6 +32,13 @@
 #include "galaxy/virtual_keys.h"
 #endif
 #endif
+#if !defined(NEBULA_HOST_RENDERER)
+namespace galaxy::host {
+// The headless host gives the platform no performance hints.
+inline void perf_hint_add_current_thread() noexcept {}
+inline int64_t perf_hint_retrace() noexcept { return 0; }
+}  // namespace galaxy::host
+#endif
 #if defined(NEBULA_HOST_SDL)
 #include "sdl_host.h"
 
