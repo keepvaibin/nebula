@@ -491,10 +491,21 @@ private fun SettingsScreen(model: LauncherModel, onChoose: () -> Unit, onShareLo
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.padding(start = 20.dp, top = 10.dp, end = 20.dp),
                     )
-                    ChoiceRow("Off", null, graphics.aa == "off") { model.updateGraphics(graphics.copy(aa = "off")) }
-                    ChoiceRow("FXAA", "Lightest", graphics.aa == "fxaa") { model.updateGraphics(graphics.copy(aa = "fxaa")) }
-                    ChoiceRow("SMAA", "Cleaner edges", graphics.aa == "smaa") {
-                        model.updateGraphics(graphics.copy(aa = "smaa"))
+                    val msaa = graphics.msaa > 1
+                    ChoiceRow("Off", null, graphics.aa == "off" && !msaa) {
+                        model.updateGraphics(graphics.copy(aa = "off", msaa = 1))
+                    }
+                    ChoiceRow("FXAA", "Lightest", graphics.aa == "fxaa" && !msaa) {
+                        model.updateGraphics(graphics.copy(aa = "fxaa", msaa = 1))
+                    }
+                    ChoiceRow("SMAA", "Cleaner edges", graphics.aa == "smaa" && !msaa) {
+                        model.updateGraphics(graphics.copy(aa = "smaa", msaa = 1))
+                    }
+                    ChoiceRow("MSAA 2x", "Geometry edges sampled twice. More power.", graphics.msaa == 2) {
+                        model.updateGraphics(graphics.copy(aa = "off", msaa = 2))
+                    }
+                    ChoiceRow("MSAA 4x", "Smoothest geometry edges. Most power.", graphics.msaa == 4) {
+                        model.updateGraphics(graphics.copy(aa = "off", msaa = 4))
                     }
                     HorizontalDivider(color = Night.GlassEdge, modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
                     Text(
