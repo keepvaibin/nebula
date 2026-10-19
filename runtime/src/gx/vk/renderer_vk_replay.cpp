@@ -77,8 +77,10 @@ void RendererVk::update_ring_mode() {
     reset_gx_bindings();
     for (Segment& segment : segments_) {
         segment.retired.clear();
+        segment.snapshots.clear();
         segment.fence = 0u;
     }
+    feedback_.clear();
     for (ReplayList& list : replay_lists_) {
         list.sequence = 0u;
     }
@@ -132,6 +134,91 @@ void RendererVk::advance_ring_segment() {
     constant_ring_.begin_frame(ring_segment_);
     matrix_ring_.begin_frame(ring_segment_);
     begin_replay_record();
+    take_log_snapshots();
+}
+
+// A table being logged: its copy textures this log has not written yet are read as an earlier frame left them.
+void RendererVk::note_feedback_reads(const std::array<VkImageView, kMaxTextureMaps>& views) {
+    for (const VkImageView view : views) {
+        if (view == VK_NULL_HANDLE ||
+            std::find(recording_log_.written.begin(), recording_log_.written.end(), view) !=
+                recording_log_.written.end()) {
+            continue;
+        }
+        if (const auto known = std::find_if(feedback_.begin(), feedback_.end(),
+                                            [view](const Feedback& entry) { return entry.view == view; });
+            known != feedback_.end()) {
+            known->serial = replay_serial_ + 1u;
+            continue;
+        }
+        for (const auto& [key, dest] : efb_copy_dests_) {
+            if (dest.texture && dest.texture->view == view) {
+                feedback_.push_back({view, dest.texture, replay_serial_ + 1u});
+                break;
+            }
+        }
+    }
+}
+
+// The log's start, before its first pass: the copy textures recent logs read before rewriting them, copied as they
+// are now (their earlier frame's content), from the segment's snapshot pool.
+void RendererVk::take_log_snapshots() {
+    // A texture no log read so in the last kInterpSegments frames, or no longer a copy destination, goes.
+    std::erase_if(feedback_, [this](const Feedback& entry) {
+        return entry.serial + kInterpSegments < replay_serial_ + 1u || entry.texture.use_count() <= 1;
+    });
+    Segment& segment = segments_[ring_segment_];
+    std::vector<gpu::TextureRef> pool = std::move(segment.snapshots);
+    segment.snapshots.clear();
+    const VkCommandBuffer commands = commands_;
+    for (const Feedback& entry : feedback_) {
+        vk::Texture& source = *entry.texture;
+        gpu::TextureRef snapshot;
+        for (gpu::TextureRef& candidate : pool) {
+            if (candidate && candidate->width == source.width && candidate->height == source.height) {
+                snapshot = std::move(candidate);
+                break;
+            }
+        }
+        if (!snapshot) {
+            snapshot = vk::Context::get().create_texture(source.width, source.height, 1u, VK_FORMAT_R8G8B8A8_UNORM,
+                                                         VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                                                         false, "sub-frame copy snapshot");
+            if (!snapshot) {
+                ++redirect_stats_.fallback_logs;
+                continue;
+            }
+        }
+        image_barrier(commands, source.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+                      VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT);
+        image_barrier(commands, snapshot->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+                      VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT);
+        VkImageCopy region{};
+        region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        region.extent = {source.width, source.height, 1};
+        vkCmdCopyImage(commands, source.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, snapshot->image,
+                       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+        image_barrier(commands, source.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                      VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+        image_barrier(commands, snapshot->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                      VK_ACCESS_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
+        snapshot->layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        recording_log_.snapshots.emplace_back(entry.view, snapshot);
+        segment.snapshots.push_back(std::move(snapshot));
+        ++redirect_stats_.snapshots;
+    }
+    // Unused pool textures retire with the segment.
+    for (gpu::TextureRef& unused : pool) {
+        if (unused) {
+            segment.retired.push_back(std::move(unused));
+        }
+    }
 }
 
 // Texture tables: the frame slot's pool, or in Interp the game frame's segment (its replays bind them).
@@ -171,6 +258,8 @@ void RendererVk::ReplayLog::clear() {
     movie = false;
     stripe_draws.clear();
     stripe_vertices.clear();
+    snapshots.clear();
+    written.clear();
 }
 
 void RendererVk::note_stripe_vertices(std::span<const StripeVertex> vertices) {
@@ -1073,6 +1162,10 @@ bool RendererVk::record_replay_list(ReplayList& list) {
     reset_gx_bindings();
     redirect_.clear();
     patched_.clear();
+    // Copy textures the frame read before rewriting them: its snapshots of them.
+    for (const auto& [view, snapshot] : run_log_.snapshots) {
+        redirect_[view] = snapshot->view;
+    }
     replay_list_ = &list;
     replay_constant_sets_.clear();
     bind_efb(nullptr);

@@ -545,6 +545,7 @@ private:
         VkDescriptorPool descriptors = VK_NULL_HANDLE;
         std::vector<VkDescriptorPool> overflow;
         std::vector<gpu::TextureRef> retired;
+        std::vector<gpu::TextureRef> snapshots;  // its logs' copy snapshots, reused when it comes round
         std::uint64_t fence = 0;  // the last submission that read the segment
     };
     void update_ring_mode();
@@ -594,6 +595,9 @@ private:
         std::uint64_t serial = 0;
         float surround = 0.0f;  // the display copy's XFB: its surround and movie flag (the sub-frame XFB's)
         bool movie = false;
+        // Copy textures this log read before rewriting them, as they were at its start (the replay reads these).
+        std::vector<std::pair<VkImageView, gpu::TextureRef>> snapshots;
+        std::vector<VkImageView> written;  // copy destinations its copies wrote
         // JPA stripe particles (note_stripe_vertices): each stripe draw's vertices, by draw index.
         struct StripeDraw {
             std::uint32_t draw = 0, first = 0, count = 0;
@@ -603,6 +607,16 @@ private:
         void clear();
     };
     void begin_replay_record();
+    // Copy textures read before the frame rewrites them (feedback: blur trails, cut covers), with the logs that read
+    // them lately: each log's start snapshots them.
+    struct Feedback {
+        VkImageView view = VK_NULL_HANDLE;
+        gpu::TextureRef texture;
+        std::uint64_t serial = 0;  // the last log that read it so
+    };
+    std::vector<Feedback> feedback_;
+    void note_feedback_reads(const std::array<VkImageView, kMaxTextureMaps>& views);
+    void take_log_snapshots();
     // The display copy closes the log: one 3D scene makes it replayable.
     void close_replay_log(std::uint32_t xfb_addr);
     // GX work recorded now goes into the log (not while a replay records, nor inside a logged operation's own

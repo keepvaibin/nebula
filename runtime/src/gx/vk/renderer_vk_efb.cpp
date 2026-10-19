@@ -553,6 +553,7 @@ gpu::Table RendererVk::texture_table_for(const TextureHandle* handles, unsigned 
         for (unsigned m = 0; m < kMaxTextureMaps; ++m) {
             views[m] = images[m].imageView;
         }
+        note_feedback_reads(views);
     }
     return gpu::Table{reinterpret_cast<std::uint64_t>(set)};
 }
@@ -1055,6 +1056,7 @@ bool RendererVk::copy_efb_to_texture(const EfbCopyParams& params, TextureCache& 
         copy.dest_view = texture.view;
         recording_log_.ops.push_back({ReplayKind::Copy, static_cast<std::uint32_t>(recording_log_.copies.size())});
         recording_log_.copies.push_back(copy);
+        recording_log_.written.push_back(texture.view);
     }
     const LogPause pause{*this};
 
