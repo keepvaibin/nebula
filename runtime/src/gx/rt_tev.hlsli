@@ -151,10 +151,13 @@ float4 tev_evaluate(uint draw, uint count, uint tri, float2 b, out bool alpha_pa
     float4 v1[3] = {tev_rgba8f(col1.x), tev_rgba8f(col1.y), tev_rgba8f(col1.z)};
     // Bits 5-6: the baked light of the vertices' colour removed per vertex and set to the program's neutral light
     // (record + 108: the levels), as the vertex shaders do.
+    // Bits 16-17: a lit channel lit at its neutral light (the record's light word), its vertex colour's hue its material.
     const uint levels = g_tev.Load(record + 108u);
     [unroll] for (uint k = 0u; k < 3u; ++k) {
         if ((header & 0x20u) != 0u) v0[k].rgb = tev_debake(v0[k].rgb) * (float(levels & 0xFFu) / 255.0f);
         if ((header & 0x40u) != 0u) v1[k].rgb = tev_debake(v1[k].rgb) * (float((levels >> 8u) & 0xFFu) / 255.0f);
+        if ((levels & 0x10000u) != 0u) v0[k].rgb = tev_debake(v0[k].rgb);
+        if ((levels & 0x20000u) != 0u) v1[k].rgb = tev_debake(v1[k].rgb);
     }
     const float4 vertex0 = v0[0] * w.x + v0[1] * w.y + v0[2] * w.z;
     const float4 vertex1 = v1[0] * w.x + v1[1] * w.y + v1[2] * w.z;

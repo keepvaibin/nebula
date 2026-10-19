@@ -248,6 +248,8 @@ VSOut main(VSIn v, uint vertex_id : SV_VertexID) {
     // Physical ray tracing (flags bits 2-3): an unlit channel's vertex colour is the art's baked light.
     if ((flags & 4u) != 0u) vtx_col0.rgb = nebula_debake(vtx_col0.rgb) * (float((flags >> 8u) & 0xFFu) / 255.0);
     if ((flags & 8u) != 0u) vtx_col1.rgb = nebula_debake(vtx_col1.rgb) * (float((flags >> 16u) & 0xFFu) / 255.0);
+    if ((flags & 16u) != 0u) vtx_col0.rgb = nebula_debake(vtx_col0.rgb);
+    if ((flags & 32u) != 0u) vtx_col1.rgb = nebula_debake(vtx_col1.rgb);
 
     bool lighting_used = false;
     [unroll] for (uint lc = 0u; lc < 2u; ++lc) {

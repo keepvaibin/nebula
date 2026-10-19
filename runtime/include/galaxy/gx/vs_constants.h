@@ -229,8 +229,9 @@ struct VsConstantsCpuCache {
     // The scene's sky up (GxVsConstants::sky_up, sky_up_known), kept across fills.
     std::uint32_t sky_up = 0u;
     std::uint32_t sky_up_known = 0u;
-    // GxVsConstants::flags bits 2-3: the vertices' colour 0 / 1 is de-baked; bits 8-15, 16-23: their neutral light
-    // (GxBackend::debake_state).
+    // GxVsConstants::flags bits 2-3: an unlit channel 0 / 1's vertex colour is de-baked to its neutral light; bits 4-5:
+    // a lit channel's (its vertex colour keeps its hue, the enhanced pixel shader lights it at its neutral light);
+    // bits 8-15, 16-23: the levels (GxBackend::debake_state).
     std::uint32_t debake = 0u;
 
     const GxVsConstants& update(const GxState& state, std::uint32_t dirty,

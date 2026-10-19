@@ -89,8 +89,9 @@ struct alignas(256) GxVsConstants {
     float chan_material[kMaxColorChannels][4];
     std::uint32_t num_texgens;
     std::uint32_t num_chans;
-    // bit0 per-vertex posmtx, bit1 lighting enable; bits 2-3: the vertices' colour 0 / 1 is de-baked to its program's
-    // neutral light (bits 8-15, 16-23; physical ray tracing: an unlit channel's vertex colour is the art's baked light).
+    // bit0 per-vertex posmtx, bit1 lighting enable; bits 2-3: an unlit channel 0 / 1's vertex colour is de-baked to its
+    // program's neutral light; bits 4-5: a lit channel is (its vertex colour's hue, the light at the neutral level); the
+    // levels in bits 8-15, 16-23 (physical ray tracing: the art's baked light removed).
     std::uint32_t flags;
     // Index of this draw's palette snapshot within the frame's matrix buffer.
     std::uint32_t mtx_palette_base;

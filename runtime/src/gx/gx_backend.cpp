@@ -7102,12 +7102,16 @@ std::uint32_t GxBackend::debake_channels() const {
         material != nullptr && material->emission != RtEmission::None) {
         return 0u;
     }
+    // Unlit channels coloured by their vertices (bits 0-1); lit channels (bits 2-3: GALAXY_RT_DEBAKE_LIT=0 none).
+    static const bool lit_enabled = read_env_u64("GALAXY_RT_DEBAKE_LIT", 1u) != 0u;
     std::uint32_t channels = 0u;
     const unsigned count = std::min<unsigned>(state_.gen_mode().num_color_chans, 2u);
     for (unsigned c = 0; c < count; ++c) {
         const XfChannelCtrl ctrl = state_.channel_ctrl(c);
         if (!ctrl.lighting_enable && ctrl.material_from_vertex) {
             channels |= 1u << c;
+        } else if (ctrl.lighting_enable && lit_enabled) {
+            channels |= 4u << c;
         }
     }
     return channels;
@@ -7226,8 +7230,8 @@ std::uint32_t GxBackend::debake_state() {
     }
     std::uint32_t state = channels;
     for (unsigned c = 0; c < 2u; ++c) {
-        if ((channels & (1u << c)) != 0u) {
-            state |= rt_tev_neutral_light(tev, stages.data(), c) << (8u + 8u * c);
+        if ((channels & (5u << c)) != 0u) {
+            state |= rt_tev_neutral_light(tev, stages.data(), c, (channels & (4u << c)) != 0u) << (8u + 8u * c);
         }
     }
     if (debake_levels_.size() > 65536u) {
@@ -7264,11 +7268,18 @@ void GxBackend::fill_rt_tev(RtDrawInfo& info, float facing) {
         const unsigned coord = t < texgens ? t : 0u;
         tev.header |= (coord == slot1 ? 1u : 0u) << (8u + 2u * t);
     }
-    // Bits 5-6: the vertices' colour 0 / 1 de-baked to its program's neutral light (pad[0]: the levels), as the
-    // raster's (debake_state; never the sky's).
+    // Bits 5-6: an unlit channel's vertex colour de-baked to its program's neutral light (pad[0] bits 0-15: the levels);
+    // pad[0] bits 16-17: a lit channel lit at its neutral light, its vertex colour's hue its material. As the raster's
+    // (debake_state; never the sky's).
     const std::uint32_t debake = (info.surface & kRtDrawSky) != 0u ? 0u : debake_state();
     tev.header |= (debake & 3u) << 5u;
-    tev.pad[0] = debake >> 8u;
+    tev.pad[0] = ((debake >> 8u) & 0xFFFFu) | (((debake >> 2u) & 3u) << 16u);
+    for (unsigned c = 0; c < 2u; ++c) {
+        if ((debake & (4u << c)) != 0u) {
+            const std::uint32_t level = (debake >> (8u + 8u * c)) & 0xFFu;
+            tev.channel[c * 2u + 1u] = (level << 24u) | (level << 16u) | (level << 8u) | 0xFFu;
+        }
+    }
     info.tev_maps = {};
     if (current_texture_table_.ptr != 0u) {
         for (unsigned m = 0; m < kMaxTextureMaps && m < 8u; ++m) {
@@ -13745,7 +13756,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
     // Physical ray tracing: the vertex shaders take a channel's baked vertex light to its program's neutral level (flags
     // bits 2-3, levels in bits 8-23).
     if (const std::uint32_t state = triangles ? debake_state() : 0u,
-        debake = ((state & 3u) << 2u) | (state & 0xFFFF00u);
+        debake = ((state & 3u) << 2u) | (((state >> 2u) & 3u) << 4u) | (state & 0xFFFF00u);
         cpu_vs_constants_.debake != debake) {
         cpu_vs_constants_.debake = debake;
         sky_up_dirty_ = true;   // the scene constants' upload

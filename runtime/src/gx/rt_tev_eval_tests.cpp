@@ -71,7 +71,7 @@ int main() {
         s[0].order = kOrderTex;
         s[0].ksel = kIdentitySwizzles;
         ok &= check(rt_tev_output(m, s, grey, white, white)[0] == 128, "tex x ras at full light", rt_tev_output(m, s, grey, white, white)[0], 128);
-        ok &= check(rt_tev_neutral_light(m, s, 0u) == 255u, "tex x ras neutral", static_cast<int>(rt_tev_neutral_light(m, s, 0u)), 255);
+        ok &= check(rt_tev_neutral_light(m, s, 0u, false) == 255u, "tex x ras neutral", static_cast<int>(rt_tev_neutral_light(m, s, 0u, false)), 255);
     }
     {
         // texture x colour x 2 (GX's doubled light): neutral at half light.
@@ -83,7 +83,7 @@ int main() {
         s[0].ksel = kIdentitySwizzles;
         const int at_full = rt_tev_output(m, s, grey, white, white)[0];
         ok &= check(at_full == 255, "tex x ras x 2 at full light (clamped)", at_full, 255);
-        ok &= check(rt_tev_neutral_light(m, s, 0u) == 128u, "tex x ras x 2 neutral", static_cast<int>(rt_tev_neutral_light(m, s, 0u)), 128);
+        ok &= check(rt_tev_neutral_light(m, s, 0u, false) == 128u, "tex x ras x 2 neutral", static_cast<int>(rt_tev_neutral_light(m, s, 0u, false)), 128);
     }
     {
         // Beach Bowl's map program: clamp(lerp(C1, C0, v) x 2), then clamp(prev x texture x 2): lit colour C0 = 128,
@@ -98,7 +98,7 @@ int main() {
         s[1].alpha_env = alpha_env(kAZero, kAZero, kAZero, kAZero);
         s[1].order = kOrderTex;
         s[1].ksel = kIdentitySwizzles;
-        const std::uint32_t v = rt_tev_neutral_light(m, s, 0u);
+        const std::uint32_t v = rt_tev_neutral_light(m, s, 0u, false);
         const int at = rt_tev_output(m, s, grey, {static_cast<int>(v), static_cast<int>(v), static_cast<int>(v), 255}, white)[0];
         const int below = rt_tev_output(m, s, grey, {static_cast<int>(v) - 1, static_cast<int>(v) - 1, static_cast<int>(v) - 1, 255}, white)[0];
         ok &= check(v >= 82u && v <= 88u, "Beach Bowl program neutral (about 85)", static_cast<int>(v), 85);

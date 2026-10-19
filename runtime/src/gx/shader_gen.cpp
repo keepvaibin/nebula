@@ -545,6 +545,7 @@ cbuffer GxPplConstants : register(b0) {
     float4 ppl_chan_ambient[2]  : packoffset(c8);
     float4 ppl_chan_material[2] : packoffset(c10);
     uint   ppl_num_chans        : packoffset(c12.y);
+    uint   ppl_flags            : packoffset(c12.z);
     uint   ppl_mtx_palette_base : packoffset(c12.w);
     uint   ppl_sky_up           : packoffset(c13.z);
     uint   ppl_sky_up_known     : packoffset(c13.w);
@@ -1242,7 +1243,9 @@ float xfw(uint w) {
     s << "        float((v.color1       ) & 0xFFu) / 255.0);\n";
     // Physical ray tracing (flags bits 2-3): an unlit channel's vertex colour is the art's baked light.
     s << "    if ((flags & 4u) != 0u) vtx_col0.rgb = nebula_debake(vtx_col0.rgb) * (float((flags >> 8u) & 0xFFu) / 255.0);\n";
-    s << "    if ((flags & 8u) != 0u) vtx_col1.rgb = nebula_debake(vtx_col1.rgb) * (float((flags >> 16u) & 0xFFu) / 255.0);\n\n";
+    s << "    if ((flags & 8u) != 0u) vtx_col1.rgb = nebula_debake(vtx_col1.rgb) * (float((flags >> 16u) & 0xFFu) / 255.0);\n";
+    s << "    if ((flags & 16u) != 0u) vtx_col0.rgb = nebula_debake(vtx_col0.rgb);\n";
+    s << "    if ((flags & 32u) != 0u) vtx_col1.rgb = nebula_debake(vtx_col1.rgb);\n\n";
 
     if (lighting_used) {
         // Lighting-space normal: transform by the normal (inverse-transpose) matrix, 3-float rows at XF words
@@ -1698,7 +1701,10 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
                      "                }\n",
                      n, spot ? "true" : "false");
             }
-            s << "            }\n"
+            // De-baked (GxVsConstants flags bit 4): lit at its program's neutral light (bits 8-15), not the art's full
+            // light.
+            s << "                if ((ppl_flags & 16u) != 0u) enh_avg = (float((ppl_flags >> 8u) & 0xFFu) / 255.0).xxx;\n"
+                 "            }\n"
                  "            pin.col0.rgb = enh_mat * saturate(enh_avg);\n"
                  "        } else {\n";
             s << "        const float3 enh_amb_lin = enh_lin(enh_amb);\n"

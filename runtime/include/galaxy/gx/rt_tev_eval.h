@@ -18,10 +18,11 @@ namespace galaxy::gx {
                                                const std::array<int, 4>& texel, const std::array<int, 4>& ras0,
                                                const std::array<int, 4>& ras1) noexcept;
 
-// De-baking (GxBackend::debake_channels): the vertex light (0-255) at which colour channel `channel`'s grey
-// vertex colour makes the program show a mid-grey texture as itself (its luminance 128), the other channel at full
-// light. 255 where the program never brightens past it; the program's own floor where it never darkens to it.
+// De-baking (GxBackend::debake_channels): the light level (0-255) at which colour channel `channel` makes the program
+// show a mid-grey texture as itself (its luminance 128), the other channel as recorded. Unlit (`lit` false): the level
+// of its grey vertex colour, the baked light; lit: the level of the light on its material (its vertex colour's hue,
+// white, or its register). 255 where the program never brightens past it; 0 where it never darkens to it.
 [[nodiscard]] std::uint32_t rt_tev_neutral_light(const RtTevMaterial& material, const RtTevStage* stages,
-                                                 unsigned channel) noexcept;
+                                                 unsigned channel, bool lit) noexcept;
 
 }  // namespace galaxy::gx

@@ -223,13 +223,23 @@ std::array<int, 4> rt_tev_output(const RtTevMaterial& material, const RtTevStage
     return {prev[0] & 255, prev[1] & 255, prev[2] & 255, prev[3] & 255};
 }
 
-std::uint32_t rt_tev_neutral_light(const RtTevMaterial& material, const RtTevStage* stages, unsigned channel) noexcept {
-    // A mid-grey texel (opaque) as the texture; the channel's grey vertex light v times its light factor, the other
-    // channel at its full light.
+std::uint32_t rt_tev_neutral_light(const RtTevMaterial& material, const RtTevStage* stages, unsigned channel,
+                                   bool lit) noexcept {
+    // A mid-grey texel (opaque) as the texture. The channel solved: unlit, its grey vertex light v times its light
+    // factor; lit, its material (a vertex colour's hue: white) under the grey light v. The other channel as recorded.
     const Int4 texel{128, 128, 128, 255};
     const auto ras_of = [&](unsigned c, int v) {
-        const Int4 light = rgba8(material.channel[c * 2u + 1u]);
         const bool from_vertex = (material.header & (1u << (24u + 2u * c))) != 0u;
+        if (lit && c == channel) {
+            const Int4 base = from_vertex ? Int4{255, 255, 255, 255} : rgba8(material.channel[c * 2u]);
+            Int4 out{};
+            for (unsigned i = 0; i < 3u; ++i) {
+                out[i] = (base[i] * v + 127) / 255;
+            }
+            out[3] = base[3];
+            return out;
+        }
+        const Int4 light = rgba8(material.channel[c * 2u + 1u]);
         const Int4 base = from_vertex ? Int4{v, v, v, 255} : rgba8(material.channel[c * 2u]);
         Int4 out{};
         for (unsigned i = 0; i < 4u; ++i) {
