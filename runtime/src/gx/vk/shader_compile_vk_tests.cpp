@@ -1,15 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Compiles every shader the Vulkan GX backend uses through annotate() and glslang: the uber shaders' variants, the
 // line/point geometry shaders, generated shaders for representative keys, and the EFB conversion shader. Each must
-// pass the SPIR-V validator, and every descriptor it declares must sit at a (set, binding) of its layout.
+// pass the SPIR-V validator, and every descriptor it declares must sit at a (set, binding) of its layout. Stage
+// variables must sit at their semantics' locations, constant-buffer members at the C++ structs' offsets, and matrices
+// must be row-major as on D3D12.
 
 #include "galaxy/gx/renderer_common.h"
 #include "galaxy/gx/shader_gen.h"
+#include "galaxy/gx/uber_constants.h"
 #include "galaxy/gx/uber_shaders.h"
 #include "galaxy/gx/vk/shader_compile_vk.h"
 
+#include <cstddef>
 #include <cstdio>
 #include <map>
+#include <set>
 #include <string>
 
 using namespace galaxy::gx;
@@ -18,6 +23,86 @@ using namespace galaxy::gx::vk;
 namespace {
 
 int failures = 0;
+
+// The constant-buffer members the shaders read, at the byte offsets the C++ structs write them (uber_constants.h).
+const std::map<std::string, std::size_t>& constant_offsets() {
+    static const std::map<std::string, std::size_t> offsets = {
+        {"projection", offsetof(GxVsConstants, projection)},
+        {"texgen_config", offsetof(GxVsConstants, texgen_config)},
+        {"chan_ambient", offsetof(GxVsConstants, chan_ambient)},
+        {"chan_material", offsetof(GxVsConstants, chan_material)},
+        {"num_texgens", offsetof(GxVsConstants, num_texgens)},
+        {"num_chans", offsetof(GxVsConstants, num_chans)},
+        {"mtx_palette_base", offsetof(GxVsConstants, mtx_palette_base)},
+        {"matrix_index_a", offsetof(GxVsConstants, matrix_index_a)},
+        {"matrix_index_b", offsetof(GxVsConstants, matrix_index_b)},
+        {"inline_pos_matrix", offsetof(GxVsConstants, inline_pos_matrix)},
+        {"inline_tex_matrices", offsetof(GxVsConstants, inline_tex_matrices)},
+        {"inline_post_matrices", offsetof(GxVsConstants, inline_post_matrices)},
+        {"line_point_raster", offsetof(GxVsConstants, line_point_raster)},
+        {"line_point_tex_offsets", offsetof(GxVsConstants, line_point_tex_offsets)},
+        {"uber_vs_header", offsetof(GxVsConstants, uber_vs_header)},
+        {"uber_texgen", offsetof(GxVsConstants, uber_texgen)},
+        {"uber_post_texgen", offsetof(GxVsConstants, uber_post_texgen)},
+        {"uber_channel", offsetof(GxVsConstants, uber_channel)},
+        {"stage_config", offsetof(GxPsConstants, stage_config)},
+        {"tev_regs", offsetof(GxPsConstants, tev_regs)},
+        {"konst", offsetof(GxPsConstants, konst)},
+        {"alpha_refs", offsetof(GxPsConstants, alpha_refs)},
+        {"fog_params", offsetof(GxPsConstants, fog_params)},
+        {"tex_dims", offsetof(GxPsConstants, tex_dims)},
+        {"ztex_params", offsetof(GxPsConstants, ztex_params)},
+        {"ind_cmd", offsetof(GxPsConstants, ind_cmd)},
+        {"ind_mtx", offsetof(GxPsConstants, ind_mtx)},
+        {"ind_misc", offsetof(GxPsConstants, ind_misc)},
+        {"uber_ps_header", offsetof(GxPsConstants, uber_ps_header)},
+    };
+    return offsets;
+}
+
+// Empty when every named member of a uniform block sits at the C++ offset; else the mismatches.
+std::string check_constant_offsets(const std::vector<std::uint32_t>& spirv, unsigned& matched) {
+    matched = 0;
+    constexpr std::uint32_t kOpMemberName = 6;
+    constexpr std::uint32_t kOpMemberDecorate = 72;
+    constexpr std::uint32_t kDecorationOffset = 35;
+    std::map<std::pair<std::uint32_t, std::uint32_t>, std::string> names;
+    std::map<std::pair<std::uint32_t, std::uint32_t>, std::uint32_t> offsets;
+    for (std::size_t at = 5; at < spirv.size();) {
+        const std::uint32_t count = spirv[at] >> 16u;
+        const std::uint32_t op = spirv[at] & 0xffffu;
+        if (count == 0u) {
+            break;
+        }
+        if (op == kOpMemberName && count >= 4u) {
+            std::string name;
+            for (std::size_t w = at + 3u; w < at + count; ++w) {
+                for (unsigned b = 0; b < 4u; ++b) {
+                    const char c = static_cast<char>((spirv[w] >> (b * 8u)) & 0xffu);
+                    if (c == '\0') break;
+                    name += c;
+                }
+            }
+            names[{spirv[at + 1], spirv[at + 2]}] = name.substr(0, name.find('\0'));
+        } else if (op == kOpMemberDecorate && count >= 5u && spirv[at + 3] == kDecorationOffset) {
+            offsets[{spirv[at + 1], spirv[at + 2]}] = spirv[at + 4];
+        }
+        at += count;
+    }
+    std::string problems;
+    for (const auto& [member, name] : names) {
+        const auto expected = constant_offsets().find(name);
+        const auto actual = offsets.find(member);
+        if (expected != constant_offsets().end() && actual != offsets.end()) {
+            ++matched;
+        }
+        if (expected != constant_offsets().end() && actual != offsets.end() && expected->second != actual->second) {
+            problems += name + " at " + std::to_string(actual->second) + ", C++ " + std::to_string(expected->second) +
+                "; ";
+        }
+    }
+    return problems;
+}
 
 // SPIR-V opcodes, decorations and storage classes the binding check reads.
 constexpr std::uint32_t kOpVariable = 59;
@@ -83,6 +168,85 @@ std::string check_bindings(const std::vector<std::uint32_t>& spirv, std::span<co
     return problems;
 }
 
+// The locations of the module's inputs (storage class 1) or outputs (3).
+std::set<std::uint32_t> io_locations(const std::vector<std::uint32_t>& spirv, std::uint32_t storage_class) {
+    constexpr std::uint32_t kDecorationLocation = 30;
+    std::map<std::uint32_t, std::uint32_t> locations;
+    std::set<std::uint32_t> variables;
+    for (std::size_t at = 5; at < spirv.size();) {
+        const std::uint32_t count = spirv[at] >> 16u;
+        const std::uint32_t op = spirv[at] & 0xffffu;
+        if (count == 0u) {
+            break;
+        }
+        if (op == kOpDecorate && count >= 4u && spirv[at + 2] == kDecorationLocation) {
+            locations[spirv[at + 1]] = spirv[at + 3];
+        } else if (op == kOpVariable && count >= 4u && spirv[at + 3] == storage_class) {
+            variables.insert(spirv[at + 2]);
+        }
+        at += count;
+    }
+    std::set<std::uint32_t> result;
+    for (const std::uint32_t variable : variables) {
+        if (const auto it = locations.find(variable); it != locations.end()) {
+            result.insert(it->second);
+        }
+    }
+    return result;
+}
+
+// Stage variables sit at their semantics' locations even when the shader leaves others unused (glslang alone would
+// number the used ones from 0).
+void expect_semantic_locations() {
+    constexpr const char* kVs = R"(
+struct VSIn { float3 pos : POSITION; float3 nrm : NORMAL; uint color0 : COLOR0; uint color1 : COLOR1; };
+struct VSOut { float4 pos : SV_Position; float4 col0 : COLOR0; float3 uv3 : TEXCOORD3; };
+VSOut main(VSIn input) {
+    VSOut o;
+    o.pos = float4(input.pos, 1.0);
+    o.col0 = 0.0;
+    o.uv3 = float3(input.color1, 0.0, 0.0);
+    return o;
+})";
+    constexpr const char* kPs = R"(
+struct PSIn { float4 pos : SV_Position; float3 uv3 : TEXCOORD3; };
+float4 main(PSIn input) : SV_Target0 { return float4(input.uv3, 1.0); })";
+    std::string error;
+    const auto vs = compile_hlsl(kVs, ShaderStage::Vertex, "main", {}, error, {true, false});
+    const auto ps = compile_hlsl(kPs, ShaderStage::Fragment, "main", {}, error, {true, false});
+    const bool ok = !vs.empty() && !ps.empty() && io_locations(vs, 1) == std::set<std::uint32_t>{0u, 5u} &&
+        io_locations(vs, 3) == std::set<std::uint32_t>{0u, 5u} && io_locations(ps, 1) == std::set<std::uint32_t>{5u} &&
+        io_locations(ps, 3) == std::set<std::uint32_t>{0u};
+    if (!ok) {
+        ++failures;
+        std::printf("FAIL semantic locations %s\n", error.c_str());
+        return;
+    }
+    std::printf("ok   semantic locations (POSITION 0, COLOR1 5; COLOR0 0, TEXCOORD3 5; SV_Target0 0)\n");
+}
+
+// Constant-buffer matrices default to row-major, as the D3D12 compile (D3DCOMPILE_PACK_MATRIX_ROW_MAJOR): a plain
+// float4x4 compiles to the same module as one declared row_major (glslang's own default is the transpose).
+void expect_row_major_matrices() {
+    constexpr const char* kPlain = R"(
+cbuffer C : register(b0) { float4x4 m; };
+float4 main(float3 p : POSITION) : SV_Position { return mul(m, float4(p, 1.0)); })";
+    constexpr const char* kRowMajor = R"(
+cbuffer C : register(b0) { row_major float4x4 m; };
+float4 main(float3 p : POSITION) : SV_Position { return mul(m, float4(p, 1.0)); })";
+    constexpr RegisterBinding bindings[] = {{"b0", 0, 0}};
+    std::string error;
+    const auto plain = compile_hlsl(annotate(kPlain, bindings), ShaderStage::Vertex, "main", {}, error, {true, false});
+    const auto row_major =
+        compile_hlsl(annotate(kRowMajor, bindings), ShaderStage::Vertex, "main", {}, error, {true, false});
+    if (plain.empty() || plain != row_major) {
+        ++failures;
+        std::printf("FAIL row-major matrices %s\n", error.c_str());
+        return;
+    }
+    std::printf("ok   row-major matrices (as D3DCOMPILE_PACK_MATRIX_ROW_MAJOR)\n");
+}
+
 void expect(const char* what, std::string_view hlsl, ShaderStage stage, std::span<const RegisterBinding> bindings,
             std::initializer_list<const char*> defines = {}, bool dual_source = false) {
     std::string error;
@@ -93,7 +257,48 @@ void expect(const char* what, std::string_view hlsl, ShaderStage stage, std::spa
         std::printf("FAIL %s\n%s\n", what, error.c_str());
         return;
     }
-    const std::string problems = check_bindings(spirv, bindings);
+    unsigned matched = 0;
+    std::string problems = check_bindings(spirv, bindings) + check_constant_offsets(spirv, matched);
+    bool uniform_block = false;  // the optimizer drops a block the shader never reads
+    for (std::size_t at = 5; at < spirv.size() && (spirv[at] >> 16u) != 0u; at += spirv[at] >> 16u) {
+        uniform_block |= (spirv[at] & 0xffffu) == kOpVariable && spirv[at + 3] == kStorageUniform;
+    }
+    const bool declares = hlsl.find("cbuffer GxVsConstants") != std::string_view::npos ||
+        hlsl.find("cbuffer GxPsConstants") != std::string_view::npos;
+    if (declares && uniform_block && matched == 0u) {
+        problems += "no constant-buffer member names to check; ";
+    }
+    if (dual_source) {
+        // Two colour outputs, both at location 0: the second at index 1 (the blender's SRC1).
+        constexpr std::uint32_t kDecorationLocation = 30;
+        constexpr std::uint32_t kDecorationIndex = 32;
+        std::map<std::uint32_t, std::uint32_t> locations, indices;
+        std::set<std::uint32_t> outputs;
+        for (std::size_t at = 5; at < spirv.size();) {
+            const std::uint32_t count = spirv[at] >> 16u;
+            const std::uint32_t op = spirv[at] & 0xffffu;
+            if (op == kOpDecorate && count >= 4u && spirv[at + 2] == kDecorationLocation) {
+                locations[spirv[at + 1]] = spirv[at + 3];
+            } else if (op == kOpDecorate && count >= 4u && spirv[at + 2] == kDecorationIndex) {
+                indices[spirv[at + 1]] = spirv[at + 3];
+            } else if (op == kOpVariable && count >= 4u && spirv[at + 3] == 3u) {
+                outputs.insert(spirv[at + 2]);
+            }
+            at += count;
+        }
+        unsigned first = 0, second = 0;
+        for (const std::uint32_t output : outputs) {
+            if (!locations.contains(output)) {
+                continue;  // built-in (SV_Depth)
+            }
+            const std::uint32_t index = indices.contains(output) ? indices[output] : 0u;
+            first += locations[output] == 0u && index == 0u;
+            second += locations[output] == 0u && index == 1u;
+        }
+        if (first != 1u || second != 1u) {
+            problems += "dual-source outputs are not location 0 index 0 and 1; ";
+        }
+    }
     if (!problems.empty()) {
         ++failures;
         std::printf("FAIL %s: %s\n", what, problems.c_str());
@@ -106,6 +311,8 @@ void expect(const char* what, std::string_view hlsl, ShaderStage stage, std::spa
 
 int main(int argc, char** argv) {
     const auto gx = gx_draw_bindings();
+    expect_semantic_locations();
+    expect_row_major_matrices();
     expect("uber vs", uber_vs_source(), ShaderStage::Vertex, gx);
     // The six output variants, defined as PipelineCacheVk defines them.
     for (unsigned variant = 0; variant < kUberPsVariants; ++variant) {

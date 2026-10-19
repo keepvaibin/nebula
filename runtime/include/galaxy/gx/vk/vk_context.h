@@ -96,12 +96,21 @@ public:
     [[nodiscard]] bool geometry_shader() const noexcept { return geometry_shader_; }
     [[nodiscard]] bool sampler_anisotropy() const noexcept { return sampler_anisotropy_; }
     [[nodiscard]] bool bc_textures() const noexcept { return bc_textures_; }
+    [[nodiscard]] bool depth_clamp() const noexcept { return depth_clamp_; }
+    // VK_EXT_depth_clip_enable: clamping without giving up clipping (D3D's rasterizer).
+    [[nodiscard]] bool depth_clip_enable() const noexcept { return depth_clip_enable_; }
+    // The largest device-local heap's use and budget (the driver's with VK_EXT_memory_budget, else VMA's estimate).
+    bool device_memory_budget(std::uint64_t& usage, std::uint64_t& budget) const noexcept;
 
     // Submits command buffers in order (waiting on `wait_semaphore` at `wait_stage` and signalling `signal_semaphore`
     // when given) and returns their fence value.
     std::uint64_t submit(std::span<const VkCommandBuffer> commands, VkSemaphore wait_semaphore = VK_NULL_HANDLE,
                          VkPipelineStageFlags wait_stage = 0, VkSemaphore signal_semaphore = VK_NULL_HANDLE);
     std::uint64_t submit(VkCommandBuffer commands) { return submit(std::span<const VkCommandBuffer>(&commands, 1u)); }
+    // A frame's submission (the renderer's end_frame): objects released since the previous one (defer) are destroyed
+    // once it completes.
+    std::uint64_t submit_frame(std::span<const VkCommandBuffer> commands, VkSemaphore wait_semaphore = VK_NULL_HANDLE,
+                               VkPipelineStageFlags wait_stage = 0, VkSemaphore signal_semaphore = VK_NULL_HANDLE);
     // The highest fence value the GPU has passed.
     [[nodiscard]] std::uint64_t completed_value();
     // Waits until the GPU has passed `value`; false on a timeout or a lost device.
@@ -109,8 +118,9 @@ public:
     [[nodiscard]] std::uint64_t submitted_value() const noexcept {
         return submitted_.load(std::memory_order_acquire);
     }
-    // Runs `destroy` once the GPU has passed the next submission, which carries any commands being recorded now
-    // (one submitting thread: the render thread).
+    // Runs `destroy` once the GPU has passed the next frame submission (submit_frame), which carries any commands
+    // being recorded now; peeks and other submissions in between carry none of them (one submitting thread: the
+    // render thread).
     void defer(std::function<void()> destroy);
     // Runs the deferred destructions the GPU has passed.
     void collect();
@@ -168,6 +178,9 @@ private:
     bool geometry_shader_ = false;
     bool sampler_anisotropy_ = false;
     bool bc_textures_ = false;
+    bool memory_budget_ = false;
+    bool depth_clamp_ = false;
+    bool depth_clip_enable_ = false;
     bool debug_names_ = false;
     struct Pending {
         std::uint64_t value;

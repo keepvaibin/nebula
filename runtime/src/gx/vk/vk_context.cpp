@@ -240,12 +240,35 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
     queue_info.queueFamilyIndex = queue_family_;
     queue_info.queueCount = 1;
     queue_info.pQueuePriorities = &priority;
-    const char* device_extensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+    std::vector<const char*> device_extensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+    // The driver's per-heap budget (the internal-resolution memory check), where it reports one.
+    memory_budget_ = has_device_extension(physical_, VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
+    if (memory_budget_) {
+        device_extensions.push_back(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
+    }
+    // Depth clipping apart from depth clamping: with both, fragment depth (shader-written too) is clamped to the
+    // viewport's range while primitives are still clipped, as D3D does.
+    VkPhysicalDeviceDepthClipEnableFeaturesEXT depth_clip{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DEPTH_CLIP_ENABLE_FEATURES_EXT};
+    if (available.depthClamp == VK_TRUE && has_device_extension(physical_, VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME)) {
+        VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+        features.pNext = &depth_clip;
+        vkGetPhysicalDeviceFeatures2(physical_, &features);
+        depth_clip_enable_ = depth_clip.depthClipEnable == VK_TRUE;
+        if (depth_clip_enable_) {
+            device_extensions.push_back(VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME);
+        }
+    }
+    depth_clamp_ = available.depthClamp == VK_TRUE;
     VkDeviceCreateInfo device_info{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
+    if (depth_clip_enable_) {
+        depth_clip.pNext = nullptr;
+        depth_clip.depthClipEnable = VK_TRUE;
+        device_info.pNext = &depth_clip;
+    }
     device_info.queueCreateInfoCount = 1;
     device_info.pQueueCreateInfos = &queue_info;
-    device_info.enabledExtensionCount = 1;
-    device_info.ppEnabledExtensionNames = device_extensions;
+    device_info.enabledExtensionCount = static_cast<std::uint32_t>(device_extensions.size());
+    device_info.ppEnabledExtensionNames = device_extensions.data();
     device_info.pEnabledFeatures = &enabled;
     if (vkCreateDevice(physical_, &device_info, nullptr, &device_) != VK_SUCCESS) {
         device_ = VK_NULL_HANDLE;
@@ -263,6 +286,9 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
     allocator_info.device = device_;
     allocator_info.instance = instance_;
     allocator_info.pVulkanFunctions = &functions;
+    if (memory_budget_) {
+        allocator_info.flags |= VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
+    }
     if (vmaCreateAllocator(&allocator_info, &allocator_) != VK_SUCCESS) {
         allocator_ = nullptr;
         return fail("vmaCreateAllocator failed");
@@ -393,11 +419,23 @@ bool Context::wait(std::uint64_t value, std::uint64_t timeout_ns) {
     return true;
 }
 
-void Context::defer(std::function<void()> destroy) {
-    // The commands being recorded now go out in the next submission.
-    const std::uint64_t value = submitted_.load(std::memory_order_acquire) + 1u;
+std::uint64_t Context::submit_frame(std::span<const VkCommandBuffer> commands, VkSemaphore wait_semaphore,
+                                    VkPipelineStageFlags wait_stage, VkSemaphore signal_semaphore) {
+    const std::uint64_t value = submit(commands, wait_semaphore, wait_stage, signal_semaphore);
     std::lock_guard<std::mutex> lock(deferred_mutex_);
-    deferred_.push_back({value, std::move(destroy)});
+    for (Deferred& deferred : deferred_) {
+        if (deferred.value == 0u) {
+            deferred.value = value;
+        }
+    }
+    return value;
+}
+
+void Context::defer(std::function<void()> destroy) {
+    // Commands recorded into the open frame may name the object: it waits for that frame's submission (a peek or
+    // one-time submission in between carries none of them).
+    std::lock_guard<std::mutex> lock(deferred_mutex_);
+    deferred_.push_back({0u, std::move(destroy)});
 }
 
 void Context::collect() {
@@ -405,8 +443,9 @@ void Context::collect() {
     std::vector<Deferred> due;
     {
         std::lock_guard<std::mutex> lock(deferred_mutex_);
-        auto split = std::stable_partition(deferred_.begin(), deferred_.end(),
-                                           [completed](const Deferred& d) { return d.value > completed; });
+        auto split = std::stable_partition(deferred_.begin(), deferred_.end(), [completed](const Deferred& d) {
+            return d.value == 0u || d.value > completed;
+        });
         due.assign(std::make_move_iterator(split), std::make_move_iterator(deferred_.end()));
         deferred_.erase(split, deferred_.end());
     }
@@ -457,6 +496,9 @@ std::shared_ptr<Texture> Context::create_texture(std::uint32_t width, std::uint3
     }
     if (render_target) {
         view_info.subresourceRange.levelCount = 1;
+        if (format == VK_FORMAT_D24_UNORM_S8_UINT || format == VK_FORMAT_D32_SFLOAT_S8_UINT) {
+            view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+        }
         if (vkCreateImageView(device_, &view_info, nullptr, &texture->target_view) != VK_SUCCESS) {
             return {};
         }
@@ -467,16 +509,37 @@ std::shared_ptr<Texture> Context::create_texture(std::uint32_t width, std::uint3
     return texture;
 }
 
+bool Context::device_memory_budget(std::uint64_t& usage, std::uint64_t& budget) const noexcept {
+    usage = budget = 0u;
+    if (allocator_ == nullptr) {
+        return false;
+    }
+    VkPhysicalDeviceMemoryProperties memory{};
+    vkGetPhysicalDeviceMemoryProperties(physical_, &memory);
+    std::array<VmaBudget, VK_MAX_MEMORY_HEAPS> budgets{};
+    vmaGetHeapBudgets(allocator_, budgets.data());
+    // The largest device-local heap holds the render targets (the only one on most devices).
+    for (std::uint32_t i = 0; i < memory.memoryHeapCount; ++i) {
+        if ((memory.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) != 0u && budgets[i].budget > budget) {
+            budget = budgets[i].budget;
+            usage = budgets[i].usage;
+        }
+    }
+    return budget != 0u;
+}
+
 MappedBuffer Context::create_mapped_buffer(std::uint64_t size, VkBufferUsageFlags usage, const char* name) {
     MappedBuffer out;
     VkBufferCreateInfo buffer_info{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
     buffer_info.size = size;
     buffer_info.usage = usage;
     buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    // Host memory the GPU reads across the bus, as D3D12's upload heap: written once, read once per frame.
+    // Host memory the GPU reads across the bus, as D3D12's upload heap: written once, read once per frame. Coherent:
+    // the shared ring code never flushes (every Vulkan device has a host-visible coherent type).
     VmaAllocationCreateInfo alloc_info{};
     alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
     alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+    alloc_info.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
     VmaAllocationInfo allocated{};
     if (vmaCreateBuffer(allocator_, &buffer_info, &alloc_info, &out.buffer, &out.allocation, &allocated) != VK_SUCCESS) {
         return {};

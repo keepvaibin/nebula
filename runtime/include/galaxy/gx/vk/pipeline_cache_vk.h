@@ -1,0 +1,165 @@
+// SPDX-License-Identifier: GPL-3.0-only
+#pragma once
+
+// PipelineCacheVk: GX pipelines on Vulkan (docs/VULKAN.md), the interface GxBackend uses on PipelineCache.
+//
+// A pipeline is its key's specialised shaders (ShaderGenerator's HLSL, compiled by glslang) with its render state. A
+// key seen for the first time draws with the uber pipeline of its render state while a worker builds the specialised
+// one; drain_completions publishes finished pipelines at the frame boundary, so the render thread never waits for a
+// compile once the uber shaders exist. SPIR-V (by its HLSL's hash, so a changed generator never serves stale code),
+// the keys seen and the driver's VkPipelineCache persist in cache_dir; a later session builds every known pipeline
+// on the workers at start. GALAXY_GX_UBER as on D3D12: 1 = this hybrid (default), force = the uber pipelines for every
+// draw, 0 = none (a first use builds its pipeline on the render thread).
+
+#include "galaxy/gx/shader_gen.h"
+#include "galaxy/gx/shader_keys.h"
+#include "galaxy/gx/uber_shaders.h"
+#include "galaxy/gx/vk/renderer_vk.h"
+
+#include <array>
+#include <atomic>
+#include <condition_variable>
+#include <cstdint>
+#include <deque>
+#include <filesystem>
+#include <mutex>
+#include <thread>
+#include <type_traits>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
+namespace galaxy::gx {
+
+class PipelineCacheVk {
+public:
+    PipelineCacheVk() = default;
+    PipelineCacheVk(const PipelineCacheVk&) = delete;
+    PipelineCacheVk& operator=(const PipelineCacheVk&) = delete;
+    ~PipelineCacheVk() noexcept;
+
+    bool initialize(VkDevice device, const vk::GxLayout* layout, const std::filesystem::path& cache_dir,
+                    unsigned worker_count);
+    void shutdown();  // joins the workers, saves the caches
+
+    // Render thread only.
+    [[nodiscard]] VkPipeline get(const PsoKey& key, const PixelShaderKey& ps_key, const VertexShaderKey& vs_key);
+    void drain_completions();
+
+    void flush_disk();
+    void flush_disk_async();
+    void poll_disk_flush();
+    [[nodiscard]] bool has_unsaved_records() const noexcept { return unsaved_.load(std::memory_order_acquire); }
+    [[nodiscard]] std::uint64_t specialized_hits() const noexcept { return specialized_hits_; }
+    [[nodiscard]] std::uint64_t uber_fallbacks() const noexcept { return uber_fallbacks_; }
+    [[nodiscard]] bool last_get_used_uber() const noexcept { return last_get_used_uber_; }
+
+    struct CompileStats {
+        std::uint64_t pso_compiles = 0;
+        std::uint64_t pso_library_loads = 0;  // not separable from builds on Vulkan
+        std::uint64_t shader_pair_compiles = 0;
+        std::uint64_t blobs_from_cache = 0;
+        std::uint64_t blob_compile_us = 0;
+        std::size_t shader_records = 0;
+        std::size_t shader_records_on_disk = 0;
+        std::size_t pso_keys = 0;
+        std::size_t pso_keys_on_disk = 0;
+        bool shader_cache_at_capacity = false;
+        bool pso_cache_at_capacity = false;
+    };
+    [[nodiscard]] CompileStats compile_stats() const;
+
+private:
+    // A pipeline's full keys: the shaders are generated again from them.
+    struct Entry {
+        PsoKey key{};
+        VertexShaderKey vs_key{};
+        PixelShaderKey ps_key{};
+    };
+    // Written and read as raw records (vk_keys.bin).
+    static_assert(std::has_unique_object_representations_v<Entry>);
+    struct UberKey {
+        RenderStateKey render_state{};
+        unsigned variant = 0;
+        bool operator==(const UberKey& other) const noexcept {
+            return render_state == other.render_state && variant == other.variant;
+        }
+    };
+    struct UberKeyHasher {
+        std::size_t operator()(const UberKey& key) const noexcept;
+    };
+    struct Completion {
+        PsoKey key{};
+        VkPipeline pipeline = VK_NULL_HANDLE;
+    };
+
+    [[nodiscard]] VkShaderModule module_for(const std::string& hlsl, vk::ShaderStage stage, bool dual_source);
+    [[nodiscard]] VkPipeline build(const Entry& entry);
+    // `export_depth`: the pixel shader writes the fragment depth (Z textures).
+    [[nodiscard]] VkPipeline create_pipeline(const RenderStateKey& render_state, VkShaderModule vs, VkShaderModule ps,
+                                             bool dual_source, bool export_depth) const;
+    [[nodiscard]] VkPipeline uber_pipeline(const RenderStateKey& render_state, unsigned variant);
+    void compile_uber_shaders() noexcept;
+    void worker_main();
+    void enqueue(const Entry& entry);
+    void load_disk();
+    void save_disk() noexcept;
+
+    VkDevice device_ = VK_NULL_HANDLE;
+    const vk::GxLayout* layout_ = nullptr;
+    std::filesystem::path cache_dir_;
+    VkPipelineCache driver_cache_ = VK_NULL_HANDLE;
+    ShaderGenerator generator_;
+
+    // Shader modules by the hash of their HLSL (and output form); SPIR-V kept for the disk.
+    mutable std::mutex modules_mutex_;
+    std::unordered_map<std::uint64_t, VkShaderModule> modules_;
+    // A vertex module's input locations (bit n: location n): its pipelines bind only those attributes.
+    std::unordered_map<VkShaderModule, std::uint32_t> input_masks_;
+    std::unordered_map<std::uint64_t, std::vector<std::uint32_t>> spirv_;
+    std::size_t spirv_on_disk_ = 0;
+
+    // Uber shaders: built on their own thread at start (with GALAXY_GX_UBER=force, before initialize returns).
+    enum class UberMode { Hybrid, Force, Off };
+    UberMode uber_mode_ = UberMode::Hybrid;
+    std::thread uber_thread_;
+    std::atomic<bool> uber_ready_{false};
+    VkShaderModule uber_vs_ = VK_NULL_HANDLE;
+    std::array<VkShaderModule, kUberPsVariants> uber_ps_{};
+    VkShaderModule line_gs_ = VK_NULL_HANDLE;
+    VkShaderModule point_gs_ = VK_NULL_HANDLE;
+    std::unordered_map<UberKey, VkPipeline, UberKeyHasher> uber_pipelines_;  // render thread
+
+    // Render thread.
+    std::unordered_map<PsoKey, VkPipeline, PsoKeyHasher> published_;
+    std::unordered_set<PsoKey, PsoKeyHasher> in_flight_;
+    PsoKey memo_key_{};
+    VkPipeline memo_pipeline_ = VK_NULL_HANDLE;
+    bool last_get_used_uber_ = false;
+    std::uint64_t specialized_hits_ = 0;
+    std::uint64_t uber_fallbacks_ = 0;
+
+    // Keys seen (persisted), workers and their queues.
+    mutable std::mutex entries_mutex_;
+    std::vector<Entry> entries_;
+    std::unordered_set<PsoKey, PsoKeyHasher> entry_keys_;
+    std::size_t entries_on_disk_ = 0;
+    std::atomic<bool> unsaved_{false};
+    std::mutex jobs_mutex_;
+    std::condition_variable jobs_cv_;
+    std::deque<Entry> jobs_;
+    std::vector<Completion> completions_;
+    bool stopping_ = false;
+    std::vector<std::thread> workers_;
+    std::thread flush_thread_;
+    std::atomic<bool> flush_done_{true};
+
+    std::atomic<std::uint64_t> pso_compiles_{0};
+    std::atomic<std::uint64_t> shader_compiles_{0};
+    std::atomic<std::uint64_t> shaders_from_cache_{0};
+    std::atomic<std::uint64_t> compile_us_{0};
+};
+
+using PipelineCache = PipelineCacheVk;
+
+}  // namespace galaxy::gx

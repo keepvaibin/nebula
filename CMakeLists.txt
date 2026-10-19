@@ -1331,4 +1331,59 @@ if(NEBULA_VULKAN)
     target_compile_features(galaxy_vk_shader_tests PRIVATE cxx_std_20)
     target_link_libraries(galaxy_vk_shader_tests PRIVATE nebula_vulkan_deps galaxy_runtime_abi galaxy_runtime_settings)
     add_test(NAME galaxy_vk_shader_tests COMMAND galaxy_vk_shader_tests)
+
+    # galaxy_gx on Vulkan: the API-neutral GX sources with the Vulkan renderer, pipeline cache and texture backend.
+    add_library(galaxy_gx_vk STATIC
+        runtime/src/gx/gx_shim.cpp
+        runtime/src/gx/gx_state.cpp
+        runtime/src/gx/frame_completion.cpp
+        runtime/src/gx/render_config.cpp
+        runtime/src/gx/host_window_win32.cpp
+        runtime/src/gx/renderer_common.cpp
+        runtime/src/gx/upload_ring.cpp
+        runtime/src/gx/window_owner.cpp
+        runtime/src/gx/texture_cache.cpp
+        runtime/src/gx/vertex_loader.cpp
+        runtime/src/gx/shader_keys.cpp
+        runtime/src/gx/efb_copy.cpp
+        runtime/src/gx/line_point_raster.cpp
+        runtime/src/gx/shader_gen.cpp
+        runtime/src/gx/uber_shaders.cpp
+        ${galaxy_uber_embed_cpp}
+        runtime/src/gx/post_process_settings.cpp
+        runtime/src/gx/transform_history.cpp
+        runtime/src/gx/display_modes.cpp
+        runtime/src/gx/fifo_parser.cpp
+        runtime/src/gx/gx_backend.cpp
+        runtime/src/frame_telemetry.cpp
+        runtime/src/gx/game_asset_extract.cpp
+        runtime/src/gx/vk/vk_context.cpp
+        runtime/src/gx/vk/vk_libraries.cpp
+        runtime/src/gx/vk/shader_compile_vk.cpp
+        runtime/src/gx/vk/texture_backend_vk.cpp
+        runtime/src/gx/vk/pipeline_cache_vk.cpp
+        runtime/src/gx/vk/renderer_vk.cpp
+        runtime/src/gx/vk/renderer_vk_efb.cpp)
+    target_include_directories(galaxy_gx_vk PUBLIC runtime/include)
+    target_compile_features(galaxy_gx_vk PUBLIC cxx_std_20)
+    target_link_libraries(galaxy_gx_vk
+        PUBLIC
+            nebula_vulkan_deps
+            galaxy_native_host
+            galaxy_frame_cadence_diagnostics
+            galaxy_runtime_abi
+            galaxy_runtime_settings
+            galaxy_host_pointer_events)
+    if(MSVC)
+        target_compile_options(galaxy_gx_vk PRIVATE /GS- /GR- /Oi /favor:INTEL64)
+    endif()
+
+    add_executable(NebulaNativeVk native/host/host_main.cpp runtime/src/native_thp_video.cpp)
+    target_include_directories(NebulaNativeVk PRIVATE native/include runtime/include)
+    target_compile_definitions(NebulaNativeVk PRIVATE NEBULA_HOST_RENDERER=1 _CRT_SECURE_NO_WARNINGS)
+    target_link_libraries(NebulaNativeVk PRIVATE galaxy_gx_vk)
+    if(MSVC)
+        target_compile_options(NebulaNativeVk PRIVATE /Zi)
+        target_link_options(NebulaNativeVk PRIVATE /DEBUG /OPT:REF /OPT:ICF /PDBALTPATH:NebulaNativeVk.pdb)
+    endif()
 endif()

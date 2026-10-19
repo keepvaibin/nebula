@@ -67,4 +67,15 @@ Each phase: pictures compared with D3D12 on the same route, CPU and GPU measured
 - Shader path (M): every shader the Vulkan backend uses compiles through glslang to SPIR-V that passes the validator,
   each descriptor at its layout's binding (`galaxy_vk_shader_tests`): the uber shaders' variants, line/point geometry,
   EFB conversion, and the game's own 229 vertex and 719 pixel shaders captured over the 102-stop tour.
-- Next: TextureBackendVk, RendererVk and PipelineCacheVk; NebulaNativeVk on Windows; pictures against D3D12.
+- V1-V4 on Windows (M): RendererVk (renderer_vk.cpp, renderer_vk_efb.cpp), PipelineCacheVk (uber stand-ins while
+  workers build specialised pipelines; SPIR-V, keys and the driver cache on disk; GALAXY_GX_UBER as on D3D12) and the
+  texture backend build into `NebulaNativeVk`. The title over 40 s matches D3D12 within 1/255 at presents 600, 1200,
+  1800 and 2280 (0 pixels differ by more than 8); the Khronos validation layer (built from vulkan-sdk-1.4.350.1 into
+  deps/vvl, `GALAXY_VULKAN_VALIDATION=1 VK_LAYER_PATH=...\vvl\bin`) reports nothing.
+- What D3D12 gives implicitly and Vulkan sets explicitly: stage variables at their HLSL semantics' locations
+  (`compile_hlsl`); constant-buffer matrices row-major (the D3D12 compile's `D3DCOMPILE_PACK_MATRIX_ROW_MAJOR`;
+  glslang's default is the transpose, which drew every 2D layout off-screen); fragment depth clamped to the viewport's
+  range while primitives are still clipped (depth clamp with VK_EXT_depth_clip_enable); destruction of released
+  objects after the frame's own submission, not the next one (GXPeek submits in between).
+- Next: the 102-stop tour and Battlerock against D3D12, the iGPU (`GALAXY_GPU_PREFERENCE=low`), CPU and GPU cost; then
+  V5 (Linux host on SDL3).
