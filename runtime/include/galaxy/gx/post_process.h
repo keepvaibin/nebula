@@ -100,16 +100,7 @@ private:
         std::uint64_t release_after_frame = 0;
         Microsoft::WRL::ComPtr<ID3D12PipelineState> pipeline;
     };
-    struct Constants {
-        float rt_metrics[4];
-        std::uint32_t con0[4];
-        std::uint32_t con1[4];
-        std::uint32_t con2[4];
-        std::uint32_t con3[4];
-        float params[4];
-        std::int32_t origin[4];
-    };
-    static_assert(sizeof(Constants) == 28u * 4u);
+    using Constants = PostConstants;
 
     bool create_pipeline(D3D12_SHADER_BYTECODE vs, D3D12_SHADER_BYTECODE ps,
                          DXGI_FORMAT format, int stencil,

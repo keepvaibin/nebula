@@ -57,39 +57,6 @@ constexpr DXGI_FORMAT kEdgesFormat = DXGI_FORMAT_R8G8_UNORM;
 constexpr DXGI_FORMAT kStencilFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 constexpr unsigned kRtvSlots = 4u;
 
-std::uint32_t bits(float value) noexcept { return std::bit_cast<std::uint32_t>(value); }
-
-// FsrEasuCon with the input viewport equal to the input resource.
-void easu_constants(std::uint32_t (&con0)[4], std::uint32_t (&con1)[4],
-                    std::uint32_t (&con2)[4], std::uint32_t (&con3)[4],
-                    float in_w, float in_h, float out_w, float out_h) noexcept {
-    con0[0] = bits(in_w / out_w);
-    con0[1] = bits(in_h / out_h);
-    con0[2] = bits(0.5f * in_w / out_w - 0.5f);
-    con0[3] = bits(0.5f * in_h / out_h - 0.5f);
-    con1[0] = bits(1.0f / in_w);
-    con1[1] = bits(1.0f / in_h);
-    con1[2] = bits(1.0f / in_w);
-    con1[3] = bits(-1.0f / in_h);
-    con2[0] = bits(-1.0f / in_w);
-    con2[1] = bits(2.0f / in_h);
-    con2[2] = bits(1.0f / in_w);
-    con2[3] = bits(2.0f / in_h);
-    con3[0] = bits(0.0f);
-    con3[1] = bits(4.0f / in_h);
-    con3[2] = 0u;
-    con3[3] = 0u;
-}
-
-// FsrRcasCon: sharpness in stops, 0 = strongest. The 32-bit path reads con.x.
-void rcas_constants(std::uint32_t (&con0)[4], unsigned sharpness_percent) noexcept {
-    const float stops = 2.0f * (1.0f - std::clamp(sharpness_percent, 0u, 100u) / 100.0f);
-    con0[0] = bits(std::exp2(-stops));
-    con0[1] = 0u;
-    con0[2] = 0u;
-    con0[3] = 0u;
-}
-
 D3D12_SHADER_BYTECODE code(ShaderBytes shader) noexcept {
     return {shader.data, shader.size};
 }
@@ -555,10 +522,7 @@ bool PostProcessor::record_aa(ID3D12GraphicsCommandList* list, DescriptorRing& s
     const D3D12_VIEWPORT viewport{
         0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
     Constants c{};
-    c.rt_metrics[0] = 1.0f / static_cast<float>(width);
-    c.rt_metrics[1] = 1.0f / static_cast<float>(height);
-    c.rt_metrics[2] = static_cast<float>(width);
-    c.rt_metrics[3] = static_cast<float>(height);
+    set_post_input_size(c, width, height);
     if (pass == AaRun::kFxaa) {
         transition(list, antialiased_, D3D12_RESOURCE_STATE_RENDER_TARGET);
         list->OMSetRenderTargets(1, &antialiased_.rtv, FALSE, nullptr);
@@ -658,10 +622,7 @@ AaRun PostProcessor::record_scene_aa(ID3D12GraphicsCommandList* list, Descriptor
                                  static_cast<LONG>(width));
     const D3D12_RECT output{left, 0, static_cast<LONG>(width), static_cast<LONG>(height)};
     Constants c{};
-    c.rt_metrics[0] = 1.0f / static_cast<float>(width);
-    c.rt_metrics[1] = 1.0f / static_cast<float>(height);
-    c.rt_metrics[2] = static_cast<float>(width);
-    c.rt_metrics[3] = static_cast<float>(height);
+    set_post_input_size(c, width, height);
     if (pass == AaRun::kFxaa) {
         list->OMSetRenderTargets(1, &color_rtv, FALSE, nullptr);
         draw(list, srv_ring, fxaa_rgb_.Get(), {source}, {kColorFormat}, viewport, c, &output);
@@ -722,20 +683,10 @@ void PostProcessor::self_test(ID3D12CommandQueue* queue) {
         fail(AaRun::kSmaa, "LOOKUP");
     }
 
-    // A white-over-black edge stepping down one row every four columns: the
-    // jagged case both passes exist for.
-    constexpr unsigned kSize = 32u;
+    constexpr unsigned kSize = kPostSelfTestSize;
     constexpr unsigned kPitch = 256u;  // kSize * 4 rounded up to the copy alignment
-    const auto edge_row = [](unsigned x) { return 10u + x / 4u; };
     std::array<unsigned char, kPitch * kSize> pattern{};
-    for (unsigned y = 0; y < kSize; ++y) {
-        for (unsigned x = 0; x < kSize; ++x) {
-            unsigned char* p = &pattern[y * kPitch + x * 4u];
-            const unsigned char v = y < edge_row(x) ? 255u : 0u;
-            p[0] = p[1] = p[2] = v;
-            p[3] = 255u;
-        }
-    }
+    write_post_self_test_pattern(pattern.data(), kPitch);
     D3D12_HEAP_PROPERTIES def{}, up{}, rb{};
     def.Type = D3D12_HEAP_TYPE_DEFAULT;
     up.Type = D3D12_HEAP_TYPE_UPLOAD;
@@ -848,24 +799,10 @@ void PostProcessor::self_test(ID3D12CommandQueue* queue) {
     }
     for (unsigned i = 0; i < 2u; ++i) {
         if (!recorded[i]) continue;
-        unsigned changed = 0u, stray = 0u;
-        for (unsigned y = 0; y < kSize; ++y) {
-            for (unsigned x = 0; x < kSize; ++x) {
-                const unsigned char* a = &pattern[y * kPitch + x * 4u];
-                const unsigned char* c = out + i * sizeof(pattern) + y * kPitch + x * 4u;
-                int delta = 0;
-                for (unsigned k = 0; k < 3u; ++k) delta = std::max(delta, std::abs(int(a[k]) - int(c[k])));
-                const int distance = std::abs(int(y) - int(edge_row(x)));
-                if (delta > 24) ++changed;
-                if (distance >= 3 && delta > 4) ++stray;
-            }
-        }
-        // A working pass blends a few dozen pixels along the steps and
-        // leaves flat areas alone.
-        const bool passed = changed >= 8u && stray == 0u &&
-            !(fault_selftest_ && passes[i] == AaRun::kSmaa);
+        const PostSelfTestResult result = check_post_self_test(pattern.data(), out + i * sizeof(pattern), kPitch);
+        const bool passed = result.passed && !(fault_selftest_ && passes[i] == AaRun::kSmaa);
         std::cerr << "[post-process] self-test " << (passes[i] == AaRun::kSmaa ? "smaa" : "fxaa")
-                  << " changed=" << changed << " stray=" << stray << '\n';
+                  << " changed=" << result.changed << " stray=" << result.stray << '\n';
         if (!passed) fail(passes[i], "SELF-TEST");
     }
     readback->Unmap(0, &none);
@@ -899,17 +836,14 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
     const D3D12_VIEWPORT window_sized{
         0.0f, 0.0f, static_cast<float>(target_width), static_cast<float>(target_height), 0.0f, 1.0f};
     Constants c{};
-    c.rt_metrics[0] = 1.0f / static_cast<float>(source_width);
-    c.rt_metrics[1] = 1.0f / static_cast<float>(source_height);
-    c.rt_metrics[2] = static_cast<float>(source_width);
-    c.rt_metrics[3] = static_cast<float>(source_height);
+    set_post_input_size(c, source_width, source_height);
 
     // Enlarging on both axes with sharpening: one pass straight into the target. The two-pass
     // form wrote and read a window-sized intermediate for every presented frame.
     if (plan.resample && plan.rcas && rcas_scaled_ && target_width >= source_width &&
         target_height >= source_height) {
         Constants s = c;
-        rcas_constants(s.con0, settings_.sharpness);
+        set_fsr_rcas_constants(s, settings_.sharpness);
         s.params[0] = static_cast<float>(source_width);
         s.params[1] = static_cast<float>(source_height);
         s.params[2] = static_cast<float>(target_width);
@@ -949,9 +883,8 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
 
     if (plan.easu) {
         Constants e = c;
-        easu_constants(e.con0, e.con1, e.con2, e.con3,
-                       static_cast<float>(source_width), static_cast<float>(source_height),
-                       static_cast<float>(target_width), static_cast<float>(target_height));
+        set_fsr_easu_constants(e, static_cast<float>(source_width), static_cast<float>(source_height),
+                               static_cast<float>(target_width), static_cast<float>(target_height));
         D3D12_VIEWPORT vp{};
         into(!plan.rcas, vp, e);
         draw(list, srv_ring, easu_.Get(), {image}, {kColorFormat}, vp, e);
@@ -976,7 +909,7 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
 
     if (plan.rcas) {
         Constants s = c;
-        rcas_constants(s.con0, settings_.sharpness);
+        set_fsr_rcas_constants(s, settings_.sharpness);
         s.params[0] = static_cast<float>(target_width);
         s.params[1] = static_cast<float>(target_height);
         D3D12_VIEWPORT vp{};

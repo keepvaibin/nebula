@@ -147,15 +147,6 @@ void copy_adapter_description(
     }
 }
 
-PostProcessSettings post_process_settings_from(const RenderConfig& cfg) noexcept {
-    PostProcessSettings post{};
-    post.aa = static_cast<PostProcessSettings::Aa>(std::min(cfg.aa_mode, 3u));
-    post.smaa_quality = static_cast<std::uint8_t>(std::min(cfg.smaa_quality, 3u));
-    post.upscaler = static_cast<PostProcessSettings::Upscaler>(std::min(cfg.upscaler, 1u));
-    post.sharpness = static_cast<std::uint8_t>(std::min(cfg.sharpness, 100u));
-    return post;
-}
-
 // GALAXY_GPU_PREFERENCE=low selects the minimum-power (integrated) adapter
 // first, e.g. to measure on a hybrid machine's iGPU.
 DXGI_GPU_PREFERENCE adapter_preference() {

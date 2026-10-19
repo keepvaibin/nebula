@@ -1,10 +1,96 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/gx/post_process_settings.h"
+#include "galaxy/gx/render_config.h"
 
 #include <algorithm>
+#include <bit>
+#include <cmath>
+#include <cstdlib>
 #include <mutex>
 
 namespace galaxy::gx {
+
+PostProcessSettings post_process_settings_from(const RenderConfig& cfg) noexcept {
+    PostProcessSettings post{};
+    post.aa = static_cast<PostProcessSettings::Aa>(std::min(cfg.aa_mode, 3u));
+    post.smaa_quality = static_cast<std::uint8_t>(std::min(cfg.smaa_quality, 3u));
+    post.upscaler = static_cast<PostProcessSettings::Upscaler>(std::min(cfg.upscaler, 1u));
+    post.sharpness = static_cast<std::uint8_t>(std::min(cfg.sharpness, 100u));
+    return post;
+}
+
+void set_post_input_size(PostConstants& constants, unsigned width, unsigned height) noexcept {
+    constants.rt_metrics[0] = 1.0f / static_cast<float>(width);
+    constants.rt_metrics[1] = 1.0f / static_cast<float>(height);
+    constants.rt_metrics[2] = static_cast<float>(width);
+    constants.rt_metrics[3] = static_cast<float>(height);
+}
+
+void set_fsr_easu_constants(PostConstants& c, float in_w, float in_h, float out_w, float out_h) noexcept {
+    const auto bits = [](float value) { return std::bit_cast<std::uint32_t>(value); };
+    c.con0[0] = bits(in_w / out_w);
+    c.con0[1] = bits(in_h / out_h);
+    c.con0[2] = bits(0.5f * in_w / out_w - 0.5f);
+    c.con0[3] = bits(0.5f * in_h / out_h - 0.5f);
+    c.con1[0] = bits(1.0f / in_w);
+    c.con1[1] = bits(1.0f / in_h);
+    c.con1[2] = bits(1.0f / in_w);
+    c.con1[3] = bits(-1.0f / in_h);
+    c.con2[0] = bits(-1.0f / in_w);
+    c.con2[1] = bits(2.0f / in_h);
+    c.con2[2] = bits(1.0f / in_w);
+    c.con2[3] = bits(2.0f / in_h);
+    c.con3[0] = bits(0.0f);
+    c.con3[1] = bits(4.0f / in_h);
+    c.con3[2] = 0u;
+    c.con3[3] = 0u;
+}
+
+// Sharpness in stops, 0 = strongest; the 32-bit path reads con.x.
+void set_fsr_rcas_constants(PostConstants& c, unsigned sharpness_percent) noexcept {
+    const float stops = 2.0f * (1.0f - static_cast<float>(std::min(sharpness_percent, 100u)) / 100.0f);
+    c.con0[0] = std::bit_cast<std::uint32_t>(std::exp2(-stops));
+    c.con0[1] = 0u;
+    c.con0[2] = 0u;
+    c.con0[3] = 0u;
+}
+
+namespace {
+
+unsigned self_test_edge_row(unsigned x) noexcept {
+    return 10u + x / 4u;
+}
+
+}  // namespace
+
+void write_post_self_test_pattern(std::uint8_t* rgba, unsigned pitch) noexcept {
+    for (unsigned y = 0; y < kPostSelfTestSize; ++y) {
+        for (unsigned x = 0; x < kPostSelfTestSize; ++x) {
+            std::uint8_t* p = rgba + static_cast<std::size_t>(y) * pitch + x * 4u;
+            const std::uint8_t v = y < self_test_edge_row(x) ? 255u : 0u;
+            p[0] = p[1] = p[2] = v;
+            p[3] = 255u;
+        }
+    }
+}
+
+PostSelfTestResult check_post_self_test(const std::uint8_t* pattern, const std::uint8_t* result,
+                                        unsigned pitch) noexcept {
+    PostSelfTestResult out{};
+    for (unsigned y = 0; y < kPostSelfTestSize; ++y) {
+        for (unsigned x = 0; x < kPostSelfTestSize; ++x) {
+            const std::uint8_t* a = pattern + static_cast<std::size_t>(y) * pitch + x * 4u;
+            const std::uint8_t* c = result + static_cast<std::size_t>(y) * pitch + x * 4u;
+            int delta = 0;
+            for (unsigned k = 0; k < 3u; ++k) delta = std::max(delta, std::abs(int(a[k]) - int(c[k])));
+            const int distance = std::abs(int(y) - int(self_test_edge_row(x)));
+            if (delta > 24) ++out.changed;
+            if (distance >= 3 && delta > 4) ++out.stray;
+        }
+    }
+    out.passed = out.changed >= 8u && out.stray == 0u;
+    return out;
+}
 
 PostProcessPlan plan_post_process(
     unsigned source_width, unsigned source_height,

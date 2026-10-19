@@ -59,7 +59,7 @@ int2 ViewportPixel(float4 pos) {
 #define SMAASampleOffset(tex, coord, offset) tex.Sample(LinearSampler, coord, offset)
 #define SMAA_FLATTEN [flatten]
 #define SMAA_BRANCH [branch]
-#define SMAAGather(tex, coord) tex.Gather(LinearSampler, coord, 0)
+#define SMAAGather(tex, coord) tex.Gather(LinearSampler, coord)
 #endif
 
 #if defined(PASS_FSR_EASU) || defined(PASS_FSR_RCAS) || defined(PASS_FSR_RCAS_SCALED)
@@ -72,9 +72,9 @@ int2 ViewportPixel(float4 pos) {
 Texture2D inputTex : register(t0);
 
 #if defined(PASS_FSR_EASU)
-AF4 FsrEasuRF(AF2 p) { return inputTex.GatherRed(LinearSampler, p, int2(0, 0)); }
-AF4 FsrEasuGF(AF2 p) { return inputTex.GatherGreen(LinearSampler, p, int2(0, 0)); }
-AF4 FsrEasuBF(AF2 p) { return inputTex.GatherBlue(LinearSampler, p, int2(0, 0)); }
+AF4 FsrEasuRF(AF2 p) { return inputTex.GatherRed(LinearSampler, p); }
+AF4 FsrEasuGF(AF2 p) { return inputTex.GatherGreen(LinearSampler, p); }
+AF4 FsrEasuBF(AF2 p) { return inputTex.GatherBlue(LinearSampler, p); }
 #define FSR_EASU_F 1
 #endif
 
