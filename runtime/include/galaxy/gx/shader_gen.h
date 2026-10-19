@@ -23,6 +23,9 @@ struct ShaderGenOptions {
     // A zero TEV colour input A or B read from the constants (uber_ps_header.w, always zero) instead of a literal
     // (Qualcomm folds the literal wrongly).
     bool tev_zero_from_constant = false;
+    // Vertex blending in the vertex shaders (b2 and space1 t1-t2, renderer_d3d12.cpp's blend pairs). Without it the
+    // shaders keep the draw's own vertices and declare no blending resources (Vulkan until it blends).
+    bool vertex_blend = true;
 };
 
 class ShaderGenerator {

@@ -1565,6 +1565,7 @@ if(NEBULA_VULKAN)
         runtime/src/gx/vk/compile_journal.cpp
         runtime/src/gx/vk/renderer_vk.cpp
         runtime/src/gx/vk/renderer_vk_efb.cpp
+        runtime/src/gx/vk/renderer_vk_replay.cpp
         runtime/src/gx/vk/surface_win32.cpp)
     target_include_directories(galaxy_gx_vk PUBLIC runtime/include)
     target_compile_features(galaxy_gx_vk PUBLIC cxx_std_20)

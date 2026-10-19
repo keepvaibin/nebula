@@ -91,6 +91,7 @@ add_library(galaxy_gx_vk STATIC
     ${rt}/gx/vk/compile_journal.cpp
     ${rt}/gx/vk/renderer_vk.cpp
     ${rt}/gx/vk/renderer_vk_efb.cpp
+    ${rt}/gx/vk/renderer_vk_replay.cpp
     ${rt}/frame_cadence_diagnostics.cpp
     ${rt}/runtime_settings.cpp
     ${rt}/input_bindings.cpp

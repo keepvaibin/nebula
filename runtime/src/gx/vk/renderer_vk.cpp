@@ -2,6 +2,7 @@
 // The Vulkan GX renderer (renderer_vk.h): device, swapchain, frames, present and the overlay. The EFB, draws,
 // copies and peeks are renderer_vk_efb.cpp.
 
+#include "renderer_vk_internal.h"
 #include "galaxy/gx/vk/renderer_vk.h"
 #include "galaxy/platform_time.h"
 
@@ -82,13 +83,11 @@ VkRect2D turned_rect(VkSurfaceTransformFlagBitsKHR transform, int width, int hei
     }
 }
 
-// Descriptor capacity of one frame: a texture table per distinct set of maps, plus the renderer's own sets (the
-// present's, a resolution change's carry), whose immutable samplers count against the pool's samplers.
-constexpr std::uint32_t kFrameSets = 4096u;
-constexpr std::uint32_t kFrameUtilitySamplers = 256u;
+}  // namespace
 
-VkDescriptorPool create_pool(VkDevice device, std::uint32_t sets, std::uint32_t images, std::uint32_t samplers,
-                             std::uint32_t dynamic_uniforms, std::uint32_t dynamic_storage) {
+VkDescriptorPool vk_detail::create_pool(VkDevice device, std::uint32_t sets, std::uint32_t images,
+                                        std::uint32_t samplers, std::uint32_t dynamic_uniforms,
+                                        std::uint32_t dynamic_storage) {
     std::vector<VkDescriptorPoolSize> sizes;
     if (images != 0u) sizes.push_back({VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, images});
     if (samplers != 0u) sizes.push_back({VK_DESCRIPTOR_TYPE_SAMPLER, samplers});
@@ -102,6 +101,12 @@ VkDescriptorPool create_pool(VkDevice device, std::uint32_t sets, std::uint32_t 
     vk::check(vkCreateDescriptorPool(device, &info, nullptr, &pool), "vkCreateDescriptorPool");
     return pool;
 }
+
+using vk_detail::create_pool;
+using vk_detail::kFrameSets;
+using vk_detail::kFrameUtilitySamplers;
+
+namespace {
 
 VkSampler create_sampler(VkDevice device, VkFilter filter, VkSamplerMipmapMode mip) {
     VkSamplerCreateInfo info{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
@@ -120,6 +125,7 @@ VkSampler create_sampler(VkDevice device, VkFilter filter, VkSamplerMipmapMode m
 std::size_t RendererVk::ConstantsSetKeyHash::operator()(const ConstantsSetKey& key) const noexcept {
     std::uint64_t hash = mix64(reinterpret_cast<std::uint64_t>(key.b0));
     hash = combine64(hash, reinterpret_cast<std::uint64_t>(key.b1));
+    hash = combine64(hash, key.whole_palette ? 1u : 0u);
     return static_cast<std::size_t>(combine64(hash, reinterpret_cast<std::uint64_t>(key.palette)));
 }
 
@@ -797,6 +803,7 @@ void RendererVk::shutdown() {
     const VkDevice device = context.device();
     if (device != VK_NULL_HANDLE) {
         vkDeviceWaitIdle(device);
+        release_replay_resources();
         efb_copy_dests_.clear();
         efb_copy_dests_bytes_ = 0u;
         for (Frame& frame : frames_) {
@@ -918,6 +925,7 @@ void RendererVk::begin_frame(bool) {
     host_window::poll_render_config_file();
     follow_window_and_resize();
     apply_pending_efb_scale();
+    update_ring_mode();
 
     frame_slot_ = static_cast<unsigned>(frame_index_ % kFramesInFlight);
     Frame& frame = frames_[frame_slot_];
@@ -969,10 +977,18 @@ void RendererVk::begin_frame(bool) {
         vkCmdResetQueryPool(frame.commands, timestamps_, frame_slot_ * 2u, 2u);
         vkCmdWriteTimestamp(frame.commands, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, timestamps_, frame_slot_ * 2u);
     }
-    vertex_ring_.begin_frame(frame_slot_);
-    index_ring_.begin_frame(frame_slot_);
-    constant_ring_.begin_frame(frame_slot_);
-    matrix_ring_.begin_frame(frame_slot_);
+    if (ring_mode_ == RingMode::Interp) {
+        // One segment per game frame: its frames (chunks) append to it, so its draws stay replayable until the
+        // segment comes round again.
+        if (ring_advance_pending_) {
+            advance_ring_segment();
+        }
+    } else {
+        vertex_ring_.begin_frame(frame_slot_);
+        index_ring_.begin_frame(frame_slot_);
+        constant_ring_.begin_frame(frame_slot_);
+        matrix_ring_.begin_frame(frame_slot_);
+    }
     reset_gx_bindings();
     efb_pass_open_ = false;
     swap_image_ = UINT32_MAX;
@@ -1004,6 +1020,9 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
         : context.submit_frame(buffers);
     frame.fence = fence;
     last_submitted_ = fence;
+    if (ring_mode_ == RingMode::Interp) {
+        segments_[ring_segment_].fence = std::max(segments_[ring_segment_].fence, fence);
+    }
     timestamp_pending_[frame_slot_] = timestamps_ != VK_NULL_HANDLE;
     if (pointer_depth_in_frame_) {
         pointer_depth_fence_ = fence;
@@ -1025,87 +1044,7 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
         on_submitted(submission_context, fence);
     }
     if (presenting) {
-        const RenderConfig cfg = get_render_config();
-        const double pace_wait_ms = present_pacer_.pace(cfg.vsync_interval, cfg.max_fps);
-        const std::int64_t present_start = galaxy::qpc_now();
-        VkPresentInfoKHR info{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
-        info.waitSemaphoreCount = 1;
-        info.pWaitSemaphores = &swapchain_.rendered[swap_image_];
-        info.swapchainCount = 1;
-        info.pSwapchains = &swapchain_.handle;
-        info.pImageIndices = &swap_image_;
-        VkPresentTimeGOOGLE present_time{};
-        VkPresentTimesInfoGOOGLE present_times{VK_STRUCTURE_TYPE_PRESENT_TIMES_INFO_GOOGLE};
-        std::int64_t retrace = 0, period = 0, vsync = 0, now = 0;
-        if (context.display_timing() && host_window::present_grid(retrace, period, vsync, now)) {
-            PresentTiming& timing = present_timing_;
-            // The slot after the previous frame's, on the grid of the latest retrace; two retraces after that retrace
-            // when it is out of reach (the first frame, after a stall) or the frames ran ahead of it.
-            std::int64_t slot = timing.last_slot + period;
-            const std::int64_t first = retrace + 2 * period;
-            if (timing.last_slot == 0 || slot > first + period || slot < retrace + period) {
-                slot = first;
-            } else {
-                slot = retrace + (slot - retrace + period / 2) / period * period;
-            }
-            // A frame too late for its slot (the compositor takes it about a vsync ahead) takes a later one.
-            while (slot - vsync < now) {
-                slot += period;
-            }
-            timing.last_slot = slot;
-            timing.vsync_ns = vsync;
-            present_time.presentID = ++timing.next_id;
-            present_time.desiredPresentTime = static_cast<std::uint64_t>(slot - vsync / 2);
-            timing.requested[present_time.presentID % timing.requested.size()] = slot;
-            present_times.swapchainCount = 1;
-            present_times.pTimes = &present_time;
-            info.pNext = &present_times;
-        } else {
-            present_timing_.last_slot = 0;
-        }
-        const std::int64_t present_cpu = vk::thread_cpu_ns();
-        const VkResult result = vkQueuePresentKHR(context.queue(), &info);
-        vk::note_driver_cpu(vk::DriverCall::Present, vk::thread_cpu_ns() - present_cpu);
-        surface_lock_ = {};
-        if (result == VK_ERROR_OUT_OF_DATE_KHR || (result == VK_SUBOPTIMAL_KHR && surface_changed())) {
-            swapchain_dirty_ = true;
-        } else if (result == VK_ERROR_SURFACE_LOST_KHR) {
-            swapchain_dirty_ = true;
-            surface_lost_ = true;
-        } else if (result != VK_SUCCESS) {
-            vk::check(result, "vkQueuePresentKHR");
-        }
-        const std::int64_t present_end = galaxy::qpc_now();
-        if (trace_present_stats_enabled()) {
-            const double present_ms = static_cast<double>(present_end - present_start) * 1000.0 /
-                static_cast<double>(galaxy::qpc_frequency());
-            stats_.present_ms += present_ms;
-            stats_.present_max_ms = std::max(stats_.present_max_ms, present_ms);
-            stats_.pace_wait_ms += pace_wait_ms;
-            stats_.pace_wait_max_ms = std::max(stats_.pace_wait_max_ms, pace_wait_ms);
-        }
-        // Presents per second over the last second (the FRAME RATE row).
-        ++measured_present_count_;
-        if (measured_present_window_qpc_ == 0) {
-            measured_present_window_qpc_ = present_end;
-            measured_present_count_ = 0u;
-        } else if (present_end - measured_present_window_qpc_ >= galaxy::qpc_frequency()) {
-            const double hz = static_cast<double>(measured_present_count_) * static_cast<double>(galaxy::qpc_frequency()) /
-                static_cast<double>(present_end - measured_present_window_qpc_);
-            measured_present_hz_.store(hz, std::memory_order_relaxed);
-            host_window::measured_present_hz.store(hz, std::memory_order_relaxed);
-            measured_present_window_qpc_ = present_end;
-            measured_present_count_ = 0u;
-        }
-        report_present_stats();
-        // Android keeps only the last few frames' timings: read them often.
-        if (context.display_timing() && present_timing_.next_id % 4u == 0u) {
-            report_present_timing();
-        }
-        if (!window_shown_ && window_ != nullptr && !host_window::hidden_window_mode_enabled()) {
-            window_shown_ = true;
-            host_window::show_window(window_);
-        }
+        present_swapchain_image();
     }
     surface_lock_ = {};  // an image acquired but not presented
     swap_image_ = UINT32_MAX;
@@ -1142,6 +1081,98 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
 
 // The past presentation times (VK_GOOGLE_display_timing): whether each frame was shown by the slot it asked for, and
 // one retrace period after the frame before it. Every 600 frames to the log.
+// Presents the acquired image after the submission that draws it (end_frame's and a sub-frame's), paced to the
+// frame rate, on Android at the display slot it was meant for (VK_GOOGLE_display_timing).
+void RendererVk::present_swapchain_image() {
+    vk::Context& context = vk::Context::get();
+    const RenderConfig cfg = get_render_config();
+    const double pace_wait_ms = present_pacer_.pace(cfg.vsync_interval, cfg.max_fps);
+    const std::int64_t present_start = galaxy::qpc_now();
+    VkPresentInfoKHR info{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
+    info.waitSemaphoreCount = 1;
+    info.pWaitSemaphores = &swapchain_.rendered[swap_image_];
+    info.swapchainCount = 1;
+    info.pSwapchains = &swapchain_.handle;
+    info.pImageIndices = &swap_image_;
+    VkPresentTimeGOOGLE present_time{};
+    VkPresentTimesInfoGOOGLE present_times{VK_STRUCTURE_TYPE_PRESENT_TIMES_INFO_GOOGLE};
+    std::int64_t retrace = 0, period = 0, vsync = 0, now = 0;
+    if (context.display_timing() && host_window::present_grid(retrace, period, vsync, now)) {
+        PresentTiming& timing = present_timing_;
+        // Interpolating, the game's retrace holds several presented frames: slots step by one of them.
+        const std::int64_t step = ring_mode_ == RingMode::Interp
+            ? period / static_cast<std::int64_t>(interpolated_frames_per_game_frame(present_frame_rate(
+                  presented_max_fps(cfg), cfg.vsync_interval, display_refresh_hz_)) + 1u)
+            : period;
+        // The slot after the previous frame's, on the grid of the latest retrace; two retraces after that retrace
+        // when it is out of reach (the first frame, after a stall) or the frames ran ahead of it.
+        std::int64_t slot = timing.last_slot + step;
+        const std::int64_t first = retrace + 2 * period;
+        if (timing.last_slot == 0 || slot > first + period || slot < retrace + step) {
+            slot = first;
+        } else {
+            slot = retrace + (slot - retrace + step / 2) / step * step;
+        }
+        // A frame too late for its slot (the compositor takes it about a vsync ahead) takes a later one.
+        while (slot - vsync < now) {
+            slot += step;
+        }
+        timing.last_slot = slot;
+        timing.vsync_ns = vsync;
+        present_time.presentID = ++timing.next_id;
+        present_time.desiredPresentTime = static_cast<std::uint64_t>(slot - vsync / 2);
+        timing.requested[present_time.presentID % timing.requested.size()] = slot;
+        present_times.swapchainCount = 1;
+        present_times.pTimes = &present_time;
+        info.pNext = &present_times;
+    } else {
+        present_timing_.last_slot = 0;
+    }
+    const std::int64_t present_cpu = vk::thread_cpu_ns();
+    const VkResult result = vkQueuePresentKHR(context.queue(), &info);
+    vk::note_driver_cpu(vk::DriverCall::Present, vk::thread_cpu_ns() - present_cpu);
+    surface_lock_ = {};
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || (result == VK_SUBOPTIMAL_KHR && surface_changed())) {
+        swapchain_dirty_ = true;
+    } else if (result == VK_ERROR_SURFACE_LOST_KHR) {
+        swapchain_dirty_ = true;
+        surface_lost_ = true;
+    } else if (result != VK_SUCCESS) {
+        vk::check(result, "vkQueuePresentKHR");
+    }
+    const std::int64_t present_end = galaxy::qpc_now();
+    if (trace_present_stats_enabled()) {
+        const double present_ms = static_cast<double>(present_end - present_start) * 1000.0 /
+            static_cast<double>(galaxy::qpc_frequency());
+        stats_.present_ms += present_ms;
+        stats_.present_max_ms = std::max(stats_.present_max_ms, present_ms);
+        stats_.pace_wait_ms += pace_wait_ms;
+        stats_.pace_wait_max_ms = std::max(stats_.pace_wait_max_ms, pace_wait_ms);
+    }
+    // Presents per second over the last second (the FRAME RATE row).
+    ++measured_present_count_;
+    if (measured_present_window_qpc_ == 0) {
+        measured_present_window_qpc_ = present_end;
+        measured_present_count_ = 0u;
+    } else if (present_end - measured_present_window_qpc_ >= galaxy::qpc_frequency()) {
+        const double hz = static_cast<double>(measured_present_count_) * static_cast<double>(galaxy::qpc_frequency()) /
+            static_cast<double>(present_end - measured_present_window_qpc_);
+        measured_present_hz_.store(hz, std::memory_order_relaxed);
+        host_window::measured_present_hz.store(hz, std::memory_order_relaxed);
+        measured_present_window_qpc_ = present_end;
+        measured_present_count_ = 0u;
+    }
+    report_present_stats();
+    // Android keeps only the last few frames' timings: read them often.
+    if (context.display_timing() && present_timing_.next_id % 4u == 0u) {
+        report_present_timing();
+    }
+    if (!window_shown_ && window_ != nullptr && !host_window::hidden_window_mode_enabled()) {
+        window_shown_ = true;
+        host_window::show_window(window_);
+    }
+}
+
 void RendererVk::report_present_timing() {
     const VkDevice device = vk::Context::get().device();
     if (swapchain_.handle == VK_NULL_HANDLE) {

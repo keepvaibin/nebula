@@ -145,7 +145,8 @@ void add_light(uint n, uint ctrl, bool alpha_part, bool finite, float3 wpos, flo
     }
 }
 
-// Interpolated redraw vertex blending (shader_gen.cpp kVertexBlendDef).
+// Interpolated redraw vertex blending (shader_gen.cpp kVertexBlendDef); none on Vulkan yet (kVertexBlendNone).
+#ifndef NEBULA_VULKAN
 cbuffer GxVertexBlend : register(b2) {
     uint  vb_mode;   // 0: the draw's own vertices only
     uint  vb_frame;  // element of the presented frame's values (a zero element in game frames)
@@ -198,6 +199,10 @@ void vertex_blend(inout VSIn v, uint id) {
         v.uv[i] = float2(vb_coord(uv.x, v.uv[i].x), vb_coord(uv.y, v.uv[i].y));
     }
 }
+#else
+void vertex_blend(inout VSIn v, uint id) {
+}
+#endif
 
 VSOut main(VSIn v, uint vertex_id : SV_VertexID) {
     vertex_blend(v, vertex_id);

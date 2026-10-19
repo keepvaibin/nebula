@@ -455,6 +455,21 @@ void vertex_blend(inout VSIn v, uint id) {
 }
 )HLSL";
 
+// Without vertex blending: the draw's own vertices, with the values a game frame's draws see (vertex_blend above with
+// the zero element).
+static constexpr const char* kVertexBlendNone = R"HLSL(
+static float vb_t;
+static float vb_t_prev;
+static float2 vb_jitter;
+static float3 vb_pos_prev;
+void vertex_blend(inout VSIn v, uint id) {
+    vb_t = 0.0;
+    vb_t_prev = 0.0;
+    vb_jitter = float2(0.0, 0.0);
+    vb_pos_prev = v.pos;
+}
+)HLSL";
+
 static std::string insert_before_close(const char* text, const char* members, bool last) {
     std::string out(text);
     const std::size_t at = last ? out.rfind("};") : out.find("};");
@@ -1085,7 +1100,7 @@ std::string ShaderGenerator::generate_vs(const VertexShaderKey& key) const {
         s << kVsConstantsDef;
         s << (ppl_outputs ? kVsStructsPpl : kVsStructs);
     }
-    s << kVertexBlendDef;
+    s << (options_.vertex_blend ? kVertexBlendDef : kVertexBlendNone);
 
     const bool dual_tex = (key.flags & 0x04u) != 0u;
 

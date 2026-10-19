@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The Vulkan GX renderer's EFB (renderer_vk.h): its targets, draws, clears, copies, peeks and test captures.
 
+#include "renderer_vk_internal.h"
 #include "galaxy/gx/vk/renderer_vk.h"
 
 #include "galaxy/gx/host_window.h"
@@ -24,28 +25,7 @@ namespace galaxy::gx {
 
 namespace {
 
-constexpr VkShaderStageFlags kPushStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-constexpr VkImageLayout kDepthSampleLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-
-void image_barrier(VkCommandBuffer commands, VkImage image, VkImageAspectFlags aspect, VkImageLayout from,
-                   VkImageLayout to, VkPipelineStageFlags src_stage, VkAccessFlags src_access,
-                   VkPipelineStageFlags dst_stage, VkAccessFlags dst_access) {
-    VkImageMemoryBarrier barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
-    barrier.srcAccessMask = src_access;
-    barrier.dstAccessMask = dst_access;
-    barrier.oldLayout = from;
-    barrier.newLayout = to;
-    barrier.srcQueueFamilyIndex = barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.image = image;
-    barrier.subresourceRange = {aspect, 0, VK_REMAINING_MIP_LEVELS, 0, 1};
-    vkCmdPipelineBarrier(commands, src_stage, dst_stage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
-}
-
-VkImageAspectFlags depth_aspects(VkFormat format) {
-    return format == VK_FORMAT_D24_UNORM_S8_UINT || format == VK_FORMAT_D32_SFLOAT_S8_UINT
-        ? VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT
-        : VK_IMAGE_ASPECT_DEPTH_BIT;
-}
+using namespace vk_detail;
 
 // A test capture's pixels as a binary PPM, written off the render thread.
 void write_ppm_async(std::string path, std::vector<std::uint8_t> rgb, unsigned width, unsigned height) {
@@ -62,7 +42,9 @@ void write_ppm_async(std::string path, std::vector<std::uint8_t> rgb, unsigned w
 // The EFB targets
 // ---------------------------------------------------------------------------------------------------------------------
 
-bool RendererVk::create_efb_targets(unsigned scale) {
+// An EFB set at `scale`: targets in their attachment layouts, the framebuffer, and the conversion inputs (allocated
+// once per set; rewriting them needs a GPU that no longer reads the old views, which callers ensure).
+bool RendererVk::create_efb_set(EfbSet& set, unsigned scale) {
     vk::Context& context = vk::Context::get();
     const VkDevice device = context.device();
     const std::uint32_t width = kEfbWidth * scale;
@@ -103,42 +85,67 @@ bool RendererVk::create_efb_targets(unsigned scale) {
                       VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
                       VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
     });
-    // The previous targets are read once more (carry_over_efb_contents), then released after the GPU is done.
-    if (efb_.framebuffer != VK_NULL_HANDLE) {
-        const VkFramebuffer old_framebuffer = efb_.framebuffer;
-        context.defer([device, old_framebuffer] { vkDestroyFramebuffer(device, old_framebuffer, nullptr); });
-        efb_carry_color_ = std::move(efb_.color);
-        efb_carry_depth_ = std::move(efb_.depth);
-    }
-    efb_.color = std::move(color);
-    efb_.depth = std::move(depth);
-    efb_.framebuffer = framebuffer;
-    efb_scale_ = scale;
-
-    // Conversion inputs: the colour and depth targets.
-    for (VkDescriptorSet* set : {&efb_.color_source, &efb_.depth_source}) {
-        if (*set == VK_NULL_HANDLE) {
-            *set = allocate_persistent_set(conversion_set_layout_);
+    set.color = std::move(color);
+    set.depth = std::move(depth);
+    set.framebuffer = framebuffer;
+    for (VkDescriptorSet* source : {&set.color_source, &set.depth_source}) {
+        if (*source == VK_NULL_HANDLE) {
+            *source = allocate_persistent_set(conversion_set_layout_);
         }
     }
-    const VkDescriptorImageInfo color_info{VK_NULL_HANDLE, efb_.color->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-    const VkDescriptorImageInfo depth_info{VK_NULL_HANDLE, efb_.depth->view, kDepthSampleLayout};
+    const VkDescriptorImageInfo color_info{VK_NULL_HANDLE, set.color->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    const VkDescriptorImageInfo depth_info{VK_NULL_HANDLE, set.depth->view, kDepthSampleLayout};
     // The conversion's filtering sampler: nearest for a depth format the device cannot filter linearly.
     const VkDescriptorImageInfo color_sampler{linear_clamp_, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_UNDEFINED};
     const VkDescriptorImageInfo depth_sampler{depth_linear_ ? linear_clamp_ : point_clamp_, VK_NULL_HANDLE,
                                               VK_IMAGE_LAYOUT_UNDEFINED};
     VkWriteDescriptorSet writes[4]{};
     for (unsigned i = 0; i < 4u; ++i) {
-        const bool color = (i & 1u) == 0u;
+        const bool is_color = (i & 1u) == 0u;
         writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writes[i].dstSet = color ? efb_.color_source : efb_.depth_source;
+        writes[i].dstSet = is_color ? set.color_source : set.depth_source;
         writes[i].dstBinding = i < 2u ? 0u : 1u;
         writes[i].descriptorCount = 1;
         writes[i].descriptorType = i < 2u ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : VK_DESCRIPTOR_TYPE_SAMPLER;
-        writes[i].pImageInfo = i < 2u ? (color ? &color_info : &depth_info) : (color ? &color_sampler : &depth_sampler);
+        writes[i].pImageInfo = i < 2u ? (is_color ? &color_info : &depth_info)
+                                      : (is_color ? &color_sampler : &depth_sampler);
     }
-    // A set in a submitted, unfinished frame may still read the old views: the GPU must be idle (callers ensure it).
     vkUpdateDescriptorSets(device, 4, writes, 0, nullptr);
+    return true;
+}
+
+// Releases a set's targets and framebuffer once the GPU is past the commands recorded so far (its conversion inputs
+// stay allocated for the next create_efb_set).
+void RendererVk::destroy_efb_set(EfbSet& set) {
+    if (set.framebuffer != VK_NULL_HANDLE) {
+        const VkDevice device = vk::Context::get().device();
+        const VkFramebuffer framebuffer = set.framebuffer;
+        vk::Context::get().defer([device, framebuffer] { vkDestroyFramebuffer(device, framebuffer, nullptr); });
+        set.framebuffer = VK_NULL_HANDLE;
+    }
+    retire(std::move(set.color));
+    retire(std::move(set.depth));
+}
+
+bool RendererVk::create_efb_targets(unsigned scale) {
+    // The previous targets are read once more (carry_over_efb_contents), then released after the GPU is done.
+    EfbSet made;
+    made.color_source = efb_.color_source;
+    made.depth_source = efb_.depth_source;
+    const VkFramebuffer old_framebuffer = efb_.framebuffer;
+    gpu::TextureRef old_color = efb_.color;
+    gpu::TextureRef old_depth = efb_.depth;
+    if (!create_efb_set(made, scale)) {
+        return false;
+    }
+    if (old_framebuffer != VK_NULL_HANDLE) {
+        const VkDevice device = vk::Context::get().device();
+        vk::Context::get().defer([device, old_framebuffer] { vkDestroyFramebuffer(device, old_framebuffer, nullptr); });
+        efb_carry_color_ = std::move(old_color);
+        efb_carry_depth_ = std::move(old_depth);
+    }
+    efb_ = std::move(made);
+    efb_scale_ = scale;
     return true;
 }
 
@@ -317,6 +324,15 @@ void RendererVk::reset_gx_bindings() noexcept {
 }
 
 void RendererVk::bind_efb(const float xf_vp[6]) {
+    if (logging()) {
+        ReplayViewport viewport{};
+        viewport.valid = xf_vp != nullptr;
+        if (viewport.valid) {
+            std::memcpy(viewport.values, xf_vp, sizeof(viewport.values));
+        }
+        recording_log_.ops.push_back({ReplayKind::BindEfb, static_cast<std::uint32_t>(recording_log_.viewports.size())});
+        recording_log_.viewports.push_back(viewport);
+    }
     float x = 0.0f, y = 0.0f;
     float w = static_cast<float>(kEfbWidth * efb_scale_);
     float h = static_cast<float>(kEfbHeight * efb_scale_);
@@ -345,6 +361,18 @@ void RendererVk::bind_efb(const float xf_vp[6]) {
 void RendererVk::clear_efb(std::uint32_t clear_ar, std::uint32_t clear_gb, std::uint32_t clear_z24,
                            bool color_enable, bool alpha_enable, bool depth_enable, unsigned rect_x, unsigned rect_y,
                            unsigned rect_w, unsigned rect_h, std::uint8_t pixel_format) {
+    const ReplayClear logged{clear_ar, clear_gb, clear_z24, color_enable, alpha_enable, depth_enable,
+                             rect_x, rect_y, rect_w, rect_h, pixel_format};
+    if (logging()) {
+        recording_log_.ops.push_back({ReplayKind::Clear, static_cast<std::uint32_t>(recording_log_.clears.size())});
+        recording_log_.clears.push_back(logged);
+    } else if (ring_mode_ == RingMode::Interp && ring_advance_pending_ && !replaying_) {
+        // The display copy's copy-clear, after the log closed: the next log starts with it, so its sub-frames begin
+        // from the EFB the frame began from.
+        start_clear_ = logged;
+        start_clear_valid_ = true;
+    }
+    const LogPause pause{*this};
     const std::int32_t efb_w = static_cast<std::int32_t>(kEfbWidth * efb_scale_);
     const std::int32_t efb_h = static_cast<std::int32_t>(kEfbHeight * efb_scale_);
     VkRect2D rect{{0, 0}, {static_cast<std::uint32_t>(efb_w), static_cast<std::uint32_t>(efb_h)}};
@@ -460,7 +488,13 @@ VkDescriptorSet RendererVk::allocate_frame_set(VkDescriptorSetLayout layout) {
 
 // A texture the GPU may still read: released once the submissions that can name it completed.
 void RendererVk::retire(gpu::TextureRef texture) {
-    if (texture) {
+    if (!texture) {
+        return;
+    }
+    // Interpolating, a logged frame's sub-frames may still name it until its game-frame segment comes round.
+    if (ring_mode_ == RingMode::Interp) {
+        segments_[ring_segment_].retired.push_back(std::move(texture));
+    } else {
         frames_[frame_slot_].retired.push_back(std::move(texture));
     }
 }
@@ -500,7 +534,7 @@ void RendererVk::attach_texture_uploads(TextureCache& cache) {
 
 gpu::Table RendererVk::texture_table_for(const TextureHandle* handles, unsigned count, const TextureCache& cache,
                                          bool) {
-    const VkDescriptorSet set = allocate_frame_set(gx_layout_.sets[1]);
+    const VkDescriptorSet set = allocate_table_set(gx_layout_.sets[1]);
     std::array<VkDescriptorImageInfo, kMaxTextureMaps> images{};
     for (unsigned m = 0; m < kMaxTextureMaps; ++m) {
         const bool bound = m < count && handles[m].resource != nullptr;
@@ -514,6 +548,12 @@ gpu::Table RendererVk::texture_table_for(const TextureHandle* handles, unsigned 
     write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
     write.pImageInfo = images.data();
     vkUpdateDescriptorSets(vk::Context::get().device(), 1, &write, 0, nullptr);
+    if (logging()) {
+        std::array<VkImageView, kMaxTextureMaps>& views = recording_log_.tables[reinterpret_cast<std::uint64_t>(set)];
+        for (unsigned m = 0; m < kMaxTextureMaps; ++m) {
+            views[m] = images[m].imageView;
+        }
+    }
     return gpu::Table{reinterpret_cast<std::uint64_t>(set)};
 }
 
@@ -608,16 +648,37 @@ void RendererVk::refresh_default_sampler_table() {
     default_sampler_config_ = config;
 }
 
-VkDescriptorSet RendererVk::constants_set(VkBuffer b0, VkBuffer b1, VkBuffer palette) {
-    const ConstantsSetKey key{b0, b1, palette};
-    if (const auto it = constants_sets_.find(key); it != constants_sets_.end()) {
-        return it->second;
+VkDescriptorSet RendererVk::constants_set(VkBuffer b0, VkBuffer b1, VkBuffer palette, VkDeviceSize palette_offset,
+                                          VkDeviceSize palette_range) {
+    const bool whole = palette_range == VK_WHOLE_SIZE;
+    const bool cached = palette_offset == 0u;
+    const ConstantsSetKey key{b0, b1, palette, whole};
+    if (cached) {
+        if (const auto it = constants_sets_.find(key); it != constants_sets_.end()) {
+            return it->second;
+        }
     }
-    const VkDescriptorSet set = allocate_persistent_set(gx_layout_.sets[0]);
+    VkDescriptorSet set = VK_NULL_HANDLE;
+    if (cached) {
+        set = allocate_persistent_set(gx_layout_.sets[0]);
+    } else {
+        // A replay's evaluated palettes (their base moves with each sequence's layout): a set of the replay list's.
+        for (const auto& [buffers, existing] : replay_constant_sets_) {
+            if (buffers[0] == b0 && buffers[1] == b1) {
+                return existing;
+            }
+        }
+        VkDescriptorSetAllocateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+        info.descriptorPool = replay_list_->descriptors;
+        info.descriptorSetCount = 1;
+        info.pSetLayouts = &gx_layout_.sets[0];
+        vk::check(vkAllocateDescriptorSets(vk::Context::get().device(), &info, &set), "replay constants set");
+        replay_constant_sets_.push_back({{b0, b1}, set});
+    }
     const VkDescriptorBufferInfo infos[3] = {
         {b0, 0, sizeof(GxVsConstants)},
         {b1, 0, sizeof(GxPsConstants)},
-        {palette, 0, GxState::kMatrixPaletteWords * sizeof(std::uint32_t)},
+        {palette, palette_offset, palette_range},
     };
     VkWriteDescriptorSet writes[3]{};
     for (unsigned i = 0; i < 3u; ++i) {
@@ -630,11 +691,18 @@ VkDescriptorSet RendererVk::constants_set(VkBuffer b0, VkBuffer b1, VkBuffer pal
         writes[i].pBufferInfo = &infos[i];
     }
     vkUpdateDescriptorSets(vk::Context::get().device(), 3, writes, 0, nullptr);
-    constants_sets_.emplace(key, set);
+    if (cached) {
+        constants_sets_.emplace(key, set);
+    }
     return set;
 }
 
 void RendererVk::draw(const DrawCall& call) {
+    if (logging()) {
+        recording_log_.ops.push_back({ReplayKind::Draw, static_cast<std::uint32_t>(recording_log_.draws.size())});
+        recording_log_.draws.push_back(call);
+    }
+    const LogPause pause{*this};
     begin_efb_pass();
     const VkCommandBuffer commands = commands_;
     const vk::Context& context = vk::Context::get();
@@ -665,9 +733,20 @@ void RendererVk::draw(const DrawCall& call) {
     resolve(call.ps_constants, buffers[1], offsets[1]);
     resolve(call.matrix_palette, buffers[2], offsets[2]);
     if (constants_changed || buffers != bound_.buffers || offsets != bound_.offsets) {
-        const VkDescriptorSet set = constants_set(buffers[0], buffers[1], buffers[2]);
+        // The palette's range follows its addressing: palettes indexed from the buffer's base (an interpolating or
+        // temporal frame's: mtx_palette_base counts from the ring's start) reach the buffer's end; a replay's
+        // evaluated palettes, from their base in the output; otherwise the draw's own palette.
+        constexpr VkDeviceSize kPaletteBytes = GxState::kMatrixPaletteWords * sizeof(std::uint32_t);
+        std::array<std::uint32_t, 3> dynamic = offsets;
+        VkDescriptorSet set = VK_NULL_HANDLE;
+        if (replaying_ && interp_output_ && buffers[2] == interp_output_->buffer) {
+            set = constants_set(buffers[0], buffers[1], buffers[2], offsets[2], VK_WHOLE_SIZE);
+            dynamic[2] = 0u;
+        } else {
+            set = constants_set(buffers[0], buffers[1], buffers[2], 0u, offsets[2] == 0u ? VK_WHOLE_SIZE : kPaletteBytes);
+        }
         vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, gx_layout_.layout, 0, 1, &set, 3,
-                                offsets.data());
+                                dynamic.data());
         bound_.buffers = buffers;
         bound_.offsets = offsets;
         bound_.constants_valid = true;
@@ -829,8 +908,37 @@ void RendererVk::copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& dest) 
     // Display copies never convert to intensity; gamma and the copy filter apply.
     const EfbCopySamplingGeometry sampling = compute_xfb_sampling_geometry(params, dest.width, dest.height,
                                                                            efb_scale_);
-    record_conversion_blit(*dest.texture, dest.width, dest.height, params, false, false, true, 15u, sampling.src_x,
-                           sampling.src_y, sampling.step_x, sampling.step_y, sampling.filter_row_offset);
+    const bool logged = logging();
+    if (logged) {
+        ReplayCopy copy{};
+        copy.params = params;
+        copy.display = true;
+        copy.width = dest.width;
+        copy.height = dest.height;
+        copy.geometry[0] = sampling.src_x;
+        copy.geometry[1] = sampling.src_y;
+        copy.geometry[2] = sampling.step_x;
+        copy.geometry[3] = sampling.step_y;
+        copy.geometry[4] = sampling.filter_row_offset;
+        recording_log_.ops.push_back({ReplayKind::Copy, static_cast<std::uint32_t>(recording_log_.copies.size())});
+        recording_log_.copies.push_back(copy);
+        recording_log_.surround = dest.safety_surround;
+        recording_log_.movie = dest.prerecorded_movie;
+    }
+    {
+        const LogPause pause{*this};
+        record_conversion_blit(*dest.texture, dest.width, dest.height, params, false, false, true, 15u,
+                               sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y,
+                               sampling.filter_row_offset);
+    }
+    if (ring_mode_ == RingMode::Interp && !replaying_) {
+        // The display copy closes the game frame: its log is complete and the next frame takes a new segment.
+        if (logged) {
+            close_replay_log(dest.guest_addr);
+        } else {
+            ring_advance_pending_ = true;
+        }
+    }
 }
 
 bool RendererVk::copy_efb_to_texture(const EfbCopyParams& params, TextureCache& textures, bool is_depth_copy) {
@@ -899,8 +1007,32 @@ bool RendererVk::copy_efb_to_texture(const EfbCopyParams& params, TextureCache& 
     }
     EfbCopyDest& current = efb_copy_dests_[dest_key];
     vk::Texture& texture = *current.texture;
+    const auto identity = efb_identity_copy_rect(params, is_depth_copy, efb_scale_, w, h);
+    const EfbCopySamplingGeometry sampling = compute_efb_copy_sampling_geometry(params, w, h, efb_scale_);
+    if (logging()) {
+        ReplayCopy copy{};
+        copy.params = params;
+        copy.depth = is_depth_copy;
+        copy.dest_key = dest_key;
+        copy.width = w;
+        copy.height = h;
+        copy.geometry[0] = sampling.src_x;
+        copy.geometry[1] = sampling.src_y;
+        copy.geometry[2] = sampling.step_x;
+        copy.geometry[3] = sampling.step_y;
+        copy.geometry[4] = sampling.filter_row_offset;
+        copy.exact = identity.has_value();
+        if (identity) {
+            copy.box_left = identity->left;
+            copy.box_top = identity->top;
+        }
+        copy.dest_view = texture.view;
+        recording_log_.ops.push_back({ReplayKind::Copy, static_cast<std::uint32_t>(recording_log_.copies.size())});
+        recording_log_.copies.push_back(copy);
+    }
+    const LogPause pause{*this};
 
-    if (const auto box = efb_identity_copy_rect(params, is_depth_copy, efb_scale_, w, h)) {
+    if (const auto& box = identity) {
         // An exact colour copy: the EFB's texels as they are.
         end_efb_pass();
         const VkCommandBuffer commands = commands_;
@@ -931,7 +1063,6 @@ bool RendererVk::copy_efb_to_texture(const EfbCopyParams& params, TextureCache& 
         bind_efb(nullptr);
         return textures.register_efb_copy(params.dest_addr, params, current.texture);
     }
-    const EfbCopySamplingGeometry sampling = compute_efb_copy_sampling_geometry(params, w, h, efb_scale_);
     // Intensity copies to RA4/RA8 (IA4/IA8) keep the source alpha; pure-I formats replicate Y into alpha.
     const bool keep_alpha = params.target_format == 2u || params.target_format == 3u;
     record_conversion_blit(texture, w, h, params, is_depth_copy, params.intensity, keep_alpha, params.target_format,

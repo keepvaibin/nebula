@@ -240,6 +240,7 @@ EShLanguage language(ShaderStage stage) {
     case ShaderStage::Vertex: return EShLangVertex;
     case ShaderStage::Geometry: return EShLangGeometry;
     case ShaderStage::Fragment: return EShLangFragment;
+    case ShaderStage::Compute: return EShLangCompute;
     }
     return EShLangVertex;
 }
@@ -345,8 +346,11 @@ std::vector<std::uint32_t> compile_hlsl(std::string_view hlsl, ShaderStage stage
     shader.setEnvInput(glslang::EShSourceHlsl, lang, glslang::EShClientVulkan, 100);
     shader.setEnvClient(glslang::EShClientVulkan, glslang::EShTargetVulkan_1_1);
     shader.setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_3);
-    // Semantics on stage variables (assign_semantic_locations), removed again before the module is used.
-    shader.setEnvTargetHlslFunctionality1();
+    // Semantics on stage variables (assign_semantic_locations), removed again before the module is used; a compute
+    // shader has none, and would keep the extension.
+    if (stage != ShaderStage::Compute) {
+        shader.setEnvTargetHlslFunctionality1();
+    }
     // Every resource carries an explicit [[vk::binding]] (annotate()); stage inputs and outputs take provisional
     // locations, replaced by their semantics' after compiling.
     shader.setAutoMapLocations(true);
@@ -373,7 +377,8 @@ std::vector<std::uint32_t> compile_hlsl(std::string_view hlsl, ShaderStage stage
         error = "glslang produced no SPIR-V";
         return {};
     }
-    if (!assign_semantic_locations(spirv, stage, error)) {
+    // A compute shader has no stage inputs or outputs but built-ins.
+    if (stage != ShaderStage::Compute && !assign_semantic_locations(spirv, stage, error)) {
         return {};
     }
     if (compile_options.dual_source && !make_dual_source_output(spirv)) {

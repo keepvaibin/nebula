@@ -18,6 +18,7 @@
 
 #include "galaxy/gx/efb_copy.h"
 #include "galaxy/gx/gpu_types.h"
+#include "galaxy/gx/interp_gpu.h"
 #include "galaxy/gx/interp_types.h"
 #include "galaxy/gx/renderer_common.h"
 #include "galaxy/gx/rt_materials.h"
@@ -83,31 +84,33 @@ public:
     void shutdown();
     [[nodiscard]] UploadBuffer create_upload_buffer(std::size_t bytes, const char* name);
 
-    // ---- Frame interpolation, scene AA and ray tracing: D3D12 only for now, inert here (gx_backend's paths for
-    // them see nothing running: no replays, no traced scene). Same signatures as RendererD3D12's.
+    // ---- Interpolated sub-frames (renderer_vk_replay.cpp): each game frame's draws, clears and copies are logged;
+    // a sub-frame replays the log with the constants evaluated at its t (interp_eval.h) into a private EFB and
+    // presents its display copy. The interface is RendererD3D12's. Scene AA and ray tracing are inert here.
     using ReplaySequence = gx::ReplaySequence;
     using SubframeTime = gx::SubframeTime;
     using CopyRedirectStats = gx::CopyRedirectStats;
     using StripeVertex = gx::StripeVertex;
-    [[nodiscard]] std::uint64_t playing_serial() const noexcept { return 0u; }
-    void prepare_vertex_blend(std::span<const std::int32_t>) {}
-    [[nodiscard]] std::span<const std::int32_t> ps_record_pairs() const noexcept { return {}; }
+    [[nodiscard]] std::uint64_t playing_serial() const noexcept { return run_log_.serial; }
+    void prepare_vertex_blend(std::span<const std::int32_t> previous_record);
+    [[nodiscard]] std::span<const std::int32_t> ps_record_pairs() const noexcept { return run_ps_previous_; }
     void record_scene_aa() {}
-    [[nodiscard]] unsigned replay_reject() const noexcept { return 0u; }
-    void reset_subframe_gpu_ema() noexcept {}
-    [[nodiscard]] double subframe_gpu_ema_ms() const noexcept { return 0.0; }
+    [[nodiscard]] unsigned replay_reject() const noexcept { return replay_reject_; }
+    void reset_subframe_gpu_ema() noexcept { subframe_gpu_ema_ms_ = 0.0; }
+    [[nodiscard]] double subframe_gpu_ema_ms() const noexcept { return subframe_gpu_ema_ms_; }
     void suspend_temporal_interpolation(double) {}
     [[nodiscard]] bool temporal_interpolation() const noexcept { return false; }
-    bool begin_replay_sequence(const ReplaySequence&) { return false; }
-    bool present_replay_subframe(const SubframeTime&, const Affine34&, const Affine34&) { return false; }
+    bool begin_replay_sequence(const ReplaySequence& sequence);
+    bool present_replay_subframe(const SubframeTime& time, const Affine34& camera_t, const Affine34& camera_prev);
     void note_stripe_vertices(std::span<const StripeVertex>) {}
-    [[nodiscard]] CopyRedirectStats take_copy_redirect_stats() noexcept { return {}; }
+    [[nodiscard]] CopyRedirectStats take_copy_redirect_stats() noexcept { return std::exchange(redirect_stats_, {}); }
     void set_subframe_copy_redirect(int) noexcept {}
     [[nodiscard]] std::uint64_t take_log_gap_ops() noexcept { return 0u; }
     [[nodiscard]] std::uint64_t take_vertex_blend_draws() noexcept { return 0u; }
     void take_sequence_record_ms(double& total_ms, std::uint64_t& samples, std::uint64_t& replays) noexcept {
-        total_ms = 0.0;
-        samples = replays = 0u;
+        total_ms = std::exchange(sequence_record_ms_, 0.0);
+        samples = std::exchange(sequence_record_samples_, 0u);
+        replays = std::exchange(replay_records_, 0u);
     }
     [[nodiscard]] std::uint64_t take_subframe_guarded() noexcept { return 0u; }
     void take_subframe_path_gpu_ms(std::array<double, 3>& total_ms, std::array<std::uint64_t, 3>& samples) noexcept {
@@ -116,8 +119,8 @@ public:
     }
     [[nodiscard]] std::array<double, 3> take_subframe_phase_ms() noexcept { return {}; }
     void take_subframe_record_ms(double& total_ms, std::uint64_t& samples) noexcept {
-        total_ms = 0.0;
-        samples = 0u;
+        total_ms = std::exchange(subframe_record_ms_, 0.0);
+        samples = std::exchange(subframe_record_samples_, 0u);
     }
     void set_capture_waits(bool) noexcept {}
     void set_resident_vertices(gpu::Address, std::uint64_t) noexcept {}
@@ -152,9 +155,13 @@ public:
     [[nodiscard]] const void* rt_light_texture() const noexcept { return nullptr; }
     [[nodiscard]] bool rt_light_texture_ready() const noexcept { return false; }
     [[nodiscard]] float rt_light_texture_scale() const noexcept { return 1.0f; }
-    [[nodiscard]] unsigned replay_hold_segment() const noexcept { return 0u; }
-    void request_eval_readback() noexcept {}
-    [[nodiscard]] bool take_eval_readback(std::vector<std::uint32_t>&, float&) { return false; }
+    // The game-frame ring segment while interpolating (a log's resources live until it comes round), ~0u else.
+    [[nodiscard]] unsigned replay_hold_segment() const noexcept {
+        return ring_mode_ == RingMode::Interp ? ring_segment_ : ~0u;
+    }
+    // Diagnostics (GALAXY_INTERP_VERIFY): the next sub-frame's evaluated output, read back once its fence passed.
+    void request_eval_readback() noexcept { eval_readback_requested_ = true; }
+    [[nodiscard]] bool take_eval_readback(std::vector<std::uint32_t>& words, float& t);
     [[nodiscard]] bool temporal_mode() const { return false; }
     // No output-resolution EFB without temporal upscaling: the EFB itself.
     [[nodiscard]] bool copy_output_efb_to_texture(const EfbCopyParams& params, TextureCache& textures) {
@@ -184,7 +191,7 @@ public:
     // `black`: the frame is presented black (the pass clears; the XFB is not drawn).
     bool present(const XfbTexture* source, bool capture_backbuffer = false, bool black = false);
 
-    // Not on Vulkan yet: the HUD split, temporal upscaling and interpolated redraw.
+    // Not on Vulkan yet: the HUD split and temporal upscaling.
     [[nodiscard]] bool begin_output_efb() noexcept { return false; }
     void end_output_efb() noexcept {}
     [[nodiscard]] bool output_efb_active() const noexcept { return false; }
@@ -194,20 +201,21 @@ public:
     void reset_temporal_history() noexcept {}
     [[nodiscard]] unsigned matrix_history_frames() const noexcept { return 0u; }
     [[nodiscard]] std::uint64_t matrix_segment_serial() const noexcept { return 0u; }
-    [[nodiscard]] bool replay_available() const noexcept { return false; }
-    bool start_replay_playback() noexcept { return false; }
-    [[nodiscard]] bool replay_playing() const noexcept { return false; }
-    [[nodiscard]] bool interpolation_mode() const noexcept { return false; }
-    [[nodiscard]] std::uint64_t replay_serial() const noexcept { return 0u; }
-    [[nodiscard]] std::uint32_t replay_xfb_addr() const noexcept { return 0u; }
-    void note_replay_scene() noexcept {}
+    // A completed log waits (interpolation mode); start_replay_playback makes it the playing one.
+    [[nodiscard]] bool replay_available() const noexcept { return ready_valid_; }
+    bool start_replay_playback();
+    [[nodiscard]] bool replay_playing() const noexcept { return run_valid_; }
+    // A present rate above 60 (GALAXY_INTERPOLATION=0 turns it off).
+    [[nodiscard]] bool interpolation_mode() const;
+    [[nodiscard]] std::uint64_t replay_serial() const noexcept { return replay_serial_; }
+    [[nodiscard]] std::uint32_t replay_xfb_addr() const noexcept { return replay_xfb_addr_; }
+    void note_replay_scene() noexcept { ++replay_scene_count_; }
     [[nodiscard]] unsigned replay_failure() const noexcept { return replay_failure_; }
     void note_replay_failure(unsigned reason) noexcept { replay_failure_ = reason; }
-    void set_subframe_capture(bool) noexcept {}
-    bool present_replay_subframe(std::span<const gpu::Address>) noexcept { return false; }
+    void set_subframe_capture(bool capture) noexcept { subframe_capture_ = capture; }
     void take_subframe_gpu_ms(double& total_ms, std::uint64_t& samples) noexcept {
-        total_ms = 0.0;
-        samples = 0u;
+        total_ms = std::exchange(subframe_gpu_ms_, 0.0);
+        samples = std::exchange(subframe_gpu_samples_, 0u);
     }
     void set_scene_camera(float, float, float) noexcept {}
 
@@ -352,7 +360,10 @@ private:
     void retire(gpu::TextureRef texture);
     [[nodiscard]] VkDescriptorSet allocate_persistent_set(VkDescriptorSetLayout layout);
     void refresh_default_sampler_table();
-    [[nodiscard]] VkDescriptorSet constants_set(VkBuffer b0, VkBuffer b1, VkBuffer palette);
+    // Set 0 for b0, b1 and a palette binding of `palette_range` bytes from `palette_offset` (VK_WHOLE_SIZE: to the
+    // buffer's end); every binding takes its draw's dynamic offset.
+    [[nodiscard]] VkDescriptorSet constants_set(VkBuffer b0, VkBuffer b1, VkBuffer palette, VkDeviceSize palette_offset,
+                                                VkDeviceSize palette_range);
     [[nodiscard]] VkSampler sampler_for(std::uint32_t key, const RenderConfig& cfg);
     void record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsigned dest_h, const EfbCopyParams& params,
                                 bool is_depth_copy, bool intensity, bool keep_alpha, std::uint8_t copy_format,
@@ -443,6 +454,7 @@ private:
     UploadRing matrix_ring_;
     struct ConstantsSetKey {
         VkBuffer b0, b1, palette;
+        bool whole_palette;  // the palette binding reaches the buffer's end (palettes addressed from its base)
         bool operator==(const ConstantsSetKey&) const = default;
     };
     struct ConstantsSetKeyHash {
@@ -516,6 +528,189 @@ private:
     std::uint64_t last_frame_slot_wait_us_ = 0;
     std::uint64_t last_begin_reset_us_ = 0;
     unsigned replay_failure_ = 0;
+
+    // ---- Interpolated sub-frames (renderer_vk_replay.cpp).
+    // Ring mode: in Interp the upload rings, texture-table descriptors and retired textures are segmented per game
+    // frame (kInterpSegments), so a logged frame's data lives until its segment comes round again.
+    enum class RingMode : std::uint8_t { Normal, Interp };
+    struct Segment {
+        VkDescriptorPool descriptors = VK_NULL_HANDLE;
+        std::vector<VkDescriptorPool> overflow;
+        std::vector<gpu::TextureRef> retired;
+        std::uint64_t fence = 0;  // the last submission that read the segment
+    };
+    void update_ring_mode();
+    void advance_ring_segment();
+    [[nodiscard]] VkDescriptorSet allocate_table_set(VkDescriptorSetLayout layout);
+    RingMode ring_mode_ = RingMode::Normal;
+    std::array<Segment, kInterpSegments> segments_{};
+    unsigned ring_segment_ = 0;
+    bool ring_advance_pending_ = false;
+
+    // The log: one game frame's GX work in order (a display copy closes it).
+    enum class ReplayKind : std::uint8_t { Draw, BindEfb, Clear, Copy };
+    struct ReplayOp {
+        ReplayKind kind = ReplayKind::Draw;
+        std::uint32_t index = 0;
+    };
+    struct ReplayViewport {
+        bool valid = false;
+        float values[6]{};
+    };
+    struct ReplayClear {
+        std::uint32_t ar = 0, gb = 0, z24 = 0;
+        bool color = false, alpha = false, depth = false;
+        unsigned x = 0, y = 0, w = 0, h = 0;
+        std::uint8_t format = 0;
+    };
+    struct ReplayCopy {
+        EfbCopyParams params{};
+        bool depth = false;
+        bool display = false;            // the display copy (closes the log)
+        std::uint64_t dest_key = 0;      // a texture copy's destination (efb_copy_dests_)
+        unsigned width = 0, height = 0;  // the destination's size
+        float geometry[5]{};             // sampling: src x, y, step x, y, filter row offset
+        bool exact = false;              // an identity copy (vkCmdCopyImage)
+        unsigned box_left = 0, box_top = 0;
+        VkImageView dest_view = VK_NULL_HANDLE;  // the destination's view as the log's tables name it
+    };
+    struct ReplayLog {
+        std::vector<ReplayOp> ops;
+        std::vector<DrawCall> draws;
+        std::vector<ReplayViewport> viewports;
+        std::vector<ReplayClear> clears;
+        std::vector<ReplayCopy> copies;
+        // The views of each texture table its draws bound (stand-ins replace copy destinations in them).
+        std::unordered_map<std::uint64_t, std::array<VkImageView, kMaxTextureMaps>> tables;
+        unsigned segment = 0;
+        std::uint64_t serial = 0;
+        float surround = 0.0f;  // the display copy's XFB: its surround and movie flag (the sub-frame XFB's)
+        bool movie = false;
+        void clear();
+    };
+    void begin_replay_record();
+    // The display copy closes the log: one 3D scene makes it replayable.
+    void close_replay_log(std::uint32_t xfb_addr);
+    // GX work recorded now goes into the log (not while a replay records, nor inside a logged operation's own
+    // clears and rebinds: LogPause).
+    [[nodiscard]] bool logging() const noexcept { return recording_log_valid_ && !replaying_ && !log_paused_; }
+    struct LogPause {
+        RendererVk& renderer;
+        bool was;
+        explicit LogPause(RendererVk& r) : renderer(r), was(r.log_paused_) { r.log_paused_ = true; }
+        ~LogPause() { renderer.log_paused_ = was; }
+    };
+    bool log_paused_ = false;
+    // A copy-clear right after the display copy (outside any log) starts the next log.
+    ReplayClear start_clear_{};
+    bool start_clear_valid_ = false;
+    ReplayLog recording_log_;  // being recorded
+    ReplayLog ready_log_;      // complete, waiting
+    ReplayLog run_log_;        // playing
+    bool recording_log_valid_ = false;
+    bool ready_valid_ = false;
+    bool run_valid_ = false;
+    unsigned replay_scene_count_ = 0;
+    unsigned replay_reject_ = 0;
+    std::uint64_t replay_serial_ = 0;
+    std::uint32_t replay_xfb_addr_ = 0;
+    std::vector<std::int32_t> run_ps_previous_;
+
+    // A sequence: the playing log's sub-frames between two game frames.
+    struct SequenceState {
+        bool ready = false;
+        bool first = true;
+        std::uint64_t serial = 0;
+        ReplaySequence overrides{};
+        gpu::Address program = 0;  // copies, ops and payload, in the constant ring
+        std::uint32_t program_bytes = 0;
+        std::uint32_t copies = 0, ops = 0;
+        std::uint32_t copies_offset = 0, ops_offset = 0, payload_offset = 0;
+    };
+    bool ensure_interp_eval();
+    bool ensure_interp_output(std::uint64_t bytes);
+    void record_interp_eval(VkCommandBuffer commands, const SubframeTime& time, const Affine34& camera_t,
+                            const Affine34& camera_prev);
+    SequenceState sequence_;
+    std::uint64_t sequence_serial_ = 0;
+    std::vector<interp_gpu::Copy> interp_copies_;
+    std::vector<std::uint8_t> interp_copied_;
+    VkDescriptorSetLayout eval_set_layout_ = VK_NULL_HANDLE;
+    VkPipelineLayout eval_layout_ = VK_NULL_HANDLE;
+    VkPipeline eval_copy_pipeline_ = VK_NULL_HANDLE;
+    VkPipeline eval_pipeline_ = VK_NULL_HANDLE;
+    VkDescriptorPool eval_pool_ = VK_NULL_HANDLE;
+    bool eval_failed_ = false;
+    // A sequence's program (copies, ops, payload), in one of three buffers; each sub-frame's evaluation constants
+    // (InterpEvalFrame) at its slot's 256 bytes of eval_frames_.
+    struct ProgramBuffer {
+        std::shared_ptr<vk::Buffer> buffer;
+        std::uint64_t fence = 0;
+        VkDescriptorSet set = VK_NULL_HANDLE;
+        std::array<VkBuffer, 5> bound{};  // what `set` names: program, constant ring, matrix ring, output, verdicts
+    };
+    std::array<ProgramBuffer, 3> program_buffers_{};
+    unsigned program_index_ = 0;
+    std::shared_ptr<vk::Buffer> eval_frames_;
+    std::shared_ptr<vk::Buffer> eval_readback_;
+    std::uint64_t eval_readback_fence_ = 0;
+    float eval_readback_t_ = 0.0f;
+    bool eval_readback_requested_ = false;
+    bool eval_readback_recorded_ = false;
+    [[nodiscard]] VkDescriptorSet eval_set(ProgramBuffer& program);
+    std::shared_ptr<vk::Buffer> interp_output_;  // storage (written) and uniform (read by the replay's draws)
+    gpu::Address interp_output_address_ = 0;
+    std::shared_ptr<vk::Buffer> blend_verdicts_;
+    std::vector<std::pair<std::shared_ptr<vk::Buffer>, std::uint64_t>> interp_retired_;  // with their last fence
+
+    // Replay lists: the playing log recorded once per sequence into a reusable command buffer, with its own
+    // descriptor pool, private EFB and stand-ins for its copies' destinations.
+    struct StandIn {
+        std::uint64_t dest_key = 0;
+        gpu::TextureRef texture;
+    };
+    struct ReplayList {
+        VkCommandPool pool = VK_NULL_HANDLE;
+        VkCommandBuffer commands = VK_NULL_HANDLE;
+        VkDescriptorPool descriptors = VK_NULL_HANDLE;
+        std::vector<StandIn> stand_ins;
+        std::uint64_t sequence = 0;
+        std::uint64_t fence = 0;
+        unsigned segment = 0;
+    };
+    bool record_replay_list(ReplayList& list);
+    // A log's texture table with the replay's stand-ins in place of the copy destinations it names.
+    [[nodiscard]] std::uint64_t patched_table(ReplayList& list, std::uint64_t table);
+    std::unordered_map<VkImageView, VkImageView> redirect_;  // copy destination -> stand-in (this replay)
+    ReplayList* replay_list_ = nullptr;  // the list being recorded
+    std::vector<std::pair<std::array<VkBuffer, 2>, VkDescriptorSet>> replay_constant_sets_;  // its output-palette sets
+    std::unordered_map<std::uint64_t, std::uint64_t> patched_;  // texture table -> patched (this replay)
+    void replay_copy(const ReplayCopy& copy, vk::Texture& target);
+    std::array<ReplayList, 3> replay_lists_{};
+    EfbSet replay_efb_;
+    unsigned replay_efb_scale_ = 0;
+    bool create_efb_set(EfbSet& set, unsigned scale);
+    void destroy_efb_set(EfbSet& set);
+    XfbTexture subframe_xfb_;
+    bool replaying_ = false;
+
+    // Sub-frame submissions: the evaluation and present command buffers, their descriptor pool and acquire
+    // semaphore (Frame), independent of the frame slots.
+    std::array<Frame, 3> subframes_{};
+    unsigned subframe_next_ = 0;
+    bool subframe_capture_ = false;
+    double subframe_gpu_ema_ms_ = 0.0;
+    double subframe_gpu_ms_ = 0.0;
+    std::uint64_t subframe_gpu_samples_ = 0;
+    double subframe_record_ms_ = 0.0;
+    std::uint64_t subframe_record_samples_ = 0;
+    double sequence_record_ms_ = 0.0;
+    std::uint64_t sequence_record_samples_ = 0;
+    std::uint64_t replay_records_ = 0;
+    CopyRedirectStats redirect_stats_{};
+    void release_replay_resources() noexcept;
+    // Presents the acquired image (swap_image_) after its submission: end_frame's and a sub-frame's.
+    void present_swapchain_image();
     // Match Output: the window and picture shape the scale was last derived for, and the GPU-time cap
     // (RenderConfig::gpu_budget).
     std::uint32_t follow_window_width_ = 0;
