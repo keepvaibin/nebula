@@ -8920,6 +8920,7 @@ void GxBackend::advance_interp_sequence(bool flush) {
                 ++interp_presented_;
                 interp_shown_scene_ = static_cast<std::int32_t>(sequence.scene);
                 note_present_vblank(slot);
+                note_interp_timeline(slot, force_t >= 0.0 ? force_t : t, false);
             } else {
                 ++interp_failed_;
             }
@@ -8935,6 +8936,7 @@ void GxBackend::advance_interp_sequence(bool flush) {
         interp_presenting_real_ = true;
         present_cached_xfb_on_thread(sequence.xfb_addr, false, true);
         note_present_vblank(slot);
+        note_interp_timeline(slot, 1.0, true);
         interp_presenting_real_ = false;
         interp_shown_scene_ = static_cast<std::int32_t>(sequence.scene);
         renderer_.set_capture_waits(false);
@@ -8973,6 +8975,29 @@ void GxBackend::note_present_vblank(std::int64_t slot) {
     }
     interp_slot_to_vblank_min_ms_ = std::min(interp_slot_to_vblank_min_ms_, slot_to_vblank_ms);
     interp_slot_to_vblank_max_ms_ = std::max(interp_slot_to_vblank_max_ms_, slot_to_vblank_ms);
+}
+
+// The line: the slot's time and the present's (QPC ticks), the game frame shown (the played log's serial; t
+// between the frame before, 0, and it, 1), and whether it was the game's own frame.
+void GxBackend::note_interp_timeline(std::int64_t slot, double t, bool real) {
+    static std::FILE* const file = [] {
+        char path[MAX_PATH]{};
+        std::size_t length = 0u;
+        if (getenv_s(&length, path, sizeof(path), "GALAXY_INTERP_TIMELINE") != 0 || length <= 1u) {
+            return static_cast<std::FILE*>(nullptr);
+        }
+        std::FILE* opened = nullptr;
+        if (fopen_s(&opened, path, "w") == 0 && opened != nullptr) {
+            std::fprintf(opened, "slot_qpc,present_qpc,frame,t,real,frequency\n");
+        }
+        return opened;
+    }();
+    if (file == nullptr) {
+        return;
+    }
+    std::fprintf(file, "%lld,%lld,%llu,%.6f,%d,%lld\n", static_cast<long long>(slot),
+                 static_cast<long long>(galaxy::qpc_now()), static_cast<unsigned long long>(interp_last_played_serial_),
+                 t, real ? 1 : 0, static_cast<long long>(galaxy::qpc_frequency()));
 }
 
 // A game frame presented while interpolating, without sub-frames: why.

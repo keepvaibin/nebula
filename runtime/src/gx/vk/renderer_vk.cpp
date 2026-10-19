@@ -1227,10 +1227,11 @@ void RendererVk::present_swapchain_image() {
     std::int64_t retrace = 0, period = 0, vsync = 0, now = 0;
     if (context.display_timing() && host_window::present_grid(retrace, period, vsync, now)) {
         PresentTiming& timing = present_timing_;
-        // Interpolating, the game's retrace holds several presented frames: slots step by one of them.
-        const std::int64_t step = ring_mode_ == RingMode::Interp
-            ? period / static_cast<std::int64_t>(interpolated_frames_per_game_frame(present_frame_rate(
-                  presented_max_fps(cfg), cfg.vsync_interval, display_refresh_hz_)) + 1u)
+        // Interpolating, slots step by one presented frame: the game's retrace period times 60 / the present rate
+        // (90 Hz: 1.5 presents per retrace).
+        const double rate = present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, display_refresh_hz_);
+        const std::int64_t step = ring_mode_ == RingMode::Interp && rate > 61.0
+            ? std::llround(static_cast<double>(period) * 60.0 / rate)
             : period;
         // The slot after the previous frame's, on the grid of the latest retrace; two retraces after that retrace
         // when it is out of reach (the first frame, after a stall) or the frames ran ahead of it.

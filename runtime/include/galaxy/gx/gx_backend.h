@@ -1095,6 +1095,8 @@ private:
     double interp_slot_to_vblank_max_ms_ = 0.0;
     std::uint64_t interp_slot_to_vblank_samples_ = 0;
     void note_present_vblank(std::int64_t slot);
+    // GALAXY_INTERP_TIMELINE=<file>: one line per present while interpolating (pacing checks).
+    void note_interp_timeline(std::int64_t slot, double t, bool real);
     // Smoothed game-frame arrival clock (start_interp_sequence).
     std::int64_t interp_arrival_qpc_ = 0;
     std::int64_t interp_frame_period_qpc_ = 0;
