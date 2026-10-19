@@ -107,7 +107,7 @@ int main() {
                 passed = false;
             }
         }
-        const auto wide = aspect_window_sizes(4u, 2600u, 1400u);
+        const auto wide = aspect_window_sizes(5u, 2600u, 1400u);
         if (wide.empty() || wide.front() != std::pair{840u, 360u} || wide.back() != std::pair{2520u, 1080u}) {
             std::cerr << "21:9 window sizes within 2600 x 1400 must run from 840 x 360 to 2520 x 1080\n";
             passed = false;
@@ -484,6 +484,35 @@ int main() {
             galaxy::gx::get_render_config().window_width == 3440u &&
                 galaxy::gx::get_render_config().window_height == 1440u,
             "a saved custom aspect and resolution survive reload");
+
+        {
+            std::ofstream file(path, std::ios::binary | std::ios::trunc);
+            file << "aspect=4\n";
+        }
+        galaxy::gx::load_render_config_from_file();
+        passed &= expect(galaxy::gx::get_render_config().aspect_mode == 5u,
+                         "a numeric aspect is an index of the list before 3:2 (4 is 21:9)");
+        {
+            std::ofstream file(path, std::ios::binary | std::ios::trunc);
+            file << "aspect=3:2\n";
+        }
+        galaxy::gx::load_render_config_from_file();
+        passed &= expect(galaxy::gx::get_render_config().aspect_mode == 2u, "aspect=3:2 reads by name");
+        {
+            galaxy::gx::RenderConfig wide = galaxy::gx::get_render_config();
+            wide.aspect_mode = 6u;
+            galaxy::gx::set_render_config(wide);
+            passed &= expect(galaxy::gx::save_render_config_to_file(), "the aspect saves");
+            std::ifstream file(path, std::ios::binary);
+            const std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+            passed &= expect(text.find("aspect=32:9\n") != std::string::npos, "the aspect saves by name");
+            file.close();
+            galaxy::gx::set_render_config(galaxy::gx::RenderConfig{});
+            galaxy::gx::load_render_config_from_file();
+            passed &= expect(galaxy::gx::get_render_config().aspect_mode == 6u, "a saved aspect name reads back");
+            galaxy::gx::set_render_config(custom);
+            passed &= expect(galaxy::gx::save_render_config_to_file(), "the custom size saves again");
+        }
 
         {
             std::ofstream file(path, std::ios::binary | std::ios::trunc);

@@ -1665,7 +1665,8 @@ std::string native_settings_row_text(
             return text;
         case 4: {
             static constexpr const char* kAspects[] = {
-                "AUTO", "4:3", "16:10", "16:9", "21:9", "32:9"};
+                "AUTO", "4:3", "3:2", "16:10", "16:9", "21:9", "32:9"};
+            static_assert(std::size(kAspects) == kAspectModeCount);
             return std::string("ASPECT RATIO: ") +
                    kAspects[std::min(render.aspect_mode, kAspectModeCount - 1u)];
         }

@@ -175,10 +175,13 @@ inline unsigned interpolated_frames_per_game_frame(double rate) {
 inline constexpr unsigned kDisplayWindowed = 0u;
 inline constexpr unsigned kDisplayBorderless = 1u;
 inline constexpr unsigned kDisplayExclusive = 2u;
-inline constexpr unsigned kAspectModeCount = 6u;
-// Width:height of each aspect_mode (0 = follow the window).
+inline constexpr unsigned kAspectModeCount = 7u;
+// Width:height of each aspect_mode (0 = follow the window), narrowest first.
 inline constexpr unsigned kAspectRatios[kAspectModeCount][2] = {
-    {0u, 0u}, {4u, 3u}, {16u, 10u}, {16u, 9u}, {21u, 9u}, {32u, 9u}};
+    {0u, 0u}, {4u, 3u}, {3u, 2u}, {16u, 10u}, {16u, 9u}, {21u, 9u}, {32u, 9u}};
+// Their names in config.ini (aspect=). A number there is an index of the list before 3:2 (auto, 4:3, 16:10, 16:9,
+// 21:9, 32:9).
+inline constexpr const char* kAspectNames[kAspectModeCount] = {"auto", "4:3", "3:2", "16:10", "16:9", "21:9", "32:9"};
 
 // Window sizes of exactly an aspect_mode's shape that fit max_width x
 // max_height, smallest first; none for aspect_mode 0. The launcher's

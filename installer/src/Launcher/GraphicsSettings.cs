@@ -17,7 +17,10 @@ namespace Nebula.Launcher
     internal sealed class GraphicsSettings
     {
         public static readonly string[] DisplayModes = { "Windowed", "Borderless fullscreen" };
-        public static readonly string[] Aspects = { "Auto (match the window)", "4:3", "16:10", "16:9", "21:9", "32:9" };
+        public static readonly string[] Aspects = { "Auto (match the window)", "4:3", "3:2", "16:10", "16:9", "21:9", "32:9" };
+        // Their names in config.ini (the runtime's kAspectNames). A number there is an index of the list before 3:2.
+        public static readonly string[] AspectNames = { "auto", "4:3", "3:2", "16:10", "16:9", "21:9", "32:9" };
+        private static readonly int[] AspectsBefore3To2 = { 0, 1, 3, 4, 5, 6 };
         public static readonly string[] AntiAliasingModes = { "Off", "SMAA", "Auto (SMAA unless supersampled)", "FXAA" };
         public static readonly string[] AntiAliasingQualities = { "Low", "Medium", "High", "Ultra" };
         // Release runtimes are built without FSR 3 (upscaler 2); a saved 2 reads as FSR 1.
@@ -29,7 +32,7 @@ namespace Nebula.Launcher
         // The runtime's frame_rate_options.
         public static readonly int[] FrameRates = { 30, 60 };
         // Width:height of each aspect choice; Auto has none.
-        private static readonly int[,] AspectRatios = { { 0, 0 }, { 4, 3 }, { 16, 10 }, { 16, 9 }, { 21, 9 }, { 32, 9 } };
+        private static readonly int[,] AspectRatios = { { 0, 0 }, { 4, 3 }, { 3, 2 }, { 16, 10 }, { 16, 9 }, { 21, 9 }, { 32, 9 } };
         // Window heights offered for a fixed aspect when the width comes out whole.
         // The runtime's settings_window_sizes uses the same list.
         private static readonly int[] WindowHeights = { 360, 480, 540, 600, 720, 768, 800, 900, 960, 1050, 1080, 1200, 1440, 1536, 1600, 1800, 2160, 2400, 2880, 4320 };
@@ -89,7 +92,7 @@ namespace Nebula.Launcher
             settings.FullscreenWidth = Choice(values, "fullscreen_width", 16385, 0);
             settings.FullscreenHeight = Choice(values, "fullscreen_height", 16385, 0);
             settings.FullscreenRefresh = Choice(values, "fullscreen_refresh_hz", 1001, 0);
-            settings.Aspect = Choice(values, "aspect", Aspects.Length, settings.Aspect);
+            settings.Aspect = AspectChoice(values, settings.Aspect);
             settings.EfbScale = Math.Max(1, Choice(values, "efb_scale", 17, settings.EfbScale));
             string follow, vsync;
             if (values.TryGetValue("internal_follow_window", out follow)) settings.MatchOutput = follow.Trim() != "0";
@@ -133,7 +136,7 @@ namespace Nebula.Launcher
                 new KeyValuePair<string, string>("fullscreen_width", n(FullscreenWidth)),
                 new KeyValuePair<string, string>("fullscreen_height", n(FullscreenHeight)),
                 new KeyValuePair<string, string>("fullscreen_refresh_hz", n(FullscreenRefresh)),
-                new KeyValuePair<string, string>("aspect", n(Aspect)),
+                new KeyValuePair<string, string>("aspect", AspectNames[Math.Max(0, Math.Min(Aspect, AspectNames.Length - 1))]),
                 new KeyValuePair<string, string>("efb_scale", n(EfbScale)),
                 new KeyValuePair<string, string>("internal_follow_window", MatchOutput ? "1" : "0"),
                 new KeyValuePair<string, string>("vsync_interval", VSync ? "1" : "0"),
@@ -172,6 +175,18 @@ namespace Nebula.Launcher
                 }
             }
             return Tuple.Create(lines, values);
+        }
+
+        private static int AspectChoice(Dictionary<string, string> values, int fallback)
+        {
+            string text;
+            if (!values.TryGetValue("aspect", out text)) return fallback;
+            text = text.Trim();
+            int index;
+            if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out index))
+                return index >= 0 && index < AspectsBefore3To2.Length ? AspectsBefore3To2[index] : fallback;
+            int named = Array.FindIndex(AspectNames, name => string.Equals(name, text, StringComparison.OrdinalIgnoreCase));
+            return named >= 0 ? named : fallback;
         }
 
         private static int Choice(Dictionary<string, string> values, string key, int count, int fallback)

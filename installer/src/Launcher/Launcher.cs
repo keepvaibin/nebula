@@ -198,7 +198,7 @@ namespace Nebula.Launcher
                 { "startUtc", DateTime.UtcNow.ToString("o") }, { "pid", null }, { "monitoring", true },
                 { "recording", Recording.ToString() }, { "content", Content }, { "saves", start.EnvironmentVariables["GALAXY_NAND_ROOT"] },
                 { "app", App }, { "displayMode", graphics.DisplayMode }, { "window", graphics.WindowWidth + "x" + graphics.WindowHeight },
-                { "aspect", graphics.Aspect }, { "efbScale", graphics.MatchOutput ? 0 : graphics.EfbScale },
+                { "aspect", GraphicsSettings.AspectNames[graphics.Aspect] }, { "efbScale", graphics.MatchOutput ? 0 : graphics.EfbScale },
                 { "detailedRendererTimings", Recording == RecordingMode.Detailed },
                 { "launchFileSha256", launchFiles }, { "environment", launchEnvironment }
             };

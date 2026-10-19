@@ -85,7 +85,7 @@ namespace Nebula.Launcher
         static void WindowSizeCases()
         {
             Check(GraphicsSettings.AspectWindowSizes(0, 4000, 4000).Count == 0, "Auto aspect has no fixed window sizes");
-            int[,] ratios = { { 0, 0 }, { 4, 3 }, { 16, 10 }, { 16, 9 }, { 21, 9 }, { 32, 9 } };
+            int[,] ratios = { { 0, 0 }, { 4, 3 }, { 3, 2 }, { 16, 10 }, { 16, 9 }, { 21, 9 }, { 32, 9 } };
             for (int aspect = 1; aspect < GraphicsSettings.Aspects.Length; aspect++)
             {
                 var sizes = GraphicsSettings.AspectWindowSizes(aspect, 2600, 1400);
@@ -94,10 +94,10 @@ namespace Nebula.Launcher
                 Check(sizes.All(s => s.Width <= 2600 && s.Height <= 1400), GraphicsSettings.Aspects[aspect] + ": every size fits");
                 Check(sizes.Zip(sizes.Skip(1), (a, b) => a.Height < b.Height).All(x => x), GraphicsSettings.Aspects[aspect] + ": smallest first");
             }
-            var wide = GraphicsSettings.AspectWindowSizes(4, 2600, 1400);
+            var wide = GraphicsSettings.AspectWindowSizes(5, 2600, 1400);
             Check(wide[GraphicsSettings.SnapWindowSize(wide, new Size(1440, 1080))] == new Size(2520, 1080), "21:9 from 1440 x 1080 snaps to 2520 x 1080");
             Check(wide[GraphicsSettings.SnapWindowSize(wide, new Size(1280, 720))] == new Size(1680, 720), "21:9 from 1280 x 720 snaps to 1680 x 720");
-            var small = GraphicsSettings.AspectWindowSizes(4, 1900, 1000);
+            var small = GraphicsSettings.AspectWindowSizes(5, 1900, 1000);
             Check(small[GraphicsSettings.SnapWindowSize(small, new Size(1920, 1080))] == small[small.Count - 1], "a size taller than the screen allows snaps to the largest");
         }
 
@@ -276,6 +276,21 @@ namespace Nebula.Launcher
             File.Delete(config);
         }
 
+        // config.ini's aspect: a name, or an index of the list before 3:2.
+        static void AspectNameCases()
+        {
+            string config = GraphicsSettings.ConfigPath;
+            File.WriteAllText(config, "aspect=4\n");
+            Check(GraphicsSettings.Load().Aspect == 5, "a numeric aspect is an index of the list before 3:2 (4 is 21:9)");
+            File.WriteAllText(config, "aspect=3:2\n");
+            var graphics = GraphicsSettings.Load();
+            Check(graphics.Aspect == 2, "aspect=3:2 reads by name");
+            graphics.Aspect = 6;
+            graphics.Save();
+            Check(File.ReadAllText(config).Contains("aspect=32:9"), "the aspect saves by name");
+            File.Delete(config);
+        }
+
         static void SaveArchiveCases(string scratch)
         {
             string saves = NebulaPaths.Saves, parent = Path.GetDirectoryName(saves);
@@ -402,6 +417,7 @@ namespace Nebula.Launcher
                 WindowSizeCases();
                 GeneralCases();
                 SharedFileCases();
+                AspectNameCases();
                 SaveArchiveCases(outDir);
                 Application.EnableVisualStyles();
                 RecordingNoticeCases(outDir);

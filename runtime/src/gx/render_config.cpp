@@ -2,7 +2,9 @@
 #include "galaxy/atomic_file.h"
 
 #define WIN32_LEAN_AND_MEAN
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
 #include <Windows.h>
 #include <Shlobj.h>
 
@@ -107,6 +109,18 @@ static unsigned parse_choice(const char* v, const char* const (&names)[N], unsig
     if (index < N) return index;
     for (std::size_t i = 0; i < N; ++i) {
         if (_stricmp(v, names[i]) == 0) return static_cast<unsigned>(i);
+    }
+    return def;
+}
+
+// config.ini's aspect: a name (kAspectNames), or an index of the list before 3:2.
+static unsigned parse_aspect_mode(const char* v, unsigned def) {
+    static constexpr unsigned kBefore3To2[] = {0u, 1u, 3u, 4u, 5u, 6u};
+    if (v == nullptr || *v == '\0') return def;
+    const unsigned index = parse_uint(v, kAspectModeCount);
+    if (index < std::size(kBefore3To2)) return kBefore3To2[index];
+    for (unsigned i = 0; i < kAspectModeCount; ++i) {
+        if (_stricmp(v, kAspectNames[i]) == 0) return i;
     }
     return def;
 }
@@ -221,8 +235,7 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
     else if (std::strcmp(key, "fullscreen_height") == 0) cfg.fullscreen_height = std::min(parse_uint(val, 0u), 16384u);
     else if (std::strcmp(key, "fullscreen_refresh_hz") == 0) cfg.fullscreen_refresh_hz = std::min(parse_uint(val, 0u), 1000u);
     else if (std::strcmp(key, "aspect") == 0) {
-        static constexpr const char* kNames[] = {"auto", "4:3", "16:10", "16:9", "21:9", "32:9"};
-        cfg.aspect_mode = parse_choice(val, kNames, cfg.aspect_mode);
+        cfg.aspect_mode = parse_aspect_mode(val, cfg.aspect_mode);
     }
 }
 
@@ -631,7 +644,7 @@ bool save_render_config_to_file() {
              << "fullscreen_width=" << cfg.fullscreen_width << '\n'
              << "fullscreen_height=" << cfg.fullscreen_height << '\n'
              << "fullscreen_refresh_hz=" << cfg.fullscreen_refresh_hz << '\n'
-             << "aspect=" << cfg.aspect_mode << '\n';
+             << "aspect=" << kAspectNames[std::min(cfg.aspect_mode, kAspectModeCount - 1u)] << '\n';
     if (!contents) {
         return false;
     }
