@@ -62,30 +62,35 @@ public class GameActivity extends SDLActivity {
         };
     }
 
-    // The pipelines the whole game uses (assets/vk_seed_keys.bin) beside the pipeline cache, which builds them in the
-    // background from the first launch (PipelineCacheVk). Copied again after each app update.
+    // The pipelines the whole game uses and their precompiled shaders (assets/vk_seed_*.bin) beside the pipeline cache,
+    // which builds them in the background from the first launch and then deletes them, keeping only what this GPU
+    // uses (PipelineCacheVk). Installed once per app update.
     private void installPipelineSeed() {
-        final File dir = new File(GameFiles.data(this), "shadercache/RMGE01");
-        final File seed = new File(dir, "vk_seed_keys.bin");
+        final SharedPreferences prefs = getSharedPreferences("pipeline_seed", MODE_PRIVATE);
         try {
             final long installed = getPackageManager().getPackageInfo(getPackageName(), 0).lastUpdateTime;
-            if (seed.exists() && seed.lastModified() >= installed) {
+            if (prefs.getLong("installed_for", 0L) == installed) {
                 return;
             }
+            final File dir = new File(GameFiles.data(this), "shadercache/RMGE01");
             if (!dir.isDirectory() && !dir.mkdirs()) {
                 return;
             }
-            final File partial = new File(dir, "vk_seed_keys.bin.tmp");
-            try (InputStream in = getAssets().open("vk_seed_keys.bin");
-                 OutputStream out = new FileOutputStream(partial)) {
-                final byte[] buffer = new byte[1 << 16];
-                for (int read; (read = in.read(buffer)) > 0; ) {
-                    out.write(buffer, 0, read);
+            for (final String name : new String[] {"vk_seed_shaders.bin", "vk_seed_keys.bin"}) {
+                final File partial = new File(dir, name + ".tmp");
+                try (InputStream in = getAssets().open(name);
+                     OutputStream out = new FileOutputStream(partial)) {
+                    final byte[] buffer = new byte[1 << 16];
+                    for (int read; (read = in.read(buffer)) > 0; ) {
+                        out.write(buffer, 0, read);
+                    }
+                }
+                if (!partial.renameTo(new File(dir, name))) {
+                    partial.delete();
+                    return;
                 }
             }
-            if (!partial.renameTo(seed)) {
-                partial.delete();
-            }
+            prefs.edit().putLong("installed_for", installed).apply();
         } catch (Exception e) {
             Log.w(TAG, "pipeline seed not installed", e);
         }

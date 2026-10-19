@@ -17,6 +17,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <map>
 
 #if !defined(_WIN32)
 #include <sys/resource.h>
@@ -27,7 +28,8 @@ namespace galaxy::gx {
 
 namespace {
 
-// vk_shaders.bin: magic, version, then records of (u64 HLSL hash, u32 words, SPIR-V).
+// vk_shaders.bin: magic, version, then records of (u64 HLSL hash, u32 words, SPIR-V). vk_seed_shaders.bin
+// (build_shader_seed) has the same form.
 // vk_keys.bin: magic, version, then Entry records (the keys the shaders are generated from).
 // vk_pipelines.bin: the driver's VkPipelineCache data (it checks its own header).
 constexpr std::uint32_t kShaderFileMagic = 0x53565847u;  // "GXVS"
@@ -115,6 +117,21 @@ std::uint64_t module_hash(const std::string& hlsl, vk::ShaderStage stage, bool d
     hash = combine64(hash, static_cast<std::uint64_t>(stage));
     hash = combine64(hash, vk::kCompilerRevision);
     return combine64(hash, dual_source ? 1u : 0u);
+}
+
+std::vector<std::uint32_t> compile_module(const std::string& hlsl, vk::ShaderStage stage, bool dual_source,
+                                          std::string& error) {
+    return vk::compile_hlsl(vk::annotate(hlsl, vk::gx_draw_bindings()), stage, "main", {}, error, {false, dual_source});
+}
+
+std::string uber_ps_hlsl(unsigned variant) {
+    std::string ps;
+    ps.reserve(uber_ps_source().size() + 96u);
+    ps += uber_ps_variant_dual_source(variant) ? "#define UBER_DUAL_SRC 1\n" : "#define UBER_DUAL_SRC 0\n";
+    ps += uber_ps_variant_export_depth(variant) ? "#define UBER_EXPORT_DEPTH 1\n" : "#define UBER_EXPORT_DEPTH 0\n";
+    ps += uber_ps_variant_early_depth(variant) ? "#define UBER_EARLY_DEPTH 1\n" : "#define UBER_EARLY_DEPTH 0\n";
+    ps += uber_ps_source();
+    return ps;
 }
 
 VkBlendFactor gx_src_blend(std::uint32_t f) {
@@ -313,8 +330,9 @@ bool PipelineCacheVk::initialize(VkDevice device, const vk::GxLayout* layout, co
             enqueue(entry);
         }
     }
-    std::fprintf(stderr, "[pipeline-cache-vk] shaders=%zu keys=%zu workers=%u\n", spirv_.size(), entries_.size(),
-                 workers);
+    prewarm_enqueued_.store(true, std::memory_order_release);
+    std::fprintf(stderr, "[pipeline-cache-vk] shaders=%zu seed-shaders=%zu keys=%zu workers=%u\n", spirv_.size(),
+                 seed_index_.size(), entries_.size(), workers);
     return true;
 }
 
@@ -381,10 +399,23 @@ VkShaderModule PipelineCacheVk::module_for(const std::string& hlsl, vk::ShaderSt
         }
     }
     if (spirv.empty()) {
+        if (const auto it = seed_index_.find(hash); it != seed_index_.end()) {
+            spirv.resize(it->second.second);
+            std::ifstream in(seed_shaders_path_, std::ios::binary);
+            in.seekg(static_cast<std::streamoff>(it->second.first));
+            if (in.read(reinterpret_cast<char*>(spirv.data()),
+                        static_cast<std::streamsize>(spirv.size() * sizeof(std::uint32_t))) &&
+                spirv[0] == 0x07230203u) {
+                shaders_from_cache_.fetch_add(1u, std::memory_order_relaxed);
+            } else {
+                spirv.clear();
+            }
+        }
+    }
+    if (spirv.empty()) {
         const auto start = std::chrono::steady_clock::now();
         std::string error;
-        spirv = vk::compile_hlsl(vk::annotate(hlsl, vk::gx_draw_bindings()), stage, "main", {}, error,
-                                 {false, dual_source});
+        spirv = compile_module(hlsl, stage, dual_source, error);
         compile_us_.fetch_add(elapsed_us(start), std::memory_order_relaxed);
         shader_compiles_.fetch_add(1u, std::memory_order_relaxed);
         if (spirv.empty()) {
@@ -875,14 +906,8 @@ void PipelineCacheVk::compile_uber_shaders() noexcept {
         const std::string vs(uber_vs_source());
         uber_vs_ = module_for(vs, vk::ShaderStage::Vertex, false);
         for (unsigned variant = 0; variant < kUberPsVariants; ++variant) {
-            const bool dual = uber_ps_variant_dual_source(variant);
-            std::string ps;
-            ps.reserve(uber_ps_source().size() + 96u);
-            ps += dual ? "#define UBER_DUAL_SRC 1\n" : "#define UBER_DUAL_SRC 0\n";
-            ps += uber_ps_variant_export_depth(variant) ? "#define UBER_EXPORT_DEPTH 1\n" : "#define UBER_EXPORT_DEPTH 0\n";
-            ps += uber_ps_variant_early_depth(variant) ? "#define UBER_EARLY_DEPTH 1\n" : "#define UBER_EARLY_DEPTH 0\n";
-            ps += uber_ps_source();
-            uber_ps_[variant] = module_for(ps, vk::ShaderStage::Fragment, dual);
+            uber_ps_[variant] = module_for(uber_ps_hlsl(variant), vk::ShaderStage::Fragment,
+                                           uber_ps_variant_dual_source(variant));
         }
         if (layout_->geometry_shaders) {
             line_gs_ = module_for(std::string(ShaderGenerator::line_geometry_shader_source()),
@@ -903,6 +928,128 @@ void PipelineCacheVk::compile_uber_shaders() noexcept {
     } catch (...) {
         // Without the uber shaders every first use builds its specialised pipeline on the render thread.
     }
+}
+
+std::size_t PipelineCacheVk::build_shader_seed(const std::filesystem::path& keys, const std::filesystem::path& out,
+                                               unsigned threads, std::string& error) {
+    std::vector<Entry> entries;
+    {
+        std::ifstream in(keys, std::ios::binary);
+        std::uint32_t magic = 0, version = 0, count = 0;
+        if (!in || !read_pod(in, magic) || !read_pod(in, version) || !read_pod(in, count) || magic != kKeyFileMagic ||
+            version != kFileVersion || count > kMaxRecords) {
+            error = "not a key file of this build: " + keys.string();
+            return 0;
+        }
+        for (std::uint32_t i = 0; i < count; ++i) {
+            Entry entry;
+            if (!read_pod(in, entry)) {
+                break;
+            }
+            if (entry.key.vs_hash == entry.vs_key.hash() && entry.key.ps_hash == entry.ps_key.hash()) {
+                entries.push_back(entry);
+            }
+        }
+    }
+    struct Source {
+        std::string hlsl;
+        vk::ShaderStage stage;
+        bool dual_source;
+        std::vector<std::uint32_t> spirv;
+    };
+    std::map<std::uint64_t, Source> sources;  // ordered: the same keys make the same file
+    const auto add = [&](std::string hlsl, vk::ShaderStage stage, bool dual_source) {
+        const std::uint64_t hash = module_hash(hlsl, stage, dual_source);
+        sources.try_emplace(hash, Source{std::move(hlsl), stage, dual_source, {}});
+    };
+    // Every module module_for can be asked for with these keys on any Vulkan device: both TEV zero forms (DeviceQuirks
+    // and the fallback's flip), the point-size vertex shaders (no geometry shaders), the single-source form of a
+    // dual-source pixel shader (kCompatNoDualSource), diagnose_uber's simple pair, the uber and geometry shaders.
+    for (const bool zero_from_constant : {false, true}) {
+        ShaderGenOptions options;
+        options.scalar_byte_masks = true;
+        options.tev_zero_from_constant = zero_from_constant;
+        ShaderGenerator generator;
+        generator.set_options(options);
+        const auto add_pair = [&](const VertexShaderKey& vs_key, const PixelShaderKey& ps_key, bool points) {
+            std::string vs = generator.generate_vs(vs_key);
+            if (points) {
+                add(vk::with_point_size(vs), vk::ShaderStage::Vertex, false);
+            }
+            add(std::move(vs), vk::ShaderStage::Vertex, false);
+            const bool dual = (ps_key.flags & 0x80u) != 0u;
+            std::string ps = generator.generate_ps(ps_key);
+            if (dual) {
+                add(ps, vk::ShaderStage::Fragment, false);
+            }
+            add(std::move(ps), vk::ShaderStage::Fragment, dual);
+        };
+        for (const Entry& entry : entries) {
+            add_pair(entry.vs_key, entry.ps_key,
+                     entry.key.render_state.primitive_topology == gpu::kTopologyTypePointValue);
+        }
+        PixelShaderKey dual_key{};
+        dual_key.flags |= 0x80u;
+        add_pair(VertexShaderKey{}, PixelShaderKey{}, false);
+        add_pair(VertexShaderKey{}, dual_key, false);
+    }
+    add(std::string(uber_vs_source()), vk::ShaderStage::Vertex, false);
+    add(vk::with_point_size(std::string(uber_vs_source())), vk::ShaderStage::Vertex, false);
+    for (unsigned variant = 0; variant < kUberPsVariants; ++variant) {
+        const bool dual = uber_ps_variant_dual_source(variant);
+        add(uber_ps_hlsl(variant), vk::ShaderStage::Fragment, dual);
+        if (dual) {
+            add(uber_ps_hlsl(variant), vk::ShaderStage::Fragment, false);
+        }
+    }
+    add(std::string(ShaderGenerator::line_geometry_shader_source()), vk::ShaderStage::Geometry, false);
+    add(std::string(ShaderGenerator::point_geometry_shader_source()), vk::ShaderStage::Geometry, false);
+
+    std::vector<Source*> work;
+    work.reserve(sources.size());
+    for (auto& [hash, source] : sources) {
+        work.push_back(&source);
+    }
+    std::atomic<std::size_t> next{0};
+    std::mutex error_mutex;
+    const auto compile_all = [&] {
+        for (std::size_t i; (i = next.fetch_add(1u, std::memory_order_relaxed)) < work.size();) {
+            std::string failure;
+            work[i]->spirv = compile_module(work[i]->hlsl, work[i]->stage, work[i]->dual_source, failure);
+            if (work[i]->spirv.empty()) {
+                std::lock_guard<std::mutex> lock(error_mutex);
+                error += failure + "\n";
+            }
+        }
+    };
+    std::vector<std::thread> pool;
+    for (unsigned t = 1; t < std::max(threads, 1u); ++t) {
+        pool.emplace_back(compile_all);
+    }
+    compile_all();
+    for (std::thread& thread : pool) {
+        thread.join();
+    }
+    if (!error.empty()) {
+        return 0;
+    }
+    const auto count = static_cast<std::uint32_t>(std::min<std::size_t>(sources.size(), kMaxRecords));
+    replace_file(out, [&](std::ofstream& file) {
+        write_pod(file, kShaderFileMagic);
+        write_pod(file, kFileVersion);
+        write_pod(file, count);
+        std::uint32_t written = 0;
+        for (const auto& [hash, source] : sources) {
+            if (written++ == count) {
+                break;
+            }
+            write_pod(file, hash);
+            write_pod(file, static_cast<std::uint32_t>(source.spirv.size()));
+            file.write(reinterpret_cast<const char*>(source.spirv.data()),
+                       static_cast<std::streamsize>(source.spirv.size() * sizeof(std::uint32_t)));
+        }
+    });
+    return count;
 }
 
 void PipelineCacheVk::diagnose_uber(const RenderStateKey& render_state, unsigned variant) {
@@ -1102,6 +1249,12 @@ void PipelineCacheVk::worker_main() {
         const VkPipeline pipeline = build(entry);
         std::lock_guard<std::mutex> lock(jobs_mutex_);
         completions_.push_back({entry.key, pipeline});
+        // Every seeded pipeline built: their modules are in vk_shaders.bin at the next save (this device's forms only),
+        // which then deletes the seeds (the app installs them again with its next update).
+        if (jobs_.empty() && !seed_index_.empty() && prewarm_enqueued_.load(std::memory_order_acquire) &&
+            !seed_drained_.exchange(true, std::memory_order_acq_rel)) {
+            unsaved_.store(true, std::memory_order_release);
+        }
     }
 }
 
@@ -1239,6 +1392,27 @@ void PipelineCacheVk::load_disk() {
         }
         entries_on_disk_ = entries_.size();
     }
+    // Their SPIR-V for every device (build_shader_seed), indexed here and read as modules are made.
+    {
+        seed_shaders_path_ = cache_dir_ / "vk_seed_shaders.bin";
+        std::ifstream in(seed_shaders_path_, std::ios::binary);
+        std::uint32_t magic = 0, version = 0, count = 0;
+        if (in && read_pod(in, magic) && read_pod(in, version) && read_pod(in, count) && magic == kShaderFileMagic &&
+            version == kFileVersion && count <= kMaxRecords) {
+            for (std::uint32_t i = 0; i < count; ++i) {
+                std::uint64_t hash = 0;
+                std::uint32_t words = 0;
+                if (!read_pod(in, hash) || !read_pod(in, words) || words == 0u || words > kMaxSpirvWords) {
+                    break;
+                }
+                const auto offset = static_cast<std::uint64_t>(in.tellg());
+                if (!in.seekg(static_cast<std::streamoff>(words) * 4, std::ios::cur)) {
+                    break;
+                }
+                seed_index_.emplace(hash, std::make_pair(offset, words));
+            }
+        }
+    }
     // The pipelines the whole game uses (captured on a PC over every galaxy; the Android app installs the file): built
     // by the workers from the first launch, in the order the game first needs them.
     {
@@ -1301,8 +1475,9 @@ void PipelineCacheVk::save_disk() noexcept {
             entries = entries_;
         }
         unsaved_.store(false, std::memory_order_release);
+        const bool seed_drained = seed_drained_.load(std::memory_order_acquire);
         const auto count = static_cast<std::uint32_t>(std::min<std::size_t>(spirv.size(), kMaxRecords));
-        replace_file(cache_dir_ / "vk_shaders.bin", [&](std::ofstream& out) {
+        const bool shaders_saved = replace_file(cache_dir_ / "vk_shaders.bin", [&](std::ofstream& out) {
             write_pod(out, kShaderFileMagic);
             write_pod(out, kFileVersion);
             write_pod(out, count);
@@ -1318,7 +1493,7 @@ void PipelineCacheVk::save_disk() noexcept {
             }
         });
         const auto key_count = static_cast<std::uint32_t>(std::min<std::size_t>(entries.size(), kMaxRecords));
-        replace_file(cache_dir_ / "vk_keys.bin", [&](std::ofstream& out) {
+        const bool keys_saved = replace_file(cache_dir_ / "vk_keys.bin", [&](std::ofstream& out) {
             write_pod(out, kKeyFileMagic);
             write_pod(out, kFileVersion);
             write_pod(out, key_count);
@@ -1336,6 +1511,11 @@ void PipelineCacheVk::save_disk() noexcept {
                     });
                 }
             }
+        }
+        if (seed_drained && shaders_saved && keys_saved) {
+            std::error_code ignored;
+            std::filesystem::remove(cache_dir_ / "vk_seed_shaders.bin", ignored);
+            std::filesystem::remove(cache_dir_ / "vk_seed_keys.bin", ignored);
         }
         spirv_on_disk_ = count;
         entries_on_disk_ = key_count;

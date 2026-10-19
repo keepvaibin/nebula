@@ -51,6 +51,12 @@ public:
 
     bool initialize(VkDevice device, const vk::GxLayout* layout, const std::filesystem::path& cache_dir,
                     unsigned worker_count);
+
+    // The SPIR-V of every module the keys of a vk_keys.bin can use on any Vulkan device, in vk_shaders.bin's form, as
+    // `out`. Shipped as vk_seed_shaders.bin beside the seed keys, so a device compiles no HLSL for them. No device
+    // needed. Returns the modules written (0: `error` says why).
+    static std::size_t build_shader_seed(const std::filesystem::path& keys, const std::filesystem::path& out,
+                                         unsigned threads, std::string& error);
     void shutdown();  // joins the workers, saves the caches
 
     // Render thread only.
@@ -169,6 +175,11 @@ private:
     std::unordered_map<VkShaderModule, std::uint32_t> input_masks_;
     std::unordered_map<std::uint64_t, std::vector<std::uint32_t>> spirv_;
     std::size_t spirv_on_disk_ = 0;
+    // vk_seed_shaders.bin: by hash, the record's file offset and words (read when its module is made).
+    std::filesystem::path seed_shaders_path_;
+    std::unordered_map<std::uint64_t, std::pair<std::uint64_t, std::uint32_t>> seed_index_;
+    std::atomic<bool> prewarm_enqueued_{false};
+    std::atomic<bool> seed_drained_{false};  // every seeded pipeline built: save_disk deletes the seeds
 
     // Uber shaders: built on their own thread at start (with GALAXY_GX_UBER=force, before initialize returns).
     enum class UberMode { Hybrid, Force, Off };
