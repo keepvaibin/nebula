@@ -696,6 +696,7 @@ add_library(galaxy_gx STATIC
     runtime/src/gx/fifo_parser.cpp
     runtime/src/gx/gx_backend.cpp
     runtime/src/frame_telemetry.cpp
+    runtime/src/perf_hint.cpp
     runtime/src/gx/game_asset_extract.cpp
 )
 # AMD FidelityFX FSR 3.1 (MIT): the FidelityFX SDK 1.1.4 `sdk` directory
@@ -1362,6 +1363,7 @@ if(NEBULA_VULKAN)
         runtime/src/gx/fifo_parser.cpp
         runtime/src/gx/gx_backend.cpp
         runtime/src/frame_telemetry.cpp
+        runtime/src/perf_hint.cpp
         runtime/src/gx/game_asset_extract.cpp
         runtime/src/gx/vk/vk_context.cpp
         runtime/src/gx/vk/device_quirks_vk.cpp

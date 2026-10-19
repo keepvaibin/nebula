@@ -54,5 +54,15 @@ Uninstalling asks whether to keep this data (`hasFragileUserData`).
   the picture into it, so the compositor does no rotation of its own.
 - Every GPU and driver: docs/VULKAN.md, "Driver compatibility". Before a release, `vk_profile_matrix.sh` runs every
   Android GPU profile under validation on the PC.
-- The surface asks for 60 frames a second (`ANativeWindow_setFrameRate`), so a variable-rate display shows each
-  frame for the same time.
+- The surface asks for 60 frames a second (`ANativeWindow_setFrameRate`), and the game's retrace follows the
+  display's own vsync (Choreographer; every second one at 120 Hz, `display_clock.cpp`), so frames never drift against
+  the display and each stays on screen for the same time. The host's clock takes over when the display gives no vsync
+  or runs at a rate 60 does not divide.
+- The game and GX render threads are a performance-hint session (ADPF, Android 13+): each frame's work (the busier
+  thread's CPU time) is reported against 16.7 ms, so the CPU clocks rise before a frame runs late.
+- The log reports every 10 s: `[pacing]` (retraces on the display's vsync, frame work), `[vk-cpu]` (the render
+  thread's CPU and the driver calls' share), `[host-events]` (the main thread).
+- Profiling over adb: the app is `profileable` (simpleperf, Android Studio), and
+  `adb shell setprop debug.nebula.profile <seconds>` makes the next launch sample its busy threads that many seconds
+  in and log where they are (`thread_sampler.cpp`; offsets for `llvm-symbolizer` with the build's unstripped
+  libraries).

@@ -76,6 +76,11 @@ foreach ($abi in $Abis -split ",") {
         "$Work\cargo\$triple\release\libnebula_import.so" $dest -Force
 }
 
+# The pipelines the whole game uses (platform/android/vk_seed_keys.bin, captured by the PC's galaxy tour):
+# GameActivity installs it beside the pipeline cache, which builds them from the first launch.
+New-Item -ItemType Directory -Force (Join-Path $Work "assets") | Out-Null
+Copy-Item (Join-Path $root "platform\android\vk_seed_keys.bin") (Join-Path $Work "assets\vk_seed_keys.bin") -Force
+
 # The license texts the About screen opens (assets/licenses; the list is app/src/main/kotlin/.../Licenses.kt).
 $licenses = Join-Path $Work "assets\licenses"
 New-Item -ItemType Directory -Force $licenses | Out-Null

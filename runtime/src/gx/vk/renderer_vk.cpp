@@ -1021,7 +1021,9 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
         info.swapchainCount = 1;
         info.pSwapchains = &swapchain_.handle;
         info.pImageIndices = &swap_image_;
+        const std::int64_t present_cpu = vk::thread_cpu_ns();
         const VkResult result = vkQueuePresentKHR(context.queue(), &info);
+        vk::note_driver_cpu(vk::DriverCall::Present, vk::thread_cpu_ns() - present_cpu);
         surface_lock_ = {};
         if (result == VK_ERROR_OUT_OF_DATE_KHR || (result == VK_SUBOPTIMAL_KHR && surface_changed())) {
             swapchain_dirty_ = true;
@@ -1062,6 +1064,24 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
     surface_lock_ = {};  // an image acquired but not presented
     swap_image_ = UINT32_MAX;
     ++frame_index_;
+    // Every 600 frames (Linux, Android): the render thread's CPU time and how much of it the driver's calls took.
+    if (frame_index_ % 600u == 0u) {
+        static std::int64_t last_cpu = 0;
+        static auto last_time = std::chrono::steady_clock::now();
+        const std::int64_t cpu = vk::thread_cpu_ns();
+        const auto now = std::chrono::steady_clock::now();
+        const double seconds = std::chrono::duration<double>(now - last_time).count();
+        const auto driver = vk::take_driver_cpu();
+        if (cpu != 0 && last_cpu != 0 && seconds > 0.0) {
+            const auto per_second = [&](std::int64_t ns) { return static_cast<double>(ns) / 1e6 / seconds; };
+            std::fprintf(stderr, "[vk-cpu] render thread %.1f ms/s; in the driver: acquire %.1f, present %.1f, submit %.1f, "
+                         "fence waits %.1f, fence polls %.1f ms/s\n", per_second(cpu - last_cpu),
+                         per_second(driver[0]), per_second(driver[1]), per_second(driver[2]), per_second(driver[3]),
+                         per_second(driver[4]));
+        }
+        last_cpu = cpu;
+        last_time = now;
+    }
     return fence;
 }
 
@@ -1254,8 +1274,10 @@ bool RendererVk::present(const XfbTexture* source, bool capture_backbuffer) {
     std::uint32_t image = 0;
     // A second at most: an image the presentation engine never returns (a surface going away) skips the frame.
     constexpr std::uint64_t kAcquireTimeoutNs = 1'000'000'000ull;
+    const std::int64_t acquire_cpu = vk::thread_cpu_ns();
     VkResult result = vkAcquireNextImageKHR(context.device(), swapchain_.handle, kAcquireTimeoutNs, frame.acquired,
                                             VK_NULL_HANDLE, &image);
+    vk::note_driver_cpu(vk::DriverCall::Acquire, vk::thread_cpu_ns() - acquire_cpu);
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_ERROR_SURFACE_LOST_KHR || result == VK_TIMEOUT ||
         result == VK_NOT_READY) {
         swapchain_dirty_ = true;

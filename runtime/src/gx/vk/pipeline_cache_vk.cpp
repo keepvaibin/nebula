@@ -4,6 +4,7 @@
 #include "galaxy/gx/vk/pipeline_cache_vk.h"
 
 #include "galaxy/gx/host_window.h"
+#include "galaxy/windows_power.h"
 #include "galaxy/gx/vk/shader_compile_vk.h"
 #include "galaxy/gx/vk/vk_context.h"
 #include "galaxy/gx/vertex_loader.h"
@@ -16,6 +17,11 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+
+#if !defined(_WIN32)
+#include <sys/resource.h>
+#include <unistd.h>
+#endif
 
 namespace galaxy::gx {
 
@@ -741,6 +747,8 @@ void PipelineCacheVk::load_compat() {
             crashed_keys_.insert(value);
         } else if (name == "uber-crashed") {
             crashed_uber_.insert(value);
+        } else if (name == "uber-refused") {
+            uber_refused_.store(static_cast<std::uint32_t>(value), std::memory_order_release);
         }
     }
 }
@@ -750,6 +758,7 @@ void PipelineCacheVk::save_compat() {
     out << "nebula-vk-compat 1\ndriver " << driver_key_ << "\n" << std::hex;
     out << "compat " << device_compat_.load(std::memory_order_acquire) << "\n";
     out << "generator " << generator_bits_.load(std::memory_order_acquire) << "\n";
+    out << "uber-refused " << uber_refused_.load(std::memory_order_acquire) << "\n";
     {
         std::lock_guard<std::mutex> lock(compat_mutex_);
         for (const std::uint64_t key : refused_keys_) out << "refused " << key << "\n";
@@ -885,13 +894,42 @@ void PipelineCacheVk::compile_uber_shaders() noexcept {
             std::all_of(uber_ps_.begin(), uber_ps_.end(), [](VkShaderModule m) { return m != VK_NULL_HANDLE; });
         std::fprintf(stderr, "[uber-pipeline-vk] %s in %llu ms\n", complete ? "shaders ready" : "shader compile failed",
                      static_cast<unsigned long long>(elapsed_us(start) / 1000u));
-        uber_ready_.store(complete, std::memory_order_release);
+        // A new driver build's self-test before any stand-in is used: a variant the driver refuses is then never tried
+        // on the render thread (each refusal costs the driver's compile and the fallbacks', a stall per render state).
         if (complete && !compat_known_) {
             self_test();
         }
+        uber_ready_.store(complete, std::memory_order_release);
     } catch (...) {
         // Without the uber shaders every first use builds its specialised pipeline on the render thread.
     }
+}
+
+void PipelineCacheVk::diagnose_uber(const RenderStateKey& render_state, unsigned variant) {
+    // The simplest specialised shaders (default keys) with each uber shader: the half that still fails is the culprit.
+    const ShaderGenerator generator = generator_for(generator_bits_.load(std::memory_order_acquire));
+    const bool dual = uber_ps_variant_dual_source(variant);
+    const bool export_depth = uber_ps_variant_export_depth(variant);
+    const VkShaderModule simple_vs = module_for(generator.generate_vs(VertexShaderKey{}), vk::ShaderStage::Vertex, false);
+    PixelShaderKey ps_key{};
+    if (dual) {
+        ps_key.flags |= 0x80u;
+    }
+    const VkShaderModule simple_ps = module_for(generator.generate_ps(ps_key), vk::ShaderStage::Fragment, dual);
+    VkResult uber_vs_result = VK_SUCCESS;
+    VkResult uber_ps_result = VK_SUCCESS;
+    const std::uint32_t compat = device_compat_.load(std::memory_order_acquire);
+    if (const VkPipeline p = create_pipeline(render_state, uber_vs_, simple_ps, dual, false, compat, uber_vs_result)) {
+        vkDestroyPipeline(device_, p, nullptr);
+    }
+    if (const VkPipeline p =
+            create_pipeline(render_state, simple_vs, uber_ps_[variant], dual, export_depth, compat, uber_ps_result)) {
+        vkDestroyPipeline(device_, p, nullptr);
+    }
+    std::fprintf(stderr, "[vk-compat] uber variant %u diagnosis: uber VS with a simple PS %s (%d); a simple VS with the "
+                 "uber PS %s (%d)\n", variant, uber_vs_result == VK_SUCCESS ? "accepted" : "refused",
+                 static_cast<int>(uber_vs_result), uber_ps_result == VK_SUCCESS ? "accepted" : "refused",
+                 static_cast<int>(uber_ps_result));
 }
 
 // A new driver build's first launch: the uber pipeline of every pixel-shader variant, and of each optional feature,
@@ -946,6 +984,10 @@ void PipelineCacheVk::self_test() {
         if (pipeline != VK_NULL_HANDLE) {
             ++accepted;
             vkDestroyPipeline(device_, pipeline, nullptr);
+        } else if (render_state == opaque) {
+            // The variant's shaders themselves: never used for a stand-in on this driver, and which of them fails.
+            uber_refused_.fetch_or(1u << variant, std::memory_order_acq_rel);
+            diagnose_uber(render_state, variant);
         }
     }
     std::fprintf(stderr, "[vk-compat] self-test: %u of %zu pipelines accepted in %llu ms, without 0x%x\n", accepted,
@@ -964,6 +1006,10 @@ VkPipeline PipelineCacheVk::uber_pipeline(const RenderStateKey& render_state, un
         return it->second;
     }
     const std::uint64_t hash = uber_hash(key.render_state, variant);
+    if ((uber_refused_.load(std::memory_order_acquire) & (1u << variant)) != 0u) {
+        uber_pipelines_.emplace(key, VK_NULL_HANDLE);
+        return VK_NULL_HANDLE;
+    }
     {
         std::lock_guard<std::mutex> lock(compat_mutex_);
         if (crashed_uber_.contains(hash)) {
@@ -973,6 +1019,7 @@ VkPipeline PipelineCacheVk::uber_pipeline(const RenderStateKey& render_state, un
     }
     const vk::CompileJournal::Guard marked(journal_, kJournalUber, hash);
     const bool export_depth = uber_ps_variant_export_depth(variant);
+    bool transient = false;
     char what[40];
     std::snprintf(what, sizeof(what), "uber pipeline %u", variant);
     const VkPipeline pipeline = with_fallbacks(
@@ -984,9 +1031,32 @@ VkPipeline PipelineCacheVk::uber_pipeline(const RenderStateKey& render_state, un
                                    export_depth, compat, result);
         },
         applicable_compat(key.render_state, uber_ps_variant_dual_source(variant), export_depth), what,
-        describe_render_state(key.render_state));
-    uber_pipelines_.emplace(key, pipeline);  // a refused one stays refused
+        describe_render_state(key.render_state), &transient);
+    if (pipeline == VK_NULL_HANDLE && !transient) {
+        // Accepted in no form: the variant's shaders themselves (every render state fails alike).
+        uber_refused_.fetch_or(1u << variant, std::memory_order_acq_rel);
+        std::fprintf(stderr, "[vk-compat] uber variant %u refused: its draws are built specialised when first drawn\n",
+                     variant);
+        save_compat();
+    }
+    if (!transient) {
+        uber_pipelines_.emplace(key, pipeline);  // a refused one stays refused
+    }
     return pipeline;
+}
+
+bool PipelineCacheVk::uber_usable(const PixelShaderKey& ps_key) const noexcept {
+    return (uber_refused_.load(std::memory_order_acquire) & (1u << uber_ps_variant(ps_key))) == 0u;
+}
+
+bool PipelineCacheVk::unqueue(const PsoKey& key) {
+    std::lock_guard<std::mutex> lock(jobs_mutex_);
+    const auto it = std::find_if(jobs_.begin(), jobs_.end(), [&](const Entry& job) { return job.key == key; });
+    if (it == jobs_.end()) {
+        return false;
+    }
+    jobs_.erase(it);
+    return true;
 }
 
 VkPipeline PipelineCacheVk::stand_in(const PsoKey& key, const PixelShaderKey& ps_key) {
@@ -1013,6 +1083,11 @@ void PipelineCacheVk::enqueue(const Entry& entry) {
 }
 
 void PipelineCacheVk::worker_main() {
+    galaxy::host::name_current_thread(L"Nebula PSO Build");
+#if !defined(_WIN32)
+    // Below the game and render threads: background builds never take a frame's CPU time.
+    (void)setpriority(PRIO_PROCESS, static_cast<id_t>(gettid()), 10);
+#endif
     for (;;) {
         Entry entry;
         {
@@ -1069,31 +1144,37 @@ VkPipeline PipelineCacheVk::get(const PsoKey& key, const PixelShaderKey& ps_key,
             published_[key] = VK_NULL_HANDLE;
             return stand_in(key, ps_key);
         }
-        if (!uber_ready_.load(std::memory_order_acquire)) {
-            // No stand-in yet: build it here.
-            const VkPipeline pipeline = build(entry);
-            published_[key] = pipeline;
-            if (pipeline != VK_NULL_HANDLE) {
-                memo_key_ = key;
-                memo_pipeline_ = pipeline;
-                return pipeline;
+        if (uber_ready_.load(std::memory_order_acquire) && uber_usable(ps_key)) {
+            // The uber pipeline draws it while a worker builds its own.
+            in_flight_.insert(key);
+            enqueue(entry);
+            if (const VkPipeline uber = stand_in(key, ps_key); uber != VK_NULL_HANDLE) {
+                return uber;
             }
-            return stand_in(key, ps_key);
         }
-        in_flight_.insert(key);
-        enqueue(entry);
-    }
-    if (!uber_ready_.load(std::memory_order_acquire)) {
-        // A prewarm job queued before the uber shaders exist: build it here too (drain_completions keeps one).
+    } else {
         drain_completions();
-        if (const auto it = published_.find(key); it != published_.end()) {
-            return it->second != VK_NULL_HANDLE ? it->second : stand_in(key, ps_key);
+        if (const auto it = published_.find(key); it != published_.end() && it->second != VK_NULL_HANDLE) {
+            return it->second;
         }
-        const VkPipeline pipeline = build(Entry{key, vs_key, ps_key});
-        published_[key] = pipeline;
-        return pipeline != VK_NULL_HANDLE ? pipeline : stand_in(key, ps_key);
+        if (uber_ready_.load(std::memory_order_acquire) && uber_usable(ps_key)) {
+            if (const VkPipeline uber = stand_in(key, ps_key); uber != VK_NULL_HANDLE) {
+                return uber;
+            }
+        }
     }
-    return stand_in(key, ps_key);
+    // Nothing draws it yet (the uber shaders still compiling, or refused by this driver): its own pipeline is built
+    // here, now, rather than the draw dropped; a queued prewarm job for it is taken back.
+    if (unqueue(key)) {
+        in_flight_.erase(key);
+    }
+    const VkPipeline pipeline = build(Entry{key, vs_key, ps_key});
+    published_[key] = pipeline;
+    if (pipeline != VK_NULL_HANDLE) {
+        memo_key_ = key;
+        memo_pipeline_ = pipeline;
+    }
+    return pipeline;
 }
 
 void PipelineCacheVk::drain_completions() {
@@ -1157,6 +1238,30 @@ void PipelineCacheVk::load_disk() {
             }
         }
         entries_on_disk_ = entries_.size();
+    }
+    // The pipelines the whole game uses (captured on a PC over every galaxy; the Android app installs the file): built
+    // by the workers from the first launch, in the order the game first needs them.
+    {
+        std::ifstream in(cache_dir_ / "vk_seed_keys.bin", std::ios::binary);
+        std::uint32_t magic = 0, version = 0, count = 0;
+        std::size_t seeded = 0;
+        if (in && read_pod(in, magic) && read_pod(in, version) && read_pod(in, count) && magic == kKeyFileMagic &&
+            version == kFileVersion && count <= kMaxRecords) {
+            for (std::uint32_t i = 0; i < count; ++i) {
+                Entry entry;
+                if (!read_pod(in, entry)) {
+                    break;
+                }
+                if (entry.key.vs_hash != entry.vs_key.hash() || entry.key.ps_hash != entry.ps_key.hash()) {
+                    continue;
+                }
+                if (entry_keys_.insert(entry.key).second) {
+                    entries_.push_back(entry);
+                    ++seeded;
+                }
+            }
+            std::fprintf(stderr, "[pipeline-cache-vk] %zu seed keys added (%u in the seed)\n", seeded, count);
+        }
     }
     std::vector<char> data;
     {

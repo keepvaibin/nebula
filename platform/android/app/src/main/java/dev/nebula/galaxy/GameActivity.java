@@ -18,6 +18,11 @@ import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
+
 import org.libsdl.app.SDLActivity;
 import org.libsdl.app.SDLSurface;
 
@@ -57,6 +62,35 @@ public class GameActivity extends SDLActivity {
         };
     }
 
+    // The pipelines the whole game uses (assets/vk_seed_keys.bin) beside the pipeline cache, which builds them in the
+    // background from the first launch (PipelineCacheVk). Copied again after each app update.
+    private void installPipelineSeed() {
+        final File dir = new File(GameFiles.data(this), "shadercache/RMGE01");
+        final File seed = new File(dir, "vk_seed_keys.bin");
+        try {
+            final long installed = getPackageManager().getPackageInfo(getPackageName(), 0).lastUpdateTime;
+            if (seed.exists() && seed.lastModified() >= installed) {
+                return;
+            }
+            if (!dir.isDirectory() && !dir.mkdirs()) {
+                return;
+            }
+            final File partial = new File(dir, "vk_seed_keys.bin.tmp");
+            try (InputStream in = getAssets().open("vk_seed_keys.bin");
+                 OutputStream out = new FileOutputStream(partial)) {
+                final byte[] buffer = new byte[1 << 16];
+                for (int read; (read = in.read(buffer)) > 0; ) {
+                    out.write(buffer, 0, read);
+                }
+            }
+            if (!partial.renameTo(seed)) {
+                partial.delete();
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "pipeline seed not installed", e);
+        }
+    }
+
     @Override
     protected SDLSurface createSDLSurface(Context context) {
         return new GameSurface(context);
@@ -71,6 +105,7 @@ public class GameActivity extends SDLActivity {
             Log.e(TAG, "NEBULA_DATA_DIR not set", e);
         }
         GameFiles.lastError(this).delete();
+        installPipelineSeed();
         super.onCreate(savedInstanceState);
         if (mBrokenLibraries || mLayout == null) {
             return;

@@ -73,6 +73,7 @@ add_library(galaxy_gx_vk STATIC
     ${rt}/gx/fifo_parser.cpp
     ${rt}/gx/gx_backend.cpp
     ${rt}/frame_telemetry.cpp
+    ${rt}/perf_hint.cpp
     ${rt}/gx/game_asset_extract.cpp
     ${rt}/gx/vk/vk_context.cpp
     ${rt}/gx/vk/device_quirks_vk.cpp
@@ -114,6 +115,8 @@ set(host_sources
     "${nebula_root}/native/host/host_main.cpp"
     "${nebula_root}/runtime/src/native_thp_video.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/host_window_sdl.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/display_clock.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/thread_sampler.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/native_game_host_sdl.cpp")
 if(ANDROID)
     add_library(main SHARED ${host_sources})

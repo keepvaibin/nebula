@@ -23,6 +23,7 @@
 #endif
 #include "galaxy/platform_time.h"
 #include "galaxy/platform_paths.h"
+#include "galaxy/perf_hint.h"
 
 #include "galaxy/gx/gx_backend.h"
 #include "galaxy/gx/dependency_draw_memo.h"
@@ -7013,6 +7014,7 @@ void GxBackend::present_cached_xfb(
 // frames are drained before a stop so the last presents land.
 void GxBackend::render_thread_main() {
     galaxy::host::name_current_thread(L"Nebula GX Render");
+    galaxy::host::perf_hint_add_current_thread();
 #if defined(_WIN32)
     SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
 #endif

@@ -7,6 +7,7 @@
 
 #include "galaxy/gx/display_modes.h"
 #include "galaxy/gx/host_window.h"
+#include "galaxy/gx/vk/vk_context.h"
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx_d3d12.h"
 #include "galaxy/native_host.h"
@@ -383,7 +384,40 @@ void run_requests() {
 
 void pump_events(int timeout_ms) noexcept {
     SDL_Event event;
+    // Every 10 s: this thread's CPU time and how much SDL's event wait took (a wait that polls rather than sleeps).
+    static std::int64_t report_cpu = 0;
+    static std::int64_t wait_cpu = 0;
+    static std::uint32_t waits = 0;
+    static auto report_time = std::chrono::steady_clock::now();
+    const std::int64_t wait_start = galaxy::gx::vk::thread_cpu_ns();
+#if defined(__ANDROID__)
+    // SDL's timed event wait polls without sleeping on Android (98% of a core, measured): the events are pumped here
+    // and the thread sleeps between pumps.
+    SDL_PumpEvents();
+    bool any = SDL_PollEvent(&event);
+    if (!any && timeout_ms > 0) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(timeout_ms));
+        SDL_PumpEvents();
+        any = SDL_PollEvent(&event);
+    }
+#else
     bool any = SDL_WaitEventTimeout(&event, timeout_ms);
+#endif
+    wait_cpu += galaxy::gx::vk::thread_cpu_ns() - wait_start;
+    ++waits;
+    if (const auto now = std::chrono::steady_clock::now(); now - report_time >= std::chrono::seconds(10)) {
+        const std::int64_t cpu = galaxy::gx::vk::thread_cpu_ns();
+        const double seconds = std::chrono::duration<double>(now - report_time).count();
+        if (report_cpu != 0) {
+            std::fprintf(stderr, "[host-events] %u waits; main thread %.1f ms/s, %.1f ms/s of it in the event wait\n",
+                         waits, static_cast<double>(cpu - report_cpu) / 1e6 / seconds,
+                         static_cast<double>(wait_cpu) / 1e6 / seconds);
+        }
+        report_cpu = cpu;
+        report_time = now;
+        wait_cpu = 0;
+        waits = 0;
+    }
     {
     std::lock_guard<std::mutex> lock(g_input_mutex);
     while (any) {

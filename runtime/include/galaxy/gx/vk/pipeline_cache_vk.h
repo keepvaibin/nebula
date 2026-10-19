@@ -143,6 +143,12 @@ private:
     [[nodiscard]] VkPipeline uber_pipeline(const RenderStateKey& render_state, unsigned variant);
     // The uber pipeline drawing a key whose own pipeline is missing (refused, or still building).
     [[nodiscard]] VkPipeline stand_in(const PsoKey& key, const PixelShaderKey& ps_key);
+    // The uber pixel-shader variant this key draws with links on this driver (uber_refused_).
+    [[nodiscard]] bool uber_usable(const PixelShaderKey& ps_key) const noexcept;
+    // Takes a queued job for `key` off the workers' queue (it is built elsewhere); false when none was queued.
+    bool unqueue(const PsoKey& key);
+    // The self-test's look at a refused uber variant: which of its two shaders the driver rejects.
+    void diagnose_uber(const RenderStateKey& render_state, unsigned variant);
     void compile_uber_shaders() noexcept;
     void self_test();
     void worker_main();
@@ -212,6 +218,9 @@ private:
     std::unordered_set<std::uint64_t> refused_keys_;
     std::unordered_set<std::uint64_t> crashed_keys_;
     std::unordered_set<std::uint64_t> crashed_uber_;
+    // Uber pixel-shader variants (bit n: variant n) the driver accepts in no form: their keys are built specialised,
+    // at once, when nothing has built them yet (Adreno 840 512.842: "Failed to link shaders").
+    std::atomic<std::uint32_t> uber_refused_{0};
     vk::CompileJournal journal_;
     std::string driver_key_;
     bool compat_known_ = false;  // vk_compat.txt was this driver build's

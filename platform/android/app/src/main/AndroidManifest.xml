@@ -28,6 +28,9 @@
         android:enableOnBackInvokedCallback="false"
         android:hardwareAccelerated="true">
 
+        <!-- Profilers (simpleperf, Android Studio) may sample a release build over adb: the shell user only. -->
+        <profileable android:shell="true" />
+
         <!-- The launcher: setup, play, settings. Standard launch mode: the app's icon brings back a running game
              rather than clearing it. -->
         <activity

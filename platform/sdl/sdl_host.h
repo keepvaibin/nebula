@@ -22,6 +22,18 @@ void pump_events(int timeout_ms) noexcept;
 // The app is out of sight (Android: the activity stopped); the host stops the game's clocks meanwhile.
 [[nodiscard]] bool in_background() noexcept;
 
+// The display's vsync as the game's retrace clock (Android: Choreographer, display_clock.cpp): waits for the vsync
+// nearest `period_ns` after `last_ns` (steady-clock nanoseconds, CLOCK_MONOTONIC; updated), so every frame stays on
+// screen for the same number of vsyncs. False when none comes by `deadline_ns` (out of sight, not yet shown), the
+// display's rate does not divide the period, or the platform has no display clock: the host's own clock runs the
+// retrace then.
+bool wait_display_retrace(std::int64_t period_ns, std::int64_t& last_ns, std::int64_t deadline_ns) noexcept;
+// The display's refresh rate as its vsyncs measure it (0: not known).
+[[nodiscard]] double display_refresh_hz() noexcept;
+// Android, when `adb shell setprop debug.nebula.profile <seconds>` asks: that many seconds on, the GX, host-main and
+// game threads' instruction pointers are sampled for 2 s each and the busiest places logged (thread_sampler.cpp).
+void start_thread_sampler() noexcept;
+
 // The on-screen controls (Android: the activity's overlay, through JNI).
 enum TouchButton : std::uint32_t {
     kTouchA = 1u << 0,

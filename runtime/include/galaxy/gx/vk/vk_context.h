@@ -213,4 +213,12 @@ private:
 // Throws std::runtime_error naming `what` when `result` is an error.
 void check(VkResult result, const char* what);
 
+// The calling thread's CPU time (nanoseconds; 0 where the platform has no per-thread clock).
+[[nodiscard]] std::int64_t thread_cpu_ns() noexcept;
+// CPU time spent inside driver calls since the last take (a driver that spins where it should sleep shows here):
+// RendererVk logs it with the render thread's own every 10 seconds.
+enum class DriverCall : unsigned { Acquire, Present, Submit, Wait, Poll, Count };
+void note_driver_cpu(DriverCall call, std::int64_t ns) noexcept;
+[[nodiscard]] std::array<std::int64_t, static_cast<unsigned>(DriverCall::Count)> take_driver_cpu() noexcept;
+
 }  // namespace galaxy::gx::vk

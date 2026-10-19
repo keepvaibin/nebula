@@ -12,7 +12,36 @@
 #include <stdexcept>
 #include <string>
 
+#if !defined(_WIN32)
+#include <time.h>
+#endif
+
 namespace galaxy::gx::vk {
+
+namespace {
+std::array<std::atomic<std::int64_t>, static_cast<unsigned>(DriverCall::Count)> g_driver_cpu{};
+}  // namespace
+
+std::int64_t thread_cpu_ns() noexcept {
+#if defined(_WIN32)
+    return 0;
+#else
+    timespec now{};
+    return clock_gettime(CLOCK_THREAD_CPUTIME_ID, &now) == 0 ? std::int64_t{now.tv_sec} * 1000000000 + now.tv_nsec : 0;
+#endif
+}
+
+void note_driver_cpu(DriverCall call, std::int64_t ns) noexcept {
+    g_driver_cpu[static_cast<unsigned>(call)].fetch_add(ns, std::memory_order_relaxed);
+}
+
+std::array<std::int64_t, static_cast<unsigned>(DriverCall::Count)> take_driver_cpu() noexcept {
+    std::array<std::int64_t, static_cast<unsigned>(DriverCall::Count)> taken{};
+    for (unsigned i = 0; i < taken.size(); ++i) {
+        taken[i] = g_driver_cpu[i].exchange(0, std::memory_order_relaxed);
+    }
+    return taken;
+}
 
 void check(VkResult result, const char* what) {
     if (result < VK_SUCCESS) {
@@ -399,7 +428,9 @@ std::uint64_t Context::submit(std::span<const VkCommandBuffer> commands, VkSemap
         submit.signalSemaphoreCount = 1;
         submit.pSignalSemaphores = &signal_semaphore;
     }
+    const std::int64_t cpu_start = thread_cpu_ns();
     const VkResult result = vkQueueSubmit(queue_, 1, &submit, fence);
+    note_driver_cpu(DriverCall::Submit, thread_cpu_ns() - cpu_start);
     if (result != VK_SUCCESS) {
         free_fences_.push_back(fence);
         check(result, "vkQueueSubmit");
@@ -413,11 +444,13 @@ std::uint64_t Context::submit(std::span<const VkCommandBuffer> commands, VkSemap
 std::uint64_t Context::completed_value() {
     std::lock_guard<std::mutex> lock(submit_mutex_);
     std::size_t done = 0;
+    const std::int64_t cpu_start = thread_cpu_ns();
     while (done < pending_.size() && vkGetFenceStatus(device_, pending_[done].fence) == VK_SUCCESS) {
         completed_ = pending_[done].value;
         free_fences_.push_back(pending_[done].fence);
         ++done;
     }
+    note_driver_cpu(DriverCall::Poll, thread_cpu_ns() - cpu_start);
     pending_.erase(pending_.begin(), pending_.begin() + static_cast<std::ptrdiff_t>(done));
     return completed_;
 }
@@ -440,7 +473,9 @@ bool Context::wait(std::uint64_t value, std::uint64_t timeout_ns) {
         }
         ++waiters_;
     }
+    const std::int64_t cpu_start = thread_cpu_ns();
     const VkResult result = vkWaitForFences(device_, 1, &fence, VK_TRUE, timeout_ns);
+    note_driver_cpu(DriverCall::Wait, thread_cpu_ns() - cpu_start);
     {
         std::lock_guard<std::mutex> lock(submit_mutex_);
         --waiters_;
