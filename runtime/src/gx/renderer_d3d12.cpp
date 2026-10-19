@@ -3691,6 +3691,11 @@ std::uint64_t RendererD3D12::end_frame(
         pointer_depth_capture_fence_ = submitted_fence;
         pointer_depth_in_frame_pending_ = false;
     }
+    for (AsyncPeekField& field : async_peek_fields_) {
+        if (field.fence == kAsyncPeekInFrame) {
+            field.fence = submitted_fence;
+        }
+    }
     const HRESULT signal_hr = queue_->Signal(fence_.Get(), submitted_fence);
     if (FAILED(signal_hr)) {
         dump_device_removal(device_.Get());
@@ -5832,14 +5837,54 @@ bool RendererD3D12::ensure_async_peek_field_resources(
     return true;
 }
 
-std::uint64_t RendererD3D12::submit_async_peek_field(EfbPeekKind kind, std::size_t slot) {
-    AsyncPeekField& field = async_peek_fields_[async_peek_field_index(kind)];
+std::uint64_t RendererD3D12::submit_async_peek_field(
+    std::size_t channel, EfbPeekKind kind, std::size_t slot) {
+    AsyncPeekField& field = async_peek_fields_[channel];
     if (field.fence != 0u || slot >= kAsyncPeekFieldSlots) {
         return 0u;
     }
     if (!ensure_async_peek_field_resources(field, kind)) {
         return 0u;
     }
+    ID3D12GraphicsCommandList* const list = field.command_list.Get();
+    d3d_check(field.allocator->Reset(), "async peek field allocator reset");
+    d3d_check(
+        list->Reset(field.allocator.Get(), nullptr),
+        "async peek field command list reset");
+    ID3D12DescriptorHeap* heaps[] = {srv_ring_.heap()};
+    list->SetDescriptorHeaps(1, heaps);
+    record_async_peek_field_commands(list, field, kind, slot);
+    d3d_check(list->Close(), "async peek field command list close");
+    ID3D12CommandList* lists[] = {list};
+    queue_->ExecuteCommandLists(1, lists);
+    const std::uint64_t fence_value = ++next_fence_value_;
+    const HRESULT signal_hr = queue_->Signal(fence_.Get(), fence_value);
+    if (FAILED(signal_hr)) {
+        dump_device_removal(device_.Get());
+        d3d_check(signal_hr, "async peek field queue signal");
+    }
+    field.fence = fence_value;
+    return fence_value;
+}
+
+bool RendererD3D12::record_async_peek_field_in_frame(
+    std::size_t channel, EfbPeekKind kind, std::size_t slot) {
+    AsyncPeekField& field = async_peek_fields_[channel];
+    if (field.fence != 0u || slot >= kAsyncPeekFieldSlots ||
+        !ensure_async_peek_field_resources(field, kind)) {
+        return false;
+    }
+    record_async_peek_field_commands(command_list_.Get(), field, kind, slot);
+    // Restore the GX drawing state exactly as record_conversion_blit does.
+    command_list_->SetGraphicsRootSignature(root_signature_.Get());
+    invalidate_gx_bindings();
+    bind_efb(nullptr);
+    field.fence = kAsyncPeekInFrame;  // fenced at end_frame
+    return true;
+}
+
+void RendererD3D12::record_async_peek_field_commands(
+    ID3D12GraphicsCommandList* list, AsyncPeekField& field, EfbPeekKind kind, std::size_t slot) {
     const bool is_depth = kind == EfbPeekKind::Depth;
     constexpr UINT width = kEfbWidth;
     constexpr UINT height = kEfbHeight;
@@ -5848,12 +5893,6 @@ std::uint64_t RendererD3D12::submit_async_peek_field(EfbPeekKind kind, std::size
     ID3D12Resource* const target = field.target.Get();
     ID3D12Resource* const readback = field.readbacks[slot].Get();
     ID3D12Resource* const src = is_depth ? efb_depth_.Get() : efb_color_.Get();
-    ID3D12GraphicsCommandList* const list = field.command_list.Get();
-
-    d3d_check(field.allocator->Reset(), "async peek field allocator reset");
-    d3d_check(
-        list->Reset(field.allocator.Get(), nullptr),
-        "async peek field command list reset");
 
     D3D12_RESOURCE_BARRIER barriers[2]{};
     barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -5870,8 +5909,6 @@ std::uint64_t RendererD3D12::submit_async_peek_field(EfbPeekKind kind, std::size
     barriers[1].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     list->ResourceBarrier(2, barriers);
 
-    ID3D12DescriptorHeap* heaps[] = {srv_ring_.heap()};
-    list->SetDescriptorHeaps(1, heaps);
     list->OMSetRenderTargets(1, &field.rtv, FALSE, nullptr);
     const D3D12_VIEWPORT viewport{
         0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
@@ -5907,22 +5944,10 @@ std::uint64_t RendererD3D12::submit_async_peek_field(EfbPeekKind kind, std::size
     dst_copy.PlacedFootprint.Footprint.Depth = 1;
     dst_copy.PlacedFootprint.Footprint.RowPitch = row_pitch;
     list->CopyTextureRegion(&dst_copy, 0, 0, 0, &src_copy, nullptr);
-
-    d3d_check(list->Close(), "async peek field command list close");
-    ID3D12CommandList* lists[] = {list};
-    queue_->ExecuteCommandLists(1, lists);
-    const std::uint64_t fence_value = ++next_fence_value_;
-    const HRESULT signal_hr = queue_->Signal(fence_.Get(), fence_value);
-    if (FAILED(signal_hr)) {
-        dump_device_removal(device_.Get());
-        d3d_check(signal_hr, "async peek field queue signal");
-    }
-    field.fence = fence_value;
-    return fence_value;
 }
 
-bool RendererD3D12::try_complete_async_peek_field(EfbPeekKind kind) {
-    AsyncPeekField& field = async_peek_fields_[async_peek_field_index(kind)];
+bool RendererD3D12::try_complete_async_peek_field(std::size_t channel) {
+    AsyncPeekField& field = async_peek_fields_[channel];
     if (field.fence == 0u) {
         return false;
     }
@@ -5934,9 +5959,9 @@ bool RendererD3D12::try_complete_async_peek_field(EfbPeekKind kind) {
 }
 
 const std::uint8_t* RendererD3D12::async_peek_field_rgba(
-    EfbPeekKind kind, std::size_t slot) const noexcept {
+    std::size_t channel, std::size_t slot) const noexcept {
     return slot < kAsyncPeekFieldSlots
-        ? async_peek_fields_[async_peek_field_index(kind)].rgba[slot] : nullptr;
+        ? async_peek_fields_[channel].rgba[slot] : nullptr;
 }
 
 bool RendererD3D12::read_efb_pixels(

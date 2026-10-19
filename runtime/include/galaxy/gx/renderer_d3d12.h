@@ -372,24 +372,32 @@ public:
     [[nodiscard]] bool try_complete_pointer_depth_capture(
         std::span<std::uint32_t> pixels);
     // Render-owner only. Asynchronous 640x528 EFB fields (depth for GXPeekZ,
-    // color for GXPeekARGB) for the simulation thread, each on private
-    // resources so they never contend with the pointer field above or with
-    // each other. Returns the fence value, or 0 when that field is in flight.
+    // color for GXPeekARGB) for the simulation thread, one per channel
+    // (GxBackend binds a channel to a peek kind and draw-sync token), each on
+    // private resources so they never contend with the pointer field above or
+    // with each other. Returns the fence value, or 0 when that channel is in
+    // flight.
     static constexpr std::size_t kAsyncPeekFieldSlots = 3u;
+    static constexpr std::size_t kAsyncPeekFieldChannels = 4u;
     // Captures the field into readback `slot` (0..2). Completion leaves it
     // there; async_peek_field_rgba names the mapped bytes (RGBA8, 640x528).
-    [[nodiscard]] std::uint64_t submit_async_peek_field(EfbPeekKind kind, std::size_t slot);
-    [[nodiscard]] bool try_complete_async_peek_field(EfbPeekKind kind);
+    [[nodiscard]] std::uint64_t submit_async_peek_field(
+        std::size_t channel, EfbPeekKind kind, std::size_t slot);
+    // The same capture recorded in the open frame where the stream is now
+    // (a draw-sync token); fenced when the frame is submitted.
+    [[nodiscard]] bool record_async_peek_field_in_frame(
+        std::size_t channel, EfbPeekKind kind, std::size_t slot);
+    [[nodiscard]] bool try_complete_async_peek_field(std::size_t channel);
     [[nodiscard]] const std::uint8_t* async_peek_field_rgba(
-        EfbPeekKind kind, std::size_t slot) const noexcept;
-    [[nodiscard]] bool async_peek_field_pending(EfbPeekKind kind) const noexcept {
-        return async_peek_fields_[async_peek_field_index(kind)].fence != 0u;
+        std::size_t channel, std::size_t slot) const noexcept;
+    [[nodiscard]] bool async_peek_field_pending(std::size_t channel) const noexcept {
+        return async_peek_fields_[channel].fence != 0u;
     }
     [[nodiscard]] bool any_async_peek_field_pending() const noexcept {
-        return async_peek_fields_[0].fence != 0u || async_peek_fields_[1].fence != 0u;
-    }
-    static constexpr std::size_t async_peek_field_index(EfbPeekKind kind) noexcept {
-        return kind == EfbPeekKind::Depth ? 0u : 1u;
+        for (const AsyncPeekField& field : async_peek_fields_) {
+            if (field.fence != 0u) return true;
+        }
+        return false;
     }
     [[nodiscard]] bool peek_efb(
         std::uint16_t x,
@@ -1054,9 +1062,12 @@ private:
         D3D12_CPU_DESCRIPTOR_HANDLE rtv{};
         std::uint64_t fence = 0;
     };
-    // [0] depth, [1] color (async_peek_field_index).
-    std::array<AsyncPeekField, 2> async_peek_fields_{};
+    std::array<AsyncPeekField, kAsyncPeekFieldChannels> async_peek_fields_{};
+    // AsyncPeekField::fence of a field recorded in the open frame.
+    static constexpr std::uint64_t kAsyncPeekInFrame = ~std::uint64_t{0};
     bool ensure_async_peek_field_resources(AsyncPeekField& field, EfbPeekKind kind);
+    void record_async_peek_field_commands(
+        ID3D12GraphicsCommandList* list, AsyncPeekField& field, EfbPeekKind kind, std::size_t slot);
     bool read_efb_pixels(std::uint16_t x, std::uint16_t y, EfbPeekKind kind,
         std::uint32_t& value, std::span<std::uint32_t> depth_pixels,
         bool defer_pointer_depth = false);

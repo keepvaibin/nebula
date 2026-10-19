@@ -145,6 +145,14 @@ void set_safety_scene_surround(float intensity) noexcept;
     std::uint16_t y,
     EfbPeekKind kind,
     std::uint32_t& value);
+// A peek made in draw-sync token `token`'s callback: the field captured where the stream reached that
+// token (GxBackend::peek_efb_published).
+[[nodiscard]] bool peek_efb_published(
+    std::uint16_t x,
+    std::uint16_t y,
+    EfbPeekKind kind,
+    std::uint16_t token,
+    std::uint32_t& value);
 
 // Present an already-rendered XFB after the guest VI callback has selected
 // the displayed buffer. This keeps the host swap-chain cadence tied to the

@@ -278,7 +278,14 @@ static void GXTokenInterruptHandler(__OSInterrupt, OSContext* context)
     if (TokenCB) {
         OSClearContext(&exceptionContext);
         OSSetCurrentContext(&exceptionContext);
+#ifdef TARGET_PC
+        // The console's GPU waits at a breakpoint after the token while the callback peeks the EFB.
+        __NebulaGXPeekToken(token);
+#endif
         (*TokenCB)(token);
+#ifdef TARGET_PC
+        __NebulaGXPeekToken(0);
+#endif
         OSClearContext(&exceptionContext);
         OSSetCurrentContext(context);        
     }

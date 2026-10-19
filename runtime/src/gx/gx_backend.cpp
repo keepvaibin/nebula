@@ -7304,22 +7304,31 @@ void GxBackend::render_thread_main() {
     }
 }
 
-bool GxBackend::peek_efb_published(
-    std::uint16_t x,
-    std::uint16_t y,
-    EfbPeekKind kind,
-    std::uint32_t& value) {
-    if (!initialized_ || !async_render_thread_enabled() ||
-        x >= kEfbWidth || y >= kEfbHeight) {
+std::size_t GxBackend::async_peek_channel(EfbPeekKind kind, std::uint16_t token) {
+    const std::uint32_t key = async_peek_key(kind, token);
+    std::size_t oldest = 0;
+    for (std::size_t index = 0; index < async_peek_.size(); ++index) {
+        if (async_peek_[index].key.load(std::memory_order_relaxed) == key) {
+            return index;
+        }
+        if (async_peek_[index].last_request < async_peek_[oldest].last_request) {
+            oldest = index;
+        }
+    }
+    AsyncPeekFieldState& state = async_peek_[oldest];
+    state.generation.fetch_add(1u, std::memory_order_acq_rel);
+    state.key.store(key, std::memory_order_release);
+    return oldest;
+}
+
+bool GxBackend::read_async_peek_field(
+    AsyncPeekFieldState& state, std::uint16_t x, std::uint16_t y, EfbPeekKind kind, std::uint32_t& value) {
+    const std::uint64_t published = state.published.load(std::memory_order_acquire);
+    if ((published & 0xFFFFFFFFu) == 0u ||
+        (published >> 32u) != state.generation.load(std::memory_order_acquire)) {
         return false;
     }
-    AsyncPeekFieldState& state = async_peek_[async_peek_kind_index(kind)];
-    state.requested.store(true, std::memory_order_release);
-    const int slot = state.published.load(std::memory_order_acquire);
-    if (slot < 0) {
-        return false;
-    }
-    const std::uint8_t* field = state.rgba[static_cast<std::size_t>(slot)];
+    const std::uint8_t* field = state.rgba[static_cast<std::size_t>((published & 0xFFFFFFFFu) - 1u)];
     if (field == nullptr) {
         return false;
     }
@@ -7334,10 +7343,40 @@ bool GxBackend::peek_efb_published(
     return true;
 }
 
+bool GxBackend::peek_efb_published(
+    std::uint16_t x,
+    std::uint16_t y,
+    EfbPeekKind kind,
+    std::uint16_t token,
+    std::uint32_t& value) {
+    if (!initialized_ || !async_render_thread_enabled() ||
+        x >= kEfbWidth || y >= kEfbHeight) {
+        return false;
+    }
+    AsyncPeekFieldState& state = async_peek_[async_peek_channel(kind, token)];
+    state.last_request = ++async_peek_requests_;
+    state.requested.store(true, std::memory_order_release);
+    if (read_async_peek_field(state, x, y, kind, value)) {
+        return true;
+    }
+    // A channel just bound: the latest field of the kind, so a new token never stalls on the
+    // synchronous path.
+    AsyncPeekFieldState* latest = nullptr;
+    for (AsyncPeekFieldState& other : async_peek_) {
+        const std::uint32_t key = other.key.load(std::memory_order_relaxed);
+        if (&other != &state && key != kAsyncPeekUnbound && async_peek_key_kind(key) == kind &&
+            (latest == nullptr || other.last_request > latest->last_request) &&
+            (other.published.load(std::memory_order_acquire) & 0xFFFFFFFFu) != 0u) {
+            latest = &other;
+        }
+    }
+    return latest != nullptr &&
+        read_async_peek_field(*latest, x, y, kind, value);
+}
+
 void GxBackend::poll_async_peek_fields() {
     for (std::size_t index = 0; index < async_peek_.size(); ++index) {
-        const EfbPeekKind kind = async_peek_kind_at(index);
-        if (!renderer_.async_peek_field_pending(kind)) {
+        if (!renderer_.async_peek_field_pending(index)) {
             continue;
         }
         AsyncPeekFieldState& state = async_peek_[index];
@@ -7345,38 +7384,48 @@ void GxBackend::poll_async_peek_fields() {
         if (slot < 0) {
             continue;
         }
-        if (renderer_.try_complete_async_peek_field(kind)) {
+        if (renderer_.try_complete_async_peek_field(index)) {
             state.pending_slot = -1;
             ++state.completed;
-            state.published.store(slot, std::memory_order_release);
+            state.published.store(
+                (std::uint64_t{state.pending_generation} << 32u) | static_cast<std::uint32_t>(slot + 1),
+                std::memory_order_release);
         }
     }
 }
 
 void GxBackend::submit_async_peek_fields_if_requested() {
     for (std::size_t index = 0; index < async_peek_.size(); ++index) {
-        const EfbPeekKind kind = async_peek_kind_at(index);
         AsyncPeekFieldState& state = async_peek_[index];
         if (!state.requested.load(std::memory_order_acquire)) {
             continue;
         }
-        if (renderer_.async_peek_field_pending(kind)) {
+        // Token channels record at their token (record_async_peek_fields_at_token).
+        const std::uint32_t key = state.key.load(std::memory_order_acquire);
+        if (key == kAsyncPeekUnbound || (key & 0xFFFFu) != 0u) {
+            continue;
+        }
+        if (renderer_.async_peek_field_pending(index)) {
             // Keep the request alive for the next rendered chunk.
             continue;
         }
         state.requested.store(false, std::memory_order_relaxed);
         // Never the published slot: a reader may be converting its pixel.
-        const int published = state.published.load(std::memory_order_relaxed);
-        const int slot = published < 0 ? 0 : (published + 1) % 3;
-        if (renderer_.submit_async_peek_field(kind, static_cast<std::size_t>(slot)) != 0u) {
+        const std::uint64_t published = state.published.load(std::memory_order_relaxed);
+        const int slot = (published & 0xFFFFFFFFu) == 0u
+            ? 0 : static_cast<int>(published & 0xFFFFFFFFu) % 3;
+        const std::uint32_t generation = state.generation.load(std::memory_order_acquire);
+        if (renderer_.submit_async_peek_field(
+                index, async_peek_key_kind(key), static_cast<std::size_t>(slot)) != 0u) {
             // The slot pointers are fixed once the resources exist; record
             // them before the first publication so readers never race a write.
             if (state.rgba[0] == nullptr) {
                 for (std::size_t i = 0; i < state.rgba.size(); ++i) {
-                    state.rgba[i] = renderer_.async_peek_field_rgba(kind, i);
+                    state.rgba[i] = renderer_.async_peek_field_rgba(index, i);
                 }
             }
             state.pending_slot = slot;
+            state.pending_generation = generation;
         }
     }
 }
@@ -12539,8 +12588,38 @@ void GxBackend::on_pe_finish() {
     }
 }
 
+void GxBackend::record_async_peek_fields_at_token(std::uint16_t token) {
+    for (std::size_t index = 0; index < async_peek_.size(); ++index) {
+        AsyncPeekFieldState& state = async_peek_[index];
+        const std::uint32_t key = state.key.load(std::memory_order_acquire);
+        if (key == kAsyncPeekUnbound || (key & 0xFFFFu) != token ||
+            !state.requested.load(std::memory_order_acquire) || renderer_.async_peek_field_pending(index)) {
+            continue;
+        }
+        // Never the published slot: a reader may be converting its pixel.
+        const std::uint64_t published = state.published.load(std::memory_order_relaxed);
+        const int slot = (published & 0xFFFFFFFFu) == 0u
+            ? 0 : static_cast<int>(published & 0xFFFFFFFFu) % 3;
+        const std::uint32_t generation = state.generation.load(std::memory_order_acquire);
+        if (renderer_.record_async_peek_field_in_frame(
+                index, async_peek_key_kind(key), static_cast<std::size_t>(slot))) {
+            state.requested.store(false, std::memory_order_relaxed);
+            if (state.rgba[0] == nullptr) {
+                for (std::size_t i = 0; i < state.rgba.size(); ++i) {
+                    state.rgba[i] = renderer_.async_peek_field_rgba(index, i);
+                }
+            }
+            state.pending_slot = slot;
+            state.pending_generation = generation;
+        }
+    }
+}
+
 void GxBackend::on_pe_token(std::uint16_t token, bool interrupt) {
     flush_pending_draw_batch();
+    if (token != 0u) {
+        record_async_peek_fields_at_token(token);
+    }
     if (frame_dependency_event_sink_ != nullptr) {
         frame_dependency_event_sink_->pe_token(token, interrupt);
     }

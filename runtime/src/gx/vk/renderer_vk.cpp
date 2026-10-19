@@ -881,6 +881,11 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
         pointer_depth_fence_ = fence;
         pointer_depth_in_frame_ = false;
     }
+    for (AsyncField& field : async_fields_) {
+        if (field.fence == kAsyncPeekInFrame) {
+            field.fence = fence;
+        }
+    }
     if (efb_capture_.buffer && efb_capture_.fence == 0u && !efb_capture_pending_path_.empty()) {
         efb_capture_.fence = fence;
     }

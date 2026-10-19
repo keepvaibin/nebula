@@ -263,13 +263,17 @@ public:
         std::uint16_t y,
         EfbPeekKind kind,
         std::uint32_t& value);
-    // Simulation thread: answers a depth or color peek from the latest published asynchronous EFB
-    // field of that kind. The request is recorded so the render thread keeps producing fields
-    // while peeks continue.
+    // Simulation thread: answers a depth or color peek from an asynchronous EFB field. A peek made in
+    // a draw-sync token's callback (`token` nonzero) reads the field captured where the stream
+    // reached that token (the console stopped the GPU there with a breakpoint while the callback
+    // peeked); the field a frame earlier, as the capture completes asynchronously. Until that
+    // channel has a field, and for token 0, the latest field of the kind answers. The request is
+    // recorded so the render thread keeps producing fields while peeks continue.
     [[nodiscard]] bool peek_efb_published(
         std::uint16_t x,
         std::uint16_t y,
         EfbPeekKind kind,
+        std::uint16_t token,
         std::uint32_t& value);
     void scan_pe_events_on_sim_thread(
         const std::byte* fifo_data,
@@ -893,27 +897,41 @@ private:
     void apply_scene_jitter(const GxVsConstants& cpu, GxVsConstants& upload,
                             float jitter_ndc[2]);
     void adopt_pointer_depth_fence_if_needed();
-    // Asynchronous EFB depth field for simulation-thread GXPeekZ. Three slots: the render owner fills the
-    // slot after the published one, then publishes it. Readers only load the published slot. One set per
-    // peek kind: [0] depth, [1] color (async_peek_kind_index).
+    // Asynchronous EFB fields for simulation-thread GXPeekZ/GXPeekARGB, one per channel. A channel
+    // answers one peek kind at one draw-sync token (`key`, bound by the simulation thread at the
+    // first such peek; the least recently used channel is rebound). Three slots: the render owner
+    // fills the slot after the published one, then publishes it. Readers only load the published
+    // slot. `published` packs the binding generation (high word) and slot + 1, so a field
+    // captured for an earlier binding never answers the new one.
+    static constexpr std::uint32_t kAsyncPeekUnbound = 0xFFFFFFFFu;
     struct AsyncPeekFieldState {
         // Mapped readback bytes of each slot (RGBA8, 640x528), written by the
         // render thread before the slot is published.
         std::array<const std::uint8_t*, 3> rgba{};
-        // Slot the in-flight field writes; render thread only.
+        // Slot the in-flight field writes and the binding it was captured for; render thread only.
         int pending_slot = -1;
-        std::atomic<int> published{-1};
+        std::uint32_t pending_generation = 0;
+        std::atomic<std::uint32_t> key{kAsyncPeekUnbound};
+        std::atomic<std::uint32_t> generation{0};
+        std::atomic<std::uint64_t> published{0};
         std::atomic<bool> requested{false};
         std::atomic<std::uint64_t> published_answers{0};
+        std::uint64_t last_request = 0;  // simulation thread
         std::uint64_t completed = 0;
     };
-    static constexpr std::size_t async_peek_kind_index(EfbPeekKind kind) noexcept {
-        return kind == EfbPeekKind::Depth ? 0u : 1u;
+    static constexpr std::uint32_t async_peek_key(EfbPeekKind kind, std::uint16_t token) noexcept {
+        return (kind == EfbPeekKind::Depth ? 0u : 0x10000u) | token;
     }
-    static constexpr EfbPeekKind async_peek_kind_at(std::size_t index) noexcept {
-        return index == 0u ? EfbPeekKind::Depth : EfbPeekKind::Color;
+    static constexpr EfbPeekKind async_peek_key_kind(std::uint32_t key) noexcept {
+        return (key & 0x10000u) == 0u ? EfbPeekKind::Depth : EfbPeekKind::Color;
     }
-    std::array<AsyncPeekFieldState, 2> async_peek_{};
+    [[nodiscard]] std::size_t async_peek_channel(EfbPeekKind kind, std::uint16_t token);
+    [[nodiscard]] static bool read_async_peek_field(
+        AsyncPeekFieldState& state, std::uint16_t x, std::uint16_t y, EfbPeekKind kind, std::uint32_t& value);
+    std::array<AsyncPeekFieldState, Renderer::kAsyncPeekFieldChannels> async_peek_{};
+    std::uint64_t async_peek_requests_ = 0;  // simulation thread
+    // Render owner: records the fields of channels bound to `token` where the stream reaches it.
+    void record_async_peek_fields_at_token(std::uint16_t token);
     FramePeCompletionContract frame_pe_completions_;
     std::size_t render_chunks_in_flight_ = 0;
     std::size_t present_chunks_in_flight_ = 0;

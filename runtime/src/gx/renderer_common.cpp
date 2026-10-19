@@ -103,15 +103,18 @@ float4 main(V v) : SV_Target {
                     filt2.w < 0.0 ? int2(src_xform.xy + floor(v.pos.xy) * src_xform.zw)
                                  : int2(src_xform.xy), 0)).r);
         } else {
-            // Color peeks reduce the complete scaled logical-pixel block.
+            // Color peeks reduce the complete scaled logical-pixel block; a whole field (filt2.w < 0)
+            // reduces each destination pixel's block.
+            const bool field = filt2.w < 0.0;
+            const uint block = field ? uint(src_xform.z + 0.5) : reduction_width;
+            const int2 origin = field ? int2(src_xform.xy + floor(v.pos.xy) * src_xform.zw) : int2(src_xform.xy);
             float4 sum = 0.0;
-            int2 origin = int2(src_xform.xy);
-            [loop] for (uint py = 0u; py < reduction_width; ++py) {
-                [loop] for (uint px = 0u; px < reduction_width; ++px) {
+            [loop] for (uint py = 0u; py < block; ++py) {
+                [loop] for (uint px = 0u; px < block; ++px) {
                     sum += srctex.Load(int3(origin + int2(px, py), 0));
                 }
             }
-            float4 reduced = sum / float(reduction_width * reduction_width);
+            float4 reduced = sum / float(block * block);
             texcol_raw = uint4(round(saturate(reduced) * 255.0));
         }
     } else {

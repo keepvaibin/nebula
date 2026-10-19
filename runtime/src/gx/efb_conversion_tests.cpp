@@ -1115,6 +1115,23 @@ V main(uint id : SV_VertexID) {
         return result.front();
     }
 
+    std::vector<Pixel> run_color_field(
+        const std::vector<Pixel>& pixels, unsigned width, unsigned height, unsigned scale,
+        unsigned logical_size) {
+        std::vector<std::uint8_t> bytes(pixels.size() * 4u);
+        for (std::size_t index = 0u; index < pixels.size(); ++index) {
+            bytes[index * 4u + 0u] = pixels[index].r;
+            bytes[index * 4u + 1u] = pixels[index].g;
+            bytes[index * 4u + 2u] = pixels[index].b;
+            bytes[index * 4u + 3u] = pixels[index].a;
+        }
+        auto constants = galaxy::gx::make_efb_peek_conversion_constants(
+            galaxy::gx::compute_efb_peek_sampling_geometry(0, 0, scale),
+            galaxy::gx::EfbPeekKind::Color);
+        constants.values[15] = -1.0f;
+        return run_bytes(DXGI_FORMAT_R8G8B8A8_UNORM, bytes, width, height, logical_size, constants);
+    }
+
     std::vector<Pixel> run_depth_field(
         const std::vector<std::uint32_t>& z24_pixels, unsigned width,
         unsigned height, unsigned scale, unsigned logical_size) {
@@ -3212,6 +3229,31 @@ bool test_warp_against_oracle() {
                     color_block, scale, scale, color_sampling),
                 kColorMean,
                 color_label);
+
+            // The whole colour field (GXPeekARGB from a draw-sync token's field): every logical pixel is its own
+            // block's reduction, as a single peek of that pixel. The lens flare's visibility test reads its alpha.
+            constexpr std::array<Pixel, 4> kFieldColors{
+                Pixel{64u, 96u, 128u, 255u}, Pixel{200u, 40u, 80u, 0u},
+                Pixel{16u, 240u, 32u, 128u}, Pixel{100u, 100u, 100u, 250u}};
+            std::vector<Pixel> color_grid(static_cast<std::size_t>(width) * height);
+            for (unsigned y = 0u; y < height; ++y) {
+                for (unsigned x = 0u; x < width; ++x) {
+                    color_grid[static_cast<std::size_t>(y) * width + x] =
+                        kFieldColors[(y / scale) * 2u + x / scale];
+                }
+            }
+            if (scale > 1u) {
+                // Deltas that cancel only when the whole block takes part.
+                Pixel& corner = color_grid[0];
+                Pixel& next = color_grid[1];
+                corner.r = static_cast<std::uint8_t>(corner.r - 32u);
+                next.r = static_cast<std::uint8_t>(next.r + 32u);
+            }
+            const auto color_field = harness.run_color_field(color_grid, width, height, scale, 2u);
+            for (std::size_t i = 0; i < kFieldColors.size(); ++i) {
+                passed &= expect_pixel(color_field.at(i), kFieldColors[i],
+                    "whole colour field reduces each logical pixel's block, alpha included");
+            }
         }
     } catch (const std::exception& error) {
         std::fprintf(stderr, "FAILED: WARP EFB conversion suite: %s\n", error.what());

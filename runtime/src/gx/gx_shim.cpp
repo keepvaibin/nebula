@@ -95,7 +95,16 @@ bool peek_efb_published(
     std::uint16_t y,
     EfbPeekKind kind,
     std::uint32_t& value) {
-    return backend().peek_efb_published(x, y, kind, value);
+    return backend().peek_efb_published(x, y, kind, 0u, value);
+}
+
+bool peek_efb_published(
+    std::uint16_t x,
+    std::uint16_t y,
+    EfbPeekKind kind,
+    std::uint16_t token,
+    std::uint32_t& value) {
+    return backend().peek_efb_published(x, y, kind, token, value);
 }
 
 void present_cached_xfb(

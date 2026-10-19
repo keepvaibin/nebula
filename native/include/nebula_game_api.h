@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 6u
+#define NEBULA_GAME_API_VERSION 7u
 
 /* A physical range of the game's memory and where it is in the host process: what the GPU's addresses resolve to. */
 typedef struct NebulaGameMemoryRegion {
@@ -168,8 +168,9 @@ typedef struct NebulaHostServices {
     /* A PE event at the end of the stream so far: a draw-sync token (finish = 0) or a draw done (finish = 1). The
        renderer answers it with nebula_game_gx_event when its parse reaches that point. */
     void (*gx_pe_marker)(void* user, int finish, uint16_t token);
-    /* An EFB pixel (type 0: colour, 1: depth), as GXPeekARGB/GXPeekZ read it. */
-    uint32_t (*gx_peek_efb)(void* user, uint16_t x, uint16_t y, uint32_t type);
+    /* An EFB pixel (type 0: colour, 1: depth), as GXPeekARGB/GXPeekZ read it; `token` is the draw-sync token
+       whose callback peeks (0: none), the stream position the console's GPU was stopped at. */
+    uint32_t (*gx_peek_efb)(void* user, uint16_t x, uint16_t y, uint32_t type, uint16_t token);
     /* The game's 3D scene (GameScene::draw3D) begins (marker 0, with the camera's world-to-eye matrix, row-major 3x4)
        or ends (marker 1, `view` NULL) at the end of the stream so far. */
     void (*gx_scene_marker)(void* user, uint32_t marker, const float* view);

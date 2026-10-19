@@ -64,6 +64,7 @@ class RendererVk final : public UiCanvas {
 public:
     using SubmissionCallback = void (*)(void* context, std::uint64_t fence_value);
     static constexpr std::size_t kAsyncPeekFieldSlots = 3u;
+    static constexpr std::size_t kAsyncPeekFieldChannels = 4u;
 
     bool initialize(int window_width, int window_height, unsigned efb_scale);
     void create_first_use_resources();
@@ -129,17 +130,20 @@ public:
     [[nodiscard]] bool record_pointer_depth_capture_in_frame();
     [[nodiscard]] std::uint64_t pointer_depth_capture_fence() const noexcept { return pointer_depth_fence_; }
     [[nodiscard]] bool try_complete_pointer_depth_capture_in_place(const std::uint8_t*& rgba);
-    [[nodiscard]] std::uint64_t submit_async_peek_field(EfbPeekKind kind, std::size_t slot);
-    [[nodiscard]] bool try_complete_async_peek_field(EfbPeekKind kind);
-    [[nodiscard]] const std::uint8_t* async_peek_field_rgba(EfbPeekKind kind, std::size_t slot) const noexcept;
-    [[nodiscard]] bool async_peek_field_pending(EfbPeekKind kind) const noexcept {
-        return async_fields_[async_peek_field_index(kind)].fence != 0u;
+    // Asynchronous EFB fields, one per channel (GxBackend binds a channel to a peek kind and draw-sync token).
+    [[nodiscard]] std::uint64_t submit_async_peek_field(std::size_t channel, EfbPeekKind kind, std::size_t slot);
+    // The same capture recorded in the open frame where the stream is now (a draw-sync token); fenced at end_frame.
+    [[nodiscard]] bool record_async_peek_field_in_frame(std::size_t channel, EfbPeekKind kind, std::size_t slot);
+    [[nodiscard]] bool try_complete_async_peek_field(std::size_t channel);
+    [[nodiscard]] const std::uint8_t* async_peek_field_rgba(std::size_t channel, std::size_t slot) const noexcept;
+    [[nodiscard]] bool async_peek_field_pending(std::size_t channel) const noexcept {
+        return async_fields_[channel].fence != 0u;
     }
     [[nodiscard]] bool any_async_peek_field_pending() const noexcept {
-        return async_fields_[0].fence != 0u || async_fields_[1].fence != 0u;
-    }
-    static constexpr std::size_t async_peek_field_index(EfbPeekKind kind) noexcept {
-        return kind == EfbPeekKind::Depth ? 0u : 1u;
+        for (const AsyncField& field : async_fields_) {
+            if (field.fence != 0u) return true;
+        }
+        return false;
     }
 
     // Test captures: the EFB and the presented backbuffer as PPM files (paths from set_debug_capture_paths).
@@ -365,7 +369,10 @@ private:
     bool pointer_depth_in_frame_ = false;
     VkCommandPool utility_pool_ = VK_NULL_HANDLE;
     VkCommandBuffer utility_commands_ = VK_NULL_HANDLE;
-    std::array<AsyncField, 2> async_fields_{};
+    std::array<AsyncField, kAsyncPeekFieldChannels> async_fields_{};
+    // AsyncField::fence of a field recorded in the open frame.
+    static constexpr std::uint64_t kAsyncPeekInFrame = ~std::uint64_t{0};
+    void ensure_async_field(AsyncField& field);
 
     // Captures and telemetry.
     std::string efb_capture_path_;

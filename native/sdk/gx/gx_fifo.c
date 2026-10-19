@@ -277,9 +277,16 @@ void __NebulaGXSceneMarker(u32 marker, const f32 (*view)[4]) {
     }
 }
 
+/* The draw-sync token whose callback runs (GXTokenInterruptHandler): its peeks read the EFB as the stream reached it. */
+static u16 sPeekToken;
+
+void __NebulaGXPeekToken(u16 token) {
+    sPeekToken = token;
+}
+
 u32 __NebulaGXPeekEFB(u16 x, u16 y, u32 type) {
     submit();
-    return nebula_host()->gx_peek_efb(nebula_host()->user, x, y, type);
+    return nebula_host()->gx_peek_efb(nebula_host()->user, x, y, type, sPeekToken);
 }
 
 void GXInitFifoBase(GXFifoObj* fifo, void* base, u32 size) {

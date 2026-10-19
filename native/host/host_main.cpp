@@ -1118,11 +1118,11 @@ void svc_gx_scene_marker(void*, uint32_t marker, const float* view) {
 #endif
 }
 
-uint32_t svc_gx_peek_efb(void*, uint16_t x, uint16_t y, uint32_t type) {
+uint32_t svc_gx_peek_efb(void*, uint16_t x, uint16_t y, uint32_t type, uint16_t token) {
 #if defined(NEBULA_HOST_RENDERER)
     const auto kind = type == 0 ? galaxy::gx::EfbPeekKind::Color : galaxy::gx::EfbPeekKind::Depth;
     uint32_t value = 0;
-    if (!galaxy::gx::peek_efb_published(x, y, kind, value)) {
+    if (!galaxy::gx::peek_efb_published(x, y, kind, token, value)) {
         submit_frame(false, 0);
         (void)galaxy::gx::peek_efb(x, y, kind, value);
     }
@@ -1131,6 +1131,7 @@ uint32_t svc_gx_peek_efb(void*, uint16_t x, uint16_t y, uint32_t type) {
     (void)x;
     (void)y;
     (void)type;
+    (void)token;
     return 0;
 #endif
 }

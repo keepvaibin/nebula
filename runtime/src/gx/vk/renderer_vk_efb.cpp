@@ -1064,11 +1064,47 @@ bool RendererVk::try_complete_pointer_depth_capture_in_place(const std::uint8_t*
     return true;
 }
 
-std::uint64_t RendererVk::submit_async_peek_field(EfbPeekKind kind, std::size_t slot) {
-    AsyncField& field = async_fields_[async_peek_field_index(kind)];
+std::uint64_t RendererVk::submit_async_peek_field(std::size_t channel, EfbPeekKind kind, std::size_t slot) {
+    AsyncField& field = async_fields_[channel];
     if (field.fence != 0u || slot >= kAsyncPeekFieldSlots) {
         return 0u;
     }
+    ensure_async_field(field);
+    vk::check(vkResetCommandBuffer(field.commands, 0), "vkResetCommandBuffer");
+    VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+    begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+    vk::check(vkBeginCommandBuffer(field.commands, &begin), "vkBeginCommandBuffer");
+    EfbConversionShaderConstants constants =
+        make_efb_peek_conversion_constants(compute_efb_peek_sampling_geometry(0u, 0u, efb_scale_), kind);
+    constants.values[15] = -1.0f;
+    record_peek_field(field.commands, *field.target, kind, constants, kEfbWidth, kEfbHeight,
+                      field.readbacks[slot].buffer->buffer);
+    field.readbacks[slot].fence = submit_one_time(field.commands);
+    field.fence = field.readbacks[slot].fence;
+    field.pending_slot = slot;
+    return field.fence;
+}
+
+bool RendererVk::record_async_peek_field_in_frame(std::size_t channel, EfbPeekKind kind, std::size_t slot) {
+    AsyncField& field = async_fields_[channel];
+    if (field.fence != 0u || slot >= kAsyncPeekFieldSlots) {
+        return false;
+    }
+    ensure_async_field(field);
+    end_efb_pass();
+    EfbConversionShaderConstants constants =
+        make_efb_peek_conversion_constants(compute_efb_peek_sampling_geometry(0u, 0u, efb_scale_), kind);
+    constants.values[15] = -1.0f;
+    record_peek_field(frames_[frame_slot_].commands, *field.target, kind, constants, kEfbWidth, kEfbHeight,
+                      field.readbacks[slot].buffer->buffer);
+    reset_gx_bindings();
+    bind_efb(nullptr);
+    field.fence = kAsyncPeekInFrame;  // fenced at end_frame
+    field.pending_slot = slot;
+    return true;
+}
+
+void RendererVk::ensure_async_field(AsyncField& field) {
     vk::Context& context = vk::Context::get();
     const VkDevice device = context.device();
     if (field.pool == VK_NULL_HANDLE) {
@@ -1095,23 +1131,10 @@ std::uint64_t RendererVk::submit_async_peek_field(EfbPeekKind kind, std::size_t 
             throw std::runtime_error("async peek field target unavailable");
         }
     }
-    vk::check(vkResetCommandBuffer(field.commands, 0), "vkResetCommandBuffer");
-    VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
-    begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-    vk::check(vkBeginCommandBuffer(field.commands, &begin), "vkBeginCommandBuffer");
-    EfbConversionShaderConstants constants =
-        make_efb_peek_conversion_constants(compute_efb_peek_sampling_geometry(0u, 0u, efb_scale_), kind);
-    constants.values[15] = -1.0f;
-    record_peek_field(field.commands, *field.target, kind, constants, kEfbWidth, kEfbHeight,
-                      field.readbacks[slot].buffer->buffer);
-    field.readbacks[slot].fence = submit_one_time(field.commands);
-    field.fence = field.readbacks[slot].fence;
-    field.pending_slot = slot;
-    return field.fence;
 }
 
-bool RendererVk::try_complete_async_peek_field(EfbPeekKind kind) {
-    AsyncField& field = async_fields_[async_peek_field_index(kind)];
+bool RendererVk::try_complete_async_peek_field(std::size_t channel) {
+    AsyncField& field = async_fields_[channel];
     if (field.fence == 0u || completed_fence_value() < field.fence) {
         return false;
     }
@@ -1120,8 +1143,8 @@ bool RendererVk::try_complete_async_peek_field(EfbPeekKind kind) {
     return true;
 }
 
-const std::uint8_t* RendererVk::async_peek_field_rgba(EfbPeekKind kind, std::size_t slot) const noexcept {
-    const AsyncField& field = async_fields_[async_peek_field_index(kind)];
+const std::uint8_t* RendererVk::async_peek_field_rgba(std::size_t channel, std::size_t slot) const noexcept {
+    const AsyncField& field = async_fields_[channel];
     return slot < kAsyncPeekFieldSlots && field.readbacks[slot].buffer
         ? reinterpret_cast<const std::uint8_t*>(field.readbacks[slot].buffer->mapped)
         : nullptr;
