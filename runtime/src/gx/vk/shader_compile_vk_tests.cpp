@@ -327,11 +327,13 @@ int main(int argc, char** argv) {
     expect("line gs", ShaderGenerator::line_geometry_shader_source(), ShaderStage::Geometry, gx);
     expect("point gs", ShaderGenerator::point_geometry_shader_source(), ShaderStage::Geometry, gx);
 
-    const ShaderGenerator generator;
-    // The forms PipelineCacheVk generates: per-component byte masks always, constant TEV zeros on Qualcomm.
-    ShaderGenerator scalar_masks, constant_zero;
+    // The forms PipelineCacheVk generates: no vertex-blending inputs, per-component byte masks always, constant TEV
+    // zeros on Qualcomm.
+    ShaderGenerator generator, scalar_masks, constant_zero;
     {
         ShaderGenOptions options;
+        options.vertex_blend = false;
+        generator.set_options(options);
         options.scalar_byte_masks = true;
         scalar_masks.set_options(options);
         options.tev_zero_from_constant = true;

@@ -1512,6 +1512,9 @@ if(NEBULA_VULKAN)
         runtime/src/gx/vk/device_quirks_vk.cpp
         runtime/src/gx/vk/vk_libraries.cpp
         runtime/src/gx/shader_gen.cpp
+        runtime/src/gx/enhanced_lighting.cpp
+        runtime/src/gx/rt_materials.cpp
+        runtime/src/gx/rt_surfaces.cpp
         runtime/src/gx/uber_shaders.cpp
         ${galaxy_uber_embed_cpp}
         runtime/src/gx/renderer_common.cpp
