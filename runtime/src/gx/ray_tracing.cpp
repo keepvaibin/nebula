@@ -35,6 +35,7 @@
 #include "rt_spatial_b_cs.h"
 #include "rt_spatial_m_cs.h"
 #include "rt_star_sphere_cs.h"
+#include "rt_gbuffer_cs.h"
 #include "rt_temporal_cs.h"
 #include "rt_trace_cs.h"
 #include "rt_trace_tex_cs.h"
@@ -301,8 +302,9 @@ struct RtCompositeConstants {
     float efb_scale;     // EFB pixels per game pixel
     float sun[4];        // towards the traced sun (eye space, traced frame); relief height (eye units)
     float sun_light[4];  // its light (rgb)
+    std::uint32_t target_size[2];   // the traced frame's EFB pixels (its per-pixel normals)
 };
-static_assert(sizeof(RtCompositeConstants) == 112u);
+static_assert(sizeof(RtCompositeConstants) == 120u);
 
 enum LightParameter : UINT {
     kLightFrame = 0,
@@ -331,6 +333,7 @@ enum LightParameter : UINT {
     kLightReference,
     kLightSkyMap,
     kLightTev,
+    kLightPixels,
     kLightCount,
 };
 
@@ -816,6 +819,9 @@ void SceneRayTracer::shutdown() noexcept {
     sky_probe_map_.Reset();
     sky_probe_pso_.Reset();
     sky_trace_sh_pso_.Reset();
+    for (auto& buffer : light_pixels_) buffer.Reset();
+    light_pixels_bytes_ = {};
+    gbuffer_pso_.Reset();
     stats_.Reset();
     stats_zero_.Reset();
     readback_.Reset();
@@ -2224,6 +2230,9 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
     // The draws' TEV records for ray hits (t23; a stand-in without them).
     params[kLightTev].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
     params[kLightTev].Descriptor.ShaderRegister = 23u;
+    // Physical: the per-pixel normals (u7; a stand-in without them).
+    params[kLightPixels].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+    params[kLightPixels].Descriptor.ShaderRegister = 7u;
     for (auto& param : params) {
         param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     }
@@ -2267,7 +2276,8 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
         !compute(light_root_.Get(), g_rt_spatial_a_cs, sizeof(g_rt_spatial_a_cs), spatial_a_pso_) ||
         !compute(light_root_.Get(), g_rt_spatial_m_cs, sizeof(g_rt_spatial_m_cs), spatial_m_pso_) ||
         !compute(light_root_.Get(), g_rt_spatial_b_cs, sizeof(g_rt_spatial_b_cs), spatial_b_pso_) ||
-        !compute(light_root_.Get(), g_rt_star_sphere_cs, sizeof(g_rt_star_sphere_cs), star_sphere_pso_)) {
+        !compute(light_root_.Get(), g_rt_star_sphere_cs, sizeof(g_rt_star_sphere_cs), star_sphere_pso_) ||
+        !compute(light_root_.Get(), g_rt_gbuffer_cs, sizeof(g_rt_gbuffer_cs), gbuffer_pso_)) {
         return false;
     }
     // The reference reads the hits' textures from the descriptor heap: only with the textured trace.
@@ -2551,7 +2561,7 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
     composite_color.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     composite_color.NumDescriptors = 1u;
     composite_color.BaseShaderRegister = 3u;
-    D3D12_ROOT_PARAMETER composite_params[5]{};
+    D3D12_ROOT_PARAMETER composite_params[6]{};
     composite_params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
     composite_params[0].Constants.Num32BitValues = sizeof(RtCompositeConstants) / 4u;
     composite_params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
@@ -2563,11 +2573,13 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
     composite_params[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     composite_params[4].DescriptorTable.NumDescriptorRanges = 1u;
     composite_params[4].DescriptorTable.pDescriptorRanges = &composite_color;
+    composite_params[5].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    composite_params[5].Descriptor.ShaderRegister = 4u;
     for (auto& param : composite_params) {
         param.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     }
     D3D12_ROOT_SIGNATURE_DESC composite_rsd{};
-    composite_rsd.NumParameters = 5u;
+    composite_rsd.NumParameters = 6u;
     composite_rsd.pParameters = composite_params;
     if (!serialize(composite_rsd, composite_root_)) {
         return false;
@@ -3280,12 +3292,34 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     list->SetComputeRootShaderResourceView(kLightSkyMap, sky_traced ? sky_probe_map_->GetGPUVirtualAddress()
                                                                     : positions_->GetGPUVirtualAddress());
     list->SetComputeRootShaderResourceView(kLightTev, tev_table != 0u ? tev_table : draw_table.gpu);
+    list->SetComputeRootUnorderedAccessView(kLightPixels, light_raw_->GetGPUVirtualAddress());
     // The stars' balls, after the samples in the result (the composite shades the stars on them, reflections that
     // meet a star find its ball): every slot each frame, one without a star this frame written empty.
     list->SetPipelineState(star_sphere_pso_.Get());
     list->Dispatch(kStarSlots, 1u, 1u);
     list->SetPipelineState(trace_pso_.Get());
     list->Dispatch(groups_x, groups_y, 1u);
+    // Physical: the per-pixel normals of this frame into the slot's buffer (the composite's per-pixel sun).
+    bool pixels = false;
+    if (physical_active_ && !reference) {
+        const UINT64 bytes = static_cast<UINT64>(width) * height * 4u;
+        if (!light_pixels_[slot] || light_pixels_bytes_[slot] < bytes) {
+            retire(light_pixels_[slot]);
+            light_pixels_bytes_[slot] = 0u;
+            if (create_buffer(bytes, D3D12_HEAP_TYPE_DEFAULT, kUav, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+                              light_pixels_[slot], L"rt pixel normals")) {
+                light_pixels_bytes_[slot] = bytes;
+                light_pixels_state_[slot] = kUav;
+            }
+        }
+        if (light_pixels_[slot]) {
+            to_state(list, light_pixels_[slot].Get(), light_pixels_state_[slot], kUav);
+            list->SetComputeRootUnorderedAccessView(kLightPixels, light_pixels_[slot]->GetGPUVirtualAddress());
+            list->SetPipelineState(gbuffer_pso_.Get());
+            list->Dispatch((width + 7u) / 8u, (height + 7u) / 8u, 1u);
+            pixels = true;
+        }
+    }
     const D3D12_RESOURCE_BARRIER all_uav = uav_barrier(nullptr);
     list->ResourceBarrier(1u, &all_uav);
     list->SetPipelineState(temporal_pso_.Get());
@@ -3352,6 +3386,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     info.sample_height = sample_height;
     info.factor = factor;
     info.near_plane = c.near_plane;
+    info.pixels = pixels;
     for (unsigned i = 0; i < 3u; ++i) {
         info.sun[i] = c.sun[i];
         info.sun_light[i] = c.sun_light[i];
@@ -4091,7 +4126,12 @@ void SceneRayTracer::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRI
     c.sample_size[0] = info.sample_width;
     c.sample_size[1] = info.sample_height;
     c.factor = info.factor;
-    c.flags = (reproject ? 1u : 0u) | (show_lighting_ ? 2u : 0u) | (reference_active_ || physical_active_ ? 4u : 0u);
+    // Physical: the sun per pixel from the slot's per-pixel normals (not the reference, whose light is its own).
+    const bool per_pixel = info.pixels && !reference_active_ && light_pixels_[index];
+    c.flags = (reproject ? 1u : 0u) | (show_lighting_ ? 2u : 0u) | (reference_active_ || physical_active_ ? 4u : 0u) |
+              (per_pixel ? 8u : 0u);
+    c.target_size[0] = info.width;
+    c.target_size[1] = info.height;
     c.slot = index;
     c.near_plane = info.near_plane;
     c.split = split_ > 0.0f ? info.view.viewport[0] + split_ * info.view.viewport[2] : -1.0f;
@@ -4115,6 +4155,11 @@ void SceneRayTracer::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRI
     list->SetGraphicsRootShaderResourceView(3u, reproject ? reproject_->GetGPUVirtualAddress()
                                                           : light_final_[index]->GetGPUVirtualAddress());
     list->SetGraphicsRootDescriptorTable(4u, color_srv);
+    if (per_pixel) {
+        to_state(list, light_pixels_[index].Get(), light_pixels_state_[index], kLightRead);
+    }
+    list->SetGraphicsRootShaderResourceView(5u, per_pixel ? light_pixels_[index]->GetGPUVirtualAddress()
+                                                          : light_final_[index]->GetGPUVirtualAddress());
     list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     list->DrawInstanced(3u, 1u, 0u, 0u);
     end_pass(list, timed, kPassComposite);

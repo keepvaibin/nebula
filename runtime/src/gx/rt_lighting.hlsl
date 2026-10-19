@@ -139,6 +139,8 @@ RWStructuredBuffer<float4> g_reference : register(u6);
 // the sky's light in units of the stage's full light (linear), then its 9 spherical-harmonic coefficients (rgb).
 // SkyProbeCS and SkyTraceShCS write it (g_reference's slot).
 StructuredBuffer<float4> g_sky_map : register(t22);
+// kPhysicalFlag: per EFB pixel its shading normal (pack_normal; GBufferCS), for the composite's per-pixel sun.
+RWStructuredBuffer<uint> g_pixels : register(u7);
 static const uint kSkyMapSize = 64u;
 static const uint kSkyLayers = 8u;     // the sky's layers a probe ray composites, at most
 
@@ -3761,8 +3763,15 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
     if ((g_flags & kPhysicalFlag) != 0u) {
         // The game's light units: the sky and bounce light, the sun's (its irradiance over pi times N.L and its
         // visibility) and the point lights', summed; the composite multiplies the full-light colour by it in linear
-        // light. A light source's own surface glows over it as the reference's does.
-        float3 m = (light.sky + g_sun_light.rgb * light.sun + light.points * g_point_light) * physical_exposure();
+        // light. A light source's own surface glows over it as the reference's does. The sun's shadow at its
+        // penumbra's width (SpatialACS, kept by SpatialMCS), not the sky's wider filter; its visibility (the sun over
+        // this sample's facing) with the exposure in w's low half: the composite turns the sun to each pixel's normal.
+        float own_count;
+        light.sun = unpack_light(g_history_in[index], own_count).sun;
+        const float facing = dot(unpack_normal(g_normal[index]), g_sun.xyz);
+        const float exposure = physical_exposure();
+        const float visible = facing > 1e-3f ? saturate(light.sun / facing) * exposure : 0.0f;
+        float3 m = (light.sky + g_sun_light.rgb * light.sun + light.points * g_point_light) * exposure;
         const uint tri = g_primary[index].x;
         if (tri != 0u) {
             const uint record = min(g_surfaces.Load((tri - 1u) * 16u + 12u) >> 16u, max(g_draw_count, 1u) - 1u) *
@@ -3778,7 +3787,7 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
         }
         m = min(m, kMaxLight);
         g_final[index] = uint4(f32tof16(m.r) | (f32tof16(m.g) << 16u), f32tof16(m.b) | (f32tof16(1.0f) << 16u), asuint(z),
-                               0u);
+                               f32tof16(visible));
         return;
     }
     {
@@ -4229,6 +4238,24 @@ void StarSphereCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
     g_final[g_sample_size.x * g_sample_size.y + star] = asuint(ball);
 }
 
+// kPhysicalFlag: per EFB pixel the shading normal of the surface its camera ray meets at the raster's depth (the
+// smooth vertex normals, primary_surface), for the composite's per-pixel sun. A ray per pixel, once per traced frame;
+// the frame's in-between pictures read it where their pixels lay in it.
+[numthreads(8, 8, 1)]
+void GBufferCS(uint3 id : SV_DispatchThreadID)
+{
+    if (any(id.xy >= g_target_size)) {
+        return;
+    }
+    const int2 q = int2(id.xy);
+    float3 p;
+    uint packed = 0u;
+    if (pixel_point(q, p) && inside(g_viewport, float2(q) + 0.5f)) {
+        packed = pack_normal(primary_surface(q, p).n);
+    }
+    g_pixels[id.y * g_target_size.x + id.x] = packed;
+}
+
 // ---------------------------------------------------------------------------------------------
 // The lighting as a texture for the translucent draws after the trace (one texel per sample).
 // ---------------------------------------------------------------------------------------------
@@ -4275,11 +4302,21 @@ cbuffer RtComposite : register(b0)
     float m_efb_scale;  // EFB pixels per game pixel (the internal resolution)
     float4 m_sun;        // towards the traced sun (eye space, traced frame); relief height (eye units)
     float4 m_sun_light;  // its light (rgb)
+    uint2 m_target_size; // the traced frame's EFB pixels (m_pixels)
 };
 StructuredBuffer<uint4> m_light : register(t0);
 Texture2D<float> m_efb_depth : register(t1);
 StructuredBuffer<float4> m_reproject : register(t2);
 Texture2D<float4> m_color : register(t3);
+// m_flags bit 3 (physical): the traced frame's per-pixel shading normals (GBufferCS).
+StructuredBuffer<uint> m_pixels : register(t4);
+
+// The traced frame's shading normal at its pixel `q`.
+float3 traced_normal(int2 q)
+{
+    const int2 c = clamp(q, int2(0, 0), int2(m_target_size) - 1);
+    return unpack_normal(m_pixels[uint(c.y) * m_target_size.x + uint(c.x)]);
+}
 
 struct CompositeOut
 {
@@ -4416,6 +4453,14 @@ CompositeOut CompositePS(float4 position : SV_Position)
     float3 nearest = float3(1.0f, 1.0f, 1.0f);
     float nearest_relief = 0.0f;
     float nearest_dz = abs(p.z) * 0.1f;
+    // Physical (bit 3): the sun turned from each sample's facing to this pixel's own normal (the samples' visibility
+    // with the exposure in w's low half, their facing from the per-pixel normals at their pixels).
+    const bool per_pixel = (m_flags & 8u) != 0u;
+    const float pixel_facing = per_pixel ? max(dot(traced_normal(int2(eye_to_pixel(m_projection, m_viewport, p))),
+                                                   m_sun.xyz), 0.0f)
+                                         : 0.0f;
+    float sun_turn = 0.0f;
+    float nearest_turn = 0.0f;
     [unroll] for (uint k = 0u; k < 9u; ++k) {
         const int2 o = int2(int(k % 3u) - 1, int(k / 3u) - 1);
         const int2 s = clamp(centre + o, int2(0, 0), int2(m_sample_size) - 1);
@@ -4427,19 +4472,38 @@ CompositeOut CompositePS(float4 position : SV_Position)
         const float3 m = float3(f16tof32(sample.x), f16tof32(sample.x >> 16u), f16tof32(sample.y));
         const float2 offset = float2(centre + o) - a;
         const float dz = abs(sz - (p.z + dot(gradient, offset * float(m_factor))));
+        float turn = 0.0f;
+        if (per_pixel) {
+            const float visible = f16tof32(sample.w & 0xFFFFu);
+            const float facing = max(dot(traced_normal(int2(min(uint2(s) * m_factor, m_target_size - 1u))), m_sun.xyz),
+                                     0.0f);
+            turn = visible * (pixel_facing - facing);
+        }
         if (dz < nearest_dz) {
             nearest_dz = dz;
             nearest = m;
             nearest_relief = f16tof32(sample.w & 0xFFFFu);
+            nearest_turn = turn;
         }
         const float d = dz / tolerance;
         const float2 tent = max(1.5f - abs(offset), 0.0f);
         const float bw = tent.x * tent.y * exp(-d * d);
         sum += m * bw;
         relief_sum += f16tof32(sample.w & 0xFFFFu) * bw;
+        sun_turn += turn * bw;
         weight += bw;
     }
     float3 m = clamp(weight > 1e-3f ? sum / weight : nearest, 0.0f, kMaxLight);
+    if (per_pixel) {
+        // The per-pixel sun, then the film path (no relief: the normals are the surface's own).
+        m = clamp(m + m_sun_light.rgb * (weight > 1e-3f ? sun_turn / weight : nearest_turn), 0.0f, kMaxLight);
+        if ((m_flags & 2u) != 0u) {
+            result.color = float4(m * 0.5f, 1.0f);
+            return result;
+        }
+        result.color = float4(linear_to_srgb(film_light(srgb_to_linear(color), m)), 1.0f);
+        return result;
+    }
     // Relief: the texture's detail as height (its brightness, m_sun.w eye units at white) bends the
     // pixel's normal (the surface gradient of the faceted normal from depth, Mikkelsen 2010); the
     // sun's light follows the bent normal where the sample sees the sun. Across a depth edge that

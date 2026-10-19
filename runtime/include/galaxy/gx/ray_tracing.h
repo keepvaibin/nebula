@@ -475,6 +475,7 @@ private:
         bool camera_known = false;
         std::array<float, 3> sun{};        // towards the traced sun (eye space)
         std::array<float, 3> sun_light{};  // its light
+        bool pixels = false;               // light_pixels_ holds its per-pixel normals (physical)
     };
     Microsoft::WRL::ComPtr<ID3D12RootSignature> light_root_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> trace_pso_;
@@ -517,6 +518,11 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> light_primary_;
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 2> light_history_;
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kLightSlots> light_final_;
+    // Physical: per light slot its traced frame's per-pixel shading normals (rt_lighting.hlsl GBufferCS).
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kLightSlots> light_pixels_;
+    std::array<std::uint64_t, kLightSlots> light_pixels_bytes_{};
+    std::array<D3D12_RESOURCE_STATES, kLightSlots> light_pixels_state_{};
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> gbuffer_pso_;
     Microsoft::WRL::ComPtr<ID3D12Resource> picture_;
     Microsoft::WRL::ComPtr<ID3D12Resource> picture_sums_;
     // The exposure's measurement (lit and game luminance per bucket, snapshot_glow_base); always a UAV.
