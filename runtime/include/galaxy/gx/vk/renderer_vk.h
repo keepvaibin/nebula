@@ -428,11 +428,14 @@ private:
     std::int64_t gpu_budget_window_qpc_ = 0;
     unsigned gpu_budget_over_windows_ = 0;
     PresentPacer present_pacer_;
-    // VK_GOOGLE_display_timing (Android): each frame is presented for the retrace slot after the latest retrace
+    // VK_GOOGLE_display_timing (Android): each frame is presented for a retrace slot after the latest retrace
     // (host_window::present_target_ns), so it is shown one retrace period at the display's own vsync; the past
-    // presentation times report how many were shown at their slot ([present-timing], every 600 presents).
+    // presentation times report how many were shown at their slot ([present-timing], every 600 presents). The first
+    // frame the compositor shows after its slot moves every later one a slot further (`slots` 2): one retrace more
+    // latency for a cadence that never breaks.
     struct PresentTiming {
         std::uint32_t next_id = 0;
+        unsigned slots = 1;
         std::array<std::int64_t, 64> requested{};  // by presentID % 64
         std::int64_t refresh_ns = 0;
         std::int64_t last_actual = 0;

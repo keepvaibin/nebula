@@ -361,9 +361,9 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
                  describe(quirks_).c_str());
     std::fprintf(stderr,
                  "[vulkan] features: dual-source=%d logic-op=%d geometry=%d depth-clamp=%d depth-clip=%d bc=%d "
-                 "anisotropy=%d\n",
+                 "anisotropy=%d display-timing=%d\n",
                  dual_source_blend_, logic_op_, geometry_shader_, depth_clamp_, depth_clip_enable_, bc_textures_,
-                 sampler_anisotropy_);
+                 sampler_anisotropy_, display_timing_);
     return true;
 }
 

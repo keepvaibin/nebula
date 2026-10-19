@@ -113,16 +113,17 @@ bool wait_display_retrace(std::int64_t period_ns, std::int64_t& last_ns) noexcep
     return true;
 }
 
-std::int64_t display_present_target(std::int64_t margin_ns) noexcept {
+std::int64_t display_present_target(unsigned slots, std::int64_t margin_ns) noexcept {
     const std::int64_t retrace = g_retrace_ns.load(std::memory_order_acquire);
     const std::int64_t period = g_retrace_period_ns.load(std::memory_order_relaxed);
-    if (retrace == 0 || period == 0) {
+    const std::int64_t now = monotonic_ns();
+    if (retrace == 0 || period == 0 || now - retrace > 4 * period) {
         return 0;
     }
-    // The retrace slot after the latest retrace: a frame made within one retrace period is shown at the next retrace
-    // and stays one period. A frame too late for it takes the slot after.
-    const std::int64_t earliest = monotonic_ns() + margin_ns;
-    std::int64_t target = retrace + period;
+    // `slots` retrace slots after the latest retrace: a frame made within one retrace period is shown then and stays
+    // one period. A frame too late for it takes the slot after.
+    const std::int64_t earliest = now + margin_ns;
+    std::int64_t target = retrace + static_cast<std::int64_t>(slots) * period;
     if (target < earliest) {
         target += (earliest - target + period - 1) / period * period;
     }
@@ -140,7 +141,7 @@ bool wait_display_retrace(std::int64_t, std::int64_t&) noexcept {
     return false;
 }
 
-std::int64_t display_present_target(std::int64_t) noexcept {
+std::int64_t display_present_target(unsigned, std::int64_t) noexcept {
     return 0;
 }
 

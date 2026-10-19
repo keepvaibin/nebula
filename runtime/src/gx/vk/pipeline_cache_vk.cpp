@@ -70,8 +70,8 @@ std::string describe_render_state(const RenderStateKey& rs) {
 }
 
 // GALAXY_VK_TEST_REFUSE=<names, comma-separated>: pipelines using those features (dual-source, depth-clip,
-// depth-clamp, logic-op, geometry) or of that kind (specialised, uber) are refused as a driver would, so the
-// fallbacks run on any GPU. GALAXY_VK_TEST_CRASH_AT=<n>: the process aborts inside the n-th specialised build (the
+// depth-clamp, logic-op, geometry) or of that kind (specialised, uber, uber-vs: with the uber vertex shader) are
+// refused as a driver would, so the fallbacks run on any GPU. GALAXY_VK_TEST_CRASH_AT=<n>: the process aborts inside the n-th specialised build (the
 // compile journal's test).
 struct TestRefusals {
     bool dual_source = false;
@@ -81,6 +81,7 @@ struct TestRefusals {
     bool geometry = false;
     bool specialised = false;
     bool uber = false;
+    bool uber_vs = false;  // the Adreno 840 case: the uber vertex shader alone
     unsigned crash_at = 0;
 };
 
@@ -97,6 +98,7 @@ const TestRefusals& test_refusals() {
         r.geometry = has("geometry");
         r.specialised = has("specialised");
         r.uber = has("uber");
+        r.uber_vs = has("uber-vs");
         const char* crash = std::getenv("GALAXY_VK_TEST_CRASH_AT");
         r.crash_at = crash != nullptr ? static_cast<unsigned>(std::strtoul(crash, nullptr, 10)) : 0u;
         return r;
@@ -167,9 +169,22 @@ const std::vector<UberProbe>& uber_vs_probes() {
                                                             "const uint key_texgens = 0u;"};
         const std::pair<const char*, const char*> no_lighting{"const uint key_chans = uber_vs_header.y;",
                                                               "const uint key_chans = 0u;"};
+        // Within the texture coordinates (the part the Adreno 840 refused): the loop unrolled, and each kind of
+        // coordinate left out in turn.
+        const std::pair<const char*, const char*> unrolled{
+            "[loop] for (uint i = 0u; i < key_texgens && i < 8u; ++i) {",
+            "[unroll] for (uint i = 0u; i < 8u && i < key_texgens; ++i) {"};
+        const std::pair<const char*, const char*> no_emboss{"} else if (type == 1u) {", "} else if (false) {"};
+        const std::pair<const char*, const char*> no_texmtx{"if (((key_texmtx_mask >> i) & 1u) != 0u) {",
+                                                            "if (false) {"};
+        const std::pair<const char*, const char*> no_post{"if ((key_flags & 0x04u) != 0u) {", "if (false) {"};
         return std::vector<UberProbe>{{"no-texgen", {no_texgen}},
                                       {"no-lighting", {no_lighting}},
-                                      {"minimal", {no_texgen, no_lighting}}};
+                                      {"minimal", {no_texgen, no_lighting}},
+                                      {"texgen-unrolled", {unrolled}},
+                                      {"texgen-no-emboss", {no_emboss}},
+                                      {"texgen-no-texmtx", {no_texmtx}},
+                                      {"texgen-no-post", {no_post}}};
     }();
     return probes;
 }
@@ -728,9 +743,11 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
     info.renderPass = layout_->efb_pass;
     const TestRefusals& refuse = test_refusals();
     const bool uber = std::find(uber_ps_.begin(), uber_ps_.end(), ps) != uber_ps_.end();
+    const bool uber_vertex = vs != VK_NULL_HANDLE && vs == uber_vs_;
     if ((refuse.dual_source && dual_source && layout_->dual_source_blend) || (refuse.depth_clip && raster.pNext) ||
         (refuse.depth_clamp && raster.depthClampEnable) || (refuse.logic_op && blend.logicOpEnable) ||
-        (refuse.geometry && expanded) || (refuse.specialised && !uber) || (refuse.uber && uber)) {
+        (refuse.geometry && expanded) || (refuse.specialised && !uber) || (refuse.uber && uber) ||
+        (refuse.uber_vs && uber_vertex)) {
         result = VK_ERROR_INITIALIZATION_FAILED;
         return VK_NULL_HANDLE;
     }

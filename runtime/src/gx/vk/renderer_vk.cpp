@@ -1030,7 +1030,8 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
         if (context.display_timing()) {
             // Two milliseconds for the composer to take the frame before its slot.
             present_time.presentID = ++present_timing_.next_id;
-            present_time.desiredPresentTime = static_cast<std::uint64_t>(host_window::present_target_ns(2000000));
+            present_time.desiredPresentTime =
+                static_cast<std::uint64_t>(host_window::present_target_ns(present_timing_.slots, 2000000));
             present_timing_.requested[present_time.presentID % present_timing_.requested.size()] =
                 static_cast<std::int64_t>(present_time.desiredPresentTime);
             present_times.swapchainCount = 1;
@@ -1134,6 +1135,11 @@ void RendererVk::report_present_timing() {
             ++timing.on_slot;
         } else {
             ++timing.late;
+            if (timing.slots == 1u) {
+                timing.slots = 2u;
+                std::fprintf(stderr, "[present-timing] a frame was shown %.1f ms after its slot: frames are presented "
+                             "two retrace slots ahead from now\n", static_cast<double>(actual - requested) / 1e6);
+            }
         }
         if (timing.last_actual != 0 && std::llabs(actual - timing.last_actual - kRetraceNs) < half_vsync) {
             ++timing.even;
@@ -1141,9 +1147,9 @@ void RendererVk::report_present_timing() {
         timing.last_actual = actual;
         if (++timing.frames == 600u) {
             std::fprintf(stderr, "[present-timing] %u frames: %u shown at their retrace slot, %u late, %u without one "
-                         "(the host's clock); %u shown one retrace after the frame before (refresh %.2f ms)\n",
-                         timing.frames, timing.on_slot, timing.late, timing.unrequested, timing.even,
-                         static_cast<double>(timing.refresh_ns) / 1e6);
+                         "(the host's clock); %u shown one retrace after the frame before (refresh %.2f ms, %u slot%s "
+                         "ahead)\n", timing.frames, timing.on_slot, timing.late, timing.unrequested, timing.even,
+                         static_cast<double>(timing.refresh_ns) / 1e6, timing.slots, timing.slots == 1u ? "" : "s");
             timing.frames = timing.on_slot = timing.late = timing.unrequested = timing.even = 0u;
         }
     }

@@ -2099,7 +2099,7 @@ void show_window(NativeWindow window) noexcept {
     ShowWindowAsync(window, SW_SHOWNORMAL);
 }
 
-std::int64_t present_target_ns(std::int64_t) noexcept {
+std::int64_t present_target_ns(unsigned, std::int64_t) noexcept {
     return 0;  // the presents pace themselves (present_pacer)
 }
 

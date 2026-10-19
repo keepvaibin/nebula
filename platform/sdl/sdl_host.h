@@ -28,9 +28,9 @@ void pump_events(int timeout_ms) noexcept;
 // no recent vsyncs (out of sight, not yet shown), the display's rate does not divide the period, or the platform has
 // no display clock: the host's own clock runs the retrace then.
 bool wait_display_retrace(std::int64_t period_ns, std::int64_t& last_ns) noexcept;
-// The display time (CLOCK_MONOTONIC nanoseconds) for a frame presented now: the retrace slot after the latest
+// The display time (CLOCK_MONOTONIC nanoseconds) for a frame presented now: `slots` retrace slots after the latest
 // retrace, at least `margin_ns` from now; 0 while the retrace follows the host's clock.
-[[nodiscard]] std::int64_t display_present_target(std::int64_t margin_ns) noexcept;
+[[nodiscard]] std::int64_t display_present_target(unsigned slots, std::int64_t margin_ns) noexcept;
 // The display's refresh rate as its vsyncs measure it (0: not known).
 [[nodiscard]] double display_refresh_hz() noexcept;
 // Android, when `adb shell setprop debug.nebula.profile <seconds>` asks: that many seconds on, the GX, host-main and
