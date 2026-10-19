@@ -1734,7 +1734,9 @@ void FifoParser::replay_cached_display_list(
                 read_indexed_values(
                     guest_window.data(), values.data(), command.length);
                 state.load_xf_indexed(
-                    command.xf_addr, values.data(), command.length);
+                    command.xf_addr, values.data(), command.length,
+                    (static_cast<std::uint32_t>(command.array_slot) << 16u) |
+                        static_cast<std::uint32_t>(command.idx));
                 break;
             }
 
@@ -1841,6 +1843,8 @@ static bool top_level_command_complete(
         return available >= 4u;
     case op::kCallDisplayList:
         return available >= 8u;
+    case op::kHostMarker:
+        return available >= op::kHostMarkerBytes - 1u;
     default:
         if (opcode >= op::kDrawFirst && opcode <= op::kDrawLast) {
             if (available < 2u) {
@@ -2061,7 +2065,9 @@ void FifoParser::run_window(
 
                 std::array<std::uint32_t, 16> values{};
                 read_indexed_values(guest_window.data(), values.data(), length);
-                state.load_xf_indexed(xf_addr, values.data(), length);
+                state.load_xf_indexed(xf_addr, values.data(), length,
+                                      (static_cast<std::uint32_t>(array_slot) << 16u) |
+                                          static_cast<std::uint32_t>(idx));
             }
             if (recording != nullptr && recording->cacheable) {
                 CachedDisplayListCommand command;
@@ -2254,6 +2260,23 @@ void FifoParser::run_window(
                     byte_size,
                     call_dl_us);
             }
+            break;
+        }
+
+        // ---- 0xF0: host draw-identity marker (top level only) -----------------
+        case op::kHostMarker: {
+            if (depth != 0) {
+                throw GxFatalError("GX FIFO: host marker inside a display list",
+                                   opcode_offset, opcode);
+            }
+            const std::uint8_t kind = cursor.read_u8();
+            const std::uint16_t aux = cursor.read_u16();
+            const std::uint32_t a = cursor.read_u32();
+            const std::uint32_t b = cursor.read_u32();
+            sink.on_host_marker(kind, aux, a, b, opcode_offset);
+            finish_profile(
+                &FifoParserProfile::nop_count,
+                &FifoParserProfile::nop_us);
             break;
         }
 

@@ -14,6 +14,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -25,7 +26,7 @@ namespace galaxy::gx {
 // D3D12 16384-texel limit. Higher scales are opt-in; the default remains 1x.
 inline constexpr unsigned kMaxEfbScale = 16u;
 inline constexpr float kMinFrameRate = 1.0f;
-inline constexpr float kMaxFrameRate = 60.0f;
+inline constexpr float kMaxFrameRate = 1000.0f;
 
 struct RenderConfig {
     // EFB resolution multiplier (1-kMaxEfbScale).  efb_scale=2 -> 1280x1056 and acts as
@@ -85,6 +86,12 @@ struct RenderConfig {
     // position and normal). Applies to specialized triangle pipelines.
     bool     per_pixel_lighting  = false;
 
+    // Enhancement (enhanced_lighting.h): lit and environment-mapped draws are
+    // shaded per pixel in linear light with highlights, a sky/ground ambient
+    // and Fresnel on environment maps. Takes precedence over
+    // per_pixel_lighting for the draws it shades.
+    bool     enhanced_lighting   = false;
+
     // Presentation image quality (post_process.h), applied to the presented
     // frame on the render thread. aa_mode: 0 off, 1 SMAA, 2 auto (SMAA unless
     // the game image already has 1.5x the window's pixels on both axes),
@@ -115,14 +122,29 @@ struct RenderConfig {
     bool     post_process        = true;
     unsigned aa_mode             = 0;
     unsigned smaa_quality        = 2;
+    // 3: NVIDIA DLSS (temporal like 2; needs the user's Streamline install).
     unsigned upscaler            = 0;
+    // NVIDIA DLSS Frame Generation (GRAPHICS > INTERPOLATION): nonzero has its
+    // generated frames reach max_fps (0: the display's refresh rate) instead of
+    // Nebula's interpolated ones. It runs with DLSS (upscaler 3) and the Frame
+    // Generation plugins, loaded when the game starts with it on; while it runs
+    // the game presents its own 60 frames. Without it the target falls back to
+    // native interpolation.
+    unsigned frame_generation    = 0;
     unsigned temporal_quality    = 1;
+    // Bilinear and FSR 1: 0 renders at the INTERNAL RES row; 1-4 render at the output scale
+    // divided by 1.5, 1.7, 2 or 3 (the temporal_quality ratios).
+    unsigned spatial_quality     = 0;
     unsigned sharpness           = 0;
 
-    // Reserved for future DXR work. Clamped off until there is a real DXR
-    // capability query, acceleration-structure path, ray PSO, and visible
-    // native effect.
+    // Ray-traced effects (ambient occlusion) on adapters with DXR 1.1, shader
+    // model 6.5 and dedicated video memory; ignored elsewhere. The other rt_*
+    // keys are reserved and clamped off.
     bool     ray_tracing_enabled = false;
+    // Ray tracing quality: 0 medium (lighting at a share of the pixels, 2 sky rays, one glow light per
+    // sample), 1 high (every pixel up to 4K-class pictures, 4 sky rays, two glow lights, reflections that
+    // shade what they hit off screen).
+    unsigned rt_quality          = 1;
     unsigned rt_shadow_quality   = 0;   // 0=off, 1=low, 2=medium, 3=high
     bool     rt_ao_enabled       = false;
     bool     rt_reflections      = false;
@@ -140,6 +162,10 @@ struct RenderConfig {
     // GDI device name of the monitor (UTF-8, e.g. \\.\DISPLAY2); empty or
     // unknown selects the primary monitor.
     std::array<char, 64> monitor{};
+    // The GPU this session renders on, as gpu_identity() writes it ("10de:2b85:89ef1043"); empty, or a
+    // GPU that is not present, picks one automatically (GALAXY_GPU_PREFERENCE). Set at start-up from
+    // config.ini (GALAXY_GPU overrides) and kept for the session; see next_start_gpu().
+    std::array<char, 32> gpu{};
     unsigned fullscreen_width    = 0;
     unsigned fullscreen_height   = 0;
     unsigned fullscreen_refresh_hz = 0;
@@ -148,9 +174,23 @@ struct RenderConfig {
     unsigned aspect_mode         = 0;
 };
 
-// Frame-rate choices: 30 and the game's own 60.
-inline std::vector<unsigned> frame_rate_options() {
-    return {30u, 60u};
+// Frame-rate choices for a display refreshing at refresh_hz (0 = unknown):
+// the standard rates it can show, its own rate when that is not one of them,
+// then 0 for unlimited. 59 Hz reports count as 60.
+inline constexpr unsigned kStandardFrameRates[] = {30u, 60u, 120u, 144u, 165u, 240u, 360u};
+inline std::vector<unsigned> frame_rate_options(unsigned refresh_hz) {
+    std::vector<unsigned> options;
+    bool listed = false;
+    for (const unsigned rate : kStandardFrameRates) {
+        if (refresh_hz != 0u && rate > refresh_hz + 1u) break;
+        options.push_back(rate);
+        listed = listed || (refresh_hz + 1u >= rate && refresh_hz <= rate + 1u);
+    }
+    if (refresh_hz > 30u && !listed) {
+        options.insert(std::upper_bound(options.begin(), options.end(), refresh_hz), refresh_hz);
+    }
+    options.push_back(0u);
+    return options;
 }
 
 // Frames per second the game picture is presented at. The game renders 60;
@@ -270,6 +310,15 @@ struct RenderFeatureCaps {
 // Thread-safe accessors. The stored value is copied while holding the shared
 // lock so callers never observe a partial update.
 [[nodiscard]] RenderConfig get_render_config();
+
+// While DLSS Frame Generation runs (set by the renderer) the game presents its
+// own 60 frames; the generated ones raise the rate.
+void set_frame_generation_running(bool running) noexcept;
+[[nodiscard]] bool frame_generation_running() noexcept;
+// The rate the game presents at: max_fps, or 60 while frame generation runs.
+[[nodiscard]] inline float presented_max_fps(const RenderConfig& cfg) noexcept {
+    return frame_generation_running() ? 60.0f : cfg.max_fps;
+}
 void set_render_config(const RenderConfig& cfg);
 
 // The persisted EFB scale for the next process start. The overlay sets it
@@ -295,6 +344,21 @@ void load_render_config_from_file();
 // are real and exposed.
 bool save_render_config_to_file();
 
+// A GPU's identity in config.ini's gpu key: PCI vendor, device and subsystem id in lowercase hex,
+// "vvvv:dddd:ssssssss". The subsystem tells two boards of the same chip apart.
+std::string gpu_identity(unsigned vendor_id, unsigned device_id, unsigned subsys_id);
+
+// The gpu config.ini names, which the next start renders on. Nebula Settings owns the key: a reload
+// takes it here and leaves RenderConfig::gpu as the session started, and every save writes the value
+// the file has at that moment (this one when it cannot be read), never GALAXY_GPU.
+std::string next_start_gpu();
+
+// Records the adapter the renderer runs on (adapter.ini beside config.ini) for the launcher,
+// which offers DLSS only on an NVIDIA RTX adapter: description, PCI vendor and device id, its
+// gpu_identity(), the GPU preference the runtime started with (low: integrated first) and
+// whether it runs Nebula's ray tracing.
+void record_render_adapter(const wchar_t* description, unsigned vendor_id, unsigned device_id,
+                           unsigned subsys_id, bool low_power_preference, bool ray_tracing) noexcept;
 // When config.ini changed on disk since this process last read or wrote it
 // (Nebula Settings saved it while the game runs), reads it over the live
 // settings, as the in-game menu would apply them, and returns true.

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
 
 namespace Nebula.Launcher
 {
@@ -23,15 +24,21 @@ namespace Nebula.Launcher
             start.CreateNoWindow = true;
             start.WorkingDirectory = app;
             start.RedirectStandardOutput = start.RedirectStandardError = recording != RecordingMode.None;
+            // The runtime's narrow output is UTF-8 (its manifest sets the process code page).
+            if (start.RedirectStandardOutput) start.StandardOutputEncoding = start.StandardErrorEncoding = Encoding.UTF8;
             foreach (var name in start.EnvironmentVariables.Keys.Cast<string>().Where(n => n.StartsWith("GALAXY_", StringComparison.OrdinalIgnoreCase)).ToList())
                 start.EnvironmentVariables.Remove(name);
             foreach (var entry in (System.Collections.IList)Json.ParseAny(File.ReadAllText(Path.Combine(app, "runtime-env.json"))))
             {
-                var pair = (Dictionary<string, object>)entry;
-                start.EnvironmentVariables[Json.Str(pair, "name")] = Json.Str(pair, "value");
+                // A nameless entry (a wrapped list, Native39's runtime-env.json) is skipped, not fatal.
+                var pair = entry as Dictionary<string, object>;
+                string name = pair != null ? Json.Str(pair, "name") : null;
+                if (string.IsNullOrEmpty(name)) continue;
+                start.EnvironmentVariables[name] = Json.Str(pair, "value") ?? "";
             }
             var env = start.EnvironmentVariables;
             env["GALAXY_NAND_ROOT"] = saves;
+            env["GALAXY_STREAMLINE_DIR"] = GraphicsSettings.StreamlineDir;
             env["GALAXY_NATIVE_THP_VIDEO_DECODE"] = "1";
             env["GALAXY_DUSK_DSP_HLE"] = "0";
             ApplyRecording(start, recording);

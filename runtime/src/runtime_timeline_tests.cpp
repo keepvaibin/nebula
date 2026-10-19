@@ -28,6 +28,10 @@
 
 namespace {
 
+// A worker thread's publication on a loaded machine (the suite beside a game run or a build) can
+// take far longer than its own work: these waits end at the publication and only bound a hang.
+constexpr auto kWorkerPublishTimeout = std::chrono::seconds(15);
+
 template <class Ready>
 bool await_handshake(Ready ready, std::atomic_bool& clean,
                      std::chrono::steady_clock::time_point deadline) {
@@ -1083,7 +1087,7 @@ bool broker_rebases_and_restores_deadlines_atomically() {
 
     counter.value.store(950u, std::memory_order_release);
     const auto publish_timeout =
-        std::chrono::steady_clock::now() + std::chrono::milliseconds(100);
+        std::chrono::steady_clock::now() + kWorkerPublishTimeout;
     while ((latch.pending(EventKind::VideoInterface) == 0u ||
             latch.pending_replaceable_generation(EventKind::AudioDma) == 0u) &&
            !broker.failed() && std::chrono::steady_clock::now() < publish_timeout) {
@@ -1113,7 +1117,7 @@ bool broker_rebases_and_restores_deadlines_atomically() {
 
     counter.value.fetch_add(50u, std::memory_order_acq_rel);
     const auto restore_timeout =
-        std::chrono::steady_clock::now() + std::chrono::milliseconds(100);
+        std::chrono::steady_clock::now() + kWorkerPublishTimeout;
     while (latch.pending(EventKind::VideoInterface) == 0u &&
            !broker.failed() && std::chrono::steady_clock::now() < restore_timeout) {
         std::this_thread::yield();
@@ -1165,7 +1169,7 @@ bool broker_rejects_wrong_restore_owner_transactionally() {
     latch.clear_replaceable(EventKind::AudioDma);
     broker.start();
     counter.value.store(1'100u, std::memory_order_release);
-    const auto timeout = std::chrono::steady_clock::now() + std::chrono::milliseconds(100);
+    const auto timeout = std::chrono::steady_clock::now() + kWorkerPublishTimeout;
     while (latch.pending(EventKind::VideoInterface) < 2u && !broker.failed() &&
            std::chrono::steady_clock::now() < timeout) { std::this_thread::yield(); }
     broker.stop();
@@ -1225,7 +1229,7 @@ bool broker_rejects_observed_recovery_without_mutating_owners() {
     broker.start();
     counter.value.store(1'100u, std::memory_order_release);
     const auto timeout = std::chrono::steady_clock::now() +
-        std::chrono::milliseconds(100);
+        kWorkerPublishTimeout;
     while ((latch.pending(EventKind::VideoInterface) < 2u ||
             latch.pending(EventKind::InputReport) == 0u) && !broker.failed() &&
            std::chrono::steady_clock::now() < timeout) {
@@ -1732,6 +1736,59 @@ bool level_periodic_consumer_coalesces_only_complete_due_identity() {
             stats.level_coalescing_events == 1u &&
             stats.missed_or_coalesced_edges == 2u,
         "level coalescing remains explicit in acceptance telemetry");
+    return passed;
+}
+
+// Diagnostics session 20261015-002725: the broker's timer woke over a period
+// late, so the simulation thread saw two due VI deadlines with none published.
+bool level_periodic_consumer_waits_for_late_broker_publication() {
+    using galaxy::timing::DeadlineEvent;
+    using galaxy::timing::EventKind;
+    using galaxy::timing::ExactPeriodicDeadlineConsumer;
+    using galaxy::timing::PendingEventLatch;
+
+    constexpr EventKind kKind = EventKind::VideoInterface;
+    PendingEventLatch latch;
+    ExactPeriodicDeadlineConsumer consumer(1'000u, 100u, 7u);
+    bool passed = true;
+
+    passed &= expect(
+        consumer.inspect(latch, kKind, 1'150u).status ==
+            galaxy::timing::PeriodicConsumeStatus::Backlog,
+        "two due VI deadlines with no publication inspect as a backlog");
+    const auto unpublished = consumer.consume_one_or_coalesce_level_or_throw(
+        latch, kKind, 1'150u);
+    passed &= expect(
+        !unpublished.has_value() && latch.pending(kKind) == 0u &&
+            consumer.stats().locked_rate_valid &&
+            consumer.stats().delivered_edges == 0u,
+        "an unpublished due batch waits for the broker instead of failing");
+
+    passed &= expect(
+        latch.publish_periodic(DeadlineEvent{kKind, 7u, 1'000u}) &&
+            latch.publish_periodic(DeadlineEvent{kKind, 8u, 1'100u}),
+        "the late broker publishes both due identities");
+    const auto coalesced = consumer.consume_one_or_coalesce_level_or_throw(
+        latch, kKind, 1'160u);
+    passed &= expect(
+        coalesced.has_value() && coalesced->sequence == 8u &&
+            coalesced->deadline_ticks == 1'100u &&
+            latch.pending(kKind) == 0u &&
+            consumer.stats().locked_rate_valid &&
+            consumer.stats().delivered_edges == 2u &&
+            consumer.stats().coalesced_level_edges == 1u,
+        "the late batch coalesces into one level at its latest identity");
+
+    passed &= expect(
+        latch.publish_periodic(DeadlineEvent{kKind, 9u, 1'200u}),
+        "the successor publishes on time");
+    const auto successor = consumer.consume_one_or_coalesce_level_or_throw(
+        latch, kKind, 1'200u);
+    passed &= expect(
+        successor.has_value() && successor->sequence == 9u &&
+            consumer.stats().locked_rate_valid &&
+            consumer.stats().delivered_interrupts == 2u,
+        "the schedule continues at its exact successor");
     return passed;
 }
 
@@ -2254,7 +2311,7 @@ bool broker_only_latches_host_events() {
         galaxy::timing::kViPeriodTicks);
     broker.start();
     const auto timeout =
-        std::chrono::steady_clock::now() + std::chrono::milliseconds(100);
+        std::chrono::steady_clock::now() + kWorkerPublishTimeout;
     while (latch.pending(galaxy::timing::EventKind::VideoInterface) == 0u &&
            std::chrono::steady_clock::now() < timeout) {
         std::this_thread::yield();
@@ -2295,7 +2352,7 @@ bool broker_periodic_rephase_discards_old_latch() {
     broker.start();
 
     const auto old_phase_timeout =
-        std::chrono::steady_clock::now() + std::chrono::milliseconds(100);
+        std::chrono::steady_clock::now() + kWorkerPublishTimeout;
     while (latch.pending(EventKind::InputReport) == 0u && !broker.failed() &&
            std::chrono::steady_clock::now() < old_phase_timeout) {
         std::this_thread::yield();
@@ -2317,7 +2374,7 @@ bool broker_periodic_rephase_discards_old_latch() {
 
     counter.value.store(5'000u, std::memory_order_release);
     const auto new_phase_timeout =
-        std::chrono::steady_clock::now() + std::chrono::milliseconds(100);
+        std::chrono::steady_clock::now() + kWorkerPublishTimeout;
     while (latch.pending(EventKind::InputReport) == 0u && !broker.failed() &&
            std::chrono::steady_clock::now() < new_phase_timeout) {
         std::this_thread::yield();
@@ -2354,7 +2411,7 @@ bool broker_rephase_starts_at_next_unconsumed_input_deadline() {
     broker.start();
 
     const auto startup_timeout =
-        std::chrono::steady_clock::now() + std::chrono::milliseconds(100);
+        std::chrono::steady_clock::now() + kWorkerPublishTimeout;
     while (latch.pending(EventKind::InputReport) == 0u && !broker.failed() &&
            std::chrono::steady_clock::now() < startup_timeout) {
         std::this_thread::yield();
@@ -2391,7 +2448,7 @@ bool broker_rephase_starts_at_next_unconsumed_input_deadline() {
 
     counter.value.store(kNextUnconsumedDeadline, std::memory_order_release);
     const auto next_deadline_timeout =
-        std::chrono::steady_clock::now() + std::chrono::milliseconds(100);
+        std::chrono::steady_clock::now() + kWorkerPublishTimeout;
     while (latch.pending(EventKind::InputReport) == 0u && !broker.failed() &&
            std::chrono::steady_clock::now() < next_deadline_timeout) {
         std::this_thread::yield();
@@ -2457,7 +2514,7 @@ bool broker_configures_worker_priority_before_timeline_reads() {
     broker.start();
 
     const auto timeout =
-        std::chrono::steady_clock::now() + std::chrono::milliseconds(100);
+        std::chrono::steady_clock::now() + kWorkerPublishTimeout;
     while (!counter.worker_observed.load(std::memory_order_acquire) &&
            !broker.failed() &&
            std::chrono::steady_clock::now() < timeout) {
@@ -2506,7 +2563,7 @@ bool broker_replaces_and_cancels_one_shots_linearly() {
     // sleeping first generation and publish identity 2, never a bare count.
     broker.replace_once(EventKind::AudioDma, 0u, 2u);
     const auto timeout =
-        std::chrono::steady_clock::now() + std::chrono::milliseconds(100);
+        std::chrono::steady_clock::now() + kWorkerPublishTimeout;
     while (latch.pending_replaceable_generation(EventKind::AudioDma) == 0u &&
            !broker.failed() && std::chrono::steady_clock::now() < timeout) {
         std::this_thread::yield();
@@ -2716,6 +2773,7 @@ int main() {
     passed &= run_test("exact_periodic_consumer_accepts_one_late_edge_within_period", exact_periodic_consumer_accepts_one_late_edge_within_period);
     passed &= run_test("exact_periodic_consumer_rejects_267ms_backlog", exact_periodic_consumer_rejects_267ms_backlog);
     passed &= run_test("level_periodic_consumer_coalesces_only_complete_due_identity", level_periodic_consumer_coalesces_only_complete_due_identity);
+    passed &= run_test("level_periodic_consumer_waits_for_late_broker_publication", level_periodic_consumer_waits_for_late_broker_publication);
     passed &= run_test("periodic_prefix_take_preserves_concurrent_successor", periodic_prefix_take_preserves_concurrent_successor);
     passed &= run_test("level_periodic_consumer_rejects_anonymous_singleton", level_periodic_consumer_rejects_anonymous_singleton);
     passed &= run_test("periodic_prefix_concurrent_orders_converge", periodic_prefix_concurrent_orders_converge);

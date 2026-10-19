@@ -266,6 +266,9 @@ int main() {
             loaded_audio.sfx == 0.7f && loaded_audio.voice == 0.6f &&
             loaded_audio.ambience == 0.5f,
         "all five persisted audio gains load independently");
+    passed &= expect(
+        loaded_audio.wiimote_speaker == 0.0f,
+        "a settings file without the Wiimote sounds key keeps them off");
 
     _putenv_s("GALAXY_AUDIO_AMBIENCE_GAIN", "0.250");
     galaxy::load_runtime_settings_from_file();
@@ -273,6 +276,23 @@ int main() {
         galaxy::get_runtime_settings().audio.ambience == 0.25f,
         "ambience environment override is independent from SFX");
     _putenv_s("GALAXY_AUDIO_AMBIENCE_GAIN", "");
+
+    write_text(settings_path, "audio_wiimote_speaker_gain=0.750\n");
+    galaxy::load_runtime_settings_from_file();
+    passed &= expect(
+        galaxy::get_runtime_settings().audio.wiimote_speaker == 0.75f &&
+            galaxy::get_runtime_settings().audio.master == 1.0f,
+        "the Wiimote sounds gain loads on its own");
+    _putenv_s("GALAXY_AUDIO_WIIMOTE_SPEAKER_GAIN", "0.5");
+    galaxy::load_runtime_settings_from_file();
+    passed &= expect(
+        galaxy::get_runtime_settings().audio.wiimote_speaker == 0.5f,
+        "the Wiimote sounds gain has an environment override");
+    _putenv_s("GALAXY_AUDIO_WIIMOTE_SPEAKER_GAIN", "");
+    passed &= expect(
+        galaxy::save_runtime_settings_to_file() &&
+            read_text(settings_path).find("audio_wiimote_speaker_gain=0.5") != std::string::npos,
+        "the Wiimote sounds gain is saved with the other audio settings");
 
     galaxy::RuntimeSettings invalid_audio = galaxy::get_runtime_settings();
     invalid_audio.audio.master = -1.0f;

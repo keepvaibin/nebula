@@ -3122,6 +3122,11 @@ public:
         failure_notifier_.set(notifier, user);
     }
 
+    // The emulated remote's speaker stream, mixed on the submitting thread.
+    void set_wiimote_speaker(galaxy::input::speaker::Speaker* speaker) noexcept {
+        wiimote_speaker_ = speaker;
+    }
+
     bool preinitialize() {
         const auto started = std::chrono::steady_clock::now();
         const bool initialized = initialization_gate_.preinitialize(
@@ -3172,7 +3177,7 @@ public:
                 log_drop("invalid Wii AI PCM channel conversion");
                 return false;
             }
-            apply_output_master_gain(pcm_le);
+            finish_output(pcm_le, sample_rate);
             if (!wav_dump_.append(
                 std::span<const std::byte>(pcm_le.data(), pcm_le.size()),
                 sample_rate)) {
@@ -3336,7 +3341,7 @@ public:
                     log_drop("offline audio WAV diagnostic failed");
                     return false;
                 }
-                apply_output_master_gain(pcm_le);
+                finish_output(pcm_le, sample_rate);
                 if (!wav_dump_.append(pcm_le, sample_rate)) {
                     log_drop("offline audio WAV diagnostic failed");
                     return false;
@@ -3356,7 +3361,7 @@ public:
             log_drop("invalid Wii AI PCM channel conversion");
             return false;
         }
-        apply_output_master_gain(buffer->bytes);
+        finish_output(buffer->bytes, sample_rate);
 
         if (!enqueue_pending_buffer(std::move(buffer))) {
             return false;
@@ -3832,13 +3837,21 @@ public:
 #endif
 
 private:
+    // The Wii Remote speaker joins the game's output before the master volume, which covers it too.
+    void finish_output(std::vector<std::byte>& pcm_le, std::uint32_t sample_rate) noexcept {
+        const galaxy::RuntimeAudioSettings audio = galaxy::get_runtime_settings().audio;
+        if (wiimote_speaker_ != nullptr) {
+            wiimote_speaker_->mix(pcm_le, sample_rate, audio.wiimote_speaker);
+        }
+        apply_output_master_gain(pcm_le, audio.master);
+    }
+
     // Master volume, applied once to the final output so it also covers audio mixed outside the DSP
     // channels (the movie player). A change ramps across one buffer from the previous value. One
     // submitting thread.
-    void apply_output_master_gain(std::vector<std::byte>& pcm_le) noexcept {
+    void apply_output_master_gain(std::vector<std::byte>& pcm_le, float master) noexcept {
         constexpr std::uint32_t kUnity = galaxy::audio::kNativeAudioUnityGainQ16;
-        const std::uint32_t target = galaxy::audio::native_audio_gain_to_q16(
-            galaxy::get_runtime_settings().audio.master);
+        const std::uint32_t target = galaxy::audio::native_audio_gain_to_q16(master);
         // The first buffer starts at the configured gain; later changes ramp.
         const std::uint32_t start =
             output_master_started_ ? output_master_q16_ : target;
@@ -3879,6 +3892,7 @@ private:
     }
     std::uint32_t output_master_q16_ = galaxy::audio::kNativeAudioUnityGainQ16;
     bool output_master_started_ = false;
+    galaxy::input::speaker::Speaker* wiimote_speaker_ = nullptr;
 
     struct SubmittedBuffer {
         std::atomic_bool started{false};
@@ -8806,6 +8820,7 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
     // and whether it moved (a new physical sample inside the client).
     bool mouse_visible = false;
     bool mouse_moved = false;
+    bool mouse_button_held = false;
     const char* mouse_source = "mouse";
     const bool drop_injected_mouse = drop_injected && native_pointer_input_injected(false);
     input_poll_diagnostic_stage(NativeInputPollStage::Pointer);
@@ -8961,10 +8976,11 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
                 : host_pointer_absolute_sequence_changed;
             // Fresh physical movement inside the client takes precedence over a non-forced script, even when
             // the game window is unfocused. Button ownership stays guarded separately by window focus.
+            mouse_button_held = host_pointer.window_focused &&
+                                (host_pointer.left_button || host_pointer.right_button);
             if ((host_pointer_inside_client &&
                  host_pointer_has_fresh_coordinates) ||
-                (host_pointer.window_focused &&
-                 (host_pointer.left_button || host_pointer.right_button))) {
+                mouse_button_held) {
                 s_last_live_mouse_tick = now;
             }
             if (button_sample.has_transition_coordinates &&
@@ -9167,6 +9183,14 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
         pointer_active = false;
         pointer_source = "controller-rest-hidden";
     }
+    // In menus a key press acts on the pointer's position, so a resting mouse pointer stays.
+    static galaxy::input::MouseRestHide s_mouse_rest_hide{};
+    if (s_mouse_rest_hide.update(owner == galaxy::input::PointerSource::Mouse && pointer_active && window_focused &&
+                                     play_context == galaxy::input::PlayContext::Play,
+                                 mouse_moved || mouse_button_held, now_us)) {
+        pointer_active = false;
+        pointer_source = "mouse-rest-hidden";
+    }
     if (script.has_pointer &&
         (script_pointer_force_enabled() || !live_mouse_recent ||
          !pointer_active)) {
@@ -9211,6 +9235,12 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
         script.shake || held(WiiTarget::Shake) || motion_shake_remote;
     static bool s_previous_shake = false;
     static std::uint8_t s_shake_frames = 0;
+    if (shake_pressed && !s_previous_shake) {
+        // Each shake the virtual remote reports, by its source (the session log beside [controller-motion]).
+        std::cerr << "[input-shake] vi=" << current_vi << " source="
+                  << (motion_shake_remote ? "motion" : held(WiiTarget::Shake) ? "binding" : "script")
+                  << " tilt-section=" << galaxy::input::tilt::section_name(tilt_section) << '\n';
+    }
     const bool shake_active = galaxy::input::advance_wiimote_shake_accel(
         snapshot, shake_pressed, s_previous_shake, s_shake_frames);
     static bool s_previous_nunchuk_shake = false;
@@ -11502,6 +11532,7 @@ bool GuestAddressSpace::preinitialize_native_audio() {
         native_audio_->set_failure_notifier(
             native_audio_failure_callback_,
             native_audio_failure_callback_user_);
+        native_audio_->set_wiimote_speaker(&wiimote_speaker_);
         if (ai_pcm_identity_tracking_enabled_) {
             native_audio_->reset_measurement_window();
         }
@@ -12205,7 +12236,9 @@ void GuestAddressSpace::drain_wgpipe_gather_bursts() {
             (cpu_fifo_wrap_ ? kPiCpWrapMask : 0u);
         write_storage_be32(broadway_registers_, kPiCpWrite, pi_write);
     }
-    if (live_fifo) {
+    if (!pending_gx_markers_.empty()) [[unlikely]] {
+        append_staged_bytes_with_markers(complete, live_fifo);
+    } else if (live_fifo) {
         const std::size_t append_start = gx_fifo_.size();
         gx_fifo_.insert(gx_fifo_.end(), wgpipe_gather_.begin(),
                         wgpipe_gather_.begin() + static_cast<std::ptrdiff_t>(complete));
@@ -12279,9 +12312,48 @@ void GuestAddressSpace::flush_wgpipe_gather_burst(
     }
 }
 
+void GuestAddressSpace::append_staged_bytes_with_markers(std::uint32_t count, bool live_fifo) {
+    std::uint32_t copied = 0u;
+    std::size_t done = 0u;
+    for (; done < pending_gx_markers_.size() && pending_gx_markers_[done].at <= count; ++done) {
+        const PendingGxMarker& marker = pending_gx_markers_[done];
+        if (live_fifo && marker.at > copied) {
+            gx_fifo_.insert(gx_fifo_.end(), wgpipe_gather_.begin() + copied,
+                            wgpipe_gather_.begin() + marker.at);
+        }
+        copied = marker.at;
+        gx_fifo_.insert(gx_fifo_.end(), marker.bytes.begin(), marker.bytes.end());
+    }
+    if (live_fifo && count > copied) {
+        gx_fifo_.insert(gx_fifo_.end(), wgpipe_gather_.begin() + copied,
+                        wgpipe_gather_.begin() + count);
+    }
+    pending_gx_markers_.erase(pending_gx_markers_.begin(),
+                              pending_gx_markers_.begin() + static_cast<std::ptrdiff_t>(done));
+    for (PendingGxMarker& marker : pending_gx_markers_) {
+        marker.at -= count;
+    }
+}
+
+bool GuestAddressSpace::append_gx_host_marker(const std::array<std::byte, 12>& marker) {
+    drain_wgpipe_gather_bursts();
+    if (!wgpipe_feeds_live_fifo()) {
+        return false;
+    }
+    if (wgpipe_gather_count_ == 0u && pending_gx_markers_.empty()) {
+        gx_fifo_.insert(gx_fifo_.end(), marker.begin(), marker.end());
+        return true;
+    }
+    pending_gx_markers_.push_back({wgpipe_gather_count_, marker});
+    return true;
+}
+
 void GuestAddressSpace::flush_wgpipe_gather_tail_for_frame() {
     drain_wgpipe_gather_bursts();
     if (wgpipe_gather_count_ == 0) {
+        if (!pending_gx_markers_.empty() && wgpipe_feeds_live_fifo()) {
+            append_staged_bytes_with_markers(0u, true);
+        }
         return;
     }
 
@@ -12294,11 +12366,15 @@ void GuestAddressSpace::flush_wgpipe_gather_tail_for_frame() {
         return;
     }
     const std::size_t append_start = gx_fifo_.size();
-    gx_fifo_.insert(
-        gx_fifo_.end(),
-        wgpipe_gather_.begin(),
-        wgpipe_gather_.begin() +
-            static_cast<std::ptrdiff_t>(wgpipe_gather_count_));
+    if (!pending_gx_markers_.empty()) [[unlikely]] {
+        append_staged_bytes_with_markers(wgpipe_gather_count_, true);
+    } else {
+        gx_fifo_.insert(
+            gx_fifo_.end(),
+            wgpipe_gather_.begin(),
+            wgpipe_gather_.begin() +
+                static_cast<std::ptrdiff_t>(wgpipe_gather_count_));
+    }
     if (trace_gx_fifo_append_enabled_) {
         trace_gx_fifo_append(
             "wgpipe-tail",
@@ -28795,8 +28871,9 @@ void GuestAddressSpace::submit_ai_dma_audio(
     // leading-silence decision is therefore unchanged, without a second per-buffer diagnostic scan.
     const bool has_audible_pcm = !analyze_pcm || pcm_stats.peak != 0u ||
                                  pcm_stats.nonzero_samples != 0u;
+    // The Wii Remote speaker is mixed into these buffers, so it ends the leading silence too.
     const bool mute_leading_silence =
-        !ai_audio_seen_nonzero_pcm_ && !has_audible_pcm;
+        !ai_audio_seen_nonzero_pcm_ && !has_audible_pcm && !bt_wiimote_speaker_enabled_;
     if (has_audible_pcm) {
         ai_audio_seen_nonzero_pcm_ = true;
     }
@@ -28811,6 +28888,7 @@ void GuestAddressSpace::submit_ai_dma_audio(
             native_audio_->set_failure_notifier(
                 native_audio_failure_callback_,
                 native_audio_failure_callback_user_);
+            native_audio_->set_wiimote_speaker(&wiimote_speaker_);
             if (ai_pcm_identity_tracking_enabled_) {
                 native_audio_->reset_measurement_window();
             }
@@ -29478,6 +29556,8 @@ void GuestAddressSpace::reset_wiimote_link_state(
     bt_wiimote_rumble_ = false;
     bt_wiimote_speaker_enabled_ = false;
     bt_wiimote_speaker_muted_ = true;
+    wiimote_speaker_.set_enabled(false);
+    wiimote_speaker_.set_muted(true);
     bt_wiimote_ir_enabled_ = false;
     bt_wiimote_ir_report13_enabled_ = false;
     bt_wiimote_ir_report1a_enabled_ = false;
@@ -31580,6 +31660,7 @@ bool GuestAddressSpace::handle_bluetooth_acl_out(
             }
         case 0x14u:
             bt_wiimote_speaker_enabled_ = (common & 0x04u) != 0;
+            wiimote_speaker_.set_enabled(bt_wiimote_speaker_enabled_);
             ack_after_handler = ack_requested;
             break;
         case 0x15u: {
@@ -31631,6 +31712,16 @@ bool GuestAddressSpace::handle_bluetooth_acl_out(
                 message << "native Wiimote unsupported register write address 0x"
                         << std::hex << address;
                 throw std::runtime_error(message.str());
+            }
+            if ((address & kWiimoteRegisterPageMask) == kWiimoteSpeakerRegisterBase) {
+                const galaxy::input::speaker::Config previous = wiimote_speaker_.config();
+                wiimote_speaker_.write_registers(address & 0xffu, write_data);
+                if (const galaxy::input::speaker::Config config = wiimote_speaker_.config(); config != previous) {
+                    std::cerr << "[wiimote-speaker] "
+                              << (config.format == galaxy::input::speaker::Format::Pcm8 ? "pcm8 " : "adpcm4 ")
+                              << config.sample_rate << " Hz volume 0x" << std::hex
+                              << static_cast<unsigned>(config.volume) << std::dec << '\n';
+                }
             }
             if ((address & kWiimoteRegisterPageMask) ==
                 kWiimoteIrRegisterBase) {
@@ -31781,10 +31872,12 @@ bool GuestAddressSpace::handle_bluetooth_acl_out(
                         << static_cast<unsigned>(common >> 3u);
                 throw std::runtime_error(message.str());
             }
+            wiimote_speaker_.receive(std::span<const std::uint8_t>(payload + 3, common >> 3u));
             ack_after_handler = ack_requested;
             break;
         case 0x19u:
             bt_wiimote_speaker_muted_ = (common & 0x04u) != 0;
+            wiimote_speaker_.set_muted(bt_wiimote_speaker_muted_);
             ack_after_handler = ack_requested;
             break;
         default:

@@ -13,9 +13,11 @@
 #endif
 
 #include "galaxy/gx/texture_cache.h"
+#include "galaxy/gx/rt_materials.h"
 #include "galaxy/gx/dependency_event_capture.h"
 
 #include "galaxy/gx/render_config.h"
+#include "galaxy/gx/shader_keys.h"
 #include "galaxy/windows_power.h"
 
 #include <algorithm>
@@ -380,6 +382,96 @@ static inline void rgb5a3x8_to_rgba(v128 v, RGBA8* row0, RGBA8* row1) noexcept {
 }
 
 }  // namespace
+
+bool detail::flatten_texel_checker(std::vector<RGBA8>& pixels, std::uint32_t width, std::uint32_t height) {
+    if (width < 4u || height < 4u || pixels.size() < static_cast<std::size_t>(width) * height) {
+        return false;
+    }
+    const RGBA8 even = pixels[0];
+    const RGBA8 odd = pixels[1];
+    const auto same = [](RGBA8 a, RGBA8 b) { return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a; };
+    if (same(even, odd)) {
+        return false;
+    }
+    for (std::uint32_t y = 0; y < height; ++y) {
+        for (std::uint32_t x = 0; x < width; ++x) {
+            if (!same(pixels[static_cast<std::size_t>(y) * width + x], ((x + y) & 1u) == 0u ? even : odd)) {
+                return false;
+            }
+        }
+    }
+    const auto mean = [](std::uint8_t a, std::uint8_t b) { return static_cast<std::uint8_t>((a + b + 1u) >> 1u); };
+    const RGBA8 flat{mean(even.r, odd.r), mean(even.g, odd.g), mean(even.b, odd.b), mean(even.a, odd.a)};
+    std::fill_n(pixels.begin(), static_cast<std::size_t>(width) * height, flat);
+    return true;
+}
+
+bool detail::remove_texel_checker(std::vector<RGBA8>& pixels, std::uint32_t width, std::uint32_t height) {
+    const std::size_t count = static_cast<std::size_t>(width) * height;
+    if (width < 4u || height < 4u || pixels.size() < count) {
+        return false;
+    }
+    const auto at = [&](std::uint32_t x, std::uint32_t y) -> const RGBA8& {
+        return pixels[static_cast<std::size_t>(y) * width + x];
+    };
+    // Four times a value against the sum of its four neighbours (clamped at the edges), signed by the checker.
+    const auto checker_detail = [&](std::uint32_t x, std::uint32_t y, auto channel) {
+        const std::int32_t sum = channel(at(x > 0u ? x - 1u : x, y)) + channel(at(x + 1u < width ? x + 1u : x, y)) +
+                                 channel(at(x, y > 0u ? y - 1u : y)) + channel(at(x, y + 1u < height ? y + 1u : y));
+        const std::int32_t d = 4 * channel(at(x, y)) - sum;
+        return ((x + y) & 1u) == 0u ? d : -d;
+    };
+    // Luminance x 256 (Rec. 709 weights).
+    const auto luma = [](const RGBA8& p) {
+        return 54 * static_cast<std::int32_t>(p.r) + 183 * static_cast<std::int32_t>(p.g) + 19 * static_cast<std::int32_t>(p.b);
+    };
+    std::size_t strong = 0u;
+    std::int64_t phase = 0;
+    for (std::uint32_t y = 0; y < height; ++y) {
+        for (std::uint32_t x = 0; x < width; ++x) {
+            const std::int32_t d = checker_detail(x, y, luma);
+            if (d >= 8 * 256 || d <= -8 * 256) {
+                ++strong;
+                phase += d > 0 ? 1 : -1;
+            }
+        }
+    }
+    if (strong * 5u < count || static_cast<std::size_t>(phase < 0 ? -phase : phase) * 100u < strong * 95u) {
+        return false;
+    }
+    std::vector<std::int32_t> detail(count);
+    std::vector<RGBA8> out(pixels.begin(), pixels.begin() + static_cast<std::ptrdiff_t>(count));
+    const auto remove = [&](auto channel, auto store) {
+        for (std::uint32_t y = 0; y < height; ++y) {
+            for (std::uint32_t x = 0; x < width; ++x) {
+                detail[static_cast<std::size_t>(y) * width + x] = checker_detail(x, y, channel);
+            }
+        }
+        for (std::uint32_t y = 0; y < height; ++y) {
+            for (std::uint32_t x = 0; x < width; ++x) {
+                std::int32_t sum = 0;
+                for (std::uint32_t sy = y > 0u ? y - 1u : y; sy <= std::min(y + 1u, height - 1u); ++sy) {
+                    for (std::uint32_t sx = x > 0u ? x - 1u : x; sx <= std::min(x + 1u, width - 1u); ++sx) {
+                        sum += detail[static_cast<std::size_t>(sy) * width + sx];
+                    }
+                }
+                // The checker's amplitude: the mean signed detail (four times twice the amplitude) over the 3x3 texels
+                // within the level.
+                const std::int32_t taps = static_cast<std::int32_t>((std::min(x + 1u, width - 1u) - (x > 0u ? x - 1u : x) + 1u) *
+                                                                    (std::min(y + 1u, height - 1u) - (y > 0u ? y - 1u : y) + 1u));
+                const std::int32_t scale = 8 * taps;
+                const std::int32_t amplitude = (sum >= 0 ? sum + scale / 2 : sum - scale / 2) / scale;
+                const std::int32_t value = channel(at(x, y)) - (((x + y) & 1u) == 0u ? amplitude : -amplitude);
+                store(out[static_cast<std::size_t>(y) * width + x], static_cast<std::uint8_t>(std::clamp(value, 0, 255)));
+            }
+        }
+    };
+    remove([](const RGBA8& p) { return static_cast<std::int32_t>(p.r); }, [](RGBA8& p, std::uint8_t v) { p.r = v; });
+    remove([](const RGBA8& p) { return static_cast<std::int32_t>(p.g); }, [](RGBA8& p, std::uint8_t v) { p.g = v; });
+    remove([](const RGBA8& p) { return static_cast<std::int32_t>(p.b); }, [](RGBA8& p, std::uint8_t v) { p.b = v; });
+    std::copy(out.begin(), out.end(), pixels.begin());
+    return true;
+}
 
 void detail::generate_rgba8_mip_level(
     const std::vector<RGBA8>& source,
@@ -1097,6 +1189,9 @@ static void decode_texture_levels(
             throw std::runtime_error(
                 "[TextureCache] get: unhandled TexFormat");
         }
+        if (efb_true_color() && !detail::flatten_texel_checker(level_pixels[l], lw, lh)) {
+            detail::remove_texel_checker(level_pixels[l], lw, lh);
+        }
         src += tex_data_size(format, lw, lh);
     }
     if (generated_mips) {
@@ -1268,14 +1363,50 @@ void TextureCache::begin_frame(
     // Reserve before publishing any slots, so allocation failure cannot leave
     // a partially reclaimed list that would publish duplicate slots on retry.
     free_srv_indices_.reserve(free_srv_indices_.size() + retired.size());
+    std::vector<Entry>* held = hold_segment_ < kMaxHoldSegments
+        ? &held_entries_[hold_segment_] : nullptr;
+    if (held != nullptr) [[unlikely]] {
+        held->reserve(held->size() + retired.size());
+    }
     for (Entry& entry : retired) {
         free_srv_indices_.push_back(entry.handle.srv_index);
-        pool_retired_texture(entry);
+        if (held != nullptr) [[unlikely]] {
+            held->push_back(std::move(entry));
+            ++held_texture_count_;
+        } else {
+            pool_retired_texture(entry);
+        }
     }
     retired.clear();
     upload_arenas_[frame_slot].active_chunk = 0;
     upload_arenas_[frame_slot].cursor = 0;
     current_frame_slot_ = frame_slot;
+}
+
+void TextureCache::release_held_entries(std::vector<Entry>& held) {
+    for (Entry& entry : held) {
+        pool_retired_texture(entry);
+    }
+    held.clear();
+}
+
+void TextureCache::set_retirement_hold_segment(unsigned segment) {
+    if (segment == hold_segment_) {
+        return;
+    }
+    if (segment >= kMaxHoldSegments) {
+        // Interpolation ended: the renderer drained the GPU when its rings
+        // left the per-game-frame mode.
+        for (auto& held : held_entries_) {
+            release_held_entries(held);
+        }
+        hold_segment_ = kNoHoldSegment;
+        return;
+    }
+    // The renderer waited for this segment's fence before reusing it: every
+    // replay that could name these textures has completed.
+    release_held_entries(held_entries_[segment]);
+    hold_segment_ = segment;
 }
 
 bool TextureCache::preallocate_upload_arenas(unsigned frames_in_flight) {
@@ -1559,6 +1690,10 @@ void TextureCache::shutdown() {
     efb_aliases_.clear();
     alias_guest_envelope_.clear();
     retired_entries_.clear();
+    for (auto& held : held_entries_) {
+        held.clear();
+    }
+    hold_segment_ = kNoHoldSegment;
     texture_pool_.clear();
     texture_pool_bytes_ = 0;
     release_upload_arenas();
@@ -2133,6 +2268,14 @@ TextureHandle TextureCache::get(
             std::span<const std::byte>(guest_bytes, total_guest_size));
     }
     const auto* src = reinterpret_cast<const std::uint8_t*>(guest_bytes);
+    // The ray tracer's material table names textures by the texture-pack key of their base level.
+    std::uint16_t rt_material = 0u;
+    if (rt_materials_loaded()) {
+        const std::uint64_t pack = texture_pack_hash(
+            src, texture_guest_byte_size(image.format, image.width, image.height, 1u));
+        rt_material = rt_material_index(pack);
+        note_rt_texture(image.guest_addr, pack, image.width, image.height, static_cast<std::uint32_t>(image.format));
+    }
     std::optional<ContentKey> content_key;
     if (decoded_content_cache_enabled() &&
         !debug_invalidate_every_frame && total_guest_size != 0u &&
@@ -2193,6 +2336,7 @@ TextureHandle TextureCache::get(
                 entry.handle.from_efb_copy = false;
                 entry.handle.generated_mips = generated_mips;
                 entry.handle.guest_byte_size = total_guest_size;
+                entry.handle.rt_material = rt_material;
                 const TextureHandle handle = entry.handle;
                 if (entries_.empty()) decoded_guest_envelope_.clear();
                 decoded_guest_envelope_.include(image.guest_addr, total_guest_size);
@@ -2390,6 +2534,7 @@ TextureHandle TextureCache::get(
     handle.from_efb_copy = false;
     handle.generated_mips = generated_mips;
     handle.guest_byte_size = total_guest_size;
+    handle.rt_material = rt_material;
 
     Entry entry{};
     entry.texture = std::move(resource);

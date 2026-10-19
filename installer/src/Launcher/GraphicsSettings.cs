@@ -23,14 +23,172 @@ namespace Nebula.Launcher
         private static readonly int[] AspectsBefore3To2 = { 0, 1, 3, 4, 5, 6 };
         public static readonly string[] AntiAliasingModes = { "Off", "SMAA", "Auto (SMAA unless supersampled)", "FXAA" };
         public static readonly string[] AntiAliasingQualities = { "Low", "Medium", "High", "Ultra" };
+        // Frame rate: the game's own 60 (Off), Nebula's interpolated frames (Native) or NVIDIA's
+        // generated ones (DLSS Frame Generation, with DLSS on an RTX GPU).
+        public static readonly string[] InterpolationModes = { "Off", "Native", "DLSS Frame Generation" };
         // Release runtimes are built without FSR 3 (upscaler 2); a saved 2 reads as FSR 1.
         public static readonly string[] Upscalers = { "Bilinear", "AMD FidelityFX FSR 1" };
+        // NVIDIA DLSS (upscaler 3) runs from files the player downloads from NVIDIA
+        // (DlssPackage); Nebula ships none of them.
+        public static string StreamlineDir { get { return DlssPackage.Folder; } }
+        public static bool DlssInstalled() { return DlssPackage.Installed(); }
+        // The upscaler setting values offered, in list order. DLSS is listed (before it is
+        // downloaded too) when the game runs on an NVIDIA RTX GPU.
+        public static List<int> UpscalerChoices(string gpu)
+        {
+            var choices = new List<int> { 0, 1 };
+            if (DlssAdapter(gpu)) choices.Add(3);
+            return choices;
+        }
+
+        /// <summary>
+        /// The GPU the game will run on for the gpu setting: the chosen GPU, or the automatic choice when
+        /// it is empty or not present (GpuAdapters.Resolve). Null when DXGI cannot list the GPUs.
+        /// </summary>
+        public static GpuAdapter TargetAdapter(string gpu)
+        {
+            return GpuAdapters.Resolve(GpuAdapters.List(PackagePrefersIntegratedGpu()), gpu);
+        }
+
+        /// <summary>
+        /// The GPU the game will run on is an NVIDIA RTX GPU. Without DXGI's list, the runtime's record of
+        /// its last run (adapter.ini, written with this package's GPU preference) decides; with no record,
+        /// any RTX adapter in the machine, unless this package prefers the integrated GPU.
+        /// </summary>
+        public static bool DlssAdapter(string gpu)
+        {
+            GpuAdapter target = TargetAdapter(gpu);
+            if (target != null) return target.IsNvidiaRtx;
+            bool lowPower = PackagePrefersIntegratedGpu();
+            var values = AdapterRecord(lowPower);
+            string vendor, description;
+            if (values != null && values.TryGetValue("vendor_id", out vendor) && values.TryGetValue("description", out description))
+            {
+                return vendor == "4318" && description.IndexOf("RTX", StringComparison.OrdinalIgnoreCase) >= 0;
+            }
+            return !lowPower && DlssPackage.RtxAdapterPresent();
+        }
+
+        /// <summary>
+        /// The GPU the game will run on runs Nebula's ray tracing (DXR 1.1, shader model 6.5, dedicated
+        /// memory). The runtime records whether the GPU it ran on does (adapter.ini); a GPU it has not run on
+        /// yet does when it is an NVIDIA RTX GPU, and is otherwise offered after its first run.
+        /// </summary>
+        public static bool RayTracingAdapter(string gpu)
+        {
+            GpuAdapter target = TargetAdapter(gpu);
+            string rt, id;
+            if (target != null)
+            {
+                var record = AdapterRecord(null);
+                if (record != null && record.TryGetValue("id", out id) && id == target.Id)
+                    return record.TryGetValue("ray_tracing", out rt) && rt == "1";
+                return target.IsNvidiaRtx;
+            }
+            var values = AdapterRecord(PackagePrefersIntegratedGpu());
+            return values != null && values.TryGetValue("ray_tracing", out rt) && rt == "1";
+        }
+
+        // adapter.ini when it was written with the given GPU preference (any, for null); otherwise null.
+        private static Dictionary<string, string> AdapterRecord(bool? lowPower)
+        {
+            string path = Path.Combine(NebulaPaths.DataRoot, "adapter.ini");
+            try
+            {
+                if (!File.Exists(path)) return null;
+                var values = new Dictionary<string, string>();
+                foreach (string line in File.ReadAllLines(path))
+                {
+                    int equals = line.IndexOf('=');
+                    if (equals > 0) values[line.Substring(0, equals).Trim()] = line.Substring(equals + 1).Trim();
+                }
+                string preference;
+                return lowPower == null ||
+                       (values.TryGetValue("gpu_preference", out preference) && (preference == "low") == lowPower.Value)
+                    ? values : null;
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+            return null;
+        }
+
+        /// <summary>runtime-env.json beside the launcher selects the integrated GPU (GALAXY_GPU_PREFERENCE=low).</summary>
+        public static bool PackagePrefersIntegratedGpu()
+        {
+            try
+            {
+                string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "runtime-env.json");
+                if (!File.Exists(path)) return false;
+                foreach (var entry in (System.Collections.IList)Json.ParseAny(File.ReadAllText(path)))
+                {
+                    var pair = entry as Dictionary<string, object>;
+                    if (pair != null && Json.Str(pair, "name") == "GALAXY_GPU_PREFERENCE")
+                        return string.Equals(Json.Str(pair, "value"), "low", StringComparison.OrdinalIgnoreCase);
+                }
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+            catch (ArgumentException) { }
+            catch (InvalidCastException) { }
+            return false;
+        }
+        public static string UpscalerName(int value)
+        {
+            if (value == 3) return DlssInstalled() ? "NVIDIA DLSS" : "NVIDIA DLSS (download)";
+            return Upscalers[Math.Max(0, Math.Min(value, Upscalers.Length - 1))];
+        }
+        public static readonly string[] DlssQualities = { "DLAA", "Quality", "Balanced", "Performance", "Ultra Performance" };
+        // Every upscaler: the first mode renders at the internal resolution, the others at the
+        // internal resolution divided by 1.5, 1.7, 2 or 3.
+        public static readonly string[] SpatialQualities = { "Native", "Quality", "Balanced", "Performance", "Ultra Performance" };
         private const int TemporalQualityCount = 5;
         public static readonly string[] TextureFilters = { "Trilinear", "2x anisotropic", "4x anisotropic", "8x anisotropic", "16x anisotropic" };
-        public static readonly string[] LightingModes = { "Per pixel (enhanced)", "Per vertex (original)" };
+        public static readonly string[] LightingModes = { "Enhanced", "Per pixel", "Per vertex (original)" };
         private static readonly int[] Anisotropy = { 1, 2, 4, 8, 16 };
-        // The runtime's frame_rate_options.
-        public static readonly int[] FrameRates = { 30, 60 };
+        private static readonly int[] StandardFrameRates = { 30, 60, 120, 144, 165, 240, 360 };
+
+        // The runtime's frame_rate_options: standard rates the display can
+        // show, its own rate when that is not one of them, then 0 (unlimited).
+        /// <summary>
+        /// The frame rates an interpolation mode offers, lowest first: 30 and 60 without one; else
+        /// the standard rates below the display's, then the display's own (0, "match refresh rate").
+        /// With DLSS upscaling native interpolation runs at multiples of 60. The runtime keeps the
+        /// same list (renderer_d3d12.cpp interpolation_targets).
+        /// </summary>
+        public static List<int> InterpolationTargets(int mode, int refreshHz, bool dlss)
+        {
+            var targets = new List<int>();
+            if (mode == 0) { targets.Add(30); targets.Add(60); return targets; }
+            bool sixties = mode == 1 && dlss;
+            foreach (int rate in new[] { 120, 144, 165, 180, 240, 360 })
+            {
+                if (refreshHz != 0 && rate + 1 >= refreshHz) break;
+                if ((rate == 180 && mode == 1 && !sixties) || (sixties && rate % 60 != 0)) continue;
+                targets.Add(rate);
+            }
+            bool own = refreshHz == 0 || (refreshHz > 61 && (!sixties || refreshHz % 60 <= 1 || refreshHz % 60 >= 59));
+            if (own) targets.Add(0);
+            return targets;
+        }
+
+        public static List<int> FrameRates(int refreshHz)
+        {
+            var rates = new List<int>();
+            bool listed = false;
+            foreach (int rate in StandardFrameRates)
+            {
+                if (refreshHz != 0 && rate > refreshHz + 1) break;
+                rates.Add(rate);
+                listed = listed || (refreshHz + 1 >= rate && refreshHz <= rate + 1);
+            }
+            if (refreshHz > 30 && !listed)
+            {
+                int at = rates.FindIndex(r => r > refreshHz);
+                rates.Insert(at < 0 ? rates.Count : at, refreshHz);
+            }
+            rates.Add(0);
+            return rates;
+        }
         // Width:height of each aspect choice; Auto has none.
         private static readonly int[,] AspectRatios = { { 0, 0 }, { 4, 3 }, { 3, 2 }, { 16, 10 }, { 16, 9 }, { 21, 9 }, { 32, 9 } };
         // Window heights offered for a fixed aspect when the width comes out whole.
@@ -39,6 +197,8 @@ namespace Nebula.Launcher
 
         public int DisplayMode = 1;
         public string Monitor = "";
+        // The GPU the game renders on (GpuAdapter.Id); empty chooses automatically.
+        public string Gpu = "";
         public int WindowWidth = 1280, WindowHeight = 720;
         public int FullscreenWidth = 0, FullscreenHeight = 0, FullscreenRefresh = 0;
         public int Aspect = 0;
@@ -48,7 +208,16 @@ namespace Nebula.Launcher
         public int FrameRate = 60;
         public int AntiAliasing = 0, Quality = 2, Upscaler = 0, Sharpness = 0, TextureFilter = 0;
         public int TemporalQuality = 1;
-        public bool GeneratedMipmaps = false, PerPixelLighting = false, HudOutputResolution = false;
+        public int FrameGeneration = 0;
+        public int SpatialQuality = 0;
+        public bool GeneratedMipmaps = false, PerPixelLighting = false, EnhancedLighting = false;
+        public bool HudOutputResolution = false, RayTracing = false;
+        // Ray tracing quality (config rt_quality): 0 medium (one sample per 2 x 2 pixels of the internal
+        // resolution), 1 high (every internal pixel, more rays, reflections shaded where they land), 2 low (one
+        // per 3 x 3, single rays: RTX 3050-class cards). Shown Low, Medium, High (RtQualityOrder).
+        public int RtQuality = 1;
+        public static readonly string[] RtQualities = { "Low (1/3 res)", "Medium (1/2 res)", "High (full res)" };
+        public static readonly int[] RtQualityOrder = { 2, 0, 1 };
 
         public static string ConfigPath { get { return Path.Combine(NebulaPaths.DataRoot, "config.ini"); } }
 
@@ -87,6 +256,8 @@ namespace Nebula.Launcher
             settings.DisplayMode = Math.Min(Choice(values, "display_mode", 3, settings.DisplayMode), 1);
             string monitor;
             if (values.TryGetValue("monitor", out monitor)) settings.Monitor = monitor.Trim();
+            string gpu;
+            if (values.TryGetValue("gpu", out gpu)) settings.Gpu = gpu.Trim().ToLowerInvariant();
             settings.WindowWidth = Choice(values, "window_width", 65536, settings.WindowWidth);
             settings.WindowHeight = Choice(values, "window_height", 65536, settings.WindowHeight);
             settings.FullscreenWidth = Choice(values, "fullscreen_width", 16385, 0);
@@ -101,11 +272,14 @@ namespace Nebula.Launcher
             double rate;
             if (values.TryGetValue("max_fps", out fps) &&
                 double.TryParse(fps.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out rate) &&
-                rate >= 1 && rate <= 60) settings.FrameRate = (int)Math.Round(rate);
+                (rate == 0 || (rate >= 1 && rate <= 1000))) settings.FrameRate = (int)Math.Round(rate);
             settings.AntiAliasing = Choice(values, "aa", AntiAliasingModes.Length, settings.AntiAliasing);
             settings.Quality = Choice(values, "smaa_quality", AntiAliasingQualities.Length, settings.Quality);
-            settings.Upscaler = Math.Min(Choice(values, "upscaler", Upscalers.Length + 1, settings.Upscaler), Upscalers.Length - 1);
+            int upscaler = Choice(values, "upscaler", 4, settings.Upscaler);
+            settings.Upscaler = upscaler == 2 ? 1 : upscaler;
             settings.TemporalQuality = Choice(values, "temporal_quality", TemporalQualityCount, settings.TemporalQuality);
+            settings.FrameGeneration = Choice(values, "frame_generation", 6, settings.FrameGeneration);
+            settings.SpatialQuality = Choice(values, "spatial_quality", TemporalQualityCount, settings.SpatialQuality);
             settings.Sharpness = Math.Min(Choice(values, "sharpness", 101, settings.Sharpness), 100);
             int anisotropy = Choice(values, "anisotropic_filtering", 17, -1);
             if (anisotropy >= 1)
@@ -113,10 +287,18 @@ namespace Nebula.Launcher
                 settings.TextureFilter = 0;
                 for (int i = 0; i < Anisotropy.Length; i++) if (Anisotropy[i] <= anisotropy) settings.TextureFilter = i;
             }
-            string mipmaps, lighting, hud;
+            string mipmaps, lighting, enhanced, hud, rt;
             if (values.TryGetValue("enhanced_mipmaps", out mipmaps)) settings.GeneratedMipmaps = mipmaps.Trim() != "0";
             if (values.TryGetValue("per_pixel_lighting", out lighting)) settings.PerPixelLighting = lighting.Trim() != "0";
+            if (values.TryGetValue("enhanced_lighting", out enhanced)) settings.EnhancedLighting = enhanced.Trim() != "0";
             if (values.TryGetValue("hud_output_resolution", out hud)) settings.HudOutputResolution = hud.Trim() != "0";
+            if (values.TryGetValue("ray_tracing_enabled", out rt)) settings.RayTracing = rt.Trim() != "0";
+            string quality;
+            if (values.TryGetValue("rt_quality", out quality))
+                settings.RtQuality = quality.Trim() == "0" ||
+                                     quality.Trim().Equals("medium", StringComparison.OrdinalIgnoreCase) ? 0
+                                   : quality.Trim() == "2" ||
+                                     quality.Trim().Equals("low", StringComparison.OrdinalIgnoreCase) ? 2 : 1;
             settings.read = SettingsFile.Snapshot(settings.Values());
             return settings;
         }
@@ -131,6 +313,7 @@ namespace Nebula.Launcher
             {
                 new KeyValuePair<string, string>("display_mode", n(DisplayMode)),
                 new KeyValuePair<string, string>("monitor", Monitor ?? ""),
+                new KeyValuePair<string, string>("gpu", Gpu ?? ""),
                 new KeyValuePair<string, string>("window_width", n(WindowWidth)),
                 new KeyValuePair<string, string>("window_height", n(WindowHeight)),
                 new KeyValuePair<string, string>("fullscreen_width", n(FullscreenWidth)),
@@ -145,11 +328,16 @@ namespace Nebula.Launcher
                 new KeyValuePair<string, string>("smaa_quality", n(Quality)),
                 new KeyValuePair<string, string>("upscaler", n(Upscaler)),
                 new KeyValuePair<string, string>("temporal_quality", n(TemporalQuality)),
+                new KeyValuePair<string, string>("frame_generation", n(FrameGeneration)),
+                new KeyValuePair<string, string>("spatial_quality", n(SpatialQuality)),
                 new KeyValuePair<string, string>("sharpness", n(Sharpness)),
                 new KeyValuePair<string, string>("anisotropic_filtering", n(Anisotropy[Math.Max(0, Math.Min(TextureFilter, Anisotropy.Length - 1))])),
                 new KeyValuePair<string, string>("enhanced_mipmaps", GeneratedMipmaps ? "1" : "0"),
                 new KeyValuePair<string, string>("per_pixel_lighting", PerPixelLighting ? "1" : "0"),
+                new KeyValuePair<string, string>("enhanced_lighting", EnhancedLighting ? "1" : "0"),
                 new KeyValuePair<string, string>("hud_output_resolution", HudOutputResolution ? "1" : "0"),
+                new KeyValuePair<string, string>("ray_tracing_enabled", RayTracing ? "1" : "0"),
+                new KeyValuePair<string, string>("rt_quality", RtQuality == 0 ? "medium" : RtQuality == 2 ? "low" : "high"),
             };
         }
 

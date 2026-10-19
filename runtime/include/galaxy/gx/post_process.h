@@ -21,13 +21,14 @@ namespace galaxy::gx {
 
 class DescriptorRing;
 
-// Presentation image quality, applied to the presented XFB on the render
-// thread only.
-//   aa:          SMAA 1x or FXAA at the game image's resolution, before any
-//                scaling. kAuto runs SMAA only when the game image is not
-//                already supersampled (less than 1.5 source pixels per window
-//                pixel on either axis). SMAA falls back to FXAA when its
-//                pipelines, lookup textures or start-up self-test fail.
+// Image quality on the render thread.
+//   aa:          SMAA 1x or FXAA of the 3D scene in the EFB, before the 2D layer
+//                draws (record_scene_aa), so menus and text stay sharp. kAuto
+//                runs SMAA only when the scene is not already supersampled
+//                (less than 1.5 scene pixels per window pixel on either axis).
+//                SMAA falls back to FXAA when its pipelines, lookup textures or
+//                start-up self-test fail. The presented frame is not
+//                antialiased again.
 //   upscaler:    FidelityFX FSR 1 EASU when the game image is smaller than the
 //                window on both axes; otherwise a footprint box filter, which
 //                averages every source pixel when the image is reduced.
@@ -53,9 +54,9 @@ public:
     // Capabilities, self-test results, last frame's AA pass and totals.
     [[nodiscard]] const PostProcessStatus& status() const noexcept { return status_; }
 
-    // Records the chain from `source` (RGBA8, PIXEL_SHADER_RESOURCE) into the
-    // `viewport` rectangle of `target_rtv`. Intermediate targets are kept
-    // across frames and replaced only when a size changes; replaced
+    // Records the scaling chain from `source` (RGBA8, PIXEL_SHADER_RESOURCE)
+    // into the `viewport` rectangle of `target_rtv`. Intermediate targets are
+    // kept across frames and replaced only when a size changes; replaced
     // resources are released `frames_in_flight` frames later.
     void record(ID3D12GraphicsCommandList* list,
                 DescriptorRing& srv_ring,
@@ -66,6 +67,17 @@ public:
                 const D3D12_VIEWPORT& viewport,
                 std::uint64_t frame_index,
                 unsigned frames_in_flight);
+
+    // SMAA or FXAA of the 3D scene in `color` (RGBA8, RENDER_TARGET state, `width` x `height`) in
+    // place: RGB only, the alpha the game left there stays. `picture_*` is the part the display
+    // copy shows and `display_*` its size on screen (kAuto skips a supersampled scene). Pixels
+    // left of `split` x width stay as they are (side-by-side comparisons; 0 for all). Returns the
+    // pass that ran.
+    AaRun record_scene_aa(ID3D12GraphicsCommandList* list, DescriptorRing& srv_ring,
+                          ID3D12Resource* color, D3D12_CPU_DESCRIPTOR_HANDLE color_rtv,
+                          unsigned width, unsigned height, unsigned picture_width,
+                          unsigned picture_height, unsigned display_width, unsigned display_height,
+                          float split, std::uint64_t frame_index, unsigned frames_in_flight);
 
     [[nodiscard]] const PostProcessSettings& settings() const noexcept { return settings_; }
 
@@ -101,7 +113,8 @@ private:
 
     bool create_pipeline(D3D12_SHADER_BYTECODE vs, D3D12_SHADER_BYTECODE ps,
                          DXGI_FORMAT format, int stencil,
-                         Microsoft::WRL::ComPtr<ID3D12PipelineState>& out);
+                         Microsoft::WRL::ComPtr<ID3D12PipelineState>& out,
+                         UINT8 write_mask = D3D12_COLOR_WRITE_ENABLE_ALL);
     bool create_smaa_pipelines(unsigned quality,
                                Microsoft::WRL::ComPtr<ID3D12PipelineState>& edges,
                                Microsoft::WRL::ComPtr<ID3D12PipelineState>& weights);
@@ -122,13 +135,16 @@ private:
     // stair-stepped edge, on `queue`, waiting for the GPU.
     void self_test(ID3D12CommandQueue* queue);
     // Binds `inputs` as t0..t2 and draws the full-target triangle into the
-    // render target the caller has bound, inside `viewport`.
+    // render target the caller has bound, inside `viewport` (and `scissor`
+    // when given).
     void draw(ID3D12GraphicsCommandList* list, DescriptorRing& srv_ring,
               ID3D12PipelineState* pipeline,
               std::initializer_list<ID3D12Resource*> inputs,
               std::initializer_list<DXGI_FORMAT> formats,
               const D3D12_VIEWPORT& viewport,
-              const Constants& constants);
+              const Constants& constants,
+              const D3D12_RECT* scissor = nullptr);
+    void note_aa_run(const PostProcessPlan& plan, AaRun ran);
     void release_retired(std::uint64_t frame_index) noexcept;
 
     ID3D12Device* device_ = nullptr;
@@ -142,10 +158,15 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> smaa_weights_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> smaa_blend_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> fxaa_;
+    // The scene passes' last step into the EFB: colour only.
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> smaa_blend_rgb_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> fxaa_rgb_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> easu_;
     // RCAS and the resample run into intermediates and into the back buffer;
     // both use RGBA8, so one pipeline each serves every target.
     Microsoft::WRL::ComPtr<ID3D12PipelineState> rcas_;
+    // Bilinear enlargement and RCAS in one pass (no window-sized intermediate).
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> rcas_scaled_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> resample_;
     Microsoft::WRL::ComPtr<ID3D12Resource> area_texture_;
     Microsoft::WRL::ComPtr<ID3D12Resource> search_texture_;

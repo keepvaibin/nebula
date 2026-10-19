@@ -449,7 +449,8 @@ void RendererVk::attach_texture_uploads(TextureCache& cache) {
     cache.backend().prepare_null_view(uploads);
 }
 
-gpu::Table RendererVk::texture_table_for(const TextureHandle* handles, unsigned count, const TextureCache& cache) {
+gpu::Table RendererVk::texture_table_for(const TextureHandle* handles, unsigned count, const TextureCache& cache,
+                                         bool) {
     const VkDescriptorSet set = allocate_frame_set(gx_layout_.sets[1]);
     std::array<VkDescriptorImageInfo, kMaxTextureMaps> images{};
     for (unsigned m = 0; m < kMaxTextureMaps; ++m) {

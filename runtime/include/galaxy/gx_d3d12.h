@@ -6,6 +6,7 @@
 #include "galaxy/host_pointer_events.h"
 #include "galaxy/native_api.h"
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -48,10 +49,14 @@ struct HostClientExtent {
 [[nodiscard]] HostClientExtent aspect_latch_extent() noexcept;
 
 // Guest scene boundaries the simulation thread marks in the GX stream:
-// GameScene::draw3D's entry and its closing MR::clearZBuffer call.
+// GameScene::draw3D's entry and its closing MR::clearZBuffer call; the 2D
+// layer, GameScene::draw2D's entry and epilogue (layouts, camera cover,
+// pause, 2D models, wipes).
 enum class FifoMarker : std::uint8_t {
     SceneBegin,
     SceneEnd,
+    Scene2DBegin,
+    Scene2DEnd,
 };
 
 enum class EfbPeekKind : std::uint8_t {
@@ -125,6 +130,48 @@ void attach_fifo_marker(FifoMarker marker, std::size_t fifo_offset) noexcept;
 // Simulation thread, before attach_fifo_marker(SceneBegin): the game camera's
 // world-to-eye matrix (row-major 3x4) for that scene.
 void attach_scene_view(const float view[12]) noexcept;
+// Simulation thread, at each SceneBegin: whether the renderer reads
+// draw-identity markers (frame interpolation or motion vectors are on).
+[[nodiscard]] bool draw_identity_wanted() noexcept;
+// Simulation thread (BrightSun::control): the world direction towards the game's visible sun and
+// the distance of its model from the camera. The ray tracer lights the scene from it while it
+// keeps arriving.
+void set_game_sun(const std::array<float, 3>& direction, float distance) noexcept;
+// The direction (and distance) when one arrived within `max_age_ms`.
+[[nodiscard]] bool game_sun(std::array<float, 3>& direction, std::uint64_t max_age_ms,
+                            float* distance = nullptr) noexcept;
+// Simulation thread, each scene while the Comet Observatory's star core (AstroCore) exists: its
+// world centre and scale (it grows with the Grand Stars). The ray tracer lights the scene from it
+// and gives it its finish.
+void set_star_core(const std::array<float, 3>& position, float scale) noexcept;
+[[nodiscard]] bool star_core(std::array<float, 3>& position, float& scale, std::uint64_t max_age_ms) noexcept;
+// How many have arrived.
+[[nodiscard]] std::uint64_t game_sun_updates() noexcept;
+// Simulation thread: the game's lights as it loads them for drawing. A point light
+// (LightFunction::loadPointLightInfo: world position, colour 0-1, the distance at which its GX
+// distance attenuation halves it, 0 without attenuation) and a world-fixed light of an
+// ActorLightInfo (follow-camera off: its far position names its direction).
+void note_game_point_light(std::uint32_t info, const std::array<float, 3>& position,
+                           const std::array<float, 3>& color, float half_distance) noexcept;
+void note_game_world_light(const std::array<float, 3>& position, const std::array<float, 3>& color) noexcept;
+// Simulation thread: an actor asking for the game's one point light this frame (MR::requestPointLight: Lumas,
+// Power Stars, item blocks, fireballs, Boos), as its own light. While requests arrive, the one light the game hands
+// to the requester nearest the player (note_game_point_light) is not noted again.
+void note_game_point_request(std::uint32_t actor, const std::array<float, 3>& position,
+                             const std::array<float, 3>& color, float half_distance) noexcept;
+struct GameLight {
+    std::array<float, 3> position{};
+    std::array<float, 3> color{};
+    float half_distance = 0.0f;
+};
+// The lights noted within `max_age_ms` (not black), at most `out.size()`; returns the count.
+std::size_t game_point_lights(std::span<GameLight> out, std::uint64_t max_age_ms) noexcept;
+std::size_t game_world_lights(std::span<GameLight> out, std::uint64_t max_age_ms) noexcept;
+// Simulation thread: one particle of a JPA stripe at `stream_offset` of the
+// live GX stream (GuestAddressSpace::gx_stream_position); its two strip
+// vertices follow. The next render_frame submission carries it.
+void attach_stripe_particle(std::size_t stream_offset, std::uint32_t particle, std::uint32_t age_lifetime,
+                            std::uint8_t strip);
 void set_pointer_response(PointerResponseStamp stamp) noexcept;
 // Simulation producer; copied into each owned FIFO chunk and selected XFB.
 void set_prerecorded_movie_content(bool movie) noexcept;
@@ -294,6 +341,8 @@ native_settings_overlay_snapshot() noexcept;
     std::uintptr_t virtual_key,
     bool was_down);
 void native_settings_reset_overlay_state_for_tests() noexcept;
+// Waits until the settings files the overlay queued are written (saves run on a worker).
+void native_settings_wait_saved_for_tests();
 // The settings the menu would apply (its draft), for tests.
 [[nodiscard]] RenderConfig native_settings_draft_for_tests();
 // Delivers an overlay key to the window thread (controller navigation).

@@ -19,9 +19,14 @@
 namespace galaxy::gx {
 
 inline constexpr unsigned kFramesInFlight = 2;
-// Ring segments in temporal and interpolation modes (see RendererD3D12::
-// begin_frame): two more than the frames in flight.
+// Matrix-ring segments in temporal mode (see RendererD3D12::begin_frame):
+// two more than the frames in flight.
 inline constexpr unsigned kRingSegments = kFramesInFlight + 2u;
+// Interpolation mode: one segment of every ring, the descriptor ring and the
+// sampler heaps per game frame, for the frame being recorded, the completed
+// log waiting for its present and the log whose sub-frames play. A segment
+// is reused only after its fence (the oldest log is then invalidated).
+inline constexpr unsigned kInterpSegments = 3u;
 inline constexpr unsigned kSamplerHeapSlots = 2048;
 
 inline constexpr unsigned kEfbWidth = 640;
@@ -219,6 +224,13 @@ struct DrawCall {
     // Interpolated redraw: the scene transform record whose VS constants a
     // sub-frame replaces, -1 for draws outside the 3D scene.
     std::int32_t replay_record = -1;
+    // Sub-frames only: the matching draw's vertices in the frame before,
+    // blended with this draw's (root SRV t1, space1); 0 for none. The pair's
+    // GPU verdict (same geometry or not) is at `blend_slot`.
+    gpu::Address blend_vertices = 0;
+    std::uint32_t blend_slot = 0;
+    // Interpolated redraw: the scene's pixel-constant record, -1 for none.
+    std::int32_t ps_record = -1;
 };
 
 }  // namespace galaxy::gx

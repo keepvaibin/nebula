@@ -35,6 +35,8 @@ static RenderFeatureCaps s_feature_caps{};
 static std::shared_mutex s_lock;
 // Last-write time of config.ini when this process last read or wrote it.
 static std::uint64_t s_config_write_time = 0u;
+// The gpu config.ini named when this process last read or wrote it (next_start_gpu).
+static std::array<char, 32> s_file_gpu{};
 
 static std::uint64_t file_write_time(const std::filesystem::path& path) noexcept {
 #if defined(_WIN32)
@@ -202,6 +204,7 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
     else if (std::strcmp(key, "anisotropic_filtering") == 0) cfg.anisotropic_filtering = std::clamp(parse_uint(val, cfg.anisotropic_filtering), 1u, 16u);
     else if (std::strcmp(key, "enhanced_mipmaps") == 0) cfg.enhanced_mipmaps = parse_bool(val, cfg.enhanced_mipmaps);
     else if (std::strcmp(key, "per_pixel_lighting") == 0) cfg.per_pixel_lighting = parse_bool(val, cfg.per_pixel_lighting);
+    else if (std::strcmp(key, "enhanced_lighting") == 0) cfg.enhanced_lighting = parse_bool(val, cfg.enhanced_lighting);
     else if (std::strcmp(key, "post_process") == 0) cfg.post_process = parse_bool(val, cfg.post_process);
     else if (std::strcmp(key, "internal_follow_window") == 0) cfg.internal_follow_window = parse_bool(val, cfg.internal_follow_window);
     else if (std::strcmp(key, "gpu_budget") == 0) cfg.gpu_budget = parse_bool(val, cfg.gpu_budget);
@@ -213,16 +216,26 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
         static constexpr const char* kNames[] = {"low", "medium", "high", "ultra"};
         cfg.smaa_quality = parse_choice(val, kNames, cfg.smaa_quality);
     } else if (std::strcmp(key, "upscaler") == 0) {
-        static constexpr const char* kNames[] = {"bilinear", "fsr", "fsr3"};
+        static constexpr const char* kNames[] = {"bilinear", "fsr", "fsr3", "dlss"};
         cfg.upscaler = parse_choice(val, kNames, cfg.upscaler);
+    } else if (std::strcmp(key, "frame_generation") == 0) {
+        cfg.frame_generation = std::min(parse_uint(val, cfg.frame_generation), 5u);
     } else if (std::strcmp(key, "temporal_quality") == 0) {
         static constexpr const char* kNames[] = {
             "native", "quality", "balanced", "performance", "ultra_performance"};
         cfg.temporal_quality = parse_choice(val, kNames, cfg.temporal_quality);
+    } else if (std::strcmp(key, "spatial_quality") == 0) {
+        static constexpr const char* kNames[] = {
+            "manual", "quality", "balanced", "performance", "ultra_performance"};
+        cfg.spatial_quality = parse_choice(val, kNames, cfg.spatial_quality);
     } else if (std::strcmp(key, "sharpness") == 0) {
         cfg.sharpness = std::min(parse_uint(val, cfg.sharpness), 100u);
     }
     else if (std::strcmp(key, "ray_tracing_enabled") == 0) cfg.ray_tracing_enabled = parse_bool(val, false);
+    else if (std::strcmp(key, "rt_quality") == 0) {
+        static constexpr const char* kNames[] = {"medium", "high", "low"};
+        cfg.rt_quality = parse_choice(val, kNames, cfg.rt_quality);
+    }
     else if (std::strcmp(key, "rt_shadow_quality") == 0) cfg.rt_shadow_quality = std::clamp(parse_uint(val, 0), 0u, 3u);
     else if (std::strcmp(key, "rt_ao_enabled")  == 0) cfg.rt_ao_enabled       = parse_bool(val, false);
     else if (std::strcmp(key, "rt_reflections") == 0) cfg.rt_reflections      = parse_bool(val, false);
@@ -235,6 +248,10 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
         cfg.monitor.fill('\0');
         const std::size_t length = std::min(std::strlen(val), cfg.monitor.size() - 1u);
         std::memcpy(cfg.monitor.data(), val, length);
+    } else if (std::strcmp(key, "gpu") == 0) {
+        cfg.gpu.fill('\0');
+        const std::size_t length = std::min(std::strlen(val), cfg.gpu.size() - 1u);
+        std::memcpy(cfg.gpu.data(), val, length);
     }
     else if (std::strcmp(key, "fullscreen_width") == 0) cfg.fullscreen_width = std::min(parse_uint(val, 0u), 16384u);
     else if (std::strcmp(key, "fullscreen_height") == 0) cfg.fullscreen_height = std::min(parse_uint(val, 0u), 16384u);
@@ -291,6 +308,7 @@ static void apply_env_overrides(RenderConfig& cfg) {
     apply_env(cfg, "GALAXY_ANISOTROPIC_FILTERING", "anisotropic_filtering");
     apply_env(cfg, "GALAXY_ENHANCED_MIPMAPS", "enhanced_mipmaps");
     apply_env(cfg, "GALAXY_PER_PIXEL_LIGHTING", "per_pixel_lighting");
+    apply_env(cfg, "GALAXY_ENHANCED_LIGHTING", "enhanced_lighting");
     apply_env(cfg, "GALAXY_POST_PROCESS", "post_process");
     apply_env(cfg, "GALAXY_INTERNAL_FOLLOW_WINDOW", "internal_follow_window");
     apply_env(cfg, "GALAXY_GPU_BUDGET", "gpu_budget");
@@ -298,10 +316,14 @@ static void apply_env_overrides(RenderConfig& cfg) {
     apply_env(cfg, "GALAXY_AA", "aa");
     apply_env(cfg, "GALAXY_SMAA_QUALITY", "smaa_quality");
     apply_env(cfg, "GALAXY_UPSCALER", "upscaler");
+    apply_env(cfg, "GALAXY_FRAME_GENERATION", "frame_generation");
     apply_env(cfg, "GALAXY_TEMPORAL_QUALITY", "temporal_quality");
+    apply_env(cfg, "GALAXY_SPATIAL_QUALITY", "spatial_quality");
     apply_env(cfg, "GALAXY_SHARPNESS", "sharpness");
+    apply_env(cfg, "GALAXY_RAY_TRACING", "ray_tracing_enabled");
     apply_env(cfg, "GALAXY_RAY_TRACING_ENABLED", "ray_tracing_enabled");
     apply_env(cfg, "GALAXY_RT_SHADOW_QUALITY", "rt_shadow_quality");
+    apply_env(cfg, "GALAXY_RT_QUALITY", "rt_quality");
     apply_env(cfg, "GALAXY_RT_AO_ENABLED", "rt_ao_enabled");
     apply_env(cfg, "GALAXY_RT_REFLECTIONS", "rt_reflections");
     apply_env(cfg, "GALAXY_WINDOW_WIDTH", "window_width");
@@ -318,6 +340,7 @@ static void apply_env_overrides(RenderConfig& cfg) {
     }
     apply_env(cfg, "GALAXY_DISPLAY_MODE", "display_mode");
     apply_env(cfg, "GALAXY_MONITOR", "monitor");
+    apply_env(cfg, "GALAXY_GPU", "gpu");
     apply_env(cfg, "GALAXY_ASPECT", "aspect");
 }
 
@@ -328,15 +351,17 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.vsync_interval = std::clamp(cfg.vsync_interval, 0u, 2u);
     cfg.swap_chain_frame_latency =
         std::clamp(cfg.swap_chain_frame_latency, 1u, 2u);
-    if (!std::isfinite(cfg.max_fps) || cfg.max_fps < kMinFrameRate || cfg.max_fps > kMaxFrameRate) {
+    if (!std::isfinite(cfg.max_fps) || (cfg.max_fps != 0.0f && cfg.max_fps < kMinFrameRate) || cfg.max_fps > kMaxFrameRate) {
         cfg.max_fps = RenderConfig{}.max_fps;
     }
     cfg.texture_lod_bias = std::min(cfg.texture_lod_bias, 8u);
     cfg.anisotropic_filtering = std::clamp(cfg.anisotropic_filtering, 1u, 16u);
     cfg.aa_mode = std::min(cfg.aa_mode, 3u);
     cfg.smaa_quality = std::min(cfg.smaa_quality, 3u);
-    cfg.upscaler = std::min(cfg.upscaler, 2u);
+    cfg.upscaler = std::min(cfg.upscaler, 3u);
+    cfg.frame_generation = std::min(cfg.frame_generation, 5u);
     cfg.temporal_quality = std::min(cfg.temporal_quality, 4u);
+    cfg.spatial_quality = std::min(cfg.spatial_quality, 4u);
     cfg.sharpness = std::min(cfg.sharpness, 100u);
     // Win32 client geometry is signed-int based even though DXGI dimensions
     // are UINT. Keep direct API callers inside the common representable range.
@@ -347,10 +372,11 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.display_mode = std::min(cfg.display_mode, kDisplayBorderless);
     cfg.aspect_mode = std::min(cfg.aspect_mode, kAspectModeCount - 1u);
     cfg.monitor.back() = '\0';
+    cfg.gpu.back() = '\0';
     cfg.msaa_samples = 1;
     cfg.taa_enabled = false;
-    cfg.ray_tracing_enabled = false;
     cfg.rt_shadow_quality = 0;
+    cfg.rt_quality = std::min(cfg.rt_quality, 2u);
     cfg.rt_ao_enabled = false;
     cfg.rt_reflections = false;
 }
@@ -439,6 +465,16 @@ RenderConfig get_render_config() {
     s_lock.unlock_shared();
     return copy;
 }
+
+namespace {
+std::atomic<bool> s_frame_generation_running{false};
+}  // namespace
+
+void set_frame_generation_running(bool running) noexcept {
+    s_frame_generation_running.store(running, std::memory_order_relaxed);
+}
+
+bool frame_generation_running() noexcept { return s_frame_generation_running.load(std::memory_order_relaxed); }
 
 GxTimingConfig resolve_gx_timing_config_from_environment() {
     GxTimingConfig config{};
@@ -550,6 +586,8 @@ void set_render_feature_caps(const RenderFeatureCaps& caps) {
 
 void load_render_config_from_file() {
     RenderConfig cfg = get_render_config();
+    // A file without the key is the automatic choice.
+    cfg.gpu.fill('\0');
 
     const std::filesystem::path path = config_path();
     const std::uint64_t write_time = file_write_time(path);
@@ -560,6 +598,8 @@ void load_render_config_from_file() {
             std::fclose(f);
         }
     }
+    std::array<char, 32> file_gpu = cfg.gpu;
+    file_gpu.back() = '\0';
 
     apply_env_overrides(cfg);
     if (!experimental_frame_rate_decouple_allowed()) {
@@ -571,6 +611,7 @@ void load_render_config_from_file() {
     s_config = cfg;
     s_next_start_efb_scale = cfg.efb_scale;
     s_config_write_time = write_time;
+    s_file_gpu = file_gpu;
     s_lock.unlock();
 }
 
@@ -588,9 +629,15 @@ bool reload_render_config_if_changed() {
     if (f == nullptr) {
         return false;  // Being replaced; the next check reads it.
     }
+    // The device was created on the session's GPU; a new choice is for the next start.
+    const std::array<char, 32> session_gpu = cfg.gpu;
+    cfg.gpu.fill('\0');
     parse_ini(f, cfg);
     std::fclose(f);
+    std::array<char, 32> file_gpu = cfg.gpu;
+    file_gpu.back() = '\0';
     apply_env_overrides(cfg);
+    cfg.gpu = session_gpu;
     if (!experimental_frame_rate_decouple_allowed()) {
         cfg.frame_rate_decouple = false;
     }
@@ -600,6 +647,7 @@ bool reload_render_config_if_changed() {
     s_config = cfg;
     s_next_start_efb_scale = cfg.efb_scale;
     s_config_write_time = write_time;
+    s_file_gpu = file_gpu;
     s_lock.unlock();
     return true;
 }
@@ -608,11 +656,25 @@ bool save_render_config_to_file() {
     s_lock.lock_shared();
     RenderConfig cfg = s_config;
     const unsigned next_start_efb_scale = s_next_start_efb_scale;
+    std::array<char, 32> gpu = s_file_gpu;
     s_lock.unlock_shared();
     clamp_unimplemented_features(cfg);
     const std::filesystem::path path = config_path();
     if (path.empty()) {
         return false;
+    }
+    // The game never chooses the GPU: it writes back the gpu the file names now, which Nebula Settings may
+    // have changed since the game last read it (the in-game menu was open, or the change is younger than
+    // the next check).
+    {
+        FILE* f = nullptr;
+        if (_wfopen_s(&f, path.c_str(), L"r") == 0 && f != nullptr) {
+            RenderConfig file{};
+            parse_ini(f, file);
+            std::fclose(f);
+            gpu = file.gpu;
+        }
+        gpu.back() = '\0';
     }
 
     std::ostringstream contents;
@@ -635,20 +697,28 @@ bool save_render_config_to_file() {
              << (cfg.enhanced_mipmaps ? 1u : 0u) << '\n'
              << "per_pixel_lighting="
              << (cfg.per_pixel_lighting ? 1u : 0u) << '\n'
+             << "enhanced_lighting="
+             << (cfg.enhanced_lighting ? 1u : 0u) << '\n'
              << "aa=" << cfg.aa_mode << '\n'
              << "smaa_quality=" << cfg.smaa_quality << '\n'
              << "upscaler=" << cfg.upscaler << '\n'
+             << "frame_generation=" << cfg.frame_generation << '\n'
              << "temporal_quality=" << cfg.temporal_quality << '\n'
+             << "spatial_quality=" << cfg.spatial_quality << '\n'
              << "sharpness=" << cfg.sharpness << '\n'
              << "internal_follow_window="
              << (cfg.internal_follow_window ? 1u : 0u) << '\n'
              << "gpu_budget=" << (cfg.gpu_budget ? 1u : 0u) << '\n'
              << "hud_output_resolution="
              << (cfg.hud_output_resolution ? 1u : 0u) << '\n'
+             << "ray_tracing_enabled="
+             << (cfg.ray_tracing_enabled ? 1u : 0u) << '\n'
+             << "rt_quality=" << (cfg.rt_quality == 1u ? "high" : cfg.rt_quality == 2u ? "low" : "medium") << '\n'
              << "window_width=" << cfg.window_width << '\n'
              << "window_height=" << cfg.window_height << '\n'
              << "display_mode=" << cfg.display_mode << '\n'
              << "monitor=" << cfg.monitor.data() << '\n'
+             << "gpu=" << gpu.data() << '\n'
              << "fullscreen_width=" << cfg.fullscreen_width << '\n'
              << "fullscreen_height=" << cfg.fullscreen_height << '\n'
              << "fullscreen_refresh_hz=" << cfg.fullscreen_refresh_hz << '\n'
@@ -663,8 +733,48 @@ bool save_render_config_to_file() {
     const std::uint64_t write_time = file_write_time(path);
     s_lock.lock();
     s_config_write_time = write_time;
+    s_file_gpu = gpu;
     s_lock.unlock();
     return true;
+}
+
+std::string gpu_identity(unsigned vendor_id, unsigned device_id, unsigned subsys_id) {
+    char text[32]{};
+    std::snprintf(text, sizeof(text), "%04x:%04x:%08x", vendor_id & 0xFFFFu, device_id & 0xFFFFu, subsys_id);
+    return text;
+}
+
+std::string next_start_gpu() {
+    s_lock.lock_shared();
+    const std::array<char, 32> gpu = s_file_gpu;
+    s_lock.unlock_shared();
+    return gpu.data();
+}
+
+void record_render_adapter(const wchar_t* description, unsigned vendor_id, unsigned device_id,
+                           unsigned subsys_id, bool low_power_preference, bool ray_tracing) noexcept {
+    try {
+        const std::filesystem::path config = config_path();
+        if (config.empty() || description == nullptr) {
+            return;
+        }
+        char name[256]{};
+        WideCharToMultiByte(CP_UTF8, 0, description, -1, name, static_cast<int>(sizeof(name) - 1), nullptr,
+                            nullptr);
+        for (char& c : name) {
+            if (c == '\r' || c == '\n') c = ' ';
+        }
+        std::ostringstream contents;
+        contents.imbue(std::locale::classic());
+        contents << "description=" << name << '\n'
+                 << "vendor_id=" << vendor_id << '\n'
+                 << "device_id=" << device_id << '\n'
+                 << "id=" << gpu_identity(vendor_id, device_id, subsys_id) << '\n'
+                 << "gpu_preference=" << (low_power_preference ? "low" : "high") << '\n'
+                 << "ray_tracing=" << (ray_tracing ? 1 : 0) << '\n';
+        static_cast<void>(io::write_text_file_atomically(config.parent_path() / L"adapter.ini", contents.str()));
+    } catch (...) {
+    }
 }
 
 }  // namespace galaxy::gx

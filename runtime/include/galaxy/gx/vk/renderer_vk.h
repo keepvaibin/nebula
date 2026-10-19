@@ -72,7 +72,8 @@ public:
     void create_first_use_resources();
     void shutdown();
     [[nodiscard]] UploadBuffer create_upload_buffer(std::size_t bytes, const char* name);
-    [[nodiscard]] gpu::Table texture_table_for(const TextureHandle* handles, unsigned count, const TextureCache& cache);
+    [[nodiscard]] gpu::Table texture_table_for(const TextureHandle* handles, unsigned count, const TextureCache& cache,
+                                               bool lit_table = false);  // no ray tracing on Vulkan yet
     void attach_texture_uploads(TextureCache& cache);
     void drain_gpu();
     void pump_messages() {}

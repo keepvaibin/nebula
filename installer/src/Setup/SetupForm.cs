@@ -16,7 +16,7 @@ namespace Nebula.Setup
         private InstalledInfo installed;
         private readonly Panel choose = new Panel(), work = new Panel();
         private readonly TextBox input = new TextBox(), root = new TextBox(), log = new TextBox();
-        private readonly CheckBox desktop = new CheckBox(), license = new CheckBox();
+        private readonly CheckBox desktop = new CheckBox(), license = new CheckBox(), dlss = new CheckBox(), dlssLicense = new CheckBox();
         private readonly LinkLabel licenseLink = new LinkLabel();
         private Dictionary<string, object> toolchainPins;
         private long toolchainDownloadBytes;
@@ -190,6 +190,30 @@ namespace Nebula.Setup
             choose.Controls.Add(desktop);
             y += 28;
 
+            if (DlssPackage.RtxAdapterPresent() && !DlssPackage.Installed())
+            {
+                dlss.Text = "Install NVIDIA DLSS (" + FileUtil.FormatBytes(DlssPackage.DownloadBytes) + " download from NVIDIA)";
+                dlss.Location = new Point(20, y);
+                dlss.Size = new Size(620, 24);
+                choose.Controls.Add(dlss);
+                y += 26;
+                dlssLicense.Text = "I accept the NVIDIA RTX SDKs license";
+                dlssLicense.Location = new Point(40, y);
+                dlssLicense.Size = new Size(600, 24);
+                dlssLicense.Enabled = false;
+                dlssLicense.CheckedChanged += delegate { dlssLicense.ForeColor = SystemColors.ControlText; };
+                dlss.CheckedChanged += delegate
+                {
+                    dlssLicense.Enabled = dlss.Checked;
+                    if (!dlss.Checked) { dlssLicense.Checked = false; dlssLicense.ForeColor = SystemColors.ControlText; }
+                };
+                choose.Controls.Add(dlssLicense);
+                var dlssLink = new LinkLabel { Text = "Read license", Location = new Point(644, y + 3), Size = new Size(100, 22) };
+                dlssLink.LinkClicked += delegate { using (var dialog = new DlssInstallDialog(true)) dialog.ShowDialog(this); };
+                choose.Controls.Add(dlssLink);
+                y += 32;
+            }
+
             toolchainPins = Json.Parse(Payload.ReadText("toolchain.json"));
             var toolchain = new Toolchain(toolchainPins, layout.Toolchains);
             toolchainDownloadBytes = toolchain.DownloadBytes;
@@ -309,6 +333,12 @@ namespace Nebula.Setup
                 UpdateChoices();
                 Fail("Accept the Microsoft Visual Studio Build Tools license to continue."); return;
             }
+            if (dlss.Checked && !dlssLicense.Checked)
+            {
+                dlssLicense.ForeColor = Color.Firebrick;
+                dlssLicense.Focus();
+                Fail("Accept the NVIDIA RTX SDKs license to install DLSS, or clear the DLSS option."); return;
+            }
             var problems = InstallEngine.CheckRequirements(layout.Root.Length > 3 ? Path.GetDirectoryName(layout.Root) ?? layout.Root : layout.Root);
             if (problems.Count > 0) { Fail(string.Join("\r\n", problems)); return; }
             string lowMemory = InstallEngine.LowMemoryWarning();
@@ -318,7 +348,7 @@ namespace Nebula.Setup
 
             var request = new InstallRequest
             {
-                Mode = mode, GameInput = game, InstallRoot = layout.Root, DesktopShortcut = desktop.Checked,
+                Mode = mode, GameInput = game, InstallRoot = layout.Root, DesktopShortcut = desktop.Checked, InstallDlss = dlss.Checked,
                 SourceOverride = options.ContainsKey("source") ? options["source"] : null,
                 CompileJobs = options.ContainsKey("jobs") ? int.Parse(options["jobs"]) : 0
             };
@@ -352,6 +382,9 @@ namespace Nebula.Setup
             if (failure == null)
             {
                 step.Text = engine.ModuleUpdateNotice ?? ("Nebula " + BuildInfo.Version + " is installed.");
+                if (engine.DlssFailure != null)
+                    MessageBox.Show(this, "NVIDIA DLSS was not installed: " + engine.DlssFailure + "\r\n\r\nYou can install it later from the game's graphics settings.",
+                        "Nebula Setup", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 overall.Value = overall.Maximum;
                 launch.Visible = true;
                 return;

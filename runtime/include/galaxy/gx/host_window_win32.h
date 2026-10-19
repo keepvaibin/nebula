@@ -15,6 +15,7 @@
 
 #include "galaxy/gx/display_modes.h"
 #include "galaxy/gx/host_window.h"
+#include "galaxy/gx/render_config.h"
 #include "galaxy/gx/ui_canvas.h"
 #include "galaxy/gx/window_owner.h"
 
@@ -43,6 +44,16 @@ extern std::atomic<std::uintptr_t> pointer_hwnd;
 
 // The window's outer rect for a windowed client size on a monitor.
 [[nodiscard]] RECT windowed_rect_on_monitor(const MonitorInfo& monitor, unsigned width, unsigned height);
+
+// The settings the D3D12 renderer reads (temporal upscaling and interpolation, ray tracing).
+extern std::atomic<bool> temporal_interp_suspended;  // RendererD3D12::suspend_temporal_interpolation
+extern std::atomic<bool> ray_tracing_offered;        // the RAY TRACING row is offered
+extern std::atomic<bool> rtx_adapter;                // the session's GPU is an NVIDIA RTX (DLSS)
+[[nodiscard]] bool temporal_interpolation_allowed();
+[[nodiscard]] unsigned upscaler_render_scale(const RenderConfig& render, unsigned internal);
+void save_native_settings_now();
+// GALAXY_DISPLAY_REFRESH_HZ, else 0.
+[[nodiscard]] unsigned refresh_override_hz();
 LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 
 }  // namespace galaxy::gx::host_window

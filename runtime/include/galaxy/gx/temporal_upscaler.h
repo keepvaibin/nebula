@@ -11,6 +11,7 @@
 
 #include "galaxy/gx/post_process_settings.h"
 
+#include <array>
 #include <cstdint>
 #include <memory>
 
@@ -38,6 +39,9 @@ struct TemporalUpscaleInputs {
     float fov_y = 1.0f;     // radians
     float frame_ms = 16.667f;
     bool reset = false;
+    // The scene camera (world to eye, rows 3x4; the eye looks down -z), when known.
+    std::array<float, 12> view{};
+    bool view_known = false;
 };
 
 class TemporalUpscaler {

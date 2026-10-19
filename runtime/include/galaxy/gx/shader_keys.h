@@ -100,6 +100,54 @@ inline constexpr std::uint32_t kRenderStateMotionTarget = 1u << 29u;
 // alpha (max-blended, capped at 0.9) to an R8 render target 1.
 inline constexpr std::uint8_t kPsKeyReactive = 0x04u;
 inline constexpr std::uint32_t kRenderStateReactiveTarget = 1u << 30u;
+// Lit channels with spotlight or specular attenuation evaluate the XF
+// attenuation polynomials on finite operands (cosine and distance at most
+// 1e18): a zero coefficient nulls an out-of-range cosine, as on the hardware,
+// where a light object whose direction the game never initialized keeps its
+// light. Keys without the bit keep their original source. The pixel bit marks
+// the per-pixel lighting keys of such draws.
+inline constexpr std::uint8_t kVsKeyFiniteLightAttn = 0x20u;
+inline constexpr std::uint8_t kPsKeyPplFiniteLightAttn = 0x08u;
+// Enhanced lighting (RenderConfig::enhanced_lighting): set together on the
+// vertex and pixel keys of a perspective scene triangle draw that is lit or
+// environment-mapped. The vertex stage passes the per-pixel lighting
+// interpolants (normal from the position matrix when the draw is unlit); the
+// pixel key's ind_reserved word carries the material (kEnhanced* below).
+inline constexpr std::uint8_t kVsKeyEnhancedLighting = 0x40u;
+inline constexpr std::uint8_t kPsKeyEnhancedLighting = 0x10u;
+// PixelShaderKey::ind_reserved under kPsKeyEnhancedLighting: bits 0-7 the
+// texcoords generated from normals (environment maps), bit 8 colour channel 0
+// is lit with a diffuse light function, bit 9 the surface class whose
+// highlights the ray tracer's reflections own (environment-mapped metal,
+// indirect water), bits 10-17 colour channel 0's lights, 18-19 its diffuse
+// function, bit 20 spot attenuation, bit 21 ambient and bit 22 material from
+// the vertex colour, bits 24-31 the tuning (GALAXY_ENHANCED_LIGHTING_TUNE)
+// hash, zero by default.
+inline constexpr std::uint32_t kEnhancedEnvCoordMask = 0xFFu;
+inline constexpr std::uint32_t kEnhancedLit = 1u << 8u;
+inline constexpr std::uint32_t kEnhancedReflective = 1u << 9u;
+inline constexpr unsigned kEnhancedLightShift = 10u;
+inline constexpr unsigned kEnhancedDiffuseShift = 18u;
+inline constexpr std::uint32_t kEnhancedSpot = 1u << 20u;
+inline constexpr std::uint32_t kEnhancedAmbientVertex = 1u << 21u;
+inline constexpr std::uint32_t kEnhancedMaterialVertex = 1u << 22u;
+inline constexpr unsigned kEnhancedTuneShift = 24u;
+// GxPsConstants::uber_ps_header[3] for enhanced pipelines: bits 0-15 the
+// split column in render-target pixels (left of it the game's own lighting,
+// 0 none), bit 16 the ray tracer's reflections are live, bit 17 its lighting
+// is (it supplies the sky light: no hemisphere ambient or sky rim), bit 18
+// the highlights alone (GALAXY_ENHANCED_LIGHTING_VIEW=1), bit 19 colour
+// channel 0 alone (=2).
+inline constexpr std::uint32_t kEnhancedSplitMask = 0xFFFFu;
+inline constexpr std::uint32_t kEnhancedRtReflections = 1u << 16u;
+inline constexpr std::uint32_t kEnhancedRtLighting = 1u << 17u;
+// Bits 20-25 the material table's roughness (/63), 26-29 its metalness (/15), bit 30 the table names
+// the draw's texture (enhanced_table_material): the enhanced highlights take its lobe.
+inline constexpr unsigned kEnhancedTableRoughShift = 20u;
+inline constexpr unsigned kEnhancedTableMetalShift = 26u;
+inline constexpr std::uint32_t kEnhancedTableKnown = 1u << 30u;
+inline constexpr std::uint32_t kEnhancedView = 1u << 18u;
+inline constexpr std::uint32_t kEnhancedViewChannel = 1u << 19u;
 
 struct PixelShaderKey {
     std::uint8_t num_tev_stages;    // 1-16
@@ -114,16 +162,23 @@ struct PixelShaderKey {
                                     // bits5-6 ztex format, bit7 dual-source: TEV source alpha is exported on SV_Target1
                                     // for SRC1 blend factors
     std::uint8_t output_flags;      // bits0-2 EFB format, bit3 RGBA6 dither, bit4 RGBA6 with
-                                    // 8-bit colour (no 6-bit colour, no dither; alpha stays 6-bit)
+                                    // 8-bit colour (no 6-bit colour, no dither; alpha stays 6-bit),
+                                    // bit5 glow: colour times ztex_params.z (additive scene draws
+                                    // while ray-traced lighting is on), bit6 lit translucent: colour
+                                    // times texture 7 (the ray-traced lighting) at pixel x ztex_params.z,
+                                    // bit7 with bit6: an opaque draw after the trace (its light at most
+                                    // 1.15: the surface behind it may be an emitter)
     std::uint8_t num_ind_stages;    // 0-4
     // Keys 0..15 keep their original shader source. New dither keys use 0xff and read the
     // reciprocal scale from the per-draw PS constants.
     std::uint8_t efb_scale_minus_one;
-    std::uint8_t reserved;          // bit0 per-pixel lighting
+    std::uint8_t reserved;          // bit0 per-pixel lighting, bit1 motion, bit2 reactive,
+                                    // bit3 per-pixel finite light attenuation,
+                                    // bit4 enhanced lighting
     std::uint32_t ind_cmd[4][4];    // BP 0x10-0x1F, grouped as uint4s
     std::uint32_t ind_ref;          // BP 0x27
     std::uint32_t ind_scale[2];     // BP 0x25-0x26
-    std::uint32_t ind_reserved;
+    std::uint32_t ind_reserved;     // enhanced lighting material, else zero
     TevStagePacked stages[16];      // zeroed past num_tev_stages
 
     [[nodiscard]] bool operator==(const PixelShaderKey& other) const noexcept {
@@ -142,7 +197,9 @@ struct VertexShaderKey {
     std::uint8_t num_chans;
     std::uint8_t flags;             // bit0 per-vertex posmtx, bit1 lighting,
                                     // bit2 dual-tex (post-matrix) enable,
-                                    // bit3 per-pixel lighting outputs
+                                    // bit3 per-pixel lighting outputs, bit4 motion,
+                                    // bit5 finite light attenuation,
+                                    // bit6 enhanced lighting
     std::uint8_t texmtx_idx_mask;   // VCD_LO bits 1-8: per-vertex texture
                                     // matrix index present for texgen n (masked to active texgens; affects VS codegen: per-vertex
                                     // index vs MatrixIndexA/B)
@@ -278,7 +335,9 @@ struct MemoizedPsoKeyHasher {
 // Key builders: the only construction path outside tests. Each applies the canonicalization rule against
 // the current register state.
 // RGBA6 colour precision: 8-bit (the default) or the hardware 6-bit colour with its 2x2 dither
-// (GALAXY_EFB_TRUE_COLOR=0).
+// (GALAXY_EFB_TRUE_COLOR=0). 8-bit colour also flattens the game's checker dither textures
+// (detail::flatten_texel_checker) and takes the checker dither out of the art that has one baked in
+// (detail::remove_texel_checker).
 [[nodiscard]] bool efb_true_color() noexcept;
 [[nodiscard]] PixelShaderKey build_pixel_shader_key(
     const GxState& state, unsigned efb_scale, bool true_color);

@@ -5,9 +5,11 @@
 #include "galaxy/gx/host_window_win32.h"
 
 #include "galaxy/gx/display_modes.h"
+#include "galaxy/gx/galaxy_select.h"
 #include "galaxy/gx/post_process_settings.h"
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx/renderer_common.h"
+#include "galaxy/gx/streamline_bridge.h"
 #include "galaxy/gx_d3d12.h"
 #include "galaxy/native_host.h"
 #include "galaxy/runtime_settings.h"
@@ -15,6 +17,8 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <condition_variable>
+#include <functional>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -24,6 +28,7 @@
 #include <iterator>
 #include <limits>
 #include <mutex>
+#include <thread>
 #include <string>
 #include <utility>
 #include <vector>
@@ -47,6 +52,10 @@ std::atomic<std::uint64_t> pending_resize_extent{0};
 std::atomic<bool> surface_withdrawn{false};
 std::timed_mutex surface_use;
 std::atomic<bool> follow_window_rearm{false};
+// RendererD3D12::suspend_temporal_interpolation (the FRAME RATE row says so).
+std::atomic<bool> temporal_interp_suspended{false};
+// The session's GPU is an NVIDIA RTX (RendererD3D12::initialize): DLSS can be offered.
+std::atomic<bool> rtx_adapter{false};
 
 }  // namespace host_window
 
@@ -63,9 +72,120 @@ using host_window::WindowPlacement;
 
 namespace {
 
+#if defined(GALAXY_WITH_STREAMLINE)
+constexpr bool kStreamlineBuilt = true;
+#else
+constexpr bool kStreamlineBuilt = false;
+#endif
+
+// DLSS before it is installed (defined after the adapter selection below).
+bool dlss_offered();
+bool dlss_installed_now();
+bool frame_generation_offered();
+bool dlss_hold_back(RenderConfig& applied, const RenderConfig& live);
+bool dlss_prompt_key(WPARAM key, bool was_down);
+void dlss_dismiss_prompt();
+void poll_dlss_download();
+std::string dlss_footer(std::uint64_t now_ms, bool& error);
+
+// Settings pages built from rows (DISPLAY, GRAPHICS, GAME, SYSTEM: settings_page): a label, the
+// value for the draft, how left/right change the draft (none: the row is fixed) and a help line; a
+// heading starts a section and is never selected. CONTROLS and AUDIO keep their own rows.
+struct SettingsRow {
+    std::string label;
+    std::string value;
+    std::function<void(RenderConfig&, int)> change;
+    std::string help;
+    bool heading = false;
+};
+std::vector<SettingsRow> settings_page(unsigned tab, const RenderConfig& draft, const RuntimeSettings& runtime,
+                                       const RenderFeatureCaps& caps);
+bool settings_page_tab(unsigned tab) { return tab != 2u && tab != 3u; }
+
+bool temporal_interpolation_allowed() {
+    // A temporal upscaler upscales every presented frame at rates that are
+    // multiples of 60. GALAXY_TEMPORAL_INTERPOLATION=0 keeps it at 60
+    // (diagnostics).
+    static const bool allowed = [] {
+        char value[8]{};
+        std::size_t length = 0u;
+        return !(getenv_s(&length, value, sizeof(value), "GALAXY_TEMPORAL_INTERPOLATION") == 0 &&
+                 length > 1u && value[0] == '0');
+    }();
+    return allowed;
+}
+
+// The temporal upscaler this configuration runs (2 FSR 3, 3 DLSS), 0 none.
+// Without temporal interpolation it limits the frame rate to 60.
+unsigned temporal_upscaler(const RenderConfig& render) {
+    if (render.upscaler == 2u && fsr3_available()) return 2u;
+    if (render.upscaler == 3u && streamline::dlss_supported()) return 3u;
+    return 0u;
+}
+
+// The upscaler choices this runtime and machine offer, in menu order.
+std::vector<unsigned> available_upscalers() {
+    std::vector<unsigned> choices{0u, 1u};
+    if (fsr3_available()) choices.push_back(2u);
+    if (galaxy::gx::streamline::dlss_supported() || dlss_offered()) choices.push_back(3u);
+    return choices;
+}
+
+// The quality row serves every upscaler: it sets the render resolution relative to the INTERNAL
+// RESOLUTION row (QUALITY 1.5x, BALANCED 1.7x, PERFORMANCE 2x, ULTRA PERFORMANCE 3x fewer pixels
+// per axis). Its first mode renders at the internal resolution.
+bool temporal_quality_row_shown() {
+    return true;
+}
+
+// Output scale divided by the quality ratio (native, 1.5, 1.7, 2, 3), at least 1x.
+unsigned quality_render_scale(unsigned output_scale, unsigned quality) {
+    static constexpr float kRatio[] = {1.0f, 1.5f, 1.7f, 2.0f, 3.0f};
+    const long scale = std::lround(static_cast<float>(output_scale) / kRatio[std::min(quality, 4u)]);
+    return std::clamp(static_cast<unsigned>(std::max(scale, 1l)), 1u, std::max(output_scale, 1u));
+}
+
+// Bilinear or FSR 1 with a quality mode: the render scale follows the output like FSR 3/DLSS.
+bool spatial_quality_mode(const RenderConfig& render) {
+    return temporal_upscaler(render) == 0u && std::min(render.spatial_quality, 4u) >= 1u;
+}
+
+// DLSS's narrowest render scale for a quality and output scale (its mode's range starts above
+// ultra performance's 3x ratio at low outputs).
+unsigned dlss_min_render_scale(unsigned quality, unsigned output_scale) {
+    static std::mutex mutex;
+    static unsigned cached_quality = ~0u;
+    static unsigned cached_output = 0u;
+    static unsigned cached_scale = 1u;
+    const std::lock_guard<std::mutex> lock(mutex);
+    if (quality != cached_quality || output_scale != cached_output) {
+        const unsigned width = dlss_min_render_width(quality, kEfbWidth * output_scale, kEfbHeight * output_scale);
+        cached_quality = quality;
+        cached_output = output_scale;
+        cached_scale = std::max((width + kEfbWidth - 1u) / kEfbWidth, 1u);
+    }
+    return cached_scale;
+}
+
+// The render scale the upscaling settings give below the internal resolution `internal`.
+unsigned upscaler_render_scale(const RenderConfig& render, unsigned internal) {
+    const unsigned temporal = temporal_upscaler(render);
+    if (temporal == 0u) {
+        return spatial_quality_mode(render) ? quality_render_scale(internal, render.spatial_quality) : internal;
+    }
+    const unsigned quality = std::min(render.temporal_quality, 4u);
+    unsigned scale = quality_render_scale(internal, quality);
+    if (temporal == 3u) {
+        scale = std::max(scale, dlss_min_render_scale(quality, internal));
+    }
+    return std::clamp(scale, 1u, std::max(internal, 1u));
+}
+
+
 std::string native_settings_row_text(
     unsigned tab, unsigned row,
-    const RenderConfig& render, const RuntimeSettings& runtime);
+    const RenderConfig& render, const RuntimeSettings& runtime,
+    const RenderFeatureCaps& caps);
 
 
 std::atomic<bool> s_pointer_focused{false};
@@ -141,6 +261,26 @@ RenderConfig s_display_confirm_previous{};
 std::uint64_t s_settings_applied_ms = 0u;
 constexpr std::uint64_t kDisplayConfirmMs = 15000u;
 
+// The display driver's monitors and modes, read at start and again when Windows reports a display change
+// (WM_DISPLAYCHANGE): reading them takes the driver tens of milliseconds on some PCs, which opening the
+// settings menu (under the lock the render thread takes) must not wait on.
+std::mutex s_monitor_cache_mutex;
+std::vector<MonitorInfo> s_monitor_cache;
+
+void store_monitor_cache(std::vector<MonitorInfo> monitors) {
+    const std::lock_guard<std::mutex> lock(s_monitor_cache_mutex);
+    s_monitor_cache = std::move(monitors);
+}
+
+std::vector<MonitorInfo> cached_monitors() {
+    const std::lock_guard<std::mutex> lock(s_monitor_cache_mutex);
+    if (s_monitor_cache.empty()) {
+        // Before the renderer has started (tests), the list is read now.
+        s_monitor_cache = enumerate_monitors();
+    }
+    return s_monitor_cache;
+}
+
 // CONTROLS page (tab 2): a draft of the bindings/tuning and of the input
 // source, applied together with the other pages. The edited scheme only
 // selects which table the rows show. A binding row waiting for an input is
@@ -158,8 +298,7 @@ unsigned s_settings_first_row = 0u;
 // The window thread's left/right-resolved code for the key being handled.
 std::uint32_t s_handled_key_normalized = 0u;
 
-
-constexpr unsigned kNativeSettingsTabCount = 5;
+constexpr unsigned kNativeSettingsTabCount = 6;
 
 // The GENERAL page's languages, in the order LEFT/RIGHT steps through them.
 constexpr GameLanguage kGameLanguages[] = {GameLanguage::English, GameLanguage::French, GameLanguage::Spanish};
@@ -173,6 +312,7 @@ const char* game_language_name(GameLanguage language) {
     }
     return "ENGLISH";
 }
+
 // Rows the panel shows at once; longer pages scroll.
 constexpr unsigned kNativeSettingsVisibleRows = 9u;
 
@@ -198,6 +338,71 @@ bool native_settings_ui_enabled() {
     return enabled;
 }
 
+// Writes both settings files when something changed. Each atomic replace flushes the disk, which a busy or
+// scanned disk can hold for tens of milliseconds and more.
+bool write_dirty_settings_files() {
+    if (!s_native_settings_dirty.exchange(false, std::memory_order_acq_rel)) {
+        return true;
+    }
+    bool runtime_saved = false;
+    bool render_saved = false;
+    try {
+        runtime_saved = save_runtime_settings_to_file();
+    } catch (...) {
+        runtime_saved = false;
+    }
+    try {
+        render_saved = save_render_config_to_file();
+    } catch (...) {
+        render_saved = false;
+    }
+    if (!runtime_saved || !render_saved) {
+        s_native_settings_dirty.store(true, std::memory_order_release);
+        const bool already_reported =
+            s_native_settings_save_error.exchange(
+                true,
+                std::memory_order_acq_rel);
+        if (!already_reported) {
+            std::cerr
+                << "[settings] atomic persistence failed; dirty state "
+                   "retained for retry\n";
+        }
+        return false;
+    }
+    s_native_settings_save_error.store(false, std::memory_order_release);
+    return true;
+}
+
+// Saves run on a worker: the menu, the window thread and the render thread hold the settings lock while they
+// ask for one, and the render thread takes that lock every frame the menu is open.
+std::mutex s_settings_save_mutex;
+std::condition_variable s_settings_save_changed;
+bool s_settings_save_requested = false;  // guarded by s_settings_save_mutex
+bool s_settings_save_running = false;    // guarded by s_settings_save_mutex
+
+void settings_save_worker() {
+    SetThreadDescription(GetCurrentThread(), L"Nebula Settings Save");
+    for (;;) {
+        {
+            std::unique_lock<std::mutex> lock(s_settings_save_mutex);
+            s_settings_save_changed.wait(lock, [] { return s_settings_save_requested; });
+            s_settings_save_requested = false;
+            s_settings_save_running = true;
+        }
+        (void)write_dirty_settings_files();
+        {
+            const std::lock_guard<std::mutex> lock(s_settings_save_mutex);
+            s_settings_save_running = false;
+        }
+        s_settings_save_changed.notify_all();
+    }
+}
+
+bool settings_save_pending() {
+    const std::lock_guard<std::mutex> lock(s_settings_save_mutex);
+    return s_settings_save_requested || s_settings_save_running;
+}
+
 
 float step_gain(float current, int delta) {
     const float snapped = std::round(current * 20.0f) / 20.0f;
@@ -216,12 +421,119 @@ bool display_settings_differ(const RenderConfig& a, const RenderConfig& b) {
 const MonitorInfo* settings_monitor(const RenderConfig& render);
 
 // The refresh rate the picture will be shown at with these settings.
+// GALAXY_DISPLAY_REFRESH_HZ: the refresh rate the menu and the pacing assume
+// (hidden test runs; a remote desktop session reports its virtual display's).
+unsigned refresh_override_hz() {
+    static const unsigned hz = [] {
+        char value[16]{};
+        std::size_t length = 0u;
+        return getenv_s(&length, value, sizeof(value), "GALAXY_DISPLAY_REFRESH_HZ") == 0 && length > 1u
+            ? static_cast<unsigned>(std::strtoul(value, nullptr, 10)) : 0u;
+    }();
+    return hz;
+}
+
 unsigned settings_refresh_hz(const RenderConfig& render) {
+    if (const unsigned hz = refresh_override_hz(); hz != 0u) {
+        return hz;
+    }
     const MonitorInfo* monitor = settings_monitor(render);
     if (render.display_mode == kDisplayExclusive && render.fullscreen_refresh_hz != 0u) {
         return render.fullscreen_refresh_hz;
     }
     return monitor != nullptr ? monitor->current.refresh_hz : 0u;
+}
+
+// GRAPHICS > FRAME RATE. INTERPOLATION OFF presents the game's own frames (FRAME RATE LIMIT 30
+// or 60); NATIVE adds Nebula's interpolated frames up to the TARGET FRAME RATE; DLSS FRAME
+// GENERATION has NVIDIA's generated frames reach it. The target is max_fps (0: the display's
+// refresh rate); frame_generation selects DLSS.
+enum class Interpolation : unsigned { kOff, kNative, kFrameGeneration };
+
+Interpolation interpolation_of(const RenderConfig& render) {
+    if (render.frame_generation != 0u) {
+        return Interpolation::kFrameGeneration;
+    }
+    const auto rate = static_cast<unsigned>(std::lround(std::max(0.0f, render.max_fps)));
+    return rate != 0u && rate <= 61u ? Interpolation::kOff : Interpolation::kNative;
+}
+
+// The targets a mode offers, lowest first (0: the display's refresh rate): the standard rates
+// below the display's, then its own. With a temporal upscaler native interpolation runs at
+// multiples of 60, as does frame generation without dynamic multi frame generation (and at most
+// the multiplier the GPU runs).
+std::vector<unsigned> interpolation_targets(const RenderConfig& render, Interpolation mode) {
+    std::vector<unsigned> targets;
+    if (mode == Interpolation::kOff) {
+        return targets;
+    }
+    const unsigned refresh = settings_refresh_hz(render);
+    const bool generated = mode == Interpolation::kFrameGeneration;
+    const bool sixties = generated ? streamline::frame_generation_supported() && !streamline::frame_generation_dynamic()
+                                   : temporal_upscaler(render) != 0u;
+    if (!generated && sixties && !temporal_interpolation_allowed()) {
+        return targets;
+    }
+    const unsigned most = generated && streamline::frame_generation_supported()
+        ? 60u * (streamline::frame_generation_max() + 1u) : 1000u;
+    for (const unsigned rate : {120u, 144u, 165u, 180u, 240u, 360u}) {
+        if (refresh != 0u && rate + 1u >= refresh) {
+            break;
+        }
+        if ((rate == 180u && !sixties) || (sixties && rate % 60u != 0u) || rate > most) {
+            continue;
+        }
+        targets.push_back(rate);
+    }
+    // Its own rate: above 60, and with the multiples of 60 only where it is one (frame generation
+    // takes the largest multiple at or below it).
+    const bool own = refresh == 0u || (refresh > 61u && (!sixties || generated || refresh % 60u <= 1u ||
+                                                          refresh % 60u >= 59u));
+    if (own) {
+        targets.push_back(0u);
+    }
+    return targets;
+}
+
+std::vector<Interpolation> interpolation_modes(const RenderConfig& render) {
+    std::vector<Interpolation> modes{Interpolation::kOff};
+    if (!interpolation_targets(render, Interpolation::kNative).empty()) {
+        modes.push_back(Interpolation::kNative);
+    }
+    if (frame_generation_offered() && !interpolation_targets(render, Interpolation::kFrameGeneration).empty()) {
+        modes.push_back(Interpolation::kFrameGeneration);
+    }
+    return modes;
+}
+
+// Keeps the draft's target one its mode offers: the same, else the highest at or below it (the
+// display's rate counting as its refresh), else the lowest offered; a mode with none turns off.
+void normalize_interpolation(RenderConfig& render) {
+    const Interpolation mode = interpolation_of(render);
+    const auto rate = static_cast<unsigned>(std::lround(std::max(0.0f, render.max_fps)));
+    if (mode == Interpolation::kOff) {
+        render.max_fps = rate != 0u && rate <= 30u ? 30.0f : 60.0f;
+        return;
+    }
+    const auto targets = interpolation_targets(render, mode);
+    if (targets.empty()) {
+        render.frame_generation = 0u;
+        render.max_fps = 60.0f;
+        return;
+    }
+    if (std::find(targets.begin(), targets.end(), rate) != targets.end()) {
+        return;
+    }
+    const unsigned refresh = settings_refresh_hz(render);
+    const unsigned wanted = rate == 0u ? (refresh != 0u ? refresh : 1000u) : rate;
+    unsigned chosen = targets.front();
+    for (const unsigned target : targets) {
+        const unsigned value = target == 0u ? (refresh != 0u ? refresh : 1000u) : target;
+        if (value <= wanted) {
+            chosen = target;
+        }
+    }
+    render.max_fps = static_cast<float>(chosen);
 }
 
 const MonitorInfo* settings_monitor(const RenderConfig& render) {
@@ -339,6 +651,11 @@ void sanitize_settings_draft(RenderConfig& render) {
 
 unsigned controls_changes();
 
+// The LIGHTING row: 0 per vertex, 1 per pixel, 2 enhanced.
+unsigned lighting_mode(const RenderConfig& render) {
+    return render.enhanced_lighting ? 2u : render.per_pixel_lighting ? 1u : 0u;
+}
+
 unsigned pending_settings_changes() {
     const RenderConfig live = get_render_config();
     const RenderConfig& d = s_settings_draft;
@@ -357,15 +674,18 @@ unsigned pending_settings_changes() {
         (!d.internal_follow_window && d.efb_scale != live.efb_scale);
     changes += d.vsync_interval != live.vsync_interval;
     changes += d.max_fps != live.max_fps;
+    changes += d.frame_generation != live.frame_generation;
     changes += d.aa_mode != live.aa_mode;
     changes += d.smaa_quality != live.smaa_quality;
     changes += d.upscaler != live.upscaler;
     changes += d.temporal_quality != live.temporal_quality;
+    changes += d.spatial_quality != live.spatial_quality;
     changes += d.sharpness != live.sharpness;
     changes += d.anisotropic_filtering != live.anisotropic_filtering;
     changes += d.enhanced_mipmaps != live.enhanced_mipmaps;
-    changes += d.per_pixel_lighting != live.per_pixel_lighting;
+    changes += lighting_mode(d) != lighting_mode(live);
     changes += d.hud_output_resolution != live.hud_output_resolution;
+    changes += d.ray_tracing_enabled != live.ray_tracing_enabled;
     changes += controls_changes();
     return changes;
 }
@@ -510,21 +830,23 @@ void reset_controls_draft() {
     s_input_mode_draft = get_runtime_settings().input_mode;
 }
 
-// The graphics page has its FSR 3 QUALITY row (row 3) only in runtimes built
-// with FSR 3; maps a shown row to its graphics row.
-unsigned graphics_row(unsigned row) {
-    return !fsr3_available() && row >= 3u ? row + 1u : row;
+unsigned native_settings_row_count(unsigned tab) {
+    tab %= kNativeSettingsTabCount;
+    if (settings_page_tab(tab)) {
+        return static_cast<unsigned>(
+            settings_page(tab, s_settings_draft, get_runtime_settings(), get_render_feature_caps()).size());
+    }
+    return tab == 2u ? controls_row_count() : 7u;
 }
 
-unsigned native_settings_row_count(unsigned tab) {
-    switch (tab % kNativeSettingsTabCount) {
-    case 0: return 8u;
-    case 1: return fsr3_available() ? 9u : 8u;
-    case 2: return controls_row_count();
-    case 3: return 6u;
-    case 4: return 2u;
-    default: return 0u;
+// A heading row (never selected).
+bool native_settings_heading(unsigned tab, unsigned row) {
+    tab %= kNativeSettingsTabCount;
+    if (!settings_page_tab(tab)) {
+        return false;
     }
+    const auto page = settings_page(tab, s_settings_draft, get_runtime_settings(), get_render_feature_caps());
+    return row < page.size() && page[row].heading;
 }
 
 bool settings_display_confirming() {
@@ -613,15 +935,20 @@ void apply_native_settings_draft() {
     applied.efb_scale = next.efb_scale;
     applied.vsync_interval = next.vsync_interval;
     applied.max_fps = next.max_fps;
+    applied.frame_generation = next.frame_generation;
     applied.aa_mode = next.aa_mode;
     applied.smaa_quality = next.smaa_quality;
     applied.upscaler = next.upscaler;
+    const bool dlss_asked = dlss_hold_back(applied, live);
     applied.temporal_quality = next.temporal_quality;
+    applied.spatial_quality = next.spatial_quality;
     applied.sharpness = next.sharpness;
     applied.anisotropic_filtering = next.anisotropic_filtering;
     applied.enhanced_mipmaps = next.enhanced_mipmaps;
     applied.per_pixel_lighting = next.per_pixel_lighting;
+    applied.enhanced_lighting = next.enhanced_lighting;
     applied.hud_output_resolution = next.hud_output_resolution;
+    applied.ray_tracing_enabled = next.ray_tracing_enabled;
     const bool display_changed = display_settings_differ(live, applied);
     const unsigned changes = pending_settings_changes();
     if (applied.internal_follow_window) {
@@ -636,6 +963,9 @@ void apply_native_settings_draft() {
         host_window::follow_window_rearm.store(true, std::memory_order_release);
     }
     s_settings_draft = get_render_config();
+    if (dlss_asked) {
+        s_settings_draft.upscaler = 3u;  // the row shows what the question is about
+    }
     if (display_changed) {
         if (!settings_display_confirming()) {
             s_display_confirm_previous = live;
@@ -667,7 +997,8 @@ void adjust_native_setting(int delta) {
     const unsigned row = s_native_settings_row.load(std::memory_order_relaxed);
     const auto text = [tab, row] {
         return native_settings_row_text(tab, row, s_settings_draft,
-                                        get_runtime_settings());
+                                        get_runtime_settings(),
+                                        get_render_feature_caps());
     };
     const std::string before = text();
     adjust_native_setting_unlogged(delta);
@@ -692,162 +1023,10 @@ void adjust_native_setting_unlogged(int delta) {
             static_cast<int>(value) + delta, 0, static_cast<int>(count) - 1));
     };
 
-    if (tab == 0u) {
-        const MonitorInfo* monitor = settings_monitor(draft);
-        switch (row) {
-        case 0: {  // monitor
-            if (s_settings_monitors.size() < 2u) return;
-            std::size_t index = 0u;
-            for (std::size_t i = 0; i < s_settings_monitors.size(); ++i) {
-                if (&s_settings_monitors[i] == monitor) index = i;
-            }
-            const std::size_t next = step(static_cast<unsigned>(index),
-                                          static_cast<unsigned>(s_settings_monitors.size()));
-            if (next == index) return;
-            const std::string device = narrow_utf8(s_settings_monitors[next].device);
-            draft.monitor.fill('\0');
-            std::memcpy(draft.monitor.data(), device.data(),
-                        std::min(device.size(), draft.monitor.size() - 1u));
-            // A fullscreen mode belongs to its monitor; start from the new
-            // one's desktop mode.
-            draft.fullscreen_width = 0u;
-            draft.fullscreen_height = 0u;
-            draft.fullscreen_refresh_hz = 0u;
-            sanitize_settings_draft(draft);
-            return;
-        }
-        case 1:  // display mode
-            draft.display_mode = step(std::min(draft.display_mode, kDisplayBorderless), 2u);
-            if (draft.display_mode == kDisplayWindowed && draft.aspect_mode != 0u) {
-                snap_window_size(draft);
-            }
-            sanitize_settings_draft(draft);
-            return;
-        case 2: {  // resolution
-            if (draft.display_mode == kDisplayBorderless) return;
-            if (draft.display_mode == kDisplayExclusive) {
-                if (monitor == nullptr) return;
-                const auto sizes = monitor_resolutions(*monitor);  // largest first
-                const unsigned w = draft.fullscreen_width != 0u ? draft.fullscreen_width
-                                                                : monitor->current.width;
-                const unsigned h = draft.fullscreen_height != 0u ? draft.fullscreen_height
-                                                                 : monitor->current.height;
-                std::size_t index = 0u;
-                for (std::size_t i = 0; i < sizes.size(); ++i) {
-                    if (sizes[i].first == w && sizes[i].second == h) index = i;
-                }
-                // Right moves to a larger mode.
-                const int moved = static_cast<int>(index) - delta;
-                if (moved < 0 || moved >= static_cast<int>(sizes.size())) return;
-                draft.fullscreen_width = sizes[static_cast<std::size_t>(moved)].first;
-                draft.fullscreen_height = sizes[static_cast<std::size_t>(moved)].second;
-                const auto rates = monitor_refresh_rates(
-                    *monitor, draft.fullscreen_width, draft.fullscreen_height);
-                draft.fullscreen_refresh_hz = rates.empty() ? 0u : rates.front();
-            } else {
-                const auto sizes = settings_window_sizes(monitor, draft.aspect_mode);  // smallest first
-                std::size_t index = 0u;
-                for (std::size_t i = 0; i < sizes.size(); ++i) {
-                    if (std::uint64_t{sizes[i].first} * sizes[i].second <=
-                        std::uint64_t{draft.window_width} * draft.window_height) {
-                        index = i;
-                    }
-                }
-                const int moved = static_cast<int>(index) + delta;
-                if (moved < 0 || moved >= static_cast<int>(sizes.size())) return;
-                draft.window_width = sizes[static_cast<std::size_t>(moved)].first;
-                draft.window_height = sizes[static_cast<std::size_t>(moved)].second;
-            }
-            sanitize_settings_draft(draft);
-            return;
-        }
-        case 3: {  // refresh rate (exclusive fullscreen)
-            if (draft.display_mode != kDisplayExclusive || monitor == nullptr) return;
-            const unsigned w = draft.fullscreen_width != 0u ? draft.fullscreen_width
-                                                            : monitor->current.width;
-            const unsigned h = draft.fullscreen_height != 0u ? draft.fullscreen_height
-                                                             : monitor->current.height;
-            const auto rates = monitor_refresh_rates(*monitor, w, h);  // highest first
-            if (rates.empty()) return;
-            const unsigned current = draft.fullscreen_refresh_hz != 0u
-                ? draft.fullscreen_refresh_hz : monitor->current.refresh_hz;
-            std::size_t index = 0u;
-            for (std::size_t i = 0; i < rates.size(); ++i) {
-                if (rates[i] == current) index = i;
-            }
-            const int moved = static_cast<int>(index) - delta;
-            if (moved < 0 || moved >= static_cast<int>(rates.size())) return;
-            draft.fullscreen_width = w;
-            draft.fullscreen_height = h;
-            draft.fullscreen_refresh_hz = rates[static_cast<std::size_t>(moved)];
-            return;
-        }
-        case 4:  // aspect ratio
-            draft.aspect_mode = step(draft.aspect_mode, kAspectModeCount);
-            if (draft.display_mode == kDisplayWindowed && draft.aspect_mode != 0u) {
-                snap_window_size(draft);
-            }
-            return;
-        case 5: {  // internal resolution: 0 matches the output, then 1x..cap
-            const unsigned cap = settings_scale_cap(draft);
-            const unsigned current = draft.internal_follow_window ? 0u
-                : std::clamp(draft.efb_scale, 1u, cap);
-            const unsigned next = step(current, cap + 1u);
-            if (next == 0u) {
-                draft.internal_follow_window = true;
-            } else {
-                draft.internal_follow_window = false;
-                draft.efb_scale = next;
-            }
-            return;
-        }
-        case 6: {  // frame rate
-            const auto rates = frame_rate_options();
-            const auto current = static_cast<unsigned>(std::lround(std::max(0.0f, draft.max_fps)));
-            std::size_t index = 0u;
-            for (std::size_t i = 0; i < rates.size(); ++i) {
-                if (rates[i] <= current) index = i;
-            }
-            const std::size_t next = step(static_cast<unsigned>(index), static_cast<unsigned>(rates.size()));
-            draft.max_fps = static_cast<float>(rates[next]);
-            return;
-        }
-        case 7:
-            draft.vsync_interval = draft.vsync_interval == 0u ? 1u : 0u;
-            return;
-        default:
-            return;
-        }
-    }
-
-    if (tab == 1u) {
-        static constexpr std::array<unsigned, 5> kAnisotropy{1u, 2u, 4u, 8u, 16u};
-        switch (graphics_row(row)) {
-        case 0: draft.aa_mode = step(std::min(draft.aa_mode, 3u), 4u); break;
-        case 1: draft.smaa_quality = step(std::min(draft.smaa_quality, 3u), 4u); break;
-        case 2: {
-            const unsigned count = fsr3_available() ? 3u : 2u;
-            draft.upscaler = step(std::min(draft.upscaler, count - 1u), count);
-            break;
-        }
-        case 3: draft.temporal_quality = step(std::min(draft.temporal_quality, 4u), 5u); break;
-        case 4:
-            draft.sharpness = static_cast<unsigned>(std::clamp(
-                static_cast<int>(std::min(draft.sharpness, 100u)) + delta * 10, 0, 100));
-            break;
-        case 5: {
-            std::size_t index = 0u;
-            for (std::size_t i = 0; i < kAnisotropy.size(); ++i) {
-                if (kAnisotropy[i] <= draft.anisotropic_filtering) index = i;
-            }
-            draft.anisotropic_filtering = kAnisotropy[step(
-                static_cast<unsigned>(index), static_cast<unsigned>(kAnisotropy.size()))];
-            break;
-        }
-        case 6: draft.enhanced_mipmaps = !draft.enhanced_mipmaps; break;
-        case 7: draft.per_pixel_lighting = !draft.per_pixel_lighting; break;
-        case 8: draft.hud_output_resolution = !draft.hud_output_resolution; break;
-        default: return;
+    if (settings_page_tab(tab)) {
+        const auto page = settings_page(tab, draft, get_runtime_settings(), get_render_feature_caps());
+        if (row < page.size() && page[row].change) {
+            page[row].change(draft, delta);
         }
         return;
     }
@@ -936,32 +1115,12 @@ void adjust_native_setting_unlogged(int delta) {
         // The mix changes live (no apply).
         float* const gains[] = {&settings.audio.master, &settings.audio.music,
                                 &settings.audio.sfx, &settings.audio.voice,
-                                &settings.audio.ambience, &settings.audio.cutscene};
+                                &settings.audio.ambience, &settings.audio.cutscene,
+                                &settings.audio.wiimote_speaker};
         if (row >= std::size(gains)) return;
         const float next = step_gain(*gains[row], delta);
         if (next != *gains[row]) {
             *gains[row] = next;
-            set_runtime_settings(settings);
-            s_native_settings_dirty.store(true, std::memory_order_release);
-        }
-    }
-    if (tab == 4u && row == 0u) {
-        // Text speed changes live (no apply).
-        const unsigned next = step(std::clamp(settings.text_speed, 1u, 3u) - 1u, 3u) + 1u;
-        if (next != settings.text_speed) {
-            settings.text_speed = next;
-            set_runtime_settings(settings);
-            s_native_settings_dirty.store(true, std::memory_order_release);
-        }
-    }
-    if (tab == 4u && row == 1u) {
-        // Saved at once; the game takes it at its next start (footer note).
-        const unsigned index = static_cast<unsigned>(
-            std::find(std::begin(kGameLanguages), std::end(kGameLanguages), settings.language) -
-            std::begin(kGameLanguages));
-        const GameLanguage next = kGameLanguages[step(std::min(index, 2u), 3u)];
-        if (next != settings.language) {
-            settings.language = next;
             set_runtime_settings(settings);
             s_native_settings_dirty.store(true, std::memory_order_release);
         }
@@ -979,11 +1138,27 @@ void move_native_setting_row(int delta) {
         return;
     }
     int row = static_cast<int>(s_native_settings_row.load(std::memory_order_relaxed));
-    row = (row + delta) % static_cast<int>(count);
-    if (row < 0) {
-        row += static_cast<int>(count);
+    for (unsigned tries = 0u; tries < count; ++tries) {
+        row = (row + delta) % static_cast<int>(count);
+        if (row < 0) {
+            row += static_cast<int>(count);
+        }
+        if (!native_settings_heading(tab, static_cast<unsigned>(row))) {
+            break;
+        }
     }
     s_native_settings_row.store(static_cast<unsigned>(row), std::memory_order_relaxed);
+}
+
+// The selection never rests on a heading or past the page's end.
+void settle_native_settings_row() {
+    const unsigned tab = s_native_settings_tab.load(std::memory_order_relaxed) % kNativeSettingsTabCount;
+    const unsigned count = native_settings_row_count(tab);
+    unsigned row = std::min(s_native_settings_row.load(std::memory_order_relaxed), count == 0u ? 0u : count - 1u);
+    while (row + 1u < count && native_settings_heading(tab, row)) {
+        ++row;
+    }
+    s_native_settings_row.store(row, std::memory_order_relaxed);
 }
 
 void cycle_native_settings_tab(int delta) {
@@ -998,19 +1173,27 @@ void cycle_native_settings_tab(int delta) {
     }
     s_native_settings_tab.store(
         static_cast<unsigned>(tab), std::memory_order_relaxed);
-    s_native_settings_row.store(0u, std::memory_order_relaxed);
+    unsigned first = 0u;
+    const unsigned count = native_settings_row_count(static_cast<unsigned>(tab));
+    while (first + 1u < count && native_settings_heading(static_cast<unsigned>(tab), first)) {
+        ++first;
+    }
+    s_native_settings_row.store(first, std::memory_order_relaxed);
 }
 
 void set_native_settings_visible(bool visible) {
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
     if (visible && !s_native_settings_visible.load(std::memory_order_relaxed)) {
         // A fresh draft and monitor list each time the menu opens.
-        s_settings_monitors = enumerate_monitors();
+        s_settings_monitors = cached_monitors();
         s_settings_draft = get_render_config();
         reset_controls_draft();
+        settle_native_settings_row();
     }
     if (!visible) {
-        // Closing discards an unapplied draft and an unconfirmed display.
+        // Closing discards an unapplied draft, an unconfirmed display and an
+        // unanswered DLSS question.
+        dlss_dismiss_prompt();
         revert_display_settings();
         s_settings_draft = get_render_config();
         reset_controls_draft();
@@ -1099,6 +1282,10 @@ bool handle_native_settings_key(WPARAM key, bool was_down, bool from_pad = false
     }
     if (key == galaxy::host::kBindingCaptureKey && !s_native_settings_visible.load(std::memory_order_relaxed)) {
         (void)galaxy::host::take_controller_binding_capture();
+        return true;
+    }
+    if (key != VK_F1 && s_native_settings_visible.load(std::memory_order_relaxed) &&
+        dlss_prompt_key(key, was_down)) {
         return true;
     }
     if (key != VK_F1 && s_native_settings_visible.load(std::memory_order_relaxed) &&
@@ -1546,6 +1733,7 @@ std::array<std::uint8_t, 7> ui_glyph(char ch) {
     case ',': return {0x00u, 0x00u, 0x00u, 0x00u, 0x0Cu, 0x04u, 0x08u};
     case '=': return {0x00u, 0x00u, 0x1Fu, 0x00u, 0x1Fu, 0x00u, 0x00u};
     case '%': return {0x19u, 0x19u, 0x02u, 0x04u, 0x08u, 0x13u, 0x13u};
+    case '?': return {0x0Eu, 0x11u, 0x01u, 0x02u, 0x04u, 0x00u, 0x04u};
     case '<': return {0x02u, 0x04u, 0x08u, 0x10u, 0x08u, 0x04u, 0x02u};
     case '(': return {0x02u, 0x04u, 0x08u, 0x08u, 0x08u, 0x04u, 0x02u};
     case ')': return {0x08u, 0x04u, 0x02u, 0x02u, 0x02u, 0x04u, 0x08u};
@@ -1624,6 +1812,10 @@ std::string percent_text(float value) {
     return text;
 }
 
+const char* exposed_text(const RenderFeatureStatus& status) {
+    return status.settings_exposed ? "READY" : "HIDDEN";
+}
+
 std::string upper_ascii(std::string text) {
     for (char& ch : text) {
         if (ch >= 'a' && ch <= 'z') ch = static_cast<char>(ch - 'a' + 'A');
@@ -1631,102 +1823,460 @@ std::string upper_ascii(std::string text) {
     return text;
 }
 
-std::string native_settings_row_text(
-    unsigned tab, unsigned row,
-    const RenderConfig& render, const RuntimeSettings& runtime) {
-    char text[128]{};
-    switch (tab % kNativeSettingsTabCount) {
-    case 0: {
-        const MonitorInfo* monitor = settings_monitor(render);
-        switch (row) {
-        case 0: {
-            if (monitor == nullptr) return "MONITOR: PRIMARY";
+
+// One step of a row's choice, clamped to its ends.
+unsigned settings_step(unsigned value, unsigned count, int delta) {
+    return static_cast<unsigned>(std::clamp(static_cast<int>(value) + delta, 0, static_cast<int>(count) - 1));
+}
+
+std::vector<SettingsRow> display_page(const RenderConfig& render) {
+    std::vector<SettingsRow> rows;
+    char text[96]{};
+    const MonitorInfo* monitor = settings_monitor(render);
+    rows.push_back({"SCREEN", {}, nullptr, {}, true});
+    {
+        std::string value = "PRIMARY";
+        if (monitor != nullptr) {
             std::size_t index = 0u;
             for (std::size_t i = 0; i < s_settings_monitors.size(); ++i) {
                 if (&s_settings_monitors[i] == monitor) index = i;
             }
             std::string name = monitor->name.empty() ? std::string("DISPLAY") : monitor->name;
             if (name.size() > 22u) name.resize(22u);
-            std::snprintf(text, sizeof(text), "MONITOR: %u %s %uX%u",
-                          static_cast<unsigned>(index + 1u), upper_ascii(name).c_str(),
-                          monitor->current.width, monitor->current.height);
-            return text;
+            std::snprintf(text, sizeof(text), "%u %s", static_cast<unsigned>(index + 1u), upper_ascii(name).c_str());
+            value = text;
         }
-        case 1: {
-            static constexpr const char* kModes[] = {"WINDOWED", "BORDERLESS"};
-            return std::string("MODE: ") + kModes[std::min(render.display_mode, kDisplayBorderless)];
+        SettingsRow row{"MONITOR", value, nullptr, "THE DISPLAY THE GAME RUNS ON"};
+        if (s_settings_monitors.size() >= 2u) {
+            row.change = [](RenderConfig& draft, int delta) {
+                const MonitorInfo* current = settings_monitor(draft);
+                std::size_t index = 0u;
+                for (std::size_t i = 0; i < s_settings_monitors.size(); ++i) {
+                    if (&s_settings_monitors[i] == current) index = i;
+                }
+                const std::size_t next = settings_step(static_cast<unsigned>(index),
+                                                       static_cast<unsigned>(s_settings_monitors.size()), delta);
+                if (next == index) return;
+                const std::string device = narrow_utf8(s_settings_monitors[next].device);
+                draft.monitor.fill('\0');
+                std::memcpy(draft.monitor.data(), device.data(), std::min(device.size(), draft.monitor.size() - 1u));
+                // A fullscreen mode belongs to its monitor; start from the new one's desktop mode.
+                draft.fullscreen_width = 0u;
+                draft.fullscreen_height = 0u;
+                draft.fullscreen_refresh_hz = 0u;
+                sanitize_settings_draft(draft);
+                normalize_interpolation(draft);
+            };
         }
-        case 2: {
-            const auto [w, h] = settings_output_size(render);
-            std::snprintf(text, sizeof(text), "RESOLUTION: %uX%u%s", w, h,
-                          render.display_mode == kDisplayBorderless ? " DESKTOP" : "");
-            return text;
-        }
-        case 3:
-            std::snprintf(text, sizeof(text), "REFRESH RATE: %u HZ", monitor ? monitor->current.refresh_hz : 60u);
-            return text;
-        case 4: {
-            static constexpr const char* kAspects[] = {
-                "AUTO", "4:3", "3:2", "16:10", "16:9", "21:9", "32:9"};
-            static_assert(std::size(kAspects) == kAspectModeCount);
-            return std::string("ASPECT RATIO: ") +
-                   kAspects[std::min(render.aspect_mode, kAspectModeCount - 1u)];
-        }
-        case 5: {
-            if (render.internal_follow_window) return "INTERNAL RES: MATCH OUTPUT";
-            const unsigned scale = std::clamp(render.efb_scale, 1u, kMaxEfbScale);
-            std::snprintf(text, sizeof(text), "INTERNAL RES: %uX %uX%u%s", scale,
-                          kEfbWidth * scale, kEfbHeight * scale,
-                          scale >= settings_scale_cap(render) ? " MAX" : "");
-            return text;
-        }
-        case 6: {
-            const auto rate = static_cast<unsigned>(std::lround(std::max(0.0f, render.max_fps)));
-            const double measured = host_window::measured_present_hz.load(std::memory_order_relaxed);
-            std::snprintf(text, sizeof(text), "FRAME RATE: %u  %.1f", rate, measured);
-            return text;
-        }
-        case 7:
-            return std::string("VSYNC: ") + (render.vsync_interval == 0u ? "OFF" : "ON");
-        default:
-            return {};
-        }
+        rows.push_back(std::move(row));
     }
-    case 1: {
+    {
+        static constexpr const char* kModes[] = {"WINDOWED", "BORDERLESS FULLSCREEN"};
+        rows.push_back({"DISPLAY MODE", kModes[std::min(render.display_mode, kDisplayBorderless)],
+                        [](RenderConfig& draft, int delta) {
+                            draft.display_mode = settings_step(std::min(draft.display_mode, kDisplayBorderless), 2u, delta);
+                            if (draft.display_mode == kDisplayWindowed && draft.aspect_mode != 0u) {
+                                snap_window_size(draft);
+                            }
+                            sanitize_settings_draft(draft);
+                        },
+                        "BORDERLESS FILLS THE SCREEN AND SWITCHES INSTANTLY"});
+    }
+    {
+        const auto [w, h] = settings_output_size(render);
+        std::snprintf(text, sizeof(text), "%uX%u", w, h);
+        SettingsRow row{"RESOLUTION", text, nullptr, "BORDERLESS USES THE DESKTOP RESOLUTION"};
+        if (render.display_mode == kDisplayWindowed) {
+            row.help = "THE WINDOW SIZE";
+            row.change = [](RenderConfig& draft, int delta) {
+                const auto sizes = settings_window_sizes(settings_monitor(draft), draft.aspect_mode);  // smallest first
+                std::size_t index = 0u;
+                for (std::size_t i = 0; i < sizes.size(); ++i) {
+                    if (std::uint64_t{sizes[i].first} * sizes[i].second <=
+                        std::uint64_t{draft.window_width} * draft.window_height) {
+                        index = i;
+                    }
+                }
+                const int moved = static_cast<int>(index) + delta;
+                if (moved < 0 || moved >= static_cast<int>(sizes.size())) return;
+                draft.window_width = sizes[static_cast<std::size_t>(moved)].first;
+                draft.window_height = sizes[static_cast<std::size_t>(moved)].second;
+                sanitize_settings_draft(draft);
+            };
+        }
+        rows.push_back(std::move(row));
+    }
+    {
+        const unsigned hz = settings_refresh_hz(render);
+        std::snprintf(text, sizeof(text), "%u HZ", hz != 0u ? hz : 60u);
+        rows.push_back({"REFRESH RATE", text, nullptr, "SET IN THE WINDOWS DISPLAY SETTINGS"});
+    }
+    {
+        static constexpr const char* kAspects[] = {"AUTO", "4:3", "3:2", "16:10", "16:9", "21:9", "32:9"};
+        static_assert(std::size(kAspects) == kAspectModeCount);
+        rows.push_back({"ASPECT RATIO", kAspects[std::min(render.aspect_mode, kAspectModeCount - 1u)],
+                        [](RenderConfig& draft, int delta) {
+                            draft.aspect_mode = settings_step(draft.aspect_mode, kAspectModeCount, delta);
+                            if (draft.display_mode == kDisplayWindowed && draft.aspect_mode != 0u) {
+                                snap_window_size(draft);
+                            }
+                        },
+                        "AUTO MATCHES THE WINDOW. WIDER SHOWS MORE OF THE WORLD"});
+    }
+    rows.push_back({"VSYNC", render.vsync_interval == 0u ? "OFF" : "ON",
+                    [](RenderConfig& draft, int) {
+                        draft.vsync_interval = draft.vsync_interval == 0u ? 1u : 0u;
+                        normalize_interpolation(draft);
+                    },
+                    "WAITS FOR THE DISPLAY: NO TEARING, A LITTLE MORE LATENCY"});
+    rows.push_back({"INTERFACE", {}, nullptr, {}, true});
+    rows.push_back({"HUD RESOLUTION", render.hud_output_resolution ? "DISPLAY" : "INTERNAL",
+                    [](RenderConfig& draft, int) { draft.hud_output_resolution = !draft.hud_output_resolution; },
+                    "DISPLAY DRAWS MENUS AND TEXT SHARP AT THE SCREEN RESOLUTION"});
+    return rows;
+}
+
+std::vector<SettingsRow> graphics_page(const RenderConfig& render) {
+    std::vector<SettingsRow> rows;
+    char text[96]{};
+    rows.push_back({"RESOLUTION", {}, nullptr, {}, true});
+    {
+        static constexpr const char* kUpscalers[] = {"OFF", "FSR 1", "FSR 3", "DLSS"};
+        const std::vector<unsigned> choices = available_upscalers();
+        const bool offered = std::find(choices.begin(), choices.end(), render.upscaler) != choices.end();
+        std::string value = kUpscalers[offered ? std::min(render.upscaler, 3u) : 1u];
+        if (offered && render.upscaler == 3u && !streamline::dlss_supported()) {
+            value += dlss_installed_now() ? " (AFTER RESTART)" : " (DOWNLOAD)";
+        }
+        rows.push_back({"UPSCALING", value,
+                        [](RenderConfig& draft, int delta) {
+                            const std::vector<unsigned> options = available_upscalers();
+                            std::size_t index = 0u;
+                            for (std::size_t i = 0; i < options.size(); ++i) {
+                                if (options[i] == draft.upscaler) index = i;
+                            }
+                            draft.upscaler = options[settings_step(static_cast<unsigned>(index),
+                                                                   static_cast<unsigned>(options.size()), delta)];
+                            normalize_interpolation(draft);
+                        },
+                        "DLSS AND FSR 3 RENDER FEWER PIXELS AND REBUILD A SHARP IMAGE"});
+    }
+    const unsigned internal = std::clamp(render.efb_scale, 1u, settings_scale_cap(render));
+    const unsigned render_scale = upscaler_render_scale(render, internal);
+    const bool upscaled = temporal_upscaler(render) != 0u || spatial_quality_mode(render);
+    {
+        static constexpr const char* kTemporal[] = {"NATIVE AA", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE"};
+        static constexpr const char* kDlss[] = {"DLAA", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE"};
+        static constexpr const char* kSpatial[] = {"NATIVE", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE"};
+        const bool temporal = render.upscaler >= 2u;
+        const unsigned quality = temporal ? std::min(render.temporal_quality, 4u) : std::min(render.spatial_quality, 4u);
+        const unsigned upscaler = std::min(render.upscaler, 3u);
+        std::snprintf(text, sizeof(text), "%s (%uX)",
+                      upscaler == 3u ? kDlss[quality] : upscaler == 2u ? kTemporal[quality] : kSpatial[quality],
+                      render_scale);
+        rows.push_back({upscaler == 3u ? "DLSS MODE" : upscaler == 2u ? "FSR 3 MODE" : "QUALITY MODE", text,
+                        [](RenderConfig& draft, int delta) {
+                            if (draft.upscaler >= 2u) {
+                                draft.temporal_quality = settings_step(std::min(draft.temporal_quality, 4u), 5u, delta);
+                            } else {
+                                draft.spatial_quality = settings_step(std::min(draft.spatial_quality, 4u), 5u, delta);
+                            }
+                        },
+                        "THE RENDER RESOLUTION BELOW THE INTERNAL ONE. QUALITY RENDERS THE MOST PIXELS"});
+    }
+    {
+        std::string value = "MATCH OUTPUT";
+        if (!render.internal_follow_window) {
+            std::snprintf(text, sizeof(text), "%uX %uX%u%s", internal, kEfbWidth * internal, kEfbHeight * internal,
+                          internal >= settings_scale_cap(render) ? " MAX" : "");
+            value = text;
+        }
+        rows.push_back({"INTERNAL RESOLUTION", value,
+                        [](RenderConfig& draft, int delta) {
+                            const unsigned cap = settings_scale_cap(draft);
+                            const unsigned current = draft.internal_follow_window ? 0u
+                                                                                  : std::clamp(draft.efb_scale, 1u, cap);
+                            const unsigned next = settings_step(current, cap + 1u, delta);
+                            if (next == 0u) {
+                                draft.internal_follow_window = true;
+                            } else {
+                                draft.internal_follow_window = false;
+                                draft.efb_scale = next;
+                            }
+                        },
+                        upscaled ? "THE UPSCALER'S OUTPUT. MATCH OUTPUT FOLLOWS THE SCREEN"
+                                 : "MATCH OUTPUT RENDERS AT THE SCREEN RESOLUTION"});
+    }
+    std::snprintf(text, sizeof(text), "%u%%", std::min(render.sharpness, 100u));
+    rows.push_back({"SHARPENING", text,
+                    [](RenderConfig& draft, int delta) {
+                        draft.sharpness = static_cast<unsigned>(
+                            std::clamp(static_cast<int>(std::min(draft.sharpness, 100u)) + delta * 10, 0, 100));
+                    },
+                    "CONTRAST-ADAPTIVE SHARPENING OF THE FINAL IMAGE"});
+    {
+        std::string value = anti_aliasing_row_text(render.aa_mode, render.smaa_quality, get_post_process_status());
+        if (const std::size_t colon = value.find(": "); colon != std::string::npos) value.erase(0, colon + 2u);
+        rows.push_back({"ANTI-ALIASING", value,
+                        [](RenderConfig& draft, int delta) { draft.aa_mode = settings_step(std::min(draft.aa_mode, 3u), 4u, delta); },
+                        "SMOOTHS EDGES. AUTO SKIPS IT WHEN THE IMAGE IS ALREADY SUPERSAMPLED"});
+    }
+    if (render.aa_mode == 1u || render.aa_mode == 2u) {
         static constexpr const char* kQuality[] = {"LOW", "MEDIUM", "HIGH", "ULTRA"};
-        switch (graphics_row(row)) {
-        case 0: return anti_aliasing_row_text(render.aa_mode, render.smaa_quality, get_post_process_status());
-        case 1: return std::string("AA QUALITY: ") + kQuality[std::min(render.smaa_quality, 3u)];
-        case 2: {
-            static constexpr const char* kUpscalers[] = {"BILINEAR", "FSR 1", "FSR 3"};
-            return std::string("UPSCALER: ") +
-                   kUpscalers[std::min(render.upscaler, fsr3_available() ? 2u : 1u)];
+        rows.push_back({"SMAA QUALITY", kQuality[std::min(render.smaa_quality, 3u)],
+                        [](RenderConfig& draft, int delta) {
+                            draft.smaa_quality = settings_step(std::min(draft.smaa_quality, 3u), 4u, delta);
+                        },
+                        "HIGHER FINDS MORE EDGES"});
+    }
+
+    rows.push_back({"FRAME RATE", {}, nullptr, {}, true});
+    const Interpolation mode = interpolation_of(render);
+    {
+        std::string value = mode == Interpolation::kOff      ? "OFF"
+                            : mode == Interpolation::kNative ? "NATIVE"
+                                                             : "DLSS FRAME GENERATION";
+        if (mode == Interpolation::kFrameGeneration) {
+            if (!streamline::frame_generation_supported()) value += " (AFTER RESTART)";
+            else if (render.upscaler != 3u) value += " (NEEDS DLSS)";
         }
-        case 3: {
-            static constexpr const char* kTemporal[] = {
-                "NATIVE AA", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE"};
-            return std::string("FSR 3 QUALITY: ") + kTemporal[std::min(render.temporal_quality, 4u)];
+        rows.push_back({"INTERPOLATION", value,
+                        [](RenderConfig& draft, int delta) {
+                            const auto modes = interpolation_modes(draft);
+                            const Interpolation current = interpolation_of(draft);
+                            std::size_t index = 0u;
+                            for (std::size_t i = 0; i < modes.size(); ++i) {
+                                if (modes[i] == current) index = i;
+                            }
+                            const Interpolation next = modes[settings_step(static_cast<unsigned>(index),
+                                                                           static_cast<unsigned>(modes.size()), delta)];
+                            if (next == current) return;
+                            draft.frame_generation = next == Interpolation::kFrameGeneration ? 1u : 0u;
+                            // Interpolation starts at the display's own rate.
+                            draft.max_fps = next == Interpolation::kOff ? 60.0f : 0.0f;
+                            if (next == Interpolation::kFrameGeneration && draft.upscaler != 3u) {
+                                draft.upscaler = 3u;  // frame generation runs with DLSS
+                            }
+                            normalize_interpolation(draft);
+                        },
+                        mode == Interpolation::kOff ? "THE GAME RUNS AT 60. NATIVE OR DLSS ADD FRAMES BETWEEN"
+                        : mode == Interpolation::kNative
+                            ? "NEBULA DRAWS EXTRA FRAMES FROM THE GAME MOTION"
+                            : "NVIDIA GENERATES THE FRAMES BETWEEN THE GAME'S 60"});
+    }
+    const double measured = host_window::measured_present_hz.load(std::memory_order_relaxed) *
+                            (frame_generation_running() ? static_cast<double>(streamline::frames_presented()) : 1.0);
+    char now[48]{};
+    std::snprintf(now, sizeof(now), "SHOWING %.1f FPS", measured);
+    if (mode == Interpolation::kOff) {
+        const auto rate = static_cast<unsigned>(std::lround(std::max(0.0f, render.max_fps)));
+        rows.push_back({"FRAME RATE LIMIT", rate <= 30u ? "30 FPS" : "60 FPS",
+                        [](RenderConfig& draft, int delta) { draft.max_fps = delta < 0 ? 30.0f : 60.0f; },
+                        now});
+    } else {
+        const auto rate = static_cast<unsigned>(std::lround(std::max(0.0f, render.max_fps)));
+        if (rate == 0u) {
+            const unsigned refresh = settings_refresh_hz(render);
+            std::snprintf(text, sizeof(text), refresh != 0u ? "MATCH REFRESH (%u HZ)" : "MATCH REFRESH", refresh);
+        } else {
+            std::snprintf(text, sizeof(text), "%u FPS", rate);
         }
-        case 4:
-            std::snprintf(text, sizeof(text), "SHARPENING: %u%%", std::min(render.sharpness, 100u));
-            return text;
-        case 5:
-            if (render.anisotropic_filtering <= 1u) return "TEXTURES: TRILINEAR";
-            std::snprintf(text, sizeof(text), "TEXTURES: %uX ANISOTROPIC",
-                          std::min(render.anisotropic_filtering, 16u));
-            return text;
-        case 6:
-            return std::string("MIPMAPS: ") + (render.enhanced_mipmaps ? "GENERATED" : "ORIGINAL");
-        case 7:
-            return std::string("LIGHTING: ") +
-                   (render.per_pixel_lighting ? "PER PIXEL" : "PER VERTEX");
-        case 8:
-            return std::string("2D LAYER: ") +
-                   (render.hud_output_resolution ? "DISPLAY RES" : "INTERNAL RES");
-        default:
+        rows.push_back({"TARGET FRAME RATE", text,
+                        [](RenderConfig& draft, int delta) {
+                            const auto targets = interpolation_targets(draft, interpolation_of(draft));
+                            if (targets.empty()) return;
+                            const auto current = static_cast<unsigned>(std::lround(std::max(0.0f, draft.max_fps)));
+                            std::size_t index = targets.size() - 1u;
+                            for (std::size_t i = 0; i < targets.size(); ++i) {
+                                if (targets[i] == current) index = i;
+                            }
+                            draft.max_fps = static_cast<float>(targets[settings_step(
+                                static_cast<unsigned>(index), static_cast<unsigned>(targets.size()), delta)]);
+                        },
+                        now});
+    }
+
+    rows.push_back({"DETAIL", {}, nullptr, {}, true});
+    {
+        static constexpr std::array<unsigned, 5> kAnisotropy{1u, 2u, 4u, 8u, 16u};
+        if (render.anisotropic_filtering <= 1u) {
+            std::snprintf(text, sizeof(text), "TRILINEAR");
+        } else {
+            std::snprintf(text, sizeof(text), "%uX ANISOTROPIC", std::min(render.anisotropic_filtering, 16u));
+        }
+        rows.push_back({"TEXTURE FILTERING", text,
+                        [](RenderConfig& draft, int delta) {
+                            std::size_t index = 0u;
+                            for (std::size_t i = 0; i < kAnisotropy.size(); ++i) {
+                                if (kAnisotropy[i] <= draft.anisotropic_filtering) index = i;
+                            }
+                            draft.anisotropic_filtering = kAnisotropy[settings_step(
+                                static_cast<unsigned>(index), static_cast<unsigned>(kAnisotropy.size()), delta)];
+                        },
+                        "SHARPER TEXTURES ON FLOORS AND WALLS AT AN ANGLE"});
+    }
+    rows.push_back({"MIPMAPS", render.enhanced_mipmaps ? "GENERATED" : "ORIGINAL",
+                    [](RenderConfig& draft, int) { draft.enhanced_mipmaps = !draft.enhanced_mipmaps; },
+                    "GENERATED ADDS SMOOTH DISTANT DETAIL WHERE THE GAME HAS NONE"});
+    {
+        static constexpr const char* kLighting[] = {"PER VERTEX", "PER PIXEL", "ENHANCED"};
+        rows.push_back({"LIGHTING", kLighting[lighting_mode(render)],
+                        [](RenderConfig& draft, int delta) {
+                            const unsigned mode = settings_step(lighting_mode(draft), 3u, delta);
+                            draft.per_pixel_lighting = mode != 0u;
+                            draft.enhanced_lighting = mode == 2u;
+                        },
+                        lighting_mode(render) == 2u
+                            ? "HIGHLIGHTS, SOFT SKY LIGHT AND SHINIER METALS FROM THE GAME'S OWN LIGHTS"
+                            : "PER PIXEL LIGHTS EVERY PIXEL INSTEAD OF EVERY CORNER"});
+    }
+    if (host_window::ray_tracing_offered.load(std::memory_order_relaxed)) {
+        rows.push_back({"RAY TRACING", render.ray_tracing_enabled ? "ON" : "OFF",
+                        [](RenderConfig& draft, int) { draft.ray_tracing_enabled = !draft.ray_tracing_enabled; },
+                        "TRACED SHADOWS, SKY AND BOUNCE LIGHT, GLOWS THAT LIGHT THE WORLD"});
+    }
+    return rows;
+}
+
+// GAME > GALAXY SELECT: the galaxy and star the TRAVEL row goes to.
+std::size_t s_galaxy_select_stage = 0u;
+std::uint32_t s_galaxy_select_star = 1u;
+
+std::vector<SettingsRow> game_page(const RuntimeSettings& runtime) {
+    std::vector<SettingsRow> rows;
+    char text[32]{};
+    std::snprintf(text, sizeof(text), "%uX", std::clamp(runtime.text_speed, 1u, 3u));
+    rows.push_back({"TEXT SPEED", text,
+                    [](RenderConfig&, int delta) {
+                        // Changes live (no apply).
+                        RuntimeSettings settings = get_runtime_settings();
+                        const unsigned next = settings_step(std::clamp(settings.text_speed, 1u, 3u) - 1u, 3u, delta) + 1u;
+                        if (next != settings.text_speed) {
+                            settings.text_speed = next;
+                            set_runtime_settings(settings);
+                            s_native_settings_dirty.store(true, std::memory_order_release);
+                        }
+                    },
+                    "HOW FAST DIALOGUE TEXT APPEARS"});
+    rows.push_back({"LANGUAGE", game_language_name(runtime.language),
+                    [](RenderConfig&, int delta) {
+                        // Saved now; the game switches at the next start (game_language_for_boot).
+                        RuntimeSettings settings = get_runtime_settings();
+                        std::size_t index = 0u;
+                        for (std::size_t i = 0; i < std::size(kGameLanguages); ++i) {
+                            if (kGameLanguages[i] == settings.language) index = i;
+                        }
+                        const GameLanguage next = kGameLanguages[settings_step(
+                            static_cast<unsigned>(index), static_cast<unsigned>(std::size(kGameLanguages)), delta)];
+                        if (next != settings.language) {
+                            settings.language = next;
+                            set_runtime_settings(settings);
+                            s_native_settings_dirty.store(true, std::memory_order_release);
+                        }
+                    },
+                    "THE GAME'S TEXT AND MENUS"});
+    if (galaxy_select_enabled()) {
+        want_galaxy_select_names();
+        const std::size_t stage = std::min(s_galaxy_select_stage, kGalaxyStageCount - 1u);
+        const std::uint32_t star = std::clamp(s_galaxy_select_star, 1u, kGalaxyStages[stage].stars);
+        std::string name = galaxy_select_name(stage);
+        if (name.empty()) {
+            name = std::string_view(kGalaxyStages[stage].id) == kObservatoryId ? std::string(kObservatoryName)
+                                                                                : upper_ascii(kGalaxyStages[stage].id);
+        }
+        rows.push_back({"GALAXY SELECT", {}, nullptr, {}, true});
+        rows.push_back({"GALAXY", name,
+                        [](RenderConfig&, int delta) {
+                            s_galaxy_select_stage = settings_step(
+                                static_cast<unsigned>(std::min(s_galaxy_select_stage, kGalaxyStageCount - 1u)),
+                                static_cast<unsigned>(kGalaxyStageCount), delta);
+                            s_galaxy_select_star = 1u;
+                        },
+                        "ANY GALAXY, FOR TESTING. STARS COLLECTED THERE ARE SAVED"});
+        std::string star_name = galaxy_select_star_name(stage, star);
+        char star_text[96]{};
+        std::snprintf(star_text, sizeof(star_text), star_name.empty() ? "%u" : "%u  %s", star, star_name.c_str());
+        rows.push_back({"STAR", star_text,
+                        [](RenderConfig&, int delta) {
+                            const std::size_t at = std::min(s_galaxy_select_stage, kGalaxyStageCount - 1u);
+                            s_galaxy_select_star = settings_step(s_galaxy_select_star - 1u, kGalaxyStages[at].stars,
+                                                                 delta) + 1u;
+                        },
+                        "THE MISSION TO PLAY"});
+        rows.push_back({"TRAVEL", "PRESS RIGHT",
+                        [](RenderConfig&, int delta) {
+                            if (delta <= 0) return;
+                            const std::size_t at = std::min(s_galaxy_select_stage, kGalaxyStageCount - 1u);
+                            request_galaxy_travel(at, std::clamp(s_galaxy_select_star, 1u, kGalaxyStages[at].stars));
+                            std::cerr << "[settings] travel to " << kGalaxyStages[at].id << ' '
+                                      << s_galaxy_select_star << '\n';
+                            set_native_settings_visible(false);
+                        },
+                        "LOADS IT WITH THE GAME OWN STAGE CHANGE, FROM ANY GALAXY"});
+        rows.push_back({"GRAND STARS", "PRESS RIGHT",
+                        [](RenderConfig&, int delta) {
+                            if (delta <= 0) return;
+                            request_grand_stars();
+                            std::cerr << "[settings] grand stars\n";
+                            set_native_settings_visible(false);
+                        },
+                        "GIVES THIS SAVE FILE GRAND STARS 1-6 (EVERY DOME POWERED) AND LOADS THE OBSERVATORY. "
+                        "USE A SPARE FILE"});
+    }
+    return rows;
+}
+
+std::vector<SettingsRow> system_page(const RenderFeatureCaps& caps) {
+    std::vector<SettingsRow> rows;
+    {
+        std::string name = upper_ascii(caps.adapter_description.data());
+        if (name.size() > 24u) name.resize(24u);
+        while (!name.empty() && name.back() == ' ') name.pop_back();
+        rows.push_back({"GRAPHICS CARD", name, nullptr, "CHOSEN IN NEBULA SETTINGS. A CHANGE APPLIES AT THE NEXT START"});
+    }
+    char text[64]{};
+    if (caps.dxr_raytracing_tier != 0u) {
+        std::snprintf(text, sizeof(text), "TIER %u.%u %s", caps.dxr_raytracing_tier / 10u, caps.dxr_raytracing_tier % 10u,
+                      exposed_text(caps.dxr));
+    } else {
+        std::snprintf(text, sizeof(text), "NONE");
+    }
+    rows.push_back({"RAY TRACING HARDWARE", text, nullptr, "DIRECTX RAYTRACING ON THIS GPU"});
+    rows.push_back({"NVIDIA STREAMLINE", exposed_text(caps.streamline), nullptr, "LOADS DLSS FROM THE NVIDIA DOWNLOAD"});
+    rows.push_back({"NVIDIA REFLEX", exposed_text(caps.reflex), nullptr, "LOW LATENCY WITH FRAME GENERATION"});
+    rows.push_back({"DLSS", exposed_text(caps.dlss_super_resolution), nullptr, "UPSCALING ON NVIDIA RTX GPUS"});
+    rows.push_back({"DLSS FRAME GENERATION", exposed_text(caps.dlss_frame_generation), nullptr,
+                    "GENERATED FRAMES ON NVIDIA RTX 40 AND 50 GPUS"});
+    std::string post = post_process_caps_text(get_post_process_status());
+    if (const std::size_t colon = post.find(": "); colon != std::string::npos) post.erase(0, colon + 2u);
+    rows.push_back({"POST-PROCESS", post, nullptr, "ANTI-ALIASING, FSR 1 AND SHARPENING"});
+    return rows;
+}
+
+std::vector<SettingsRow> settings_page(unsigned tab, const RenderConfig& draft, const RuntimeSettings& runtime,
+                                       const RenderFeatureCaps& caps) {
+    switch (tab % kNativeSettingsTabCount) {
+    case 0: return display_page(draft);
+    case 1: return graphics_page(draft);
+    case 4: return game_page(runtime);
+    case 5: return system_page(caps);
+    default: return {};
+    }
+}
+
+std::string native_settings_row_text(
+    unsigned tab, unsigned row,
+    const RenderConfig& render, const RuntimeSettings& runtime,
+    const RenderFeatureCaps& caps) {
+    char text[128]{};
+    if (settings_page_tab(tab % kNativeSettingsTabCount)) {
+        const auto page = settings_page(tab % kNativeSettingsTabCount, render, runtime, caps);
+        if (row >= page.size()) {
             return {};
         }
+        return page[row].heading ? page[row].label : page[row].label + ": " + page[row].value;
     }
+    switch (tab % kNativeSettingsTabCount) {
     case 2: {
         (void)runtime;
         using galaxy::input::ControlScheme;
@@ -1812,14 +2362,209 @@ std::string native_settings_row_text(
         case 3: return std::string("VOICE: ") + percent_text(runtime.audio.voice);
         case 4: return std::string("AMBIENCE: ") + percent_text(runtime.audio.ambience);
         case 5: return std::string("CUTSCENE: ") + percent_text(runtime.audio.cutscene);
+        case 6: return std::string("WIIMOTE SOUNDS: ") + percent_text(runtime.audio.wiimote_speaker);
         default: return {};
         }
-    case 4:
-        if (row == 0u) {
-            std::snprintf(text, sizeof(text), "TEXT SPEED: %uX", std::clamp(runtime.text_speed, 1u, 3u));
-            return text;
+    default:
+        return {};
+    }
+}
+
+enum class DlssOffer : std::uint8_t { None, Ask, Downloading, Ready, Failed };
+DlssOffer s_dlss_offer = DlssOffer::None;
+HANDLE s_dlss_download = nullptr;
+std::atomic<bool> s_dlss_downloading{false};
+bool s_dlss_installed_now = false;
+std::uint64_t s_dlss_failed_until_ms = 0u;
+
+std::wstring launcher_path() {
+    wchar_t path[MAX_PATH]{};
+    const DWORD length = GetModuleFileNameW(nullptr, path, MAX_PATH);
+    if (length == 0u || length >= MAX_PATH) {
+        return {};
+    }
+    std::wstring launcher(path, length);
+    const std::size_t slash = launcher.find_last_of(L"\\/");
+    if (slash == std::wstring::npos) {
+        return {};
+    }
+    launcher.resize(slash + 1u);
+    launcher += L"Nebula.exe";
+    return GetFileAttributesW(launcher.c_str()) == INVALID_FILE_ATTRIBUTES ? std::wstring{} : launcher;
+}
+
+bool streamline_files_present() {
+    const std::wstring interposer = streamline::default_directory() + L"\\sl.interposer.dll";
+    return GetFileAttributesW(interposer.c_str()) != INVALID_FILE_ATTRIBUTES;
+}
+
+bool start_launcher(const std::wstring& arguments, HANDLE* process_out) {
+    const std::wstring launcher = launcher_path();
+    if (launcher.empty()) {
+        return false;
+    }
+    std::wstring command = L"\"" + launcher + L"\" " + arguments;
+    STARTUPINFOW startup{};
+    startup.cb = sizeof(startup);
+    PROCESS_INFORMATION process{};
+    if (!CreateProcessW(launcher.c_str(), command.data(), nullptr, nullptr, FALSE, 0u, nullptr, nullptr,
+                        &startup, &process)) {
+        std::cerr << "[dlss] could not start Nebula.exe: win32=" << GetLastError() << '\n';
+        return false;
+    }
+    // Its window comes to the front over the game.
+    AllowSetForegroundWindow(process.dwProcessId);
+    CloseHandle(process.hThread);
+    if (process_out != nullptr) {
+        *process_out = process.hProcess;
+    } else {
+        CloseHandle(process.hProcess);
+    }
+    return true;
+}
+
+bool dlss_offered() {
+    if (!kStreamlineBuilt || streamline::dlss_supported()) {
+        return false;
+    }
+    if (s_dlss_installed_now) {
+        return true;
+    }
+    static const bool offered = host_window::rtx_adapter.load(std::memory_order_relaxed) &&
+                                !streamline_files_present() && !launcher_path().empty();
+    return offered;
+}
+
+bool dlss_installed_now() {
+    return s_dlss_installed_now && !streamline::dlss_supported();
+}
+
+// DLSS Frame Generation (DISPLAY: FRAME GENERATION): offered while it runs, or with DLSS once its
+// plugins are installed (it loads when the game starts with it on).
+bool frame_generation_offered() {
+    if (streamline::frame_generation_supported()) {
+        return true;
+    }
+    static const bool installed = [] {
+        const std::wstring directory = streamline::default_directory();
+        for (const wchar_t* name : {L"sl.dlss_g.dll", L"nvngx_dlssg.dll", L"sl.reflex.dll", L"sl.pcl.dll"}) {
+            if (GetFileAttributesW((directory + L"\\" + name).c_str()) == INVALID_FILE_ATTRIBUTES) {
+                return false;
+            }
         }
-        if (row == 1u) return std::string("LANGUAGE: ") + game_language_name(runtime.language);
+        return true;
+    }();
+    return installed && streamline::dlss_supported();
+}
+
+
+// DLSS chosen before it is installed is not applied: the menu asks to
+// download it. Once downloaded this session it applies and runs after a
+// restart (FSR 1 until then).
+bool dlss_hold_back(RenderConfig& applied, const RenderConfig& live) {
+    if (applied.upscaler != 3u || live.upscaler == 3u || !dlss_offered() || s_dlss_installed_now) {
+        return false;
+    }
+    applied.upscaler = live.upscaler;
+    if (s_dlss_offer != DlssOffer::Downloading) {
+        s_dlss_offer = DlssOffer::Ask;
+    }
+    return true;
+}
+
+void dlss_dismiss_prompt() {
+    if (s_dlss_offer == DlssOffer::Ask || s_dlss_offer == DlssOffer::Ready) {
+        s_dlss_offer = DlssOffer::None;
+    }
+}
+
+void dlss_fail(const char* why) {
+    if (s_settings_draft.upscaler == 3u && !s_dlss_installed_now) {
+        s_settings_draft.upscaler = get_render_config().upscaler;
+    }
+    s_dlss_offer = DlssOffer::Failed;
+    s_dlss_failed_until_ms = GetTickCount64() + 4000u;
+    std::cerr << "[dlss] not installed: " << why << '\n';
+}
+
+// Enter/Y and Esc/B answer the DLSS questions; other keys wait for an answer.
+bool dlss_prompt_key(WPARAM key, bool was_down) {
+    if (s_dlss_offer != DlssOffer::Ask && s_dlss_offer != DlssOffer::Ready) {
+        return false;
+    }
+    if (was_down || (key != VK_RETURN && key != VK_ESCAPE)) {
+        return true;
+    }
+    if (key == VK_ESCAPE) {
+        if (s_dlss_offer == DlssOffer::Ask) {
+            s_settings_draft.upscaler = get_render_config().upscaler;
+        }
+        s_dlss_offer = DlssOffer::None;
+        return true;
+    }
+    if (s_dlss_offer == DlssOffer::Ask) {
+        if (start_launcher(L"--install-dlss", &s_dlss_download)) {
+            s_dlss_downloading.store(true, std::memory_order_release);
+            s_dlss_offer = DlssOffer::Downloading;
+            std::cerr << "[dlss] download started\n";
+        } else {
+            dlss_fail("no launcher");
+        }
+        return true;
+    }
+    // Ready: the launcher starts the game again once this process has exited.
+    s_dlss_offer = DlssOffer::None;
+    if (start_launcher(L"--restart-after " + std::to_wstring(GetCurrentProcessId()), nullptr)) {
+        std::cerr << "[dlss] restarting\n";
+        PostMessageW(reinterpret_cast<HWND>(host_window::settings_window.load(std::memory_order_acquire)),
+                     WM_CLOSE, 0, 0);
+    }
+    return true;
+}
+
+// Render thread, every frame: notices when the download window closes.
+void poll_dlss_download() {
+    if (!s_dlss_downloading.load(std::memory_order_acquire)) {
+        return;
+    }
+    const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
+    if (s_dlss_download == nullptr || WaitForSingleObject(s_dlss_download, 0u) != WAIT_OBJECT_0) {
+        return;
+    }
+    DWORD code = 1u;
+    GetExitCodeProcess(s_dlss_download, &code);
+    CloseHandle(s_dlss_download);
+    s_dlss_download = nullptr;
+    s_dlss_downloading.store(false, std::memory_order_release);
+    if (code != 0u || !streamline_files_present()) {
+        dlss_fail(code == 1u ? "closed" : "download failed");
+        return;
+    }
+    s_dlss_installed_now = true;
+    RenderConfig render = get_render_config();
+    render.upscaler = 3u;
+    set_render_config(render);
+    s_settings_draft.upscaler = 3u;
+    s_native_settings_dirty.store(true, std::memory_order_release);
+    flush_native_settings_if_dirty();
+    s_dlss_offer = DlssOffer::Ready;
+    std::cerr << "[dlss] installed; it starts with the next launch\n";
+}
+
+std::string dlss_footer(std::uint64_t now_ms, bool& error) {
+    switch (s_dlss_offer) {
+    case DlssOffer::Ask:
+        return "DOWNLOAD NVIDIA DLSS (31 MB)? ENTER/Y YES  ESC/B NO";
+    case DlssOffer::Downloading:
+        return "INSTALLING NVIDIA DLSS...";
+    case DlssOffer::Ready:
+        return "DLSS READY. RESTART NOW? ENTER/Y YES  ESC/B LATER";
+    case DlssOffer::Failed:
+        if (now_ms < s_dlss_failed_until_ms) {
+            error = true;
+            return "DLSS WAS NOT INSTALLED";
+        }
+        s_dlss_offer = DlssOffer::None;
         return {};
     default:
         return {};
@@ -1868,38 +2613,44 @@ unsigned display_efb_scale_cap() {
     return std::clamp(static_cast<unsigned>(std::ceil(needed - 1e-6)), 1u, kMaxEfbScale);
 }
 
+// DXR 1.1 with shader model 6.5 on an adapter with dedicated memory (the RAY TRACING row).
+std::atomic<bool> ray_tracing_offered{false};
+// Queues a save of the settings files when something changed; never waits on the disk.
 bool flush_native_settings_if_dirty() {
-    const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
     if (!s_native_settings_dirty.load(std::memory_order_acquire)) {
         return true;
     }
-    bool runtime_saved = false;
-    bool render_saved = false;
-    try {
-        runtime_saved = save_runtime_settings_to_file();
-    } catch (...) {
-        runtime_saved = false;
+    static std::once_flag started;
+    std::call_once(started, [] { std::thread(settings_save_worker).detach(); });
+    {
+        const std::lock_guard<std::mutex> lock(s_settings_save_mutex);
+        s_settings_save_requested = true;
     }
-    try {
-        render_saved = save_render_config_to_file();
-    } catch (...) {
-        render_saved = false;
+    s_settings_save_changed.notify_all();
+    return true;  // queued: the worker reports a failed write and keeps the settings dirty
+}
+
+unsigned refresh_override_hz() {
+    return gx::refresh_override_hz();
+}
+
+bool temporal_interpolation_allowed() {
+    return gx::temporal_interpolation_allowed();
+}
+
+unsigned upscaler_render_scale(const RenderConfig& render, unsigned internal) {
+    return gx::upscaler_render_scale(render, internal);
+}
+
+// Exit paths: waits for a queued or running save (at most 5 s), then writes what is still unsaved here.
+void save_native_settings_now() {
+    {
+        std::unique_lock<std::mutex> lock(s_settings_save_mutex);
+        s_settings_save_changed.wait_for(lock, std::chrono::seconds(5), [] {
+            return !s_settings_save_requested && !s_settings_save_running;
+        });
     }
-    if (!runtime_saved || !render_saved) {
-        const bool already_reported =
-            s_native_settings_save_error.exchange(
-                true,
-                std::memory_order_acq_rel);
-        if (!already_reported) {
-            std::cerr
-                << "[settings] atomic persistence failed; dirty state "
-                   "retained for retry\n";
-        }
-        return false;
-    }
-    s_native_settings_dirty.store(false, std::memory_order_release);
-    s_native_settings_save_error.store(false, std::memory_order_release);
-    return true;
+    (void)write_dirty_settings_files();
 }
 
 // Nebula Settings can save config.ini while the game runs. The game takes the file's settings as the menu's
@@ -1913,11 +2664,16 @@ void poll_render_config_file() {
         return;
     }
     s_next_check_ms = now + 500u;
+    // A save of the game's own still in flight would read back as a change made outside it.
+    if (settings_save_pending()) {
+        return;
+    }
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
     if (s_native_settings_visible.load(std::memory_order_relaxed)) {
         return;
     }
     const RenderConfig before = get_render_config();
+    const std::string gpu_before = next_start_gpu();
     if (!reload_render_config_if_changed()) {
         return;
     }
@@ -1929,6 +2685,16 @@ void poll_render_config_file() {
         host_window::follow_window_rearm.store(true, std::memory_order_release);
     }
     std::cerr << "[settings] config.ini changed outside the game; applied\n";
+    if (const std::string gpu = next_start_gpu(); gpu != gpu_before) {
+        std::cerr << "[settings] gpu=" << gpu << " applies at the next start\n";
+    }
+}
+
+// A GPU chosen in Nebula Settings during the session that is not the one the game runs on.
+bool gpu_change_pending(const RenderConfig& render, const RenderFeatureCaps& caps) {
+    const std::string next = next_start_gpu();
+    return next != render.gpu.data() &&
+           next != gpu_identity(caps.adapter_vendor_id, caps.adapter_device_id, caps.adapter_subsys_id);
 }
 
 bool hidden_window_mode_enabled() {
@@ -1985,6 +2751,7 @@ OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_h
         ? kDisplayWindowed : std::min(start_config.display_mode, kDisplayExclusive);
     const bool fullscreen_window = start_mode != kDisplayWindowed;
     const std::vector<MonitorInfo> start_monitors = enumerate_monitors();
+    store_monitor_cache(start_monitors);
     const MonitorInfo* start_monitor =
         find_monitor(start_monitors, widen_utf8(start_config.monitor.data()));
     int actual_window_width = window_width;
@@ -2116,6 +2883,9 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == kSettingsKeyMessage) {
         (void)handle_native_settings_key(wp, false, true);
         return 0;
+    }
+    if (msg == WM_DISPLAYCHANGE) {
+        store_monitor_cache(enumerate_monitors());
     }
     if (msg == kPlaceWindowMessage) {
         const auto* placement = reinterpret_cast<const WindowPlacement*>(lp);
@@ -2388,13 +3158,13 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
     }
     if (msg == WM_CLOSE) {
-        flush_native_settings_if_dirty();
+        save_native_settings_now();
         host_window::quit_request.store(true, std::memory_order_release);
         DestroyWindow(hwnd);
         return 0;
     }
     if (msg == WM_DESTROY) {
-        flush_native_settings_if_dirty();
+        save_native_settings_now();
         host_window::quit_request.store(true, std::memory_order_release);
         hold_display_on(false);
         invalidate_pointer_focus_once();
@@ -2409,6 +3179,34 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 }
 
 void draw_native_settings_overlay(UiCanvas& renderer) {
+    poll_dlss_download();
+    {
+        // GALAXY_TEST_SETTINGS_OPEN=<page>[:<present>]: hidden test runs open the menu on that page
+        // once, at that present.
+        static int test_page = -1;
+        static unsigned long test_present = 0u;
+        static const bool test_read = [] {
+            char value[32]{};
+            std::size_t length = 0u;
+            if (getenv_s(&length, value, sizeof(value), "GALAXY_TEST_SETTINGS_OPEN") == 0 && length > 1u) {
+                char* end = nullptr;
+                test_page = static_cast<int>(std::strtol(value, &end, 10));
+                if (end != nullptr && *end == ':') test_present = std::strtoul(end + 1, nullptr, 10);
+            }
+            return true;
+        }();
+        (void)test_read;
+        static unsigned long presents = 0u;
+        static bool test_opened = false;
+        if (test_page >= 0 && !test_opened && ++presents >= test_present) {
+            test_opened = true;
+            const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
+            s_native_settings_tab.store(static_cast<unsigned>(test_page) % kNativeSettingsTabCount,
+                                        std::memory_order_relaxed);
+            s_native_settings_row.store(0u, std::memory_order_relaxed);
+            set_native_settings_visible(true);
+        }
+    }
     if (!s_native_settings_visible.load(std::memory_order_relaxed)) {
         return;
     }
@@ -2476,12 +3274,12 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
         "SETTINGS",
         text);
 
-    const char* tabs[] = {"DISPLAY", "GRAPHICS", "CONTROLS", "AUDIO", "GENERAL"};
+    const char* tabs[] = {"DISPLAY", "GRAPHICS", "CONTROLS", "AUDIO", "GENERAL", "SYSTEM"};
     static_assert(std::size(tabs) == kNativeSettingsTabCount);
     int tab_x = panel_x + 28;
-    // Five labels share the panel width; the longest is eight 6-unit glyphs
+    // The labels share the panel width; the longest is eight 6-unit glyphs
     // plus a gap, so the label scale shrinks on narrow panels.
-    const int tab_step = (panel_w - 56) / 5;
+    const int tab_step = (panel_w - 56) / static_cast<int>(kNativeSettingsTabCount);
     const int tab_scale = std::clamp(tab_step / 54, 1, scale);
     for (unsigned i = 0; i < kNativeSettingsTabCount; ++i) {
         ui_text(
@@ -2499,6 +3297,7 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
     expire_controls_capture();
     const RenderConfig row_render = s_settings_draft;
     const RuntimeSettings row_runtime = get_runtime_settings();
+    const RenderFeatureCaps row_caps = get_render_feature_caps();
     const unsigned row_count = native_settings_row_count(tab);
     const unsigned selected_row =
         std::min(s_native_settings_row.load(std::memory_order_relaxed),
@@ -2516,9 +3315,43 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
                                           static_cast<int>(row_count - visible_rows);
         ui_rect(renderer, track_x, thumb_y, 4, thumb_h, accent);
     }
+    // Rows: the label on the left, the value on the right between arrows where it can change;
+    // section headings in the accent colour.
+    const auto text_width = [](const std::string& line, int glyph_scale) {
+        int width = 0;
+        for (const char ch : line) width += (ch == ' ' ? 4 : 6) * glyph_scale;
+        return width;
+    };
+    const bool page_tab = settings_page_tab(tab);
+    const std::vector<SettingsRow> page =
+        page_tab ? settings_page(tab, row_render, row_runtime, row_caps) : std::vector<SettingsRow>{};
+    std::string help;
     for (unsigned row = s_settings_first_row; row < s_settings_first_row + visible_rows; ++row) {
         const int y =
             layout.rows_y + static_cast<int>(row - s_settings_first_row) * layout.row_step;
+        std::string label;
+        std::string value;
+        bool heading = false;
+        bool changes = true;
+        if (page_tab && row < page.size()) {
+            label = page[row].label;
+            value = page[row].value;
+            heading = page[row].heading;
+            changes = static_cast<bool>(page[row].change);
+            if (row == selected_row) help = page[row].help;
+        } else {
+            label = native_settings_row_text(tab, row, row_render, row_runtime, row_caps);
+            if (const std::size_t colon = label.find(": "); colon != std::string::npos) {
+                value = label.substr(colon + 2u);
+                label.resize(colon);
+            }
+        }
+        if (heading) {
+            ui_text(renderer, panel_x + 36, y, scale, label, accent);
+            ui_rect(renderer, panel_x + 44 + text_width(label, scale), y + scale * 3, panel_w - 92 - text_width(label, scale),
+                    std::max(1, scale / 2), muted);
+            continue;
+        }
         if (row == selected_row) {
             const int selection_height = std::max(14, scale * 7 + 4);
             ui_rect(
@@ -2530,13 +3363,12 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
                 selected);
             ui_text(renderer, panel_x + 36, y, scale, ">", accent);
         }
-        ui_text(
-            renderer,
-            panel_x + 70,
-            y,
-            scale,
-            native_settings_row_text(tab, row, row_render, row_runtime),
-            text);
+        ui_text(renderer, panel_x + 70, y, scale, label, changes ? text : muted);
+        if (!value.empty()) {
+            const std::string shown = changes && row == selected_row ? "< " + value + " >" : value;
+            ui_text(renderer, panel_x + panel_w - 48 - text_width(shown, scale), y, scale, shown,
+                    row == selected_row ? accent : (changes ? text : muted));
+        }
     }
 
     const int footer_y = layout.footer_y;
@@ -2554,6 +3386,8 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
     } else if (s_controls_message_until_ms > now_ms) {
         status = s_controls_message;
         status_color = error;
+    } else if (bool dlss_error = false; !(status = dlss_footer(now_ms, dlss_error)).empty()) {
+        status_color = dlss_error ? error : accent;
     } else if (settings_display_confirming()) {
         const std::uint64_t left_ms = s_display_confirm_deadline_ms > now_ms
             ? s_display_confirm_deadline_ms - now_ms : 0u;
@@ -2580,6 +3414,11 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
     } else if (GameLanguage running{}; tab == 4u && running_game_language(running) && running != row_runtime.language) {
         status = "THE NEW LANGUAGE APPLIES WHEN NEBULA RESTARTS";
         status_color = accent;
+    } else if (tab == 5u && gpu_change_pending(row_render, row_caps)) {
+        status = "THE NEW GRAPHICS CARD APPLIES WHEN NEBULA RESTARTS";
+        status_color = accent;
+    } else if (!help.empty()) {
+        status = help;
     }
     if (!status.empty()) {
         ui_text(renderer, panel_x + 28, footer_y, footer_scale, status, status_color);
@@ -3178,6 +4017,11 @@ void native_settings_post_key(std::uintptr_t virtual_key) noexcept {
     }
 }
 
+void native_settings_wait_saved_for_tests() {
+    std::unique_lock<std::mutex> save_lock(s_settings_save_mutex);
+    s_settings_save_changed.wait(save_lock, [] { return !s_settings_save_requested && !s_settings_save_running; });
+}
+
 RenderConfig native_settings_draft_for_tests() {
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
     return s_settings_draft;
@@ -3194,6 +4038,7 @@ void native_settings_reset_overlay_state_for_tests() noexcept {
     s_native_settings_save_error.store(false, std::memory_order_relaxed);
     s_native_settings_tab.store(0u, std::memory_order_relaxed);
     s_native_settings_row.store(0u, std::memory_order_relaxed);
+    settle_native_settings_row();
 }
 
 }  // namespace galaxy::gx

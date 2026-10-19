@@ -13,19 +13,13 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-option(
-    GALAXY_WITH_STREAMLINE_BRIDGE
-    "Build the SDK-backed NVIDIA Streamline bridge. Hidden/off until real bridge sources and SDK deployment are present."
-    OFF
-)
-mark_as_advanced(GALAXY_WITH_STREAMLINE_BRIDGE)
-if(GALAXY_WITH_STREAMLINE_BRIDGE)
-    message(
-        FATAL_ERROR
-        "GALAXY_WITH_STREAMLINE_BRIDGE requires a real SDK-backed Streamline "
-        "bridge target. Do not enable it with stub sources, checked-in SDK "
-        "binaries, or renderer hot-path placeholders."
-    )
+# NVIDIA's runtime binaries (Streamline, DLSS) never enter the source tree or
+# the build: users install them into their own vendor folder.
+file(GLOB_RECURSE GALAXY_VENDOR_BINARIES "${CMAKE_SOURCE_DIR}/runtime/*nvngx*.dll"
+     "${CMAKE_SOURCE_DIR}/runtime/*sl.*.dll" "${CMAKE_SOURCE_DIR}/third_party/*nvngx*.dll"
+     "${CMAKE_SOURCE_DIR}/third_party/*sl.*.dll")
+if(GALAXY_VENDOR_BINARIES)
+    message(FATAL_ERROR "NVIDIA runtime binaries must not be in the source tree: ${GALAXY_VENDOR_BINARIES}")
 endif()
 
 if(MSVC)
@@ -321,6 +315,11 @@ set_target_properties(galaxy_test_module PROPERTIES PREFIX "")
 add_executable(galaxy_runtime_smoke runtime/src/runtime_smoke.cpp)
 target_link_libraries(galaxy_runtime_smoke PRIVATE galaxy_runtime_abi)
 
+add_library(galaxy_output_relay STATIC runtime/src/output_relay.cpp)
+target_link_libraries(galaxy_output_relay PUBLIC galaxy_runtime_abi)
+add_executable(galaxy_output_relay_tests runtime/src/output_relay_tests.cpp)
+target_link_libraries(galaxy_output_relay_tests PRIVATE galaxy_output_relay)
+
 add_library(galaxy_atomic_file STATIC runtime/src/atomic_file.cpp)
 target_link_libraries(galaxy_atomic_file PUBLIC galaxy_runtime_abi)
 add_executable(galaxy_atomic_file_tests runtime/src/atomic_file_tests.cpp)
@@ -470,7 +469,8 @@ add_library(galaxy_native_input STATIC
     runtime/src/pointer_control.cpp
     runtime/src/rumble.cpp
     runtime/src/switch_controller.cpp
-    runtime/src/tilt.cpp)
+    runtime/src/tilt.cpp
+    runtime/src/wiimote_speaker.cpp)
 target_link_libraries(galaxy_native_input PUBLIC galaxy_runtime_abi)
 if(MSVC)
     target_compile_options(galaxy_native_input PRIVATE /GS- /GR- /Oi /favor:INTEL64)
@@ -650,6 +650,7 @@ galaxy_post_shader(post_resample_ps PASS_RESAMPLE - none ps_5_0 PSMain)
 galaxy_post_shader(post_fxaa_ps PASS_FXAA - none ps_5_0 PSMain)
 galaxy_post_shader(post_fsr_easu_ps PASS_FSR_EASU - fsr ps_5_0 PSMain)
 galaxy_post_shader(post_fsr_rcas_ps PASS_FSR_RCAS - fsr ps_5_0 PSMain)
+galaxy_post_shader(post_fsr_rcas_scaled_ps PASS_FSR_RCAS_SCALED - fsr ps_5_0 PSMain)
 galaxy_post_shader(post_smaa_edges_vs PASS_SMAA_EDGES SMAA_PRESET_HIGH smaa vs_5_0 VSMain)
 galaxy_post_shader(post_smaa_blend_vs PASS_SMAA_BLEND SMAA_PRESET_HIGH smaa vs_5_0 VSMain)
 galaxy_post_shader(post_smaa_blend_ps PASS_SMAA_BLEND SMAA_PRESET_HIGH smaa ps_5_0 PSMain)
@@ -661,6 +662,125 @@ foreach(galaxy_smaa_preset LOW MEDIUM HIGH ULTRA)
         PASS_SMAA_WEIGHTS SMAA_PRESET_${galaxy_smaa_preset} smaa vs_5_0 VSMain)
     galaxy_post_shader(post_smaa_weights_ps_${galaxy_smaa_suffix}
         PASS_SMAA_WEIGHTS SMAA_PRESET_${galaxy_smaa_preset} smaa ps_5_0 PSMain)
+endforeach()
+
+# Ray-tracing compute shaders (runtime/src/gx/ray_tracing.hlsl: DXR 1.1 inline ray queries,
+# shader model 6.5) are compiled by the Windows SDK's DXC at build time into signed DXIL headers.
+find_program(GALAXY_DXC dxc
+    HINTS "$ENV{WindowsSdkVerBinPath}x64" "$ENV{WindowsSdkBinPath}x64"
+    NO_DEFAULT_PATH)
+if(NOT GALAXY_DXC)
+    find_program(GALAXY_DXC dxc REQUIRED)
+endif()
+set(galaxy_rt_dir "${CMAKE_CURRENT_BINARY_DIR}/generated/rt_shaders")
+file(MAKE_DIRECTORY "${galaxy_rt_dir}")
+set(galaxy_rt_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/gx/ray_tracing.hlsl")
+set(galaxy_rt_headers "")
+foreach(galaxy_rt_pass geometry:GeometryCS validate:ValidateCS)
+    string(REPLACE ":" ";" galaxy_rt_pair "${galaxy_rt_pass}")
+    list(GET galaxy_rt_pair 0 galaxy_rt_name)
+    list(GET galaxy_rt_pair 1 galaxy_rt_entry)
+    set(galaxy_rt_header "${galaxy_rt_dir}/rt_${galaxy_rt_name}_cs.h")
+    add_custom_command(OUTPUT "${galaxy_rt_header}"
+        COMMAND "${GALAXY_DXC}" -nologo -T cs_6_5 -E ${galaxy_rt_entry} -O3 -WX -Qstrip_debug -Qstrip_reflect
+            -Vn g_rt_${galaxy_rt_name}_cs -Fh "${galaxy_rt_header}" "${galaxy_rt_hlsl}"
+        DEPENDS "${galaxy_rt_hlsl}"
+        VERBATIM)
+    list(APPEND galaxy_rt_headers "${galaxy_rt_header}")
+endforeach()
+# Ray-traced lighting passes, the picture capture and the EFB composite
+# (runtime/src/gx/rt_lighting.hlsl).
+set(galaxy_rt_light_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/gx/rt_lighting.hlsl")
+foreach(galaxy_rt_pass capture_cs:CaptureCS:cs_6_5 sky_state_cs:SkyStateCS:cs_6_5 glow_base_cs:GlowBaseCS:cs_6_5
+        sky_light_map_cs:SkyLightMapCS:cs_6_5 sky_light_sh_cs:SkyLightShCS:cs_6_5
+        surface_emit_cs:SurfaceEmitCS:cs_6_5 bloom_down_cs:BloomDownCS:cs_6_5 bloom_blur_cs:BloomBlurCS:cs_6_5
+        bloom_ps:BloomPS:ps_6_0
+        glow_emit_cs:GlowEmitCS:cs_6_5 authored_emit_cs:AuthoredEmitCS:cs_6_5 emit_merge_cs:EmitMergeCS:cs_6_5
+        trace_cs:TraceCS:cs_6_5
+        temporal_cs:TemporalCS:cs_6_5
+        spatial_a_cs:SpatialACS:cs_6_5 spatial_m_cs:SpatialMCS:cs_6_5 spatial_b_cs:SpatialBCS:cs_6_5
+        star_sphere_cs:StarSphereCS:cs_6_5 reference_exposure_cs:ReferenceExposureCS:cs_6_5
+        composite_vs:CompositeVS:vs_6_0
+        composite_ps:CompositePS:ps_6_0 light_texture_ps:LightTexturePS:ps_6_0)
+    string(REPLACE ":" ";" galaxy_rt_pair "${galaxy_rt_pass}")
+    list(GET galaxy_rt_pair 0 galaxy_rt_name)
+    list(GET galaxy_rt_pair 1 galaxy_rt_entry)
+    list(GET galaxy_rt_pair 2 galaxy_rt_profile)
+    set(galaxy_rt_header "${galaxy_rt_dir}/rt_${galaxy_rt_name}.h")
+    add_custom_command(OUTPUT "${galaxy_rt_header}"
+        COMMAND "${GALAXY_DXC}" -nologo -T ${galaxy_rt_profile} -E ${galaxy_rt_entry} -O3 -WX -Qstrip_debug
+            -Qstrip_reflect -Vn g_rt_${galaxy_rt_name} -Fh "${galaxy_rt_header}" "${galaxy_rt_light_hlsl}"
+        DEPENDS "${galaxy_rt_light_hlsl}"
+        VERBATIM)
+    list(APPEND galaxy_rt_headers "${galaxy_rt_header}")
+endforeach()
+# The cinematic finish of the ray-traced picture (runtime/src/gx/rt_post.hlsl).
+set(galaxy_rt_post_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/gx/rt_post.hlsl")
+foreach(galaxy_rt_pass post_copy_cs:PostCopyCS:cs_6_5 post_bright_cs:PostBrightCS:cs_6_5
+        post_blur_cs:PostBlurCS:cs_6_5 post_shafts_cs:PostShaftsCS:cs_6_5 post_focus_cs:PostFocusCS:cs_6_5
+        post_lum_cs:PostLumCS:cs_6_5 post_lens_cs:PostLensCS:cs_6_5
+        post_vs:PostVS:vs_6_0 post_ps:PostPS:ps_6_0)
+    string(REPLACE ":" ";" galaxy_rt_pair "${galaxy_rt_pass}")
+    list(GET galaxy_rt_pair 0 galaxy_rt_name)
+    list(GET galaxy_rt_pair 1 galaxy_rt_entry)
+    list(GET galaxy_rt_pair 2 galaxy_rt_profile)
+    set(galaxy_rt_header "${galaxy_rt_dir}/rt_${galaxy_rt_name}.h")
+    add_custom_command(OUTPUT "${galaxy_rt_header}"
+        COMMAND "${GALAXY_DXC}" -nologo -T ${galaxy_rt_profile} -E ${galaxy_rt_entry} -O3 -WX -Qstrip_debug
+            -Qstrip_reflect -Vn g_rt_${galaxy_rt_name} -Fh "${galaxy_rt_header}" "${galaxy_rt_post_hlsl}"
+        DEPENDS "${galaxy_rt_post_hlsl}"
+        VERBATIM)
+    list(APPEND galaxy_rt_headers "${galaxy_rt_header}")
+endforeach()
+# Ray-traced reflections and their EFB composite (runtime/src/gx/rt_reflections.hlsl).
+set(galaxy_rt_reflect_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/gx/rt_reflections.hlsl")
+foreach(galaxy_rt_pass reflect_memory_cs:ReflectMemoryCS:cs_6_5 reflect_trace_cs:ReflectTraceCS:cs_6_5
+        reflect_sky_cs:SkyCaptureCS:cs_6_5 reflect_draw_clear_cs:DrawLightClearCS:cs_6_5
+        reflect_draw_cs:DrawLightCS:cs_6_5
+        reflect_temporal_cs:ReflectTemporalCS:cs_6_5 reflect_filter_a_cs:ReflectFilterACS:cs_6_5
+        reflect_filter_cs:ReflectFilterCS:cs_6_5
+        reflect_composite_vs:ReflectCompositeVS:vs_6_0 reflect_composite_ps:ReflectCompositePS:ps_6_0
+        water_trace_cs:WaterTraceCS:cs_6_5 water_composite_ps:WaterCompositePS:ps_6_0
+        underwater_ps:UnderwaterPS:ps_6_0)
+    string(REPLACE ":" ";" galaxy_rt_pair "${galaxy_rt_pass}")
+    list(GET galaxy_rt_pair 0 galaxy_rt_name)
+    list(GET galaxy_rt_pair 1 galaxy_rt_entry)
+    list(GET galaxy_rt_pair 2 galaxy_rt_profile)
+    set(galaxy_rt_header "${galaxy_rt_dir}/rt_${galaxy_rt_name}.h")
+    add_custom_command(OUTPUT "${galaxy_rt_header}"
+        COMMAND "${GALAXY_DXC}" -nologo -T ${galaxy_rt_profile} -E ${galaxy_rt_entry} -O3 -WX -Qstrip_debug
+            -Qstrip_reflect -Vn g_rt_${galaxy_rt_name} -Fh "${galaxy_rt_header}" "${galaxy_rt_reflect_hlsl}"
+        DEPENDS "${galaxy_rt_reflect_hlsl}"
+        VERBATIM)
+    list(APPEND galaxy_rt_headers "${galaxy_rt_header}")
+endforeach()
+# High quality's traces: the hits' textures straight from the descriptor heap (shader model 6.6).
+foreach(galaxy_rt_pass reflect_trace_tex_cs:ReflectTraceCS water_trace_tex_cs:WaterTraceCS)
+    string(REPLACE ":" ";" galaxy_rt_pair "${galaxy_rt_pass}")
+    list(GET galaxy_rt_pair 0 galaxy_rt_name)
+    list(GET galaxy_rt_pair 1 galaxy_rt_entry)
+    set(galaxy_rt_header "${galaxy_rt_dir}/rt_${galaxy_rt_name}.h")
+    add_custom_command(OUTPUT "${galaxy_rt_header}"
+        COMMAND "${GALAXY_DXC}" -nologo -T cs_6_6 -E ${galaxy_rt_entry} -D RT_TEXTURED=1 -O3 -WX -Qstrip_debug
+            -Qstrip_reflect -Vn g_rt_${galaxy_rt_name} -Fh "${galaxy_rt_header}" "${galaxy_rt_reflect_hlsl}"
+        DEPENDS "${galaxy_rt_reflect_hlsl}"
+        VERBATIM)
+    list(APPEND galaxy_rt_headers "${galaxy_rt_header}")
+endforeach()
+
+# The lighting's trace testing alpha-tested geometry by its alpha maps from the descriptor heap (shader model 6.6),
+# and the reference path tracer, which shades its hits from their textures (GALAXY_RT_REFERENCE).
+foreach(galaxy_rt_pass trace_tex_cs:TraceCS reference_tex_cs:ReferenceCS)
+    string(REPLACE ":" ";" galaxy_rt_pair "${galaxy_rt_pass}")
+    list(GET galaxy_rt_pair 0 galaxy_rt_name)
+    list(GET galaxy_rt_pair 1 galaxy_rt_entry)
+    set(galaxy_rt_header "${galaxy_rt_dir}/rt_${galaxy_rt_name}.h")
+    add_custom_command(OUTPUT "${galaxy_rt_header}"
+        COMMAND "${GALAXY_DXC}" -nologo -T cs_6_6 -E ${galaxy_rt_entry} -D RT_TEXTURED=1 -O3 -WX -Qstrip_debug
+            -Qstrip_reflect -Vn g_rt_${galaxy_rt_name} -Fh "${galaxy_rt_header}" "${galaxy_rt_light_hlsl}"
+        DEPENDS "${galaxy_rt_light_hlsl}"
+        VERBATIM)
+    list(APPEND galaxy_rt_headers "${galaxy_rt_header}")
 endforeach()
 
 # galaxy_gx: static lib used by NebulaRuntime and the renderer tests.
@@ -675,6 +795,7 @@ add_library(galaxy_gx STATIC
     runtime/src/gx/renderer_d3d12.cpp
     runtime/src/gx/renderer_common.cpp
     runtime/src/gx/upload_ring.cpp
+    runtime/src/gx/galaxy_select.cpp
     runtime/src/gx/window_owner.cpp
     runtime/src/gx/texture_cache.cpp
     runtime/src/gx/texture_backend_d3d12.cpp
@@ -691,7 +812,17 @@ add_library(galaxy_gx STATIC
     runtime/src/gx/post_process_settings.cpp
     ${galaxy_post_headers}
     runtime/src/gx/temporal_upscaler.cpp
+    runtime/src/gx/ray_tracing.cpp
+    runtime/src/gx/ray_tracing_reflections.cpp
+    runtime/src/gx/ray_tracing_water.cpp
+    runtime/src/gx/rt_surfaces.cpp
+    runtime/src/gx/rt_materials.cpp
+    runtime/src/gx/enhanced_lighting.cpp
+    ${galaxy_rt_headers}
+    runtime/src/gx/streamline_bridge.cpp
     runtime/src/gx/transform_history.cpp
+    runtime/src/gx/frame_interpolation.cpp
+    runtime/src/gx/interp_gpu.cpp
     runtime/src/gx/display_modes.cpp
     runtime/src/gx/fifo_parser.cpp
     runtime/src/gx/gx_backend.cpp
@@ -708,6 +839,14 @@ if(GALAXY_FIDELITYFX_SDK)
         "${GALAXY_FIDELITYFX_SDK}/bin/ffx_sdk/ffx_fsr3upscaler_x64.lib"
         "${GALAXY_FIDELITYFX_SDK}/bin/ffx_sdk/ffx_backend_dx12_x64.lib")
     target_compile_definitions(galaxy_gx PRIVATE GALAXY_WITH_FSR3=1)
+endif()
+# NVIDIA Streamline 2.14.1 headers (MIT, third_party/streamline) for DLSS: the
+# runtime loads the signed binaries from the user's vendor folder at run time.
+# Empty builds the runtime without DLSS.
+set(GALAXY_STREAMLINE_SDK "${CMAKE_SOURCE_DIR}/third_party/streamline" CACHE PATH "Streamline SDK 2.14.1 directory (headers in include/)")
+if(GALAXY_STREAMLINE_SDK)
+    target_include_directories(galaxy_gx SYSTEM PRIVATE "${GALAXY_STREAMLINE_SDK}/include")
+    target_compile_definitions(galaxy_gx PRIVATE GALAXY_WITH_STREAMLINE=1)
 endif()
 target_link_libraries(galaxy_gx
     PUBLIC
@@ -729,6 +868,7 @@ target_compile_definitions(
 target_include_directories(galaxy_gx
     PRIVATE
         "${galaxy_post_dir}"
+        "${galaxy_rt_dir}"
         "${CMAKE_CURRENT_SOURCE_DIR}/third_party/smaa"
 )
 if(MSVC)
@@ -797,7 +937,7 @@ BEGIN
   END
 END
 ]=] @ONLY)
-target_sources(NebulaRuntime PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/nebula_runtime.rc")
+target_sources(NebulaRuntime PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/nebula_runtime.rc" runtime/NebulaRuntime.manifest)
 set_source_files_properties("${CMAKE_CURRENT_BINARY_DIR}/nebula_runtime.rc" PROPERTIES OBJECT_DEPENDS "${NEBULA_ICON}")
 target_include_directories(NebulaRuntime PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 # The native game's windowed host (native/host): runs the game module that native/CMakeLists.txt builds with clang
@@ -831,6 +971,7 @@ target_link_libraries(
         galaxy_runtime_timeline
         galaxy_jaudio_mixer)
 target_link_libraries(NebulaRuntime PRIVATE galaxy_runtime_instance)
+target_link_libraries(NebulaRuntime PRIVATE galaxy_output_relay)
 target_link_libraries(NebulaRuntime PRIVATE xinput9_1_0)
 target_link_libraries(NebulaRuntime PRIVATE dbghelp)
 if(MSVC)
@@ -988,6 +1129,9 @@ target_link_libraries(galaxy_simulation_cache_affinity_tests PRIVATE galaxy_runt
 add_executable(galaxy_native_input_tests runtime/src/native_input_tests.cpp)
 target_link_libraries(galaxy_native_input_tests PRIVATE galaxy_native_input)
 
+add_executable(galaxy_wiimote_speaker_tests runtime/src/wiimote_speaker_tests.cpp)
+target_link_libraries(galaxy_wiimote_speaker_tests PRIVATE galaxy_native_input)
+
 add_executable(galaxy_layout_aspect_tests runtime/src/layout_aspect_tests.cpp)
 target_link_libraries(galaxy_layout_aspect_tests PRIVATE galaxy_runtime_abi)
 
@@ -1047,6 +1191,17 @@ add_executable(galaxy_transform_history_tests runtime/src/gx/transform_history_t
     runtime/src/gx/transform_history.cpp)
 target_include_directories(galaxy_transform_history_tests PRIVATE runtime/include)
 
+add_executable(galaxy_motion_signals_tests runtime/src/motion_signals_tests.cpp)
+target_include_directories(galaxy_motion_signals_tests PRIVATE runtime/include)
+
+add_executable(galaxy_frame_interpolation_tests runtime/src/gx/frame_interpolation_tests.cpp
+    runtime/src/gx/frame_interpolation.cpp runtime/src/gx/transform_history.cpp)
+target_include_directories(galaxy_frame_interpolation_tests PRIVATE runtime/include)
+
+add_executable(galaxy_interp_gpu_tests runtime/src/gx/interp_gpu_tests.cpp runtime/src/gx/interp_gpu.cpp
+    runtime/src/gx/frame_interpolation.cpp runtime/src/gx/transform_history.cpp)
+target_include_directories(galaxy_interp_gpu_tests PRIVATE runtime/include)
+
 add_executable(galaxy_frame_completion_tests
     runtime/src/gx/frame_completion_tests.cpp)
 target_link_libraries(galaxy_frame_completion_tests PRIVATE galaxy_gx)
@@ -1063,6 +1218,12 @@ target_link_libraries(galaxy_memory_snapshot_tests PRIVATE galaxy_gx)
 add_executable(galaxy_sampler_key_tests runtime/src/gx/sampler_key_tests.cpp)
 target_link_libraries(galaxy_sampler_key_tests PRIVATE galaxy_gx)
 
+add_executable(galaxy_rt_surfaces_tests runtime/src/gx/rt_surfaces_tests.cpp)
+target_link_libraries(galaxy_rt_surfaces_tests PRIVATE galaxy_gx)
+
+add_executable(galaxy_rt_materials_tests runtime/src/gx/rt_materials_tests.cpp)
+target_link_libraries(galaxy_rt_materials_tests PRIVATE galaxy_gx)
+
 add_executable(galaxy_xfb_present_selection_tests
     runtime/src/gx/xfb_present_selection_tests.cpp)
 target_link_libraries(galaxy_xfb_present_selection_tests PRIVATE galaxy_gx)
@@ -1074,6 +1235,10 @@ target_link_libraries(galaxy_efb_conversion_tests PRIVATE galaxy_gx)
 add_executable(galaxy_line_point_raster_tests
     runtime/src/gx/line_point_raster_tests.cpp)
 target_link_libraries(galaxy_line_point_raster_tests PRIVATE galaxy_gx)
+
+add_executable(galaxy_xf_lighting_tests
+    runtime/src/gx/xf_lighting_tests.cpp)
+target_link_libraries(galaxy_xf_lighting_tests PRIVATE galaxy_gx)
 
 add_executable(galaxy_sorted_dirty_ranges_tests
     runtime/src/gx/sorted_dirty_ranges_tests.cpp)
@@ -1111,6 +1276,8 @@ if(MSVC)
         galaxy_runtime_settings_tests
         galaxy_atomic_file
         galaxy_atomic_file_tests
+        galaxy_output_relay
+        galaxy_output_relay_tests
         galaxy_runtime_instance
         galaxy_runtime_instance_tests
         galaxy_runtime_timeline
@@ -1135,6 +1302,7 @@ if(MSVC)
         galaxy_ai_pcm_identity
         galaxy_ai_pcm_identity_tests
         galaxy_native_input_tests
+        galaxy_wiimote_speaker_tests
         galaxy_diagnostic_stick_lease_tests
         galaxy_simulation_cache_affinity_tests
         galaxy_native_host
@@ -1178,13 +1346,19 @@ if(MSVC)
         galaxy_vertex_loader_tests
         galaxy_render_config_tests
         galaxy_transform_history_tests
+        galaxy_frame_interpolation_tests
+        galaxy_interp_gpu_tests
+        galaxy_motion_signals_tests
         galaxy_frame_completion_tests
         galaxy_window_owner_tests
         galaxy_memory_snapshot_tests
         galaxy_sampler_key_tests
+        galaxy_rt_surfaces_tests
+        galaxy_rt_materials_tests
         galaxy_xfb_present_selection_tests
         galaxy_efb_conversion_tests
         galaxy_line_point_raster_tests
+        galaxy_xf_lighting_tests
         galaxy_sorted_dirty_ranges_tests
         galaxy_same_context_rfi_tests
         galaxy_pipeline_cache_persistence_tests
@@ -1220,6 +1394,7 @@ galaxy_add_native_test(native_zero_span_publication galaxy_native_zero_tests)
 galaxy_add_native_test(native_yaz0_span_publication galaxy_native_yaz0_span_tests)
 galaxy_add_native_test(vs_constant_preparation_cache galaxy_vs_constants_tests)
 galaxy_add_native_test(atomic_settings_file galaxy_atomic_file_tests)
+galaxy_add_native_test(output_relay galaxy_output_relay_tests)
 galaxy_add_native_test(runtime_instance_lease galaxy_runtime_instance_tests)
 galaxy_add_native_test(runtime_settings_helpers galaxy_runtime_settings_tests)
 galaxy_add_native_test(runtime_timeline_helpers galaxy_runtime_timeline_tests)
@@ -1243,6 +1418,7 @@ galaxy_add_native_test(
     host_pointer_events
     galaxy_host_pointer_events_tests)
 galaxy_add_native_test(native_input_reports galaxy_native_input_tests)
+galaxy_add_native_test(wiimote_speaker galaxy_wiimote_speaker_tests)
 galaxy_add_native_test(layout_aspect_geometry galaxy_layout_aspect_tests)
 galaxy_add_native_test(diagnostic_stick_lease galaxy_diagnostic_stick_lease_tests)
 galaxy_add_native_test(simulation_cache_affinity galaxy_simulation_cache_affinity_tests)
@@ -1266,17 +1442,23 @@ galaxy_add_native_test(dsp_alu_helpers galaxy_dsp_alu_tests)
 galaxy_add_native_test(native_dsp_coprocessor galaxy_native_dsp_tests)
 galaxy_add_native_test(render_config_gates galaxy_render_config_tests)
 galaxy_add_native_test(transform_history_matching galaxy_transform_history_tests)
+galaxy_add_native_test(frame_interpolation_math galaxy_frame_interpolation_tests)
+galaxy_add_native_test(interp_gpu_program galaxy_interp_gpu_tests)
+galaxy_add_native_test(motion_signal_epochs galaxy_motion_signals_tests)
 galaxy_add_native_test(frame_pe_completion galaxy_frame_completion_tests)
 galaxy_add_native_test(native_window_owner galaxy_window_owner_tests)
 set_tests_properties(native_window_owner PROPERTIES TIMEOUT 20)
 galaxy_add_native_test(compact_memory_snapshot galaxy_memory_snapshot_tests)
 galaxy_add_native_test(sampler_key_packing galaxy_sampler_key_tests)
+galaxy_add_native_test(rt_surface_classes galaxy_rt_surfaces_tests)
+galaxy_add_native_test(rt_material_table galaxy_rt_materials_tests)
 galaxy_add_native_test(xfb_present_selection galaxy_xfb_present_selection_tests)
 galaxy_add_native_test(efb_content_key_identity galaxy_efb_conversion_tests --content-key-hash)
 galaxy_add_native_test(efb_conversion_pipeline galaxy_efb_conversion_tests)
 galaxy_add_native_test(efb_oversized_content_retirement galaxy_efb_conversion_tests --oversized-content-cache)
 galaxy_add_native_test(efb_decoded_allocation_budget galaxy_efb_conversion_tests --decoded-allocation-budget)
 galaxy_add_native_test(line_point_raster galaxy_line_point_raster_tests)
+galaxy_add_native_test(xf_lighting galaxy_xf_lighting_tests)
 galaxy_add_native_test(cosmetic_game_asset_extract galaxy_game_asset_extract_tests)
 galaxy_add_native_test(sorted_dirty_ranges galaxy_sorted_dirty_ranges_tests)
 galaxy_add_native_test(same_context_rfi galaxy_same_context_rfi_tests)

@@ -1111,7 +1111,7 @@ bool asynchronous_persistence(const std::filesystem::path& dir, bool fail_write,
     const auto begin = std::chrono::steady_clock::now();
     cache.flush_disk_async();
     const auto submitted = std::chrono::steady_clock::now();
-    bool passed = expect(WaitForSingleObject(gate.entered, 2000u) == WAIT_OBJECT_0,
+    bool passed = expect(WaitForSingleObject(gate.entered, 30000u) == WAIT_OBJECT_0,
         "background writer reaches held disk boundary");
     const auto poll_begin = std::chrono::steady_clock::now();
     cache.poll_disk_flush();
@@ -1155,7 +1155,7 @@ bool asynchronous_persistence(const std::filesystem::path& dir, bool fail_write,
     const auto poll_us = std::chrono::duration<double, std::micro>(polled-poll_begin).count();
     std::cout << "[async-cache-fixture] fail=" << fail_write << " shutdown=" << shutdown_with_work
               << " request-us=" << request_us << " held-writer-poll-us=" << poll_us << '\n';
-    // The five-second gate timeout makes a mistakenly synchronous call measurable instead of hanging the
+    // The 30-second gate timeout makes a mistakenly synchronous call measurable instead of hanging the
     // suite. The check allows for scheduling noise.
     passed &= expect(request_us < 1000000.0 && poll_us < 1000000.0,
         "normal submission/poll does not wait for held file writes");

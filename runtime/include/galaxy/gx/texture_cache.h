@@ -71,6 +71,17 @@ void generate_rgba8_mip_level(const std::vector<RGBA8>& source,
                              std::uint32_t source_width, std::uint32_t source_height,
                              std::vector<RGBA8>& dest,
                              std::uint32_t dest_width, std::uint32_t dest_height);
+// A level of at least 4x4 texels that alternates two values on every texel is a dither the game painted for
+// the Wii's 6-bit framebuffer (the sky's DotNoise, the white and red plastics). In 8-bit colour it only shows,
+// magnified, as a grid of dots; it becomes the two values' rounded average. Returns whether it was one.
+bool flatten_texel_checker(std::vector<RGBA8>& pixels, std::uint32_t width, std::uint32_t height);
+// A level whose texel-scale detail is a one-texel checker over its content: the art's ordered dither, baked in before
+// the texture was compressed (lawns, turf, sand, concrete, bed cloth; 90 of 3,202 dumped textures). Detected where
+// at least a fifth of the texels differ from their four neighbours' mean by 2 levels or more and the sign of that
+// difference follows one checker phase in at least 95 % of them (other textures: 0.6 % median). Each colour channel
+// loses the checker at its local amplitude (the 3x3 mean of the difference against the checker); the content and
+// alpha stay. Returns whether it was one.
+bool remove_texel_checker(std::vector<RGBA8>& pixels, std::uint32_t width, std::uint32_t height);
 // Caller validates the complete block-rounded source footprint. Edge tiles
 // advance by all 64 source bytes but write only pixels inside width/height.
 void decode_rgba8_tiles(const std::uint8_t* src, std::uint32_t width,
@@ -119,6 +130,8 @@ struct TextureHandle {
     bool from_efb_copy = false;
     bool generated_mips = false;
     std::uint32_t guest_byte_size = 0;
+    // The ray tracer's material table entry of its base level (rt_materials.h; 0: none).
+    std::uint16_t rt_material = 0;
 };
 
 class TextureCache {
@@ -226,6 +239,22 @@ public:
 
     // Called after the renderer has waited for this frame slot's fence.
     void begin_frame(unsigned frame_slot, unsigned frames_in_flight);
+
+    // Interpolated redraw replays a game frame's draws until the renderer's
+    // game-frame ring segment comes round again. Called before begin_frame
+    // with that segment (kNoHoldSegment outside interpolation): a reclaimed
+    // slot's textures then keep their resources, out of the pool, until the
+    // segment current at reclaim comes round (its fence has been waited on).
+    // Their SRV slots are reclaimed as usual: replayed draws read descriptor
+    // tables already copied into the renderer's shader-visible ring.
+    static constexpr unsigned kNoHoldSegment = ~0u;
+    static constexpr unsigned kMaxHoldSegments = 4u;
+    void set_retirement_hold_segment(unsigned segment);
+    [[nodiscard]] std::uint64_t take_held_texture_count() noexcept {
+        const std::uint64_t count = held_texture_count_;
+        held_texture_count_ = 0u;
+        return count;
+    }
 
     // Asynchronous first-use decode. While allowed, a miss creates the texture,
     // records its staging copy and SRV exactly as before, and hands only the
@@ -385,6 +414,11 @@ private:
     std::unordered_map<EfbAliasKey, Entry, EfbAliasKeyHasher> efb_aliases_;
     detail::ConservativeGuestRangeEnvelope alias_guest_envelope_;
     std::vector<std::vector<Entry>> retired_entries_;
+    // Interpolation: reclaimed textures held per game-frame segment.
+    std::array<std::vector<Entry>, kMaxHoldSegments> held_entries_;
+    unsigned hold_segment_ = kNoHoldSegment;
+    std::uint64_t held_texture_count_ = 0;
+    void release_held_entries(std::vector<Entry>& held);
     // Recycled decoded-texture resources. Creating a committed resource on first use can stall the texture
     // flush, so a GPU-idle retired texture of the same size and mip count is reused instead. RGBA8 2D, no
     // flags, PSR state.

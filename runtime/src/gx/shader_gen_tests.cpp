@@ -18,6 +18,7 @@
 
 #include "galaxy/gx/shader_gen.h"
 #include "galaxy/gx/shader_keys.h"
+#include "galaxy/gx/enhanced_lighting.h"
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx/texture_sampling.h"
 #include "galaxy/gx/shader_pair_compile.h"
@@ -447,7 +448,68 @@ int main() {
             std::snprintf(label, sizeof(label),
                           "vs_light_attn%u_diff%u", attn, diff);
             run_vs(k, label);
+            k.flags |= kVsKeyFiniteLightAttn;
+            std::snprintf(label, sizeof(label),
+                          "vs_light_attn%u_diff%u_finite", attn, diff);
+            run_vs(k, label);
         }
+    }
+
+    {   // Finite light attenuation: the key bit marks lit channels with specular or spotlight
+        // attenuation and at least one light; only those keys change source.
+        GxState state;
+        state.load_bp(1u << 4u);  // one colour channel
+        const struct {
+            std::uint32_t control;
+            bool finite;
+            const char* label;
+        } cases[] = {
+            {chan_ctrl(true, true, 0x03, false, 2, 3), true, "finite_attn_key_spotlight"},
+            {chan_ctrl(true, true, 0x01, false, 0, 1), true, "finite_attn_key_specular"},
+            {chan_ctrl(true, true, 0x10, false, 2, 3), true, "finite_attn_key_light4"},
+            {chan_ctrl(true, true, 0x03, false, 2, 0), false, "finite_attn_key_no_attenuation"},
+            {chan_ctrl(true, true, 0x03, false, 2, 2), false, "finite_attn_key_select_without_enable"},
+            {chan_ctrl(true, true, 0x00, false, 2, 3), false, "finite_attn_key_no_lights"},
+            {chan_ctrl(true, false, 0x03, false, 2, 3), false, "finite_attn_key_unlit"},
+        };
+        for (const auto& c : cases) {
+            state.load_xf(xf::kChannelCtrlBase, &c.control, 1u);
+            const bool finite = (build_vertex_shader_key(state).flags & kVsKeyFiniteLightAttn) != 0u;
+            if (finite != c.finite) {
+                ++g_failures;
+                std::printf("FAILED: %s\n", c.label);
+            } else {
+                std::printf("ok: %s\n", c.label);
+            }
+        }
+
+        const ShaderGenerator gen;
+        VertexShaderKey k{};
+        std::memset(&k, 0, sizeof(k));
+        k.num_chans = 1;
+        k.flags = 0x02;
+        k.channel[0] = chan_ctrl(true, true, 0x03, false, 2, 3);
+        k.channel[2] = chan_ctrl(false, true, 0x04, false, 1, 1);
+        check_not_contains(gen.generate_vs(k), "1.0e18", "vs_light_attn_legacy_source");
+        k.flags |= kVsKeyFiniteLightAttn;
+        const std::string finite = gen.generate_vs(k);
+        check_contains(finite, "attn = min(attn, 1.0e18);", "vs_light_attn_finite_cosine");
+        check_contains(finite, "dist2 = min(dist2, 1.0e36);", "vs_light_attn_finite_distance");
+
+        PixelShaderKey p{};
+        std::memset(&p, 0, sizeof(p));
+        p.num_tev_stages = 1;
+        p.num_texgens = 1;
+        p.num_chans = 1;
+        p.alpha_comp0 = 7;
+        p.alpha_comp1 = 7;
+        p.stages[0] = basic_stage();
+        p.reserved = kPsKeyPerPixelLighting;
+        check_contains(gen.generate_ps(p), "ppl_finite_attn = false", "ps_ppl_light_attn_legacy");
+        p.reserved |= kPsKeyPplFiniteLightAttn;
+        const std::string ppl = gen.generate_ps(p);
+        check_contains(ppl, "ppl_finite_attn = true", "ps_ppl_light_attn_finite");
+        check_compiles(ppl, "ps_5_1", "ps_ppl_light_attn_finite_compiles");
     }
 
     {   // Texgens: regular ST (tex0 source), regular STQ (geom source,
@@ -525,8 +587,11 @@ int main() {
             std::snprintf(label, sizeof(label), "vs_motion_variant%u", variant);
             check_contains(src, "TEXCOORD13", label);
             check_contains(src, (variant & 1u) != 0u ? "motion_ctrl.x == 0u"
-                                                     : "dot(motion_prev_pos[0], float4(pos_in",
+                                                     : "dot(motion_prev_pos[0], float4(vb_pos_prev",
                            label);
+            // Replays take the presented frame's jitter and the blended position before it.
+            check_contains(src, "o.pos.xy += jitter_ndc * o.pos.w", label);
+            check_contains(src, "vb_pos_prev = lerp(earlier, v.pos, vb_t_prev)", label);
             Microsoft::WRL::ComPtr<ID3DBlob> code, errors;
             const HRESULT hr = D3DCompile(src.data(), src.size(), label, nullptr, nullptr,
                 "main", "vs_5_1", D3DCOMPILE_ENABLE_STRICTNESS |
@@ -589,6 +654,174 @@ int main() {
             std::snprintf(label, sizeof(label), "ps_reactive_variant%u", variant);
             check_contains(src, "float reactive : SV_Target1", label);
             check_compiles(src, "ps_5_1", label);
+        }
+    }
+
+    // ---- Enhanced lighting ----------------------------------------------------
+    {
+        const ShaderGenerator gen;
+        // Vertex stage: lit (normal matrix) and unlit environment-mapped (position matrix),
+        // palette and inline positions, with and without motion vectors.
+        for (unsigned variant = 0; variant < 8u; ++variant) {
+            VertexShaderKey k{};
+            std::memset(&k, 0, sizeof(k));
+            k.num_chans = 1;
+            k.num_texgens = 2;
+            k.texgen[0] = texgen_word(false, false, 0, 5);
+            k.texgen[1] = texgen_word(false, true, 0, 1);
+            k.flags = kVsKeyEnhancedLighting;
+            const bool lit = (variant & 1u) != 0u;
+            if (lit) {
+                k.flags |= 0x02u;
+                k.channel[0] = chan_ctrl(false, true, 0x03, false, 2, 3);
+            } else {
+                k.channel[0] = chan_ctrl(true, false, 0, false, 0, 0);
+            }
+            if ((variant & 2u) != 0u) k.flags |= 0x01u;
+            if ((variant & 4u) != 0u) k.flags |= kVsKeyMotion;
+            const std::string src = gen.generate_vs(k);
+            char label[64];
+            std::snprintf(label, sizeof(label), "vs_enhanced_variant%u", variant);
+            check_contains(src, "o.ppl_nrm = nrm;", label);
+            check_contains(src, lit ? "uint nrm_base" : "nrm_row0", label);
+            check_compiles(src, "vs_5_1", label);
+        }
+        // Pixel stage: lit dielectric, lit environment-mapped, unlit environment-mapped (the ray
+        // tracer's class), each also with motion vectors.
+        for (unsigned variant = 0; variant < 6u; ++variant) {
+            PixelShaderKey k{};
+            std::memset(&k, 0, sizeof(k));
+            k.num_tev_stages = 2;
+            k.num_texgens = 2;
+            k.num_chans = 1;
+            k.alpha_comp0 = 7;
+            k.alpha_comp1 = 7;
+            k.stages[0] = basic_stage();
+            k.stages[1] = basic_stage();
+            k.stages[1].order = (1u << 3) | 1u | (1u << 6);
+            k.reserved = kPsKeyEnhancedLighting;
+            const unsigned material = variant % 3u;
+            // The actors' colour channel 0x70F: lights 0 and 1, clamped diffuse, spot attenuation,
+            // material from the vertex colour.
+            const std::uint32_t actor = kEnhancedLit | (0x3u << kEnhancedLightShift) |
+                                        (2u << kEnhancedDiffuseShift) | kEnhancedSpot | kEnhancedMaterialVertex;
+            k.ind_reserved = material == 0u ? actor
+                           : material == 1u ? actor | 0x02u | kEnhancedReflective
+                                            : 0x02u | kEnhancedReflective;
+            if (variant >= 3u) k.reserved |= kPsKeyMotion;
+            const std::string src = gen.generate_ps(k);
+            char label[64];
+            std::snprintf(label, sizeof(label), "ps_enhanced_variant%u", variant);
+            check_contains(src, "uint4    uber_ps_header;", label);
+            if (material == 2u) {
+                check_contains(src, "enh_key_highlight(enh", label);
+            } else {
+                check_contains(src, "enh_light(1u, true, pin.ppl_pos", label);
+                check_contains(src, "pin.col0.rgb = enh_mat *", label);
+                // Under traced lighting the channel is the game's light averaged over direction.
+                check_contains(src, "pin.col0.rgb = enh_mat * saturate(enh_avg);", label);
+            }
+            if (material == 0u) {
+                check_not_contains(src, "enh.env_gain))", label);
+            } else {
+                check_contains(src, "enh.env_gain))", label);
+                // Under traced lighting the painted map stays as drawn (the traced reflection screens over it).
+                check_not_contains(src, "env_mean", label);
+            }
+            check_compiles(src, "ps_5_1", label);
+        }
+        // Keys without the enhanced bits generate no enhanced code (their cached shaders stay valid).
+        PixelShaderKey k{};
+        std::memset(&k, 0, sizeof(k));
+        k.num_tev_stages = 1;
+        k.num_texgens = 1;
+        k.num_chans = 1;
+        k.alpha_comp0 = 7;
+        k.alpha_comp1 = 7;
+        k.stages[0] = basic_stage();
+        k.reserved = kPsKeyPerPixelLighting;
+        const std::string ppl = gen.generate_ps(k);
+        check_not_contains(ppl, "enh_", "ps_ppl_has_no_enhanced_lighting");
+        check_not_contains(ppl, "uber_ps_header", "ps_ppl_keeps_its_constants");
+
+        // The material word from the draw's keys (enhanced_lighting.h).
+        {
+            VertexShaderKey vs{};
+            std::memset(&vs, 0, sizeof(vs));
+            vs.num_chans = 1;
+            vs.num_texgens = 2;
+            vs.texgen[0] = texgen_word(false, false, 0, 5);
+            vs.texgen[1] = texgen_word(false, true, 0, 1);
+            vs.channel[0] = 0x70Fu;  // actors: lights 0+1, clamp, spot, material from the vertex
+            PixelShaderKey ps{};
+            std::memset(&ps, 0, sizeof(ps));
+            ps.num_tev_stages = 1;
+            ps.num_texgens = 2;
+            ps.num_chans = 1;
+            ps.stages[0] = basic_stage();  // texture 0 times the lit colour
+            const std::uint32_t lit = enhanced_lighting_material(vs, ps);
+            const std::uint32_t actor = kEnhancedLit | (0x3u << kEnhancedLightShift) |
+                                        (2u << kEnhancedDiffuseShift) | kEnhancedSpot | kEnhancedMaterialVertex;
+            if (lit != actor) {
+                ++g_failures;
+                std::printf("FAILED: enhanced material of a lit actor 0x%08X\n", lit);
+            }
+            ps.num_tev_stages = 2;
+            ps.stages[1] = basic_stage();
+            ps.stages[1].order = (1u << 3) | 1u | (1u << 6);  // texture 1 through texgen 1 (normals)
+            vs.channel[0] = 0x1u;                              // baked vertex colour
+            const std::uint32_t metal = enhanced_lighting_material(vs, ps);
+            if (metal != (0x2u | kEnhancedReflective)) {
+                ++g_failures;
+                std::printf("FAILED: enhanced material of an unlit environment map 0x%08X\n", metal);
+            }
+            ps.num_tev_stages = 1;
+            if (enhanced_lighting_material(vs, ps) != 0u) {
+                ++g_failures;
+                std::printf("FAILED: baked map geometry is enhanced\n");
+            }
+            std::printf("ok: enhanced_lighting_material\n");
+        }
+
+        // The game's actor material ([light-census]: lights 0+1 and the alpha light, three stages),
+        // compiled as the pipeline cache does (level 1): the enhanced variant's FXC time next to the
+        // game's own (printed, not checked).
+        PixelShaderKey actor{};
+        std::memset(&actor, 0, sizeof(actor));
+        actor.num_tev_stages = 3;
+        actor.num_texgens = 1;
+        actor.num_chans = 1;
+        actor.alpha_comp0 = 7;
+        actor.alpha_comp1 = 7;
+        const std::uint32_t envs[3][3] = {
+            {0x08F2A2u, 0x189A90u, 0x049u}, {0x08FA10u, 0x00FB70u, 0x000u}, {0x1848A0u, 0x001FF0u, 0x040u}};
+        for (unsigned s = 0; s < 3u; ++s) {
+            actor.stages[s] = basic_stage();
+            actor.stages[s].color_env = envs[s][0];
+            actor.stages[s].alpha_env = envs[s][1];
+            actor.stages[s].order = envs[s][2];
+        }
+        PixelShaderKey enhanced = actor;
+        enhanced.reserved = kPsKeyEnhancedLighting;
+        enhanced.ind_reserved = kEnhancedLit | (0x3u << kEnhancedLightShift) | (2u << kEnhancedDiffuseShift) |
+                                kEnhancedSpot | kEnhancedMaterialVertex;
+        const auto fxc_ms = [](const std::string& src) {
+            Microsoft::WRL::ComPtr<ID3DBlob> code, errors;
+            const auto start = std::chrono::steady_clock::now();
+            const HRESULT hr = D3DCompile(src.data(), src.size(), "timing", nullptr, nullptr, "main", "ps_5_1",
+                D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_PACK_MATRIX_ROW_MAJOR | D3DCOMPILE_OPTIMIZATION_LEVEL1,
+                0, &code, &errors);
+            const double ms = std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - start).count();
+            return FAILED(hr) ? -1.0 : ms;
+        };
+        const double plain_ms = fxc_ms(gen.generate_ps(actor));
+        const double enhanced_ms = fxc_ms(gen.generate_ps(enhanced));
+        if (plain_ms < 0.0 || enhanced_ms < 0.0) {
+            ++g_failures;
+            std::printf("FAILED: actor material compile\n");
+        } else {
+            std::printf("ok: ps_actor_compile_ms plain=%.1f enhanced=%.1f\n", plain_ms, enhanced_ms);
         }
     }
 

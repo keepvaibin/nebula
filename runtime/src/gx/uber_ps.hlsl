@@ -631,6 +631,28 @@ PSOut main(PSIn pin) {
         frag.rgb = float3((fog_rgb_i * (256 - fog_i) + fog_color_i * fog_i) >> 8) / 255.0;
     }
 
+    // Glows (additive scene draws under ray-traced lighting) shine at their light's exposure; what
+    // passes 1 in one channel spills into all of them, as an over-exposed emitter turns white-hot.
+    if ((output_flags & 0x20u) != 0u) {
+        frag.rgb *= ztex_params.z;
+        frag.rgb += max(max(frag.r, max(frag.g, frag.b)) - 1.0, 0.0) * ztex_params.w;
+    }
+    // Lit translucents (dust, smoke, splashes: blended scene draws under ray-traced lighting) take
+    // the light of the surface behind them, a little softened (texture 7: the lighting per sample).
+    if ((output_flags & 0x40u) != 0u) {
+        uint lit_w, lit_h;
+        tex[7].GetDimensions(lit_w, lit_h);
+        const int2 lit_at = min(int2(pin.pos.xy * ztex_params.z), int2(lit_w, lit_h) - 1);
+        // As lit up to the knee, then a film shoulder towards white on the brightest channel, the hue
+        // kept (rt_lighting.hlsl film_light).
+        const float3 lit_c = frag.rgb * clamp(tex[7].Load(int3(lit_at, 0)).rgb, 0.45, 4.0);
+        const float lit_peak = max(lit_c.r, max(lit_c.g, lit_c.b));
+        const float lit_knee = max(max(frag.r, max(frag.g, frag.b)), 0.8);
+        const float lit_room = max(1.0 - lit_knee, 1e-4);
+        frag.rgb = lit_peak > lit_knee
+                       ? lit_c * ((lit_knee + lit_room * (1.0 - exp(-(lit_peak - lit_knee) / lit_room))) / lit_peak)
+                       : lit_c;
+    }
     float tev_alpha = saturate(frag.a);
     uint4 efb_color = uint4(round(saturate(frag) * 255.0));
     if (rgba6) {

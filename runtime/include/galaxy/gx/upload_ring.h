@@ -26,11 +26,17 @@ public:
         std::size_t offset = 0;     // within the whole resource
     };
 
+    // `capacity`: bytes reserved beyond bytes_per_frame * frames_in_flight, so later
+    // resegment() calls up to it need no new buffer.
     bool initialize(
         gpu::Device* device,
         const char* name,
         std::size_t bytes_per_frame,
-        unsigned frames_in_flight);
+        unsigned frames_in_flight,
+        std::size_t capacity = 0);
+    // A new segmentation inside the existing buffer (the caller has retired every GPU
+    // reference to its contents); false when it does not fit. Immutable uploads start over.
+    bool resegment(std::size_t bytes_per_frame, unsigned frames_in_flight);
     void begin_frame(unsigned frame_slot);
 
     // Bump-allocates within the current frame segment. Exhaustion is a GxFatalError:
@@ -65,7 +71,18 @@ public:
     [[nodiscard]] std::size_t peak_bytes_per_frame() const {
         return peak_bytes_per_frame_;
     }
+    // The peak since the last call (diagnostics windows).
+    [[nodiscard]] std::size_t take_peak_bytes_per_frame() noexcept {
+        const std::size_t peak = peak_bytes_per_frame_;
+        peak_bytes_per_frame_ = 0u;
+        return peak;
+    }
     [[nodiscard]] std::size_t bytes_per_frame() const { return bytes_per_frame_; }
+    [[nodiscard]] std::size_t total_bytes() const { return bytes_per_frame_ * frames_in_flight_; }
+    // CPU view of a GPU address inside this ring; null outside it.
+    [[nodiscard]] const std::byte* cpu_at(gpu::Address va) const {
+        return va >= gpu_base_ && va < gpu_base_ + total_bytes() ? mapped_ + (va - gpu_base_) : nullptr;
+    }
     [[nodiscard]] std::size_t cursor() const { return cursor_; }
 
     [[nodiscard]] gpu::Resource* resource() const { return gpu::raw(buffer_); }
@@ -80,6 +97,7 @@ private:
     // This committed buffer keeps its address until it is replaced by initialize.
     gpu::Address gpu_base_ = 0;
     std::size_t bytes_per_frame_ = 0;
+    std::size_t capacity_ = 0;
     std::size_t segment_base_ = 0;
     std::size_t cursor_ = 0;
     unsigned frames_in_flight_ = 0;

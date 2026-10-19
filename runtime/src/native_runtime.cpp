@@ -1,5 +1,6 @@
 #include "galaxy/native_api.h"
 #include "galaxy/crash_notes.h"
+#include "galaxy/output_relay.h"
 #include "nebula_build_identity.h"
 #include "galaxy/ai_dma_timing.h"
 #include "galaxy/checkpoint_gate.h"
@@ -33,8 +34,10 @@
 #include "galaxy/native_input_anomaly.h"
 #include "galaxy/native_input_causality.h"
 #include "galaxy/gx_d3d12.h"
+#include "galaxy/gx/galaxy_select.h"
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx/fifo_submission.h"
+#include "galaxy/motion_signals.h"
 #include "galaxy/runtime_timeline.h"
 #include "galaxy/relative_vi_window.h"
 #include "galaxy/opening_route_marker_guard.h"
@@ -2270,6 +2273,59 @@ struct RuntimeState {
     std::uint32_t first_tick{};
     std::uint32_t last_tick{};
     galaxy::host::GuestAddressSpace* address_space{};
+    // Draw-identity markers are emitted inside this 3D scene (set at its
+    // SceneBegin when the renderer wants them).
+    bool draw_identity_scene{};
+    std::uint64_t draw_identity_markers{};
+    std::uint64_t draw_identity_dropped{};
+    // Motion signals (generation-20 site hooks; galaxy/motion_signals.h).
+    galaxy::motion::EpochTable motion_epochs;
+    std::uint32_t motion_camera_epoch{};
+    std::uint32_t motion_camera_sites{};      // CameraSite bits seen since the last cut
+    bool motion_camera_cut_pending{};         // a cut since the previous scene marker
+    std::uint32_t motion_object_events{};     // epoch bumps since the previous scene marker
+    std::uint64_t motion_scene_serial{};      // SceneBegin markers seen
+    std::uint32_t astro_core{};               // the Comet Observatory's AstroCore while it lives
+    // The actors that asked for the game's point light (note_point_request), each with its last request: its light
+    // stays while the game clips the actor (keep_point_requests).
+    struct PointRequester {
+        std::uint32_t actor{};
+        std::uint32_t vtable{};               // its first word when it asked (another object there: gone)
+        std::array<float, 3> position{};
+        std::array<float, 3> color{};
+        float half_distance{};
+        std::uint64_t vi{};                   // the VI of its last request
+    };
+    std::vector<PointRequester> point_requesters;
+    std::array<std::uint64_t, 8> motion_object_counts{};
+    std::uint64_t motion_camera_cuts{};
+    std::uint64_t motion_category_markers{};
+    std::uint64_t motion_light_markers{};
+    std::uint64_t motion_stripe_entries{};
+    std::uint64_t motion_mirror_passes{};
+    std::uint64_t motion_dead_repeats{};      // makeActorDead on a dead actor (no bump)
+    std::uint64_t motion_player_moves{};      // player placed without a jump (no bump)
+    // The 2D layer (SiteHookKind::Layout2D): GameScene::draw2D bounds and
+    // layout identity markers. Index 0 pane, 1 layout actor, 2 star pointer.
+    bool layout_2d_open{};                    // inside GameScene::draw2D
+    bool layout_2d_markers{};                 // ... and the renderer reads identity markers
+    bool layout_2d_since_scene{};             // draw2D ran since the last 3D SceneBegin
+    bool layout_after_2d{};                   // draw2D ended, no 3D SceneBegin since
+    std::array<std::uint64_t, 3> layout_drawn_after_2d{};  // outside draw2D, after it in the frame
+    std::uint64_t layout_2d_scenes{};         // draw2D entries
+    std::uint64_t layout_3d_without_2d{};     // 3D scenes with no draw2D before the next one
+    std::array<std::uint32_t, 3> layout_frame_drawn{};    // this draw2D
+    std::array<std::uint32_t, 3> layout_frame_markers{};  // this draw2D, appended
+    std::uint32_t layout_frame_categories{};
+    std::array<std::uint64_t, 3> layout_markers_in_2d{};  // appended inside draw2D
+    std::array<std::uint64_t, 3> layout_drawn_outside_2d{};
+    std::array<std::uint64_t, 3> layout_drawn_in_3d{};
+    std::uint64_t layout_markers_outside_2d{};            // appended outside draw2D
+    std::uint64_t layout_markers_dropped{};
+    std::uint32_t layout_panes_min{0xFFFFFFFFu};
+    std::uint32_t layout_panes_max{};
+    std::uint64_t layout_panes_sum{};
+    std::uint64_t layout_summary_frames{};
     galaxy::input::NativeInputCausalityTracker native_input_causality;
     galaxy::scheduler::FunctionAsyncFlightTracker function_async_flights;
     std::unordered_map<std::uint32_t, std::uint64_t>
@@ -2434,6 +2490,10 @@ struct RuntimeState {
     std::uint64_t vi_first_deadline_ticks{};
     bool vi_deadline_wait_active{};
     bool vi_edge_delivery_active{};
+    // VI services that found a due batch still unpublished a period late.
+    std::uint64_t vi_unpublished_backlog_retries{};
+    // The VI sequence whose late publication last woke the broker worker.
+    std::uint64_t vi_late_wake_sequence{};
     std::atomic_bool vi_readiness_probe_requested{false};
     bool guest_write_watch_enabled =
         read_env_flag("GALAXY_TRACE_GUEST_WRITE_WATCH", false);
@@ -2594,6 +2654,8 @@ struct RuntimeState {
     std::uint32_t last_valid_displaying_xfb_manager{};
     std::uint64_t last_valid_displaying_xfb_vi{};
     std::uint64_t stale_displaying_xfb_preserves{};
+    // The VI's output is black (VISetBlack) since this retrace (0: not black).
+    std::uint64_t vi_black_since{};
     // Two samples are captured per VI. 1,536 records hold a complete 600-VI certification window, with
     // room for setup and teardown, and stay below the process stack reserve.
     static constexpr std::size_t kXfbStateRecordCapacity = 1'536u;
@@ -9855,6 +9917,14 @@ bool try_read_guest_u32(
     return true;
 }
 
+// SiteHookKind::DrawShapePacket..DrawParticle: one op::kHostMarker in the GX
+// stream naming the object whose commands follow. Marker kinds: 1 J3D shape
+// packet (packet, its J3DShape), 2 NameObj draw (object, vtable), 3 JPA
+// emitter pass (emitter, JPAResource; aux 1 = child pass), 4 JPA particle
+// (particle, age << 16 | lifetime; aux 1 = child pass).
+void emit_draw_identity_marker(RuntimeState& state, std::uint32_t kind, std::uint32_t argument,
+                               const galaxy::PpcContext& context);
+
 std::uint32_t read_guest_u32_or_zero(
     const galaxy::host::GuestAddressSpace& address_space,
     std::uint32_t address) {
@@ -9863,12 +9933,748 @@ std::uint32_t read_guest_u32_or_zero(
     return value;
 }
 
+bool append_host_marker(RuntimeState& state, std::uint8_t kind, std::uint16_t aux, std::uint32_t a,
+                        std::uint32_t b) {
+    const std::array<std::byte, 12> marker{
+        std::byte{0xF0}, std::byte{kind},
+        std::byte(aux >> 8u), std::byte(aux & 0xFFu),
+        std::byte(a >> 24u), std::byte((a >> 16u) & 0xFFu),
+        std::byte((a >> 8u) & 0xFFu), std::byte(a & 0xFFu),
+        std::byte(b >> 24u), std::byte((b >> 16u) & 0xFFu),
+        std::byte((b >> 8u) & 0xFFu), std::byte(b & 0xFFu)};
+    if (state.address_space->append_gx_host_marker(marker)) {
+        ++state.draw_identity_markers;
+        return true;
+    }
+    ++state.draw_identity_dropped;
+    return false;
+}
+
+// Shape-packet, NameObj and emitter markers carry their object's epoch above
+// the pass bit (galaxy/motion_signals.h): a reset or new life is a new identity.
+void emit_draw_identity_marker(RuntimeState& state, std::uint32_t kind, std::uint32_t argument,
+                               const galaxy::PpcContext& context) {
+    if (state.address_space == nullptr) {
+        return;
+    }
+    const auto& space = *state.address_space;
+    std::uint8_t marker_kind = 0u;
+    std::uint16_t aux = 0u;
+    std::uint32_t a = 0u;
+    std::uint32_t b = 0u;
+    switch (static_cast<galaxy::SiteHookKind>(kind)) {
+    case galaxy::SiteHookKind::DrawShapePacket:
+        marker_kind = galaxy::motion::kMarkerShapePacket;
+        a = context.gpr[3];
+        b = read_guest_u32_or_zero(space, a + 0x28u);  // J3DShapePacket::mpShape
+        if (state.motion_epochs.size() != 0u) {
+            const std::uint32_t model = read_guest_u32_or_zero(space, a + galaxy::motion::kShapePacketModel);
+            aux = static_cast<std::uint16_t>(state.motion_epochs.get(model) << 1u);
+        }
+        break;
+    case galaxy::SiteHookKind::DrawNameObj:
+        marker_kind = galaxy::motion::kMarkerNameObj;
+        a = context.gpr[4];
+        b = read_guest_u32_or_zero(space, a);          // vtable
+        aux = static_cast<std::uint16_t>(state.motion_epochs.get(a) << 1u);
+        break;
+    case galaxy::SiteHookKind::DrawEmitter:
+        marker_kind = galaxy::motion::kMarkerEmitter;
+        a = read_guest_u32_or_zero(space, context.gpr[4]);  // JPAEmitterWorkData::mpEmtr
+        b = context.gpr[3];
+        aux = static_cast<std::uint16_t>((state.motion_epochs.get(a) << 1u) | (argument & 1u));
+        break;
+    case galaxy::SiteHookKind::DrawParticle:
+        marker_kind = galaxy::motion::kMarkerParticle;
+        a = context.gpr[argument & 0x1Fu] + 8u;         // JPANode -> JPABaseParticle
+        b = read_guest_u32_or_zero(space, a + 0x80u);  // mAge << 16 | mLifeTime
+        aux = static_cast<std::uint16_t>((argument >> 8u) & 1u);
+        break;
+    default:
+        return;
+    }
+    static_cast<void>(append_host_marker(state, marker_kind, aux, a, b));
+}
+
 std::uint8_t read_guest_u8_or_zero(
     const galaxy::host::GuestAddressSpace& address_space,
     std::uint32_t address) {
     return mapped_guest_range(address_space, address, 1u)
                ? read_guest_u8(address_space, address)
                : 0u;
+}
+
+// Generation-20 motion signals (galaxy/motion_signals.h), simulation thread.
+// GALAXY_MOTION_TRACE_SIGNALS=1 logs every camera cut, the first 4000 camera
+// sites and object epoch bumps, and a summary every 600 scenes.
+bool motion_trace_enabled() {
+    static const bool enabled = read_env_u64("GALAXY_MOTION_TRACE_SIGNALS", 0u) != 0u;
+    return enabled;
+}
+
+void note_motion_camera(RuntimeState& state, std::uint32_t site, const galaxy::PpcContext& context) {
+    using galaxy::motion::CameraSite;
+    if (state.address_space == nullptr) {
+        return;
+    }
+    const auto& space = *state.address_space;
+    if (site == static_cast<std::uint32_t>(CameraSite::ReduceOscillation)) {
+        const std::uint32_t self = context.gpr[3];
+        if (read_guest_u8_or_zero(space, self + galaxy::motion::kInterpolatorForceChange) == 0u) {
+            return;
+        }
+        ++state.motion_camera_epoch;
+        ++state.motion_camera_cuts;
+        state.motion_camera_cut_pending = true;
+        if (motion_trace_enabled()) {
+            std::fprintf(stderr,
+                         "[motion-signal] camera-cut vi=%llu scene=%llu epoch=%u sites=0x%X anti-oscillation=%u\n",
+                         static_cast<unsigned long long>(state.vi_retrace_count),
+                         static_cast<unsigned long long>(state.motion_scene_serial), state.motion_camera_epoch,
+                         state.motion_camera_sites,
+                         static_cast<unsigned>(read_guest_u8_or_zero(
+                             space, self + galaxy::motion::kInterpolatorAntiOscillation)));
+        }
+        state.motion_camera_sites = 0u;
+        return;
+    }
+    if (site < 32u) {
+        state.motion_camera_sites |= 1u << site;
+    }
+    if (motion_trace_enabled()) {
+        static std::uint64_t lines = 0u;
+        if (lines++ < 4000u) {
+            const std::uint32_t frames = site == static_cast<std::uint32_t>(CameraSite::StartInterpolation)
+                ? context.gpr[3]
+                : site == static_cast<std::uint32_t>(CameraSite::SetInterpolation) ? context.gpr[4] : 0u;
+            const unsigned off = site == static_cast<std::uint32_t>(CameraSite::SetInterpolation)
+                ? read_guest_u8_or_zero(space, context.gpr[3] + galaxy::motion::kInterpolatorOff)
+                : 0u;
+            std::fprintf(stderr, "[motion-signal] camera-site vi=%llu scene=%llu site=%u frames=%u interpolation-off=%u\n",
+                         static_cast<unsigned long long>(state.vi_retrace_count),
+                         static_cast<unsigned long long>(state.motion_scene_serial), site, frames, off);
+        }
+    }
+}
+
+// A reset position or a new life: the object's epoch, and its model's.
+// `source` is r31 at the player sites: the target position (setTrans) or
+// base matrix (setBaseMtx).
+void note_motion_object(RuntimeState& state, std::uint32_t site, std::uint32_t object, std::uint32_t source) {
+    using galaxy::motion::ObjectSite;
+    if (object == 0u || state.address_space == nullptr || site >= static_cast<std::uint32_t>(ObjectSite::Count)) {
+        return;
+    }
+    const auto& space = *state.address_space;
+    // The Comet Observatory's star core (AstroCore: its vtable 0x80579720) appears and dies with
+    // its stage; the ray tracer lights the scene from it and gives it its finish.
+    constexpr std::uint32_t kAstroCoreVtable = 0x80579720u;
+    if (site == static_cast<std::uint32_t>(ObjectSite::Appeared) &&
+        read_guest_u32_or_zero(space, object) == kAstroCoreVtable) {
+        state.astro_core = object;
+    } else if (site == static_cast<std::uint32_t>(ObjectSite::Dead) && object == state.astro_core) {
+        state.astro_core = 0u;
+    }
+    // makeActorDead on an actor that is already dead ends no life (some
+    // objects kill their dead children every frame).
+    if (site == static_cast<std::uint32_t>(ObjectSite::Dead) &&
+        read_guest_u8_or_zero(space, object + galaxy::motion::kActorDeadFlag) != 0u) {
+        ++state.motion_dead_repeats;
+        return;
+    }
+    if (site == static_cast<std::uint32_t>(ObjectSite::PlayerTrans) ||
+        site == static_cast<std::uint32_t>(ObjectSite::PlayerBaseMtx)) {
+        const bool matrix = site == static_cast<std::uint32_t>(ObjectSite::PlayerBaseMtx);
+        float now[3]{};
+        float target[3]{};
+        for (std::uint32_t i = 0; i < 3u; ++i) {
+            now[i] = std::bit_cast<float>(
+                read_guest_u32_or_zero(space, object + galaxy::motion::kActorPosition + 4u * i));
+            target[i] = std::bit_cast<float>(
+                read_guest_u32_or_zero(space, source + (matrix ? 0x0Cu + 0x10u * i : 4u * i)));
+        }
+        if (!galaxy::motion::player_jump_is_new_life(now, target)) {
+            ++state.motion_player_moves;
+            return;
+        }
+        if (motion_trace_enabled()) {
+            const float dx = target[0] - now[0], dy = target[1] - now[1], dz = target[2] - now[2];
+            std::fprintf(stderr, "[motion-signal] player-jump vi=%llu scene=%llu site=%s distance=%.1f\n",
+                         static_cast<unsigned long long>(state.vi_retrace_count),
+                         static_cast<unsigned long long>(state.motion_scene_serial),
+                         matrix ? "player-base-mtx" : "player-trans", std::sqrt(dx * dx + dy * dy + dz * dz));
+        }
+    }
+    const std::uint16_t epoch = state.motion_epochs.bump(object);
+    std::uint32_t model = 0u;
+    if (site != static_cast<std::uint32_t>(ObjectSite::EmitterInit)) {
+        const std::uint32_t manager = read_guest_u32_or_zero(space, object + galaxy::motion::kActorModelManager);
+        model = manager != 0u ? read_guest_u32_or_zero(space, manager + galaxy::motion::kModelManagerModel) : 0u;
+        if (model != 0u) {
+            static_cast<void>(state.motion_epochs.bump(model));
+        }
+    }
+    ++state.motion_object_events;
+    ++state.motion_object_counts[site];
+    if (motion_trace_enabled()) {
+        static constexpr const char* kNames[] = {"reset-position", "reset-position-to", "reset-position-named",
+                                                 "appeared", "dead", "player-trans", "player-base-mtx",
+                                                 "emitter-init"};
+        static std::array<std::uint64_t, 8> lines{};
+        if (lines[site]++ < 4000u) {
+            std::fprintf(stderr, "[motion-signal] object vi=%llu scene=%llu site=%s object=%08X model=%08X epoch=%u\n",
+                         static_cast<unsigned long long>(state.vi_retrace_count),
+                         static_cast<unsigned long long>(state.motion_scene_serial), kNames[site], object, model,
+                         static_cast<unsigned>(epoch));
+        }
+    }
+}
+
+// Draw category or scene phase marker (inside the 3D scene only).
+void emit_motion_category(RuntimeState& state, std::uint32_t argument, const galaxy::PpcContext& context) {
+    if ((!state.draw_identity_scene && !state.layout_2d_markers) || state.address_space == nullptr) {
+        return;
+    }
+    const auto source = static_cast<std::uint16_t>((argument >> 8u) & 0xFFu);
+    const std::uint32_t type = source == galaxy::motion::kCategoryPhase ? (argument & 0xFFu) : context.gpr[3];
+    if (append_host_marker(state, galaxy::motion::kMarkerCategory, source, type, 0u)) {
+        ++state.motion_category_markers;
+        if (state.layout_2d_open) {
+            ++state.layout_frame_categories;
+        }
+    }
+}
+
+// The first marker of a 3D scene: the camera epoch and the object epoch bumps
+// since the previous scene.
+void emit_scene_signal_marker(RuntimeState& state) {
+    const std::uint16_t flags = state.motion_camera_cut_pending ? galaxy::motion::kSceneCameraCut : 0u;
+    static_cast<void>(append_host_marker(state, galaxy::motion::kMarkerScene, flags, state.motion_camera_epoch,
+                                         state.motion_object_events));
+    state.motion_camera_cut_pending = false;
+    state.motion_object_events = 0u;
+    if (motion_trace_enabled() && state.motion_scene_serial % 600u == 0u) {
+        const auto& counts = state.motion_object_counts;
+        std::fprintf(stderr,
+                     "[motion-signal] summary scene=%llu camera-cuts=%llu epoch=%u objects reset=%llu/%llu/%llu "
+                     "appeared=%llu dead=%llu dead-repeats=%llu player=%llu/%llu player-moves=%llu emitters=%llu "
+                     "table=%zu resets=%u categories=%llu lights=%llu stripes=%llu mirrors=%llu\n",
+                     static_cast<unsigned long long>(state.motion_scene_serial),
+                     static_cast<unsigned long long>(state.motion_camera_cuts), state.motion_camera_epoch,
+                     static_cast<unsigned long long>(counts[0]), static_cast<unsigned long long>(counts[1]),
+                     static_cast<unsigned long long>(counts[2]), static_cast<unsigned long long>(counts[3]),
+                     static_cast<unsigned long long>(counts[4]),
+                     static_cast<unsigned long long>(state.motion_dead_repeats),
+                     static_cast<unsigned long long>(counts[5]),
+                     static_cast<unsigned long long>(counts[6]),
+                     static_cast<unsigned long long>(state.motion_player_moves),
+                     static_cast<unsigned long long>(counts[7]),
+                     state.motion_epochs.size(), state.motion_epochs.resets(),
+                     static_cast<unsigned long long>(state.motion_category_markers),
+                     static_cast<unsigned long long>(state.motion_light_markers),
+                     static_cast<unsigned long long>(state.motion_stripe_entries),
+                     static_cast<unsigned long long>(state.motion_mirror_passes));
+    }
+}
+
+// One particle of a JPA stripe: its two strip vertices follow inside the same
+// GXBegin, so it travels as a side mark at its FIFO offset, never as a marker.
+void note_stripe_particle(RuntimeState& state, std::uint32_t argument, const galaxy::PpcContext& context) {
+    if (!state.draw_identity_scene || state.address_space == nullptr) {
+        return;
+    }
+    const std::size_t position = state.address_space->gx_stream_position();
+    if (position == SIZE_MAX) {
+        return;
+    }
+    const std::uint32_t particle = context.gpr[argument & 0x1Fu] + 8u;  // JPANode -> JPABaseParticle
+    const std::uint32_t age_lifetime = read_guest_u32_or_zero(*state.address_space, particle + 0x80u);
+    galaxy::gx::attach_stripe_particle(position, particle, age_lifetime,
+                                       static_cast<std::uint8_t>((argument >> 8u) & 0xFFu));
+    ++state.motion_stripe_entries;
+}
+
+// The 2D layer (SiteHookKind::Layout2D, galaxy/motion_signals.h).
+// GameScene::draw2D's entry and epilogue become FIFO markers at the flushed
+// gather position, like the 3D scene's bounds. A pane's, layout actor's or
+// star pointer's draw starts with a host marker (kinds 9-11) at a function
+// entry or after its visibility test, so never inside a GXBegin.
+// GALAXY_MOTION_TRACE_SIGNALS=1 traces the markers of the first two and
+// every 600th 2D scene, pane counts per frame (the first 30, then every 60th),
+// markers outside draw2D (the first 100, each layout actor or star pointer
+// object the first time, the first 100 panes once a 3D scene ran) and a
+// summary every 600 frames.
+void trace_layout_marker(const RuntimeState& state, const char* where, std::uint8_t kind, std::uint16_t aux,
+                         std::uint32_t a, std::uint32_t b) {
+    char name[17]{};
+    if (kind == galaxy::motion::kMarkerLayoutPane) {
+        for (std::uint32_t i = 0; i < 16u; ++i) {
+            const auto c = static_cast<char>(
+                read_guest_u8_or_zero(*state.address_space, a + galaxy::motion::kPaneName + i));
+            if (c == '\0') {
+                break;
+            }
+            name[i] = c >= 0x20 && c < 0x7F ? c : '?';
+        }
+    }
+    static constexpr const char* kKinds[] = {"pane", "layout-actor", "star-pointer"};
+    std::fprintf(stderr,
+                 "[layout-signal] %s frame=%llu scene3d=%llu vi=%llu n=%u after-2d=%d kind=%s aux=%u a=%08X b=%08X "
+                 "name=%s\n",
+                 where, static_cast<unsigned long long>(state.layout_2d_scenes),
+                 static_cast<unsigned long long>(state.motion_scene_serial),
+                 static_cast<unsigned long long>(state.vi_retrace_count),
+                 state.layout_frame_markers[0] + state.layout_frame_markers[1] + state.layout_frame_markers[2],
+                 state.layout_after_2d ? 1 : 0, kKinds[kind - galaxy::motion::kMarkerLayoutPane],
+                 static_cast<unsigned>(aux), a, b, name);
+}
+
+void note_layout_frame_end(RuntimeState& state, std::size_t position) {
+    const std::uint32_t panes = state.layout_frame_drawn[0];
+    state.layout_panes_min = std::min(state.layout_panes_min, panes);
+    state.layout_panes_max = std::max(state.layout_panes_max, panes);
+    state.layout_panes_sum += panes;
+    ++state.layout_summary_frames;
+    if (!motion_trace_enabled()) {
+        return;
+    }
+    const std::uint64_t frame = state.layout_2d_scenes;
+    if (frame <= 30u || frame % 60u == 0u) {
+        std::fprintf(stderr,
+                     "[layout-signal] draw2d-end frame=%llu scene3d=%llu fifo=%zu panes=%u layout-actors=%u "
+                     "star-pointer=%u markers(pane/actor/star)=%u/%u/%u categories=%u\n",
+                     static_cast<unsigned long long>(frame),
+                     static_cast<unsigned long long>(state.motion_scene_serial), position,
+                     state.layout_frame_drawn[0], state.layout_frame_drawn[1], state.layout_frame_drawn[2],
+                     state.layout_frame_markers[0], state.layout_frame_markers[1], state.layout_frame_markers[2],
+                     state.layout_frame_categories);
+    }
+    if (frame % 600u == 0u) {
+        std::fprintf(stderr,
+                     "[layout-signal] summary frames=%llu scenes3d=%llu 3d-without-2d=%llu "
+                     "panes-per-frame(min/avg/max)=%u/%.1f/%u in-2d-appended(pane/actor/star)=%llu/%llu/%llu "
+                     "drawn-outside-2d=%llu/%llu/%llu drawn-after-2d=%llu/%llu/%llu drawn-in-3d=%llu/%llu/%llu "
+                     "outside-appended=%llu dropped=%llu\n",
+                     static_cast<unsigned long long>(frame),
+                     static_cast<unsigned long long>(state.motion_scene_serial),
+                     static_cast<unsigned long long>(state.layout_3d_without_2d),
+                     state.layout_panes_min == 0xFFFFFFFFu ? 0u : state.layout_panes_min,
+                     state.layout_summary_frames != 0u
+                         ? static_cast<double>(state.layout_panes_sum) /
+                               static_cast<double>(state.layout_summary_frames)
+                         : 0.0,
+                     state.layout_panes_max,
+                     static_cast<unsigned long long>(state.layout_markers_in_2d[0]),
+                     static_cast<unsigned long long>(state.layout_markers_in_2d[1]),
+                     static_cast<unsigned long long>(state.layout_markers_in_2d[2]),
+                     static_cast<unsigned long long>(state.layout_drawn_outside_2d[0]),
+                     static_cast<unsigned long long>(state.layout_drawn_outside_2d[1]),
+                     static_cast<unsigned long long>(state.layout_drawn_outside_2d[2]),
+                     static_cast<unsigned long long>(state.layout_drawn_after_2d[0]),
+                     static_cast<unsigned long long>(state.layout_drawn_after_2d[1]),
+                     static_cast<unsigned long long>(state.layout_drawn_after_2d[2]),
+                     static_cast<unsigned long long>(state.layout_drawn_in_3d[0]),
+                     static_cast<unsigned long long>(state.layout_drawn_in_3d[1]),
+                     static_cast<unsigned long long>(state.layout_drawn_in_3d[2]),
+                     static_cast<unsigned long long>(state.layout_markers_outside_2d),
+                     static_cast<unsigned long long>(state.layout_markers_dropped));
+        state.layout_panes_min = 0xFFFFFFFFu;
+        state.layout_panes_max = 0u;
+        state.layout_panes_sum = 0u;
+        state.layout_summary_frames = 0u;
+    }
+}
+
+void handle_layout_signal(RuntimeState& state, std::uint32_t argument, const galaxy::PpcContext& context) {
+    using galaxy::motion::Layout2DSite;
+    if (state.address_space == nullptr) {
+        return;
+    }
+    auto& space = *state.address_space;
+    const auto site = static_cast<Layout2DSite>(argument);
+    if (site == Layout2DSite::SceneBegin || site == Layout2DSite::SceneEnd) {
+        const bool begin = site == Layout2DSite::SceneBegin;
+        space.flush_wgpipe_gather_tail_for_frame();
+        const std::size_t position = space.gx_fifo_data().size();
+        galaxy::gx::attach_fifo_marker(
+            begin ? galaxy::gx::FifoMarker::Scene2DBegin : galaxy::gx::FifoMarker::Scene2DEnd, position);
+        if (begin) {
+            state.layout_2d_open = true;
+            state.layout_2d_markers = galaxy::gx::draw_identity_wanted();
+            state.layout_2d_since_scene = true;
+            ++state.layout_2d_scenes;
+            state.layout_frame_drawn = {};
+            state.layout_frame_markers = {};
+            state.layout_frame_categories = 0u;
+            if (motion_trace_enabled() && (state.layout_2d_scenes <= 30u || state.layout_2d_scenes % 60u == 0u)) {
+                std::fprintf(stderr, "[layout-signal] draw2d-begin frame=%llu scene3d=%llu vi=%llu fifo=%zu markers=%d\n",
+                             static_cast<unsigned long long>(state.layout_2d_scenes),
+                             static_cast<unsigned long long>(state.motion_scene_serial),
+                             static_cast<unsigned long long>(state.vi_retrace_count), position,
+                             state.layout_2d_markers ? 1 : 0);
+            }
+        } else {
+            state.layout_2d_open = false;
+            state.layout_2d_markers = false;
+            state.layout_after_2d = true;
+            note_layout_frame_end(state, position);
+        }
+        return;
+    }
+    std::uint8_t kind = 0u;
+    std::uint16_t aux = state.layout_2d_open ? galaxy::motion::kLayoutIn2D : 0u;
+    std::uint32_t a = 0u;
+    std::uint32_t b = 0u;
+    switch (site) {
+    case Layout2DSite::Pane:
+        kind = galaxy::motion::kMarkerLayoutPane;
+        a = context.gpr[3];
+        b = read_guest_u32_or_zero(space, a + galaxy::motion::kPaneParent);
+        break;
+    case Layout2DSite::LayoutActor:
+        kind = galaxy::motion::kMarkerLayoutActor;
+        a = context.gpr[31];
+        b = read_guest_u32_or_zero(space, a);  // vtable
+        break;
+    case Layout2DSite::StarPointerLayout:
+        kind = galaxy::motion::kMarkerStarPointer;
+        a = context.gpr[31];
+        b = read_guest_u32_or_zero(space, a);  // vtable
+        break;
+    case Layout2DSite::StarPointerDirector:
+        kind = galaxy::motion::kMarkerStarPointer;
+        aux |= galaxy::motion::kStarPointerDirector;
+        a = context.gpr[3];
+        break;
+    default:
+        return;
+    }
+    const std::size_t index = kind - galaxy::motion::kMarkerLayoutPane;
+    if (state.layout_2d_open) {
+        ++state.layout_frame_drawn[index];
+    } else {
+        ++state.layout_drawn_outside_2d[index];
+        if (state.layout_after_2d) {
+            ++state.layout_drawn_after_2d[index];
+        }
+    }
+    if (state.draw_identity_scene) {
+        ++state.layout_drawn_in_3d[index];
+    }
+    const bool wanted = state.layout_2d_open ? state.layout_2d_markers : galaxy::gx::draw_identity_wanted();
+    if (!wanted) {
+        return;
+    }
+    if (!append_host_marker(state, kind, aux, a, b)) {
+        ++state.layout_markers_dropped;
+        return;
+    }
+    if (state.layout_2d_open) {
+        ++state.layout_frame_markers[index];
+        ++state.layout_markers_in_2d[index];
+        if (motion_trace_enabled() && (state.layout_2d_scenes <= 2u || state.layout_2d_scenes % 600u == 0u) &&
+            state.layout_frame_markers[0] + state.layout_frame_markers[1] + state.layout_frame_markers[2] <= 40u) {
+            trace_layout_marker(state, "marker", kind, aux, a, b);
+        }
+    } else {
+        ++state.layout_markers_outside_2d;
+        if (motion_trace_enabled()) {
+            static std::vector<std::uint32_t> objects_seen;
+            static std::uint32_t panes_after_scene = 0u;
+            bool fresh = false;
+            if (kind != galaxy::motion::kMarkerLayoutPane) {
+                fresh = objects_seen.size() < 400u &&
+                        std::find(objects_seen.begin(), objects_seen.end(), a) == objects_seen.end();
+                if (fresh) {
+                    objects_seen.push_back(a);
+                }
+            } else if (state.motion_scene_serial != 0u) {
+                fresh = panes_after_scene++ < 100u;
+            }
+            if (state.layout_markers_outside_2d <= 100u || fresh) {
+                trace_layout_marker(state, "outside-2d", kind, aux, a, b);
+            }
+        }
+    }
+}
+
+// GALAXY_TRACE_LIGHTS=1: each distinct light the game loads (diagnostics). ActorLightInfo:
+// light A and B (colour, position, follow-camera flag), ambient; PointLightInfo: position,
+// colour, reference distance and brightness, distance function.
+void trace_game_light(RuntimeState& state, std::uint32_t site, std::uint32_t info) {
+    static const bool enabled = [] {
+        char value[8]{};
+        std::size_t length = 0u;
+        return getenv_s(&length, value, sizeof(value), "GALAXY_TRACE_LIGHTS") == 0 && length > 1u &&
+               value[0] == '1';
+    }();
+    auto* mem = state.address_space;
+    if (!enabled || mem == nullptr || (site != 0u && site != 2u) || !mapped_guest_range(mem, info, 0x30u)) {
+        return;
+    }
+    static std::vector<std::array<std::uint32_t, 12>> seen;
+    std::array<std::uint32_t, 12> words{};
+    for (unsigned i = 0; i < 12u; ++i) words[i] = mem->read_u32(info + 4u * i);
+    // Once per light: positions to 1000 units, colours and brightness to 1/16 (blends and fades
+    // repeat a light many times).
+    std::array<std::uint32_t, 12> key{};
+    for (unsigned i = 0; i < 12u; ++i) {
+        const bool position = site == 2u ? i < 3u : (i >= 1u && i <= 3u) || (i >= 6u && i <= 8u);
+        const bool color = site == 2u ? i == 3u || i == 5u : i == 0u || i == 5u || i == 10u;
+        key[i] = position  ? static_cast<std::uint32_t>(static_cast<std::int32_t>(
+                                std::lround(std::bit_cast<float>(words[i]) / 1000.0f)))
+                 : color ? words[i] & 0xF0F0F0F0u
+                         : words[i];
+    }
+    key[11] = info;
+    if (seen.size() >= 1200u || std::find(seen.begin(), seen.end(), key) != seen.end()) {
+        return;
+    }
+    seen.push_back(key);
+    const auto f = [&](unsigned word) { return std::bit_cast<float>(words[word]); };
+    char line[320];
+    if (site == 2u) {
+        std::snprintf(line, sizeof(line),
+                      "[game-light] vi=%u point info=%08x pos=(%.1f %.1f %.1f) color=%08x ref-distance=%.2f "
+                      "ref-brightness=%.3f distance-fn=%u\n",
+                      static_cast<unsigned>(state.vi_retrace_count), info, f(0), f(1), f(2), words[3], f(4), f(5),
+                      words[6]);
+    } else {
+        std::snprintf(line, sizeof(line),
+                      "[game-light] vi=%u actor info=%08x A color=%08x pos=(%.1f %.1f %.1f) follow=%u | B color=%08x "
+                      "pos=(%.1f %.1f %.1f) follow=%u | ambient=%08x\n",
+                      static_cast<unsigned>(state.vi_retrace_count), info, words[0], f(1), f(2), f(3), words[4] >> 24u,
+                      words[5], f(6),
+                      f(7), f(8), words[9] >> 24u, (words[10] << 8u) | (words[11] >> 24u));
+    }
+    std::cerr << line;
+}
+
+// MR::requestPointLight (r3 the actor, r4 its position, r5 its colour, f1 its brightness at the reference distance):
+// every actor that asks for the game's one point light this frame. LightPointCtrl hands that light to the requester
+// nearest the player, so the ray tracer, which noted only it, lit Lumas and Power Stars one at a time near Mario
+// (user: lights switch on only near the camera and jump between them). Each request is a light of its own, set up
+// as LightPointCtrl sets it: brightness 0.95-0.999999 at reference distance 15, steep attenuation (GX_DA_STEEP,
+// 1 / (1 + k2 d^2), halved at the reference distance times sqrt(b / (1 - b))). Behaviour understood from the Petari
+// decompilation (SMGCommunity).
+// Requesters kept (the Observatory's terrace has 7); VIs without a request before an actor counts as silent (a game
+// running at 30 fps asks every other VI).
+constexpr std::size_t kPointRequesters = 64u;
+constexpr std::uint64_t kPointRequestGap = 4u;
+
+void note_point_request(RuntimeState& state, const galaxy::PpcContext& context) {
+    auto* mem = state.address_space;
+    const std::uint32_t position = context.gpr[4];
+    const std::uint32_t color = context.gpr[5];
+    if (mem == nullptr || !mapped_guest_range(mem, position, 12u) || !mapped_guest_range(mem, color, 4u)) {
+        return;
+    }
+    const auto f = [&](std::uint32_t address) { return std::bit_cast<float>(mem->read_u32(address)); };
+    const std::uint32_t rgba = mem->read_u32(color);
+    const double requested = std::bit_cast<double>(context.fpr_bits[1]);
+    const float brightness = std::isfinite(requested) ? std::clamp(static_cast<float>(requested), 0.95f, 0.999999f) : 0.95f;
+    constexpr float kReferenceDistance = 15.0f;
+    RuntimeState::PointRequester request{};
+    request.actor = context.gpr[3];
+    request.position = {f(position), f(position + 4u), f(position + 8u)};
+    request.color = {static_cast<float>(rgba >> 24u) / 255.0f, static_cast<float>((rgba >> 16u) & 0xFFu) / 255.0f,
+                     static_cast<float>((rgba >> 8u) & 0xFFu) / 255.0f};
+    request.half_distance = kReferenceDistance * std::sqrt(brightness / (1.0f - brightness));
+    request.vi = state.vi_retrace_count;
+    galaxy::gx::note_game_point_request(request.actor, request.position, request.color, request.half_distance);
+    if (!mapped_guest_range(mem, request.actor, 0x70u)) {
+        return;
+    }
+    request.vtable = mem->read_u32(request.actor);
+    auto& requesters = state.point_requesters;
+    const auto known = std::find_if(requesters.begin(), requesters.end(),
+                                    [&](const RuntimeState::PointRequester& r) { return r.actor == request.actor; });
+    if (known != requesters.end()) {
+        *known = request;
+    } else if (requesters.size() < kPointRequesters) {
+        requesters.push_back(request);
+    } else {
+        *std::min_element(requesters.begin(), requesters.end(),
+                          [](const RuntimeState::PointRequester& a, const RuntimeState::PointRequester& b) {
+                              return a.vi < b.vi;
+                          }) = request;
+    }
+}
+
+// Once per VI: an actor that has asked for no light for kPointRequestGap VIs keeps its light while the game clips it.
+// A clipped actor runs no control, which is where it asks: a Luma behind the camera or round a corner went dark and
+// stopped lighting what the camera sees (user: every light source must keep projecting). Clipping also hides the
+// model (measured: every clipped Luma had its hidden flag set), so only a clipped actor keeps its light. One that
+// died or no longer exists (its first word changed) lets its light fade out, and so does one the game still runs
+// that stopped asking. LiveActor flags at +0x68: dead +0, clipped +7 (Petari LiveActorFlag, SMGCommunity).
+void keep_point_requests(RuntimeState& state) {
+    auto* mem = state.address_space;
+    if (mem == nullptr || state.point_requesters.empty()) {
+        return;
+    }
+    std::erase_if(state.point_requesters, [&](const RuntimeState::PointRequester& r) {
+        if (state.vi_retrace_count - r.vi <= kPointRequestGap) {
+            return false;
+        }
+        if (!mapped_guest_range(mem, r.actor, 0x70u) || mem->read_u32(r.actor) != r.vtable) {
+            return true;
+        }
+        const bool dead = (mem->read_u32(r.actor + 0x68u) >> 24u) != 0u;
+        const bool clipped = (mem->read_u32(r.actor + 0x6Cu) & 0xFFu) != 0u;
+        if (dead || !clipped) {
+            return true;
+        }
+        galaxy::gx::note_game_point_request(r.actor, r.position, r.color, r.half_distance);
+        return false;
+    });
+}
+
+// The ray tracer lights the scene with the game's lights: each point light it loads
+// (PointLightInfo: position +0, colour +0xC) and each world-fixed light of an ActorLightInfo
+// (LightInfo A +0 and B +0x14: colour +0, position +4, follow-camera flag +0x10).
+void note_game_light(RuntimeState& state, std::uint32_t site, std::uint32_t info) {
+    auto* mem = state.address_space;
+    if (mem == nullptr || (site != 0u && site != 2u) || !mapped_guest_range(mem, info, 0x28u)) {
+        return;
+    }
+    const auto f = [&](std::uint32_t address) { return std::bit_cast<float>(mem->read_u32(address)); };
+    const auto rgb = [](std::uint32_t color) {
+        return std::array<float, 3>{static_cast<float>(color >> 24u) / 255.0f,
+                                    static_cast<float>((color >> 16u) & 0xFFu) / 255.0f,
+                                    static_cast<float>((color >> 8u) & 0xFFu) / 255.0f};
+    };
+    if (site == 2u) {
+        // GX distance attenuation (GXInitLightDistAttn: reference distance +0x10, brightness
+        // there +0x14, function +0x18): 1 / (1 + k1 d + k2 d^2); the distance where it halves.
+        const float reference = f(info + 0x10u);
+        const float brightness = f(info + 0x14u);
+        const std::uint32_t function = mem->read_u32(info + 0x18u);
+        float half_distance = 0.0f;
+        if (reference > 0.0f && brightness > 0.0f && brightness < 1.0f && function >= 1u && function <= 3u) {
+            const float q = (1.0f - brightness) / brightness;
+            const float k1 = function == 1u ? q / reference : function == 2u ? 0.5f * q / reference : 0.0f;
+            const float k2 = function == 3u ? q / (reference * reference)
+                             : function == 2u ? 0.5f * q / (reference * reference)
+                                              : 0.0f;
+            half_distance = k2 > 0.0f ? (-k1 + std::sqrt(k1 * k1 + 4.0f * k2)) / (2.0f * k2) : 1.0f / k1;
+        }
+        galaxy::gx::note_game_point_light(info, {f(info), f(info + 4u), f(info + 8u)},
+                                          rgb(mem->read_u32(info + 0xCu)), half_distance);
+        return;
+    }
+    for (const std::uint32_t light : {info, info + 0x14u}) {
+        const std::array<float, 3> position{f(light + 4u), f(light + 8u), f(light + 0xCu)};
+        const bool follow = (mem->read_u32(light + 0x10u) >> 24u) != 0u;
+        if (!follow && position[0] * position[0] + position[1] * position[1] + position[2] * position[2] > 4.0e8f) {
+            galaxy::gx::note_game_world_light(position, rgb(mem->read_u32(light)));
+        }
+    }
+}
+
+// A light-load marker's follow-camera bits: bit 0 LightInfo A (GX light 0), bit 1 an
+// ActorLightInfo's B (+0x14, GX light 1). The renderer moves those lights under ray tracing
+// (galaxy/gx/actor_lights.h).
+std::uint32_t light_follow_bits(RuntimeState& state, std::uint32_t site, std::uint32_t info) {
+    auto* mem = state.address_space;
+    const auto follows = [&](std::uint32_t light) {
+        return mapped_guest_range(mem, light + 0x10u, 4u) && (mem->read_u32(light + 0x10u) >> 24u) != 0u;
+    };
+    if (site == static_cast<std::uint32_t>(galaxy::motion::LightSite::ActorLightInfo)) {
+        return (follows(info) ? 1u : 0u) | (follows(info + 0x14u) ? 2u : 0u);
+    }
+    if (site == static_cast<std::uint32_t>(galaxy::motion::LightSite::Coin)) {
+        return follows(info) ? 1u : 0u;
+    }
+    return 0u;
+}
+
+// BrightSun::control (SiteHookKind::SunCenter): the visible sun's centre less the camera
+// position it was placed from is the world direction towards it.
+void note_game_sun(RuntimeState& state, const galaxy::PpcContext& context) {
+    auto* mem = state.address_space;
+    const std::uint32_t sun = context.gpr[31];
+    const std::uint32_t camera = context.gpr[1] + 8u;
+    if (mem == nullptr || !mapped_guest_range(mem, sun + 0xCu, 12u) || !mapped_guest_range(mem, camera, 12u)) {
+        return;
+    }
+    std::array<float, 3> direction{};
+    float length = 0.0f;
+    for (unsigned i = 0; i < 3u; ++i) {
+        direction[i] = std::bit_cast<float>(mem->read_u32(sun + 0xCu + 4u * i)) -
+                       std::bit_cast<float>(mem->read_u32(camera + 4u * i));
+        length += direction[i] * direction[i];
+    }
+    if (!(length > 1e-6f) || !std::isfinite(length)) {
+        return;
+    }
+    length = std::sqrt(length);
+    for (float& v : direction) v /= length;
+    galaxy::gx::set_game_sun(direction, length);
+    static std::uint32_t traced = 0u;
+    static const bool trace = [] {
+        char value[8]{};
+        std::size_t length = 0u;
+        return getenv_s(&length, value, sizeof(value), "GALAXY_TRACE_LIGHTS") == 0 && length > 1u &&
+               value[0] == '1';
+    }();
+    if (trace && (traced++ % 600u) == 0u) {
+        char line[224];
+        std::snprintf(line, sizeof(line),
+                      "[game-light] vi=%u sun direction=(%.3f %.3f %.3f) distance=%.1f centre=(%.1f %.1f %.1f)\n",
+                      static_cast<unsigned>(state.vi_retrace_count), direction[0], direction[1], direction[2], length,
+                      std::bit_cast<float>(mem->read_u32(sun + 0xCu)), std::bit_cast<float>(mem->read_u32(sun + 0x10u)),
+                      std::bit_cast<float>(mem->read_u32(sun + 0x14u)));
+        std::cerr << line;
+    }
+}
+
+void handle_motion_signal(RuntimeState& state, std::uint32_t kind, std::uint32_t argument,
+                          const galaxy::PpcContext& context) {
+    switch (static_cast<galaxy::SiteHookKind>(kind)) {
+    case galaxy::SiteHookKind::Layout2D:
+        handle_layout_signal(state, argument, context);
+        return;
+    case galaxy::SiteHookKind::MotionCamera:
+        note_motion_camera(state, argument, context);
+        return;
+    case galaxy::SiteHookKind::MotionObject:
+        note_motion_object(state, argument, context.gpr[3], context.gpr[31]);
+        return;
+    case galaxy::SiteHookKind::DrawCategory:
+        emit_motion_category(state, argument, context);
+        return;
+    case galaxy::SiteHookKind::DrawStripeParticle:
+        note_stripe_particle(state, argument, context);
+        return;
+    case galaxy::SiteHookKind::MirrorPass:
+        if (state.address_space != nullptr && galaxy::gx::draw_identity_wanted() &&
+            append_host_marker(state, galaxy::motion::kMarkerPass,
+                               static_cast<std::uint16_t>(argument == 0u ? galaxy::motion::PassMarker::MirrorBegin
+                                                                         : galaxy::motion::PassMarker::MirrorEnd),
+                               0u, 0u) &&
+            argument == 0u) {
+            ++state.motion_mirror_passes;
+        }
+        return;
+    case galaxy::SiteHookKind::LightLoad:
+        if (argument == static_cast<std::uint32_t>(galaxy::motion::LightSite::PointRequest)) {
+            note_point_request(state, context);
+            return;
+        }
+        trace_game_light(state, argument, context.gpr[3]);
+        note_game_light(state, argument, context.gpr[3]);
+        if (state.draw_identity_scene && state.address_space != nullptr &&
+            append_host_marker(state, galaxy::motion::kMarkerLight, static_cast<std::uint16_t>(argument),
+                               argument <= static_cast<std::uint32_t>(galaxy::motion::LightSite::PointLight)
+                                   ? context.gpr[3]
+                                   : 0u,
+                               light_follow_bits(state, argument, context.gpr[3]))) {
+            ++state.motion_light_markers;
+        }
+        return;
+    default:
+        return;
+    }
 }
 
 RuntimeState::FunctionAsyncCausalityObservation
@@ -15482,12 +16288,35 @@ std::uint64_t indeterminate_slot_xfb_preserve_vis() {
     return value;
 }
 
+// VISetBlack clears the active video lines (ACV) of the VI's vertical timing register, so the
+// display shows black whatever the XFB holds. JUTVideo::preRetraceProc does so while a black
+// frame count runs and while no drawn XFB exists, around scene changes. A register never
+// written (before VIConfigure) is not black. GALAXY_VI_BLACK=0 ignores it (A/B).
+bool vi_output_black(const galaxy::host::GuestAddressSpace& address_space) {
+    static const bool honoured = read_env_flag("GALAXY_VI_BLACK", true);
+    constexpr std::uint32_t kViVerticalTiming = 0xCC002000u;
+    const std::uint32_t vtr = address_space.read_u32(kViVerticalTiming) >> 16u;
+    return honoured && vtr != 0u && ((vtr >> 4u) & 0x3FFu) == 0u;
+}
+
 std::uint32_t current_displayed_xfb_addr(RuntimeState& state) {
     if (state.address_space == nullptr) {
         return 0;
     }
 
     const auto& address_space = *state.address_space;
+    if (vi_output_black(address_space)) {
+        if (state.vi_black_since == 0u) {
+            state.vi_black_since = std::max<std::uint64_t>(state.vi_retrace_count, 1u);
+            std::cerr << "[vi] black from vi=" << state.vi_retrace_count << '\n';
+        }
+        return galaxy::gx::kNoDisplayedXfbAddr;
+    }
+    if (state.vi_black_since != 0u) {
+        std::cerr << "[vi] black ends vi=" << state.vi_retrace_count
+                  << " retraces=" << state.vi_retrace_count - state.vi_black_since << '\n';
+        state.vi_black_since = 0u;
+    }
     const bool has_any_xfb_copy = galaxy::gx::xfb_copy_count() != 0u;
     constexpr std::uint32_t kJutXfbManagerPtr = 0x806A2868u;
     const std::uint32_t xfb = address_space.read_u32(kJutXfbManagerPtr);
@@ -18512,7 +19341,9 @@ void dump_exact_vi_deadline_audit(
                << " early-publications=" << stats.early_publication_edges
                << " arithmetic-failures=" << stats.arithmetic_failures
                << " locked-rate-valid="
-               << (stats.locked_rate_valid ? 1 : 0);
+               << (stats.locked_rate_valid ? 1 : 0)
+               << " unpublished-backlog-retries="
+               << state.vi_unpublished_backlog_retries;
     }
     if (state.deadline_broker != nullptr) {
         const galaxy::timing::DeadlinePublicationStats publication =
@@ -18860,6 +19691,14 @@ void wake_idle_simulation_thread(void* user) noexcept {
     }
 }
 
+// Some due VI deadline is not published yet: the broker is late (by up to a period while
+// AwaitingPublication, by more in a Backlog it has not caught up with).
+bool vi_publication_late(const galaxy::timing::PeriodicDeadlineObservation& observation) noexcept {
+    using Status = galaxy::timing::PeriodicConsumeStatus;
+    return (observation.status == Status::AwaitingPublication || observation.status == Status::Backlog) &&
+           observation.pending_edges < observation.scheduled_due_edges;
+}
+
 void wait_for_exact_vi_deadline(
     RuntimeState& state,
     galaxy::PpcContext* context,
@@ -18898,9 +19737,14 @@ void wait_for_exact_vi_deadline(
                 now_ticks);
         if (observation.status !=
                 galaxy::timing::PeriodicConsumeStatus::NotDue &&
-            observation.status !=
-                galaxy::timing::PeriodicConsumeStatus::AwaitingPublication) {
+            !vi_publication_late(observation)) {
             return;
+        }
+        if (observation.scheduled_due_edges > 1u &&
+            state.vi_late_wake_sequence != observation.expected_sequence) {
+            // A period late: the worker was descheduled or its timer fired late.
+            state.vi_late_wake_sequence = observation.expected_sequence;
+            state.deadline_broker->wake_worker();
         }
 
         pump_due_os_events_except_vi(
@@ -19528,6 +20372,10 @@ bool dispatch_vi_retrace(
         // broker publishes its edge. The level consumer leaves this partial
         // batch intact and returns no event. Retry at the next safepoint;
         // competing consumers and invalid identities still throw inside it.
+        if (state.deadline_events.pending(
+                galaxy::timing::EventKind::VideoInterface) == 0u) {
+            ++state.vi_unpublished_backlog_retries;
+        }
         return false;
     }
     state.last_vi_delivery_ticks = observation_ticks;
@@ -19774,6 +20622,7 @@ bool finalize_vi_retrace(
     }
 
     ++state.vi_retrace_count;
+    keep_point_requests(state);
     state.main_frame_trace_active.store(
         trace_main_frame_vi_window(state), std::memory_order_relaxed);
     if (trace_runtime_scaffolding() &&
@@ -22633,9 +23482,7 @@ bool arbitrate_external_before_decrementer(
             state.deadline_events,
             galaxy::timing::EventKind::VideoInterface,
             runtime_time_base_ticks(state));
-        force_due_vi_publication =
-            observation.status ==
-            galaxy::timing::PeriodicConsumeStatus::AwaitingPublication;
+        force_due_vi_publication = vi_publication_late(observation);
         // wait_for_exact_vi_deadline owns publication waiting. Re-entering its
         // force path would recurse; its latest exact sample instead decides
         // whether DEC was eligible before the VI edge.
@@ -23920,33 +24767,73 @@ bool coop_call_intercept(
     }
 }
 
-// Test hook: GALAXY_TEST_TELEPORT=x,y,z,frame places Mario with the game's
-// own MR::setPlayerPos once, at that GameScene draw, so a scripted run can
-// start anywhere in a stage.
+// GameScene draws seen by the test hooks, and the one at which the galaxy
+// tour last requested a stage.
+std::uint64_t test_scene_frames = 0u;
+std::uint64_t test_tour_stop_frame = 0u;
+
+// Test hook: GALAXY_TEST_TELEPORT=x,y,z,frame[/x,y,z,frame...] places Mario
+// with the game's own MR::setPlayerPos at each listed GameScene draw, so a
+// scripted run can start anywhere in a stage or visit several places. With
+// GALAXY_TEST_GALAXY_TOUR the frames count from the latest tour stop.
 void apply_test_teleport(RuntimeState& state, galaxy::PpcContext* context, galaxy::GuestMemoryV1* memory) {
     struct Teleport {
         float x = 0.0f, y = 0.0f, z = 0.0f;
         std::uint64_t frame = 0u;
-        bool armed = false;
     };
-    static Teleport teleport = [] {
-        Teleport result{};
-        char value[96]{};
+    static const std::vector<Teleport> teleports = [] {
+        std::vector<Teleport> result;
+        char value[1024]{};
         std::size_t length = 0;
         if (getenv_s(&length, value, sizeof(value), "GALAXY_TEST_TELEPORT") == 0 && length > 1) {
-            unsigned long long frame = 0u;
-            result.armed = sscanf_s(value, "%f,%f,%f,%llu", &result.x, &result.y, &result.z, &frame) == 4;
-            result.frame = frame;
+            std::istringstream list(value);
+            std::string entry;
+            while (std::getline(list, entry, '/')) {
+                Teleport t{};
+                unsigned long long frame = 0u;
+                if (sscanf_s(entry.c_str(), "%f,%f,%f,%llu", &t.x, &t.y, &t.z, &frame) == 4) {
+                    t.frame = frame;
+                    result.push_back(t);
+                }
+            }
         }
         return result;
     }();
-    static std::uint64_t scene_frames = 0u;
-    ++scene_frames;
-    // Held for 30 frames: Mario's own update re-derives his position until
-    // the game settles him there.
-    if (!teleport.armed || scene_frames < teleport.frame || scene_frames >= teleport.frame + 30u) {
+    static const bool touring = [] {
+        char value[MAX_PATH]{};
+        std::size_t length = 0;
+        return getenv_s(&length, value, sizeof(value), "GALAXY_TEST_GALAXY_TOUR") == 0 && length > 1;
+    }();
+    // GALAXY_GX_CAPTURE_REQUEST_FILE: one GX capture request 60 frames after
+    // each teleport, when Mario and the camera have settled.
+    static const std::string capture_request = [] {
+        char value[MAX_PATH]{};
+        std::size_t length = 0;
+        return getenv_s(&length, value, sizeof(value), "GALAXY_GX_CAPTURE_REQUEST_FILE") == 0 && length > 1
+            ? std::string(value) : std::string{};
+    }();
+    ++test_scene_frames;
+    if (teleports.empty() || (touring && test_tour_stop_frame == 0u)) {
         return;
     }
+    const std::uint64_t frame = test_scene_frames - test_tour_stop_frame;
+    if (!capture_request.empty()) {
+        for (std::size_t i = 0; i < teleports.size(); ++i) {
+            if (frame == teleports[i].frame + 60u) {
+                std::ofstream(capture_request, std::ios::trunc) << (i + 1u) << '\n';
+                std::cerr << "[test-teleport] capture request " << (i + 1u) << '\n';
+            }
+        }
+    }
+    // Held for 30 frames: Mario's own update re-derives his position until
+    // the game settles him there.
+    const auto it = std::find_if(teleports.begin(), teleports.end(), [frame](const Teleport& t) {
+        return frame >= t.frame && frame < t.frame + 30u;
+    });
+    if (it == teleports.end()) {
+        return;
+    }
+    const Teleport& teleport = *it;
     galaxy::coop::ThreadRegisters saved{};
     galaxy::coop::save_thread_registers(*context, saved);
     const std::uint32_t vector = (context->gpr[1] - 0x40u) & ~0xFu;
@@ -23958,9 +24845,221 @@ void apply_test_teleport(RuntimeState& state, galaxy::PpcContext* context, galax
     context->pc = 0x803F1F80u;
     call_guest_impl(&state, 0x803F1F80u, nullptr, context, memory);
     galaxy::coop::load_thread_registers(saved, *context);
-    if (scene_frames == teleport.frame) {
+    if (frame == teleport.frame) {
         std::cerr << "[test-teleport] " << teleport.x << ',' << teleport.y << ',' << teleport.z
                   << " at scene frame " << teleport.frame << '\n';
+    }
+}
+
+// The Comet Observatory's scenario for the save's progress: the game's own choice
+// (StorySequenceExecutor::calcAproposScenarioNoOnAstroGalaxy, 0x803BBB1C: 5, 3, 2, 4 or 1 by the save's events and
+// Grand Stars; it reads no member), the scenario a return from a galaxy enters.
+std::uint32_t observatory_scenario_for_save(RuntimeState& state, galaxy::PpcContext* context,
+                                            galaxy::GuestMemoryV1* memory) {
+    galaxy::coop::ThreadRegisters saved{};
+    galaxy::coop::save_thread_registers(*context, saved);
+    context->gpr[1] = (context->gpr[1] - 0x100u) & ~0xFu;
+    context->gpr[3] = 0u;
+    context->pc = 0x803BBB1Cu;
+    call_guest_impl(&state, 0x803BBB1Cu, nullptr, context, memory);
+    const std::uint32_t scenario = context->gpr[3];
+    galaxy::coop::load_thread_registers(saved, *context);
+    return scenario >= 1u && scenario <= 5u ? scenario : 1u;
+}
+
+// Grand Stars 1-count in the current save file. Grand Star n is power star 1 of a Bowser or Bowser Jr. stage (the
+// game's event flags SpecialStarGrand1-7 derive from them: GameEventFlagTable type 3, records at 0x8053BB40), recorded
+// with GameDataFunction::setGameFlagPowerStarSuccess (0x803AF8C0), the call a collected star makes. The Observatory's
+// domes and lights follow them; the game saves them with the file. The name is kept at 0x80002900, low memory beside
+// the stage names.
+void give_grand_stars(RuntimeState& state, galaxy::PpcContext* context, galaxy::GuestMemoryV1* memory,
+                      std::uint32_t count) {
+    static constexpr const char* kGrandStarStages[] = {"HeavensDoorGalaxy",   "TriLegLv1Galaxy",
+                                                       "KoopaBattleVs1Galaxy", "KoopaJrShipLv1Galaxy",
+                                                       "KoopaBattleVs2Galaxy", "FloaterOtaKingGalaxy",
+                                                       "KoopaBattleVs3Galaxy"};
+    constexpr std::uint32_t kStageName = 0x80002900u;
+    const std::uint32_t given = std::min<std::uint32_t>(count, 7u);
+    for (std::uint32_t n = 0u; n < given; ++n) {
+        const std::string_view text = kGrandStarStages[n];
+        std::array<std::byte, 32> name{};
+        std::transform(text.begin(), text.end(), name.begin(), [](char c) { return static_cast<std::byte>(c); });
+        state.address_space->copy(kStageName, name);
+        galaxy::coop::ThreadRegisters saved{};
+        galaxy::coop::save_thread_registers(*context, saved);
+        context->gpr[1] = (context->gpr[1] - 0x100u) & ~0xFu;
+        context->gpr[3] = kStageName;
+        context->gpr[4] = 1u;
+        context->gpr[5] = 1u;
+        context->pc = 0x803AF8C0u;
+        call_guest_impl(&state, 0x803AF8C0u, nullptr, context, memory);
+        galaxy::coop::load_thread_registers(saved, *context);
+    }
+    std::cerr << "[grand-stars] 1-" << given << " recorded\n";
+}
+
+// Test hook: GALAXY_TEST_GALAXY_TOUR=<file of "Stage scenario" lines> visits
+// those stages in turn with the game's own MR::requestChangeStageInGameMoving
+// (0x803F8328), GALAXY_TEST_GALAXY_TOUR_FRAMES 3D scene frames apart (default
+// 1200), so a hidden run can load every galaxy and scenario the game enters
+// (hidden scenarios are skipped). The stage name is kept at 0x80002800: low
+// memory between the exception vectors and the OS globals that no game code
+// uses, and the request keeps a pointer to it.
+void apply_test_galaxy_tour(RuntimeState& state, galaxy::PpcContext* context, galaxy::GuestMemoryV1* memory) {
+    struct Tour {
+        std::vector<std::pair<std::string, std::uint32_t>> stops;
+        std::uint64_t frames = 1200u;
+        std::size_t next = 0u;
+        std::uint64_t scene_frames = 0u;
+    };
+    static Tour tour = [] {
+        Tour result{};
+        char value[MAX_PATH]{};
+        std::size_t length = 0;
+        if (getenv_s(&length, value, sizeof(value), "GALAXY_TEST_GALAXY_TOUR") != 0 || length <= 1) {
+            return result;
+        }
+        std::ifstream list(value);
+        std::string stage;
+        std::uint32_t scenario = 0u;
+        while (list >> stage >> scenario) {
+            const std::uint32_t stars = galaxy::gx::galaxy_stage_stars(stage);
+            if (stage == galaxy::gx::kObservatoryId) {
+                // The Observatory's scenarios 1-5; 0 the save's (galaxy_select.h kObservatoryStates).
+                if (scenario <= 5u) {
+                    result.stops.emplace_back(stage, scenario);
+                } else {
+                    std::cerr << "[galaxy-tour] skipped " << stage << ' ' << scenario << ": states 0-5\n";
+                }
+            } else if (stars != 0u && (scenario == 0u || scenario > stars)) {
+                // A hidden scenario: see kGalaxyStages.
+                std::cerr << "[galaxy-tour] skipped " << stage << ' ' << scenario << ": the game enters 1-" << stars
+                          << '\n';
+            } else if (stage.size() < 63u) {
+                result.stops.emplace_back(stage, scenario);
+            }
+        }
+        result.frames = std::max<std::uint64_t>(read_env_u64("GALAXY_TEST_GALAXY_TOUR_FRAMES", 1200u), 60u);
+        std::cerr << "[galaxy-tour] stops=" << result.stops.size() << " frames=" << result.frames << '\n';
+        return result;
+    }();
+    if (tour.next >= tour.stops.size() || ++tour.scene_frames < tour.frames) {
+        return;
+    }
+    tour.scene_frames = 0u;
+    test_tour_stop_frame = test_scene_frames;
+    const auto& [stage, listed] = tour.stops[tour.next++];
+    std::uint32_t scenario = listed;
+    // GALAXY_TEST_GRAND_STARS=n: the save file holds Grand Stars 1-n from the first stop on.
+    static const std::uint32_t grand_stars = static_cast<std::uint32_t>(read_env_u64("GALAXY_TEST_GRAND_STARS", 0u));
+    if (grand_stars != 0u) {
+        give_grand_stars(state, context, memory, grand_stars);
+    }
+    if (stage == galaxy::gx::kObservatoryId && scenario == 0u) {
+        scenario = observatory_scenario_for_save(state, context, memory);
+    }
+    constexpr std::uint32_t kStageName = 0x80002800u;
+    std::array<std::byte, 64> name{};
+    std::transform(stage.begin(), stage.end(), name.begin(), [](char c) { return static_cast<std::byte>(c); });
+    state.address_space->copy(kStageName, name);
+    std::cerr << "[galaxy-tour] " << tour.next << '/' << tour.stops.size() << ' ' << stage << ' '
+              << scenario << '\n';
+    galaxy::coop::ThreadRegisters saved{};
+    galaxy::coop::save_thread_registers(*context, saved);
+    context->gpr[1] = (context->gpr[1] - 0x100u) & ~0xFu;
+    context->gpr[3] = kStageName;
+    context->gpr[4] = scenario;
+    context->pc = 0x803F8328u;
+    call_guest_impl(&state, 0x803F8328u, nullptr, context, memory);
+    galaxy::coop::load_thread_registers(saved, *context);
+}
+
+// GAME > GALAXY SELECT (galaxy/gx/galaxy_select.h): the game's names for the stages and their
+// stars once the page asks for them, and a travel request, both through the game's own functions
+// at a scene's start, as the galaxy tour. Names are looked up from 0x80002880 (the travel's stage
+// name stays at 0x80002800, where the stage change keeps a pointer to it).
+void apply_galaxy_select(RuntimeState& state, galaxy::PpcContext* context, galaxy::GuestMemoryV1* memory) {
+    if (!galaxy::gx::galaxy_select_enabled() || state.address_space == nullptr) {
+        return;
+    }
+    const auto write_name = [&](std::uint32_t address, const char* id) {
+        std::array<std::byte, 64> name{};
+        for (std::size_t i = 0; id[i] != '\0' && i < 63u; ++i) {
+            name[i] = static_cast<std::byte>(id[i]);
+        }
+        state.address_space->copy(address, name);
+    };
+    const auto call = [&](std::uint32_t function, std::uint32_t r3, std::uint32_t r4) {
+        galaxy::coop::ThreadRegisters saved{};
+        galaxy::coop::save_thread_registers(*context, saved);
+        context->gpr[1] = (context->gpr[1] - 0x100u) & ~0xFu;
+        context->gpr[3] = r3;
+        context->gpr[4] = r4;
+        context->pc = function;
+        call_guest_impl(&state, function, nullptr, context, memory);
+        const std::uint32_t result = context->gpr[3];
+        galaxy::coop::load_thread_registers(saved, *context);
+        return result;
+    };
+    const auto read_message = [&](std::uint32_t address) {
+        std::vector<std::uint16_t> units;
+        for (std::uint32_t i = 0; i < 64u && address != 0u; ++i) {
+            const std::uint32_t at = address + i * 2u;
+            std::uint32_t word = 0u;
+            if (!try_read_guest_u32(*state.address_space, at & ~3u, word)) {
+                break;
+            }
+            const auto unit = static_cast<std::uint16_t>((at & 2u) != 0u ? (word & 0xFFFFu) : (word >> 16u));
+            if (unit == 0u || unit == 0x1Au) {
+                break;  // the end, or a control sequence (names carry none)
+            }
+            units.push_back(unit);
+        }
+        return galaxy::gx::galaxy_select_text(units);
+    };
+    if (galaxy::gx::galaxy_select_names_wanted()) {
+        constexpr std::uint32_t kLookupName = 0x80002880u;
+        std::vector<std::string> galaxies;
+        std::vector<std::vector<std::string>> stars;
+        for (const galaxy::gx::GalaxyStage& stage : galaxy::gx::kGalaxyStages) {
+            if (std::string_view(stage.id) == galaxy::gx::kObservatoryId) {
+                // Not a galaxy to the game's message lookups: its states.
+                galaxies.emplace_back(galaxy::gx::kObservatoryName);
+                stars.emplace_back(std::begin(galaxy::gx::kObservatoryStates), std::end(galaxy::gx::kObservatoryStates));
+                continue;
+            }
+            write_name(kLookupName, stage.id);
+            galaxies.push_back(read_message(call(0x803E7D78u, kLookupName, 0u)));  // getGalaxyNameOnCurrentLanguage
+            std::vector<std::string> names;
+            for (std::uint32_t star = 1u; star <= stage.stars; ++star) {
+                write_name(kLookupName, stage.id);
+                names.push_back(read_message(call(0x803E7E18u, kLookupName, star)));  // getScenarioNameOnCurrentLanguage
+            }
+            stars.push_back(std::move(names));
+        }
+        galaxy::gx::set_galaxy_select_names(std::move(galaxies), std::move(stars));
+        std::cerr << "[galaxy-select] names read\n";
+    }
+    std::size_t stage = 0u;
+    std::uint32_t star = 0u;
+    if (galaxy::gx::take_grand_stars()) {
+        // GRAND STARS: the flags, then the Observatory in the state they give.
+        give_grand_stars(state, context, memory, galaxy::gx::kGrandStarsGiven);
+        for (std::size_t i = 0; i < galaxy::gx::kGalaxyStageCount; ++i) {
+            if (std::string_view(galaxy::gx::kGalaxyStages[i].id) == galaxy::gx::kObservatoryId) {
+                galaxy::gx::request_galaxy_travel(i, 1u);
+            }
+        }
+    }
+    if (galaxy::gx::take_galaxy_travel(stage, star)) {
+        constexpr std::uint32_t kStageName = 0x80002800u;
+        write_name(kStageName, galaxy::gx::kGalaxyStages[stage].id);
+        if (std::string_view(galaxy::gx::kGalaxyStages[stage].id) == galaxy::gx::kObservatoryId) {
+            // The Observatory in the save's state.
+            star = observatory_scenario_for_save(state, context, memory);
+        }
+        std::cerr << "[galaxy-select] " << galaxy::gx::kGalaxyStages[stage].id << ' ' << star << '\n';
+        (void)call(0x803F8328u, kStageName, star);  // MR::requestChangeStageInGameMoving
     }
 }
 
@@ -23999,6 +25098,8 @@ void call_guest_impl_body(
         state.address_space->flush_wgpipe_gather_tail_for_frame();
         if (guest_address == 0x8033EE8Cu) {
             apply_test_teleport(state, context, memory);
+            apply_test_galaxy_tour(state, context, memory);
+            apply_galaxy_select(state, context, memory);
             // MR::getCameraViewMtx (0x803C73CC): *(r13 - 0x3A78) -> +0x24 ->
             // +0xAC -> +0x10 -> scene object 0x17 (CameraContext) -> view
             // matrix at +0x0C. Motion vectors and interpolation use it for
@@ -24022,11 +25123,41 @@ void call_guest_impl_body(
                     galaxy::gx::attach_scene_view(view);
                 }
             }
+            // The star core: LiveActor position +0x0C, scale +0x24, while its vtable holds.
+            if (state.astro_core != 0u && read_guest_u32_or_zero(space, state.astro_core) == 0x80579720u) {
+                std::array<float, 3> position{};
+                for (unsigned i = 0; i < 3u; ++i) {
+                    position[i] = std::bit_cast<float>(
+                        read_guest_u32_or_zero(space, state.astro_core + galaxy::motion::kActorPosition + 4u * i));
+                }
+                const float scale = std::bit_cast<float>(read_guest_u32_or_zero(space, state.astro_core + 0x24u));
+                if (std::isfinite(position[0]) && std::isfinite(position[1]) && std::isfinite(position[2]) &&
+                    std::isfinite(scale) && scale > 0.0f) {
+                    galaxy::gx::set_star_core(position, scale);
+                }
+            }
         }
         galaxy::gx::attach_fifo_marker(
             guest_address == 0x8033EE8Cu ? galaxy::gx::FifoMarker::SceneBegin
                                          : galaxy::gx::FifoMarker::SceneEnd,
             state.address_space->gx_fifo_data().size());
+        state.draw_identity_scene =
+            guest_address == 0x8033EE8Cu && galaxy::gx::draw_identity_wanted();
+        if (guest_address == 0x8033EE8Cu) {
+            // The scene's first marker: the game's camera epoch and object
+            // epoch bumps since the previous scene (galaxy/motion_signals.h).
+            ++state.motion_scene_serial;
+            if (state.draw_identity_scene) {
+                emit_scene_signal_marker(state);
+            }
+            // GameScene::draw runs draw2D after draw3D: a 3D scene with no
+            // draw2D before the next one is a frame without the 2D layer.
+            if (state.motion_scene_serial > 1u && !state.layout_2d_since_scene) {
+                ++state.layout_3d_without_2d;
+            }
+            state.layout_2d_since_scene = false;
+            state.layout_after_2d = false;
+        }
     }
     const auto mouse_boundary_object=context->gpr[3];
     guest_address = normalize_executable_address(state, guest_address);
@@ -31505,7 +32636,7 @@ public:
         char narrow[MAX_PATH * 3]{};
         (void)WideCharToMultiByte(CP_UTF8, 0, path_, -1, narrow, static_cast<int>(sizeof(narrow)), nullptr, nullptr);
         std::fprintf(stderr, "[crash] log=%s\n", narrow);
-        std::fflush(stderr);
+        galaxy::output::drain_relay(std::chrono::milliseconds(1000));
     }
     CrashLog(const CrashLog&) = delete;
     CrashLog& operator=(const CrashLog&) = delete;
@@ -31764,7 +32895,7 @@ static LONG WINAPI galaxy_unhandled_exception_filter(
             static_cast<unsigned long>(GetCurrentThreadId()));
         print_guest_crash_report(record.ExceptionAddress, crash_module, log);
     }
-    std::fflush(stderr);
+    galaxy::output::drain_relay(std::chrono::milliseconds(1000));
     return EXCEPTION_EXECUTE_HANDLER;
 }
 
@@ -32276,6 +33407,8 @@ static void print_runtime_usage() {
 int wmain(int argc, wchar_t** argv) {
     // First statement: before any allocation or assertion.
     disable_runtime_dialogs();
+    // Before any output or thread: a slow log reader never stalls the game (galaxy/output_relay.h).
+    galaxy::output::start_relay();
     // Every aspect setting, 4:3 included, runs through the live aspect path
     // so it can change during play. Set before any module loads; explicit
     // aspect variables (tests, older launchers) are kept.
@@ -32973,6 +34106,29 @@ int wmain(int argc, wchar_t** argv) {
                     }
                 }
                 state.pending_draw_done_submissions.audit_drained();
+                // A VI boundary stopped while its frame token was pending
+                // (the render thread was still on that frame): its token is
+                // newer than every draw-done receipt, so consume it last.
+                if (state.pending_vi_boundary.snapshot().phase ==
+                    galaxy::vi::BoundaryPhase::TokenPending) {
+                    const auto token = state.pending_vi_boundary.snapshot().token;
+                    const auto start = std::chrono::steady_clock::now();
+                    while (!galaxy::gx::wait_for_frame_pe_completion_for(token, 0u)) {
+                        if (std::chrono::steady_clock::now() - start >=
+                            std::chrono::milliseconds(
+                                galaxy::gx::kFramePeCooperativeWaitTimeoutMs)) {
+                            throw RuntimeFailure(
+                                "shutdown VI PE token exceeded its absolute budget");
+                        }
+                        if (!wait_realtime_vi_duration_high_res(
+                                std::chrono::milliseconds(1))) {
+                            SwitchToThread();
+                        }
+                    }
+                    if (!state.pending_vi_boundary.mark_token_consumed(token)) {
+                        throw RuntimeFailure("shutdown VI token lost exact ownership");
+                    }
+                }
             } catch (const std::exception& error) {
                 if (cleanup_failure == nullptr) {
                     cleanup_failure = std::current_exception();
@@ -32987,6 +34143,8 @@ int wmain(int argc, wchar_t** argv) {
                           << " bytes=" << state.gx_stream_bytes
                           << " deferred=" << state.gx_stream_deferred
                           << " queue-full=" << state.gx_stream_queue_full << '\n';
+                std::cerr << "[draw-identity-audit] markers=" << state.draw_identity_markers
+                          << " dropped=" << state.draw_identity_dropped << '\n';
                 std::cerr << "[draw-done-submit-audit] enabled="
                           << (submit_gx_at_draw_done_wait_enabled() ? 1 : 0)
                           << " attempts=" << state.draw_done_submit_attempts
@@ -33074,6 +34232,7 @@ int wmain(int argc, wchar_t** argv) {
     auto finish_process = [](UINT exit_code) {
         std::cout.flush();
         std::cerr.flush();
+        galaxy::output::drain_relay(std::chrono::milliseconds(2000));
         ExitProcess(exit_code);
     };
 
@@ -33488,8 +34647,24 @@ int wmain(int argc, wchar_t** argv) {
     services.site_hook = +[](void* user, std::uint32_t guest_pc, std::uint32_t kind,
                              std::uint32_t argument, galaxy::PpcContext* context,
                              galaxy::GuestMemoryV1* memory) {
-        galaxy::dispatch_site_hook(static_cast<RuntimeState*>(user)->services, guest_pc, kind,
-                                   argument, context, memory);
+        auto& runtime = *static_cast<RuntimeState*>(user);
+        if (kind >= static_cast<std::uint32_t>(galaxy::SiteHookKind::DrawShapePacket) &&
+            kind <= static_cast<std::uint32_t>(galaxy::SiteHookKind::DrawParticle)) {
+            if (runtime.draw_identity_scene) {
+                emit_draw_identity_marker(runtime, kind, argument, *context);
+            }
+            return;
+        }
+        if (kind >= static_cast<std::uint32_t>(galaxy::SiteHookKind::MotionCamera) &&
+            kind <= static_cast<std::uint32_t>(galaxy::SiteHookKind::Layout2D)) {
+            handle_motion_signal(runtime, kind, argument, *context);
+            return;
+        }
+        if (kind == static_cast<std::uint32_t>(galaxy::SiteHookKind::SunCenter)) {
+            note_game_sun(runtime, *context);
+            return;
+        }
+        galaxy::dispatch_site_hook(runtime.services, guest_pc, kind, argument, context, memory);
     };
     build_direct_dispatch_table(state, function_records_fn);
     if (!state.direct_dispatch_table.empty()) {

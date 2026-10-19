@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/gx/upload_ring.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cstring>
 #include <iostream>
@@ -25,19 +26,23 @@ namespace galaxy::gx {
 // UploadRing
 // ---------------------------------------------------------------------------
 
+namespace {
+std::atomic<std::uint64_t> g_upload_ring_identity{1};
+}  // namespace
+
 void UploadRing::reset() noexcept {
     *this = UploadRing{};
 }
 
 bool UploadRing::initialize(
     gpu::Device* device, const char* name, std::size_t bytes_per_frame,
-    unsigned frames_in_flight) {
+    unsigned frames_in_flight, std::size_t capacity) {
     if (device == nullptr || bytes_per_frame == 0u || frames_in_flight == 0u ||
         bytes_per_frame > std::numeric_limits<std::size_t>::max() / frames_in_flight) {
         return false;
     }
     // Prepare all fallible state before replacing the retained mapped buffer.
-    const std::size_t total = bytes_per_frame * frames_in_flight;
+    const std::size_t total = std::max(bytes_per_frame * frames_in_flight, capacity);
     gpu::UploadMemory memory = gpu::create_upload_memory(device, total, name);
     if (!memory) {
         return false;
@@ -54,9 +59,29 @@ bool UploadRing::initialize(
     name_ = name != nullptr ? name : "";
     bytes_per_frame_ = bytes_per_frame;
     frames_in_flight_ = frames_in_flight;
-    static std::atomic<std::uint64_t> next_identity{1};
-    resource_identity_ = next_identity.fetch_add(1, std::memory_order_relaxed);
+    capacity_ = total;
+    resource_identity_ = g_upload_ring_identity.fetch_add(1, std::memory_order_relaxed);
     slot_generations_ = std::move(generations);
+    segment_base_ = cursor_ = 0u;
+    active_slot_ = 0u;
+    frame_ready_ = false;
+    segment_allocation_pending_ = true;
+    reused_bytes_ = copied_bytes_ = 0u;
+    immutable_upload_calls_ = 0u;
+    peak_bytes_per_frame_ = 0u;
+    return true;
+}
+
+bool UploadRing::resegment(std::size_t bytes_per_frame, unsigned frames_in_flight) {
+    if (!buffer_ || mapped_ == nullptr || bytes_per_frame == 0u || frames_in_flight == 0u ||
+        bytes_per_frame > capacity_ / frames_in_flight) {
+        return false;
+    }
+    bytes_per_frame_ = bytes_per_frame;
+    frames_in_flight_ = frames_in_flight;
+    // A new identity: no immutable-upload token of the old segmentation matches.
+    resource_identity_ = g_upload_ring_identity.fetch_add(1, std::memory_order_relaxed);
+    slot_generations_.assign(frames_in_flight, 0u);
     segment_base_ = cursor_ = 0u;
     active_slot_ = 0u;
     frame_ready_ = false;

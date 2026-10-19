@@ -320,6 +320,99 @@ bool test_generated_mip_uniform_alpha() {
     return true;
 }
 
+bool test_flatten_texel_checker() {
+    using galaxy::gx::RGBA8;
+    const auto checker = [](std::uint32_t width, std::uint32_t height, RGBA8 even, RGBA8 odd) {
+        std::vector<RGBA8> pixels(static_cast<std::size_t>(width) * height);
+        for (std::uint32_t y = 0u; y < height; ++y) {
+            for (std::uint32_t x = 0u; x < width; ++x) pixels[y * width + x] = ((x + y) & 1u) == 0u ? even : odd;
+        }
+        return pixels;
+    };
+    // The sky's DotNoise (I4 238/255) becomes one level of 247.
+    auto dots = checker(128u, 128u, {238, 238, 238, 238}, {255, 255, 255, 255});
+    if (!expect(galaxy::gx::detail::flatten_texel_checker(dots, 128u, 128u), "a one-texel checker is a dither")) return false;
+    for (const RGBA8& pixel : dots) {
+        if (!expect(pixel.r == 247u && pixel.g == 247u && pixel.b == 247u && pixel.a == 247u,
+                    "a flattened checker is its two values' rounded average")) return false;
+    }
+    // Content is never touched: a texel off the pattern, a uniform level, a two-texel checker, a thin strip.
+    auto broken = checker(64u, 64u, {242, 238, 234, 255}, {247, 243, 239, 255});
+    broken[64u * 30u + 17u] = {0, 0, 0, 255};
+    const auto broken_before = broken;
+    auto uniform = std::vector<RGBA8>(64u, RGBA8{10, 20, 30, 255});
+    std::vector<RGBA8> squares(16u * 16u);
+    for (std::uint32_t y = 0u; y < 16u; ++y) {
+        for (std::uint32_t x = 0u; x < 16u; ++x) {
+            squares[y * 16u + x] = (((x >> 1u) + (y >> 1u)) & 1u) == 0u ? RGBA8{0, 0, 0, 255} : RGBA8{255, 255, 255, 255};
+        }
+    }
+    auto strip = checker(64u, 2u, {0, 0, 0, 255}, {255, 255, 255, 255});
+    const bool untouched = !galaxy::gx::detail::flatten_texel_checker(broken, 64u, 64u) &&
+        !galaxy::gx::detail::flatten_texel_checker(uniform, 8u, 8u) &&
+        !galaxy::gx::detail::flatten_texel_checker(squares, 16u, 16u) &&
+        !galaxy::gx::detail::flatten_texel_checker(strip, 64u, 2u);
+    bool same = true;
+    for (std::size_t i = 0u; i < broken.size(); ++i) {
+        same &= broken[i].r == broken_before[i].r && broken[i].g == broken_before[i].g && broken[i].b == broken_before[i].b;
+    }
+    return expect(untouched && same, "only a whole-level one-texel checker of at least 4x4 is flattened");
+}
+
+bool test_remove_texel_checker() {
+    using galaxy::gx::RGBA8;
+    // Art under a baked dither: a smooth ramp in red and green with a +-6 one-texel checker, alpha a ramp of its own.
+    constexpr std::uint32_t kSize = 64u;
+    std::vector<RGBA8> art(kSize * kSize);
+    std::vector<RGBA8> dithered(kSize * kSize);
+    for (std::uint32_t y = 0u; y < kSize; ++y) {
+        for (std::uint32_t x = 0u; x < kSize; ++x) {
+            const RGBA8 smooth{static_cast<std::uint8_t>(40u + 2u * x), static_cast<std::uint8_t>(60u + 2u * y), 120u,
+                               static_cast<std::uint8_t>(3u * x)};
+            const std::int32_t k = ((x + y) & 1u) == 0u ? 6 : -6;
+            art[y * kSize + x] = smooth;
+            dithered[y * kSize + x] = {static_cast<std::uint8_t>(smooth.r + k), static_cast<std::uint8_t>(smooth.g + k),
+                                       static_cast<std::uint8_t>(smooth.b + k), smooth.a};
+        }
+    }
+    if (!expect(galaxy::gx::detail::remove_texel_checker(dithered, kSize, kSize), "a checker over content is a dither")) {
+        return false;
+    }
+    for (std::uint32_t y = 1u; y + 1u < kSize; ++y) {
+        for (std::uint32_t x = 1u; x + 1u < kSize; ++x) {
+            const RGBA8 a = art[y * kSize + x];
+            const RGBA8 b = dithered[y * kSize + x];
+            if (!expect(std::abs(a.r - b.r) <= 1 && std::abs(a.g - b.g) <= 1 && std::abs(a.b - b.b) <= 1 && a.a == b.a,
+                        "the checker goes, the art and alpha stay")) {
+                return false;
+            }
+        }
+    }
+    // Content is never touched: the smooth art alone, noise, a two-texel checker.
+    auto smooth = art;
+    std::vector<RGBA8> noise(kSize * kSize);
+    std::uint32_t seed = 12345u;
+    for (RGBA8& p : noise) {
+        seed = seed * 1664525u + 1013904223u;
+        p = {static_cast<std::uint8_t>(seed >> 24u), static_cast<std::uint8_t>(seed >> 16u), static_cast<std::uint8_t>(seed >> 8u), 255u};
+    }
+    const auto noise_before = noise;
+    std::vector<RGBA8> squares(kSize * kSize);
+    for (std::uint32_t y = 0u; y < kSize; ++y) {
+        for (std::uint32_t x = 0u; x < kSize; ++x) {
+            squares[y * kSize + x] = (((x >> 1u) + (y >> 1u)) & 1u) == 0u ? RGBA8{0, 0, 0, 255} : RGBA8{255, 255, 255, 255};
+        }
+    }
+    const bool untouched = !galaxy::gx::detail::remove_texel_checker(smooth, kSize, kSize) &&
+                           !galaxy::gx::detail::remove_texel_checker(noise, kSize, kSize) &&
+                           !galaxy::gx::detail::remove_texel_checker(squares, kSize, kSize);
+    bool same = true;
+    for (std::size_t i = 0u; i < noise.size(); ++i) {
+        same &= noise[i].r == noise_before[i].r && noise[i].g == noise_before[i].g && noise[i].b == noise_before[i].b;
+    }
+    return expect(untouched && same, "only texel-scale detail in one checker phase is removed");
+}
+
 bool test_cmpr_tile_decode() {
     using galaxy::gx::RGBA8;
     constexpr std::array<std::uint32_t, 12> dimensions{
@@ -3313,6 +3406,8 @@ int main(int argc, char** argv) {
     passed &= test_intensity_tile_decode();
     passed &= test_rgba8_tile_decode();
     passed &= test_generated_mip_uniform_alpha();
+    passed &= test_flatten_texel_checker();
+    passed &= test_remove_texel_checker();
     passed &= test_cmpr_tile_decode();
     passed &= test_small_index_tile_decode();
     passed &= test_clear_precision();
