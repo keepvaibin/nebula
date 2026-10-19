@@ -764,6 +764,9 @@ private:
     // semaphore (Frame), independent of the frame slots.
     std::array<Frame, 3> subframes_{};
     unsigned subframe_next_ = 0;
+    // Each sub-frame's GPU time (its evaluation's start to its present's end): the interpolation's GPU governor.
+    VkQueryPool subframe_timestamps_ = VK_NULL_HANDLE;
+    std::array<bool, 3> subframe_timestamp_pending_{};
     bool subframe_capture_ = false;
     double subframe_gpu_ema_ms_ = 0.0;
     double subframe_gpu_ms_ = 0.0;

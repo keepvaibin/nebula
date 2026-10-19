@@ -1330,6 +1330,25 @@ bool RendererVk::present_replay_subframe(const SubframeTime& time, const Affine3
     if (slot.fence != 0u) {
         wait_for_fence_value(slot.fence);
     }
+    const auto index = static_cast<std::uint32_t>(&slot - subframes_.data());
+    if (subframe_timestamps_ == VK_NULL_HANDLE && timestamps_ != VK_NULL_HANDLE) {
+        VkQueryPoolCreateInfo query_info{VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
+        query_info.queryType = VK_QUERY_TYPE_TIMESTAMP;
+        query_info.queryCount = static_cast<std::uint32_t>(subframes_.size()) * 2u;
+        vk::check(vkCreateQueryPool(device, &query_info, nullptr, &subframe_timestamps_), "vkCreateQueryPool");
+    }
+    if (subframe_timestamp_pending_[index]) {
+        subframe_timestamp_pending_[index] = false;
+        std::uint64_t ticks[2]{};
+        if (vkGetQueryPoolResults(device, subframe_timestamps_, index * 2u, 2u, sizeof(ticks), ticks,
+                                  sizeof(std::uint64_t), VK_QUERY_RESULT_64_BIT) == VK_SUCCESS &&
+            ticks[1] >= ticks[0]) {
+            const double ms = static_cast<double>(ticks[1] - ticks[0]) * timestamp_period_ns_ / 1'000'000.0;
+            subframe_gpu_ms_ += ms;
+            ++subframe_gpu_samples_;
+            subframe_gpu_ema_ms_ = subframe_gpu_ema_ms_ == 0.0 ? ms : subframe_gpu_ema_ms_ + (ms - subframe_gpu_ema_ms_) * 0.0625;
+        }
+    }
     slot.retired.clear();
     vk::check(vkResetCommandPool(device, slot.pool, 0), "vkResetCommandPool");
     vk::check(vkResetDescriptorPool(device, slot.descriptors, 0), "vkResetDescriptorPool");
@@ -1346,6 +1365,10 @@ bool RendererVk::present_replay_subframe(const SubframeTime& time, const Affine3
     VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     vk::check(vkBeginCommandBuffer(slot.uploads, &begin), "vkBeginCommandBuffer");
+    if (subframe_timestamps_ != VK_NULL_HANDLE) {
+        vkCmdResetQueryPool(slot.uploads, subframe_timestamps_, index * 2u, 2u);
+        vkCmdWriteTimestamp(slot.uploads, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, subframe_timestamps_, index * 2u);
+    }
     if (list->blend && !sequence_.validated) {
         record_blend_validation(slot.uploads);
         sequence_.validated = true;
@@ -1357,6 +1380,10 @@ bool RendererVk::present_replay_subframe(const SubframeTime& time, const Affine3
     efb_pass_open_ = false;
     swap_image_ = UINT32_MAX;
     (void)present(&subframe_xfb_, subframe_capture_);
+    if (subframe_timestamps_ != VK_NULL_HANDLE) {
+        vkCmdWriteTimestamp(slot.commands, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, subframe_timestamps_, index * 2u + 1u);
+        subframe_timestamp_pending_[index] = true;
+    }
     vk::check(vkEndCommandBuffer(slot.commands), "vkEndCommandBuffer");
     const VkCommandBuffer buffers[] = {slot.uploads, list->commands, slot.commands};
     const bool presenting = swap_image_ != UINT32_MAX;
@@ -1417,6 +1444,9 @@ void RendererVk::release_replay_resources() noexcept {
         if (list.descriptors != VK_NULL_HANDLE) vkDestroyDescriptorPool(device, list.descriptors, nullptr);
         list = ReplayList{};
     }
+    if (subframe_timestamps_ != VK_NULL_HANDLE) vkDestroyQueryPool(device, subframe_timestamps_, nullptr);
+    subframe_timestamps_ = VK_NULL_HANDLE;
+    subframe_timestamp_pending_ = {};
     for (Frame& slot : subframes_) {
         slot.retired.clear();
         if (slot.pool != VK_NULL_HANDLE) vkDestroyCommandPool(device, slot.pool, nullptr);
