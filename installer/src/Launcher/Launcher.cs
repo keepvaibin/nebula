@@ -298,7 +298,8 @@ namespace Nebula.Launcher
         private readonly Label frameRateLabel = new Label();
         private readonly List<int> interpolationChoices = new List<int>();
         private readonly NumericUpDown sharpness = new NumericUpDown();
-        private readonly CheckBox mipmaps = new CheckBox(), hudOutput = new CheckBox(), rayTracing = new CheckBox();
+        private readonly CheckBox mipmaps = new CheckBox(), occlusion = new CheckBox(), hudOutput = new CheckBox(),
+            rayTracing = new CheckBox();
         // The GPUs the game can run on, the automatic choice first; the Graphics card row shows with two or more.
         private readonly List<GpuAdapter> gpus = GpuAdapters.List(GraphicsSettings.PackagePrefersIntegratedGpu()) ?? new List<GpuAdapter>();
         private readonly ComboBox gpuBox = new ComboBox();
@@ -431,8 +432,12 @@ namespace Nebula.Launcher
             Row(image, "Lighting", lighting, ref y);
             mipmaps.Text = "Generated mipmaps";
             mipmaps.Location = new Point(12, y);
-            mipmaps.Size = new Size(600, 28);
+            mipmaps.Size = new Size(300, 28);
             image.Controls.Add(mipmaps);
+            occlusion.Text = "Ambient occlusion";
+            occlusion.Location = new Point(320, y);
+            occlusion.Size = new Size(300, 28);
+            image.Controls.Add(occlusion);
             y += 32;
             rayTracing.Text = "Ray tracing";
             rayTracing.Location = new Point(12, y);
@@ -916,6 +921,7 @@ namespace Nebula.Launcher
             textureFilter.SelectedIndex = graphics.TextureFilter;
             lighting.SelectedIndex = graphics.EnhancedLighting ? 0 : graphics.PerPixelLighting ? 1 : 2;
             mipmaps.Checked = graphics.GeneratedMipmaps;
+            occlusion.Checked = graphics.AmbientOcclusion;
             hudOutput.Checked = graphics.HudOutputResolution;
             rayTracing.Checked = graphics.RayTracing;
             rtQuality.SelectedIndex = Math.Max(0, Array.IndexOf(GraphicsSettings.RtQualityOrder, graphics.RtQuality));
@@ -1154,6 +1160,7 @@ namespace Nebula.Launcher
                 graphics.EnhancedLighting = lighting.SelectedIndex == 0;
                 graphics.PerPixelLighting = lighting.SelectedIndex <= 1;
                 graphics.GeneratedMipmaps = mipmaps.Checked;
+                graphics.AmbientOcclusion = occlusion.Checked;
                 graphics.HudOutputResolution = hudOutput.Checked;
                 if (rayTracingOffered)
                 {

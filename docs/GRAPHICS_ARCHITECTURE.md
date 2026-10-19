@@ -131,6 +131,16 @@ fails is replaced (SMAA by FXAA).
 Effect copies up to 320x228 (bloom, depth of field, Mario's shadow) are made at the game's own
 resolution, so their blur kernels keep their footprint at any internal scale.
 
+## Enhanced lighting and ambient occlusion
+
+Enhanced lighting (`enhanced_lighting.h`, `shader_gen.cpp` `kEnhancedLighting`) shades lit and
+environment-mapped draws per pixel from the game's GX lights: authored falloff summed in linear
+light, a sky hemisphere about the player's up (`GxVsConstants::sky_up`, from the 3D scene marker),
+the sky's Fresnel reflection, GGX highlights with specular antialiasing; the material table
+decides metal. Ambient occlusion (`ambient_occlusion.{h,cpp,hlsl}`) runs GTAO on the EFB depth
+when the first translucent phase begins and multiplies the opaque scene's colour; in-between
+frames replay it (`ReplayKind::SceneAo`).
+
 ## HUD separation and temporal inputs
 
 The game module routes two call sites through the host: `GameScene::draw3D` from

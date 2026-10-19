@@ -78,8 +78,8 @@ void attach_fifo_marker(FifoMarker marker, std::size_t fifo_offset) noexcept {
     backend().attach_fifo_marker(marker, fifo_offset);
 }
 
-void attach_scene_view(const float view[12]) noexcept {
-    backend().attach_scene_view(view);
+void attach_scene_view(const float view[12], const float* up) noexcept {
+    backend().attach_scene_view(view, up);
 }
 
 bool draw_identity_wanted() noexcept {

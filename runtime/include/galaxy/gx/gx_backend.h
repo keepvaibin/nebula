@@ -246,10 +246,16 @@ public:
             const std::uint8_t index = producer_fifo_marker_count_++;
             producer_fifo_markers_[index] = {fifo_offset, marker};
             producer_fifo_marker_views_[index] = producer_scene_view_;
+            producer_fifo_marker_sky_up_[index] = producer_scene_sky_up_;
             if (producer_scene_view_valid_ && marker == FifoMarker::SceneBegin) {
                 producer_fifo_marker_view_mask_ |= static_cast<std::uint8_t>(1u << index);
             } else {
                 producer_fifo_marker_view_mask_ &= static_cast<std::uint8_t>(~(1u << index));
+            }
+            if (producer_scene_view_valid_ && producer_scene_sky_up_known_ && marker == FifoMarker::SceneBegin) {
+                producer_fifo_marker_sky_up_mask_ |= static_cast<std::uint8_t>(1u << index);
+            } else {
+                producer_fifo_marker_sky_up_mask_ &= static_cast<std::uint8_t>(~(1u << index));
             }
         }
         producer_scene_view_valid_ = false;
@@ -270,10 +276,20 @@ public:
     [[nodiscard]] std::int64_t scene_2d_begin_offset() const noexcept { return scene_2d_begin_offset_; }
     [[nodiscard]] std::int64_t scene_2d_end_offset() const noexcept { return scene_2d_end_offset_; }
     [[nodiscard]] bool scene_2d_open() const noexcept { return scene_2d_open_; }
-    // Simulation thread: the game camera for the next SceneBegin marker.
-    void attach_scene_view(const float view[12]) noexcept {
+    // Simulation thread: the game camera for the next SceneBegin marker, and the player's up in the
+    // world (null when unknown), kept in that camera's eye space for the enhanced sky.
+    void attach_scene_view(const float view[12], const float* up = nullptr) noexcept {
         for (unsigned i = 0; i < 12u; ++i) producer_scene_view_[i] = view[i];
         producer_scene_view_valid_ = true;
+        producer_scene_sky_up_known_ = false;
+        if (up != nullptr) {
+            const float eye[3] = {view[0] * up[0] + view[1] * up[1] + view[2] * up[2],
+                                  view[4] * up[0] + view[5] * up[1] + view[6] * up[2],
+                                  view[8] * up[0] + view[9] * up[1] + view[10] * up[2]};
+            const float length2 = eye[0] * eye[0] + eye[1] * eye[1] + eye[2] * eye[2];
+            producer_scene_sky_up_known_ = std::isfinite(length2) && length2 > 1e-12f;
+            producer_scene_sky_up_ = producer_scene_sky_up_known_ ? encode_octahedral(eye) : 0u;
+        }
     }
     // One particle of a JPA stripe at `stream_offset` of the live GX stream
     // (its two strip vertices follow); carried by the next submission.
@@ -601,6 +617,9 @@ private:
         // mask marks marker i's view valid.
         std::array<std::array<float, 12>, kFifoMarkersPerChunk> fifo_marker_views{};
         std::uint8_t fifo_marker_view_mask = 0;
+        // The player's up per SceneBegin marker (GxVsConstants::sky_up); bit i of the mask marks it known.
+        std::array<std::uint32_t, kFifoMarkersPerChunk> fifo_marker_sky_up{};
+        std::uint8_t fifo_marker_sky_up_mask = 0;
         // JPA stripe particles in this chunk's FIFO (attach_stripe_particle).
         std::vector<StripeParticleMark> stripe_particles;
         std::uint64_t dependency_scan_ns = 0;
@@ -677,8 +696,14 @@ private:
     std::uint8_t producer_fifo_marker_count_ = 0;
     std::array<std::array<float, 12>, kFifoMarkersPerChunk> producer_fifo_marker_views_{};
     std::uint8_t producer_fifo_marker_view_mask_ = 0;
+    std::array<std::uint32_t, kFifoMarkersPerChunk> producer_fifo_marker_sky_up_{};
+    std::uint8_t producer_fifo_marker_sky_up_mask_ = 0;
     std::array<float, 12> producer_scene_view_{};
     bool producer_scene_view_valid_ = false;
+    std::uint32_t producer_scene_sky_up_ = 0u;
+    bool producer_scene_sky_up_known_ = false;
+    // Render thread: the scene's sky up changed; the next draw uploads its VS constants.
+    bool sky_up_dirty_ = false;
     std::vector<StripeParticleMark> producer_stripe_particles_;
     // Render thread: the chunk's stripe marks while its FIFO is parsed (log
     // recording), and the stripe vertices of the pending draw batch.
@@ -822,6 +847,11 @@ private:
     bool lit_late_ = false;             // a lit late opaque draw (output_flags bit 7: its light at most 1.15)
     bool rt_scene_traced_ = true;
     bool rt_view_set_ = false;
+    // Ambient occlusion (RenderConfig::ambient_occlusion, without traced lighting), sampled at each frame start; the
+    // scene's view is set (note_scene_ao_view) and the occlusion drawn (apply_scene_ao).
+    bool ambient_occlusion_ = false;
+    bool ao_view_set_ = false;
+    bool ao_scene_applied_ = true;
     [[nodiscard]] bool rt_geometry_draw() const noexcept;
     [[nodiscard]] bool rt_card_draw() const noexcept;
     [[nodiscard]] bool rt_alpha_draw() const noexcept;
@@ -837,6 +867,12 @@ private:
     [[nodiscard]] bool rt_water_draw() const noexcept;
     [[nodiscard]] bool rt_sprite_light_draw() const noexcept;
     void note_rt_phase(std::uint8_t phase);
+    // The view of a perspective scene draw for ambient occlusion: its projection with the upscaler's jitter, depth
+    // range and viewport (the ray tracer's RtView).
+    [[nodiscard]] RtView scene_depth_view(const ScaledGxViewport& viewport) const;
+    void note_scene_ao_view(const DrawCall& call);
+    // The scene's occlusion, once, before its first translucent phase (or at its end).
+    void apply_scene_ao();
     void trace_rt_scene();
     void trace_rt_water();
     // GALAXY_RT_MATERIALS: the census line of a scene draw (rt_surfaces.h).
@@ -1360,7 +1396,9 @@ private:
     void take_attached_pointer_depth_capture(FrameChunk& chunk, std::size_t fifo_size);
     void record_pointer_depth_capture_in_frame(FrameChunk& chunk);
     void take_attached_fifo_markers(FrameChunk& chunk, std::size_t fifo_size) noexcept;
-    void on_fifo_marker(FifoMarker marker, const std::array<float, 12>* view = nullptr);
+    // `sky_up`: the scene's GxVsConstants::sky_up when `sky_up_known` (SceneBegin).
+    void on_fifo_marker(FifoMarker marker, const std::array<float, 12>* view = nullptr, std::uint32_t sky_up = 0u,
+                        bool sky_up_known = false);
     // Temporal scene: jitter, palette base, transform record and motion
     // fields of a VS constant upload (`upload` is write-combined memory).
     void write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants& upload);

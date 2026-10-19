@@ -1184,7 +1184,7 @@ void svc_gx_scene_marker(void*, uint32_t marker, const float* view) {
     }
 #if defined(NEBULA_HOST_RENDERER)
     if (marker == NEBULA_SCENE_3D_BEGIN && view != nullptr) {
-        galaxy::gx::attach_scene_view(view);
+        galaxy::gx::attach_scene_view(view, view[15] != 0.0f ? view + 12 : nullptr);
     }
     static constexpr galaxy::gx::FifoMarker kMarkers[] = {
         galaxy::gx::FifoMarker::SceneBegin, galaxy::gx::FifoMarker::SceneEnd,

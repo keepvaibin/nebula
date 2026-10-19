@@ -130,8 +130,9 @@ void attach_pointer_depth_capture(
 // its parser reaches `fifo_offset` bytes into the submitted FIFO.
 void attach_fifo_marker(FifoMarker marker, std::size_t fifo_offset) noexcept;
 // Simulation thread, before attach_fifo_marker(SceneBegin): the game camera's
-// world-to-eye matrix (row-major 3x4) for that scene.
-void attach_scene_view(const float view[12]) noexcept;
+// world-to-eye matrix (row-major 3x4) for that scene, and the player's up in
+// the world (null when unknown: the enhanced sky then takes the view's up).
+void attach_scene_view(const float view[12], const float* up = nullptr) noexcept;
 // Simulation thread, at each SceneBegin: whether the renderer reads
 // draw-identity markers (frame interpolation or motion vectors are on).
 [[nodiscard]] bool draw_identity_wanted() noexcept;

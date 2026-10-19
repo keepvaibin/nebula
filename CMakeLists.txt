@@ -669,6 +669,28 @@ foreach(galaxy_smaa_preset LOW MEDIUM HIGH ULTRA)
         PASS_SMAA_WEIGHTS SMAA_PRESET_${galaxy_smaa_preset} smaa ps_5_0 PSMain)
 endforeach()
 
+# Ambient occlusion (runtime/src/gx/ambient_occlusion.hlsl), compiled by fxc like the post passes.
+set(galaxy_ao_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/gx/ambient_occlusion.hlsl")
+set(galaxy_ao_headers "")
+foreach(galaxy_ao_pass distance_cs:DepthCS:cs_5_0 occlusion_cs:AoCS:cs_5_0 denoise_cs:DenoiseCS:cs_5_0
+        apply_vs:ApplyVS:vs_5_0 apply_ps:ApplyPS:ps_5_0)
+    string(REPLACE ":" ";" galaxy_ao_pair "${galaxy_ao_pass}")
+    list(GET galaxy_ao_pair 0 galaxy_ao_name)
+    list(GET galaxy_ao_pair 1 galaxy_ao_entry)
+    list(GET galaxy_ao_pair 2 galaxy_ao_profile)
+    set(galaxy_ao_header "${galaxy_post_dir}/ao_${galaxy_ao_name}.h")
+    set(galaxy_ao_stage /DAO_GRAPHICS=1)
+    if(galaxy_ao_profile MATCHES "^cs_")
+        set(galaxy_ao_stage /DAO_COMPUTE=1)
+    endif()
+    add_custom_command(OUTPUT "${galaxy_ao_header}"
+        COMMAND "${GALAXY_FXC}" /nologo /T ${galaxy_ao_profile} /E ${galaxy_ao_entry} /O3 /Ges ${galaxy_ao_stage}
+            /Vn g_ao_${galaxy_ao_name} /Fh "${galaxy_ao_header}" "${galaxy_ao_hlsl}"
+        DEPENDS "${galaxy_ao_hlsl}"
+        VERBATIM)
+    list(APPEND galaxy_ao_headers "${galaxy_ao_header}")
+endforeach()
+
 # Ray-tracing compute shaders (runtime/src/gx/ray_tracing.hlsl: DXR 1.1 inline ray queries,
 # shader model 6.5) are compiled by the Windows SDK's DXC at build time into signed DXIL headers.
 find_program(GALAXY_DXC dxc
@@ -817,6 +839,8 @@ add_library(galaxy_gx STATIC
     runtime/src/gx/post_process.cpp
     runtime/src/gx/post_process_settings.cpp
     ${galaxy_post_headers}
+    runtime/src/gx/ambient_occlusion.cpp
+    ${galaxy_ao_headers}
     runtime/src/gx/temporal_upscaler.cpp
     runtime/src/gx/ray_tracing.cpp
     runtime/src/gx/game_lights.cpp

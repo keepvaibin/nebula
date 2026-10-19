@@ -4,6 +4,10 @@
 #include "Game/LiveActor/ModelManager.hpp"
 #include "Game/Map/LightDataHolder.hpp"
 #include "Game/NameObj/NameObj.hpp"
+#include "Game/Player/MarioActor.hpp"
+#include "Game/Player/MarioHolder.hpp"
+#include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/Util/CameraUtil.hpp"
 #include "Game/Screen/LayoutActor.hpp"
 #include "JSystem/J3DGraphAnimator/J3DModel.hpp"
 #include "JSystem/J3DGraphBase/J3DPacket.hpp"
@@ -180,6 +184,25 @@ namespace MotionSignal {
     void starPointerDirector(const void* pDirector) {
         if (__NebulaGXMarkers != 0) {
             layoutImpl(Kind_StarPointer, static_cast< u16 >(layoutAux() | Layout_StarPointerDirector), pDirector, nullptr);
+        }
+    }
+
+    void sceneCamera(f32 (*pOut)[4]) {
+        const TPos3f& view = MR::getCameraViewMtx();
+        for (int row = 0; row < 3; row++) {
+            for (int column = 0; column < 4; column++) {
+                pOut[row][column] = view.mMtx[row][column];
+            }
+        }
+        pOut[3][0] = pOut[3][1] = pOut[3][2] = pOut[3][3] = 0.0f;
+        if (MR::isExistSceneObj(SceneObj_MarioHolder) && MR::getMarioHolder()->getMarioActor() != nullptr) {
+            const TVec3f& gravity = MR::getMarioHolder()->getMarioActor()->getGravityVec();
+            if (gravity.x != 0.0f || gravity.y != 0.0f || gravity.z != 0.0f) {
+                pOut[3][0] = -gravity.x;
+                pOut[3][1] = -gravity.y;
+                pOut[3][2] = -gravity.z;
+                pOut[3][3] = 1.0f;
+            }
         }
     }
 

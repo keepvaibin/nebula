@@ -6885,6 +6885,7 @@ void GxBackend::note_stripe_particles(const FrameChunk& chunk) {
 void GxBackend::take_attached_fifo_markers(FrameChunk& chunk, std::size_t fifo_size) noexcept {
     chunk.fifo_marker_count = 0;
     chunk.fifo_marker_view_mask = 0;
+    chunk.fifo_marker_sky_up_mask = 0;
     for (std::uint8_t i = 0; i < producer_fifo_marker_count_; ++i) {
         if (producer_fifo_markers_[i].first <= fifo_size &&
             chunk.fifo_marker_count < chunk.fifo_markers.size()) {
@@ -6894,10 +6895,15 @@ void GxBackend::take_attached_fifo_markers(FrameChunk& chunk, std::size_t fifo_s
                 chunk.fifo_marker_views[index] = producer_fifo_marker_views_[i];
                 chunk.fifo_marker_view_mask |= static_cast<std::uint8_t>(1u << index);
             }
+            if ((producer_fifo_marker_sky_up_mask_ & (1u << i)) != 0u) {
+                chunk.fifo_marker_sky_up[index] = producer_fifo_marker_sky_up_[i];
+                chunk.fifo_marker_sky_up_mask |= static_cast<std::uint8_t>(1u << index);
+            }
         }
     }
     producer_fifo_marker_count_ = 0;
     producer_fifo_marker_view_mask_ = 0;
+    producer_fifo_marker_sky_up_mask_ = 0;
 }
 
 // A fresh InterpScene for the frame being recorded (its mirror pass or its 3D
@@ -7389,6 +7395,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
                          reasons, what);
         }
     };
+    note_scene_ao_view(call);
     if (!scene_phase_ || !(renderer_.rt_scene_open() || renderer_.rt_glow_open() || renderer_.rt_water_open() ||
                            renderer_.rt_late_open())) {
         outcome("closed");
@@ -7687,32 +7694,74 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         }
     }
     if (!rt_view_set_) {
-        // fill_vs_projection: D3D clip z = -(z E + F) (1 - 1e-7).
-        constexpr float kFarEps = 1.0f - 1e-7f;
-        RtView view{};
-        view.projection = {projection(0u), projection(1u), projection(2u), projection(3u)};
-        // The scene's depth is drawn with the temporal upscaler's jitter (apply_scene_jitter: clip x + jx w, so the
-        // projection's x offset B becomes B - jx; y likewise). The ray tracer rebuilds every sample's position from
-        // that depth: with the projection without the jitter each sample sat up to half a pixel off its surface, a
-        // different half each frame, and creases and edges alternated between their two surfaces' shading.
-        if (temporal_scene_ && state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u) {
-            const float scale = static_cast<float>(renderer_.efb_scale());
-            const float width = 2.0f * std::fabs(std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(xf::kViewportBase)))) * scale;
-            const float height = 2.0f * std::fabs(std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(xf::kViewportBase + 1u)))) * scale;
-            if (width > 0.0f && height > 0.0f) {
-                view.projection[1] -= 2.0f * scene_jitter_px_[0] / width;
-                view.projection[3] -= -2.0f * scene_jitter_px_[1] / height;
-            }
-        }
-        view.z_scale = -projection(4u) * kFarEps;
-        view.z_offset = -projection(5u) * kFarEps;
-        view.viewport = {viewport.x, viewport.y, viewport.width, viewport.height};
-        view.min_depth = viewport.min_depth;
-        view.max_depth = viewport.max_depth;
-        renderer_.rt_set_view(view);
+        renderer_.rt_set_view(scene_depth_view(viewport));
         rt_view_set_ = true;
     }
     return true;
+}
+
+RtView GxBackend::scene_depth_view(const ScaledGxViewport& viewport) const {
+    const auto projection = [this](unsigned i) {
+        return std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + i)));
+    };
+    // fill_vs_projection: D3D clip z = -(z E + F) (1 - 1e-7).
+    constexpr float kFarEps = 1.0f - 1e-7f;
+    RtView view{};
+    view.projection = {projection(0u), projection(1u), projection(2u), projection(3u)};
+    // The scene's depth is drawn with the temporal upscaler's jitter (apply_scene_jitter: clip x + jx w, so the
+    // projection's x offset B becomes B - jx; y likewise). Passes rebuild every sample's position from that depth:
+    // with the projection without the jitter each sample sat up to half a pixel off its surface, a different half
+    // each frame, and creases and edges alternated between their two surfaces' shading.
+    if (temporal_scene_ && state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u) {
+        const float scale = static_cast<float>(renderer_.efb_scale());
+        const float width = 2.0f * std::fabs(std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(xf::kViewportBase)))) * scale;
+        const float height = 2.0f * std::fabs(std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(xf::kViewportBase + 1u)))) * scale;
+        if (width > 0.0f && height > 0.0f) {
+            view.projection[1] -= 2.0f * scene_jitter_px_[0] / width;
+            view.projection[3] -= -2.0f * scene_jitter_px_[1] / height;
+        }
+    }
+    view.z_scale = -projection(4u) * kFarEps;
+    view.z_offset = -projection(5u) * kFarEps;
+    view.viewport = {viewport.x, viewport.y, viewport.width, viewport.height};
+    view.min_depth = viewport.min_depth;
+    view.max_depth = viewport.max_depth;
+    return view;
+}
+
+// The first perspective scene draw with depth since the scene began or the game last cleared its depth
+// (MR::clearZBuffer draws through a flattened viewport after the sky and air layers, which may project otherwise).
+void GxBackend::note_scene_ao_view(const DrawCall& call) {
+    if (ao_scene_applied_ || !scene_phase_ || side_layer_ != kSceneLayer ||
+        state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) != 0u || !call.has_viewport) {
+        return;
+    }
+    const ScaledGxViewport viewport = compute_scaled_gx_viewport(call.xf_viewport, renderer_.efb_scale());
+    if (!viewport.valid()) {
+        return;
+    }
+    if (viewport.max_depth - viewport.min_depth < 0.5f) {
+        if ((render_state_key_.zmode_bits & (1u << 4u)) != 0u) {
+            ao_view_set_ = false;
+        }
+        return;
+    }
+    if (!ao_view_set_) {
+        renderer_.set_scene_ao_view(scene_depth_view(viewport));
+        ao_view_set_ = true;
+    }
+}
+
+void GxBackend::apply_scene_ao() {
+    if (ao_scene_applied_ || side_layer_ != kSceneLayer) {
+        return;
+    }
+    ao_scene_applied_ = true;
+    if (!ao_view_set_) {
+        return;
+    }
+    flush_pending_draw_batch();
+    renderer_.record_scene_ao();
 }
 
 // The scene's key light (actor_lights.h): the game's visible sun (the ray tracer's: GALAXY_RT_SUN
@@ -8030,6 +8079,7 @@ void GxBackend::note_rt_phase(std::uint8_t phase) {
         phase == static_cast<std::uint8_t>(ScenePhase::AfterIndirect) ||
         phase == static_cast<std::uint8_t>(ScenePhase::ImageEffect)) {
         trace_rt_scene();
+        apply_scene_ao();
     }
     if (phase == static_cast<std::uint8_t>(ScenePhase::ImageEffect)) {
         trace_rt_water();
@@ -8054,7 +8104,8 @@ void GxBackend::trace_rt_scene() {
     renderer_.rt_trace_scene();
 }
 
-void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* view) {
+void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* view, std::uint32_t sky_up,
+                               bool sky_up_known) {
     flush_pending_draw_batch();
     {
         static const std::uint64_t trace_from = read_env_u64("GALAXY_TRACE_DRAW_ORDER", 0u);
@@ -8071,6 +8122,15 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
     }
     scene_phase_ = marker == FifoMarker::SceneBegin;
     if (marker == FifoMarker::SceneBegin) {
+        ao_view_set_ = false;
+        ao_scene_applied_ = !ambient_occlusion_;
+        // The enhanced sky's up for the scene's draws (the view's up without a player).
+        const std::uint32_t known = sky_up_known ? 1u : 0u;
+        if (cpu_vs_constants_.sky_up != sky_up || cpu_vs_constants_.sky_up_known != known) {
+            cpu_vs_constants_.sky_up = sky_up;
+            cpu_vs_constants_.sky_up_known = known;
+            sky_up_dirty_ = true;
+        }
         rt_mirror_pass_ = false;
         renderer_.set_scene_view(view);
         // GALAXY_RT_AB: the game's own picture on odd presents (the snapshots' numbering).
@@ -8095,6 +8155,7 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
                              (renderer_.rt_lighting() ? kEnhancedRtLighting : 0u);
     } else {
         trace_rt_scene();
+        apply_scene_ao();
         if (renderer_.rt_active() && side_layer_ == kSceneLayer) {
             trace_rt_water();
             renderer_.rt_capture_picture();
@@ -11334,6 +11395,8 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             // Observatory, user Native41; fe176 against fe076). Per-pixel lighting stays: the configuration every
             // ray-traced picture was tuned and verified in.
             const bool enhanced = render.enhanced_lighting && !renderer_.rt_lighting();
+            ambient_occlusion_ =
+                render.ambient_occlusion && !renderer_.rt_lighting() && renderer_.ambient_occlusion_ready();
             // A lighting-mode change re-keys every lit draw's pipeline.
             if (render.per_pixel_lighting != per_pixel_lighting_ || enhanced != enhanced_lighting_) {
                 per_pixel_lighting_ = render.per_pixel_lighting;
@@ -11701,11 +11764,13 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                                            split.offset - prefix);
                     } else {
                         const auto index = static_cast<std::size_t>(split.view);
+                        const bool sky_up = split.view >= 0 && (chunk.fifo_marker_sky_up_mask & (1u << index)) != 0u;
                         on_fifo_marker(static_cast<FifoMarker>(split.marker),
                             split.view >= 0 &&
                                     (chunk.fifo_marker_view_mask & (1u << index)) != 0u
                                 ? &chunk.fifo_marker_views[index]
-                                : nullptr);
+                                : nullptr,
+                            sky_up ? chunk.fifo_marker_sky_up[index] : 0u, sky_up);
                     }
                 }
                 if (consumed < stream.size()) {
@@ -13839,7 +13904,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         : current_matrix_palette_;
 
     // Upload VS constants when scalar state or fixed inline matrices change.
-    if (vs_c_dirty || xf_dirty || vcd_dirty || inline_matrices_stale_ ||
+    if (std::exchange(sky_up_dirty_, false) || vs_c_dirty || xf_dirty || vcd_dirty || inline_matrices_stale_ ||
         frame_bindings_dirty_ || dirty == ~0u ||
         (history_scene_ && current_matrix_palette_ != temporal_vs_palette_va_)) {
         const auto constants_start = time_detail

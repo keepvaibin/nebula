@@ -214,7 +214,7 @@ namespace Nebula.Launcher
         public int TemporalQuality = 1;
         public int FrameGeneration = 0;
         public int SpatialQuality = 0;
-        public bool GeneratedMipmaps = false, PerPixelLighting = false, EnhancedLighting = false;
+        public bool GeneratedMipmaps = false, PerPixelLighting = false, EnhancedLighting = false, AmbientOcclusion = false;
         public bool HudOutputResolution = false, RayTracing = false;
         // Ray tracing quality (config rt_quality): 0 medium (one sample per 2 x 2 pixels of the internal
         // resolution), 1 high (every internal pixel, more rays, reflections shaded where they land), 2 low (one
@@ -297,6 +297,8 @@ namespace Nebula.Launcher
             if (values.TryGetValue("enhanced_mipmaps", out mipmaps)) settings.GeneratedMipmaps = mipmaps.Trim() != "0";
             if (values.TryGetValue("per_pixel_lighting", out lighting)) settings.PerPixelLighting = lighting.Trim() != "0";
             if (values.TryGetValue("enhanced_lighting", out enhanced)) settings.EnhancedLighting = enhanced.Trim() != "0";
+            string occlusion;
+            if (values.TryGetValue("ambient_occlusion", out occlusion)) settings.AmbientOcclusion = occlusion.Trim() != "0";
             if (values.TryGetValue("hud_output_resolution", out hud)) settings.HudOutputResolution = hud.Trim() != "0";
             if (values.TryGetValue("ray_tracing_enabled", out rt)) settings.RayTracing = rt.Trim() != "0";
             string quality;
@@ -342,6 +344,7 @@ namespace Nebula.Launcher
                 new KeyValuePair<string, string>("enhanced_mipmaps", GeneratedMipmaps ? "1" : "0"),
                 new KeyValuePair<string, string>("per_pixel_lighting", PerPixelLighting ? "1" : "0"),
                 new KeyValuePair<string, string>("enhanced_lighting", EnhancedLighting ? "1" : "0"),
+                new KeyValuePair<string, string>("ambient_occlusion", AmbientOcclusion ? "1" : "0"),
                 new KeyValuePair<string, string>("hud_output_resolution", HudOutputResolution ? "1" : "0"),
                 new KeyValuePair<string, string>("ray_tracing_enabled", RayTracing ? "1" : "0"),
                 new KeyValuePair<string, string>("rt_quality", RtQuality == 0 ? "medium" : RtQuality == 2 ? "low" : "high"),

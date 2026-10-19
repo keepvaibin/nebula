@@ -124,6 +124,10 @@ namespace MotionSignal {
     void starPointerLayout(const LayoutActor* pLayout);
     void starPointerDirector(const void* pDirector);
 
+    // GameScene::draw3D's scene marker: the camera's world-to-eye rows, then the player's up (against its gravity) and
+    // 1, or zeros without a player. The renderer's sky light comes from that up.
+    void sceneCamera(f32 (*pOut)[4]);
+
     // After GameScene::draw3D's begin: the camera's cut count and the object events since the previous scene.
     void sceneBegin();
 

@@ -31,6 +31,7 @@
 #include "galaxy/gx/upload_ring.h"
 #include "galaxy/gx/interp_gpu.h"
 #include "galaxy/gx/post_process.h"
+#include "galaxy/gx/ambient_occlusion.h"
 #include "galaxy/gx/interp_types.h"
 #include "galaxy/gx/ray_tracing.h"
 #include "galaxy/gx/placed_texture_allocator.h"
@@ -256,6 +257,11 @@ public:
     void record_scene_aa();
     // GALAXY_TRACE_SCENE_AA=1: the pass's GPU time per game frame, logged every 300 frames.
     void read_scene_aa_timing();
+    // Ambient occlusion (ambient_occlusion.h) of the scene drawn so far, from the view `set_scene_ao_view` gave:
+    // after the opaque phases, before the translucent ones; sub-frames replay it.
+    [[nodiscard]] bool ambient_occlusion_ready() const noexcept { return ambient_occlusion_.ready(); }
+    void set_scene_ao_view(const RtView& view) noexcept { scene_ao_view_ = view; }
+    void record_scene_ao();
     [[nodiscard]] bool output_efb_active() const noexcept { return output_efb_active_; }
     // Whether the targets for `scale` fit the adapter's video-memory budget
     // next to everything already resident.
@@ -756,7 +762,7 @@ private:
     [[nodiscard]] unsigned msaa_max_samples() const;
     // Before the EFB's single-sample color (and `depth`) are read: the multisampled targets drawn since the last
     // resolve, resolved into them.
-    void resolve_efb(bool depth);
+    void resolve_efb(bool depth, bool color = true);
     // The resolve itself into `list` (a separately submitted list resolves what was submitted before it). The depth
     // resolve leaves `list` with the blit root signature and the single-sample depth bound.
     void record_efb_resolve(ID3D12GraphicsCommandList* list, bool color, bool depth);
@@ -977,7 +983,7 @@ private:
     };
     // RtComposite: the ambient occlusion of ray-tracer result slot `index`.
     enum class ReplayKind : std::uint8_t {
-        Draw, BindEfb, Clear, Copy, SwapEfbSets, ClearDepth, RtComposite, RtBloom, RtPost, RtWater, SceneAa
+        Draw, BindEfb, Clear, Copy, SwapEfbSets, ClearDepth, RtComposite, RtBloom, RtPost, RtWater, SceneAa, SceneAo
     };
     struct ReplayOp {
         ReplayKind kind = ReplayKind::Draw;
@@ -1420,6 +1426,8 @@ private:
     // Presentation image quality; present() keeps the plain blit while it is
     // not ready.
     PostProcessor post_process_;
+    AmbientOcclusion ambient_occlusion_;
+    RtView scene_ao_view_{};
     // EFB-copy destination textures (render targets) are placed in shared
     // heaps rather than committed one by one (placed_texture_allocator.h).
     PlacedTextureAllocator efb_copy_heap_{

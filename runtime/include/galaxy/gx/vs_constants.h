@@ -9,6 +9,8 @@
 #include <algorithm>
 #include <array>
 #include <bit>
+#include <cmath>
+#include <cstdint>
 #include <cstring>
 
 namespace galaxy::gx {
@@ -184,10 +186,34 @@ inline void fill_vs_constants(
     out.line_point_tex_offsets[3] = line_point.point_texcoord_divisor;
 }
 
+// A unit vector as a point of the octahedral map, x and y as snorm16 in the low and high halves
+// (GxVsConstants::sky_up; the enhanced pixel shader's enh_up decodes it).
+[[nodiscard]] inline std::uint32_t encode_octahedral(const float v[3]) noexcept {
+    const float sum = std::fabs(v[0]) + std::fabs(v[1]) + std::fabs(v[2]);
+    if (!(sum > 0.0f)) {
+        return 0u;
+    }
+    float x = v[0] / sum;
+    float y = v[1] / sum;
+    if (v[2] < 0.0f) {
+        const float ox = x;
+        x = (1.0f - std::fabs(y)) * (ox >= 0.0f ? 1.0f : -1.0f);
+        y = (1.0f - std::fabs(ox)) * (y >= 0.0f ? 1.0f : -1.0f);
+    }
+    const auto snorm = [](float value) {
+        return static_cast<std::uint32_t>(static_cast<std::uint16_t>(
+            static_cast<std::int16_t>(std::lround(std::clamp(value, -1.0f, 1.0f) * 32767.0f))));
+    };
+    return snorm(x) | (snorm(y) << 16u);
+}
+
 struct VsConstantsCpuCache {
     GxVsConstants constants{};
     unsigned efb_scale = 0u;
     bool valid = false;
+    // The scene's sky up (GxVsConstants::sky_up, sky_up_known), kept across fills.
+    std::uint32_t sky_up = 0u;
+    std::uint32_t sky_up_known = 0u;
 
     const GxVsConstants& update(const GxState& state, std::uint32_t dirty,
         unsigned current_scale, bool frame_bindings_dirty) {
@@ -201,6 +227,8 @@ struct VsConstantsCpuCache {
             efb_scale = current_scale;
             valid = true;
         }
+        constants.sky_up = sky_up;
+        constants.sky_up_known = sky_up_known;
         return constants;
     }
 };

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/gx/vs_constants.h"
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <chrono>
 #include <cstdint>
@@ -50,6 +52,53 @@ int main(int argc, char**) {
         if((i%64u)==0u) {cache={};}
     }
     std::printf("PASS 8192 complete VS images: matrices, lights, indices, VCD, projection, colors, post texgen, raster, scale, frame/reset\n");
+    // The sky up's octahedral word, decoded as the enhanced pixel shader's enh_up does: within 0.0002 rad
+    // over the sphere, the poles and the octahedron's folds included; the cache carries it into every image.
+    {
+        double worst = 0.0;
+        const auto check = [&](float x, float y, float z) {
+            const float length = std::sqrt(x * x + y * y + z * z);
+            const float v[3] = {x / length, y / length, z / length};
+            const std::uint32_t word = encode_octahedral(v);
+            const float fx = static_cast<float>(static_cast<std::int16_t>(word & 0xFFFFu)) / 32767.0f;
+            const float fy = static_cast<float>(static_cast<std::int16_t>(word >> 16u)) / 32767.0f;
+            float n[3] = {fx, fy, 1.0f - std::fabs(fx) - std::fabs(fy)};
+            const float t = std::max(-n[2], 0.0f);
+            n[0] += n[0] >= 0.0f ? -t : t;
+            n[1] += n[1] >= 0.0f ? -t : t;
+            // In doubles: the angle between two floats within an ulp of each other is not resolvable in float.
+            const double m = std::sqrt(double(n[0]) * n[0] + double(n[1]) * n[1] + double(n[2]) * n[2]);
+            const double d = (double(n[0]) * v[0] + double(n[1]) * v[1] + double(n[2]) * v[2]) / m;
+            const double cx = double(n[1]) * v[2] - double(n[2]) * v[1];
+            const double cy = double(n[2]) * v[0] - double(n[0]) * v[2];
+            const double cz = double(n[0]) * v[1] - double(n[1]) * v[0];
+            worst = std::max(worst, std::atan2(std::sqrt(cx * cx + cy * cy + cz * cz) / m, d));
+        };
+        for (unsigned i = 0; i < 4096u; ++i) {
+            const float x = static_cast<float>(next() % 2001u) / 1000.0f - 1.0f;
+            const float y = static_cast<float>(next() % 2001u) / 1000.0f - 1.0f;
+            const float z = static_cast<float>(next() % 2001u) / 1000.0f - 1.0f;
+            if (x * x + y * y + z * z > 1e-6f) check(x, y, z);
+        }
+        for (const float s : {1.0f, -1.0f}) {
+            check(s, 0.0f, 0.0f);
+            check(0.0f, s, 0.0f);
+            check(0.0f, 0.0f, s);
+            check(s, s, -1.0f);
+            check(s, -s, -0.001f);
+        }
+        cache = {};
+        cache.sky_up = 0x12345678u;
+        cache.sky_up_known = 1u;
+        GxVsConstants reference{};
+        fill_vs_constants(state, 0u, scale, reference);
+        const auto& got = cache.update(state, ~0u, scale, true);
+        if (worst > 2e-4 || got.sky_up != 0x12345678u || got.sky_up_known != 1u) {
+            std::printf("FAILED sky up: worst %.6f rad, word %08X known %u\n", worst, got.sky_up, got.sky_up_known);
+            return 1;
+        }
+        std::printf("PASS sky up: octahedral words within %.6f rad, carried into the image\n", worst);
+    }
 #if defined(GALAXY_VS_CONSTANTS_BENCH)
     if(argc>1) {
         std::uint64_t checksum=0u;

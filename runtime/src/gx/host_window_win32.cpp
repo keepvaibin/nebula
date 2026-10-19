@@ -686,6 +686,7 @@ unsigned pending_settings_changes() {
     changes += d.anisotropic_filtering != live.anisotropic_filtering;
     changes += d.enhanced_mipmaps != live.enhanced_mipmaps;
     changes += lighting_mode(d) != lighting_mode(live);
+    changes += d.ambient_occlusion != live.ambient_occlusion;
     changes += d.hud_output_resolution != live.hud_output_resolution;
     changes += d.ray_tracing_enabled != live.ray_tracing_enabled;
     changes += controls_changes();
@@ -950,6 +951,7 @@ void apply_native_settings_draft() {
     applied.enhanced_mipmaps = next.enhanced_mipmaps;
     applied.per_pixel_lighting = next.per_pixel_lighting;
     applied.enhanced_lighting = next.enhanced_lighting;
+    applied.ambient_occlusion = next.ambient_occlusion;
     applied.hud_output_resolution = next.hud_output_resolution;
     applied.ray_tracing_enabled = next.ray_tracing_enabled;
     const bool display_changed = display_settings_differ(live, applied);
@@ -2149,6 +2151,16 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render) {
                         lighting_mode(render) == 2u
                             ? "HIGHLIGHTS, SOFT SKY LIGHT AND SHINIER METALS FROM THE GAME'S OWN LIGHTS"
                             : "PER PIXEL LIGHTS EVERY PIXEL INSTEAD OF EVERY CORNER"});
+    }
+    {
+        std::string value = render.ambient_occlusion ? "ON" : "OFF";
+        if (render.ambient_occlusion && render.ray_tracing_enabled &&
+            host_window::ray_tracing_offered.load(std::memory_order_relaxed)) {
+            value += " (OFF WITH RAY TRACING)";
+        }
+        rows.push_back({"AMBIENT OCCLUSION", value,
+                        [](RenderConfig& draft, int) { draft.ambient_occlusion = !draft.ambient_occlusion; },
+                        "SOFT SHADOWS IN CORNERS, CREASES AND WHERE THINGS MEET THE GROUND"});
     }
     if (host_window::ray_tracing_offered.load(std::memory_order_relaxed)) {
         rows.push_back({"RAY TRACING", render.ray_tracing_enabled ? "ON" : "OFF",

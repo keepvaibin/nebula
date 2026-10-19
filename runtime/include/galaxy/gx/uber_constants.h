@@ -100,8 +100,10 @@ struct alignas(256) GxVsConstants {
     // vertex shader resolves them, so the palette snapshot stays the only matrix upload.
     std::uint32_t matrix_index_a;
     std::uint32_t matrix_index_b;
-    std::uint32_t pad0;
-    std::uint32_t pad1;
+    // Enhanced lighting's sky: the player's up in eye space (octahedral, vs_constants.h
+    // encode_octahedral), and nonzero when known (else the view's up).
+    std::uint32_t sky_up;
+    std::uint32_t sky_up_known;
     float inline_pos_matrix[3][4];
     float inline_tex_matrices[kMaxTexGens][3][4];
     float inline_post_matrices[kMaxTexGens][3][4];

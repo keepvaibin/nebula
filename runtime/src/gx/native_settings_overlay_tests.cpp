@@ -205,10 +205,10 @@ int main() {
 
     // Graphics page with no upscaler and the native quality mode: 0 heading, 1 upscaling, 2 quality
     // mode, 3 internal resolution, 4 sharpening, 5 anti-aliasing, 6 MSAA, 7 heading, 8 interpolation,
-    // 9 frame rate limit, 10 heading, 11 texture filtering, 12 mipmaps, 13 lighting.
+    // 9 frame rate limit, 10 heading, 11 texture filtering, 12 mipmaps, 13 lighting, 14 ambient occlusion.
     passed &= expect(key(VK_TAB), "Tab enters the graphics page");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
-    passed &= expect(snapshot.tab == 1u && snapshot.row == 1u && snapshot.row_count == 14u,
+    passed &= expect(snapshot.tab == 1u && snapshot.row == 1u && snapshot.row_count == 15u,
                      "graphics page: resolution, frame rate and detail sections");
     passed &= expect(key(VK_DOWN) && key(VK_DOWN), "down moves to the internal resolution");
     passed &= expect(key(VK_LEFT), "left lowers the internal resolution in the draft");
@@ -266,7 +266,7 @@ int main() {
     galaxy::gx::set_render_config(render);
     passed &= expect(reopen() && page_start(), "reopening takes the new live settings");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
-    passed &= expect(snapshot.tab == 1u && snapshot.row_count == 15u,
+    passed &= expect(snapshot.tab == 1u && snapshot.row_count == 16u,
                      "with FSR 1 and SMAA the page also has the SMAA quality row");
     passed &= expect(key(VK_LEFT), "left lowers the upscaler");
     passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "quality mode row is adjustable");
@@ -280,9 +280,10 @@ int main() {
     passed &= expect(key(VK_RIGHT), "texture filtering row is adjustable");
     passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "mipmap row toggles");
     passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "lighting row toggles");
+    passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "ambient occlusion row toggles");
     passed &= expect(
         galaxy::gx::get_render_config().aa_mode == 2u &&
-            galaxy::gx::native_settings_overlay_snapshot().pending_changes == 9u,
+            galaxy::gx::native_settings_overlay_snapshot().pending_changes == 10u,
         "every graphics change waits in the draft");
     passed &= expect(key(VK_RETURN), "Enter applies the graphics changes");
     const galaxy::gx::RenderConfig applied = galaxy::gx::get_render_config();
@@ -297,6 +298,7 @@ int main() {
     passed &= expect(!applied.enhanced_mipmaps, "mipmaps switch to the original ones");
     passed &= expect(applied.per_pixel_lighting && applied.enhanced_lighting,
                      "lighting steps from per pixel to enhanced");
+    passed &= expect(applied.ambient_occlusion, "ambient occlusion switches on");
     passed &= expect(galaxy::gx::native_settings_overlay_snapshot().pending_changes == 0u,
                      "nothing is pending after apply");
 

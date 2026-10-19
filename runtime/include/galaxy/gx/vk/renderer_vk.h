@@ -108,6 +108,10 @@ public:
     [[nodiscard]] std::span<const std::int32_t> ps_record_pairs() const noexcept { return run_ps_previous_; }
     // SMAA or FXAA of the 3D scene in the EFB before the 2D layer draws (PostProcessorVk).
     void record_scene_aa();
+    // Ambient occlusion (D3D12's ambient_occlusion.h) is not on Vulkan yet.
+    [[nodiscard]] bool ambient_occlusion_ready() const noexcept { return false; }
+    void set_scene_ao_view(const RtView&) noexcept {}
+    void record_scene_ao() noexcept {}
     [[nodiscard]] unsigned replay_reject() const noexcept { return replay_reject_; }
     void reset_subframe_gpu_ema() noexcept { subframe_gpu_ema_ms_ = 0.0; }
     [[nodiscard]] double subframe_gpu_ema_ms() const noexcept { return subframe_gpu_ema_ms_; }

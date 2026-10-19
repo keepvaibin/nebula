@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 7u
+#define NEBULA_GAME_API_VERSION 8u
 
 /* A physical range of the game's memory and where it is in the host process: what the GPU's addresses resolve to. */
 typedef struct NebulaGameMemoryRegion {
@@ -132,7 +132,7 @@ enum {
 
 /* gx_scene_marker: the scene bounds in the stream. */
 enum {
-    NEBULA_SCENE_3D_BEGIN = 0, /* GameScene::draw3D's begin, with the camera's world-to-eye matrix */
+    NEBULA_SCENE_3D_BEGIN = 0, /* GameScene::draw3D's begin, with the camera and the player's up */
     NEBULA_SCENE_3D_END,
     NEBULA_SCENE_2D_BEGIN, /* GameScene::draw2D's begin */
     NEBULA_SCENE_2D_END,
@@ -180,8 +180,9 @@ typedef struct NebulaHostServices {
     /* An EFB pixel (type 0: colour, 1: depth), as GXPeekARGB/GXPeekZ read it; `token` is the draw-sync token
        whose callback peeks (0: none), the stream position the console's GPU was stopped at. */
     uint32_t (*gx_peek_efb)(void* user, uint16_t x, uint16_t y, uint32_t type, uint16_t token);
-    /* A scene bound (NEBULA_SCENE_*) at the end of the stream so far; the 3D scene's begin carries the camera's
-       world-to-eye matrix (row-major 3x4), the others NULL. */
+    /* A scene bound (NEBULA_SCENE_*) at the end of the stream so far; the 3D scene's begin carries 16 floats: the
+       camera's world-to-eye matrix (row-major 3x4), then the player's up in the world (against its gravity) and 1, or
+       four zeros without a player. The others NULL. */
     void (*gx_scene_marker)(void* user, uint32_t marker, const float* view);
     /* A JPA stripe particle whose two strip vertices are written next, `span_offset` bytes into the span the game
        has not submitted yet (galaxy/motion_signals.h): age << 16 | lifetime, strip 0 JPADrawStripe, 1-2 the passes

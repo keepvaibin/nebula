@@ -21,7 +21,7 @@ struct TuningField {
 constexpr TuningField kTuningFields[] = {
     {"ramp", &EnhancedLightingTuning::ramp},
     {"hemi", &EnhancedLightingTuning::hemi},
-    {"rim", &EnhancedLightingTuning::rim},
+    {"sky", &EnhancedLightingTuning::sky},
     {"knee", &EnhancedLightingTuning::knee},
     {"sheen", &EnhancedLightingTuning::sheen},
     {"sheen_rough", &EnhancedLightingTuning::sheen_rough},

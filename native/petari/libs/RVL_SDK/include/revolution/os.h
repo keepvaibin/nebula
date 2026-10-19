@@ -71,7 +71,8 @@ u32 __NebulaOption(u32 what);
 void __NebulaPoll(void);
 void* __NebulaFromPhysical(u32 paddr);
 // A scene bound in the GX stream (NEBULA_SCENE_* in nebula_game_api.h; the 3D scene's begin with the camera's
-// world-to-eye matrix). The begins ask whether the renderer wants host markers (__NebulaGXHostMarker).
+// world-to-eye matrix and the player's up as a fourth row). The begins ask whether the renderer wants host markers
+// (__NebulaGXHostMarker).
 void __NebulaGXSceneMarker(u32 marker, const f32 (*view)[4]);
 // A JPA stripe particle whose two vertices are written next (gx_stripe_particle in nebula_game_api.h).
 void __NebulaGXStripeParticle(u32 particle, u32 ageLifetime, u8 strip);

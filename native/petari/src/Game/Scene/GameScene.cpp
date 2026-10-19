@@ -429,7 +429,9 @@ void GameScene::draw3D() const {
         return;
     }
 
-    __NebulaGXSceneMarker(NEBULA_SCENE_3D_BEGIN, MR::getCameraViewMtx());
+    f32 sceneCamera[4][4];
+    MotionSignal::sceneCamera(sceneCamera);
+    __NebulaGXSceneMarker(NEBULA_SCENE_3D_BEGIN, sceneCamera);
     MotionSignal::sceneBegin();
     CategoryList::execute(MR::DrawType_AstroDomeSkyClear);
     MR::loadViewMtx();

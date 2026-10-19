@@ -327,8 +327,8 @@ cbuffer GxVsConstants : register(b0) {
     uint     mtx_palette_base;
     uint     matrix_index_a;
     uint     matrix_index_b;
-    uint     pad0;
-    uint     pad1;
+    uint     sky_up;
+    uint     sky_up_known;
     float4   inline_pos_matrix[3];
     float4   inline_tex_matrices[24];
     float4   inline_post_matrices[24];
@@ -546,6 +546,8 @@ cbuffer GxPplConstants : register(b0) {
     float4 ppl_chan_material[2] : packoffset(c10);
     uint   ppl_num_chans        : packoffset(c12.y);
     uint   ppl_mtx_palette_base : packoffset(c12.w);
+    uint   ppl_sky_up           : packoffset(c13.z);
+    uint   ppl_sky_up_known     : packoffset(c13.w);
     uint4  ppl_channel          : packoffset(c72);
 };
 StructuredBuffer<float4> mtx_palette : register(t0, space1);
@@ -679,10 +681,11 @@ void ppl_apply(inout float4 col0, inout float4 col1, float3 wpos, float3 nrm_in,
 
 // Enhanced lighting (enhanced_lighting.h), after kPplLighting and the kEnh* tuning constants. The
 // lit colour channel 0 (generate_ps, one block per light of the key) adds its lights in linear
-// light, each along a blend of its authored falloff and the linear ramp between the channel's
-// ambient and ambient-plus-light colours, under a soft shoulder; the ambient is a view-up hemisphere
-// with a sky rim. The key light's highlight: dielectric, or tinted by the surface colour on
-// environment-mapped (metal) draws. Other channels keep the vertex stage's GX colours.
+// light, each along its authored falloff (kEnhRamp blends in the linear ramp between the channel's
+// ambient and ambient-plus-light colours), under a soft shoulder; the ambient is a sky hemisphere
+// about the player's up whose reflection takes its share from the diffuse light. The key light's
+// highlight: dielectric, or tinted by the surface colour on environment-mapped (metal) draws. Other
+// channels keep the vertex stage's GX colours.
 static constexpr const char* kEnhancedLighting = R"HLSL(
 float3 enh_lin(float3 c) { return pow(max(c, 0.0), 2.2); }
 float3 enh_srgb(float3 c) { return pow(max(c, 0.0), 1.0 / 2.2); }
@@ -724,15 +727,30 @@ void enh_light(uint n, bool spot, float3 P, out float3 ldir, out float attn, out
     lcol = float3((lcw >> 24) & 255u, (lcw >> 16) & 255u, (lcw >> 8) & 255u) / 255.0;
 }
 
+// The player's up in eye space (GxVsConstants::sky_up: octahedral, x and y in snorm16 halves),
+// else the view's up.
+float3 enh_up() {
+    if (ppl_sky_up_known == 0u) {
+        return float3(0.0, 1.0, 0.0);
+    }
+    const float2 f = float2(int2(int(ppl_sky_up << 16u), int(ppl_sky_up)) >> 16) / 32767.0;
+    float3 n = float3(f, 1.0 - abs(f.x) - abs(f.y));
+    const float t = saturate(-n.z);
+    n.xy += float2(n.x >= 0.0 ? -t : t, n.y >= 0.0 ? -t : t);
+    return normalize(n);
+}
+
 struct EnhShade {
-    bool   valid;     // the draw has a normal
-    float3 N;
+    bool   valid;      // the draw has a normal
+    float3 N;          // as GX lights it (two-sided surfaces keep it from behind)
+    float3 Nv;         // facing the viewer: the reflections' normal
     float3 V;
     float  NoV;
-    float  env_gain;  // environment lookups: Fresnel gain
-    float3 spec;      // dielectric highlight, linear, added after the TEV
-    float3 metal;     // metal lobe, linear, times the surface's Fresnel after the TEV
-    float  metal_fw;  // its Schlick weight
+    float  a2_filter;  // the lobes' widening for the normal's change across the pixel
+    float  env_gain;   // environment lookups: Fresnel gain
+    float3 spec;       // dielectric highlight and sky reflection, linear, added after the TEV
+    float3 metal;      // metal lobe, linear, times the surface's Fresnel after the TEV
+    float  metal_fw;   // its Schlick weight
 };
 
 EnhShade enh_begin(float3 P, float3 n) {
@@ -740,54 +758,79 @@ EnhShade enh_begin(float3 P, float3 n) {
     e.valid = dot(n, n) > 0.0;
     e.N = e.valid ? normalize(n) : float3(0.0, 0.0, 0.0);
     e.V = dot(P, P) > 0.0 ? normalize(-P) : float3(0.0, 0.0, 1.0);
-    // Two-sided surfaces seen from behind face the viewer too (no rim across their back).
+    e.Nv = dot(e.N, e.V) < 0.0 ? -e.N : e.N;
     e.NoV = e.valid ? min(abs(dot(e.N, e.V)), 1.0) : 1.0;
     const float g = 1.0 - e.NoV;
     e.env_gain = e.valid ? kEnhEnvBase + kEnhEnvGraze * (g * g) * (g * g) * g : 1.0;
+    // Tokuyoshi and Kaplanyan 2019: alpha^2 grows by the normal's variance over the pixel's
+    // footprint (filter variance 0.25), at most 0.18.
+    const float3 dx = ddx(e.N);
+    const float3 dy = ddy(e.N);
+    e.a2_filter = e.valid ? min(0.5 * (dot(dx, dx) + dot(dy, dy)), 0.18) : 0.0;
     return e;
 }
 
-// The material table's lobe for this draw (uber header bits 20-30), else the tuning's.
+// The material table's lobe for this draw (uber header bits 20-30), else the tuning's for the draw's
+// class (`metal`: environment-mapped). The table decides metal too: an environment map is also how the
+// game paints the gloss of shells, plastics and paint.
 void enh_table(bool metal, out float rough, out bool is_metal) {
     const uint w = uber_ps_header.w;
     rough = metal ? kEnhMetalRough : kEnhSheenRough;
     is_metal = metal;
     if ((w & 0x40000000u) != 0u) {
         rough = max(float((w >> 20) & 63u) / 63.0, 0.05);
-        is_metal = metal || float((w >> 26) & 15u) / 15.0 >= 0.5;
+        is_metal = float((w >> 26) & 15u) / 15.0 >= 0.5;
     }
 }
 
+// A light's highlight. `radiance` is its colour in linear light: GX's diffuse term is the colour times
+// N.L, so the colour is the light's irradiance over pi and the lobe takes kEnhSheen = pi.
 void enh_highlight(inout EnhShade e, float3 ldir, float3 radiance, bool env_metal) {
-    const float NoL = saturate(dot(e.N, ldir));
+    const float NoL = saturate(dot(e.Nv, ldir));
     if (NoL <= 0.0) {
         return;
     }
     float rough;
     bool metal;
     enh_table(env_metal, rough, metal);
+    const float a2 = min(rough * rough * rough * rough + e.a2_filter, 1.0);
+    const float a = sqrt(a2);
     const float3 H = normalize(ldir + e.V);
-    const float NoH = saturate(dot(e.N, H));
+    const float NoH = saturate(dot(e.Nv, H));
     const float fw = pow(1.0 - saturate(dot(e.V, H)), 5.0);
+    const float lobe = NoL * enh_ggx(NoH, a2) * enh_vis(NoL, e.NoV, a);
     if (metal) {
-        const float a = rough * rough;
-        e.metal = radiance * (NoL * enh_ggx(NoH, a * a) * enh_vis(NoL, e.NoV, a) * kEnhMetal);
+        e.metal = radiance * (lobe * kEnhMetal);
         e.metal_fw = fw;
     } else {
-        const float a = rough * rough;
-        e.spec = radiance * (NoL * enh_ggx(NoH, a * a) * enh_vis(NoL, e.NoV, a) * kEnhSheen *
-                             (0.04 + 0.96 * fw));
+        e.spec += radiance * (lobe * kEnhSheen * (0.04 + 0.96 * fw));
     }
 }
 
-// The ambient's sky term: a view-up hemisphere (mean 1) and a rim of sky light on the upper half;
-// 1 while the ray tracer lights the scene (`sky_light` false).
+// The ambient's sky term: a hemisphere about the up direction (mean 1 over the sphere); 1 while the
+// ray tracer lights the scene (`sky_light` false).
 float enh_sky(EnhShade e, bool sky_light) {
-    if (!e.valid || !sky_light) {
+    return e.valid && sky_light ? 1.0 + kEnhHemi * dot(e.N, enh_up()) : 1.0;
+}
+
+// The sky's reflection off a dielectric (F0 0.04) at the surface's roughness, along the reflected
+// view direction: Karis' analytic fit of the split-sum environment BRDF ("Physically Based Shading
+// on Mobile", 2014). Adds it to the highlights; returns the diffuse light's share (what is not
+// reflected). Metals reflect through their environment maps.
+float enh_sky_reflection(inout EnhShade e, float3 sky) {
+    float rough;
+    bool metal;
+    enh_table(false, rough, metal);
+    if (!e.valid || metal) {
         return 1.0;
     }
-    const float g = 1.0 - e.NoV;
-    return 1.0 + kEnhHemi * e.N.y + kEnhRim * g * g * g * saturate(0.5 + 0.5 * e.N.y);
+    const float4 r = rough * float4(-1.0, -0.0275, -0.572, 0.022) + float4(1.0, 0.0425, 1.04, -0.04);
+    const float a004 = min(r.x * r.x, exp2(-9.28 * e.NoV)) * r.x + r.y;
+    const float2 ab = float2(-1.04, 1.04) * a004 + r.zw;
+    const float reflected = saturate(0.04 * ab.x + ab.y) * kEnhSky;
+    const float3 R = reflect(-e.V, e.Nv);
+    e.spec += sky * (reflected * (1.0 + kEnhHemi * dot(R, enh_up())));
+    return 1.0 - reflected;
 }
 
 // Unlit environment-mapped draws: the highlight of light 0, the last actor key light the game
@@ -1517,7 +1560,7 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
         emit(s,
              "static const float kEnhRamp = %.9g;\n"
              "static const float kEnhHemi = %.9g;\n"
-             "static const float kEnhRim = %.9g;\n"
+             "static const float kEnhSky = %.9g;\n"
              "static const float kEnhKnee = %.9g;\n"
              "static const float kEnhSheen = %.9g;\n"
              "static const float kEnhSheenRough = %.9g;\n"
@@ -1526,7 +1569,7 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
              "static const float kEnhMetalF0 = %.9g;\n"
              "static const float kEnhEnvBase = %.9g;\n"
              "static const float kEnhEnvGraze = %.9g;\n",
-             t.ramp, t.hemi, t.rim, t.knee, t.sheen, t.sheen_rough, t.metal, t.metal_rough, t.metal_f0, t.env_base,
+             t.ramp, t.hemi, t.sky, t.knee, t.sheen, t.sheen_rough, t.metal, t.metal_rough, t.metal_f0, t.env_base,
              t.env_graze);
         s << kEnhancedLighting;
     }
@@ -1656,7 +1699,8 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
                 s << "        }\n";
                 first = false;
             }
-            s << "        pin.col0.rgb = enh_mat * enh_srgb(enh_shoulder(max(enh_acc, 0.0)));\n"
+            s << "        enh_acc *= enh_sky_reflection(enh, enh_amb_lin);\n"
+                 "        pin.col0.rgb = enh_mat * enh_srgb(enh_shoulder(max(enh_acc, 0.0)));\n"
                  "        }\n"
                  "    }\n";
         } else {

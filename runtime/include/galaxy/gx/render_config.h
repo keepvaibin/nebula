@@ -91,6 +91,8 @@ struct RenderConfig {
     // and Fresnel on environment maps. Takes precedence over
     // per_pixel_lighting for the draws it shades.
     bool     enhanced_lighting   = false;
+    // Ambient occlusion of the 3D scene (ambient_occlusion.h); ray-traced lighting has its own.
+    bool     ambient_occlusion   = false;
 
     // Presentation image quality (post_process.h), applied to the presented
     // frame on the render thread. aa_mode: 0 off, 1 SMAA, 2 auto (SMAA unless

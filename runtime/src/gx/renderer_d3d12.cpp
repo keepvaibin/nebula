@@ -1080,9 +1080,9 @@ float main(float4 pos : SV_Position) : SV_Depth {
 
 }  // namespace
 
-void RendererD3D12::resolve_efb(bool depth) {
+void RendererD3D12::resolve_efb(bool depth, bool color_wanted) {
     EfbMsaa& msaa = efb_msaa_;
-    const bool color = msaa.color_dirty;
+    const bool color = color_wanted && msaa.color_dirty;
     depth = depth && msaa.depth_dirty;
     if (msaa.samples <= 1u || (!color && !depth)) {
         return;
@@ -2492,6 +2492,9 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
                 std::cerr << "[post-process] aa=" << cfg.aa_mode << " smaa-quality=" << cfg.smaa_quality
                           << " upscaler=" << cfg.upscaler << " sharpness=" << cfg.sharpness << '\n';
             }
+            if (!ambient_occlusion_.initialize(device_.Get())) {
+                std::cerr << "[ambient-occlusion] unavailable\n";
+            }
         }
 
         // Sampler heap.
@@ -2680,6 +2683,7 @@ void RendererD3D12::shutdown() {
     }
     s_blit_root_sig.Reset();
     post_process_.shutdown();
+    ambient_occlusion_.shutdown();
     ray_tracer_.shutdown();
     {
         const PlacedTextureAllocator::Stats heap = efb_copy_heap_.stats();
@@ -3651,6 +3655,7 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
     }
 
     read_scene_aa_timing();
+    ambient_occlusion_.read_timing(timestamp_frequency_, frame_slot_);
     ray_tracer_.begin_frame(frame_index_);
 
     const auto reset_start = collect_begin_timing
@@ -6644,6 +6649,9 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
             case ReplayKind::SceneAa:
                 record_scene_aa();
                 break;
+            case ReplayKind::SceneAo:
+                record_scene_ao();
+                break;
             }
             if (op.kind == ReplayKind::Copy) {
                 const ReplayCopy& copy = run_copies_[op.index];
@@ -7807,6 +7815,46 @@ void RendererD3D12::record_scene_aa() {
                                         scene_aa_readback_.Get(),
                                         static_cast<UINT64>(frame_slot_) * 2u * sizeof(std::uint64_t));
         scene_aa_pending_[frame_slot_] = static_cast<std::uint8_t>(ran);
+    }
+    command_list_->SetGraphicsRootSignature(root_signature_.Get());
+    invalidate_gx_bindings();
+    bound_rt_aux_ = 0xFFu;
+}
+
+// The EFB's depth, single-sample (MSAA resolves it, sample 0), read by the occlusion; the product lands on the
+// EFB's own colour target, every sample of a multisampled one.
+void RendererD3D12::record_scene_ao() {
+    if (!ambient_occlusion_.ready() || !efb_depth_ || !efb_color_) {
+        return;
+    }
+    if (replay_recording_) [[unlikely]] {
+        replay_ops_.push_back({ReplayKind::SceneAo, 0u});
+    }
+    resolve_efb(true, false);
+    D3D12_RESOURCE_BARRIER barrier{};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition.pResource = efb_depth_.Get();
+    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    barrier.Transition.StateAfter =
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    command_list_->ResourceBarrier(1, &barrier);
+    const D3D12_RESOURCE_DESC desc = efb_depth_->GetDesc();
+    AmbientOcclusion::Inputs in{};
+    in.depth = efb_depth_.Get();
+    in.width = static_cast<unsigned>(desc.Width);
+    in.height = desc.Height;
+    in.efb_scale = efb_scale_;
+    in.color_rtv = efb_rtv_;
+    in.samples = efb_msaa_.samples;
+    in.view = scene_ao_view_;
+    in.timing_slot = replay_playing_ ? -1 : static_cast<int>(frame_slot_);
+    dred_marker(command_list_.Get(), L"ambient occlusion");
+    static_cast<void>(ambient_occlusion_.record(command_list_.Get(), srv_ring_, in, frame_index_, kFramesInFlight));
+    std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
+    command_list_->ResourceBarrier(1, &barrier);
+    if (efb_msaa_.samples > 1u) {
+        efb_msaa_.color_dirty = true;
     }
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
     invalidate_gx_bindings();
