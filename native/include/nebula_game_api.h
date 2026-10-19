@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 11u
+#define NEBULA_GAME_API_VERSION 12u
 
 /* A physical range of the game's memory and where it is in the host process: what the GPU's addresses resolve to. */
 typedef struct NebulaGameMemoryRegion {
@@ -137,6 +137,10 @@ enum {
     NEBULA_LIGHT_POINT,         /* LightPointCtrl's point light: position (3), colour (3), distance where it halves */
     NEBULA_LIGHT_POINT_REQUEST, /* one actor's request for it (id the actor), as NEBULA_LIGHT_POINT */
     NEBULA_LIGHT_WORLD,         /* a world-fixed area light far out: position (3), colour (3) */
+    NEBULA_LIGHT_AREA,          /* the stage's planet light (LightDirector's default area light), then */
+    NEBULA_LIGHT_PLAYER,        /* the player's current light: ambient (3), then the key and the fill light each:
+                                   colour (3), position (3; the camera's eye space when it follows the camera),
+                                   follows the camera (1) */
 };
 
 /* gx_scene_marker: the scene bounds in the stream. */

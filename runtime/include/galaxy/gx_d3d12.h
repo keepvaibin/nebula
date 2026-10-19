@@ -158,6 +158,21 @@ void set_star_core(const std::array<float, 3>& position, float scale) noexcept;
 void note_game_point_light(std::uint32_t info, const std::array<float, 3>& position,
                            const std::array<float, 3>& color, float half_distance) noexcept;
 void note_game_world_light(const std::array<float, 3>& position, const std::array<float, 3>& color) noexcept;
+// The game's area lights (native game, NEBULA_LIGHT_AREA and _PLAYER): an ambient and two lights, each with its
+// colour (0-1), position (world, or the camera's eye space when it follows the camera).
+struct GameAreaLight {
+    std::array<float, 3> ambient{};
+    struct Light {
+        std::array<float, 3> color{};
+        std::array<float, 3> position{};
+        bool follows_camera = false;
+    } lights[2];
+};
+enum class GameAreaLightKind : std::uint8_t { Stage, Player };
+void set_game_area_light(GameAreaLightKind kind, const GameAreaLight& light) noexcept;
+// The latest of `kind` when reported within `max_age_ms`.
+[[nodiscard]] bool game_area_light(GameAreaLightKind kind, GameAreaLight& out, std::uint64_t max_age_ms) noexcept;
+
 // Simulation thread (native game): a game object's name (NameObj::mName) by the id its host markers carry.
 void note_object_name(std::uint32_t id, const char* name) noexcept;
 // Any thread: that name into `out` (NUL-terminated, cut to `size`); false when the game never named `id`.

@@ -1378,13 +1378,32 @@ void svc_game_light(void*, uint32_t kind, uint32_t id, const float* v) {
     case NEBULA_LIGHT_WORLD:
         galaxy::gx::note_game_world_light({v[0], v[1], v[2]}, {v[3], v[4], v[5]});
         break;
+    case NEBULA_LIGHT_AREA:
+    case NEBULA_LIGHT_PLAYER: {
+        galaxy::gx::GameAreaLight light{};
+        light.ambient = {v[0], v[1], v[2]};
+        for (unsigned i = 0; i < 2u; ++i) {
+            const float* l = v + 3 + 7 * i;
+            light.lights[i].color = {l[0], l[1], l[2]};
+            light.lights[i].position = {l[3], l[4], l[5]};
+            light.lights[i].follows_camera = l[6] != 0.0f;
+        }
+        galaxy::gx::set_game_area_light(kind == NEBULA_LIGHT_AREA ? galaxy::gx::GameAreaLightKind::Stage
+                                                                  : galaxy::gx::GameAreaLightKind::Player,
+                                        light);
+        break;
+    }
     default:
         break;
     }
     // GALAXY_TRACE_GAME_LIGHTS=1: every 10 s, the lights of each kind since the last line and the sun's direction.
     static const bool trace = std::getenv("GALAXY_TRACE_GAME_LIGHTS") != nullptr;
-    if (trace && kind <= NEBULA_LIGHT_WORLD) [[unlikely]] {
-        static std::array<std::uint32_t, NEBULA_LIGHT_WORLD + 1> counts{};
+    if (trace && kind <= NEBULA_LIGHT_PLAYER) [[unlikely]] {
+        static std::array<std::uint32_t, NEBULA_LIGHT_PLAYER + 1> counts{};
+        static std::array<float, 17> area{};
+        if (kind == NEBULA_LIGHT_AREA) {
+            std::copy(v, v + 17, area.begin());
+        }
         static std::array<float, 4> sun{};
         static auto last = std::chrono::steady_clock::now();
         ++counts[kind];
@@ -1395,9 +1414,13 @@ void svc_game_light(void*, uint32_t kind, uint32_t id, const float* v) {
         if (now - last >= std::chrono::seconds(10)) {
             last = now;
             std::fprintf(stderr,
-                         "[game-light] sun=%u star-core=%u point=%u request=%u world=%u sun-direction=(%.3f %.3f %.3f) "
-                         "distance=%.0f\n",
-                         counts[0], counts[1], counts[2], counts[3], counts[4], sun[0], sun[1], sun[2], sun[3]);
+                         "[game-light] sun=%u star-core=%u point=%u request=%u world=%u area=%u player=%u "
+                         "sun-direction=(%.3f %.3f %.3f) distance=%.0f area-ambient=(%.2f %.2f %.2f) "
+                         "key=(%.2f %.2f %.2f) at (%.0f %.0f %.0f)%s fill=(%.2f %.2f %.2f)%s\n",
+                         counts[0], counts[1], counts[2], counts[3], counts[4], counts[5], counts[6], sun[0], sun[1],
+                         sun[2], sun[3], area[0], area[1], area[2], area[3], area[4], area[5], area[6], area[7],
+                         area[8], area[9] != 0.0f ? " camera" : "", area[10], area[11], area[12],
+                         area[16] != 0.0f ? " camera" : "");
             counts = {};
         }
     }

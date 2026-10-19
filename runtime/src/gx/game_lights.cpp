@@ -44,6 +44,11 @@ std::chrono::steady_clock::time_point g_point_request_seen{};
 std::array<NotedLight, 32> g_point_lights{};
 std::array<NotedLight, 16> g_world_lights{};
 
+std::mutex g_area_mutex;
+std::array<GameAreaLight, 2> g_area_lights{};
+std::array<std::chrono::steady_clock::time_point, 2> g_area_time{};
+std::array<bool, 2> g_area_known{};
+
 // A light is its guest info (id) when it has one, else its position.
 template <std::size_t N>
 void note_light(std::array<NotedLight, N>& lights, const std::array<float, 3>& position,
@@ -163,6 +168,24 @@ std::size_t game_point_lights(std::span<GameLight> out, std::uint64_t max_age_ms
 
 std::size_t game_world_lights(std::span<GameLight> out, std::uint64_t max_age_ms) noexcept {
     return active_lights(g_world_lights, out, max_age_ms);
+}
+
+void set_game_area_light(GameAreaLightKind kind, const GameAreaLight& light) noexcept {
+    const auto i = static_cast<std::size_t>(kind);
+    const std::lock_guard<std::mutex> lock(g_area_mutex);
+    g_area_lights[i] = light;
+    g_area_time[i] = std::chrono::steady_clock::now();
+    g_area_known[i] = true;
+}
+
+bool game_area_light(GameAreaLightKind kind, GameAreaLight& out, std::uint64_t max_age_ms) noexcept {
+    const auto i = static_cast<std::size_t>(kind);
+    const std::lock_guard<std::mutex> lock(g_area_mutex);
+    if (!g_area_known[i] || std::chrono::steady_clock::now() - g_area_time[i] > std::chrono::milliseconds(max_age_ms)) {
+        return false;
+    }
+    out = g_area_lights[i];
+    return true;
 }
 
 bool game_sun(std::array<float, 3>& direction, std::uint64_t max_age_ms, float* distance) noexcept {

@@ -1,9 +1,12 @@
 #ifdef TARGET_PC
 #include "Game/Util/GameLightSignal.hpp"
+#include "Game/LiveActor/ActorLightCtrl.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Map/LightDataHolder.hpp"
+#include "Game/Map/LightDirector.hpp"
 #include "Game/Map/LightPointCtrl.hpp"
 #include "Game/Util/CameraUtil.hpp"
+#include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include <nebula_game_api.h>
 #include <revolution/os.h>
@@ -34,6 +37,26 @@ namespace {
         return static_cast< f32 >(value) / 255.0f;
     }
 
+    // An ActorLightInfo as NEBULA_LIGHT_AREA and NEBULA_LIGHT_PLAYER values.
+    void actorLightValues(u32 kind, const ActorLightInfo& rInfo) {
+        f32 values[17];
+        values[0] = channel(rInfo.mColor.r);
+        values[1] = channel(rInfo.mColor.g);
+        values[2] = channel(rInfo.mColor.b);
+        const LightInfo* const lights[2] = {&rInfo.mInfo0, &rInfo.mInfo1};
+        for (u32 i = 0; i < 2; i++) {
+            f32* v = values + 3 + 7 * i;
+            v[0] = channel(lights[i]->mColor.r);
+            v[1] = channel(lights[i]->mColor.g);
+            v[2] = channel(lights[i]->mColor.b);
+            v[3] = lights[i]->mPos.x;
+            v[4] = lights[i]->mPos.y;
+            v[5] = lights[i]->mPos.z;
+            v[6] = lights[i]->mIsFollowCamera ? 1.0f : 0.0f;
+        }
+        __NebulaGameLight(kind, 0, values);
+    }
+
     // A LightInfo that does not follow the camera and sits this far out (20000 units) lights its area as the sun does.
     void worldLight(const LightInfo& rInfo) {
         const Vec& p = rInfo.mPos;
@@ -54,6 +77,17 @@ namespace GameLightSignal {
 
     void frame() {
         sFrame++;
+        // The stage's planet light (what its map geometry is lit with) and the player's current light, blended as
+        // the player crosses light areas.
+        if (MR::isExistSceneObj(SceneObj_LightDirector)) {
+            const LightDirector* director = MR::getSceneObj< LightDirector >(SceneObj_LightDirector);
+            if (director->mDefaultAreaLight != nullptr) {
+                actorLightValues(NEBULA_LIGHT_AREA, director->mDefaultAreaLight->mPlanetLight);
+            }
+            if (director->_1C != nullptr && director->_1C->mAreaLightInf != nullptr) {
+                actorLightValues(NEBULA_LIGHT_PLAYER, *director->_1C->getActorLight());
+            }
+        }
         if (sStarCore != nullptr && !MR::isDead(sStarCore)) {
             const TVec3f& p = sStarCore->mPosition;
             const f32 values[4] = {p.x, p.y, p.z, sStarCore->mScale.x};
