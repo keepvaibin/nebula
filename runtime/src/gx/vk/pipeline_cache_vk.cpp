@@ -1473,13 +1473,18 @@ void PipelineCacheVk::drain_completions() {
 }
 
 void PipelineCacheVk::load_disk() {
+    // SPIR-V of another compiler (or file version) is dropped, and so is the driver's cache of the pipelines made from
+    // it: none of them can be asked for again, and the driver would keep them in every later save.
+    bool other_compiler = false;
     {
         std::ifstream in(cache_dir_ / "vk_shaders.bin", std::ios::binary);
         std::uint32_t magic = 0, version = 0, count = 0;
         std::uint64_t identity = 0;
+        other_compiler = in.good();
         if (in && read_pod(in, magic) && read_pod(in, version) && magic == kShaderFileMagic &&
             version == kShaderFileVersion && read_pod(in, identity) && identity == compiler_identity() &&
             read_pod(in, count) && count <= kMaxRecords) {
+            other_compiler = false;
             for (std::uint32_t i = 0; i < count; ++i) {
                 std::uint64_t hash = 0;
                 std::uint32_t words = 0;
@@ -1566,7 +1571,7 @@ void PipelineCacheVk::load_disk() {
         }
     }
     std::vector<char> data;
-    {
+    if (!other_compiler) {
         std::ifstream in(cache_dir_ / "vk_pipelines.bin", std::ios::binary | std::ios::ate);
         if (in) {
             const std::streamsize size = in.tellg();
