@@ -121,7 +121,7 @@ void RendererVk::advance_ring_segment() {
     segment.retired.clear();
     const VkDevice device = vk::Context::get().device();
     if (segment.descriptors == VK_NULL_HANDLE) {
-        segment.descriptors = create_pool(device, kFrameSets, kFrameSets * 8u, 0u, 0u, 0u);
+        segment.descriptors = create_pool(device, kFrameSets, {.images = kFrameSets * 8u});
     } else {
         vk::check(vkResetDescriptorPool(device, segment.descriptors, 0), "vkResetDescriptorPool");
     }
@@ -235,7 +235,7 @@ VkDescriptorSet RendererVk::allocate_table_set(VkDescriptorSetLayout layout) {
     VkDescriptorSet set = VK_NULL_HANDLE;
     VkResult result = vkAllocateDescriptorSets(device, &info, &set);
     if (result == VK_ERROR_OUT_OF_POOL_MEMORY || result == VK_ERROR_FRAGMENTED_POOL) {
-        segment.overflow.push_back(create_pool(device, kFrameSets, kFrameSets * 8u, 0u, 0u, 0u));
+        segment.overflow.push_back(create_pool(device, kFrameSets, {.images = kFrameSets * 8u}));
         info.descriptorPool = segment.overflow.back();
         result = vkAllocateDescriptorSets(device, &info, &set);
     }
@@ -1108,7 +1108,9 @@ bool RendererVk::record_replay_list(ReplayList& list) {
         alloc.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
         alloc.commandBufferCount = 1;
         vk::check(vkAllocateCommandBuffers(device, &alloc, &list.commands), "replay command buffer");
-        list.descriptors = create_pool(device, kFrameSets, kFrameSets * 8u, 0u, 0u, 0u);
+        // Patched texture tables and the replay's constants sets (constants_set).
+        list.descriptors =
+            create_pool(device, kFrameSets, constants_sets(64u, {.images = kFrameSets * 8u}));
     }
     if (replay_efb_.color && replay_efb_scale_ != efb_scale_) {
         destroy_efb_set(replay_efb_);
@@ -1323,7 +1325,7 @@ bool RendererVk::present_replay_subframe(const SubframeTime& time, const Affine3
         vk::check(vkAllocateCommandBuffers(device, &alloc, buffers), "vkAllocateCommandBuffers");
         slot.uploads = buffers[0];   // the evaluation
         slot.commands = buffers[1];  // the present
-        slot.descriptors = create_pool(device, 16u, 16u, kFrameUtilitySamplers, 0u, 0u);
+        slot.descriptors = create_pool(device, 16u, {.images = 16u, .samplers = kFrameUtilitySamplers});
         VkSemaphoreCreateInfo semaphore_info{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
         vk::check(vkCreateSemaphore(device, &semaphore_info, nullptr, &slot.acquired), "vkCreateSemaphore");
     }

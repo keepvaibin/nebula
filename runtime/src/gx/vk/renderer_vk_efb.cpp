@@ -508,15 +508,8 @@ VkDescriptorSet RendererVk::allocate_persistent_set(VkDescriptorSetLayout layout
     VkDescriptorSet set = VK_NULL_HANDLE;
     VkResult result = vkAllocateDescriptorSets(device, &info, &set);
     if (result == VK_ERROR_OUT_OF_POOL_MEMORY || result == VK_ERROR_FRAGMENTED_POOL) {
-        const VkDescriptorPoolSize sizes[] = {
-            {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 256u}, {VK_DESCRIPTOR_TYPE_SAMPLER, 1024u * 8u},
-            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 64u}, {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 32u}};
-        VkDescriptorPoolCreateInfo pool_info{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
-        pool_info.maxSets = 1024u;
-        pool_info.poolSizeCount = static_cast<std::uint32_t>(std::size(sizes));
-        pool_info.pPoolSizes = sizes;
-        VkDescriptorPool pool = VK_NULL_HANDLE;
-        vk::check(vkCreateDescriptorPool(device, &pool_info, nullptr, &pool), "persistent descriptor pool");
+        const VkDescriptorPool pool =
+            vk_detail::create_pool(device, vk_detail::kPersistentSets, vk_detail::kPersistentPool);
         persistent_overflow_.push_back(pool);
         info.descriptorPool = pool;
         result = vkAllocateDescriptorSets(device, &info, &set);

@@ -85,14 +85,17 @@ VkRect2D turned_rect(VkSurfaceTransformFlagBitsKHR transform, int width, int hei
 
 }  // namespace
 
-VkDescriptorPool vk_detail::create_pool(VkDevice device, std::uint32_t sets, std::uint32_t images,
-                                        std::uint32_t samplers, std::uint32_t dynamic_uniforms,
-                                        std::uint32_t dynamic_storage) {
+VkDescriptorPool vk_detail::create_pool(VkDevice device, std::uint32_t sets, const PoolSizes& counts) {
     std::vector<VkDescriptorPoolSize> sizes;
-    if (images != 0u) sizes.push_back({VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, images});
-    if (samplers != 0u) sizes.push_back({VK_DESCRIPTOR_TYPE_SAMPLER, samplers});
-    if (dynamic_uniforms != 0u) sizes.push_back({VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, dynamic_uniforms});
-    if (dynamic_storage != 0u) sizes.push_back({VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, dynamic_storage});
+    if (counts.images != 0u) sizes.push_back({VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, counts.images});
+    if (counts.samplers != 0u) sizes.push_back({VK_DESCRIPTOR_TYPE_SAMPLER, counts.samplers});
+    if (counts.dynamic_uniforms != 0u) {
+        sizes.push_back({VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, counts.dynamic_uniforms});
+    }
+    if (counts.dynamic_storage != 0u) {
+        sizes.push_back({VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, counts.dynamic_storage});
+    }
+    if (counts.storage != 0u) sizes.push_back({VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, counts.storage});
     VkDescriptorPoolCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
     info.maxSets = sets;
     info.poolSizeCount = static_cast<std::uint32_t>(sizes.size());
@@ -105,6 +108,8 @@ VkDescriptorPool vk_detail::create_pool(VkDevice device, std::uint32_t sets, std
 using vk_detail::create_pool;
 using vk_detail::kFrameSets;
 using vk_detail::kFrameUtilitySamplers;
+using vk_detail::kPersistentPool;
+using vk_detail::kPersistentSets;
 
 namespace {
 
@@ -180,7 +185,7 @@ bool RendererVk::initialize(int window_width, int window_height, unsigned efb_sc
             frame.uploads = buffers[0];
             frame.commands = buffers[1];
             frame.descriptors =
-                create_pool(device, kFrameSets, kFrameSets * 8u + 64u, kFrameUtilitySamplers, 0u, 0u);
+                create_pool(device, kFrameSets, {.images = kFrameSets * 8u + 64u, .samplers = kFrameUtilitySamplers});
             VkSemaphoreCreateInfo semaphore_info{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
             vk::check(vkCreateSemaphore(device, &semaphore_info, nullptr, &frame.acquired), "vkCreateSemaphore");
         }
@@ -440,7 +445,7 @@ bool RendererVk::create_layouts() {
     gx_layout_.logic_op = context.logic_op();
     gx_layout_.depth_clamp = context.depth_clamp();
     gx_layout_.depth_clip_enable = context.depth_clip_enable();
-    persistent_pool_ = create_pool(device, 1024u, 64u, 1024u * 8u, 64u, 32u);
+    persistent_pool_ = create_pool(device, kPersistentSets, kPersistentPool);
     return true;
 }
 
