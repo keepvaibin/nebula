@@ -265,26 +265,6 @@ void J3DShape::setArrayAndBindPipeline() const {
     J3DShapeMtx::sTexMtxLoadType = getTexMtxLoadType();
 }
 
-#ifdef TARGET_PC
-// The draws of one matrix group of this shape in the model being drawn (J3DShapePacket::prepareDraw sets it): the same
-// identity every frame, so the renderer matches the draw to its previous frame exactly.
-static void tagDraw(const J3DShape* pShape, u16 group) {
-    if (__NebulaGXDrawIdentities != 0) {
-        static const u64 kGolden = 0x9E3779B97F4A7C15ull;
-        u64 identity = static_cast< u64 >(reinterpret_cast< uintptr_t >(j3dSys.getModel()));
-        identity ^= static_cast< u64 >(reinterpret_cast< uintptr_t >(pShape)) * kGolden;
-        identity ^= static_cast< u64 >(group + 1u) << 48;
-        __NebulaGXDrawIdentity(identity | 1u);
-    }
-}
-
-static void untagDraw() {
-    if (__NebulaGXDrawIdentities != 0) {
-        __NebulaGXDrawIdentity(0);
-    }
-}
-#endif
-
 void J3DShape::drawFast() const {
     if (sOldVcdVatCmd != mVcdVatCmd) {
         GXCallDisplayList(mVcdVatCmd, kVcdVatDLSize);
@@ -302,9 +282,6 @@ void J3DShape::drawFast() const {
         for (u16 n = mMtxGroupNum, i = 0; i < n; i++) {
             if (mShapeMtx[i] != nullptr)
                 mShapeMtx[i]->load();
-#ifdef TARGET_PC
-            tagDraw(this, i);
-#endif
             if (mShapeDraw[i] != nullptr)
                 mShapeDraw[i]->draw();
         }
@@ -312,16 +289,10 @@ void J3DShape::drawFast() const {
         J3DFifoLoadPosMtxImm(*j3dSys.getShapePacket()->getBaseMtxPtr(), GX_PNMTX0);
         J3DFifoLoadNrmMtxImm(*j3dSys.getShapePacket()->getBaseMtxPtr(), GX_PNMTX0);
         for (u16 n = mMtxGroupNum, i = 0; i < n; i++) {
-#ifdef TARGET_PC
-            tagDraw(this, i);
-#endif
             if (mShapeDraw[i] != nullptr)
                 mShapeDraw[i]->draw();
         }
     }
-#ifdef TARGET_PC
-    untagDraw();
-#endif
 }
 
 void J3DShape::draw() const {

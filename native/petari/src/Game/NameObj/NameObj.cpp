@@ -8,6 +8,9 @@
 #define FLAG_RESUME 4u
 
 NameObj::NameObj(const char* pName) : mName(pName), mFlag(), mExecutorIdx(-1) {
+#ifdef TARGET_PC
+    mMotionEpoch = 0;
+#endif
     SingletonHolder< NameObjRegister >::get()->add(this);
 }
 

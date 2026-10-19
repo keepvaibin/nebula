@@ -1,4 +1,7 @@
 #include "Game/Screen/StarPointerDirector.hpp"
+#ifdef TARGET_PC
+#include "Game/Util/MotionSignal.hpp"
+#endif
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include "Game/Screen/StarPointerController.hpp"
 #include "Game/Screen/StarPointerGuidance.hpp"
@@ -65,6 +68,9 @@ void StarPointerDirector::update() {
 }
 
 void StarPointerDirector::draw() {
+#ifdef TARGET_PC
+    MotionSignal::starPointerDirector(this);
+#endif
     if (mGuidance != nullptr) {
         mGuidance->draw();
     }

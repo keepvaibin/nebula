@@ -126,6 +126,18 @@ uint32_t __NebulaToPhysical(const void* addr) {
     return 0;
 }
 
+uint32_t __NebulaObjectId(const void* object) {
+    const uintptr_t a = (uintptr_t)object;
+    if (a - (uintptr_t)sArena < kReserveSize) {
+        return (uint32_t)(a - (uintptr_t)sArena);
+    }
+    if (a - sImageBase < sImageSize) {
+        return kImageWindow + (uint32_t)(a - sImageBase);
+    }
+    /* Outside the game's memory (none of its objects are): the address folded, never 0 unless NULL. */
+    return (uint32_t)(a ^ (a >> 32)) | (a != 0 ? 0x80000000u : 0u);
+}
+
 void* __NebulaFromPhysical(uint32_t paddr) {
     if (paddr - kImageWindow < sImageSize) {
         return (void*)(sImageBase + (paddr - kImageWindow));

@@ -312,11 +312,6 @@ public:
         EfbPeekKind kind,
         std::uint16_t token,
         std::uint32_t& value);
-    // Any thread: the last 3D scene recorded transform history (interpolation, motion vectors), so the game writes
-    // its draw identities.
-    [[nodiscard]] bool draw_identities_wanted() const noexcept {
-        return draw_identities_wanted_.load(std::memory_order_relaxed);
-    }
     void scan_pe_events_on_sim_thread(
         const std::byte* fifo_data,
         std::size_t fifo_size,
@@ -793,7 +788,6 @@ private:
     gpu::Address draw_matrix_palette_ = 0;
     gpu::Address temporal_vs_palette_va_ = 0;
     TransformHistory transform_history_;
-    std::atomic<bool> draw_identities_wanted_{false};
     // The scene records transforms (temporal upscaling or interpolation).
     bool history_scene_ = false;
     // An interpolated frame's records come in layers (InterpScene::layers): its

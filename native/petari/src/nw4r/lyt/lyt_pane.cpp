@@ -1,4 +1,7 @@
 #include "nw4r/lyt/animation.h"
+#ifdef TARGET_PC
+#include "Game/Util/MotionSignal.hpp"
+#endif
 #include "nw4r/lyt/common.h"
 #include "nw4r/lyt/drawInfo.h"
 #include "nw4r/lyt/layout.h"
@@ -236,6 +239,9 @@ namespace nw4r {
                 return;
             }
 
+#ifdef TARGET_PC
+            MotionSignal::layoutPane(this);
+#endif
             DrawSelf(rInfo);
             for (PaneList::Iterator it = mChildList.GetBeginIter(); it != mChildList.GetEndIter(); ++it) {
                 it->Draw(rInfo);

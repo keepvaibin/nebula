@@ -1,4 +1,7 @@
 #include "Game/Map/LightFunction.hpp"
+#ifdef TARGET_PC
+#include "Game/Util/MotionSignal.hpp"
+#endif
 #include "Game/AreaObj/LightAreaHolder.hpp"
 #include "Game/Map/LightDirector.hpp"
 #include "Game/Map/LightPointCtrl.hpp"
@@ -187,6 +190,9 @@ namespace {
 };  // namespace
 
 void LightFunction::loadActorLightInfo(const ActorLightInfo* pInfo) {
+#ifdef TARGET_PC
+    MotionSignal::actorLight(pInfo);
+#endif
     ::loadLightInfoDiffuse(pInfo->mInfo0, GX_LIGHT0);
     ::loadLightInfoDiffuse(pInfo->mInfo1, GX_LIGHT1);
 
@@ -197,6 +203,9 @@ void LightFunction::loadActorLightInfo(const ActorLightInfo* pInfo) {
 }
 
 void LightFunction::loadLightInfoCoin(const LightInfoCoin* pInfo) {
+#ifdef TARGET_PC
+    MotionSignal::coinLight(pInfo);
+#endif
     ::loadLightInfoDiffuse(pInfo->base, GX_LIGHT0);
     TVec3f v7(0.0f, 0.0f, -1.0f);
     GXLightObj obj;
@@ -208,6 +217,9 @@ void LightFunction::loadLightInfoCoin(const LightInfoCoin* pInfo) {
 }
 
 void LightFunction::loadPointLightInfo(const PointLightInfo* pInfo) {
+#ifdef TARGET_PC
+    MotionSignal::pointLight(pInfo);
+#endif
     TVec3f v7(pInfo->mPos);
     MR::getCameraViewMtx().mult(v7, v7);
     GXLightObj obj;
@@ -219,6 +231,9 @@ void LightFunction::loadPointLightInfo(const PointLightInfo* pInfo) {
 }
 
 void LightFunction::loadAllLightWhite() {
+#ifdef TARGET_PC
+    MotionSignal::allLightWhite();
+#endif
     const GXLightID cLightDataIDs[8] = {GX_LIGHT0, GX_LIGHT1, GX_LIGHT2, GX_LIGHT3, GX_LIGHT4, GX_LIGHT5, GX_LIGHT6, GX_LIGHT7};
 
     for (u32 i = 0; i < ARRAY_SIZE(cLightDataIDs); i++) {

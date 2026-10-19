@@ -103,10 +103,6 @@ bool peek_efb(
     return backend().peek_efb(x, y, kind, value);
 }
 
-bool draw_identities_wanted() noexcept {
-    return backend().draw_identities_wanted();
-}
-
 bool peek_efb_published(
     std::uint16_t x,
     std::uint16_t y,

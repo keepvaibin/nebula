@@ -1,4 +1,7 @@
 #include "Game/Util/ActorMovementUtil.hpp"
+#ifdef TARGET_PC
+#include "Game/Util/MotionSignal.hpp"
+#endif
 #include "Game/Animation/XanimeCore.hpp"
 #include "Game/LiveActor/Binder.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
@@ -533,6 +536,9 @@ namespace MR {
     }
 
     void resetPosition(LiveActor* pActor) {
+#ifdef TARGET_PC
+        MotionSignal::newLife(pActor);
+#endif
         MR::clearHitSensors(pActor);
 
         if (pActor->mBinder != nullptr) {

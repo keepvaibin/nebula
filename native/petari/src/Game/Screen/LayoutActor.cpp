@@ -1,4 +1,7 @@
 #include "Game/Screen/LayoutActor.hpp"
+#ifdef TARGET_PC
+#include "Game/Util/MotionSignal.hpp"
+#endif
 #include "Game/LiveActor/Spine.hpp"
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include "Game/Screen/LayoutManager.hpp"
@@ -35,6 +38,9 @@ void LayoutActor::calcAnim() {
 
 void LayoutActor::draw() const {
     if (MR::isExecuteDrawLayout(this)) {
+#ifdef TARGET_PC
+        MotionSignal::layoutActor(this);
+#endif
         mLayoutManager->draw();
     }
 }

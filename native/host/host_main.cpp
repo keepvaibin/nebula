@@ -1172,18 +1172,33 @@ void svc_gx_pe_marker(void*, int finish, uint16_t token) {
 }
 
 void svc_gx_scene_marker(void*, uint32_t marker, const float* view) {
-    if (marker == 0) {
+    if (marker == NEBULA_SCENE_3D_BEGIN) {
         gSceneBegins.fetch_add(1, std::memory_order_relaxed);
     }
 #if defined(NEBULA_HOST_RENDERER)
-    if (marker == 0 && view != nullptr) {
+    if (marker == NEBULA_SCENE_3D_BEGIN && view != nullptr) {
         galaxy::gx::attach_scene_view(view);
     }
-    galaxy::gx::attach_fifo_marker(marker == 0 ? galaxy::gx::FifoMarker::SceneBegin : galaxy::gx::FifoMarker::SceneEnd,
-                                   gPendingSize);
+    static constexpr galaxy::gx::FifoMarker kMarkers[] = {
+        galaxy::gx::FifoMarker::SceneBegin, galaxy::gx::FifoMarker::SceneEnd,
+        galaxy::gx::FifoMarker::Scene2DBegin, galaxy::gx::FifoMarker::Scene2DEnd};
+    if (marker < std::size(kMarkers)) {
+        galaxy::gx::attach_fifo_marker(kMarkers[marker], gPendingSize);
+    }
 #else
     (void)marker;
     (void)view;
+#endif
+}
+
+void svc_gx_stripe_particle(void*, size_t span_offset, uint32_t particle, uint32_t age_lifetime, uint8_t strip) {
+#if defined(NEBULA_HOST_RENDERER)
+    galaxy::gx::attach_stripe_particle(gPendingSize + span_offset, particle, age_lifetime, strip);
+#else
+    (void)span_offset;
+    (void)particle;
+    (void)age_lifetime;
+    (void)strip;
 #endif
 }
 
@@ -1327,7 +1342,7 @@ uint32_t svc_option(void*, uint32_t what) {
 #endif
     case NEBULA_OPTION_DRAW_IDENTITIES:
 #if defined(NEBULA_HOST_RENDERER)
-        return galaxy::gx::draw_identities_wanted() ? 1u : 0u;
+        return galaxy::gx::draw_identity_wanted() ? 1u : 0u;
 #else
         return 0;
 #endif
@@ -1975,6 +1990,7 @@ int main(int argc, char** argv) {
     services.gx_pe_marker = svc_gx_pe_marker;
     services.gx_peek_efb = svc_gx_peek_efb;
     services.gx_scene_marker = svc_gx_scene_marker;
+    services.gx_stripe_particle = svc_gx_stripe_particle;
     services.disc_fst = svc_disc_fst;
     services.disc_read = svc_disc_read;
     services.disc_dol = svc_disc_dol;

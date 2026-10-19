@@ -199,6 +199,15 @@ static __GXFifoObj sGPFifo;
 static GXBool sCPUFifoReady;
 static GXBool sGPFifoReady;
 static GXBool sLinked; /* the CPU FIFO is the main FIFO: writes go to the ring */
+
+/* Host markers (nebula_gx_fifo.h): the renderer wants them (asked at each scene's begin) and the writer is in the main
+   ring. */
+uint8_t __NebulaGXMarkers;
+static u8 sMarkersWanted;
+
+static void update_markers(void) {
+    __NebulaGXMarkers = (uint8_t)(sLinked && sMarkersWanted);
+}
 /* Where a display list's writes go once it has overflowed (the SDK then reports the wrap and the list as empty);
    larger than any single reservation. */
 static u8 sOverflowSink[4096];
@@ -270,16 +279,21 @@ void __NebulaGXPeMarker(int finish, u16 token) {
     }
 }
 
-u8 __NebulaGXDrawIdentities;
-
 void __NebulaGXSceneMarker(u32 marker, const f32 (*view)[4]) {
     if (sLinked) {
-        if (marker == 0) {
-            __NebulaGXDrawIdentities =
-                (u8)(nebula_host()->option(nebula_host()->user, NEBULA_OPTION_DRAW_IDENTITIES) != 0);
+        if (marker == NEBULA_SCENE_3D_BEGIN || marker == NEBULA_SCENE_2D_BEGIN) {
+            sMarkersWanted = (u8)(nebula_host()->option(nebula_host()->user, NEBULA_OPTION_DRAW_IDENTITIES) != 0);
+            update_markers();
         }
         submit();
         nebula_host()->gx_scene_marker(nebula_host()->user, marker, view != NULL ? &view[0][0] : NULL);
+    }
+}
+
+void __NebulaGXStripeParticle(u32 particle, u32 ageLifetime, u8 strip) {
+    if (__NebulaGXMarkers != 0) {
+        nebula_host()->gx_stripe_particle(nebula_host()->user, (size_t)(__NebulaGXWriter.ptr - sSpanStart), particle,
+                                          ageLifetime, strip);
     }
 }
 
@@ -331,6 +345,7 @@ static void relink(void) {
         __NebulaGXWriter.ptr = sSpanStart;
     }
     sLinked = linked;
+    update_markers();
     point_writer();
 }
 
@@ -450,6 +465,7 @@ void __GXFifoInit(void) {
     sCPUFifoReady = GX_FALSE;
     sGPFifoReady = GX_FALSE;
     sLinked = GX_FALSE;
+    update_markers();
     point_writer();
 }
 

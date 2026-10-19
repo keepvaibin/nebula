@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-// Game-side motion signals (generation-20 site hooks) for frame interpolation
-// and motion vectors.
+// Game-side motion signals for frame interpolation and motion vectors: the
+// recompiled build's generation-20 site hooks, and in the native build the
+// game's own calls (Petari's MotionSignal, Game/Util/MotionSignal.hpp), which
+// write the same host markers.
 //
 // Object epochs: a counter per guest object (LiveActor, its J3DModel, a JPA
 // emitter), bumped when the game resets the object's position or starts a new

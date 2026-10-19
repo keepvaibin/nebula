@@ -1,4 +1,7 @@
 #include "JSystem/J3DGraphBase/J3DPacket.hpp"
+#ifdef TARGET_PC
+#include "Game/Util/MotionSignal.hpp"
+#endif
 #include "JSystem/J3DGraphAnimator/J3DModel.hpp"
 #include "JSystem/J3DGraphAnimator/J3DModelData.hpp"
 #include "JSystem/J3DGraphAnimator/J3DMtxBuffer.hpp"
@@ -282,6 +285,9 @@ J3DError J3DShapePacket::newDifferedDisplayList(u32 diffFlags) {
 }
 
 void J3DShapePacket::prepareDraw() const {
+#ifdef TARGET_PC
+    MotionSignal::drawShapePacket(this);
+#endif
     mpModel->getVertexBuffer()->setArray();
     j3dSys.setModel(mpModel);
     j3dSys.setShapePacket((J3DShapePacket*)this);

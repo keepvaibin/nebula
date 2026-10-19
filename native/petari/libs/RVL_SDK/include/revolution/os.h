@@ -70,10 +70,13 @@ u32 __NebulaOption(u32 what);
 // a host thread raises something.
 void __NebulaPoll(void);
 void* __NebulaFromPhysical(u32 paddr);
-// The 3D scene's begin (0, with the camera's world-to-eye matrix) and end (1) in the GX stream (gx_scene_marker).
+// A scene bound in the GX stream (NEBULA_SCENE_* in nebula_game_api.h; the 3D scene's begin with the camera's
+// world-to-eye matrix). The begins ask whether the renderer wants host markers (__NebulaGXHostMarker).
 void __NebulaGXSceneMarker(u32 marker, const f32 (*view)[4]);
-// Nonzero while the renderer wants draw identities (__NebulaGXDrawIdentity); read at each scene's begin.
-extern u8 __NebulaGXDrawIdentities;
+// A JPA stripe particle whose two vertices are written next (gx_stripe_particle in nebula_game_api.h).
+void __NebulaGXStripeParticle(u32 particle, u32 ageLifetime, u8 strip);
+// A stable 32-bit name for a game object: its physical address (OSCachedToPhysical) when in the game's memory.
+u32 __NebulaObjectId(const void* pObject);
 // The draw-sync token whose callback runs (0 after it): GXPeek reads the EFB as the stream reached it.
 void __NebulaGXPeekToken(u16 token);
 #ifdef __cplusplus

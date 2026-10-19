@@ -127,7 +127,15 @@ typedef struct NebulaDisplay {
 enum {
     NEBULA_OPTION_TEXT_SPEED = 1, /* 1 to 3: text steps revealed per frame */
     NEBULA_OPTION_TEST_DUMP_LAYOUTS, /* tests: 1 logs each layout's pane tree once (GALAXY_TEST_DUMP_LAYOUTS) */
-    NEBULA_OPTION_DRAW_IDENTITIES, /* 1 while the renderer matches draws across frames (__NebulaGXDrawIdentity) */
+    NEBULA_OPTION_DRAW_IDENTITIES, /* 1 while the renderer reads host markers (__NebulaGXHostMarker) */
+};
+
+/* gx_scene_marker: the scene bounds in the stream. */
+enum {
+    NEBULA_SCENE_3D_BEGIN = 0, /* GameScene::draw3D's begin, with the camera's world-to-eye matrix */
+    NEBULA_SCENE_3D_END,
+    NEBULA_SCENE_2D_BEGIN, /* GameScene::draw2D's begin */
+    NEBULA_SCENE_2D_END,
 };
 
 /* Audio interface requests (ai_control). */
@@ -172,9 +180,14 @@ typedef struct NebulaHostServices {
     /* An EFB pixel (type 0: colour, 1: depth), as GXPeekARGB/GXPeekZ read it; `token` is the draw-sync token
        whose callback peeks (0: none), the stream position the console's GPU was stopped at. */
     uint32_t (*gx_peek_efb)(void* user, uint16_t x, uint16_t y, uint32_t type, uint16_t token);
-    /* The game's 3D scene (GameScene::draw3D) begins (marker 0, with the camera's world-to-eye matrix, row-major 3x4)
-       or ends (marker 1, `view` NULL) at the end of the stream so far. */
+    /* A scene bound (NEBULA_SCENE_*) at the end of the stream so far; the 3D scene's begin carries the camera's
+       world-to-eye matrix (row-major 3x4), the others NULL. */
     void (*gx_scene_marker)(void* user, uint32_t marker, const float* view);
+    /* A JPA stripe particle whose two strip vertices are written next, `span_offset` bytes into the span the game
+       has not submitted yet (galaxy/motion_signals.h): age << 16 | lifetime, strip 0 JPADrawStripe, 1-2 the passes
+       of JPADrawStripeX. */
+    void (*gx_stripe_particle)(void* user, size_t span_offset, uint32_t particle, uint32_t age_lifetime,
+                               uint8_t strip);
 
     /* Disc: the game partition's file table as on the disc (big-endian), valid for the process's life. */
     const uint8_t* (*disc_fst)(void* user, size_t* size);

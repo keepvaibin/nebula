@@ -1,6 +1,9 @@
 #include "Game/System/ShapePacketUserData.hpp"
 #include "Game/System/WPad.hpp"
 #include "Game/Util/MathUtil.hpp"
+#ifdef TARGET_PC
+#include "Game/Util/MotionSignal.hpp"
+#endif
 
 #include <JSystem/JKernel/JKRAram.hpp>
 #include <JSystem/JKernel/JKRAramPiece.hpp>
@@ -467,6 +470,9 @@ namespace {
 };  // namespace
 
 void JPABaseEmitter::init(JPAEmitterManager* pManager, JPAResource* pResource) {
+#ifdef TARGET_PC
+    MotionSignal::emitterInit(this);
+#endif
     mpEmtrMgr = pManager;
     mpRes = pResource;
     const JPADynamicsBlockData* pData = mpRes->getDyn()->mpData;
@@ -711,6 +717,9 @@ void JPADrawStripe(JPAEmitterWorkData* pWork) {
     for (JPANode< JPABaseParticle >* pNode = pFirst; pNode != pWork->mpAlivePtcl->getEnd();) {
         JPABaseParticle* pParticle = pNode->getObject();
         pWork->mpCurNode = pNode;
+#ifdef TARGET_PC
+        MotionSignal::stripeParticle(pParticle, 0);
+#endif
         position.set(pParticle->mPosition);
         f32 sin = JMASSin(pParticle->mRotateAngle);
         f32 cos = JMASCos(pParticle->mRotateAngle);
@@ -806,6 +815,9 @@ void JPADrawStripeX(JPAEmitterWorkData* pWork) {
     for (JPANode< JPABaseParticle >* pNode = pFirst; pNode != pWork->mpAlivePtcl->getEnd();) {
         JPABaseParticle* pParticle = pNode->getObject();
         pWork->mpCurNode = pNode;
+#ifdef TARGET_PC
+        MotionSignal::stripeParticle(pParticle, 1);
+#endif
         position.set(pParticle->mPosition);
         f32 sin = JMASSin(pParticle->mRotateAngle);
         f32 cos = JMASCos(pParticle->mRotateAngle);
@@ -860,6 +872,9 @@ void JPADrawStripeX(JPAEmitterWorkData* pWork) {
     for (JPANode< JPABaseParticle >* pNode = pFirst; pNode != pWork->mpAlivePtcl->getEnd();) {
         JPABaseParticle* pParticle = pNode->getObject();
         pWork->mpCurNode = pNode;
+#ifdef TARGET_PC
+        MotionSignal::stripeParticle(pParticle, 2);
+#endif
         position.set(pParticle->mPosition);
         f32 sin = -JMASSin(pParticle->mRotateAngle);
         f32 cos = JMASCos(pParticle->mRotateAngle);

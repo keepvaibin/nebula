@@ -1,4 +1,7 @@
 #include "Game/LiveActor/LiveActor.hpp"
+#ifdef TARGET_PC
+#include "Game/Util/MotionSignal.hpp"
+#endif
 #include "Game/AudioLib/AudAnmSoundObject.hpp"
 #include "Game/LiveActor/ActorAnimKeeper.hpp"
 #include "Game/LiveActor/ActorLightCtrl.hpp"
@@ -74,6 +77,9 @@ void LiveActor::kill() {
 }
 
 void LiveActor::makeActorDead() {
+#ifdef TARGET_PC
+    MotionSignal::died(this);
+#endif
     mVelocity.zero();
 
     MR::clearHitSensors(this);

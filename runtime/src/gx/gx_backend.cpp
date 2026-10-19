@@ -8098,7 +8098,6 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
         motion_scene_ = temporal_scene_ && renderer_.begin_motion_scene();
         scene_camera_captured_ = false;
         history_scene_ = temporal_scene_ || interp_recording_;
-        draw_identities_wanted_.store(history_scene_, std::memory_order_relaxed);
         if (interp_recording_) {
             renderer_.note_replay_scene();
             if (!std::exchange(mirror_opened_scene_, false)) {

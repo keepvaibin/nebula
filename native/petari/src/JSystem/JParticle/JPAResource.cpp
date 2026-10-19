@@ -1,6 +1,9 @@
 #define JPA_LIST_DEFER_INLINE
 #define JPA_FIELD_BLOCK_DEFER_INLINE
 #include "JSystem/JParticle/JPAResource.hpp"
+#ifdef TARGET_PC
+#include "Game/Util/MotionSignal.hpp"
+#endif
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include "JSystem/JParticle/JPABaseShape.hpp"
 #include "JSystem/JParticle/JPAChildShape.hpp"
@@ -769,6 +772,9 @@ void JPAResource::draw(JPAEmitterWorkData* work, JPABaseEmitter* emtr) {
 }
 
 void JPAResource::drawP(JPAEmitterWorkData* work) {
+#ifdef TARGET_PC
+    MotionSignal::drawEmitter(this, work->mpEmtr, false);
+#endif
     work->mpEmtr->clearStatus(0x80);
 
     work->mGlobalPtclScl.x = work->mpEmtr->mGlobalPScl.x * mpBaseShape->getBaseSizeX();
@@ -805,6 +811,9 @@ void JPAResource::drawP(JPAEmitterWorkData* work) {
         JPANode< JPABaseParticle >* node = work->mpEmtr->mAlivePtclBase.getLast();
         for (; node != work->mpEmtr->mAlivePtclBase.getEnd(); node = node->getPrev()) {
             work->mpCurNode = node;
+#ifdef TARGET_PC
+            MotionSignal::drawParticle(node->getObject(), false);
+#endif
             if (mpDrawParticleFuncList != NULL) {
                 for (int i = mpDrawParticleFuncListNum - 1; i >= 0; i--) {
                     (*mpDrawParticleFuncList[i])(work, node->getObject());
@@ -815,6 +824,9 @@ void JPAResource::drawP(JPAEmitterWorkData* work) {
         JPANode< JPABaseParticle >* node = work->mpEmtr->mAlivePtclBase.getFirst();
         for (; node != work->mpEmtr->mAlivePtclBase.getEnd(); node = node->getNext()) {
             work->mpCurNode = node;
+#ifdef TARGET_PC
+            MotionSignal::drawParticle(node->getObject(), false);
+#endif
             if (mpDrawParticleFuncList != NULL) {
                 for (int i = mpDrawParticleFuncListNum - 1; i >= 0; i--) {
                     (*mpDrawParticleFuncList[i])(work, node->getObject());
@@ -831,6 +843,9 @@ void JPAResource::drawP(JPAEmitterWorkData* work) {
 }
 
 void JPAResource::drawC(JPAEmitterWorkData* work) {
+#ifdef TARGET_PC
+    MotionSignal::drawEmitter(this, work->mpEmtr, true);
+#endif
     work->mpEmtr->setStatus(0x80);
 
     if (mpChildShape->isScaleInherited()) {
@@ -867,6 +882,9 @@ void JPAResource::drawC(JPAEmitterWorkData* work) {
         JPANode< JPABaseParticle >* node = work->mpEmtr->mAlivePtclChld.getLast();
         for (; node != work->mpEmtr->mAlivePtclChld.getEnd(); node = node->getPrev()) {
             work->mpCurNode = node;
+#ifdef TARGET_PC
+            MotionSignal::drawParticle(node->getObject(), true);
+#endif
             if (mpDrawParticleChildFuncList != NULL) {
                 for (int i = mpDrawParticleChildFuncListNum - 1; i >= 0; i--) {
                     (*mpDrawParticleChildFuncList[i])(work, node->getObject());
@@ -877,6 +895,9 @@ void JPAResource::drawC(JPAEmitterWorkData* work) {
         JPANode< JPABaseParticle >* node = work->mpEmtr->mAlivePtclChld.getFirst();
         for (; node != work->mpEmtr->mAlivePtclChld.getEnd(); node = node->getNext()) {
             work->mpCurNode = node;
+#ifdef TARGET_PC
+            MotionSignal::drawParticle(node->getObject(), true);
+#endif
             if (mpDrawParticleChildFuncList != NULL) {
                 for (int i = mpDrawParticleChildFuncListNum - 1; i >= 0; i--) {
                     (*mpDrawParticleChildFuncList[i])(work, node->getObject());

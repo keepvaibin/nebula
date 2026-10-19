@@ -1,4 +1,7 @@
 #include "Game/Scene/SceneFunction.hpp"
+#ifdef TARGET_PC
+#include "Game/Util/MotionSignal.hpp"
+#endif
 #include "Game/Effect/EffectSystem.hpp"
 #include "Game/NameObj/NameObjExecuteHolder.hpp"
 #include "Game/NameObj/NameObjListExecutor.hpp"
@@ -91,6 +94,9 @@ void CategoryList::execute(MR::CalcAnimType type) {
 }
 
 void CategoryList::execute(MR::DrawType type) {
+#ifdef TARGET_PC
+    MotionSignal::drawType(type);
+#endif
     NameObjListExecutor* pListExecutor = SingletonHolder< GameSystem >::get()->mSceneController->getNameObjListExecutor();
 
     pListExecutor->executeDraw(type);
@@ -115,12 +121,18 @@ void CategoryList::entryDrawBufferMirror() {
 }
 
 void CategoryList::drawOpa(MR::DrawBufferType type) {
+#ifdef TARGET_PC
+    MotionSignal::drawBufferOpa(type);
+#endif
     NameObjListExecutor* pListExecutor = SingletonHolder< GameSystem >::get()->mSceneController->getNameObjListExecutor();
 
     pListExecutor->drawOpa(type);
 }
 
 void CategoryList::drawXlu(MR::DrawBufferType type) {
+#ifdef TARGET_PC
+    MotionSignal::drawBufferXlu(type);
+#endif
     NameObjListExecutor* pListExecutor = SingletonHolder< GameSystem >::get()->mSceneController->getNameObjListExecutor();
 
     pListExecutor->drawXlu(type);

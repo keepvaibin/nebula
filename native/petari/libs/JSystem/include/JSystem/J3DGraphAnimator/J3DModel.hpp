@@ -182,4 +182,7 @@ public:
     /* 0xD0 */ J3DVtxColorCalc* mVtxColorCalc;
     /* 0xD4 */ J3DVtxShader* mUnkCalc1;
     /* 0xD8 */ J3DUnkCalc2* mUnkCalc2;
+#ifdef TARGET_PC
+    u16 mMotionEpoch;  // counts the model's lives (MotionSignal)
+#endif
 };

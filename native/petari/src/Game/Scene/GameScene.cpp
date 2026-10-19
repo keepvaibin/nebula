@@ -1,5 +1,8 @@
 #include "Game/Scene/GameScene.hpp"
 #ifdef TARGET_PC
+#include "Game/Util/MotionSignal.hpp"
+#endif
+#ifdef TARGET_PC
 #include "Game/System/GameDataFunction.hpp"
 #include "Game/System/GameDataHolder.hpp"
 #include "Game/Util/PlayerUtil.hpp"
@@ -392,6 +395,9 @@ void GameScene::initEffect() {
 
 void GameScene::drawMirror() const {
     if (isDrawMirror()) {
+#ifdef TARGET_PC
+        MotionSignal::mirror(true);
+#endif
         PSMTXCopy(MR::getMirrorCameraViewMtx(), j3dSys.mViewMtx);
         MR::loadProjectionMtx();
         CategoryList::entryDrawBufferMirror();
@@ -400,6 +406,9 @@ void GameScene::drawMirror() const {
         CategoryList::drawOpa(MR::DrawBufferType_MirrorMapObj);
         CategoryList::drawXlu(MR::DrawBufferType_MirrorMapObj);
         CategoryList::execute(MR::DrawType_CaptureScreenIndirect);
+#ifdef TARGET_PC
+        MotionSignal::mirror(false);
+#endif
         MR::clearZBuffer();
         GXColor c = {0, 0, 255, 0};
         MR::fillScreen(c);
@@ -420,7 +429,8 @@ void GameScene::draw3D() const {
         return;
     }
 
-    __NebulaGXSceneMarker(0, MR::getCameraViewMtx());
+    __NebulaGXSceneMarker(NEBULA_SCENE_3D_BEGIN, MR::getCameraViewMtx());
+    MotionSignal::sceneBegin();
     CategoryList::execute(MR::DrawType_AstroDomeSkyClear);
     MR::loadViewMtx();
     MR::loadProjectionMtx();
@@ -469,11 +479,14 @@ void GameScene::draw3D() const {
     MR::loadLightPlayer();
     CategoryList::execute(MR::DrawType_0x24);
     CategoryList::execute(MR::DrawType_0x3B);
-    __NebulaGXSceneMarker(1, nullptr);
+    __NebulaGXSceneMarker(NEBULA_SCENE_3D_END, nullptr);
     MR::clearZBuffer();
 }
 
 void GameScene::draw2D() const {
+#ifdef TARGET_PC
+    MotionSignal::scene2D(true);
+#endif
     if (isPlayMovie()) {
         SceneFunction::executeDrawList2DMovie();
     } else {
@@ -487,6 +500,9 @@ void GameScene::draw2D() const {
     CategoryList::drawOpa(MR::DrawBufferType_0x26);
     CategoryList::drawXlu(MR::DrawBufferType_0x26);
     CategoryList::execute(MR::DrawType_WipeLayout);
+#ifdef TARGET_PC
+    MotionSignal::scene2D(false);
+#endif
 }
 
 bool GameScene::isValidScenarioOpeningCamera() const {

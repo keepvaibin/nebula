@@ -104,14 +104,22 @@ static inline uint8_t* __NebulaGXCmdXFWords(uint16_t addr, unsigned count) {
     return p + 5;
 }
 
-/* Nebula's draw identity (XF 0x1F00-0x1F01, no console register; the renderer keeps it beside its state): what the
-   draws that follow are, 0 for nothing known. The renderer matches each draw to the same draw of the previous frame by
-   it (interpolated frames, motion vectors). Written only while the renderer asks (__NebulaGXDrawIdentities). */
-#define NEBULA_XF_DRAW_IDENTITY 0x1F00u
-static inline void __NebulaGXDrawIdentity(uint64_t identity) {
-    uint8_t* const p = __NebulaGXCmdXFWords((uint16_t)NEBULA_XF_DRAW_IDENTITY, 2);
-    __NebulaGXStore32(p, (uint32_t)(identity >> 32));
-    __NebulaGXStore32(p + 4, (uint32_t)identity);
+/* Nonzero while host markers go into the stream: the renderer wants them (frame interpolation, motion vectors, ray
+   tracing; asked at each scene's begin) and the writer is in the main ring, not a display list. */
+extern uint8_t __NebulaGXMarkers;
+
+/* A host marker (galaxy/gx/fifo_parser.h op::kHostMarker, galaxy/motion_signals.h): the game object whose GX commands
+   follow, or a scene signal. 12 bytes: 0xF0, the kind, then aux, a and b big-endian. Never inside a GXBegin. */
+static inline void __NebulaGXHostMarker(uint8_t kind, uint16_t aux, uint32_t a, uint32_t b) {
+    if (__NebulaGXMarkers == 0) {
+        return;
+    }
+    uint8_t* const p = __NebulaGXReserve(12);
+    p[0] = 0xF0;
+    p[1] = kind;
+    __NebulaGXStore16(p + 2, aux);
+    __NebulaGXStore32(p + 4, a);
+    __NebulaGXStore32(p + 8, b);
 }
 
 /* Indexed load (0x20/0x28/0x30/0x38): the opcode, the index, the address and size word. */

@@ -1,4 +1,7 @@
 #include "Game/Util/LightUtil.hpp"
+#ifdef TARGET_PC
+#include "Game/Util/MotionSignal.hpp"
+#endif
 #include "Game/LiveActor/ActorLightCtrl.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Map/LightDirector.hpp"
@@ -33,6 +36,9 @@ namespace MR {
     }
 
     void loadLightPlayer() {
+#ifdef TARGET_PC
+        MotionSignal::playerLight();
+#endif
         MR::getSceneObj< LightDirector >(SceneObj_LightDirector)->loadLightPlayer();
     }
 

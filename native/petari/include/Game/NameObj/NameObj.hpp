@@ -55,6 +55,9 @@ public:
     /* 0x04 */ const char* mName;  ///< A string to identify the NameObj.
     /* 0x08 */ u16 mFlag;          ///< Flags in relation to movement.
     /* 0x0A */ s16 mExecutorIdx;   ///< The index into the NameObjExecuteInfo array.
+#ifdef TARGET_PC
+    u16 mMotionEpoch;  ///< Counts the object's lives (MotionSignal), in the padding after mExecutorIdx.
+#endif
 };
 
 /// @brief Contains static functions to begin and end movement in a NameObj.

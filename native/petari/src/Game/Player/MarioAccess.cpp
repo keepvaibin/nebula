@@ -1,4 +1,7 @@
 #include "Game/Player/MarioAccess.hpp"
+#ifdef TARGET_PC
+#include "Game/Util/MotionSignal.hpp"
+#endif
 #include "Game/LiveActor/Binder.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/MapObj/CollectCounter.hpp"
@@ -259,6 +262,9 @@ namespace MarioAccess {
     }
 
     void setTrans(const TVec3f& rTrans, u16) {
+#ifdef TARGET_PC
+        MotionSignal::playerPlaced(getPlayerActor(), rTrans);
+#endif
         getPlayerActor()->mPosition.set(rTrans);
         getPlayerActor()->getMario()->mPosition = rTrans;
 
@@ -556,6 +562,9 @@ namespace MarioAccess {
     }
 
     void setBaseMtx(MtxPtr mtx) {
+#ifdef TARGET_PC
+        MotionSignal::playerPlaced(getPlayerActor(), TVec3f(mtx[0][3], mtx[1][3], mtx[2][3]));
+#endif
         getPlayerActor()->forceSetBaseMtx(mtx);
     }
 

@@ -390,6 +390,9 @@ public:
     /* 0x111 */ u8 mTexAnmIdx;
     /* 0x112 */ u8 mGroupID;
     /* 0x113 */ u8 mResMgrID;
+#ifdef TARGET_PC
+    u16 mMotionEpoch;  // counts the pooled emitter's effects (MotionSignal)
+#endif
 };
 
 enum {

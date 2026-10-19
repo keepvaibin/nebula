@@ -1,4 +1,7 @@
 #include "Game/Map/Air.hpp"
+#ifdef TARGET_PC
+#include "Game/Util/MotionSignal.hpp"
+#endif
 #include "Game/MapObj/SpiderThread.hpp"
 #include "Game/MapObj/SpinDriverPathDrawer.hpp"
 #include "Game/NameObj/NameObjExecuteHolder.hpp"
@@ -130,6 +133,9 @@ void SceneFunction::executeCalcViewAndEntryList2D() {
 }
 
 void SceneFunction::executeDrawBufferListNormalOpaBeforeVolumeShadow() {
+#ifdef TARGET_PC
+    MotionSignal::phase(MotionSignal::ScenePhase_OpaBeforeVolumeShadow);
+#endif
     CategoryList::drawOpa(MR::DrawBufferType_CrystalItem);
     CategoryList::drawXlu(MR::DrawBufferType_CrystalItem);
     CategoryList::drawOpa(MR::DrawBufferType_Crystal);
@@ -162,11 +168,17 @@ void SceneFunction::executeDrawBufferListNormalOpaBeforeVolumeShadow() {
 }
 
 void SceneFunction::executeDrawBufferListNormalOpaBeforeSilhouette() {
+#ifdef TARGET_PC
+    MotionSignal::phase(MotionSignal::ScenePhase_OpaBeforeSilhouette);
+#endif
     CategoryList::drawOpa(MR::DrawBufferType_NoShadowedMapObj);
     CategoryList::drawOpa(MR::DrawBufferType_NoShadowedMapObjStrongLight);
 }
 
 void SceneFunction::executeDrawBufferListNormalOpa() {
+#ifdef TARGET_PC
+    MotionSignal::phase(MotionSignal::ScenePhase_Opa);
+#endif
     CategoryList::drawOpa(MR::DrawBufferType_NoSilhouettedMapObj);
     CategoryList::drawOpa(MR::DrawBufferType_NoSilhouettedMapObjWeakLight);
     CategoryList::drawOpa(MR::DrawBufferType_NoSilhouettedMapObjStrongLight);
@@ -187,6 +199,9 @@ void SceneFunction::executeDrawBufferListNormalOpa() {
 }
 
 void SceneFunction::executeDrawBufferListNormalXlu() {
+#ifdef TARGET_PC
+    MotionSignal::phase(MotionSignal::ScenePhase_Xlu);
+#endif
     CategoryList::drawXlu(MR::DrawBufferType_Planet);
     CategoryList::drawXlu(MR::DrawBufferType_PlanetLow);
     CategoryList::drawXlu(MR::DrawBufferType_Environment);
@@ -208,6 +223,9 @@ void SceneFunction::executeDrawBufferListNormalXlu() {
 }
 
 void SceneFunction::executeDrawListOpa() {
+#ifdef TARGET_PC
+    MotionSignal::phase(MotionSignal::ScenePhase_ListOpa);
+#endif
     CategoryList::execute(MR::DrawType_0x3);
     MR::reinitGX();
     CategoryList::execute(MR::DrawType_0x52);
@@ -242,6 +260,9 @@ void SceneFunction::executeDrawListOpa() {
 }
 
 void SceneFunction::executeDrawListXlu() {
+#ifdef TARGET_PC
+    MotionSignal::phase(MotionSignal::ScenePhase_ListXlu);
+#endif
     MR::reinitGX();
     CategoryList::execute(MR::DrawType_VolumeModel);
     CategoryList::execute(MR::DrawType_0x30);
@@ -255,17 +276,26 @@ void SceneFunction::executeDrawListXlu() {
 }
 
 void SceneFunction::executeDrawSilhouetteAndFillShadow() {
+#ifdef TARGET_PC
+    MotionSignal::phase(MotionSignal::ScenePhase_SilhouetteAndFillShadow);
+#endif
     MR::fillSilhouetteColor();
     MR::loadViewMtx();
     MR::loadProjectionMtx();
 }
 
 void SceneFunction::executeDrawAlphaShadow() {
+#ifdef TARGET_PC
+    MotionSignal::phase(MotionSignal::ScenePhase_AlphaShadow);
+#endif
     CategoryList::execute(MR::DrawType_AlphaShadow);
     MR::loadViewMtx();
 }
 
 void SceneFunction::executeDrawAfterIndirect() {
+#ifdef TARGET_PC
+    MotionSignal::phase(MotionSignal::ScenePhase_AfterIndirect);
+#endif
     CategoryList::drawOpa(MR::DrawBufferType_IndirectPlanet);
     CategoryList::drawOpa(MR::DrawBufferType_IndirectMapObj);
     CategoryList::drawOpa(MR::DrawBufferType_IndirectMapObjStrongLight);
@@ -299,6 +329,9 @@ void SceneFunction::executeDrawAfterIndirect() {
 }
 
 void SceneFunction::executeDrawImageEffect() {
+#ifdef TARGET_PC
+    MotionSignal::phase(MotionSignal::ScenePhase_ImageEffect);
+#endif
     if (MR::isNormalBloomOn()) {
         MR::reinitGX();
         CategoryList::execute(MR::DrawType_BloomEffectPreDraw);

@@ -1,4 +1,7 @@
 #include "Game/Screen/StarPointerLayout.hpp"
+#ifdef TARGET_PC
+#include "Game/Util/MotionSignal.hpp"
+#endif
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include "Game/Screen/StarPointerBlur.hpp"
@@ -539,6 +542,9 @@ void StarPointerLayout::draw() const {
         return;
     }
 
+#ifdef TARGET_PC
+    MotionSignal::starPointerLayout(this);
+#endif
     drawDecoration();
     LayoutActor::draw();
     mNumber->draw();
