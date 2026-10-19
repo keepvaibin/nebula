@@ -31,8 +31,13 @@ Affine34 rotation_only(const Affine34& m) noexcept {
 
 // Payload layouts (floats): still b[12]; element-wise a[12] b[12]; rigid
 // qa[4] qb[4] stretch_a[9] stretch_b[9] translation_a[3] translation_b[3]
-// theta inv_sin_theta.
+// theta inv_sin_theta; then the endpoint values (kFlagEndA, kFlagEndB).
 constexpr std::uint32_t kRigidWords = 34u;
+constexpr std::uint32_t kLightWords = 14u;
+
+[[nodiscard]] std::uint32_t transform_words(std::uint32_t flags) noexcept {
+    return (flags & kFlagStill) != 0u ? 12u : (flags & kFlagRigid) != 0u ? kRigidWords : 24u;
+}
 
 Affine34 transform_at(const std::uint32_t* p, std::uint32_t flags, float t) noexcept {
     Affine34 out{};
@@ -42,8 +47,7 @@ Affine34 transform_at(const std::uint32_t* p, std::uint32_t flags, float t) noex
     }
     if ((flags & kFlagRigid) == 0u) {
         for (unsigned i = 0; i < 12u; ++i) {
-            const float a = word_float(p[i]);
-            out[i] = a + (word_float(p[12u + i]) - a) * t;
+            out[i] = word_float(p[i]) * (1.0f - t) + word_float(p[12u + i]) * t;
         }
         return out;
     }
@@ -82,7 +86,70 @@ Affine34 transform_at(const std::uint32_t* p, std::uint32_t flags, float t) noex
     return out;
 }
 
+// An Affine or Normal op's value at t with the camera at t, before its endpoint terms.
+Affine34 transform_value(const std::uint32_t* p, std::uint32_t flags, OpKind kind, float t,
+                         const Affine34& camera) noexcept {
+    Affine34 m = transform_at(p, flags, t);
+    if (kind == OpKind::Normal) {
+        m[3] = m[7] = m[11] = 0.0f;
+    }
+    if ((flags & kFlagSplit) != 0u) {
+        m = affine_multiply(kind == OpKind::Normal ? rotation_only(camera) : camera, m);
+    }
+    return m;
+}
+
+// A light op's position and direction at t (6 floats).
+void light_value(const std::uint32_t* p, std::uint32_t flags, float t, const Affine34& camera, float* out) noexcept {
+    float w[3], v[3], pos[3], dir[3];
+    for (unsigned i = 0; i < 3u; ++i) {
+        w[i] = word_float(p[i]) * (1.0f - t) + word_float(p[3u + i]) * t;
+        v[i] = word_float(p[6u + i]) * (1.0f - t) + word_float(p[9u + i]) * t;
+    }
+    if ((flags & kFlagLightSplit) != 0u) {
+        affine_transform_point(camera, w, pos);
+        affine_transform_point(rotation_only(camera), v, dir);
+    } else {
+        std::memcpy(pos, w, sizeof(w));
+        std::memcpy(dir, v, sizeof(v));
+    }
+    const float la = word_float(p[12]), lb = word_float(p[13]);
+    const float ld = vector_length(dir);
+    if (ld > 1e-20f) {
+        const float scale = (la * (1.0f - t) + lb * t) / ld;
+        for (float& x : dir) x *= scale;
+    }
+    std::memcpy(out, pos, sizeof(pos));
+    std::memcpy(out + 3, dir, sizeof(dir));
+}
+
+// value + (1 - t)(A - value at 0) + t(B - value at 1), each term only where it is finite.
+float endpoint_exact(float value, float t, bool has_a, float a, float at_0, bool has_b, float b,
+                     float at_1) noexcept {
+    const float da = has_a ? a - at_0 : 0.0f;
+    const float db = has_b ? b - at_1 : 0.0f;
+    return value + (1.0f - t) * (std::isfinite(da) ? da : 0.0f) + t * (std::isfinite(db) ? db : 0.0f);
+}
+
 }  // namespace
+
+void Program::clear() {
+    ops.clear();
+    payload.assign(kHeaderWords, 0u);
+    payload[kHeaderOne] = float_word(1.0f);
+    const Affine34 identity{1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f};
+    set_endpoint_cameras(identity, identity);
+    endpoint_cameras_ = false;
+    flags_ = 0u;
+}
+
+void Program::set_endpoint_cameras(const Affine34& at_0, const Affine34& at_1) {
+    for (unsigned i = 0; i < 12u; ++i) {
+        payload[kHeaderCamera0 + i] = float_word(at_0[i]);
+        payload[kHeaderCamera1 + i] = float_word(at_1[i]);
+    }
+    endpoint_cameras_ = true;
+}
 
 void Program::push(OpKind kind, std::uint32_t flags, std::uint32_t count, std::uint32_t dst, std::uint32_t at) {
     ops.push_back({control(kind, flags | flags_, count), dst, at, 0u});
@@ -94,7 +161,8 @@ std::uint32_t Program::append(const float* values, std::uint32_t count) {
     return at;
 }
 
-void Program::transform(OpKind kind, std::uint32_t dst, const AffineMotion& m, bool split, bool still) {
+void Program::transform(OpKind kind, std::uint32_t dst, const AffineMotion& m, bool split, bool still,
+                        const float* end_a, const float* end_b) {
     std::uint32_t flags = split ? kFlagSplit : 0u;
     std::uint32_t at = 0u;
     if (still) {
@@ -118,15 +186,33 @@ void Program::transform(OpKind kind, std::uint32_t dst, const AffineMotion& m, b
         at = append(m.a.data(), 12u);
         append(m.b.data(), 12u);
     }
-    push(kind, flags, kind == OpKind::Normal ? 9u : 12u, dst, at);
+    // A still op that is not split is b itself; an element-wise lerp is exact at both ends already.
+    // A split op's ends need the cameras at t = 0 and 1 (set_endpoint_cameras).
+    const bool exact = ((flags & kFlagSplit) != 0u && endpoint_cameras_) ||
+        ((flags & kFlagSplit) == 0u && (flags & kFlagRigid) != 0u);
+    const std::uint32_t count = kind == OpKind::Normal ? 9u : 12u;
+    if (exact && end_a != nullptr && (flags & kFlagStill) == 0u) {
+        flags |= kFlagEndA;
+        append(end_a, count);
+    } else if (exact && end_a != nullptr && (flags & kFlagSplit) != 0u) {
+        // Still in the world: the camera moves it.
+        flags |= kFlagEndA;
+        append(end_a, count);
+    }
+    if (exact && end_b != nullptr) {
+        flags |= kFlagEndB;
+        append(end_b, count);
+    }
+    push(kind, flags, count, dst, at);
 }
 
-void Program::eye(std::uint32_t dst, const EyeMotion& m) {
-    transform(OpKind::Affine, dst, m.world, m.split, m.still);
+void Program::eye(std::uint32_t dst, const EyeMotion& m, const float* end_a, const float* end_b) {
+    // A snapped jump or a sprite flip shows b's value at t = 0 by design.
+    transform(OpKind::Affine, dst, m.world, m.split, m.still, m.snapped || m.flipped ? nullptr : end_a, end_b);
 }
 
-void Program::normal(std::uint32_t dst, const NormalMotion& m) {
-    transform(OpKind::Normal, dst, m.world, m.split, m.still);
+void Program::normal(std::uint32_t dst, const NormalMotion& m, const float* end_a, const float* end_b) {
+    transform(OpKind::Normal, dst, m.world, m.split, m.still, end_a, end_b);
 }
 
 void Program::lerp(std::uint32_t dst, const float* from, const float* to, std::uint32_t count, bool round) {
@@ -152,21 +238,23 @@ void Program::tex_matrix(std::uint32_t dst, const float* a, const float* b, bool
     if (std::memcmp(a, b, 12u * sizeof(float)) == 0 || !finite_all(a, 12u) || !finite_all(b, 12u)) {
         return;
     }
-    float from[12];
-    std::memcpy(from, a, sizeof(from));
+    // A scrolling translation that wrapped is unwrapped on b's side (whole repeats show the same texels), so t = 0
+    // is the frame before exactly.
+    float to[12];
+    std::memcpy(to, b, sizeof(to));
     if (!spatial) {
         for (unsigned i = 0; i < 12u; ++i) {
             if (a[i] == b[i]) continue;
             if ((i & 3u) == 3u) {
-                const float d = b[i] - from[i];
-                if (std::fabs(d) > 0.5f) from[i] += std::round(d);
-                if (std::fabs(b[i] - from[i]) > kTexStepLimit) return;
+                const float d = b[i] - a[i];
+                if (std::fabs(d) > 0.5f) to[i] -= std::round(d);
+                if (std::fabs(to[i] - a[i]) > kTexStepLimit) return;
             } else if (std::fabs(b[i] - a[i]) > 1.0f) {
                 return;
             }
         }
     }
-    lerp(dst, from, b, 12u);
+    lerp(dst, a, to, 12u);
 }
 
 void Program::light(std::uint32_t dst, const std::uint32_t* a, const std::uint32_t* b,
@@ -182,6 +270,7 @@ void Program::light(std::uint32_t dst, const std::uint32_t* a, const std::uint32
         }
         a = b;
     }
+    const std::uint32_t* const end_a = held ? nullptr : a;
     if (a[3] != b[3]) {
         color8(dst + 3u, a[3], b[3]);
     }
@@ -217,20 +306,47 @@ void Program::light(std::uint32_t dst, const std::uint32_t* a, const std::uint32
         std::memcpy(p + 6, da, sizeof(da));
         std::memcpy(p + 9, db, sizeof(db));
     }
-    p[12] = std::sqrt(da[0] * da[0] + da[1] * da[1] + da[2] * da[2]);
-    p[13] = std::sqrt(db[0] * db[0] + db[1] * db[1] + db[2] * db[2]);
-    const std::uint32_t at = append(p, 14u);
-    push(OpKind::Light, split ? kFlagLightSplit : 0u, 6u, dst + 10u, at);
+    p[12] = vector_length(da);
+    p[13] = vector_length(db);
+    const std::uint32_t at = append(p, kLightWords);
+    std::uint32_t flags = split ? kFlagLightSplit : 0u;
+    if (split && !endpoint_cameras_) {
+        push(OpKind::Light, flags, 6u, dst + 10u, at);
+        return;
+    }
+    // The ends as the frames have them: position then direction.
+    const auto ends = [&](const std::uint32_t* light) {
+        const float values[6]{word_float(light[10]), word_float(light[11]), word_float(light[12]),
+                              word_float(light[13]), word_float(light[14]), word_float(light[15])};
+        append(values, 6u);
+    };
+    if (end_a != nullptr) {
+        flags |= kFlagEndA;
+        ends(end_a);
+    }
+    flags |= kFlagEndB;
+    ends(b);
+    push(OpKind::Light, flags, 6u, dst + 10u, at);
 }
 
 void Program::palette(std::uint32_t dst, const PaletteMotion& m, const std::uint32_t* a,
                       const std::uint32_t* b, const CameraMotion& camera) {
     for (unsigned k = 0; k < 10u; ++k) {
         if (m.position_changed[k] != 0u) {
-            eye(dst + k * 12u, m.position[k]);
+            float end_a[12], end_b[12];
+            for (unsigned i = 0; i < 12u; ++i) {
+                end_a[i] = a != nullptr ? word_float(a[k * 12u + i]) : 0.0f;
+                end_b[i] = word_float(b[k * 12u + i]);
+            }
+            eye(dst + k * 12u, m.position[k], a != nullptr ? end_a : nullptr, end_b);
         }
         if (m.normal_changed[k] != 0u) {
-            normal(dst + kXfNormalBase + k * 9u, m.normal[k]);
+            float end_a[9], end_b[9];
+            for (unsigned i = 0; i < 9u; ++i) {
+                end_a[i] = a != nullptr ? word_float(a[kXfNormalBase + k * 9u + i]) : 0.0f;
+                end_b[i] = word_float(b[kXfNormalBase + k * 9u + i]);
+            }
+            normal(dst + kXfNormalBase + k * 9u, m.normal[k], a != nullptr ? end_a : nullptr, end_b);
         }
     }
     if (a == nullptr) {
@@ -272,10 +388,16 @@ void Program::palette(std::uint32_t dst, const PaletteMotion& m, const std::uint
     }
 }
 
-void Program::palette_positions(std::uint32_t dst, const PaletteMotion& m) {
+void Program::palette_positions(std::uint32_t dst, const PaletteMotion& m, const std::uint32_t* a,
+                                const std::uint32_t* b) {
     for (unsigned k = 0; k < 10u; ++k) {
         if (m.position_changed[k] != 0u) {
-            eye(dst + k * 12u, m.position[k]);
+            float end_a[12], end_b[12];
+            for (unsigned i = 0; i < 12u; ++i) {
+                end_a[i] = a != nullptr ? word_float(a[k * 12u + i]) : 0.0f;
+                end_b[i] = word_float(b[k * 12u + i]);
+            }
+            eye(dst + k * 12u, m.position[k], a != nullptr ? end_a : nullptr, end_b);
         }
     }
 }
@@ -363,8 +485,14 @@ void Program::ps_colours(std::uint32_t dst, const GxPsConstants& a, const GxPsCo
 }
 
 void evaluate(const Program& program, const FrameTimes& times, std::uint32_t* out) {
-    const Affine34 rotation_now = rotation_only(times.camera);
-    const Affine34 rotation_prev = rotation_only(times.camera_prev);
+    const std::uint32_t* const header = program.payload.data();
+    Affine34 camera_0{}, camera_1{};
+    for (unsigned i = 0; i < 12u; ++i) {
+        camera_0[i] = word_float(header[kHeaderCamera0 + i]);
+        camera_1[i] = word_float(header[kHeaderCamera1 + i]);
+    }
+    const float zero = word_float(header[kHeaderZero]);
+    const float one = word_float(header[kHeaderOne]);
     for (const Op& op : program.ops) {
         const std::uint32_t* p = program.payload.data() + op.payload;
         const std::uint32_t flags = op.control & 0xFF00u;
@@ -374,22 +502,26 @@ void evaluate(const Program& program, const FrameTimes& times, std::uint32_t* ou
         }
         const float t = previous ? times.t_prev : times.t;
         const Affine34& camera_t = previous ? times.camera_prev : times.camera;
-        const Affine34& rotation_t = previous ? rotation_prev : rotation_now;
         const std::uint32_t count = op_count(op.control);
         std::uint32_t* const dst = out + op.dst;
-        switch (static_cast<OpKind>(op_kind(op.control))) {
-        case OpKind::Affine: {
-            Affine34 m = transform_at(p, flags, t);
-            if ((flags & kFlagSplit) != 0u) m = affine_multiply(camera_t, m);
-            for (unsigned i = 0; i < 12u; ++i) dst[i] = float_word(m[i]);
-            break;
-        }
+        const bool has_a = (flags & kFlagEndA) != 0u;
+        const bool has_b = (flags & kFlagEndB) != 0u;
+        const auto kind = static_cast<OpKind>(op_kind(op.control));
+        switch (kind) {
+        case OpKind::Affine:
         case OpKind::Normal: {
-            Affine34 n = transform_at(p, flags, t);
-            n[3] = n[7] = n[11] = 0.0f;
-            if ((flags & kFlagSplit) != 0u) n = affine_multiply(rotation_t, n);
-            for (unsigned r = 0; r < 3u; ++r) {
-                for (unsigned c = 0; c < 3u; ++c) dst[r * 3u + c] = float_word(n[r * 4u + c]);
+            const Affine34 m = transform_value(p, flags, kind, t, camera_t);
+            Affine34 m0{}, m1{};
+            if (has_a || has_b) {
+                m0 = transform_value(p, flags, kind, zero, camera_0);
+                m1 = transform_value(p, flags, kind, one, camera_1);
+            }
+            const std::uint32_t* const end_a = p + transform_words(flags);
+            const std::uint32_t* const end_b = end_a + (has_a ? count : 0u);
+            for (unsigned i = 0; i < count; ++i) {
+                const unsigned e = kind == OpKind::Normal ? (i / 3u) * 4u + i % 3u : i;
+                dst[i] = float_word(endpoint_exact(m[e], t, has_a, has_a ? word_float(end_a[i]) : 0.0f, m0[e],
+                                                   has_b, has_b ? word_float(end_b[i]) : 0.0f, m1[e]));
             }
             break;
         }
@@ -398,13 +530,12 @@ void evaluate(const Program& program, const FrameTimes& times, std::uint32_t* ou
             for (unsigned i = 0; i < count; ++i) {
                 const float a = word_float(p[i]);
                 const float b = word_float(p[count + i]);
-                dst[i] = float_word(a == b ? b : a + (b - a) * t);
+                dst[i] = float_word(a == b ? b : a * (1.0f - t) + b * t);
             }
             break;
         case OpKind::LerpRound:
             for (unsigned i = 0; i < count; ++i) {
-                const float a = word_float(p[i]);
-                const float v = a + (word_float(p[count + i]) - a) * t;
+                const float v = word_float(p[i]) * (1.0f - t) + word_float(p[count + i]) * t;
                 dst[i] = static_cast<std::uint32_t>(static_cast<std::int32_t>(std::lround(v)));
             }
             break;
@@ -420,27 +551,17 @@ void evaluate(const Program& program, const FrameTimes& times, std::uint32_t* ou
             break;
         }
         case OpKind::Light: {
-            float w[3], v[3], pos[3], dir[3];
-            for (unsigned i = 0; i < 3u; ++i) {
-                w[i] = word_float(p[i]) + (word_float(p[3u + i]) - word_float(p[i])) * t;
-                v[i] = word_float(p[6u + i]) + (word_float(p[9u + i]) - word_float(p[6u + i])) * t;
+            float v[6], v0[6], v1[6];
+            light_value(p, flags, t, camera_t, v);
+            if (has_a || has_b) {
+                light_value(p, flags, zero, camera_0, v0);
+                light_value(p, flags, one, camera_1, v1);
             }
-            if ((flags & kFlagLightSplit) != 0u) {
-                affine_transform_point(camera_t, w, pos);
-                affine_transform_point(rotation_t, v, dir);
-            } else {
-                std::memcpy(pos, w, sizeof(w));
-                std::memcpy(dir, v, sizeof(v));
-            }
-            const float la = word_float(p[12]), lb = word_float(p[13]);
-            const float ld = std::sqrt(dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]);
-            if (ld > 1e-20f) {
-                const float scale = (la + (lb - la) * t) / ld;
-                for (float& x : dir) x *= scale;
-            }
-            for (unsigned i = 0; i < 3u; ++i) {
-                dst[i] = float_word(pos[i]);
-                dst[3u + i] = float_word(dir[i]);
+            const std::uint32_t* const end_a = p + kLightWords;
+            const std::uint32_t* const end_b = end_a + (has_a ? 6u : 0u);
+            for (unsigned i = 0; i < 6u; ++i) {
+                dst[i] = float_word(endpoint_exact(v[i], t, has_a, has_a ? word_float(end_a[i]) : 0.0f, v0[i], has_b,
+                                                   has_b ? word_float(end_b[i]) : 0.0f, v1[i]));
             }
             break;
         }

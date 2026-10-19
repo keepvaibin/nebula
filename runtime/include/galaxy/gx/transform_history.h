@@ -30,6 +30,8 @@ using Affine34 = std::array<float, 12>;
 // False (and identity) when the 3x3 part is singular.
 [[nodiscard]] bool affine_inverse(const Affine34& m, Affine34& out) noexcept;
 void affine_transform_point(const Affine34& m, const float p[3], float out[3]) noexcept;
+// |v| without the squares overflowing (a GX light's direction can hold 1e31-scale values) or underflowing.
+[[nodiscard]] float vector_length(const float v[3]) noexcept;
 // The transform at t between a (t = 0) and b (t = 1): translation and scale
 // lerp, rotation slerp (after removing per-axis scale). Matrices with shear,
 // mismatched handedness or no clean rotation lerp element-wise.

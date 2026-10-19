@@ -154,6 +154,7 @@ void test_palettes() {
         PaletteMotion motion;
         palette_motion(no_before ? nullptr : a.data(), b.data(), camera, round % 10 == 0, motion);
         Program program;
+        program.set_endpoint_cameras(camera_at(camera, 0.0f), camera_at(camera, 1.0f));
         program.palette(0u, motion, no_before ? nullptr : a.data(), b.data(), camera);
         for (float t : {0.2f, 0.5f, 0.9f}) {
             const Affine34 camera_t = camera_at(camera, t);
@@ -164,7 +165,8 @@ void test_palettes() {
             bool same = true;
             for (unsigned w = 0; w < kXfPaletteWords; ++w) {
                 const bool colour = w >= kXfLightBase && ((w - kXfLightBase) & 15u) == 3u;
-                same = same && (colour ? got[w] == want[w] : near_word(got[w], want[w], 1e-4f));
+                const bool ok = colour ? got[w] == want[w] : near_word(got[w], want[w], 1e-4f);
+                same = same && ok;
             }
             check(same, "palette ops match palette_at");
         }
@@ -333,10 +335,109 @@ void test_previous_frame() {
     }
 }
 
+// Endpoint-exact ops: at t = 0 the value is the frame before's bit for bit, at t = 1 this frame's, wherever the
+// objects are (far from the world's origin too, where the world-space round trip loses the low bits), and in
+// between they stay within float error of the plain evaluation.
+void test_endpoints() {
+    for (int round = 0; round < 400; ++round) {
+        const float far = round % 2 == 0 ? 1.0f : 120.0f;  // world coordinates up to about 60000
+        const Affine34 va = view(uniform(-1.0f, 1.0f), uniform(-500.0f, 500.0f) * far, 100.0f * far, 500.0f * far);
+        const Affine34 vb = nudge(va, 0.05f);
+        CameraMotion camera;
+        camera_motion(&va, &vb, 0.0f, CameraCutLimits{}, camera);
+        Affine34 wa = random_object();
+        wa[3] += uniform(-500.0f, 500.0f) * far;
+        wa[7] += 100.0f * far;
+        wa[11] += 500.0f * far - 300.0f;
+        Affine34 wb = nudge(wa, round % 3 == 0 ? 0.3f : 0.05f);
+        if (round % 5 == 0) wb[1] += 0.2f;
+        const Affine34 ma = affine_multiply(va, wa);
+        const Affine34 mb = affine_multiply(vb, wb);
+        EyeMotion eye;
+        eye_motion(&ma, mb, camera, round % 7 == 0, eye);
+        NormalMotion normal;
+        normal_motion(&ma, mb, camera, normal);
+        float na[9], nb[9];
+        for (unsigned r = 0; r < 3u; ++r) {
+            for (unsigned c = 0; c < 3u; ++c) {
+                na[r * 3u + c] = ma[r * 4u + c];
+                nb[r * 3u + c] = mb[r * 4u + c];
+            }
+        }
+        Program program;
+        program.set_endpoint_cameras(camera_at(camera, 0.0f), camera_at(camera, 1.0f));
+        program.eye(0u, eye, ma.data(), mb.data());
+        program.normal(12u, normal, na, nb);
+        Program plain;
+        plain.eye(0u, eye);
+        plain.normal(12u, normal);
+        const auto words = [](const float* v, unsigned n, std::uint32_t* out) {
+            for (unsigned i = 0; i < n; ++i) out[i] = std::bit_cast<std::uint32_t>(v[i]);
+        };
+        std::uint32_t want_a[21], want_b[21];
+        words(ma.data(), 12u, want_a);
+        words(na, 9u, want_a + 12);
+        words(mb.data(), 12u, want_b);
+        words(nb, 9u, want_b + 12);
+        std::uint32_t out[21]{};
+        evaluate(program, camera_at(camera, 0.0f), 0.0f, out);
+        const bool exact_a = eye.snapped || eye.flipped || std::memcmp(out, want_a, sizeof(out)) == 0;
+        check(exact_a, "an endpoint-exact op gives the frame before at t = 0");
+        evaluate(program, camera_at(camera, 1.0f), 1.0f, out);
+        check(std::memcmp(out, want_b, sizeof(out)) == 0, "an endpoint-exact op gives this frame at t = 1");
+        for (float t : {0.25f, 0.5f, 0.75f}) {
+            std::uint32_t got[21]{}, base[21]{};
+            evaluate(program, camera_at(camera, t), t, got);
+            evaluate(plain, camera_at(camera, t), t, base);
+            bool close = true;
+            for (unsigned i = 0; i < 21u; ++i) close = close && near_word(got[i], base[i], 2e-4f);
+            check(close, "endpoint terms stay within float error between the frames");
+        }
+    }
+    // A light in the world: position and direction exact at both ends.
+    for (int round = 0; round < 200; ++round) {
+        const Affine34 va = view(uniform(-1.0f, 1.0f), uniform(-5000.0f, 5000.0f), 1000.0f, 5000.0f);
+        const Affine34 vb = nudge(va, 0.05f);
+        CameraMotion camera;
+        camera_motion(&va, &vb, 0.0f, CameraCutLimits{}, camera);
+        std::uint32_t la[16]{}, lb[16]{};
+        const float world[3]{uniform(-6000.0f, 6000.0f), uniform(-500.0f, 2000.0f), uniform(-6000.0f, 6000.0f)};
+        // Every tenth one as the game sometimes leaves a light's direction: 1e31-scale values.
+        const float scale = round % 10 == 0 ? 1e31f : 1.0f;
+        const float axis[3]{0.3f * scale, -0.9f * scale, 0.3f * scale};
+        float pa[3], pb[3], da[3], db[3];
+        affine_transform_point(va, world, pa);
+        affine_transform_point(vb, world, pb);
+        Affine34 ra = va, rb = vb;
+        ra[3] = ra[7] = ra[11] = rb[3] = rb[7] = rb[11] = 0.0f;
+        affine_transform_point(ra, axis, da);
+        affine_transform_point(rb, axis, db);
+        for (unsigned i = 0; i < 3u; ++i) {
+            la[10u + i] = std::bit_cast<std::uint32_t>(pa[i]);
+            lb[10u + i] = std::bit_cast<std::uint32_t>(pb[i]);
+            la[13u + i] = std::bit_cast<std::uint32_t>(da[i]);
+            lb[13u + i] = std::bit_cast<std::uint32_t>(db[i]);
+        }
+        Program program;
+        program.set_endpoint_cameras(camera_at(camera, 0.0f), camera_at(camera, 1.0f));
+        program.light(0u, la, lb, camera, true);
+        std::uint32_t out[16]{};
+        evaluate(program, camera_at(camera, 0.0f), 0.0f, out);
+        check(std::memcmp(out + 10, la + 10, 6u * 4u) == 0, "a light gives the frame before at t = 0");
+        evaluate(program, camera_at(camera, 1.0f), 1.0f, out);
+        check(std::memcmp(out + 10, lb + 10, 6u * 4u) == 0, "a light gives this frame at t = 1");
+        evaluate(program, camera_at(camera, 0.5f), 0.5f, out);
+        bool finite = true;
+        for (unsigned i = 10u; i < 16u; ++i) finite = finite && std::isfinite(std::bit_cast<float>(out[i]));
+        check(finite, "a light's position and direction stay finite between the frames");
+    }
+}
+
 }  // namespace
 
 int main() {
     test_transforms();
+    test_endpoints();
     test_palettes();
     test_texture_matrices();
     test_colours();

@@ -376,15 +376,16 @@ void tex_matrix_at(const float* a, const float* b, bool spatial, float t, float*
         std::memcpy(out, a, 12u * sizeof(float));
         return;
     }
-    float from[12];
-    std::memcpy(from, a, sizeof(from));
+    // A wrapped scroll unwraps on b's side (whole repeats show the same texels): t = 0 is a exactly.
+    float to[12];
+    std::memcpy(to, b, sizeof(to));
     if (!spatial) {
         for (unsigned i = 0; i < 12u; ++i) {
             if (a[i] == b[i]) continue;
             if ((i & 3u) == 3u) {
-                const float d = b[i] - from[i];
-                if (std::fabs(d) > 0.5f) from[i] += std::round(d);
-                if (std::fabs(b[i] - from[i]) > kTexStepLimit) {
+                const float d = b[i] - a[i];
+                if (std::fabs(d) > 0.5f) to[i] -= std::round(d);
+                if (std::fabs(to[i] - a[i]) > kTexStepLimit) {
                     std::memcpy(out, b, 12u * sizeof(float));
                     return;
                 }
@@ -394,7 +395,7 @@ void tex_matrix_at(const float* a, const float* b, bool spatial, float t, float*
             }
         }
     }
-    for (unsigned i = 0; i < 12u; ++i) out[i] = from[i] + (b[i] - from[i]) * t;
+    for (unsigned i = 0; i < 12u; ++i) out[i] = a[i] * (1.0f - t) + to[i] * t;
 }
 
 bool texgen_spatial(std::uint32_t texgen) noexcept {
@@ -540,9 +541,9 @@ void light_at(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion
     }
     // Keep the interpolated direction at the interpolated length (GX spot
     // directions are unit vectors; specular half-angle vectors are not).
-    const float la = std::sqrt(da[0] * da[0] + da[1] * da[1] + da[2] * da[2]);
-    const float lb = std::sqrt(db[0] * db[0] + db[1] * db[1] + db[2] * db[2]);
-    const float ld = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+    const float la = vector_length(da);
+    const float lb = vector_length(db);
+    const float ld = vector_length(d);
     if (ld > 1e-20f) {
         const float scale = (la + (lb - la) * t) / ld;
         for (float& v : d) v *= scale;
@@ -603,6 +604,8 @@ void palette_motion(const std::uint32_t* a, const std::uint32_t* b, const Camera
     const CameraMotion& normal_camera = orthographic ? screen : camera;
     for (unsigned k = 0; k < 10u; ++k) {
         if ((normal_mask & (1u << k)) == 0u) continue;
+        // A position matrix snapped to b or taking b's rotation (a flip) takes b's normals with it.
+        if (out.position_changed[k] != 0u && (out.position[k].snapped || out.position[k].flipped)) continue;
         const std::uint32_t* wb = b + kXfNormalBase + k * 9u;
         const bool differs =
             a != nullptr && std::memcmp(a + kXfNormalBase + k * 9u, wb, 9u * 4u) != 0;

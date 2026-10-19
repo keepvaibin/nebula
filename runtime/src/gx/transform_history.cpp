@@ -58,6 +58,15 @@ bool affine_inverse(const Affine34& m, Affine34& out) noexcept {
     return true;
 }
 
+float vector_length(const float v[3]) noexcept {
+    const float largest = std::max(std::max(std::fabs(v[0]), std::fabs(v[1])), std::fabs(v[2]));
+    if (!(largest > 0.0f) || !std::isfinite(largest)) {
+        return largest;
+    }
+    const float x = v[0] / largest, y = v[1] / largest, z = v[2] / largest;
+    return largest * std::sqrt(x * x + y * y + z * z);
+}
+
 void affine_transform_point(const Affine34& m, const float p[3], float out[3]) noexcept {
     const float x = p[0], y = p[1], z = p[2];
     out[0] = m[0] * x + m[1] * y + m[2] * z + m[3];

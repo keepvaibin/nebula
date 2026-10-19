@@ -49,6 +49,14 @@ static const uint kStill = 0x200u;
 static const uint kRigid = 0x400u;
 static const uint kLightSplit = 0x800u;
 static const uint kPrev = 0x1000u;
+static const uint kEndA = 0x2000u;
+static const uint kEndB = 0x4000u;
+// interp_gpu.h kHeader*: the camera at t = 0 and t = 1, then 0 and 1 as data.
+static const uint kHeaderCamera0 = 0u;
+static const uint kHeaderCamera1 = 12u;
+static const uint kHeaderZero = 24u;
+static const uint kHeaderOne = 25u;
+static const uint kLightWords = 14u;
 uint word(uint index) {
     return program.Load(min(payload + index * 4u, program_last));
 }
@@ -85,8 +93,7 @@ Affine transform_at(uint p, uint flags, float at) {
     }
     if ((flags & kRigid) == 0u) {
         [unroll] for (uint i = 0u; i < 3u; ++i) {
-            const float4 a = row(p + 4u * i);
-            m.r[i] = a + (row(p + 12u + 4u * i) - a) * at;
+            m.r[i] = row(p + 4u * i) * (1.0 - at) + row(p + 12u + 4u * i) * at;
         }
         return m;
     }
@@ -117,6 +124,53 @@ Affine transform_at(uint p, uint flags, float at) {
     m.r[1] = float4(r1.x * s[0] + r1.y * s[1] + r1.z * s[2], tr.y);
     m.r[2] = float4(r2.x * s[0] + r2.y * s[1] + r2.z * s[2], tr.z);
     return m;
+}
+uint transform_words(uint flags) {
+    return (flags & kStill) != 0u ? 12u : (flags & kRigid) != 0u ? 34u : 24u;
+}
+// An Affine (kind 0) or Normal (kind 1) op's value at `at` with the camera rows c, before its endpoint terms.
+Affine transform_value(uint p, uint flags, uint kind, float at, float4 c0, float4 c1, float4 c2) {
+    Affine m = transform_at(p, flags, at);
+    Affine c;
+    c.r[0] = c0;
+    c.r[1] = c1;
+    c.r[2] = c2;
+    if (kind == 1u) {
+        [unroll] for (uint i = 0u; i < 3u; ++i) {
+            m.r[i].w = 0.0;
+            c.r[i].w = 0.0;
+        }
+    }
+    if ((flags & kSplit) != 0u) {
+        m = multiply(c, m);
+    }
+    return m;
+}
+// |v| without the squares overflowing (transform_history.h vector_length).
+float safe_length(float3 v) {
+    const float largest = max(max(abs(v.x), abs(v.y)), abs(v.z));
+    return largest > 0.0 && isfinite(largest) ? largest * length(v / largest) : largest;
+}
+// A light op's position (xyz of the first) and direction at `at`.
+void light_value(uint p, uint flags, float at, float4 c0, float4 c1, float4 c2, out float3 pos, out float3 dir) {
+    pos = vec(p) * (1.0 - at) + vec(p + 3u) * at;
+    dir = vec(p + 6u) * (1.0 - at) + vec(p + 9u) * at;
+    if ((flags & kLightSplit) != 0u) {
+        pos = float3(dot(c0.xyz, pos) + c0.w, dot(c1.xyz, pos) + c1.w, dot(c2.xyz, pos) + c2.w);
+        dir = float3(dot(c0.xyz, dir), dot(c1.xyz, dir), dot(c2.xyz, dir));
+    }
+    const float ld = safe_length(dir);
+    if (ld > 1e-20) {
+        dir *= (value(p + 12u) * (1.0 - at) + value(p + 13u) * at) / ld;
+    }
+}
+// value + (1 - t)(A - value at 0) + t(B - value at 1), each term only where it is finite.
+float endpoint_exact(float v, float at, bool has_a, float a, float v0, bool has_b, float b, float v1) {
+    float da = has_a ? a - v0 : 0.0;
+    float db = has_b ? b - v1 : 0.0;
+    da = isfinite(da) ? da : 0.0;
+    db = isfinite(db) ? db : 0.0;
+    return v + (1.0 - at) * da + at * db;
 }
 [numthreads(64, 1, 1)]
 void copy_main(uint3 group : SV_GroupID, uint lane : SV_GroupIndex) {
@@ -153,38 +207,36 @@ void eval_main(uint3 id : SV_DispatchThreadID) {
     const float4 c0 = previous ? camera_prev0 : camera0;
     const float4 c1 = previous ? camera_prev1 : camera1;
     const float4 c2 = previous ? camera_prev2 : camera2;
+    const bool has_a = (flags & kEndA) != 0u;
+    const bool has_b = (flags & kEndB) != 0u;
+    // The ends are evaluated with 0 and 1 read as data: f(0) runs the instructions f(t) runs at t = 0.
+    const float zero = value(kHeaderZero);
+    const float one = value(kHeaderOne);
     if (kind <= 1u) {
-        Affine m = transform_at(p, flags, at);
-        Affine c;
-        c.r[0] = c0;
-        c.r[1] = c1;
-        c.r[2] = c2;
-        if (kind == 1u) {
-            [unroll] for (uint i = 0u; i < 3u; ++i) {
-                m.r[i].w = 0.0;
-                c.r[i].w = 0.0;
-            }
+        const Affine m = transform_value(p, flags, kind, at, c0, c1, c2);
+        Affine m0 = m;
+        Affine m1 = m;
+        if (has_a || has_b) {
+            m0 = transform_value(p, flags, kind, zero, row(kHeaderCamera0), row(kHeaderCamera0 + 4u),
+                                 row(kHeaderCamera0 + 8u));
+            m1 = transform_value(p, flags, kind, one, row(kHeaderCamera1), row(kHeaderCamera1 + 4u),
+                                 row(kHeaderCamera1 + 8u));
         }
-        if ((flags & kSplit) != 0u) {
-            m = multiply(c, m);
-        }
-        [unroll] for (uint i = 0u; i < 3u; ++i) {
-            if (kind == 0u) {
-                put(dst + 4u * i, asuint(m.r[i].x));
-                put(dst + 4u * i + 1u, asuint(m.r[i].y));
-                put(dst + 4u * i + 2u, asuint(m.r[i].z));
-                put(dst + 4u * i + 3u, asuint(m.r[i].w));
-            } else {
-                put(dst + 3u * i, asuint(m.r[i].x));
-                put(dst + 3u * i + 1u, asuint(m.r[i].y));
-                put(dst + 3u * i + 2u, asuint(m.r[i].z));
-            }
+        const uint end_a = p + transform_words(flags);
+        const uint end_b = end_a + (has_a ? n : 0u);
+        const uint columns = kind == 0u ? 4u : 3u;
+        for (uint i = 0u; i < n; ++i) {
+            const uint r = i / columns;
+            const uint k = i % columns;
+            const float v = endpoint_exact(m.r[r][k], at, has_a, has_a ? value(end_a + i) : 0.0, m0.r[r][k], has_b,
+                                           has_b ? value(end_b + i) : 0.0, m1.r[r][k]);
+            put(dst + i, asuint(v));
         }
     } else if (kind <= 3u) {
         for (uint i = 0u; i < n; ++i) {
             const float a = value(p + i);
             const float b = value(p + n + i);
-            const float v = a == b ? b : a + (b - a) * at;
+            const float v = a == b ? b : a * (1.0 - at) + b * at;
             put(dst + i, kind == 2u ? asuint(v) : asuint(int(v >= 0.0 ? floor(v + 0.5) : ceil(v - 0.5))));
         }
     } else if (kind == 4u) {
@@ -198,26 +250,24 @@ void eval_main(uint3 id : SV_DispatchThreadID) {
         }
         put(dst, c);
     } else if (kind == 5u) {
-        const float3 wa = vec(p);
-        const float3 va = vec(p + 6u);
-        float3 pos = wa + (vec(p + 3u) - wa) * at;
-        float3 dir = va + (vec(p + 9u) - va) * at;
-        if ((flags & kLightSplit) != 0u) {
-            pos = float3(dot(c0.xyz, pos) + c0.w, dot(c1.xyz, pos) + c1.w, dot(c2.xyz, pos) + c2.w);
-            dir = float3(dot(c0.xyz, dir), dot(c1.xyz, dir), dot(c2.xyz, dir));
+        float3 pos, dir;
+        light_value(p, flags, at, c0, c1, c2, pos, dir);
+        float3 pos0 = pos, dir0 = dir, pos1 = pos, dir1 = dir;
+        if (has_a || has_b) {
+            light_value(p, flags, zero, row(kHeaderCamera0), row(kHeaderCamera0 + 4u), row(kHeaderCamera0 + 8u),
+                        pos0, dir0);
+            light_value(p, flags, one, row(kHeaderCamera1), row(kHeaderCamera1 + 4u), row(kHeaderCamera1 + 8u),
+                        pos1, dir1);
         }
-        const float la = value(p + 12u);
-        const float lb = value(p + 13u);
-        const float ld = length(dir);
-        if (ld > 1e-20) {
-            dir *= (la + (lb - la) * at) / ld;
+        const uint end_a = p + kLightWords;
+        const uint end_b = end_a + (has_a ? 6u : 0u);
+        const float v[6] = {pos.x, pos.y, pos.z, dir.x, dir.y, dir.z};
+        const float v0[6] = {pos0.x, pos0.y, pos0.z, dir0.x, dir0.y, dir0.z};
+        const float v1[6] = {pos1.x, pos1.y, pos1.z, dir1.x, dir1.y, dir1.z};
+        [unroll] for (uint i = 0u; i < 6u; ++i) {
+            put(dst + i, asuint(endpoint_exact(v[i], at, has_a, has_a ? value(end_a + i) : 0.0, v0[i], has_b,
+                                               has_b ? value(end_b + i) : 0.0, v1[i])));
         }
-        put(dst, asuint(pos.x));
-        put(dst + 1u, asuint(pos.y));
-        put(dst + 2u, asuint(pos.z));
-        put(dst + 3u, asuint(dir.x));
-        put(dst + 4u, asuint(dir.y));
-        put(dst + 5u, asuint(dir.z));
     } else if (kind == 6u) {
         for (uint i = 0u; i < n; ++i) {
             put(dst + i, word(p + i));

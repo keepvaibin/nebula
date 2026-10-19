@@ -9515,6 +9515,7 @@ bool GxBackend::prepare_interp_sequence(const InterpScene& scene, const InterpSc
             : nullptr;
     };
     interp_program_.clear();
+    interp_program_.set_endpoint_cameras(camera_at(interp_camera_, 0.0f), camera_at(interp_camera_, 1.0f));
     interp_vs_slot_.assign(count, -1);
     interp_record_palette_slot_.assign(count, -1);
     interp_ps_slot_.assign(scene.ps_constants.size(), -1);
@@ -9549,8 +9550,11 @@ bool GxBackend::prepare_interp_sequence(const InterpScene& scene, const InterpSc
         const GxVsConstants& recorded = scene.constants[moving.record];
         const GxVsConstants* before = moving.prev >= 0
             ? &before_scene.constants[static_cast<std::size_t>(moving.prev)] : nullptr;
+        // The inline matrix's ends: the frame before's and this one's.
+        const float* const position_a = before != nullptr ? &before->inline_pos_matrix[0][0] : nullptr;
+        const float* const position_b = &recorded.inline_pos_matrix[0][0];
         if (moving.position_moves && (parts & 1u) != 0u) {
-            interp_program_.eye(base + interp_gpu::kVsPosition, moving.position);
+            interp_program_.eye(base + interp_gpu::kVsPosition, moving.position, position_a, position_b);
         }
         if (moving.tex_moves && before != nullptr && (parts & 2u) != 0u) {
             // Per texgen: projection and environment maps lerp whole; texture
@@ -9584,7 +9588,7 @@ bool GxBackend::prepare_interp_sequence(const InterpScene& scene, const InterpSc
         if (motion) {
             interp_program_.at_previous(true);
             if (moving.position_moves && (parts & 1u) != 0u) {
-                interp_program_.eye(base + interp_gpu::kVsMotionPrevPos, moving.position);
+                interp_program_.eye(base + interp_gpu::kVsMotionPrevPos, moving.position, position_a, position_b);
             }
             if (moving.projection_moves && before != nullptr && (parts & 4u) != 0u) {
                 interp_program_.projection_params(base, *before, recorded);
@@ -9608,7 +9612,7 @@ bool GxBackend::prepare_interp_sequence(const InterpScene& scene, const InterpSc
         if (q < layout.prev_palette_count) {
             interp_program_.at_previous(true);
             interp_program_.palette_positions(layout.prev_palette_offset(static_cast<std::uint32_t>(q)) / 4u,
-                                              entry.motion);
+                                              entry.motion, before_palette(entry.before), now_words);
             interp_program_.at_previous(false);
         }
     }
@@ -9671,15 +9675,32 @@ void GxBackend::verify_interp_program(const InterpScene& scene, const InterpScen
     times.camera_prev = camera_t;
     build_interp_reference(scene, times, out);
     const interp_gpu::Layout& layout = interp_layout_;
-    std::size_t checked = 0u, bad = 0u, palette_words = 0u;
-    float worst = 0.0f;
-    const auto compare = [&worst](const float* x, const float* y, std::size_t n) {
-        float local = 0.0f;
-        for (std::size_t i = 0; i < n; ++i) {
-            local = std::max(local, std::fabs(x[i] - y[i]) / (1.0f + std::fabs(y[i])));
+    // Differences by kind: deliberate ones (a camera cut, an implausible jump snapped to b, a sprite flip taking b's
+    // rotation, a texture matrix stepping) show the new frame at t = 0 by design; the rest are faults.
+    enum Kind : unsigned { Projection, Texture, TextureStep, Position, PositionSnapped, Normal, Light, Cut, Kinds };
+    static constexpr const char* kNames[Kinds] = {"projection", "texture", "texture-step", "position",
+                                                  "position-snapped", "normal", "light", "cut"};
+    std::array<std::size_t, Kinds> off{};
+    std::array<float, Kinds> worst{};
+    std::size_t checked = 0u, unread_off = 0u;
+    // GALAXY_INTERP_VERIFY=2: the first large differences of each kind, with what produced them.
+    static const bool verbose = read_env_u64("GALAXY_INTERP_VERIFY", 0u) >= 2u;
+    static std::array<unsigned, Kinds> printed{};
+    static const std::uint64_t verbose_from = read_env_u64("GALAXY_INTERP_VERIFY_FROM", 0u);
+    std::string detail;
+    const auto note = [&](Kind kind, float x, float y) {
+        const float relative = std::fabs(x - y) / (1.0f + std::fabs(y));
+        if (!(relative <= 1e-3f)) {
+            ++off[kind];
+            worst[kind] = std::max(worst[kind], std::isfinite(relative) ? relative : 1e30f);
+            if (verbose && interp_sequence_serial_ >= verbose_from && !(relative <= 0.05f) && printed[kind] < 12u) {
+                ++printed[kind];
+                std::ostringstream s;
+                s << "[interp-verify-detail] seq=" << interp_sequence_serial_ << ' ' << kNames[kind] << " got=" << x
+                  << " was=" << y << ' ' << detail << '\n';
+                std::cerr << s.str();
+            }
         }
-        worst = std::max(worst, local);
-        return local;
     };
     for (std::size_t s = 0; s < interp_moving_.size(); ++s) {
         const InterpRecordMotion& moving = interp_moving_[s];
@@ -9688,28 +9709,105 @@ void GxBackend::verify_interp_program(const InterpScene& scene, const InterpScen
         GxVsConstants built{};
         std::memcpy(&built, out.data() + layout.vs_offset(static_cast<std::uint32_t>(s)) / 4u, sizeof(built));
         ++checked;
-        float local = compare(&built.projection[0][0], &was.projection[0][0], 16u);
-        local = std::max(local, compare(&built.inline_tex_matrices[0][0][0], &was.inline_tex_matrices[0][0][0],
-                                        kMaxTexGens * 12u));
-        if (scene.per_vertex[moving.record] == 0u) {
-            local = std::max(local, compare(&built.inline_pos_matrix[0][0], &was.inline_pos_matrix[0][0], 12u));
+        for (unsigned i = 0; i < 16u; ++i) {
+            note(Projection, (&built.projection[0][0])[i], (&was.projection[0][0])[i]);
         }
-        bad += local > 1e-3f ? 1u : 0u;
+        const GxVsConstants& now = scene.constants[moving.record];
+        if (verbose) {
+            std::ostringstream text;
+            text << "record=" << moving.record << " texgens=" << now.num_texgens << " config=0x" << std::hex
+              << now.texgen_config[0][0] << std::dec;
+            detail = text.str();
+        }
+        for (unsigned i = 0; i < kMaxTexGens * 12u; ++i) {
+            const float x = (&built.inline_tex_matrices[0][0][0])[i];
+            note(x == (&now.inline_tex_matrices[0][0][0])[i] ? TextureStep : Texture, x,
+                 (&was.inline_tex_matrices[0][0][0])[i]);
+        }
+        if (scene.per_vertex[moving.record] == 0u) {
+            unsigned layer = kSceneLayer;
+            for (unsigned l = 0; l < scene.layers.size(); ++l) {
+                if (scene.in_layer(l, moving.record)) layer = l;
+            }
+            const bool snapped = moving.position.snapped || moving.position.flipped || layer_camera(layer).cut;
+            for (unsigned i = 0; i < 12u; ++i) {
+                note(snapped ? PositionSnapped : Position, (&built.inline_pos_matrix[0][0])[i],
+                     (&was.inline_pos_matrix[0][0])[i]);
+            }
+        }
     }
+    // Only the words the palette's records read count (position, normal and light blocks by its masks; texture and
+    // post matrices); the others keep the current frame's values and are never read.
     for (std::size_t q = 0; q < interp_palette_entry_.size(); ++q) {
         const InterpPaletteMotion& entry = interp_palette_motions_[static_cast<std::size_t>(interp_palette_entry_[q])];
         if (entry.before < 0) continue;
+        const bool cut = layer_camera(entry.layer).cut;
         const std::uint32_t* was =
             before_scene.palettes.data() + static_cast<std::size_t>(entry.before) * kMatrixPaletteWords;
         const std::uint32_t* got = out.data() + layout.palette_offset(static_cast<std::uint32_t>(q)) / 4u;
+        const std::uint32_t* now = entry.shadow >= 0
+            ? scene.palettes.data() + static_cast<std::size_t>(entry.shadow) * kMatrixPaletteWords : nullptr;
         for (std::size_t w = 0; w < kMatrixPaletteWords; ++w) {
+            if (got[w] == was[w]) continue;
             const float x = std::bit_cast<float>(got[w]);
             const float y = std::bit_cast<float>(was[w]);
-            palette_words += got[w] != was[w] && !(std::fabs(x - y) <= 1e-3f * (1.0f + std::fabs(y))) ? 1u : 0u;
+            if (verbose) {
+                std::ostringstream s;
+                s << "palette=" << q << " word=0x" << std::hex << w << std::dec
+                  << " now=" << (now != nullptr ? std::bit_cast<float>(now[w]) : 0.0f) << " cut=" << cut
+                  << " ortho=" << entry.orthographic << " split=" << entry.motion.split;
+                if (w >= kXfNormalBase && w < kXfNormalBase + 90u) {
+                    const NormalMotion& n = entry.motion.normal[(w - kXfNormalBase) / 9u];
+                    s << " normal(split=" << n.split << " still=" << n.still << " rigid=" << n.world.rigid
+                      << " theta=" << n.world.theta << ')';
+                } else if (w < 120u) {
+                    const EyeMotion& e = entry.motion.position[w / 12u];
+                    s << " eye(split=" << e.split << " still=" << e.still << " rigid=" << e.world.rigid
+                      << " theta=" << e.world.theta << ')';
+                }
+                detail = s.str();
+            }
+            if (w < 120u) {
+                const unsigned k = static_cast<unsigned>(w / 12u);
+                if (((entry.position_mask >> k) & 1u) == 0u) {
+                    ++unread_off;
+                    continue;
+                }
+                const EyeMotion& m = entry.motion.position[k];
+                note(m.snapped || m.flipped || cut ? PositionSnapped : Position, x, y);
+            } else if (w < 256u || (w >= kXfPostBase && w < kXfLightBase)) {
+                // A texture animation that steps shows its new frame (tex_matrix).
+                note(now != nullptr && got[w] == now[w] ? TextureStep : Texture, x, y);
+            } else if (w >= kXfNormalBase && w < kXfNormalBase + 90u &&
+                       ((entry.normal_mask >> ((w - kXfNormalBase) / 9u)) & 1u) != 0u) {
+                const auto k = static_cast<unsigned>((w - kXfNormalBase) / 9u);
+                const EyeMotion& m = entry.motion.position[k];
+                note(cut ? Cut : entry.motion.position_changed[k] != 0u && (m.snapped || m.flipped) ? PositionSnapped
+                                                                                                  : Normal,
+                     x, y);
+            } else if (w >= kXfLightBase && ((entry.light_mask >> ((w - kXfLightBase) / 16u)) & 1u) != 0u) {
+                // The colour word holds RGBA8 bytes: compared as integers.
+                if ((w - kXfLightBase) % 16u == 3u) {
+                    if (got[w] != was[w]) {
+                        ++off[cut ? Cut : Light];
+                    }
+                } else {
+                    note(cut ? Cut : Light, x, y);
+                }
+            } else {
+                ++unread_off;
+            }
         }
     }
-    std::cerr << "[interp-verify] seq=" << interp_sequence_serial_ << " checked=" << checked << " bad=" << bad
-              << " palette-words-off=" << palette_words << " worst=" << worst << '\n';
+    std::ostringstream line;
+    line << "[interp-verify] seq=" << interp_sequence_serial_ << " checked=" << checked;
+    for (unsigned k = 0; k < Kinds; ++k) {
+        if (off[k] != 0u) {
+            line << ' ' << kNames[k] << '=' << off[k] << '/' << worst[k];
+        }
+    }
+    line << " unread-off=" << unread_off << '\n';
+    std::cerr << line.str();
 }
 
 // GALAXY_INTERP_EVAL_CHECK=<n>: every n-th sequence the GPU evaluation of its
@@ -9767,10 +9865,29 @@ void GxBackend::check_interp_eval(const InterpScene& scene, const Affine34& came
                 }
             }
         }
+        constexpr std::size_t kVsWords = interp_gpu::kVsBytes / 4u;
+        const std::size_t vs_words = interp_layout_.vs_count * kVsWords;
+        std::size_t reported_slot = ~std::size_t{0};
         for (std::size_t w = 0; w < words; ++w) {
             if (covered[w] == 0u && got[w] != want[w]) {
                 if (copies_off++ < 4u) {
                     detail << " copy(word=" << w << ' ' << got[w] << "!=" << want[w] << ')';
+                }
+                // A VS block copied from another record's constants: which record its words are.
+                const std::size_t slot = w / kVsWords;
+                if (w < vs_words && slot != reported_slot && slot < interp_moving_.size()) {
+                    reported_slot = slot;
+                    const std::uint32_t* block = got.data() + slot * kVsWords;
+                    std::int64_t match = -1;
+                    for (std::size_t r = 0; r < scene.constants.size() && match < 0; ++r) {
+                        if (std::memcmp(&scene.constants[r].texgen_config, block + 16u, 40u * 4u) == 0) {
+                            match = static_cast<std::int64_t>(r);
+                        }
+                    }
+                    detail << " block(slot=" << slot << " field=" << w % kVsWords << " record="
+                           << interp_moving_[slot].record << " gpu-matches-record=" << match
+                           << " cpu-base=" << scene.constants[interp_moving_[slot].record].mtx_palette_base
+                           << " gpu-base=" << block[51] << ')';
                 }
             }
         }

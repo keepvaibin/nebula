@@ -43,6 +43,21 @@ inline constexpr std::uint32_t kFlagRigid = 1u << 10u;
 inline constexpr std::uint32_t kFlagLightSplit = 1u << 11u;
 // At the frame presented before, with its t and camera (motion vector fields).
 inline constexpr std::uint32_t kFlagPrev = 1u << 12u;
+// Endpoint-exact (Affine, Normal, Light): the payload ends with the value the op must give at t = 0 (EndA) and at
+// t = 1 (EndB), as the two game frames have them. The op adds (1 - t)(A - f(0)) + t(B - f(1)) to its value f(t), so
+// the rebuilt rotation, the world-space round trip and float rounding leave nothing at either end: at t = 0 a
+// sub-frame is the frame before bit for bit, and at t = 1 it meets the next one. Without EndA the op shows b's value
+// at t = 0 on purpose (a jump snapped to b, a sprite flip, no frame before).
+inline constexpr std::uint32_t kFlagEndA = 1u << 13u;
+inline constexpr std::uint32_t kFlagEndB = 1u << 14u;
+
+// The program's first payload words: the camera at t = 0 and at t = 1 (row-major 3x4, for the endpoint values of
+// world-space ops), then 0 and 1 as data (the shader evaluates f(0) and f(1) with the same instructions as f(t)).
+inline constexpr std::uint32_t kHeaderCamera0 = 0u;
+inline constexpr std::uint32_t kHeaderCamera1 = 12u;
+inline constexpr std::uint32_t kHeaderZero = 24u;
+inline constexpr std::uint32_t kHeaderOne = 25u;
+inline constexpr std::uint32_t kHeaderWords = 26u;
 
 [[nodiscard]] constexpr std::uint32_t op_kind(std::uint32_t control) noexcept { return control & 0xFFu; }
 [[nodiscard]] constexpr std::uint32_t op_count(std::uint32_t control) noexcept { return control >> 16u; }
@@ -119,17 +134,19 @@ struct Layout {
 
 class Program {
 public:
-    void clear() noexcept {
-        ops.clear();
-        payload.clear();
-        flags_ = 0u;
-    }
+    Program() { clear(); }
+    void clear();
     [[nodiscard]] bool empty() const noexcept { return ops.empty(); }
     // Ops added while set are evaluated at the frame presented before (kFlagPrev).
     void at_previous(bool previous) noexcept { flags_ = previous ? kFlagPrev : 0u; }
+    // The camera of world-space ops at t = 0 and t = 1 (camera_at of the sequence's camera).
+    void set_endpoint_cameras(const Affine34& at_0, const Affine34& at_1);
 
-    void eye(std::uint32_t dst, const EyeMotion& m);
-    void normal(std::uint32_t dst, const NormalMotion& m);
+    // `end_a`, `end_b`: the eye-space matrix (3x4) of the frame before and of this one, when known.
+    void eye(std::uint32_t dst, const EyeMotion& m, const float* end_a = nullptr, const float* end_b = nullptr);
+    // `end_a`, `end_b`: 3x3 normal matrices.
+    void normal(std::uint32_t dst, const NormalMotion& m, const float* end_a = nullptr,
+                const float* end_b = nullptr);
     // from/to: `count` floats (count <= 16); `round` stores int32.
     void lerp(std::uint32_t dst, const float* from, const float* to, std::uint32_t count, bool round = false);
     void color8(std::uint32_t dst, std::uint32_t a, std::uint32_t b);
@@ -141,7 +158,8 @@ public:
     void palette(std::uint32_t dst, const PaletteMotion& m, const std::uint32_t* a, const std::uint32_t* b,
                  const CameraMotion& camera);
     // Only its changed position matrices.
-    void palette_positions(std::uint32_t dst, const PaletteMotion& m);
+    void palette_positions(std::uint32_t dst, const PaletteMotion& m, const std::uint32_t* a,
+                           const std::uint32_t* b);
     // One GX light (16 words at dst) as light_at; a may be null.
     void light(std::uint32_t dst, const std::uint32_t* a, const std::uint32_t* b, const CameraMotion& camera,
                bool split);
@@ -158,10 +176,12 @@ public:
     std::vector<std::uint32_t> payload;
 
 private:
-    void transform(OpKind kind, std::uint32_t dst, const AffineMotion& m, bool split, bool still);
+    void transform(OpKind kind, std::uint32_t dst, const AffineMotion& m, bool split, bool still,
+                   const float* end_a, const float* end_b);
     void push(OpKind kind, std::uint32_t flags, std::uint32_t count, std::uint32_t dst, std::uint32_t at);
     std::uint32_t append(const float* values, std::uint32_t count);
     std::uint32_t flags_ = 0;
+    bool endpoint_cameras_ = false;  // world-space ops take endpoint terms only with them
 };
 
 // One presented frame: t and camera_at(camera, t) (row-major 3x4), and the
