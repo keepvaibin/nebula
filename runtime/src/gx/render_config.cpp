@@ -1,12 +1,6 @@
 #include "galaxy/gx/render_config.h"
 #include "galaxy/atomic_file.h"
-
-#define WIN32_LEAN_AND_MEAN
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <Windows.h>
-#include <Shlobj.h>
+#include "galaxy/platform_paths.h"
 
 #include <algorithm>
 #include <atomic>
@@ -20,30 +14,41 @@
 #include <iomanip>
 #include <limits>
 #include <locale>
+#include <mutex>
+#include <shared_mutex>
 #include <sstream>
 #include <string>
+#include <system_error>
 
+#if defined(_WIN32)
 #pragma comment(lib, "Shell32.lib")
+#endif
 
 namespace galaxy::gx {
 
 namespace {
 
-// Full replacement and snapshots are protected by the same SRWLOCK.
+// Full replacement and snapshots are protected by the same lock.
 static RenderConfig s_config{};
 static unsigned s_next_start_efb_scale = 1u;
 static RenderFeatureCaps s_feature_caps{};
-static SRWLOCK      s_lock  = SRWLOCK_INIT;
+static std::shared_mutex s_lock;
 // Last-write time of config.ini when this process last read or wrote it.
 static std::uint64_t s_config_write_time = 0u;
 
 static std::uint64_t file_write_time(const std::filesystem::path& path) noexcept {
+#if defined(_WIN32)
     WIN32_FILE_ATTRIBUTE_DATA data{};
     if (path.empty() || !GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &data)) {
         return 0u;
     }
     return (static_cast<std::uint64_t>(data.ftLastWriteTime.dwHighDateTime) << 32u) |
         data.ftLastWriteTime.dwLowDateTime;
+#else
+    std::error_code error;
+    const auto time = path.empty() ? std::filesystem::file_time_type{} : std::filesystem::last_write_time(path, error);
+    return path.empty() || error ? 0u : static_cast<std::uint64_t>(time.time_since_epoch().count());
+#endif
 }
 
 // ---------------------------------------------------------------------------
@@ -397,6 +402,7 @@ static bool experimental_frame_rate_decouple_allowed() {
 }
 
 static std::filesystem::path config_path() {
+#if defined(_WIN32)
     SetLastError(ERROR_SUCCESS);
     const DWORD required = GetEnvironmentVariableW(L"GALAXY_RENDER_CONFIG_PATH", nullptr, 0);
     if (required != 0u) {
@@ -411,12 +417,14 @@ static std::filesystem::path config_path() {
     // the user's default configuration by accident.
     if (GetLastError() != ERROR_ENVVAR_NOT_FOUND) return {};
 
-    wchar_t app_data[MAX_PATH]{};
-    if (FAILED(SHGetFolderPathW(
-            nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, app_data))) {
-        return {};
+#else
+    // An explicitly empty override must never redirect a save into the user's default configuration.
+    if (const char* override_path = std::getenv("GALAXY_RENDER_CONFIG_PATH"); override_path != nullptr) {
+        return override_path[0] != '\0' ? std::filesystem::path(override_path) : std::filesystem::path{};
     }
-    return std::filesystem::path(app_data) / L"Nebula" / L"config.ini";
+#endif
+    const std::filesystem::path folder = galaxy::nebula_data_directory();
+    return folder.empty() ? folder : folder / "config.ini";
 }
 
 }  // namespace
@@ -426,9 +434,9 @@ static std::filesystem::path config_path() {
 // ---------------------------------------------------------------------------
 
 RenderConfig get_render_config() {
-    AcquireSRWLockShared(&s_lock);
+    s_lock.lock_shared();
     const RenderConfig copy = s_config;
-    ReleaseSRWLockShared(&s_lock);
+    s_lock.unlock_shared();
     return copy;
 }
 
@@ -506,38 +514,38 @@ RenderFeatureStatus make_render_feature_status(
 void set_render_config(const RenderConfig& cfg) {
     RenderConfig sanitized = cfg;
     clamp_unimplemented_features(sanitized);
-    AcquireSRWLockExclusive(&s_lock);
+    s_lock.lock();
     s_config = sanitized;
-    ReleaseSRWLockExclusive(&s_lock);
+    s_lock.unlock();
 }
 
 unsigned get_next_start_efb_scale() {
-    AcquireSRWLockShared(&s_lock);
+    s_lock.lock_shared();
     const unsigned copy = s_next_start_efb_scale;
-    ReleaseSRWLockShared(&s_lock);
+    s_lock.unlock_shared();
     return copy;
 }
 
 void stage_next_start_efb_scale(unsigned efb_scale) {
     const unsigned sanitized = std::clamp(efb_scale, 1u, kMaxEfbScale);
-    AcquireSRWLockExclusive(&s_lock);
+    s_lock.lock();
     s_next_start_efb_scale = sanitized;
-    ReleaseSRWLockExclusive(&s_lock);
+    s_lock.unlock();
 }
 
 RenderFeatureCaps get_render_feature_caps() {
-    AcquireSRWLockShared(&s_lock);
+    s_lock.lock_shared();
     const RenderFeatureCaps copy = s_feature_caps;
-    ReleaseSRWLockShared(&s_lock);
+    s_lock.unlock_shared();
     return copy;
 }
 
 void set_render_feature_caps(const RenderFeatureCaps& caps) {
     RenderFeatureCaps sanitized = caps;
     clamp_feature_caps(sanitized);
-    AcquireSRWLockExclusive(&s_lock);
+    s_lock.lock();
     s_feature_caps = sanitized;
-    ReleaseSRWLockExclusive(&s_lock);
+    s_lock.unlock();
 }
 
 void load_render_config_from_file() {
@@ -546,8 +554,8 @@ void load_render_config_from_file() {
     const std::filesystem::path path = config_path();
     const std::uint64_t write_time = file_write_time(path);
     if (!path.empty()) {
-        FILE* f = nullptr;
-        if (_wfopen_s(&f, path.c_str(), L"r") == 0 && f != nullptr) {
+        FILE* f = galaxy::open_path(path, "r");
+        if (f != nullptr) {
             parse_ini(f, cfg);
             std::fclose(f);
         }
@@ -559,25 +567,25 @@ void load_render_config_from_file() {
     }
     clamp_unimplemented_features(cfg);
 
-    AcquireSRWLockExclusive(&s_lock);
+    s_lock.lock();
     s_config = cfg;
     s_next_start_efb_scale = cfg.efb_scale;
     s_config_write_time = write_time;
-    ReleaseSRWLockExclusive(&s_lock);
+    s_lock.unlock();
 }
 
 bool reload_render_config_if_changed() {
     const std::filesystem::path path = config_path();
     const std::uint64_t write_time = file_write_time(path);
-    AcquireSRWLockShared(&s_lock);
+    s_lock.lock_shared();
     const std::uint64_t known = s_config_write_time;
-    ReleaseSRWLockShared(&s_lock);
+    s_lock.unlock_shared();
     if (write_time == 0u || write_time == known) {
         return false;
     }
     RenderConfig cfg = get_render_config();
-    FILE* f = nullptr;
-    if (_wfopen_s(&f, path.c_str(), L"r") != 0 || f == nullptr) {
+    FILE* f = galaxy::open_path(path, "r");
+    if (f == nullptr) {
         return false;  // Being replaced; the next check reads it.
     }
     parse_ini(f, cfg);
@@ -588,19 +596,19 @@ bool reload_render_config_if_changed() {
     }
     clamp_unimplemented_features(cfg);
 
-    AcquireSRWLockExclusive(&s_lock);
+    s_lock.lock();
     s_config = cfg;
     s_next_start_efb_scale = cfg.efb_scale;
     s_config_write_time = write_time;
-    ReleaseSRWLockExclusive(&s_lock);
+    s_lock.unlock();
     return true;
 }
 
 bool save_render_config_to_file() {
-    AcquireSRWLockShared(&s_lock);
+    s_lock.lock_shared();
     RenderConfig cfg = s_config;
     const unsigned next_start_efb_scale = s_next_start_efb_scale;
-    ReleaseSRWLockShared(&s_lock);
+    s_lock.unlock_shared();
     clamp_unimplemented_features(cfg);
     const std::filesystem::path path = config_path();
     if (path.empty()) {
@@ -653,9 +661,9 @@ bool save_render_config_to_file() {
     }
     // This process's own write is not a change to take back in.
     const std::uint64_t write_time = file_write_time(path);
-    AcquireSRWLockExclusive(&s_lock);
+    s_lock.lock();
     s_config_write_time = write_time;
-    ReleaseSRWLockExclusive(&s_lock);
+    s_lock.unlock();
     return true;
 }
 

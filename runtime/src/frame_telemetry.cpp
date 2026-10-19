@@ -1,6 +1,10 @@
+// Windows: the frame counts published in shared memory for Nebula's monitoring tools. Elsewhere there is no reader
+// and the publisher does nothing.
+#if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
+#include "galaxy/platform_time.h"
 
 #include "galaxy/frame_telemetry.h"
 #include "galaxy/windows_power.h"
@@ -50,7 +54,7 @@ struct Publisher::Impl {
     }
 
     void publish(bool active) noexcept {
-        LARGE_INTEGER begin{}; QueryPerformanceCounter(&begin);
+        const std::int64_t begin = galaxy::qpc_now();
         Counts counts{};
         try { counts = sample(); } catch (...) { return; }
         packet[8] = active ? 1u : 0u;
@@ -62,10 +66,10 @@ struct Publisher::Impl {
             packet[19] = filetime_value(kernel) + filetime_value(user);
         ULONG64 cycles = 0;
         if (QueryThreadCycleTime(GetCurrentThread(), &cycles)) packet[24] = cycles;
-        LARGE_INTEGER now{}; QueryPerformanceCounter(&now);
-        packet[6] = static_cast<std::uint64_t>(now.QuadPart);
+        const std::int64_t now = galaxy::qpc_now();
+        packet[6] = static_cast<std::uint64_t>(now);
         packet[20] = (std::max)(packet[20], static_cast<std::uint64_t>(
-            (now.QuadPart - begin.QuadPart) * 1000000 / packet[7]));
+            (now - begin) * 1000000 / packet[7]));
         const DWORD acquired = WaitForSingleObject(guard, 0);
         if (acquired != WAIT_OBJECT_0 && acquired != WAIT_ABANDONED) return;
         ++packet[5];
@@ -107,3 +111,18 @@ Publisher::Publisher(std::function<Counts()> sample, std::uint64_t width,
 }
 Publisher::~Publisher() = default;
 }  // namespace galaxy::telemetry
+
+#else
+
+#include "galaxy/frame_telemetry.h"
+
+namespace galaxy::telemetry {
+
+struct Publisher::Impl {};
+
+Publisher::Publisher(std::function<Counts()>, std::uint64_t, std::uint64_t, std::uint64_t) noexcept {}
+Publisher::~Publisher() = default;
+
+}  // namespace galaxy::telemetry
+
+#endif

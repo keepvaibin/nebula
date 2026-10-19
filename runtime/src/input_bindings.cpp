@@ -1,9 +1,14 @@
 #include "galaxy/input_bindings.h"
 #include "galaxy/rumble.h"
+#include "galaxy/c_locale_number.h"
 
+#if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
+#else
+#include "galaxy/virtual_keys.h"
+#endif
 
 #include <algorithm>
 #include <atomic>
@@ -13,6 +18,8 @@
 #include <locale.h>
 #include <cmath>
 #include <cstdio>
+#include <mutex>
+#include <shared_mutex>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
@@ -192,12 +199,9 @@ void set(BindingTable& table, WiiTarget target, std::initializer_list<InputSourc
 bool parse_float_c(std::string_view text, float& out) noexcept {
     const std::string copy(trim(text));
     if (copy.empty()) return false;
-    _locale_t locale = _create_locale(LC_NUMERIC, "C");
-    if (locale == nullptr) return false;
     char* end = nullptr;
     errno = 0;
-    const float value = _strtof_l(copy.c_str(), &end, locale);
-    _free_locale(locale);
+    const float value = galaxy::strtof_c(copy.c_str(), &end);
     if (end == copy.c_str() || *end != '\0' || errno == ERANGE || !std::isfinite(value)) {
         return false;
     }
@@ -214,11 +218,7 @@ bool parse_bool(std::string_view text, bool& out) noexcept {
 
 std::string format_float_c(float value) {
     char text[48]{};
-    _locale_t locale = _create_locale(LC_NUMERIC, "C");
-    if (locale != nullptr) {
-        _snprintf_s_l(text, sizeof(text), _TRUNCATE, "%.9g", locale, static_cast<double>(value));
-        _free_locale(locale);
-    }
+    galaxy::format_g9_c(text, sizeof(text), static_cast<double>(value));
     return text;
 }
 
@@ -914,7 +914,7 @@ std::optional<InputSource> detect_pad_capture(const PadSample& baseline, const P
 }
 
 namespace {
-SRWLOCK g_controls_lock = SRWLOCK_INIT;
+std::shared_mutex g_controls_lock;
 ControlsConfig& controls_storage() {
     static ControlsConfig config = default_controls_config();
     return config;
@@ -923,18 +923,18 @@ std::atomic<std::uint64_t> g_controls_generation{1u};
 }  // namespace
 
 ControlsConfig get_controls_config() {
-    AcquireSRWLockShared(&g_controls_lock);
+    g_controls_lock.lock_shared();
     ControlsConfig copy = controls_storage();
-    ReleaseSRWLockShared(&g_controls_lock);
+    g_controls_lock.unlock_shared();
     return copy;
 }
 
 void set_controls_config(const ControlsConfig& config) {
     const ControlsConfig sanitized = sanitize_controls_config(config);
-    AcquireSRWLockExclusive(&g_controls_lock);
+    g_controls_lock.lock();
     controls_storage() = sanitized;
     g_controls_generation.fetch_add(1u, std::memory_order_acq_rel);
-    ReleaseSRWLockExclusive(&g_controls_lock);
+    g_controls_lock.unlock();
 }
 
 std::uint64_t controls_config_generation() noexcept {

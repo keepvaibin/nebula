@@ -170,10 +170,8 @@ struct EffectCopyPolicy {
 [[nodiscard]] bool smooth_realtime_present_enabled();
 [[nodiscard]] std::uint64_t smooth_realtime_present_max_wait_us();
 
-#if defined(_WIN32)
 // Holds each present to the frame-rate cap when the display does not (vsync off), and smooths a VI-paced present
-// that arrives early by at most the smoothing wait: a high-resolution waitable timer to 0.2 ms before the target,
-// then yields.
+// that arrives early by at most the smoothing wait: a high-resolution sleep to 0.2 ms before the target, then yields.
 class PresentPacer {
 public:
     PresentPacer() noexcept;
@@ -191,8 +189,9 @@ private:
     // SwitchToThread, which cost the render thread about 100 ms of CPU a second. Null: Sleep and yield.
     void* timer_ = nullptr;
     bool timer_tried_ = false;
+    // Sleeps toward a target `remaining_ms` away, waking kPaceSpinMs early; yields when closer.
+    void sleep_before(double remaining_ms);
 };
-#endif
 
 // One fully resolved draw.  The renderer sets PSO / root arguments only when
 // they differ from the previous draw (cheap CPU-side batching).

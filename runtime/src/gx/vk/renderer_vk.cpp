@@ -3,11 +3,12 @@
 // copies and peeks are renderer_vk_efb.cpp.
 
 #include "galaxy/gx/vk/renderer_vk.h"
+#include "galaxy/platform_time.h"
 
 #include "galaxy/content_viewport.h"
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/gx/game_asset_extract.h"
-#include "galaxy/gx/host_window_win32.h"
+#include "galaxy/gx/host_window.h"
 #include "galaxy/gx/texture_cache.h"
 #include "galaxy/native_host.h"
 
@@ -40,21 +41,6 @@ bool env_flag(const char* name, bool fallback) {
 bool trace_present_stats_enabled() {
     static const bool enabled = env_flag("GALAXY_TRACE_PRESENT_STATS", false);
     return enabled;
-}
-
-std::int64_t qpc_now() {
-    LARGE_INTEGER now{};
-    QueryPerformanceCounter(&now);
-    return now.QuadPart;
-}
-
-std::int64_t qpc_frequency() {
-    static const std::int64_t frequency = [] {
-        LARGE_INTEGER value{};
-        QueryPerformanceFrequency(&value);
-        return value.QuadPart;
-    }();
-    return frequency;
 }
 
 // The binding layouts of the renderer's own shaders (annotate()).
@@ -192,19 +178,11 @@ bool RendererVk::create_surface_and_device() {
         return value != nullptr && (value[0] == 'l' || value[0] == 'L' || value[0] == 'm' || value[0] == 'M');
     }();
     const bool validation = env_flag("GALAXY_VULKAN_VALIDATION", false);
-    const HWND window = window_;
+    const host_window::NativeWindow window = window_;
     const auto make_surface = [window](VkInstance instance) {
-        VkWin32SurfaceCreateInfoKHR info{VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR};
-        info.hinstance = GetModuleHandleW(nullptr);
-        info.hwnd = window;
-        VkSurfaceKHR surface = VK_NULL_HANDLE;
-        if (vkCreateWin32SurfaceKHR(instance, &info, nullptr, &surface) != VK_SUCCESS) {
-            return VkSurfaceKHR{VK_NULL_HANDLE};
-        }
-        return surface;
+        return host_window::create_vulkan_surface(instance, window);
     };
-    if (!vk::Context::get().initialize(prefer_integrated, validation,
-                                       {VK_KHR_SURFACE_EXTENSION_NAME, VK_KHR_WIN32_SURFACE_EXTENSION_NAME},
+    if (!vk::Context::get().initialize(prefer_integrated, validation, host_window::vulkan_instance_extensions(),
                                        make_surface, &surface_)) {
         return false;
     }
@@ -899,7 +877,7 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
     if (presenting) {
         const RenderConfig cfg = get_render_config();
         const double pace_wait_ms = present_pacer_.pace(cfg.vsync_interval, cfg.max_fps);
-        const std::int64_t present_start = qpc_now();
+        const std::int64_t present_start = galaxy::qpc_now();
         VkPresentInfoKHR info{VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
         info.waitSemaphoreCount = 1;
         info.pWaitSemaphores = &swapchain_.rendered[swap_image_];
@@ -912,10 +890,10 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
         } else if (result != VK_SUCCESS) {
             vk::check(result, "vkQueuePresentKHR");
         }
-        const std::int64_t present_end = qpc_now();
+        const std::int64_t present_end = galaxy::qpc_now();
         if (trace_present_stats_enabled()) {
             const double present_ms = static_cast<double>(present_end - present_start) * 1000.0 /
-                static_cast<double>(qpc_frequency());
+                static_cast<double>(galaxy::qpc_frequency());
             stats_.present_ms += present_ms;
             stats_.present_max_ms = std::max(stats_.present_max_ms, present_ms);
             stats_.pace_wait_ms += pace_wait_ms;
@@ -926,8 +904,8 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
         if (measured_present_window_qpc_ == 0) {
             measured_present_window_qpc_ = present_end;
             measured_present_count_ = 0u;
-        } else if (present_end - measured_present_window_qpc_ >= qpc_frequency()) {
-            const double hz = static_cast<double>(measured_present_count_) * static_cast<double>(qpc_frequency()) /
+        } else if (present_end - measured_present_window_qpc_ >= galaxy::qpc_frequency()) {
+            const double hz = static_cast<double>(measured_present_count_) * static_cast<double>(galaxy::qpc_frequency()) /
                 static_cast<double>(present_end - measured_present_window_qpc_);
             measured_present_hz_.store(hz, std::memory_order_relaxed);
             host_window::measured_present_hz.store(hz, std::memory_order_relaxed);
@@ -937,7 +915,7 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
         report_present_stats();
         if (!window_shown_ && window_ != nullptr && !host_window::hidden_window_mode_enabled()) {
             window_shown_ = true;
-            ShowWindowAsync(window_, SW_SHOWNORMAL);
+            host_window::show_window(window_);
         }
     }
     swap_image_ = UINT32_MAX;
@@ -949,20 +927,20 @@ void RendererVk::report_present_stats() {
     if (!trace_present_stats_enabled()) {
         return;
     }
-    const std::int64_t now = qpc_now();
+    const std::int64_t now = galaxy::qpc_now();
     if (stats_.window_start_qpc == 0) {
         stats_.window_start_qpc = now;
     }
     if (stats_.last_present_qpc != 0) {
         const double interval = static_cast<double>(now - stats_.last_present_qpc) * 1000.0 /
-            static_cast<double>(qpc_frequency());
+            static_cast<double>(galaxy::qpc_frequency());
         stats_.interval_ms += interval;
         stats_.interval_max_ms = std::max(stats_.interval_max_ms, interval);
         ++stats_.intervals;
     }
     stats_.last_present_qpc = now;
     ++stats_.presents;
-    const double seconds = static_cast<double>(now - stats_.window_start_qpc) / static_cast<double>(qpc_frequency());
+    const double seconds = static_cast<double>(now - stats_.window_start_qpc) / static_cast<double>(galaxy::qpc_frequency());
     if (seconds < 2.0) {
         return;
     }
@@ -998,14 +976,14 @@ void RendererVk::report_present_stats() {
 constexpr double kGpuBudgetBusy = 0.80;
 
 void RendererVk::update_gpu_budget() {
-    const std::int64_t now = qpc_now();
+    const std::int64_t now = galaxy::qpc_now();
     if (gpu_budget_window_qpc_ == 0) {
         gpu_budget_window_qpc_ = now;
         gpu_budget_ms_ = 0.0;
         return;
     }
     const double window_ms = static_cast<double>(now - gpu_budget_window_qpc_) * 1000.0 /
-        static_cast<double>(qpc_frequency());
+        static_cast<double>(galaxy::qpc_frequency());
     if (window_ms < 2000.0) {
         return;
     }
@@ -1028,16 +1006,10 @@ void RendererVk::update_gpu_budget() {
 }
 
 void RendererVk::refresh_display_rate() {
-    const HMONITOR monitor = MonitorFromWindow(window_, MONITOR_DEFAULTTONEAREST);
-    MONITORINFOEXW info{};
-    info.cbSize = sizeof(info);
-    DEVMODEW mode{};
-    mode.dmSize = sizeof(mode);
-    if (monitor == nullptr || !GetMonitorInfoW(monitor, &info) ||
-        !EnumDisplaySettingsW(info.szDevice, ENUM_CURRENT_SETTINGS, &mode) || mode.dmDisplayFrequency <= 1u) {
+    const double hz = host_window::display_refresh_hz(window_);
+    if (hz <= 1.0) {
         return;
     }
-    const double hz = static_cast<double>(mode.dmDisplayFrequency);
     if (hz != display_refresh_hz_) {
         std::cerr << "[display] refresh-hz=" << hz << '\n';
     }
@@ -1074,7 +1046,7 @@ void RendererVk::follow_window_and_resize() {
         host_window::follow_window_rearm.exchange(false, std::memory_order_acq_rel)) {
         follow_window_width_ = 0u;
     }
-    if (follow_window_retry_ms_ != 0u && GetTickCount64() >= follow_window_retry_ms_) {
+    if (follow_window_retry_ms_ != 0u && galaxy::steady_ms() >= follow_window_retry_ms_) {
         follow_window_retry_ms_ = 0u;
         follow_window_width_ = 0u;
     }

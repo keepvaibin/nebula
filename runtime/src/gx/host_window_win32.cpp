@@ -2093,6 +2093,23 @@ void close_game_window(WindowOwner& owner) noexcept {
     UnregisterClassW(kWindowClass, GetModuleHandleW(nullptr));
 }
 
+void show_window(NativeWindow window) noexcept {
+    ShowWindowAsync(window, SW_SHOWNORMAL);
+}
+
+double display_refresh_hz(NativeWindow window) noexcept {
+    const HMONITOR monitor = MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST);
+    MONITORINFOEXW info{};
+    info.cbSize = sizeof(info);
+    DEVMODEW mode{};
+    mode.dmSize = sizeof(mode);
+    if (monitor == nullptr || !GetMonitorInfoW(monitor, &info) ||
+        !EnumDisplaySettingsW(info.szDevice, ENUM_CURRENT_SETTINGS, &mode) || mode.dmDisplayFrequency <= 1u) {
+        return 0.0;
+    }
+    return static_cast<double>(mode.dmDisplayFrequency);
+}
+
 LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == kSettingsKeyMessage) {
         (void)handle_native_settings_key(wp, false, true);

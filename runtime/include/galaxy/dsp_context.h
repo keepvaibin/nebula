@@ -2953,19 +2953,53 @@ inline const std::uint32_t& dsp_cpu_mailbox(const DspContext& context) {
     return context.cpu_mailbox;
 }
 
+// std::atomic_ref<std::uint32_t> where the C++ library has it; the compiler's __atomic builtins, the same
+// operations and orders, where it does not (Android's libc++).
+#if defined(__cpp_lib_atomic_ref)
+using DspMailboxRef = std::atomic_ref<std::uint32_t>;
+#else
+class DspMailboxRef {
+public:
+    explicit DspMailboxRef(std::uint32_t& word) noexcept : word_(&word) {}
+    [[nodiscard]] std::uint32_t load(std::memory_order order) const noexcept {
+        return __atomic_load_n(word_, builtin(order));
+    }
+    std::uint32_t fetch_and(std::uint32_t value, std::memory_order order) noexcept {
+        return __atomic_fetch_and(word_, value, builtin(order));
+    }
+    bool compare_exchange_weak(std::uint32_t& expected, std::uint32_t desired, std::memory_order success,
+                               std::memory_order failure) noexcept {
+        return __atomic_compare_exchange_n(word_, &expected, desired, true, builtin(success), builtin(failure));
+    }
+
+private:
+    static constexpr int builtin(std::memory_order order) noexcept {
+        switch (order) {
+        case std::memory_order_relaxed: return __ATOMIC_RELAXED;
+        case std::memory_order_consume: return __ATOMIC_CONSUME;
+        case std::memory_order_acquire: return __ATOMIC_ACQUIRE;
+        case std::memory_order_release: return __ATOMIC_RELEASE;
+        case std::memory_order_acq_rel: return __ATOMIC_ACQ_REL;
+        default: return __ATOMIC_SEQ_CST;
+        }
+    }
+    std::uint32_t* word_;
+};
+#endif
+
 // The two mailbox words are the only DspContext state touched by both the CPU thread and the free-running
 // DSP worker, so every access goes through std::atomic_ref. The busy bit (kDspMailboxBusy) is the "mail
 // present" handshake. A low-half write sets it with release semantics, so the published high half is
 // visible. The consuming low-half read clears it. Reads use acquire, so the spinning DSP sees CPU writes.
 inline std::uint16_t dsp_mailbox_read_high(const std::uint32_t& mailbox) {
-    std::atomic_ref<std::uint32_t> ref(const_cast<std::uint32_t&>(mailbox));
+    DspMailboxRef ref(const_cast<std::uint32_t&>(mailbox));
     return static_cast<std::uint16_t>(ref.load(std::memory_order_acquire) >> 16u);
 }
 
 inline std::uint16_t dsp_mailbox_read_low(
     std::uint32_t& mailbox,
     bool* consumed_mail = nullptr) {
-    std::atomic_ref<std::uint32_t> ref(mailbox);
+    DspMailboxRef ref(mailbox);
     const auto value = ref.fetch_and(~kDspMailboxBusy, std::memory_order_acq_rel);
     if (consumed_mail != nullptr) {
         *consumed_mail = (value & kDspMailboxBusy) != 0u;
@@ -2974,12 +3008,12 @@ inline std::uint16_t dsp_mailbox_read_low(
 }
 
 inline std::uint16_t dsp_mailbox_peek_low(const std::uint32_t& mailbox) {
-    std::atomic_ref<std::uint32_t> ref(const_cast<std::uint32_t&>(mailbox));
+    DspMailboxRef ref(const_cast<std::uint32_t&>(mailbox));
     return static_cast<std::uint16_t>(ref.load(std::memory_order_acquire));
 }
 
 inline void dsp_mailbox_write_high(std::uint32_t& mailbox, std::uint16_t value) {
-    std::atomic_ref<std::uint32_t> ref(mailbox);
+    DspMailboxRef ref(mailbox);
     std::uint32_t expected = ref.load(std::memory_order_relaxed);
     std::uint32_t desired;
     do {
@@ -2993,7 +3027,7 @@ inline void dsp_mailbox_write_high(std::uint32_t& mailbox, std::uint16_t value) 
 [[nodiscard]] inline std::uint32_t dsp_mailbox_write_low(
     std::uint32_t& mailbox,
     std::uint16_t value) {
-    std::atomic_ref<std::uint32_t> ref(mailbox);
+    DspMailboxRef ref(mailbox);
     std::uint32_t expected = ref.load(std::memory_order_relaxed);
     std::uint32_t desired;
     do {
@@ -3005,7 +3039,7 @@ inline void dsp_mailbox_write_high(std::uint32_t& mailbox, std::uint16_t value) 
 }
 
 inline std::uint32_t dsp_mailbox_raw(const std::uint32_t& mailbox) {
-    std::atomic_ref<std::uint32_t> ref(const_cast<std::uint32_t&>(mailbox));
+    DspMailboxRef ref(const_cast<std::uint32_t&>(mailbox));
     return ref.load(std::memory_order_acquire);
 }
 

@@ -33,16 +33,24 @@ namespace galaxy::gx {
 
 namespace {
 
-// Append to an ostringstream using a printf-style format.
+// Append to an ostringstream using a printf-style format; text without arguments as it is.
+#if defined(_MSC_VER)
 #pragma warning(push)
 #pragma warning(disable : 4996)  // suppress snprintf security warning
+#endif
 template <typename... Args>
 static void emit(std::ostringstream& s, const char* fmt, Args&&... args) {
-    char buf[4096];
-    std::snprintf(buf, sizeof(buf), fmt, std::forward<Args>(args)...);
-    s << buf;
+    if constexpr (sizeof...(Args) == 0) {
+        s << fmt;
+    } else {
+        char buf[4096];
+        std::snprintf(buf, sizeof(buf), fmt, std::forward<Args>(args)...);
+        s << buf;
+    }
 }
+#if defined(_MSC_VER)
 #pragma warning(pop)
+#endif
 
 // ---- TevColorArg -> HLSL int expression (color .rgb channel) --------------
 static const char* color_arg_rgb(TevColorArg arg) {

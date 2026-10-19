@@ -1,5 +1,16 @@
 #pragma once
 
+#if !defined(_WIN32)
+namespace galaxy::gx {
+// The game window's owner on SDL platforms: the host creates the window on its main thread (platform/sdl) and lends
+// it to the renderer.
+class WindowOwner {
+public:
+    void* window = nullptr;  // SDL_Window*
+};
+}  // namespace galaxy::gx
+#else
+
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -41,3 +52,5 @@ private:
 };
 
 } // namespace galaxy::gx
+
+#endif

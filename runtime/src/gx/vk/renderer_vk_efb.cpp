@@ -3,7 +3,8 @@
 
 #include "galaxy/gx/vk/renderer_vk.h"
 
-#include "galaxy/gx/host_window_win32.h"
+#include "galaxy/gx/host_window.h"
+#include "galaxy/platform_time.h"
 #include "galaxy/gx/gx_state.h"
 #include "galaxy/gx/texture_cache.h"
 #include "galaxy/gx/uber_constants.h"
@@ -192,7 +193,7 @@ void RendererVk::apply_pending_efb_scale() {
         stage_next_start_efb_scale(efb_scale_);
         host_window::efb_scale_rejected.store(wanted, std::memory_order_release);
         if (render.internal_follow_window) {
-            follow_window_retry_ms_ = GetTickCount64() + 10'000u;
+            follow_window_retry_ms_ = galaxy::steady_ms() + 10'000u;
         }
         return;
     }

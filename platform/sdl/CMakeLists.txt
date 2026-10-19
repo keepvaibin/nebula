@@ -1,0 +1,99 @@
+# The native game on SDL3 platforms (Android, Linux, SteamOS; docs/NATIVE_PORT.md "Platforms"): the shared GX layer
+# with the Vulkan renderer, the host's runtime pieces, and the SDL host. Dependencies are source checkouts named by
+# the cache paths below; the game module is native/CMakeLists.txt.
+cmake_minimum_required(VERSION 3.22)
+project(NebulaSDL LANGUAGES C CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+get_filename_component(nebula_root "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
+set(NEBULA_DEPS "D:/NebulaWork/deps" CACHE PATH "Folder of the dependency checkouts")
+set(NEBULA_VULKAN_HEADERS_DIR "${NEBULA_DEPS}/Vulkan-Headers-vulkan-sdk-1.4.350.1" CACHE PATH "Vulkan-Headers")
+set(NEBULA_VOLK_DIR "${NEBULA_DEPS}/volk-vulkan-sdk-1.4.350.1" CACHE PATH "volk")
+set(NEBULA_VMA_DIR "${NEBULA_DEPS}/VulkanMemoryAllocator-v3.4.0" CACHE PATH "VulkanMemoryAllocator")
+set(NEBULA_GLSLANG_SOURCE_DIR "${NEBULA_DEPS}/glslang-src" CACHE PATH "glslang source (External/spirv-tools inside)")
+set(NEBULA_SDL_DIR "${NEBULA_DEPS}/SDL3-3.4.18" CACHE PATH "SDL3 source")
+
+# glslang with its HLSL front end and the SPIR-V optimizer, as the Windows build links it.
+set(ENABLE_GLSLANG_BINARIES OFF CACHE BOOL "" FORCE)
+set(ENABLE_HLSL ON CACHE BOOL "" FORCE)
+set(ENABLE_OPT ON CACHE BOOL "" FORCE)
+set(GLSLANG_TESTS OFF CACHE BOOL "" FORCE)
+set(GLSLANG_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+set(SPIRV_SKIP_TESTS ON CACHE BOOL "" FORCE)
+set(SPIRV_SKIP_EXECUTABLES ON CACHE BOOL "" FORCE)
+set(SPIRV_TOOLS_BUILD_STATIC ON CACHE BOOL "" FORCE)
+add_subdirectory("${NEBULA_GLSLANG_SOURCE_DIR}" glslang EXCLUDE_FROM_ALL)
+# The renderer includes glslang's headers in their installed layout (glslang/SPIRV/...).
+file(GLOB glslang_spirv_headers "${NEBULA_GLSLANG_SOURCE_DIR}/SPIRV/*.h" "${NEBULA_GLSLANG_SOURCE_DIR}/SPIRV/*.hpp")
+file(COPY ${glslang_spirv_headers} DESTINATION "${CMAKE_BINARY_DIR}/glslang-include/glslang/SPIRV")
+
+add_library(nebula_vulkan_deps INTERFACE)
+target_include_directories(nebula_vulkan_deps INTERFACE
+    "${NEBULA_VULKAN_HEADERS_DIR}/include" "${NEBULA_VOLK_DIR}" "${NEBULA_VMA_DIR}/include"
+    "${CMAKE_BINARY_DIR}/glslang-include" "${NEBULA_GLSLANG_SOURCE_DIR}"
+    "${NEBULA_GLSLANG_SOURCE_DIR}/External/spirv-tools/include")
+target_compile_definitions(nebula_vulkan_deps INTERFACE NEBULA_GPU_VULKAN VK_NO_PROTOTYPES
+    $<$<PLATFORM_ID:Android>:VK_USE_PLATFORM_ANDROID_KHR>)
+target_link_libraries(nebula_vulkan_deps INTERFACE glslang SPIRV glslang-default-resource-limits SPIRV-Tools-opt
+    SPIRV-Tools-static)
+
+# Uber shader sources become NUL-terminated char arrays, as in the root build.
+set(galaxy_uber_embed_cpp "${CMAKE_CURRENT_BINARY_DIR}/generated/uber_shader_embed.cpp")
+set(galaxy_uber_embed_body "")
+foreach(stage vs ps)
+    set(hlsl "${nebula_root}/runtime/src/gx/uber_${stage}.hlsl")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${hlsl}")
+    file(READ "${hlsl}" hex HEX)
+    string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," hex "${hex}")
+    string(APPEND galaxy_uber_embed_body "extern const char galaxy_uber_${stage}_hlsl[] = {${hex}0x00};\n")
+endforeach()
+file(CONFIGURE OUTPUT "${galaxy_uber_embed_cpp}" CONTENT "namespace galaxy::gx {\n${galaxy_uber_embed_body}}\n" @ONLY)
+
+set(rt "${nebula_root}/runtime/src")
+add_library(galaxy_gx_vk STATIC
+    ${rt}/gx/gx_shim.cpp
+    ${rt}/gx/gx_state.cpp
+    ${rt}/gx/frame_completion.cpp
+    ${rt}/gx/render_config.cpp
+    ${rt}/gx/renderer_common.cpp
+    ${rt}/gx/upload_ring.cpp
+    ${rt}/gx/texture_cache.cpp
+    ${rt}/gx/vertex_loader.cpp
+    ${rt}/gx/shader_keys.cpp
+    ${rt}/gx/efb_copy.cpp
+    ${rt}/gx/line_point_raster.cpp
+    ${rt}/gx/shader_gen.cpp
+    ${rt}/gx/uber_shaders.cpp
+    ${galaxy_uber_embed_cpp}
+    ${rt}/gx/post_process_settings.cpp
+    ${rt}/gx/transform_history.cpp
+    ${rt}/gx/fifo_parser.cpp
+    ${rt}/gx/gx_backend.cpp
+    ${rt}/frame_telemetry.cpp
+    ${rt}/gx/game_asset_extract.cpp
+    ${rt}/gx/vk/vk_context.cpp
+    ${rt}/gx/vk/vk_libraries.cpp
+    ${rt}/gx/vk/shader_compile_vk.cpp
+    ${rt}/gx/vk/texture_backend_vk.cpp
+    ${rt}/gx/vk/pipeline_cache_vk.cpp
+    ${rt}/gx/vk/renderer_vk.cpp
+    ${rt}/gx/vk/renderer_vk_efb.cpp
+    ${rt}/frame_cadence_diagnostics.cpp
+    ${rt}/runtime_settings.cpp
+    ${rt}/input_bindings.cpp
+    ${rt}/host_pointer_events.cpp
+    ${rt}/native_input.cpp
+    ${rt}/pointer_control.cpp
+    ${rt}/rumble.cpp
+    ${rt}/switch_controller.cpp
+    ${rt}/tilt.cpp
+    ${rt}/jaudio_host_mixer.cpp
+    ${rt}/atomic_file.cpp)
+target_include_directories(galaxy_gx_vk PUBLIC "${nebula_root}/runtime/include")
+target_compile_options(galaxy_gx_vk PUBLIC "SHELL:-include ${nebula_root}/runtime/include/galaxy/posix_compat.h")
+# vk_mem_alloc.h leaves pointer nullability unannotated.
+target_compile_options(galaxy_gx_vk PRIVATE -Wno-nullability-completeness)
+target_link_libraries(galaxy_gx_vk PUBLIC nebula_vulkan_deps)

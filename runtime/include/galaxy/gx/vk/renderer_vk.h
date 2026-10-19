@@ -24,6 +24,7 @@
 #include "galaxy/gx/upload_ring.h"
 #include "galaxy/gx/vk/shader_compile_vk.h"
 #include "galaxy/gx/vk/vk_context.h"
+#include "galaxy/gx/host_window.h"
 #include "galaxy/gx/window_owner.h"
 #include "galaxy/gx_d3d12.h"
 
@@ -265,7 +266,7 @@ private:
     [[nodiscard]] std::uint64_t submit_one_time(VkCommandBuffer commands);
 
     WindowOwner window_owner_;
-    HWND window_ = nullptr;
+    host_window::NativeWindow window_ = nullptr;
     bool window_shown_ = false;
     VkSurfaceKHR surface_ = VK_NULL_HANDLE;
     Swapchain swapchain_;

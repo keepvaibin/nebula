@@ -2,6 +2,7 @@
 // What both GX renderers share (renderer_common.h).
 
 #include "galaxy/gx/renderer_common.h"
+#include "galaxy/platform_time.h"
 
 #if defined(_WIN32)
 #ifndef WIN32_LEAN_AND_MEAN
@@ -11,6 +12,9 @@
 #define NOMINMAX
 #endif
 #include <Windows.h>
+#else
+#include <sched.h>
+#include <time.h>
 #endif
 
 #include <algorithm>
@@ -625,12 +629,7 @@ bool is_effect_copy(const EffectCopyPolicy& policy, const EfbCopyParams& params,
                                        : is_galaxy_bloom_workspace_copy(params, is_depth_copy);
 }
 
-#if defined(_WIN32)
-PresentPacer::PresentPacer() noexcept {
-    LARGE_INTEGER frequency{};
-    QueryPerformanceFrequency(&frequency);
-    frequency_ = frequency.QuadPart;
-}
+PresentPacer::PresentPacer() noexcept : frequency_(galaxy::qpc_frequency()) {}
 
 PresentPacer::~PresentPacer() {
     reset();
@@ -638,16 +637,56 @@ PresentPacer::~PresentPacer() {
 
 void PresentPacer::reset() noexcept {
     last_qpc_ = 0;
+#if defined(_WIN32)
     if (timer_ != nullptr) {
         CloseHandle(timer_);
         timer_ = nullptr;
     }
+#endif
     timer_tried_ = false;
 }
 
 // The present pacer spins (yields) only for its last 0.2 ms: Battlerock 1080p, render thread 197 ms/s with the
 // yield loop for the whole wait, 99 ms/s with the timer alone (median worst interval 16.82 -> 17.18 ms).
 constexpr double kPaceSpinMs = 0.2;
+
+#if defined(_WIN32)
+void PresentPacer::sleep_before(double remaining_ms) {
+    if (!timer_tried_) {
+        timer_tried_ = true;
+        timer_ = CreateWaitableTimerExW(
+            nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
+    }
+    if (timer_ != nullptr && remaining_ms > kPaceSpinMs) {
+        // Sleep to kPaceSpinMs before the target (the timer wakes up to a few hundred microseconds late), then
+        // yield for the rest: the spin is at most kPaceSpinMs a frame. Due time in 100 ns units, relative.
+        LARGE_INTEGER due{};
+        due.QuadPart = -std::max<LONGLONG>(1, static_cast<LONGLONG>((remaining_ms - kPaceSpinMs) * 10000.0));
+        if (SetWaitableTimer(timer_, &due, 0, nullptr, nullptr, FALSE)) {
+            WaitForSingleObject(timer_, INFINITE);
+        } else {
+            SwitchToThread();
+        }
+    } else if (timer_ != nullptr) {
+        SwitchToThread();
+    } else if (remaining_ms >= 2.0) {
+        Sleep(static_cast<DWORD>(remaining_ms - 1.0));
+    } else {
+        SwitchToThread();
+    }
+}
+#else
+void PresentPacer::sleep_before(double remaining_ms) {
+    if (remaining_ms > kPaceSpinMs) {
+        // CLOCK_MONOTONIC sleeps are high resolution on Linux and Android.
+        const auto ns = static_cast<long long>((remaining_ms - kPaceSpinMs) * 1e6);
+        timespec duration{static_cast<time_t>(ns / 1000000000), static_cast<long>(ns % 1000000000)};
+        clock_nanosleep(CLOCK_MONOTONIC, 0, &duration, nullptr);
+    } else {
+        sched_yield();
+    }
+}
+#endif
 
 double PresentPacer::pace(unsigned vsync_interval, float max_fps) {
     // Runtime gameplay is paced by the native VI scheduler. A tiny bounded
@@ -667,14 +706,13 @@ double PresentPacer::pace(unsigned vsync_interval, float max_fps) {
         return 0.0;
     }
 
-    LARGE_INTEGER now{};
-    QueryPerformanceCounter(&now);
+    std::int64_t now = galaxy::qpc_now();
     if (last_qpc_ == 0) {
-        last_qpc_ = now.QuadPart;
+        last_qpc_ = now;
         return 0.0;
     }
 
-    const auto wait_start_qpc = now.QuadPart;
+    const auto wait_start_qpc = now;
     const double ticks_per_frame =
         static_cast<double>(frequency_) /
         static_cast<double>(max_fps);
@@ -689,56 +727,33 @@ double PresentPacer::pace(unsigned vsync_interval, float max_fps) {
                   1'000'000.0)
             : std::numeric_limits<std::int64_t>::max();
     const std::int64_t wait_limit =
-        realtime_paced ? now.QuadPart + wait_cap_ticks
+        realtime_paced ? now + wait_cap_ticks
                        : std::numeric_limits<std::int64_t>::max();
-    while (now.QuadPart < target) {
-        if (realtime_paced && now.QuadPart >= wait_limit) {
+    while (now < target) {
+        if (realtime_paced && now >= wait_limit) {
             break;
         }
         const std::int64_t capped_target =
             realtime_paced ? std::min<std::int64_t>(target, wait_limit)
                            : target;
         const double remaining_ms =
-            static_cast<double>(capped_target - now.QuadPart) * 1000.0 /
+            static_cast<double>(capped_target - now) * 1000.0 /
             static_cast<double>(frequency_);
-        if (!timer_tried_) {
-            timer_tried_ = true;
-            timer_ = CreateWaitableTimerExW(
-                nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
-        }
-        if (timer_ != nullptr && remaining_ms > kPaceSpinMs) {
-            // Sleep to kPaceSpinMs before the target (the timer wakes up to a few hundred microseconds late), then
-            // yield for the rest: the spin is at most kPaceSpinMs a frame. Due time in 100 ns units, relative.
-            LARGE_INTEGER due{};
-            due.QuadPart = -std::max<LONGLONG>(1, static_cast<LONGLONG>((remaining_ms - kPaceSpinMs) * 10000.0));
-            if (SetWaitableTimer(timer_, &due, 0, nullptr, nullptr, FALSE)) {
-                WaitForSingleObject(timer_, INFINITE);
-            } else {
-                SwitchToThread();
-            }
-        } else if (timer_ != nullptr) {
-            SwitchToThread();
-        } else if (remaining_ms >= 2.0) {
-            Sleep(static_cast<DWORD>(remaining_ms - 1.0));
-        } else {
-            SwitchToThread();
-        }
-        QueryPerformanceCounter(&now);
+        sleep_before(remaining_ms);
+        now = galaxy::qpc_now();
     }
 
     const double wait_ms =
-        static_cast<double>(now.QuadPart - wait_start_qpc) * 1000.0 /
+        static_cast<double>(now - wait_start_qpc) * 1000.0 /
         static_cast<double>(frequency_);
 
     const auto max_lag =
         static_cast<std::int64_t>(ticks_per_frame * 2.0);
     last_qpc_ =
-        (now.QuadPart < target && realtime_paced)
-            ? now.QuadPart
-            : ((now.QuadPart - target > max_lag) ? now.QuadPart : target);
+        (now < target && realtime_paced)
+            ? now
+            : ((now - target > max_lag) ? now : target);
     return wait_ms;
 }
-
-#endif
 
 }  // namespace galaxy::gx

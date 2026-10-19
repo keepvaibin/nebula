@@ -1363,7 +1363,8 @@ if(NEBULA_VULKAN)
         runtime/src/gx/vk/texture_backend_vk.cpp
         runtime/src/gx/vk/pipeline_cache_vk.cpp
         runtime/src/gx/vk/renderer_vk.cpp
-        runtime/src/gx/vk/renderer_vk_efb.cpp)
+        runtime/src/gx/vk/renderer_vk_efb.cpp
+        runtime/src/gx/vk/surface_win32.cpp)
     target_include_directories(galaxy_gx_vk PUBLIC runtime/include)
     target_compile_features(galaxy_gx_vk PUBLIC cxx_std_20)
     target_link_libraries(galaxy_gx_vk

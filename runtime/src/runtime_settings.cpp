@@ -1,11 +1,8 @@
 #include "galaxy/runtime_settings.h"
 #include "galaxy/atomic_file.h"
 #include "galaxy/input_bindings.h"
-
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <Windows.h>
-#include <Shlobj.h>
+#include "galaxy/platform_paths.h"
+#include "galaxy/c_locale_number.h"
 
 #include <algorithm>
 #include <atomic>
@@ -21,12 +18,16 @@
 #include <limits>
 #include <locale>
 #include <memory>
+#include <mutex>
+#include <shared_mutex>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 
+#if defined(_WIN32)
 #pragma comment(lib, "Shell32.lib")
+#endif
 
 namespace galaxy {
 
@@ -34,7 +35,7 @@ namespace {
 
 RuntimeSettings s_settings{};
 std::uint64_t s_input_mode_generation = 1u;
-SRWLOCK s_settings_lock = SRWLOCK_INIT;
+std::shared_mutex s_settings_lock;
 
 RuntimeSettings sanitize_settings(RuntimeSettings settings) {
     switch (settings.input_mode) {
@@ -64,21 +65,12 @@ RuntimeSettings sanitize_settings(RuntimeSettings settings) {
 }
 
 float parse_gain(const char* value, float fallback) {
-    struct NumericLocale {
-        _locale_t handle = _create_locale(LC_NUMERIC, "C");
-        ~NumericLocale() {
-            if (handle != nullptr) {
-                _free_locale(handle);
-            }
-        }
-    };
-    static const NumericLocale locale;
-    if (locale.handle == nullptr) {
+    if (galaxy::c_numeric_locale() == nullptr) {
         throw std::runtime_error("cannot create runtime settings numeric locale");
     }
     char* end = nullptr;
     errno = 0;
-    const float parsed = _strtof_l(value, &end, locale.handle);
+    const float parsed = galaxy::strtof_c(value, &end);
     if (end == value || errno == ERANGE || !std::isfinite(parsed)) {
         return fallback;
     }
@@ -156,6 +148,7 @@ void apply_kv(RuntimeSettings& settings, const char* key, const char* value) {
 }
 
 std::filesystem::path settings_path() {
+#if defined(_WIN32)
     wchar_t* override_value = nullptr;
     std::size_t override_length = 0u;
     const int query_error = _wdupenv_s(
@@ -180,13 +173,18 @@ std::filesystem::path settings_path() {
         return path;
     }
 
-    wchar_t app_data[MAX_PATH]{};
-    if (FAILED(SHGetFolderPathW(
-            nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, app_data))) {
-        return {};
+#else
+    if (const char* override_value = std::getenv("GALAXY_RUNTIME_SETTINGS_PATH");
+        override_value != nullptr && override_value[0] != '\0') {
+        const std::filesystem::path path(override_value);
+        if (path.filename().empty()) {
+            throw std::runtime_error("GALAXY_RUNTIME_SETTINGS_PATH must name a settings file");
+        }
+        return path;
     }
-    return std::filesystem::path(app_data) / L"Nebula" /
-           L"runtime_settings.ini";
+#endif
+    const std::filesystem::path folder = nebula_data_directory();
+    return folder.empty() ? folder : folder / "runtime_settings.ini";
 }
 
 // Files written by an older controls version carry that version's defaults:
@@ -215,8 +213,8 @@ void parse_settings_file(RuntimeSettings& settings, input::ControlsConfig& contr
     }
     unsigned controls_version = 0u;
 
-    FILE* file = nullptr;
-    const int open_error = _wfopen_s(&file, path.c_str(), L"rb");
+    FILE* file = open_path(path, "rb");
+    const int open_error = file != nullptr ? 0 : errno;
     const std::unique_ptr<FILE, decltype(&std::fclose)> owned_file(file, &std::fclose);
     if (open_error != 0 || file == nullptr) {
         if (open_error == ENOENT) {
@@ -292,9 +290,9 @@ void apply_env_overrides(RuntimeSettings& settings) {
 }  // namespace
 
 RuntimeSettings get_runtime_settings() {
-    AcquireSRWLockShared(&s_settings_lock);
+    s_settings_lock.lock_shared();
     const RuntimeSettings copy = s_settings;
-    ReleaseSRWLockShared(&s_settings_lock);
+    s_settings_lock.unlock_shared();
     return copy;
 }
 
@@ -331,29 +329,29 @@ const char* game_language_key(GameLanguage language) noexcept {
 }
 
 RuntimeInputModeState get_runtime_input_mode_state() {
-    AcquireSRWLockShared(&s_settings_lock);
+    s_settings_lock.lock_shared();
     const RuntimeInputModeState copy{
         s_settings.input_mode,
         s_input_mode_generation,
     };
-    ReleaseSRWLockShared(&s_settings_lock);
+    s_settings_lock.unlock_shared();
     return copy;
 }
 
 void set_runtime_settings(const RuntimeSettings& settings) {
     const RuntimeSettings sanitized = sanitize_settings(settings);
-    AcquireSRWLockExclusive(&s_settings_lock);
+    s_settings_lock.lock();
     if (s_settings.input_mode != sanitized.input_mode) {
         if (s_input_mode_generation ==
             std::numeric_limits<std::uint64_t>::max()) {
-            ReleaseSRWLockExclusive(&s_settings_lock);
+            s_settings_lock.unlock();
             throw std::overflow_error(
                 "runtime input-mode generation overflow");
         }
         ++s_input_mode_generation;
     }
     s_settings = sanitized;
-    ReleaseSRWLockExclusive(&s_settings_lock);
+    s_settings_lock.unlock();
 }
 
 namespace {
@@ -369,13 +367,14 @@ RuntimeInputMode s_file_input_mode = RuntimeInputMode::Auto;
 RuntimeInputMode s_input_mode_at_sync = RuntimeInputMode::Auto;
 
 void record_input_mode_sync(RuntimeInputMode file_mode, RuntimeInputMode live_mode) {
-    AcquireSRWLockExclusive(&s_settings_lock);
+    s_settings_lock.lock();
     s_file_input_mode = file_mode;
     s_input_mode_at_sync = live_mode;
-    ReleaseSRWLockExclusive(&s_settings_lock);
+    s_settings_lock.unlock();
 }
 
 std::uint64_t settings_file_write_time(const std::filesystem::path& path) noexcept {
+#if defined(_WIN32)
     WIN32_FILE_ATTRIBUTE_DATA data{};
     if (path.empty() ||
         !GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &data)) {
@@ -383,6 +382,11 @@ std::uint64_t settings_file_write_time(const std::filesystem::path& path) noexce
     }
     return (static_cast<std::uint64_t>(data.ftLastWriteTime.dwHighDateTime) << 32u) |
         data.ftLastWriteTime.dwLowDateTime;
+#else
+    std::error_code error;
+    const auto time = path.empty() ? std::filesystem::file_time_type{} : std::filesystem::last_write_time(path, error);
+    return path.empty() || error ? 0u : static_cast<std::uint64_t>(time.time_since_epoch().count());
+#endif
 }
 
 }  // namespace
@@ -433,10 +437,10 @@ bool save_runtime_settings_to_file() {
         if (path.empty()) {
             return false;
         }
-        AcquireSRWLockShared(&s_settings_lock);
+        s_settings_lock.lock_shared();
         const RuntimeInputMode input_mode =
             settings.input_mode == s_input_mode_at_sync ? s_file_input_mode : settings.input_mode;
-        ReleaseSRWLockShared(&s_settings_lock);
+        s_settings_lock.unlock_shared();
 
         std::ostringstream contents;
         contents.imbue(std::locale::classic());

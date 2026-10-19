@@ -3,6 +3,7 @@
 // gx_shim.cpp implements the frozen galaxy::gx public API in gx_d3d12.h as a thin wrapper
 // around this backend.
 
+#if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -13,6 +14,15 @@
 #include <d3d12.h>
 #endif
 #pragma warning(pop)
+#include <intrin.h>
+#else
+#include <time.h>
+#if defined(__x86_64__)
+#include <immintrin.h>
+#endif
+#endif
+#include "galaxy/platform_time.h"
+#include "galaxy/platform_paths.h"
 
 #include "galaxy/gx/gx_backend.h"
 #include "galaxy/gx/dependency_draw_memo.h"
@@ -40,7 +50,6 @@
 #include <charconv>
 #include <cstdio>
 #include <cstdlib>
-#include <intrin.h>
 #include <cstring>
 #include <filesystem>
 #include <iostream>
@@ -192,11 +201,11 @@ void poll_live_capture_request(std::uint64_t frame, std::size_t fifo_size) {
     static std::uint64_t examined_frame = 0u;
     static std::uint64_t last_request = 0u;
     static std::uint64_t pending_request = 0u;
-    static ULONGLONG pending_since = 0u;
-    static ULONGLONG last_poll = 0u;
+    static std::uint64_t pending_since = 0u;
+    static std::uint64_t last_poll = 0u;
     if (examined_frame == frame) return;
     examined_frame = frame;
-    const auto now = GetTickCount64();
+    const auto now = galaxy::steady_ms();
     if (pending_request != 0u) {
         if (now - pending_since > 10000u) {
             std::cerr << "[capture-request] request=" << pending_request
@@ -213,14 +222,22 @@ void poll_live_capture_request(std::uint64_t frame, std::size_t fifo_size) {
     }
     if (last_poll != 0u && now - last_poll < 100u) return;
     last_poll = now;
+    std::array<char, 32> text{};
+#if defined(_WIN32)
     const HANDLE file = CreateFileA(path.c_str(), GENERIC_READ,
         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
         OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (file == INVALID_HANDLE_VALUE) return;
-    std::array<char, 32> text{};
     DWORD count = 0u;
     const BOOL read = ReadFile(file, text.data(), static_cast<DWORD>(text.size()), &count, nullptr);
     CloseHandle(file);
+#else
+    std::FILE* const file = std::fopen(path.c_str(), "rb");
+    if (file == nullptr) return;
+    const std::size_t count = std::fread(text.data(), 1u, text.size(), file);
+    const bool read = std::ferror(file) == 0;
+    std::fclose(file);
+#endif
     if (!read || count == 0u || count == text.size()) return;
     std::string_view token(text.data(), count);
     if (token.back() == '\n') {
@@ -2255,11 +2272,15 @@ ThreadCounterSample thread_counter_interval(
 }
 
 ThreadCounterSample thread_cycle_count() noexcept {
+#if defined(_WIN32)
     ULONG64 cycles = 0u;
     if (QueryThreadCycleTime(GetCurrentThread(), &cycles) == FALSE) return {};
     // Raw count, never converted to time. Frequency and instrumentation affect
     // its interpretation; this counter alone cannot distinguish work/waits.
     return {static_cast<std::uint64_t>(cycles), true};
+#else
+    return {};  // no per-thread cycle counter; thread_cpu_time_100ns is the measure there
+#endif
 }
 
 bool pso_cycles_requested() {
@@ -2274,6 +2295,7 @@ bool pso_cycles_requested() {
 }
 
 ThreadCounterSample thread_cpu_time_100ns() noexcept {
+#if defined(_WIN32)
     // Kernel+user CPU duration in 100ns units. Granularity is host-dependent;
     // wall minus CPU also includes blocking, not solely scheduler preemption.
     FILETIME creation{};
@@ -2294,6 +2316,11 @@ ThreadCounterSample thread_cpu_time_100ns() noexcept {
     // taken at the top of render_frame_on_thread, so the delta is a real CPU-time
     // delta for this thread, independent of how often it was descheduled.
     return {kernel_ticks.QuadPart + user_ticks.QuadPart, true};
+#else
+    timespec now{};
+    if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &now) != 0) return {};
+    return {(static_cast<std::uint64_t>(now.tv_sec) * 1000000000u + static_cast<std::uint64_t>(now.tv_nsec)) / 100u, true};
+#endif
 }
 
 // Always-on flush timing, sampled one call in kFlushTimingSampleStride so the meter does not
@@ -3316,6 +3343,7 @@ bool GxBackend::initialize(int w, int h) {
 
     // Determine shader-cache directory.
     std::filesystem::path cache_dir;
+#if defined(_WIN32)
     {
         wchar_t* local_app = nullptr;
         std::size_t local_app_len = 0;
@@ -3328,6 +3356,13 @@ bool GxBackend::initialize(int w, int h) {
             cache_dir = std::filesystem::path("generated") / "shadercache";
         }
     }
+#else
+    if (const std::filesystem::path data = galaxy::nebula_data_directory(); !data.empty()) {
+        cache_dir = data / "shadercache" / "RMGE01";
+    } else {
+        cache_dir = std::filesystem::path("generated") / "shadercache";
+    }
+#endif
 
     // Worker count: keep low-end systems conservative, but let high-end
     // machines warm cached PSOs before gameplay reaches shader-heavy scenes.
@@ -6684,13 +6719,8 @@ void GxBackend::run_pending_interp_start() {
 }
 
 void GxBackend::start_interp_sequence(std::uint32_t xfb_addr) {
-    static const std::int64_t frequency = [] {
-        LARGE_INTEGER value{};
-        QueryPerformanceFrequency(&value);
-        return static_cast<std::int64_t>(value.QuadPart);
-    }();
-    LARGE_INTEGER now{};
-    QueryPerformanceCounter(&now);
+    static const std::int64_t frequency = galaxy::qpc_frequency();
+    const std::int64_t now = galaxy::qpc_now();
     if (!renderer_.start_replay_playback()) {
         return;
     }
@@ -6705,7 +6735,7 @@ void GxBackend::start_interp_sequence(std::uint32_t xfb_addr) {
     // closes the game frame.
     interp_sequence_.step_qpc =
         frequency / (60 * static_cast<std::int64_t>(interp_frames_ + 1u));
-    interp_sequence_.due_qpc = now.QuadPart;
+    interp_sequence_.due_qpc = now;
 }
 
 std::string GxBackend::interp_snapshot_path(const char* suffix) const {
@@ -6725,23 +6755,17 @@ std::string GxBackend::interp_snapshot_path(const char* suffix) const {
 }
 
 std::int64_t GxBackend::interp_wait_ms() const {
-    LARGE_INTEGER now{};
-    QueryPerformanceCounter(&now);
-    static const std::int64_t frequency = [] {
-        LARGE_INTEGER value{};
-        QueryPerformanceFrequency(&value);
-        return static_cast<std::int64_t>(value.QuadPart);
-    }();
-    const std::int64_t remaining = interp_sequence_.due_qpc - now.QuadPart;
+    const std::int64_t now = galaxy::qpc_now();
+    static const std::int64_t frequency = galaxy::qpc_frequency();
+    const std::int64_t remaining = interp_sequence_.due_qpc - now;
     return remaining <= 0 ? 0 : std::max<std::int64_t>(1, remaining * 1000 / frequency);
 }
 
 void GxBackend::advance_interp_sequence(bool flush) {
     flush = flush || interp_sequence_.flush_requested;
     while (interp_sequence_.active) {
-        LARGE_INTEGER now{};
-        QueryPerformanceCounter(&now);
-        if (!flush && now.QuadPart < interp_sequence_.due_qpc) {
+        const std::int64_t now = galaxy::qpc_now();
+        if (!flush && now < interp_sequence_.due_qpc) {
             return;
         }
         InterpSequence& sequence = interp_sequence_;
@@ -6770,7 +6794,7 @@ void GxBackend::advance_interp_sequence(bool flush) {
             ++sequence.next;
             sequence.due_qpc += sequence.step_qpc;
             // A late sub-frame never delays the next one past its own slot.
-            if (now.QuadPart > sequence.due_qpc) sequence.due_qpc = now.QuadPart;
+            if (now > sequence.due_qpc) sequence.due_qpc = now;
             return;
         }
         if (sequence.next < sequence.subframes) {
@@ -6782,17 +6806,13 @@ void GxBackend::advance_interp_sequence(bool flush) {
         interp_snapshot_path_.clear();
         static const bool trace = read_env_u64("GALAXY_TRACE_PRESENT_STATS", 0u) != 0u;
         if (trace) {
-            static const std::int64_t frequency = [] {
-                LARGE_INTEGER value{};
-                QueryPerformanceFrequency(&value);
-                return static_cast<std::int64_t>(value.QuadPart);
-            }();
-            if (interp_stats_qpc_ == 0) interp_stats_qpc_ = now.QuadPart;
-            if (now.QuadPart - interp_stats_qpc_ >= 2 * frequency) {
+            static const std::int64_t frequency = galaxy::qpc_frequency();
+            if (interp_stats_qpc_ == 0) interp_stats_qpc_ = now;
+            if (now - interp_stats_qpc_ >= 2 * frequency) {
                 double gpu_ms = 0.0;
                 std::uint64_t gpu_samples = 0u;
                 renderer_.take_subframe_gpu_ms(gpu_ms, gpu_samples);
-                const double seconds = static_cast<double>(now.QuadPart - interp_stats_qpc_) /
+                const double seconds = static_cast<double>(now - interp_stats_qpc_) /
                                        static_cast<double>(frequency);
                 std::cerr << "[interp-stats] subframes-per-frame=" << sequence.subframes
                           << " presented-hz=" << static_cast<double>(interp_presented_) / seconds
@@ -6808,7 +6828,7 @@ void GxBackend::advance_interp_sequence(bool flush) {
                 interp_dropped_ = 0u;
                 interp_failed_ = 0u;
                 interp_cpu_ms_ = 0.0;
-                interp_stats_qpc_ = now.QuadPart;
+                interp_stats_qpc_ = now;
             }
         }
         return;
@@ -6929,19 +6949,14 @@ bool GxBackend::skip_for_present_rate() {
         next_rate_present_qpc_ = 0;
         return false;
     }
-    static const std::int64_t frequency = [] {
-        LARGE_INTEGER value{};
-        QueryPerformanceFrequency(&value);
-        return static_cast<std::int64_t>(value.QuadPart);
-    }();
-    LARGE_INTEGER now{};
-    QueryPerformanceCounter(&now);
+    static const std::int64_t frequency = galaxy::qpc_frequency();
+    const std::int64_t now = galaxy::qpc_now();
     const auto period = static_cast<std::int64_t>(static_cast<double>(frequency) / rate);
     // A stall restarts the cadence instead of releasing a burst of presents.
-    if (next_rate_present_qpc_ == 0 || now.QuadPart - next_rate_present_qpc_ > period) {
-        next_rate_present_qpc_ = now.QuadPart;
+    if (next_rate_present_qpc_ == 0 || now - next_rate_present_qpc_ > period) {
+        next_rate_present_qpc_ = now;
     }
-    if (now.QuadPart + period / 4 < next_rate_present_qpc_) return true;
+    if (now + period / 4 < next_rate_present_qpc_) return true;
     next_rate_present_qpc_ += period;
     return false;
 }
@@ -6998,7 +7013,9 @@ void GxBackend::present_cached_xfb(
 // frames are drained before a stop so the last presents land.
 void GxBackend::render_thread_main() {
     galaxy::host::name_current_thread(L"Nebula GX Render");
+#if defined(_WIN32)
     SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
+#endif
     // Hybrid CPUs: keep the FIFO parser on performance cores with the
     // simulation thread; the scheduler still balances inside that set.
     // Opt-in together with the simulation thread's placement.
@@ -7012,6 +7029,7 @@ void GxBackend::render_thread_main() {
         static std::once_flag power_throttling_once;
         std::call_once(power_throttling_once, [] {
             galaxy::host::opt_out_of_power_throttling_process();
+#if defined(_WIN32)
             // Request 1 ms timer granularity. Without it Sleep/cv timeouts and
             // waitable timers round to the 15.6 ms scheduler tick whenever no
             // other process has raised it, which delays render-thread fence
@@ -7023,6 +7041,7 @@ void GxBackend::render_thread_main() {
                     (void)begin(1);
                 }
             }
+#endif
         });
     }
     EfbPeekRequest* active_peek = nullptr;
@@ -7211,7 +7230,7 @@ void GxBackend::render_thread_main() {
                     if (const RenderStallInjection& stall = render_stall_injection(); stall.ms != 0u) {
                         static std::uint32_t chunks = 0u;
                         if (++chunks % stall.every == 0u) {
-                            Sleep(stall.ms);
+                            std::this_thread::sleep_for(std::chrono::milliseconds(stall.ms));
                         }
                     }
                     render_frame_on_thread(chunk);
@@ -8088,7 +8107,11 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             std::chrono::steady_clock::now() - first_chunk >= std::chrono::milliseconds(burn_after_ms)) {
             const auto until = std::chrono::steady_clock::now() + std::chrono::microseconds(burn_us);
             while (std::chrono::steady_clock::now() < until) {
+#if defined(_M_X64) || defined(__x86_64__)
                 _mm_pause();
+#elif defined(__aarch64__)
+                __asm__ __volatile__("yield");
+#endif
             }
         }
     }
@@ -11374,10 +11397,10 @@ bool GxBackend::on_cached_packet_draw_run(
         }
         pending_draw_batch_.call.index_count += prim.index_count;
         pending_draw_batch_.call.vertex_view.SizeInBytes +=
-            prim.vertex_count * static_cast<UINT>(sizeof(GxVertexOut));
+            prim.vertex_count * static_cast<std::uint32_t>(sizeof(GxVertexOut));
         if (prim.indexed) {
             pending_draw_batch_.call.index_view.SizeInBytes +=
-                prim.index_count * static_cast<UINT>(sizeof(std::uint16_t));
+                prim.index_count * static_cast<std::uint32_t>(sizeof(std::uint16_t));
         }
         pending_draw_batch_.vertex_count += prim.vertex_count;
         pending_draw_batch_.vertex_byte_end = vertex_byte_end;
@@ -11551,10 +11574,10 @@ void GxBackend::on_cached_draw_run_draw(
         }
         pending_draw_batch_.call.index_count += prim.index_count;
         pending_draw_batch_.call.vertex_view.SizeInBytes +=
-            prim.vertex_count * static_cast<UINT>(sizeof(GxVertexOut));
+            prim.vertex_count * static_cast<std::uint32_t>(sizeof(GxVertexOut));
         if (prim.indexed) {
             pending_draw_batch_.call.index_view.SizeInBytes +=
-                prim.index_count * static_cast<UINT>(sizeof(std::uint16_t));
+                prim.index_count * static_cast<std::uint32_t>(sizeof(std::uint16_t));
         }
         pending_draw_batch_.vertex_count += prim.vertex_count;
         pending_draw_batch_.vertex_byte_end = vertex_byte_end;
@@ -12312,10 +12335,10 @@ void GxBackend::on_draw(
         }
         pending_draw_batch_.call.index_count += prim.index_count;
         pending_draw_batch_.call.vertex_view.SizeInBytes +=
-            prim.vertex_count * static_cast<UINT>(sizeof(GxVertexOut));
+            prim.vertex_count * static_cast<std::uint32_t>(sizeof(GxVertexOut));
         if (prim.indexed) {
             pending_draw_batch_.call.index_view.SizeInBytes +=
-                prim.index_count * static_cast<UINT>(sizeof(std::uint16_t));
+                prim.index_count * static_cast<std::uint32_t>(sizeof(std::uint16_t));
         }
         pending_draw_batch_.vertex_count += prim.vertex_count;
         pending_draw_batch_.vertex_byte_end = vertex_byte_end;
