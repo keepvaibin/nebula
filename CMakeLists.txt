@@ -846,6 +846,7 @@ add_library(galaxy_gx STATIC
     runtime/src/gx/ray_tracing.cpp
     runtime/src/gx/game_lights.cpp
     runtime/src/gx/game_objects.cpp
+    runtime/src/gx/rt_tev_eval.cpp
     runtime/src/gx/ray_tracing_reflections.cpp
     runtime/src/gx/ray_tracing_water.cpp
     runtime/src/gx/rt_surfaces.cpp
@@ -1218,6 +1219,9 @@ target_link_libraries(galaxy_simd_kernel_tests PRIVATE galaxy_gx)
 add_executable(galaxy_vs_constants_tests runtime/src/gx/vs_constants_tests.cpp)
 target_link_libraries(galaxy_vs_constants_tests PRIVATE galaxy_gx)
 
+add_executable(galaxy_rt_tev_eval_tests runtime/src/gx/rt_tev_eval_tests.cpp)
+target_link_libraries(galaxy_rt_tev_eval_tests PRIVATE galaxy_gx)
+
 add_executable(galaxy_render_config_tests runtime/src/gx/render_config_tests.cpp)
 target_link_libraries(galaxy_render_config_tests PRIVATE galaxy_gx)
 
@@ -1368,6 +1372,7 @@ if(MSVC)
         galaxy_native_zero_tests
         galaxy_native_yaz0_span_tests
         galaxy_vs_constants_tests
+        galaxy_rt_tev_eval_tests
         galaxy_native_host_tests
         galaxy_ppc_float
         galaxy_ppc_float_tests
@@ -1427,6 +1432,7 @@ galaxy_add_native_test(windows_power_policy_fallback galaxy_windows_power_tests)
 galaxy_add_native_test(native_zero_span_publication galaxy_native_zero_tests)
 galaxy_add_native_test(native_yaz0_span_publication galaxy_native_yaz0_span_tests)
 galaxy_add_native_test(vs_constant_preparation_cache galaxy_vs_constants_tests)
+galaxy_add_native_test(rt_tev_eval galaxy_rt_tev_eval_tests)
 galaxy_add_native_test(atomic_settings_file galaxy_atomic_file_tests)
 galaxy_add_native_test(output_relay galaxy_output_relay_tests)
 galaxy_add_native_test(runtime_instance_lease galaxy_runtime_instance_tests)
@@ -1583,6 +1589,7 @@ if(NEBULA_VULKAN)
         runtime/src/gx/gx_backend.cpp
         runtime/src/gx/game_lights.cpp
         runtime/src/gx/game_objects.cpp
+    runtime/src/gx/rt_tev_eval.cpp
         runtime/src/gx/galaxy_select.cpp
         runtime/src/gx/frame_interpolation.cpp
         runtime/src/gx/interp_gpu.cpp

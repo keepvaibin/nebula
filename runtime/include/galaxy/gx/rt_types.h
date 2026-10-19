@@ -103,7 +103,7 @@ struct RtTevMaterial {
     std::uint32_t regs[8]{};         // PREV, C0-C2: half floats (r | g << 16, b | a << 16), value / 255
     std::uint32_t maps[8]{};         // texture views (SceneRayTracer: 0xFFFFFFFF none)
     std::uint32_t stage_offset = 0u; // SceneRayTracer: its first stage
-    std::uint32_t pad[5]{};
+    std::uint32_t pad[5]{};          // pad[0]: de-baked channels' neutral light (bits 0-7, 8-15; rt_tev_eval.h)
 };
 static_assert(sizeof(RtTevMaterial) == 128u);
 // Bits 8-11: the draw's surface class (rt_surfaces.h).

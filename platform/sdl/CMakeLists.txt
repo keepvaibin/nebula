@@ -79,6 +79,7 @@ add_library(galaxy_gx_vk STATIC
     ${rt}/gx/gx_backend.cpp
     ${rt}/gx/game_lights.cpp
     ${rt}/gx/game_objects.cpp
+    ${rt}/gx/rt_tev_eval.cpp
     ${rt}/gx/galaxy_select.cpp
     ${rt}/gx/frame_interpolation.cpp
     ${rt}/gx/interp_gpu.cpp

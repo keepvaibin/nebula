@@ -30,6 +30,7 @@
 #include "galaxy/gx/dependency_range_memo.h"
 #include "galaxy/gx/dependency_page_mask.h"
 #include "galaxy/gx/fifo_cache_fingerprint.h"
+#include "galaxy/gx/rt_tev_eval.h"
 #include "galaxy/gx/dependency_event_capture.h"
 #include "galaxy/gx/owned_fifo_event_replay.h"
 
@@ -7112,38 +7113,14 @@ std::uint32_t GxBackend::debake_channels() const {
     return channels;
 }
 
-void GxBackend::fill_rt_tev(RtDrawInfo& info, float facing) {
-    RtTevMaterial& tev = info.tev;
+void GxBackend::build_rt_tev(RtTevMaterial& tev, RtTevStage* stages_out, float facing) const {
     tev = RtTevMaterial{};
     const unsigned stages = std::min<unsigned>(ps_key_.num_tev_stages, kRtTevMaxStages);
     const unsigned texgens = std::min<unsigned>(vs_key_.num_texgens, 8u);
-    // The two texture slots: the material texture's coordinates, then the next ones a stage reads (the raster's rule:
-    // coordinates past the draw's generators read generator 0).
-    unsigned slot0 = info.texgen < texgens ? info.texgen : 0xFFu;
-    unsigned slot1 = 0xFFu;
-    for (unsigned s = 0; s < stages; ++s) {
-        const std::uint32_t order = ps_key_.stages[s].order;
-        if ((order & (1u << 6u)) == 0u || texgens == 0u) {
-            continue;
-        }
-        const unsigned coord = ((order >> 3u) & 7u) < texgens ? (order >> 3u) & 7u : 0u;
-        if (slot0 == 0xFFu) {
-            slot0 = coord;
-        } else if (coord != slot0 && slot1 == 0xFFu) {
-            slot1 = coord;
-        }
-    }
-    info.texgen = slot0;
-    info.texgen2 = slot1;
-    // Bits 5-6: the vertices' colour 0 / 1 keeps only its hue, as the raster's (debake_channels; never the sky's).
-    tev.header = stages | (texgens << 28u) | ((info.surface & kRtDrawSky) != 0u ? 0u : debake_channels() << 5u);
-    for (unsigned t = 0; t < 8u; ++t) {
-        const unsigned coord = t < texgens ? t : 0u;
-        tev.header |= (coord == slot1 ? 1u : 0u) << (8u + 2u * t);
-    }
+    tev.header = stages | (texgens << 28u);
     for (unsigned s = 0; s < stages; ++s) {
         const TevStagePacked& packed = ps_key_.stages[s];
-        RtTevStage& stage = info.tev_stages[s];
+        RtTevStage& stage = stages_out[s];
         stage.color_env = packed.color_env;
         stage.alpha_env = packed.alpha_env;
         stage.order = packed.order;
@@ -7222,6 +7199,76 @@ void GxBackend::fill_rt_tev(RtDrawInfo& info, float facing) {
         tev.regs[r * 2u + 1u] = half(static_cast<float>(regs[r][2]) / 255.0f) |
                                 (half(static_cast<float>(regs[r][3]) / 255.0f) << 16u);
     }
+}
+
+std::uint32_t GxBackend::debake_state() {
+    const std::uint32_t channels = debake_channels();
+    if (channels == 0u) {
+        return 0u;
+    }
+    // The program's neutral light per de-baked channel (rt_tev_neutral_light), by the TEV state it depends on.
+    RtTevMaterial tev{};
+    std::array<RtTevStage, kRtTevMaxStages> stages{};
+    build_rt_tev(tev, stages.data(), 1.0f);
+    std::uint64_t key = combine64(channels, tev.header);
+    const auto words = [&key](const std::uint32_t* w, std::size_t n) {
+        for (std::size_t i = 0; i < n; ++i) {
+            key = combine64(key, w[i]);
+        }
+    };
+    words(&tev.alpha_test, 1u + 4u + 4u + 8u);
+    for (unsigned s = 0; s < (tev.header & 0x1Fu); ++s) {
+        words(&stages[s].color_env, 4u);
+    }
+    const auto found = debake_levels_.find(key);
+    if (found != debake_levels_.end()) {
+        return found->second;
+    }
+    std::uint32_t state = channels;
+    for (unsigned c = 0; c < 2u; ++c) {
+        if ((channels & (1u << c)) != 0u) {
+            state |= rt_tev_neutral_light(tev, stages.data(), c) << (8u + 8u * c);
+        }
+    }
+    if (debake_levels_.size() > 65536u) {
+        debake_levels_.clear();
+    }
+    debake_levels_.emplace(key, state);
+    return state;
+}
+
+void GxBackend::fill_rt_tev(RtDrawInfo& info, float facing) {
+    RtTevMaterial& tev = info.tev;
+    build_rt_tev(tev, info.tev_stages.data(), facing);
+    const unsigned stages = tev.header & 0x1Fu;
+    const unsigned texgens = tev.header >> 28u;
+    // The two texture slots: the material texture's coordinates, then the next ones a stage reads (the raster's rule:
+    // coordinates past the draw's generators read generator 0).
+    unsigned slot0 = info.texgen < texgens ? info.texgen : 0xFFu;
+    unsigned slot1 = 0xFFu;
+    for (unsigned s = 0; s < stages; ++s) {
+        const std::uint32_t order = ps_key_.stages[s].order;
+        if ((order & (1u << 6u)) == 0u || texgens == 0u) {
+            continue;
+        }
+        const unsigned coord = ((order >> 3u) & 7u) < texgens ? (order >> 3u) & 7u : 0u;
+        if (slot0 == 0xFFu) {
+            slot0 = coord;
+        } else if (coord != slot0 && slot1 == 0xFFu) {
+            slot1 = coord;
+        }
+    }
+    info.texgen = slot0;
+    info.texgen2 = slot1;
+    for (unsigned t = 0; t < 8u; ++t) {
+        const unsigned coord = t < texgens ? t : 0u;
+        tev.header |= (coord == slot1 ? 1u : 0u) << (8u + 2u * t);
+    }
+    // Bits 5-6: the vertices' colour 0 / 1 de-baked to its program's neutral light (pad[0]: the levels), as the
+    // raster's (debake_state; never the sky's).
+    const std::uint32_t debake = (info.surface & kRtDrawSky) != 0u ? 0u : debake_state();
+    tev.header |= (debake & 3u) << 5u;
+    tev.pad[0] = debake >> 8u;
     info.tev_maps = {};
     if (current_texture_table_.ptr != 0u) {
         for (unsigned m = 0; m < kMaxTextureMaps && m < 8u; ++m) {
@@ -13695,8 +13742,11 @@ gpu::Pipeline* GxBackend::flush_draw_state(
     // Per-pixel and enhanced lighting need the extra position/normal
     // interpolants, which the line and point geometry shaders do not carry.
     const bool triangles = topology_key == static_cast<std::uint8_t>(gpu::kTopologyTypeTriangle);
-    // Physical ray tracing: the vertex shaders keep only the hue of a channel's baked vertex light (flags bits 2-3).
-    if (const std::uint32_t debake = triangles ? debake_channels() << 2u : 0u; cpu_vs_constants_.debake != debake) {
+    // Physical ray tracing: the vertex shaders take a channel's baked vertex light to its program's neutral level (flags
+    // bits 2-3, levels in bits 8-23).
+    if (const std::uint32_t state = triangles ? debake_state() : 0u,
+        debake = ((state & 3u) << 2u) | (state & 0xFFFF00u);
+        cpu_vs_constants_.debake != debake) {
         cpu_vs_constants_.debake = debake;
         sky_up_dirty_ = true;   // the scene constants' upload
     }

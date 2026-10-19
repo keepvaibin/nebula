@@ -1241,8 +1241,8 @@ float xfw(uint w) {
     s << "        float((v.color1 >>  8u) & 0xFFu) / 255.0,\n";
     s << "        float((v.color1       ) & 0xFFu) / 255.0);\n";
     // Physical ray tracing (flags bits 2-3): an unlit channel's vertex colour is the art's baked light.
-    s << "    if ((flags & 4u) != 0u) vtx_col0.rgb = nebula_debake(vtx_col0.rgb);\n";
-    s << "    if ((flags & 8u) != 0u) vtx_col1.rgb = nebula_debake(vtx_col1.rgb);\n\n";
+    s << "    if ((flags & 4u) != 0u) vtx_col0.rgb = nebula_debake(vtx_col0.rgb) * (float((flags >> 8u) & 0xFFu) / 255.0);\n";
+    s << "    if ((flags & 8u) != 0u) vtx_col1.rgb = nebula_debake(vtx_col1.rgb) * (float((flags >> 16u) & 0xFFu) / 255.0);\n\n";
 
     if (lighting_used) {
         // Lighting-space normal: transform by the normal (inverse-transpose) matrix, 3-float rows at XF words

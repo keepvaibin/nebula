@@ -924,6 +924,12 @@ private:
     // The draw's TEV program, registers, colour channels (lit ones at `facing` of their lights) and textures for ray
     // hits (RtDrawInfo.tev); its two texture slots.
     void fill_rt_tev(RtDrawInfo& info, float facing);
+    // The program and its state alone (stages, registers, konstants, colour channels, alpha compare).
+    void build_rt_tev(RtTevMaterial& tev, RtTevStage* stages, float facing) const;
+    // debake_channels (bits 0-1) with each channel's neutral light (bits 8-15, 16-23: rt_tev_neutral_light), cached by
+    // the TEV state.
+    [[nodiscard]] std::uint32_t debake_state();
+    std::unordered_map<std::uint64_t, std::uint32_t> debake_levels_;
     // Physical ray tracing: the colour channels (bit 0: channel 0, bit 1: channel 1) whose colour is the art's baked
     // light: unlit and taken from the vertices, in an opaque scene phase, outside the sky lists and the material table's
     // emitters (whose colour is their light). GALAXY_RT_DEBAKE=0: none.
