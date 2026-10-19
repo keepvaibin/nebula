@@ -124,6 +124,65 @@ std::vector<std::uint32_t> compile_module(const std::string& hlsl, vk::ShaderSta
     return vk::compile_hlsl(vk::annotate(hlsl, vk::gx_draw_bindings()), stage, "main", {}, error, {false, dual_source});
 }
 
+// diagnose_uber's simple vertex shader: it writes every output the uber pixel shader reads (a pixel shader input no
+// vertex output writes is invalid, VUID-RuntimeSpirv-OpEntryPoint-08743).
+VertexShaderKey diagnosis_vs_key() {
+    VertexShaderKey key{};
+    key.num_texgens = 8u;
+    key.num_chans = 2u;
+    return key;
+}
+
+// Cut-down forms of the uber shaders for diagnose_uber, as edits of their text (the shipped shaders keep their hashes).
+struct UberProbe {
+    const char* name;
+    std::vector<std::pair<const char*, const char*>> edits;
+};
+
+const std::vector<UberProbe>& uber_ps_probes() {
+    static const std::vector<UberProbe> probes = [] {
+        const std::pair<const char*, const char*> no_sampling{
+            "float4 sample_map(uint map, float2 uv) {",
+            "float4 sample_map(uint map, float2 uv) {\n    return float4(0.5, 0.5, 0.5, 0.5);\n}\n"
+            "float4 sample_map_unused(uint map, float2 uv) {"};
+        const std::pair<const char*, const char*> no_indirect{"const uint num_ind = ind_misc.w;",
+                                                              "const uint num_ind = 0u;"};
+        const std::pair<const char*, const char*> one_stage{
+            "[loop] for (uint st = 0u; st < n_stages && st < 16u; ++st) {",
+            "[unroll] for (uint st = 0u; st < 1u; ++st) {"};
+        return std::vector<UberProbe>{{"no-sampling", {no_sampling}},
+                                      {"no-indirect", {no_indirect}},
+                                      {"one-stage", {one_stage}},
+                                      {"minimal", {no_sampling, no_indirect, one_stage}}};
+    }();
+    return probes;
+}
+
+const std::vector<UberProbe>& uber_vs_probes() {
+    static const std::vector<UberProbe> probes = [] {
+        const std::pair<const char*, const char*> no_texgen{"const uint key_texgens = uber_vs_header.x;",
+                                                            "const uint key_texgens = 0u;"};
+        const std::pair<const char*, const char*> no_lighting{"const uint key_chans = uber_vs_header.y;",
+                                                              "const uint key_chans = 0u;"};
+        return std::vector<UberProbe>{{"no-texgen", {no_texgen}},
+                                      {"no-lighting", {no_lighting}},
+                                      {"minimal", {no_texgen, no_lighting}}};
+    }();
+    return probes;
+}
+
+// The probe's source, or empty when an edit's anchor is not in it exactly once (the shader changed).
+std::string apply_probe(std::string source, const UberProbe& probe) {
+    for (const auto& [from, to] : probe.edits) {
+        const std::size_t at = source.find(from);
+        if (at == std::string::npos || source.find(from, at + 1u) != std::string::npos) {
+            return {};
+        }
+        source.replace(at, std::strlen(from), to);
+    }
+    return source;
+}
+
 std::string uber_ps_hlsl(unsigned variant) {
     std::string ps;
     ps.reserve(uber_ps_source().size() + 96u);
@@ -990,8 +1049,8 @@ std::size_t PipelineCacheVk::build_shader_seed(const std::filesystem::path& keys
         }
         PixelShaderKey dual_key{};
         dual_key.flags |= 0x80u;
-        add_pair(VertexShaderKey{}, PixelShaderKey{}, false);
-        add_pair(VertexShaderKey{}, dual_key, false);
+        add_pair(diagnosis_vs_key(), PixelShaderKey{}, false);
+        add_pair(diagnosis_vs_key(), dual_key, false);
     }
     add(std::string(uber_vs_source()), vk::ShaderStage::Vertex, false);
     add(vk::with_point_size(std::string(uber_vs_source())), vk::ShaderStage::Vertex, false);
@@ -1057,7 +1116,7 @@ void PipelineCacheVk::diagnose_uber(const RenderStateKey& render_state, unsigned
     const ShaderGenerator generator = generator_for(generator_bits_.load(std::memory_order_acquire));
     const bool dual = uber_ps_variant_dual_source(variant);
     const bool export_depth = uber_ps_variant_export_depth(variant);
-    const VkShaderModule simple_vs = module_for(generator.generate_vs(VertexShaderKey{}), vk::ShaderStage::Vertex, false);
+    const VkShaderModule simple_vs = module_for(generator.generate_vs(diagnosis_vs_key()), vk::ShaderStage::Vertex, false);
     PixelShaderKey ps_key{};
     if (dual) {
         ps_key.flags |= 0x80u;
@@ -1077,6 +1136,36 @@ void PipelineCacheVk::diagnose_uber(const RenderStateKey& render_state, unsigned
                  "uber PS %s (%d)\n", variant, uber_vs_result == VK_SUCCESS ? "accepted" : "refused",
                  static_cast<int>(uber_vs_result), uber_ps_result == VK_SUCCESS ? "accepted" : "refused",
                  static_cast<int>(uber_ps_result));
+    // Once per launch, the refused half cut down, each form with the simple other half: the feature the driver rejects.
+    if (uber_probed_) {
+        return;
+    }
+    uber_probed_ = true;
+    const auto run = [&](bool pixel, const std::string& source, const std::vector<UberProbe>& probes) {
+        for (const UberProbe& probe : probes) {
+            const std::string text = apply_probe(source, probe);
+            VkResult result = VK_ERROR_INITIALIZATION_FAILED;
+            if (!text.empty()) {
+                const VkShaderModule module =
+                    module_for(text, pixel ? vk::ShaderStage::Fragment : vk::ShaderStage::Vertex, pixel && dual);
+                const VkPipeline p = pixel
+                    ? create_pipeline(render_state, simple_vs, module, dual, export_depth, compat, result)
+                    : create_pipeline(render_state, module, simple_ps, dual, false, compat, result);
+                if (p != VK_NULL_HANDLE) {
+                    vkDestroyPipeline(device_, p, nullptr);
+                }
+            }
+            std::fprintf(stderr, "[vk-compat] uber %s probe %s: %s (%d)\n", pixel ? "PS" : "VS", probe.name,
+                         text.empty() ? "not run, the source changed" : result == VK_SUCCESS ? "accepted" : "refused",
+                         static_cast<int>(result));
+        }
+    };
+    if (uber_ps_result != VK_SUCCESS) {
+        run(true, uber_ps_hlsl(variant), uber_ps_probes());
+    }
+    if (uber_vs_result != VK_SUCCESS) {
+        run(false, std::string(uber_vs_source()), uber_vs_probes());
+    }
 }
 
 // A new driver build's first launch: the uber pipeline of every pixel-shader variant, and of each optional feature,

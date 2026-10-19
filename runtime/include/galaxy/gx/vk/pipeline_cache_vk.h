@@ -186,6 +186,7 @@ private:
     UberMode uber_mode_ = UberMode::Hybrid;
     std::thread uber_thread_;
     std::atomic<bool> uber_ready_{false};
+    bool uber_probed_ = false;  // diagnose_uber's cut-down forms run (uber thread)
     VkShaderModule uber_vs_ = VK_NULL_HANDLE;
     std::array<VkShaderModule, kUberPsVariants> uber_ps_{};
     VkShaderModule line_gs_ = VK_NULL_HANDLE;
