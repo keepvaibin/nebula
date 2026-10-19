@@ -349,6 +349,7 @@ private:
     void end_efb_pass();
     void reset_gx_bindings() noexcept;
     [[nodiscard]] VkDescriptorSet allocate_frame_set(VkDescriptorSetLayout layout);
+    void retire(gpu::TextureRef texture);
     [[nodiscard]] VkDescriptorSet allocate_persistent_set(VkDescriptorSetLayout layout);
     void refresh_default_sampler_table();
     [[nodiscard]] VkDescriptorSet constants_set(VkBuffer b0, VkBuffer b1, VkBuffer palette);
@@ -381,6 +382,8 @@ private:
 
     std::array<Frame, kFramesInFlight> frames_{};
     unsigned frame_slot_ = 0;
+    Frame* frame_ = &frames_[0];  // the submission being recorded: the frame slot's, or a sub-frame's
+    VkCommandBuffer commands_ = VK_NULL_HANDLE;  // where GX work records: the frame's, or a replay's
     std::uint64_t frame_index_ = 0;
     std::uint64_t last_submitted_ = 0;
 
@@ -401,13 +404,18 @@ private:
     unsigned efb_scale_ = 1;
     VkFormat depth_format_ = VK_FORMAT_UNDEFINED;
     bool depth_linear_ = true;  // depth_format_ can be sampled with linear filtering
-    gpu::TextureRef efb_color_;
-    gpu::TextureRef efb_depth_;  // its sampled view is the depth aspect alone
-    VkFramebuffer efb_framebuffer_ = VK_NULL_HANDLE;
+    // An EFB: its targets, their framebuffer and the conversion inputs reading them. The live one, and the private
+    // one sub-frames replay into (the chunks of the game frame being drawn keep the live one between them).
+    struct EfbSet {
+        gpu::TextureRef color;
+        gpu::TextureRef depth;  // its sampled view is the depth aspect alone
+        VkFramebuffer framebuffer = VK_NULL_HANDLE;
+        VkDescriptorSet color_source = VK_NULL_HANDLE;
+        VkDescriptorSet depth_source = VK_NULL_HANDLE;
+    };
+    EfbSet efb_;
     gpu::TextureRef efb_carry_color_;  // the previous targets, read once after a resolution change
     gpu::TextureRef efb_carry_depth_;
-    VkDescriptorSet efb_color_source_ = VK_NULL_HANDLE;  // conversion inputs
-    VkDescriptorSet efb_depth_source_ = VK_NULL_HANDLE;
     bool efb_pass_open_ = false;
     bool present_black_ = false;  // present()'s `black`, for present_xfb
     bool efb_seeded_ = false;

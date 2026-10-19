@@ -826,10 +826,10 @@ void RendererVk::shutdown() {
         samplers_.clear();
         sampler_tables_.clear();
         constants_sets_.clear();
-        if (efb_framebuffer_ != VK_NULL_HANDLE) vkDestroyFramebuffer(device, efb_framebuffer_, nullptr);
-        efb_framebuffer_ = VK_NULL_HANDLE;
-        efb_color_.reset();
-        efb_depth_.reset();
+        if (efb_.framebuffer != VK_NULL_HANDLE) vkDestroyFramebuffer(device, efb_.framebuffer, nullptr);
+        efb_.framebuffer = VK_NULL_HANDLE;
+        efb_.color.reset();
+        efb_.depth.reset();
         efb_carry_color_.reset();
         efb_carry_depth_.reset();
         corner_texture_.reset();
@@ -921,6 +921,7 @@ void RendererVk::begin_frame(bool) {
 
     frame_slot_ = static_cast<unsigned>(frame_index_ % kFramesInFlight);
     Frame& frame = frames_[frame_slot_];
+    frame_ = &frame;
     vk::Context& context = vk::Context::get();
     const VkDevice device = context.device();
     const bool collect_timing = trace_present_stats_enabled();
@@ -963,6 +964,7 @@ void RendererVk::begin_frame(bool) {
     begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     vk::check(vkBeginCommandBuffer(frame.uploads, &begin), "vkBeginCommandBuffer");
     vk::check(vkBeginCommandBuffer(frame.commands, &begin), "vkBeginCommandBuffer");
+    commands_ = frame.commands;
     if (timestamps_ != VK_NULL_HANDLE) {
         vkCmdResetQueryPool(frame.commands, timestamps_, frame_slot_ * 2u, 2u);
         vkCmdWriteTimestamp(frame.commands, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, timestamps_, frame_slot_ * 2u);
@@ -1363,7 +1365,7 @@ bool RendererVk::present(const XfbTexture* source, bool capture_backbuffer, bool
     debug_log_backbuffer_readback();
     end_efb_pass();
     vk::Context& context = vk::Context::get();
-    Frame& frame = frames_[frame_slot_];
+    Frame& frame = *frame_;
     surface_lock_ = std::unique_lock<std::timed_mutex>(host_window::surface_use);
     if (swapchain_dirty_ || swapchain_.handle == VK_NULL_HANDLE ||
         host_window::surface_withdrawn.load(std::memory_order_acquire)) {
@@ -1390,7 +1392,7 @@ bool RendererVk::present(const XfbTexture* source, bool capture_backbuffer, bool
         vk::check(result, "vkAcquireNextImageKHR");
     }
     swap_image_ = image;
-    const VkCommandBuffer commands = frame.commands;
+    const VkCommandBuffer commands = commands_;
     vk::Texture& xfb = *source->texture;
     if (xfb.layout == VK_IMAGE_LAYOUT_UNDEFINED) {
         VkImageMemoryBarrier barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
@@ -1599,7 +1601,7 @@ void RendererVk::draw_ui_textured_quad(int x, int y, int w, int h, float u0, flo
         u0, v0, u1, v1, tint[0], tint[1], tint[2], tint[3],
         static_cast<float>(host_window::backbuffer_width), static_cast<float>(host_window::backbuffer_height),
     };
-    const VkCommandBuffer commands = frames_[frame_slot_].commands;
+    const VkCommandBuffer commands = commands_;
     vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, ui_textured_pipeline_);
     vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, utility_layout_, 0, 1, &corner_set_, 0,
                             nullptr);
@@ -1625,7 +1627,7 @@ void RendererVk::draw_ui_solid_quad(int x, int y, int w, int h, const std::array
         {0u, 0u},
         0u,
     };
-    const VkCommandBuffer commands = frames_[frame_slot_].commands;
+    const VkCommandBuffer commands = commands_;
     vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, ui_solid_pipeline_);
     vkCmdPushConstants(commands, utility_layout_, kPushStages, 0, sizeof(constants), &constants);
     vkCmdDraw(commands, 4, 1, 0, 0);
@@ -1642,7 +1644,7 @@ void RendererVk::draw_ui_glyph(int x, int y, int scale, std::uint64_t bitmap, co
         {static_cast<std::uint32_t>(bitmap), static_cast<std::uint32_t>(bitmap >> 32u)},
         1u,
     };
-    const VkCommandBuffer commands = frames_[frame_slot_].commands;
+    const VkCommandBuffer commands = commands_;
     vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, ui_solid_pipeline_);
     vkCmdPushConstants(commands, utility_layout_, kPushStages, 0, sizeof(constants), &constants);
     // One instance per cell, row-major; unlit cells have degenerate geometry.
