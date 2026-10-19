@@ -8454,6 +8454,26 @@ void GxBackend::start_interp_sequence(std::uint32_t xfb_addr) {
     const RenderConfig cfg = get_render_config();
     double rate = std::max(61.0, present_frame_rate(
         presented_max_fps(cfg), cfg.vsync_interval, renderer_.display_refresh_hz()));
+    // VSync with the display's vblanks timed: every slot is a vblank (every n-th for a rate below the refresh, kept
+    // above 60), so each picture's moment is the one its vblank shows. The game's 60 Hz is not locked to the
+    // display, so content time follows the slots (no lead). GALAXY_INTERP_VBLANK_SLOTS=0: the QPC clock (A/B).
+    static const bool vblank_slots = read_env_u64("GALAXY_INTERP_VBLANK_SLOTS", 1u) != 0u;
+    std::int64_t vblank = 0;
+    std::int64_t vblank_period = 0;
+    const bool on_vblanks =
+        vblank_slots && cfg.vsync_interval != 0u && renderer_.vblank_grid(vblank, vblank_period);
+    std::int64_t vblanks_per_slot = 1;
+    const auto fit_rate_to_vblanks = [&] {
+        const double refresh = static_cast<double>(frequency) / static_cast<double>(vblank_period);
+        vblanks_per_slot = std::max<std::int64_t>(1, static_cast<std::int64_t>(std::ceil(refresh / rate - 0.02)));
+        if (refresh / static_cast<double>(vblanks_per_slot) < 61.0) {
+            vblanks_per_slot = std::max<std::int64_t>(1, static_cast<std::int64_t>(refresh / 61.0));
+        }
+        rate = refresh / static_cast<double>(vblanks_per_slot);
+    };
+    if (on_vblanks) {
+        fit_rate_to_vblanks();
+    }
     ++interp_sequence_serial_;
     ++interp_started_;
     // Logs completed but never played (a newer one replaced them first).
@@ -8476,6 +8496,9 @@ void GxBackend::start_interp_sequence(std::uint32_t xfb_addr) {
     select_interp_before();
     interp_sequence_.xfb_addr = xfb_addr;
     interp_sequence_.subframes = interp_gpu_governor(rate);
+    if (on_vblanks) {
+        fit_rate_to_vblanks();  // a rate the governors lowered
+    }
     interp_sequence_.next = 0u;
     // Present slots run on one clock at the present rate. A slot shows the
     // game at t = (slot - arrival) * 60 + lead between the previous frame (0)
@@ -8487,8 +8510,9 @@ void GxBackend::start_interp_sequence(std::uint32_t xfb_addr) {
     // t -> 1), where a lead would show the frame up to one slot early and
     // step the content unevenly around it. A clock left behind by a pause
     // restarts.
-    interp_slot_period_qpc_ = static_cast<std::int64_t>(static_cast<double>(frequency) / rate);
-    const bool locked = std::abs(rate / 60.0 - std::round(rate / 60.0)) < 0.02;
+    interp_slot_period_qpc_ = on_vblanks ? vblanks_per_slot * vblank_period
+                                         : static_cast<std::int64_t>(static_cast<double>(frequency) / rate);
+    const bool locked = !on_vblanks && std::abs(rate / 60.0 - std::round(rate / 60.0)) < 0.02;
     // The arrival clock: the render thread sees a frame's present when it
     // reaches the queue (a chunk in progress delays it by milliseconds), so
     // arrivals are the game's frame cadence, smoothed: the prediction one or
@@ -8514,7 +8538,15 @@ void GxBackend::start_interp_sequence(std::uint32_t xfb_addr) {
     interp_arrival_qpc_ = arrival;
     interp_sequence_.frame_qpc = arrival;
     interp_sequence_.lead = locked ? 60.0 / rate : 0.0;
-    if (locked || interp_slot_due_qpc_ == 0 ||
+    if (on_vblanks) {
+        // The next slot moves to the vblank nearest where it was due, so the clock follows the display without
+        // adding or dropping a slot; a clock not running starts at the vblank nearest now.
+        const std::int64_t due = interp_slot_due_qpc_ != 0 &&
+                std::llabs(interp_slot_due_qpc_ - now) <= interp_slot_period_qpc_
+            ? interp_slot_due_qpc_ : now;
+        interp_slot_due_qpc_ = vblank + std::llround(static_cast<double>(due - vblank) /
+                                                     static_cast<double>(vblank_period)) * vblank_period;
+    } else if (locked || interp_slot_due_qpc_ == 0 ||
         now - interp_slot_due_qpc_ > interp_slot_period_qpc_ ||
         interp_slot_due_qpc_ - now > interp_slot_period_qpc_) {
         // Locked rates start the slots at the (smoothed) arrival.
@@ -8842,9 +8874,9 @@ void GxBackend::advance_interp_sequence(bool flush) {
             interp_slot_due_qpc_ = slot + interp_slot_period_qpc_;
             // A stall skips the slots it missed instead of bunching them.
             if (now >= interp_slot_due_qpc_) {
-                interp_late_slots_ += static_cast<std::uint64_t>(
-                    (now - interp_slot_due_qpc_) / interp_slot_period_qpc_ + 1);
-                interp_slot_due_qpc_ = now + interp_slot_period_qpc_;
+                const std::int64_t missed = (now - interp_slot_due_qpc_) / interp_slot_period_qpc_ + 1;
+                interp_late_slots_ += static_cast<std::uint64_t>(missed);
+                interp_slot_due_qpc_ += missed * interp_slot_period_qpc_;
             }
         }
         if (!flush && t < 1.0 - 1e-3 && sequence.next < 7u && sequence.subframes != 0u &&
@@ -8887,6 +8919,7 @@ void GxBackend::advance_interp_sequence(bool flush) {
             if (presented) {
                 ++interp_presented_;
                 interp_shown_scene_ = static_cast<std::int32_t>(sequence.scene);
+                note_present_vblank(slot);
             } else {
                 ++interp_failed_;
             }
@@ -8901,6 +8934,7 @@ void GxBackend::advance_interp_sequence(bool flush) {
         renderer_.set_capture_waits(!interp_snapshot_path_.empty());
         interp_presenting_real_ = true;
         present_cached_xfb_on_thread(sequence.xfb_addr, false, true);
+        note_present_vblank(slot);
         interp_presenting_real_ = false;
         interp_shown_scene_ = static_cast<std::int32_t>(sequence.scene);
         renderer_.set_capture_waits(false);
@@ -8909,6 +8943,36 @@ void GxBackend::advance_interp_sequence(bool flush) {
         report_interp_stats();
         return;
     }
+}
+
+// A present while interpolating: the vblank interval it was issued in, against the one before (0: two in one
+// interval, one of them never shown on its own; 2 or more at one present a vblank: a refresh shown twice), and the
+// time from its slot to the vblank ending that interval. The picture shows its slot's moment, so with even motion
+// that time stays the same; its spread is the motion's unevenness on the display.
+void GxBackend::note_present_vblank(std::int64_t slot) {
+    static const bool trace = read_env_u64("GALAXY_TRACE_PRESENT_STATS", 0u) != 0u;
+    std::int64_t vblank = 0;
+    std::int64_t period = 0;
+    if (!trace || !renderer_.vblank_grid(vblank, period)) {
+        return;
+    }
+    const std::int64_t now = galaxy::qpc_now();
+    const std::int64_t start = vblank + static_cast<std::int64_t>(
+        std::floor(static_cast<double>(now - vblank) / static_cast<double>(period))) * period;
+    if (interp_last_present_vblank_ != 0) {
+        const std::int64_t steps = std::llround(static_cast<double>(start - interp_last_present_vblank_) /
+                                                static_cast<double>(period));
+        ++interp_vblank_steps_[static_cast<std::size_t>(std::clamp<std::int64_t>(steps, 0, 3))];
+    }
+    interp_last_present_vblank_ = start;
+    static const double frequency = static_cast<double>(galaxy::qpc_frequency());
+    const double slot_to_vblank_ms = static_cast<double>(start + period - slot) * 1000.0 / frequency;
+    if (interp_slot_to_vblank_samples_++ == 0u) {
+        interp_slot_to_vblank_min_ms_ = slot_to_vblank_ms;
+        interp_slot_to_vblank_max_ms_ = slot_to_vblank_ms;
+    }
+    interp_slot_to_vblank_min_ms_ = std::min(interp_slot_to_vblank_min_ms_, slot_to_vblank_ms);
+    interp_slot_to_vblank_max_ms_ = std::max(interp_slot_to_vblank_max_ms_, slot_to_vblank_ms);
 }
 
 // A game frame presented while interpolating, without sub-frames: why.
@@ -8972,6 +9036,9 @@ void GxBackend::report_interp_stats() {
             << " presented-hz=" << presented / seconds
             << " dropped=" << interp_dropped_
             << " late-slots=" << interp_late_slots_
+            << " vblank-steps=" << interp_vblank_steps_[0] << '/' << interp_vblank_steps_[1] << '/'
+            << interp_vblank_steps_[2] << '/' << interp_vblank_steps_[3]
+            << " slot-to-vblank-ms=" << interp_slot_to_vblank_min_ms_ << '/' << interp_slot_to_vblank_max_ms_
             << " superseded=" << interp_superseded_
             << " started=" << interp_started_
             << " logs-skipped=" << interp_logs_skipped_
@@ -9066,6 +9133,8 @@ void GxBackend::report_interp_stats() {
     interp_presented_ = 0u;
     interp_dropped_ = 0u;
     interp_late_slots_ = 0u;
+    interp_vblank_steps_ = {};
+    interp_slot_to_vblank_samples_ = 0u;
     interp_superseded_ = 0u;
     interp_started_ = 0u;
     interp_logs_skipped_ = 0u;

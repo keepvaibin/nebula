@@ -78,6 +78,9 @@ void close_game_window(WindowOwner& owner) noexcept;
 void show_window(NativeWindow window) noexcept;
 // The refresh rate of the display the window is on, or 0 when unknown.
 [[nodiscard]] double display_refresh_hz(NativeWindow window) noexcept;
+// The display's vblanks: the latest and the interval between them, on galaxy::qpc_now()'s clock (Windows: timed on
+// the window's monitor; Android: Choreographer's); false while not known.
+[[nodiscard]] bool vblank_grid(NativeWindow window, std::int64_t& vblank, std::int64_t& period) noexcept;
 // Where the game's retrace follows the display's vsync (Android): the latest retrace, the retrace period, the
 // display's vsync interval and now (CLOCK_MONOTONIC nanoseconds), for presents timed to it; else false.
 [[nodiscard]] bool present_grid(std::int64_t& retrace_ns, std::int64_t& period_ns, std::int64_t& vsync_ns,

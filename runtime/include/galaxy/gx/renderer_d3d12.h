@@ -629,6 +629,8 @@ public:
         return root_signature_.Get();
     }
     [[nodiscard]] double display_refresh_hz() const noexcept { return display_refresh_hz_; }
+    // The display's vblanks (host_window::vblank_grid): the latest and the interval, on galaxy::qpc_now()'s clock.
+    [[nodiscard]] bool vblank_grid(std::int64_t& vblank, std::int64_t& period) const noexcept;
     [[nodiscard]] UploadRing& vertex_ring() { return vertex_ring_; }
     [[nodiscard]] UploadRing& index_ring() { return index_ring_; }
     [[nodiscard]] UploadRing& constant_ring() { return constant_ring_; }

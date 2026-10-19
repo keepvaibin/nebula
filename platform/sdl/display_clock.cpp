@@ -132,6 +132,14 @@ bool display_grid(std::int64_t& retrace_ns, std::int64_t& period_ns, std::int64_
     return retrace_ns != 0 && period_ns != 0 && vsync_ns != 0 && now_ns - retrace_ns <= 4 * period_ns;
 }
 
+bool vsync_grid(std::int64_t& vsync_ns, std::int64_t& interval_ns) noexcept {
+    const std::int64_t stated = g_display_period_ns.load(std::memory_order_relaxed);
+    std::lock_guard<std::mutex> lock(g_mutex);
+    vsync_ns = g_vsync_ns;
+    interval_ns = stated > 0 ? stated : g_interval_ns;
+    return vsync_ns != 0 && interval_ns != 0;
+}
+
 double display_refresh_hz() noexcept {
     if (const std::int64_t period = g_display_period_ns.load(std::memory_order_relaxed); period > 0) {
         return 1e9 / static_cast<double>(period);
@@ -147,6 +155,10 @@ bool wait_display_retrace(std::int64_t, std::int64_t&) noexcept {
 }
 
 bool display_grid(std::int64_t&, std::int64_t&, std::int64_t&, std::int64_t&) noexcept {
+    return false;
+}
+
+bool vsync_grid(std::int64_t&, std::int64_t&) noexcept {
     return false;
 }
 

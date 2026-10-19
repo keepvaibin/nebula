@@ -1318,15 +1318,19 @@ void RendererVk::update_gpu_budget() {
               << efb_scale_ << "x; Match Output capped at " << gpu_budget_cap_ << "x\n";
 }
 
+bool RendererVk::vblank_grid(std::int64_t& vblank, std::int64_t& period) const noexcept {
+    return window_ != nullptr && host_window::vblank_grid(window_, vblank, period);
+}
+
 void RendererVk::refresh_display_rate() {
     const double hz = host_window::display_refresh_hz(window_);
     if (hz <= 1.0) {
         return;
     }
-    if (hz != display_refresh_hz_) {
+    if (std::abs(hz - display_refresh_hz_) >= 0.1) {
         std::cerr << "[display] refresh-hz=" << hz << '\n';
+        display_refresh_hz_ = hz;
     }
-    display_refresh_hz_ = hz;
 }
 
 // Swapchain changes (window size, VSYNC) and Match Output's internal resolution, between frames.

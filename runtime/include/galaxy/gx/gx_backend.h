@@ -1084,9 +1084,17 @@ private:
     // RendererD3D12::replay_hold_segment() seen at the last render chunk.
     unsigned resident_hold_segment_ = ~0u;
     std::uint64_t interp_held_vertex_blocks_ = 0;   // released while interpolating
-    // Present slot clock (VSync off): next slot and slot length.
+    // Present slot clock: next slot and slot length (with VSync, on the display's vblanks when they are timed).
     std::int64_t interp_slot_due_qpc_ = 0;
     std::int64_t interp_slot_period_qpc_ = 0;
+    // Presents by the vblanks since the one before (0, 1, 2, 3 or more), against the display's vblank grid, and the
+    // range of the time from a present's slot (the moment it shows) to the vblank that shows it.
+    std::array<std::uint64_t, 4> interp_vblank_steps_{};
+    std::int64_t interp_last_present_vblank_ = 0;
+    double interp_slot_to_vblank_min_ms_ = 0.0;
+    double interp_slot_to_vblank_max_ms_ = 0.0;
+    std::uint64_t interp_slot_to_vblank_samples_ = 0;
+    void note_present_vblank(std::int64_t slot);
     // Smoothed game-frame arrival clock (start_interp_sequence).
     std::int64_t interp_arrival_qpc_ = 0;
     std::int64_t interp_frame_period_qpc_ = 0;

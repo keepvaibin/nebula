@@ -12,6 +12,7 @@
 #include "galaxy/gx/streamline_bridge.h"
 #include "galaxy/gx_d3d12.h"
 #include "galaxy/native_host.h"
+#include "galaxy/platform_time.h"
 #include "galaxy/runtime_settings.h"
 
 #include <algorithm>
@@ -2870,7 +2871,13 @@ bool present_grid(std::int64_t&, std::int64_t&, std::int64_t&, std::int64_t&) no
     return false;  // the presents pace themselves (present_pacer)
 }
 
+// The vblanks' own rate when they are timed (the mode reports whole hertz: 239 or 240 for 239.76).
 double display_refresh_hz(NativeWindow window) noexcept {
+    std::int64_t vblank = 0;
+    std::int64_t period = 0;
+    if (vblank_grid(window, vblank, period)) {
+        return std::round(static_cast<double>(galaxy::qpc_frequency()) / static_cast<double>(period) * 100.0) / 100.0;
+    }
     const HMONITOR monitor = MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST);
     MONITORINFOEXW info{};
     info.cbSize = sizeof(info);

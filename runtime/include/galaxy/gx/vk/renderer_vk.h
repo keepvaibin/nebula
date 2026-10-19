@@ -263,6 +263,8 @@ public:
     [[nodiscard]] unsigned efb_scale() const noexcept { return efb_scale_; }
     [[nodiscard]] const vk::GxLayout* root_signature() const noexcept { return &gx_layout_; }
     [[nodiscard]] double display_refresh_hz() const noexcept { return display_refresh_hz_; }
+    // The display's vblanks (host_window::vblank_grid): the latest and the interval, on galaxy::qpc_now()'s clock.
+    [[nodiscard]] bool vblank_grid(std::int64_t& vblank, std::int64_t& period) const noexcept;
     [[nodiscard]] UploadRing& vertex_ring() noexcept { return vertex_ring_; }
     [[nodiscard]] UploadRing& index_ring() noexcept { return index_ring_; }
     [[nodiscard]] UploadRing& constant_ring() noexcept { return constant_ring_; }

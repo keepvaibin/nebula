@@ -3565,12 +3565,28 @@ void RendererD3D12::wait_for_frame_latency_if_needed(
     }
 }
 
+bool RendererD3D12::vblank_grid(std::int64_t& vblank, std::int64_t& period) const noexcept {
+    return window_ != nullptr && host_window::vblank_grid(window_, vblank, period);
+}
+
 void RendererD3D12::refresh_display_rate() {
     if (const unsigned hz = host_window::refresh_override_hz(); hz != 0u) {
         if (display_refresh_hz_ != hz) {
             std::cerr << "[display] refresh-hz=" << hz << " (GALAXY_DISPLAY_REFRESH_HZ)\n";
         }
         display_refresh_hz_ = hz;
+        return;
+    }
+    // The vblanks' own rate when they are timed (the mode reports whole hertz: 239 or 240 for 239.76).
+    std::int64_t vblank = 0;
+    std::int64_t period = 0;
+    if (vblank_grid(vblank, period)) {
+        const double hz =
+            std::round(static_cast<double>(qpc_frequency_.QuadPart) / static_cast<double>(period) * 100.0) / 100.0;
+        if (std::abs(hz - display_refresh_hz_) >= 0.1) {
+            std::cerr << "[display] refresh-hz=" << hz << " (vblanks)\n";
+            display_refresh_hz_ = hz;
+        }
         return;
     }
     if (swap_chain_ == nullptr) {

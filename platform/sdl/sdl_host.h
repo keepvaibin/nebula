@@ -32,6 +32,9 @@ bool wait_display_retrace(std::int64_t period_ns, std::int64_t& last_ns) noexcep
 // interval and now; false while the retrace follows the host's clock.
 [[nodiscard]] bool display_grid(std::int64_t& retrace_ns, std::int64_t& period_ns, std::int64_t& vsync_ns,
                                 std::int64_t& now_ns) noexcept;
+// The latest vsync and the interval between vsyncs (the stated period when known; CLOCK_MONOTONIC nanoseconds);
+// false while not known.
+[[nodiscard]] bool vsync_grid(std::int64_t& vsync_ns, std::int64_t& interval_ns) noexcept;
 // The display's refresh rate: the vsync period the system states, else as its vsyncs measure it (0: not known).
 [[nodiscard]] double display_refresh_hz() noexcept;
 // Android, when `adb shell setprop debug.nebula.profile <seconds>` asks: that many seconds on, the GX, host-main and
