@@ -167,7 +167,7 @@ bool RendererVk::initialize(int window_width, int window_height, unsigned efb_sc
             alloc.commandBufferCount = 1;
             vk::check(vkAllocateCommandBuffers(device, &alloc, &utility_commands_), "vkAllocateCommandBuffers");
         }
-        if (!create_efb_targets(efb_scale_) || !create_utility_pipelines()) {
+        if (!create_efb_targets(efb_scale_, wanted_msaa_samples()) || !create_utility_pipelines()) {
             shutdown();
             return false;
         }
@@ -351,11 +351,39 @@ bool RendererVk::create_layouts() {
         vk::check(vkCreatePipelineLayout(device, &info, nullptr, &conversion_layout_), "conversion pipeline layout");
     }
 
-    // The EFB pass keeps both targets in their attachment layouts; whoever samples them transitions and returns them.
+    // MSAA: the counts the device renders RGBA8 and the depth format with and samples the depth with.
     {
-        VkAttachmentDescription attachments[2]{};
+        const VkPhysicalDeviceLimits& limits = context.properties().limits;
+        VkSampleCountFlags counts = limits.framebufferColorSampleCounts & limits.framebufferDepthSampleCounts &
+            limits.sampledImageDepthSampleCounts;
+        VkImageFormatProperties image{};
+        if (vkGetPhysicalDeviceImageFormatProperties(context.physical_device(), VK_FORMAT_R8G8B8A8_UNORM,
+                                                     VK_IMAGE_TYPE_2D, VK_IMAGE_TILING_OPTIMAL,
+                                                     VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 0, &image) == VK_SUCCESS) {
+            counts &= image.sampleCounts;
+        } else {
+            counts = VK_SAMPLE_COUNT_1_BIT;
+        }
+        if (vkGetPhysicalDeviceImageFormatProperties(context.physical_device(), depth_format_, VK_IMAGE_TYPE_2D,
+                                                     VK_IMAGE_TILING_OPTIMAL,
+                                                     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+                                                         VK_IMAGE_USAGE_SAMPLED_BIT,
+                                                     0, &image) == VK_SUCCESS) {
+            counts &= image.sampleCounts;
+        } else {
+            counts = VK_SAMPLE_COUNT_1_BIT;
+        }
+        msaa_max_samples_ = 1u;
+        for (unsigned samples = 2u; samples <= 8u && (counts & samples) != 0u; samples *= 2u) {
+            msaa_max_samples_ = samples;
+        }
+    }
+    // The EFB pass keeps both targets in their attachment layouts; whoever samples them transitions and returns them.
+    // With MSAA its targets are multisampled and a third attachment, the single-sample colour, takes their resolve.
+    for (unsigned samples_log2 = 0u; (1u << samples_log2) <= msaa_max_samples_; ++samples_log2) {
+        VkAttachmentDescription attachments[3]{};
         attachments[0].format = VK_FORMAT_R8G8B8A8_UNORM;
-        attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
+        attachments[0].samples = static_cast<VkSampleCountFlagBits>(1u << samples_log2);
         attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
         attachments[0].storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         attachments[0].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
@@ -366,12 +394,17 @@ bool RendererVk::create_layouts() {
         attachments[1].format = depth_format_;
         attachments[1].initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
         attachments[1].finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        attachments[2] = attachments[0];
+        attachments[2].samples = VK_SAMPLE_COUNT_1_BIT;
+        attachments[2].loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         const VkAttachmentReference color{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
         const VkAttachmentReference depth{1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
+        const VkAttachmentReference resolve{2, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
         VkSubpassDescription subpass{};
         subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
         subpass.colorAttachmentCount = 1;
         subpass.pColorAttachments = &color;
+        subpass.pResolveAttachments = samples_log2 != 0u ? &resolve : nullptr;
         subpass.pDepthStencilAttachment = &depth;
         // Work before the pass (copies out of the EFB, uploads) completes before its draws; draws complete before
         // anything after it reads the EFB.
@@ -399,17 +432,22 @@ bool RendererVk::create_layouts() {
         dependencies[1].dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_TRANSFER_READ_BIT |
             VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
         VkRenderPassCreateInfo info{VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO};
-        info.attachmentCount = 2;
+        info.attachmentCount = samples_log2 != 0u ? 3u : 2u;
         info.pAttachments = attachments;
         info.subpassCount = 1;
         info.pSubpasses = &subpass;
         info.dependencyCount = 2;
         info.pDependencies = dependencies;
-        vk::check(vkCreateRenderPass(device, &info, nullptr, &gx_layout_.efb_pass), "EFB render pass");
+        vk::check(vkCreateRenderPass(device, &info, nullptr,
+                                     samples_log2 != 0u ? &gx_layout_.ms_passes[samples_log2] : &gx_layout_.efb_pass),
+                  "EFB render pass");
         attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        vk::check(vkCreateRenderPass(device, &info, nullptr, &gx_layout_.efb_pass_clear), "EFB clearing render pass");
+        vk::check(vkCreateRenderPass(device, &info, nullptr,
+                                     samples_log2 != 0u ? &gx_layout_.ms_passes_clear[samples_log2]
+                                                        : &gx_layout_.efb_pass_clear),
+                  "EFB clearing render pass");
     }
     // One RGBA8 target written whole (copies, peeks): its old contents are dropped; it ends shader-readable.
     {
@@ -726,7 +764,8 @@ VkShaderModule RendererVk::utility_module(std::string_view hlsl, vk::ShaderStage
 
 VkPipeline RendererVk::create_utility_pipeline(VkRenderPass pass, VkPipelineLayout layout, std::string_view vs_source,
                                                std::string_view ps_source, VkColorComponentFlags write_mask,
-                                               bool blend, bool strip, bool depth_write) {
+                                               bool blend, bool strip, bool depth_write,
+                                               VkSampleCountFlagBits samples) {
     const VkDevice device = vk::Context::get().device();
     const bool conversion = layout == conversion_layout_;
     const VkShaderModule vs = utility_module(vs_source, vk::ShaderStage::Vertex, conversion);
@@ -748,7 +787,7 @@ VkPipeline RendererVk::create_utility_pipeline(VkRenderPass pass, VkPipelineLayo
     raster.frontFace = VK_FRONT_FACE_CLOCKWISE;
     raster.lineWidth = 1.0f;
     VkPipelineMultisampleStateCreateInfo multisample{VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
-    multisample.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    multisample.rasterizationSamples = samples;
     VkPipelineDepthStencilStateCreateInfo depth{VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
     if (depth_write) {
         depth.depthTestEnable = VK_TRUE;
@@ -800,19 +839,20 @@ bool RendererVk::create_utility_pipelines() {
         VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
     conversion_pipeline_ = create_utility_pipeline(color_pass_, conversion_layout_, blit_vertex_shader_source(),
                                                    efb_conversion_shader_source(), kAll, false, false, false);
-    clear_rgb_pipeline_ = create_utility_pipeline(
-        gx_layout_.efb_pass, utility_layout_, blit_vertex_shader_source(), clear_pixel_shader_source(),
-        VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT, false, false, false);
-    clear_alpha_pipeline_ = create_utility_pipeline(gx_layout_.efb_pass, utility_layout_, blit_vertex_shader_source(),
-                                                    clear_pixel_shader_source(), VK_COLOR_COMPONENT_A_BIT, false,
-                                                    false, false);
-    if (vk::Context::get().quirks().clear_with_draw) {
-        clear_rgba_pipeline_ = create_utility_pipeline(gx_layout_.efb_pass, utility_layout_,
-                                                       blit_vertex_shader_source(), clear_pixel_shader_source(), kAll,
-                                                       false, false, false);
-        clear_depth_pipeline_ = create_utility_pipeline(gx_layout_.efb_pass, utility_layout_,
-                                                        blit_vertex_shader_source(),
-                                                        clear_depth_pixel_shader_source(), 0u, false, false, true);
+    for (unsigned kind = 0u; kind < static_cast<unsigned>(EfbUtility::Count); ++kind) {
+        (void)efb_utility_pipeline(static_cast<EfbUtility>(kind));
+    }
+    if (msaa_max_samples_ > 1u) {
+        // The depth resolve: each pixel's sample 0 (the console's single sample sits at the pixel centre).
+        static constexpr char kDepthResolvePs[] = R"HLSL(
+Texture2DMS<float> t0 : register(t0);
+float main(float4 pos : SV_Position) : SV_Depth {
+    return t0.Load(int2(pos.xy), 0);
+}
+)HLSL";
+        depth_resolve_pipeline_ = create_utility_pipeline(gx_layout_.efb_pass, utility_layout_,
+                                                          blit_vertex_shader_source(), kDepthResolvePs, 0u, false,
+                                                          false, true);
     }
     blit_pipeline_ = create_utility_pipeline(present_pass_, utility_layout_, kPresentVs, blit_pixel_shader_source(),
                                              kAll, false, false, false);
@@ -828,6 +868,40 @@ bool RendererVk::create_utility_pipelines() {
     color_carry_pipeline_ = create_utility_pipeline(gx_layout_.efb_pass, utility_layout_, blit_vertex_shader_source(),
                                                     blit_pixel_shader_source(), kAll, false, false, false);
     return true;
+}
+
+VkPipeline RendererVk::efb_utility_pipeline(EfbUtility kind) {
+    const unsigned samples_log2 = efb_samples_log2();
+    VkPipeline& pipeline = efb_utility_pipelines_[static_cast<unsigned>(kind)][samples_log2];
+    if (pipeline != VK_NULL_HANDLE) {
+        return pipeline;
+    }
+    if ((kind == EfbUtility::ClearRgba || kind == EfbUtility::ClearDepth) &&
+        !vk::Context::get().quirks().clear_with_draw) {
+        return VK_NULL_HANDLE;
+    }
+    const VkRenderPass pass = gx_layout_.pass_for(samples_log2, false);
+    const auto samples = static_cast<VkSampleCountFlagBits>(1u << samples_log2);
+    constexpr VkColorComponentFlags kRgb = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
+        VK_COLOR_COMPONENT_B_BIT;
+    switch (kind) {
+    case EfbUtility::ClearRgb:
+    case EfbUtility::ClearAlpha:
+    case EfbUtility::ClearRgba:
+        pipeline = create_utility_pipeline(
+            pass, utility_layout_, blit_vertex_shader_source(), clear_pixel_shader_source(),
+            kind == EfbUtility::ClearRgb ? kRgb
+                : kind == EfbUtility::ClearAlpha ? VK_COLOR_COMPONENT_A_BIT : kRgb | VK_COLOR_COMPONENT_A_BIT,
+            false, false, false, samples);
+        break;
+    case EfbUtility::ClearDepth:
+        pipeline = create_utility_pipeline(pass, utility_layout_, blit_vertex_shader_source(),
+                                           clear_depth_pixel_shader_source(), 0u, false, false, true, samples);
+        break;
+    case EfbUtility::Count:
+        break;
+    }
+    return pipeline;
 }
 
 void RendererVk::shutdown() {
@@ -855,23 +929,32 @@ void RendererVk::shutdown() {
         if (utility_pool_ != VK_NULL_HANDLE) vkDestroyCommandPool(device, utility_pool_, nullptr);
         utility_pool_ = VK_NULL_HANDLE;
         utility_commands_ = VK_NULL_HANDLE;
-        for (VkPipeline pipeline : {conversion_pipeline_, clear_rgb_pipeline_, clear_alpha_pipeline_, blit_pipeline_,
-                                    ui_solid_pipeline_, ui_textured_pipeline_, depth_carry_pipeline_,
-                                    color_carry_pipeline_, clear_rgba_pipeline_, clear_depth_pipeline_}) {
+        for (VkPipeline pipeline : {conversion_pipeline_, blit_pipeline_, ui_solid_pipeline_, ui_textured_pipeline_,
+                                    depth_carry_pipeline_, color_carry_pipeline_, depth_resolve_pipeline_}) {
             if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
         }
-        conversion_pipeline_ = clear_rgb_pipeline_ = clear_alpha_pipeline_ = blit_pipeline_ = VK_NULL_HANDLE;
-        clear_rgba_pipeline_ = clear_depth_pipeline_ = VK_NULL_HANDLE;
+        for (auto& by_samples : efb_utility_pipelines_) {
+            for (VkPipeline& pipeline : by_samples) {
+                if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
+                pipeline = VK_NULL_HANDLE;
+            }
+        }
+        conversion_pipeline_ = blit_pipeline_ = depth_resolve_pipeline_ = VK_NULL_HANDLE;
         ui_solid_pipeline_ = ui_textured_pipeline_ = depth_carry_pipeline_ = color_carry_pipeline_ = VK_NULL_HANDLE;
         for (auto& [key, sampler] : samplers_) vkDestroySampler(device, sampler, nullptr);
         samplers_.clear();
         sampler_tables_.clear();
         constants_sets_.clear();
         for (EfbSet* set : {&efb_, &alt_efb_}) {
-            if (set->framebuffer != VK_NULL_HANDLE) vkDestroyFramebuffer(device, set->framebuffer, nullptr);
-            set->framebuffer = VK_NULL_HANDLE;
+            for (VkFramebuffer framebuffer : {set->framebuffer, set->resolve_framebuffer}) {
+                if (framebuffer != VK_NULL_HANDLE) vkDestroyFramebuffer(device, framebuffer, nullptr);
+            }
+            set->framebuffer = set->resolve_framebuffer = VK_NULL_HANDLE;
             set->color.reset();
             set->depth.reset();
+            set->ms_color.reset();
+            set->ms_depth.reset();
+            set->samples = 1u;
         }
         alt_efb_scale_ = 0u;
         output_efb_active_ = false;
@@ -897,6 +980,12 @@ void RendererVk::shutdown() {
         destroy_swapchain();
         for (VkRenderPass pass : {present_pass_, color_pass_, gx_layout_.efb_pass, gx_layout_.efb_pass_clear}) {
             if (pass != VK_NULL_HANDLE) vkDestroyRenderPass(device, pass, nullptr);
+        }
+        for (auto* passes : {&gx_layout_.ms_passes, &gx_layout_.ms_passes_clear}) {
+            for (VkRenderPass& pass : *passes) {
+                if (pass != VK_NULL_HANDLE) vkDestroyRenderPass(device, pass, nullptr);
+                pass = VK_NULL_HANDLE;
+            }
         }
         present_pass_ = color_pass_ = gx_layout_.efb_pass = gx_layout_.efb_pass_clear = VK_NULL_HANDLE;
         for (VkPipelineLayout layout : {gx_layout_.layout, utility_layout_, conversion_layout_}) {

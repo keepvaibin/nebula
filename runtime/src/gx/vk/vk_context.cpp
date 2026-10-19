@@ -567,7 +567,7 @@ std::shared_ptr<Texture> Context::create_linear_image(std::uint32_t width, std::
 
 std::shared_ptr<Texture> Context::create_texture(std::uint32_t width, std::uint32_t height, std::uint32_t levels,
                                                  VkFormat format, VkImageUsageFlags usage, bool render_target,
-                                                 const char* name) {
+                                                 const char* name, VkSampleCountFlagBits samples) {
     auto texture = std::make_shared<Texture>();
     VkImageCreateInfo image_info{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
     image_info.imageType = VK_IMAGE_TYPE_2D;
@@ -575,7 +575,7 @@ std::shared_ptr<Texture> Context::create_texture(std::uint32_t width, std::uint3
     image_info.extent = {width, height, 1};
     image_info.mipLevels = levels;
     image_info.arrayLayers = 1;
-    image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    image_info.samples = samples;
     image_info.tiling = VK_IMAGE_TILING_OPTIMAL;
     image_info.usage = usage;
     image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;

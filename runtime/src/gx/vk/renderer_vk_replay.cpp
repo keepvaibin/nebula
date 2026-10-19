@@ -1114,11 +1114,12 @@ bool RendererVk::record_replay_list(ReplayList& list) {
     }
     // The scene EFB's scale (the output EFB's place while the live frame's 2D layer is in it).
     const unsigned scene_scale = output_efb_active_ ? alt_efb_scale_ : efb_scale_;
-    if (replay_efb_.color && replay_efb_scale_ != scene_scale) {
+    const unsigned scene_samples = output_efb_active_ ? alt_efb_.samples : efb_.samples;
+    if (replay_efb_.color && (replay_efb_scale_ != scene_scale || replay_efb_.samples != scene_samples)) {
         destroy_efb_set(replay_efb_);
     }
     if (!replay_efb_.color) {
-        if (!create_efb_set(replay_efb_, scene_scale)) {
+        if (!create_efb_set(replay_efb_, scene_scale, scene_samples)) {
             replay_failure_ = 5u;
             return false;
         }
@@ -1518,7 +1519,9 @@ void RendererVk::release_replay_resources() noexcept {
     eval_frames_.reset();
     eval_readback_.reset();
     for (EfbSet* set : {&replay_efb_, &replay_alt_efb_}) {
-        if (set->framebuffer != VK_NULL_HANDLE) vkDestroyFramebuffer(device, set->framebuffer, nullptr);
+        for (VkFramebuffer framebuffer : {set->framebuffer, set->resolve_framebuffer}) {
+            if (framebuffer != VK_NULL_HANDLE) vkDestroyFramebuffer(device, framebuffer, nullptr);
+        }
         *set = EfbSet{};
     }
     replay_alt_scale_ = 0u;

@@ -37,6 +37,7 @@
 
 #include <array>
 #include <atomic>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -62,6 +63,16 @@ struct GxLayout {
     // The same pass clearing both targets as it begins (a whole-EFB copy-clear): nothing loaded from memory, which a
     // tiled GPU otherwise reads back at the full internal resolution. Compatible with efb_pass (load ops only).
     VkRenderPass efb_pass_clear = VK_NULL_HANDLE;
+    // MSAA: the EFB passes over multisampled targets (index: log2 of the samples per pixel, 1 to 3), the colour
+    // resolved into the single-sample target as each pass ends. Index 0 is efb_pass / efb_pass_clear.
+    std::array<VkRenderPass, 4> ms_passes{};
+    std::array<VkRenderPass, 4> ms_passes_clear{};
+    [[nodiscard]] VkRenderPass pass_for(unsigned samples_log2, bool clear) const noexcept {
+        if (samples_log2 == 0u) {
+            return clear ? efb_pass_clear : efb_pass;
+        }
+        return clear ? ms_passes_clear[samples_log2] : ms_passes[samples_log2];
+    }
     VkFormat depth_format = VK_FORMAT_UNDEFINED;
     bool geometry_shaders = false;
     bool dual_source_blend = false;
@@ -263,6 +274,10 @@ public:
 
     [[nodiscard]] gpu::Device* device() const noexcept { return vk::Context::get().device(); }
     [[nodiscard]] unsigned efb_scale() const noexcept { return efb_scale_; }
+    // log2 of the EFB's samples per pixel (MSAA; the output EFB has one): the GX pipelines' sample count.
+    [[nodiscard]] std::uint8_t efb_samples_log2() const noexcept {
+        return static_cast<std::uint8_t>(std::countr_zero(efb_.samples));
+    }
     [[nodiscard]] const vk::GxLayout* root_signature() const noexcept { return &gx_layout_; }
     [[nodiscard]] double display_refresh_hz() const noexcept { return display_refresh_hz_; }
     // The display's vblanks (host_window::vblank_grid): the latest and the interval, on galaxy::qpc_now()'s clock.
@@ -344,7 +359,12 @@ private:
     [[nodiscard]] bool restore_surface();
     [[nodiscard]] bool surface_changed() const;
     bool create_layouts();
-    bool create_efb_targets(unsigned scale);
+    bool create_efb_targets(unsigned scale, unsigned samples);
+    // The MSAA sample count the settings ask for and the device has for the EFB's formats (1: none).
+    [[nodiscard]] unsigned wanted_msaa_samples() const;
+    // Before the EFB's single-sample depth is read: the multisampled depth drawn since the last resolve, resolved
+    // into it (each pixel's sample 0). The colour resolves as each EFB pass ends.
+    void resolve_efb_depth(VkCommandBuffer commands);
     [[nodiscard]] bool efb_scale_fits_memory(unsigned scale) const;
     void apply_pending_efb_scale();
     void carry_over_efb_contents();
@@ -356,7 +376,8 @@ private:
     [[nodiscard]] VkPipeline create_utility_pipeline(VkRenderPass pass, VkPipelineLayout layout,
                                                      std::string_view vs_source, std::string_view ps_source,
                                                      VkColorComponentFlags write_mask, bool blend, bool strip,
-                                                     bool depth_write);
+                                                     bool depth_write,
+                                                     VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT);
     [[nodiscard]] VkShaderModule utility_module(std::string_view hlsl, vk::ShaderStage stage, bool conversion);
 
     // Frame recording.
@@ -439,6 +460,14 @@ private:
         VkFramebuffer framebuffer = VK_NULL_HANDLE;
         VkDescriptorSet color_source = VK_NULL_HANDLE;
         VkDescriptorSet depth_source = VK_NULL_HANDLE;
+        // MSAA (samples above one): the multisampled targets the EFB pass draws into, color and depth above being
+        // their resolves; resolve_framebuffer (efb_pass) holds color and depth for the depth resolve.
+        unsigned samples = 1u;
+        gpu::TextureRef ms_color;
+        gpu::TextureRef ms_depth;
+        VkFramebuffer resolve_framebuffer = VK_NULL_HANDLE;
+        VkDescriptorSet ms_depth_source = VK_NULL_HANDLE;
+        bool depth_dirty = false;
     };
     EfbSet efb_;
     // The output EFB (begin_output_efb) and its scale; they trade places with efb_ and efb_scale_ while it is active.
@@ -450,17 +479,20 @@ private:
     void swap_efb_sets();
     gpu::TextureRef efb_carry_color_;  // the previous targets, read once after a resolution change
     gpu::TextureRef efb_carry_depth_;
+    bool efb_carry_clear_ = false;  // the new targets start cleared (MSAA before or after the change)
     bool efb_pass_open_ = false;
     bool present_black_ = false;  // present()'s `black`, for present_xfb
     bool efb_seeded_ = false;
 
     // Pipelines the renderer owns.
     VkPipeline conversion_pipeline_ = VK_NULL_HANDLE;
-    VkPipeline clear_rgb_pipeline_ = VK_NULL_HANDLE;
-    VkPipeline clear_alpha_pipeline_ = VK_NULL_HANDLE;
-    // Whole-colour and depth clears as draws (DeviceQuirks::clear_with_draw only).
-    VkPipeline clear_rgba_pipeline_ = VK_NULL_HANDLE;
-    VkPipeline clear_depth_pipeline_ = VK_NULL_HANDLE;
+    // The renderer's own draws into the EFB pass, per EFB sample count (log2), made at first use: masked clears,
+    // and whole-colour and depth clears as draws (DeviceQuirks::clear_with_draw only; null otherwise).
+    enum class EfbUtility : unsigned { ClearRgb, ClearAlpha, ClearRgba, ClearDepth, Count };
+    std::array<std::array<VkPipeline, 4>, static_cast<std::size_t>(EfbUtility::Count)> efb_utility_pipelines_{};
+    [[nodiscard]] VkPipeline efb_utility_pipeline(EfbUtility kind);
+    unsigned msaa_max_samples_ = 1u;  // create_layouts: the most the EFB's formats render and sample
+    VkPipeline depth_resolve_pipeline_ = VK_NULL_HANDLE;
     VkPipeline blit_pipeline_ = VK_NULL_HANDLE;
     VkPipeline ui_solid_pipeline_ = VK_NULL_HANDLE;
     VkPipeline ui_textured_pipeline_ = VK_NULL_HANDLE;
@@ -778,7 +810,7 @@ private:
     unsigned replay_efb_scale_ = 0;
     EfbSet replay_alt_efb_;  // the replay's output EFB
     unsigned replay_alt_scale_ = 0;
-    bool create_efb_set(EfbSet& set, unsigned scale);
+    bool create_efb_set(EfbSet& set, unsigned scale, unsigned samples = 1u);
     void destroy_efb_set(EfbSet& set);
     XfbTexture subframe_xfb_;
     bool replaying_ = false;

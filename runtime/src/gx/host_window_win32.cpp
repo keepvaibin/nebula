@@ -2021,6 +2021,10 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render) {
     {
         std::string value = anti_aliasing_row_text(render.aa_mode, render.smaa_quality, get_post_process_status());
         if (const std::size_t colon = value.find(": "); colon != std::string::npos) value.erase(0, colon + 2u);
+        if (render.aa_mode != 0u && render.msaa_samples > 1u && render.upscaler != 2u && render.upscaler != 3u &&
+            !render.ray_tracing_enabled) {
+            value += " (OFF WITH MSAA)";
+        }
         rows.push_back({"ANTI-ALIASING", value,
                         [](RenderConfig& draft, int delta) { draft.aa_mode = settings_step(std::min(draft.aa_mode, 3u), 4u, delta); },
                         "SMOOTHS EDGES. AUTO SKIPS IT WHEN THE IMAGE IS ALREADY SUPERSAMPLED"});

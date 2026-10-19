@@ -135,9 +135,11 @@ public:
     void collect();
 
     // RGBA8 (or `format`) image with a sampled view of `levels` levels; `render_target` adds a level-0 target view.
+    // `samples` per pixel above one: a multisampled target (one level).
     [[nodiscard]] std::shared_ptr<Texture> create_texture(std::uint32_t width, std::uint32_t height, std::uint32_t levels,
                                                           VkFormat format, VkImageUsageFlags usage,
-                                                          bool render_target, const char* name);
+                                                          bool render_target, const char* name,
+                                                          VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT);
     // A linear-tiled transfer image (DeviceQuirks::linear_readback); empty when the device cannot copy `format` to
     // and from linear images.
     [[nodiscard]] std::shared_ptr<Texture> create_linear_image(std::uint32_t width, std::uint32_t height,

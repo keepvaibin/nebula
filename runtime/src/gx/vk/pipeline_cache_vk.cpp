@@ -654,7 +654,7 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
         raster.cullMode = VK_CULL_MODE_NONE;  // GX culls polygons, not lines or points
     }
     VkPipelineMultisampleStateCreateInfo multisample{VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
-    multisample.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    multisample.rasterizationSamples = static_cast<VkSampleCountFlagBits>(1u << rs.samples_log2);
 
     // Reversed-Z against GX's z24 (the projection negates z; RendererVk's viewport maps the GX depth range), so the
     // compare directions flip, as on D3D12.
@@ -740,7 +740,7 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
     info.pColorBlendState = &blend;
     info.pDynamicState = &dynamic;
     info.layout = layout_->layout;
-    info.renderPass = layout_->efb_pass;
+    info.renderPass = layout_->pass_for(rs.samples_log2, false);
     const TestRefusals& refuse = test_refusals();
     const bool uber = std::find(uber_ps_.begin(), uber_ps_.end(), ps) != uber_ps_.end();
     const bool uber_vertex = vs != VK_NULL_HANDLE && vs == uber_vs_;
