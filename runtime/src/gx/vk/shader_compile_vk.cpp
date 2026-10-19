@@ -170,6 +170,35 @@ bool assign_semantic_locations(std::vector<std::uint32_t>& spirv, ShaderStage st
     return true;
 }
 
+// Debug names and source text dropped (they mean nothing to a driver, SPIR-V 2.13). Adreno's driver matches stage
+// variables by name: a vertex input named like one of the outputs fails its compile (naga issue 1331). glslang names a
+// split HLSL array input "v.uv[0]" and the output "@entryPointOutput.uv[0]", and the Fold 8's 512.842 refused every
+// vertex shader that reads a texture coordinate (824 of 977 pipelines; those reading none were accepted).
+void strip_debug_names(std::vector<std::uint32_t>& spirv) {
+    constexpr std::uint32_t kOpSourceContinued = 2;
+    constexpr std::uint32_t kOpSource = 3;
+    constexpr std::uint32_t kOpSourceExtension = 4;
+    constexpr std::uint32_t kOpMemberName = 6;
+    constexpr std::uint32_t kOpString = 7;
+    constexpr std::uint32_t kOpLine = 8;
+    constexpr std::uint32_t kOpNoLine = 317;
+    constexpr std::uint32_t kOpModuleProcessed = 330;
+    std::vector<std::uint32_t> out(spirv.begin(), spirv.begin() + 5);
+    out.reserve(spirv.size());
+    for (std::size_t at = 5; at < spirv.size();) {
+        const std::uint32_t count = std::max(spirv[at] >> 16u, 1u);
+        const std::uint32_t op = spirv[at] & 0xffffu;
+        const bool debug = op == kOpSourceContinued || op == kOpSource || op == kOpSourceExtension || op == kOpName ||
+            op == kOpMemberName || op == kOpString || op == kOpLine || op == kOpNoLine || op == kOpModuleProcessed;
+        if (!debug) {
+            out.insert(out.end(), spirv.begin() + static_cast<std::ptrdiff_t>(at),
+                       spirv.begin() + static_cast<std::ptrdiff_t>(std::min<std::size_t>(at + count, spirv.size())));
+        }
+        at += count;
+    }
+    spirv = std::move(out);
+}
+
 // The output at location 1 moves to location 0, index 1. False when the module has none.
 bool make_dual_source_output(std::vector<std::uint32_t>& spirv) {
     std::vector<std::uint32_t> outputs;
@@ -350,6 +379,9 @@ std::vector<std::uint32_t> compile_hlsl(std::string_view hlsl, ShaderStage stage
     if (compile_options.dual_source && !make_dual_source_output(spirv)) {
         error = "dual-source pixel shader without SV_Target1";
         return {};
+    }
+    if (!compile_options.keep_names) {
+        strip_debug_names(spirv);
     }
     std::string messages_out = logger.getAllMessages();
     if (compile_options.validate) {

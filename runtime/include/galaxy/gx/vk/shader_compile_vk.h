@@ -43,10 +43,12 @@ struct CompileOptions {
     // index 1, while glslang places it at location 1 and ignores location attributes on output-struct members, so
     // the module's decorations are rewritten.
     bool dual_source = false;
+    // Keep the debug names (the tests read constant-buffer member names); the runtime strips them (Adreno).
+    bool keep_names = false;
 };
 
 // Changes with anything that changes compile_hlsl's output for the same source (cached SPIR-V is keyed on it).
-inline constexpr std::uint32_t kCompilerRevision = 3;
+inline constexpr std::uint32_t kCompilerRevision = 4;  // 4: debug names stripped (Adreno)
 
 // SPIR-V for `entry` of `hlsl`; empty with `error` set when it does not compile. `defines` are NAME=VALUE. Stage
 // inputs and outputs sit at their semantics' locations, so stages and the vertex layout match as D3D12's do by name:

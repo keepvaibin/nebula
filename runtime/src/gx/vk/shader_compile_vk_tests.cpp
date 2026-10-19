@@ -251,7 +251,7 @@ void expect(const char* what, std::string_view hlsl, ShaderStage stage, std::spa
             std::initializer_list<const char*> defines = {}, bool dual_source = false) {
     std::string error;
     const std::vector<std::uint32_t> spirv =
-        compile_hlsl(annotate(hlsl, bindings), stage, "main", defines, error, {true, dual_source});
+        compile_hlsl(annotate(hlsl, bindings), stage, "main", defines, error, {true, dual_source, true});
     if (spirv.empty()) {
         ++failures;
         std::printf("FAIL %s\n%s\n", what, error.c_str());
