@@ -125,6 +125,7 @@ VkSampler create_sampler(VkDevice device, VkFilter filter, VkSamplerMipmapMode m
 std::size_t RendererVk::ConstantsSetKeyHash::operator()(const ConstantsSetKey& key) const noexcept {
     std::uint64_t hash = mix64(reinterpret_cast<std::uint64_t>(key.b0));
     hash = combine64(hash, reinterpret_cast<std::uint64_t>(key.b1));
+    hash = combine64(hash, reinterpret_cast<std::uint64_t>(key.earlier));
     hash = combine64(hash, key.whole_palette ? 1u : 0u);
     return static_cast<std::size_t>(combine64(hash, reinterpret_cast<std::uint64_t>(key.palette)));
 }
@@ -199,6 +200,14 @@ bool RendererVk::initialize(int window_width, int window_height, unsigned efb_sc
             shutdown();
             return false;
         }
+        // Vertex blending's verdicts and frame values: every draw reads them (game frames the zero element).
+        blend_verdicts_ = vk::Context::get().create_buffer((vk_detail::kZeroValuesElement + 1u) * 16u,
+                                                           VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, "blend verdicts");
+        if (!blend_verdicts_) {
+            shutdown();
+            return false;
+        }
+        std::memset(blend_verdicts_->mapped, 0, blend_verdicts_->size);
         refresh_default_sampler_table();
     } catch (const std::exception& error) {
         std::cerr << "[Renderer] Vulkan initialize failed: " << error.what() << '\n';
@@ -250,14 +259,16 @@ bool RendererVk::create_layouts() {
     const VkShaderStageFlags gx_stages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT |
         (context.geometry_shader() ? VK_SHADER_STAGE_GEOMETRY_BIT : 0u);
     {
-        // Set 0: b0, b1, the matrix palette.
+        // Set 0: b0, b1, the matrix palette, vertex blending's earlier vertices and verdicts.
         const VkDescriptorSetLayoutBinding bindings[] = {
             {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, gx_stages, nullptr},
             {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
             {2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1, gx_stages, nullptr},
+            {3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
+            {4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
         };
         VkDescriptorSetLayoutCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-        info.bindingCount = 3;
+        info.bindingCount = 5;
         info.pBindings = bindings;
         vk::check(vkCreateDescriptorSetLayout(device, &info, nullptr, &gx_layout_.sets[0]), "set 0 layout");
     }
@@ -278,9 +289,13 @@ bool RendererVk::create_layouts() {
         vk::check(vkCreateDescriptorSetLayout(device, &info, nullptr, &gx_layout_.sets[2]), "set 2 layout");
     }
     {
+        // Vertex blending's per-draw values (b2): mode, frame element, verdict slot, last vertex, first vertex's byte.
+        const VkPushConstantRange blend{VK_SHADER_STAGE_VERTEX_BIT, 0, 5u * sizeof(std::uint32_t)};
         VkPipelineLayoutCreateInfo info{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
         info.setLayoutCount = 3;
         info.pSetLayouts = gx_layout_.sets.data();
+        info.pushConstantRangeCount = 1;
+        info.pPushConstantRanges = &blend;
         vk::check(vkCreatePipelineLayout(device, &info, nullptr, &gx_layout_.layout), "GX pipeline layout");
     }
     linear_clamp_ = create_sampler(device, VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_NEAREST);

@@ -384,6 +384,7 @@ cbuffer GxVertexBlend : register(b2) {
     uint  vb_frame;  // element of the presented frame's values (a zero element in game frames)
     uint  vb_slot;   // the pair's verdict
     uint  vb_last;   // the last vertex of the earlier draw
+    uint  vb_base;   // its first vertex's byte offset in vb_prev (0 where the view starts there)
 };
 ByteAddressBuffer vb_prev : register(t1, space1);
 // Per pair: vertices, positions unchanged, largest move, extent (the GPU
@@ -433,7 +434,7 @@ void vertex_blend(inout VSIn v, uint id) {
         !(worst <= 0.02 * extent)) {
         return;
     }
-    const uint at = min(id, vb_last) * 144u;
+    const uint at = vb_base + min(id, vb_last) * 144u;
     const float3 earlier = asfloat(vb_prev.Load3(at));
     vb_pos_prev = lerp(earlier, v.pos, vb_t_prev);
     if (vb_t >= 1.0) {
@@ -452,21 +453,6 @@ void vertex_blend(inout VSIn v, uint id) {
         const float2 uv = asfloat(vb_prev.Load2(at + 56u + 8u * i));
         v.uv[i] = float2(vb_coord(uv.x, v.uv[i].x), vb_coord(uv.y, v.uv[i].y));
     }
-}
-)HLSL";
-
-// Without vertex blending: the draw's own vertices, with the values a game frame's draws see (vertex_blend above with
-// the zero element).
-static constexpr const char* kVertexBlendNone = R"HLSL(
-static float vb_t;
-static float vb_t_prev;
-static float2 vb_jitter;
-static float3 vb_pos_prev;
-void vertex_blend(inout VSIn v, uint id) {
-    vb_t = 0.0;
-    vb_t_prev = 0.0;
-    vb_jitter = float2(0.0, 0.0);
-    vb_pos_prev = v.pos;
 }
 )HLSL";
 
@@ -1100,7 +1086,7 @@ std::string ShaderGenerator::generate_vs(const VertexShaderKey& key) const {
         s << kVsConstantsDef;
         s << (ppl_outputs ? kVsStructsPpl : kVsStructs);
     }
-    s << (options_.vertex_blend ? kVertexBlendDef : kVertexBlendNone);
+    s << kVertexBlendDef;
 
     const bool dual_tex = (key.flags & 0x04u) != 0u;
 

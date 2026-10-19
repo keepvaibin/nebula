@@ -25,8 +25,9 @@ struct RegisterBinding {
     bool push_constant = false;
 };
 
-// The GX draw layout (RendererVk): set 0 = b0 and b1 (dynamic uniform buffers) and t0 space1 (the matrix palette,
-// a dynamic storage buffer); set 1 = t0-t7 (textures); set 2 = s0-s7 (samplers).
+// The GX draw layout (RendererVk): set 0 = b0 and b1 (dynamic uniform buffers), t0 space1 (the matrix palette, a
+// dynamic storage buffer), t1 and t2 space1 (vertex blending's earlier vertices and verdicts, storage buffers); set
+// 1 = t0-t7 (textures); set 2 = s0-s7 (samplers); b2 (vertex blending's per-draw values) = vertex push constants.
 [[nodiscard]] std::span<const RegisterBinding> gx_draw_bindings() noexcept;
 
 // Inserts the Vulkan attribute before every resource declared with a mapped register.
@@ -48,7 +49,7 @@ struct CompileOptions {
 };
 
 // Changes with anything that changes compile_hlsl's output for the same source (cached SPIR-V is keyed on it).
-inline constexpr std::uint32_t kCompilerRevision = 5;  // 5: no vertex-blending inputs; 4: debug names stripped
+inline constexpr std::uint32_t kCompilerRevision = 6;  // 6: vertex blending inputs; 4: debug names stripped
 
 // SPIR-V for `entry` of `hlsl`; empty with `error` set when it does not compile. `defines` are NAME=VALUE. Stage
 // inputs and outputs sit at their semantics' locations, so stages and the vertex layout match as D3D12's do by name:

@@ -209,7 +209,6 @@ std::uint64_t compiler_identity() {
     static const std::uint64_t identity = [] {
         ShaderGenOptions options;
         options.scalar_byte_masks = true;
-        options.vertex_blend = false;
         ShaderGenerator generator;
         generator.set_options(options);
         VertexShaderKey vs_key{};
@@ -383,7 +382,6 @@ bool PipelineCacheVk::initialize(VkDevice device, const vk::GxLayout* layout, co
     {
         const vk::DeviceQuirks& quirks = vk::Context::get().quirks();
         generator_defaults_.scalar_byte_masks = true;
-        generator_defaults_.vertex_blend = false;
         generator_defaults_.tev_zero_from_constant = quirks.tev_zero_from_constant;
         driver_key_ = vk::driver_key(vk::Context::get().identity());
         const char* dump = std::getenv("GALAXY_VK_SHADER_DUMP");
@@ -1139,7 +1137,6 @@ std::size_t PipelineCacheVk::build_shader_seed(const std::filesystem::path& keys
     for (const bool zero_from_constant : {false, true}) {
         ShaderGenOptions options;
         options.scalar_byte_masks = true;
-        options.vertex_blend = false;
         options.tev_zero_from_constant = zero_from_constant;
         ShaderGenerator generator;
         generator.set_options(options);

@@ -24,6 +24,9 @@ constexpr RegisterBinding kGxDrawBindings[] = {
     {"b0", 0, 0},
     {"b1", 0, 1},
     {"t0, space1", 0, 2},
+    {"t1, space1", 0, 3},  // vertex blending: the earlier draw's vertices
+    {"t2, space1", 0, 4},  // vertex blending: verdicts and the presented frame's values
+    {"b2", 0, 0, true},    // vertex blending: the draw's (push constants)
     {"t0", 1, 0},
     {"s0", 2, 0},
 };

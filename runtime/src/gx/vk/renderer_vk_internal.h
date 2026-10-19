@@ -18,6 +18,13 @@ inline constexpr VkImageLayout kDepthSampleLayout = VK_IMAGE_LAYOUT_DEPTH_STENCI
 inline constexpr std::uint32_t kFrameSets = 4096u;
 inline constexpr std::uint32_t kFrameUtilitySamplers = 256u;
 
+// Vertex blending's verdicts (one per draw pair; the last for stripes), then the presented frame's values (t, the t
+// of the frame before, jitter) a sub-frame's draws read, then a zero element the game frames' draws read.
+inline constexpr std::uint32_t kMaxBlendPairs = 8192u;
+inline constexpr std::uint32_t kStripeVerdict = kMaxBlendPairs - 1u;
+inline constexpr std::uint32_t kFrameValuesElement = kMaxBlendPairs;
+inline constexpr std::uint32_t kZeroValuesElement = kMaxBlendPairs + 1u;
+
 inline void image_barrier(VkCommandBuffer commands, VkImage image, VkImageAspectFlags aspect, VkImageLayout from,
                           VkImageLayout to, VkPipelineStageFlags src_stage, VkAccessFlags src_access,
                           VkPipelineStageFlags dst_stage, VkAccessFlags dst_access) {

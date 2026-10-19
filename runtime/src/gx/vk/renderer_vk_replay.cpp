@@ -25,9 +25,6 @@ using namespace vk_detail;
 
 namespace {
 
-// The blend verdicts and, at kFrameValuesElement, the sub-frame's t (read by blended draws).
-constexpr std::uint32_t kMaxBlendPairs = 8192u;
-constexpr std::uint32_t kFrameValuesElement = kMaxBlendPairs;
 // InterpEvalFrame blocks at uniform-offset alignment: two per sub-frame slot (the copies' dispatch, the ops').
 constexpr VkDeviceSize kEvalFrameBlock = 256u;
 
@@ -88,6 +85,7 @@ void RendererVk::update_ring_mode() {
     recording_log_valid_ = false;
     ready_valid_ = false;
     run_valid_ = false;
+    prev_valid_ = false;
     sequence_.ready = false;
     start_clear_valid_ = false;
     ring_segment_ = 0u;
@@ -105,6 +103,9 @@ void RendererVk::advance_ring_segment() {
     if (run_valid_ && run_log_.segment == ring_segment_) {
         run_valid_ = false;
         sequence_.ready = false;
+    }
+    if (prev_valid_ && prev_log_.segment == ring_segment_) {
+        prev_valid_ = false;
     }
     for (ReplayList& list : replay_lists_) {
         if (list.segment == ring_segment_) {
@@ -168,6 +169,18 @@ void RendererVk::ReplayLog::clear() {
     tables.clear();
     surround = 0.0f;
     movie = false;
+    stripe_draws.clear();
+    stripe_vertices.clear();
+}
+
+void RendererVk::note_stripe_vertices(std::span<const StripeVertex> vertices) {
+    if (!logging() || vertices.empty()) {
+        return;
+    }
+    recording_log_.stripe_draws.push_back({static_cast<std::uint32_t>(recording_log_.draws.size()),
+                                          static_cast<std::uint32_t>(recording_log_.stripe_vertices.size()),
+                                          static_cast<std::uint32_t>(vertices.size())});
+    recording_log_.stripe_vertices.insert(recording_log_.stripe_vertices.end(), vertices.begin(), vertices.end());
 }
 
 void RendererVk::begin_replay_record() {
@@ -201,16 +214,374 @@ bool RendererVk::start_replay_playback() {
     if (!ready_valid_) {
         return false;
     }
+    // The playing log becomes the one before (the draw pairing reads it).
+    prev_valid_ = run_valid_;
+    if (run_valid_) {
+        std::swap(prev_log_, run_log_);
+    }
     std::swap(ready_log_, run_log_);
     run_valid_ = true;
     ready_valid_ = false;
     return true;
 }
 
-// Pixel-constant pairs between the playing log and the one before come with vertex blending (not yet on Vulkan): no
-// colour moves, every record keeps the game frame's colours.
-void RendererVk::prepare_vertex_blend(std::span<const std::int32_t>) {
-    run_ps_previous_.clear();
+// The playing log's draws paired with the log before's (RendererD3D12::prepare_vertex_blend, the same rules): a draw
+// pairs with the next draw of its matched record (`previous_record[record]`, the record of the scene before) with as
+// many vertices, skipping at most three drawn in one frame only. Each pixel-constant record takes the record its paired
+// draws used (-2 when they disagree), so its colours interpolate. Paired draws whose vertices the CPU wrote (in
+// different places each frame) blend them per sub-frame after the GPU checked the pair (kBlendValidateCs); JPA stripes
+// pair particle by particle, their earlier vertices gathered first (kStripeGatherCs).
+void RendererVk::prepare_vertex_blend(std::span<const std::int32_t> previous_record) {
+    run_blend_vertices_.assign(run_log_.draws.size(), BlendSource{});
+    blend_pairs_.clear();
+    stripe_gather_.clear();
+    blend_validate_pending_ = false;
+    std::int32_t ps_records = 0;
+    for (const DrawCall& call : run_log_.draws) {
+        ps_records = std::max(ps_records, call.ps_record + 1);
+    }
+    run_ps_previous_.assign(static_cast<std::size_t>(ps_records), -1);
+    if (!prev_valid_ || prev_log_.serial + 1u != run_log_.serial || previous_record.empty()) {
+        return;
+    }
+    // Where a draw's vertices are: the vertex ring (0) or the resident decoded-vertex buffer (1), and the byte offset.
+    const gpu::Address ring_base = vertex_ring_.gpu_base();
+    const std::uint64_t ring_bytes = vertex_ring_.total_bytes();
+    const auto locate = [&](gpu::Address address, std::uint32_t bytes, std::uint32_t& offset) {
+        if (address >= ring_base && address + bytes <= ring_base + ring_bytes) {
+            offset = static_cast<std::uint32_t>(address - ring_base);
+            return 0;
+        }
+        if (resident_vertex_base_ != 0u && address >= resident_vertex_base_ &&
+            address + bytes <= resident_vertex_base_ + resident_vertex_bytes_) {
+            offset = static_cast<std::uint32_t>(address - resident_vertex_base_);
+            return 1;
+        }
+        return -1;
+    };
+    // The draws of each previous record, in log order (counting sort).
+    std::int32_t records = 0;
+    for (const DrawCall& call : prev_log_.draws) {
+        records = std::max(records, call.replay_record + 1);
+    }
+    const std::size_t count = static_cast<std::size_t>(records);
+    pairing_scratch_.assign(2u * count + 1u + prev_log_.draws.size(), 0u);
+    std::uint32_t* const first = pairing_scratch_.data();  // [records + 1]
+    std::uint32_t* const fill = first + count + 1u;         // [records]
+    std::uint32_t* const order = fill + count;              // [draws]
+    for (const DrawCall& call : prev_log_.draws) {
+        if (call.replay_record >= 0) ++first[call.replay_record + 1];
+    }
+    for (std::size_t r = 0; r < count; ++r) first[r + 1u] += first[r];
+    for (std::size_t d = 0; d < prev_log_.draws.size(); ++d) {
+        const std::int32_t r = prev_log_.draws[d].replay_record;
+        if (r >= 0) order[first[r] + fill[r]++] = static_cast<std::uint32_t>(d);
+    }
+    // `fill` becomes each previous record's cursor.
+    std::fill(fill, fill + count, 0u);
+    stripe_of_draw_.assign(run_log_.draws.size(), -1);
+    for (std::size_t i = 0; i < run_log_.stripe_draws.size(); ++i) {
+        const ReplayLog::StripeDraw& stripe = run_log_.stripe_draws[i];
+        if (stripe.draw < stripe_of_draw_.size()) stripe_of_draw_[stripe.draw] = static_cast<std::int32_t>(i);
+    }
+    stripe_of_prev_draw_.assign(prev_log_.draws.size(), -1);
+    for (std::size_t i = 0; i < prev_log_.stripe_draws.size(); ++i) {
+        const ReplayLog::StripeDraw& stripe = prev_log_.stripe_draws[i];
+        if (stripe.draw < stripe_of_prev_draw_.size()) {
+            stripe_of_prev_draw_[stripe.draw] = static_cast<std::int32_t>(i);
+        }
+    }
+    const bool pairs_checked = ensure_blend_pipelines();
+    std::vector<std::array<std::uint32_t, 2>> stripe_blends;  // per stripe draw: its draw, its first gathered vertex
+    std::vector<std::uint32_t> seen;
+    for (std::size_t d = 0; d < run_log_.draws.size(); ++d) {
+        const DrawCall& call = run_log_.draws[d];
+        const std::int32_t r = call.replay_record;
+        if (r < 0 || static_cast<std::size_t>(r) >= previous_record.size()) continue;
+        const std::int32_t m = previous_record[static_cast<std::size_t>(r)];
+        if (m < 0 || m >= records) continue;
+        if (seen.size() <= static_cast<std::size_t>(r)) seen.resize(static_cast<std::size_t>(r) + 1u, 0u);
+        ++seen[static_cast<std::size_t>(r)];
+        std::uint32_t at = first[m] + fill[m];
+        const std::uint32_t end = std::min(first[m + 1], at + 4u);
+        const std::int32_t stripe = stripe_of_draw_[d];
+        if (stripe >= 0) {
+            // A stripe pairs with its record's next stripe draw whatever the particle count, then particle by particle.
+            while (at < end && stripe_of_prev_draw_[order[at]] < 0) {
+                ++at;
+            }
+        } else {
+            while (at < end && prev_log_.draws[order[at]].vertex_view.SizeInBytes != call.vertex_view.SizeInBytes) {
+                ++at;
+            }
+        }
+        if (at >= end) continue;
+        fill[m] = at + 1u - first[m];
+        const DrawCall& before = prev_log_.draws[order[at]];
+        if (call.ps_record >= 0 && before.ps_record >= 0) {
+            std::int32_t& pair = run_ps_previous_[static_cast<std::size_t>(call.ps_record)];
+            pair = pair == -1 || pair == before.ps_record ? before.ps_record : -2;
+        }
+        std::uint32_t current_offset = 0u, previous_offset = 0u;
+        const int current_buffer =
+            locate(call.vertex_view.BufferLocation, call.vertex_view.SizeInBytes, current_offset);
+        const int previous_buffer =
+            locate(before.vertex_view.BufferLocation, before.vertex_view.SizeInBytes, previous_offset);
+        // A strip of the same length slides along itself (index pairing, as any pair); one that grew or shrank pairs
+        // particle by particle.
+        if (stripe >= 0 && before.vertex_view.SizeInBytes != call.vertex_view.SizeInBytes) {
+            const std::uint32_t vertices = call.vertex_view.StrideInBytes == 144u
+                ? call.vertex_view.SizeInBytes / call.vertex_view.StrideInBytes : 0u;
+            const std::uint32_t previous_vertices = before.vertex_view.StrideInBytes == 144u
+                ? before.vertex_view.SizeInBytes / before.vertex_view.StrideInBytes : 0u;
+            if (vertices == 0u || current_buffer < 0 || previous_buffer < 0 ||
+                stripe_gather_.size() + vertices > (1u << 20u)) {
+                continue;
+            }
+            // Previous particles by (particle, pass, side, lifetime); a match continues only if its age moved on by at
+            // most one frame.
+            const ReplayLog::StripeDraw& prev_draw =
+                prev_log_.stripe_draws[static_cast<std::size_t>(stripe_of_prev_draw_[order[at]])];
+            const auto key_of = [](const StripeVertex& v) {
+                return (static_cast<std::uint64_t>(v.particle) << 32u) |
+                       (static_cast<std::uint64_t>(v.strip) << 24u) | (static_cast<std::uint64_t>(v.side) << 16u) |
+                       (v.age_lifetime & 0xFFFFu);
+            };
+            stripe_keys_.clear();
+            for (std::uint32_t i = 0; i < prev_draw.count; ++i) {
+                const StripeVertex& v = prev_log_.stripe_vertices[prev_draw.first + i];
+                if (v.vertex < previous_vertices) stripe_keys_.emplace_back(key_of(v), prev_draw.first + i);
+            }
+            std::sort(stripe_keys_.begin(), stripe_keys_.end());
+            const auto base = static_cast<std::uint32_t>(stripe_gather_.size());
+            for (std::uint32_t i = 0; i < vertices; ++i) {
+                stripe_gather_.push_back({current_offset + i * 144u, static_cast<std::uint32_t>(current_buffer)});
+            }
+            stripe_matched_.assign(vertices, -1);
+            const ReplayLog::StripeDraw& draw = run_log_.stripe_draws[static_cast<std::size_t>(stripe)];
+            for (std::uint32_t i = 0; i < draw.count; ++i) {
+                const StripeVertex& v = run_log_.stripe_vertices[draw.first + i];
+                if (v.vertex >= vertices) continue;
+                const std::uint64_t key = key_of(v);
+                const auto found = std::lower_bound(stripe_keys_.begin(), stripe_keys_.end(),
+                                                    std::pair<std::uint64_t, std::uint32_t>{key, 0u});
+                if (found == stripe_keys_.end() || found->first != key) continue;
+                const StripeVertex& was = prev_log_.stripe_vertices[found->second];
+                const auto steps = static_cast<std::uint16_t>((v.age_lifetime >> 16u) - (was.age_lifetime >> 16u));
+                if (steps > 1u) continue;
+                stripe_gather_[base + v.vertex] = {previous_offset + was.vertex * 144u,
+                                                   static_cast<std::uint32_t>(previous_buffer)};
+                stripe_matched_[v.vertex] = static_cast<std::int32_t>(was.vertex);
+            }
+            // A new particle grows out of where its nearest surviving neighbour (same side of the strip) was.
+            for (std::uint32_t i = 0; i < vertices; ++i) {
+                if (stripe_matched_[i] >= 0) continue;
+                for (std::uint32_t step = 2u; step <= 16u; step += 2u) {
+                    const std::int64_t below = static_cast<std::int64_t>(i) - step;
+                    const std::uint32_t above = i + step;
+                    std::int32_t from = -1;
+                    if (above < vertices && stripe_matched_[above] >= 0) {
+                        from = stripe_matched_[above];
+                    } else if (below >= 0 && stripe_matched_[static_cast<std::size_t>(below)] >= 0) {
+                        from = stripe_matched_[static_cast<std::size_t>(below)];
+                    }
+                    if (from >= 0) {
+                        stripe_gather_[base + i] = {previous_offset + static_cast<std::uint32_t>(from) * 144u,
+                                                    static_cast<std::uint32_t>(previous_buffer)};
+                        break;
+                    }
+                }
+            }
+            stripe_blends.push_back({static_cast<std::uint32_t>(d), base});
+            continue;
+        }
+        if (pairs_checked && before.vertex_view.BufferLocation != call.vertex_view.BufferLocation &&
+            before.vertex_view.StrideInBytes == call.vertex_view.StrideInBytes && call.vertex_view.SizeInBytes != 0u &&
+            current_buffer >= 0 && previous_buffer >= 0 && blend_pairs_.size() < kStripeVerdict) {
+            const auto slot = static_cast<std::uint32_t>(blend_pairs_.size());
+            blend_pairs_.push_back({current_offset, previous_offset,
+                                    call.vertex_view.SizeInBytes / call.vertex_view.StrideInBytes,
+                                    static_cast<std::uint32_t>(current_buffer) |
+                                        (static_cast<std::uint32_t>(previous_buffer) << 1u)});
+            run_blend_vertices_[d] = {before.vertex_view.BufferLocation, slot};
+        }
+    }
+    if (!stripe_gather_.empty()) {
+        const std::uint64_t bytes = static_cast<std::uint64_t>(stripe_gather_.size()) * 144u;
+        if (!stripe_earlier_ || stripe_earlier_->size < bytes) {
+            if (stripe_earlier_) {
+                interp_retired_.emplace_back(std::move(stripe_earlier_), last_submitted_);
+            }
+            std::uint64_t size = 1ull << 20u;
+            while (size < bytes) {
+                size *= 2u;
+            }
+            stripe_earlier_ = vk::Context::get().create_buffer(size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                                                               "earlier stripe vertices");
+        }
+        if (stripe_earlier_) {
+            for (const auto& [draw, base] : stripe_blends) {
+                run_blend_vertices_[draw] = {stripe_earlier_->address + static_cast<std::uint64_t>(base) * 144u,
+                                             kStripeVerdict};
+            }
+        } else {
+            stripe_gather_.clear();
+        }
+    }
+    blend_validate_pending_ = !blend_pairs_.empty() || !stripe_gather_.empty();
+}
+
+bool RendererVk::ensure_blend_pipelines() {
+    if (blend_validate_pipeline_ != VK_NULL_HANDLE) {
+        return true;
+    }
+    if (blend_failed_) {
+        return false;
+    }
+    blend_failed_ = true;
+    const VkDevice device = vk::Context::get().device();
+    VkDescriptorSetLayoutBinding bindings[4]{};
+    for (std::uint32_t i = 0; i < 4u; ++i) {
+        bindings[i].binding = i;
+        bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        bindings[i].descriptorCount = 1;
+        bindings[i].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    }
+    VkDescriptorSetLayoutCreateInfo layout_info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+    layout_info.bindingCount = 4;
+    layout_info.pBindings = bindings;
+    vk::check(vkCreateDescriptorSetLayout(device, &layout_info, nullptr, &blend_set_layout_), "blend set layout");
+    const VkPushConstantRange limits{VK_SHADER_STAGE_COMPUTE_BIT, 0, 3u * sizeof(std::uint32_t)};
+    VkPipelineLayoutCreateInfo pipeline_layout_info{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+    pipeline_layout_info.setLayoutCount = 1;
+    pipeline_layout_info.pSetLayouts = &blend_set_layout_;
+    pipeline_layout_info.pushConstantRangeCount = 1;
+    pipeline_layout_info.pPushConstantRanges = &limits;
+    vk::check(vkCreatePipelineLayout(device, &pipeline_layout_info, nullptr, &blend_layout_), "blend layout");
+    const VkDescriptorPoolSize size{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 4u * 2u * 3u};
+    VkDescriptorPoolCreateInfo pool_info{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+    pool_info.maxSets = 2u * 3u;
+    pool_info.poolSizeCount = 1;
+    pool_info.pPoolSizes = &size;
+    vk::check(vkCreateDescriptorPool(device, &pool_info, nullptr, &blend_pool_), "blend descriptor pool");
+    for (const auto& [source, pipeline] : {std::pair{kBlendValidateCs, &blend_validate_pipeline_},
+                                           std::pair{kStripeGatherCs, &stripe_gather_pipeline_}}) {
+        std::string error;
+        const std::vector<std::uint32_t> spirv = vk::compile_hlsl(source, vk::ShaderStage::Compute, "main", {}, error);
+        if (spirv.empty()) {
+            std::cerr << "[interp-blend] " << error << '\n';
+            return false;
+        }
+        VkShaderModuleCreateInfo module_info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+        module_info.codeSize = spirv.size() * sizeof(std::uint32_t);
+        module_info.pCode = spirv.data();
+        VkShaderModule module = VK_NULL_HANDLE;
+        vk::check(vkCreateShaderModule(device, &module_info, nullptr, &module), "blend shader module");
+        VkComputePipelineCreateInfo info{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
+        info.stage = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+        info.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+        info.stage.module = module;
+        info.stage.pName = "main";
+        info.layout = blend_layout_;
+        const VkResult result = vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, pipeline);
+        vkDestroyShaderModule(device, module, nullptr);
+        vk::check(result, "blend pipeline");
+    }
+    blend_failed_ = false;
+    return true;
+}
+
+// The first sub-frame of a blending replay, before the evaluation: the earlier stripe vertices gathered from the log
+// before, then every pair checked (the verdicts its draws read).
+void RendererVk::record_blend_validation(VkCommandBuffer commands) {
+    if (!blend_validate_pending_ || blend_validate_pipeline_ == VK_NULL_HANDLE) {
+        return;
+    }
+    blend_validate_pending_ = false;
+    vk::Context& context = vk::Context::get();
+    const VkDevice device = context.device();
+    ProgramBuffer& program = program_buffers_[program_index_];
+    const VkBuffer ring = reinterpret_cast<VkBuffer>(vertex_ring_.resource());
+    const std::uint64_t ring_bytes = vertex_ring_.total_bytes();
+    const bool resident = resident_vertex_base_ != 0u && resident_vertex_bytes_ >= 12u;
+    const VkBuffer resident_buffer = resident ? context.resolve(resident_vertex_base_).buffer : ring;
+    const std::uint64_t resident_bytes = resident ? resident_vertex_bytes_ : ring_bytes;
+    // A table of the sequence's (rewritten only after the sub-frames that read it completed: the program fence).
+    const auto table = [&](std::shared_ptr<vk::Buffer>& buffer, const void* data, std::size_t bytes, const char* name) {
+        if (!buffer || buffer->size < bytes) {
+            std::uint64_t size = 64u << 10u;
+            while (size < bytes) {
+                size *= 2u;
+            }
+            buffer = context.create_buffer(size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, name);
+        }
+        if (buffer) {
+            std::memcpy(buffer->mapped, data, bytes);
+        }
+        return static_cast<bool>(buffer);
+    };
+    const auto set_for = [&](VkDescriptorSet& set, std::array<VkBuffer, 4>& bound, const std::array<VkBuffer, 4>& buffers) {
+        if (set == VK_NULL_HANDLE) {
+            VkDescriptorSetAllocateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+            info.descriptorPool = blend_pool_;
+            info.descriptorSetCount = 1;
+            info.pSetLayouts = &blend_set_layout_;
+            vk::check(vkAllocateDescriptorSets(device, &info, &set), "blend set");
+        }
+        if (bound != buffers) {
+            VkDescriptorBufferInfo infos[4]{};
+            VkWriteDescriptorSet writes[4]{};
+            for (unsigned i = 0; i < 4u; ++i) {
+                infos[i] = {buffers[i], 0, VK_WHOLE_SIZE};
+                writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                writes[i].dstSet = set;
+                writes[i].dstBinding = i;
+                writes[i].descriptorCount = 1;
+                writes[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+                writes[i].pBufferInfo = &infos[i];
+            }
+            vkUpdateDescriptorSets(device, 4, writes, 0, nullptr);
+            bound = buffers;
+        }
+        return set;
+    };
+    VkMemoryBarrier barrier{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+    // The outputs are rewritten after the sub-frames before read them (queue order).
+    vkCmdPipelineBarrier(commands, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0,
+                         nullptr, 0, nullptr, 0, nullptr);
+    if (!stripe_gather_.empty() && stripe_earlier_ &&
+        table(program.sources, stripe_gather_.data(), stripe_gather_.size() * sizeof(stripe_gather_[0]),
+              "stripe sources")) {
+        const VkDescriptorSet set =
+            set_for(program.gather_set, program.gather_bound,
+                    {ring, resident_buffer, program.sources->buffer, stripe_earlier_->buffer});
+        const std::uint32_t limits[3]{
+            static_cast<std::uint32_t>(std::min<std::uint64_t>(ring_bytes - 4u, 0xFFFFFFF0u)),
+            static_cast<std::uint32_t>(std::min<std::uint64_t>(resident_bytes - 4u, 0xFFFFFFF0u)),
+            static_cast<std::uint32_t>(stripe_gather_.size())};
+        vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_COMPUTE, stripe_gather_pipeline_);
+        vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_COMPUTE, blend_layout_, 0, 1, &set, 0, nullptr);
+        vkCmdPushConstants(commands, blend_layout_, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(limits), limits);
+        const std::uint64_t threads = static_cast<std::uint64_t>(stripe_gather_.size()) * 36u;
+        vkCmdDispatch(commands, static_cast<std::uint32_t>((threads + 63u) / 64u), 1u, 1u);
+    }
+    if (!blend_pairs_.empty() &&
+        table(program.pairs, blend_pairs_.data(), blend_pairs_.size() * sizeof(blend_pairs_[0]), "blend pairs")) {
+        const VkDescriptorSet set = set_for(program.validate_set, program.validate_bound,
+                                            {ring, resident_buffer, program.pairs->buffer, blend_verdicts_->buffer});
+        const std::uint32_t limits[3]{
+            static_cast<std::uint32_t>(std::min<std::uint64_t>(ring_bytes - 12u, 0xFFFFFFF0u)),
+            static_cast<std::uint32_t>(std::min<std::uint64_t>(resident_bytes - 12u, 0xFFFFFFF0u)), 0u};
+        vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_COMPUTE, blend_validate_pipeline_);
+        vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_COMPUTE, blend_layout_, 0, 1, &set, 0, nullptr);
+        vkCmdPushConstants(commands, blend_layout_, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(limits), limits);
+        vkCmdDispatch(commands, static_cast<std::uint32_t>(blend_pairs_.size()), 1u, 1u);
+    }
+    barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+    vkCmdPipelineBarrier(commands, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, 0, 1, &barrier, 0,
+                         nullptr, 0, nullptr);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -273,8 +644,6 @@ bool RendererVk::ensure_interp_eval() {
         vk::check(result, "eval pipeline");
     }
     vk::Context& context = vk::Context::get();
-    blend_verdicts_ = context.create_buffer((kFrameValuesElement + 1u) * 16u, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                                           "interpolation verdicts");
     eval_frames_ = context.create_buffer(kEvalFrameBlock * 2u * subframes_.size(), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                                          "interpolation frames");
     if (!blend_verdicts_ || !eval_frames_) {
@@ -708,6 +1077,10 @@ bool RendererVk::record_replay_list(ReplayList& list) {
     replay_constant_sets_.clear();
     bind_efb(nullptr);
     const gpu::Address output = interp_output_address_;
+    // The log before's vertices are gone once its segment came round (a later game frame records there).
+    const bool blend = sequence.vertex_blend && prev_valid_ && (!blend_pairs_.empty() || !stripe_gather_.empty()) &&
+                       run_blend_vertices_.size() == run_log_.draws.size();
+    std::uint64_t blended = 0u;
     for (const ReplayOp& op : run_log_.ops) {
         switch (op.kind) {
         case ReplayKind::Draw: {
@@ -726,6 +1099,11 @@ bool RendererVk::record_replay_list(ReplayList& list) {
                 if (const std::int32_t slot = sequence.ps_slot[static_cast<std::size_t>(call.ps_record)]; slot >= 0) {
                     call.ps_constants = output + layout.ps_offset(static_cast<std::uint32_t>(slot));
                 }
+            }
+            if (blend && run_blend_vertices_[op.index].vertices != 0u) {
+                call.blend_vertices = run_blend_vertices_[op.index].vertices;
+                call.blend_slot = run_blend_vertices_[op.index].slot;
+                ++blended;
             }
             if (!redirect_.empty() && call.texture_table.ptr != 0u) {
                 call.texture_table.ptr = patched_table(list, call.texture_table.ptr);
@@ -790,6 +1168,8 @@ bool RendererVk::record_replay_list(ReplayList& list) {
     vk::check(vkEndCommandBuffer(list.commands), "vkEndCommandBuffer");
     list.sequence = sequence_.serial;
     list.segment = run_log_.segment;
+    list.blend = blend && blended != 0u;
+    list.blend_segment = prev_log_.segment;
     // Stand-ins unused by this log (a copy changed size) go.
     std::erase_if(list.stand_ins, [this](const StandIn& stand_in) {
         return std::none_of(run_log_.copies.begin(), run_log_.copies.end(), [&](const ReplayCopy& copy) {
@@ -812,7 +1192,8 @@ bool RendererVk::present_replay_subframe(const SubframeTime& time, const Affine3
     const std::uint64_t completed = completed_fence_value();
     ReplayList* list = nullptr;
     for (ReplayList& entry : replay_lists_) {
-        if (entry.sequence == sequence_.serial && entry.fence <= completed) {
+        if (entry.sequence == sequence_.serial && entry.fence <= completed &&
+            (!entry.blend || (prev_valid_ && entry.blend_segment == prev_log_.segment))) {
             list = &entry;
             break;
         }
@@ -872,6 +1253,10 @@ bool RendererVk::present_replay_subframe(const SubframeTime& time, const Affine3
     VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     vk::check(vkBeginCommandBuffer(slot.uploads, &begin), "vkBeginCommandBuffer");
+    if (list->blend && !sequence_.validated) {
+        record_blend_validation(slot.uploads);
+        sequence_.validated = true;
+    }
     record_interp_eval(slot.uploads, time, camera_t, camera_prev);
     vk::check(vkEndCommandBuffer(slot.uploads), "vkEndCommandBuffer");
     vk::check(vkBeginCommandBuffer(slot.commands, &begin), "vkBeginCommandBuffer");
@@ -896,6 +1281,9 @@ bool RendererVk::present_replay_subframe(const SubframeTime& time, const Affine3
     program_buffers_[program_index_].fence = fence;
     // The replay reads its log's segment; the present allocates nothing from the rings.
     segments_[run_log_.segment].fence = std::max(segments_[run_log_.segment].fence, fence);
+    if (list->blend) {
+        segments_[list->blend_segment].fence = std::max(segments_[list->blend_segment].fence, fence);
+    }
     if (backbuffer_capture_.buffer && backbuffer_capture_.fence == 0u && !backbuffer_capture_pending_path_.empty()) {
         backbuffer_capture_.fence = fence;
     }
@@ -950,10 +1338,17 @@ void RendererVk::release_replay_resources() noexcept {
         for (VkDescriptorPool pool : segment.overflow) vkDestroyDescriptorPool(device, pool, nullptr);
         segment = Segment{};
     }
-    for (VkPipeline pipeline : {eval_copy_pipeline_, eval_pipeline_}) {
+    for (VkPipeline pipeline : {eval_copy_pipeline_, eval_pipeline_, blend_validate_pipeline_, stripe_gather_pipeline_}) {
         if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
     }
-    eval_copy_pipeline_ = eval_pipeline_ = VK_NULL_HANDLE;
+    eval_copy_pipeline_ = eval_pipeline_ = blend_validate_pipeline_ = stripe_gather_pipeline_ = VK_NULL_HANDLE;
+    if (blend_layout_ != VK_NULL_HANDLE) vkDestroyPipelineLayout(device, blend_layout_, nullptr);
+    if (blend_set_layout_ != VK_NULL_HANDLE) vkDestroyDescriptorSetLayout(device, blend_set_layout_, nullptr);
+    if (blend_pool_ != VK_NULL_HANDLE) vkDestroyDescriptorPool(device, blend_pool_, nullptr);
+    blend_layout_ = VK_NULL_HANDLE;
+    blend_set_layout_ = VK_NULL_HANDLE;
+    blend_pool_ = VK_NULL_HANDLE;
+    stripe_earlier_.reset();
     if (eval_layout_ != VK_NULL_HANDLE) vkDestroyPipelineLayout(device, eval_layout_, nullptr);
     if (eval_set_layout_ != VK_NULL_HANDLE) vkDestroyDescriptorSetLayout(device, eval_set_layout_, nullptr);
     if (eval_pool_ != VK_NULL_HANDLE) vkDestroyDescriptorPool(device, eval_pool_, nullptr);
@@ -963,7 +1358,6 @@ void RendererVk::release_replay_resources() noexcept {
     program_buffers_ = {};
     interp_output_.reset();
     interp_retired_.clear();
-    blend_verdicts_.reset();
     eval_frames_.reset();
     eval_readback_.reset();
     if (replay_efb_.framebuffer != VK_NULL_HANDLE) vkDestroyFramebuffer(device, replay_efb_.framebuffer, nullptr);
