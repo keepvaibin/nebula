@@ -164,6 +164,8 @@ inline constexpr std::uint16_t kNumTexGens = 0x103F;
 inline constexpr std::uint16_t kTexGenBase = 0x1040;        // 0x1040-0x1047
 inline constexpr std::uint16_t kPostTexGenBase = 0x1050;    // dual-tex transforms
 inline constexpr std::uint16_t kViewportBase = 0x101A;      // 6 floats
+// Nebula's draw identity (native game module only; no console register): two words, high then low.
+inline constexpr std::uint16_t kNebulaDrawIdentity = 0x1F00;
 }  // namespace xf
 
 // ---------------------------------------------------------------------------

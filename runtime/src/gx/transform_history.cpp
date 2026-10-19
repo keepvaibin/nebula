@@ -231,6 +231,7 @@ void TransformHistory::begin_scene(std::uint64_t frame, const Affine34* view) {
         }
     }
     matched_ = 0;
+    identified_ = 0;
     scene_open_ = true;
 }
 
@@ -276,6 +277,7 @@ void TransformHistory::build_previous_index() {
 const TransformRecord* TransformHistory::add(const TransformRecord& record) {
     if (!scene_open_) return nullptr;
     current_.push_back(record);
+    identified_ += record.identity != 0u ? 1u : 0u;
     std::int32_t best = -1;
     if (previous_valid_ && !previous_.empty()) {
         float predicted[3]{record.translation[0], record.translation[1],
@@ -292,7 +294,16 @@ const TransformRecord* TransformHistory::add(const TransformRecord& record) {
         const float exact = 1e-3f * (length + 1.0f);
         const float exact_d2 = exact * exact;
         Group& group = table_[find_group(record.signature)];
-        if (group.used) {
+        if (group.used && record.identity != 0u) {
+            // The same draw of the previous scene: its next occurrence in draw order.
+            while (group.first_unclaimed < group.end &&
+                   claimed_[static_cast<std::size_t>(grouped_[group.first_unclaimed])] != 0u) {
+                ++group.first_unclaimed;
+            }
+            if (group.first_unclaimed < group.end) {
+                best = grouped_[group.first_unclaimed];
+            }
+        } else if (group.used) {
             // Draw order mostly repeats: claimed records gather at the front
             // and the match is among the first unclaimed ones. The scan is
             // bounded so large groups (coins, star bits) stay linear.
@@ -333,6 +344,7 @@ TransformHistoryStats TransformHistory::stats() const noexcept {
     s.records = static_cast<std::uint32_t>(current_.size());
     s.matched = matched_;
     s.previous_records = previous_valid_ ? static_cast<std::uint32_t>(previous_.size()) : 0u;
+    s.identified = identified_;
     return s;
 }
 

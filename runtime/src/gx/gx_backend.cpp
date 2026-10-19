@@ -6284,6 +6284,10 @@ void GxBackend::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants
         (static_cast<std::uint64_t>(state_.cp(cp::kArrayBaseBase)) << 32u) ^
             (static_cast<std::uint64_t>(state_.cp(cp::kVcdLo)) << 16u) ^
             state_.cp(cp::kVcdHi));
+    record.identity = state_.draw_identity();
+    if (record.identity != 0u) {
+        record.signature = combine64(record.signature, record.identity);
+    }
     record.palette = (vs_key_.flags & 0x01u) != 0u;
     if (record.palette) {
         // PNMTX0 (XF rows 0-2) stands for the per-vertex palette's object.
@@ -6388,6 +6392,7 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
         motion_scene_ = temporal_scene_ && renderer_.begin_motion_scene();
         scene_camera_captured_ = false;
         history_scene_ = temporal_scene_ || interp_recording_;
+        draw_identities_wanted_.store(history_scene_, std::memory_order_relaxed);
         if (interp_recording_) {
             note_interp_log_completion();
             renderer_.note_replay_scene();
@@ -6445,6 +6450,7 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
                 std::cerr << "[motion] frame=" << renderer_.frame_index()
                           << " records=" << stats.records
                           << " matched=" << stats.matched
+                          << " identified=" << stats.identified
                           << " previous=" << stats.previous_records
                           << " prev-frame-gap="
                           << (transform_history_.current_frame() -

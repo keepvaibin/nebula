@@ -59,6 +59,10 @@ public:
     [[nodiscard]] std::uint32_t xf(std::uint16_t addr) const {
         return xf_[addr & 0x1FFFu];
     }
+    // The native module's draw identity (xf::kNebulaDrawIdentity), 0 when none.
+    [[nodiscard]] std::uint64_t draw_identity() const noexcept {
+        return (std::uint64_t{xf_[xf::kNebulaDrawIdentity]} << 32u) | xf_[xf::kNebulaDrawIdentity + 1u];
+    }
     [[nodiscard]] std::uint32_t bp(std::uint8_t reg) const {
         return bp_[reg];
     }

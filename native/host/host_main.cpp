@@ -1256,6 +1256,12 @@ uint32_t svc_option(void*, uint32_t what) {
 #else
         return 1;
 #endif
+    case NEBULA_OPTION_DRAW_IDENTITIES:
+#if defined(NEBULA_HOST_RENDERER)
+        return galaxy::gx::draw_identities_wanted() ? 1u : 0u;
+#else
+        return 0;
+#endif
     case NEBULA_OPTION_TEST_DUMP_LAYOUTS: {
         static const bool dump = [] {
             const char* value = std::getenv("GALAXY_TEST_DUMP_LAYOUTS");

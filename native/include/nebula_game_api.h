@@ -127,6 +127,7 @@ typedef struct NebulaDisplay {
 enum {
     NEBULA_OPTION_TEXT_SPEED = 1, /* 1 to 3: text steps revealed per frame */
     NEBULA_OPTION_TEST_DUMP_LAYOUTS, /* tests: 1 logs each layout's pane tree once (GALAXY_TEST_DUMP_LAYOUTS) */
+    NEBULA_OPTION_DRAW_IDENTITIES, /* 1 while the renderer matches draws across frames (__NebulaGXDrawIdentity) */
 };
 
 /* Audio interface requests (ai_control). */

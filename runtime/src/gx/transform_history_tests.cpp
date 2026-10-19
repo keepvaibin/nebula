@@ -211,6 +211,43 @@ void test_many_records() {
     check(matched == 3000u, "3000 records match their own previous record");
 }
 
+void test_identity_matching() {
+    TransformHistory h;
+    const Affine34 view = affine_identity();
+    h.begin_scene(1u, &view);
+    TransformRecord a = make(7u, 0.0f, 0.0f, -10.0f);
+    a.identity = 0xA1u;
+    a.signature ^= a.identity;
+    TransformRecord b = make(7u, 100.0f, 0.0f, -10.0f);
+    b.identity = 0xB1u;
+    b.signature ^= b.identity;
+    h.add(a);
+    h.add(b);
+    h.add(b);  // the same draw twice (a reflection): matched in draw order
+    h.end_scene();
+    h.begin_scene(2u, &view);
+    // B moved far past the distance limit and A to where B was: identity decides, not distance.
+    TransformRecord b2 = make(7u, -400.0f, 0.0f, -10.0f);
+    b2.identity = b.identity;
+    b2.signature = b.signature;
+    TransformRecord a2 = make(7u, 100.0f, 0.0f, -10.0f);
+    a2.identity = a.identity;
+    a2.signature = a.signature;
+    const TransformRecord* mb = h.add(b2);
+    const TransformRecord* ma = h.add(a2);
+    const TransformRecord* mb2 = h.add(b2);
+    const TransformRecord* mb3 = h.add(b2);
+    TransformRecord c = make(7u, 0.0f, 0.0f, -10.0f);
+    c.identity = 0xC1u;
+    c.signature ^= c.identity;
+    const TransformRecord* mc = h.add(c);
+    check(mb != nullptr && near(mb->translation[0], 100.0f), "identity B matches B wherever it moved");
+    check(ma != nullptr && near(ma->translation[0], 0.0f), "identity A matches A, not the record at its place");
+    check(mb2 != nullptr && mb2 != mb, "the second draw of B matches the previous second draw");
+    check(mb3 == nullptr, "a third draw of B has no previous draw");
+    check(mc == nullptr, "a new identity matches nothing");
+}
+
 }  // namespace
 
 int main() {
@@ -221,6 +258,7 @@ int main() {
     test_camera_delta();
     test_reset_and_outside_scene();
     test_many_records();
+    test_identity_matching();
     if (failures != 0) {
         std::printf("%d failure(s)\n", failures);
         return 1;

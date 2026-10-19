@@ -183,7 +183,8 @@ void reject_tmem_load(std::uint32_t value, std::uint32_t command) {
         in_u16_range(address, xf::kProjectionBase, 0x1027u) ||
         address == xf::kNumTexGens ||
         in_u16_range(address, xf::kTexGenBase, 0x1048u) ||
-        in_u16_range(address, xf::kPostTexGenBase, 0x1058u);
+        in_u16_range(address, xf::kPostTexGenBase, 0x1058u) ||
+        in_u16_range(address, xf::kNebulaDrawIdentity, static_cast<std::uint16_t>(xf::kNebulaDrawIdentity + 2u));
 }
 
 // True when every address of the transfer is known. Otherwise each unknown address is rejected

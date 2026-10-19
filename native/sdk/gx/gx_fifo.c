@@ -270,8 +270,14 @@ void __NebulaGXPeMarker(int finish, u16 token) {
     }
 }
 
+u8 __NebulaGXDrawIdentities;
+
 void __NebulaGXSceneMarker(u32 marker, const f32 (*view)[4]) {
     if (sLinked) {
+        if (marker == 0) {
+            __NebulaGXDrawIdentities =
+                (u8)(nebula_host()->option(nebula_host()->user, NEBULA_OPTION_DRAW_IDENTITIES) != 0);
+        }
         submit();
         nebula_host()->gx_scene_marker(nebula_host()->user, marker, view != NULL ? &view[0][0] : NULL);
     }

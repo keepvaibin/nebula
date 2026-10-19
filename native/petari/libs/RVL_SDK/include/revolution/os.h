@@ -72,6 +72,8 @@ void __NebulaPoll(void);
 void* __NebulaFromPhysical(u32 paddr);
 // The 3D scene's begin (0, with the camera's world-to-eye matrix) and end (1) in the GX stream (gx_scene_marker).
 void __NebulaGXSceneMarker(u32 marker, const f32 (*view)[4]);
+// Nonzero while the renderer wants draw identities (__NebulaGXDrawIdentity); read at each scene's begin.
+extern u8 __NebulaGXDrawIdentities;
 // The draw-sync token whose callback runs (0 after it): GXPeek reads the EFB as the stream reached it.
 void __NebulaGXPeekToken(u16 token);
 #ifdef __cplusplus

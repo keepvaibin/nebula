@@ -35,6 +35,10 @@ inline constexpr std::uint32_t kNoPaletteOffset = 0xFFFFFFFFu;
 
 struct TransformRecord {
     std::uint64_t signature = 0;
+    // The game's own identity of the draw (model, shape, matrix group), 0 when unknown. A record with one matches the
+    // previous scene's record of the same identity in draw order, wherever it moved; one without falls back to the
+    // signature and nearest eye-space translation. The signature includes it.
+    std::uint64_t identity = 0;
     // Matching fingerprint: eye-space origin of the draw's object (inline
     // position matrix translation, or PNMTX0's for per-vertex palettes).
     float translation[3]{};
@@ -51,6 +55,7 @@ struct TransformHistoryStats {
     std::uint32_t records = 0;
     std::uint32_t matched = 0;
     std::uint32_t previous_records = 0;
+    std::uint32_t identified = 0;  // records carrying the game's draw identity
 };
 
 class TransformHistory {
@@ -118,6 +123,7 @@ private:
     bool current_valid_ = false;
     bool previous_valid_ = false;
     std::uint32_t matched_ = 0;
+    std::uint32_t identified_ = 0;
 };
 
 }  // namespace galaxy::gx
