@@ -44,6 +44,8 @@ std::atomic<std::uintptr_t> pointer_hwnd{0};
 std::atomic<bool> move_size_active{false};
 std::atomic<bool> quit_request{false};
 std::atomic<std::uint64_t> pending_resize_extent{0};
+std::atomic<bool> surface_withdrawn{false};
+std::timed_mutex surface_use;
 std::atomic<bool> follow_window_rearm{false};
 
 }  // namespace host_window

@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <stdexcept>
 #include <string>
@@ -117,13 +118,20 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
         std::fprintf(stderr, "[vulkan] no Vulkan loader\n");
         return false;
     }
-    const bool debug_utils = has_instance_extension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-    if (debug_utils) {
-        instance_extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-    }
     std::vector<const char*> layers;
     if (validation && has_layer("VK_LAYER_KHRONOS_validation")) {
         layers.push_back("VK_LAYER_KHRONOS_validation");
+    }
+    // Object names and the validation messages only when debugging (validation on, or GALAXY_VULKAN_DEBUG_NAMES=1
+    // for capture tools): a name is a driver call per object, and the Android emulator's driver crashes on them.
+    const bool debug_names_wanted = [] {
+        const char* value = std::getenv("GALAXY_VULKAN_DEBUG_NAMES");
+        return value != nullptr && value[0] == '1';
+    }();
+    const bool debug_utils =
+        (!layers.empty() || debug_names_wanted) && has_instance_extension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+    if (debug_utils) {
+        instance_extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     }
     VkApplicationInfo app{VK_STRUCTURE_TYPE_APPLICATION_INFO};
     app.pApplicationName = "Nebula";

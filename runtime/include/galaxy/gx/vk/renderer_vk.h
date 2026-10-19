@@ -34,6 +34,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <span>
 #include <string>
 #include <unordered_map>
@@ -194,7 +195,12 @@ private:
     struct Swapchain {
         VkSwapchainKHR handle = VK_NULL_HANDLE;
         VkFormat format = VK_FORMAT_UNDEFINED;
-        VkExtent2D extent{};
+        VkExtent2D extent{};  // the window as it is displayed
+        // Pre-rotation: on a display turned from its natural orientation (Android), the images keep the natural
+        // orientation (`image`, extent's sides swapped for a quarter turn) and the present pass turns the picture
+        // into them by `transform`, so the compositor shows them as they are.
+        VkExtent2D image{};
+        VkSurfaceTransformFlagBitsKHR transform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
         VkPresentModeKHR mode = VK_PRESENT_MODE_FIFO_KHR;
         std::vector<VkImage> images;
         std::vector<VkImageView> views;
@@ -225,6 +231,10 @@ private:
     bool create_surface_and_device();
     bool create_swapchain();
     void destroy_swapchain() noexcept;
+    // The window's surface withdrawn (host_window::surface_withdrawn) or lost, and made again once it is back.
+    void release_surface() noexcept;
+    [[nodiscard]] bool restore_surface();
+    [[nodiscard]] bool surface_changed() const;
     bool create_layouts();
     bool create_efb_targets(unsigned scale);
     [[nodiscard]] bool efb_scale_fits_memory(unsigned scale) const;
@@ -271,7 +281,10 @@ private:
     VkSurfaceKHR surface_ = VK_NULL_HANDLE;
     Swapchain swapchain_;
     bool swapchain_dirty_ = false;
+    bool surface_lost_ = false;  // the driver reported it: made again from the window at the next frame
     std::uint32_t swap_image_ = UINT32_MAX;  // acquired for this frame's present
+    // host_window::surface_use, from acquiring this frame's image until it is presented.
+    std::unique_lock<std::timed_mutex> surface_lock_;
 
     std::array<Frame, kFramesInFlight> frames_{};
     unsigned frame_slot_ = 0;

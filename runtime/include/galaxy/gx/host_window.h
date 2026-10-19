@@ -10,6 +10,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -47,6 +48,13 @@ extern std::atomic<std::uint64_t> pending_resize_extent;
 // Set by the overlay when Match Output is switched on, so the render thread derives the scale for the current
 // window right away.
 extern std::atomic<bool> follow_window_rearm;
+// The window's drawing surface withdrawn (Android: the activity out of sight, or the fold moving it to the other
+// display). The platform sets surface_withdrawn and then takes surface_use, which the renderer holds from acquiring a
+// swap-chain image until it is presented: once the platform has it, no present uses the surface. The renderer drops
+// its swap chain and surface at its next frame and presents nothing until surface_withdrawn is cleared, then makes
+// both again for the window. Windows never withdraws its window's surface.
+extern std::atomic<bool> surface_withdrawn;
+extern std::timed_mutex surface_use;
 
 // The internal resolution that fills the display.
 [[nodiscard]] unsigned display_efb_scale_cap();

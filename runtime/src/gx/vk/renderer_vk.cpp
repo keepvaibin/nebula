@@ -50,6 +50,38 @@ constexpr vk::RegisterBinding kConversionBindings[] = {
 constexpr std::uint32_t kPushConstantBytes = 64u;
 constexpr VkShaderStageFlags kPushStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 
+// The XFB into the swap chain image (the present pass's blit), turned for a pre-rotated image: `transform` is the
+// image's VkSurfaceTransformFlagBitsKHR (identity, 90, 180 or 270 degrees clockwise). t is the position in the
+// viewport, which already covers the picture's turned rectangle; uv is the picture's point shown there.
+constexpr char kPresentVs[] = R"HLSL(
+cbuffer C : register(b0) { uint transform; };
+struct V { float4 pos:SV_Position; float2 uv:TEXCOORD0; };
+V main(uint id : SV_VertexID) {
+    V o;
+    float2 t = float2(id == 1 ? 2 : 0, id == 2 ? 2 : 0);
+    o.pos = float4(t.x * 2 - 1, 1 - t.y * 2, 0.5, 1);
+    o.uv = transform == 2u ? float2(t.y, 1 - t.x)
+         : transform == 4u ? float2(1 - t.x, 1 - t.y)
+         : transform == 8u ? float2(1 - t.y, t.x)
+         : t;
+    return o;
+}
+)HLSL";
+
+// The picture's rectangle (in the window as displayed, `width` x `height`) in an image turned by `transform`.
+VkRect2D turned_rect(VkSurfaceTransformFlagBitsKHR transform, int width, int height, int left, int top, int w, int h) {
+    switch (transform) {
+    case VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR:
+        return {{height - top - h, left}, {static_cast<std::uint32_t>(h), static_cast<std::uint32_t>(w)}};
+    case VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR:
+        return {{width - left - w, height - top - h}, {static_cast<std::uint32_t>(w), static_cast<std::uint32_t>(h)}};
+    case VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR:
+        return {{top, width - left - w}, {static_cast<std::uint32_t>(h), static_cast<std::uint32_t>(w)}};
+    default:
+        return {{left, top}, {static_cast<std::uint32_t>(w), static_cast<std::uint32_t>(h)}};
+    }
+}
+
 // Descriptor capacity of one frame: a texture table per distinct set of maps, plus the renderer's own sets (the
 // present's, a resolution change's carry), whose immutable samplers count against the pool's samplers.
 constexpr std::uint32_t kFrameSets = 4096u;
@@ -385,8 +417,12 @@ bool RendererVk::create_swapchain() {
     const vk::Context& context = vk::Context::get();
     const VkDevice device = context.device();
     VkSurfaceCapabilitiesKHR caps{};
-    vk::check(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(context.physical_device(), surface_, &caps),
-              "vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
+    const VkResult caps_result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(context.physical_device(), surface_, &caps);
+    if (caps_result == VK_ERROR_SURFACE_LOST_KHR) {
+        surface_lost_ = true;
+        return false;
+    }
+    vk::check(caps_result, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
     VkExtent2D extent = caps.currentExtent;
     if (extent.width == UINT32_MAX) {
         extent = {host_window::backbuffer_width, host_window::backbuffer_height};
@@ -433,25 +469,56 @@ bool RendererVk::create_swapchain() {
     info.minImageCount = images;
     info.imageFormat = format.format;
     info.imageColorSpace = format.colorSpace;
-    info.imageExtent = extent;
     info.imageArrayLayers = 1;
     info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
     info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    info.preTransform = caps.currentTransform;
-    info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    // Pre-rotated to the display's current transform (Android's turned display), so the compositor does no turning
+    // of its own; the image then has the display's natural orientation.
+    VkSurfaceTransformFlagBitsKHR transform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+    switch (caps.currentTransform) {
+    case VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR:
+    case VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR:
+    case VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR:
+        if ((caps.supportedTransforms & caps.currentTransform) != 0u) {
+            transform = caps.currentTransform;
+        }
+        break;
+    default:
+        break;
+    }
+    if (transform == VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR &&
+        (caps.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR) == 0u) {
+        transform = caps.currentTransform;
+    }
+    const bool quarter_turn =
+        transform == VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR || transform == VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR;
+    const VkExtent2D image_extent = quarter_turn ? VkExtent2D{extent.height, extent.width} : extent;
+    info.imageExtent = image_extent;
+    info.preTransform = transform;
+    info.compositeAlpha = (caps.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR) != 0u
+        ? VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR : VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
     info.presentMode = mode;
     info.clipped = VK_TRUE;
     info.oldSwapchain = swapchain_.handle;
     VkSwapchainKHR handle = VK_NULL_HANDLE;
-    vk::check(vkCreateSwapchainKHR(device, &info, nullptr, &handle), "vkCreateSwapchainKHR");
+    const VkResult created = vkCreateSwapchainKHR(device, &info, nullptr, &handle);
+    if (created == VK_ERROR_SURFACE_LOST_KHR || created == VK_ERROR_NATIVE_WINDOW_IN_USE_KHR) {
+        surface_lost_ = true;
+        return false;
+    }
+    vk::check(created, "vkCreateSwapchainKHR");
     destroy_swapchain();
     swapchain_.handle = handle;
     swapchain_.format = format.format;
     swapchain_.extent = extent;
+    swapchain_.image = image_extent;
+    swapchain_.transform = transform;
     swapchain_.mode = mode;
     vkGetSwapchainImagesKHR(device, handle, &count, nullptr);
     swapchain_.images.resize(count);
     vkGetSwapchainImagesKHR(device, handle, &count, swapchain_.images.data());
+    std::fprintf(stderr, "[vulkan] swapchain %ux%u transform=%u images=%u\n", extent.width, extent.height,
+                 static_cast<unsigned>(transform), count);
 
     if (present_pass_ == VK_NULL_HANDLE || swapchain_.format != format.format) {
         if (present_pass_ != VK_NULL_HANDLE) {
@@ -500,8 +567,8 @@ bool RendererVk::create_swapchain() {
         fb_info.renderPass = present_pass_;
         fb_info.attachmentCount = 1;
         fb_info.pAttachments = &view;
-        fb_info.width = extent.width;
-        fb_info.height = extent.height;
+        fb_info.width = image_extent.width;
+        fb_info.height = image_extent.height;
         fb_info.layers = 1;
         VkFramebuffer framebuffer = VK_NULL_HANDLE;
         vk::check(vkCreateFramebuffer(device, &fb_info, nullptr, &framebuffer), "swapchain framebuffer");
@@ -533,6 +600,50 @@ void RendererVk::destroy_swapchain() noexcept {
     swapchain_.rendered.clear();
     swapchain_.images.clear();
     swapchain_.handle = VK_NULL_HANDLE;
+}
+
+// Whether the surface's size or transform now differs from the swap chain's. SUBOPTIMAL is also how a driver may
+// report what the swap chain already handles, which must not remake it every frame.
+bool RendererVk::surface_changed() const {
+    VkSurfaceCapabilitiesKHR caps{};
+    if (vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vk::Context::get().physical_device(), surface_, &caps) != VK_SUCCESS) {
+        return true;
+    }
+    const bool size_known = caps.currentExtent.width != UINT32_MAX;
+    return caps.currentTransform != swapchain_.transform ||
+        (size_known && (caps.currentExtent.width != swapchain_.extent.width ||
+                        caps.currentExtent.height != swapchain_.extent.height));
+}
+
+void RendererVk::release_surface() noexcept {
+    if (surface_ == VK_NULL_HANDLE) {
+        return;
+    }
+    vk::Context& context = vk::Context::get();
+    vkDeviceWaitIdle(context.device());
+    destroy_swapchain();
+    vkDestroySurfaceKHR(context.instance(), surface_, nullptr);
+    surface_ = VK_NULL_HANDLE;
+    std::fprintf(stderr, "[vulkan] window surface released\n");
+}
+
+bool RendererVk::restore_surface() {
+    vk::Context& context = vk::Context::get();
+    const VkSurfaceKHR surface = host_window::create_vulkan_surface(context.instance(), window_);
+    if (surface == VK_NULL_HANDLE) {
+        return false;
+    }
+    VkBool32 presents = VK_FALSE;
+    if (vkGetPhysicalDeviceSurfaceSupportKHR(context.physical_device(), context.queue_family(), surface, &presents) !=
+            VK_SUCCESS ||
+        presents != VK_TRUE) {
+        vkDestroySurfaceKHR(context.instance(), surface, nullptr);
+        return false;
+    }
+    surface_ = surface;
+    swapchain_dirty_ = true;
+    std::fprintf(stderr, "[vulkan] window surface restored\n");
+    return true;
 }
 
 VkShaderModule RendererVk::utility_module(std::string_view hlsl, vk::ShaderStage stage, bool conversion) {
@@ -634,8 +745,8 @@ bool RendererVk::create_utility_pipelines() {
     clear_alpha_pipeline_ = create_utility_pipeline(gx_layout_.efb_pass, utility_layout_, blit_vertex_shader_source(),
                                                     clear_pixel_shader_source(), VK_COLOR_COMPONENT_A_BIT, false,
                                                     false, false);
-    blit_pipeline_ = create_utility_pipeline(present_pass_, utility_layout_, blit_vertex_shader_source(),
-                                             blit_pixel_shader_source(), kAll, false, false, false);
+    blit_pipeline_ = create_utility_pipeline(present_pass_, utility_layout_, kPresentVs, blit_pixel_shader_source(),
+                                             kAll, false, false, false);
     ui_solid_pipeline_ = create_utility_pipeline(present_pass_, utility_layout_, ui_solid_quad_vertex_shader_source(),
                                                  ui_solid_quad_pixel_shader_source(), kAll, true, true, false);
     ui_textured_pipeline_ = create_utility_pipeline(
@@ -885,8 +996,12 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
         info.pSwapchains = &swapchain_.handle;
         info.pImageIndices = &swap_image_;
         const VkResult result = vkQueuePresentKHR(context.queue(), &info);
-        if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+        surface_lock_ = {};
+        if (result == VK_ERROR_OUT_OF_DATE_KHR || (result == VK_SUBOPTIMAL_KHR && surface_changed())) {
             swapchain_dirty_ = true;
+        } else if (result == VK_ERROR_SURFACE_LOST_KHR) {
+            swapchain_dirty_ = true;
+            surface_lost_ = true;
         } else if (result != VK_SUCCESS) {
             vk::check(result, "vkQueuePresentKHR");
         }
@@ -918,6 +1033,7 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
             host_window::show_window(window_);
         }
     }
+    surface_lock_ = {};  // an image acquired but not presented
     swap_image_ = UINT32_MAX;
     ++frame_index_;
     return fence;
@@ -1018,6 +1134,15 @@ void RendererVk::refresh_display_rate() {
 
 // Swapchain changes (window size, VSYNC) and Match Output's internal resolution, between frames.
 void RendererVk::follow_window_and_resize() {
+    // The window's surface: dropped while withdrawn or after the driver lost it, made again once it is back.
+    if (surface_lost_ || host_window::surface_withdrawn.load(std::memory_order_acquire)) {
+        release_surface();
+        surface_lost_ = false;
+    }
+    if (surface_ == VK_NULL_HANDLE &&
+        (host_window::surface_withdrawn.load(std::memory_order_acquire) || !restore_surface())) {
+        return;
+    }
     const std::uint64_t extent = host_window::pending_resize_extent.exchange(0u, std::memory_order_acq_rel);
     if (extent != 0u) {
         const auto width = static_cast<std::uint32_t>(extent >> 32u);
@@ -1094,18 +1219,26 @@ bool RendererVk::present(const XfbTexture* source, bool capture_backbuffer) {
     end_efb_pass();
     vk::Context& context = vk::Context::get();
     Frame& frame = frames_[frame_slot_];
-    if (swapchain_dirty_ || swapchain_.handle == VK_NULL_HANDLE) {
+    surface_lock_ = std::unique_lock<std::timed_mutex>(host_window::surface_use);
+    if (swapchain_dirty_ || swapchain_.handle == VK_NULL_HANDLE ||
+        host_window::surface_withdrawn.load(std::memory_order_acquire)) {
+        surface_lock_ = {};
         return false;  // remade at the next frame boundary
     }
     std::uint32_t image = 0;
-    VkResult result = vkAcquireNextImageKHR(context.device(), swapchain_.handle, UINT64_MAX, frame.acquired,
+    // A second at most: an image the presentation engine never returns (a surface going away) skips the frame.
+    constexpr std::uint64_t kAcquireTimeoutNs = 1'000'000'000ull;
+    VkResult result = vkAcquireNextImageKHR(context.device(), swapchain_.handle, kAcquireTimeoutNs, frame.acquired,
                                             VK_NULL_HANDLE, &image);
-    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_ERROR_SURFACE_LOST_KHR || result == VK_TIMEOUT ||
+        result == VK_NOT_READY) {
         swapchain_dirty_ = true;
+        surface_lost_ = result == VK_ERROR_SURFACE_LOST_KHR;
+        surface_lock_ = {};
         return false;
     }
     if (result == VK_SUBOPTIMAL_KHR) {
-        swapchain_dirty_ = true;  // presented now, remade after
+        swapchain_dirty_ = swapchain_dirty_ || surface_changed();  // presented now, remade after
     } else if (result != VK_SUCCESS) {
         vk::check(result, "vkAcquireNextImageKHR");
     }
@@ -1151,12 +1284,12 @@ bool RendererVk::present(const XfbTexture* source, bool capture_backbuffer) {
     VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
     begin.renderPass = present_pass_;
     begin.framebuffer = swapchain_.framebuffers[image];
-    begin.renderArea = {{0, 0}, swapchain_.extent};
+    begin.renderArea = {{0, 0}, swapchain_.image};
     begin.clearValueCount = 1;
     begin.pClearValues = &clear;
     vkCmdBeginRenderPass(commands, &begin, VK_SUBPASS_CONTENTS_INLINE);
 
-    // The XFB, aspect-fitted (D3D-style viewport: y flipped by a negative height).
+    // The XFB, aspect-fitted (D3D-style viewport: y flipped by a negative height), turned into a pre-rotated image.
     const VkDescriptorSet set = allocate_frame_set(utility_set_layout_);
     const VkDescriptorImageInfo image_info{VK_NULL_HANDLE, xfb.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
     VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
@@ -1166,25 +1299,32 @@ bool RendererVk::present(const XfbTexture* source, bool capture_backbuffer) {
     write.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
     write.pImageInfo = &image_info;
     vkUpdateDescriptorSets(context.device(), 1, &write, 0, nullptr);
-    const VkViewport viewport{static_cast<float>(content.left), static_cast<float>(content.top + content.height),
-                              static_cast<float>(content.width), -static_cast<float>(content.height), 0.0f, 1.0f};
-    const VkRect2D scissor{{content.left, content.top},
-                           {static_cast<std::uint32_t>(content.width), static_cast<std::uint32_t>(content.height)}};
+    const VkRect2D scissor =
+        turned_rect(swapchain_.transform, bb_w, bb_h, content.left, content.top, content.width, content.height);
+    const VkViewport viewport{static_cast<float>(scissor.offset.x),
+                              static_cast<float>(scissor.offset.y) + static_cast<float>(scissor.extent.height),
+                              static_cast<float>(scissor.extent.width), -static_cast<float>(scissor.extent.height),
+                              0.0f, 1.0f};
     vkCmdSetViewport(commands, 0, 1, &viewport);
     vkCmdSetScissor(commands, 0, 1, &scissor);
     vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, blit_pipeline_);
     vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, utility_layout_, 0, 1, &set, 0, nullptr);
+    const std::uint32_t transform = static_cast<std::uint32_t>(swapchain_.transform);
+    vkCmdPushConstants(commands, utility_layout_, kPushStages, 0, sizeof(transform), &transform);
     vkCmdDraw(commands, 3, 1, 0, 0);
 
     // The overlays are authored in backbuffer pixels over the whole surface.
     const VkViewport full{0.0f, static_cast<float>(bb_h), static_cast<float>(bb_w), -static_cast<float>(bb_h), 0.0f,
                           1.0f};
-    const VkRect2D full_scissor{{0, 0}, swapchain_.extent};
+    const VkRect2D full_scissor{{0, 0}, swapchain_.image};
     vkCmdSetViewport(commands, 0, 1, &full);
     vkCmdSetScissor(commands, 0, 1, &full_scissor);
-    host_window::draw_native_settings_overlay(*this);
-    host_window::draw_native_settings_hint(*this);
-    host_window::draw_home_menu(*this);
+    // The overlays are drawn unturned (Windows); turned images belong to platforms whose overlays are their own screens.
+    if (swapchain_.transform == VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR) {
+        host_window::draw_native_settings_overlay(*this);
+        host_window::draw_native_settings_hint(*this);
+        host_window::draw_home_menu(*this);
+    }
     vkCmdEndRenderPass(commands);
     reset_gx_bindings();
 
@@ -1207,7 +1347,7 @@ bool RendererVk::present(const XfbTexture* source, bool capture_backbuffer) {
                                  VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
             VkBufferImageCopy region{};
             region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-            region.imageExtent = {swapchain_.extent.width, swapchain_.extent.height, 1};
+            region.imageExtent = {swapchain_.image.width, swapchain_.image.height, 1};
             vkCmdCopyImageToBuffer(commands, swapchain_.images[image], VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                                    backbuffer_capture_.buffer->buffer, 1, &region);
             barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
@@ -1218,8 +1358,8 @@ bool RendererVk::present(const XfbTexture* source, bool capture_backbuffer) {
                                  nullptr, 0, nullptr, 1, &barrier);
             backbuffer_capture_.fence = 0u;
             backbuffer_capture_pending_path_ = backbuffer_capture_path_;
-            backbuffer_capture_width_ = swapchain_.extent.width;
-            backbuffer_capture_height_ = swapchain_.extent.height;
+            backbuffer_capture_width_ = swapchain_.image.width;
+            backbuffer_capture_height_ = swapchain_.image.height;
             backbuffer_capture_bgra_ = swapchain_.format == VK_FORMAT_B8G8R8A8_UNORM;
             return true;
         }
