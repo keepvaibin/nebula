@@ -89,8 +89,11 @@ void __NebulaGXSceneMarker(u32 marker, const f32 (*view)[4]);
 #define OSPhysicalToUncached(paddr) ((void*)((u32)(paddr) + OS_BASE_UNCACHED))
 #endif
 
+#ifndef TARGET_PC
+// Console address tests; host addresses carry no MEM1/MEM2 bits (native/tools/console_address_audit.py).
 #define OSIsMEM1Region(addr) (((u32)(addr)&0x30000000) == 0x00000000)
 #define OSIsMEM2Region(addr) (((u32)(addr)&0x30000000) == 0x10000000)
+#endif
 
 #ifdef TARGET_PC
 #define OSRoundUp32B(x) (((uintptr_t)(x) + 32 - 1) & ~(uintptr_t)(32 - 1))

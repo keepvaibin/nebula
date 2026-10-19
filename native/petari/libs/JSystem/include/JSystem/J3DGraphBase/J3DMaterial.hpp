@@ -53,7 +53,14 @@ public:
     s32 newSingleSharedDisplayList(u32);
 
     inline J3DMaterialAnm* getMaterialAnm() {
+#ifdef TARGET_PC
+        // The console's test (a cached MEM1/MEM2 address, below 0xC0000000) rejects every host heap address above
+        // 3 GiB, which turned off every material animation (BTP, BRK, BTK, BPK). The field only ever holds NULL or a
+        // MaterialAnmBuffer entry.
+        return mMaterialAnm;
+#else
         return reinterpret_cast< uintptr_t >(mMaterialAnm) < 0xC0000000 ? mMaterialAnm : nullptr;
+#endif
     }
 
     bool isDrawModeOpaTexEdge() {
