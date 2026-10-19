@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 9u
+#define NEBULA_GAME_API_VERSION 10u
 
 /* A physical range of the game's memory and where it is in the host process: what the GPU's addresses resolve to. */
 typedef struct NebulaGameMemoryRegion {
@@ -267,6 +267,8 @@ typedef struct NebulaHostServices {
     /* A light of the game (NEBULA_LIGHT_*): `id` names it across frames (0: none), `values` as the kind lists. Called on
        the simulation thread. */
     void (*game_light)(void* user, uint32_t kind, uint32_t id, const float* values);
+    /* The stage being played (MR::getCurrentStageName), before each 3D scene's begin marker. */
+    void (*game_stage)(void* user, const char* name);
 } NebulaHostServices;
 
 enum {

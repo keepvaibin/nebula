@@ -432,6 +432,7 @@ void GameScene::draw3D() const {
 
     f32 sceneCamera[4][4];
     MotionSignal::sceneCamera(sceneCamera);
+    __NebulaGameStage(MR::getCurrentStageName());
     __NebulaGXSceneMarker(NEBULA_SCENE_3D_BEGIN, sceneCamera);
     MotionSignal::sceneBegin();
     GameLightSignal::frame();

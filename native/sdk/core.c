@@ -59,6 +59,10 @@ void __NebulaGameLight(u32 kind, u32 id, const f32* values) {
     sHost->game_light(sHost->user, kind, id, values);
 }
 
+void __NebulaGameStage(const char* name) {
+    sHost->game_stage(sHost->user, name);
+}
+
 NEBULA_GAME_API int nebula_game_memory_regions(NebulaGameMemoryRegion* out, int max) {
     NebulaMemoryRegion regions[4];
     int count = 0;

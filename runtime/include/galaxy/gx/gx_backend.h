@@ -239,6 +239,8 @@ public:
         const std::shared_ptr<PointerDepthCapture>& capture, std::size_t fifo_offset);
     // Scene boundaries one render chunk carries (3D and 2D, two frames).
     static constexpr std::size_t kFifoMarkersPerChunk = 8u;
+    // A stage name as the game reports it (MR::getCurrentStageName), NUL-terminated.
+    using SceneStage = std::array<char, 48>;
     // Simulation thread: the next render_frame submission handles `marker`
     // when its parser reaches `fifo_offset` bytes into the submitted FIFO.
     void attach_fifo_marker(FifoMarker marker, std::size_t fifo_offset) noexcept {
@@ -257,6 +259,7 @@ public:
             } else {
                 producer_fifo_marker_sky_up_mask_ &= static_cast<std::uint8_t>(~(1u << index));
             }
+            producer_fifo_marker_stages_[index] = producer_scene_stage_;
         }
         producer_scene_view_valid_ = false;
     }
@@ -276,11 +279,16 @@ public:
     [[nodiscard]] std::int64_t scene_2d_begin_offset() const noexcept { return scene_2d_begin_offset_; }
     [[nodiscard]] std::int64_t scene_2d_end_offset() const noexcept { return scene_2d_end_offset_; }
     [[nodiscard]] bool scene_2d_open() const noexcept { return scene_2d_open_; }
-    // Simulation thread: the game camera for the next SceneBegin marker, and the player's up in the
-    // world (null when unknown), kept in that camera's eye space for the enhanced sky.
-    void attach_scene_view(const float view[12], const float* up = nullptr) noexcept {
+    // Simulation thread: the game camera for the next SceneBegin marker, the player's up in the world
+    // (null when unknown), kept in that camera's eye space for the enhanced sky, and the stage being
+    // played (null: unknown, an empty name in the marker).
+    void attach_scene_view(const float view[12], const float* up = nullptr, const char* stage = nullptr) noexcept {
         for (unsigned i = 0; i < 12u; ++i) producer_scene_view_[i] = view[i];
         producer_scene_view_valid_ = true;
+        producer_scene_stage_ = {};
+        for (std::size_t i = 0; stage != nullptr && i + 1u < producer_scene_stage_.size() && stage[i] != 0; ++i) {
+            producer_scene_stage_[i] = stage[i];
+        }
         producer_scene_sky_up_known_ = false;
         if (up != nullptr) {
             const float eye[3] = {view[0] * up[0] + view[1] * up[1] + view[2] * up[2],
@@ -620,6 +628,8 @@ private:
         // The player's up per SceneBegin marker (GxVsConstants::sky_up); bit i of the mask marks it known.
         std::array<std::uint32_t, kFifoMarkersPerChunk> fifo_marker_sky_up{};
         std::uint8_t fifo_marker_sky_up_mask = 0;
+        // The stage per SceneBegin marker (empty when the game did not say).
+        std::array<SceneStage, kFifoMarkersPerChunk> fifo_marker_stages{};
         // JPA stripe particles in this chunk's FIFO (attach_stripe_particle).
         std::vector<StripeParticleMark> stripe_particles;
         std::uint64_t dependency_scan_ns = 0;
@@ -702,6 +712,11 @@ private:
     bool producer_scene_view_valid_ = false;
     std::uint32_t producer_scene_sky_up_ = 0u;
     bool producer_scene_sky_up_known_ = false;
+    std::array<SceneStage, kFifoMarkersPerChunk> producer_fifo_marker_stages_{};
+    SceneStage producer_scene_stage_{};
+    // Render thread: the stage the game last reported (native builds), and whether it ever did.
+    SceneStage scene_stage_{};
+    bool scene_stage_known_ = false;
     // Render thread: the scene's sky up changed; the next draw uploads its VS constants.
     bool sky_up_dirty_ = false;
     std::vector<StripeParticleMark> producer_stripe_particles_;
@@ -1396,9 +1411,11 @@ private:
     void take_attached_pointer_depth_capture(FrameChunk& chunk, std::size_t fifo_size);
     void record_pointer_depth_capture_in_frame(FrameChunk& chunk);
     void take_attached_fifo_markers(FrameChunk& chunk, std::size_t fifo_size) noexcept;
-    // `sky_up`: the scene's GxVsConstants::sky_up when `sky_up_known` (SceneBegin).
+    // `sky_up`: the scene's GxVsConstants::sky_up when `sky_up_known`; `stage` the game's stage (SceneBegin).
     void on_fifo_marker(FifoMarker marker, const std::array<float, 12>* view = nullptr, std::uint32_t sky_up = 0u,
-                        bool sky_up_known = false);
+                        bool sky_up_known = false, const SceneStage* stage = nullptr);
+    // A stage was loaded (another sky and other lights): the tracer's stage state starts over.
+    void begin_rt_stage();
     // Temporal scene: jitter, palette base, transform record and motion
     // fields of a VS constant upload (`upload` is write-combined memory).
     void write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants& upload);

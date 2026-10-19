@@ -6710,11 +6710,8 @@ void GxBackend::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint
             constexpr std::uint32_t kStageObjectEvents = 256u;
             rt_scene_cut_ = true;
             rt_cut_objects_ = std::max(rt_cut_objects_, b);
-            if (b >= kStageObjectEvents) {
-                renderer_.rt_reset_sky();
-                rt_fake_shadow_cache_.clear();
-                rt_world_held_ = {};
-                note_rt_stage();
+            if (b >= kStageObjectEvents && !scene_stage_known_) {
+                begin_rt_stage();
             }
         }
         if (!history_scene_) {
@@ -6899,6 +6896,7 @@ void GxBackend::take_attached_fifo_markers(FrameChunk& chunk, std::size_t fifo_s
                 chunk.fifo_marker_sky_up[index] = producer_fifo_marker_sky_up_[i];
                 chunk.fifo_marker_sky_up_mask |= static_cast<std::uint8_t>(1u << index);
             }
+            chunk.fifo_marker_stages[index] = producer_fifo_marker_stages_[i];
         }
     }
     producer_fifo_marker_count_ = 0;
@@ -7156,8 +7154,15 @@ std::uint16_t GxBackend::rt_material_of(std::uint32_t map_mask,
     return metal_helper != 0u ? metal_helper : lookup;
 }
 
-// The loaded stage (GameSystem's scene controller holds its name inline at +0x20) and its row of the
-// sun table.
+void GxBackend::begin_rt_stage() {
+    renderer_.rt_reset_sky();
+    rt_fake_shadow_cache_.clear();
+    rt_world_held_ = {};
+    note_rt_stage();
+}
+
+// The loaded stage and its row of the sun table: the game's own report (native builds), else the recompiled game's
+// memory (GameSystem's scene controller holds the name inline at +0x20).
 void GxBackend::note_rt_stage() {
     constexpr std::uint32_t kGameSystemPointer = 0x806A1228u;
     const auto word = [this](std::uint32_t address, std::uint32_t& out) {
@@ -7171,9 +7176,11 @@ void GxBackend::note_rt_stage() {
     };
     std::uint32_t system = 0u;
     std::uint32_t controller = 0u;
-    char name[33]{};
-    if (word(kGameSystemPointer, system) && system >= 0x80000000u && word(system + 0x24u, controller) &&
-        controller >= 0x80000000u) {
+    char name[sizeof(SceneStage)]{};
+    if (scene_stage_known_) {
+        std::memcpy(name, scene_stage_.data(), sizeof(name));
+    } else if (word(kGameSystemPointer, system) && system >= 0x80000000u && word(system + 0x24u, controller) &&
+               controller >= 0x80000000u) {
         for (std::uint32_t i = 0; i + 1u < sizeof(name); ++i) {
             const std::byte* c = resolve_guest_const_bytes(frame_memory_, controller + 0x20u + i, 1u);
             const auto v = c != nullptr ? std::to_integer<unsigned char>(*c) : 0u;
@@ -8105,7 +8112,7 @@ void GxBackend::trace_rt_scene() {
 }
 
 void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* view, std::uint32_t sky_up,
-                               bool sky_up_known) {
+                               bool sky_up_known, const SceneStage* stage) {
     flush_pending_draw_batch();
     {
         static const std::uint64_t trace_from = read_env_u64("GALAXY_TRACE_DRAW_ORDER", 0u);
@@ -8124,6 +8131,12 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
     if (marker == FifoMarker::SceneBegin) {
         ao_view_set_ = false;
         ao_scene_applied_ = !ambient_occlusion_;
+        // The game names its stage (native builds): a new one starts the tracer's stage state over.
+        if (stage != nullptr && (*stage)[0] != 0 && (!scene_stage_known_ || *stage != scene_stage_)) {
+            scene_stage_ = *stage;
+            scene_stage_known_ = true;
+            begin_rt_stage();
+        }
         // The enhanced sky's up for the scene's draws (the view's up without a player).
         const std::uint32_t known = sky_up_known ? 1u : 0u;
         if (cpu_vs_constants_.sky_up != sky_up || cpu_vs_constants_.sky_up_known != known) {
@@ -11770,7 +11783,8 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                                     (chunk.fifo_marker_view_mask & (1u << index)) != 0u
                                 ? &chunk.fifo_marker_views[index]
                                 : nullptr,
-                            sky_up ? chunk.fifo_marker_sky_up[index] : 0u, sky_up);
+                            sky_up ? chunk.fifo_marker_sky_up[index] : 0u, sky_up,
+                            split.view >= 0 ? &chunk.fifo_marker_stages[index] : nullptr);
                     }
                 }
                 if (consumed < stream.size()) {

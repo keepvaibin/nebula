@@ -1179,13 +1179,23 @@ void svc_gx_pe_marker(void*, int finish, uint16_t token) {
 #endif
 }
 
+// The stage the game reports before each 3D scene (game_stage); the scene's begin marker carries it.
+std::string gSceneStage;
+
+void svc_game_stage(void*, const char* name) {
+    if (name != nullptr && gSceneStage != name) {
+        gSceneStage = name;
+    }
+}
+
 void svc_gx_scene_marker(void*, uint32_t marker, const float* view) {
     if (marker == NEBULA_SCENE_3D_BEGIN) {
         gSceneBegins.fetch_add(1, std::memory_order_relaxed);
     }
 #if defined(NEBULA_HOST_RENDERER)
     if (marker == NEBULA_SCENE_3D_BEGIN && view != nullptr) {
-        galaxy::gx::attach_scene_view(view, view[15] != 0.0f ? view + 12 : nullptr);
+        galaxy::gx::attach_scene_view(view, view[15] != 0.0f ? view + 12 : nullptr,
+                                      gSceneStage.empty() ? nullptr : gSceneStage.c_str());
     }
     static constexpr galaxy::gx::FifoMarker kMarkers[] = {
         galaxy::gx::FifoMarker::SceneBegin, galaxy::gx::FifoMarker::SceneEnd,
@@ -2069,6 +2079,7 @@ int main(int argc, char** argv) {
     services.scene_surround = svc_scene_surround;
     services.option = svc_option;
     services.game_light = svc_game_light;
+    services.game_stage = svc_game_stage;
 #if defined(NEBULA_HOST_RENDERER)
     // Every aspect follows the output's shape through the live aspect path, as v1.0.1 sets it; explicit aspect
     // variables (tests) are kept. Before the renderer starts: it reads the choice once.
