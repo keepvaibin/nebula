@@ -43,6 +43,7 @@
 #include "galaxy/gx_d3d12.h"
 
 #include <array>
+#include <bit>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -622,6 +623,10 @@ public:
 
     [[nodiscard]] ID3D12Device* device() const { return device_.Get(); }
     [[nodiscard]] unsigned efb_scale() const noexcept { return efb_scale_; }
+    // The EFB's samples per pixel as a power of two (MSAA; 0 for one sample), which its draws' pipelines share.
+    [[nodiscard]] std::uint8_t efb_samples_log2() const noexcept {
+        return static_cast<std::uint8_t>(std::countr_zero(efb_msaa_.samples));
+    }
     [[nodiscard]] ID3D12GraphicsCommandList* command_list() const {
         return command_list_.Get();
     }
@@ -744,6 +749,20 @@ private:
         unsigned row_pitch);
     bool create_efb_targets(unsigned efb_scale);
     void carry_over_efb_contents();
+    // The MSAA sample count the settings ask for and the device has for the EFB's formats: 1 without MSAA, and
+    // with a temporal upscaler or ray tracing, which read the EFB's single-sample targets directly.
+    [[nodiscard]] unsigned wanted_msaa_samples() const;
+    // The most samples per pixel the device has for both EFB formats (1: none), asked once.
+    [[nodiscard]] unsigned msaa_max_samples() const;
+    // Before the EFB's single-sample color (and `depth`) are read: the multisampled targets drawn since the last
+    // resolve, resolved into them.
+    void resolve_efb(bool depth);
+    // The resolve itself into `list` (a separately submitted list resolves what was submitted before it). The depth
+    // resolve leaves `list` with the blit root signature and the single-sample depth bound.
+    void record_efb_resolve(ID3D12GraphicsCommandList* list, bool color, bool depth);
+    // resolve_efb for a reader recording into `list`: another list resolves (what the frame's list submitted before
+    // it) without clearing the frame's pending resolve, which can hold draws not submitted yet.
+    void resolve_efb_on(ID3D12GraphicsCommandList* list, bool color, bool depth);
     [[nodiscard]] unsigned output_efb_scale_for_window() const;
     [[nodiscard]] bool ensure_motion_target();
     [[nodiscard]] bool record_temporal_upscale(unsigned output_scale);
@@ -853,9 +872,30 @@ private:
     D3D12_CPU_DESCRIPTOR_HANDLE efb_rtv_{};
     D3D12_CPU_DESCRIPTOR_HANDLE efb_dsv_{};
     // The inactive EFB target set (the output-resolution one between frames).
+    // MSAA: an EFB's draws and clears go to these multisampled targets (the set's rtv and dsv name them); its color
+    // and depth, which copies, peeks and readbacks read, are their resolves (resolve_efb).
+    struct EfbMsaa {
+        Microsoft::WRL::ComPtr<ID3D12Resource> color;
+        Microsoft::WRL::ComPtr<ID3D12Resource> depth;
+        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtv_heap;
+        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsv_heap;  // the multisampled depth, then the resolve's target
+        std::optional<DescriptorRing::Table> depth_srv;  // the multisampled depth, read by the depth resolve
+        unsigned samples = 1;
+        bool color_dirty = false;
+        bool depth_dirty = false;
+    };
+    // The set's multisampled targets for `samples` (none for one), with `rtv` and `dsv` pointed at them.
+    bool create_efb_msaa(EfbMsaa& msaa, ID3D12Resource* depth, unsigned scale, unsigned samples,
+                         D3D12_CPU_DESCRIPTOR_HANDLE& rtv, D3D12_CPU_DESCRIPTOR_HANDLE& dsv);
+    void write_msaa_depth_view(EfbMsaa& msaa);
+    [[nodiscard]] ID3D12PipelineState* clear_pipeline(bool color);
+    EfbMsaa efb_msaa_;
+    mutable unsigned msaa_max_samples_ = 0u;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> depth_resolve_pso_;
     struct EfbTargetSet {
         Microsoft::WRL::ComPtr<ID3D12Resource> color;
         Microsoft::WRL::ComPtr<ID3D12Resource> depth;
+        EfbMsaa msaa;
         unsigned scale = 0;
         D3D12_CPU_DESCRIPTOR_HANDLE rtv{};
         D3D12_CPU_DESCRIPTOR_HANDLE dsv{};
@@ -1011,7 +1051,7 @@ private:
     // upscaler's output, as the live output EFB).
     bool create_efb_set(EfbTargetSet& set, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& rtv_heap,
                         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& dsv_heap, unsigned scale,
-                        bool persistent_views = true, bool unordered_access = false);
+                        bool persistent_views = true, bool unordered_access = false, unsigned samples = 1u);
     void write_efb_set_views(EfbTargetSet& set, const DescriptorRing::Table& table);
     void swap_efb_with(EfbTargetSet& other);
     bool replay_playing_ = false;
@@ -1610,10 +1650,13 @@ private:
     std::optional<DescriptorRing::Table> conv_efb_source_table_;
     D3D12_GPU_DESCRIPTOR_HANDLE conv_efb_color_srv_{};
     D3D12_GPU_DESCRIPTOR_HANDLE conv_efb_depth_srv_{};
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> clear_rgb_pipeline_;
+    // The masked EFB clears' pipelines (color / alpha only), per EFB sample count (log2), made at first use.
+    Microsoft::WRL::ComPtr<ID3DBlob> clear_vs_;
+    Microsoft::WRL::ComPtr<ID3DBlob> clear_ps_;
+    std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, 4> clear_rgb_pipelines_;
+    std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, 4> clear_alpha_pipelines_;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> motion_debug_root_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> motion_debug_pipeline_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> clear_alpha_pipeline_;
 
     // Synchronous GXPeekARGB/GXPeekZ bridge. Peeks execute on the render
     // thread through a tiny 1x1 conversion target and readback buffer, so

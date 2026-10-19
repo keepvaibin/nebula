@@ -204,11 +204,11 @@ int main() {
                      "undo restores the HUD resolution");
 
     // Graphics page with no upscaler and the native quality mode: 0 heading, 1 upscaling, 2 quality
-    // mode, 3 internal resolution, 4 sharpening, 5 anti-aliasing, 6 heading, 7 interpolation, 8 frame
-    // rate limit, 9 heading, 10 texture filtering, 11 mipmaps, 12 lighting.
+    // mode, 3 internal resolution, 4 sharpening, 5 anti-aliasing, 6 MSAA, 7 heading, 8 interpolation,
+    // 9 frame rate limit, 10 heading, 11 texture filtering, 12 mipmaps, 13 lighting.
     passed &= expect(key(VK_TAB), "Tab enters the graphics page");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
-    passed &= expect(snapshot.tab == 1u && snapshot.row == 1u && snapshot.row_count == 13u,
+    passed &= expect(snapshot.tab == 1u && snapshot.row == 1u && snapshot.row_count == 14u,
                      "graphics page: resolution, frame rate and detail sections");
     passed &= expect(key(VK_DOWN) && key(VK_DOWN), "down moves to the internal resolution");
     passed &= expect(key(VK_LEFT), "left lowers the internal resolution in the draft");
@@ -233,8 +233,8 @@ int main() {
         !galaxy::gx::native_settings_draft_for_tests().internal_follow_window &&
             galaxy::gx::native_settings_overlay_snapshot().pending_changes == 0u,
         "undo returns the draft to the live settings");
-    for (int i = 0; i < 4; ++i) passed &= expect(key(VK_DOWN), "down moves to the frame rate limit");
-    passed &= expect(galaxy::gx::native_settings_overlay_snapshot().row == 8u, "the heading is skipped");
+    for (int i = 0; i < 5; ++i) passed &= expect(key(VK_DOWN), "down moves to the frame rate limit");
+    passed &= expect(galaxy::gx::native_settings_overlay_snapshot().row == 9u, "the heading is skipped");
     passed &= expect(key(VK_LEFT), "left lowers the frame rate limit in the draft");
     passed &= expect(
         galaxy::gx::native_settings_draft_for_tests().max_fps == 30.0f &&
@@ -266,7 +266,7 @@ int main() {
     galaxy::gx::set_render_config(render);
     passed &= expect(reopen() && page_start(), "reopening takes the new live settings");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
-    passed &= expect(snapshot.tab == 1u && snapshot.row_count == 14u,
+    passed &= expect(snapshot.tab == 1u && snapshot.row_count == 15u,
                      "with FSR 1 and SMAA the page also has the SMAA quality row");
     passed &= expect(key(VK_LEFT), "left lowers the upscaler");
     passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "quality mode row is adjustable");
@@ -275,18 +275,20 @@ int main() {
     passed &= expect(key(VK_DOWN) && key(VK_LEFT), "anti-aliasing row is adjustable");
     passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "SMAA quality row is adjustable");
     passed &= expect(key(VK_RIGHT), "quality stops at its last value");
+    passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "MSAA row is adjustable");
     for (int i = 0; i < 3; ++i) passed &= expect(key(VK_DOWN), "down moves to texture filtering");
     passed &= expect(key(VK_RIGHT), "texture filtering row is adjustable");
     passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "mipmap row toggles");
     passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "lighting row toggles");
     passed &= expect(
         galaxy::gx::get_render_config().aa_mode == 2u &&
-            galaxy::gx::native_settings_overlay_snapshot().pending_changes == 8u,
+            galaxy::gx::native_settings_overlay_snapshot().pending_changes == 9u,
         "every graphics change waits in the draft");
     passed &= expect(key(VK_RETURN), "Enter applies the graphics changes");
     const galaxy::gx::RenderConfig applied = galaxy::gx::get_render_config();
     passed &= expect(applied.aa_mode == 1u, "AUTO steps down to SMAA");
     passed &= expect(applied.smaa_quality == 3u, "HIGH steps up to ULTRA and stops there");
+    passed &= expect(applied.msaa_samples == 2u, "MSAA steps from off to 2x");
     passed &= expect(applied.upscaler == 0u, "FSR 1 steps down to off");
     passed &= expect(applied.spatial_quality == 1u && applied.temporal_quality == 1u,
                      "with no upscaler the quality mode steps NATIVE up to QUALITY; FSR 3/DLSS keep theirs");

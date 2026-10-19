@@ -3,6 +3,7 @@
 #include "galaxy/platform_paths.h"
 
 #include <algorithm>
+#include <bit>
 #include <atomic>
 #include <cerrno>
 #include <cctype>
@@ -373,7 +374,7 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.aspect_mode = std::min(cfg.aspect_mode, kAspectModeCount - 1u);
     cfg.monitor.back() = '\0';
     cfg.gpu.back() = '\0';
-    cfg.msaa_samples = 1;
+    cfg.msaa_samples = std::bit_floor(std::clamp(cfg.msaa_samples, 1u, 8u));
     cfg.taa_enabled = false;
     cfg.rt_shadow_quality = 0;
     cfg.rt_quality = std::min(cfg.rt_quality, 2u);
@@ -700,6 +701,7 @@ bool save_render_config_to_file() {
              << (cfg.enhanced_lighting ? 1u : 0u) << '\n'
              << "aa=" << cfg.aa_mode << '\n'
              << "smaa_quality=" << cfg.smaa_quality << '\n'
+             << "msaa_samples=" << cfg.msaa_samples << '\n'
              << "upscaler=" << cfg.upscaler << '\n'
              << "frame_generation=" << cfg.frame_generation << '\n'
              << "temporal_quality=" << cfg.temporal_quality << '\n'

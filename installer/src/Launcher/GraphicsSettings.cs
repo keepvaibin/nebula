@@ -23,6 +23,8 @@ namespace Nebula.Launcher
         private static readonly int[] AspectsBefore3To2 = { 0, 1, 3, 4, 5, 6 };
         public static readonly string[] AntiAliasingModes = { "Off", "SMAA", "Auto (SMAA unless supersampled)", "FXAA" };
         public static readonly string[] AntiAliasingQualities = { "Low", "Medium", "High", "Ultra" };
+        // MSAA (config msaa_samples 1, 2, 4, 8); off with DLSS, FSR 3 or ray tracing.
+        public static readonly string[] MsaaModes = { "Off", "2x", "4x", "8x" };
         // Frame rate: the game's own 60 (Off), Nebula's interpolated frames (Native) or NVIDIA's
         // generated ones (DLSS Frame Generation, with DLSS on an RTX GPU).
         public static readonly string[] InterpolationModes = { "Off", "Native", "DLSS Frame Generation" };
@@ -207,6 +209,8 @@ namespace Nebula.Launcher
         public bool VSync = false;
         public int FrameRate = 60;
         public int AntiAliasing = 0, Quality = 2, Upscaler = 0, Sharpness = 0, TextureFilter = 0;
+        // Index in MsaaModes: 2^Msaa samples per pixel.
+        public int Msaa = 0;
         public int TemporalQuality = 1;
         public int FrameGeneration = 0;
         public int SpatialQuality = 0;
@@ -275,6 +279,8 @@ namespace Nebula.Launcher
                 (rate == 0 || (rate >= 1 && rate <= 1000))) settings.FrameRate = (int)Math.Round(rate);
             settings.AntiAliasing = Choice(values, "aa", AntiAliasingModes.Length, settings.AntiAliasing);
             settings.Quality = Choice(values, "smaa_quality", AntiAliasingQualities.Length, settings.Quality);
+            int samples = Choice(values, "msaa_samples", 9, 1 << settings.Msaa);
+            settings.Msaa = samples >= 8 ? 3 : samples >= 4 ? 2 : samples >= 2 ? 1 : 0;
             int upscaler = Choice(values, "upscaler", 4, settings.Upscaler);
             settings.Upscaler = upscaler == 2 ? 1 : upscaler;
             settings.TemporalQuality = Choice(values, "temporal_quality", TemporalQualityCount, settings.TemporalQuality);
@@ -326,6 +332,7 @@ namespace Nebula.Launcher
                 new KeyValuePair<string, string>("max_fps", n(FrameRate)),
                 new KeyValuePair<string, string>("aa", n(AntiAliasing)),
                 new KeyValuePair<string, string>("smaa_quality", n(Quality)),
+                new KeyValuePair<string, string>("msaa_samples", n(1 << Math.Max(0, Math.Min(Msaa, 3)))),
                 new KeyValuePair<string, string>("upscaler", n(Upscaler)),
                 new KeyValuePair<string, string>("temporal_quality", n(TemporalQuality)),
                 new KeyValuePair<string, string>("frame_generation", n(FrameGeneration)),

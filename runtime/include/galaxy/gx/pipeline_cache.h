@@ -237,7 +237,8 @@ private:
             hash = combine64(hash,
                 static_cast<std::uint64_t>(key.render_state.cull) |
                 (static_cast<std::uint64_t>(key.render_state.pixfmt) << 8) |
-                (static_cast<std::uint64_t>(key.render_state.primitive_topology) << 16));
+                (static_cast<std::uint64_t>(key.render_state.primitive_topology) << 16) |
+                (static_cast<std::uint64_t>(key.render_state.samples_log2) << 24));
             return static_cast<std::size_t>(combine64(hash, key.variant));
         }
     };
@@ -250,7 +251,9 @@ private:
     std::unordered_map<UberPsoKey, Microsoft::WRL::ComPtr<ID3D12PipelineState>,
         UberPsoKeyHasher> uber_psos_;
     std::unordered_set<UberPsoKey, UberPsoKeyHasher> uber_pending_;
-    bool uber_prewarm_enqueued_ = false;
+    // Bit n: draws asked for pipelines with 2^n samples per pixel (MSAA) / the uber prewarm ran for them.
+    std::uint8_t seen_samples_mask_ = 0u;
+    std::uint8_t uber_prewarmed_samples_mask_ = 0u;
     bool last_get_used_uber_ = false;
     std::uint64_t uber_resolutions_ = 0;
     std::uint64_t uber_async_specializations_ = 0;
@@ -260,7 +263,8 @@ private:
     [[nodiscard]] Microsoft::WRL::ComPtr<ID3D12PipelineState> create_uber_pso(
         const RenderStateKey& render_state, unsigned variant);
     void enqueue_uber_pso(const UberPsoKey& key);
-    void enqueue_uber_prewarm();
+    void enqueue_uber_prewarm(std::uint8_t samples_log2);
+    void prewarm_uber_for_seen_samples();
     void enqueue_async_specialization(
         const MemoizedPsoKey& memoized,
         const PixelShaderKey& ps_key,

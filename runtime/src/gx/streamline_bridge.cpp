@@ -2,8 +2,7 @@
 #include "galaxy/gx/streamline_bridge.h"
 
 #include "galaxy/gx/temporal_upscaler.h"
-
-#include <ShlObj.h>
+#include "galaxy/platform_paths.h"
 
 #include <algorithm>
 #include <cmath>
@@ -31,13 +30,8 @@ std::wstring default_directory() {
     if (_wgetenv_s(&length, value, MAX_PATH, L"GALAXY_STREAMLINE_DIR") == 0 && length > 1u) {
         return value;
     }
-    PWSTR base = nullptr;
-    std::wstring directory;
-    if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &base)) && base != nullptr) {
-        directory = std::wstring(base) + L"\\Nebula\\vendor\\streamline-2.14.1";
-    }
-    CoTaskMemFree(base);
-    return directory;
+    const std::filesystem::path data = galaxy::nebula_data_directory();
+    return data.empty() ? std::wstring{} : (data / L"vendor" / L"streamline-2.14.1").wstring();
 }
 
 }  // namespace streamline

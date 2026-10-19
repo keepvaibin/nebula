@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <bit>
 #include <condition_variable>
 #include <functional>
 #include <cmath>
@@ -678,6 +679,7 @@ unsigned pending_settings_changes() {
     changes += d.frame_generation != live.frame_generation;
     changes += d.aa_mode != live.aa_mode;
     changes += d.smaa_quality != live.smaa_quality;
+    changes += d.msaa_samples != live.msaa_samples;
     changes += d.upscaler != live.upscaler;
     changes += d.temporal_quality != live.temporal_quality;
     changes += d.spatial_quality != live.spatial_quality;
@@ -939,6 +941,7 @@ void apply_native_settings_draft() {
     applied.frame_generation = next.frame_generation;
     applied.aa_mode = next.aa_mode;
     applied.smaa_quality = next.smaa_quality;
+    applied.msaa_samples = next.msaa_samples;
     applied.upscaler = next.upscaler;
     const bool dlss_asked = dlss_hold_back(applied, live);
     applied.temporal_quality = next.temporal_quality;
@@ -2029,6 +2032,19 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render) {
                             draft.smaa_quality = settings_step(std::min(draft.smaa_quality, 3u), 4u, delta);
                         },
                         "HIGHER FINDS MORE EDGES"});
+    }
+    {
+        const unsigned samples = std::bit_floor(std::clamp(render.msaa_samples, 1u, 8u));
+        std::string value = samples <= 1u ? "OFF" : std::to_string(samples) + "X";
+        if (samples > 1u && (render.upscaler == 2u || render.upscaler == 3u)) value += " (OFF WITH DLSS / FSR 3)";
+        else if (samples > 1u && render.ray_tracing_enabled) value += " (OFF WITH RAY TRACING)";
+        rows.push_back({"MSAA", value,
+                        [](RenderConfig& draft, int delta) {
+                            const unsigned index = static_cast<unsigned>(
+                                std::countr_zero(std::bit_floor(std::clamp(draft.msaa_samples, 1u, 8u))));
+                            draft.msaa_samples = 1u << settings_step(index, 4u, delta);
+                        },
+                        "SAMPLES EACH EDGE OF THE 3D SCENE SEVERAL TIMES. COSTS GPU TIME"});
     }
 
     rows.push_back({"FRAME RATE", {}, nullptr, {}, true});

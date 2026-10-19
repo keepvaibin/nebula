@@ -947,7 +947,245 @@ bool RendererD3D12::create_efb_targets(unsigned efb_scale) {
         efb_rtv_ = h;
     }
     efb_dsv_ = dsv_heap_->GetCPUDescriptorHandleForHeapStart();
+    // MSAA: draws and clears go to the multisampled targets; efb_color_ and efb_depth_ hold their resolves.
+    if (!create_efb_msaa(efb_msaa_, efb_depth_.Get(), efb_scale, wanted_msaa_samples(), efb_rtv_, efb_dsv_)) {
+        std::cerr << "[Renderer] MSAA targets unavailable; the EFB draws without MSAA\n";
+        efb_msaa_.samples = 1u;
+        const UINT stride = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+        efb_rtv_ = rtv_heap_->GetCPUDescriptorHandleForHeapStart();
+        efb_rtv_.ptr += static_cast<SIZE_T>(kSwapChainBuffers) * stride;
+    } else if (efb_msaa_.samples > 1u) {
+        std::cout << "[Renderer] EFB MSAA " << efb_msaa_.samples << "x\n";
+    }
     return true;
+}
+
+unsigned RendererD3D12::wanted_msaa_samples() const {
+    const unsigned asked = std::min(get_render_config().msaa_samples, 8u);
+    if (asked <= 1u || !device_ || temporal_mode() || rt_active()) {
+        return 1u;
+    }
+    return std::min(std::bit_floor(asked), msaa_max_samples());
+}
+
+unsigned RendererD3D12::msaa_max_samples() const {
+    if (msaa_max_samples_ != 0u || !device_) {
+        return std::max(msaa_max_samples_, 1u);
+    }
+    msaa_max_samples_ = 1u;
+    for (unsigned samples = 8u; samples > 1u; samples /= 2u) {
+        D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS color{kEfbColorFormat, samples};
+        D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS depth{kEfbDepthFormat, samples};
+        if (SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &color, sizeof(color))) &&
+            SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &depth, sizeof(depth))) &&
+            color.NumQualityLevels > 0u && depth.NumQualityLevels > 0u) {
+            msaa_max_samples_ = samples;
+            break;
+        }
+    }
+    return msaa_max_samples_;
+}
+
+bool RendererD3D12::create_efb_msaa(EfbMsaa& msaa, ID3D12Resource* depth, unsigned scale, unsigned samples,
+                                    D3D12_CPU_DESCRIPTOR_HANDLE& rtv, D3D12_CPU_DESCRIPTOR_HANDLE& dsv) {
+    msaa.color.Reset();
+    msaa.depth.Reset();
+    msaa.samples = 1u;
+    msaa.color_dirty = msaa.depth_dirty = false;
+    if (samples <= 1u) {
+        return true;
+    }
+    D3D12_HEAP_PROPERTIES hp{};
+    hp.Type = D3D12_HEAP_TYPE_DEFAULT;
+    D3D12_RESOURCE_DESC rd{};
+    rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    rd.Width = kEfbWidth * scale;
+    rd.Height = kEfbHeight * scale;
+    rd.DepthOrArraySize = 1;
+    rd.MipLevels = 1;
+    rd.Format = kEfbColorFormat;
+    rd.SampleDesc.Count = samples;
+    rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+    D3D12_CLEAR_VALUE cv{};
+    cv.Format = kEfbColorFormat;
+    cv.Color[3] = 1.0f;
+    if (FAILED(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_RENDER_TARGET,
+                                                &cv, IID_PPV_ARGS(&msaa.color)))) {
+        return false;
+    }
+    rd.Format = kEfbDepthResourceFormat;
+    rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+    D3D12_CLEAR_VALUE dcv{};
+    dcv.Format = kEfbDepthFormat;
+    dcv.DepthStencil.Depth = 1.0f;
+    if (FAILED(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_DEPTH_WRITE,
+                                                &dcv, IID_PPV_ARGS(&msaa.depth)))) {
+        msaa.color.Reset();
+        return false;
+    }
+    if (!msaa.rtv_heap) {
+        D3D12_DESCRIPTOR_HEAP_DESC heap{};
+        heap.NumDescriptors = 1;
+        heap.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+        d3d_check(device_->CreateDescriptorHeap(&heap, IID_PPV_ARGS(&msaa.rtv_heap)), "MSAA RTV heap");
+        heap.NumDescriptors = 2;
+        heap.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+        d3d_check(device_->CreateDescriptorHeap(&heap, IID_PPV_ARGS(&msaa.dsv_heap)), "MSAA DSV heap");
+    }
+    rtv = msaa.rtv_heap->GetCPUDescriptorHandleForHeapStart();
+    D3D12_RENDER_TARGET_VIEW_DESC color_view{};
+    color_view.Format = kEfbColorFormat;
+    color_view.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DMS;
+    device_->CreateRenderTargetView(msaa.color.Get(), &color_view, rtv);
+    const UINT dsv_stride = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+    dsv = msaa.dsv_heap->GetCPUDescriptorHandleForHeapStart();
+    D3D12_DEPTH_STENCIL_VIEW_DESC depth_view{};
+    depth_view.Format = kEfbDepthFormat;
+    depth_view.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMS;
+    device_->CreateDepthStencilView(msaa.depth.Get(), &depth_view, dsv);
+    // The single-sample depth, the depth resolve's target.
+    D3D12_CPU_DESCRIPTOR_HANDLE resolve_dsv = dsv;
+    resolve_dsv.ptr += dsv_stride;
+    depth_view.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+    device_->CreateDepthStencilView(depth, &depth_view, resolve_dsv);
+    msaa.samples = samples;
+    if (msaa.depth_srv) {
+        write_msaa_depth_view(msaa);
+    }
+    return true;
+}
+
+// The multisampled depth's view for the depth resolve (made at the first resolve: the EFB's first targets come before
+// the descriptor ring).
+void RendererD3D12::write_msaa_depth_view(EfbMsaa& msaa) {
+    if (!msaa.depth_srv) {
+        msaa.depth_srv = srv_ring_.allocate_persistent(1u);
+    }
+    D3D12_SHADER_RESOURCE_VIEW_DESC view{};
+    view.Format = kEfbDepthSrvFormat;
+    view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DMS;
+    view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    device_->CreateShaderResourceView(msaa.depth.Get(), &view, msaa.depth_srv->cpu);
+}
+
+namespace {
+
+// The depth resolve: each pixel's first sample (the console's single sample sits at the pixel centre).
+constexpr char kDepthResolvePs[] = R"HLSL(
+Texture2DMS<float> depth_samples : register(t0);
+float main(float4 pos : SV_Position) : SV_Depth {
+    return depth_samples.Load(int2(pos.xy), 0);
+}
+)HLSL";
+
+}  // namespace
+
+void RendererD3D12::resolve_efb(bool depth) {
+    EfbMsaa& msaa = efb_msaa_;
+    const bool color = msaa.color_dirty;
+    depth = depth && msaa.depth_dirty;
+    if (msaa.samples <= 1u || (!color && !depth)) {
+        return;
+    }
+    record_efb_resolve(command_list_.Get(), color, depth);
+    msaa.color_dirty = msaa.color_dirty && !color;
+    if (depth) {
+        // The EFB's own targets and the GX state again, as the next draw expects them.
+        command_list_->SetGraphicsRootSignature(root_signature_.Get());
+        command_list_->OMSetRenderTargets(1, &efb_rtv_, FALSE, &efb_dsv_);
+        bound_rt_aux_ = 0u;
+        invalidate_gx_bindings();
+        bound_viewport_valid_ = false;
+        bound_scissor_valid_ = false;
+        bound_scissor_input_valid_ = false;
+        msaa.depth_dirty = false;
+    }
+}
+
+void RendererD3D12::resolve_efb_on(ID3D12GraphicsCommandList* list, bool color, bool depth) {
+    if (list == command_list_.Get()) {
+        resolve_efb(depth);
+        return;
+    }
+    color = color && efb_msaa_.color_dirty;
+    depth = depth && efb_msaa_.depth_dirty;
+    if (color || depth) {
+        record_efb_resolve(list, color, depth);
+    }
+}
+
+void RendererD3D12::record_efb_resolve(ID3D12GraphicsCommandList* list, bool color, bool depth) {
+    EfbMsaa& msaa = efb_msaa_;
+    if (msaa.samples <= 1u) {
+        return;
+    }
+    if (color) {
+        D3D12_RESOURCE_BARRIER barriers[2]{};
+        for (auto& barrier : barriers) {
+            barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+            barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        }
+        barriers[0].Transition.pResource = msaa.color.Get();
+        barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_RESOLVE_SOURCE;
+        barriers[1].Transition.pResource = efb_color_.Get();
+        barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_RESOLVE_DEST;
+        list->ResourceBarrier(2u, barriers);
+        list->ResolveSubresource(efb_color_.Get(), 0u, msaa.color.Get(), 0u, kEfbColorFormat);
+        for (auto& barrier : barriers) {
+            std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
+        }
+        list->ResourceBarrier(2u, barriers);
+    }
+    if (depth) {
+        if (!depth_resolve_pso_) {
+            const ComPtr<ID3DBlob> vs =
+                compile_hlsl(blit_vertex_shader_source().data(), blit_vertex_shader_source().size(), "vs_5_1", "main");
+            const ComPtr<ID3DBlob> ps = compile_hlsl(kDepthResolvePs, sizeof(kDepthResolvePs) - 1u, "ps_5_1", "main");
+            D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
+            pd.pRootSignature = s_blit_root_sig.Get();
+            pd.VS = {vs->GetBufferPointer(), vs->GetBufferSize()};
+            pd.PS = {ps->GetBufferPointer(), ps->GetBufferSize()};
+            pd.SampleMask = UINT_MAX;
+            pd.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+            pd.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+            pd.DepthStencilState.DepthEnable = TRUE;
+            pd.DepthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+            pd.DepthStencilState.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+            pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+            pd.NumRenderTargets = 0;
+            pd.DSVFormat = kEfbDepthFormat;
+            pd.SampleDesc.Count = 1;
+            d3d_check(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&depth_resolve_pso_)),
+                      "depth resolve PSO");
+        }
+        if (!msaa.depth_srv) {
+            write_msaa_depth_view(msaa);
+        }
+        D3D12_RESOURCE_BARRIER barrier{};
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        barrier.Transition.pResource = msaa.depth.Get();
+        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        list->ResourceBarrier(1u, &barrier);
+        D3D12_CPU_DESCRIPTOR_HANDLE resolve_dsv = msaa.dsv_heap->GetCPUDescriptorHandleForHeapStart();
+        resolve_dsv.ptr += device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+        const D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(kEfbWidth * efb_scale_),
+                                      static_cast<float>(kEfbHeight * efb_scale_), 0.0f, 1.0f};
+        const D3D12_RECT scissor{0, 0, static_cast<LONG>(kEfbWidth * efb_scale_),
+                                 static_cast<LONG>(kEfbHeight * efb_scale_)};
+        list->SetGraphicsRootSignature(s_blit_root_sig.Get());
+        list->RSSetViewports(1, &viewport);
+        list->RSSetScissorRects(1, &scissor);
+        list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        list->OMSetRenderTargets(0, nullptr, FALSE, &resolve_dsv);
+        list->SetPipelineState(depth_resolve_pso_.Get());
+        list->SetGraphicsRootDescriptorTable(0, msaa.depth_srv->gpu);
+        list->DrawInstanced(3, 1, 0, 0);
+        std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
+        list->ResourceBarrier(1u, &barrier);
+    }
 }
 
 // After an internal-resolution change the new EFB starts with the previous targets' contents,
@@ -955,7 +1193,17 @@ bool RendererD3D12::create_efb_targets(unsigned efb_scale) {
 // copy's clear, whose alpha its shadow and glow passes read); zero-filled targets would show as a
 // dark picture with stray geometry.
 void RendererD3D12::carry_over_efb_contents() {
-    if (!efb_carry_color_ || !efb_carry_depth_) {
+    if (!efb_carry_color_ || !efb_carry_depth_ || efb_msaa_.samples > 1u) {
+        if (efb_msaa_.samples > 1u && efb_carry_color_) {
+            const auto far_values = make_efb_clear_values(0u, 0u, 0x00FFFFFFu, 0u);
+            const float black[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+            command_list_->ClearRenderTargetView(efb_rtv_, black, 0u, nullptr);
+            command_list_->ClearDepthStencilView(efb_dsv_, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
+                                                 far_values.reversed_depth, 0u, 0u, nullptr);
+            efb_msaa_.color_dirty = efb_msaa_.depth_dirty = true;
+            retired_efb_copy_textures_[frame_slot_].push_back(std::move(efb_carry_color_));
+            retired_efb_copy_textures_[frame_slot_].push_back(std::move(efb_carry_depth_));
+        }
         efb_carry_color_.Reset();
         efb_carry_depth_.Reset();
         return;
@@ -1542,7 +1790,8 @@ void RendererD3D12::apply_pending_efb_scale() {
     const unsigned wanted = host_window::upscaler_render_scale(render, internal);
     const unsigned live_internal = upscale_output_scale_ != 0u ? upscale_output_scale_ : efb_scale_;
     upscale_output_scale_ = internal;
-    if (wanted == efb_scale_) {
+    const unsigned samples = wanted_msaa_samples();
+    if (wanted == efb_scale_ && samples == efb_msaa_.samples) {
         return;
     }
     // Keeps the current targets; the setting returns to the live internal resolution.
@@ -1591,7 +1840,11 @@ void RendererD3D12::apply_pending_efb_scale() {
     bound_scissor_input_scale_ = 0u;
     std::cout << "[Renderer] internal resolution " << previous << "x -> "
               << applied << "x (" << kEfbWidth * applied << "x"
-              << kEfbHeight * applied << ")\n";
+              << kEfbHeight * applied << ")";
+    if (efb_msaa_.samples > 1u) {
+        std::cout << " MSAA " << efb_msaa_.samples << 'x';
+    }
+    std::cout << '\n';
 }
 
 bool RendererD3D12::efb_scale_fits_memory(unsigned scale) const {
@@ -1662,15 +1915,23 @@ bool RendererD3D12::create_clear_pipeline() {
         0, blob->GetBufferPointer(), blob->GetBufferSize(),
         IID_PPV_ARGS(&s_clear_root_sig)), "CreateClearRS");
 
-    const ComPtr<ID3DBlob> vs =
-        compile_hlsl(blit_vertex_shader_source().data(), blit_vertex_shader_source().size(), "vs_5_1", "main");
-    const ComPtr<ID3DBlob> ps =
+    clear_vs_ = compile_hlsl(blit_vertex_shader_source().data(), blit_vertex_shader_source().size(), "vs_5_1", "main");
+    clear_ps_ =
         compile_hlsl(clear_pixel_shader_source().data(), clear_pixel_shader_source().size(), "ps_5_1", "main");
+    return clear_pipeline(true) != nullptr && clear_pipeline(false) != nullptr;
+}
 
+ID3D12PipelineState* RendererD3D12::clear_pipeline(bool color) {
+    const std::uint8_t samples_log2 = efb_samples_log2();
+    ComPtr<ID3D12PipelineState>& pipeline =
+        (color ? clear_rgb_pipelines_ : clear_alpha_pipelines_)[samples_log2];
+    if (pipeline) {
+        return pipeline.Get();
+    }
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
     pd.pRootSignature = s_clear_root_sig.Get();
-    pd.VS = {vs->GetBufferPointer(), vs->GetBufferSize()};
-    pd.PS = {ps->GetBufferPointer(), ps->GetBufferSize()};
+    pd.VS = {clear_vs_->GetBufferPointer(), clear_vs_->GetBufferSize()};
+    pd.PS = {clear_ps_->GetBufferPointer(), clear_ps_->GetBufferSize()};
     pd.SampleMask = UINT_MAX;
     pd.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
     pd.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
@@ -1679,20 +1940,13 @@ bool RendererD3D12::create_clear_pipeline() {
     pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     pd.NumRenderTargets = 1;
     pd.RTVFormats[0] = kEfbColorFormat;
-    pd.SampleDesc.Count = 1;
-
-    pd.BlendState.RenderTarget[0].RenderTargetWriteMask =
-        D3D12_COLOR_WRITE_ENABLE_RED |
-        D3D12_COLOR_WRITE_ENABLE_GREEN |
-        D3D12_COLOR_WRITE_ENABLE_BLUE;
-    d3d_check(device_->CreateGraphicsPipelineState(
-        &pd, IID_PPV_ARGS(&clear_rgb_pipeline_)), "CreateClearRgbPSO");
-
-    pd.BlendState.RenderTarget[0].RenderTargetWriteMask =
-        D3D12_COLOR_WRITE_ENABLE_ALPHA;
-    d3d_check(device_->CreateGraphicsPipelineState(
-        &pd, IID_PPV_ARGS(&clear_alpha_pipeline_)), "CreateClearAlphaPSO");
-    return true;
+    pd.SampleDesc.Count = 1u << samples_log2;
+    pd.BlendState.RenderTarget[0].RenderTargetWriteMask = color
+        ? D3D12_COLOR_WRITE_ENABLE_RED | D3D12_COLOR_WRITE_ENABLE_GREEN | D3D12_COLOR_WRITE_ENABLE_BLUE
+        : D3D12_COLOR_WRITE_ENABLE_ALPHA;
+    d3d_check(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&pipeline)),
+              color ? "CreateClearRgbPSO" : "CreateClearAlphaPSO");
+    return pipeline.Get();
 }
 
 // ---------------------------------------------------------------------------
@@ -1990,11 +2244,12 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
                                 streamline::attach_device(device_.Get(), adapter_desc.AdapterLuid);
         caps.streamline_bridge_built = kStreamlineBuilt;
         caps.msaa = make_render_feature_status(
-            false,
-            false,
-            false,
-            false,
-            "EFB/depth targets and GX PSOs are single-sample");
+            true,
+            msaa_max_samples() > 1u,
+            true,
+            true,
+            msaa_max_samples() > 1u ? "EFB targets multisampled; off with DLSS, FSR 3 or ray tracing"
+                                    : "the GPU has no multisampled EFB formats");
         caps.taa = make_render_feature_status(
             false,
             false,
@@ -2457,8 +2712,10 @@ void RendererD3D12::shutdown() {
     peek_rtv_ = {};
     peek_readback_row_pitch_ = 0;
     s_clear_root_sig.Reset();
-    clear_rgb_pipeline_.Reset();
-    clear_alpha_pipeline_.Reset();
+    clear_rgb_pipelines_ = {};
+    clear_alpha_pipelines_ = {};
+    clear_vs_.Reset();
+    clear_ps_.Reset();
     timestamp_query_heap_.Reset();
     timestamp_readback_.Reset();
     timestamp_pending_.fill(false);
@@ -5409,6 +5666,7 @@ bool RendererD3D12::ensure_subframe_resources(unsigned xfb_width, unsigned xfb_h
 
 void RendererD3D12::execute_replay_copy(const ReplayCopy& copy, ID3D12Resource* target) {
     if (copy.identity) {
+        resolve_efb(false);
         detail::record_efb_identity_copy(command_list_.Get(), efb_color_.Get(),
                                          target != nullptr ? target : copy.dest, copy.box);
         return;
@@ -6202,8 +6460,11 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
         // render EFB's scale and, for a log that switches to the output EFB (HUD
         // at output resolution), one at that scale.
         const unsigned render_scale = output_efb_active_ ? alt_efb_.scale : efb_scale_;
-        if (((!replay_efb_.color || replay_efb_.scale != render_scale) &&
-             !create_efb_set(replay_efb_, replay_efb_rtv_heap_, replay_efb_dsv_heap_, render_scale)) ||
+        const unsigned render_samples = output_efb_active_ ? alt_efb_.msaa.samples : efb_msaa_.samples;
+        if (((!replay_efb_.color || replay_efb_.scale != render_scale ||
+              replay_efb_.msaa.samples != render_samples) &&
+             !create_efb_set(replay_efb_, replay_efb_rtv_heap_, replay_efb_dsv_heap_, render_scale, true, false,
+                             render_samples)) ||
             (output_scale != 0u &&
              (!replay_output_efb_.color || replay_output_efb_.scale != output_scale) &&
              !create_efb_set(replay_output_efb_, replay_output_efb_rtv_heap_,
@@ -7214,7 +7475,7 @@ void RendererD3D12::write_efb_set_views(EfbTargetSet& set, const DescriptorRing:
 bool RendererD3D12::create_efb_set(
     EfbTargetSet& set, ComPtr<ID3D12DescriptorHeap>& rtv_heap,
     ComPtr<ID3D12DescriptorHeap>& dsv_heap, unsigned scale, bool persistent_views,
-    bool unordered_access) {
+    bool unordered_access, unsigned samples) {
     const UINT w = kEfbWidth * scale;
     const UINT h = kEfbHeight * scale;
     if (set.color) {
@@ -7230,9 +7491,9 @@ bool RendererD3D12::create_efb_set(
         d3d_check(device_->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&rtv_heap)), "EFB set RTV heap");
         dhd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
         d3d_check(device_->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&dsv_heap)), "EFB set DSV heap");
-        set.rtv = rtv_heap->GetCPUDescriptorHandleForHeapStart();
-        set.dsv = dsv_heap->GetCPUDescriptorHandleForHeapStart();
     }
+    set.rtv = rtv_heap->GetCPUDescriptorHandleForHeapStart();
+    set.dsv = dsv_heap->GetCPUDescriptorHandleForHeapStart();
     D3D12_HEAP_PROPERTIES hp{};
     hp.Type = D3D12_HEAP_TYPE_DEFAULT;
     D3D12_RESOURCE_DESC rd{};
@@ -7269,6 +7530,11 @@ bool RendererD3D12::create_efb_set(
     dsv.Format = kEfbDepthFormat;
     dsv.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
     device_->CreateDepthStencilView(set.depth.Get(), &dsv, set.dsv);
+    if (!create_efb_msaa(set.msaa, set.depth.Get(), scale, samples, set.rtv, set.dsv)) {
+        set.color.Reset();
+        set.depth.Reset();
+        return false;
+    }
     if (persistent_views) {
         write_efb_set_views(set, set.conv_table ? *set.conv_table
                                                 : srv_ring_.allocate_persistent(2u));
@@ -7283,6 +7549,7 @@ bool RendererD3D12::create_efb_set(
 void RendererD3D12::swap_efb_with(EfbTargetSet& other) {
     std::swap(efb_color_, other.color);
     std::swap(efb_depth_, other.depth);
+    std::swap(efb_msaa_, other.msaa);
     std::swap(efb_scale_, other.scale);
     std::swap(efb_rtv_, other.rtv);
     std::swap(efb_dsv_, other.dsv);
@@ -7299,6 +7566,7 @@ void RendererD3D12::swap_efb_sets() {
     }
     std::swap(efb_color_, alt_efb_.color);
     std::swap(efb_depth_, alt_efb_.depth);
+    std::swap(efb_msaa_, alt_efb_.msaa);
     std::swap(efb_scale_, alt_efb_.scale);
     std::swap(efb_rtv_, alt_efb_.rtv);
     std::swap(efb_dsv_, alt_efb_.dsv);
@@ -7482,7 +7750,7 @@ void RendererD3D12::present_fg_hudless(const XfbTexture& source, const D3D12_VIE
 }
 
 void RendererD3D12::record_scene_aa() {
-    if (!post_process_.ready() || output_efb_active_ || scene_temporal_ || !efb_color_ ||
+    if (!post_process_.ready() || output_efb_active_ || scene_temporal_ || !efb_color_ || efb_msaa_.samples > 1u ||
         post_process_.settings().aa == PostProcessSettings::Aa::kOff) {
         return;
     }
@@ -7729,6 +7997,9 @@ void RendererD3D12::clear_efb(
     bool color_enable, bool alpha_enable, bool depth_enable,
     unsigned rect_x, unsigned rect_y, unsigned rect_w, unsigned rect_h,
     std::uint8_t pixel_format) {
+    if (efb_msaa_.samples > 1u) {
+        efb_msaa_.color_dirty = efb_msaa_.depth_dirty = true;
+    }
     if (replay_recording_) [[unlikely]] {
         replay_ops_.push_back({ReplayKind::Clear, static_cast<std::uint32_t>(replay_clears_.size())});
         replay_clears_.push_back({clear_ar, clear_gb, clear_z24, color_enable, alpha_enable,
@@ -7781,10 +8052,7 @@ void RendererD3D12::clear_efb(
             command_list_->RSSetViewports(1, &vp);
             command_list_->RSSetScissorRects(1, &rect);
             command_list_->SetGraphicsRootSignature(s_clear_root_sig.Get());
-            command_list_->SetPipelineState(
-                color_enable
-                    ? clear_rgb_pipeline_.Get()
-                    : clear_alpha_pipeline_.Get());
+            command_list_->SetPipelineState(clear_pipeline(color_enable));
             command_list_->SetGraphicsRoot32BitConstants(0, 4, col, 0);
             command_list_->IASetPrimitiveTopology(
                 D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -7869,6 +8137,9 @@ void RendererD3D12::check_draw_addresses(const DrawCall& call) {
 }
 
 void RendererD3D12::draw(const DrawCall& call) {
+    if (efb_msaa_.samples > 1u) {
+        efb_msaa_.color_dirty = efb_msaa_.depth_dirty = true;
+    }
     static const bool validate_addresses = [] {
         char value[8]{};
         std::size_t length = 0u;
@@ -8138,6 +8409,7 @@ void RendererD3D12::record_conversion_blit(
     float step_x,
     float step_y,
     float filter_row_offset) {
+    resolve_efb(is_depth_copy);
     ID3D12Resource* src =
         is_depth_copy ? efb_depth_.Get() : efb_color_.Get();
 
@@ -8521,6 +8793,7 @@ bool RendererD3D12::copy_efb_to_texture(
             replay_ops_.push_back({ReplayKind::Copy, static_cast<std::uint32_t>(replay_copies_.size())});
             replay_copies_.push_back(copy);
         }
+        resolve_efb(false);
         detail::record_efb_identity_copy(command_list_.Get(), efb_color_.Get(),
             dest.texture.Get(), *source_box);
         if (ring_mode_ == RingMode::Interp) note_copy_write(dest.texture.Get());
@@ -8746,6 +9019,7 @@ bool RendererD3D12::record_pointer_depth_capture_in_frame() {
     constexpr UINT height = kEfbHeight;
     constexpr UINT row_pitch = kEfbWidth * 4u;
     select_pointer_depth_destination();
+    resolve_efb(true);
     ID3D12Resource* const target = pointer_depth_target_.Get();
     ID3D12Resource* const readback = pointer_depth_readback_.Get();
     ID3D12Resource* const src = efb_depth_.Get();
@@ -9004,6 +9278,7 @@ bool RendererD3D12::record_async_peek_field_in_frame(
 void RendererD3D12::record_async_peek_field_commands(
     ID3D12GraphicsCommandList* list, AsyncPeekField& field, EfbPeekKind kind, std::size_t slot) {
     const bool is_depth = kind == EfbPeekKind::Depth;
+    resolve_efb_on(list, !is_depth, is_depth);
     constexpr UINT width = kEfbWidth;
     constexpr UINT height = kEfbHeight;
     constexpr UINT row_pitch = kEfbWidth * 4u;
@@ -9116,6 +9391,11 @@ bool RendererD3D12::read_efb_pixels(
     d3d_check(
         peek_command_list_->Reset(peek_allocator_.Get(), nullptr),
         "GXPeek command list reset");
+    if (efb_msaa_.samples > 1u) {
+        ID3D12DescriptorHeap* resolve_heaps[] = {srv_ring_.heap()};
+        peek_command_list_->SetDescriptorHeaps(1, resolve_heaps);
+        resolve_efb_on(peek_command_list_.Get(), !is_depth, is_depth);
+    }
 
     D3D12_RESOURCE_BARRIER barriers[2]{};
     barriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -9382,6 +9662,7 @@ void RendererD3D12::queue_debug_ppm_capture(
 }
 
 bool RendererD3D12::debug_copy_efb_to_readback() {
+    resolve_efb(false);
     debug_log_readback();
     if (readback_pending_) {
         std::cerr << "[efb-dump] skipped=prior-readback-pending path="

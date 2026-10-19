@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-// Nebula's settings folder and file opening on every platform: %LOCALAPPDATA%\Nebula on Windows; elsewhere
+// Nebula's settings folder and file opening on every platform: %LOCALAPPDATA%\Nebula on Windows (the variable, as
+// the shader cache and crash dumps read it, so a test's private one holds everything; the shell's folder without it);
+// elsewhere
 // NEBULA_DATA_DIR (the Android host sets it to the app's private files folder), else $XDG_DATA_HOME/Nebula, else
 // ~/.local/share/Nebula.
 
@@ -26,6 +28,10 @@ namespace galaxy {
 [[nodiscard]] inline std::filesystem::path nebula_data_directory() {
 #if defined(_WIN32)
     wchar_t app_data[MAX_PATH]{};
+    const DWORD length = GetEnvironmentVariableW(L"LOCALAPPDATA", app_data, MAX_PATH);
+    if (length != 0u && length < MAX_PATH) {
+        return std::filesystem::path(app_data) / L"Nebula";
+    }
     if (FAILED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, app_data))) {
         return {};
     }

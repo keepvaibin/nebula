@@ -13276,9 +13276,12 @@ gpu::Pipeline* GxBackend::flush_draw_state(
     if (rs_dirty) {
         render_state_key_ = build_render_state_key(state_);
     }
+    // The EFB's samples per pixel (MSAA; the output EFB has one) decide the pipeline's too.
+    const std::uint8_t samples_log2 = renderer_.efb_samples_log2();
     const bool topology_dirty =
-        render_state_key_.primitive_topology != topology_key;
+        render_state_key_.primitive_topology != topology_key || render_state_key_.samples_log2 != samples_log2;
     render_state_key_.primitive_topology = topology_key;
+    render_state_key_.samples_log2 = samples_log2;
     if (lighting_census_enabled() && scene_phase_ && side_layer_ == kSceneLayer) [[unlikely]] {
         static std::unordered_set<std::uint64_t> seen;
         if (seen.insert(current_vs_hash_ * 31u ^ current_ps_hash_).second) {

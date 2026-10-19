@@ -542,7 +542,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_gx_pso_desc_impl(
         mask.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_RED;
     }
     pd.DSVFormat             = kEfbDepthFormat;
-    pd.SampleDesc.Count      = 1;
+    pd.SampleDesc.Count      = 1u << rs.samples_log2;
 
     return pd;
 }
@@ -594,7 +594,12 @@ std::wstring pso_library_name(const PsoKey& key) {
         static_cast<unsigned>(key.render_state.cull),
         static_cast<unsigned>(key.render_state.pixfmt),
         static_cast<unsigned>(key.render_state.primitive_topology));
-    return name;
+    std::wstring result = name;
+    if (key.render_state.samples_log2 != 0u) {
+        // Multisampled: its own entry (single-sample names stay as they were, so existing libraries still hit).
+        result += L"_m" + std::to_wstring(key.render_state.samples_log2);
+    }
+    return result;
 }
 
 }  // anonymous namespace
@@ -871,6 +876,7 @@ ID3D12PipelineState* PipelineCache::get(
         if (worker_error_) std::rethrow_exception(worker_error_);
     }
     last_get_used_uber_ = false;
+    seen_samples_mask_ |= static_cast<std::uint8_t>(1u << key.render_state.samples_log2);
     if (uber_mode_ == UberMode::Force) [[unlikely]] {
         if (ID3D12PipelineState* uber = uber_pipeline(
                 key.render_state, uber_ps_variant(ps_key), /*create_now=*/true)) {
@@ -1105,10 +1111,8 @@ void PipelineCache::drain_completions() {
     // that drops the memo. It runs unconditionally, so the assert holds even when the queue is
     // empty. The cost is one null store per frame.
     clear_last_hit_memo();
-    if (uber_mode_ == UberMode::Hybrid && !uber_prewarm_enqueued_ &&
-        uber_blobs_ready_.load(std::memory_order_acquire)) {
-        uber_prewarm_enqueued_ = true;
-        enqueue_uber_prewarm();
+    if (uber_mode_ == UberMode::Hybrid) {
+        prewarm_uber_for_seen_samples();
     }
     PsoCompletionQueue::Item item;
     while (completions_.try_pop(item)) {
@@ -1436,7 +1440,7 @@ constexpr std::size_t kCacheCoverageAppendBatch = 64u;
 bool valid_pso_key(const PsoKey& key) {
     const auto& state = key.render_state;
     return state.primitive_topology >= 1u && state.primitive_topology <= 3u &&
-        state.cull <= 3u && state.pixfmt <= 7u &&
+        state.cull <= 3u && state.pixfmt <= 7u && state.samples_log2 <= 3u &&
         (state.blend_bits & 0x80000000u) == 0u && (state.zmode_bits & ~0x1fu) == 0u &&
         std::all_of(std::begin(state.reserved), std::end(state.reserved),
             [](std::uint8_t value) { return value == 0u; });
@@ -3061,10 +3065,7 @@ ID3D12PipelineState* PipelineCache::uber_pipeline(
     if (!uber_blobs_ready_.load(std::memory_order_acquire)) {
         return nullptr;
     }
-    if (!uber_prewarm_enqueued_) {
-        uber_prewarm_enqueued_ = true;
-        enqueue_uber_prewarm();
-    }
+    prewarm_uber_for_seen_samples();
     UberPsoKey key{};
     // Uber stand-ins stay single-target: a motion writer drawing with one
     // leaves its pixels' motion at the cleared zero for those frames.
@@ -3074,6 +3075,7 @@ ID3D12PipelineState* PipelineCache::uber_pipeline(
     key.render_state.cull = render_state.cull;
     key.render_state.pixfmt = render_state.pixfmt;
     key.render_state.primitive_topology = render_state.primitive_topology;
+    key.render_state.samples_log2 = render_state.samples_log2;
     key.variant = variant;
     if (const auto it = uber_psos_.find(key); it != uber_psos_.end()) {
         return it->second.Get();  // null: its build failed, never retried
@@ -3109,7 +3111,20 @@ void PipelineCache::enqueue_uber_pso(const UberPsoKey& key) {
 // variant (dual-source when the blend state reads SRC1 alpha): the common
 // case, built in the background so first-use materials meet a ready uber
 // pipeline. Other variants are built on their first miss.
-void PipelineCache::enqueue_uber_prewarm() {
+void PipelineCache::prewarm_uber_for_seen_samples() {
+    const std::uint8_t pending = seen_samples_mask_ & ~uber_prewarmed_samples_mask_;
+    if (pending == 0u || !uber_blobs_ready_.load(std::memory_order_acquire)) {
+        return;
+    }
+    uber_prewarmed_samples_mask_ |= pending;
+    for (std::uint8_t samples_log2 = 0u; samples_log2 < 8u; ++samples_log2) {
+        if ((pending & (1u << samples_log2)) != 0u) {
+            enqueue_uber_prewarm(samples_log2);
+        }
+    }
+}
+
+void PipelineCache::enqueue_uber_prewarm(std::uint8_t samples_log2) {
     std::unordered_set<UberPsoKey, UberPsoKeyHasher> seen;
     // Early-Z first (most materials), then late-Z (alpha-tested materials,
     // about as common in RMGE01), then the Z-texture depth export. A blend
@@ -3123,6 +3138,7 @@ void PipelineCache::enqueue_uber_prewarm() {
         key.render_state.cull = cull;
         key.render_state.pixfmt = pixfmt;
         key.render_state.primitive_topology = topology;
+        key.render_state.samples_log2 = samples_log2;
         const unsigned dual = (blend_bits & (1u << 27u)) != 0u ? 1u : 0u;
         key.variant = (pass == 0u ? 4u : pass == 1u ? 0u : 2u) + dual;
         if (seen.insert(key).second && !uber_psos_.contains(key)) {
@@ -3160,6 +3176,11 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineCache::create_uber_pso(
         static_cast<unsigned>(render_state.cull),
         static_cast<unsigned>(render_state.pixfmt),
         static_cast<unsigned>(render_state.primitive_topology), variant);
+    if (render_state.samples_log2 != 0u) {
+        const std::size_t length = wcslen(name);
+        swprintf_s(name + length, std::size(name) - length, L"_m%u",
+            static_cast<unsigned>(render_state.samples_log2));
+    }
     {
         std::lock_guard<std::mutex> lock(pipeline_library_mutex_);
         if (pipeline_library_) {

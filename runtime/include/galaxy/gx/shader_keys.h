@@ -228,7 +228,8 @@ struct RenderStateKey {
     std::uint8_t cull;              // CullMode
     std::uint8_t pixfmt;            // PeControl pixel format (dst-alpha cap)
     std::uint8_t primitive_topology; // D3D12_PRIMITIVE_TOPOLOGY_TYPE value
-    std::uint8_t reserved[7];
+    std::uint8_t samples_log2;      // the EFB's samples per pixel (MSAA), as a power of two; 0 for one
+    std::uint8_t reserved[6];
 
     // Field-wise, not the byte-wise `key_bytes_equal` form.
     //
@@ -247,7 +248,8 @@ struct RenderStateKey {
             zmode_bits == other.zmode_bits &&
             cull == other.cull &&
             pixfmt == other.pixfmt &&
-            primitive_topology == other.primitive_topology;
+            primitive_topology == other.primitive_topology &&
+            samples_log2 == other.samples_log2;
     }
 };
 static_assert(sizeof(RenderStateKey) == 16);
@@ -280,7 +282,8 @@ struct PsoKey {
             static_cast<std::uint64_t>(render_state.cull) |
                 (static_cast<std::uint64_t>(render_state.pixfmt) << 8) |
                 (static_cast<std::uint64_t>(render_state.primitive_topology)
-                 << 16));
+                 << 16) |
+                (static_cast<std::uint64_t>(render_state.samples_log2) << 24));
         return hash;
     }
 };

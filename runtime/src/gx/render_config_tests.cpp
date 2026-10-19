@@ -442,8 +442,8 @@ int main() {
     const galaxy::gx::RenderConfig sanitized =
         galaxy::gx::get_render_config();
     passed &= expect(
-        sanitized.msaa_samples == 1,
-        "set_render_config clamps unimplemented MSAA off");
+        sanitized.msaa_samples == 8,
+        "set_render_config keeps MSAA 8x");
     passed &= expect(
         !sanitized.taa_enabled,
         "set_render_config clamps unimplemented TAA off");
@@ -648,7 +648,7 @@ int main() {
     const galaxy::gx::RenderConfig loaded =
         galaxy::gx::get_render_config();
     passed &= expect(
-        loaded.msaa_samples == 1 &&
+        loaded.msaa_samples == 8 &&
             !loaded.taa_enabled &&
             loaded.ray_tracing_enabled &&
             loaded.rt_shadow_quality == 0 &&

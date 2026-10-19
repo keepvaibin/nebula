@@ -290,7 +290,8 @@ namespace Nebula.Launcher
         private readonly ComboBox monitor = new ComboBox(), mode = new ComboBox(), resolution = new ComboBox(), refresh = new ComboBox();
         private readonly ComboBox aspect = new ComboBox(), internalScale = new ComboBox(), frameRate = new ComboBox();
         private readonly CheckBox vsync = new CheckBox();
-        private readonly ComboBox antiAliasing = new ComboBox(), aaQuality = new ComboBox(), upscaler = new ComboBox(),
+        private readonly ComboBox antiAliasing = new ComboBox(), aaQuality = new ComboBox(), msaa = new ComboBox(),
+            upscaler = new ComboBox(),
             dlssQuality = new ComboBox(), textureFilter = new ComboBox(), lighting = new ComboBox(),
             interpolation = new ComboBox(), rtQuality = new ComboBox();
         // The frame rate row's label: TARGET with interpolation, LIMIT without.
@@ -346,7 +347,7 @@ namespace Nebula.Launcher
             try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch (Exception) { }
             Font = new Font("Segoe UI", 10f);
             AutoScaleMode = AutoScaleMode.None;
-            ClientSize = new Size(760, 640);
+            ClientSize = new Size(760, 680);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
@@ -358,7 +359,7 @@ namespace Nebula.Launcher
             };
             Controls.Add(intro);
 
-            var tabs = new TabControl { Location = new Point(12, 54), Size = new Size(736, 520) };
+            var tabs = new TabControl { Location = new Point(12, 54), Size = new Size(736, 560) };
             var display = new TabPage("Display");
             var image = new TabPage("Graphics");
             var sound = new TabPage("Audio");
@@ -419,6 +420,7 @@ namespace Nebula.Launcher
             y += 40;
             Row(image, "Anti-aliasing", antiAliasing, ref y);
             Row(image, "Anti-aliasing quality", aaQuality, ref y);
+            Row(image, "MSAA", msaa, ref y);
             Row(image, "Interpolation", interpolation, ref y);
             frameRateLabel.Location = new Point(12, y + 3);
             frameRateLabel.Size = new Size(300, 26);
@@ -444,6 +446,7 @@ namespace Nebula.Launcher
             rayTracing.CheckedChanged += delegate { rtQuality.Enabled = rayTracing.Checked; };
             antiAliasing.Items.AddRange(GraphicsSettings.AntiAliasingModes);
             aaQuality.Items.AddRange(GraphicsSettings.AntiAliasingQualities);
+            msaa.Items.AddRange(GraphicsSettings.MsaaModes);
             foreach (int value in upscalerChoices) upscaler.Items.Add(GraphicsSettings.UpscalerName(value));
             textureFilter.Items.AddRange(GraphicsSettings.TextureFilters);
             lighting.Items.AddRange(GraphicsSettings.LightingModes);
@@ -515,11 +518,11 @@ namespace Nebula.Launcher
                 if (File.Exists(setup)) Process.Start(new ProcessStartInfo(setup, "--update") { WorkingDirectory = session.Root });
             };
 
-            var play = new Button { Text = "Save and play", Location = new Point(608, 588), Size = new Size(140, 38) };
+            var play = new Button { Text = "Save and play", Location = new Point(608, 628), Size = new Size(140, 38) };
             play.Click += delegate { if (Commit()) Play(); };
             Controls.Add(play);
             AcceptButton = play;
-            var save = new Button { Text = "Save", Location = new Point(496, 588), Size = new Size(104, 38) };
+            var save = new Button { Text = "Save", Location = new Point(496, 628), Size = new Size(104, 38) };
             save.Click += delegate { if (Commit()) Close(); };
             Controls.Add(save);
 #if !NEBULA_SETTINGS_APP
@@ -902,6 +905,7 @@ namespace Nebula.Launcher
             vsync.Checked = graphics.VSync;
             antiAliasing.SelectedIndex = graphics.AntiAliasing;
             aaQuality.SelectedIndex = graphics.Quality;
+            msaa.SelectedIndex = graphics.Msaa;
             upscaler.SelectedIndex = upscalerChoices.Contains(graphics.Upscaler)
                 ? upscalerChoices.IndexOf(graphics.Upscaler) : upscalerChoices.IndexOf(1);
             ShowUpscalerQuality();
@@ -1144,6 +1148,7 @@ namespace Nebula.Launcher
                 }
                 graphics.AntiAliasing = antiAliasing.SelectedIndex;
                 graphics.Quality = aaQuality.SelectedIndex;
+                graphics.Msaa = Math.Max(0, msaa.SelectedIndex);
                 graphics.Sharpness = (int)sharpness.Value;
                 graphics.TextureFilter = textureFilter.SelectedIndex;
                 graphics.EnhancedLighting = lighting.SelectedIndex == 0;
