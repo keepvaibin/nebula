@@ -65,11 +65,23 @@ object Storage {
 }
 
 /** The renderer's settings, config.ini in the data folder (runtime/src/gx/render_config.cpp reads it). */
-data class GraphicsSettings(val scale: Int, val matchScreen: Boolean, val vsync: Boolean, val displayRate: Boolean) {
+data class GraphicsSettings(
+    val scale: Int,
+    val matchScreen: Boolean,
+    val vsync: Boolean,
+    val displayRate: Boolean,
+    val aa: String,         // config.ini's aa: "off", "fxaa" or "smaa"
+    val fsr: Boolean,       // upscaler "fsr" (FSR 1) rather than "bilinear"
+    val sharpness: Int,     // RCAS, 0-100
+    val hudAtScreen: Boolean,  // hud_output_resolution: menus and HUD drawn at the screen's resolution
+) {
     companion object {
         // The runtime's defaults: 1x, VSYNC on, 60 fps (displayRate: the display's own rate, frames in between drawn
-        // from the game's motion).
-        val Default = GraphicsSettings(scale = 1, matchScreen = false, vsync = true, displayRate = false)
+        // from the game's motion), no anti-aliasing, bilinear enlarging, no sharpening.
+        val Default = GraphicsSettings(
+            scale = 1, matchScreen = false, vsync = true, displayRate = false, aa = "off", fsr = false, sharpness = 0,
+            hudAtScreen = false,
+        )
         const val MAX_SCALE = 4
 
         fun read(context: Context): GraphicsSettings {
@@ -79,6 +91,10 @@ data class GraphicsSettings(val scale: Int, val matchScreen: Boolean, val vsync:
                 matchScreen = values["internal_follow_window"]?.let { it == "1" } ?: Default.matchScreen,
                 vsync = values["vsync_interval"]?.let { it != "0" } ?: Default.vsync,
                 displayRate = values["max_fps"]?.toFloatOrNull()?.let { it == 0f } ?: Default.displayRate,
+                aa = values["aa"]?.takeIf { it == "fxaa" || it == "smaa" } ?: Default.aa,
+                fsr = values["upscaler"]?.let { it == "fsr" } ?: Default.fsr,
+                sharpness = values["sharpness"]?.toIntOrNull()?.coerceIn(0, 100) ?: Default.sharpness,
+                hudAtScreen = values["hud_output_resolution"]?.let { it == "1" } ?: Default.hudAtScreen,
             )
         }
 
@@ -103,6 +119,10 @@ data class GraphicsSettings(val scale: Int, val matchScreen: Boolean, val vsync:
         values["internal_follow_window"] = if (matchScreen) "1" else "0"
         values["vsync_interval"] = if (vsync) "1" else "0"
         values["max_fps"] = if (displayRate) "0" else "60"
+        values["aa"] = aa
+        values["upscaler"] = if (fsr) "fsr" else "bilinear"
+        values["sharpness"] = sharpness.toString()
+        values["hud_output_resolution"] = if (hudAtScreen) "1" else "0"
         file.parentFile?.mkdirs()
         val temporary = File(file.parentFile, ".config.ini.writing")
         temporary.writeText(values.entries.joinToString("\n", postfix = "\n") { "${it.key}=${it.value}" })

@@ -466,6 +466,10 @@ private fun SettingsScreen(model: LauncherModel, onChoose: () -> Unit, onShareLo
                     ChoiceRow("Match the screen", "The smallest that covers this display", graphics.matchScreen) {
                         model.updateGraphics(graphics.copy(matchScreen = true))
                     }
+                    SwitchRow("Menus and HUD at the screen's resolution", "Sharp text at any internal resolution",
+                        graphics.hudAtScreen) {
+                        model.updateGraphics(graphics.copy(hudAtScreen = it))
+                    }
                     val refresh = LocalView.current.display?.let { DisplayRate.fastestMode(it).refreshRate.roundToInt() } ?: 60
                     if (refresh > 61) {
                         HorizontalDivider(color = Night.GlassEdge, modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
@@ -480,6 +484,30 @@ private fun SettingsScreen(model: LauncherModel, onChoose: () -> Unit, onShareLo
                         ChoiceRow("$refresh fps", "Frames in between are drawn from the game's motion. More power.", graphics.displayRate) {
                             model.updateGraphics(graphics.copy(displayRate = true))
                         }
+                    }
+                    HorizontalDivider(color = Night.GlassEdge, modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
+                    Text(
+                        "Anti-aliasing",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(start = 20.dp, top = 10.dp, end = 20.dp),
+                    )
+                    ChoiceRow("Off", null, graphics.aa == "off") { model.updateGraphics(graphics.copy(aa = "off")) }
+                    ChoiceRow("FXAA", "Lightest", graphics.aa == "fxaa") { model.updateGraphics(graphics.copy(aa = "fxaa")) }
+                    ChoiceRow("SMAA", "Cleaner edges", graphics.aa == "smaa") {
+                        model.updateGraphics(graphics.copy(aa = "smaa"))
+                    }
+                    HorizontalDivider(color = Night.GlassEdge, modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
+                    Text(
+                        "Enlarging to the screen",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(start = 20.dp, top = 10.dp, end = 20.dp),
+                    )
+                    ChoiceRow("Bilinear", null, !graphics.fsr) { model.updateGraphics(graphics.copy(fsr = false)) }
+                    ChoiceRow("FSR 1", "Sharper edges when enlarging", graphics.fsr) {
+                        model.updateGraphics(graphics.copy(fsr = true))
+                    }
+                    SliderRow("Sharpening", graphics.sharpness / 100f, 0f..1f, { "${(it * 100).roundToInt()}%" }) {
+                        model.updateGraphics(graphics.copy(sharpness = (it * 100).roundToInt()))
                     }
                     HorizontalDivider(color = Night.GlassEdge, modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
                     SwitchRow("VSync", "Frames wait for the display. Off lowers latency.", graphics.vsync) {
