@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Nebula's mark (the Windows icon, installer/assets/nebula.ico) inside the adaptive icon's safe zone. -->
+<!-- Nebula's mark (the Windows icon's nebula, from its 819 px source) inside the adaptive icon's safe zone. -->
 <inset xmlns:android="http://schemas.android.com/apk/res/android"
     android:drawable="@drawable/nebula_mark"
     android:inset="12dp" />
