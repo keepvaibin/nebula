@@ -14,6 +14,9 @@
 #endif
 
 #include <algorithm>
+#include <limits>
+#include <cstdlib>
+#include <cerrno>
 #include <cmath>
 #include <cstring>
 
@@ -558,6 +561,65 @@ std::uint64_t smooth_realtime_present_max_wait_us() {
             8000u);
     }();
     return wait_us;
+}
+
+std::uint64_t read_megabyte_budget(
+    const char* variable, std::uint64_t default_bytes,
+    bool zero_uses_default,
+    std::uint64_t maximum_bytes) {
+    char value[24]{};
+    std::size_t length = 0u;
+    if (getenv_s(&length, value, sizeof(value), variable) != 0 || length <= 1u) {
+        return default_bytes;
+    }
+    for (const char* digit = value; *digit != '\0'; ++digit) {
+        if (*digit < '0' || *digit > '9') {
+            return default_bytes;
+        }
+    }
+    errno = 0;
+    char* end = nullptr;
+    const unsigned long long megabytes = std::strtoull(value, &end, 10);
+    constexpr std::uint64_t kMegabyte = UINT64_C(1) << 20;
+    if (end == value || *end != '\0' || errno == ERANGE ||
+        megabytes > maximum_bytes / kMegabyte ||
+        (megabytes == 0u && zero_uses_default)) {
+        return default_bytes;
+    }
+    return static_cast<std::uint64_t>(megabytes) * kMegabyte;
+}
+
+// Byte budget for the EFB-copy destination cache. It is hoisted out of the eviction site so the
+// value in use can be reported with the live bytes. The pool's allocation scales with
+// efb_scale^2 while this budget stays fixed, so it is the one resolution-scaled GPU pool that is
+// neither a render target nor visible in any recording.
+std::uint64_t efb_copy_dest_budget_bytes() {
+    static const std::uint64_t bytes = read_megabyte_budget(
+        "GALAXY_EFB_COPY_DEST_BUDGET_MB", UINT64_C(192) << 20, false);
+    return bytes;
+}
+
+EffectCopyPolicy effect_copy_policy() noexcept {
+    static const EffectCopyPolicy policy = [] {
+        EffectCopyPolicy result;
+        char value[8]{};
+        std::size_t length = 0u;
+        result.native_bloom_workspace =
+            getenv_s(&length, value, sizeof(value), "GALAXY_NATIVE_BLOOM_WORKSPACE") == 0 && length == 2u &&
+            value[0] == '1';
+        length = 0u;
+        result.native_effect_copies =
+            !(getenv_s(&length, value, sizeof(value), "GALAXY_NATIVE_EFFECT_COPIES") == 0 && length == 2u &&
+              value[0] == '0');
+        return result;
+    }();
+    return policy;
+}
+
+bool is_effect_copy(const EffectCopyPolicy& policy, const EfbCopyParams& params, bool is_depth_copy,
+                    unsigned width, unsigned height) noexcept {
+    return policy.native_effect_copies ? width <= 320u && height <= 228u
+                                       : is_galaxy_bloom_workspace_copy(params, is_depth_copy);
 }
 
 #if defined(_WIN32)

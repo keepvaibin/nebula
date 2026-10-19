@@ -4,10 +4,14 @@
 // around this backend.
 
 #define WIN32_LEAN_AND_MEAN
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
 #pragma warning(push, 0)
 #include <Windows.h>
+#if !defined(NEBULA_GPU_VULKAN)
 #include <d3d12.h>
+#endif
 #pragma warning(pop)
 
 #include "galaxy/gx/gx_backend.h"

@@ -1742,11 +1742,11 @@ bool TextureCache::register_efb_copy(
     const auto current_alias_it = efb_aliases_.find(alias_key);
     const bool current_alias_same_resource =
         current_alias_it != efb_aliases_.end() &&
-        current_alias_it->second.texture.Get() == texture.Get();
+        gpu::raw(current_alias_it->second.texture) == gpu::raw(texture);
     if (debug_capture_frame_ != 0u) {
         std::cerr << "[cap-alias-copy] frame=" << debug_capture_frame_
                   << " addr=0x" << std::hex << guest_addr
-                  << " resource=" << texture.Get() << std::dec
+                  << " resource=" << gpu::raw(texture) << std::dec
                   << " bytes=" << guest_byte_size
                   << " wh=" << alias_width << 'x' << alias_height
                   << " format=" << static_cast<unsigned>(alias_key.format)
@@ -1787,7 +1787,7 @@ bool TextureCache::register_efb_copy(
             alias_begin + it->second.handle.guest_byte_size;
         const bool is_current_same_resource =
             it->first == alias_key &&
-            it->second.texture.Get() == texture.Get();
+            gpu::raw(it->second.texture) == gpu::raw(texture);
         if (!is_current_same_resource &&
             overlaps(new_begin, new_end, alias_begin, alias_end)) {
             if (dependency_event_sink_ != nullptr) {
@@ -1796,7 +1796,7 @@ bool TextureCache::register_efb_copy(
                                        it->first.width, it->first.height,
                                        it->first.format},
                     reinterpret_cast<std::uintptr_t>(
-                        it->second.texture.Get()));
+                        gpu::raw(it->second.texture)));
             }
             retire(std::move(it->second));
             it = efb_aliases_.erase(it);
@@ -1851,7 +1851,7 @@ bool TextureCache::register_efb_copy(
                                    alias_it->first.height,
                                    alias_it->first.format},
                 reinterpret_cast<std::uintptr_t>(
-                    alias_it->second.texture.Get()));
+                    gpu::raw(alias_it->second.texture)));
         }
         retire(std::move(alias_it->second));
         alias_it->second = std::move(entry);
@@ -1962,7 +1962,7 @@ std::size_t TextureCache::invalidate_guest_ranges(
             if (trace_dirty_detail) {
                 std::cerr << "[gx-texture-dirty-detail] kind=efb-alias"
                           << " frame=" << debug_capture_frame_
-                          << " resource=" << it->second.texture.Get()
+                          << " resource=" << gpu::raw(it->second.texture)
                           << " dirty=0x" << std::hex << std::uppercase
                           << static_cast<std::uint32_t>(dirty_begin)
                           << "..0x" << static_cast<std::uint32_t>(dirty_end)
@@ -1982,7 +1982,7 @@ std::size_t TextureCache::invalidate_guest_ranges(
                                        it->first.width, it->first.height,
                                        it->first.format},
                     reinterpret_cast<std::uintptr_t>(
-                        it->second.texture.Get()));
+                        gpu::raw(it->second.texture)));
             }
             retire(std::move(it->second));
             it = efb_aliases_.erase(it);
@@ -2187,7 +2187,7 @@ TextureHandle TextureCache::get(
                 Entry entry{};
                 entry.texture = it->second.texture;
                 entry.allocation_bytes = it->second.allocation_bytes;
-                entry.handle.resource = entry.texture.Get();
+                entry.handle.resource = gpu::raw(entry.texture);
                 entry.handle.srv_index = srv_idx;
                 entry.handle.width = static_cast<std::uint16_t>(w);
                 entry.handle.height = static_cast<std::uint16_t>(h);

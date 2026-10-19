@@ -5,6 +5,7 @@
 
 #include "galaxy/gx/efb_copy.h"
 #include "galaxy/gx/render_config.h"
+#include "galaxy/gx/renderer_common.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -467,6 +468,34 @@ const XfbTexture* EfbCopyManager::find_xfb(
         return nullptr;
     }
     return it->second.presentable ? &it->second : nullptr;
+}
+
+std::optional<EfbCopyRect> efb_identity_copy_rect(
+    const EfbCopyParams& params, bool is_depth_copy, unsigned efb_scale,
+    unsigned dest_width, unsigned dest_height) noexcept {
+    if (is_depth_copy || params.copy_to_xfb || params.target_format != 6u ||
+        params.intensity || params.yuv || (params.gamma & 3u) != 0u ||
+        params.half_scale || params.scale_y || params.frame_to_field != 0u ||
+        params.src_width == 0u || params.src_height == 0u ||
+        static_cast<unsigned>(params.src_x) + params.src_width > kEfbWidth ||
+        static_cast<unsigned>(params.src_y) + params.src_height > kEfbHeight) {
+        return std::nullopt;
+    }
+    const unsigned upper = params.filter_upper();
+    const unsigned middle = params.filter_middle();
+    const unsigned lower = params.filter_lower();
+    // All-zero startup registers use middle64 in the conversion shader too.
+    if (upper != 0u || lower != 0u || (middle != 0u && middle != 64u)) {
+        return std::nullopt;
+    }
+    const unsigned scale = std::clamp(efb_scale, 1u, kMaxEfbScale);
+    if (dest_width != params.src_width * scale ||
+        dest_height != params.src_height * scale) {
+        return std::nullopt;
+    }
+    const std::uint32_t left = params.src_x * scale;
+    const std::uint32_t top = params.src_y * scale;
+    return EfbCopyRect{left, top, left + dest_width, top + dest_height};
 }
 
 }  // namespace galaxy::gx

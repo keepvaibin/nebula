@@ -661,32 +661,6 @@ DescriptorRing::Table DescriptorRing::allocate(unsigned count) {
 namespace {
 
 // Keep malformed or overflowing settings from changing the intended budget.
-[[nodiscard]] std::uint64_t read_megabyte_budget(
-    const char* variable, std::uint64_t default_bytes,
-    bool zero_uses_default,
-    std::uint64_t maximum_bytes = std::numeric_limits<std::uint64_t>::max()) {
-    char value[24]{};
-    std::size_t length = 0u;
-    if (getenv_s(&length, value, sizeof(value), variable) != 0 || length <= 1u) {
-        return default_bytes;
-    }
-    for (const char* digit = value; *digit != '\0'; ++digit) {
-        if (*digit < '0' || *digit > '9') {
-            return default_bytes;
-        }
-    }
-    errno = 0;
-    char* end = nullptr;
-    const unsigned long long megabytes = std::strtoull(value, &end, 10);
-    constexpr std::uint64_t kMegabyte = UINT64_C(1) << 20;
-    if (end == value || *end != '\0' || errno == ERANGE ||
-        megabytes > maximum_bytes / kMegabyte ||
-        (megabytes == 0u && zero_uses_default)) {
-        return default_bytes;
-    }
-    return static_cast<std::uint64_t>(megabytes) * kMegabyte;
-}
-
 [[nodiscard]] std::size_t ring_bytes_per_frame(
     const char* variable,
     std::size_t default_bytes) {
@@ -711,16 +685,6 @@ bool g_selected_adapter_valid = false;
 // class of part it is the fictitious compatibility value (see the ring-sizing comment above,
 // and Intel FAQ 000020962). The threshold is loose (256 MiB dedicated, with shared an order of
 // magnitude larger), so a low-end discrete part with a small real pool is not classed as unified.
-// Byte budget for the EFB-copy destination cache. It is hoisted out of the eviction site so the
-// value in use can be reported with the live bytes. The pool's allocation scales with
-// efb_scale^2 while this budget stays fixed, so it is the one resolution-scaled GPU pool that is
-// neither a render target nor visible in any recording.
-[[nodiscard]] std::uint64_t efb_copy_dest_budget_bytes() {
-    static const std::uint64_t bytes = read_megabyte_budget(
-        "GALAXY_EFB_COPY_DEST_BUDGET_MB", UINT64_C(192) << 20, false);
-    return bytes;
-}
-
 [[nodiscard]] bool adapter_is_unified_memory() {
     if (!g_selected_adapter_valid) {
         return false;
@@ -4998,29 +4962,12 @@ void RendererD3D12::draw(const DrawCall& call) {
 std::optional<D3D12_BOX> detail::efb_identity_copy_box(
     const EfbCopyParams& params, bool is_depth_copy, unsigned efb_scale,
     unsigned dest_width, unsigned dest_height) noexcept {
-    if (is_depth_copy || params.copy_to_xfb || params.target_format != 6u ||
-        params.intensity || params.yuv || (params.gamma & 3u) != 0u ||
-        params.half_scale || params.scale_y || params.frame_to_field != 0u ||
-        params.src_width == 0u || params.src_height == 0u ||
-        static_cast<unsigned>(params.src_x) + params.src_width > kEfbWidth ||
-        static_cast<unsigned>(params.src_y) + params.src_height > kEfbHeight) {
+    const std::optional<EfbCopyRect> rect =
+        efb_identity_copy_rect(params, is_depth_copy, efb_scale, dest_width, dest_height);
+    if (!rect) {
         return std::nullopt;
     }
-    const unsigned upper = params.filter_upper();
-    const unsigned middle = params.filter_middle();
-    const unsigned lower = params.filter_lower();
-    // All-zero startup registers use middle64 in the conversion shader too.
-    if (upper != 0u || lower != 0u || (middle != 0u && middle != 64u)) {
-        return std::nullopt;
-    }
-    const unsigned scale = std::clamp(efb_scale, 1u, kMaxEfbScale);
-    if (dest_width != params.src_width * scale ||
-        dest_height != params.src_height * scale) {
-        return std::nullopt;
-    }
-    const UINT left = params.src_x * scale;
-    const UINT top = params.src_y * scale;
-    return D3D12_BOX{left, top, 0u, left + dest_width, top + dest_height, 1u};
+    return D3D12_BOX{rect->left, rect->top, 0u, rect->right, rect->bottom, 1u};
 }
 
 void detail::record_efb_identity_copy(
@@ -5246,17 +5193,7 @@ bool RendererD3D12::copy_efb_to_texture(
     const UINT dh_unscaled = params.half_scale
         ? std::max<UINT>(1u, params.src_height / 2u)
         : params.src_height;
-    // Experimental until image/motion and route validation. Inspired by
-    // Dolphin's Super Mario Galaxy Native Bloom graphics mod (iwubcode,
-    // GPL-2.0-or-later): preserve native bloom surfaces while sampling the
-    // actual high-resolution EFB. No scene/depth/XFB resolution reduction.
-    static const bool native_bloom_workspace = [] {
-        char value[8]{};
-        std::size_t length = 0u;
-        return getenv_s(&length, value, sizeof(value),
-            "GALAXY_NATIVE_BLOOM_WORKSPACE") == 0 &&
-            length == 2u && value[0] == '1';
-    }();
+    const EffectCopyPolicy& policy = effect_copy_policy();
     // Diagnostic A/B control only: permits stationary-camera comparison in
     // one process. No file access or clock sampling in normal play. The
     // render worker owns this state; missing/malformed input preserves it.
@@ -5267,27 +5204,11 @@ bool RendererD3D12::copy_efb_to_texture(
             "GALAXY_NATIVE_BLOOM_COMPARISON_FILE") == 0 && length > 1u
             ? std::string(value) : std::string{};
     }();
-    // Effect copies (destinations up to 320x228: the bloom pyramid, simple
-    // bloom, depth of field, Mario's 160x160 shadow capture) are built at the
-    // game's own resolution, box-filtered over the scaled EFB (kConvPs). Their
-    // low resolution is part of the effect: the blur kernels use fixed
-    // screen-relative tap offsets and rely on it to soften, so scaled copies
-    // turn the taps into separate offset images. Full-size captures stay
-    // scaled. GALAXY_NATIVE_EFFECT_COPIES=0 keeps only the three bloom
-    // workspace copies native (GALAXY_NATIVE_BLOOM_WORKSPACE).
-    static const bool native_effect_copies = [] {
-        char value[8]{};
-        std::size_t length = 0u;
-        return !(getenv_s(&length, value, sizeof(value),
-            "GALAXY_NATIVE_EFFECT_COPIES") == 0 && length == 2u && value[0] == '0');
-    }();
-    static bool comparison_enabled = native_bloom_workspace || native_effect_copies;
+    static bool comparison_enabled = policy.native_bloom_workspace || policy.native_effect_copies;
     static ULONGLONG comparison_last_poll = 0u;
-    const bool effect_copy = native_effect_copies
-        ? dw_unscaled <= 320u && dh_unscaled <= 228u
-        : is_galaxy_bloom_workspace_copy(params, is_depth_copy);
+    const bool effect_copy = is_effect_copy(policy, params, is_depth_copy, dw_unscaled, dh_unscaled);
     const bool bloom_copy =
-        (native_bloom_workspace || native_effect_copies || !bloom_comparison_file.empty()) &&
+        (policy.native_bloom_workspace || policy.native_effect_copies || !bloom_comparison_file.empty()) &&
         efb_scale_ > 1u && effect_copy;
     if (bloom_copy && !bloom_comparison_file.empty()) {
         const auto now = GetTickCount64();

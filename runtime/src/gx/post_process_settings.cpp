@@ -99,4 +99,9 @@ std::string post_process_caps_text(const PostProcessStatus& status) {
            ", FXAA " + (status.fxaa_ok ? "PASS" : "FAIL");
 }
 
+#if defined(NEBULA_GPU_VULKAN)
+// Temporal upscaling is D3D12-only so far (temporal_upscaler.cpp).
+bool fsr3_available() noexcept { return false; }
+#endif
+
 }  // namespace galaxy::gx

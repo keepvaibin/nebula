@@ -7,7 +7,9 @@
 //
 //   <host> --pak <game.pak> --nand <dir> [--module <smg_game.dll>] [--seconds N]
 #if defined(_WIN32)
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
 #endif
 #include <nebula_game_api.h>
 
@@ -46,7 +48,6 @@
 #include <vector>
 
 #if defined(_WIN32)
-#define NOMINMAX
 #include <windows.h>
 #include <intrin.h>
 #include <dbghelp.h>

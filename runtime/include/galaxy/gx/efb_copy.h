@@ -29,6 +29,7 @@
 #include <cstddef>
 #include "galaxy/gx/pointer_response.h"
 #include <cstdint>
+#include <optional>
 #include <unordered_map>
 #include <vector>
 
@@ -146,6 +147,18 @@ struct EfbCopySamplingGeometry {
     unsigned dest_width,
     unsigned dest_height,
     unsigned efb_scale) noexcept;
+
+// A copy that is an exact colour/alpha identity at `efb_scale`: its source rectangle in scaled EFB texels. Rejects
+// filtering, conversion, resampling and any source rectangle that would need the conversion shader's clamp.
+struct EfbCopyRect {
+    std::uint32_t left = 0;
+    std::uint32_t top = 0;
+    std::uint32_t right = 0;
+    std::uint32_t bottom = 0;
+};
+[[nodiscard]] std::optional<EfbCopyRect> efb_identity_copy_rect(
+    const EfbCopyParams& params, bool is_depth_copy, unsigned efb_scale,
+    unsigned dest_width, unsigned dest_height) noexcept;
 
 struct ScaledEfbRect {
     std::int32_t left = 0;
