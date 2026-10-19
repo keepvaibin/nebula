@@ -1,5 +1,6 @@
 #include "Game/Map/LightFunction.hpp"
 #ifdef TARGET_PC
+#include "Game/Util/GameLightSignal.hpp"
 #include "Game/Util/MotionSignal.hpp"
 #endif
 #include "Game/AreaObj/LightAreaHolder.hpp"
@@ -192,6 +193,7 @@ namespace {
 void LightFunction::loadActorLightInfo(const ActorLightInfo* pInfo) {
 #ifdef TARGET_PC
     MotionSignal::actorLight(pInfo);
+    GameLightSignal::actorLight(pInfo);
 #endif
     ::loadLightInfoDiffuse(pInfo->mInfo0, GX_LIGHT0);
     ::loadLightInfoDiffuse(pInfo->mInfo1, GX_LIGHT1);
@@ -219,6 +221,7 @@ void LightFunction::loadLightInfoCoin(const LightInfoCoin* pInfo) {
 void LightFunction::loadPointLightInfo(const PointLightInfo* pInfo) {
 #ifdef TARGET_PC
     MotionSignal::pointLight(pInfo);
+    GameLightSignal::pointLight(pInfo);
 #endif
     TVec3f v7(pInfo->mPos);
     MR::getCameraViewMtx().mult(v7, v7);

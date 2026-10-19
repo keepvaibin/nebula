@@ -46,6 +46,7 @@ inline int64_t perf_hint_retrace() noexcept { return 0; }
 #endif
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -1339,6 +1340,55 @@ void svc_scene_surround(void*, float intensity) {
 #endif
 }
 
+// The game's lights (NEBULA_LIGHT_*) into the renderer's light registry (game_lights.cpp), which the ray tracer reads.
+void svc_game_light(void*, uint32_t kind, uint32_t id, const float* v) {
+#if defined(NEBULA_HOST_RENDERER)
+    switch (kind) {
+    case NEBULA_LIGHT_SUN:
+        galaxy::gx::set_game_sun({v[0], v[1], v[2]}, v[3]);
+        break;
+    case NEBULA_LIGHT_STAR_CORE:
+        galaxy::gx::set_star_core({v[0], v[1], v[2]}, v[3]);
+        break;
+    case NEBULA_LIGHT_POINT:
+        galaxy::gx::note_game_point_light(id, {v[0], v[1], v[2]}, {v[3], v[4], v[5]}, v[6]);
+        break;
+    case NEBULA_LIGHT_POINT_REQUEST:
+        galaxy::gx::note_game_point_request(id, {v[0], v[1], v[2]}, {v[3], v[4], v[5]}, v[6]);
+        break;
+    case NEBULA_LIGHT_WORLD:
+        galaxy::gx::note_game_world_light({v[0], v[1], v[2]}, {v[3], v[4], v[5]});
+        break;
+    default:
+        break;
+    }
+    // GALAXY_TRACE_GAME_LIGHTS=1: every 10 s, the lights of each kind since the last line and the sun's direction.
+    static const bool trace = std::getenv("GALAXY_TRACE_GAME_LIGHTS") != nullptr;
+    if (trace && kind <= NEBULA_LIGHT_WORLD) [[unlikely]] {
+        static std::array<std::uint32_t, NEBULA_LIGHT_WORLD + 1> counts{};
+        static std::array<float, 4> sun{};
+        static auto last = std::chrono::steady_clock::now();
+        ++counts[kind];
+        if (kind == NEBULA_LIGHT_SUN) {
+            sun = {v[0], v[1], v[2], v[3]};
+        }
+        const auto now = std::chrono::steady_clock::now();
+        if (now - last >= std::chrono::seconds(10)) {
+            last = now;
+            std::fprintf(stderr,
+                         "[game-light] sun=%u star-core=%u point=%u request=%u world=%u sun-direction=(%.3f %.3f %.3f) "
+                         "distance=%.0f\n",
+                         counts[0], counts[1], counts[2], counts[3], counts[4], sun[0], sun[1], sun[2], sun[3]);
+            counts = {};
+        }
+    }
+#else
+    (void)kind;
+    (void)id;
+    (void)v;
+#endif
+}
+
 uint32_t svc_option(void*, uint32_t what) {
     switch (what) {
     case NEBULA_OPTION_TEXT_SPEED:
@@ -2018,6 +2068,7 @@ int main(int argc, char** argv) {
     services.display_extent = svc_display_extent;
     services.scene_surround = svc_scene_surround;
     services.option = svc_option;
+    services.game_light = svc_game_light;
 #if defined(NEBULA_HOST_RENDERER)
     // Every aspect follows the output's shape through the live aspect path, as v1.0.1 sets it; explicit aspect
     // variables (tests) are kept. Before the renderer starts: it reads the choice once.

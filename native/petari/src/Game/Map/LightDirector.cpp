@@ -1,4 +1,7 @@
 #include "Game/Map/LightDirector.hpp"
+#ifdef TARGET_PC
+#include "Game/Util/GameLightSignal.hpp"
+#endif
 #include "Game/LiveActor/ActorLightCtrl.hpp"
 #include "Game/Map/LightDataHolder.hpp"
 #include "Game/Map/LightFunction.hpp"
@@ -9,6 +12,9 @@
 
 LightDirector::LightDirector()
     : NameObj("\203\211\203\103\203\147\216\167\212\366" /* ライト指揮 */), _C(), mDataHolder(), mZoneDataHolder(), mDefaultAreaLight(), _1C(), mPointCtrl(), mResourceHolder() {
+#ifdef TARGET_PC
+    GameLightSignal::sceneStart();
+#endif
 }
 
 void LightDirector::init(const JMapInfoIter& rIter) {

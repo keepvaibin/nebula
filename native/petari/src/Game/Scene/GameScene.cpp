@@ -1,5 +1,6 @@
 #include "Game/Scene/GameScene.hpp"
 #ifdef TARGET_PC
+#include "Game/Util/GameLightSignal.hpp"
 #include "Game/Util/MotionSignal.hpp"
 #endif
 #ifdef TARGET_PC
@@ -433,6 +434,7 @@ void GameScene::draw3D() const {
     MotionSignal::sceneCamera(sceneCamera);
     __NebulaGXSceneMarker(NEBULA_SCENE_3D_BEGIN, sceneCamera);
     MotionSignal::sceneBegin();
+    GameLightSignal::frame();
     CategoryList::execute(MR::DrawType_AstroDomeSkyClear);
     MR::loadViewMtx();
     MR::loadProjectionMtx();

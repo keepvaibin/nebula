@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 8u
+#define NEBULA_GAME_API_VERSION 9u
 
 /* A physical range of the game's memory and where it is in the host process: what the GPU's addresses resolve to. */
 typedef struct NebulaGameMemoryRegion {
@@ -128,6 +128,15 @@ enum {
     NEBULA_OPTION_TEXT_SPEED = 1, /* 1 to 3: text steps revealed per frame */
     NEBULA_OPTION_TEST_DUMP_LAYOUTS, /* tests: 1 logs each layout's pane tree once (GALAXY_TEST_DUMP_LAYOUTS) */
     NEBULA_OPTION_DRAW_IDENTITIES, /* 1 while the renderer reads host markers (__NebulaGXHostMarker) */
+};
+
+/* game_light: the game's lights, from the objects that own them; `values` per kind. */
+enum {
+    NEBULA_LIGHT_SUN = 0,       /* BrightSun: direction from the camera towards it (3), its distance */
+    NEBULA_LIGHT_STAR_CORE,     /* the Comet Observatory's AstroCore: position (3), scale */
+    NEBULA_LIGHT_POINT,         /* LightPointCtrl's point light: position (3), colour (3), distance where it halves */
+    NEBULA_LIGHT_POINT_REQUEST, /* one actor's request for it (id the actor), as NEBULA_LIGHT_POINT */
+    NEBULA_LIGHT_WORLD,         /* a world-fixed area light far out: position (3), colour (3) */
 };
 
 /* gx_scene_marker: the scene bounds in the stream. */
@@ -255,6 +264,9 @@ typedef struct NebulaHostServices {
     void (*scene_surround)(void* user, float intensity);
     /* A Nebula option (NEBULA_OPTION_*), read when the game needs it. */
     uint32_t (*option)(void* user, uint32_t what);
+    /* A light of the game (NEBULA_LIGHT_*): `id` names it across frames (0: none), `values` as the kind lists. Called on
+       the simulation thread. */
+    void (*game_light)(void* user, uint32_t kind, uint32_t id, const float* values);
 } NebulaHostServices;
 
 enum {
