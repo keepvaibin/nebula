@@ -1112,15 +1112,17 @@ bool RendererVk::record_replay_list(ReplayList& list) {
         list.descriptors =
             create_pool(device, kFrameSets, constants_sets(64u, {.images = kFrameSets * 8u}));
     }
-    if (replay_efb_.color && replay_efb_scale_ != efb_scale_) {
+    // The scene EFB's scale (the output EFB's place while the live frame's 2D layer is in it).
+    const unsigned scene_scale = output_efb_active_ ? alt_efb_scale_ : efb_scale_;
+    if (replay_efb_.color && replay_efb_scale_ != scene_scale) {
         destroy_efb_set(replay_efb_);
     }
     if (!replay_efb_.color) {
-        if (!create_efb_set(replay_efb_, efb_scale_)) {
+        if (!create_efb_set(replay_efb_, scene_scale)) {
             replay_failure_ = 5u;
             return false;
         }
-        replay_efb_scale_ = efb_scale_;
+        replay_efb_scale_ = scene_scale;
     }
     const ReplayCopy* display = nullptr;
     for (const ReplayCopy& copy : run_log_.copies) {
@@ -1157,9 +1159,16 @@ bool RendererVk::record_replay_list(ReplayList& list) {
 
     const VkCommandBuffer saved_commands = commands_;
     const bool saved_pass = efb_pass_open_;
+    // The live frame's EFB back in place when its 2D layer is in the output EFB (the log starts at the scene's).
+    const bool live_output = output_efb_active_;
+    if (live_output) {
+        swap_efb_sets();
+    }
     commands_ = list.commands;
     efb_pass_open_ = false;
     std::swap(efb_, replay_efb_);
+    std::swap(alt_efb_, replay_alt_efb_);
+    std::swap(alt_efb_scale_, replay_alt_scale_);
     replaying_ = true;
     reset_gx_bindings();
     redirect_.clear();
@@ -1220,6 +1229,17 @@ bool RendererVk::record_replay_list(ReplayList& list) {
         case ReplayKind::SceneAa:
             record_scene_aa();
             break;
+        case ReplayKind::OutputEfbBegin:
+            if (!output_efb_active_) {
+                (void)enter_output_efb(op.index);
+            }
+            break;
+        case ReplayKind::SwapEfbSets:
+            if (alt_efb_.color) {
+                swap_efb_sets();
+                bind_efb(nullptr);
+            }
+            break;
         case ReplayKind::Copy: {
             const ReplayCopy& copy = run_log_.copies[op.index];
             if (copy.display) {
@@ -1258,7 +1278,15 @@ bool RendererVk::record_replay_list(ReplayList& list) {
         }
     }
     end_efb_pass();
+    if (output_efb_active_) {
+        swap_efb_sets();
+    }
+    std::swap(alt_efb_, replay_alt_efb_);
+    std::swap(alt_efb_scale_, replay_alt_scale_);
     std::swap(efb_, replay_efb_);
+    if (live_output) {
+        swap_efb_sets();
+    }
     replaying_ = false;
     replay_list_ = nullptr;
     commands_ = saved_commands;
@@ -1489,8 +1517,11 @@ void RendererVk::release_replay_resources() noexcept {
     interp_retired_.clear();
     eval_frames_.reset();
     eval_readback_.reset();
-    if (replay_efb_.framebuffer != VK_NULL_HANDLE) vkDestroyFramebuffer(device, replay_efb_.framebuffer, nullptr);
-    replay_efb_ = EfbSet{};
+    for (EfbSet* set : {&replay_efb_, &replay_alt_efb_}) {
+        if (set->framebuffer != VK_NULL_HANDLE) vkDestroyFramebuffer(device, set->framebuffer, nullptr);
+        *set = EfbSet{};
+    }
+    replay_alt_scale_ = 0u;
     subframe_xfb_ = XfbTexture{};
 }
 

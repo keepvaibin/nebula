@@ -169,10 +169,8 @@ public:
     void request_eval_readback() noexcept { eval_readback_requested_ = true; }
     [[nodiscard]] bool take_eval_readback(std::vector<std::uint32_t>& words, float& t);
     [[nodiscard]] bool temporal_mode() const { return false; }
-    // No output-resolution EFB without temporal upscaling: the EFB itself.
-    [[nodiscard]] bool copy_output_efb_to_texture(const EfbCopyParams& params, TextureCache& textures) {
-        return copy_efb_to_texture(params, textures, false);
-    }
+    // A copy right after the display copy, from the output EFB the 2D layer drew in (the EFB itself without one).
+    [[nodiscard]] bool copy_output_efb_to_texture(const EfbCopyParams& params, TextureCache& textures);
 
     [[nodiscard]] gpu::Table texture_table_for(const TextureHandle* handles, unsigned count, const TextureCache& cache,
                                                bool lit_table = false);  // no ray tracing on Vulkan yet
@@ -197,10 +195,12 @@ public:
     // `black`: the frame is presented black (the pass clears; the XFB is not drawn).
     bool present(const XfbTexture* source, bool capture_backbuffer = false, bool black = false);
 
-    // Not on Vulkan yet: the HUD split and temporal upscaling.
-    [[nodiscard]] bool begin_output_efb() noexcept { return false; }
-    void end_output_efb() noexcept {}
-    [[nodiscard]] bool output_efb_active() const noexcept { return false; }
+    // The 2D layer at the window's resolution (hud_output_resolution): at the scene's end the EFB is resampled into
+    // an EFB at the window's scale, which the 2D layer and the display copy then use, until end_output_efb.
+    [[nodiscard]] bool begin_output_efb();
+    void end_output_efb();
+    [[nodiscard]] bool output_efb_active() const noexcept { return output_efb_active_; }
+    // Not on Vulkan yet: temporal upscaling.
     [[nodiscard]] bool scene_temporal_begin(float&, float&) noexcept { return false; }
     [[nodiscard]] bool begin_motion_scene() noexcept { return false; }
     void record_motion_debug_view() noexcept {}
@@ -441,6 +441,13 @@ private:
         VkDescriptorSet depth_source = VK_NULL_HANDLE;
     };
     EfbSet efb_;
+    // The output EFB (begin_output_efb) and its scale; they trade places with efb_ and efb_scale_ while it is active.
+    EfbSet alt_efb_;
+    unsigned alt_efb_scale_ = 0;
+    bool output_efb_active_ = false;
+    [[nodiscard]] unsigned output_efb_scale_for_window() const;
+    bool enter_output_efb(unsigned scale);
+    void swap_efb_sets();
     gpu::TextureRef efb_carry_color_;  // the previous targets, read once after a resolution change
     gpu::TextureRef efb_carry_depth_;
     bool efb_pass_open_ = false;
@@ -568,7 +575,9 @@ private:
     bool ring_advance_pending_ = false;
 
     // The log: one game frame's GX work in order (a display copy closes it).
-    enum class ReplayKind : std::uint8_t { Draw, BindEfb, Clear, Copy, SceneAa };
+    // OutputEfbBegin: the scene resampled into the output EFB at the op's scale; SwapEfbSets: the EFB and the output
+    // EFB trade places.
+    enum class ReplayKind : std::uint8_t { Draw, BindEfb, Clear, Copy, SceneAa, OutputEfbBegin, SwapEfbSets };
     struct ReplayOp {
         ReplayKind kind = ReplayKind::Draw;
         std::uint32_t index = 0;
@@ -767,6 +776,8 @@ private:
     std::array<ReplayList, 3> replay_lists_{};
     EfbSet replay_efb_;
     unsigned replay_efb_scale_ = 0;
+    EfbSet replay_alt_efb_;  // the replay's output EFB
+    unsigned replay_alt_scale_ = 0;
     bool create_efb_set(EfbSet& set, unsigned scale);
     void destroy_efb_set(EfbSet& set);
     XfbTexture subframe_xfb_;

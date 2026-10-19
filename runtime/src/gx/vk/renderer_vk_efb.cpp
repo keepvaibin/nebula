@@ -194,7 +194,8 @@ bool RendererVk::efb_scale_fits_memory(unsigned scale) const {
 void RendererVk::apply_pending_efb_scale() {
     unsigned wanted = std::clamp(get_render_config().efb_scale, 1u, kMaxEfbScale);
     wanted = std::min(wanted, host_window::display_efb_scale_cap());
-    if (wanted == efb_scale_ || !efb_.color) {
+    // Not while the output EFB holds the EFB's place (its scale is the window's).
+    if (wanted == efb_scale_ || !efb_.color || output_efb_active_) {
         return;
     }
     if (wanted > efb_scale_ && !efb_scale_fits_memory(wanted)) {
@@ -486,6 +487,113 @@ VkDescriptorSet RendererVk::allocate_frame_set(VkDescriptorSetLayout layout) {
     }
     vk::check(result, "vkAllocateDescriptorSets");
     return set;
+}
+
+// The smallest integer scale whose 640x456 picture covers the window's content rectangle on both axes (the
+// launcher's Match Output rule, as RendererD3D12's).
+unsigned RendererVk::output_efb_scale_for_window() const {
+    const auto aspect = galaxy::experimental_effective_host_aspect();
+    const galaxy::ContentViewport content = galaxy::fit_content_viewport(
+        static_cast<int>(host_window::backbuffer_width), static_cast<int>(host_window::backbuffer_height),
+        aspect ? aspect->content_aspect : galaxy::kWiiContentAspect);
+    if (content.width <= 0 || content.height <= 0) {
+        return 0u;
+    }
+    const double needed = std::max(content.width / static_cast<double>(kEfbWidth), content.height / 456.0);
+    return std::clamp(static_cast<unsigned>(std::ceil(needed - 1e-6)), 1u, kMaxEfbScale);
+}
+
+// The EFB and the output EFB trade places: targets, scale and their copy sources.
+void RendererVk::swap_efb_sets() {
+    end_efb_pass();
+    std::swap(efb_, alt_efb_);
+    std::swap(efb_scale_, alt_efb_scale_);
+    output_efb_active_ = !output_efb_active_;
+    reset_gx_bindings();
+}
+
+bool RendererVk::begin_output_efb() {
+    if (output_efb_active_ || !get_render_config().hud_output_resolution) {
+        return false;
+    }
+    const unsigned scale = output_efb_scale_for_window();
+    if (scale <= efb_scale_) {
+        return false;
+    }
+    if (logging()) {
+        recording_log_.ops.push_back({ReplayKind::OutputEfbBegin, scale});
+    }
+    return enter_output_efb(scale);
+}
+
+// The whole scene EFB resampled into the output EFB with the display copy's identity settings (no filter, gamma 1.0,
+// alpha kept), which then takes the EFB's place with its depth cleared to the far plane.
+bool RendererVk::enter_output_efb(unsigned scale) {
+    const LogPause pause(*this);
+    if (!alt_efb_.color || alt_efb_scale_ != scale) {
+        if (alt_efb_.color) {
+            destroy_efb_set(alt_efb_);
+        }
+        if (!create_efb_set(alt_efb_, scale)) {
+            alt_efb_scale_ = 0u;
+            return false;
+        }
+        alt_efb_scale_ = scale;
+        if (!replaying_) {
+            std::cout << "[Renderer] 2D layer at " << scale << "x (" << kEfbWidth * scale << 'x' << kEfbHeight * scale
+                      << ")\n";
+        }
+    }
+    EfbCopyParams params{};
+    params.src_width = static_cast<std::uint16_t>(kEfbWidth);
+    params.src_height = static_cast<std::uint16_t>(kEfbHeight);
+    params.y_scale_raw = 256u;
+    params.filter0_raw = (21u << 12u) | (22u << 18u);
+    params.filter1_raw = 21u;
+    const unsigned width = kEfbWidth * scale;
+    const unsigned height = kEfbHeight * scale;
+    const EfbCopySamplingGeometry sampling = compute_xfb_sampling_geometry(params, width, height, efb_scale_);
+    record_conversion_blit(*alt_efb_.color, width, height, params, false, false, true, 15u, sampling.src_x,
+                           sampling.src_y, sampling.step_x, sampling.step_y, sampling.filter_row_offset);
+    end_efb_pass();
+    image_barrier(commands_, alt_efb_.color->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                  VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                  VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+    alt_efb_.color->layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    swap_efb_sets();
+    bind_efb(nullptr);
+    clear_efb(0u, 0u, 0x00FFFFFFu, false, false, true);
+    return true;
+}
+
+void RendererVk::end_output_efb() {
+    if (!output_efb_active_) {
+        return;
+    }
+    if (logging()) {
+        recording_log_.ops.push_back({ReplayKind::SwapEfbSets, 0u});
+    }
+    swap_efb_sets();
+    bind_efb(nullptr);
+}
+
+bool RendererVk::copy_output_efb_to_texture(const EfbCopyParams& params, TextureCache& textures) {
+    if (output_efb_active_ || !alt_efb_.color) {
+        return copy_efb_to_texture(params, textures, false);
+    }
+    if (logging()) {
+        recording_log_.ops.push_back({ReplayKind::SwapEfbSets, 0u});
+    }
+    swap_efb_sets();
+    bind_efb(nullptr);
+    const bool updated = copy_efb_to_texture(params, textures, false);
+    if (logging()) {
+        recording_log_.ops.push_back({ReplayKind::SwapEfbSets, 0u});
+    }
+    swap_efb_sets();
+    bind_efb(nullptr);
+    return updated;
 }
 
 VkDescriptorSet RendererVk::allocate_post_set(VkDescriptorSetLayout layout) {

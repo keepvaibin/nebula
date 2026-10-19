@@ -867,10 +867,14 @@ void RendererVk::shutdown() {
         samplers_.clear();
         sampler_tables_.clear();
         constants_sets_.clear();
-        if (efb_.framebuffer != VK_NULL_HANDLE) vkDestroyFramebuffer(device, efb_.framebuffer, nullptr);
-        efb_.framebuffer = VK_NULL_HANDLE;
-        efb_.color.reset();
-        efb_.depth.reset();
+        for (EfbSet* set : {&efb_, &alt_efb_}) {
+            if (set->framebuffer != VK_NULL_HANDLE) vkDestroyFramebuffer(device, set->framebuffer, nullptr);
+            set->framebuffer = VK_NULL_HANDLE;
+            set->color.reset();
+            set->depth.reset();
+        }
+        alt_efb_scale_ = 0u;
+        output_efb_active_ = false;
         efb_carry_color_.reset();
         efb_carry_depth_.reset();
         corner_texture_.reset();
