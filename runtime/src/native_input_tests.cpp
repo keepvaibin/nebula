@@ -883,11 +883,14 @@ bool maps_opt_in_ultrawide_logical_and_pointer_space() {
             !galaxy::native_four_three(*live_four_three_policy) &&
             std::fabs(galaxy::experimental_nw4r_vertical_fit_scale(
                           *live_four_three_policy) - 4.0f / 3.0f) < 0.0001f &&
-            !galaxy::parse_experimental_ultrawide_aspect("5:4") &&
+            galaxy::parse_experimental_ultrawide_aspect("5:4") == 1.25 &&
+            galaxy::parse_experimental_ultrawide_aspect("1:3") == 1.0 / 3.0 &&
+            galaxy::make_experimental_ultrawide_aspect(1.0 / 3.0)->content_aspect == 9.0 / 21.0 &&
             !galaxy::parse_experimental_ultrawide_aspect("21:0") &&
+            !galaxy::parse_experimental_ultrawide_aspect("-4:3") &&
             !galaxy::parse_experimental_ultrawide_aspect("invalid"),
         "live 4:3 keeps the wide mode at 624 units and fits its UI; narrower "
-        "and malformed aspects fail closed");
+        "shapes are taller (down to 9:21) and malformed aspects fail closed");
     return passed;
 }
 
@@ -928,12 +931,17 @@ bool latches_one_dynamic_aspect_generation_for_guest_and_ir() {
             !galaxy::experimental_dynamic_aspect_change_pending(1600, 1200),
         "a 4:3 window latches the live 4:3 picture in one generation");
     galaxy::experimental_latch_dynamic_aspect(1000, 1000);
-    const auto fallback = galaxy::g_experimental_dynamic_aspect_word.load();
+    const auto square = galaxy::g_experimental_dynamic_aspect_word.load();
+    const auto square_policy = galaxy::experimental_aspect_from_dynamic_word(square);
     passed &= expect(
-        fallback >> 32u == 3u &&
-            !galaxy::experimental_aspect_from_dynamic_word(fallback) &&
+        square >> 32u == 3u && square_policy && square_policy->guest_screen_width == 624u &&
+            square_policy->content_aspect == 1.0 &&
             !galaxy::experimental_dynamic_aspect_change_pending(1000, 1000),
-        "narrower than 4:3 falls back without stretching or mid-frame mutation");
+        "narrower than 4:3 keeps 4:3's width and grows taller in one generation");
+    galaxy::experimental_latch_dynamic_aspect(1, 1000);
+    passed &= expect(
+        static_cast<std::uint32_t>(galaxy::g_experimental_dynamic_aspect_word.load()) == 0u,
+        "a degenerate client extent falls back without stretching");
     galaxy::g_experimental_dynamic_aspect_word.store(old);
     return passed;
 }
