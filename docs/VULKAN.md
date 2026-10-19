@@ -47,7 +47,10 @@ Every Vulkan 1.1 GPU and driver (Android's in particular), with no per-device wo
   decodes its version; the log's first lines give the device, driver build, workarounds and features.
 - **Known driver bugs** (the GX-relevant entries of Dolphin's DriverDetails, ANGLE's vk_renderer features and Dawn's
   Vulkan toggles; each entry cites its source): Qualcomm 512.700+ takes TEV zero colour inputs from a constant;
-  Qualcomm before 512.762.12 draws its clears; Mali and Adreno read back from coherent memory. On every device:
+  Qualcomm before 512.762.12 draws its clears; Mali and Adreno read back from coherent memory; Qualcomm reads back
+  through a linear image (its optimal image-to-buffer copies make a temporary image each); PowerVR clears render
+  passes by command (its load-op clears do nothing); one PSO thread on Android (parallel precompiles crash Android
+  drivers). On every device:
   SPIR-V 1.3 (Qualcomm and ARM drivers mishandle 1.4), no maximal-reconvergence mode (Dusklight issue 2563), TEV byte
   masks per component (Mali's vector AND), D24S8 depth where present (Adreno's D32F clears), no reversed depth ranges.
 - **Capabilities.** Only what the device reports is enabled; without it: single-source blending, plain writes for
@@ -61,15 +64,16 @@ Every Vulkan 1.1 GPU and driver (Android's in particular), with no per-device wo
   no form of which is accepted draws with its uber pipeline, else is skipped; the game never stops for a pipeline
   (`GALAXY_STRICT_PIPELINES=1` makes it). A new driver build's first launch tests the uber pipelines of every
   variant and feature in the background. Results stay in `vk_compat.txt`, per driver build.
-- **Uber shaders a driver cannot link** (Adreno 840, 512.842: "Failed to link shaders" for every variant): the
-  self-test finds them before any stand-in is used and says which half fails; the variant is never tried again on
-  that driver, and its keys are built specialised at their first draw instead of skipped. The Android app ships the
-  keys the whole game uses (`platform/android/vk_seed_keys.bin`, the PC's 102-galaxy tour), which the workers build
-  from the first launch in the order the game needs them, and their SPIR-V for every GPU's forms
-  (`vk_seed_shaders.bin`, made at APK build time by `vk_shader_seed`, `tools/dev/vk_shader_seed.cpp`, from the same
-  commit), so no HLSL is compiled on the phone. Once every seeded pipeline is built, the
-  modules this GPU used are in `vk_shaders.bin` and both seeds are deleted (the app installs them again after its
-  next update).
+- **Uber shaders a driver cannot compile** (Adreno 840, 512.842: the uber vertex shader's texture coordinates by
+  dynamic array index; the self-test's half diagnosis and cut-down probes found it): the uber vertex shader reads and
+  writes them by switch, as Dolphin's does. A variant a driver still refuses is never tried again on it, and its keys
+  are built specialised at their first draw instead of skipped.
+- **Shipped pipelines.** The Android app ships the keys the whole game uses (`platform/android/vk_seed_keys.bin`, the
+  PC's 102-galaxy tour), which the workers build from the first launch in the order the game needs them, then delete.
+  SPIR-V on disk carries its compiler's identity (`compiler_identity`: the SPIR-V of two fixed shaders, hashed);
+  a file of another compiler, and the refusals recorded with it in `vk_compat.txt`, are dropped. The same glslang
+  version built elsewhere makes other SPIR-V: the Adreno 840 refused the PC build's vertex shaders that it accepts from
+  the phone's own (test 3), so `vk_shader_seed` SPIR-V is used only on a matching compiler.
 - **Driver crashes** inside a compile (the class Dusklight hit on Adreno 740): `compile_journal.h` maps the compiles
   in progress into a file; the next launch never builds that pipeline again.
 - **Reports.** The first refusal logs the VkResult, the pipeline's state, this process's driver log (Android's

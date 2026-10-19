@@ -63,6 +63,11 @@ struct DeviceQuirks {
     bool clear_with_draw = false;
     // Readback buffers in host-coherent memory (cached memory reads back slower on Mali and Adreno).
     bool coherent_readback = false;
+    // Readbacks copy an optimal-tiled image into a linear image first (Qualcomm's driver makes a temporary image for
+    // every optimal image-to-buffer copy, slowly).
+    bool linear_readback = false;
+    // Render passes clear by command, not by load op (PowerVR's load-op clears are broken).
+    bool clear_by_command = false;
 };
 
 [[nodiscard]] DeviceIdentity identify(VkPhysicalDevice physical, bool has_driver_properties);

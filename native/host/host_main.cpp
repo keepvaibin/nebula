@@ -605,11 +605,7 @@ void vi_thread() {
 #endif
     for (;;) {
 #if defined(NEBULA_HOST_SDL)
-        // A few milliseconds past the host's own retrace at most, so the game keeps its speed without the display.
-        const bool vsync = galaxy::sdl::wait_display_retrace(
-            period.count(), vsync_ns,
-            std::chrono::duration_cast<std::chrono::nanoseconds>((next + std::chrono::milliseconds(4)).time_since_epoch())
-                .count());
+        const bool vsync = galaxy::sdl::wait_display_retrace(period.count(), vsync_ns);
         if (!vsync) {
             sleep_until_precise(next);
         }

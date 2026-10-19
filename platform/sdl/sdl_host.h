@@ -22,12 +22,15 @@ void pump_events(int timeout_ms) noexcept;
 // The app is out of sight (Android: the activity stopped); the host stops the game's clocks meanwhile.
 [[nodiscard]] bool in_background() noexcept;
 
-// The display's vsync as the game's retrace clock (Android: Choreographer, display_clock.cpp): waits for the vsync
-// nearest `period_ns` after `last_ns` (steady-clock nanoseconds, CLOCK_MONOTONIC; updated), so every frame stays on
-// screen for the same number of vsyncs. False when none comes by `deadline_ns` (out of sight, not yet shown), the
-// display's rate does not divide the period, or the platform has no display clock: the host's own clock runs the
-// retrace then.
-bool wait_display_retrace(std::int64_t period_ns, std::int64_t& last_ns, std::int64_t deadline_ns) noexcept;
+// The display's vsync as the game's retrace clock (Android: Choreographer's vsync times, display_clock.cpp): sleeps
+// until the vsync one retrace period after `last_ns` (CLOCK_MONOTONIC nanoseconds; updated) on the grid the latest
+// vsync times predict, so every frame stays on screen for the same number of vsyncs. False, at once, when there are
+// no recent vsyncs (out of sight, not yet shown), the display's rate does not divide the period, or the platform has
+// no display clock: the host's own clock runs the retrace then.
+bool wait_display_retrace(std::int64_t period_ns, std::int64_t& last_ns) noexcept;
+// The display time (CLOCK_MONOTONIC nanoseconds) for a frame presented now: the retrace slot after the latest
+// retrace, at least `margin_ns` from now; 0 while the retrace follows the host's clock.
+[[nodiscard]] std::int64_t display_present_target(std::int64_t margin_ns) noexcept;
 // The display's refresh rate as its vsyncs measure it (0: not known).
 [[nodiscard]] double display_refresh_hz() noexcept;
 // Android, when `adb shell setprop debug.nebula.profile <seconds>` asks: that many seconds on, the GX, host-main and

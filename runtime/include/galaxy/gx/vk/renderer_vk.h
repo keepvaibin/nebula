@@ -380,6 +380,8 @@ private:
     // Peeks.
     gpu::TextureRef peek_target_;  // 1x1, and the 640x528 pointer field below
     gpu::TextureRef field_target_;
+    // Each peek target's linear twin (DeviceQuirks::linear_readback), made on first use.
+    std::unordered_map<const vk::Texture*, gpu::TextureRef> linear_twins_;
     Readback peek_readback_;
     static constexpr std::size_t kPointerDepthRing = 3u;
     std::array<Readback, kPointerDepthRing> pointer_depth_ring_;
@@ -426,6 +428,22 @@ private:
     std::int64_t gpu_budget_window_qpc_ = 0;
     unsigned gpu_budget_over_windows_ = 0;
     PresentPacer present_pacer_;
+    // VK_GOOGLE_display_timing (Android): each frame is presented for the retrace slot after the latest retrace
+    // (host_window::present_target_ns), so it is shown one retrace period at the display's own vsync; the past
+    // presentation times report how many were shown at their slot ([present-timing], every 600 presents).
+    struct PresentTiming {
+        std::uint32_t next_id = 0;
+        std::array<std::int64_t, 64> requested{};  // by presentID % 64
+        std::int64_t refresh_ns = 0;
+        std::int64_t last_actual = 0;
+        unsigned frames = 0;
+        unsigned on_slot = 0;
+        unsigned late = 0;
+        unsigned unrequested = 0;
+        unsigned even = 0;  // shown one retrace period after the frame before
+    };
+    PresentTiming present_timing_;
+    void report_present_timing();
     struct PresentStats {
         std::int64_t window_start_qpc = 0;
         std::int64_t last_present_qpc = 0;

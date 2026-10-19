@@ -6,12 +6,11 @@
 #   3. Gradle: the launcher, SDL's Java half and the libraries, signed with the key -Signing names (debug key without).
 #
 #   build_apk.ps1 -Deps <folder of SDL3-3.4.18, glslang-src, Vulkan-Headers, volk, VMA> -Work <build folder>
-#                 -SeedTool <vk_shader_seed.exe, the PC Vulkan build of this commit>
-#                 [-Signing <signing.properties>] [-Abis arm64-v8a,x86_64]
+#                 [-SeedTool <vk_shader_seed.exe>] [-Signing <signing.properties>] [-Abis arm64-v8a,x86_64]
 param(
     [Parameter(Mandatory = $true)][string]$Deps,
     [Parameter(Mandatory = $true)][string]$Work,
-    [Parameter(Mandatory = $true)][string]$SeedTool,
+    [string]$SeedTool = "",
     [string]$Signing = "",
     [string]$Abis = "arm64-v8a,x86_64"
 )
@@ -78,14 +77,18 @@ foreach ($abi in $Abis -split ",") {
         "$Work\cargo\$triple\release\libnebula_import.so" $dest -Force
 }
 
-# The pipelines the whole game uses (platform/android/vk_seed_keys.bin, captured by the PC's galaxy tour) and their
-# shaders' SPIR-V for every GPU (vk_seed_shaders.bin, made here by vk_shader_seed, so it is this commit's shader
-# generator): GameActivity installs them beside the pipeline cache, which builds them from the first launch.
+# The pipelines the whole game uses (platform/android/vk_seed_keys.bin, captured by the PC's galaxy tour):
+# GameActivity installs them beside the pipeline cache, which builds them from the first launch. -SeedTool also ships
+# their SPIR-V (vk_seed_shaders.bin); the device uses it only when its compiler is the tool's (compiler_identity), so a
+# tool built against another glslang build than the app's adds size and nothing else.
 New-Item -ItemType Directory -Force (Join-Path $Work "assets") | Out-Null
 $seedKeys = Join-Path $root "platform\android\vk_seed_keys.bin"
 Copy-Item $seedKeys (Join-Path $Work "assets\vk_seed_keys.bin") -Force
-& $SeedTool $seedKeys (Join-Path $Work "assets\vk_seed_shaders.bin")
-if ($LASTEXITCODE -ne 0) { throw "vk_shader_seed failed" }
+Remove-Item (Join-Path $Work "assets\vk_seed_shaders.bin") -ErrorAction SilentlyContinue
+if ($SeedTool) {
+    & $SeedTool $seedKeys (Join-Path $Work "assets\vk_seed_shaders.bin")
+    if ($LASTEXITCODE -ne 0) { throw "vk_shader_seed failed" }
+}
 
 # The license texts the About screen opens (assets/licenses; the list is app/src/main/kotlin/.../Licenses.kt).
 $licenses = Join-Path $Work "assets\licenses"

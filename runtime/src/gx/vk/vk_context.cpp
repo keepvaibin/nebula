@@ -296,6 +296,12 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
     if (has_device_extension(physical_, "VK_KHR_portability_subset")) {
         device_extensions.push_back("VK_KHR_portability_subset");
     }
+    // Presents at a requested display time (Android's swapchain implements it for every driver): the frame pacing of
+    // RendererVk::end_frame.
+    display_timing_ = has_device_extension(physical_, VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME);
+    if (display_timing_) {
+        device_extensions.push_back(VK_GOOGLE_DISPLAY_TIMING_EXTENSION_NAME);
+    }
     // The driver's per-heap budget (the internal-resolution memory check), where it reports one.
     memory_budget_ = has_device_extension(physical_, VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
     if (memory_budget_) {
@@ -520,6 +526,41 @@ void Context::collect() {
     for (Deferred& deferred : due) {
         deferred.destroy();
     }
+}
+
+std::shared_ptr<Texture> Context::create_linear_image(std::uint32_t width, std::uint32_t height, VkFormat format,
+                                                     const char* name) {
+    VkFormatProperties properties{};
+    vkGetPhysicalDeviceFormatProperties(physical_, format, &properties);
+    constexpr VkFormatFeatureFlags kNeeded = VK_FORMAT_FEATURE_TRANSFER_SRC_BIT | VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
+    if ((properties.linearTilingFeatures & kNeeded) != kNeeded) {
+        return {};
+    }
+    auto texture = std::make_shared<Texture>();
+    VkImageCreateInfo image_info{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+    image_info.imageType = VK_IMAGE_TYPE_2D;
+    image_info.format = format;
+    image_info.extent = {width, height, 1};
+    image_info.mipLevels = 1;
+    image_info.arrayLayers = 1;
+    image_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    image_info.tiling = VK_IMAGE_TILING_LINEAR;
+    image_info.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    VmaAllocationCreateInfo alloc_info{};
+    alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+    VmaAllocationInfo allocated{};
+    if (vmaCreateImage(allocator_, &image_info, &alloc_info, &texture->image, &texture->allocation, &allocated) !=
+        VK_SUCCESS) {
+        return {};
+    }
+    texture->format = format;
+    texture->width = width;
+    texture->height = height;
+    texture->allocation_bytes = allocated.size;
+    set_name(VK_OBJECT_TYPE_IMAGE, reinterpret_cast<std::uint64_t>(texture->image), name);
+    return texture;
 }
 
 std::shared_ptr<Texture> Context::create_texture(std::uint32_t width, std::uint32_t height, std::uint32_t levels,

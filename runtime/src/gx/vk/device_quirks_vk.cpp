@@ -142,6 +142,11 @@ DeviceQuirks quirks_for(const DeviceIdentity& id) {
     // Dolphin DriverDetails BUG_SLOW_CACHED_READBACK_MEMORY: Mali and Adreno read cached memory back slower than
     // coherent memory.
     quirks.coherent_readback = qualcomm || arm;
+    // Dolphin DriverDetails BUG_SLOW_OPTIMAL_IMAGE_TO_BUFFER_COPY (VKStagingTexture): Qualcomm's driver allocates a
+    // temporary image for each copy from an optimal-tiled image to a buffer; a reused linear image avoids it.
+    quirks.linear_readback = qualcomm;
+    // Dolphin DriverDetails BUG_BROKEN_CLEAR_LOADOP_RENDERPASS: PowerVR's render-pass load-op clears do not clear.
+    quirks.clear_by_command = id.driver == DriverKind::ImaginationProprietary;
     // Applied on every device, so not quirks: SPIR-V 1.3 (ANGLE supportsSPIRV14 and Dawn UseSpirv14: Qualcomm before
     // 512.829 crashes on SPIR-V 1.4's OpCopyLogical, Adreno 7xx too, ARM before r47 mishandles its OpSelect); no
     // maximal-reconvergence execution mode (Dawn use_spirv_reconvergence_mode, Dusklight issue 2563: Adreno 740's
@@ -193,6 +198,8 @@ std::string describe(const DeviceQuirks& quirks) {
     add(quirks.tev_zero_from_constant, "tev-zero-from-constant");
     add(quirks.clear_with_draw, "clear-with-draw");
     add(quirks.coherent_readback, "coherent-readback");
+    add(quirks.linear_readback, "linear-readback");
+    add(quirks.clear_by_command, "clear-by-command");
     return text.empty() ? "none" : text;
 }
 

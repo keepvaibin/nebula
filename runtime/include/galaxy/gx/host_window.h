@@ -78,6 +78,9 @@ void close_game_window(WindowOwner& owner) noexcept;
 void show_window(NativeWindow window) noexcept;
 // The refresh rate of the display the window is on, or 0 when unknown.
 [[nodiscard]] double display_refresh_hz(NativeWindow window) noexcept;
+// When the frame presented now should first be shown (CLOCK_MONOTONIC nanoseconds): the retrace slot after the
+// latest, where the game's retrace follows the display's vsync (Android), at least `margin_ns` away; else 0.
+[[nodiscard]] std::int64_t present_target_ns(std::int64_t margin_ns) noexcept;
 
 void draw_native_settings_overlay(UiCanvas& renderer);
 void draw_home_menu(UiCanvas& renderer);

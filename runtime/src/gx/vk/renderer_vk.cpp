@@ -523,6 +523,8 @@ bool RendererVk::create_swapchain() {
     vk::check(created, "vkCreateSwapchainKHR");
     destroy_swapchain();
     swapchain_.handle = handle;
+    present_timing_.refresh_ns = 0;  // the new swapchain's, at the next report
+    present_timing_.last_actual = 0;
     swapchain_.format = format.format;
     swapchain_.extent = extent;
     swapchain_.image = image_extent;
@@ -542,7 +544,9 @@ bool RendererVk::create_swapchain() {
         VkAttachmentDescription attachment{};
         attachment.format = format.format;
         attachment.samples = VK_SAMPLE_COUNT_1_BIT;
-        attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        // PowerVR clears by command instead (DeviceQuirks::clear_by_command, present_xfb).
+        attachment.loadOp = vk::Context::get().quirks().clear_by_command ? VK_ATTACHMENT_LOAD_OP_DONT_CARE
+                                                                         : VK_ATTACHMENT_LOAD_OP_CLEAR;
         attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -1021,6 +1025,18 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
         info.swapchainCount = 1;
         info.pSwapchains = &swapchain_.handle;
         info.pImageIndices = &swap_image_;
+        VkPresentTimeGOOGLE present_time{};
+        VkPresentTimesInfoGOOGLE present_times{VK_STRUCTURE_TYPE_PRESENT_TIMES_INFO_GOOGLE};
+        if (context.display_timing()) {
+            // Two milliseconds for the composer to take the frame before its slot.
+            present_time.presentID = ++present_timing_.next_id;
+            present_time.desiredPresentTime = static_cast<std::uint64_t>(host_window::present_target_ns(2000000));
+            present_timing_.requested[present_time.presentID % present_timing_.requested.size()] =
+                static_cast<std::int64_t>(present_time.desiredPresentTime);
+            present_times.swapchainCount = 1;
+            present_times.pTimes = &present_time;
+            info.pNext = &present_times;
+        }
         const std::int64_t present_cpu = vk::thread_cpu_ns();
         const VkResult result = vkQueuePresentKHR(context.queue(), &info);
         vk::note_driver_cpu(vk::DriverCall::Present, vk::thread_cpu_ns() - present_cpu);
@@ -1056,6 +1072,9 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
             measured_present_count_ = 0u;
         }
         report_present_stats();
+        if (context.display_timing() && present_timing_.next_id % 30u == 0u) {
+            report_present_timing();
+        }
         if (!window_shown_ && window_ != nullptr && !host_window::hidden_window_mode_enabled()) {
             window_shown_ = true;
             host_window::show_window(window_);
@@ -1083,6 +1102,51 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
         last_time = now;
     }
     return fence;
+}
+
+// The past presentation times (VK_GOOGLE_display_timing): whether each frame was shown by the slot it asked for, and
+// one retrace period after the frame before it. Every 600 frames to the log.
+void RendererVk::report_present_timing() {
+    const VkDevice device = vk::Context::get().device();
+    if (swapchain_.handle == VK_NULL_HANDLE) {
+        return;
+    }
+    PresentTiming& timing = present_timing_;
+    if (timing.refresh_ns == 0) {
+        VkRefreshCycleDurationGOOGLE cycle{};
+        if (vkGetRefreshCycleDurationGOOGLE(device, swapchain_.handle, &cycle) == VK_SUCCESS) {
+            timing.refresh_ns = static_cast<std::int64_t>(cycle.refreshDuration);
+        }
+    }
+    std::array<VkPastPresentationTimingGOOGLE, 64> past{};
+    auto count = static_cast<std::uint32_t>(past.size());
+    if (vkGetPastPresentationTimingGOOGLE(device, swapchain_.handle, &count, past.data()) < VK_SUCCESS) {
+        return;
+    }
+    constexpr std::int64_t kRetraceNs = 1000000000 / 60;
+    const std::int64_t half_vsync = (timing.refresh_ns != 0 ? timing.refresh_ns : kRetraceNs) / 2;
+    for (std::uint32_t i = 0; i < count; ++i) {
+        const auto actual = static_cast<std::int64_t>(past[i].actualPresentTime);
+        const std::int64_t requested = timing.requested[past[i].presentID % timing.requested.size()];
+        if (requested == 0) {
+            ++timing.unrequested;
+        } else if (actual <= requested + half_vsync) {
+            ++timing.on_slot;
+        } else {
+            ++timing.late;
+        }
+        if (timing.last_actual != 0 && std::llabs(actual - timing.last_actual - kRetraceNs) < half_vsync) {
+            ++timing.even;
+        }
+        timing.last_actual = actual;
+        if (++timing.frames == 600u) {
+            std::fprintf(stderr, "[present-timing] %u frames: %u shown at their retrace slot, %u late, %u without one "
+                         "(the host's clock); %u shown one retrace after the frame before (refresh %.2f ms)\n",
+                         timing.frames, timing.on_slot, timing.late, timing.unrequested, timing.even,
+                         static_cast<double>(timing.refresh_ns) / 1e6);
+            timing.frames = timing.on_slot = timing.late = timing.unrequested = timing.even = 0u;
+        }
+    }
 }
 
 void RendererVk::report_present_stats() {
@@ -1336,6 +1400,11 @@ bool RendererVk::present(const XfbTexture* source, bool capture_backbuffer) {
     begin.clearValueCount = 1;
     begin.pClearValues = &clear;
     vkCmdBeginRenderPass(commands, &begin, VK_SUBPASS_CONTENTS_INLINE);
+    if (vk::Context::get().quirks().clear_by_command) {
+        const VkClearAttachment attachment{VK_IMAGE_ASPECT_COLOR_BIT, 0, clear};
+        const VkClearRect rect{{{0, 0}, swapchain_.image}, 0, 1};
+        vkCmdClearAttachments(commands, 1, &attachment, 1, &rect);
+    }
 
     // The XFB, aspect-fitted (D3D-style viewport: y flipped by a negative height), turned into a pre-rotated image.
     const VkDescriptorSet set = allocate_frame_set(utility_set_layout_);

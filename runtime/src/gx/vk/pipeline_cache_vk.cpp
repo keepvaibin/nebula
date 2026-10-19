@@ -15,9 +15,10 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <iomanip>
+#include <map>
 #include <sstream>
 #include <string>
-#include <map>
 
 #if !defined(_WIN32)
 #include <sys/resource.h>
@@ -28,13 +29,15 @@ namespace galaxy::gx {
 
 namespace {
 
-// vk_shaders.bin: magic, version, then records of (u64 HLSL hash, u32 words, SPIR-V). vk_seed_shaders.bin
-// (build_shader_seed) has the same form.
+// vk_shaders.bin: magic, version, the compiler's identity (compiler_identity), then records of (u64 HLSL hash, u32
+// words, SPIR-V). vk_seed_shaders.bin (build_shader_seed) has the same form; either is read only when its compiler is
+// this build's.
 // vk_keys.bin: magic, version, then Entry records (the keys the shaders are generated from).
 // vk_pipelines.bin: the driver's VkPipelineCache data (it checks its own header).
 constexpr std::uint32_t kShaderFileMagic = 0x53565847u;  // "GXVS"
 constexpr std::uint32_t kKeyFileMagic = 0x4b565847u;     // "GXVK"
-constexpr std::uint32_t kFileVersion = 1u;
+constexpr std::uint32_t kShaderFileVersion = 2u;
+constexpr std::uint32_t kKeyFileVersion = 1u;
 constexpr std::uint32_t kMaxRecords = 65536u;
 constexpr std::uint32_t kMaxSpirvWords = 1u << 20u;
 
@@ -181,6 +184,33 @@ std::string apply_probe(std::string source, const UberProbe& probe) {
         source.replace(at, std::strlen(from), to);
     }
     return source;
+}
+
+// The SPIR-V this build's compiler makes of two fixed shaders, hashed. SPIR-V on disk and the driver refusals recorded
+// with it belong to the compiler that made them: glslang of the same version but another build makes other SPIR-V for
+// the same HLSL (2026-10-19: the PC's build of 16.6.0 against the phone's; the Adreno 840 refused the PC's vertex
+// shaders and accepted the phone's), so files of another compiler are dropped rather than trusted.
+std::uint64_t compiler_identity() {
+    static const std::uint64_t identity = [] {
+        ShaderGenOptions options;
+        options.scalar_byte_masks = true;
+        ShaderGenerator generator;
+        generator.set_options(options);
+        VertexShaderKey vs_key{};
+        vs_key.num_texgens = 1u;
+        vs_key.num_chans = 1u;
+        PixelShaderKey ps_key{};
+        std::string error;
+        const std::vector<std::uint32_t> vs =
+            compile_module(generator.generate_vs(vs_key), vk::ShaderStage::Vertex, false, error);
+        const std::vector<std::uint32_t> ps =
+            compile_module(generator.generate_ps(ps_key), vk::ShaderStage::Fragment, false, error);
+        std::uint64_t hash = fnv1a64(vs.data(), vs.size() * sizeof(std::uint32_t));
+        hash = combine64(hash, fnv1a64(ps.data(), ps.size() * sizeof(std::uint32_t)));
+        hash = combine64(hash, vk::kCompilerRevision);
+        return combine64(hash, kShaderFileVersion);
+    }();
+    return identity;
 }
 
 std::string uber_ps_hlsl(unsigned variant) {
@@ -814,9 +844,12 @@ void PipelineCacheVk::learn(std::uint32_t compat_bit, std::uint32_t generator_bi
 void PipelineCacheVk::load_compat() {
     std::ifstream in(cache_dir_ / "vk_compat.txt");
     std::string line;
-    if (!std::getline(in, line) || line != "nebula-vk-compat 1" || !std::getline(in, line) ||
-        line != "driver " + driver_key_) {
-        return;  // another driver build (or none yet): the self-test runs
+    char compiler[40];
+    std::snprintf(compiler, sizeof(compiler), "compiler %016llx",
+                  static_cast<unsigned long long>(compiler_identity()));
+    if (!std::getline(in, line) || line != "nebula-vk-compat 2" || !std::getline(in, line) ||
+        line != "driver " + driver_key_ || !std::getline(in, line) || line != compiler) {
+        return;  // another driver build or compiler (or none yet): the self-test runs, earlier refusals are dropped
     }
     compat_known_ = true;
     std::lock_guard<std::mutex> lock(compat_mutex_);
@@ -845,7 +878,8 @@ void PipelineCacheVk::load_compat() {
 
 void PipelineCacheVk::save_compat() {
     std::ostringstream out;
-    out << "nebula-vk-compat 1\ndriver " << driver_key_ << "\n" << std::hex;
+    out << "nebula-vk-compat 2\ndriver " << driver_key_ << "\n" << std::hex;
+    out << "compiler " << std::setw(16) << std::setfill('0') << compiler_identity() << std::setfill(' ') << "\n";
     out << "compat " << device_compat_.load(std::memory_order_acquire) << "\n";
     out << "generator " << generator_bits_.load(std::memory_order_acquire) << "\n";
     out << "uber-refused " << uber_refused_.load(std::memory_order_acquire) << "\n";
@@ -996,7 +1030,7 @@ std::size_t PipelineCacheVk::build_shader_seed(const std::filesystem::path& keys
         std::ifstream in(keys, std::ios::binary);
         std::uint32_t magic = 0, version = 0, count = 0;
         if (!in || !read_pod(in, magic) || !read_pod(in, version) || !read_pod(in, count) || magic != kKeyFileMagic ||
-            version != kFileVersion || count > kMaxRecords) {
+            version != kKeyFileVersion || count > kMaxRecords) {
             error = "not a key file of this build: " + keys.string();
             return 0;
         }
@@ -1095,7 +1129,8 @@ std::size_t PipelineCacheVk::build_shader_seed(const std::filesystem::path& keys
     const auto count = static_cast<std::uint32_t>(std::min<std::size_t>(sources.size(), kMaxRecords));
     replace_file(out, [&](std::ofstream& file) {
         write_pod(file, kShaderFileMagic);
-        write_pod(file, kFileVersion);
+        write_pod(file, kShaderFileVersion);
+        write_pod(file, compiler_identity());
         write_pod(file, count);
         std::uint32_t written = 0;
         for (const auto& [hash, source] : sources) {
@@ -1441,8 +1476,10 @@ void PipelineCacheVk::load_disk() {
     {
         std::ifstream in(cache_dir_ / "vk_shaders.bin", std::ios::binary);
         std::uint32_t magic = 0, version = 0, count = 0;
-        if (in && read_pod(in, magic) && read_pod(in, version) && read_pod(in, count) && magic == kShaderFileMagic &&
-            version == kFileVersion && count <= kMaxRecords) {
+        std::uint64_t identity = 0;
+        if (in && read_pod(in, magic) && read_pod(in, version) && magic == kShaderFileMagic &&
+            version == kShaderFileVersion && read_pod(in, identity) && identity == compiler_identity() &&
+            read_pod(in, count) && count <= kMaxRecords) {
             for (std::uint32_t i = 0; i < count; ++i) {
                 std::uint64_t hash = 0;
                 std::uint32_t words = 0;
@@ -1464,7 +1501,7 @@ void PipelineCacheVk::load_disk() {
         std::ifstream in(cache_dir_ / "vk_keys.bin", std::ios::binary);
         std::uint32_t magic = 0, version = 0, count = 0;
         if (in && read_pod(in, magic) && read_pod(in, version) && read_pod(in, count) && magic == kKeyFileMagic &&
-            version == kFileVersion && count <= kMaxRecords) {
+            version == kKeyFileVersion && count <= kMaxRecords) {
             for (std::uint32_t i = 0; i < count; ++i) {
                 Entry entry;
                 if (!read_pod(in, entry)) {
@@ -1486,8 +1523,10 @@ void PipelineCacheVk::load_disk() {
         seed_shaders_path_ = cache_dir_ / "vk_seed_shaders.bin";
         std::ifstream in(seed_shaders_path_, std::ios::binary);
         std::uint32_t magic = 0, version = 0, count = 0;
-        if (in && read_pod(in, magic) && read_pod(in, version) && read_pod(in, count) && magic == kShaderFileMagic &&
-            version == kFileVersion && count <= kMaxRecords) {
+        std::uint64_t identity = 0;
+        if (in && read_pod(in, magic) && read_pod(in, version) && magic == kShaderFileMagic &&
+            version == kShaderFileVersion && read_pod(in, identity) && identity == compiler_identity() &&
+            read_pod(in, count) && count <= kMaxRecords) {
             for (std::uint32_t i = 0; i < count; ++i) {
                 std::uint64_t hash = 0;
                 std::uint32_t words = 0;
@@ -1509,7 +1548,7 @@ void PipelineCacheVk::load_disk() {
         std::uint32_t magic = 0, version = 0, count = 0;
         std::size_t seeded = 0;
         if (in && read_pod(in, magic) && read_pod(in, version) && read_pod(in, count) && magic == kKeyFileMagic &&
-            version == kFileVersion && count <= kMaxRecords) {
+            version == kKeyFileVersion && count <= kMaxRecords) {
             for (std::uint32_t i = 0; i < count; ++i) {
                 Entry entry;
                 if (!read_pod(in, entry)) {
@@ -1568,7 +1607,8 @@ void PipelineCacheVk::save_disk() noexcept {
         const auto count = static_cast<std::uint32_t>(std::min<std::size_t>(spirv.size(), kMaxRecords));
         const bool shaders_saved = replace_file(cache_dir_ / "vk_shaders.bin", [&](std::ofstream& out) {
             write_pod(out, kShaderFileMagic);
-            write_pod(out, kFileVersion);
+            write_pod(out, kShaderFileVersion);
+            write_pod(out, compiler_identity());
             write_pod(out, count);
             std::uint32_t written = 0;
             for (const auto& [hash, words] : spirv) {
@@ -1584,7 +1624,7 @@ void PipelineCacheVk::save_disk() noexcept {
         const auto key_count = static_cast<std::uint32_t>(std::min<std::size_t>(entries.size(), kMaxRecords));
         const bool keys_saved = replace_file(cache_dir_ / "vk_keys.bin", [&](std::ofstream& out) {
             write_pod(out, kKeyFileMagic);
-            write_pod(out, kFileVersion);
+            write_pod(out, kKeyFileVersion);
             write_pod(out, key_count);
             for (std::uint32_t i = 0; i < key_count; ++i) {
                 write_pod(out, entries[i]);

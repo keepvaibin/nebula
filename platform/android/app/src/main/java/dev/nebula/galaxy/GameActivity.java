@@ -22,6 +22,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Arrays;
+import java.util.List;
 
 import org.libsdl.app.SDLActivity;
 import org.libsdl.app.SDLSurface;
@@ -76,7 +78,13 @@ public class GameActivity extends SDLActivity {
             if (!dir.isDirectory() && !dir.mkdirs()) {
                 return;
             }
+            final List<String> shipped = Arrays.asList(getAssets().list(""));
             for (final String name : new String[] {"vk_seed_shaders.bin", "vk_seed_keys.bin"}) {
+                // A seed of an earlier version goes; this version's, if it has one, replaces it.
+                new File(dir, name).delete();
+                if (!shipped.contains(name)) {
+                    continue;
+                }
                 final File partial = new File(dir, name + ".tmp");
                 try (InputStream in = getAssets().open(name);
                      OutputStream out = new FileOutputStream(partial)) {

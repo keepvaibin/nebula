@@ -2099,6 +2099,10 @@ void show_window(NativeWindow window) noexcept {
     ShowWindowAsync(window, SW_SHOWNORMAL);
 }
 
+std::int64_t present_target_ns(std::int64_t) noexcept {
+    return 0;  // the presents pace themselves (present_pacer)
+}
+
 double display_refresh_hz(NativeWindow window) noexcept {
     const HMONITOR monitor = MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST);
     MONITORINFOEXW info{};

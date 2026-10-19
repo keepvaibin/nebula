@@ -714,6 +714,10 @@ double display_refresh_hz(NativeWindow window) noexcept {
     return mode != nullptr && mode->refresh_rate > 1.0f ? static_cast<double>(mode->refresh_rate) : 0.0;
 }
 
+std::int64_t present_target_ns(std::int64_t margin_ns) noexcept {
+    return galaxy::sdl::display_present_target(margin_ns);
+}
+
 // The overlay, the HOME Menu and the hint are the platform's own screens on SDL platforms (Android: the activity's).
 void draw_native_settings_overlay(UiCanvas&) {}
 void draw_home_menu(UiCanvas&) {}

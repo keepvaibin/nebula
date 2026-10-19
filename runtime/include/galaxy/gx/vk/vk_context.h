@@ -105,6 +105,7 @@ public:
     [[nodiscard]] bool depth_clamp() const noexcept { return depth_clamp_; }
     // VK_EXT_depth_clip_enable: clamping without giving up clipping (D3D's rasterizer).
     [[nodiscard]] bool depth_clip_enable() const noexcept { return depth_clip_enable_; }
+    [[nodiscard]] bool display_timing() const noexcept { return display_timing_; }
     // The largest device-local heap's use and budget (the driver's with VK_EXT_memory_budget, else VMA's estimate).
     bool device_memory_budget(std::uint64_t& usage, std::uint64_t& budget) const noexcept;
 
@@ -135,6 +136,10 @@ public:
     [[nodiscard]] std::shared_ptr<Texture> create_texture(std::uint32_t width, std::uint32_t height, std::uint32_t levels,
                                                           VkFormat format, VkImageUsageFlags usage,
                                                           bool render_target, const char* name);
+    // A linear-tiled transfer image (DeviceQuirks::linear_readback); empty when the device cannot copy `format` to
+    // and from linear images.
+    [[nodiscard]] std::shared_ptr<Texture> create_linear_image(std::uint32_t width, std::uint32_t height,
+                                                               VkFormat format, const char* name);
     [[nodiscard]] MappedBuffer create_mapped_buffer(std::uint64_t size, VkBufferUsageFlags usage, const char* name);
     // A mapped buffer with a GX address.
     [[nodiscard]] std::shared_ptr<Buffer> create_buffer(std::uint64_t size, VkBufferUsageFlags usage, const char* name);
@@ -189,6 +194,7 @@ private:
     bool sampler_anisotropy_ = false;
     bool bc_textures_ = false;
     bool memory_budget_ = false;
+    bool display_timing_ = false;  // VK_GOOGLE_display_timing
     bool depth_clamp_ = false;
     bool depth_clip_enable_ = false;
     bool debug_names_ = false;
