@@ -33,8 +33,11 @@ namespace in = galaxy::input;
 constexpr std::uint64_t kTouchPointerHoldMs = 1500;
 // A pad or key pointer at rest hides after this long, as the Wii's does when the remote points away.
 constexpr std::uint64_t kStickPointerHoldMs = 3000;
-// A tap in a menu is A for this many reports (100 a second).
-constexpr std::uint8_t kTapPressReports = 4;
+// A tap in a menu is A for this many reports (100 a second), as long as a finger's press, once the pointer has rested
+// where the finger touched this long: the game takes A on what the pointer is over, which it finds a few frames
+// after the pointer arrives, and reads the remote once a frame (a shorter press can fall between two reads).
+constexpr std::uint8_t kTapPressReports = 10;
+constexpr std::uint64_t kTapHoverMs = 200;
 constexpr float kTriggerThreshold = 96.0f / 255.0f;  // as GALAXY_XINPUT_TRIGGER_THRESHOLD's default
 
 const in::ControlsConfig& live_controls() {
@@ -116,6 +119,7 @@ in::WiimoteInputSnapshot native_game_wiimote_snapshot(std::uint8_t, std::uint64_
         star_pointer_mode >= 0 && static_cast<std::uint32_t>(star_pointer_mode) < in::kStarPointerModeCount
         ? in::play_context_from_star_pointer_mode(static_cast<std::uint32_t>(star_pointer_mode))
         : in::PlayContext::Play;
+    sdl::set_menu_context(context == in::PlayContext::Menu);
     const in::tilt::Section section = tilt_section == 1u ? in::tilt::Section::StarBall
         : tilt_section == 2u ? in::tilt::Section::Ray
         : in::tilt::Section::None;
@@ -213,6 +217,7 @@ in::WiimoteInputSnapshot native_game_wiimote_snapshot(std::uint8_t, std::uint64_
     // A tap in a menu points there and presses A.
     static std::uint64_t s_taps = state.taps;
     static std::uint8_t s_tap_reports = 0;
+    static std::uint64_t s_tap_due_ms = 0;  // 0: no press waiting
     if (state.taps != s_taps) {
         s_taps = state.taps;
         if (context == in::PlayContext::Menu && project_window_point(state, state.tap_x, state.tap_y, x, y)) {
@@ -220,8 +225,12 @@ in::WiimoteInputSnapshot native_game_wiimote_snapshot(std::uint8_t, std::uint64_
             s_pointer_y = y;
             s_pointer_ms = now;
             s_hold_ms = kTouchPointerHoldMs;
-            s_tap_reports = kTapPressReports;
+            s_tap_due_ms = std::max(now, state.tap_down_ms + kTapHoverMs);
         }
+    }
+    if (s_tap_due_ms != 0 && now >= s_tap_due_ms) {
+        s_tap_due_ms = 0;
+        s_tap_reports = kTapPressReports;
     }
     if (s_tap_reports != 0) {
         snapshot.buttons.a = true;
@@ -385,6 +394,12 @@ unsigned NativeGameAudio::queued_blocks() const {
 
 bool NativeGameAudio::output_available() const {
     return state_->stream != nullptr;
+}
+
+void NativeGameAudio::set_paused(bool paused) {
+    if (state_->stream != nullptr) {
+        (void)(paused ? SDL_PauseAudioStreamDevice(state_->stream) : SDL_ResumeAudioStreamDevice(state_->stream));
+    }
 }
 
 std::string NativeGameAudio::stats_line() const {

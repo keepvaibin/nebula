@@ -10351,6 +10351,9 @@ bool NativeGameAudio::output_available() const {
     return state_->sink.output_available();
 }
 
+// Windows keeps the game running out of sight (minimised, as v1.0.1).
+void NativeGameAudio::set_paused(bool) {}
+
 std::string NativeGameAudio::stats_line() const {
     const JAudioHostMixerStats& s = state_->mixer.stats();
     std::ostringstream line;

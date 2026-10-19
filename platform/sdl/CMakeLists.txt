@@ -115,7 +115,7 @@ set(host_sources
     "${CMAKE_CURRENT_SOURCE_DIR}/native_game_host_sdl.cpp")
 if(ANDROID)
     add_library(main SHARED ${host_sources})
-    target_link_libraries(main PRIVATE android log)
+    target_link_libraries(main PRIVATE android log nativewindow)
 else()
     add_executable(main ${host_sources})
     set_target_properties(main PROPERTIES OUTPUT_NAME nebula)

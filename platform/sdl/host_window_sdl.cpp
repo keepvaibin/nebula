@@ -10,6 +10,7 @@
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx_d3d12.h"
 #include "galaxy/native_host.h"
+#include "galaxy/platform_paths.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/virtual_keys.h"
 
@@ -18,16 +19,20 @@
 
 #if defined(__ANDROID__)
 #include <android/log.h>
+#include <android/native_window.h>
 #include <jni.h>
 #include <unistd.h>
 #endif
 
 #include <algorithm>
 #include <atomic>
+#include <bit>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <mutex>
 #include <thread>
 
@@ -39,12 +44,31 @@ InputState g_input;                 // guarded by g_input_mutex
 SDL_Window* g_window = nullptr;
 std::atomic<int> g_home_choice{-1};
 std::atomic<bool> g_home_visible{false};
+std::atomic<bool> g_background{false};
+std::atomic<bool> g_menu_context{false};
+
+// SDL's thread, the only one that calls SDL's window, gamepad and Java functions. The game's threads run on stacks of
+// their own, which the Java VM refuses to attach (it aborts the process), so they leave requests here instead, done
+// after each pump (every 4 ms at most).
+std::thread::id g_sdl_thread;
+std::atomic<int> g_home_request{0};  // 1 show the HOME Menu, 2 hide it
+std::atomic<std::uint32_t> g_rumble_pad{0};
+std::atomic<std::uint32_t> g_rumble_level{0};
+// What SDL's thread last sent, and when (it renews a rumble that lasts).
+std::uint32_t g_rumble_sent_pad = 0;
+std::uint32_t g_rumble_sent_level = 0;
+std::uint64_t g_rumble_sent_ms = 0;
+
+// An on-screen button stays pressed for the game at least this long: the game reads the remote once a frame, and a
+// quick tap would otherwise end between two reads.
+constexpr std::uint64_t kMinTouchPressMs = 80;
+std::array<std::uint64_t, 32> g_touch_held_until{};  // per TouchButton bit, steady ms; guarded by g_input_mutex
 std::array<SDL_Gamepad*, kMaxPads> g_gamepads{};
 
 // A touch that ends within this time, having moved less than this fraction of the window's shorter side, is a tap.
 constexpr std::uint64_t kTapMs = 280;
 constexpr float kTapTravel = 0.03f;
-SDL_FingerID g_pointer_finger = 0;
+std::uint64_t g_pointer_finger = 0;
 bool g_pointer_finger_valid = false;
 std::uint64_t g_finger_down_ms = 0;
 float g_finger_down_x = 0.0f;
@@ -52,19 +76,34 @@ float g_finger_down_y = 0.0f;
 float g_finger_travel = 0.0f;
 
 #if defined(__ANDROID__)
-// stdout and stderr to logcat, line by line (the host and the renderer log there).
+// stdout and stderr to logcat and to <data>/logs/game.log, line by line (the host and the renderer log there).
 void forward_output_to_logcat() {
     static int pipe_fds[2];
     if (pipe(pipe_fds) != 0) {
         return;
     }
+    std::FILE* file = nullptr;
+    if (const std::filesystem::path data = galaxy::nebula_data_directory(); !data.empty()) {
+        std::error_code error;
+        std::filesystem::create_directories(data / "logs", error);
+        std::filesystem::rename(data / "logs" / "game.log", data / "logs" / "game.previous.log", error);
+        file = galaxy::open_path(data / "logs" / "game.log", "w");
+    }
     setvbuf(stdout, nullptr, _IOLBF, 0);
     setvbuf(stderr, nullptr, _IONBF, 0);
     dup2(pipe_fds[1], STDOUT_FILENO);
     dup2(pipe_fds[1], STDERR_FILENO);
-    std::thread([] {
+    std::thread([file] {
         char line[1024];
         std::size_t used = 0;
+        const auto emit = [file](const char* text) {
+            __android_log_write(ANDROID_LOG_INFO, "Nebula", text);
+            if (file != nullptr) {
+                std::fputs(text, file);
+                std::fputc('\n', file);
+                std::fflush(file);
+            }
+        };
         for (;;) {
             const ssize_t n = read(pipe_fds[0], line + used, sizeof(line) - 1 - used);
             if (n <= 0) {
@@ -75,13 +114,13 @@ void forward_output_to_logcat() {
             for (std::size_t i = 0; i < used; ++i) {
                 if (line[i] == '\n') {
                     line[i] = '\0';
-                    __android_log_write(ANDROID_LOG_INFO, "Nebula", line + start);
+                    emit(line + start);
                     start = i + 1;
                 }
             }
             if (start == 0 && used == sizeof(line) - 1) {
                 line[used] = '\0';
-                __android_log_write(ANDROID_LOG_INFO, "Nebula", line);
+                emit(line);
                 used = 0;
             } else if (start != 0) {
                 std::memmove(line, line + start, used - start);
@@ -252,19 +291,18 @@ void close_gamepad(SDL_JoystickID id) {
     }
 }
 
-void finger_event(const SDL_TouchFingerEvent& finger, bool down, bool up) {
-    const float x = finger.x * static_cast<float>(g_input.window_width);
-    const float y = finger.y * static_cast<float>(g_input.window_height);
+// The first finger on the picture is the pointer; x, y in window pixels. Called with g_input_mutex held.
+void finger_event(std::uint64_t id, float x, float y, bool down, bool up) {
     const std::uint64_t now = galaxy::steady_ms();
     if (down && !g_pointer_finger_valid) {
-        g_pointer_finger = finger.fingerID;
+        g_pointer_finger = id;
         g_pointer_finger_valid = true;
         g_finger_down_ms = now;
         g_finger_down_x = x;
         g_finger_down_y = y;
         g_finger_travel = 0.0f;
     }
-    if (!g_pointer_finger_valid || finger.fingerID != g_pointer_finger) {
+    if (!g_pointer_finger_valid || id != g_pointer_finger) {
         return;
     }
     const float side = static_cast<float>(std::max(1, std::min(g_input.window_width, g_input.window_height)));
@@ -279,6 +317,7 @@ void finger_event(const SDL_TouchFingerEvent& finger, bool down, bool up) {
             ++g_input.taps;
             g_input.tap_x = x;
             g_input.tap_y = y;
+            g_input.tap_down_ms = g_finger_down_ms;
         }
     }
 }
@@ -295,11 +334,16 @@ void update_window_size() {
 }  // namespace
 
 bool start() noexcept {
+    g_sdl_thread = std::this_thread::get_id();
 #if defined(__ANDROID__)
     forward_output_to_logcat();
 #endif
-    SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight Portrait PortraitUpsideDown");
+    // Landscape either way up: the game lays out for shapes from 4:3 wide; taller ones come with Vert+ framing.
+    SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
     SDL_SetHint(SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1");
+    // The host stops the game's clocks itself while the app is out of sight (in_background, from the activity);
+    // SDL's thread keeps pumping events instead of blocking in them.
+    SDL_SetHint(SDL_HINT_ANDROID_BLOCK_ON_PAUSE, "0");
     SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
     SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS, "0");
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMEPAD | SDL_INIT_HAPTIC | SDL_INIT_SENSOR)) {
@@ -309,9 +353,38 @@ bool start() noexcept {
     return true;
 }
 
+// Requests from other threads (g_home_request, rumble), on SDL's thread.
+void run_requests() {
+#if defined(__ANDROID__)
+    if (const int request = g_home_request.exchange(0, std::memory_order_acq_rel); request != 0) {
+        call_activity(request == 1 ? "showHomeMenu" : "hideHomeMenu");
+    }
+#endif
+    const std::uint32_t pad = g_rumble_pad.load(std::memory_order_relaxed);
+    const std::uint32_t level = g_rumble_level.load(std::memory_order_relaxed);
+    const std::uint64_t now = galaxy::steady_ms();
+    // Renewed while it lasts: 100 ms outlasts the next renewal, so it never gaps.
+    if (pad != g_rumble_sent_pad || level != g_rumble_sent_level || (level != 0u && now - g_rumble_sent_ms >= 50u)) {
+        for (SDL_Gamepad* gamepad : g_gamepads) {
+            if (gamepad == nullptr) {
+                continue;
+            }
+            const SDL_JoystickID id = SDL_GetGamepadID(gamepad);
+            if (id == pad || id == g_rumble_sent_pad) {
+                const auto strength = static_cast<Uint16>(id == pad ? level : 0u);
+                (void)SDL_RumbleGamepad(gamepad, strength, strength, strength != 0u ? 100u : 0u);
+            }
+        }
+        g_rumble_sent_pad = pad;
+        g_rumble_sent_level = level;
+        g_rumble_sent_ms = now;
+    }
+}
+
 void pump_events(int timeout_ms) noexcept {
     SDL_Event event;
     bool any = SDL_WaitEventTimeout(&event, timeout_ms);
+    {
     std::lock_guard<std::mutex> lock(g_input_mutex);
     while (any) {
         switch (event.type) {
@@ -334,14 +407,14 @@ void pump_events(int timeout_ms) noexcept {
             g_input.keys = {};
             break;
         case SDL_EVENT_FINGER_DOWN:
-            finger_event(event.tfinger, true, false);
-            break;
         case SDL_EVENT_FINGER_MOTION:
-            finger_event(event.tfinger, false, false);
-            break;
         case SDL_EVENT_FINGER_UP:
         case SDL_EVENT_FINGER_CANCELED:
-            finger_event(event.tfinger, false, true);
+            // Platforms whose touches reach SDL (Android's go to the activity's controls, nativePointer).
+            finger_event(event.tfinger.fingerID, event.tfinger.x * static_cast<float>(g_input.window_width),
+                         event.tfinger.y * static_cast<float>(g_input.window_height),
+                         event.type == SDL_EVENT_FINGER_DOWN,
+                         event.type == SDL_EVENT_FINGER_UP || event.type == SDL_EVENT_FINGER_CANCELED);
             break;
         case SDL_EVENT_MOUSE_MOTION:
             g_input.finger_x = event.motion.x;
@@ -368,6 +441,8 @@ void pump_events(int timeout_ms) noexcept {
                 // Android's back gesture: the HOME button, as the HOME Menu opens with it.
                 if (event.type == SDL_EVENT_KEY_DOWN) {
                     g_input.touch_buttons |= kTouchHome;
+                    g_touch_held_until[std::countr_zero(static_cast<std::uint32_t>(kTouchHome))] =
+                        galaxy::steady_ms() + kMinTouchPressMs;
                 } else {
                     g_input.touch_buttons &= ~kTouchHome;
                 }
@@ -387,36 +462,58 @@ void pump_events(int timeout_ms) noexcept {
         any = SDL_PollEvent(&event);
     }
     sample_gamepads();
+    }
+    run_requests();
+}
+
+void show_fatal(const char* message) noexcept {
+    if (const std::filesystem::path data = galaxy::nebula_data_directory(); !data.empty()) {
+        if (std::FILE* file = galaxy::open_path(data / "last_error.txt", "w")) {
+            std::fputs(message, file);
+            std::fclose(file);
+        }
+    }
+    // A message box is Java's on Android: only SDL's thread may show it. From another, the launcher shows the file.
+    if (std::this_thread::get_id() == g_sdl_thread) {
+        (void)SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Nebula", message, g_window);
+    }
+}
+
+void set_menu_context(bool menu) noexcept {
+    g_menu_context.store(menu, std::memory_order_relaxed);
+}
+
+bool in_background() noexcept {
+    return g_background.load(std::memory_order_acquire);
 }
 
 InputState input_state() noexcept {
     std::lock_guard<std::mutex> lock(g_input_mutex);
-    return g_input;
+    InputState state = g_input;
+    const std::uint64_t now = galaxy::steady_ms();
+    for (std::uint32_t bit = 0; bit < g_touch_held_until.size(); ++bit) {
+        if (g_touch_held_until[bit] > now) {
+            state.touch_buttons |= 1u << bit;
+        }
+    }
+    return state;
 }
 
 void rumble(std::uint32_t pad_id, float strength) noexcept {
-    const auto level = static_cast<Uint16>(std::clamp(strength, 0.0f, 1.0f) * 65535.0f);
-    for (SDL_Gamepad* gamepad : g_gamepads) {
-        if (gamepad != nullptr && SDL_GetGamepadID(gamepad) == pad_id) {
-            // Renewed with every report (100 a second); 50 ms outlasts a late one.
-            (void)SDL_RumbleGamepad(gamepad, level, level, level != 0 ? 50 : 0);
-        }
-    }
+    g_rumble_level.store(static_cast<std::uint32_t>(std::clamp(strength, 0.0f, 1.0f) * 65535.0f),
+                         std::memory_order_relaxed);
+    g_rumble_pad.store(pad_id, std::memory_order_relaxed);
 }
 
 void home_menu_show() noexcept {
     g_home_choice.store(-1, std::memory_order_relaxed);
     g_home_visible.store(true, std::memory_order_release);
-#if defined(__ANDROID__)
-    call_activity("showHomeMenu");
-#endif
+    g_home_request.store(1, std::memory_order_release);
 }
 
 void home_menu_hide() noexcept {
     g_home_visible.store(false, std::memory_order_release);
-#if defined(__ANDROID__)
-    call_activity("hideHomeMenu");
-#endif
+    g_home_request.store(2, std::memory_order_release);
 }
 
 int home_menu_choice() noexcept {
@@ -431,14 +528,69 @@ extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeTouc
     JNIEnv*, jclass, jint buttons, jfloat stick_x, jfloat stick_y) {
     std::lock_guard<std::mutex> lock(galaxy::sdl::g_input_mutex);
     const std::uint32_t back = galaxy::sdl::g_input.touch_buttons & galaxy::sdl::kTouchHome;
-    galaxy::sdl::g_input.touch_buttons = static_cast<std::uint32_t>(buttons) | back;
+    const auto held = static_cast<std::uint32_t>(buttons);
+    const std::uint32_t pressed = held & ~galaxy::sdl::g_input.touch_buttons;
+    if (pressed != 0u) {
+        const std::uint64_t until = galaxy::steady_ms() + galaxy::sdl::kMinTouchPressMs;
+        for (std::uint32_t bit = 0; bit < galaxy::sdl::g_touch_held_until.size(); ++bit) {
+            if ((pressed & (1u << bit)) != 0u) {
+                galaxy::sdl::g_touch_held_until[bit] = until;
+            }
+        }
+    }
+    galaxy::sdl::g_input.touch_buttons = held | back;
     galaxy::sdl::g_input.touch_stick_x = std::clamp(stick_x, -1.0f, 1.0f);
     galaxy::sdl::g_input.touch_stick_y = std::clamp(stick_y, -1.0f, 1.0f);
+}
+
+// A finger on the picture that is not on a control (the activity's controls take every touch): action 0 down, 1 moved,
+// 2 up or cancelled; x, y in the picture's pixels.
+extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativePointer(
+    JNIEnv*, jclass, jint action, jint id, jfloat x, jfloat y) {
+    std::lock_guard<std::mutex> lock(galaxy::sdl::g_input_mutex);
+    galaxy::sdl::finger_event(static_cast<std::uint64_t>(id), x, y, action == 0, action == 2);
+}
+
+// Whether the game is on a pointer screen (set_menu_context), for the controls deciding what a touch is.
+extern "C" JNIEXPORT jboolean JNICALL Java_dev_nebula_galaxy_GameActivity_nativeMenuContext(JNIEnv*, jclass) {
+    return galaxy::sdl::g_menu_context.load(std::memory_order_relaxed) ? JNI_TRUE : JNI_FALSE;
 }
 
 // The HOME Menu's choice (0 return, 1 quit, 2 reset).
 extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeHomeChoice(JNIEnv*, jclass, jint choice) {
     galaxy::sdl::g_home_choice.store(static_cast<int>(choice), std::memory_order_release);
+}
+
+// The activity in sight (onStart) or not (onStop): the host stops the game's clocks while it is not, and nothing
+// stays held meanwhile.
+extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeSetVisible(JNIEnv*, jclass, jboolean visible) {
+    std::lock_guard<std::mutex> lock(galaxy::sdl::g_input_mutex);
+    if (!visible) {
+        galaxy::sdl::g_input.keys = {};
+        galaxy::sdl::g_input.touch_buttons = 0;
+        galaxy::sdl::g_touch_held_until.fill(0);
+        galaxy::sdl::g_input.touch_stick_x = 0.0f;
+        galaxy::sdl::g_input.touch_stick_y = 0.0f;
+        galaxy::sdl::g_input.finger_down = false;
+        galaxy::sdl::g_pointer_finger_valid = false;
+    }
+    galaxy::sdl::g_background.store(!visible, std::memory_order_release);
+}
+
+// The activity's SurfaceView is going (surfaceDestroyed, before SDL lets the window go): returns once no present uses
+// it (host_window.h). Two seconds at most, so a stalled render thread cannot hold the UI thread.
+extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeSurfaceWithdrawn(JNIEnv*, jclass) {
+    galaxy::gx::host_window::surface_withdrawn.store(true, std::memory_order_release);
+    if (galaxy::gx::host_window::surface_use.try_lock_for(std::chrono::seconds(2))) {
+        galaxy::gx::host_window::surface_use.unlock();
+    } else {
+        std::fprintf(stderr, "[window] the renderer kept the surface past 2 s\n");
+    }
+}
+
+// A new surface is ready (after SDL took it in surfaceChanged): the renderer makes its own for it.
+extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeSurfaceReturned(JNIEnv*, jclass) {
+    galaxy::gx::host_window::surface_withdrawn.store(false, std::memory_order_release);
 }
 #endif
 
@@ -458,6 +610,8 @@ std::atomic<unsigned> efb_scale_rejected{0u};
 std::atomic<bool> move_size_active{false};
 std::atomic<bool> quit_request{false};
 std::atomic<std::uint64_t> pending_resize_extent{0u};
+std::atomic<bool> surface_withdrawn{false};
+std::timed_mutex surface_use;
 std::atomic<bool> follow_window_rearm{false};
 
 unsigned display_efb_scale_cap() {
@@ -543,6 +697,15 @@ VkSurfaceKHR create_vulkan_surface(VkInstance instance, NativeWindow window) {
         std::fprintf(stderr, "[window] SDL_Vulkan_CreateSurface failed: %s\n", SDL_GetError());
         return VK_NULL_HANDLE;
     }
+#if defined(__ANDROID__)
+    // The game's 60 frames a second, so a variable-rate display runs at a whole multiple of it (each frame shown for
+    // the same time) rather than at a rate the frames divide unevenly.
+    if (auto* native = static_cast<ANativeWindow*>(SDL_GetPointerProperty(
+            SDL_GetWindowProperties(static_cast<SDL_Window*>(window)), SDL_PROP_WINDOW_ANDROID_WINDOW_POINTER,
+            nullptr))) {
+        ANativeWindow_setFrameRate(native, 60.0f, ANATIVEWINDOW_FRAME_RATE_COMPATIBILITY_FIXED_SOURCE);
+    }
+#endif
     return surface;
 }
 

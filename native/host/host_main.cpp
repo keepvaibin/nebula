@@ -116,6 +116,9 @@ void log_line(const char* tag, const char* text) {
     va_end(args);
     log_line("fatal:", text);
     std::fflush(stdout);
+#if defined(NEBULA_HOST_SDL)
+    galaxy::sdl::show_fatal(text);
+#endif
     std::_Exit(3);
 }
 
@@ -527,9 +530,26 @@ const std::byte* guest_bytes(uint32_t address, uint32_t size);
 extern galaxy::host::NativeGameAudio* gAudio;
 #endif
 
+// The app out of sight (SDL hosts: Android's background): the display and audio clocks stop, so the game waits at
+// its next retrace; they restart from its return, with nothing to catch up.
+std::mutex gSuspendLock;
+std::condition_variable gSuspendWake;
+bool gSuspended = false;  // guarded by gSuspendLock
+
+// True when it waited.
+bool wait_while_suspended() {
+    std::unique_lock<std::mutex> lock(gSuspendLock);
+    if (!gSuspended) {
+        return false;
+    }
+    gSuspendWake.wait(lock, [] { return !gSuspended; });
+    return true;
+}
+
 void ai_thread() {
     name_thread(L"Nebula Host AI");
     for (;;) {
+        wait_while_suspended();
         uint32_t size = 0;
         uint32_t start = 0;
         uint32_t rate = 32000;
@@ -576,6 +596,10 @@ void vi_thread() {
     auto next = Clock::now() + period;
     for (;;) {
         sleep_until_precise(next);
+        if (wait_while_suspended()) {
+            next = Clock::now() + period;
+            continue;
+        }
         gModule.vi_retrace();
         next += period;
         const auto now = Clock::now();
@@ -2031,6 +2055,15 @@ int main(int argc, char** argv) {
         // The window's messages, on the thread that created it.
 #if defined(NEBULA_HOST_SDL)
         galaxy::sdl::pump_events(4);
+        if (const bool away = galaxy::sdl::in_background(); away != gSuspended) {
+            {
+                std::lock_guard<std::mutex> lock(gSuspendLock);
+                gSuspended = away;
+            }
+            gSuspendWake.notify_all();
+            gAudio->set_paused(away);
+            log_line("host:", away ? "suspended (out of sight)" : "resumed");
+        }
 #else
         MsgWaitForMultipleObjects(0, nullptr, FALSE, 4, QS_ALLINPUT);
 #endif

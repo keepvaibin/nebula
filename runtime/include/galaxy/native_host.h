@@ -2217,6 +2217,8 @@ public:
     // Blocks submitted to the device and not yet played.
     [[nodiscard]] unsigned queued_blocks() const;
     [[nodiscard]] bool output_available() const;
+    // The device stopped while the app is out of sight (SDL hosts), queued blocks kept for its return.
+    void set_paused(bool paused);
     // The DSP program's counters, as v1.0.1 logs them ([jaudio] ...).
     [[nodiscard]] std::string stats_line() const;
 
