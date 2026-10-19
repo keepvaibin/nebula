@@ -709,7 +709,12 @@ void show_window(NativeWindow window) noexcept {
     SDL_ShowWindow(static_cast<SDL_Window*>(window));
 }
 
+// The system's vsync rate where there is one (Android: SDL's display mode can lag a refresh-rate switch), to the
+// whole Hz.
 double display_refresh_hz(NativeWindow window) noexcept {
+    if (const double vsync = galaxy::sdl::display_refresh_hz(); vsync > 1.0) {
+        return std::round(vsync);
+    }
     const SDL_DisplayMode* mode = SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(static_cast<SDL_Window*>(window)));
     return mode != nullptr && mode->refresh_rate > 1.0f ? static_cast<double>(mode->refresh_rate) : 0.0;
 }

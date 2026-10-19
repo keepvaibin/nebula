@@ -34,6 +34,8 @@ std::once_flag g_started;
 // follows the host's clock.
 std::atomic<std::int64_t> g_retrace_ns{0};
 std::atomic<std::int64_t> g_retrace_period_ns{0};
+// The display's vsync period as the system states it (refresh-rate callbacks); 0 until the first.
+std::atomic<std::int64_t> g_display_period_ns{0};
 
 std::int64_t monotonic_ns() noexcept {
     timespec now{};
@@ -55,6 +57,10 @@ void on_frame(std::int64_t frame_ns, void* choreographer) {
     AChoreographer_postFrameCallback64(static_cast<AChoreographer*>(choreographer), on_frame, choreographer);
 }
 
+void on_refresh_rate(std::int64_t vsync_period_ns, void*) {
+    g_display_period_ns.store(vsync_period_ns, std::memory_order_relaxed);
+}
+
 void clock_thread() {
     pthread_setname_np(pthread_self(), "Nebula Vsync");
     ALooper_prepare(0);
@@ -63,6 +69,7 @@ void clock_thread() {
         return;
     }
     AChoreographer_postFrameCallback64(choreographer, on_frame, choreographer);
+    AChoreographer_registerRefreshRateCallback(choreographer, on_refresh_rate, nullptr);
     for (;;) {
         ALooper_pollOnce(-1, nullptr, nullptr, nullptr);
     }
@@ -126,6 +133,9 @@ bool display_grid(std::int64_t& retrace_ns, std::int64_t& period_ns, std::int64_
 }
 
 double display_refresh_hz() noexcept {
+    if (const std::int64_t period = g_display_period_ns.load(std::memory_order_relaxed); period > 0) {
+        return 1e9 / static_cast<double>(period);
+    }
     std::lock_guard<std::mutex> lock(g_mutex);
     return g_interval_ns != 0 ? 1e9 / static_cast<double>(g_interval_ns) : 0.0;
 }

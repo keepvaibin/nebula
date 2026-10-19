@@ -9,6 +9,7 @@ import android.os.Process;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.util.Log;
+import android.view.Display;
 import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
@@ -18,8 +19,10 @@ import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Arrays;
@@ -104,6 +107,47 @@ public class GameActivity extends SDLActivity {
         }
     }
 
+    // Frame rate set to the display's own (config.ini max_fps=0): the panel's fastest mode at this resolution, preferring
+    // a multiple of 60 Hz (each game frame then spans whole refreshes), so the renderer draws the frames in between.
+    // Without the request Android may hold the game at 60 Hz.
+    private void requestDisplayRate() {
+        String maxFps = "60";
+        try (BufferedReader reader = new BufferedReader(new FileReader(GameFiles.renderConfig(this)))) {
+            for (String line; (line = reader.readLine()) != null; ) {
+                if (line.startsWith("max_fps=")) {
+                    maxFps = line.substring("max_fps=".length()).trim();
+                }
+            }
+        } catch (Exception e) {
+            return;
+        }
+        final Display display = getDisplay();
+        if (display == null || !"0".equals(maxFps)) {
+            return;
+        }
+        final Display.Mode current = display.getMode();
+        Display.Mode best = current;
+        for (final Display.Mode mode : display.getSupportedModes()) {
+            if (mode.getPhysicalWidth() != current.getPhysicalWidth() ||
+                mode.getPhysicalHeight() != current.getPhysicalHeight()) {
+                continue;
+            }
+            if (rateScore(mode.getRefreshRate()) > rateScore(best.getRefreshRate())) {
+                best = mode;
+            }
+        }
+        final WindowManager.LayoutParams attributes = getWindow().getAttributes();
+        attributes.preferredDisplayModeId = best.getModeId();
+        getWindow().setAttributes(attributes);
+        Log.i(TAG, "display mode " + best.getRefreshRate() + " Hz requested (was " + current.getRefreshRate() + " Hz)");
+    }
+
+    // Multiples of 60 Hz first, then the faster rate.
+    private static float rateScore(float hz) {
+        final float multiple = Math.round(hz / 60.0f) * 60.0f;
+        return (Math.abs(hz - multiple) < 1.0f ? 1000.0f : 0.0f) + hz;
+    }
+
     @Override
     protected SDLSurface createSDLSurface(Context context) {
         return new GameSurface(context);
@@ -124,6 +168,7 @@ public class GameActivity extends SDLActivity {
             return;
         }
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        requestDisplayRate();
 
         final SharedPreferences prefs = GameFiles.controls(this);
         controlsMode = prefs.getString(GameFiles.CONTROLS_MODE, "auto");
