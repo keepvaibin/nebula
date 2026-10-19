@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/gx/ray_tracing.h"
 #include "galaxy/gx/rt_materials.h"
+#include "galaxy/gx/rt_surfaces.h"
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx/gx_bitfields.h"
 
@@ -36,6 +37,9 @@
 #include "rt_spatial_m_cs.h"
 #include "rt_star_sphere_cs.h"
 #include "rt_gbuffer_cs.h"
+#include "rt_gbuffer_tex_cs.h"
+#include "rt_delight_cs.h"
+#include "rt_delight_mip_cs.h"
 #include "rt_temporal_cs.h"
 #include "rt_trace_cs.h"
 #include "rt_trace_tex_cs.h"
@@ -134,7 +138,7 @@ struct RtLightConstants {
     float history_projection[4];          // the previous samples' projection (their frame's jitter)
     float picture_projection[4];          // the previous picture's
     float sky_radiance[4];                // GALAXY_RT_PHYSICAL: the sky's radiance in units of the stage's full light
-    float full_light[4];                  // 1 / the stage's full light in linear light (rgb); 1: the traced sky (w)
+    float full_light[4];                  // the stage's full light in linear light (rgb); 1: the traced sky (w)
     std::uint32_t tev_info[4];            // TEV records of the scene's draws, of the sky's (rt_tev.hlsli)
     float up[4];                          // the player's up in eye space (the game's gravity; else the view's up)
     std::uint32_t probe[4];               // GALAXY_RT_PROBE: its sample (x, y), on (z)
@@ -737,6 +741,8 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     post_local_bright_ = std::clamp(env_float("GALAXY_RT_LOCAL_BRIGHT", 1.0f), 0.3f, 1.0f);
     post_local_dark_ = std::clamp(env_float("GALAXY_RT_LOCAL_DARK", 1.0f), 0.3f, 1.0f);
     relief_ = std::clamp(env_float("GALAXY_RT_RELIEF", 3.0f), 0.0f, 64.0f);
+    delight_ = env_float("GALAXY_RT_DELIGHT", 1.0f) != 0.0f;
+    delight_relief_ = std::clamp(env_float("GALAXY_RT_DELIGHT_RELIEF", 2.0f), 0.0f, 32.0f);
     post_haze_distance_ = std::clamp(env_float("GALAXY_RT_POST_HAZE_DISTANCE", 20000.0f), 100.0f, 1.0e6f);
     post_vignette_ = std::clamp(env_float("GALAXY_RT_POST_VIGNETTE", 0.1f), 0.0f, 1.0f);
     post_view_ = env_float("GALAXY_RT_POST_VIEW", 0.0f) != 0.0f;
@@ -822,6 +828,12 @@ void SceneRayTracer::shutdown() noexcept {
     for (auto& buffer : light_pixels_) buffer.Reset();
     light_pixels_bytes_ = {};
     gbuffer_pso_.Reset();
+    // The views stay the renderer's (set_delight_views): every slot free again.
+    reset_delight();
+    delight_scratch_.Reset();
+    delight_root_.Reset();
+    delight_pso_.Reset();
+    delight_mip_pso_.Reset();
     stats_.Reset();
     stats_zero_.Reset();
     readback_.Reset();
@@ -1120,6 +1132,14 @@ void SceneRayTracer::begin_frame(std::uint64_t frame_index) {
     reflections_.begin_frame(frame_index);
     read_sky();
     std::erase_if(retired_, [&](const Retired& entry) { return entry.frame + kResultDelay <= frame_index; });
+    // De-light maps' views of evicted maps are free once no frame in flight can read them.
+    std::erase_if(delight_retired_slots_, [&](const std::pair<std::uint32_t, std::uint64_t>& entry) {
+        if (entry.second + kResultDelay + 2u > frame_index) {
+            return false;
+        }
+        delight_free_.push_back(entry.first);
+        return true;
+    });
     for (unsigned slot = 0; slot < kResultSlots; ++slot) {
         ResultSlot& result = slots_[slot];
         if (!result.pending || result.frame + kResultDelay > frame_index) {
@@ -1557,6 +1577,20 @@ void SceneRayTracer::report() {
                   per(static_cast<double>(window_.glow_triangles), window_.captures),
                   per(static_cast<double>(window_.late_triangles), window_.scenes));
     std::cerr << line;
+    if (physical_ && delight_pso_) {
+        // Texture de-lighting: maps made so far, held now and their memory.
+        // Draws: seen, not paint, no material map, no texture key, with a map, without one yet.
+        std::fprintf(stderr,
+                     "[rt-delight] made=%llu held=%zu kb=%llu draws=%llu not-paint=%llu no-map=%llu no-key=%llu "
+                     "mapped=%llu waiting=%llu views=%u\n",
+                     static_cast<unsigned long long>(delight_made_), delight_maps_.size(),
+                     static_cast<unsigned long long>(delight_bytes_ >> 10u),
+                     static_cast<unsigned long long>(delight_seen_[0]), static_cast<unsigned long long>(delight_seen_[1]),
+                     static_cast<unsigned long long>(delight_seen_[2]), static_cast<unsigned long long>(delight_seen_[3]),
+                     static_cast<unsigned long long>(delight_seen_[4]), static_cast<unsigned long long>(delight_seen_[5]),
+                     delight_view_increment_);
+        delight_seen_ = {};
+    }
     if (reference_) {
         // Frames the reference ran and how often it started again (a still camera starts it once).
         std::fprintf(stderr, "[rt-reference] frames=%llu restarts=%llu\n",
@@ -1720,6 +1754,16 @@ void SceneRayTracer::begin_scene() noexcept {
     }
     texture_view_slots_.clear();
     texture_view_count_ = 0u;
+    // De-light jobs the last scene's trace did not run: their source views are gone with its block.
+    for (const DelightJob& job : delight_jobs_) {
+        if (const auto found = delight_maps_.find(job.pack); found != delight_maps_.end()) {
+            delight_bytes_ -= found->second.bytes;
+            delight_free_.push_back(found->second.slot);
+            retire(found->second.texture);
+            delight_maps_.erase(found);
+        }
+    }
+    delight_jobs_.clear();
     light_tex_ready_ = false;
     draws_.clear();
     glow_draws_.clear();
@@ -1763,7 +1807,7 @@ void SceneRayTracer::begin_scene() noexcept {
 }
 
 void SceneRayTracer::note_tev(const RtDrawInfo& info, std::vector<RtTevMaterial>& records,
-                              std::vector<RtTevStage>& stages) {
+                              std::vector<RtTevStage>& stages, std::uint32_t delight) {
     RtTevMaterial record = info.tev;
     record.stage_offset = static_cast<std::uint32_t>(stages.size());
     const unsigned count = std::min(record.header & 0x1Fu, kRtTevMaxStages);
@@ -1771,7 +1815,276 @@ void SceneRayTracer::note_tev(const RtDrawInfo& info, std::vector<RtTevMaterial>
     for (unsigned m = 0; m < 8u; ++m) {
         record.maps[m] = info.tev_maps[m].resource != nullptr ? texture_view(info.tev_maps[m]) : 0xFFFFFFFFu;
     }
+    // The material texture's de-light map: its map, the texture slot and coordinate scale of the first stage that
+    // samples it (the coordinates the raster's texel came from; past the generators coordinate 0, as fill_rt_tev).
+    record.pad[1] = 0xFFFFFFFFu;
+    record.pad[2] = 0u;
+    if (delight != 0xFFFFFFFFu && info.texture_map < 8u) {
+        const unsigned texgens = record.header >> 28u;
+        for (unsigned s = 0; s < count; ++s) {
+            const std::uint32_t order = info.tev_stages[s].order;
+            if ((order & (1u << 6u)) == 0u || (order & 7u) != info.texture_map || texgens == 0u) {
+                continue;
+            }
+            const unsigned coord = ((order >> 3u) & 7u) < texgens ? (order >> 3u) & 7u : 0u;
+            record.pad[1] = delight;
+            record.pad[2] = info.texture_map | (((record.header >> (8u + 2u * coord)) & 1u) << 3u) |
+                            ((info.texture_wrap & 0xFu) << 4u);
+            record.pad[3] = std::bit_cast<std::uint32_t>(info.tev_stages[s].scale_s);
+            record.pad[4] = std::bit_cast<std::uint32_t>(info.tev_stages[s].scale_t);
+            break;
+        }
+    }
     records.push_back(record);
+}
+
+namespace {
+
+// A de-light map's levels in the scratch buffer: placed footprints (offsets 512-aligned, rows 256-aligned), a byte a
+// texel.
+struct DelightLayout {
+    std::array<std::uint64_t, 12> offset{};
+    std::array<std::uint32_t, 12> pitch{};
+    std::uint64_t bytes = 0;
+};
+
+DelightLayout delight_layout(std::uint32_t width, std::uint32_t height, std::uint32_t levels) {
+    constexpr std::uint64_t kPlace = D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT;
+    constexpr std::uint32_t kPitch = D3D12_TEXTURE_DATA_PITCH_ALIGNMENT;
+    DelightLayout layout;
+    std::uint64_t at = 0u;
+    for (std::uint32_t l = 0; l < levels; ++l) {
+        const std::uint32_t lw = std::max(1u, width >> l);
+        const std::uint32_t lh = std::max(1u, height >> l);
+        at = (at + kPlace - 1u) & ~(kPlace - 1u);
+        layout.offset[l] = at;
+        layout.pitch[l] = (lw + kPitch - 1u) & ~(kPitch - 1u);
+        at += static_cast<std::uint64_t>(layout.pitch[l]) * lh;
+    }
+    layout.bytes = (at + kPlace - 1u) & ~(kPlace - 1u);
+    return layout;
+}
+
+// rt_delight.hlsl RtDelight.
+struct DelightConstants {
+    std::uint32_t source;
+    std::uint32_t size[2];
+    std::uint32_t source_levels;
+    std::uint32_t out;
+    std::uint32_t out_pitch;
+    std::uint32_t out_size[2];
+    std::uint32_t in;
+    std::uint32_t in_pitch;
+    std::uint32_t in_size[2];
+    std::uint32_t wrap;
+};
+static_assert(sizeof(DelightConstants) == 52u);
+
+}  // namespace
+
+void SceneRayTracer::set_delight_views(D3D12_CPU_DESCRIPTOR_HANDLE cpu, std::uint32_t first, UINT increment) noexcept {
+    delight_view_cpu_ = cpu;
+    delight_view_first_ = first;
+    delight_view_increment_ = increment;
+    reset_delight();
+}
+
+// No de-light maps: every view free (the ray tracer starting or stopping; the GPU is idle then).
+void SceneRayTracer::reset_delight() noexcept {
+    delight_maps_.clear();
+    delight_jobs_.clear();
+    delight_retired_slots_.clear();
+    delight_bytes_ = 0u;
+    delight_free_.clear();
+    for (std::uint32_t slot = kDelightViews; slot-- > 0u;) {
+        delight_free_.push_back(slot);
+    }
+}
+
+// The de-light map of a traced draw's material texture: its view, or 0xFFFFFFFF until it is made. A texture first
+// drawn in this scene gets its map and a job in this scene's trace (run_delight), within the frame's budget of
+// texels; the rest wait for a later scene.
+std::uint32_t SceneRayTracer::delight_view(const RtTextureSource& source, std::uint32_t wrap) {
+    if (!delight_ || !physical_ || !delight_pso_ || delight_view_increment_ == 0u || source.pack == 0u ||
+        source.resource == nullptr || source.width < 4u || source.height < 4u) {
+        return 0xFFFFFFFFu;
+    }
+    if (const auto found = delight_maps_.find(source.pack); found != delight_maps_.end()) {
+        found->second.used = scene_serial_;
+        return found->second.ready ? delight_view_first_ + found->second.slot : 0xFFFFFFFFu;
+    }
+    const std::uint32_t width = source.width;
+    const std::uint32_t height = source.height;
+    std::uint32_t levels = 1u;
+    while ((std::max(width, height) >> levels) != 0u) {
+        ++levels;
+    }
+    std::uint64_t texels = static_cast<std::uint64_t>(width) * height;
+    std::uint64_t scratch = delight_layout(width, height, levels).bytes;
+    for (const DelightJob& job : delight_jobs_) {
+        texels += static_cast<std::uint64_t>(job.width) * job.height;
+        scratch += delight_layout(job.width, job.height, job.levels).bytes;
+    }
+    if ((!delight_jobs_.empty() && texels > kDelightTexelsPerFrame) || scratch > kDelightScratchBytes) {
+        return 0xFFFFFFFFu;
+    }
+    std::uint64_t bytes = 0u;
+    for (std::uint32_t l = 0; l < levels; ++l) {
+        bytes += static_cast<std::uint64_t>(std::max(1u, width >> l)) * std::max(1u, height >> l);
+    }
+    // Past the budget or the views the least recently drawn maps go (never one this or the last two scenes drew).
+    while (delight_free_.empty() || delight_bytes_ + bytes > kDelightBytes) {
+        auto oldest = delight_maps_.end();
+        for (auto it = delight_maps_.begin(); it != delight_maps_.end(); ++it) {
+            if (it->second.ready && it->second.used + 2u < scene_serial_ &&
+                (oldest == delight_maps_.end() || it->second.used < oldest->second.used)) {
+                oldest = it;
+            }
+        }
+        if (oldest == delight_maps_.end()) {
+            return 0xFFFFFFFFu;
+        }
+        delight_bytes_ -= oldest->second.bytes;
+        delight_retired_slots_.emplace_back(oldest->second.slot, frame_index_);
+        retire(oldest->second.texture);
+        delight_maps_.erase(oldest);
+    }
+    const std::uint32_t source_view = texture_view(source);
+    if (source_view == 0xFFFFFFFFu) {
+        return 0xFFFFFFFFu;
+    }
+    DelightMap map;
+    D3D12_HEAP_PROPERTIES heap{};
+    heap.Type = D3D12_HEAP_TYPE_DEFAULT;
+    D3D12_RESOURCE_DESC desc{};
+    desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    desc.Width = width;
+    desc.Height = height;
+    desc.DepthOrArraySize = 1u;
+    desc.MipLevels = static_cast<UINT16>(levels);
+    desc.Format = DXGI_FORMAT_R8_SNORM;
+    desc.SampleDesc.Count = 1u;
+    desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    if (FAILED(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_COPY_DEST,
+                                                nullptr, IID_PPV_ARGS(&map.texture)))) {
+        return 0xFFFFFFFFu;
+    }
+    map.texture->SetName(L"rt delight map");
+    map.slot = delight_free_.back();
+    delight_free_.pop_back();
+    map.bytes = bytes;
+    map.used = scene_serial_;
+    D3D12_SHADER_RESOURCE_VIEW_DESC view{};
+    view.Format = DXGI_FORMAT_R8_SNORM;
+    view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    view.Texture2D.MipLevels = levels;
+    D3D12_CPU_DESCRIPTOR_HANDLE at = delight_view_cpu_;
+    at.ptr += static_cast<SIZE_T>(map.slot) * delight_view_increment_;
+    device_->CreateShaderResourceView(map.texture.Get(), &view, at);
+    delight_bytes_ += bytes;
+    delight_jobs_.push_back(
+        {source.pack, source_view, width, height, std::max<std::uint32_t>(source.levels, 1u), levels, wrap});
+    delight_maps_.emplace(source.pack, std::move(map));
+    return 0xFFFFFFFFu;
+}
+
+// This scene's de-light jobs: level 0 of each map (DelightCS), then each further level from the one above
+// (DelightMipCS), all in the scratch buffer, then copied into the maps.
+void SceneRayTracer::run_delight(ID3D12GraphicsCommandList* list) {
+    if (delight_jobs_.empty()) {
+        return;
+    }
+    if (!delight_scratch_ &&
+        !create_buffer(kDelightScratchBytes, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                       D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, delight_scratch_, L"rt delight scratch")) {
+        for (const DelightJob& job : delight_jobs_) {
+            if (const auto found = delight_maps_.find(job.pack); found != delight_maps_.end()) {
+                delight_bytes_ -= found->second.bytes;
+                delight_free_.push_back(found->second.slot);
+                retire(found->second.texture);
+                delight_maps_.erase(found);
+            }
+        }
+        delight_jobs_.clear();
+        return;
+    }
+    to_state(list, delight_scratch_.Get(), delight_scratch_state_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    std::vector<DelightLayout> layouts;
+    std::vector<std::uint64_t> bases;
+    std::uint64_t at = 0u;
+    std::uint32_t most_levels = 1u;
+    for (const DelightJob& job : delight_jobs_) {
+        layouts.push_back(delight_layout(job.width, job.height, job.levels));
+        bases.push_back(at);
+        at += layouts.back().bytes;
+        most_levels = std::max(most_levels, job.levels);
+    }
+    list->SetComputeRootSignature(delight_root_.Get());
+    list->SetComputeRootUnorderedAccessView(1u, delight_scratch_->GetGPUVirtualAddress());
+    list->SetPipelineState(delight_pso_.Get());
+    for (std::size_t i = 0; i < delight_jobs_.size(); ++i) {
+        const DelightJob& job = delight_jobs_[i];
+        const DelightConstants constants{job.source, {job.width, job.height}, job.source_levels,
+                                         static_cast<std::uint32_t>(bases[i]), layouts[i].pitch[0],
+                                         {job.width, job.height}, 0u, 0u, {0u, 0u}, job.wrap};
+        list->SetComputeRoot32BitConstants(0u, sizeof(constants) / 4u, &constants, 0u);
+        list->Dispatch((((job.width + 3u) / 4u) + 7u) / 8u, (job.height + 7u) / 8u, 1u);
+    }
+    const D3D12_RESOURCE_BARRIER scratch_uav = uav_barrier(delight_scratch_.Get());
+    list->ResourceBarrier(1u, &scratch_uav);
+    list->SetPipelineState(delight_mip_pso_.Get());
+    for (std::uint32_t l = 1u; l < most_levels; ++l) {
+        for (std::size_t i = 0; i < delight_jobs_.size(); ++i) {
+            const DelightJob& job = delight_jobs_[i];
+            if (l >= job.levels) {
+                continue;
+            }
+            const std::uint32_t w = std::max(1u, job.width >> l);
+            const std::uint32_t h = std::max(1u, job.height >> l);
+            const DelightConstants constants{0u, {0u, 0u}, 0u,
+                                             static_cast<std::uint32_t>(bases[i] + layouts[i].offset[l]),
+                                             layouts[i].pitch[l], {w, h},
+                                             static_cast<std::uint32_t>(bases[i] + layouts[i].offset[l - 1u]),
+                                             layouts[i].pitch[l - 1u],
+                                             {std::max(1u, job.width >> (l - 1u)), std::max(1u, job.height >> (l - 1u))},
+                                             job.wrap};
+            list->SetComputeRoot32BitConstants(0u, sizeof(constants) / 4u, &constants, 0u);
+            list->Dispatch((((w + 3u) / 4u) + 7u) / 8u, (h + 7u) / 8u, 1u);
+        }
+        list->ResourceBarrier(1u, &scratch_uav);
+    }
+    to_state(list, delight_scratch_.Get(), delight_scratch_state_, D3D12_RESOURCE_STATE_COPY_SOURCE);
+    std::vector<D3D12_RESOURCE_BARRIER> ready;
+    for (std::size_t i = 0; i < delight_jobs_.size(); ++i) {
+        const DelightJob& job = delight_jobs_[i];
+        const auto found = delight_maps_.find(job.pack);
+        if (found == delight_maps_.end()) {
+            continue;
+        }
+        for (std::uint32_t l = 0; l < job.levels; ++l) {
+            D3D12_TEXTURE_COPY_LOCATION destination{};
+            destination.pResource = found->second.texture.Get();
+            destination.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+            destination.SubresourceIndex = l;
+            D3D12_TEXTURE_COPY_LOCATION from{};
+            from.pResource = delight_scratch_.Get();
+            from.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+            from.PlacedFootprint.Offset = bases[i] + layouts[i].offset[l];
+            from.PlacedFootprint.Footprint = {DXGI_FORMAT_R8_SNORM, std::max(1u, job.width >> l),
+                                              std::max(1u, job.height >> l), 1u, layouts[i].pitch[l]};
+            list->CopyTextureRegion(&destination, 0u, 0u, 0u, &from, nullptr);
+        }
+        ready.push_back(transition(found->second.texture.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
+                                   D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE |
+                                       D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));
+        found->second.ready = true;
+        ++delight_made_;
+    }
+    if (!ready.empty()) {
+        list->ResourceBarrier(static_cast<UINT>(ready.size()), ready.data());
+    }
+    delight_jobs_.clear();
 }
 
 D3D12_GPU_VIRTUAL_ADDRESS SceneRayTracer::upload_tev(const std::vector<RtTevMaterial>& records,
@@ -1988,7 +2301,30 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
                             std::bit_cast<std::uint32_t>(relief), std::bit_cast<std::uint32_t>(info.light[0][0]),
                             std::bit_cast<std::uint32_t>(info.light[0][1]),
                             std::bit_cast<std::uint32_t>(info.light[0][2]), light_kind});
-    note_tev(info, tev_records_, tev_stages_);
+    // Physical: the material texture's de-light map, for opaque surfaces the game lights or bakes (not water, clear
+    // crystal or glass, the sky, effects, light sources: their colour is light, not paint over a surface).
+    std::uint32_t delight = 0xFFFFFFFFu;
+    {
+        const std::uint32_t surface_class = (info.surface & kRtDrawClassMask) >> kRtDrawClassShift;
+        const bool paint = surface_class != static_cast<std::uint32_t>(RtSurfaceClass::Water) &&
+                           surface_class != static_cast<std::uint32_t>(RtSurfaceClass::Crystal) &&
+                           (material == nullptr ||
+                            (!material->particle && !material->sky && !material->star && !material->lens &&
+                             !material->hide && !material->mirror && !material->helper && !material->painted &&
+                             material->emission == RtEmission::None));
+        ++delight_seen_[0];
+        if (!paint) {
+            ++delight_seen_[1];
+        } else if (info.texture_map >= 8u) {
+            ++delight_seen_[2];
+        } else if (info.texture.pack == 0u) {
+            ++delight_seen_[3];
+        } else {
+            delight = delight_view(info.texture, info.texture_wrap);
+            ++delight_seen_[delight != 0xFFFFFFFFu ? 4u : 5u];
+        }
+    }
+    note_tev(info, tev_records_, tev_stages_, delight);
     draw_materials_.push_back(info.rt_material);
     if (dump_scene_ != 0u && scene_serial_ == dump_scene_) {
         infos_.push_back(info);
@@ -2236,17 +2572,20 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
     for (auto& param : params) {
         param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     }
-    D3D12_STATIC_SAMPLER_DESC wrap{};
-    wrap.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
-    wrap.AddressU = wrap.AddressV = wrap.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-    wrap.MaxLOD = D3D12_FLOAT32_MAX;
-    wrap.ShaderRegister = 0u;
-    wrap.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    // s0 point, s1 trilinear (the de-light maps), both repeating.
+    D3D12_STATIC_SAMPLER_DESC wrap[2]{};
+    for (UINT s = 0; s < 2u; ++s) {
+        wrap[s].Filter = s == 0u ? D3D12_FILTER_MIN_MAG_MIP_POINT : D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+        wrap[s].AddressU = wrap[s].AddressV = wrap[s].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+        wrap[s].MaxLOD = D3D12_FLOAT32_MAX;
+        wrap[s].ShaderRegister = s;
+        wrap[s].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    }
     D3D12_ROOT_SIGNATURE_DESC rsd{};
     rsd.NumParameters = kLightCount;
     rsd.pParameters = params;
-    rsd.NumStaticSamplers = 1u;
-    rsd.pStaticSamplers = &wrap;
+    rsd.NumStaticSamplers = 2u;
+    rsd.pStaticSamplers = wrap;
     // The trace tests alpha maps straight from the descriptor heap: shader model 6.6 and resource binding tier 3
     // (else alpha-tested draws are traced solid). GALAXY_RT_ALPHA_TEST=0: solid.
     {
@@ -2277,8 +2616,31 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
         !compute(light_root_.Get(), g_rt_spatial_m_cs, sizeof(g_rt_spatial_m_cs), spatial_m_pso_) ||
         !compute(light_root_.Get(), g_rt_spatial_b_cs, sizeof(g_rt_spatial_b_cs), spatial_b_pso_) ||
         !compute(light_root_.Get(), g_rt_star_sphere_cs, sizeof(g_rt_star_sphere_cs), star_sphere_pso_) ||
-        !compute(light_root_.Get(), g_rt_gbuffer_cs, sizeof(g_rt_gbuffer_cs), gbuffer_pso_)) {
+        !(light_textured_ ? compute(light_root_.Get(), g_rt_gbuffer_tex_cs, sizeof(g_rt_gbuffer_tex_cs), gbuffer_pso_)
+                          : compute(light_root_.Get(), g_rt_gbuffer_cs, sizeof(g_rt_gbuffer_cs), gbuffer_pso_))) {
         return false;
+    }
+    // Texture de-lighting (rt_delight.hlsl) reads the textures from the descriptor heap: only with the textured
+    // trace. Its root: the constants (b0), the scratch buffer (u0).
+    if (light_textured_) {
+        D3D12_ROOT_PARAMETER delight_params[2]{};
+        delight_params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+        delight_params[0].Constants.Num32BitValues = 13u;
+        delight_params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+        for (auto& param : delight_params) {
+            param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+        }
+        D3D12_ROOT_SIGNATURE_DESC delight_desc{};
+        delight_desc.NumParameters = 2u;
+        delight_desc.pParameters = delight_params;
+        delight_desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
+        if (!serialize(delight_desc, delight_root_) ||
+            !compute(delight_root_.Get(), g_rt_delight_cs, sizeof(g_rt_delight_cs), delight_pso_) ||
+            !compute(delight_root_.Get(), g_rt_delight_mip_cs, sizeof(g_rt_delight_mip_cs), delight_mip_pso_)) {
+            delight_root_.Reset();
+            delight_pso_.Reset();
+            delight_mip_pso_.Reset();
+        }
     }
     // The reference reads the hits' textures from the descriptor heap: only with the textured trace.
     if (reference_ && (!light_textured_ ||
@@ -2513,7 +2875,7 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
     {
         D3D12_ROOT_PARAMETER light_tex_params[2]{};
         light_tex_params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-        light_tex_params[0].Constants.Num32BitValues = 4u;
+        light_tex_params[0].Constants.Num32BitValues = 8u;
         light_tex_params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
         for (auto& param : light_tex_params) {
             param.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
@@ -2959,12 +3321,12 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
                          strength};
     }
     // GALAXY_RT_PHYSICAL: the game's own light units. Its planet light lights a surface as material x min(ambient + key
-    // x N.L, 1) in display-encoded colour. Every traced surface's colour is its colour at that full light (lit draws:
-    // header bit 31; unlit draws are drawn at it), so the light is in units of the stage's full light, in linear light:
-    // the sky's radiance the ambient's share of it, the sun's irradiance over pi the rest. A surface facing the sun
-    // unshadowed shows its colour as the game draws it, one in shade the ambient's share. The sun comes from the key light's position, where the game
-    // lights from (the visible BrightSun is its lens flare: on Good Egg it stands on the horizon while the key is 35
-    // degrees up).
+    // x N.L, 1) in display-encoded colour. Every traced surface's colour is its colour at white light (lit draws:
+    // header bit 31; unlit draws are drawn at their program's neutral light), so the light is in the game's units in
+    // linear light (white 1): the sky's radiance the ambient, the sun's irradiance over pi the rest of the full light.
+    // A surface facing the sun unshadowed shows its colour as the game draws it, one in shade at the ambient. The sun
+    // comes from the key light's position, where the game lights from (the visible BrightSun is its lens flare: on Good
+    // Egg it stands on the horizon while the key is 35 degrees up).
     GameAreaLight area{};
     RtUpload sky_record_table{};
     physical_active_ = physical_ && game_area_light(GameAreaLightKind::Stage, area, 2000u);
@@ -2973,13 +3335,18 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
             v = std::clamp(v, 0.0f, 1.0f);
             return v <= 0.04045f ? v / 12.92f : std::pow((v + 0.055f) / 1.055f, 2.4f);
         };
+        // In the game's own units, each channel as the stage sets it: the sky the ambient, the sun the rest of the full
+        // light (ambient + key, as the game clamps it). Not divided by the full light: that made every stage's light
+        // white and as bright as day, a dim blue stage (Ghostly) washed out and grey (sweep1, 2026-10-19).
         for (unsigned i = 0; i < 3u; ++i) {
             const float full = lin(area.ambient[i] + area.lights[0].color[i]);
-            const float sky = full > 1e-4f ? lin(area.ambient[i]) / full : 1.0f;
+            const float sky = lin(area.ambient[i]);
             c.sky_radiance[i] = sky;
-            c.sun_light[i] = 1.0f - sky;
-            c.full_light[i] = 1.0f / std::max(full, 1e-3f);
+            c.sun_light[i] = std::max(full - sky, 0.0f);
+            c.full_light[i] = full;
         }
+        light_full_ = {std::max(c.full_light[0], 1e-3f), std::max(c.full_light[1], 1e-3f),
+                       std::max(c.full_light[2], 1e-3f)};
         // The traced sky: the sky's draws of this scene, each one's record for the probe.
         if (sky_built_ != 0u && sky_probe_pso_ && sky_trace_sh_pso_ && sky_probe_map_ && !sky_records_.empty()) {
             sky_record_table = allocate(allocate_context, sky_records_.size() * sizeof(sky_records_[0]), 256u);
@@ -2994,6 +3361,8 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         // The real sun's disc (0.533 degrees across): penumbrae as wide as distance from the caster makes them.
         c.sun[3] = std::tan(0.2665f * 3.14159265f / 180.0f);
         std::copy(scene_up_.begin(), scene_up_.end(), c.up);
+        // The textures' de-light maps (GBufferCS's relief, the hits' albedo): their relief height (on: above 0).
+        c.up[3] = delight_ && delight_pso_ ? std::max(delight_relief_, 1e-3f) : 0.0f;
         const std::array<float, 3>& key = area.lights[0].position;
         const std::array<float, 3> eye =
             area.lights[0].follows_camera
@@ -3196,6 +3565,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     const unsigned previous = current ^ 1u;
     const unsigned slot = next_light_slot_;
     next_light_slot_ = (next_light_slot_ + 1u) % kLightSlots;
+    light_slot_full_[slot] = physical_active_ ? light_full_ : std::array<float, 3>{1.0f, 1.0f, 1.0f};
     reflections_.invalidate(slot);
     constexpr D3D12_RESOURCE_STATES kUav = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     constexpr D3D12_RESOURCE_STATES kRead = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
@@ -3218,6 +3588,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
 
     const UINT groups_x = (sample_width + 7u) / 8u;
     const UINT groups_y = (sample_height + 7u) / 8u;
+    run_delight(list);
     list->SetComputeRootSignature(light_root_.Get());
     list->SetComputeRootConstantBufferView(kLightFrame, upload.gpu);
     list->SetComputeRootShaderResourceView(kLightScene, tlas_->GetGPUVirtualAddress());
@@ -3302,7 +3673,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     // Physical: the per-pixel normals of this frame into the slot's buffer (the composite's per-pixel sun).
     bool pixels = false;
     if (physical_active_ && !reference) {
-        const UINT64 bytes = static_cast<UINT64>(width) * height * 4u;
+        const UINT64 bytes = static_cast<UINT64>(width) * height * 8u;
         if (!light_pixels_[slot] || light_pixels_bytes_[slot] < bytes) {
             retire(light_pixels_[slot]);
             light_pixels_bytes_[slot] = 0u;
@@ -4047,8 +4418,11 @@ void SceneRayTracer::write_light_texture(ID3D12GraphicsCommandList* list, int sl
     list->RSSetScissorRects(1u, &scissor);
     list->SetGraphicsRootSignature(light_tex_root_.Get());
     list->SetPipelineState(light_tex_pso_.Get());
-    const std::uint32_t constants[4] = {light_tex_width_, light_tex_height_, 0u, 0u};
-    list->SetGraphicsRoot32BitConstants(0u, 4u, constants, 0u);
+    // The translucent draws are drawn in the game's own light: the traced light relative to the stage's full light.
+    const std::array<float, 3>& full = light_slot_full_[static_cast<unsigned>(slot)];
+    const std::uint32_t constants[8] = {light_tex_width_, light_tex_height_, 0u, 0u, std::bit_cast<std::uint32_t>(full[0]),
+                                        std::bit_cast<std::uint32_t>(full[1]), std::bit_cast<std::uint32_t>(full[2]), 0u};
+    list->SetGraphicsRoot32BitConstants(0u, 8u, constants, 0u);
     list->SetGraphicsRootShaderResourceView(1u, light_final_[static_cast<unsigned>(slot)]->GetGPUVirtualAddress());
     list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     list->DrawInstanced(3u, 1u, 0u, 0u);

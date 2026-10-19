@@ -2270,8 +2270,9 @@ TextureHandle TextureCache::get(
     const auto* src = reinterpret_cast<const std::uint8_t*>(guest_bytes);
     // The ray tracer's material table names textures by the texture-pack key of their base level.
     std::uint16_t rt_material = 0u;
+    std::uint64_t pack = 0u;
     if (rt_materials_loaded()) {
-        const std::uint64_t pack = texture_pack_hash(
+        pack = texture_pack_hash(
             src, texture_guest_byte_size(image.format, image.width, image.height, 1u));
         rt_material = rt_material_index(pack);
         note_rt_texture(image.guest_addr, pack, image.width, image.height, static_cast<std::uint32_t>(image.format));
@@ -2337,6 +2338,7 @@ TextureHandle TextureCache::get(
                 entry.handle.generated_mips = generated_mips;
                 entry.handle.guest_byte_size = total_guest_size;
                 entry.handle.rt_material = rt_material;
+                entry.handle.pack = pack;
                 const TextureHandle handle = entry.handle;
                 if (entries_.empty()) decoded_guest_envelope_.clear();
                 decoded_guest_envelope_.include(image.guest_addr, total_guest_size);
@@ -2535,6 +2537,7 @@ TextureHandle TextureCache::get(
     handle.generated_mips = generated_mips;
     handle.guest_byte_size = total_guest_size;
     handle.rt_material = rt_material;
+    handle.pack = pack;
 
     Entry entry{};
     entry.texture = std::move(resource);

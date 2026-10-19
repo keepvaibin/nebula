@@ -72,6 +72,9 @@ public:
     static constexpr std::uint32_t kTextureViewsPerScene = 4096u;
     static constexpr unsigned kTextureViewScenes = 4u;
     void set_texture_views(D3D12_CPU_DESCRIPTOR_HANDLE cpu, std::uint32_t first, UINT increment) noexcept;
+    // Physical: the textures' de-light maps' views, kDelightViews descriptors of that heap from index `first`.
+    static constexpr std::uint32_t kDelightViews = 4096u;
+    void set_delight_views(D3D12_CPU_DESCRIPTOR_HANDLE cpu, std::uint32_t first, UINT increment) noexcept;
     // The fence value the next scene's texture views wait for before begin_scene (0: none; ~0: they are still in
     // unsubmitted work, and that scene draws untextured).
     [[nodiscard]] std::uint64_t texture_views_fence() const noexcept;
@@ -427,6 +430,49 @@ private:
     std::array<TextureViewBlock, kTextureViewScenes> texture_view_blocks_{};
     std::unordered_map<SIZE_T, TextureViewSlot> texture_view_slots_;
     D3D12_GPU_VIRTUAL_ADDRESS draw_texture_table_ = 0;
+    // Physical: texture de-lighting (rt_delight.hlsl). Per texture-pack key the shading painted into the texture
+    // (R8_SNORM log units, mips), made on the GPU in the trace of the scene that first shows the texture as a traced
+    // draw's material and read from the next scene on (by GBufferCS for the composite, by the hits' TEV). Kept across
+    // scenes; past kDelightBytes or the views the least recently drawn go. GALAXY_RT_DELIGHT=0: off.
+    struct DelightMap {
+        Microsoft::WRL::ComPtr<ID3D12Resource> texture;
+        std::uint32_t slot = 0;      // its view: delight_view_first_ + slot
+        std::uint64_t bytes = 0;
+        std::uint64_t used = 0;      // the last scene that drew it
+        bool ready = false;          // its job is recorded
+    };
+    struct DelightJob {
+        std::uint64_t pack = 0;
+        std::uint32_t source = 0;    // the texture's view in this scene's block
+        std::uint32_t width = 0;
+        std::uint32_t height = 0;
+        std::uint32_t source_levels = 1;
+        std::uint32_t levels = 1;
+        std::uint32_t wrap = 5u;     // RtDrawInfo.texture_wrap of the draw that made it
+    };
+    static constexpr std::uint64_t kDelightBytes = 256ull << 20u;
+    static constexpr std::uint64_t kDelightScratchBytes = 8ull << 20u;
+    static constexpr std::uint64_t kDelightTexelsPerFrame = 1ull << 20u;
+    [[nodiscard]] std::uint32_t delight_view(const RtTextureSource& source, std::uint32_t wrap);
+    void run_delight(ID3D12GraphicsCommandList* list);
+    void reset_delight() noexcept;
+    bool delight_ = true;
+    float delight_relief_ = 2.0f;    // GALAXY_RT_DELIGHT_RELIEF: relief height in texels per log unit of shading
+    D3D12_CPU_DESCRIPTOR_HANDLE delight_view_cpu_{};
+    std::uint32_t delight_view_first_ = 0;
+    UINT delight_view_increment_ = 0;
+    std::unordered_map<std::uint64_t, DelightMap> delight_maps_;
+    std::vector<DelightJob> delight_jobs_;
+    std::vector<std::uint32_t> delight_free_;
+    std::vector<std::pair<std::uint32_t, std::uint64_t>> delight_retired_slots_;   // slot, frame
+    std::uint64_t delight_bytes_ = 0;
+    std::uint64_t delight_made_ = 0;
+    std::array<std::uint64_t, 6> delight_seen_{};   // [rt-delight] draw counts since the last report
+    Microsoft::WRL::ComPtr<ID3D12Resource> delight_scratch_;
+    D3D12_RESOURCE_STATES delight_scratch_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> delight_root_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> delight_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> delight_mip_pso_;
     // High quality: per triangle its texture coordinates and colours (ray_tracing.hlsl g_tri_uv).
     Microsoft::WRL::ComPtr<ID3D12Resource> surface_uv_;
     D3D12_RESOURCE_STATES surface_uv_state_ = D3D12_RESOURCE_STATE_COMMON;
@@ -520,6 +566,9 @@ private:
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kLightSlots> light_final_;
     // Physical: per light slot its traced frame's per-pixel shading normals (rt_lighting.hlsl GBufferCS).
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kLightSlots> light_pixels_;
+    // Physical: the stage's full light in linear light (this frame's; per slot, its frame's), 1 otherwise.
+    std::array<float, 3> light_full_{1.0f, 1.0f, 1.0f};
+    std::array<std::array<float, 3>, kLightSlots> light_slot_full_{};
     std::array<std::uint64_t, kLightSlots> light_pixels_bytes_{};
     std::array<D3D12_RESOURCE_STATES, kLightSlots> light_pixels_state_{};
     Microsoft::WRL::ComPtr<ID3D12PipelineState> gbuffer_pso_;
@@ -763,7 +812,8 @@ private:
     std::vector<RtTevStage> tev_stages_;
     std::vector<RtTevMaterial> sky_tev_records_;
     std::vector<RtTevStage> sky_tev_stages_;
-    void note_tev(const RtDrawInfo& info, std::vector<RtTevMaterial>& records, std::vector<RtTevStage>& stages);
+    void note_tev(const RtDrawInfo& info, std::vector<RtTevMaterial>& records, std::vector<RtTevStage>& stages,
+                  std::uint32_t delight = 0xFFFFFFFFu);
     // The records, then the stages (each record's stage_offset in bytes), for g_tev; 0 for none.
     D3D12_GPU_VIRTUAL_ADDRESS upload_tev(const std::vector<RtTevMaterial>& records, const std::vector<RtTevStage>& stages,
                                          Allocate allocate, void* allocate_context);

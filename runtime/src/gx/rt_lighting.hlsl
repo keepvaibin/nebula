@@ -85,19 +85,23 @@ cbuffer RtLight : register(b0)
     uint g_reference_pad;
     float4 g_history_projection;   // the previous samples' projection (their frame's jitter)
     float4 g_picture_projection;   // the previous picture's
-    float4 g_sky_radiance;         // kPhysicalFlag: the sky's radiance in units of the stage's full light (rgb)
-    float4 g_full_light;           // 1 / the stage's full light in linear light (rgb); 1: g_sky_map holds the traced sky (w)
+    float4 g_sky_radiance;         // kPhysicalFlag: the sky's radiance, the stage's ambient in linear light (rgb)
+    float4 g_full_light;           // the stage's full light in linear light (rgb); 1: g_sky_map holds the traced sky (w)
     uint4 g_tev_info;              // TEV records (g_tev) of the scene's draws, of the sky's draws (the sky probe)
-    float4 g_up;                   // the player's up in eye space by the game's gravity (else the view's up)
+    float4 g_up;                   // the player's up in eye space by the game's gravity (else the view's up); the de-light
+                                   // maps' relief height in texels per log unit (w; 0: off)
     uint4 g_probe;                 // GALAXY_RT_PROBE: the probed sample (x, y), on (z)
 };
 
-// g_flags bit 14: the game's light units (GALAXY_RT_PHYSICAL), relative to the stage's full light (ambient + key):
+// g_flags bit 14: the game's light units (GALAXY_RT_PHYSICAL), as the stage sets them in linear light (white 1):
 // g_sky_radiance is the sky, g_sun_light the sun's irradiance over pi, and the reference keeps them as they are (no
 // exposure).
 static const uint kPhysicalFlag = 16384u;
 
 RaytracingAccelerationStructure g_scene : register(t6);
+// Texture de-lighting (rt_delight.hlsl): its maps hold the light painted into a texture in log units, R8_SNORM over
+// +-kDelightRange.
+static const float kDelightRange = 1.25f;
 #if RT_TEXTURED
 // Alpha-tested geometry (g_flags bit 12): per triangle its texture coordinates and colours (36 bytes,
 // ray_tracing.hlsl g_tri_uv), per draw its alpha map and the alpha its test passes from (word 3: the map's view
@@ -105,6 +109,7 @@ RaytracingAccelerationStructure g_scene : register(t6);
 ByteAddressBuffer g_tri_uv : register(t20);
 StructuredBuffer<uint4> g_draw_tex : register(t21);
 SamplerState g_wrap_point : register(s0);
+SamplerState g_wrap_linear : register(s1);
 // Per draw its TEV program for ray hits (rt_tev.hlsli; g_tev_info.x records of the scene, .y of the sky in the probe).
 ByteAddressBuffer g_tev : register(t23);
 #include "rt_tev.hlsli"
@@ -139,8 +144,9 @@ RWStructuredBuffer<float4> g_reference : register(u6);
 // the sky's light in units of the stage's full light (linear), then its 9 spherical-harmonic coefficients (rgb).
 // SkyProbeCS and SkyTraceShCS write it (g_reference's slot).
 StructuredBuffer<float4> g_sky_map : register(t22);
-// kPhysicalFlag: per EFB pixel its shading normal (pack_normal; GBufferCS), for the composite's per-pixel sun.
-RWStructuredBuffer<uint> g_pixels : register(u7);
+// kPhysicalFlag: per EFB pixel its shading normal (pack_normal) and the texture's de-lighting there
+// (pack_pixel_delight; 0: none), GBufferCS, for the composite's per-pixel sun and albedo.
+RWStructuredBuffer<uint2> g_pixels : register(u7);
 static const uint kSkyMapSize = 64u;
 static const uint kSkyLayers = 8u;     // the sky's layers a probe ray composites, at most
 
@@ -336,6 +342,35 @@ float3 unpack_normal(uint v)
     n.x += n.x >= 0.0f ? -t : t;
     n.y += n.y >= 0.0f ? -t : t;
     return normalize(n);
+}
+
+// A pixel's de-lighting (GBufferCS): the normal its texture's relief bends (octahedral, 10 bits an axis) and the light
+// painted into its texel (log units, 12 bits over +-kDelightRange, never 0: 0 is none).
+uint pack_pixel_delight(float3 n, float shading)
+{
+    n /= abs(n.x) + abs(n.y) + abs(n.z);
+    float2 e = n.xy;
+    if (n.z < 0.0f) {
+        e = (1.0f - abs(n.yx)) * float2(n.x >= 0.0f ? 1.0f : -1.0f, n.y >= 0.0f ? 1.0f : -1.0f);
+    }
+    const uint2 u = uint2(round(saturate(e * 0.5f + 0.5f) * 1023.0f));
+    const uint s = uint(clamp(round(shading / kDelightRange * 2047.0f) + 2048.0f, 1.0f, 4095.0f));
+    return u.x | (u.y << 10u) | (s << 20u);
+}
+
+float3 unpack_pixel_normal(uint v)
+{
+    const float2 e = float2(float(v & 0x3FFu), float((v >> 10u) & 0x3FFu)) / 1023.0f * 2.0f - 1.0f;
+    float3 n = float3(e, 1.0f - abs(e.x) - abs(e.y));
+    const float t = saturate(-n.z);
+    n.x += n.x >= 0.0f ? -t : t;
+    n.y += n.y >= 0.0f ? -t : t;
+    return normalize(n);
+}
+
+float unpack_pixel_shading(uint v)
+{
+    return (float(v >> 20u) - 2048.0f) / 2047.0f * kDelightRange;
 }
 
 // ray_tracing.hlsl pack_vertex_normal: octahedral, 1-65535 per axis.
@@ -2036,11 +2071,13 @@ float3 physical_sky_irradiance(float3 n)
 }
 
 // kPhysicalFlag: the camera's exposure: a white surface facing the player's up (the ground under the player, by the
-// game's gravity; g_up), lit by the open sky and the sun at its angle, shows at the game's full light.
+// game's gravity; g_up), lit by the open sky and the sun at its angle, shows at the stage's full light (the game's
+// ambient + key: a dim stage stays as dim as the game sets it, a coloured one keeps its colour).
 float physical_exposure()
 {
     const float sun = max(dot(g_up.xyz, g_sun.xyz), 0.0f);
-    return 1.0f / max(luminance(physical_sky_irradiance(g_up.xyz)) + luminance(g_sun_light.rgb) * sun, 1e-3f);
+    return luminance(g_full_light.rgb) /
+           max(luminance(physical_sky_irradiance(g_up.xyz)) + luminance(g_sun_light.rgb) * sun, 1e-4f);
 }
 
 // The game's distance attenuation (1 / (1 + d^2 / half^2)), windowed to 0 at the light's reach.
@@ -3200,7 +3237,7 @@ void SkyProbeCS(uint3 id : SV_DispatchThreadID)
         }
         sum += srgb_to_linear(c);
     }
-    g_reference[id.y * kSkyMapSize + id.x] = float4(sum * 0.25f * g_full_light.rgb, 1.0f);
+    g_reference[id.y * kSkyMapSize + id.x] = float4(sum * 0.25f, 1.0f);
 }
 #endif
 
@@ -4241,6 +4278,117 @@ void StarSphereCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
 // kPhysicalFlag: per EFB pixel the shading normal of the surface its camera ray meets at the raster's depth (the
 // smooth vertex normals, primary_surface), for the composite's per-pixel sun. A ray per pixel, once per traced frame;
 // the frame's in-between pictures read it where their pixels lay in it.
+#if RT_TEXTURED
+// Coordinate `u` of an axis under GX addressing `mode` (0 clamp, 1 repeat, 2 mirror), for a repeating sampler: clamped
+// and mirrored coordinates kept half a texel (`half`) inside so the filter never reaches the far edge.
+float delight_coordinate(float u, uint mode, float half)
+{
+    if (mode == 1u) {
+        return u;
+    }
+    if (mode == 2u) {
+        u = 1.0f - abs(frac(u * 0.5f) * 2.0f - 1.0f);
+    }
+    return clamp(u, half, 1.0f - half);
+}
+
+float2 delight_uv(float2 uv, uint wrap, float2 half)
+{
+    return float2(delight_coordinate(uv.x, wrap & 3u, half.x), delight_coordinate(uv.y, (wrap >> 2u) & 3u, half.y));
+}
+
+// The relief's height for painted shading `s` (log units): saturating at +-kReliefSpan, so a painted outline or a deep
+// painted shadow (a dark plank border, measured Good Egg build delight3) is a shallow groove, not a cliff.
+static const float kReliefSpan = 0.35f;
+// The steepest relief slope (tan 20 degrees): the painted light says little of shape, and a sun 20 degrees up or more
+// never leaves a surface black for it. Steeper, bent normals turned whole bands of a surface from the sun (the dark
+// ring along Good Egg's rim: 75 degrees in delight2/3, still a line at 35 in delight4).
+static const float kReliefSlope = 0.36f;
+
+float relief_height(float s)
+{
+    return kReliefSpan * tanh(s / kReliefSpan);
+}
+
+// The light painted into the material texture of triangle `tri` at barycentrics `b` (its de-light map, record pad[1]
+// and pad[2]; rt_delight.hlsl), at the level a pixel `pixel_width` eye units wide at `p` covers there (a ray cone,
+// Akenine-Moller et al. 2021: the triangle's texels per eye unit, the footprint widened by its slant to the view), and
+// the relief it implies: its height (relief_height, g_up.w texels per log unit) bends the shading normal `n` by its
+// surface gradient on the triangle's texture axes (Mikkelsen 2020), at most kReliefSlope. False without a map.
+bool delight_surface(uint tri, float2 b, float3 p, float3 ng, float pixel_width, inout float3 n, out float shading)
+{
+    shading = 0.0f;
+    const uint draw = g_surfaces.Load(tri * 16u + 12u) >> 16u;
+    if (g_up.w <= 0.0f || draw >= g_tev_info.x) {
+        return false;
+    }
+    const uint record = draw * kTevRecordBytes;
+    const uint view = g_tev.Load(record + 112u);
+    if (view == 0xFFFFFFFFu) {
+        return false;
+    }
+    const uint info = g_tev.Load(record + 116u);
+    const uint slot = (info >> 3u) & 1u;
+    const uint wrap = (info >> 4u) & 0xFu;
+    const float2 scale = asfloat(g_tev.Load2(record + 120u));
+    const uint a = tri * kTriUvStride + slot * 24u;
+    const float4 uv01 = asfloat(g_tri_uv.Load4(a));
+    const float2 t0 = uv01.xy * scale;
+    const float2 t1 = uv01.zw * scale;
+    const float2 t2 = asfloat(g_tri_uv.Load2(a + 16u)) * scale;
+    const float2 uv = t0 * (1.0f - b.x - b.y) + t1 * b.x + t2 * b.y;
+    if (any(abs(uv) >= 1.0e4f)) {
+        return false;
+    }
+    const Texture2D<float> map = ResourceDescriptorHeap[NonUniformResourceIndex(view)];
+    uint width, height, levels;
+    map.GetDimensions(0u, width, height, levels);
+    const float2 size = float2(width, height);
+    const float3 v0 = asfloat(g_positions.Load3(tri * 36u));
+    const float3 e1 = asfloat(g_positions.Load3(tri * 36u + 12u)) - v0;
+    const float3 e2 = asfloat(g_positions.Load3(tri * 36u + 24u)) - v0;
+    const float2 d1 = (t1 - t0) * size;
+    const float2 d2 = (t2 - t0) * size;
+    const float det = d1.x * d2.y - d2.x * d1.y;
+    const float world_area = length(cross(e1, e2));
+    if (abs(det) < 1e-8f || world_area < 1e-12f) {
+        return false;
+    }
+    const float slant = max(abs(dot(ng, normalize(p))), 0.05f);
+    const float lod = clamp(0.5f * log2(abs(det) / world_area) + log2(pixel_width / slant), 0.0f, float(levels - 1u));
+    // Its gradient at that level (central differences a texel of it apart), per level-0 texel, under the draw's
+    // addressing (a clamped texture's edge never meets the far edge).
+    const float step = exp2(lod);
+    const float2 half = 0.5f * step / size;
+    shading = map.SampleLevel(g_wrap_linear, delight_uv(uv, wrap, half), lod) * kDelightRange;
+    const float2 du = float2(step / size.x, 0.0f);
+    const float2 dv = float2(0.0f, step / size.y);
+    const float su = (relief_height(map.SampleLevel(g_wrap_linear, delight_uv(uv + du, wrap, half), lod) * kDelightRange) -
+                      relief_height(map.SampleLevel(g_wrap_linear, delight_uv(uv - du, wrap, half), lod) * kDelightRange)) /
+                     (2.0f * step);
+    const float sv = (relief_height(map.SampleLevel(g_wrap_linear, delight_uv(uv + dv, wrap, half), lod) * kDelightRange) -
+                      relief_height(map.SampleLevel(g_wrap_linear, delight_uv(uv - dv, wrap, half), lod) * kDelightRange)) /
+                     (2.0f * step);
+    // The texture's axes on the surface (eye units per texel) in the shading normal's plane; the height in eye units
+    // g_up.w x shading x the texel's size, so the slope is g_up.w x the shading's change per texel.
+    float3 axis_u = (e1 * d2.y - e2 * d1.y) / det;
+    float3 axis_v = (e2 * d1.x - e1 * d2.x) / det;
+    axis_u -= n * dot(n, axis_u);
+    axis_v -= n * dot(n, axis_v);
+    const float texel = sqrt(length(axis_u) * length(axis_v));
+    const float3 r1 = cross(axis_v, n);
+    const float3 r2 = cross(n, axis_u);
+    const float d = dot(axis_u, r1);
+    if (abs(d) > 1e-20f) {
+        float3 slope = (g_up.w * texel) * (su * r1 + sv * r2) / d;
+        const float steep = length(slope);
+        slope *= steep > kReliefSlope ? kReliefSlope / steep : 1.0f;
+        n = normalize(n - slope);
+    }
+    return true;
+}
+#endif
+
 [numthreads(8, 8, 1)]
 void GBufferCS(uint3 id : SV_DispatchThreadID)
 {
@@ -4249,9 +4397,21 @@ void GBufferCS(uint3 id : SV_DispatchThreadID)
     }
     const int2 q = int2(id.xy);
     float3 p;
-    uint packed = 0u;
+    uint2 packed = uint2(0u, 0u);
     if (pixel_point(q, p) && inside(g_viewport, float2(q) + 0.5f)) {
-        packed = pack_normal(primary_surface(q, p).n);
+        const Surface s = primary_surface(q, p);
+        packed.x = pack_normal(s.n);
+#if RT_TEXTURED
+        if (s.primary.x != 0u) {
+            const float3 next = eye_position(g_projection, g_viewport, float2(q) + float2(1.5f, 0.5f), p.z);
+            float3 bent = s.n;
+            float shading;
+            if (delight_surface(s.primary.x - 1u, float2(f16tof32(s.primary.y), f16tof32(s.primary.y >> 16u)), p, s.ng,
+                                length(next - p), bent, shading)) {
+                packed.y = pack_pixel_delight(bent, shading);
+            }
+        }
+#endif
     }
     g_pixels[id.y * g_target_size.x + id.x] = packed;
 }
@@ -4264,6 +4424,7 @@ cbuffer RtLightTexture : register(b0)
 {
     uint2 t_size;
     uint2 t_pad;
+    float4 t_full;   // the stage's full light in linear light (physical; else 1)
 };
 StructuredBuffer<uint4> t_final : register(t0);
 
@@ -4277,7 +4438,8 @@ float4 LightTexturePS(float4 position : SV_Position) : SV_Target0
     // A blended translucent (seaweed, glass, leaf cards) takes the light of the surface behind it, and
     // that surface lies in the translucent's own shadow: it keeps at most half of the darkening (more
     // light it takes whole). Measured wb33/wb36: Beach Bowl's seaweed 115,111,36 -> 27,52,25.
-    const float3 m = float3(f16tof32(v.x), f16tof32(v.x >> 16u), f16tof32(v.y));
+    // Physical: the translucents are drawn in the game's light, the traced light is in its units (white 1).
+    const float3 m = float3(f16tof32(v.x), f16tof32(v.x >> 16u), f16tof32(v.y)) / max(t_full.rgb, 1e-3f);
     return float4(max(m, 0.5f + 0.5f * m), 1.0f);
 }
 
@@ -4308,14 +4470,21 @@ StructuredBuffer<uint4> m_light : register(t0);
 Texture2D<float> m_efb_depth : register(t1);
 StructuredBuffer<float4> m_reproject : register(t2);
 Texture2D<float4> m_color : register(t3);
-// m_flags bit 3 (physical): the traced frame's per-pixel shading normals (GBufferCS).
-StructuredBuffer<uint> m_pixels : register(t4);
+// m_flags bit 3 (physical): the traced frame's per-pixel shading normals and de-lighting (GBufferCS).
+StructuredBuffer<uint2> m_pixels : register(t4);
 
 // The traced frame's shading normal at its pixel `q`.
 float3 traced_normal(int2 q)
 {
     const int2 c = clamp(q, int2(0, 0), int2(m_target_size) - 1);
-    return unpack_normal(m_pixels[uint(c.y) * m_target_size.x + uint(c.x)]);
+    return unpack_normal(m_pixels[uint(c.y) * m_target_size.x + uint(c.x)].x);
+}
+
+// Its de-lighting there (pack_pixel_delight; 0: none).
+uint traced_delight(int2 q)
+{
+    const int2 c = clamp(q, int2(0, 0), int2(m_target_size) - 1);
+    return m_pixels[uint(c.y) * m_target_size.x + uint(c.x)].y;
 }
 
 struct CompositeOut
@@ -4455,10 +4624,14 @@ CompositeOut CompositePS(float4 position : SV_Position)
     float nearest_dz = abs(p.z) * 0.1f;
     // Physical (bit 3): the sun turned from each sample's facing to this pixel's own normal (the samples' visibility
     // with the exposure in w's low half, their facing from the per-pixel normals at their pixels).
+    // The pixel's own normal is its texture's relief where it has a de-light map; the samples' facing stays their
+    // smooth normal's, as their light was found.
     const bool per_pixel = (m_flags & 8u) != 0u;
-    const float pixel_facing = per_pixel ? max(dot(traced_normal(int2(eye_to_pixel(m_projection, m_viewport, p))),
-                                                   m_sun.xyz), 0.0f)
-                                         : 0.0f;
+    const int2 traced_pixel = int2(eye_to_pixel(m_projection, m_viewport, p));
+    const uint delit = per_pixel ? traced_delight(traced_pixel) : 0u;
+    const float pixel_facing =
+        per_pixel ? max(dot(delit != 0u ? unpack_pixel_normal(delit) : traced_normal(traced_pixel), m_sun.xyz), 0.0f)
+                  : 0.0f;
     float sun_turn = 0.0f;
     float nearest_turn = 0.0f;
     [unroll] for (uint k = 0u; k < 9u; ++k) {
@@ -4501,7 +4674,9 @@ CompositeOut CompositePS(float4 position : SV_Position)
             result.color = float4(m * 0.5f, 1.0f);
             return result;
         }
-        result.color = float4(linear_to_srgb(film_light(srgb_to_linear(color), m)), 1.0f);
+        // The texel's albedo: the light painted into it taken out (rt_delight.hlsl), the traced light in its place.
+        const float3 albedo = srgb_to_linear(color) * (delit != 0u ? exp(-unpack_pixel_shading(delit)) : 1.0f);
+        result.color = float4(linear_to_srgb(film_light(albedo, m)), 1.0f);
         return result;
     }
     // Relief: the texture's detail as height (its brightness, m_sun.w eye units at white) bends the

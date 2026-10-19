@@ -825,7 +825,7 @@ static constexpr unsigned    kSrvPerFrame = 32768u;
 // SRV indices are independent of this prefix.
 // EFB, output EFB and sub-frame EFB conversion sources; the ray-traced scenes' texture views.
 static constexpr unsigned    kRtTextureViews = SceneRayTracer::kTextureViewScenes * SceneRayTracer::kTextureViewsPerScene;
-static constexpr unsigned    kPersistentSrvDescriptors = 6u + kRtTextureViews;
+static constexpr unsigned    kPersistentSrvDescriptors = 6u + kRtTextureViews + SceneRayTracer::kDelightViews;
 
 void RendererD3D12::wait_for_gpu() {
     const std::uint64_t val = ++next_fence_value_;
@@ -2516,6 +2516,9 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
         {
             const DescriptorRing::Table views = srv_ring_.allocate_persistent(kRtTextureViews);
             ray_tracer_.set_texture_views(views.cpu, srv_ring_.index_of(views.gpu),
+                                          device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV));
+            const DescriptorRing::Table delight = srv_ring_.allocate_persistent(SceneRayTracer::kDelightViews);
+            ray_tracer_.set_delight_views(delight.cpu, srv_ring_.index_of(delight.gpu),
                                           device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV));
         }
 

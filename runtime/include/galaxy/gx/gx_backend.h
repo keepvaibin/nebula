@@ -914,6 +914,7 @@ private:
     unsigned current_rt_map_ = 0xFFu;  // its texture map (else the first bound one; 0xFF none)
     std::uint32_t rt_draw_buffer_ = 0xFFFFu;   // the last draw buffer marker's type (bit 16: translucent)
     bool rt_sky_buffer_ = false;  // the draws are the game's sky lists' (kRtDrawSky) until the next category marker
+    bool rt_sun_buffer_ = false;   // the game's sun list (Sun 3): neither sky nor scene under physical light
     // The draws are the game's own shadows (CategoryList::execute of MR::DrawType ShadowSurface 0x26, ShadowVolume 0x27,
     // AlphaShadow 0x29) until the next category marker: hidden under traced lighting (rt_hidden_draw).
     bool rt_fake_shadow_list_ = false;

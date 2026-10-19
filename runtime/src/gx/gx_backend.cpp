@@ -6671,10 +6671,13 @@ void GxBackend::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint
     switch (kind) {
     case motion::kMarkerCategory: {
         ++motion_category_markers_;
-        // The game's sky lists (MR::DrawBufferType Sky 1, Air 2, Sun 3, AstroDomeSky 0x23) until the next list, draw
-        // type or phase.
-        rt_sky_buffer_ = (aux == motion::kCategoryBufferOpa || aux == motion::kCategoryBufferXlu) &&
-                         ((a & 0xFFFFu) == 1u || (a & 0xFFFFu) == 2u || (a & 0xFFFFu) == 3u || (a & 0xFFFFu) == 0x23u);
+        // The game's sky lists (MR::DrawBufferType Sky 1, Air 2, AstroDomeSky 0x23) until the next list, draw type or
+        // phase. Its sun list (Sun 3: the sun's disc and glow) is neither sky nor scene: the key light is the sun, and
+        // its glow in the sky's light counted it twice and, as the sky's level is its mean, darkened the rest of the sky
+        // (Sea Slide's shade sides, sweep1).
+        const bool list = aux == motion::kCategoryBufferOpa || aux == motion::kCategoryBufferXlu;
+        rt_sky_buffer_ = list && ((a & 0xFFFFu) == 1u || (a & 0xFFFFu) == 2u || (a & 0xFFFFu) == 0x23u);
+        rt_sun_buffer_ = list && (a & 0xFFFFu) == 3u;
         // The game's shadow lists (MR::DrawType ShadowSurface 0x26, ShadowVolume 0x27, AlphaShadow 0x29).
         rt_fake_shadow_list_ = aux == motion::kCategoryDrawType &&
                                ((a & 0xFFFFu) == 0x26u || (a & 0xFFFFu) == 0x27u || (a & 0xFFFFu) == 0x29u);
@@ -7300,7 +7303,8 @@ RtTextureSource GxBackend::rt_texture_source(unsigned map) const noexcept {
 #else
     D3D12_CPU_DESCRIPTOR_HANDLE view = texture_cache_.backend().srv_cpu_base();
     view.ptr += static_cast<SIZE_T>(handle.srv_index) * texture_cache_.backend().srv_descriptor_stride();
-    return {static_cast<std::uintptr_t>(view.ptr), handle.resource};
+    return {static_cast<std::uintptr_t>(view.ptr), handle.resource, handle.from_efb_copy ? 0u : handle.pack,
+            handle.width, handle.height, handle.mip_levels};
 #endif
 }
 
@@ -7677,6 +7681,11 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     note_scene_ao_view(call);
     // The game's sky lists: the traced sky's geometry, whatever their viewport (the sky and air layers draw at the far
     // plane through a flattened one).
+    if (rt_sun_buffer_ && scene_phase_ && side_layer_ == kSceneLayer &&
+        (enhanced_ps_flags_ & kEnhancedRtPhysical) != 0u) {
+        outcome("sun");
+        return false;
+    }
     const bool sky = rt_sky_buffer_ && scene_phase_ && side_layer_ == kSceneLayer && renderer_.rt_sky_open() &&
                      state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u && !rt_hidden_draw();
     if (!scene_phase_ || !(sky || renderer_.rt_scene_open() || renderer_.rt_glow_open() || renderer_.rt_water_open() ||
@@ -7889,6 +7898,9 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     // High quality's textured hits: the material texture (the scene keeps its own view of it).
     if (current_texture_table_.ptr != 0u && current_rt_map_ < kMaxTextureMaps) {
         info.texture = rt_texture_source(current_rt_map_);
+        info.texture_map = current_rt_map_;
+        const TexMode mode = state_.tex_mode(current_rt_map_);
+        info.texture_wrap = static_cast<std::uint32_t>(mode.wrap_s) | (static_cast<std::uint32_t>(mode.wrap_t) << 2u);
         info.texgen = rt_texgen_of_map(current_rt_map_);
     }
     if ((water && !metal_coat && surface.surface_class == RtSurfaceClass::Metal) || clear_added) {
@@ -8462,6 +8474,7 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
         rt_view_set_ = false;
         rt_scene_traced_ = !renderer_.rt_active();
         rt_sky_buffer_ = false;
+        rt_sun_buffer_ = false;
         rt_fake_shadow_list_ = false;
         if (!rt_scene_traced_) {
             renderer_.rt_begin_scene();

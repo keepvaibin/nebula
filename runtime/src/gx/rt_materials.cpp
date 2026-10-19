@@ -141,6 +141,7 @@ void apply_class(const std::string& text, RtMaterial& m) {
         else if (token == "mirror") m.mirror = true;
         else if (token == "star") m.star = true;
         else if (token == "strip") m.strip = true;
+        else if (token == "painted") m.painted = true;
         else if (token == "waterfall") {
             m.waterfall = true;
             set(RtSurfaceClass::Water);
@@ -159,6 +160,8 @@ void apply_class(const std::string& text, RtMaterial& m) {
             m.relief = token == "diffuse" ? 1.0f : token == "foliage" ? 0.7f : 0.0f;
             m.matte = token == "foliage" || token == "fabric";
             m.foliage = token == "foliage";
+            // Skin carries the features (eyes, mouths, brows) the de-lighting would flatten.
+            m.painted = m.painted || token == "skin";
         } else if (token == "unlit" || token == "sky") {
             set(RtSurfaceClass::Unlit);
             m.relief = 0.0f;

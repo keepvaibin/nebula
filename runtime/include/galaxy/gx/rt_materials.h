@@ -22,7 +22,8 @@
 // (environment, indirect or mask map) that never decides a draw's material. skip: never a light.
 // hide: a light effect the game fakes (a beam, a cone, a flare) that the traced light replaces; not
 // drawn while the ray-traced lighting is on. unlit-only: only the draws the game does not light
-// emit (a lamp's glass beside its lit housing in one texture).
+// emit (a lamp's glass beside its lit housing in one texture). painted: its brightness changes are the material's own
+// (a face, lettering, a picture), not painted light: never de-lit (rt_delight.hlsl).
 // roughness: GGX perceptual 0-1; metallic 0-1; r g b: 0-1; intensity: relative to a Luma (1);
 // range: eye units (0: from the intensity); pulse: Hz (0: steady); cone: a spot light's half angle in
 // degrees around the draw's mean normal (0: all around); shadow: 0 or 1; glow: the light source's own
@@ -57,6 +58,7 @@ struct RtMaterial {
     bool matte = false;                   // foliage, cloth: absorbs light, no highlight or reflection
     bool sky = false;                     // a sky or backdrop mesh: drawn, never in the traced scene
     bool strip = false;                   // a long emitter (a cable): a light per stretch of it
+    bool painted = false;                 // its detail is the material's, not light: never de-lit
     bool star = false;                    // a star's burning surface (the star core, the suns): its own colour,
                                           // brighter and more textured (rt_lighting.hlsl CompositePS)
     bool shadow = true;

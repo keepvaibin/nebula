@@ -103,7 +103,10 @@ struct RtTevMaterial {
     std::uint32_t regs[8]{};         // PREV, C0-C2: half floats (r | g << 16, b | a << 16), value / 255
     std::uint32_t maps[8]{};         // texture views (SceneRayTracer: 0xFFFFFFFF none)
     std::uint32_t stage_offset = 0u; // SceneRayTracer: its first stage
-    std::uint32_t pad[5]{};          // pad[0]: de-baked channels' neutral light (bits 0-7, 8-15; rt_tev_eval.h)
+    // pad[0]: de-baked channels' neutral light (bits 0-7, 8-15; rt_tev_eval.h). SceneRayTracer: pad[1] the material
+    // texture's de-light map (its view; 0xFFFFFFFF none), pad[2] its map (bits 0-2) and texture slot (bit 3), pad[3]
+    // and pad[4] that stage's coordinate scale (floats); pad[2] bits 4-7 its addressing (RtDrawInfo.texture_wrap).
+    std::uint32_t pad[5]{};
 };
 static_assert(sizeof(RtTevMaterial) == 128u);
 // Bits 8-11: the draw's surface class (rt_surfaces.h).
@@ -115,9 +118,14 @@ inline constexpr std::uint32_t kRtLatePhase = 8u;
 
 // A texture a draw samples: its view in the texture cache's CPU descriptor heap (D3D12_CPU_DESCRIPTOR_HANDLE::ptr) and
 // its resource (ID3D12Resource; null: none). Opaque here so the Vulkan build, which traces nothing yet, shares the type.
+// For texture de-lighting its texture-pack key (0: none, an EFB copy) and size.
 struct RtTextureSource {
     std::uintptr_t view = 0;
     void* resource = nullptr;
+    std::uint64_t pack = 0;
+    std::uint16_t width = 0;
+    std::uint16_t height = 0;
+    std::uint8_t levels = 1;
 };
 
 // Diagnostics for GALAXY_RT_DUMP: the draw's GX projection (A-F), viewport depth range, cull
@@ -143,8 +151,12 @@ struct RtDrawInfo {
     std::array<std::uint32_t, 4> shading{};
     // Its material table entry (rt_materials.h; 0: none).
     std::uint16_t rt_material = 0;
-    // Its material texture: high quality's reflections sample it where they hit the draw off screen.
+    // Its material texture: high quality's reflections sample it where they hit the draw off screen; its map (0-7,
+    // 0xFF: none).
     RtTextureSource texture{};
+    std::uint32_t texture_map = 0xFFu;
+    // Its addressing (GX TexWrap: 0 clamp, 1 repeat, 2 mirror): s (bits 0-1), t (bits 2-3).
+    std::uint32_t texture_wrap = 5u;
     // An alpha-tested draw (kRtDrawAlphaTest, kRtDrawCard): its alpha map and the alpha its test passes from
     // (1-255; 0: none, solid).
     RtTextureSource alpha{};

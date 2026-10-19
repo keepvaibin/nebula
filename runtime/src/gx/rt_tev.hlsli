@@ -202,8 +202,18 @@ float4 tev_evaluate(uint draw, uint count, uint tri, float2 b, out bool alpha_pa
             const float2 coords = uv[(header >> (8u + 2u * texcoord)) & 1u] * scale;
             if (view != 0xFFFFFFFFu && all(abs(coords) < 1.0e4f)) {
                 const Texture2D<float4> map = ResourceDescriptorHeap[NonUniformResourceIndex(view)];
-                texc = tev_swizzle(int4(round(saturate(map.SampleLevel(g_wrap_point, coords, 0.0f)) * 255.0f)),
-                                   tex_swizzle);
+                float4 texel = saturate(map.SampleLevel(g_wrap_point, coords, 0.0f));
+                // Physical: the material texture's albedo, the light painted into it taken out (its de-light map,
+                // record pad[1]; rt_delight.hlsl).
+                const uint painted_view = g_tev.Load(record + 112u);
+                if (painted_view != 0xFFFFFFFFu && g_up.w > 0.0f && texmap == (g_tev.Load(record + 116u) & 7u)) {
+                    const Texture2D<float> painted = ResourceDescriptorHeap[NonUniformResourceIndex(painted_view)];
+                    const float3 lin = select(texel.rgb <= 0.04045f, texel.rgb / 12.92f,
+                                              pow((texel.rgb + 0.055f) / 1.055f, 2.4f)) *
+                                       exp(-painted.SampleLevel(g_wrap_point, coords, 0.0f) * kDelightRange);
+                    texel.rgb = select(lin <= 0.0031308f, lin * 12.92f, 1.055f * pow(saturate(lin), 1.0f / 2.4f) - 0.055f);
+                }
+                texc = tev_swizzle(int4(round(saturate(texel) * 255.0f)), tex_swizzle);
             }
 #endif
         } else {
