@@ -9,6 +9,11 @@ static const char* __KPADVersion = "<< RVL_SDK - KPAD \trelease build: Aug 29 20
 static const char* __KPADVersion = "<< RVL_SDK - KPAD \trelease build: Jun  3 2008 11:53:11 (0x4201_134) >>";
 #endif
 
+/* Nebula: the host's exact pointer for the sample WPAD is delivering (sdk/wpad/wpad_native.c). */
+BOOL __NebulaWPADExactPointer(s32 chan, Vec2* pos);
+/* KPADRead stages each sample in the caller's KPADStatus buffer. */
+_Static_assert(sizeof(KPADUnifiedWpadStatus) <= sizeof(KPADStatus), "KPADUnifiedWpadStatus outgrew KPADStatus");
+
 static Vec2 icenter_org = {0.000f, 0.000f};
 static f32 idist_org = 1.000f;
 static Vec2 iaccXY_nrm_hori = {0.000f, -1.000f};
@@ -940,6 +945,8 @@ void read_kpad_dpd(KPADInsideStatus* kp, KPADUnifiedWpadStatus* uwp) {
     KPADStatus* sp = &kp->status;
     KPADObject* op1;
     s8 valid_fg_next;
+    const Vec2 prev_pos = sp->pos;
+    const s8 prev_valid = sp->dpd_valid_fg;
 
     if (uwp->fmt == WPAD_FMT_CORE_ACC_DPD || uwp->fmt == WPAD_FMT_FREESTYLE_ACC_DPD || uwp->fmt == WPAD_FMT_CLASSIC_ACC_DPD) {
         get_kobj(kp, &uwp->u.core.obj[WPAD_DPD_MAX_OBJECTS - 1]);
@@ -1033,6 +1040,18 @@ LABEL_select_OK:
     }
 
     calc_dpd_variable(kp, valid_fg_next);
+    /* Nebula: a host pointer (mouse, gyro) is exact. Its IR dots still give the distance and roll; the position is
+       the host's, without the dots' resolution, the play radius or the smoothing a real remote's camera needs. */
+    if (uwp->exact && sp->dpd_valid_fg != 0) {
+        if (prev_valid != 0) {
+            sp->vec.x = uwp->exact_pos.x - prev_pos.x;
+            sp->vec.y = uwp->exact_pos.y - prev_pos.y;
+        } else {
+            sp->vec = Vec2_0;
+        }
+        sp->speed = sqrt(sp->vec.x * sp->vec.x + sp->vec.y * sp->vec.y);
+        sp->pos = uwp->exact_pos;
+    }
 }
 
 void clamp_stick_circle(Vec2* stick, s32 sx, s32 sy, s32 min, s32 max) {
@@ -1438,6 +1457,7 @@ static void KPADiSamplingCallback(s32 chan) {
     uwp = &kp->uniRingBuf[idx];
     WPADRead(chan, &uwp->u);
     uwp->fmt = (u8)WPADGetDataFormat(chan);
+    uwp->exact = (u8)__NebulaWPADExactPointer(chan, &uwp->exact_pos);
 
     kp->bufIdx = (u8)(idx + 1);
     if (kp->bufCount < 120) {

@@ -84,7 +84,8 @@ typedef struct KPADUnifiedWpadStatus {
         WPADCLStatus cl;
     } u;
     u8 fmt;
-    u8 padding;
+    u8 exact; /* Nebula: exact_pos is the host's pointer for this sample (mouse, gyro) */
+    Vec2 exact_pos;
 } KPADUnifiedWpadStatus;
 
 typedef struct {

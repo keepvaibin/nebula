@@ -420,6 +420,7 @@ void GameScene::draw3D() const {
         return;
     }
 
+    __NebulaGXSceneMarker(0, MR::getCameraViewMtx());
     CategoryList::execute(MR::DrawType_AstroDomeSkyClear);
     MR::loadViewMtx();
     MR::loadProjectionMtx();
@@ -468,6 +469,7 @@ void GameScene::draw3D() const {
     MR::loadLightPlayer();
     CategoryList::execute(MR::DrawType_0x24);
     CategoryList::execute(MR::DrawType_0x3B);
+    __NebulaGXSceneMarker(1, nullptr);
     MR::clearZBuffer();
 }
 

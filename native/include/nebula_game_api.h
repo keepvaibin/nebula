@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 5u
+#define NEBULA_GAME_API_VERSION 6u
 
 /* A physical range of the game's memory and where it is in the host process: what the GPU's addresses resolve to. */
 typedef struct NebulaGameMemoryRegion {
@@ -70,6 +70,13 @@ typedef struct NebulaWiimoteConnection {
     uint32_t extension;
     uint8_t battery;
 } NebulaWiimoteConnection;
+
+/* The pointer a report's IR data stands for, in KPAD's units (-1..1 across the screen, x right, y down), when the
+   host points directly (mouse, gyro): KPAD takes it as the position instead of solving it from the IR dots. */
+typedef struct NebulaWpadPointer {
+    float x;
+    float y;
+} NebulaWpadPointer;
 
 /* What the game asks of a remote (wpad_control). */
 enum {
@@ -163,6 +170,9 @@ typedef struct NebulaHostServices {
     void (*gx_pe_marker)(void* user, int finish, uint16_t token);
     /* An EFB pixel (type 0: colour, 1: depth), as GXPeekARGB/GXPeekZ read it. */
     uint32_t (*gx_peek_efb)(void* user, uint16_t x, uint16_t y, uint32_t type);
+    /* The game's 3D scene (GameScene::draw3D) begins (marker 0, with the camera's world-to-eye matrix, row-major 3x4)
+       or ends (marker 1, `view` NULL) at the end of the stream so far. */
+    void (*gx_scene_marker)(void* user, uint32_t marker, const float* view);
 
     /* Disc: the game partition's file table as on the disc (big-endian), valid for the process's life. */
     const uint8_t* (*disc_fst)(void* user, size_t* size);
@@ -266,8 +276,10 @@ NEBULA_GAME_API void nebula_game_ai_interrupt(void);
 /* A Wii Remote connected (with its calibration) or disconnected. */
 NEBULA_GAME_API void nebula_game_wpad_connect(uint32_t chan, int connected, const NebulaWiimoteConnection* connection);
 /* A Wii Remote input report, from its id (0x30, 0x31, 0x33 or 0x37 as the data format asks), extension bytes decrypted;
-   one per report the remote sends (100 per second). */
-NEBULA_GAME_API void nebula_game_wpad_report(uint32_t chan, const uint8_t* report, size_t size);
+   one per report the remote sends (100 per second). `pointer`: the exact position its IR dots stand for, or NULL (a
+   real remote). */
+NEBULA_GAME_API void nebula_game_wpad_report(uint32_t chan, const uint8_t* report, size_t size,
+                                             const NebulaWpadPointer* pointer);
 
 #ifdef __cplusplus
 }

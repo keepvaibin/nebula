@@ -85,6 +85,10 @@ struct WiimoteInputSnapshot {
     Axis10 accel{kWiimoteRestAccelX, kWiimoteRestAccelY, kWiimoteRestAccelZ};
     std::array<IrDot, 4> ir{};
     NunchukState nunchuk{};
+    // The pointer the IR dots stand for, in KPAD's units, when they were made from one (publish_wiimote_ir_dots).
+    bool pointer_exact = false;
+    float pointer_x = 0.0f;
+    float pointer_y = 0.0f;
 };
 
 struct WiimoteDeviceStatus {

@@ -70,6 +70,8 @@ u32 __NebulaOption(u32 what);
 // a host thread raises something.
 void __NebulaPoll(void);
 void* __NebulaFromPhysical(u32 paddr);
+// The 3D scene's begin (0, with the camera's world-to-eye matrix) and end (1) in the GX stream (gx_scene_marker).
+void __NebulaGXSceneMarker(u32 marker, const f32 (*view)[4]);
 #ifdef __cplusplus
 }
 #endif

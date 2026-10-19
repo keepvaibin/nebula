@@ -270,6 +270,13 @@ void __NebulaGXPeMarker(int finish, u16 token) {
     }
 }
 
+void __NebulaGXSceneMarker(u32 marker, const f32 (*view)[4]) {
+    if (sLinked) {
+        submit();
+        nebula_host()->gx_scene_marker(nebula_host()->user, marker, view != NULL ? &view[0][0] : NULL);
+    }
+}
+
 u32 __NebulaGXPeekEFB(u16 x, u16 y, u32 type) {
     submit();
     return nebula_host()->gx_peek_efb(nebula_host()->user, x, y, type);

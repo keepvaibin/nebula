@@ -1499,9 +1499,13 @@ void publish_wiimote_ir_dots(
     float pointer_y,
     bool active) noexcept {
     snapshot.ir = {};
+    snapshot.pointer_exact = false;
     if (!active) {
         return;
     }
+    snapshot.pointer_exact = true;
+    snapshot.pointer_x = std::clamp(pointer_x, -1.0f, 1.0f);
+    snapshot.pointer_y = std::clamp(pointer_y, -1.0f, 1.0f);
     constexpr int kKpadFrameMinRaw = 26;
     constexpr int kKpadFrameMaxXRaw = 997;
     constexpr int kKpadFrameMaxYRaw = 725;

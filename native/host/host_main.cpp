@@ -140,6 +140,7 @@ std::atomic<uint32_t> gFsOps{0};
 std::atomic<uint32_t> gAiBlocks{0};
 std::atomic<uint32_t> gDspFrames{0};
 std::atomic<uint32_t> gMovieFrames{0};
+std::atomic<uint32_t> gSceneBegins{0};
 
 void* find_symbol(void* module, const char* name) {
 #if defined(_WIN32)
@@ -1101,6 +1102,22 @@ void svc_gx_pe_marker(void*, int finish, uint16_t token) {
 #endif
 }
 
+void svc_gx_scene_marker(void*, uint32_t marker, const float* view) {
+    if (marker == 0) {
+        gSceneBegins.fetch_add(1, std::memory_order_relaxed);
+    }
+#if defined(NEBULA_HOST_RENDERER)
+    if (marker == 0 && view != nullptr) {
+        galaxy::gx::attach_scene_view(view);
+    }
+    galaxy::gx::attach_fifo_marker(marker == 0 ? galaxy::gx::FifoMarker::SceneBegin : galaxy::gx::FifoMarker::SceneEnd,
+                                   gPendingSize);
+#else
+    (void)marker;
+    (void)view;
+#endif
+}
+
 uint32_t svc_gx_peek_efb(void*, uint16_t x, uint16_t y, uint32_t type) {
 #if defined(NEBULA_HOST_RENDERER)
     const auto kind = type == 0 ? galaxy::gx::EfbPeekKind::Color : galaxy::gx::EfbPeekKind::Depth;
@@ -1383,7 +1400,7 @@ void wpad_thread() {
         const uint8_t id = static_cast<uint8_t>(gWpadReport.load(std::memory_order_relaxed));
 #if !defined(NEBULA_HOST_RENDERER)
         uint8_t idle[22];
-        gModule.wpad_report(0, idle, idle_wiimote_report(id, idle));
+        gModule.wpad_report(0, idle, idle_wiimote_report(id, idle), nullptr);
         continue;
 #else
         const int32_t mode = gStarPointerMode.load(std::memory_order_relaxed);
@@ -1395,7 +1412,9 @@ void wpad_thread() {
         uint8_t report[galaxy::input::kMaxWiimoteInputReportBytes];
         const auto built = galaxy::input::build_wiimote_input_report(id, snapshot, report);
         if (built.status == galaxy::input::WiimoteReportBuildStatus::Ok && built.size > 1) {
-            gModule.wpad_report(0, report + 1, built.size - 1);  // from the report id, past the HID header
+            // From the report id, past the HID header; the exact pointer its IR dots stand for, when there is one.
+            const NebulaWpadPointer pointer{snapshot.pointer_x, snapshot.pointer_y};
+            gModule.wpad_report(0, report + 1, built.size - 1, snapshot.pointer_exact ? &pointer : nullptr);
         }
 #endif
     }
@@ -1868,6 +1887,7 @@ int main(int argc, char** argv) {
     services.gx_submit = svc_gx_submit;
     services.gx_pe_marker = svc_gx_pe_marker;
     services.gx_peek_efb = svc_gx_peek_efb;
+    services.gx_scene_marker = svc_gx_scene_marker;
     services.disc_fst = svc_disc_fst;
     services.disc_read = svc_disc_read;
     services.disc_dol = svc_disc_dol;
@@ -1904,6 +1924,9 @@ int main(int argc, char** argv) {
         die("the settings did not load: %s", failure.what());
     }
     galaxy::gx::set_native_settings_content_root(galaxy::host::locate_game(pak).content_root.string());
+    // The environment is final from here: the input poll's many reads per report are served once from a table (each
+    // read otherwise scans the whole environment block, 100 reports a second).
+    galaxy::host::set_env_flag_cache_enabled(true);
     const galaxy::gx::RenderConfig render_config = galaxy::gx::get_render_config();
     if (!galaxy::gx::initialize(static_cast<int>(render_config.window_width),
                                 static_cast<int>(render_config.window_height))) {
@@ -2026,6 +2049,7 @@ int main(int argc, char** argv) {
         }
     }
     log_line("host:", Clock::now() < end ? "the window was closed" : "time limit reached");
+    log_line("host:", ("3D scenes " + std::to_string(gSceneBegins.load(std::memory_order_relaxed))).c_str());
     if (gModule.debug_dump != nullptr) {
         gModule.debug_dump();
     }

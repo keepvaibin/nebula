@@ -9,6 +9,7 @@
 #include <stdatomic.h>
 #include <string.h>
 
+#include <revolution/kpad.h>
 #include <revolution/os.h>
 #include <revolution/vi.h>
 #include <revolution/wpad.h>
@@ -23,6 +24,8 @@ enum { kChannels = WPAD_MAX_CONTROLLERS, kReportBytes = 22, kQueue = 32, kDeferr
 
 typedef struct {
     u8 bytes[kReportBytes];
+    BOOL pointerExact;
+    f32 pointerX, pointerY;
 } Report;
 
 typedef struct {
@@ -49,6 +52,8 @@ typedef struct {
     WPADInfo info;
     WPADCLStatus status; /* the largest status: WPADRead copies the part its format uses */
     u16 accSettle, stickSettle; /* reports an analog change has persisted (IsControllerDataChanged) */
+    BOOL pointerExact; /* the sample being delivered carries the host's exact pointer */
+    f32 pointerX, pointerY;
     WPADSamplingCallback samplingCallback;
     WPADConnectCallback connectCallback;
     WPADExtensionCallback extensionCallback;
@@ -85,7 +90,8 @@ NEBULA_GAME_API void nebula_game_wpad_connect(uint32_t chan, int connected, cons
     nebula_raise_interrupt(__OS_INTERRUPT_PI_SI);
 }
 
-NEBULA_GAME_API void nebula_game_wpad_report(uint32_t chan, const uint8_t* report, size_t size) {
+NEBULA_GAME_API void nebula_game_wpad_report(uint32_t chan, const uint8_t* report, size_t size,
+                                             const NebulaWpadPointer* pointer) {
     if (chan >= kChannels || size == 0) {
         return;
     }
@@ -97,6 +103,9 @@ NEBULA_GAME_API void nebula_game_wpad_report(uint32_t chan, const uint8_t* repor
     Report* r = &c->queue[head % kQueue];
     memset(r->bytes, 0, sizeof(r->bytes));
     memcpy(r->bytes, report, size < kReportBytes ? size : kReportBytes);
+    r->pointerExact = pointer != NULL;
+    r->pointerX = pointer != NULL ? pointer->x : 0.0f;
+    r->pointerY = pointer != NULL ? pointer->y : 0.0f;
     atomic_store_explicit(&c->head, head + 1, memory_order_release);
     nebula_raise_interrupt(__OS_INTERRUPT_PI_SI);
 }
@@ -409,7 +418,11 @@ static void controller_interrupt(__OSInterrupt interrupt, OSContext* context) {
             u32 tail = atomic_load_explicit(&c->tail, memory_order_relaxed);
             const u32 head = atomic_load_explicit(&c->head, memory_order_acquire);
             for (; tail != head; tail++) {
-                decode(c, c->queue[tail % kQueue].bytes);
+                const Report* r = &c->queue[tail % kQueue];
+                decode(c, r->bytes);
+                c->pointerExact = r->pointerExact;
+                c->pointerX = r->pointerX;
+                c->pointerY = r->pointerY;
                 atomic_store_explicit(&c->tail, tail + 1, memory_order_release);
                 if (c->samplingCallback != NULL) {
                     c->samplingCallback(chan);
@@ -423,6 +436,17 @@ static void controller_interrupt(__OSInterrupt interrupt, OSContext* context) {
         memmove(&sDeferred[0], &sDeferred[1], sDeferredCount * sizeof(Deferred));
         d.callback(d.chan, d.result);
     }
+}
+
+/* KPAD's sampling callback, per sample: the host's exact pointer for it (KPAD.c). */
+BOOL __NebulaWPADExactPointer(s32 chan, Vec2* pos) {
+    const Channel* c = &sChannels[chan];
+    if (!c->pointerExact) {
+        return FALSE;
+    }
+    pos->x = c->pointerX;
+    pos->y = c->pointerY;
+    return TRUE;
 }
 
 /* The API */
