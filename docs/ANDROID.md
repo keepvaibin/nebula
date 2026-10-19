@@ -14,8 +14,11 @@ player's disc image and starts it, and SDL's activity running the native game.
 ## Build
 
 ```
-platform/android/build_apk.ps1 -Deps <deps> -Work <build folder> [-Signing <signing.properties>]
+platform/android/build_apk.ps1 -Deps <deps> -Work <build folder> -SeedTool <vk_shader_seed.exe> [-Signing <signing.properties>]
 ```
+
+`-SeedTool` is the PC Vulkan build's `vk_shader_seed` (`NEBULA_VULKAN=ON`) of the same commit: it makes the app's
+precompiled shaders from `platform/android/vk_seed_keys.bin`.
 
 `<deps>` holds `SDL3-3.4.18`, `glslang-src` (with `External/spirv-tools`), `Vulkan-Headers-vulkan-sdk-1.4.350.1`,
 `volk-vulkan-sdk-1.4.350.1` and `VulkanMemoryAllocator-v3.4.0`. Needs NDK 28.2.13676358, SDK platform 36, the Rust

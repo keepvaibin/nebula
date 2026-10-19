@@ -66,8 +66,8 @@ Every Vulkan 1.1 GPU and driver (Android's in particular), with no per-device wo
   that driver, and its keys are built specialised at their first draw instead of skipped. The Android app ships the
   keys the whole game uses (`platform/android/vk_seed_keys.bin`, the PC's 102-galaxy tour), which the workers build
   from the first launch in the order the game needs them, and their SPIR-V for every GPU's forms
-  (`vk_seed_shaders.bin`, `vk_shader_seed <keys> <out>` from `tools/dev/vk_shader_seed.cpp`; rebuild it with the keys
-  after any shader-generator change), so no HLSL is compiled on the phone. Once every seeded pipeline is built, the
+  (`vk_seed_shaders.bin`, made at APK build time by `vk_shader_seed`, `tools/dev/vk_shader_seed.cpp`, from the same
+  commit), so no HLSL is compiled on the phone. Once every seeded pipeline is built, the
   modules this GPU used are in `vk_shaders.bin` and both seeds are deleted (the app installs them again after its
   next update).
 - **Driver crashes** inside a compile (the class Dusklight hit on Adreno 740): `compile_journal.h` maps the compiles
