@@ -44,6 +44,20 @@ namespace galaxy {
 #endif
 }
 
+// The running executable's folder (where a release keeps its data tables); empty when unknown.
+[[nodiscard]] inline std::filesystem::path program_directory() {
+#if defined(_WIN32)
+    wchar_t exe[MAX_PATH]{};
+    const DWORD length = GetModuleFileNameW(nullptr, exe, MAX_PATH);
+    return length == 0u || length >= MAX_PATH ? std::filesystem::path{}
+                                              : std::filesystem::path(exe, exe + length).parent_path();
+#else
+    std::error_code error;
+    const std::filesystem::path exe = std::filesystem::read_symlink("/proc/self/exe", error);
+    return error ? std::filesystem::path{} : exe.parent_path();
+#endif
+}
+
 // fopen on a path (UTF-16 on Windows); null on failure, with errno set.
 [[nodiscard]] inline std::FILE* open_path(const std::filesystem::path& path, const char* mode) {
 #if defined(_WIN32)

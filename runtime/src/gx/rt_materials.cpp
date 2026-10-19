@@ -2,8 +2,7 @@
 #include "galaxy/gx/rt_materials.h"
 
 #include "galaxy/gx/rt_surfaces.h"
-
-#include <windows.h>
+#include "galaxy/platform_paths.h"
 
 #include <algorithm>
 #include <bit>
@@ -178,12 +177,8 @@ std::vector<std::string> table_paths() {
         }
         return paths;
     }
-    char exe[MAX_PATH]{};
-    const DWORD n = GetModuleFileNameA(nullptr, exe, MAX_PATH);
-    std::string dir(exe, n);
-    const std::size_t slash = dir.find_last_of("\\/");
-    dir = slash == std::string::npos ? std::string(".") : dir.substr(0, slash);
-    return {dir + "\\rt-materials.tsv", dir + "\\rt-materials-lights.tsv"};
+    const std::filesystem::path dir = program_directory();
+    return {(dir / "rt-materials.tsv").string(), (dir / "rt-materials-lights.tsv").string()};
 }
 
 RtMaterialTable load() {
@@ -208,17 +203,13 @@ const RtMaterialTable& table() {
 const RtStageSunTable& suns() {
     static const RtStageSunTable loaded = [] {
         RtStageSunTable t;
-        char value[MAX_PATH]{};
+        char value[4096]{};
         std::size_t length = 0u;
         std::string path;
         if (getenv_s(&length, value, sizeof(value), "GALAXY_RT_SUNS_FILE") == 0 && length > 1u) {
             path = value;
         } else {
-            char exe[MAX_PATH]{};
-            const DWORD n = GetModuleFileNameA(nullptr, exe, MAX_PATH);
-            std::string dir(exe, n);
-            const std::size_t slash = dir.find_last_of("\\/");
-            path = (slash == std::string::npos ? std::string(".") : dir.substr(0, slash)) + "\\rt-suns.tsv";
+            path = (program_directory() / "rt-suns.tsv").string();
         }
         std::ifstream file(path);
         if (file) {
