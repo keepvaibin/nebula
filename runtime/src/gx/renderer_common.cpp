@@ -314,6 +314,9 @@ float4 main() : SV_Target { return color; }
 constexpr char kClearPs[] =
     "cbuffer C:register(b0){float4 clear_color;};"
     "float4 main():SV_Target{return clear_color;}";
+constexpr char kClearDepthPs[] =
+    "cbuffer C:register(b0){float4 clear_value;};"
+    "float main():SV_Depth{return clear_value.x;}";
 constexpr char kDepthCarryPs[] =
     "Texture2D<float> t:register(t0);"
     "SamplerState s:register(s0);"
@@ -348,6 +351,10 @@ std::string_view ui_solid_quad_pixel_shader_source() noexcept {
 
 std::string_view clear_pixel_shader_source() noexcept {
     return {kClearPs, sizeof(kClearPs) - 1u};
+}
+
+std::string_view clear_depth_pixel_shader_source() noexcept {
+    return {kClearDepthPs, sizeof(kClearDepthPs) - 1u};
 }
 
 std::string_view depth_carry_pixel_shader_source() noexcept {

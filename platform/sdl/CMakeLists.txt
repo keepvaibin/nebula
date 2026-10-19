@@ -75,10 +75,12 @@ add_library(galaxy_gx_vk STATIC
     ${rt}/frame_telemetry.cpp
     ${rt}/gx/game_asset_extract.cpp
     ${rt}/gx/vk/vk_context.cpp
+    ${rt}/gx/vk/device_quirks_vk.cpp
     ${rt}/gx/vk/vk_libraries.cpp
     ${rt}/gx/vk/shader_compile_vk.cpp
     ${rt}/gx/vk/texture_backend_vk.cpp
     ${rt}/gx/vk/pipeline_cache_vk.cpp
+    ${rt}/gx/vk/compile_journal.cpp
     ${rt}/gx/vk/renderer_vk.cpp
     ${rt}/gx/vk/renderer_vk_efb.cpp
     ${rt}/frame_cadence_diagnostics.cpp

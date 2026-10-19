@@ -10,10 +10,20 @@
 // the keys seen and the driver's VkPipelineCache persist in cache_dir; a later session builds every known pipeline
 // on the workers at start. GALAXY_GX_UBER as on D3D12: 1 = this hybrid (default), force = the uber pipelines for every
 // draw, 0 = none (a first use builds its pipeline on the render thread).
+//
+// Driver compatibility (docs/VULKAN.md): a pipeline the driver refuses is built again without each optional feature it
+// uses (CompatBit, cheapest loss first; for a specialised pipeline also with the other TEV zero form), and a feature
+// whose removal fixed two pipelines is left out of every later one. A key no form of which the driver accepts is
+// remembered as refused and drawn by its uber pipeline (none: the draw is skipped). The first launch on a driver
+// build tests the uber pipelines of every pixel-shader variant and feature in the background; what it and the
+// fallbacks found is kept in vk_compat.txt for that driver build. The first refusal logs the driver's result, the
+// pipeline's state, the driver's own log (host_window::driver_log) and the shaders' HLSL. GALAXY_VK_SHADER_DUMP=<dir>
+// writes every module's HLSL and SPIR-V there.
 
 #include "galaxy/gx/shader_gen.h"
 #include "galaxy/gx/shader_keys.h"
 #include "galaxy/gx/uber_shaders.h"
+#include "galaxy/gx/vk/compile_journal.h"
 #include "galaxy/gx/vk/renderer_vk.h"
 
 #include <array>
@@ -23,6 +33,7 @@
 #include <deque>
 #include <filesystem>
 #include <mutex>
+#include <string>
 #include <thread>
 #include <type_traits>
 #include <unordered_map>
@@ -69,6 +80,20 @@ public:
     };
     [[nodiscard]] CompileStats compile_stats() const;
 
+    // Optional features a pipeline can be built without (create_pipeline), in the order the fallbacks try them.
+    enum CompatBit : std::uint32_t {
+        kCompatNoDepthClip = 1u << 0u,   // no VK_EXT_depth_clip_enable (depth clamped, primitives unclipped)
+        kCompatNoLogicOp = 1u << 1u,     // GX logic ops draw as plain writes
+        kCompatNoDualSource = 1u << 2u,  // single-source blend factors, no second pixel-shader output
+        kCompatNoDepthClamp = 1u << 3u,
+        kCompatNoGeometry = 1u << 4u,    // lines and points one pixel wide
+        kCompatBits = 5u,
+    };
+    // Shader-generator forms the fallbacks can switch (ShaderGenOptions).
+    enum GeneratorBit : std::uint32_t {
+        kGeneratorTevZeroFromConstant = 1u << 0u,
+    };
+
 private:
     // A pipeline's full keys: the shaders are generated again from them.
     struct Entry {
@@ -94,12 +119,29 @@ private:
     };
 
     [[nodiscard]] VkShaderModule module_for(const std::string& hlsl, vk::ShaderStage stage, bool dual_source);
+    [[nodiscard]] ShaderGenerator generator_for(std::uint32_t generator_bits) const;
     [[nodiscard]] VkPipeline build(const Entry& entry);
-    // `export_depth`: the pixel shader writes the fragment depth (Z textures).
+    // `export_depth`: the pixel shader writes the fragment depth (Z textures). `compat`: CompatBits to build without.
     [[nodiscard]] VkPipeline create_pipeline(const RenderStateKey& render_state, VkShaderModule vs, VkShaderModule ps,
-                                             bool dual_source, bool export_depth) const;
+                                             bool dual_source, bool export_depth, std::uint32_t compat,
+                                             VkResult& result) const;
+    // The CompatBits `render_state` (with these shaders' outputs) uses.
+    [[nodiscard]] std::uint32_t applicable_compat(const RenderStateKey& render_state, bool dual_source,
+                                                  bool export_depth) const;
+    // `make(compat, result)` with this device's CompatBits, then (refused) with each applicable fallback, then all.
+    // `transient`: the driver was out of memory or lost the device (no answer about this pipeline).
+    template <typename Make>
+    VkPipeline with_fallbacks(Make&& make, std::uint32_t applicable, const char* what, const std::string& detail,
+                              bool* transient = nullptr);
+    void report_refusal(const char* what, const std::string& detail, VkResult result, std::uint32_t compat);
+    void learn(std::uint32_t compat_bit, std::uint32_t generator_bit);
+    void load_compat();
+    void save_compat();
     [[nodiscard]] VkPipeline uber_pipeline(const RenderStateKey& render_state, unsigned variant);
+    // The uber pipeline drawing a key whose own pipeline is missing (refused, or still building).
+    [[nodiscard]] VkPipeline stand_in(const PsoKey& key, const PixelShaderKey& ps_key);
     void compile_uber_shaders() noexcept;
+    void self_test();
     void worker_main();
     void enqueue(const Entry& entry);
     void load_disk();
@@ -109,7 +151,7 @@ private:
     const vk::GxLayout* layout_ = nullptr;
     std::filesystem::path cache_dir_;
     VkPipelineCache driver_cache_ = VK_NULL_HANDLE;
-    ShaderGenerator generator_;
+    ShaderGenOptions generator_defaults_;  // this device's (DeviceQuirks), before the fallbacks' changes
 
     // Shader modules by the hash of their HLSL (and output form); SPIR-V kept for the disk.
     mutable std::mutex modules_mutex_;
@@ -153,6 +195,24 @@ private:
     std::vector<std::thread> workers_;
     std::thread flush_thread_;
     std::atomic<bool> flush_done_{true};
+
+    // Driver compatibility (CompatBit / GeneratorBit): what every build leaves out or switches, fixes counted towards
+    // that, the refusals seen.
+    std::atomic<std::uint32_t> device_compat_{0};
+    std::atomic<std::uint32_t> generator_bits_{0};
+    std::array<std::atomic<std::uint32_t>, kCompatBits + 1u> fixes_{};
+    std::atomic<std::uint32_t> refusals_{0};
+    std::atomic<bool> refusal_reported_{false};
+    std::mutex compat_mutex_;
+    // Keys (PsoKey::hash) the driver accepted in no form, and the ones it crashed on (CompileJournal); uber pipelines
+    // (uber_hash) it crashed on.
+    std::unordered_set<std::uint64_t> refused_keys_;
+    std::unordered_set<std::uint64_t> crashed_keys_;
+    std::unordered_set<std::uint64_t> crashed_uber_;
+    vk::CompileJournal journal_;
+    std::string driver_key_;
+    bool compat_known_ = false;  // vk_compat.txt was this driver build's
+    std::string shader_dump_dir_;
 
     std::atomic<std::uint64_t> pso_compiles_{0};
     std::atomic<std::uint64_t> shader_compiles_{0};

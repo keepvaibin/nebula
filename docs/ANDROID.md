@@ -50,6 +50,9 @@ Uninstalling asks whether to keep this data (`hasFragileUserData`).
 - When Android takes the window's surface away (the app leaving the screen, a fold moving it to the other display),
   `surfaceDestroyed` returns once no present uses it; the renderer drops its swap chain and surface and makes new
   ones when the surface is back (`host_window.h`, `surface_withdrawn`).
-- The picture is presented with the identity transform: the compositor rotates it with the display.
+- The picture is pre-rotated: the swap chain keeps the display's natural orientation and the present pass turns
+  the picture into it, so the compositor does no rotation of its own.
+- Every GPU and driver: docs/VULKAN.md, "Driver compatibility". Before a release, `vk_profile_matrix.sh` runs every
+  Android GPU profile under validation on the PC.
 - The surface asks for 60 frames a second (`ANativeWindow_setFrameRate`), so a variable-rate display shows each
   frame for the same time.

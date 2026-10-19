@@ -227,6 +227,8 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
     }
     vkGetPhysicalDeviceProperties(physical_, &properties_);
     device_name_ = properties_.deviceName;
+    identity_ = identify(physical_, has_device_extension(physical_, VK_KHR_DRIVER_PROPERTIES_EXTENSION_NAME));
+    quirks_ = quirks_for(identity_);
     VkPhysicalDeviceFeatures available{};
     vkGetPhysicalDeviceFeatures(physical_, &available);
     VkPhysicalDeviceFeatures enabled{};
@@ -304,6 +306,13 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
     std::fprintf(stderr, "[vulkan] device=\"%s\" api=%u.%u driver=0x%x validation=%d\n", device_name_.c_str(),
                  VK_API_VERSION_MAJOR(properties_.apiVersion), VK_API_VERSION_MINOR(properties_.apiVersion),
                  properties_.driverVersion, layers.empty() ? 0 : 1);
+    std::fprintf(stderr, "[vulkan] driver: %s; workarounds: %s\n", describe(identity_).c_str(),
+                 describe(quirks_).c_str());
+    std::fprintf(stderr,
+                 "[vulkan] features: dual-source=%d logic-op=%d geometry=%d depth-clamp=%d depth-clip=%d bc=%d "
+                 "anisotropy=%d\n",
+                 dual_source_blend_, logic_op_, geometry_shader_, depth_clamp_, depth_clip_enable_, bc_textures_,
+                 sampler_anisotropy_);
     return true;
 }
 
@@ -582,10 +591,15 @@ std::shared_ptr<Buffer> Context::create_readback_buffer(std::uint64_t size, cons
     buffer_info.size = size;
     buffer_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    // Cached host memory: the CPU reads every byte, which uncached write-combined memory makes slow.
+    // Cached host memory: the CPU reads every byte, which uncached write-combined memory makes slow. Where cached
+    // memory's invalidation costs more (Mali, Adreno), coherent memory, cached as well where the device has such a type.
     VmaAllocationCreateInfo alloc_info{};
     alloc_info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
     alloc_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+    if (quirks_.coherent_readback) {
+        alloc_info.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        alloc_info.preferredFlags = VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
+    }
     auto buffer = std::make_shared<Buffer>();
     VmaAllocationInfo allocated{};
     if (vmaCreateBuffer(allocator_, &buffer_info, &alloc_info, &buffer->buffer, &buffer->allocation, &allocated) !=

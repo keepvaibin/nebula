@@ -87,6 +87,9 @@ void draw_native_settings_hint(UiCanvas& renderer);
 // The instance extensions the window's surface needs, and the surface (VK_NULL_HANDLE when it cannot be made).
 [[nodiscard]] std::vector<const char*> vulkan_instance_extensions();
 [[nodiscard]] VkSurfaceKHR create_vulkan_surface(VkInstance instance, NativeWindow window);
+// What the graphics driver wrote to the platform's log from this process (Android: its log lines other than the
+// game's own; elsewhere nothing), for a report when the driver refuses something.
+[[nodiscard]] std::string driver_log();
 #endif
 
 }  // namespace galaxy::gx::host_window

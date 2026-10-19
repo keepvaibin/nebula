@@ -202,6 +202,7 @@ private:
         VkExtent2D image{};
         VkSurfaceTransformFlagBitsKHR transform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
         VkPresentModeKHR mode = VK_PRESENT_MODE_FIFO_KHR;
+        bool copyable = false;  // transfer source (test snapshots of the backbuffer)
         std::vector<VkImage> images;
         std::vector<VkImageView> views;
         std::vector<VkFramebuffer> framebuffers;
@@ -321,6 +322,9 @@ private:
     VkPipeline conversion_pipeline_ = VK_NULL_HANDLE;
     VkPipeline clear_rgb_pipeline_ = VK_NULL_HANDLE;
     VkPipeline clear_alpha_pipeline_ = VK_NULL_HANDLE;
+    // Whole-colour and depth clears as draws (DeviceQuirks::clear_with_draw only).
+    VkPipeline clear_rgba_pipeline_ = VK_NULL_HANDLE;
+    VkPipeline clear_depth_pipeline_ = VK_NULL_HANDLE;
     VkPipeline blit_pipeline_ = VK_NULL_HANDLE;
     VkPipeline ui_solid_pipeline_ = VK_NULL_HANDLE;
     VkPipeline ui_textured_pipeline_ = VK_NULL_HANDLE;

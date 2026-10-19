@@ -439,6 +439,9 @@ bool RendererVk::create_swapchain() {
     vkGetPhysicalDeviceSurfaceFormatsKHR(context.physical_device(), surface_, &count, formats.data());
     // UNORM as D3D12's backbuffer: the picture is already in display gamma.
     VkSurfaceFormatKHR format = formats.empty() ? VkSurfaceFormatKHR{} : formats[0];
+    if (format.format == VK_FORMAT_UNDEFINED) {  // the surface takes any format
+        format = {VK_FORMAT_R8G8B8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
+    }
     for (const VkSurfaceFormatKHR& candidate : formats) {
         if ((candidate.format == VK_FORMAT_B8G8R8A8_UNORM || candidate.format == VK_FORMAT_R8G8B8A8_UNORM) &&
             candidate.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
@@ -470,7 +473,9 @@ bool RendererVk::create_swapchain() {
     info.imageFormat = format.format;
     info.imageColorSpace = format.colorSpace;
     info.imageArrayLayers = 1;
-    info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    // Transfer source (the backbuffer capture) only where the surface allows it: drivers must offer only the colour
+    // attachment use.
+    info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | (caps.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
     info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
     // Pre-rotated to the display's current transform (Android's turned display), so the compositor does no turning
     // of its own; the image then has the display's natural orientation.
@@ -495,8 +500,11 @@ bool RendererVk::create_swapchain() {
     const VkExtent2D image_extent = quarter_turn ? VkExtent2D{extent.height, extent.width} : extent;
     info.imageExtent = image_extent;
     info.preTransform = transform;
-    info.compositeAlpha = (caps.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR) != 0u
-        ? VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR : VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
+    // Opaque, else inherited from the window (Android's usual one), else whatever the surface has.
+    const VkCompositeAlphaFlagsKHR alphas = caps.supportedCompositeAlpha;
+    info.compositeAlpha = (alphas & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR) != 0u ? VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR
+        : (alphas & VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR) != 0u || alphas == 0u ? VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR
+        : static_cast<VkCompositeAlphaFlagBitsKHR>(alphas & (~alphas + 1u));
     info.presentMode = mode;
     info.clipped = VK_TRUE;
     info.oldSwapchain = swapchain_.handle;
@@ -513,6 +521,7 @@ bool RendererVk::create_swapchain() {
     swapchain_.extent = extent;
     swapchain_.image = image_extent;
     swapchain_.transform = transform;
+    swapchain_.copyable = (info.imageUsage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0u;
     swapchain_.mode = mode;
     vkGetSwapchainImagesKHR(device, handle, &count, nullptr);
     swapchain_.images.resize(count);
@@ -745,6 +754,14 @@ bool RendererVk::create_utility_pipelines() {
     clear_alpha_pipeline_ = create_utility_pipeline(gx_layout_.efb_pass, utility_layout_, blit_vertex_shader_source(),
                                                     clear_pixel_shader_source(), VK_COLOR_COMPONENT_A_BIT, false,
                                                     false, false);
+    if (vk::Context::get().quirks().clear_with_draw) {
+        clear_rgba_pipeline_ = create_utility_pipeline(gx_layout_.efb_pass, utility_layout_,
+                                                       blit_vertex_shader_source(), clear_pixel_shader_source(), kAll,
+                                                       false, false, false);
+        clear_depth_pipeline_ = create_utility_pipeline(gx_layout_.efb_pass, utility_layout_,
+                                                        blit_vertex_shader_source(),
+                                                        clear_depth_pixel_shader_source(), 0u, false, false, true);
+    }
     blit_pipeline_ = create_utility_pipeline(present_pass_, utility_layout_, kPresentVs, blit_pixel_shader_source(),
                                              kAll, false, false, false);
     ui_solid_pipeline_ = create_utility_pipeline(present_pass_, utility_layout_, ui_solid_quad_vertex_shader_source(),
@@ -783,10 +800,11 @@ void RendererVk::shutdown() {
         utility_commands_ = VK_NULL_HANDLE;
         for (VkPipeline pipeline : {conversion_pipeline_, clear_rgb_pipeline_, clear_alpha_pipeline_, blit_pipeline_,
                                     ui_solid_pipeline_, ui_textured_pipeline_, depth_carry_pipeline_,
-                                    color_carry_pipeline_}) {
+                                    color_carry_pipeline_, clear_rgba_pipeline_, clear_depth_pipeline_}) {
             if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
         }
         conversion_pipeline_ = clear_rgb_pipeline_ = clear_alpha_pipeline_ = blit_pipeline_ = VK_NULL_HANDLE;
+        clear_rgba_pipeline_ = clear_depth_pipeline_ = VK_NULL_HANDLE;
         ui_solid_pipeline_ = ui_textured_pipeline_ = depth_carry_pipeline_ = color_carry_pipeline_ = VK_NULL_HANDLE;
         for (auto& [key, sampler] : samplers_) vkDestroySampler(device, sampler, nullptr);
         samplers_.clear();
@@ -1328,7 +1346,8 @@ bool RendererVk::present(const XfbTexture* source, bool capture_backbuffer) {
     vkCmdEndRenderPass(commands);
     reset_gx_bindings();
 
-    if (capture_backbuffer && !backbuffer_capture_path_.empty() && backbuffer_capture_pending_path_.empty()) {
+    if (capture_backbuffer && swapchain_.copyable && !backbuffer_capture_path_.empty() &&
+        backbuffer_capture_pending_path_.empty()) {
         // The finished image, copied out for a test snapshot (PRESENT_SRC -> TRANSFER_SRC and back).
         const std::uint64_t bytes = static_cast<std::uint64_t>(bb_w) * bb_h * 4u;
         if (!backbuffer_capture_.buffer || backbuffer_capture_.buffer->size < bytes) {

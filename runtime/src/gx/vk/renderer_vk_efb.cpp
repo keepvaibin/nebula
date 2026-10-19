@@ -356,7 +356,18 @@ void RendererVk::clear_efb(std::uint32_t clear_ar, std::uint32_t clear_gb, std::
         if (pixel_format != 1u) {
             alpha_enable = true;
         }
-        if (color_enable && alpha_enable) {
+        if (color_enable && alpha_enable && clear_rgba_pipeline_ != VK_NULL_HANDLE) {
+            // Drawn: vkCmdClearAttachments races with draws on this driver (DeviceQuirks::clear_with_draw).
+            const VkViewport viewport{0.0f, static_cast<float>(efb_h), static_cast<float>(efb_w),
+                                      -static_cast<float>(efb_h), 0.0f, 1.0f};
+            vkCmdSetViewport(commands, 0, 1, &viewport);
+            vkCmdSetScissor(commands, 0, 1, &rect);
+            vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, clear_rgba_pipeline_);
+            vkCmdPushConstants(commands, utility_layout_, kPushStages, 0, sizeof(float) * 4u, clear.color.data());
+            vkCmdDraw(commands, 3, 1, 0, 0);
+            reset_gx_bindings();
+            bind_efb(nullptr);
+        } else if (color_enable && alpha_enable) {
             VkClearAttachment attachment{};
             attachment.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
             attachment.colorAttachment = 0;
@@ -376,7 +387,18 @@ void RendererVk::clear_efb(std::uint32_t clear_ar, std::uint32_t clear_gb, std::
             bind_efb(nullptr);
         }
     }
-    if (depth_enable) {
+    if (depth_enable && clear_depth_pipeline_ != VK_NULL_HANDLE) {
+        const VkViewport viewport{0.0f, static_cast<float>(efb_h), static_cast<float>(efb_w),
+                                  -static_cast<float>(efb_h), 0.0f, 1.0f};
+        const float value[4] = {clear.reversed_depth, 0.0f, 0.0f, 0.0f};
+        vkCmdSetViewport(commands, 0, 1, &viewport);
+        vkCmdSetScissor(commands, 0, 1, &rect);
+        vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, clear_depth_pipeline_);
+        vkCmdPushConstants(commands, utility_layout_, kPushStages, 0, sizeof(value), value);
+        vkCmdDraw(commands, 3, 1, 0, 0);
+        reset_gx_bindings();
+        bind_efb(nullptr);
+    } else if (depth_enable) {
         // Reversed-Z: GX's farthest (0xFFFFFF) clears to about 0.
         VkClearAttachment attachment{};
         attachment.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;

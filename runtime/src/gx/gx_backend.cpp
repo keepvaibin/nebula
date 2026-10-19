@@ -10266,9 +10266,17 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         }
     }
     if (current_pipeline_ == nullptr) {
-        // Required pipeline creation failed. Stop instead of dropping the draw.
-        throw std::runtime_error(
-            "[GxBackend] failed to create required graphics pipeline");
+        // The driver refused the pipeline in every form and no uber stand-in exists (the pipeline cache logged why):
+        // the draw is skipped. GALAXY_STRICT_PIPELINES=1 stops instead (tests that must see every draw).
+        static const bool strict = [] {
+            char value[8]{};
+            std::size_t length = 0;
+            return getenv_s(&length, value, sizeof(value), "GALAXY_STRICT_PIPELINES") == 0 && value[0] == '1';
+        }();
+        if (strict) {
+            throw std::runtime_error("[GxBackend] failed to create required graphics pipeline");
+        }
+        return nullptr;
     }
     current_pipeline_aux_ = current_pipeline_is_uber_ ? 0u
         : (render_state_key_.blend_bits & kRenderStateMotionTarget) != 0u ? 1u

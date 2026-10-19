@@ -1325,6 +1325,7 @@ if(NEBULA_VULKAN)
         runtime/src/gx/vk/shader_compile_vk_tests.cpp
         runtime/src/gx/vk/shader_compile_vk.cpp
         runtime/src/gx/vk/vk_context.cpp
+        runtime/src/gx/vk/device_quirks_vk.cpp
         runtime/src/gx/vk/vk_libraries.cpp
         runtime/src/gx/shader_gen.cpp
         runtime/src/gx/uber_shaders.cpp
@@ -1363,10 +1364,12 @@ if(NEBULA_VULKAN)
         runtime/src/frame_telemetry.cpp
         runtime/src/gx/game_asset_extract.cpp
         runtime/src/gx/vk/vk_context.cpp
+        runtime/src/gx/vk/device_quirks_vk.cpp
         runtime/src/gx/vk/vk_libraries.cpp
         runtime/src/gx/vk/shader_compile_vk.cpp
         runtime/src/gx/vk/texture_backend_vk.cpp
         runtime/src/gx/vk/pipeline_cache_vk.cpp
+        runtime/src/gx/vk/compile_journal.cpp
         runtime/src/gx/vk/renderer_vk.cpp
         runtime/src/gx/vk/renderer_vk_efb.cpp
         runtime/src/gx/vk/surface_win32.cpp)

@@ -691,6 +691,30 @@ std::vector<const char*> vulkan_instance_extensions() {
     return names != nullptr ? std::vector<const char*>(names, names + count) : std::vector<const char*>{};
 }
 
+std::string driver_log() {
+#if defined(__ANDROID__)
+    // An app reads its own log lines (logcat shows a process only its own uid's). The game's lines are in game.log
+    // already; the rest from this process are the driver's and the system's.
+    char command[96];
+    std::snprintf(command, sizeof(command), "logcat -d -v brief --pid=%d -t 600 2>/dev/null", static_cast<int>(getpid()));
+    std::FILE* pipe = popen(command, "r");
+    if (pipe == nullptr) {
+        return {};
+    }
+    std::string text;
+    char line[1024];
+    while (std::fgets(line, sizeof(line), pipe) != nullptr) {
+        if (std::strstr(line, "/Nebula(") == nullptr && std::strstr(line, "/SDL(") == nullptr) {
+            text += line;
+        }
+    }
+    pclose(pipe);
+    return text;
+#else
+    return {};
+#endif
+}
+
 VkSurfaceKHR create_vulkan_surface(VkInstance instance, NativeWindow window) {
     VkSurfaceKHR surface = VK_NULL_HANDLE;
     if (!SDL_Vulkan_CreateSurface(static_cast<SDL_Window*>(window), instance, nullptr, &surface)) {

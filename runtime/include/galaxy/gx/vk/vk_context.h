@@ -8,6 +8,8 @@
 
 #include <volk.h>
 
+#include "galaxy/gx/vk/device_quirks_vk.h"
+
 #include <array>
 #include <atomic>
 #include <cstddef>
@@ -91,6 +93,8 @@ public:
     [[nodiscard]] VmaAllocator_T* allocator() const noexcept { return allocator_; }
     [[nodiscard]] const VkPhysicalDeviceProperties& properties() const noexcept { return properties_; }
     [[nodiscard]] const std::string& device_name() const noexcept { return device_name_; }
+    [[nodiscard]] const DeviceIdentity& identity() const noexcept { return identity_; }
+    [[nodiscard]] const DeviceQuirks& quirks() const noexcept { return quirks_; }
     [[nodiscard]] bool dual_source_blend() const noexcept { return dual_source_blend_; }
     [[nodiscard]] bool logic_op() const noexcept { return logic_op_; }
     [[nodiscard]] bool geometry_shader() const noexcept { return geometry_shader_; }
@@ -132,7 +136,8 @@ public:
     [[nodiscard]] MappedBuffer create_mapped_buffer(std::uint64_t size, VkBufferUsageFlags usage, const char* name);
     // A mapped buffer with a GX address.
     [[nodiscard]] std::shared_ptr<Buffer> create_buffer(std::uint64_t size, VkBufferUsageFlags usage, const char* name);
-    // A mapped transfer-destination buffer in cached host memory, which the CPU reads (readbacks); no GX address.
+    // A mapped transfer-destination buffer the CPU reads (readbacks), in cached host memory (coherent where the driver
+    // reads that back faster: DeviceQuirks::coherent_readback); no GX address.
     [[nodiscard]] std::shared_ptr<Buffer> create_readback_buffer(std::uint64_t size, const char* name);
     // Makes the GPU's writes to a readback buffer visible to the CPU (after its fence).
     void invalidate(const Buffer& buffer) const noexcept;
@@ -173,6 +178,8 @@ private:
     VmaAllocator_T* allocator_ = nullptr;
     VkPhysicalDeviceProperties properties_{};
     std::string device_name_;
+    DeviceIdentity identity_;
+    DeviceQuirks quirks_;
     bool dual_source_blend_ = false;
     bool logic_op_ = false;
     bool geometry_shader_ = false;
