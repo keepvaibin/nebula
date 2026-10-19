@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/nebula-import",
     "crates/nebula-recomp-cli",
     "crates/nebula-recomp-core",
 ]
