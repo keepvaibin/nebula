@@ -69,6 +69,8 @@ public:
     static constexpr std::size_t kAsyncPeekFieldChannels = 4u;
 
     bool initialize(int window_width, int window_height, unsigned efb_scale);
+    // Why initialize failed, when the device said.
+    [[nodiscard]] std::string startup_failure() const { return vk::Context::get().failure(); }
     void create_first_use_resources();
     void shutdown();
     [[nodiscard]] UploadBuffer create_upload_buffer(std::size_t bytes, const char* name);
@@ -308,6 +310,7 @@ private:
     // The EFB.
     unsigned efb_scale_ = 1;
     VkFormat depth_format_ = VK_FORMAT_UNDEFINED;
+    bool depth_linear_ = true;  // depth_format_ can be sampled with linear filtering
     gpu::TextureRef efb_color_;
     gpu::TextureRef efb_depth_;  // its sampled view is the depth aspect alone
     VkFramebuffer efb_framebuffer_ = VK_NULL_HANDLE;

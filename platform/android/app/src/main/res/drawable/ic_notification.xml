@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The status-bar icon: a four-point sparkle inside a tilted orbit (white; the system tints it). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:rotation="-24">
+        <path
+            android:pathData="M24,54 A30,11 0 1,1 84,54 A30,11 0 1,1 24,54 Z"
+            android:strokeWidth="2.2"
+            android:strokeColor="#FFFFFFFF"
+            android:fillColor="#00000000" />
+    </group>
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M54,25 C55.6,44.5 62.5,52.4 81,54 C62.5,55.6 55.6,63.5 54,83 C52.4,63.5 45.5,55.6 27,54 C45.5,52.4 52.4,44.5 54,25 Z" />
+</vector>

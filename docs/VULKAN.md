@@ -51,9 +51,11 @@ Every Vulkan 1.1 GPU and driver (Android's in particular), with no per-device wo
   SPIR-V 1.3 (Qualcomm and ARM drivers mishandle 1.4), no maximal-reconvergence mode (Dusklight issue 2563), TEV byte
   masks per component (Mali's vector AND), D24S8 depth where present (Adreno's D32F clears), no reversed depth ranges.
 - **Capabilities.** Only what the device reports is enabled; without it: single-source blending, plain writes for
-  logic ops, one-pixel lines and points (no geometry shaders), depth clamp only (no depth-clip control), D32F depth
-  (CMPR textures are decoded to RGBA8 on every device). The swap chain takes only the usages, formats and alpha
-  modes the surface lists.
+  logic ops, one-pixel lines and points (no geometry shaders; the vertex shader then writes the point size), depth
+  clamp only (no depth-clip control), D32F depth, nearest sampling of a depth format the device cannot filter
+  linearly (Xclipse, PowerVR), CMPR decoded to RGBA8 on every device. The swap chain takes only the usages, formats
+  and alpha modes the surface lists. A Vulkan 1.0 driver gets a clear message instead of a start (1.1 is required;
+  every Android 12 device has it).
 - **Refusals** (`pipeline_cache_vk.h`): a refused pipeline is built again without each optional feature it uses,
   then with the other TEV zero form; a feature whose removal fixed two pipelines is left out of all of them. A key
   no form of which is accepted draws with its uber pipeline, else is skipped; the game never stops for a pipeline

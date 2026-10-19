@@ -183,6 +183,7 @@ public:
     // kEfbWidth x kEfbHeight x efb_scale, the shared GX root signature, the
     // present-blit pipeline, and all rings.
     bool initialize(int window_width, int window_height, unsigned efb_scale);
+    [[nodiscard]] std::string startup_failure() const { return {}; }
     // Creates the EFB-peek and pointer-depth resources up front. Creating them on first
     // use stalled the first frame that showed the pointer.
     void create_first_use_resources();

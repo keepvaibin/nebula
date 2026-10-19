@@ -762,6 +762,15 @@ void PipelineCacheVk::save_compat() {
     });
 }
 
+bool PipelineCacheVk::unexpanded_points(const RenderStateKey& rs, std::uint32_t compat) const noexcept {
+    return rs.primitive_topology == gpu::kTopologyTypePointValue &&
+        (point_gs_ == VK_NULL_HANDLE || (compat & kCompatNoGeometry) != 0u);
+}
+
+VkShaderModule PipelineCacheVk::point_size_variant(const std::string& vertex_hlsl) {
+    return module_for(vk::with_point_size(vertex_hlsl), vk::ShaderStage::Vertex, false);
+}
+
 ShaderGenerator PipelineCacheVk::generator_for(std::uint32_t generator_bits) const {
     ShaderGenOptions options = generator_defaults_;
     if ((generator_bits & kGeneratorTevZeroFromConstant) != 0u) {
@@ -795,7 +804,8 @@ VkPipeline PipelineCacheVk::build(const Entry& entry) {
             }
             pixel = ps_single;
         }
-        return create_pipeline(rs, vs, pixel, dual, export_depth, compat, result);
+        const VkShaderModule vertex = unexpanded_points(rs, compat) ? point_size_variant(vs_hlsl) : vs;
+        return create_pipeline(rs, vertex, pixel, dual, export_depth, compat, result);
     };
     const std::uint64_t key_hash = entry.key.hash();
     const vk::CompileJournal::Guard marked(journal_, kJournalSpecialised, key_hash);
@@ -927,7 +937,9 @@ void PipelineCacheVk::self_test() {
         const VkPipeline pipeline = with_fallbacks(
             [&](std::uint32_t compat, VkResult& result) {
                 const unsigned v = (compat & kCompatNoDualSource) != 0u ? variant & ~1u : variant;
-                return create_pipeline(render_state, uber_vs_, uber_ps_[v], uber_ps_variant_dual_source(v),
+                const VkShaderModule vertex = unexpanded_points(render_state, compat)
+                    ? point_size_variant(std::string(uber_vs_source())) : uber_vs_;
+                return create_pipeline(render_state, vertex, uber_ps_[v], uber_ps_variant_dual_source(v),
                                        export_depth, compat, result);
             },
             applicable_compat(render_state, dual, export_depth), what, describe_render_state(render_state));
@@ -966,7 +978,9 @@ VkPipeline PipelineCacheVk::uber_pipeline(const RenderStateKey& render_state, un
     const VkPipeline pipeline = with_fallbacks(
         [&](std::uint32_t compat, VkResult& result) {
             const unsigned v = (compat & kCompatNoDualSource) != 0u ? variant & ~1u : variant;
-            return create_pipeline(key.render_state, uber_vs_, uber_ps_[v], uber_ps_variant_dual_source(v),
+            const VkShaderModule vertex = unexpanded_points(key.render_state, compat)
+                ? point_size_variant(std::string(uber_vs_source())) : uber_vs_;
+            return create_pipeline(key.render_state, vertex, uber_ps_[v], uber_ps_variant_dual_source(v),
                                    export_depth, compat, result);
         },
         applicable_compat(key.render_state, uber_ps_variant_dual_source(variant), export_depth), what,

@@ -235,6 +235,11 @@ bool RendererVk::create_layouts() {
             (VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT)
         ? VK_FORMAT_D24_UNORM_S8_UINT
         : VK_FORMAT_D32_SFLOAT;
+    {
+        VkFormatProperties depth_properties{};
+        vkGetPhysicalDeviceFormatProperties(context.physical_device(), depth_format_, &depth_properties);
+        depth_linear_ = (depth_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT) != 0u;
+    }
 
     const VkShaderStageFlags gx_stages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT |
         (context.geometry_shader() ? VK_SHADER_STAGE_GEOMETRY_BIT : 0u);
@@ -287,7 +292,8 @@ bool RendererVk::create_layouts() {
     {
         const VkDescriptorSetLayoutBinding bindings[] = {
             {0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
-            {1, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, &linear_clamp_},
+            // Written per set: linear, or nearest for a depth format the device cannot filter linearly.
+            {1, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
             {2, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, &point_clamp_},
         };
         VkDescriptorSetLayoutCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
@@ -769,8 +775,10 @@ bool RendererVk::create_utility_pipelines() {
     ui_textured_pipeline_ = create_utility_pipeline(
         present_pass_, utility_layout_, ui_textured_quad_vertex_shader_source(),
         ui_textured_quad_pixel_shader_source(), kAll, true, true, false);
-    depth_carry_pipeline_ = create_utility_pipeline(gx_layout_.efb_pass, utility_layout_, blit_vertex_shader_source(),
-                                                    depth_carry_pixel_shader_source(), 0u, false, false, true);
+    depth_carry_pipeline_ = create_utility_pipeline(
+        gx_layout_.efb_pass, utility_layout_, blit_vertex_shader_source(),
+        depth_linear_ ? depth_carry_pixel_shader_source() : depth_carry_load_pixel_shader_source(), 0u, false, false,
+        true);
     color_carry_pipeline_ = create_utility_pipeline(gx_layout_.efb_pass, utility_layout_, blit_vertex_shader_source(),
                                                     blit_pixel_shader_source(), kAll, false, false, false);
     return true;

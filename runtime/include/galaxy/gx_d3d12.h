@@ -62,6 +62,8 @@ enum class EfbPeekKind : std::uint8_t {
 // Creates the Win32 window and the D3D12 device, swap chain, command queue, root signature, PSO and
 // upload buffers. Returns false on failure.
 bool initialize(int width, int height);
+// Why initialize failed, when the renderer knows (else empty): the player's error message.
+std::string startup_failure();
 
 // Records the game dump's content root (GamePaths::content_root). The native settings overlay reads
 // read-only UI assets from it (see galaxy/gx/game_asset_extract.h), so it can use the game's own art.

@@ -221,6 +221,19 @@ std::span<const RegisterBinding> gx_draw_bindings() noexcept {
     return kGxDrawBindings;
 }
 
+std::string with_point_size(std::string_view vertex_hlsl) {
+    std::string text(vertex_hlsl);
+    const std::size_t output = text.find("struct VSOut {");
+    const std::size_t close = output == std::string::npos ? output : text.find("};", output);
+    const std::size_t init = text.find("VSOut o = (VSOut)0;");
+    if (close == std::string::npos || init == std::string::npos) {
+        return text;
+    }
+    text.insert(init + std::strlen("VSOut o = (VSOut)0;"), "\n    o.psize = 1.0;");
+    text.insert(close, "    [[vk::builtin(\"PointSize\")]] float psize : PSIZE;\n");
+    return text;
+}
+
 std::string annotate(std::string_view hlsl, std::span<const RegisterBinding> bindings) {
     // Each resource declaration names its register as ": register(<reg>)"; the attribute goes at the start of that
     // declaration (after the previous ';', '{', '}' or line break and any blanks). Several declarations may share a

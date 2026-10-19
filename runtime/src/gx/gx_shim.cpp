@@ -19,6 +19,10 @@ bool initialize(int width, int height) {
     return backend().initialize(width, height);
 }
 
+std::string startup_failure() {
+    return backend().startup_failure();
+}
+
 FramePeCompletionToken render_frame(
     const std::byte* fifo_data,
     std::size_t fifo_size,

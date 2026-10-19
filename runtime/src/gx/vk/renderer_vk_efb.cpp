@@ -123,17 +123,22 @@ bool RendererVk::create_efb_targets(unsigned scale) {
     }
     const VkDescriptorImageInfo color_info{VK_NULL_HANDLE, efb_color_->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
     const VkDescriptorImageInfo depth_info{VK_NULL_HANDLE, efb_depth_->view, kDepthSampleLayout};
-    VkWriteDescriptorSet writes[2]{};
-    for (unsigned i = 0; i < 2u; ++i) {
+    // The conversion's filtering sampler: nearest for a depth format the device cannot filter linearly.
+    const VkDescriptorImageInfo color_sampler{linear_clamp_, VK_NULL_HANDLE, VK_IMAGE_LAYOUT_UNDEFINED};
+    const VkDescriptorImageInfo depth_sampler{depth_linear_ ? linear_clamp_ : point_clamp_, VK_NULL_HANDLE,
+                                              VK_IMAGE_LAYOUT_UNDEFINED};
+    VkWriteDescriptorSet writes[4]{};
+    for (unsigned i = 0; i < 4u; ++i) {
+        const bool color = (i & 1u) == 0u;
         writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        writes[i].dstSet = i == 0u ? efb_color_source_ : efb_depth_source_;
-        writes[i].dstBinding = 0;
+        writes[i].dstSet = color ? efb_color_source_ : efb_depth_source_;
+        writes[i].dstBinding = i < 2u ? 0u : 1u;
         writes[i].descriptorCount = 1;
-        writes[i].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-        writes[i].pImageInfo = i == 0u ? &color_info : &depth_info;
+        writes[i].descriptorType = i < 2u ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : VK_DESCRIPTOR_TYPE_SAMPLER;
+        writes[i].pImageInfo = i < 2u ? (color ? &color_info : &depth_info) : (color ? &color_sampler : &depth_sampler);
     }
     // A set in a submitted, unfinished frame may still read the old views: the GPU must be idle (callers ensure it).
-    vkUpdateDescriptorSets(device, 2, writes, 0, nullptr);
+    vkUpdateDescriptorSets(device, 4, writes, 0, nullptr);
     return true;
 }
 

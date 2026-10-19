@@ -1979,7 +1979,8 @@ int main(int argc, char** argv) {
     const galaxy::gx::RenderConfig render_config = galaxy::gx::get_render_config();
     if (!galaxy::gx::initialize(static_cast<int>(render_config.window_width),
                                 static_cast<int>(render_config.window_height))) {
-        die("the renderer did not start");
+        const std::string reason = galaxy::gx::startup_failure();
+        die("the renderer did not start%s%s", reason.empty() ? "" : ": ", reason.c_str());
     }
     galaxy::gx::set_indexed_load_host_order(true);
     gAudio = new galaxy::host::NativeGameAudio();  // lives as long as the process (the AI thread is detached)

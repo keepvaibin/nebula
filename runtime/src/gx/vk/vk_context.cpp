@@ -114,8 +114,10 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
     if (device_ != VK_NULL_HANDLE) {
         return true;
     }
+    failure_.clear();
     if (volkInitialize() != VK_SUCCESS) {
         std::fprintf(stderr, "[vulkan] no Vulkan loader\n");
+        failure_ = "no Vulkan driver";
         return false;
     }
     std::vector<const char*> layers;
@@ -162,6 +164,7 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
     // Every failure from here leaves no instance, device or surface behind.
     const auto fail = [&](const char* message) {
         std::fprintf(stderr, "[vulkan] %s\n", message);
+        failure_ = message;
         if (window_surface != VK_NULL_HANDLE) {
             if (device_ != VK_NULL_HANDLE) {
                 vkDeviceWaitIdle(device_);
@@ -198,8 +201,16 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
         vkGetPhysicalDeviceProperties(b, &pb);
         return (pa.deviceType == wanted) > (pb.deviceType == wanted);
     });
+    bool vulkan_1_0_only = false;
     for (const VkPhysicalDevice candidate : devices) {
         if (!has_device_extension(candidate, VK_KHR_SWAPCHAIN_EXTENSION_NAME)) {
+            continue;
+        }
+        // Vulkan 1.1 at least (the memory allocator's and the device queries' entry points).
+        VkPhysicalDeviceProperties candidate_properties{};
+        vkGetPhysicalDeviceProperties(candidate, &candidate_properties);
+        if (candidate_properties.apiVersion < VK_API_VERSION_1_1) {
+            vulkan_1_0_only = true;
             continue;
         }
         std::uint32_t families = 0;
@@ -223,7 +234,8 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
         }
     }
     if (physical_ == VK_NULL_HANDLE) {
-        return fail("no device with a graphics queue that presents to the window, and swapchains");
+        return fail(vulkan_1_0_only ? "the GPU's Vulkan driver is version 1.0; Nebula needs Vulkan 1.1"
+                                    : "no device with a graphics queue that presents to the window, and swapchains");
     }
     vkGetPhysicalDeviceProperties(physical_, &properties_);
     device_name_ = properties_.deviceName;

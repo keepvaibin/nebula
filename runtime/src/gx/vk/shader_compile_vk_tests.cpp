@@ -342,6 +342,8 @@ int main(int argc, char** argv) {
     expect("generated vs (default key)", generator.generate_vs(vs), ShaderStage::Vertex, gx);
     expect("generated ps (default key)", generator.generate_ps(ps), ShaderStage::Fragment, gx);
     expect("generated ps (scalar masks)", scalar_masks.generate_ps(ps), ShaderStage::Fragment, gx);
+    expect("generated vs (point size)", with_point_size(generator.generate_vs(vs)), ShaderStage::Vertex, gx);
+    expect("uber vs (point size)", with_point_size(uber_vs_source()), ShaderStage::Vertex, gx);
     expect("generated ps (constant TEV zero)", constant_zero.generate_ps(ps), ShaderStage::Fragment, gx);
 
     // argv[1]: keys a session captured (GALAXY_TEST_SHADER_KEY_CAPTURE): 'V' or 'P', then the key's bytes.
@@ -385,6 +387,7 @@ int main(int argc, char** argv) {
     expect("blit ps", blit_pixel_shader_source(), ShaderStage::Fragment, utility);
     expect("clear ps", clear_pixel_shader_source(), ShaderStage::Fragment, utility);
     expect("clear depth ps", clear_depth_pixel_shader_source(), ShaderStage::Fragment, utility);
+    expect("depth carry by load ps", depth_carry_load_pixel_shader_source(), ShaderStage::Fragment, utility);
     expect("depth carry ps", depth_carry_pixel_shader_source(), ShaderStage::Fragment, utility);
     expect("ui textured vs", ui_textured_quad_vertex_shader_source(), ShaderStage::Vertex, utility);
     expect("ui textured ps", ui_textured_quad_pixel_shader_source(), ShaderStage::Fragment, utility);

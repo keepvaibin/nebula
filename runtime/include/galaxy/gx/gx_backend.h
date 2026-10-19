@@ -206,6 +206,7 @@ public:
     // --- Frozen public surface (mirrors gx_d3d12.h) -------------------------
 
     bool initialize(int width, int height);
+    [[nodiscard]] std::string startup_failure() const { return renderer_.startup_failure(); }
     [[nodiscard]] FramePeCompletionToken render_frame(
         const std::byte* fifo_data,
         std::size_t fifo_size,

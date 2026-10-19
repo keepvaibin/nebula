@@ -32,6 +32,10 @@ struct RegisterBinding {
 // Inserts the Vulkan attribute before every resource declared with a mapped register.
 [[nodiscard]] std::string annotate(std::string_view hlsl, std::span<const RegisterBinding> bindings);
 
+// A GX vertex shader (VSOut, `VSOut o = (VSOut)0;`) that also writes a one-pixel point size: Vulkan points drawn
+// without the expanding geometry shader need the vertex stage to write PointSize.
+[[nodiscard]] std::string with_point_size(std::string_view vertex_hlsl);
+
 struct CompileOptions {
     // Run the SPIR-V validator and fail on any message (the tests; the runtime trusts its sources).
     bool validate = false;

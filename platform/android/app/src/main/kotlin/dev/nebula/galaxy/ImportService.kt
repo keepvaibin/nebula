@@ -149,7 +149,7 @@ class ImportService : Service() {
         )
         val percent = if (total > 0) (done * 100 / total).toInt() else 0
         return Notification.Builder(this, CHANNEL)
-            .setSmallIcon(R.drawable.ic_launcher_monochrome)
+            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(getString(R.string.import_notification_title))
             .setContentText(if (total > 0) "$percent% · ${formatBytes(done)} of ${formatBytes(total)}" else "Reading the disc image")
             .setProgress(100, percent, total == 0L)

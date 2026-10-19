@@ -84,6 +84,8 @@ public:
                     VkSurfaceKHR* surface = nullptr);
     void shutdown() noexcept;
     [[nodiscard]] bool ready() const noexcept { return device_ != VK_NULL_HANDLE; }
+    // Why the last initialize failed (for the player's error message).
+    [[nodiscard]] const std::string& failure() const noexcept { return failure_; }
 
     [[nodiscard]] VkInstance instance() const noexcept { return instance_; }
     [[nodiscard]] VkPhysicalDevice physical_device() const noexcept { return physical_; }
@@ -178,6 +180,7 @@ private:
     VmaAllocator_T* allocator_ = nullptr;
     VkPhysicalDeviceProperties properties_{};
     std::string device_name_;
+    std::string failure_;
     DeviceIdentity identity_;
     DeviceQuirks quirks_;
     bool dual_source_blend_ = false;

@@ -120,6 +120,9 @@ private:
 
     [[nodiscard]] VkShaderModule module_for(const std::string& hlsl, vk::ShaderStage stage, bool dual_source);
     [[nodiscard]] ShaderGenerator generator_for(std::uint32_t generator_bits) const;
+    // Points drawn as points (no expanding geometry shader): the vertex shader must write the point size.
+    [[nodiscard]] bool unexpanded_points(const RenderStateKey& render_state, std::uint32_t compat) const noexcept;
+    [[nodiscard]] VkShaderModule point_size_variant(const std::string& vertex_hlsl);
     [[nodiscard]] VkPipeline build(const Entry& entry);
     // `export_depth`: the pixel shader writes the fragment depth (Z textures). `compat`: CompatBits to build without.
     [[nodiscard]] VkPipeline create_pipeline(const RenderStateKey& render_state, VkShaderModule vs, VkShaderModule ps,

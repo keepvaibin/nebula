@@ -105,6 +105,8 @@ struct EfbConversionShaderConstants {
 [[nodiscard]] std::string_view clear_pixel_shader_source() noexcept;
 // Depth clear as a draw (Vulkan drivers whose vkCmdClearAttachments races with draws): writes clear_value.x.
 [[nodiscard]] std::string_view clear_depth_pixel_shader_source() noexcept;
+// The depth carry by texel loads, for a depth format the device cannot filter linearly.
+[[nodiscard]] std::string_view depth_carry_load_pixel_shader_source() noexcept;
 [[nodiscard]] std::string_view depth_carry_pixel_shader_source() noexcept;
 [[nodiscard]] std::string_view ui_textured_quad_vertex_shader_source() noexcept;
 [[nodiscard]] std::string_view ui_textured_quad_pixel_shader_source() noexcept;
