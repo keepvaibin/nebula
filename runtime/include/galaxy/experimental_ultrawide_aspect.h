@@ -75,9 +75,8 @@ inline std::atomic<std::uint64_t> g_experimental_dynamic_aspect_word{0u};
         return 0u;
     }
     const double aspect = static_cast<double>(width) / height;
-    // The first native slice supports only RMGE01's selected widescreen path. At 4:3 and unsupported
-    // extremes the game's default fitted 16:9 presentation is kept, without stretching or changing guest
-    // camera state.
+    // Shapes beyond 9:21..32:9 are clamped into it (the presentation fits the picture); a degenerate client
+    // keeps the game's fitted 16:9 picture.
     if (!make_experimental_ultrawide_aspect(aspect)) {
         return 0u;
     }
@@ -213,8 +212,8 @@ experimental_ultrawide_aspect_from_env() {
         const auto parsed = parse_experimental_ultrawide_aspect(setting);
         if (!parsed) {
             throw std::invalid_argument(
-                "GALAXY_EXPERIMENTAL_ULTRAWIDE_ASPECT requires an aspect "
-                "above 4:3 and at most 32:9 (for example 16:10 or 21:9)");
+                "GALAXY_EXPERIMENTAL_ULTRAWIDE_ASPECT requires a positive "
+                "aspect (for example 16:10, 21:9 or 9:16)");
         }
         return make_experimental_ultrawide_aspect(*parsed);
     }();
