@@ -141,6 +141,8 @@ inline constexpr unsigned kEnhancedTuneShift = 24u;
 inline constexpr std::uint32_t kEnhancedSplitMask = 0xFFFFu;
 inline constexpr std::uint32_t kEnhancedRtReflections = 1u << 16u;
 inline constexpr std::uint32_t kEnhancedRtLighting = 1u << 17u;
+// Ray-traced lighting in the game's units (GALAXY_RT_PHYSICAL): lit draws show their full-light colour.
+inline constexpr std::uint32_t kEnhancedRtPhysical = 1u << 31u;
 // Bits 20-25 the material table's roughness (/63), 26-29 its metalness (/15), bit 30 the table names
 // the draw's texture (enhanced_table_material): the enhanced highlights take its lobe.
 inline constexpr unsigned kEnhancedTableRoughShift = 20u;

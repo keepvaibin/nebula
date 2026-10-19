@@ -309,6 +309,7 @@ public:
     void rt_set_view(const RtView& view) noexcept { ray_tracer_.set_view(view); }
     void rt_set_camera(const std::array<float, 12>* view) noexcept { ray_tracer_.set_camera(view); }
     [[nodiscard]] bool rt_lighting() const noexcept { return ray_tracer_.lighting_active(); }
+    [[nodiscard]] bool rt_physical() const noexcept { return ray_tracer_.physical_active(); }
     [[nodiscard]] bool rt_ab_original() const noexcept { return ray_tracer_.ab_original(); }
     void rt_set_ab_original(bool original) noexcept { ray_tracer_.set_ab_original(original); }
     void rt_set_presents(std::uint64_t presents) noexcept { ray_tracer_.set_presents(presents); }

@@ -114,6 +114,8 @@ public:
     // scene has none. The lighting history follows it from frame to frame.
     void set_camera(const std::array<float, 12>* view) noexcept;
     [[nodiscard]] bool lighting_active() const noexcept { return ready_ && lighting_enabled_ && !ab_original_; }
+    // The traced light is in the game's units (GALAXY_RT_PHYSICAL): lit draws show their full-light colour.
+    [[nodiscard]] bool physical_active() const noexcept { return lighting_active() && physical_active_; }
     // GALAXY_RT_AB=1 (test runs): every other present shows the game's own picture (no traced
     // lighting, reflections or finish); the traced frames carry a mark in the EFB's top-left corner.
     [[nodiscard]] bool ab_original() const noexcept { return ab_original_; }
@@ -474,6 +476,9 @@ private:
     bool reference_camera_known_ = false;
     bool reference_reset_ = true;
     bool reference_ = false;
+    // GALAXY_RT_PHYSICAL=1: the game's own light units (the stage's planet light as sky and sun, set_constants).
+    bool physical_ = false;
+    bool physical_active_ = false;  // this frame had the game's area light
     std::uint32_t reference_bounces_ = 3;
     float reference_exposure_ = 1.0f;
     std::uint64_t reference_frames_ = 0;     // since the last report

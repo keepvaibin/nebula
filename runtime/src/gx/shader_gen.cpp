@@ -1673,7 +1673,24 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
                      "            }\n",
                      n, spot ? "true" : "false", dfn != 0u ? "0.55" : "1.0");
             }
-            s << "            pin.col0.rgb = enh_mat * saturate(enh_avg);\n"
+            // In the game's own light units (header bit 31) the channel is its full light, the ambient and every light
+            // at N.L 1, clamped as GX's channel: the traced light (sky, sun, bounces) multiplies it.
+            s << "            if ((uber_ps_header.w & 0x80000000u) != 0u) {\n"
+                 "                enh_avg = enh_amb;\n";
+            for (unsigned n = 0; n < 8u; ++n) {
+                if ((lights & (1u << n)) == 0u) continue;
+                emit(s,
+                     "                {\n"
+                     "                    float3 ldir;\n"
+                     "                    float attn;\n"
+                     "                    float3 lcol;\n"
+                     "                    enh_light(%uu, %s, pin.ppl_pos, ldir, attn, lcol);\n"
+                     "                    enh_avg += lcol * attn;\n"
+                     "                }\n",
+                     n, spot ? "true" : "false");
+            }
+            s << "            }\n"
+                 "            pin.col0.rgb = enh_mat * saturate(enh_avg);\n"
                  "        } else {\n";
             s << "        const float3 enh_amb_lin = enh_lin(enh_amb);\n"
                  "        float3 enh_acc = enh_amb_lin * enh_sky(enh, (uber_ps_header.w & 0x20000u) == 0u);\n";

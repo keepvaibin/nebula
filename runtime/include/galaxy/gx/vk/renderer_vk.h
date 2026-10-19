@@ -163,6 +163,7 @@ public:
     void rt_reset_sky() noexcept {}
     void rt_set_camera(const std::array<float, 12>*) noexcept {}
     void rt_set_view(const RtView&) noexcept {}
+    [[nodiscard]] bool rt_physical() const noexcept { return false; }
     void rt_set_presents(std::uint64_t) noexcept {}
     void rt_set_key_light(bool, const std::array<float, 3>&, const std::array<float, 3>&, float, bool) noexcept {}
     void rt_set_stage_sun(const RtStageSun*) noexcept {}

@@ -130,8 +130,9 @@ struct RtLightConstants {
     std::uint32_t reference_pad;
     float history_projection[4];          // the previous samples' projection (their frame's jitter)
     float picture_projection[4];          // the previous picture's
+    float sky_radiance[4];                // GALAXY_RT_PHYSICAL: the sky's radiance in the game's units (rgb)
 };
-static_assert(sizeof(RtLightConstants) == 1120u);
+static_assert(sizeof(RtLightConstants) == 1136u);
 
 // Mirrors cbuffer RtPost in rt_post.hlsl (root constants).
 struct RtPostConstants {
@@ -203,6 +204,7 @@ static_assert(sizeof(RtEmitConstants) == 192u);
 constexpr std::uint32_t kEmitLights = 512u;     // remembered glow lights (rt_lighting.hlsl kEmitLights)
 constexpr std::uint64_t kEmitLightBytes = 64u;  // per remembered light (rt_lighting.hlsl kEmitLightVectors)
 constexpr std::uint32_t kReferenceFlag = 8192u;  // RtLightConstants.flags: the reference (rt_lighting.hlsl kReferenceFlag)
+constexpr std::uint32_t kPhysicalFlag = 16384u;  // the game's light units (rt_lighting.hlsl kPhysicalFlag)
 constexpr std::uint32_t kGlowMaxTriangles = 65536u;
 // A game point light's emitter radius (eye units) other than the star core's (its fitted ball): about a Luma's body,
 // so the actor that asked for the light does not shadow it, and its shadows have the penumbra of a light that size.
@@ -647,6 +649,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     // measured against. GALAXY_RT_REFERENCE_BOUNCES: bounces after the first surface; _EXPOSURE: times the exposure
     // that brings its light's geometric mean to 1.
     reference_ = env_float("GALAXY_RT_REFERENCE", 0.0f) != 0.0f;
+    physical_ = env_float("GALAXY_RT_PHYSICAL", 0.0f) != 0.0f;
     reference_bounces_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_REFERENCE_BOUNCES", 3.0f), 0.0f, 8.0f));
     reference_exposure_ = std::clamp(env_float("GALAXY_RT_REFERENCE_EXPOSURE", 1.0f), 1.0f / 64.0f, 64.0f);
     // _FROM: the present it starts at (before it the real-time lighting alone, at full speed).
@@ -2750,6 +2753,39 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         emit_log_sun_ = {c.sun_light[0], c.sun_light[1], c.sun_light[2], c.sun_light[3], keyed ? 1.0f : 0.0f,
                          strength};
     }
+    // GALAXY_RT_PHYSICAL: the game's own light units. Its planet light lights a surface as material x min(ambient + key
+    // x N.L, 1) in display-encoded colour, so in linear light the ambient is the sky's radiance and min(ambient + key,
+    // 1) less the ambient the sun's irradiance over pi: a surface facing the sun unshadowed shows its full-light colour
+    // as the game draws it, one in shade the ambient's share. The sun comes from the key light's position, where the game
+    // lights from (the visible BrightSun is its lens flare: on Good Egg it stands on the horizon while the key is 35
+    // degrees up).
+    GameAreaLight area{};
+    physical_active_ = physical_ && game_area_light(GameAreaLightKind::Stage, area, 2000u);
+    if (physical_active_) {
+        const auto lin = [](float v) {
+            v = std::clamp(v, 0.0f, 1.0f);
+            return v <= 0.04045f ? v / 12.92f : std::pow((v + 0.055f) / 1.055f, 2.4f);
+        };
+        for (unsigned i = 0; i < 3u; ++i) {
+            const float sky = lin(area.ambient[i]);
+            c.sky_radiance[i] = sky;
+            c.sun_light[i] = lin(area.ambient[i] + area.lights[0].color[i]) - sky;
+        }
+        c.sun_light[3] = 1.0f;
+        const std::array<float, 3>& key = area.lights[0].position;
+        const std::array<float, 3> eye =
+            area.lights[0].follows_camera
+                ? key
+                : std::array<float, 3>{camera_[0] * key[0] + camera_[1] * key[1] + camera_[2] * key[2],
+                                       camera_[4] * key[0] + camera_[5] * key[1] + camera_[6] * key[2],
+                                       camera_[8] * key[0] + camera_[9] * key[1] + camera_[10] * key[2]};
+        const float length = std::sqrt(eye[0] * eye[0] + eye[1] * eye[1] + eye[2] * eye[2]);
+        if (length > 1e-6f) {
+            for (unsigned i = 0; i < 3u; ++i) {
+                c.sun[i] = eye[i] / length;
+            }
+        }
+    }
     {
         // The game's point lights nearest in light to the camera, in eye space.
         std::array<GameLight, 32> lights{};
@@ -2886,7 +2922,8 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
               (show_term_ == 4u ? 16u : 0u) | (show_term_ == 5u ? 32u : 0u) |
               (show_term_ == 6u ? 64u : 0u) | (gi_ ? 0u : 128u) | (show_term_ == 7u ? 256u : 0u) |
               (show_term_ == 8u ? 512u : 0u) | (high_quality_ ? 1024u : 0u) |
-              (light_textured_ && surface_uv_ && draw_texture_table_ != 0u ? 4096u : 0u);
+              (light_textured_ && surface_uv_ && draw_texture_table_ != 0u ? 4096u : 0u) |
+              (physical_active_ ? kPhysicalFlag : 0u);
     std::memcpy(c.reproject, reproject.data(), sizeof(c.reproject));
     std::memcpy(c.picture, to_picture.data(), sizeof(c.picture));
     std::copy(history ? history_projection_.begin() : view_.projection.begin(),

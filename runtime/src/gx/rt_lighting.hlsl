@@ -85,6 +85,7 @@ cbuffer RtLight : register(b0)
     uint g_reference_pad;
     float4 g_history_projection;   // the previous samples' projection (their frame's jitter)
     float4 g_picture_projection;   // the previous picture's
+    float4 g_sky_radiance;         // kPhysicalFlag: the sky's radiance in the game's light units (rgb)
 };
 
 RaytracingAccelerationStructure g_scene : register(t6);
@@ -2732,6 +2733,9 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
 // ---------------------------------------------------------------------------------------------
 
 static const uint kReferenceFlag = 8192u;
+// The game's light units (GALAXY_RT_PHYSICAL): g_sky_radiance is the sky, g_sun_light the sun's irradiance over pi,
+// and the reference keeps them as they are (no exposure).
+static const uint kPhysicalFlag = 16384u;
 
 // The sRGB transfer functions (IEC 61966-2-1).
 float3 srgb_to_linear(float3 c)
@@ -3030,7 +3034,9 @@ void ReferenceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
         }
         const float3 x = position + direction * query.CommittedRayT();
         if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT || length(x) > g_ambient.w) {
-            light += throughput * linear_hue(sky_light(direction, tint, sky_sh, sky_known)) * ambient;
+            light += throughput * ((g_flags & kPhysicalFlag) != 0u
+                                       ? g_sky_radiance.rgb
+                                       : linear_hue(sky_light(direction, tint, sky_sh, sky_known)) * ambient);
             break;
         }
         if (query.CommittedInstanceID() != 0u) {
@@ -3102,7 +3108,9 @@ void ReferenceExposureCS(uint gi : SV_GroupIndex)
     }
     if (gi == 0u) {
         const float mean = s_exposure_count[0] > 0.0f ? s_exposure_sum[0] / s_exposure_count[0] : 0.0f;
-        g_reference[2u * total] = float4(clamp(g_reference_exposure * exp(-mean), 1.0f / 64.0f, 64.0f), 0.0f, 0.0f, 0.0f);
+        const float exposure = (g_flags & kPhysicalFlag) != 0u ? g_reference_exposure
+                                                               : clamp(g_reference_exposure * exp(-mean), 1.0f / 64.0f, 64.0f);
+        g_reference[2u * total] = float4(exposure, 0.0f, 0.0f, 0.0f);
     }
 }
 

@@ -8176,9 +8176,10 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
         }
         // This scene's ray-tracing state for the enhanced pipelines (and the de-lit draws: under
         // traced lighting every lit and environment-mapped scene draw takes the enhanced path).
-        enhanced_ps_flags_ = (enhanced_ps_flags_ & ~(kEnhancedRtReflections | kEnhancedRtLighting)) |
+        enhanced_ps_flags_ = (enhanced_ps_flags_ & ~(kEnhancedRtReflections | kEnhancedRtLighting | kEnhancedRtPhysical)) |
                              (renderer_.rt_reflections_active() ? kEnhancedRtReflections : 0u) |
-                             (renderer_.rt_lighting() ? kEnhancedRtLighting : 0u);
+                             (renderer_.rt_lighting() ? kEnhancedRtLighting : 0u) |
+                             (renderer_.rt_physical() ? kEnhancedRtPhysical : 0u);
     } else {
         trace_rt_scene();
         apply_scene_ao();
