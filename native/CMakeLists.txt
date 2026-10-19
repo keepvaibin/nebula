@@ -120,7 +120,9 @@ if(WIN32)
     target_link_libraries(smg_game PRIVATE winmm)
 else()
     target_link_options(smg_game PRIVATE -Wl,-Bsymbolic -Wl,-z,now)
-    target_link_libraries(smg_game PRIVATE pthread)
+    if(NOT ANDROID)  # Android's C library holds the threads
+        target_link_libraries(smg_game PRIVATE pthread)
+    endif()
 endif()
 
 # Sanitizer builds (tests only): e.g. -DNEBULA_SANITIZE=address for the module and the host.
