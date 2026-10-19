@@ -105,8 +105,7 @@ std::vector<SettingsRow> settings_page(unsigned tab, const RenderConfig& draft, 
 bool settings_page_tab(unsigned tab) { return tab != 2u && tab != 3u; }
 
 bool temporal_interpolation_allowed() {
-    // A temporal upscaler upscales every presented frame at rates that are
-    // multiples of 60. GALAXY_TEMPORAL_INTERPOLATION=0 keeps it at 60
+    // A temporal upscaler upscales every presented frame. GALAXY_TEMPORAL_INTERPOLATION=0 keeps it at 60
     // (diagnostics).
     static const bool allowed = [] {
         char value[8]{};
@@ -471,9 +470,9 @@ std::vector<unsigned> interpolation_targets(const RenderConfig& render, Interpol
     }
     const unsigned refresh = settings_refresh_hz(render);
     const bool generated = mode == Interpolation::kFrameGeneration;
-    const bool sixties = generated ? streamline::frame_generation_supported() && !streamline::frame_generation_dynamic()
-                                   : temporal_upscaler(render) != 0u;
-    if (!generated && sixties && !temporal_interpolation_allowed()) {
+    // NVIDIA's fixed frame generation makes whole multiples of the game's 60.
+    const bool sixties = generated && streamline::frame_generation_supported() && !streamline::frame_generation_dynamic();
+    if (!generated && temporal_upscaler(render) != 0u && !temporal_interpolation_allowed()) {
         return targets;
     }
     const unsigned most = generated && streamline::frame_generation_supported()

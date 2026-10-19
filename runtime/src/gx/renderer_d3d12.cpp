@@ -4533,14 +4533,10 @@ bool RendererD3D12::interpolation_mode() const {
     }
     const RenderConfig cfg = get_render_config();
     const double rate = present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, display_refresh_hz_);
-    if (temporal_mode()) {
-        // The upscaler's history follows the presented frames: one per slot of
-        // a clock locked to the game's 60 Hz.
-        const double multiple = std::round(rate / 60.0);
-        if (!host_window::temporal_interpolation_allowed() || temporal_interp_suspended_ ||
-            std::abs(rate - 60.0 * multiple) > 0.5) {
-            return false;
-        }
+    // With a temporal upscaler every presented frame is upscaled, its motion from the frame presented before (any
+    // rate: the slots' t need not divide the game frame evenly).
+    if (temporal_mode() && (!host_window::temporal_interpolation_allowed() || temporal_interp_suspended_)) {
+        return false;
     }
     return interpolated_frames_per_game_frame(rate) != 0u;
 }
