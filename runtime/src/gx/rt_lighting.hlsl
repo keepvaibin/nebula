@@ -88,6 +88,10 @@ cbuffer RtLight : register(b0)
     float4 g_sky_radiance;         // kPhysicalFlag: the sky's radiance in the game's light units (rgb)
 };
 
+// g_flags bit 14: the game's light units (GALAXY_RT_PHYSICAL): g_sky_radiance is the sky, g_sun_light the sun's
+// irradiance over pi, and the reference keeps them as they are (no exposure).
+static const uint kPhysicalFlag = 16384u;
+
 RaytracingAccelerationStructure g_scene : register(t6);
 #if RT_TEXTURED
 // Alpha-tested geometry (g_flags bit 12): per triangle its texture coordinates and colours (36 bytes,
@@ -2375,6 +2379,9 @@ bool sun_visible(float3 origin, float3 direction, bool card, uint salt, out floa
     return true;
 }
 
+void reference_material(uint tri, float2 b, out float3 albedo, out float3 emission);
+float3 physical_hit(uint tri, float2 b, float3 x, float3 direction, uint salt);
+
 [numthreads(8, 8, 1)]
 void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
 {
@@ -2438,7 +2445,9 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
                 blocker = blocker == 0.0f ? t : min(blocker, t);
             }
         }
-        sun = facing_sun * (1.5f - 0.5f * facing_sun) * (float(open) / float(sun_rays));
+        // The game's light units: Lambert's N.L; else the art model's wrapped falloff.
+        sun = ((g_flags & kPhysicalFlag) != 0u ? facing_sun : facing_sun * (1.5f - 0.5f * facing_sun)) *
+              (float(open) / float(sun_rays));
         if ((g_flags & 64u) != 0u) {
             // GALAXY_RT_VIEW=6: the nearest blocker's distance up to 1e6, past the sun's reach,
             // 0.1 + 0.9 log10(t) / 6 (0: none).
@@ -2659,11 +2668,12 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
         // Never into the face itself: below its plane the direction mirrors back out.
         const float below = dot(direction, ng);
         direction = below < 0.0f ? direction - 2.0f * below * ng : direction;
+        const bool physical = (g_flags & kPhysicalFlag) != 0u;
         RayDesc ray;
         ray.Origin = origin;
         ray.Direction = direction;
         ray.TMin = 0.0f;
-        ray.TMax = g_range;
+        ray.TMax = physical ? 1.0e6f : g_range;
         RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
         query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
         while (query.Proceed()) {
@@ -2674,6 +2684,19 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
                                          origin + ray.Direction * query.CandidateTriangleRayT(), salt + 5u + i))) {
                 query.CommitNonOpaqueTriangleHit();
             }
+        }
+        if (physical) {
+            // The game's light units: what the ray sees is the sky's radiance, or the surface it hits lit by the sun
+            // (a shadow ray from there) and the open sky, plus its own emission. Late geometry (another instance)
+            // only blocks.
+            const float3 x = origin + direction * query.CommittedRayT();
+            if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT || length(x) > g_ambient.w) {
+                light += g_sky_radiance.rgb;
+            } else if (query.CommittedInstanceID() == 0u) {
+                light += physical_hit(query.CommittedPrimitiveIndex(), query.CommittedTriangleBarycentrics(), x,
+                                      direction, salt + 9u + i);
+            }
+            continue;
         }
         if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
             const float t = query.CommittedRayT();
@@ -2733,9 +2756,6 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
 // ---------------------------------------------------------------------------------------------
 
 static const uint kReferenceFlag = 8192u;
-// The game's light units (GALAXY_RT_PHYSICAL): g_sky_radiance is the sky, g_sun_light the sun's irradiance over pi,
-// and the reference keeps them as they are (no exposure).
-static const uint kPhysicalFlag = 16384u;
 
 // The sRGB transfer functions (IEC 61966-2-1).
 float3 srgb_to_linear(float3 c)
@@ -2954,6 +2974,37 @@ void reference_material(uint tri, float2 b, out float3 albedo, out float3 emissi
     if ((table.x & kEmitNamed) != 0u && (table.x & 3u) == kEmitArea && g_emit.w > 0.0f) {
         emission = srgb_to_linear(rgb8(table.x)) * (g_self.z * asfloat(table.y) * g_emit.w);
     }
+}
+
+// A bounce ray's hit in the game's light units (TraceCS with kPhysicalFlag): the surface's albedo times the sun on it
+// (N.L, one shadow ray inside the sun's disc) and the open sky, plus its emission.
+float3 physical_hit(uint tri, float2 b, float3 x, float3 direction, uint salt)
+{
+    float3 albedo;
+    float3 emission;
+    reference_material(tri, b, albedo, emission);
+    const float3 v0 = asfloat(g_positions.Load3(tri * 36u));
+    const float3 v1 = asfloat(g_positions.Load3(tri * 36u + 12u));
+    const float3 v2 = asfloat(g_positions.Load3(tri * 36u + 24u));
+    const float3 face = cross(v1 - v0, v2 - v0);
+    if (dot(face, face) <= 1e-24f) {
+        return emission;
+    }
+    float3 ng = normalize(face);
+    ng = dot(ng, direction) > 0.0f ? -ng : ng;
+    const float3 w = float3(1.0f - b.x - b.y, b.x, b.y);
+    float3 lifted = v0 * w.x + v1 * w.y + v2 * w.z;
+    float3 n;
+    smooth_surface(tri, w, v0, v1, v2, ng, n, lifted);
+    float3 sun = float3(0.0f, 0.0f, 0.0f);
+    const float nl = dot(n, g_sun.xyz);
+    if (nl > 0.0f && any(g_sun_light.rgb > 0.0f)) {
+        float blocker;
+        if (sun_visible(lifted + ng * (0.2f + abs(x.z) * 4e-4f), g_sun.xyz, false, salt, blocker)) {
+            sun = g_sun_light.rgb * nl;
+        }
+    }
+    return albedo * (sun + g_sky_radiance.rgb) + emission;
 }
 
 [numthreads(8, 8, 1)]
@@ -3468,6 +3519,29 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
         return;
     }
     Light light = filtered(id.xy, 4, true);
+    if ((g_flags & kPhysicalFlag) != 0u) {
+        // The game's light units: the sky and bounce light, the sun's (its irradiance over pi times N.L and its
+        // visibility) and the point lights', summed; the composite multiplies the full-light colour by it in linear
+        // light. A light source's own surface glows over it as the reference's does.
+        float3 m = light.sky + g_sun_light.rgb * light.sun + light.points * g_point_light;
+        const uint tri = g_primary[index].x;
+        if (tri != 0u) {
+            const uint record = min(g_surfaces.Load((tri - 1u) * 16u + 12u) >> 16u, max(g_draw_count, 1u) - 1u) *
+                                kDrawStride;
+            const uint2 emission = g_draws.Load2(record + 8u);
+            if ((emission.x & kEmitNamed) != 0u && (emission.x & 3u) != 0u && (emission.x & kEmitNoLight) == 0u) {
+                const uint table_flags = g_draws.Load(record + 24u);
+                const float intensity = (table_flags & kDrawTableGlow) != 0u
+                                            ? float(table_flags >> 16u) / 65535.0f * kDrawGlowScale
+                                            : asfloat(emission.y);
+                m += ((emission.x & 3u) == kEmitArea ? g_self.x * intensity : 0.3f * min(intensity, 3.0f)).xxx;
+            }
+        }
+        m = min(m, kMaxLight);
+        g_final[index] = uint4(f32tof16(m.r) | (f32tof16(m.g) << 16u), f32tof16(m.b) | (f32tof16(1.0f) << 16u), asuint(z),
+                               0u);
+        return;
+    }
     {
         float own_count;
         light.sun = unpack_light(g_history_in[index], own_count).sun;   // sharp sun shadows (SpatialMCS)
