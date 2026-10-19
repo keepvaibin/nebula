@@ -598,6 +598,11 @@ file(CONFIGURE OUTPUT "${galaxy_uber_embed_cpp}"
     CONTENT "namespace galaxy::gx {\n${galaxy_uber_embed_body}}\n"
     @ONLY)
 
+# The same passes for the Vulkan renderer, compiled on the device (cmake/post_shader_sources.cmake).
+include(cmake/post_shader_sources.cmake)
+set(galaxy_post_embed_cpp "${CMAKE_CURRENT_BINARY_DIR}/generated/post_shader_embed.cpp")
+galaxy_embed_post_sources("${galaxy_post_embed_cpp}" "${CMAKE_CURRENT_SOURCE_DIR}")
+
 # Presentation post-processing passes (runtime/src/gx/post_process.hlsl with
 # the vendored SMAA and FidelityFX FSR 1 sources) are compiled by fxc at build
 # time into bytecode headers, so the runtime never compiles them at startup.
@@ -1571,8 +1576,11 @@ if(NEBULA_VULKAN)
         runtime/src/gx/vk/renderer_vk.cpp
         runtime/src/gx/vk/renderer_vk_efb.cpp
         runtime/src/gx/vk/renderer_vk_replay.cpp
+        runtime/src/gx/vk/post_process_vk.cpp
+        ${galaxy_post_embed_cpp}
         runtime/src/gx/vk/surface_win32.cpp)
     target_include_directories(galaxy_gx_vk PUBLIC runtime/include)
+    target_include_directories(galaxy_gx_vk PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party/smaa")
     target_compile_features(galaxy_gx_vk PUBLIC cxx_std_20)
     target_link_libraries(galaxy_gx_vk
         PUBLIC

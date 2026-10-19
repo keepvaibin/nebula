@@ -280,11 +280,13 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
     enabled.textureCompressionBC = available.textureCompressionBC;
     enabled.depthClamp = available.depthClamp;
     enabled.independentBlend = available.independentBlend;
+    enabled.shaderImageGatherExtended = available.shaderImageGatherExtended;
     dual_source_blend_ = available.dualSrcBlend == VK_TRUE;
     logic_op_ = available.logicOp == VK_TRUE;
     geometry_shader_ = available.geometryShader == VK_TRUE;
     sampler_anisotropy_ = available.samplerAnisotropy == VK_TRUE;
     bc_textures_ = available.textureCompressionBC == VK_TRUE;
+    gather_extended_ = available.shaderImageGatherExtended == VK_TRUE;
 
     const float priority = 1.0f;
     VkDeviceQueueCreateInfo queue_info{VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO};

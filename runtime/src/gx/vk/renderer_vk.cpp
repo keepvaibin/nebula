@@ -214,6 +214,17 @@ bool RendererVk::initialize(int window_width, int window_height, unsigned efb_sc
         }
         std::memset(blend_verdicts_->mapped, 0, blend_verdicts_->size);
         refresh_default_sampler_table();
+        // Presentation post-processing, compiled on a worker; the plain blit presents until it is ready.
+        const RenderConfig cfg = get_render_config();
+        if (cfg.post_process) {
+            post_.initialize(post_process_settings_from(cfg), gx_layout_.efb_pass, color_pass_);
+            post_.set_present_pass(present_pass_);
+        } else {
+            PostProcessStatus off{};
+            std::snprintf(off.skip_reason.data(), off.skip_reason.size(), "CONFIG OFF");
+            set_post_process_status(off);
+            std::cerr << "[post-process] off; presenting with the plain blit\n";
+        }
     } catch (const std::exception& error) {
         std::cerr << "[Renderer] Vulkan initialize failed: " << error.what() << '\n';
         shutdown();
@@ -569,6 +580,7 @@ bool RendererVk::create_swapchain() {
 
     if (present_pass_ == VK_NULL_HANDLE || swapchain_.format != format.format) {
         if (present_pass_ != VK_NULL_HANDLE) {
+            post_.set_present_pass(VK_NULL_HANDLE);
             vkDestroyRenderPass(device, present_pass_, nullptr);
         }
         VkAttachmentDescription attachment{};
@@ -823,6 +835,8 @@ void RendererVk::shutdown() {
     const VkDevice device = context.device();
     if (device != VK_NULL_HANDLE) {
         vkDeviceWaitIdle(device);
+        post_.shutdown();
+        oriented_.reset();
         release_replay_resources();
         efb_copy_dests_.clear();
         efb_copy_dests_bytes_ = 0u;
@@ -946,6 +960,7 @@ void RendererVk::begin_frame(bool) {
     follow_window_and_resize();
     apply_pending_efb_scale();
     update_ring_mode();
+    sync_post_process();
 
     frame_slot_ = static_cast<unsigned>(frame_index_ % kFramesInFlight);
     Frame& frame = frames_[frame_slot_];
@@ -1318,6 +1333,23 @@ void RendererVk::update_gpu_budget() {
               << efb_scale_ << "x; Match Output capped at " << gpu_budget_cap_ << "x\n";
 }
 
+void RendererVk::sync_post_process() {
+    const bool was_ready = post_.ready();
+    if (!post_.poll_ready()) {
+        return;
+    }
+    if (!was_ready) {
+        set_post_process_status(post_.status());
+    }
+    const PostProcessSettings next = post_process_settings_from(get_render_config());
+    const PostProcessSettings& current = post_.settings();
+    if (next.aa != current.aa || next.smaa_quality != current.smaa_quality || next.upscaler != current.upscaler ||
+        next.sharpness != current.sharpness) {
+        post_.apply_settings(next);
+        set_post_process_status(post_.status());
+    }
+}
+
 bool RendererVk::vblank_grid(std::int64_t& vblank, std::int64_t& period) const noexcept {
     return window_ != nullptr && host_window::vblank_grid(window_, vblank, period);
 }
@@ -1482,6 +1514,49 @@ bool RendererVk::present(const XfbTexture* source, bool capture_backbuffer, bool
     }
     (void)galaxy::g_presentation_content.publish(bb_w, bb_h, content);
 
+    // The post chain's passes before the swap chain's: the picture scaled (and sharpened) to its size on screen. A
+    // turned swap chain takes it through `oriented_` and the blit, which turns it.
+    const auto allocate = [this](VkDescriptorSetLayout layout) { return allocate_post_set(layout); };
+    vk::PostProcessorVk::PresentStep step{};
+    const vk::Texture* picture = &xfb;
+    if (post_.ready() && !present_black_) {
+        const bool turned = swapchain_.transform != VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+        const auto width = static_cast<std::uint32_t>(content.width);
+        const auto height = static_cast<std::uint32_t>(content.height);
+        step = post_.prepare_present(commands, xfb, xfb.width, xfb.height, width, height, !turned, allocate);
+        if (turned && step.pipeline != VK_NULL_HANDLE) {
+            if (!oriented_ || oriented_->width != width || oriented_->height != height) {
+                oriented_ = context.create_texture(width, height, 1u, VK_FORMAT_R8G8B8A8_UNORM,
+                                                   VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                                                   true, "post-process picture");
+                VkFramebufferCreateInfo info{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
+                info.renderPass = color_pass_;
+                info.attachmentCount = 1;
+                info.width = width;
+                info.height = height;
+                info.layers = 1;
+                if (oriented_) {
+                    info.pAttachments = &oriented_->target_view;
+                    if (vkCreateFramebuffer(context.device(), &info, nullptr, &oriented_->framebuffer) != VK_SUCCESS) {
+                        oriented_.reset();
+                    }
+                }
+            }
+            if (oriented_) {
+                VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
+                begin.renderPass = color_pass_;
+                begin.framebuffer = oriented_->framebuffer;
+                begin.renderArea = {{0, 0}, {width, height}};
+                vkCmdBeginRenderPass(commands, &begin, VK_SUBPASS_CONTENTS_INLINE);
+                post_.finish_present(commands, step, {{0, 0}, {width, height}}, allocate);
+                vkCmdEndRenderPass(commands);
+                oriented_->layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                picture = oriented_.get();
+            }
+            step = {};
+        }
+    }
+
     const float surround = source->safety_surround;
     VkClearValue clear{};
     clear.color = {{surround, surround, surround, 1.0f}};
@@ -1498,9 +1573,10 @@ bool RendererVk::present(const XfbTexture* source, bool capture_backbuffer, bool
         vkCmdClearAttachments(commands, 1, &attachment, 1, &rect);
     }
 
-    // The XFB, aspect-fitted (D3D-style viewport: y flipped by a negative height), turned into a pre-rotated image.
+    // The picture, aspect-fitted (D3D-style viewport: y flipped by a negative height), turned into a pre-rotated image:
+    // the post chain's last pass, or the blit of the XFB (or of the chain's turned picture).
     const VkDescriptorSet set = allocate_frame_set(utility_set_layout_);
-    const VkDescriptorImageInfo image_info{VK_NULL_HANDLE, xfb.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    const VkDescriptorImageInfo image_info{VK_NULL_HANDLE, picture->view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
     VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
     write.dstSet = set;
     write.dstBinding = 0;
@@ -1516,12 +1592,16 @@ bool RendererVk::present(const XfbTexture* source, bool capture_backbuffer, bool
                               0.0f, 1.0f};
     vkCmdSetViewport(commands, 0, 1, &viewport);
     vkCmdSetScissor(commands, 0, 1, &scissor);
-    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, blit_pipeline_);
-    vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, utility_layout_, 0, 1, &set, 0, nullptr);
-    const std::uint32_t transform = static_cast<std::uint32_t>(swapchain_.transform);
-    vkCmdPushConstants(commands, utility_layout_, kPushStages, 0, sizeof(transform), &transform);
-    if (!present_black_) {
-        vkCmdDraw(commands, 3, 1, 0, 0);
+    if (step.pipeline != VK_NULL_HANDLE) {
+        post_.finish_present(commands, step, scissor, allocate);
+    } else {
+        vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, blit_pipeline_);
+        vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, utility_layout_, 0, 1, &set, 0, nullptr);
+        const std::uint32_t transform = static_cast<std::uint32_t>(swapchain_.transform);
+        vkCmdPushConstants(commands, utility_layout_, kPushStages, 0, sizeof(transform), &transform);
+        if (!present_black_) {
+            vkCmdDraw(commands, 3, 1, 0, 0);
+        }
     }
 
     // The overlays are authored in backbuffer pixels over the whole surface.

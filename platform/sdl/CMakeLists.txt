@@ -52,6 +52,11 @@ foreach(stage vs ps)
 endforeach()
 file(CONFIGURE OUTPUT "${galaxy_uber_embed_cpp}" CONTENT "namespace galaxy::gx {\n${galaxy_uber_embed_body}}\n" @ONLY)
 
+# The post-processing passes' sources (post_process_vk.cpp compiles them on the device).
+include("${nebula_root}/cmake/post_shader_sources.cmake")
+set(galaxy_post_embed_cpp "${CMAKE_CURRENT_BINARY_DIR}/generated/post_shader_embed.cpp")
+galaxy_embed_post_sources("${galaxy_post_embed_cpp}" "${nebula_root}")
+
 set(rt "${nebula_root}/runtime/src")
 add_library(galaxy_gx_vk STATIC
     ${rt}/gx/gx_shim.cpp
@@ -92,6 +97,8 @@ add_library(galaxy_gx_vk STATIC
     ${rt}/gx/vk/renderer_vk.cpp
     ${rt}/gx/vk/renderer_vk_efb.cpp
     ${rt}/gx/vk/renderer_vk_replay.cpp
+    ${rt}/gx/vk/post_process_vk.cpp
+    ${galaxy_post_embed_cpp}
     ${rt}/frame_cadence_diagnostics.cpp
     ${rt}/runtime_settings.cpp
     ${rt}/input_bindings.cpp
@@ -105,6 +112,7 @@ add_library(galaxy_gx_vk STATIC
     ${rt}/atomic_file.cpp
     ${rt}/wii_device_data.cpp)
 target_include_directories(galaxy_gx_vk PUBLIC "${nebula_root}/runtime/include")
+target_include_directories(galaxy_gx_vk PRIVATE "${nebula_root}/third_party/smaa")
 target_compile_options(galaxy_gx_vk PUBLIC "SHELL:-include ${nebula_root}/runtime/include/galaxy/posix_compat.h")
 # vk_mem_alloc.h leaves pointer nullability unannotated.
 target_compile_options(galaxy_gx_vk PRIVATE -Wno-nullability-completeness)

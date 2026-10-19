@@ -28,6 +28,7 @@
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx/ui_canvas.h"
 #include "galaxy/gx/upload_ring.h"
+#include "galaxy/gx/vk/post_process_vk.h"
 #include "galaxy/gx/vk/shader_compile_vk.h"
 #include "galaxy/gx/vk/vk_context.h"
 #include "galaxy/gx/host_window.h"
@@ -94,7 +95,8 @@ public:
     [[nodiscard]] std::uint64_t playing_serial() const noexcept { return run_log_.serial; }
     void prepare_vertex_blend(std::span<const std::int32_t> previous_record);
     [[nodiscard]] std::span<const std::int32_t> ps_record_pairs() const noexcept { return run_ps_previous_; }
-    void record_scene_aa() {}
+    // SMAA or FXAA of the 3D scene in the EFB before the 2D layer draws (PostProcessorVk).
+    void record_scene_aa();
     [[nodiscard]] unsigned replay_reject() const noexcept { return replay_reject_; }
     void reset_subframe_gpu_ema() noexcept { subframe_gpu_ema_ms_ = 0.0; }
     [[nodiscard]] double subframe_gpu_ema_ms() const noexcept { return subframe_gpu_ema_ms_; }
@@ -363,6 +365,13 @@ private:
     void end_efb_pass();
     void reset_gx_bindings() noexcept;
     [[nodiscard]] VkDescriptorSet allocate_frame_set(VkDescriptorSetLayout layout);
+    // A post-process draw's set: the replay list's while one is recorded, else the frame's.
+    [[nodiscard]] VkDescriptorSet allocate_post_set(VkDescriptorSetLayout layout);
+    // Presentation post-processing: SMAA or FXAA of the scene, FSR 1 or the box resample, RCAS.
+    vk::PostProcessorVk post_;
+    void sync_post_process();
+    // The picture through the post chain before a turned swap chain's blit (pre-rotated images).
+    gpu::TextureRef oriented_;
     void retire(gpu::TextureRef texture);
     [[nodiscard]] VkDescriptorSet allocate_persistent_set(VkDescriptorSetLayout layout);
     void refresh_default_sampler_table();
@@ -559,7 +568,7 @@ private:
     bool ring_advance_pending_ = false;
 
     // The log: one game frame's GX work in order (a display copy closes it).
-    enum class ReplayKind : std::uint8_t { Draw, BindEfb, Clear, Copy };
+    enum class ReplayKind : std::uint8_t { Draw, BindEfb, Clear, Copy, SceneAa };
     struct ReplayOp {
         ReplayKind kind = ReplayKind::Draw;
         std::uint32_t index = 0;
@@ -745,6 +754,7 @@ private:
         unsigned segment = 0;
         bool blend = false;          // its draws read the log before's vertices
         unsigned blend_segment = 0;  // that log's segment
+        std::vector<gpu::TextureRef> held;  // the post-process targets its scene AA reads
     };
     bool record_replay_list(ReplayList& list);
     // A log's texture table with the replay's stand-ins in place of the copy destinations it names.

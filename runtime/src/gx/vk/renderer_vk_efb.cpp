@@ -4,6 +4,8 @@
 #include "renderer_vk_internal.h"
 #include "galaxy/gx/vk/renderer_vk.h"
 
+#include "galaxy/content_viewport.h"
+#include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/gx/host_window.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/gx/gx_state.h"
@@ -484,6 +486,54 @@ VkDescriptorSet RendererVk::allocate_frame_set(VkDescriptorSetLayout layout) {
     }
     vk::check(result, "vkAllocateDescriptorSets");
     return set;
+}
+
+VkDescriptorSet RendererVk::allocate_post_set(VkDescriptorSetLayout layout) {
+    if (replay_list_ == nullptr) {
+        return allocate_frame_set(layout);
+    }
+    VkDescriptorSetAllocateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+    info.descriptorPool = replay_list_->descriptors;
+    info.descriptorSetCount = 1;
+    info.pSetLayouts = &layout;
+    VkDescriptorSet set = VK_NULL_HANDLE;
+    vk::check(vkAllocateDescriptorSets(vk::Context::get().device(), &info, &set), "replay post-process set");
+    return set;
+}
+
+// SMAA or FXAA of the 3D scene at its end, before the 2D layer draws: the EFB pass ends for the passes that read
+// a copy of the scene, then the result is drawn into it again.
+void RendererVk::record_scene_aa() {
+    if (!post_.ready() || !efb_.color || post_.settings().aa == PostProcessSettings::Aa::kOff) {
+        return;
+    }
+    // GALAXY_AA_SPLIT=<0..1>: the part of the picture left of it stays unfiltered (A/B captures).
+    static const float split = [] {
+        const char* value = std::getenv("GALAXY_AA_SPLIT");
+        return value != nullptr && value[0] != '\0'
+            ? std::clamp(static_cast<float>(std::strtod(value, nullptr)), 0.0f, 1.0f) : 0.0f;
+    }();
+    if (logging()) {
+        recording_log_.ops.push_back({ReplayKind::SceneAa, 0u});
+    }
+    // The 640x456 picture the display copy takes, against its size on screen, decides AUTO.
+    const auto aspect = galaxy::experimental_effective_host_aspect();
+    const galaxy::ContentViewport content = galaxy::fit_content_viewport(
+        static_cast<int>(host_window::backbuffer_width), static_cast<int>(host_window::backbuffer_height),
+        aspect ? aspect->content_aspect : galaxy::kWiiContentAspect);
+    const vk::Texture& color = *efb_.color;
+    const auto allocate = [this](VkDescriptorSetLayout layout) { return allocate_post_set(layout); };
+    end_efb_pass();
+    const AaRun ran = post_.prepare_scene_aa(
+        commands_, color, color.width, color.height, kEfbWidth * efb_scale_, 456u * efb_scale_,
+        static_cast<unsigned>(std::max(content.width, 1)), static_cast<unsigned>(std::max(content.height, 1)),
+        allocate);
+    begin_efb_pass();
+    post_.finish_scene_aa(commands_, ran, color.width, color.height, split, allocate);
+    if (replay_list_ != nullptr && ran != AaRun::kNone) {
+        post_.hold_scene_targets(replay_list_->held);
+    }
+    reset_gx_bindings();
 }
 
 // A texture the GPU may still read: released once the submissions that can name it completed.

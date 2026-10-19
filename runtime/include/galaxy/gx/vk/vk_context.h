@@ -101,6 +101,8 @@ public:
     [[nodiscard]] bool logic_op() const noexcept { return logic_op_; }
     [[nodiscard]] bool geometry_shader() const noexcept { return geometry_shader_; }
     [[nodiscard]] bool sampler_anisotropy() const noexcept { return sampler_anisotropy_; }
+    // shaderImageGatherExtended: a gather of one chosen channel (FSR 1 EASU's GatherRed/Green/Blue).
+    [[nodiscard]] bool gather_extended() const noexcept { return gather_extended_; }
     [[nodiscard]] bool bc_textures() const noexcept { return bc_textures_; }
     [[nodiscard]] bool depth_clamp() const noexcept { return depth_clamp_; }
     // VK_EXT_depth_clip_enable: clamping without giving up clipping (D3D's rasterizer).
@@ -192,6 +194,7 @@ private:
     bool logic_op_ = false;
     bool geometry_shader_ = false;
     bool sampler_anisotropy_ = false;
+    bool gather_extended_ = false;
     bool bc_textures_ = false;
     bool memory_budget_ = false;
     bool display_timing_ = false;  // VK_GOOGLE_display_timing

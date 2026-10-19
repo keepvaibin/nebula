@@ -1170,6 +1170,7 @@ bool RendererVk::record_replay_list(ReplayList& list) {
     }
     replay_list_ = &list;
     replay_constant_sets_.clear();
+    list.held.clear();
     bind_efb(nullptr);
     const gpu::Address output = interp_output_address_;
     // The log before's vertices are gone once its segment came round (a later game frame records there).
@@ -1216,6 +1217,9 @@ bool RendererVk::record_replay_list(ReplayList& list) {
             clear_efb(c.ar, c.gb, c.z24, c.color, c.alpha, c.depth, c.x, c.y, c.w, c.h, c.format);
             break;
         }
+        case ReplayKind::SceneAa:
+            record_scene_aa();
+            break;
         case ReplayKind::Copy: {
             const ReplayCopy& copy = run_log_.copies[op.index];
             if (copy.display) {
