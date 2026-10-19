@@ -91,9 +91,36 @@ add_library(galaxy_gx_vk STATIC
     ${rt}/switch_controller.cpp
     ${rt}/tilt.cpp
     ${rt}/jaudio_host_mixer.cpp
-    ${rt}/atomic_file.cpp)
+    ${rt}/atomic_file.cpp
+    ${rt}/wii_device_data.cpp)
 target_include_directories(galaxy_gx_vk PUBLIC "${nebula_root}/runtime/include")
 target_compile_options(galaxy_gx_vk PUBLIC "SHELL:-include ${nebula_root}/runtime/include/galaxy/posix_compat.h")
 # vk_mem_alloc.h leaves pointer nullability unannotated.
 target_compile_options(galaxy_gx_vk PRIVATE -Wno-nullability-completeness)
 target_link_libraries(galaxy_gx_vk PUBLIC nebula_vulkan_deps)
+
+# SDL3: the window, Vulkan surface, audio, gamepads and touch. Android loads libSDL3.so from SDL's Java activity.
+set(SDL_SHARED ON CACHE BOOL "" FORCE)
+set(SDL_STATIC OFF CACHE BOOL "" FORCE)
+set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
+add_subdirectory("${NEBULA_SDL_DIR}" SDL3 EXCLUDE_FROM_ALL)
+
+# The native game's host on SDL (native/host/host_main.cpp with NEBULA_HOST_SDL): libmain.so on Android (SDL's
+# activity calls its SDL_main), an executable elsewhere.
+set(host_sources
+    "${nebula_root}/native/host/host_main.cpp"
+    "${nebula_root}/runtime/src/native_thp_video.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/host_window_sdl.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/native_game_host_sdl.cpp")
+if(ANDROID)
+    add_library(main SHARED ${host_sources})
+    target_link_libraries(main PRIVATE android log)
+else()
+    add_executable(main ${host_sources})
+    set_target_properties(main PROPERTIES OUTPUT_NAME nebula)
+endif()
+target_include_directories(main PRIVATE "${nebula_root}/native/include" "${nebula_root}/runtime/include")
+target_compile_definitions(main PRIVATE NEBULA_HOST_RENDERER=1 NEBULA_HOST_SDL=1)
+target_include_directories(main PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(main PRIVATE galaxy_gx_vk SDL3::SDL3)

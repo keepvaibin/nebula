@@ -59,6 +59,10 @@ inline int _strnicmp(const char* a, const char* b, std::size_t count) {
     return strncasecmp(a, b, count);
 }
 
+inline int _putenv_s(const char* name, const char* value) {
+    return setenv(name, value, 1) == 0 ? 0 : errno;
+}
+
 inline int fopen_s(std::FILE** file, const char* path, const char* mode) {
     if (file == nullptr) return EINVAL;
     *file = std::fopen(path, mode);

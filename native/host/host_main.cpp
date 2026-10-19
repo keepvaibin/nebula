@@ -4,6 +4,8 @@
 //     answered at once; audio is paced but not played; no remotes connect.
 //   - NebulaNative (the top-level build, NEBULA_HOST_RENDERER): the stream goes to Nebula's D3D12 renderer, which
 //     raises the PE events and presents the frame buffer the game displays.
+//   - On SDL platforms (platform/sdl, NEBULA_HOST_SDL): the same with the Vulkan renderer, SDL's window, sound and
+//     input; on Android SDL's activity calls SDL_main.
 //
 //   <host> --pak <game.pak> --nand <dir> [--module <smg_game.dll>] [--seconds N]
 #if defined(_WIN32)
@@ -23,7 +25,16 @@
 #include "galaxy/runtime_settings.h"
 #include "galaxy/gx/render_config.h"
 
+#if defined(_WIN32)
 #include <crtdbg.h>
+#else
+#include "galaxy/virtual_keys.h"
+#endif
+#endif
+#if defined(NEBULA_HOST_SDL)
+#include "sdl_host.h"
+
+#include <SDL3/SDL_main.h>
 #endif
 
 #include <algorithm>
@@ -1808,8 +1819,15 @@ void apply_shipped_renderer_defaults() {
 #endif
 
 int main(int argc, char** argv) {
+#if defined(NEBULA_HOST_SDL)
+    if (!galaxy::sdl::start()) {
+        return 1;
+    }
+#endif
 #if defined(NEBULA_HOST_RENDERER)
     apply_shipped_renderer_defaults();
+#endif
+#if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
     // As v1.0.1 starts: physical-pixel DPI awareness before any window (sizes and mouse coordinates in pixels), and
     // CRT assertion and error reports to stderr instead of dialogs.
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
@@ -2011,7 +2029,11 @@ int main(int argc, char** argv) {
     while (Clock::now() < end && !gTourDone.load(std::memory_order_relaxed)) {
 #if defined(NEBULA_HOST_RENDERER)
         // The window's messages, on the thread that created it.
+#if defined(NEBULA_HOST_SDL)
+        galaxy::sdl::pump_events(4);
+#else
         MsgWaitForMultipleObjects(0, nullptr, FALSE, 4, QS_ALLINPUT);
+#endif
         galaxy::gx::pump_messages();
         if (galaxy::gx::quit_requested()) {
             break;

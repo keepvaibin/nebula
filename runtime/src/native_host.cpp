@@ -1,4 +1,5 @@
 #include "galaxy/native_host.h"
+#include "galaxy/wii_device_data.h"
 
 #include "galaxy/ai_dma_timing.h"
 #include "galaxy/native_audio_anomaly.h"
@@ -401,14 +402,6 @@ constexpr std::string_view kRmge01DataDirView{
     kRmge01DataDir,
     sizeof(kRmge01DataDir) - 1};
 constexpr std::uint32_t kEsTicketViewSize = 0xD8u;
-constexpr std::uint32_t kRflOfficialMagic = 0x524E4F44;  // "RNOD"
-constexpr std::uint32_t kRflHiddenMagic = 0x524E4844;    // "RNHD"
-constexpr std::size_t kRflDatabaseIsolationOffset = 0x1CEC;
-constexpr std::size_t kRflDatabaseHiddenOffset = 0x1D00;
-constexpr std::size_t kRflHiddenTableOffset = kRflDatabaseHiddenOffset + 0x08;
-constexpr std::size_t kRflHiddenTableEntrySize = 0x0C;
-constexpr std::size_t kRflHiddenTableEntries = 10000;
-constexpr std::size_t kRflDatabaseSize = 0x1F1E0;
 constexpr std::size_t kSysconfSize = 0x4000;
 constexpr std::size_t kSettingTxtSize = 0x100;
 constexpr std::size_t kPlayRecSize = 0x80;
@@ -455,23 +448,6 @@ void append_be32(std::vector<std::byte>& bytes, std::uint32_t value) {
     bytes.push_back(static_cast<std::byte>(value & 0xFFu));
 }
 
-std::uint16_t rfl_crc(std::span<const std::byte> bytes) {
-    std::uint16_t crc = 0;
-    for (const std::byte byte : bytes) {
-        std::uint8_t data = static_cast<std::uint8_t>(byte);
-        for (int bit = 0; bit < 8; ++bit, data <<= 1) {
-            if ((crc & 0x8000u) != 0) {
-                crc = static_cast<std::uint16_t>((crc << 1) ^ 0x1021u);
-            } else {
-                crc = static_cast<std::uint16_t>(crc << 1);
-            }
-            if ((data & 0x80u) != 0) {
-                crc = static_cast<std::uint16_t>(crc ^ 0x0001u);
-            }
-        }
-    }
-    return crc;
-}
 
 std::vector<std::byte> be32_bytes(std::uint32_t value) {
     std::vector<std::byte> bytes;
@@ -762,25 +738,6 @@ std::vector<std::byte> create_default_play_rec_file() {
     return std::vector<std::byte>(kPlayRecSize, std::byte{0});
 }
 
-std::vector<std::byte> create_empty_rfl_database() {
-    std::vector<std::byte> db(kRflDatabaseSize, std::byte{0});
-    write_be32(db, 0x0000, kRflOfficialMagic);
-    // The fallback is copyright-neutral: a valid empty FaceLib container, with no packed face
-    // feature data.
-    write_be32(db, kRflDatabaseIsolationOffset, 0x80000000u);
-    write_be32(db, kRflDatabaseHiddenOffset + 0x00, kRflHiddenMagic);
-    write_be16(db, kRflDatabaseHiddenOffset + 0x04, 0xFFFFu);
-    write_be16(db, kRflDatabaseHiddenOffset + 0x06, 0xFFFFu);
-    for (std::size_t i = 0; i < kRflHiddenTableEntries; ++i) {
-        const std::size_t offset =
-            kRflHiddenTableOffset + i * kRflHiddenTableEntrySize;
-        write_be16(db, offset + 0x08, 0x7FFFu);
-        write_be16(db, offset + 0x0A, 0x7FFFu);
-    }
-    write_be16(db, kRflDatabaseSize - 2, 0);
-    write_be16(db, kRflDatabaseSize - 2, rfl_crc(db));
-    return db;
-}
 
 bool is_generated_empty_rfl_database(std::span<const std::byte> db) {
     const std::vector<std::byte> empty = create_empty_rfl_database();
@@ -6325,7 +6282,6 @@ constexpr std::uint16_t kHciSniffMode = 0x0803;
 constexpr std::uint16_t kHciExitSniffMode = 0x0804;
 constexpr std::uint16_t kHciWriteLinkPolicySettings = 0x080D;
 constexpr std::uint8_t kHciRemoteUserTerminatedConnection = 0x13;
-constexpr std::size_t kWiimoteEepromBytes = 0x4000;
 constexpr std::uint32_t kWiimoteExtensionRegisterBase = 0xA40000;
 constexpr std::uint32_t kWiimoteSpeakerRegisterBase = 0xA20000;
 constexpr std::uint32_t kWiimoteIrRegisterBase = 0xB00000;
@@ -6359,52 +6315,6 @@ std::uint32_t wiimote_output_report_size(std::uint8_t report_id) {
     default:
         return 0u;
     }
-}
-
-std::array<std::uint8_t, kWiimoteEepromBytes> create_virtual_wiimote_eeprom() {
-    std::array<std::uint8_t, kWiimoteEepromBytes> eeprom{};
-    // The SDK reads two duplicate 11-byte DPD blocks, then two duplicate 10-byte accelerometer
-    // blocks. A neutral virtual sensor bar and a checksum-valid upright accelerometer calibration
-    // let KPAD trust the IR data.
-    const std::array<std::uint8_t, 11> ir_calibration{
-        0x7f, 0xa2, 0x8b, 0x80, 0xa2, 0x80, 0x5d, 0x30, 0x7f, 0x5d, 0x0c};
-    for (std::size_t i = 0; i < ir_calibration.size(); ++i) {
-        eeprom[i] = ir_calibration[i];
-        eeprom[0x0Bu + i] = ir_calibration[i];
-    }
-    const std::array<std::uint8_t, 10> accel_calibration{
-        0x80, 0x80, 0x80, 0x00, 0x99, 0x99, 0x99, 0x00, 0x00, 0xa0};
-    for (std::size_t i = 0; i < accel_calibration.size(); ++i) {
-        eeprom[0x16u + i] = accel_calibration[i];
-        eeprom[0x20u + i] = accel_calibration[i];
-    }
-    return eeprom;
-}
-
-std::array<std::uint8_t, 256> create_virtual_nunchuk_registers(
-    bool initialized) {
-    std::array<std::uint8_t, 256> regs{};
-    regs.fill(0xff);
-    if (!initialized) {
-        return regs;
-    }
-
-    regs.fill(0);
-    // Captured RVL-CNT-01 Nunchuk calibration: accelerometer 0G/1G plus stick max/min/center.
-    // Reports stay aligned with these centers, since title screens that require a neutral Control
-    // Stick accept the virtual device only then.
-    const std::array<std::uint8_t, 16> calibration{
-        0x7d, 0x7e, 0x7a, 0x3c, 0xb1, 0xaf, 0xae, 0x1b,
-        0xe0, 0x15, 0x7b, 0xe6, 0x1d, 0x81, 0x23, 0x78};
-    for (std::size_t i = 0; i < calibration.size(); ++i) {
-        regs[0x20u + i] = calibration[i];
-    }
-    const std::array<std::uint8_t, 6> nunchuk_id{
-        0x00, 0x00, 0xa4, 0x20, 0x00, 0x00};
-    for (std::size_t i = 0; i < nunchuk_id.size(); ++i) {
-        regs[0xFAu + i] = nunchuk_id[i];
-    }
-    return regs;
 }
 
 std::vector<std::uint8_t> read_virtual_wiimote_bytes(

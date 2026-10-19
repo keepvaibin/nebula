@@ -2,8 +2,9 @@
 
 // Monitors and their display modes, for the display settings (monitor,
 // fullscreen resolution and refresh rate) and the internal-resolution cap.
-// Windows-only; no D3D12.
+// The monitor list is Windows-only; no D3D12.
 
+#if defined(_WIN32)
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -11,7 +12,10 @@
 #define NOMINMAX
 #endif
 #include <Windows.h>
+#endif
 
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -20,6 +24,18 @@
 
 namespace galaxy::gx {
 
+// The internal resolution (EFB scale) whose 640x456 game picture covers a
+// width x height output, clamped to 1..max_scale.
+[[nodiscard]] inline unsigned efb_scale_covering(
+    unsigned width, unsigned height, unsigned max_scale) noexcept {
+    if (width == 0u || height == 0u || max_scale == 0u) {
+        return std::max(max_scale, 1u);
+    }
+    const double needed = std::max(width / 640.0, height / 456.0);
+    return std::clamp(static_cast<unsigned>(std::ceil(needed - 1e-6)), 1u, max_scale);
+}
+
+#if defined(_WIN32)
 struct DisplayModeInfo {
     unsigned width = 0;
     unsigned height = 0;
@@ -54,12 +70,8 @@ struct MonitorInfo {
 [[nodiscard]] std::vector<unsigned> monitor_refresh_rates(
     const MonitorInfo& monitor, unsigned width, unsigned height);
 
-// The internal resolution (EFB scale) whose 640x456 game picture covers a
-// width x height output, clamped to 1..max_scale.
-[[nodiscard]] unsigned efb_scale_covering(
-    unsigned width, unsigned height, unsigned max_scale) noexcept;
-
 [[nodiscard]] std::string narrow_utf8(std::wstring_view text);
 [[nodiscard]] std::wstring widen_utf8(std::string_view text);
+#endif
 
 }  // namespace galaxy::gx

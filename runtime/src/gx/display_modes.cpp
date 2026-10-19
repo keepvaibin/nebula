@@ -190,12 +190,4 @@ std::vector<unsigned> monitor_refresh_rates(
     return out;
 }
 
-unsigned efb_scale_covering(unsigned width, unsigned height, unsigned max_scale) noexcept {
-    if (width == 0u || height == 0u || max_scale == 0u) {
-        return std::max(max_scale, 1u);
-    }
-    const double needed = std::max(width / 640.0, height / 456.0);
-    return std::clamp(static_cast<unsigned>(std::ceil(needed - 1e-6)), 1u, max_scale);
-}
-
 }  // namespace galaxy::gx
