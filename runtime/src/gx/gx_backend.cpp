@@ -8392,8 +8392,13 @@ void GxBackend::interp_event(const char* what, std::uint64_t a, std::uint64_t b)
         std::size_t length = 0u;
         std::pair<std::uint64_t, std::uint64_t> r{1u, 0u};
         if (getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_EVENTS") == 0 && length > 1u) {
-            unsigned long long first = 0, last = 0;
-            if (std::sscanf(value, "%llu,%llu", &first, &last) == 2) r = {first, last};
+            const char* const end = value + std::strlen(value);
+            std::uint64_t first = 0u, last = 0u;
+            const auto [comma, error] = std::from_chars(value, end, first);
+            if (error == std::errc{} && comma != end && *comma == ',' &&
+                std::from_chars(comma + 1, end, last).ec == std::errc{}) {
+                r = {first, last};
+            }
         }
         return r;
     }();
