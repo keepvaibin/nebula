@@ -9104,12 +9104,12 @@ bool GxBackend::render_interp_subframe(float t) {
     // Matched records of the scene before (through skipped scenes: B18).
     const std::vector<std::int32_t>& matched_index =
         interp_sequence_.chained ? interp_chain_prev_ : scene.prev_index;
-    // The screen layer (HUD, titles, fades, cinema bars) is drawn as the game frame has it. Its panels are
-    // all 4-vertex quads paired by draw order, so a panel that appears or goes (a fade, a banner) pairs the
-    // ones after it with other panels and the sub-frame blends their colours: a see-through black fade
-    // showing the next scene, dark HUD icons, a title gone for a sub-frame (it64 presents 5676, 9604).
-    // GALAXY_INTERP_SCREEN_MOTION=1 interpolates it again (diagnostics).
-    static const bool screen_motion = read_env_u64("GALAXY_INTERP_SCREEN_MOTION", 0u) != 0u;
+    // The screen layer (HUD, titles, fades, cinema bars) moves like the scene: the game names each layout pane,
+    // layout actor and star pointer (layout markers), so a panel that appears or goes is its own identity and
+    // never pairs the panels after it with others (without names, paired by draw order, it did: see-through
+    // fades, dark HUD icons, a title gone for a sub-frame). GALAXY_INTERP_SCREEN_MOTION=0 draws it as the game
+    // frame has it (diagnostics).
+    static const bool screen_motion = read_env_u64("GALAXY_INTERP_SCREEN_MOTION", 1u) != 0u;
     const InterpScene::LayerRange& screen_range = scene.layers[kScreenLayer];
     const bool snap_screen = !screen_motion && screen_range.count != 0u;
     if (snap_screen && !interp_sequence_.classified) {
