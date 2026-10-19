@@ -714,8 +714,9 @@ double display_refresh_hz(NativeWindow window) noexcept {
     return mode != nullptr && mode->refresh_rate > 1.0f ? static_cast<double>(mode->refresh_rate) : 0.0;
 }
 
-std::int64_t present_target_ns(unsigned slots, std::int64_t margin_ns) noexcept {
-    return galaxy::sdl::display_present_target(slots, margin_ns);
+bool present_grid(std::int64_t& retrace_ns, std::int64_t& period_ns, std::int64_t& vsync_ns,
+                  std::int64_t& now_ns) noexcept {
+    return galaxy::sdl::display_grid(retrace_ns, period_ns, vsync_ns, now_ns);
 }
 
 // The overlay, the HOME Menu and the hint are the platform's own screens on SDL platforms (Android: the activity's).

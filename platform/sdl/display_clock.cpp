@@ -113,21 +113,16 @@ bool wait_display_retrace(std::int64_t period_ns, std::int64_t& last_ns) noexcep
     return true;
 }
 
-std::int64_t display_present_target(unsigned slots, std::int64_t margin_ns) noexcept {
-    const std::int64_t retrace = g_retrace_ns.load(std::memory_order_acquire);
-    const std::int64_t period = g_retrace_period_ns.load(std::memory_order_relaxed);
-    const std::int64_t now = monotonic_ns();
-    if (retrace == 0 || period == 0 || now - retrace > 4 * period) {
-        return 0;
+bool display_grid(std::int64_t& retrace_ns, std::int64_t& period_ns, std::int64_t& vsync_ns,
+                  std::int64_t& now_ns) noexcept {
+    retrace_ns = g_retrace_ns.load(std::memory_order_acquire);
+    period_ns = g_retrace_period_ns.load(std::memory_order_relaxed);
+    {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        vsync_ns = g_interval_ns;
     }
-    // `slots` retrace slots after the latest retrace: a frame made within one retrace period is shown then and stays
-    // one period. A frame too late for it takes the slot after.
-    const std::int64_t earliest = now + margin_ns;
-    std::int64_t target = retrace + static_cast<std::int64_t>(slots) * period;
-    if (target < earliest) {
-        target += (earliest - target + period - 1) / period * period;
-    }
-    return target;
+    now_ns = monotonic_ns();
+    return retrace_ns != 0 && period_ns != 0 && vsync_ns != 0 && now_ns - retrace_ns <= 4 * period_ns;
 }
 
 double display_refresh_hz() noexcept {
@@ -141,8 +136,8 @@ bool wait_display_retrace(std::int64_t, std::int64_t&) noexcept {
     return false;
 }
 
-std::int64_t display_present_target(unsigned, std::int64_t) noexcept {
-    return 0;
+bool display_grid(std::int64_t&, std::int64_t&, std::int64_t&, std::int64_t&) noexcept {
+    return false;
 }
 
 double display_refresh_hz() noexcept {

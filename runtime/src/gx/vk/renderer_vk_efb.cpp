@@ -276,17 +276,25 @@ void RendererVk::carry_over_efb_contents() {
     reset_gx_bindings();
 }
 
-void RendererVk::begin_efb_pass() {
+void RendererVk::begin_efb_pass(const EfbClearValues* clear) {
     if (efb_pass_open_) {
         return;
     }
     const VkCommandBuffer commands = frames_[frame_slot_].commands;
     VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
-    begin.renderPass = gx_layout_.efb_pass;
+    begin.renderPass = clear != nullptr ? gx_layout_.efb_pass_clear : gx_layout_.efb_pass;
     begin.framebuffer = efb_framebuffer_;
     begin.renderArea = {{0, 0}, {kEfbWidth * efb_scale_, kEfbHeight * efb_scale_}};
+    VkClearValue values[2]{};
+    if (clear != nullptr) {
+        std::memcpy(values[0].color.float32, clear->color.data(), sizeof(float) * 4u);
+        values[1].depthStencil = {clear->reversed_depth, 0u};  // reversed-Z, as clear_efb's
+        begin.clearValueCount = 2;
+        begin.pClearValues = values;
+    }
     vkCmdBeginRenderPass(commands, &begin, VK_SUBPASS_CONTENTS_INLINE);
     efb_pass_open_ = true;
+    ++gpu_window_.passes;
     // Dynamic state and bindings outlive the pass, but the renderer's own passes in between changed them.
     if (bound_.viewport_valid) {
         vkCmdSetViewport(commands, 0, 1, &bound_.viewport);
@@ -353,9 +361,16 @@ void RendererVk::clear_efb(std::uint32_t clear_ar, std::uint32_t clear_gb, std::
                         {static_cast<std::uint32_t>(scaled.right - scaled.left),
                          static_cast<std::uint32_t>(scaled.bottom - scaled.top)}};
     }
+    const EfbClearValues clear = make_efb_clear_values(clear_ar, clear_gb, clear_z24, pixel_format);
+    // The whole EFB, every channel, while the pass is closed (a copy-clear): the pass begins cleared.
+    if (!efb_pass_open_ && color_enable && (alpha_enable || pixel_format != 1u) && depth_enable && rect.offset.x == 0 &&
+        rect.offset.y == 0 && rect.extent.width == static_cast<std::uint32_t>(efb_w) &&
+        rect.extent.height == static_cast<std::uint32_t>(efb_h)) {
+        begin_efb_pass(&clear);
+        return;
+    }
     begin_efb_pass();
     const VkCommandBuffer commands = frames_[frame_slot_].commands;
-    const EfbClearValues clear = make_efb_clear_values(clear_ar, clear_gb, clear_z24, pixel_format);
     const VkClearRect clear_rect{rect, 0, 1};
     if (color_enable || alpha_enable) {
         if (pixel_format != 1u) {
@@ -811,6 +826,7 @@ void RendererVk::copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& dest) 
 }
 
 bool RendererVk::copy_efb_to_texture(const EfbCopyParams& params, TextureCache& textures, bool is_depth_copy) {
+    ++gpu_window_.copies;
     // The game composites its picture from EFB->texture copies; half_scale halves both dimensions (a 2x2 box).
     const unsigned dw_unscaled = params.half_scale ? std::max(1u, params.src_width / 2u) : params.src_width;
     const unsigned dh_unscaled = params.half_scale ? std::max(1u, params.src_height / 2u) : params.src_height;

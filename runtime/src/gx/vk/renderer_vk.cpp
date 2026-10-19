@@ -369,6 +369,10 @@ bool RendererVk::create_layouts() {
         info.dependencyCount = 2;
         info.pDependencies = dependencies;
         vk::check(vkCreateRenderPass(device, &info, nullptr, &gx_layout_.efb_pass), "EFB render pass");
+        attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        vk::check(vkCreateRenderPass(device, &info, nullptr, &gx_layout_.efb_pass_clear), "EFB clearing render pass");
     }
     // One RGBA8 target written whole (copies, peeks): its old contents are dropped; it ends shader-readable.
     {
@@ -846,10 +850,10 @@ void RendererVk::shutdown() {
         if (timestamps_ != VK_NULL_HANDLE) vkDestroyQueryPool(device, timestamps_, nullptr);
         timestamps_ = VK_NULL_HANDLE;
         destroy_swapchain();
-        for (VkRenderPass pass : {present_pass_, color_pass_, gx_layout_.efb_pass}) {
+        for (VkRenderPass pass : {present_pass_, color_pass_, gx_layout_.efb_pass, gx_layout_.efb_pass_clear}) {
             if (pass != VK_NULL_HANDLE) vkDestroyRenderPass(device, pass, nullptr);
         }
-        present_pass_ = color_pass_ = gx_layout_.efb_pass = VK_NULL_HANDLE;
+        present_pass_ = color_pass_ = gx_layout_.efb_pass = gx_layout_.efb_pass_clear = VK_NULL_HANDLE;
         for (VkPipelineLayout layout : {gx_layout_.layout, utility_layout_, conversion_layout_}) {
             if (layout != VK_NULL_HANDLE) vkDestroyPipelineLayout(device, layout, nullptr);
         }
@@ -940,6 +944,9 @@ void RendererVk::begin_frame(bool) {
             stats_.gpu_ms += gpu_ms;
             ++stats_.gpu_samples;
             gpu_budget_ms_ += gpu_ms;
+            gpu_window_.ms += gpu_ms;
+            gpu_window_.max_ms = std::max(gpu_window_.max_ms, gpu_ms);
+            ++gpu_window_.frames;
         }
         timestamp_pending_[frame_slot_] = false;
     }
@@ -1027,16 +1034,32 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
         info.pImageIndices = &swap_image_;
         VkPresentTimeGOOGLE present_time{};
         VkPresentTimesInfoGOOGLE present_times{VK_STRUCTURE_TYPE_PRESENT_TIMES_INFO_GOOGLE};
-        if (context.display_timing()) {
-            // Two milliseconds for the composer to take the frame before its slot.
-            present_time.presentID = ++present_timing_.next_id;
-            present_time.desiredPresentTime =
-                static_cast<std::uint64_t>(host_window::present_target_ns(present_timing_.slots, 2000000));
-            present_timing_.requested[present_time.presentID % present_timing_.requested.size()] =
-                static_cast<std::int64_t>(present_time.desiredPresentTime);
+        std::int64_t retrace = 0, period = 0, vsync = 0, now = 0;
+        if (context.display_timing() && host_window::present_grid(retrace, period, vsync, now)) {
+            PresentTiming& timing = present_timing_;
+            // The slot after the previous frame's, on the grid of the latest retrace; two retraces after that retrace
+            // when it is out of reach (the first frame, after a stall) or the frames ran ahead of it.
+            std::int64_t slot = timing.last_slot + period;
+            const std::int64_t first = retrace + 2 * period;
+            if (timing.last_slot == 0 || slot > first + period || slot < retrace + period) {
+                slot = first;
+            } else {
+                slot = retrace + (slot - retrace + period / 2) / period * period;
+            }
+            // A frame too late for its slot (the compositor takes it about a vsync ahead) takes a later one.
+            while (slot - vsync < now) {
+                slot += period;
+            }
+            timing.last_slot = slot;
+            timing.vsync_ns = vsync;
+            present_time.presentID = ++timing.next_id;
+            present_time.desiredPresentTime = static_cast<std::uint64_t>(slot - vsync / 2);
+            timing.requested[present_time.presentID % timing.requested.size()] = slot;
             present_times.swapchainCount = 1;
             present_times.pTimes = &present_time;
             info.pNext = &present_times;
+        } else {
+            present_timing_.last_slot = 0;
         }
         const std::int64_t present_cpu = vk::thread_cpu_ns();
         const VkResult result = vkQueuePresentKHR(context.queue(), &info);
@@ -1073,7 +1096,8 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
             measured_present_count_ = 0u;
         }
         report_present_stats();
-        if (context.display_timing() && present_timing_.next_id % 30u == 0u) {
+        // Android keeps only the last few frames' timings: read them often.
+        if (context.display_timing() && present_timing_.next_id % 4u == 0u) {
             report_present_timing();
         }
         if (!window_shown_ && window_ != nullptr && !host_window::hidden_window_mode_enabled()) {
@@ -1101,6 +1125,15 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
         }
         last_cpu = cpu;
         last_time = now;
+        if (gpu_window_.frames != 0u) {
+            const double frames = static_cast<double>(gpu_window_.frames);
+            std::fprintf(stderr, "[vk-gpu] frame %.2f ms average, %.2f ms longest; %.1f EFB passes and %.1f EFB copies a "
+                         "frame; EFB %ux%u, swap chain %ux%u\n", gpu_window_.ms / frames, gpu_window_.max_ms,
+                         static_cast<double>(gpu_window_.passes) / 600.0,
+                         static_cast<double>(gpu_window_.copies) / 600.0, kEfbWidth * efb_scale_,
+                         kEfbHeight * efb_scale_, swapchain_.image.width, swapchain_.image.height);
+        }
+        gpu_window_ = GpuWindow{};
     }
     return fence;
 }
@@ -1125,7 +1158,7 @@ void RendererVk::report_present_timing() {
         return;
     }
     constexpr std::int64_t kRetraceNs = 1000000000 / 60;
-    const std::int64_t half_vsync = (timing.refresh_ns != 0 ? timing.refresh_ns : kRetraceNs) / 2;
+    const std::int64_t half_vsync = (timing.vsync_ns != 0 ? timing.vsync_ns : kRetraceNs / 2) / 2;
     for (std::uint32_t i = 0; i < count; ++i) {
         const auto actual = static_cast<std::int64_t>(past[i].actualPresentTime);
         const std::int64_t requested = timing.requested[past[i].presentID % timing.requested.size()];
@@ -1135,11 +1168,6 @@ void RendererVk::report_present_timing() {
             ++timing.on_slot;
         } else {
             ++timing.late;
-            if (timing.slots == 1u) {
-                timing.slots = 2u;
-                std::fprintf(stderr, "[present-timing] a frame was shown %.1f ms after its slot: frames are presented "
-                             "two retrace slots ahead from now\n", static_cast<double>(actual - requested) / 1e6);
-            }
         }
         if (timing.last_actual != 0 && std::llabs(actual - timing.last_actual - kRetraceNs) < half_vsync) {
             ++timing.even;
@@ -1147,9 +1175,9 @@ void RendererVk::report_present_timing() {
         timing.last_actual = actual;
         if (++timing.frames == 600u) {
             std::fprintf(stderr, "[present-timing] %u frames: %u shown at their retrace slot, %u late, %u without one "
-                         "(the host's clock); %u shown one retrace after the frame before (refresh %.2f ms, %u slot%s "
-                         "ahead)\n", timing.frames, timing.on_slot, timing.late, timing.unrequested, timing.even,
-                         static_cast<double>(timing.refresh_ns) / 1e6, timing.slots, timing.slots == 1u ? "" : "s");
+                         "(the host's clock); %u shown one retrace after the frame before (refresh %.2f ms)\n",
+                         timing.frames, timing.on_slot, timing.late, timing.unrequested, timing.even,
+                         static_cast<double>(timing.refresh_ns) / 1e6);
             timing.frames = timing.on_slot = timing.late = timing.unrequested = timing.even = 0u;
         }
     }

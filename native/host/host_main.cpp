@@ -1866,6 +1866,10 @@ void apply_shipped_renderer_defaults() {
         {"GALAXY_VI_RENDER_FIFO_WAIT", "0"},
         {"GALAXY_WAIT_FOR_FRAME_LATENCY", "0"},
         {"GALAXY_XFB_MAX_PRESERVE_AGE", "30"},
+#if defined(NEBULA_HOST_SDL)
+        // The picture takes the display's shape, any shape (the Windows launcher sets it from its aspect setting).
+        {"GALAXY_EXPERIMENTAL_DYNAMIC_ASPECT", "1"},
+#endif
     };
     for (const auto& setting : kDefaults) {
         size_t length = 0;

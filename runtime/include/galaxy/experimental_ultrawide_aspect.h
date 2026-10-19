@@ -107,21 +107,24 @@ inline void experimental_latch_dynamic_aspect(int width, int height) noexcept {
 
 [[nodiscard]] inline std::optional<ExperimentalUltrawideAspect>
 make_experimental_ultrawide_aspect(double content_aspect) noexcept {
+    // Every shape: wider than 16:9 the view widens (Hor+), below 4:3 it keeps 4:3's width and grows taller (Vert+,
+    // display_native.c and CameraContext::getRenderFovy); beyond 32:9 or below 9:21 the picture keeps those shapes
+    // and the presentation fits it to the output.
     constexpr double kMaximumAspect = 32.0 / 9.0;
+    constexpr double kMinimumAspect = 9.0 / 21.0;
     constexpr double kWideLogicalWidth = 832.0;
-    if (!std::isfinite(content_aspect) ||
-        content_aspect < 4.0 / 3.0 - 1e-9 ||
-        content_aspect > kMaximumAspect) {
+    if (!std::isfinite(content_aspect) || content_aspect <= 0.0) {
         return std::nullopt;
     }
-    // Round to an even horizontal unit, matching RMGE01's 608/832 widths.
+    const double aspect = std::clamp(content_aspect, kMinimumAspect, kMaximumAspect);
+    // Round to an even horizontal unit, matching RMGE01's 608/832 widths (624 at 4:3 and narrower).
     const unsigned width = static_cast<unsigned>(
         std::lround(kWideLogicalWidth *
-                    (content_aspect / kWiiContentAspect) * 0.5)) * 2u;
+                    (std::max(aspect, 4.0 / 3.0) / kWiiContentAspect) * 0.5)) * 2u;
     if (width <= 608u || width > 1664u) {
         return std::nullopt;
     }
-    return ExperimentalUltrawideAspect{content_aspect, width};
+    return ExperimentalUltrawideAspect{aspect, width};
 }
 
 [[nodiscard]] inline std::optional<double>

@@ -61,7 +61,7 @@ void ParticleDrawExecutor::draw2D() const {
 
 void ParticleDrawExecutor::drawIndirect() const {
     if (_20) {
-        JPADrawInfo drawInfo(j3dSys.getViewMtx(), MR::getFovy(), MR::getAspect());
+        JPADrawInfo drawInfo(j3dSys.getViewMtx(), MR::getRenderFovy(), MR::getAspect());
         mHost->mEmitterManager->draw(&drawInfo, 2);
         GXSetClipMode(GX_CLIP_ENABLE);
     }

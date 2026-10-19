@@ -52,6 +52,9 @@ struct GxLayout {
     VkPipelineLayout layout = VK_NULL_HANDLE;
     std::array<VkDescriptorSetLayout, 3> sets{};
     VkRenderPass efb_pass = VK_NULL_HANDLE;
+    // The same pass clearing both targets as it begins (a whole-EFB copy-clear): nothing loaded from memory, which a
+    // tiled GPU otherwise reads back at the full internal resolution. Compatible with efb_pass (load ops only).
+    VkRenderPass efb_pass_clear = VK_NULL_HANDLE;
     VkFormat depth_format = VK_FORMAT_UNDEFINED;
     bool geometry_shaders = false;
     bool dual_source_blend = false;
@@ -255,7 +258,8 @@ private:
     [[nodiscard]] VkShaderModule utility_module(std::string_view hlsl, vk::ShaderStage stage, bool conversion);
 
     // Frame recording.
-    void begin_efb_pass();
+    // `clear`: begins with both targets cleared to it (efb_pass_clear).
+    void begin_efb_pass(const EfbClearValues* clear = nullptr);
     void end_efb_pass();
     void reset_gx_bindings() noexcept;
     [[nodiscard]] VkDescriptorSet allocate_frame_set(VkDescriptorSetLayout layout);
@@ -428,15 +432,16 @@ private:
     std::int64_t gpu_budget_window_qpc_ = 0;
     unsigned gpu_budget_over_windows_ = 0;
     PresentPacer present_pacer_;
-    // VK_GOOGLE_display_timing (Android): each frame is presented for a retrace slot after the latest retrace
-    // (host_window::present_target_ns), so it is shown one retrace period at the display's own vsync; the past
-    // presentation times report how many were shown at their slot ([present-timing], every 600 presents). The first
-    // frame the compositor shows after its slot moves every later one a slot further (`slots` 2): one retrace more
-    // latency for a cadence that never breaks.
+    // VK_GOOGLE_display_timing (Android), as Swappy paces: each frame gets the retrace slot after the previous
+    // frame's on the display's vsync grid (host_window::present_grid), two retraces after the latest retrace at
+    // first (one of pipelining) and later only when the frame itself is late, and asks for half a vsync before it,
+    // so the compositor shows it at that vsync for exactly one retrace period. The past presentation times report
+    // how many were ([present-timing], every 600 frames).
     struct PresentTiming {
         std::uint32_t next_id = 0;
-        unsigned slots = 1;
-        std::array<std::int64_t, 64> requested{};  // by presentID % 64
+        std::int64_t last_slot = 0;
+        std::int64_t vsync_ns = 0;  // the display's vsync interval (Choreographer)
+        std::array<std::int64_t, 64> requested{};  // each presentID's slot, by presentID % 64
         std::int64_t refresh_ns = 0;
         std::int64_t last_actual = 0;
         unsigned frames = 0;
@@ -447,6 +452,16 @@ private:
     };
     PresentTiming present_timing_;
     void report_present_timing();
+    // Every 600 frames ([vk-gpu]): the GPU's frame time (timestamps), and how often the EFB pass reopened (each
+    // reopening loads and stores the whole EFB on a tiled GPU) and the EFB was copied.
+    struct GpuWindow {
+        double ms = 0.0;
+        double max_ms = 0.0;
+        unsigned frames = 0;
+        std::uint64_t passes = 0;
+        std::uint64_t copies = 0;
+    };
+    GpuWindow gpu_window_;
     struct PresentStats {
         std::int64_t window_start_qpc = 0;
         std::int64_t last_present_qpc = 0;

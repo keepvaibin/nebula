@@ -110,7 +110,7 @@ void StarPointerDirector::setGameSceneCameraMtx() {
     if (mIsUpdateTransHolder) {
         mTransHolder->mViewMtx.setInline(MR::getCameraViewMtx());
         mTransHolder->mProjMtx.setInline(MR::getCameraProjectionMtx());
-        mTransHolder->mFovy = MR::getFovy();
+        mTransHolder->mFovy = MR::getRenderFovy();
     }
 }
 

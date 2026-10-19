@@ -944,6 +944,14 @@ VkPipeline PipelineCacheVk::build(const Entry& entry) {
     if (vs == VK_NULL_HANDLE || ps == VK_NULL_HANDLE) {
         return VK_NULL_HANDLE;  // our compile failed (module_for logged it)
     }
+    {
+        std::lock_guard<std::mutex> lock(compat_mutex_);
+        if (rejected_modules_.contains(module_hash(vs_hlsl, vk::ShaderStage::Vertex, false)) ||
+            rejected_modules_.contains(module_hash(ps_hlsl, vk::ShaderStage::Fragment, dual_source))) {
+            refused_keys_.insert(entry.key.hash());
+            return VK_NULL_HANDLE;  // a shader this driver rejects on its own: no form of the pipeline can work
+        }
+    }
     VkShaderModule ps_single = VK_NULL_HANDLE;
     const auto make = [&](std::uint32_t compat, VkResult& result) {
         VkShaderModule pixel = ps;
@@ -994,6 +1002,8 @@ VkPipeline PipelineCacheVk::build(const Entry& entry) {
         }
     }
     if (pipeline == VK_NULL_HANDLE) {
+        classify_refusal(rs, vs_hlsl, ps_hlsl, dual_source, export_depth,
+                         device_compat_.load(std::memory_order_acquire) & applicable);
         {
             std::lock_guard<std::mutex> lock(compat_mutex_);
             refused_keys_.insert(key_hash);
@@ -1008,6 +1018,55 @@ VkPipeline PipelineCacheVk::build(const Entry& entry) {
     }
     pso_compiles_.fetch_add(1u, std::memory_order_relaxed);
     return pipeline;
+}
+
+void PipelineCacheVk::classify_refusal(const RenderStateKey& rs, const std::string& vs_hlsl,
+                                       const std::string& ps_hlsl, bool dual_source, bool export_depth,
+                                       std::uint32_t compat) {
+    const std::uint64_t vs_hash = module_hash(vs_hlsl, vk::ShaderStage::Vertex, false);
+    const std::uint64_t ps_hash = module_hash(ps_hlsl, vk::ShaderStage::Fragment, dual_source);
+    {
+        std::lock_guard<std::mutex> lock(compat_mutex_);
+        if (rejected_modules_.contains(vs_hash) || rejected_modules_.contains(ps_hash)) {
+            return;
+        }
+    }
+    // diagnose_uber's simple pair: each shader with a partner every driver takes.
+    const ShaderGenerator generator = generator_for(generator_bits_.load(std::memory_order_acquire));
+    PixelShaderKey simple_key{};
+    if (dual_source) {
+        simple_key.flags |= 0x80u;
+    }
+    const VkShaderModule simple_vs = module_for(generator.generate_vs(diagnosis_vs_key()), vk::ShaderStage::Vertex, false);
+    const VkShaderModule simple_ps = module_for(generator.generate_ps(simple_key), vk::ShaderStage::Fragment, dual_source);
+    const VkShaderModule vs = module_for(vs_hlsl, vk::ShaderStage::Vertex, false);
+    const VkShaderModule ps = module_for(ps_hlsl, vk::ShaderStage::Fragment, dual_source);
+    VkResult vs_result = VK_SUCCESS;
+    VkResult ps_result = VK_SUCCESS;
+    if (const VkPipeline p = create_pipeline(rs, vs, simple_ps, dual_source, false, compat, vs_result)) {
+        vkDestroyPipeline(device_, p, nullptr);
+    }
+    if (const VkPipeline p = create_pipeline(rs, simple_vs, ps, dual_source, export_depth, compat, ps_result)) {
+        vkDestroyPipeline(device_, p, nullptr);
+    }
+    // Out of memory is no verdict on a shader.
+    const auto rejected = [](VkResult r) {
+        return r != VK_SUCCESS && r != VK_ERROR_OUT_OF_HOST_MEMORY && r != VK_ERROR_OUT_OF_DEVICE_MEMORY;
+    };
+    std::lock_guard<std::mutex> lock(compat_mutex_);
+    if (rejected(vs_result)) {
+        rejected_modules_.insert(vs_hash);
+    }
+    if (rejected(ps_result)) {
+        rejected_modules_.insert(ps_hash);
+    }
+    static std::atomic<int> reported{0};
+    if (reported.fetch_add(1, std::memory_order_relaxed) < 8) {
+        std::fprintf(stderr, "[vk-compat] the refused pipeline's vertex shader with a simple pixel shader: %s (%d); its "
+                     "pixel shader with a simple vertex shader: %s (%d)\n", rejected(vs_result) ? "refused" : "accepted",
+                     static_cast<int>(vs_result), rejected(ps_result) ? "refused" : "accepted",
+                     static_cast<int>(ps_result));
+    }
 }
 
 void PipelineCacheVk::compile_uber_shaders() noexcept {

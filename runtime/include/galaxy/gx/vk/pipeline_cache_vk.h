@@ -229,6 +229,13 @@ private:
     // (uber_hash) it crashed on.
     std::unordered_set<std::uint64_t> refused_keys_;
     std::unordered_set<std::uint64_t> crashed_keys_;
+    // Shader modules (by HLSL hash) the driver refuses with the simplest partner: every later pipeline using one is
+    // refused at once instead of trying its fallbacks (each a full driver compile, on the render thread at a first
+    // draw). Their keys are recorded as refused; the modules themselves only this session.
+    std::unordered_set<std::uint64_t> rejected_modules_;
+    // Which of a refused pipeline's shaders the driver rejects on its own (`rejected_modules_`).
+    void classify_refusal(const RenderStateKey& rs, const std::string& vs_hlsl, const std::string& ps_hlsl,
+                          bool dual_source, bool export_depth, std::uint32_t compat);
     std::unordered_set<std::uint64_t> crashed_uber_;
     // Uber pixel-shader variants (bit n: variant n) the driver accepts in no form: their keys are built specialised,
     // at once, when nothing has built them yet (Adreno 840 512.842: "Failed to link shaders").
