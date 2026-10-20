@@ -1735,6 +1735,11 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
                      "                }\n",
                      n, spot ? "true" : "false");
             }
+            // Lit by the game's player light rig (flags bit 7, GxBackend::rt_player_rig_draw): its level, not its hue
+            // (the prologue's night rig turned Mario's gloves and skin cyan; the traced light gives the colour).
+            s << "                if ((ppl_flags & 128u) != 0u) {\n"
+                 "                    enh_avg = dot(enh_avg, float3(0.2126, 0.7152, 0.0722)).xxx;\n"
+                 "                }\n";
             // De-baked (GxVsConstants flags bit 4): lit at its program's neutral light (bits 8-15), not the art's full
             // light, in the full light's hue: the ambient register or the vertices often hold the object's own colour
             // (Toy Time's toys and robot went white under a grey light).

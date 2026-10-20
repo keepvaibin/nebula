@@ -322,7 +322,9 @@ public:
     [[nodiscard]] bool rt_engine() const noexcept { return ray_tracer_.engine_active(); }
     [[nodiscard]] bool rt_log_seq() const noexcept { return ray_tracer_.log_seq(); }
     [[nodiscard]] bool rt_ab_original() const noexcept { return ray_tracer_.ab_original(); }
+    [[nodiscard]] bool rt_scene_untraced() const noexcept { return ray_tracer_.scene_untraced(); }
     void rt_set_ab_original(bool original) noexcept { ray_tracer_.set_ab_original(original); }
+    void rt_set_scene_untraced(bool untraced) noexcept { ray_tracer_.set_scene_untraced(untraced); }
     void rt_set_presents(std::uint64_t presents) noexcept { ray_tracer_.set_presents(presents); }
     [[nodiscard]] bool rt_reflections_active() const noexcept { return ray_tracer_.reflections_active(); }
     [[nodiscard]] bool rt_sun_direction(std::array<float, 3>& world) const noexcept {

@@ -144,7 +144,13 @@ public:
     // The game camera's view matrix (3x4 rows, world to eye) of the open scene; null when the
     // scene has none. The lighting history follows it from frame to frame.
     void set_camera(const std::array<float, 12>* view) noexcept;
-    [[nodiscard]] bool lighting_active() const noexcept { return ready_ && lighting_enabled_ && !ab_original_; }
+    [[nodiscard]] bool lighting_active() const noexcept {
+        return ready_ && lighting_enabled_ && !ab_original_ && !scene_untraced_;
+    }
+    // A scene shown as the game draws it under ray tracing (the file select: no stage, no world, its own menu
+    // lights tinting the heads; traced, Mario's skin went white).
+    void set_scene_untraced(bool untraced) noexcept { scene_untraced_ = untraced; }
+    [[nodiscard]] bool scene_untraced() const noexcept { return scene_untraced_; }
     // The traced light is in the game's units (GALAXY_RT_PHYSICAL): lit draws show their full-light colour.
     [[nodiscard]] bool physical_active() const noexcept { return lighting_active() && physical_active_; }
     // GALAXY_RT_AB=1 (test runs): every other present shows the game's own picture (no traced
@@ -1139,6 +1145,7 @@ private:
     bool lighting_enabled_ = true;
     bool ab_ = false;               // GALAXY_RT_AB
     bool ab_original_ = false;
+    bool scene_untraced_ = false;
     bool show_lighting_ = false;
     std::uint32_t show_term_ = 0;   // GALAXY_RT_VIEW=2 sun, 3 sky light
     std::uint32_t view_cycle_ = 0;  // GALAXY_RT_VIEW_CYCLE: frames per view, 0 off

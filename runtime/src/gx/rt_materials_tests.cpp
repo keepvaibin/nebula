@@ -144,9 +144,11 @@ bool stage_suns() {
         "EggStarGalaxy\tgame\t\t\t\t1\t0.95\t0.85\t1.2\t3\t0.8\tBrightSun\n"
         "HoneyBeeKingdomGalaxy\ttable\t0\t3\t4\t\t\t\t\t\t\tsky sun\n"
         "BadGalaxy\ttable\t0\t0\t0\t\t\t\t9\t\t\tno direction\n"
-        "HellProminenceGalaxy\tnone\t\t\t\t\t\t\t\t\t\tlava\n");
+        "HellProminenceGalaxy\tnone\t\t\t\t\t\t\t\t\t\tlava\n"
+        "PeachCastleGardenGalaxy\tmoon\t3\t4\t0\t0.78\t0.85\t1\t0.4\t1.5\t\tnight\n"
+        "MoonlessGalaxy\tmoon\t\t\t\t\t\t\t\t\t\tno direction\n");
     galaxy::gx::RtStageSunTable table;
-    bool ok = expect(table.read(file) == 4u, "four suns");
+    bool ok = expect(table.read(file) == 6u, "six suns");
     using Source = galaxy::gx::RtStageSun::Source;
     const auto* egg = table.find("EggStarGalaxy");
     ok &= expect(egg != nullptr && egg->source == Source::Game && egg->has_color && near(egg->color[2], 0.85f) &&
@@ -161,6 +163,12 @@ bool stage_suns() {
                  "no direction: the game's sun; strength clamped");
     const auto* lava = table.find("HellProminenceGalaxy");
     ok &= expect(lava != nullptr && lava->source == Source::None, "no sun");
+    const auto* moon = table.find("PeachCastleGardenGalaxy");
+    ok &= expect(moon != nullptr && moon->source == Source::Moon && near(moon->direction[0], 0.6f) &&
+                     near(moon->direction[1], 0.8f) && near(moon->strength, 0.4f) && near(moon->size, 1.5f),
+                 "a moon, its direction normalised");
+    const auto* moonless = table.find("MoonlessGalaxy");
+    ok &= expect(moonless != nullptr && moonless->source == Source::Game, "a moon without a direction: the game's");
     ok &= expect(table.find("Missing") == nullptr, "no row");
     ok &= expect(egg->day < 0.0f, "no day column: by the sky");
     std::istringstream with_day(

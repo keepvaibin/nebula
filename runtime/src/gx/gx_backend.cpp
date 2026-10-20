@@ -7206,7 +7206,7 @@ void GxBackend::build_rt_tev(RtTevMaterial& tev, RtTevStage* stages_out, float f
         tev.header |= (color.material_from_vertex ? 1u : 0u) << (24u + 2u * c);
         tev.header |= (alpha.material_from_vertex ? 1u : 0u) << (25u + 2u * c);
         const std::uint32_t ambient = state_.xf(static_cast<std::uint16_t>(xf::kAmbientColorBase + c));
-        std::uint32_t light = 0u;
+        float sums[4]{};
         for (unsigned k = 0; k < 4u; ++k) {
             const XfChannelCtrl& ctrl = k < 3u ? color : alpha;
             const unsigned shift = 24u - 8u * k;
@@ -7220,7 +7220,16 @@ void GxBackend::build_rt_tev(RtTevMaterial& tev, RtTevStage* stages_out, float f
                     }
                 }
             }
-            light |= static_cast<std::uint32_t>(std::lround(std::clamp(sum, 0.0f, 1.0f) * 255.0f)) << shift;
+            sums[k] = sum;
+        }
+        // The player's light rig under physical light: its level, not its hue (rt_player_rig_draw).
+        if (c == 0u && (enhanced_ps_flags_ & kEnhancedRtPhysical) != 0u && rt_player_rig_draw()) {
+            const float level = 0.2126f * sums[0] + 0.7152f * sums[1] + 0.0722f * sums[2];
+            sums[0] = sums[1] = sums[2] = level;
+        }
+        std::uint32_t light = 0u;
+        for (unsigned k = 0; k < 4u; ++k) {
+            light |= static_cast<std::uint32_t>(std::lround(std::clamp(sums[k], 0.0f, 1.0f) * 255.0f)) << (24u - 8u * k);
         }
         tev.channel[c * 2u + 1u] = light;
     }
@@ -7835,6 +7844,7 @@ void GxBackend::note_rt_stage() {
                      : sun->source == RtStageSun::Source::Table ? "table"
                      : sun->source == RtStageSun::Source::None  ? "none"
                      : sun->source == RtStageSun::Source::Core  ? "core"
+                     : sun->source == RtStageSun::Source::Moon  ? "moon"
                                                                 : "game");
     }
 }
@@ -8603,6 +8613,19 @@ void GxBackend::aim_rt_scene_lights(const std::array<float, 12>* view) {
     if (view != nullptr) {
         rt_scene_view_ = *view;
     }
+    {
+        // The player's light rig (LightFunction::loadActorLightInfo: its ambient, lights 0 and 1) as XF colour words.
+        GameAreaLight rig{};
+        rt_player_rig_known_ = game_area_light(GameAreaLightKind::Player, rig, 2000u);
+        const auto word = [](const std::array<float, 3>& rgb) {
+            std::uint32_t w = 0u;
+            for (unsigned k = 0; k < 3u; ++k) {
+                w |= static_cast<std::uint32_t>(std::lround(std::clamp(rgb[k], 0.0f, 1.0f) * 255.0f)) << (24u - 8u * k);
+            }
+            return w;
+        };
+        rt_player_rig_ = {word(rig.ambient), word(rig.lights[0].color), word(rig.lights[1].color)};
+    }
     // The game's sun holds from its first arrival after a camera cut to the next cut (a stage
     // load cuts): it stops arriving while the game pauses BrightSun, its direction stays.
     const std::uint64_t sun_updates = game_sun_updates();
@@ -8628,8 +8651,9 @@ void GxBackend::aim_rt_scene_lights(const std::array<float, 12>* view) {
     const RtStageSun* const stage_sun = renderer_.rt_stage_sun();
     if (stage_sun != nullptr && stage_sun->source == RtStageSun::Source::None) {
         // The stage has no sun or sky key (rt-suns.tsv): its own lights carry it.
-    } else if (keying && stage_sun != nullptr && stage_sun->source == RtStageSun::Source::Table) {
-        // The stage's sun where its sky shows it (rt-suns.tsv): lit as the sky's own sun.
+    } else if (keying && stage_sun != nullptr &&
+               (stage_sun->source == RtStageSun::Source::Table || stage_sun->source == RtStageSun::Source::Moon)) {
+        // The stage's sun where its sky shows it, or its moon (rt-suns.tsv): lit as the sky's own sun.
         source = 2u;
         target = {stage_sun->direction[0], stage_sun->direction[1], stage_sun->direction[2]};
         rt_light_key_color_ = 0xFFF6E600u;
@@ -8773,6 +8797,23 @@ void GxBackend::aim_rt_scene_lights(const std::array<float, 12>* view) {
                      static_cast<unsigned long long>(trace_cycles()),
                      static_cast<long long>(ns.count()), rt_light_blend_);
     }
+}
+
+// A draw lit by the game's player light rig: its channel 0 ambient and lights 0 and 1 hold the rig's colours. The
+// rig's hue is the game's character grading (the prologue's night: a cyan key, a blue fill and a blue ambient on
+// Mario); under physical light the traced light gives the colour, the rig its level only (shader_gen, fill_rt_tev).
+bool GxBackend::rt_player_rig_draw() const noexcept {
+    if (!rt_player_rig_known_ || state_.gen_mode().num_color_chans == 0u) {
+        return false;
+    }
+    const XfChannelCtrl color = state_.channel_ctrl(0u);
+    if (!color.lighting_enable || (color.light_mask & 3u) != 3u) {
+        return false;
+    }
+    const auto rgb = [this](std::uint16_t address) { return state_.xf(address) & 0xFFFFFF00u; };
+    return rgb(xf::kAmbientColorBase) == rt_player_rig_[0] &&
+           rgb(static_cast<std::uint16_t>(xf::kLightsBase + 3u)) == rt_player_rig_[1] &&
+           rgb(static_cast<std::uint16_t>(xf::kLightsBase + 16u + 3u)) == rt_player_rig_[2];
 }
 
 // The lights a lit scene draw has moved: its follow-camera lights 0 and 1 that still hold the
@@ -8928,6 +8969,13 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
             scene_stage_known_ = true;
             begin_rt_stage();
         }
+        // The file select is the game's own picture: no stage light or world to trace, and its menu lights colour the
+        // heads (owner: traced, it looked horrible; Mario's skin went white).
+        {
+            static constexpr char kFileSelect[] = "FileSelect";
+            renderer_.rt_set_scene_untraced(scene_stage_known_ &&
+                                            std::strncmp(scene_stage_.data(), kFileSelect, sizeof(kFileSelect)) == 0);
+        }
         // The enhanced sky's up for the scene's draws (the view's up without a player).
         const std::uint32_t known = sky_up_known ? 1u : 0u;
         if (cpu_vs_constants_.sky_up != sky_up || cpu_vs_constants_.sky_up_known != known) {
@@ -8950,7 +8998,7 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
         renderer_.rt_set_presents(g_snapshot_presents + 1u);
         rt_phase_ = 0xFFu;
         rt_view_set_ = false;
-        rt_scene_traced_ = !renderer_.rt_active();
+        rt_scene_traced_ = !renderer_.rt_active() || renderer_.rt_scene_untraced();
         rt_sky_buffer_ = false;
         rt_sun_buffer_ = false;
         rt_fake_shadow_list_ = false;
@@ -14299,8 +14347,10 @@ gpu::Pipeline* GxBackend::flush_draw_state(
                 }
             }
         }
+        // Bit 7: lit by the game's player light rig (rt_player_rig_draw): its level, not its hue.
+        const bool rig = triangles && (enhanced_ps_flags_ & kEnhancedRtPhysical) != 0u && rt_player_rig_draw();
         const std::uint32_t debake = ((state & 3u) << 2u) | (((state >> 2u) & 3u) << 4u) | (state & 0xFFFF00u) |
-                                     (fit ? 64u : 0u);
+                                     (fit ? 64u : 0u) | (rig ? 128u : 0u);
         bool changed = cpu_vs_constants_.debake != debake;
         if (fit && (std::memcmp(cpu_vs_constants_.debake_sh, debake_fit_sh_, sizeof(debake_fit_sh_)) != 0 ||
                     std::memcmp(cpu_vs_constants_.debake_peak, debake_fit_peak_, sizeof(debake_fit_peak_)) != 0)) {

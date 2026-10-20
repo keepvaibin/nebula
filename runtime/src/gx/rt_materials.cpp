@@ -450,8 +450,8 @@ std::size_t RtStageSunTable::read(std::istream& in) {
         float d[3]{};
         const bool direction = number(row, x_col, d[0]) && number(row, y_col, d[1]) && number(row, z_col, d[2]);
         const float length = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
-        if (source == "table" && direction && length > 1e-4f) {
-            sun.source = RtStageSun::Source::Table;
+        if ((source == "table" || source == "moon") && direction && length > 1e-4f) {
+            sun.source = source == "moon" ? RtStageSun::Source::Moon : RtStageSun::Source::Table;
             for (unsigned i = 0; i < 3u; ++i) sun.direction[i] = d[i] / length;
         } else if (source == "none") {
             sun.source = RtStageSun::Source::None;

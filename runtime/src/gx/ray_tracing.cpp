@@ -3464,11 +3464,16 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         // The textures' de-light maps (GBufferCS's relief, the hits' albedo): their relief height (on: above 0).
         c.up[3] = delight_ && delight_pso_ ? std::max(delight_relief_, 1e-3f) : 0.0f;
         // From the sun the game shows where it shows one (user: Dusty Dune's sun shone from the top left while the
-        // shadows followed the key light, a lighting rig for the characters, and the picture looked untraced); else
-        // from the key light's position.
-        const std::array<float, 3>& key = area.lights[0].position;
+        // shadows followed the key light, a lighting rig for the characters, and the picture looked untraced); a night
+        // stage's moon (rt-suns `moon`) from where the table puts it; else from the key light's position. The
+        // prologue's moon row took the key's position (700000, 700000, 700000) whatever direction it gave (b106 moon
+        // a/b: the same lamp-post shadow either way).
+        const bool table_moon = stage_sun_ != nullptr && stage_sun_->source == RtStageSun::Source::Moon && !sun_override_;
+        const std::array<float, 3>& key =
+            table_moon ? std::array<float, 3>{stage_sun_->direction[0], stage_sun_->direction[1], stage_sun_->direction[2]}
+                       : area.lights[0].position;
         const std::array<float, 3> eye = visible_sun ? std::array<float, 3>{c.sun[0], c.sun[1], c.sun[2]} :
-            area.lights[0].follows_camera
+            area.lights[0].follows_camera && !table_moon
                 ? key
                 : std::array<float, 3>{camera_[0] * key[0] + camera_[1] * key[1] + camera_[2] * key[2],
                                        camera_[4] * key[0] + camera_[5] * key[1] + camera_[6] * key[2],
@@ -3524,8 +3529,12 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
             // key (a world-fixed light at 700000, 700000, 700000, the same in every galaxy) is no sun there: traced as
             // one it threw daylight shadows (the telescope ring's across the Fountain dome, user 2026-10-19). It keeps
             // the table's `strength` share as moonlight in the table's colour; the core carries the light (its ball a
-            // sphere light, below). The camera stays exposed for the stage's full light.
-            if (stage_sun_ != nullptr && stage_sun_->source == RtStageSun::Source::Core && !sun_override_) {
+            // sphere light, below). The camera stays exposed for the stage's full light. A night stage's moon (rt-suns
+            // `moon`) the same: its key a moon, the night kept (the prologue's full key lit it as day: owner, too
+            // bright for night; without one Mario stood unlit and shadowless).
+            if (stage_sun_ != nullptr &&
+                (stage_sun_->source == RtStageSun::Source::Core || stage_sun_->source == RtStageSun::Source::Moon) &&
+                !sun_override_) {
                 const float moon = luma(c.sun_light) * std::min(stage_sun_->strength, 1.0f);
                 const float tint = stage_sun_->has_color ? std::max(luma(stage_sun_->color), 1e-3f) : 0.0f;
                 const float full = std::max(luma(c.sun_light), 1e-4f);

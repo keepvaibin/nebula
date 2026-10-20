@@ -1020,6 +1020,11 @@ private:
     std::uint32_t rt_world_key_count_ = 0;
     // The stage's last world key (none: no draws), until a stage load.
     RtWorldKey rt_world_held_{};
+    // The game's player light rig as its draws load it (XF words, RGB): ambient, lights 0 and 1; per scene
+    // (aim_rt_scene_lights). rt_player_rig_draw: the draw is lit by it.
+    std::array<std::uint32_t, 3> rt_player_rig_{};
+    bool rt_player_rig_known_ = false;
+    [[nodiscard]] bool rt_player_rig_draw() const noexcept;
     void note_rt_world_key() noexcept;
     // A camera cut since the last scene's aim (and the most objects one reported); the game's sun
     // count at the last cut, and whether one arrived since (the ray tracer holds it).

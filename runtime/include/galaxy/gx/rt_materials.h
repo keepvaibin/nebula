@@ -133,12 +133,13 @@ private:
 // sky shows: as without a row), table (x y z: the world direction towards the sun, where the sky
 // shows it), none (no sun or sky key: the stage's own lights carry it), core (the Comet Observatory: its star core is the
 // light, a sphere of radiance `core` (relative to a white surface under the stage's full light); the key keeps the
-// `strength` share as moonlight in r g b). r g b: its colour (0-1); strength: its light relative to the default; size: the disc's
+// `strength` share as moonlight in r g b), moon (a night stage's moon: x y z its world direction, the `strength` share
+// of the stage's key in r g b, the camera exposed for the stage's full light). r g b: its colour (0-1); strength: its light relative to the default; size: the disc's
 // radius in degrees; shafts: the light shafts' strength (GALAXY_RT_POST_SHAFTS); day: 1 the day model (the
 // art as drawn with modern shadows), 0 the night model (lit by its lights), between a blend; empty: by the
 // brightness of its sky. Empty fields keep the defaults.
 struct RtStageSun {
-    enum class Source : std::uint8_t { Game = 0, Table = 1, None = 2, Core = 3 };
+    enum class Source : std::uint8_t { Game = 0, Table = 1, None = 2, Core = 3, Moon = 4 };
     Source source = Source::Game;
     float direction[3] = {0.0f, 1.0f, 0.0f};
     bool has_color = false;
