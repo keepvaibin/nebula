@@ -1197,6 +1197,32 @@ void svc_object_name(void*, uint32_t id, const char* name) {
 #endif
 }
 
+float svc_light_reach(void*, const char* model, float radius) {
+#if defined(NEBULA_HOST_RENDERER)
+    return galaxy::gx::rt_light_reach(model, radius);
+#else
+    (void)model;
+    (void)radius;
+    return 0.0f;
+#endif
+}
+
+int svc_traced_sun(void*, float* direction) {
+#if defined(NEBULA_HOST_RENDERER)
+    std::array<float, 3> sun{};
+    if (direction == nullptr || !galaxy::gx::traced_sun(sun, 500u)) {
+        return 0;
+    }
+    direction[0] = sun[0];
+    direction[1] = sun[1];
+    direction[2] = sun[2];
+    return 1;
+#else
+    (void)direction;
+    return 0;
+#endif
+}
+
 void svc_gx_scene_marker(void*, uint32_t marker, const float* view) {
     if (marker == NEBULA_SCENE_3D_BEGIN) {
         gSceneBegins.fetch_add(1, std::memory_order_relaxed);
@@ -2136,6 +2162,8 @@ int main(int argc, char** argv) {
     services.game_light = svc_game_light;
     services.game_stage = svc_game_stage;
     services.object_name = svc_object_name;
+    services.light_reach = svc_light_reach;
+    services.traced_sun = svc_traced_sun;
 #if defined(NEBULA_HOST_RENDERER)
     // Every aspect follows the output's shape through the live aspect path, as v1.0.1 sets it; explicit aspect
     // variables (tests) are kept. Before the renderer starts: it reads the choice once.

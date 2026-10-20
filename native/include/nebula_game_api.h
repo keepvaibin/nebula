@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 12u
+#define NEBULA_GAME_API_VERSION 13u
 
 /* A physical range of the game's memory and where it is in the host process: what the GPU's addresses resolve to. */
 typedef struct NebulaGameMemoryRegion {
@@ -280,6 +280,12 @@ typedef struct NebulaHostServices {
     /* A game object's name (NameObj::mName, Shift-JIS as the game spells it) when it is made or renamed; `id` as the
        host markers name the object (__NebulaObjectId). */
     void (*object_name)(void* user, uint32_t id, const char* name);
+    /* While NEBULA_OPTION_RT_SHADOW_CASTERS is 1: how far (world units) the traced light of a model (its resource name,
+       MR::getModelResName) reaches from a ball of `radius` around it; 0 when the model is no light source. */
+    float (*light_reach)(void* user, const char* model, float radius);
+    /* While NEBULA_OPTION_RT_SHADOW_CASTERS is 1: the world direction towards the sun the ray tracer lights the scene
+       from (3 floats, unit length): 1, or 0 without one. */
+    int (*traced_sun)(void* user, float* direction);
 } NebulaHostServices;
 
 enum {

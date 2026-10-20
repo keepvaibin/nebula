@@ -4,6 +4,7 @@
 #include "Game/LiveActor/ViewGroupCtrl.hpp"
 #ifdef TARGET_PC
 #include "Game/NameObj/NameObjExecuteHolder.hpp"
+#include <revolution/os.h>
 #endif
 #include "Game/Util.hpp"
 
@@ -17,6 +18,7 @@ ClippingActorInfo::ClippingActorInfo(LiveActor* pActor) {
     _14 = 0;
 #ifdef TARGET_PC
     mShadowDrawn = false;
+    mLightReach = -1.0f;
 #endif
     setTypeToSphere(300.0f, 0);
 }
@@ -50,8 +52,16 @@ bool ClippingActorInfo::isJudgedToClip() const {
 #ifdef TARGET_PC
 void ClippingActorInfo::judgeShadowDraw() {
     const s32 level = _14->_0 == 1 ? 0 : mFarClipLevel;
-    const bool keep = MR::isClipped(mActor) && !MR::isDead(mActor) && !MR::isNoEntryDrawBuffer(mActor) &&
-                      MR::getClippingJudge()->isShadowCasterInView(*_4, _8, level);
+    bool keep = false;
+    if (MR::isClipped(mActor) && !MR::isDead(mActor) && !MR::isNoEntryDrawBuffer(mActor)) {
+        const ClippingJudge* judge = MR::getClippingJudge();
+        if (mLightReach < 0.0f && judge->isLightSourcesWanted()) {
+            // Asked once, while ray-traced light is on: the reach of the model's light (0: none).
+            mLightReach = mActor->mModelManager != nullptr ? __NebulaLightReach(MR::getModelResName(mActor), _8) : 0.0f;
+        }
+        keep = judge->isShadowCasterInView(*_4, _8, level) ||
+               (mLightReach > 0.0f && judge->isLightInView(*_4, _8 + mLightReach));
+    }
     if (keep == mShadowDrawn) {
         return;
     }

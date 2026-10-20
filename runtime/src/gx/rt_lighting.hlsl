@@ -82,7 +82,7 @@ cbuffer RtLight : register(b0)
     uint g_reference_bounces;   // the reference's bounces (ReferenceCS)
     float g_reference_exposure; // its exposure over the geometric mean of its light
     uint g_reference_reset;     // 1: it starts again this frame (the camera moved)
-    uint g_reference_pad;
+    uint g_emit_scene;          // the scene's emitting triangles among g_tev_info.z (the rest: glow emitters)
     float4 g_history_projection;   // the previous samples' projection (their frame's jitter)
     float4 g_picture_projection;   // the previous picture's
     float4 g_sky_radiance;         // kPhysicalFlag: the sky's radiance, the stage's ambient in linear light (rgb)
@@ -154,6 +154,15 @@ RWStructuredBuffer<uint2> g_pixels : register(u7);
 // radiance (linear) and power; at 1 + 4 kEmitTriangles + i the running power (EmitScanCS).
 ByteAddressBuffer g_emit_tris : register(t24);
 static const uint kEmitTriangles = 65536u;   // ray_tracing.cpp kEmitTriangles
+// Glow light sources (GlowEmitterCS): the table's glow draws (additive: the Observatory's star lights and walkway lamps,
+// launch stars) drawn after the trace, their triangles in world space after the scene's emitters and lit from the next
+// frame. ray_tracing.cpp kGlowEmitters.
+static const uint kGlowEmitters = 16384u;
+// g_emit_tris (float4 elements): the header; per scene emitter four (EmitTriangleCS); the running power, the scene's
+// then the glows'; per glow emitter four in world space; the glow emitters' power.
+static const uint kEmitRunning = 1u + 4u * kEmitTriangles;
+static const uint kGlowElements = kEmitRunning + kEmitTriangles + kGlowEmitters;
+static const uint kGlowPowers = kGlowElements + 4u * kGlowEmitters;
 static const uint kSkyMapSize = 64u;
 static const uint kSkyLayers = 8u;     // the sky's layers a probe ray composites, at most
 
@@ -186,6 +195,16 @@ static const uint kStarSlots = 8u;
 // cleared per capture), then the stars' colour over time, rgb (float) and known (SkyStateCS).
 static const uint kStarSums = 64u;
 static const uint kStarColour = kStarSums + kStarSlots * 16u;
+// Physical light: the eye's adaptation (ray_tracing.cpp kPictureSumsBytes): its factor and known (kept), the traced
+// light's log2 sum (x 256, signed) and count over the surfaces GlowBaseCS samples (cleared by SkyStateCS).
+static const uint kAdaptation = kStarColour + 16u;
+// A scene lit at this share of the stage's full light or more (the surfaces' geometric mean) is exposed as the stage's
+// light sets it; a dimmer one brightens by the square root of the ratio (vision adapts partly: brightness goes about as
+// the square root of luminance, Stevens 1957), at most 4 times (two stops). A sunlit view's surfaces (open ground,
+// walls, shade) average about a fifth of the full light: Good Egg measured 0.21 (b27, through the film shoulder), so day stages keep their
+// exposure; the stage's own dimness is the static exposure's (physical_exposure).
+static const float kAdaptationReference = 0.2f;
+static const float kAdaptationMost = 4.0f;
 // Scene instance masks (ray_tracing.cpp kSceneMask): the frame's geometry. The late geometry (instance 1:
 // drawn after the trace, Rosalina) has no records in g_positions or g_surfaces: shadow, sky and reflection
 // rays meet it as an occluder.
@@ -530,7 +549,8 @@ cbuffer RtCapture : register(b0)
     float c_split;           // GALAXY_RT_SPLIT: pixels left of it kept the game's own colour
     float c_surface_gain;    // a glowing surface's light per unit of colour and eye-space area
     float c_sky_distance;    // farther surfaces are the sky (backdrops)
-    float c_exposure_day;    // the mean lighting the exposure holds under a bright sky
+    float c_exposure_day;    // the mean lighting the exposure holds under a bright sky; physical (c_exposure bit 3):
+                             // the camera's exposure for the stage's light before the eye's adaptation
     float4 c_projection;
     float4 c_to_world[3];    // eye to world
     float c_exposure_night;  // ... under a black sky
@@ -816,6 +836,20 @@ void SkyStateCS()
     } else if ((c_exposure & 8u) != 0u) {
         // Physical (bit 3): the exposure is the camera's own (physical_exposure); the measurement stays for [rt-emit].
         c_sums.Store2(48u, uint2(asuint(1.0f), 0u));
+        // The eye's adaptation: the surfaces' mean light in log2 (their geometric mean, which a few lamps or a dark
+        // corner do not sway) against kAdaptationReference; eased a tenth of a second's worth a frame (about a second
+        // to settle), started over with a new stage.
+        const uint count = c_sums.Load(kAdaptation + 12u);
+        const float mean = count != 0u ? exp2(float(asint(c_sums.Load(kAdaptation + 8u))) / (256.0f * float(count))) : 0.0f;
+        c_sums.Store2(kAdaptation + 8u, uint2(0u, 0u));
+        if ((c_exposure & 3u) == 2u) {
+            c_sums.Store2(kAdaptation, uint2(asuint(1.0f), 0u));
+        } else if (count * 50u > grid) {
+            const float target = clamp(rsqrt(max(mean, 1e-4f) / kAdaptationReference), 1.0f, kAdaptationMost);
+            const bool known = c_sums.Load(kAdaptation + 4u) != 0u;
+            const float current = known ? asfloat(c_sums.Load(kAdaptation)) : target;
+            c_sums.Store2(kAdaptation, uint2(asuint(current * pow(target / current, 0.02f)), 1u));
+        }
     } else if (measured.z * 50u > grid && measured.y != 0u) {
         const float ratio = float(measured.x) / float(measured.y);
         const float day = c_sums.Load(36u) != 0u ? saturate(asfloat(c_sums.Load(32u)) / c_daylight) : 1.0f;
@@ -837,6 +871,20 @@ void GlowBaseCS(uint3 id : SV_DispatchThreadID)
         return;
     }
     c_glow[id.y * c_sample_size.x + id.x] = pack_r11g11b10(block_color(id.xy));
+    // Physical: the light the surfaces receive (the lighting's result over the camera's exposure and the eye's
+    // adaptation, in the stage's full light), one sample in 8 x 8 on a surface, for the eye's adaptation (SkyStateCS).
+    if ((c_exposure & 8u) != 0u && c_exposure_day > 0.0f && ((id.x | id.y) & 7u) == 4u) {
+        const uint4 f = c_final[id.y * c_sample_size.x + id.x];
+        const int2 q = int2(min(id.xy * c_factor, c_target_size - 1u));
+        if (asfloat(f.z) != 0.0f && inside(c_viewport, float2(q) + 0.5f) && float(q.x) >= c_split &&
+            -asfloat(f.z) <= c_sky_distance) {
+            const float adaptation = c_sums.Load(kAdaptation + 4u) != 0u ? asfloat(c_sums.Load(kAdaptation)) : 1.0f;
+            const float m = luminance(float3(f16tof32(f.x), f16tof32(f.x >> 16u), f16tof32(f.y)));
+            const float light = clamp(m / (c_exposure_day * max(adaptation, 1e-3f)), 1.0f / 256.0f, 16.0f);
+            c_sums.InterlockedAdd(kAdaptation + 8u, asuint(int(round(log2(light) * 256.0f))));
+            c_sums.InterlockedAdd(kAdaptation + 12u, 1u);
+        }
+    }
     if ((c_exposure & 1u) != 0u && ((id.x | id.y) & 7u) == 0u) {
         const int2 q = int2(min(id.xy * c_factor, c_target_size - 1u));
         const float depth = c_depth_tex.Load(int3(q, 0));
@@ -1199,6 +1247,7 @@ static const uint kGlowTableIntensity = 4u;
 static const uint kGlowTableColor = 8u;
 static const uint kGlowLens = 16u;      // a black hole's lens draw: no light (rt_post.hlsl PostLensCS)
 static const uint kGlowEffect = 32u;    // the table names it a particle: an effect, its halo in the bloom only
+static const uint kGlowPhysical = 64u;  // a table light source under physical light: GlowEmitterCS makes it an area light
 
 // A light's power by its size: a flame, a glow or a star of radius r lights its surroundings in proportion to
 // its area (a 60-unit glow as the table gives it, a 500-unit fire at the limit). Characters and items (Lumas,
@@ -1368,7 +1417,7 @@ void GlowEmitCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
 {
     const uint record = group.x * 32u;
     const uint2 range = e_draws.Load2(record);   // first triangle, count
-    if ((e_draws.Load(record + 24u) & kGlowLens) != 0u) {
+    if ((e_draws.Load(record + 24u) & (kGlowLens | kGlowPhysical)) != 0u) {
         return;
     }
     cluster_begin(gi, range.y);
@@ -2147,15 +2196,22 @@ float3 physical_sky_irradiance(float3 n)
 // a photographer's sunny-16 rule is: at no less than 30 degrees up (cosine 0.5). With the sun below the player's
 // horizon the reference was lit by the sky alone and the exposure rose twentyfold (Melty Molten: key 35 degrees below,
 // its lava's light flooding the ground orange, sweep1).
+float physical_adaptation()
+{
+    return g_picture_sums.Load(kAdaptation + 4u) != 0u ? asfloat(g_picture_sums.Load(kAdaptation)) : 1.0f;
+}
+
 float physical_exposure()
 {
-    // Set from the game's own stage light (SceneRayTracer): a light fitted dimmer to the baked light stays dimmer.
+    // Set from the game's own stage light (SceneRayTracer): a light fitted dimmer to the baked light stays dimmer; times
+    // the eye's adaptation to the light the surfaces receive (SkyStateCS).
     if (g_light_fit.x > 0.0f) {
-        return g_light_fit.x;
+        return g_light_fit.x * physical_adaptation();
     }
     const float sun = max(dot(g_up.xyz, g_sun.xyz), 0.5f);
     return luminance(g_full_light.rgb) /
-           max(luminance(physical_sky_irradiance(g_up.xyz)) + luminance(g_sun_light.rgb) * sun, 1e-4f);
+           max(luminance(physical_sky_irradiance(g_up.xyz)) + luminance(g_sun_light.rgb) * sun, 1e-4f) *
+           physical_adaptation();
 }
 
 // The game's distance attenuation (1 / (1 + d^2 / half^2)), windowed to 0 at the light's reach.
@@ -2600,7 +2656,24 @@ float4 emit_element(uint e)
 
 float emit_running(uint i)
 {
-    return asfloat(g_emit_tris.Load((1u + 4u * kEmitTriangles + i) * 16u));
+    return asfloat(g_emit_tris.Load((kEmitRunning + i) * 16u));
+}
+
+// Emitter i's four elements in this frame's eye space (v0 and area, e1 and two-sided, e2 and beam, radiance and power): a
+// scene triangle's as EmitTriangleCS wrote them, a glow's (from g_emit_scene on) moved from the world.
+void emit_triangle_of(uint i, out float4 a, out float4 b, out float4 c, out float4 d)
+{
+    const bool glow = i >= g_emit_scene;
+    const uint e = glow ? kGlowElements + 4u * (i - g_emit_scene) : 1u + 4u * i;
+    a = emit_element(e);
+    b = emit_element(e + 1u);
+    c = emit_element(e + 2u);
+    d = emit_element(e + 3u);
+    if (glow) {
+        a.xyz = transform(g_to_eye, a.xyz);
+        b.xyz = rotate3(g_to_eye, b.xyz);
+        c.xyz = rotate3(g_to_eye, c.xyz);
+    }
 }
 
 uint emit_hash(uint v)
@@ -2648,10 +2721,8 @@ float3 emitter_light(float3 p, float3 n, float3 origin, uint candidates, uint se
                 lo = mid + 1u;
             }
         }
-        const float4 a = emit_element(1u + 4u * lo);   // v0, area
-        const float4 b = emit_element(2u + 4u * lo);   // e1, two-sided
-        const float4 c = emit_element(3u + 4u * lo);   // e2
-        const float4 d = emit_element(4u + 4u * lo);   // radiance, power
+        float4 a, b, c, d;   // v0, area; e1, two-sided; e2, beam; radiance, power
+        emit_triangle_of(lo, a, b, c, d);
         if (!(d.w > 0.0f) || !(a.w > 0.0f)) {
             continue;
         }
@@ -2672,8 +2743,9 @@ float3 emitter_light(float3 p, float3 n, float3 origin, uint candidates, uint se
         if (cos_light <= 0.0f || cos_surface <= 0.0f) {
             continue;
         }
-        // Its light per unit of emitter area, and the chance of this point per unit area.
-        const float3 light = d.rgb * (cos_light * cos_surface / (kPi * d2));
+        // Its light per unit of emitter area (a beam's cos^n, EmitTriangleCS), and the chance of this point per unit
+        // area.
+        const float3 light = d.rgb * ((c.w >= 1.0f ? pow(cos_light, c.w) : cos_light) * cos_surface / (kPi * d2));
         const float chance = d.w / (total * a.w);
         const float target = luminance(light);
         const float w = target / chance;
@@ -3155,6 +3227,68 @@ float3 linear_to_srgb(float3 c)
     return lerp(1.055f * pow(c, 1.0f / 2.4f) - 0.055f, 12.92f * c, step(c, 0.0031308f));
 }
 
+#if RT_TEXTURED
+// Physical glow light sources (emit root; kGlowPhysical draws): a table light the game draws as an additive glow (the
+// Observatory's star lights and walkway lamps, launch stars, fire) is an area light of its own triangles, as the scene's
+// emitters are: each triangle (e_triangles: this frame's eye space) into the emitters' glow segment (e_glow_out:
+// g_emit_tris) in world space, two-sided, its radiance the table's colour (linear) times the table's radiance times the
+// share of its quad its texture lights (an additive sprite adds texel x alpha: a fire sprite's soft blob about a quarter;
+// counted whole, the Observatory kitchen's overlapping fire sprites flooded the oven white, b26), its power 2 pi L A.
+// The next frame's lighting samples them after the scene's emitters (they draw after this frame's trace).
+// e_draws: per glow emitter draw (32 bytes) its first glow triangle, count, first glow emitter, colour (RGBA8), radiance,
+// its texture's view in the descriptor heap (~0: none).
+RWByteAddressBuffer e_glow_out : register(u3);
+
+groupshared float s_coverage[64];
+
+[numthreads(64, 1, 1)]
+void GlowEmitterCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
+{
+    const uint record = group.x * 32u;
+    const uint4 draw = e_draws.Load4(record);
+    // The texture's mean of luminance x alpha over an 8 x 8 grid of its texels (particle textures often have no mips).
+    const uint view = e_draws.Load(record + 20u);
+    float own = 1.0f;
+    if (view != 0xFFFFFFFFu) {
+        const Texture2D<float4> map = ResourceDescriptorHeap[NonUniformResourceIndex(view)];
+        uint w, h, levels;
+        map.GetDimensions(0u, w, h, levels);
+        const uint2 texel = uint2((float2(gi & 7u, gi >> 3u) + 0.5f) / 8.0f * float2(w, h));
+        const float4 t = saturate(map.Load(int3(min(texel, uint2(max(w, 1u), max(h, 1u)) - 1u), 0)));
+        own = luminance(t.rgb) * t.a;
+    }
+    s_coverage[gi] = own;
+    GroupMemoryBarrierWithGroupSync();
+    [unroll] for (uint stride = 32u; stride > 0u; stride >>= 1u) {
+        if (gi < stride) {
+            s_coverage[gi] += s_coverage[gi + stride];
+        }
+        GroupMemoryBarrierWithGroupSync();
+    }
+    const float coverage = view != 0xFFFFFFFFu ? s_coverage[0] / 64.0f : 1.0f;
+    const float3 radiance = srgb_to_linear(rgb8(draw.w)) * (asfloat(e_draws.Load(record + 16u)) * coverage);
+    for (uint t = gi; t < draw.y; t += 64u) {
+        const uint slot = draw.z + t;
+        if (slot >= kGlowEmitters) {
+            break;
+        }
+        float3 v0, v1, v2;
+        const bool valid = emit_triangle(draw.x + t, v0, v1, v2);
+        const float3 w0 = transform(e_to_world, v0);
+        const float3 e1 = rotate3(e_to_world, v1 - v0);
+        const float3 e2 = rotate3(e_to_world, v2 - v0);
+        const float area = valid ? 0.5f * length(cross(e1, e2)) : 0.0f;
+        const float power = area > 1e-8f ? 2.0f * kPi * luminance(radiance) * area : 0.0f;
+        const uint at = (kGlowElements + 4u * slot) * 16u;
+        e_glow_out.Store4(at, asuint(float4(w0, area)));
+        e_glow_out.Store4(at + 16u, asuint(float4(e1, 1.0f)));
+        e_glow_out.Store4(at + 32u, asuint(float4(e2, 0.0f)));
+        e_glow_out.Store4(at + 48u, asuint(float4(radiance, power)));
+        e_glow_out.Store4((kGlowPowers + slot) * 16u, asuint(float4(power, 0.0f, 0.0f, 0.0f)));
+    }
+}
+#endif
+
 // A light's colour decoded to linear light at its own peak (its brightness kept: light colours past 1 are intensities).
 float3 linear_hue(float3 c)
 {
@@ -3393,7 +3527,7 @@ float3 physical_hit(uint tri, float2 b, float3 x, float3 direction, uint salt)
 [numthreads(64, 1, 1)]
 void EmitTriangleCS(uint3 id : SV_DispatchThreadID)
 {
-    const uint total = g_tev_info.z;
+    const uint total = g_emit_scene;
     if (id.x >= total) {
         return;
     }
@@ -3429,10 +3563,14 @@ void EmitTriangleCS(uint3 id : SV_DispatchThreadID)
     radiance *= max(asfloat(g_draws.Load(min(draw, max(g_draw_count, 1u) - 1u) * kDrawStride + 12u)), 1.0f) *
                 (tev_glows_at(draw, g_tev_info.x, tri, float2(1.0f / 3.0f, 1.0f / 3.0f)) ? 1.0f : 0.0f);
     const bool two_sided = (range.z >> 31u) != 0u;
-    const float power = area > 1e-8f ? kPi * luminance(radiance) * area * (two_sided ? 2.0f : 1.0f) : 0.0f;
+    // A beam (the table's `cone`: TEV record pad[0] bits 16-31, n): radiance L cos^n from the face's normal, its power
+    // 2 pi L A / (n + 1) (n = 1: a Lambertian face's pi L A).
+    const float beam = draw < g_tev_info.x ? float(g_tev.Load(draw * kTevRecordBytes + 108u) >> 16u) : 0.0f;
+    const float lobe = beam >= 1.0f ? 2.0f / (beam + 1.0f) : 1.0f;
+    const float power = area > 1e-8f ? kPi * luminance(radiance) * area * lobe * (two_sided ? 2.0f : 1.0f) : 0.0f;
     g_reference[1u + 4u * id.x] = float4(v0, area);
     g_reference[2u + 4u * id.x] = float4(e1, two_sided ? 1.0f : 0.0f);
-    g_reference[3u + 4u * id.x] = float4(e2, 0.0f);
+    g_reference[3u + 4u * id.x] = float4(e2, beam);
     g_reference[4u + 4u * id.x] = float4(radiance, power);
     g_reference[1u + 4u * kEmitTriangles + id.x] = float4(power, 0.0f, 0.0f, 0.0f);
 }
@@ -3450,7 +3588,7 @@ void EmitScanCS(uint gi : SV_GroupIndex)
     const uint end = min(begin + per, total);
     float sum = 0.0f;
     for (uint i = begin; i < end; ++i) {
-        sum += g_reference[1u + 4u * kEmitTriangles + i].x;
+        sum += i < g_emit_scene ? g_reference[kEmitRunning + i].x : g_reference[kGlowPowers + (i - g_emit_scene)].x;
     }
     s_emit_running[gi] = sum;
     GroupMemoryBarrierWithGroupSync();
@@ -3462,8 +3600,8 @@ void EmitScanCS(uint gi : SV_GroupIndex)
     }
     float running = s_emit_running[gi] - sum;
     for (uint j = begin; j < end; ++j) {
-        running += g_reference[1u + 4u * kEmitTriangles + j].x;
-        g_reference[1u + 4u * kEmitTriangles + j] = float4(running, 0.0f, 0.0f, 0.0f);
+        running += j < g_emit_scene ? g_reference[kEmitRunning + j].x : g_reference[kGlowPowers + (j - g_emit_scene)].x;
+        g_reference[kEmitRunning + j] = float4(running, 0.0f, 0.0f, 0.0f);
     }
     if (gi == 1023u) {
         g_reference[0] = float4(asfloat(total), s_emit_running[1023], 0.0f, 0.0f);

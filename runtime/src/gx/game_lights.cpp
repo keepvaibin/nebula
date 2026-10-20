@@ -24,6 +24,9 @@ float g_game_sun_distance = 0.0f;
 std::chrono::steady_clock::time_point g_game_sun_time{};
 bool g_game_sun_known = false;
 std::uint64_t g_game_sun_updates = 0u;
+std::array<float, 3> g_traced_sun{};
+std::chrono::steady_clock::time_point g_traced_sun_time{};
+bool g_traced_sun_present = false;
 
 // The game's lights by position (a light that moves takes a new entry; old ones age out).
 struct NotedLight {
@@ -129,6 +132,23 @@ void set_game_sun(const std::array<float, 3>& direction, float distance) noexcep
     g_game_sun_time = std::chrono::steady_clock::now();
     g_game_sun_known = true;
     ++g_game_sun_updates;
+}
+
+void set_traced_sun(const std::array<float, 3>& direction, bool present) noexcept {
+    const std::lock_guard<std::mutex> lock(g_game_sun_mutex);
+    g_traced_sun = direction;
+    g_traced_sun_present = present;
+    g_traced_sun_time = std::chrono::steady_clock::now();
+}
+
+bool traced_sun(std::array<float, 3>& direction, std::uint64_t max_age_ms) noexcept {
+    const std::lock_guard<std::mutex> lock(g_game_sun_mutex);
+    if (!g_traced_sun_present ||
+        std::chrono::steady_clock::now() - g_traced_sun_time > std::chrono::milliseconds(max_age_ms)) {
+        return false;
+    }
+    direction = g_traced_sun;
+    return true;
 }
 
 std::uint64_t game_sun_updates() noexcept {

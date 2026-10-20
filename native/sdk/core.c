@@ -69,6 +69,14 @@ void __NebulaObjectName(const void* object, const char* name) {
     sHost->object_name(sHost->user, __NebulaObjectId(object), name);
 }
 
+f32 __NebulaLightReach(const char* model, f32 radius) {
+    return sHost->light_reach(sHost->user, model, radius);
+}
+
+int __NebulaTracedSun(f32* direction) {
+    return sHost->traced_sun(sHost->user, direction);
+}
+
 NEBULA_GAME_API int nebula_game_memory_regions(NebulaGameMemoryRegion* out, int max) {
     NebulaMemoryRegion regions[4];
     int count = 0;

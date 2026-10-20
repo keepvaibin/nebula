@@ -9,9 +9,12 @@
 #include <revolution/os.h>
 
 namespace {
-    // The stage key light's direction of travel (from the light), when ray-traced shadows want clipped casters.
+    // The traced sun's direction of travel (from the sun; else the stage key light's), when ray-traced shadows want
+    // clipped casters.
     TVec3f sShadowDirection;
     bool sShadowCasters;
+    // Ray-traced light wants clipped light sources whose light reaches the view (ClippingActorInfo::judgeShadowDraw).
+    bool sLightSources;
 };  // namespace
 #endif
 
@@ -51,7 +54,18 @@ void ClippingJudge::movement() {
 #ifdef TARGET_PC
 void ClippingJudge::updateShadowCasters() {
     sShadowCasters = false;
-    if (__NebulaOption(NEBULA_OPTION_RT_SHADOW_CASTERS) == 0 || !MR::isExistSceneObj(SceneObj_LightDirector)) {
+    sLightSources = __NebulaOption(NEBULA_OPTION_RT_SHADOW_CASTERS) != 0;
+    if (!sLightSources) {
+        return;
+    }
+    // The sun the ray tracer lights the scene from (the game's visible sun, the stage table's, else the key light).
+    f32 sun[3];
+    if (__NebulaTracedSun(sun) != 0) {
+        sShadowDirection.set(-sun[0], -sun[1], -sun[2]);
+        sShadowCasters = true;
+        return;
+    }
+    if (!MR::isExistSceneObj(SceneObj_LightDirector)) {
         return;
     }
     const LightDirector* director = MR::getSceneObj< LightDirector >(SceneObj_LightDirector);
@@ -73,6 +87,15 @@ void ClippingJudge::updateShadowCasters() {
     }
     sShadowDirection.set(-toward.x / length, -toward.y / length, -toward.z / length);
     sShadowCasters = true;
+}
+
+bool ClippingJudge::isLightSourcesWanted() const {
+    return sLightSources;
+}
+
+bool ClippingJudge::isLightInView(const TVec3f& rCenter, f32 reach) const {
+    // Its light reaches past the actor's own draw distance: against the whole view.
+    return sLightSources && reach > 0.0f && mFrustum.mayIntersectBall3(rCenter, reach);
 }
 
 bool ClippingJudge::isShadowCasterInView(const TVec3f& rCenter, f32 radius, s32 index) const {

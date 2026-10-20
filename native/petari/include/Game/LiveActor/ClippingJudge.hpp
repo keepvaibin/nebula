@@ -19,7 +19,12 @@ public:
     // Nebula, ray-traced shadows (NEBULA_OPTION_RT_SHADOW_CASTERS): whether a ball at `rCenter`, swept along the stage's
     // key light as far as its clip level draws (`index`, as isJudgedToClipFrustum), can reach that level's frustum.
     bool isShadowCasterInView(const TVec3f& rCenter, f32 radius, s32 index) const;
-    // The key light's direction of travel this frame (none: the option is off or the stage has no light).
+    // Whether ray-traced light keeps clipped light sources drawn this frame.
+    bool isLightSourcesWanted() const;
+    // Whether the ball of a light source's reach around `rCenter` (light_reach in nebula_game_api.h) meets the view.
+    bool isLightInView(const TVec3f& rCenter, f32 reach) const;
+    // The traced sun's direction of travel this frame, else the key light's (none: the option is off or the stage has
+    // neither).
     void updateShadowCasters();
 #endif
 

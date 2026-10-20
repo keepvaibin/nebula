@@ -72,6 +72,10 @@ void __NebulaGameLight(u32 kind, u32 id, const f32* values);
 void __NebulaGameStage(const char* name);
 // A game object's name for the renderer (object_name in nebula_game_api.h).
 void __NebulaObjectName(const void* pObject, const char* pName);
+// How far a model's traced light reaches (light_reach in nebula_game_api.h).
+f32 __NebulaLightReach(const char* pModel, f32 radius);
+// The traced sun's world direction (traced_sun in nebula_game_api.h): 1, or 0 without one.
+int __NebulaTracedSun(f32* pDirection);
 // A wait on another thread's work (a busy loop the console's interrupts preempt): runs what is pending, or sleeps until
 // a host thread raises something.
 void __NebulaPoll(void);

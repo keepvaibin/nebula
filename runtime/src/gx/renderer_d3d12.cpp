@@ -4857,7 +4857,9 @@ RtSources RendererD3D12::rt_sources() const {
 RtUpload RendererD3D12::rt_allocate(void* renderer, std::size_t bytes, std::size_t alignment) {
     const UploadRing::Allocation allocation =
         static_cast<RendererD3D12*>(renderer)->constant_ring_.allocate(bytes, alignment);
-    return {allocation.cpu, allocation.gpu};
+    return {allocation.cpu, allocation.gpu,
+            static_cast<ID3D12Resource*>(static_cast<RendererD3D12*>(renderer)->constant_ring_.resource()),
+            allocation.offset};
 }
 
 // A traced draw's buffers: vertices in the frame ring or the resident decoded-vertex buffer,

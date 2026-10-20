@@ -86,6 +86,26 @@ float luminance(float3 c)
     return dot(c, float3(0.2126f, 0.7152f, 0.0722f));
 }
 
+float3 srgb_to_linear(float3 c)
+{
+    c = max(c, 0.0f);
+    return lerp(pow((c + 0.055f) / 1.055f, 2.4f), c / 12.92f, step(c, 0.04045f));
+}
+
+float3 linear_to_srgb(float3 c)
+{
+    c = max(c, 0.0f);
+    return lerp(1.055f * pow(c, 1.0f / 2.4f) - 0.055f, 12.92f * c, step(c, 0.0031308f));
+}
+
+// Physical light as the reflections carry it: a surface's linear light at the camera's exposure, display-encoded up to
+// white as the composite shows it (rt_lighting.hlsl CompositePS: linear_to_srgb of the lit albedo), light past white
+// as it is (lamps, lava: the reflection's composite rolls it off).
+float3 physical_encode(float3 c)
+{
+    return lerp(linear_to_srgb(min(c, 1.0f)), c, step(1.0f, c));
+}
+
 // Strong light rolled off softly: c ln(1 + l / c) in luminance, its hue kept. Weak light passes unchanged and strong
 // light keeps a falloff all the way to its source. The rational l / (1 + l / c) it replaced flattened a lamp's light
 // into a disc with a rim (user, 2026-10-17: a harsh, clear radius around the lights).
@@ -239,7 +259,26 @@ cbuffer RtReflect : register(b0)
     // Physical light: the open sky's ambient as the picture shows it; the sky a reflection sees is at least this
     // (RtReflectScene::sky_fill).
     float3 g_sky_fill;
+    // Physical light (g_flags bit 12, RtReflectScene::physical): the lighting's inputs (rt_lighting.hlsl RtLight) for
+    // the hits off screen: the sky's radiance (w: overcast), the stage's full light (w 1: the traced sky's map), the
+    // player's up in eye space (w: the de-light maps' relief), the camera's exposure (x; 0: physical_exposure's own).
+    float4 g_sky_radiance;
+    float4 g_full_light;
+    float4 g_up;
+    float4 g_light_fit;
+    // Raw views in the descriptor heap (~0: none): the scene's TEV records, the emitting triangles, the traced sky's
+    // map; the records' and the triangles' counts.
+    uint g_tev_view;
+    uint g_emit_view;
+    uint g_sky_view;
+    uint g_tev_count;
+    uint g_emit_count;
+    uint g_emit_scene;          // the scene's emitting triangles among g_emit_count (the rest: glow emitters)
+    uint2 g_physical_pad;
 };
+
+// g_flags bit 12: physical light (GALAXY_RT_PHYSICAL), the lighting's units.
+static const uint kReflectPhysical = 4096u;
 
 RaytracingAccelerationStructure g_scene : register(t0);
 ByteAddressBuffer g_positions : register(t1);       // per triangle three eye-space vertices
@@ -477,7 +516,10 @@ bool shown_at(float2 pixel, out float3 light, out float distance, float blur = 0
         if (distance >= g_sky_distance) {
             distance = kSkyDistance;
         } else if ((g_flags & 32u) == 0u) {
-            light *= lighting_at(c);
+            // Physical: in linear light, as the lighting's composite lights that pixel (the game's colour times the
+            // light in display encoding read shade darker and light brighter than the picture shows them).
+            light = (g_flags & kReflectPhysical) != 0u ? physical_encode(srgb_to_linear(light) * lighting_at(c))
+                                                        : light * lighting_at(c);
         }
     }
     return true;
@@ -1080,6 +1122,296 @@ float3 sky_behind(float3 l)
     return max(average(0u, light) ? light : float3(0.0f, 0.0f, 0.0f), g_sky_fill);
 }
 
+#if RT_TEXTURED
+// ---------------------------------------------------------------------------------------------
+// Physical light at the hits off screen (g_flags bit 12 with the textured hits): the hit lit as the lighting lights
+// the scene (rt_lighting.hlsl physical_hit, emitter_light, physical_sky_irradiance, physical_exposure; keep in step):
+// its draw's TEV program the albedo (a table light source its radiance), the sun behind a shadow ray, the traced sky's
+// irradiance, the game's point lights at their own falloff, and the emitting triangles by resampled importance with one
+// shadow ray. A gold arch by night mirrors the lamp-lit tiles behind the camera, not a flat night level.
+// ---------------------------------------------------------------------------------------------
+static const float kDelightRange = 1.25f;      // rt_lighting.hlsl kDelightRange
+static const uint kEmitTriangles = 65536u;     // ray_tracing.cpp kEmitTriangles
+static const uint kGlowEmitters = 16384u;      // rt_lighting.hlsl g_emit_tris layout
+static const uint kEmitRunning = 1u + 4u * kEmitTriangles;
+static const uint kGlowElements = kEmitRunning + kEmitTriangles + kGlowEmitters;
+static const uint kSkyMapSize = 64u;           // rt_lighting.hlsl kSkyMapSize
+static const uint kDrawStride = 48u;           // rt_lighting.hlsl kDrawStride
+static const uint kEmitArea = 2u;              // rt_lighting.hlsl kEmit*: kind (low 2 bits), named, never a light
+static const uint kEmitNamed = 4u;
+static const uint kEmitNoLight = 8u;
+
+ByteAddressBuffer physical_tev()
+{
+    ByteAddressBuffer records = ResourceDescriptorHeap[g_tev_view];
+    return records;
+}
+
+float4 physical_emit_element(uint e)
+{
+    ByteAddressBuffer emitters = ResourceDescriptorHeap[g_emit_view];
+    return asfloat(emitters.Load4(e * 16u));
+}
+
+float4 physical_sky_texel(uint i)
+{
+    ByteAddressBuffer sky = ResourceDescriptorHeap[g_sky_view];
+    return asfloat(sky.Load4(i * 16u));
+}
+
+#define g_tev physical_tev()
+#define g_wrap_point g_wrap
+#include "rt_tev.hlsli"
+#undef g_wrap_point
+#undef g_tev
+
+float3 physical_world(float3 d)
+{
+    return normalize(float3(dot(g_eye_to_world[0].xyz, d), dot(g_eye_to_world[1].xyz, d), dot(g_eye_to_world[2].xyz, d)));
+}
+
+void physical_sh9(float3 d, out float basis[9])
+{
+    basis[0] = 0.282095f;
+    basis[1] = 0.488603f * d.y;
+    basis[2] = 0.488603f * d.z;
+    basis[3] = 0.488603f * d.x;
+    basis[4] = 1.092548f * d.x * d.y;
+    basis[5] = 1.092548f * d.y * d.z;
+    basis[6] = 0.315392f * (3.0f * d.z * d.z - 1.0f);
+    basis[7] = 1.092548f * d.x * d.z;
+    basis[8] = 0.546274f * (d.x * d.x - d.y * d.y);
+}
+
+bool physical_sky_traced()
+{
+    return g_full_light.w != 0.0f && g_sky_view != 0xFFFFFFFFu;
+}
+
+float physical_sky_mean()
+{
+    return luminance(physical_sky_texel(kSkyMapSize * kSkyMapSize).rgb * 0.282095f);
+}
+
+float physical_sky_own()
+{
+    const float mean = physical_sky_mean();
+    const float ambient = luminance(g_sky_radiance.rgb);
+    return mean > ambient && mean > 1e-4f ? ambient / mean : 1.0f;
+}
+
+float3 physical_sky_fill()
+{
+    const float ambient = luminance(g_sky_radiance.rgb);
+    return ambient > 1e-4f ? g_sky_radiance.rgb * saturate(1.0f - physical_sky_mean() * physical_sky_own() / ambient)
+                           : float3(0.0f, 0.0f, 0.0f);
+}
+
+float physical_overcast_irradiance(float3 n)
+{
+    if (g_sky_radiance.w <= 0.0f) {
+        return 1.0f;
+    }
+    const float c = clamp(dot(n, g_up.xyz), -1.0f, 1.0f);
+    const float a = acos(c);
+    return 3.0f / 7.0f + (6.0f / 7.0f) * (2.0f * ((kPi - a) * c + sin(a)) / (3.0f * kPi));
+}
+
+// The open sky's irradiance over pi on a surface facing eye-space `n`.
+float3 physical_sky_irradiance(float3 n)
+{
+    if (!physical_sky_traced()) {
+        return g_sky_radiance.rgb * physical_overcast_irradiance(n);
+    }
+    float basis[9];
+    physical_sh9(physical_world(n), basis);
+    float3 irradiance = float3(0.0f, 0.0f, 0.0f);
+    [unroll] for (uint b = 0u; b < 9u; ++b) {
+        irradiance += physical_sky_texel(kSkyMapSize * kSkyMapSize + b).rgb *
+                      (basis[b] * (b == 0u ? 1.0f : b < 4u ? 2.0f / 3.0f : 0.25f));
+    }
+    return max(irradiance, 0.0f) * physical_sky_own() + physical_sky_fill() * physical_overcast_irradiance(n);
+}
+
+// The eye's adaptation (rt_lighting.hlsl kAdaptation in the picture sums).
+float physical_adaptation()
+{
+    const uint at = 64u + 8u * 16u + 16u;
+    return (g_flags & 4u) != 0u && g_sums.Load(at + 4u) != 0u ? asfloat(g_sums.Load(at)) : 1.0f;
+}
+
+float physical_exposure()
+{
+    if (g_light_fit.x > 0.0f) {
+        return g_light_fit.x * physical_adaptation();
+    }
+    const float sun = max(dot(g_up.xyz, g_sun.xyz), 0.5f);
+    return luminance(g_full_light.rgb) /
+           max(luminance(physical_sky_irradiance(g_up.xyz)) + luminance(g_sun_light.rgb) * sun, 1e-4f) *
+           physical_adaptation();
+}
+
+uint physical_hash(uint v)
+{
+    const uint state = v * 747796405u + 2891336453u;
+    const uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+    return (word >> 22u) ^ word;
+}
+
+float physical_random(inout uint seed)
+{
+    seed = physical_hash(seed);
+    return float(seed >> 8u) * (1.0f / 16777216.0f);
+}
+
+// The emitting triangles' light at `p` (normal `n`, shadow ray from `origin`), as rt_lighting.hlsl emitter_light.
+float3 physical_emitters(float3 p, float3 n, float3 origin, uint candidates, uint seed)
+{
+    if (g_emit_count == 0u || g_emit_view == 0xFFFFFFFFu) {
+        return float3(0.0f, 0.0f, 0.0f);
+    }
+    const float total = physical_emit_element(0u).y;
+    if (!(total > 0.0f)) {
+        return float3(0.0f, 0.0f, 0.0f);
+    }
+    ByteAddressBuffer emitters = ResourceDescriptorHeap[g_emit_view];
+    float weight_sum = 0.0f;
+    float kept_target = 0.0f;
+    float3 kept_light = float3(0.0f, 0.0f, 0.0f);
+    float3 kept_point = float3(0.0f, 0.0f, 0.0f);
+    [loop] for (uint k = 0u; k < candidates; ++k) {
+        const float u = physical_random(seed) * total;
+        uint lo = 0u;
+        uint hi = g_emit_count - 1u;
+        [loop] while (lo < hi) {
+            const uint mid = (lo + hi) >> 1u;
+            if (asfloat(emitters.Load((kEmitRunning + mid) * 16u)) > u) {
+                hi = mid;
+            } else {
+                lo = mid + 1u;
+            }
+        }
+        // A scene triangle as EmitTriangleCS wrote it, a glow's (from g_emit_scene on) moved from the world.
+        const bool glow = lo >= g_emit_scene;
+        const uint e = glow ? kGlowElements + 4u * (lo - g_emit_scene) : 1u + 4u * lo;
+        float4 a = physical_emit_element(e);
+        float4 b = physical_emit_element(e + 1u);
+        float4 c = physical_emit_element(e + 2u);
+        const float4 d = physical_emit_element(e + 3u);
+        if (glow) {
+            a.xyz = float3(dot(g_world_to_eye[0].xyz, a.xyz) + g_world_to_eye[0].w,
+                           dot(g_world_to_eye[1].xyz, a.xyz) + g_world_to_eye[1].w,
+                           dot(g_world_to_eye[2].xyz, a.xyz) + g_world_to_eye[2].w);
+            b.xyz = float3(dot(g_world_to_eye[0].xyz, b.xyz), dot(g_world_to_eye[1].xyz, b.xyz),
+                           dot(g_world_to_eye[2].xyz, b.xyz));
+            c.xyz = float3(dot(g_world_to_eye[0].xyz, c.xyz), dot(g_world_to_eye[1].xyz, c.xyz),
+                           dot(g_world_to_eye[2].xyz, c.xyz));
+        }
+        if (!(d.w > 0.0f) || !(a.w > 0.0f)) {
+            continue;
+        }
+        float r1 = physical_random(seed);
+        float r2 = physical_random(seed);
+        if (r1 + r2 > 1.0f) {
+            r1 = 1.0f - r1;
+            r2 = 1.0f - r2;
+        }
+        const float3 y = a.xyz + b.xyz * r1 + c.xyz * r2;
+        const float3 to = y - p;
+        const float d2 = max(dot(to, to), 1e-4f);
+        const float3 dir = to * rsqrt(d2);
+        const float3 face = normalize(cross(b.xyz, c.xyz));
+        float cos_light = -dot(face, dir);
+        cos_light = b.w != 0.0f ? abs(cos_light) : cos_light;
+        const float cos_surface = dot(n, dir);
+        if (cos_light <= 0.0f || cos_surface <= 0.0f) {
+            continue;
+        }
+        const float3 light = d.rgb * ((c.w >= 1.0f ? pow(cos_light, c.w) : cos_light) * cos_surface / (kPi * d2));
+        const float chance = d.w / (total * a.w);
+        const float target = luminance(light);
+        const float w = target / chance;
+        weight_sum += w;
+        if (w > 0.0f && physical_random(seed) * weight_sum < w) {
+            kept_target = target;
+            kept_light = light;
+            kept_point = y;
+        }
+    }
+    if (!(kept_target > 0.0f)) {
+        return float3(0.0f, 0.0f, 0.0f);
+    }
+    const float3 to = kept_point - origin;
+    const float span = length(to);
+    if (!lit_from(origin, to / max(span, 1e-4f), max(span * 0.999f - 0.5f, 0.0f))) {
+        return float3(0.0f, 0.0f, 0.0f);
+    }
+    return kept_light * (weight_sum / (float(candidates) * kept_target));
+}
+
+// A hit's light in the picture's units (physical_encode), lit physically; false without the lighting's records.
+bool physical_hit_light(uint tri, float2 b, float3 x, float3 l, out float3 light)
+{
+    light = float3(0.0f, 0.0f, 0.0f);
+    if ((g_flags & kReflectPhysical) == 0u || g_tev_view == 0xFFFFFFFFu) {
+        return false;
+    }
+    const uint draw = g_surfaces.Load(tri * 16u + 12u) >> 16u;
+    bool pass;
+    float3 albedo = srgb_to_linear(saturate(tev_evaluate(draw, g_tev_count, tri, b, pass).rgb));
+    float3 emission = float3(0.0f, 0.0f, 0.0f);
+    if ((g_flags & 128u) != 0u && draw < g_draw_count) {
+        // A light source of the table shows what it sends (EmitTriangleCS: brighter by its intensity past 1).
+        const uint2 table = g_draws.Load2(draw * kDrawStride + 8u);
+        if ((table.x & kEmitNamed) != 0u && (table.x & 3u) != 0u && (table.x & kEmitNoLight) == 0u &&
+            tev_glows_at(draw, g_tev_count, tri, b)) {
+            emission = albedo * max(asfloat(table.y), 1.0f);
+            albedo = float3(0.0f, 0.0f, 0.0f);
+        }
+    }
+    const float3 v0 = asfloat(g_positions.Load3(tri * 36u));
+    const float3 v1 = asfloat(g_positions.Load3(tri * 36u + 12u));
+    const float3 v2 = asfloat(g_positions.Load3(tri * 36u + 24u));
+    float3 ng = cross(v1 - v0, v2 - v0);
+    ng = dot(ng, ng) > 1e-24f ? normalize(ng) : -l;
+    ng = dot(ng, l) > 0.0f ? -ng : ng;
+    // The vertex normals of the side the ray meets.
+    float3 n = ng;
+    {
+        const uint4 record = g_surfaces.Load4(tri * 16u);
+        if (record.x != 0u && record.y != 0u && record.z != 0u) {
+            const float3 w = float3(1.0f - b.x - b.y, b.x, b.y);
+            float3 smooth = unpack_vertex_normal(record.x) * w.x + unpack_vertex_normal(record.y) * w.y +
+                            unpack_vertex_normal(record.z) * w.z;
+            smooth *= dot(smooth, ng) < 0.0f ? -1.0f : 1.0f;
+            const float smooth_length = length(smooth);
+            if (smooth_length > 1e-3f && dot(smooth, ng) > 0.05f * smooth_length) {
+                n = smooth / smooth_length;
+            }
+        }
+    }
+    const float3 origin = x + ng * (0.2f + abs(x.z) * 4e-4f);
+    float3 sun = float3(0.0f, 0.0f, 0.0f);
+    const float nl = dot(n, g_sun.xyz);
+    if (nl > 0.0f && any(g_sun_light.rgb > 0.0f) && lit_from(origin, g_sun.xyz, g_sun_light.w)) {
+        sun = g_sun_light.rgb * nl;
+    }
+    // The game's point lights at their own falloff (no reach window under physical light), unshadowed.
+    float3 points = float3(0.0f, 0.0f, 0.0f);
+    [loop] for (uint i = 0u; i < g_point_count; ++i) {
+        const float3 to = g_points[2u * i].xyz - x;
+        const float d2 = dot(to, to);
+        points += g_points[2u * i + 1u].rgb * (saturate(dot(n, to) * rsqrt(max(d2, 1e-6f))) /
+                                               (1.0f + d2 * g_points[2u * i + 1u].w));
+    }
+    uint seed = physical_hash(tri ^ physical_hash(asuint(x.x) ^ (g_frame * 0x9E3779B9u)));
+    const float3 emitted = physical_emitters(x, n, origin, 2u, seed);
+    light = physical_encode(((albedo * (sun + physical_sky_irradiance(n) + points * g_point_light + emitted)) + emission) *
+                            physical_exposure());
+    return true;
+}
+#endif
+
 // High quality: what a reflection ray hits where the frame does not show it, shaded by ray tracing (user: the
 // water and the metal reflect what is around them, not only what the screen holds). Its draw's material
 // texture at the hit's texture coordinates (detail by distance), times the vertices' colour 0 or the draw's
@@ -1104,6 +1436,9 @@ bool hit_shade(uint instance, uint tri, float2 b, float3 x, float3 l, float dist
     const uint a = tri * 72u;   // rt_types.h kRtTriUvStride
     const float4 uv01 = asfloat(g_tri_uv.Load4(a));
     const float2 uv = uv01.xy * w.x + uv01.zw * w.y + asfloat(g_tri_uv.Load2(a + 16u)) * w.z;
+    // Physical light: lit as the lighting lights the scene; a cut-out keeps its coverage below.
+    float3 physical;
+    const bool lit_physically = physical_hit_light(tri, b, x, l, physical);
     const uint3 colours = g_tri_uv.Load3(a + 48u);
     float3 albedo = hit_rgb8(d.z);
     if ((d.y & 1u) != 0u && (colours.x | colours.y | colours.z) != 0u) {
@@ -1131,6 +1466,10 @@ bool hit_shade(uint instance, uint tri, float2 b, float3 x, float3 l, float dist
             }
         }
         albedo *= texel;
+    }
+    if (lit_physically) {
+        light = physical;
+        return true;
     }
     const float3 v0 = asfloat(g_positions.Load3(tri * 36u));
     const float3 v1 = asfloat(g_positions.Load3(tri * 36u + 12u));

@@ -81,6 +81,18 @@ struct RtReflectConstants {
     float sun_cap;
     std::uint32_t core_point;
     float sky_fill[3];   // RtReflectScene::sky_fill
+    // RtReflectScene::physical
+    float sky_radiance[4];
+    float full_light[4];
+    float up[4];
+    float light_fit[4];
+    std::uint32_t tev_view;
+    std::uint32_t emit_view;
+    std::uint32_t sky_view;
+    std::uint32_t tev_count;
+    std::uint32_t emit_count;
+    std::uint32_t emit_scene;
+    std::uint32_t physical_pad[2];
 };
 static_assert(sizeof(RtReflectConstants) == RtReflections::kConstantsBytes);
 
@@ -838,6 +850,23 @@ void RtReflections::fill_constants(const RtReflectScene& scene, const Pass& pass
     c.sky_trust = sky_trust_;
     c.metal_cover = materials_[kBareMetalClass].cover;
     std::copy(scene.sky_fill.begin(), scene.sky_fill.end(), c.sky_fill);
+    // Physical light (bit 12): the hits in the lighting's units; off screen (with the textured hits' heap) lit by it.
+    const RtReflectPhysical& physical = scene.physical;
+    if (physical.on) {
+        c.flags |= 4096u;
+        std::copy(physical.sky_radiance.begin(), physical.sky_radiance.end(), c.sky_radiance);
+        std::copy(physical.full_light.begin(), physical.full_light.end(), c.full_light);
+        std::copy(physical.up.begin(), physical.up.end(), c.up);
+        std::copy(physical.light_fit.begin(), physical.light_fit.end(), c.light_fit);
+        c.tev_view = physical.tev_view;
+        c.tev_count = physical.tev_view != ~0u ? physical.tev_count : 0u;
+        c.emit_view = physical.emit_view;
+        c.emit_count = physical.emit_view != ~0u ? physical.emit_count : 0u;
+        c.emit_scene = physical.emit_scene;
+        c.sky_view = physical.sky_view;
+    } else {
+        c.tev_view = c.emit_view = c.sky_view = ~0u;
+    }
     std::memcpy(constants_cpu, &c, sizeof(c));
 }
 

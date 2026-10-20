@@ -93,6 +93,10 @@ public:
     // elsewhere stays water). Per material index, its stage material.
     [[nodiscard]] std::vector<std::pair<std::uint16_t, const RtMaterial*>> stage_materials(
         std::string_view stage) const;
+    // The radiance (relative to a white surface under the stage's full light) of the brightest light source among
+    // the textures whose rows name `model` in their object column ("Model/texture", or models apart by spaces),
+    // case-insensitive; 0: the model has none.
+    [[nodiscard]] float model_light(std::string_view model) const;
 
 private:
     struct StageRow {
@@ -103,6 +107,8 @@ private:
     std::vector<RtMaterial> materials_;
     std::unordered_map<std::uint64_t, std::uint16_t> by_hash_;
     std::vector<StageRow> stage_rows_;
+    // Per model name (lower case) the material indices its rows name.
+    std::unordered_map<std::string, std::vector<std::uint16_t>> model_rows_;
     std::size_t skipped_ = 0;
 };
 
@@ -111,12 +117,14 @@ private:
 //   stage  source  x  y  z  r  g  b  strength  size  shafts  day  (others ignored)
 // stage: the game's stage name (EggStarGalaxy). source: game (the game's visible sun, else the one its
 // sky shows: as without a row), table (x y z: the world direction towards the sun, where the sky
-// shows it), none (no sun or sky key: the stage's own lights carry it). r g b: its colour (0-1); strength: its light relative to the default; size: the disc's
+// shows it), none (no sun or sky key: the stage's own lights carry it), core (the Comet Observatory: its star core is the
+// light, a sphere of radiance `core` (relative to a white surface under the stage's full light); the key keeps the
+// `strength` share as moonlight in r g b). r g b: its colour (0-1); strength: its light relative to the default; size: the disc's
 // radius in degrees; shafts: the light shafts' strength (GALAXY_RT_POST_SHAFTS); day: 1 the day model (the
 // art as drawn with modern shadows), 0 the night model (lit by its lights), between a blend; empty: by the
 // brightness of its sky. Empty fields keep the defaults.
 struct RtStageSun {
-    enum class Source : std::uint8_t { Game = 0, Table = 1, None = 2 };
+    enum class Source : std::uint8_t { Game = 0, Table = 1, None = 2, Core = 3 };
     Source source = Source::Game;
     float direction[3] = {0.0f, 1.0f, 0.0f};
     bool has_color = false;
@@ -126,6 +134,7 @@ struct RtStageSun {
     float shafts = -1.0f;                 // < 0: the default
     float day = -1.0f;                    // < 0: by the sky's brightness
     float ambient = 1.0f;                 // the night model's open-art level for this stage (x GALAXY_RT_NIGHT_LEVEL)
+    float core = 0.0f;                    // source core: the star core's radiance (white under the full light: 1)
 };
 
 class RtStageSunTable {

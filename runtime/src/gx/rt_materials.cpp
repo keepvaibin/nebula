@@ -14,6 +14,7 @@
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -232,7 +233,7 @@ std::size_t RtMaterialTable::read(std::istream& in) {
     bool header_read = false;
     int hash_col = -1, class_col = -1, rough_col = -1, metal_col = -1, r_col = -1, g_col = -1, b_col = -1,
         intensity_col = -1, range_col = -1, pulse_col = -1, cone_col = -1, shadow_col = -1, glow_col = -1,
-        stage_col = -1, region_col = -1;
+        stage_col = -1, region_col = -1, object_col = -1;
     std::size_t rows = 0u;
     while (std::getline(in, line)) {
         if (line.empty() || line[0] == '#') {
@@ -249,7 +250,8 @@ std::size_t RtMaterialTable::read(std::istream& in) {
                                 : name == "intensity" ? &intensity_col : name == "range" ? &range_col
                                 : name == "pulse" ? &pulse_col : name == "cone" ? &cone_col
                                 : name == "shadow" ? &shadow_col : name == "glow" ? &glow_col
-                                : name == "stage" ? &stage_col : name == "region" ? &region_col : nullptr;
+                                : name == "stage" ? &stage_col : name == "region" ? &region_col
+                                : name == "object" ? &object_col : nullptr;
                 if (slot != nullptr) *slot = static_cast<int>(i);
             }
             continue;
@@ -278,6 +280,18 @@ std::size_t RtMaterialTable::read(std::istream& in) {
         }
         RtMaterial& m = stage.empty() ? materials_[it->second - 1u] : stage_rows_.back().material;
         const RtEmission before = m.emission;
+        if (stage.empty() && object_col >= 0 && static_cast<std::size_t>(object_col) < row.size()) {
+            // "Model/texture" or "ModelA ModelB": each model this row's texture belongs to.
+            for (const std::string& name : split(row[static_cast<std::size_t>(object_col)], ' ')) {
+                const std::string model = lower(name.substr(0u, name.find('/')));
+                if (!model.empty() && model != "-") {
+                    std::vector<std::uint16_t>& indices = model_rows_[model];
+                    if (std::find(indices.begin(), indices.end(), it->second) == indices.end()) {
+                        indices.push_back(it->second);
+                    }
+                }
+            }
+        }
         if (class_col >= 0 && static_cast<std::size_t>(class_col) < row.size()) {
             apply_class(row[static_cast<std::size_t>(class_col)], m);
         }
@@ -330,6 +344,23 @@ const RtMaterial* RtMaterialTable::material(std::uint16_t index) const noexcept 
     return index != 0u && index <= materials_.size() ? &materials_[index - 1u] : nullptr;
 }
 
+float RtMaterialTable::model_light(std::string_view model) const {
+    const auto it = model_rows_.find(lower(std::string(model)));
+    if (it == model_rows_.end()) {
+        return 0.0f;
+    }
+    float light = 0.0f;
+    for (const std::uint16_t index : it->second) {
+        const RtMaterial* const m = material(index);
+        // As the physical emitters take it (rt_lighting.hlsl EmitTriangleCS): its colour, at most white, times the
+        // table's intensity where that passes 1.
+        if (m != nullptr && m->emission != RtEmission::None && !m->no_light && !m->hide) {
+            light = std::max(light, std::max(m->intensity, 1.0f));
+        }
+    }
+    return light;
+}
+
 std::vector<std::pair<std::uint16_t, const RtMaterial*>> RtMaterialTable::stage_materials(
     std::string_view stage) const {
     std::vector<std::pair<std::uint16_t, const RtMaterial*>> out;
@@ -345,7 +376,7 @@ std::size_t RtStageSunTable::read(std::istream& in) {
     std::string line;
     bool header_read = false;
     int stage_col = -1, source_col = -1, x_col = -1, y_col = -1, z_col = -1, r_col = -1, g_col = -1, b_col = -1,
-        strength_col = -1, size_col = -1, shafts_col = -1, day_col = -1, ambient_col = -1;
+        strength_col = -1, size_col = -1, shafts_col = -1, day_col = -1, ambient_col = -1, core_col = -1;
     std::size_t rows = 0u;
     while (std::getline(in, line)) {
         if (line.empty() || line[0] == '#') {
@@ -361,7 +392,7 @@ std::size_t RtStageSunTable::read(std::istream& in) {
                                 : name == "r" ? &r_col : name == "g" ? &g_col : name == "b" ? &b_col
                                 : name == "strength" ? &strength_col : name == "size" ? &size_col
                                 : name == "shafts" ? &shafts_col : name == "day" ? &day_col
-                                : name == "ambient" ? &ambient_col : nullptr;
+                                : name == "ambient" ? &ambient_col : name == "core" ? &core_col : nullptr;
                 if (slot != nullptr) *slot = static_cast<int>(i);
             }
             continue;
@@ -386,6 +417,8 @@ std::size_t RtStageSunTable::read(std::istream& in) {
             for (unsigned i = 0; i < 3u; ++i) sun.direction[i] = d[i] / length;
         } else if (source == "none") {
             sun.source = RtStageSun::Source::None;
+        } else if (source == "core") {
+            sun.source = RtStageSun::Source::Core;
         }
         float c[3]{};
         if (number(row, r_col, c[0]) && number(row, g_col, c[1]) && number(row, b_col, c[2])) {
@@ -398,6 +431,7 @@ std::size_t RtStageSunTable::read(std::istream& in) {
         if (number(row, shafts_col, v)) sun.shafts = std::clamp(v, 0.0f, 4.0f);
         if (number(row, day_col, v)) sun.day = std::clamp(v, 0.0f, 1.0f);
         if (number(row, ambient_col, v)) sun.ambient = std::clamp(v, 0.0f, 2.0f);
+        if (number(row, core_col, v)) sun.core = std::clamp(v, 0.0f, 1000.0f);
         suns_[stage] = sun;
         ++rows;
     }
@@ -521,6 +555,26 @@ const RtMaterial* rt_material(std::uint16_t index) noexcept {
         }
     }
     return table().material(index);
+}
+
+float rt_light_reach(const char* model, float radius) noexcept {
+    if (model == nullptr || !(radius > 0.0f)) {
+        return 0.0f;
+    }
+    // The model's resource name ("Tico.bdl", maybe with a folder): its name alone.
+    std::string_view name(model);
+    if (const std::size_t slash = name.find_last_of("/\\"); slash != std::string_view::npos) {
+        name.remove_prefix(slash + 1u);
+    }
+    name = name.substr(0u, name.find('.'));
+    const float light = table().model_light(name);
+    if (!(light > 0.0f)) {
+        return 0.0f;
+    }
+    // A ball of radius r and radiance L lights a surface facing it at distance d with L (r / d)^2 of a white
+    // surface's full light. Below 1/4096 of it (under one level of 255 once sRGB-encoded) it shows nothing: it reaches
+    // r sqrt(4096 L).
+    return std::min(radius * 64.0f * std::sqrt(light), 1.0e5f);
 }
 
 }  // namespace galaxy::gx

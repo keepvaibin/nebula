@@ -778,7 +778,7 @@ foreach(galaxy_rt_pass reflect_memory_cs:ReflectMemoryCS:cs_6_5 reflect_trace_cs
     add_custom_command(OUTPUT "${galaxy_rt_header}"
         COMMAND "${GALAXY_DXC}" -nologo -T ${galaxy_rt_profile} -E ${galaxy_rt_entry} -O3 -WX -Qstrip_debug
             -Qstrip_reflect -Vn g_rt_${galaxy_rt_name} -Fh "${galaxy_rt_header}" "${galaxy_rt_reflect_hlsl}"
-        DEPENDS "${galaxy_rt_reflect_hlsl}"
+        DEPENDS "${galaxy_rt_reflect_hlsl}" "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/gx/rt_tev.hlsli"
         VERBATIM)
     list(APPEND galaxy_rt_headers "${galaxy_rt_header}")
 endforeach()
@@ -791,7 +791,7 @@ foreach(galaxy_rt_pass reflect_trace_tex_cs:ReflectTraceCS water_trace_tex_cs:Wa
     add_custom_command(OUTPUT "${galaxy_rt_header}"
         COMMAND "${GALAXY_DXC}" -nologo -T cs_6_6 -E ${galaxy_rt_entry} -D RT_TEXTURED=1 -O3 -WX -Qstrip_debug
             -Qstrip_reflect -Vn g_rt_${galaxy_rt_name} -Fh "${galaxy_rt_header}" "${galaxy_rt_reflect_hlsl}"
-        DEPENDS "${galaxy_rt_reflect_hlsl}"
+        DEPENDS "${galaxy_rt_reflect_hlsl}" "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/gx/rt_tev.hlsli"
         VERBATIM)
     list(APPEND galaxy_rt_headers "${galaxy_rt_header}")
 endforeach()
@@ -799,7 +799,7 @@ endforeach()
 # The lighting's trace testing alpha-tested geometry by its alpha maps from the descriptor heap (shader model 6.6),
 # and the reference path tracer, which shades its hits from their textures (GALAXY_RT_REFERENCE).
 foreach(galaxy_rt_pass trace_tex_cs:TraceCS reference_tex_cs:ReferenceCS sky_probe_tex_cs:SkyProbeCS
-        gbuffer_tex_cs:GBufferCS emit_triangle_cs:EmitTriangleCS emit_scan_cs:EmitScanCS
+        gbuffer_tex_cs:GBufferCS emit_triangle_cs:EmitTriangleCS emit_scan_cs:EmitScanCS glow_emitter_cs:GlowEmitterCS
         baked_fit_cs:BakedFitCS baked_reduce_cs:BakedReduceCS)
     string(REPLACE ":" ";" galaxy_rt_pair "${galaxy_rt_pass}")
     list(GET galaxy_rt_pair 0 galaxy_rt_name)

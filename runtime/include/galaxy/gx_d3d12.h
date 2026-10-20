@@ -147,6 +147,14 @@ void set_game_sun(const std::array<float, 3>& direction, float distance) noexcep
 // The direction (and distance) when one arrived within `max_age_ms`.
 [[nodiscard]] bool game_sun(std::array<float, 3>& direction, std::uint64_t max_age_ms,
                             float* distance = nullptr) noexcept;
+// Render thread, each traced frame: the world direction towards the sun the ray tracer lights the scene from (the
+// game's visible sun, the stage table's, else the key light; none on a sunless stage). Simulation thread: the
+// direction when one was set within `max_age_ms` (the off-screen shadow casters sweep along it).
+void set_traced_sun(const std::array<float, 3>& direction, bool present) noexcept;
+[[nodiscard]] bool traced_sun(std::array<float, 3>& direction, std::uint64_t max_age_ms) noexcept;
+// Simulation thread: how far (world units) the light of a model's table light sources reaches (rt-materials.tsv
+// emitter rows whose object names the model; `radius` its bounding radius), 0 when it has none.
+[[nodiscard]] float rt_light_reach(const char* model, float radius) noexcept;
 // Simulation thread, each scene while the Comet Observatory's star core (AstroCore) exists: its
 // world centre and scale (it grows with the Grand Stars). The ray tracer lights the scene from it
 // and gives it its finish.

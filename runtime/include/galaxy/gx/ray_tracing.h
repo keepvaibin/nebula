@@ -47,6 +47,9 @@ struct RtSources {
 struct RtUpload {
     void* cpu = nullptr;
     D3D12_GPU_VIRTUAL_ADDRESS gpu = 0;
+    // The upload memory's buffer and this allocation's offset in it (for a raw view in the descriptor heap).
+    ID3D12Resource* resource = nullptr;
+    std::uint64_t offset = 0;
 };
 
 class SceneRayTracer {
@@ -256,6 +259,12 @@ private:
     static constexpr std::size_t kAuthoredLights = 512u;
     // Physical: the scene's emitting triangles at most (rt_lighting.hlsl kEmitTriangles).
     static constexpr std::uint32_t kEmitTriangles = 65536u;
+    // Physical glow light sources (rt_lighting.hlsl GlowEmitterCS, kGlowEmitters): the table's glow draws' triangles in
+    // the emitters' buffer after the scene's, in world space, lit from the next frame.
+    static constexpr std::uint32_t kGlowEmitters = 16384u;
+    // g_emit_tris: header, 4 per scene emitter, the running power (scene then glow), 4 per glow emitter, glow powers.
+    static constexpr std::uint64_t kEmitBufferBytes =
+        (1ull + 5ull * kEmitTriangles + 6ull * kGlowEmitters) * 16u;
     // A light in the glow lights' lists (rt_lighting.hlsl kEmitStride): position, radius; power,
     // frames unseen or cumulative power; spot direction, cosine of its cone (0 0 0 for a point light).
     static constexpr std::uint32_t kEmitStride = 48u;
@@ -423,6 +432,13 @@ private:
         ID3D12Resource* resource = nullptr;
     };
     [[nodiscard]] std::uint32_t texture_view(const RtTextureSource& source);
+    // A raw (ByteAddressBuffer) view of `bytes` of `resource` from `offset` among this scene's views; ~0 when none is
+    // free or the views are unusable.
+    [[nodiscard]] std::uint32_t buffer_view(ID3D12Resource* resource, std::uint64_t offset, std::uint64_t bytes);
+    // Physical light for the reflections' off-screen hits (RtReflectScene::physical), from this scene's lighting.
+    RtReflectPhysical reflect_physical_{};
+    // Physical: the camera's exposure for the stage's light (RtLightConstants light_fit x) for the eye's adaptation.
+    float physical_exposure_ = 0.0f;
     D3D12_CPU_DESCRIPTOR_HANDLE texture_view_cpu_{};
     std::uint32_t texture_view_first_ = 0;
     UINT texture_view_increment_ = 0;
@@ -649,6 +665,13 @@ private:
     std::uint64_t bloom_entries_ = 0u;
     int bloom_slot_ = -1;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> glow_emit_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> glow_emitter_pso_;
+    // Physical: this scene's glow draws that are table light sources (GlowEmitterCS): first glow triangle, count, first
+    // glow emitter, colour (RGBA8), radiance (float bits), padding; the glow emitters it wrote, which the next frame's
+    // lighting samples after the scene's emitters.
+    std::vector<std::array<std::uint32_t, 8>> glow_emitters_;
+    std::uint32_t glow_emitter_slots_ = 0u;
+    std::uint32_t glow_emit_count_ = 0u;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> emit_merge_pso_;
     D3D12_RESOURCE_STATES glow_base_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     D3D12_RESOURCE_STATES glow_added_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
@@ -862,7 +885,8 @@ private:
                   std::uint32_t delight = 0xFFFFFFFFu);
     // The records, then the stages (each record's stage_offset in bytes), for g_tev; 0 for none.
     D3D12_GPU_VIRTUAL_ADDRESS upload_tev(const std::vector<RtTevMaterial>& records, const std::vector<RtTevStage>& stages,
-                                         Allocate allocate, void* allocate_context);
+                                         Allocate allocate, void* allocate_context, RtUpload* uploaded = nullptr,
+                                         std::uint64_t* uploaded_bytes = nullptr);
     std::uint32_t sky_triangles_ = 0u;
     std::size_t sky_flushed_draws_ = 0u;
     std::uint32_t sky_flushed_triangles_ = 0u;

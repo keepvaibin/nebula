@@ -46,6 +46,23 @@ struct RtReflectLights {
     std::uint32_t core_point = ~0u;
 };
 
+// Physical light (GALAXY_RT_PHYSICAL) at the hits a reflection ray finds off screen: lit as the lighting lights the
+// scene (rt_lighting.hlsl physical_hit and emitter_light), from the lighting's own inputs. Its buffers are raw views in
+// the frame's descriptor heap (high quality's textured hits; ~0: none).
+struct RtReflectPhysical {
+    bool on = false;
+    std::array<float, 4> sky_radiance{};   // rt_lighting.hlsl g_sky_radiance (w: an overcast sky)
+    std::array<float, 4> full_light{};     // g_full_light (w 1: the traced sky's map holds the sky)
+    std::array<float, 4> up{};             // g_up: the player's up in eye space (w the de-light maps' relief; 0 off)
+    std::array<float, 4> light_fit{};      // g_light_fit (x: the camera's exposure; 0: physical_exposure's own)
+    std::uint32_t tev_view = ~0u;          // the scene's TEV records (rt_tev.hlsli g_tev)
+    std::uint32_t tev_count = 0u;
+    std::uint32_t emit_view = ~0u;         // the emitting triangles (EmitTriangleCS, EmitScanCS)
+    std::uint32_t emit_count = 0u;
+    std::uint32_t emit_scene = 0u;         // the scene's among them (the rest: glow emitters, in world space)
+    std::uint32_t sky_view = ~0u;          // the traced sky's map and its spherical harmonics (SkyProbeCS)
+};
+
 // A traced scene, as the reflections read it. They take the lighting's samples: one per factor x
 // factor EFB pixels, each with the triangle the lighting's camera ray met.
 struct RtReflectScene {
@@ -95,12 +112,13 @@ struct RtReflectScene {
     D3D12_GPU_VIRTUAL_ADDRESS draw_textures = 0;
     std::uint32_t texture_count = 0;
     std::array<float, 4> hit{};
+    RtReflectPhysical physical{};
 };
 
 class RtReflections {
 public:
     // Constants of one trace, in an upload allocation the caller makes (256-byte aligned).
-    static constexpr std::size_t kConstantsBytes = 1056u;
+    static constexpr std::size_t kConstantsBytes = 1152u;
     // Results kept for the sub-frames of the game frames being interpolated (the lighting's slots).
     static constexpr unsigned kSlots = 4u;
 

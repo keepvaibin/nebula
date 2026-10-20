@@ -7807,6 +7807,7 @@ void GxBackend::note_rt_stage() {
                      sun == nullptr                             ? "no row"
                      : sun->source == RtStageSun::Source::Table ? "table"
                      : sun->source == RtStageSun::Source::None  ? "none"
+                     : sun->source == RtStageSun::Source::Core  ? "core"
                                                                 : "game");
     }
 }

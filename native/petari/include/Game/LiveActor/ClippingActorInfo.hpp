@@ -22,8 +22,9 @@ public:
         mFarClipLevel = level;
     }
 #ifdef TARGET_PC
-    // Nebula, ray-traced shadows: a clipped actor whose shadow can reach the view stays drawn as the game left it (its
-    // movement, animation and sensors stop as the game's clipping stops them; the camera still places its model).
+    // Nebula, ray-traced shadows and light: a clipped actor whose shadow, or whose light as a light source, can reach the
+    // view stays drawn as the game left it (its movement, animation and sensors stop as the game's clipping stops them;
+    // the camera still places its model).
     void judgeShadowDraw();
 #endif
 
@@ -36,6 +37,7 @@ public:
     /* 0x14 */ ViewGroupCtrlDataEntry* _14;
 #ifdef TARGET_PC
     bool mShadowDrawn;   // judgeShadowDraw keeps it in the draw lists while the game clips it
+    f32 mLightReach;     // how far its traced light reaches (0: no light source; < 0: not asked yet)
 #endif
 };
 
