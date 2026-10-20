@@ -749,7 +749,8 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     relief_ = std::clamp(env_float("GALAXY_RT_RELIEF", 3.0f), 0.0f, 64.0f);
     delight_ = env_float("GALAXY_RT_DELIGHT", 1.0f) != 0.0f;
     fit_ = env_float("GALAXY_RT_FIT_LIGHT", 0.0f) != 0.0f;
-    delight_relief_ = std::clamp(env_float("GALAXY_RT_DELIGHT_RELIEF", 2.0f), 0.0f, 32.0f);
+    // Half of 2 (user: grass and other textures too rough; halfway to flat).
+    delight_relief_ = std::clamp(env_float("GALAXY_RT_DELIGHT_RELIEF", 1.0f), 0.0f, 32.0f);
     post_haze_distance_ = std::clamp(env_float("GALAXY_RT_POST_HAZE_DISTANCE", 20000.0f), 100.0f, 1.0e6f);
     post_vignette_ = std::clamp(env_float("GALAXY_RT_POST_VIGNETTE", 0.1f), 0.0f, 1.0f);
     post_view_ = env_float("GALAXY_RT_POST_VIEW", 0.0f) != 0.0f;
@@ -3398,6 +3399,8 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     c.contact_range = contact_range_;
     c.sky_saturation = sky_saturation_;
     c.fallback = fallback_;
+    // The sun the game shows (its BrightSun, else the stage table's): the physical light's direction too.
+    bool visible_sun = false;
     {
         // The game's visible sun (GALAXY_RT_SUN overrides it), else the scene's key light (the sun
         // its sky shows or the world-fixed light its lit draws take, set_key_light); without
@@ -3525,6 +3528,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         c.sun_light[3] = sun_present ? 1.0f + (sky_light_ - 1.0f) * strength : 1.0f;
         emit_log_sun_ = {c.sun_light[0], c.sun_light[1], c.sun_light[2], c.sun_light[3], keyed ? 1.0f : 0.0f,
                          strength};
+        visible_sun = sun_present && !keyed && length > 1e-6f;
     }
     // GALAXY_RT_PHYSICAL: the game's own light units. Its planet light lights a surface as material x min(ambient + key
     // x N.L, 1) in display-encoded colour. Every traced surface's colour is its colour at white light (lit draws:
@@ -3610,8 +3614,11 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         std::copy(scene_up_.begin(), scene_up_.end(), c.up);
         // The textures' de-light maps (GBufferCS's relief, the hits' albedo): their relief height (on: above 0).
         c.up[3] = delight_ && delight_pso_ ? std::max(delight_relief_, 1e-3f) : 0.0f;
+        // From the sun the game shows where it shows one (user: Dusty Dune's sun shone from the top left while the
+        // shadows followed the key light, a lighting rig for the characters, and the picture looked untraced); else
+        // from the key light's position.
         const std::array<float, 3>& key = area.lights[0].position;
-        const std::array<float, 3> eye =
+        const std::array<float, 3> eye = visible_sun ? std::array<float, 3>{c.sun[0], c.sun[1], c.sun[2]} :
             area.lights[0].follows_camera
                 ? key
                 : std::array<float, 3>{camera_[0] * key[0] + camera_[1] * key[1] + camera_[2] * key[2],

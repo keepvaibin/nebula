@@ -774,10 +774,10 @@ static const uint kMetalClass = 2u;
 // name: penguins, glassy domes, painted sheen) keeps its reflection screened over its look.
 static const uint kBareMetalClass = 8u;
 static const float kDielectricF0 = 0.04f;
-// Metal is never too rough to mirror what stands around it (user: everything metal shines at least a bit): the
-// table's 32 metals at roughness 0.78 reflected nothing past the cut-off (0.65); at 0.58 they keep a soft, blurred
-// reflection (35 % of the strength, draw_material). Real metals past 0.6 are cast or corroded, none in the game.
-static const float kMetalRoughnessMax = 0.58f;
+// Metal is never too rough to mirror what stands around it (user: everything metal shines; no metal may look matte):
+// the table's 32 metals at roughness 0.78 reflected nothing past the cut-off (0.65), at 0.58 a faint blur (user: still
+// matte). At most 0.35, the reflection clear and at full strength; the table's lower values stay.
+static const float kMetalRoughnessMax = 0.35f;
 
 // A spot light's share along `from_light` (normalised, from the light): full inside the inner part of
 // its cone, none outside it (`spot` w: the cosine of its half angle; xyz 0: a point light).
@@ -1569,8 +1569,13 @@ void ReflectTraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
             const float3 lit = base * lighting_at(q);
             const float peak = max(lit.r, max(lit.g, lit.b));
             const float saturation = (peak - min(lit.r, min(lit.g, lit.b))) / max(peak, 1e-3f);
+            // Metal emits nothing: a bright metal is bright by what it reflects (its painted reflection is taken out
+            // under physical light: counted an emitter, Gold Leaf's star outline, an environment map alone, went
+            // black).
+            const bool metal_class = surface_class == kMetalClass || surface_class == kBareMetalClass;
             const float emitter = surface_class == 3u ? smoothstep(0.75f, 1.0f, peak)
                                 : surface_class == 4u ? smoothstep(0.75f, 1.0f, peak) * smoothstep(0.35f, 0.6f, saturation)
+                                : metal_class         ? 0.0f
                                                       : smoothstep(0.95f, 1.2f, peak);
             info.x = pack_normal(n);
             info.z = pack_material(surface_class, params.y, 1.0f - emitter, roughness, params.w);
@@ -1587,9 +1592,16 @@ void ReflectTraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
                 // Painted dielectrics and clear ones (ice, crystal, opaque water) take the sky's reflection
                 // at half its confidence: what stands around them reads in their reflection, the bright sky
                 // or aurora only half (rf2: Freezeflame's crystals took the dark sky at cover 0.8).
+                // Clear crystal and glass take it whole (their painted look stays under it, F0 0.17).
                 const bool painted = (surface_class == 0u || surface_class == 1u || surface_class == 3u) && params.w < 0.5f;
-                const bool clear = surface_class == 4u || surface_class == 7u;
+                const bool clear = surface_class == 4u;
                 confidence = (painted || clear) && sky_source(r.source) ? r.confidence * 0.5f : r.confidence;
+                // A metal's ray that leaves the scene sees at least the metal's own environment map, the probe the game
+                // made for it (its painted look, base): the traced world where the ray meets it, never black space
+                // (Space Junk's chrome mirrored black where the game shows its studio).
+                if ((metal_class || surface_class == 7u) && sky_source(r.source)) {
+                    light = max(light, base);
+                }
                 // Bare metal is its reflection (the class's cover): where the traced light is unknown it shows
                 // the game's own painted reflection at the game's level, which the lighting's shade, occlusion
                 // and night level would otherwise darken (its composite multiplies the whole colour).
@@ -2141,6 +2153,10 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
                                                   false);
                 g_reflect_blur = 0.0f;
                 light = r.light;
+                // Glass and crystal whose rays leave the scene keep what they drew (never a dark mirror of space).
+                if (surface == kCrystal && !fall && sky_source(r.source)) {
+                    light = max(light, base);
+                }
                 // The lights' glints off the waves, their lobe widened by the waves' spread over the pixel (specular
                 // anti-aliasing, highlights), weighted like the reflection.
                 g_spread = crystal || coat ? 0.0f : 2.0f * length(cross(wave, n));
@@ -2688,7 +2704,9 @@ CompositeOut finish(Blend b, uint view, float3 under_add, float3 under_keep)
 {
     CompositeOut result;
     const float k = saturate(b.k_sum / b.weight);
-    const float3 highlight = min(b.glint / b.weight, 0.35f);
+    // A light's glint up to white: the sun's on glass or polished metal outshines everything (capped at 0.35, the
+    // brightest a glass sphere showed was a grey smudge: user, nothing glass-like may look matte).
+    const float3 highlight = min(b.glint / b.weight, 1.0f);
     const float3 kept = saturate(1.0f - b.covered / b.weight);
     if (view == 1u || view == 4u) {
         const float3 reflection = b.k_sum > 1e-4f ? b.sum / b.k_sum : float3(0.0f, 0.0f, 0.0f);

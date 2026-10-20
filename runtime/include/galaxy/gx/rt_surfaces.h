@@ -65,6 +65,8 @@ struct RtMaterialNote {
     std::uint32_t texture_format = 0;
     std::uint32_t phase = 0;
     std::uint32_t buffer = 0xFFFFu;  // MR::DrawBufferType of the draw (bit 16: its translucent list)
+    std::uint64_t pack = 0;          // texture-pack keys (the table's hashes): the texture above, the material's
+    std::uint64_t material_pack = 0;
 };
 [[nodiscard]] bool rt_material_census() noexcept;
 void note_rt_material(const RtMaterialNote& note);

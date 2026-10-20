@@ -5,6 +5,8 @@
 #endif
 #ifdef TARGET_PC
 #include "Game/System/GameDataFunction.hpp"
+#include "Game/LiveActor/LiveActor.hpp"
+#include "Game/Util/LiveActorUtil.hpp"
 #include "Game/System/GameDataHolder.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SequenceUtil.hpp"
@@ -216,6 +218,25 @@ void GameScene::draw() const {
             // GameDataHolder::isDataMario reads the file's name ("mario1" or "luigi1").
             snprintf(GameDataFunction::getCurrentGameDataHolder()->mName, sizeof(GameDataHolder::mName), "%s1",
                      action.scenario != 0 ? "luigi" : "mario");
+        } else if (action.kind == NEBULA_TEST_SET_GRAND_STARS) {
+            // Grand Star n is the first star of its galaxy (SpecialStarGrand1-7 derive from these).
+            static const char* const kGrandStarGalaxies[] = {"HeavensDoorGalaxy",    "TriLegLv1Galaxy",
+                                                             "KoopaBattleVs1Galaxy", "KoopaJrShipLv1Galaxy",
+                                                             "KoopaBattleVs2Galaxy", "FloaterOtaKingGalaxy",
+                                                             "KoopaBattleVs3Galaxy"};
+            for (s32 i = 0; i < action.scenario && i < 7; ++i) {
+                GameDataFunction::setGameFlagPowerStarSuccess(kGrandStarGalaxies[i], 1, true);
+            }
+        } else if (action.kind == NEBULA_TEST_LIST_ACTORS) {
+            AllLiveActorGroup* pGroup = MR::getAllLiveActorGroup();
+            for (s32 i = 0; pGroup != nullptr && i < pGroup->getObjNum(); ++i) {
+                LiveActor* pActor = pGroup->getActor(i);
+                if (pActor == nullptr || pActor->mModelManager == nullptr || MR::isDead(pActor)) {
+                    continue;
+                }
+                OSReport("actor %s %.0f %.0f %.0f\n", MR::getModelResName(pActor), pActor->mPosition.x,
+                         pActor->mPosition.y, pActor->mPosition.z);
+            }
         } else if (action.kind == NEBULA_TEST_START_MOVIE) {
             if (MR::isExistSceneObj(SceneObj_MoviePlayingSequenceHolder)) {
                 MR::startMovie(action.scenario);

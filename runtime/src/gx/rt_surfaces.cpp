@@ -152,12 +152,13 @@ void note_rt_material(const RtMaterialNote& note) {
     static const char* const kBlends[4] = {"opaque", "alpha", "add", "other"};
     std::fprintf(stderr,
                  "[rt-material] name=%s object=%08X class=%u features=0x%02X stages=%u texgens=%u ind=%u "
-                 "chan=%08X env=%06X blend=%s tex=%08X %ux%u fmt=%u phase=%u buffer=%u%s\n",
+                 "chan=%08X env=%06X blend=%s tex=%08X %ux%u fmt=%u phase=%u buffer=%u%s pack=%016llX mat=%016llX\n",
                  note.name[0] != 0 ? note.name : "-", note.object, static_cast<unsigned>(note.surface.surface_class),
                  static_cast<unsigned>(note.surface.features), note.stages, note.texgens, note.indirect, note.channel,
                  note.combiner, kBlends[note.blend & 3u], note.texture, note.texture_size & 0xFFFFu,
                  note.texture_size >> 16u, note.texture_format, note.phase, note.buffer & 0xFFFFu,
-                 (note.buffer & 0x10000u) != 0u ? "x" : "o");
+                 (note.buffer & 0x10000u) != 0u ? "x" : "o", static_cast<unsigned long long>(note.pack),
+                 static_cast<unsigned long long>(note.material_pack));
 }
 
 }  // namespace galaxy::gx

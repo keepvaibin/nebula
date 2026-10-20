@@ -7599,6 +7599,11 @@ void GxBackend::fill_rt_tev(RtDrawInfo& info, float facing) {
     // Bits 5-6: an unlit channel's vertex colour de-baked to its program's neutral light (pad[0] bits 0-15: the levels);
     // pad[0] bits 16-17: a lit channel lit at its neutral light, its vertex colour's hue its material. As the raster's
     // (debake_state; never the sky's).
+    // The painted reflection (environment-map stages, header bit 7) comes out only on metal, whose traced reflection
+    // takes its place; crystal, glass, glossy and unlit surfaces keep it as their look (their brilliance, sheen).
+    if (((info.surface & kRtDrawClassMask) >> kRtDrawClassShift) != static_cast<std::uint32_t>(RtSurfaceClass::Metal)) {
+        tev.header &= ~(1u << 7u);
+    }
     const std::uint32_t debake = (info.surface & kRtDrawSky) != 0u ? 0u : debake_state();
     // By the model's facing fit the traced triangles' colours come de-baked (ray_tracing.hlsl GeometryCS).
     tev.header |= debake_fit_active_ ? 0u : (debake & 3u) << 5u;
@@ -7963,6 +7968,8 @@ void GxBackend::note_rt_material() {
     note.texture_format = (image0 >> 20u) & 0xFu;
     note.phase = rt_phase_;
     note.buffer = rt_draw_buffer_;
+    note.pack = rt_texture_source(map).pack;
+    note.material_pack = current_rt_map_ < kMaxTextureMaps ? rt_texture_source(current_rt_map_).pack : 0u;
     galaxy::gx::note_rt_material(note);
 }
 

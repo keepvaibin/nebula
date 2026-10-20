@@ -1716,6 +1716,9 @@ int svc_hbm(void*, uint32_t what, uint32_t) {
 //     miss: MR::forceKillPlayerByAbyss), movieN (MR::startMovie(N), in a stage with a movie sequence), wait (nothing:
 //     keeps a tour's last stop running until then), star / grandstar (the stop's star is collected: its result, the get
 //     demo, the save and what follows, the ending after KoopaBattleVs3Galaxy).
+//   GALAXY_TEST_GRAND_STARS=n: the save holds Grand Stars 1-n from the second scene frame (the Observatory's domes lit as
+//     the game lights them for that many).
+//   GALAXY_TEST_EVENTS actors@frame: the live actors with a model, by model name and position (where to teleport).
 std::atomic<bool> gTourDone{false};
 
 int svc_test_scene_frame(void*, NebulaTestAction* action) {
@@ -1778,6 +1781,8 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
                         events.push_back({NEBULA_TEST_GET_GRAND_STAR, frame, -1});
                     } else if (kind == "mario" || kind == "luigi") {
                         events.push_back({NEBULA_TEST_SET_PLAYER, frame, kind == "luigi" ? 1 : 0});
+                    } else if (kind == "actors") {
+                        events.push_back({NEBULA_TEST_LIST_ACTORS, frame, 0});
                     } else if (kind == "wait") {
                         events.push_back({0, frame, 0});
                     } else if (kind.rfind("movie", 0) == 0) {
@@ -1804,6 +1809,18 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
         }
     }
     ++scene_frames;
+    static const int32_t grand_stars = [] {
+        const char* value = std::getenv("GALAXY_TEST_GRAND_STARS");
+        return value != nullptr ? std::atoi(value) : 0;
+    }();
+    static bool grand_stars_set = false;
+    if (grand_stars > 0 && !grand_stars_set && scene_frames >= 2u) {
+        grand_stars_set = true;
+        action->kind = NEBULA_TEST_SET_GRAND_STARS;
+        action->scenario = grand_stars;
+        log_line("test:", "grand stars set");
+        return 1;
+    }
     // The last stop stays for its frames, or until 20 s after the last test event, then the run ends.
     static const uint64_t last_frame = [] {
         uint64_t last = 0;

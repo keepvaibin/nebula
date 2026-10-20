@@ -297,7 +297,10 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     // so much face on) turned Melty Molten's and Freezeflame's crystals into dark mirrors of their surroundings (user:
     // dull); at 0.25 / 0.4 the glass spheres looked as the game draws them (user: glass and crystal must reflect). Screened
     // over it at cover 0, the bright canopy only lifted the Observatory fountain's glass into a flat, pale disc (v53a).
-    materials_[7] = material("GALAXY_RT_REFLECT_CRYSTAL", {0.05f, 0.17f, 1.0f, 0.0f, 1.0f});
+    // F0 0.35 (user: every glass far more reflective; at 0.17 Space Junk's glass spheres and crystal read matte): its
+    // rays that leave the scene keep its painted look (ReflectTraceCS, WaterTraceCS), so a strong mirror never shows a
+    // dark one of empty space.
+    materials_[7] = material("GALAXY_RT_REFLECT_CRYSTAL", {0.05f, 0.35f, 1.0f, 0.0f, 1.0f});
     view_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_REFLECT_VIEW", 0.0f), 0.0f, 9.0f));
     history_frames_ =
         static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_REFLECT_HISTORY", 24.0f), 1.0f, 64.0f));
