@@ -127,6 +127,7 @@ bool tev_alpha_compare(uint comp, int value, int reference)
 
 static const uint kTevGreyTexture = 1u;   // tev_evaluate_mode: every texture a mid grey (128)
 static const uint kTevBakedColours = 2u;  // tev_evaluate_mode: the vertices' colours as the game baked them
+static const uint kTevNoEnvironment = 4u; // tev_evaluate_mode: its environment maps (painted reflections) black
 
 // Draw `draw`'s TEV output at triangle `tri`, barycentrics `b` (display-encoded RGBA, 0-1), and whether its alpha
 // passes the draw's alpha compare. A draw without a record (`count` records) is white and passes. `mode`:
@@ -155,14 +156,12 @@ float4 tev_evaluate_mode(uint draw, uint count, uint tri, float2 b, uint mode, o
     float4 v1[3] = {tev_rgba8f(col1.x), tev_rgba8f(col1.y), tev_rgba8f(col1.z)};
     // Bits 5-6: the baked light of the vertices' colour removed per vertex and set to the program's neutral light
     // (record + 108: the levels), as the vertex shaders do.
-    // Bits 16-17: a lit channel lit at its neutral light (the record's light word), its vertex colour's hue its material.
+    // Bits 16-17: a lit channel lit at its neutral light (the record's light word), its vertex colour its material.
     const uint levels = g_tev.Load(record + 108u);
     const bool baked = (mode & kTevBakedColours) != 0u;
     [unroll] for (uint k = 0u; k < 3u; ++k) {
         if ((header & 0x20u) != 0u && !baked) v0[k].rgb = tev_debake(v0[k].rgb) * (float(levels & 0xFFu) / 255.0f);
         if ((header & 0x40u) != 0u && !baked) v1[k].rgb = tev_debake(v1[k].rgb) * (float((levels >> 8u) & 0xFFu) / 255.0f);
-        if ((levels & 0x10000u) != 0u) v0[k].rgb = tev_debake(v0[k].rgb);
-        if ((levels & 0x20000u) != 0u) v1[k].rgb = tev_debake(v1[k].rgb);
     }
     const float4 vertex0 = v0[0] * w.x + v0[1] * w.y + v0[2] * w.z;
     const float4 vertex1 = v1[0] * w.x + v1[1] * w.y + v1[2] * w.z;
@@ -223,6 +222,9 @@ float4 tev_evaluate_mode(uint draw, uint count, uint tri, float2 b, uint mode, o
 #endif
             if ((mode & kTevGreyTexture) != 0u) {
                 texc = int4(128, 128, 128, 255);
+            }
+            if ((mode & kTevNoEnvironment) != 0u && g_tev.Load(at + 24u) != 0u) {
+                texc = int4(0, 0, 0, texc.a);
             }
         } else {
             texc = texgens != 0u ? int4(255, 255, 255, 255) : int4(0, 0, 0, 0);
@@ -341,6 +343,28 @@ float4 tev_evaluate_mode(uint draw, uint count, uint tri, float2 b, uint mode, o
     const uint logic = (test >> 22u) & 3u;
     alpha_pass = logic == 0u ? test0 && test1 : logic == 1u ? test0 || test1 : logic == 2u ? test0 != test1 : test0 == test1;
     return float4(fragment) / 255.0f;
+}
+
+// Whether triangle `tri` at barycentrics `b` lies in its emitter's glowing region of the material texture (record pad[2]
+// bits 8-31: u0, v0, u1, v1 in 63rds; 0: all of it), at its coordinates there wrapped into the texture.
+bool tev_glows_at(uint draw, uint count, uint tri, float2 b)
+{
+    if (draw >= count) {
+        return true;
+    }
+    const uint record = draw * kTevRecordBytes;
+    const uint info = g_tev.Load(record + 116u);
+    const uint region = info >> 8u;
+    if (region == 0u) {
+        return true;
+    }
+    const float4 box = float4(float(region & 63u), float((region >> 6u) & 63u), float((region >> 12u) & 63u),
+                              float((region >> 18u) & 63u)) / 63.0f;
+    const uint a = tri * kTriUvStride + ((info >> 3u) & 1u) * 24u;
+    const float4 uv01 = asfloat(g_tri_uv.Load4(a));
+    const float2 uv2 = asfloat(g_tri_uv.Load2(a + 16u));
+    const float2 uv = frac((uv01.xy * (1.0f - b.x - b.y) + uv01.zw * b.x + uv2 * b.y) * asfloat(g_tev.Load2(record + 120u)));
+    return all(uv >= box.xy) && all(uv <= box.zw);
 }
 
 float4 tev_evaluate(uint draw, uint count, uint tri, float2 b, out bool alpha_pass)

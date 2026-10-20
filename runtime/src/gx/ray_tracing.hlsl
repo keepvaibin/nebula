@@ -63,6 +63,8 @@ static const uint kVsKeyFlags = 1080u;
 static const uint kVsKeyTexMatrixMask = 1084u;
 static const uint kVsKeyTexGen = 1088u;
 static const uint kVsKeyPostTexGen = 1120u;
+static const uint kVsDebakeSh = 1280u;     // GxVsConstants::debake_sh (flags bit 6)
+static const uint kVsDebakePeak = 1392u;
 
 uint load_index(uint index_offset, uint i, bool wide)
 {
@@ -143,6 +145,34 @@ void vertex_uv(uint4 draw, uint vertex, out float2 uv, out uint colour)
         uv = asfloat(g_vertex_ring.Load2(a + kVertexUv));
         colour = g_vertex_ring.Load(a + kVertexColor);
     }
+}
+
+// A de-baked vertex colour (RGBA8, R high) raised by the model's facing fit (uber_vs.hlsl nebula_debake_gain): its baked
+// light at its most lit facing over the light at the vertex's object-space normal, 1 to 4.
+uint debake_colour(uint colour, uint4 draw, uint vertex, uint constants)
+{
+    const uint address = draw.x + min(vertex, max(draw.z & 0xFFFFFFu, 1u) - 1u) * kVertexStride;
+    const float3 nrm = (draw.y & 1u) != 0u ? asfloat(g_resident.Load3(min(address, g_resident_limit) + kVertexNormal))
+                                           : asfloat(g_vertex_ring.Load3(min(address, g_vertex_ring_limit) + kVertexNormal));
+    const float len2 = dot(nrm, nrm);
+    if (!(len2 > 0.25f)) {
+        return colour;
+    }
+    const float3 n = nrm * rsqrt(len2);
+    const float y[9] = {0.282095f, 0.488603f * n.y, 0.488603f * n.z, 0.488603f * n.x, 1.092548f * n.x * n.y,
+                        1.092548f * n.y * n.z, 0.315392f * (3.0f * n.z * n.z - 1.0f), 1.092548f * n.x * n.z,
+                        0.546274f * (n.x * n.x - n.y * n.y)};
+    float3 light = float3(0.0f, 0.0f, 0.0f);
+    [unroll] for (uint i = 0u; i < 9u; ++i) {
+        light.r += asfloat(g_constant_ring.Load(constants + kVsDebakeSh + i * 4u)) * y[i];
+        light.g += asfloat(g_constant_ring.Load(constants + kVsDebakeSh + (9u + i) * 4u)) * y[i];
+        light.b += asfloat(g_constant_ring.Load(constants + kVsDebakeSh + (18u + i) * 4u)) * y[i];
+    }
+    const float3 peak = max(asfloat(g_constant_ring.Load3(constants + kVsDebakePeak)), 1e-3f);
+    const float3 gain = clamp(peak / max(light, peak * 0.25f), 0.25f, 4.0f);
+    const float3 rgb = float3(float(colour >> 24u), float((colour >> 16u) & 0xFFu), float((colour >> 8u) & 0xFFu)) / 255.0f;
+    const uint3 lifted = uint3(round(saturate(rgb * gain) * 255.0f));
+    return (lifted.r << 24u) | (lifted.g << 16u) | (lifted.b << 8u) | (colour & 0xFFu);
 }
 
 // The texture coordinates texture generator `gen` gives a vertex, as the uber vertex shader makes them (uber_vs.hlsl):
@@ -254,6 +284,15 @@ void GeometryCS(uint3 id : SV_DispatchThreadID)
             const uint address = draw.x + min(vertex, max(draw.z & 0xFFFFFFu, 1u) - 1u) * kVertexStride;
             colours2[k] = (draw.y & 1u) != 0u ? g_resident.Load(min(address, g_resident_limit) + kVertexColor + 4u)
                                               : g_vertex_ring.Load(min(address, g_vertex_ring_limit) + kVertexColor + 4u);
+            // Physical: de-baked channels by the model's facing fit (VS constants flags bit 6, bits 2-3).
+            if ((vs_flags & 64u) != 0u) {
+                if ((vs_flags & 4u) != 0u) {
+                    colours[k] = debake_colour(colours[k], draw, vertex, constants);
+                }
+                if ((vs_flags & 8u) != 0u) {
+                    colours2[k] = debake_colour(colours2[k], draw, vertex, constants);
+                }
+            }
         }
     }
     if ((g_frame_flags & 2u) != 0u) {

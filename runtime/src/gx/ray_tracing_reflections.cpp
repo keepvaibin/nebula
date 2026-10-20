@@ -80,7 +80,7 @@ struct RtReflectConstants {
     float night_cap;
     float sun_cap;
     std::uint32_t core_point;
-    std::uint32_t tail[3];
+    float sky_fill[3];   // RtReflectScene::sky_fill
 };
 static_assert(sizeof(RtReflectConstants) == RtReflections::kConstantsBytes);
 
@@ -147,6 +147,8 @@ enum Parameter : UINT {
     kDrawTextures,
     kSky,
     kDrawLight,
+    kWaterUv,
+    kWaterWaves,
     kParameterCount,
 };
 
@@ -254,9 +256,10 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
                         std::clamp(v[3], 0.0f, 1.0f), std::clamp(v[4], 0.0f, 1.0f)};
     };
     materials_ = {};
-    // The game's own shading of its shiny surfaces already carries a reflection (its environment
-    // maps): the traced reflections screen over it (cover 0), so a surface is never darker than the
-    // game shows it. The table's metals (bare metal, class 8) are their reflection: the traced one takes the
+    // The game's own shading of its shiny surfaces carries a reflection (its environment maps). Physical light takes
+    // it out (GBufferCS, the per-pixel record's share) and the traced reflection screens over what remains at full
+    // strength (cover 0); GALAXY_RT_PAINTED_REFLECTION=1 keeps the painted one, the traced one at half strength over
+    // it. The table's metals (bare metal, class 8) are their reflection: the traced one takes the
     // painted one's place (cover 1) where it is known, the game's own colour where it is not (ReflectTraceCS),
     // so the lighting's shade never dulls the chrome (screened over it at half strength, Battlerock's discs did
     // not change). Environment maps the table does not name (penguins, glassy domes) stay screened.
@@ -264,7 +267,8 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     // at grazing angles.
     materials_[0] = material("GALAXY_RT_REFLECT_DIFFUSE", {0.6f, 0.04f, 0.0f, 0.0f, 0.0f});
     materials_[1] = material("GALAXY_RT_REFLECT_GLOSSY", {0.3f, 0.06f, 1.0f, 0.0f, 0.0f});
-    materials_[2] = material("GALAXY_RT_REFLECT_METAL", {0.12f, 0.9f, 0.5f, 1.0f, 0.0f});
+    const bool painted = env_float("GALAXY_RT_PAINTED_REFLECTION", 0.0f) != 0.0f;
+    materials_[2] = material("GALAXY_RT_REFLECT_METAL", {0.12f, 0.9f, painted ? 0.5f : 1.0f, 1.0f, 0.0f});
     materials_[kBareMetalClass] = material("GALAXY_RT_REFLECT_BARE_METAL", {0.12f, 0.9f, 1.0f, 1.0f, 1.0f});
     materials_[3] = material("GALAXY_RT_REFLECT_UNLIT", {0.5f, 0.02f, 0.0f, 0.0f, 0.0f});
     // Opaque indirect-textured surfaces: ice (Freezeflame's rink and walls), pools, swamps: polished
@@ -287,11 +291,13 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     materials_[kWaterClass + 1u] = materials_[kWaterClass];
     // Crystals, ice, gems and glass (named in rt_surfaces.cpp): clear dielectric, its reflection
     // white and Fresnel-weighted.
-    // F0 0.45 and cover 0.8: what the glass mirrors replaces most of it (an image with its darks and lights), 45 %
-    // face on and nearly all of it at grazing angles (user: glass, crystal and water must be fully reflective; at
-    // 0.25 / 0.4 Melty Molten's glass spheres looked as the game draws them). Screened over it at cover 0, the bright
-    // canopy only lifted the Observatory fountain's glass into a flat, pale disc (v53a).
-    materials_[7] = material("GALAXY_RT_REFLECT_CRYSTAL", {0.05f, 0.45f, 1.0f, 0.0f, 0.8f});
+    // A diamond's F0 (n 2.42: ((n - 1) / (n + 1))^2 = 0.17) and cover 1, the physical split: the reflection takes F of
+    // the colour, 17 % face on and nearly all of it at grazing angles; the rest is the game's own look of the gem (what
+    // passes through it and the light it gathers inside, its brilliance). F0 0.45 and cover 0.8 (no material reflects
+    // so much face on) turned Melty Molten's and Freezeflame's crystals into dark mirrors of their surroundings (user:
+    // dull); at 0.25 / 0.4 the glass spheres looked as the game draws them (user: glass and crystal must reflect). Screened
+    // over it at cover 0, the bright canopy only lifted the Observatory fountain's glass into a flat, pale disc (v53a).
+    materials_[7] = material("GALAXY_RT_REFLECT_CRYSTAL", {0.05f, 0.17f, 1.0f, 0.0f, 1.0f});
     view_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_REFLECT_VIEW", 0.0f), 0.0f, 9.0f));
     history_frames_ =
         static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_REFLECT_HISTORY", 24.0f), 1.0f, 64.0f));
@@ -306,7 +312,11 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     shafts_ = std::clamp(env_float("GALAXY_RT_WATER_SHAFTS", 1.0f), 0.0f, 8.0f);
     sky_fade_ = std::clamp(env_float("GALAXY_RT_REFLECT_SKY_FADE", 0.9995f), 0.0f, 1.0f);
     sky_average_ = std::clamp(env_float("GALAXY_RT_REFLECT_SKY_AVERAGE", 0.15f), 0.0f, 1.0f);
-    metal_sky_ = std::clamp(env_float("GALAXY_RT_REFLECT_METAL_SKY", 0.5f), 0.0f, 1.0f);
+    // The sky's share in a metal's reflection where the frame and the capture do not show it: half where the painted
+    // reflection stays under it (GALAXY_RT_PAINTED_REFLECTION=1), all of it where the traced one replaces it.
+    metal_sky_ = std::clamp(env_float("GALAXY_RT_REFLECT_METAL_SKY",
+                                      env_float("GALAXY_RT_PAINTED_REFLECTION", 0.0f) != 0.0f ? 0.5f : 1.0f),
+                            0.0f, 1.0f);
     local_gain_ = std::clamp(env_float("GALAXY_RT_REFLECT_LOCAL_GAIN", 2.0f), 0.0f, 16.0f);
     rough_cutoff_ = std::clamp(env_float("GALAXY_RT_REFLECT_ROUGH_CUTOFF", 0.65f), 0.05f, 1.2f);
     waves_ = std::clamp(env_float("GALAXY_RT_WAVES", 1.0f), 0.0f, 4.0f);
@@ -534,6 +544,11 @@ bool RtReflections::create_pipelines(DXGI_FORMAT color_format) {
     params[kSky].Descriptor.ShaderRegister = 9u;
     params[kDrawLight].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
     params[kDrawLight].Descriptor.ShaderRegister = 10u;
+    // Translucent water's texture coordinates and waves (t18, t19; stand-ins without them).
+    params[kWaterUv].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    params[kWaterUv].Descriptor.ShaderRegister = 18u;
+    params[kWaterWaves].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    params[kWaterWaves].Descriptor.ShaderRegister = 19u;
     for (auto& param : params) {
         param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     }
@@ -819,6 +834,7 @@ void RtReflections::fill_constants(const RtReflectScene& scene, const Pass& pass
     c.draw_trust = draw_trust_;
     c.sky_trust = sky_trust_;
     c.metal_cover = materials_[kBareMetalClass].cover;
+    std::copy(scene.sky_fill.begin(), scene.sky_fill.end(), c.sky_fill);
     std::memcpy(constants_cpu, &c, sizeof(c));
 }
 
@@ -875,6 +891,9 @@ void RtReflections::bind_trace(ID3D12GraphicsCommandList* list, const RtReflectS
                                            scene.draw_textures != 0u ? scene.draw_textures : previous_info);
     list->SetComputeRootUnorderedAccessView(kSky, sky_.resource->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kDrawLight, draw_light_.resource->GetGPUVirtualAddress());
+    list->SetComputeRootShaderResourceView(kWaterUv, water && scene.water_uv != 0u ? scene.water_uv : previous_info);
+    list->SetComputeRootShaderResourceView(kWaterWaves,
+                                           water && scene.water_waves != 0u ? scene.water_waves : previous_info);
 }
 
 void RtReflections::accumulate(ID3D12GraphicsCommandList* list, Pass& pass, unsigned slot, UINT groups_x,
@@ -1058,6 +1077,7 @@ void RtReflections::trace_water(ID3D12GraphicsCommandList* list, const RtReflect
     water_composite_timing_ = timed ? result : -1;
     ++window_.waters;
     finish_trace(water_, water_slots_, scene, slot, groups_x);
+    water_slots_[slot].game_waves = scene.water_game_waves;
 }
 
 void RtReflections::draw_composite(ID3D12GraphicsCommandList* list, Pass& pass, ID3D12PipelineState* pso,
@@ -1099,7 +1119,8 @@ void RtReflections::draw_composite(ID3D12GraphicsCommandList* list, Pass& pass, 
     }
     c.water[3] = clear_;
     c.sun[3] = info.sun[3] * caustics_;
-    c.water2[0] = waves_;
+    // The composite's own waves rest where the water's are the game's (traced, water_wave).
+    c.water2[0] = info.game_waves ? 0.0f : waves_;
     // Its sign: the frame before the water is bound (the water layer over a sharp seabed).
     c.water2[1] = water_opaque_.ptr != 0u ? water_cover_ : -water_cover_;
     c.water2[2] = foam_;

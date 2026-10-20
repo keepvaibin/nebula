@@ -70,6 +70,9 @@ struct RtMaterial {
     float pulse = 0.0f;
     float cone = 0.0f;                    // degrees; 0: a point light
     float glow = -1.0f;                   // < 0: the intensity
+    // An emitter's glowing part of its texture (u0, v0, u1, v1; the table's `region`): Gusty Garden's spin bulbs glow,
+    // their leaves (the same texture's other half) do not.
+    float region[4] = {0.0f, 0.0f, 1.0f, 1.0f};
     // Surface relief from the texture's detail under the sun (ground, rock, bark, cloth; none on
     // skin, paint, metal, glass): the strength of the per-pixel normal its brightness gives.
     float relief = 0.0f;

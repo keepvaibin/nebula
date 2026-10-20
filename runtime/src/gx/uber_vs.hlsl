@@ -28,6 +28,10 @@ cbuffer GxVsConstants : register(b0) {
     uint4    uber_post_texgen[2];
     // color0, color1, alpha0, alpha1 channel controls.
     uint4    uber_channel;
+    float4   uber_motion_skip_[7];
+    // Physical ray tracing (flags bit 6): the model's baked light by facing (uber_constants.h).
+    float4   debake_sh[7];
+    float4   debake_peak;
 };
 StructuredBuffer<float4> mtx_palette : register(t0, space1);
 
@@ -201,6 +205,29 @@ void vertex_blend(inout VSIn v, uint id) {
 }
 
 // A vertex colour with its baked light removed: its hue at full brightness (black stays black).
+// Physical ray tracing (flags bit 6): what a de-baked vertex colour is raised by: the model's baked light at its most
+// lit facing (debake_peak: its light at the player's up, GxBackend::flush_draw_state) over the light at this vertex's
+// object-space normal `nrm` (nine spherical harmonics a channel, debake_sh; GxBackend::fit_debake_light), 1/4 to 4.
+// No normal: 1.
+float3 nebula_debake_gain(float3 nrm) {
+    const float len2 = dot(nrm, nrm);
+    if (!(len2 > 0.25)) {
+        return float3(1.0, 1.0, 1.0);
+    }
+    const float3 n = nrm * rsqrt(len2);
+    const float y[9] = {0.282095, 0.488603 * n.y, 0.488603 * n.z, 0.488603 * n.x, 1.092548 * n.x * n.y,
+                        1.092548 * n.y * n.z, 0.315392 * (3.0 * n.z * n.z - 1.0), 1.092548 * n.x * n.z,
+                        0.546274 * (n.x * n.x - n.y * n.y)};
+    float3 light = float3(0.0, 0.0, 0.0);
+    [unroll] for (uint i = 0u; i < 9u; ++i) {
+        light.r += debake_sh[i >> 2u][i & 3u] * y[i];
+        light.g += debake_sh[(9u + i) >> 2u][(9u + i) & 3u] * y[i];
+        light.b += debake_sh[(18u + i) >> 2u][(18u + i) & 3u] * y[i];
+    }
+    const float3 peak = max(debake_peak.rgb, 1e-3);
+    return clamp(peak / max(light, peak * 0.25), 0.25, 4.0);
+}
+
 float3 nebula_debake(float3 c) {
     const float m = max(c.r, max(c.g, c.b));
     return m > (1.0 / 255.0) ? c / m : c;
@@ -246,10 +273,15 @@ VSOut main(VSIn v, uint vertex_id : SV_VertexID) {
         float((v.color1 >>  8u) & 0xFFu) / 255.0,
         float((v.color1       ) & 0xFFu) / 255.0);
     // Physical ray tracing (flags bits 2-3): an unlit channel's vertex colour is the art's baked light.
-    if ((flags & 4u) != 0u) vtx_col0.rgb = nebula_debake(vtx_col0.rgb) * (float((flags >> 8u) & 0xFFu) / 255.0);
-    if ((flags & 8u) != 0u) vtx_col1.rgb = nebula_debake(vtx_col1.rgb) * (float((flags >> 16u) & 0xFFu) / 255.0);
-    if ((flags & 16u) != 0u) vtx_col0.rgb = nebula_debake(vtx_col0.rgb);
-    if ((flags & 32u) != 0u) vtx_col1.rgb = nebula_debake(vtx_col1.rgb);
+    if ((flags & 64u) != 0u) {
+        const float3 debake_gain = nebula_debake_gain(v.nrm);
+        if ((flags & 4u) != 0u) vtx_col0.rgb = saturate(vtx_col0.rgb * debake_gain);
+        if ((flags & 8u) != 0u) vtx_col1.rgb = saturate(vtx_col1.rgb * debake_gain);
+    } else {
+        if ((flags & 4u) != 0u) vtx_col0.rgb = nebula_debake(vtx_col0.rgb) * (float((flags >> 8u) & 0xFFu) / 255.0);
+        if ((flags & 8u) != 0u) vtx_col1.rgb = nebula_debake(vtx_col1.rgb) * (float((flags >> 16u) & 0xFFu) / 255.0);
+    }
+    // Lit channels (flags bits 4-5) keep their vertices' colours: the game lights them, so those are the material.
 
     bool lighting_used = false;
     [unroll] for (uint lc = 0u; lc < 2u; ++lc) {

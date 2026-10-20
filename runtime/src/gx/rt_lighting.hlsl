@@ -351,6 +351,29 @@ float3 unpack_normal(uint v)
     return normalize(n);
 }
 
+// A pixel's shading normal (12 bits an axis, octahedral) and the share of its colour that is not the game's painted
+// reflection (8 bits, 255: all of it; GBufferCS).
+uint pack_pixel_normal(float3 n, float own)
+{
+    n /= abs(n.x) + abs(n.y) + abs(n.z);
+    float2 e = n.xy;
+    if (n.z < 0.0f) {
+        e = (1.0f - abs(n.yx)) * float2(n.x >= 0.0f ? 1.0f : -1.0f, n.y >= 0.0f ? 1.0f : -1.0f);
+    }
+    const uint2 u = uint2(round(saturate(e * 0.5f + 0.5f) * 4095.0f));
+    return u.x | (u.y << 12u) | (uint(round(saturate(own) * 255.0f)) << 24u);
+}
+
+float3 unpack_pixel_smooth_normal(uint v)
+{
+    const float2 e = float2(float(v & 0xFFFu), float((v >> 12u) & 0xFFFu)) / 4095.0f * 2.0f - 1.0f;
+    float3 n = float3(e, 1.0f - abs(e.x) - abs(e.y));
+    const float t = saturate(-n.z);
+    n.x += n.x >= 0.0f ? -t : t;
+    n.y += n.y >= 0.0f ? -t : t;
+    return normalize(n);
+}
+
 // A pixel's de-lighting (GBufferCS): the normal its texture's relief bends (octahedral, 10 bits an axis) and the light
 // painted into its texel (log units, 12 bits over +-kDelightRange, never 0: 0 is none).
 uint pack_pixel_delight(float3 n, float shading)
@@ -2032,28 +2055,38 @@ float3 eye_to_world(float3 d)
     return normalize(d.x * g_to_eye[0].xyz + d.y * g_to_eye[1].xyz + d.z * g_to_eye[2].xyz);
 }
 
-// kPhysicalFlag: the traced sky's level. The sky model is drawn as a backdrop (its picture says nothing of how much
-// light it gives); the stage's ambient says how much the open sky lights a surface: the traced sky keeps its colours
-// and their distribution over the sphere at the ambient's luminance (its mean radiance equal to it).
-float physical_sky_scale()
+// kPhysicalFlag: the open sky's light. The sky model is a backdrop drawn as it shows: its picture is the radiance it
+// sends at the game's exposure, in its own colours and over its directions (image-based light). The stage's ambient
+// (g_sky_radiance) says how much light a surface open to the sky gets: what the backdrop sends short of it comes from
+// every direction in the ambient's colour; a backdrop brighter than it is taken down to it. A dark space backdrop so
+// lights little (Good Egg's deep blue raised to the ambient tinted its stone lavender, expo1); a glowing one lights in
+// its own colour (Melty Molten's lava horizon; grey under the ambient's colour alone).
+float physical_sky_mean()
 {
-    const float mean = luminance(g_sky_map[kSkyMapSize * kSkyMapSize].rgb * 0.282095f);
-    return mean > 1e-4f ? luminance(g_sky_radiance.rgb) / mean : 0.0f;
+    return luminance(g_sky_map[kSkyMapSize * kSkyMapSize].rgb * 0.282095f);
 }
 
-// kPhysicalFlag: the traced sky's light in the stage's ambient colour (g_sky_radiance), its luminance kept. The traced
-// sky gives the light's distribution over directions; its colour is the backdrop's, often a saturated space backdrop the
-// game never lights with (Good Egg's deep blue made its stone lavender, fit2). Reflections show the backdrop itself.
-float3 ambient_coloured(float3 light)
+// The share of the backdrop's own radiance its light keeps.
+float physical_sky_own()
 {
-    return luminance(light) * g_sky_radiance.rgb / max(luminance(g_sky_radiance.rgb), 1e-4f);
+    const float mean = physical_sky_mean();
+    const float ambient = luminance(g_sky_radiance.rgb);
+    return mean > ambient && mean > 1e-4f ? ambient / mean : 1.0f;
+}
+
+// The ambient beyond the backdrop's own light, from every direction (radiance).
+float3 physical_sky_fill()
+{
+    const float ambient = luminance(g_sky_radiance.rgb);
+    return ambient > 1e-4f ? g_sky_radiance.rgb * saturate(1.0f - physical_sky_mean() * physical_sky_own() / ambient)
+                           : float3(0.0f, 0.0f, 0.0f);
 }
 
 // kPhysicalFlag: the sky's radiance towards eye-space direction `d`: the traced sky's (bilinear in its map, at the
 // stage's ambient level and colour), else the ambient from every direction.
 float3 physical_sky(float3 d)
 {
-    if (g_full_light.w == 0.0f || physical_sky_scale() == 0.0f) {
+    if (g_full_light.w == 0.0f) {
         return g_sky_radiance.rgb;
     }
     const float2 p = sky_map_uv(eye_to_world(d)) * float(kSkyMapSize) - 0.5f;
@@ -2065,14 +2098,14 @@ float3 physical_sky(float3 d)
         const float w = ((k & 1u) != 0u ? f.x : 1.0f - f.x) * ((k & 2u) != 0u ? f.y : 1.0f - f.y);
         radiance += g_sky_map[uint(t.y) * kSkyMapSize + uint(t.x)].rgb * w;
     }
-    return ambient_coloured(radiance) * physical_sky_scale();
+    return radiance * physical_sky_own() + physical_sky_fill();
 }
 
 // kPhysicalFlag: the open sky's irradiance over pi on a surface facing eye-space `n` (the traced sky's spherical
 // harmonics convolved with the cosine: bands 1, 2/3, 1/4, at the stage's ambient level), else the ambient.
 float3 physical_sky_irradiance(float3 n)
 {
-    if (g_full_light.w == 0.0f || physical_sky_scale() == 0.0f) {
+    if (g_full_light.w == 0.0f) {
         return g_sky_radiance.rgb;
     }
     float basis[9];
@@ -2082,7 +2115,7 @@ float3 physical_sky_irradiance(float3 n)
         irradiance += g_sky_map[kSkyMapSize * kSkyMapSize + b].rgb *
                       (basis[b] * (b == 0u ? 1.0f : b < 4u ? 2.0f / 3.0f : 0.25f));
     }
-    return ambient_coloured(max(irradiance, 0.0f)) * physical_sky_scale();
+    return max(irradiance, 0.0f) * physical_sky_own() + physical_sky_fill();
 }
 
 // kPhysicalFlag: the camera's exposure: a white surface facing the player's up (the ground under the player, by the
@@ -3047,7 +3080,18 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
     }
     g_z[index] = p.z;
     g_normal[index] = pack_normal(n);
-    g_primary[index] = primary;
+    // g_primary x bit 31: an emitter's part outside the table's glowing region of its texture (lit as any surface).
+    uint2 marked = primary;
+#if RT_TEXTURED
+    if (primary.x != 0u) {
+        const uint tri = primary.x - 1u;
+        if (!tev_glows_at(g_surfaces.Load(tri * 16u + 12u) >> 16u, g_tev_info.x, tri,
+                          float2(f16tof32(primary.y), f16tof32(primary.y >> 16u)))) {
+            marked.x |= 0x80000000u;
+        }
+    }
+#endif
+    g_primary[index] = marked;
     // The glowing surfaces' light (cosine-weighted rays: their mean is the irradiance over pi),
     // saturating softly like the glow lights'.
     if (any(emitted > 0.0f)) {
@@ -3356,7 +3400,11 @@ void EmitTriangleCS(uint3 id : SV_DispatchThreadID)
         bool pass;
         radiance += srgb_to_linear(saturate(tev_evaluate(draw, g_tev_info.x, tri, kPoints[k], pass).rgb));
     }
-    radiance /= 7.0f;
+    // Brighter than it shows by the table's intensity where that passes 1 (a glowing bulb's luminance over its painted
+    // colour); the table's lesser art intensities (Luma units) leave it as it shows. Outside the table's glowing region
+    // of its texture (tev_glows_at, at the triangle's centre) none.
+    radiance *= max(asfloat(g_draws.Load(min(draw, max(g_draw_count, 1u) - 1u) * kDrawStride + 12u)), 1.0f) *
+                (tev_glows_at(draw, g_tev_info.x, tri, float2(1.0f / 3.0f, 1.0f / 3.0f)) ? 1.0f : 0.0f);
     const bool two_sided = (range.z >> 31u) != 0u;
     const float power = area > 1e-8f ? kPi * luminance(radiance) * area * (two_sided ? 2.0f : 1.0f) : 0.0f;
     g_reference[1u + 4u * id.x] = float4(v0, area);
@@ -3426,7 +3474,7 @@ void BakedFitCS(uint3 id : SV_DispatchThreadID, uint3 group : SV_GroupID, uint g
     bool counted = false;
     if (all(s < g_sample_size)) {
         const uint index = s.y * g_sample_size.x + s.x;
-        const uint2 primary = g_primary[index];
+        const uint2 primary = uint2(g_primary[index].x & 0x7FFFFFFFu, g_primary[index].y);
         if (primary.x != 0u) {
             const uint tri = primary.x - 1u;
             const uint draw = g_surfaces.Load(tri * 16u + 12u) >> 16u;
@@ -4138,8 +4186,8 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
         const float4 sum = g_reference[2u * index];
         float3 m = (sum.w > 0.0f ? sum.rgb / sum.w : float3(0.0f, 0.0f, 0.0f)) *
                    g_reference[2u * g_sample_size.x * g_sample_size.y].x;
-        const uint tri = g_primary[index].x;
-        if (tri != 0u) {
+        const uint tri = g_primary[index].x & 0x7FFFFFFFu;
+        if (tri != 0u && (g_primary[index].x >> 31u) == 0u) {
             const uint record = min(g_surfaces.Load((tri - 1u) * 16u + 12u) >> 16u, max(g_draw_count, 1u) - 1u) *
                                 kDrawStride;
             const uint2 emission = g_draws.Load2(record + 8u);
@@ -4169,14 +4217,15 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
         const float exposure = physical_exposure();
         const float visible = facing > 1e-3f ? saturate(light.sun / facing) * exposure : 0.0f;
         float3 m = (light.sky + g_sun_light.rgb * light.sun + light.points * g_point_light) * exposure;
-        const uint tri = g_primary[index].x;
-        if (tri != 0u) {
+        const uint tri = g_primary[index].x & 0x7FFFFFFFu;
+        if (tri != 0u && (g_primary[index].x >> 31u) == 0u) {
             const uint record = min(g_surfaces.Load((tri - 1u) * 16u + 12u) >> 16u, max(g_draw_count, 1u) - 1u) *
                                 kDrawStride;
             const uint2 emission = g_draws.Load2(record + 8u);
             if ((emission.x & kEmitNamed) != 0u && (emission.x & 3u) != 0u && (emission.x & kEmitNoLight) == 0u) {
-                // A light source shows what it sends: its colour is its radiance, at the camera's exposure.
-                m = exposure.xxx;
+                // A light source shows what it sends: its colour is its radiance (times the table's intensity past 1,
+                // EmitTriangleCS), at the camera's exposure.
+                m = (exposure * max(asfloat(emission.y), 1.0f)).xxx;
             }
         }
         m = min(m, kMaxLight);
@@ -4220,7 +4269,7 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
     // A surface the game lights already turns its shading towards its lights: the traced light
     // shadows it (the ratio to the same light unshadowed). The point lights add to it, or, where
     // the game lights it with them too (GX light 4), shadow it likewise.
-    const uint tri = g_primary[index].x;
+    const uint tri = g_primary[index].x & 0x7FFFFFFFu;
     const uint draw_flags = tri != 0u ? g_surfaces.Load((tri - 1u) * 16u + 12u) : 0u;
     const bool delit = (draw_flags & kDrawDelit) != 0u;
     const bool point_lit = (draw_flags & kDrawPointLit) != 0u && g_point_count != 0u;
@@ -4757,18 +4806,30 @@ void GBufferCS(uint3 id : SV_DispatchThreadID)
     uint2 packed = uint2(0u, 0u);
     if (pixel_point(q, p) && inside(g_viewport, float2(q) + 0.5f)) {
         const Surface s = primary_surface(q, p);
-        packed.x = pack_normal(s.n);
+        float own = 1.0f;
 #if RT_TEXTURED
         if (s.primary.x != 0u) {
+            const uint tri = s.primary.x - 1u;
+            const float2 bary = float2(f16tof32(s.primary.y), f16tof32(s.primary.y >> 16u));
             const float3 next = eye_position(g_projection, g_viewport, float2(q) + float2(1.5f, 0.5f), p.z);
             float3 bent = s.n;
             float shading;
-            if (delight_surface(s.primary.x - 1u, float2(f16tof32(s.primary.y), f16tof32(s.primary.y >> 16u)), p, s.ng,
-                                length(next - p), bent, shading)) {
+            if (delight_surface(tri, bary, p, s.ng, length(next - p), bent, shading)) {
                 packed.y = pack_pixel_delight(bent, shading);
+            }
+            // The game's painted reflection (its environment maps): the share of the colour without it, which the
+            // composite keeps; the traced reflection (rt_reflections.hlsl) takes its place.
+            const uint draw = g_surfaces.Load(tri * 16u + 12u) >> 16u;
+            if (draw < g_tev_info.x && (g_tev.Load(draw * kTevRecordBytes) & 0x80u) != 0u) {
+                bool pass;
+                const float3 full = srgb_to_linear(saturate(tev_evaluate_mode(draw, g_tev_info.x, tri, bary, 0u, pass).rgb));
+                const float3 bare =
+                    srgb_to_linear(saturate(tev_evaluate_mode(draw, g_tev_info.x, tri, bary, kTevNoEnvironment, pass).rgb));
+                own = luminance(full) > 1e-4f ? saturate(luminance(bare) / luminance(full)) : 1.0f;
             }
         }
 #endif
+        packed.x = pack_pixel_normal(s.n, own);
     }
     g_pixels[id.y * g_target_size.x + id.x] = packed;
 }
@@ -4814,7 +4875,8 @@ cbuffer RtComposite : register(b0)
     uint2 m_sample_size;
     uint m_factor;
     uint m_flags;   // bit 0: move the point to the traced frame's camera (m_reproject[m_slot]);
-                    // bit 1: show the lighting alone; bit 2: light in linear light (the reference)
+                    // bit 1: show the lighting alone; bit 2: light in linear light (the reference);
+                    // bit 4: traced reflections (the painted ones taken out, bit 3)
     uint m_slot;
     float m_near;
     float m_split;  // GALAXY_RT_SPLIT: left of it the game's own picture (a dark line between)
@@ -4834,7 +4896,14 @@ StructuredBuffer<uint2> m_pixels : register(t4);
 float3 traced_normal(int2 q)
 {
     const int2 c = clamp(q, int2(0, 0), int2(m_target_size) - 1);
-    return unpack_normal(m_pixels[uint(c.y) * m_target_size.x + uint(c.x)].x);
+    return unpack_pixel_smooth_normal(m_pixels[uint(c.y) * m_target_size.x + uint(c.x)].x);
+}
+
+// The share of its colour that is not the game's painted reflection (GBufferCS).
+float traced_own(int2 q)
+{
+    const int2 c = clamp(q, int2(0, 0), int2(m_target_size) - 1);
+    return float(m_pixels[uint(c.y) * m_target_size.x + uint(c.x)].x >> 24u) / 255.0f;
 }
 
 // Its de-lighting there (pack_pixel_delight; 0: none).
@@ -5032,7 +5101,9 @@ CompositeOut CompositePS(float4 position : SV_Position)
             return result;
         }
         // The texel's albedo: the light painted into it taken out (rt_delight.hlsl), the traced light in its place.
-        const float3 albedo = srgb_to_linear(color) * (delit != 0u ? exp(-unpack_pixel_shading(delit)) : 1.0f);
+        // Its painted reflection taken out too where the traced one replaces it (environment maps).
+        const float3 albedo = srgb_to_linear(color) * (delit != 0u ? exp(-unpack_pixel_shading(delit)) : 1.0f) *
+                              ((m_flags & 16u) != 0u ? traced_own(traced_pixel) : 1.0f);
         result.color = float4(linear_to_srgb(film_light(albedo, m)), 1.0f);
         return result;
     }

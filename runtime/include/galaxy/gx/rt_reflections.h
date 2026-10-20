@@ -50,6 +50,10 @@ struct RtReflectLights {
 // factor EFB pixels, each with the triangle the lighting's camera ray met.
 struct RtReflectScene {
     std::array<float, 4> projection{};      // GX projection A-D
+    // Physical light: the open sky's ambient as the picture shows it (display-encoded, at the camera's exposure). A
+    // reflection sees the sky at least this bright, as the lighting lights a surface (its backdrop and the ambient's
+    // fill): chrome in space mirrored black where every matte surface took the ambient.
+    std::array<float, 3> sky_fill{};
     std::array<float, 4> depth{};           // D3D projection [2][2], [2][3]; viewport min, max depth
     std::array<float, 4> viewport{};        // EFB pixels
     float near_plane = 0.0f;
@@ -79,6 +83,11 @@ struct RtReflectScene {
     D3D12_GPU_VIRTUAL_ADDRESS water_tlas = 0;
     D3D12_GPU_VIRTUAL_ADDRESS water_positions = 0;
     D3D12_GPU_VIRTUAL_ADDRESS water_surfaces = 0;
+    // Their texture coordinates (per triangle as surface_uv: the wave map's, the water texture's) and per draw its waves
+    // (rt_reflections.hlsl water_wave); whether any has the game's waves (the composite's own waves then rest).
+    D3D12_GPU_VIRTUAL_ADDRESS water_uv = 0;
+    D3D12_GPU_VIRTUAL_ADDRESS water_waves = 0;
+    bool water_game_waves = false;
     // High quality: per triangle texture coordinates and colours, per draw its texture view and colour
     // (0: none, the hits off screen stay unknown); the art's level at a hit (day share, night level, day
     // level, texture detail per eye unit of distance).
@@ -180,6 +189,7 @@ private:
         std::uint32_t factor = 0;
         std::uint32_t tile_width = 0;
         std::array<float, 4> sun{};   // the water's caustics: towards the sun (eye space), 0 without one
+        bool game_waves = false;      // its water moved by the game's own waves (water_wave)
     };
     struct Pending {
         std::uint64_t frame = 0;

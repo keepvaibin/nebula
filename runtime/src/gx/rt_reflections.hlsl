@@ -236,6 +236,9 @@ cbuffer RtReflect : register(b0)
     float g_hit_cap;
     float g_hit_sun_cap;
     uint g_hit_core;
+    // Physical light: the open sky's ambient as the picture shows it; the sky a reflection sees is at least this
+    // (RtReflectScene::sky_fill).
+    float3 g_sky_fill;
 };
 
 RaytracingAccelerationStructure g_scene : register(t0);
@@ -771,6 +774,10 @@ static const uint kMetalClass = 2u;
 // name: penguins, glassy domes, painted sheen) keeps its reflection screened over its look.
 static const uint kBareMetalClass = 8u;
 static const float kDielectricF0 = 0.04f;
+// Metal is never too rough to mirror what stands around it (user: everything metal shines at least a bit): the
+// table's 32 metals at roughness 0.78 reflected nothing past the cut-off (0.65); at 0.58 they keep a soft, blurred
+// reflection (35 % of the strength, draw_material). Real metals past 0.6 are cast or corroded, none in the game.
+static const float kMetalRoughnessMax = 0.58f;
 
 // A spot light's share along `from_light` (normalised, from the light): full inside the inner part of
 // its cone, none outside it (`spot` w: the cosine of its half angle; xyz 0: a point light).
@@ -1059,17 +1066,18 @@ float3 hit_rgb8(uint c)
     return float3(float(c >> 24u), float((c >> 16u) & 0xFFu), float((c >> 8u) & 0xFFu)) / 255.0f;
 }
 
-// The sky along `l` as the reflections hold it: the captured sky, else the lighting's sky map, else the sky's average.
+// The sky along `l` as the reflections hold it: the captured sky, else the lighting's sky map, else the sky's average;
+// at least the ambient's fill under physical light (g_sky_fill).
 float3 sky_behind(float3 l)
 {
     float3 light;
     if (sky_captured(l, light) > 0.05f) {
-        return light;
+        return max(light, g_sky_fill);
     }
     if (sky_map_light(l, light) > 0.05f) {
-        return light;
+        return max(light, g_sky_fill);
     }
-    return average(0u, light) ? light : float3(0.0f, 0.0f, 0.0f);
+    return max(average(0u, light) ? light : float3(0.0f, 0.0f, 0.0f), g_sky_fill);
 }
 
 // High quality: what a reflection ray hits where the frame does not show it, shaded by ray tracing (user: the
@@ -1345,8 +1353,13 @@ Reflected reflect_light(uint2 s, float3 dir, float3 n, float3 ng, float3 hit, fl
             }
         }
     }
+    // Physical light: the sky is never darker than the ambient's fill (g_sky_fill), as the lighting lights a surface.
+    if (sky_source(r.source)) {
+        r.light = max(r.light, g_sky_fill);
+    }
     // A mirror shows the sky as sharp as the frame or the capture holds it; the 64^2 memory, the sky map and
-    // the sky's average are blurrier than the game's painted reflection, which keeps part of their place.
+    // the sky's average are blurrier than the game's painted reflection, which keeps part of their place (g_metal_sky:
+    // 1 where the painted reflection is taken out).
     if (params.w > 0.0f && sky_source(r.source) && r.source != kSkyShown && r.source != kSkyCaptured) {
         r.confidence *= g_metal_sky;
     }
@@ -1427,6 +1440,9 @@ float4 draw_material(inout uint surface_class, uint draw, out float roughness)
     }
     if (r16 != 0xFFFFu) {
         roughness = float(r16) / 65534.0f;
+        if (params.w >= 0.5f) {
+            roughness = min(roughness, kMetalRoughnessMax);
+        }
         params.x = max(roughness * roughness, 1e-3f);
         params.y = saturate((g_rough_cutoff - roughness) / 0.2f);
     }
@@ -1862,6 +1878,90 @@ bool water_faces(uint tri, float2 b, float3 dir)
     return dot(smooth, dir) < 0.0f;
 }
 
+
+#if RT_TEXTURED
+// Translucent water's own waves: per water triangle its texture coordinates (72 bytes as g_tri_uv: slot 0 the wave map's,
+// slot 1 the water texture's), per water draw (48 bytes) the wave map's view, flags (bit 0 waves), its coordinate scale,
+// the indirect matrix's direction part (s from x, s from y, t from x, t from y), the water texture's coordinate scale
+// (SceneRayTracer's water records, GxBackend's wave capture).
+ByteAddressBuffer g_water_uv : register(t18);
+ByteAddressBuffer g_water_waves : register(t19);
+
+// The sea's slope at two standard deviations for a light breeze (Cox & Munk 1954: sigma^2 = 0.003 + 0.00512 U, U = 5 m/s:
+// sigma 0.17): the slope the wave map's full range stands for.
+static const float kWaveSlope = 0.34f;
+
+// The water's normal `n` at water triangle `tri` (barycentrics `b`; eye-space `hit`) bent by the game's own waves: the
+// wave map GX moves the water's texture by (its indirect texture; its alpha and blue are the s and t offsets) read as the
+// waves' slope (its range kWaveSlope), turned by the indirect matrix onto the water texture's axes on the surface. Read
+// at the level the pixel's footprint covers: waves wider than a pixel bend the reflection, finer ones average out, so no
+// glitter at any resolution. False without waves.
+bool water_wave(uint tri, float2 b, float3 hit, float3 n, out float3 wave)
+{
+    wave = n;
+    const uint draw = g_water_surfaces.Load(tri * 16u + 12u) >> 16u;
+    const uint4 head = g_water_waves.Load4(draw * 48u);
+    if ((head.y & 1u) == 0u || head.x == 0xFFFFFFFFu) {
+        return false;
+    }
+    const float4 turn = asfloat(g_water_waves.Load4(draw * 48u + 16u));
+    const float2 main_scale = asfloat(g_water_waves.Load2(draw * 48u + 32u));
+    const float2 wave_scale = asfloat(head.zw);
+    const uint a = tri * 72u;
+    const float4 w01 = asfloat(g_water_uv.Load4(a));
+    const float2 w2 = asfloat(g_water_uv.Load2(a + 16u));
+    const float4 m01 = asfloat(g_water_uv.Load4(a + 24u));
+    const float2 m2 = asfloat(g_water_uv.Load2(a + 40u));
+    const float3 w = float3(1.0f - b.x - b.y, b.x, b.y);
+    const float2 t0 = w01.xy * wave_scale;
+    const float2 t1 = w01.zw * wave_scale;
+    const float2 t2 = w2 * wave_scale;
+    const float2 uv = t0 * w.x + t1 * w.y + t2 * w.z;
+    if (any(abs(uv) >= 1.0e4f)) {
+        return false;
+    }
+    const float3 v0 = asfloat(g_water_positions.Load3(tri * 36u));
+    const float3 e1 = asfloat(g_water_positions.Load3(tri * 36u + 12u)) - v0;
+    const float3 e2 = asfloat(g_water_positions.Load3(tri * 36u + 24u)) - v0;
+    // The water texture's axes on the surface (eye units per unit of its coordinates), in the normal's plane.
+    const float2 d1 = (m01.zw - m01.xy) * main_scale;
+    const float2 d2 = (m2 - m01.xy) * main_scale;
+    const float det = d1.x * d2.y - d2.x * d1.y;
+    if (abs(det) < 1e-12f) {
+        return false;
+    }
+    float3 axis_s = (e1 * d2.y - e2 * d1.y) / det;
+    float3 axis_t = (e2 * d1.x - e1 * d2.x) / det;
+    axis_s -= n * dot(n, axis_s);
+    axis_t -= n * dot(n, axis_t);
+    if (dot(axis_s, axis_s) < 1e-20f || dot(axis_t, axis_t) < 1e-20f) {
+        return false;
+    }
+    axis_s = normalize(axis_s);
+    axis_t = normalize(axis_t);
+    // The wave map's level for the pixel's footprint (its texels per eye unit over the triangle, a ray cone).
+    const Texture2D<float4> map = ResourceDescriptorHeap[NonUniformResourceIndex(head.x)];
+    uint width, height, levels;
+    map.GetDimensions(0u, width, height, levels);
+    const float2 size = float2(width, height);
+    const float2 g1 = (t1 - t0) * size;
+    const float2 g2 = (t2 - t0) * size;
+    const float texels = abs(g1.x * g2.y - g2.x * g1.y);
+    const float area = length(cross(e1, e2));
+    if (texels < 1e-12f || area < 1e-12f) {
+        return false;
+    }
+    const float footprint = pixel_size(hit.z) / max(abs(dot(n, normalize(hit))), 0.1f);
+    const float lod = clamp(0.5f * log2(texels / area) + log2(footprint), 0.0f, float(levels - 1u));
+    const float4 texel = map.SampleLevel(g_wrap, uv, lod);
+    const float2 xy = (float2(texel.a, texel.b) * 255.0f - 128.0f) / 128.0f;
+    const float2 slope = clamp(float2(turn.x * xy.x + turn.y * xy.y, turn.z * xy.x + turn.w * xy.y), -1.0f, 1.0f) *
+                         kWaveSlope;
+    wave = normalize(n - slope.x * axis_s - slope.y * axis_t);
+    return true;
+}
+#endif
+
 // Translucent water (seas, lakes, pools drawn blended after the trace) and clear crystals and glass
 // drawn the same way: the camera ray meets the
 // water draws' own triangles in front of the surface the EFB holds behind them; the vertex normals
@@ -1979,13 +2079,20 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
             const bool mirror = (record.w & kWaterMirrorFlag) != 0u;
             const bool coat = ((record.w >> 8u) & 15u) == kMetalClass;
             const bool crystal = mirror || ((record.w >> 8u) & 15u) == kCrystal;
-            // The reflection is traced off the calm surface: every pixel's ray mirrors coherently, one sharp image
-            // that the composite moves with the waves (water_distortion). Rays bent per pixel by the waves (up to
-            // 17 degrees) scattered the image into glitter, the more the higher the resolution (user, Native42 at
-            // 6x: "barely any reflection and so much flicker"). The waves shape the glints only.
+            // The game's own waves (its wave map, water_wave) bend the reflected ray: read at the pixel's footprint
+            // they are smooth from pixel to pixel. Without them the reflection is traced off the calm surface and the
+            // composite moves the image with procedural waves (water_distortion): rays bent per pixel by those
+            // (up to 17 degrees) scattered the image into glitter, the more the higher the resolution (user, Native42
+            // at 6x: "barely any reflection and so much flicker").
             float3 wave = n;
+            bool game_waves = false;
             if (!crystal && !coat) {
-                wave = water_detail(rippled(q, n), dir * water_t, (record.w & kWaterfallFlag) != 0u);
+#if RT_TEXTURED
+                game_waves = water_wave(tri, b, dir * water_t, n, wave);
+#endif
+                if (!game_waves) {
+                    wave = water_detail(rippled(q, n), dir * water_t, (record.w & kWaterfallFlag) != 0u);
+                }
             }
             if (dot(n, -dir) < 0.02f) {
                 n = ng;
@@ -2030,7 +2137,8 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
                 // Over at least two of the game's own 640-wide pixels: what the frame shows thinner than that (a
                 // net's cords, a fence's bars) averages out instead of reflecting as specks the waves set moving.
                 g_reflect_blur = crystal || coat ? 0.0f : 2.0f * max(g_viewport.z / 640.0f, 1.0f);
-                const Reflected r = reflect_light(id.xy, dir, n, ng, hit, ray_params, base, false, false);
+                const Reflected r = reflect_light(id.xy, dir, game_waves ? wave : n, ng, hit, ray_params, base, false,
+                                                  false);
                 g_reflect_blur = 0.0f;
                 light = r.light;
                 // The lights' glints off the waves, their lobe widened by the waves' spread over the pixel (specular

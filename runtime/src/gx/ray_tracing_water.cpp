@@ -63,6 +63,8 @@ bool SceneRayTracer::ensure_water_buffers() {
                        water_positions_, L"rt water triangles") ||
         !create_buffer(static_cast<std::uint64_t>(kWaterMaxTriangles) * 16u, D3D12_HEAP_TYPE_DEFAULT, kUav, kUavFlag,
                        water_surfaces_, L"rt water surfaces") ||
+        !create_buffer(static_cast<std::uint64_t>(kWaterMaxTriangles) * kRtTriUvStride, D3D12_HEAP_TYPE_DEFAULT, kUav,
+                       kUavFlag, water_uv_, L"rt water texture coordinates") ||
         !create_buffer(bottom_info.ResultDataMaxSizeInBytes, D3D12_HEAP_TYPE_DEFAULT, kStructure, kUavFlag,
                        water_blas_, L"rt water blas") ||
         !create_buffer(top_info.ResultDataMaxSizeInBytes, D3D12_HEAP_TYPE_DEFAULT, kStructure, kUavFlag, water_tlas_,
@@ -74,6 +76,7 @@ bool SceneRayTracer::ensure_water_buffers() {
                        L"rt water instance")) {
         water_positions_.Reset();
         water_surfaces_.Reset();
+        water_uv_.Reset();
         water_blas_.Reset();
         water_tlas_.Reset();
         water_scratch_.Reset();
@@ -82,6 +85,7 @@ bool SceneRayTracer::ensure_water_buffers() {
     }
     water_positions_state_ = kUav;
     water_surfaces_state_ = kUav;
+    water_uv_state_ = kUav;
     D3D12_RAYTRACING_INSTANCE_DESC instance{};
     instance.Transform[0][0] = 1.0f;
     instance.Transform[1][1] = 1.0f;
@@ -114,7 +118,8 @@ void SceneRayTracer::flush_water(ID3D12GraphicsCommandList* list, const RtSource
     if (!ensure_water_buffers() ||
         !transform_draws(list, sources, allocate, allocate_context, water_draws_.data() + first,
                          water_draws_.size() - first, base, water_triangles_ - base, water_positions_.Get(),
-                         water_positions_state_, water_surfaces_.Get(), water_surfaces_state_)) {
+                         water_positions_state_, water_surfaces_.Get(), water_surfaces_state_, water_uv_.Get(),
+                         &water_uv_state_)) {
         water_incomplete_ = true;
     }
 }
@@ -152,6 +157,15 @@ int SceneRayTracer::trace_water(ID3D12GraphicsCommandList* list, const RtSources
     }
     to_state(list, water_positions_.Get(), water_positions_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     to_state(list, water_surfaces_.Get(), water_surfaces_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    to_state(list, water_uv_.Get(), water_uv_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    // The water draws' waves (water_wave): their records in the frame's upload ring.
+    RtUpload waves{};
+    if (!water_waves_.empty()) {
+        waves = allocate(allocate_context, water_waves_.size() * sizeof(water_waves_[0]), 256u);
+        if (waves.cpu != nullptr) {
+            std::memcpy(waves.cpu, water_waves_.data(), water_waves_.size() * sizeof(water_waves_[0]));
+        }
+    }
     D3D12_RAYTRACING_GEOMETRY_DESC geometry{};
     geometry.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
     geometry.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
@@ -210,6 +224,9 @@ int SceneRayTracer::trace_water(ID3D12GraphicsCommandList* list, const RtSources
     scene.water_tlas = water_tlas_->GetGPUVirtualAddress();
     scene.water_positions = water_positions_->GetGPUVirtualAddress();
     scene.water_surfaces = water_surfaces_->GetGPUVirtualAddress();
+    scene.water_uv = water_uv_->GetGPUVirtualAddress();
+    scene.water_waves = waves.cpu != nullptr ? waves.gpu : 0u;
+    scene.water_game_waves = waves.cpu != nullptr && water_game_waves_;
     reflections_.trace_water(list, scene, slot, upload.cpu, upload.gpu, color_depth_table);
     return static_cast<int>(slot);
 }

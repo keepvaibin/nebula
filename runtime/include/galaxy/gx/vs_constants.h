@@ -233,6 +233,9 @@ struct VsConstantsCpuCache {
     // a lit channel's (its vertex colour keeps its hue, the enhanced pixel shader lights it at its neutral light);
     // bits 8-15, 16-23: the levels (GxBackend::debake_state).
     std::uint32_t debake = 0u;
+    // GxVsConstants::debake_sh, debake_peak (flags bit 6).
+    float debake_sh[7][4]{};
+    float debake_peak[4]{};
 
     const GxVsConstants& update(const GxState& state, std::uint32_t dirty,
         unsigned current_scale, bool frame_bindings_dirty) {
@@ -249,6 +252,8 @@ struct VsConstantsCpuCache {
         constants.sky_up = sky_up;
         constants.sky_up_known = sky_up_known;
         constants.flags = (constants.flags & 0x3u) | debake;
+        std::memcpy(constants.debake_sh, debake_sh, sizeof(debake_sh));
+        std::memcpy(constants.debake_peak, debake_peak, sizeof(debake_peak));
         return constants;
     }
 };

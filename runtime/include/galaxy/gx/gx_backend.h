@@ -74,6 +74,7 @@
 #include <thread>
 #include <type_traits>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace galaxy::gx {
@@ -495,6 +496,7 @@ private:
         // A light effect the game fakes (rt_materials.h hide) while the traced lighting replaces it.
         bool hidden = false;
         RtDrawInfo rt_info{};
+        std::uint64_t debake_model = 0u;   // an undecided model whose vertex colours this batch samples
     };
 
     [[nodiscard]] static bool draw_calls_batch_compatible(
@@ -931,6 +933,40 @@ private:
     // the TEV state.
     [[nodiscard]] std::uint32_t debake_state();
     std::unordered_map<std::uint64_t, std::uint32_t> debake_levels_;
+    // De-baking by model (apply_debake_model): a model's vertex colours (its CP colour arrays CLR0 / CLR1), sampled the
+    // first frame it draws, decide whether they hold baked light (de-baked from the next frame) or paint (kept).
+    struct DebakeModel {
+        std::uint64_t frame = 0u;   // the frame (frame_index_ + 1) it first drew in
+        bool decided = false;
+        bool baked = false;
+        std::uint8_t level = 0u;    // its brightest vertex's value (0-255): the colour it is de-baked to
+        std::uint32_t vertices = 0u;
+        std::unordered_set<std::uint32_t> colours;   // distinct RGB8, at most kDebakeModelColours
+        // The light baked into its colours as a function of the surface's facing (fit_debake_light): its sampled
+        // vertices with a normal (object space) and their colours, at most kDebakeModelSamples.
+        std::vector<std::array<float, 6>> samples;
+        std::array<float, 27> sh{};      // the fitted light, nine spherical harmonics a channel (r, g, b)
+        std::array<float, 3> peak{};     // the fitted light at the most lit sampled facing
+        float fit_r2 = 0.0f;             // the share of the colours' luminance variance the facing explains
+        bool fitted = false;
+    };
+    static constexpr std::size_t kDebakeModelSamples = 4096u;
+    // Its baked light as a function of the facing (model.sh, peak, fit_r2) from its samples.
+    static void fit_debake_light(DebakeModel& model);
+    static constexpr std::size_t kDebakeModelColours = 4096u;
+    std::unordered_map<std::uint64_t, DebakeModel> debake_models_;
+    std::uint32_t debake_models_stage_ = 0u;
+    std::uint64_t debake_sample_key_ = 0u;   // the current state's undecided model: its batches are sampled
+    std::uint8_t debake_model_level_ = 0u;   // the current state's baked model's level (0: the program's neutral)
+    // The current state's model's facing fit (GxVsConstants::debake_sh, debake_peak): the shaders de-bake by it.
+    bool debake_fit_active_ = false;
+    float debake_fit_sh_[7][4]{};
+    float debake_fit_peak_[4]{};
+    std::vector<std::uint64_t> debake_model_order_;   // GALAXY_RT_DEBAKE_CYCLE: the baked models in decision order
+    // The unlit channels (bits 0-1) of `channels` kept only where the model's colours are baked light.
+    [[nodiscard]] std::uint32_t apply_debake_model(std::uint32_t channels);
+    // A finished batch's vertex colours into its undecided model's sample.
+    void sample_debake_model(std::uint64_t key, const DrawCall& call);
     // Physical ray tracing: the colour channels whose colour carries the art's baked light, in an opaque scene phase,
     // outside the sky lists and the material table's emitters (whose colour is their light): unlit and taken from the
     // vertices (bits 0-1: channel 0, 1), and lit (bits 2-3: their light at full, their vertex colour's shading).

@@ -481,7 +481,7 @@ enum RootParameter : UINT {
     kRootCount,
 };
 
-constexpr std::uint32_t kVsConstantsBytes = 1280u;
+constexpr std::uint32_t kVsConstantsBytes = 1536u;   // sizeof(GxVsConstants)
 constexpr std::uint32_t kPaletteMatrixBytes = 48u;
 constexpr UINT kTimestampsPerSlot = 4u;
 constexpr UINT64 kReadbackSlotBytes = 128u;
@@ -748,7 +748,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     post_local_dark_ = std::clamp(env_float("GALAXY_RT_LOCAL_DARK", 1.0f), 0.3f, 1.0f);
     relief_ = std::clamp(env_float("GALAXY_RT_RELIEF", 3.0f), 0.0f, 64.0f);
     delight_ = env_float("GALAXY_RT_DELIGHT", 1.0f) != 0.0f;
-    fit_ = env_float("GALAXY_RT_FIT_LIGHT", 1.0f) != 0.0f;
+    fit_ = env_float("GALAXY_RT_FIT_LIGHT", 0.0f) != 0.0f;
     delight_relief_ = std::clamp(env_float("GALAXY_RT_DELIGHT_RELIEF", 2.0f), 0.0f, 32.0f);
     post_haze_distance_ = std::clamp(env_float("GALAXY_RT_POST_HAZE_DISTANCE", 20000.0f), 100.0f, 1.0e6f);
     post_vignette_ = std::clamp(env_float("GALAXY_RT_POST_VIGNETTE", 0.1f), 0.0f, 1.0f);
@@ -1837,6 +1837,8 @@ void SceneRayTracer::begin_scene() noexcept {
     glow_open_ = false;
     glow_base_valid_ = false;
     water_draws_.clear();
+    water_waves_.clear();
+    water_game_waves_ = false;
     water_triangles_ = 0u;
     water_flushed_draws_ = 0u;
     water_flushed_triangles_ = 0u;
@@ -1872,11 +1874,21 @@ void SceneRayTracer::note_tev(const RtDrawInfo& info, std::vector<RtTevMaterial>
     for (unsigned m = 0; m < 8u; ++m) {
         record.maps[m] = info.tev_maps[m].resource != nullptr ? texture_view(info.tev_maps[m]) : 0xFFFFFFFFu;
     }
-    // The material texture's de-light map: its map, the texture slot and coordinate scale of the first stage that
-    // samples it (the coordinates the raster's texel came from; past the generators coordinate 0, as fill_rt_tev).
+    // The material texture: its de-light map (pad[1]), its map, the texture slot and coordinate scale of the first stage
+    // that samples it (the coordinates the raster's texel came from; past the generators coordinate 0, as fill_rt_tev),
+    // and the table's glowing region of it (pad[2] bits 8-31: u0, v0, u1, v1 in 63rds; 0: all of it).
     record.pad[1] = 0xFFFFFFFFu;
     record.pad[2] = 0u;
-    if (delight != 0xFFFFFFFFu && info.texture_map < 8u) {
+    std::uint32_t region = 0u;
+    if (const RtMaterial* const material = rt_material(info.rt_material);
+        material != nullptr && material->emission != RtEmission::None &&
+        (material->region[0] > 0.0f || material->region[1] > 0.0f || material->region[2] < 1.0f ||
+         material->region[3] < 1.0f)) {
+        for (unsigned k = 0; k < 4u; ++k) {
+            region |= static_cast<std::uint32_t>(std::lround(material->region[k] * 63.0f)) << (8u + 6u * k);
+        }
+    }
+    if (info.texture_map < 8u) {
         const unsigned texgens = record.header >> 28u;
         for (unsigned s = 0; s < count; ++s) {
             const std::uint32_t order = info.tev_stages[s].order;
@@ -1886,7 +1898,7 @@ void SceneRayTracer::note_tev(const RtDrawInfo& info, std::vector<RtTevMaterial>
             const unsigned coord = ((order >> 3u) & 7u) < texgens ? (order >> 3u) & 7u : 0u;
             record.pad[1] = delight;
             record.pad[2] = info.texture_map | (((record.header >> (8u + 2u * coord)) & 1u) << 3u) |
-                            ((info.texture_wrap & 0xFu) << 4u);
+                            ((info.texture_wrap & 0xFu) << 4u) | region;
             record.pad[3] = std::bit_cast<std::uint32_t>(info.tev_stages[s].scale_s);
             record.pad[4] = std::bit_cast<std::uint32_t>(info.tev_stages[s].scale_t);
             break;
@@ -2346,7 +2358,21 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
         if (water_open_ && draw.triangle_count != 0u && water_triangles_ + draw.triangle_count <= kWaterMaxTriangles) {
             RtDraw& entry = water_draws_.emplace_back(draw);
             entry.first_triangle = water_triangles_;
+            // Its record (bits 16-31: rt_reflections.hlsl water_wave reads its waves by it).
+            entry.flags = (entry.flags & 0xFFFFu) |
+                          (static_cast<std::uint32_t>(std::min<std::size_t>(water_draws_.size() - 1u, 0xFFFFu)) << 16u);
             water_triangles_ += draw.triangle_count;
+            std::array<std::uint32_t, 12> waves{};
+            waves[0] = 0xFFFFFFFFu;
+            const std::uint32_t wave_flags = std::bit_cast<std::uint32_t>(info.wave_params[0]);
+            if ((wave_flags & 1u) != 0u && info.wave.resource != nullptr) {
+                waves[0] = texture_view(info.wave);
+                for (unsigned k = 0; k < 11u; ++k) {
+                    waves[1u + k] = std::bit_cast<std::uint32_t>(info.wave_params[k]);
+                }
+                water_game_waves_ = water_game_waves_ || waves[0] != 0xFFFFFFFFu;
+            }
+            water_waves_.push_back(waves);
         }
         return;
     }
@@ -3528,6 +3554,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         }
         light_full_ = {std::max(c.full_light[0], 1e-3f), std::max(c.full_light[1], 1e-3f),
                        std::max(c.full_light[2], 1e-3f)};
+        sky_fill_ = {};
         // The stage's light as the game sets it (display-encoded), when it changes.
         static std::array<float, 6> logged_light{-1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f};
         const std::array<float, 6> stage_light{area.ambient[0], area.ambient[1], area.ambient[2],
@@ -3605,6 +3632,14 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
                                           0.5f);
             const float reference = luma(c.sky_radiance) + luma(c.sun_light) * up_key;
             c.light_fit[0] = reference > 1e-4f ? luma(c.full_light) / reference : 0.0f;
+            // The ambient's fill as the picture shows it (the reflections' sky floor).
+            const auto srgb = [](float v) {
+                v = std::clamp(v, 0.0f, 1.0f);
+                return v <= 0.0031308f ? v * 12.92f : 1.055f * std::pow(v, 1.0f / 2.4f) - 0.055f;
+            };
+            for (unsigned i = 0; i < 3u; ++i) {
+                sky_fill_[i] = srgb(c.sky_radiance[i] * c.light_fit[0]);
+            }
         }
         // The stage's light fitted to the light baked into its surfaces (fit_baked_light), when it has one: the sun's
         // direction, colour and strength and the sky's the artists lit the stage with. The game's area light is often
@@ -4835,7 +4870,7 @@ void SceneRayTracer::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRI
     // Physical: the sun per pixel from the slot's per-pixel normals (not the reference, whose light is its own).
     const bool per_pixel = info.pixels && !reference_active_ && light_pixels_[index];
     c.flags = (reproject ? 1u : 0u) | (show_lighting_ ? 2u : 0u) | (reference_active_ || physical_active_ ? 4u : 0u) |
-              (per_pixel ? 8u : 0u);
+              (per_pixel ? 8u : 0u) | (reflections_active() ? 16u : 0u);
     c.target_size[0] = info.width;
     c.target_size[1] = info.height;
     c.slot = index;
@@ -4893,6 +4928,7 @@ RtReflectScene SceneRayTracer::reflect_scene(unsigned slot) const {
     scene.projection = light.view.projection;
     scene.depth = {light.view.z_scale, light.view.z_offset, light.view.min_depth, light.view.max_depth};
     scene.viewport = light.view.viewport;
+    scene.sky_fill = physical_active_ ? sky_fill_ : std::array<float, 3>{};
     scene.near_plane = light.near_plane;
     scene.camera = light.camera;
     scene.camera_known = light.camera_known;

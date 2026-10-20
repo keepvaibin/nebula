@@ -132,6 +132,12 @@ struct alignas(256) GxVsConstants {
     float motion_prev_pos[3][4];
     float motion_params[4];
     std::uint32_t motion_ctrl[4];
+    // Physical ray tracing (flags bit 6): the model's light baked into its vertex colours as a function of the surface's
+    // facing (GxBackend::fit_debake_light): nine spherical harmonics of the object-space normal a channel (r 0-8, g
+    // 9-17, b 18-26), and its value at the most lit sampled facing (rgb). A de-baked channel's vertex colour is raised
+    // by that over its own facing's value: the light's fall-off and colour leave it, its paint and occlusion stay.
+    float debake_sh[7][4];
+    float debake_peak[4];
 };
 
 static_assert(offsetof(GxVsConstants, projection) == 0);
@@ -151,7 +157,9 @@ static_assert(offsetof(GxVsConstants, uber_post_texgen) == 1120);
 static_assert(offsetof(GxVsConstants, uber_channel) == 1152);
 static_assert(offsetof(GxVsConstants, motion_prev_proj) == 1168);
 static_assert(offsetof(GxVsConstants, motion_ctrl) == 1264);
-static_assert(sizeof(GxVsConstants) == 1280);
+static_assert(offsetof(GxVsConstants, debake_sh) == 1280);
+static_assert(offsetof(GxVsConstants, debake_peak) == 1392);
+static_assert(sizeof(GxVsConstants) == 1536);
 
 #if defined(_MSC_VER)
 #pragma warning(pop)

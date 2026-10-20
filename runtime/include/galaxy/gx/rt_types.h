@@ -93,8 +93,9 @@ struct RtTevStage {
 };
 static_assert(sizeof(RtTevStage) == 32u);
 struct RtTevMaterial {
-    // Stages (bits 0-4); the vertices' colour 0 / 1 de-baked (bits 5-6); per texture coordinate 0-7 its slot (bits
-    // 8 + 2n); colour 0, alpha 0, colour 1, alpha 1 from the vertices (bits 24-27); texture generators (bits 28-31).
+    // Stages (bits 0-4); the vertices' colour 0 / 1 de-baked (bits 5-6); an environment map among its stages (bit 7;
+    // RtTevStage.pad[0] 1 on those stages); per texture coordinate 0-7 its slot (bits 8 + 2n); colour 0, alpha 0, colour
+    // 1, alpha 1 from the vertices (bits 24-27); texture generators (bits 28-31).
     std::uint32_t header = 0u;
     std::uint32_t alpha_test = 0u;   // ref0 | ref1 << 8 | comp0 << 16 | comp1 << 19 | logic << 22
     // Colour channels 0 and 1: material (RGBA8) and the light that lights it (RGBA8, white unlit).
@@ -105,7 +106,8 @@ struct RtTevMaterial {
     std::uint32_t stage_offset = 0u; // SceneRayTracer: its first stage
     // pad[0]: de-baked channels' neutral light (bits 0-7, 8-15; rt_tev_eval.h). SceneRayTracer: pad[1] the material
     // texture's de-light map (its view; 0xFFFFFFFF none), pad[2] its map (bits 0-2) and texture slot (bit 3), pad[3]
-    // and pad[4] that stage's coordinate scale (floats); pad[2] bits 4-7 its addressing (RtDrawInfo.texture_wrap).
+    // and pad[4] that stage's coordinate scale (floats); pad[2] bits 4-7 its addressing (RtDrawInfo.texture_wrap), bits
+    // 8-31 an emitter's glowing region of it (u0, v0, u1, v1 in 63rds; 0: all of it).
     std::uint32_t pad[5]{};
 };
 static_assert(sizeof(RtTevMaterial) == 128u);
@@ -157,6 +159,12 @@ struct RtDrawInfo {
     std::uint32_t texture_map = 0xFFu;
     // Its addressing (GX TexWrap: 0 clamp, 1 repeat, 2 mirror): s (bits 0-1), t (bits 2-3).
     std::uint32_t texture_wrap = 5u;
+    // A water draw whose texture the game moves by an indirect texture (its waves): that wave map and how its texels
+    // become slopes (GxBackend after fill_rt_tev; rt_reflections.hlsl water_wave): flags (bit 0 waves, bits 1-3 the s t
+    // u bias, bits 4-5 the format), the map's coordinate scale (slot 0 to its 0-1 coordinates), the indirect matrix's
+    // direction part (s from x, s from y, t from x, t from y), the water texture's coordinate scale (slot 1).
+    RtTextureSource wave{};
+    std::array<float, 12> wave_params{};
     // An alpha-tested draw (kRtDrawAlphaTest, kRtDrawCard): its alpha map and the alpha its test passes from
     // (1-255; 0: none, solid).
     RtTextureSource alpha{};

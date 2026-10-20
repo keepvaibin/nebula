@@ -6685,8 +6685,10 @@ void GxBackend::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint
             note_rt_phase(static_cast<std::uint8_t>(a));
         }
         if (aux == motion::kCategoryBufferOpa || aux == motion::kCategoryBufferXlu) {
-            // The draw buffer (MR::DrawBufferType) the next draws come from, for the census.
+            // The draw buffer (MR::DrawBufferType) the next draws come from (the census, the de-baking).
             rt_draw_buffer_ = (a & 0xFFFFu) | (aux == motion::kCategoryBufferXlu ? 0x10000u : 0u);
+        } else if (aux == motion::kCategoryDrawType) {
+            rt_draw_buffer_ = 0xFFFFu;   // a draw type's list (plants, oceans, ropes): no buffer
         }
         if (scene_2d_open_) {
             ++scene_2d_categories_;
@@ -7106,12 +7108,21 @@ std::uint32_t GxBackend::debake_channels() const {
         return 0u;
     }
     // Unlit channels coloured by their vertices (bits 0-1); lit channels (bits 2-3: GALAXY_RT_DEBAKE_LIT=0 none).
+    // Vertex colours hold baked light on the terrain only (MR::DrawBufferType ClippedMapParts 0, Planet 4, PlanetLow 5,
+    // Environment 6-7, IndirectPlanet 0x1D, and the draw types' lists): the game lights its actors (the player, NPCs,
+    // enemies) as they move, and its map objects (houses, toys, blocks, props) paint their vertices with their own
+    // colours. Each vertex colour over its brightest channel turned Toy Time's toy's black hair and its robot's dark
+    // panels white.
     static const bool lit_enabled = read_env_u64("GALAXY_RT_DEBAKE_LIT", 1u) != 0u;
+    const std::uint32_t buffer = rt_draw_buffer_ & 0xFFFFu;
+    const bool terrain = buffer == 0xFFFFu || buffer == 0x00u || buffer == 0x04u || buffer == 0x05u ||
+                         buffer == 0x06u || buffer == 0x07u || buffer == 0x1Du;
+    const bool actor = !terrain;
     std::uint32_t channels = 0u;
     const unsigned count = std::min<unsigned>(state_.gen_mode().num_color_chans, 2u);
     for (unsigned c = 0; c < count; ++c) {
         const XfChannelCtrl ctrl = state_.channel_ctrl(c);
-        if (!ctrl.lighting_enable && ctrl.material_from_vertex) {
+        if (!ctrl.lighting_enable && ctrl.material_from_vertex && !actor) {
             channels |= 1u << c;
         } else if (ctrl.lighting_enable && lit_enabled) {
             channels |= 4u << c;
@@ -7140,6 +7151,18 @@ void GxBackend::build_rt_tev(RtTevMaterial& tev, RtTevStage* stages_out, float f
         const std::uint32_t t_scale = state_.bp(static_cast<std::uint8_t>(bp::kTexCoordSizeBase + coord * 2u + 1u));
         stage.scale_s = static_cast<float>((s_scale & 0xFFFFu) + 1u) / static_cast<float>(std::max<unsigned>(image.width, 1u));
         stage.scale_t = static_cast<float>((t_scale & 0xFFFFu) + 1u) / static_cast<float>(std::max<unsigned>(image.height, 1u));
+        // A texture whose coordinates the vertex normals generate: an environment map, the game's painted reflection
+        // (pad[0] 1; header bit 7: the draw has one). Under physical light the traced reflection takes its place.
+        // GALAXY_RT_PAINTED_REFLECTION=1 keeps them (A/B).
+        static const bool painted = read_env_u64("GALAXY_RT_PAINTED_REFLECTION", 0u) != 0u;
+        stage.pad[0] = 0u;
+        if (!painted && ((packed.order >> 6u) & 1u) != 0u && coord < texgens) {
+            const XfTexGen texgen = decode_xf_texgen(vs_key_.texgen[coord]);
+            if (texgen.type == TexGenType::Regular && texgen.source_row == 1u) {
+                stage.pad[0] = 1u;
+                tev.header |= 1u << 7u;
+            }
+        }
     }
     const AlphaCompare test = state_.alpha_compare();
     tev.alpha_test = static_cast<std::uint32_t>(test.ref0) | (static_cast<std::uint32_t>(test.ref1) << 8u) |
@@ -7208,8 +7231,296 @@ void GxBackend::build_rt_tev(RtTevMaterial& tev, RtTevStage* stages_out, float f
     }
 }
 
+// Paint or baked light (apply_debake_model), from a model's distinct vertex colours. Light baked over a model's curved
+// surfaces takes hundreds to thousands of values; shading painted by hand a handful of exact ones (Toy Time's robot:
+// 808080 and FFFFFF stripes on its grille, the grey shoulders: white once divided by their brightest channel; Space
+// Junk's green panels: three). Measured (GALAXY_RT_DEBAKE_LOG, sampled at most 2048 vertices a batch): painted models
+// 2-12 values, baked ones 39-4096 (Good Egg, Gusty Garden, Honeyhive, Space Junk, Toy Time, Freezeflame). Hue is no
+// cue: the artists baked coloured light (Good Egg's terrain: up to 36 saturated hues). One flat colour is paint too.
+// `hue_count` (saturated hues within 0.15 of chromaticity) for the log.
+bool debake_colours_baked(const std::unordered_set<std::uint32_t>& colours, unsigned& hue_count, float& lo, float& hi) {
+    std::vector<std::array<float, 3>> hues;
+    lo = 1.0f;
+    hi = 0.0f;
+    for (const std::uint32_t c : colours) {
+        const float r = static_cast<float>((c >> 16u) & 0xFFu) / 255.0f;
+        const float g = static_cast<float>((c >> 8u) & 0xFFu) / 255.0f;
+        const float b = static_cast<float>(c & 0xFFu) / 255.0f;
+        const float peak = std::max({r, g, b});
+        const float least = std::min({r, g, b});
+        lo = std::min(lo, peak);
+        hi = std::max(hi, peak);
+        // Saturated (a paint's hue, not a light's tint) and bright enough for its hue to be known.
+        if (peak < 0.2f || 1.0f - least / peak < 0.35f) {
+            continue;
+        }
+        const std::array<float, 3> hue{r / peak, g / peak, b / peak};
+        const bool known = std::any_of(hues.begin(), hues.end(), [&hue](const std::array<float, 3>& h) {
+            return std::abs(h[0] - hue[0]) < 0.15f && std::abs(h[1] - hue[1]) < 0.15f && std::abs(h[2] - hue[2]) < 0.15f;
+        });
+        if (!known) {
+            hues.push_back(hue);
+        }
+    }
+    hue_count = static_cast<unsigned>(hues.size());
+    return colours.size() > 16u && hi - lo >= 0.08f;
+}
+
+// The nine real spherical harmonics (bands 0-2) at unit direction `n` (Sloan 2008, the same basis as rt_lighting.hlsl
+// sh9 and the de-baking shaders).
+void debake_sh9(const float* n, float* y) {
+    y[0] = 0.282095f;
+    y[1] = 0.488603f * n[1];
+    y[2] = 0.488603f * n[2];
+    y[3] = 0.488603f * n[0];
+    y[4] = 1.092548f * n[0] * n[1];
+    y[5] = 1.092548f * n[1] * n[2];
+    y[6] = 0.315392f * (3.0f * n[2] * n[2] - 1.0f);
+    y[7] = 1.092548f * n[0] * n[2];
+    y[8] = 0.546274f * (n[0] * n[0] - n[1] * n[1]);
+}
+
+// The light baked into a model's vertex colours as a function of the surface's facing: per channel the least-squares
+// fit of nine spherical harmonics of the vertex normal to the colour (Ramamoorthi & Hanrahan 2001: a distant light's
+// irradiance lies almost wholly in these bands), solved by Cholesky with a small ridge (1e-3 of the mean diagonal).
+// What the facing does not explain stays: paint (Toy Time's robot's grille stripes, on faces facing alike), occlusion.
+void GxBackend::fit_debake_light(DebakeModel& model) {
+    model.fitted = false;
+    if (model.samples.size() < 32u) {
+        return;
+    }
+    double a[9][9]{};
+    double b[3][9]{};
+    double sum_y = 0.0;
+    double sum_y2 = 0.0;
+    for (const std::array<float, 6>& s : model.samples) {
+        float y[9];
+        debake_sh9(s.data(), y);
+        for (unsigned i = 0; i < 9u; ++i) {
+            for (unsigned j = 0; j <= i; ++j) {
+                a[i][j] += static_cast<double>(y[i]) * y[j];
+            }
+            for (unsigned c = 0; c < 3u; ++c) {
+                b[c][i] += static_cast<double>(y[i]) * s[3u + c];
+            }
+        }
+        const double lum = 0.2126 * s[3] + 0.7152 * s[4] + 0.0722 * s[5];
+        sum_y += lum;
+        sum_y2 += lum * lum;
+    }
+    double trace = 0.0;
+    for (unsigned i = 0; i < 9u; ++i) {
+        trace += a[i][i];
+    }
+    const double ridge = 1e-3 * trace / 9.0;
+    double l[9][9]{};
+    for (unsigned i = 0; i < 9u; ++i) {
+        for (unsigned j = 0; j <= i; ++j) {
+            double sum = a[i][j] + (i == j ? ridge : 0.0);
+            for (unsigned k = 0; k < j; ++k) {
+                sum -= l[i][k] * l[j][k];
+            }
+            if (i == j) {
+                if (sum <= 0.0) {
+                    return;
+                }
+                l[i][i] = std::sqrt(sum);
+            } else {
+                l[i][j] = sum / l[j][j];
+            }
+        }
+    }
+    for (unsigned c = 0; c < 3u; ++c) {
+        double z[9];
+        for (unsigned i = 0; i < 9u; ++i) {
+            double sum = b[c][i];
+            for (unsigned k = 0; k < i; ++k) {
+                sum -= l[i][k] * z[k];
+            }
+            z[i] = sum / l[i][i];
+        }
+        for (int i = 8; i >= 0; --i) {
+            double sum = z[i];
+            for (unsigned k = static_cast<unsigned>(i) + 1u; k < 9u; ++k) {
+                sum -= l[k][i] * z[k];
+            }
+            z[i] = sum / l[i][i];
+            model.sh[c * 9u + static_cast<unsigned>(i)] = static_cast<float>(z[i]);
+        }
+    }
+    // The most lit sampled facing, and how much of the luminance's variance the facing explains.
+    model.peak = {0.0f, 0.0f, 0.0f};
+    double sse = 0.0;
+    for (const std::array<float, 6>& s : model.samples) {
+        float y[9];
+        debake_sh9(s.data(), y);
+        float fit[3]{};
+        for (unsigned c = 0; c < 3u; ++c) {
+            for (unsigned i = 0; i < 9u; ++i) {
+                fit[c] += model.sh[c * 9u + i] * y[i];
+            }
+            model.peak[c] = std::max(model.peak[c], fit[c]);
+        }
+        const double lum = 0.2126 * s[3] + 0.7152 * s[4] + 0.0722 * s[5];
+        const double fitted = 0.2126 * fit[0] + 0.7152 * fit[1] + 0.0722 * fit[2];
+        sse += (lum - fitted) * (lum - fitted);
+    }
+    const double n = static_cast<double>(model.samples.size());
+    const double sst = sum_y2 - sum_y * sum_y / n;
+    model.fit_r2 = sst > 1e-9 ? static_cast<float>(std::max(0.0, 1.0 - sse / sst)) : 0.0f;
+    model.fitted = true;
+}
+
+std::uint32_t GxBackend::apply_debake_model(std::uint32_t channels) {
+    debake_model_level_ = 0u;
+    debake_fit_active_ = false;
+    if ((channels & 3u) == 0u) {
+        return channels;
+    }
+    // Indexed colours only (a model's arrays; the descriptor's VCD part is the same for every format).
+    const VertexDescriptor desc = state_.vertex_desc(0u);
+    if (desc.color[0].vcd != VcdType::Index8 && desc.color[0].vcd != VcdType::Index16) {
+        return channels;
+    }
+    if (const std::uint32_t stage = rt_materials_stage_serial(); stage != debake_models_stage_) {
+        debake_models_.clear();
+        debake_models_stage_ = stage;
+    }
+    const std::uint64_t key = static_cast<std::uint64_t>(state_.array_base(2u)) |
+                              (static_cast<std::uint64_t>(state_.array_base(3u)) << 32u);
+    DebakeModel& model = debake_models_[key];
+    if (!model.decided) {
+        if (model.frame == 0u) {
+            model.frame = frame_index_ + 1u;
+        }
+        if (frame_index_ + 1u <= model.frame || model.vertices == 0u) {
+            // Its first frame: drawn as the game paints it while its colours are sampled.
+            debake_sample_key_ = key;
+            return channels & ~3u;
+        }
+        unsigned hues = 0u;
+        float lo = 0.0f;
+        float hi = 0.0f;
+        model.baked = debake_colours_baked(model.colours, hues, lo, hi);
+        const std::size_t sampled = model.samples.size();
+        fit_debake_light(model);
+        model.level = static_cast<std::uint8_t>(std::lround(std::clamp(hi, 0.0f, 1.0f) * 255.0f));
+        model.decided = true;
+        static const bool log = read_env_u64("GALAXY_RT_DEBAKE_LOG", 0u) != 0u;
+        if (log) {
+            std::string sample;
+            unsigned shown = 0u;
+            for (const std::uint32_t c : model.colours) {
+                if (shown++ == 12u) {
+                    break;
+                }
+                char text[10];
+                std::snprintf(text, sizeof(text), " %06X", c);
+                sample += text;
+            }
+            std::fprintf(stderr,
+                         "[rt-debake] model=%08X:%08X buffer=%u vertices=%u colours=%zu hues=%u value=%.2f-%.2f %s "
+                         "normals=%zu fit=%d r2=%.2f peak=%.2f,%.2f,%.2f%s\n",
+                         static_cast<unsigned>(key & 0xFFFFFFFFu), static_cast<unsigned>(key >> 32u),
+                         rt_draw_buffer_ & 0xFFFFu, model.vertices, model.colours.size(), hues, lo, hi,
+                         model.baked ? "baked" : "paint", sampled, model.fitted ? 1 : 0, model.fit_r2, model.peak[0],
+                         model.peak[1], model.peak[2], sample.c_str());
+        }
+        model.colours = {};
+        model.samples = {};
+        if (model.baked) {
+            debake_model_order_.push_back(key);
+        }
+    }
+    // Its light as a function of the facing (its vertices have normals): the shaders take that out alone, whatever
+    // its colours count (GALAXY_RT_DEBAKE_FIT=0: the colours' verdict and each colour over its brightest channel).
+    static const bool by_fit = read_env_u64("GALAXY_RT_DEBAKE_FIT", 1u) != 0u;
+    if (by_fit && model.fitted) {
+        for (unsigned i = 0; i < 27u; ++i) {
+            debake_fit_sh_[i / 4u][i % 4u] = model.sh[i];
+        }
+        debake_fit_sh_[6][3] = 0.0f;
+        debake_fit_peak_[0] = model.peak[0];
+        debake_fit_peak_[1] = model.peak[1];
+        debake_fit_peak_[2] = model.peak[2];
+        debake_fit_peak_[3] = 0.0f;
+        debake_fit_active_ = true;
+        return channels;
+    }
+    if (!model.baked) {
+        return channels & ~3u;
+    }
+    // GALAXY_RT_DEBAKE_CYCLE=1 (diagnostics): one baked model de-baked at a time, the next every 120 frames, to find a
+    // model in the picture.
+    static const bool cycle = read_env_u64("GALAXY_RT_DEBAKE_CYCLE", 0u) != 0u;
+    if (cycle && !debake_model_order_.empty()) {
+        const std::size_t turn = static_cast<std::size_t>((frame_index_ / 120u) % debake_model_order_.size());
+        static std::size_t logged_turn = ~std::size_t{0};
+        if (turn != logged_turn) {
+            logged_turn = turn;
+            std::fprintf(stderr, "[rt-debake-cycle] frame=%llu turn=%zu model=%08X:%08X\n",
+                         static_cast<unsigned long long>(frame_index_), turn,
+                         static_cast<unsigned>(debake_model_order_[turn] & 0xFFFFFFFFu),
+                         static_cast<unsigned>(debake_model_order_[turn] >> 32u));
+        }
+        if (debake_model_order_[turn] != key) {
+            return channels & ~3u;
+        }
+    }
+    // GALAXY_RT_DEBAKE_LEVEL=1: de-baked to the model's brightest vertex (too bright: Good Egg's stone and wood
+    // clipped white, b8); else the program's neutral level.
+    static const bool brightest = read_env_u64("GALAXY_RT_DEBAKE_LEVEL", 0u) != 0u;
+    debake_model_level_ = brightest ? model.level : 0u;
+    return channels;
+}
+
+void GxBackend::sample_debake_model(std::uint64_t key, const DrawCall& call) {
+    const auto found = debake_models_.find(key);
+    if (found == debake_models_.end() || found->second.decided) {
+        return;
+    }
+    DebakeModel& model = found->second;
+    // The batch's decoded vertices: the frame ring or the resident buffer (both CPU-mapped upload memory, read
+    // sparsely: at most 2048 vertices a batch).
+    const gpu::Address va = call.vertex_view.BufferLocation;
+    const std::uint32_t bytes = call.vertex_view.SizeInBytes;
+    const std::byte* vertices = nullptr;
+    const std::uint64_t resident_bytes =
+        static_cast<std::uint64_t>(kResidentDecodedVertexCapacity) * sizeof(GxVertexOut);
+    if (resident_vertex_mapped_ != nullptr && va >= resident_vertex_gpu_ && va + bytes <= resident_vertex_gpu_ + resident_bytes) {
+        vertices = resident_vertex_mapped_ + (va - resident_vertex_gpu_);
+    } else {
+        vertices = renderer_.vertex_ring().cpu_at(va);
+    }
+    if (vertices == nullptr) {
+        return;
+    }
+    const std::uint32_t count = bytes / static_cast<std::uint32_t>(sizeof(GxVertexOut));
+    const std::uint32_t step = std::max(count / 2048u, 1u);
+    for (std::uint32_t v = 0u; v < count && model.colours.size() < kDebakeModelColours; v += step) {
+        std::uint32_t colour = 0u;
+        std::memcpy(&colour, vertices + static_cast<std::size_t>(v) * sizeof(GxVertexOut) + offsetof(GxVertexOut, color0),
+                    sizeof(colour));
+        model.colours.insert(colour >> 8u);   // RGB (R in the high byte)
+        if (model.samples.size() < kDebakeModelSamples) {
+            float normal[3];
+            std::memcpy(normal, vertices + static_cast<std::size_t>(v) * sizeof(GxVertexOut) + offsetof(GxVertexOut, normal),
+                        sizeof(normal));
+            const float length2 = normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2];
+            if (std::isfinite(length2) && length2 > 0.25f) {
+                const float inv = 1.0f / std::sqrt(length2);
+                model.samples.push_back({normal[0] * inv, normal[1] * inv, normal[2] * inv,
+                                         static_cast<float>((colour >> 24u) & 0xFFu) / 255.0f,
+                                         static_cast<float>((colour >> 16u) & 0xFFu) / 255.0f,
+                                         static_cast<float>((colour >> 8u) & 0xFFu) / 255.0f});
+            }
+        }
+    }
+    model.vertices += count;
+}
+
 std::uint32_t GxBackend::debake_state() {
-    const std::uint32_t channels = debake_channels();
+    const std::uint32_t channels = apply_debake_model(debake_channels());
     if (channels == 0u) {
         return 0u;
     }
@@ -7227,9 +7538,23 @@ std::uint32_t GxBackend::debake_state() {
     for (unsigned s = 0; s < (tev.header & 0x1Fu); ++s) {
         words(&stages[s].color_env, 4u);
     }
+    // A baked model's unlit channels: every vertex as bright as its brightest (the surface as the game shows it fully
+    // lit, the programs' doubling and clamping included), not the program's neutral level (its texture 1:1: half the
+    // game's lit brightness and duller: Good Egg's wood ring 246,155,58 where the game shows 250,242,103).
+    const auto model_level = [this](std::uint32_t state) {
+        if (debake_model_level_ != 0u) {
+            for (unsigned c = 0; c < 2u; ++c) {
+                if ((state & (1u << c)) != 0u) {
+                    state = (state & ~(0xFFu << (8u + 8u * c))) |
+                            (static_cast<std::uint32_t>(debake_model_level_) << (8u + 8u * c));
+                }
+            }
+        }
+        return state;
+    };
     const auto found = debake_levels_.find(key);
     if (found != debake_levels_.end()) {
-        return found->second;
+        return model_level(found->second);
     }
     std::uint32_t state = channels;
     for (unsigned c = 0; c < 2u; ++c) {
@@ -7241,7 +7566,7 @@ std::uint32_t GxBackend::debake_state() {
         debake_levels_.clear();
     }
     debake_levels_.emplace(key, state);
-    return state;
+    return model_level(state);
 }
 
 void GxBackend::fill_rt_tev(RtDrawInfo& info, float facing) {
@@ -7275,12 +7600,23 @@ void GxBackend::fill_rt_tev(RtDrawInfo& info, float facing) {
     // pad[0] bits 16-17: a lit channel lit at its neutral light, its vertex colour's hue its material. As the raster's
     // (debake_state; never the sky's).
     const std::uint32_t debake = (info.surface & kRtDrawSky) != 0u ? 0u : debake_state();
-    tev.header |= (debake & 3u) << 5u;
+    // By the model's facing fit the traced triangles' colours come de-baked (ray_tracing.hlsl GeometryCS).
+    tev.header |= debake_fit_active_ ? 0u : (debake & 3u) << 5u;
     tev.pad[0] = ((debake >> 8u) & 0xFFFFu) | (((debake >> 2u) & 3u) << 16u);
+    // A lit channel at its neutral light in its full light's hue (as the raster's, shader_gen): the ambient register or
+    // the vertices can hold the object's own colour.
     for (unsigned c = 0; c < 2u; ++c) {
         if ((debake & (4u << c)) != 0u) {
             const std::uint32_t level = (debake >> (8u + 8u * c)) & 0xFFu;
-            tev.channel[c * 2u + 1u] = (level << 24u) | (level << 16u) | (level << 8u) | 0xFFu;
+            const std::uint32_t light = tev.channel[c * 2u + 1u];
+            const std::uint32_t rgb[3] = {light >> 24u, (light >> 16u) & 0xFFu, (light >> 8u) & 0xFFu};
+            const std::uint32_t peak = std::max({rgb[0], rgb[1], rgb[2]});
+            std::uint32_t word = 0xFFu;
+            for (unsigned k = 0; k < 3u; ++k) {
+                const std::uint32_t v = peak != 0u ? (rgb[k] * level + peak / 2u) / peak : level;
+                word |= std::min(v, 255u) << (24u - 8u * k);
+            }
+            tev.channel[c * 2u + 1u] = word;
         }
     }
     info.tev_maps = {};
@@ -8013,6 +8349,75 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         }
     }
     fill_rt_tev(info, renderer_.rt_physical() ? 1.0f : 0.55f);
+    // A water draw's waves: the first TEV stage that moves its texture coordinates by an indirect texture (the game's
+    // wave map). Its texture slots become the wave map's coordinates and the water texture's (rt_reflections.hlsl
+    // water_wave); RtDrawInfo.wave_params: flags (bit 0 waves, bits 1-3 the s t u bias, bits 4-5 the format), the wave
+    // map's coordinate scale (slot 0 to its 0-1 coordinates, as the uber shader samples it), the indirect matrix's
+    // direction part (s from x, s from y, t from x, t from y; unit scale), the water texture's coordinate scale (slot 1).
+    if ((info.surface & kRtDrawWater) != 0u && ps_key_.num_ind_stages != 0u && vs_key_.num_texgens != 0u &&
+        current_texture_table_.ptr != 0u) {
+        const unsigned texgens = vs_key_.num_texgens;
+        for (unsigned s = 0; s < ps_key_.num_tev_stages && s < 16u; ++s) {
+            const std::uint32_t cmd = ps_key_.ind_cmd[s / 4u][s & 3u];
+            const unsigned ind_stage = cmd & 3u;
+            const unsigned matrix = (cmd >> 9u) & 3u;
+            if (cmd == 0u || ind_stage >= ps_key_.num_ind_stages || matrix == 0u || ((cmd >> 11u) & 3u) != 0u) {
+                continue;
+            }
+            const unsigned wave_map = (ps_key_.ind_ref >> (ind_stage * 6u)) & 7u;
+            const unsigned wave_coord_raw = (ps_key_.ind_ref >> (ind_stage * 6u + 3u)) & 7u;
+            const unsigned wave_coord = wave_coord_raw < texgens ? wave_coord_raw : 0u;
+            const unsigned main_map = ps_key_.stages[s].order & 7u;
+            const unsigned main_coord_raw = (ps_key_.stages[s].order >> 3u) & 7u;
+            const unsigned main_coord = main_coord_raw < texgens ? main_coord_raw : 0u;
+            if ((current_texture_map_mask_ & (1u << wave_map)) == 0u) {
+                break;
+            }
+            const auto coord_size = [&](unsigned coord, unsigned axis) {
+                return static_cast<float>(
+                    (state_.bp(static_cast<std::uint8_t>(bp::kTexCoordSizeBase + coord * 2u + axis)) & 0xFFFFu) + 1u);
+            };
+            const std::uint32_t scale_word = ps_key_.ind_scale[ind_stage / 2u] >> ((ind_stage & 1u) != 0u ? 8u : 0u);
+            const TexImage wave_image = state_.tex_image(wave_map);
+            const TexImage main_image = state_.tex_image(main_map);
+            const auto sign11 = [](std::uint32_t value) {
+                value &= 0x7FFu;
+                return static_cast<float>((value & 0x400u) != 0u ? static_cast<std::int32_t>(value | ~0x7FFu)
+                                                                  : static_cast<std::int32_t>(value));
+            };
+            const unsigned row = (matrix - 1u) * 3u;
+            const std::uint32_t a = state_.bp(static_cast<std::uint8_t>(bp::kIndMtxBase + row));
+            const std::uint32_t b = state_.bp(static_cast<std::uint8_t>(bp::kIndMtxBase + row + 1u));
+            // s = ma x + mc y (+ me z), t = mb x + md y (+ mf z): the map's x and y as a slope, z left out.
+            float m[4] = {sign11(a), sign11(b), sign11(a >> 11u), sign11(b >> 11u)};
+            const float norm = std::sqrt(0.5f * (m[0] * m[0] + m[1] * m[1] + m[2] * m[2] + m[3] * m[3]));
+            if (norm <= 0.0f) {
+                break;
+            }
+            info.wave = rt_texture_source(wave_map);
+            if (info.wave.resource == nullptr) {
+                break;
+            }
+            const std::uint32_t flags = 1u | (((cmd >> 4u) & 7u) << 1u) | (((cmd >> 2u) & 3u) << 4u);
+            info.wave_params = {std::bit_cast<float>(flags),
+                                coord_size(wave_coord, 0u) / static_cast<float>(1u << (scale_word & 0xFu)) /
+                                    static_cast<float>(std::max<unsigned>(wave_image.width, 1u)),
+                                coord_size(wave_coord, 1u) / static_cast<float>(1u << ((scale_word >> 4u) & 0xFu)) /
+                                    static_cast<float>(std::max<unsigned>(wave_image.height, 1u)),
+                                m[0] / norm,
+                                m[1] / norm,
+                                m[2] / norm,
+                                m[3] / norm,
+                                coord_size(main_coord, 0u) / static_cast<float>(std::max<unsigned>(main_image.width, 1u)),
+                                coord_size(main_coord, 1u) / static_cast<float>(std::max<unsigned>(main_image.height, 1u)),
+                                0.0f,
+                                0.0f,
+                                0.0f};
+            info.texgen = wave_coord;
+            info.texgen2 = main_coord;
+            break;
+        }
+    }
     if (!rt_view_set_) {
         renderer_.rt_set_view(scene_depth_view(viewport));
         rt_view_set_ = true;
@@ -13768,11 +14173,55 @@ gpu::Pipeline* GxBackend::flush_draw_state(
     const bool triangles = topology_key == static_cast<std::uint8_t>(gpu::kTopologyTypeTriangle);
     // Physical ray tracing: the vertex shaders take a channel's baked vertex light to its program's neutral level (flags
     // bits 2-3, levels in bits 8-23).
-    if (const std::uint32_t state = triangles ? debake_state() : 0u,
-        debake = ((state & 3u) << 2u) | (((state >> 2u) & 3u) << 4u) | (state & 0xFFFF00u);
-        cpu_vs_constants_.debake != debake) {
-        cpu_vs_constants_.debake = debake;
-        sky_up_dirty_ = true;   // the scene constants' upload
+    // Bit 6: by the model's facing fit (debake_sh, debake_peak).
+    debake_sample_key_ = 0u;
+    debake_fit_active_ = false;
+    {
+        const std::uint32_t state = triangles ? debake_state() : 0u;
+        const bool fit = debake_fit_active_ && (state & 3u) != 0u;
+        if (fit && cpu_vs_constants_.sky_up_known != 0u) {
+            // The level it is de-baked to: its baked light at the player's up, the exposure's reference (a white surface
+            // facing the player's up shows white), the up taken into the model's space by its position matrix; at most
+            // its most lit facing's, at least a quarter of it. Its most lit facing's alone overexposed: Good Egg's
+            // hand-shaded stone path (fit 1.03 where its upward faces hold 0.52-0.77) went white.
+            float up[3];
+            decode_octahedral(cpu_vs_constants_.sky_up, up);
+            const unsigned row = std::min(state_.cp(cp::kMatrixIndexA) & 0x3Fu, 61u);
+            float model_up[3]{};
+            for (unsigned c = 0; c < 3u; ++c) {
+                for (unsigned r = 0; r < 3u; ++r) {
+                    model_up[c] += std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>((row + r) * 4u + c))) * up[r];
+                }
+            }
+            const float length = std::sqrt(model_up[0] * model_up[0] + model_up[1] * model_up[1] + model_up[2] * model_up[2]);
+            if (std::isfinite(length) && length > 1e-6f) {
+                for (float& v : model_up) {
+                    v /= length;
+                }
+                float y[9];
+                debake_sh9(model_up, y);
+                for (unsigned c = 0; c < 3u; ++c) {
+                    float light = 0.0f;
+                    for (unsigned i = 0; i < 9u; ++i) {
+                        light += debake_fit_sh_[(c * 9u + i) / 4u][(c * 9u + i) % 4u] * y[i];
+                    }
+                    debake_fit_peak_[c] = std::clamp(light, 0.25f * debake_fit_peak_[c], debake_fit_peak_[c]);
+                }
+            }
+        }
+        const std::uint32_t debake = ((state & 3u) << 2u) | (((state >> 2u) & 3u) << 4u) | (state & 0xFFFF00u) |
+                                     (fit ? 64u : 0u);
+        bool changed = cpu_vs_constants_.debake != debake;
+        if (fit && (std::memcmp(cpu_vs_constants_.debake_sh, debake_fit_sh_, sizeof(debake_fit_sh_)) != 0 ||
+                    std::memcmp(cpu_vs_constants_.debake_peak, debake_fit_peak_, sizeof(debake_fit_peak_)) != 0)) {
+            std::memcpy(cpu_vs_constants_.debake_sh, debake_fit_sh_, sizeof(debake_fit_sh_));
+            std::memcpy(cpu_vs_constants_.debake_peak, debake_fit_peak_, sizeof(debake_fit_peak_));
+            changed = true;
+        }
+        if (changed) {
+            cpu_vs_constants_.debake = debake;
+            sky_up_dirty_ = true;   // the scene constants' upload
+        }
     }
     bool enhanced = false;
     bool enhanced_changed = false;
@@ -14596,6 +15045,9 @@ void GxBackend::flush_pending_draw_batch() {
         }
         renderer_.draw(pending_draw_batch_.call);
     }
+    if (pending_draw_batch_.debake_model != 0u) [[unlikely]] {
+        sample_debake_model(pending_draw_batch_.debake_model, pending_draw_batch_.call);
+    }
     if (time_detail) {
         frame_draw_record_us_ +=
             elapsed_us(draw_record_start, std::chrono::steady_clock::now());
@@ -15390,6 +15842,7 @@ bool GxBackend::on_cached_packet_draw_run(
     pending_draw_batch_.call = call;
     pending_draw_batch_.rt = begin_rt_batch(call, pending_draw_batch_.rt_info);
     pending_draw_batch_.hidden = rt_hidden_draw();
+    pending_draw_batch_.debake_model = debake_sample_key_;
     pending_draw_batch_.indexed = prim.indexed;
     pending_draw_batch_.base_vertex = prim.base_vertex;
     pending_draw_batch_.vertex_count = prim.vertex_count;
@@ -15568,6 +16021,7 @@ void GxBackend::on_cached_draw_run_draw(
     pending_draw_batch_.call = call;
     pending_draw_batch_.rt = begin_rt_batch(call, pending_draw_batch_.rt_info);
     pending_draw_batch_.hidden = rt_hidden_draw();
+    pending_draw_batch_.debake_model = debake_sample_key_;
     pending_draw_batch_.indexed = prim.indexed;
     pending_draw_batch_.base_vertex = prim.base_vertex;
     pending_draw_batch_.vertex_count = prim.vertex_count;
@@ -16500,6 +16954,7 @@ void GxBackend::on_draw(
         pending_draw_batch_.call = call;
         pending_draw_batch_.rt = begin_rt_batch(call, pending_draw_batch_.rt_info);
         pending_draw_batch_.hidden = rt_hidden_draw();
+        pending_draw_batch_.debake_model = debake_sample_key_;
         pending_draw_batch_.indexed = prim.indexed;
         pending_draw_batch_.base_vertex = prim.base_vertex;
         pending_draw_batch_.vertex_count = prim.vertex_count;

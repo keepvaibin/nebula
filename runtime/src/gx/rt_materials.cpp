@@ -232,7 +232,7 @@ std::size_t RtMaterialTable::read(std::istream& in) {
     bool header_read = false;
     int hash_col = -1, class_col = -1, rough_col = -1, metal_col = -1, r_col = -1, g_col = -1, b_col = -1,
         intensity_col = -1, range_col = -1, pulse_col = -1, cone_col = -1, shadow_col = -1, glow_col = -1,
-        stage_col = -1;
+        stage_col = -1, region_col = -1;
     std::size_t rows = 0u;
     while (std::getline(in, line)) {
         if (line.empty() || line[0] == '#') {
@@ -249,7 +249,7 @@ std::size_t RtMaterialTable::read(std::istream& in) {
                                 : name == "intensity" ? &intensity_col : name == "range" ? &range_col
                                 : name == "pulse" ? &pulse_col : name == "cone" ? &cone_col
                                 : name == "shadow" ? &shadow_col : name == "glow" ? &glow_col
-                                : name == "stage" ? &stage_col : nullptr;
+                                : name == "stage" ? &stage_col : name == "region" ? &region_col : nullptr;
                 if (slot != nullptr) *slot = static_cast<int>(i);
             }
             continue;
@@ -297,6 +297,25 @@ std::size_t RtMaterialTable::read(std::istream& in) {
         if (number(row, cone_col, v)) m.cone = std::clamp(v, 0.0f, 90.0f);
         if (number(row, shadow_col, v)) m.shadow = v != 0.0f;
         if (number(row, glow_col, v)) m.glow = std::clamp(v, 0.0f, 16.0f);
+        if (region_col >= 0 && static_cast<std::size_t>(region_col) < row.size()) {
+            // u0,v0,u1,v1
+            float r[4] = {0.0f, 0.0f, 1.0f, 1.0f};
+            const char* cursor = row[static_cast<std::size_t>(region_col)].c_str();
+            int n = 0;
+            for (; n < 4; ++n) {
+                char* end = nullptr;
+                r[n] = std::strtof(cursor, &end);
+                if (end == cursor) {
+                    break;
+                }
+                cursor = *end == ',' ? end + 1 : end;
+            }
+            if (n == 4) {
+                for (int k = 0; k < 4; ++k) {
+                    m.region[k] = std::clamp(r[k], 0.0f, 1.0f);
+                }
+            }
+        }
         ++rows;
     }
     return rows;

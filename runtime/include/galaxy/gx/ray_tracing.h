@@ -571,6 +571,7 @@ private:
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kLightSlots> light_pixels_;
     // Physical: the stage's full light in linear light (this frame's; per slot, its frame's), 1 otherwise.
     std::array<float, 3> light_full_{1.0f, 1.0f, 1.0f};
+    std::array<float, 3> sky_fill_{};   // the ambient's fill as the picture shows it (RtReflectScene::sky_fill)
     std::array<std::array<float, 3>, kLightSlots> light_slot_full_{};
     std::array<std::uint64_t, kLightSlots> light_pixels_bytes_{};
     std::array<D3D12_RESOURCE_STATES, kLightSlots> light_pixels_state_{};
@@ -673,6 +674,12 @@ private:
     // Physical: the scene's emitting draws as area lights (EmitTriangleCS): first scene triangle, count, draw (bit 31:
     // two-sided), first emitter; the emitters (rt_lighting.hlsl g_emit_tris) and their passes.
     std::vector<std::array<std::uint32_t, 4>> emit_ranges_;
+    // Per water draw its waves for the reflections (rt_reflections.hlsl g_water_waves, 48 bytes): the wave map's view,
+    // then RtDrawInfo.wave_params past its flags' word; per water triangle its texture coordinates (water_uv_).
+    std::vector<std::array<std::uint32_t, 12>> water_waves_;
+    bool water_game_waves_ = false;
+    Microsoft::WRL::ComPtr<ID3D12Resource> water_uv_;
+    D3D12_RESOURCE_STATES water_uv_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     std::uint32_t emit_triangles_ = 0u;
     std::map<std::uint16_t, std::uint64_t> emit_materials_;   // [rt-emit]: emitting materials' triangles
     Microsoft::WRL::ComPtr<ID3D12Resource> emit_tris_;
@@ -693,7 +700,7 @@ private:
         double samples = 0.0;
     };
     void fit_baked_light(const float* sums);
-    bool fit_ = true;
+    bool fit_ = false;
     bool fit_used_ = false;   // this frame's light is the fit (its sun above the player's horizon)
     Microsoft::WRL::ComPtr<ID3D12Resource> fit_sums_;
     D3D12_RESOURCE_STATES fit_sums_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
