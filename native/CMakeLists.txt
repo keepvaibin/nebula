@@ -119,6 +119,11 @@ target_compile_options(smg_game PRIVATE
     "-ffile-prefix-map=${petari}=petari" "-ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=native"
     $<$<COMPILE_LANGUAGE:CXX>:-nostdinc++ -fno-rtti -fno-exceptions -fno-sized-deallocation -fno-aligned-allocation
         -fno-threadsafe-statics>
+    # Every new-expression tests the allocation before constructing, as the console's compiler did: JKRHeap's
+    # operator new and the sound pools' (JASPoolAllocObject) return null when full, and the game checks
+    # (JAISeMgr::newSe_). Standard C++ lets the compiler drop those checks for an operator new that is not
+    # noexcept, and a full sound pool ran JAISe's constructor on null (owner's crashes, 2026-10-20).
+    $<$<COMPILE_LANGUAGE:CXX>:-fcheck-new>
     # The Microsoft C++ ABI sizes a member pointer by its class's inheritance, known only where the class is complete;
     # a unit seeing just a declaration would use another size than its callers (NameObj methods once did).
     $<$<AND:$<PLATFORM_ID:Windows>,$<COMPILE_LANGUAGE:CXX>>:-fcomplete-member-pointers>

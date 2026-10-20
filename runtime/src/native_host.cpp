@@ -3373,6 +3373,16 @@ public:
         return queue_mirror_.queued_buffers();
     }
 
+    // Accepted and not yet played: the worker's pending queue and the device's.
+    unsigned unplayed_buffers() const {
+        return queue_mirror_.queued_buffers() + pending_queue_depth_.load(std::memory_order_acquire);
+    }
+
+    // The buffers the voice waits for before it starts (and starts again after running dry).
+    unsigned prebuffer_buffers() const noexcept {
+        return prebuffer_buffers_;
+    }
+
     void record_anomaly(NativeAudioAnomalyRecord record) noexcept {
         record.host_ns = host_time_ns(std::chrono::steady_clock::now());
         record.queued = queue_mirror_.queued_buffers();
@@ -10359,9 +10369,14 @@ bool NativeGameAudio::dsp_command(const std::uint32_t* words, std::uint32_t coun
     case 0x8Eu:
         mixer.set_varam(word(1u));
         break;
-    case 0x82u:
+    case 0x82u: {
+        // The volume categories, once an audio frame (master applies at the output); they never reached the native
+        // game's mixer before b106 (the owner: the audio split does nothing).
+        const galaxy::RuntimeAudioSettings audio = galaxy::get_runtime_settings().audio;
+        mixer.set_bus_gains({1.0f, audio.music, audio.voice, audio.sfx, audio.ambience, audio.cutscene});
         mixer.sync_frame(words[0], word(1u), word(2u), word(3u), word(4u), guest);
         break;
+    }
     default:
         mixer.note_ignored_command();
         break;
@@ -10369,12 +10384,20 @@ bool NativeGameAudio::dsp_command(const std::uint32_t* words, std::uint32_t coun
     return false;
 }
 
+void NativeGameAudio::set_channel_owner(std::uint32_t (*owner)(std::uint32_t, std::uint32_t*)) {
+    state_->mixer.set_owner_resolver(owner);
+}
+
 bool NativeGameAudio::play(std::span<const std::byte> block, std::uint32_t sample_rate) {
     return state_->sink.submit_pcm16_be_stereo(block, sample_rate, 0u, 0u);
 }
 
 unsigned NativeGameAudio::queued_blocks() const {
-    return state_->sink.queued_buffers();
+    return state_->sink.unplayed_buffers();
+}
+
+unsigned NativeGameAudio::target_blocks() const {
+    return std::max(state_->sink.prebuffer_buffers(), 1u);
 }
 
 bool NativeGameAudio::output_available() const {
@@ -10393,7 +10416,8 @@ std::string NativeGameAudio::stats_line() const {
          << " iir=" << s.iir_renders << " auto-mixer=" << s.auto_mixer_renders
          << " fx-line-subframes=" << s.fx_line_subframes << " unresolved=" << s.unresolved_reads
          << " unsupported-osc=" << s.unsupported_oscillators << " ignored=" << s.ignored_commands
-         << " stray=" << s.stray_releases << " varam=0x" << std::hex << state_->mixer.varam() << std::dec
+         << " stray=" << s.stray_releases << " categories=" << s.category_decisions
+         << " owner-misses=" << s.category_owner_misses << " varam=0x" << std::hex << state_->mixer.varam() << std::dec
          << " mix-ms=" << s.mix_ns / 1000000u;
     return line.str();
 }

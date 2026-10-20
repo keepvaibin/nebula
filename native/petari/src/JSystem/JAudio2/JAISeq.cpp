@@ -20,6 +20,10 @@ JAISeq::JAISeq(JAISeqMgr* seqMgr, JAISoundStrategyMgr< JAISeq >* soundStrategyMg
     for (int i = 0; i < NUM_CHILDREN; i++) {
         inner_.mSoundChild[i] = nullptr;
     }
+#ifdef TARGET_PC
+    inner_.outputTrack.mNebulaOwner = this;
+    inner_.outputTrack.mNebulaOwnerRoute = 2;
+#endif
 }
 
 void JAISeq::JAISeqMgr_startID_(JAISoundID id, const TVec3f* posPtr, JAIAudience* audience, int category, int numTracks) {

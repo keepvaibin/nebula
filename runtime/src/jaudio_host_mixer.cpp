@@ -145,8 +145,20 @@ void JAudioHostMixer::classify_channel(std::uint32_t index, const std::byte* rec
         return word != nullptr ? be32(word, 0u) : 0u;
     };
     JAudioChannelCategory& category = categories_[index];
-    category.decision = galaxy::audio::classify_jaudio_channel(
-        read_u32, index, be16(record, 0x064u), be16(record, 0x100u), &category.owner);
+    if (owner_resolver_ != nullptr) {
+        std::uint32_t route = 0u;
+        const std::uint32_t sound_id = owner_resolver_(index, &route);
+        category.owner = {static_cast<galaxy::audio::JAudioOwnerRoute>(route <= 3u ? route : 0u), sound_id};
+        category.decision = route != 0u ? galaxy::audio::native_audio_bus_from_sound_id(sound_id)
+                                        : galaxy::audio::NativeAudioBusDecision{};
+        if (category.decision.classification != galaxy::audio::NativeAudioBusClassification::OwnerSoundId) {
+            category.decision = galaxy::audio::native_audio_bus_from_channel_format(be16(record, 0x064u),
+                                                                                    be16(record, 0x100u));
+        }
+    } else {
+        category.decision = galaxy::audio::classify_jaudio_channel(
+            read_u32, index, be16(record, 0x064u), be16(record, 0x100u), &category.owner);
+    }
     ++stats_.category_decisions;
     if (category.decision.classification == galaxy::audio::NativeAudioBusClassification::OwnerSoundId) {
         category_retries_[index] = 0u;

@@ -29,6 +29,9 @@ JAIStream::JAIStream(JAIStreamMgr* streamMgr_, JAISoundStrategyMgr< JAIStream >*
     for (int i = 0; i < NUM_CHILDREN; i++) {
         children[i] = nullptr;
     }
+#ifdef TARGET_PC
+    inner_.aramStream.mNebulaOwner = this;
+#endif
 }
 
 void JAIStream::JAIStreamMgr_startID_(JAISoundID id, s32 streamFileEntry, const TVec3f* posPtr, JAIAudience* audience, int category) {

@@ -177,4 +177,9 @@ public:
     static u8* sReadBuffer;
     static u32 sBlockSize;
     static u32 sChannelMax;
+
+#ifdef TARGET_PC
+    // The stream sound playing it (JAIStream sets it) for the host's volume categories.
+    const class JAISound* mNebulaOwner = nullptr;
+#endif
 };

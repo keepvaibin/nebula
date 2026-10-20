@@ -6,6 +6,10 @@ JAISe::JAISe(JAISeMgr* SeMgr, JAISoundStrategyMgr< JAISe >* soundStrategyMgr, u3
     inner_.mSoundStrategyMgr = soundStrategyMgr;
     inner_.seMgr = SeMgr;
     inner_.mProperPriority = priority;
+#ifdef TARGET_PC
+    inner_.track.mNebulaOwner = this;
+    inner_.track.mNebulaOwnerRoute = 1;
+#endif
 }
 
 void JAISe::mixOut_(const JASSoundParams& params) {

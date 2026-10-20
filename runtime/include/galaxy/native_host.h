@@ -2242,11 +2242,15 @@ public:
     // One AI block: 16-bit samples, right then left, big-endian, as the console's DMA engine reads them. Call from one
     // thread; the first call opens the device.
     bool play(std::span<const std::byte> block, std::uint32_t sample_rate);
-    // Blocks submitted to the device and not yet played.
+    // Blocks submitted and not yet played (the sink's pending queue and the device's).
     [[nodiscard]] unsigned queued_blocks() const;
+    // The blocks the device holds before it plays (or plays again after running dry): the level to keep queued.
+    [[nodiscard]] unsigned target_blocks() const;
     [[nodiscard]] bool output_available() const;
     // The device stopped while the app is out of sight (SDL hosts), queued blocks kept for its return.
     void set_paused(bool paused);
+    // The game's name for the sound on a DSP channel (nebula_game_audio_channel_owner), for the volume categories.
+    void set_channel_owner(std::uint32_t (*owner)(std::uint32_t channel, std::uint32_t* route));
     // The DSP program's counters, as v1.0.1 logs them ([jaudio] ...).
     [[nodiscard]] std::string stats_line() const;
 

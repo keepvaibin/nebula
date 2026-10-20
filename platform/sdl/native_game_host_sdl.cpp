@@ -12,6 +12,7 @@
 #include "galaxy/native_input.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/pointer_control.h"
+#include "galaxy/runtime_settings.h"
 #include "galaxy/tilt.h"
 #include "galaxy/wii_device_data.h"
 
@@ -343,14 +344,22 @@ bool NativeGameAudio::dsp_command(const std::uint32_t* words, std::uint32_t coun
     case 0x8Eu:
         mixer.set_varam(word(1u));
         break;
-    case 0x82u:
+    case 0x82u: {
+        // The volume categories, once an audio frame (master applies to the stream's output).
+        const galaxy::RuntimeAudioSettings audio = galaxy::get_runtime_settings().audio;
+        mixer.set_bus_gains({1.0f, audio.music, audio.voice, audio.sfx, audio.ambience, audio.cutscene});
         mixer.sync_frame(words[0], word(1u), word(2u), word(3u), word(4u), guest);
         break;
+    }
     default:
         mixer.note_ignored_command();
         break;
     }
     return false;
+}
+
+void NativeGameAudio::set_channel_owner(std::uint32_t (*owner)(std::uint32_t, std::uint32_t*)) {
+    state_->mixer.set_owner_resolver(owner);
 }
 
 bool NativeGameAudio::play(std::span<const std::byte> block, std::uint32_t sample_rate) {
@@ -390,6 +399,12 @@ unsigned NativeGameAudio::queued_blocks() const {
     }
     const int queued = SDL_GetAudioStreamQueued(s.stream);
     return queued > 0 ? static_cast<unsigned>(static_cast<std::size_t>(queued) / s.block_bytes) : 0u;
+}
+
+// SDL's stream plays silence when it runs dry and starts again with the next data: four blocks (70 ms at the game's
+// 17.5 ms blocks) absorb the device's period and the game's mixing time.
+unsigned NativeGameAudio::target_blocks() const {
+    return 4u;
 }
 
 bool NativeGameAudio::output_available() const {

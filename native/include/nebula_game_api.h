@@ -320,6 +320,10 @@ NEBULA_GAME_API void nebula_game_vi_retrace(void);
 NEBULA_GAME_API void nebula_game_fs_complete(uint32_t slot, int32_t result);
 /* The AI took the latched DMA block (the console's AI DMA interrupt): the game prepares the next. */
 NEBULA_GAME_API void nebula_game_ai_interrupt(void);
+/* The sound playing on DSP channel `channel` (0-63) for the host's volume categories: its JAudio sound ID, with *route
+   1 (an effect), 2 (a sequence) or 3 (a stream); 0 with *route 0 when no sound the game can name plays there. The host
+   calls it from the DSP command it is running (the game's audio thread). */
+NEBULA_GAME_API uint32_t nebula_game_audio_channel_owner(uint32_t channel, uint32_t* route);
 /* A Wii Remote connected (with its calibration) or disconnected. */
 NEBULA_GAME_API void nebula_game_wpad_connect(uint32_t chan, int connected, const NebulaWiimoteConnection* connection);
 /* A Wii Remote input report, from its id (0x30, 0x31, 0x33 or 0x37 as the data format asks), extension bytes decrypted;

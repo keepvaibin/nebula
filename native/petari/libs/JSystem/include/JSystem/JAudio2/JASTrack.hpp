@@ -411,5 +411,10 @@ struct JASTrack : public JASPoolAllocObject_MultiThreaded< JASTrack > {
     static int nebulaListNodeOffset() {
         return -(int)offsetof(JASTrack, mNode);
     }
+
+    // The sound whose output track this is (JAISe and JAISeq set it; route 1 an effect, 2 a sequence) for the host's
+    // volume categories (nebula_game_audio_channel_owner); none on a sequence's child tracks.
+    const class JAISound* mNebulaOwner = nullptr;
+    u8 mNebulaOwnerRoute = 0;
 #endif
 };

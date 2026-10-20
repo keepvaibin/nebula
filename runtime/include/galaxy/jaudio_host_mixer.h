@@ -94,6 +94,10 @@ public:
     // render). The gain then applies from the sound's first sample. A changed gain ramps over 80 samples.
     // Until the first call, every gain is 1.
     void set_bus_gains(const galaxy::audio::NativeAudioBusGains& gains) noexcept;
+    // The native game names the sound on a channel itself (its sound ID; route 1 effect, 2 sequence, 3 stream, 0 none);
+    // without it the owner is read from the console's memory, as v1.0.1 does.
+    using OwnerResolver = std::uint32_t (*)(std::uint32_t channel, std::uint32_t* route);
+    void set_owner_resolver(OwnerResolver resolver) noexcept { owner_resolver_ = resolver; }
     [[nodiscard]] const JAudioChannelCategory& channel_category(std::uint32_t channel) const noexcept {
         return categories_[channel < categories_.size() ? channel : 0u];
     }
@@ -109,6 +113,7 @@ public:
     }
 
 private:
+    OwnerResolver owner_resolver_{};
     struct FxLine {
         std::uint16_t flags{};
         std::uint16_t frames{};

@@ -689,6 +689,7 @@ unsigned pending_settings_changes() {
     changes += d.ambient_occlusion != live.ambient_occlusion;
     changes += d.hud_output_resolution != live.hud_output_resolution;
     changes += d.ray_tracing_enabled != live.ray_tracing_enabled;
+    changes += d.rt_quality != live.rt_quality;
     changes += controls_changes();
     return changes;
 }
@@ -2166,6 +2167,19 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render) {
         rows.push_back({"RAY TRACING", render.ray_tracing_enabled ? "ON" : "OFF",
                         [](RenderConfig& draft, int) { draft.ray_tracing_enabled = !draft.ray_tracing_enabled; },
                         "TRACED SHADOWS, SKY AND BOUNCE LIGHT, GLOWS THAT LIGHT THE WORLD"});
+        // rt_quality: 0 medium, 1 high, 2 low; the ray tracer reads it when it starts.
+        static const unsigned started = std::min(get_render_config().rt_quality, 2u);
+        static constexpr unsigned kOrder[] = {2u, 0u, 1u};
+        static constexpr const char* kNames[] = {"MEDIUM", "HIGH", "LOW"};
+        std::string value = kNames[std::min(render.rt_quality, 2u)];
+        if (std::min(render.rt_quality, 2u) != started) value += " (NEXT START)";
+        rows.push_back({"RAY TRACING QUALITY", value,
+                        [](RenderConfig& draft, int delta) {
+                            const unsigned quality = std::min(draft.rt_quality, 2u);
+                            const unsigned at = quality == 2u ? 0u : quality == 0u ? 1u : 2u;
+                            draft.rt_quality = kOrder[settings_step(at, 3u, delta)];
+                        },
+                        "HIGH SAMPLES MORE LIGHTS PER PIXEL AND REFLECTS WATER AT FULL RESOLUTION. APPLIES AT THE NEXT START"});
     }
     return rows;
 }

@@ -17,6 +17,7 @@
 
 #if defined(NEBULA_HOST_RENDERER)
 #include "galaxy/experimental_ultrawide_aspect.h"
+#include "galaxy/frame_timeline.h"
 #include "galaxy/gx_d3d12.h"
 #include "galaxy/native_api.h"
 #include "galaxy/native_host.h"
@@ -143,6 +144,7 @@ struct Module {
     decltype(&nebula_game_vi_retrace) vi_retrace;
     decltype(&nebula_game_fs_complete) fs_complete;
     decltype(&nebula_game_ai_interrupt) ai_interrupt;
+    decltype(&nebula_game_audio_channel_owner) audio_channel_owner;
     decltype(&nebula_game_gx_event) gx_event;
     decltype(&nebula_game_gx_release) gx_release;
     decltype(&nebula_game_memory_regions) memory_regions;
@@ -192,6 +194,8 @@ void load_module(const fs::path& path) {
     gModule.vi_retrace = reinterpret_cast<decltype(gModule.vi_retrace)>(find_symbol(module, "nebula_game_vi_retrace"));
     gModule.fs_complete = reinterpret_cast<decltype(gModule.fs_complete)>(find_symbol(module, "nebula_game_fs_complete"));
     gModule.ai_interrupt = reinterpret_cast<decltype(gModule.ai_interrupt)>(find_symbol(module, "nebula_game_ai_interrupt"));
+    gModule.audio_channel_owner = reinterpret_cast<decltype(gModule.audio_channel_owner)>(
+        find_symbol(module, "nebula_game_audio_channel_owner"));
     gModule.gx_event = reinterpret_cast<decltype(gModule.gx_event)>(find_symbol(module, "nebula_game_gx_event"));
     gModule.gx_release = reinterpret_cast<decltype(gModule.gx_release)>(find_symbol(module, "nebula_game_gx_release"));
     gModule.memory_regions = reinterpret_cast<decltype(gModule.memory_regions)>(find_symbol(module, "nebula_game_memory_regions"));
@@ -555,44 +559,71 @@ bool wait_while_suspended() {
     return true;
 }
 
+// The audio interface's clock: a block taken every block's length (4 bytes a stereo sample at the AI rate), on
+// fixed deadlines, as the console's DMA engine runs. With an output device the period follows the device's own clock:
+// at most 1 % shorter while fewer blocks than the sink's restart level wait there unplayed, longer while more, so the
+// queue holds about that level and the two clocks never drift apart.
+// It never waits for the device. The thread before b105 took the next block only once fewer than two waited, and
+// measured each period from its own wake-up: it ran at 94.5 % of the AI rate (54 blocks a second for 57), the device ran
+// dry over and over (stutter), and once the sink had stopped the dry voice, to restart it at four blocks, two waiting
+// blocks never played: the AI stopped, the game's sounds never ended, its sound pools filled and the next sound was
+// built on a null allocation (the owner's crashes, 2026-10-20). Silent or failed devices leave the clock as it is.
 void ai_thread() {
     name_thread(L"Nebula Host AI");
+    Clock::time_point next{};
+    bool scheduled = false;
     for (;;) {
-        wait_while_suspended();
+        if (wait_while_suspended()) {
+            scheduled = false;
+        }
         uint32_t size = 0;
         uint32_t start = 0;
         uint32_t rate = 32000;
         {
             std::unique_lock<std::mutex> lock(gAiLock);
-            gAiWake.wait(lock, [] { return gAiRunning && gAiLatchedSize != 0; });
+            // A stopped interface (or none latched yet) restarts the schedule from the block that resumes it.
+            if (!(gAiRunning && gAiLatchedSize != 0)) {
+                gAiWake.wait(lock, [] { return gAiRunning && gAiLatchedSize != 0; });
+                scheduled = false;
+            }
             size = gAiLatchedSize;
             start = gAiLatchedStart;
-            rate = gAiRate;
+            rate = gAiRate != 0 ? gAiRate : 32000;
         }
-        const auto begin = Clock::now();
+        if (!scheduled) {
+            next = Clock::now();
+            scheduled = true;
+        }
+        double period_ns = static_cast<double>((uint64_t)size / 4 * 1000000000ull) / rate;
 #if defined(NEBULA_HOST_RENDERER)
-        // The block the DMA engine takes now goes to the output device, whose clock then sets the pace: the next
-        // block is taken once fewer than two wait there (the engine latches one block ahead of the one playing).
         bool played = false;
         if (const std::byte* samples = guest_bytes(start, size)) {
             played = gAudio->play(std::span<const std::byte>(samples, size), rate);
+        }
+        if (played && gAudio->output_available()) {
+            const int error = static_cast<int>(gAudio->queued_blocks()) - static_cast<int>(gAudio->target_blocks());
+            period_ns *= 1.0 + std::clamp(error * 0.0025, -0.01, 0.01);
         }
 #else
         (void)start;
 #endif
         gAiBlocks.fetch_add(1, std::memory_order_relaxed);
-        gModule.ai_interrupt();
-#if defined(NEBULA_HOST_RENDERER)
-        if (played && gAudio->output_available()) {
-            const auto block = std::chrono::nanoseconds((uint64_t)size / 4 * 1000000000ull / rate);
-            while (gAudio->queued_blocks() >= 2) {
-                sleep_until_precise(Clock::now() + block / 8);
-            }
-            continue;
+        // Tests: GALAXY_TEST_AI_STALL_AFTER=<blocks> stops the interrupts there, as a dead output once did: the game's
+        // sounds never end and its sound pools fill (the game must refuse new sounds, never crash).
+        static const uint64_t stall_after = [] {
+            const char* value = std::getenv("GALAXY_TEST_AI_STALL_AFTER");
+            return value != nullptr ? std::strtoull(value, nullptr, 10) : 0ull;
+        }();
+        if (stall_after == 0 || gAiBlocks.load(std::memory_order_relaxed) < stall_after) {
+            gModule.ai_interrupt();
         }
-#endif
-        // No device: the block's length on the host clock (4 bytes per stereo sample).
-        sleep_until_precise(begin + std::chrono::nanoseconds((uint64_t)size / 4 * 1000000000ull / rate));
+        next += std::chrono::nanoseconds(static_cast<int64_t>(period_ns));
+        // A stall past 100 ms (a debugger, a hitch) starts the schedule again rather than catching up in a burst.
+        const auto now = Clock::now();
+        if (next + std::chrono::milliseconds(100) < now) {
+            next = now;
+        }
+        sleep_until_precise(next);
     }
 }
 
@@ -1342,6 +1373,9 @@ void svc_vi_frame(void*, uint32_t xfb, int black, uint32_t retrace) {
     gXfb.store(xfb, std::memory_order_relaxed);
     gRetraces.store(retrace, std::memory_order_relaxed);
 #if defined(NEBULA_HOST_RENDERER)
+#if defined(_WIN32)
+    galaxy::timeline::record(galaxy::timeline::Event::GuestFrame, retrace, xfb);
+#endif
     if (!gRegions.empty()) {
         submit_frame(true, xfb == 0 || black ? galaxy::gx::kNoDisplayedXfbAddr : xfb);
     }
@@ -2053,6 +2087,10 @@ int main(int argc, char** argv) {
     apply_shipped_renderer_defaults();
 #endif
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
+    // GALAXY_FRAME_TIMELINE=1: the frame pipeline's events (frame_timeline.h), as v1.0.1 records them, written at exit.
+    galaxy::timeline::initialize_from_environment();
+#endif
+#if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
     // As v1.0.1 starts: physical-pixel DPI awareness before any window (sizes and mouse coordinates in pixels), and
     // CRT assertion and error reports to stderr instead of dialogs.
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
@@ -2191,6 +2229,7 @@ int main(int argc, char** argv) {
     }
     galaxy::gx::set_indexed_load_host_order(true);
     gAudio = new galaxy::host::NativeGameAudio();  // lives as long as the process (the AI thread is detached)
+    gAudio->set_channel_owner(gModule.audio_channel_owner);
     // The live controls' links to the window, as v1.0.1 installs them: the mouse as the pointer, keyboard capture and
     // controller navigation while the settings overlay or the HOME Menu is open.
     galaxy::host::install_host_pointer_provider([]() noexcept {
@@ -2327,6 +2366,9 @@ int main(int argc, char** argv) {
     if (gModule.debug_dump != nullptr) {
         gModule.debug_dump();
     }
+#if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
+    galaxy::timeline::dump();
+#endif
     std::fflush(stdout);
     std::_Exit(0);
 }
