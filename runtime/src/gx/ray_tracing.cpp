@@ -3556,6 +3556,26 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
             c.sun_light[i] = std::max(full - sky, 0.0f);
             c.full_light[i] = full;
         }
+        // A stage without a sun (rt-suns none: Melty Molten's glowing haze) gives the table's `strength` share of the
+        // key's light to its sky, an overcast sky (physical_overcast): open ground lit from above, a soft shadow under
+        // whatever stands on it. The key stood 35 degrees below the player's horizon there and lit nothing: the lava's
+        // red light alone turned the stone red and Mario's overalls black (b16); the whole key from the haze read as
+        // the game's daylight (b18; user: something in between). In the table's colour when it has one (Melty's golden
+        // sky at half its tint; white light made the lava world read as the game's grey stone, b17). The camera stays
+        // exposed for the stage's own light (its key as a sun 30 degrees up): a dimmer haze leaves the lava brighter.
+        const auto luma3 = [](const float* rgb) { return 0.2126f * rgb[0] + 0.7152f * rgb[1] + 0.0722f * rgb[2]; };
+        const bool overcast = stage_sun_ != nullptr && stage_sun_->source == RtStageSun::Source::None && !sun_override_;
+        const float overcast_reference = luma3(c.sky_radiance) + 0.5f * luma3(c.sun_light);
+        if (overcast) {
+            const float level = luma3(c.sky_radiance) + std::min(stage_sun_->strength, 1.0f) * luma3(c.sun_light);
+            const float tint = stage_sun_->has_color ? std::max(luma3(stage_sun_->color), 1e-3f) : 0.0f;
+            const float full = std::max(luma3(c.full_light), 1e-4f);
+            for (unsigned i = 0; i < 3u; ++i) {
+                c.sky_radiance[i] = tint > 0.0f ? level * stage_sun_->color[i] / tint : level * c.full_light[i] / full;
+                c.sun_light[i] = 0.0f;
+            }
+            c.sky_radiance[3] = 1.0f;
+        }
         light_full_ = {std::max(c.full_light[0], 1e-3f), std::max(c.full_light[1], 1e-3f),
                        std::max(c.full_light[2], 1e-3f)};
         sky_fill_ = {};
@@ -3637,7 +3657,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
             const auto luma = [](const float* rgb) { return 0.2126f * rgb[0] + 0.7152f * rgb[1] + 0.0722f * rgb[2]; };
             const float up_key = std::max(scene_up_[0] * c.sun[0] + scene_up_[1] * c.sun[1] + scene_up_[2] * c.sun[2],
                                           0.5f);
-            const float reference = luma(c.sky_radiance) + luma(c.sun_light) * up_key;
+            const float reference = overcast ? overcast_reference : luma(c.sky_radiance) + luma(c.sun_light) * up_key;
             c.light_fit[0] = reference > 1e-4f ? luma(c.full_light) / reference : 0.0f;
             // The ambient's fill as the picture shows it (the reflections' sky floor).
             const auto srgb = [](float v) {

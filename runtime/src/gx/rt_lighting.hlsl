@@ -2082,12 +2082,35 @@ float3 physical_sky_fill()
                            : float3(0.0f, 0.0f, 0.0f);
 }
 
+// A sky without a sun (g_sky_radiance.w: rt-suns none, Melty Molten's haze) is an overcast one: the CIE standard
+// overcast sky (Moon and Spencer 1942; CIE S 011/E:2003 type 1), its radiance (1 + 2 cos) / 3 of the zenith's by the
+// angle from the player's up, three times brighter overhead than at the horizon; below the horizon the horizon's.
+// Scaled so that open ground gets the light of a uniform sky (zenith 9/7, horizon 3/7 of it): whatever stands on the
+// ground shades it most straight below (a uniform haze left Mario's shadow a faint blur, b18).
+float physical_overcast(float3 d)
+{
+    return g_sky_radiance.w > 0.0f ? (3.0f + 6.0f * max(dot(d, g_up.xyz), 0.0f)) / 7.0f : 1.0f;
+}
+
+// The overcast sky's irradiance over pi on a surface facing `n`, as a share of a uniform sky's: 3/7 from the even
+// part, 6/7 times the integral of the two clamped cosines over pi, 2 ((pi - a) cos a + sin a) / (3 pi) at the angle a
+// between the surface and the player's up (2/3 facing up, 0 facing down).
+float physical_overcast_irradiance(float3 n)
+{
+    if (g_sky_radiance.w <= 0.0f) {
+        return 1.0f;
+    }
+    const float c = clamp(dot(n, g_up.xyz), -1.0f, 1.0f);
+    const float a = acos(c);
+    return 3.0f / 7.0f + (6.0f / 7.0f) * (2.0f * ((kPi - a) * c + sin(a)) / (3.0f * kPi));
+}
+
 // kPhysicalFlag: the sky's radiance towards eye-space direction `d`: the traced sky's (bilinear in its map, at the
 // stage's ambient level and colour), else the ambient from every direction.
 float3 physical_sky(float3 d)
 {
     if (g_full_light.w == 0.0f) {
-        return g_sky_radiance.rgb;
+        return g_sky_radiance.rgb * physical_overcast(d);
     }
     const float2 p = sky_map_uv(eye_to_world(d)) * float(kSkyMapSize) - 0.5f;
     const float2 f = frac(p);
@@ -2098,7 +2121,7 @@ float3 physical_sky(float3 d)
         const float w = ((k & 1u) != 0u ? f.x : 1.0f - f.x) * ((k & 2u) != 0u ? f.y : 1.0f - f.y);
         radiance += g_sky_map[uint(t.y) * kSkyMapSize + uint(t.x)].rgb * w;
     }
-    return radiance * physical_sky_own() + physical_sky_fill();
+    return radiance * physical_sky_own() + physical_sky_fill() * physical_overcast(d);
 }
 
 // kPhysicalFlag: the open sky's irradiance over pi on a surface facing eye-space `n` (the traced sky's spherical
@@ -2106,7 +2129,7 @@ float3 physical_sky(float3 d)
 float3 physical_sky_irradiance(float3 n)
 {
     if (g_full_light.w == 0.0f) {
-        return g_sky_radiance.rgb;
+        return g_sky_radiance.rgb * physical_overcast_irradiance(n);
     }
     float basis[9];
     sh9(eye_to_world(n), basis);
@@ -2115,7 +2138,7 @@ float3 physical_sky_irradiance(float3 n)
         irradiance += g_sky_map[kSkyMapSize * kSkyMapSize + b].rgb *
                       (basis[b] * (b == 0u ? 1.0f : b < 4u ? 2.0f / 3.0f : 0.25f));
     }
-    return max(irradiance, 0.0f) * physical_sky_own() + physical_sky_fill();
+    return max(irradiance, 0.0f) * physical_sky_own() + physical_sky_fill() * physical_overcast_irradiance(n);
 }
 
 // kPhysicalFlag: the camera's exposure: a white surface facing the player's up (the ground under the player, by the
