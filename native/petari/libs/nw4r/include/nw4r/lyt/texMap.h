@@ -111,7 +111,7 @@ namespace nw4r {
             }
 
             void SetLODBias(f32 bias) {
-                mLODBias = u16(bias * 256);
+                mLODBias = u16((s32)(bias * 256));
             }
 
             void SetWrapMode(GXTexWrapMode wrapS, GXTexWrapMode wrapT) {

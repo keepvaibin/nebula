@@ -9,7 +9,7 @@
 
 namespace MR {
     void drawFullScreenBlur(f32 param1) {
-        drawFullScreenBlur(param1, param1, param1 / 30.0f, (param1 / 30.0f) / 2.0f);
+        drawFullScreenBlur(param1, param1, (s32)(param1 / 30.0f), (s32)((param1 / 30.0f) / 2.0f));
     }
 
     void drawFullScreenBlur(f32 param1, f32 param2, u8 param3, u8 param4) {

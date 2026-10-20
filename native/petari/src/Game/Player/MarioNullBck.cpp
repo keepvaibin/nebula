@@ -38,7 +38,7 @@ bool MarioNullBck::getFramePos(f32 a1, TVec3f* a2, TVec3f* a3) {
         ret = true;
         a1 = MR::getBckCtrl(this)->getEnd();
     }
-    _8C = (s16)a1;
+    _8C = (s16)(s32)(a1);
     MR::setBckFrame(this, a1);
     MR::setBckRate(this, 0.0f);
     MR::updateModelManager(this);

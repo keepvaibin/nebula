@@ -15,7 +15,7 @@ void JPABaseParticle::init_p(JPAEmitterWorkData* pWork) {
     JPADynamicsBlock* dyn = pWork->mpRes->mpDynamicsBlock;
 
     mAge = -1;
-    mLifeTime = (1.0f - dyn->getLifetimeRndm() * emtr->get_r_f()) * emtr->mLifeTime;
+    mLifeTime = (s32)((1.0f - dyn->getLifetimeRndm() * emtr->get_r_f()) * emtr->mLifeTime);
     mTime = 0.0f;
 
     initStatus(0);
@@ -49,7 +49,7 @@ void JPABaseParticle::init_p(JPAEmitterWorkData* pWork) {
 
     if (emtr->mDirSpeed) {
         Mtx mtx;
-        JPAGetYZRotateMtx(emtr->get_r_zp() * 0x8000 * emtr->mSpread, emtr->mRndm.get_rndm_ss(), mtx);
+        JPAGetYZRotateMtx((s32)(emtr->get_r_zp() * 0x8000 * emtr->mSpread), emtr->mRndm.get_rndm_ss(), mtx);
         PSMTXConcat(pWork->mDirectionMtx, mtx, mtx);
         velDir.set< f32 >(emtr->mDirSpeed * mtx[0][2], emtr->mDirSpeed * mtx[1][2], emtr->mDirSpeed * mtx[2][2]);
     } else {
@@ -88,7 +88,7 @@ void JPABaseParticle::init_p(JPAEmitterWorkData* pWork) {
     mPrmClr = emtr->mPrmClr;
     mEnvClr = emtr->mEnvClr;
 
-    mAnmRandom = emtr->get_r_f() * bsp->getLoopOfstValue();
+    mAnmRandom = (s32)(emtr->get_r_f() * bsp->getLoopOfstValue());
 
     if (esp != nullptr && esp->isEnableScaleAnm()) {
         mParticleScaleX = mParticleScaleY = mScaleOut = emtr->mScaleOut * (emtr->get_r_zp() * esp->getScaleRndm() + 1.0f);
@@ -106,8 +106,8 @@ void JPABaseParticle::init_p(JPAEmitterWorkData* pWork) {
 
     if (esp != nullptr) {
         if (esp->isEnableRotateAnm()) {
-            mRotateAngle = esp->getRotateInitAngle() + esp->getRotateRndmAngle() * emtr->mRndm.get_rndm_zh();
-            mRotateSpeed = esp->getRotateInitSpeed() * (esp->getRotateRndmSpeed() * emtr->get_r_zp() + 1.0f);
+            mRotateAngle = (s32)(esp->getRotateInitAngle() + esp->getRotateRndmAngle() * emtr->mRndm.get_rndm_zh());
+            mRotateSpeed = (s32)(esp->getRotateInitSpeed() * (esp->getRotateRndmSpeed() * emtr->get_r_zp() + 1.0f));
             mRotateSpeed = emtr->get_r_zp() < esp->getRotateDirection() ? mRotateSpeed : (s16)-mRotateSpeed;
         } else {
             mRotateAngle = 0;
@@ -174,12 +174,12 @@ void JPABaseParticle::init_c(JPAEmitterWorkData* pWork, JPABaseParticle* pParent
     }
 
     if (csp->isColorInherited()) {
-        mPrmClr.r = pParent->mPrmClr.r * csp->getColorInhRate();
-        mPrmClr.g = pParent->mPrmClr.g * csp->getColorInhRate();
-        mPrmClr.b = pParent->mPrmClr.b * csp->getColorInhRate();
-        mEnvClr.r = pParent->mEnvClr.r * csp->getColorInhRate();
-        mEnvClr.g = pParent->mEnvClr.g * csp->getColorInhRate();
-        mEnvClr.b = pParent->mEnvClr.b * csp->getColorInhRate();
+        mPrmClr.r = (s32)(pParent->mPrmClr.r * csp->getColorInhRate());
+        mPrmClr.g = (s32)(pParent->mPrmClr.g * csp->getColorInhRate());
+        mPrmClr.b = (s32)(pParent->mPrmClr.b * csp->getColorInhRate());
+        mEnvClr.r = (s32)(pParent->mEnvClr.r * csp->getColorInhRate());
+        mEnvClr.g = (s32)(pParent->mEnvClr.g * csp->getColorInhRate());
+        mEnvClr.b = (s32)(pParent->mEnvClr.b * csp->getColorInhRate());
     } else {
         csp->getPrmClr(&mPrmClr);
         csp->getEnvClr(&mEnvClr);
@@ -187,7 +187,7 @@ void JPABaseParticle::init_c(JPAEmitterWorkData* pWork, JPABaseParticle* pParent
 
     mPrmColorAlphaAnm = 0xff;
     if (csp->isAlphaInherited()) {
-        mPrmClr.a = COLOR_MULTI(pParent->mPrmClr.a, pParent->mPrmColorAlphaAnm) * csp->getAlphaInhRate();
+        mPrmClr.a = (s32)(COLOR_MULTI(pParent->mPrmClr.a, pParent->mPrmColorAlphaAnm) * csp->getAlphaInhRate());
     } else {
         mPrmClr.a = csp->getPrmAlpha();
     }

@@ -204,7 +204,7 @@ public:
         mLocalTrs.set(i_trans);
     }
     void setLocalRotation(const JGeometry::TVec3< s16 >& i_rot) {
-        mLocalRot.set(i_rot.x * 0.005493248f, i_rot.y * 0.005493248f, i_rot.z * 0.005493248f);
+        mLocalRot.set((s32)(i_rot.x * 0.005493248f), (s32)(i_rot.y * 0.005493248f), (s32)(i_rot.z * 0.005493248f));
     }
     void setRateStep(u8 i_step) {
         mRateStep = i_step;

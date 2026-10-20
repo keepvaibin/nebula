@@ -223,7 +223,7 @@ bool MarioStep::update() {
     if (v7 < 0.0f) {
         return false;
     } else {
-        mActor->setBlendMtxTimer(v7);
+        mActor->setBlendMtxTimer((s32)(v7));
         return true;
     }
 }

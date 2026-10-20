@@ -663,7 +663,7 @@ void JASTrack::updateChannel(JASChannel* channel, JASDsp::TChannel* dspChannel) 
     }
 
     dspChannel->setFilterMode(mFilterMode);
-    dspChannel->setDistFilter(32767.0f * mMoveParam.params.distFilter.mValue);
+    dspChannel->setDistFilter((s32)(32767.0f * mMoveParam.params.distFilter.mValue));
 }
 
 void JASTrack::channelUpdateCallback(u32 a, JASChannel* channel, JASDsp::TChannel* dspChannel, void* data) {

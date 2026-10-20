@@ -134,8 +134,8 @@ void MarioActor::captureScreenBox() const {
         return;
     }
 
-    GXSetTexCopyDst(_B3C, _B40, GX_TF_RGB565, GX_FALSE);
-    GXSetTexCopySrc(_B34, _B38, _B3C, _B40);
+    GXSetTexCopyDst((s32)(_B3C), (s32)(_B40), GX_TF_RGB565, GX_FALSE);
+    GXSetTexCopySrc((s32)(_B34), (s32)(_B38), (s32)(_B3C), (s32)(_B40));
     GXSetColorUpdate(GX_FALSE);
     GXSetAlphaUpdate(GX_TRUE);
 
@@ -161,7 +161,7 @@ void MarioActor::writeBackScreenBox() const {
     TVec2f minimum;
     TVec2f maximum;
     TDDraw::setup(1, 0, 2);
-    GXInitTexObj(&texture, _B44, _B3C, _B40, GX_TF_RGB565, GX_CLAMP, GX_CLAMP, GX_FALSE);
+    GXInitTexObj(&texture, _B44, (s32)(_B3C), (s32)(_B40), GX_TF_RGB565, GX_CLAMP, GX_CLAMP, GX_FALSE);
     GXLoadTexObj(&texture, GX_TEXMAP0);
     MR::convertFrameBufferPosToScreenPos(&minimum, mScreenBoxPos);
     MR::convertFrameBufferPosToScreenPos(&maximum, mScreenBoxPos + mScreenBoxSize + TVec2f(0.99f, 0.99f));
@@ -201,7 +201,7 @@ void MarioActor::calc1stPersonView() {
         val = 1.0f - (maxVal - length) / (maxVal - minVal);
     }
 
-    u8 compareVal = 255.0f * val;
+    u8 compareVal = (s32)(255.0f * val);
 
     if (compareVal == 0) {
         _1A1 = true;
@@ -245,7 +245,7 @@ void MarioActor::calcFogLighting() {
         fog.mGXColor = _1B0.mGXColor;
 
         if (_1B5) {
-            fog.g = 255.0f * MR::sin(JGeometry::TUtil< f32 >::PI() * (_1AA / 20.0f));
+            fog.g = (s32)(255.0f * MR::sin(JGeometry::TUtil< f32 >::PI() * (_1AA / 20.0f)));
         }
 
         _1A4 = _1AC * MR::sin((_1AA / static_cast< f32 >(getConst().getTable()->mStarPieceFogTime)) * JGeometry::TUtil< f32 >::PI());

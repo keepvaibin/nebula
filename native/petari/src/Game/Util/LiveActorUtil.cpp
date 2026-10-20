@@ -1098,8 +1098,11 @@ namespace MR {
             setBrkFrame(pActor, getBrkCtrl(pActor)->getEnd());
         }
 
+        // The visibility animation's own frame: the decompilation set the colour animation's here, so every shape a
+        // BVA shows only at its end stayed hidden natively (the Observatory's restored domes: their doorways, lamps
+        // and star lights invisible while their collision was there; the original game shows them).
         if (isExistBva(pActor, pName)) {
-            setBrkFrame(pActor, getBvaCtrl(pActor)->getEnd());
+            setBvaFrame(pActor, getBvaCtrl(pActor)->getEnd());
         }
     }
 

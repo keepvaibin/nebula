@@ -269,7 +269,7 @@ void BloomEffect::initBlur(JUTTexture* pTexture, u32 param2, f32 intensity) cons
 
     GXSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_TEXC, GX_CC_RASC, GX_CC_ZERO);
     GXSetTevColorOp(GXTevStageID(param2), GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    GXSetChanMatColor(GX_COLOR0A0, Color8(intensity * 255.0f, intensity * 255.0f, intensity * 255.0f, 255));
+    GXSetChanMatColor(GX_COLOR0A0, Color8((s32)(intensity * 255.0f), (s32)(intensity * 255.0f), (s32)(intensity * 255.0f), 255));
     pTexture->load(GX_TEXMAP0);
     GXSetBlendMode(GX_BM_NONE, GX_BL_ZERO, GX_BL_ZERO, GX_LO_CLEAR);
 }

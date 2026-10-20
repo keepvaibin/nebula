@@ -1020,13 +1020,13 @@ void JPAResource::calcKey(JPAEmitterWorkData* work) {
             work->mpEmtr->mRate = val;
             break;
         case 1:
-            work->mpEmtr->mVolumeSize = val;
+            work->mpEmtr->mVolumeSize = (s32)(val);
             break;
         case 3:
             work->mpEmtr->mVolumeMinRad = val;
             break;
         case 4:
-            work->mpEmtr->mLifeTime = val;
+            work->mpEmtr->mLifeTime = (s32)(val);
             break;
         case 6:
             work->mpEmtr->mAwayFromCenterSpeed = val;

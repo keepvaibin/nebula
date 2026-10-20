@@ -35,7 +35,7 @@ void FullnessMeter::control() {
 void FullnessMeter::setNumber(s32 num) {
     _20 = num;
 
-    s32 frame = 128 - (u16)(128.0f * (1.0f - (static_cast< f32 >(_20) / _24)));
+    s32 frame = 128 - (u16)(s32)((128.0f * (1.0f - (static_cast< f32 >(_20) / _24))));
 
     MR::startPaneAnim(this, "TargetMeter", "Count", 0);
     MR::setPaneAnimFrameAndStop(this, "TargetMeter", frame, 0);

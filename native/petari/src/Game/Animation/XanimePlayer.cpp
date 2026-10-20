@@ -218,10 +218,10 @@ void XanimePlayer::swapFrameCtrl(const XanimeGroupInfo* pInfo) {
     _20 = &_24[_55];
     _20->init(reinterpret_cast< J3DAnmTransform* >(pInfo->_20[0])->getFrameMax());
     _20->setRate(pInfo->mRate);
-    _20->setStart(pInfo->mStart);
+    _20->setStart((s32)(pInfo->mStart));
     _20->setFrame(pInfo->mStart);
-    _20->setLoop(pInfo->mLoop);
-    _20->setEnd(pInfo->mEnd);
+    _20->setLoop((s32)(pInfo->mLoop));
+    _20->setEnd((s32)(pInfo->mEnd));
     _20->setAttribute(pInfo->mAttribute);
     _20->_14 = pInfo->_8;
 

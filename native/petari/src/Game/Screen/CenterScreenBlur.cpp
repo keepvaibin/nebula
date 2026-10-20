@@ -37,7 +37,7 @@ void CenterScreenBlur::draw() const {
     }
 
     f32 a = mOffset * mBlendRate;
-    u8 b = mAlpha * mBlendRate;
+    u8 b = (s32)(mAlpha * mBlendRate);
 
     MR::drawFullScreenBlur(a, a, b, b);
 }

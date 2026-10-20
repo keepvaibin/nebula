@@ -161,7 +161,7 @@ void DepthOfFieldBlur::drawFinal() const {
     GXSetIndTexCoordScale(GX_INDTEXSTAGE0, GX_ITS_1, GX_ITS_1);
     _28->load(GX_TEXMAP1);
     _20->load(GX_TEXMAP2);
-    ImageEffectLocalUtil::drawTexture(_24, 1, 0, mIntensity * get_10() * 255.0f, ImageEffectLocalUtil::TexDrawType_2);
+    ImageEffectLocalUtil::drawTexture(_24, 1, 0, (s32)(mIntensity * get_10() * 255.0f), ImageEffectLocalUtil::TexDrawType_2);
     GXSetNumTevStages(1);
     GXSetTevOp(GX_TEVSTAGE0, GX_PASSCLR);
     GXSetNumIndStages(0);

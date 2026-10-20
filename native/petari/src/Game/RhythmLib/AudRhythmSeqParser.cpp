@@ -69,7 +69,7 @@ bool AudRhythmSeqParser::execNoteOnMidi(JASTrack* pTrack, u32 channel, u32 pitch
             while (mainTrack->mParent != nullptr) {
                 mainTrack = mainTrack->mParent;
             }
-            mainTrack->setTempo(mTempo * rate);
+            mainTrack->setTempo((s32)(mTempo * rate));
             mModifiedTempo = mainTrack->mTempo;
         }
     }

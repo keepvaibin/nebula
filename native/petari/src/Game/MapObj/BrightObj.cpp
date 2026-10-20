@@ -232,7 +232,7 @@ void BrightObjBase::checkVisible(BrightObjBase::CheckArg* pArg, const TVec3f& rT
         MR::convertScreenPosToFrameBufferPos(&frameBufferPos, screenPos);
 
         u32 color;
-        GXPeekARGB(frameBufferPos.x, frameBufferPos.y, &color);
+        GXPeekARGB((s32)(frameBufferPos.x), (s32)(frameBufferPos.y), &color);
 
         if ((color & 0xFF000000) >= 0xF0000000) {
             pArg->mCurrBrightness++;

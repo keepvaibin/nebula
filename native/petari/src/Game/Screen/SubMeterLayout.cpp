@@ -23,7 +23,7 @@ void SubMeterLayout::init(const JMapInfoIter& rIter) {
 
 void SubMeterLayout::setLifeRatio(f32 ratio) {
     f32 mult = 128.0f * ratio;
-    _22 = mult;
+    _22 = (s32)(mult);
     MR::setPaneAnimFrameAndStop(this, "Count", 0x80 - _22, 0);
 }
 

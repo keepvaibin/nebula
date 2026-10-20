@@ -42,7 +42,7 @@ void WipeFade::draw() const {
     fillColor.r = mFillColor.r;
     fillColor.g = mFillColor.g;
     fillColor.b = mFillColor.b;
-    fillColor.a = 255.0f * alpha;
+    fillColor.a = (s32)(255.0f * alpha);
     MR::fillScreen(fillColor);
 }
 

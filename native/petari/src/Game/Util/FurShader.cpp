@@ -576,7 +576,7 @@ u16 CShader::CLengthMap::getTexelOrder(u16 a1, f32 a2, _GXTexWrapMode mode) cons
         }
     }
 
-    return (a1 - 1) * a2;
+    return (s32)((a1 - 1) * a2);
 }
 
 CShader::CIndex::CIndex() {

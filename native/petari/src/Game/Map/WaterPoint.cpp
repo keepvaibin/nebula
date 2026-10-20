@@ -23,7 +23,7 @@ void WaterPoint::initAfterPlacement() {
         if (MR::calcMapGround(startCheckPos, &mapCheckPos, ::sMapCheckHeight)) {
             f32 heightDiff = ((mapCheckPos.y - mPosition.y) / (::sMapCheckHeight / 2.0f));
             f32 waveRate = MR::clamp((::sMapWaveRateMin + MR::abs(heightDiff)), ::sMapWaveRateMin, 1.0f);
-            mAlpha = MR::clamp((::sAlphaMin + (255.0f * -heightDiff)), ::sAlphaMin, 255.0f);
+            mAlpha = (s32)(MR::clamp((::sAlphaMin + (255.0f * -heightDiff)), ::sAlphaMin, 255.0f));
             mHeight = MR::min(waveRate, mHeight);
         }
     }

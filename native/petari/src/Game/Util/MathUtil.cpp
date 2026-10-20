@@ -1092,7 +1092,7 @@ namespace MR {
     }
 
     u8 lerp(u8 start, u8 end, f32 t) {
-        return JGeometry::TUtil< f32 >::clamp(start + (end - start) * t, 0.0f, 255.0f);
+        return (s32)(JGeometry::TUtil< f32 >::clamp(start + (end - start) * t, 0.0f, 255.0f));
     }
 
     GXColor lerp(GXColor start, GXColor end, f32 t) {
@@ -1334,10 +1334,10 @@ namespace MR {
     }
 
     void blendColor(GXColor* pDst, const GXColor& rStart, const GXColor& rEnd, f32 t) {
-        pDst->r = getInterpolateValue(t, rStart.r, rEnd.r);
-        pDst->g = getInterpolateValue(t, rStart.g, rEnd.g);
-        pDst->b = getInterpolateValue(t, rStart.b, rEnd.b);
-        pDst->a = getInterpolateValue(t, rStart.a, rEnd.a);
+        pDst->r = (s32)(getInterpolateValue(t, rStart.r, rEnd.r));
+        pDst->g = (s32)(getInterpolateValue(t, rStart.g, rEnd.g));
+        pDst->b = (s32)(getInterpolateValue(t, rStart.b, rEnd.b));
+        pDst->a = (s32)(getInterpolateValue(t, rStart.a, rEnd.a));
     }
 
     void blendVec(Vec* pDst, const Vec& rStart, const Vec& rEnd, f32 t) {
@@ -1608,9 +1608,9 @@ namespace MR {
     void floatToFixed16(TVec3s* pDst, const TVec3f& rPSrc, u8 q) {
         f32 scale = 1 << q;
 
-        pDst->x = rPSrc.x * scale;
-        pDst->y = rPSrc.y * scale;
-        pDst->z = rPSrc.z * scale;
+        pDst->x = (s32)(rPSrc.x * scale);
+        pDst->y = (s32)(rPSrc.y * scale);
+        pDst->z = (s32)(rPSrc.z * scale);
     }
 
     void fixed16ToFloat(TVec3f* pDst, const TVec3s& rPSrc, u8 q) {

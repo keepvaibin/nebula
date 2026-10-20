@@ -801,9 +801,9 @@ void NormalMapBase::swapColorGB(JUTTexture* pTexture) {
             TVec3f normal;
             normal.set(static_cast< s8 >((color & 0xFF) - 128) / 128.0f, static_cast< s8 >(((color >> 8) & 0xFF) - 128) / 128.0f,
                        static_cast< s8 >(((color >> 16) & 0xFF) - 128) / 128.0f);
-            u8 r = 128.0f + 127.0f * normal.x;
-            u8 g = 128.0f + 127.0f * normal.y;
-            u8 b = 128.0f + 127.0f * normal.z;
+            u8 r = (s32)(128.0f + 127.0f * normal.x);
+            u8 g = (s32)(128.0f + 127.0f * normal.y);
+            u8 b = (s32)(128.0f + 127.0f * normal.z);
             TDDraw::setTexel32(pTexture, x, y, (g << 16) | (b << 8) | r);
         }
     }

@@ -77,6 +77,16 @@ else()
     message(WARNING "Python 3 not found: tools/console_address_audit.py does not run with this build")
 endif()
 
+# Every float-to-integer conversion into a type narrower than 32 bits goes through s32, as the Wii converts
+# (tools/narrow_float_audit.py; clang-query over the whole module, minutes): after each link with this option.
+option(NEBULA_AUDIT_FLOAT_CASTS "Fail the module build on narrow float-to-integer conversions" OFF)
+if(NEBULA_AUDIT_FLOAT_CASTS AND Python3_Interpreter_FOUND)
+    set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+    add_custom_command(TARGET smg_game POST_BUILD
+        COMMAND "${Python3_EXECUTABLE}" -I "${CMAKE_CURRENT_SOURCE_DIR}/tools/narrow_float_audit.py" "${CMAKE_BINARY_DIR}"
+        VERBATIM)
+endif()
+
 # Audit builds (docs/NATIVE_PORT.md, "Audits"), not for shipping: these diagnostics in place of -Wno-everything
 # (which no later -W option undoes), e.g. -Wshorten-64-to-32 for tools/narrowing.py.
 set(NEBULA_AUDIT_FLAGS "" CACHE STRING "Diagnostics for an audit build")

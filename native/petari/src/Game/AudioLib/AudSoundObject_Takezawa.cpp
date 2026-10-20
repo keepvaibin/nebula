@@ -298,7 +298,7 @@ void AudSoundObject::modifySe_Takezawa(JAISoundHandle* pHandle, s32 levelA, s32 
         levelA = MR::min(levelA, 100000);
         pitch = AudUtil::linerMinMax(levelA, ::cTorpedoPitMinPrm, ::cTorpedoPitMaxPrm, ::cTorpedoPitMin, ::cTorpedoPitMax);
         f32 wait = AudUtil::linerMinMax(levelA, ::cTorpedoWiatMinPrm, ::cTorpedoWiatMaxPrm, ::cTorpedoWiatMin, ::cTorpedoWiatMax);
-        writePort(pHandle, 11, wait);
+        writePort(pHandle, 11, (s32)(wait));
         break;
     }
 

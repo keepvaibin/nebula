@@ -267,7 +267,7 @@ s32 JASChannel::initialUpdateDSPChannel(JASDsp::TChannel* i_channel) {
     if (pitch < 0.0f) {
         pitch = 0.0f;
     }
-    i_channel->setPitch(pitch);
+    i_channel->setPitch((s32)(pitch));
 
     i_channel->setPauseFlag(mPauseFlag);
     i_channel->_66 = 0;
@@ -338,7 +338,7 @@ s32 JASChannel::updateDSPChannel(JASDsp::TChannel* i_channel) {
     if (pitch < 0.0f) {
         pitch = 0.0f;
     }
-    i_channel->setPitch(pitch);
+    i_channel->setPitch((s32)(pitch));
 
     if (!mPauseFlag && mKeySweepCount != 0) {
         mKeySweep += (mKeySweepTarget - mKeySweep) / mKeySweepCount;
@@ -353,10 +353,10 @@ void JASChannel::updateAutoMixer(JASDsp::TChannel* i_channel, f32 param_1, f32 p
     }
     param_1 = JASCalc::clamp01(param_1);
 
-    u16 r31 = param_1 * JASDriver::getChannelLevel_dsp();
-    u8 r30 = param_2 * 127.5f;
-    u8 r29 = param_4 * 127.5f;
-    u8 r28 = param_3 * 127.5f;
+    u16 r31 = (s32)(param_1 * JASDriver::getChannelLevel_dsp());
+    u8 r30 = (s32)(param_2 * 127.5f);
+    u8 r29 = (s32)(param_4 * 127.5f);
+    u8 r28 = (s32)(param_3 * 127.5f);
     i_channel->setAutoMixer(r31, r30, r29, r28, 0);
 }
 
@@ -448,7 +448,7 @@ void JASChannel::updateMixer(f32 i_volume, f32 i_pan, f32 i_fxmix, f32 i_dolby, 
             }
 
             volume = JASCalc::clamp01(volume);
-            i_volumeOut[i] = volume * JASDriver::getChannelLevel_dsp();
+            i_volumeOut[i] = (s32)(volume * JASDriver::getChannelLevel_dsp());
         }
     }
 }

@@ -174,7 +174,7 @@ void MR::setLayoutAlpha(const LayoutActor* pActor, u8 alpha) {
 void MR::setLayoutAlphaFloat(const LayoutActor* pActor, f32 alpha) {
     f32 alphaFloat = clamp(alpha, 0.0f, 1.0f);
 
-    setLayoutAlpha(pActor, alphaFloat * 255.0f);
+    setLayoutAlpha(pActor, (s32)(alphaFloat * 255.0f));
 }
 
 void MR::setPaneAlpha(const LayoutActor* pActor, const char* pPaneName, u8 alpha) {
@@ -184,7 +184,7 @@ void MR::setPaneAlpha(const LayoutActor* pActor, const char* pPaneName, u8 alpha
 void MR::setPaneAlphaFloat(const LayoutActor* pActor, const char* pPaneName, f32 alpha) {
     f32 alphaFloat = MR::clamp(alpha, 0.0f, 1.0f);
 
-    setPaneAlpha(pActor, pPaneName, alphaFloat * 255.0f);
+    setPaneAlpha(pActor, pPaneName, (s32)(alphaFloat * 255.0f));
 }
 
 void MR::executeTextBoxRecursive(LayoutActor* pActor, const char* pPaneName, const TextBoxRecursiveOperation& rOperation) {

@@ -186,7 +186,7 @@ void WaterRoadModelInfo::initPoints(WaterRoad* pRoad) {
             pos.scale(pRoad->mRadius);
             pos.add(MR::getRailPos(pRoad));
             mPoints[pointIdx].set(pos);
-            mNormals[pointIdx].set(side.x * ::sFloatToShortShift, side.y * ::sFloatToShortShift, side.z * ::sFloatToShortShift);
+            mNormals[pointIdx].set((s32)(side.x * ::sFloatToShortShift), (s32)(side.y * ::sFloatToShortShift), (s32)(side.z * ::sFloatToShortShift));
             pointIdx++;
             loopRot.mult(side, side);
         }
@@ -362,14 +362,14 @@ void WaterRoadModelInfo::drawDirect(const WaterRoad* pRoad) const {
             TVec3f vB = v3 * (1.0f - t) + v4 * t;
 
             TVec3s nA;
-            nA.x = n1.x * (1.0f - t) + n2.x * t;
-            nA.y = n1.y * (1.0f - t) + n2.y * t;
-            nA.z = n1.z * (1.0f - t) + n2.z * t;
+            nA.x = (s32)(n1.x * (1.0f - t) + n2.x * t);
+            nA.y = (s32)(n1.y * (1.0f - t) + n2.y * t);
+            nA.z = (s32)(n1.z * (1.0f - t) + n2.z * t);
 
             TVec3s nB;
-            nB.x = n3.x * (1.0f - t) + n4.x * t;
-            nB.y = n3.y * (1.0f - t) + n4.y * t;
-            nB.z = n3.z * (1.0f - t) + n4.z * t;
+            nB.x = (s32)(n3.x * (1.0f - t) + n4.x * t);
+            nB.y = (s32)(n3.y * (1.0f - t) + n4.y * t);
+            nB.z = (s32)(n3.z * (1.0f - t) + n4.z * t);
 
             f32 texV0 = MR::getRailCoord(pRoad) * ::sTexRateV0;
             f32 texV1 = MR::getRailCoord(pRoad) * ::sTexRateV1;
@@ -771,7 +771,7 @@ void WaterRoad::exeDemoWaitEnd() {
 }
 
 void WaterRoad::exeDisappear() {
-    mAlpha = MR::calcNerveValue(this, ::sDisappearStep, 255.0f, 0.0f);
+    mAlpha = (s32)(MR::calcNerveValue(this, ::sDisappearStep, 255.0f, 0.0f));
 
     if (MR::isStep(this, ::sDisappearStep)) {
         kill();

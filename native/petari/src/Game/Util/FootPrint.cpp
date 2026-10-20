@@ -134,7 +134,7 @@ void FootPrint::draw() const {
             continue;
         }
 
-        color.a = 255.0f * MR::normalize(mPrints[i].mTimeLeft, 0.0f, ::sFadeOutTime);
+        color.a = (s32)(255.0f * MR::normalize(mPrints[i].mTimeLeft, 0.0f, ::sFadeOutTime));
         GXSetTevColor(GX_TEVREG0, color);
 
         TVec3f cross = mPrints[i]._C.cross(mPrints[i]._18);

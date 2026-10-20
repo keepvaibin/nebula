@@ -878,7 +878,7 @@ void THPSimplePlayerWrapper::mixAudio(s16* pDest, u32 sample) {
                     if (_30C) {
                         s32 diff = *(pDest - 2) + (*(pDest - 1));
                         f32 v16 = (diff / 2);
-                        *(pDest - 1) = *(pDest - 2) = 0.707f * v16;
+                        *(pDest - 1) = *(pDest - 2) = (s32)(0.707f * v16);
                     }
                 }
 

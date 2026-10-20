@@ -8,19 +8,19 @@
 #include <revolution/mtx.h>
 
 void JPASetPointSize(JPAEmitterWorkData* work) {
-    GXSetPointSize((u8)(25.0f * work->mGlobalPtclScl.x), GX_TO_ONE);
+    GXSetPointSize((u8)(s32)((25.0f * work->mGlobalPtclScl.x)), GX_TO_ONE);
 }
 
 void JPASetLineWidth(JPAEmitterWorkData* work) {
-    GXSetLineWidth((u8)(25.0f * work->mGlobalPtclScl.x), GX_TO_ONE);
+    GXSetLineWidth((u8)(s32)((25.0f * work->mGlobalPtclScl.x)), GX_TO_ONE);
 }
 
 void JPASetPointSize(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
-    GXSetPointSize((u8)(ptcl->mParticleScaleX * (25.0f * work->mGlobalPtclScl.x)), GX_TO_ONE);
+    GXSetPointSize((u8)(s32)((ptcl->mParticleScaleX * (25.0f * work->mGlobalPtclScl.x))), GX_TO_ONE);
 }
 
 void JPASetLineWidth(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
-    GXSetLineWidth((u8)(ptcl->mParticleScaleX * (25.0f * work->mGlobalPtclScl.x)), GX_TO_ONE);
+    GXSetLineWidth((u8)(s32)((ptcl->mParticleScaleX * (25.0f * work->mGlobalPtclScl.x))), GX_TO_ONE);
 }
 
 void JPARegistPrm(JPAEmitterWorkData* work) {
@@ -982,13 +982,13 @@ static void makeColorTable(GXColor** o_color_table, JPAClrAnmKeyData const* i_da
             }
         } else {
             r += r_step;
-            color_table[i].r = r;
+            color_table[i].r = (s32)(r);
             g += g_step;
-            color_table[i].g = g;
+            color_table[i].g = (s32)(g);
             b += b_step;
-            color_table[i].b = b;
+            color_table[i].b = (s32)(b);
             a += a_step;
-            color_table[i].a = a;
+            color_table[i].a = (s32)(a);
         }
     }
 

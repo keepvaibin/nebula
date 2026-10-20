@@ -120,7 +120,7 @@ void MultiEmitterCallBack::setSRTFromHostMtx(JPABaseEmitter* pEmitter, MtxPtr pM
 
 namespace {
     inline s16 toS16(f32 deg) {
-        return DEGREE_TO_S16 * deg;
+        return (s32)(DEGREE_TO_S16 * deg);
     }
 
     inline void setScaleFromHostScaleOne(MultiEmitterCallBack* pCallBack, JPABaseEmitter* pEmitter, bool b1, bool b2) {

@@ -186,7 +186,7 @@ void MarioLauncher::exePlayerIn() {
         data.mLoopMode = 0;
         data.mStartFrame = 0;
         data.mEndFrame = MR::getBckFrameMaxPlayer("EarthenPipeIn");
-        data.mPlayFrame = data.mEndFrame / ::sEarthenPipeInScale;
+        data.mPlayFrame = (s32)(data.mEndFrame / ::sEarthenPipeInScale);
 
         MR::startBckPlayer("EarthenPipeIn", data);
         MR::startSound(mHost, "SE_PV_CATCH");

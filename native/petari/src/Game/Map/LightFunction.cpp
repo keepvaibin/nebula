@@ -159,7 +159,7 @@ void LightFunction::blendActorLightInfo(ActorLightInfo* pResult, const ActorLigh
     MR::blendColor(&pResult->mColor, rFrom.mColor, rTo.mColor, rate);
     ::blendActorLightPos(rFrom.mInfo0, rTo.mInfo0, &pResult->mInfo0, rate);
     ::blendActorLightPos(rFrom.mInfo1, rTo.mInfo1, &pResult->mInfo1, rate);
-    pResult->mAlpha2 = MR::getInterpolateValue(rate, rFrom.mAlpha2, rTo.mAlpha2);
+    pResult->mAlpha2 = (s32)(MR::getInterpolateValue(rate, rFrom.mAlpha2, rTo.mAlpha2));
 }
 
 namespace {

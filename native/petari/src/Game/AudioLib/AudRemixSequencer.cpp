@@ -56,7 +56,7 @@ bool AudRmxSeqNoteOnTimer::update(f32 f1) {
             AudWrap::getSystemSeObject()->writePort(pHandle, 0xf, _8->_4);
 
             f32 x200 = pSeq->_200;
-            u16 length = (_8->_8 * 120.0f) / x200;
+            u16 length = (s32)((_8->_8 * 120.0f) / x200);
             if (length < 1) {
                 length = 1;
             } else if (length > 1440) {

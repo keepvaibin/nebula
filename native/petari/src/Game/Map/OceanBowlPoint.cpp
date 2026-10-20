@@ -33,5 +33,5 @@ void OceanBowlPoint::reset(const TVec3f& rVec, f32 f) {
     mVertexPosition.set(mPosition);
     mWaveScale = f;
     f32 v = 255.0f;
-    mAlpha = v * (f32)((f64)f);
+    mAlpha = (s32)(v * (f32)((f64)f));
 }

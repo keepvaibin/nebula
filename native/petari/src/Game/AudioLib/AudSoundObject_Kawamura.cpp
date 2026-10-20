@@ -233,7 +233,7 @@ void AudSoundObject::modifySe_Kawamura(JAISoundHandle* pHandle, s32 level) {
         level = MR::min(level, 100000);
         pitch = AudUtil::linerMinMax(level, 300, 2000, 2.0f, 1.85f);
         f32 l = AudUtil::linerMinMax(level, 200, 3000, 4.0f, 24.0f);
-        writePort(pHandle, 11, l);
+        writePort(pHandle, 11, (s32)(l));
         break;
     }
     case SE_OJ_LV_FLEX_SPHERE_MOVE: {

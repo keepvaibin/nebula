@@ -181,7 +181,7 @@ void StarPointerPeekZ::drawSyncCallback(u16 token) {
             MR::isInRange(mInfos[channel]->mPos.y, 0.0f, MR::getScreenHeight() - 1)) {
             TVec2f pos;
             MR::convertScreenPosToFrameBufferPos(&pos, mInfos[channel]->mPos);
-            GXPeekZ(pos.x, pos.y, &mInfos[channel]->mZDepth);
+            GXPeekZ((s32)(pos.x), (s32)(pos.y), &mInfos[channel]->mZDepth);
             mInfos[channel]->mDrawReady = true;
         }
     }

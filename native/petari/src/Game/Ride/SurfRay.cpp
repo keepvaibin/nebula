@@ -180,7 +180,7 @@ void SurfRay::init(const JMapInfoIter& pMapInfoIter) {
     MR::setShadowSurfaceOvalColor(this, 0, shadowColor);
     MR::setShadowSurfaceOvalAlpha(this, 0, 64);
     MR::setShadowProjectionPtr(this, 0, &mWaterShadowPos, &mWaterNormal);
-    MR::setShadowSurfaceOvalAlpha(this, 0, (u8)mShadowAlpha & 0xff);
+    MR::setShadowSurfaceOvalAlpha(this, 0, (u8)(s32)(mShadowAlpha) & 0xff);
 
     initNerve(GET_NERVE(SurfRay, SurfRayNrvWaitPlayer));
 
@@ -788,7 +788,7 @@ void SurfRay::updateToWater() {
     }
 
     mShadowAlpha = MR::clamp(mShadowAlpha, 0.0f, ::sShadowAlphaMax);
-    MR::setShadowSurfaceOvalAlpha(this, 0, (u8)mShadowAlpha & 0xff);
+    MR::setShadowSurfaceOvalAlpha(this, 0, (u8)(s32)(mShadowAlpha) & 0xff);
 }
 
 void SurfRay::updateAccel() {

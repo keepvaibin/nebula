@@ -157,7 +157,7 @@ void OceanRingPipe::initPoints() {
             v4.add(MR::getRailPos(this));
 
             _A0[idx].set< f32 >(v4.x, v4.y, v4.z);
-            _A4[idx].set(v1.x * 32768.0f, v1.y * 32768.0f, v1.z * 32768.0f);  // TODO: sFloatToShortShift
+            _A4[idx].set((s32)(v1.x * 32768.0f), (s32)(v1.y * 32768.0f), (s32)(v1.z * 32768.0f));  // TODO: sFloatToShortShift
             idx++;
 
             mtx.mult(side, side);

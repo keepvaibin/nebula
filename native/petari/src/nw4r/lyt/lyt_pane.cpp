@@ -204,7 +204,7 @@ namespace nw4r {
             }
 
             if (rInfo.IsInfluencedAlpha() && mpParent != NULL) {
-                mGlbAlpha = static_cast< u8 >(mAlpha * rInfo.GetGlobalAlpha());
+                mGlbAlpha = static_cast< u8 >((s32)(mAlpha * rInfo.GetGlobalAlpha()));
             } else {
                 mGlbAlpha = mAlpha;
             }

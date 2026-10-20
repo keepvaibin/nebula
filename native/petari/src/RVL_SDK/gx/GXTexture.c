@@ -206,7 +206,7 @@ void GXInitTexObj(GXTexObj* obj, void* image_ptr, u16 width, u16 height, GXTexFm
         } else {
             maxLOD = (u32)(31 - NumLeadingZeros(height));
         }
-        lmax = (u8)(maxLOD * 16.0f);
+        lmax = (u8)(s32)(maxLOD * 16.0f);
         SC_TX_SETMODE1_SET_MAXLOD(t->mode1, lmax);
     } else {
         SC_TX_SETMODE0_SET_MIN_FILTER(t->mode0, 4);
@@ -290,7 +290,7 @@ void GXInitTexObjLOD(GXTexObj* obj, GXTexFilter min_filt, GXTexFilter mag_filt, 
         lod_bias = -4.0f;
     else if (lod_bias >= 4.0f)
         lod_bias = 3.99f;
-    lbias = (u8)((s8)(lod_bias * 32.0f));
+    lbias = (u8)((s8)(s32)(lod_bias * 32.0f));
 
     SC_TX_SETMODE0_SET_LODBIAS(t->mode0, lbias);
 
@@ -307,13 +307,13 @@ void GXInitTexObjLOD(GXTexObj* obj, GXTexFilter min_filt, GXTexFilter mag_filt, 
         min_lod = 0;
     else if (min_lod > 10.0f)
         min_lod = 10.0f;
-    lmin = (u8)(min_lod * 16.0f);
+    lmin = (u8)(s32)(min_lod * 16.0f);
 
     if (max_lod < 0)
         max_lod = 0;
     else if (max_lod > 10.0f)
         max_lod = 10.0f;
-    lmax = (u8)(max_lod * 16.0f);
+    lmax = (u8)(s32)(max_lod * 16.0f);
 
     SC_TX_SETMODE1_SET_MINLOD(t->mode1, lmin);
     SC_TX_SETMODE1_SET_MAXLOD(t->mode1, lmax);

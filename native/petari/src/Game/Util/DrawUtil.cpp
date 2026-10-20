@@ -206,8 +206,8 @@ namespace MR {
     }
 
     void clearAlphaBuffer(u8 alpha, const TVec2f& rPosition, const TVec2f& rSize) {
-        u16 width = rSize.x;
-        u16 height = rSize.y;
+        u16 width = (s32)(rSize.x);
+        u16 height = (s32)(rSize.y);
         Mtx44 projection;
         C_MTXOrtho(projection, 0.0f, ::getScreenHeightInline(), 0.0f, getFrameBufferWidth(), -1.0f, 1.0f);
         GXSetProjection(projection, GX_ORTHOGRAPHIC);

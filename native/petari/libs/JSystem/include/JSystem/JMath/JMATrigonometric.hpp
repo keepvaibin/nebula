@@ -65,25 +65,25 @@ namespace JMath {
 
         inline T sinRadian(f32 v) {
             if (v < 0.0f) {
-                return -sin_(v * -(LEN / TAngleConstant_< f32 >::RADIAN_DEG360()));
+                return -sin_((s32)(v * -(LEN / TAngleConstant_< f32 >::RADIAN_DEG360())));
             } else {
-                return sin_(v * (LEN / TAngleConstant_< f32 >::RADIAN_DEG360()));
+                return sin_((s32)(v * (LEN / TAngleConstant_< f32 >::RADIAN_DEG360())));
             }
         }
 
         inline T sinDegree(f32 v) {
             if (v < 0.0f) {
-                return -sin_(v * -(LEN / 360.0f));
+                return -sin_((s32)(v * -(LEN / 360.0f)));
             } else {
-                return sin_(v * (LEN / 360.0f));
+                return sin_((s32)(v * (LEN / 360.0f)));
             }
         }
 
         inline T sinLap(f32 v) {
             if (v < 0.0f) {
-                return -sin_(v * -(f32)LEN);
+                return -sin_((s32)(v * -(f32)LEN));
             } else {
-                return sin_(v * (f32)LEN);
+                return sin_((s32)(v * (f32)LEN));
             }
         }
 
@@ -92,7 +92,7 @@ namespace JMath {
                 v = -v;
             }
 
-            return cos_(v * (LEN / TAngleConstant_< f32 >::RADIAN_DEG360()));
+            return cos_((s32)(v * (LEN / TAngleConstant_< f32 >::RADIAN_DEG360())));
         }
 
         inline T cosDegree(f32 v) {
@@ -100,7 +100,7 @@ namespace JMath {
                 v = -v;
             }
 
-            return cos_(v * (LEN / 360.0f));
+            return cos_((s32)(v * (LEN / 360.0f)));
         }
 
         inline T cosLap(f32 v) {
@@ -108,7 +108,7 @@ namespace JMath {
                 v = -v;
             }
 
-            return cos_(v * (f32)LEN);
+            return cos_((s32)(v * (f32)LEN));
         }
     };
 

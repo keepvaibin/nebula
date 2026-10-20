@@ -272,7 +272,7 @@ void Flag::updateFlag() {
         } else if (camDist > mAlphaDistanceFar) {
             mAlpha = 255;
         } else {
-            mAlpha = ((camDist - mAlphaDistanceNear) / (mAlphaDistanceFar - mAlphaDistanceNear)) * 255;
+            mAlpha = (s32)(((camDist - mAlphaDistanceNear) / (mAlphaDistanceFar - mAlphaDistanceNear)) * 255);
         }
     }
 
@@ -371,7 +371,7 @@ void Flag::updateFlag() {
 
             if (!mDisableLighting) {
                 f32 lightColor = 255.0f * ((point->mUp.dot(mFront) - ::sLightBorderMin) / (::sLightBorderMax - ::sLightBorderMin));
-                u8 color = MR::clamp(lightColor, mLightColorMin, 255.0f);
+                u8 color = (s32)(MR::clamp(lightColor, mLightColorMin, 255.0f));
                 mColors[idxV * (mNumPointsU + 1) + idxU + 1].set(color, color, color, 0xFF);
             }
         }

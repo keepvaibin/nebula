@@ -751,9 +751,9 @@ void MarioFoo::draw3D() const {
         for (u32 i = 0; i < count; i++) {
             u8 alpha;
             if (i > midpoint) {
-                alpha = 255.0f * (static_cast< f32 >(count - i) / static_cast< f32 >(count));
+                alpha = (s32)(255.0f * (static_cast< f32 >(count - i) / static_cast< f32 >(count)));
             } else {
-                alpha = 255.0f * (static_cast< f32 >(i) / static_cast< f32 >(count));
+                alpha = (s32)(255.0f * (static_cast< f32 >(i) / static_cast< f32 >(count)));
             }
 
             const Color8 color3(255, 0, 0, alpha);

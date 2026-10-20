@@ -126,9 +126,9 @@ void MarioActor::calcViewReflectionModel() {
         MR::clamp01(&alpha);
         alpha *= 64.0f;
         f32 target = factor * alpha;
-        if (_A25 > static_cast< u8 >(target)) {
+        if (_A25 > static_cast< u8 >((s32)(target))) {
             _A25--;
-        } else if (_A25 < static_cast< u8 >(target)) {
+        } else if (_A25 < static_cast< u8 >((s32)(target))) {
             _A25++;
         }
 
@@ -177,9 +177,9 @@ void MarioActor::calcViewReflectionModel() {
         MR::clamp01(&alpha);
         alpha *= 127.0f;
         f32 target = factor * alpha;
-        if (_A24 > static_cast< u8 >(target)) {
+        if (_A24 > static_cast< u8 >((s32)(target))) {
             _A24--;
-        } else if (_A24 < static_cast< u8 >(target)) {
+        } else if (_A24 < static_cast< u8 >((s32)(target))) {
             _A24++;
         }
 
@@ -373,7 +373,7 @@ void MarioActor::decideShadowMode() {
 
         u32 maximum = 64;
         distance = 1.0f - distance;
-        u8 target = static_cast< f32 >(maximum) * distance;
+        u8 target = (s32)(static_cast< f32 >(maximum) * distance);
         for (s32 i = 0; i < 4; i++) {
             if (_A09 < target) {
                 _A09++;

@@ -129,7 +129,7 @@ void JUTConsole::doDraw(JUTConsole::EConsoleType consoleType) const {
                     mFont->drawString_scale(mPositionX, ((yFactor * font_yOffset) + mPositionY), mFontSizeX, mFontSizeY,
                                             reinterpret_cast< char* >(linePtr), true);
                 } else {
-                    JUTDirectPrint::getManager()->drawString(mPositionX, ((yFactor * font_yOffset) + mPositionY), reinterpret_cast< char* >(linePtr));
+                    JUTDirectPrint::getManager()->drawString(mPositionX, (s32)(((yFactor * font_yOffset) + mPositionY)), reinterpret_cast< char* >(linePtr));
                 }
                 curLine = nextIndex(curLine);
                 yFactor++;

@@ -539,7 +539,7 @@ bool MarioSwim::start() {
                 f32 ftmp = (getPlayer()->mVerticalSpeed / 200.0f);
                 mActionLockTimer *= ftmp;
                 mSinkTimer *= ftmp;
-                mActor->setBlendMtxTimer(8.0f * ftmp);
+                mActor->setBlendMtxTimer((s32)(8.0f * ftmp));
             }
         }
     } else if (mIsOnSurface) {

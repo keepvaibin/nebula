@@ -45,7 +45,7 @@ void DsetupTable(u32 param_0, uintptr_t param_1, uintptr_t param_2, uintptr_t pa
 static u16 DSP_MIXERLEVEL = 0x4000;
 
 void DsetMixerLevel(f32 level) {
-    DSP_MIXERLEVEL = 4096.0f * level;
+    DSP_MIXERLEVEL = (s32)(4096.0f * level);
 }
 
 void DsyncFrame2ch(u32 param_0, uintptr_t param_1, uintptr_t param_2) {

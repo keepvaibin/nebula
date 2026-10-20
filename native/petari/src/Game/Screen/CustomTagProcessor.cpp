@@ -106,7 +106,7 @@ void CustomTagAlphaCtrl::init(u32 count, f32 speed, f32 interval, s32 startDelay
 u8 CustomTagAlphaCtrl::alpha() const {
     if (mEnabled) {
         f32 value = mFadeSpeed * (mFrame - mWaitTime) - mCharIndex * mCharInterval;
-        return 255.0f * std::max(0.0f, std::min(1.0f, value));
+        return (s32)(255.0f * std::max(0.0f, std::min(1.0f, value)));
     }
 
     return 255;

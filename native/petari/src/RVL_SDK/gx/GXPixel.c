@@ -97,7 +97,7 @@ void GXSetFogRangeAdj(GXBool enable, u16 center, const GXFogAdjTable* table) {
     }
 
     range_c = 0;
-    SC_TEV_RANGE_ADJ_C_SET_CENTER(range_c, center + (u16)342.0f);
+    SC_TEV_RANGE_ADJ_C_SET_CENTER(range_c, center + (u16)(s32)342.0f);
     SC_TEV_RANGE_ADJ_C_SET_ENB(range_c, enable);
     SC_TEV_RANGE_ADJ_C_SET_RID(range_c, 0xE8);
     GX_WRITE_RA_REG(range_c);

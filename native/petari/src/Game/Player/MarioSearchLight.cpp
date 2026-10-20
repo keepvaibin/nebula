@@ -283,7 +283,7 @@ void MarioActor::drawSearchLight() const {
         GXSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_A0);
         GXSetTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
 
-        GXColorS10 color = {255, 255, 255, (u8)(lightBrightness * mConst->getTable()->mSearchLightColor[3])};
+        GXColorS10 color = {255, 255, 255, (u8)(s32)((lightBrightness * mConst->getTable()->mSearchLightColor[3]))};
 
         GXSetTevColorS10(GX_TEVREG0, color);
 
@@ -320,7 +320,7 @@ void MarioActor::drawSearchLight() const {
         GXSetTevOp(GX_TEVSTAGE0, GX_PASSCLR);
 
         // Colour of the light cone.
-        GXColorS10 searchLightCol = {255, 255, 255, (u8)(lightBrightness * mConst->getTable()->mSearchLightAlphaLevel)};
+        GXColorS10 searchLightCol = {255, 255, 255, (u8)(s32)((lightBrightness * mConst->getTable()->mSearchLightAlphaLevel))};
         GXSetTevColorS10(GX_TEVREG0, searchLightCol);
         GXSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_KONST, GX_CA_ZERO, GX_CA_A0, GX_CA_RASA);
         GXSetTevAlphaOp(GX_TEVSTAGE0, GX_TEV_SUB, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
@@ -340,7 +340,7 @@ void MarioActor::drawSearchLight() const {
             model->setDrawView(i + 1);
 
             // Cone falloff colour.
-            GXColorS10 color3 = {255, 255, 255, (u8)(lightBrightness * mConst->getTable()->mSearchLightBlurAlpha[i])};
+            GXColorS10 color3 = {255, 255, 255, (u8)(s32)((lightBrightness * mConst->getTable()->mSearchLightBlurAlpha[i]))};
             GXSetTevColorS10(GX_TEVREG0, color3);
 
             // End cap falloff colour.

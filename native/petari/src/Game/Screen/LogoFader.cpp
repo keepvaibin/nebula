@@ -23,7 +23,7 @@ void LogoFader::draw() const {
         GXSetColorUpdate(GX_TRUE);
         GXSetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_NOOP);
 
-        GXColor fillColor = {0, 0, 0, mRate * 255.0f};
+        GXColor fillColor = {0, 0, 0, (s32)(mRate * 255.0f)};
         MR::fillScreen(fillColor);
     }
 }

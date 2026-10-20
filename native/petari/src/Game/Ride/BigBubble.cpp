@@ -1098,7 +1098,7 @@ void BigBubble::updateCaptureWarningColor() {
         f32 flashPhase = static_cast< f32 >(mReduceVolumeTimer % warningCycle) / static_cast< f32 >(warningCycle - 1);
         f32 color = (MR::cos(TWO_PI * flashPhase) + 1.0f) * 0.5f;
 
-        mWarningColor.a = color * 128.0f;
+        mWarningColor.a = (s32)(color * 128.0f);
     } else {
         mWarningColor.a = 0;
     }

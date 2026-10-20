@@ -74,7 +74,7 @@ void SnowFloorTile::init(const JMapInfoIter& rIter) {
     MR::useStageSwitchWriteDead(this, rIter);
     initSound(4, false);
     makeActorAppeared();
-    createReduceMap(800.0f / mCellSize);
+    createReduceMap((s32)(800.0f / mCellSize));
     mDirtyFrames = 2;
 }
 
@@ -257,10 +257,10 @@ f32 SnowFloorTile::doMove(TVec2f from, TVec2f to, f32 radius, f32 amount) {
     outerRadius = 1.732051f * radius;
     to.x *= mTextureSize;
     to.y *= mTextureSize;
-    s32 left = static_cast< s16 >(to.x - outerRadius) - 1;
-    s32 top = static_cast< s16 >(to.y - outerRadius) - 1;
-    s32 right = static_cast< s16 >(to.x + outerRadius) + 1;
-    s32 bottom = static_cast< s16 >(to.y + outerRadius) + 1;
+    s32 left = static_cast< s16 >((s32)(to.x - outerRadius)) - 1;
+    s32 top = static_cast< s16 >((s32)(to.y - outerRadius)) - 1;
+    s32 right = static_cast< s16 >((s32)(to.x + outerRadius)) + 1;
+    s32 bottom = static_cast< s16 >((s32)(to.y + outerRadius)) + 1;
     minX = MR::clamp(left, 0L, static_cast< s32 >(mTextureSize));
     u32 minY = MR::clamp(top, 0L, static_cast< s32 >(mTextureSize));
     u32 maxX = MR::clamp(right, 0L, static_cast< s32 >(mTextureSize));
@@ -331,10 +331,10 @@ void SnowFloorTile::doErase(TVec2f point, f32 radius, f32 amount) {
     point.x *= mTextureSize;
     point.y *= mTextureSize;
     u32 minX;
-    s32 left = static_cast< s16 >(point.x - radius) - 1;
-    s32 top = static_cast< s16 >(point.y - radius) - 1;
-    s32 right = static_cast< s16 >(point.x + radius) + 1;
-    s32 bottom = static_cast< s16 >(point.y + radius) + 1;
+    s32 left = static_cast< s16 >((s32)(point.x - radius)) - 1;
+    s32 top = static_cast< s16 >((s32)(point.y - radius)) - 1;
+    s32 right = static_cast< s16 >((s32)(point.x + radius)) + 1;
+    s32 bottom = static_cast< s16 >((s32)(point.y + radius)) + 1;
     minX = MR::clamp(left, 0L, static_cast< s32 >(mTextureSize));
     u32 minY = MR::clamp(top, 0L, static_cast< s32 >(mTextureSize));
     u32 maxX = MR::clamp(right, 0L, static_cast< s32 >(mTextureSize));

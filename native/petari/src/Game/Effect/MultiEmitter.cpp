@@ -251,7 +251,7 @@ void MultiEmitter::addChildEmitter(MultiEmitter* pChild) {
 
 namespace {
     inline s16 toS16(f32 deg) {
-        return DEGREE_TO_S16 * deg;
+        return (s32)(DEGREE_TO_S16 * deg);
     }
 };  // namespace
 

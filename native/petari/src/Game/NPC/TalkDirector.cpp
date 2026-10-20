@@ -64,7 +64,7 @@ void TalkPeekZ::drawSyncCallback(u16 arg) {
     TVec2f pos;
     MR::convertScreenPosToFrameBufferPos(&pos, mScreenPos);
 
-    GXPeekZ(pos.x, pos.y, &_8);
+    GXPeekZ((s32)(pos.x), (s32)(pos.y), &_8);
 
     TDDraw::invProject(&_14, TVec3f(mScreenPos.x, mScreenPos.y, static_cast< f32 >(_8)), const_cast< MtxPtr >(MR::getCameraViewMtx().mMtx), &_20,
                        &_3C, false);

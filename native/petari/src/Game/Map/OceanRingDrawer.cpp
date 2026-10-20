@@ -601,7 +601,7 @@ void OceanRingDrawer::loadMaterialBloom() const {
     }
 
     f32 v18 = (150.0f + (105.0f * v8));
-    u8 v19 = v18;
+    u8 v19 = (s32)(v18);
     GXSetNumTevStages(2);
     Color8 v14(80, 80, 80, v19);
     Color8 v13(80, 80, 80, 255);

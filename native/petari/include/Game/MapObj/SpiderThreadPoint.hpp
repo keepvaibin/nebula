@@ -27,7 +27,7 @@ public:
 
     // TODO: this should be removed when the appropriate inline in JAudio is made/found
     inline s32 systemLevelParam(f32 a, f32 b) {
-        return static_cast< s16 >(a) << 16 | static_cast< s16 >(b) & 0xFFFF;
+        return static_cast< s16 >((s32)(a)) << 16 | static_cast< s16 >((s32)(b)) & 0xFFFF;
     }
 
     /* 0x00 */ TVec3f mBasePos;

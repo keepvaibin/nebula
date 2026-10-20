@@ -120,8 +120,8 @@ void Dossun::calcParameters() {
     _8C.add(_98, offset);
 
     mFallingTime =
-        static_cast< s16 >(mMovementDist / (MR::isGalaxyQuickCometAppearInCurrentStage() ? ::sFallingSpeed * ::sQuickRatio : ::sFallingSpeed));
-    mHoldTime = static_cast< s16 >(mMovementDist / (MR::isGalaxyQuickCometAppearInCurrentStage() ? ::sRisingSpeed * ::sQuickRatio : ::sRisingSpeed));
+        static_cast< s16 >((s32)(mMovementDist / (MR::isGalaxyQuickCometAppearInCurrentStage() ? ::sFallingSpeed * ::sQuickRatio : ::sFallingSpeed)));
+    mHoldTime = static_cast< s16 >((s32)(mMovementDist / (MR::isGalaxyQuickCometAppearInCurrentStage() ? ::sRisingSpeed * ::sQuickRatio : ::sRisingSpeed)));
 }
 
 s32 Dossun::getUpperFrame() const {

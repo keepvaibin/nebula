@@ -238,9 +238,9 @@ void FurDrawer::setupLayerMaterial(s32 layer) const {
     f32 brightness = mAlpha.calcValue(mNumLayers - layer - 1, mNumLayers);
     f32 blend = mColorBlend.calcValue(mNumLayers - layer - 1, mNumLayers);
     GXColor kColor;
-    kColor.r = alpha;
-    kColor.g = brightness;
-    kColor.b = blend;
+    kColor.r = (s32)(alpha);
+    kColor.g = (s32)(brightness);
+    kColor.b = (s32)(blend);
     kColor.a = 255;
     GXSetTevKColor(GX_KCOLOR3, kColor);
     GXColor color;
@@ -291,7 +291,7 @@ void FurDrawer::createFurMap() {
                 x = s32(width) - 1;
             }
 
-            pPixels[x + width * y] = (u16(255.0f * mThickness[type]) << 8) | u16(255 - mLengthMap[type]);
+            pPixels[x + width * y] = (u16((s32)(255.0f * mThickness[type])) << 8) | u16(255 - mLengthMap[type]);
         }
     }
 

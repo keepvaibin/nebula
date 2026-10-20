@@ -42,7 +42,7 @@ void JPAVolumeCircle(JPAEmitterWorkData* work) {
         theta *= work->mVolumeSweep;
         work->mVolumeEmitIdx++;
     } else {
-        theta = work->mVolumeSweep * work->mpEmtr->get_r_ss();
+        theta = (s32)(work->mVolumeSweep * work->mpEmtr->get_r_ss());
     }
 
     distance = work->mpEmtr->get_r_f();
@@ -76,7 +76,7 @@ static void JPAVolumeSphere(JPAEmitterWorkData* work) {
         phi = (u16)(work->mVolumeX * 0x8000 / (work->mDivNumber - 1) + 0x4000);
         u16 angle = (u16)(work->mVolumeAngleNum * 0x10000 / (work->mVolumeAngleMax - 1));
 #endif
-        theta = (f32)angle * work->mVolumeSweep + 0x8000;
+        theta = (s32)((f32)angle * work->mVolumeSweep + 0x8000);
         work->mVolumeAngleNum++;
         if (work->mVolumeAngleNum == work->mVolumeAngleMax) {
             work->mVolumeAngleNum = 0;
@@ -89,7 +89,7 @@ static void JPAVolumeSphere(JPAEmitterWorkData* work) {
         }
     } else {
         phi = work->mpEmtr->get_r_ss() >> 1;
-        theta = work->mVolumeSweep * work->mpEmtr->get_r_ss();
+        theta = (s32)(work->mVolumeSweep * work->mpEmtr->get_r_ss());
     }
 
     f32 rnd = work->mpEmtr->get_r_f();
@@ -103,7 +103,7 @@ static void JPAVolumeSphere(JPAEmitterWorkData* work) {
 }
 
 static void JPAVolumeCylinder(JPAEmitterWorkData* work) {
-    s16 theta = work->mVolumeSweep * work->mpEmtr->get_r_ss();
+    s16 theta = (s32)(work->mVolumeSweep * work->mpEmtr->get_r_ss());
     f32 rnd = work->mpEmtr->get_r_f();
     if (work->mpEmtr->checkFlag(JPADynFlag_FixedDensity)) {
         rnd = 1.0f - rnd * rnd;
@@ -115,7 +115,7 @@ static void JPAVolumeCylinder(JPAEmitterWorkData* work) {
 }
 
 static void JPAVolumeTorus(JPAEmitterWorkData* work) {
-    s16 theta = work->mVolumeSweep * work->mpEmtr->get_r_ss();
+    s16 theta = (s32)(work->mVolumeSweep * work->mpEmtr->get_r_ss());
     s16 phi = work->mpEmtr->get_r_ss();
     f32 rad = work->mVolumeSize * work->mVolumeMinRad;
     work->mVolumeCalcData.mVelAxis.set< f32 >(rad * JPASinShort(theta) * JPACosShort(phi), rad * JPASinShort(phi), rad * JPACosShort(theta) * JPACosShort(phi));

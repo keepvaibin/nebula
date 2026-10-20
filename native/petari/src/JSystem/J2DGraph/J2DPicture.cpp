@@ -397,19 +397,19 @@ void J2DPicture::drawOut(JGeometry::TBox2< f32 > const& posBox, JGeometry::TBox2
         GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
 
         GXBegin(GX_QUADS, GX_VTXFMT0, 4);
-        GXPosition3f32((s16)posBox.i.x, (s16)posBox.i.y, 0.0f);
+        GXPosition3f32((s16)(s32)(posBox.i.x), (s16)(s32)(posBox.i.y), 0.0f);
         GXColor1u32(color[0]);
         GXTexCoord2f32(s0, t0);
 
-        GXPosition3f32((s16)posBox.f.x, (s16)posBox.i.y, 0.0f);
+        GXPosition3f32((s16)(s32)(posBox.f.x), (s16)(s32)(posBox.i.y), 0.0f);
         GXColor1u32(color[1]);
         GXTexCoord2f32(s1, t0);
 
-        GXPosition3f32((s16)posBox.f.x, (s16)posBox.f.y, 0.0f);
+        GXPosition3f32((s16)(s32)(posBox.f.x), (s16)(s32)(posBox.f.y), 0.0f);
         GXColor1u32(color[3]);
         GXTexCoord2f32(s1, t1);
 
-        GXPosition3f32((s16)posBox.i.x, (s16)posBox.f.y, 0.0f);
+        GXPosition3f32((s16)(s32)(posBox.i.x), (s16)(s32)(posBox.f.y), 0.0f);
         GXColor1u32(color[2]);
         GXTexCoord2f32(s0, t1);
         GXEnd();
@@ -587,7 +587,7 @@ void J2DPicture::setBlendKonstColor() {
 
         if (tmp + field_0x11c[i] != 0.0f) {
             f32 value = 255.0f * (1.0f - tmp / (tmp + field_0x11c[i]));
-            uvar3 |= static_cast< u8 >(value) << (i - 1) * 8;
+            uvar3 |= static_cast< u8 >((s32)(value)) << (i - 1) * 8;
         }
     }
     mBlendKonstColor = uvar3;
@@ -603,7 +603,7 @@ void J2DPicture::setBlendKonstAlpha() {
 
         if (tmp + field_0x124[i] != 0.0f) {
             f32 value = 255.0f * (1.0f - tmp / (tmp + field_0x124[i]));
-            uvar3 |= static_cast< u8 >(value) << (i - 1) * 8;
+            uvar3 |= static_cast< u8 >((s32)(value)) << (i - 1) * 8;
         }
     }
     mBlendKonstAlpha = uvar3;
