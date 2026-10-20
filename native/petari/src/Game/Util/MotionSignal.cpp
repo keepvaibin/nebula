@@ -10,6 +10,10 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Screen/LayoutActor.hpp"
 #include "JSystem/J3DGraphAnimator/J3DModel.hpp"
+#include "JSystem/J3DGraphAnimator/J3DModelData.hpp"
+#include "JSystem/J3DGraphBase/J3DMaterial.hpp"
+#include "JSystem/J3DGraphBase/J3DShape.hpp"
+#include "JSystem/JUtility/JUTNameTab.hpp"
 #include "JSystem/J3DGraphBase/J3DPacket.hpp"
 #include "JSystem/JParticle/JPAEmitter.hpp"
 #include "JSystem/JParticle/JPAParticle.hpp"
@@ -31,6 +35,7 @@ namespace {
         Kind_LayoutPane = 9,
         Kind_LayoutActor = 10,
         Kind_StarPointer = 11,
+        Kind_Material = 12,
     };
 
     enum {
@@ -75,6 +80,30 @@ namespace {
     u16 layoutAux() {
         return s2DOpen ? Layout_In2D : 0;
     }
+
+    // FNV-1a over lower-case ASCII (rt_materials.cpp rt_material_identity hashes the table's names the same way).
+    u32 hashName(u32 hash, const char* pName, bool stopAtDot) {
+        for (const char* c = pName; *c != '\0' && !(stopAtDot && *c == '.'); ++c) {
+            const u8 v = static_cast< u8 >(*c >= 'A' && *c <= 'Z' ? *c + ('a' - 'A') : *c);
+            hash = (hash ^ v) * 16777619u;
+        }
+        return hash;
+    }
+
+    // The models' resource names' hashes ("model/" so far), by model data: open addressing, linear probing. Scene heaps
+    // are freed whole (no model data is deleted alone), so addresses come back with new models, which register again
+    // over them; a full table lets a new model take its home slot.
+    const u32 cModelNames = 16384;
+    struct ModelName {
+        const J3DModelData* mData;
+        u32 mHash;
+    };
+    ModelName sModelNames[cModelNames];
+
+    u32 modelSlot(const J3DModelData* pData) {
+        const u32 key = static_cast< u32 >(reinterpret_cast< uintptr_t >(pData) >> 4);
+        return (key * 2654435761u) & (cModelNames - 1);
+    }
 };  // namespace
 
 namespace MotionSignal {
@@ -84,6 +113,50 @@ namespace MotionSignal {
         const J3DModel* pModel = pPacket->getModel();
         __NebulaGXHostMarker(Kind_ShapePacket, pModel != nullptr ? auxEpoch(pModel->mMotionEpoch) : 0,
                              pModel != nullptr ? id(pModel) : id(pPacket), id(pPacket->getShape()));
+    }
+
+    void modelResource(const J3DModelData* pData, const char* pName) {
+        if (pData == nullptr || pName == nullptr) {
+            return;
+        }
+        const char* base = pName;
+        for (const char* c = pName; *c != '\0'; ++c) {
+            if (*c == '/' || *c == '\\') {
+                base = c + 1;
+            }
+        }
+        const u32 hash = hashName(hashName(2166136261u, base, true), "/", false);
+        for (u32 i = 0, slot = modelSlot(pData); i < cModelNames; ++i, slot = (slot + 1) & (cModelNames - 1)) {
+            if (sModelNames[slot].mData == nullptr || sModelNames[slot].mData == pData) {
+                sModelNames[slot].mData = pData;
+                sModelNames[slot].mHash = hash;
+                return;
+            }
+        }
+        sModelNames[modelSlot(pData)].mData = pData;
+        sModelNames[modelSlot(pData)].mHash = hash;
+    }
+
+    void drawMaterialImpl(const J3DShapePacket* pPacket) {
+        J3DShape* pShape = pPacket->getShape();
+        J3DMaterial* pMaterial = pShape != nullptr ? pShape->getMaterial() : nullptr;
+        J3DModel* pModel = const_cast< J3DModel* >(pPacket->getModel());
+        J3DModelData* pData = pModel != nullptr ? pModel->getModelData() : nullptr;
+        u32 key = 0;
+        if (pMaterial != nullptr && pData != nullptr && pData->getMaterialName() != nullptr) {
+            const char* pName = pData->getMaterialName()->getName(pMaterial->getIndex());
+            for (u32 i = 0, slot = modelSlot(pData); pName != nullptr && i < cModelNames;
+                 ++i, slot = (slot + 1) & (cModelNames - 1)) {
+                if (sModelNames[slot].mData == pData) {
+                    key = hashName(sModelNames[slot].mHash, pName, false);
+                    break;
+                }
+                if (sModelNames[slot].mData == nullptr) {
+                    break;
+                }
+            }
+        }
+        __NebulaGXHostMarker(Kind_Material, 0, key, 0);
     }
 
     void drawNameObjImpl(const NameObj* pObj) {

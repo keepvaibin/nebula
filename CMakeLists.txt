@@ -829,6 +829,24 @@ foreach(galaxy_rt_pass trace_tex_cs:TraceCS reference_tex_cs:ReferenceCS sky_pro
     list(APPEND galaxy_rt_headers "${galaxy_rt_header}")
 endforeach()
 
+# The ray tracing engine (runtime/src/gx/rt_engine.hlsl, including rt_lighting.hlsl; shader model 6.6).
+set(galaxy_rt_engine_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/gx/rt_engine.hlsl")
+foreach(galaxy_rt_pass engine_gbuffer_cs:EngineGBufferCS engine_direct_cs:EngineDirectCS
+        engine_direct_spatial_cs:EngineDirectSpatialCS engine_indirect_cs:EngineIndirectCS
+        engine_indirect_spatial_cs:EngineIndirectSpatialCS engine_specular_cs:EngineSpecularCS
+        engine_temporal_cs:EngineTemporalCS engine_atrous_cs:EngineAtrousCS engine_final_cs:EngineFinalCS)
+    string(REPLACE ":" ";" galaxy_rt_pair "${galaxy_rt_pass}")
+    list(GET galaxy_rt_pair 0 galaxy_rt_name)
+    list(GET galaxy_rt_pair 1 galaxy_rt_entry)
+    set(galaxy_rt_header "${galaxy_rt_dir}/rt_${galaxy_rt_name}.h")
+    add_custom_command(OUTPUT "${galaxy_rt_header}"
+        COMMAND "${GALAXY_DXC}" -nologo -T cs_6_6 -E ${galaxy_rt_entry} -D RT_TEXTURED=1 -O3 -WX -Qstrip_debug
+            -Qstrip_reflect -Vn g_rt_${galaxy_rt_name} -Fh "${galaxy_rt_header}" "${galaxy_rt_engine_hlsl}"
+        DEPENDS "${galaxy_rt_engine_hlsl}" "${galaxy_rt_light_hlsl}" "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/gx/rt_tev.hlsli"
+        VERBATIM)
+    list(APPEND galaxy_rt_headers "${galaxy_rt_header}")
+endforeach()
+
 # Texture de-lighting for the physical lighting (runtime/src/gx/rt_delight.hlsl; textures from the descriptor heap).
 set(galaxy_rt_delight_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/gx/rt_delight.hlsl")
 foreach(galaxy_rt_pass delight_cs:DelightCS delight_mip_cs:DelightMipCS)
@@ -881,6 +899,7 @@ add_library(galaxy_gx STATIC
     runtime/src/gx/game_objects.cpp
     runtime/src/gx/rt_tev_eval.cpp
     runtime/src/gx/ray_tracing_camera.cpp
+    runtime/src/gx/ray_tracing_engine.cpp
     runtime/src/gx/ray_tracing_reflections.cpp
     runtime/src/gx/ray_tracing_water.cpp
     runtime/src/gx/rt_surfaces.cpp

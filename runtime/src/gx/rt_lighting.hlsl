@@ -93,6 +93,11 @@ cbuffer RtLight : register(b0)
     uint4 g_probe;                 // GALAXY_RT_PROBE: the probed sample (x, y), on (z)
     float4 g_light_fit;            // physical: the camera's exposure (x; 0: physical_exposure's own), the light
                                    // fitted to the baked light (y: 1)
+    // The ray tracing engine (rt_engine.hlsl; ray_tracing.h RtEngineConstants).
+    uint4 g_engine_views[6];       // its buffers in the descriptor heap (kEv*)
+    uint4 g_engine_size;           // full width, height; half width, height
+    uint4 g_engine_info;           // flags (kEngine*), a-trous step, slot, a-trous parity
+    float4 g_engine_params;
 };
 
 // g_flags bit 14: the game's light units (GALAXY_RT_PHYSICAL), as the stage sets them in linear light (white 1):
@@ -3419,14 +3424,20 @@ float3 linear_to_srgb(float3 c)
 // g_emit_tris) in world space, its radiance the table's colour (linear) times the table's radiance, its power 2 pi L A
 // times the share of its quad its texture lights (an additive sprite adds texel x alpha: a fire sprite's soft blob about
 // a quarter; counted whole, the Observatory kitchen's overlapping fire sprites flooded the oven white, b26).
-// A sprite stands for a glowing volume (a star light's glass, a flame), not a panel: its light leaves evenly in every
-// direction (sides 2: emitter_facing 1/2, the same power as two-sided Lambert), from its triangles shrunk about their
-// centres to that share of their area (where the texture is lit). Drawn as panels (word 6 = 0), the sprite faced the
-// camera: the light turned with the view and stopped at its plane (a hard edge across the Terrace dome, b30).
+// What emits is what the game drew. A triangle with vertex normals (e_glow_normals: the glow geometry's surfaces) is
+// a surface that glows (the Observatory's star lamps' glowing bodies, their glow texture projected from their normals;
+// lamp glass): it emits from its outward face (the side its normals point to; one-sided, power pi L A) at the table's
+// radiance times the share of it its texture lights. A triangle without normals is a sprite standing for a glowing
+// volume (a flame): its light leaves evenly in every direction (sides 2: emitter_facing 1/2, power 2 pi L A) from the
+// triangle shrunk about its centre to the share of it its texture lights. Lit as panels facing the camera (word 6 =
+// 0) the sprites' light turned with the view and stopped at their plane (a hard edge across the Terrace dome, b30).
 // The next frame's lighting samples them after the scene's emitters (they draw after this frame's trace).
 // e_draws: per glow emitter draw (32 bytes) its first glow triangle, count, first glow emitter, colour (RGBA8), radiance,
 // its texture's view in the descriptor heap (~0: none), 1 isotropic.
 RWByteAddressBuffer e_glow_out : register(u3);
+// The glow triangles' surfaces (16 bytes each: three eye-space vertex normals, octahedral, 0 without; the draw's
+// flags), in e_added's slot (GlowEmitterCS reads no added light).
+StructuredBuffer<uint> e_glow_normals : register(t4);
 
 groupshared float s_coverage[64];
 
@@ -3456,9 +3467,7 @@ void GlowEmitterCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
     }
     const float coverage = view != 0xFFFFFFFFu ? s_coverage[0] / 64.0f : 1.0f;
     const bool isotropic = e_draws.Load(record + 24u) != 0u;
-    const float shrink = isotropic ? sqrt(max(coverage, 1e-4f)) : 1.0f;
-    const float3 radiance =
-        srgb_to_linear(rgb8(draw.w)) * (asfloat(e_draws.Load(record + 16u)) * (isotropic ? 1.0f : coverage));
+    const float3 table_radiance = srgb_to_linear(rgb8(draw.w)) * asfloat(e_draws.Load(record + 16u));
     for (uint t = gi; t < draw.y; t += 64u) {
         const uint slot = draw.z + t;
         if (slot >= kGlowEmitters) {
@@ -3466,18 +3475,38 @@ void GlowEmitterCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
         }
         float3 v0, v1, v2;
         const bool valid = emit_triangle(draw.x + t, v0, v1, v2);
-        const float3 centre = (v0 + v1 + v2) / 3.0f;
-        v0 = centre + (v0 - centre) * shrink;
-        v1 = centre + (v1 - centre) * shrink;
-        v2 = centre + (v2 - centre) * shrink;
+        const uint tri = draw.x + t;
+        const uint3 normals = uint3(e_glow_normals[tri * 4u], e_glow_normals[tri * 4u + 1u], e_glow_normals[tri * 4u + 2u]);
+        const bool surface = isotropic && all(normals != 0u);
+        float sides = isotropic ? 2.0f : 1.0f;
+        // A surface's radiance on average over it (its glow texture lights part of it: what is seen, GX output_flags
+        // bit 5); a sprite's whole radiance over its shrunk triangle (the same power).
+        float3 radiance = table_radiance * (surface || !isotropic ? coverage : 1.0f);
+        if (surface) {
+            // Outward: the face turned to the side its vertex normals point to.
+            const float3 outward = unpack_vertex_normal(normals.x) + unpack_vertex_normal(normals.y) +
+                                   unpack_vertex_normal(normals.z);
+            if (dot(cross(v1 - v0, v2 - v0), outward) < 0.0f) {
+                const float3 swap = v1;
+                v1 = v2;
+                v2 = swap;
+            }
+            sides = 0.0f;
+        } else if (isotropic) {
+            const float3 centre = (v0 + v1 + v2) / 3.0f;
+            const float shrink = sqrt(max(coverage, 1e-4f));
+            v0 = centre + (v0 - centre) * shrink;
+            v1 = centre + (v1 - centre) * shrink;
+            v2 = centre + (v2 - centre) * shrink;
+        }
         const float3 w0 = transform(e_to_world, v0);
         const float3 e1 = rotate3(e_to_world, v1 - v0);
         const float3 e2 = rotate3(e_to_world, v2 - v0);
         const float area = valid ? 0.5f * length(cross(e1, e2)) : 0.0f;
-        const float power = area > 1e-8f ? 2.0f * kPi * luminance(radiance) * area : 0.0f;
+        const float power = area > 1e-8f ? (sides == 0.0f ? kPi : 2.0f * kPi) * luminance(radiance) * area : 0.0f;
         const uint at = (kGlowElements + 4u * slot) * 16u;
         e_glow_out.Store4(at, asuint(float4(w0, area)));
-        e_glow_out.Store4(at + 16u, asuint(float4(e1, isotropic ? 2.0f : 1.0f)));
+        e_glow_out.Store4(at + 16u, asuint(float4(e1, sides)));
         e_glow_out.Store4(at + 32u, asuint(float4(e2, 0.0f)));
         e_glow_out.Store4(at + 48u, asuint(float4(radiance, power)));
         e_glow_out.Store4((kGlowPowers + slot) * 16u, asuint(float4(power, 0.0f, 0.0f, 0.0f)));
@@ -5405,6 +5434,38 @@ CompositeOut CompositePS(float4 position : SV_Position)
     float3 nearest = float3(1.0f, 1.0f, 1.0f);
     float nearest_relief = 0.0f;
     float nearest_dz = abs(p.z) * 0.1f;
+    // The engine's result (bit 5; full resolution, rt_engine.hlsl EngineFinalCS: diffuse light and specular, exposed):
+    // at this pixel's place in the traced frame, the nearest pixel in depth of the 3 x 3 there.
+    if ((m_flags & 32u) != 0u) {
+        const int2 traced = int2(floor(eye_to_pixel(m_projection, m_viewport, p)));
+        uint4 best = uint4(0u, 0u, 0u, 0u);
+        float best_dz = abs(p.z) * 0.05f + 1.0f;
+        [unroll] for (uint k = 0u; k < 9u; ++k) {
+            const int2 o = clamp(traced + int2(int(k % 3u) - 1, int(k / 3u) - 1), int2(0, 0), int2(m_sample_size) - 1);
+            const uint4 e = m_light[uint(o.y) * m_sample_size.x + uint(o.x)];
+            const float dz = abs(asfloat(e.w) - p.z);
+            if (e.w != 0u && (dz < best_dz || (k == 4u && dz <= best_dz))) {
+                best_dz = dz;
+                best = e;
+            }
+        }
+        // No traced surface there (the sky's backdrops beyond the lighting's reach): the picture as the game drew it.
+        if (best.w == 0u) {
+            discard;
+        }
+        const float3 diffuse = float3(f16tof32(best.x), f16tof32(best.x >> 16u), f16tof32(best.y));
+        const float3 specular = float3(f16tof32(best.y >> 16u), f16tof32(best.z), f16tof32(best.z >> 16u));
+        if ((m_flags & 2u) != 0u) {
+            result.color = float4(linear_to_srgb(diffuse + specular), 1.0f);
+            return result;
+        }
+        const int2 at = clamp(traced, int2(0, 0), int2(m_target_size) - 1);
+        const uint delit = traced_delight(at);
+        const float3 albedo = srgb_to_linear(color) * (delit != 0u ? exp(-unpack_pixel_shading(delit)) : 1.0f) *
+                              traced_own(at);
+        result.color = float4(linear_to_srgb(albedo * diffuse + specular), 1.0f);
+        return result;
+    }
     // Physical (bit 3): the sun turned from each sample's facing to this pixel's own normal (the samples' visibility
     // with the exposure in w's low half, their facing from the per-pixel normals at their pixels).
     // The pixel's own normal is its texture's relief where it has a de-light map; the samples' facing stays their

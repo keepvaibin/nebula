@@ -5,7 +5,9 @@
 #include <nebula_gx_fifo.h>
 #include <revolution/types.h>
 
+class J3DMatPacket;
 class J3DModel;
+class J3DModelData;
 class J3DShapePacket;
 class JPABaseEmitter;
 class JPABaseParticle;
@@ -43,6 +45,9 @@ namespace MotionSignal {
     };
 
     void drawShapePacketImpl(const J3DShapePacket* pPacket);
+    void drawMaterialImpl(const J3DShapePacket* pPacket);
+    // A model's resource name (ResourceHolder: the archive's .bdl or .bmd), for its materials' identities.
+    void modelResource(const J3DModelData* pData, const char* pName);
     void drawNameObjImpl(const NameObj* pObj);
     void drawEmitterImpl(const JPAResource* pResource, const JPABaseEmitter* pEmitter, bool child);
     void drawParticleImpl(const JPABaseParticle* pParticle, bool child);
@@ -54,6 +59,16 @@ namespace MotionSignal {
     inline void drawShapePacket(const J3DShapePacket* pPacket) {
         if (__NebulaGXMarkers != 0) {
             drawShapePacketImpl(pPacket);
+        }
+    }
+
+    // A J3D shape packet draws next (J3DShapePacket::prepareDraw, every drawer: J3DMatPacket::draw, the game's
+    // DrawBufferShapeDrawer, MR::simpleDraw): its material's identity, the hash of "model/material" (the model's
+    // resource name and the material's name, lower case), names the surface for the renderer's material table (the
+    // ray tracer's light sources and materials, finer than their textures).
+    inline void drawMaterial(const J3DShapePacket* pPacket) {
+        if (__NebulaGXMarkers != 0) {
+            drawMaterialImpl(pPacket);
         }
     }
 

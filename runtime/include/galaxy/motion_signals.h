@@ -94,7 +94,8 @@ inline constexpr std::uint8_t kMarkerLight = 8u;      // aux LightSite, a light 
 inline constexpr std::uint8_t kMarkerLayoutPane = 9u;    // aux kLayoutIn2D, a pane, b its parent (0 root)
 inline constexpr std::uint8_t kMarkerLayoutActor = 10u;  // aux kLayoutIn2D, a LayoutActor, b its vtable
 inline constexpr std::uint8_t kMarkerStarPointer = 11u;  // aux kLayoutIn2D | kStarPointerDirector; a, b vtable (layout)
-inline constexpr std::uint8_t kMarkerKinds = 12u;
+inline constexpr std::uint8_t kMarkerMaterial = 12u;     // a the material's identity (rt_material_identity; 0 unknown)
+inline constexpr std::uint8_t kMarkerKinds = 13u;
 
 // Kinds 9-11 aux bits.
 inline constexpr std::uint16_t kLayoutIn2D = 1u;           // drawn inside GameScene::draw2D

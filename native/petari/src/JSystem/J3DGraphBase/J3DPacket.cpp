@@ -286,6 +286,7 @@ J3DError J3DShapePacket::newDifferedDisplayList(u32 diffFlags) {
 
 void J3DShapePacket::prepareDraw() const {
 #ifdef TARGET_PC
+    MotionSignal::drawMaterial(this);
     MotionSignal::drawShapePacket(this);
 #endif
     mpModel->getVertexBuffer()->setArray();

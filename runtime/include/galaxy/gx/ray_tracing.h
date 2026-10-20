@@ -52,6 +52,15 @@ struct RtUpload {
     std::uint64_t offset = 0;
 };
 
+// The ray tracing engine's block at the end of the lighting's constants (rt_lighting.hlsl RtLight g_engine_*).
+struct RtEngineConstants {
+    std::uint32_t views[24];   // its buffers in the descriptor heap (rt_engine.hlsl kEv*)
+    std::uint32_t size[4];     // full width, height; half width, height
+    std::uint32_t info[4];     // flags, a-trous step, slot, a-trous parity
+    float params[4];
+};
+static_assert(sizeof(RtEngineConstants) == 144u);
+
 class SceneRayTracer {
 public:
     using Allocate = RtUpload (*)(void* context, std::size_t bytes, std::size_t alignment);
@@ -220,6 +229,13 @@ public:
     // HDR scene EFB's light (`picture_table`, NON_PIXEL and PIXEL_SHADER_RESOURCE) through bloom and the tone curve
     // into the RGBA8 EFB (`target`); without physical light the picture as it is, clamped.
     [[nodiscard]] bool camera_ready() const noexcept { return camera_pso_ && camera_widen_pso_; }
+    // The ray tracing engine (ray_tracing_engine.cpp, rt_engine.hlsl): under physical light with the textured
+    // lighting, unless GALAXY_RT_ENGINE=0. set_engine_picture: the EFB's colour for the trace that follows
+    // (NON_PIXEL_SHADER_RESOURCE during it; the renderer transitions it).
+    [[nodiscard]] bool engine_active() const noexcept {
+        return engine_ready_ && physical_active_ && lighting_active() && light_textured_;
+    }
+    void set_engine_picture(ID3D12Resource* picture) noexcept { engine_picture_ = picture; }
     bool camera_widen(ID3D12GraphicsCommandList* list, D3D12_GPU_DESCRIPTOR_HANDLE picture_table,
                       D3D12_CPU_DESCRIPTOR_HANDLE target, std::uint32_t width, std::uint32_t height);
     bool camera_finish(ID3D12GraphicsCommandList* list, D3D12_GPU_DESCRIPTOR_HANDLE picture_table,
@@ -261,6 +277,9 @@ public:
         return lighting_active() ? (model ? glow_model_exposure_ : glow_exposure_) : 1.0f;
     }
     [[nodiscard]] float glow_spill(bool model) const noexcept { return model ? glow_model_spill_ : glow_spill_; }
+    // Under physical light: a glow draw's gain in linear light (GX output_flags bit 5): a light source of the table
+    // (`material`) at its radiance times the camera's exposure, else 1.
+    [[nodiscard]] float glow_gain(std::uint16_t material) const noexcept;
 
 private:
     static constexpr unsigned kResultSlots = 16u;
@@ -272,6 +291,11 @@ private:
     // Physical glow light sources (rt_lighting.hlsl GlowEmitterCS, kGlowEmitters): the table's glow draws' triangles in
     // the emitters' buffer after the scene's, in world space, lit from the next frame.
     static constexpr std::uint32_t kGlowEmitters = 16384u;
+    // The eye's adaptation in the picture sums (ray_tracing.cpp kPictureStarColour + 16; rt_lighting.hlsl kAdaptation):
+    // its factor, known.
+    static constexpr std::uint64_t kPictureAdaptation = 208u;
+    // The glow emitters' first float4 element in the emitters' buffer (rt_lighting.hlsl kGlowElements).
+    static constexpr std::uint32_t kGlowElements = 1u + 4u * kEmitTriangles + kEmitTriangles + kGlowEmitters;
     // g_emit_tris: header, 4 per scene emitter, the running power (scene then glow), 4 per glow emitter, glow powers.
     static constexpr std::uint64_t kEmitBufferBytes =
         (1ull + 5ull * kEmitTriangles + 6ull * kGlowEmitters) * 16u;
@@ -340,6 +364,19 @@ private:
     void log_emitters();
     bool create_lighting_pipelines(DXGI_FORMAT scene_format, DXGI_FORMAT display_format);
     bool create_camera_pipelines(DXGI_FORMAT scene_format, DXGI_FORMAT display_format);
+    bool create_engine_pipelines();
+    bool ensure_engine_buffers(std::uint32_t width, std::uint32_t height);
+    // The engine's views and constants for this trace (false: it does not run; the lighting's own passes do).
+    bool engine_prepare(std::uint32_t width, std::uint32_t height, unsigned slot, RtEngineConstants& c,
+                        std::uint32_t& flags);
+    // Its passes, the frame's constants (`constants`, `bytes`, the engine block at `engine_at`) re-uploaded per a-trous
+    // step; `frame` rebound after.
+    void trace_engine(ID3D12GraphicsCommandList* list, Allocate allocate, void* allocate_context, const void* constants,
+                      std::size_t bytes, std::size_t engine_at, D3D12_GPU_VIRTUAL_ADDRESS frame, unsigned slot);
+    // Slot `slot` holds the engine's result for a width x height frame.
+    [[nodiscard]] bool engine_slot(unsigned slot, std::uint32_t width, std::uint32_t height) const noexcept;
+    std::uint32_t buffer_uav(ID3D12Resource* resource, std::uint64_t bytes);
+    std::uint32_t texture_srv(ID3D12Resource* resource);
     bool ensure_camera_pyramid(std::uint32_t width, std::uint32_t height);
     void bind_camera(ID3D12GraphicsCommandList* list, bool graphics_root, D3D12_GPU_DESCRIPTOR_HANDLE picture_table);
     // The geometry pass over `count` draws (triangles from `triangle_base`) into `positions` and
@@ -665,6 +702,49 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> camera_up_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> camera_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> camera_widen_pso_;
+    // The engine.
+    enum EngineBuffer : unsigned {
+        kGb0, kGb1, kDiTemp, kDi0, kDi1, kDirect, kGiTemp, kGi0, kGi1, kGiOut, kSpecular, kHistD0, kHistD1, kHistS0,
+        kHistS1, kAtrousA, kAtrousB, kEngineBuffers,
+    };
+    struct EngineBufferSpec {
+        std::uint32_t bytes;   // per pixel, or per half-resolution sample
+        bool half;
+        const wchar_t* name;
+    };
+    static const EngineBufferSpec kEngineBufferSpecs[kEngineBuffers];
+    bool engine_wanted_ = true;     // GALAXY_RT_ENGINE
+    bool engine_ready_ = false;
+    bool engine_running_ = false;   // this trace runs it
+    bool engine_indirect_ = true;   // GALAXY_RT_ENGINE_INDIRECT
+    bool engine_specular_ = true;   // GALAXY_RT_ENGINE_SPECULAR
+    bool engine_fresh_ = true;      // new buffers: no history
+    std::uint32_t engine_view_ = 0;  // GALAXY_RT_ENGINE_VIEW (rt_engine.hlsl kEngineView)
+    std::uint32_t engine_width_ = 0;
+    std::uint32_t engine_height_ = 0;
+    unsigned engine_parity_ = 0;
+    ID3D12Resource* engine_picture_ = nullptr;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_gbuffer_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_direct_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_direct_spatial_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_indirect_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_indirect_spatial_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_specular_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_temporal_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_atrous_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_final_pso_;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kEngineBuffers> engine_buffers_;
+    // Per light slot: the engine's result (rt_engine.hlsl kEvSlot), read by the composite.
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 4> engine_slots_;
+    std::array<D3D12_RESOURCE_STATES, 4> engine_slot_state_{};
+    std::array<bool, 4> engine_slot_valid_{};
+    // The eye's adaptation as the GPU eased it (rt_lighting.hlsl kAdaptation), read back kResultDelay frames later: the
+    // camera's exposure on the CPU (glow gains).
+    static constexpr unsigned kAdaptationReadbacks = 4u;
+    Microsoft::WRL::ComPtr<ID3D12Resource> adaptation_readback_;
+    std::array<std::uint64_t, kAdaptationReadbacks> adaptation_readback_frame_{};
+    unsigned adaptation_readback_next_ = 0;
+    float adaptation_cpu_ = 1.0f;
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 2> camera_pyramid_;
     std::array<D3D12_RESOURCE_STATES, 2> camera_pyramid_states_{};
     std::uint64_t camera_texels_ = 0;

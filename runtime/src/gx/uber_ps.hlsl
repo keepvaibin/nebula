@@ -643,34 +643,30 @@ PSOut main(PSIn pin) {
         frag.rgb = float3((fog_rgb_i * (256 - fog_i) + fog_color_i * fog_i) >> 8) / 255.0;
     }
 
-    // Glows (additive scene draws under ray-traced lighting) shine at their light's exposure; what
-    // passes 1 in one channel spills into all of them, as an over-exposed emitter turns white-hot.
-    if ((output_flags & 0x20u) != 0u) {
-        frag.rgb *= ztex_params.z;
-        frag.rgb += max(max(frag.r, max(frag.g, frag.b)) - 1.0, 0.0) * ztex_params.w;
-    }
-    // Lit translucents (dust, smoke, splashes: blended scene draws under ray-traced lighting) take
-    // the light of the surface behind them, a little softened (texture 7: the lighting per sample).
-    if ((output_flags & 0x40u) != 0u) {
-        uint lit_w, lit_h;
-        tex[7].GetDimensions(lit_w, lit_h);
-        const int2 lit_at = min(int2(pin.pos.xy * ztex_params.z), int2(lit_w, lit_h) - 1);
-        // As lit up to the knee, then a film shoulder towards white on the brightest channel, the hue
-        // kept (rt_lighting.hlsl film_light).
-        const float3 lit_c = frag.rgb * clamp(tex[7].Load(int3(lit_at, 0)).rgb, 0.45, 4.0);
-        const float lit_peak = max(lit_c.r, max(lit_c.g, lit_c.b));
-        const float lit_knee = max(max(frag.r, max(frag.g, frag.b)), 0.8);
-        const float lit_room = max(1.0 - lit_knee, 1e-4);
-        frag.rgb = lit_peak > lit_knee
-                       ? lit_c * ((lit_knee + lit_room * (1.0 - exp(-(lit_peak - lit_knee) / lit_room))) / lit_peak)
-                       : lit_c;
-    }
     float tev_alpha = saturate(frag.a);
     uint4 efb_color = uint4(round(saturate(frag) * 255.0));
     if (rgba6) {
         frag.rgb = float3(efb_color.rgb >> 2) / 63.0;
     } else {
         frag.rgb = float3(efb_color.rgb) / 255.0;
+    }
+    // Under ray-traced light (the HDR scene EFB, sRGB-encoded past 1), in linear light after the TEV's 8-bit result: a
+    // light source's glow (additive, output_flags bit 5) at its radiance times the camera's exposure (ztex_params.z);
+    // a lit translucent (bit 6) under the light of the surface behind it (texture 7, exposed), unclamped; an opaque draw
+    // after the trace (bit 7) takes no emitter's light.
+    if ((output_flags & 0x60u) != 0u) {
+        float3 lin = frag.rgb <= 0.04045 ? frag.rgb / 12.92 : pow((frag.rgb + 0.055) / 1.055, 2.4);
+        if ((output_flags & 0x20u) != 0u) {
+            lin *= ztex_params.z;
+        }
+        if ((output_flags & 0x40u) != 0u) {
+            uint lit_w, lit_h;
+            tex[7].GetDimensions(lit_w, lit_h);
+            const int2 lit_at = min(int2(pin.pos.xy * ztex_params.w), int2(lit_w, lit_h) - 1);
+            const float3 light = max(tex[7].Load(int3(lit_at, 0)).rgb, 0.0);
+            lin *= (output_flags & 0x80u) != 0u ? min(light, 1.15) : light;
+        }
+        frag.rgb = lin <= 0.0031308 ? lin * 12.92 : 1.055 * pow(lin, 1.0 / 2.4) - 0.055;
     }
     if ((key_flags & 0x04u) != 0u) {
         uint dst_alpha6 = uint(round(saturate(alpha_refs.w) * 255.0)) >> 2;

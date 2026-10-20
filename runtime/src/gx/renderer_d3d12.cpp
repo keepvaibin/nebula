@@ -4967,9 +4967,24 @@ void RendererD3D12::rt_trace_scene() {
     const D3D12_RESOURCE_DESC desc = depth ? efb_depth_->GetDesc() : D3D12_RESOURCE_DESC{};
     const auto width = static_cast<std::uint32_t>(desc.Width);
     dred_marker(command_list_.Get(), L"rt scene");
+    // The engine's G-buffer reads the EFB's colour (the texels' albedo) during the trace.
+    const bool picture = depth && efb_color_ && ray_tracer_.engine_active();
+    D3D12_RESOURCE_BARRIER picture_barrier = barrier;
+    picture_barrier.Transition.pResource = efb_color_.Get();
+    picture_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    picture_barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    if (picture) {
+        command_list_->ResourceBarrier(1, &picture_barrier);
+    }
+    ray_tracer_.set_engine_picture(picture ? efb_color_.Get() : nullptr);
     static_cast<void>(ray_tracer_.trace_scene(command_list_.Get(), rt_sources(), &RendererD3D12::rt_allocate, this,
                                               depth ? conv_efb_depth_srv_ : D3D12_GPU_DESCRIPTOR_HANDLE{}, width,
                                               desc.Height));
+    ray_tracer_.set_engine_picture(nullptr);
+    if (picture) {
+        std::swap(picture_barrier.Transition.StateBefore, picture_barrier.Transition.StateAfter);
+        command_list_->ResourceBarrier(1, &picture_barrier);
+    }
     // The occlusion multiplies the opaque scene before the translucent phases draw; a recorded
     // log applies it again on each sub-frame's replay.
     const int slot = ray_tracer_.light_slot();
@@ -5187,6 +5202,9 @@ void RendererD3D12::record_hdr_end() {
     }
     EfbTargetSet& set = replay_playing_ ? replay_hdr_efb_ : hdr_scene_efb_;
     const D3D12_RESOURCE_DESC desc = efb_color_->GetDesc();
+    const auto width = static_cast<std::uint32_t>(desc.Width);
+    constexpr D3D12_RESOURCE_STATES kRead =
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
     D3D12_RESOURCE_BARRIER barriers[3]{};
     for (D3D12_RESOURCE_BARRIER& barrier : barriers) {
         barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -5194,8 +5212,7 @@ void RendererD3D12::record_hdr_end() {
     }
     barriers[0].Transition.pResource = efb_color_.Get();
     barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    barriers[0].Transition.StateAfter =
-        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    barriers[0].Transition.StateAfter = kRead;
     barriers[1].Transition.pResource = efb_depth_.Get();
     barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
     barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
@@ -5204,8 +5221,7 @@ void RendererD3D12::record_hdr_end() {
     barriers[2].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
     command_list_->ResourceBarrier(3u, barriers);
     dred_marker(command_list_.Get(), L"hdr scene camera");
-    ray_tracer_.camera_finish(command_list_.Get(), conv_efb_color_srv_, set.rtv,
-                              static_cast<std::uint32_t>(desc.Width), desc.Height);
+    ray_tracer_.camera_finish(command_list_.Get(), conv_efb_color_srv_, set.rtv, width, desc.Height);
     command_list_->CopyResource(set.depth.Get(), efb_depth_.Get());
     for (D3D12_RESOURCE_BARRIER& barrier : barriers) {
         std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);

@@ -15,6 +15,8 @@
 //   and the brightest light loses its saturation towards white (a lamp's core burns white, not a saturated blob).
 //   The standard's toe (darkening the darkest tones by up to 0.04) is left out: the game's darks stay as drawn.
 //   c_flags kCameraAces: ACES 1.0 (RRT and sRGB ODT, Hill's fit, as Unreal's filmic curve), for comparison.
+// Light sources reach the picture at their radiance: the game's own glow draws of the table's light sources shine at
+// it in the HDR scene EFB (GX output_flags bit 5, the glow gain), so what lights the scene is what is seen and blooms.
 // Without physical light (c_flags 0) the picture passes as it is, clamped: as the RGBA8 EFB would have kept it.
 
 static const uint kCameraPhysical = 1u;
@@ -33,7 +35,7 @@ cbuffer RtCamera : register(b0)
     uint c_levels;          // the pyramid's levels
     uint c_pad;
 };
-Texture2D<float4> c_picture : register(t0);           // the scene's picture (the conversion views: colour, then depth)
+Texture2D<float4> c_picture : register(t0);           // the scene's picture (its colour view)
 StructuredBuffer<uint2> c_bloom_in : register(t1);    // the upward pyramid (the finish reads its first level)
 RWStructuredBuffer<uint2> c_down : register(u0);      // the downward pyramid, all levels (half-float RGB)
 RWStructuredBuffer<uint2> c_up : register(u1);        // the upward pyramid

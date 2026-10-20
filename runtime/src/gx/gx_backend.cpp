@@ -6611,7 +6611,23 @@ std::uint64_t GxBackend::record_identity() noexcept {
 void GxBackend::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a,
                                std::uint32_t b, std::size_t offset) {
     if (kind < identity_markers_by_kind_.size()) {
-        ++identity_markers_by_kind_[kind];
+        if (identity_markers_by_kind_[kind]++ == 0u && rt_log_glows()) [[unlikely]] {
+            std::fprintf(stderr, "[rt-identity] first marker of kind %u\n", static_cast<unsigned>(kind));
+        }
+    }
+    // The J3D material whose shapes draw next: the table's row for it, where it has one, over its texture's.
+    if (kind == motion::kMarkerMaterial) {
+        rt_material_identity_ = rt_material_by_identity(a);
+        // GALAXY_RT_LOG_GLOWS=1: each identity the first time it is seen, and the row it found.
+        if (rt_log_glows()) [[unlikely]] {
+            static std::unordered_set<std::uint32_t> logged;
+            if (logged.size() < 4096u && logged.insert(a).second) {
+                std::fprintf(stderr, "[rt-identity] seen %08X -> material %u\n", a,
+                             static_cast<unsigned>(rt_material_identity_));
+            }
+        }
+        current_rt_material_ = rt_material_identity_ != 0u ? rt_material_identity_ : texture_rt_material_;
+        return;
     }
     if (kind >= motion::kMarkerCategory) {
         on_motion_marker(kind, aux, a, b, offset);
@@ -6619,6 +6635,11 @@ void GxBackend::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32
     }
     // The drawing object for the material census and the named classes: a NameObj's draws follow
     // its marker; emitters and particles are none.
+    if (kind != motion::kMarkerShapePacket && rt_material_identity_ != 0u) {
+        // A NameObj's own draws, emitters and particles: no J3D material.
+        rt_material_identity_ = 0u;
+        current_rt_material_ = texture_rt_material_;
+    }
     if (kind == motion::kMarkerNameObj) {
         rt_object_ = a;
         rt_object_fake_shadow_ = renderer_.rt_lighting() && rt_fake_shadow_object(a);
@@ -14158,7 +14179,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         const BlendMode b = state_.blend_mode();
         const bool glow = scene_phase_ && side_layer_ == kSceneLayer && b.blend_enable && !b.logic_op_enable &&
                           !b.subtract && b.color_update && b.dst_factor == BlendFactor::One &&
-                          renderer_.rt_glow_exposure() > 1.0f;
+                          (renderer_.rt_physical() || renderer_.rt_glow_exposure() > 1.0f);
         const auto flags = static_cast<std::uint8_t>(glow ? (ps_key_.output_flags | 0x20u)
                                                           : (ps_key_.output_flags & ~0x20u));
         if (flags != ps_key_.output_flags) {
@@ -14802,8 +14823,9 @@ gpu::Pipeline* GxBackend::flush_draw_state(
                 for (const auto& handle : frame_binding_it->second.texture_handles) {
                     texture_cache_.touch_cached_handle(handle);
                 }
-                current_rt_material_ =
+                texture_rt_material_ =
                     rt_material_of(texture_map_mask, frame_binding_it->second.texture_handles, current_rt_map_);
+                current_rt_material_ = rt_material_identity_ != 0u ? rt_material_identity_ : texture_rt_material_;
                 binding_cache_hit = true;
                 ++frame_texture_binding_cache_hits_;
             }
@@ -14922,7 +14944,8 @@ gpu::Pipeline* GxBackend::flush_draw_state(
                     texture_binding_key,
                     cached_tables);
                 current_texture_handles_ = texture_handles;
-                current_rt_material_ = rt_material_of(texture_map_mask, texture_handles, current_rt_map_);
+                texture_rt_material_ = rt_material_of(texture_map_mask, texture_handles, current_rt_map_);
+                current_rt_material_ = rt_material_identity_ != 0u ? rt_material_identity_ : texture_rt_material_;
             }
         }
         current_texture_map_mask_ = texture_map_mask;
@@ -14953,21 +14976,25 @@ gpu::Pipeline* GxBackend::flush_draw_state(
     // draw's material table entry does (after the texture binding, which finds it).
     const std::uint32_t enhanced_material_bits =
         (ps_key_.reserved & kPsKeyEnhancedLighting) != 0u ? enhanced_table_material(rt_material(current_rt_material_)) : 0u;
+    // A glow's gain follows its material (a light source's radiance): another material is another gain.
+    const std::uint16_t glow_material = (ps_key_.output_flags & 0x20u) != 0u ? current_rt_material_ : 0u;
     if (tev_dirty || tev_c_dirty || tex_dirty || frame_bindings_dirty_ || glow_changed || enhanced_changed ||
-        dirty == ~0u || (ps_record_restart_ && history_scene_) || enhanced_material_bits != enhanced_material_bits_) {
+        dirty == ~0u || (ps_record_restart_ && history_scene_) || enhanced_material_bits != enhanced_material_bits_ ||
+        glow_material != glow_material_) {
         enhanced_material_bits_ = enhanced_material_bits;
+        glow_material_ = glow_material;
         const auto constants_start = time_detail
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
         GxPsConstants ps_c{};
         fill_ps_constants(state_, ps_c);
         ps_c.ztex_params[1] = 1.0f / static_cast<float>(renderer_.efb_scale());
-        ps_c.ztex_params[2] =
-            (ps_key_.output_flags & 0x20u) != 0u   ? renderer_.rt_glow_exposure(glow_kind_ == 2u)
-            : (ps_key_.output_flags & 0x40u) != 0u ? renderer_.rt_light_texture_scale()
-                                                   : 0.0f;
-        ps_c.ztex_params[3] =
-            (ps_key_.output_flags & 0x20u) != 0u ? renderer_.rt_glow_spill(glow_kind_ == 2u) : 0.0f;
+        // A glow's gain (output_flags bit 5): under physical light a light source's radiance times the exposure (else
+        // 1); the art model's glow exposure otherwise. The lighting texture's scale (bit 6).
+        ps_c.ztex_params[2] = (ps_key_.output_flags & 0x20u) == 0u ? 0.0f
+                              : renderer_.rt_physical()          ? renderer_.rt_glow_gain(current_rt_material_)
+                                                                 : renderer_.rt_glow_exposure(glow_kind_ == 2u);
+        ps_c.ztex_params[3] = (ps_key_.output_flags & 0x40u) != 0u ? renderer_.rt_light_texture_scale() : 0.0f;
         apply_uber_ps_key(ps_key_, ps_c);
         if ((ps_key_.reserved & kPsKeyEnhancedLighting) != 0u) {
             std::uint32_t column = 0u;

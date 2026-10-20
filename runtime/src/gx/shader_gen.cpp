@@ -2538,30 +2538,6 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
     // 6-bit; RGBA6 also quantizes RGB to 6-bit unless it keeps 8-bit colour.
     // Dual-source blending consumes the original 8-bit TEV alpha through
     // SV_Target1.
-    if ((key.output_flags & 0x20u) != 0u) {
-        // Glows (additive scene draws under ray-traced lighting) shine at their light's exposure;
-        // what passes 1 in one channel spills into all of them (white-hot).
-        s << "    frag.rgb *= ztex_params.z;\n";
-        s << "    frag.rgb += max(max(frag.r, max(frag.g, frag.b)) - 1.0, 0.0) * ztex_params.w;\n";
-    }
-    if ((key.output_flags & 0x40u) != 0u) {
-        // Lit translucents (blended scene draws under ray-traced lighting) take the light of the
-        // surface behind them (texture 7: the lighting per sample).
-        s << "    uint lit_w, lit_h;\n";
-        s << "    tex[7].GetDimensions(lit_w, lit_h);\n";
-        s << "    const int2 lit_at = min(int2(pin.pos.xy * ztex_params.z), int2(lit_w, lit_h) - 1);\n";
-        // The film shoulder on the brightest channel, the hue kept (rt_lighting.hlsl film_light).
-        // An opaque draw after the trace (bit 7: Rosalina, Freezeflame's ice) takes the light of what lay behind it,
-        // never an emitter's (the lava under the ice took it to x4: a white blot, measured v52b Freezeflame).
-        s << ((key.output_flags & 0x80u) != 0u
-                  ? "    const float3 lit_c = frag.rgb * clamp(tex[7].Load(int3(lit_at, 0)).rgb, 0.45, 1.15);\n"
-                  : "    const float3 lit_c = frag.rgb * clamp(tex[7].Load(int3(lit_at, 0)).rgb, 0.45, 4.0);\n");
-        s << "    const float lit_peak = max(lit_c.r, max(lit_c.g, lit_c.b));\n";
-        s << "    const float lit_knee = max(max(frag.r, max(frag.g, frag.b)), 0.8);\n";
-        s << "    const float lit_room = max(1.0 - lit_knee, 1e-4);\n";
-        s << "    frag.rgb = lit_peak > lit_knee ? lit_c * ((lit_knee + lit_room * (1.0 - exp(-(lit_peak - lit_knee) / "
-             "lit_room))) / lit_peak) : lit_c;\n";
-    }
     if (dual_src) {
         s << "    float tev_alpha = saturate(frag.a);\n";
     }
@@ -2570,6 +2546,26 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
         s << "    frag.rgb = float3(efb_color.rgb >> 2) / 63.0;\n";
     } else {
         s << "    frag.rgb = float3(efb_color.rgb) / 255.0;\n";
+    }
+    // Under ray-traced light the scene draws into the HDR scene EFB (sRGB-encoded past 1), and these two act in linear
+    // light after the TEV's own 8-bit result: a light source's glow (additive, output_flags bit 5) shines at its radiance
+    // times the camera's exposure (ztex_params.z); a lit translucent (bit 6) takes the light of the surface behind it
+    // (texture 7: the lighting per sample, exposed), unclamped. An opaque draw after the trace (bit 7: Rosalina,
+    // Freezeflame's ice) takes no emitter's light (the lava under the ice lit it white, measured v52b Freezeflame).
+    if ((key.output_flags & 0x60u) != 0u) {
+        s << "    float3 lin = frag.rgb <= 0.04045 ? frag.rgb / 12.92 : pow((frag.rgb + 0.055) / 1.055, 2.4);\n";
+        if ((key.output_flags & 0x20u) != 0u) {
+            s << "    lin *= ztex_params.z;\n";
+        }
+        if ((key.output_flags & 0x40u) != 0u) {
+            s << "    uint lit_w, lit_h;\n";
+            s << "    tex[7].GetDimensions(lit_w, lit_h);\n";
+            s << "    const int2 lit_at = min(int2(pin.pos.xy * ztex_params.w), int2(lit_w, lit_h) - 1);\n";
+            s << ((key.output_flags & 0x80u) != 0u
+                      ? "    lin *= min(max(tex[7].Load(int3(lit_at, 0)).rgb, 0.0), 1.15);\n"
+                      : "    lin *= max(tex[7].Load(int3(lit_at, 0)).rgb, 0.0);\n");
+        }
+        s << "    frag.rgb = lin <= 0.0031308 ? lin * 12.92 : 1.055 * pow(lin, 1.0 / 2.4) - 0.055;\n";
     }
     if (key.flags & 0x04u) {
         s << "    uint dst_alpha6 = uint(round(saturate(alpha_refs.w)"

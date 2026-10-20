@@ -61,6 +61,7 @@
 #include <mutex>
 #include <cstdio>
 #include <cstdlib>
+#include <cstddef>
 #include <cstring>
 #include <fstream>
 #include <intrin.h>
@@ -148,8 +149,9 @@ struct RtLightConstants {
     float up[4];                          // the player's up in eye space (the game's gravity; else the view's up)
     std::uint32_t probe[4];               // GALAXY_RT_PROBE: its sample (x, y), on (z)
     float light_fit[4];                   // physical: the camera's exposure, the light fitted to the baked light (1)
+    RtEngineConstants engine;             // the ray tracing engine (ray_tracing_engine.cpp)
 };
-static_assert(sizeof(RtLightConstants) == 1216u);
+static_assert(sizeof(RtLightConstants) == 1360u);
 
 // Mirrors cbuffer RtPost in rt_post.hlsl (root constants).
 struct RtPostConstants {
@@ -524,6 +526,7 @@ D3D12_RESOURCE_BARRIER uav_barrier(ID3D12Resource* resource) {
 bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_frequency, bool validate,
                                 DXGI_FORMAT scene_format, DXGI_FORMAT display_format) {
     shutdown();
+    static_assert(kPictureStarColour + 16u == kPictureAdaptation);
     if (device == nullptr || FAILED(device->QueryInterface(IID_PPV_ARGS(&device_)))) {
         device_.Reset();
         return false;
@@ -803,6 +806,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
         shutdown();
         return false;
     }
+    engine_ready_ = lighting_enabled_ && create_engine_pipelines();
     ready_ = true;
     std::cerr << "[rt] ready tier=1.1 validate=" << (validate ? 1 : 0) << " lighting=" << (lighting_enabled_ ? 1 : 0)
               << " rays=" << rays_ << " range=" << range_ << " strength=" << strength_
@@ -811,6 +815,15 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
               << sun_direction_[1] << ',' << sun_direction_[2] << " sun-light=" << sun_light_
               << " sky-light=" << sky_light_ << '\n';
     return true;
+}
+
+float SceneRayTracer::glow_gain(std::uint16_t material) const noexcept {
+    const RtMaterial* const m = rt_material(material);
+    if (!physical_active_ || m == nullptr || m->emission == RtEmission::None || m->no_light || m->hide) {
+        return 1.0f;
+    }
+    const float exposure = physical_exposure_ > 0.0f ? physical_exposure_ : 1.0f;
+    return std::max(m->intensity, 1.0f) * exposure * adaptation_cpu_;
 }
 
 void SceneRayTracer::shutdown() noexcept {
@@ -932,6 +945,26 @@ void SceneRayTracer::shutdown() noexcept {
     camera_widen_pso_.Reset();
     for (auto& buffer : camera_pyramid_) buffer.Reset();
     camera_texels_ = 0u;
+    engine_ready_ = false;
+    engine_running_ = false;
+    engine_gbuffer_pso_.Reset();
+    engine_direct_pso_.Reset();
+    engine_direct_spatial_pso_.Reset();
+    engine_indirect_pso_.Reset();
+    engine_indirect_spatial_pso_.Reset();
+    engine_specular_pso_.Reset();
+    engine_temporal_pso_.Reset();
+    engine_atrous_pso_.Reset();
+    engine_final_pso_.Reset();
+    for (auto& buffer : engine_buffers_) buffer.Reset();
+    for (auto& buffer : engine_slots_) buffer.Reset();
+    engine_slot_valid_ = {};
+    engine_width_ = engine_height_ = 0u;
+    engine_fresh_ = true;
+    engine_picture_ = nullptr;
+    adaptation_readback_.Reset();
+    adaptation_readback_frame_ = {};
+    adaptation_cpu_ = 1.0f;
     for (auto& buffer : post_buffers_) buffer.Reset();
     post_pixels_ = post_quarter_ = 0u;
     bloom_root_.Reset();
@@ -1278,6 +1311,23 @@ void SceneRayTracer::begin_frame(std::uint64_t frame_index) {
         fit_readback_->Unmap(0, &no_write);
         fit_read_frame_ = taken;
         fit_baked_light(sums);
+    }
+    for (unsigned k = 0; adaptation_readback_ && k < kAdaptationReadbacks; ++k) {
+        const std::uint64_t taken = adaptation_readback_frame_[k];
+        if (taken == 0u || taken + kResultDelay > frame_index) {
+            continue;
+        }
+        adaptation_readback_frame_[k] = 0u;
+        const D3D12_RANGE range{k * 16u, k * 16u + 8u};
+        void* mapped = nullptr;
+        if (SUCCEEDED(adaptation_readback_->Map(0, &range, &mapped))) {
+            std::uint32_t values[2]{};
+            std::memcpy(values, static_cast<const std::byte*>(mapped) + range.Begin, sizeof(values));
+            const D3D12_RANGE no_write{0, 0};
+            adaptation_readback_->Unmap(0, &no_write);
+            const float adaptation = std::bit_cast<float>(values[0]);
+            adaptation_cpu_ = values[1] != 0u && std::isfinite(adaptation) && adaptation > 0.0f ? adaptation : 1.0f;
+        }
     }
     for (unsigned k = 0; ball_readback_ && k < kBallReadbacks; ++k) {
         const std::uint64_t taken = ball_readback_frame_[k];
@@ -4022,6 +4072,11 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     }
     c.reference_bounces = reference_bounces_;
     c.reference_exposure = reference_exposure_;
+    // The ray tracing engine takes the place of the lighting's own passes when it runs (its slot is the next one).
+    engine_running_ = false;
+    if (physical_active_ && !reference) {
+        static_cast<void>(engine_prepare(width, height, next_light_slot_, c.engine, c.flags));
+    }
     std::memcpy(upload.cpu, &c, sizeof(c));
     // The same lights give the reflections their highlights.
     std::copy(std::begin(c.sun), std::end(c.sun), reflect_lights_.sun.begin());
@@ -4187,9 +4242,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     // meet a star find its ball): every slot each frame, one without a star this frame written empty.
     list->SetPipelineState(star_sphere_pso_.Get());
     list->Dispatch(kStarSlots, 1u, 1u);
-    list->SetPipelineState(trace_pso_.Get());
-    list->Dispatch(groups_x, groups_y, 1u);
-    // Physical: the per-pixel normals of this frame into the slot's buffer (the composite's per-pixel sun).
+    // Physical: the per-pixel normals and de-lighting of this frame into the slot's buffer (the composite's).
     bool pixels = false;
     if (physical_active_ && !reference) {
         const UINT64 bytes = static_cast<UINT64>(width) * height * 8u;
@@ -4205,9 +4258,21 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         if (light_pixels_[slot]) {
             to_state(list, light_pixels_[slot].Get(), light_pixels_state_[slot], kUav);
             list->SetComputeRootUnorderedAccessView(kLightPixels, light_pixels_[slot]->GetGPUVirtualAddress());
+            pixels = true;
+        }
+    }
+    // The engine (its G-buffer writes the pixels' buffer), else the lighting's own trace and per-pixel pass.
+    const bool engine = engine_running_ && pixels;
+    if (engine) {
+        trace_engine(list, allocate, allocate_context, &c, sizeof(c), offsetof(RtLightConstants, engine), upload.gpu,
+                     slot);
+    } else {
+        engine_slot_valid_[slot] = false;
+        list->SetPipelineState(trace_pso_.Get());
+        list->Dispatch(groups_x, groups_y, 1u);
+        if (pixels) {
             list->SetPipelineState(gbuffer_pso_.Get());
             list->Dispatch((width + 7u) / 8u, (height + 7u) / 8u, 1u);
-            pixels = true;
         }
     }
     const D3D12_RESOURCE_BARRIER all_uav = uav_barrier(nullptr);
@@ -4248,6 +4313,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
                                                               : light_raw_->GetGPUVirtualAddress());
         }
     }
+    if (!engine) {
     list->SetPipelineState(temporal_pso_.Get());
     list->Dispatch(groups_x, groups_y, 1u);
     list->ResourceBarrier(1u, &all_uav);
@@ -4278,6 +4344,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     list->SetComputeRootUnorderedAccessView(kLightHistory, light_normal_->GetGPUVirtualAddress());
     list->SetPipelineState(spatial_b_pso_.Get());
     list->Dispatch(groups_x, groups_y, 1u);
+    }
     // The stars' balls for the star core's light, read a few frames later (begin_frame).
     if (ball_readback_ && ball_readback_frame_[ball_readback_next_] == 0u) {
         const UINT64 at = static_cast<UINT64>(ball_readback_next_) * kBallReadbackBytes;
@@ -4531,6 +4598,22 @@ void SceneRayTracer::capture_picture(ID3D12GraphicsCommandList* list, const RtSo
     }
     list->SetPipelineState(sky_state_pso_.Get());
     list->Dispatch(1u, 1u, 1u);
+    // The eased adaptation for the CPU (glow gains), a few frames later.
+    if (physical_active_ && picture_sums_ &&
+        (adaptation_readback_ ||
+         create_buffer(kAdaptationReadbacks * 16u, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST,
+                       D3D12_RESOURCE_FLAG_NONE, adaptation_readback_, L"rt adaptation readback")) &&
+        adaptation_readback_frame_[adaptation_readback_next_] == 0u) {
+        const D3D12_RESOURCE_BARRIER sums_uav = uav_barrier(picture_sums_.Get());
+        list->ResourceBarrier(1u, &sums_uav);
+        const D3D12_RESOURCE_STATES before = picture_sums_state_;
+        to_state(list, picture_sums_.Get(), picture_sums_state_, D3D12_RESOURCE_STATE_COPY_SOURCE);
+        list->CopyBufferRegion(adaptation_readback_.Get(), adaptation_readback_next_ * 16u, picture_sums_.Get(),
+                               kPictureAdaptation, 8u);
+        to_state(list, picture_sums_.Get(), picture_sums_state_, before);
+        adaptation_readback_frame_[adaptation_readback_next_] = frame_index_ + 1u;
+        adaptation_readback_next_ = (adaptation_readback_next_ + 1u) % kAdaptationReadbacks;
+    }
     if (emitters_active() && emit_merge_pso_ && camera_known_) {
         const int lights_timed = begin_pass(list);
         capture_glow_lights(list, sources, allocate, allocate_context, color_depth_table, width, height, factor,
@@ -4723,10 +4806,16 @@ void SceneRayTracer::capture_glow_lights(ID3D12GraphicsCommandList* list, const 
         if (emit_tris_ && list_upload.cpu != nullptr) {
             std::memcpy(list_upload.cpu, glow_emitters_.data(), glow_emitters_.size() * sizeof(glow_emitters_[0]));
             to_state(list, emit_tris_.Get(), emit_tris_state_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+            // The glow triangles' surfaces (their vertex normals; the geometry pass keeps them as a UAV).
+            D3D12_RESOURCE_STATES surfaces_state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+            to_state(list, glow_surfaces_.Get(), surfaces_state, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
             list->SetComputeRootShaderResourceView(kEmitDraws, list_upload.gpu);
+            list->SetComputeRootShaderResourceView(kEmitAdded, glow_surfaces_->GetGPUVirtualAddress());
             list->SetComputeRootUnorderedAccessView(kEmitGlowOut, emit_tris_->GetGPUVirtualAddress());
             list->SetPipelineState(glow_emitter_pso_.Get());
             list->Dispatch(static_cast<UINT>(glow_emitters_.size()), 1u, 1u);
+            to_state(list, glow_surfaces_.Get(), surfaces_state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+            list->SetComputeRootShaderResourceView(kEmitAdded, glow_added_->GetGPUVirtualAddress());
             const D3D12_RESOURCE_BARRIER glow_uav = uav_barrier(emit_tris_.Get());
             list->ResourceBarrier(1u, &glow_uav);
             to_state(list, emit_tris_.Get(), emit_tris_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -5097,8 +5186,16 @@ void SceneRayTracer::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRI
     c.factor = info.factor;
     // Physical: the sun per pixel from the slot's per-pixel normals (not the reference, whose light is its own).
     const bool per_pixel = info.pixels && !reference_active_ && light_pixels_[index];
+    // The engine's result (full resolution, its own record: rt_engine.hlsl EngineFinalCS).
+    const bool engine = per_pixel && engine_slot(index, width, height);
     c.flags = (reproject ? 1u : 0u) | (show_lighting_ ? 2u : 0u) | (reference_active_ || physical_active_ ? 4u : 0u) |
-              (per_pixel ? 8u : 0u) | (reflections_active() ? 16u : 0u);
+              (per_pixel ? 8u : 0u) | (reflections_active() || engine ? 16u : 0u) | (engine ? 32u : 0u);
+    if (engine) {
+        c.sample_size[0] = width;
+        c.sample_size[1] = height;
+        c.factor = 1u;
+        to_state(list, engine_slots_[index].Get(), engine_slot_state_[index], kLightRead);
+    }
     c.target_size[0] = info.width;
     c.target_size[1] = info.height;
     c.slot = index;
@@ -5119,7 +5216,8 @@ void SceneRayTracer::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRI
     list->SetGraphicsRootSignature(composite_root_.Get());
     list->SetPipelineState(composite_pso_.Get());
     list->SetGraphicsRoot32BitConstants(0u, sizeof(c) / 4u, &c, 0u);
-    list->SetGraphicsRootShaderResourceView(1u, light_final_[index]->GetGPUVirtualAddress());
+    list->SetGraphicsRootShaderResourceView(1u, engine ? engine_slots_[index]->GetGPUVirtualAddress()
+                                                       : light_final_[index]->GetGPUVirtualAddress());
     list->SetGraphicsRootDescriptorTable(2u, depth_srv);
     list->SetGraphicsRootShaderResourceView(3u, reproject ? reproject_->GetGPUVirtualAddress()
                                                           : light_final_[index]->GetGPUVirtualAddress());
@@ -5144,7 +5242,7 @@ void SceneRayTracer::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRI
             list->ClearRenderTargetView(target, white, 1u, &square);
         }
     }
-    if (!show_lighting_) {
+    if (!show_lighting_ && !engine) {
         reflections_.composite(list, target, depth_srv, width, height, index,
                                reproject ? reproject_->GetGPUVirtualAddress() : 0u, c.split);
     }
@@ -5196,8 +5294,10 @@ RtReflectScene SceneRayTracer::reflect_scene(unsigned slot) const {
 void SceneRayTracer::trace_reflections(ID3D12GraphicsCommandList* list, Allocate allocate, void* allocate_context,
                                        D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table, std::uint32_t width,
                                        std::uint32_t height) {
+    // The engine's specular takes the opaque reflections' place (the water's stay: trace_water).
     if (!reflections_active() || light_slot_ < 0 || list == nullptr || allocate == nullptr || !tlas_ ||
-        !positions_ || !surfaces_ || !light_primary_) {
+        !positions_ || !surfaces_ || !light_primary_ ||
+        (light_slot_ >= 0 && engine_slot(static_cast<unsigned>(light_slot_), width, height))) {
         return;
     }
     const auto slot = static_cast<unsigned>(light_slot_);

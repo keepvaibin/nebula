@@ -233,7 +233,7 @@ std::size_t RtMaterialTable::read(std::istream& in) {
     bool header_read = false;
     int hash_col = -1, class_col = -1, rough_col = -1, metal_col = -1, r_col = -1, g_col = -1, b_col = -1,
         intensity_col = -1, range_col = -1, pulse_col = -1, cone_col = -1, shadow_col = -1, glow_col = -1,
-        stage_col = -1, region_col = -1, object_col = -1;
+        stage_col = -1, region_col = -1, object_col = -1, material_col = -1;
     std::size_t rows = 0u;
     while (std::getline(in, line)) {
         if (line.empty() || line[0] == '#') {
@@ -251,7 +251,7 @@ std::size_t RtMaterialTable::read(std::istream& in) {
                                 : name == "pulse" ? &pulse_col : name == "cone" ? &cone_col
                                 : name == "shadow" ? &shadow_col : name == "glow" ? &glow_col
                                 : name == "stage" ? &stage_col : name == "region" ? &region_col
-                                : name == "object" ? &object_col : nullptr;
+                                : name == "object" ? &object_col : name == "material" ? &material_col : nullptr;
                 if (slot != nullptr) *slot = static_cast<int>(i);
             }
             continue;
@@ -274,11 +274,36 @@ std::size_t RtMaterialTable::read(std::istream& in) {
                                 ? row[static_cast<std::size_t>(stage_col)]
                                 : std::string();
         while (!stage.empty() && (stage.back() == '\r' || stage.back() == ' ')) stage.pop_back();
-        if (!stage.empty()) {
+        std::string identity = material_col >= 0 && static_cast<std::size_t>(material_col) < row.size()
+                                   ? row[static_cast<std::size_t>(material_col)]
+                                   : std::string();
+        while (!identity.empty() && (identity.back() == '\r' || identity.back() == ' ')) identity.pop_back();
+        RtMaterial* target = &materials_[it->second - 1u];
+        if (!identity.empty() && identity != "-") {
+            // The texture's material so far, with this row on top, for the named models' material.
+            if (materials_.size() >= 0xFFFEu) {
+                ++skipped_;
+                continue;
+            }
+            materials_.push_back(materials_[it->second - 1u]);
+            const auto index = static_cast<std::uint16_t>(materials_.size());
+            for (const std::string& name : split(identity, ' ')) {
+                if (!name.empty()) {
+                    by_identity_[rt_material_identity(name)] = index;
+                    if (rt_log_glows()) {
+                        std::fprintf(stderr, "[rt-identity] row %s = %08X -> material %u\n", name.c_str(),
+                                     rt_material_identity(name), static_cast<unsigned>(index));
+                    }
+                }
+            }
+            target = &materials_.back();
+            stage.clear();
+        } else if (!stage.empty()) {
             // The texture's material so far, with this row on top, for that stage.
             stage_rows_.push_back({stage, it->second, materials_[it->second - 1u]});
+            target = &stage_rows_.back().material;
         }
-        RtMaterial& m = stage.empty() ? materials_[it->second - 1u] : stage_rows_.back().material;
+        RtMaterial& m = *target;
         const RtEmission before = m.emission;
         if (stage.empty() && object_col >= 0 && static_cast<std::size_t>(object_col) < row.size()) {
             // "Model/texture" or "ModelA ModelB": each model this row's texture belongs to.
@@ -338,6 +363,11 @@ std::size_t RtMaterialTable::read(std::istream& in) {
 std::uint16_t RtMaterialTable::index(std::uint64_t hash) const noexcept {
     const auto it = by_hash_.find(hash);
     return it != by_hash_.end() ? it->second : 0u;
+}
+
+std::uint16_t RtMaterialTable::identity_index(std::uint32_t identity) const noexcept {
+    const auto it = by_identity_.find(identity);
+    return it != by_identity_.end() ? it->second : 0u;
 }
 
 const RtMaterial* RtMaterialTable::material(std::uint16_t index) const noexcept {
@@ -453,6 +483,25 @@ bool rt_materials_loaded() noexcept {
 
 std::uint16_t rt_material_index(std::uint64_t hash) noexcept {
     return table().index(hash);
+}
+
+std::uint32_t rt_material_identity(std::string_view name) noexcept {
+    // "Model.bdl/material": the model's extension is not part of it.
+    const std::size_t slash = name.find('/');
+    std::uint32_t hash = 2166136261u;
+    for (std::size_t i = 0; i < name.size(); ++i) {
+        if (i < slash && name[i] == '.') {
+            i = slash - 1u;
+            continue;
+        }
+        const char c = name[i];
+        hash = (hash ^ static_cast<std::uint8_t>(c >= 'A' && c <= 'Z' ? c + ('a' - 'A') : c)) * 16777619u;
+    }
+    return hash;
+}
+
+std::uint16_t rt_material_by_identity(std::uint32_t identity) noexcept {
+    return identity != 0u ? table().identity_index(identity) : 0u;
 }
 
 namespace {

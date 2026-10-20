@@ -768,7 +768,7 @@ private:
     [[nodiscard]] std::uint32_t note_identity_occurrence(std::uint64_t key);
     [[nodiscard]] std::uint64_t record_identity() noexcept;
     void begin_identity_scene();
-    std::array<std::uint64_t, 12> identity_markers_by_kind_{};  // motion::kMarkerKinds
+    std::array<std::uint64_t, 13> identity_markers_by_kind_{};  // motion::kMarkerKinds
     std::uint64_t identity_records_ = 0;
     std::uint64_t identity_matched_ = 0;
     std::uint64_t identity_rejected_ = 0;
@@ -912,7 +912,10 @@ private:
     bool rt_mirror_pass_ = false;         // the game's mirror pass is drawing (motion::PassMarker)
     std::unordered_map<std::uint32_t, bool> rt_fake_shadow_cache_;
     bool rt_fake_shadow_object(std::uint32_t object);
-    std::uint16_t current_rt_material_ = 0u;  // the bound textures' material table entry (rt_materials.h)
+    std::uint16_t current_rt_material_ = 0u;  // the draw's material table entry (rt_materials.h)
+    // Its parts: the bound textures' entry, and the J3D material's (motion::kMarkerMaterial; 0: none) over it.
+    std::uint16_t texture_rt_material_ = 0u;
+    std::uint16_t rt_material_identity_ = 0u;
     unsigned current_rt_map_ = 0xFFu;  // its texture map (else the first bound one; 0xFF none)
     std::uint32_t rt_draw_buffer_ = 0xFFFFu;   // the last draw buffer marker's type (bit 16: translucent)
     bool rt_sky_buffer_ = false;  // the draws are the game's sky lists' (kRtDrawSky) until the next category marker
@@ -1773,6 +1776,7 @@ private:
     std::uint32_t enhanced_ps_flags_ = 0u;
     // The material table bits (enhanced_table_material) the last uploaded PS constants carry.
     std::uint32_t enhanced_material_bits_ = 0u;
+    std::uint16_t glow_material_ = 0u;  // the material whose glow gain the PS constants hold (output_flags bit 5)
     float enhanced_split_ = 0.0f;
     // GALAXY_LIGHTING_CENSUS: enhanced flushes since the last [enh-stats] line, and those drawn by the
     // uber stand-in while their pipeline compiles.

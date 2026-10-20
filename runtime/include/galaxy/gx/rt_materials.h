@@ -97,6 +97,10 @@ public:
     // the textures whose rows name `model` in their object column ("Model/texture", or models apart by spaces),
     // case-insensitive; 0: the model has none.
     [[nodiscard]] float model_light(std::string_view model) const;
+    // A row with a `material` ("Model/material": the model's resource name and J3D's material name, models apart by
+    // spaces) names those models' material alone (MotionSignal::drawMaterial's identity): its texture's material with
+    // that row on top (the Observatory's white star lamps, not every white plastic its texture is on). 0: none.
+    [[nodiscard]] std::uint16_t identity_index(std::uint32_t identity) const noexcept;
 
 private:
     struct StageRow {
@@ -106,6 +110,7 @@ private:
     };
     std::vector<RtMaterial> materials_;
     std::unordered_map<std::uint64_t, std::uint16_t> by_hash_;
+    std::unordered_map<std::uint32_t, std::uint16_t> by_identity_;
     std::vector<StageRow> stage_rows_;
     // Per model name (lower case) the material indices its rows name.
     std::unordered_map<std::string, std::vector<std::uint16_t>> model_rows_;
@@ -157,6 +162,11 @@ private:
 [[nodiscard]] bool rt_materials_loaded() noexcept;
 // 0: not in the table; else its index + 1.
 [[nodiscard]] std::uint16_t rt_material_index(std::uint64_t hash) noexcept;
+// A material's identity: FNV-1a of "model/material" in lower case, the model without its extension
+// (native/petari MotionSignal.cpp hashName).
+[[nodiscard]] std::uint32_t rt_material_identity(std::string_view name) noexcept;
+// The table's material for a material identity (RtMaterialTable::identity_index; 0: none).
+[[nodiscard]] std::uint16_t rt_material_by_identity(std::uint32_t identity) noexcept;
 // The hash a row keyed `untextured` takes: on the stage its row names, surfaces without texture coordinates
 // (vertex-coloured models: the Observatory's power cables) take that row; no texture row can name them.
 inline constexpr std::uint64_t kRtUntexturedHash = 0xFFFFFFFFFFFFFFFFull;

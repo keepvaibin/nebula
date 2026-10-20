@@ -77,6 +77,7 @@ std::uint32_t camera_levels(std::uint32_t width, std::uint32_t height, Level (&l
 bool SceneRayTracer::create_camera_pipelines(DXGI_FORMAT scene_format, DXGI_FORMAT display_format) {
     camera_bloom_ = std::clamp(env_value("GALAXY_RT_CAMERA_BLOOM", 0.04f), 0.0f, 1.0f);
     camera_tone_ = static_cast<std::uint32_t>(std::clamp(env_value("GALAXY_RT_TONEMAP", 0.0f), 0.0f, 2.0f));
+    // The picture's colour view (t0); the pyramid's levels down and up (u0, u1) and up again (t1).
     D3D12_DESCRIPTOR_RANGE picture{};
     picture.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     picture.NumDescriptors = 1u;
@@ -237,23 +238,12 @@ bool SceneRayTracer::camera_finish(ID3D12GraphicsCommandList* list, D3D12_GPU_DE
             list->Dispatch((level.width + 7u) / 8u, (level.height + 7u) / 8u, 1u);
             list->ResourceBarrier(1u, &all_uav);
         };
-        // Down from the picture; up from the coarsest level.
+        // Down from the picture; up from the coarsest level (which starts the sum: no coarser one).
         for (std::uint32_t k = 0; k < count; ++k) {
             run(camera_down_pso_.Get(), levels[k], k == 0u ? nullptr : &levels[k - 1u]);
         }
         for (std::uint32_t k = count; k-- > 0u;) {
-            if (k + 1u == count) {
-                c.from_at = kNoLevel;
-                c.level[0] = levels[k].width;
-                c.level[1] = levels[k].height;
-                c.level_at = levels[k].at;
-                list->SetComputeRoot32BitConstants(0u, sizeof(c) / 4u, &c, 0u);
-                list->SetPipelineState(camera_up_pso_.Get());
-                list->Dispatch((levels[k].width + 7u) / 8u, (levels[k].height + 7u) / 8u, 1u);
-                list->ResourceBarrier(1u, &all_uav);
-            } else {
-                run(camera_up_pso_.Get(), levels[k], &levels[k + 1u]);
-            }
+            run(camera_up_pso_.Get(), levels[k], k + 1u == count ? nullptr : &levels[k + 1u]);
         }
         to_state(list, camera_pyramid_[1].Get(), camera_pyramid_states_[1], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
         c.levels = count;
