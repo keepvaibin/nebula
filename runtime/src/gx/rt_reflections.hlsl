@@ -2704,9 +2704,11 @@ CompositeOut finish(Blend b, uint view, float3 under_add, float3 under_keep)
 {
     CompositeOut result;
     const float k = saturate(b.k_sum / b.weight);
-    // A light's glint up to white: the sun's on glass or polished metal outshines everything (capped at 0.35, the
-    // brightest a glass sphere showed was a grey smudge: user, nothing glass-like may look matte).
-    const float3 highlight = min(b.glint / b.weight, 1.0f);
+    // A light's glint on clear glass and crystal up to white: a point of the sun on a curved clear surface (at 0.35 the
+    // brightest a glass sphere showed was a grey smudge: user, nothing glass-like may look matte). Elsewhere 0.35: the
+    // broad sheen of large metal panels and rock tips went white with it (user: Space Junk washed out, Battlerock's
+    // peaks too bright).
+    const float3 highlight = min(b.glint / b.weight, b.nearest_class == kCrystal ? 1.0f : 0.35f);
     const float3 kept = saturate(1.0f - b.covered / b.weight);
     if (view == 1u || view == 4u) {
         const float3 reflection = b.k_sum > 1e-4f ? b.sum / b.k_sum : float3(0.0f, 0.0f, 0.0f);
