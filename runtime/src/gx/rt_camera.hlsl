@@ -15,6 +15,11 @@
 //   and the brightest light loses its saturation towards white (a lamp's core burns white, not a saturated blob).
 //   The standard's toe (darkening the darkest tones by up to 0.04) is left out: the game's darks stay as drawn.
 //   c_flags kCameraAces: ACES 1.0 (RRT and sRGB ODT, Hill's fit, as Unreal's filmic curve), for comparison.
+// - Sun shafts: the light the air scatters towards the camera around a sun the sky shows (crepuscular rays), from
+//   where the sky shows it: along each pixel's line to the sun on the picture, the sky's light near the sun where the
+//   depth shows sky (the world in front of it blocks it), decaying with the distance (Mitchell 2007, "Volumetric Light
+//   Scattering as a Post-Process", GPU Gems 3; the screen-space light shafts of Unreal). A quarter of the picture's
+//   resolution, added to the light before the bloom and the tone curve.
 // Light sources reach the picture at their radiance: the game's own glow draws of the table's light sources shine at
 // it in the HDR scene EFB (GX output_flags bit 5, the glow gain), so what lights the scene is what is seen and blooms.
 // Without physical light (c_flags 0) the picture passes as it is, clamped: as the RGBA8 EFB would have kept it.
@@ -34,9 +39,18 @@ cbuffer RtCamera : register(b0)
     uint c_flags;
     uint c_levels;          // the pyramid's levels
     uint c_pad;
+    float4 c_sun;           // the visible sun on the picture (pixels), the shafts' strength (0: none), the picture's height
+    uint2 c_quarter;        // the shafts' texels (a quarter of the picture's side)
+    float c_far;            // the depth of the far plane (sky)
+    float c_sky_distance;   // eye distance beyond which surfaces are the sky's backdrops
+    float4 c_depth_params;  // D3D projection [2][2], [2][3]; the viewport's min and max depth
+    float4 c_sun_dir;       // towards the sun in eye space (xyz); the air's Henyey-Greenstein asymmetry (w)
+    float4 c_proj;          // D3D projection [0][0], [0][2], [1][1], [1][2]
+    float4 c_viewport;      // the viewport (x, y, width, height; pixels)
 };
 Texture2D<float4> c_picture : register(t0);           // the scene's picture (its colour view)
-StructuredBuffer<uint2> c_bloom_in : register(t1);    // the upward pyramid (the finish reads its first level)
+Texture2D<float> c_depth : register(t1);              // its depth (the conversion table's second view)
+StructuredBuffer<uint2> c_bloom_in : register(t2);    // the upward pyramid (the finish reads its first level)
 RWStructuredBuffer<uint2> c_down : register(u0);      // the downward pyramid, all levels (half-float RGB)
 RWStructuredBuffer<uint2> c_up : register(u1);        // the upward pyramid
 
@@ -135,6 +149,78 @@ void CameraUpCS(uint3 id : SV_DispatchThreadID)
     c_up[at] = pack_half3(c);
 }
 
+// The sun's shafts at a quarter texel: 32 steps along the line to the sun on the picture (their start jittered per
+// texel: no bands), each the sky's light there (sky: the far plane or a backdrop) weighted by its nearness to the sun
+// (forward scattering: a seventh of the picture's height, so the sun's glow scatters, not the stars across the sky),
+// decaying 4% a step. Into the downward pyramid's first texels (free once the bloom is summed).
+[numthreads(8, 8, 1)]
+void CameraShaftsCS(uint3 id : SV_DispatchThreadID)
+{
+    if (any(id.xy >= c_quarter)) {
+        return;
+    }
+    const float2 pixel = (float2(id.xy) + 0.5f) * 4.0f;
+    const float2 delta = (c_sun.xy - pixel) / 32.0f;
+    const float reach = 0.14f * c_sun.w;
+    float3 sum = float3(0.0f, 0.0f, 0.0f);
+    float decay = 1.0f;
+    // Interleaved gradient noise (Jimenez 2014) for the start.
+    const float jitter = frac(52.9829189f * frac(dot(float2(id.xy), float2(0.06711056f, 0.00583715f))));
+    float2 at = pixel + delta * (jitter - 1.0f);
+    [loop] for (uint i = 0u; i < 32u; ++i) {
+        at += delta;
+        const int2 s = int2(at);
+        if (any(s < 0) || any(s >= int2(c_size))) {
+            break;
+        }
+        const float depth = c_depth.Load(int3(s, 0));
+        const float ndc = (depth - c_depth_params.z) / max(c_depth_params.w - c_depth_params.z, 1e-7f);
+        const float eye_z = -c_depth_params.y / (ndc + c_depth_params.x);
+        if (depth <= c_far + 1e-6f || -eye_z > c_sky_distance) {
+            const float2 off = at - c_sun.xy;
+            // Each sample's light at most 8 (exposed): 32 jittered steps per quarter texel land on the sun's few
+            // disc pixels or miss them, and the disc's full radiance made dotted streaks across the sky (Good Egg b69).
+            float3 light = picture_light(s);
+            light *= min(1.0f, 8.0f / max(dot(light, float3(0.2126f, 0.7152f, 0.0722f)), 1e-4f));
+            sum += light * (decay * exp(-dot(off, off) / (reach * reach)));
+        }
+        decay *= 0.96f;
+    }
+    // The share of that light the air in front of this pixel's surface sends to the eye: forward scattering by its
+    // angle from the sun (Henyey-Greenstein, 1 towards the sun) and the air's depth (the sky's whole column; a near
+    // surface little: aerial perspective over the sky's distance).
+    const float2 ndc = float2((pixel.x - c_viewport.x) / c_viewport.z * 2.0f - 1.0f,
+                              1.0f - (pixel.y - c_viewport.y) / c_viewport.w * 2.0f);
+    const float3 eye_dir = normalize(float3((ndc.x + c_proj.y) / c_proj.x, (ndc.y + c_proj.w) / c_proj.z, -1.0f));
+    const float g = c_sun_dir.w;
+    const float phase = pow(1.0f - g, 3.0f) /
+                        pow(max(1.0f + g * g - 2.0f * g * dot(eye_dir, normalize(c_sun_dir.xyz)), 1e-6f), 1.5f);
+    const float own = c_depth.Load(int3(clamp(int2(pixel), int2(0, 0), int2(c_size) - 1), 0));
+    float air = 1.0f;
+    if (own > c_far + 1e-6f) {
+        const float ndc_z = (own - c_depth_params.z) / max(c_depth_params.w - c_depth_params.z, 1e-7f);
+        const float distance = c_depth_params.y / (ndc_z + c_depth_params.x) / max(-eye_dir.z, 1e-3f);
+        air = distance > c_sky_distance ? 1.0f : 1.0f - exp(-max(distance, 0.0f) / c_sky_distance);
+    }
+    c_down[id.y * c_quarter.x + id.x] = pack_half3(sum * (c_sun.z / 32.0f * phase * air));
+}
+
+// The shafts at a pixel (bilinear in their quarter texels).
+float3 shafts_at(int2 p)
+{
+    const float2 t = (float2(p) + 0.5f) / 4.0f - 0.5f;
+    const int2 b = int2(floor(t));
+    const float2 f = t - float2(b);
+    float3 sum = float3(0.0f, 0.0f, 0.0f);
+    [unroll] for (uint k = 0u; k < 4u; ++k) {
+        const int2 o = int2(k & 1u, k >> 1u);
+        const int2 q = clamp(b + o, int2(0, 0), int2(c_quarter) - 1);
+        const float w = (o.x != 0 ? f.x : 1.0f - f.x) * (o.y != 0 ? f.y : 1.0f - f.y);
+        sum += unpack_half3(c_down[uint(q.y) * c_quarter.x + uint(q.x)]) * w;
+    }
+    return sum;
+}
+
 // Khronos PBR Neutral's shoulder and desaturation (no toe: see the header).
 float3 neutral_curve(float3 c)
 {
@@ -181,6 +267,9 @@ float4 CameraPS(float4 position : SV_Position) : SV_Target0
         return saturate(picture);
     }
     float3 c = srgb_decode(picture.rgb);
+    if (c_sun.z > 0.0f) {
+        c += shafts_at(p);
+    }
     if (c_bloom > 0.0f && c_levels != 0u) {
         // The first level's upward sum at this pixel (level texels are two pixels), over the levels summed.
         const float2 t = (float2(p) + 0.5f) * (float2(c_from) / float2(c_size)) - 0.5f;

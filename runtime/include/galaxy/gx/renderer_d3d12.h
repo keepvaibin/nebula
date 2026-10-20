@@ -304,9 +304,6 @@ public:
         return ray_tracer_.ready() ? ray_tracer_.glow_exposure(model) : 1.0f;
     }
     [[nodiscard]] float rt_glow_spill(bool model) const noexcept { return ray_tracer_.glow_spill(model); }
-    [[nodiscard]] float rt_glow_gain(std::uint16_t material) const noexcept {
-        return ray_tracer_.ready() ? ray_tracer_.glow_gain(material) : 1.0f;
-    }
     // The last traced scene's lighting as a texture for lit translucents (texture 7).
     [[nodiscard]] bool rt_light_texture_ready() const noexcept {
         return ray_tracer_.ready() && ray_tracer_.light_texture_ready();

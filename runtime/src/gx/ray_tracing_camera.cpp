@@ -6,6 +6,7 @@
 
 #include "rt_camera_down_cs.h"
 #include "rt_camera_ps.h"
+#include "rt_camera_shafts_cs.h"
 #include "rt_camera_up_cs.h"
 #include "rt_camera_vs.h"
 #include "rt_camera_widen_ps.h"
@@ -30,8 +31,16 @@ struct RtCameraConstants {
     std::uint32_t flags;
     std::uint32_t levels;
     std::uint32_t pad;
+    float sun[4];               // the visible sun on the picture (pixels), the shafts' strength, the picture's height
+    std::uint32_t quarter[2];   // the shafts' texels
+    float far_depth;            // the far plane's depth (sky)
+    float sky_distance;         // farther surfaces are the sky's backdrops
+    float depth_params[4];      // D3D projection [2][2], [2][3]; viewport min and max depth
+    float sun_dir[4];           // towards the sun (eye space); the air's Henyey-Greenstein asymmetry
+    float projection[4];        // D3D projection [0][0], [0][2], [1][1], [1][2]
+    float viewport[4];          // x, y, width, height (pixels)
 };
-static_assert(sizeof(RtCameraConstants) == 48u);
+static_assert(sizeof(RtCameraConstants) == 144u);
 
 constexpr std::uint32_t kCameraPhysical = 1u;
 constexpr std::uint32_t kCameraAces = 2u;
@@ -77,10 +86,12 @@ std::uint32_t camera_levels(std::uint32_t width, std::uint32_t height, Level (&l
 bool SceneRayTracer::create_camera_pipelines(DXGI_FORMAT scene_format, DXGI_FORMAT display_format) {
     camera_bloom_ = std::clamp(env_value("GALAXY_RT_CAMERA_BLOOM", 0.04f), 0.0f, 1.0f);
     camera_tone_ = static_cast<std::uint32_t>(std::clamp(env_value("GALAXY_RT_TONEMAP", 0.0f), 0.0f, 2.0f));
-    // The picture's colour view (t0); the pyramid's levels down and up (u0, u1) and up again (t1).
+    camera_shafts_ = std::clamp(env_value("GALAXY_RT_CAMERA_SHAFTS", 1.0f), 0.0f, 8.0f);
+    // The picture's colour and depth views (t0, t1: the conversion table); the pyramid's levels down and up (u0, u1)
+    // and up again (t2).
     D3D12_DESCRIPTOR_RANGE picture{};
     picture.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-    picture.NumDescriptors = 1u;
+    picture.NumDescriptors = 2u;
     D3D12_ROOT_PARAMETER params[5]{};
     params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
     params[0].Constants.Num32BitValues = sizeof(RtCameraConstants) / 4u;
@@ -91,7 +102,7 @@ bool SceneRayTracer::create_camera_pipelines(DXGI_FORMAT scene_format, DXGI_FORM
     params[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
     params[3].Descriptor.ShaderRegister = 1u;
     params[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
-    params[4].Descriptor.ShaderRegister = 1u;
+    params[4].Descriptor.ShaderRegister = 2u;
     for (auto& param : params) {
         param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     }
@@ -130,12 +141,13 @@ bool SceneRayTracer::create_camera_pipelines(DXGI_FORMAT scene_format, DXGI_FORM
     };
     if (!compute(g_rt_camera_down_cs, sizeof(g_rt_camera_down_cs), camera_down_pso_) ||
         !compute(g_rt_camera_up_cs, sizeof(g_rt_camera_up_cs), camera_up_pso_) ||
+        !compute(g_rt_camera_shafts_cs, sizeof(g_rt_camera_shafts_cs), camera_shafts_pso_) ||
         !graphics(g_rt_camera_ps, sizeof(g_rt_camera_ps), display_format, camera_pso_) ||
         !graphics(g_rt_camera_widen_ps, sizeof(g_rt_camera_widen_ps), scene_format, camera_widen_pso_)) {
         std::cerr << "[rt] camera pipelines failed\n";
         return false;
     }
-    std::cerr << "[rt] camera bloom=" << camera_bloom_ << " tone="
+    std::cerr << "[rt] camera bloom=" << camera_bloom_ << " shafts=" << camera_shafts_ << " tone="
               << (camera_tone_ == 1u ? "aces" : camera_tone_ == 2u ? "clip" : "neutral") << '\n';
     return true;
 }
@@ -245,11 +257,46 @@ bool SceneRayTracer::camera_finish(ID3D12GraphicsCommandList* list, D3D12_GPU_DE
         for (std::uint32_t k = count; k-- > 0u;) {
             run(camera_up_pso_.Get(), levels[k], k + 1u == count ? nullptr : &levels[k + 1u]);
         }
-        to_state(list, camera_pyramid_[1].Get(), camera_pyramid_states_[1], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
         c.levels = count;
         c.bloom = camera_bloom_;
         c.from[0] = levels[0].width;
         c.from[1] = levels[0].height;
+        // The sun's shafts, from a sun the sky shows in front of the camera (on the picture or off it), into the
+        // downward pyramid's first texels.
+        const LightSlot* const slot = light_slot_ >= 0 ? &light_slots_[static_cast<unsigned>(light_slot_)] : nullptr;
+        if (slot != nullptr && slot->sun_shown && camera_shafts_ > 0.0f && slot->sun[2] < -0.05f &&
+            slot->width == width && slot->height == height) {
+            const std::array<float, 4>& pr = slot->view.projection;
+            const std::array<float, 4>& vp = slot->view.viewport;
+            const float w = -slot->sun[2];
+            const float ndc_x = (pr[0] * slot->sun[0] + pr[1] * slot->sun[2]) / w;
+            const float ndc_y = (pr[2] * slot->sun[1] + pr[3] * slot->sun[2]) / w;
+            const float stage = stage_sun_ != nullptr && stage_sun_->shafts >= 0.0f ? stage_sun_->shafts : 1.0f;
+            c.sun[0] = vp[0] + (ndc_x + 1.0f) * 0.5f * vp[2];
+            c.sun[1] = vp[1] + (1.0f - ndc_y) * 0.5f * vp[3];
+            c.sun[2] = camera_shafts_ * stage;
+            c.sun[3] = static_cast<float>(height);
+            c.quarter[0] = (width + 3u) / 4u;
+            c.quarter[1] = (height + 3u) / 4u;
+            c.far_depth = slot->view.min_depth;
+            c.sky_distance = sky_distance_;
+            c.depth_params[0] = slot->view.z_scale;
+            c.depth_params[1] = slot->view.z_offset;
+            c.depth_params[2] = slot->view.min_depth;
+            c.depth_params[3] = slot->view.max_depth;
+            // Aerosol (Mie) forward scattering, g 0.76 (Preetham et al. 1999's haze; Nishita et al. 1993).
+            for (unsigned i = 0u; i < 3u; ++i) {
+                c.sun_dir[i] = slot->sun[i];
+            }
+            c.sun_dir[3] = 0.76f;
+            std::copy(pr.begin(), pr.end(), c.projection);
+            std::copy(vp.begin(), vp.end(), c.viewport);
+            list->SetComputeRoot32BitConstants(0u, sizeof(c) / 4u, &c, 0u);
+            list->SetPipelineState(camera_shafts_pso_.Get());
+            list->Dispatch((c.quarter[0] + 7u) / 8u, (c.quarter[1] + 7u) / 8u, 1u);
+            list->ResourceBarrier(1u, &all_uav);
+        }
+        to_state(list, camera_pyramid_[1].Get(), camera_pyramid_states_[1], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     }
     list->OMSetRenderTargets(1u, &target, FALSE, nullptr);
     const D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};

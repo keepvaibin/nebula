@@ -285,9 +285,6 @@ public:
         return lighting_active() ? (model ? glow_model_exposure_ : glow_exposure_) : 1.0f;
     }
     [[nodiscard]] float glow_spill(bool model) const noexcept { return model ? glow_model_spill_ : glow_spill_; }
-    // Under physical light: a glow draw's gain in linear light (GX output_flags bit 5): a table light source's
-    // (`material`) radiance past 1 times the camera's exposure; 1 otherwise (the game's display-referred effects).
-    [[nodiscard]] float glow_gain(std::uint16_t material) const noexcept;
 
 private:
     static constexpr unsigned kResultSlots = 16u;
@@ -606,6 +603,7 @@ private:
         bool camera_known = false;
         std::array<float, 3> sun{};        // towards the traced sun (eye space)
         std::array<float, 3> sun_light{};  // its light
+        bool sun_shown = false;            // the sky shows it (the game's BrightSun, or the sun its sky map holds)
         bool pixels = false;               // light_pixels_ holds its per-pixel normals (physical)
     };
     Microsoft::WRL::ComPtr<ID3D12RootSignature> light_root_;
@@ -717,6 +715,8 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> camera_up_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> camera_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> camera_widen_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> camera_shafts_pso_;
+    float camera_shafts_ = 1.0f;   // GALAXY_RT_CAMERA_SHAFTS: the sun shafts' strength (times the stage's rt-suns shafts)
     // The engine.
     enum EngineBuffer : unsigned {
         kGb0, kGb1, kDiTemp, kDi0, kDi1, kDirect, kGiTemp, kGi0, kGi1, kGiOut, kSpecular, kHistD0, kHistD1, kHistS0,
@@ -735,7 +735,7 @@ private:
     bool engine_specular_ = true;   // GALAXY_RT_ENGINE_SPECULAR
     bool engine_points_ = true;     // GALAXY_RT_ENGINE_POINTS: the game's point lights and the star core
     bool engine_clear_wanted_ = true;  // GALAXY_RT_ENGINE_CLEAR: the clear-surface pass
-    std::uint32_t engine_clear_mode_ = 1u;  // GALAXY_RT_ENGINE_CLEAR: 0 off, 1 on, 2 finds its surfaces only
+    std::uint32_t engine_clear_mode_ = 1u;  // GALAXY_RT_ENGINE_CLEAR: 0 off, 1 on, 2-9 diagnostics (rt_engine.hlsl)
     bool engine_fresh_ = true;      // new buffers: no history
     std::uint32_t engine_view_ = 0;  // GALAXY_RT_ENGINE_VIEW (rt_engine.hlsl kEngineView)
     std::uint32_t engine_width_ = 0;
@@ -775,13 +775,15 @@ private:
         D3D12_GPU_VIRTUAL_ADDRESS draw_textures = 0;
         D3D12_GPU_VIRTUAL_ADDRESS sky_map = 0;
         D3D12_GPU_VIRTUAL_ADDRESS emit_tris = 0;
+        bool tev_records = false;   // the trace had TEV records (else `tev` is the draw table)
+        bool textured = false;      // the trace had its draws' texture table (else `draw_textures` is the draw table)
     };
     EngineBind engine_bind_;
     // Per water draw (rt_engine.hlsl kEvClearDraws): the table's roughness (unorm16; 0xFFFF none), bit 16 the engine's
     // glass (glass or crystal; not mirror glass, not a metal coat).
     std::vector<std::uint32_t> water_clear_;
     // The eye's adaptation as the GPU eased it (rt_lighting.hlsl kAdaptation), read back kResultDelay frames later: the
-    // camera's exposure on the CPU (glow gains).
+    // camera's exposure on the CPU ([rt-stats]).
     static constexpr unsigned kAdaptationReadbacks = 4u;
     Microsoft::WRL::ComPtr<ID3D12Resource> adaptation_readback_;
     std::array<std::uint64_t, kAdaptationReadbacks> adaptation_readback_frame_{};
@@ -1040,6 +1042,9 @@ private:
     D3D12_GPU_VIRTUAL_ADDRESS upload_tev(const std::vector<RtTevMaterial>& records, const std::vector<RtTevStage>& stages,
                                          Allocate allocate, void* allocate_context, RtUpload* uploaded = nullptr,
                                          std::uint64_t* uploaded_bytes = nullptr);
+    // The trace's per-draw tables (draws, their textures, TEV records) again in the recording renderer frame's upload
+    // ring, for the water trace (ray_tracing_water.cpp).
+    void refresh_draw_tables(Allocate allocate, void* allocate_context);
     std::uint32_t sky_triangles_ = 0u;
     std::size_t sky_flushed_draws_ = 0u;
     std::uint32_t sky_flushed_triangles_ = 0u;
@@ -1113,6 +1118,7 @@ private:
     bool sun_held_ = false;
     bool key_valid_ = false;    // set_key_light
     bool key_shown_ = false;
+    bool sun_shown_ = false;   // this trace's sun is one the sky shows (the camera's shafts come from it)
     std::array<float, 3> key_direction_{};
     std::array<float, 3> key_color_{};
     float key_strength_ = 0.0f;

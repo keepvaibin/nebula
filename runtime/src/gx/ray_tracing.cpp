@@ -820,21 +820,6 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     return true;
 }
 
-float SceneRayTracer::glow_gain(std::uint16_t material) const noexcept {
-    if (!physical_active_) {
-        return 1.0f;
-    }
-    // A light source of the table shines at its radiance (its intensity past 1) in the scene's units, seen at the
-    // camera's exposure. The game's other additive effects (sparkles, shafts, flares) are drawn for the display, not
-    // as scene light: as the game drew them (b40 scaled them by the exposure too: Beach Bowl's and Ghostly's blew out).
-    const RtMaterial* const m = rt_material(material);
-    if (m == nullptr || m->emission == RtEmission::None || m->no_light || m->hide) {
-        return 1.0f;
-    }
-    const float exposure = (physical_exposure_ > 0.0f ? physical_exposure_ : 1.0f) * adaptation_cpu_;
-    return std::max(m->intensity, 1.0f) * exposure;
-}
-
 void SceneRayTracer::shutdown() noexcept {
     reflections_.shutdown();
     ready_ = false;
@@ -3725,6 +3710,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         emit_log_sun_ = {c.sun_light[0], c.sun_light[1], c.sun_light[2], c.sun_light[3], keyed ? 1.0f : 0.0f,
                          strength};
         visible_sun = sun_present && !keyed && length > 1e-6f;
+        sun_shown_ = sun_present && (!keyed || key_shown_) && length > 1e-6f;
     }
     // GALAXY_RT_PHYSICAL: the game's own light units. Its planet light lights a surface as material x min(ambient + key
     // x N.L, 1) in display-encoded colour. Every traced surface's colour is its colour at white light (lit draws:
@@ -4320,6 +4306,8 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         engine_bind_.sky_map = sky_traced ? sky_probe_map_->GetGPUVirtualAddress() : positions_->GetGPUVirtualAddress();
         engine_bind_.emit_tris =
             c.tev_info[2] != 0u ? emit_tris_->GetGPUVirtualAddress() : positions_->GetGPUVirtualAddress();
+        engine_bind_.tev_records = tev_table != 0u;
+        engine_bind_.textured = draw_texture_table_ != 0u;
     }
     if (engine) {
         trace_engine(list, allocate, allocate_context, &c, sizeof(c), offsetof(RtLightConstants, engine), upload.gpu,
@@ -4440,6 +4428,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     info.pixels = pixels;
     for (unsigned i = 0; i < 3u; ++i) {
         info.sun[i] = c.sun[i];
+        info.sun_shown = sun_shown_;
         info.sun_light[i] = c.sun_light[i];
     }
     history_camera_ = camera_;

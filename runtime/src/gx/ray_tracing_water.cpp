@@ -124,6 +124,59 @@ void SceneRayTracer::flush_water(ID3D12GraphicsCommandList* list, const RtSource
     }
 }
 
+// The trace wrote its per-draw tables into the upload ring of the renderer frame it ran in; the water trace runs
+// renderer frames later (a game frame spans several), when that space can hold newer uploads, and its reflections and
+// the engine's glass read the draws' textures and TEV records at their hits (stale TEV records there sent texture
+// fetches through garbage views: the GPU hung under Dusty Dune's crystals). Draws noted since the trace only append to
+// the tables, so the trace's indices and counts hold.
+void SceneRayTracer::refresh_draw_tables(Allocate allocate, void* allocate_context) {
+    if (draw_texture_table_ != 0u) {
+        draw_texture_table_ = 0u;
+        if (surface_uv_ && !draw_textures_.empty()) {
+            const std::size_t bytes = draw_textures_.size() * sizeof(draw_textures_[0]);
+            const RtUpload textures = allocate(allocate_context, bytes, 256u);
+            if (textures.cpu != nullptr) {
+                std::memcpy(textures.cpu, draw_textures_.data(), bytes);
+                draw_texture_table_ = textures.gpu;
+            }
+        }
+    }
+    D3D12_GPU_VIRTUAL_ADDRESS draws = 0u;
+    if (draw_table_ != 0u || engine_bind_.valid) {
+        const std::size_t count = std::max<std::size_t>(draw_colors_.size(), 1u);
+        const RtUpload table = allocate(allocate_context, count * sizeof(draw_colors_[0]), 256u);
+        if (table.cpu != nullptr) {
+            if (draw_colors_.empty()) {
+                std::memset(table.cpu, 0, sizeof(draw_colors_[0]));
+            } else {
+                std::memcpy(table.cpu, draw_colors_.data(), draw_colors_.size() * sizeof(draw_colors_[0]));
+            }
+            draws = table.gpu;
+        }
+        draw_table_ = draw_colors_.empty() ? 0u : draws;
+    }
+    const bool physical_tev = reflect_physical_.tev_view != ~0u;
+    RtUpload tev_upload{};
+    std::uint64_t tev_bytes = 0u;
+    const D3D12_GPU_VIRTUAL_ADDRESS tev =
+        physical_tev || (engine_bind_.valid && engine_bind_.tev_records)
+            ? upload_tev(tev_records_, tev_stages_, allocate, allocate_context, &tev_upload, &tev_bytes)
+            : 0u;
+    if (physical_tev) {
+        reflect_physical_.tev_view =
+            tev != 0u && tev_upload.resource != nullptr ? buffer_view(tev_upload.resource, tev_upload.offset, tev_bytes) : ~0u;
+    }
+    if (engine_bind_.valid) {
+        engine_bind_.valid = draws != 0u && (!engine_bind_.tev_records || tev != 0u) &&
+                             (!engine_bind_.textured || draw_texture_table_ != 0u);
+        engine_bind_.draws = draws;
+        engine_bind_.tev = engine_bind_.tev_records ? tev : draws;
+        engine_bind_.draw_textures = engine_bind_.textured ? draw_texture_table_ : draws;
+        engine_bind_.surface_uv =
+            surface_uv_ ? surface_uv_->GetGPUVirtualAddress() : positions_->GetGPUVirtualAddress();
+    }
+}
+
 int SceneRayTracer::trace_water(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
                                 void* allocate_context, D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table,
                                 std::uint32_t width, std::uint32_t height) {
@@ -159,6 +212,7 @@ int SceneRayTracer::trace_water(ID3D12GraphicsCommandList* list, const RtSources
     if (upload.cpu == nullptr) {
         return -1;
     }
+    refresh_draw_tables(allocate, allocate_context);
     to_state(list, water_positions_.Get(), water_positions_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     to_state(list, water_surfaces_.Get(), water_surfaces_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     to_state(list, water_uv_.Get(), water_uv_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);

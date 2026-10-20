@@ -213,9 +213,11 @@ float4 tev_evaluate_mode(uint draw, uint count, uint tri, float2 b, uint mode, o
                 const uint painted_view = g_tev.Load(record + 112u);
                 if (painted_view != 0xFFFFFFFFu && g_up.w > 0.0f && texmap == (g_tev.Load(record + 116u) & 7u)) {
                     const Texture2D<float> painted = ResourceDescriptorHeap[NonUniformResourceIndex(painted_view)];
-                    const float3 lin = select(texel.rgb <= 0.04045f, texel.rgb / 12.92f,
-                                              pow((texel.rgb + 0.055f) / 1.055f, 2.4f)) *
-                                       exp(-painted.SampleLevel(g_wrap_point, coords, 0.0f) * kDelightRange);
+                    float3 lin = select(texel.rgb <= 0.04045f, texel.rgb / 12.92f,
+                                        pow((texel.rgb + 0.055f) / 1.055f, 2.4f)) *
+                                 exp(-painted.SampleLevel(g_wrap_point, coords, 0.0f) * kDelightRange);
+                    // Past 1 it keeps its hue (not each channel clipped).
+                    lin /= max(max(lin.r, max(lin.g, lin.b)), 1.0f);
                     texel.rgb = select(lin <= 0.0031308f, lin * 12.92f, 1.055f * pow(saturate(lin), 1.0f / 2.4f) - 0.055f);
                 }
                 texc = tev_swizzle(int4(round(saturate(texel) * 255.0f)), tex_swizzle);

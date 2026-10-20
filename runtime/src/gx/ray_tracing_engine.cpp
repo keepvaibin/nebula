@@ -43,6 +43,13 @@ constexpr std::uint32_t kEngineSpecular = 2u;
 constexpr std::uint32_t kEngineIndirect = 4u;
 constexpr std::uint32_t kEnginePoints = 256u;
 constexpr std::uint32_t kEngineClearFind = 512u;
+constexpr std::uint32_t kEngineClearNoRay = 1024u;
+constexpr std::uint32_t kEngineClearNoSun = 2048u;
+constexpr std::uint32_t kEngineClearNoBack = 4096u;
+constexpr std::uint32_t kEngineClearNoShade = 8192u;
+constexpr std::uint32_t kEngineHitNoLights = 16384u;
+constexpr std::uint32_t kEngineHitNoSky = 32768u;
+constexpr std::uint32_t kEngineClearNoTev = 65536u;
 
 float env_value(const char* name, float fallback) {
     char value[32]{};
@@ -80,7 +87,7 @@ bool SceneRayTracer::create_engine_pipelines() {
     engine_indirect_ = env_value("GALAXY_RT_ENGINE_INDIRECT", 1.0f) != 0.0f;
     engine_specular_ = env_value("GALAXY_RT_ENGINE_SPECULAR", 1.0f) != 0.0f;
     engine_points_ = env_value("GALAXY_RT_ENGINE_POINTS", 1.0f) != 0.0f;
-    engine_clear_mode_ = static_cast<std::uint32_t>(std::clamp(env_value("GALAXY_RT_ENGINE_CLEAR", 1.0f), 0.0f, 2.0f));
+    engine_clear_mode_ = static_cast<std::uint32_t>(std::clamp(env_value("GALAXY_RT_ENGINE_CLEAR", 1.0f), 0.0f, 9.0f));
     engine_clear_wanted_ = engine_clear_mode_ != 0u;
     if (!engine_wanted_ || !light_textured_ || !light_root_) {
         return false;
@@ -234,6 +241,10 @@ bool SceneRayTracer::engine_prepare(std::uint32_t width, std::uint32_t height, u
     c.size[3] = (height + 1u) / 2u;
     c.info[0] = kEngineOn | (engine_specular_ ? kEngineSpecular : 0u) | (engine_indirect_ ? kEngineIndirect : 0u) |
                 (engine_points_ ? kEnginePoints : 0u) | (engine_clear_mode_ == 2u ? kEngineClearFind : 0u) |
+                (engine_clear_mode_ == 3u ? kEngineClearNoRay : 0u) | (engine_clear_mode_ == 4u ? kEngineClearNoSun : 0u) |
+                (engine_clear_mode_ == 5u ? kEngineClearNoBack : 0u) | (engine_clear_mode_ == 6u ? kEngineClearNoShade : 0u) |
+                (engine_clear_mode_ == 7u ? kEngineHitNoLights : 0u) | (engine_clear_mode_ == 8u ? kEngineHitNoSky : 0u) |
+                (engine_clear_mode_ == 9u ? kEngineClearNoTev : 0u) |
                 (engine_view_ << 4u);
     c.info[1] = 0u;
     c.info[2] = slot;

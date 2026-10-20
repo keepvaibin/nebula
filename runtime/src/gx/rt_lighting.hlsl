@@ -2622,8 +2622,9 @@ bool emitter_visible(float3 start, float3 centre, float radius, float2 du, uint 
 // Whether the sun is seen from `origin` along `direction` (a point inside its disc); the blocker's distance in
 // `blocker` (0: open). `card`: the sample lies on a foliage card, which the cards close beside it do not shade.
 // Candidates a ray's traversal weighs before it takes the one it is at as its hit (bounded work per ray: layered
-// alpha cards, Dusty Dune's hourglass sand, ran a dispatch past the GPU's watchdog).
-static const uint kMaxCandidates = 256u;
+// alpha cards, Dusty Dune's hourglass sand, ran a dispatch past the GPU's watchdog). 64 alpha cards along one ray are
+// as good as a wall.
+static const uint kMaxCandidates = 64u;
 
 bool sun_visible(float3 origin, float3 direction, bool card, uint salt, out float blocker)
 {
@@ -2819,11 +2820,12 @@ float3 emitter_light(float3 p, float3 n, float3 origin, uint candidates, uint se
 
 // A light point's target for resampling at `p` (normal `n`): the luminance of its light there unshadowed, as
 // emitter_light weighs its candidates (eye space).
-float emitter_target(float3 p, float3 n, float3 y, float3 face, float3 radiance, float beam, float sides, out float3 light)
+float emitter_target(float3 p, float3 n, float3 y, float3 face, float3 radiance, float beam, float sides, out float3 light,
+                     float near2 = 1e-4f)
 {
     light = float3(0.0f, 0.0f, 0.0f);
     const float3 to = y - p;
-    const float d2 = max(dot(to, to), 1e-4f);
+    const float d2 = max(dot(to, to), near2);
     const float3 dir = to * rsqrt(d2);
     const float cos_light = emitter_facing(-dot(face, dir), sides);
     const float cos_surface = dot(n, dir);
@@ -3713,9 +3715,14 @@ void reference_material(uint tri, float2 b, out float3 albedo, out float3 emissi
 #endif
     albedo = srgb_to_linear(saturate(albedo));
     const uint2 table = g_draws.Load2(min(draw, max(g_draw_count, 1u) - 1u) * kDrawStride + 8u);
+    bool glows = true;
+#if RT_TEXTURED
+    glows = tev_glows_at(draw, g_tev_info.x, tri, b);
+#endif
     if ((g_flags & kPhysicalFlag) != 0u) {
-        // A light source of the table shows what it sends: its TEV output is its radiance, not a colour under light.
-        if ((table.x & kEmitNamed) != 0u && (table.x & 3u) != 0u && (table.x & kEmitNoLight) == 0u) {
+        // A light source of the table shows what it sends: its TEV output is its radiance, not a colour under light
+        // (an atlas only in the table's glowing region of its texture).
+        if ((table.x & kEmitNamed) != 0u && (table.x & 3u) != 0u && (table.x & kEmitNoLight) == 0u && glows) {
             emission = albedo;
             albedo = float3(0.0f, 0.0f, 0.0f);
         }

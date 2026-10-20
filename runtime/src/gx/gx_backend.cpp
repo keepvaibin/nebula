@@ -7901,6 +7901,16 @@ bool GxBackend::rt_hidden_draw() const noexcept {
     if (debug_hide_phase < 255u && rt_phase_ == static_cast<std::uint8_t>(debug_hide_phase)) {
         return true;
     }
+    // GALAXY_RT_DEBUG_HIDE_MATERIAL_LO/_HI (diagnostics): the draws of the table's materials lo..hi (0: none) are not
+    // drawn under the traced lighting (bisecting a draw by material; mat_id.py names them).
+    // _PHASE: only in that scene phase.
+    static const std::uint64_t debug_hide_lo = read_env_u64("GALAXY_RT_DEBUG_HIDE_MATERIAL_LO", 1u);
+    static const std::uint64_t debug_hide_hi = read_env_u64("GALAXY_RT_DEBUG_HIDE_MATERIAL_HI", 0u);
+    static const std::uint64_t debug_hide_material_phase = read_env_u64("GALAXY_RT_DEBUG_HIDE_MATERIAL_PHASE", 255u);
+    if (current_rt_material_ >= debug_hide_lo && current_rt_material_ <= debug_hide_hi &&
+        (debug_hide_material_phase >= 255u || rt_phase_ == static_cast<std::uint8_t>(debug_hide_material_phase))) {
+        return true;
+    }
     // The game's own mirror copies drawn after the trace (Mario's reflection under Freezeflame's ice:
     // MarioActor::drawReflectModel in the indirect phase) carry a mirrored position matrix. Under traced
     // reflections they doubled what the trace reflects (two Marios, user); GALAXY_RT_KEEP_GAME_MIRRORS=1 keeps them.
@@ -15027,14 +15037,27 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         GxPsConstants ps_c{};
         fill_ps_constants(state_, ps_c);
         ps_c.ztex_params[1] = 1.0f / static_cast<float>(renderer_.efb_scale());
-        // A glow's gain (output_flags bit 5): under physical light a light source's radiance times the exposure (else
-        // 1); the art model's glow exposure otherwise. The lighting texture's scale (bit 6).
-        // A light source's radiance only on its model's surface (glow_kind_ 2); a sprite's halo as the game drew it.
+        // A glow's gain (output_flags bit 5): under physical light 1 (the game's additive effects as it drew them:
+        // their light reaches the scene as the engine's emitting geometry; raised to a light source's radiance times
+        // the exposure, b40-b71, their whole halos saturated into white blobs); the art model's glow exposure otherwise.
+        // The lighting texture's scale (bit 6).
         ps_c.ztex_params[2] = (ps_key_.output_flags & 0x20u) == 0u ? 0.0f
-                              : renderer_.rt_physical()
-                                  ? (glow_kind_ == 2u ? renderer_.rt_glow_gain(current_rt_material_) : 1.0f)
-                                  : renderer_.rt_glow_exposure(glow_kind_ == 2u);
+                              : renderer_.rt_physical() ? 1.0f
+                                                        : renderer_.rt_glow_exposure(glow_kind_ == 2u);
         ps_c.ztex_params[3] = (ps_key_.output_flags & 0x40u) != 0u ? renderer_.rt_light_texture_scale() : 0.0f;
+        // GALAXY_RT_LOG_GLOWS=1: each scene draw's material once per phase, glow kind and lighting texture (mat_id.py
+        // names the material).
+        if (scene_phase_ && rt_log_glows()) [[unlikely]] {
+            static std::set<std::uint64_t> logged;
+            const std::uint64_t key = (static_cast<std::uint64_t>(current_rt_material_) << 24u) |
+                                      (static_cast<std::uint64_t>(rt_phase_) << 8u) | glow_kind_ |
+                                      (ps_c.ztex_params[3] > 0.0f ? 0x80u : 0u);
+            if (logged.insert(key).second) {
+                std::fprintf(stderr, "[rt-draw-material] material=%u phase=%u kind=%u gain=%.2f lit-scale=%.3f\n",
+                             static_cast<unsigned>(current_rt_material_), static_cast<unsigned>(rt_phase_),
+                             static_cast<unsigned>(glow_kind_), ps_c.ztex_params[2], ps_c.ztex_params[3]);
+            }
+        }
         apply_uber_ps_key(ps_key_, ps_c);
         if ((ps_key_.reserved & kPsKeyEnhancedLighting) != 0u) {
             std::uint32_t column = 0u;

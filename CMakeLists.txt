@@ -764,7 +764,7 @@ endforeach()
 # The camera of the ray-traced picture: bloom and the tone curve from the HDR scene EFB (runtime/src/gx/rt_camera.hlsl).
 set(galaxy_rt_camera_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/gx/rt_camera.hlsl")
 foreach(galaxy_rt_pass camera_down_cs:CameraDownCS:cs_6_5 camera_up_cs:CameraUpCS:cs_6_5 camera_vs:CameraVS:vs_6_0
-        camera_ps:CameraPS:ps_6_0 camera_widen_ps:CameraWidenPS:ps_6_0)
+        camera_ps:CameraPS:ps_6_0 camera_widen_ps:CameraWidenPS:ps_6_0 camera_shafts_cs:CameraShaftsCS:cs_6_0)
     string(REPLACE ":" ";" galaxy_rt_pair "${galaxy_rt_pass}")
     list(GET galaxy_rt_pair 0 galaxy_rt_name)
     list(GET galaxy_rt_pair 1 galaxy_rt_entry)

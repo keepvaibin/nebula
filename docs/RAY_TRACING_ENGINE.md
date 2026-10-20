@@ -68,23 +68,30 @@ slot, rewritten each frame: no root-signature limits).
 
 | # | Pass | Resolution | Output |
 |---|---|---|---|
-| E1 | GBufferCS | full | normal (oct16x2), face normal, albedo (linear, de-lit: EFB colour x exp(-painted shading)), roughness, metallic, class, emission, eye z, draw id |
+| E1 | GBufferCS | full | normal (oct16x2), face normal, albedo (linear, de-lit: EFB colour x exp(-painted shading), the painted reflection out per channel, past 1 scaled by its brightest channel: hue kept), roughness, metallic, class, emission (only inside the table's glowing region of an atlas), eye z, draw id |
 | E2 | DirectInitialCS | full | the sun's disc (one direction, a shadow ray; its specular lobe at least the disc wide); ReSTIR DI: 4 (8 high) light candidates (emissive triangles and the game's point lights by power), temporal reuse (reprojected, M cap 20 x candidates, depth / normal checks) |
 | E3 | DirectSpatialCS | full | 4 spatial neighbours (30 px, normal > 0.9, depth 10%), final shadow ray, diffuse irradiance and specular (GGX) of the kept light; visibility reuse (occluded: W 0, M kept); reservoir stored in world space |
-| E4 | IndirectCS | half (one pixel per 2x2, rotating) | cosine ray; hit: emission + albedo x (sun with a shadow ray + one emitter by RIS with a shadow ray + sky SH); miss: sky radiance. ReSTIR GI temporal + spatial reuse (sample point, normal, radiance; Jacobian for the spatial) |
+| E4 | IndirectCS | half (one pixel per 2x2, rotating) | cosine ray; hit: emission + albedo x (sun with a shadow ray + one emitter by RIS with a shadow ray + sky SH); miss: sky radiance. ReSTIR GI temporal + spatial reuse (sample point, normal, radiance; Jacobian for the spatial, neighbours past tenfold rejected). The temporal reservoirs are the history; the spatial ones live one frame (fed back, their biased gain compounded into white blobs: Beach Bowl, the Garden doorway, b40-b75) |
 | E5 | SpecularCS | full | GGX VNDF ray, hit shaded as E4 (emission, sun, lights by RIS, sky ray) |
 | E5b | ClearCS (the water's trace) | full | the water window's glass and crystal by their own geometry (closest-hit traversal of the water acceleration structure): up to two thin walls along the camera ray (front, far side), each R = 2F/(1+F), T = (1-F)/(1+F) of the exact dielectric Fresnel (n 1.5), a traced GGX reflection and the sun's highlight; ClearCompositePS with the water's composite: picture behind x T + R, exposed. A `traced` material's game draw is hidden but still captured |
-| E6 | DenoiseTemporalCS | full | diffuse (demodulated) and specular histories, reprojection by depth / normal / draw id, moments, history length; variance clipping of specular history |
-| E7 | DenoiseAtrousCS x4 | full | variance-guided a-trous (steps 1, 2, 4, 8): depth plane, normal^64, luminance / sqrt(variance); half-res GI joins through a joint bilateral upsample in the first step; a reflection spreads no wider than its lobe (none below roughness 0.05, full from 0.3) |
+| E6 | DenoiseTemporalCS | full | diffuse (demodulated) and specular histories, reprojection by depth / normal / draw id, moments, history length; variance clipping of specular history; a new sample brighter than all 8 neighbours lowered to their brightest (fireflies) |
+| E7 | DenoiseAtrousCS x4 | full | variance-guided a-trous (steps 1, 2, 4, 8): depth plane, normal^p (p 2 at one frame of history to 64 from eight: moving characters), luminance / sqrt(variance); half-res GI joins through a joint bilateral upsample in the first step; a reflection spreads no wider than its lobe (none below roughness 0.05, full from 0.3) |
 | E8 | CompositePS | full | albedo x diffuse + specular + emission, x exposure, sRGB-encoded into the HDR scene EFB |
-| E9 | Emission (camera) | full | glow-volume emitters drawn at radiance (rt_camera.hlsl) |
-| E10 | Camera | full | adaptation from the scene's log luminance, bloom, tone curve |
+| E9 | The game's additive draws | full | drawn as the game drew them (gain 1): halos, sparks, number plates, flames are display effects; their light reaches the scene as emitting geometry (raised to radiance x exposure, b40-b71, whole halos saturated into white blobs) |
+| E10 | Camera | full | adaptation from the scene's log luminance, bloom, sun shafts (screen-space radial gather from a visible sun, quarter resolution, weighted by Henyey-Greenstein g 0.76 forward scattering of the pixel's angle from the sun and the air in front of its surface, 1 - exp(-d / sky distance); samples above 8 clamped), tone curve |
 
 Translucent draws after the composite read the diffuse irradiance as the light texture (the existing interface).
 Sub-frames re-run E8 per sub-frame with reprojection from their traced slot (kLightSlots results kept: diffuse,
 specular, eye z, camera).
 
-Robustness: every non-opaque traversal weighs at most 256 candidates, then takes the one it is at as its hit (layered
+The water's trace runs renderer frames after the trace (a game frame spans several): the draws' tables (draw table,
+texture table, TEV records) it and the glass pass read are uploaded again into its own frame's ring
+(refresh_draw_tables); read from the trace's ring, since reused, they hung the GPU under Dusty Dune's crystals.
+
+Emitting triangles: nearer than its own size (d^2 < A / pi) a triangle lights a point as its near field (at most about
+its radiance), not 1 / d^2.
+
+Robustness: every non-opaque traversal weighs at most 64 candidates, then takes the one it is at as its hit (layered
 alpha cards, Dusty Dune's hourglass sand, ran a dispatch past the GPU watchdog); no ray is traced with an empty span.
 A depth clear through a flattened viewport restarts the traced scene only before its trace (Good Egg clears the depth
 late: the restart closed the water window untraced).
@@ -98,7 +105,8 @@ late: the restart closed the water window untraced).
   a shadow ray for the reused sample.
 - Denoiser: SVGF (Schied 2017) with ReLAX's history clamping for specular; history length cap 32 (diffuse), 16
   (specular).
-- Russian roulette / clamps: none on the primary estimators; a firefly clamp only on history input (5 sigma).
+- Russian roulette / clamps: none on the primary estimators; firefly rejection on the history input (a sample above
+  all 8 neighbours lowered to their brightest).
 
 ## 7. Deleted when E1-E10 pass verification
 TraceCS, TemporalCS, SpatialA/M/BCS, the art composite path, CaptureCS's picture feedback, GlowEmitCS / AuthoredEmitCS
