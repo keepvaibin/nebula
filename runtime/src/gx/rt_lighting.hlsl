@@ -224,6 +224,9 @@ static const uint kClearClass = 7u;
 // The lighting multiplies the game's colour by at most this; the composite rolls it off on a film
 // shoulder from kLitKnee (apply_light).
 static const float kMaxLight = 8.0f;
+// Under physical light the light is scene light (the HDR scene EFB, the camera's tone curve at the scene's end): a bound
+// only, 12 stops over white, in the half floats' range.
+static const float kMaxPhysicalLight = 4096.0f;
 // Daytime (SpatialBCS): a cast shadow's depth, the sun's darkening of faces turned from it, the sky
 // occlusion's depth and the sky colour's share in shade. Faces turned from the sun at 0.7 of the sunlit ones
 // and shade 40 % towards the sky's cool hue: the ground reads lit by a sun, not dimmed (user, v53a).
@@ -4582,7 +4585,7 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
                 m = (exposure * max(asfloat(emission.y), 1.0f)).xxx;
             }
         }
-        m = min(m, kMaxLight);
+        m = min(m, kMaxPhysicalLight);
         g_final[index] = uint4(f32tof16(m.r) | (f32tof16(m.g) << 16u), f32tof16(m.b) | (f32tof16(1.0f) << 16u), asuint(z),
                                f32tof16(visible));
         return;
@@ -5446,19 +5449,20 @@ CompositeOut CompositePS(float4 position : SV_Position)
         sun_turn += turn * bw;
         weight += bw;
     }
-    float3 m = clamp(weight > 1e-3f ? sum / weight : nearest, 0.0f, kMaxLight);
+    float3 m = clamp(weight > 1e-3f ? sum / weight : nearest, 0.0f, per_pixel ? kMaxPhysicalLight : kMaxLight);
     if (per_pixel) {
-        // The per-pixel sun, then the film path (no relief: the normals are the surface's own).
-        m = clamp(m + m_sun_light.rgb * (weight > 1e-3f ? sun_turn / weight : nearest_turn), 0.0f, kMaxLight);
+        // The per-pixel sun (no relief: the normals are the surface's own).
+        m = clamp(m + m_sun_light.rgb * (weight > 1e-3f ? sun_turn / weight : nearest_turn), 0.0f, kMaxPhysicalLight);
         if ((m_flags & 2u) != 0u) {
             result.color = float4(m * 0.5f, 1.0f);
             return result;
         }
         // The texel's albedo: the light painted into it taken out (rt_delight.hlsl), the traced light in its place.
-        // Its painted reflection taken out too where the traced one replaces it (environment maps).
+        // Its painted reflection taken out too where the traced one replaces it (environment maps). The scene light
+        // into the HDR scene EFB unclamped: the camera's tone curve at the scene's end brings it to the display.
         const float3 albedo = srgb_to_linear(color) * (delit != 0u ? exp(-unpack_pixel_shading(delit)) : 1.0f) *
                               ((m_flags & 16u) != 0u ? traced_own(traced_pixel) : 1.0f);
-        result.color = float4(linear_to_srgb(film_light(albedo, m)), 1.0f);
+        result.color = float4(linear_to_srgb(albedo * m), 1.0f);
         return result;
     }
     // Relief: the texture's detail as height (its brightness, m_sun.w eye units at white) bends the

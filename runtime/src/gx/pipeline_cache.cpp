@@ -520,7 +520,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_gx_pso_desc_impl(
         break;
     }
     pd.NumRenderTargets      = 1;
-    pd.RTVFormats[0]         = kEfbColorFormat;
+    pd.RTVFormats[0]         = (rs.samples_log2 & kEfbVariantHdr) != 0u ? kEfbHdrColorFormat : kEfbColorFormat;
     if ((bb & kRenderStateMotionTarget) != 0u) {
         // Opaque motion writer: render target 1 takes the motion vectors
         // with render target 0's write mask (independent blend off).
@@ -542,7 +542,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_gx_pso_desc_impl(
         mask.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_RED;
     }
     pd.DSVFormat             = kEfbDepthFormat;
-    pd.SampleDesc.Count      = 1u << rs.samples_log2;
+    pd.SampleDesc.Count      = 1u << (rs.samples_log2 & kEfbVariantSamplesMask);
 
     return pd;
 }
@@ -596,7 +596,7 @@ std::wstring pso_library_name(const PsoKey& key) {
         static_cast<unsigned>(key.render_state.primitive_topology));
     std::wstring result = name;
     if (key.render_state.samples_log2 != 0u) {
-        // Multisampled: its own entry (single-sample names stay as they were, so existing libraries still hit).
+        // Multisampled or HDR: its own entry (single-sample names stay as they were, so existing libraries still hit).
         result += L"_m" + std::to_wstring(key.render_state.samples_log2);
     }
     return result;
@@ -1440,7 +1440,7 @@ constexpr std::size_t kCacheCoverageAppendBatch = 64u;
 bool valid_pso_key(const PsoKey& key) {
     const auto& state = key.render_state;
     return state.primitive_topology >= 1u && state.primitive_topology <= 3u &&
-        state.cull <= 3u && state.pixfmt <= 7u && state.samples_log2 <= 3u &&
+        state.cull <= 3u && state.pixfmt <= 7u && state.samples_log2 <= 7u &&
         (state.blend_bits & 0x80000000u) == 0u && (state.zmode_bits & ~0x1fu) == 0u &&
         std::all_of(std::begin(state.reserved), std::end(state.reserved),
             [](std::uint8_t value) { return value == 0u; });

@@ -222,6 +222,11 @@ static_assert(std::has_unique_object_representations_v<VertexShaderKey>);
 
 // Fixed-function PSO state. It affects pipeline creation only, never HLSL codegen. Kept apart
 // from the shader keys so one compiled shader pair is shared across blend and depth variants.
+// RenderStateKey::samples_log2 bit 2: the draw renders into the ray tracer's HDR scene EFB (RGBA16F, the scene
+// layer while ray tracing runs) rather than the RGBA8 EFB. Ray tracing runs without MSAA: the bits never combine.
+inline constexpr std::uint8_t kEfbVariantHdr = 4u;
+inline constexpr std::uint8_t kEfbVariantSamplesMask = 3u;
+
 struct RenderStateKey {
     std::uint32_t blend_bits;       // bit27 dual-source alpha, bit28 constant
                                     // EFB alpha overwrite; PE_CMODE0/1 fields
@@ -230,7 +235,8 @@ struct RenderStateKey {
     std::uint8_t cull;              // CullMode
     std::uint8_t pixfmt;            // PeControl pixel format (dst-alpha cap)
     std::uint8_t primitive_topology; // D3D12_PRIMITIVE_TOPOLOGY_TYPE value
-    std::uint8_t samples_log2;      // the EFB's samples per pixel (MSAA), as a power of two; 0 for one
+    std::uint8_t samples_log2;      // the EFB's variant: bits 0-1 its samples per pixel (MSAA) as a power of
+                                    // two (0 for one), bit 2 kEfbVariantHdr
     std::uint8_t reserved[6];
 
     // Field-wise, not the byte-wise `key_bytes_equal` form.

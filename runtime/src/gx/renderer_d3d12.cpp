@@ -825,7 +825,8 @@ static constexpr unsigned    kSrvPerFrame = 32768u;
 // SRV indices are independent of this prefix.
 // EFB, output EFB and sub-frame EFB conversion sources; the ray-traced scenes' texture views.
 static constexpr unsigned    kRtTextureViews = SceneRayTracer::kTextureViewScenes * SceneRayTracer::kTextureViewsPerScene;
-static constexpr unsigned    kPersistentSrvDescriptors = 6u + kRtTextureViews + SceneRayTracer::kDelightViews;
+// The EFB's views, the output EFB's, the MSAA depth's, then the HDR scene EFBs' (live and sub-frame): 10.
+static constexpr unsigned    kPersistentSrvDescriptors = 10u + kRtTextureViews + SceneRayTracer::kDelightViews;
 
 void RendererD3D12::wait_for_gpu() {
     const std::uint64_t val = ++next_fence_value_;
@@ -1779,7 +1780,7 @@ void RendererD3D12::sync_post_process_settings() {
 }
 
 void RendererD3D12::apply_pending_efb_scale() {
-    if (!device_ || !efb_color_ || output_efb_active_) {
+    if (!device_ || !efb_color_ || output_efb_active_ || efb_hdr_) {
         return;
     }
     const RenderConfig render = get_render_config();
@@ -1856,12 +1857,14 @@ bool RendererD3D12::efb_scale_fits_memory(unsigned scale) const {
             0u, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &info)) || info.Budget == 0u) {
         return true;
     }
-    // Scale-dependent residency: EFB color + depth (8 bytes per pixel) and,
-    // at most, the XFB pair plus one full-picture copy (12 bytes per pixel of
-    // the 640x456 picture). Everything else is independent of the scale.
-    const auto scaled_bytes = [](unsigned s) {
+    // Scale-dependent residency: EFB color + depth (8 bytes per pixel; with ray
+    // tracing the HDR scene EFB's 12 more) and, at most, the XFB pair plus one
+    // full-picture copy (12 bytes per pixel of the 640x456 picture). Everything
+    // else is independent of the scale.
+    const double efb_bytes = ray_tracer_.ready() ? 20.0 : 8.0;
+    const auto scaled_bytes = [efb_bytes](unsigned s) {
         const double area = static_cast<double>(s) * s;
-        return area * (static_cast<double>(kEfbWidth) * kEfbHeight * 8.0 +
+        return area * (static_cast<double>(kEfbWidth) * kEfbHeight * efb_bytes +
                        static_cast<double>(kEfbWidth) * 456.0 * 12.0);
     };
     const double needed = scaled_bytes(scale) - scaled_bytes(efb_scale_);
@@ -1922,9 +1925,9 @@ bool RendererD3D12::create_clear_pipeline() {
 }
 
 ID3D12PipelineState* RendererD3D12::clear_pipeline(bool color) {
-    const std::uint8_t samples_log2 = efb_samples_log2();
+    const std::uint8_t variant = efb_variant();
     ComPtr<ID3D12PipelineState>& pipeline =
-        (color ? clear_rgb_pipelines_ : clear_alpha_pipelines_)[samples_log2];
+        (color ? clear_rgb_pipelines_ : clear_alpha_pipelines_)[variant];
     if (pipeline) {
         return pipeline.Get();
     }
@@ -1939,8 +1942,8 @@ ID3D12PipelineState* RendererD3D12::clear_pipeline(bool color) {
     pd.DepthStencilState.DepthEnable = FALSE;
     pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     pd.NumRenderTargets = 1;
-    pd.RTVFormats[0] = kEfbColorFormat;
-    pd.SampleDesc.Count = 1u << samples_log2;
+    pd.RTVFormats[0] = (variant & kEfbVariantHdr) != 0u ? kEfbHdrColorFormat : kEfbColorFormat;
+    pd.SampleDesc.Count = 1u << (variant & kEfbVariantSamplesMask);
     pd.BlendState.RenderTarget[0].RenderTargetWriteMask = color
         ? D3D12_COLOR_WRITE_ENABLE_RED | D3D12_COLOR_WRITE_ENABLE_GREEN | D3D12_COLOR_WRITE_ENABLE_BLUE
         : D3D12_COLOR_WRITE_ENABLE_ALPHA;
@@ -4454,7 +4457,8 @@ static constexpr char kMotionDebugPs[] =
     " return float4(saturate(0.5+m.x/16.0),saturate(0.5+m.y/16.0),0.5,1.0);}";
 
 void RendererD3D12::record_motion_debug_view() {
-    if (!motion_target_) {
+    // Its pipeline draws to the RGBA8 EFB.
+    if (!motion_target_ || efb_hdr_) {
         return;
     }
     if (!motion_debug_pipeline_) {
@@ -4828,7 +4832,11 @@ void RendererD3D12::reconcile_ray_tracing() {
         return;
     }
     if (!wanted) {
-        // Recorded sub-frame replays composite the tracer's results: none may run again.
+        // Recorded sub-frame replays composite the tracer's results: none may run again. A scene left open in the
+        // HDR scene EFB gives the EFB back as it was.
+        if (efb_hdr_) {
+            swap_efb_with(hdr_scene_efb_);
+        }
         wait_for_gpu();
         for (ReplayList& entry : replay_lists_) {
             entry.sequence = 0u;
@@ -4841,7 +4849,8 @@ void RendererD3D12::reconcile_ray_tracing() {
     std::size_t length = 0u;
     const bool validate =
         getenv_s(&length, value, sizeof(value), "GALAXY_RT_VALIDATE") == 0 && length > 1u && value[0] == '1';
-    rt_start_failed_ = !ray_tracer_.initialize(device_.Get(), timestamp_frequency_, validate, kEfbColorFormat);
+    rt_start_failed_ =
+        !ray_tracer_.initialize(device_.Get(), timestamp_frequency_, validate, kEfbHdrColorFormat, kEfbColorFormat);
 }
 
 RtSources RendererD3D12::rt_sources() const {
@@ -4977,7 +4986,7 @@ void RendererD3D12::rt_trace_scene() {
         command_list_->ResourceBarrier(1, &color);
     }
     D3D12_GPU_DESCRIPTOR_HANDLE game_srv{};
-    if (depth && slot >= 0) {
+    if (depth && slot >= 0 && efb_hdr_) {
         game_srv = rt_composite_color();
         ray_tracer_.composite(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_, game_srv, width,
                               desc.Height, slot, false, efb_scale_);
@@ -5044,9 +5053,12 @@ void RendererD3D12::rt_capture_picture() {
     }
     command_list_->ResourceBarrier(2, barriers);
     bound_pipeline_ = nullptr;
+    // The camera turns the HDR scene EFB's light into the EFB's picture.
+    end_hdr_scene();
     // The glows' bloom (what the emitters added), then the cinematic finish over it, join the
-    // picture before the 2D layer; sub-frames replay both.
-    if (const int bloom = ray_tracer_.bloom_slot(); bloom >= 0) {
+    // picture before the 2D layer; sub-frames replay both. Under physical light the camera's bloom,
+    // from the light itself, stands in for the glow bloom.
+    if (const int bloom = ray_tracer_.physical_active() ? -1 : ray_tracer_.bloom_slot(); bloom >= 0) {
         record_rt_bloom(bloom);
         if (replay_recording_) {
             replay_ops_.push_back({ReplayKind::RtBloom, static_cast<std::uint32_t>(bloom)});
@@ -5091,6 +5103,118 @@ void RendererD3D12::record_rt_post(bool replay) {
     invalidate_gx_bindings();
     bound_rt_aux_ = 0xFFu;
     bound_pipeline_ = nullptr;
+}
+
+void RendererD3D12::begin_hdr_scene() {
+    if (efb_hdr_ || output_efb_active_ || efb_msaa_.samples > 1u || !efb_color_ || !efb_depth_ ||
+        conv_efb_color_srv_.ptr == 0u || !ray_tracer_.ready() || !ray_tracer_.camera_ready()) {
+        return;
+    }
+    if (replay_recording_) {
+        replay_ops_.push_back({ReplayKind::HdrBegin, 0u});
+    }
+    record_hdr_begin();
+}
+
+void RendererD3D12::end_hdr_scene() {
+    if (!efb_hdr_) {
+        return;
+    }
+    if (replay_recording_) {
+        replay_ops_.push_back({ReplayKind::HdrEnd, 0u});
+    }
+    record_hdr_end();
+}
+
+// The HDR scene EFB stands in: the EFB's colour so far widened into it (a draw: the formats differ), its depth copied;
+// then the two swap (the set keeps the RGBA8 EFB meanwhile). Sub-frames use their own set (a later frame's scene may
+// be open while they play).
+void RendererD3D12::record_hdr_begin() {
+    if (efb_hdr_) {
+        return;
+    }
+    EfbTargetSet& set = replay_playing_ ? replay_hdr_efb_ : hdr_scene_efb_;
+    if (!set.color || !set.hdr || set.scale != efb_scale_) {
+        if (!create_efb_set(set, replay_playing_ ? replay_hdr_rtv_heap_ : hdr_scene_rtv_heap_,
+                            replay_playing_ ? replay_hdr_dsv_heap_ : hdr_scene_dsv_heap_, efb_scale_, true, false, 1u,
+                            true)) {
+            static bool reported = false;
+            if (!std::exchange(reported, true)) {
+                std::cerr << "[rt] HDR scene EFB allocation failed: the scene stays in the RGBA8 EFB\n";
+            }
+            return;
+        }
+    }
+    const D3D12_RESOURCE_DESC desc = efb_color_->GetDesc();
+    D3D12_RESOURCE_BARRIER barriers[3]{};
+    for (D3D12_RESOURCE_BARRIER& barrier : barriers) {
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    }
+    barriers[0].Transition.pResource = efb_color_.Get();
+    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    barriers[1].Transition.pResource = efb_depth_.Get();
+    barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
+    barriers[2].Transition.pResource = set.depth.Get();
+    barriers[2].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    barriers[2].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+    command_list_->ResourceBarrier(3u, barriers);
+    dred_marker(command_list_.Get(), L"hdr scene begin");
+    const bool widened = ray_tracer_.camera_widen(command_list_.Get(), conv_efb_color_srv_, set.rtv,
+                                                  static_cast<std::uint32_t>(desc.Width), desc.Height);
+    command_list_->CopyResource(set.depth.Get(), efb_depth_.Get());
+    for (D3D12_RESOURCE_BARRIER& barrier : barriers) {
+        std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
+    }
+    command_list_->ResourceBarrier(3u, barriers);
+    command_list_->SetGraphicsRootSignature(root_signature_.Get());
+    bound_pipeline_ = nullptr;
+    bound_rt_aux_ = 0xFFu;
+    if (!widened) {
+        invalidate_gx_bindings();
+        return;
+    }
+    swap_efb_with(set);
+}
+
+// The camera writes the HDR scene EFB's picture into the RGBA8 EFB (held by the set), its depth is copied back, and
+// the two swap again.
+void RendererD3D12::record_hdr_end() {
+    if (!efb_hdr_) {
+        return;
+    }
+    EfbTargetSet& set = replay_playing_ ? replay_hdr_efb_ : hdr_scene_efb_;
+    const D3D12_RESOURCE_DESC desc = efb_color_->GetDesc();
+    D3D12_RESOURCE_BARRIER barriers[3]{};
+    for (D3D12_RESOURCE_BARRIER& barrier : barriers) {
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    }
+    barriers[0].Transition.pResource = efb_color_.Get();
+    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barriers[0].Transition.StateAfter =
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    barriers[1].Transition.pResource = efb_depth_.Get();
+    barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    barriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
+    barriers[2].Transition.pResource = set.depth.Get();
+    barriers[2].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    barriers[2].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+    command_list_->ResourceBarrier(3u, barriers);
+    dred_marker(command_list_.Get(), L"hdr scene camera");
+    ray_tracer_.camera_finish(command_list_.Get(), conv_efb_color_srv_, set.rtv,
+                              static_cast<std::uint32_t>(desc.Width), desc.Height);
+    command_list_->CopyResource(set.depth.Get(), efb_depth_.Get());
+    for (D3D12_RESOURCE_BARRIER& barrier : barriers) {
+        std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
+    }
+    command_list_->ResourceBarrier(3u, barriers);
+    command_list_->SetGraphicsRootSignature(root_signature_.Get());
+    bound_pipeline_ = nullptr;
+    bound_rt_aux_ = 0xFFu;
+    swap_efb_with(set);
 }
 
 void RendererD3D12::record_rt_bloom(int slot) {
@@ -5213,7 +5337,7 @@ void RendererD3D12::rt_trace_water() {
                                              conv_efb_color_srv_, width, desc.Height);
     std::swap(barriers[0].Transition.StateBefore, barriers[0].Transition.StateAfter);
     command_list_->ResourceBarrier(1, &barriers[0]);
-    if (slot >= 0) {
+    if (slot >= 0 && efb_hdr_) {
         const D3D12_GPU_DESCRIPTOR_HANDLE scene = rt_copy_color(rt_water_copy_, L"rt water scene");
         ray_tracer_.composite_water(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_, width, desc.Height, slot,
                                     false, scene, rt_opaque_srv_);
@@ -5230,7 +5354,7 @@ void RendererD3D12::rt_trace_water() {
 }
 
 void RendererD3D12::record_rt_water(int slot, bool reproject) {
-    if (!efb_depth_ || conv_efb_depth_srv_.ptr == 0u) {
+    if (!efb_depth_ || conv_efb_depth_srv_.ptr == 0u || !efb_hdr_) {
         return;
     }
     D3D12_RESOURCE_BARRIER barrier{};
@@ -5253,7 +5377,7 @@ void RendererD3D12::record_rt_water(int slot, bool reproject) {
 }
 
 void RendererD3D12::record_rt_composite(int slot, bool reproject) {
-    if (!efb_depth_ || conv_efb_depth_srv_.ptr == 0u) {
+    if (!efb_depth_ || conv_efb_depth_srv_.ptr == 0u || !efb_hdr_) {
         return;
     }
     D3D12_RESOURCE_BARRIER barrier{};
@@ -6664,6 +6788,12 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
             case ReplayKind::SceneAo:
                 record_scene_ao();
                 break;
+            case ReplayKind::HdrBegin:
+                record_hdr_begin();
+                break;
+            case ReplayKind::HdrEnd:
+                record_hdr_end();
+                break;
             }
             if (op.kind == ReplayKind::Copy) {
                 const ReplayCopy& copy = run_copies_[op.index];
@@ -7476,7 +7606,7 @@ void RendererD3D12::write_efb_set_views(EfbTargetSet& set, const DescriptorRing:
     view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
     view.Texture2D.MipLevels = 1u;
-    view.Format = kEfbColorFormat;
+    view.Format = set.hdr ? kEfbHdrColorFormat : kEfbColorFormat;
     device_->CreateShaderResourceView(set.color.Get(), &view, table.cpu);
     auto depth_cpu = table.cpu;
     depth_cpu.ptr += stride;
@@ -7491,7 +7621,7 @@ void RendererD3D12::write_efb_set_views(EfbTargetSet& set, const DescriptorRing:
 bool RendererD3D12::create_efb_set(
     EfbTargetSet& set, ComPtr<ID3D12DescriptorHeap>& rtv_heap,
     ComPtr<ID3D12DescriptorHeap>& dsv_heap, unsigned scale, bool persistent_views,
-    bool unordered_access, unsigned samples) {
+    bool unordered_access, unsigned samples, bool hdr) {
     const UINT w = kEfbWidth * scale;
     const UINT h = kEfbHeight * scale;
     if (set.color) {
@@ -7518,18 +7648,19 @@ bool RendererD3D12::create_efb_set(
     rd.Height = h;
     rd.DepthOrArraySize = 1;
     rd.MipLevels = 1;
-    rd.Format = kEfbColorFormat;
+    rd.Format = hdr ? kEfbHdrColorFormat : kEfbColorFormat;
     rd.SampleDesc.Count = 1;
     rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET |
                (unordered_access ? D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS : D3D12_RESOURCE_FLAG_NONE);
     D3D12_CLEAR_VALUE cv{};
-    cv.Format = kEfbColorFormat;
+    cv.Format = rd.Format;
     cv.Color[3] = 1.0f;
     if (FAILED(device_->CreateCommittedResource(
             &hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_RENDER_TARGET,
             &cv, IID_PPV_ARGS(&set.color)))) {
         return false;
     }
+    set.hdr = hdr;
     rd.Format = kEfbDepthResourceFormat;
     rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
     D3D12_CLEAR_VALUE dcv{};
@@ -7567,6 +7698,7 @@ void RendererD3D12::swap_efb_with(EfbTargetSet& other) {
     std::swap(efb_depth_, other.depth);
     std::swap(efb_msaa_, other.msaa);
     std::swap(efb_scale_, other.scale);
+    std::swap(efb_hdr_, other.hdr);
     std::swap(efb_rtv_, other.rtv);
     std::swap(efb_dsv_, other.dsv);
     std::swap(conv_efb_source_table_, other.conv_table);
@@ -7584,6 +7716,7 @@ void RendererD3D12::swap_efb_sets() {
     std::swap(efb_depth_, alt_efb_.depth);
     std::swap(efb_msaa_, alt_efb_.msaa);
     std::swap(efb_scale_, alt_efb_.scale);
+    std::swap(efb_hdr_, alt_efb_.hdr);
     std::swap(efb_rtv_, alt_efb_.rtv);
     std::swap(efb_dsv_, alt_efb_.dsv);
     std::swap(conv_efb_source_table_, alt_efb_.conv_table);
@@ -7859,6 +7992,7 @@ void RendererD3D12::record_scene_ao() {
     in.efb_scale = efb_scale_;
     in.color_rtv = efb_rtv_;
     in.samples = efb_msaa_.samples;
+    in.hdr = efb_hdr_;
     in.view = scene_ao_view_;
     in.timing_slot = replay_playing_ ? -1 : static_cast<int>(frame_slot_);
     dred_marker(command_list_.Get(), L"ambient occlusion");
@@ -8543,6 +8677,8 @@ void RendererD3D12::copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& des
     if (!dest.texture) {
         throw std::runtime_error("XFB copy has no destination texture");
     }
+    // A scene still in the HDR scene EFB (no scene end before the display copy): the camera first.
+    end_hdr_scene();
     ++efb_copy_requests_;
     // Another XFB or texture copy can overwrite the shared CPU RTV slot.
     // Check its current resource, even when this destination has copied before.
@@ -8837,7 +8973,8 @@ bool RendererD3D12::copy_efb_to_texture(
             }
         }
     }
-    if (const auto source_box = detail::efb_identity_copy_box(
+    // The HDR scene EFB's copies go through the conversion blit (clamped to the texture's range, as GX's).
+    if (const auto source_box = efb_hdr_ ? std::optional<D3D12_BOX>{} : detail::efb_identity_copy_box(
             params, is_depth_copy, efb_scale_, w, h)) {
         if (replay_recording_) [[unlikely]] {
             ReplayCopy copy{};
@@ -9718,6 +9855,10 @@ void RendererD3D12::queue_debug_ppm_capture(
 }
 
 bool RendererD3D12::debug_copy_efb_to_readback() {
+    // The readback decodes RGBA8: the HDR scene EFB's dumps are taken after its scene's end.
+    if (efb_hdr_) {
+        return false;
+    }
     resolve_efb(false);
     debug_log_readback();
     if (readback_pending_) {

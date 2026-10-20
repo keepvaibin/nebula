@@ -46,6 +46,7 @@ public:
         unsigned efb_scale = 1;           // EFB pixels per game pixel
         D3D12_CPU_DESCRIPTOR_HANDLE color_rtv{};  // the EFB's colour (multisampled with MSAA)
         unsigned samples = 1;
+        bool hdr = false;                 // the colour is the HDR scene EFB (kEfbHdrColorFormat)
         RtView view{};                    // the scene's projection, depth range and viewport (EFB pixels)
         int timing_slot = -1;             // GALAXY_TRACE_AO: the frame slot whose timestamps this pass writes
     };
@@ -72,7 +73,7 @@ private:
     bool ensure_target(Target& target, DXGI_FORMAT format, unsigned width, unsigned height,
                        std::uint64_t frame_index, unsigned frames_in_flight);
     void transition(ID3D12GraphicsCommandList* list, Target& target, D3D12_RESOURCE_STATES state);
-    [[nodiscard]] ID3D12PipelineState* apply_pipeline(unsigned samples);
+    [[nodiscard]] ID3D12PipelineState* apply_pipeline(unsigned samples, bool hdr);
 
     ID3D12Device* device_ = nullptr;
     bool ready_ = false;
@@ -80,7 +81,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> distance_pass_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> occlusion_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> denoise_;
-    std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, 4> apply_{};  // 1, 2, 4, 8 samples
+    std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, 8> apply_{};  // 1, 2, 4, 8 samples; then HDR
     Target distance_;  // eye distance per occlusion pixel (R32F)
     Target raw_;       // occlusion, eye distance (R16G16F)
     Target denoised_;

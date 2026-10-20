@@ -142,8 +142,8 @@ void AmbientOcclusion::shutdown() noexcept {
 }
 
 // The multiply: the shader's output times the EFB's colour (RGB; the game's alpha stays), no depth.
-ID3D12PipelineState* AmbientOcclusion::apply_pipeline(unsigned samples) {
-    const unsigned index = std::min(static_cast<unsigned>(std::countr_zero(std::max(samples, 1u))), 3u);
+ID3D12PipelineState* AmbientOcclusion::apply_pipeline(unsigned samples, bool hdr) {
+    const unsigned index = std::min(static_cast<unsigned>(std::countr_zero(std::max(samples, 1u))), 3u) + (hdr ? 4u : 0u);
     if (apply_[index]) {
         return apply_[index].Get();
     }
@@ -169,10 +169,10 @@ ID3D12PipelineState* AmbientOcclusion::apply_pipeline(unsigned samples) {
     pd.DepthStencilState.DepthEnable = FALSE;
     pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     pd.NumRenderTargets = 1;
-    pd.RTVFormats[0] = kEfbColorFormat;
-    pd.SampleDesc.Count = 1u << index;
+    pd.RTVFormats[0] = hdr ? kEfbHdrColorFormat : kEfbColorFormat;
+    pd.SampleDesc.Count = 1u << (index & 3u);
     if (FAILED(device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&apply_[index])))) {
-        std::cerr << "[ambient-occlusion] multiply pipeline failed for " << (1u << index) << " samples\n";
+        std::cerr << "[ambient-occlusion] multiply pipeline failed for " << (1u << (index & 3u)) << " samples\n";
         return nullptr;
     }
     return apply_[index].Get();
@@ -233,7 +233,7 @@ bool AmbientOcclusion::record(ID3D12GraphicsCommandList* list, DescriptorRing& r
         in.view.viewport[3] <= 0.0f) {
         return false;
     }
-    ID3D12PipelineState* const apply = apply_pipeline(in.samples);
+    ID3D12PipelineState* const apply = apply_pipeline(in.samples, in.hdr);
     // The game's resolution: one occlusion pixel per internal-scale x internal-scale EFB pixels.
     const unsigned divisor = std::max(in.efb_scale, 1u);
     const unsigned width = (in.width + divisor - 1u) / divisor;

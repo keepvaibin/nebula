@@ -63,9 +63,10 @@ public:
 
     // False without DXR 1.1 and shader model 6.5, or when a pipeline cannot be created.
     // `validate` adds the primary-ray check against the raster depth ([rt-stats]);
-    // `color_format` is the EFB colour format the occlusion composite draws into.
+    // `scene_format` is the HDR scene EFB's colour (the composites draw into it during the scene),
+    // `display_format` the EFB's after the camera (the glow bloom and the finish draw into it).
     bool initialize(ID3D12Device* device, std::uint64_t timestamp_frequency, bool validate,
-                    DXGI_FORMAT color_format);
+                    DXGI_FORMAT scene_format, DXGI_FORMAT display_format);
     void shutdown() noexcept;
     [[nodiscard]] bool ready() const noexcept { return ready_; }
 
@@ -214,6 +215,15 @@ public:
                       std::uint32_t width, std::uint32_t height, bool replay);
     void post_finish(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
                      D3D12_GPU_DESCRIPTOR_HANDLE depth_table, std::uint32_t width, std::uint32_t height);
+    // The camera (ray_tracing_camera.cpp, rt_camera.hlsl). camera_widen: the RGBA8 EFB's picture (`picture_table`:
+    // its colour view first, PIXEL_SHADER_RESOURCE) into the HDR scene EFB (`target`) as it is. camera_finish: the
+    // HDR scene EFB's light (`picture_table`, NON_PIXEL and PIXEL_SHADER_RESOURCE) through bloom and the tone curve
+    // into the RGBA8 EFB (`target`); without physical light the picture as it is, clamped.
+    [[nodiscard]] bool camera_ready() const noexcept { return camera_pso_ && camera_widen_pso_; }
+    bool camera_widen(ID3D12GraphicsCommandList* list, D3D12_GPU_DESCRIPTOR_HANDLE picture_table,
+                      D3D12_CPU_DESCRIPTOR_HANDLE target, std::uint32_t width, std::uint32_t height);
+    bool camera_finish(ID3D12GraphicsCommandList* list, D3D12_GPU_DESCRIPTOR_HANDLE picture_table,
+                       D3D12_CPU_DESCRIPTOR_HANDLE target, std::uint32_t width, std::uint32_t height);
     // Transforms the water draws noted since the last flush (before a render chunk's list closes,
     // as flush_geometry).
     void flush_water(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
@@ -311,6 +321,7 @@ private:
         kPassBloomBlur,     // inside the capture: the bloom's downsample and blurs
         kPassEmit,          // inside the lights: the glow and table light passes
         kPassMerge,         // inside the lights: the merge into the remembered lights
+        kPassCamera,        // the camera at the scene's end (bloom, tone curve)
         kPassCount
     };
     struct PassEntry {
@@ -327,7 +338,10 @@ private:
                         std::uint32_t height, std::uint32_t flags, RtUpload& frame);
     void write_dump();
     void log_emitters();
-    bool create_lighting_pipelines(DXGI_FORMAT color_format);
+    bool create_lighting_pipelines(DXGI_FORMAT scene_format, DXGI_FORMAT display_format);
+    bool create_camera_pipelines(DXGI_FORMAT scene_format, DXGI_FORMAT display_format);
+    bool ensure_camera_pyramid(std::uint32_t width, std::uint32_t height);
+    void bind_camera(ID3D12GraphicsCommandList* list, bool graphics_root, D3D12_GPU_DESCRIPTOR_HANDLE picture_table);
     // The geometry pass over `count` draws (triangles from `triangle_base`) into `positions` and
     // `surfaces`, and their texture coordinates and colours into `uv` where given.
     bool transform_draws(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
@@ -643,6 +657,19 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> post_lens_pso_;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> post_finish_root_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> post_finish_pso_;
+    // The camera (ray_tracing_camera.cpp): its passes, the bloom pyramid's levels down and up (half-float RGB per
+    // texel), GALAXY_RT_CAMERA_BLOOM (the share of the light the lens scatters), GALAXY_RT_TONEMAP (0 Khronos PBR
+    // Neutral, 1 ACES, 2 clipped).
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> camera_root_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> camera_down_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> camera_up_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> camera_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> camera_widen_pso_;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 2> camera_pyramid_;
+    std::array<D3D12_RESOURCE_STATES, 2> camera_pyramid_states_{};
+    std::uint64_t camera_texels_ = 0;
+    float camera_bloom_ = 0.04f;
+    std::uint32_t camera_tone_ = 0;
     // scene, bright, tmp, bloom, shafts, state, region luminance, its blur's temporary
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 8> post_buffers_{};
     std::array<D3D12_RESOURCE_STATES, 8> post_states_{};

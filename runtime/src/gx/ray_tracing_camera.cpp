@@ -1,0 +1,278 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// SceneRayTracer: the camera (rt_camera.hlsl). While ray tracing runs, the scene layer draws into the renderer's HDR
+// scene EFB; at the scene's end the camera turns its light into the RGBA8 EFB's picture: bloom from the light itself
+// and the tone curve. RendererD3D12::begin_hdr_scene / end_hdr_scene swap the EFBs.
+#include "galaxy/gx/ray_tracing.h"
+
+#include "rt_camera_down_cs.h"
+#include "rt_camera_ps.h"
+#include "rt_camera_up_cs.h"
+#include "rt_camera_vs.h"
+#include "rt_camera_widen_ps.h"
+
+#include <algorithm>
+#include <cstdlib>
+#include <iostream>
+
+namespace galaxy::gx {
+namespace {
+
+using Microsoft::WRL::ComPtr;
+
+// rt_camera.hlsl RtCamera.
+struct RtCameraConstants {
+    std::uint32_t size[2];
+    std::uint32_t level[2];
+    std::uint32_t from[2];
+    std::uint32_t level_at;
+    std::uint32_t from_at;
+    float bloom;
+    std::uint32_t flags;
+    std::uint32_t levels;
+    std::uint32_t pad;
+};
+static_assert(sizeof(RtCameraConstants) == 48u);
+
+constexpr std::uint32_t kCameraPhysical = 1u;
+constexpr std::uint32_t kCameraAces = 2u;
+constexpr std::uint32_t kCameraClip = 4u;
+constexpr std::uint32_t kNoLevel = 0xFFFFFFFFu;
+// The pyramid's levels: the coarsest a 64th of the picture's side (at 1280 pixels, 20: a blur about a fifth of the
+// picture wide).
+constexpr std::uint32_t kCameraLevels = 6u;
+
+float env_value(const char* name, float fallback) {
+    char value[32]{};
+    std::size_t length = 0u;
+    if (getenv_s(&length, value, sizeof(value), name) != 0 || length <= 1u) {
+        return fallback;
+    }
+    return std::strtof(value, nullptr);
+}
+
+struct Level {
+    std::uint32_t width = 0;
+    std::uint32_t height = 0;
+    std::uint32_t at = 0;
+};
+
+// The pyramid's levels for a width x height picture (each half the one before, rounded up), their first texels.
+std::uint32_t camera_levels(std::uint32_t width, std::uint32_t height, Level (&levels)[kCameraLevels]) {
+    std::uint32_t count = 0u;
+    std::uint32_t at = 0u;
+    std::uint32_t w = width;
+    std::uint32_t h = height;
+    while (count < kCameraLevels && (w > 1u || h > 1u)) {
+        w = (w + 1u) / 2u;
+        h = (h + 1u) / 2u;
+        levels[count] = {w, h, at};
+        at += w * h;
+        ++count;
+    }
+    return count;
+}
+
+}  // namespace
+
+bool SceneRayTracer::create_camera_pipelines(DXGI_FORMAT scene_format, DXGI_FORMAT display_format) {
+    camera_bloom_ = std::clamp(env_value("GALAXY_RT_CAMERA_BLOOM", 0.04f), 0.0f, 1.0f);
+    camera_tone_ = static_cast<std::uint32_t>(std::clamp(env_value("GALAXY_RT_TONEMAP", 0.0f), 0.0f, 2.0f));
+    D3D12_DESCRIPTOR_RANGE picture{};
+    picture.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+    picture.NumDescriptors = 1u;
+    D3D12_ROOT_PARAMETER params[5]{};
+    params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+    params[0].Constants.Num32BitValues = sizeof(RtCameraConstants) / 4u;
+    params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    params[1].DescriptorTable.NumDescriptorRanges = 1u;
+    params[1].DescriptorTable.pDescriptorRanges = &picture;
+    params[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+    params[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+    params[3].Descriptor.ShaderRegister = 1u;
+    params[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    params[4].Descriptor.ShaderRegister = 1u;
+    for (auto& param : params) {
+        param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+    }
+    D3D12_ROOT_SIGNATURE_DESC rsd{};
+    rsd.NumParameters = 5u;
+    rsd.pParameters = params;
+    ComPtr<ID3DBlob> blob;
+    ComPtr<ID3DBlob> error;
+    if (FAILED(D3D12SerializeRootSignature(&rsd, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error)) ||
+        FAILED(device_->CreateRootSignature(0u, blob->GetBufferPointer(), blob->GetBufferSize(),
+                                            IID_PPV_ARGS(&camera_root_)))) {
+        std::cerr << "[rt] camera root signature failed\n";
+        return false;
+    }
+    const auto compute = [&](const void* code, std::size_t size, ComPtr<ID3D12PipelineState>& out) {
+        D3D12_COMPUTE_PIPELINE_STATE_DESC desc{};
+        desc.pRootSignature = camera_root_.Get();
+        desc.CS = {code, size};
+        return SUCCEEDED(device_->CreateComputePipelineState(&desc, IID_PPV_ARGS(&out)));
+    };
+    const auto graphics = [&](const void* code, std::size_t size, DXGI_FORMAT format, ComPtr<ID3D12PipelineState>& out) {
+        D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};
+        desc.pRootSignature = camera_root_.Get();
+        desc.VS = {g_rt_camera_vs, sizeof(g_rt_camera_vs)};
+        desc.PS = {code, size};
+        desc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+        desc.SampleMask = UINT_MAX;
+        desc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+        desc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+        desc.RasterizerState.DepthClipEnable = TRUE;
+        desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        desc.NumRenderTargets = 1u;
+        desc.RTVFormats[0] = format;
+        desc.SampleDesc.Count = 1u;
+        return SUCCEEDED(device_->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(&out)));
+    };
+    if (!compute(g_rt_camera_down_cs, sizeof(g_rt_camera_down_cs), camera_down_pso_) ||
+        !compute(g_rt_camera_up_cs, sizeof(g_rt_camera_up_cs), camera_up_pso_) ||
+        !graphics(g_rt_camera_ps, sizeof(g_rt_camera_ps), display_format, camera_pso_) ||
+        !graphics(g_rt_camera_widen_ps, sizeof(g_rt_camera_widen_ps), scene_format, camera_widen_pso_)) {
+        std::cerr << "[rt] camera pipelines failed\n";
+        return false;
+    }
+    std::cerr << "[rt] camera bloom=" << camera_bloom_ << " tone="
+              << (camera_tone_ == 1u ? "aces" : camera_tone_ == 2u ? "clip" : "neutral") << '\n';
+    return true;
+}
+
+bool SceneRayTracer::ensure_camera_pyramid(std::uint32_t width, std::uint32_t height) {
+    Level levels[kCameraLevels];
+    const std::uint32_t count = camera_levels(width, height, levels);
+    const std::uint64_t texels = count != 0u ? levels[count - 1u].at + levels[count - 1u].width * levels[count - 1u].height
+                                             : 1u;
+    if (texels <= camera_texels_ && camera_pyramid_[0] && camera_pyramid_[1]) {
+        return true;
+    }
+    for (auto& buffer : camera_pyramid_) retire(buffer);
+    camera_texels_ = 0u;
+    for (unsigned i = 0; i < 2u; ++i) {
+        if (!create_buffer(texels * 8u, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                           D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, camera_pyramid_[i],
+                           i == 0u ? L"rt camera down" : L"rt camera up")) {
+            for (auto& buffer : camera_pyramid_) buffer.Reset();
+            return false;
+        }
+        camera_pyramid_states_[i] = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    }
+    camera_texels_ = texels;
+    return true;
+}
+
+void SceneRayTracer::bind_camera(ID3D12GraphicsCommandList* list, bool graphics_root,
+                                 D3D12_GPU_DESCRIPTOR_HANDLE picture_table) {
+    const D3D12_GPU_VIRTUAL_ADDRESS down = camera_pyramid_[0]->GetGPUVirtualAddress();
+    const D3D12_GPU_VIRTUAL_ADDRESS up = camera_pyramid_[1]->GetGPUVirtualAddress();
+    if (graphics_root) {
+        list->SetGraphicsRootSignature(camera_root_.Get());
+        list->SetGraphicsRootDescriptorTable(1u, picture_table);
+        list->SetGraphicsRootUnorderedAccessView(2u, down);
+        list->SetGraphicsRootUnorderedAccessView(3u, down);
+        list->SetGraphicsRootShaderResourceView(4u, up);
+    } else {
+        list->SetComputeRootSignature(camera_root_.Get());
+        list->SetComputeRootDescriptorTable(1u, picture_table);
+        list->SetComputeRootUnorderedAccessView(2u, down);
+        list->SetComputeRootUnorderedAccessView(3u, up);
+        list->SetComputeRootShaderResourceView(4u, up);
+    }
+}
+
+bool SceneRayTracer::camera_widen(ID3D12GraphicsCommandList* list, D3D12_GPU_DESCRIPTOR_HANDLE picture_table,
+                                  D3D12_CPU_DESCRIPTOR_HANDLE target, std::uint32_t width, std::uint32_t height) {
+    if (!camera_ready() || list == nullptr || picture_table.ptr == 0u || width == 0u || height == 0u ||
+        !ensure_camera_pyramid(width, height)) {
+        return false;
+    }
+    RtCameraConstants c{};
+    c.size[0] = width;
+    c.size[1] = height;
+    list->OMSetRenderTargets(1u, &target, FALSE, nullptr);
+    const D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
+    const D3D12_RECT scissor{0, 0, static_cast<LONG>(width), static_cast<LONG>(height)};
+    list->RSSetViewports(1u, &viewport);
+    list->RSSetScissorRects(1u, &scissor);
+    bind_camera(list, true, picture_table);
+    list->SetPipelineState(camera_widen_pso_.Get());
+    list->SetGraphicsRoot32BitConstants(0u, sizeof(c) / 4u, &c, 0u);
+    list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    list->DrawInstanced(3u, 1u, 0u, 0u);
+    return true;
+}
+
+bool SceneRayTracer::camera_finish(ID3D12GraphicsCommandList* list, D3D12_GPU_DESCRIPTOR_HANDLE picture_table,
+                                   D3D12_CPU_DESCRIPTOR_HANDLE target, std::uint32_t width, std::uint32_t height) {
+    if (!camera_ready() || list == nullptr || picture_table.ptr == 0u || width == 0u || height == 0u ||
+        !ensure_camera_pyramid(width, height)) {
+        return false;
+    }
+    const int timed = begin_pass(list);
+    RtCameraConstants c{};
+    c.size[0] = width;
+    c.size[1] = height;
+    const bool physical = physical_active();
+    c.flags = physical ? kCameraPhysical | (camera_tone_ == 1u ? kCameraAces : camera_tone_ == 2u ? kCameraClip : 0u)
+                       : 0u;
+    Level levels[kCameraLevels];
+    const std::uint32_t count = camera_levels(width, height, levels);
+    if (physical && camera_bloom_ > 0.0f && count != 0u) {
+        for (unsigned i = 0; i < 2u; ++i) {
+            to_state(list, camera_pyramid_[i].Get(), camera_pyramid_states_[i], D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        }
+        bind_camera(list, false, picture_table);
+        D3D12_RESOURCE_BARRIER all_uav{};
+        all_uav.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+        const auto run = [&](ID3D12PipelineState* pso, const Level& level, const Level* from) {
+            c.level[0] = level.width;
+            c.level[1] = level.height;
+            c.level_at = level.at;
+            c.from[0] = from != nullptr ? from->width : width;
+            c.from[1] = from != nullptr ? from->height : height;
+            c.from_at = from != nullptr ? from->at : kNoLevel;
+            list->SetComputeRoot32BitConstants(0u, sizeof(c) / 4u, &c, 0u);
+            list->SetPipelineState(pso);
+            list->Dispatch((level.width + 7u) / 8u, (level.height + 7u) / 8u, 1u);
+            list->ResourceBarrier(1u, &all_uav);
+        };
+        // Down from the picture; up from the coarsest level.
+        for (std::uint32_t k = 0; k < count; ++k) {
+            run(camera_down_pso_.Get(), levels[k], k == 0u ? nullptr : &levels[k - 1u]);
+        }
+        for (std::uint32_t k = count; k-- > 0u;) {
+            if (k + 1u == count) {
+                c.from_at = kNoLevel;
+                c.level[0] = levels[k].width;
+                c.level[1] = levels[k].height;
+                c.level_at = levels[k].at;
+                list->SetComputeRoot32BitConstants(0u, sizeof(c) / 4u, &c, 0u);
+                list->SetPipelineState(camera_up_pso_.Get());
+                list->Dispatch((levels[k].width + 7u) / 8u, (levels[k].height + 7u) / 8u, 1u);
+                list->ResourceBarrier(1u, &all_uav);
+            } else {
+                run(camera_up_pso_.Get(), levels[k], &levels[k + 1u]);
+            }
+        }
+        to_state(list, camera_pyramid_[1].Get(), camera_pyramid_states_[1], D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        c.levels = count;
+        c.bloom = camera_bloom_;
+        c.from[0] = levels[0].width;
+        c.from[1] = levels[0].height;
+    }
+    list->OMSetRenderTargets(1u, &target, FALSE, nullptr);
+    const D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
+    const D3D12_RECT scissor{0, 0, static_cast<LONG>(width), static_cast<LONG>(height)};
+    list->RSSetViewports(1u, &viewport);
+    list->RSSetScissorRects(1u, &scissor);
+    bind_camera(list, true, picture_table);
+    list->SetPipelineState(camera_pso_.Get());
+    list->SetGraphicsRoot32BitConstants(0u, sizeof(c) / 4u, &c, 0u);
+    list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    list->DrawInstanced(3u, 1u, 0u, 0u);
+    end_pass(list, timed, kPassCamera);
+    return true;
+}
+
+}  // namespace galaxy::gx

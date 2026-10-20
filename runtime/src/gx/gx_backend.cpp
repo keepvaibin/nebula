@@ -8912,6 +8912,8 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
             trace_rt_water();
             renderer_.rt_capture_picture();
         }
+        // The camera (in rt_capture_picture with the lighting; else here) brings the RGBA8 EFB back.
+        renderer_.end_hdr_scene();
     }
     const bool was_temporal = temporal_scene_;
     const bool was_motion = motion_scene_;
@@ -9029,6 +9031,11 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
     }
     if (marker == FifoMarker::SceneEnd) {
         begin_side_layer(kScreenLayer);
+    }
+    // While ray tracing runs the scene layer draws into the HDR scene EFB (renderer_d3d12 begin_hdr_scene): from here,
+    // with the render EFB back.
+    if (marker == FifoMarker::SceneBegin && renderer_.rt_active()) {
+        renderer_.begin_hdr_scene();
     }
 }
 
@@ -14295,8 +14302,9 @@ gpu::Pipeline* GxBackend::flush_draw_state(
     if (rs_dirty) {
         render_state_key_ = build_render_state_key(state_);
     }
-    // The EFB's samples per pixel (MSAA; the output EFB has one) decide the pipeline's too.
-    const std::uint8_t samples_log2 = renderer_.efb_samples_log2();
+    // The EFB's variant (its samples per pixel, MSAA, the output EFB has one; the HDR scene EFB) decides the
+    // pipeline's too.
+    const std::uint8_t samples_log2 = renderer_.efb_variant();
     const bool topology_dirty =
         render_state_key_.primitive_topology != topology_key || render_state_key_.samples_log2 != samples_log2;
     render_state_key_.primitive_topology = topology_key;

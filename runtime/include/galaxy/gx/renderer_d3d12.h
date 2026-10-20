@@ -38,6 +38,7 @@
 #include "galaxy/gx/gx_bitfields.h"
 #include "galaxy/gx/gpu_types.h"
 #include "galaxy/gx/renderer_common.h"
+#include "galaxy/gx/shader_keys.h"
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx/ui_canvas.h"
 #include "galaxy/gx/window_owner.h"
@@ -93,6 +94,10 @@ private:
 }  // namespace detail
 
 inline constexpr DXGI_FORMAT kEfbColorFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+// The ray tracer's HDR scene EFB (the scene layer while ray tracing runs; RendererD3D12::begin_hdr_scene): the traced
+// light unclamped, sRGB-encoded past 1 as below it, until the camera pass at the scene's end turns it into the RGBA8
+// EFB's picture.
+inline constexpr DXGI_FORMAT kEfbHdrColorFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
 // Motion vectors for temporal upscaling: render pixels, current -> previous.
 inline constexpr DXGI_FORMAT kMotionVectorFormat = DXGI_FORMAT_R16G16_FLOAT;
 // Reactive mask for temporal upscaling: blended draws' alpha, max-blended.
@@ -338,6 +343,11 @@ public:
     void rt_trace_scene();
     // The scene's end: its finished picture becomes the light the next frame's rays read.
     void rt_capture_picture();
+    // The scene layer's beginning while ray tracing runs: the HDR scene EFB stands in for the EFB (its contents so
+    // far carried over), until end_hdr_scene's camera pass (rt_capture_picture, or the display copy of a scene that
+    // never ended) writes its picture to the EFB and restores it. Sub-frames replay both.
+    void begin_hdr_scene();
+    void end_hdr_scene();
     // The ray tracer's glow bloom of `slot` added to the EFB (a scene's end and its sub-frames).
     void record_rt_bloom(int slot);
     // The cinematic finish over the EFB (a scene's end; sub-frames replay it on their picture).
@@ -633,10 +643,16 @@ public:
 
     [[nodiscard]] ID3D12Device* device() const { return device_.Get(); }
     [[nodiscard]] unsigned efb_scale() const noexcept { return efb_scale_; }
-    // The EFB's samples per pixel as a power of two (MSAA; 0 for one sample), which its draws' pipelines share.
+    // The EFB's samples per pixel as a power of two (MSAA; 0 for one sample).
     [[nodiscard]] std::uint8_t efb_samples_log2() const noexcept {
         return static_cast<std::uint8_t>(std::countr_zero(efb_msaa_.samples));
     }
+    // The live EFB's variant, which its draws' pipelines share (shader_keys.h RenderStateKey::samples_log2): its
+    // samples, and kEfbVariantHdr while the HDR scene EFB stands in.
+    [[nodiscard]] std::uint8_t efb_variant() const noexcept {
+        return static_cast<std::uint8_t>(efb_samples_log2() | (efb_hdr_ ? kEfbVariantHdr : 0u));
+    }
+    [[nodiscard]] bool efb_hdr() const noexcept { return efb_hdr_; }
     [[nodiscard]] ID3D12GraphicsCommandList* command_list() const {
         return command_list_.Get();
     }
@@ -907,6 +923,7 @@ private:
         Microsoft::WRL::ComPtr<ID3D12Resource> depth;
         EfbMsaa msaa;
         unsigned scale = 0;
+        bool hdr = false;   // colour kEfbHdrColorFormat (else kEfbColorFormat)
         D3D12_CPU_DESCRIPTOR_HANDLE rtv{};
         D3D12_CPU_DESCRIPTOR_HANDLE dsv{};
         std::optional<DescriptorRing::Table> conv_table;
@@ -987,7 +1004,8 @@ private:
     };
     // RtComposite: the ambient occlusion of ray-tracer result slot `index`.
     enum class ReplayKind : std::uint8_t {
-        Draw, BindEfb, Clear, Copy, SwapEfbSets, ClearDepth, RtComposite, RtBloom, RtPost, RtWater, SceneAa, SceneAo
+        Draw, BindEfb, Clear, Copy, SwapEfbSets, ClearDepth, RtComposite, RtBloom, RtPost, RtWater, SceneAa, SceneAo,
+        HdrBegin, HdrEnd
     };
     struct ReplayOp {
         ReplayKind kind = ReplayKind::Draw;
@@ -1051,6 +1069,20 @@ private:
     EfbTargetSet replay_efb_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_efb_rtv_heap_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_efb_dsv_heap_;
+    // The HDR scene EFB (begin_hdr_scene) of the live frames and of the sub-frames (a later frame's scene may be open
+    // while they play).
+    EfbTargetSet hdr_scene_efb_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> hdr_scene_rtv_heap_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> hdr_scene_dsv_heap_;
+    EfbTargetSet replay_hdr_efb_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_hdr_rtv_heap_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_hdr_dsv_heap_;
+    // The live EFB is an HDR set (swapped with the set that held it).
+    bool efb_hdr_ = false;
+    // The carry from the EFB into the HDR scene EFB (record_hdr_begin): a copy that widens RGBA8 to RGBA16F.
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> hdr_widen_pso_;
+    void record_hdr_begin();
+    void record_hdr_end();
     // The output-resolution EFB of a sub-frame whose log switches to it.
     EfbTargetSet replay_output_efb_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_output_efb_rtv_heap_;
@@ -1061,7 +1093,8 @@ private:
     // upscaler's output, as the live output EFB).
     bool create_efb_set(EfbTargetSet& set, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& rtv_heap,
                         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& dsv_heap, unsigned scale,
-                        bool persistent_views = true, bool unordered_access = false, unsigned samples = 1u);
+                        bool persistent_views = true, bool unordered_access = false, unsigned samples = 1u,
+                        bool hdr = false);
     void write_efb_set_views(EfbTargetSet& set, const DescriptorRing::Table& table);
     void swap_efb_with(EfbTargetSet& other);
     bool replay_playing_ = false;
@@ -1665,8 +1698,9 @@ private:
     // The masked EFB clears' pipelines (color / alpha only), per EFB sample count (log2), made at first use.
     Microsoft::WRL::ComPtr<ID3DBlob> clear_vs_;
     Microsoft::WRL::ComPtr<ID3DBlob> clear_ps_;
-    std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, 4> clear_rgb_pipelines_;
-    std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, 4> clear_alpha_pipelines_;
+    // Per EFB variant (efb_variant: samples, then HDR).
+    std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, 8> clear_rgb_pipelines_;
+    std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, 8> clear_alpha_pipelines_;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> motion_debug_root_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> motion_debug_pipeline_;
 

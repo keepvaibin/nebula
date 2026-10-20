@@ -522,7 +522,7 @@ D3D12_RESOURCE_BARRIER uav_barrier(ID3D12Resource* resource) {
 }  // namespace
 
 bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_frequency, bool validate,
-                                DXGI_FORMAT color_format) {
+                                DXGI_FORMAT scene_format, DXGI_FORMAT display_format) {
     shutdown();
     if (device == nullptr || FAILED(device->QueryInterface(IID_PPV_ARGS(&device_)))) {
         device_.Reset();
@@ -791,12 +791,17 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     sun_max_elevation_ = std::clamp(env_float("GALAXY_RT_SUN_MAX_ELEVATION", 65.0f), sun_min_elevation_, 90.0f);
     sun_light_ = std::clamp(env_float("GALAXY_RT_SUN_LIGHT", 1.2f), 0.0f, 4.0f);
     sky_light_ = std::clamp(env_float("GALAXY_RT_SKY_LIGHT", 0.6f), 0.0f, 4.0f);
-    if (lighting_enabled_ && !create_lighting_pipelines(color_format)) {
+    if (lighting_enabled_ && !create_lighting_pipelines(scene_format, display_format)) {
         std::cerr << "[rt] lighting unavailable\n";
         lighting_enabled_ = false;
     }
     if (lighting_enabled_) {
-        static_cast<void>(reflections_.initialize(device_.Get(), timestamp_frequency, color_format));
+        static_cast<void>(reflections_.initialize(device_.Get(), timestamp_frequency, scene_format));
+    }
+    // The renderer draws the scene into the HDR scene EFB only with a camera to bring it back.
+    if (!create_camera_pipelines(scene_format, display_format)) {
+        shutdown();
+        return false;
     }
     ready_ = true;
     std::cerr << "[rt] ready tier=1.1 validate=" << (validate ? 1 : 0) << " lighting=" << (lighting_enabled_ ? 1 : 0)
@@ -920,6 +925,13 @@ void SceneRayTracer::shutdown() noexcept {
     post_lens_pso_.Reset();
     post_finish_root_.Reset();
     post_finish_pso_.Reset();
+    camera_root_.Reset();
+    camera_down_pso_.Reset();
+    camera_up_pso_.Reset();
+    camera_pso_.Reset();
+    camera_widen_pso_.Reset();
+    for (auto& buffer : camera_pyramid_) buffer.Reset();
+    camera_texels_ = 0u;
     for (auto& buffer : post_buffers_) buffer.Reset();
     post_pixels_ = post_quarter_ = 0u;
     bloom_root_.Reset();
@@ -1686,14 +1698,14 @@ void SceneRayTracer::report() {
                       "composites=%.2f glow-base-ms=%.3f capture-ms=%.3f captures=%.2f post-copy-ms=%.3f "
                       "post-bright-ms=%.3f post-focus-ms=%.3f post-shafts-ms=%.3f post-blur-ms=%.3f "
                       "post-finish-ms=%.3f posts=%.2f bloom-ms=%.3f blooms=%.2f lights-ms=%.3f (emit %.3f merge %.3f) "
-                      "bloom-blur-ms=%.3f dropped=%llu gpu-ms-per-scene=%.3f\n",
+                      "bloom-blur-ms=%.3f camera-ms=%.3f dropped=%llu gpu-ms-per-scene=%.3f\n",
                       static_cast<unsigned long long>(window_.scenes), per(ms[kPassGeometry], window_.scenes),
                       calls(kPassGeometry), call_ms(kPassComposite), calls(kPassComposite), call_ms(kPassGlowBase),
                       call_ms(kPassCapture), calls(kPassCapture), call_ms(kPassPostCopy), call_ms(kPassPostBright),
                       call_ms(kPassPostFocus), call_ms(kPassPostShafts), call_ms(kPassPostBlur),
                       call_ms(kPassPostFinish), calls(kPassPostFinish), call_ms(kPassBloom), calls(kPassBloom),
                       call_ms(kPassLights), call_ms(kPassEmit), call_ms(kPassMerge), call_ms(kPassBloomBlur),
-                      static_cast<unsigned long long>(window_.passes_dropped), scene_ms);
+                      call_ms(kPassCamera), static_cast<unsigned long long>(window_.passes_dropped), scene_ms);
         std::cerr << line;
     }
     window_ = {};
@@ -2774,7 +2786,7 @@ std::uint32_t SceneRayTracer::sample_factor(std::uint32_t width, std::uint32_t h
     return low_quality_ ? 3u : 2u;
 }
 
-bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
+bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT scene_format, DXGI_FORMAT display_format) {
     const auto serialize = [&](const D3D12_ROOT_SIGNATURE_DESC& desc, ComPtr<ID3D12RootSignature>& out) {
         ComPtr<ID3DBlob> blob, error;
         return SUCCEEDED(D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error)) &&
@@ -3080,7 +3092,7 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
         additive.RasterizerState.DepthClipEnable = TRUE;
         additive.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
         additive.NumRenderTargets = 1u;
-        additive.RTVFormats[0] = color_format;
+        additive.RTVFormats[0] = display_format;
         additive.SampleDesc.Count = 1u;
         if (FAILED(device_->CreateGraphicsPipelineState(&additive, IID_PPV_ARGS(&bloom_composite_pso_)))) {
             return false;
@@ -3150,7 +3162,7 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
         finish.RasterizerState.DepthClipEnable = TRUE;
         finish.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
         finish.NumRenderTargets = 1u;
-        finish.RTVFormats[0] = color_format;
+        finish.RTVFormats[0] = display_format;
         finish.SampleDesc.Count = 1u;
         if (FAILED(device_->CreateGraphicsPipelineState(&finish, IID_PPV_ARGS(&post_finish_pso_)))) {
             return false;
@@ -3248,7 +3260,7 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
     graphics.RasterizerState.DepthClipEnable = TRUE;
     graphics.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     graphics.NumRenderTargets = 1u;
-    graphics.RTVFormats[0] = color_format;
+    graphics.RTVFormats[0] = scene_format;
     graphics.SampleDesc.Count = 1u;
     if (FAILED(device_->CreateGraphicsPipelineState(&graphics, IID_PPV_ARGS(&composite_pso_)))) {
         return false;
