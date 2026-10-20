@@ -68,6 +68,7 @@ struct RtMaterial {
                                           // brighter and more textured (rt_lighting.hlsl CompositePS)
     bool traced = false;                  // a clear surface the engine traces; its game draw not shown
     bool seen = false;                    // shows its radiance; its light is the game's point light there
+    bool recolour = false;                // a light source's sprite shown in the table's colour (its luminance kept)
     bool shadow = true;
     float roughness = -1.0f;              // < 0: the class's
     float metallic = -1.0f;               // < 0: the class's

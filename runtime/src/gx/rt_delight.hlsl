@@ -32,7 +32,7 @@ cbuffer RtDelight : register(b0)
     uint d_in_pitch;
     uint2 d_in_size;
     uint d_wrap;          // the texture's addressing as the draw that made the map sets it (GX: 0 clamp, 1 repeat,
-                          // 2 mirror; s bits 0-1, t bits 2-3)
+                          // 2 mirror; s bits 0-1, t bits 2-3); DelightCS: the share taken out (bits 8-15, of 255)
 };
 RWByteAddressBuffer d_scratch : register(u0);
 
@@ -115,7 +115,8 @@ void DelightCS(uint3 id : SV_DispatchThreadID)
                     }
                 }
                 if (weight > 1e-6f) {
-                    s = (centre.log_l - sum / weight) * (127.0f / kDelightRange);
+                    s = (centre.log_l - sum / weight) * (127.0f / kDelightRange) *
+                        (float((d_wrap >> 8u) & 0xFFu) / 255.0f);
                 }
             }
         }

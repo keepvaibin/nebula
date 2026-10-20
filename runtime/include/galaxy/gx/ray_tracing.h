@@ -351,6 +351,13 @@ private:
         kPassEmit,          // inside the lights: the glow and table light passes
         kPassMerge,         // inside the lights: the merge into the remembered lights
         kPassCamera,        // the camera at the scene's end (bloom, tone curve)
+        kPassEngineGBuffer,     // inside the lighting: the engine's passes (rt_engine.hlsl)
+        kPassEngineDirect,      // ReSTIR DI, temporal and spatial
+        kPassEngineIndirect,    // ReSTIR GI, temporal and spatial (half resolution)
+        kPassEngineSpecular,
+        kPassEngineDenoise,     // temporal accumulation and the four a-trous iterations
+        kPassEngineFinal,
+        kPassEngineClear,       // the glass pass at the water's trace (outside the lighting)
         kPassCount
     };
     struct PassEntry {
@@ -602,6 +609,7 @@ private:
         float near_plane = 0.0f;
         bool camera_known = false;
         std::array<float, 3> sun{};        // towards the traced sun (eye space)
+        std::array<float, 3> sun_visible{};  // towards the sun the sky shows (eye space): the shafts' centre
         std::array<float, 3> sun_light{};  // its light
         bool sun_shown = false;            // the sky shows it (the game's BrightSun, or the sun its sky map holds)
         bool pixels = false;               // light_pixels_ holds its per-pixel normals (physical)
@@ -734,6 +742,7 @@ private:
     bool engine_indirect_ = true;   // GALAXY_RT_ENGINE_INDIRECT
     bool engine_specular_ = true;   // GALAXY_RT_ENGINE_SPECULAR
     bool engine_points_ = true;     // GALAXY_RT_ENGINE_POINTS: the game's point lights and the star core
+    bool engine_bounces_ = true;    // GALAXY_RT_ENGINE_BOUNCES: indirect hits take their cached light (every bounce)
     bool engine_clear_wanted_ = true;  // GALAXY_RT_ENGINE_CLEAR: the clear-surface pass
     std::uint32_t engine_clear_mode_ = 1u;  // GALAXY_RT_ENGINE_CLEAR: 0 off, 1 on, 2-9 diagnostics (rt_engine.hlsl)
     bool engine_fresh_ = true;      // new buffers: no history
@@ -1113,12 +1122,14 @@ private:
     float sun_size_ = 1.0f;     // degrees
     bool sun_override_ = false;
     float sun_max_elevation_ = 65.0f;  // GALAXY_RT_SUN_MAX_ELEVATION: degrees no key light (no sun shown) rises above
-    float sun_min_elevation_ = 0.0f;   // GALAXY_RT_SUN_MIN_ELEVATION (diagnostics): degrees a game sun rises to
+    float key_min_elevation_ = 50.0f;  // GALAXY_RT_KEY_MIN_ELEVATION: degrees a key light (no sun shown) rises to
+    float sun_min_elevation_ = 30.0f;  // GALAXY_RT_SUN_MIN_ELEVATION: degrees a sun the sky shows rises to
     const RtStageSun* stage_sun_ = nullptr;
     bool sun_held_ = false;
     bool key_valid_ = false;    // set_key_light
     bool key_shown_ = false;
     bool sun_shown_ = false;   // this trace's sun is one the sky shows (the camera's shafts come from it)
+    std::array<float, 3> sun_visible_eye_{};   // where the sky shows it (eye space; the light may stand higher)
     std::array<float, 3> key_direction_{};
     std::array<float, 3> key_color_{};
     float key_strength_ = 0.0f;

@@ -401,8 +401,8 @@ constexpr UINT64 kPictureStarSlots = 8u;
 constexpr UINT64 kPictureStarSums = 64u;
 constexpr UINT64 kPictureStarColour = kPictureStarSums + kPictureStarSlots * 16u;
 // Physical: the eye's adaptation (rt_lighting.hlsl kAdaptation): its factor, known (kept); the traced light's log2 sum
-// (x 256) and count (cleared).
-constexpr UINT64 kPictureSumsBytes = kPictureStarColour + 32u;
+// (x 256) and count (cleared); its histogram (kAdaptationBuckets words, cleared).
+constexpr UINT64 kPictureSumsBytes = kPictureStarColour + 32u + 16u * 4u;
 // The composite's exposure measurement (rt_lighting.hlsl kExposureBuckets x 16 bytes). Always
 // in UNORDERED_ACCESS: the composite (pixel) adds, the capture (compute) reads and clears.
 constexpr UINT64 kExposureSumsBytes = 16u * 16u;
@@ -522,6 +522,40 @@ D3D12_RESOURCE_BARRIER uav_barrier(ID3D12Resource* resource) {
     barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
     barrier.UAV.pResource = resource;
     return barrier;
+}
+
+// A light's direction d held between `lowest` and `highest` degrees over the horizon of `up` (any space, both in it),
+// its compass direction kept; one straight above or below turns toward `away` (the camera's back: the shadows fall
+// away from it). d comes back unit length.
+void hold_elevation(std::array<float, 3>& d, const std::array<float, 3>& up, float lowest, float highest,
+                    const std::array<float, 3>& away) noexcept {
+    const float up_length = std::sqrt(up[0] * up[0] + up[1] * up[1] + up[2] * up[2]);
+    const float length = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+    if (length <= 1e-6f || up_length <= 1e-6f) {
+        return;
+    }
+    const std::array<float, 3> u{up[0] / up_length, up[1] / up_length, up[2] / up_length};
+    for (float& v : d) v /= length;
+    const float e = d[0] * u[0] + d[1] * u[1] + d[2] * u[2];
+    const float min_e = std::sin(lowest * 3.14159265f / 180.0f);
+    const float max_e = std::sin(highest * 3.14159265f / 180.0f);
+    if (e >= min_e && e <= max_e) {
+        return;
+    }
+    const float target = std::clamp(e, min_e, max_e);
+    std::array<float, 3> h{d[0] - e * u[0], d[1] - e * u[1], d[2] - e * u[2]};
+    float h_length = std::sqrt(h[0] * h[0] + h[1] * h[1] + h[2] * h[2]);
+    if (h_length < 1e-3f) {
+        const float along = away[0] * u[0] + away[1] * u[1] + away[2] * u[2];
+        h = {away[0] - along * u[0], away[1] - along * u[1], away[2] - along * u[2]};
+        h_length = std::sqrt(h[0] * h[0] + h[1] * h[1] + h[2] * h[2]);
+    }
+    if (h_length > 1e-6f) {
+        const float across = std::sqrt(std::max(1.0f - target * target, 0.0f));
+        for (unsigned i = 0; i < 3u; ++i) {
+            d[i] = h[i] / h_length * across + u[i] * target;
+        }
+    }
 }
 
 }  // namespace
@@ -791,10 +825,13 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     }
     sun_direction_ = env_triple("GALAXY_RT_SUN", sun_direction_);
     sun_color_ = env_triple("GALAXY_RT_SUN_COLOR", sun_color_);
-    sun_size_ = std::clamp(env_float("GALAXY_RT_SUN_SIZE", 1.0f), 0.0f, 30.0f);
+    // The sun's angular radius in degrees: the real sun's 0.27 (its shadows as crisp as daylight's; at 1 degree four
+    // times too soft, owner: the sun does not feel strong). A stage's rt-suns size (a moon, a key) is its own.
+    sun_size_ = std::clamp(env_float("GALAXY_RT_SUN_SIZE", 0.27f), 0.0f, 30.0f);
     key_size_ = std::clamp(env_float("GALAXY_RT_KEY_SIZE", 1.5f), 0.0f, 30.0f);
-    sun_min_elevation_ = std::clamp(env_float("GALAXY_RT_SUN_MIN_ELEVATION", 0.0f), 0.0f, 89.0f);
-    sun_max_elevation_ = std::clamp(env_float("GALAXY_RT_SUN_MAX_ELEVATION", 65.0f), sun_min_elevation_, 90.0f);
+    sun_min_elevation_ = std::clamp(env_float("GALAXY_RT_SUN_MIN_ELEVATION", 30.0f), 0.0f, 89.0f);
+    sun_max_elevation_ = std::clamp(env_float("GALAXY_RT_SUN_MAX_ELEVATION", 65.0f), 0.0f, 90.0f);
+    key_min_elevation_ = std::clamp(env_float("GALAXY_RT_KEY_MIN_ELEVATION", 50.0f), 0.0f, sun_max_elevation_);
     sun_light_ = std::clamp(env_float("GALAXY_RT_SUN_LIGHT", 1.2f), 0.0f, 4.0f);
     sky_light_ = std::clamp(env_float("GALAXY_RT_SKY_LIGHT", 0.6f), 0.0f, 4.0f);
     if (lighting_enabled_ && !create_lighting_pipelines(scene_format, display_format)) {
@@ -1359,6 +1396,19 @@ void SceneRayTracer::begin_frame(std::uint64_t frame_index) {
             std::memcpy(&t, &probe[4], 4u);
             std::memcpy(&z, &probe[6], 4u);
             std::memcpy(&facing, &probe[7], 4u);
+            if (engine_active()) {
+                // The engine's G-buffer at the probed pixel (rt_engine.hlsl EngineGBufferCS): its triangle + 1, draw,
+                // emission word, G-buffer flags (kGb*) and whether the draw glows there (bit 16); its emission, the
+                // picture's luminance, eye z and its own share.
+                float picture = 0.0f;
+                std::memcpy(&picture, &probe[5], 4u);
+                std::fprintf(stderr,
+                             "[rt-probe-engine] frame=%llu pixel=%u,%u tri=%u draw=%d material=%d emission-word=0x%08x "
+                             "flags=0x%x glows=%u emission=%.2f picture=%.3f z=%.1f own=%.3f\n",
+                             static_cast<unsigned long long>(taken), probe_pixel_[0], probe_pixel_[1], probe[0],
+                             static_cast<int>(probe[1]), material(probe[1]), probe[2], probe[3] & 0xFFFFu,
+                             probe[3] >> 16u, t, picture, z, facing);
+            } else
             std::fprintf(stderr,
                          "[rt-probe] frame=%llu pixel=%u,%u seen-tri=%u draw=%d material=%d sun-blocker-tri=%u draw=%d "
                          "material=%d t=%.1f instance=%d z=%.1f facing-sun=%.3f\n",
@@ -1737,9 +1787,13 @@ void SceneRayTracer::report() {
         const auto& ms = window_.pass_ms;
         const auto& n = window_.passes;
         double passes_ms = 0.0;
-        // The capture's inner passes (lights, bloom blur) are inside its own time.
+        // The capture's inner passes (lights, bloom blur) are inside its own time, the engine's (but its glass pass)
+        // inside the lighting's.
         for (unsigned p = 0; p < kPassCount; ++p) {
-            if (p != kPassLights && p != kPassBloomBlur && p != kPassEmit && p != kPassMerge) passes_ms += ms[p];
+            if (p != kPassLights && p != kPassBloomBlur && p != kPassEmit && p != kPassMerge &&
+                (p < kPassEngineGBuffer || p == kPassEngineClear)) {
+                passes_ms += ms[p];
+            }
         }
         const double scene_ms = per(window_.build_ms, window_.timed) + per(window_.light_ms, window_.timed) +
                                 per(passes_ms, window_.scenes);
@@ -1759,6 +1813,18 @@ void SceneRayTracer::report() {
                       call_ms(kPassLights), call_ms(kPassEmit), call_ms(kPassMerge), call_ms(kPassBloomBlur),
                       call_ms(kPassCamera), static_cast<unsigned long long>(window_.passes_dropped), scene_ms);
         std::cerr << line;
+        if (n[kPassEngineGBuffer] != 0u) {
+            const double engine_ms = call_ms(kPassEngineGBuffer) + call_ms(kPassEngineDirect) +
+                                     call_ms(kPassEngineIndirect) + call_ms(kPassEngineSpecular) +
+                                     call_ms(kPassEngineDenoise) + call_ms(kPassEngineFinal);
+            std::snprintf(line, sizeof(line),
+                          "[rt-engine-pass] gbuffer-ms=%.3f direct-ms=%.3f indirect-ms=%.3f specular-ms=%.3f "
+                          "denoise-ms=%.3f final-ms=%.3f engine-ms=%.3f clear-ms=%.3f clears=%.2f\n",
+                          call_ms(kPassEngineGBuffer), call_ms(kPassEngineDirect), call_ms(kPassEngineIndirect),
+                          call_ms(kPassEngineSpecular), call_ms(kPassEngineDenoise), call_ms(kPassEngineFinal),
+                          engine_ms, call_ms(kPassEngineClear), calls(kPassEngineClear));
+            std::cerr << line;
+        }
     }
     window_ = {};
 }
@@ -2300,11 +2366,16 @@ void SceneRayTracer::run_delight(ID3D12GraphicsCommandList* list) {
     list->SetComputeRootSignature(delight_root_.Get());
     list->SetComputeRootUnorderedAccessView(1u, delight_scratch_->GetGPUVirtualAddress());
     list->SetPipelineState(delight_pso_.Get());
+    // GALAXY_RT_DELIGHT_STRENGTH (A/B, default 1): the share of each texel's measured shading the map takes out, in
+    // the wrap word's bits 8-15 (rt_delight.hlsl).
+    static const std::uint32_t strength =
+        static_cast<std::uint32_t>(std::lround(std::clamp(env_float("GALAXY_RT_DELIGHT_STRENGTH", 1.0f), 0.0f, 1.0f) *
+                                               255.0f));
     for (std::size_t i = 0; i < delight_jobs_.size(); ++i) {
         const DelightJob& job = delight_jobs_[i];
         const DelightConstants constants{job.source, {job.width, job.height}, job.source_levels,
                                          static_cast<std::uint32_t>(bases[i]), layouts[i].pitch[0],
-                                         {job.width, job.height}, 0u, 0u, {0u, 0u}, job.wrap};
+                                         {job.width, job.height}, 0u, 0u, {0u, 0u}, job.wrap | (strength << 8u)};
         list->SetComputeRoot32BitConstants(0u, sizeof(constants) / 4u, &constants, 0u);
         list->Dispatch((((job.width + 3u) / 4u) + 7u) / 8u, (job.height + 7u) / 8u, 1u);
     }
@@ -3594,60 +3665,33 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         // Sun rays end halfway to the game's sun model (BrightSun, drawn that far out along the
         // sun's direction): it would shadow everything near the camera.
         c.sun_reach = sun_distance > 0.0f ? 0.5f * sun_distance : 1.0e6f;
-        // The game's visible sun lights from where the sky shows it (its BrightSun): a sun on the horizon behind the
-        // Good Egg's house leaves the planet's top in the house's, the tree's and the planet's own shadow, as the
-        // owner expected (build 40; it was lifted to 50 degrees, so the light came from overhead while the sky showed
-        // a sunset). GALAXY_RT_SUN_MIN_ELEVATION (diagnostics, default 0) still lifts it: its compass direction kept,
-        // at least that many degrees over world Y.
-        if (sun_present && !keyed && !sun_override_ && sun_min_elevation_ > 0.0f) {
-            const std::array<float, 3> up{0.0f, 1.0f, 0.0f};
-            const float up_length = std::sqrt(up[0] * up[0] + up[1] * up[1] + up[2] * up[2]);
-            const float length = std::sqrt(l[0] * l[0] + l[1] * l[1] + l[2] * l[2]);
-            const float min_e = std::sin(sun_min_elevation_ * 3.14159265f / 180.0f);
-            if (length > 1e-6f && up_length > 1e-6f) {
-                std::array<float, 3> u{up[0] / up_length, up[1] / up_length, up[2] / up_length};
-                std::array<float, 3> d{l[0] / length, l[1] / length, l[2] / length};
-                const float e = d[0] * u[0] + d[1] * u[1] + d[2] * u[2];
-                if (e < min_e) {
-                    std::array<float, 3> h{d[0] - e * u[0], d[1] - e * u[1], d[2] - e * u[2]};
-                    float h_length = std::sqrt(h[0] * h[0] + h[1] * h[1] + h[2] * h[2]);
-                    if (h_length < 1e-3f) {
-                        // Straight below: from behind the camera.
-                        h = {camera_[8], camera_[9], camera_[10]};
-                        h_length = std::sqrt(h[0] * h[0] + h[1] * h[1] + h[2] * h[2]);
-                    }
-                    if (h_length > 1e-6f) {
-                        const float across = std::sqrt(1.0f - min_e * min_e);
-                        for (unsigned i = 0; i < 3u; ++i) {
-                            l[i] = h[i] / h_length * across + u[i] * min_e;
-                        }
-                    }
+        // The game's visible sun lights from the side the sky shows it on (its BrightSun), its shafts from its disc.
+        // A sky's painted sun often stands below the playfield's horizon (Hurry-Scurry's 17 degrees under its
+        // platforms, Good Egg's behind the planet: no direct sunlight reached them, b84 direct-light views; owner: the
+        // sun does not apply): it is held over the player's horizon (below).
+        // Where the sky shows the sun (world): the shafts' centre, whatever lift the light takes below.
+        const std::array<float, 3> shown_direction = l;
+        // The light's elevation over the player's horizon (the ground under the player, by the game's gravity), its
+        // compass direction kept: the game's sun model (BrightSun) at least GALAXY_RT_SUN_MIN_ELEVATION (30) degrees up;
+        // a key light (no sun model in the stage's sky) between GALAXY_RT_KEY_MIN_ELEVATION (50) and
+        // GALAXY_RT_SUN_MAX_ELEVATION (65) degrees: high as a midday sun, so an enclosed playfield is lit across (low,
+        // a tube or wall shadows half of every floor: owner, half lighting on all textures, Bowser's Star Reactor) while
+        // the characters' shadows still show beside them (straight overhead they hide under them). A key the sky map
+        // shows (key_shown_: the sky detector's bright spot of a backdrop) is held as a key, its shafts from the spot.
+        // Physical light holds its final direction the same way (hold_light, below).
+        const bool lift_sun = sun_present && !keyed && !sun_override_;
+        const bool lift_key = sun_present && keyed && !sun_override_;
+        if (lift_sun || lift_key) {
+            // The player's up in world space (scene_up_ is the eye's), else world Y.
+            std::array<float, 3> up{0.0f, 1.0f, 0.0f};
+            if (camera_known_ &&
+                scene_up_[0] * scene_up_[0] + scene_up_[1] * scene_up_[1] + scene_up_[2] * scene_up_[2] > 0.25f) {
+                for (unsigned i = 0; i < 3u; ++i) {
+                    up[i] = camera_[i] * scene_up_[0] + camera_[4u + i] * scene_up_[1] + camera_[8u + i] * scene_up_[2];
                 }
             }
-        }
-        // A key from the game's world-fixed light (no sun in its sky) no higher than GALAXY_RT_SUN_MAX_ELEVATION degrees:
-        // straight overhead it hides every character's shadow under them (user: tilt it slightly so the shadows show).
-        // Its compass direction stays; straight overhead it leans away from the camera's view (the shadows fall
-        // towards the camera). A sun the sky shows (the game's BrightSun, or the one its sky map holds: key_shown_)
-        // keeps its place: the light comes from where the sky shows it (owner, 10-20).
-        if (sun_present && keyed && !key_shown_ && !sun_override_ && sun_max_elevation_ < 90.0f) {
-            const float length = std::sqrt(l[0] * l[0] + l[1] * l[1] + l[2] * l[2]);
-            const float max_e = std::sin(sun_max_elevation_ * 3.14159265f / 180.0f);
-            if (length > 1e-6f) {
-                const std::array<float, 3> d{l[0] / length, l[1] / length, l[2] / length};
-                if (d[1] > max_e) {
-                    std::array<float, 3> h{d[0], 0.0f, d[2]};
-                    float h_length = std::sqrt(h[0] * h[0] + h[2] * h[2]);
-                    if (h_length < 1e-3f) {
-                        h = {-camera_[8], 0.0f, -camera_[10]};
-                        h_length = std::sqrt(h[0] * h[0] + h[2] * h[2]);
-                    }
-                    if (h_length > 1e-6f) {
-                        const float across = std::sqrt(1.0f - max_e * max_e);
-                        l = {h[0] / h_length * across, max_e, h[2] / h_length * across};
-                    }
-                }
-            }
+            hold_elevation(l, up, lift_sun ? sun_min_elevation_ : key_min_elevation_,
+                           lift_sun ? 90.0f : sun_max_elevation_, {camera_[8], camera_[9], camera_[10]});
         }
         std::array<float, 3> sun_color = keyed ? key_color_ : sun_color_;
         const RtStageSun* const stage = stage_sun_;
@@ -3688,6 +3732,18 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
             l = {camera_[0] * l[0] + camera_[1] * l[1] + camera_[2] * l[2],
                  camera_[4] * l[0] + camera_[5] * l[1] + camera_[6] * l[2],
                  camera_[8] * l[0] + camera_[9] * l[1] + camera_[10] * l[2]};
+            const std::array<float, 3>& v = shown_direction;
+            sun_visible_eye_ = {camera_[0] * v[0] + camera_[1] * v[1] + camera_[2] * v[2],
+                                camera_[4] * v[0] + camera_[5] * v[1] + camera_[6] * v[2],
+                                camera_[8] * v[0] + camera_[9] * v[1] + camera_[10] * v[2]};
+        } else {
+            sun_visible_eye_ = shown_direction;
+        }
+        {
+            const float v = std::sqrt(sun_visible_eye_[0] * sun_visible_eye_[0] +
+                                      sun_visible_eye_[1] * sun_visible_eye_[1] +
+                                      sun_visible_eye_[2] * sun_visible_eye_[2]);
+            for (float& x : sun_visible_eye_) x = v > 1e-6f ? x / v : 0.0f;
         }
         const float length = std::sqrt(l[0] * l[0] + l[1] * l[1] + l[2] * l[2]);
         const std::array<float, 3> fallback_sun{0.3f, 0.8f, 0.5f};
@@ -3834,6 +3890,29 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
                 c.sun[i] = eye[i] / length;
             }
         }
+        // Whatever it comes from, the light keeps its elevation band over the player's horizon (eye space: scene_up_):
+        // a sun the sky shows at least GALAXY_RT_SUN_MIN_ELEVATION up, anything else (the key, the game's stage key
+        // light, the baked-light fit) between GALAXY_RT_KEY_MIN_ELEVATION and GALAXY_RT_SUN_MAX_ELEVATION. The stage
+        // key was taken as it stood: Bowser's Star Reactor (no sun, no key) lit its floors from 7 degrees, half of
+        // every floor in the tube's shadow (owner: half lighting on all textures; b86 [rt-light] eye 0.955,0.043,0.292).
+        const auto hold_light = [&](bool shown) {
+            if (sun_override_) {
+                return;
+            }
+            std::array<float, 3> d{c.sun[0], c.sun[1], c.sun[2]};
+            hold_elevation(d, scene_up_, shown ? sun_min_elevation_ : key_min_elevation_,
+                           shown ? 90.0f : sun_max_elevation_, {0.0f, 0.0f, 1.0f});
+            std::copy(d.begin(), d.end(), c.sun);
+            // The game's off-screen shadow casters sweep along it (world: the rotation's transpose).
+            std::array<float, 3> world{};
+            for (unsigned r = 0; r < 3u; ++r) {
+                for (unsigned k = 0; k < 3u; ++k) {
+                    world[k] += camera_[r * 4u + k] * d[r];
+                }
+            }
+            set_traced_sun(world, camera_known_);
+        };
+        hold_light(visible_sun);
         // The camera's exposure from the game's own stage light: a white surface facing the player's up under its
         // ambient and its key, the key at no less than 30 degrees up (physical_exposure). Set here so that a light
         // fitted dimmer to the baked light stays dimmer.
@@ -3907,6 +3986,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
                 c.sky_radiance[i] *= sky_strength / sky_luma;
                 c.sun[i] = fitted_eye[i];
             }
+            hold_light(false);
             const float up_sun = std::max(scene_up_[0] * c.sun[0] + scene_up_[1] * c.sun[1] + scene_up_[2] * c.sun[2],
                                           0.5f);
             const float lit = sky_strength + sun_strength * up_sun;
@@ -3992,6 +4072,11 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
                     for (unsigned k = 0; k < 3u; ++k) {
                         hue[k] = core_colour_[k] * warm / seen;
                     }
+                }
+                // Half its colour, as the sun's: a glowing ball's picture is more saturated than its light (at its
+                // full colour the Observatory's white floor and rings turned orange-pink, b83-b84).
+                for (float& v : hue) {
+                    v = warm + 0.5f * (v - warm);
                 }
                 candidates[used++] = {1.0e6f, e, {hue[0] * l, hue[1] * l, hue[2] * l}, half, true, core_ball_radius_};
             }
@@ -4428,6 +4513,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     info.pixels = pixels;
     for (unsigned i = 0; i < 3u; ++i) {
         info.sun[i] = c.sun[i];
+        info.sun_visible[i] = sun_visible_eye_[i];
         info.sun_shown = sun_shown_;
         info.sun_light[i] = c.sun_light[i];
     }
@@ -5422,7 +5508,9 @@ bool SceneRayTracer::trace_engine_clear(ID3D12GraphicsCommandList* list, Allocat
     list->SetComputeRootShaderResourceView(kLightReservoirIn, spare);
     list->SetComputeRootUnorderedAccessView(kLightReservoirOut, scratch);
     list->SetPipelineState(engine_clear_pso_.Get());
+    const int timed = begin_pass(list);
     list->Dispatch((engine_width_ + 7u) / 8u, (engine_height_ + 7u) / 8u, 1u);
+    end_pass(list, timed, kPassEngineClear);
     const D3D12_RESOURCE_BARRIER barrier = uav_barrier(engine_clear_[slot].Get());
     list->ResourceBarrier(1u, &barrier);
     to_state(list, engine_clear_[slot].Get(), engine_clear_state_[slot],

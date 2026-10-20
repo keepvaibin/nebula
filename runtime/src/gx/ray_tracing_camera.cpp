@@ -12,6 +12,7 @@
 #include "rt_camera_widen_ps.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <cstdlib>
 #include <iostream>
 
@@ -264,16 +265,29 @@ bool SceneRayTracer::camera_finish(ID3D12GraphicsCommandList* list, D3D12_GPU_DE
         // The sun's shafts, from a sun the sky shows in front of the camera (on the picture or off it), into the
         // downward pyramid's first texels.
         const LightSlot* const slot = light_slot_ >= 0 ? &light_slots_[static_cast<unsigned>(light_slot_)] : nullptr;
-        if (slot != nullptr && slot->sun_shown && camera_shafts_ > 0.0f && slot->sun[2] < -0.05f &&
+        // From the disc the sky shows (sun_visible), not the light's direction (lifted over the player's horizon).
+        if (slot != nullptr && slot->sun_shown && camera_shafts_ > 0.0f && slot->sun_visible[2] < -0.05f &&
             slot->width == width && slot->height == height) {
             const std::array<float, 4>& pr = slot->view.projection;
             const std::array<float, 4>& vp = slot->view.viewport;
-            const float w = -slot->sun[2];
-            const float ndc_x = (pr[0] * slot->sun[0] + pr[1] * slot->sun[2]) / w;
-            const float ndc_y = (pr[2] * slot->sun[1] + pr[3] * slot->sun[2]) / w;
+            const std::array<float, 3>& sun = slot->sun_visible;
+            const float w = -sun[2];
+            const float ndc_x = (pr[0] * sun[0] + pr[1] * sun[2]) / w;
+            const float ndc_y = (pr[2] * sun[1] + pr[3] * sun[2]) / w;
             const float stage = stage_sun_ != nullptr && stage_sun_->shafts >= 0.0f ? stage_sun_->shafts : 1.0f;
             c.sun[0] = vp[0] + (ndc_x + 1.0f) * 0.5f * vp[2];
             c.sun[1] = vp[1] + (1.0f - ndc_y) * 0.5f * vp[3];
+            // GALAXY_RT_LOG_SUN=1 (diagnostics): where the shafts' sun falls on the picture, every 120 frames (the
+            // traced light's direction, eye space: the same vector lights the scene).
+            static const bool log_sun = env_value("GALAXY_RT_LOG_SUN", 0.0f) != 0.0f;
+            static std::uint32_t logged = 0u;
+            if (log_sun && (logged++ % 120u) == 0u) {
+                std::fprintf(stderr,
+                             "[rt-sun] eye=%.4f,%.4f,%.4f pixel=%.1f,%.1f picture=%ux%u "
+                             "viewport=%.0f,%.0f,%.0f,%.0f\n",
+                             sun[0], sun[1], sun[2], c.sun[0], c.sun[1], width, height, vp[0], vp[1],
+                             vp[2], vp[3]);
+            }
             c.sun[2] = camera_shafts_ * stage;
             c.sun[3] = static_cast<float>(height);
             c.quarter[0] = (width + 3u) / 4u;
@@ -286,7 +300,7 @@ bool SceneRayTracer::camera_finish(ID3D12GraphicsCommandList* list, D3D12_GPU_DE
             c.depth_params[3] = slot->view.max_depth;
             // Aerosol (Mie) forward scattering, g 0.76 (Preetham et al. 1999's haze; Nishita et al. 1993).
             for (unsigned i = 0u; i < 3u; ++i) {
-                c.sun_dir[i] = slot->sun[i];
+                c.sun_dir[i] = sun[i];
             }
             c.sun_dir[3] = 0.76f;
             std::copy(pr.begin(), pr.end(), c.projection);

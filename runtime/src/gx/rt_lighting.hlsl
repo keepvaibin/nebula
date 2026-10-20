@@ -209,12 +209,22 @@ static const uint kStarColour = kStarSums + kStarSlots * 16u;
 // light's log2 sum (x 256, signed) and count over the surfaces GlowBaseCS samples (cleared by SkyStateCS).
 static const uint kAdaptation = kStarColour + 16u;
 // A scene lit at this share of the stage's full light or more (the surfaces' geometric mean) is exposed as the stage's
-// light sets it; a dimmer one brightens by the square root of the ratio (vision adapts partly: brightness goes about as
-// the square root of luminance, Stevens 1957), at most 4 times (two stops). A sunlit view's surfaces (open ground,
-// walls, shade) average about a fifth of the full light: Good Egg measured 0.21 (b27, through the film shoulder), so day stages keep their
-// exposure; the stage's own dimness is the static exposure's (physical_exposure).
+// light sets it; a dimmer one is metered up to it as a camera meters (the ratio, not its square root: the picture is a
+// camera's, and at the square root shaded and sunless views kept half their darkness and lost their colours, owner
+// b81: the Reactor, the Dark Matter Plant, the Airship's hull), at most 4 times (two stops: a night stays darker than
+// a day). A sunlit view's surfaces (open ground, walls, shade) average about a fifth of the full light: Good Egg
+// measured 0.21 (b27, through the film shoulder), so day stages keep their exposure; the stage's own dimness is the
+// static exposure's (physical_exposure).
 static const float kAdaptationReference = 0.2f;
 static const float kAdaptationMost = 4.0f;
+// Highlight priority: the metering brightens a view no further than shows the brightest tenth of its surfaces' light at
+// the stage's full light on the picture (a camera exposed for its sunlit parts: the sunny-16 rule). Metered on the shade's geometric
+// mean alone, a sunlit view with much shade was brightened up to 4 times and its sunlit ground pushed into the tone
+// curve's shoulder, pale (owner, b83: the sun does not feel strong). The light in log2 buckets of 0.75 stops from
+// 1/256 to 16 of the full light (GlowBaseCS), read and cleared by SkyStateCS.
+static const uint kAdaptationBuckets = 16u;
+static const uint kAdaptationHistogram = kAdaptation + 16u;
+static const float kAdaptationBright = 0.1f;
 // Scene instance masks (ray_tracing.cpp kSceneMask): the frame's geometry. The late geometry (instance 1:
 // drawn after the trace, Rosalina) has no records in g_positions or g_surfaces: shadow, sky and reflection
 // rays meet it as an occluder.
@@ -226,6 +236,12 @@ static const float kDrawGlowScale = 16.0f;
 static const float kPlantHalo = 2.0f;
 // RtDraw.flags bits 8-11 (rt_surfaces.h RtSurfaceClass::Crystal): clear crystal, glass and gems.
 static const uint kClearClass = 7u;
+// The share of the light a clear solid stops on its way through: its facets refract and totally reflect most rays
+// away from the straight path, so the light behind a cut crystal is a partial, mottled shadow (about 0.4 of the light
+// arrives), not the 0.91 a flat pane passes ((1 - F)^2) nor a solid's full shadow. Decided per shadow ray by a hash
+// (the denoiser averages it); the sun's and the lights' rays alike (b82 had the lights' only: no crystal shadowed the
+// sun, owner).
+static const float kClearShadow = 0.6f;
 // The lighting multiplies the game's colour by at most this; the composite rolls it off on a film
 // shoulder from kLitKnee (apply_light).
 static const float kMaxLight = 8.0f;
@@ -855,10 +871,31 @@ void SkyStateCS()
         const uint count = c_sums.Load(kAdaptation + 12u);
         const float mean = count != 0u ? exp2(float(asint(c_sums.Load(kAdaptation + 8u))) / (256.0f * float(count))) : 0.0f;
         c_sums.Store2(kAdaptation + 8u, uint2(0u, 0u));
+        // The light at the brightest tenth of the surfaces (the top of the bucket the tenth falls in).
+        float bright = 0.0f;
+        {
+            uint total = 0u;
+            [unroll] for (uint b = 0u; b < kAdaptationBuckets; ++b) {
+                total += c_sums.Load(kAdaptationHistogram + b * 4u);
+            }
+            uint above = 0u;
+            [loop] for (uint k = kAdaptationBuckets; k > 0u; --k) {
+                above += c_sums.Load(kAdaptationHistogram + (k - 1u) * 4u);
+                if (bright == 0.0f && float(above) >= kAdaptationBright * float(total) && total != 0u) {
+                    bright = exp2(-8.0f + 0.75f * float(k));
+                }
+            }
+            [unroll] for (uint c = 0u; c < kAdaptationBuckets; ++c) {
+                c_sums.Store(kAdaptationHistogram + c * 4u, 0u);
+            }
+        }
         if ((c_exposure & 3u) == 2u) {
             c_sums.Store2(kAdaptation, uint2(asuint(1.0f), 0u));
         } else if (count * 50u > grid) {
-            const float target = clamp(rsqrt(max(mean, 1e-4f) / kAdaptationReference), 1.0f, kAdaptationMost);
+            // The light the picture shows it at is the camera's exposure (c_exposure_day) times the adaptation.
+            const float highlight = bright > 0.0f ? 1.0f / max(bright * c_exposure_day, 1e-4f) : kAdaptationMost;
+            const float target =
+                clamp(min(kAdaptationReference / max(mean, 1e-4f), highlight), 1.0f, kAdaptationMost);
             const bool known = c_sums.Load(kAdaptation + 4u) != 0u;
             const float current = known ? asfloat(c_sums.Load(kAdaptation)) : target;
             c_sums.Store2(kAdaptation, uint2(asuint(current * pow(target / current, 0.02f)), 1u));
@@ -899,6 +936,8 @@ void GlowBaseCS(uint3 id : SV_DispatchThreadID)
             const int weight = all(abs(at) < float2(0.2f, 0.25f)) ? 4 : 1;
             c_sums.InterlockedAdd(kAdaptation + 8u, asuint(int(round(log2(light) * 256.0f)) * weight));
             c_sums.InterlockedAdd(kAdaptation + 12u, uint(weight));
+            const uint bucket = min(uint(max((log2(light) + 8.0f) / 0.75f, 0.0f)), kAdaptationBuckets - 1u);
+            c_sums.InterlockedAdd(kAdaptationHistogram + bucket * 4u, uint(weight));
         }
     }
     if ((c_exposure & 1u) != 0u && ((id.x | id.y) & 7u) == 0u) {
@@ -2553,17 +2592,31 @@ Surface primary_surface(int2 q, float3 p)
     ray.TMax = span * 1.02f + 2.0f;
     RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
     query.TraceRayInline(g_scene, RAY_FLAG_NONE, kSceneMask, ray);
+    // The candidate nearest the raster's depth, whatever its kind: the raster drew a surface there (its alpha test
+    // passed), so when no triangle meets the depth closely that one is it. Without it Bowser's Star Reactor's fire-bar
+    // balls (alpha-tested, a few units off the raster's depth) had no draw at their pixels (probe b82: no triangle at a
+    // lit pixel 1566 units out): never a light source, shaded as dark discs.
+    float nearest_gap = span * 0.03f + 8.0f;
+    uint nearest_tri = 0u;
+    float2 nearest_b = float2(0.0f, 0.0f);
     while (query.Proceed()) {
         // A foliage card is the surface only where the raster drew it (at this pixel's depth).
         const uint candidate = g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u);
-        if (abs(query.CandidateTriangleRayT() - span) <= span * 0.002f + 0.5f ||
-            !(traced_card(candidate) || alpha_draw(candidate))) {
+        const float gap = abs(query.CandidateTriangleRayT() - span);
+        if (gap < nearest_gap) {
+            nearest_gap = gap;
+            nearest_tri = query.CandidatePrimitiveIndex() + 1u;
+            nearest_b = query.CandidateTriangleBarycentrics();
+        }
+        if (gap <= span * 0.002f + 0.5f || !(traced_card(candidate) || alpha_draw(candidate))) {
             query.CommitNonOpaqueTriangleHit();
         }
     }
-    if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT && abs(query.CommittedRayT() - span) < span * 0.01f + 2.0f) {
-        const uint tri = query.CommittedPrimitiveIndex();
-        const float2 b = query.CommittedTriangleBarycentrics();
+    const bool committed =
+        query.CommittedStatus() == COMMITTED_TRIANGLE_HIT && abs(query.CommittedRayT() - span) < span * 0.01f + 2.0f;
+    if (committed || nearest_tri != 0u) {
+        const uint tri = committed ? query.CommittedPrimitiveIndex() : nearest_tri - 1u;
+        const float2 b = committed ? query.CommittedTriangleBarycentrics() : nearest_b;
         const float3 w = float3(1.0f - b.x - b.y, b.x, b.y);
         const float3 v0 = asfloat(g_positions.Load3(tri * 36u));
         const float3 v1 = asfloat(g_positions.Load3(tri * 36u + 12u));
@@ -2648,6 +2701,12 @@ bool sun_visible(float3 origin, float3 direction, bool card, uint salt, out floa
             continue;
         }
         const uint hit = g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u);
+        if (((hit >> 8u) & 15u) == kClearClass) {
+            if (card_hash(query.CandidatePrimitiveIndex(), salt ^ 0x5BD1E995u) < kClearShadow) {
+                query.CommitNonOpaqueTriangleHit();
+            }
+            continue;
+        }
         if ((hit & kDrawNoShadow) != 0u) {
             continue;
         }
@@ -3805,8 +3864,14 @@ void EmitTriangleCS(uint3 id : SV_DispatchThreadID)
     // Brighter than it shows by the table's intensity where that passes 1 (a glowing bulb's luminance over its painted
     // colour); the table's lesser art intensities (Luma units) leave it as it shows. Outside the table's glowing region
     // of its texture (tev_glows_at, at the triangle's centre) none.
-    radiance *= max(asfloat(g_draws.Load(min(draw, max(g_draw_count, 1u) - 1u) * kDrawStride + 12u)), 1.0f) *
-                (tev_glows_at(draw, g_tev_info.x, tri, float2(1.0f / 3.0f, 1.0f / 3.0f)) ? 1.0f : 0.0f);
+    // A faint glow (intensity below 1, the engine's kGbGlow) sends its glow: its colour times the intensity.
+    {
+        const uint record = min(draw, max(g_draw_count, 1u) - 1u) * kDrawStride;
+        const float intensity = asfloat(g_draws.Load(record + 12u));
+        const bool star = (g_draws.Load(record + 24u) & kDrawTableStar) != 0u;
+        radiance *= (intensity < 1.0f && !star ? intensity : max(intensity, 1.0f)) *
+                    (tev_glows_at(draw, g_tev_info.x, tri, float2(1.0f / 3.0f, 1.0f / 3.0f)) ? 1.0f : 0.0f);
+    }
     const bool two_sided = (range.z >> 31u) != 0u;
     // A beam (the table's `cone`: TEV record pad[0] bits 16-31, n): radiance L cos^n from the face's normal, its power
     // 2 pi L A / (n + 1) (n = 1: a Lambertian face's pi L A).

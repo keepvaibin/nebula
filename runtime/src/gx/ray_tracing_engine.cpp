@@ -50,6 +50,7 @@ constexpr std::uint32_t kEngineClearNoShade = 8192u;
 constexpr std::uint32_t kEngineHitNoLights = 16384u;
 constexpr std::uint32_t kEngineHitNoSky = 32768u;
 constexpr std::uint32_t kEngineClearNoTev = 65536u;
+constexpr std::uint32_t kEngineBounceCache = 131072u;
 
 float env_value(const char* name, float fallback) {
     char value[32]{};
@@ -87,6 +88,7 @@ bool SceneRayTracer::create_engine_pipelines() {
     engine_indirect_ = env_value("GALAXY_RT_ENGINE_INDIRECT", 1.0f) != 0.0f;
     engine_specular_ = env_value("GALAXY_RT_ENGINE_SPECULAR", 1.0f) != 0.0f;
     engine_points_ = env_value("GALAXY_RT_ENGINE_POINTS", 1.0f) != 0.0f;
+    engine_bounces_ = env_value("GALAXY_RT_ENGINE_BOUNCES", 1.0f) != 0.0f;
     engine_clear_mode_ = static_cast<std::uint32_t>(std::clamp(env_value("GALAXY_RT_ENGINE_CLEAR", 1.0f), 0.0f, 9.0f));
     engine_clear_wanted_ = engine_clear_mode_ != 0u;
     if (!engine_wanted_ || !light_textured_ || !light_root_) {
@@ -244,7 +246,7 @@ bool SceneRayTracer::engine_prepare(std::uint32_t width, std::uint32_t height, u
                 (engine_clear_mode_ == 3u ? kEngineClearNoRay : 0u) | (engine_clear_mode_ == 4u ? kEngineClearNoSun : 0u) |
                 (engine_clear_mode_ == 5u ? kEngineClearNoBack : 0u) | (engine_clear_mode_ == 6u ? kEngineClearNoShade : 0u) |
                 (engine_clear_mode_ == 7u ? kEngineHitNoLights : 0u) | (engine_clear_mode_ == 8u ? kEngineHitNoSky : 0u) |
-                (engine_clear_mode_ == 9u ? kEngineClearNoTev : 0u) |
+                (engine_clear_mode_ == 9u ? kEngineClearNoTev : 0u) | (engine_bounces_ ? kEngineBounceCache : 0u) |
                 (engine_view_ << 4u);
     c.info[1] = 0u;
     c.info[2] = slot;
@@ -271,12 +273,22 @@ void SceneRayTracer::trace_engine(ID3D12GraphicsCommandList* list, Allocate allo
         list->Dispatch(x, y, 1u);
         list->ResourceBarrier(1u, &barrier);
     };
+    // GALAXY_RT_PASS_TIMING: each stage's GPU time ([rt-engine-pass]).
+    int timed = begin_pass(list);
     run(engine_gbuffer_pso_.Get(), gx, gy);
+    end_pass(list, timed, kPassEngineGBuffer);
+    timed = begin_pass(list);
     run(engine_direct_pso_.Get(), gx, gy);
     run(engine_direct_spatial_pso_.Get(), gx, gy);
+    end_pass(list, timed, kPassEngineDirect);
+    timed = begin_pass(list);
     run(engine_indirect_pso_.Get(), hx, hy);
     run(engine_indirect_spatial_pso_.Get(), hx, hy);
+    end_pass(list, timed, kPassEngineIndirect);
+    timed = begin_pass(list);
     run(engine_specular_pso_.Get(), gx, gy);
+    end_pass(list, timed, kPassEngineSpecular);
+    timed = begin_pass(list);
     run(engine_temporal_pso_.Get(), gx, gy);
     // The a-trous iterations (steps 1, 2, 4, 8: A to B, B to A, ...) and the final pass (the result in A), each with
     // its step in the frame's constants.
@@ -297,9 +309,12 @@ void SceneRayTracer::trace_engine(ID3D12GraphicsCommandList* list, Allocate allo
             run(engine_atrous_pso_.Get(), gx, gy);
         }
     }
+    end_pass(list, timed, kPassEngineDenoise);
+    timed = begin_pass(list);
     if (with_info(0u, 0u)) {
         run(engine_final_pso_.Get(), gx, gy);
     }
+    end_pass(list, timed, kPassEngineFinal);
     list->SetComputeRootConstantBufferView(0u, frame);
     engine_slot_valid_[slot] = true;
     engine_parity_ ^= 1u;

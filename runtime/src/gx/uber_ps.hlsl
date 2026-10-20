@@ -652,19 +652,28 @@ PSOut main(PSIn pin) {
     }
     // Under ray-traced light (the HDR scene EFB, sRGB-encoded past 1), in linear light after the TEV's 8-bit result: a
     // light source's glow (additive, output_flags bit 5) at its radiance times the camera's exposure (ztex_params.z);
-    // a lit translucent (bit 6) under the light of the surface behind it (texture 7, exposed), unclamped; an opaque draw
-    // after the trace (bit 7) takes no emitter's light.
+    // a lit translucent (bit 6) under the light of the surface behind it (texture 7, exposed), unclamped, unless its
+    // scale (ztex_params.w) is 0 (light sources, clear surfaces) or negative (a light source in the table's colour);
+    // an opaque draw after the trace (bit 7) takes no emitter's light.
     if ((output_flags & 0x60u) != 0u) {
         float3 lin = frag.rgb <= 0.04045 ? frag.rgb / 12.92 : pow((frag.rgb + 0.055) / 1.055, 2.4);
         if ((output_flags & 0x20u) != 0u) {
             lin *= ztex_params.z;
         }
-        if ((output_flags & 0x40u) != 0u) {
+        if ((output_flags & 0x40u) != 0u && ztex_params.w > 0.0) {
             uint lit_w, lit_h;
             tex[7].GetDimensions(lit_w, lit_h);
             const int2 lit_at = min(int2(pin.pos.xy * ztex_params.w), int2(lit_w, lit_h) - 1);
             const float3 light = max(tex[7].Load(int3(lit_at, 0)).rgb, 0.0);
             lin *= (output_flags & 0x80u) != 0u ? min(light, 1.15) : light;
+        } else if (ztex_params.w < 0.0) {
+            // A light source the table shows in its own colour (`recolour`: RGB8 + 1, negated): its peak kept (a blue
+            // glow's luminance is a fifth of its peak: warm white at that luminance showed grey).
+            const uint code = uint(-ztex_params.w) - 1u;
+            const float3 c = float3(code & 255u, (code >> 8u) & 255u, (code >> 16u) & 255u) / 255.0;
+            const float3 hue = c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4);
+            const float peak = max(hue.r, max(hue.g, hue.b));
+            lin = peak > 1e-4 ? max(lin.r, max(lin.g, lin.b)) * hue / peak : lin;
         }
         frag.rgb = lin <= 0.0031308 ? lin * 12.92 : 1.055 * pow(lin, 1.0 / 2.4) - 0.055;
     }

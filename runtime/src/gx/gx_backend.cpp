@@ -7133,7 +7133,9 @@ std::uint32_t GxBackend::debake_channels() const {
     // Environment 6-7, IndirectPlanet 0x1D, and the draw types' lists): the game lights its actors (the player, NPCs,
     // enemies) as they move, and its map objects (houses, toys, blocks, props) paint their vertices with their own
     // colours. Each vertex colour over its brightest channel turned Toy Time's toy's black hair and its robot's dark
-    // panels white.
+    // panels white. A lit channel whose material colour comes from an actor's or map object's vertices is that paint
+    // too: de-baked by its facing fit, the Airship Armada's pink Octoombas went dark crimson (d84: pink with the
+    // de-bake off, as the game shows them).
     static const bool lit_enabled = read_env_u64("GALAXY_RT_DEBAKE_LIT", 1u) != 0u;
     const std::uint32_t buffer = rt_draw_buffer_ & 0xFFFFu;
     const bool terrain = buffer == 0xFFFFu || buffer == 0x00u || buffer == 0x04u || buffer == 0x05u ||
@@ -7145,7 +7147,7 @@ std::uint32_t GxBackend::debake_channels() const {
         const XfChannelCtrl ctrl = state_.channel_ctrl(c);
         if (!ctrl.lighting_enable && ctrl.material_from_vertex && !actor) {
             channels |= 1u << c;
-        } else if (ctrl.lighting_enable && lit_enabled) {
+        } else if (ctrl.lighting_enable && lit_enabled && !(actor && ctrl.material_from_vertex)) {
             channels |= 4u << c;
         }
     }
@@ -7691,8 +7693,12 @@ bool GxBackend::rt_alpha_draw() const noexcept {
     if (!enabled || !rt_card_eligible_ || rt_card_draw()) {
         return false;
     }
+    // A particle texture the table names a light source, drawn as opaque geometry, is that light's surface: traced
+    // (Bowser's Star Reactor's fire-bar balls: their opaque core in phase 1, alpha-tested, untraced as a particle,
+    // reasons 0xA0 in GALAXY_RT_UNTRACED; never a light source, they showed as dark discs).
     const RtMaterial* const material = current_rt_material_ != 0u ? rt_material(current_rt_material_) : nullptr;
-    return material == nullptr || (!material->particle && !material->sky && !material->hide);
+    return material == nullptr || ((!material->particle || material->emission != RtEmission::None) && !material->sky &&
+                                    !material->hide);
 }
 
 // Glows: additive draws of the translucent phases, after the trace and before the scene's end.
@@ -15044,7 +15050,28 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         ps_c.ztex_params[2] = (ps_key_.output_flags & 0x20u) == 0u ? 0.0f
                               : renderer_.rt_physical() ? 1.0f
                                                         : renderer_.rt_glow_exposure(glow_kind_ == 2u);
-        ps_c.ztex_params[3] = (ps_key_.output_flags & 0x40u) != 0u ? renderer_.rt_light_texture_scale() : 0.0f;
+        // The lighting texture's scale; 0 leaves a lit translucent unlit: a table light source (its own light) or a
+        // clear surface (glass, crystal, ice, water: the lit scene through it; lit again, Melty Molten's crystals went
+        // near black and Bowser's Star Reactor's fire bars dark).
+        bool takes_light = (ps_key_.output_flags & 0x40u) != 0u;
+        float recolour = 0.0f;
+        if (const RtMaterial* const m = rt_material(current_rt_material_);
+            m != nullptr && (ps_key_.output_flags & 0x60u) != 0u) {
+            const bool emits = m->emission != RtEmission::None && !m->no_light && !m->hide;
+            const bool clear = m->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Crystal) ||
+                               m->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Water);
+            takes_light = takes_light && !emits && !clear;
+            // `recolour`: a light source's sprite in the table's colour (the Observatory's walkway lamps: the game
+            // draws their glow blue, the table and the owner give them warm white), as RGB8 + 1, negated.
+            if (emits && m->recolour) {
+                const auto byte = [](float v) {
+                    return static_cast<std::uint32_t>(std::lround(std::clamp(v, 0.0f, 1.0f) * 255.0f));
+                };
+                recolour = -static_cast<float>(1u + byte(m->color[0]) + (byte(m->color[1]) << 8u) +
+                                               (byte(m->color[2]) << 16u));
+            }
+        }
+        ps_c.ztex_params[3] = takes_light ? renderer_.rt_light_texture_scale() : recolour;
         // GALAXY_RT_LOG_GLOWS=1: each scene draw's material once per phase, glow kind and lighting texture (mat_id.py
         // names the material).
         if (scene_phase_ && rt_log_glows()) [[unlikely]] {

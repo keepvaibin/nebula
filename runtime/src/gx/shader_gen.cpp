@@ -2557,14 +2557,25 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
         if ((key.output_flags & 0x20u) != 0u) {
             s << "    lin *= ztex_params.z;\n";
         }
+        // The light texture only for a positive scale (0: a light source or a clear surface, none; read anyway it
+        // took the light at texel 0, 0); a negative one carries the table's colour for a light source shown in it.
         if ((key.output_flags & 0x40u) != 0u) {
-            s << "    uint lit_w, lit_h;\n";
-            s << "    tex[7].GetDimensions(lit_w, lit_h);\n";
-            s << "    const int2 lit_at = min(int2(pin.pos.xy * ztex_params.w), int2(lit_w, lit_h) - 1);\n";
+            s << "    if (ztex_params.w > 0.0) {\n";
+            s << "        uint lit_w, lit_h;\n";
+            s << "        tex[7].GetDimensions(lit_w, lit_h);\n";
+            s << "        const int2 lit_at = min(int2(pin.pos.xy * ztex_params.w), int2(lit_w, lit_h) - 1);\n";
             s << ((key.output_flags & 0x80u) != 0u
-                      ? "    lin *= min(max(tex[7].Load(int3(lit_at, 0)).rgb, 0.0), 1.15);\n"
-                      : "    lin *= max(tex[7].Load(int3(lit_at, 0)).rgb, 0.0);\n");
+                      ? "        lin *= min(max(tex[7].Load(int3(lit_at, 0)).rgb, 0.0), 1.15);\n"
+                      : "        lin *= max(tex[7].Load(int3(lit_at, 0)).rgb, 0.0);\n");
+            s << "    }\n";
         }
+        s << "    if (ztex_params.w < 0.0) {\n"
+             "        const uint code = uint(-ztex_params.w) - 1u;\n"
+             "        const float3 c = float3(code & 255u, (code >> 8u) & 255u, (code >> 16u) & 255u) / 255.0;\n"
+             "        const float3 hue = c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4);\n"
+             "        const float peak = max(hue.r, max(hue.g, hue.b));\n"
+             "        lin = peak > 1e-4 ? max(lin.r, max(lin.g, lin.b)) * hue / peak : lin;\n"
+             "    }\n";
         s << "    frag.rgb = lin <= 0.0031308 ? lin * 12.92 : 1.055 * pow(lin, 1.0 / 2.4) - 0.055;\n";
     }
     if (key.flags & 0x04u) {

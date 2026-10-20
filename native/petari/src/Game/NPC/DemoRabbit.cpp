@@ -147,7 +147,10 @@ void DemoRabbit::updateStopVelocity() {
     MR::addVelocityToGravityOrGround(this, ::sGroundGravityAccel);
     MR::reboundVelocityFromCollision(this);
 
-    TVec3f normal;
+    // Nebula: with no ground within 10 units the console left `normal` as whatever its stack slot held; natively that
+    // was a vector of length ~9, so the kept part of the velocity grew 81-fold a frame until the binder stepped through
+    // it forever (Gateway, scenario 1). No ground: the up vector (the fall kept, the drift stopped).
+    TVec3f normal(-mGravity);
     MR::getFirstPolyNormalOnLineToMap(&normal, mPosition, mGravity * 10.0f, nullptr, nullptr);
     MR::vecKillElement(mVelocity, normal, &normal);
     mVelocity.sub(normal);
