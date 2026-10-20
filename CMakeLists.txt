@@ -836,7 +836,7 @@ foreach(galaxy_rt_pass engine_gbuffer_cs:EngineGBufferCS engine_direct_cs:Engine
         engine_direct_spatial_cs:EngineDirectSpatialCS engine_indirect_cs:EngineIndirectCS
         engine_indirect_spatial_cs:EngineIndirectSpatialCS engine_specular_cs:EngineSpecularCS
         engine_temporal_cs:EngineTemporalCS engine_atrous_cs:EngineAtrousCS engine_final_cs:EngineFinalCS
-        engine_clear_cs:EngineClearCS)
+        engine_clear_cs:EngineClearCS engine_reference_cs:EngineReferenceCS)
     string(REPLACE ":" ";" galaxy_rt_pair "${galaxy_rt_pass}")
     list(GET galaxy_rt_pair 0 galaxy_rt_name)
     list(GET galaxy_rt_pair 1 galaxy_rt_entry)

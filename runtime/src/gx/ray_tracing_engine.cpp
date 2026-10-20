@@ -14,10 +14,12 @@
 #include "rt_engine_gbuffer_cs.h"
 #include "rt_engine_indirect_cs.h"
 #include "rt_engine_indirect_spatial_cs.h"
+#include "rt_engine_reference_cs.h"
 #include "rt_engine_specular_cs.h"
 #include "rt_engine_temporal_cs.h"
 
 #include <algorithm>
+#include <bit>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
@@ -51,6 +53,7 @@ constexpr std::uint32_t kEngineHitNoLights = 16384u;
 constexpr std::uint32_t kEngineHitNoSky = 32768u;
 constexpr std::uint32_t kEngineClearNoTev = 65536u;
 constexpr std::uint32_t kEngineBounceCache = 131072u;
+constexpr std::uint32_t kEngineReference = 262144u;
 
 float env_value(const char* name, float fallback) {
     char value[32]{};
@@ -91,6 +94,9 @@ bool SceneRayTracer::create_engine_pipelines() {
     engine_bounces_ = env_value("GALAXY_RT_ENGINE_BOUNCES", 1.0f) != 0.0f;
     engine_clear_mode_ = static_cast<std::uint32_t>(std::clamp(env_value("GALAXY_RT_ENGINE_CLEAR", 1.0f), 0.0f, 9.0f));
     engine_clear_wanted_ = engine_clear_mode_ != 0u;
+    engine_reference_ = env_value("GALAXY_RT_ENGINE_REFERENCE", 0.0f) != 0.0f;
+    engine_reference_bounces_ =
+        static_cast<std::uint32_t>(std::clamp(env_value("GALAXY_RT_ENGINE_REFERENCE_BOUNCES", 8.0f), 0.0f, 32.0f));
     if (!engine_wanted_ || !light_textured_ || !light_root_) {
         return false;
     }
@@ -111,13 +117,15 @@ bool SceneRayTracer::create_engine_pipelines() {
         compute(g_rt_engine_temporal_cs, sizeof(g_rt_engine_temporal_cs), engine_temporal_pso_) &&
         compute(g_rt_engine_atrous_cs, sizeof(g_rt_engine_atrous_cs), engine_atrous_pso_) &&
         compute(g_rt_engine_final_cs, sizeof(g_rt_engine_final_cs), engine_final_pso_) &&
-        compute(g_rt_engine_clear_cs, sizeof(g_rt_engine_clear_cs), engine_clear_pso_);
+        compute(g_rt_engine_clear_cs, sizeof(g_rt_engine_clear_cs), engine_clear_pso_) &&
+        compute(g_rt_engine_reference_cs, sizeof(g_rt_engine_reference_cs), engine_reference_pso_);
     if (!ok) {
         std::cerr << "[rt] engine pipelines failed: the lighting's own passes run\n";
         return false;
     }
     std::cerr << "[rt] engine on view=" << engine_view_ << " indirect=" << (engine_indirect_ ? 1 : 0)
-              << " specular=" << (engine_specular_ ? 1 : 0) << '\n';
+              << " specular=" << (engine_specular_ ? 1 : 0) << " reference=" << (engine_reference_ ? 1 : 0)
+              << " bounces=" << engine_reference_bounces_ << '\n';
     return true;
 }
 
@@ -251,6 +259,31 @@ bool SceneRayTracer::engine_prepare(std::uint32_t width, std::uint32_t height, u
     c.info[1] = 0u;
     c.info[2] = slot;
     c.info[3] = 0u;
+    // The converged reference: once a present from GALAXY_RT_REFERENCE_FROM on (a still view), its sums started over
+    // when the picture's size changes.
+    engine_reference_running_ = false;
+    if (engine_reference_ && engine_reference_pso_ && presents_ >= reference_from_ &&
+        presents_ != engine_reference_present_) {
+        if (!engine_reference_sums_ || engine_reference_pixels_ != full) {
+            retire(engine_reference_sums_);
+            engine_reference_pixels_ = 0u;
+            engine_reference_paths_ = 0u;
+            if (create_buffer(full * 16u, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                              D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, engine_reference_sums_, L"rt engine reference")) {
+                engine_reference_pixels_ = full;
+            }
+        }
+        const std::uint32_t view =
+            engine_reference_pixels_ == full ? buffer_uav(engine_reference_sums_.Get(), full * 16u) : 0xFFFFFFFFu;
+        if (view != 0xFFFFFFFFu) {
+            c.params[0] = std::bit_cast<float>(view);
+            c.params[1] = static_cast<float>(engine_reference_paths_);
+            c.params[2] = std::bit_cast<float>(engine_reference_bounces_);
+            c.info[0] |= kEngineReference;
+            engine_reference_running_ = true;
+            engine_reference_present_ = presents_;
+        }
+    }
     if (engine_fresh_) {
         // New buffers: no history to reuse.
         flags &= ~1u;
@@ -277,6 +310,10 @@ void SceneRayTracer::trace_engine(ID3D12GraphicsCommandList* list, Allocate allo
     int timed = begin_pass(list);
     run(engine_gbuffer_pso_.Get(), gx, gy);
     end_pass(list, timed, kPassEngineGBuffer);
+    if (engine_reference_running_) {
+        run(engine_reference_pso_.Get(), gx, gy);
+        ++engine_reference_paths_;
+    }
     timed = begin_pass(list);
     run(engine_direct_pso_.Get(), gx, gy);
     run(engine_direct_spatial_pso_.Get(), gx, gy);

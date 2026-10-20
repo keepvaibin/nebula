@@ -760,6 +760,19 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_temporal_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_atrous_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_final_pso_;
+    // GALAXY_RT_ENGINE_REFERENCE: the converged reference (rt_engine.hlsl EngineReferenceCS) from present
+    // GALAXY_RT_REFERENCE_FROM on, one path a pixel a present, GALAXY_RT_ENGINE_REFERENCE_BOUNCES (8) bounces;
+    // [rt-reference-engine] prints the engine's diffuse light against it.
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_reference_pso_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> engine_reference_sums_;
+    bool engine_reference_ = false;
+    bool engine_reference_running_ = false;
+    std::uint32_t engine_reference_bounces_ = 8u;
+    std::uint64_t engine_reference_pixels_ = 0u;
+    std::uint64_t engine_reference_paths_ = 0u;
+    std::uint64_t engine_reference_present_ = ~0ull;
+    std::uint64_t engine_reference_printed_ = 0u;
+    std::array<std::uint64_t, 8> engine_reference_taken_paths_{};
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kEngineBuffers> engine_buffers_;
     // Per light slot: the engine's result (rt_engine.hlsl kEvSlot), read by the composite.
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 4> engine_slots_;
@@ -933,7 +946,8 @@ private:
     // taken (+1; 0: free) and whether the colour was copied.
     static constexpr unsigned kBallReadbacks = 4u;
     // Then the pixel probe's two records (GALAXY_RT_PROBE: rt_lighting.hlsl TraceCS).
-    static constexpr unsigned kProbeRecords = 2u;
+    // The probe's two records, then the engine reference's comparison (rt_engine.hlsl EngineFinalCS) and a spare.
+    static constexpr unsigned kProbeRecords = 4u;
     static constexpr unsigned kBallReadbackBytes = kStarSlots * 16u + 16u + kProbeRecords * 16u;
     // GALAXY_RT_PROBE=x,y (diagnostics): an EFB pixel whose sample reports, once a second, the draw the camera sees and
     // what stops the sun's centre ray from it (draw record, material table entry, distance, instance).

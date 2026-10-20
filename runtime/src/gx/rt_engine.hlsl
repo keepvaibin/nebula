@@ -45,6 +45,7 @@ static const uint kEngineOn = 1u;         // g_engine_info.x
 static const uint kEngineSpecular = 2u;   // traced specular
 static const uint kEngineIndirect = 4u;   // traced indirect light
 static const uint kEngineView = 0xF0u;    // GALAXY_RT_ENGINE_VIEW (bits 4-7): 1 direct, 2 indirect, 3 specular, 4 noisy,
+                                          // 8 the converged reference's diffuse light (GALAXY_RT_ENGINE_REFERENCE),
                                           // 5 the clear surfaces found (magenta), 6 the clear composite's coverage,
                                           // 7 the composite's albedo (unlit)
 static const uint kEnginePoints = 256u;   // the game's point lights and the star core (GALAXY_RT_ENGINE_POINTS)
@@ -56,7 +57,9 @@ static const uint kEngineClearNoShade = 8192u; // =6: the reflection ray, its hi
 static const uint kEngineHitNoLights = 16384u;  // =7: hits without the lights' sample
 static const uint kEngineHitNoSky = 32768u;     // =8: hits without the sky ray
 static const uint kEngineClearNoTev = 65536u;   // =9: glass reflection hits without their TEV colour
-static const uint kEngineBounceCache = 131072u;  // GALAXY_RT_ENGINE_BOUNCES (default on): hits take the cached light
+static const uint kEngineBounceCache = 131072u;
+static const uint kEngineReference = 262144u;   // GALAXY_RT_ENGINE_REFERENCE: the converged reference accumulates
+                                                 // (g_engine_params: x its buffer's view, y paths so far, z bounces)  // GALAXY_RT_ENGINE_BOUNCES (default on): hits take the cached light
 
 // The water draws' clear records (kEvClearDraws, word per draw: roughness in bits 0-15, flags above).
 static const uint kClearGlass = 1u << 16u;   // the engine's: glass or crystal (not mirror glass, not a metal coat)
@@ -1834,6 +1837,91 @@ void EngineClearCS(uint3 id : SV_DispatchThreadID)
     engine_buffer(kEvClear).Store4(pixel * 16u, result);
 }
 
+// --- The converged reference (GALAXY_RT_ENGINE_REFERENCE) -------------------------------------------------------
+// The engine's diffuse light (m) at a surface as one unbiased path: at every vertex the sun and the lights behind
+// shadow rays (as the direct light: the emitters' light by next-event estimation only), the sky where the cosine ray
+// leaves the scene, the hit's albedo (reference_material, as the engine's hits) carried on; Russian roulette from the
+// third bounce. No reservoirs, no history, no radiance cache, no denoiser: the same scene, materials and light, so
+// what the real-time passes add or lose shows against it ([rt-reference-engine], EngineFinalCS).
+float3 reference_path(float3 p, float3 n, float3 ng, bool card, inout uint seed, uint salt)
+{
+    float3 total = float3(0.0f, 0.0f, 0.0f);
+    float3 throughput = float3(1.0f, 1.0f, 1.0f);
+    const uint bounces = asuint(g_engine_params.z);
+    [loop] for (uint bounce = 0u; bounce <= bounces; ++bounce) {
+        const uint at = salt + bounce * 101u;
+        const float3 start = p + ng * (0.2f + abs(p.z) * 4e-4f);
+        float3 m = float3(0.0f, 0.0f, 0.0f);
+        if (any(g_sun_light.rgb > 0.0f)) {
+            const float3 l = sun_direction_sample(float2(emit_random(seed), emit_random(seed)));
+            const float nl = dot(n, l);
+            float blocker;
+            if (nl > 0.0f && dot(ng, l) > -0.05f && sun_visible(start, l, card && bounce == 0u, at, blocker)) {
+                m += g_sun_light.rgb * nl;
+            }
+        }
+        m += engine_light_sample(p, n, start, 8u, seed, at + 13u);
+        total += throughput * safe_light(m);
+        const float3 d = cosine_direction(n, ng, float2(emit_random(seed), emit_random(seed)));
+        const Hit h = engine_trace(start, d, at + 7u);
+        if (!h.surface) {
+            if (!h.late) {
+                total += throughput * sky_light_colour(physical_sky(d));
+            }
+            break;
+        }
+        float3 albedo;
+        float3 emission;
+        reference_material(h.tri, h.b, albedo, emission);
+        const float3 v0 = asfloat(g_positions.Load3(h.tri * 36u));
+        const float3 v1 = asfloat(g_positions.Load3(h.tri * 36u + 12u));
+        const float3 v2 = asfloat(g_positions.Load3(h.tri * 36u + 24u));
+        const float3 face = cross(v1 - v0, v2 - v0);
+        if (dot(face, face) <= 1e-24f || !any(albedo > 0.0f)) {
+            break;
+        }
+        ng = normalize(face);
+        ng = dot(ng, d) > 0.0f ? -ng : ng;
+        const float3 w = float3(1.0f - h.b.x - h.b.y, h.b.x, h.b.y);
+        p = v0 * w.x + v1 * w.y + v2 * w.z;
+        smooth_surface(h.tri, w, v0, v1, v2, ng, n, p);
+        throughput *= albedo;
+        if (bounce >= 2u) {
+            const float keep = clamp(max(throughput.r, max(throughput.g, throughput.b)), 0.05f, 0.95f);
+            if (emit_random(seed) >= keep) {
+                break;
+            }
+            throughput /= keep;
+        }
+    }
+    return total;
+}
+
+// Adds one path a pixel to the reference's sums (16 bytes a pixel: rgb, paths); the first frame starts them over and
+// clears the comparison's record (g_final after the probe's two).
+[numthreads(8, 8, 1)]
+void EngineReferenceCS(uint3 id : SV_DispatchThreadID)
+{
+    if (any(id.xy >= g_target_size) || (g_engine_info.x & kEngineReference) == 0u) {
+        return;
+    }
+    if (all(id.xy == 0u)) {
+        g_final[g_sample_size.x * g_sample_size.y + kStarSlots + 2u] = uint4(0u, 0u, 0u, 0u);
+    }
+    const uint pixel = id.y * g_target_size.x + id.x;
+    const int2 q = int2(id.xy);
+    const GSurface s = gb_load(engine_view(kEvGBuffer), pixel, g_projection, q);
+    RWByteAddressBuffer sums = ResourceDescriptorHeap[asuint(g_engine_params.x)];
+    float4 sum = g_engine_params.y > 0.0f ? asfloat(sums.Load4(pixel * 16u)) : float4(0.0f, 0.0f, 0.0f, 0.0f);
+    if (s.valid && (s.flags & (kGbEmitter | kGbClear)) == 0u) {
+        uint seed = emit_hash(pixel ^ (g_frame * 0x2545F491u) ^ 0x7F4A7C15u);
+        const uint salt = pixel * 32u + g_frame * 0x632BE5ABu + 29u;
+        sum.rgb += reference_path(s.p, s.n, s.ng, (s.flags & kGbCard) != 0u, seed, salt);
+        sum.w += 1.0f;
+    }
+    sums.Store4(pixel * 16u, asuint(sum));
+}
+
 // The slot's result at the camera's exposure (the composite and the sub-frames read it), and the samples' export in
 // the lighting's own result format (light texture for translucent draws, the eye's adaptation, the reflections).
 [numthreads(8, 8, 1)]
@@ -1852,6 +1940,9 @@ void EngineFinalCS(uint3 id : SV_DispatchThreadID)
     // the translucent draws, the water's reflections), whatever the view and the surface's metalness.
     float3 whole = float3(0.0f, 0.0f, 0.0f);
     float z = 0.0f;
+    // GALAXY_RT_ENGINE_REFERENCE: the pixel's diffuse light (m) against the reference's (luminance: reference, engine,
+    // absolute difference, 1), on the ordinary non-metal surfaces.
+    float4 compare = float4(0.0f, 0.0f, 0.0f, 0.0f);
     if (s.valid) {
         z = s.p.z;
         if ((s.flags & kGbEmitter) != 0u) {
@@ -1873,6 +1964,22 @@ void EngineFinalCS(uint3 id : SV_DispatchThreadID)
             diffuse = float3(f16tof32(a.x), f16tof32(a.x >> 16u), f16tof32(a.y));
             specular = float3(f16tof32(a.z), f16tof32(a.z >> 16u), f16tof32(a.w));
             whole = diffuse * exposure;
+            if ((g_engine_info.x & kEngineReference) != 0u) {
+                RWByteAddressBuffer sums = ResourceDescriptorHeap[asuint(g_engine_params.x)];
+                const float4 sum = asfloat(sums.Load4(pixel * 16u));
+                if (sum.w > 0.0f) {
+                    const float3 reference = sum.rgb / sum.w;
+                    if (s.metallic < 0.5f && (s.flags & kGbGlow) == 0u) {
+                        const float r = luminance(reference);
+                        const float e = luminance(diffuse);
+                        compare = float4(r, e, abs(e - r), 1.0f);
+                    }
+                    // View 8: the reference's light in the engine's place.
+                    if (view == 8u) {
+                        diffuse = reference;
+                    }
+                }
+            }
             if (view == 1u || view == 2u || view == 4u) {
                 const uint4 dv = engine_buffer(kEvDirect).Load4(pixel * 16u);
                 const float3 direct = float3(f16tof32(dv.x), f16tof32(dv.x >> 16u), f16tof32(dv.y));
@@ -1895,6 +2002,17 @@ void EngineFinalCS(uint3 id : SV_DispatchThreadID)
         if (((g_engine_info.x & kEngineView) >> 4u) == 7u) {
             diffuse = float3(1.0f, 1.0f, 1.0f);
             specular = float3(0.0f, 0.0f, 0.0f);
+        }
+    }
+    if ((g_engine_info.x & kEngineReference) != 0u) {
+        // Summed over the picture (fixed point, 1/64): the comparison's record ([rt-reference-engine]).
+        const float4 total = WaveActiveSum(compare);
+        if (WaveIsFirstLane() && total.w > 0.0f) {
+            const uint at = g_sample_size.x * g_sample_size.y + kStarSlots + 2u;
+            InterlockedAdd(g_final[at].x, uint(round(total.x * 64.0f)));
+            InterlockedAdd(g_final[at].y, uint(round(total.y * 64.0f)));
+            InterlockedAdd(g_final[at].z, uint(round(total.z * 64.0f)));
+            InterlockedAdd(g_final[at].w, uint(total.w));
         }
     }
     diffuse = safe_light(diffuse);

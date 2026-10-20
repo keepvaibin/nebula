@@ -987,6 +987,9 @@ void SceneRayTracer::shutdown() noexcept {
     engine_temporal_pso_.Reset();
     engine_atrous_pso_.Reset();
     engine_final_pso_.Reset();
+    engine_reference_pso_.Reset();
+    engine_reference_sums_.Reset();
+    engine_reference_pixels_ = 0u;
     for (auto& buffer : engine_buffers_) buffer.Reset();
     for (auto& buffer : engine_slots_) buffer.Reset();
     engine_slot_valid_ = {};
@@ -1415,6 +1418,24 @@ void SceneRayTracer::begin_frame(std::uint64_t frame_index) {
                          static_cast<unsigned long long>(taken), probe_pixel_[0], probe_pixel_[1], probe[0],
                          static_cast<int>(probe[1]), material(probe[1]), probe[2], static_cast<int>(probe[3]),
                          material(probe[3]), t, static_cast<int>(probe[5]), z, facing);
+        }
+        // The engine's diffuse light against the converged reference ([rt-reference-engine]): the means over the
+        // ordinary non-metal surfaces of the reference's, the engine's and their absolute difference (luminance, the
+        // stage's light units), the engine's bias and its mean error relative to the reference.
+        const std::uint64_t paths = engine_reference_taken_paths_[k];
+        if (paths != 0u && probe[11] != 0u && (paths >= engine_reference_printed_ + 60u || paths < engine_reference_printed_)) {
+            engine_reference_printed_ = paths;
+            const double pixels = static_cast<double>(probe[11]);
+            const double reference = probe[8] / 64.0 / pixels;
+            const double engine = probe[9] / 64.0 / pixels;
+            const double difference = probe[10] / 64.0 / pixels;
+            std::fprintf(stderr,
+                         "[rt-reference-engine] frame=%llu paths=%llu pixels=%u reference=%.4f engine=%.4f bias=%+.4f "
+                         "mean-abs=%.4f relative-bias=%+.4f relative-error=%.4f\n",
+                         static_cast<unsigned long long>(taken), static_cast<unsigned long long>(paths), probe[11],
+                         reference, engine, engine - reference, difference,
+                         reference > 0.0 ? (engine - reference) / reference : 0.0,
+                         reference > 0.0 ? difference / reference : 0.0);
         }
         const D3D12_RANGE no_write{0, 0};
         ball_readback_->Unmap(0, &no_write);
@@ -4482,12 +4503,13 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         to_state(list, light_final_[slot].Get(), light_final_state_[slot], D3D12_RESOURCE_STATE_COPY_SOURCE);
         list->CopyBufferRegion(ball_readback_.Get(), at, light_final_[slot].Get(),
                                static_cast<UINT64>(sample_width) * sample_height * 16u, kStarSlots * 16u);
-        if (probe_) {
+        if (probe_ || engine_reference_running_) {
             list->CopyBufferRegion(ball_readback_.Get(), at + kStarSlots * 16u + 16u, light_final_[slot].Get(),
                                    (static_cast<UINT64>(sample_width) * sample_height + kStarSlots) * 16u,
                                    kProbeRecords * 16u);
             probe_materials_[ball_readback_next_] = draw_materials_;
         }
+        engine_reference_taken_paths_[ball_readback_next_] = engine_reference_running_ ? engine_reference_paths_ : 0u;
         ball_readback_colour_[ball_readback_next_] = picture_valid_;
         if (picture_valid_) {
             to_state(list, picture_sums_.Get(), picture_sums_state_, D3D12_RESOURCE_STATE_COPY_SOURCE);
