@@ -799,7 +799,8 @@ endforeach()
 # The lighting's trace testing alpha-tested geometry by its alpha maps from the descriptor heap (shader model 6.6),
 # and the reference path tracer, which shades its hits from their textures (GALAXY_RT_REFERENCE).
 foreach(galaxy_rt_pass trace_tex_cs:TraceCS reference_tex_cs:ReferenceCS sky_probe_tex_cs:SkyProbeCS
-        gbuffer_tex_cs:GBufferCS)
+        gbuffer_tex_cs:GBufferCS emit_triangle_cs:EmitTriangleCS emit_scan_cs:EmitScanCS
+        baked_fit_cs:BakedFitCS baked_reduce_cs:BakedReduceCS)
     string(REPLACE ":" ";" galaxy_rt_pair "${galaxy_rt_pass}")
     list(GET galaxy_rt_pair 0 galaxy_rt_name)
     list(GET galaxy_rt_pair 1 galaxy_rt_entry)

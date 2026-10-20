@@ -91,6 +91,8 @@ cbuffer RtLight : register(b0)
     float4 g_up;                   // the player's up in eye space by the game's gravity (else the view's up); the de-light
                                    // maps' relief height in texels per log unit (w; 0: off)
     uint4 g_probe;                 // GALAXY_RT_PROBE: the probed sample (x, y), on (z)
+    float4 g_light_fit;            // physical: the camera's exposure (x; 0: physical_exposure's own), the light
+                                   // fitted to the baked light (y: 1)
 };
 
 // g_flags bit 14: the game's light units (GALAXY_RT_PHYSICAL), as the stage sets them in linear light (white 1):
@@ -147,6 +149,11 @@ StructuredBuffer<float4> g_sky_map : register(t22);
 // kPhysicalFlag: per EFB pixel its shading normal (pack_normal) and the texture's de-lighting there
 // (pack_pixel_delight; 0: none), GBufferCS, for the composite's per-pixel sun and albedo.
 RWStructuredBuffer<uint2> g_pixels : register(u7);
+// Physical emitters (kPhysicalFlag, g_tev_info.z triangles): while EmitTriangleCS runs the emitting draws' ranges, then
+// the emitting triangles as float4 elements: 0 the count and total power; at 1 + 4 i v0 and area, e1 and two-sided, e2,
+// radiance (linear) and power; at 1 + 4 kEmitTriangles + i the running power (EmitScanCS).
+ByteAddressBuffer g_emit_tris : register(t24);
+static const uint kEmitTriangles = 65536u;   // ray_tracing.cpp kEmitTriangles
 static const uint kSkyMapSize = 64u;
 static const uint kSkyLayers = 8u;     // the sky's layers a probe ray composites, at most
 
@@ -2034,8 +2041,16 @@ float physical_sky_scale()
     return mean > 1e-4f ? luminance(g_sky_radiance.rgb) / mean : 0.0f;
 }
 
+// kPhysicalFlag: the traced sky's light in the stage's ambient colour (g_sky_radiance), its luminance kept. The traced
+// sky gives the light's distribution over directions; its colour is the backdrop's, often a saturated space backdrop the
+// game never lights with (Good Egg's deep blue made its stone lavender, fit2). Reflections show the backdrop itself.
+float3 ambient_coloured(float3 light)
+{
+    return luminance(light) * g_sky_radiance.rgb / max(luminance(g_sky_radiance.rgb), 1e-4f);
+}
+
 // kPhysicalFlag: the sky's radiance towards eye-space direction `d`: the traced sky's (bilinear in its map, at the
-// stage's ambient level), else the ambient from every direction.
+// stage's ambient level and colour), else the ambient from every direction.
 float3 physical_sky(float3 d)
 {
     if (g_full_light.w == 0.0f || physical_sky_scale() == 0.0f) {
@@ -2050,7 +2065,7 @@ float3 physical_sky(float3 d)
         const float w = ((k & 1u) != 0u ? f.x : 1.0f - f.x) * ((k & 2u) != 0u ? f.y : 1.0f - f.y);
         radiance += g_sky_map[uint(t.y) * kSkyMapSize + uint(t.x)].rgb * w;
     }
-    return radiance * physical_sky_scale();
+    return ambient_coloured(radiance) * physical_sky_scale();
 }
 
 // kPhysicalFlag: the open sky's irradiance over pi on a surface facing eye-space `n` (the traced sky's spherical
@@ -2067,15 +2082,22 @@ float3 physical_sky_irradiance(float3 n)
         irradiance += g_sky_map[kSkyMapSize * kSkyMapSize + b].rgb *
                       (basis[b] * (b == 0u ? 1.0f : b < 4u ? 2.0f / 3.0f : 0.25f));
     }
-    return max(irradiance, 0.0f) * physical_sky_scale();
+    return ambient_coloured(max(irradiance, 0.0f)) * physical_sky_scale();
 }
 
 // kPhysicalFlag: the camera's exposure: a white surface facing the player's up (the ground under the player, by the
 // game's gravity; g_up), lit by the open sky and the sun at its angle, shows at the stage's full light (the game's
-// ambient + key: a dim stage stays as dim as the game sets it, a coloured one keeps its colour).
+// ambient + key: a dim stage stays as dim as the game sets it, a coloured one keeps its colour). Exposed for the sun as
+// a photographer's sunny-16 rule is: at no less than 30 degrees up (cosine 0.5). With the sun below the player's
+// horizon the reference was lit by the sky alone and the exposure rose twentyfold (Melty Molten: key 35 degrees below,
+// its lava's light flooding the ground orange, sweep1).
 float physical_exposure()
 {
-    const float sun = max(dot(g_up.xyz, g_sun.xyz), 0.0f);
+    // Set from the game's own stage light (SceneRayTracer): a light fitted dimmer to the baked light stays dimmer.
+    if (g_light_fit.x > 0.0f) {
+        return g_light_fit.x;
+    }
+    const float sun = max(dot(g_up.xyz, g_sun.xyz), 0.5f);
     return luminance(g_full_light.rgb) /
            max(luminance(physical_sky_irradiance(g_up.xyz)) + luminance(g_sun_light.rgb) * sun, 1e-4f);
 }
@@ -2084,7 +2106,7 @@ float physical_exposure()
 float point_falloff(float d2, uint i)
 {
     const float x = d2 / (g_points[2u * i].w * g_points[2u * i].w);
-    const float window = saturate(1.0f - x * x);
+    const float window = (g_flags & kPhysicalFlag) != 0u ? 1.0f : saturate(1.0f - x * x);
     return window * window / (1.0f + d2 * g_points[2u * i + 1u].w);
 }
 
@@ -2507,6 +2529,134 @@ bool sun_visible(float3 origin, float3 direction, bool card, uint salt, out floa
     return true;
 }
 
+
+// ---------------------------------------------------------------------------------------------
+// Physical emitters (kPhysicalFlag): every triangle of the scene's emitting draws (the material table's light sources:
+// lava, lamps, Lumas) is an area light. What it shows is what it sends: its radiance is its draw's TEV output in linear
+// light (units of a white surface under white light), its power pi L A (two-sided: twice). EmitTriangleCS writes them,
+// EmitScanCS the running power; TraceCS picks them by resampled importance (emitter_light).
+// ---------------------------------------------------------------------------------------------
+
+float4 emit_element(uint e)
+{
+    return asfloat(g_emit_tris.Load4(e * 16u));
+}
+
+float emit_running(uint i)
+{
+    return asfloat(g_emit_tris.Load((1u + 4u * kEmitTriangles + i) * 16u));
+}
+
+uint emit_hash(uint v)
+{
+    const uint state = v * 747796405u + 2891336453u;
+    const uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+    return (word >> 22u) ^ word;
+}
+
+float emit_random(inout uint seed)
+{
+    seed = emit_hash(seed);
+    return float(seed >> 8u) * (1.0f / 16777216.0f);
+}
+
+// The emitters' light at `p` (shading normal `n`; shadow rays from `origin`) in the game's units (the irradiance over
+// pi a white surface takes): `candidates` triangles drawn in proportion to their power, a uniform point on each, one
+// kept in proportion to its unshadowed light there (resampled importance sampling, Talbot 2005; Bitterli et al. 2020),
+// its light behind one shadow ray, weighted to stay unbiased: the sum over the candidates' weights over the count, over
+// the kept one's target.
+float3 emitter_light(float3 p, float3 n, float3 origin, uint candidates, uint seed)
+{
+    const uint count = g_tev_info.z;
+    if (count == 0u) {
+        return float3(0.0f, 0.0f, 0.0f);
+    }
+    const float total = emit_element(0u).y;
+    if (!(total > 0.0f)) {
+        return float3(0.0f, 0.0f, 0.0f);
+    }
+    float weight_sum = 0.0f;
+    float kept_target = 0.0f;
+    float3 kept_light = float3(0.0f, 0.0f, 0.0f);
+    float3 kept_point = float3(0.0f, 0.0f, 0.0f);
+    [loop] for (uint k = 0u; k < candidates; ++k) {
+        // The triangle whose running power first passes u x total.
+        const float u = emit_random(seed) * total;
+        uint lo = 0u;
+        uint hi = count - 1u;
+        [loop] while (lo < hi) {
+            const uint mid = (lo + hi) >> 1u;
+            if (emit_running(mid) > u) {
+                hi = mid;
+            } else {
+                lo = mid + 1u;
+            }
+        }
+        const float4 a = emit_element(1u + 4u * lo);   // v0, area
+        const float4 b = emit_element(2u + 4u * lo);   // e1, two-sided
+        const float4 c = emit_element(3u + 4u * lo);   // e2
+        const float4 d = emit_element(4u + 4u * lo);   // radiance, power
+        if (!(d.w > 0.0f) || !(a.w > 0.0f)) {
+            continue;
+        }
+        float r1 = emit_random(seed);
+        float r2 = emit_random(seed);
+        if (r1 + r2 > 1.0f) {
+            r1 = 1.0f - r1;
+            r2 = 1.0f - r2;
+        }
+        const float3 y = a.xyz + b.xyz * r1 + c.xyz * r2;
+        const float3 to = y - p;
+        const float d2 = max(dot(to, to), 1e-4f);
+        const float3 dir = to * rsqrt(d2);
+        const float3 face = normalize(cross(b.xyz, c.xyz));
+        float cos_light = -dot(face, dir);
+        cos_light = b.w != 0.0f ? abs(cos_light) : cos_light;
+        const float cos_surface = dot(n, dir);
+        if (cos_light <= 0.0f || cos_surface <= 0.0f) {
+            continue;
+        }
+        // Its light per unit of emitter area, and the chance of this point per unit area.
+        const float3 light = d.rgb * (cos_light * cos_surface / (kPi * d2));
+        const float chance = d.w / (total * a.w);
+        const float target = luminance(light);
+        const float w = target / chance;
+        weight_sum += w;
+        if (w > 0.0f && emit_random(seed) * weight_sum < w) {
+            kept_target = target;
+            kept_light = light;
+            kept_point = y;
+        }
+    }
+    if (!(kept_target > 0.0f)) {
+        return float3(0.0f, 0.0f, 0.0f);
+    }
+    // One shadow ray to the kept point, stopping short of its own triangle.
+    const float3 to = kept_point - origin;
+    const float span = length(to);
+    RayDesc ray;
+    ray.Origin = origin;
+    ray.Direction = to / max(span, 1e-4f);
+    ray.TMin = 0.0f;
+    ray.TMax = max(span * 0.999f - 0.5f, 0.0f);
+    RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES>
+        query;
+    query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
+    while (query.Proceed()) {
+        const bool late_hit = query.CandidateInstanceID() != 0u;
+        const uint hit = late_hit ? 0u : g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u);
+        if (late_hit || ((hit & kDrawNoShadow) == 0u &&
+                         card_blocks(query.CandidatePrimitiveIndex(), hit,
+                                     origin + ray.Direction * query.CandidateTriangleRayT(), seed))) {
+            query.CommitNonOpaqueTriangleHit();
+        }
+    }
+    if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
+        return float3(0.0f, 0.0f, 0.0f);
+    }
+    return kept_light * (weight_sum / (float(candidates) * kept_target));
+}
+
 void reference_material(uint tri, float2 b, out float3 albedo, out float3 emission);
 float3 physical_hit(uint tri, float2 b, float3 x, float3 direction, uint salt);
 
@@ -2888,6 +3038,13 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
             light += sky_light(direction, tint, sky_sh, sky_known);
         }
     }
+    // Physical: the emitting triangles' light (emitter_light), in the point lights' units; 8 candidates on High, 4 on
+    // Medium, 2 on Low.
+    if ((g_flags & kPhysicalFlag) != 0u && g_tev_info.z != 0u) {
+        const uint candidates = (g_flags & 1024u) != 0u ? 8u : g_rays <= 1u ? 2u : 4u;
+        points += emitter_light(p, n, origin, candidates, emit_hash(index ^ (g_frame * 0x9E3779B9u))) /
+                  max(g_point_light, 1e-3f);
+    }
     g_z[index] = p.z;
     g_normal[index] = pack_normal(n);
     g_primary[index] = primary;
@@ -3117,13 +3274,20 @@ void reference_material(uint tri, float2 b, out float3 albedo, out float3 emissi
 #endif
     albedo = srgb_to_linear(saturate(albedo));
     const uint2 table = g_draws.Load2(min(draw, max(g_draw_count, 1u) - 1u) * kDrawStride + 8u);
-    if ((table.x & kEmitNamed) != 0u && (table.x & 3u) == kEmitArea && g_emit.w > 0.0f) {
+    if ((g_flags & kPhysicalFlag) != 0u) {
+        // A light source of the table shows what it sends: its TEV output is its radiance, not a colour under light.
+        if ((table.x & kEmitNamed) != 0u && (table.x & 3u) != 0u && (table.x & kEmitNoLight) == 0u) {
+            emission = albedo;
+            albedo = float3(0.0f, 0.0f, 0.0f);
+        }
+    } else if ((table.x & kEmitNamed) != 0u && (table.x & 3u) == kEmitArea && g_emit.w > 0.0f) {
         emission = srgb_to_linear(rgb8(table.x)) * (g_self.z * asfloat(table.y) * g_emit.w);
     }
 }
 
 // A bounce ray's hit in the game's light units (TraceCS with kPhysicalFlag): the surface's albedo times the sun on it
-// (N.L, one shadow ray inside the sun's disc) and the open sky, plus its emission.
+// (N.L, one shadow ray inside the sun's disc) and the open sky. Not its emission: the emitters' light comes by
+// emitter_light (counting it here as well would count it twice); the reference, which samples no triangles, keeps it.
 float3 physical_hit(uint tri, float2 b, float3 x, float3 direction, uint salt)
 {
     float3 albedo;
@@ -3150,8 +3314,204 @@ float3 physical_hit(uint tri, float2 b, float3 x, float3 direction, uint salt)
             sun = g_sun_light.rgb * nl;
         }
     }
-    return albedo * (sun + physical_sky_irradiance(n)) + emission;
+    return albedo * (sun + physical_sky_irradiance(n));
 }
+
+#if RT_TEXTURED
+// Physical emitters: the triangles (one thread each) of the emitting draws' ranges (g_emit_tris here: the range count,
+// then per range at 16 + 16 r its first scene triangle, triangle count, draw | two-sided << 31 and first emitter) into
+// g_reference (float4 elements: 0 header; at 1 + 4 i v0 and area, e1 and two-sided, e2, radiance and power; at
+// 1 + 4 kEmitTriangles + i the power, EmitScanCS's running sum). The radiance is the mean of the draw's TEV output at
+// seven points of the triangle in linear light.
+[numthreads(64, 1, 1)]
+void EmitTriangleCS(uint3 id : SV_DispatchThreadID)
+{
+    const uint total = g_tev_info.z;
+    if (id.x >= total) {
+        return;
+    }
+    const uint ranges = g_emit_tris.Load(0u);
+    uint lo = 0u;
+    uint hi = max(ranges, 1u) - 1u;
+    [loop] while (lo < hi) {
+        const uint mid = (lo + hi + 1u) >> 1u;
+        if (g_emit_tris.Load(16u + mid * 16u + 12u) <= id.x) {
+            lo = mid;
+        } else {
+            hi = mid - 1u;
+        }
+    }
+    const uint4 range = g_emit_tris.Load4(16u + lo * 16u);
+    const uint tri = range.x + (id.x - range.w);
+    const uint draw = range.z & 0xFFFFu;
+    const float3 v0 = asfloat(g_positions.Load3(tri * 36u));
+    const float3 e1 = asfloat(g_positions.Load3(tri * 36u + 12u)) - v0;
+    const float3 e2 = asfloat(g_positions.Load3(tri * 36u + 24u)) - v0;
+    const float area = 0.5f * length(cross(e1, e2));
+    static const float2 kPoints[7] = {float2(1.0f / 3.0f, 1.0f / 3.0f), float2(2.0f / 3.0f, 1.0f / 6.0f),
+                                      float2(1.0f / 6.0f, 2.0f / 3.0f), float2(1.0f / 6.0f, 1.0f / 6.0f),
+                                      float2(0.5f, 0.25f), float2(0.25f, 0.5f), float2(0.25f, 0.25f)};
+    float3 radiance = float3(0.0f, 0.0f, 0.0f);
+    [unroll] for (uint k = 0u; k < 7u; ++k) {
+        bool pass;
+        radiance += srgb_to_linear(saturate(tev_evaluate(draw, g_tev_info.x, tri, kPoints[k], pass).rgb));
+    }
+    radiance /= 7.0f;
+    const bool two_sided = (range.z >> 31u) != 0u;
+    const float power = area > 1e-8f ? kPi * luminance(radiance) * area * (two_sided ? 2.0f : 1.0f) : 0.0f;
+    g_reference[1u + 4u * id.x] = float4(v0, area);
+    g_reference[2u + 4u * id.x] = float4(e1, two_sided ? 1.0f : 0.0f);
+    g_reference[3u + 4u * id.x] = float4(e2, 0.0f);
+    g_reference[4u + 4u * id.x] = float4(radiance, power);
+    g_reference[1u + 4u * kEmitTriangles + id.x] = float4(power, 0.0f, 0.0f, 0.0f);
+}
+
+groupshared float s_emit_running[1024];
+
+// The running power of the emitters (one group): each thread sums its stretch, the stretches' sums are scanned, each
+// thread writes its stretch's running sums; the header takes the count and the total.
+[numthreads(1024, 1, 1)]
+void EmitScanCS(uint gi : SV_GroupIndex)
+{
+    const uint total = g_tev_info.z;
+    const uint per = (total + 1023u) / 1024u;
+    const uint begin = min(gi * per, total);
+    const uint end = min(begin + per, total);
+    float sum = 0.0f;
+    for (uint i = begin; i < end; ++i) {
+        sum += g_reference[1u + 4u * kEmitTriangles + i].x;
+    }
+    s_emit_running[gi] = sum;
+    GroupMemoryBarrierWithGroupSync();
+    [loop] for (uint offset = 1u; offset < 1024u; offset <<= 1u) {
+        const float before = gi >= offset ? s_emit_running[gi - offset] : 0.0f;
+        GroupMemoryBarrierWithGroupSync();
+        s_emit_running[gi] += before;
+        GroupMemoryBarrierWithGroupSync();
+    }
+    float running = s_emit_running[gi] - sum;
+    for (uint j = begin; j < end; ++j) {
+        running += g_reference[1u + 4u * kEmitTriangles + j].x;
+        g_reference[1u + 4u * kEmitTriangles + j] = float4(running, 0.0f, 0.0f, 0.0f);
+    }
+    if (gi == 1023u) {
+        g_reference[0] = float4(asfloat(total), s_emit_running[1023], 0.0f, 0.0f);
+    }
+}
+#endif
+
+#if RT_TEXTURED
+// ---------------------------------------------------------------------------------------------
+// Physical: the light the game baked into its surfaces, for the light the stage is lit by (inverse lighting: Marschner
+// & Greenberg 1997; irradiance as nine spherical harmonics, Ramamoorthi & Hanrahan 2001). Per visible sample of a draw
+// whose vertex colours carry baked light (de-baked, not a light source; every second sample on both axes): its baked
+// light, the TEV output with the vertices' colours as the game baked them over the output at the program's neutral light,
+// both on a grey texture, in linear light (1: white light, the traced light's units), and its world normal's spherical
+// harmonics, summed as the normal equations of a least-squares fit (A: 9 x 9 symmetric, 45 values; B: 9 x 3, 27).
+// SceneRayTracer::fit_baked_light solves them and takes the sun (the first band's direction) and the sky (the rest).
+// ---------------------------------------------------------------------------------------------
+
+static const uint kFitValues = 72u;          // 45 + 27
+static const uint kFitGroupElements = 18u;   // float4s per group's partial sums
+static const uint kFitGroups = 16384u;       // ray_tracing.cpp kFitGroups: the totals follow the groups' sums
+
+groupshared float s_fit[kFitValues][32];
+
+[numthreads(16, 16, 1)]
+void BakedFitCS(uint3 id : SV_DispatchThreadID, uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
+{
+    const uint2 s = id.xy * 2u;
+    float basis[9] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+    float3 baked_light = float3(0.0f, 0.0f, 0.0f);
+    bool counted = false;
+    if (all(s < g_sample_size)) {
+        const uint index = s.y * g_sample_size.x + s.x;
+        const uint2 primary = g_primary[index];
+        if (primary.x != 0u) {
+            const uint tri = primary.x - 1u;
+            const uint draw = g_surfaces.Load(tri * 16u + 12u) >> 16u;
+            if (draw < g_tev_info.x) {
+                const uint header = g_tev.Load(draw * kTevRecordBytes);
+                const uint emission = g_draws.Load(min(draw, max(g_draw_count, 1u) - 1u) * kDrawStride + 8u);
+                const bool emitter = (emission & kEmitNamed) != 0u && (emission & 3u) != 0u;
+                if ((header & 0x20u) != 0u && !emitter) {
+                    const float2 bary = float2(f16tof32(primary.y), f16tof32(primary.y >> 16u));
+                    bool pass;
+                    const float3 baked =
+                        tev_evaluate_mode(draw, g_tev_info.x, tri, bary, kTevGreyTexture | kTevBakedColours, pass).rgb;
+                    const float3 neutral = tev_evaluate_mode(draw, g_tev_info.x, tri, bary, kTevGreyTexture, pass).rgb;
+                    // A clipped output says only that the light was at least that much: left out.
+                    if (all(baked < 0.995f) && all(neutral > 0.02f)) {
+                        baked_light = srgb_to_linear(baked) / srgb_to_linear(neutral);
+                        sh9(eye_to_world(unpack_normal(g_normal[index])), basis);
+                        counted = true;
+                    }
+                }
+            }
+        }
+    }
+    const uint lanes = WaveGetLaneCount();
+    const uint wave = gi / lanes;
+    [loop] for (uint v = 0u; v < kFitValues; ++v) {
+        float value = 0.0f;
+        if (counted) {
+            if (v < 45u) {
+                // The upper triangle, row by row.
+                uint i = 0u;
+                uint first = 0u;
+                [loop] while (v >= first + (9u - i)) {
+                    first += 9u - i;
+                    ++i;
+                }
+                const uint j = i + (v - first);
+                value = basis[i] * basis[j];
+            } else {
+                const uint k = v - 45u;
+                value = basis[k / 3u] * baked_light[k % 3u];
+            }
+        }
+        const float sum = WaveActiveSum(value);
+        if (WaveIsFirstLane() && wave < 32u) {
+            s_fit[v][wave] = sum;
+        }
+    }
+    GroupMemoryBarrierWithGroupSync();
+    const uint waves = min((256u + lanes - 1u) / lanes, 32u);
+    if (gi < kFitValues) {
+        float total = 0.0f;
+        for (uint w = 0u; w < waves; ++w) {
+            total += s_fit[gi][w];
+        }
+        s_fit[gi][0] = total;
+    }
+    GroupMemoryBarrierWithGroupSync();
+    if (gi < kFitGroupElements) {
+        const uint g = group.y * ((g_sample_size.x + 31u) / 32u) + group.x;
+        if (g < kFitGroups) {
+            g_reference[g * kFitGroupElements + gi] =
+                float4(s_fit[gi * 4u][0], s_fit[gi * 4u + 1u][0], s_fit[gi * 4u + 2u][0], s_fit[gi * 4u + 3u][0]);
+        }
+    }
+}
+
+// The groups' sums (g_tev_info.w groups) into the totals after them (kFitGroups x kFitGroupElements).
+[numthreads(kFitValues, 1, 1)]
+void BakedReduceCS(uint gi : SV_GroupIndex)
+{
+    const uint groups = min(g_tev_info.w, kFitGroups);
+    float total = 0.0f;
+    for (uint g = 0u; g < groups; ++g) {
+        total += g_reference[g * kFitGroupElements + gi / 4u][gi % 4u];
+    }
+    s_fit[gi][0] = total;
+    GroupMemoryBarrierWithGroupSync();
+    if (gi < kFitGroupElements) {
+        g_reference[kFitGroups * kFitGroupElements + gi] =
+            float4(s_fit[gi * 4u][0], s_fit[gi * 4u + 1u][0], s_fit[gi * 4u + 2u][0], s_fit[gi * 4u + 3u][0]);
+    }
+}
+#endif
+
 
 #if RT_TEXTURED
 
@@ -3815,11 +4175,8 @@ void SpatialBCS(uint3 id : SV_DispatchThreadID)
                                 kDrawStride;
             const uint2 emission = g_draws.Load2(record + 8u);
             if ((emission.x & kEmitNamed) != 0u && (emission.x & 3u) != 0u && (emission.x & kEmitNoLight) == 0u) {
-                const uint table_flags = g_draws.Load(record + 24u);
-                const float intensity = (table_flags & kDrawTableGlow) != 0u
-                                            ? float(table_flags >> 16u) / 65535.0f * kDrawGlowScale
-                                            : asfloat(emission.y);
-                m += ((emission.x & 3u) == kEmitArea ? g_self.x * intensity : 0.3f * min(intensity, 3.0f)).xxx;
+                // A light source shows what it sends: its colour is its radiance, at the camera's exposure.
+                m = exposure.xxx;
             }
         }
         m = min(m, kMaxLight);

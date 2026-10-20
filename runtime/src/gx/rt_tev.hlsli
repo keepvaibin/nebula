@@ -125,9 +125,13 @@ bool tev_alpha_compare(uint comp, int value, int reference)
     }
 }
 
+static const uint kTevGreyTexture = 1u;   // tev_evaluate_mode: every texture a mid grey (128)
+static const uint kTevBakedColours = 2u;  // tev_evaluate_mode: the vertices' colours as the game baked them
+
 // Draw `draw`'s TEV output at triangle `tri`, barycentrics `b` (display-encoded RGBA, 0-1), and whether its alpha
-// passes the draw's alpha compare. A draw without a record (`count` records) is white and passes.
-float4 tev_evaluate(uint draw, uint count, uint tri, float2 b, out bool alpha_pass)
+// passes the draw's alpha compare. A draw without a record (`count` records) is white and passes. `mode`:
+// kTevGreyTexture, kTevBakedColours (not de-baked: the light the game baked in).
+float4 tev_evaluate_mode(uint draw, uint count, uint tri, float2 b, uint mode, out bool alpha_pass)
 {
     alpha_pass = true;
     if (draw >= count) {
@@ -153,9 +157,10 @@ float4 tev_evaluate(uint draw, uint count, uint tri, float2 b, out bool alpha_pa
     // (record + 108: the levels), as the vertex shaders do.
     // Bits 16-17: a lit channel lit at its neutral light (the record's light word), its vertex colour's hue its material.
     const uint levels = g_tev.Load(record + 108u);
+    const bool baked = (mode & kTevBakedColours) != 0u;
     [unroll] for (uint k = 0u; k < 3u; ++k) {
-        if ((header & 0x20u) != 0u) v0[k].rgb = tev_debake(v0[k].rgb) * (float(levels & 0xFFu) / 255.0f);
-        if ((header & 0x40u) != 0u) v1[k].rgb = tev_debake(v1[k].rgb) * (float((levels >> 8u) & 0xFFu) / 255.0f);
+        if ((header & 0x20u) != 0u && !baked) v0[k].rgb = tev_debake(v0[k].rgb) * (float(levels & 0xFFu) / 255.0f);
+        if ((header & 0x40u) != 0u && !baked) v1[k].rgb = tev_debake(v1[k].rgb) * (float((levels >> 8u) & 0xFFu) / 255.0f);
         if ((levels & 0x10000u) != 0u) v0[k].rgb = tev_debake(v0[k].rgb);
         if ((levels & 0x20000u) != 0u) v1[k].rgb = tev_debake(v1[k].rgb);
     }
@@ -216,6 +221,9 @@ float4 tev_evaluate(uint draw, uint count, uint tri, float2 b, out bool alpha_pa
                 texc = tev_swizzle(int4(round(saturate(texel) * 255.0f)), tex_swizzle);
             }
 #endif
+            if ((mode & kTevGreyTexture) != 0u) {
+                texc = int4(128, 128, 128, 255);
+            }
         } else {
             texc = texgens != 0u ? int4(255, 255, 255, 255) : int4(0, 0, 0, 0);
         }
@@ -333,4 +341,9 @@ float4 tev_evaluate(uint draw, uint count, uint tri, float2 b, out bool alpha_pa
     const uint logic = (test >> 22u) & 3u;
     alpha_pass = logic == 0u ? test0 && test1 : logic == 1u ? test0 || test1 : logic == 2u ? test0 != test1 : test0 == test1;
     return float4(fragment) / 255.0f;
+}
+
+float4 tev_evaluate(uint draw, uint count, uint tri, float2 b, out bool alpha_pass)
+{
+    return tev_evaluate_mode(draw, count, tri, b, 0u, alpha_pass);
 }

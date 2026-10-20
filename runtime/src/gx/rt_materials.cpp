@@ -5,6 +5,7 @@
 #include "galaxy/platform_paths.h"
 
 #include <algorithm>
+#include <atomic>
 #include <bit>
 #include <cmath>
 #include <cstdio>
@@ -466,7 +467,16 @@ std::uint16_t rt_stage_untextured_material() noexcept {
     return g_stage_untextured;
 }
 
+namespace {
+std::atomic<std::uint32_t> g_stage_serial{0u};
+}  // namespace
+
+std::uint32_t rt_materials_stage_serial() noexcept {
+    return g_stage_serial.load(std::memory_order_relaxed);
+}
+
 void rt_materials_set_stage(std::string_view stage) {
+    g_stage_serial.fetch_add(1u, std::memory_order_relaxed);
     g_stage_materials = table().stage_materials(stage);
     // Only a stage row names untextured surfaces: elsewhere they stay as the GX state shows them.
     const std::uint16_t untextured = table().index(kRtUntexturedHash);

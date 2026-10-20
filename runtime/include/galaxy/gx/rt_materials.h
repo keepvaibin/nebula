@@ -160,5 +160,7 @@ void note_rt_unnamed_surface(std::uint32_t guest_addr);
 [[nodiscard]] bool rt_log_glows() noexcept;
 // The loaded stage: its rows of the table (RtMaterialTable::stage_materials) take effect.
 void rt_materials_set_stage(std::string_view stage);
+// Counts the stages set: a new value is a new stage.
+[[nodiscard]] std::uint32_t rt_materials_stage_serial() noexcept;
 
 }  // namespace galaxy::gx

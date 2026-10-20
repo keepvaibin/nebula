@@ -39,6 +39,10 @@
 #include "rt_gbuffer_cs.h"
 #include "rt_gbuffer_tex_cs.h"
 #include "rt_delight_cs.h"
+#include "rt_emit_triangle_cs.h"
+#include "rt_emit_scan_cs.h"
+#include "rt_baked_fit_cs.h"
+#include "rt_baked_reduce_cs.h"
 #include "rt_delight_mip_cs.h"
 #include "rt_temporal_cs.h"
 #include "rt_trace_cs.h"
@@ -139,11 +143,12 @@ struct RtLightConstants {
     float picture_projection[4];          // the previous picture's
     float sky_radiance[4];                // GALAXY_RT_PHYSICAL: the sky's radiance in units of the stage's full light
     float full_light[4];                  // the stage's full light in linear light (rgb); 1: the traced sky (w)
-    std::uint32_t tev_info[4];            // TEV records of the scene's draws, of the sky's (rt_tev.hlsli)
+    std::uint32_t tev_info[4];            // TEV records of the scene's draws, of the sky's (rt_tev.hlsli); emitters
     float up[4];                          // the player's up in eye space (the game's gravity; else the view's up)
     std::uint32_t probe[4];               // GALAXY_RT_PROBE: its sample (x, y), on (z)
+    float light_fit[4];                   // physical: the camera's exposure, the light fitted to the baked light (1)
 };
-static_assert(sizeof(RtLightConstants) == 1200u);
+static_assert(sizeof(RtLightConstants) == 1216u);
 
 // Mirrors cbuffer RtPost in rt_post.hlsl (root constants).
 struct RtPostConstants {
@@ -338,6 +343,7 @@ enum LightParameter : UINT {
     kLightSkyMap,
     kLightTev,
     kLightPixels,
+    kLightEmitTris,
     kLightCount,
 };
 
@@ -742,6 +748,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     post_local_dark_ = std::clamp(env_float("GALAXY_RT_LOCAL_DARK", 1.0f), 0.3f, 1.0f);
     relief_ = std::clamp(env_float("GALAXY_RT_RELIEF", 3.0f), 0.0f, 64.0f);
     delight_ = env_float("GALAXY_RT_DELIGHT", 1.0f) != 0.0f;
+    fit_ = env_float("GALAXY_RT_FIT_LIGHT", 1.0f) != 0.0f;
     delight_relief_ = std::clamp(env_float("GALAXY_RT_DELIGHT_RELIEF", 2.0f), 0.0f, 32.0f);
     post_haze_distance_ = std::clamp(env_float("GALAXY_RT_POST_HAZE_DISTANCE", 20000.0f), 100.0f, 1.0e6f);
     post_vignette_ = std::clamp(env_float("GALAXY_RT_POST_VIGNETTE", 0.1f), 0.0f, 1.0f);
@@ -825,6 +832,18 @@ void SceneRayTracer::shutdown() noexcept {
     sky_probe_map_.Reset();
     sky_probe_pso_.Reset();
     sky_trace_sh_pso_.Reset();
+    emit_tris_.Reset();
+    emit_triangle_pso_.Reset();
+    emit_scan_pso_.Reset();
+    fit_sums_.Reset();
+    fit_readback_.Reset();
+    fit_readback_frame_ = {};
+    fit_sums_acc_ = {};
+    fitted_ = {};
+    baked_fit_pso_.Reset();
+    baked_reduce_pso_.Reset();
+    emit_ranges_.clear();
+    emit_triangles_ = 0u;
     for (auto& buffer : light_pixels_) buffer.Reset();
     light_pixels_bytes_ = {};
     gbuffer_pso_.Reset();
@@ -1216,6 +1235,25 @@ void SceneRayTracer::begin_frame(std::uint64_t frame_index) {
         sky_dump_taken_ = 0u;
         sky_dump_at_ = 0u;
     }
+    // Physical: the frames' baked-light sums, into the fitted light.
+    for (unsigned k = 0; fit_readback_ && k < kFitReadbacks; ++k) {
+        const std::uint64_t taken = fit_readback_frame_[k];
+        if (taken == 0u || taken + kResultDelay > frame_index) {
+            continue;
+        }
+        fit_readback_frame_[k] = 0u;
+        const D3D12_RANGE range{k * kFitBytes, (k + 1u) * kFitBytes};
+        void* mapped = nullptr;
+        if (taken <= fit_read_frame_ || FAILED(fit_readback_->Map(0, &range, &mapped))) {
+            continue;
+        }
+        float sums[72]{};
+        std::memcpy(sums, static_cast<const std::byte*>(mapped) + range.Begin, sizeof(sums));
+        const D3D12_RANGE no_write{0, 0};
+        fit_readback_->Unmap(0, &no_write);
+        fit_read_frame_ = taken;
+        fit_baked_light(sums);
+    }
     for (unsigned k = 0; ball_readback_ && k < kBallReadbacks; ++k) {
         const std::uint64_t taken = ball_readback_frame_[k];
         if (taken == 0u || taken + kResultDelay > frame_index) {
@@ -1590,6 +1628,23 @@ void SceneRayTracer::report() {
                      static_cast<unsigned long long>(delight_seen_[4]), static_cast<unsigned long long>(delight_seen_[5]),
                      delight_view_increment_);
         delight_seen_ = {};
+        // Physical: the fitted light (direction in the world, the sun's and the sky's light, samples).
+        if (fit_) {
+            std::fprintf(stderr,
+                         "[rt-fit] valid=%d used=%d samples=%.0f direction=%.3f,%.3f,%.3f sun=%.3f,%.3f,%.3f "
+                         "sky=%.3f,%.3f,%.3f\n",
+                         fitted_.valid ? 1 : 0, fit_used_ ? 1 : 0, fitted_.samples, fitted_.direction[0], fitted_.direction[1],
+                         fitted_.direction[2], fitted_.sun[0], fitted_.sun[1], fitted_.sun[2], fitted_.sky[0],
+                         fitted_.sky[1], fitted_.sky[2]);
+        }
+        // Physical emitters: the last scene's emitting draws and triangles.
+        std::fprintf(stderr, "[rt-emit] draws=%zu triangles=%u", emit_ranges_.size(), emit_triangles_);
+        // The emitting materials since the last report (table id: triangles), for mat_id.py.
+        for (const auto& [id, triangles] : emit_materials_) {
+            std::fprintf(stderr, " %u:%llu", static_cast<unsigned>(id), static_cast<unsigned long long>(triangles));
+        }
+        std::fprintf(stderr, "\n");
+        emit_materials_.clear();
     }
     if (reference_) {
         // Frames the reference ran and how often it started again (a still camera starts it once).
@@ -1754,6 +1809,8 @@ void SceneRayTracer::begin_scene() noexcept {
     }
     texture_view_slots_.clear();
     texture_view_count_ = 0u;
+    emit_ranges_.clear();
+    emit_triangles_ = 0u;
     // De-light jobs the last scene's trace did not run: their source views are gone with its block.
     for (const DelightJob& job : delight_jobs_) {
         if (const auto found = delight_maps_.find(job.pack); found != delight_maps_.end()) {
@@ -1836,6 +1893,100 @@ void SceneRayTracer::note_tev(const RtDrawInfo& info, std::vector<RtTevMaterial>
         }
     }
     records.push_back(record);
+}
+
+
+// Physical: one frame's baked-light sums (BakedFitCS: the normal equations of the least-squares fit of nine spherical
+// harmonics to the baked light over the surfaces' world normals) into the fitted light. The baked light does not
+// change within a stage: the sums decay slowly (0.995 a frame, about three seconds at 60), so the light holds while the
+// camera turns, and start again with a new stage. Solved by Cholesky with a small ridge (1e-4 of the mean diagonal); the
+// sun is the first band's direction and strength (a directional light's irradiance has 2 pi / 3 Y1m(d) per unit of
+// strength there; Sloan 2008), the sky the rest of the constant band (sqrt(pi) / 2 of the sun's strength is its own
+// share; a uniform sky's is sqrt(4 pi)). Needs 2000 samples; with fewer the last fit holds.
+void SceneRayTracer::fit_baked_light(const float* sums) {
+    for (std::size_t i = 0; i < fit_sums_acc_.size(); ++i) {
+        fit_sums_acc_[i] = fit_sums_acc_[i] * 0.995 + static_cast<double>(sums[i]);
+    }
+    constexpr double kY00 = 0.282095;
+    const double samples = fit_sums_acc_[0] / (kY00 * kY00);
+    if (!(samples >= 2000.0)) {
+        return;
+    }
+    double a[9][9]{};
+    std::size_t k = 0u;
+    for (unsigned i = 0; i < 9u; ++i) {
+        for (unsigned j = i; j < 9u; ++j) {
+            a[i][j] = a[j][i] = fit_sums_acc_[k++];
+        }
+    }
+    double trace = 0.0;
+    for (unsigned i = 0; i < 9u; ++i) {
+        trace += a[i][i];
+    }
+    for (unsigned i = 0; i < 9u; ++i) {
+        a[i][i] += 1e-4 * trace / 9.0;
+    }
+    double l[9][9]{};
+    for (unsigned i = 0; i < 9u; ++i) {
+        for (unsigned j = 0; j <= i; ++j) {
+            double sum = a[i][j];
+            for (unsigned m = 0; m < j; ++m) {
+                sum -= l[i][m] * l[j][m];
+            }
+            if (i == j) {
+                if (!(sum > 0.0)) {
+                    return;
+                }
+                l[i][i] = std::sqrt(sum);
+            } else {
+                l[i][j] = sum / l[j][j];
+            }
+        }
+    }
+    double coef[9][3]{};
+    for (unsigned c = 0; c < 3u; ++c) {
+        double y[9]{};
+        for (unsigned i = 0; i < 9u; ++i) {
+            double sum = fit_sums_acc_[45u + i * 3u + c];
+            for (unsigned m = 0; m < i; ++m) {
+                sum -= l[i][m] * y[m];
+            }
+            y[i] = sum / l[i][i];
+        }
+        for (unsigned i = 9u; i-- > 0u;) {
+            double sum = y[i];
+            for (unsigned m = i + 1u; m < 9u; ++m) {
+                sum -= l[m][i] * coef[m][c];
+            }
+            coef[i][c] = sum / l[i][i];
+        }
+    }
+    // The first band's direction by luminance (basis 1: y, 2: z, 3: x).
+    constexpr double kLuma[3] = {0.2126, 0.7152, 0.0722};
+    double v[3]{};
+    for (unsigned c = 0; c < 3u; ++c) {
+        v[0] += kLuma[c] * coef[3][c];
+        v[1] += kLuma[c] * coef[1][c];
+        v[2] += kLuma[c] * coef[2][c];
+    }
+    const double length = std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+    FittedLight fit;
+    fit.valid = true;
+    fit.samples = samples;
+    for (unsigned c = 0; c < 3u; ++c) {
+        double sun = 0.0;
+        if (length > 1e-9) {
+            sun = (coef[3][c] * v[0] + coef[1][c] * v[1] + coef[2][c] * v[2]) / length / (2.0943951 * 0.488603);
+        }
+        sun = std::max(sun, 0.0);
+        const double sky = std::max((coef[0][c] - 0.8862269 * sun) / 3.5449077, 0.0);
+        fit.sun[c] = static_cast<float>(sun);
+        fit.sky[c] = static_cast<float>(sky);
+    }
+    for (unsigned i = 0; i < 3u; ++i) {
+        fit.direction[i] = length > 1e-9 ? static_cast<float>(v[i] / length) : 0.0f;
+    }
+    fitted_ = fit;
 }
 
 namespace {
@@ -2253,7 +2404,19 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
             emission &= ~3u;
             intensity = 0.0f;
         }
-        if (emits && material->emission == RtEmission::Point && intensity > 0.0f && authored_.size() < kAuthoredLights) {
+        if (physical_ && emits && material->emission != RtEmission::None && !material->no_light) {
+            // Physical: a light source of the table is an area light of its own triangles (emitter_light), its
+            // radiance what it shows; not the art model's light at its centre.
+            if (emit_triangles_ + entry.triangle_count <= kEmitTriangles) {
+                emit_ranges_.push_back({entry.first_triangle, entry.triangle_count,
+                                        static_cast<std::uint32_t>(draws_.size() - 1u) |
+                                            (info.cull == 0u ? 0x80000000u : 0u),
+                                        emit_triangles_});
+                emit_triangles_ += entry.triangle_count;
+                emit_materials_[info.rt_material] += entry.triangle_count;
+            }
+        } else if (emits && material->emission == RtEmission::Point && intensity > 0.0f &&
+                   authored_.size() < kAuthoredLights) {
             const bool spot = material->cone > 0.0f;
             const std::uint32_t light_flags = (material->tint ? kAuthoredTint : 0u) | (spot ? kAuthoredSpot : 0u) |
                                               (material->star ? kAuthoredStar : 0u) |
@@ -2569,6 +2732,9 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
     // Physical: the per-pixel normals (u7; a stand-in without them).
     params[kLightPixels].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
     params[kLightPixels].Descriptor.ShaderRegister = 7u;
+    // Physical: the emitting draws' ranges while their triangles are written, then the triangles (t24; a stand-in).
+    params[kLightEmitTris].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    params[kLightEmitTris].Descriptor.ShaderRegister = 24u;
     for (auto& param : params) {
         param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     }
@@ -2650,6 +2816,20 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
         reference_ = false;
         reference_pso_.Reset();
         reference_exposure_pso_.Reset();
+    }
+    // Physical emitters: their radiance from their draws' TEV programs, read from the descriptor heap.
+    if (!light_textured_ ||
+        !compute(light_root_.Get(), g_rt_emit_triangle_cs, sizeof(g_rt_emit_triangle_cs), emit_triangle_pso_) ||
+        !compute(light_root_.Get(), g_rt_emit_scan_cs, sizeof(g_rt_emit_scan_cs), emit_scan_pso_)) {
+        emit_triangle_pso_.Reset();
+        emit_scan_pso_.Reset();
+    }
+    // The fitted light reads its draws' TEV programs: only with the textured trace.
+    if (!light_textured_ ||
+        !compute(light_root_.Get(), g_rt_baked_fit_cs, sizeof(g_rt_baked_fit_cs), baked_fit_pso_) ||
+        !compute(light_root_.Get(), g_rt_baked_reduce_cs, sizeof(g_rt_baked_reduce_cs), baked_reduce_pso_)) {
+        baked_fit_pso_.Reset();
+        baked_reduce_pso_.Reset();
     }
     // The traced sky reads its draws' textures from the descriptor heap: only with the textured trace.
     if (!light_textured_ ||
@@ -3329,6 +3509,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     // Egg it stands on the horizon while the key is 35 degrees up).
     GameAreaLight area{};
     RtUpload sky_record_table{};
+    RtUpload emit_range_table{};
     physical_active_ = physical_ && game_area_light(GameAreaLightKind::Stage, area, 2000u);
     if (physical_active_) {
         const auto lin = [](float v) {
@@ -3347,6 +3528,28 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         }
         light_full_ = {std::max(c.full_light[0], 1e-3f), std::max(c.full_light[1], 1e-3f),
                        std::max(c.full_light[2], 1e-3f)};
+        // The stage's light as the game sets it (display-encoded), when it changes.
+        static std::array<float, 6> logged_light{-1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1.0f};
+        const std::array<float, 6> stage_light{area.ambient[0], area.ambient[1], area.ambient[2],
+                                               area.lights[0].color[0], area.lights[0].color[1],
+                                               area.lights[0].color[2]};
+        if (stage_light != logged_light) {
+            logged_light = stage_light;
+            const std::array<float, 3>& at = area.lights[0].position;
+            // The camera in the world: minus the rotation's transpose times the translation.
+            std::array<float, 3> camera_world{};
+            for (unsigned r = 0; r < 3u; ++r) {
+                for (unsigned k = 0; k < 3u; ++k) {
+                    camera_world[k] -= camera_[r * 4u + k] * camera_[r * 4u + 3u];
+                }
+            }
+            std::fprintf(stderr,
+                         "[rt-stage] ambient=%.3f,%.3f,%.3f key=%.3f,%.3f,%.3f follows-camera=%d key-at=%.0f,%.0f,%.0f "
+                         "camera-at=%.0f,%.0f,%.0f\n",
+                         stage_light[0], stage_light[1], stage_light[2], stage_light[3], stage_light[4],
+                         stage_light[5], area.lights[0].follows_camera ? 1 : 0, at[0], at[1], at[2], camera_world[0],
+                         camera_world[1], camera_world[2]);
+        }
         // The traced sky: the sky's draws of this scene, each one's record for the probe.
         if (sky_built_ != 0u && sky_probe_pso_ && sky_trace_sh_pso_ && sky_probe_map_ && !sky_records_.empty()) {
             sky_record_table = allocate(allocate_context, sky_records_.size() * sizeof(sky_records_[0]), 256u);
@@ -3355,6 +3558,23 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
                 std::memcpy(sky_record_table.cpu, sky_records_.data(), sky_records_.size() * sizeof(sky_records_[0]));
                 c.full_light[3] = 1.0f;
                 c.tev_info[1] = static_cast<std::uint32_t>(sky_tev_records_.size());
+            }
+        }
+        // The emitting draws' ranges for EmitTriangleCS (their triangles' TEV programs need the scene's records).
+        if (emit_triangle_pso_ && emit_scan_pso_ && emit_triangles_ != 0u && tev_table != 0u) {
+            if (!emit_tris_ &&
+                !create_buffer((1ull + 5ull * kEmitTriangles) * 16u, D3D12_HEAP_TYPE_DEFAULT,
+                               D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+                               emit_tris_, L"rt emitters")) {
+                emit_tris_.Reset();
+            }
+            emit_range_table = allocate(allocate_context, 16u + emit_ranges_.size() * 16u, 256u);
+            if (emit_tris_ && emit_range_table.cpu != nullptr) {
+                auto* const words = static_cast<std::uint32_t*>(emit_range_table.cpu);
+                words[0] = static_cast<std::uint32_t>(emit_ranges_.size());
+                words[1] = words[2] = words[3] = 0u;
+                std::memcpy(words + 4u, emit_ranges_.data(), emit_ranges_.size() * 16u);
+                c.tev_info[2] = emit_triangles_;
             }
         }
         c.sun_light[3] = 1.0f;
@@ -3376,6 +3596,64 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
                 c.sun[i] = eye[i] / length;
             }
         }
+        // The camera's exposure from the game's own stage light: a white surface facing the player's up under its
+        // ambient and its key, the key at no less than 30 degrees up (physical_exposure). Set here so that a light
+        // fitted dimmer to the baked light stays dimmer.
+        {
+            const auto luma = [](const float* rgb) { return 0.2126f * rgb[0] + 0.7152f * rgb[1] + 0.0722f * rgb[2]; };
+            const float up_key = std::max(scene_up_[0] * c.sun[0] + scene_up_[1] * c.sun[1] + scene_up_[2] * c.sun[2],
+                                          0.5f);
+            const float reference = luma(c.sky_radiance) + luma(c.sun_light) * up_key;
+            c.light_fit[0] = reference > 1e-4f ? luma(c.full_light) / reference : 0.0f;
+        }
+        // The stage's light fitted to the light baked into its surfaces (fit_baked_light), when it has one: the sun's
+        // direction, colour and strength and the sky's the artists lit the stage with. The game's area light is often
+        // its default (Melty Molten, Ghostly: ambient 0.25, white key at 700000, 700000, 700000).
+        // A new stage or stage light starts the fit again (most stages share the default light: the stage counts).
+        const std::array<float, 9> fit_light{area.ambient[0], area.ambient[1], area.ambient[2],
+                                               area.lights[0].color[0], area.lights[0].color[1],
+                                               static_cast<float>(rt_materials_stage_serial()),
+                                               area.lights[0].position[0], area.lights[0].position[1],
+                                               area.lights[0].position[2]};
+        if (fit_light != fit_stage_light_) {
+            fit_stage_light_ = fit_light;
+            fit_sums_acc_ = {};
+            fitted_ = {};
+        }
+        // Its direction and its sun's and sky's strengths; their colours stay the game's key's and the traced sky's: a
+        // program mixing coloured registers by the vertex value (lerp(C1, C0, v)) puts its registers' hue into the
+        // measured light (Good Egg fitted blue, its stone lavender, fit1). The camera is exposed for the game's white
+        // light: a stage baked brighter than white light (GX's doubled light: Good Egg's sun 1.5) is exposed down to
+        // it; one baked dimmer keeps half its dimness in log luminance, as vision adapts partly (brightness about the
+        // square root of luminance, Stevens 1957): Ghostly stays dim, Sea Slide (0.77) not darker than the game.
+        // A fitted sun below the player's horizon is not a sun: light baked from local lamps onto undersides (the
+        // Observatory fitted one from straight below, its floors black, fit2); the lamps are emitters, the game's light
+        // stays.
+        std::array<float, 3> fitted_eye{};
+        for (unsigned i = 0; i < 3u; ++i) {
+            fitted_eye[i] = camera_[i * 4u] * fitted_.direction[0] + camera_[i * 4u + 1u] * fitted_.direction[1] +
+                            camera_[i * 4u + 2u] * fitted_.direction[2];
+        }
+        fit_used_ = fit_ && fitted_.valid &&
+                    scene_up_[0] * fitted_eye[0] + scene_up_[1] * fitted_eye[1] + scene_up_[2] * fitted_eye[2] > 0.1f;
+        if (fit_used_) {
+            const auto luma = [](const float* rgb) { return 0.2126f * rgb[0] + 0.7152f * rgb[1] + 0.0722f * rgb[2]; };
+            const float sun_strength = luma(fitted_.sun.data());
+            const float sky_strength = luma(fitted_.sky.data());
+            const float key_luma = std::max(luma(c.sun_light), 1e-4f);
+            const float sky_luma = std::max(luma(c.sky_radiance), 1e-4f);
+            for (unsigned i = 0; i < 3u; ++i) {
+                c.sun_light[i] *= sun_strength / key_luma;
+                c.sky_radiance[i] *= sky_strength / sky_luma;
+                c.sun[i] = fitted_eye[i];
+            }
+            const float up_sun = std::max(scene_up_[0] * c.sun[0] + scene_up_[1] * c.sun[1] + scene_up_[2] * c.sun[2],
+                                          0.5f);
+            const float lit = sky_strength + sun_strength * up_sun;
+            c.light_fit[0] = luma(c.full_light) / (lit >= 1.0f ? lit : std::sqrt(std::max(lit, 1e-4f)));
+            c.light_fit[1] = 1.0f;
+        }
+        c.tev_info[3] = ((sample_width + 31u) / 32u) * ((sample_height + 31u) / 32u);
     }
     {
         // The game's point lights nearest in light to the camera, in eye space.
@@ -3664,6 +3942,24 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
                                                                     : positions_->GetGPUVirtualAddress());
     list->SetComputeRootShaderResourceView(kLightTev, tev_table != 0u ? tev_table : draw_table.gpu);
     list->SetComputeRootUnorderedAccessView(kLightPixels, light_raw_->GetGPUVirtualAddress());
+    // Physical: the emitting triangles (EmitTriangleCS into the emitters' buffer in the reference's slot, then their
+    // running power), before the trace samples them.
+    if (c.tev_info[2] != 0u) {
+        to_state(list, emit_tris_.Get(), emit_tris_state_, kUav);
+        list->SetComputeRootShaderResourceView(kLightEmitTris, emit_range_table.gpu);
+        list->SetComputeRootUnorderedAccessView(kLightReference, emit_tris_->GetGPUVirtualAddress());
+        list->SetPipelineState(emit_triangle_pso_.Get());
+        list->Dispatch((c.tev_info[2] + 63u) / 64u, 1u, 1u);
+        const D3D12_RESOURCE_BARRIER emit_uav = uav_barrier(emit_tris_.Get());
+        list->ResourceBarrier(1u, &emit_uav);
+        list->SetPipelineState(emit_scan_pso_.Get());
+        list->Dispatch(1u, 1u, 1u);
+        to_state(list, emit_tris_.Get(), emit_tris_state_, kRead);
+        list->SetComputeRootUnorderedAccessView(kLightReference, reference ? reference_buffer_->GetGPUVirtualAddress()
+                                                                           : light_raw_->GetGPUVirtualAddress());
+    }
+    list->SetComputeRootShaderResourceView(kLightEmitTris, c.tev_info[2] != 0u ? emit_tris_->GetGPUVirtualAddress()
+                                                                              : positions_->GetGPUVirtualAddress());
     // The stars' balls, after the samples in the result (the composite shades the stars on them, reflections that
     // meet a star find its ball): every slot each frame, one without a star this frame written empty.
     list->SetPipelineState(star_sphere_pso_.Get());
@@ -3693,6 +3989,42 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     }
     const D3D12_RESOURCE_BARRIER all_uav = uav_barrier(nullptr);
     list->ResourceBarrier(1u, &all_uav);
+    // Physical: the baked light's sums for the fitted light (BakedFitCS into the groups' sums in the reference's slot,
+    // BakedReduceCS into the totals), copied for fit_baked_light.
+    if (physical_active_ && fit_ && baked_fit_pso_ && baked_reduce_pso_ && tev_table != 0u && c.tev_info[3] != 0u &&
+        c.tev_info[3] <= kFitGroups) {
+        if (!fit_sums_ &&
+            !create_buffer((static_cast<std::uint64_t>(kFitGroups) + 1u) * kFitBytes, D3D12_HEAP_TYPE_DEFAULT,
+                           D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, fit_sums_,
+                           L"rt baked fit")) {
+            fit_sums_.Reset();
+        }
+        if (!fit_readback_ &&
+            !create_buffer(static_cast<std::uint64_t>(kFitReadbacks) * kFitBytes, D3D12_HEAP_TYPE_READBACK,
+                           D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_FLAG_NONE, fit_readback_,
+                           L"rt baked fit readback")) {
+            fit_readback_.Reset();
+        }
+        if (fit_sums_ && fit_readback_ && fit_readback_frame_[fit_readback_next_] == 0u) {
+            to_state(list, fit_sums_.Get(), fit_sums_state_, kUav);
+            list->SetComputeRootUnorderedAccessView(kLightReference, fit_sums_->GetGPUVirtualAddress());
+            list->SetPipelineState(baked_fit_pso_.Get());
+            list->Dispatch((sample_width + 31u) / 32u, (sample_height + 31u) / 32u, 1u);
+            const D3D12_RESOURCE_BARRIER fit_uav = uav_barrier(fit_sums_.Get());
+            list->ResourceBarrier(1u, &fit_uav);
+            list->SetPipelineState(baked_reduce_pso_.Get());
+            list->Dispatch(1u, 1u, 1u);
+            to_state(list, fit_sums_.Get(), fit_sums_state_, D3D12_RESOURCE_STATE_COPY_SOURCE);
+            list->CopyBufferRegion(fit_readback_.Get(), fit_readback_next_ * kFitBytes, fit_sums_.Get(),
+                                   static_cast<UINT64>(kFitGroups) * kFitBytes, kFitBytes);
+            to_state(list, fit_sums_.Get(), fit_sums_state_, kUav);
+            fit_readback_frame_[fit_readback_next_] = frame_index_ + 1u;
+            fit_readback_next_ = (fit_readback_next_ + 1u) % kFitReadbacks;
+            list->SetComputeRootUnorderedAccessView(kLightReference,
+                                                    reference ? reference_buffer_->GetGPUVirtualAddress()
+                                                              : light_raw_->GetGPUVirtualAddress());
+        }
+    }
     list->SetPipelineState(temporal_pso_.Get());
     list->Dispatch(groups_x, groups_y, 1u);
     list->ResourceBarrier(1u, &all_uav);

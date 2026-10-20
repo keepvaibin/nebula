@@ -22,6 +22,7 @@
 #include "galaxy/gx/rt_sky_sun.h"
 
 #include <array>
+#include <map>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -253,6 +254,8 @@ private:
     static constexpr std::uint64_t kResultDelay = 8u;
     static constexpr std::uint32_t kEmitLogLights = 512u;   // the whole list (ray_tracing.cpp kEmitLights)
     static constexpr std::size_t kAuthoredLights = 512u;
+    // Physical: the scene's emitting triangles at most (rt_lighting.hlsl kEmitTriangles).
+    static constexpr std::uint32_t kEmitTriangles = 65536u;
     // A light in the glow lights' lists (rt_lighting.hlsl kEmitStride): position, radius; power,
     // frames unseen or cumulative power; spot direction, cosine of its cone (0 0 0 for a point light).
     static constexpr std::uint32_t kEmitStride = 48u;
@@ -667,6 +670,42 @@ private:
     };
     static_assert(sizeof(AuthoredLight) == 32u);
     std::vector<AuthoredLight> authored_;
+    // Physical: the scene's emitting draws as area lights (EmitTriangleCS): first scene triangle, count, draw (bit 31:
+    // two-sided), first emitter; the emitters (rt_lighting.hlsl g_emit_tris) and their passes.
+    std::vector<std::array<std::uint32_t, 4>> emit_ranges_;
+    std::uint32_t emit_triangles_ = 0u;
+    std::map<std::uint16_t, std::uint64_t> emit_materials_;   // [rt-emit]: emitting materials' triangles
+    Microsoft::WRL::ComPtr<ID3D12Resource> emit_tris_;
+    D3D12_RESOURCE_STATES emit_tris_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> emit_triangle_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> emit_scan_pso_;
+    // Physical: the stage's light fitted to the light the game baked into its surfaces (BakedFitCS, fit_baked_light;
+    // GALAXY_RT_FIT_LIGHT=0: the game's stage light). The groups' sums and totals, their readbacks, the decaying
+    // normal equations, the fit and the stage light it belongs to.
+    static constexpr std::uint32_t kFitGroups = 16384u;   // rt_lighting.hlsl kFitGroups
+    static constexpr unsigned kFitReadbacks = 4u;
+    static constexpr std::uint32_t kFitBytes = 18u * 16u;
+    struct FittedLight {
+        bool valid = false;
+        std::array<float, 3> direction{};   // towards the sun, world space
+        std::array<float, 3> sun{};         // its irradiance over pi at normal incidence (linear, white light 1)
+        std::array<float, 3> sky{};         // the sky's (uniform)
+        double samples = 0.0;
+    };
+    void fit_baked_light(const float* sums);
+    bool fit_ = true;
+    bool fit_used_ = false;   // this frame's light is the fit (its sun above the player's horizon)
+    Microsoft::WRL::ComPtr<ID3D12Resource> fit_sums_;
+    D3D12_RESOURCE_STATES fit_sums_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    Microsoft::WRL::ComPtr<ID3D12Resource> fit_readback_;
+    std::array<std::uint64_t, kFitReadbacks> fit_readback_frame_{};
+    unsigned fit_readback_next_ = 0u;
+    std::uint64_t fit_read_frame_ = 0u;
+    std::array<double, 72> fit_sums_acc_{};
+    FittedLight fitted_{};
+    std::array<float, 9> fit_stage_light_{};
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> baked_fit_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> baked_reduce_pso_;
     // Per glow draw (glow_draws_) for GlowEmitCS, in AuthoredLight's layout: its triangles, the material
     // table's colour and intensity for its texture where the table names it (flags kGlowTable).
     std::vector<AuthoredLight> glow_lights_;
