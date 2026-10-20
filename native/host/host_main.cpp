@@ -1716,8 +1716,8 @@ int svc_hbm(void*, uint32_t what, uint32_t) {
 //     miss: MR::forceKillPlayerByAbyss), movieN (MR::startMovie(N), in a stage with a movie sequence), wait (nothing:
 //     keeps a tour's last stop running until then), star / grandstar (the stop's star is collected: its result, the get
 //     demo, the save and what follows, the ending after KoopaBattleVs3Galaxy).
-//   GALAXY_TEST_GRAND_STARS=n: the save holds Grand Stars 1-n from the second scene frame (the Observatory's domes lit as
-//     the game lights them for that many).
+//   GALAXY_TEST_GRAND_STARS=n: the save holds Grand Stars 1-n from the second scene frame, and the stage starts again
+//     with them (the Observatory's domes restored, lit and furnished as the game shows them for that many).
 //   GALAXY_TEST_EVENTS actors@frame: the live actors with a model, by model name and position (where to teleport).
 std::atomic<bool> gTourDone{false};
 

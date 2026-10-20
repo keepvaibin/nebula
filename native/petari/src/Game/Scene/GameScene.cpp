@@ -227,6 +227,12 @@ void GameScene::draw() const {
             for (s32 i = 0; i < action.scenario && i < 7; ++i) {
                 GameDataFunction::setGameFlagPowerStarSuccess(kGrandStarGalaxies[i], 1, true);
             }
+            // The scene's domes and their parts took their state from the save as it was built
+            // (AstroMapObjFunction::isAlreadyRevival): the stage starts again with these stars. Set at the scene's
+            // second frame only, every dome stayed a shell without its pillars, lamps and glass top, a state play never
+            // reaches (user: the domes' pillars and lights never show).
+            strcpy(sStage, MR::getCurrentStageName());
+            MR::requestChangeStageInGameMoving(sStage, MR::getCurrentScenarioNo());
         } else if (action.kind == NEBULA_TEST_LIST_ACTORS) {
             AllLiveActorGroup* pGroup = MR::getAllLiveActorGroup();
             for (s32 i = 0; pGroup != nullptr && i < pGroup->getObjNum(); ++i) {
