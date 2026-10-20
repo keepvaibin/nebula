@@ -3263,6 +3263,10 @@ CompositeOut ClearCompositePS(float4 position : SV_Position)
     if (any(traced < 0) || any(traced >= int2(m_sample_size))) {
         discard;
     }
+    // A discarded pixel's shader runs on: its read stays in the buffer (m_light is a root view, unchecked). A sub-frame's
+    // reprojected pixel off the traced frame (or NaN behind the camera) read far outside it, and the GPU hung under
+    // frame interpolation (b103 settings matrix: every 120 fps run, DXGI_ERROR_DEVICE_HUNG at this draw by DRED).
+    traced = clamp(traced, int2(0, 0), int2(m_sample_size) - 1);
     // GALAXY_RT_ENGINE_VIEW=6 (m_flags bit 3): the composite's coverage, magenta.
     if ((m_flags & 8u) != 0u) {
         result.color = float4(0.8f, 0.0f, 0.8f, 1.0f);
