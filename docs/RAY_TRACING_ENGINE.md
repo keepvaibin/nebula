@@ -3,7 +3,10 @@
 One physically based renderer for the traced picture. Scene light is radiance in the stage's units; light comes only
 from emitting geometry, the sun and the sky; the scene renders into an HDR target and a camera brings it to the
 display. It replaces the art model and its physical retrofit (the light multiplier relative to the game's painted
-look, sprite and halo lights, light caps, the picture-feedback bounce, the legacy finish).
+look, sprite and halo lights, light caps, the picture-feedback bounce, the legacy finish), which are deleted: ray
+tracing is the engine under physical light or nothing. It needs shader model 6.6 and resource binding tier 3 (the
+lighting is unavailable without them); a scene without the game's stage light (it sets one each frame a stage draws)
+is not traced and shows the game's picture.
 
 ## 1. Units
 - Radiance relative to a white Lambertian surface under the stage's full light (ambient + key as rt-suns.tsv / the
@@ -28,7 +31,13 @@ look, sprite and halo lights, light caps, the picture-feedback bounce, the legac
   surface is shown at most 1.5 x white so its colour survives the tone curve. A faint glow (intensity below 1: coins,
   star chips, Boos, glowing flowers) is a surface lit, shaded and reflecting as any other, its glow (colour x intensity)
   added, and sends that glow as light. Power pi L A (one-sided), 2 pi L A (two-sided). A particle texture the table
-  names a light source, drawn as opaque geometry, is traced (the fire bars' cores).
+  names a light source, drawn as opaque geometry, is traced (the fire bars' cores). An emitting triangle's radiance is
+  its TEV output's mean over seven points (97752e9 lost the division: every model light source lit the scene at seven
+  times its stated radiance until b90). A light source shows its emitted colour (the TEV output at full light, or the
+  table's for `recolour`) times its radiance past the composite's albedo, so an environment-mapped lamp keeps its
+  colour; a faint glow adds its glow in the game's painted colours of it (a coin's gradient and embossed ?).
+  `near-glow`: a material emits only within 1.25 x the size of a glow light source's light (the game's glow sprite of
+  it): the Observatory's entrance stars share one material and one draw with their gold border.
 - Exposure: stage exposure (CPU, from the stage light) x eye adaptation (GPU, eased), applied once where scene light
   enters the HDR scene EFB (composite, emission pass). The camera's tone curve is the only compression. The
   adaptation meters the light the surfaces receive centre-weighted (the picture's middle, where the player is, four
@@ -131,21 +140,31 @@ late: the restart closed the water window untraced).
 - Visible surface: the camera ray's triangle within the raster's depth; else the candidate nearest that depth (the
   raster drew a surface there): an alpha-tested light source a few units off was no draw at all.
 
-## 7. Deleted when E1-E10 pass verification
-TraceCS, TemporalCS, SpatialA/M/BCS, the art composite path, CaptureCS's picture feedback, GlowEmitCS / AuthoredEmitCS
-/ EmitMergeCS (art glow lights), BakedFit, the night model, local exposure / shafts / grade / rim / haze of
-rt_post.hlsl, RtReflections for opaque surfaces and clear glass (water, mirror glass and metal coats stay),
-GALAXY_RT_* switches of the removed paths. The game's point lights and the star core stay: they are the game's own
+## 7. Deleted (b90)
+TraceCS, the art GBufferCS, TemporalCS, SpatialA/M/BCS, ReferenceCS and ReferenceExposureCS (the engine's reference
+replaces them), BakedFitCS / BakedReduceCS (the baked-light fit), the glow bloom (BloomDown/Blur/PS), rt_post.hlsl (the
+cinematic finish), GALAXY_RT_PHYSICAL and GALAXY_RT_ENGINE (always on), and every shader declaration only those
+reached (port/tools/hlsl_reach.py: 2278 lines). Still to go: the art model's knobs and constants the kept shaders no
+longer read, the old passes' buffers (light history, reservoirs: 242 MB), CaptureCS's picture feedback, GlowEmitCS /
+AuthoredEmitCS / EmitMergeCS, the night model, RtReflections for opaque surfaces (skipped under the engine; the water
+pass stays). The game's point lights and the star core stay: they are the game's own
 light sources (dropping them in build 39 left the Octoombas' lamps unlit, owner report 10-20).
 
 ## 8. Budget (reference GPU, 2x EFB 1280x1056, 60 fps)
 G-buffer 0.3 ms, DI 1.2 ms, GI 1.5 ms, specular 1.0 ms, denoise 1.0 ms, composite + camera 0.4 ms: 5.4 ms.
 
 ## 9. Verification
-1. Converged reference: ReferenceCS accumulation (sun + emitters + sky, 4 bounces) vs the engine, per region mean
-   within 5% at the Observatory spawn, Terrace, Fountain, Good Egg, Honeyhive, Battlerock, Beach Bowl.
+1. Converged reference: GALAXY_RT_ENGINE_REFERENCE=1 (from GALAXY_RT_REFERENCE_FROM, a still view): EngineReferenceCS
+   traces one unbiased path a pixel a present on the engine's own G-buffer, materials and light (next-event estimation
+   at every vertex, the sky through the cosine ray, Russian roulette from the third bounce, 8 bounces);
+   [rt-reference-engine] prints the engine's diffuse light against it over the ordinary non-metal surfaces (bias, mean
+   error). Good Egg, 4140 paths: -2.5 % bias, 6.8 % mean per-pixel difference. GALAXY_RT_ENGINE_VIEW=8 shows it.
+   Diagnostic views: 1 direct, 2 indirect, 3 specular, 7 albedo, 8 reference, 9 / 10 the texture coordinate of the
+   table's glowing region (u / v as 16 hues); GALAXY_RT_PROBE prints [rt-probe-engine] and [rt-probe-uv].
 2. Pictures vs the game and the previous build, hidden runs, frozen bins, rt-images.
-3. Temporal stability: frame-to-frame luminance noise in static views.
+3. Temporal stability: frame-to-frame change of a still view against the game's own (port/tools/flicker.py, 60
+   consecutive presents, GALAXY_PRESENT_SNAPSHOT_EVERY=1 with _LAST): Observatory plaza b93, 0.16 / 255 more than
+   the game on average, 0.08 % of pixels more than 4 / 255.
 4. GALAXY_RT_PASS_TIMING against the budget.
 5. Sub-frame replay (interpolation on), DLSS/FSR, every resolution and aspect.
 

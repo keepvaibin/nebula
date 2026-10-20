@@ -8,23 +8,11 @@
 #include <bit>
 #include "galaxy/gx_d3d12.h"
 
-#include "rt_bloom_blur_cs.h"
-#include "rt_bloom_down_cs.h"
-#include "rt_bloom_ps.h"
 #include "rt_capture_cs.h"
 #include "rt_sky_light_map_cs.h"
 #include "rt_sky_light_sh_cs.h"
 #include "rt_light_texture_ps.h"
-#include "rt_post_blur_cs.h"
-#include "rt_post_bright_cs.h"
-#include "rt_post_copy_cs.h"
-#include "rt_post_focus_cs.h"
-#include "rt_post_lum_cs.h"
-#include "rt_post_lens_cs.h"
-#include "rt_post_ps.h"
-#include "rt_post_shafts_cs.h"
 #include "rt_clear_composite_ps.h"
-#include "rt_post_vs.h"
 #include "rt_emit_merge_cs.h"
 #include "rt_glow_base_cs.h"
 #include "rt_glow_emit_cs.h"
@@ -34,25 +22,13 @@
 #include "rt_surface_emit_cs.h"
 #include "rt_composite_ps.h"
 #include "rt_composite_vs.h"
-#include "rt_spatial_a_cs.h"
-#include "rt_spatial_b_cs.h"
-#include "rt_spatial_m_cs.h"
 #include "rt_star_sphere_cs.h"
-#include "rt_gbuffer_cs.h"
-#include "rt_gbuffer_tex_cs.h"
 #include "rt_delight_cs.h"
 #include "rt_emit_triangle_cs.h"
 #include "rt_emit_scan_cs.h"
-#include "rt_baked_fit_cs.h"
-#include "rt_baked_reduce_cs.h"
 #include "rt_delight_mip_cs.h"
-#include "rt_temporal_cs.h"
-#include "rt_trace_cs.h"
-#include "rt_trace_tex_cs.h"
-#include "rt_reference_tex_cs.h"
 #include "rt_sky_probe_tex_cs.h"
 #include "rt_sky_trace_sh_cs.h"
-#include "rt_reference_exposure_cs.h"
 #include "rt_geometry_cs.h"
 #include "rt_validate_cs.h"
 
@@ -154,55 +130,6 @@ struct RtLightConstants {
 };
 static_assert(sizeof(RtLightConstants) == 1360u);
 
-// Mirrors cbuffer RtPost in rt_post.hlsl (root constants).
-struct RtPostConstants {
-    float projection[4];
-    float depth[4];
-    float viewport[4];
-    std::uint32_t size[2];
-    std::uint32_t quarter[2];
-    float core[4];
-    float core_light[4];
-    float sun[4];
-    float time;
-    float bloom;
-    float threshold;
-    float shafts;
-    float dof;
-    float grade;
-    float split;
-    std::uint32_t axis;
-    float rim;
-    float haze;
-    float haze_distance;
-    float vignette;
-    float local[4];      // local exposure: bright and dark regions' contrast scale, mid grey, 0
-    std::uint32_t lens_first[4];  // black holes' lens triangles: first, count | strength x 32 << 24 |
-    std::uint32_t lens_count[4];  // view ring << 31 (0: none)
-};
-static_assert(sizeof(RtPostConstants) == 208u);
-
-// Mirror cbuffer RtBloom and RtBloomComposite in rt_lighting.hlsl (root constants).
-struct RtBloomConstants {
-    std::uint32_t size[2];
-    std::uint32_t sample_size[2];
-    float threshold;
-    float strength;
-    std::uint32_t axis;
-    std::uint32_t pad;
-};
-static_assert(sizeof(RtBloomConstants) == 32u);
-struct RtBloomCompositeConstants {
-    float scale[2];
-    std::uint32_t size[2];
-    float strength;
-    float split;
-    std::uint32_t light_size[2];
-    std::uint32_t factor;
-    std::uint32_t pad[3];
-};
-static_assert(sizeof(RtBloomCompositeConstants) == 48u);
-
 // Mirrors cbuffer RtEmit in rt_lighting.hlsl (root constants).
 struct RtEmitConstants {
     float projection[4];
@@ -248,6 +175,10 @@ constexpr std::uint32_t kDrawTableCard = 16u;
 constexpr std::uint32_t kDrawTableAlpha = 32u;
 // g_draws word 6 (rt_reflections.hlsl kDrawTableMirror): the table's `mirror` (the Observatory fountain's plates).
 constexpr std::uint32_t kDrawTableMirror = 64u;
+// g_draws word 6 (rt_lighting.hlsl kDrawTableRecolour): a light source in the table's colour.
+constexpr std::uint32_t kDrawTableRecolour = 128u;
+// g_draws word 6 (rt_lighting.hlsl kDrawTableNearGlow): a light source only near a glow light (`near-glow`).
+constexpr std::uint32_t kDrawTableNearGlow = 256u;
 constexpr float kDrawGlowScale = 16.0f;
 // AuthoredLight.flags (rt_lighting.hlsl kAuthored*): the colour the draw shows; a spot light.
 constexpr std::uint32_t kAuthoredTint = 1u;
@@ -716,11 +647,6 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     range_ = std::clamp(env_float("GALAXY_RT_RANGE", 1600.0f), 10.0f, 100000.0f);
     strength_ = std::clamp(env_float("GALAXY_RT_STRENGTH", 1.0f), 0.0f, 1.0f);
     history_frames_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_HISTORY", 32.0f), 1.0f, 64.0f));
-    // The reference (rt_lighting.hlsl ReferenceCS): a path tracer for a still camera that the real-time lighting is
-    // measured against. GALAXY_RT_REFERENCE_BOUNCES: bounces after the first surface; _EXPOSURE: times the exposure
-    // that brings its light's geometric mean to 1.
-    reference_ = env_float("GALAXY_RT_REFERENCE", 0.0f) != 0.0f;
-    physical_ = env_float("GALAXY_RT_PHYSICAL", 0.0f) != 0.0f;
     sky_dump_at_ = static_cast<std::uint64_t>(std::max(env_float("GALAXY_RT_SKY_DUMP", 0.0f), 0.0f));
     {
         char value[32]{};
@@ -731,9 +657,8 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
                  sscanf_s(value, "%u,%u", &x, &y) == 2;
         probe_pixel_ = {x, y};
     }
-    reference_bounces_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_REFERENCE_BOUNCES", 3.0f), 0.0f, 8.0f));
-    reference_exposure_ = std::clamp(env_float("GALAXY_RT_REFERENCE_EXPOSURE", 1.0f), 1.0f / 64.0f, 64.0f);
-    // _FROM: the present it starts at (before it the real-time lighting alone, at full speed).
+    // GALAXY_RT_REFERENCE_FROM: the present the engine's reference (GALAXY_RT_ENGINE_REFERENCE) starts at (a still
+    // view; before it the real-time lighting alone, at full speed).
     reference_from_ = static_cast<std::uint64_t>(std::max(env_float("GALAXY_RT_REFERENCE_FROM", 0.0f), 0.0f));
     factor_override_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_FACTOR", 0.0f), 0.0f, 4.0f));
     contact_ = std::clamp(env_float("GALAXY_RT_CONTACT", 0.3f), 0.0f, 1.0f);
@@ -781,39 +706,13 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     sun_cap_ = std::clamp(env_float("GALAXY_RT_SUN_CAP", 2.5f), 0.05f, 8.0f);
     night_key_ = std::clamp(env_float("GALAXY_RT_NIGHT_KEY", 0.5f), 0.0f, 4.0f);
     day_environment_ = std::clamp(env_float("GALAXY_RT_DAY_ENVIRONMENT", 0.92f), 0.3f, 1.2f);
-    // The finish (grade, depth of field, shafts, haze, star core, lenses) off by default: with it and the
-    // reflections both on, pictures came out x(1 + x) of the game (Honeyhive 1.31-1.51 per pair with the
-    // lighting off; off: 0.87-1.03, measured h5n / h5p / hhd, 2026-10-15). Cause not yet found.
-    post_ = env_float("GALAXY_RT_POST", 0.0f) != 0.0f;
-    post_bloom_ = std::clamp(env_float("GALAXY_RT_POST_BLOOM", 0.0f), 0.0f, 4.0f);
-    post_threshold_ = std::clamp(env_float("GALAXY_RT_POST_THRESHOLD", 0.97f), 0.0f, 0.99f);
-    post_shafts_ = std::clamp(env_float("GALAXY_RT_POST_SHAFTS", 1.0f), 0.0f, 4.0f);
-    post_dof_ = std::clamp(env_float("GALAXY_RT_POST_DOF", 1.5f), 0.0f, 32.0f);
-    post_grade_ = std::clamp(env_float("GALAXY_RT_POST_GRADE", 1.0f), 0.0f, 1.0f);
-    post_rim_ = std::clamp(env_float("GALAXY_RT_POST_RIM", 0.0f), 0.0f, 2.0f);
-    post_haze_ = std::clamp(env_float("GALAXY_RT_POST_HAZE", 0.04f), 0.0f, 1.0f);
-    lens_strength_ = std::clamp(env_float("GALAXY_RT_LENS", 1.0f), 0.0f, 3.9f);
-    lens_view_ = env_float("GALAXY_RT_LENS_VIEW", 0.0f) != 0.0f;
-    post_local_bright_ = std::clamp(env_float("GALAXY_RT_LOCAL_BRIGHT", 1.0f), 0.3f, 1.0f);
-    post_local_dark_ = std::clamp(env_float("GALAXY_RT_LOCAL_DARK", 1.0f), 0.3f, 1.0f);
     relief_ = std::clamp(env_float("GALAXY_RT_RELIEF", 3.0f), 0.0f, 64.0f);
     delight_ = env_float("GALAXY_RT_DELIGHT", 1.0f) != 0.0f;
-    fit_ = env_float("GALAXY_RT_FIT_LIGHT", 0.0f) != 0.0f;
     // Half of 2 (user: grass and other textures too rough; halfway to flat).
     delight_relief_ = std::clamp(env_float("GALAXY_RT_DELIGHT_RELIEF", 1.0f), 0.0f, 32.0f);
-    post_haze_distance_ = std::clamp(env_float("GALAXY_RT_POST_HAZE_DISTANCE", 20000.0f), 100.0f, 1.0e6f);
-    post_vignette_ = std::clamp(env_float("GALAXY_RT_POST_VIGNETTE", 0.1f), 0.0f, 1.0f);
-    post_view_ = env_float("GALAXY_RT_POST_VIEW", 0.0f) != 0.0f;
-    // GALAXY_RT_POST_IDENTITY=1 (diagnostics): the finish writes its copy of the picture back untouched.
-    post_identity_ = env_float("GALAXY_RT_POST_IDENTITY", 0.0f) != 0.0f;
     gi_ = env_float("GALAXY_RT_GI", 1.0f) != 0.0f;
     core_radius_ = std::clamp(env_float("GALAXY_RT_CORE_RADIUS", 1667.0f), 1.0f, 100000.0f);
     core_light_ = std::clamp(env_float("GALAXY_RT_CORE_LIGHT", 8.0f), 0.0f, 16.0f);
-    // The glows' corona: only what an emitter adds past half the picture's range, at 0.8. From 0.15 at 1.4 the
-    // Observatory's map hologram behind Rosalina bloomed her face white and the star plate's 54 burned out (isoBl,
-    // build 89: both in the game's colours with the bloom off).
-    bloom_strength_ = std::clamp(env_float("GALAXY_RT_BLOOM", 0.8f), 0.0f, 4.0f);
-    bloom_threshold_ = std::clamp(env_float("GALAXY_RT_BLOOM_THRESHOLD", 0.5f), 0.0f, 4.0f);
     exposure_ = env_float("GALAXY_RT_EXPOSURE", 1.0f) != 0.0f;
     exposure_day_ = std::clamp(env_float("GALAXY_RT_EXPOSURE_DAY", 1.0f), 0.3f, 1.5f);
     exposure_night_ = std::clamp(env_float("GALAXY_RT_EXPOSURE_NIGHT", 1.0f), 0.3f, 1.5f);
@@ -834,7 +733,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     key_min_elevation_ = std::clamp(env_float("GALAXY_RT_KEY_MIN_ELEVATION", 50.0f), 0.0f, sun_max_elevation_);
     sun_light_ = std::clamp(env_float("GALAXY_RT_SUN_LIGHT", 1.2f), 0.0f, 4.0f);
     sky_light_ = std::clamp(env_float("GALAXY_RT_SKY_LIGHT", 0.6f), 0.0f, 4.0f);
-    if (lighting_enabled_ && !create_lighting_pipelines(scene_format, display_format)) {
+    if (lighting_enabled_ && !create_lighting_pipelines(scene_format)) {
         std::cerr << "[rt] lighting unavailable\n";
         lighting_enabled_ = false;
     }
@@ -846,7 +745,12 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
         shutdown();
         return false;
     }
+    // The engine is the lighting: without it nothing is traced.
     engine_ready_ = lighting_enabled_ && create_engine_pipelines();
+    if (lighting_enabled_ && !engine_ready_) {
+        std::cerr << "[rt] lighting unavailable: the engine's pipelines failed\n";
+        lighting_enabled_ = false;
+    }
     ready_ = true;
     std::cerr << "[rt] ready tier=1.1 validate=" << (validate ? 1 : 0) << " lighting=" << (lighting_enabled_ ? 1 : 0)
               << " rays=" << rays_ << " range=" << range_ << " strength=" << strength_
@@ -897,18 +801,10 @@ void SceneRayTracer::shutdown() noexcept {
     emit_tris_.Reset();
     emit_triangle_pso_.Reset();
     emit_scan_pso_.Reset();
-    fit_sums_.Reset();
-    fit_readback_.Reset();
-    fit_readback_frame_ = {};
-    fit_sums_acc_ = {};
-    fitted_ = {};
-    baked_fit_pso_.Reset();
-    baked_reduce_pso_.Reset();
     emit_ranges_.clear();
     emit_triangles_ = 0u;
     for (auto& buffer : light_pixels_) buffer.Reset();
     light_pixels_bytes_ = {};
-    gbuffer_pso_.Reset();
     // The views stay the renderer's (set_delight_views): every slot free again.
     reset_delight();
     delight_scratch_.Reset();
@@ -941,11 +837,6 @@ void SceneRayTracer::shutdown() noexcept {
     geometry_pso_.Reset();
     validate_pso_.Reset();
     root_.Reset();
-    trace_pso_.Reset();
-    temporal_pso_.Reset();
-    spatial_a_pso_.Reset();
-    spatial_m_pso_.Reset();
-    spatial_b_pso_.Reset();
     star_sphere_pso_.Reset();
     light_root_.Reset();
     capture_pso_.Reset();
@@ -959,16 +850,6 @@ void SceneRayTracer::shutdown() noexcept {
     light_tex_srv_ = {};
     light_tex_width_ = light_tex_height_ = 0u;
     light_tex_ready_ = false;
-    post_root_.Reset();
-    post_copy_pso_.Reset();
-    post_bright_pso_.Reset();
-    post_blur_pso_.Reset();
-    post_shafts_pso_.Reset();
-    post_focus_pso_.Reset();
-    post_lum_pso_.Reset();
-    post_lens_pso_.Reset();
-    post_finish_root_.Reset();
-    post_finish_pso_.Reset();
     camera_root_.Reset();
     camera_down_pso_.Reset();
     camera_up_pso_.Reset();
@@ -999,17 +880,6 @@ void SceneRayTracer::shutdown() noexcept {
     adaptation_readback_.Reset();
     adaptation_readback_frame_ = {};
     adaptation_cpu_ = 1.0f;
-    for (auto& buffer : post_buffers_) buffer.Reset();
-    post_pixels_ = post_quarter_ = 0u;
-    bloom_root_.Reset();
-    bloom_down_pso_.Reset();
-    bloom_blur_pso_.Reset();
-    bloom_composite_root_.Reset();
-    bloom_composite_pso_.Reset();
-    bloom_temp_.Reset();
-    for (auto& buffer : bloom_) buffer.Reset();
-    bloom_entries_ = 0u;
-    bloom_slot_ = -1;
     sky_state_pso_.Reset();
     surface_emit_pso_.Reset();
     sky_light_map_pso_.Reset();
@@ -1333,25 +1203,6 @@ void SceneRayTracer::begin_frame(std::uint64_t frame_index) {
         sky_dump_taken_ = 0u;
         sky_dump_at_ = 0u;
     }
-    // Physical: the frames' baked-light sums, into the fitted light.
-    for (unsigned k = 0; fit_readback_ && k < kFitReadbacks; ++k) {
-        const std::uint64_t taken = fit_readback_frame_[k];
-        if (taken == 0u || taken + kResultDelay > frame_index) {
-            continue;
-        }
-        fit_readback_frame_[k] = 0u;
-        const D3D12_RANGE range{k * kFitBytes, (k + 1u) * kFitBytes};
-        void* mapped = nullptr;
-        if (taken <= fit_read_frame_ || FAILED(fit_readback_->Map(0, &range, &mapped))) {
-            continue;
-        }
-        float sums[72]{};
-        std::memcpy(sums, static_cast<const std::byte*>(mapped) + range.Begin, sizeof(sums));
-        const D3D12_RANGE no_write{0, 0};
-        fit_readback_->Unmap(0, &no_write);
-        fit_read_frame_ = taken;
-        fit_baked_light(sums);
-    }
     for (unsigned k = 0; adaptation_readback_ && k < kAdaptationReadbacks; ++k) {
         const std::uint64_t taken = adaptation_readback_frame_[k];
         if (taken == 0u || taken + kResultDelay > frame_index) {
@@ -1411,6 +1262,12 @@ void SceneRayTracer::begin_frame(std::uint64_t frame_index) {
                              static_cast<unsigned long long>(taken), probe_pixel_[0], probe_pixel_[1], probe[0],
                              static_cast<int>(probe[1]), material(probe[1]), probe[2], probe[3] & 0xFFFFu,
                              probe[3] >> 16u, t, picture, z, facing);
+            float region_u = 0.0f;
+            float region_v = 0.0f;
+            std::memcpy(&region_u, &probe[12], 4u);
+            std::memcpy(&region_v, &probe[13], 4u);
+            std::fprintf(stderr, "[rt-probe-uv] frame=%llu draw=%u tri=%u region-uv=%.3f,%.3f\n",
+                         static_cast<unsigned long long>(taken), probe[14], probe[15], region_u, region_v);
             } else
             std::fprintf(stderr,
                          "[rt-probe] frame=%llu pixel=%u,%u seen-tri=%u draw=%d material=%d sun-blocker-tri=%u draw=%d "
@@ -1763,7 +1620,7 @@ void SceneRayTracer::report() {
                   per(static_cast<double>(window_.late_triangles), window_.scenes),
                   static_cast<double>(physical_exposure_), static_cast<double>(adaptation_cpu_));
     std::cerr << line;
-    if (physical_ && delight_pso_) {
+    if (delight_pso_) {
         // Texture de-lighting: maps made so far, held now and their memory.
         // Draws: seen, not paint, no material map, no texture key, with a map, without one yet.
         std::fprintf(stderr,
@@ -1776,15 +1633,6 @@ void SceneRayTracer::report() {
                      static_cast<unsigned long long>(delight_seen_[4]), static_cast<unsigned long long>(delight_seen_[5]),
                      delight_view_increment_);
         delight_seen_ = {};
-        // Physical: the fitted light (direction in the world, the sun's and the sky's light, samples).
-        if (fit_) {
-            std::fprintf(stderr,
-                         "[rt-fit] valid=%d used=%d samples=%.0f direction=%.3f,%.3f,%.3f sun=%.3f,%.3f,%.3f "
-                         "sky=%.3f,%.3f,%.3f\n",
-                         fitted_.valid ? 1 : 0, fit_used_ ? 1 : 0, fitted_.samples, fitted_.direction[0], fitted_.direction[1],
-                         fitted_.direction[2], fitted_.sun[0], fitted_.sun[1], fitted_.sun[2], fitted_.sky[0],
-                         fitted_.sky[1], fitted_.sky[2]);
-        }
         // Physical emitters: the last scene's emitting draws and triangles.
         std::fprintf(stderr, "[rt-emit] draws=%zu triangles=%u glow-draws=%zu glow-triangles=%u", emit_ranges_.size(),
                      emit_triangles_, glow_emitters_.size(), glow_emit_count_);
@@ -1794,13 +1642,6 @@ void SceneRayTracer::report() {
         }
         std::fprintf(stderr, "\n");
         emit_materials_.clear();
-    }
-    if (reference_) {
-        // Frames the reference ran and how often it started again (a still camera starts it once).
-        std::fprintf(stderr, "[rt-reference] frames=%llu restarts=%llu\n",
-                     static_cast<unsigned long long>(reference_frames_),
-                     static_cast<unsigned long long>(reference_restarts_));
-        reference_frames_ = reference_restarts_ = 0u;
     }
     if (pass_timestamps_) {
         // Per scene: geometry and every pass after the trace (sub-frames' replays included); per pass:
@@ -2109,99 +1950,6 @@ void SceneRayTracer::note_tev(const RtDrawInfo& info, std::vector<RtTevMaterial>
 }
 
 
-// Physical: one frame's baked-light sums (BakedFitCS: the normal equations of the least-squares fit of nine spherical
-// harmonics to the baked light over the surfaces' world normals) into the fitted light. The baked light does not
-// change within a stage: the sums decay slowly (0.995 a frame, about three seconds at 60), so the light holds while the
-// camera turns, and start again with a new stage. Solved by Cholesky with a small ridge (1e-4 of the mean diagonal); the
-// sun is the first band's direction and strength (a directional light's irradiance has 2 pi / 3 Y1m(d) per unit of
-// strength there; Sloan 2008), the sky the rest of the constant band (sqrt(pi) / 2 of the sun's strength is its own
-// share; a uniform sky's is sqrt(4 pi)). Needs 2000 samples; with fewer the last fit holds.
-void SceneRayTracer::fit_baked_light(const float* sums) {
-    for (std::size_t i = 0; i < fit_sums_acc_.size(); ++i) {
-        fit_sums_acc_[i] = fit_sums_acc_[i] * 0.995 + static_cast<double>(sums[i]);
-    }
-    constexpr double kY00 = 0.282095;
-    const double samples = fit_sums_acc_[0] / (kY00 * kY00);
-    if (!(samples >= 2000.0)) {
-        return;
-    }
-    double a[9][9]{};
-    std::size_t k = 0u;
-    for (unsigned i = 0; i < 9u; ++i) {
-        for (unsigned j = i; j < 9u; ++j) {
-            a[i][j] = a[j][i] = fit_sums_acc_[k++];
-        }
-    }
-    double trace = 0.0;
-    for (unsigned i = 0; i < 9u; ++i) {
-        trace += a[i][i];
-    }
-    for (unsigned i = 0; i < 9u; ++i) {
-        a[i][i] += 1e-4 * trace / 9.0;
-    }
-    double l[9][9]{};
-    for (unsigned i = 0; i < 9u; ++i) {
-        for (unsigned j = 0; j <= i; ++j) {
-            double sum = a[i][j];
-            for (unsigned m = 0; m < j; ++m) {
-                sum -= l[i][m] * l[j][m];
-            }
-            if (i == j) {
-                if (!(sum > 0.0)) {
-                    return;
-                }
-                l[i][i] = std::sqrt(sum);
-            } else {
-                l[i][j] = sum / l[j][j];
-            }
-        }
-    }
-    double coef[9][3]{};
-    for (unsigned c = 0; c < 3u; ++c) {
-        double y[9]{};
-        for (unsigned i = 0; i < 9u; ++i) {
-            double sum = fit_sums_acc_[45u + i * 3u + c];
-            for (unsigned m = 0; m < i; ++m) {
-                sum -= l[i][m] * y[m];
-            }
-            y[i] = sum / l[i][i];
-        }
-        for (unsigned i = 9u; i-- > 0u;) {
-            double sum = y[i];
-            for (unsigned m = i + 1u; m < 9u; ++m) {
-                sum -= l[m][i] * coef[m][c];
-            }
-            coef[i][c] = sum / l[i][i];
-        }
-    }
-    // The first band's direction by luminance (basis 1: y, 2: z, 3: x).
-    constexpr double kLuma[3] = {0.2126, 0.7152, 0.0722};
-    double v[3]{};
-    for (unsigned c = 0; c < 3u; ++c) {
-        v[0] += kLuma[c] * coef[3][c];
-        v[1] += kLuma[c] * coef[1][c];
-        v[2] += kLuma[c] * coef[2][c];
-    }
-    const double length = std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
-    FittedLight fit;
-    fit.valid = true;
-    fit.samples = samples;
-    for (unsigned c = 0; c < 3u; ++c) {
-        double sun = 0.0;
-        if (length > 1e-9) {
-            sun = (coef[3][c] * v[0] + coef[1][c] * v[1] + coef[2][c] * v[2]) / length / (2.0943951 * 0.488603);
-        }
-        sun = std::max(sun, 0.0);
-        const double sky = std::max((coef[0][c] - 0.8862269 * sun) / 3.5449077, 0.0);
-        fit.sun[c] = static_cast<float>(sun);
-        fit.sky[c] = static_cast<float>(sky);
-    }
-    for (unsigned i = 0; i < 3u; ++i) {
-        fit.direction[i] = length > 1e-9 ? static_cast<float>(v[i] / length) : 0.0f;
-    }
-    fitted_ = fit;
-}
-
 namespace {
 
 // A de-light map's levels in the scratch buffer: placed footprints (offsets 512-aligned, rows 256-aligned), a byte a
@@ -2269,7 +2017,7 @@ void SceneRayTracer::reset_delight() noexcept {
 // drawn in this scene gets its map and a job in this scene's trace (run_delight), within the frame's budget of
 // texels; the rest wait for a later scene.
 std::uint32_t SceneRayTracer::delight_view(const RtTextureSource& source, std::uint32_t wrap) {
-    if (!delight_ || !physical_ || !delight_pso_ || delight_view_increment_ == 0u || source.pack == 0u ||
+    if (!delight_ || !delight_pso_ || delight_view_increment_ == 0u || source.pack == 0u ||
         source.resource == nullptr || source.width < 4u || source.height < 4u) {
         return 0xFFFFFFFFu;
     }
@@ -2496,7 +2244,7 @@ void SceneRayTracer::begin_sky() noexcept {
     sky_flushed_triangles_ = 0u;
     sky_incomplete_ = false;
     sky_built_ = 0u;
-    sky_open_ = physical_ && lighting_active() && sky_probe_pso_ && sky_trace_sh_pso_;
+    sky_open_ = lighting_active() && sky_probe_pso_ && sky_trace_sh_pso_;
 }
 
 void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
@@ -2564,7 +2312,7 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
                 // stopped at the sprite's plane, a hard edge across the Terrace dome, b30).
                 static const bool glow_emitters = env_float("GALAXY_RT_GLOW_EMITTERS", 1.0f) != 0.0f;
                 static const bool isotropic = env_float("GALAXY_RT_GLOW_ISOTROPIC", 1.0f) != 0.0f;
-                if (physical_ && glow_emitters && !material->no_light && !material->hide &&
+                if (glow_emitters && !material->no_light && !material->hide &&
                     glow_emitter_slots_ + draw.triangle_count <= kGlowEmitters) {
                     light.flags |= kGlowPhysical;
                     glow_emitters_.push_back({glow_triangles_, draw.triangle_count, glow_emitter_slots_, light.color,
@@ -2659,7 +2407,8 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
         flags = (material->tint ? kDrawTableTint : 0u) | (material->foliage ? kDrawTableFoliage : 0u) |
                 (material->star ? kDrawTableStar : 0u) |
                 ((info.surface & kRtDrawCard) != 0u ? kDrawTableCard : 0u) |
-                (material->mirror ? kDrawTableMirror : 0u);
+                (material->mirror ? kDrawTableMirror : 0u) | (material->recolour ? kDrawTableRecolour : 0u) |
+                (material->near_glow ? kDrawTableNearGlow : 0u);
         if (material->glow >= 0.0f) {
             flags |= kDrawTableGlow |
                      (static_cast<std::uint32_t>(std::lround(std::min(material->glow / kDrawGlowScale, 1.0f) * 65535.0f))
@@ -2671,7 +2420,7 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
             emission &= ~3u;
             intensity = 0.0f;
         }
-        if (physical_ && emits && material->emission != RtEmission::None && !material->no_light && !material->seen) {
+        if (emits && material->emission != RtEmission::None && !material->no_light && !material->seen) {
             // Physical: a light source of the table is an area light of its own triangles (emitter_light), its
             // radiance what it shows; not the art model's light at its centre. A `seen` one shows its radiance
             // (the G-buffer's emitters) while the game's point light there is its light.
@@ -2949,7 +2698,7 @@ std::uint32_t SceneRayTracer::sample_factor(std::uint32_t width, std::uint32_t h
     return low_quality_ ? 3u : 2u;
 }
 
-bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT scene_format, DXGI_FORMAT display_format) {
+bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT scene_format) {
     const auto serialize = [&](const D3D12_ROOT_SIGNATURE_DESC& desc, ComPtr<ID3D12RootSignature>& out) {
         ComPtr<ID3DBlob> blob, error;
         return SUCCEEDED(D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error)) &&
@@ -3037,26 +2786,15 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT scene_format, DXGI_FO
                           options.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_3 &&
                           env_float("GALAXY_RT_ALPHA_TEST", 1.0f) != 0.0f;
     }
-    if (light_textured_) {
-        rsd.Flags = D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
-        if (!serialize(rsd, light_root_) ||
-            !compute(light_root_.Get(), g_rt_trace_tex_cs, sizeof(g_rt_trace_tex_cs), trace_pso_)) {
-            light_textured_ = false;
-            light_root_.Reset();
-            trace_pso_.Reset();
-            rsd.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
-        }
+    // The engine reads every texture, TEV record and buffer it traces straight from the descriptor heap: ray tracing
+    // needs shader model 6.6 and resource binding tier 3 (every DXR 1.1 GPU the game's ray tracing supports).
+    if (!light_textured_) {
+        std::cerr << "[rt] lighting unavailable: shader model 6.6 and resource binding tier 3 needed\n";
+        return false;
     }
-    std::cerr << "[rt] alpha-tested geometry " << (light_textured_ ? "tested by its alpha maps" : "solid") << '\n';
-    if ((!light_textured_ && (!serialize(rsd, light_root_) ||
-                              !compute(light_root_.Get(), g_rt_trace_cs, sizeof(g_rt_trace_cs), trace_pso_))) ||
-        !compute(light_root_.Get(), g_rt_temporal_cs, sizeof(g_rt_temporal_cs), temporal_pso_) ||
-        !compute(light_root_.Get(), g_rt_spatial_a_cs, sizeof(g_rt_spatial_a_cs), spatial_a_pso_) ||
-        !compute(light_root_.Get(), g_rt_spatial_m_cs, sizeof(g_rt_spatial_m_cs), spatial_m_pso_) ||
-        !compute(light_root_.Get(), g_rt_spatial_b_cs, sizeof(g_rt_spatial_b_cs), spatial_b_pso_) ||
-        !compute(light_root_.Get(), g_rt_star_sphere_cs, sizeof(g_rt_star_sphere_cs), star_sphere_pso_) ||
-        !(light_textured_ ? compute(light_root_.Get(), g_rt_gbuffer_tex_cs, sizeof(g_rt_gbuffer_tex_cs), gbuffer_pso_)
-                          : compute(light_root_.Get(), g_rt_gbuffer_cs, sizeof(g_rt_gbuffer_cs), gbuffer_pso_))) {
+    rsd.Flags = D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED;
+    if (!serialize(rsd, light_root_) ||
+        !compute(light_root_.Get(), g_rt_star_sphere_cs, sizeof(g_rt_star_sphere_cs), star_sphere_pso_)) {
         return false;
     }
     // Texture de-lighting (rt_delight.hlsl) reads the textures from the descriptor heap: only with the textured
@@ -3081,28 +2819,12 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT scene_format, DXGI_FO
             delight_mip_pso_.Reset();
         }
     }
-    // The reference reads the hits' textures from the descriptor heap: only with the textured trace.
-    if (reference_ && (!light_textured_ ||
-                       !compute(light_root_.Get(), g_rt_reference_tex_cs, sizeof(g_rt_reference_tex_cs), reference_pso_) ||
-                       !compute(light_root_.Get(), g_rt_reference_exposure_cs, sizeof(g_rt_reference_exposure_cs),
-                                reference_exposure_pso_))) {
-        reference_ = false;
-        reference_pso_.Reset();
-        reference_exposure_pso_.Reset();
-    }
     // Physical emitters: their radiance from their draws' TEV programs, read from the descriptor heap.
     if (!light_textured_ ||
         !compute(light_root_.Get(), g_rt_emit_triangle_cs, sizeof(g_rt_emit_triangle_cs), emit_triangle_pso_) ||
         !compute(light_root_.Get(), g_rt_emit_scan_cs, sizeof(g_rt_emit_scan_cs), emit_scan_pso_)) {
         emit_triangle_pso_.Reset();
         emit_scan_pso_.Reset();
-    }
-    // The fitted light reads its draws' TEV programs: only with the textured trace.
-    if (!light_textured_ ||
-        !compute(light_root_.Get(), g_rt_baked_fit_cs, sizeof(g_rt_baked_fit_cs), baked_fit_pso_) ||
-        !compute(light_root_.Get(), g_rt_baked_reduce_cs, sizeof(g_rt_baked_reduce_cs), baked_reduce_pso_)) {
-        baked_fit_pso_.Reset();
-        baked_reduce_pso_.Reset();
     }
     // The traced sky reads its draws' textures from the descriptor heap: only with the textured trace.
     if (!light_textured_ ||
@@ -3111,11 +2833,6 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT scene_format, DXGI_FO
         sky_probe_pso_.Reset();
         sky_trace_sh_pso_.Reset();
     }
-    if (env_float("GALAXY_RT_REFERENCE", 0.0f) != 0.0f) {
-        std::cerr << "[rt] reference " << (reference_ ? "on" : "unavailable (needs shader model 6.6 and binding tier 3)")
-                  << " bounces=" << reference_bounces_ << " exposure=" << reference_exposure_ << '\n';
-    }
-
     D3D12_DESCRIPTOR_RANGE sources_range{};
     sources_range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     sources_range.NumDescriptors = 2u;
@@ -3197,139 +2914,6 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT scene_format, DXGI_FO
         !compute(emit_root_.Get(), g_rt_authored_emit_cs, sizeof(g_rt_authored_emit_cs), authored_emit_pso_) ||
         !compute(emit_root_.Get(), g_rt_emit_merge_cs, sizeof(g_rt_emit_merge_cs), emit_merge_pso_)) {
         return false;
-    }
-
-    {
-        D3D12_ROOT_PARAMETER bloom_params[4]{};
-        bloom_params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-        bloom_params[0].Constants.Num32BitValues = sizeof(RtBloomConstants) / 4u;
-        bloom_params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
-        bloom_params[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
-        bloom_params[2].Descriptor.ShaderRegister = 1u;
-        bloom_params[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
-        for (auto& param : bloom_params) {
-            param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-        }
-        D3D12_ROOT_SIGNATURE_DESC bloom_rsd{};
-        bloom_rsd.NumParameters = 4u;
-        bloom_rsd.pParameters = bloom_params;
-        if (!serialize(bloom_rsd, bloom_root_) ||
-            !compute(bloom_root_.Get(), g_rt_bloom_down_cs, sizeof(g_rt_bloom_down_cs), bloom_down_pso_) ||
-            !compute(bloom_root_.Get(), g_rt_bloom_blur_cs, sizeof(g_rt_bloom_blur_cs), bloom_blur_pso_)) {
-            return false;
-        }
-        // Constants; the bloom (t0); the lighting's result for the halo mask (t1).
-        D3D12_ROOT_PARAMETER composite_bloom_params[3]{};
-        composite_bloom_params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-        composite_bloom_params[0].Constants.Num32BitValues = sizeof(RtBloomCompositeConstants) / 4u;
-        composite_bloom_params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
-        composite_bloom_params[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
-        composite_bloom_params[2].Descriptor.ShaderRegister = 1u;
-        for (auto& param : composite_bloom_params) {
-            param.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-        }
-        D3D12_ROOT_SIGNATURE_DESC composite_bloom_rsd{};
-        composite_bloom_rsd.NumParameters = 3u;
-        composite_bloom_rsd.pParameters = composite_bloom_params;
-        if (!serialize(composite_bloom_rsd, bloom_composite_root_)) {
-            return false;
-        }
-        D3D12_GRAPHICS_PIPELINE_STATE_DESC additive{};
-        additive.pRootSignature = bloom_composite_root_.Get();
-        additive.VS = {g_rt_composite_vs, sizeof(g_rt_composite_vs)};
-        additive.PS = {g_rt_bloom_ps, sizeof(g_rt_bloom_ps)};
-        D3D12_RENDER_TARGET_BLEND_DESC& add = additive.BlendState.RenderTarget[0];
-        add.BlendEnable = TRUE;
-        add.SrcBlend = D3D12_BLEND_ONE;
-        add.DestBlend = D3D12_BLEND_ONE;
-        add.BlendOp = D3D12_BLEND_OP_ADD;
-        add.SrcBlendAlpha = D3D12_BLEND_ZERO;
-        add.DestBlendAlpha = D3D12_BLEND_ONE;
-        add.BlendOpAlpha = D3D12_BLEND_OP_ADD;
-        add.LogicOp = D3D12_LOGIC_OP_NOOP;
-        add.RenderTargetWriteMask =
-            D3D12_COLOR_WRITE_ENABLE_RED | D3D12_COLOR_WRITE_ENABLE_GREEN | D3D12_COLOR_WRITE_ENABLE_BLUE;
-        additive.SampleMask = UINT_MAX;
-        additive.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
-        additive.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-        additive.RasterizerState.DepthClipEnable = TRUE;
-        additive.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-        additive.NumRenderTargets = 1u;
-        additive.RTVFormats[0] = display_format;
-        additive.SampleDesc.Count = 1u;
-        if (FAILED(device_->CreateGraphicsPipelineState(&additive, IID_PPV_ARGS(&bloom_composite_pso_)))) {
-            return false;
-        }
-    }
-
-    {
-        D3D12_ROOT_PARAMETER post_params[5]{};
-        post_params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-        post_params[0].Constants.Num32BitValues = sizeof(RtPostConstants) / 4u;
-        post_params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-        post_params[1].DescriptorTable.NumDescriptorRanges = 1u;
-        post_params[1].DescriptorTable.pDescriptorRanges = &sources_range;
-        post_params[2].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
-        post_params[2].Descriptor.ShaderRegister = 2u;
-        post_params[3].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
-        post_params[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
-        post_params[4].Descriptor.ShaderRegister = 1u;
-        for (auto& param : post_params) {
-            param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-        }
-        D3D12_ROOT_SIGNATURE_DESC post_rsd{};
-        post_rsd.NumParameters = 5u;
-        post_rsd.pParameters = post_params;
-        if (!serialize(post_rsd, post_root_) ||
-            !compute(post_root_.Get(), g_rt_post_copy_cs, sizeof(g_rt_post_copy_cs), post_copy_pso_) ||
-            !compute(post_root_.Get(), g_rt_post_bright_cs, sizeof(g_rt_post_bright_cs), post_bright_pso_) ||
-            !compute(post_root_.Get(), g_rt_post_blur_cs, sizeof(g_rt_post_blur_cs), post_blur_pso_) ||
-            !compute(post_root_.Get(), g_rt_post_shafts_cs, sizeof(g_rt_post_shafts_cs), post_shafts_pso_) ||
-            !compute(post_root_.Get(), g_rt_post_focus_cs, sizeof(g_rt_post_focus_cs), post_focus_pso_) ||
-            !compute(post_root_.Get(), g_rt_post_lum_cs, sizeof(g_rt_post_lum_cs), post_lum_pso_) ||
-            !compute(post_root_.Get(), g_rt_post_lens_cs, sizeof(g_rt_post_lens_cs), post_lens_pso_)) {
-            return false;
-        }
-        D3D12_DESCRIPTOR_RANGE finish_depth{};
-        finish_depth.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-        finish_depth.NumDescriptors = 1u;
-        finish_depth.BaseShaderRegister = 1u;
-        D3D12_ROOT_PARAMETER finish_params[7]{};
-        finish_params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-        finish_params[0].Constants.Num32BitValues = sizeof(RtPostConstants) / 4u;
-        finish_params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-        finish_params[1].DescriptorTable.NumDescriptorRanges = 1u;
-        finish_params[1].DescriptorTable.pDescriptorRanges = &finish_depth;
-        for (UINT i = 0; i < 5u; ++i) {
-            finish_params[2 + i].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
-            finish_params[2 + i].Descriptor.ShaderRegister = 2u + i;
-        }
-        for (auto& param : finish_params) {
-            param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-        }
-        D3D12_ROOT_SIGNATURE_DESC finish_rsd{};
-        finish_rsd.NumParameters = 7u;
-        finish_rsd.pParameters = finish_params;
-        if (!serialize(finish_rsd, post_finish_root_)) {
-            return false;
-        }
-        D3D12_GRAPHICS_PIPELINE_STATE_DESC finish{};
-        finish.pRootSignature = post_finish_root_.Get();
-        finish.VS = {g_rt_post_vs, sizeof(g_rt_post_vs)};
-        finish.PS = {g_rt_post_ps, sizeof(g_rt_post_ps)};
-        finish.BlendState.RenderTarget[0].RenderTargetWriteMask =
-            D3D12_COLOR_WRITE_ENABLE_RED | D3D12_COLOR_WRITE_ENABLE_GREEN | D3D12_COLOR_WRITE_ENABLE_BLUE;
-        finish.SampleMask = UINT_MAX;
-        finish.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
-        finish.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
-        finish.RasterizerState.DepthClipEnable = TRUE;
-        finish.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-        finish.NumRenderTargets = 1u;
-        finish.RTVFormats[0] = display_format;
-        finish.SampleDesc.Count = 1u;
-        if (FAILED(device_->CreateGraphicsPipelineState(&finish, IID_PPV_ARGS(&post_finish_pso_)))) {
-            return false;
-        }
     }
 
     {
@@ -3477,22 +3061,6 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT scene_format, DXGI_FO
     return true;
 }
 
-bool SceneRayTracer::ensure_reference_buffer(std::uint32_t samples) {
-    if (samples <= reference_samples_ && reference_buffer_) {
-        return true;
-    }
-    retire(reference_buffer_);
-    reference_samples_ = 0u;
-    // Per sample two float4 (its sums, its depth at the start), then the exposure.
-    if (!create_buffer((2ull * samples + 1ull) * 16ull, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-                       D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, reference_buffer_, L"rt reference")) {
-        return false;
-    }
-    reference_samples_ = samples;
-    reference_reset_ = true;
-    return true;
-}
-
 bool SceneRayTracer::ensure_lighting_buffers(std::uint32_t samples) {
     if (samples <= light_samples_ && light_raw_) {
         return true;
@@ -3567,7 +3135,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
                                     std::uint32_t height) {
     light_slot_ = -1;
     draw_table_ = 0u;
-    if (!lighting_active() || !trace_pso_ || !view_known_ || depth_srv.ptr == 0u || width == 0u || height == 0u) {
+    if (!lighting_active() || !engine_ready_ || !view_known_ || depth_srv.ptr == 0u || width == 0u || height == 0u) {
         return;
     }
     const std::uint32_t factor = sample_factor(width, height);
@@ -3799,8 +3367,13 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     GameAreaLight area{};
     RtUpload sky_record_table{};
     RtUpload emit_range_table{};
-    physical_active_ = physical_ && game_area_light(GameAreaLightKind::Stage, area, 2000u);
-    if (physical_active_) {
+    physical_active_ = game_area_light(GameAreaLightKind::Stage, area, 2000u);
+    if (!physical_active_) {
+        // No stage light (the game sets one each frame a stage draws): nothing to light in its units, the game's
+        // picture stays.
+        return;
+    }
+    {
         const auto lin = [](float v) {
             v = std::clamp(v, 0.0f, 1.0f);
             return v <= 0.04045f ? v / 12.92f : std::pow((v + 0.055f) / 1.055f, 2.4f);
@@ -3966,56 +3539,6 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
                 }
             }
         }
-        // The stage's light fitted to the light baked into its surfaces (fit_baked_light), when it has one: the sun's
-        // direction, colour and strength and the sky's the artists lit the stage with. The game's area light is often
-        // its default (Melty Molten, Ghostly: ambient 0.25, white key at 700000, 700000, 700000).
-        // A new stage or stage light starts the fit again (most stages share the default light: the stage counts).
-        const std::array<float, 9> fit_light{area.ambient[0], area.ambient[1], area.ambient[2],
-                                               area.lights[0].color[0], area.lights[0].color[1],
-                                               static_cast<float>(rt_materials_stage_serial()),
-                                               area.lights[0].position[0], area.lights[0].position[1],
-                                               area.lights[0].position[2]};
-        if (fit_light != fit_stage_light_) {
-            fit_stage_light_ = fit_light;
-            fit_sums_acc_ = {};
-            fitted_ = {};
-        }
-        // Its direction and its sun's and sky's strengths; their colours stay the game's key's and the traced sky's: a
-        // program mixing coloured registers by the vertex value (lerp(C1, C0, v)) puts its registers' hue into the
-        // measured light (Good Egg fitted blue, its stone lavender, fit1). The camera is exposed for the game's white
-        // light: a stage baked brighter than white light (GX's doubled light: Good Egg's sun 1.5) is exposed down to
-        // it; one baked dimmer keeps half its dimness in log luminance, as vision adapts partly (brightness about the
-        // square root of luminance, Stevens 1957): Ghostly stays dim, Sea Slide (0.77) not darker than the game.
-        // A fitted sun below the player's horizon is not a sun: light baked from local lamps onto undersides (the
-        // Observatory fitted one from straight below, its floors black, fit2); the lamps are emitters, the game's light
-        // stays.
-        std::array<float, 3> fitted_eye{};
-        for (unsigned i = 0; i < 3u; ++i) {
-            fitted_eye[i] = camera_[i * 4u] * fitted_.direction[0] + camera_[i * 4u + 1u] * fitted_.direction[1] +
-                            camera_[i * 4u + 2u] * fitted_.direction[2];
-        }
-        fit_used_ = fit_ && fitted_.valid &&
-                    scene_up_[0] * fitted_eye[0] + scene_up_[1] * fitted_eye[1] + scene_up_[2] * fitted_eye[2] > 0.1f;
-        if (fit_used_) {
-            const auto luma = [](const float* rgb) { return 0.2126f * rgb[0] + 0.7152f * rgb[1] + 0.0722f * rgb[2]; };
-            const float sun_strength = luma(fitted_.sun.data());
-            const float sky_strength = luma(fitted_.sky.data());
-            const float key_luma = std::max(luma(c.sun_light), 1e-4f);
-            const float sky_luma = std::max(luma(c.sky_radiance), 1e-4f);
-            for (unsigned i = 0; i < 3u; ++i) {
-                c.sun_light[i] *= sun_strength / key_luma;
-                c.sky_radiance[i] *= sky_strength / sky_luma;
-                c.sun[i] = fitted_eye[i];
-            }
-            hold_light(false);
-            const float up_sun = std::max(scene_up_[0] * c.sun[0] + scene_up_[1] * c.sun[1] + scene_up_[2] * c.sun[2],
-                                          0.5f);
-            const float lit = sky_strength + sun_strength * up_sun;
-            c.light_fit[0] = luma(c.full_light) / (lit >= 1.0f ? lit : std::sqrt(std::max(lit, 1e-4f)));
-            c.light_fit[1] = 1.0f;
-            physical_exposure_ = c.light_fit[0];
-        }
-        c.tev_info[3] = ((sample_width + 31u) / 32u) * ((sample_height + 31u) / 32u);
     }
     {
         // The game's point lights nearest in light to the camera, in eye space.
@@ -4187,30 +3710,24 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     c.ambient[1] = daylight_;
     c.ambient[2] = glow_boost_;
     c.ambient[3] = sky_distance_;
-    // The reference starts again when its buffer is new, the samples change or the camera moves.
-    const bool reference = reference_ && presents_ >= reference_from_ && ensure_reference_buffer(sample_width * sample_height);
-    reference_active_ = reference;
-    if (reference) {
-        bool moved = !reference_camera_known_ || sample_width != reference_width_ || sample_height != reference_height_;
-        for (unsigned i = 0; i < 12u && !moved; ++i) {
-            moved = std::abs(camera_[i] - reference_camera_[i]) > ((i % 4u) == 3u ? 0.05f : 1e-4f);
-        }
-        c.reference_reset = moved || reference_reset_ ? 1u : 0u;
-        ++reference_frames_;
-        reference_restarts_ += c.reference_reset;
-        reference_reset_ = false;
-        reference_camera_ = camera_;
-        reference_camera_known_ = true;
-        reference_width_ = sample_width;
-        reference_height_ = sample_height;
-        c.flags |= kReferenceFlag;
-    }
-    c.reference_bounces = reference_bounces_;
-    c.reference_exposure = reference_exposure_;
-    // The ray tracing engine takes the place of the lighting's own passes when it runs (its slot is the next one).
+    // The ray tracing engine (its slot is the next one), with its pixels' buffer (its G-buffer writes the composite's
+    // per-pixel normals and de-lighting there).
     engine_running_ = false;
-    if (physical_active_ && !reference) {
-        static_cast<void>(engine_prepare(width, height, next_light_slot_, c.engine, c.flags));
+    {
+        const unsigned next = next_light_slot_;
+        const UINT64 bytes = static_cast<UINT64>(width) * height * 8u;
+        if (!light_pixels_[next] || light_pixels_bytes_[next] < bytes) {
+            retire(light_pixels_[next]);
+            light_pixels_bytes_[next] = 0u;
+            if (create_buffer(bytes, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                              D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, light_pixels_[next], L"rt pixel normals")) {
+                light_pixels_bytes_[next] = bytes;
+                light_pixels_state_[next] = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+            }
+        }
+        if (!light_pixels_[next] || !engine_prepare(width, height, next, c.engine, c.flags)) {
+            return;
+        }
     }
     std::memcpy(upload.cpu, &c, sizeof(c));
     // The same lights give the reflections their highlights.
@@ -4229,7 +3746,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     // Physical: the reflections light their off-screen hits as this lighting does (its TEV records, emitting triangles
     // and traced sky as views in the frame's heap).
     reflect_physical_ = {};
-    if (physical_active_ && !reference && (c.flags & kPhysicalFlag) != 0u) {
+    {
         reflect_physical_.on = true;
         std::copy(std::begin(c.sky_radiance), std::end(c.sky_radiance), reflect_physical_.sky_radiance.begin());
         std::copy(std::begin(c.full_light), std::end(c.full_light), reflect_physical_.full_light.begin());
@@ -4275,8 +3792,6 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     to_state(list, glow_added_.Get(), glow_added_state_, kRead);
     to_state(list, sky_sh_.Get(), sky_sh_state_, kRead);
 
-    const UINT groups_x = (sample_width + 7u) / 8u;
-    const UINT groups_y = (sample_height + 7u) / 8u;
     run_delight(list);
     list->SetComputeRootSignature(light_root_.Get());
     list->SetComputeRootConstantBufferView(kLightFrame, upload.gpu);
@@ -4308,8 +3823,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
                                                                         : positions_->GetGPUVirtualAddress());
     list->SetComputeRootShaderResourceView(kLightDrawTextures,
                                            draw_texture_table_ != 0u ? draw_texture_table_ : draw_table.gpu);
-    list->SetComputeRootUnorderedAccessView(kLightReference, reference ? reference_buffer_->GetGPUVirtualAddress()
-                                                                       : light_raw_->GetGPUVirtualAddress());
+    list->SetComputeRootUnorderedAccessView(kLightReference, light_raw_->GetGPUVirtualAddress());
     // The traced sky (kPhysicalFlag): the probe traces the sky's own geometry from the camera into its map and the
     // map's spherical harmonics, with the sky's buffers in the scene's slots, before the traces read them.
     const bool sky_traced = c.full_light[3] != 0.0f;
@@ -4348,8 +3862,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
                                                                             : positions_->GetGPUVirtualAddress());
         list->SetComputeRootShaderResourceView(kLightDrawTextures,
                                                draw_texture_table_ != 0u ? draw_texture_table_ : draw_table.gpu);
-        list->SetComputeRootUnorderedAccessView(kLightReference, reference ? reference_buffer_->GetGPUVirtualAddress()
-                                                                           : light_raw_->GetGPUVirtualAddress());
+        list->SetComputeRootUnorderedAccessView(kLightReference, light_raw_->GetGPUVirtualAddress());
     }
     list->SetComputeRootShaderResourceView(kLightSkyMap, sky_traced ? sky_probe_map_->GetGPUVirtualAddress()
                                                                     : positions_->GetGPUVirtualAddress());
@@ -4368,8 +3881,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         list->SetPipelineState(emit_scan_pso_.Get());
         list->Dispatch(1u, 1u, 1u);
         to_state(list, emit_tris_.Get(), emit_tris_state_, kRead);
-        list->SetComputeRootUnorderedAccessView(kLightReference, reference ? reference_buffer_->GetGPUVirtualAddress()
-                                                                           : light_raw_->GetGPUVirtualAddress());
+        list->SetComputeRootUnorderedAccessView(kLightReference, light_raw_->GetGPUVirtualAddress());
     }
     list->SetComputeRootShaderResourceView(kLightEmitTris, c.tev_info[2] != 0u ? emit_tris_->GetGPUVirtualAddress()
                                                                               : positions_->GetGPUVirtualAddress());
@@ -4377,31 +3889,13 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     // meet a star find its ball): every slot each frame, one without a star this frame written empty.
     list->SetPipelineState(star_sphere_pso_.Get());
     list->Dispatch(kStarSlots, 1u, 1u);
-    // Physical: the per-pixel normals and de-lighting of this frame into the slot's buffer (the composite's).
-    bool pixels = false;
-    if (physical_active_ && !reference) {
-        const UINT64 bytes = static_cast<UINT64>(width) * height * 8u;
-        if (!light_pixels_[slot] || light_pixels_bytes_[slot] < bytes) {
-            retire(light_pixels_[slot]);
-            light_pixels_bytes_[slot] = 0u;
-            if (create_buffer(bytes, D3D12_HEAP_TYPE_DEFAULT, kUav, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
-                              light_pixels_[slot], L"rt pixel normals")) {
-                light_pixels_bytes_[slot] = bytes;
-                light_pixels_state_[slot] = kUav;
-            }
-        }
-        if (light_pixels_[slot]) {
-            to_state(list, light_pixels_[slot].Get(), light_pixels_state_[slot], kUav);
-            list->SetComputeRootUnorderedAccessView(kLightPixels, light_pixels_[slot]->GetGPUVirtualAddress());
-            pixels = true;
-        }
-    }
-    // The engine (its G-buffer writes the pixels' buffer), else the lighting's own trace and per-pixel pass. Its
-    // constants and bindings kept for the clear pass at the scene's end.
-    const bool engine = engine_running_ && pixels;
+    // The per-pixel normals and de-lighting of this frame into the slot's buffer (the composite's).
+    to_state(list, light_pixels_[slot].Get(), light_pixels_state_[slot], kUav);
+    list->SetComputeRootUnorderedAccessView(kLightPixels, light_pixels_[slot]->GetGPUVirtualAddress());
+    // The engine; its constants and bindings kept for the clear pass at the scene's end.
     engine_clear_valid_[slot] = false;
-    engine_bind_.valid = engine;
-    if (engine) {
+    engine_bind_.valid = true;
+    {
         engine_bind_.slot = slot;
         engine_bind_.constants.assign(reinterpret_cast<const std::byte*>(&c), reinterpret_cast<const std::byte*>(&c) + sizeof(c));
         engine_bind_.engine_at = offsetof(RtLightConstants, engine);
@@ -4415,88 +3909,9 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         engine_bind_.tev_records = tev_table != 0u;
         engine_bind_.textured = draw_texture_table_ != 0u;
     }
-    if (engine) {
-        trace_engine(list, allocate, allocate_context, &c, sizeof(c), offsetof(RtLightConstants, engine), upload.gpu,
-                     slot);
-    } else {
-        engine_slot_valid_[slot] = false;
-        list->SetPipelineState(trace_pso_.Get());
-        list->Dispatch(groups_x, groups_y, 1u);
-        if (pixels) {
-            list->SetPipelineState(gbuffer_pso_.Get());
-            list->Dispatch((width + 7u) / 8u, (height + 7u) / 8u, 1u);
-        }
-    }
+    trace_engine(list, allocate, allocate_context, &c, sizeof(c), offsetof(RtLightConstants, engine), upload.gpu, slot);
     const D3D12_RESOURCE_BARRIER all_uav = uav_barrier(nullptr);
     list->ResourceBarrier(1u, &all_uav);
-    // Physical: the baked light's sums for the fitted light (BakedFitCS into the groups' sums in the reference's slot,
-    // BakedReduceCS into the totals), copied for fit_baked_light.
-    if (physical_active_ && fit_ && baked_fit_pso_ && baked_reduce_pso_ && tev_table != 0u && c.tev_info[3] != 0u &&
-        c.tev_info[3] <= kFitGroups) {
-        if (!fit_sums_ &&
-            !create_buffer((static_cast<std::uint64_t>(kFitGroups) + 1u) * kFitBytes, D3D12_HEAP_TYPE_DEFAULT,
-                           D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, fit_sums_,
-                           L"rt baked fit")) {
-            fit_sums_.Reset();
-        }
-        if (!fit_readback_ &&
-            !create_buffer(static_cast<std::uint64_t>(kFitReadbacks) * kFitBytes, D3D12_HEAP_TYPE_READBACK,
-                           D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_FLAG_NONE, fit_readback_,
-                           L"rt baked fit readback")) {
-            fit_readback_.Reset();
-        }
-        if (fit_sums_ && fit_readback_ && fit_readback_frame_[fit_readback_next_] == 0u) {
-            to_state(list, fit_sums_.Get(), fit_sums_state_, kUav);
-            list->SetComputeRootUnorderedAccessView(kLightReference, fit_sums_->GetGPUVirtualAddress());
-            list->SetPipelineState(baked_fit_pso_.Get());
-            list->Dispatch((sample_width + 31u) / 32u, (sample_height + 31u) / 32u, 1u);
-            const D3D12_RESOURCE_BARRIER fit_uav = uav_barrier(fit_sums_.Get());
-            list->ResourceBarrier(1u, &fit_uav);
-            list->SetPipelineState(baked_reduce_pso_.Get());
-            list->Dispatch(1u, 1u, 1u);
-            to_state(list, fit_sums_.Get(), fit_sums_state_, D3D12_RESOURCE_STATE_COPY_SOURCE);
-            list->CopyBufferRegion(fit_readback_.Get(), fit_readback_next_ * kFitBytes, fit_sums_.Get(),
-                                   static_cast<UINT64>(kFitGroups) * kFitBytes, kFitBytes);
-            to_state(list, fit_sums_.Get(), fit_sums_state_, kUav);
-            fit_readback_frame_[fit_readback_next_] = frame_index_ + 1u;
-            fit_readback_next_ = (fit_readback_next_ + 1u) % kFitReadbacks;
-            list->SetComputeRootUnorderedAccessView(kLightReference,
-                                                    reference ? reference_buffer_->GetGPUVirtualAddress()
-                                                              : light_raw_->GetGPUVirtualAddress());
-        }
-    }
-    if (!engine) {
-    list->SetPipelineState(temporal_pso_.Get());
-    list->Dispatch(groups_x, groups_y, 1u);
-    list->ResourceBarrier(1u, &all_uav);
-    to_state(list, light_history_[current].Get(), light_history_state_[current], kRead);
-    list->SetComputeRootShaderResourceView(kLightHistoryIn, light_history_[current]->GetGPUVirtualAddress());
-    // The history slot is read-only from here; its UAV parameter names a buffer the filters do
-    // not touch.
-    list->SetComputeRootUnorderedAccessView(kLightHistory, light_normal_->GetGPUVirtualAddress());
-    list->SetPipelineState(spatial_a_pso_.Get());
-    list->Dispatch(groups_x, groups_y, 1u);
-    list->ResourceBarrier(1u, &all_uav);
-    // The previous frame's history is free after the temporal pass: the middle filter's output.
-    to_state(list, light_history_[previous].Get(), light_history_state_[previous], kUav);
-    list->SetComputeRootUnorderedAccessView(kLightHistory, light_history_[previous]->GetGPUVirtualAddress());
-    list->SetPipelineState(spatial_m_pso_.Get());
-    list->Dispatch(groups_x, groups_y, 1u);
-    if (reference) {
-        list->ResourceBarrier(1u, &all_uav);
-        list->SetPipelineState(reference_pso_.Get());
-        list->Dispatch(groups_x, groups_y, 1u);
-        list->ResourceBarrier(1u, &all_uav);
-        list->SetPipelineState(reference_exposure_pso_.Get());
-        list->Dispatch(1u, 1u, 1u);
-        list->ResourceBarrier(1u, &all_uav);
-    }
-    to_state(list, light_history_[previous].Get(), light_history_state_[previous], kRead);
-    list->SetComputeRootShaderResourceView(kLightHistoryIn, light_history_[previous]->GetGPUVirtualAddress());
-    list->SetComputeRootUnorderedAccessView(kLightHistory, light_normal_->GetGPUVirtualAddress());
-    list->SetPipelineState(spatial_b_pso_.Get());
-    list->Dispatch(groups_x, groups_y, 1u);
-    }
     // The stars' balls for the star core's light, read a few frames later (begin_frame).
     if (ball_readback_ && ball_readback_frame_[ball_readback_next_] == 0u) {
         const UINT64 at = static_cast<UINT64>(ball_readback_next_) * kBallReadbackBytes;
@@ -4532,7 +3947,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     info.sample_height = sample_height;
     info.factor = factor;
     info.near_plane = c.near_plane;
-    info.pixels = pixels;
+    info.pixels = true;
     for (unsigned i = 0; i < 3u; ++i) {
         info.sun[i] = c.sun[i];
         info.sun_visible[i] = sun_visible_eye_[i];
@@ -4577,13 +3992,12 @@ void SceneRayTracer::snapshot_glow_base(ID3D12GraphicsCommandList* list, D3D12_G
     // Physical: the eye's adaptation measures this frame's lighting result (c_final) into the picture sums.
     const bool adapt = physical_active_ && light_slot_ >= 0 && light_final_[static_cast<unsigned>(light_slot_)] &&
                        picture_sums_ && physical_exposure_ > 0.0f;
-    c.exposure = (measure ? 1u : 0u) | (post_active() && post_grade_ > 0.0f ? 4u : 0u) | (adapt ? 8u : 0u);
+    c.exposure = (measure ? 1u : 0u) | (adapt ? 8u : 0u);
     // The camera's exposure for the stage's light, before the eye's adaptation, in the art exposure's place
     // (rt_lighting.hlsl c_exposure_day).
     if (adapt) {
         c.exposure_day = physical_exposure_;
     }
-    c.grade = std::clamp(post_grade_, 0.0f, 1.0f);
     const int timed = begin_pass(list);
     to_state(list, glow_base_.Get(), glow_base_state_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     if (measure) {
@@ -4775,70 +4189,6 @@ void SceneRayTracer::capture_picture(ID3D12GraphicsCommandList* list, const RtSo
                             glow);
         end_pass(list, lights_timed, kPassLights);
     }
-    bloom_slot_ = -1;
-    if (glow && bloom_strength_ > 0.0f && bloom_blur_pso_ && light_slot_ >= 0) {
-        // What the glows added, at a quarter of the samples above the threshold, blurred twice
-        // across and down: the slot's bloom for this frame and its sub-frames.
-        const auto slot = static_cast<unsigned>(light_slot_);
-        const std::uint32_t bw = (sample_width + 1u) / 2u;
-        const std::uint32_t bh = (sample_height + 1u) / 2u;
-        const std::uint64_t entries = static_cast<std::uint64_t>(bw) * bh;
-        bool ready = entries <= bloom_entries_;
-        if (!ready) {
-            retire(bloom_temp_);
-            for (auto& buffer : bloom_) retire(buffer);
-            bloom_size_ = {};
-            ready = create_buffer(entries * 4u, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-                                  D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, bloom_temp_, L"rt bloom temp");
-            for (unsigned i = 0; ready && i < bloom_.size(); ++i) {
-                ready = create_buffer(entries * 4u, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-                                      D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, bloom_[i], L"rt bloom");
-                bloom_state_[i] = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-            }
-            bloom_temp_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-            bloom_entries_ = ready ? entries : 0u;
-        }
-        if (ready && slot < bloom_.size()) {
-            const int blur_timed = begin_pass(list);
-            RtBloomConstants b{};
-            b.size[0] = bw;
-            b.size[1] = bh;
-            b.sample_size[0] = sample_width;
-            b.sample_size[1] = sample_height;
-            b.threshold = bloom_threshold_;
-            b.strength = bloom_strength_;
-            to_state(list, glow_added_.Get(), glow_added_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-            to_state(list, bloom_[slot].Get(), bloom_state_[slot], D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-            to_state(list, bloom_temp_.Get(), bloom_temp_state_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-            const D3D12_RESOURCE_BARRIER all_uav = uav_barrier(nullptr);
-            list->SetComputeRootSignature(bloom_root_.Get());
-            list->SetComputeRoot32BitConstants(0u, sizeof(b) / 4u, &b, 0u);
-            list->SetComputeRootShaderResourceView(1u, glow_added_->GetGPUVirtualAddress());
-            list->SetComputeRootShaderResourceView(2u, glow_added_->GetGPUVirtualAddress());
-            list->SetComputeRootUnorderedAccessView(3u, bloom_[slot]->GetGPUVirtualAddress());
-            list->SetPipelineState(bloom_down_pso_.Get());
-            list->Dispatch((bw + 7u) / 8u, (bh + 7u) / 8u, 1u);
-            for (unsigned pass = 0; pass < 2u; ++pass) {
-                ID3D12Resource* from = pass == 0u ? bloom_[slot].Get() : bloom_temp_.Get();
-                ID3D12Resource* to = pass == 0u ? bloom_temp_.Get() : bloom_[slot].Get();
-                list->ResourceBarrier(1u, &all_uav);
-                to_state(list, from, pass == 0u ? bloom_state_[slot] : bloom_temp_state_,
-                         D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-                to_state(list, to, pass == 0u ? bloom_temp_state_ : bloom_state_[slot],
-                         D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-                b.axis = pass;
-                list->SetComputeRoot32BitConstants(0u, sizeof(b) / 4u, &b, 0u);
-                list->SetComputeRootShaderResourceView(2u, from->GetGPUVirtualAddress());
-                list->SetComputeRootUnorderedAccessView(3u, to->GetGPUVirtualAddress());
-                list->SetPipelineState(bloom_blur_pso_.Get());
-                list->Dispatch((bw + 7u) / 8u, (bh + 7u) / 8u, 1u);
-            }
-            to_state(list, bloom_[slot].Get(), bloom_state_[slot], kLightRead);
-            end_pass(list, blur_timed, kPassBloomBlur);
-            bloom_size_[slot] = {bw, bh, width, height};
-            bloom_slot_ = light_slot_;
-        }
-    }
     static_cast<void>(emit);
     to_state(list, picture_.Get(), picture_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     to_state(list, picture_sums_.Get(), picture_sums_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -5028,187 +4378,6 @@ void SceneRayTracer::capture_glow_lights(ID3D12GraphicsCommandList* list, const 
     window_.glow_triangles += glow ? glow_triangles_ : 0u;
 }
 
-void SceneRayTracer::post_prepare(ID3D12GraphicsCommandList* list, D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table,
-                                  std::uint32_t width, std::uint32_t height, bool replay) {
-    if (!post_active() || !post_finish_pso_ || list == nullptr || color_depth_table.ptr == 0u || !view_known_ ||
-        width == 0u || height == 0u) {
-        return;
-    }
-    const std::uint32_t qw = (width + 3u) / 4u;
-    const std::uint32_t qh = (height + 3u) / 4u;
-    const std::uint64_t pixels = static_cast<std::uint64_t>(width) * height;
-    const std::uint64_t quarter = static_cast<std::uint64_t>(qw) * qh;
-    if (pixels > post_pixels_ || quarter > post_quarter_) {
-        for (auto& buffer : post_buffers_) retire(buffer);
-        post_pixels_ = post_quarter_ = 0u;
-        bool ok = true;
-        for (unsigned i = 0; ok && i < post_buffers_.size(); ++i) {
-            // 5: the state (focus, core, sky colour; 8 floats per black hole from 8)
-            const std::uint64_t bytes = i == 0u ? pixels * 4u : i == 5u ? 160u : quarter * 4u;  // 6, 7: luminance
-            ok = create_buffer(bytes, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
-                               D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, post_buffers_[i], L"rt post");
-            post_states_[i] = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-        }
-        if (!ok) {
-            for (auto& buffer : post_buffers_) buffer.Reset();
-            return;
-        }
-        post_pixels_ = pixels;
-        post_quarter_ = quarter;
-    }
-    const std::array<float, 12>& camera = replay && post_camera_known_ ? post_camera_ : camera_;
-    const bool camera_known = camera_known_ || (replay && post_camera_known_);
-    RtPostConstants c{};
-    std::copy(view_.projection.begin(), view_.projection.end(), c.projection);
-    c.depth[0] = view_.z_scale;
-    c.depth[1] = view_.z_offset;
-    c.depth[2] = view_.min_depth;
-    c.depth[3] = view_.max_depth;
-    std::copy(view_.viewport.begin(), view_.viewport.end(), c.viewport);
-    c.size[0] = width;
-    c.size[1] = height;
-    c.quarter[0] = qw;
-    c.quarter[1] = qh;
-    {
-        std::array<float, 3> core{};
-        float scale = 0.0f;
-        if (camera_known && star_core(core, scale, 500u)) {
-            for (unsigned r = 0; r < 3u; ++r) {
-                c.core[r] = camera[r * 4u] * core[0] + camera[r * 4u + 1u] * core[1] + camera[r * 4u + 2u] * core[2] +
-                            camera[r * 4u + 3u];
-            }
-            c.core[3] = core_radius_ * scale;
-            c.core_light[0] = 1.0f;
-            c.core_light[1] = 0.72f;
-            c.core_light[2] = 0.38f;
-            c.core_light[3] = std::clamp(0.4f + 0.35f * scale, 0.5f, 2.5f);
-        }
-        // Shafts from a sun the sky shows: the game's, else the one the sky map found.
-        std::array<float, 3> sun{};
-        std::array<float, 3> sky_color{};
-        if (camera_known && (game_sun(sun, 2000u) || sky_sun(sun, sky_color))) {
-            for (unsigned r = 0; r < 3u; ++r) {
-                c.sun[r] = camera[r * 4u] * sun[0] + camera[r * 4u + 1u] * sun[1] + camera[r * 4u + 2u] * sun[2];
-            }
-            c.sun[3] = 0.35f;
-        }
-    }
-    c.time = std::chrono::duration<float>(std::chrono::steady_clock::now() - post_epoch_).count();
-    c.bloom = post_bloom_;
-    c.threshold = post_threshold_;
-    c.shafts = stage_sun_ != nullptr && stage_sun_->shafts >= 0.0f ? stage_sun_->shafts : post_shafts_;
-    c.dof = post_dof_ * static_cast<float>(width) / 640.0f;
-    c.grade = post_grade_;
-    c.rim = post_rim_;
-    c.haze = post_haze_;
-    c.haze_distance = post_haze_distance_;
-    c.vignette = post_vignette_;
-    c.local[0] = post_local_bright_;
-    c.local[1] = post_local_dark_;
-    c.local[2] = post_local_bright_ < 1.0f || post_local_dark_ < 1.0f ? 0.4f : 0.0f;
-    c.split = split_ > 0.0f ? view_.viewport[0] + split_ * view_.viewport[2] : -1.0f;
-    if (lens_ready_ && lens_strength_ > 0.0f && post_lens_pso_ && glow_positions_) {
-        const auto strength = static_cast<std::uint32_t>(std::clamp(lens_strength_ * 32.0f, 1.0f, 127.0f));
-        for (std::uint32_t i = 0; i < lens_draws_ && i < kLensSlots; ++i) {
-            c.lens_first[i] = lens_first_[i];
-            c.lens_count[i] = std::min(lens_count_[i], 0xFFFFFFu) | (strength << 24u) | (lens_view_ ? 1u << 31u : 0u);
-        }
-    }
-
-    ID3D12Resource* const scene = post_buffers_[0].Get();
-    ID3D12Resource* const bright = post_buffers_[1].Get();
-    ID3D12Resource* const tmp = post_buffers_[2].Get();
-    ID3D12Resource* const bloom = post_buffers_[3].Get();
-    ID3D12Resource* const shafts = post_buffers_[4].Get();
-    ID3D12Resource* const state = post_buffers_[5].Get();
-    for (unsigned i = 0; i < post_buffers_.size(); ++i) {
-        to_state(list, post_buffers_[i].Get(), post_states_[i], D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    }
-    const D3D12_RESOURCE_BARRIER all_uav = uav_barrier(nullptr);
-    const auto run = [&](ID3D12PipelineState* pso, ID3D12Resource* in, ID3D12Resource* out, std::uint32_t axis,
-                         UINT gx, UINT gy, Pass pass) {
-        c.axis = axis;
-        list->SetComputeRoot32BitConstants(0u, sizeof(c) / 4u, &c, 0u);
-        list->SetComputeRootShaderResourceView(2u, in->GetGPUVirtualAddress());
-        list->SetComputeRootUnorderedAccessView(3u, out->GetGPUVirtualAddress());
-        list->SetPipelineState(pso);
-        const int timed = begin_pass(list);
-        list->Dispatch(gx, gy, 1u);
-        if (timed >= 0) {
-            list->ResourceBarrier(1u, &all_uav);
-        }
-        end_pass(list, timed, pass);
-    };
-    list->SetComputeRootSignature(post_root_.Get());
-    list->SetComputeRootDescriptorTable(1u, color_depth_table);
-    list->SetComputeRootUnorderedAccessView(4u, state->GetGPUVirtualAddress());
-    // The picture before the finish, its bright part, the focus and core radius.
-    run(post_copy_pso_.Get(), state, scene, 0u, (width + 7u) / 8u, (height + 7u) / 8u, kPassPostCopy);
-    run(post_bright_pso_.Get(), state, bright, 0u, (qw + 7u) / 8u, (qh + 7u) / 8u, kPassPostBright);
-    run(post_focus_pso_.Get(), state, tmp, 0u, 1u, 1u, kPassPostFocus);
-    if (c.lens_count[0] != 0u) {
-        // Black holes: each lens draw's centre and size on screen, its dark horizon's radius.
-        run(post_lens_pso_.Get(), glow_positions_.Get(), tmp, 0u, kLensSlots, 1u, kPassPostFocus);
-    }
-    list->ResourceBarrier(1u, &all_uav);
-    // Shafts from the bright part; its blur across, then down.
-    to_state(list, bright, post_states_[1], D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-    run(post_shafts_pso_.Get(), bright, shafts, 0u, (qw + 7u) / 8u, (qh + 7u) / 8u, kPassPostShafts);
-    run(post_blur_pso_.Get(), bright, tmp, 0u, (qw + 7u) / 8u, (qh + 7u) / 8u, kPassPostBlur);
-    list->ResourceBarrier(1u, &all_uav);
-    to_state(list, tmp, post_states_[2], D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-    run(post_blur_pso_.Get(), tmp, bloom, 1u, (qw + 7u) / 8u, (qh + 7u) / 8u, kPassPostBlur);
-    list->ResourceBarrier(1u, &all_uav);
-    if (c.local[2] > 0.0f) {
-        // Local exposure: the surfaces' luminance per quarter texel, blurred twice over the region.
-        ID3D12Resource* const lum = post_buffers_[6].Get();
-        ID3D12Resource* const lum_tmp = post_buffers_[7].Get();
-        run(post_lum_pso_.Get(), state, lum, 0u, (qw + 7u) / 8u, (qh + 7u) / 8u, kPassPostBright);
-        for (unsigned pass = 0; pass < 2u; ++pass) {
-            list->ResourceBarrier(1u, &all_uav);
-            to_state(list, lum, post_states_[6], D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-            to_state(list, lum_tmp, post_states_[7], D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-            run(post_blur_pso_.Get(), lum, lum_tmp, 0u, (qw + 7u) / 8u, (qh + 7u) / 8u, kPassPostBlur);
-            list->ResourceBarrier(1u, &all_uav);
-            to_state(list, lum_tmp, post_states_[7], D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-            to_state(list, lum, post_states_[6], D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-            run(post_blur_pso_.Get(), lum_tmp, lum, 1u, (qw + 7u) / 8u, (qh + 7u) / 8u, kPassPostBlur);
-        }
-        list->ResourceBarrier(1u, &all_uav);
-    }
-    for (unsigned i = 0; i < post_buffers_.size(); ++i) {
-        to_state(list, post_buffers_[i].Get(), post_states_[i], kLightRead);
-    }
-    c.axis = post_identity_ ? 3u : post_view_ ? 2u : 0u;
-    std::memcpy(post_constants_.data(), &c, sizeof(c));
-}
-
-void SceneRayTracer::post_finish(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
-                                 D3D12_GPU_DESCRIPTOR_HANDLE depth_table, std::uint32_t width, std::uint32_t height) {
-    if (!post_active() || !post_finish_pso_ || list == nullptr || depth_table.ptr == 0u || post_pixels_ == 0u ||
-        static_cast<std::uint64_t>(width) * height > post_pixels_) {
-        return;
-    }
-    list->OMSetRenderTargets(1u, &target, FALSE, nullptr);
-    const D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
-    const D3D12_RECT scissor{0, 0, static_cast<LONG>(width), static_cast<LONG>(height)};
-    list->RSSetViewports(1u, &viewport);
-    list->RSSetScissorRects(1u, &scissor);
-    list->SetGraphicsRootSignature(post_finish_root_.Get());
-    list->SetPipelineState(post_finish_pso_.Get());
-    list->SetGraphicsRoot32BitConstants(0u, static_cast<UINT>(post_constants_.size()), post_constants_.data(), 0u);
-    list->SetGraphicsRootDescriptorTable(1u, depth_table);
-    list->SetGraphicsRootShaderResourceView(2u, post_buffers_[0]->GetGPUVirtualAddress());
-    list->SetGraphicsRootShaderResourceView(3u, post_buffers_[3]->GetGPUVirtualAddress());
-    list->SetGraphicsRootShaderResourceView(4u, post_buffers_[4]->GetGPUVirtualAddress());
-    list->SetGraphicsRootShaderResourceView(5u, post_buffers_[5]->GetGPUVirtualAddress());
-    list->SetGraphicsRootShaderResourceView(6u, post_buffers_[6]->GetGPUVirtualAddress());
-    list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    const int timed = begin_pass(list);
-    list->DrawInstanced(3u, 1u, 0u, 0u);
-    end_pass(list, timed, kPassPostFinish);
-}
-
 void SceneRayTracer::write_light_texture(ID3D12GraphicsCommandList* list, int slot) {
     if (list == nullptr || slot < 0 || slot >= static_cast<int>(kLightSlots) || !light_tex_pso_ ||
         !light_final_[static_cast<unsigned>(slot)]) {
@@ -5270,50 +4439,6 @@ void SceneRayTracer::write_light_texture(ID3D12GraphicsCommandList* list, int sl
     light_tex_ready_ = true;
 }
 
-void SceneRayTracer::bloom(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target, std::uint32_t width,
-                           std::uint32_t height, int slot) {
-    if (list == nullptr || slot < 0 || slot >= static_cast<int>(bloom_.size()) || !bloom_composite_pso_) {
-        return;
-    }
-    const auto index = static_cast<unsigned>(slot);
-    const auto& size = bloom_size_[index];
-    if (!bloom_[index] || size[0] == 0u || size[2] != width || size[3] != height) {
-        return;
-    }
-    to_state(list, bloom_[index].Get(), bloom_state_[index], kLightRead);
-    RtBloomCompositeConstants c{};
-    c.scale[0] = static_cast<float>(size[0]) / static_cast<float>(width);
-    c.scale[1] = static_cast<float>(size[1]) / static_cast<float>(height);
-    c.size[0] = size[0];
-    c.size[1] = size[1];
-    c.strength = bloom_strength_;
-    c.split = split_ > 0.0f ? split_ * static_cast<float>(width) : -1.0f;
-    // The halo mask reads the same slot's lighting result (bloom slots are the light slots).
-    const bool mask = index < kLightSlots && light_final_[index] && light_slots_[index].factor != 0u &&
-                      light_slots_[index].width == width && light_slots_[index].height == height;
-    if (mask) {
-        to_state(list, light_final_[index].Get(), light_final_state_[index], kLightRead);
-        c.light_size[0] = light_slots_[index].sample_width;
-        c.light_size[1] = light_slots_[index].sample_height;
-        c.factor = light_slots_[index].factor;
-    }
-    list->OMSetRenderTargets(1u, &target, FALSE, nullptr);
-    const D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
-    const D3D12_RECT scissor{0, 0, static_cast<LONG>(width), static_cast<LONG>(height)};
-    list->RSSetViewports(1u, &viewport);
-    list->RSSetScissorRects(1u, &scissor);
-    list->SetGraphicsRootSignature(bloom_composite_root_.Get());
-    list->SetPipelineState(bloom_composite_pso_.Get());
-    list->SetGraphicsRoot32BitConstants(0u, sizeof(c) / 4u, &c, 0u);
-    list->SetGraphicsRootShaderResourceView(1u, bloom_[index]->GetGPUVirtualAddress());
-    list->SetGraphicsRootShaderResourceView(2u, mask ? light_final_[index]->GetGPUVirtualAddress()
-                                                     : bloom_[index]->GetGPUVirtualAddress());
-    list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    const int timed = begin_pass(list);
-    list->DrawInstanced(3u, 1u, 0u, 0u);
-    end_pass(list, timed, kPassBloom);
-}
-
 void SceneRayTracer::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
                                D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, D3D12_GPU_DESCRIPTOR_HANDLE color_srv,
                                std::uint32_t width, std::uint32_t height, int slot, bool reproject, unsigned efb_scale) {
@@ -5340,10 +4465,10 @@ void SceneRayTracer::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRI
     c.sample_size[1] = info.sample_height;
     c.factor = info.factor;
     // Physical: the sun per pixel from the slot's per-pixel normals (not the reference, whose light is its own).
-    const bool per_pixel = info.pixels && !reference_active_ && light_pixels_[index];
+    const bool per_pixel = info.pixels && light_pixels_[index];
     // The engine's result (full resolution, its own record: rt_engine.hlsl EngineFinalCS).
     const bool engine = per_pixel && engine_slot(index, width, height);
-    c.flags = (reproject ? 1u : 0u) | (show_lighting_ ? 2u : 0u) | (reference_active_ || physical_active_ ? 4u : 0u) |
+    c.flags = (reproject ? 1u : 0u) | (show_lighting_ ? 2u : 0u) | (physical_active_ ? 4u : 0u) |
               (per_pixel ? 8u : 0u) | (reflections_active() || engine ? 16u : 0u) | (engine ? 32u : 0u);
     if (engine) {
         c.sample_size[0] = width;
@@ -5675,8 +4800,6 @@ void SceneRayTracer::trace_reflections(ID3D12GraphicsCommandList* list, Allocate
 }
 
 void SceneRayTracer::write_reprojection(ID3D12GraphicsCommandList* list, const std::array<float, 12>& camera_t) {
-    post_camera_ = camera_t;
-    post_camera_known_ = true;
     if (list == nullptr || !lighting_active() || !reproject_ || reproject_mapped_ == nullptr) {
         return;
     }

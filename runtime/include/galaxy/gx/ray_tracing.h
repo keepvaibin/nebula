@@ -206,16 +206,6 @@ public:
     void capture_picture(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
                          void* allocate_context, D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table, std::uint32_t width,
                          std::uint32_t height, D3D12_GPU_DESCRIPTOR_HANDLE game_srv = {});
-    // The glows' bloom of the scene just captured (-1: none) and its composite (additive) onto the
-    // EFB; sub-frames replay the composite of their frame's slot.
-    [[nodiscard]] int bloom_slot() const noexcept { return bloom_slot_; }
-    void bloom(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target, std::uint32_t width,
-               std::uint32_t height, int slot);
-    // The cinematic finish at the scene's end (rt_post.hlsl): post_prepare reads the EFB colour and
-    // depth (NON_PIXEL_SHADER_RESOURCE, two consecutive SRVs at `color_depth_table`); post_finish
-    // writes over the EFB colour (render target) reading the depth (PIXEL_SHADER_RESOURCE at
-    // `depth_table`). A sub-frame's replay passes `replay` (its camera from write_reprojection).
-    [[nodiscard]] bool post_active() const noexcept { return lighting_active() && post_; }
     // The lighting of the last traced scene as a texture (RGBA16F, one texel per sample) for the
     // translucent draws after it: written after the composite, PIXEL_SHADER_RESOURCE otherwise.
     void write_light_texture(ID3D12GraphicsCommandList* list, int slot);
@@ -223,17 +213,13 @@ public:
     [[nodiscard]] ID3D12Resource* light_texture() const noexcept { return light_tex_.Get(); }
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE light_texture_srv() const noexcept { return light_tex_srv_; }
     [[nodiscard]] float light_texture_scale() const noexcept { return light_tex_scale_; }
-    void post_prepare(ID3D12GraphicsCommandList* list, D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table,
-                      std::uint32_t width, std::uint32_t height, bool replay);
-    void post_finish(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
-                     D3D12_GPU_DESCRIPTOR_HANDLE depth_table, std::uint32_t width, std::uint32_t height);
     // The camera (ray_tracing_camera.cpp, rt_camera.hlsl). camera_widen: the RGBA8 EFB's picture (`picture_table`:
     // its colour view first, PIXEL_SHADER_RESOURCE) into the HDR scene EFB (`target`) as it is. camera_finish: the
     // HDR scene EFB's light (`picture_table`, NON_PIXEL and PIXEL_SHADER_RESOURCE) through bloom and the tone curve
     // into the RGBA8 EFB (`target`); without physical light the picture as it is, clamped.
     [[nodiscard]] bool camera_ready() const noexcept { return camera_pso_ && camera_widen_pso_; }
     // The ray tracing engine (ray_tracing_engine.cpp, rt_engine.hlsl): under physical light with the textured
-    // lighting, unless GALAXY_RT_ENGINE=0. set_engine_picture: the EFB's colour for the trace that follows
+    // lighting (the only lighting). set_engine_picture: the EFB's colour for the trace that follows
     // (NON_PIXEL_SHADER_RESOURCE during it; the renderer transitions it).
     // The engine's clear surfaces (rt_engine.hlsl EngineClearCS) of slot `slot` over the picture (`scene_srv`: its copy
     // at the water's trace), with the water's composite.
@@ -374,11 +360,11 @@ private:
                         std::uint32_t height, std::uint32_t flags, RtUpload& frame);
     void write_dump();
     void log_emitters();
-    bool create_lighting_pipelines(DXGI_FORMAT scene_format, DXGI_FORMAT display_format);
+    bool create_lighting_pipelines(DXGI_FORMAT scene_format);
     bool create_camera_pipelines(DXGI_FORMAT scene_format, DXGI_FORMAT display_format);
     bool create_engine_pipelines();
     bool ensure_engine_buffers(std::uint32_t width, std::uint32_t height);
-    // The engine's views and constants for this trace (false: it does not run; the lighting's own passes do).
+    // The engine's views and constants for this trace (false: it does not run, the scene is not traced).
     bool engine_prepare(std::uint32_t width, std::uint32_t height, unsigned slot, RtEngineConstants& c,
                         std::uint32_t& flags);
     // Its passes, the frame's constants (`constants`, `bytes`, the engine block at `engine_at`) re-uploaded per a-trous
@@ -424,7 +410,6 @@ private:
                              void* allocate_context, D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table,
                              std::uint32_t width, std::uint32_t height, std::uint32_t factor, bool glow);
     bool ensure_lighting_buffers(std::uint32_t samples);
-    bool ensure_reference_buffer(std::uint32_t samples);
     // EFB pixels per sample side for a width x height target.
     [[nodiscard]] std::uint32_t sample_factor(std::uint32_t width, std::uint32_t height) const noexcept;
     void trace_lighting(ID3D12GraphicsCommandList* list, Allocate allocate, void* allocate_context,
@@ -615,32 +600,10 @@ private:
         bool pixels = false;               // light_pixels_ holds its per-pixel normals (physical)
     };
     Microsoft::WRL::ComPtr<ID3D12RootSignature> light_root_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> trace_pso_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> temporal_pso_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> spatial_a_pso_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> spatial_m_pso_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> spatial_b_pso_;
-    // The reference (GALAXY_RT_REFERENCE, ReferenceCS): its passes, its sums and when it starts again.
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> reference_pso_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> reference_exposure_pso_;
-    Microsoft::WRL::ComPtr<ID3D12Resource> reference_buffer_;
-    std::uint32_t reference_samples_ = 0;
-    std::uint32_t reference_width_ = 0;
-    std::uint32_t reference_height_ = 0;
-    std::array<float, 12> reference_camera_{};
-    bool reference_camera_known_ = false;
-    bool reference_reset_ = true;
-    bool reference_ = false;
-    // GALAXY_RT_PHYSICAL=1: the game's own light units (the stage's planet light as sky and sun, set_constants).
-    bool physical_ = false;
-    bool physical_active_ = false;  // this frame had the game's area light
-    std::uint32_t reference_bounces_ = 3;
-    float reference_exposure_ = 1.0f;
-    std::uint64_t reference_frames_ = 0;     // since the last report
-    std::uint64_t reference_from_ = 0;       // the present it starts at (GALAXY_RT_REFERENCE_FROM)
-    bool reference_active_ = false;          // it ran this frame
+    bool physical_active_ = false;  // this frame had the game's area light (else it is not traced)
+    // GALAXY_RT_REFERENCE_FROM: the present the engine's reference (GALAXY_RT_ENGINE_REFERENCE) starts at.
+    std::uint64_t reference_from_ = 0;
     std::uint64_t presents_ = 0;
-    std::uint64_t reference_restarts_ = 0;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> capture_root_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> capture_pso_;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> composite_root_;
@@ -657,7 +620,7 @@ private:
     // The emitters' reservoirs per sample (rt_lighting.hlsl emitter_light_reused, 32 bytes), with the history's parity.
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 2> light_reservoir_;
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kLightSlots> light_final_;
-    // Physical: per light slot its traced frame's per-pixel shading normals (rt_lighting.hlsl GBufferCS).
+    // Per light slot its traced frame's per-pixel shading normals and de-lighting (rt_engine.hlsl EngineGBufferCS).
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kLightSlots> light_pixels_;
     // Physical: the stage's full light in linear light (this frame's; per slot, its frame's), 1 otherwise.
     std::array<float, 3> light_full_{1.0f, 1.0f, 1.0f};
@@ -665,7 +628,6 @@ private:
     std::array<std::array<float, 3>, kLightSlots> light_slot_full_{};
     std::array<std::uint64_t, kLightSlots> light_pixels_bytes_{};
     std::array<D3D12_RESOURCE_STATES, kLightSlots> light_pixels_state_{};
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> gbuffer_pso_;
     Microsoft::WRL::ComPtr<ID3D12Resource> picture_;
     Microsoft::WRL::ComPtr<ID3D12Resource> picture_sums_;
     // The exposure's measurement (lit and game luminance per bucket, snapshot_glow_base); always a UAV.
@@ -703,18 +665,6 @@ private:
     std::uint32_t light_tex_height_ = 0u;
     float light_tex_scale_ = 0.5f;
     bool light_tex_ready_ = false;
-    // The cinematic finish (rt_post.hlsl): the picture before it (RGBA8), its bright part, blur and
-    // light shafts at a quarter of the pixels, the focus and core radius over time.
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> post_root_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> post_copy_pso_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> post_bright_pso_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> post_blur_pso_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> post_shafts_pso_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> post_focus_pso_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> post_lum_pso_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> post_lens_pso_;
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> post_finish_root_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> post_finish_pso_;
     // The camera (ray_tracing_camera.cpp): its passes, the bloom pyramid's levels down and up (half-float RGB per
     // texel), GALAXY_RT_CAMERA_BLOOM (the share of the light the lens scatters), GALAXY_RT_TONEMAP (0 Khronos PBR
     // Neutral, 1 ACES, 2 clipped).
@@ -736,7 +686,6 @@ private:
         const wchar_t* name;
     };
     static const EngineBufferSpec kEngineBufferSpecs[kEngineBuffers];
-    bool engine_wanted_ = true;     // GALAXY_RT_ENGINE
     bool engine_ready_ = false;
     bool engine_running_ = false;   // this trace runs it
     bool engine_indirect_ = true;   // GALAXY_RT_ENGINE_INDIRECT
@@ -816,30 +765,6 @@ private:
     std::uint64_t camera_texels_ = 0;
     float camera_bloom_ = 0.04f;
     std::uint32_t camera_tone_ = 0;
-    // scene, bright, tmp, bloom, shafts, state, region luminance, its blur's temporary
-    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 8> post_buffers_{};
-    std::array<D3D12_RESOURCE_STATES, 8> post_states_{};
-    std::uint64_t post_pixels_ = 0u;
-    std::uint64_t post_quarter_ = 0u;
-    std::array<std::uint32_t, 40> post_constants_{};
-    std::array<float, 12> post_camera_{};
-    bool post_camera_known_ = false;
-    std::chrono::steady_clock::time_point post_epoch_ = std::chrono::steady_clock::now();
-    // Glow bloom (rt_lighting.hlsl BloomDownCS, BloomBlurCS, BloomPS): per light slot, what the
-    // glows added at a quarter of the samples, blurred.
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> bloom_root_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> bloom_down_pso_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> bloom_blur_pso_;
-    Microsoft::WRL::ComPtr<ID3D12RootSignature> bloom_composite_root_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> bloom_composite_pso_;
-    Microsoft::WRL::ComPtr<ID3D12Resource> bloom_temp_;
-    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 4> bloom_{};
-    std::array<D3D12_RESOURCE_STATES, 4> bloom_state_{};
-    D3D12_RESOURCE_STATES bloom_temp_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-    std::array<std::array<std::uint32_t, 4>, 4> bloom_size_{};   // width, height, EFB width, EFB height
-    std::uint64_t bloom_entries_ = 0u;
-    int bloom_slot_ = -1;
-    bool post_identity_ = false;   // GALAXY_RT_POST_IDENTITY: the finish writes its copy back (diagnostics)
     Microsoft::WRL::ComPtr<ID3D12PipelineState> glow_emit_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> glow_emitter_pso_;
     // Physical: this scene's glow draws that are table light sources (GlowEmitterCS): first glow triangle, count, first
@@ -885,33 +810,6 @@ private:
     D3D12_RESOURCE_STATES emit_tris_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> emit_triangle_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> emit_scan_pso_;
-    // Physical: the stage's light fitted to the light the game baked into its surfaces (BakedFitCS, fit_baked_light;
-    // GALAXY_RT_FIT_LIGHT=0: the game's stage light). The groups' sums and totals, their readbacks, the decaying
-    // normal equations, the fit and the stage light it belongs to.
-    static constexpr std::uint32_t kFitGroups = 16384u;   // rt_lighting.hlsl kFitGroups
-    static constexpr unsigned kFitReadbacks = 4u;
-    static constexpr std::uint32_t kFitBytes = 18u * 16u;
-    struct FittedLight {
-        bool valid = false;
-        std::array<float, 3> direction{};   // towards the sun, world space
-        std::array<float, 3> sun{};         // its irradiance over pi at normal incidence (linear, white light 1)
-        std::array<float, 3> sky{};         // the sky's (uniform)
-        double samples = 0.0;
-    };
-    void fit_baked_light(const float* sums);
-    bool fit_ = false;
-    bool fit_used_ = false;   // this frame's light is the fit (its sun above the player's horizon)
-    Microsoft::WRL::ComPtr<ID3D12Resource> fit_sums_;
-    D3D12_RESOURCE_STATES fit_sums_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-    Microsoft::WRL::ComPtr<ID3D12Resource> fit_readback_;
-    std::array<std::uint64_t, kFitReadbacks> fit_readback_frame_{};
-    unsigned fit_readback_next_ = 0u;
-    std::uint64_t fit_read_frame_ = 0u;
-    std::array<double, 72> fit_sums_acc_{};
-    FittedLight fitted_{};
-    std::array<float, 9> fit_stage_light_{};
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> baked_fit_pso_;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> baked_reduce_pso_;
     // Per glow draw (glow_draws_) for GlowEmitCS, in AuthoredLight's layout: its triangles, the material
     // table's colour and intensity for its texture where the table names it (flags kGlowTable).
     std::vector<AuthoredLight> glow_lights_;
@@ -1217,29 +1115,11 @@ private:
     float day_environment_ = 0.92f;
     float sky_ibl_ = 0.8f;          // GALAXY_RT_SKY_IBL: rays reaching the sky take the light of their
                                     // direction (0: the sky's mean colour from every direction)
-    bool post_ = false;             // GALAXY_RT_POST: the cinematic finish (off: see ray_tracing.cpp)
-    // GALAXY_RT_POST_BLOOM: bloom of the picture's bright part. 0: the 8-bit picture holds no light
-    // beyond white, so a threshold blooms white sand, snow and clouds; the glows' own bloom (what
-    // the emitters added) runs under the finish instead.
-    float post_bloom_ = 0.0f;
-    float post_threshold_ = 0.9f;   // GALAXY_RT_POST_THRESHOLD: luminance where bloom starts
-    float post_shafts_ = 1.0f;      // GALAXY_RT_POST_SHAFTS
-    float post_dof_ = 1.5f;         // GALAXY_RT_POST_DOF: largest far blur (EFB pixels at 1x; 0 none)
-    float post_grade_ = 1.0f;       // GALAXY_RT_POST_GRADE
-    float post_rim_ = 0.0f;         // GALAXY_RT_POST_RIM: rim light at silhouettes (outlined everything)
     float relief_ = 3.0f;           // GALAXY_RT_RELIEF: height (eye units) of full texture brightness
-    float post_local_bright_ = 1.0f;   // GALAXY_RT_LOCAL_BRIGHT: contrast scale of regions above mid grey
-    float post_local_dark_ = 1.0f;     // GALAXY_RT_LOCAL_DARK: of regions below it (1: no local exposure)
-    float post_haze_ = 0.04f;       // GALAXY_RT_POST_HAZE: distance haze's largest share (bright skies)
-    float post_haze_distance_ = 20000.0f;  // GALAXY_RT_POST_HAZE_DISTANCE: where it reaches 63 % of it
-    float post_vignette_ = 0.1f;    // GALAXY_RT_POST_VIGNETTE: darkening towards the corners
-    bool post_view_ = false;        // GALAXY_RT_POST_VIEW: the finished luminance in false colour
     bool gi_ = true;                // GALAXY_RT_GI=0: no sky occlusion or bounce (shadows and lights stay)
     // GALAXY_RT_CORE_RADIUS: the star core light's half distance at scale 1, over 1.2 (it reaches the plaza)
     float core_radius_ = 1667.0f;
     float core_light_ = 8.0f;       // GALAXY_RT_CORE_LIGHT: its light at full revival (by its ball's surface)
-    float bloom_strength_ = 1.4f;   // GALAXY_RT_BLOOM: the glows' bloom (0: none)
-    float bloom_threshold_ = 0.15f; // GALAXY_RT_BLOOM_THRESHOLD: glow luminance that starts to bloom
     // GALAXY_RT_EXPOSURE_DAY / _NIGHT: the mean lighting the exposure holds under a bright / black
     // sky (the light moves into lit areas and out of shadows instead of dimming the picture);
     // GALAXY_RT_EXPOSURE=0 turns it off.

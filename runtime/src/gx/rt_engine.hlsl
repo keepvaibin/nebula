@@ -41,7 +41,6 @@ static const uint kEvWaterSurfaces = 21u;   // their vertex normals and draw fla
 static const uint kEvClearDraws = 22u;    // per water draw: the table's roughness (unorm16), kClear* flags
 static const uint kEvClear = 23u;         // per pixel uint4: reflection rgb (halves, exposed), transmittance, eye z
 
-static const uint kEngineOn = 1u;         // g_engine_info.x
 static const uint kEngineSpecular = 2u;   // traced specular
 static const uint kEngineIndirect = 4u;   // traced indirect light
 static const uint kEngineView = 0xF0u;    // GALAXY_RT_ENGINE_VIEW (bits 4-7): 1 direct, 2 indirect, 3 specular, 4 noisy,
@@ -116,11 +115,6 @@ RWByteAddressBuffer engine_buffer(uint i)
 uint pack_half2(float a, float b)
 {
     return f32tof16(a) | (f32tof16(b) << 16u);
-}
-
-float3 unpack_half3(uint2 v)
-{
-    return float3(f16tof32(v.x), f16tof32(v.x >> 16u), f16tof32(v.y));
 }
 
 float3 safe_light(float3 c)
@@ -263,7 +257,8 @@ void EngineGBufferCS(uint3 id : SV_DispatchThreadID)
                 s.flags |= kGbCard;
             }
             if ((table.x & kEmitNamed) != 0u && (table.x & 3u) != 0u && (table.x & kEmitNoLight) == 0u &&
-                tev_glows_at(draw, g_tev_info.x, tri, bary)) {
+                tev_glows_at(draw, g_tev_info.x, tri, bary) &&
+                ((g_draws.Load(record + 24u) & kDrawTableNearGlow) == 0u || near_glow_light(p))) {
                 const float intensity = asfloat(table.y);
                 if (intensity < 1.0f && (g_draws.Load(record + 24u) & kDrawTableStar) == 0u) {
                     // A faintly glowing material (intensity below 1: coins, star chips, Boos, the garden's flowers)
@@ -279,7 +274,9 @@ void EngineGBufferCS(uint3 id : SV_DispatchThreadID)
                     s.emission = max(intensity, 1.0f);
                     // Its colour the radiance its light carries (EmitTriangleCS, reference_material: the draw's TEV
                     // output), not the game's shading of it in the EFB (Bowser's Star Reactor's fireballs: dark discs).
-                    if (draw < g_tev_info.x) {
+                    if ((g_draws.Load(record + 24u) & kDrawTableRecolour) != 0u) {
+                        emitted = srgb_to_linear(rgb8(table.x));
+                    } else if (draw < g_tev_info.x) {
                         bool pass;
                         emitted = srgb_to_linear(saturate(tev_evaluate(draw, g_tev_info.x, tri, bary, pass).rgb));
                     }
@@ -326,6 +323,11 @@ void EngineGBufferCS(uint3 id : SV_DispatchThreadID)
             const uint base = g_sample_size.x * g_sample_size.y + kStarSlots;
             g_final[base] = uint4(surface.primary.x, s.draw, probe_table.x, s.flags | (probe_table.y << 16u));
             g_final[base + 1u] = uint4(asuint(s.emission), asuint(luminance(color)), asuint(p.z), asuint(own));
+            if ((g_engine_info.x & kEngineReference) == 0u && s.draw != 0xFFFFu) {
+                const float2 region_uv = tev_region_uv(s.draw, g_tev_info.x, surface.primary.x - 1u,
+                                                       float2(f16tof32(surface.primary.y), f16tof32(surface.primary.y >> 16u)));
+                g_final[base + 3u] = uint4(asuint(region_uv.x), asuint(region_uv.y), s.draw, surface.primary.x);
+            }
         }
         packed.x = pack_pixel_normal(surface.n, own);
         w0 = gb_word0(s);
@@ -386,19 +388,6 @@ float3 specular_f0(GSurface s)
 {
     const float dielectric = (s.flags & kGbClear) != 0u ? kClearF0 : 0.04f;
     return lerp(dielectric.xxx, s.albedo, s.metallic);
-}
-
-// The specular BRDF times n.l towards l (radiance per unit irradiance arriving along l).
-float3 specular_brdf_nl(GSurface s, float3 v, float3 l)
-{
-    const float nl = dot(s.n, l);
-    const float nv = dot(s.n, v);
-    if (nl <= 0.0f || nv <= 0.0f) {
-        return float3(0.0f, 0.0f, 0.0f);
-    }
-    const float3 h = normalize(v + l);
-    const float alpha = s.roughness * s.roughness;
-    return fresnel_schlick(specular_f0(s), dot(v, h)) * (ggx_d(alpha, dot(s.n, h)) * smith_visibility(alpha, nl, nv) * nl);
 }
 
 // The GGX lobe's alpha for the sun's highlight: at least the sun's disc (g_sun.w, the tangent of its radius) wide. A
@@ -1946,9 +1935,12 @@ void EngineFinalCS(uint3 id : SV_DispatchThreadID)
     if (s.valid) {
         z = s.p.z;
         if ((s.flags & kGbEmitter) != 0u) {
-            // A light source shows what it sends (its colour, the composite's albedo, times this), at most
-            // kEmitterShown.
-            diffuse = (min(s.emission, kEmitterShown) * exposure).xxx;
+            // A light source shows what it sends: its emitted colour (the G-buffer's: the draw's TEV output at full
+            // light, the table's for a recoloured one) times its radiance, at most kEmitterShown, past the composite's
+            // albedo (the picture's colour less its painted reflection: an environment-mapped lamp kept almost none of
+            // it, the Observatory's entrance stars at own 0.003 showing khaki reflections only, b90).
+            specular = s.albedo * (min(s.emission, kEmitterShown) * exposure);
+            whole = specular;
         } else if ((s.flags & kGbClear) != 0u) {
             // A clear solid shows the scene behind it as the game refracted it (its picture is the lit, exposed scene
             // through it: the albedo view, d84, shows Melty Molten's crystals and their star chips as the game does),
@@ -1991,17 +1983,32 @@ void EngineFinalCS(uint3 id : SV_DispatchThreadID)
             diffuse *= (1.0f - s.metallic) * exposure;
             specular *= exposure;
             if ((s.flags & kGbGlow) != 0u) {
-                // Its glow over its lit colour (in the specular term: the composite does not take it times the
-                // albedo, which for a metal is its painted reflection's remainder).
-                specular += s.albedo * (s.emission * exposure);
+                // Its glow over its lit colour, in the colours the game paints it (the picture's: a coin's gold
+                // gradient and its embossed ?), in the specular term (the composite does not take it times the albedo,
+                // which for a metal is its painted reflection's remainder). In the metal's reflectance, one colour,
+                // a coin was a flat disc (owner: the ? coin, b90).
+                const Texture2D<float4> painted = ResourceDescriptorHeap[engine_view(kEvPicture)];
+                specular += srgb_to_linear(saturate(painted.Load(int3(q, 0)).rgb)) * (s.emission * exposure);
             }
-        }
-        if ((s.flags & kGbEmitter) != 0u) {
-            whole = diffuse;
         }
         if (((g_engine_info.x & kEngineView) >> 4u) == 7u) {
             diffuse = float3(1.0f, 1.0f, 1.0f);
             specular = float3(0.0f, 0.0f, 0.0f);
+        }
+        // Views 9 and 10: the texture coordinate the table's glowing region is tested at, u (9) or v (10), as one of 16
+        // hues (bin i at hue i / 16; the tone curve keeps hue, not level), black where the hit has none: for a region
+        // separating parts of one texture.
+        if (((g_engine_info.x & kEngineView) >> 4u) == 9u || ((g_engine_info.x & kEngineView) >> 4u) == 10u) {
+            const uint4 hit = engine_buffer(kEvGBuffer).Load4(pixel * 32u + 16u);
+            float2 uv = float2(-1.0f, -1.0f);
+            if (hit.z != 0u && s.draw != 0xFFFFu) {
+                uv = tev_region_uv(s.draw, g_tev_info.x, hit.z - 1u, float2(f16tof32(hit.w), f16tof32(hit.w >> 16u)));
+            }
+            diffuse = float3(0.0f, 0.0f, 0.0f);
+            const float t = ((g_engine_info.x & kEngineView) >> 4u) == 9u ? uv.x : uv.y;
+            const float h = floor(saturate(t) * 15.999f) / 16.0f;
+            const float3 hue = saturate(float3(abs(h * 6.0f - 3.0f) - 1.0f, 2.0f - abs(h * 6.0f - 2.0f), 2.0f - abs(h * 6.0f - 4.0f)));
+            specular = uv.x >= 0.0f ? hue * 0.3f : float3(0.0f, 0.0f, 0.0f);
         }
     }
     if ((g_engine_info.x & kEngineReference) != 0u) {

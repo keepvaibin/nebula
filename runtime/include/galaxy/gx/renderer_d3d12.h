@@ -352,9 +352,7 @@ public:
     void begin_hdr_scene();
     void end_hdr_scene();
     // The ray tracer's glow bloom of `slot` added to the EFB (a scene's end and its sub-frames).
-    void record_rt_bloom(int slot);
     // The cinematic finish over the EFB (a scene's end; sub-frames replay it on their picture).
-    void record_rt_post(bool replay);
     // After the translucent phases: the water drawn since the trace reflects (its composite is
     // recorded for the sub-frames' replays).
     void rt_trace_water();
@@ -1007,7 +1005,7 @@ private:
     };
     // RtComposite: the ambient occlusion of ray-tracer result slot `index`.
     enum class ReplayKind : std::uint8_t {
-        Draw, BindEfb, Clear, Copy, SwapEfbSets, ClearDepth, RtComposite, RtBloom, RtPost, RtWater, SceneAa, SceneAo,
+        Draw, BindEfb, Clear, Copy, SwapEfbSets, ClearDepth, RtComposite, RtWater, SceneAa, SceneAo,
         HdrBegin, HdrEnd
     };
     struct ReplayOp {

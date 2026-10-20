@@ -69,6 +69,7 @@ struct RtMaterial {
     bool traced = false;                  // a clear surface the engine traces; its game draw not shown
     bool seen = false;                    // shows its radiance; its light is the game's point light there
     bool recolour = false;                // a light source's sprite shown in the table's colour (its luminance kept)
+    bool near_glow = false;               // a light source only near its glow light (the game's sprite of it)
     bool shadow = true;
     float roughness = -1.0f;              // < 0: the class's
     float metallic = -1.0f;               // < 0: the class's

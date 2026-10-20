@@ -86,7 +86,6 @@ const SceneRayTracer::EngineBufferSpec SceneRayTracer::kEngineBufferSpecs[kEngin
 };
 
 bool SceneRayTracer::create_engine_pipelines() {
-    engine_wanted_ = env_value("GALAXY_RT_ENGINE", 1.0f) != 0.0f;
     engine_view_ = static_cast<std::uint32_t>(std::clamp(env_value("GALAXY_RT_ENGINE_VIEW", 0.0f), 0.0f, 15.0f));
     engine_indirect_ = env_value("GALAXY_RT_ENGINE_INDIRECT", 1.0f) != 0.0f;
     engine_specular_ = env_value("GALAXY_RT_ENGINE_SPECULAR", 1.0f) != 0.0f;
@@ -97,7 +96,7 @@ bool SceneRayTracer::create_engine_pipelines() {
     engine_reference_ = env_value("GALAXY_RT_ENGINE_REFERENCE", 0.0f) != 0.0f;
     engine_reference_bounces_ =
         static_cast<std::uint32_t>(std::clamp(env_value("GALAXY_RT_ENGINE_REFERENCE_BOUNCES", 8.0f), 0.0f, 32.0f));
-    if (!engine_wanted_ || !light_textured_ || !light_root_) {
+    if (!light_textured_ || !light_root_) {
         return false;
     }
     const auto compute = [&](const void* code, std::size_t size, ComPtr<ID3D12PipelineState>& out) {
@@ -120,7 +119,7 @@ bool SceneRayTracer::create_engine_pipelines() {
         compute(g_rt_engine_clear_cs, sizeof(g_rt_engine_clear_cs), engine_clear_pso_) &&
         compute(g_rt_engine_reference_cs, sizeof(g_rt_engine_reference_cs), engine_reference_pso_);
     if (!ok) {
-        std::cerr << "[rt] engine pipelines failed: the lighting's own passes run\n";
+        std::cerr << "[rt] engine pipelines failed\n";
         return false;
     }
     std::cerr << "[rt] engine on view=" << engine_view_ << " indirect=" << (engine_indirect_ ? 1 : 0)

@@ -353,6 +353,20 @@ float4 tev_evaluate_mode(uint draw, uint count, uint tri, float2 b, uint mode, o
 
 // Whether triangle `tri` at barycentrics `b` lies in its emitter's glowing region of the material texture (record pad[2]
 // bits 8-31: u0, v0, u1, v1 in 63rds; 0: all of it), at its coordinates there wrapped into the texture.
+// The texture coordinate the table's glowing region is tested at (tev_glows_at), in the region's 0-1 space.
+float2 tev_region_uv(uint draw, uint count, uint tri, float2 b)
+{
+    if (draw >= count) {
+        return float2(-1.0f, -1.0f);
+    }
+    const uint record = draw * kTevRecordBytes;
+    const uint info = g_tev.Load(record + 116u);
+    const uint a = tri * kTriUvStride + ((info >> 3u) & 1u) * 24u;
+    const float4 uv01 = asfloat(g_tri_uv.Load4(a));
+    const float2 uv2 = asfloat(g_tri_uv.Load2(a + 16u));
+    return frac((uv01.xy * (1.0f - b.x - b.y) + uv01.zw * b.x + uv2 * b.y) * asfloat(g_tev.Load2(record + 120u)));
+}
+
 bool tev_glows_at(uint draw, uint count, uint tri, float2 b)
 {
     if (draw >= count) {

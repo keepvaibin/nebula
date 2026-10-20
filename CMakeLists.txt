@@ -720,14 +720,9 @@ endforeach()
 set(galaxy_rt_light_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/gx/rt_lighting.hlsl")
 foreach(galaxy_rt_pass capture_cs:CaptureCS:cs_6_5 sky_state_cs:SkyStateCS:cs_6_5 glow_base_cs:GlowBaseCS:cs_6_5
         sky_light_map_cs:SkyLightMapCS:cs_6_5 sky_light_sh_cs:SkyLightShCS:cs_6_5
-        surface_emit_cs:SurfaceEmitCS:cs_6_5 bloom_down_cs:BloomDownCS:cs_6_5 bloom_blur_cs:BloomBlurCS:cs_6_5
-        bloom_ps:BloomPS:ps_6_0
+        surface_emit_cs:SurfaceEmitCS:cs_6_5
         glow_emit_cs:GlowEmitCS:cs_6_5 authored_emit_cs:AuthoredEmitCS:cs_6_5 emit_merge_cs:EmitMergeCS:cs_6_5
-        trace_cs:TraceCS:cs_6_5
-        temporal_cs:TemporalCS:cs_6_5
-        spatial_a_cs:SpatialACS:cs_6_5 spatial_m_cs:SpatialMCS:cs_6_5 spatial_b_cs:SpatialBCS:cs_6_5
-        star_sphere_cs:StarSphereCS:cs_6_5 reference_exposure_cs:ReferenceExposureCS:cs_6_5
-        sky_trace_sh_cs:SkyTraceShCS:cs_6_5 gbuffer_cs:GBufferCS:cs_6_5
+        star_sphere_cs:StarSphereCS:cs_6_5 sky_trace_sh_cs:SkyTraceShCS:cs_6_5
         composite_vs:CompositeVS:vs_6_0
         composite_ps:CompositePS:ps_6_0 clear_composite_ps:ClearCompositePS:ps_6_0
         light_texture_ps:LightTexturePS:ps_6_0)
@@ -740,24 +735,6 @@ foreach(galaxy_rt_pass capture_cs:CaptureCS:cs_6_5 sky_state_cs:SkyStateCS:cs_6_
         COMMAND "${GALAXY_DXC}" -nologo -T ${galaxy_rt_profile} -E ${galaxy_rt_entry} -O3 -WX -Qstrip_debug
             -Qstrip_reflect -Vn g_rt_${galaxy_rt_name} -Fh "${galaxy_rt_header}" "${galaxy_rt_light_hlsl}"
         DEPENDS "${galaxy_rt_light_hlsl}" "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/gx/rt_tev.hlsli"
-        VERBATIM)
-    list(APPEND galaxy_rt_headers "${galaxy_rt_header}")
-endforeach()
-# The cinematic finish of the ray-traced picture (runtime/src/gx/rt_post.hlsl).
-set(galaxy_rt_post_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/gx/rt_post.hlsl")
-foreach(galaxy_rt_pass post_copy_cs:PostCopyCS:cs_6_5 post_bright_cs:PostBrightCS:cs_6_5
-        post_blur_cs:PostBlurCS:cs_6_5 post_shafts_cs:PostShaftsCS:cs_6_5 post_focus_cs:PostFocusCS:cs_6_5
-        post_lum_cs:PostLumCS:cs_6_5 post_lens_cs:PostLensCS:cs_6_5
-        post_vs:PostVS:vs_6_0 post_ps:PostPS:ps_6_0)
-    string(REPLACE ":" ";" galaxy_rt_pair "${galaxy_rt_pass}")
-    list(GET galaxy_rt_pair 0 galaxy_rt_name)
-    list(GET galaxy_rt_pair 1 galaxy_rt_entry)
-    list(GET galaxy_rt_pair 2 galaxy_rt_profile)
-    set(galaxy_rt_header "${galaxy_rt_dir}/rt_${galaxy_rt_name}.h")
-    add_custom_command(OUTPUT "${galaxy_rt_header}"
-        COMMAND "${GALAXY_DXC}" -nologo -T ${galaxy_rt_profile} -E ${galaxy_rt_entry} -O3 -WX -Qstrip_debug
-            -Qstrip_reflect -Vn g_rt_${galaxy_rt_name} -Fh "${galaxy_rt_header}" "${galaxy_rt_post_hlsl}"
-        DEPENDS "${galaxy_rt_post_hlsl}"
         VERBATIM)
     list(APPEND galaxy_rt_headers "${galaxy_rt_header}")
 endforeach()
@@ -813,11 +790,10 @@ foreach(galaxy_rt_pass reflect_trace_tex_cs:ReflectTraceCS water_trace_tex_cs:Wa
     list(APPEND galaxy_rt_headers "${galaxy_rt_header}")
 endforeach()
 
-# The lighting's trace testing alpha-tested geometry by its alpha maps from the descriptor heap (shader model 6.6),
-# and the reference path tracer, which shades its hits from their textures (GALAXY_RT_REFERENCE).
-foreach(galaxy_rt_pass trace_tex_cs:TraceCS reference_tex_cs:ReferenceCS sky_probe_tex_cs:SkyProbeCS
-        gbuffer_tex_cs:GBufferCS emit_triangle_cs:EmitTriangleCS emit_scan_cs:EmitScanCS glow_emitter_cs:GlowEmitterCS
-        baked_fit_cs:BakedFitCS baked_reduce_cs:BakedReduceCS)
+# The passes reading textures and TEV records straight from the descriptor heap (shader model 6.6): the traced sky,
+# the emitting triangles and the glow light sources.
+foreach(galaxy_rt_pass sky_probe_tex_cs:SkyProbeCS emit_triangle_cs:EmitTriangleCS emit_scan_cs:EmitScanCS
+        glow_emitter_cs:GlowEmitterCS)
     string(REPLACE ":" ";" galaxy_rt_pair "${galaxy_rt_pass}")
     list(GET galaxy_rt_pair 0 galaxy_rt_name)
     list(GET galaxy_rt_pair 1 galaxy_rt_entry)
