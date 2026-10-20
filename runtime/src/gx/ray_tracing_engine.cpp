@@ -54,6 +54,7 @@ constexpr std::uint32_t kEngineHitNoSky = 32768u;
 constexpr std::uint32_t kEngineClearNoTev = 65536u;
 constexpr std::uint32_t kEngineBounceCache = 131072u;
 constexpr std::uint32_t kEngineReference = 262144u;
+constexpr std::uint32_t kEngineWaterLight = 524288u;
 
 float env_value(const char* name, float fallback) {
     char value[32]{};
@@ -94,6 +95,7 @@ bool SceneRayTracer::create_engine_pipelines() {
     engine_clear_mode_ = static_cast<std::uint32_t>(std::clamp(env_value("GALAXY_RT_ENGINE_CLEAR", 1.0f), 0.0f, 9.0f));
     engine_clear_wanted_ = engine_clear_mode_ != 0u;
     engine_reference_ = env_value("GALAXY_RT_ENGINE_REFERENCE", 0.0f) != 0.0f;
+    water_light_ = env_value("GALAXY_RT_WATER_LIGHT", 1.0f) != 0.0f;
     engine_reference_bounces_ =
         static_cast<std::uint32_t>(std::clamp(env_value("GALAXY_RT_ENGINE_REFERENCE_BOUNCES", 8.0f), 0.0f, 32.0f));
     if (!light_textured_ || !light_root_) {
@@ -244,6 +246,19 @@ bool SceneRayTracer::engine_prepare(std::uint32_t width, std::uint32_t height, u
         }
     }
     std::copy(std::begin(views), std::end(views), c.views);
+    // Light under water: the last water pass's surfaces (still readable: the next one rebuilds them after this trace).
+    bool water_light = false;
+    if (water_light_ && water_light_triangles_ != 0u && water_tlas_ && water_positions_ &&
+        water_positions_state_ == D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE) {
+        const std::uint32_t scene = tlas_view(water_tlas_->GetGPUVirtualAddress());
+        const std::uint32_t positions =
+            buffer_view(water_positions_.Get(), 0u, static_cast<std::uint64_t>(water_light_triangles_) * 36u);
+        if (scene != 0xFFFFFFFFu && positions != 0xFFFFFFFFu) {
+            c.views[kEvWaterScene] = scene;
+            c.views[kEvWaterPositions] = positions;
+            water_light = true;
+        }
+    }
     c.size[0] = width;
     c.size[1] = height;
     c.size[2] = (width + 1u) / 2u;
@@ -254,7 +269,7 @@ bool SceneRayTracer::engine_prepare(std::uint32_t width, std::uint32_t height, u
                 (engine_clear_mode_ == 5u ? kEngineClearNoBack : 0u) | (engine_clear_mode_ == 6u ? kEngineClearNoShade : 0u) |
                 (engine_clear_mode_ == 7u ? kEngineHitNoLights : 0u) | (engine_clear_mode_ == 8u ? kEngineHitNoSky : 0u) |
                 (engine_clear_mode_ == 9u ? kEngineClearNoTev : 0u) | (engine_bounces_ ? kEngineBounceCache : 0u) |
-                (engine_view_ << 4u);
+                (water_light ? kEngineWaterLight : 0u) | (engine_view_ << 4u);
     c.info[1] = 0u;
     c.info[2] = slot;
     c.info[3] = 0u;

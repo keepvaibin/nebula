@@ -57,6 +57,7 @@ static const uint kEngineHitNoLights = 16384u;  // =7: hits without the lights' 
 static const uint kEngineHitNoSky = 32768u;     // =8: hits without the sky ray
 static const uint kEngineClearNoTev = 65536u;   // =9: glass reflection hits without their TEV colour
 static const uint kEngineBounceCache = 131072u;
+static const uint kEngineWaterLight = 524288u;  // last frame's water (kEvWaterScene, kEvWaterPositions) shades light
 static const uint kEngineReference = 262144u;   // GALAXY_RT_ENGINE_REFERENCE: the converged reference accumulates
                                                  // (g_engine_params: x its buffer's view, y paths so far, z bounces)  // GALAXY_RT_ENGINE_BOUNCES (default on): hits take the cached light
 
@@ -506,13 +507,85 @@ bool engine_visible(float3 origin, float3 target, float margin, uint salt)
     return query.CommittedStatus() != COMMITTED_TRIANGLE_HIT;
 }
 
+// A direction within a disc about the sun's direction of tangent radius `spread` (g_sun.w: the sun's own).
+float3 sun_direction_spread(float2 u, float spread)
+{
+    const float3x3 f = tangent_frame(g_sun.xyz);
+    const float r = sqrt(u.x) * spread;
+    const float phi = 2.0f * kPi * u.y;
+    return normalize(g_sun.xyz + f[0] * (r * cos(phi)) + f[1] * (r * sin(phi)));
+}
+
 // A direction within the sun's disc (g_sun: towards it, tangent of its radius).
 float3 sun_direction_sample(float2 u)
 {
-    const float3x3 f = tangent_frame(g_sun.xyz);
-    const float r = sqrt(u.x) * g_sun.w;
-    const float phi = 2.0f * kPi * u.y;
-    return normalize(g_sun.xyz + f[0] * (r * cos(phi)) + f[1] * (r * sin(phi)));
+    return sun_direction_spread(u, g_sun.w);
+}
+
+// --- Light under water (kEngineWaterLight) ------------------------------------------------------------------------
+// Clear ocean water's diffuse attenuation per eye unit (about a centimetre: Mario stands 160 tall), red, green, blue:
+// Jerlov type I, Kd = 0.35, 0.065, 0.019 per metre at 650, 550, 450 nm. The beam's own attenuation (c = 0.36, 0.08,
+// 0.03) left 36 metres down navy (b97, Beach Bowl's deep fish): the light scattered out of the beam still goes down.
+// Half of it: the game's water is drawn clearer than the sea (owner: under water the blue too strong).
+static const float3 kWaterAttenuation = float3(0.00175f, 0.000325f, 0.000095f);
+// The share of the water's hue shift the light under it keeps (the rest dims it evenly): at the sea's own the
+// game's lagoons went teal and their depths cyan-blue (owner, b97-b98: tone the blue down).
+static const float kWaterHue = 0.35f;
+// A slight warm balance on the light under water, its luminance kept (owner: add a little yellow).
+static const float3 kWaterWarm = float3(1.05f, 1.01f, 0.86f) / dot(float3(1.05f, 1.01f, 0.86f), float3(0.2126f, 0.7152f, 0.0722f));
+// Forward scattering widens the sun's disc with the depth: tan 0.5 degrees per metre (100 units), at most 10 degrees.
+static const float kWaterSpread = 0.0000873f;
+static const float kWaterSpreadMost = 0.176f;
+
+// The water between eye point `p` and the light along direction `l`: the distance to last frame's first water surface
+// along it (the water pass's, its eye space through g_reproject) when that surface lies near level (within 45 degrees
+// of the player's horizon: a lake's or sea's top, not a waterfall's sheet), else 0 (above water, or no water).
+float water_depth_along(float3 p, float3 l)
+{
+    if ((g_engine_info.x & kEngineWaterLight) == 0u || (g_flags & 1u) == 0u) {
+        return 0.0f;
+    }
+    const RaytracingAccelerationStructure water = ResourceDescriptorHeap[engine_view(kEvWaterScene)];
+    const ByteAddressBuffer positions = ResourceDescriptorHeap[engine_view(kEvWaterPositions)];
+    RayDesc ray;
+    ray.Origin = transform(g_reproject, p);
+    ray.Direction = normalize(rotate3(g_reproject, l));
+    ray.TMin = 0.0f;
+    ray.TMax = 1.0e5f;
+    RayQuery<RAY_FLAG_NONE> query;
+    query.TraceRayInline(water, RAY_FLAG_NONE, 0xFFu, ray);
+    while (query.Proceed()) {
+        if (query.CandidateType() == CANDIDATE_NON_OPAQUE_TRIANGLE) {
+            query.CommitNonOpaqueTriangleHit();
+        }
+    }
+    if (query.CommittedStatus() != COMMITTED_TRIANGLE_HIT) {
+        return 0.0f;
+    }
+    const uint tri = query.CommittedPrimitiveIndex();
+    const float3 v0 = asfloat(positions.Load3(tri * 36u));
+    const float3 v1 = asfloat(positions.Load3(tri * 36u + 12u));
+    const float3 v2 = asfloat(positions.Load3(tri * 36u + 24u));
+    const float3 face = cross(v1 - v0, v2 - v0);
+    const float3 up = rotate3(g_reproject, g_up.xyz);
+    if (dot(face, face) <= 1e-24f || abs(dot(normalize(face), normalize(up))) < 0.7071f) {
+        return 0.0f;
+    }
+    return query.CommittedRayT();
+}
+
+// The light left after `depth` of water: its attenuation, kWaterHue of its hue shift kept.
+float3 water_tint(float depth)
+{
+    const float3 t = exp(-kWaterAttenuation * depth);
+    return lerp(luminance(t).xxx, t, kWaterHue) * kWaterWarm;
+}
+
+// The share of light from direction `l` reaching `p` through the water above it (1 out of the water).
+float3 water_through(float3 p, float3 l)
+{
+    const float depth = water_depth_along(p, l);
+    return depth > 0.0f ? water_tint(depth) : float3(1.0f, 1.0f, 1.0f);
 }
 
 struct Hit {
@@ -750,9 +823,11 @@ float3 engine_hit_radiance(Hit h, float3 origin, float3 direction, bool emission
     x = origin + direction * h.t;
     hn = -direction;
     if (!h.surface) {
-        // Seen (a reflection): the backdrop as it shows; as light (the indirect light): its light's colour.
+        // Seen (a reflection): the backdrop as it shows; as light (the indirect light): its light's colour; through
+        // the water above the ray's origin.
         return h.late ? float3(0.0f, 0.0f, 0.0f)
-                      : emission_wanted ? physical_sky(direction) : sky_light_colour(physical_sky(direction));
+                      : (emission_wanted ? physical_sky(direction) : sky_light_colour(physical_sky(direction))) *
+                            water_through(origin, direction);
     }
     float3 albedo;
     float3 emission;
@@ -802,7 +877,7 @@ float3 engine_hit_radiance(Hit h, float3 origin, float3 direction, bool emission
             const float nl = dot(n, l);
             float blocker;
             if (nl > 0.0f && sun_visible(start, l, false, salt, blocker)) {
-                m += g_sun_light.rgb * nl;
+                m += g_sun_light.rgb * nl * water_through(start, g_sun.xyz);
             }
         }
         if ((g_engine_info.x & kEngineHitNoLights) == 0u) {
@@ -814,7 +889,7 @@ float3 engine_hit_radiance(Hit h, float3 origin, float3 direction, bool emission
         } else {
             const Hit sky = engine_trace(start, d, salt + 7u);
             if (!sky.surface && !sky.late) {
-                m += sky_light_colour(physical_sky(d));
+                m += sky_light_colour(physical_sky(d)) * water_through(start, d);
             }
         }
     }
@@ -961,12 +1036,16 @@ void EngineDirectCS(uint3 id : SV_DispatchThreadID)
     float3 diffuse = float3(0.0f, 0.0f, 0.0f);
     float3 specular = float3(0.0f, 0.0f, 0.0f);
     if (any(g_sun_light.rgb > 0.0f)) {
-        const float3 l = sun_direction_sample(float2(emit_random(seed), emit_random(seed)));
+        // Under water the sunlight crosses `depth` of it: attenuated, its disc widened by forward scattering.
+        const float depth = water_depth_along(start, g_sun.xyz);
+        const float spread = depth > 0.0f ? min(g_sun.w + depth * kWaterSpread, kWaterSpreadMost) : g_sun.w;
+        const float3 l = sun_direction_spread(float2(emit_random(seed), emit_random(seed)), spread);
         const float nl = dot(s.n, l);
         float blocker;
         if (nl > 0.0f && dot(s.ng, l) > -0.05f && sun_visible(start, l, (s.flags & kGbCard) != 0u, salt, blocker)) {
-            diffuse = g_sun_light.rgb * nl;
-            specular = sun_specular(s, v);
+            const float3 through = depth > 0.0f ? water_tint(depth) : float3(1.0f, 1.0f, 1.0f);
+            diffuse = g_sun_light.rgb * nl * through;
+            specular = sun_specular(s, v) * through;
         }
     }
     direct.Store4(pixel * 16u, uint4(pack_half2(diffuse.r, diffuse.g), pack_half2(diffuse.b, specular.r),
@@ -1846,7 +1925,7 @@ float3 reference_path(float3 p, float3 n, float3 ng, bool card, inout uint seed,
             const float nl = dot(n, l);
             float blocker;
             if (nl > 0.0f && dot(ng, l) > -0.05f && sun_visible(start, l, card && bounce == 0u, at, blocker)) {
-                m += g_sun_light.rgb * nl;
+                m += g_sun_light.rgb * nl * water_through(start, g_sun.xyz);
             }
         }
         m += engine_light_sample(p, n, start, 8u, seed, at + 13u);
@@ -1855,7 +1934,7 @@ float3 reference_path(float3 p, float3 n, float3 ng, bool card, inout uint seed,
         const Hit h = engine_trace(start, d, at + 7u);
         if (!h.surface) {
             if (!h.late) {
-                total += throughput * sky_light_colour(physical_sky(d));
+                total += throughput * sky_light_colour(physical_sky(d)) * water_through(start, d);
             }
             break;
         }

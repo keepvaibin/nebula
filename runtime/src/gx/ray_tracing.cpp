@@ -708,8 +708,8 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     day_environment_ = std::clamp(env_float("GALAXY_RT_DAY_ENVIRONMENT", 0.92f), 0.3f, 1.2f);
     relief_ = std::clamp(env_float("GALAXY_RT_RELIEF", 3.0f), 0.0f, 64.0f);
     delight_ = env_float("GALAXY_RT_DELIGHT", 1.0f) != 0.0f;
-    // Half of 2 (user: grass and other textures too rough; halfway to flat).
-    delight_relief_ = std::clamp(env_float("GALAXY_RT_DELIGHT_RELIEF", 1.0f), 0.0f, 32.0f);
+    // A quarter of 2: 1 was still too rough on grass and sand (owner 2026-10-20: rough, but in between).
+    delight_relief_ = std::clamp(env_float("GALAXY_RT_DELIGHT_RELIEF", 0.5f), 0.0f, 32.0f);
     gi_ = env_float("GALAXY_RT_GI", 1.0f) != 0.0f;
     core_radius_ = std::clamp(env_float("GALAXY_RT_CORE_RADIUS", 1667.0f), 1.0f, 100000.0f);
     core_light_ = std::clamp(env_float("GALAXY_RT_CORE_LIGHT", 8.0f), 0.0f, 16.0f);
@@ -908,7 +908,6 @@ void SceneRayTracer::shutdown() noexcept {
     light_normal_.Reset();
     light_raw_.Reset();
     light_primary_.Reset();
-    for (auto& buffer : light_history_) buffer.Reset();
     for (auto& buffer : light_final_) buffer.Reset();
     picture_.Reset();
     picture_sums_.Reset();
@@ -2135,10 +2134,12 @@ void SceneRayTracer::run_delight(ID3D12GraphicsCommandList* list) {
     list->SetComputeRootSignature(delight_root_.Get());
     list->SetComputeRootUnorderedAccessView(1u, delight_scratch_->GetGPUVirtualAddress());
     list->SetPipelineState(delight_pso_.Get());
-    // GALAXY_RT_DELIGHT_STRENGTH (A/B, default 1): the share of each texel's measured shading the map takes out, in
-    // the wrap word's bits 8-15 (rt_delight.hlsl).
+    // GALAXY_RT_DELIGHT_STRENGTH (default 0.5): the share of each texel's measured shading the map takes out, in the
+    // wrap word's bits 8-15 (rt_delight.hlsl). Retinex cannot tell painted light from a pattern of one colour (a
+    // stone's cracks, sand's grain): taking it all out left Deep Dark's walls and sand flat and grey (owner; b97
+    // A/B against 0.5 and off: half keeps the pattern and the game's warm sand, and takes half the painted light).
     static const std::uint32_t strength =
-        static_cast<std::uint32_t>(std::lround(std::clamp(env_float("GALAXY_RT_DELIGHT_STRENGTH", 1.0f), 0.0f, 1.0f) *
+        static_cast<std::uint32_t>(std::lround(std::clamp(env_float("GALAXY_RT_DELIGHT_STRENGTH", 0.5f), 0.0f, 1.0f) *
                                                255.0f));
     for (std::size_t i = 0; i < delight_jobs_.size(); ++i) {
         const DelightJob& job = delight_jobs_[i];
@@ -3069,8 +3070,6 @@ bool SceneRayTracer::ensure_lighting_buffers(std::uint32_t samples) {
     retire(light_normal_);
     retire(light_raw_);
     retire(light_primary_);
-    for (auto& buffer : light_history_) retire(buffer);
-    for (auto& buffer : light_reservoir_) retire(buffer);
     for (auto& buffer : light_final_) retire(buffer);
     retire(picture_);
     retire(glow_base_);
@@ -3091,10 +3090,8 @@ bool SceneRayTracer::ensure_lighting_buffers(std::uint32_t samples) {
               make(n * 4u, glow_base_, L"rt glow base") && make(n * 4u, glow_added_, L"rt glow added");
     glow_base_state_ = glow_added_state_ = state;
     for (unsigned i = 0; ok && i < 2u; ++i) {
-        ok = make(n * 4u, light_z_[i], L"rt light eye z") && make(n * 16u, light_history_[i], L"rt light history") &&
-             make(n * 32u, light_reservoir_[i], L"rt light reservoirs");
+        ok = make(n * 4u, light_z_[i], L"rt light eye z");
         light_z_state_[i] = state;
-        light_history_state_[i] = state;
     }
     for (unsigned i = 0; ok && i < kLightSlots; ++i) {
         ok = make((n + kStarSlots + kProbeRecords) * 16u, light_final_[i], L"rt light result");
@@ -3106,16 +3103,14 @@ bool SceneRayTracer::ensure_lighting_buffers(std::uint32_t samples) {
         light_normal_.Reset();
         light_raw_.Reset();
         light_primary_.Reset();
-        for (auto& buffer : light_history_) buffer.Reset();
-        for (auto& buffer : light_reservoir_) buffer.Reset();
-        for (auto& buffer : light_final_) buffer.Reset();
+            for (auto& buffer : light_final_) buffer.Reset();
         picture_.Reset();
         glow_base_.Reset();
         glow_added_.Reset();
         return false;
     }
     light_samples_ = samples;
-    std::cerr << "[rt] light samples=" << samples << " mb=" << ((n * (4u + 16u + 8u + 8u + 2u * 4u + 2u * 16u + 2u * 32u + 12u * kLightSlots)) >> 20u)
+    std::cerr << "[rt] light samples=" << samples << " mb=" << ((n * (4u + 16u + 8u + 8u + 2u * 4u + 12u * kLightSlots)) >> 20u)
               << '\n';
     return true;
 }
@@ -3776,9 +3771,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     constexpr D3D12_RESOURCE_STATES kUav = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     constexpr D3D12_RESOURCE_STATES kRead = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     to_state(list, light_z_[current].Get(), light_z_state_[current], kUav);
-    to_state(list, light_history_[current].Get(), light_history_state_[current], kUav);
     to_state(list, light_z_[previous].Get(), light_z_state_[previous], kRead);
-    to_state(list, light_history_[previous].Get(), light_history_state_[previous], kRead);
     to_state(list, light_final_[slot].Get(), light_final_state_[slot], kUav);
     to_state(list, picture_.Get(), picture_state_, kRead);
     to_state(list, picture_sums_.Get(), picture_sums_state_, kRead);
@@ -3798,8 +3791,9 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     list->SetComputeRootShaderResourceView(kLightScene, tlas_->GetGPUVirtualAddress());
     list->SetComputeRootDescriptorTable(kLightDepth, depth_srv);
     list->SetComputeRootShaderResourceView(kLightPrevZ, light_z_[previous]->GetGPUVirtualAddress());
-    list->SetComputeRootShaderResourceView(kLightPrevHistory, light_history_[previous]->GetGPUVirtualAddress());
-    list->SetComputeRootShaderResourceView(kLightHistoryIn, light_history_[previous]->GetGPUVirtualAddress());
+    // The old filters' histories and reservoirs are gone: stand-ins in their slots (no kept shader reads them).
+    list->SetComputeRootShaderResourceView(kLightPrevHistory, positions_->GetGPUVirtualAddress());
+    list->SetComputeRootShaderResourceView(kLightHistoryIn, positions_->GetGPUVirtualAddress());
     list->SetComputeRootShaderResourceView(kLightPicture, picture_->GetGPUVirtualAddress());
     list->SetComputeRootShaderResourceView(kLightPictureSums, picture_sums_->GetGPUVirtualAddress());
     list->SetComputeRootShaderResourceView(kLightPositions, positions_->GetGPUVirtualAddress());
@@ -3812,11 +3806,11 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     list->SetComputeRootUnorderedAccessView(kLightZ, light_z_[current]->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kLightNormal, light_normal_->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kLightRaw, light_raw_->GetGPUVirtualAddress());
-    list->SetComputeRootUnorderedAccessView(kLightHistory, light_history_[current]->GetGPUVirtualAddress());
+    list->SetComputeRootUnorderedAccessView(kLightHistory, light_raw_->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kLightFinal, light_final_[slot]->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kLightPrimary, light_primary_->GetGPUVirtualAddress());
-    list->SetComputeRootShaderResourceView(kLightReservoirIn, light_reservoir_[previous]->GetGPUVirtualAddress());
-    list->SetComputeRootUnorderedAccessView(kLightReservoirOut, light_reservoir_[current]->GetGPUVirtualAddress());
+    list->SetComputeRootShaderResourceView(kLightReservoirIn, positions_->GetGPUVirtualAddress());
+    list->SetComputeRootUnorderedAccessView(kLightReservoirOut, light_raw_->GetGPUVirtualAddress());
     // The alpha tests' texture coordinates and alpha maps (stand-ins the trace never reads without them: g_flags
     // bit 12 off).
     list->SetComputeRootShaderResourceView(kLightSurfaceUv, surface_uv_ ? surface_uv_->GetGPUVirtualAddress()
@@ -5248,6 +5242,11 @@ bool SceneRayTracer::build_tlas(ID3D12GraphicsCommandList4* list, Allocate alloc
 bool SceneRayTracer::trace_scene(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
                                  void* allocate_context, D3D12_GPU_DESCRIPTOR_HANDLE depth_srv,
                                  std::uint32_t width, std::uint32_t height) {
+    if (log_seq_) {
+        std::fprintf(stderr, "[rt-seq] frame=%llu trace_scene ready=%d scene-open=%d draws=%zu triangles=%u incomplete=%d\n",
+                     static_cast<unsigned long long>(frame_index_), ready_ ? 1 : 0, scene_open_ ? 1 : 0, draws_.size(),
+                     triangles_, scene_incomplete_ ? 1 : 0);
+    }
     if (!ready_ || !scene_open_) {
         return false;
     }
@@ -5256,6 +5255,11 @@ bool SceneRayTracer::trace_scene(ID3D12GraphicsCommandList* list, const RtSource
     glow_open_ = emitters_active() && emit_merge_pso_ != nullptr;
     if (draws_.empty() || triangles_ == 0u || list == nullptr || allocate == nullptr || !positions_ ||
         capacity_ < triangles_ || scene_incomplete_) {
+        if (log_seq_) {
+            std::fprintf(stderr, "[rt-seq] frame=%llu trace_scene skipped draws=%zu triangles=%u capacity=%u incomplete=%d\n",
+                         static_cast<unsigned long long>(frame_index_), draws_.size(), triangles_, capacity_,
+                         scene_incomplete_ ? 1 : 0);
+        }
         return false;
     }
     ++window_.scenes;
@@ -5286,6 +5290,7 @@ bool SceneRayTracer::trace_scene(ID3D12GraphicsCommandList* list, const RtSource
     if (!fill_constants(sources, allocate, allocate_context, 0u, 0u, triangles_, width, height, dumping ? 1u : 0u,
                         frame)) {
         ++window_.skipped;
+        if (log_seq_) std::fprintf(stderr, "[rt-seq] trace_scene failed: constants\n");
         return false;
     }
     if (record_results && timestamps_) {
@@ -5322,6 +5327,7 @@ bool SceneRayTracer::trace_scene(ID3D12GraphicsCommandList* list, const RtSource
     }
     if (!build_tlas(list4.Get(), allocate, allocate_context)) {
         ++window_.skipped;
+        if (log_seq_) std::fprintf(stderr, "[rt-seq] trace_scene failed: tlas\n");
         return false;
     }
     finish_sky(list4.Get(), sources, allocate, allocate_context);

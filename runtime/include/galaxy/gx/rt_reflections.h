@@ -136,6 +136,8 @@ public:
     // the same device, the reflections continue from what the stage has shown.
     void shutdown() noexcept;
     [[nodiscard]] bool ready() const noexcept { return ready_; }
+    // GALAXY_RT_LOG_SEQ's frames (the ray tracer's).
+    void set_log_seq(bool on) noexcept { log_seq_ = on; }
 
     // Start of a renderer frame: statistics of frames the GPU has finished are collected.
     void begin_frame(std::uint64_t frame_index);
@@ -168,6 +170,7 @@ public:
                          D3D12_GPU_DESCRIPTOR_HANDLE scene_srv = {}, D3D12_GPU_DESCRIPTOR_HANDLE opaque_srv = {});
 
 private:
+    bool log_seq_ = false;
     static constexpr unsigned kResultSlots = 16u;
     static constexpr std::uint64_t kResultDelay = 8u;
     // Words 0-15 the trace's, 16-27 the water's; 28, 29 the sky map's share (trace, water); 30, 31 the
@@ -245,7 +248,8 @@ private:
     };
 
     bool create_pipelines(DXGI_FORMAT color_format);
-    bool ensure_buffers(std::uint32_t samples, std::uint32_t tiles);
+    // `opaque`: the opaque pass's buffers too (the engine skips that pass; the water pass needs the rest).
+    bool ensure_buffers(std::uint32_t samples, std::uint32_t tiles, bool opaque);
     bool ensure_water_buffers();
     bool allocate_pass(Pass& pass, std::uint64_t samples, std::uint32_t tiles, const wchar_t* name);
     void release_pass(Pass& pass);

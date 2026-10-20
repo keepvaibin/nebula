@@ -48,8 +48,7 @@ inline constexpr std::uint32_t kRtDrawWater = 128u;
 inline constexpr std::uint32_t kRtDrawDelit = 1u << 12u;
 // A water draw the material table marks as falling water (rt_reflections.hlsl kWaterfallFlag).
 inline constexpr std::uint32_t kRtDrawWaterfall = 1u << 13u;
-// With kRtDrawGlow: a black hole's lens draw (the material table's `lens`): its triangles give the
-// finish the hole's centre and size on screen (rt_post.hlsl PostLensCS), it lights nothing.
+// With kRtDrawGlow: a black hole's lens draw (the material table's `lens`): it lights nothing.
 inline constexpr std::uint32_t kRtDrawLens = 1u << 14u;
 // A water-pass draw only (kRtDrawWater): glass the material table marks `mirror` (rt_reflections.hlsl
 // kWaterMirrorFlag). Shares the lens bit, which water draws never carry.

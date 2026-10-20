@@ -194,11 +194,21 @@ int SceneRayTracer::trace_water(ID3D12GraphicsCommandList* list, const RtSources
     if (list == nullptr || allocate == nullptr || water_incomplete_ || water_triangles_ == 0u ||
         !reflections_active() || light_slot_ < 0 || !water_tlas_ || !tlas_ || !positions_ || !surfaces_ ||
         !light_primary_ || color_depth_table.ptr == 0u) {
+        if (log_seq_) {
+            std::fprintf(stderr, "[rt-seq] trace_water refused reflections=%d slot=%d water-tlas=%d tlas=%d table=%d\n",
+                         reflections_active() ? 1 : 0, light_slot_, water_tlas_ ? 1 : 0, tlas_ ? 1 : 0,
+                         color_depth_table.ptr != 0u ? 1 : 0);
+        }
+        water_light_triangles_ = 0u;
         return -1;
     }
     const auto slot = static_cast<unsigned>(light_slot_);
     const LightSlot& light = light_slots_[slot];
     if (light.width != width || light.height != height || !light_final_[slot]) {
+        if (log_seq_) {
+            std::fprintf(stderr, "[rt-seq] trace_water size light=%ux%u efb=%ux%u\n", light.width, light.height, width,
+                         height);
+        }
         return -1;
     }
     ComPtr<ID3D12GraphicsCommandList4> list4;
@@ -253,6 +263,8 @@ int SceneRayTracer::trace_water(ID3D12GraphicsCommandList* list, const RtSources
     list4->BuildRaytracingAccelerationStructure(&top, 0u, nullptr);
     barrier = uav(water_tlas_.Get());
     list->ResourceBarrier(1u, &barrier);
+    // The next trace's light under water reads this water (engine_prepare).
+    water_light_triangles_ = water_triangles_;
     // The opaque scene stays readable from its trace until the next scene's geometry.
     to_state(list, positions_.Get(), positions_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     to_state(list, surfaces_.Get(), surfaces_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);

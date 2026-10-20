@@ -53,6 +53,20 @@ is not traced and shows the game's picture.
   the hue of its own colour where that is a coloured metal's (saturated: gold, copper), neutral for a grey metal's
   cast. A metal of a colour no metal has (saturated, hue outside 8-60 degrees: teal, blue, green, olive, violet, pure
   red) is paint over metal: a dielectric, its colour its albedo, F0 0.04, a gloss lacquer (roughness at most 0.2).
+- Under water: the sun and the sky reach a point under water through last frame's water surfaces (the water pass's
+  acceleration structure, reprojected; a near-level surface above the point, not a waterfall): attenuated by clear ocean
+  water's diffuse attenuation at half (Jerlov I Kd 0.35, 0.065, 0.019 per metre, halved: the game's water is clearer
+  than the sea), 35 % of its hue shift kept (the rest dims evenly: at the sea's own the lagoons went teal and their
+  depths cyan-blue), the sun's disc widened 0.5 degrees per metre by forward scattering. The water pass adds caustics,
+  shafts and a veil (its colour 40 % toward grey) while the camera is under water. Seen from below, the surface mirrors
+  the water under it by the water-to-air Fresnel (n 1.333), all of it past the critical angle (Snell's window).
+- Water from above (every translucent water the water pass sees: lagoons, seas, the Observatory's moat and the Fountain
+  dome's pool) reflects by its Fresnel, F0 0.02: 2 % looking straight down, 6 % at 60 degrees from the normal, 21 % at
+  75, 61 % at 85, a mirror at grazing angles; the reflection takes the place of that share of the water's own light
+  (cover 1). F0 0.2-0.5 by quality with cover 0.3-0.6 (builds 55-102) laid a third to a half of the bright
+  surroundings over water seen from above: the near lagoon turned milky (b103).
+- Texture de-lighting takes out half of each texel's measured shading (GALAXY_RT_DELIGHT_STRENGTH 0.5) and turns it
+  into relief at 0.5 (GALAXY_RT_DELIGHT_RELIEF): Retinex cannot tell painted light from a pattern of one colour.
 - Clear solids (crystal, glass, gems): the pixel is the game's refraction of the lit scene behind, shown at 1 - F
   (F0 0.08, a dense crystal's) plus the traced reflection; they stop 0.6 of the light of the sun and the lights behind
   them (a partial shadow, hashed per ray).
@@ -117,6 +131,9 @@ specular, eye z, camera).
 The water's trace runs renderer frames after the trace (a game frame spans several): the draws' tables (draw table,
 texture table, TEV records) it and the glass pass read are uploaded again into its own frame's ring
 (refresh_draw_tables); read from the trace's ring, since reused, they hung the GPU under Dusty Dune's crystals.
+The water pass makes its own samples' buffers (RtReflections::ensure_buffers without the opaque pass's): the opaque
+pass made them before the engine took its place, and from then to b103 the water pass refused every frame (no water
+reflections, mirror glass or metal coats; GALAXY_RT_LOG_SEQ prints each step and refusal).
 
 Emitting triangles: nearer than its own size (d^2 < A / pi) a triangle lights a point as its near field (at most about
 its radiance), not 1 / d^2.

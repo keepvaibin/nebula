@@ -2484,11 +2484,13 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
                 tint_all = 1u;
                 tint_deep = floor_distance - water_t > 300.0f ? 1u : 0u;
             }
-            // Under the water its surfaces (and a volume's walls) reflect nothing: the reflection of
-            // the bright world above only washed the view out (measured: Beach Bowl underwater).
+            // Seen from under the water the surface mirrors the water below it (its normal faces the camera: the mirror
+            // ray goes down, never to the bright world above, which washed the view out when it did): Snell's window
+            // overhead, total internal reflection past it (the composite's water_inside_fresnel). Without it the logs,
+            // island and penguins above showed through the surface as through clear glass (owner, b100 Beach Bowl).
             // Falling water is turbulent: no mirror image in it (the island mirrored in Beach Bowl's waterfall, x81bb);
             // the game's own streaks and foam stay.
-            if (params.y > 0.0f && emitter < 1.0f && !below && !fall) {
+            if (params.y > 0.0f && emitter < 1.0f && !fall) {
                 reflected = true;
                 // Water: a mirror (no lobe jitter: the composite's distortion is its roughness).
                 float4 ray_params = params;
@@ -2949,6 +2951,22 @@ struct Blend
     uint nearest_class;
 };
 
+// The share of light a water surface reflects back into the water at cosine `c` from its normal (seen from below):
+// Fresnel from water (n 1.333) into air, all of it past the critical angle (48.6 degrees: Snell's window overhead).
+float water_inside_fresnel(float c)
+{
+    const float n1 = 1.333f;
+    c = saturate(c);
+    const float sin_t = n1 * sqrt(max(1.0f - c * c, 0.0f));
+    if (sin_t >= 1.0f) {
+        return 1.0f;
+    }
+    const float cos_t = sqrt(1.0f - sin_t * sin_t);
+    const float rs = (n1 * c - cos_t) / (n1 * c + cos_t);
+    const float rp = (n1 * cos_t - c) / (n1 * cos_t + c);
+    return 0.5f * (rs * rs + rp * rp);
+}
+
 // On water (`water`) the samples off it count in the weight: the reflection fades towards the shore.
 Blend blend_samples(float2 pixel, float3 p, bool water)
 {
@@ -3006,11 +3024,12 @@ Blend blend_samples(float2 pixel, float3 p, bool water)
             const float alpha_k = max(rough * rough, 1e-3f);
             float k = rough >= 0.62f ? 0.0f
                     : (f0 + (fresnel(f0, alpha_k, dot(n, v)) - f0) * graze) * sample_weight;
-            // Water from above reflects at most 0.8, like a calm lake: islands, palms, towers and Mario mirrored
-            // clearly (user: water reflects everything around it; 0.5 left Buoy Base's and Beach Bowl's water
-            // looking unreflective). The sky in it never outshines the water (WaterTraceCS): no bleaching.
-            if (surface_class == kWaterSurface) {
-                k = min(k, min(0.8f, 1.6f * c.y) * sample_weight);
+            // Water from above reflects by its Fresnel alone (class_params: F0 0.02, cover 1), up to a mirror at
+            // grazing angles; the sky in it never outshines the water (WaterTraceCS): no bleaching.
+            // From below: the water-to-air Fresnel, total past the critical angle (the reflection of the water below
+            // covers what the game drew above the surface).
+            if (surface_class == kWaterBelow) {
+                k = water_inside_fresnel(dot(n, v)) * sample_weight;
             }
             const float3 light = min(unpack_r11g11b10(sample.x), 1.0f);
             b.sum += light * (k * bw);
@@ -3018,7 +3037,7 @@ Blend blend_samples(float2 pixel, float3 p, bool water)
             // (dst * (1 - k) + k * light), only its own share at cover 0 (a screen: never darker). The
             // bare metal's cover is its metalness's share (its painted look gives way to the traced
             // reflection where that is known; k carries the confidence).
-            const float cover = surface_class == kBareMetalClass ? c.w * metal : c.w;
+            const float cover = surface_class == kBareMetalClass ? c.w * metal : surface_class == kWaterBelow ? 1.0f : c.w;
             b.covered += (cover + (1.0f - cover) * light) * (k * bw);
             b.k_sum += k * bw;
             b.glint += unpack_r11g11b10(sample.w) * bw;
@@ -3268,6 +3287,30 @@ float2 water_distortion(float3 p, float3 n, float2 pixel)
 // (refracted, lit by the sun the ripples focus) and deepens the game's water colour towards blue with
 // the depth of water the light crosses. Sub-frames move the pixel to the traced frame's camera along the
 // water the samples hold there. What the EFB holds in front of the water keeps its colour.
+// The brightest the game's drawn water may be at `at`: the mean luminance of eight taps two pixels round plus 1.5
+// deviations. Isolated bright texels (the foam flecks of a tiled water texture) shimmer as glitter once the picture
+// moves; a wave or a gradient over a few pixels is within it (owner 2026-10-20: no water glitter anywhere).
+float water_speck_limit(float2 at, float2 lo, float2 hi)
+{
+    float sum = 0.0f;
+    float sum2 = 0.0f;
+    [unroll] for (uint k = 0u; k < 8u; ++k) {
+        const float a = float(k) * 0.785398f;
+        const float l = luminance(m_scene.Load(int3(int2(clamp(at + float2(cos(a), sin(a)) * 2.0f, lo, hi)), 0)).rgb);
+        sum += l;
+        sum2 += l * l;
+    }
+    const float mean = sum / 8.0f;
+    return mean + 1.5f * sqrt(max(sum2 / 8.0f - mean * mean, 0.0f));
+}
+
+// A colour of the game's water held to `limit` in luminance, its hue kept.
+float3 water_unspeckled(float3 c, float limit)
+{
+    const float l = luminance(c);
+    return l > limit && l > 1e-4f ? c * (limit / l) : c;
+}
+
 CompositeOut WaterCompositePS(float4 position : SV_Position)
 {
     if (!inside(m_viewport, position.xy) || position.x < m_split + 1.0f) {
@@ -3437,7 +3480,9 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
             {
                 // Derived: kept share of the game's water = deep + (1 - deep) T, T = exp(-sigma path):
                 // path 30 0.92/0.97/0.99, 150 0.68/0.87/0.94, no floor found (500) 0.39/0.70/0.83.
-                const float3 drawn_water = m_scene.Load(int3(int2(clamp(position.xy, lo, hi)), 0)).rgb;
+                const float3 drawn_water =
+                    water_unspeckled(m_scene.Load(int3(int2(clamp(position.xy, lo, hi)), 0)).rgb,
+                                     water_speck_limit(clamp(position.xy, lo, hi), lo, hi));
                 const float3 through = exp(-float3(0.004f, 0.0022f, 0.0016f) * path_c);
                 const float3 deep = drawn_water * float3(0.3f, 0.55f, 0.7f);
                 water = lerp(deep, drawn_water * caustic_gain, through);
@@ -3469,13 +3514,15 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
             water = tone * lerp(float3(1.0f, 1.0f, 1.0f), detail, clear);
             }
         } else {
-            const float3 centre = m_scene.Load(int3(int2(clamp(position.xy + wobble, lo, hi)), 0)).rgb;
+            const float2 centre_at = clamp(position.xy + wobble, lo, hi);
+            const float limit = water_speck_limit(centre_at, lo, hi);
+            const float3 centre = water_unspeckled(m_scene.Load(int3(int2(centre_at), 0)).rgb, limit);
             water = centre;
             float taps = 1.0f;
             [unroll] for (uint k = 0u; k < 16u; ++k) {
                 const float a = float(k) * 2.39996f;
                 const float2 o = float2(cos(a), sin(a)) * (min(radius, 6.0f) * sqrt((float(k) + 0.5f) / 16.0f)) + wobble;
-                const float3 c = m_scene.Load(int3(int2(clamp(position.xy + o, lo, hi)), 0)).rgb;
+                const float3 c = water_unspeckled(m_scene.Load(int3(int2(clamp(position.xy + o, lo, hi)), 0)).rgb, limit);
                 const float3 d = c - centre;
                 const float w = exp(-dot(d, d) / 0.02f);
                 water += c * w;
@@ -3590,7 +3637,9 @@ CompositeOut UnderwaterPS(float4 position : SV_Position)
     {
         const float span = max((sky ? 1500.0f : min(length(p), 4000.0f)) - 600.0f, 0.0f);
         const float3 t = exp(-float3(0.00032f, 0.00016f, 0.00012f) * span);
-        const float3 scatter = (sun * 0.4f + 0.25f) * float3(0.07f, 0.4f, 0.78f);
+        // The veil's colour 40 % of the way from the sea's blue-teal to a warm grey (owner: under water the blue too
+        // strong; a little yellow to balance it).
+        const float3 scatter = (sun * 0.4f + 0.25f) * lerp(float3(0.07f, 0.4f, 0.78f), float3(0.47f, 0.43f, 0.35f), 0.4f);
         add = add * t + scatter * (1.0f - t);
         keep *= t;
     }

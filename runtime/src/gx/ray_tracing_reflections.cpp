@@ -287,19 +287,14 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     // and glossy (F0 above water's, so the aurora and Mario read in the ice); a white surface shows its
     // reflection only where the reflection takes its place.
     materials_[4] = material("GALAXY_RT_REFLECT_WATER", {0.04f, 0.25f, 1.0f, 0.0f, 0.8f});
-    // A calm, glassy surface (roughness 0.03) with F0 0.5: what stands over the water mirrors in it like a lake (50 %
-    // looking 45 degrees down, 52 % at 60, 61 % at 75, the far water at the 0.8 cap); cover 0.6: the reflection
-    // replaces the water's colour where it shows, as a mirror's does; the sky's part never brighter than the water
-    // (WaterTraceCS), so nothing bleaches. (Cover 0.8 turned Beach Bowl's lagoon milky with the sky uncapped, v53a;
-    // F0 0.2 and 0.3, builds 55-60: user, the water must reflect what is around it much more.)
-    // By quality (user: Low very little water reflection, Medium some, High a realistic mirror): F0 and cover
-    // 0.2 / 0.3 (Low), 0.35 / 0.45 (Medium), 0.5 / 0.6 (High); the composite caps it at 1.6 F0 (0.32, 0.56, 0.8).
-    {
-        const unsigned quality = get_render_config().rt_quality;   // 0 medium, 1 high, 2 low
-        const float f0 = quality == 1u ? 0.5f : quality == 2u ? 0.2f : 0.35f;
-        const float cover = quality == 1u ? 0.6f : quality == 2u ? 0.3f : 0.45f;
-        materials_[kWaterClass] = material("GALAXY_RT_WATER", {0.03f, f0, 1.0f, 0.0f, cover});
-    }
+    // A calm, glassy surface (roughness 0.03) of water, F0 0.02 (n 1.333): its Fresnel reflects 2 % looking straight
+    // down, 6 % at 60 degrees from the normal, 21 % at 75, 61 % at 85 and all of it at grazing angles, so the near water
+    // shows its body and seabed and the far water mirrors the islands, palms and sky; cover 1: the reflection takes the
+    // place of that share of the water's own light (L = F reflected + (1 - F) body). The sky's part is never brighter
+    // than the water (WaterTraceCS), so nothing bleaches. F0 0.2-0.5 with cover 0.3-0.6 by quality (builds 55-102) laid
+    // a third to a half of the bright surroundings over water seen from above: the near lagoon turned milky once the
+    // water pass ran again (b103, Beach Bowl), and the waves' glints (scaled by F0) showed as glitter.
+    materials_[kWaterClass] = material("GALAXY_RT_WATER", {0.03f, 0.02f, 1.0f, 0.0f, 1.0f});
     materials_[kWaterClass + 1u] = materials_[kWaterClass];
     // Crystals, ice, gems and glass (named in rt_surfaces.cpp): clear dielectric, its reflection
     // white and Fresnel-weighted.
@@ -715,8 +710,8 @@ void RtReflections::release_pass(Pass& pass) {
     pass = {};
 }
 
-bool RtReflections::ensure_buffers(std::uint32_t samples, std::uint32_t tiles) {
-    if (samples <= samples_ && tiles <= tiles_capacity_ && raw_.resource) {
+bool RtReflections::ensure_buffers(std::uint32_t samples, std::uint32_t tiles, bool opaque) {
+    if (samples <= samples_ && tiles <= tiles_capacity_ && raw_.resource && (!opaque || main_.final[0].resource)) {
         return true;
     }
     release_pass(main_);
@@ -734,7 +729,7 @@ bool RtReflections::ensure_buffers(std::uint32_t samples, std::uint32_t tiles) {
     bool ok = n != 0u &&
               create_buffer(n * 16u, D3D12_HEAP_TYPE_DEFAULT, raw_.state, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
                             raw_.resource, L"rt reflect raw") &&
-              allocate_pass(main_, n, tiles, L"rt reflect");
+              (!opaque || allocate_pass(main_, n, tiles, L"rt reflect"));
     for (unsigned i = 0; ok && i < kSlots; ++i) {
         under_[i].state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
         ok = create_buffer((n + kUnderState) * 8u, D3D12_HEAP_TYPE_DEFAULT, under_[i].state,
@@ -749,8 +744,8 @@ bool RtReflections::ensure_buffers(std::uint32_t samples, std::uint32_t tiles) {
     }
     samples_ = samples;
     tiles_capacity_ = tiles;
-    std::cerr << "[rt] reflect samples=" << samples << " mb=" << ((n * (16u * (5u + kSlots) + 8u * kSlots)) >> 20u)
-              << '\n';
+    std::cerr << "[rt] reflect samples=" << samples << " opaque=" << (opaque ? 1 : 0)
+              << " mb=" << ((n * (16u * (opaque ? 5u + kSlots : 1u) + 8u * kSlots)) >> 20u) << '\n';
     return true;
 }
 
@@ -999,7 +994,7 @@ void RtReflections::trace(ID3D12GraphicsCommandList* list, const RtReflectScene&
     }
     const UINT groups_x = (scene.sample_width + 7u) / 8u;
     const UINT groups_y = (scene.sample_height + 7u) / 8u;
-    if (!ensure_buffers(scene.sample_width * scene.sample_height, groups_x * groups_y)) {
+    if (!ensure_buffers(scene.sample_width * scene.sample_height, groups_x * groups_y, true)) {
         return;
     }
     RtReflectScene opaque = scene;
@@ -1071,14 +1066,29 @@ void RtReflections::trace_water(ID3D12GraphicsCommandList* list, const RtReflect
     water_slots_[slot].valid = false;
     if (list == nullptr || constants_cpu == nullptr || scene.tlas == 0u || scene.water_tlas == 0u ||
         scene.water_positions == 0u || scene.water_surfaces == 0u || scene.primary == 0u || scene.light == 0u ||
-        color_depth.ptr == 0u || scene.width == 0u || scene.sample_width == 0u || scene.factor == 0u ||
-        scene.sample_width * scene.sample_height > samples_ || !raw_.resource) {
+        color_depth.ptr == 0u || scene.width == 0u || scene.sample_width == 0u || scene.factor == 0u) {
+        if (log_seq_) {
+            std::fprintf(stderr, "[rt-seq] reflections water refused primary=%d light=%d width=%u samples=%ux%u of %u raw=%d\n",
+                         scene.primary != 0u ? 1 : 0, scene.light != 0u ? 1 : 0, scene.width, scene.sample_width,
+                         scene.sample_height, samples_, raw_.resource ? 1 : 0);
+        }
         return;
     }
     const UINT groups_x = (scene.sample_width + 7u) / 8u;
     const UINT groups_y = (scene.sample_height + 7u) / 8u;
-    if (groups_x * groups_y > tiles_capacity_ || !ensure_water_buffers()) {
+    // The samples' buffers: the opaque pass made them before the engine took its place (it skips it), and the water
+    // pass refused every frame without them (no traced water reflection from then to b103).
+    if (!ensure_buffers(scene.sample_width * scene.sample_height, groups_x * groups_y, false) ||
+        !ensure_water_buffers()) {
+        if (log_seq_) {
+            std::fprintf(stderr, "[rt-seq] reflections water buffers groups=%u capacity=%u\n", groups_x * groups_y,
+                         tiles_capacity_);
+        }
         return;
+    }
+    if (log_seq_) {
+        std::fprintf(stderr, "[rt-seq] reflections water traced slot=%u samples=%ux%u\n", slot, scene.sample_width,
+                     scene.sample_height);
     }
     // The water pass: the EFB colour is the lit picture.
     fill_constants(scene, water_, 32u, constants_cpu);
@@ -1235,6 +1245,10 @@ void RtReflections::composite_water(ID3D12GraphicsCommandList* list, D3D12_CPU_D
         return;
     }
     const Slot& info = water_slots_[slot];
+    if (log_seq_) {
+        std::fprintf(stderr, "[rt-seq] reflections water composite slot=%u valid=%d size=%ux%u target=%ux%u view=%u\n",
+                     slot, info.valid ? 1 : 0, info.width, info.height, width, height, view_);
+    }
     if (!info.valid || info.width != width || info.height != height || !water_.final[slot].resource) {
         return;
     }

@@ -103,7 +103,10 @@ public:
     // From the trace to the water's trace: translucent water draws (kRtDrawWater) are noted.
     [[nodiscard]] bool water_open() const noexcept { return water_open_; }
     // GALAXY_RT_LOG_SEQ (diagnostics): the renderer's window of logged frames.
-    void set_log_seq(bool on) noexcept { log_seq_ = on; }
+    void set_log_seq(bool on) noexcept {
+        log_seq_ = on;
+        reflections_.set_log_seq(on);
+    }
     [[nodiscard]] bool log_seq() const noexcept { return log_seq_; }
     // From the trace to the scene's end: opaque draws after the screen capture (kRtLatePhase) are noted.
     [[nodiscard]] bool late_open() const noexcept { return late_open_; }
@@ -616,9 +619,6 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> light_raw_;
     // Per sample: the camera ray's triangle + 1 (0: none) and its barycentrics (halves).
     Microsoft::WRL::ComPtr<ID3D12Resource> light_primary_;
-    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 2> light_history_;
-    // The emitters' reservoirs per sample (rt_lighting.hlsl emitter_light_reused, 32 bytes), with the history's parity.
-    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 2> light_reservoir_;
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kLightSlots> light_final_;
     // Per light slot its traced frame's per-pixel shading normals and de-lighting (rt_engine.hlsl EngineGBufferCS).
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kLightSlots> light_pixels_;
@@ -715,6 +715,10 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_reference_pso_;
     Microsoft::WRL::ComPtr<ID3D12Resource> engine_reference_sums_;
     bool engine_reference_ = false;
+    // Light under water (GALAXY_RT_WATER_LIGHT, default on): the triangles of the water the last water pass built (its
+    // acceleration structure stays until the next one), 0: none.
+    bool water_light_ = true;
+    std::uint32_t water_light_triangles_ = 0u;
     bool engine_reference_running_ = false;
     std::uint32_t engine_reference_bounces_ = 8u;
     std::uint64_t engine_reference_pixels_ = 0u;
@@ -892,7 +896,6 @@ private:
     // The logged scene's material-table point lights, glow draws and the glow draws the table names.
     std::array<std::uint32_t, 3> emit_log_draws_{};
     std::array<D3D12_RESOURCE_STATES, 2> light_z_state_{};
-    std::array<D3D12_RESOURCE_STATES, 2> light_history_state_{};
     std::array<D3D12_RESOURCE_STATES, kLightSlots> light_final_state_{};
     D3D12_RESOURCE_STATES picture_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     D3D12_RESOURCE_STATES picture_sums_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
