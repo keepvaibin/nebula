@@ -7,6 +7,7 @@
 #include "galaxy/gx/ray_tracing.h"
 
 #include "rt_engine_atrous_cs.h"
+#include "rt_engine_clear_cs.h"
 #include "rt_engine_direct_cs.h"
 #include "rt_engine_direct_spatial_cs.h"
 #include "rt_engine_final_cs.h"
@@ -31,13 +32,17 @@ enum EngineView : std::uint32_t {
     kEvGBuffer, kEvGBufferPrev, kEvDiTemp, kEvDi, kEvDiPrev, kEvDirect, kEvGiTemp, kEvGi, kEvGiPrev, kEvGiOut,
     kEvSpecular, kEvHistDiffuse, kEvHistDiffusePrev, kEvHistSpecular, kEvHistSpecularPrev, kEvAtrousA, kEvAtrousB,
     kEvSlot, kEvPicture, kEvCount,
+    // The clear-surface pass's (trace_engine_clear), after the trace's.
+    kEvWaterScene = kEvCount, kEvWaterPositions, kEvWaterSurfaces, kEvClearDraws, kEvClear, kEvClearEnd,
 };
-static_assert(kEvCount <= 24u);
+static_assert(kEvClearEnd <= 24u);
 
 // rt_engine.hlsl kEngine*.
 constexpr std::uint32_t kEngineOn = 1u;
 constexpr std::uint32_t kEngineSpecular = 2u;
 constexpr std::uint32_t kEngineIndirect = 4u;
+constexpr std::uint32_t kEnginePoints = 256u;
+constexpr std::uint32_t kEngineClearFind = 512u;
 
 float env_value(const char* name, float fallback) {
     char value[32]{};
@@ -74,6 +79,9 @@ bool SceneRayTracer::create_engine_pipelines() {
     engine_view_ = static_cast<std::uint32_t>(std::clamp(env_value("GALAXY_RT_ENGINE_VIEW", 0.0f), 0.0f, 15.0f));
     engine_indirect_ = env_value("GALAXY_RT_ENGINE_INDIRECT", 1.0f) != 0.0f;
     engine_specular_ = env_value("GALAXY_RT_ENGINE_SPECULAR", 1.0f) != 0.0f;
+    engine_points_ = env_value("GALAXY_RT_ENGINE_POINTS", 1.0f) != 0.0f;
+    engine_clear_mode_ = static_cast<std::uint32_t>(std::clamp(env_value("GALAXY_RT_ENGINE_CLEAR", 1.0f), 0.0f, 2.0f));
+    engine_clear_wanted_ = engine_clear_mode_ != 0u;
     if (!engine_wanted_ || !light_textured_ || !light_root_) {
         return false;
     }
@@ -93,7 +101,8 @@ bool SceneRayTracer::create_engine_pipelines() {
         compute(g_rt_engine_specular_cs, sizeof(g_rt_engine_specular_cs), engine_specular_pso_) &&
         compute(g_rt_engine_temporal_cs, sizeof(g_rt_engine_temporal_cs), engine_temporal_pso_) &&
         compute(g_rt_engine_atrous_cs, sizeof(g_rt_engine_atrous_cs), engine_atrous_pso_) &&
-        compute(g_rt_engine_final_cs, sizeof(g_rt_engine_final_cs), engine_final_pso_);
+        compute(g_rt_engine_final_cs, sizeof(g_rt_engine_final_cs), engine_final_pso_) &&
+        compute(g_rt_engine_clear_cs, sizeof(g_rt_engine_clear_cs), engine_clear_pso_);
     if (!ok) {
         std::cerr << "[rt] engine pipelines failed: the lighting's own passes run\n";
         return false;
@@ -144,6 +153,8 @@ bool SceneRayTracer::ensure_engine_buffers(std::uint32_t width, std::uint32_t he
     }
     for (auto& buffer : engine_buffers_) retire(buffer);
     for (auto& buffer : engine_slots_) retire(buffer);
+    for (auto& buffer : engine_clear_) retire(buffer);
+    engine_clear_valid_ = {};
     engine_width_ = engine_height_ = 0u;
     const std::uint64_t full = static_cast<std::uint64_t>(width) * height;
     const std::uint64_t half = static_cast<std::uint64_t>((width + 1u) / 2u) * ((height + 1u) / 2u);
@@ -222,6 +233,7 @@ bool SceneRayTracer::engine_prepare(std::uint32_t width, std::uint32_t height, u
     c.size[2] = (width + 1u) / 2u;
     c.size[3] = (height + 1u) / 2u;
     c.info[0] = kEngineOn | (engine_specular_ ? kEngineSpecular : 0u) | (engine_indirect_ ? kEngineIndirect : 0u) |
+                (engine_points_ ? kEnginePoints : 0u) | (engine_clear_mode_ == 2u ? kEngineClearFind : 0u) |
                 (engine_view_ << 4u);
     c.info[1] = 0u;
     c.info[2] = slot;

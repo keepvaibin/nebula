@@ -846,6 +846,9 @@ void RtReflections::fill_constants(const RtReflectScene& scene, const Pass& pass
     if (textured_ && scene.surface_uv != 0u && scene.draw_textures != 0u) {
         c.flags |= 2048u;
     }
+    if (scene.engine_clear) {
+        c.flags |= 8192u;
+    }
     c.draw_trust = draw_trust_;
     c.sky_trust = sky_trust_;
     c.metal_cover = materials_[kBareMetalClass].cover;

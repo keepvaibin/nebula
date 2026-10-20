@@ -131,7 +131,8 @@ void apply_class(const std::string& text, RtMaterial& m) {
     const auto set = [&m](RtSurfaceClass c) { m.surface_class = static_cast<std::uint8_t>(c); };
     for (const std::string& part : split(lower(text), '+')) {
         const std::string token = lower(part);
-        if (token == "emitter" || token == "light") m.emission = RtEmission::Point;
+        if (token == "own") m = RtMaterial{};
+        else if (token == "emitter" || token == "light") m.emission = RtEmission::Point;
         else if (token == "emissive-area" || token == "area") m.emission = RtEmission::Area;
         else if (token == "skip" || token == "none") m.no_light = true;
         else if (token == "helper") m.helper = true;
@@ -144,6 +145,11 @@ void apply_class(const std::string& text, RtMaterial& m) {
         else if (token == "star") m.star = true;
         else if (token == "strip") m.strip = true;
         else if (token == "painted") m.painted = true;
+        else if (token == "traced") m.traced = true;
+        else if (token == "seen") {
+            m.seen = true;
+            if (m.emission == RtEmission::None) m.emission = RtEmission::Point;
+        }
         else if (token == "waterfall") {
             m.waterfall = true;
             set(RtSurfaceClass::Water);

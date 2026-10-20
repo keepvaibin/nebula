@@ -23,7 +23,12 @@
 // hide: a light effect the game fakes (a beam, a cone, a flare) that the traced light replaces; not
 // drawn while the ray-traced lighting is on. unlit-only: only the draws the game does not light
 // emit (a lamp's glass beside its lit housing in one texture). painted: its brightness changes are the material's own
-// (a face, lettering, a picture), not painted light: never de-lit (rt_delight.hlsl).
+// (a face, lettering, a picture), not painted light: never de-lit (rt_delight.hlsl). traced: a clear surface the
+// engine traces (rt_engine.hlsl EngineClearCS: its reflection and what shows through) whose game draw paints a fake
+// reflection: the draw is not shown under the engine, its geometry still traced. seen: a light source's surface that
+// shows its radiance while its light is the game's own point light there (an Octoomba's bulb): no light of its own.
+// own (first, `material` rows): the row alone, not on top of its texture's (a glass material whose textures the table
+// names particles).
 // roughness: GGX perceptual 0-1; metallic 0-1; r g b: 0-1; intensity: relative to a Luma (1);
 // range: eye units (0: from the intensity); pulse: Hz (0: steady); cone: a spot light's half angle in
 // degrees around the draw's mean normal (0: all around); shadow: 0 or 1; glow: the light source's own
@@ -61,6 +66,8 @@ struct RtMaterial {
     bool painted = false;                 // its detail is the material's, not light: never de-lit
     bool star = false;                    // a star's burning surface (the star core, the suns): its own colour,
                                           // brighter and more textured (rt_lighting.hlsl CompositePS)
+    bool traced = false;                  // a clear surface the engine traces; its game draw not shown
+    bool seen = false;                    // shows its radiance; its light is the game's point light there
     bool shadow = true;
     float roughness = -1.0f;              // < 0: the class's
     float metallic = -1.0f;               // < 0: the class's

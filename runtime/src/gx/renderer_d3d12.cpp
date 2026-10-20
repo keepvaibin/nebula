@@ -5001,6 +5001,7 @@ void RendererD3D12::rt_trace_scene() {
         command_list_->ResourceBarrier(1, &color);
     }
     D3D12_GPU_DESCRIPTOR_HANDLE game_srv{};
+    log_rt_seq("trace");
     if (depth && slot >= 0 && efb_hdr_) {
         game_srv = rt_composite_color();
         ray_tracer_.composite(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_, game_srv, width,
@@ -5144,7 +5145,27 @@ void RendererD3D12::end_hdr_scene() {
 // The HDR scene EFB stands in: the EFB's colour so far widened into it (a draw: the formats differ), its depth copied;
 // then the two swap (the set keeps the RGBA8 EFB meanwhile). Sub-frames use their own set (a later frame's scene may
 // be open while they play).
+// GALAXY_RT_LOG_SEQ=n (diagnostics): the ray tracing frame's steps and the EFB colour each meets, renderer frames n to
+// n + 12.
+void RendererD3D12::log_rt_seq(const char* step) {
+    static const std::uint64_t first = [] {
+        char value[24]{};
+        std::size_t length = 0u;
+        return getenv_s(&length, value, sizeof(value), "GALAXY_RT_LOG_SEQ") == 0 && length > 1u
+                   ? std::strtoull(value, nullptr, 10)
+                   : 0ull;
+    }();
+    ray_tracer_.set_log_seq(first != 0u && frame_index_ >= first && frame_index_ <= first + 12u);
+    if (ray_tracer_.log_seq()) {
+        std::fprintf(stderr, "[rt-seq] frame=%llu %s efb=%p rtv=%llx hdr=%d replay=%d/%d output=%d\n",
+                     static_cast<unsigned long long>(frame_index_), step, static_cast<void*>(efb_color_.Get()),
+                     static_cast<unsigned long long>(efb_rtv_.ptr), efb_hdr_ ? 1 : 0, replay_recording_ ? 1 : 0,
+                     replay_playing_ ? 1 : 0, output_efb_active_ ? 1 : 0);
+    }
+}
+
 void RendererD3D12::record_hdr_begin() {
+    log_rt_seq("hdr-begin");
     if (efb_hdr_) {
         return;
     }
@@ -5197,6 +5218,7 @@ void RendererD3D12::record_hdr_begin() {
 // The camera writes the HDR scene EFB's picture into the RGBA8 EFB (held by the set), its depth is copied back, and
 // the two swap again.
 void RendererD3D12::record_hdr_end() {
+    log_rt_seq("hdr-end");
     if (!efb_hdr_) {
         return;
     }
@@ -5323,6 +5345,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE RendererD3D12::rt_game_picture() {
 }
 
 void RendererD3D12::rt_trace_water() {
+    log_rt_seq("water");
     if (!ray_tracer_.water_open()) {
         return;
     }
@@ -5393,6 +5416,7 @@ void RendererD3D12::record_rt_water(int slot, bool reproject) {
 }
 
 void RendererD3D12::record_rt_composite(int slot, bool reproject) {
+    log_rt_seq("composite");
     if (!efb_depth_ || conv_efb_depth_srv_.ptr == 0u || !efb_hdr_) {
         return;
     }
@@ -8688,6 +8712,7 @@ void RendererD3D12::record_conversion_blit(
 }
 
 void RendererD3D12::copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& dest) {
+    log_rt_seq("xfb");
     // The caller publishes a new XFB serial only after this returns. A
     // missing target must fail closed rather than masquerade as a new frame.
     if (!dest.texture) {

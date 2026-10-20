@@ -128,6 +128,7 @@ bool tev_alpha_compare(uint comp, int value, int reference)
 static const uint kTevGreyTexture = 1u;   // tev_evaluate_mode: every texture a mid grey (128)
 static const uint kTevBakedColours = 2u;  // tev_evaluate_mode: the vertices' colours as the game baked them
 static const uint kTevNoEnvironment = 4u; // tev_evaluate_mode: its environment maps (painted reflections) black
+static const uint kTevWhiteEnvironment = 8u;  // tev_evaluate_mode: its environment maps white (its reflectance)
 
 // Draw `draw`'s TEV output at triangle `tri`, barycentrics `b` (display-encoded RGBA, 0-1), and whether its alpha
 // passes the draw's alpha compare. A draw without a record (`count` records) is white and passes. `mode`:
@@ -225,6 +226,9 @@ float4 tev_evaluate_mode(uint draw, uint count, uint tri, float2 b, uint mode, o
             }
             if ((mode & kTevNoEnvironment) != 0u && g_tev.Load(at + 24u) != 0u) {
                 texc = int4(0, 0, 0, texc.a);
+            }
+            if ((mode & kTevWhiteEnvironment) != 0u && g_tev.Load(at + 24u) != 0u) {
+                texc = int4(255, 255, 255, texc.a);
             }
         } else {
             texc = texgens != 0u ? int4(255, 255, 255, 255) : int4(0, 0, 0, 0);

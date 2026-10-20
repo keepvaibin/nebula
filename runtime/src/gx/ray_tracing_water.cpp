@@ -134,6 +134,10 @@ int SceneRayTracer::trace_water(ID3D12GraphicsCommandList* list, const RtSources
     }
     flush_water(list, sources, allocate, allocate_context);
     water_open_ = false;
+    if (log_seq_) {
+        std::fprintf(stderr, "[rt-seq] trace_water draws=%zu triangles=%u incomplete=%d\n", water_draws_.size(),
+                     water_triangles_, water_incomplete_ ? 1 : 0);
+    }
     if (list == nullptr || allocate == nullptr || water_incomplete_ || water_triangles_ == 0u ||
         !reflections_active() || light_slot_ < 0 || !water_tlas_ || !tlas_ || !positions_ || !surfaces_ ||
         !light_primary_ || color_depth_table.ptr == 0u) {
@@ -221,6 +225,12 @@ int SceneRayTracer::trace_water(ID3D12GraphicsCommandList* list, const RtSources
         std::cerr << "[rt-camera] water=" << logged << " eye=" << eye[0] << ',' << eye[1] << ',' << eye[2]
                   << " forward=" << -m[8] << ',' << -m[9] << ',' << -m[10] << '\n';
     }
+    // The engine's glass and crystal (rt_engine.hlsl EngineClearCS), the EFB depth the conversion table's second view.
+    if (engine_active() && engine_clear_wanted_) {
+        D3D12_GPU_DESCRIPTOR_HANDLE depth_table = color_depth_table;
+        depth_table.ptr += texture_view_increment_;
+        scene.engine_clear = trace_engine_clear(list, allocate, allocate_context, depth_table, slot);
+    }
     scene.water_tlas = water_tlas_->GetGPUVirtualAddress();
     scene.water_positions = water_positions_->GetGPUVirtualAddress();
     scene.water_surfaces = water_surfaces_->GetGPUVirtualAddress();
@@ -244,6 +254,7 @@ void SceneRayTracer::composite_water(ID3D12GraphicsCommandList* list, D3D12_CPU_
     const float split = split_ > 0.0f ? info.view.viewport[0] + split_ * info.view.viewport[2] : -1.0f;
     reflections_.composite_water(list, target, depth_srv, width, height, static_cast<unsigned>(slot),
                                  reproject ? reproject_->GetGPUVirtualAddress() : 0u, split, scene_srv, opaque_srv);
+    composite_clear(list, target, depth_srv, width, height, static_cast<unsigned>(slot), reproject, scene_srv);
 }
 
 }  // namespace galaxy::gx

@@ -102,6 +102,9 @@ public:
     [[nodiscard]] bool glow_open() const noexcept { return glow_open_; }
     // From the trace to the water's trace: translucent water draws (kRtDrawWater) are noted.
     [[nodiscard]] bool water_open() const noexcept { return water_open_; }
+    // GALAXY_RT_LOG_SEQ (diagnostics): the renderer's window of logged frames.
+    void set_log_seq(bool on) noexcept { log_seq_ = on; }
+    [[nodiscard]] bool log_seq() const noexcept { return log_seq_; }
     // From the trace to the scene's end: opaque draws after the screen capture (kRtLatePhase) are noted.
     [[nodiscard]] bool late_open() const noexcept { return late_open_; }
     // From the 3D scene's start to its trace, under physical lighting: the game's sky lists' draws (kRtDrawSky) are
@@ -232,6 +235,11 @@ public:
     // The ray tracing engine (ray_tracing_engine.cpp, rt_engine.hlsl): under physical light with the textured
     // lighting, unless GALAXY_RT_ENGINE=0. set_engine_picture: the EFB's colour for the trace that follows
     // (NON_PIXEL_SHADER_RESOURCE during it; the renderer transitions it).
+    // The engine's clear surfaces (rt_engine.hlsl EngineClearCS) of slot `slot` over the picture (`scene_srv`: its copy
+    // at the water's trace), with the water's composite.
+    void composite_clear(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
+                         D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width, std::uint32_t height, unsigned slot,
+                         bool reproject, D3D12_GPU_DESCRIPTOR_HANDLE scene_srv);
     [[nodiscard]] bool engine_active() const noexcept {
         return engine_ready_ && physical_active_ && lighting_active() && light_textured_;
     }
@@ -277,8 +285,8 @@ public:
         return lighting_active() ? (model ? glow_model_exposure_ : glow_exposure_) : 1.0f;
     }
     [[nodiscard]] float glow_spill(bool model) const noexcept { return model ? glow_model_spill_ : glow_spill_; }
-    // Under physical light: a glow draw's gain in linear light (GX output_flags bit 5): a light source of the table
-    // (`material`) at its radiance times the camera's exposure, else 1.
+    // Under physical light: a glow draw's gain in linear light (GX output_flags bit 5): a table light source's
+    // (`material`) radiance past 1 times the camera's exposure; 1 otherwise (the game's display-referred effects).
     [[nodiscard]] float glow_gain(std::uint16_t material) const noexcept;
 
 private:
@@ -375,6 +383,13 @@ private:
                       std::size_t bytes, std::size_t engine_at, D3D12_GPU_VIRTUAL_ADDRESS frame, unsigned slot);
     // Slot `slot` holds the engine's result for a width x height frame.
     [[nodiscard]] bool engine_slot(unsigned slot, std::uint32_t width, std::uint32_t height) const noexcept;
+    // The clear-surface pass (rt_engine.hlsl EngineClearCS) at the scene's end: the water window's glass and crystal by
+    // their own geometry into slot `slot`'s clear buffer, the lighting's bindings of the slot's trace restored
+    // (engine_bind_); `depth_table`: the EFB depth's view. False: none this scene.
+    bool trace_engine_clear(ID3D12GraphicsCommandList* list, Allocate allocate, void* allocate_context,
+                            D3D12_GPU_DESCRIPTOR_HANDLE depth_table, unsigned slot);
+    // A view of an acceleration structure in the scene's descriptor block.
+    std::uint32_t tlas_view(D3D12_GPU_VIRTUAL_ADDRESS tlas);
     std::uint32_t buffer_uav(ID3D12Resource* resource, std::uint64_t bytes);
     std::uint32_t texture_srv(ID3D12Resource* resource);
     bool ensure_camera_pyramid(std::uint32_t width, std::uint32_t height);
@@ -718,6 +733,9 @@ private:
     bool engine_running_ = false;   // this trace runs it
     bool engine_indirect_ = true;   // GALAXY_RT_ENGINE_INDIRECT
     bool engine_specular_ = true;   // GALAXY_RT_ENGINE_SPECULAR
+    bool engine_points_ = true;     // GALAXY_RT_ENGINE_POINTS: the game's point lights and the star core
+    bool engine_clear_wanted_ = true;  // GALAXY_RT_ENGINE_CLEAR: the clear-surface pass
+    std::uint32_t engine_clear_mode_ = 1u;  // GALAXY_RT_ENGINE_CLEAR: 0 off, 1 on, 2 finds its surfaces only
     bool engine_fresh_ = true;      // new buffers: no history
     std::uint32_t engine_view_ = 0;  // GALAXY_RT_ENGINE_VIEW (rt_engine.hlsl kEngineView)
     std::uint32_t engine_width_ = 0;
@@ -738,6 +756,30 @@ private:
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 4> engine_slots_;
     std::array<D3D12_RESOURCE_STATES, 4> engine_slot_state_{};
     std::array<bool, 4> engine_slot_valid_{};
+    // The clear-surface pass: its pipelines; per light slot the clear surfaces' reflections and transmittance
+    // (rt_engine.hlsl kEvClear, 16 bytes a pixel), made when a scene first has clear surfaces.
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_clear_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> clear_composite_pso_;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 4> engine_clear_;
+    std::array<D3D12_RESOURCE_STATES, 4> engine_clear_state_{};
+    std::array<bool, 4> engine_clear_valid_{};
+    // The lighting's constants and bindings of the trace the engine ran (slot), for the clear pass at the scene's end.
+    struct EngineBind {
+        bool valid = false;
+        unsigned slot = 0;
+        std::vector<std::byte> constants;
+        std::size_t engine_at = 0;
+        D3D12_GPU_VIRTUAL_ADDRESS draws = 0;
+        D3D12_GPU_VIRTUAL_ADDRESS tev = 0;
+        D3D12_GPU_VIRTUAL_ADDRESS surface_uv = 0;
+        D3D12_GPU_VIRTUAL_ADDRESS draw_textures = 0;
+        D3D12_GPU_VIRTUAL_ADDRESS sky_map = 0;
+        D3D12_GPU_VIRTUAL_ADDRESS emit_tris = 0;
+    };
+    EngineBind engine_bind_;
+    // Per water draw (rt_engine.hlsl kEvClearDraws): the table's roughness (unorm16; 0xFFFF none), bit 16 the engine's
+    // glass (glass or crystal; not mirror glass, not a metal coat).
+    std::vector<std::uint32_t> water_clear_;
     // The eye's adaptation as the GPU eased it (rt_lighting.hlsl kAdaptation), read back kResultDelay frames later: the
     // camera's exposure on the CPU (glow gains).
     static constexpr unsigned kAdaptationReadbacks = 4u;
@@ -944,6 +986,7 @@ private:
     std::size_t water_flushed_draws_ = 0u;
     std::uint32_t water_flushed_triangles_ = 0u;
     bool water_open_ = false;
+    bool log_seq_ = false;
     bool water_incomplete_ = false;
     Microsoft::WRL::ComPtr<ID3D12Resource> water_positions_;
     Microsoft::WRL::ComPtr<ID3D12Resource> water_surfaces_;
@@ -1064,8 +1107,8 @@ private:
     std::array<float, 3> sun_color_{1.0f, 0.93f, 0.82f};
     float sun_size_ = 1.0f;     // degrees
     bool sun_override_ = false;
-    float sun_max_elevation_ = 65.0f;  // GALAXY_RT_SUN_MAX_ELEVATION: degrees no sun or key rises above
-    float sun_min_elevation_ = 50.0f;  // GALAXY_RT_SUN_MIN_ELEVATION: degrees a game sun rises to at least
+    float sun_max_elevation_ = 65.0f;  // GALAXY_RT_SUN_MAX_ELEVATION: degrees no key light (no sun shown) rises above
+    float sun_min_elevation_ = 0.0f;   // GALAXY_RT_SUN_MIN_ELEVATION (diagnostics): degrees a game sun rises to
     const RtStageSun* stage_sun_ = nullptr;
     bool sun_held_ = false;
     bool key_valid_ = false;    // set_key_light

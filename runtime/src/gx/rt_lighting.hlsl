@@ -894,8 +894,11 @@ void GlowBaseCS(uint3 id : SV_DispatchThreadID)
             const float adaptation = c_sums.Load(kAdaptation + 4u) != 0u ? asfloat(c_sums.Load(kAdaptation)) : 1.0f;
             const float m = luminance(float3(f16tof32(f.x), f16tof32(f.x >> 16u), f16tof32(f.y)));
             const float light = clamp(m / (c_exposure_day * max(adaptation, 1e-3f)), 1.0f / 256.0f, 16.0f);
-            c_sums.InterlockedAdd(kAdaptation + 8u, asuint(int(round(log2(light) * 256.0f))));
-            c_sums.InterlockedAdd(kAdaptation + 12u, 1u);
+            // Centre-weighted, as a camera meters its subject: the picture's middle (the player) four times.
+            const float2 at = (float2(q) + 0.5f - c_viewport.xy) / max(c_viewport.zw, 1.0f) - float2(0.5f, 0.55f);
+            const int weight = all(abs(at) < float2(0.2f, 0.25f)) ? 4 : 1;
+            c_sums.InterlockedAdd(kAdaptation + 8u, asuint(int(round(log2(light) * 256.0f)) * weight));
+            c_sums.InterlockedAdd(kAdaptation + 12u, uint(weight));
         }
     }
     if ((c_exposure & 1u) != 0u && ((id.x | id.y) & 7u) == 0u) {
@@ -2618,6 +2621,10 @@ bool emitter_visible(float3 start, float3 centre, float radius, float2 du, uint 
 
 // Whether the sun is seen from `origin` along `direction` (a point inside its disc); the blocker's distance in
 // `blocker` (0: open). `card`: the sample lies on a foliage card, which the cards close beside it do not shade.
+// Candidates a ray's traversal weighs before it takes the one it is at as its hit (bounded work per ray: layered
+// alpha cards, Dusty Dune's hourglass sand, ran a dispatch past the GPU's watchdog).
+static const uint kMaxCandidates = 256u;
+
 bool sun_visible(float3 origin, float3 direction, bool card, uint salt, out float blocker)
 {
     blocker = 0.0f;
@@ -2628,7 +2635,13 @@ bool sun_visible(float3 origin, float3 direction, bool card, uint salt, out floa
     ray.TMax = g_sun_reach;
     RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
     query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
+    uint visits = 0u;
     while (query.Proceed()) {
+        if (++visits > kMaxCandidates) {
+            query.CommitNonOpaqueTriangleHit();
+            query.Abort();
+            break;
+        }
         if (query.CandidateInstanceID() != 0u) {
             query.CommitNonOpaqueTriangleHit();
             continue;
@@ -5368,6 +5381,52 @@ float3 star_surface(int2 c, float z, float mu, float3 color)
     return saturate(lit / max(peak, 1.0f) + max(peak - 1.0f, 0.0f) * 0.2f + detail * kStarDetail);
 }
 
+// The engine's clear surfaces (rt_engine.hlsl EngineClearCS; m_light: the slot's clear buffer, per pixel reflection
+// rgb and transmittance as halves, eye z, present) over the picture at the scene's end (m_color, its copy): what shows
+// through times the walls' transmittance plus their reflections, in linear light. Sub-frames move the point to the
+// traced frame by the scene's depth behind the glass.
+CompositeOut ClearCompositePS(float4 position : SV_Position)
+{
+    CompositeOut result;
+    const int2 c = int2(position.xy);
+    if (!inside(m_viewport, position.xy)) {
+        discard;
+    }
+    int2 traced = c;
+    if ((m_flags & 1u) != 0u) {
+        const float depth = m_efb_depth.Load(int3(c, 0));
+        const float z = far_plane(m_depth, depth) ? -1.0e5f : depth_to_eye_z(m_depth, depth);
+        const uint row = m_slot * 3u;
+        const float4 rows[3] = {m_reproject[row], m_reproject[row + 1u], m_reproject[row + 2u]};
+        const float3 p = transform(rows, eye_position(m_projection, m_viewport, position.xy, z));
+        if (p.z >= -m_near) {
+            discard;
+        }
+        traced = int2(floor(eye_to_pixel(m_projection, m_viewport, p)));
+    }
+    if (any(traced < 0) || any(traced >= int2(m_sample_size))) {
+        discard;
+    }
+    // GALAXY_RT_ENGINE_VIEW=6 (m_flags bit 3): the composite's coverage, magenta.
+    if ((m_flags & 8u) != 0u) {
+        result.color = float4(0.8f, 0.0f, 0.8f, 1.0f);
+        return result;
+    }
+    const uint4 e = m_light[uint(traced.y) * m_sample_size.x + uint(traced.x)];
+    if (e.w == 0u) {
+        // GALAXY_RT_ENGINE_VIEW=5 (m_flags bit 2): where the pass wrote nothing, red.
+        if ((m_flags & 4u) != 0u) {
+            result.color = float4(0.6f, 0.0f, 0.0f, 1.0f);
+            return result;
+        }
+        discard;
+    }
+    const float3 r = float3(f16tof32(e.x), f16tof32(e.x >> 16u), f16tof32(e.y));
+    const float t = f16tof32(e.y >> 16u);
+    result.color = float4(linear_to_srgb(srgb_to_linear(m_color.Load(int3(c, 0)).rgb) * t + r), 1.0f);
+    return result;
+}
+
 float4 CompositeVS(uint id : SV_VertexID) : SV_Position
 {
     const float2 uv = float2((id << 1u) & 2u, id & 2u);
@@ -5456,7 +5515,7 @@ CompositeOut CompositePS(float4 position : SV_Position)
         const float3 diffuse = float3(f16tof32(best.x), f16tof32(best.x >> 16u), f16tof32(best.y));
         const float3 specular = float3(f16tof32(best.y >> 16u), f16tof32(best.z), f16tof32(best.z >> 16u));
         if ((m_flags & 2u) != 0u) {
-            result.color = float4(linear_to_srgb(diffuse + specular), 1.0f);
+            result.color = float4((diffuse + specular) * 0.5f, 1.0f);
             return result;
         }
         const int2 at = clamp(traced, int2(0, 0), int2(m_target_size) - 1);

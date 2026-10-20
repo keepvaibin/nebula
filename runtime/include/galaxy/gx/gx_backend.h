@@ -495,6 +495,8 @@ private:
         bool rt = false;
         // A light effect the game fakes (rt_materials.h hide) while the traced lighting replaces it.
         bool hidden = false;
+        // Hidden but traced: a clear surface the engine traces (the table's `traced`), captured though not drawn.
+        bool traced = false;
         RtDrawInfo rt_info{};
         std::uint64_t debake_model = 0u;   // an undecided model whose vertex colours this batch samples
     };
@@ -902,6 +904,8 @@ private:
     void note_rt_stage();
     // The current draw is a light effect the traced lighting replaces (rt_materials.h hide).
     [[nodiscard]] bool rt_hidden_draw() const noexcept;
+    // The draw is a clear surface the engine traces (the table's `traced`): not shown, still captured.
+    [[nodiscard]] bool rt_traced_clear_draw() const noexcept;
     // The current object's name (NameObj::mName) into `out`; its guest address, 0 for none.
     std::uint32_t rt_object_name(char* out, std::size_t size);
     [[nodiscard]] static std::uint16_t rt_material_of(std::uint32_t map_mask,

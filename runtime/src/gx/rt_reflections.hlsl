@@ -279,6 +279,9 @@ cbuffer RtReflect : register(b0)
 
 // g_flags bit 12: physical light (GALAXY_RT_PHYSICAL), the lighting's units.
 static const uint kReflectPhysical = 4096u;
+// g_flags bit 13: the ray tracing engine traces the clear glass and crystal (rt_engine.hlsl EngineClearCS); the water
+// pass leaves them (mirror glass and metal coats stay its own).
+static const uint kReflectEngineClear = 8192u;
 
 RaytracingAccelerationStructure g_scene : register(t0);
 ByteAddressBuffer g_positions : register(t1);       // per triangle three eye-space vertices
@@ -2388,6 +2391,11 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
         const uint2 under = g_under[index];
         const float floor_distance = under.y != 0u ? length(through) * -asfloat(under.y) : 1e30f;
         const uint hit_flags = hit_water ? g_water_surfaces.Load(water_tri * 16u + 12u) : 0u;
+        // The engine's glass: not this pass's surface.
+        if (hit_water && (g_flags & kReflectEngineClear) != 0u && ((hit_flags >> 8u) & 15u) == kCrystal &&
+            (hit_flags & kWaterMirrorFlag) == 0u) {
+            hit_water = false;
+        }
         const bool opaque_clear = hit_water && (hit_flags & kWaterOpaqueFlag) != 0u &&
                                   abs(floor_distance - water_t) <= max(0.01f * water_t, 8.0f);
         // Mirror glass and a metal coat lie on what they cover (the Observatory fountain's glass over its star plates,

@@ -23,6 +23,7 @@
 #include "rt_post_lens_cs.h"
 #include "rt_post_ps.h"
 #include "rt_post_shafts_cs.h"
+#include "rt_clear_composite_ps.h"
 #include "rt_post_vs.h"
 #include "rt_emit_merge_cs.h"
 #include "rt_glow_base_cs.h"
@@ -386,6 +387,8 @@ enum EmitParameter : UINT {
     kEmitCount,
 };
 
+// The ray tracing engine's views of the clear-surface pass (rt_engine.hlsl kEvWaterScene .. kEvClear).
+constexpr std::uint32_t kEngineClearViews = 19u;
 // A result slot's state: read by the composite (pixel) and the picture capture (compute).
 constexpr D3D12_RESOURCE_STATES kLightRead =
     D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
@@ -790,7 +793,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     sun_color_ = env_triple("GALAXY_RT_SUN_COLOR", sun_color_);
     sun_size_ = std::clamp(env_float("GALAXY_RT_SUN_SIZE", 1.0f), 0.0f, 30.0f);
     key_size_ = std::clamp(env_float("GALAXY_RT_KEY_SIZE", 1.5f), 0.0f, 30.0f);
-    sun_min_elevation_ = std::clamp(env_float("GALAXY_RT_SUN_MIN_ELEVATION", 50.0f), 0.0f, 89.0f);
+    sun_min_elevation_ = std::clamp(env_float("GALAXY_RT_SUN_MIN_ELEVATION", 0.0f), 0.0f, 89.0f);
     sun_max_elevation_ = std::clamp(env_float("GALAXY_RT_SUN_MAX_ELEVATION", 65.0f), sun_min_elevation_, 90.0f);
     sun_light_ = std::clamp(env_float("GALAXY_RT_SUN_LIGHT", 1.2f), 0.0f, 4.0f);
     sky_light_ = std::clamp(env_float("GALAXY_RT_SKY_LIGHT", 0.6f), 0.0f, 4.0f);
@@ -818,12 +821,18 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
 }
 
 float SceneRayTracer::glow_gain(std::uint16_t material) const noexcept {
-    const RtMaterial* const m = rt_material(material);
-    if (!physical_active_ || m == nullptr || m->emission == RtEmission::None || m->no_light || m->hide) {
+    if (!physical_active_) {
         return 1.0f;
     }
-    const float exposure = physical_exposure_ > 0.0f ? physical_exposure_ : 1.0f;
-    return std::max(m->intensity, 1.0f) * exposure * adaptation_cpu_;
+    // A light source of the table shines at its radiance (its intensity past 1) in the scene's units, seen at the
+    // camera's exposure. The game's other additive effects (sparkles, shafts, flares) are drawn for the display, not
+    // as scene light: as the game drew them (b40 scaled them by the exposure too: Beach Bowl's and Ghostly's blew out).
+    const RtMaterial* const m = rt_material(material);
+    if (m == nullptr || m->emission == RtEmission::None || m->no_light || m->hide) {
+        return 1.0f;
+    }
+    const float exposure = (physical_exposure_ > 0.0f ? physical_exposure_ : 1.0f) * adaptation_cpu_;
+    return std::max(m->intensity, 1.0f) * exposure;
 }
 
 void SceneRayTracer::shutdown() noexcept {
@@ -993,6 +1002,12 @@ void SceneRayTracer::shutdown() noexcept {
     emit_list_.Reset();
     emit_readback_.Reset();
     composite_pso_.Reset();
+    clear_composite_pso_.Reset();
+    engine_clear_pso_.Reset();
+    for (auto& buffer : engine_clear_) buffer.Reset();
+    engine_clear_valid_ = {};
+    engine_bind_ = {};
+    water_clear_.clear();
     composite_root_.Reset();
     for (auto& buffer : light_z_) buffer.Reset();
     light_normal_.Reset();
@@ -1675,7 +1690,8 @@ void SceneRayTracer::report() {
                   "[rt-stats] scenes=%llu skipped=%llu draws-per-scene=%.1f triangles-per-scene=%.0f "
                   "max-triangles=%llu capacity=%u build-ms=%.3f validate-ms=%.3f light-ms=%.3f point-lights=%.2f composites=%llu captures=%llu validated=%llu "
                   "geometry-pixels=%.2f%% match-0.1%%=%.3f%% match-1%%=%.3f%% hit-nearer=%.3f%% hit-farther=%.3f%% "
-                  "miss=%.3f%% background-hit=%.3f%% glow-draws=%.1f glow-triangles=%.0f late-triangles=%.0f\n",
+                  "miss=%.3f%% background-hit=%.3f%% glow-draws=%.1f glow-triangles=%.0f late-triangles=%.0f "
+                  "exposure=%.3f adaptation=%.3f\n",
                   static_cast<unsigned long long>(window_.scenes), static_cast<unsigned long long>(window_.skipped),
                   per(static_cast<double>(window_.draws), window_.scenes),
                   per(static_cast<double>(window_.triangles), window_.scenes),
@@ -1688,7 +1704,8 @@ void SceneRayTracer::report() {
                   pct(5u, 2u), pct(6u, 2u), pct(7u, 2u), pct(8u, 1u),
                   per(static_cast<double>(window_.glow_draws), window_.captures),
                   per(static_cast<double>(window_.glow_triangles), window_.captures),
-                  per(static_cast<double>(window_.late_triangles), window_.scenes));
+                  per(static_cast<double>(window_.late_triangles), window_.scenes),
+                  static_cast<double>(physical_exposure_), static_cast<double>(adaptation_cpu_));
     std::cerr << line;
     if (physical_ && delight_pso_) {
         // Texture de-lighting: maps made so far, held now and their memory.
@@ -1937,10 +1954,15 @@ void SceneRayTracer::begin_scene() noexcept {
     glow_base_valid_ = false;
     water_draws_.clear();
     water_waves_.clear();
+    water_clear_.clear();
     water_game_waves_ = false;
     water_triangles_ = 0u;
     water_flushed_draws_ = 0u;
     water_flushed_triangles_ = 0u;
+    if (water_open_ && log_seq_) {
+        std::fprintf(stderr, "[rt-seq] frame=%llu begin-scene closes an open water window (%zu draws)\n",
+                     static_cast<unsigned long long>(frame_index_), water_draws_.size());
+    }
     water_open_ = false;
     water_incomplete_ = false;
     draw_colors_.clear();
@@ -2491,6 +2513,19 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
             entry.flags = (entry.flags & 0xFFFFu) |
                           (static_cast<std::uint32_t>(std::min<std::size_t>(water_draws_.size() - 1u, 0xFFFFu)) << 16u);
             water_triangles_ += draw.triangle_count;
+            // Its clear record: the table's roughness; the engine's glass (glass or crystal, not mirror glass).
+            {
+                const RtMaterial* const clear = rt_material(info.rt_material);
+                const auto surface_class = (info.surface >> kRtDrawClassShift) & 15u;
+                const float roughness = clear != nullptr ? clear->roughness : -1.0f;
+                water_clear_.push_back(
+                    (roughness >= 0.0f ? static_cast<std::uint32_t>(std::lround(std::min(roughness, 1.0f) * 65534.0f))
+                                       : 0xFFFFu) |
+                    (surface_class == static_cast<std::uint32_t>(RtSurfaceClass::Crystal) &&
+                             (info.surface & kRtDrawWaterMirror) == 0u
+                         ? 0x10000u
+                         : 0u));
+            }
             std::array<std::uint32_t, 12> waves{};
             waves[0] = 0xFFFFFFFFu;
             const std::uint32_t wave_flags = std::bit_cast<std::uint32_t>(info.wave_params[0]);
@@ -2559,9 +2594,10 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
             emission &= ~3u;
             intensity = 0.0f;
         }
-        if (physical_ && emits && material->emission != RtEmission::None && !material->no_light) {
+        if (physical_ && emits && material->emission != RtEmission::None && !material->no_light && !material->seen) {
             // Physical: a light source of the table is an area light of its own triangles (emitter_light), its
-            // radiance what it shows; not the art model's light at its centre.
+            // radiance what it shows; not the art model's light at its centre. A `seen` one shows its radiance
+            // (the G-buffer's emitters) while the game's point light there is its light.
             if (emit_triangles_ + entry.triangle_count <= kEmitTriangles) {
                 emit_ranges_.push_back({entry.first_triangle, entry.triangle_count,
                                         static_cast<std::uint32_t>(draws_.size() - 1u) |
@@ -3315,6 +3351,11 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT scene_format, DXGI_FO
     if (FAILED(device_->CreateGraphicsPipelineState(&graphics, IID_PPV_ARGS(&composite_pso_)))) {
         return false;
     }
+    // The engine's clear surfaces over the picture (rt_lighting.hlsl ClearCompositePS): none without it.
+    graphics.PS = {g_rt_clear_composite_ps, sizeof(g_rt_clear_composite_ps)};
+    if (FAILED(device_->CreateGraphicsPipelineState(&graphics, IID_PPV_ARGS(&clear_composite_pso_)))) {
+        clear_composite_pso_.Reset();
+    }
     if (!create_buffer(kReprojectEntryBytes, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST,
                        D3D12_RESOURCE_FLAG_NONE, reproject_, L"rt light reprojection") ||
         !create_buffer(kReprojectEntries * kReprojectEntryBytes, D3D12_HEAP_TYPE_UPLOAD,
@@ -3568,11 +3609,11 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         // Sun rays end halfway to the game's sun model (BrightSun, drawn that far out along the
         // sun's direction): it would shadow everything near the camera.
         c.sun_reach = sun_distance > 0.0f ? 0.5f * sun_distance : 1.0e6f;
-        // A sun the game placed low (a BrightSun on the horizon) keeps its compass direction but rises to
-        // at least GALAXY_RT_SUN_MIN_ELEVATION degrees over world Y. The camera's up is not the ground's:
-        // looking down at Mario under water it lies level, and a sun lifted against it came in flat and
-        // shadowed the whole seabed (measured wb31: seabed 178 -> 49). Keys (the game's world-fixed planet
-        // light) stay as the game has them. The shafts still come from the sun the sky shows.
+        // The game's visible sun lights from where the sky shows it (its BrightSun): a sun on the horizon behind the
+        // Good Egg's house leaves the planet's top in the house's, the tree's and the planet's own shadow, as the
+        // owner expected (build 40; it was lifted to 50 degrees, so the light came from overhead while the sky showed
+        // a sunset). GALAXY_RT_SUN_MIN_ELEVATION (diagnostics, default 0) still lifts it: its compass direction kept,
+        // at least that many degrees over world Y.
         if (sun_present && !keyed && !sun_override_ && sun_min_elevation_ > 0.0f) {
             const std::array<float, 3> up{0.0f, 1.0f, 0.0f};
             const float up_length = std::sqrt(up[0] * up[0] + up[1] * up[1] + up[2] * up[2]);
@@ -3599,10 +3640,12 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
                 }
             }
         }
-        // Nor higher than GALAXY_RT_SUN_MAX_ELEVATION degrees, keys included: a sun overhead hides every
-        // character's shadow under it (user: tilt it slightly so the shadows show). Its compass direction stays;
-        // straight overhead it leans away from the camera's view (the shadows fall towards the camera).
-        if (sun_present && !sun_override_ && sun_max_elevation_ < 90.0f) {
+        // A key from the game's world-fixed light (no sun in its sky) no higher than GALAXY_RT_SUN_MAX_ELEVATION degrees:
+        // straight overhead it hides every character's shadow under them (user: tilt it slightly so the shadows show).
+        // Its compass direction stays; straight overhead it leans away from the camera's view (the shadows fall
+        // towards the camera). A sun the sky shows (the game's BrightSun, or the one its sky map holds: key_shown_)
+        // keeps its place: the light comes from where the sky shows it (owner, 10-20).
+        if (sun_present && keyed && !key_shown_ && !sun_override_ && sun_max_elevation_ < 90.0f) {
             const float length = std::sqrt(l[0] * l[0] + l[1] * l[1] + l[2] * l[2]);
             const float max_e = std::sin(sun_max_elevation_ * 3.14159265f / 180.0f);
             if (length > 1e-6f) {
@@ -4261,8 +4304,23 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
             pixels = true;
         }
     }
-    // The engine (its G-buffer writes the pixels' buffer), else the lighting's own trace and per-pixel pass.
+    // The engine (its G-buffer writes the pixels' buffer), else the lighting's own trace and per-pixel pass. Its
+    // constants and bindings kept for the clear pass at the scene's end.
     const bool engine = engine_running_ && pixels;
+    engine_clear_valid_[slot] = false;
+    engine_bind_.valid = engine;
+    if (engine) {
+        engine_bind_.slot = slot;
+        engine_bind_.constants.assign(reinterpret_cast<const std::byte*>(&c), reinterpret_cast<const std::byte*>(&c) + sizeof(c));
+        engine_bind_.engine_at = offsetof(RtLightConstants, engine);
+        engine_bind_.draws = draw_table.gpu;
+        engine_bind_.tev = tev_table != 0u ? tev_table : draw_table.gpu;
+        engine_bind_.surface_uv = surface_uv_ ? surface_uv_->GetGPUVirtualAddress() : positions_->GetGPUVirtualAddress();
+        engine_bind_.draw_textures = draw_texture_table_ != 0u ? draw_texture_table_ : draw_table.gpu;
+        engine_bind_.sky_map = sky_traced ? sky_probe_map_->GetGPUVirtualAddress() : positions_->GetGPUVirtualAddress();
+        engine_bind_.emit_tris =
+            c.tev_info[2] != 0u ? emit_tris_->GetGPUVirtualAddress() : positions_->GetGPUVirtualAddress();
+    }
     if (engine) {
         trace_engine(list, allocate, allocate_context, &c, sizeof(c), offsetof(RtLightConstants, engine), upload.gpu,
                      slot);
@@ -5248,6 +5306,198 @@ void SceneRayTracer::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRI
     }
 }
 
+std::uint32_t SceneRayTracer::tlas_view(D3D12_GPU_VIRTUAL_ADDRESS tlas) {
+    if (!texture_views_usable_ || tlas == 0u || !device_ || texture_view_count_ >= kTextureViewsPerScene) {
+        return 0xFFFFFFFFu;
+    }
+    const std::uint32_t slot = texture_view_scene_ * kTextureViewsPerScene + texture_view_count_++;
+    D3D12_CPU_DESCRIPTOR_HANDLE destination = texture_view_cpu_;
+    destination.ptr += static_cast<SIZE_T>(slot) * texture_view_increment_;
+    D3D12_SHADER_RESOURCE_VIEW_DESC view{};
+    view.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
+    view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    view.RaytracingAccelerationStructure.Location = tlas;
+    device_->CreateShaderResourceView(nullptr, &view, destination);
+    return texture_view_first_ + slot;
+}
+
+bool SceneRayTracer::trace_engine_clear(ID3D12GraphicsCommandList* list, Allocate allocate, void* allocate_context,
+                                        D3D12_GPU_DESCRIPTOR_HANDLE depth_table, unsigned slot) {
+    // GALAXY_RT_LOG_CLEAR=1: why a scene's clear pass did not run (its first refusals, then every 300th).
+    static const bool log_clear = env_float("GALAXY_RT_LOG_CLEAR", 0.0f) != 0.0f;
+    static std::uint64_t calls = 0u;
+    const auto refuse = [&](const char* why) {
+        if (log_clear && (calls < 12u || calls % 300u == 0u)) {
+            std::fprintf(stderr, "[rt-clear-pass] slot=%u bind=%d/%u draws=%zu glass=%zd triangles=%u: %s\n", slot,
+                         engine_bind_.valid ? 1 : 0, engine_bind_.slot, water_clear_.size(),
+                         std::count_if(water_clear_.begin(), water_clear_.end(),
+                                       [](std::uint32_t w) { return (w & 0x10000u) != 0u; }),
+                         water_triangles_, why);
+        }
+        ++calls;
+        return false;
+    };
+    if (list == nullptr || allocate == nullptr || !engine_clear_pso_) {
+        return refuse("no pipeline");
+    }
+    if (!engine_bind_.valid || engine_bind_.slot != slot || slot >= kLightSlots ||
+        !engine_slot(slot, engine_width_, engine_height_)) {
+        return refuse("no engine trace for the slot");
+    }
+    if (!water_tlas_ || water_triangles_ == 0u || depth_table.ptr == 0u) {
+        return refuse("no water geometry");
+    }
+    if (std::none_of(water_clear_.begin(), water_clear_.end(), [](std::uint32_t w) { return (w & 0x10000u) != 0u; })) {
+        return refuse("no glass");
+    }
+    const std::uint64_t full = static_cast<std::uint64_t>(engine_width_) * engine_height_;
+    if (!engine_clear_[slot]) {
+        if (!create_buffer(full * 16u, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                           D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, engine_clear_[slot], L"rt engine clear")) {
+            return false;
+        }
+        engine_clear_state_[slot] = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    }
+    const std::size_t record_bytes = std::max<std::size_t>(water_clear_.size() * 4u, 16u);
+    const RtUpload records = allocate(allocate_context, record_bytes, 256u);
+    const RtUpload upload = allocate(allocate_context, engine_bind_.constants.size(), 256u);
+    if (records.cpu == nullptr || upload.cpu == nullptr) {
+        return false;
+    }
+    std::memcpy(records.cpu, water_clear_.data(), water_clear_.size() * 4u);
+    std::uint32_t views[5] = {
+        tlas_view(water_tlas_->GetGPUVirtualAddress()),
+        buffer_view(water_positions_.Get(), 0u, static_cast<std::uint64_t>(water_triangles_) * 36u),
+        buffer_view(water_surfaces_.Get(), 0u, static_cast<std::uint64_t>(water_triangles_) * 16u),
+        buffer_view(records.resource, records.offset, record_bytes),
+        buffer_uav(engine_clear_[slot].Get(), full * 16u),
+    };
+    for (const std::uint32_t view : views) {
+        if (view == 0xFFFFFFFFu) {
+            return refuse("no view");
+        }
+    }
+    refuse("runs");
+    std::memcpy(upload.cpu, engine_bind_.constants.data(), engine_bind_.constants.size());
+    auto* const engine = reinterpret_cast<RtEngineConstants*>(static_cast<std::byte*>(upload.cpu) + engine_bind_.engine_at);
+    std::copy(std::begin(views), std::end(views), engine->views + kEngineClearViews);
+    engine->info[1] = 0u;
+    engine->info[2] = slot;
+    constexpr D3D12_RESOURCE_STATES kRead = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    to_state(list, engine_clear_[slot].Get(), engine_clear_state_[slot], D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    to_state(list, picture_.Get(), picture_state_, kRead);
+    to_state(list, picture_sums_.Get(), picture_sums_state_, kRead);
+    to_state(list, emit_list_.Get(), emit_list_state_, kRead);
+    to_state(list, glow_base_.Get(), glow_base_state_, kRead);
+    to_state(list, glow_added_.Get(), glow_added_state_, kRead);
+    to_state(list, sky_sh_.Get(), sky_sh_state_, kRead);
+    if (sky_probe_map_) {
+        to_state(list, sky_probe_map_.Get(), sky_probe_map_state_, kRead);
+    }
+    if (emit_tris_) {
+        to_state(list, emit_tris_.Get(), emit_tris_state_, kRead);
+    }
+    // The lighting's root as the trace bound it (the clear pass reads the scene, its draws, TEV records, textures,
+    // emitters and sky; nothing writes the lighting's own buffers).
+    const D3D12_GPU_VIRTUAL_ADDRESS spare = positions_->GetGPUVirtualAddress();
+    const D3D12_GPU_VIRTUAL_ADDRESS scratch = light_raw_->GetGPUVirtualAddress();
+    list->SetComputeRootSignature(light_root_.Get());
+    list->SetComputeRootConstantBufferView(kLightFrame, upload.gpu);
+    list->SetComputeRootShaderResourceView(kLightScene, tlas_->GetGPUVirtualAddress());
+    list->SetComputeRootDescriptorTable(kLightDepth, depth_table);
+    list->SetComputeRootShaderResourceView(kLightPrevZ, spare);
+    list->SetComputeRootShaderResourceView(kLightPrevHistory, spare);
+    list->SetComputeRootShaderResourceView(kLightHistoryIn, spare);
+    list->SetComputeRootShaderResourceView(kLightPicture, picture_->GetGPUVirtualAddress());
+    list->SetComputeRootShaderResourceView(kLightPictureSums, picture_sums_->GetGPUVirtualAddress());
+    list->SetComputeRootShaderResourceView(kLightPositions, positions_->GetGPUVirtualAddress());
+    list->SetComputeRootShaderResourceView(kLightSurfaces, surfaces_->GetGPUVirtualAddress());
+    list->SetComputeRootShaderResourceView(kLightEmitters, emit_list_->GetGPUVirtualAddress());
+    list->SetComputeRootShaderResourceView(kLightGlowBase, glow_base_->GetGPUVirtualAddress());
+    list->SetComputeRootShaderResourceView(kLightGlowAdded, glow_added_->GetGPUVirtualAddress());
+    list->SetComputeRootShaderResourceView(kLightDraws, engine_bind_.draws);
+    list->SetComputeRootShaderResourceView(kLightSky, sky_sh_->GetGPUVirtualAddress());
+    list->SetComputeRootUnorderedAccessView(kLightZ, scratch);
+    list->SetComputeRootUnorderedAccessView(kLightNormal, scratch);
+    list->SetComputeRootUnorderedAccessView(kLightRaw, scratch);
+    list->SetComputeRootUnorderedAccessView(kLightHistory, scratch);
+    list->SetComputeRootUnorderedAccessView(kLightFinal, scratch);
+    list->SetComputeRootUnorderedAccessView(kLightPrimary, scratch);
+    list->SetComputeRootShaderResourceView(kLightSurfaceUv, engine_bind_.surface_uv);
+    list->SetComputeRootShaderResourceView(kLightDrawTextures, engine_bind_.draw_textures);
+    list->SetComputeRootUnorderedAccessView(kLightReference, scratch);
+    list->SetComputeRootShaderResourceView(kLightSkyMap, engine_bind_.sky_map);
+    list->SetComputeRootShaderResourceView(kLightTev, engine_bind_.tev);
+    list->SetComputeRootUnorderedAccessView(kLightPixels, scratch);
+    list->SetComputeRootShaderResourceView(kLightEmitTris, engine_bind_.emit_tris);
+    list->SetComputeRootShaderResourceView(kLightReservoirIn, spare);
+    list->SetComputeRootUnorderedAccessView(kLightReservoirOut, scratch);
+    list->SetPipelineState(engine_clear_pso_.Get());
+    list->Dispatch((engine_width_ + 7u) / 8u, (engine_height_ + 7u) / 8u, 1u);
+    const D3D12_RESOURCE_BARRIER barrier = uav_barrier(engine_clear_[slot].Get());
+    list->ResourceBarrier(1u, &barrier);
+    to_state(list, engine_clear_[slot].Get(), engine_clear_state_[slot],
+             D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    engine_clear_valid_[slot] = true;
+    return true;
+}
+
+void SceneRayTracer::composite_clear(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
+                                     D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width, std::uint32_t height,
+                                     unsigned slot, bool reproject, D3D12_GPU_DESCRIPTOR_HANDLE scene_srv) {
+    if (slot >= kLightSlots || !engine_clear_valid_[slot] || !engine_clear_[slot] || !clear_composite_pso_ ||
+        scene_srv.ptr == 0u || width != engine_width_ || height != engine_height_) {
+        static const bool log_clear = env_float("GALAXY_RT_LOG_CLEAR", 0.0f) != 0.0f;
+        static std::uint64_t refused = 0u;
+        if (log_clear && (refused++ < 12u || refused % 300u == 0u)) {
+            std::fprintf(stderr, "[rt-clear-composite] slot=%u valid=%d pso=%d scene=%d size=%ux%u engine=%ux%u\n", slot,
+                         slot < kLightSlots && engine_clear_valid_[slot] ? 1 : 0, clear_composite_pso_ ? 1 : 0,
+                         scene_srv.ptr != 0u ? 1 : 0, width, height, engine_width_, engine_height_);
+        }
+        return;
+    }
+    {
+        static const bool log_clear = env_float("GALAXY_RT_LOG_CLEAR", 0.0f) != 0.0f;
+        static std::uint64_t drawn = 0u;
+        if (log_clear && (drawn++ < 12u || drawn % 300u == 0u)) {
+            std::fprintf(stderr, "[rt-clear-composite] slot=%u drawn reproject=%d\n", slot, reproject ? 1 : 0);
+        }
+    }
+    const LightSlot& info = light_slots_[slot];
+    reproject = reproject && reproject_;
+    RtCompositeConstants c{};
+    std::copy(info.view.projection.begin(), info.view.projection.end(), c.projection);
+    c.depth[0] = info.view.z_scale;
+    c.depth[1] = info.view.z_offset;
+    c.depth[2] = info.view.min_depth;
+    c.depth[3] = info.view.max_depth;
+    std::copy(info.view.viewport.begin(), info.view.viewport.end(), c.viewport);
+    c.sample_size[0] = width;
+    c.sample_size[1] = height;
+    c.factor = 1u;
+    c.flags = (reproject ? 1u : 0u) | (engine_view_ == 5u ? 4u : 0u) | (engine_view_ == 6u ? 8u : 0u);
+    c.slot = slot;
+    c.near_plane = info.near_plane;
+    c.target_size[0] = width;
+    c.target_size[1] = height;
+    list->OMSetRenderTargets(1u, &target, FALSE, nullptr);
+    const D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
+    const D3D12_RECT scissor{0, 0, static_cast<LONG>(width), static_cast<LONG>(height)};
+    list->RSSetViewports(1u, &viewport);
+    list->RSSetScissorRects(1u, &scissor);
+    list->SetGraphicsRootSignature(composite_root_.Get());
+    list->SetPipelineState(clear_composite_pso_.Get());
+    list->SetGraphicsRoot32BitConstants(0u, sizeof(c) / 4u, &c, 0u);
+    list->SetGraphicsRootShaderResourceView(1u, engine_clear_[slot]->GetGPUVirtualAddress());
+    list->SetGraphicsRootDescriptorTable(2u, depth_srv);
+    list->SetGraphicsRootShaderResourceView(3u, reproject ? reproject_->GetGPUVirtualAddress()
+                                                          : engine_clear_[slot]->GetGPUVirtualAddress());
+    list->SetGraphicsRootDescriptorTable(4u, scene_srv);
+    list->SetGraphicsRootShaderResourceView(5u, engine_clear_[slot]->GetGPUVirtualAddress());
+    list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    list->DrawInstanced(3u, 1u, 0u, 0u);
+}
+
 RtReflectScene SceneRayTracer::reflect_scene(unsigned slot) const {
     const LightSlot& light = light_slots_[slot];
     RtReflectScene scene{};
@@ -5895,6 +6145,11 @@ bool SceneRayTracer::trace_scene(ID3D12GraphicsCommandList* list, const RtSource
     }
     trace_lighting(list, allocate, allocate_context, depth_srv, width, height);
     water_open_ = reflections_active() && light_slot_ >= 0;
+    if (log_seq_) {
+        std::fprintf(stderr, "[rt-seq] frame=%llu traced: water window %s (reflections %d, slot %d)\n",
+                     static_cast<unsigned long long>(frame_index_), water_open_ ? "open" : "closed",
+                     reflections_active() ? 1 : 0, light_slot_);
+    }
     late_open_ = true;
     late_next_camera_ = camera_;
     late_next_camera_known_ = camera_known_;

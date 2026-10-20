@@ -321,6 +321,9 @@ public:
     void rt_set_camera(const std::array<float, 12>* view) noexcept { ray_tracer_.set_camera(view); }
     [[nodiscard]] bool rt_lighting() const noexcept { return ray_tracer_.lighting_active(); }
     [[nodiscard]] bool rt_physical() const noexcept { return ray_tracer_.physical_active(); }
+    // The ray tracing engine runs (its clear-surface pass traces the table's `traced` glass).
+    [[nodiscard]] bool rt_engine() const noexcept { return ray_tracer_.engine_active(); }
+    [[nodiscard]] bool rt_log_seq() const noexcept { return ray_tracer_.log_seq(); }
     [[nodiscard]] bool rt_ab_original() const noexcept { return ray_tracer_.ab_original(); }
     void rt_set_ab_original(bool original) noexcept { ray_tracer_.set_ab_original(original); }
     void rt_set_presents(std::uint64_t presents) noexcept { ray_tracer_.set_presents(presents); }
@@ -1160,6 +1163,7 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> rt_opaque_copy_;  // the frame before the translucent phases
     D3D12_GPU_DESCRIPTOR_HANDLE rt_opaque_srv_{};             // its view this frame (0: none)
     void record_rt_water(int slot, bool reproject);
+    void log_rt_seq(const char* step);
     [[nodiscard]] bool temporal_inputs_match(const TemporalUpscaleInputs& in) const;
     D3D12_GPU_VIRTUAL_ADDRESS resident_vertex_base_ = 0;
     std::uint64_t resident_vertex_bytes_ = 0;

@@ -105,6 +105,9 @@ struct RtReflectScene {
     D3D12_GPU_VIRTUAL_ADDRESS water_uv = 0;
     D3D12_GPU_VIRTUAL_ADDRESS water_waves = 0;
     bool water_game_waves = false;
+    // The ray tracing engine traced the clear glass and crystal (rt_engine.hlsl EngineClearCS): the water pass leaves
+    // them (rt_reflections.hlsl kReflectEngineClear).
+    bool engine_clear = false;
     // High quality: per triangle texture coordinates and colours, per draw its texture view and colour
     // (0: none, the hits off screen stay unknown); the art's level at a hit (day share, night level, day
     // level, texture detail per eye unit of distance).

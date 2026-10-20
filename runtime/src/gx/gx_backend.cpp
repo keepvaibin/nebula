@@ -7864,6 +7864,12 @@ bool GxBackend::rt_fake_shadow_object(std::uint32_t object) {
     return shadow;
 }
 
+bool GxBackend::rt_traced_clear_draw() const noexcept {
+    const RtMaterial* const clear = rt_material(current_rt_material_);
+    return clear != nullptr && clear->traced && scene_phase_ && side_layer_ == kSceneLayer && renderer_.rt_engine() &&
+           renderer_.rt_water_open();
+}
+
 bool GxBackend::rt_hidden_draw() const noexcept {
     // GALAXY_RT_HIDE_MIRROR=1: the game's mirror pass (the world drawn from the mirrored camera into the
     // texture mirrors project) is not drawn under traced reflections. Off by default: in Freezeflame the
@@ -7874,6 +7880,11 @@ bool GxBackend::rt_hidden_draw() const noexcept {
     }
     if (!scene_phase_ || side_layer_ != kSceneLayer || !renderer_.rt_lighting()) {
         return false;
+    }
+    // A clear surface the engine traces (the table's `traced`): its reflection and what shows through are traced
+    // (rt_engine.hlsl EngineClearCS); the game's draw paints a fake reflection over it.
+    if (rt_traced_clear_draw()) {
+        return true;
     }
     // The game's own shadows: its shadow lists by their draw type (every drawer the game files there: blob and volume
     // shadows of items, enemies and objects), and the drawers known by name.
@@ -8061,7 +8072,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     // What the traced lighting hides from the picture (the game's drop-shadow volumes, the table's faked
     // light cones) stays out of the traced scene too: Mario's invisible shadow box, extruded down along
     // gravity, cast a rectangular shadow on the stone under him and a second one down Good Egg's rim.
-    if (rt_hidden_draw()) {
+    if (rt_hidden_draw() && !rt_traced_clear_draw()) {
         outcome("hidden");
         return false;
     }
@@ -8084,9 +8095,14 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     }
     // MR::clearZBuffer: a depth write through a flattened viewport puts the far plane under
     // everything drawn before (the sky and air layers); that geometry occludes nothing.
+    // After the scene's trace a depth clear starts no new traced scene: the water window drawn since stays open for its
+    // trace (Good Egg clears the depth late in its frame; the restart closed the window untraced, its water and glass
+    // never reflected).
     if (flat && (render_state_key_.zmode_bits & (1u << 4u)) != 0u) {
-        renderer_.rt_begin_scene();
-        rt_view_set_ = false;
+        if (!rt_scene_traced_) {
+            renderer_.rt_begin_scene();
+            rt_view_set_ = false;
+        }
         if (!sky) {
             return false;
         }
@@ -8099,7 +8115,8 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         outcome("flat");
         return false;
     }
-    const bool translucent = !rt_geometry_draw();
+    // The engine's traced clear surfaces go by the water window whatever their state (never solid geometry).
+    const bool translucent = !rt_geometry_draw() || rt_traced_clear_draw();
     // A black hole's lens (the table's `lens`): captured with the glows for the finish's bending.
     const RtMaterial* const lens_material = translucent ? rt_material(current_rt_material_) : nullptr;
     const bool lens = lens_material != nullptr && lens_material->lens && renderer_.rt_glow_open();
@@ -8158,7 +8175,14 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
                      metal->emission == RtEmission::None && blend.blend_enable && !blend.logic_op_enable &&
                      !blend.subtract && blend.color_update && (position == VcdType::Index8 || position == VcdType::Index16);
     }
-    const bool glow = translucent && !lens && !clear_added && !clear_blended && !metal_coat &&
+    // The table's traced clear surfaces join the water window under the engine whatever their blend (their draw is
+    // hidden: the engine traces them, rt_engine.hlsl EngineClearCS).
+    const RtMaterial* const traced_clear = translucent && !lens ? rt_material(current_rt_material_) : nullptr;
+    const bool traced = traced_clear != nullptr && traced_clear->traced && renderer_.rt_engine() &&
+                        renderer_.rt_water_open() && scene_phase_ && side_layer_ == kSceneLayer &&
+                        (state_.vertex_desc(0u).position.vcd == VcdType::Index8 ||
+                         state_.vertex_desc(0u).position.vcd == VcdType::Index16);
+    const bool glow = translucent && !lens && !clear_added && !clear_blended && !metal_coat && !traced &&
                       (rt_glow_draw() || rt_sprite_light_draw());
     if (glow && current_rt_material_ == 0u) {
         const unsigned map = ps_key_.stages[0].order & 7u;
@@ -8166,7 +8190,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         note_rt_unnamed_glow((state_.bp(static_cast<std::uint8_t>(bp::kTexImage3Base + bank + (map & 3u))) & 0xFFFFFFu)
                              << 5u);
     }
-    bool water = translucent && !lens && !glow && (clear_added || clear_blended || metal_coat || rt_water_draw());
+    bool water = translucent && !lens && !glow && (clear_added || clear_blended || metal_coat || traced || rt_water_draw());
     // An opaque late draw the table names water or crystal (Freezeflame's ice, drawn after the indirect
     // capture with the game's own refraction): a surface of the water pass, its reflections laid over what it
     // drew (user: the ice reflects nothing; Mario stood on it unmirrored).
@@ -8842,6 +8866,10 @@ void GxBackend::note_rt_phase(std::uint8_t phase) {
 
 // The water drawn since the trace reflects, before the image effects (or at the scene's end).
 void GxBackend::trace_rt_water() {
+    if (renderer_.rt_log_seq()) {
+        std::fprintf(stderr, "[rt-seq] backend water request open=%d phase=%u\n", renderer_.rt_water_open() ? 1 : 0,
+                     static_cast<unsigned>(rt_phase_));
+    }
     if (!renderer_.rt_water_open()) {
         return;
     }
@@ -8927,6 +8955,16 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
                              (renderer_.rt_lighting() ? kEnhancedRtLighting : 0u) |
                              (renderer_.rt_physical() ? kEnhancedRtPhysical : 0u);
     } else {
+        {
+            if (renderer_.rt_log_seq()) {
+                std::fprintf(stderr, "[rt-seq] scene-end layer=%u scene-phase=%d traced=%d water-open=%d\n",
+                             side_layer_, scene_phase_ ? 1 : 0, rt_scene_traced_ ? 1 : 0,
+                             renderer_.rt_water_open() ? 1 : 0);
+            }
+        }
+        if (side_layer_ == kMirrorLayer) {
+            end_side_layer();
+        }
         trace_rt_scene();
         apply_scene_ao();
         if (renderer_.rt_active() && side_layer_ == kSceneLayer) {
@@ -14991,9 +15029,11 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         ps_c.ztex_params[1] = 1.0f / static_cast<float>(renderer_.efb_scale());
         // A glow's gain (output_flags bit 5): under physical light a light source's radiance times the exposure (else
         // 1); the art model's glow exposure otherwise. The lighting texture's scale (bit 6).
+        // A light source's radiance only on its model's surface (glow_kind_ 2); a sprite's halo as the game drew it.
         ps_c.ztex_params[2] = (ps_key_.output_flags & 0x20u) == 0u ? 0.0f
-                              : renderer_.rt_physical()          ? renderer_.rt_glow_gain(current_rt_material_)
-                                                                 : renderer_.rt_glow_exposure(glow_kind_ == 2u);
+                              : renderer_.rt_physical()
+                                  ? (glow_kind_ == 2u ? renderer_.rt_glow_gain(current_rt_material_) : 1.0f)
+                                  : renderer_.rt_glow_exposure(glow_kind_ == 2u);
         ps_c.ztex_params[3] = (ps_key_.output_flags & 0x40u) != 0u ? renderer_.rt_light_texture_scale() : 0.0f;
         apply_uber_ps_key(ps_key_, ps_c);
         if ((ps_key_.reserved & kPsKeyEnhancedLighting) != 0u) {
@@ -15082,10 +15122,12 @@ void GxBackend::flush_pending_draw_batch() {
         renderer_.note_stripe_vertices(pending_stripe_vertices_);
         pending_stripe_vertices_.clear();
     }
+    // A hidden draw stays out of the picture and of the traced scene, unless the engine traces it (clear glass whose
+    // game draw paints a fake reflection: hidden, its geometry the engine's glass; it was dropped here, b40-b57).
+    if (pending_draw_batch_.rt && (!pending_draw_batch_.hidden || pending_draw_batch_.traced)) {
+        renderer_.rt_note_draw(pending_draw_batch_.call, pending_draw_batch_.rt_info);
+    }
     if (!pending_draw_batch_.hidden) {
-        if (pending_draw_batch_.rt) {
-            renderer_.rt_note_draw(pending_draw_batch_.call, pending_draw_batch_.rt_info);
-        }
         renderer_.draw(pending_draw_batch_.call);
     }
     if (pending_draw_batch_.debake_model != 0u) [[unlikely]] {
@@ -15885,6 +15927,7 @@ bool GxBackend::on_cached_packet_draw_run(
     pending_draw_batch_.call = call;
     pending_draw_batch_.rt = begin_rt_batch(call, pending_draw_batch_.rt_info);
     pending_draw_batch_.hidden = rt_hidden_draw();
+    pending_draw_batch_.traced = pending_draw_batch_.hidden && rt_traced_clear_draw();
     pending_draw_batch_.debake_model = debake_sample_key_;
     pending_draw_batch_.indexed = prim.indexed;
     pending_draw_batch_.base_vertex = prim.base_vertex;
@@ -16064,6 +16107,7 @@ void GxBackend::on_cached_draw_run_draw(
     pending_draw_batch_.call = call;
     pending_draw_batch_.rt = begin_rt_batch(call, pending_draw_batch_.rt_info);
     pending_draw_batch_.hidden = rt_hidden_draw();
+    pending_draw_batch_.traced = pending_draw_batch_.hidden && rt_traced_clear_draw();
     pending_draw_batch_.debake_model = debake_sample_key_;
     pending_draw_batch_.indexed = prim.indexed;
     pending_draw_batch_.base_vertex = prim.base_vertex;
@@ -16997,6 +17041,7 @@ void GxBackend::on_draw(
         pending_draw_batch_.call = call;
         pending_draw_batch_.rt = begin_rt_batch(call, pending_draw_batch_.rt_info);
         pending_draw_batch_.hidden = rt_hidden_draw();
+        pending_draw_batch_.traced = pending_draw_batch_.hidden && rt_traced_clear_draw();
         pending_draw_batch_.debake_model = debake_sample_key_;
         pending_draw_batch_.indexed = prim.indexed;
         pending_draw_batch_.base_vertex = prim.base_vertex;
