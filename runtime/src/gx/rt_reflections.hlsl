@@ -1321,8 +1321,8 @@ float3 physical_emitters(float3 p, float3 n, float3 origin, uint candidates, uin
         const float d2 = max(dot(to, to), 1e-4f);
         const float3 dir = to * rsqrt(d2);
         const float3 face = normalize(cross(b.xyz, c.xyz));
-        float cos_light = -dot(face, dir);
-        cos_light = b.w != 0.0f ? abs(cos_light) : cos_light;
+        // Sides (b.w): 0 one-sided, 1 two-sided, 2 isotropic (rt_lighting.hlsl emitter_facing).
+        const float cos_light = b.w >= 1.5f ? 0.5f : b.w > 0.0f ? abs(-dot(face, dir)) : -dot(face, dir);
         const float cos_surface = dot(n, dir);
         if (cos_light <= 0.0f || cos_surface <= 0.0f) {
             continue;

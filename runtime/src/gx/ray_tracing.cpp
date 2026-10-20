@@ -349,6 +349,8 @@ enum LightParameter : UINT {
     kLightTev,
     kLightPixels,
     kLightEmitTris,
+    kLightReservoirIn,
+    kLightReservoirOut,
     kLightCount,
 };
 
@@ -762,6 +764,8 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     post_haze_distance_ = std::clamp(env_float("GALAXY_RT_POST_HAZE_DISTANCE", 20000.0f), 100.0f, 1.0e6f);
     post_vignette_ = std::clamp(env_float("GALAXY_RT_POST_VIGNETTE", 0.1f), 0.0f, 1.0f);
     post_view_ = env_float("GALAXY_RT_POST_VIEW", 0.0f) != 0.0f;
+    // GALAXY_RT_POST_IDENTITY=1 (diagnostics): the finish writes its copy of the picture back untouched.
+    post_identity_ = env_float("GALAXY_RT_POST_IDENTITY", 0.0f) != 0.0f;
     gi_ = env_float("GALAXY_RT_GI", 1.0f) != 0.0f;
     core_radius_ = std::clamp(env_float("GALAXY_RT_CORE_RADIUS", 1667.0f), 1.0f, 100000.0f);
     core_light_ = std::clamp(env_float("GALAXY_RT_CORE_LIGHT", 8.0f), 0.0f, 16.0f);
@@ -2394,12 +2398,17 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
                 light.flags = kGlowTableIntensity | (material->tint ? 0u : kGlowTableColor);
                 // Under physical light an area light of its own triangles (GlowEmitterCS): its radiance the table's colour
                 // times the table's radiance (at least 1: what it shows), lit from the next frame.
-                if (physical_ && !material->no_light && !material->hide &&
+                // GALAXY_RT_GLOW_EMITTERS=0: none (the art glow lights take them); GALAXY_RT_GLOW_ISOTROPIC=0: each
+                // triangle a two-sided flat panel (the sprite faces the camera: its light turned with the view and
+                // stopped at the sprite's plane, a hard edge across the Terrace dome, b30).
+                static const bool glow_emitters = env_float("GALAXY_RT_GLOW_EMITTERS", 1.0f) != 0.0f;
+                static const bool isotropic = env_float("GALAXY_RT_GLOW_ISOTROPIC", 1.0f) != 0.0f;
+                if (physical_ && glow_emitters && !material->no_light && !material->hide &&
                     glow_emitter_slots_ + draw.triangle_count <= kGlowEmitters) {
                     light.flags |= kGlowPhysical;
                     glow_emitters_.push_back({glow_triangles_, draw.triangle_count, glow_emitter_slots_, light.color,
                                               std::bit_cast<std::uint32_t>(std::max(material->intensity, 1.0f)),
-                                              texture_view(info.texture), 0u, 0u});
+                                              texture_view(info.texture), isotropic ? 1u : 0u, 0u});
                     glow_emitter_slots_ += draw.triangle_count;
                 }
             } else if (material != nullptr && material->particle) {
@@ -2819,6 +2828,11 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT color_format) {
     // Physical: the emitting draws' ranges while their triangles are written, then the triangles (t24; a stand-in).
     params[kLightEmitTris].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
     params[kLightEmitTris].Descriptor.ShaderRegister = 24u;
+    // The emitters' reservoirs (rt_lighting.hlsl emitter_light_reused): the last traced frame's, this frame's.
+    params[kLightReservoirIn].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    params[kLightReservoirIn].Descriptor.ShaderRegister = 25u;
+    params[kLightReservoirOut].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
+    params[kLightReservoirOut].Descriptor.ShaderRegister = 8u;
     for (auto& param : params) {
         param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     }
@@ -3308,6 +3322,7 @@ bool SceneRayTracer::ensure_lighting_buffers(std::uint32_t samples) {
     retire(light_raw_);
     retire(light_primary_);
     for (auto& buffer : light_history_) retire(buffer);
+    for (auto& buffer : light_reservoir_) retire(buffer);
     for (auto& buffer : light_final_) retire(buffer);
     retire(picture_);
     retire(glow_base_);
@@ -3328,7 +3343,8 @@ bool SceneRayTracer::ensure_lighting_buffers(std::uint32_t samples) {
               make(n * 4u, glow_base_, L"rt glow base") && make(n * 4u, glow_added_, L"rt glow added");
     glow_base_state_ = glow_added_state_ = state;
     for (unsigned i = 0; ok && i < 2u; ++i) {
-        ok = make(n * 4u, light_z_[i], L"rt light eye z") && make(n * 16u, light_history_[i], L"rt light history");
+        ok = make(n * 4u, light_z_[i], L"rt light eye z") && make(n * 16u, light_history_[i], L"rt light history") &&
+             make(n * 32u, light_reservoir_[i], L"rt light reservoirs");
         light_z_state_[i] = state;
         light_history_state_[i] = state;
     }
@@ -3343,6 +3359,7 @@ bool SceneRayTracer::ensure_lighting_buffers(std::uint32_t samples) {
         light_raw_.Reset();
         light_primary_.Reset();
         for (auto& buffer : light_history_) buffer.Reset();
+        for (auto& buffer : light_reservoir_) buffer.Reset();
         for (auto& buffer : light_final_) buffer.Reset();
         picture_.Reset();
         glow_base_.Reset();
@@ -3350,7 +3367,7 @@ bool SceneRayTracer::ensure_lighting_buffers(std::uint32_t samples) {
         return false;
     }
     light_samples_ = samples;
-    std::cerr << "[rt] light samples=" << samples << " mb=" << ((n * (4u + 16u + 8u + 8u + 2u * 4u + 2u * 16u + 12u * kLightSlots)) >> 20u)
+    std::cerr << "[rt] light samples=" << samples << " mb=" << ((n * (4u + 16u + 8u + 8u + 2u * 4u + 2u * 16u + 2u * 32u + 12u * kLightSlots)) >> 20u)
               << '\n';
     return true;
 }
@@ -3954,6 +3971,14 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
               (show_term_ == 8u ? 512u : 0u) | (high_quality_ ? 1024u : 0u) |
               (light_textured_ && surface_uv_ && draw_texture_table_ != 0u ? 4096u : 0u) |
               (physical_active_ ? kPhysicalFlag : 0u);
+    // Diagnostics (rt_lighting.hlsl emitter_light_reused): GALAXY_RT_EMIT_REUSE=0 no temporal reuse (bit 15),
+    // GALAXY_RT_EMIT_CANDIDATES=n the candidates per sample (bits 16-23; 0: the quality's).
+    {
+        static const bool reuse = env_float("GALAXY_RT_EMIT_REUSE", 1.0f) != 0.0f;
+        static const auto candidates =
+            static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_EMIT_CANDIDATES", 0.0f), 0.0f, 255.0f));
+        c.flags |= (reuse ? 0u : 32768u) | (candidates << 16u);
+    }
     std::memcpy(c.reproject, reproject.data(), sizeof(c.reproject));
     std::memcpy(c.picture, to_picture.data(), sizeof(c.picture));
     std::copy(history ? history_projection_.begin() : view_.projection.begin(),
@@ -4073,6 +4098,8 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     list->SetComputeRootUnorderedAccessView(kLightHistory, light_history_[current]->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kLightFinal, light_final_[slot]->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kLightPrimary, light_primary_->GetGPUVirtualAddress());
+    list->SetComputeRootShaderResourceView(kLightReservoirIn, light_reservoir_[previous]->GetGPUVirtualAddress());
+    list->SetComputeRootUnorderedAccessView(kLightReservoirOut, light_reservoir_[current]->GetGPUVirtualAddress());
     // The alpha tests' texture coordinates and alpha maps (stand-ins the trace never reads without them: g_flags
     // bit 12 off).
     list->SetComputeRootShaderResourceView(kLightSurfaceUv, surface_uv_ ? surface_uv_->GetGPUVirtualAddress()
@@ -4896,7 +4923,7 @@ void SceneRayTracer::post_prepare(ID3D12GraphicsCommandList* list, D3D12_GPU_DES
     for (unsigned i = 0; i < post_buffers_.size(); ++i) {
         to_state(list, post_buffers_[i].Get(), post_states_[i], kLightRead);
     }
-    c.axis = post_view_ ? 2u : 0u;
+    c.axis = post_identity_ ? 3u : post_view_ ? 2u : 0u;
     std::memcpy(post_constants_.data(), &c, sizeof(c));
 }
 

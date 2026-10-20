@@ -22,7 +22,7 @@ cbuffer RtPost : register(b0)
     float p_dof;                // largest blur radius (EFB pixels; 0: none)
     float p_grade;              // colour grade strength (0: none)
     float p_split;              // GALAXY_RT_SPLIT: left of it the game's own picture
-    uint p_axis;                // blur pass: 0 across, 1 down; finish: 2 false colour
+    uint p_axis;                // blur pass: 0 across, 1 down; finish: 2 false colour, 3 its copy untouched
     float p_rim;                // rim light at silhouettes (0: none)
     float p_haze;               // distance haze in the sky's colour: its largest share (0: none)
     float p_haze_distance;      // eye distance at which the haze reaches 63 % of that share
@@ -628,6 +628,9 @@ float4 PostPS(float4 position : SV_Position) : SV_Target0
         discard;
     }
     float3 c = scene_at(q);
+    if (p_axis == 3u) {
+        return float4(c, 1.0f);
+    }
     const float distance = scene_distance(q);
     if (p_lens_count.x != 0u) {
         c = black_holes(q, distance, c);

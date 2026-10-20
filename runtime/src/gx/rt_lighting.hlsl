@@ -153,6 +153,11 @@ RWStructuredBuffer<uint2> g_pixels : register(u7);
 // the emitting triangles as float4 elements: 0 the count and total power; at 1 + 4 i v0 and area, e1 and two-sided, e2,
 // radiance (linear) and power; at 1 + 4 kEmitTriangles + i the running power (EmitScanCS).
 ByteAddressBuffer g_emit_tris : register(t24);
+// The emitters' reservoirs (emitter_light_reused; ReSTIR, Bitterli et al. 2020), two uint4 per sample: the light point
+// a sample kept (world position) and its weight W; its face's normal (world, octahedral), radiance (halves), the
+// candidates it stands for (M), its beam exponent and sides (bits 16-17, emitter_facing). The last traced frame's (read), this frame's (written).
+StructuredBuffer<uint4> g_reservoir_in : register(t25);
+RWStructuredBuffer<uint4> g_reservoir_out : register(u8);
 static const uint kEmitTriangles = 65536u;   // ray_tracing.cpp kEmitTriangles
 // Glow light sources (GlowEmitterCS): the table's glow draws (additive: the Observatory's star lights and walkway lamps,
 // launch stars) drawn after the trace, their triangles in world space after the scene's emitters and lit from the next
@@ -2659,6 +2664,13 @@ float emit_running(uint i)
     return asfloat(g_emit_tris.Load((kEmitRunning + i) * 16u));
 }
 
+// An emitter's facing towards a point, from the cosine at its face: sides (its element b.w) 0 one-sided, 1 two-sided,
+// 2 isotropic (a glowing volume's sprite, GlowEmitterCS: 1/2, the mean of |cos| over the sphere, the same power).
+float emitter_facing(float cos_light, float sides)
+{
+    return sides >= 1.5f ? 0.5f : sides > 0.0f ? abs(cos_light) : cos_light;
+}
+
 // Emitter i's four elements in this frame's eye space (v0 and area, e1 and two-sided, e2 and beam, radiance and power): a
 // scene triangle's as EmitTriangleCS wrote them, a glow's (from g_emit_scene on) moved from the world.
 void emit_triangle_of(uint i, out float4 a, out float4 b, out float4 c, out float4 d)
@@ -2737,8 +2749,7 @@ float3 emitter_light(float3 p, float3 n, float3 origin, uint candidates, uint se
         const float d2 = max(dot(to, to), 1e-4f);
         const float3 dir = to * rsqrt(d2);
         const float3 face = normalize(cross(b.xyz, c.xyz));
-        float cos_light = -dot(face, dir);
-        cos_light = b.w != 0.0f ? abs(cos_light) : cos_light;
+        const float cos_light = emitter_facing(-dot(face, dir), b.w);
         const float cos_surface = dot(n, dir);
         if (cos_light <= 0.0f || cos_surface <= 0.0f) {
             continue;
@@ -2783,6 +2794,176 @@ float3 emitter_light(float3 p, float3 n, float3 origin, uint candidates, uint se
         return float3(0.0f, 0.0f, 0.0f);
     }
     return kept_light * (weight_sum / (float(candidates) * kept_target));
+}
+
+// A light point's target for resampling at `p` (normal `n`): the luminance of its light there unshadowed, as
+// emitter_light weighs its candidates (eye space).
+float emitter_target(float3 p, float3 n, float3 y, float3 face, float3 radiance, float beam, float sides, out float3 light)
+{
+    light = float3(0.0f, 0.0f, 0.0f);
+    const float3 to = y - p;
+    const float d2 = max(dot(to, to), 1e-4f);
+    const float3 dir = to * rsqrt(d2);
+    const float cos_light = emitter_facing(-dot(face, dir), sides);
+    const float cos_surface = dot(n, dir);
+    if (cos_light <= 0.0f || cos_surface <= 0.0f) {
+        return 0.0f;
+    }
+    light = radiance * ((beam >= 1.0f ? pow(cos_light, beam) : cos_light) * cos_surface / (kPi * d2));
+    return luminance(light);
+}
+
+float3 eye_point_to_world(float3 p)
+{
+    const float3 d = p - float3(g_to_eye[0].w, g_to_eye[1].w, g_to_eye[2].w);
+    return d.x * g_to_eye[0].xyz + d.y * g_to_eye[1].xyz + d.z * g_to_eye[2].xyz;
+}
+
+float3 eye_direction_to_world(float3 d)
+{
+    return d.x * g_to_eye[0].xyz + d.y * g_to_eye[1].xyz + d.z * g_to_eye[2].xyz;
+}
+
+// The emitters' light with spatiotemporal reuse's temporal half (ReSTIR DI, Bitterli et al. 2020; NVIDIA RTXDI): the
+// candidates as emitter_light draws them make this frame's reservoir; the reservoir the last frame kept where this
+// point was (reprojected, its depth plane agreeing) joins it at its light re-weighed here, its count capped at 20
+// times this frame's (stale light fades); one light point is kept, shaded behind one shadow ray, and stored in world
+// space for the next frame (the emitters' list is rebuilt each frame: indices would not hold). A shadowed point is
+// kept with no weight (visibility reuse). Biased (1/M), as RTXDI's default.
+float3 emitter_light_reused(float3 p, float3 n, float3 origin, uint candidates, uint seed, uint index)
+{
+    float weight_sum = 0.0f;
+    float m = 0.0f;
+    float kept_target = 0.0f;
+    float3 kept_light = float3(0.0f, 0.0f, 0.0f);
+    float3 kept_point = float3(0.0f, 0.0f, 0.0f);
+    float3 kept_face = float3(0.0f, 0.0f, 1.0f);
+    float3 kept_radiance = float3(0.0f, 0.0f, 0.0f);
+    float kept_beam = 0.0f;
+    float kept_sides = 0.0f;
+    const uint count = g_tev_info.z;
+    const float total = count != 0u ? emit_element(0u).y : 0.0f;
+    if (count != 0u && total > 0.0f) {
+        m = float(candidates);
+        [loop] for (uint k = 0u; k < candidates; ++k) {
+            const float u = emit_random(seed) * total;
+            uint lo = 0u;
+            uint hi = count - 1u;
+            [loop] while (lo < hi) {
+                const uint mid = (lo + hi) >> 1u;
+                if (emit_running(mid) > u) {
+                    hi = mid;
+                } else {
+                    lo = mid + 1u;
+                }
+            }
+            float4 a, b, c, d;
+            emit_triangle_of(lo, a, b, c, d);
+            if (!(d.w > 0.0f) || !(a.w > 0.0f)) {
+                continue;
+            }
+            float r1 = emit_random(seed);
+            float r2 = emit_random(seed);
+            if (r1 + r2 > 1.0f) {
+                r1 = 1.0f - r1;
+                r2 = 1.0f - r2;
+            }
+            const float3 y = a.xyz + b.xyz * r1 + c.xyz * r2;
+            const float3 face = normalize(cross(b.xyz, c.xyz));
+            float3 light;
+            const float target = emitter_target(p, n, y, face, d.rgb, c.w, b.w, light);
+            const float w = target / (d.w / (total * a.w));
+            weight_sum += w;
+            if (w > 0.0f && emit_random(seed) * weight_sum < w) {
+                kept_target = target;
+                kept_light = light;
+                kept_point = y;
+                kept_face = face;
+                kept_radiance = d.rgb;
+                kept_beam = c.w;
+                kept_sides = b.w;
+            }
+        }
+    }
+    // The last frame's reservoir where this point was (GALAXY_RT_EMIT_REUSE=0, g_flags bit 15: none).
+    if ((g_flags & 1u) != 0u && (g_flags & 32768u) == 0u) {
+        const float3 previous = transform(g_reproject, p);
+        if (previous.z < -g_near) {
+            const float2 a = (eye_to_pixel(g_history_projection, g_viewport, previous) - 0.5f) / float(g_factor);
+            const int2 s = int2(round(a));
+            if (all(s >= 0) && all(s < int2(g_sample_size))) {
+                const uint si = uint(s.y) * g_sample_size.x + uint(s.x);
+                const float sz = g_prev_z[si];
+                if (sz != 0.0f && abs(sz - previous.z) < 0.5f + abs(previous.z) * 0.02f) {
+                    const uint4 r0 = g_reservoir_in[2u * si];
+                    const uint4 r1 = g_reservoir_in[2u * si + 1u];
+                    const float w_prev = asfloat(r0.w);
+                    const float m_prev = min(f16tof32(r1.z >> 16u), 20.0f * max(float(candidates), 1.0f));
+                    // A reservoir whose light was shadowed keeps its count with no weight: it still dilutes (RTXDI);
+                    // dropped whole, only lit samples lived on and shadows washed out (Terrace grass 0.51x the game
+                    // vs 0.27x for 64 candidates without reuse, b30).
+                    m += m_prev;
+                    if (w_prev > 0.0f && m_prev > 0.0f) {
+                        const float3 y = transform(g_to_eye, asfloat(r0.xyz));
+                        const float3 face = normalize(rotate3(g_to_eye, unpack_normal(r1.x)));
+                        const float3 radiance = float3(f16tof32(r1.y), f16tof32(r1.y >> 16u), f16tof32(r1.z));
+                        const float beam = float(r1.w & 0xFFFFu);
+                        const float sides = float((r1.w >> 16u) & 3u);
+                        float3 light;
+                        const float target = emitter_target(p, n, y, face, radiance, beam, sides, light);
+                        const float w = target * w_prev * m_prev;
+                        weight_sum += w;
+                        if (w > 0.0f && emit_random(seed) * weight_sum < w) {
+                            kept_target = target;
+                            kept_light = light;
+                            kept_point = y;
+                            kept_face = face;
+                            kept_radiance = radiance;
+                            kept_beam = beam;
+                            kept_sides = sides;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    float weight = kept_target > 0.0f && m > 0.0f ? weight_sum / (m * kept_target) : 0.0f;
+    float3 result = float3(0.0f, 0.0f, 0.0f);
+    if (weight > 0.0f) {
+        // One shadow ray to the kept point, stopping short of its own triangle.
+        const float3 to = kept_point - origin;
+        const float span = length(to);
+        RayDesc ray;
+        ray.Origin = origin;
+        ray.Direction = to / max(span, 1e-4f);
+        ray.TMin = 0.0f;
+        ray.TMax = max(span * 0.999f - 0.5f, 0.0f);
+        RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES>
+            query;
+        query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
+        while (query.Proceed()) {
+            const bool late_hit = query.CandidateInstanceID() != 0u;
+            const uint hit = late_hit ? 0u : g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u);
+            if (late_hit || ((hit & kDrawNoShadow) == 0u &&
+                             card_blocks(query.CandidatePrimitiveIndex(), hit,
+                                         origin + ray.Direction * query.CandidateTriangleRayT(), seed))) {
+                query.CommitNonOpaqueTriangleHit();
+            }
+        }
+        if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
+            weight = 0.0f;
+        } else {
+            result = kept_light * weight;
+        }
+    }
+    const float3 world = eye_point_to_world(kept_point);
+    g_reservoir_out[2u * index] = uint4(asuint(world), asuint(weight));
+    g_reservoir_out[2u * index + 1u] =
+        uint4(pack_normal(normalize(eye_direction_to_world(kept_face))),
+              f32tof16(kept_radiance.r) | (f32tof16(kept_radiance.g) << 16u),
+              f32tof16(kept_radiance.b) | (f32tof16(min(m, 60000.0f)) << 16u),
+              min(uint(kept_beam), 0xFFFFu) | (min(uint(kept_sides + 0.5f), 3u) << 16u));
+    return result;
 }
 
 void reference_material(uint tri, float2 b, out float3 albedo, out float3 emission);
@@ -3168,9 +3349,10 @@ void TraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
     }
     // Physical: the emitting triangles' light (emitter_light), in the point lights' units; 8 candidates on High, 4 on
     // Medium, 2 on Low.
-    if ((g_flags & kPhysicalFlag) != 0u && g_tev_info.z != 0u) {
-        const uint candidates = (g_flags & 1024u) != 0u ? 8u : g_rays <= 1u ? 2u : 4u;
-        points += emitter_light(p, n, origin, candidates, emit_hash(index ^ (g_frame * 0x9E3779B9u))) /
+    if ((g_flags & kPhysicalFlag) != 0u) {
+        const uint chosen = (g_flags >> 16u) & 0xFFu;   // GALAXY_RT_EMIT_CANDIDATES
+        const uint candidates = chosen != 0u ? chosen : (g_flags & 1024u) != 0u ? 8u : g_rays <= 1u ? 2u : 4u;
+        points += emitter_light_reused(p, n, origin, candidates, emit_hash(index ^ (g_frame * 0x9E3779B9u)), index) /
                   max(g_point_light, 1e-3f);
     }
     g_z[index] = p.z;
@@ -3231,12 +3413,16 @@ float3 linear_to_srgb(float3 c)
 // Physical glow light sources (emit root; kGlowPhysical draws): a table light the game draws as an additive glow (the
 // Observatory's star lights and walkway lamps, launch stars, fire) is an area light of its own triangles, as the scene's
 // emitters are: each triangle (e_triangles: this frame's eye space) into the emitters' glow segment (e_glow_out:
-// g_emit_tris) in world space, two-sided, its radiance the table's colour (linear) times the table's radiance times the
-// share of its quad its texture lights (an additive sprite adds texel x alpha: a fire sprite's soft blob about a quarter;
-// counted whole, the Observatory kitchen's overlapping fire sprites flooded the oven white, b26), its power 2 pi L A.
+// g_emit_tris) in world space, its radiance the table's colour (linear) times the table's radiance, its power 2 pi L A
+// times the share of its quad its texture lights (an additive sprite adds texel x alpha: a fire sprite's soft blob about
+// a quarter; counted whole, the Observatory kitchen's overlapping fire sprites flooded the oven white, b26).
+// A sprite stands for a glowing volume (a star light's glass, a flame), not a panel: its light leaves evenly in every
+// direction (sides 2: emitter_facing 1/2, the same power as two-sided Lambert), from its triangles shrunk about their
+// centres to that share of their area (where the texture is lit). Drawn as panels (word 6 = 0), the sprite faced the
+// camera: the light turned with the view and stopped at its plane (a hard edge across the Terrace dome, b30).
 // The next frame's lighting samples them after the scene's emitters (they draw after this frame's trace).
 // e_draws: per glow emitter draw (32 bytes) its first glow triangle, count, first glow emitter, colour (RGBA8), radiance,
-// its texture's view in the descriptor heap (~0: none).
+// its texture's view in the descriptor heap (~0: none), 1 isotropic.
 RWByteAddressBuffer e_glow_out : register(u3);
 
 groupshared float s_coverage[64];
@@ -3266,7 +3452,10 @@ void GlowEmitterCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
         GroupMemoryBarrierWithGroupSync();
     }
     const float coverage = view != 0xFFFFFFFFu ? s_coverage[0] / 64.0f : 1.0f;
-    const float3 radiance = srgb_to_linear(rgb8(draw.w)) * (asfloat(e_draws.Load(record + 16u)) * coverage);
+    const bool isotropic = e_draws.Load(record + 24u) != 0u;
+    const float shrink = isotropic ? sqrt(max(coverage, 1e-4f)) : 1.0f;
+    const float3 radiance =
+        srgb_to_linear(rgb8(draw.w)) * (asfloat(e_draws.Load(record + 16u)) * (isotropic ? 1.0f : coverage));
     for (uint t = gi; t < draw.y; t += 64u) {
         const uint slot = draw.z + t;
         if (slot >= kGlowEmitters) {
@@ -3274,6 +3463,10 @@ void GlowEmitterCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
         }
         float3 v0, v1, v2;
         const bool valid = emit_triangle(draw.x + t, v0, v1, v2);
+        const float3 centre = (v0 + v1 + v2) / 3.0f;
+        v0 = centre + (v0 - centre) * shrink;
+        v1 = centre + (v1 - centre) * shrink;
+        v2 = centre + (v2 - centre) * shrink;
         const float3 w0 = transform(e_to_world, v0);
         const float3 e1 = rotate3(e_to_world, v1 - v0);
         const float3 e2 = rotate3(e_to_world, v2 - v0);
@@ -3281,7 +3474,7 @@ void GlowEmitterCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
         const float power = area > 1e-8f ? 2.0f * kPi * luminance(radiance) * area : 0.0f;
         const uint at = (kGlowElements + 4u * slot) * 16u;
         e_glow_out.Store4(at, asuint(float4(w0, area)));
-        e_glow_out.Store4(at + 16u, asuint(float4(e1, 1.0f)));
+        e_glow_out.Store4(at + 16u, asuint(float4(e1, isotropic ? 2.0f : 1.0f)));
         e_glow_out.Store4(at + 32u, asuint(float4(e2, 0.0f)));
         e_glow_out.Store4(at + 48u, asuint(float4(radiance, power)));
         e_glow_out.Store4((kGlowPowers + slot) * 16u, asuint(float4(power, 0.0f, 0.0f, 0.0f)));

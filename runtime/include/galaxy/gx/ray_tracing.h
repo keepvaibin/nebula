@@ -582,6 +582,8 @@ private:
     // Per sample: the camera ray's triangle + 1 (0: none) and its barycentrics (halves).
     Microsoft::WRL::ComPtr<ID3D12Resource> light_primary_;
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 2> light_history_;
+    // The emitters' reservoirs per sample (rt_lighting.hlsl emitter_light_reused, 32 bytes), with the history's parity.
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 2> light_reservoir_;
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kLightSlots> light_final_;
     // Physical: per light slot its traced frame's per-pixel shading normals (rt_lighting.hlsl GBufferCS).
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kLightSlots> light_pixels_;
@@ -664,6 +666,7 @@ private:
     std::array<std::array<std::uint32_t, 4>, 4> bloom_size_{};   // width, height, EFB width, EFB height
     std::uint64_t bloom_entries_ = 0u;
     int bloom_slot_ = -1;
+    bool post_identity_ = false;   // GALAXY_RT_POST_IDENTITY: the finish writes its copy back (diagnostics)
     Microsoft::WRL::ComPtr<ID3D12PipelineState> glow_emit_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> glow_emitter_pso_;
     // Physical: this scene's glow draws that are table light sources (GlowEmitterCS): first glow triangle, count, first
