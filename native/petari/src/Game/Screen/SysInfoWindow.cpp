@@ -174,6 +174,20 @@ void SysInfoWindow::control() {
     }
 }
 
+#ifdef TARGET_PC
+// A Yes/No question of Nebula's own (the cutscene skip): its text as given, the answers as init set them (the save
+// prompt's Yes and No, in the played language).
+void SysInfoWindow::appearYesNoWithText(const wchar_t* pText) {
+    mType = Type_YesNo;
+    MR::showPaneRecursive(this, "Left");
+    MR::showPaneRecursive(this, "Right");
+    MR::setTextBoxVerticalPositionCenterRecursive(this, mTextParentPaneName);
+    MR::setTextBoxMessageRecursive(this, mTextParentPaneName, pText);
+    appear();
+    mYesNoSelector->appear();
+}
+#endif
+
 const char* SysInfoWindow::getLayoutName() const {
     switch (mWindowType) {
     case WindowType_Normal:

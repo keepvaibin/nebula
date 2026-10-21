@@ -558,6 +558,22 @@ void AudSystem::enterPauseMenu() {
     setSeVolumeSet(AudSystemVolumeController::VolumeSet_PauseMenu, 18);
 }
 
+#ifdef TARGET_PC
+// Nebula's cutscene skip (NebulaCutsceneSkip): the music and the game's sounds fade as for the pause menu, but nothing
+// is paused, so a cutscene waiting for a sound to end still ends; the menu's own sounds play.
+void AudSystem::muteForCutsceneSkip(bool mute) {
+    if (mute) {
+        mSeqMgr.getParams()->moveVolume(0.0f, 10);
+        mStreamMgr.getParams()->moveVolume(0.0f, 10);
+        setSeVolumeSet(AudSystemVolumeController::VolumeSet_PauseMenu, 10);
+    } else {
+        mSeqMgr.getParams()->moveVolume(AudParams::masterVolBgm, 20);
+        mStreamMgr.getParams()->moveVolume(AudParams::masterVolStream, 20);
+        recoverSeVolumeSet(20);
+    }
+}
+#endif
+
 void AudSystem::exitPauseMenu() {
     mPauseMenuState = MenuState_Exit;
     mPauseMenuToggleTime = 20 + 1;

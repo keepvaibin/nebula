@@ -87,6 +87,11 @@ namespace MR {
     void endStarPointerMode(void*);
     void requestStarPointerModeErrorWindow(void*);
     void requestStarPointerModeSaveLoad(void*);
+#ifdef TARGET_PC
+    // The pointer's mode as requested this frame, while the scene and its sequences hold still (Nebula's cutscene
+    // skip question): GameSequenceProgress updates it otherwise.
+    void updateStarPointerModeWhileSceneHeld();
+#endif
     void requestStarPointerModePictureBook(void*);
     void requestStarPointerModePauseMenu(void*);
     void requestStarPointerModeBlueStarReady(void*);

@@ -75,6 +75,9 @@ public:
     void updateHomeButtonMenu();
     bool isHomeButtonMenuActive() const;
     void enterPauseMenu();
+#ifdef TARGET_PC
+    void muteForCutsceneSkip(bool mute);
+#endif
     void exitPauseMenu();
     void updatePauseMenu();
     bool isPauseMenuActive() const;

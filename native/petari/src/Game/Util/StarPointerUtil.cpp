@@ -838,6 +838,12 @@ namespace MR {
         ::getStarPointerOnOffController()->requestMode(pRequester, StarPointerMode_SaveLoad);
     }
 
+#ifdef TARGET_PC
+    void updateStarPointerModeWhileSceneHeld() {
+        ::getStarPointerOnOffController()->update();
+    }
+#endif
+
     void requestStarPointerModePictureBook(void* pRequester) {
         ::getStarPointerOnOffController()->requestMode(pRequester, StarPointerMode_PictureBook);
     }

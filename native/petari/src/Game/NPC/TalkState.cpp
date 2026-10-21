@@ -1,4 +1,7 @@
 #include "Game/NPC/TalkState.hpp"
+#ifdef TARGET_PC
+#include "Game/System/NebulaCutsceneSkip.hpp"
+#endif
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/NPC/TalkBalloon.hpp"
 #include "Game/NPC/TalkMessageCtrl.hpp"
@@ -136,6 +139,9 @@ bool TalkStateEvent::talk(const TalkMessageCtrl* pArg1) {
     }
 
     if (TalkFunction::isSelectTalk(_04) && !mBalloon->hasNextPage()) {
+#ifdef TARGET_PC
+        NebulaCutsceneSkip::endForQuestion();
+#endif
         return true;
     }
 

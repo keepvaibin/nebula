@@ -32,6 +32,9 @@
 #include <JSystem/JKernel/JKRExpHeap.hpp>
 #include <nw4r/lyt/init.h>
 #include <revolution.h>
+#ifdef TARGET_PC
+#include "Game/System/NebulaCutsceneSkip.hpp"
+#endif
 
 #define GX_FIFO_SIZE 0x80000
 
@@ -175,6 +178,9 @@ void GameSystem::initAfterStationedResourceLoaded() {
     mHomeButtonLayout->initWithoutIter();
     mErrorWatcher->initAfterResourceLoaded();
     mSystemWipeHolder = MR::createSystemWipeHolder();
+#ifdef TARGET_PC
+    NebulaCutsceneSkip::init();
+#endif
     mSceneController->initAfterStationedResourceLoaded();
     mSequenceDirector->initAfterResourceLoaded();
 }
@@ -201,6 +207,13 @@ void GameSystem::frameLoop() {
     MainLoopFramework::sManager->endRender();
     update();
     calcAnim();
+#ifdef TARGET_PC
+    // A skipped cutscene runs on unseen: more of the game's steps while they fit in this frame.
+    while (NebulaCutsceneSkip::tryExtraStep()) {
+        update();
+        calcAnim();
+    }
+#endif
     mObjHolder->captureIfAllowForScreenPreserver();
     MainLoopFramework::sManager->endFrame();
     MainLoopFramework::sManager->waitForRetrace();
@@ -209,6 +222,9 @@ void GameSystem::frameLoop() {
 void GameSystem::draw() {
     mSceneController->drawScene();
     mSequenceDirector->draw();
+#ifdef TARGET_PC
+    NebulaCutsceneSkip::draw();
+#endif
     mObjHolder->drawStarPointer();
     mObjHolder->drawBeforeEndRender();
 
@@ -225,6 +241,9 @@ void GameSystem::update() {
     SingletonHolder< GameSystemResetAndPowerProcess >::get()->movement();
     mSceneController->checkRequestAndChangeScene();
     mObjHolder->update();
+#ifdef TARGET_PC
+    NebulaCutsceneSkip::update();
+#endif
     mHomeButtonLayout->movement();
 
     if (!mHomeButtonLayout->isActive()) {
@@ -254,7 +273,17 @@ void GameSystem::updateSceneController() {
         isSceneUpdate = false;
     }
 
+#ifdef TARGET_PC
+    // The cutscene skip's question holds the scene still, as the HOME Menu does (a movie resumes in step after it).
+    const bool isSkipPrompt = NebulaCutsceneSkip::isFreezingScene();
+    if (isSkipPrompt) {
+        isSceneUpdate = false;
+    }
+    mHomeButtonStateNotifier->update(mHomeButtonLayout->isActive() || GameSystemFunction::isOccurredSystemWarning() ||
+                                     isSkipPrompt);
+#else
     mHomeButtonStateNotifier->update(mHomeButtonLayout->isActive() || GameSystemFunction::isOccurredSystemWarning());
+#endif
 
     if (isSceneUpdate || isResetProcessing) {
         mSequenceDirector->update();

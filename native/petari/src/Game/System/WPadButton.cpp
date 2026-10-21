@@ -1,5 +1,8 @@
 #include "Game/System/WPadButton.hpp"
 #include "Game/System/WPad.hpp"
+#ifdef TARGET_PC
+#include "Game/System/NebulaCutsceneSkip.hpp"
+#endif
 
 WPadButton::WPadButton(const WPad* pPad) : mPad(pPad), mHold(), mTrigger(), mRelease(), mRepeat(), mDelaySec(1.0f / 2.4f), mPulseSec(1.0f / 6.0f) {
     KPADSetBtnRepeat(mPad->mChannel, mDelaySec, mPulseSec);
@@ -28,6 +31,15 @@ void WPadButton::update() {
     if ((pStatus->hold & KPAD_BUTTON_RPT) != 0) {
         mRepeat |= mHold;
     }
+#ifdef TARGET_PC
+    if (mPad->mChannel == WPAD_CHAN0 && NebulaCutsceneSkip::isPressingA(0)) {
+        const u32 previous = mHold;
+        mHold = WPAD_BUTTON_A;
+        mTrigger = (previous & WPAD_BUTTON_A) != 0 ? 0 : WPAD_BUTTON_A;
+        mRelease = previous & ~WPAD_BUTTON_A;
+        mRepeat = mTrigger;
+    }
+#endif
 }
 
 bool WPadButton::testButtonUp() const {

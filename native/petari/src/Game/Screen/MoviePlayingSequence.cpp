@@ -1,4 +1,7 @@
 #include "Game/Screen/MoviePlayingSequence.hpp"
+#ifdef TARGET_PC
+#include "Game/System/NebulaCutsceneSkip.hpp"
+#endif
 #include "Game/Demo/DemoPadRumbler.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Player/MarioAccess.hpp"
@@ -365,6 +368,15 @@ bool MoviePlayingSequence::trySkip() {
     if (!MR::isActiveMoviePlayer()) {
         return false;
     }
+
+#ifdef TARGET_PC
+    if (NebulaCutsceneSkip::takeMovieSkip()) {
+        MR::stopMoviePlayer();
+        MR::forceCloseWipeFade();
+        setNerve(GET_NERVE(MoviePlayingSequence, HostTypeEndWait));
+        return true;
+    }
+#endif
 
     if (!MR::isEqualStringCase(mInfo->mMovieName, "/MovieData/FinalBattle.thp")) {
         return false;

@@ -50,6 +50,9 @@ public:
     virtual void control();
 
     void appear(const char*, SysInfoType, SysInfoTextPos, SysInfoMessageType);
+#ifdef TARGET_PC
+    void appearYesNoWithText(const wchar_t* pText);
+#endif
     void disappear();
     void forceKill();
     bool isWait() const;
