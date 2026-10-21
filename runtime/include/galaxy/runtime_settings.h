@@ -40,6 +40,8 @@ struct RuntimeSettings {
     unsigned text_speed = 1u;
     // The language to start the game in. A change takes effect at the next start.
     GameLanguage language = GameLanguage::English;
+    // Discord shows what the player is doing (galaxy, star, Power Stars) while Discord runs.
+    bool discord_status = true;
 };
 
 // The language the game runs in this session: the setting when the game first asks (at boot), then

@@ -1103,6 +1103,9 @@ void FileSelector::exeFileSelectStart() {
 
 void FileSelector::exeFileSelect() {
     if (MR::isFirstStep(this)) {
+#ifdef TARGET_PC
+        __NebulaPresence(nullptr, nullptr, -1);  // Discord: choosing a file
+#endif
         validateSelectAll();
         appearAllIndex();
         MR::activeStarPointerGuidance();

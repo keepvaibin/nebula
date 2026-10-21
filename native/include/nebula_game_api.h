@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 15u
+#define NEBULA_GAME_API_VERSION 16u
 
 /* A physical range of the game's memory and where it is in the host process: what the GPU's addresses resolve to. */
 typedef struct NebulaGameMemoryRegion {
@@ -296,6 +296,9 @@ typedef struct NebulaHostServices {
     /* A native equivalent of a mod's code patch (NEBULA_PATCH_*): 1 with `value` set when an enabled mod carries it,
        else 0. Fixed for the session. */
     int (*code_patch)(void* user, uint32_t id, uint32_t* value);
+    /* What the player is doing, for Discord: the galaxy and the star (UTF-16, the game's own text in the played
+       language; either may be NULL) and the Power Stars collected (-1: not in a file). Reported when it changes. */
+    void (*presence)(void* user, const uint16_t* galaxy, const uint16_t* star, int32_t power_stars);
 } NebulaHostServices;
 
 enum {

@@ -2923,6 +2923,15 @@ std::vector<SettingsRow> game_page(const RuntimeSettings& runtime) {
                         }
                     },
                     "THE GAME'S TEXT AND MENUS"});
+    rows.push_back({"DISCORD STATUS", runtime.discord_status ? std::string("ON") : std::string("OFF"),
+                    [](RenderConfig&, int delta) {
+                        if (delta == 0) return;
+                        RuntimeSettings settings = get_runtime_settings();
+                        settings.discord_status = !settings.discord_status;
+                        set_runtime_settings(settings);
+                        s_native_settings_dirty.store(true, std::memory_order_release);
+                    },
+                    "SHOWS YOUR GALAXY AND STAR IN DISCORD WHILE IT RUNS"});
     {
         rows.push_back({"MIIS", {}, nullptr, {}, true});
         std::string status;

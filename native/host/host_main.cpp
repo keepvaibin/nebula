@@ -29,6 +29,7 @@
 #include "galaxy/native_input.h"
 #include "galaxy/native_thp_video.h"
 #include "galaxy/perf_hint.h"
+#include "galaxy/discord_presence.h"
 #include "galaxy/runtime_settings.h"
 #include "galaxy/gx/render_config.h"
 
@@ -1552,6 +1553,72 @@ int svc_traced_sun(void*, float* direction) {
 #endif
 }
 
+// The Discord application Nebula's status shows under (GALAXY_DISCORD_CLIENT_ID replaces it); empty: no status.
+constexpr const char* kDiscordClientId = "";
+
+// The game's message text (UTF-16, its tags skipped: 0x1A, then the tag's size in bytes in the next unit's high byte)
+// as UTF-8.
+std::string message_utf8(const uint16_t* text) {
+    std::string out;
+    if (text == nullptr) return out;
+    for (size_t i = 0; i < 256u && text[i] != 0u; ++i) {
+        uint32_t c = text[i];
+        if (c == 0x1Au) {
+            const uint32_t units = (static_cast<uint32_t>(text[i + 1u]) >> 8u) / 2u;
+            if (units < 2u) break;
+            i += units - 1u;
+            continue;
+        }
+        if (c >= 0xD800u && c <= 0xDBFFu && text[i + 1u] >= 0xDC00u && text[i + 1u] <= 0xDFFFu) {
+            c = 0x10000u + ((c - 0xD800u) << 10u) + (text[i + 1u] - 0xDC00u);
+            ++i;
+        }
+        if (c < 0x20u) c = ' ';
+        if (c < 0x80u) {
+            out += static_cast<char>(c);
+        } else if (c < 0x800u) {
+            out += static_cast<char>(0xC0u | (c >> 6u));
+            out += static_cast<char>(0x80u | (c & 0x3Fu));
+        } else if (c < 0x10000u) {
+            out += static_cast<char>(0xE0u | (c >> 12u));
+            out += static_cast<char>(0x80u | ((c >> 6u) & 0x3Fu));
+            out += static_cast<char>(0x80u | (c & 0x3Fu));
+        } else {
+            out += static_cast<char>(0xF0u | (c >> 18u));
+            out += static_cast<char>(0x80u | ((c >> 12u) & 0x3Fu));
+            out += static_cast<char>(0x80u | ((c >> 6u) & 0x3Fu));
+            out += static_cast<char>(0x80u | (c & 0x3Fu));
+        }
+    }
+    while (!out.empty() && out.back() == ' ') out.pop_back();
+    while (!out.empty() && out.front() == ' ') out.erase(out.begin());
+    return out;
+}
+
+// What the player is doing, for Discord: the galaxy (or the file select) and the star, else the Power Stars.
+void svc_presence(void*, const uint16_t* galaxy, const uint16_t* star, int32_t power_stars) {
+    galaxy::discord::Activity activity;
+    if (power_stars < 0) {
+        activity.details = "Choosing a file";
+    } else {
+        activity.details = message_utf8(galaxy);
+        activity.state = message_utf8(star);
+        if (activity.details.empty()) {
+            activity.details = "At the title screen";  // the title's stage has no galaxy name
+            activity.state.clear();
+        } else if (activity.state.empty()) {
+            activity.state = std::to_string(power_stars) + (power_stars == 1 ? " Power Star" : " Power Stars");
+        }
+    }
+    static std::string last;
+    const std::string line = activity.details + " | " + activity.state;
+    if (line != last) {
+        last = line;
+        log_line("presence:", line.c_str());
+    }
+    galaxy::discord::set_activity(activity);
+}
+
 // A mod's code patch the game runs natively (NEBULA_PATCH_*), as the mods layer matched it at the start.
 int svc_code_patch(void*, uint32_t id, uint32_t* value) {
     static_assert(galaxy::mods::kPatchFlipPanelGroup == NEBULA_PATCH_FLIP_PANEL_GROUP &&
@@ -2858,6 +2925,7 @@ int main(int argc, char** argv) {
     services.gx_scene_marker = svc_gx_scene_marker;
     services.movie_frame = svc_movie_frame;
     services.code_patch = svc_code_patch;
+    services.presence = svc_presence;
     services.gx_stripe_particle = svc_gx_stripe_particle;
     services.disc_fst = svc_disc_fst;
     services.disc_read = svc_disc_read;
@@ -2900,6 +2968,12 @@ int main(int argc, char** argv) {
         die("the settings did not load: %s", failure.what());
     }
     galaxy::gx::set_native_settings_content_root(galaxy::host::locate_game(pak).content_root.string());
+    // Discord: never from a hidden test run, which must leave the player's status alone.
+    if (const char* hidden = std::getenv("GALAXY_HIDE_WINDOW"); hidden == nullptr || hidden[0] == '\0' || hidden[0] == '0') {
+        const char* id = std::getenv("GALAXY_DISCORD_CLIENT_ID");
+        galaxy::discord::set_enabled_provider([] { return galaxy::get_runtime_settings().discord_status; });
+        galaxy::discord::start(id != nullptr ? id : kDiscordClientId);
+    }
     // The environment is final from here: the input poll's many reads per report are served once from a table (each
     // read otherwise scans the whole environment block, 100 reports a second).
     galaxy::host::set_env_flag_cache_enabled(true);

@@ -91,6 +91,10 @@ void __NebulaGameStage(const char* name) {
     sHost->game_stage(sHost->user, name);
 }
 
+void __NebulaPresence(const u16* galaxy, const u16* star, s32 power_stars) {
+    sHost->presence(sHost->user, galaxy, star, power_stars);
+}
+
 uint32_t __NebulaObjectId(const void* object); /* memory.c */
 
 void __NebulaObjectName(const void* object, const char* name) {

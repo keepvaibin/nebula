@@ -145,6 +145,8 @@ void apply_kv(RuntimeSettings& settings, const char* key, const char* value) {
         if (value[0] >= '1' && value[0] <= '4' && value[1] == '\0') {
             settings.text_speed = static_cast<unsigned>(value[0] - '0');
         }
+    } else if (std::strcmp(key, "discord_status") == 0) {
+        settings.discord_status = value[0] != '0';
     } else if (std::strcmp(key, "language") == 0) {
         for (const GameLanguage language : {GameLanguage::English, GameLanguage::French, GameLanguage::Spanish}) {
             if (_stricmp(value, game_language_key(language)) == 0) settings.language = language;
@@ -435,6 +437,7 @@ bool reload_runtime_audio_settings_if_changed() noexcept {
         settings.audio = parsed.audio;
         settings.text_speed = parsed.text_speed;
         settings.language = parsed.language;
+        settings.discord_status = parsed.discord_status;
         set_runtime_settings(settings);
         input::set_controls_config(controls);
         record_input_mode_sync(file_mode, settings.input_mode);
@@ -472,6 +475,7 @@ bool save_runtime_settings_to_file() {
                  << "audio_wiimote_speaker_gain=" << settings.audio.wiimote_speaker << '\n'
                  << "text_speed=" << settings.text_speed << '\n'
                  << "language=" << game_language_key(settings.language) << '\n'
+                 << "discord_status=" << (settings.discord_status ? 1 : 0) << '\n'
                  << input::format_controls_settings(input::get_controls_config());
         if (!contents) {
             return false;

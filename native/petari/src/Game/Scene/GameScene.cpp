@@ -52,6 +52,9 @@
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
+#ifdef TARGET_PC
+#include "Game/Util/MessageUtil.hpp"
+#endif
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
@@ -169,8 +172,24 @@ void GameScene::init() {
     }
 }
 
+#ifdef TARGET_PC
+namespace {
+    // Discord (__NebulaPresence): the galaxy and its star in the game's own words, and the Power Stars collected.
+    void reportPresence() {
+        const char* pStage = MR::getCurrentStageName();
+        const s32 scenario = MR::getCurrentScenarioNo();
+        const wchar_t* pGalaxy = MR::getGalaxyNameOnCurrentLanguage(pStage);
+        const wchar_t* pStar = scenario > 0 ? MR::getScenarioNameOnCurrentLanguage(pStage, scenario) : nullptr;
+        __NebulaPresence(reinterpret_cast< const u16* >(pGalaxy), reinterpret_cast< const u16* >(pStar), MR::getPowerStarNum());
+    }
+};  // namespace
+#endif
+
 void GameScene::start() {
     AudWrap::getSceneMgr()->startScene();
+#ifdef TARGET_PC
+    reportPresence();
+#endif
 
     if (MR::isGlobalTimerEnd()) {
         MR::forceCloseWipeCircle();
