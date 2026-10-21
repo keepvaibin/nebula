@@ -135,12 +135,10 @@ void TalkBalloon::updateBalloon() {
 
 void TalkBalloon::updateTalking() {
     updateBalloon();
-    mTextFormer->updateTalking();
 #ifdef TARGET_PC
-    // Nebula's text speed: the same step again while text is still appearing.
-    for (u32 speed = __NebulaOption(NEBULA_OPTION_TEXT_SPEED); speed > 1 && !mTextFormer->isTextAppearedAll(); speed--) {
-        mTextFormer->updateTalking();
-    }
+    mTextFormer->updateTalkingAtTextSpeed();
+#else
+    mTextFormer->updateTalking();
 #endif
 }
 

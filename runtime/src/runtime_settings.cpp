@@ -60,7 +60,7 @@ RuntimeSettings sanitize_settings(RuntimeSettings settings) {
     settings.audio.wiimote_speaker = std::isfinite(settings.audio.wiimote_speaker)
         ? std::clamp(settings.audio.wiimote_speaker, 0.0f, 4.0f)
         : 0.0f;
-    settings.text_speed = std::clamp(settings.text_speed, 1u, 3u);
+    settings.text_speed = std::clamp(settings.text_speed, 1u, 4u);
     if (settings.language != GameLanguage::French && settings.language != GameLanguage::Spanish) {
         settings.language = GameLanguage::English;
     }
@@ -142,7 +142,7 @@ void apply_kv(RuntimeSettings& settings, const char* key, const char* value) {
     } else if (std::strcmp(key, "audio_wiimote_speaker_gain") == 0) {
         settings.audio.wiimote_speaker = parse_gain(value, settings.audio.wiimote_speaker);
     } else if (std::strcmp(key, "text_speed") == 0) {
-        if (value[0] >= '1' && value[0] <= '3' && value[1] == '\0') {
+        if (value[0] >= '1' && value[0] <= '4' && value[1] == '\0') {
             settings.text_speed = static_cast<unsigned>(value[0] - '0');
         }
     } else if (std::strcmp(key, "language") == 0) {

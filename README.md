@@ -48,7 +48,7 @@ it is the original game code, translated instruction by instruction by the recom
 - Anti-aliasing (SMAA, FXAA), AMD FidelityFX FSR 1 upscaling, anisotropic filtering and
   optional per-pixel lighting.
 - In-game settings menu (F1, View + Menu on Xbox, Minus + Plus on Switch).
-- Text speed: dialogue and Rosalina's storybook at the original pace, 2x or 3x.
+- Text speed: dialogue and Rosalina's storybook at the original pace, 2x, 3x or instant (each page at once).
 - The game in English, French or Spanish, the three languages of the USA release.
 - Mii import for the file icons: Miis from a Wii (`.mii`, `.rcd`, `.rsd`, `RFL_DB.dat`, Wii Remote data), DS,
   3DS, Wii U (`.cfsd`, `.ffsd`, their Mii databases), Switch (`.charinfo`, `.nfsd`), Mii Studio (code or link)

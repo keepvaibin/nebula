@@ -574,6 +574,9 @@ int main() {
     write_text(settings_path, "text_speed=3\n");
     galaxy::load_runtime_settings_from_file();
     passed &= expect(galaxy::get_runtime_settings().text_speed == 3u, "text speed 3x loads");
+    write_text(settings_path, "text_speed=4\n");
+    galaxy::load_runtime_settings_from_file();
+    passed &= expect(galaxy::get_runtime_settings().text_speed == 4u, "instant text loads");
     write_text(settings_path, "text_speed=9\n");
     galaxy::load_runtime_settings_from_file();
     passed &= expect(galaxy::get_runtime_settings().text_speed == 1u, "an unknown text speed keeps the game's pace");

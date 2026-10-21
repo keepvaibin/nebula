@@ -1610,7 +1610,7 @@ uint32_t svc_option(void*, uint32_t what) {
     switch (what) {
     case NEBULA_OPTION_TEXT_SPEED:
 #if defined(NEBULA_HOST_RENDERER)
-        return std::clamp(galaxy::get_runtime_settings().text_speed, 1u, 3u);
+        return std::clamp(galaxy::get_runtime_settings().text_speed, 1u, 4u);
 #else
         return 1;
 #endif

@@ -437,9 +437,11 @@ int main() {
                      "general page has text speed, language and Mii import (a heading, import, count, folder)");
     passed &= expect(galaxy::get_runtime_settings().text_speed == 1u, "text speed starts at the game's pace");
     passed &= expect(key(VK_RIGHT) && galaxy::get_runtime_settings().text_speed == 2u, "right raises text speed live");
-    passed &= expect(key(VK_RIGHT) && key(VK_RIGHT) && galaxy::get_runtime_settings().text_speed == 3u,
-                     "text speed stops at 3x");
-    passed &= expect(key(VK_LEFT) && galaxy::get_runtime_settings().text_speed == 2u, "left lowers text speed");
+    passed &= expect(key(VK_RIGHT) && key(VK_RIGHT) && galaxy::get_runtime_settings().text_speed == 4u,
+                     "text speed reaches instant");
+    passed &= expect(key(VK_RIGHT) && galaxy::get_runtime_settings().text_speed == 4u, "text speed stops at instant");
+    passed &= expect(key(VK_LEFT) && key(VK_LEFT) && galaxy::get_runtime_settings().text_speed == 2u,
+                     "left lowers text speed");
     passed &= expect(key(VK_DOWN) && galaxy::gx::native_settings_overlay_snapshot().row == 1u, "down selects language");
     passed &= expect(galaxy::get_runtime_settings().language == galaxy::GameLanguage::English, "language starts as English");
     passed &= expect(key(VK_RIGHT) && galaxy::get_runtime_settings().language == galaxy::GameLanguage::French,

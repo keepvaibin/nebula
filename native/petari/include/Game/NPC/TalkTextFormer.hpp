@@ -14,6 +14,9 @@ public:
     bool nextPage();
     bool hasNextPage() const;
     void updateTalking();
+#ifdef TARGET_PC
+    void updateTalkingAtTextSpeed();
+#endif
     bool isTextAppearedAll() const;
 
     /* 0x0 */ LayoutActor* mHostActor;

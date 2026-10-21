@@ -36,7 +36,7 @@ enum class GameLanguage : std::uint8_t { English = 1, French = 3, Spanish = 4 };
 struct RuntimeSettings {
     RuntimeInputMode input_mode = RuntimeInputMode::Auto;
     RuntimeAudioSettings audio{};
-    // Steps of dialogue text revealed per frame: 1 the game's pace, 2 or 3.
+    // Steps of dialogue text revealed per frame: 1 the game's pace, 2 or 3; 4 each page at once (instant).
     unsigned text_speed = 1u;
     // The language to start the game in. A change takes effect at the next start.
     GameLanguage language = GameLanguage::English;

@@ -1,4 +1,5 @@
 #include "Game/NPC/TalkTextFormer.hpp"
+#include <nebula_game_api.h>
 #include "Game/NPC/TalkMessageCtrl.hpp"
 #include "Game/Screen/CustomTagProcessor.hpp"
 #include "Game/System/Language.hpp"
@@ -144,6 +145,17 @@ bool TalkTextFormer::hasNextPage() const {
 void TalkTextFormer::updateTalking() {
     MR::nextStepTagProcessorRecursive(mHostActor, mPaneName);
 }
+
+#ifdef TARGET_PC
+// Nebula's text speed (NEBULA_OPTION_TEXT_SPEED): 1 to 3 steps a frame, 4 the whole page at once, its pauses included.
+void TalkTextFormer::updateTalkingAtTextSpeed() {
+    updateTalking();
+    const u32 speed = __NebulaOption(NEBULA_OPTION_TEXT_SPEED);
+    for (u32 extra = speed >= 4 ? 0x2000 : speed - 1; extra != 0 && !isTextAppearedAll(); extra--) {
+        updateTalking();
+    }
+}
+#endif
 
 bool TalkTextFormer::isTextAppearedAll() const {
     if (_8 == 2) {

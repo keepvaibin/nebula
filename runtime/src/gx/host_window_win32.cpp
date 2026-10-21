@@ -2279,19 +2279,19 @@ void open_mii_folder() {
 std::vector<SettingsRow> game_page(const RuntimeSettings& runtime) {
     std::vector<SettingsRow> rows;
     char text[32]{};
-    std::snprintf(text, sizeof(text), "%uX", std::clamp(runtime.text_speed, 1u, 3u));
-    rows.push_back({"TEXT SPEED", text,
+    std::snprintf(text, sizeof(text), "%uX", std::clamp(runtime.text_speed, 1u, 4u));
+    rows.push_back({"TEXT SPEED", runtime.text_speed >= 4u ? std::string("INSTANT") : std::string(text),
                     [](RenderConfig&, int delta) {
                         // Changes live (no apply).
                         RuntimeSettings settings = get_runtime_settings();
-                        const unsigned next = settings_step(std::clamp(settings.text_speed, 1u, 3u) - 1u, 3u, delta) + 1u;
+                        const unsigned next = settings_step(std::clamp(settings.text_speed, 1u, 4u) - 1u, 4u, delta) + 1u;
                         if (next != settings.text_speed) {
                             settings.text_speed = next;
                             set_runtime_settings(settings);
                             s_native_settings_dirty.store(true, std::memory_order_release);
                         }
                     },
-                    "HOW FAST DIALOGUE TEXT APPEARS"});
+                    "HOW FAST DIALOGUE TEXT APPEARS. INSTANT: EACH PAGE AT ONCE"});
     rows.push_back({"LANGUAGE", game_language_name(runtime.language),
                     [](RenderConfig&, int delta) {
                         // Saved now; the game switches at the next start (game_language_for_boot).

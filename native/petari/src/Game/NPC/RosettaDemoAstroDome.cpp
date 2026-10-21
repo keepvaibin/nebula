@@ -84,12 +84,11 @@ void RosettaMonologue::control() {
         return;
     }
 
-    mTextFormer.updateTalking();
 #ifdef TARGET_PC
     // Nebula's text speed, for Rosalina's storybook too.
-    for (u32 speed = __NebulaOption(NEBULA_OPTION_TEXT_SPEED); speed > 1 && !mTextFormer.isTextAppearedAll(); speed--) {
-        mTextFormer.updateTalking();
-    }
+    mTextFormer.updateTalkingAtTextSpeed();
+#else
+    mTextFormer.updateTalking();
 #endif
 
     if (!mTextFormer.isTextAppearedAll()) {
