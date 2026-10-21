@@ -524,6 +524,7 @@ add_library(galaxy_native_host STATIC
     runtime/src/virtual_disc.cpp
     runtime/src/mods.cpp
     runtime/src/mod_import.cpp
+    runtime/src/crash_report.cpp
     runtime/src/controller_hid.cpp
     runtime/src/flat_guest_memory.cpp)
 target_link_libraries(
@@ -563,6 +564,7 @@ add_library(galaxy_native_host_test_support STATIC
     runtime/src/virtual_disc.cpp
     runtime/src/mods.cpp
     runtime/src/mod_import.cpp
+    runtime/src/crash_report.cpp
     runtime/src/controller_hid.cpp
     runtime/src/flat_guest_memory.cpp)
 target_link_libraries(
@@ -1321,6 +1323,8 @@ target_link_libraries(galaxy_mii_import_tests PRIVATE galaxy_atomic_file)
 add_executable(galaxy_mods_tests runtime/src/mods_tests.cpp runtime/src/mod_xml.cpp runtime/src/virtual_disc.cpp
                runtime/src/mods.cpp runtime/src/mod_import.cpp)
 target_link_libraries(galaxy_mods_tests PRIVATE galaxy_atomic_file nebula_archive)
+add_executable(galaxy_crash_report_tests runtime/src/crash_report_tests.cpp runtime/src/crash_report.cpp)
+target_include_directories(galaxy_crash_report_tests PRIVATE runtime/include)
 add_executable(galaxy_rt_materials_tests runtime/src/gx/rt_materials_tests.cpp)
 target_link_libraries(galaxy_rt_materials_tests PRIVATE galaxy_gx)
 add_executable(galaxy_texture_pack_tests runtime/src/gx/texture_pack_tests.cpp)
@@ -1462,6 +1466,7 @@ if(MSVC)
         galaxy_rt_materials_tests
         galaxy_mii_import_tests
         galaxy_mods_tests
+        galaxy_crash_report_tests
         galaxy_texture_pack_tests
         galaxy_movie_replacement_tests
         galaxy_xfb_present_selection_tests

@@ -120,7 +120,8 @@ add_library(galaxy_gx_vk STATIC
     ${rt}/mii_formats.cpp
     ${rt}/mod_xml.cpp
     ${rt}/virtual_disc.cpp
-    ${rt}/mods.cpp)
+    ${rt}/mods.cpp
+    ${rt}/crash_report.cpp)
 # Mod import (archives) on the desktop systems; Android and iOS take no mods.
 if(NOT ANDROID AND NOT IOS)
     set(NEBULA_ARCHIVE_SOURCES "${nebula_root}/third_party/archive" CACHE PATH "zlib, xz and libarchive sources")

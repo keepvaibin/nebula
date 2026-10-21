@@ -3,6 +3,8 @@
 
 #include "galaxy/gx/texture_pack.h"
 
+#include "galaxy/crash_report.h"
+
 #include "galaxy/gx/rt_materials.h"
 #include "galaxy/gx/texture_cache.h"
 #include "galaxy/windows_power.h"
@@ -634,6 +636,8 @@ void TexturePacks::request(std::uint32_t slot) {
 
 std::unique_ptr<TexturePacks::Load> TexturePacks::load(const Record& record, std::uint32_t slot,
                                                        std::uint64_t generation) const {
+    // A crash while this image loads names it (NEB-T01).
+    const galaxy::crash::ScopedActivity activity(galaxy::crash::Activity::TexturePack, record.file);
     const auto start = std::chrono::steady_clock::now();
     auto result = std::make_unique<Load>();
     result->slot = slot;

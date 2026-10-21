@@ -294,7 +294,7 @@ std::vector<std::uint8_t> VirtualDisc::build(std::uint64_t virtual_base) {
     put32(entries, 0u);
     put32(entries, 0u);
     std::uint32_t count = 1;
-    const auto add = [&](auto&& self, const DiscNode& dir, std::uint32_t parent) -> void {
+    const auto add = [&](auto&& self, const DiscNode& dir, std::uint32_t parent, const std::string& dir_path) -> void {
         for (const DiscNode& node : dir.children) {
             const std::uint32_t index = count++;
             const auto name_at = static_cast<std::uint32_t>(strings.size());
@@ -305,7 +305,7 @@ std::vector<std::uint8_t> VirtualDisc::build(std::uint64_t virtual_base) {
             if (node.directory) {
                 put32(entries, parent);
                 put32(entries, 0u);
-                self(self, node, index);
+                self(self, node, index, dir_path + "/" + node.name);
                 const std::uint32_t next = count;
                 entries[at + 8] = static_cast<std::uint8_t>(next >> 24u);
                 entries[at + 9] = static_cast<std::uint8_t>(next >> 16u);
@@ -315,7 +315,7 @@ std::vector<std::uint8_t> VirtualDisc::build(std::uint64_t virtual_base) {
                 std::uint64_t position = node.partition_offset;
                 if (node.changed) {
                     position = cursor;
-                    placed_.push_back({cursor, &node});
+                    placed_.push_back({cursor, &node, dir_path + "/" + node.name});
                     cursor = (cursor + std::max<std::uint64_t>(node.size, 1u) + kPlaceAlign - 1u) & ~(kPlaceAlign - 1u);
                 }
                 fits = fits && position + node.size <= kDiscReach && node.size <= 0xFFFFFFFFull;
@@ -324,7 +324,7 @@ std::vector<std::uint8_t> VirtualDisc::build(std::uint64_t virtual_base) {
             }
         }
     };
-    add(add, root_, 0u);
+    add(add, root_, 0u, std::string());
     entries[8] = static_cast<std::uint8_t>(count >> 24u);
     entries[9] = static_cast<std::uint8_t>(count >> 16u);
     entries[10] = static_cast<std::uint8_t>(count >> 8u);
@@ -373,6 +373,18 @@ bool VirtualDisc::read(std::uint64_t offset, std::uint32_t size, std::uint8_t* d
     if (within >= span || span - within < size) return false;
     read_pieces(*placed.file, within, size, dst, partition, partition_size_);
     return true;
+}
+
+const DiscNode* VirtualDisc::placed_file(std::uint64_t offset, const std::string** path) const {
+    if (offset < virtual_base_ || placed_.empty()) return nullptr;
+    const auto it = std::upper_bound(placed_.begin(), placed_.end(), offset,
+                                     [](std::uint64_t value, const Placed& p) { return value < p.start; });
+    if (it == placed_.begin()) return nullptr;
+    const Placed& placed = *(it - 1);
+    const std::uint64_t span = (std::max<std::uint64_t>(placed.file->size, 1u) + kPlaceAlign - 1u) & ~(kPlaceAlign - 1u);
+    if (offset - placed.start >= span) return nullptr;
+    if (path != nullptr) *path = &placed.path;
+    return placed.file;
 }
 
 std::vector<std::uint8_t> VirtualDisc::materialize(const DiscNode& file, const std::uint8_t* partition,

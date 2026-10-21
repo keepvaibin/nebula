@@ -16,6 +16,7 @@
 #include <nebula_game_api.h>
 
 #include "galaxy/atomic_file.h"
+#include "galaxy/crash_report.h"
 #include "galaxy/mods.h"
 #if defined(NEBULA_HOST_RENDERER)
 #include "galaxy/experimental_ultrawide_aspect.h"
@@ -124,6 +125,121 @@ void log_line(const char* tag, const char* text) {
     std::fflush(stdout);
 }
 
+// ---- Crash reports (galaxy/crash_report.h): why Nebula stopped, as a code with what to do --------------------------
+
+// What the failing thread knew, kept for the report (gathered on that thread: its activity is its own).
+galaxy::crash::Facts gCrashFacts;
+char gCrashText[1024];
+char gCrashActivityFile[512];
+char gCrashModRead[640];
+
+void gather_crash_facts(galaxy::crash::Facts::Kind kind, const char* text, bool in_game = false,
+                        bool stack_overflow = false) noexcept {
+    std::snprintf(gCrashText, sizeof(gCrashText), "%s", text != nullptr ? text : "");
+    gCrashFacts.kind = kind;
+    gCrashFacts.in_game = in_game;
+    gCrashFacts.stack_overflow = stack_overflow;
+    gCrashFacts.text = gCrashText;
+    gCrashFacts.activity = galaxy::crash::current_activity(gCrashActivityFile, sizeof(gCrashActivityFile));
+    gCrashFacts.activity_file = gCrashActivityFile;
+    double seconds = -1.0;
+    if (galaxy::crash::last_mod_read(gCrashModRead, sizeof(gCrashModRead), &seconds)) {
+        gCrashFacts.last_mod_read = gCrashModRead;
+        gCrashFacts.last_mod_seconds = seconds;
+    }
+    gCrashFacts.mods_change_game = galaxy::crash::session_mods_change_game();
+}
+
+// Crash dumps and reports: GALAXY_CRASH_DUMP_DIR, else %LOCALAPPDATA%\Nebula\crashes for the player's executable and
+// crashes\ in the working directory for the headless test host.
+fs::path crash_folder() {
+#if defined(_WIN32)
+    wchar_t dir[MAX_PATH] = {};
+    if (GetEnvironmentVariableW(L"GALAXY_CRASH_DUMP_DIR", dir, MAX_PATH) != 0) return fs::path(dir);
+#if defined(NEBULA_HOST_RENDERER)
+    wchar_t local[MAX_PATH] = {};
+    GetEnvironmentVariableW(L"LOCALAPPDATA", local, MAX_PATH);
+    return fs::path(local) / "Nebula" / "crashes";
+#endif
+#else
+    if (const char* dir = std::getenv("GALAXY_CRASH_DUMP_DIR"); dir != nullptr && dir[0] != 0) return fs::path(dir);
+#endif
+    return fs::path("crashes");
+}
+
+// The player sees the report (hidden test runs and the headless host do not): GALAXY_HIDE_WINDOW or
+// GALAXY_CRASH_DIALOG=0 keep it in its file. GALAXY_CRASH_DIALOG_TEXT=<file>: tests; the dialog's text goes there.
+bool crash_dialog_wanted() {
+#if defined(NEBULA_HOST_RENDERER) || defined(NEBULA_HOST_SDL)
+    if (const char* test = std::getenv("GALAXY_CRASH_DIALOG_TEXT"); test != nullptr && test[0] != 0) return true;
+    const char* hidden = std::getenv("GALAXY_HIDE_WINDOW");
+    const char* dialog = std::getenv("GALAXY_CRASH_DIALOG");
+    return !(hidden != nullptr && hidden[0] != 0 && hidden[0] != '0') && !(dialog != nullptr && dialog[0] == '0');
+#else
+    return false;
+#endif
+}
+
+FILE* open_for_writing(const fs::path& file) {
+#if defined(_WIN32)
+    return _wfopen(file.c_str(), L"wb");
+#else
+    return std::fopen(file.c_str(), "wb");
+#endif
+}
+
+// gCrashFacts as a report: its code logged, its text written beside `dump` (or as nebula-<time>.txt in the crash
+// folder) and, for the player, shown by a new instance of this executable (this process may be what failed; it ends
+// right after). The SDL hosts show it in a message box here.
+void report_crash_facts(const fs::path& dump) {
+    const galaxy::crash::Report report = galaxy::crash::classify(gCrashFacts);
+    char line[160];
+    std::snprintf(line, sizeof(line), "%s %s", report.code, report.title);
+    log_line("crash:", line);
+    char technical[1600];
+    std::snprintf(technical, sizeof(technical), "%s%s%s%s%s", gCrashText,
+                  gCrashFacts.last_mod_read.empty() ? "" : "\nLast file read from a mod: ", gCrashModRead,
+                  dump.empty() ? "" : "\nDump: ", dump.empty() ? "" : dump.string().c_str());
+    static char text[8192];
+    const std::size_t length = galaxy::crash::format_report(report, technical, text, sizeof(text));
+    std::error_code error;
+    fs::path file = dump;
+    if (file.empty()) {
+        const fs::path folder = crash_folder();
+        fs::create_directories(folder, error);
+        const auto stamp = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+        char name[64];
+        std::strftime(name, sizeof(name), "nebula-%Y%m%d-%H%M%S.txt", std::localtime(&stamp));
+        file = folder / name;
+    } else {
+        file.replace_extension(".txt");
+    }
+    if (FILE* out = open_for_writing(file)) {
+        std::fwrite(text, 1, length, out);
+        std::fclose(out);
+        std::snprintf(line, sizeof(line), "report %s", file.string().c_str());
+        log_line("crash:", line);
+    }
+    if (!crash_dialog_wanted()) return;
+#if defined(_WIN32) && defined(NEBULA_HOST_RENDERER)
+    wchar_t exe[MAX_PATH] = {};
+    GetModuleFileNameW(nullptr, exe, MAX_PATH);
+    std::wstring command = L"\"" + std::wstring(exe) + L"\" --crash-report \"" + file.wstring() + L"\"";
+    STARTUPINFOW startup{};
+    startup.cb = sizeof(startup);
+    PROCESS_INFORMATION process{};
+    if (CreateProcessW(exe, command.data(), nullptr, nullptr, FALSE, 0, nullptr, nullptr, &startup, &process)) {
+        CloseHandle(process.hThread);
+        CloseHandle(process.hProcess);
+    }
+#elif defined(NEBULA_HOST_SDL)
+    const std::string_view shown(text, length);
+    const std::size_t technical_at = shown.find("\nTechnical details:");
+    const std::string message(shown.substr(0, technical_at));
+    galaxy::sdl::show_fatal(message.c_str());
+#endif
+}
+
 [[noreturn]] void die(const char* format, ...) {
     char text[1024];
     va_list args;
@@ -132,9 +248,9 @@ void log_line(const char* tag, const char* text) {
     va_end(args);
     log_line("fatal:", text);
     std::fflush(stdout);
-#if defined(NEBULA_HOST_SDL)
-    galaxy::sdl::show_fatal(text);
-#endif
+    gather_crash_facts(galaxy::crash::Facts::Kind::Startup, text);
+    report_crash_facts({});
+    std::fflush(stdout);
     std::_Exit(3);
 }
 
@@ -975,10 +1091,9 @@ void profile_thread_main(std::wstring target_name) {
 #endif
 
 #if defined(_WIN32)
-// Crash reports. A fatal exception in the game module or the host, or the game's own fatal call, writes a minidump to
-// GALAXY_CRASH_DUMP_DIR, else %LOCALAPPDATA%\Nebula\crashes for the player's executable and crashes\ in the working
-// directory for the headless test host, from a thread kept for it (the failing thread's stack may be what failed), logs
-// where it happened and the game's threads, and ends the process.
+// Crash reports. A fatal exception in the game module or the host, or the game's own fatal call, writes a minidump and
+// the report (report_crash_facts) to the crash folder from a thread kept for it (the failing thread's stack may be what
+// failed), logs where it happened and the game's threads, and ends the process.
 using MiniDumpWriteDumpFn = decltype(&MiniDumpWriteDump);  // loaded at the crash: dbghelp.dll is not linked
 
 HANDLE gCrashRequest;
@@ -990,22 +1105,13 @@ std::atomic<int> gCrashing{0};
 void crash_writer() {
     for (;;) {
         WaitForSingleObject(gCrashRequest, INFINITE);
-        wchar_t dir[MAX_PATH] = {};
-        if (GetEnvironmentVariableW(L"GALAXY_CRASH_DUMP_DIR", dir, MAX_PATH) == 0) {
-#if defined(NEBULA_HOST_RENDERER)
-            wchar_t local[MAX_PATH] = {};
-            GetEnvironmentVariableW(L"LOCALAPPDATA", local, MAX_PATH);
-            std::swprintf(dir, MAX_PATH, L"%ls\\Nebula\\crashes", local);
-#else
-            std::swprintf(dir, MAX_PATH, L"crashes");
-#endif
-        }
+        const fs::path folder = crash_folder();
         std::error_code ignored;
-        fs::create_directories(dir, ignored);
+        fs::create_directories(folder, ignored);
         SYSTEMTIME now;
         GetLocalTime(&now);
         wchar_t path[MAX_PATH];
-        std::swprintf(path, MAX_PATH, L"%ls\\nebula-native-%04u%02u%02u-%02u%02u%02u-%lu.dmp", dir, now.wYear, now.wMonth,
+        std::swprintf(path, MAX_PATH, L"%ls\\nebula-native-%04u%02u%02u-%02u%02u%02u-%lu.dmp", folder.c_str(), now.wYear, now.wMonth,
                       now.wDay, now.wHour, now.wMinute, now.wSecond, GetCurrentProcessId());
         const HMODULE dbghelp = LoadLibraryW(L"dbghelp.dll");
         const auto write = dbghelp != nullptr
@@ -1025,6 +1131,7 @@ void crash_writer() {
         if (file != INVALID_HANDLE_VALUE) {
             CloseHandle(file);
         }
+        report_crash_facts(fs::path(path));
         SetEvent(gCrashDone);
     }
 }
@@ -1058,6 +1165,8 @@ void report_crash(EXCEPTION_POINTERS* info) {
                                                       ? info->ExceptionRecord->ExceptionInformation[1]
                                                       : 0));
     log_line("crash:", text);
+    gather_crash_facts(galaxy::crash::Facts::Kind::Fault, text, owner == GetModuleHandleW(L"smg_game.dll"),
+                       code == EXCEPTION_STACK_OVERFLOW);
     report_crash(info);
     std::_Exit(4);
 }
@@ -1149,6 +1258,7 @@ void abort_handler(int) {
     }
     log_line("crash:", text);
     if (gCrashing.exchange(1) == 0) {
+        gather_crash_facts(galaxy::crash::Facts::Kind::Abort, text);
         CONTEXT context{};
         RtlCaptureContext(&context);
         EXCEPTION_RECORD record{};
@@ -1168,7 +1278,8 @@ LONG WINAPI unhandled_filter(EXCEPTION_POINTERS* info) {
         return EXCEPTION_CONTINUE_SEARCH;
     }
     char text[512];
-    if (info->ExceptionRecord->ExceptionCode == 0xE06D7363u) {
+    const bool cpp = info->ExceptionRecord->ExceptionCode == 0xE06D7363u;
+    if (cpp) {
         describe_cpp_exception(info->ExceptionRecord, text, sizeof(text));
     } else {
         std::snprintf(text, sizeof(text), "unhandled exception 0x%08lX at 0x%p", info->ExceptionRecord->ExceptionCode,
@@ -1177,9 +1288,58 @@ LONG WINAPI unhandled_filter(EXCEPTION_POINTERS* info) {
     char line[640];
     std::snprintf(line, sizeof(line), "%s (thread %lu)", text, GetCurrentThreadId());
     log_line("crash:", line);
+    HMODULE owner = nullptr;
+    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                       static_cast<LPCWSTR>(info->ExceptionRecord->ExceptionAddress), &owner);
+    gather_crash_facts(cpp ? galaxy::crash::Facts::Kind::Exception : galaxy::crash::Facts::Kind::Fault, line,
+                       !cpp && owner != nullptr && owner == GetModuleHandleW(L"smg_game.dll"),
+                       info->ExceptionRecord->ExceptionCode == EXCEPTION_STACK_OVERFLOW);
     report_crash(info);
     std::_Exit(4);
 }
+
+#if defined(NEBULA_HOST_RENDERER)
+// NebulaNative --crash-report <file>: the report of an instance that stopped (report_crash_facts), shown by this new
+// process. The technical details stay in the file, which the dialog offers to show.
+int show_crash_report_dialog() {
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    int count = 0;
+    LPWSTR* args = CommandLineToArgvW(GetCommandLineW(), &count);
+    if (args == nullptr) return 1;
+    const fs::path file = count >= 3 ? fs::path(args[2]) : fs::path();
+    LocalFree(args);
+    std::string text;
+    if (FILE* in = file.empty() ? nullptr : _wfopen(file.c_str(), L"rb")) {
+        char buffer[4096];
+        std::size_t n = 0;
+        while ((n = std::fread(buffer, 1, sizeof(buffer), in)) > 0) text.append(buffer, n);
+        std::fclose(in);
+    }
+    if (text.empty()) return 1;
+    if (const std::size_t technical = text.find("\nTechnical details:"); technical != std::string::npos) {
+        text.resize(technical);
+    }
+    while (!text.empty() && (text.back() == '\n' || text.back() == '\r')) text.pop_back();
+    text += "\n\nOpen the folder with the report?";
+    std::wstring wide(static_cast<std::size_t>(
+                          MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0)),
+                      L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), wide.data(), static_cast<int>(wide.size()));
+    if (const wchar_t* test = _wgetenv(L"GALAXY_CRASH_DIALOG_TEXT"); test != nullptr && test[0] != 0) {
+        if (FILE* out = _wfopen(test, L"wb")) {
+            std::fwrite(text.data(), 1, text.size(), out);
+            std::fclose(out);
+        }
+        return 0;
+    }
+    if (MessageBoxW(nullptr, wide.c_str(), L"Nebula stopped", MB_ICONERROR | MB_YESNO | MB_SETFOREGROUND | MB_TOPMOST) ==
+        IDYES) {
+        const std::wstring select = L"/select,\"" + file.wstring() + L"\"";
+        ShellExecuteW(nullptr, L"open", L"explorer.exe", select.c_str(), nullptr, SW_SHOWNORMAL);
+    }
+    return 0;
+}
+#endif
 
 void install_crash_reporter() {
     gCrashRequest = CreateEventW(nullptr, FALSE, FALSE, nullptr);
@@ -1193,10 +1353,13 @@ void install_crash_reporter() {
 
 void svc_fatal(void*, const char* text) {
     log_line("fatal:", text);
+    gather_crash_facts(galaxy::crash::Facts::Kind::GameFatal, text);
 #if defined(_WIN32)
     if (gCrashing.exchange(1) == 0) {
         report_crash(nullptr);
     }
+#else
+    report_crash_facts({});
 #endif
     std::fflush(stdout);
     std::_Exit(3);
@@ -1503,6 +1666,30 @@ const uint8_t* svc_disc_fst(void*, size_t* size) {
     return gPak.fst;
 }
 
+// A read of a file a mod changed: the crash report names the last one (galaxy::crash). The disc thread only.
+void note_mod_file(uint64_t offset) {
+    const std::string* path = nullptr;
+    const galaxy::mods::DiscNode* file = gMods->disc.placed_file(offset, &path);
+    if (file == nullptr) return;
+    static const galaxy::mods::DiscNode* last = nullptr;
+    static std::string mod;
+    if (file != last) {
+        last = file;
+        // The mod is the folder under the mods folder its first host file is in.
+        mod = "a mod";
+        const fs::path mods = galaxy::mods::mods_folder();
+        for (const galaxy::mods::DiscPiece& piece : file->pieces) {
+            if (piece.source != galaxy::mods::DiscPiece::Source::HostFile) continue;
+            const fs::path relative = piece.path.lexically_relative(mods);
+            if (!relative.empty() && relative.begin()->native() != fs::path("..").native()) {
+                mod = relative.begin()->string();
+            }
+            break;
+        }
+    }
+    galaxy::crash::note_mod_read(mod, *path);
+}
+
 void svc_disc_read(void*, uint64_t offset, uint32_t size, void* dst, uint32_t slot) {
     gDiscReads.fetch_add(1, std::memory_order_relaxed);
     // Tests: a slow drive (each read takes this long), so waits on loads are exercised.
@@ -1520,6 +1707,7 @@ void svc_disc_read(void*, uint64_t offset, uint32_t size, void* dst, uint32_t sl
                 gModule.disc_complete(slot, -1);
                 return;
             }
+            note_mod_file(offset);
         } else if (offset > gPak.size || gPak.size - offset < size) {
             gModule.disc_complete(slot, -1);
             return;
@@ -2432,6 +2620,11 @@ int run_mods_tool() {
 #endif
 
 int main(int argc, char** argv) {
+#if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
+    if (argc >= 3 && std::strcmp(argv[1], "--crash-report") == 0) {
+        return show_crash_report_dialog();
+    }
+#endif
 #if defined(NEBULA_HOST_SDL)
     if (!galaxy::sdl::start()) {
         return 1;
@@ -2464,11 +2657,26 @@ int main(int argc, char** argv) {
     if (const wchar_t* name = _wgetenv(L"GALAXY_PROFILE_THREAD"); name != nullptr && name[0] != 0) {
         std::thread(profile_thread_main, std::wstring(name)).detach();
     }
-    // Validation of the crash path, as v1.0.1's: a host thread faults once the game has started.
-    if (const char* test = std::getenv("GALAXY_CRASH_TEST"); test != nullptr && test[0] == '1') {
-        std::thread([] {
-            std::this_thread::sleep_for(std::chrono::seconds(5));
-            *static_cast<volatile int*>(nullptr) = 1;
+    // Validation of the crash path, as v1.0.1's: once the game has started (GALAXY_CRASH_TEST_DELAY_MS, 5 s), 1 faults
+    // a host thread; texture faults one loading a texture pack image; fatal is the game's own fatal stop; gpu the
+    // renderer losing the graphics card. Each ends with its report (crash_report.h).
+    if (const char* test = std::getenv("GALAXY_CRASH_TEST"); test != nullptr && test[0] != 0 && test[0] != '0') {
+        const std::string kind = test;
+        const char* delay = std::getenv("GALAXY_CRASH_TEST_DELAY_MS");
+        const unsigned long ms = delay != nullptr ? std::strtoul(delay, nullptr, 10) : 5000ul;
+        std::thread([kind, ms] {
+            std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+            if (kind == "texture") {
+                const galaxy::crash::ScopedActivity activity(galaxy::crash::Activity::TexturePack,
+                                                             "test/tex1_64x64_0123456789abcdef_14.png");
+                *static_cast<volatile int*>(nullptr) = 1;
+            } else if (kind == "fatal") {
+                svc_fatal(nullptr, "test: the game's fatal stop");
+            } else if (kind == "gpu") {
+                die("renderer: [RendererD3D12] Present HRESULT=0x887A0005");
+            } else {
+                *static_cast<volatile int*>(nullptr) = 1;
+            }
         }).detach();
     }
 #endif
@@ -2578,7 +2786,25 @@ int main(int argc, char** argv) {
                     fs::copy(nand_saves, gMods->save_folder, fs::copy_options::recursive, error);
                 }
             }
-        } else if (!settings_folder.empty() && fs::exists(settings_folder / "mods-report.txt", error)) {
+        }
+        {
+            // The session's mods, for crash reports: one line each, and whether one changes the game itself.
+            std::string lines;
+            bool change_game = false;
+            for (const galaxy::mods::ModInfo& mod : galaxy::mods::session_mods().started_with) {
+                if (!mod.enabled) continue;
+                std::string kinds;
+                for (const auto& [on, name] : {std::pair{mod.riivolution, "Riivolution"},
+                                               std::pair{mod.files || mod.loose, "game files"},
+                                               std::pair{mod.textures, "textures"}, std::pair{mod.movies, "movies"}}) {
+                    if (on) kinds += kinds.empty() ? name : std::string(", ") + name;
+                }
+                lines += "  " + mod.id + (kinds.empty() ? "" : " (" + kinds + ")") + "\n";
+                change_game = change_game || mod.riivolution || mod.files || mod.loose;
+            }
+            galaxy::crash::set_session_mods(lines, change_game);
+        }
+        if (gMods == nullptr && !settings_folder.empty() && fs::exists(settings_folder / "mods-report.txt", error)) {
             // No mod this start: an earlier start's report must not stand.
             (void)galaxy::io::write_text_file_atomically(settings_folder / "mods-report.txt",
                                                          "Nebula mods applied at the last start: none\n");

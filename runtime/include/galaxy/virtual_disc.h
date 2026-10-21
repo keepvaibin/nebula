@@ -55,6 +55,8 @@ public:
     [[nodiscard]] std::vector<std::uint8_t> build(std::uint64_t virtual_base);
     // Fills `dst` with `size` bytes at disc offset `offset` (partition or placed files); false past every file.
     bool read(std::uint64_t offset, std::uint32_t size, std::uint8_t* dst, const std::uint8_t* partition) const;
+    // The changed file placed at disc offset `offset` and its disc path ("/a/b"); null in the partition or past it.
+    [[nodiscard]] const DiscNode* placed_file(std::uint64_t offset, const std::string** path = nullptr) const;
     [[nodiscard]] std::uint64_t changed_files() const noexcept { return placed_.size(); }
     [[nodiscard]] const DiscNode& root() const noexcept { return root_; }
 
@@ -66,6 +68,7 @@ private:
     struct Placed {
         std::uint64_t start;  // disc offset
         const DiscNode* file;
+        std::string path;     // on the disc
     };
     static void read_pieces(const DiscNode& file, std::uint64_t at, std::uint64_t size, std::uint8_t* dst,
                             const std::uint8_t* partition, std::uint64_t partition_size);

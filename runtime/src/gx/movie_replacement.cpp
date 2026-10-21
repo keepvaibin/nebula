@@ -4,6 +4,8 @@
 
 #include "galaxy/gx/movie_replacement.h"
 
+#include "galaxy/crash_report.h"
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -244,6 +246,8 @@ private:
 #if defined(_WIN32)
     void run() {
         using Microsoft::WRL::ComPtr;
+        // A crash while this movie plays names it (NEB-V01).
+        const galaxy::crash::ScopedActivity activity(galaxy::crash::Activity::Movie, file_);
         const HRESULT com = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
         const bool mf = SUCCEEDED(MFStartup(MF_VERSION, MFSTARTUP_LITE));
         decode(mf);
