@@ -69,9 +69,11 @@ namespace Nebula
     Invoke-Checked $csc (@('/nologo', '/target:winexe', '/platform:x64', '/optimize+', '/define:NEBULA_SETTINGS_APP', "/win32manifest:$manifestFile", "/win32icon:$iconFile", "/out:$settingsApp") + $references + $common + $launcherSources)
 
     # Setup reads a source manifest and the toolchain pins at start; a native package compiles nothing, so its manifest
-    # lists no files. The host is built for AVX2 (Setup refuses CPUs without it).
+    # lists the compiled game it carries. The host is built for AVX2 (Setup refuses CPUs without it).
     $sourceManifest = Join-Path $work 'source-manifest.json'
-    [ordered]@{ schema = 'nebula.source.v1'; repository = $Repository; commit = $commit; version = $Version; treeSha256 = ''; files = @{} } |
+    $packaged = [ordered]@{}
+    foreach ($name in 'NebulaNative.exe', 'smg_game.dll') { $packaged[$name] = (Get-FileHash -LiteralPath (Join-Path $Bin $name) -Algorithm SHA256).Hash.ToLowerInvariant() }
+    [ordered]@{ schema = 'nebula.source.v1'; repository = $Repository; commit = $commit; version = $Version; treeSha256 = ''; files = $packaged } |
         ConvertTo-Json -Depth 3 | Set-Content -LiteralPath $sourceManifest -Encoding utf8
     $isa = Join-Path $work 'runtime-isa.txt'
     [IO.File]::WriteAllText($isa, 'AVX2', (New-Object Text.UTF8Encoding $false))
