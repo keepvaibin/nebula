@@ -2610,6 +2610,19 @@ int run_mods_tool() {
                    ",\"code_patches\":" + std::to_string(mod.code_patches) + ",\"native_patches\":" +
                    std::to_string(mod.native_patches) + ",\"problem\":" + json_text(mod.problem) + ",\"languages\":[";
             for (std::size_t l = 0; l < mod.languages.size(); ++l) out += (l ? "," : "") + json_text(mod.languages[l]);
+            out += "],\"options\":[";
+            for (std::size_t o = 0; o < mod.options.size(); ++o) {
+                const galaxy::mods::ModOption& option = mod.options[o];
+                out += std::string(o ? "," : "") + "{\"key\":" + json_text(option.key) + ",\"section\":" +
+                       json_text(option.section) + ",\"name\":" + json_text(option.name) +
+                       ",\"selected\":" + std::to_string(option.selected) + ",\"choices\":[";
+                for (std::size_t c = 0; c < option.choices.size(); ++c) {
+                    const bool other = c < option.other_region.size() && option.other_region[c];
+                    out += std::string(c ? "," : "") + "{\"name\":" + json_text(option.choices[c]) +
+                           ",\"other_region\":" + (other ? "true" : "false") + "}";
+                }
+                out += "]}";
+            }
             out += "],\"overlaps\":[";
             for (std::size_t o = 0; o < mod.overlaps.size(); ++o) {
                 const galaxy::mods::ModOverlap& overlap = mod.overlaps[o];

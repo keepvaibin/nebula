@@ -25,6 +25,16 @@ namespace Nebula.Launcher
             public string Kinds = "";
             public string Notes = "";
             public bool Unusable;
+            public List<ModOption> Options = new List<ModOption>();
+        }
+
+        // A Riivolution option: its choice is 0 (off) or 1.. (Choices).
+        private sealed class ModOption
+        {
+            public string Key, Section, Name;
+            public List<string> Choices = new List<string>();
+            public List<bool> OtherRegion = new List<bool>();
+            public int Selected;
         }
 
         // What a drag between or within the lists carries.
@@ -44,6 +54,7 @@ namespace Nebula.Launcher
         private readonly List<Control> actions = new List<Control>();
         private readonly ToolTip tips = new ToolTip();
         private readonly TabPage page;
+        private Button optionsButton;
         // The window thread's context: worker results come back through it (it exists before the window does).
         private readonly SynchronizationContext window;
         private ListView lastList;
@@ -89,6 +100,9 @@ namespace Nebula.Launcher
             int x = 12, y = ListTop + ListHeight + 58;
             Action(WideButton("Import file…", ref x, y, 130)).Click += delegate { Safe(ImportFiles); };
             Action(WideButton("Import folder…", ref x, y, 130)).Click += delegate { Safe(ImportFolder); };
+            optionsButton = Action(WideButton("Options…", ref x, y, 100));
+            optionsButton.Click += delegate { Safe(EditOptions); };
+            optionsButton.Enabled = false;
             Action(WideButton("Remove", ref x, y, 100)).Click += delegate { Safe(Remove); };
             WideButton("Open mods folder", ref x, y, 150).Click += delegate { Safe(OpenFolder); };
 
@@ -233,6 +247,7 @@ namespace Nebula.Launcher
         {
             busy = value;
             foreach (var control in actions) control.Enabled = !value;
+            ShowDetails(lastList);
         }
 
         // ---- The game's mods ------------------------------------------------------
@@ -347,6 +362,7 @@ namespace Nebula.Launcher
                     mod.Kinds = fresh.Kinds;
                     mod.Notes = fresh.Notes;
                     mod.Unusable = fresh.Unusable;
+                    mod.Options = fresh.Options;
                 }
                 Show();
             }
@@ -392,13 +408,44 @@ namespace Nebula.Launcher
                         : "Replaces " + what + " of " + Json.Str(overlap, "other"));
                 }
             }
+            var options = new List<ModOption>();
+            object list;
+            if (mod.TryGetValue("options", out list) && list is object[])
+            {
+                foreach (var o in (object[])list)
+                {
+                    var entry = o as Dictionary<string, object>;
+                    if (entry == null || string.IsNullOrEmpty(Json.Str(entry, "key"))) continue;
+                    var option = new ModOption
+                    {
+                        Key = Json.Str(entry, "key"),
+                        Section = Json.Str(entry, "section") ?? "",
+                        Name = Json.Str(entry, "name") ?? "",
+                        Selected = (int)Json.Long(entry, "selected")
+                    };
+                    object choices;
+                    if (entry.TryGetValue("choices", out choices) && choices is object[])
+                    {
+                        foreach (var c in (object[])choices)
+                        {
+                            var choice = c as Dictionary<string, object>;
+                            if (choice == null) continue;
+                            option.Choices.Add(Json.Str(choice, "name") ?? "");
+                            option.OtherRegion.Add(Json.Bool(choice, "other_region"));
+                        }
+                    }
+                    option.Selected = Math.Max(0, Math.Min(option.Selected, option.Choices.Count));
+                    options.Add(option);
+                }
+            }
             string kindText = string.Join(", ", kinds);
             return new Mod
             {
                 Id = Json.Str(mod, "id"),
                 Kinds = kindText.Length != 0 ? char.ToUpperInvariant(kindText[0]) + kindText.Substring(1) : "Nothing usable",
                 Notes = string.Join(". ", notes),
-                Unusable = kinds.Count == 0
+                Unusable = kinds.Count == 0,
+                Options = options
             };
         }
 
@@ -466,6 +513,7 @@ namespace Nebula.Launcher
         private void ShowDetails(ListView view)
         {
             var mods = view != null ? Selected(view) : new List<Mod>();
+            if (optionsButton != null) optionsButton.Enabled = !busy && mods.Count == 1 && mods[0].Options.Count != 0;
             if (mods.Count == 1)
                 details.Text = mods[0].Id + ": " + mods[0].Kinds.ToLowerInvariant() + (mods[0].Notes.Length != 0 ? ". " + mods[0].Notes + "." : ".");
             else details.Text = mods.Count > 1 ? mods.Count + " selected." : "";
@@ -587,7 +635,10 @@ namespace Nebula.Launcher
                 output.Append("order=").Append(++place).Append('\n');
                 List<string> lines;
                 if (sections.TryGetValue(mod.Id, out lines))
-                    foreach (var line in lines) output.Append(line).Append('\n');
+                    foreach (var line in lines)
+                        if (mod.Options.Count == 0 || !line.StartsWith("option.")) output.Append(line).Append('\n');
+                foreach (var option in mod.Options)
+                    output.Append("option.").Append(Escape(option.Key)).Append('=').Append(option.Selected).Append('\n');
             }
             try
             {
@@ -624,6 +675,67 @@ namespace Nebula.Launcher
                 else output.Append(text[i]);
             }
             return output.ToString();
+        }
+
+        // A mod's Riivolution options, each a list (Off and its choices); saved on OK.
+        private void EditOptions()
+        {
+            var mods = Selected(lastList);
+            if (busy || mods.Count != 1 || mods[0].Options.Count == 0) return;
+            Mod mod = mods[0];
+            using (var dialog = new Form
+            {
+                Text = mod.Id,
+                Font = new Font("Segoe UI", 10f),
+                AutoScaleMode = AutoScaleMode.None,
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                MaximizeBox = false,
+                MinimizeBox = false,
+                ShowInTaskbar = false,
+                StartPosition = FormStartPosition.CenterParent
+            })
+            {
+                var rows = new Panel { Location = new Point(12, 12), AutoScroll = true };
+                var boxes = new List<ComboBox>();
+                int y = 0;
+                foreach (var option in mod.Options)
+                {
+                    string title = option.Name.TrimEnd(':', ' ');
+                    if (option.Section.Length != 0 && option.Section != option.Name) title = option.Section + ": " + title;
+                    rows.Controls.Add(new Label { Text = title, Location = new Point(0, y + 4), Size = new Size(260, 24), AutoEllipsis = true });
+                    var box = new ComboBox { Location = new Point(268, y), Width = 230, DropDownStyle = ComboBoxStyle.DropDownList };
+                    box.Items.Add("Off");
+                    for (int c = 0; c < option.Choices.Count; c++)
+                        box.Items.Add(option.Choices[c] + (c < option.OtherRegion.Count && option.OtherRegion[c] ? " (another region)" : ""));
+                    box.SelectedIndex = Math.Max(0, Math.Min(option.Selected, box.Items.Count - 1));
+                    rows.Controls.Add(box);
+                    boxes.Add(box);
+                    y += 36;
+                }
+                rows.Size = new Size(520, Math.Min(y, 360));
+                dialog.Controls.Add(rows);
+                int bottom = rows.Bottom + 12;
+                var ok = new Button { Text = "OK", DialogResult = DialogResult.OK, Location = new Point(320, bottom), Size = new Size(96, 32) };
+                var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Location = new Point(424, bottom), Size = new Size(96, 32) };
+                dialog.Controls.Add(ok);
+                dialog.Controls.Add(cancel);
+                dialog.AcceptButton = ok;
+                dialog.CancelButton = cancel;
+                dialog.ClientSize = new Size(532, bottom + 44);
+                UiScale.Apply(dialog);
+                if (dialog.ShowDialog(page.FindForm()) != DialogResult.OK) return;
+                bool changed = false;
+                for (int i = 0; i < boxes.Count; i++)
+                {
+                    int value = Math.Max(0, boxes[i].SelectedIndex);
+                    changed = changed || value != mod.Options[i].Selected;
+                    mod.Options[i].Selected = value;
+                }
+                if (!changed) return;
+                status.Text = "";
+                Save();
+                Read();
+            }
         }
 
         // ---- Drag and drop ----------------------------------------------------------
