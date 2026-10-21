@@ -14,6 +14,13 @@ struct SoundList {
     union SoundFlags {
         u32 _0;
         u8 _4[4];
+
+        // The console's first byte of the word (its play kind and water variant). Big-endian, _4[0] is that byte; on a
+        // little-endian PC it is the word's last, so every level sound started as a plain sound with no lifetime and
+        // a looping one (Mario's slide on a roof or into a planet's hole) played on for minutes.
+        u8 kind() const {
+            return static_cast< u8 >(_0 >> 24);
+        }
     };
 
     const char* name;
@@ -1742,7 +1749,7 @@ void Mario::initSound() {
 void Mario::playSoundJ(const char* pSoundName, s32 timing) {
     u32 index;
     if (_96C->search(pSoundName, &index)) {
-        switch (soundlist[index]._8._4[0] & 0x3) {
+        switch (soundlist[index]._8.kind() & 0x3) {
         case 0:
             MR::startSound(mActor, soundlist[index]._14, timing);
             break;
@@ -1760,7 +1767,7 @@ void Mario::playSoundJ(const char* pSoundName, s32 timing) {
             break;
         }
 
-        switch (soundlist[index]._8._4[0] & ~0x3) {
+        switch (soundlist[index]._8.kind() & ~0x3) {
         case 0x4:
         case 0x8:
             if (mDrawStates.mIsUnderwater || mDrawStates._13) {
@@ -1779,7 +1786,7 @@ void Mario::playSoundJ(const char* pSoundName, s32 timing) {
 void Mario::stopSoundJ(const char* pSoundName, u32 delay) {
     u32 index;
     if (_96C->search(pSoundName, &index)) {
-        switch (soundlist[index]._8._4[0] & 0x3) {
+        switch (soundlist[index]._8.kind() & 0x3) {
         case 0:
             MR::stopSound(mActor, soundlist[index]._14, delay);
             break;

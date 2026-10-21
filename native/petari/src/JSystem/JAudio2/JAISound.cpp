@@ -146,9 +146,14 @@ bool JAISound::calc_JAISound_() {
         // An effect nothing can stop any more (no handle holds it, it has no lifetime) and that has played 30 s is an
         // orphaned loop: its owner went without stopping it, and it would play on through everything until the game
         // stopped every sound. It fades out as a stopped sound does, and names itself.
-        if (mCount == 1800 && mHandle == nullptr && !hasLifeTime() && asSe() != nullptr && !isStopping()) {
-            OSReport("audio: orphaned sound %08x stopped after 30 s\n", (u32)mSoundID);
-            stop(30);
+        if (mCount == 1800 && asSe() != nullptr) {
+            if (mHandle == nullptr && !hasLifeTime() && !isStopping()) {
+                OSReport("audio: orphaned sound %08x stopped after 30 s\n", (u32)mSoundID);
+                stop(30);
+            } else {
+                OSReport("audio: sound %08x alive 30 s (lifetime %s, handle %s)\n", (u32)mSoundID,
+                         hasLifeTime() ? "on" : "off", isHandleAttached() ? "held" : "none");
+            }
         }
 #endif
     }
