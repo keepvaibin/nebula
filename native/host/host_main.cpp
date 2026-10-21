@@ -1554,8 +1554,8 @@ int svc_traced_sun(void*, float* direction) {
 #endif
 }
 
-// The Discord application Nebula's status shows under (GALAXY_DISCORD_CLIENT_ID replaces it); empty: no status.
-constexpr const char* kDiscordClientId = "";
+// The Discord application Nebula's status shows under ("Super Mario Galaxy"; GALAXY_DISCORD_CLIENT_ID replaces it).
+constexpr const char* kDiscordClientId = "1562359210463727617";
 
 // The game's message text (UTF-16, its tags skipped: 0x1A, then the tag's size in bytes in the next unit's high byte)
 // as UTF-8.
