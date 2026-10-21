@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 13u
+#define NEBULA_GAME_API_VERSION 15u
 
 /* A physical range of the game's memory and where it is in the host process: what the GPU's addresses resolve to. */
 typedef struct NebulaGameMemoryRegion {
@@ -286,7 +286,42 @@ typedef struct NebulaHostServices {
     /* While NEBULA_OPTION_RT_SHADOW_CASTERS is 1: the world direction towards the sun the ray tracer lights the scene
        from (3 floats, unit length): 1, or 0 without one. */
     int (*traced_sun)(void* user, float* direction);
+    /* A THP movie (THPSimplePlayerWrapper): its disc path and NEBULA_MOVIE_OPENING when it opens, each frame it draws
+       (the frame within the movie, its frame rate and the physical addresses of its I8 Y, U and V planes, `width` x
+       `height` for Y and half each way for U and V), NEBULA_MOVIE_NONE when it closes. The host may show a replacement
+       video's frame of the same time in place of the planes. Called on the simulation thread. */
+    void (*movie_frame)(void* user, const char* name, int32_t frame, float frame_rate, uint32_t y, uint32_t u,
+                        uint32_t v, uint32_t width, uint32_t height);
+    /* A native equivalent of a mod's code patch (NEBULA_PATCH_*): 1 with `value` set when an enabled mod carries it,
+       else 0. Fixed for the session. */
+    int (*code_patch)(void* user, uint32_t id, uint32_t* value);
 } NebulaHostServices;
+
+enum {
+    NEBULA_MOVIE_NONE = -1,
+    NEBULA_MOVIE_OPENING = -2,
+};
+
+/* Native equivalents of mods' patches to the console's code (memory patches over main.dol's text): the host's mods
+   layer recognises each by its exact bytes for this disc and the game asks code_patch for it. */
+enum {
+    NEBULA_PATCH_FLIP_PANEL_GROUP = 1,       /* value: a FlipPanel group's size (joinToGroupArray's 0x20) */
+    NEBULA_PATCH_FLIP_PANEL_OBSERVER_GROUP,  /* value: the same for FlipPanelObserver */
+    NEBULA_PATCH_WATER_BAZOOKA_SHOT_FLAG,    /* WaterBazooka::tryShotBullet: shotWaterBullet's last flag set */
+    NEBULA_PATCH_KAMECK_BARRIER_OFFSET_Y,    /* value: float bits added to BossKameckBarrier's height at init */
+    NEBULA_PATCH_SKELETAL_FISH_BABY_NO_BUBBLE, /* SkeletalFishBaby::damage releases no air bubble */
+    NEBULA_PATCH_DODORYU_SHELL_ONLY,         /* Dodoryu (Lv1, Lv2) is hurt by a shell alone (isMsgJetTurtleAttack) */
+    NEBULA_PATCH_MISS_STAR_PIECES,           /* value: star bits added after a miss (s32; -999: all lost) */
+    NEBULA_PATCH_NO_HIDDEN_STAR_TABLE,       /* getPlacedHiddenStarScenarioNo skips its table */
+    NEBULA_PATCH_NO_SUDDEN_DEATH_DODORYU,    /* isStageSuddenDeathDodoryu is false */
+    NEBULA_PATCH_BEGOMAN_FIRE_PROOF,         /* Begoman Baby, Spike and Spring survive fire ground */
+    NEBULA_PATCH_MESSENGER_ALWAYS_EX,        /* KinopioAstro (the 1-up messenger) gives its larger supply */
+    NEBULA_PATCH_MESSENGER_EX_ONE_UPS,       /* value: that supply's 1-ups (20) */
+    NEBULA_PATCH_COUNT
+};
+
+/* __NebulaDolTable kinds: 0-5 the Grand galaxies' comet schedules, then: */
+enum { NEBULA_DOL_EVENT_FLAGS = 6 };
 
 enum {
     NEBULA_POWER_SHUTDOWN = 1, /* the console turns off: the game closes */

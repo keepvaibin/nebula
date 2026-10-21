@@ -1,3 +1,7 @@
+#ifdef TARGET_PC
+#include <nebula_game_api.h>
+#include <revolution/os.h>
+#endif
 #include "Game/NPC/KinopioAstro.hpp"
 #include "Game/Demo/AstroDemoFunction.hpp"
 #include "Game/Demo/DemoFunction.hpp"
@@ -25,6 +29,17 @@
 namespace {
     const s32 sMessangerOneUpNum = 5;
     const s32 sMessangerOneUpExNum = 20;
+
+    // The larger supply's 1-ups (a mod may change them: NEBULA_PATCH_MESSENGER_EX_ONE_UPS).
+    s32 messengerOneUpExNum() {
+#ifdef TARGET_PC
+        u32 count = ::sMessangerOneUpExNum;
+        __NebulaCodePatch(NEBULA_PATCH_MESSENGER_EX_ONE_UPS, &count);
+        return static_cast< s32 >(count);
+#else
+        return ::sMessangerOneUpExNum;
+#endif
+    }
     const f32 sMessangerTalkDistance = 3000.0f;
     const f32 sGotMailSePlayAreaRadius = 1500.0f;
     const char* sStaffLetterID = "StaffFinalLetter_000";
@@ -141,11 +156,11 @@ bool KinopioAstro::eventFunc(u32 letterEvent) {
         return false;
     } else if (letterEvent == LetterEvent_PeachLetter1Ups) {
         if (mIsPlayerLuigi) {
-            for (s32 i = 0; i < ::sMessangerOneUpExNum; i++) {
+            for (s32 i = 0; i < messengerOneUpExNum(); i++) {
                 MR::incPlayerLeft();
             }
 
-            MR::getGameSceneLayoutHolder()->requestOneUp(::sMessangerOneUpExNum);
+            MR::getGameSceneLayoutHolder()->requestOneUp(messengerOneUpExNum());
             MR::startSystemSE("SE_SY_5UP");
         } else {
             for (s32 i = 0; i < ::sMessangerOneUpNum; i++) {
@@ -220,9 +235,14 @@ void KinopioAstro::init(const JMapInfoIter& rIter) {
             if (MR::isLuigiLeftSupply()) {
                 mIsPlayerLuigi = true;
             }
+#ifdef TARGET_PC
+            if (__NebulaCodePatch(NEBULA_PATCH_MESSENGER_ALWAYS_EX, nullptr)) {
+                mIsPlayerLuigi = true;
+            }
+#endif
 
             if (mIsPlayerLuigi) {
-                MR::setMessageArg(mMsgCtrl, ::sMessangerOneUpExNum);
+                MR::setMessageArg(mMsgCtrl, messengerOneUpExNum());
             } else {
                 MR::setMessageArg(mMsgCtrl, ::sMessangerOneUpNum);
             }

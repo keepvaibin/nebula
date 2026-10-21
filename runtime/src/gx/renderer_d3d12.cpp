@@ -1433,7 +1433,9 @@ D3D12_SAMPLER_DESC build_sampler_desc_from_key(
     // TexMinFilter: 0 Near, 1 NearMipNear, 2 NearMipLinear,
     //               4 Linear, 5 LinearMipNear, 6 LinearMipLinear.
     const bool min_linear = (minf >= 4u);
-    const unsigned mip_mode = minf & 0x3u;  // 0 none, 1 point, 2 linear
+    // 0 none, 1 point, 2 linear, 3 linear without anisotropy (pack_sampler_key's arbitrary levels).
+    const bool no_anisotropy = (minf & 0x3u) == 3u;
+    const unsigned mip_mode = no_anisotropy ? 2u : minf & 0x3u;
     const D3D12_FILTER_TYPE ft_min = min_linear
         ? D3D12_FILTER_TYPE_LINEAR : D3D12_FILTER_TYPE_POINT;
     const D3D12_FILTER_TYPE ft_mag = mag_linear
@@ -1443,7 +1445,7 @@ D3D12_SAMPLER_DESC build_sampler_desc_from_key(
 
     D3D12_SAMPLER_DESC desc{};
     const bool use_anisotropic =
-        anisotropy > 1u && mip_mode != 0u && min_linear && mag_linear;
+        anisotropy > 1u && mip_mode != 0u && min_linear && mag_linear && !no_anisotropy;
     desc.Filter = use_anisotropic
         ? D3D12_FILTER_ANISOTROPIC
         : D3D12_ENCODE_BASIC_FILTER(

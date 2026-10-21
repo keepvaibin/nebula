@@ -1,3 +1,7 @@
+#ifdef TARGET_PC
+#include <nebula_game_api.h>
+#include <revolution/os.h>
+#endif
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/NameObj/NameObjFinder.hpp"
 #include "Game/Scene/PlacementStateChecker.hpp"
@@ -156,6 +160,11 @@ namespace MR {
     }
 
     bool isStageSuddenDeathDodoryu() {
+#ifdef TARGET_PC
+        if (__NebulaCodePatch(NEBULA_PATCH_NO_SUDDEN_DEATH_DODORYU, nullptr)) {
+            return false;
+        }
+#endif
         return isEqualStageName("CosmosGardenGalaxy") && getCurrentScenarioNo() == 4;
     }
 
@@ -262,7 +271,13 @@ namespace MR {
 
     s32 getPlacedHiddenStarScenarioNo(const char* pStageName, s32 starId) {
         GalaxyStatusAccessor accessor = makeGalaxyStatusAccessor(pStageName);
+#ifdef TARGET_PC
+        s32 scenarioNo = __NebulaCodePatch(NEBULA_PATCH_NO_HIDDEN_STAR_TABLE, nullptr)
+                             ? 0
+                             : getPlacedHiddenStarScenarioNoFromTable(pStageName, starId);
+#else
         s32 scenarioNo = getPlacedHiddenStarScenarioNoFromTable(pStageName, starId);
+#endif
         if (scenarioNo > 0) {
             return scenarioNo;
         }

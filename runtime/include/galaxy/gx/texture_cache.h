@@ -29,6 +29,8 @@
 #include "galaxy/gx/texture_backend.h"
 #include "galaxy/gx/shader_keys.h"  // fnv1a64
 #include "galaxy/gx/texture_decode_pool.h"
+#include "galaxy/gx/texture_pack.h"
+#include "galaxy/gx/movie_replacement.h"
 #include "galaxy/native_api.h"
 
 #include <array>
@@ -129,6 +131,10 @@ struct TextureHandle {
     std::uint8_t mip_levels = 1;
     bool from_efb_copy = false;
     bool generated_mips = false;
+    // A texture-pack replacement: width/height stay the guest texture's, the resource is larger by
+    // 2^(lod_shift_x16 / 16) and samplers shift their LOD range by that much.
+    std::uint8_t lod_shift_x16 = 0;
+    bool lod_arbitrary = false;  // its levels pair with the guest's by index (pack_sampler_key)
     std::uint32_t guest_byte_size = 0;
     // The ray tracer's material table entry of its base level (rt_materials.h; 0: none), and that level's
     // texture-pack key (0: not computed, an EFB copy).
@@ -275,6 +281,29 @@ public:
         return async_decode_jobs_;
     }
 
+    // Texture packs (texture_pack.h). configure_texture_packs applies changed settings; once per frame after the
+    // upload list is set, apply_texture_packs uploads finished replacements and swaps them in for the entries that
+    // wait for them (through retire(), like an invalidation); a new index or a changed dump mode drops every decoded
+    // entry so each texture is looked up again.
+    void configure_texture_packs(const TexturePackSettings& settings) {
+        if (!stager_set_) {
+            // Before any load exists: the loader threads read it.
+            packs_.set_stager([this](std::uint64_t size) { return backend_.create_upload_chunk(size); });
+            stager_set_ = true;
+        }
+        packs_.configure(settings);
+    }
+    void apply_texture_packs();
+    [[nodiscard]] TexturePacks::Stats texture_pack_stats() const noexcept { return packs_.stats(); }
+
+    // HD movie replacements (movie_replacement.h): `frame`'s planes in place of the game's movie planes (the I8
+    // textures at the mark's addresses) until the next call; null draws the game's own. Uploads through the current
+    // upload list. True when what those addresses resolve to changed.
+    bool set_movie_override(const MovieFrameMark& mark, const MovieReplacementFrame* frame);
+    [[nodiscard]] bool movie_override_active() const noexcept { return movie_active_; }
+    // A descriptor slot of a replacement plane (handles naming it change with each frame).
+    [[nodiscard]] bool movie_handle(std::uint32_t srv_index) const noexcept;
+
 private:
     DependencyEventSink* dependency_event_sink_ = nullptr;
     std::uint64_t debug_capture_frame_ = 0u;
@@ -300,6 +329,9 @@ private:
         gpu::TextureRef texture;
         TextureHandle handle;
         std::uint64_t allocation_bytes = 0;
+        // Its texture-pack replacement (bound, or awaited while the decoded original shows).
+        std::uint32_t pack_slot = TexturePacks::kNone;
+        bool pack_waiting = false;
     };
     // Adapted from Aurora's MIT-licensed TextureContentKey and bounded LRU:
     // encounter/aurora@77326d45415a64c40e560cebd2cdef0a0f08d840,
@@ -356,6 +388,11 @@ private:
         }
     };
     void retire(Entry&& entry);
+    // An entry that binds a resident replacement (no decode; charges no decoded budget and is never pooled).
+    [[nodiscard]] Entry make_replacement_entry(const TextureReplacement& replacement, std::uint32_t slot,
+                                               std::uint16_t width, std::uint16_t height, bool generated_mips,
+                                               std::uint32_t guest_byte_size);
+    void wait_for_replacement(const Key& key, Entry& entry, std::uint32_t slot);
     // Decoded-map LRU maintenance. `decoded_lru_touch` moves a key to the most
     // recently used end; `decoded_lru_forget` removes it. Both are no-ops when
     // the key is absent, so the invalidation paths can call them unguarded.
@@ -445,6 +482,39 @@ private:
     // preserving exact decode bytes and GPU upload semantics.
     std::vector<std::vector<RGBA8>> level_pixels_scratch_;
     std::unique_ptr<TextureDecodePool> decode_pool_;
+    TexturePacks packs_;
+    // Entries waiting for each replacement slot (checked when the slot becomes resident).
+    std::unordered_map<std::uint32_t, std::vector<Key>> pack_waiters_;
+    std::vector<std::pair<std::uint32_t, TexturePackPixels>> pack_uploads_;
+    // Loader-staged upload buffers by frame slot, released when the slot comes round again (its copies are done).
+    std::vector<std::vector<TextureBackend::UploadChunk>> pack_staging_;
+    bool stager_set_ = false;
+    struct MoviePlane {
+        gpu::TextureRef texture;
+        std::uint32_t srv_index = ~0u;
+        std::uint32_t width = 0;
+        std::uint32_t height = 0;
+        bool uploaded = false;
+    };
+    static constexpr unsigned kMovieRing = 4;  // frames a plane's texture rests before it is written again
+    std::array<std::array<MoviePlane, 3>, kMovieRing> movie_ring_{};
+    unsigned movie_ring_at_ = 0;
+    bool movie_active_ = false;
+    std::int32_t movie_frame_ = -1;
+    const void* movie_staging_seen_ = nullptr;
+    std::array<std::uint32_t, 3> movie_addr_{};
+    std::array<std::uint16_t, 3> movie_guest_width_{};
+    std::array<std::uint16_t, 3> movie_guest_height_{};
+    std::array<TextureHandle, 3> movie_handles_{};
+    // Upload buffers of the planes by frame slot, held until the slot comes round (the decoder then reuses them).
+    std::vector<std::vector<std::shared_ptr<TextureBackend::UploadChunk>>> movie_staging_;
+    [[nodiscard]] bool current_frame_slot_invalid() const noexcept { return current_frame_slot_ >= pack_staging_.size(); }
+    std::uint64_t pack_hashed_ = 0;
+    std::uint64_t pack_bound_ = 0;
+    std::uint64_t pack_swapped_ = 0;
+    std::uint64_t pack_stats_frame_ = 0;
+    std::uint64_t pack_apply_ns_ = 0;      // render-thread time in apply_texture_packs (uploads, swaps)
+    std::uint64_t pack_apply_max_ns_ = 0;  // its longest frame
     // Decoded textures are placed in shared heaps (placed_texture_allocator.h).
     bool async_decode_allowed_ = false;
     bool async_decode_pending_ = false;

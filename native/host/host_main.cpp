@@ -15,13 +15,13 @@
 #endif
 #include <nebula_game_api.h>
 
+#include "galaxy/atomic_file.h"
+#include "galaxy/mods.h"
 #if defined(NEBULA_HOST_RENDERER)
 #include "galaxy/experimental_ultrawide_aspect.h"
-#include "galaxy/atomic_file.h"
 #include "galaxy/frame_timeline.h"
 #include "galaxy/gx/fifo_parser.h"
 #include "galaxy/mii_import.h"
-#include "galaxy/mods.h"
 #include "galaxy/gx_d3d12.h"
 #include "galaxy/native_api.h"
 #include "galaxy/native_host.h"
@@ -74,6 +74,7 @@ inline int64_t perf_hint_retrace() noexcept { return 0; }
 
 #if defined(_WIN32)
 #include <windows.h>
+#include <shellapi.h>
 #include <intrin.h>
 #include <dbghelp.h>
 #include <tlhelp32.h>
@@ -171,6 +172,8 @@ std::atomic<uint32_t> gFsOps{0};
 std::atomic<uint32_t> gAiBlocks{0};
 std::atomic<uint32_t> gDspFrames{0};
 std::atomic<uint32_t> gMovieFrames{0};
+std::atomic<uint64_t> gMovieDecodeNs{0};   // the THP decoder's time (svc_thp_video_decode)
+std::atomic<uint32_t> gMovieSkipped{0};    // THP frames not decoded: a replacement video showed instead
 std::atomic<uint32_t> gSceneBegins{0};
 
 void* find_symbol(void* module, const char* name) {
@@ -1385,6 +1388,33 @@ int svc_traced_sun(void*, float* direction) {
 #endif
 }
 
+// A mod's code patch the game runs natively (NEBULA_PATCH_*), as the mods layer matched it at the start.
+int svc_code_patch(void*, uint32_t id, uint32_t* value) {
+    static_assert(galaxy::mods::kPatchFlipPanelGroup == NEBULA_PATCH_FLIP_PANEL_GROUP &&
+                  galaxy::mods::kPatchMessengerExOneUps == NEBULA_PATCH_MESSENGER_EX_ONE_UPS);
+    if (gMods == nullptr) return 0;
+    const auto it = gMods->code_patches.find(id);
+    if (it == gMods->code_patches.end()) return 0;
+    if (value != nullptr) *value = it->second;
+    // The first time the game uses each: evidence in the log that a mod's code change runs.
+    static std::atomic<uint64_t> logged{0};
+    if (id < 64u && (logged.fetch_or(uint64_t{1} << id) & (uint64_t{1} << id)) == 0u) {
+        char text[64];
+        std::snprintf(text, sizeof(text), "native patch %u in use (value 0x%08X)", id, it->second);
+        log_line("mods:", text);
+    }
+    return 1;
+}
+
+void svc_movie_frame(void*, const char* name, int32_t frame, float frame_rate, uint32_t y, uint32_t u, uint32_t v,
+                     uint32_t width, uint32_t height) {
+#if defined(NEBULA_HOST_RENDERER)
+    galaxy::gx::attach_movie_frame(name, frame, frame_rate, y, u, v, width, height);
+#else
+    (void)name, (void)frame, (void)frame_rate, (void)y, (void)u, (void)v, (void)width, (void)height;
+#endif
+}
+
 void svc_gx_scene_marker(void*, uint32_t marker, const float* view) {
     if (marker == NEBULA_SCENE_3D_BEGIN) {
         gSceneBegins.fetch_add(1, std::memory_order_relaxed);
@@ -2140,6 +2170,20 @@ uint32_t physical_of(const void* pointer) {
 // planes in GX's I8 tiling. The planes are then the renderer's to re-read, as after the console's decode.
 int32_t svc_thp_video_decode(void*, const void* frame, uint32_t size, void* y, void* u, void* v) {
     gMovieFrames.fetch_add(1, std::memory_order_relaxed);
+    if (galaxy::gx::movie_replacement_showing()) {
+        // A replacement video's frames show in place of these planes: their decode would be unseen work.
+        gMovieSkipped.fetch_add(1, std::memory_order_relaxed);
+        return 0;
+    }
+    const auto decode_start = std::chrono::steady_clock::now();
+    struct DecodeTime {
+        std::chrono::steady_clock::time_point start;
+        ~DecodeTime() {
+            gMovieDecodeNs.fetch_add(static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                         std::chrono::steady_clock::now() - start).count()),
+                                     std::memory_order_relaxed);
+        }
+    } decode_time{decode_start};
     ensure_guest_memory();
     const auto* p = static_cast<const uint8_t*>(frame);
     if (size < 4 || p[0] != 0xFF || p[1] != 0xD8) {
@@ -2243,6 +2287,99 @@ void apply_shipped_renderer_defaults() {
 }
 #endif
 
+#if defined(NEBULA_HOST_RENDERER)
+#include "galaxy/mod_import.h"
+
+namespace {
+
+std::string json_text(std::string_view text) {
+    std::string out = "\"";
+    for (const char c : text) {
+        if (c == '"' || c == '\\') {
+            out.push_back('\\');
+            out.push_back(c);
+        } else if (static_cast<unsigned char>(c) < 0x20u) {
+            char escaped[8];
+            std::snprintf(escaped, sizeof(escaped), "\\u%04x", static_cast<unsigned>(static_cast<unsigned char>(c)));
+            out += escaped;
+        } else {
+            out.push_back(c);
+        }
+    }
+    return out + "\"";
+}
+
+std::string utf8_of(const fs::path& path) {
+    const std::u8string text = path.u8string();
+    return std::string(reinterpret_cast<const char*>(text.data()), text.size());
+}
+
+// The launcher's mod tools: NebulaNative --import-mod <folder or archive>... or --list-mods [--game <id>]; the mods
+// folder beside the settings (as the game uses it). One JSON line on stdout; exit code 0 when everything succeeded.
+int run_mods_tool() {
+    std::vector<fs::path> args;
+#if defined(_WIN32)
+    int count = 0;
+    if (LPWSTR* wide = CommandLineToArgvW(GetCommandLineW(), &count)) {
+        for (int i = 1; i < count; ++i) args.emplace_back(wide[i]);
+        LocalFree(wide);
+    }
+#endif
+    std::string game_id = "RMGE01";
+    std::vector<fs::path> sources;
+    const bool list = !args.empty() && args[0] == "--list-mods";
+    for (std::size_t i = 1; i < args.size(); ++i) {
+        if (args[i] == "--game" && i + 1u < args.size()) {
+            game_id = utf8_of(args[++i]);
+        } else {
+            sources.push_back(args[i]);
+        }
+    }
+    const fs::path settings_folder = galaxy::runtime_settings_folder();
+    if (settings_folder.empty()) {
+        std::printf("{\"ok\":false,\"message\":\"no settings folder\"}\n");
+        return 2;
+    }
+    std::error_code error;
+    fs::create_directories(settings_folder / "mods", error);
+    galaxy::mods::set_mods_folder(settings_folder / "mods", settings_folder / "mods.ini", game_id);
+    if (list) {
+        std::string out = "{\"ok\":true,\"folder\":" + json_text(utf8_of(settings_folder / "mods")) + ",\"mods\":[";
+        bool first = true;
+        for (const galaxy::mods::ModInfo& mod : galaxy::mods::scan_mods(game_id)) {
+            out += first ? "{" : ",{";
+            first = false;
+            out += "\"id\":" + json_text(mod.id) + ",\"enabled\":" + (mod.enabled ? "true" : "false") +
+                   ",\"order\":" + std::to_string(mod.order) + ",\"riivolution\":" + (mod.riivolution ? "true" : "false") +
+                   ",\"files\":" + ((mod.files || mod.loose) ? "true" : "false") + ",\"textures\":" +
+                   (mod.textures ? "true" : "false") + ",\"movies\":" + (mod.movies ? "true" : "false") +
+                   ",\"code_patches\":" + std::to_string(mod.code_patches) + ",\"problem\":" + json_text(mod.problem) +
+                   ",\"languages\":[";
+            for (std::size_t l = 0; l < mod.languages.size(); ++l) out += (l ? "," : "") + json_text(mod.languages[l]);
+            out += "]}";
+        }
+        out += "]}";
+        std::printf("%s\n", out.c_str());
+        return 0;
+    }
+    int failed = 0;
+    std::string out = "{\"results\":[";
+    for (std::size_t i = 0; i < sources.size(); ++i) {
+        const galaxy::mods::ImportResult result = galaxy::mods::import_mod(sources[i], settings_folder / "mods");
+        failed += result.ok ? 0 : 1;
+        out += std::string(i ? "," : "") + "{\"ok\":" + (result.ok ? "true" : "false") + ",\"id\":" + json_text(result.id) +
+               ",\"replaced\":" + (result.replaced ? "true" : "false") + ",\"files\":" + std::to_string(result.files) +
+               ",\"bytes\":" + std::to_string(result.bytes) + ",\"kinds\":" + json_text(result.kinds) +
+               ",\"message\":" + json_text(result.message) + "}";
+    }
+    out += "],\"ok\":" + std::string(failed == 0 && !sources.empty() ? "true" : "false") + "}";
+    std::printf("%s\n", out.c_str());
+    return failed == 0 && !sources.empty() ? 0 : 1;
+}
+
+}  // namespace
+#endif
+
 int main(int argc, char** argv) {
 #if defined(NEBULA_HOST_SDL)
     if (!galaxy::sdl::start()) {
@@ -2282,6 +2419,11 @@ int main(int argc, char** argv) {
             std::this_thread::sleep_for(std::chrono::seconds(5));
             *static_cast<volatile int*>(nullptr) = 1;
         }).detach();
+    }
+#endif
+#if defined(NEBULA_HOST_RENDERER)
+    if (argc >= 2 && (std::strcmp(argv[1], "--import-mod") == 0 || std::strcmp(argv[1], "--list-mods") == 0)) {
+        return run_mods_tool();
     }
 #endif
     fs::path pak, nand, module;
@@ -2364,9 +2506,13 @@ int main(int argc, char** argv) {
             gMods = galaxy::mods::apply_mods(std::span<const std::uint8_t>(gPak.fst, gPak.fst_size),
                                              std::span<const std::uint8_t>(gPak.dol, gPak.dol_size),
                                              static_cast<uint64_t>(gPak.dol - gPak.data), gPak.data, gPak.size, game_id,
-                                             gPak.data[7], gPak.data[6]);
+                                             gPak.data[7], gPak.data[6],
+                                             galaxy::mods::language_folder(
+                                                 game_id, static_cast<unsigned>(galaxy::game_language_for_boot())));
         }
         if (gMods != nullptr) {
+            galaxy::gx::set_texture_pack_mod_folders(gMods->texture_folders);
+            galaxy::gx::set_movie_mod_folders(gMods->movie_folders);
             std::fprintf(stderr, "[mods] %zu mod(s), %u file patch(es), %u unsupported\n%s", gMods->active.size(),
                          gMods->files_changed, gMods->unsupported, gMods->report.c_str());
             const std::string text = "Nebula mods applied at the last start (" + game_id + ")\n\n" + gMods->report;
@@ -2380,6 +2526,10 @@ int main(int argc, char** argv) {
                     fs::copy(nand_saves, gMods->save_folder, fs::copy_options::recursive, error);
                 }
             }
+        } else if (!settings_folder.empty() && fs::exists(settings_folder / "mods-report.txt", error)) {
+            // No mod this start: an earlier start's report must not stand.
+            (void)galaxy::io::write_text_file_atomically(settings_folder / "mods-report.txt",
+                                                         "Nebula mods applied at the last start: none\n");
         }
     }
 #endif
@@ -2393,6 +2543,8 @@ int main(int argc, char** argv) {
     services.gx_pe_marker = svc_gx_pe_marker;
     services.gx_peek_efb = svc_gx_peek_efb;
     services.gx_scene_marker = svc_gx_scene_marker;
+    services.movie_frame = svc_movie_frame;
+    services.code_patch = svc_code_patch;
     services.gx_stripe_particle = svc_gx_stripe_particle;
     services.disc_fst = svc_disc_fst;
     services.disc_read = svc_disc_read;
@@ -2558,9 +2710,15 @@ int main(int argc, char** argv) {
                 log_line("host:", ("jaudio " + gAudio->stats_line()).c_str());
             }
             const size_t length = std::strlen(text);
-            std::snprintf(text + length, sizeof(text) - length, ", renderer frames %llu, movie frames %u",
+            static uint64_t last_decode_ns = 0;
+            const uint64_t decode_ns = gMovieDecodeNs.load(std::memory_order_relaxed);
+            std::snprintf(text + length, sizeof(text) - length,
+                          ", renderer frames %llu, movie frames %u (decoded in %.1f ms/s, %u replaced)",
                           (unsigned long long)gSubmissions.load(std::memory_order_relaxed),
-                          gMovieFrames.load(std::memory_order_relaxed));
+                          gMovieFrames.load(std::memory_order_relaxed),
+                          static_cast<double>(decode_ns - last_decode_ns) / 1.0e6,
+                          gMovieSkipped.load(std::memory_order_relaxed));
+            last_decode_ns = decode_ns;
 #endif
 #if defined(_WIN32)
             if (trace_thread_cpu) {

@@ -1,16 +1,25 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Mods: folders in the mods folder (next to the settings), each any of
 //   riivolution/*.xml  a Riivolution mod as on an SD card (its file, folder, savegame and memory patches; options),
-//   files/             files in the disc's layout, replacing or adding to the game's (/StageData/..., /MovieData/...),
-//   textures/          a texture pack (the community's tex1_ names, as Dolphin loads them).
-// Mods apply at the start, in load order (a later mod wins where two change a file); their order, on/off state and
-// Riivolution choices are kept in mods.ini beside the settings.
+//   files/             files in the disc's layout, replacing or adding to the game's (/StageData/..., /MovieData/...);
+//                      the disc's own folders in the mod (or in its one subfolder) count as files/,
+//   loose files        files beside nothing else (Mario.arc): each replaces every disc file of its name, as
+//                      Riivolution's disc paths without a '/' do,
+//   textures/          a texture pack (the community's tex1_ names, as Dolphin loads them); tex1_ files anywhere in a
+//                      mod with nothing else make it a pack,
+//   movies/            HD videos for the game's movies (movie_replacement.h).
+// A mod whose text covers some of the disc's languages but not the one played shows its own text in that language
+// (the same language of another region first, else English) unless its TEXT choice keeps the game's.
+// The mods are one list, as layers: where two change the same file or texture, the one higher in the list wins (order 1
+// is the top). A mod new to the list goes on top. Texture packs and movies apply at once; disc changes at the next
+// start. The order, on/off state and choices are kept in mods.ini beside the settings.
 #pragma once
 
 #include "galaxy/virtual_disc.h"
 
 #include <cstdint>
 #include <filesystem>
+#include <map>
 #include <memory>
 #include <optional>
 #include <span>
@@ -25,20 +34,60 @@ struct ModOption {
     std::string section;
     std::string name;
     std::vector<std::string> choices;
+    std::vector<bool> other_region;  // by choice: named for another region than this disc's
     unsigned selected = 0;
+};
+
+// Where two enabled mods change the same things: `files` disc files and `textures` textures.
+struct ModOverlap {
+    std::string other;       // the other mod's id
+    bool other_above = false;  // it is higher in the list (it wins these)
+    unsigned files = 0;
+    unsigned textures = 0;
 };
 
 struct ModInfo {
     std::string id;  // its folder's name
     std::filesystem::path path;
     bool enabled = true;
-    unsigned order = 0;  // load order (later wins)
+    unsigned order = 0;  // its place in the list from the top (1 wins over 2)
     bool riivolution = false;
     bool files = false;
     bool textures = false;
+    bool movies = false;
+    bool loose = false;                       // loose files placed by name
+    std::vector<std::string> languages;       // the language folders it changes (UsEnglish, EuFrench, ...)
+    bool own_text = true;                     // its text stands in for a language it lacks
+    unsigned code_patches = 0;                // patches over the game's code with no native equivalent yet
+    unsigned native_patches = 0;              // patches over the game's code that run natively
+    unsigned changed_files = 0;               // disc files it changes (its choices as they stand)
+    unsigned changed_textures = 0;            // textures its packs replace
+    std::vector<ModOverlap> overlaps;         // enabled mods changing the same files or textures
     std::vector<ModOption> options;
     std::string problem;  // why it does nothing for this game (for another game, unreadable XML)
 };
+
+// nebula_game_api.h's NEBULA_PATCH_* (the native equivalents of code patches mods_layer recognises).
+enum : std::uint32_t {
+    kPatchFlipPanelGroup = 1,
+    kPatchFlipPanelObserverGroup,
+    kPatchWaterBazookaShotFlag,
+    kPatchKameckBarrierOffsetY,
+    kPatchSkeletalFishBabyNoBubble,
+    kPatchDodoryuShellOnly,
+    kPatchMissStarPieces,
+    kPatchNoHiddenStarTable,
+    kPatchNoSuddenDeathDodoryu,
+    kPatchBegomanFireProof,
+    kPatchMessengerAlwaysEx,
+    kPatchMessengerExOneUps,
+};
+
+// Whether a mod changes the game's disc (its files, main.dol, saves): such changes take a restart.
+[[nodiscard]] bool changes_disc(const ModInfo& mod) noexcept;
+// The enabled mods' textures/ and movies/ folders, lowest in the list first (the last wins), for the live renderer.
+[[nodiscard]] std::vector<std::filesystem::path> texture_folders(std::span<const ModInfo> mods);
+[[nodiscard]] std::vector<std::filesystem::path> movie_folders(std::span<const ModInfo> mods);
 
 // What the mods do to this session's game.
 struct ActiveMods {
@@ -47,7 +96,9 @@ struct ActiveMods {
     std::vector<std::uint8_t> dol;        // main.dol with its patches (empty: unchanged)
     std::filesystem::path save_folder;    // Riivolution savegame: the game's saves there (empty: the NAND's)
     bool save_clone = false;              // copy the NAND's saves there when it is empty
-    std::vector<std::filesystem::path> texture_folders;  // in load order
+    std::map<std::uint32_t, std::uint32_t> code_patches;  // native equivalents of code patches: NEBULA_PATCH_* -> value
+    std::vector<std::filesystem::path> texture_folders;  // lowest in the list first (the last wins)
+    std::vector<std::filesystem::path> movie_folders;    // the same (movie_replacement.h)
     std::vector<std::string> active;      // the mods applied
     unsigned files_changed = 0;
     unsigned unsupported = 0;             // patches the native game cannot take (code patches)
@@ -58,6 +109,8 @@ struct ActiveMods {
 void set_mods_folder(const std::filesystem::path& folder, const std::filesystem::path& settings_file,
                      const std::string& game_id);
 [[nodiscard]] std::filesystem::path mods_folder();
+// The game set_mods_folder named (boot.bin's six characters; empty before).
+[[nodiscard]] std::string mods_game_id();
 // The mods found and their saved choices (Riivolution defaults where none is saved), in load order; for the game
 // set_mods_folder named when `game_id` is empty.
 [[nodiscard]] std::vector<ModInfo> scan_mods(const std::string& game_id = {});
@@ -70,7 +123,12 @@ bool save_mod_settings(std::span<const ModInfo> mods);
                                                      std::span<const std::uint8_t> partition_dol,
                                                      std::uint64_t dol_offset, const std::uint8_t* partition,
                                                      std::uint64_t partition_size, const std::string& game_id,
-                                                     int revision, int disc_number);
+                                                     int revision, int disc_number,
+                                                     const std::string& language_folder = {});
+// The disc's folder for a language the game plays in (UsEnglish, EuFrench, JpJapanese, ...), from the disc's region
+// (game_id[3]) and the language (1 English, 2 German, 3 French, 4 Spanish, 5 Italian, 6 Dutch; Japan and Korea have
+// one each). Empty when unknown.
+[[nodiscard]] std::string language_folder(const std::string& game_id, unsigned language);
 
 // This session's mods (apply_mods records them): the mods and choices it started with, what they changed.
 struct SessionMods {

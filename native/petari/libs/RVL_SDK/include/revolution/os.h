@@ -76,6 +76,15 @@ void __NebulaObjectName(const void* pObject, const char* pName);
 f32 __NebulaLightReach(const char* pModel, f32 radius);
 // The traced sun's world direction (traced_sun in nebula_game_api.h): 1, or 0 without one.
 int __NebulaTracedSun(f32* pDirection);
+// A native equivalent of a mod's code patch (NEBULA_PATCH_* in nebula_game_api.h): 1 with `pValue` set (when not
+// null) while an enabled mod carries it, else 0.
+int __NebulaCodePatch(u32 id, u32* pValue);
+// main.dol's version of a table the game compiles in (comet schedules, event flags): `pCompiled` while they match,
+// else the DOL's, its strings read from main.dol (a mod's memory patches over main.dol's data change it).
+const void* __NebulaDolTable(u32 kind, const void* pCompiled);
+// A THP movie's opening (frame -2), each frame it draws and its close (-1) (movie_frame in nebula_game_api.h).
+void __NebulaMovieFrame(const char* pName, s32 frame, f32 frameRate, const void* pY, const void* pU, const void* pV,
+                        u32 width, u32 height);
 // A wait on another thread's work (a busy loop the console's interrupts preempt): runs what is pending, or sleeps until
 // a host thread raises something.
 void __NebulaPoll(void);

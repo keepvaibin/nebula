@@ -1,3 +1,7 @@
+#ifdef TARGET_PC
+#include <nebula_game_api.h>
+#include <revolution/os.h>
+#endif
 #include "Game/Boss/DodoryuStateLv1.hpp"
 #include "Game/Boss/Dodoryu.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
@@ -342,7 +346,12 @@ bool DodoryuStateLv1::catchPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* 
         return true;
     }
 
+#ifdef TARGET_PC
+    if (__NebulaCodePatch(NEBULA_PATCH_DODORYU_SHELL_ONLY, nullptr) ? MR::isMsgJetTurtleAttack(msg)
+                                                                      : MR::isMsgPlayerHitAll(msg)) {
+#else
     if (MR::isMsgPlayerHitAll(msg)) {
+#endif
         _98.set(pReceiver->mPosition - pSender->mPosition);
 
         if (!calcVerticalizedDir(&_98, _98)) {

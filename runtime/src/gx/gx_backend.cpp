@@ -76,11 +76,18 @@ namespace galaxy::gx {
 std::uint32_t pack_sampler_key(
     const TexMode& mode,
     bool generated_mips,
-    std::uint8_t mip_levels) noexcept {
+    std::uint8_t mip_levels,
+    std::uint8_t lod_shift_x16,
+    bool arbitrary,
+    std::uint8_t efb_scale_log2_x32) noexcept {
     std::uint32_t min_filter =
         static_cast<std::uint32_t>(mode.min_filter) & 0x7u;
+    std::uint32_t min_lod =
+        static_cast<std::uint32_t>(mode.min_lod_x16) & 0xFFu;
     std::uint32_t max_lod =
         static_cast<std::uint32_t>(mode.max_lod_x16) & 0xFFu;
+    const bool guest_mips = (min_filter & 0x3u) != 0u;
+    bool full_chain = false;
     if (generated_mips && mip_levels > 1u &&
         min_filter == static_cast<std::uint32_t>(TexMinFilter::Linear) &&
         mode.mag_filter == TexMagFilter::Linear) {
@@ -89,15 +96,37 @@ std::uint32_t pack_sampler_key(
         max_lod = std::min<std::uint32_t>(
             0xFFu,
             static_cast<std::uint32_t>(mip_levels - 1u) * 16u);
+        full_chain = true;
+    }
+    std::uint32_t lod_bias =
+        static_cast<std::uint32_t>(static_cast<std::uint8_t>(mode.lod_bias_x32)) & 0xFFu;
+    if (arbitrary && guest_mips) {
+        const int bias = static_cast<int>(static_cast<std::int8_t>(mode.lod_bias_x32)) +
+                         static_cast<int>(efb_scale_log2_x32) - 2 * static_cast<int>(lod_shift_x16);
+        lod_bias = static_cast<std::uint32_t>(static_cast<std::uint8_t>(
+            static_cast<std::int8_t>(std::clamp(bias, -128, 127))));
+        max_lod = 0xFFu;
+        min_filter = (min_filter & 0x4u) | 0x3u;
+    } else if (lod_shift_x16 != 0u) {
+        if (guest_mips) {
+            min_lod = min_lod == 0u ? 0u : std::min<std::uint32_t>(0xFFu, min_lod + lod_shift_x16);
+            max_lod = std::min<std::uint32_t>(0xFFu, max_lod + lod_shift_x16);
+        } else if (!full_chain) {
+            min_filter = static_cast<std::uint32_t>(
+                min_filter >= static_cast<std::uint32_t>(TexMinFilter::Linear)
+                    ? TexMinFilter::LinearMipLinear
+                    : TexMinFilter::NearMipNear);
+            min_lod = 0u;
+            max_lod = lod_shift_x16;
+        }
     }
     return
           (static_cast<std::uint32_t>(mode.wrap_s) & 0x3u)
         | ((static_cast<std::uint32_t>(mode.wrap_t) & 0x3u) << 2)
         | ((static_cast<std::uint32_t>(mode.mag_filter) & 0x1u) << 4)
         | (min_filter << 5)
-        | ((static_cast<std::uint32_t>(
-               static_cast<std::uint8_t>(mode.lod_bias_x32)) & 0xFFu) << 8)
-        | ((static_cast<std::uint32_t>(mode.min_lod_x16) & 0xFFu) << 16)
+        | (lod_bias << 8)
+        | (min_lod << 16)
         | (max_lod << 24);
 }
 
@@ -5599,6 +5628,7 @@ FramePeCompletionToken GxBackend::render_frame(
         take_attached_stripe_particles(chunk, fifo_size);
         chunk.prerecorded_movie=producer_movie_content_;
         chunk.safety_surround=producer_safety_surround_;
+        chunk.movie_frame=producer_movie_frame_;
         chunk.services = services;
         chunk.memory = memory;
         chunk.present_swap_chain = present_swap_chain;
@@ -5699,6 +5729,7 @@ FramePeCompletionToken GxBackend::render_frame(
     take_attached_stripe_particles(chunk, fifo_size);
     chunk.prerecorded_movie=producer_movie_content_;
     chunk.safety_surround=producer_safety_surround_;
+    chunk.movie_frame=producer_movie_frame_;
     chunk.services = services;
     chunk.memory   = memory;
     chunk.present_swap_chain = present_swap_chain;
@@ -12155,6 +12186,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     render_pointer_response_=chunk.pointer_response;
     render_movie_content_=chunk.prerecorded_movie;
     render_safety_surround_=chunk.safety_surround;
+    render_movie_frame_=chunk.movie_frame;
     const bool trace_gx_stalls = trace_gx_stalls_enabled();
     const bool trace_gx_microprofile = trace_gx_microprofile_enabled();
     const bool trace_gx_stats = trace_gx_stats_enabled();
@@ -12390,6 +12422,82 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         }
         // New decoded textures upload through this frame's command list.
         renderer_.attach_texture_uploads(texture_cache_);
+        {
+            // Tests: GALAXY_TEXTURE_PACK_TOGGLE_FRAMES=N flips the setting every N frames, as the menu does.
+            static const std::uint64_t toggle_frames = read_env_u64("GALAXY_TEXTURE_PACK_TOGGLE_FRAMES", 0u);
+            if (toggle_frames != 0u && frame_index_ != 0u && frame_index_ % toggle_frames == 0u) {
+                RenderConfig flipped = get_render_config();
+                flipped.texture_packs = !flipped.texture_packs;
+                set_render_config(flipped);
+                std::fprintf(stderr, "[texture-pack] toggle frame=%llu packs=%u\n",
+                             static_cast<unsigned long long>(frame_index_), flipped.texture_packs ? 1u : 0u);
+            }
+            const RenderConfig render = get_render_config();
+            if (const std::uint64_t generation = texture_pack_mod_folders_generation();
+                generation != texture_pack_mods_generation_) {
+                texture_pack_mods_generation_ = generation;
+                texture_pack_mod_folders_ = texture_pack_mod_folders();
+            }
+            static const std::filesystem::path dumps = texture_dump_directory();
+            TexturePackSettings settings{};
+            settings.enabled = render.texture_packs;
+            settings.preload = render.texture_pack_preload;
+            settings.dump = render.texture_dump;
+            // Each mod's pack, the lowest in the mods list first (the last wins a texture).
+            if (std::filesystem::path packs = texture_pack_test_directory(); !packs.empty()) {
+                settings.packs.push_back(std::move(packs));
+            }
+            settings.packs.insert(settings.packs.end(), texture_pack_mod_folders_.begin(),
+                                  texture_pack_mod_folders_.end());
+            settings.dumps = dumps;
+            settings.budget_bytes = static_cast<std::uint64_t>(render.texture_pack_budget_mb) << 20u;
+            if (!texture_pack_settings_applied_ || !(settings == texture_pack_settings_)) {
+                texture_cache_.configure_texture_packs(settings);
+                texture_pack_settings_ = std::move(settings);
+                texture_pack_settings_applied_ = true;
+            }
+        }
+        // Finished replacements upload here and take the place of their originals.
+        texture_cache_.apply_texture_packs();
+        // HD movie replacements: the movies folder beside the settings, then the mods' movies/ folders.
+        if (const std::uint64_t generation = movie_mod_folders_generation();
+            generation != movie_mods_generation_) {
+            movie_mods_generation_ = generation;
+            std::vector<std::filesystem::path> folders;
+            if (std::filesystem::path movies = movie_directory(); !movies.empty()) {
+                folders.push_back(std::move(movies));
+            }
+            for (std::filesystem::path& folder : movie_mod_folders()) folders.push_back(std::move(folder));
+            movie_replacements_.configure(std::move(folders), [this](std::uint64_t size) {
+                return texture_cache_.backend().create_upload_chunk(size);
+            });
+        }
+    }
+    // The movie frame this submission draws: a replacement's planes in place of the THP's (each submission, so the
+    // frame matches the draw that carries it). Handles cached for the planes' addresses are stale when they change.
+    if (texture_cache_.backend().has_upload_list() &&
+        (render_movie_frame_.frame != MovieFrameMark::kNone || texture_cache_.movie_override_active())) {
+        if (++movie_stats_tick_ % 240u == 0u) {
+            const MovieReplacements::Stats stats = movie_replacements_.stats();
+            if (stats.decoded != 0u) {
+                std::fprintf(stderr, "[movie] decoded=%llu shown=%llu late=%llu seeks=%llu convert-ms=%.2f/frame\n",
+                             static_cast<unsigned long long>(stats.decoded),
+                             static_cast<unsigned long long>(stats.shown),
+                             static_cast<unsigned long long>(stats.late), static_cast<unsigned long long>(stats.seeks),
+                             stats.convert_ms / static_cast<double>(stats.decoded));
+            }
+        }
+        if (texture_cache_.set_movie_override(render_movie_frame_, movie_replacements_.frame(render_movie_frame_))) {
+            const std::uint32_t planes[3] = {render_movie_frame_.y, render_movie_frame_.u, render_movie_frame_.v};
+            const auto stale = [&](const auto& item) {
+                return item.first.guest_addr == planes[0] || item.first.guest_addr == planes[1] ||
+                       item.first.guest_addr == planes[2] || texture_cache_.movie_handle(item.second.srv_index);
+            };
+            std::erase_if(texture_handle_cache_, stale);
+            std::erase_if(frame_texture_handle_cache_, stale);
+            clear_texture_binding_table_cache();
+            texture_bindings_dirty_ = true;
+        }
     }
     // Workers may be filling this frame's texture staging from the chunk's
     // memory snapshot; no exit from this function may leave them running.
@@ -13963,13 +14071,16 @@ std::array<std::uint32_t, kMaxTextureMaps> GxBackend::capture_sampler_keys(
     std::uint8_t map_mask,
     const std::array<TextureHandle, kMaxTextureMaps>& handles) const {
     std::array<std::uint32_t, kMaxTextureMaps> keys{};
+    const auto efb_scale_log2_x32 = static_cast<std::uint8_t>(std::clamp(
+        std::lround(32.0 * std::log2(static_cast<double>(std::max(1u, renderer_.efb_scale())))), 0l, 127l));
     for (unsigned map = 0u; map < kMaxTextureMaps; ++map) {
         if ((map_mask & (1u << map)) == 0u) {
             continue;
         }
         const TextureHandle& handle = handles[map];
         keys[map] = pack_sampler_key(
-            state_.tex_mode(map), handle.generated_mips, handle.mip_levels);
+            state_.tex_mode(map), handle.generated_mips, handle.mip_levels,
+            handle.lod_shift_x16, handle.lod_arbitrary, efb_scale_log2_x32);
     }
     // Unused slots still get valid zero-key descriptors, but cannot fragment
     // the table cache. map_mask includes both direct and indirect sampling.

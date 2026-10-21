@@ -849,7 +849,9 @@ VkSampler RendererVk::sampler_for(std::uint32_t key, const RenderConfig& cfg) {
     const float max_lod = static_cast<float>((key >> 24u) & 0xffu) / 16.0f;
     // TexMinFilter: 0 near, 1 near-mip-near, 2 near-mip-linear, 4 linear, 5 linear-mip-near, 6 linear-mip-linear.
     const bool min_linear = minf >= 4u;
-    const unsigned mip_mode = minf & 3u;
+    // 3: linear without anisotropy (pack_sampler_key's arbitrary levels).
+    const bool no_anisotropy = (minf & 3u) == 3u;
+    const unsigned mip_mode = no_anisotropy ? 2u : minf & 3u;
     VkSamplerCreateInfo info{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
     info.magFilter = mag_linear ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
     info.minFilter = min_linear ? VK_FILTER_LINEAR : VK_FILTER_NEAREST;
@@ -859,7 +861,7 @@ VkSampler RendererVk::sampler_for(std::uint32_t key, const RenderConfig& cfg) {
     const float max_bias = context.properties().limits.maxSamplerLodBias;
     info.mipLodBias = std::clamp(lod_bias + cfg_bias, -max_bias, max_bias);
     const bool use_anisotropic = anisotropy > 1u && mip_mode != 0u && min_linear && mag_linear &&
-        context.sampler_anisotropy();
+        !no_anisotropy && context.sampler_anisotropy();
     info.anisotropyEnable = use_anisotropic ? VK_TRUE : VK_FALSE;
     // D3D12_FILTER_ANISOTROPIC (the D3D12 renderer's) filters between mips linearly.
     info.mipmapMode = mip_mode == 2u || use_anisotropic ? VK_SAMPLER_MIPMAP_MODE_LINEAR : VK_SAMPLER_MIPMAP_MODE_NEAREST;

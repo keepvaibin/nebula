@@ -14,6 +14,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <filesystem>
 #include <string>
 #include <utility>
 #include <vector>
@@ -150,6 +151,16 @@ struct RenderConfig {
     unsigned rt_shadow_quality   = 0;   // 0=off, 1=low, 2=medium, 3=high
     bool     rt_ao_enabled       = false;
     bool     rt_reflections      = false;
+
+    // Texture packs (texture_pack.h): replacements from texture_pack_directory() and the mods'
+    // textures/ folders. preload loads the whole pack at start instead of each texture at its first
+    // use; dump writes every newly decoded texture once, as a PNG under its pack name, to
+    // texture_dump_directory(). The replacements on the GPU stay within texture_pack_budget_mb
+    // (unused ones are evicted first).
+    bool     texture_packs       = true;
+    bool     texture_pack_preload = false;
+    bool     texture_dump        = false;
+    unsigned texture_pack_budget_mb = 2048;
 
     // Back-buffer dimensions (may differ from EFB; the present blit scales).
     // In windowed mode this is the client size, limited to the monitor's
@@ -365,5 +376,22 @@ void record_render_adapter(const wchar_t* description, unsigned vendor_id, unsig
 // (Nebula Settings saved it while the game runs), reads it over the live
 // settings, as the in-game menu would apply them, and returns true.
 bool reload_render_config_if_changed();
+
+// Texture packs are mods (mods.h). TextureDumps beside config.ini takes dumps (GALAXY_TEXTURE_DUMP_DIR replaces it);
+// GALAXY_TEXTURE_PACK_DIR names a pack folder for tests, below every mod. Empty when unknown or unset.
+[[nodiscard]] std::filesystem::path texture_pack_directory();
+[[nodiscard]] std::filesystem::path texture_pack_test_directory();
+[[nodiscard]] std::filesystem::path texture_dump_directory();
+// The enabled mods' textures/ folders in load order (the host sets them at start); the generation
+// changes with each set.
+void set_texture_pack_mod_folders(std::vector<std::filesystem::path> folders);
+[[nodiscard]] std::vector<std::filesystem::path> texture_pack_mod_folders();
+[[nodiscard]] std::uint64_t texture_pack_mod_folders_generation() noexcept;
+// HD movie replacements (movie_replacement.h): the Movies folder beside config.ini (GALAXY_MOVIE_DIR replaces it), and
+// the enabled mods' movies/ folders in load order (the host sets them at start).
+[[nodiscard]] std::filesystem::path movie_directory();
+void set_movie_mod_folders(std::vector<std::filesystem::path> folders);
+[[nodiscard]] std::vector<std::filesystem::path> movie_mod_folders();
+[[nodiscard]] std::uint64_t movie_mod_folders_generation() noexcept;
 
 } // namespace galaxy::gx

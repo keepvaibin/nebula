@@ -10,8 +10,10 @@
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx/renderer_common.h"
 #include "galaxy/gx/streamline_bridge.h"
+#include "galaxy/gx/texture_pack.h"
 #include "galaxy/gx_d3d12.h"
 #include "galaxy/mii_import.h"
+#include "galaxy/mod_import.h"
 #include "galaxy/mods.h"
 #include "galaxy/native_host.h"
 #include "galaxy/platform_time.h"
@@ -105,6 +107,7 @@ struct SettingsRow {
     std::function<void(RenderConfig&, int)> change;
     std::string help;
     bool heading = false;
+    std::string key;  // names the row across rebuilds (a mod's place row)
 };
 std::vector<SettingsRow> settings_page(unsigned tab, const RenderConfig& draft, const RuntimeSettings& runtime,
                                        const RenderFeatureCaps& caps);
@@ -696,6 +699,9 @@ unsigned pending_settings_changes() {
     changes += d.hud_output_resolution != live.hud_output_resolution;
     changes += d.ray_tracing_enabled != live.ray_tracing_enabled;
     changes += d.rt_quality != live.rt_quality;
+    changes += d.texture_packs != live.texture_packs ||
+        (d.texture_packs && d.texture_pack_preload != live.texture_pack_preload);
+    changes += d.texture_dump != live.texture_dump;
     changes += controls_changes();
     return changes;
 }
@@ -961,6 +967,9 @@ void apply_native_settings_draft() {
     applied.ambient_occlusion = next.ambient_occlusion;
     applied.hud_output_resolution = next.hud_output_resolution;
     applied.ray_tracing_enabled = next.ray_tracing_enabled;
+    applied.texture_packs = next.texture_packs;
+    applied.texture_pack_preload = next.texture_pack_preload;
+    applied.texture_dump = next.texture_dump;
     const bool display_changed = display_settings_differ(live, applied);
     const unsigned changes = pending_settings_changes();
     if (applied.internal_follow_window) {
@@ -1284,6 +1293,8 @@ bool handle_controls_key(WPARAM key, bool was_down, bool from_pad) {
     }
 }
 
+bool mods_move_key(WPARAM key, bool was_down);
+
 bool handle_native_settings_key(WPARAM key, bool was_down, bool from_pad = false) {
     if (s_home_menu_visible.load(std::memory_order_acquire)) {
         return handle_home_menu_key(key, was_down);
@@ -1321,6 +1332,9 @@ bool handle_native_settings_key(WPARAM key, bool was_down, bool from_pad = false
         return false;
     }
     expire_display_confirmation();
+    if (mods_move_key(key, was_down)) {
+        return true;
+    }
     switch (key) {
     case VK_ESCAPE:
         if (settings_display_confirming()) {
@@ -2294,7 +2308,17 @@ std::vector<galaxy::mods::ModInfo>& mods_list() {
     return s_mods;
 }
 
-// With s_mods_mutex held: the load order as listed, then mods.ini.
+// With s_mods_mutex held: the enabled mods' texture packs and movies to the renderer now (disc changes wait for the
+// next start).
+void apply_live_mods() {
+    set_texture_pack_mod_folders(galaxy::mods::texture_folders(s_mods));
+    set_movie_mod_folders(galaxy::mods::movie_folders(s_mods));
+}
+
+// The mod picked up on its PLACE row (empty: none): up and down move it, right or left puts it down.
+std::string s_mod_moving;
+
+// With s_mods_mutex held: the list's order, then mods.ini.
 void save_mods() {
     for (std::size_t i = 0; i < s_mods.size(); ++i) {
         s_mods[i].order = static_cast<unsigned>(i + 1u);
@@ -2302,6 +2326,7 @@ void save_mods() {
     if (!galaxy::mods::save_mod_settings(s_mods)) {
         std::cerr << "[settings] mods.ini could not be written\n";
     }
+    apply_live_mods();
 }
 
 bool mods_restart_pending() {
@@ -2323,23 +2348,241 @@ std::string mods_ui_text(std::string_view text, std::size_t width) {
     return out;
 }
 
-std::vector<SettingsRow> mods_page() {
+// Mod import (the MODS page's rows and files dropped on the window): one batch at a time on its own thread; the
+// IMPORT MOD row shows its progress and result.
+std::mutex s_mod_import_mutex;
+std::string s_mod_import_value;    // the row's value: progress, then the outcome
+std::string s_mod_import_message;  // the outcome, the row's help
+std::atomic<bool> s_mod_import_busy{false};
+std::atomic<bool> s_mod_dialog_open{false};
+std::string s_mod_remove_armed;    // a mod whose REMOVE was pressed once (a second press removes it)
+
+void run_mod_imports(std::vector<std::filesystem::path> sources) {
+    if (sources.empty()) return;
+    if (s_mod_import_busy.exchange(true, std::memory_order_acq_rel)) {
+        const std::lock_guard<std::mutex> lock(s_mod_import_mutex);
+        s_mod_import_message = "AN IMPORT IS RUNNING: TRY AGAIN WHEN IT ENDS";
+        return;
+    }
+    std::thread([sources = std::move(sources)] {
+        const std::filesystem::path folder = galaxy::mods::mods_folder();
+        std::string message;
+        unsigned imported = 0;
+        unsigned failed = 0;
+        for (std::size_t i = 0; i < sources.size(); ++i) {
+            const auto progress = [&](const galaxy::mods::ImportProgress& p) {
+                char text[32]{};
+                const unsigned percent =
+                    p.total != 0u ? static_cast<unsigned>(std::min<std::uint64_t>(99u, p.done * 100u / p.total)) : 0u;
+                if (sources.size() > 1u) {
+                    std::snprintf(text, sizeof(text), "%zu/%zu: %u%%", i + 1u, sources.size(), percent);
+                } else {
+                    std::snprintf(text, sizeof(text), "IMPORTING %u%%", percent);
+                }
+                const std::lock_guard<std::mutex> lock(s_mod_import_mutex);
+                s_mod_import_value = text;
+            };
+            const galaxy::mods::ImportResult result =
+                folder.empty() ? galaxy::mods::ImportResult{false, {}, false, 0, 0, {}, "NO MODS FOLDER"}
+                               : galaxy::mods::import_mod(sources[i], folder, progress);
+            std::cerr << "[mods] import " << sources[i].string() << ": " << result.message << " (" << result.files
+                      << " files, " << (result.bytes >> 20u) << " MB)\n";
+            (result.ok ? imported : failed) += 1u;
+            message = message.empty() ? result.message : message + "; " + result.message;
+        }
+        {
+            const std::lock_guard<std::mutex> lock(s_mod_import_mutex);
+            s_mod_import_value = failed == 0u ? "DONE" : imported == 0u ? "FAILED" : "SOME FAILED";
+            s_mod_import_message = message + ". MODS APPLY WHEN NEBULA RESTARTS";
+        }
+        {
+            const std::lock_guard<std::mutex> lock(s_mods_mutex);
+            s_mods = galaxy::mods::scan_mods();
+            s_mods_scanned = true;
+            apply_live_mods();
+        }
+        s_mod_import_busy.store(false, std::memory_order_release);
+    }).detach();
+}
+
+// The picker for archives or folders on its own thread (the game keeps running).
+void start_mod_import_dialog(bool folders) {
+    if (s_mod_dialog_open.exchange(true, std::memory_order_acq_rel)) {
+        return;
+    }
+    const HWND owner = reinterpret_cast<HWND>(host_window::settings_window.load(std::memory_order_acquire));
+    std::thread([owner, folders] {
+        const HRESULT com = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+        std::vector<std::filesystem::path> picked;
+        IFileOpenDialog* dialog = nullptr;
+        if (SUCCEEDED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog)))) {
+            DWORD options = 0u;
+            dialog->GetOptions(&options);
+            options |= FOS_ALLOWMULTISELECT | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST;
+            if (folders) {
+                options |= FOS_PICKFOLDERS;
+                dialog->SetTitle(L"Import mod folders");
+            } else {
+                const COMDLG_FILTERSPEC filters[] = {
+                    {L"Mods and texture packs (zip, 7z, rar, tar)",
+                     L"*.zip;*.7z;*.rar;*.tar;*.tgz;*.gz;*.txz;*.xz;*.tbz2;*.bz2;*.tzst;*.zst"},
+                    {L"All files", L"*.*"}};
+                dialog->SetFileTypes(2u, filters);
+                dialog->SetTitle(L"Import mods");
+                options |= FOS_FILEMUSTEXIST;
+            }
+            dialog->SetOptions(options);
+            IShellItemArray* items = nullptr;
+            if (SUCCEEDED(dialog->Show(owner)) && SUCCEEDED(dialog->GetResults(&items))) {
+                DWORD count = 0u;
+                items->GetCount(&count);
+                for (DWORD i = 0; i < count; ++i) {
+                    IShellItem* item = nullptr;
+                    if (SUCCEEDED(items->GetItemAt(i, &item))) {
+                        PWSTR path = nullptr;
+                        if (SUCCEEDED(item->GetDisplayName(SIGDN_FILESYSPATH, &path))) {
+                            picked.emplace_back(path);
+                            CoTaskMemFree(path);
+                        }
+                        item->Release();
+                    }
+                }
+                items->Release();
+            }
+            dialog->Release();
+        }
+        if (SUCCEEDED(com)) CoUninitialize();
+        s_mod_dialog_open.store(false, std::memory_order_release);
+        run_mod_imports(std::move(picked));
+    }).detach();
+}
+
+std::vector<SettingsRow> mods_page(const RenderConfig& render);
+
+// While a mod is picked up on the MODS page: up and down move it a place (the selection follows its row), right, left,
+// Enter or Escape put it down.
+bool mods_move_key(WPARAM key, bool was_down) {
+    std::string moving;
+    {
+        const std::lock_guard<std::mutex> lock(s_mods_mutex);
+        moving = s_mod_moving;
+        if (moving.empty()) return false;
+        if (key == VK_UP || key == VK_DOWN) {
+            const auto it = std::find_if(s_mods.begin(), s_mods.end(),
+                                         [&](const galaxy::mods::ModInfo& m) { return m.id == moving; });
+            if (it == s_mods.end()) {
+                s_mod_moving.clear();
+                return true;
+            }
+            const std::size_t at = static_cast<std::size_t>(it - s_mods.begin());
+            const std::size_t to = key == VK_UP ? (at == 0u ? at : at - 1u) : std::min(at + 1u, s_mods.size() - 1u);
+            if (to != at) {
+                std::swap(s_mods[at], s_mods[to]);
+                save_mods();
+                // The overlaps follow the new order at the next rescan.
+                s_mods_scanned = false;
+            }
+        } else if (key == VK_RIGHT || key == VK_LEFT || key == VK_RETURN || key == VK_ESCAPE) {
+            if (!was_down) s_mod_moving.clear();
+            return true;
+        } else {
+            return false;
+        }
+    }
+    // The selection stays on the moved mod's place row.
+    const std::vector<SettingsRow> rows = mods_page(s_settings_draft);
+    for (std::size_t r = 0; r < rows.size(); ++r) {
+        if (rows[r].key == "place:" + moving) {
+            s_native_settings_row.store(static_cast<unsigned>(r), std::memory_order_relaxed);
+            break;
+        }
+    }
+    return true;
+}
+
+// The name of a language folder as the menu says it.
+std::string language_name(std::string_view folder) {
+    static constexpr std::pair<const char*, const char*> kNames[] = {
+        {"English", "ENGLISH"}, {"French", "FRENCH"}, {"Spanish", "SPANISH"}, {"German", "GERMAN"},
+        {"Italian", "ITALIAN"}, {"Dutch", "DUTCH"}, {"Japanese", "JAPANESE"}, {"Korean", "KOREAN"},
+        {"SimpChinese", "CHINESE"}, {"TradChinese", "CHINESE"}};
+    for (const auto& [suffix, name] : kNames) {
+        if (folder.ends_with(suffix)) return name;
+    }
+    return mods_ui_text(folder, 12u);
+}
+
+// The language folder the next start plays in (the language setting applies at the next start, as mods do).
+std::string next_start_language_folder() {
+    std::string game_id = galaxy::mods::mods_game_id();
+    if (game_id.empty()) game_id = "RMGE01";
+    return galaxy::mods::language_folder(game_id, static_cast<unsigned>(get_runtime_settings().language));
+}
+
+std::vector<SettingsRow> mods_page(const RenderConfig& render) {
     std::vector<SettingsRow> rows;
     const std::lock_guard<std::mutex> lock(s_mods_mutex);
     std::vector<galaxy::mods::ModInfo>& mods = mods_list();
-    rows.push_back({"MODS", {}, nullptr, {}, true});
-    if (mods.empty()) {
-        rows.push_back({"NO MODS FOUND", {}, nullptr,
-                        "EACH MOD IN ITS OWN FOLDER IN THE MODS FOLDER: RIIVOLUTION, FILES OR TEXTURES"});
+    rows.push_back({"MODS (THE HIGHER WINS)", {}, nullptr, {}, true});
+    {
+        std::string value;
+        std::string message;
+        {
+            const std::lock_guard<std::mutex> import_lock(s_mod_import_mutex);
+            value = s_mod_import_value;
+            message = s_mod_import_message;
+        }
+        if (s_mod_dialog_open.load(std::memory_order_acquire)) value = "CHOOSING";
+        rows.push_back({"IMPORT MOD", value.empty() ? std::string("PRESS RIGHT") : value,
+                        [](RenderConfig&, int delta) {
+                            if (delta > 0 && !s_mod_import_busy.load(std::memory_order_acquire)) {
+                                start_mod_import_dialog(false);
+                            }
+                        },
+                        message.empty() ? std::string("A ZIP, 7Z OR RAR MOD OR TEXTURE PACK (OR DROP IT ON THE WINDOW)")
+                                        : mods_ui_text(message, 120u)});
+        rows.push_back({"IMPORT MOD FOLDER", "PRESS RIGHT",
+                        [](RenderConfig&, int delta) {
+                            if (delta > 0 && !s_mod_import_busy.load(std::memory_order_acquire)) {
+                                start_mod_import_dialog(true);
+                            }
+                        },
+                        "A MOD'S FOLDER, COPIED INTO THE MODS FOLDER"});
     }
+    if (mods.empty()) {
+        rows.push_back({"NO MODS YET", {}, nullptr,
+                        "IMPORT ONE ABOVE: RIIVOLUTION MODS, GAME FILES, TEXTURE PACKS OR HD MOVIES"});
+    }
+    const std::string playing = next_start_language_folder();
     for (std::size_t i = 0; i < mods.size(); ++i) {
         const galaxy::mods::ModInfo& mod = mods[i];
         std::string kinds;
-        for (const auto& [on, name] : {std::pair{mod.riivolution, "RIIVOLUTION"}, std::pair{mod.files, "FILES"},
-                                       std::pair{mod.textures, "TEXTURES"}}) {
+        for (const auto& [on, name] : {std::pair{mod.riivolution, "RIIVOLUTION"}, std::pair{mod.files || mod.loose, "FILES"},
+                                       std::pair{mod.textures, "TEXTURES"}, std::pair{mod.movies, "MOVIES"}}) {
             if (on) kinds += kinds.empty() ? name : std::string(", ") + name;
         }
-        const bool inert = !mod.problem.empty() && !mod.files && !mod.textures;
+        if (!mod.languages.empty()) {
+            std::string languages;
+            for (const std::string& folder : mod.languages) {
+                const std::string name = language_name(folder);
+                if (languages.find(name) == std::string::npos) languages += languages.empty() ? name : ", " + name;
+            }
+            kinds += ". TEXT: " + languages;
+        }
+        if (mod.code_patches != 0u) {
+            kinds += ". " + std::to_string(mod.code_patches) + " CODE CHANGE" + (mod.code_patches == 1u ? "" : "S") +
+                     " FOR THE CONSOLE'S CODE: NOT RUN NATIVELY";
+        }
+        for (const galaxy::mods::ModOverlap& overlap : mod.overlaps) {
+            std::string what;
+            if (overlap.files != 0u) what = std::to_string(overlap.files) + (overlap.files == 1u ? " FILE" : " FILES");
+            if (overlap.textures != 0u) {
+                what += (what.empty() ? "" : ", ") + std::to_string(overlap.textures) +
+                        (overlap.textures == 1u ? " TEXTURE" : " TEXTURES");
+            }
+            kinds += ". " + what + (overlap.other_above ? " COVERED BY " : " OVER ") + mods_ui_text(overlap.other, 24u);
+        }
+        const bool inert = !mod.problem.empty() && !mod.files && !mod.textures && !mod.movies && !mod.loose;
         rows.push_back({mods_ui_text(mod.id, 26u), inert ? mods_ui_text(mod.problem, 22u) : (mod.enabled ? "ON" : "OFF"),
                         [i](RenderConfig&, int delta) {
                             const std::lock_guard<std::mutex> change_lock(s_mods_mutex);
@@ -2358,6 +2601,8 @@ std::vector<SettingsRow> mods_page() {
             const std::string value = option.selected == 0u || option.selected > option.choices.size()
                                           ? std::string("OFF")
                                           : mods_ui_text(option.choices[option.selected - 1u], 22u);
+            const bool other_region = option.selected != 0u && option.selected <= option.other_region.size() &&
+                                      option.other_region[option.selected - 1u];
             rows.push_back({"  " + mods_ui_text(option.name, 24u), value,
                             [i, o](RenderConfig&, int delta) {
                                 const std::lock_guard<std::mutex> change_lock(s_mods_mutex);
@@ -2371,21 +2616,65 @@ std::vector<SettingsRow> mods_page() {
                                     save_mods();
                                 }
                             },
-                            mods_ui_text(option.section, 30u) + ": A RIIVOLUTION OPTION. APPLIES AT THE NEXT START"});
+                            other_region ? std::string("FOR ANOTHER REGION'S DISC: THIS ONE MAY NOT WORK. APPLIES AT THE NEXT START")
+                                         : mods_ui_text(option.section, 30u) + ": A RIIVOLUTION OPTION. APPLIES AT THE NEXT START"});
         }
-        char order[16]{};
-        std::snprintf(order, sizeof(order), "#%zu", i + 1u);
-        rows.push_back({"  LOAD ORDER", order,
+        // Text in the language played: the mod's own (in a language it has) or the game's.
+        const bool covers = std::find(mod.languages.begin(), mod.languages.end(), playing) != mod.languages.end();
+        if (!mod.languages.empty() && !covers && !playing.empty()) {
+            std::string theirs = language_name(mod.languages.front());
+            for (const std::string& folder : mod.languages) {
+                if (language_name(folder) == "ENGLISH") theirs = "ENGLISH";
+            }
+            rows.push_back({"  TEXT", mod.own_text ? "THE MOD'S " + theirs : "THE GAME'S " + language_name(playing),
+                            [i](RenderConfig&, int delta) {
+                                const std::lock_guard<std::mutex> change_lock(s_mods_mutex);
+                                if (i >= s_mods.size() || delta == 0) return;
+                                s_mods[i].own_text = !s_mods[i].own_text;
+                                save_mods();
+                            },
+                            "THIS MOD HAS NO " + language_name(playing) +
+                                " TEXT: ITS OWN FITS ITS CHANGES, THE GAME'S MAY NOT. APPLIES AT THE NEXT START"});
+        }
+        char order[32]{};
+        std::snprintf(order, sizeof(order), "#%zu OF %zu", i + 1u, mods.size());
+        const bool moving = s_mod_moving == mod.id;
+        SettingsRow place{"  PLACE", moving ? std::string("MOVING: UP OR DOWN") : std::string(order),
+                          [i](RenderConfig&, int delta) {
+                              const std::lock_guard<std::mutex> change_lock(s_mods_mutex);
+                              if (delta > 0 && i < s_mods.size() && s_mods.size() > 1u) s_mod_moving = s_mods[i].id;
+                          },
+                          moving ? std::string("UP OR DOWN MOVES IT, RIGHT PUTS IT DOWN")
+                                 : std::string("PRESS RIGHT TO PICK IT UP: THE HIGHER MOD WINS WHERE TWO CHANGE THE SAME "
+                                               "FILE OR TEXTURE")};
+        place.key = "place:" + mod.id;
+        rows.push_back(std::move(place));
+        const bool armed = s_mod_remove_armed == mod.id;
+        rows.push_back({"  REMOVE", armed ? "PRESS RIGHT AGAIN" : "PRESS RIGHT",
                         [i](RenderConfig&, int delta) {
                             const std::lock_guard<std::mutex> change_lock(s_mods_mutex);
-                            if (delta == 0 || i >= s_mods.size() || (delta < 0 && i == 0u) ||
-                                (delta > 0 && i + 1u >= s_mods.size())) {
+                            if (i >= s_mods.size()) return;
+                            if (delta <= 0) {
+                                s_mod_remove_armed.clear();
                                 return;
                             }
-                            std::swap(s_mods[i], s_mods[delta < 0 ? i - 1u : i + 1u]);
-                            save_mods();
+                            if (s_mod_remove_armed != s_mods[i].id) {
+                                s_mod_remove_armed = s_mods[i].id;
+                                return;
+                            }
+                            std::string message;
+                            galaxy::mods::remove_mod(galaxy::mods::mods_folder(), s_mods[i].id, &message);
+                            std::cerr << "[mods] " << message << '\n';
+                            {
+                                const std::lock_guard<std::mutex> import_lock(s_mod_import_mutex);
+                                s_mod_import_message = message;
+                            }
+                            s_mod_remove_armed.clear();
+                            s_mods = galaxy::mods::scan_mods();
+                            s_mods_scanned = true;
+                            apply_live_mods();
                         },
-                        "LEFT EARLIER, RIGHT LATER: A LATER MOD WINS WHERE TWO CHANGE ONE FILE"});
+                        "TO THE RECYCLE BIN (PRESS TWICE). APPLIES AT THE NEXT START"});
     }
     rows.push_back({"FOLDER", {}, nullptr, {}, true});
     rows.push_back({"OPEN MODS FOLDER", "PRESS RIGHT",
@@ -2407,6 +2696,44 @@ std::vector<SettingsRow> mods_page() {
     rows.push_back({"THIS SESSION", summary, nullptr,
                     session.unsupported != 0u ? "SOME PATCHES CANNOT RUN NATIVELY: SEE MODS-REPORT.TXT"
                                               : "WHAT EACH MOD CHANGED: MODS-REPORT.TXT BESIDE THE SETTINGS"});
+    // Texture packs apply at once (through the draft, like the graphics settings).
+    rows.push_back({"TEXTURE PACKS", {}, nullptr, {}, true});
+    rows.push_back({"TEXTURE PACKS", !render.texture_packs ? "OFF" : render.texture_pack_preload ? "PRELOAD" : "ON",
+                    [](RenderConfig& draft, int delta) {
+                        const int mode = !draft.texture_packs ? 0 : draft.texture_pack_preload ? 2 : 1;
+                        const unsigned next = settings_step(static_cast<unsigned>(mode), 3u, delta);
+                        draft.texture_packs = next != 0u;
+                        draft.texture_pack_preload = next == 2u;
+                    },
+                    "ON LOADS EACH TEXTURE WHEN IT FIRST SHOWS, PRELOAD LOADS THE WHOLE PACK AT ONCE"});
+    if (render.texture_packs) {
+        const galaxy::gx::TexturePacks::Summary packs = galaxy::gx::TexturePacks::summary();
+        char value[32]{};
+        std::snprintf(value, sizeof(value), "%llu TEXTURES", static_cast<unsigned long long>(packs.textures));
+        std::string help = "IN THE MODS WITH TEXTURES (IMPORT A PACK AS A MOD; THE HIGHER WINS A TEXTURE)";
+        if (packs.levels != 0u) help += ", WITH " + std::to_string(packs.levels) + " HAND-MADE MIP LEVELS";
+        if (!packs.unreadable.empty()) {
+            help += ". " + std::to_string(packs.unreadable.size()) + " FILE NAME" +
+                    (packs.unreadable.size() == 1u ? " IS" : "S ARE") + " NOT TEXTURE NAMES: " +
+                    mods_ui_text(packs.unreadable.front(), 48u);
+        }
+        rows.push_back({"  IN THE PACKS", packs.indexed ? std::string(value) : std::string("READING"), nullptr, help});
+    }
+
+    rows.push_back({"DUMP TEXTURES", render.texture_dump ? "ON" : "OFF",
+                    [](RenderConfig& draft, int) { draft.texture_dump = !draft.texture_dump; },
+                    "SAVES EACH TEXTURE THE GAME SHOWS AS A PNG, NAMED FOR PACKS (FOR MAKING ONE)"});
+    rows.push_back({"OPEN TEXTURE DUMPS FOLDER", "PRESS RIGHT",
+                    [](RenderConfig&, int delta) {
+                        if (delta > 0) open_folder_in_explorer(texture_dump_directory());
+                    },
+                    "THE DUMPED TEXTURES, IN AN RMGE01 FOLDER"});
+    rows.push_back({"MOVIES", {}, nullptr, {}, true});
+    rows.push_back({"OPEN MOVIES FOLDER", "PRESS RIGHT",
+                    [](RenderConfig&, int delta) {
+                        if (delta > 0) open_folder_in_explorer(movie_directory());
+                    },
+                    "HD VIDEOS NAMED AS THE GAME'S MOVIES (PROLOGUEA.MP4) PLAY IN THEIR PLACE"});
     return rows;
 }
 
@@ -2556,7 +2883,7 @@ std::vector<SettingsRow> settings_page(unsigned tab, const RenderConfig& draft, 
     case 0: return display_page(draft);
     case 1: return graphics_page(draft);
     case 4: return game_page(runtime);
-    case 5: return mods_page();
+    case 5: return mods_page(draft);
     case 6: return system_page(caps);
     default: return {};
     }
@@ -3130,9 +3457,10 @@ OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_h
             std::cerr << "[Renderer] adjusted window dimensions exceed Win32 limits\n";
             return {};
         }
+        // Files dropped on the window import (WM_DROPFILES).
         const DWORD ex_style =
             hidden_window ? (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE)
-                          : WS_EX_APPWINDOW;
+                          : (WS_EX_APPWINDOW | WS_EX_ACCEPTFILES);
         opened.window = owner.start({
             kWindowClass, L"Nebula", window_style, ex_style,
             window_x, window_y, static_cast<int>(outer_width),
@@ -3188,6 +3516,47 @@ double display_refresh_hz(NativeWindow window) noexcept {
 }
 
 LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    if (msg == WM_DROPFILES) {
+        // Dropped files: mod archives and folders into the mods folder (the MODS page opens on the import),
+        // anything else to the Mii import.
+        const auto drop = reinterpret_cast<HDROP>(wp);
+        std::vector<std::filesystem::path> mods;
+        std::vector<std::filesystem::path> miis;
+        const UINT count = DragQueryFileW(drop, 0xFFFFFFFFu, nullptr, 0u);
+        for (UINT i = 0; i < count; ++i) {
+            const UINT length = DragQueryFileW(drop, i, nullptr, 0u);
+            std::wstring name(length + 1u, L'\0');
+            DragQueryFileW(drop, i, name.data(), length + 1u);
+            name.resize(length);
+            const std::filesystem::path path(name);
+            std::error_code error;
+            if (std::filesystem::is_directory(path, error) || galaxy::mods::is_mod_archive(path)) {
+                mods.push_back(path);
+            } else {
+                miis.push_back(path);
+            }
+        }
+        DragFinish(drop);
+        if (!mods.empty()) {
+            run_mod_imports(std::move(mods));
+            s_native_settings_tab.store(5u, std::memory_order_relaxed);
+            s_native_settings_row.store(1u, std::memory_order_relaxed);
+            set_native_settings_visible(true);
+        }
+        if (!miis.empty()) {
+            std::thread([miis = std::move(miis)] {
+                std::string message;
+                (void)galaxy::host::import_mii_files(miis, &message);
+                std::cerr << "[settings] mii import (dropped): " << message << '\n';
+                {
+                    const std::lock_guard<std::mutex> lock(s_mii_mutex);
+                    s_mii_status = message;
+                }
+                s_mii_count.store(-1, std::memory_order_release);
+            }).detach();
+        }
+        return 0;
+    }
     if (msg == kSettingsKeyMessage) {
         (void)handle_native_settings_key(wp, false, true);
         return 0;

@@ -66,6 +66,9 @@ add_library(galaxy_gx_vk STATIC
     ${rt}/gx/renderer_common.cpp
     ${rt}/gx/upload_ring.cpp
     ${rt}/gx/texture_cache.cpp
+    ${rt}/gx/texture_pack.cpp
+    ${rt}/gx/texture_pack_codecs.cpp
+    ${rt}/gx/movie_replacement.cpp
     ${rt}/gx/vertex_loader.cpp
     ${rt}/gx/shader_keys.cpp
     ${rt}/gx/efb_copy.cpp
@@ -118,6 +121,13 @@ add_library(galaxy_gx_vk STATIC
     ${rt}/mod_xml.cpp
     ${rt}/virtual_disc.cpp
     ${rt}/mods.cpp)
+# Mod import (archives) on the desktop systems; Android and iOS take no mods.
+if(NOT ANDROID AND NOT IOS)
+    set(NEBULA_ARCHIVE_SOURCES "${nebula_root}/third_party/archive" CACHE PATH "zlib, xz and libarchive sources")
+    include("${nebula_root}/cmake/archive_deps.cmake")
+    target_sources(galaxy_gx_vk PRIVATE ${rt}/mod_import.cpp)
+    target_link_libraries(galaxy_gx_vk PUBLIC nebula_archive)
+endif()
 target_include_directories(galaxy_gx_vk PUBLIC "${nebula_root}/runtime/include")
 target_include_directories(galaxy_gx_vk PRIVATE "${nebula_root}/third_party/smaa")
 target_compile_options(galaxy_gx_vk PUBLIC "SHELL:-include ${nebula_root}/runtime/include/galaxy/posix_compat.h")

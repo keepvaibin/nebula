@@ -37,6 +37,7 @@
 #include "galaxy/gx/efb_copy.h"
 #include "galaxy/gx/fifo_parser.h"
 #include "galaxy/gx/gx_state.h"
+#include "galaxy/gx/movie_replacement.h"
 #if defined(NEBULA_GPU_VULKAN)
 #include "galaxy/gx/vk/pipeline_cache_vk.h"
 #include "galaxy/gx/vk/renderer_vk.h"
@@ -186,10 +187,21 @@ private:
     mutable std::array<VtxPayloadStrideMemo, 8> vtx_payload_stride_memo_{};
 };
 
+// lod_shift_x16: a texture-pack replacement 2^(shift / 16) times the guest size. The guest's LOD
+// range moves by the shift (its base level is the replacement's level `shift`), except that a guest
+// range starting at its base level starts at the replacement's (close up, the guest magnifies its
+// base level: the replacement shows its own); a guest sampler without mips uses the replacement's
+// levels down to the guest size. An arbitrary replacement (_arb) pairs its levels with the guest's
+// by index, as Dolphin does: the bias moves its LOD back to the guest's at the console's resolution
+// (efb_scale_log2_x32: 32 x log2 of the internal resolution scale), over its whole chain, without
+// anisotropy (which would push its levels away); mip mode 3 in the key is linear without anisotropy.
 [[nodiscard]] std::uint32_t pack_sampler_key(
     const TexMode& mode,
     bool generated_mips,
-    std::uint8_t mip_levels) noexcept;
+    std::uint8_t mip_levels,
+    std::uint8_t lod_shift_x16 = 0u,
+    bool arbitrary = false,
+    std::uint8_t efb_scale_log2_x32 = 0u) noexcept;
 
 // FNV-1a step over one 64-bit value. It consumes a whole word per step instead of one byte.
 // The byte-wise form ran 8 xor-multiply rounds per 8-byte value, and the binding table hashes
@@ -316,6 +328,26 @@ public:
         if (producer_stripe_particles_.size() < 65536u) producer_stripe_particles_.push_back(mark);
     }
     void set_prerecorded_movie_content(bool movie) noexcept { producer_movie_content_=movie; }
+    // Simulation thread: the movie frame later submissions carry (movie_replacement.h).
+    void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, std::uint32_t y, std::uint32_t u,
+                            std::uint32_t v, std::uint32_t width, std::uint32_t height) noexcept {
+        MovieFrameMark& mark = producer_movie_frame_;
+        if (frame == MovieFrameMark::kNone) {
+            mark = {};
+            return;
+        }
+        if (name != nullptr) {
+            mark.name = {};
+            for (std::size_t i = 0; name[i] != 0 && i + 1u < mark.name.size(); ++i) mark.name[i] = name[i];
+        }
+        mark.frame = frame;
+        mark.frame_rate = frame_rate;
+        mark.y = y;
+        mark.u = u;
+        mark.v = v;
+        mark.width = static_cast<std::uint16_t>(width);
+        mark.height = static_cast<std::uint16_t>(height);
+    }
     void set_safety_scene_surround(float intensity) noexcept { producer_safety_surround_=intensity; }
     void set_pointer_response(PointerResponseStamp stamp) noexcept {
         if (stamp.generation==producer_pointer_response_.generation &&
@@ -588,6 +620,7 @@ private:
         PointerResponseStamp pointer_response{};
         bool prerecorded_movie{};
         float safety_surround{};
+        MovieFrameMark movie_frame{};
         std::vector<std::byte> fifo;
         std::vector<GuestWriteRange> dirty_ranges;
         std::vector<GuestMemoryRange> memory_ranges;
@@ -1315,6 +1348,11 @@ private:
     float scene_jitter_px_[2]{};
     std::uint64_t scene_markers_seen_ = 0;
     bool producer_movie_content_{},render_movie_content_{};
+    MovieFrameMark producer_movie_frame_{}, render_movie_frame_{};
+    // HD movie replacements: the decoder (render thread) and the folders last applied.
+    MovieReplacements movie_replacements_;
+    std::uint64_t movie_mods_generation_ = ~0ull;
+    std::uint64_t movie_stats_tick_ = 0;
     float producer_safety_surround_{},render_safety_surround_{};
     std::array<std::uint64_t,512> pointer_latency_bins_{};
     std::uint64_t pointer_response_count_{}, pointer_latency_total_{}, pointer_latency_max_{}, pointer_report_ns_{};
@@ -2038,6 +2076,11 @@ private:
         TextureHandleKeyHash>
         texture_handle_cache_;
     std::uint64_t seen_texture_retirement_revision_ = 0;
+    // Texture-pack settings last applied (render config and the mods' folders, polled at frame begin).
+    TexturePackSettings texture_pack_settings_{};
+    bool texture_pack_settings_applied_ = false;
+    std::uint64_t texture_pack_mods_generation_ = ~0ull;
+    std::vector<std::filesystem::path> texture_pack_mod_folders_;
     std::unordered_map<
         TextureHandleKey,
         TextureHandle,

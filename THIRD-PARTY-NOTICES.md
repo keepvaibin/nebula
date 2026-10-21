@@ -105,6 +105,17 @@ License: `third_party/streamline/LICENSE.txt`. The Streamline and DLSS binaries 
 Nebula: Setup or the settings download them from NVIDIA's release when the player asks for DLSS and
 accepts the NVIDIA RTX SDKs license.
 
+## stb_image and stb_image_write (MIT or public domain)
+
+`third_party/stb/` holds unmodified `stb_image.h` v2.30 and `stb_image_write.h` v1.16 from
+<https://github.com/nothings/stb> (texture packs' PNG loading and texture dumps). Copyright (c) 2017 Sean Barrett,
+used under the MIT alternative: `third_party/stb/LICENSE`.
+
+## bcdec (MIT or Unlicense)
+
+`third_party/bcdec/bcdec.h` (v0.98) from <https://github.com/iOrange/bcdec> decodes texture packs' BC1-BC5 and BC7
+DDS files. Copyright (c) 2022 Sergii Kudlai, used under the MIT alternative: `third_party/bcdec/LICENSE`.
+
 ## MiiPort (ISC)
 
 `runtime/src/mii_formats.cpp` adapts the Switch's colour and glasses downgrade tables and the 3DS/Wii U and Switch Mii

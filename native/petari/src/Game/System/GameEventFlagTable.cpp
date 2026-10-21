@@ -1,3 +1,7 @@
+#ifdef TARGET_PC
+#include <nebula_game_api.h>
+#include <revolution/os.h>
+#endif
 #include "Game/System/GameEventFlagTable.hpp"
 #include "Game/System/GalaxyInfoTable.hpp"
 #include "Game/Util/HashUtil.hpp"
@@ -286,6 +290,17 @@ namespace GameEventFlagTable {
         return findFlag(pFlagName);
     }
 
+    // The flags (main.dol's when a mod changed them there).
+    const GameEventFlag* flags() {
+#ifdef TARGET_PC
+        static const GameEventFlag* sFlags =
+            static_cast< const GameEventFlag* >(__NebulaDolTable(NEBULA_DOL_EVENT_FLAGS, ::sGameEventFlagStatic));
+        return sFlags;
+#else
+        return ::sGameEventFlagStatic;
+#endif
+    }
+
     s32 getTableSize() {
         return ARRAY_SIZE(::sGameEventFlagStatic);
     }
@@ -294,7 +309,7 @@ namespace GameEventFlagTable {
         if (index < 0 || index >= getTableSize()) {
             return nullptr;
         } else {
-            return &::sGameEventFlagStatic[index];
+            return &flags()[index];
         }
     }
 
@@ -377,7 +392,7 @@ namespace GameEventFlagTable {
     }
 
     int getIndex(const GameEventFlag* pFlag) {
-        return pFlag - &::sGameEventFlagStatic[0];
+        return pFlag - &flags()[0];
     }
 
     bool isDependedAnother(const char* pFlagName1, const char* pFlagName2) {

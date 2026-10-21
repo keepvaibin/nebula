@@ -241,6 +241,10 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
     else if (std::strcmp(key, "rt_shadow_quality") == 0) cfg.rt_shadow_quality = std::clamp(parse_uint(val, 0), 0u, 3u);
     else if (std::strcmp(key, "rt_ao_enabled")  == 0) cfg.rt_ao_enabled       = parse_bool(val, false);
     else if (std::strcmp(key, "rt_reflections") == 0) cfg.rt_reflections      = parse_bool(val, false);
+    else if (std::strcmp(key, "texture_packs") == 0) cfg.texture_packs = parse_bool(val, cfg.texture_packs);
+    else if (std::strcmp(key, "texture_pack_preload") == 0) cfg.texture_pack_preload = parse_bool(val, cfg.texture_pack_preload);
+    else if (std::strcmp(key, "texture_dump") == 0) cfg.texture_dump = parse_bool(val, cfg.texture_dump);
+    else if (std::strcmp(key, "texture_pack_budget_mb") == 0) cfg.texture_pack_budget_mb = std::clamp(parse_uint(val, cfg.texture_pack_budget_mb), 64u, 65536u);
     else if (std::strcmp(key, "window_width")   == 0) cfg.window_width        = parse_window_dimension(val, cfg.window_width);
     else if (std::strcmp(key, "window_height")  == 0) cfg.window_height       = parse_window_dimension(val, cfg.window_height);
     else if (std::strcmp(key, "display_mode") == 0) {
@@ -329,6 +333,10 @@ static void apply_env_overrides(RenderConfig& cfg) {
     apply_env(cfg, "GALAXY_RT_QUALITY", "rt_quality");
     apply_env(cfg, "GALAXY_RT_AO_ENABLED", "rt_ao_enabled");
     apply_env(cfg, "GALAXY_RT_REFLECTIONS", "rt_reflections");
+    apply_env(cfg, "GALAXY_TEXTURE_PACKS", "texture_packs");
+    apply_env(cfg, "GALAXY_TEXTURE_PACK_PRELOAD", "texture_pack_preload");
+    apply_env(cfg, "GALAXY_TEXTURE_DUMP", "texture_dump");
+    apply_env(cfg, "GALAXY_TEXTURE_PACK_BUDGET_MB", "texture_pack_budget_mb");
     apply_env(cfg, "GALAXY_WINDOW_WIDTH", "window_width");
     apply_env(cfg, "GALAXY_WINDOW_HEIGHT", "window_height");
     // Launch variable of earlier launchers and the test tools:
@@ -718,6 +726,10 @@ bool save_render_config_to_file() {
              << (cfg.hud_output_resolution ? 1u : 0u) << '\n'
              << "ray_tracing_enabled="
              << (cfg.ray_tracing_enabled ? 1u : 0u) << '\n'
+             << "texture_packs=" << (cfg.texture_packs ? 1u : 0u) << '\n'
+             << "texture_pack_preload=" << (cfg.texture_pack_preload ? 1u : 0u) << '\n'
+             << "texture_dump=" << (cfg.texture_dump ? 1u : 0u) << '\n'
+             << "texture_pack_budget_mb=" << cfg.texture_pack_budget_mb << '\n'
              << "rt_quality=" << (cfg.rt_quality == 1u ? "high" : cfg.rt_quality == 2u ? "low" : "medium") << '\n'
              << "window_width=" << cfg.window_width << '\n'
              << "window_height=" << cfg.window_height << '\n'
@@ -780,6 +792,93 @@ void record_render_adapter(const wchar_t* description, unsigned vendor_id, unsig
         static_cast<void>(io::write_text_file_atomically(config.parent_path() / L"adapter.ini", contents.str()));
     } catch (...) {
     }
+}
+
+namespace {
+
+// A folder beside config.ini, or the environment's override (an empty override: none).
+std::filesystem::path data_folder(const char* override_name, const char* folder) {
+#if defined(_WIN32)
+    const std::wstring name(override_name, override_name + std::strlen(override_name));
+    SetLastError(ERROR_SUCCESS);
+    const DWORD required = GetEnvironmentVariableW(name.c_str(), nullptr, 0);
+    if (required != 0u) {
+        std::wstring value(required, L'\0');
+        const DWORD copied = GetEnvironmentVariableW(name.c_str(), value.data(), required);
+        if (copied == 0u || copied >= required) return {};
+        value.resize(copied);
+        return std::filesystem::path(value);
+    }
+    if (GetLastError() != ERROR_ENVVAR_NOT_FOUND) return {};
+#else
+    if (const char* value = std::getenv(override_name); value != nullptr) {
+        return value[0] != '\0' ? std::filesystem::path(value) : std::filesystem::path{};
+    }
+#endif
+    const std::filesystem::path config = config_path();
+    return config.empty() ? std::filesystem::path{} : config.parent_path() / folder;
+}
+
+std::mutex s_mod_folders_mutex;
+std::vector<std::filesystem::path> s_mod_folders;
+std::atomic<std::uint64_t> s_mod_folders_generation{0};
+std::vector<std::filesystem::path> s_movie_folders;
+std::atomic<std::uint64_t> s_movie_folders_generation{0};
+
+}  // namespace
+
+std::filesystem::path texture_pack_directory() {
+    return data_folder("GALAXY_TEXTURE_PACK_DIR", "TexturePacks");
+}
+
+std::filesystem::path texture_pack_test_directory() {
+    // Only the environment's: texture packs are mods (mods.h); tests name a pack folder directly.
+#if defined(_WIN32)
+    static const bool named = GetEnvironmentVariableW(L"GALAXY_TEXTURE_PACK_DIR", nullptr, 0) != 0u;
+#else
+    static const bool named = std::getenv("GALAXY_TEXTURE_PACK_DIR") != nullptr;
+#endif
+    static const std::filesystem::path folder = named ? texture_pack_directory() : std::filesystem::path{};
+    return folder;
+}
+
+std::filesystem::path texture_dump_directory() {
+    return data_folder("GALAXY_TEXTURE_DUMP_DIR", "TextureDumps");
+}
+
+void set_texture_pack_mod_folders(std::vector<std::filesystem::path> folders) {
+    const std::lock_guard<std::mutex> lock(s_mod_folders_mutex);
+    s_mod_folders = std::move(folders);
+    s_mod_folders_generation.fetch_add(1u, std::memory_order_release);
+}
+
+std::vector<std::filesystem::path> texture_pack_mod_folders() {
+    const std::lock_guard<std::mutex> lock(s_mod_folders_mutex);
+    return s_mod_folders;
+}
+
+std::uint64_t texture_pack_mod_folders_generation() noexcept {
+    return s_mod_folders_generation.load(std::memory_order_acquire);
+}
+
+std::filesystem::path movie_directory() {
+    static const std::filesystem::path folder = data_folder("GALAXY_MOVIE_DIR", "Movies");
+    return folder;
+}
+
+void set_movie_mod_folders(std::vector<std::filesystem::path> folders) {
+    const std::lock_guard<std::mutex> lock(s_mod_folders_mutex);
+    s_movie_folders = std::move(folders);
+    s_movie_folders_generation.fetch_add(1u, std::memory_order_release);
+}
+
+std::vector<std::filesystem::path> movie_mod_folders() {
+    const std::lock_guard<std::mutex> lock(s_mod_folders_mutex);
+    return s_movie_folders;
+}
+
+std::uint64_t movie_mod_folders_generation() noexcept {
+    return s_movie_folders_generation.load(std::memory_order_acquire);
 }
 
 }  // namespace galaxy::gx

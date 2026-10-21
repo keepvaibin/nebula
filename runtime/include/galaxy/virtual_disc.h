@@ -43,8 +43,10 @@ public:
     // The file or directory at `path` ("/a/b", case-insensitive as the game looks files up); with `create`, a file
     // (and its directories) is added when missing. Null when absent, or when a file and a directory clash.
     DiscNode* find_path(std::string_view path, bool create);
-    // The first file of that name anywhere (Riivolution's disc paths without a leading '/').
+    // The first file of that name anywhere.
     DiscNode* find_name(std::string_view name);
+    // Every file of that name (Riivolution's disc paths without a leading '/': Dolphin patches each), with its path.
+    std::vector<std::pair<DiscNode*, std::string>> find_names(std::string_view name);
     // Writes `length` bytes (0: the rest of the host file) of a host file from `file_offset` over a disc file at
     // `offset`; `resize`: the disc file ends where the patch does (else it keeps its size when longer). As Riivolution.
     static void patch(DiscNode& file, const std::filesystem::path& host_file, std::uint64_t host_size, std::uint64_t offset,

@@ -207,6 +207,22 @@ DiscNode* VirtualDisc::find_name(std::string_view name) {
     return search(search, root_);
 }
 
+std::vector<std::pair<DiscNode*, std::string>> VirtualDisc::find_names(std::string_view name) {
+    std::vector<std::pair<DiscNode*, std::string>> found;
+    const auto search = [&](auto&& self, DiscNode& dir, const std::string& path) -> void {
+        for (DiscNode& node : dir.children) {
+            const std::string child = path + "/" + node.name;
+            if (node.directory) {
+                self(self, node, child);
+            } else if (same_name(node.name, name)) {
+                found.emplace_back(&node, child);
+            }
+        }
+    };
+    search(search, root_, std::string());
+    return found;
+}
+
 void VirtualDisc::patch(DiscNode& file, const std::filesystem::path& host_file, std::uint64_t host_size,
                         std::uint64_t offset, std::uint64_t file_offset, std::uint64_t length, bool resize) {
     std::vector<DiscPiece>& pieces = file.pieces;

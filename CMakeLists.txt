@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 project(NebulaRuntime VERSION 1.0.1 LANGUAGES C CXX)
+# The mods importer's archive libraries (zlib, liblzma, libarchive), built once per build tree.
+include(cmake/archive_deps.cmake)
 
 if(NOT WIN32)
     message(FATAL_ERROR "The first runtime milestone targets Windows x64 only.")
@@ -521,6 +523,7 @@ add_library(galaxy_native_host STATIC
     runtime/src/mod_xml.cpp
     runtime/src/virtual_disc.cpp
     runtime/src/mods.cpp
+    runtime/src/mod_import.cpp
     runtime/src/controller_hid.cpp
     runtime/src/flat_guest_memory.cpp)
 target_link_libraries(
@@ -534,6 +537,8 @@ target_link_libraries(
         galaxy_frame_cadence_diagnostics
         galaxy_ai_pcm_identity
         galaxy_atomic_file
+        nebula_archive
+        shell32
         bcrypt
         hid
         ole32
@@ -557,6 +562,7 @@ add_library(galaxy_native_host_test_support STATIC
     runtime/src/mod_xml.cpp
     runtime/src/virtual_disc.cpp
     runtime/src/mods.cpp
+    runtime/src/mod_import.cpp
     runtime/src/controller_hid.cpp
     runtime/src/flat_guest_memory.cpp)
 target_link_libraries(
@@ -570,6 +576,8 @@ target_link_libraries(
         galaxy_frame_cadence_diagnostics
         galaxy_ai_pcm_identity
         galaxy_atomic_file
+        nebula_archive
+        shell32
         bcrypt
         hid
         ole32
@@ -868,6 +876,9 @@ add_library(galaxy_gx STATIC
     runtime/src/gx/galaxy_select.cpp
     runtime/src/gx/window_owner.cpp
     runtime/src/gx/texture_cache.cpp
+    runtime/src/gx/texture_pack.cpp
+    runtime/src/gx/texture_pack_codecs.cpp
+    runtime/src/gx/movie_replacement.cpp
     runtime/src/gx/texture_backend_d3d12.cpp
     runtime/src/gx/placed_texture_allocator.cpp
     runtime/src/gx/vertex_loader.cpp
@@ -926,6 +937,8 @@ if(GALAXY_STREAMLINE_SDK)
     target_include_directories(galaxy_gx SYSTEM PRIVATE "${GALAXY_STREAMLINE_SDK}/include")
     target_compile_definitions(galaxy_gx PRIVATE GALAXY_WITH_STREAMLINE=1)
 endif()
+# HD movie replacements decode through Media Foundation (movie_replacement.cpp).
+target_link_libraries(galaxy_gx PRIVATE mfplat mfreadwrite mfuuid)
 target_link_libraries(galaxy_gx
     PUBLIC
         # Renderer window events use the real native input bridge.
@@ -1306,10 +1319,14 @@ add_executable(galaxy_mii_import_tests runtime/src/mii_import_tests.cpp runtime/
                runtime/src/mii_formats.cpp runtime/src/wii_device_data.cpp)
 target_link_libraries(galaxy_mii_import_tests PRIVATE galaxy_atomic_file)
 add_executable(galaxy_mods_tests runtime/src/mods_tests.cpp runtime/src/mod_xml.cpp runtime/src/virtual_disc.cpp
-               runtime/src/mods.cpp)
-target_link_libraries(galaxy_mods_tests PRIVATE galaxy_atomic_file)
+               runtime/src/mods.cpp runtime/src/mod_import.cpp)
+target_link_libraries(galaxy_mods_tests PRIVATE galaxy_atomic_file nebula_archive)
 add_executable(galaxy_rt_materials_tests runtime/src/gx/rt_materials_tests.cpp)
 target_link_libraries(galaxy_rt_materials_tests PRIVATE galaxy_gx)
+add_executable(galaxy_texture_pack_tests runtime/src/gx/texture_pack_tests.cpp)
+target_link_libraries(galaxy_texture_pack_tests PRIVATE galaxy_gx)
+add_executable(galaxy_movie_replacement_tests runtime/src/gx/movie_replacement_tests.cpp)
+target_link_libraries(galaxy_movie_replacement_tests PRIVATE galaxy_gx)
 
 add_executable(galaxy_xfb_present_selection_tests
     runtime/src/gx/xfb_present_selection_tests.cpp)
@@ -1445,6 +1462,8 @@ if(MSVC)
         galaxy_rt_materials_tests
         galaxy_mii_import_tests
         galaxy_mods_tests
+        galaxy_texture_pack_tests
+        galaxy_movie_replacement_tests
         galaxy_xfb_present_selection_tests
         galaxy_efb_conversion_tests
         galaxy_line_point_raster_tests
@@ -1628,6 +1647,9 @@ if(NEBULA_VULKAN)
         runtime/src/gx/upload_ring.cpp
         runtime/src/gx/window_owner.cpp
         runtime/src/gx/texture_cache.cpp
+        runtime/src/gx/texture_pack.cpp
+        runtime/src/gx/texture_pack_codecs.cpp
+        runtime/src/gx/movie_replacement.cpp
         runtime/src/gx/vertex_loader.cpp
         runtime/src/gx/shader_keys.cpp
         runtime/src/gx/efb_copy.cpp
@@ -1679,6 +1701,9 @@ if(NEBULA_VULKAN)
             galaxy_host_pointer_events)
     if(MSVC)
         target_compile_options(galaxy_gx_vk PRIVATE /GS- /GR- /Oi /favor:INTEL64)
+    endif()
+    if(WIN32)
+        target_link_libraries(galaxy_gx_vk PRIVATE mfplat mfreadwrite mfuuid)
     endif()
 
     add_executable(NebulaNativeVk native/host/host_main.cpp runtime/src/native_thp_video.cpp)

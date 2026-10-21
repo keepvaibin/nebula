@@ -209,6 +209,12 @@ void attach_stripe_particle(std::size_t stream_offset, std::uint32_t particle, s
 void set_pointer_response(PointerResponseStamp stamp) noexcept;
 // Simulation producer; copied into each owned FIFO chunk and selected XFB.
 void set_prerecorded_movie_content(bool movie) noexcept;
+// Simulation producer: the THP movie frame the game draws (movie_replacement.h); every later submission carries it
+// until the movie closes (frame -1).
+void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, std::uint32_t y, std::uint32_t u,
+                        std::uint32_t v, std::uint32_t width, std::uint32_t height) noexcept;
+// Any thread: a replacement video's frames show for the open movie (its THP frames need no decode).
+[[nodiscard]] bool movie_replacement_showing() noexcept;
 void set_safety_scene_surround(float intensity) noexcept;
 
 [[nodiscard]] bool peek_efb(

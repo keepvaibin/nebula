@@ -63,6 +63,11 @@ bool render_queue_has_space() {
 
 void set_pointer_response(PointerResponseStamp stamp) noexcept { backend().set_pointer_response(stamp); }
 void set_prerecorded_movie_content(bool movie) noexcept { backend().set_prerecorded_movie_content(movie); }
+void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, std::uint32_t y, std::uint32_t u,
+                        std::uint32_t v, std::uint32_t width, std::uint32_t height) noexcept {
+    backend().attach_movie_frame(name, frame, frame_rate, y, u, v, width, height);
+}
+bool movie_replacement_showing() noexcept { return MovieReplacements::showing(); }
 void set_safety_scene_surround(float intensity) noexcept { backend().set_safety_scene_surround(intensity); }
 
 bool enqueue_pointer_depth_capture(const std::shared_ptr<PointerDepthCapture>& capture) {

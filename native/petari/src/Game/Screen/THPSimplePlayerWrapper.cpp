@@ -5,6 +5,14 @@
 #include <JSystem/JAudio2/JASAiCtrl.hpp>
 #include <JSystem/JKernel/JKRHeap.hpp>
 #include <cstring>
+#ifdef TARGET_PC
+#include <revolution/os.h>
+
+namespace {
+    // The open movie's disc path, for the host's replacement videos (one movie plays at a time).
+    char sNebulaMovieName[64];
+}  // namespace
+#endif
 
 static u16 VolumeTable[] = {0,     2,     8,     18,    32,    50,    73,    99,    130,   164,   203,   245,   292,   343,   398,   457,
                             520,   587,   658,   733,   812,   895,   983,   1074,  1170,  1269,  1373,  1481,  1592,  1708,  1828,  1952,
@@ -109,6 +117,11 @@ bool THPSimplePlayerWrapper::open(const char* pName) {
     if (!tryDvdOpen(pName)) {
         return false;
     }
+#ifdef TARGET_PC
+    strncpy(sNebulaMovieName, pName, sizeof(sNebulaMovieName) - 1);
+    sNebulaMovieName[sizeof(sNebulaMovieName) - 1] = '\0';
+    __NebulaMovieFrame(sNebulaMovieName, -2, 0.0f, nullptr, nullptr, nullptr, 0, 0);
+#endif
 
     setNerve(GET_NERVE(THPSimplePlayerWrapper, HostTypeReadHeader));
     return true;
@@ -128,6 +141,9 @@ bool THPSimplePlayerWrapper::close() {
             if (!mReadProgress) {
                 mOpen = 0;
                 DVDClose(&mFileInfo);
+#ifdef TARGET_PC
+                __NebulaMovieFrame(nullptr, -1, 0.0f, nullptr, nullptr, nullptr, 0, 0);
+#endif
                 return true;
             }
         }
@@ -365,6 +381,12 @@ s32 THPSimplePlayerWrapper::drawCurrentFrame(_GXRenderModeObj* rmode, u32 x, u32
         return -1;
     }
 
+#ifdef TARGET_PC
+    __NebulaMovieFrame(sNebulaMovieName,
+                       mHeader.numFrames > 0 ? mTextureSet.frameNumber % (s32)mHeader.numFrames : mTextureSet.frameNumber,
+                       mHeader.frameRate, mTextureSet.ytexture, mTextureSet.utexture, mTextureSet.vtexture,
+                       mVideoInfo.xSize, mVideoInfo.ySize);
+#endif
     THPGXYuv2RgbSetup(rmode);
     THPGXYuv2RgbDraw(mTextureSet.ytexture, mTextureSet.utexture, mTextureSet.vtexture, x, y, mVideoInfo.xSize, mVideoInfo.ySize, polyW, polyH);
     THPGXRestore();
@@ -377,6 +399,13 @@ s32 THPSimplePlayerWrapper::drawCurrentFrame(_GXRenderModeObj* rmode, u32 x, u32
         return -1;
     }
 
+#ifdef TARGET_PC
+    __NebulaMovieFrame(sNebulaMovieName,
+                       mHeader.numFrames > 0 ? mTextureSet[_310].frameNumber % (s32)mHeader.numFrames
+                                             : mTextureSet[_310].frameNumber,
+                       mHeader.frameRate, mTextureSet[_310].ytexture, mTextureSet[_310].utexture,
+                       mTextureSet[_310].vtexture, mVideoInfo.xSize, mVideoInfo.ySize);
+#endif
     THPGXYuv2RgbSetup(rmode);
     THPGXYuv2RgbDraw(mTextureSet[_310].ytexture, mTextureSet[_310].utexture, mTextureSet[_310].vtexture, x, y, mVideoInfo.xSize, mVideoInfo.ySize,
                      polyW, polyH);

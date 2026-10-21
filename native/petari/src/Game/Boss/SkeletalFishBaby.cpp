@@ -1,3 +1,7 @@
+#ifdef TARGET_PC
+#include <nebula_game_api.h>
+#include <revolution/os.h>
+#endif
 #include "Game/Boss/SkeletalFishBaby.hpp"
 #include "Game/Boss/SkeletalFishJointCalc.hpp"
 #include "Game/Boss/SkeletalFishRailControl.hpp"
@@ -260,6 +264,9 @@ bool SkeletalFishBaby::damage(const TVec3f& rAirBubblePos, bool shakeCameraNorma
             MR::shakeCameraWeak();
         }
 
+#ifdef TARGET_PC
+        if (!__NebulaCodePatch(NEBULA_PATCH_SKELETAL_FISH_BABY_NO_BUBBLE, nullptr))
+#endif
         MR::appearAirBubble(rAirBubblePos, -1);
         setNerve(GET_NERVE_ANON(SkeletalFishBabyNrvBreak));
         return true;

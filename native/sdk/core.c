@@ -59,6 +59,34 @@ void __NebulaGameLight(u32 kind, u32 id, const f32* values) {
     sHost->game_light(sHost->user, kind, id, values);
 }
 
+uint32_t __NebulaToPhysical(const void* addr);  /* memory.c */
+
+int __NebulaCodePatch(u32 id, u32* value) {
+    /* The host's answer is fixed for the session: asked once per patch. */
+    static u8 asked[NEBULA_PATCH_COUNT];
+    static u8 active[NEBULA_PATCH_COUNT];
+    static u32 values[NEBULA_PATCH_COUNT];
+    if (id == 0 || id >= NEBULA_PATCH_COUNT) {
+        return 0;
+    }
+    if (!asked[id]) {
+        uint32_t v = 0;
+        active[id] = (u8)(sHost->code_patch(sHost->user, id, &v) != 0);
+        values[id] = v;
+        asked[id] = 1;
+    }
+    if (active[id] && value != NULL) {
+        *value = values[id];
+    }
+    return active[id];
+}
+
+void __NebulaMovieFrame(const char* name, s32 frame, f32 frame_rate, const void* y, const void* u, const void* v,
+                        u32 width, u32 height) {
+    sHost->movie_frame(sHost->user, name, frame, frame_rate, y != NULL ? __NebulaToPhysical(y) : 0u,
+                       u != NULL ? __NebulaToPhysical(u) : 0u, v != NULL ? __NebulaToPhysical(v) : 0u, width, height);
+}
+
 void __NebulaGameStage(const char* name) {
     sHost->game_stage(sHost->user, name);
 }

@@ -1,11 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Mods (mods.h, virtual_disc.h, mod_xml.h): the XML reader, the disc's patching and reads, Riivolution mods, files
-// mods, load order, saved choices, savegames and main.dol's memory patches.
+// mods, load order, saved choices, savegames, main.dol's memory patches, the mods' layouts and languages, and importing.
 
+#include "galaxy/mod_import.h"
 #include "galaxy/mod_xml.h"
 #include "galaxy/mods.h"
 #include "galaxy/virtual_disc.h"
 
+#include <archive.h>
+#include <archive_entry.h>
+
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
@@ -190,7 +195,7 @@ bool riivolution() {
     write(mods / "1 Riiv" / "MyMod" / "blue.arc", "BLUE");
     write(mods / "1 Riiv" / "MyMod" / "b.arc", "bb");
     write(mods / "1 Riiv" / "MyMod" / "objects" / "Coin.arc", "COIN");
-    // A files mod after it: its A.arc wins.
+    // A files mod below it: its A.arc is covered.
     write(mods / "2 Files" / "StageData" / "A.arc", "FILES");
     // A mod for another game.
     write(mods / "3 Other" / "riivolution" / "x.xml", "<wiidisc version=\"1\"><id game=\"SB4\"/></wiidisc>");
@@ -209,8 +214,8 @@ bool riivolution() {
                                                  p.bytes.data(), p.bytes.size(), "RMGE01", 0, 0);
     ok &= expect(active != nullptr && !active->fst.empty(), "mods applied");
     if (active) {
-        ok &= expect(read_file(active->disc, active->fst, p.bytes.data(), "/StageData/A.arc") == "FILES",
-                     "the later mod wins");
+        ok &= expect(read_file(active->disc, active->fst, p.bytes.data(), "/StageData/A.arc") == "RED",
+                     "the mod on top wins");
         ok &= expect(read_file(active->disc, active->fst, p.bytes.data(), "/StageData/B.arc") == "bb",
                      "a disc path by name; an absolute external path");
         ok &= expect(read_file(active->disc, active->fst, p.bytes.data(), "/ObjectData/Coin.arc") == "COIN",
@@ -237,7 +242,7 @@ bool riivolution() {
     } else {
         ok &= expect(false, "mods applied again");
     }
-    // Load order moved: the files mod first, on again; the Riivolution mod's A.arc wins now.
+    // Order moved: the files mod on top, on again; its A.arc wins now.
     list[1].enabled = true;
     list[0].order = 2;
     list[1].order = 1;
@@ -247,8 +252,8 @@ bool riivolution() {
     const auto third = galaxy::mods::apply_mods(p.fst, std::span(p.bytes.data() + p.dol, p.dol_size), p.dol,
                                                 p.bytes.data(), p.bytes.size(), "RMGE01", 0, 0);
     if (third) {
-        ok &= expect(read_file(third->disc, third->fst, p.bytes.data(), "/StageData/A.arc") == "BLUE",
-                     "the later mod in the new order wins");
+        ok &= expect(read_file(third->disc, third->fst, p.bytes.data(), "/StageData/A.arc") == "FILES",
+                     "the mod on top in the new order wins");
     }
     // Every mod off: nothing applies.
     for (auto& m : list) m.enabled = false;
@@ -260,10 +265,245 @@ bool riivolution() {
     return ok;
 }
 
+// A partition with these files (path, contents), directories as the paths name them; an empty main.dol after them.
+struct Disc {
+    std::vector<std::uint8_t> bytes;
+    std::vector<std::uint8_t> fst;
+    std::size_t dol = 0;
+    std::size_t dol_size = 0x100;
+
+    explicit Disc(const std::vector<std::pair<std::string, std::string>>& files) {
+        struct Node {
+            std::string name;
+            bool dir = false;
+            std::string data;
+            std::vector<Node> children;
+        };
+        Node root{"", true, {}, {}};
+        for (const auto& [path, data] : files) {
+            Node* at = &root;
+            std::size_t start = 1;
+            while (true) {
+                const std::size_t slash = path.find('/', start);
+                const std::string part = path.substr(start, slash == std::string::npos ? std::string::npos : slash - start);
+                auto it = std::find_if(at->children.begin(), at->children.end(),
+                                       [&](const Node& n) { return n.name == part; });
+                if (it == at->children.end()) {
+                    at->children.push_back({part, slash != std::string::npos, {}, {}});
+                    it = at->children.end() - 1;
+                }
+                if (slash == std::string::npos) {
+                    it->data = data;
+                    break;
+                }
+                at = &*it;
+                start = slash + 1;
+            }
+        }
+        std::vector<std::uint8_t> entries(12, 0);
+        std::string strings;
+        bytes.assign(0x8000, 0);
+        const auto emit = [&](auto&& self, const Node& dir, std::uint32_t parent) -> void {
+            for (const Node& n : dir.children) {
+                const std::size_t at = entries.size();
+                entries.resize(at + 12, 0);
+                put32(entries, at, (n.dir ? 0x01000000u : 0u) | static_cast<std::uint32_t>(strings.size()));
+                strings += n.name;
+                strings.push_back('\0');
+                if (n.dir) {
+                    put32(entries, at + 4, parent);
+                    self(self, n, static_cast<std::uint32_t>(at / 12));
+                    put32(entries, at + 8, static_cast<std::uint32_t>(entries.size() / 12));
+                } else {
+                    const std::size_t offset = (bytes.size() + 31u) & ~std::size_t{31};
+                    bytes.resize(offset + n.data.size(), 0);
+                    std::memcpy(bytes.data() + offset, n.data.data(), n.data.size());
+                    put32(entries, at + 4, static_cast<std::uint32_t>(offset >> 2u));
+                    put32(entries, at + 8, static_cast<std::uint32_t>(n.data.size()));
+                }
+            }
+        };
+        emit(emit, root, 0);
+        put32(entries, 0, 0x01000000u);
+        put32(entries, 8, static_cast<std::uint32_t>(entries.size() / 12));
+        fst = entries;
+        fst.insert(fst.end(), strings.begin(), strings.end());
+        dol = (bytes.size() + 0xFFFu) & ~std::size_t{0xFFF};
+        bytes.resize(dol + dol_size, 0);
+    }
+    std::unique_ptr<galaxy::mods::ActiveMods> apply(const std::string& game_id, const std::string& language) {
+        return galaxy::mods::apply_mods(fst, std::span(bytes.data() + dol, dol_size), dol, bytes.data(), bytes.size(),
+                                        game_id, 0, 0, language);
+    }
+};
+
+// Loose files, every name match, disc layouts a folder down, packs without textures/, hidden folders, region
+// options, a sole option as the mod's switch, and text in the language played.
+bool layouts() {
+    bool ok = true;
+    const fs::path root = fs::temp_directory_path() / "nebula_mods_layouts";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    const fs::path mods = root / "mods";
+    write(mods / "A Loose" / "Mario.arc", "NEWMARIO");
+    write(mods / "A Loose" / "readme.txt", "put these in ObjectData");
+    write(mods / "A Loose" / "Nowhere.arc", "unused");
+    write(mods / "B Nested" / "MyMod" / "StageData" / "A.arc", "NESTED");
+    write(mods / "C Pack" / "RMGE01" / "tex1_8x8_0123456789abcdef_1.png", "png");
+    write(mods / ".importing-x" / "StageData" / "A.arc", "HALF");
+    write(mods / "D Text" / "riivolution" / "t.xml",
+          "<wiidisc version=\"1\"><id game=\"RMG\"/><options><section name=\"S\"><option name=\"Mod\">"
+          "<choice name=\"Enabled\"><patch id=\"p\"/></choice></option></section></options>"
+          "<patch id=\"p\"><folder disc=\"/UsEnglish\" external=\"/T/UsEnglish\" create=\"true\"/></patch></wiidisc>");
+    write(mods / "D Text" / "T" / "UsEnglish" / "MessageData" / "Message.arc", "MOD ENGLISH");
+    write(mods / "E Region" / "riivolution" / "r.xml",
+          "<wiidisc version=\"1\"><id game=\"RMG\"/><options><section name=\"K\"><option name=\"Region:\">"
+          "<choice name=\"PAL\"><patch id=\"pal\"/></choice><choice name=\"NTSC\"><patch id=\"ntsc\"/></choice>"
+          "</option><option name=\"Extra\"><choice name=\"On\"><patch id=\"x\"/></choice></option></section></options>"
+          "<patch id=\"pal\"><file disc=\"/StageData/B.arc\" external=\"/R/pal.arc\"/></patch>"
+          "<patch id=\"ntsc\"><file disc=\"/StageData/B.arc\" external=\"/R/ntsc.arc\"/></patch>"
+          "<patch id=\"x\"><file disc=\"/StageData/A.arc\" external=\"/R/x.arc\"/></patch></wiidisc>");
+    write(mods / "E Region" / "R" / "pal.arc", "PAL");
+    write(mods / "E Region" / "R" / "ntsc.arc", "NTSC");
+    write(mods / "E Region" / "R" / "x.arc", "EXTRA");
+    write(mods / "F Below" / "StageData" / "A.arc", "BELOW");
+    galaxy::mods::set_mods_folder(mods, root / "mods.ini", "RMGE01");
+    std::vector<galaxy::mods::ModInfo> list = galaxy::mods::scan_mods();
+    ok &= expect(list.size() == 6u, "six mods; a hidden import folder is none");
+    const auto find = [&](std::string_view id) -> const galaxy::mods::ModInfo* {
+        for (const auto& m : list) {
+            if (m.id == id) return &m;
+        }
+        return nullptr;
+    };
+    ok &= expect(find("A Loose") && find("A Loose")->loose && !find("A Loose")->files, "loose files");
+    ok &= expect(find("B Nested") && find("B Nested")->files, "the disc's folders a folder down");
+    ok &= expect(find("C Pack") && find("C Pack")->textures, "a pack without a textures folder");
+    ok &= expect(find("D Text") && find("D Text")->options.size() == 1u && find("D Text")->options[0].selected == 1u &&
+                     find("D Text")->languages == std::vector<std::string>{"UsEnglish"},
+                 "a sole one-choice option is on; the text's language");
+    const galaxy::mods::ModInfo* nested = find("B Nested");
+    ok &= expect(nested && nested->changed_files == 1u && nested->overlaps.size() == 1u &&
+                     nested->overlaps[0].other == "F Below" && !nested->overlaps[0].other_above &&
+                     nested->overlaps[0].files == 1u,
+                 "a mod above another covers the file both change (an off choice changes nothing)");
+    const galaxy::mods::ModInfo* below = find("F Below");
+    ok &= expect(below && below->overlaps.size() == 1u && below->overlaps[0].other_above,
+                 "the mod below is covered");
+    const galaxy::mods::ModInfo* loose = find("A Loose");
+    ok &= expect(loose && loose->changed_files == 2u, "loose files counted by name");
+    const galaxy::mods::ModInfo* region = find("E Region");
+    ok &= expect(region && region->options.size() == 2u && region->options[0].selected == 2u &&
+                     region->options[0].other_region == std::vector<bool>{true, false} &&
+                     region->options[1].selected == 0u,
+                 "a region option takes this disc's region; an extra stays off");
+
+    Disc disc({{"/ObjectData/Mario.arc", "MARIO"}, {"/Extra/Mario.arc", "MARIO2"}, {"/StageData/A.arc", "AAAA"},
+               {"/StageData/B.arc", "BBBB"}, {"/UsEnglish/MessageData/Message.arc", "ENGLISH"},
+               {"/UsFrench/MessageData/Message.arc", "FRENCH"}});
+    auto active = disc.apply("RMGE01", "UsFrench");
+    ok &= expect(active != nullptr && !active->fst.empty(), "applied");
+    if (active) {
+        const auto read = [&](std::string_view path) {
+            return read_file(active->disc, active->fst, disc.bytes.data(), path);
+        };
+        ok &= expect(read("/ObjectData/Mario.arc") == "NEWMARIO" && read("/Extra/Mario.arc") == "NEWMARIO",
+                     "a loose file replaces every file of its name");
+        ok &= expect(read("/StageData/A.arc") == "NESTED", "a nested disc layout");
+        ok &= expect(read("/StageData/B.arc") == "NTSC", "this disc's region chosen");
+        ok &= expect(read("/UsEnglish/MessageData/Message.arc") == "MOD ENGLISH", "the mod's English");
+        ok &= expect(read("/UsFrench/MessageData/Message.arc") == "MOD ENGLISH",
+                     "French played: the mod's English stands in (it has no French)");
+        ok &= expect(active->texture_folders.size() == 1u && active->texture_folders[0] == mods / "C Pack",
+                     "the pack's folder for the textures");
+        ok &= expect(active->report.find("Nowhere.arc: no file of that name") != std::string::npos,
+                     "a loose file no disc file is named for is reported");
+    }
+    // The game's French kept by choice.
+    for (auto& m : list) {
+        if (m.id == "D Text") m.own_text = false;
+    }
+    ok &= expect(galaxy::mods::save_mod_settings(list), "text choice saved");
+    auto kept = disc.apply("RMGE01", "UsFrench");
+    ok &= expect(kept && read_file(kept->disc, kept->fst, disc.bytes.data(), "/UsFrench/MessageData/Message.arc") ==
+                             "FRENCH",
+                 "TEXT: the game's French");
+    ok &= expect(galaxy::mods::language_folder("RMGE01", 3u) == "UsFrench" &&
+                     galaxy::mods::language_folder("RMGP01", 2u) == "EuGerman" &&
+                     galaxy::mods::language_folder("RMGJ01", 0u) == "JpJapanese",
+                 "language folders by region");
+    fs::remove_all(root, ec);
+    return ok;
+}
+
+// Importing: zip and 7z made with libarchive's writer, a top folder lifted, a path that would leave refused, an
+// update in place, a file that is no archive.
+bool importing() {
+    bool ok = true;
+    const fs::path root = fs::temp_directory_path() / "nebula_mods_import";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    fs::create_directories(root / "mods");
+    const auto make = [&](const fs::path& file, int format,
+                          const std::vector<std::pair<std::string, std::string>>& entries) {
+        archive* w = archive_write_new();
+        archive_write_set_format(w, format);
+        archive_write_open_filename(w, file.string().c_str());
+        for (const auto& [name, data] : entries) {
+            archive_entry* e = archive_entry_new();
+            archive_entry_set_pathname(e, name.c_str());
+            archive_entry_set_size(e, static_cast<la_int64_t>(data.size()));
+            archive_entry_set_filetype(e, AE_IFREG);
+            archive_entry_set_perm(e, 0644);
+            archive_write_header(w, e);
+            archive_write_data(w, data.data(), data.size());
+            archive_entry_free(e);
+        }
+        archive_write_close(w);
+        archive_write_free(w);
+    };
+    make(root / "Cool Mod.zip", ARCHIVE_FORMAT_ZIP,
+         {{"Cool Mod v1/riivolution/cool.xml", "<wiidisc version=\"1\"><id game=\"RMG\"/></wiidisc>"},
+          {"Cool Mod v1/Cool/a.arc", "A"},
+          {"readme.txt", "hi"},
+          {"../evil.txt", "evil"},
+          {"Cool Mod v1/__MACOSX/x", "x"}});
+    make(root / "Pack.7z", ARCHIVE_FORMAT_7ZIP, {{"RMG/tex1_8x8_0123456789abcdef_1.png", "png"}});
+    write(root / "fake.zip", "not an archive");
+    galaxy::mods::set_mods_folder(root / "mods", root / "mods.ini", "RMGE01");
+    ok &= expect(galaxy::mods::is_mod_archive(root / "Cool Mod.zip") && galaxy::mods::is_mod_archive(root / "Pack.7z") &&
+                     !galaxy::mods::is_mod_archive(root / "fake.zip"),
+                 "archives by their contents");
+    const galaxy::mods::ImportResult zip = galaxy::mods::import_mod(root / "Cool Mod.zip", root / "mods");
+    ok &= expect(zip.ok && zip.id == "Cool Mod" && zip.kinds == "RIIVOLUTION", "a zip imported");
+    ok &= expect(fs::exists(root / "mods" / "Cool Mod" / "riivolution" / "cool.xml") &&
+                     fs::exists(root / "mods" / "Cool Mod" / "readme.txt") &&
+                     !fs::exists(root / "mods" / "Cool Mod" / "Cool Mod v1"),
+                 "its one top folder lifted, its notes kept");
+    ok &= expect(!fs::exists(root / "evil.txt") && !fs::exists(root / "mods" / "evil.txt"),
+                 "a path that leaves is refused");
+    ok &= expect(!fs::exists(root / "mods" / "Cool Mod" / "__MACOSX"), "system clutter skipped");
+    const galaxy::mods::ImportResult again = galaxy::mods::import_mod(root / "Cool Mod.zip", root / "mods");
+    ok &= expect(again.ok && again.replaced, "the same mod again: updated in place");
+    const galaxy::mods::ImportResult pack = galaxy::mods::import_mod(root / "Pack.7z", root / "mods");
+    ok &= expect(pack.ok && pack.kinds == "TEXTURES", "a 7z texture pack imported");
+    const galaxy::mods::ImportResult fake = galaxy::mods::import_mod(root / "fake.zip", root / "mods");
+    ok &= expect(!fake.ok && !fake.message.empty(), "a file that is no archive is refused with a reason");
+    std::vector<std::string> left;
+    for (const auto& entry : fs::directory_iterator(root / "mods", ec)) left.push_back(entry.path().filename().string());
+    std::sort(left.begin(), left.end());
+    ok &= expect(left == std::vector<std::string>{"Cool Mod", "Pack"}, "no staging folders left behind");
+    std::string message;
+    ok &= expect(galaxy::mods::remove_mod(root / "mods", "Pack", &message) && !fs::exists(root / "mods" / "Pack"),
+                 "a mod removed");
+    fs::remove_all(root, ec);
+    return ok;
+}
+
 }  // namespace
 
 int main() {
-    const bool ok = xml() & disc() & riivolution();
+    const bool ok = xml() & disc() & riivolution() & layouts() & importing();
     std::cout << (ok ? "mods tests passed" : "mods tests FAILED") << '\n';
     return ok ? 0 : 1;
 }
