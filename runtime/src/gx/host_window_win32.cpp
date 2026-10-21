@@ -4,6 +4,7 @@
 
 #include "galaxy/gx/host_window_win32.h"
 
+#include "galaxy/achievements.h"
 #include "galaxy/gx/display_modes.h"
 #include "galaxy/gx/galaxy_select.h"
 #include "galaxy/gx/post_process_settings.h"
@@ -2932,6 +2933,13 @@ std::vector<SettingsRow> game_page(const RuntimeSettings& runtime) {
                         s_native_settings_dirty.store(true, std::memory_order_release);
                     },
                     "SHOWS YOUR GALAXY AND STAR IN DISCORD WHILE IT RUNS"});
+    rows.push_back({"ACHIEVEMENTS", {}, nullptr, {}, true});
+    for (const galaxy::achievements::Info& info : galaxy::achievements::list()) {
+        std::string name = info.name;
+        for (char& c : name) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+        rows.push_back({name, galaxy::achievements::unlocked(info.id) ? std::string("UNLOCKED") : std::string("-"),
+                        nullptr, info.hint});
+    }
     {
         rows.push_back({"MIIS", {}, nullptr, {}, true});
         std::string status;

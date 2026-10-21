@@ -29,6 +29,7 @@
 #include "galaxy/native_input.h"
 #include "galaxy/native_thp_video.h"
 #include "galaxy/perf_hint.h"
+#include "galaxy/achievements.h"
 #include "galaxy/discord_presence.h"
 #include "galaxy/runtime_settings.h"
 #include "galaxy/gx/render_config.h"
@@ -1619,6 +1620,20 @@ void svc_presence(void*, const uint16_t* galaxy, const uint16_t* star, int32_t p
     galaxy::discord::set_activity(activity);
 }
 
+// An achievement the save data meets: unlocked once (achievements.ini), its name for the game's banner.
+int svc_achievement(void*, const char* id, uint16_t* name, uint32_t capacity) {
+    if (id == nullptr || !galaxy::achievements::unlock(id)) return 0;
+    const char* text = "";
+    for (const galaxy::achievements::Info& info : galaxy::achievements::list()) {
+        if (std::strcmp(info.id, id) == 0) text = info.name;
+    }
+    uint32_t i = 0;
+    for (; name != nullptr && i + 1u < capacity && text[i] != '\0'; ++i) name[i] = static_cast<unsigned char>(text[i]);
+    if (name != nullptr && capacity != 0u) name[i] = 0u;
+    log_line("achievement:", text);
+    return 1;
+}
+
 // A mod's code patch the game runs natively (NEBULA_PATCH_*), as the mods layer matched it at the start.
 int svc_code_patch(void*, uint32_t id, uint32_t* value) {
     static_assert(galaxy::mods::kPatchFlipPanelGroup == NEBULA_PATCH_FLIP_PANEL_GROUP &&
@@ -2926,6 +2941,7 @@ int main(int argc, char** argv) {
     services.movie_frame = svc_movie_frame;
     services.code_patch = svc_code_patch;
     services.presence = svc_presence;
+    services.achievement = svc_achievement;
     services.gx_stripe_particle = svc_gx_stripe_particle;
     services.disc_fst = svc_disc_fst;
     services.disc_read = svc_disc_read;

@@ -53,6 +53,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #ifdef TARGET_PC
+#include "Game/System/NebulaAchievements.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #endif
 #include "Game/Util/ScreenUtil.hpp"
@@ -189,6 +190,7 @@ void GameScene::start() {
     AudWrap::getSceneMgr()->startScene();
 #ifdef TARGET_PC
     reportPresence();
+    NebulaAchievements::evaluate();
 #endif
 
     if (MR::isGlobalTimerEnd()) {
@@ -203,6 +205,9 @@ void GameScene::start() {
 void GameScene::update() {
     mPauseCtrl->updateNerve();
     updateNerve();
+#ifdef TARGET_PC
+    NebulaAchievements::update();
+#endif
 
     bool isTimeUp = MR::isGlobalTimerEnd() && !isNerve(GET_NERVE(GameScene, GameSceneTimeUp)) && MR::isGreaterEqualStep(this, 2);
 

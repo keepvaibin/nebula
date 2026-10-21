@@ -338,7 +338,8 @@ target_link_libraries(
 
 add_library(galaxy_runtime_settings STATIC
     runtime/src/runtime_settings.cpp
-    runtime/src/input_bindings.cpp)
+    runtime/src/input_bindings.cpp
+    runtime/src/achievements.cpp)
 target_link_libraries(
     galaxy_runtime_settings
     PUBLIC galaxy_runtime_abi galaxy_atomic_file)
@@ -1333,6 +1334,8 @@ add_executable(galaxy_crash_report_tests runtime/src/crash_report_tests.cpp runt
 target_include_directories(galaxy_crash_report_tests PRIVATE runtime/include)
 add_executable(galaxy_discord_presence_tests runtime/src/discord_presence_tests.cpp runtime/src/discord_presence.cpp)
 target_include_directories(galaxy_discord_presence_tests PRIVATE runtime/include)
+add_executable(galaxy_achievements_tests runtime/src/achievements_tests.cpp)
+target_link_libraries(galaxy_achievements_tests PRIVATE galaxy_runtime_settings)
 add_executable(galaxy_rt_materials_tests runtime/src/gx/rt_materials_tests.cpp)
 target_link_libraries(galaxy_rt_materials_tests PRIVATE galaxy_gx)
 add_executable(galaxy_texture_pack_tests runtime/src/gx/texture_pack_tests.cpp)
@@ -1478,6 +1481,7 @@ if(MSVC)
         galaxy_mods_tests
         galaxy_crash_report_tests
         galaxy_discord_presence_tests
+        galaxy_achievements_tests
         galaxy_texture_pack_tests
         galaxy_movie_replacement_tests
         galaxy_xfb_present_selection_tests
