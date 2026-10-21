@@ -45,6 +45,18 @@ u32 GXEndDisplayList(void) {
     #if (VERSION == RMGK01)
     GXFlush();
     #endif
+#ifdef TARGET_PC
+    /* The console's write-gather pipe reaches memory in 32-byte bursts: a display list ends padded with zeros (GX
+       NOPs) to a multiple of 32 bytes, the sizes GXCallDisplayList takes. Unpadded, RFL's Mii faces were called
+       with their last partial burst cut off (the GX parser's 32-byte sizes: "GX FIFO truncated payload" when the
+       Mii icon picker opened, b107). An overflowing pad marks the list overflowed, as the console's wrap does. */
+    {
+        const u8* const base = ((__GXFifoObj*)&DisplayListFifo)->base;
+        while ((((uintptr_t)__NebulaGXWriter.ptr - (uintptr_t)base) & 31u) != 0u) {
+            GX_WRITE_U8(0);
+        }
+    }
+#endif
     GXGetCPUFifo(&DisplayListFifo);
     ov = GXGetFifoWrap(&DisplayListFifo);
 

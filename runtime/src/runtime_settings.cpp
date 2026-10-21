@@ -296,6 +296,14 @@ void apply_env_overrides(RuntimeSettings& settings) {
 
 }  // namespace
 
+std::filesystem::path runtime_settings_folder() noexcept {
+    try {
+        return settings_path().parent_path();
+    } catch (...) {
+        return {};
+    }
+}
+
 RuntimeSettings get_runtime_settings() {
     s_settings_lock.lock_shared();
     const RuntimeSettings copy = s_settings;

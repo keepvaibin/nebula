@@ -17309,12 +17309,25 @@ void GxBackend::on_efb_copy(std::uint32_t exec_command) {
             read_env_u64("GALAXY_GX_CAPTURE_EFB_BEFORE_TEXTURE_SOURCE_X", UINT64_MAX);
         static const std::uint64_t capture_texture_source_y =
             read_env_u64("GALAXY_GX_CAPTURE_EFB_BEFORE_TEXTURE_SOURCE_Y", UINT64_MAX);
-        if (capture_before_texture && capture_pixel_frame_requested(frame_index_ + 1u) &&
+        // ..._DEST: only copies to that guest address (decimal); ..._SKIP: after that many of them.
+        static const std::uint64_t capture_texture_dest =
+            read_env_u64("GALAXY_GX_CAPTURE_EFB_BEFORE_TEXTURE_DEST", UINT64_MAX);
+        static std::uint64_t capture_texture_skip = read_env_u64("GALAXY_GX_CAPTURE_EFB_BEFORE_TEXTURE_SKIP", 0u);
+        const bool dest_matches = capture_texture_dest == UINT64_MAX || capture_texture_dest == params.dest_addr;
+        const bool skipped = dest_matches && capture_texture_dest != UINT64_MAX && capture_texture_skip != 0u;
+        if (skipped) {
+            --capture_texture_skip;
+        }
+        if (capture_before_texture && dest_matches && !skipped &&
+            (capture_texture_dest != UINT64_MAX || capture_pixel_frame_requested(frame_index_ + 1u)) &&
             (capture_texture_format == UINT64_MAX ||
              capture_texture_format == static_cast<std::uint64_t>(params.target_format)) &&
             (capture_texture_source_x == UINT64_MAX || capture_texture_source_x == params.src_x) &&
             (capture_texture_source_y == UINT64_MAX || capture_texture_source_y == params.src_y) &&
             !capture_readback_recorded_) {
+            if (capture_texture_dest != UINT64_MAX) {
+                renderer_.set_debug_capture_paths(capture_output_path("GALAXY_GX_CAPTURE_PPM", frame_index_ + 1u), {});
+            }
             capture_readback_recorded_ = renderer_.debug_copy_efb_to_readback();
             std::cerr << "[efb-pre-texture-capture] frame=" << (frame_index_ + 1u)
                       << " capture-recorded=" << capture_readback_recorded_

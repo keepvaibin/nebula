@@ -11,6 +11,7 @@
 #include "galaxy/gx/renderer_common.h"
 #include "galaxy/gx/streamline_bridge.h"
 #include "galaxy/gx_d3d12.h"
+#include "galaxy/mii_import.h"
 #include "galaxy/native_host.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/runtime_settings.h"
@@ -26,6 +27,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <iostream>
 #include <iterator>
 #include <limits>
@@ -34,6 +36,9 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+#include <shellapi.h>
+#include <shobjidl.h>
 
 namespace galaxy::gx {
 
@@ -2188,6 +2193,89 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render) {
 std::size_t s_galaxy_select_stage = 0u;
 std::uint32_t s_galaxy_select_star = 1u;
 
+// Mii import (GENERAL page): the last import's result and the console's Mii count (read again after an import).
+std::mutex s_mii_mutex;
+std::string s_mii_status;
+std::atomic<int> s_mii_count{-1};
+std::atomic<bool> s_mii_dialog_open{false};
+
+// The file picker on its own thread (a COM apartment of its own; the game keeps running): the files chosen are
+// imported into the console's Mii database and the running game's.
+void start_mii_import_dialog() {
+    if (s_mii_dialog_open.exchange(true, std::memory_order_acq_rel)) {
+        return;
+    }
+    const HWND owner = reinterpret_cast<HWND>(host_window::settings_window.load(std::memory_order_acquire));
+    std::thread([owner] {
+        const HRESULT com = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+        std::vector<std::filesystem::path> files;
+        IFileOpenDialog* dialog = nullptr;
+        if (SUCCEEDED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog)))) {
+            // Every console's Mii files (galaxy::host::read_mii_file); the Mii Studio code as text.
+            const COMDLG_FILTERSPEC filters[] = {
+                {L"Mii files (Wii, DS, 3DS, Wii U, Switch, Mii Studio, Mii Creator)",
+                 L"*.mii;*.rcd;*.rsd;*.mae;*.miigx;*.ncd;*.nsd;*.cfcd;*.cfsd;*.ffcd;*.ffsd;*.charinfo;*.nfsd;*.nfcd;"
+                 L"*.mnms;*.emnms;*.miic;*.dat;*.bin;*.txt"},
+                {L"All files", L"*.*"}};
+            dialog->SetFileTypes(2u, filters);
+            dialog->SetTitle(L"Import Miis");
+            DWORD options = 0u;
+            if (SUCCEEDED(dialog->GetOptions(&options))) {
+                dialog->SetOptions(options | FOS_ALLOWMULTISELECT | FOS_FILEMUSTEXIST | FOS_FORCEFILESYSTEM);
+            }
+            IShellItemArray* items = nullptr;
+            if (SUCCEEDED(dialog->Show(owner)) && SUCCEEDED(dialog->GetResults(&items))) {
+                DWORD count = 0u;
+                items->GetCount(&count);
+                for (DWORD i = 0; i < count; ++i) {
+                    IShellItem* item = nullptr;
+                    if (SUCCEEDED(items->GetItemAt(i, &item))) {
+                        PWSTR path = nullptr;
+                        if (SUCCEEDED(item->GetDisplayName(SIGDN_FILESYSPATH, &path))) {
+                            files.emplace_back(path);
+                            CoTaskMemFree(path);
+                        }
+                        item->Release();
+                    }
+                }
+                items->Release();
+            }
+            dialog->Release();
+        }
+        if (!files.empty()) {
+            std::string message;
+            (void)galaxy::host::import_mii_files(files, &message);
+            std::cerr << "[settings] mii import: " << message << '\n';
+            {
+                const std::lock_guard<std::mutex> lock(s_mii_mutex);
+                s_mii_status = message;
+            }
+            s_mii_count.store(-1, std::memory_order_release);
+        }
+        if (SUCCEEDED(com)) {
+            CoUninitialize();
+        }
+        s_mii_dialog_open.store(false, std::memory_order_release);
+    }).detach();
+}
+
+// Explorer at the import folder (its files join the database at every start).
+void open_mii_folder() {
+    const std::filesystem::path folder = galaxy::host::mii_import_folder();
+    if (folder.empty()) {
+        return;
+    }
+    std::thread([folder] {
+        std::error_code error;
+        std::filesystem::create_directories(folder, error);
+        const HRESULT com = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+        ShellExecuteW(nullptr, L"open", folder.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+        if (SUCCEEDED(com)) {
+            CoUninitialize();
+        }
+    }).detach();
+}
+
 std::vector<SettingsRow> game_page(const RuntimeSettings& runtime) {
     std::vector<SettingsRow> rows;
     char text[32]{};
@@ -2221,6 +2309,35 @@ std::vector<SettingsRow> game_page(const RuntimeSettings& runtime) {
                         }
                     },
                     "THE GAME'S TEXT AND MENUS"});
+    {
+        rows.push_back({"MIIS", {}, nullptr, {}, true});
+        std::string status;
+        {
+            const std::lock_guard<std::mutex> lock(s_mii_mutex);
+            status = s_mii_status;
+        }
+        if (s_mii_dialog_open.load(std::memory_order_acquire)) {
+            status = "CHOOSING FILES";
+        }
+        rows.push_back({"IMPORT MIIS", status.empty() ? std::string("PRESS RIGHT") : status,
+                        [](RenderConfig&, int delta) {
+                            if (delta > 0) start_mii_import_dialog();
+                        },
+                        "MIIS FROM A WII, DS, 3DS, WII U, SWITCH, MII STUDIO OR MII CREATOR, FOR THE MII ICONS"});
+        int count = s_mii_count.load(std::memory_order_acquire);
+        if (count < 0) {
+            count = static_cast<int>(galaxy::host::mii_library_count());
+            s_mii_count.store(count, std::memory_order_release);
+        }
+        char mii_text[32]{};
+        std::snprintf(mii_text, sizeof(mii_text), "%d OF 100", count);
+        rows.push_back({"MIIS ON THIS CONSOLE", mii_text, nullptr, "THE MII ICON PICKER ON THE FILE SELECT SHOWS THEM"});
+        rows.push_back({"MIIS FOLDER", "PRESS RIGHT",
+                        [](RenderConfig&, int delta) {
+                            if (delta > 0) open_mii_folder();
+                        },
+                        "FILES PUT HERE ARE IMPORTED AT EVERY START"});
+    }
     if (galaxy_select_enabled()) {
         want_galaxy_select_names();
         const std::size_t stage = std::min(s_galaxy_select_stage, kGalaxyStageCount - 1u);

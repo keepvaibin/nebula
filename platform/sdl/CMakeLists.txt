@@ -112,7 +112,9 @@ add_library(galaxy_gx_vk STATIC
     ${rt}/tilt.cpp
     ${rt}/jaudio_host_mixer.cpp
     ${rt}/atomic_file.cpp
-    ${rt}/wii_device_data.cpp)
+    ${rt}/wii_device_data.cpp
+    ${rt}/mii_import.cpp
+    ${rt}/mii_formats.cpp)
 target_include_directories(galaxy_gx_vk PUBLIC "${nebula_root}/runtime/include")
 target_include_directories(galaxy_gx_vk PRIVATE "${nebula_root}/third_party/smaa")
 target_compile_options(galaxy_gx_vk PUBLIC "SHELL:-include ${nebula_root}/runtime/include/galaxy/posix_compat.h")

@@ -25,10 +25,20 @@ void MiiFaceIcon::drawIcon() {
         return;
     }
 
+#ifdef TARGET_PC
+    // Into the image, after its ResTIMG header (createImageBuffer: mImageDataOffset). The console's code copies the
+    // face to the header's address (802775F0 passes mImageBuffer): the GPU's copy overwrote the header, already read
+    // into the layout's TexMap, and the icon showed the picture 32 bytes (one 4x4 block) out of place. Natively the
+    // copy stays on the GPU at the address it was made to: the TexMap's image (the header plus 32) found none and the
+    // Mii icon was blank (b107).
+    u8* const image = mImageBuffer + sizeof(ResTIMG);
+#else
+    u8* const image = mImageBuffer;
+#endif
     if (mIsFavoriteColorBG) {
-        mMakeIconResult = mRecipe->makeIconWithFavoriteColor(mImageBuffer, mWidth, mHeight);
+        mMakeIconResult = mRecipe->makeIconWithFavoriteColor(image, mWidth, mHeight);
     } else {
-        mMakeIconResult = mRecipe->makeIcon(mImageBuffer, mWidth, mHeight, Color8(0, 0, 0, 255));
+        mMakeIconResult = mRecipe->makeIcon(image, mWidth, mHeight, Color8(0, 0, 0, 255));
     }
 
     mIsCreated = true;

@@ -89,8 +89,7 @@ private:
     /* 0x02E */ u16 mFavoriteMiiNum;
     /* 0x030 */ u32 mFavoriteMiiIndices[10];
     /* 0x058 */ u16 mMiiNum;
-    /* 0x05C */ u32 mMiiIndices[10];
-    /* 0x084 */ u8 _84[360];
+    /* 0x05C */ u32 mMiiIndices[100];  // every Mii the database holds (decompiled as 10 and padding to 0x1EC)
     /* 0x1EC */ s32 _1EC;
     /* 0x1F0 */ s32 _1F0;
     /* 0x1F4 */ nw4r::lyt::TexMap* _1F4;

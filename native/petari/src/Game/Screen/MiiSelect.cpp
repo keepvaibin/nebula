@@ -27,6 +27,12 @@ namespace {
     static const CallbackFuncPtr func[2] = {&MiiSelect::callbackLeft, &MiiSelect::callbackRight};
 };  // namespace
 
+#ifdef TARGET_PC
+// RFL_Database.c: the database's Miis changed (Mii import while the game runs).
+extern "C" u32 __NebulaMiiGeneration;
+static u32 sCollectedMiiGeneration = 0;
+#endif
+
 MiiSelect::MiiSelect(const char* pName)
     : LayoutActor(pName, true), _28(new MR::BitArray(5)), mFellowIconNum(), mFavoriteMiiNum(), mMiiNum(), _1EC(), _1F0(), _1F4(), _1F8(), _1FC(),
       _200(), _204(new FileSelectIconID()) {
@@ -50,6 +56,12 @@ void MiiSelect::init(const JMapInfoIter& rIter) {
 void MiiSelect::appear() {
     LayoutActor::appear();
     setNerve(GET_NERVE_ANON(MiiSelectNrvAppear));
+#ifdef TARGET_PC
+    // Miis imported since the file select collected them (FileSelector::exeTitleEnd): collected again.
+    if (sCollectedMiiGeneration != __NebulaMiiGeneration) {
+        collectValidMiiIndex();
+    }
+#endif
     _1EC = 0;
     refresh();
     setCurrentPageGroupA();
@@ -320,6 +332,12 @@ void MiiSelect::updateButtons() {
 }
 
 void MiiSelect::collectValidMiiIndex() {
+#ifdef TARGET_PC
+    // From empty each time: the picker collects again when Miis were imported since (appear).
+    mFavoriteMiiNum = 0;
+    mMiiNum = 0;
+    sCollectedMiiGeneration = __NebulaMiiGeneration;
+#endif
     for (u32 i = 0; i < RFL_DB_CHAR_MAX; i++) {
         if (!RFLIsAvailableOfficialData(i)) {
             continue;
@@ -331,7 +349,12 @@ void MiiSelect::collectValidMiiIndex() {
             continue;
         }
 
+#ifdef TARGET_PC
+        // At most the ten favourites the console allows (the array's size): a database made elsewhere can mark more.
+        if (additionalInfo.favorite == 1 && mFavoriteMiiNum < ARRAY_SIZE(mFavoriteMiiIndices)) {
+#else
         if (additionalInfo.favorite == 1) {
+#endif
             mFavoriteMiiIndices[mFavoriteMiiNum] = static_cast< u16 >(i);
             mFavoriteMiiNum++;
         } else {

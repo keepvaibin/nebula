@@ -802,3 +802,71 @@ static void RFLiCheckHeaderCRCAsync(RFLiExCallback callback) {
     OSSetAlarmUserData(&mgr->crcInfo.alarm, &mgr->crcInfo);
     OSSetAlarm(&mgr->crcInfo.alarm, OSMillisecondsToTicks(19), alarmCheckCb_);
 }
+
+#ifdef TARGET_PC
+#include <nebula_game_api.h>
+
+/* Mii import (the host's settings and its import folder). Records keep the console's bytes in memory (RFLi_Endian.h):
+ * a stored Mii is copied as it is. */
+
+/* The database's Miis changed (an import while the game runs): MiiSelect collects them again when it next opens. */
+u32 __NebulaMiiGeneration = 0;
+
+/* A Mii from another console or tool made acceptable to this one, then the checks RFLiGetCharData makes: a birthday
+ * the console would not take none, a special Mii kept on this console (RFLiCheckValidInfo refuses one that may
+ * travel), a favourite colour past the twelve the first, a Mii without a name the Mii Channel's "no name". Pure: any
+ * thread. */
+NEBULA_GAME_API uint32_t nebula_game_mii_prepare(uint8_t* record) {
+    static const u16 scDayMax[12 + 1] = {0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    static const char scNoName[] = "no name";
+    RFLiCharData* const data = (RFLiCharData*)record;
+    RFLiCharInfo info;
+    u32 month;
+    u32 day;
+    u32 i;
+
+    if (!RFLiIsValidID(&data->createID) || RFLiIsTemporaryID(&data->createID)) {
+        return 0;
+    }
+    month = RFLI_GET(RFLiCharData, data, birthMonth);
+    day = RFLI_GET(RFLiCharData, data, birthDay);
+    if ((month == 0) != (day == 0) || month > 12 || day > scDayMax[month]) {
+        RFLI_SET(RFLiCharData, data, birthMonth, 0);
+        RFLI_SET(RFLiCharData, data, birthDay, 0);
+    }
+    if (RFLiIsSpecialID(&data->createID)) {
+        RFLI_SET(RFLiCharData, data, localonly, 1);
+    }
+    if (RFLI_GET(RFLiCharData, data, favoriteColor) >= RFLFavoriteColor_Max) {
+        RFLI_SET(RFLiCharData, data, favoriteColor, 0);
+    }
+    if (data->name[0] == 0) {
+        for (i = 0; scNoName[i] != '\0'; i++) {
+            RFLI_ST16(data->name[i], scNoName[i]);
+        }
+    }
+    RFLiConvertRaw2Info(data, &info);
+    return RFLiCheckValidInfo(&info) && RFLiIsValidOnNAND(&info) ? 1 : 0;
+}
+
+NEBULA_GAME_API uint32_t nebula_game_mii_install(uint32_t slot, const uint8_t* record) {
+    RFLiDBManager* mgr;
+    RFLiCharData* data;
+
+    if (slot >= RFL_DB_CHAR_MAX || !RFLiDBIsLoaded()) {
+        return 0;
+    }
+    mgr = RFLiGetDBManager();
+    if (mgr == NULL || mgr->database == NULL) {
+        return 0;
+    }
+    data = &mgr->database->rawData[slot];
+    /* A free slot, or the same Mii (its create ID) changed. */
+    if (RFLiIsValidID(&data->createID) && !RFLiIsSameID(&data->createID, &((const RFLiCharData*)record)->createID)) {
+        return 0;
+    }
+    memcpy(data, record, sizeof(*data));
+    __NebulaMiiGeneration++;
+    return 1;
+}
+#endif

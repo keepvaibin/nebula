@@ -433,7 +433,8 @@ int main() {
 
     passed &= expect(key(VK_TAB), "Tab enters the general page");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
-    passed &= expect(snapshot.tab == 4u && snapshot.row_count == 2u, "general page has text speed and language");
+    passed &= expect(snapshot.tab == 4u && snapshot.row_count == 6u,
+                     "general page has text speed, language and Mii import (a heading, import, count, folder)");
     passed &= expect(galaxy::get_runtime_settings().text_speed == 1u, "text speed starts at the game's pace");
     passed &= expect(key(VK_RIGHT) && galaxy::get_runtime_settings().text_speed == 2u, "right raises text speed live");
     passed &= expect(key(VK_RIGHT) && key(VK_RIGHT) && galaxy::get_runtime_settings().text_speed == 3u,

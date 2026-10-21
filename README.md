@@ -50,6 +50,10 @@ it is the original game code, translated instruction by instruction by the recom
 - In-game settings menu (F1, View + Menu on Xbox, Minus + Plus on Switch).
 - Text speed: dialogue and Rosalina's storybook at the original pace, 2x or 3x.
 - The game in English, French or Spanish, the three languages of the USA release.
+- Mii import for the file icons: Miis from a Wii (`.mii`, `.rcd`, `.rsd`, `RFL_DB.dat`, Wii Remote data), DS,
+  3DS, Wii U (`.cfsd`, `.ffsd`, their Mii databases), Switch (`.charinfo`, `.nfsd`), Mii Studio (code or link)
+  or Mii Creator (`.miic`). Settings > GENERAL > IMPORT MIIS, or put the files in the `miis` folder next to the
+  settings (imported at every start). Miis from newer consoles take the Wii's nearest parts and colours.
 - Saves stored in `%LOCALAPPDATA%\Nebula\saves`, with export, import and Dolphin saves
   (see [Saves](#saves)).
 

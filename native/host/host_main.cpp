@@ -18,6 +18,8 @@
 #if defined(NEBULA_HOST_RENDERER)
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/frame_timeline.h"
+#include "galaxy/gx/fifo_parser.h"
+#include "galaxy/mii_import.h"
 #include "galaxy/gx_d3d12.h"
 #include "galaxy/native_api.h"
 #include "galaxy/native_host.h"
@@ -145,6 +147,8 @@ struct Module {
     decltype(&nebula_game_fs_complete) fs_complete;
     decltype(&nebula_game_ai_interrupt) ai_interrupt;
     decltype(&nebula_game_audio_channel_owner) audio_channel_owner;
+    decltype(&nebula_game_mii_prepare) mii_prepare;
+    decltype(&nebula_game_mii_install) mii_install;
     decltype(&nebula_game_gx_event) gx_event;
     decltype(&nebula_game_gx_release) gx_release;
     decltype(&nebula_game_memory_regions) memory_regions;
@@ -196,6 +200,10 @@ void load_module(const fs::path& path) {
     gModule.ai_interrupt = reinterpret_cast<decltype(gModule.ai_interrupt)>(find_symbol(module, "nebula_game_ai_interrupt"));
     gModule.audio_channel_owner = reinterpret_cast<decltype(gModule.audio_channel_owner)>(
         find_symbol(module, "nebula_game_audio_channel_owner"));
+    gModule.mii_prepare =
+        reinterpret_cast<decltype(gModule.mii_prepare)>(find_symbol(module, "nebula_game_mii_prepare"));
+    gModule.mii_install =
+        reinterpret_cast<decltype(gModule.mii_install)>(find_symbol(module, "nebula_game_mii_install"));
     gModule.gx_event = reinterpret_cast<decltype(gModule.gx_event)>(find_symbol(module, "nebula_game_gx_event"));
     gModule.gx_release = reinterpret_cast<decltype(gModule.gx_release)>(find_symbol(module, "nebula_game_gx_release"));
     gModule.memory_regions = reinterpret_cast<decltype(gModule.memory_regions)>(find_symbol(module, "nebula_game_memory_regions"));
@@ -1014,11 +1022,58 @@ void report_crash(EXCEPTION_POINTERS* info) {
     std::_Exit(4);
 }
 
+// A C++ exception's record (MSVC's 0xE06D7363: the object, its ThrowInfo, the image base its offsets start from):
+// the thrown type and, for a std::exception, what(). Read under SEH: the record comes from a failing process.
+void describe_cpp_exception(const EXCEPTION_RECORD* record, char* out, std::size_t size) {
+    std::snprintf(out, size, "uncaught C++ exception");
+    if (record->NumberParameters < 4u) {
+        return;
+    }
+    __try {
+        const auto base = static_cast<uintptr_t>(record->ExceptionInformation[3]);
+        const auto* object = reinterpret_cast<const char*>(record->ExceptionInformation[1]);
+        // ThrowInfo: attributes, unwind, forward compat, catchable types (32-bit offsets from the image base).
+        const auto* throw_info = reinterpret_cast<const int32_t*>(record->ExceptionInformation[2]);
+        const auto* types = reinterpret_cast<const int32_t*>(base + static_cast<uint32_t>(throw_info[3]));
+        const char* thrown = nullptr;
+        const char* what = nullptr;
+        for (int32_t i = 0; i < types[0] && i < 16; ++i) {
+            // CatchableType: properties, type descriptor, this displacement (mdisp, pdisp, vdisp), size, copy.
+            const auto* type = reinterpret_cast<const int32_t*>(base + static_cast<uint32_t>(types[1 + i]));
+            const char* name = reinterpret_cast<const char*>(base + static_cast<uint32_t>(type[1])) + 16;
+            if (thrown == nullptr) {
+                thrown = name;
+            }
+            if (std::strcmp(name, ".?AVexception@std@@") == 0) {
+                what = reinterpret_cast<const std::exception*>(object + type[2])->what();
+            }
+        }
+        std::snprintf(out, size, "uncaught C++ exception %s: %s", thrown != nullptr ? thrown : "?",
+                      what != nullptr ? what : "(not a std::exception)");
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
+}
+
 #if defined(__clang__)
 __attribute__((no_sanitize("address", "undefined")))
 #endif
 LONG CALLBACK crash_handler(EXCEPTION_POINTERS* info) {
     const DWORD code = info->ExceptionRecord->ExceptionCode;
+    // A C++ exception, logged where it is thrown (the first 32): one thrown on the game's own stacks cannot unwind
+    // through them and ends the process before any filter runs (b107: the Mii picker ended with 0xE06D7363 and no
+    // line). Handled or not, the line says what was thrown.
+    if (code == 0xE06D7363u) {
+        static std::atomic<unsigned> logged{0u};
+        if (logged.fetch_add(1u, std::memory_order_relaxed) < 32u) {
+            char text[512];
+            describe_cpp_exception(info->ExceptionRecord, text, sizeof(text));
+            char line[640];
+            std::snprintf(line, sizeof(line), "thrown: %s (thread %lu)", text + std::strlen("uncaught "),
+                          GetCurrentThreadId());
+            log_line("exception:", line);
+        }
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
     if (code != EXCEPTION_ACCESS_VIOLATION && code != EXCEPTION_ILLEGAL_INSTRUCTION && code != EXCEPTION_PRIV_INSTRUCTION &&
         code != EXCEPTION_STACK_OVERFLOW && code != EXCEPTION_INT_DIVIDE_BY_ZERO && code != EXCEPTION_INT_OVERFLOW &&
         code != EXCEPTION_IN_PAGE_ERROR) {
@@ -1065,11 +1120,33 @@ void abort_handler(int) {
     std::_Exit(3);
 }
 
+// The last filter: an exception no frame handled, of any kind. A C++ exception that leaves a thread through C or
+// system frames reaches no terminate handler: the process ended with 0xE06D7363 and no line or dump (b107: the Mii
+// picker).
+LONG WINAPI unhandled_filter(EXCEPTION_POINTERS* info) {
+    if (gCrashing.exchange(1) != 0) {
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+    char text[512];
+    if (info->ExceptionRecord->ExceptionCode == 0xE06D7363u) {
+        describe_cpp_exception(info->ExceptionRecord, text, sizeof(text));
+    } else {
+        std::snprintf(text, sizeof(text), "unhandled exception 0x%08lX at 0x%p", info->ExceptionRecord->ExceptionCode,
+                      info->ExceptionRecord->ExceptionAddress);
+    }
+    char line[640];
+    std::snprintf(line, sizeof(line), "%s (thread %lu)", text, GetCurrentThreadId());
+    log_line("crash:", line);
+    report_crash(info);
+    std::_Exit(4);
+}
+
 void install_crash_reporter() {
     gCrashRequest = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     gCrashDone = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     std::thread(crash_writer).detach();
     AddVectoredExceptionHandler(0, crash_handler);  // last: the module's own handlers (division, stack guards) first
+    SetUnhandledExceptionFilter(unhandled_filter);  // whatever no frame handled, C++ exceptions included
     std::signal(SIGABRT, abort_handler);            // process-wide in the UCRT, unlike set_terminate
 }
 #endif
@@ -1168,7 +1245,7 @@ void take_finished_tokens() {
     }
 }
 
-void submit_frame(bool present, uint32_t xfb) {
+void submit_frame_unchecked(bool present, uint32_t xfb) {
     const size_t size = gPendingSize;
     const auto token = galaxy::gx::render_frame(reinterpret_cast<const std::byte*>(gPending), size, &gMemory, &gNative,
                                                 present, xfb);
@@ -1181,6 +1258,24 @@ void submit_frame(bool present, uint32_t xfb) {
         gModule.gx_release(size);
     }
     take_finished_tokens();
+}
+
+// The renderer's hard failures (the GX parser's: an unknown command, a truncated payload) end the game with their
+// line and a dump. Thrown on the game's stacks they could not unwind through its frames: the process ended with
+// 0xE06D7363 and nothing logged (b107, the Mii icon picker).
+void submit_frame(bool present, uint32_t xfb) {
+    try {
+        submit_frame_unchecked(present, xfb);
+    } catch (const galaxy::gx::GxFatalError& error) {
+        char text[1024];
+        std::snprintf(text, sizeof(text), "the renderer stopped: %s (opcode 0x%02X at stream offset %zu)", error.what(),
+                      static_cast<unsigned>(error.opcode()), error.fifo_offset());
+        svc_fatal(nullptr, text);
+    } catch (const std::exception& error) {
+        char text[1024];
+        std::snprintf(text, sizeof(text), "the renderer stopped: %s", error.what());
+        svc_fatal(nullptr, text);
+    }
 }
 #endif
 
@@ -1378,6 +1473,26 @@ void svc_vi_frame(void*, uint32_t xfb, int black, uint32_t retrace) {
 #endif
     if (!gRegions.empty()) {
         submit_frame(true, xfb == 0 || black ? galaxy::gx::kNoDisplayedXfbAddr : xfb);
+    }
+    // GALAXY_TEST_MII_IMPORT=<retrace>:<file> (tests): imports the file at that retrace, as the settings do.
+    {
+        static const char* const test_import = std::getenv("GALAXY_TEST_MII_IMPORT");
+        static bool test_imported = false;
+        if (test_import != nullptr && !test_imported) {
+            const char* const colon = std::strchr(test_import, ':');
+            if (colon != nullptr && retrace >= std::strtoul(test_import, nullptr, 10)) {
+                test_imported = true;
+                const std::filesystem::path file(colon + 1);
+                std::string message;
+                (void)galaxy::host::import_mii_files(std::span<const std::filesystem::path>(&file, 1u), &message);
+                std::fprintf(stderr, "[mii] test import at %u: %s\n", retrace, message.c_str());
+            }
+        }
+    }
+    // Miis imported from the settings while the game runs: into its loaded database too (the file has them).
+    for (const auto& [slot, mii] : galaxy::host::take_mii_installs()) {
+        const uint32_t placed = gModule.mii_install(slot, reinterpret_cast<const uint8_t*>(mii.data()));
+        std::fprintf(stderr, "[mii] slot %u %s\n", slot, placed != 0u ? "installed" : "left for the next start");
     }
     // The output's shape (the window's, or the chosen aspect) is latched once this retrace's picture is presented, as
     // v1.0.1 does: queued frames finish first, so a picture is never fitted with the next frame's camera and layouts.
@@ -2166,6 +2281,26 @@ int main(int argc, char** argv) {
 
     open_pak(pak);
     load_module(module);
+#if defined(NEBULA_HOST_RENDERER)
+    {
+        // Mii import: the files in the import folder (next to the settings: any console's Mii files, mii_formats.h)
+        // join the database before the game reads it; the settings import more while it runs.
+        const fs::path settings_folder = galaxy::runtime_settings_folder();
+        const fs::path import_folder = settings_folder.empty() ? fs::path{} : settings_folder / "miis";
+        if (!import_folder.empty()) {
+            fs::create_directories(import_folder, error);
+        }
+        galaxy::host::set_mii_library(mii_database, import_folder,
+                                      [](galaxy::host::MiiRecord& mii) {
+                                          return gModule.mii_prepare(reinterpret_cast<uint8_t*>(mii.data())) != 0u;
+                                      });
+        std::string message;
+        (void)galaxy::host::import_mii_folder(&message);
+        std::fprintf(stderr, "[mii] import folder %s: %s (%u in the database)\n", import_folder.string().c_str(),
+                     message.c_str(), galaxy::host::mii_library_count());
+        (void)galaxy::host::take_mii_installs();  // in the file the game reads at boot
+    }
+#endif
 
     static NebulaHostServices services{};
     services.version = NEBULA_GAME_API_VERSION;

@@ -324,6 +324,13 @@ NEBULA_GAME_API void nebula_game_ai_interrupt(void);
    1 (an effect), 2 (a sequence) or 3 (a stream); 0 with *route 0 when no sound the game can name plays there. The host
    calls it from the DSP command it is running (the game's audio thread). */
 NEBULA_GAME_API uint32_t nebula_game_audio_channel_owner(uint32_t channel, uint32_t* route);
+/* Mii import. prepare: makes a Mii (a 74-byte record as the console stores it) acceptable where the console would
+   refuse a detail (birthday, special Mii not kept local, favourite colour, no name), then 1 when the game takes it as
+   its database's; pure, any thread. install: places it in slot `slot` (0-99) of the loaded database, free or holding
+   the same Mii (its create ID); 0 when the database is not loaded or another Mii holds the slot. On the game thread
+   (the host's retrace). */
+NEBULA_GAME_API uint32_t nebula_game_mii_prepare(uint8_t* record);
+NEBULA_GAME_API uint32_t nebula_game_mii_install(uint32_t slot, const uint8_t* record);
 /* A Wii Remote connected (with its calibration) or disconnected. */
 NEBULA_GAME_API void nebula_game_wpad_connect(uint32_t chan, int connected, const NebulaWiimoteConnection* connection);
 /* A Wii Remote input report, from its id (0x30, 0x31, 0x33 or 0x37 as the data format asks), extension bytes decrypted;

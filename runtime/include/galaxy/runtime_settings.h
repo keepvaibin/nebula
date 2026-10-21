@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <cstdint>
 
 namespace galaxy {
@@ -71,6 +72,8 @@ bool reload_runtime_audio_settings_if_changed() noexcept;
 // Invalid explicit paths and formatting/write/replace failures return false;
 // a bad override never redirects a save to the normal user settings file.
 [[nodiscard]] bool save_runtime_settings_to_file();
+// The folder of the settings file (GALAXY_RUNTIME_SETTINGS_PATH's, else Nebula's data folder); empty when unknown.
+[[nodiscard]] std::filesystem::path runtime_settings_folder() noexcept;
 
 [[nodiscard]] const char* runtime_input_mode_name(RuntimeInputMode mode);
 
