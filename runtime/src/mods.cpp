@@ -733,6 +733,11 @@ void set_mods_folder(const std::filesystem::path& folder, const std::filesystem:
     s.game_id = game_id;
 }
 
+void set_game_dol(std::span<const std::uint8_t> dol) {
+    const std::lock_guard<std::mutex> lock(s_dol_mutex);
+    s_dol.assign(dol.begin(), dol.end());
+}
+
 std::string mods_game_id() {
     Settings& s = settings();
     const std::lock_guard<std::mutex> lock(s.mutex);
@@ -876,7 +881,11 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
         }
         mods.push_back(std::move(mod));
     }
-    std::stable_sort(mods.begin(), mods.end(), [](const ModInfo& a, const ModInfo& b) { return a.order < b.order; });
+    // Disabled mods have no place: they follow the enabled ones by name.
+    std::stable_sort(mods.begin(), mods.end(), [](const ModInfo& a, const ModInfo& b) {
+        if (a.enabled != b.enabled) return a.enabled;
+        return a.enabled ? a.order < b.order : lower(a.id) < lower(b.id);
+    });
     for (std::size_t i = 0; i < mods.size(); ++i) mods[i].order = static_cast<unsigned>(i + 1u);
     // Overlaps between enabled mods: the same disc file (a file name alone matches any path ending in it) or texture.
     const auto base = [](const std::string& path) {
@@ -915,6 +924,20 @@ std::vector<ModInfo> scan_mods(const std::string& requested_game_id) {
         }
     }
     return mods;
+}
+
+void set_mod_enabled(std::vector<ModInfo>& mods, std::size_t index, bool enabled) {
+    if (index >= mods.size() || mods[index].enabled == enabled) return;
+    ModInfo mod = std::move(mods[index]);
+    mods.erase(mods.begin() + static_cast<std::ptrdiff_t>(index));
+    mod.enabled = enabled;
+    auto at = mods.begin();
+    if (!enabled) {
+        const std::string name = lower(mod.id);
+        at = std::find_if(mods.begin(), mods.end(), [&](const ModInfo& m) { return !m.enabled && name < lower(m.id); });
+    }
+    mods.insert(at, std::move(mod));
+    for (std::size_t i = 0; i < mods.size(); ++i) mods[i].order = static_cast<unsigned>(i + 1u);
 }
 
 bool save_mod_settings(std::span<const ModInfo> mods) {

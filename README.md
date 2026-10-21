@@ -54,14 +54,14 @@ it is the original game code, translated instruction by instruction by the recom
   3DS, Wii U (`.cfsd`, `.ffsd`, their Mii databases), Switch (`.charinfo`, `.nfsd`), Mii Studio (code or link)
   or Mii Creator (`.miic`). Settings > GENERAL > IMPORT MIIS, or put the files in the `miis` folder next to the
   settings (imported at every start). Miis from newer consoles take the Wii's nearest parts and colours.
-- Mods, each in its own folder in the `mods` folder next to the settings: Riivolution mods as on an SD card
-  (`riivolution/*.xml` and their files), disc files in the disc's layout (`files/`) and texture packs
-  (`textures/`). Settings > MODS turns each on or off, picks Riivolution options and the load order (a later mod
-  wins a file); changes apply at the next start, and `mods-report.txt` lists what each mod changed.
-- Texture packs in Dolphin's format (`tex1_...` PNG or DDS, custom and arbitrary mipmaps) from the
-  `TexturePacks` folder next to the settings (a folder per pack, its textures in an `RMGE01` or `RMG` folder) or
-  a mod's `textures/`. Settings > MODS > TEXTURE PACKS (on, preload, off); DUMP TEXTURES writes the game's
-  textures under their pack names for making one.
+- Mods, texture packs and HD movies, each in its own folder in the `mods` folder next to the settings:
+  Riivolution mods as on an SD card (`riivolution/*.xml` and their files), disc files in the disc's layout
+  (`files/`), texture packs (`textures/`, or `tex1_` files anywhere in the mod) and movies (`movies/`). Import a
+  zip, 7z, rar or folder from the launcher's Mods tab or Settings > MODS, or drop it on the game window. Mods are
+  enabled or disabled; among the enabled ones the higher wins a file or texture. Texture packs and movies change
+  at once, other changes at the next start; `mods-report.txt` lists what each mod changed.
+- Texture packs in Dolphin's format (`tex1_...` PNG or DDS, custom and arbitrary mipmaps). Settings > MODS >
+  TEXTURE PACKS (on, preload, off); DUMP TEXTURES writes the game's textures under their pack names for making one.
 - Saves stored in `%LOCALAPPDATA%\Nebula\saves`, with export, import and Dolphin saves
   (see [Saves](#saves)).
 

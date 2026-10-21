@@ -1764,6 +1764,26 @@ std::array<std::uint8_t, 7> ui_glyph(char ch) {
     case '(': return {0x02u, 0x04u, 0x08u, 0x08u, 0x08u, 0x04u, 0x02u};
     case ')': return {0x08u, 0x04u, 0x02u, 0x02u, 0x02u, 0x04u, 0x08u};
     case '>': return {0x08u, 0x04u, 0x02u, 0x01u, 0x02u, 0x04u, 0x08u};
+    // Mod names and messages use these too.
+    case '\'': return {0x0Cu, 0x04u, 0x08u, 0x00u, 0x00u, 0x00u, 0x00u};
+    case '"': return {0x0Au, 0x0Au, 0x0Au, 0x00u, 0x00u, 0x00u, 0x00u};
+    case '!': return {0x04u, 0x04u, 0x04u, 0x04u, 0x04u, 0x00u, 0x04u};
+    case '#': return {0x0Au, 0x0Au, 0x1Fu, 0x0Au, 0x1Fu, 0x0Au, 0x0Au};
+    case '&': return {0x0Cu, 0x12u, 0x14u, 0x08u, 0x15u, 0x12u, 0x0Du};
+    case '_': return {0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u, 0x1Fu};
+    case '[': return {0x0Eu, 0x08u, 0x08u, 0x08u, 0x08u, 0x08u, 0x0Eu};
+    case ']': return {0x0Eu, 0x02u, 0x02u, 0x02u, 0x02u, 0x02u, 0x0Eu};
+    case '*': return {0x00u, 0x04u, 0x15u, 0x0Eu, 0x15u, 0x04u, 0x00u};
+    case ';': return {0x00u, 0x0Cu, 0x0Cu, 0x00u, 0x0Cu, 0x04u, 0x08u};
+    case '@': return {0x0Eu, 0x11u, 0x17u, 0x15u, 0x17u, 0x10u, 0x0Eu};
+    case '~': return {0x00u, 0x00u, 0x08u, 0x15u, 0x02u, 0x00u, 0x00u};
+    case '|': return {0x04u, 0x04u, 0x04u, 0x04u, 0x04u, 0x04u, 0x04u};
+    case '\\': return {0x10u, 0x10u, 0x08u, 0x04u, 0x02u, 0x01u, 0x01u};
+    case '$': return {0x04u, 0x0Fu, 0x14u, 0x0Eu, 0x05u, 0x1Eu, 0x04u};
+    case '{': return {0x02u, 0x04u, 0x04u, 0x08u, 0x04u, 0x04u, 0x02u};
+    case '}': return {0x08u, 0x04u, 0x04u, 0x02u, 0x04u, 0x04u, 0x08u};
+    case '^': return {0x04u, 0x0Au, 0x11u, 0x00u, 0x00u, 0x00u, 0x00u};
+    case '`': return {0x08u, 0x04u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u};
     case kGlyphCCedilla: return {0x0Eu, 0x11u, 0x10u, 0x10u, 0x11u, 0x0Eu, 0x04u};
     // A full N; ui_text draws the tilde above the cell.
     case kGlyphNTilde: return {0x11u, 0x19u, 0x15u, 0x13u, 0x11u, 0x11u, 0x11u};
@@ -1826,6 +1846,30 @@ void ui_text(
         renderer.draw_ui_glyph(cursor_x, y, scale, bitmap_of(ui_glyph(ch)), color);
         cursor_x += 6 * scale;
     }
+}
+
+// The width ui_text draws `text` at (a two-byte letter is one cell).
+int ui_text_width(std::string_view text, int scale) {
+    int width = 0;
+    for (std::size_t i = 0; i < text.size(); ++i) {
+        if (static_cast<unsigned char>(text[i]) == 0xC3u && i + 1u < text.size()) {
+            ++i;
+        }
+        width += (text[i] == ' ' ? 4 : 6) * scale;
+    }
+    return width;
+}
+
+// `text` shortened with "..." to `max_width`, whole letters at a time: menu text never runs into its neighbour or out
+// of the panel, at any window size.
+std::string ui_fit_text(std::string text, int scale, int max_width) {
+    if (ui_text_width(text, scale) <= max_width) return text;
+    const int dots = ui_text_width("...", scale);
+    while (!text.empty() && (ui_text_width(text, scale) + dots > max_width || text.back() == ' ')) {
+        while (!text.empty() && (static_cast<unsigned char>(text.back()) & 0xC0u) == 0x80u) text.pop_back();
+        if (!text.empty()) text.pop_back();
+    }
+    return text.empty() ? std::string() : text + "...";
 }
 
 std::string percent_text(float value) {
@@ -2199,7 +2243,7 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render) {
                             const unsigned at = quality == 2u ? 0u : quality == 0u ? 1u : 2u;
                             draft.rt_quality = kOrder[settings_step(at, 3u, delta)];
                         },
-                        "HIGH SAMPLES MORE LIGHTS PER PIXEL AND REFLECTS WATER AT FULL RESOLUTION. APPLIES AT THE NEXT START"});
+                        "HIGH: MORE LIGHTS PER PIXEL, FULL-RESOLUTION WATER. APPLIES AT THE NEXT START"});
     }
     return rows;
 }
@@ -2459,6 +2503,36 @@ void start_mod_import_dialog(bool folders) {
 
 std::vector<SettingsRow> mods_page(const RenderConfig& render);
 
+// A mod's REMOVE row (pressed twice: to the Recycle Bin).
+SettingsRow remove_row(std::size_t i, const std::string& id) {
+    const bool armed = s_mod_remove_armed == id;
+    return {"  REMOVE", armed ? "PRESS RIGHT AGAIN" : "PRESS RIGHT",
+            [i](RenderConfig&, int delta) {
+                const std::lock_guard<std::mutex> change_lock(s_mods_mutex);
+                if (i >= s_mods.size()) return;
+                if (delta <= 0) {
+                    s_mod_remove_armed.clear();
+                    return;
+                }
+                if (s_mod_remove_armed != s_mods[i].id) {
+                    s_mod_remove_armed = s_mods[i].id;
+                    return;
+                }
+                std::string message;
+                galaxy::mods::remove_mod(galaxy::mods::mods_folder(), s_mods[i].id, &message);
+                std::cerr << "[mods] " << message << '\n';
+                {
+                    const std::lock_guard<std::mutex> import_lock(s_mod_import_mutex);
+                    s_mod_import_message = message;
+                }
+                s_mod_remove_armed.clear();
+                s_mods = galaxy::mods::scan_mods();
+                s_mods_scanned = true;
+                apply_live_mods();
+            },
+            armed ? "PRESS RIGHT AGAIN TO MOVE IT TO THE RECYCLE BIN" : "MOVES IT TO THE RECYCLE BIN"};
+}
+
 // While a mod is picked up on the MODS page: up and down move it a place (the selection follows its row), right, left,
 // Enter or Escape put it down.
 bool mods_move_key(WPARAM key, bool was_down) {
@@ -2475,7 +2549,11 @@ bool mods_move_key(WPARAM key, bool was_down) {
                 return true;
             }
             const std::size_t at = static_cast<std::size_t>(it - s_mods.begin());
-            const std::size_t to = key == VK_UP ? (at == 0u ? at : at - 1u) : std::min(at + 1u, s_mods.size() - 1u);
+            // Among the enabled mods (the first ones).
+            const std::size_t enabled = static_cast<std::size_t>(
+                std::count_if(s_mods.begin(), s_mods.end(), [](const galaxy::mods::ModInfo& m) { return m.enabled; }));
+            const std::size_t last = std::max<std::size_t>(enabled, 1u) - 1u;
+            const std::size_t to = key == VK_UP ? (at == 0u ? at : at - 1u) : std::min(at + 1u, last);
             if (to != at) {
                 std::swap(s_mods[at], s_mods[to]);
                 save_mods();
@@ -2519,11 +2597,22 @@ std::string next_start_language_folder() {
     return galaxy::mods::language_folder(game_id, static_cast<unsigned>(get_runtime_settings().language));
 }
 
+// The selection to a row of the MODS page (after a change moved it).
+void select_mods_row(const RenderConfig& render, const std::string& key) {
+    const std::vector<SettingsRow> rows = mods_page(render);
+    for (std::size_t r = 0; r < rows.size(); ++r) {
+        if (rows[r].key == key) {
+            s_native_settings_row.store(static_cast<unsigned>(r), std::memory_order_relaxed);
+            return;
+        }
+    }
+}
+
 std::vector<SettingsRow> mods_page(const RenderConfig& render) {
     std::vector<SettingsRow> rows;
     const std::lock_guard<std::mutex> lock(s_mods_mutex);
     std::vector<galaxy::mods::ModInfo>& mods = mods_list();
-    rows.push_back({"MODS (THE HIGHER WINS)", {}, nullptr, {}, true});
+    rows.push_back({"MODS", {}, nullptr, {}, true});
     {
         std::string value;
         std::string message;
@@ -2539,7 +2628,7 @@ std::vector<SettingsRow> mods_page(const RenderConfig& render) {
                                 start_mod_import_dialog(false);
                             }
                         },
-                        message.empty() ? std::string("A ZIP, 7Z OR RAR MOD OR TEXTURE PACK (OR DROP IT ON THE WINDOW)")
+                        message.empty() ? std::string("A ZIP, 7Z OR RAR FILE. YOU CAN ALSO DROP IT ON THE WINDOW")
                                         : mods_ui_text(message, 120u)});
         rows.push_back({"IMPORT MOD FOLDER", "PRESS RIGHT",
                         [](RenderConfig&, int delta) {
@@ -2547,15 +2636,19 @@ std::vector<SettingsRow> mods_page(const RenderConfig& render) {
                                 start_mod_import_dialog(true);
                             }
                         },
-                        "A MOD'S FOLDER, COPIED INTO THE MODS FOLDER"});
+                        "A MOD'S FOLDER. YOU CAN ALSO DROP IT ON THE WINDOW"});
     }
     if (mods.empty()) {
-        rows.push_back({"NO MODS YET", {}, nullptr,
-                        "IMPORT ONE ABOVE: RIIVOLUTION MODS, GAME FILES, TEXTURE PACKS OR HD MOVIES"});
+        rows.push_back({"NO MODS YET", {}, nullptr, "IMPORT ONE ABOVE"});
     }
     const std::string playing = next_start_language_folder();
+    const std::size_t enabled_count = static_cast<std::size_t>(
+        std::count_if(mods.begin(), mods.end(), [](const galaxy::mods::ModInfo& m) { return m.enabled; }));
     for (std::size_t i = 0; i < mods.size(); ++i) {
         const galaxy::mods::ModInfo& mod = mods[i];
+        // The enabled mods first (scan_mods, set_mod_enabled), then the disabled ones.
+        if (i == 0u && mod.enabled) rows.push_back({"ENABLED (TOP HAS PRIORITY)", {}, nullptr, {}, true});
+        if (!mod.enabled && (i == 0u || mods[i - 1u].enabled)) rows.push_back({"DISABLED", {}, nullptr, {}, true});
         std::string kinds;
         for (const auto& [on, name] : {std::pair{mod.riivolution, "RIIVOLUTION"}, std::pair{mod.files || mod.loose, "FILES"},
                                        std::pair{mod.textures, "TEXTURES"}, std::pair{mod.movies, "MOVIES"}}) {
@@ -2571,7 +2664,7 @@ std::vector<SettingsRow> mods_page(const RenderConfig& render) {
         }
         if (mod.code_patches != 0u) {
             kinds += ". " + std::to_string(mod.code_patches) + " CODE CHANGE" + (mod.code_patches == 1u ? "" : "S") +
-                     " FOR THE CONSOLE'S CODE: NOT RUN NATIVELY";
+                     " CANNOT RUN IN NEBULA";
         }
         for (const galaxy::mods::ModOverlap& overlap : mod.overlaps) {
             std::string what;
@@ -2580,20 +2673,31 @@ std::vector<SettingsRow> mods_page(const RenderConfig& render) {
                 what += (what.empty() ? "" : ", ") + std::to_string(overlap.textures) +
                         (overlap.textures == 1u ? " TEXTURE" : " TEXTURES");
             }
-            kinds += ". " + what + (overlap.other_above ? " COVERED BY " : " OVER ") + mods_ui_text(overlap.other, 24u);
+            kinds += ". " + (overlap.other_above ? what + " REPLACED BY " : "REPLACES " + what + " OF ") +
+                     mods_ui_text(overlap.other, 24u);
         }
         const bool inert = !mod.problem.empty() && !mod.files && !mod.textures && !mod.movies && !mod.loose;
-        rows.push_back({mods_ui_text(mod.id, 26u), inert ? mods_ui_text(mod.problem, 22u) : (mod.enabled ? "ON" : "OFF"),
-                        [i](RenderConfig&, int delta) {
-                            const std::lock_guard<std::mutex> change_lock(s_mods_mutex);
-                            if (i < s_mods.size() && delta != 0 && s_mods[i].enabled != (delta > 0)) {
-                                s_mods[i].enabled = delta > 0;
-                                save_mods();
-                            }
-                        },
-                        (kinds.empty() ? std::string("NOTHING THIS GAME USES") : kinds) +
-                            ". APPLIES AT THE NEXT START"});
+        SettingsRow named{mods_ui_text(mod.id, 26u), inert ? mods_ui_text(mod.problem, 22u) : (mod.enabled ? "ON" : "OFF"),
+                          [i](RenderConfig& draft, int delta) {
+                              std::string id;
+                              {
+                                  const std::lock_guard<std::mutex> change_lock(s_mods_mutex);
+                                  if (i >= s_mods.size() || delta == 0 || s_mods[i].enabled == (delta > 0)) return;
+                                  // On: to the top of the enabled mods; off: among the disabled ones.
+                                  id = s_mods[i].id;
+                                  galaxy::mods::set_mod_enabled(s_mods, i, delta > 0);
+                                  save_mods();
+                                  // The overlaps follow at the next rescan.
+                                  s_mods_scanned = false;
+                              }
+                              // The selection follows the mod to its new place.
+                              select_mods_row(draft, "mod:" + id);
+                          },
+                          kinds.empty() ? std::string("NOTHING THIS GAME USES") : kinds};
+        named.key = "mod:" + mod.id;
+        rows.push_back(std::move(named));
         if (!mod.enabled) {
+            rows.push_back(remove_row(i, mod.id));
             continue;
         }
         for (std::size_t o = 0; o < mod.options.size(); ++o) {
@@ -2603,7 +2707,10 @@ std::vector<SettingsRow> mods_page(const RenderConfig& render) {
                                           : mods_ui_text(option.choices[option.selected - 1u], 22u);
             const bool other_region = option.selected != 0u && option.selected <= option.other_region.size() &&
                                       option.other_region[option.selected - 1u];
-            rows.push_back({"  " + mods_ui_text(option.name, 24u), value,
+            // A mod's option name as its menu shows it, without the colon some end in.
+            std::string_view name = option.name;
+            while (!name.empty() && (name.back() == ':' || name.back() == ' ')) name.remove_suffix(1);
+            rows.push_back({"  " + mods_ui_text(name, 24u), value,
                             [i, o](RenderConfig&, int delta) {
                                 const std::lock_guard<std::mutex> change_lock(s_mods_mutex);
                                 if (i >= s_mods.size() || o >= s_mods[i].options.size()) return;
@@ -2616,8 +2723,8 @@ std::vector<SettingsRow> mods_page(const RenderConfig& render) {
                                     save_mods();
                                 }
                             },
-                            other_region ? std::string("FOR ANOTHER REGION'S DISC: THIS ONE MAY NOT WORK. APPLIES AT THE NEXT START")
-                                         : mods_ui_text(option.section, 30u) + ": A RIIVOLUTION OPTION. APPLIES AT THE NEXT START"});
+                            other_region ? std::string("MADE FOR ANOTHER REGION'S DISC: IT MAY NOT WORK WITH THIS ONE")
+                                         : mods_ui_text(option.section, 30u)});
         }
         // Text in the language played: the mod's own (in a language it has) or the game's.
         const bool covers = std::find(mod.languages.begin(), mod.languages.end(), playing) != mod.languages.end();
@@ -2633,62 +2740,37 @@ std::vector<SettingsRow> mods_page(const RenderConfig& render) {
                                 s_mods[i].own_text = !s_mods[i].own_text;
                                 save_mods();
                             },
-                            "THIS MOD HAS NO " + language_name(playing) +
-                                " TEXT: ITS OWN FITS ITS CHANGES, THE GAME'S MAY NOT. APPLIES AT THE NEXT START"});
+                            "THIS MOD HAS NO " + language_name(playing) + " TEXT. ITS OWN TEXT MATCHES ITS CHANGES"});
         }
-        char order[32]{};
-        std::snprintf(order, sizeof(order), "#%zu OF %zu", i + 1u, mods.size());
-        const bool moving = s_mod_moving == mod.id;
-        SettingsRow place{"  PLACE", moving ? std::string("MOVING: UP OR DOWN") : std::string(order),
-                          [i](RenderConfig&, int delta) {
-                              const std::lock_guard<std::mutex> change_lock(s_mods_mutex);
-                              if (delta > 0 && i < s_mods.size() && s_mods.size() > 1u) s_mod_moving = s_mods[i].id;
-                          },
-                          moving ? std::string("UP OR DOWN MOVES IT, RIGHT PUTS IT DOWN")
-                                 : std::string("PRESS RIGHT TO PICK IT UP: THE HIGHER MOD WINS WHERE TWO CHANGE THE SAME "
-                                               "FILE OR TEXTURE")};
-        place.key = "place:" + mod.id;
-        rows.push_back(std::move(place));
-        const bool armed = s_mod_remove_armed == mod.id;
-        rows.push_back({"  REMOVE", armed ? "PRESS RIGHT AGAIN" : "PRESS RIGHT",
-                        [i](RenderConfig&, int delta) {
-                            const std::lock_guard<std::mutex> change_lock(s_mods_mutex);
-                            if (i >= s_mods.size()) return;
-                            if (delta <= 0) {
-                                s_mod_remove_armed.clear();
-                                return;
-                            }
-                            if (s_mod_remove_armed != s_mods[i].id) {
-                                s_mod_remove_armed = s_mods[i].id;
-                                return;
-                            }
-                            std::string message;
-                            galaxy::mods::remove_mod(galaxy::mods::mods_folder(), s_mods[i].id, &message);
-                            std::cerr << "[mods] " << message << '\n';
-                            {
-                                const std::lock_guard<std::mutex> import_lock(s_mod_import_mutex);
-                                s_mod_import_message = message;
-                            }
-                            s_mod_remove_armed.clear();
-                            s_mods = galaxy::mods::scan_mods();
-                            s_mods_scanned = true;
-                            apply_live_mods();
-                        },
-                        "TO THE RECYCLE BIN (PRESS TWICE). APPLIES AT THE NEXT START"});
+        if (enabled_count > 1u) {
+            char order[32]{};
+            std::snprintf(order, sizeof(order), "#%zu OF %zu", i + 1u, enabled_count);
+            const bool moving = s_mod_moving == mod.id;
+            SettingsRow place{"  PLACE", moving ? std::string("MOVING: UP OR DOWN") : std::string(order),
+                              [i](RenderConfig&, int delta) {
+                                  const std::lock_guard<std::mutex> change_lock(s_mods_mutex);
+                                  if (delta > 0 && i < s_mods.size() && s_mods[i].enabled) s_mod_moving = s_mods[i].id;
+                              },
+                              moving ? std::string("UP OR DOWN MOVES IT, RIGHT PUTS IT DOWN")
+                                     : std::string("PRESS RIGHT TO MOVE IT. A HIGHER MOD WINS A CONFLICT")};
+            place.key = "place:" + mod.id;
+            rows.push_back(std::move(place));
+        }
+        rows.push_back(remove_row(i, mod.id));
     }
     rows.push_back({"FOLDER", {}, nullptr, {}, true});
     rows.push_back({"OPEN MODS FOLDER", "PRESS RIGHT",
                     [](RenderConfig&, int delta) {
                         if (delta > 0) open_folder_in_explorer(galaxy::mods::mods_folder());
                     },
-                    "RIIVOLUTION MODS AS ON AN SD CARD, FILES/ IN THE DISC'S LAYOUT, TEXTURES/ PACKS"});
+                    "WHERE NEBULA KEEPS MODS"});
     rows.push_back({"RESCAN MODS FOLDER", "PRESS RIGHT",
                     [](RenderConfig&, int delta) {
                         if (delta <= 0) return;
                         const std::lock_guard<std::mutex> change_lock(s_mods_mutex);
                         s_mods_scanned = false;
                     },
-                    "READS THE MODS FOLDER AGAIN (MODS ADDED OR REMOVED)"});
+                    "AFTER ADDING OR REMOVING MODS IN THE FOLDER"});
     const galaxy::mods::SessionMods session = galaxy::mods::session_mods();
     char summary[64]{};
     std::snprintf(summary, sizeof(summary), "%zu ON, %u FILE CHANGE%s", session.active.size(), session.files_changed,
@@ -2705,35 +2787,35 @@ std::vector<SettingsRow> mods_page(const RenderConfig& render) {
                         draft.texture_packs = next != 0u;
                         draft.texture_pack_preload = next == 2u;
                     },
-                    "ON LOADS EACH TEXTURE WHEN IT FIRST SHOWS, PRELOAD LOADS THE WHOLE PACK AT ONCE"});
+                    "ON LOADS TEXTURES AS THEY APPEAR. PRELOAD LOADS THEM ALL AT ONCE"});
     if (render.texture_packs) {
         const galaxy::gx::TexturePacks::Summary packs = galaxy::gx::TexturePacks::summary();
         char value[32]{};
         std::snprintf(value, sizeof(value), "%llu TEXTURES", static_cast<unsigned long long>(packs.textures));
-        std::string help = "IN THE MODS WITH TEXTURES (IMPORT A PACK AS A MOD; THE HIGHER WINS A TEXTURE)";
-        if (packs.levels != 0u) help += ", WITH " + std::to_string(packs.levels) + " HAND-MADE MIP LEVELS";
+        std::string help = "REPLACEMENT TEXTURES IN THE ENABLED MODS";
+        if (packs.levels != 0u) help += ", WITH " + std::to_string(packs.levels) + " MIP LEVELS";
         if (!packs.unreadable.empty()) {
             help += ". " + std::to_string(packs.unreadable.size()) + " FILE NAME" +
                     (packs.unreadable.size() == 1u ? " IS" : "S ARE") + " NOT TEXTURE NAMES: " +
                     mods_ui_text(packs.unreadable.front(), 48u);
         }
-        rows.push_back({"  IN THE PACKS", packs.indexed ? std::string(value) : std::string("READING"), nullptr, help});
+        rows.push_back({"  REPLACEMENTS", packs.indexed ? std::string(value) : std::string("READING"), nullptr, help});
     }
 
     rows.push_back({"DUMP TEXTURES", render.texture_dump ? "ON" : "OFF",
                     [](RenderConfig& draft, int) { draft.texture_dump = !draft.texture_dump; },
-                    "SAVES EACH TEXTURE THE GAME SHOWS AS A PNG, NAMED FOR PACKS (FOR MAKING ONE)"});
+                    "SAVES EVERY TEXTURE THE GAME SHOWS, FOR MAKING A PACK"});
     rows.push_back({"OPEN TEXTURE DUMPS FOLDER", "PRESS RIGHT",
                     [](RenderConfig&, int delta) {
                         if (delta > 0) open_folder_in_explorer(texture_dump_directory());
                     },
-                    "THE DUMPED TEXTURES, IN AN RMGE01 FOLDER"});
+                    "WHERE DUMPED TEXTURES GO"});
     rows.push_back({"MOVIES", {}, nullptr, {}, true});
     rows.push_back({"OPEN MOVIES FOLDER", "PRESS RIGHT",
                     [](RenderConfig&, int delta) {
                         if (delta > 0) open_folder_in_explorer(movie_directory());
                     },
-                    "HD VIDEOS NAMED AS THE GAME'S MOVIES (PROLOGUEA.MP4) PLAY IN THEIR PLACE"});
+                    "VIDEOS NAMED LIKE THE GAME'S (PROLOGUEA.MP4) PLAY INSTEAD"});
     return rows;
 }
 
@@ -3883,6 +3965,37 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
             s_native_settings_row.store(0u, std::memory_order_relaxed);
             set_native_settings_visible(true);
         }
+        // GALAXY_TEST_SETTINGS_KEYS=<present>:<key>,...: keys pressed in the menu at those presents (up, down, left,
+        // right, enter, esc).
+        static const std::vector<std::pair<unsigned long, WPARAM>> test_keys = [] {
+            std::vector<std::pair<unsigned long, WPARAM>> keys;
+            char value[512]{};
+            std::size_t length = 0u;
+            if (getenv_s(&length, value, sizeof(value), "GALAXY_TEST_SETTINGS_KEYS") != 0 || length <= 1u) return keys;
+            static constexpr std::pair<std::string_view, WPARAM> kNames[] = {
+                {"up", VK_UP}, {"down", VK_DOWN}, {"left", VK_LEFT}, {"right", VK_RIGHT}, {"enter", VK_RETURN},
+                {"esc", VK_ESCAPE}};
+            std::string_view rest(value);
+            while (!rest.empty()) {
+                const std::size_t comma = rest.find(',');
+                const std::string_view item = rest.substr(0, comma);
+                rest = comma == std::string_view::npos ? std::string_view() : rest.substr(comma + 1u);
+                const std::size_t colon = item.find(':');
+                if (colon == std::string_view::npos) continue;
+                const unsigned long at = std::strtoul(std::string(item.substr(0, colon)).c_str(), nullptr, 10);
+                for (const auto& [name, key] : kNames) {
+                    if (item.substr(colon + 1u) == name) keys.emplace_back(at, key);
+                }
+            }
+            return keys;
+        }();
+        static unsigned long key_presents = 0u;
+        static std::size_t next_key = 0u;
+        ++key_presents;
+        while (next_key < test_keys.size() && key_presents >= test_keys[next_key].first) {
+            handle_native_settings_key(test_keys[next_key].second, false);
+            ++next_key;
+        }
     }
     if (!s_native_settings_visible.load(std::memory_order_relaxed)) {
         return;
@@ -3993,12 +4106,10 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
         ui_rect(renderer, track_x, thumb_y, 4, thumb_h, accent);
     }
     // Rows: the label on the left, the value on the right between arrows where it can change;
-    // section headings in the accent colour.
-    const auto text_width = [](const std::string& line, int glyph_scale) {
-        int width = 0;
-        for (const char ch : line) width += (ch == ' ' ? 4 : 6) * glyph_scale;
-        return width;
-    };
+    // section headings in the accent colour. A value takes up to three fifths of the row, the label the rest.
+    const int row_left = panel_x + 70;
+    const int row_right = panel_x + panel_w - 48;
+    const int row_gap = 12 * scale;
     const bool page_tab = settings_page_tab(tab);
     const std::vector<SettingsRow> page =
         page_tab ? settings_page(tab, row_render, row_runtime, row_caps) : std::vector<SettingsRow>{};
@@ -4024,9 +4135,10 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
             }
         }
         if (heading) {
+            label = ui_fit_text(std::move(label), scale, row_right - (panel_x + 36));
+            const int rule_x = panel_x + 44 + ui_text_width(label, scale);
             ui_text(renderer, panel_x + 36, y, scale, label, accent);
-            ui_rect(renderer, panel_x + 44 + text_width(label, scale), y + scale * 3, panel_w - 92 - text_width(label, scale),
-                    std::max(1, scale / 2), muted);
+            if (row_right - rule_x > 0) ui_rect(renderer, rule_x, y + scale * 3, row_right - rule_x, std::max(1, scale / 2), muted);
             continue;
         }
         if (row == selected_row) {
@@ -4040,12 +4152,17 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
                 selected);
             ui_text(renderer, panel_x + 36, y, scale, ">", accent);
         }
-        ui_text(renderer, panel_x + 70, y, scale, label, changes ? text : muted);
+        int value_x = row_right;
         if (!value.empty()) {
-            const std::string shown = changes && row == selected_row ? "< " + value + " >" : value;
-            ui_text(renderer, panel_x + panel_w - 48 - text_width(shown, scale), y, scale, shown,
-                    row == selected_row ? accent : (changes ? text : muted));
+            const bool arrows = changes && row == selected_row;
+            const int arrow_width = arrows ? ui_text_width("<  >", scale) : 0;
+            const std::string fitted = ui_fit_text(value, scale, (row_right - row_left) * 3 / 5 - arrow_width);
+            const std::string shown = arrows ? "< " + fitted + " >" : fitted;
+            value_x = row_right - ui_text_width(shown, scale);
+            ui_text(renderer, value_x, y, scale, shown, row == selected_row ? accent : (changes ? text : muted));
+            value_x -= row_gap;
         }
+        ui_text(renderer, row_left, y, scale, ui_fit_text(std::move(label), scale, value_x - row_left), changes ? text : muted);
     }
 
     const int footer_y = layout.footer_y;
@@ -4101,7 +4218,8 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
         status = help;
     }
     if (!status.empty()) {
-        ui_text(renderer, panel_x + 28, footer_y, footer_scale, status, status_color);
+        ui_text(renderer, panel_x + 28, footer_y, footer_scale, ui_fit_text(std::move(status), footer_scale, panel_w - 56),
+                status_color);
     }
     ui_text(
         renderer,

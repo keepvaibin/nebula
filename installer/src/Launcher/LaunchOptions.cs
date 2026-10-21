@@ -18,6 +18,24 @@ namespace Nebula.Launcher
         /// </summary>
         public static ProcessStartInfo Create(string app, string content, string saves, RecordingMode recording)
         {
+            string native = Path.Combine(app, "NebulaNative.exe");
+            if (File.Exists(native))
+            {
+                // Nebula 2 (the native game): the disc image and the saves on its command line; settings, mods and
+                // shaders in its own data folder.
+                var game = new ProcessStartInfo(native,
+                    "--pak " + ProcessRunner.Quote(Path.Combine(content, "game.pak")) + " --nand " + ProcessRunner.Quote(saves));
+                game.UseShellExecute = false;
+                game.CreateNoWindow = true;
+                game.WorkingDirectory = app;
+                game.RedirectStandardOutput = game.RedirectStandardError = recording != RecordingMode.None;
+                if (game.RedirectStandardOutput) game.StandardOutputEncoding = game.StandardErrorEncoding = Encoding.UTF8;
+                foreach (var name in game.EnvironmentVariables.Keys.Cast<string>().Where(n => n.StartsWith("GALAXY_", StringComparison.OrdinalIgnoreCase)).ToList())
+                    game.EnvironmentVariables.Remove(name);
+                game.EnvironmentVariables["GALAXY_STREAMLINE_DIR"] = GraphicsSettings.StreamlineDir;
+                ApplyRecording(game, recording);
+                return game;
+            }
             var start = new ProcessStartInfo(Path.Combine(app, "NebulaRuntime.exe"),
                 ProcessRunner.Quote(content) + " " + ProcessRunner.Quote(Path.Combine(app, "RMGE01_game.dll")));
             start.UseShellExecute = false;

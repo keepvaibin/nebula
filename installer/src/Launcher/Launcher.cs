@@ -360,14 +360,24 @@ namespace Nebula.Launcher
             };
             Controls.Add(intro);
 
-            var tabs = new TabControl { Location = new Point(12, 54), Size = new Size(736, 560) };
+            var tabs = new TabControl { Location = new Point(12, 54), Size = new Size(736, 560), SizeMode = TabSizeMode.Fixed };
             var display = new TabPage("Display");
             var image = new TabPage("Graphics");
             var sound = new TabPage("Audio");
             var input = new TabPage("Controls");
             var generalPage = new TabPage("General");
             var advanced = new TabPage("Advanced");
-            tabs.TabPages.AddRange(new[] { display, image, input, sound, generalPage, advanced });
+            var pages = new List<TabPage> { display, image, input, sound, generalPage };
+            if (ModsPage.Available(session.App))
+            {
+                // Nebula 2: the game's mods list (the game reads and imports them: ModsPage). Added with the others:
+                // TabPages.Insert is ignored before the control has a window.
+                var modsTab = new TabPage("Mods");
+                pages.Add(modsTab);
+                new ModsPage(modsTab, session.App, session.Content);
+            }
+            pages.Add(advanced);
+            tabs.TabPages.AddRange(pages.ToArray());
             Controls.Add(tabs);
 
             int y = 16;
@@ -377,12 +387,6 @@ namespace Nebula.Launcher
                 Row(display, "Graphics card", gpuBox, ref y);
                 gpuBox.Items.Add("Automatic (" + gpus[0].Name + ")");
                 foreach (var gpu in gpus) gpuBox.Items.Add(GpuAdapters.Label(gpus, gpu));
-                display.Controls.Add(new Label
-                {
-                    Text = "The game starts on this graphics card. While it is running, a change applies the next time it starts.",
-                    Location = new Point(12, y - 8), Size = new Size(700, 26), ForeColor = SystemColors.GrayText
-                });
-                y += 28;
             }
             Row(display, "Monitor", monitor, ref y);
             displayNotice.Location = new Point(12, y - 8);
@@ -481,20 +485,16 @@ namespace Nebula.Launcher
             textSpeed.Items.AddRange(GeneralSettings.TextSpeeds);
             Row(generalPage, "Language", languageBox, ref y);
             languageBox.Items.AddRange(GeneralSettings.Languages);
-            generalPage.Controls.Add(new Label
-            {
-                Text = "The game starts in this language. While it is running, a change applies the next time it starts.",
-                Location = new Point(12, y + 3), Size = new Size(700, 26), ForeColor = SystemColors.GrayText
-            });
 
             y = 16;
             Label(advanced, "Game content", 12, y + 3);
-            contentLabel.Location = new Point(200, y + 3);
-            contentLabel.Size = new Size(380, 26);
-            contentLabel.AutoEllipsis = true;
-            advanced.Controls.Add(contentLabel);
             Button(advanced, "Change…", 590, y, 120).Click += delegate { ChooseContent(); };
-            y += 44;
+            contentLabel.Location = new Point(12, y + 36);
+            contentLabel.Size = new Size(700, 26);
+            contentLabel.AutoEllipsis = true;
+            contentLabel.ForeColor = SystemColors.GrayText;
+            advanced.Controls.Add(contentLabel);
+            y += 76;
             Label(advanced, "Recording (next launch)", 12, y + 3);
             recording.Items.AddRange(new[] { "No recording", "Lightweight recording", "Detailed recording" });
             Combo(advanced, recording, 320, y);
@@ -597,6 +597,8 @@ namespace Nebula.Launcher
                 RefreshFrameRateChoices();
             };
             UiScale.Apply(this);
+            // Tab headers are not scaled with the form.
+            using (var g = CreateGraphics()) tabs.ItemSize = new Size((int)(98 * g.DpiX / 96f), (int)(28 * g.DpiY / 96f));
             // After scaling: the notice moves the rows below it by its measured height.
             RefreshDisplayNotice();
         }
@@ -627,7 +629,7 @@ namespace Nebula.Launcher
             y += 40;
 
             bindingList.Location = new Point(12, y);
-            bindingList.Size = new Size(440, 434 - y - 8);
+            bindingList.Size = new Size(440, 518 - y);
             bindingList.View = View.Details;
             bindingList.FullRowSelect = true;
             bindingList.MultiSelect = false;
@@ -635,6 +637,12 @@ namespace Nebula.Launcher
             bindingList.HeaderStyle = ColumnHeaderStyle.Nonclickable;
             bindingList.Columns.Add("Wii input", 170);
             bindingList.Columns.Add("Bound to", 226);
+            bindingList.ClientSizeChanged += delegate
+            {
+                int width = bindingList.ClientSize.Width - 1;
+                bindingList.Columns[0].Width = width * 2 / 5;
+                bindingList.Columns[1].Width = width - bindingList.Columns[0].Width;
+            };
             for (int t = 0; t < ControlsSettings.TargetCount; t++)
                 bindingList.Items.Add(new ListViewItem(new[] { ControlsSettings.TargetLabels[t], "" }));
             bindingList.DoubleClick += delegate { StartCapture(); };
@@ -666,7 +674,7 @@ namespace Nebula.Launcher
             TuningRow(page, "Pointer speed", pointerSpeed, x, ref y, 0.2m, 6.0m, 0.2m, 1);
             TuningRow(page, "Stick deadzone %", stickDeadzone, x, ref y, 0m, 50m, 2m, 0);
             TuningRow(page, "Pointer stick deadzone %", pointerDeadzone, x, ref y, 0m, 50m, 2m, 0);
-            TuningRow(page, "Hide still pointer, s", pointerHide, x, ref y, 0m, 30m, 1m, 0);
+            TuningRow(page, "Hide idle pointer (s)", pointerHide, x, ref y, 0m, 30m, 1m, 0);
             invertPointer.Text = "Invert pointer Y";
             invertPointer.Location = new Point(x, y);
             invertPointer.Size = new Size(250, 24);
@@ -1236,7 +1244,7 @@ namespace Nebula.Launcher
             }
             else
             {
-                using (var dialog = new FolderBrowserDialog { Description = "Choose a Nebula saves folder, or Dolphin's save folder for Super Mario Galaxy (the folder that holds GameData.bin; in Dolphin, right-click the game and choose Open Wii Save Folder).", ShowNewFolderButton = false })
+                using (var dialog = new FolderBrowserDialog { Description = "A Nebula saves folder, or Dolphin's Super Mario Galaxy save folder (with GameData.bin)", ShowNewFolderButton = false })
                     if (dialog.ShowDialog(this) == DialogResult.OK) source = dialog.SelectedPath;
             }
             if (source == null) return;

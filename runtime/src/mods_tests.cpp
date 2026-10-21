@@ -255,6 +255,23 @@ bool riivolution() {
         ok &= expect(read_file(third->disc, third->fst, p.bytes.data(), "/StageData/A.arc") == "FILES",
                      "the mod on top in the new order wins");
     }
+    // Turned off: after the enabled mods, by name; turned on: the top.
+    {
+        std::vector<galaxy::mods::ModInfo> two = galaxy::mods::scan_mods();
+        const auto ids = [&] {
+            std::string out;
+            for (const auto& m : two) out += m.id + (m.enabled ? "+" : "-") + std::to_string(m.order) + ",";
+            return out;
+        };
+        galaxy::mods::set_mod_enabled(two, 0, false);
+        galaxy::mods::set_mod_enabled(two, 0, false);
+        ok &= expect(ids() == "3 Other+1,1 Riiv-2,2 Files-3,", "disabled mods by name, after the enabled ones");
+        galaxy::mods::set_mod_enabled(two, 2, true);
+        ok &= expect(ids() == "2 Files+1,3 Other+2,1 Riiv-3,", "an enabled mod goes on top");
+        ok &= expect(galaxy::mods::save_mod_settings(two), "on/off saved");
+        two = galaxy::mods::scan_mods();
+        ok &= expect(ids() == "2 Files+1,3 Other+2,1 Riiv-3,", "the lists as saved");
+    }
     // Every mod off: nothing applies.
     for (auto& m : list) m.enabled = false;
     ok &= expect(galaxy::mods::save_mod_settings(list), "all off saved");

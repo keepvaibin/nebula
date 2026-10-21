@@ -69,7 +69,7 @@ namespace Nebula.Launcher
             if (target == null || string.IsNullOrEmpty(monitorDevice) || target.Drives(monitorDevice)) return null;
             GpuAdapter connected = adapters.Find(adapter => adapter.Drives(monitorDevice));
             if (connected == null) return null;
-            return string.Format("This display is connected to the {0}, so each frame is copied to it from the {1}.",
+            return string.Format("Connected to the {0}; frames are copied from the {1}.",
                                  Label(adapters, connected), Label(adapters, target));
         }
 

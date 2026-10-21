@@ -64,6 +64,7 @@ inline int64_t perf_hint_retrace() noexcept { return 0; }
 #include <deque>
 #include <exception>
 #include <filesystem>
+#include <fstream>
 #include <functional>
 #include <mutex>
 #include <span>
@@ -2314,7 +2315,34 @@ std::string utf8_of(const fs::path& path) {
     return std::string(reinterpret_cast<const char*>(text.data()), text.size());
 }
 
-// The launcher's mod tools: NebulaNative --import-mod <folder or archive>... or --list-mods [--game <id>]; the mods
+// The game id and main.dol from Setup's game.pak, read without mapping it; false (and nothing changed) for a file that
+// is not one: the tools then work without it.
+bool read_game_dol(const fs::path& path, std::string& id, std::vector<std::uint8_t>& dol) {
+    std::ifstream file(path, std::ios::binary);
+    std::uint8_t boot[0x440];
+    if (!file.read(reinterpret_cast<char*>(boot), sizeof(boot))) return false;
+    const std::uint64_t offset = (std::uint64_t)load_be32(boot + 0x420) << 2;
+    std::uint8_t header[0x100];
+    if (!file.seekg((std::streamoff)offset) || !file.read(reinterpret_cast<char*>(header), sizeof(header))) return false;
+    std::uint64_t end = 0x100;
+    for (int s = 0; s < 18; s++) {
+        const std::uint32_t size = load_be32(header + 0x90 + s * 4);
+        const std::uint64_t section_end = (std::uint64_t)load_be32(header + s * 4) + size;
+        if (size != 0 && section_end > end) end = section_end;
+    }
+    // main.dol is a few megabytes; a larger one is not a game.pak.
+    if (end > (64u << 20)) return false;
+    std::vector<std::uint8_t> bytes((std::size_t)end);
+    if (!file.seekg((std::streamoff)offset) || !file.read(reinterpret_cast<char*>(bytes.data()), (std::streamsize)end)) {
+        return false;
+    }
+    id.assign(reinterpret_cast<const char*>(boot), 6);
+    dol = std::move(bytes);
+    return true;
+}
+
+// The launcher's mod tools: NebulaNative --import-mod <folder or archive>... or --list-mods [--game <id>] [--pak
+// <game.pak>]; the mods
 // folder beside the settings (as the game uses it). One JSON line on stdout; exit code 0 when everything succeeded.
 int run_mods_tool() {
     std::vector<fs::path> args;
@@ -2328,9 +2356,18 @@ int run_mods_tool() {
     std::string game_id = "RMGE01";
     std::vector<fs::path> sources;
     const bool list = !args.empty() && args[0] == "--list-mods";
+    const bool remove = !args.empty() && args[0] == "--remove-mod";
     for (std::size_t i = 1; i < args.size(); ++i) {
         if (args[i] == "--game" && i + 1u < args.size()) {
             game_id = utf8_of(args[++i]);
+        } else if (args[i] == "--pak" && i + 1u < args.size()) {
+            // The game's own disc: its id and main.dol (another release's patches are then told apart).
+            std::string id;
+            std::vector<std::uint8_t> dol;
+            if (read_game_dol(args[++i], id, dol)) {
+                game_id = id;
+                galaxy::mods::set_game_dol(dol);
+            }
         } else {
             sources.push_back(args[i]);
         }
@@ -2343,6 +2380,13 @@ int run_mods_tool() {
     std::error_code error;
     fs::create_directories(settings_folder / "mods", error);
     galaxy::mods::set_mods_folder(settings_folder / "mods", settings_folder / "mods.ini", game_id);
+    if (remove) {
+        std::string message;
+        const bool ok = !sources.empty() &&
+                        galaxy::mods::remove_mod(settings_folder / "mods", utf8_of(sources.front()), &message);
+        std::printf("{\"ok\":%s,\"message\":%s}\n", ok ? "true" : "false", json_text(message).c_str());
+        return ok ? 0 : 1;
+    }
     if (list) {
         std::string out = "{\"ok\":true,\"folder\":" + json_text(utf8_of(settings_folder / "mods")) + ",\"mods\":[";
         bool first = true;
@@ -2353,9 +2397,16 @@ int run_mods_tool() {
                    ",\"order\":" + std::to_string(mod.order) + ",\"riivolution\":" + (mod.riivolution ? "true" : "false") +
                    ",\"files\":" + ((mod.files || mod.loose) ? "true" : "false") + ",\"textures\":" +
                    (mod.textures ? "true" : "false") + ",\"movies\":" + (mod.movies ? "true" : "false") +
-                   ",\"code_patches\":" + std::to_string(mod.code_patches) + ",\"problem\":" + json_text(mod.problem) +
-                   ",\"languages\":[";
+                   ",\"code_patches\":" + std::to_string(mod.code_patches) + ",\"native_patches\":" +
+                   std::to_string(mod.native_patches) + ",\"problem\":" + json_text(mod.problem) + ",\"languages\":[";
             for (std::size_t l = 0; l < mod.languages.size(); ++l) out += (l ? "," : "") + json_text(mod.languages[l]);
+            out += "],\"overlaps\":[";
+            for (std::size_t o = 0; o < mod.overlaps.size(); ++o) {
+                const galaxy::mods::ModOverlap& overlap = mod.overlaps[o];
+                out += std::string(o ? "," : "") + "{\"other\":" + json_text(overlap.other) + ",\"above\":" +
+                       (overlap.other_above ? "true" : "false") + ",\"files\":" + std::to_string(overlap.files) +
+                       ",\"textures\":" + std::to_string(overlap.textures) + "}";
+            }
             out += "]}";
         }
         out += "]}";
@@ -2422,7 +2473,8 @@ int main(int argc, char** argv) {
     }
 #endif
 #if defined(NEBULA_HOST_RENDERER)
-    if (argc >= 2 && (std::strcmp(argv[1], "--import-mod") == 0 || std::strcmp(argv[1], "--list-mods") == 0)) {
+    if (argc >= 2 && (std::strcmp(argv[1], "--import-mod") == 0 || std::strcmp(argv[1], "--list-mods") == 0 ||
+                      std::strcmp(argv[1], "--remove-mod") == 0)) {
         return run_mods_tool();
     }
 #endif

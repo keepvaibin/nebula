@@ -12,13 +12,13 @@ namespace Nebula.Launcher
     /// </summary>
     internal sealed class GeneralSettings
     {
-        public static readonly string[] TextSpeeds = { "1x (original)", "2x", "3x" };
+        public static readonly string[] TextSpeeds = { "1x (original)", "2x", "3x", "Instant" };
 
         /// <summary>The game's three languages, each in its own name, and their runtime_settings.ini values.</summary>
         public static readonly string[] Languages = { "English", "Français", "Español" };
         private static readonly string[] LanguageKeys = { "english", "french", "spanish" };
 
-        /// <summary>Steps of dialogue text revealed per frame, 1 to 3.</summary>
+        /// <summary>Steps of dialogue text revealed per frame, 1 to 3; 4 shows each page at once.</summary>
         public int TextSpeed = 1;
 
         /// <summary>Index into <see cref="Languages"/>; the game starts in it.</summary>
@@ -38,7 +38,7 @@ namespace Nebula.Launcher
                 string key = line.Substring(0, equals).Trim();
                 string value = line.Substring(equals + 1).Trim();
                 int speed;
-                if (key == "text_speed" && int.TryParse(value, out speed) && speed >= 1 && speed <= 3)
+                if (key == "text_speed" && int.TryParse(value, out speed) && speed >= 1 && speed <= 4)
                     settings.TextSpeed = speed;
                 if (key == "language")
                 {
@@ -57,7 +57,7 @@ namespace Nebula.Launcher
         {
             return new List<KeyValuePair<string, string>>
             {
-                new KeyValuePair<string, string>("text_speed", Math.Max(1, Math.Min(TextSpeed, 3)).ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                new KeyValuePair<string, string>("text_speed", Math.Max(1, Math.Min(TextSpeed, 4)).ToString(System.Globalization.CultureInfo.InvariantCulture)),
                 new KeyValuePair<string, string>("language", LanguageKeys[Math.Max(0, Math.Min(Language, LanguageKeys.Length - 1))]),
             };
         }

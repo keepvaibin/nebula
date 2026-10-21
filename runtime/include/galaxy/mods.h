@@ -111,11 +111,17 @@ void set_mods_folder(const std::filesystem::path& folder, const std::filesystem:
 [[nodiscard]] std::filesystem::path mods_folder();
 // The game set_mods_folder named (boot.bin's six characters; empty before).
 [[nodiscard]] std::string mods_game_id();
-// The mods found and their saved choices (Riivolution defaults where none is saved), in load order; for the game
-// set_mods_folder named when `game_id` is empty.
+// main.dol as this game has it, for scans before apply_mods (which sets it too): a patch's `original` bytes tell
+// another release's patches from this one's.
+void set_game_dol(std::span<const std::uint8_t> dol);
+// The mods found and their saved choices (Riivolution defaults where none is saved): the enabled ones in load order
+// (the first wins), then the disabled ones by name; for the game set_mods_folder named when `game_id` is empty.
 [[nodiscard]] std::vector<ModInfo> scan_mods(const std::string& game_id = {});
 // Saves the mods' order, on/off state and choices (for the next start); false when the file could not be written.
 bool save_mod_settings(std::span<const ModInfo> mods);
+// A mod of a scan_mods list turned on (to the top of the enabled ones) or off (among the disabled ones by name); the
+// orders renumbered.
+void set_mod_enabled(std::vector<ModInfo>& mods, std::size_t index, bool enabled);
 
 // The enabled mods applied to the game partition (its file table, main.dol) for game `game_id` (boot.bin's first six
 // characters), revision and disc number. Null when no mod changes anything.
