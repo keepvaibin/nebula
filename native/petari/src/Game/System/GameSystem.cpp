@@ -274,7 +274,8 @@ void GameSystem::updateSceneController() {
     }
 
 #ifdef TARGET_PC
-    // The cutscene skip's question holds the scene still, as the HOME Menu does (a movie resumes in step after it).
+    // The cutscene skip's question and its fade out hold the scene still, as the HOME Menu does (a movie resumes in
+    // step after it).
     const bool isSkipPrompt = NebulaCutsceneSkip::isFreezingScene();
     if (isSkipPrompt) {
         isSceneUpdate = false;
@@ -296,6 +297,12 @@ void GameSystem::updateSceneController() {
 
         mSceneController->updateScene();
     }
+#ifdef TARGET_PC
+    else if (isSkipPrompt && mSystemWipeHolder != nullptr) {
+        // The skip's fade to black runs over the held scene.
+        mSystemWipeHolder->movement();
+    }
+#endif
 
     if (isResetProcessing) {
         mSceneController->updateSceneDuringResetProcessing();

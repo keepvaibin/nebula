@@ -93,8 +93,8 @@ namespace Nebula.Setup
 
     internal static class Running
     {
-        /// <summary>The game, the launcher and Nebula Settings.</summary>
-        public static readonly string[] Programs = { "NebulaRuntime", "Nebula", "NebulaSettings" };
+        /// <summary>The game (recompiled or native), the launcher and Nebula Settings.</summary>
+        public static readonly string[] Programs = { "NebulaRuntime", "NebulaNative", "Nebula", "NebulaSettings" };
 
         /// <summary>The first of <paramref name="names"/> running from inside <paramref name="folder"/>, as "Nebula.exe (pid)"; null when none.</summary>
         public static string Find(string folder, params string[] names)
@@ -143,6 +143,8 @@ namespace Nebula.Setup
         {
             string app = layout.VersionDir(version);
             var failures = new List<string>();
+            // Automated tests (NEBULA_DATA_ROOT) install into their own folders: the user's shortcuts and registry stay.
+            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("NEBULA_DATA_ROOT"))) return failures;
             Action<string, string, string, string, string> link = (path, target, arguments, directory, description) =>
             {
                 try { Shortcut(path, target, arguments, directory, description); }

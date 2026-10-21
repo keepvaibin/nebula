@@ -16,6 +16,21 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#ifdef TARGET_PC
+#include "Game/System/NebulaCutsceneSkip.hpp"
+#endif
+
+namespace {
+    // A skipped star return (NebulaCutsceneSkip) closes each panel as soon as it is up.
+    bool isTriggerDecide() {
+#ifdef TARGET_PC
+        if (NebulaCutsceneSkip::isSkipping()) {
+            return true;
+        }
+#endif
+        return MR::testSystemPadTriggerDecide();
+    }
+};  // namespace
 
 namespace {
     const char cMessageIdGetNormalStar[] = "System_Result000";
@@ -81,7 +96,7 @@ void DisplayInformationForResult::exeAppear() {
 }
 
 void DisplayInformationForResult::exeDisplay() {
-    if (MR::testSystemPadTriggerDecide()) {
+    if (isTriggerDecide()) {
         MR::startSystemSE("SE_SY_TALK_OK");
         MR::startCSSound("CS_CLICK_CLOSE", nullptr, 0);
         setNerve(GET_NERVE_ANON(DisplayInformationForResultDisappear));
@@ -173,7 +188,7 @@ void StageResultInformer::exeCountUpPowerStar() {
         MR::emitEffect(this, "ResultStarCounter");
     }
 
-    if (MR::testSystemPadTriggerDecide()) {
+    if (isTriggerDecide()) {
         _30 = true;
     }
 
@@ -289,7 +304,7 @@ void StageResultInformer::exeDisplayGetStarPiece() {
         MR::startAnim(this, "Flash", 0);
     }
 
-    if (MR::testSystemPadTriggerDecide()) {
+    if (isTriggerDecide()) {
         MR::startSystemSE("SE_SY_TALK_OK");
 
         if (hasStarPiece) {
@@ -420,7 +435,7 @@ void StageResultInformer::decideNextNerve() {
 }
 
 bool StageResultInformer::tryWaitSystemPadTriggerDecide(const Nerve* pNerve) {
-    if (MR::testSystemPadTriggerDecide() || _30) {
+    if (isTriggerDecide() || _30) {
         _30 = false;
 
         setNerve(pNerve);
@@ -433,7 +448,7 @@ bool StageResultInformer::tryWaitSystemPadTriggerDecide(const Nerve* pNerve) {
 }
 
 bool StageResultInformer::tryWaitIntervalBeforeKeyWait(const Nerve* pNerve, int step) {
-    if (MR::testSystemPadTriggerDecide()) {
+    if (isTriggerDecide()) {
         _30 = true;
     }
 

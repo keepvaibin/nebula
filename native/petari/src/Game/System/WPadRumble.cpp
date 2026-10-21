@@ -3,6 +3,9 @@
 #include "Game/System/WPadRumbleData.hpp"
 #include "Game/Util/GamePadUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
+#ifdef TARGET_PC
+#include "Game/System/NebulaCutsceneSkip.hpp"
+#endif
 
 WPadRumble** WPadRumble::sInstanceForCallback;
 
@@ -95,6 +98,20 @@ void WPadRumble::stop() {
 }
 
 void WPadRumble::update() {
+#ifdef TARGET_PC
+    // A cutscene running unseen (NebulaCutsceneSkip) does not rumble.
+    if (NebulaCutsceneSkip::isSkipping()) {
+        bool isActive = _8;
+        for (u8 i = 0; i < ARRAY_SIZE(mChannel); i++) {
+            isActive |= mChannel[i]._0 != nullptr;
+        }
+        if (isActive) {
+            stop();
+        }
+        return;
+    }
+#endif
+
     if (_BC > 0) {
         _BC--;
 

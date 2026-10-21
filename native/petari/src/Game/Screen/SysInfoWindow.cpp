@@ -6,6 +6,9 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <cstdio>
+#ifdef TARGET_PC
+#include <nw4r/lyt/textBox.h>
+#endif
 
 namespace {
     const MessageChangeFuncTableEntry cMessageChangeFuncTable[] = {
@@ -175,13 +178,25 @@ void SysInfoWindow::control() {
 }
 
 #ifdef TARGET_PC
-// A Yes/No question of Nebula's own (the cutscene skip): its text as given, the answers as init set them (the save
-// prompt's Yes and No, in the played language).
+namespace {
+    // Lines centred in a box centred in its pane, as the game's own questions are.
+    class TextBoxRecursiveCenter : public TextBoxRecursiveOperation {
+    public:
+        virtual void execute(nw4r::lyt::TextBox* pTextBox) const {
+            pTextBox->SetTextPositionH(1);
+            pTextBox->SetTextPositionV(1);
+            pTextBox->mBits.textAlignment = 2;
+        }
+    };
+};  // namespace
+
+// A Yes/No question of Nebula's own (the cutscene skip): its text as given, centred; the answers as init set them (the
+// save prompt's Yes and No, in the played language).
 void SysInfoWindow::appearYesNoWithText(const wchar_t* pText) {
     mType = Type_YesNo;
     MR::showPaneRecursive(this, "Left");
     MR::showPaneRecursive(this, "Right");
-    MR::setTextBoxVerticalPositionCenterRecursive(this, mTextParentPaneName);
+    MR::executeTextBoxRecursive(this, mTextParentPaneName, TextBoxRecursiveCenter());
     MR::setTextBoxMessageRecursive(this, mTextParentPaneName, pText);
     appear();
     mYesNoSelector->appear();

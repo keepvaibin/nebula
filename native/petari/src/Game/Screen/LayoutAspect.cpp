@@ -23,6 +23,7 @@ namespace {
         FitExtendUp = 1 << 8,    // a bar grows upward to the canvas top
         FitExtendDown = 1 << 9,  // a bar grows downward to the canvas bottom
         FitSlide = 1 << 10,      // slides further in proportion; width = its 16:9 off-screen x
+        FitFlipSlide = 1 << 11,  // the pane's animated vertical slide runs the other way, at every canvas
     };
 
     struct FitRule {
@@ -81,6 +82,10 @@ namespace {
         {"MiiSelect", "Arrow", FitSlide, 660.0f},
         {"MiiSelect", "MiiGroupA", FitSlide, 608.0f},
         {"MiiSelect", "MiiGroupB", FitSlide, 608.0f},
+        // The file select's Quit to desktop (NebulaQuitButton): its Start button in the top-left corner, sliding in
+        // from above as the file select's top buttons do.
+        {"NebulaQuitButton", "StartButton", FitLeft | FitTop},
+        {"NebulaQuitButton", "SButton", FitFlipSlide},
         {"P2Manual", "BG", FitWidth | FitHeight},
         {"PauseMenu", "BG", FitWidth | FitHeight},
         {"PauseMenu", "PicStagebase", FitWidth | FitExtendUp},
@@ -231,6 +236,11 @@ namespace {
         if (rRule.mFit & (FitExtendUp | FitExtendDown)) {
             extendVertical(pPane, rExtent.mVerticalDelta, (rRule.mFit & FitExtendUp) != 0);
         }
+        bool moved = false;
+        if ((rRule.mFit & FitFlipSlide) && pPane->mpParent != nullptr && pPane->mTranslate.y != 0.0f) {
+            translateBranch(pPane, 0.0f, -2.0f * pPane->mpParent->mGlbMtx._11 * pPane->mTranslate.y, 0);
+            moved = true;
+        }
         if (rRule.mFit & FitFrame) {
             // Window::DrawSelf reads the size when drawing and CalculateMtx never restores it: always from the
             // authored size.
@@ -248,7 +258,7 @@ namespace {
         }
         const f32 y = (rRule.mFit & FitTop) ? rExtent.mVerticalDelta : (rRule.mFit & FitBottom) ? -rExtent.mVerticalDelta : 0.0f;
         if (x == 0.0f && y == 0.0f) {
-            return false;
+            return moved;
         }
         translateBranch(pPane, x, y, 0);
         return true;
@@ -357,7 +367,7 @@ namespace LayoutAspect {
         for (s32 i = 0; i < pManager->mFitRuleCount; i++) {
             const FitRule& rule = static_cast< const FitRule* >(pManager->mFitRules)[i];
             nw4r::lyt::Pane* pPane = pManager->mFitPanes[i];
-            if (pPane == nullptr || (!enlarged && !(rule.mFit & FitFrame)) || !isDrawn(pPane, pRoot)) {
+            if (pPane == nullptr || (!enlarged && !(rule.mFit & (FitFrame | FitFlipSlide))) || !isDrawn(pPane, pRoot)) {
                 continue;
             }
             moved |= applyFit(pPane, rule, extent);

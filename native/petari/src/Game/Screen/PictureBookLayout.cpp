@@ -10,6 +10,9 @@
 #include "Game/Util/GamePadUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
+#ifdef TARGET_PC
+#include "Game/System/NebulaCutsceneSkip.hpp"
+#endif
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
@@ -698,6 +701,10 @@ void PictureBookLayout::exeWaitWithText() {
     } else {
         bool isTriggerNextPage =
             MR::testCorePadTriggerA(WPAD_CHAN0) || MR::testCorePadTriggerRight(WPAD_CHAN0) || MR::testSubPadStickTriggerRight(WPAD_CHAN0);
+#ifdef TARGET_PC
+        // A skipped reading (Rosalina's, a cutscene) turns each page as soon as it is up.
+        isTriggerNextPage = isTriggerNextPage || NebulaCutsceneSkip::isSkipping();
+#endif
 
         if (isTriggerNextPage) {
             MR::startSystemSE("SE_SY_TALK_FOCUS_ITEM");

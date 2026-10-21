@@ -115,6 +115,22 @@ void TalkStateEvent::clos() {
 }
 
 bool TalkStateEvent::talk(const TalkMessageCtrl* pArg1) {
+#ifdef TARGET_PC
+    // A skipped cutscene (NebulaCutsceneSkip): each page, shown whole, turns as soon as it is up; a question ends
+    // the skip with the question on screen.
+    if (NebulaCutsceneSkip::isSkipping()) {
+        if (!mBalloon->isTextAppearedAll()) {
+            return false;
+        }
+        if (TalkFunction::isSelectTalk(_04) && !mBalloon->hasNextPage()) {
+            NebulaCutsceneSkip::endForQuestion();
+            return true;
+        }
+        mPageCount++;
+        return !mBalloon->turnPage();
+    }
+#endif
+
     if (MR::testCorePadButtonA(0)) {
         if (_10++ > 10) {
             for (int i = 0; i < 2; i++) {

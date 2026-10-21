@@ -210,9 +210,35 @@ namespace Nebula.Setup
             }
         }
 
+        // ---- Nebula 2: the game ships compiled ------------------------------------
+
+        /// <summary>
+        /// A Nebula 2 package carries the game compiled (NebulaNative.exe and smg_game.dll): nothing is recompiled on
+        /// this PC, so it needs no compiler, no source and no game modules of its own.
+        /// </summary>
+        public static bool IsNativePackage
+        {
+            get
+            {
+                if (isNativePackage == null)
+                    isNativePackage = Assembly.GetExecutingAssembly().GetManifestResourceInfo("NebulaNative.exe") != null;
+                return isNativePackage.Value;
+            }
+        }
+
+        private static bool? isNativePackage;
+
+        /// <summary>What a Nebula 2 version folder holds (each from the package, by its published name).</summary>
+        private static readonly string[] NativeFiles =
+        {
+            "NebulaNative.exe", "smg_game.dll", "material-names.tsv", "rt-materials.tsv", "rt-suns.tsv",
+            "Nebula.exe", "NebulaSettings.exe", "LICENSE", "THIRD-PARTY-NOTICES.md", "README.md"
+        };
+
         // ---- requirements --------------------------------------------------------
 
-        public const long RequiredFreeBytes = 16L << 30;
+        /// <summary>The packed game (3.2 GB) and its staging copy for a first install; the recompile needs far more.</summary>
+        public static long RequiredFreeBytes { get { return IsNativePackage ? 8L << 30 : 16L << 30; } }
         public const ulong MinimumMemory = 7UL << 30;
 
         public static List<string> CheckRequirements(string installRoot)
@@ -249,11 +275,12 @@ namespace Nebula.Setup
         /// </summary>
         public static bool BuildToolsLicenseRequired(InstallMode mode, Toolchain toolchain)
         {
-            return mode != InstallMode.Update && !toolchain.IsReady;
+            return !IsNativePackage && mode != InstallMode.Update && !toolchain.IsReady;
         }
 
         public static string LowMemoryWarning()
         {
+            if (IsNativePackage) return null;  // the warning is about compiling the game here
             ulong memory = NativeMethods.TotalPhysicalMemory();
             if (memory >= MinimumMemory) return null;
             return "This PC has " + FileUtil.FormatBytes((long)memory) + " of RAM. Nebula is designed for 8 GB or more.\r\n\r\n" +
@@ -313,6 +340,11 @@ namespace Nebula.Setup
             try
             {
                 var current = InstalledInfo.Read(layout);
+                if (IsNativePackage)
+                {
+                    InstallNative(current, dlss);
+                    return;
+                }
                 preservingModules = current != null && request.Mode == InstallMode.Update;
                 if (preservingModules)
                 {
@@ -446,6 +478,100 @@ namespace Nebula.Setup
 
         // ---- steps ---------------------------------------------------------------
 
+        /// <summary>
+        /// Nebula 2: the compiled game from this package. An update keeps the packed game (content\game.pak), the saves
+        /// and the settings (both in the user data folder), and then removes what only the recompiled game used.
+        /// </summary>
+        private void InstallNative(InstalledInfo current, Thread dlss)
+        {
+            bool reuseContent = request.GameInput == null && ContentValid();
+            if (!reuseContent && request.GameInput == null)
+                throw new InvalidOperationException("Choose your Super Mario Galaxy ISO, RVZ or extracted folder.");
+            Log("Reuse the packed game: " + reuseContent);
+            if (!reuseContent)
+            {
+                Stage(0.00, 0.02, "Checking your game");
+                Identify(request.GameInput);
+                string data = PrepareData(request.GameInput);
+                Stage(0.10, 0.60, "Packing the game files");
+                RunRecomp(new[] { "package-content", data, "--output", Path.Combine(staging, "content") }, null);
+            }
+
+            Stage(0.75, 0.15, "Installing Nebula " + BuildInfo.Version);
+            string app = Path.Combine(staging, "app");
+            Directory.CreateDirectory(app);
+            foreach (var name in NativeFiles) Payload.Extract(name, Path.Combine(app, name));
+            File.WriteAllText(Path.Combine(app, "runtime-isa.txt"), RuntimeNativeIsa);
+            var files = new Dictionary<string, object>();
+            foreach (var path in Directory.GetFiles(app)) files[Path.GetFileName(path)] = FileUtil.Sha256File(path);
+            Json.Save(Path.Combine(app, "install.json"), new Dictionary<string, object>
+            {
+                { "schema", "nebula.install.v1" },
+                { "version", BuildInfo.Version },
+                { "commit", BuildInfo.Commit },
+                { "repository", BuildInfo.Repository },
+                { "game", "native" },
+                { "contentFormatVersion", ContentFormatVersion },
+                { "runtimeIsa", RuntimeNativeIsa },
+                { "installedUtc", DateTime.UtcNow.ToString("o") },
+                { "files", files }
+            });
+            foreach (var name in NativeFiles)
+                if (new FileInfo(Path.Combine(app, name)).Length == 0) throw new InvalidOperationException("The new version's " + name + " is empty.");
+
+            if (dlss != null && dlss.IsAlive)
+            {
+                Stage(0.90, 0.04, "Downloading NVIDIA DLSS");
+                waitingForDlss = true;
+                while (!dlss.Join(200)) cancel.ThrowIfCancellationRequested();
+                waitingForDlss = false;
+            }
+            Stage(0.94, 0.06, "Switching to the new version");
+            // The versions it replaces are removed: nothing may run from this install meanwhile.
+            while (true)
+            {
+                string running = Running.Find(layout.Root, Running.Programs);
+                if (running == null) break;
+                Log("Waiting for " + running + " to close.");
+                if (!progress.AskToClose("Nebula is running (" + running + "). Close the game, the Nebula launcher and Nebula " +
+                        "Settings, then choose Retry to finish installing Nebula " + BuildInfo.Version + "."))
+                    throw new InvalidOperationException("Nebula is running. Close the game, the Nebula launcher and Nebula Settings, then try again.");
+            }
+            Commit(app, current);
+            RemoveRecompiledGame();
+            Report(1.0, "Nebula " + BuildInfo.Version + " is installed.", 1);
+            Log(string.Format("Completed in {0:mm\\:ss}.", clock.Elapsed));
+        }
+
+        /// <summary>
+        /// After a Nebula 2 install: the versions holding a recompiled game (NebulaRuntime.exe and the RMGE01 modules),
+        /// the compiler and the source go. A file still held (a launcher left open) is logged and removed by a later install.
+        /// </summary>
+        private void RemoveRecompiledGame()
+        {
+            foreach (var dir in Directory.GetDirectories(layout.Versions))
+            {
+                if (string.Equals(Path.GetFileName(dir), BuildInfo.Version, StringComparison.OrdinalIgnoreCase)) continue;
+                TryDeleteTree(dir);
+            }
+            TryDeleteTree(layout.Toolchains);
+            TryDeleteTree(layout.Sources);
+            foreach (var file in Directory.GetFiles(layout.Staging, "nebula-recomp-*.exe"))
+            {
+                try { File.Delete(file); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            }
+            Json.Save(layout.Current, new Dictionary<string, object> { { "version", BuildInfo.Version }, { "previous", null } });
+            Log("Removed the recompiled game, its compiler and its source.");
+        }
+
+        private void TryDeleteTree(string dir)
+        {
+            if (!Directory.Exists(dir)) return;
+            try { FileUtil.DeleteTree(dir); Log("Removed " + dir); }
+            catch (IOException error) { Log("Could not remove " + dir + ": " + error.Message); }
+            catch (UnauthorizedAccessException error) { Log("Could not remove " + dir + ": " + error.Message); }
+        }
+
         private void RebuildForUpdate(string app)
         {
             cancel.ThrowIfCancellationRequested();
@@ -514,7 +640,8 @@ namespace Nebula.Setup
         /// <summary>The game files an install keeps (its inputs and packed content) are intact, so an update or repair needs no game.</summary>
         public static bool RetainedGameValid(InstallLayout layout)
         {
-            return RetainedInputsValid(layout) && ContentValid(layout);
+            // Nebula 2 runs from the packed game alone.
+            return (IsNativePackage || RetainedInputsValid(layout)) && ContentValid(layout);
         }
 
         private bool RetainedInputsValid() { return RetainedInputsValid(layout); }
@@ -738,7 +865,7 @@ namespace Nebula.Setup
             while (true)
             {
                 string running = replacingVersion ? Running.Find(layout.VersionDir(BuildInfo.Version), Running.Programs) : null;
-                if (running == null && replacingGameFiles) running = Running.Find(layout.Root, "NebulaRuntime");
+                if (running == null && replacingGameFiles) running = Running.Find(layout.Root, "NebulaRuntime", "NebulaNative");
                 if (running == null) return;
                 Log("Waiting for " + running + " to close.");
                 if (!progress.AskToClose("Nebula is running (" + running + "). Close the game, the Nebula launcher and Nebula " +

@@ -1,6 +1,7 @@
 #include "Game/NPC/TalkTextFormer.hpp"
 #include <nebula_game_api.h>
 #include "Game/NPC/TalkMessageCtrl.hpp"
+#include "Game/System/NebulaCutsceneSkip.hpp"
 #include "Game/Screen/CustomTagProcessor.hpp"
 #include "Game/System/Language.hpp"
 #include "Game/Util/LayoutUtil.hpp"
@@ -148,9 +149,10 @@ void TalkTextFormer::updateTalking() {
 
 #ifdef TARGET_PC
 // Nebula's text speed (NEBULA_OPTION_TEXT_SPEED): 1 to 3 steps a frame, 4 the whole page at once, its pauses included.
+// A skipped cutscene's pages come whole.
 void TalkTextFormer::updateTalkingAtTextSpeed() {
     updateTalking();
-    const u32 speed = __NebulaOption(NEBULA_OPTION_TEXT_SPEED);
+    const u32 speed = NebulaCutsceneSkip::isSkipping() ? 4 : __NebulaOption(NEBULA_OPTION_TEXT_SPEED);
     for (u32 extra = speed >= 4 ? 0x2000 : speed - 1; extra != 0 && !isTextAppearedAll(); extra--) {
         updateTalking();
     }

@@ -1,5 +1,6 @@
 #include "Game/NPC/RosettaDemoAstroDome.hpp"
 #ifdef TARGET_PC
+#include "Game/System/NebulaCutsceneSkip.hpp"
 #include <nebula_game_api.h>
 #endif
 #include "Game/Demo/DemoFunction.hpp"
@@ -101,7 +102,12 @@ void RosettaMonologue::control() {
 
     MR::setLayoutPosAtPaneTrans(mIconAButton, this, "AButtonPosition");
 
+#ifdef TARGET_PC
+    // A skipped reading turns each page as soon as it is up.
+    if (!MR::testCorePadTriggerA(WPAD_CHAN0) && !NebulaCutsceneSkip::isSkipping()) {
+#else
     if (!MR::testCorePadTriggerA(WPAD_CHAN0)) {
+#endif
         return;
     }
 

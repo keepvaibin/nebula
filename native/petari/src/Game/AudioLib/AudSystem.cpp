@@ -560,17 +560,31 @@ void AudSystem::enterPauseMenu() {
 
 #ifdef TARGET_PC
 // Nebula's cutscene skip (NebulaCutsceneSkip): the music and the game's sounds fade as for the pause menu, but nothing
-// is paused, so a cutscene waiting for a sound to end still ends; the menu's own sounds play.
+// is paused, so a cutscene waiting for a sound to end still ends; the menu's own sounds play. They return over the
+// picture's fade in (the game's 30 frames).
 void AudSystem::muteForCutsceneSkip(bool mute) {
     if (mute) {
         mSeqMgr.getParams()->moveVolume(0.0f, 10);
         mStreamMgr.getParams()->moveVolume(0.0f, 10);
         setSeVolumeSet(AudSystemVolumeController::VolumeSet_PauseMenu, 10);
     } else {
-        mSeqMgr.getParams()->moveVolume(AudParams::masterVolBgm, 20);
-        mStreamMgr.getParams()->moveVolume(AudParams::masterVolStream, 20);
-        recoverSeVolumeSet(20);
+        mSeqMgr.getParams()->moveVolume(AudParams::masterVolBgm, 30);
+        mStreamMgr.getParams()->moveVolume(AudParams::masterVolStream, 30);
+        recoverSeVolumeSet(30);
     }
+}
+
+// While the skipped cutscene runs unseen, every sound effect is silent, the system's too (its talks' page turns); they
+// return with the picture.
+void AudSystem::silenceSeForCutsceneSkip(bool silent) {
+    mSeMgr.getParams()->moveVolume(silent ? 0.0f : AudParams::masterVolSe, silent ? 0 : 30);
+}
+
+// Quit to desktop (NebulaQuitButton): everything fades with the picture (the game's 30 frames).
+void AudSystem::fadeOutForQuit() {
+    mSeqMgr.getParams()->moveVolume(0.0f, 30);
+    mStreamMgr.getParams()->moveVolume(0.0f, 30);
+    mSeMgr.getParams()->moveVolume(0.0f, 30);
 }
 #endif
 

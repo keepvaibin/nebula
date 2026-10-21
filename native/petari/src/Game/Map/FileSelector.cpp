@@ -39,6 +39,12 @@
 #include "Game/Util/StringUtil.hpp"
 #include <JSystem/JKernel/JKRMemArchive.hpp>
 #include <nw4r/ut/ResFont.h>
+#ifdef TARGET_PC
+#include "Game/AudioLib/AudSystem.hpp"
+#include "Game/AudioLib/AudWrap.hpp"
+#include "Game/Screen/NebulaQuitButton.hpp"
+#include "Game/System/GameSystemFunction.hpp"
+#endif
 
 #define USER_FILE_NUM 6
 
@@ -135,7 +141,12 @@ void FileSelector_FORCE_MATCH_SDATA2() {
 FileSelector::FileSelector(const char* pName)
     : LiveActor(pName), mCameraController(), mSky(), mItems(), mOperationButton(), mBackButton(), mBrosButton(), mInfoMessage(), mSysInfoWindow(),
       _B4(), _B8(), _BC(), _C0(), mUserFile(), _CC(), mTitle(), mMiiSelect(), mMiiId(new RFLCreateID()), mManual(), mIsMiiSelectStartFirst(),
-      mBgmState(), mSelectEffect() {
+      mBgmState(), mSelectEffect()
+#ifdef TARGET_PC
+      ,
+      mQuitButton(), mQuitWindow(), mIsAskingQuit(false), mQuitFrames(-1)
+#endif
+{
 }
 
 void FileSelector::init(const JMapInfoIter& rIter) {
@@ -152,6 +163,9 @@ void FileSelector::init(const JMapInfoIter& rIter) {
     createBrosButton();
     createInfoMessage();
     createSysInfoWindow();
+#ifdef TARGET_PC
+    createQuitButton();
+#endif
     createFileInfo();
     createTitle();
     createMiiSelect();
@@ -237,6 +251,9 @@ void FileSelector::control() {
     }
 
     updateBgm();
+#ifdef TARGET_PC
+    updateQuitButton();
+#endif
 }
 
 bool FileSelector::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver) {
@@ -336,6 +353,66 @@ void FileSelector::createSysInfoWindow() {
     mSysInfoWindowMini = MR::createSysInfoWindowMiniExecuteWithChildren();
     MR::connectToSceneLayout(mSysInfoWindowMini);
 }
+
+#ifdef TARGET_PC
+void FileSelector::createQuitButton() {
+    mQuitButton = new NebulaQuitButton("NebulaQuitButton");
+    mQuitButton->initWithoutIter();
+
+    mQuitWindow = MR::createSysInfoWindow();
+    MR::connectToSceneLayout(mQuitWindow);
+}
+
+// Quit to desktop shows while a file is being chosen and nothing else holds the top of the screen: a file's
+// information (while the pointer is on a file) or the frame asking to point at the screen.
+void FileSelector::updateQuitButton() {
+    const bool isChoosing = isNerve(GET_NERVE(FileSelector, FileSelectorNrvFileSelect));
+    mQuitButton->setShown(isChoosing && (mIsAskingQuit || (MR::isDead(mFileInfo) && !MR::isExistStarPointerGuidanceFrame1P())));
+}
+
+// The quit question; true while it holds the file select.
+bool FileSelector::updateQuitQuestion() {
+    if (mQuitFrames >= 0) {
+        // The picture and sound fade as the cutscene skip's do; then the game's own way out (the HOME Menu's Wii
+        // Menu), its screen already black.
+        if (++mQuitFrames >= 2 && !MR::isSystemWipeActive()) {
+            GameSystemFunction::requestGoWiiMenu(true);
+        }
+        return true;
+    }
+
+    if (!mIsAskingQuit) {
+        if (!mQuitButton->isDecided()) {
+            return false;
+        }
+
+        mIsAskingQuit = true;
+        invalidateSelectAll();
+        clearPointing();
+        mQuitWindow->appearYesNoWithText(NebulaQuitButton::getQuestion());
+        return true;
+    }
+
+    if (!MR::isDead(mQuitWindow)) {
+        return true;
+    }
+
+    if (mQuitWindow->isSelectedYes()) {
+        mQuitFrames = 0;
+        MR::closeSystemWipeFade();
+        AudSystem* pAudio = AudWrap::getSystem();
+        if (pAudio != nullptr) {
+            pAudio->fadeOutForQuit();
+        }
+        return true;
+    }
+
+    mIsAskingQuit = false;
+    mQuitButton->resume();
+    validateSelectAll();
+    return false;
+}
+#endif
 
 void FileSelector::createFileInfo() {
     mFileInfo = new FileSelectInfo(RFL_NAME_LEN + 1, "\203\164\203\100\203\103\203\213\217\356\225\361" /* ファイル情報 */);
@@ -509,6 +586,12 @@ void FileSelector::onPoint(FileSelectItem* pItem) {
     if (!mBackButton->isHidden() && mBackButton->isPointing()) {
         return;
     }
+
+#ifdef TARGET_PC
+    if (mQuitButton->isPointing()) {
+        return;
+    }
+#endif
 
     if (_C0 != nullptr) {
         if (_C0->_140 > pItem->_140) {
@@ -1024,6 +1107,11 @@ void FileSelector::exeFileSelect() {
         appearAllIndex();
         MR::activeStarPointerGuidance();
     } else {
+#ifdef TARGET_PC
+        if (updateQuitQuestion()) {
+            return;
+        }
+#endif
         updateFileInfo();
     }
 

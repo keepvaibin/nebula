@@ -3,6 +3,9 @@
 #include "JSystem/JAudio2/JAISoundHandles.hpp"
 #include "JSystem/JAudio2/JASReport.hpp"
 #include "JSystem/JAudio2/JASTrack.hpp"
+#ifdef TARGET_PC
+#include <revolution/os.h>
+#endif
 
 void JAISoundHandle::releaseSound() {
     if (mSound != nullptr) {
@@ -139,6 +142,15 @@ bool JAISound::calc_JAISound_() {
     bool playing = isPlaying();
     if (playing) {
         mCount++;
+#ifdef TARGET_PC
+        // An effect nothing can stop any more (no handle holds it, it has no lifetime) and that has played 30 s is an
+        // orphaned loop: its owner went without stopping it, and it would play on through everything until the game
+        // stopped every sound. It fades out as a stopped sound does, and names itself.
+        if (mCount == 1800 && mHandle == nullptr && !hasLifeTime() && asSe() != nullptr && !isStopping()) {
+            OSReport("audio: orphaned sound %08x stopped after 30 s\n", (u32)mSoundID);
+            stop(30);
+        }
+#endif
     }
 
     bool paused = mStatus.isPaused();

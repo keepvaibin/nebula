@@ -340,7 +340,13 @@ namespace nw4r {
 #if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
         u32 TextBox::MakeDrawFlag() const {
             u32 flag = 0;
+#ifdef TARGET_PC
+            // textAlignment: the console's compiler packed the bit-field from the high bit (bits 5-6, read as
+            // mBitsu8 >> 5); this compiler packs it from the low bit, where those bits are always 0.
+            switch (GetTextAlignment()) {
+#else
             switch (mBitsu8 >> 5 & 0x3) {
+#endif
             case 0:
             default:
                 switch (GetTextPositionH()) {

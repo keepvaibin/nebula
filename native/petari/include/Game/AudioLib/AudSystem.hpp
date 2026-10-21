@@ -77,6 +77,8 @@ public:
     void enterPauseMenu();
 #ifdef TARGET_PC
     void muteForCutsceneSkip(bool mute);
+    void silenceSeForCutsceneSkip(bool silent);
+    void fadeOutForQuit();
 #endif
     void exitPauseMenu();
     void updatePauseMenu();
