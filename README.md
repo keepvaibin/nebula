@@ -62,6 +62,9 @@ it is the original game code, translated instruction by instruction by the recom
   at once, other changes at the next start; `mods-report.txt` lists what each mod changed.
 - Texture packs in Dolphin's format (`tex1_...` PNG or DDS, custom and arbitrary mipmaps). Settings > MODS >
   TEXTURE PACKS (on, preload, off); DUMP TEXTURES writes the game's textures under their pack names for making one.
+- When Nebula stops, it shows an error code ([docs/ERROR_CODES.md](docs/ERROR_CODES.md)) naming the cause (a mod
+  and the file it supplied, a texture pack image, the graphics driver) and saves a report in
+  `%LOCALAPPDATA%\Nebula\crashes`.
 - Saves stored in `%LOCALAPPDATA%\Nebula\saves`, with export, import and Dolphin saves
   (see [Saves](#saves)).
 
