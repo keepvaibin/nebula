@@ -676,13 +676,13 @@ NEBULA_GAME_API NEBULA_NO_ASAN void nebula_game_debug_dump(void) { /* reads raw 
     nebula_image_range(&image, &size);
     nebula_log("threads (current %p):\n", (void*)OSGetCurrentThread());
     for (OSThread* t = __OSActiveThreadQueue.head; t != NULL; t = t->linkActive.next) {
-        char line[512];
+        char line[1536];
         int at = snprintf(line, sizeof(line), "  %p prio %d/%d state %u suspend %d queue %p mutex %p:", (void*)t, t->priority, t->base,
                           t->state, t->suspend, (void*)t->queue, (void*)t->mutex);
         const uintptr_t* sp = (const uintptr_t*)t->context.nativeSp;
         const uintptr_t* top = (const uintptr_t*)t->stackBase;
         int found = 0;
-        for (int i = 0; sp != NULL && sp + i < top && i < 8192 && found < 14 && at < (int)sizeof(line) - 16; i++) {
+        for (int i = 0; sp != NULL && sp + i < top && i < 8192 && found < 48 && at < (int)sizeof(line) - 16; i++) {
             const uintptr_t v = sp[i];
             if (v - image < size) {
                 at += snprintf(line + at, sizeof(line) - (size_t)at, " +%llx", (unsigned long long)(v - image));

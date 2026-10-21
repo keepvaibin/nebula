@@ -8,6 +8,9 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/System/GameDataHolder.hpp"
+#include "Game/System/GameEventFlagChecker.hpp"
+#include "Game/System/GameEventFlagStorage.hpp"
+#include "Game/System/GameEventFlagTable.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SequenceUtil.hpp"
 #include <cstdio>
@@ -233,6 +236,24 @@ void GameScene::draw() const {
             // reaches (user: the domes' pillars and lights never show).
             strcpy(sStage, MR::getCurrentStageName());
             MR::requestChangeStageInGameMoving(sStage, MR::getCurrentScenarioNo());
+        } else if (action.kind == NEBULA_TEST_SET_EVENT_FLAG) {
+            // A stored flag on, past its prerequisites (tryOn checks them; flags the game derives from others, such as
+            // the storybook's chapters, follow those). name=value: an event value (LibraryOpenNewStarCount=0 with
+            // Grand Star 3 opens the Library and its chapter 1); PictureBookAlreadyRead=n: the chapters Rosalina has
+            // read (the Library's book lists those).
+            static const char kRead[] = "PictureBookAlreadyRead=";
+            const char* equals = strchr(action.stage, '=');
+            if (strncmp(action.stage, kRead, sizeof(kRead) - 1) == 0) {
+                MR::setPictureBookChapterAlreadyRead(atoi(action.stage + sizeof(kRead) - 1));
+            } else if (equals != nullptr) {
+                static char sName[sizeof(action.stage)];
+                snprintf(sName, sizeof(sName), "%.*s", (int)(equals - action.stage), action.stage);
+                GameDataFunction::setGameEventValue(sName, (u16)atoi(equals + 1));
+            } else if (const GameEventFlag* pFlag = GameEventFlagTable::findFlag(action.stage)) {
+                GameDataFunction::getCurrentGameDataHolder()->mEventFlagChecker->getChunk()->set(pFlag, true);
+            } else {
+                OSReport("test: no event flag %s\n", action.stage);
+            }
         } else if (action.kind == NEBULA_TEST_LIST_ACTORS) {
             AllLiveActorGroup* pGroup = MR::getAllLiveActorGroup();
             for (s32 i = 0; pGroup != nullptr && i < pGroup->getObjNum(); ++i) {

@@ -2163,6 +2163,9 @@ int svc_hbm(void*, uint32_t what, uint32_t) {
 //     demo, the save and what follows, the ending after KoopaBattleVs3Galaxy).
 //   GALAXY_TEST_GRAND_STARS=n: the save holds Grand Stars 1-n from the second scene frame, and the stage starts again
 //     with them (the Observatory's domes restored, lit and furnished as the game shows them for that many).
+//   GALAXY_TEST_EVENT_FLAGS=name[,name=value...]: the save's stored event flags on and event values set from the second
+//     scene frame, before the Grand Stars (with GALAXY_TEST_GRAND_STARS>=3, LibraryOpenNewStarCount=0 opens the Library
+//     and its first storybook chapter; PictureBookAlreadyRead=n: chapters 1-n read, which the Library's book lists).
 //   GALAXY_TEST_EVENTS actors@frame: the live actors with a model, by model name and position (where to teleport).
 std::atomic<bool> gTourDone{false};
 
@@ -2254,6 +2257,25 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
         }
     }
     ++scene_frames;
+    static std::vector<std::string> event_flags = [] {
+        std::vector<std::string> names;
+        if (const char* value = std::getenv("GALAXY_TEST_EVENT_FLAGS")) {
+            std::string list = value;
+            for (std::size_t start = 0; start < list.size();) {
+                const std::size_t comma = std::min(list.find(',', start), list.size());
+                if (comma > start) names.push_back(list.substr(start, comma - start));
+                start = comma + 1;
+            }
+        }
+        return names;
+    }();
+    if (!event_flags.empty() && scene_frames >= 2u) {
+        action->kind = NEBULA_TEST_SET_EVENT_FLAG;
+        std::snprintf(action->stage, sizeof(action->stage), "%s", event_flags.front().c_str());
+        log_line("test: event flag", action->stage);
+        event_flags.erase(event_flags.begin());
+        return 1;
+    }
     static const int32_t grand_stars = [] {
         const char* value = std::getenv("GALAXY_TEST_GRAND_STARS");
         return value != nullptr ? std::atoi(value) : 0;

@@ -113,6 +113,7 @@ enum {
     NEBULA_TEST_SET_PLAYER,       /* the file's player from the next scene (`scenario` 0 Mario, 1 Luigi) */
     NEBULA_TEST_SET_GRAND_STARS,  /* the save holds Grand Stars 1-`scenario` (their galaxies' first star) */
     NEBULA_TEST_LIST_ACTORS,      /* the scene's live actors with a model, their model name and position, logged */
+    NEBULA_TEST_SET_EVENT_FLAG,   /* the save's event flag named `stage` on (GameDataFunction::onGameEventFlag) */
 };
 
 /* The picture's shape as the game draws it (__NebulaDisplay), from the output's shape the host latches at each retrace
