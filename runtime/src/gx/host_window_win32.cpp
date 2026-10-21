@@ -12,6 +12,7 @@
 #include "galaxy/gx/streamline_bridge.h"
 #include "galaxy/gx_d3d12.h"
 #include "galaxy/mii_import.h"
+#include "galaxy/mods.h"
 #include "galaxy/native_host.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/runtime_settings.h"
@@ -95,7 +96,7 @@ void dlss_dismiss_prompt();
 void poll_dlss_download();
 std::string dlss_footer(std::uint64_t now_ms, bool& error);
 
-// Settings pages built from rows (DISPLAY, GRAPHICS, GAME, SYSTEM: settings_page): a label, the
+// Settings pages built from rows (DISPLAY, GRAPHICS, GAME, MODS, SYSTEM: settings_page): a label, the
 // value for the draft, how left/right change the draft (none: the row is fixed) and a help line; a
 // heading starts a section and is never selected. CONTROLS and AUDIO keep their own rows.
 struct SettingsRow {
@@ -304,7 +305,7 @@ unsigned s_settings_first_row = 0u;
 // The window thread's left/right-resolved code for the key being handled.
 std::uint32_t s_handled_key_normalized = 0u;
 
-constexpr unsigned kNativeSettingsTabCount = 6;
+constexpr unsigned kNativeSettingsTabCount = 7;
 
 // The GENERAL page's languages, in the order LEFT/RIGHT steps through them.
 constexpr GameLanguage kGameLanguages[] = {GameLanguage::English, GameLanguage::French, GameLanguage::Spanish};
@@ -2259,9 +2260,8 @@ void start_mii_import_dialog() {
     }).detach();
 }
 
-// Explorer at the import folder (its files join the database at every start).
-void open_mii_folder() {
-    const std::filesystem::path folder = galaxy::host::mii_import_folder();
+// Explorer at a folder (made if missing), off the window's thread.
+void open_folder_in_explorer(const std::filesystem::path& folder) {
     if (folder.empty()) {
         return;
     }
@@ -2274,6 +2274,140 @@ void open_mii_folder() {
             CoUninitialize();
         }
     }).detach();
+}
+
+// Explorer at the Mii import folder (its files join the database at every start).
+void open_mii_folder() { open_folder_in_explorer(galaxy::host::mii_import_folder()); }
+
+// The MODS page: the mods folder's mods (galaxy::mods), read when the page first shows and on RESCAN (pages are
+// rebuilt for every draw); each change is saved to mods.ini at once and applies at the next start.
+std::mutex s_mods_mutex;
+std::vector<galaxy::mods::ModInfo> s_mods;
+bool s_mods_scanned = false;
+
+// With s_mods_mutex held.
+std::vector<galaxy::mods::ModInfo>& mods_list() {
+    if (!s_mods_scanned) {
+        s_mods = galaxy::mods::scan_mods();
+        s_mods_scanned = true;
+    }
+    return s_mods;
+}
+
+// With s_mods_mutex held: the load order as listed, then mods.ini.
+void save_mods() {
+    for (std::size_t i = 0; i < s_mods.size(); ++i) {
+        s_mods[i].order = static_cast<unsigned>(i + 1u);
+    }
+    if (!galaxy::mods::save_mod_settings(s_mods)) {
+        std::cerr << "[settings] mods.ini could not be written\n";
+    }
+}
+
+bool mods_restart_pending() {
+    const std::lock_guard<std::mutex> lock(s_mods_mutex);
+    return s_mods_scanned && galaxy::mods::mods_differ_from_session(s_mods);
+}
+
+// A name for the overlay's font (its upper-case ASCII), shortened to fit the label column.
+std::string mods_ui_text(std::string_view text, std::size_t width) {
+    std::string out;
+    for (const char c : text) {
+        const auto u = static_cast<unsigned char>(c);
+        out.push_back(u >= 0x80u ? '?' : static_cast<char>(std::toupper(u)));
+    }
+    if (out.size() > width) {
+        out.resize(width - 3u);
+        out += "...";
+    }
+    return out;
+}
+
+std::vector<SettingsRow> mods_page() {
+    std::vector<SettingsRow> rows;
+    const std::lock_guard<std::mutex> lock(s_mods_mutex);
+    std::vector<galaxy::mods::ModInfo>& mods = mods_list();
+    rows.push_back({"MODS", {}, nullptr, {}, true});
+    if (mods.empty()) {
+        rows.push_back({"NO MODS FOUND", {}, nullptr,
+                        "EACH MOD IN ITS OWN FOLDER IN THE MODS FOLDER: RIIVOLUTION, FILES OR TEXTURES"});
+    }
+    for (std::size_t i = 0; i < mods.size(); ++i) {
+        const galaxy::mods::ModInfo& mod = mods[i];
+        std::string kinds;
+        for (const auto& [on, name] : {std::pair{mod.riivolution, "RIIVOLUTION"}, std::pair{mod.files, "FILES"},
+                                       std::pair{mod.textures, "TEXTURES"}}) {
+            if (on) kinds += kinds.empty() ? name : std::string(", ") + name;
+        }
+        const bool inert = !mod.problem.empty() && !mod.files && !mod.textures;
+        rows.push_back({mods_ui_text(mod.id, 26u), inert ? mods_ui_text(mod.problem, 22u) : (mod.enabled ? "ON" : "OFF"),
+                        [i](RenderConfig&, int delta) {
+                            const std::lock_guard<std::mutex> change_lock(s_mods_mutex);
+                            if (i < s_mods.size() && delta != 0 && s_mods[i].enabled != (delta > 0)) {
+                                s_mods[i].enabled = delta > 0;
+                                save_mods();
+                            }
+                        },
+                        (kinds.empty() ? std::string("NOTHING THIS GAME USES") : kinds) +
+                            ". APPLIES AT THE NEXT START"});
+        if (!mod.enabled) {
+            continue;
+        }
+        for (std::size_t o = 0; o < mod.options.size(); ++o) {
+            const galaxy::mods::ModOption& option = mod.options[o];
+            const std::string value = option.selected == 0u || option.selected > option.choices.size()
+                                          ? std::string("OFF")
+                                          : mods_ui_text(option.choices[option.selected - 1u], 22u);
+            rows.push_back({"  " + mods_ui_text(option.name, 24u), value,
+                            [i, o](RenderConfig&, int delta) {
+                                const std::lock_guard<std::mutex> change_lock(s_mods_mutex);
+                                if (i >= s_mods.size() || o >= s_mods[i].options.size()) return;
+                                galaxy::mods::ModOption& changed = s_mods[i].options[o];
+                                const unsigned next = settings_step(
+                                    std::min<unsigned>(changed.selected, static_cast<unsigned>(changed.choices.size())),
+                                    static_cast<unsigned>(changed.choices.size() + 1u), delta);
+                                if (next != changed.selected) {
+                                    changed.selected = next;
+                                    save_mods();
+                                }
+                            },
+                            mods_ui_text(option.section, 30u) + ": A RIIVOLUTION OPTION. APPLIES AT THE NEXT START"});
+        }
+        char order[16]{};
+        std::snprintf(order, sizeof(order), "#%zu", i + 1u);
+        rows.push_back({"  LOAD ORDER", order,
+                        [i](RenderConfig&, int delta) {
+                            const std::lock_guard<std::mutex> change_lock(s_mods_mutex);
+                            if (delta == 0 || i >= s_mods.size() || (delta < 0 && i == 0u) ||
+                                (delta > 0 && i + 1u >= s_mods.size())) {
+                                return;
+                            }
+                            std::swap(s_mods[i], s_mods[delta < 0 ? i - 1u : i + 1u]);
+                            save_mods();
+                        },
+                        "LEFT EARLIER, RIGHT LATER: A LATER MOD WINS WHERE TWO CHANGE ONE FILE"});
+    }
+    rows.push_back({"FOLDER", {}, nullptr, {}, true});
+    rows.push_back({"OPEN MODS FOLDER", "PRESS RIGHT",
+                    [](RenderConfig&, int delta) {
+                        if (delta > 0) open_folder_in_explorer(galaxy::mods::mods_folder());
+                    },
+                    "RIIVOLUTION MODS AS ON AN SD CARD, FILES/ IN THE DISC'S LAYOUT, TEXTURES/ PACKS"});
+    rows.push_back({"RESCAN MODS FOLDER", "PRESS RIGHT",
+                    [](RenderConfig&, int delta) {
+                        if (delta <= 0) return;
+                        const std::lock_guard<std::mutex> change_lock(s_mods_mutex);
+                        s_mods_scanned = false;
+                    },
+                    "READS THE MODS FOLDER AGAIN (MODS ADDED OR REMOVED)"});
+    const galaxy::mods::SessionMods session = galaxy::mods::session_mods();
+    char summary[64]{};
+    std::snprintf(summary, sizeof(summary), "%zu ON, %u FILE CHANGE%s", session.active.size(), session.files_changed,
+                  session.files_changed == 1u ? "" : "S");
+    rows.push_back({"THIS SESSION", summary, nullptr,
+                    session.unsupported != 0u ? "SOME PATCHES CANNOT RUN NATIVELY: SEE MODS-REPORT.TXT"
+                                              : "WHAT EACH MOD CHANGED: MODS-REPORT.TXT BESIDE THE SETTINGS"});
+    return rows;
 }
 
 std::vector<SettingsRow> game_page(const RuntimeSettings& runtime) {
@@ -2422,7 +2556,8 @@ std::vector<SettingsRow> settings_page(unsigned tab, const RenderConfig& draft, 
     case 0: return display_page(draft);
     case 1: return graphics_page(draft);
     case 4: return game_page(runtime);
-    case 5: return system_page(caps);
+    case 5: return mods_page();
+    case 6: return system_page(caps);
     default: return {};
     }
 }
@@ -3447,7 +3582,7 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
         "SETTINGS",
         text);
 
-    const char* tabs[] = {"DISPLAY", "GRAPHICS", "CONTROLS", "AUDIO", "GENERAL", "SYSTEM"};
+    const char* tabs[] = {"DISPLAY", "GRAPHICS", "CONTROLS", "AUDIO", "GENERAL", "MODS", "SYSTEM"};
     static_assert(std::size(tabs) == kNativeSettingsTabCount);
     int tab_x = panel_x + 28;
     // The labels share the panel width; the longest is eight 6-unit glyphs
@@ -3587,7 +3722,10 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
     } else if (GameLanguage running{}; tab == 4u && running_game_language(running) && running != row_runtime.language) {
         status = "THE NEW LANGUAGE APPLIES WHEN NEBULA RESTARTS";
         status_color = accent;
-    } else if (tab == 5u && gpu_change_pending(row_render, row_caps)) {
+    } else if (tab == 5u && mods_restart_pending()) {
+        status = "MOD CHANGES APPLY WHEN NEBULA RESTARTS";
+        status_color = accent;
+    } else if (tab == 6u && gpu_change_pending(row_render, row_caps)) {
         status = "THE NEW GRAPHICS CARD APPLIES WHEN NEBULA RESTARTS";
         status_color = accent;
     } else if (!help.empty()) {

@@ -17,9 +17,11 @@
 
 #if defined(NEBULA_HOST_RENDERER)
 #include "galaxy/experimental_ultrawide_aspect.h"
+#include "galaxy/atomic_file.h"
 #include "galaxy/frame_timeline.h"
 #include "galaxy/gx/fifo_parser.h"
 #include "galaxy/mii_import.h"
+#include "galaxy/mods.h"
 #include "galaxy/gx_d3d12.h"
 #include "galaxy/native_api.h"
 #include "galaxy/native_host.h"
@@ -245,6 +247,8 @@ struct Pak {
     size_t dol_size = 0;
 };
 Pak gPak;
+// The mods this session (galaxy::mods): the disc's file table with their files, main.dol's patches, a save folder.
+std::unique_ptr<galaxy::mods::ActiveMods> gMods;
 
 void open_pak(const fs::path& path) {
 #if defined(_WIN32)
@@ -375,11 +379,25 @@ constexpr int32_t kNandMaxFd = -10;
 constexpr int32_t kNandNoExists = -12;
 constexpr int32_t kNandNotEmpty = -13;
 
+// The game's save folder on the NAND (title/00010000/<the game's four-character code in hex>/data).
+std::string gSaveDataPath;
+
 bool nand_path(const char* path, fs::path* out) {
     if (path == nullptr || path[0] != '/') {
         return false;
     }
     fs::path result = gNandRoot;
+    // A Riivolution mod's savegame: the game's saves in its folder.
+    if (gMods != nullptr && !gMods->save_folder.empty() && !gSaveDataPath.empty() &&
+        std::strncmp(path, gSaveDataPath.c_str(), gSaveDataPath.size()) == 0 &&
+        (path[gSaveDataPath.size()] == '/' || path[gSaveDataPath.size()] == '\0')) {
+        result = gMods->save_folder;
+        path += gSaveDataPath.size();
+        if (*path == '\0') {
+            *out = result;
+            return true;
+        }
+    }
     for (const fs::path& part : fs::path(path + 1)) {
         if (part == ".." || part == ".") {
             return false;
@@ -388,6 +406,24 @@ bool nand_path(const char* path, fs::path* out) {
     }
     *out = result;
     return true;
+}
+
+// A rename, else a copy and a removal: a mod's save folder can be on another volume than the NAND's /tmp.
+void move_path(const fs::path& from, const fs::path& to, std::error_code& error) {
+    fs::rename(from, to, error);
+    if (!error) {
+        return;
+    }
+    std::error_code copy_error;
+    if (fs::is_directory(from, copy_error)) {
+        fs::copy(from, to, fs::copy_options::recursive | fs::copy_options::overwrite_existing, copy_error);
+    } else {
+        fs::copy_file(from, to, fs::copy_options::overwrite_existing, copy_error);
+    }
+    if (!copy_error) {
+        fs::remove_all(from, copy_error);
+        error.clear();
+    }
 }
 
 std::FILE* open_file(const fs::path& path, uint32_t mode) {
@@ -450,7 +486,7 @@ int32_t fs_run(const NebulaFsRequest& r) {
         std::fclose(f->file);
         f->file = nullptr;
         if (!f->temp.empty()) {
-            fs::rename(f->temp, f->path, error);
+            move_path(f->temp, f->path, error);
             f->temp.clear();
             if (error) {
                 return kNandAccess;
@@ -530,7 +566,7 @@ int32_t fs_run(const NebulaFsRequest& r) {
         if (fs::is_directory(to, error) && !fs::is_empty(to, error)) {
             return kNandNotEmpty;
         }
-        fs::rename(path, to, error);
+        move_path(path, to, error);
         return error ? kNandAccess : kNandOk;
     }
     }
@@ -1428,6 +1464,10 @@ void svc_gpu_coherent(void*, uint32_t physical, uint32_t size) {
 }
 
 const uint8_t* svc_disc_fst(void*, size_t* size) {
+    if (gMods != nullptr && !gMods->fst.empty()) {
+        *size = gMods->fst.size();
+        return gMods->fst.data();
+    }
     *size = gPak.fst_size;
     return gPak.fst;
 }
@@ -1443,11 +1483,18 @@ void svc_disc_read(void*, uint64_t offset, uint32_t size, void* dst, uint32_t sl
         if (test_delay_us != 0) {
             std::this_thread::sleep_for(std::chrono::microseconds(test_delay_us));
         }
-        if (offset > gPak.size || gPak.size - offset < size) {
+        if (gMods != nullptr && !gMods->fst.empty()) {
+            // The mods' disc: the partition, or a changed file's pieces past it.
+            if (!gMods->disc.read(offset, size, static_cast<uint8_t*>(dst), gPak.data)) {
+                gModule.disc_complete(slot, -1);
+                return;
+            }
+        } else if (offset > gPak.size || gPak.size - offset < size) {
             gModule.disc_complete(slot, -1);
             return;
+        } else {
+            std::memcpy(dst, gPak.data + offset, size);
         }
-        std::memcpy(dst, gPak.data + offset, size);
 #if defined(NEBULA_HOST_RENDERER)
         // The console's disc DMA writes memory the GPU sees.
         mark_written(dst, size);
@@ -1457,6 +1504,10 @@ void svc_disc_read(void*, uint64_t offset, uint32_t size, void* dst, uint32_t sl
 }
 
 const uint8_t* svc_disc_dol(void*, size_t* size) {
+    if (gMods != nullptr && !gMods->dol.empty()) {
+        *size = gMods->dol.size();
+        return gMods->dol.data();
+    }
     *size = gPak.dol_size;
     return gPak.dol;
 }
@@ -2299,6 +2350,37 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "[mii] import folder %s: %s (%u in the database)\n", import_folder.string().c_str(),
                      message.c_str(), galaxy::host::mii_library_count());
         (void)galaxy::host::take_mii_installs();  // in the file the game reads at boot
+    }
+    {
+        // Mods: the mods folder next to the settings (galaxy::mods), applied before the game reads its disc.
+        const fs::path settings_folder = galaxy::runtime_settings_folder();
+        const std::string game_id(reinterpret_cast<const char*>(gPak.data), 6);
+        char title[9];
+        std::snprintf(title, sizeof(title), "%02x%02x%02x%02x", gPak.data[0], gPak.data[1], gPak.data[2], gPak.data[3]);
+        gSaveDataPath = std::string("/title/00010000/") + title + "/data";
+        if (!settings_folder.empty()) {
+            fs::create_directories(settings_folder / "mods", error);
+            galaxy::mods::set_mods_folder(settings_folder / "mods", settings_folder / "mods.ini", game_id);
+            gMods = galaxy::mods::apply_mods(std::span<const std::uint8_t>(gPak.fst, gPak.fst_size),
+                                             std::span<const std::uint8_t>(gPak.dol, gPak.dol_size),
+                                             static_cast<uint64_t>(gPak.dol - gPak.data), gPak.data, gPak.size, game_id,
+                                             gPak.data[7], gPak.data[6]);
+        }
+        if (gMods != nullptr) {
+            std::fprintf(stderr, "[mods] %zu mod(s), %u file patch(es), %u unsupported\n%s", gMods->active.size(),
+                         gMods->files_changed, gMods->unsupported, gMods->report.c_str());
+            const std::string text = "Nebula mods applied at the last start (" + game_id + ")\n\n" + gMods->report;
+            (void)galaxy::io::write_text_file_atomically(settings_folder / "mods-report.txt", text);
+            if (!gMods->save_folder.empty()) {
+                // Riivolution's clone: the NAND's saves copied into an empty save folder.
+                const fs::path nand_saves = gNandRoot / gSaveDataPath.substr(1);
+                const bool empty = !fs::exists(gMods->save_folder, error) || fs::is_empty(gMods->save_folder, error);
+                fs::create_directories(gMods->save_folder, error);
+                if (empty && gMods->save_clone && fs::exists(nand_saves, error)) {
+                    fs::copy(nand_saves, gMods->save_folder, fs::copy_options::recursive, error);
+                }
+            }
+        }
     }
 #endif
 

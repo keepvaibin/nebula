@@ -518,6 +518,9 @@ add_library(galaxy_native_host STATIC
     runtime/src/wii_device_data.cpp
     runtime/src/mii_import.cpp
     runtime/src/mii_formats.cpp
+    runtime/src/mod_xml.cpp
+    runtime/src/virtual_disc.cpp
+    runtime/src/mods.cpp
     runtime/src/controller_hid.cpp
     runtime/src/flat_guest_memory.cpp)
 target_link_libraries(
@@ -551,6 +554,9 @@ add_library(galaxy_native_host_test_support STATIC
     runtime/src/wii_device_data.cpp
     runtime/src/mii_import.cpp
     runtime/src/mii_formats.cpp
+    runtime/src/mod_xml.cpp
+    runtime/src/virtual_disc.cpp
+    runtime/src/mods.cpp
     runtime/src/controller_hid.cpp
     runtime/src/flat_guest_memory.cpp)
 target_link_libraries(
@@ -1299,6 +1305,9 @@ target_link_libraries(galaxy_rt_surfaces_tests PRIVATE galaxy_gx)
 add_executable(galaxy_mii_import_tests runtime/src/mii_import_tests.cpp runtime/src/mii_import.cpp
                runtime/src/mii_formats.cpp runtime/src/wii_device_data.cpp)
 target_link_libraries(galaxy_mii_import_tests PRIVATE galaxy_atomic_file)
+add_executable(galaxy_mods_tests runtime/src/mods_tests.cpp runtime/src/mod_xml.cpp runtime/src/virtual_disc.cpp
+               runtime/src/mods.cpp)
+target_link_libraries(galaxy_mods_tests PRIVATE galaxy_atomic_file)
 add_executable(galaxy_rt_materials_tests runtime/src/gx/rt_materials_tests.cpp)
 target_link_libraries(galaxy_rt_materials_tests PRIVATE galaxy_gx)
 
@@ -1435,6 +1444,7 @@ if(MSVC)
         galaxy_rt_surfaces_tests
         galaxy_rt_materials_tests
         galaxy_mii_import_tests
+        galaxy_mods_tests
         galaxy_xfb_present_selection_tests
         galaxy_efb_conversion_tests
         galaxy_line_point_raster_tests
@@ -1534,6 +1544,7 @@ galaxy_add_native_test(sampler_key_packing galaxy_sampler_key_tests)
 galaxy_add_native_test(rt_surface_classes galaxy_rt_surfaces_tests)
 galaxy_add_native_test(rt_material_table galaxy_rt_materials_tests)
 galaxy_add_native_test(mii_import galaxy_mii_import_tests)
+galaxy_add_native_test(mods galaxy_mods_tests)
 galaxy_add_native_test(xfb_present_selection galaxy_xfb_present_selection_tests)
 galaxy_add_native_test(efb_content_key_identity galaxy_efb_conversion_tests --content-key-hash)
 galaxy_add_native_test(efb_conversion_pipeline galaxy_efb_conversion_tests)

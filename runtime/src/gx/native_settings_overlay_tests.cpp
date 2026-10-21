@@ -102,7 +102,7 @@ int main() {
     passed &= expect(!snapshot.visible, "overlay starts hidden");
     passed &= expect(!snapshot.dirty, "overlay starts clean");
     passed &= expect(!snapshot.save_error, "overlay starts without a save error");
-    passed &= expect(snapshot.tab_count == 6u, "display/graphics/controls/audio/game/system tabs exist");
+    passed &= expect(snapshot.tab_count == 7u, "display/graphics/controls/audio/game/mods/system tabs exist");
     passed &= expect(snapshot.tab == 0u && snapshot.row == 1u, "the first setting row (below its heading) is selected");
     passed &= expect(
         snapshot.row_count == 9u,
@@ -451,9 +451,12 @@ int main() {
     passed &= expect(key(VK_LEFT) && key(VK_LEFT) && galaxy::get_runtime_settings().language == galaxy::GameLanguage::English,
                      "left returns to English");
     passed &= expect(key(VK_UP) && galaxy::gx::native_settings_overlay_snapshot().row == 0u, "up returns to text speed");
+    passed &= expect(key(VK_TAB), "Tab enters the mods page");
+    snapshot = galaxy::gx::native_settings_overlay_snapshot();
+    passed &= expect(snapshot.tab == 5u && snapshot.row_count >= 5u, "mods page has its folder and session rows");
     passed &= expect(key(VK_TAB), "Tab enters the system page");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
-    passed &= expect(snapshot.tab == 5u && snapshot.row_count == 7u, "system page has the graphics card and six status rows");
+    passed &= expect(snapshot.tab == 6u && snapshot.row_count == 7u, "system page has the graphics card and six status rows");
     passed &= expect(snapshot.row == 0u && key(VK_RIGHT) && key(VK_LEFT) &&
                          galaxy::gx::native_settings_overlay_snapshot().pending_changes == 0u,
                      "the graphics card row cannot be changed in game");
@@ -462,7 +465,7 @@ int main() {
         galaxy::gx::native_settings_overlay_snapshot().tab == 0u,
         "Tab wraps back to video");
     passed &= expect(
-        key(VK_PRIOR) && galaxy::gx::native_settings_overlay_snapshot().tab == 5u,
+        key(VK_PRIOR) && galaxy::gx::native_settings_overlay_snapshot().tab == 6u,
         "Page Up (controller LB) selects the previous page, wrapping");
     passed &= expect(
         key(VK_NEXT) && galaxy::gx::native_settings_overlay_snapshot().tab == 0u,
