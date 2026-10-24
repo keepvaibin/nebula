@@ -1304,13 +1304,30 @@ std::unique_ptr<ActiveMods> apply_mods(std::span<const std::uint8_t> partition_f
                 }
                 if (source.empty()) source = *covered.begin();
                 unsigned copied = 0;
+                bool nebula_text = false;
                 for (const Placed& p : std::vector<Placed>(placed)) {
                     if (language_of(p.disc) != source) continue;
                     const std::string target = "/" + language_folder + p.disc.substr(source.size() + 1u);
                     DiscNode* node = active->disc.find_path(std::string_view(target).substr(1), p.create);
                     if (node == nullptr || node->directory) continue;
                     VirtualDisc::patch(*node, p.host, p.size, 0u, 0u, 0u, true);
+                    nebula_text |= same_name(fs::path(p.disc).filename().string(), "NebulaText.txt");
                     ++copied;
+                }
+                // Nebula's own text follows the mod's language (NebulaText reads "language = ..." from the played
+                // folder) unless the mod brings its own NebulaText.txt.
+                if (copied != 0u && !nebula_text) {
+                    const fs::path note = fs::temp_directory_path() / "Nebula" / ("NebulaText-" + source + ".txt");
+                    std::error_code ec;
+                    fs::create_directories(note.parent_path(), ec);
+                    const std::string text = "language = " + source + "\n";
+                    if (io::write_text_file_atomically(note, text)) {
+                        const std::string target = "/" + language_folder + "/MessageData/NebulaText.txt";
+                        if (DiscNode* node = active->disc.find_path(std::string_view(target).substr(1), true);
+                            node != nullptr && !node->directory) {
+                            VirtualDisc::patch(*node, note, text.size(), 0u, 0u, 0u, true);
+                        }
+                    }
                 }
                 if (copied != 0u) {
                     notes.push_back("text: its " + source + " files stand in for " + language_folder + " (" +

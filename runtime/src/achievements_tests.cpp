@@ -21,9 +21,13 @@ int main() {
     std::filesystem::remove(path);
     ach::set_path_for_tests(path);
 
-    expect(ach::list().size() == 11u, "eleven achievements");
+    expect(ach::list().size() == 30u, "thirty achievements");
     for (const ach::Info& info : ach::list()) {
         expect(!ach::unlocked(info.id), "every achievement starts locked");
+        expect(ach::find(info.id) == &info, "each id is found, once");
+    }
+    for (std::size_t i = 1; i < ach::list().size(); ++i) {
+        expect(ach::list()[i - 1].group <= ach::list()[i].group, "the catalogue is grouped: story, challenges, extras");
     }
     expect(!ach::unlock("nonsense"), "an unknown id does not unlock");
     expect(ach::unlock("comets"), "first unlock reports new");

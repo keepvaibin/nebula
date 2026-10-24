@@ -1486,22 +1486,21 @@ void svc_presence(void*, const uint16_t* galaxy, const uint16_t* star, int32_t p
     galaxy::discord::set_activity(activity);
 }
 
-// An achievement the save data meets: unlocked once (achievements.ini), its name for the game's banner. The headless
-// host keeps no achievements.
+// An achievement the save data meets: unlocked once (achievements.ini), with its English name. The game names it in
+// the played language itself (NebulaText). The headless host keeps no achievements.
 int svc_achievement(void*, const char* id, uint16_t* name, uint32_t capacity) {
 #if !defined(NEBULA_HOST_RENDERER)
     (void)id, (void)name, (void)capacity;
     return 0;
 #else
-    if (id == nullptr || !galaxy::achievements::unlock(id)) return 0;
-    const char* text = "";
-    for (const galaxy::achievements::Info& info : galaxy::achievements::list()) {
-        if (std::strcmp(info.id, id) == 0) text = info.name;
-    }
+    const galaxy::achievements::Info* info = id != nullptr ? galaxy::achievements::find(id) : nullptr;
+    if (info == nullptr || !galaxy::achievements::unlock(id)) return 0;
     uint32_t i = 0;
-    for (; name != nullptr && i + 1u < capacity && text[i] != '\0'; ++i) name[i] = static_cast<unsigned char>(text[i]);
+    for (; name != nullptr && i + 1u < capacity && info->name[i] != '\0'; ++i) {
+        name[i] = static_cast<unsigned char>(info->name[i]);
+    }
     if (name != nullptr && capacity != 0u) name[i] = 0u;
-    log_line("achievement:", text);
+    log_line("achievement:", info->name);
     return 1;
 #endif
 }
@@ -2671,6 +2670,15 @@ int main(int argc, char** argv) {
                      message.c_str(), galaxy::host::mii_library_count());
         (void)galaxy::host::take_mii_installs();  // in the file the game reads at boot
     }
+#if defined(NEBULA_HOST_RENDERER)
+    // The player's settings (GALAXY_RUNTIME_SETTINGS_PATH in tests) before the mods: the language they choose
+    // picks the mods' text (and is the game's language from then on).
+    try {
+        galaxy::load_runtime_settings_from_file();
+    } catch (const std::exception& failure) {
+        die("the settings did not load: %s", failure.what());
+    }
+#endif
     {
         // Mods: the mods folder next to the settings (galaxy::mods), applied before the game reads its disc.
         const fs::path settings_folder = galaxy::runtime_settings_folder();
@@ -2770,10 +2778,9 @@ int main(int argc, char** argv) {
     services.light_reach = svc_light_reach;
     services.traced_sun = svc_traced_sun;
 #if defined(NEBULA_HOST_RENDERER)
-    // The player's settings and display configuration (GALAXY_RUNTIME_SETTINGS_PATH / GALAXY_RENDER_CONFIG_PATH in
-    // tests), loaded before the window; the settings overlay reads its frame art from the game files.
+    // The display configuration (GALAXY_RENDER_CONFIG_PATH in tests), loaded before the window; the settings overlay
+    // reads its frame art from the game files.
     try {
-        galaxy::load_runtime_settings_from_file();
         galaxy::gx::load_render_config_from_file();
     } catch (const std::exception& failure) {
         die("the settings did not load: %s", failure.what());

@@ -7,6 +7,7 @@
 #include "Game/Screen/MarioMeter.hpp"
 #include "Game/Screen/MarioSubMeter.hpp"
 #include "Game/Screen/MissLayout.hpp"
+#include "Game/Screen/NebulaAchievementToast.hpp"
 #include "Game/Screen/NoteCounter.hpp"
 #include "Game/Screen/OneUpBoard.hpp"
 #include "Game/Screen/PurpleCoinCounter.hpp"
@@ -49,6 +50,11 @@ GameSceneLayoutHolder::GameSceneLayoutHolder()
 
     mYesNoLayout = new YesNoLayout();
     mYesNoLayout->initWithoutIter();
+
+#ifdef TARGET_PC
+    // Nebula's achievement pop-up, in every game scene.
+    (new NebulaAchievementToast())->initWithoutIter();
+#endif
 }
 
 void GameSceneLayoutHolder::createPurpleCoinCounter() {

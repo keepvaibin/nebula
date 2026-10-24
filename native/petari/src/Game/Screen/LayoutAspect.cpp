@@ -82,6 +82,8 @@ namespace {
         {"MiiSelect", "Arrow", FitSlide, 660.0f},
         {"MiiSelect", "MiiGroupA", FitSlide, 608.0f},
         {"MiiSelect", "MiiGroupB", FitSlide, 608.0f},
+        // Nebula's achievement pop-up (NebulaAchievementToast) in the bottom-right corner.
+        {"NebulaAchievementToast", "InfoWindowCenter", FitRight | FitBottom},
         // The file select's Quit to desktop (NebulaQuitButton): its Start button in the top-left corner, sliding in
         // from above as the file select's top buttons do.
         {"NebulaQuitButton", "StartButton", FitLeft | FitTop},

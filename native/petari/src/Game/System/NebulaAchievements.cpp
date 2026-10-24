@@ -1,52 +1,83 @@
 #include "Game/System/NebulaAchievements.hpp"
 
 #ifdef TARGET_PC
-#include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/System/GalaxyInfoTable.hpp"
 #include "Game/System/GalaxyStatusAccessor.hpp"
 #include "Game/System/GameDataFunction.hpp"
-#include "Game/Util/DemoUtil.hpp"
+#include "Game/System/NebulaText.hpp"
 #include "Game/Util/JMapInfo.hpp"
 #include "Game/Util/SceneUtil.hpp"
-#include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include <cstdio>
 #include <revolution/os.h>
 
 namespace {
-    const s32 cShowFrames = 180;
-    const s32 cQueueMax = 8;
+    // The picture font's codes (MR::addPictureFontTag) for each pop-up's icon.
+    const s32 cIconPowerStar = '7';
+    const s32 cIconStarBit = ';';
+    const s32 cIconMario = 'B';
+    const s32 cIconSilverStar = 'J';
+    const s32 cIconGrandStar = 'K';
+    const s32 cIconLuigi = 'L';
+    const s32 cIconPurpleCoin = 'N';
+    const s32 cIconGreenStar = 'O';
+    const s32 cIconCrown = 'P';
+    const s32 cIconRedStar = 'S';
+    const s32 cIconRainbowStar = 'W';
+    const s32 cIconPeach = 'X';
+    const s32 cIconLetter = 'Y';
+    const s32 cIconQuestion = 'Z';
+    const s32 cIconOneUp = 'a';
+    const s32 cIconHungryLuma = 'c';
+    const s32 cIconComet = 'e';
 
-    wchar_t sQueue[cQueueMax][64];
+    const s32 cQueueMax = 32;
+    const s32 cNameLength = 64;
+
+    struct Waiting {
+        wchar_t mName[cNameLength];
+        s32 mIcon;
+    };
+
+    Waiting sQueue[cQueueMax];
     s32 sQueued = 0;
-    s32 sShowFrames = 0;
+    s32 sUpdateFrames = 0;
 
-    // Asks the host to unlock; a new one waits for the banner.
-    void tryUnlock(const char* pId) {
-        if (sQueued >= cQueueMax) {
+    // Asks the host to unlock; a new one waits for its pop-up, with its name in the played language (NebulaText's
+    // Achievement.<id>).
+    void tryUnlock(const char* pId, s32 icon) {
+        if (sQueued >= cQueueMax || __NebulaAchievement(pId, nullptr, 0) == 0) {
             return;
         }
-        u16 name[48];
-        if (__NebulaAchievement(pId, name, 48) == 0) {
-            return;
-        }
-        wchar_t* pLine = sQueue[sQueued++];
-        const wchar_t* pPrefix = L"Achievement unlocked: ";
-        s32 length = 0;
-        for (const wchar_t* p = pPrefix; *p != 0 && length < 63; p++) {
-            pLine[length++] = *p;
-        }
-        for (s32 i = 0; i < 48 && name[i] != 0 && length < 63; i++) {
-            pLine[length++] = static_cast< wchar_t >(name[i]);
-        }
-        pLine[length] = 0;
+        char textId[48];
+        snprintf(textId, sizeof(textId), "Achievement.%s", pId);
+        Waiting& rWaiting = sQueue[sQueued++];
+        NebulaText::get(rWaiting.mName, cNameLength, textId);
+        rWaiting.mIcon = icon;
         OSReport("achievement: %s\n", pId);
     }
 
-    // Every galaxy of the map (the game's galaxy table, as GalaxyMap lists them), its comet, purple coin and hidden
-    // stars.
-    // Each "every" goal counts what it checked: a goal with nothing to check (no file loaded) is not met.
-    void checkGalaxies(bool* pComets, bool* pPurpleCoins, bool* pHidden) {
-        s32 comets = 0, purpleCoins = 0, hidden = 0;
+    void tryUnlock(bool met, const char* pId, s32 icon) {
+        if (met) {
+            tryUnlock(pId, icon);
+        }
+    }
+
+    struct Galaxies {
+        bool mAnyComet;
+        bool mComets;
+        bool mDaredevil;
+        bool mCosmic;
+        bool mSpeedy;
+        bool mPurpleCoins;
+        bool mHidden;
+    };
+
+    // Every galaxy of the map (the game's galaxy table, as GalaxyMap lists them): its Prankster Comet by kind, its
+    // purple coin star and its hidden stars. An "every" goal is met only when it found something to check.
+    Galaxies checkGalaxies() {
+        Galaxies result = {false, true, true, true, true, true, true};
+        s32 comets = 0, daredevil = 0, cosmic = 0, speedy = 0, purpleCoins = 0, hidden = 0;
         JMapInfo galaxies;
         galaxies.attach(&cGalaxyInfoTable);
         for (s32 i = 0; i < galaxies.getNumEntries(); i++) {
@@ -59,24 +90,51 @@ namespace {
             const GalaxyStatusAccessor galaxy = MR::makeGalaxyStatusAccessor(pName);
             const s32 comet = galaxy.getNormalCometScenarioNo();
             if (comet > 0) {
+                const bool owned = galaxy.hasPowerStar(comet);
+                const char* pKind = galaxy.getCometName(comet);
                 comets++;
-                *pComets = *pComets && galaxy.hasPowerStar(comet);
+                result.mComets = result.mComets && owned;
+                result.mAnyComet = result.mAnyComet || owned;
+                if (pKind != nullptr && MR::isEqualString(pKind, "Dark")) {
+                    daredevil++;
+                    result.mDaredevil = result.mDaredevil && owned;
+                } else if (pKind != nullptr && MR::isEqualString(pKind, "Ghost")) {
+                    cosmic++;
+                    result.mCosmic = result.mCosmic && owned;
+                } else if (pKind != nullptr && MR::isEqualString(pKind, "Red")) {
+                    speedy++;
+                    result.mSpeedy = result.mSpeedy && owned;
+                }
             }
             const s32 purple = galaxy.getCoin100CometScenarioNo();
             if (purple > 0) {
+                const bool owned = galaxy.hasPowerStar(purple);
                 purpleCoins++;
-                *pPurpleCoins = *pPurpleCoins && galaxy.hasPowerStar(purple);
+                result.mPurpleCoins = result.mPurpleCoins && owned;
+                result.mAnyComet = result.mAnyComet || owned;
             }
             for (s32 scenario = 1; scenario <= galaxy.getScenarioNum(); scenario++) {
                 if (galaxy.isHiddenStar(scenario)) {
                     hidden++;
-                    *pHidden = *pHidden && galaxy.hasPowerStar(scenario);
+                    result.mHidden = result.mHidden && galaxy.hasPowerStar(scenario);
                 }
             }
         }
-        *pComets = *pComets && comets > 0;
-        *pPurpleCoins = *pPurpleCoins && purpleCoins > 0;
-        *pHidden = *pHidden && hidden > 0;
+        result.mComets = result.mComets && comets > 0;
+        result.mDaredevil = result.mDaredevil && daredevil > 0;
+        result.mCosmic = result.mCosmic && cosmic > 0;
+        result.mSpeedy = result.mSpeedy && speedy > 0;
+        result.mPurpleCoins = result.mPurpleCoins && purpleCoins > 0;
+        result.mHidden = result.mHidden && hidden > 0;
+        return result;
+    }
+
+    // Lives and Star Bits change mid-stage; checked at each stage start and once a second.
+    void checkCounters() {
+        const s32 starBits = GameDataFunction::getStockedStarPieceNum();
+        tryUnlock(starBits >= 1000, "bits1000", cIconStarBit);
+        tryUnlock(starBits >= 9999, "bank", cIconStarBit);
+        tryUnlock(GameDataFunction::getPlayerLeft() >= 99, "lives", cIconOneUp);
     }
 };  // namespace
 
@@ -87,66 +145,91 @@ namespace NebulaAchievements {
         if (stars <= 0) {
             return;
         }
-        if (GameDataFunction::isOnGameEventFlag("ViewNormalEnding")) {
-            tryUnlock("ending");
-        }
-        if (stars >= 120) {
-            tryUnlock(GameDataFunction::isDataMario() ? "stars120" : "luigi120");
-        }
-        if (GameDataFunction::hasPowerStar("PeachCastleFinalGalaxy", 1)) {
-            tryUnlock("grandfinale");
-        }
-        bool comets = true, purpleCoins = true, hidden = true;
-        checkGalaxies(&comets, &purpleCoins, &hidden);
-        if (comets) {
-            tryUnlock("comets");
-        }
-        if (purpleCoins) {
-            tryUnlock("purplecoins");
-        }
-        if (hidden) {
-            tryUnlock("hidden");
-        }
+        const bool mario = GameDataFunction::isDataMario();
+
+        // The story, in the order it is played.
+        tryUnlock("first_star", cIconPowerStar);
+        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarGrand1"), "gateway", cIconGrandStar);
+        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarGrand2"), "robot_reactor", cIconGrandStar);
+        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarGrand3"), "star_reactor", cIconGrandStar);
+        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarGrand4"), "airship_armada", cIconGrandStar);
+        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarGrand5"), "dark_matter", cIconGrandStar);
+        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarGrand6"), "lava_reactor", cIconGrandStar);
+        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarLuigiRescued"), "luigi_found", cIconLuigi);
+        tryUnlock(stars >= 60, "halfway", cIconPowerStar);
+        tryUnlock(GameDataFunction::isOnGameEventFlag("ViewNormalEnding"), "ending", cIconPeach);
+        tryUnlock(GameDataFunction::getPictureBookChapterAlreadyRead() >= 9, "storybook", cIconLetter);
+
+        // The extras, met along the way.
+        const Galaxies galaxies = checkGalaxies();
+        tryUnlock(galaxies.mAnyComet, "first_comet", cIconComet);
+        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarRed1"), "red_star", cIconRedStar);
+        tryUnlock(!mario, "luigi_play", cIconLuigi);
+
         // The Hungry Lumas that make a galaxy: the alms with a real target (the others are capped at 32767).
-        bool fed = true;
+        bool anyFed = false, allFed = true;
         for (s32 i = 0; i < 16; i++) {
             const s32 target = GameDataFunction::getStarPieceNumMaxGivingToTicoSeed(i);
-            if (target < 32767 && GameDataFunction::getStarPieceNumGivingToTicoSeed(i) < target) {
-                fed = false;
+            if (target >= 32767) {
+                continue;
+            }
+            if (GameDataFunction::getStarPieceNumGivingToTicoSeed(i) >= target) {
+                anyFed = true;
+            } else {
+                allFed = false;
             }
         }
-        if (fed) {
-            tryUnlock("lumas");
-        }
-        if (GameDataFunction::getPictureBookChapterAlreadyRead() >= 9) {
-            tryUnlock("storybook");
-        }
-        if (GameDataFunction::getStockedStarPieceNum() >= 9999) {
-            tryUnlock("bank");
-        }
-        if (GameDataFunction::getPlayerLeft() >= 99) {
-            tryUnlock("lives");
-        }
+        tryUnlock(anyFed, "first_luma", cIconHungryLuma);
+
+        // The challenges.
+        tryUnlock(stars >= 120 && mario, "stars120", cIconCrown);
+        tryUnlock(stars >= 120 && !mario, "luigi120", cIconLuigi);
+        tryUnlock(GameDataFunction::hasPowerStar("PeachCastleFinalGalaxy", 1), "grandfinale", cIconRainbowStar);
+        tryUnlock(galaxies.mComets, "comets", cIconComet);
+        tryUnlock(galaxies.mDaredevil, "daredevil", cIconComet);
+        tryUnlock(galaxies.mCosmic, "cosmic", cIconMario);
+        tryUnlock(galaxies.mSpeedy, "speedy", cIconComet);
+        tryUnlock(galaxies.mPurpleCoins, "purplecoins", cIconPurpleCoin);
+        tryUnlock(galaxies.mHidden, "hidden", cIconQuestion);
+        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarGreenAll"), "greenstars", cIconGreenStar);
+        tryUnlock(GameDataFunction::hasPowerStar("TamakoroExLv2Galaxy", 1) && GameDataFunction::hasPowerStar("SurfingLv2Galaxy", 1) &&
+                      GameDataFunction::hasPowerStar("CubeBubbleExLv2Galaxy", 1),
+                  "trials", cIconSilverStar);
+        tryUnlock(allFed && anyFed, "lumas", cIconHungryLuma);
+        checkCounters();
+        sUpdateFrames = 0;
     }
 
     void update() {
-        if (sShowFrames > 0) {
-            if (--sShowFrames == 0) {
-                MR::disappearInformationMessage();
-            }
+        if (++sUpdateFrames < 60) {
             return;
         }
-        if (sQueued == 0 || MR::isDemoActive() || !MR::isDeadInformationMessage()) {
+        sUpdateFrames = 0;
+        if (MR::getPowerStarNum() > 0) {
+            checkCounters();
+        }
+    }
+
+    const wchar_t* getWaiting(s32* pIcon) {
+        if (sQueued == 0) {
+            return nullptr;
+        }
+        *pIcon = sQueue[0].mIcon;
+        return sQueue[0].mName;
+    }
+
+    void popWaiting() {
+        if (sQueued == 0) {
             return;
         }
-        MR::appearInformationMessage(sQueue[0], false);
-        sShowFrames = cShowFrames;
         for (s32 i = 1; i < sQueued; i++) {
-            for (s32 c = 0; c < 64; c++) {
-                sQueue[i - 1][c] = sQueue[i][c];
-            }
+            sQueue[i - 1] = sQueue[i];
         }
         sQueued--;
+    }
+
+    bool isMoreWaiting() {
+        return sQueued > 1;
     }
 };  // namespace NebulaAchievements
 #endif

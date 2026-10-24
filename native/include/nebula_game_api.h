@@ -299,8 +299,8 @@ typedef struct NebulaHostServices {
     /* What the player is doing, for Discord: the galaxy and the star (UTF-16, the game's own text in the played
        language; either may be NULL) and the Power Stars collected (-1: not in a file). Reported when it changes. */
     void (*presence)(void* user, const uint16_t* galaxy, const uint16_t* star, int32_t power_stars);
-    /* An achievement the save data meets (galaxy::achievements' id): 1 when it was not unlocked before, with its name
-       (UTF-16, NUL-terminated, at most `capacity` units) for the game's banner; else 0. */
+    /* An achievement the save data meets (galaxy::achievements' id): 1 when it was not unlocked before, with its
+       English name (UTF-16, NUL-terminated, at most `capacity` units; `name` may be NULL); else 0. */
     int (*achievement)(void* user, const char* id, uint16_t* name, uint32_t capacity);
 } NebulaHostServices;
 

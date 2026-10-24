@@ -2785,12 +2785,17 @@ std::vector<SettingsRow> game_page(const RuntimeSettings& runtime) {
                         s_native_settings_dirty.store(true, std::memory_order_release);
                     },
                     "SHOWS YOUR GALAXY AND STAR IN DISCORD WHILE IT RUNS"});
-    rows.push_back({"ACHIEVEMENTS", {}, nullptr, {}, true});
-    for (const galaxy::achievements::Info& info : galaxy::achievements::list()) {
-        std::string name = info.name;
-        for (char& c : name) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-        rows.push_back({name, galaxy::achievements::unlocked(info.id) ? std::string("UNLOCKED") : std::string("-"),
-                        nullptr, info.hint});
+    for (const auto& [group, heading] : {std::pair{galaxy::achievements::Group::Story, "ACHIEVEMENTS - STORY"},
+                                         std::pair{galaxy::achievements::Group::Challenge, "ACHIEVEMENTS - CHALLENGES"},
+                                         std::pair{galaxy::achievements::Group::Extra, "ACHIEVEMENTS - EXTRAS"}}) {
+        rows.push_back({heading, {}, nullptr, {}, true});
+        for (const galaxy::achievements::Info& info : galaxy::achievements::list()) {
+            if (info.group != group) continue;
+            std::string name = info.name;
+            for (char& c : name) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+            rows.push_back({name, galaxy::achievements::unlocked(info.id) ? std::string("UNLOCKED") : std::string("-"),
+                            nullptr, info.hint});
+        }
     }
     {
         rows.push_back({"MIIS", {}, nullptr, {}, true});

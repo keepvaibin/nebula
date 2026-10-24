@@ -13,7 +13,7 @@
 #include "Game/System/GameSequenceFunction.hpp"
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemSceneController.hpp"
-#include "Game/System/Language.hpp"
+#include "Game/System/NebulaText.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/GamePadUtil.hpp"
 #include "Game/Util/JMapIdInfo.hpp"
@@ -188,25 +188,12 @@ namespace {
         return ++sStallSteps >= cStallSteps;
     }
 
-    // The question in the played language (the game's own Yes and No answer it), its lines broken as the
-    // game's messages are (its text boxes do not wrap).
+    // The question in the played language (NebulaText; the game's own Yes and No answer it), its lines broken as
+    // the game's messages are (its text boxes do not wrap).
     const wchar_t* promptText() {
-        switch (MR::getLanguage()) {
-        case LANGUAGE_USFRENCH:
-        case LANGUAGE_EUFRENCH:
-            return L"Voulez-vous vraiment passer\ncette cin\u00e9matique ?";
-        case LANGUAGE_USSPANISH:
-        case LANGUAGE_EUSPANISH:
-            return L"\u00bfSeguro que quieres saltar\nesta escena?";
-        case LANGUAGE_EUGERMAN:
-            return L"M\u00f6chtest du diese Zwischensequenz\nwirklich \u00fcberspringen?";
-        case LANGUAGE_EUITALIAN:
-            return L"Vuoi davvero saltare\nquesta scena?";
-        case LANGUAGE_EUDUTCH:
-            return L"Wil je dit tussenfilmpje\necht overslaan?";
-        default:
-            return L"Are you sure you would like to skip\nthis cutscene?";
-        }
+        static wchar_t question[128];
+        NebulaText::get(question, 128, "SkipCutsceneQuestion");
+        return question;
     }
 
     void mute(bool on) {

@@ -4,18 +4,22 @@
 #include <span>
 #include <string_view>
 
-// Nebula's achievements. The game checks them against its save data (NebulaAchievements, at each stage start) and
-// asks the host to unlock them; they are kept across save files in achievements.ini next to the settings.
+// Nebula's achievements. The game checks them against its save data (NebulaAchievements) and asks the host to unlock
+// them; they are kept across save files in achievements.ini next to the settings.
 namespace galaxy::achievements {
+
+enum class Group { Story, Challenge, Extra };
 
 struct Info {
     const char* id;
-    const char* name;  // as the game's banner and the settings page show it
+    Group group;
+    const char* name;  // English, as the settings page shows it
     const char* hint;
 };
 
-// The catalogue, in the order the settings page lists it.
+// The catalogue, in the order the settings page lists it (grouped).
 [[nodiscard]] std::span<const Info> list() noexcept;
+[[nodiscard]] const Info* find(std::string_view id) noexcept;
 // True when `id` is in the catalogue and was not unlocked yet; it is then saved as unlocked.
 bool unlock(std::string_view id);
 [[nodiscard]] bool unlocked(std::string_view id);

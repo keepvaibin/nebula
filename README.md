@@ -53,6 +53,8 @@ the Petari decompilation by SMGCommunity, compiled for the PC with the changes a
   Dolphin's format (`textures/`, `tex1_` PNG or DDS) and movies (`movies/<THP name>.mp4`, `.webm` or `.mkv`, played
   in place of the game's THP video). Import a zip, 7z, rar or folder from the launcher's Mods tab or Settings >
   MODS, or drop it on the game window. Among enabled mods the higher one wins a file or texture.
+- Nebula's own text (its buttons, questions and achievements) is in all 14 of the game's languages and can be
+  changed or translated by a mod: [docs/MODDING_NEBULA_TEXT.md](docs/MODDING_NEBULA_TEXT.md).
 - When Nebula stops, it shows an error code ([docs/ERROR_CODES.md](docs/ERROR_CODES.md)) naming the cause and saves
   a report in `%LOCALAPPDATA%\Nebula\crashes`.
 

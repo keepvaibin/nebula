@@ -431,6 +431,8 @@ bool layouts() {
         ok &= expect(read("/UsEnglish/MessageData/Message.arc") == "MOD ENGLISH", "the mod's English");
         ok &= expect(read("/UsFrench/MessageData/Message.arc") == "MOD ENGLISH",
                      "French played: the mod's English stands in (it has no French)");
+        ok &= expect(read("/UsFrench/MessageData/NebulaText.txt") == "language = UsEnglish\n",
+                     "Nebula's own text follows the mod's English");
         ok &= expect(active->texture_folders.size() == 1u && active->texture_folders[0] == mods / "C Pack",
                      "the pack's folder for the textures");
         ok &= expect(active->report.find("Nowhere.arc: no file of that name") != std::string::npos,

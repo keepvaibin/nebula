@@ -3,7 +3,7 @@
 #ifdef TARGET_PC
 #include "Game/Screen/ButtonPaneController.hpp"
 #include "Game/Screen/LayoutManager.hpp"
-#include "Game/System/Language.hpp"
+#include "Game/System/NebulaText.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -16,24 +16,11 @@ namespace {
     // The button waits this long after its corner frees up: a pointer crossing between files does not flash it.
     const s32 cShowDelayFrames = 8;
 
-    // The label in the played language (the game's own Yes and No answer the question).
+    // The label in the played language (NebulaText; the game's own Yes and No answer the question).
     const wchar_t* getLabel() {
-        switch (MR::getLanguage()) {
-        case LANGUAGE_USFRENCH:
-        case LANGUAGE_EUFRENCH:
-            return L"Quitter vers le bureau";
-        case LANGUAGE_USSPANISH:
-        case LANGUAGE_EUSPANISH:
-            return L"Salir al escritorio";
-        case LANGUAGE_EUGERMAN:
-            return L"Zum Desktop";
-        case LANGUAGE_EUITALIAN:
-            return L"Esci al desktop";
-        case LANGUAGE_EUDUTCH:
-            return L"Naar bureaublad";
-        default:
-            return L"Quit to desktop";
-        }
+        static wchar_t label[64];
+        NebulaText::get(label, 64, "QuitToDesktop");
+        return label;
     }
 
     nw4r::lyt::TextBox* asTextBox(nw4r::lyt::Pane* pPane) {
@@ -204,21 +191,8 @@ bool NebulaQuitButton::isPointing() const {
 
 // The question the button asks, in the played language.
 const wchar_t* NebulaQuitButton::getQuestion() {
-    switch (MR::getLanguage()) {
-    case LANGUAGE_USFRENCH:
-    case LANGUAGE_EUFRENCH:
-        return L"Voulez-vous vraiment quitter ?";
-    case LANGUAGE_USSPANISH:
-    case LANGUAGE_EUSPANISH:
-        return L"\u00bfSeguro que quieres salir?";
-    case LANGUAGE_EUGERMAN:
-        return L"M\u00f6chtest du das Spiel wirklich beenden?";
-    case LANGUAGE_EUITALIAN:
-        return L"Vuoi davvero uscire?";
-    case LANGUAGE_EUDUTCH:
-        return L"Wil je echt afsluiten?";
-    default:
-        return L"Are you sure you want to quit?";
-    }
+    static wchar_t question[128];
+    NebulaText::get(question, 128, "QuitQuestion");
+    return question;
 }
 #endif
