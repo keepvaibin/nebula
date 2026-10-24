@@ -723,12 +723,6 @@ void RendererVk::record_scene_aa() {
     if (!post_.ready() || !efb_.color || post_.settings().aa == PostProcessSettings::Aa::kOff || efb_.samples > 1u) {
         return;
     }
-    // GALAXY_AA_SPLIT=<0..1>: the part of the picture left of it stays unfiltered (A/B captures).
-    static const float split = [] {
-        const char* value = std::getenv("GALAXY_AA_SPLIT");
-        return value != nullptr && value[0] != '\0'
-            ? std::clamp(static_cast<float>(std::strtod(value, nullptr)), 0.0f, 1.0f) : 0.0f;
-    }();
     if (logging()) {
         recording_log_.ops.push_back({ReplayKind::SceneAa, 0u});
     }
@@ -745,7 +739,7 @@ void RendererVk::record_scene_aa() {
         static_cast<unsigned>(std::max(content.width, 1)), static_cast<unsigned>(std::max(content.height, 1)),
         allocate);
     begin_efb_pass();
-    post_.finish_scene_aa(commands_, ran, color.width, color.height, split, allocate);
+    post_.finish_scene_aa(commands_, ran, color.width, color.height, allocate);
     if (replay_list_ != nullptr && ran != AaRun::kNone) {
         post_.hold_scene_targets(replay_list_->held);
     }
@@ -1231,9 +1225,7 @@ bool RendererVk::copy_efb_to_texture(const EfbCopyParams& params, TextureCache& 
     // The game composites its picture from EFB->texture copies; half_scale halves both dimensions (a 2x2 box).
     const unsigned dw_unscaled = params.half_scale ? std::max(1u, params.src_width / 2u) : params.src_width;
     const unsigned dh_unscaled = params.half_scale ? std::max(1u, params.src_height / 2u) : params.src_height;
-    const EffectCopyPolicy policy = effect_copy_policy();
-    const bool native = (policy.native_bloom_workspace || policy.native_effect_copies) && efb_scale_ > 1u &&
-        is_effect_copy(policy, params, is_depth_copy, dw_unscaled, dh_unscaled);
+    const bool native = efb_scale_ > 1u && is_effect_copy(dw_unscaled, dh_unscaled);
     const ScaledEfbCopyExtent extent = compute_scaled_efb_copy_extent(
         static_cast<std::uint16_t>(dw_unscaled), static_cast<std::uint16_t>(dh_unscaled), native ? 1u : efb_scale_);
     const unsigned w = extent.width;
@@ -1322,7 +1314,7 @@ bool RendererVk::copy_efb_to_texture(const EfbCopyParams& params, TextureCache& 
         // An exact colour copy: the EFB's texels as they are.
         end_efb_pass();
         const VkCommandBuffer commands = commands_;
-            image_barrier(commands, efb_.color->image, VK_IMAGE_ASPECT_COLOR_BIT,
+        image_barrier(commands, efb_.color->image, VK_IMAGE_ASPECT_COLOR_BIT,
                       VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                       VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
                       VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_READ_BIT);

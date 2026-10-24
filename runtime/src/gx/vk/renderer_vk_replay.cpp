@@ -15,7 +15,6 @@
 
 #include <algorithm>
 #include <chrono>
-#include <cstdlib>
 #include <cstring>
 #include <iostream>
 
@@ -31,14 +30,6 @@ constexpr VkDeviceSize kEvalFrameBlock = 256u;
 }  // namespace
 
 bool RendererVk::interpolation_mode() const {
-    // GALAXY_INTERPOLATION=0 turns it off (diagnostics).
-    static const bool allowed = [] {
-        const char* value = std::getenv("GALAXY_INTERPOLATION");
-        return value == nullptr || value[0] != '0';
-    }();
-    if (!allowed) {
-        return false;
-    }
     const RenderConfig cfg = get_render_config();
     const double rate = present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, display_refresh_hz_);
     return interpolated_frames_per_game_frame(rate) != 0u;

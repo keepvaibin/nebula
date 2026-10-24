@@ -156,39 +156,21 @@ static_assert(sizeof(UiSolidQuadConstants) == 13u * sizeof(std::uint32_t));
     const EfbPeekSamplingGeometry& sampling,
     EfbPeekKind kind) noexcept;
 
-// A byte budget from a megabyte count in `variable` (digits only), else `default_bytes`; zero means the default when
-// `zero_uses_default`.
-[[nodiscard]] std::uint64_t read_megabyte_budget(
-    const char* variable, std::uint64_t default_bytes, bool zero_uses_default,
-    std::uint64_t maximum_bytes = std::numeric_limits<std::uint64_t>::max());
-// The EFB-copy destination cache's byte budget (GALAXY_EFB_COPY_DEST_BUDGET_MB, 192 MiB): it scales with the internal
-// resolution squared while the budget stays fixed, so it is the one resolution-scaled GPU pool that is neither a
-// render target nor visible in a recording.
+// The EFB-copy destination cache's byte budget, 192 MiB. The cache grows with the internal resolution squared while
+// the budget stays fixed, so it is the one resolution-scaled GPU pool that is neither a render target nor visible in
+// a recording.
 [[nodiscard]] std::uint64_t efb_copy_dest_budget_bytes();
 
 // Effect copies (destinations up to 320x228: the bloom pyramid, simple bloom, depth of field, Mario's 160x160
 // shadow capture) are built at the game's own resolution, box-filtered over the scaled EFB. Their low resolution is
 // part of the effect: the blur kernels use fixed screen-relative tap offsets and rely on it to soften, so scaled
-// copies turn the taps into separate offset images. Full-size captures stay scaled.
-// GALAXY_NATIVE_EFFECT_COPIES=0 keeps only the three bloom workspace copies native when
-// GALAXY_NATIVE_BLOOM_WORKSPACE=1 (after Dolphin's Super Mario Galaxy Native Bloom mod, iwubcode, GPL-2.0-or-later).
-struct EffectCopyPolicy {
-    bool native_effect_copies = true;
-    bool native_bloom_workspace = false;
-};
-[[nodiscard]] EffectCopyPolicy effect_copy_policy() noexcept;  // environment, read once
-[[nodiscard]] bool is_effect_copy(const EffectCopyPolicy& policy, const EfbCopyParams& params, bool is_depth_copy,
-                                  unsigned width, unsigned height) noexcept;
+// copies turn the taps into separate offset images. Full-size captures stay scaled. After Dolphin's Super Mario
+// Galaxy Native Bloom mod (iwubcode, GPL-2.0-or-later).
+[[nodiscard]] bool is_effect_copy(unsigned width, unsigned height) noexcept;
 
-// Present pacing (environment, read once): the VI paces presents in real time (GALAXY_REALTIME_VI, on), with a
-// bounded smoothing wait before each VI-paced present (GALAXY_SMOOTH_REALTIME_PRESENT, on;
-// GALAXY_SMOOTH_REALTIME_PRESENT_MAX_WAIT_US, 2000, at most 8000).
-[[nodiscard]] bool realtime_vi_paces_present();
-[[nodiscard]] bool smooth_realtime_present_enabled();
-[[nodiscard]] std::uint64_t smooth_realtime_present_max_wait_us();
-
-// Holds each present to the frame-rate cap when the display does not (vsync off), and smooths a VI-paced present
-// that arrives early by at most the smoothing wait: a high-resolution sleep to 0.2 ms before the target, then yields.
+// Present pacing with vsync off and a frame-rate cap. The VI paces presents; the pacer smooths one that arrives
+// early by waiting at most 2 ms toward its slot at the cap: a high-resolution sleep to 0.2 ms before the target,
+// then yields.
 class PresentPacer {
 public:
     PresentPacer() noexcept;

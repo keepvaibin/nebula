@@ -1746,8 +1746,7 @@ void RendererVk::ensure_native_settings_corner_texture_loaded() {
         return;
     }
     corner_texture_tried_ = true;
-    if (env_flag("GALAXY_DISABLE_SETTINGS_CORNER_TEXTURE", false) ||
-        host_window::native_settings_content_root.empty()) {
+    if (host_window::native_settings_content_root.empty()) {
         return;
     }
     const auto texture = load_game_texture(host_window::native_settings_content_root,

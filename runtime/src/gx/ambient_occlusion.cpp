@@ -6,9 +6,6 @@
 
 #include <algorithm>
 #include <bit>
-#include <cmath>
-#include <cstdio>
-#include <cstdlib>
 #include <iostream>
 
 #include "ao_apply_ps.h"
@@ -33,34 +30,11 @@ static_assert(sizeof(Constants) == 80u);
 constexpr DXGI_FORMAT kOcclusionFormat = DXGI_FORMAT_R16G16_FLOAT;
 constexpr DXGI_FORMAT kDistanceFormat = DXGI_FORMAT_R32_FLOAT;
 
-float read_env_float(const char* name, float fallback) {
-    char value[32]{};
-    std::size_t length = 0u;
-    if (getenv_s(&length, value, sizeof(value), name) != 0 || length <= 1u) {
-        return fallback;
-    }
-    const float parsed = std::strtof(value, nullptr);
-    return std::isfinite(parsed) ? parsed : fallback;
-}
-
-// The occlusion's reach and look. XeGTAO's defaults (radius 0.5 m times its 1.457 multiplier, final power 2.2) in the
-// game's units (centimetres: Mario stands about 160 tall). GALAXY_AO_RADIUS, _POWER and _STRENGTH override them.
-struct Tuning {
-    float radius = 73.0f;
-    float power = 2.2f;
-    float strength = 1.0f;
-};
-
-const Tuning& tuning() {
-    static const Tuning t = [] {
-        Tuning out;
-        out.radius = std::clamp(read_env_float("GALAXY_AO_RADIUS", out.radius), 1.0f, 2000.0f);
-        out.power = std::clamp(read_env_float("GALAXY_AO_POWER", out.power), 0.1f, 8.0f);
-        out.strength = std::clamp(read_env_float("GALAXY_AO_STRENGTH", out.strength), 0.0f, 1.0f);
-        return out;
-    }();
-    return t;
-}
+// The occlusion's reach and look: XeGTAO's defaults (radius 0.5 m times its 1.457 multiplier, final power 2.2) in the
+// game's units (centimetres: Mario stands about 160 tall).
+constexpr float kRadius = 73.0f;
+constexpr float kPower = 2.2f;
+constexpr float kStrength = 1.0f;
 
 D3D12_SHADER_BYTECODE code(const void* bytes, std::size_t size) {
     return {bytes, size};
@@ -117,9 +91,6 @@ bool AmbientOcclusion::initialize(ID3D12Device* device) {
         std::cerr << "[ambient-occlusion] denoise pipeline failed\n";
         return false;
     }
-    char value[8]{};
-    std::size_t length = 0u;
-    timed_ = getenv_s(&length, value, sizeof(value), "GALAXY_TRACE_AO") == 0 && length > 1u && value[0] == '1';
     ready_ = true;
     return true;
 }
@@ -135,10 +106,6 @@ void AmbientOcclusion::shutdown() noexcept {
     raw_ = {};
     denoised_ = {};
     retired_.clear();
-    queries_.Reset();
-    readback_.Reset();
-    pending_ = {};
-    ms_sum_ = {};
     device_ = nullptr;
 }
 
@@ -245,36 +212,7 @@ bool AmbientOcclusion::record(ID3D12GraphicsCommandList* list, DescriptorRing& r
         !ensure_target(denoised_, kOcclusionFormat, width, height, frame_index, frames_in_flight)) {
         return false;
     }
-    if (timed_ && in.timing_slot >= 0 && !queries_) {
-        D3D12_QUERY_HEAP_DESC qhd{};
-        qhd.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
-        qhd.Count = static_cast<UINT>(pending_.size() * kStamps);
-        D3D12_HEAP_PROPERTIES hp{};
-        hp.Type = D3D12_HEAP_TYPE_READBACK;
-        D3D12_RESOURCE_DESC rd{};
-        rd.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-        rd.Width = pending_.size() * kStamps * sizeof(std::uint64_t);
-        rd.Height = 1;
-        rd.DepthOrArraySize = 1;
-        rd.MipLevels = 1;
-        rd.SampleDesc.Count = 1;
-        rd.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-        if (FAILED(device_->CreateQueryHeap(&qhd, IID_PPV_ARGS(&queries_))) ||
-            FAILED(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_COPY_DEST,
-                                                    nullptr, IID_PPV_ARGS(&readback_)))) {
-            queries_.Reset();
-        }
-    }
-    const bool time_pass = timed_ && queries_ && in.timing_slot >= 0 &&
-                           static_cast<std::size_t>(in.timing_slot) < pending_.size();
-    const auto stamp = [&](unsigned n) {
-        if (time_pass) {
-            list->EndQuery(queries_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, static_cast<UINT>(in.timing_slot) * kStamps + n);
-        }
-    };
-    stamp(0u);
 
-    const Tuning& t = tuning();
     Constants c{};
     // An EFB pixel centre's eye ray (z = -1): NDC from the viewport, then through the projection (x' = A x + B z).
     const float a = in.view.projection[0];
@@ -299,9 +237,9 @@ bool AmbientOcclusion::record(ID3D12GraphicsCommandList* list, DescriptorRing& r
     c.depth[1] = in.view.z_offset;
     c.depth[2] = in.view.min_depth;
     c.depth[3] = in.view.max_depth;
-    c.params[0] = t.radius;
-    c.params[1] = t.power;
-    c.params[2] = t.strength;
+    c.params[0] = kRadius;
+    c.params[1] = kPower;
+    c.params[2] = kStrength;
     c.params[3] = std::max(8.0f, 0.12f * in.view.viewport[3] / static_cast<float>(divisor));
     c.size[0] = width;
     c.size[1] = height;
@@ -359,20 +297,17 @@ bool AmbientOcclusion::record(ID3D12GraphicsCommandList* list, DescriptorRing& r
     list->SetComputeRootDescriptorTable(2, gpu(6));
     list->Dispatch(groups_x, groups_y, 1);
     transition(list, distance_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-    stamp(1u);
     transition(list, raw_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     list->SetPipelineState(occlusion_.Get());
     list->SetComputeRootDescriptorTable(2, gpu(7));
     list->Dispatch(groups_x, groups_y, 1);
     transition(list, raw_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-    stamp(2u);
     transition(list, denoised_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     list->SetPipelineState(denoise_.Get());
     list->SetComputeRootDescriptorTable(1, gpu(3));
     list->SetComputeRootDescriptorTable(2, gpu(8));
     list->Dispatch(groups_x, groups_y, 1);
     transition(list, denoised_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-    stamp(3u);
 
     list->SetGraphicsRootSignature(root_signature_.Get());
     list->SetGraphicsRoot32BitConstants(0, sizeof(Constants) / 4u, &c, 0);
@@ -385,53 +320,7 @@ bool AmbientOcclusion::record(ID3D12GraphicsCommandList* list, DescriptorRing& r
     list->RSSetScissorRects(1, &scissor);
     list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     list->DrawInstanced(3, 1, 0, 0);
-
-    stamp(4u);
-    if (time_pass) {
-        const UINT slot = static_cast<UINT>(in.timing_slot);
-        list->ResolveQueryData(queries_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, slot * kStamps, kStamps, readback_.Get(),
-                               static_cast<UINT64>(slot) * kStamps * sizeof(std::uint64_t));
-        pending_[slot] = true;
-    }
     return true;
-}
-
-void AmbientOcclusion::read_timing(std::uint64_t timestamp_frequency, unsigned frame_slot) {
-    if (frame_slot >= pending_.size() || !pending_[frame_slot] || !readback_ || timestamp_frequency == 0u) {
-        return;
-    }
-    pending_[frame_slot] = false;
-    const SIZE_T offset = static_cast<SIZE_T>(frame_slot) * kStamps * sizeof(std::uint64_t);
-    const D3D12_RANGE range{offset, offset + kStamps * sizeof(std::uint64_t)};
-    void* mapped = nullptr;
-    if (FAILED(readback_->Map(0, &range, &mapped))) {
-        return;
-    }
-    const auto* ticks = reinterpret_cast<const std::uint64_t*>(static_cast<const std::byte*>(mapped) + offset);
-    const auto ms = [&](unsigned from, unsigned to) {
-        return ticks[to] >= ticks[from]
-            ? static_cast<double>(ticks[to] - ticks[from]) * 1000.0 / static_cast<double>(timestamp_frequency)
-            : 0.0;
-    };
-    for (unsigned pass = 0; pass + 1u < kStamps; ++pass) {
-        ms_sum_[pass] += ms(pass, pass + 1u);
-    }
-    const double total = ms(0u, kStamps - 1u);
-    ms_sum_[kStamps - 1u] += total;
-    const D3D12_RANGE none{0, 0};
-    readback_->Unmap(0, &none);
-    ms_max_ = std::max(ms_max_, total);
-    if (++samples_ < 300u) {
-        return;
-    }
-    std::fprintf(stderr,
-                 "[ambient-occlusion] occlusion %ux%u gpu-ms mean=%.3f max=%.3f (distances %.3f occlusion %.3f "
-                 "denoise %.3f multiply %.3f)\n",
-                 raw_.width, raw_.height, ms_sum_[4] / samples_, ms_max_, ms_sum_[0] / samples_,
-                 ms_sum_[1] / samples_, ms_sum_[2] / samples_, ms_sum_[3] / samples_);
-    ms_sum_ = {};
-    ms_max_ = 0.0;
-    samples_ = 0;
 }
 
 }  // namespace galaxy::gx

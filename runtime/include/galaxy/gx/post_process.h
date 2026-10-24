@@ -72,14 +72,13 @@ public:
 
     // SMAA or FXAA of the 3D scene in `color` (RGBA8, RENDER_TARGET state, `width` x `height`) in
     // place: RGB only, the alpha the game left there stays. `picture_*` is the part the display
-    // copy shows and `display_*` its size on screen (kAuto skips a supersampled scene). Pixels
-    // left of `split` x width stay as they are (side-by-side comparisons; 0 for all). Returns the
-    // pass that ran.
+    // copy shows and `display_*` its size on screen (kAuto skips a supersampled scene). Returns
+    // the pass that ran.
     AaRun record_scene_aa(ID3D12GraphicsCommandList* list, DescriptorRing& srv_ring,
                           ID3D12Resource* color, D3D12_CPU_DESCRIPTOR_HANDLE color_rtv,
                           unsigned width, unsigned height, unsigned picture_width,
                           unsigned picture_height, unsigned display_width, unsigned display_height,
-                          float split, std::uint64_t frame_index, unsigned frames_in_flight);
+                          std::uint64_t frame_index, unsigned frames_in_flight);
 
     [[nodiscard]] const PostProcessSettings& settings() const noexcept { return settings_; }
 
@@ -128,15 +127,13 @@ private:
     // stair-stepped edge, on `queue`, waiting for the GPU.
     void self_test(ID3D12CommandQueue* queue);
     // Binds `inputs` as t0..t2 and draws the full-target triangle into the
-    // render target the caller has bound, inside `viewport` (and `scissor`
-    // when given).
+    // render target the caller has bound, inside `viewport`.
     void draw(ID3D12GraphicsCommandList* list, DescriptorRing& srv_ring,
               ID3D12PipelineState* pipeline,
               std::initializer_list<ID3D12Resource*> inputs,
               std::initializer_list<DXGI_FORMAT> formats,
               const D3D12_VIEWPORT& viewport,
-              const Constants& constants,
-              const D3D12_RECT* scissor = nullptr);
+              const Constants& constants);
     void note_aa_run(const PostProcessPlan& plan, AaRun ran);
     void release_retired(std::uint64_t frame_index) noexcept;
 

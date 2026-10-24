@@ -246,8 +246,6 @@ public:
     // The scene's anti-aliasing (post_process.h) in the render EFB at the end of the 3D scene,
     // before the 2D layer and begin_output_efb. A temporal upscaler antialiases the scene itself.
     void record_scene_aa();
-    // GALAXY_TRACE_SCENE_AA=1: the pass's GPU time per game frame, logged every 300 frames.
-    void read_scene_aa_timing();
     // Ambient occlusion (ambient_occlusion.h) of the scene drawn so far, from the view `set_scene_ao_view` gave:
     // after the opaque phases, before the translucent ones; sub-frames replay it.
     [[nodiscard]] bool ambient_occlusion_ready() const noexcept { return ambient_occlusion_.ready(); }
@@ -366,10 +364,11 @@ public:
     [[nodiscard]] bool replay_playing() const noexcept { return run_valid_; }
     // Replay serial (game frame) of the playing log.
     [[nodiscard]] std::uint64_t playing_serial() const noexcept { return run_serial_; }
-    // Interpolation mode: present rate above 60, temporal upscaler off, not
-    // GALAXY_INTERPOLATION=0. Rings then keep one segment per
-    // game frame (advanced at the first frame after a display copy) and the
-    // log spans every render chunk of the game frame up to its display copy.
+    // Interpolation mode: a present rate above 60 (with a temporal upscaler,
+    // while suspend_temporal_interpolation has not stopped it). Rings then keep
+    // one segment per game frame (advanced at the first frame after a display
+    // copy) and the log spans every render chunk of the game frame up to its
+    // display copy.
     [[nodiscard]] bool interpolation_mode() const;
     // The game-frame ring segment in interpolation mode (resources a log
     // names must outlive it: it comes round again only after its fence),
@@ -495,7 +494,7 @@ public:
         return std::exchange(copy_redirect_stats_, CopyRedirectStats{});
     }
     // Diagnostics (A/B in one run): 1 redirect, 0 guard, 2 neither for the
-    // next sub-frames; -1 follows GALAXY_INTERP_COPY_REDIRECT.
+    // next sub-frames; -1 (the default) redirects.
     void set_subframe_copy_redirect(int mode) noexcept { subframe_copy_redirect_ = mode; }
     [[nodiscard]] std::uint64_t take_log_gap_ops() noexcept {
         return std::exchange(log_gap_ops_, 0u);
@@ -532,9 +531,6 @@ public:
         std::uint8_t pixel_format = 0);
 
     void draw(const DrawCall& call);
-    // GALAXY_VALIDATE_DRAW_ADDRESSES=1: logs draws whose GPU addresses lie
-    // outside every buffer the renderer owns (device-removal triage).
-    void check_draw_addresses(const DrawCall& call);
 
     // EFB copy paths (record into the current command list). Both run the
     // conversion blit (intensity / gamma / 3-tap vertical copy filter /
@@ -648,9 +644,7 @@ public:
     [[nodiscard]] std::uint64_t efb_copy_dest_bytes() const {
         return efb_copy_dests_bytes_;
     }
-    // The copy-destination byte budget this session is running with (192 MiB default,
-    // GALAXY_EFB_COPY_DEST_BUDGET_MB overridable). Reported next to the live bytes so a
-    // recording states whether the pool is saturating.
+    // The copy-destination byte budget (192 MiB), reported next to the live bytes.
     [[nodiscard]] static std::uint64_t efb_copy_dest_budget_bytes();
     [[nodiscard]] std::uint64_t last_latency_wait_us() const {
         return last_latency_wait_us_;
@@ -893,12 +887,6 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> alt_efb_rtv_heap_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> alt_efb_dsv_heap_;
     bool output_efb_active_ = false;
-    Microsoft::WRL::ComPtr<ID3D12QueryHeap> scene_aa_queries_;
-    Microsoft::WRL::ComPtr<ID3D12Resource> scene_aa_readback_;
-    std::array<std::uint8_t, kFramesInFlight> scene_aa_pending_{};  // AaRun, 0 none
-    double scene_aa_ms_sum_ = 0.0;
-    double scene_aa_ms_max_ = 0.0;
-    unsigned scene_aa_samples_ = 0;
     std::unique_ptr<TemporalUpscaler> temporal_;
     // An FSR 3 context being created off the render thread (its pipelines take seconds on an
     // integrated GPU), for the sizes and mode recorded below.
@@ -1038,8 +1026,6 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_hdr_dsv_heap_;
     // The live EFB is an HDR set (swapped with the set that held it).
     bool efb_hdr_ = false;
-    // The carry from the EFB into the HDR scene EFB (record_hdr_begin): a copy that widens RGBA8 to RGBA16F.
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> hdr_widen_pso_;
     void record_hdr_begin();
     void record_hdr_end();
     // The output-resolution EFB of a sub-frame whose log switches to it.
@@ -1063,13 +1049,8 @@ private:
     // EFB-copy textures are shared with the live frames: a later game frame's
     // chunks may already have rewritten a texture the sub-frame's log copies
     // to. Such textures are saved to scratch before the sub-frame and restored
-    // after it. copy_writes_: the latest replay serial each copy texture was
-    // written under (Interp mode, real copies only).
-    struct CopyWrite {
-        ID3D12Resource* dest = nullptr;
-        std::uint64_t serial = 0;
-    };
-    std::vector<CopyWrite> copy_writes_;
+    // after it (record_subframe_guard). note_copy_write records a real copy's
+    // destination in the log being recorded (Interp mode).
     void note_copy_write(ID3D12Resource* dest);
     std::uint64_t play_serial_ = 0;       // replay serial of the ready log
     std::uint64_t run_serial_ = 0;        // replay serial of the playing log
@@ -1077,8 +1058,6 @@ private:
     // until the segment comes round again) and, per run_* draw, its matched
     // draw's vertices (prepare_vertex_blend; 0 for none).
     std::vector<DrawCall> prev_run_draws_;
-    std::vector<ReplayCopy> prev_run_copies_;
-    std::uint64_t moving_copies_ = 0;     // paired texture copies whose source moved (prepare_vertex_blend)
     unsigned prev_run_segment_ = 0;
     std::uint64_t prev_run_serial_ = 0;
     bool prev_run_valid_ = false;
@@ -1230,28 +1209,9 @@ private:
     bool ensure_replay_motion_targets();
     void swap_motion_targets();
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> subframe_upscale_list_;
-    // GALAXY_INTERP_GPU_PROFILE: timestamps around the copies and clears of a
-    // sampled replay (report_replay_profile).
-    static constexpr std::uint32_t kReplayProfileQueries = 2048u;
-    struct ReplayProfileSegment {
-        std::uint32_t kind = 0;    // 0 draws, 1-3 copy (mode 0 texture, 1 display, 2 output EFB), 4 clear
-        std::uint32_t detail = 0;  // the op's copy or clear index
-    };
-    struct ReplayProfile {
-        Microsoft::WRL::ComPtr<ID3D12QueryHeap> heap;
-        Microsoft::WRL::ComPtr<ID3D12Resource> readback;
-        std::vector<ReplayProfileSegment> segments;
-        const ReplayList* list = nullptr;
-        std::uint64_t fence = 0;
-        bool armed = false;
-    };
-    ReplayProfile replay_profile_{};
-    std::uint64_t replay_profile_recordings_ = 0;
-    bool ensure_replay_profile();
-    void report_replay_profile();
     std::array<double, 3> subframe_phase_ms_{};  // evaluation, replay, present
     // The temporal upscaler upscales the sub-frames (and the frame at t = 1)
-    // instead of the game frames (GALAXY_TEMPORAL_INTERPOLATION).
+    // instead of the game frames.
     bool temporal_interp_ = false;
     // suspend_temporal_interpolation, and the settings it was decided at.
     struct TemporalInterpKey {
@@ -1308,11 +1268,11 @@ private:
     std::uint64_t subframe_guarded_total_ = 0;
     ID3D12Resource* acquire_subframe_scratch(ID3D12Resource* dest);
     void record_subframe_guard(bool save);
-    // Sub-frame copy redirection (GALAXY_INTERP_COPY_REDIRECT, default on;
-    // 0 falls back to the save/restore guard above). Real frames own the
-    // copy textures. A sub-frame's texture copies land in redirect targets,
-    // and its draws that sample a redirected texture get a table patched in
-    // the current descriptor segment. A copy texture a log samples before
+    // Sub-frame copy redirection (set_subframe_copy_redirect can select the
+    // save/restore guard above instead). Real frames own the copy textures. A
+    // sub-frame's texture copies land in redirect targets, and its draws that
+    // sample a redirected texture get a table patched in the current
+    // descriptor segment. A copy texture a log samples before
     // writing it (an earlier frame's capture: feedback blur, camera cover) is
     // snapshotted by the recording frame, because later real frames rewrite
     // it while the log's sub-frames still run.
@@ -1369,7 +1329,6 @@ private:
     std::uint64_t redirect_epoch_ = 0;
     CopyRedirectStats copy_redirect_stats_{};
     int subframe_copy_redirect_ = -1;
-    [[nodiscard]] static bool copy_redirect_enabled();
     bool ensure_replay_store(ReplayTextures& log);
     // -1 when no texture can be made. `snapshot`: owned by the recording log.
     std::int32_t acquire_copy_texture(ID3D12Resource* like, bool snapshot);
@@ -1518,16 +1477,11 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> backbuffer_readback_buf_;
     bool backbuffer_readback_pending_ = false;
     std::uint64_t backbuffer_readback_fence_value_ = 0;
-    bool backbuffer_readback_capture_ = false;
-    bool backbuffer_readback_luma_trace_ = false;
     UINT backbuffer_readback_width_ = 0;
     UINT backbuffer_readback_height_ = 0;
     UINT backbuffer_readback_row_pitch_ = 0;
     std::string next_backbuffer_capture_path_;
     std::string backbuffer_readback_capture_path_;
-    std::uint64_t backbuffer_readback_frame_ = 0;
-    std::uint32_t backbuffer_readback_xfb_addr_ = 0;
-    std::uint64_t backbuffer_readback_xfb_stamp_ = 0;
     Microsoft::WRL::ComPtr<ID3D12Resource> selected_xfb_readback_buf_;
     Microsoft::WRL::ComPtr<ID3D12Resource> selected_xfb_readback_source_;
     bool selected_xfb_readback_pending_ = false;
@@ -1604,9 +1558,9 @@ private:
     // One texture per destination key, at the copy's scaled extent in kEfbColorFormat
     // (a full 640x456 copy: 1.11 MB at 1x, 17.81 MB at 4x, 40.08 MB at 6x). Bounded in
     // bytes, not entries, since an entry's cost varies with the copy extent and the
-    // internal scale; sizes are the driver's GetResourceAllocationInfo. The default is
-    // well above a scene's working set (a few XFBs across a couple of formats plus one
-    // bloom workspace). Override with GALAXY_EFB_COPY_DEST_BUDGET_MB; 0 disables the bound.
+    // internal scale; sizes are the driver's GetResourceAllocationInfo. The 192 MiB budget
+    // is well above a scene's working set (a few XFBs across a couple of formats plus one
+    // bloom workspace).
     std::unordered_map<std::uint64_t, EfbCopyDest> efb_copy_dests_;
     std::uint64_t efb_copy_dests_tick_ = 0;
     std::uint64_t efb_copy_dests_bytes_ = 0;

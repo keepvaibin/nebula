@@ -49,11 +49,11 @@ public:
     // Scene AA of the EFB colour `color` (RGBA8, COLOR_ATTACHMENT_OPTIMAL, no render pass open), in two parts
     // around the renderer beginning its EFB pass again: prepare_scene_aa records the passes before (a copy of the
     // scene, SMAA's edges and weights) and returns the pass to finish with; finish_scene_aa draws the result into the
-    // open EFB pass, RGB only (the alpha the game left there stays), right of `split` x width.
+    // open EFB pass, RGB only (the alpha the game left there stays).
     AaRun prepare_scene_aa(VkCommandBuffer commands, const Texture& color, unsigned width, unsigned height,
                            unsigned picture_width, unsigned picture_height, unsigned display_width,
                            unsigned display_height, const SetAllocator& allocate);
-    void finish_scene_aa(VkCommandBuffer commands, AaRun pass, unsigned width, unsigned height, float split,
+    void finish_scene_aa(VkCommandBuffer commands, AaRun pass, unsigned width, unsigned height,
                          const SetAllocator& allocate);
     // The targets recorded scene AA reads, for a command buffer submitted again later (the interpolation replay):
     // it keeps them alive.

@@ -234,7 +234,7 @@ public:
     [[nodiscard]] bool replay_available() const noexcept { return ready_valid_; }
     bool start_replay_playback();
     [[nodiscard]] bool replay_playing() const noexcept { return run_valid_; }
-    // A present rate above 60 (GALAXY_INTERPOLATION=0 turns it off).
+    // A present rate above 60.
     [[nodiscard]] bool interpolation_mode() const;
     [[nodiscard]] std::uint64_t replay_serial() const noexcept { return replay_serial_; }
     [[nodiscard]] std::uint32_t replay_xfb_addr() const noexcept { return replay_xfb_addr_; }
