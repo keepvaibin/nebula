@@ -243,8 +243,9 @@ JoyShockMapper's description of player and world space.
 ## Settings menu
 
 `F1`, View+Menu (Xbox, Steam), Share+Options (PlayStation), Minus+Plus (Switch) or the pause menu's Settings button
-opens the settings menu; a one-line hint names the keys for the first seconds of a session. Autorepeat never toggles
-it. The game draws it in its own style (the quit question's window, its buttons and message font) and holds still
+opens the settings menu, once a file is chosen (not over the logos, the title or the file select); a one-line hint
+names the keys for the first seconds of a session. Autorepeat never toggles it. The cursor ticks softly, at most four
+times a second. The game draws it in its own style (the quit question's window, its buttons and message font) and holds still
 while it is shown: the scene stops, the music pauses and the game's sounds fade out, a movie waits; all of it resumes
 once the menu has risen away. While it is open the game sees no keyboard or controller input, and buttons held when
 it closes stay hidden from the game until released.
