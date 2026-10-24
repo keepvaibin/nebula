@@ -14,4 +14,9 @@ public:
 private:
     /* 0x0 */ s32 mPlusHoldFrame;
     /* 0x4 */ s32 mMinusHoldFrame;
+#ifdef TARGET_PC
+    // A press of + or - has paused: held on when the game resumes, neither pauses again until let go.
+    mutable bool mPlusUsed;
+    mutable bool mMinusUsed;
+#endif
 };
