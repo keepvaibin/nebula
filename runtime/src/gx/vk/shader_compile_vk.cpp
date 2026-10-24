@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// HLSL to SPIR-V through glslang (shader_compile_vk.h).
 #include "galaxy/gx/vk/shader_compile_vk.h"
 
 // The release libraries are built with the HLSL front end; this exposes its switch for semantic decorations.
@@ -173,10 +174,10 @@ bool assign_semantic_locations(std::vector<std::uint32_t>& spirv, ShaderStage st
     return true;
 }
 
-// Debug names and source text dropped (they mean nothing to a driver, SPIR-V 2.13). Adreno's driver matches stage
-// variables by name: a vertex input named like one of the outputs fails its compile (naga issue 1331). glslang names a
-// split HLSL array input "v.uv[0]" and the output "@entryPointOutput.uv[0]", and the Fold 8's 512.842 refused every
-// vertex shader that reads a texture coordinate (824 of 977 pipelines; those reading none were accepted).
+// Drops debug names and source text (they mean nothing to a driver, SPIR-V 2.13). Adreno's driver matches stage
+// variables by name, so a vertex input named like one of the outputs fails its compile (naga issue 1331): glslang names
+// a split HLSL array input "v.uv[0]" and the output "@entryPointOutput.uv[0]", and Qualcomm 512.842 refuses every
+// vertex shader that reads a texture coordinate.
 void strip_debug_names(std::vector<std::uint32_t>& spirv) {
     constexpr std::uint32_t kOpSourceContinued = 2;
     constexpr std::uint32_t kOpSource = 3;

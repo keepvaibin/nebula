@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#pragma once
-
 // The Vulkan device every Vulkan GX object shares (docs/VULKAN.md): instance and device through volk, one graphics
 // queue, VMA for memory. Every submission gets the next fence value (as D3D12's fence), kept with a VkFence of its
 // own, which works on any Vulkan 1.0 device (timeline semaphores need 1.2 or an extension many Android drivers lack).
 // Objects released while the GPU may still use them are destroyed once it passes the last submitted value.
+#pragma once
 
 #include <volk.h>
 
@@ -64,7 +63,7 @@ struct Buffer {
     ~Buffer();
 };
 
-// A host-visible, persistently mapped buffer the owner destroys (Context::destroy_buffer).
+// A host-visible, persistently mapped buffer without a GX address (create_buffer wraps one in a Buffer).
 struct MappedBuffer {
     VkBuffer buffer = VK_NULL_HANDLE;
     VmaAllocation_T* allocation = nullptr;

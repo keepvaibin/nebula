@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#pragma once
-
-// PipelineCacheVk: GX pipelines on Vulkan (docs/VULKAN.md), the interface GxBackend uses on PipelineCache.
+// GX pipelines on Vulkan (docs/VULKAN.md), with the interface GxBackend uses on PipelineCache.
 //
 // A pipeline is its key's specialised shaders (ShaderGenerator's HLSL, compiled by glslang) with its render state. A
 // key seen for the first time draws with the uber pipeline of its render state while a worker builds the specialised
@@ -19,6 +17,7 @@
 // fallbacks found is kept in vk_compat.txt for that driver build. The first refusal logs the driver's result, the
 // pipeline's state, the driver's own log (host_window::driver_log) and the shaders' HLSL. GALAXY_VK_SHADER_DUMP=<dir>
 // writes every module's HLSL and SPIR-V there.
+#pragma once
 
 #include "galaxy/gx/shader_gen.h"
 #include "galaxy/gx/shader_keys.h"

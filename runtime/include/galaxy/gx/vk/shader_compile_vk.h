@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#pragma once
-
 // HLSL to SPIR-V through glslang's HLSL front end (docs/VULKAN.md). The generated GX shaders and the renderer's own
 // shaders keep their D3D12 register declarations; annotate() adds the Vulkan binding each register maps to, so the
 // D3D12 sources (and the hashes their caches use) stay as they are.
+#pragma once
 
 #include <cstdint>
 #include <initializer_list>
@@ -49,7 +48,7 @@ struct CompileOptions {
 };
 
 // Changes with anything that changes compile_hlsl's output for the same source (cached SPIR-V is keyed on it).
-inline constexpr std::uint32_t kCompilerRevision = 6;  // 6: vertex blending inputs; 4: debug names stripped
+inline constexpr std::uint32_t kCompilerRevision = 6;
 
 // SPIR-V for `entry` of `hlsl`; empty with `error` set when it does not compile. `defines` are NAME=VALUE. Stage
 // inputs and outputs sit at their semantics' locations, so stages and the vertex layout match as D3D12's do by name:

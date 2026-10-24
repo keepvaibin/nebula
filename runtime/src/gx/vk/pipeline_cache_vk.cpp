@@ -71,8 +71,8 @@ std::string describe_render_state(const RenderStateKey& rs) {
 
 // GALAXY_VK_TEST_REFUSE=<names, comma-separated>: pipelines using those features (dual-source, depth-clip,
 // depth-clamp, logic-op, geometry) or of that kind (specialised, uber, uber-vs: with the uber vertex shader) are
-// refused as a driver would, so the fallbacks run on any GPU. GALAXY_VK_TEST_CRASH_AT=<n>: the process aborts inside the n-th specialised build (the
-// compile journal's test).
+// refused as a driver would, so the fallbacks run on any GPU. GALAXY_VK_TEST_CRASH_AT=<n>: the process aborts inside
+// the n-th specialised build (the compile journal's test).
 struct TestRefusals {
     bool dual_source = false;
     bool depth_clip = false;
@@ -202,9 +202,8 @@ std::string apply_probe(std::string source, const UberProbe& probe) {
 }
 
 // The SPIR-V this build's compiler makes of two fixed shaders, hashed. SPIR-V on disk and the driver refusals recorded
-// with it belong to the compiler that made them: glslang of the same version but another build makes other SPIR-V for
-// the same HLSL (2026-10-19: the PC's build of 16.6.0 against the phone's; the Adreno 840 refused the PC's vertex
-// shaders and accepted the phone's), so files of another compiler are dropped rather than trusted.
+// with it belong to the compiler that made them: two builds of the same glslang version can make different SPIR-V of
+// the same HLSL, which one driver refuses and accepts, so files of another compiler are dropped.
 std::uint64_t compiler_identity() {
     static const std::uint64_t identity = [] {
         ShaderGenOptions options;
@@ -886,7 +885,7 @@ VkPipeline PipelineCacheVk::build(const Entry& entry) {
     const VkShaderModule vs = module_for(vs_hlsl, vk::ShaderStage::Vertex, false);
     const VkShaderModule ps = module_for(ps_hlsl, vk::ShaderStage::Fragment, dual_source);
     if (vs == VK_NULL_HANDLE || ps == VK_NULL_HANDLE) {
-        return VK_NULL_HANDLE;  // our compile failed (module_for logged it)
+        return VK_NULL_HANDLE;  // the HLSL compile failed (module_for logged it)
     }
     {
         std::lock_guard<std::mutex> lock(compat_mutex_);

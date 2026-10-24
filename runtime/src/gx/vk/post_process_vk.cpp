@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// Presentation post-processing on Vulkan (post_process_vk.h).
 #include "galaxy/gx/vk/post_process_vk.h"
 
 #include "galaxy/gx/vk/shader_compile_vk.h"
@@ -15,7 +16,7 @@
 #include <utility>
 
 namespace galaxy::gx {
-// cmake/post_shader_sources.cmake.
+// The shader sources cmake/post_shader_sources.cmake embeds.
 extern const unsigned char galaxy_post_post_process_hlsl[];
 extern const unsigned char galaxy_post_smaa_hlsl[];
 extern const unsigned char galaxy_post_ffx_a_h[];

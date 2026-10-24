@@ -42,10 +42,6 @@ void write_ppm_async(std::string path, std::vector<std::uint8_t> rgb, unsigned w
 
 }  // namespace
 
-// ---------------------------------------------------------------------------------------------------------------------
-// The EFB targets
-// ---------------------------------------------------------------------------------------------------------------------
-
 // An EFB set at `scale`: targets in their attachment layouts, the framebuffer, and the conversion inputs (allocated
 // once per set; rewriting them needs a GPU that no longer reads the old views, which callers ensure).
 bool RendererVk::create_efb_set(EfbSet& set, unsigned scale, unsigned samples) {
@@ -573,10 +569,6 @@ void RendererVk::clear_efb(std::uint32_t clear_ar, std::uint32_t clear_gb, std::
         vkCmdClearAttachments(commands, 1, &attachment, 1, &clear_rect);
     }
 }
-
-// ---------------------------------------------------------------------------------------------------------------------
-// Draws
-// ---------------------------------------------------------------------------------------------------------------------
 
 VkDescriptorSet RendererVk::allocate_frame_set(VkDescriptorSetLayout layout) {
     Frame& frame = *frame_;
@@ -1115,10 +1107,6 @@ void RendererVk::draw(const DrawCall& call) {
     }
 }
 
-// ---------------------------------------------------------------------------------------------------------------------
-// EFB copies
-// ---------------------------------------------------------------------------------------------------------------------
-
 VkFramebuffer RendererVk::framebuffer_for(vk::Texture& texture) {
     if (texture.framebuffer == VK_NULL_HANDLE) {
         VkFramebufferCreateInfo info{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
@@ -1368,10 +1356,6 @@ bool RendererVk::copy_efb_to_texture(const EfbCopyParams& params, TextureCache& 
                            sampling.filter_row_offset);
     return textures.register_efb_copy(params.dest_addr, params, current.texture);
 }
-
-// ---------------------------------------------------------------------------------------------------------------------
-// Peeks
-// ---------------------------------------------------------------------------------------------------------------------
 
 void RendererVk::create_first_use_resources() {
     vk::Context& context = vk::Context::get();
@@ -1655,10 +1639,6 @@ const std::uint8_t* RendererVk::async_peek_field_rgba(std::size_t channel, std::
         ? reinterpret_cast<const std::uint8_t*>(field.readbacks[slot].buffer->mapped)
         : nullptr;
 }
-
-// ---------------------------------------------------------------------------------------------------------------------
-// Test captures
-// ---------------------------------------------------------------------------------------------------------------------
 
 void RendererVk::set_debug_capture_paths(std::string efb_ppm_path, std::string backbuffer_ppm_path) {
     efb_capture_path_ = std::move(efb_ppm_path);

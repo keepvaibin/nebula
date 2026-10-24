@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#pragma once
-
-// RendererVk: the GX renderer on Vulkan (docs/VULKAN.md), the same interface GxBackend uses on RendererD3D12.
+// The GX renderer on Vulkan (docs/VULKAN.md), with the interface GxBackend uses on RendererD3D12.
 //
 // The EFB is a colour target (RGBA8) and a depth target (D24 where the device has it, else D32 float) drawn through
 // one render pass; an EFB copy, peek or present ends that pass, and the next EFB operation begins it again. Between
@@ -13,8 +11,9 @@
 // palette (a dynamic storage buffer), set 1 the eight textures, set 2 the eight samplers. Addresses (gpu::Address)
 // name a buffer and offset (vk::Context::resolve).
 //
-// Normal rendering only so far: the HUD split, temporal upscaling, interpolated redraw and the post-process chain
-// report themselves unavailable.
+// Temporal upscaling, ambient occlusion and ray tracing are D3D12 only: their entry points here report themselves
+// unavailable.
+#pragma once
 
 #include "galaxy/gx/efb_copy.h"
 #include "galaxy/gx/gpu_types.h"
@@ -96,7 +95,7 @@ public:
     void shutdown();
     [[nodiscard]] UploadBuffer create_upload_buffer(std::size_t bytes, const char* name);
 
-    // ---- Interpolated sub-frames (renderer_vk_replay.cpp): each game frame's draws, clears and copies are logged;
+    // Interpolated sub-frames (renderer_vk_replay.cpp): each game frame's draws, clears and copies are logged;
     // a sub-frame replays the log with the constants evaluated at its t (interp_eval.h) into a private EFB and
     // presents its display copy. The interface is RendererD3D12's. Scene AA and ray tracing are inert here.
     using ReplaySequence = gx::ReplaySequence;
@@ -601,7 +600,7 @@ private:
     std::uint64_t last_begin_reset_us_ = 0;
     unsigned replay_failure_ = 0;
 
-    // ---- Interpolated sub-frames (renderer_vk_replay.cpp).
+    // Interpolated sub-frames (renderer_vk_replay.cpp).
     // Ring mode: in Interp the upload rings, texture-table descriptors and retired textures are segmented per game
     // frame (kInterpSegments), so a logged frame's data lives until its segment comes round again.
     enum class RingMode : std::uint8_t { Normal, Interp };

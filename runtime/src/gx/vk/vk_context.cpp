@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// The shared Vulkan device, its submissions and deferred destruction (vk_context.h).
 #include "galaxy/gx/vk/vk_context.h"
 
 #include "galaxy/gx/gpu_types.h"

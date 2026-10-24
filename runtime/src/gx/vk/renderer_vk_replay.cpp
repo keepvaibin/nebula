@@ -30,10 +30,6 @@ constexpr VkDeviceSize kEvalFrameBlock = 256u;
 
 }  // namespace
 
-// ---------------------------------------------------------------------------------------------------------------------
-// Ring mode and segments
-// ---------------------------------------------------------------------------------------------------------------------
-
 bool RendererVk::interpolation_mode() const {
     // GALAXY_INTERPOLATION=0 turns it off (diagnostics).
     static const bool allowed = [] {
@@ -242,10 +238,6 @@ VkDescriptorSet RendererVk::allocate_table_set(VkDescriptorSetLayout layout) {
     vk::check(result, "vkAllocateDescriptorSets");
     return set;
 }
-
-// ---------------------------------------------------------------------------------------------------------------------
-// The log
-// ---------------------------------------------------------------------------------------------------------------------
 
 void RendererVk::ReplayLog::clear() {
     ops.clear();
@@ -673,10 +665,6 @@ void RendererVk::record_blend_validation(VkCommandBuffer commands) {
                          nullptr, 0, nullptr);
 }
 
-// ---------------------------------------------------------------------------------------------------------------------
-// Evaluation
-// ---------------------------------------------------------------------------------------------------------------------
-
 bool RendererVk::ensure_interp_eval() {
     if (eval_pipeline_ != VK_NULL_HANDLE) {
         return true;
@@ -803,7 +791,7 @@ VkDescriptorSet RendererVk::eval_set(ProgramBuffer& program) {
 }
 
 // The sequence's base copies (its first sub-frame, and the frame at t = 1) and its ops at t, into the output the
-// replay reads. `slot` is the sub-frame's: its evaluation constants.
+// replay reads. The sub-frame's slot picks its evaluation constants.
 void RendererVk::record_interp_eval(VkCommandBuffer commands, const SubframeTime& time, const Affine34& camera_t,
                                     const Affine34& camera_prev) {
     const unsigned slot = static_cast<unsigned>(frame_ - subframes_.data());
@@ -1001,10 +989,6 @@ bool RendererVk::begin_replay_sequence(const ReplaySequence& sequence) {
     ++sequence_record_samples_;
     return true;
 }
-
-// ---------------------------------------------------------------------------------------------------------------------
-// The replay
-// ---------------------------------------------------------------------------------------------------------------------
 
 std::uint64_t RendererVk::patched_table(ReplayList& list, std::uint64_t table) {
     if (const auto found = patched_.find(table); found != patched_.end()) {

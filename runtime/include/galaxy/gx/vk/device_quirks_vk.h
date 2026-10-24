@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#pragma once
-
 // Which GPU and driver the Vulkan backend runs on, and what that driver is known to get wrong (docs/VULKAN.md,
 // "Driver compatibility"). The known-bug table is the part of Dolphin's DriverDetails, ANGLE's vk_renderer features and
 // Dawn's Vulkan toggles that touches what Nebula uses; each entry in device_quirks_vk.cpp names its source.
-// PipelineCacheVk's self-test adds what this device's driver refuses on top (PipelineCompat), and keeps it per driver.
+// PipelineCacheVk's self-test adds what this device's driver refuses (PipelineCompat), kept per driver.
+#pragma once
 
 #include <volk.h>
 

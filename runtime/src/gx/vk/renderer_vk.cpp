@@ -135,10 +135,6 @@ std::size_t RendererVk::ConstantsSetKeyHash::operator()(const ConstantsSetKey& k
     return static_cast<std::size_t>(combine64(hash, reinterpret_cast<std::uint64_t>(key.palette)));
 }
 
-// ---------------------------------------------------------------------------------------------------------------------
-// Start and end
-// ---------------------------------------------------------------------------------------------------------------------
-
 bool RendererVk::initialize(int window_width, int window_height, unsigned efb_scale) {
     efb_scale_ = std::clamp(efb_scale, 1u, kMaxEfbScale);
     frame_slot_ = 0;
@@ -1044,10 +1040,6 @@ void RendererVk::wait_for_fence_value(std::uint64_t fence_value) {
     }
 }
 
-// ---------------------------------------------------------------------------------------------------------------------
-// Frames
-// ---------------------------------------------------------------------------------------------------------------------
-
 void RendererVk::begin_frame(bool) {
     host_window::poll_render_config_file();
     follow_window_and_resize();
@@ -1207,8 +1199,6 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
     return fence;
 }
 
-// The past presentation times (VK_GOOGLE_display_timing): whether each frame was shown by the slot it asked for, and
-// one retrace period after the frame before it. Every 600 frames to the log.
 // Presents the acquired image after the submission that draws it (end_frame's and a sub-frame's), paced to the
 // frame rate, on Android at the display slot it was meant for (VK_GOOGLE_display_timing).
 void RendererVk::present_swapchain_image() {
@@ -1302,6 +1292,8 @@ void RendererVk::present_swapchain_image() {
     }
 }
 
+// The past presentation times (VK_GOOGLE_display_timing): whether each frame was shown by the slot it asked for, and
+// one retrace period after the frame before it. Every 600 frames to the log.
 void RendererVk::report_present_timing() {
     const VkDevice device = vk::Context::get().device();
     if (swapchain_.handle == VK_NULL_HANDLE) {
@@ -1533,10 +1525,6 @@ void RendererVk::follow_window_and_resize() {
         stage_next_start_efb_scale(scale);
     }
 }
-
-// ---------------------------------------------------------------------------------------------------------------------
-// Present and the overlay
-// ---------------------------------------------------------------------------------------------------------------------
 
 bool RendererVk::present(const XfbTexture* source, bool capture_backbuffer, bool black) {
     present_black_ = black;

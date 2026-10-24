@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#pragma once
-
 // Presentation post-processing on Vulkan, the D3D12 chain's (post_process.h) with the same shaders: SMAA 1x or FXAA
 // of the 3D scene before the 2D layer draws, so menus and text stay sharp, and the scaling chain to the window (FSR 1
 // EASU when enlarging, else the footprint box filter, then RCAS). post_process.hlsl is composed with the vendored SMAA
 // and FidelityFX FSR 1 sources as the D3D12 build composes its fxc inputs, and compiled on the device, on a worker
 // thread: until it is ready the renderer presents with its plain blit.
+#pragma once
 
 #include "galaxy/gx/post_process_settings.h"
 #include "galaxy/gx/vk/vk_context.h"
