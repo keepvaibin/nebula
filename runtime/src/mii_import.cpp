@@ -104,6 +104,37 @@ Library& library() {
     return instance;
 }
 
+// A copy of a file Miis came from, kept in the library folder that every start imports again: none for a file already
+// there or one of the same bytes already kept; another file of the same name gets a numbered one ("name (2).mii").
+bool keep_in_library(const std::filesystem::path& folder, const std::filesystem::path& file,
+                     std::span<const std::byte> bytes) {
+    std::error_code error;
+    if (folder.empty()) {
+        return false;
+    }
+    std::filesystem::create_directories(folder, error);
+    if (std::filesystem::equivalent(file.parent_path(), folder, error)) {
+        return true;
+    }
+    for (unsigned n = 1u; n < 1000u; ++n) {
+        std::filesystem::path name = file.stem();
+        if (n > 1u) {
+            name += " (" + std::to_string(n) + ")";
+        }
+        name += file.extension();
+        const std::filesystem::path target = folder / name;
+        if (!std::filesystem::exists(target, error)) {
+            return io::write_text_file_atomically(
+                target, std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+        }
+        const std::vector<std::byte> kept = read_file(target);
+        if (std::equal(kept.begin(), kept.end(), bytes.begin(), bytes.end())) {
+            return true;
+        }
+    }
+    return false;
+}
+
 std::string result_text(const MiiMergeResult& r) {
     std::string text = "ADDED " + std::to_string(r.added);
     if (r.updated != 0u) text += ", UPDATED " + std::to_string(r.updated);
@@ -241,6 +272,7 @@ MiiMergeResult import_mii_files(std::span<const std::filesystem::path> files, st
         return total;
     }
     unsigned unreadable = 0u;
+    unsigned unkept = 0u;
     std::vector<std::pair<unsigned, MiiRecord>> placed;
     for (const std::filesystem::path& file : files) {
         const std::vector<std::byte> bytes = read_file(file);
@@ -248,6 +280,9 @@ MiiMergeResult import_mii_files(std::span<const std::filesystem::path> files, st
         if (contents.miis.empty()) {
             ++unreadable;
             continue;
+        }
+        if (!keep_in_library(lib.folder, file, bytes)) {
+            ++unkept;
         }
         const MiiMergeResult r = merge_miis(database, contents.miis, lib.prepare, &placed);
         total.added += r.added;
@@ -270,6 +305,7 @@ MiiMergeResult import_mii_files(std::span<const std::filesystem::path> files, st
     if (message != nullptr) {
         *message = result_text(total);
         if (unreadable != 0u) *message += ", " + std::to_string(unreadable) + " FILE(S) NOT MII DATA";
+        if (unkept != 0u) *message += ", " + std::to_string(unkept) + " FILE(S) NOT COPIED TO THE MIIS FOLDER";
     }
     return total;
 }

@@ -274,6 +274,24 @@ bool library() {
     const auto again = galaxy::host::import_mii_folder(&message);
     ok &= expect(again.added == 0u && again.duplicates == 1u, "the next start adds nothing");
     ok &= expect(galaxy::host::take_mii_installs().empty(), "nothing queued");
+
+    // Files imported from elsewhere: kept in the library folder (once), a different file of a kept name renamed.
+    std::filesystem::create_directories(root / "elsewhere" / "other", error);
+    const std::filesystem::path b = root / "elsewhere" / "b.mii";
+    write_file(b, mii(12u));
+    const auto from_elsewhere = galaxy::host::import_mii_files(std::span<const std::filesystem::path>(&b, 1u), &message);
+    ok &= expect(from_elsewhere.added == 1u && message == "ADDED 1", "a file from elsewhere added");
+    ok &= expect(std::filesystem::exists(root / "miis" / "b.mii"), "and kept in the library folder");
+    (void)galaxy::host::import_mii_files(std::span<const std::filesystem::path>(&b, 1u), &message);
+    ok &= expect(!std::filesystem::exists(root / "miis" / "b (2).mii"), "the same file kept once");
+    const std::filesystem::path other_b = root / "elsewhere" / "other" / "b.mii";
+    write_file(other_b, mii(13u));
+    (void)galaxy::host::import_mii_files(std::span<const std::filesystem::path>(&other_b, 1u), &message);
+    ok &= expect(std::filesystem::exists(root / "miis" / "b (2).mii"), "another file of that name numbered");
+    const std::filesystem::path kept_a = root / "miis" / "a.mii";
+    (void)galaxy::host::import_mii_files(std::span<const std::filesystem::path>(&kept_a, 1u), &message);
+    ok &= expect(!std::filesystem::exists(root / "miis" / "a (2).mii"), "a file in the folder not copied again");
+    (void)galaxy::host::take_mii_installs();
     std::filesystem::remove_all(root, error);
     return ok;
 }
