@@ -76,7 +76,6 @@ void stop_all_rumble() noexcept;
 
 // Starts the worker on first use; later calls are free.
 void ensure_controller_hid_started() noexcept;
-void stop_controller_hid() noexcept;
 // Copies every connected pad into `out`; `consume_gyro` clears the gyro
 // accumulators. Returns the number written. Never blocks on device I/O.
 std::size_t read_hid_pads(std::span<HidPadState> out, bool consume_gyro) noexcept;

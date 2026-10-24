@@ -95,54 +95,6 @@ public:
         fifo_.insert(fifo_.end(), bytes.begin(), bytes.end());
     }
 
-    void append_dependency(
-        std::uint32_t guest_base,
-        std::span<const std::byte> bytes) {
-        require_mutable();
-        if (versioned_dependencies_) {
-            throw std::invalid_argument(
-                "cannot mix versioned and disjoint GX dependencies");
-        }
-        if (bytes.empty() || dependencies_.size() >= limits_.dependencies ||
-            bytes.size() > std::numeric_limits<std::uint32_t>::max() ||
-            static_cast<std::uint64_t>(guest_base) + bytes.size() >
-                (std::uint64_t{1} << 32u)) {
-            throw std::invalid_argument("invalid owned GX dependency range");
-        }
-        // Streaming GX commands can read addresses in any order. Reject
-        // overlap, including duplicate ranges, so an owned packet cannot
-        // ambiguously expose two captured versions of one guest byte.
-        const std::uint64_t end =
-            static_cast<std::uint64_t>(guest_base) + bytes.size();
-        const auto next = dependency_intervals_.lower_bound(guest_base);
-        const bool overlaps_next =
-            next != dependency_intervals_.end() && end > next->first;
-        const bool overlaps_previous =
-            next != dependency_intervals_.begin() &&
-            std::prev(next)->second > guest_base;
-        if (overlaps_next || overlaps_previous) {
-            throw std::invalid_argument(
-                "owned GX dependencies must be disjoint");
-        }
-        require_room(dependency_bytes_.size(), bytes.size(),
-                     limits_.dependency_bytes,
-                     "owned GX dependency staging exceeds packet limit");
-        // Reserve both contiguous arrays before inserting the interval, so
-        // none of the subsequent byte/descriptor appends can allocate.
-        reserve_append(dependency_bytes_, bytes.size(), limits_.dependency_bytes);
-        reserve_append(dependencies_, 1u, limits_.dependencies);
-        dependency_intervals_.emplace(guest_base, end);
-        const auto offset = static_cast<std::uint32_t>(dependency_bytes_.size());
-        dependency_bytes_.insert(
-            dependency_bytes_.end(), bytes.begin(), bytes.end());
-        dependencies_.push_back(Dependency{
-            guest_base,
-            static_cast<std::uint32_t>(bytes.size()),
-            offset,
-        });
-        legacy_dependencies_ = true;
-    }
-
     // Append one immutable guest read and its ordered FrameOp atomically.
     // Read versions are packet-local, contiguous and strictly increasing;
     // overlapping guest addresses retain every captured byte version. The
@@ -265,8 +217,6 @@ public:
         sealed_ = true;
     }
 
-    [[nodiscard]] bool sealed() const noexcept { return sealed_; }
-
     [[nodiscard]] std::span<const std::byte> fifo() const {
         require_sealed();
         return fifo_;
@@ -275,18 +225,6 @@ public:
     [[nodiscard]] std::span<const Dependency> dependencies() const {
         require_sealed();
         return dependencies_;
-    }
-
-    [[nodiscard]] std::span<const std::byte> dependency_bytes(
-        std::size_t index) const {
-        require_sealed();
-        if (versioned_dependencies_) {
-            throw std::logic_error(
-                "versioned GX bytes require an ordered read operation");
-        }
-        const Dependency& dependency = dependencies_.at(index);
-        return std::span<const std::byte>(dependency_bytes_)
-            .subspan(dependency.staging_offset, dependency.size);
     }
 
     // The only accessor for a read at a specific ordered operation. A PE/XFB
@@ -314,25 +252,6 @@ public:
     [[nodiscard]] std::span<const OrderedOp> ordered_ops() const {
         require_sealed();
         return ops_;
-    }
-
-    [[nodiscard]] std::span<const std::byte> fifo_prefix(
-        std::size_t op_index) const {
-        require_sealed();
-        return std::span<const std::byte>(fifo_)
-            .first(ops_.at(op_index).fifo_high_water);
-    }
-
-    [[nodiscard]] std::span<const Dependency> dependency_prefix(
-        std::size_t op_index) const {
-        require_sealed();
-        return std::span<const Dependency>(dependencies_)
-            .first(ops_.at(op_index).dependency_count_high_water);
-    }
-
-    [[nodiscard]] Presentation presentation() const {
-        require_sealed();
-        return presentation_;
     }
 
 private:

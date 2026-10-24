@@ -33,12 +33,6 @@ public:
             done_.store(true, std::memory_order_release);
         });
     }
-    [[nodiscard]] bool finish_ready() {
-        if (!active()) return true;
-        if (!done_.load(std::memory_order_acquire)) return false;
-        finish();
-        return true;
-    }
     // Explicit shutdown may block. Routine health polling must use finish_ready.
     void finish() {
         if (thread_.joinable()) thread_.join();
@@ -57,12 +51,6 @@ private:
     return !strict_proof && (error == 0x80070490u || // ERROR_NOT_FOUND
         error == 0x88960004u || // XAUDIO2_E_DEVICE_INVALIDATED
         error == 0x88890004u);   // AUDCLNT_E_DEVICE_INVALIDATED
-}
-
-[[nodiscard]] constexpr bool native_audio_endpoint_retry_due(
-    std::uint64_t now_ns, std::uint64_t last_attempt_ns) noexcept {
-    return now_ns >= last_attempt_ns &&
-        now_ns - last_attempt_ns >= 1'000'000'000ull;
 }
 
 struct NativeAudioCallbackBufferObservation {
@@ -102,28 +90,6 @@ observe_callback_buffer_state(ReadCompleted&& read_completed,
     return true;
 }
 
-enum class NativeAudioPreinitializeMode : std::uint8_t {
-    NativeOutput,
-    SkipDisabled,
-    SkipWavDumpOnly,
-};
-
-[[nodiscard]] constexpr NativeAudioPreinitializeMode
-native_audio_preinitialize_mode(
-    bool audio_disabled,
-    bool wav_dump_only) noexcept {
-    // Dump-only submission is checked before AUDIO_DISABLE in the sink, so it
-    // has the same precedence here. Neither explicit diagnostic mode should
-    // initialize a Windows render endpoint.
-    if (wav_dump_only) {
-        return NativeAudioPreinitializeMode::SkipWavDumpOnly;
-    }
-    if (audio_disabled) {
-        return NativeAudioPreinitializeMode::SkipDisabled;
-    }
-    return NativeAudioPreinitializeMode::NativeOutput;
-}
-
 enum class NativeAudioInitializationState : std::uint8_t {
     Uninitialized,
     Initializing,
@@ -147,12 +113,6 @@ struct NativeAudioInitializationSnapshot {
 // testable without requiring a Windows audio endpoint in CI.
 class NativeAudioInitializationGate final {
 public:
-    template <typename Initializer>
-    bool preinitialize(Initializer&& initializer) {
-        ++preinitialize_calls_;
-        return ensure_ready(
-            false, std::forward<Initializer>(initializer));
-    }
 
     template <typename Initializer>
     bool ensure_ready_for_submit(Initializer&& initializer) {
@@ -166,10 +126,6 @@ public:
         ++submit_initialization_attempts_;
         return ensure_ready(
             true, std::forward<Initializer>(initializer));
-    }
-
-    [[nodiscard]] bool ready() const noexcept {
-        return state_ == NativeAudioInitializationState::Ready;
     }
 
     [[nodiscard]] NativeAudioInitializationSnapshot snapshot() const noexcept {
@@ -338,10 +294,6 @@ public:
         return state_ == NativeAudioPlaybackState::Recovering;
     }
 
-    [[nodiscard]] constexpr NativeAudioPlaybackState state() const noexcept {
-        return state_;
-    }
-
 private:
     NativeAudioPlaybackState state_{NativeAudioPlaybackState::Stopped};
 };
@@ -385,11 +337,6 @@ public:
         }
         handled_empty_boundaries_ = published_empty_boundaries;
         return NativeAudioEmptyBoundaryDisposition::RecoverUnderrun;
-    }
-
-    [[nodiscard]] constexpr std::uint64_t handled_empty_boundaries()
-        const noexcept {
-        return handled_empty_boundaries_;
     }
 
 private:
@@ -448,11 +395,6 @@ public:
         }
         last_sample_rate_ = sample_rate;
         return true;
-    }
-
-    void reset() noexcept {
-        snapshot_ = {};
-        last_sample_rate_ = 0u;
     }
 
     [[nodiscard]] NativeAudioRateLedgerSnapshot snapshot() const noexcept {
@@ -521,17 +463,6 @@ public:
             }
         }
         return true;
-    }
-
-    void reset() noexcept {
-        std::lock_guard<std::mutex> lock(mutex_);
-        submitted_buffers_ = 0u;
-        rate_ledger_.reset();
-        submit_delta_events_ = 0u;
-        total_submit_delta_us_ = 0u;
-        max_submit_delta_us_ = 0u;
-        submit_delta_over_expected_ = 0u;
-        submit_delta_over_25_ms_ = 0u;
     }
 
     [[nodiscard]] NativeAudioSubmissionWindowSnapshot snapshot()
@@ -671,21 +602,6 @@ public:
         return ratio_evidence_valid;
     }
 
-    void reset() noexcept {
-        started_buffers_ = 0u;
-        rate_ledger_.reset();
-        frequency_ratio_apply_calls_ = 0u;
-        frequency_ratio_inherited_buffers_ = 0u;
-        frequency_ratio_change_actions_ = 0u;
-        frequency_ratio_apply_errors_ = 0u;
-        buffer_start_callback_core_work_count_ = 0u;
-        buffer_start_callback_core_work_total_ns_ = 0u;
-        buffer_start_callback_core_work_max_ns_ = 0u;
-        buffer_start_callback_core_work_over_1_ms_ = 0u;
-        buffer_start_callback_core_work_over_2_ms_ = 0u;
-        last_sample_rate_ = 0u;
-    }
-
     [[nodiscard]] NativeAudioStartedWindowSnapshot snapshot()
         const noexcept {
         return {
@@ -730,25 +646,6 @@ public:
     NativeAudioFailureNotifier& operator=(
         const NativeAudioFailureNotifier&) = delete;
 
-    void set(Callback callback, void* user) noexcept {
-        Callback callback_to_invoke = nullptr;
-        void* callback_user = nullptr;
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            callback_ = callback;
-            callback_user_ = user;
-            current_registration_notified_ = false;
-            if (published_ && callback_ != nullptr) {
-                current_registration_notified_ = true;
-                callback_to_invoke = callback_;
-                callback_user = callback_user_;
-            }
-        }
-        if (callback_to_invoke != nullptr) {
-            callback_to_invoke(callback_user);
-        }
-    }
-
     void publish() noexcept {
         Callback callback_to_invoke = nullptr;
         void* callback_user = nullptr;
@@ -766,11 +663,6 @@ public:
         }
     }
 
-    [[nodiscard]] bool published() const noexcept {
-        std::lock_guard<std::mutex> lock(mutex_);
-        return published_;
-    }
-
 private:
     mutable std::mutex mutex_;
     Callback callback_{};
@@ -786,23 +678,6 @@ private:
     return active_generation != 0u &&
            previous_buffer_generation == active_generation &&
            current_buffer_generation == active_generation;
-}
-
-[[nodiscard]] constexpr std::uint64_t native_audio_pcm_duration_ms_ceil(
-    std::uint64_t pcm_bytes,
-    std::uint32_t sample_rate) noexcept {
-    if (sample_rate == 0u) {
-        return std::numeric_limits<std::uint64_t>::max();
-    }
-    const std::uint64_t frames = pcm_bytes / 4u;
-    constexpr std::uint64_t kMillisecondsPerSecond = 1000u;
-    if (frames >
-        (std::numeric_limits<std::uint64_t>::max() - sample_rate + 1u) /
-            kMillisecondsPerSecond) {
-        return std::numeric_limits<std::uint64_t>::max();
-    }
-    return (frames * kMillisecondsPerSecond + sample_rate - 1u) /
-        sample_rate;
 }
 
 // XAudio invokes voice callbacks on its own engine thread. That thread stays out of queue ownership: callbacks
@@ -934,15 +809,6 @@ public:
         return callback_wake_errors_.load(std::memory_order_acquire);
     }
 
-    [[nodiscard]] std::uint64_t frequency_ratio_apply_calls() const noexcept {
-        return frequency_ratio_apply_calls_.load(std::memory_order_acquire);
-    }
-
-    [[nodiscard]] std::uint64_t frequency_ratio_change_actions()
-        const noexcept {
-        return frequency_ratio_change_actions_.load(std::memory_order_acquire);
-    }
-
     [[nodiscard]] std::uint64_t frequency_ratio_apply_errors()
         const noexcept {
         return frequency_ratio_apply_errors_.load(std::memory_order_acquire);
@@ -970,30 +836,10 @@ public:
         return empty_buffer_end_boundaries_.load(std::memory_order_acquire);
     }
 
-    [[nodiscard]] std::uint64_t nonempty_buffer_end_boundaries() const noexcept {
-        return nonempty_buffer_end_boundaries_.load(std::memory_order_acquire);
-    }
-
     [[nodiscard]] std::uint64_t
     unobserved_buffer_end_boundaries() const noexcept {
         return unobserved_buffer_end_boundaries_.load(
             std::memory_order_acquire);
-    }
-
-    [[nodiscard]] std::uint64_t failure_sequence() const noexcept {
-        return failure_sequence_.load(std::memory_order_acquire);
-    }
-
-    // This is intentionally sticky.  The simulation thread can poll it at a
-    // scheduler boundary and hard-fail even if the guest never submits another
-    // AI DMA buffer after an asynchronous XAudio error.
-    [[nodiscard]] bool has_failure() const noexcept {
-        return failure_sequence() != 0u;
-    }
-
-    [[nodiscard]] bool failure_since(
-        std::uint64_t observed_failure_sequence) const noexcept {
-        return failure_sequence() != observed_failure_sequence;
     }
 
     [[nodiscard]] std::uint64_t event_sequence() const noexcept {

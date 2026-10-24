@@ -71,9 +71,9 @@ struct EyeMotion {
 // `a` may be null (no match): the object is taken as still in the world.
 void eye_motion(const Affine34* a, const Affine34& b, const CameraMotion& camera,
                 bool orthographic, EyeMotion& out) noexcept;
+
 [[nodiscard]] Affine34 eye_at(const EyeMotion& m, const CameraMotion& camera,
                               const Affine34& camera_t, float t) noexcept;
-
 // Normal matrix (3x3 in the first three columns of an Affine34) pair: the
 // rotation is taken out of the camera's like the position matrix's.
 struct NormalMotion {
@@ -83,9 +83,9 @@ struct NormalMotion {
 };
 void normal_motion(const Affine34* a, const Affine34& b, const CameraMotion& camera,
                    NormalMotion& out) noexcept;
+
 [[nodiscard]] Affine34 normal_at(const NormalMotion& m, const CameraMotion& camera,
                                  const Affine34& camera_t, float t) noexcept;
-
 // Texture-coordinate matrices are lerped element-wise; a translation that
 // changed by more than half a repeat wrapped and is unwrapped first; one that
 // still moves by more than `kTexStepLimit` repeats is a discrete step (an
@@ -130,11 +130,11 @@ void palette_motion(const std::uint32_t* a, const std::uint32_t* b, const Camera
 // The GX lights a draw with these VS constants evaluates: the light masks of
 // its lit colour and alpha channels and the lights of its emboss texgens.
 [[nodiscard]] std::uint8_t used_lights(const GxVsConstants& constants) noexcept;
+
 // Writes the palette at t: b's words with every changed part interpolated.
 void palette_at(const PaletteMotion& m, const std::uint32_t* a, const std::uint32_t* b,
                 const CameraMotion& camera, const Affine34& camera_t, float t,
                 std::uint32_t* out) noexcept;
-
 // Pixel-stage colours of one draw state between two frames: TEV registers,
 // konstant colours, alpha-test references, fog colour (and range when its
 // shift is unchanged) and indirect matrices (rows of equal scale). Only when
@@ -144,12 +144,11 @@ void palette_at(const PaletteMotion& m, const std::uint32_t* a, const std::uint3
 void ps_colours_at(const GxPsConstants& a, const GxPsConstants& b, float t, GxPsConstants& out) noexcept;
 // Channel ambient and material colours (vertex stage).
 [[nodiscard]] bool channel_colours_move(const GxVsConstants& a, const GxVsConstants& b) noexcept;
-void channel_colours_at(const GxVsConstants& a, const GxVsConstants& b, float t, GxVsConstants& out) noexcept;
 
+void channel_colours_at(const GxVsConstants& a, const GxVsConstants& b, float t, GxVsConstants& out) noexcept;
 // One GX light (16 XF words) at t: color and attenuation lerped; position and
 // direction interpolated in world space when `split` (else in eye space). A
 // null `a` (no previous snapshot) is b's light held still in the world.
 void light_at(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion& camera,
               const Affine34& camera_t, float t, bool split, std::uint32_t* out) noexcept;
-
 }  // namespace galaxy::gx

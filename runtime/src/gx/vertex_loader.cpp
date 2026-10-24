@@ -9,7 +9,7 @@
 //    loads; each component reads exactly its encoded byte width.
 //  - Color attributes never pass through the swap kernels (see below).
 //  - Unknown/unsupported configurations throw GxFatalError (hard-fail).
-//  - Indexed attributes resolve through GuestMemoryV1; unmapped memory throws GxFatalError.
+//  - Indexed attributes resolve through GuestMemory; unmapped memory throws GxFatalError.
 
 #include "galaxy/gx/vertex_loader.h"
 #include "galaxy/gx/vertex_dequant.h"
@@ -19,7 +19,7 @@
 #include "galaxy/gx/gx_bitfields.h"
 #include "galaxy/gx/gx_state.h"
 #include "galaxy/gx/upload_ring.h"
-#include "galaxy/native_api.h"
+#include "galaxy/guest_memory.h"
 
 #include "galaxy/simd128.h"
 
@@ -110,7 +110,7 @@ constexpr std::uint32_t kRecordedRangeGapBytes = 256u;
 class IndexedArrayResolver {
 public:
     explicit IndexedArrayResolver(
-        GuestMemoryV1* memory,
+        GuestMemory* memory,
         std::vector<VertexDecodeGuestRange>* read_ranges = nullptr,
         DependencyEventSink* dependency_event_sink = nullptr)
         : memory_(memory), read_ranges_(read_ranges),
@@ -218,14 +218,14 @@ private:
         std::size_t fifo_offset) const {
         if (memory_ == nullptr) {
             throw GxFatalError(
-                "VertexLoader: GuestMemoryV1 is null",
+                "VertexLoader: GuestMemory is null",
                 fifo_offset, 0);
         }
 
         if (std::byte* fast = resolve_guest_fast(memory_, address, size);
             fast != nullptr) {
             const std::uint32_t region_index = address >> 28;
-            const GuestMemoryFastRegionV1& region =
+            const GuestMemoryFastRegion& region =
                 memory_->fast_regions[region_index];
             const std::uint32_t guest_base = region_index << 28;
             return ResolvedGuestPointer{
@@ -264,7 +264,7 @@ private:
         throw_unmapped_indexed_array(address, fifo_offset);
     }
 
-    GuestMemoryV1* memory_ = nullptr;
+    GuestMemory* memory_ = nullptr;
     std::array<ResolvedGuestRange, 16> ranges_{};
     // Only the active chunk needs per-attribute state. Closed chunks already
     // live in read_range_finished_; retaining them twice adds heap churn.
@@ -1228,7 +1228,7 @@ LoadedPrimitive VertexLoader::load(
     PrimitiveClass primitive,
     std::uint8_t vtxfmt,
     const GxState& state,
-    GuestMemoryV1* memory,
+    GuestMemory* memory,
     UploadRing& vertex_ring,
     UploadRing& index_ring,
     std::uint32_t index_batch_base_vertex,
@@ -1249,7 +1249,6 @@ LoadedPrimitive VertexLoader::load(
         index_batch_base_vertex,
         rebase_indices_to_batch_base);
 }
-
 LoadedPrimitive VertexLoader::load_with_layout(
     FifoCursor& cursor,
     PrimitiveClass primitive,
@@ -1257,7 +1256,7 @@ LoadedPrimitive VertexLoader::load_with_layout(
     const GxState& state,
     const VertexDescriptor& desc,
     std::size_t src_stride,
-    GuestMemoryV1* memory,
+    GuestMemory* memory,
     UploadRing& vertex_ring,
     UploadRing& index_ring,
     std::uint32_t index_batch_base_vertex,
@@ -1419,7 +1418,7 @@ LoadedPrimitive VertexLoader::load_cached_packet_run_with_layout(
     const GxState& state,
     const VertexDescriptor& desc,
     std::size_t src_stride,
-    GuestMemoryV1* memory,
+    GuestMemory* memory,
     UploadRing& vertex_ring,
     UploadRing& index_ring,
     std::uint32_t index_batch_base_vertex,
@@ -1452,7 +1451,6 @@ LoadedPrimitive VertexLoader::load_cached_packet_run_with_layout(
         decoded.total_indices,
         precomputed_indices);
 }
-
 DecodedPacketRunVertices
 VertexLoader::decode_cached_packet_run_vertices_with_layout(
     std::span<const std::byte> bytes,
@@ -1463,7 +1461,7 @@ VertexLoader::decode_cached_packet_run_vertices_with_layout(
     const GxState& state,
     const VertexDescriptor& desc,
     std::size_t src_stride,
-    GuestMemoryV1* memory,
+    GuestMemory* memory,
     std::uint32_t precomputed_total_vertices,
     std::uint32_t precomputed_total_indices,
     bool record_indexed_read_ranges,

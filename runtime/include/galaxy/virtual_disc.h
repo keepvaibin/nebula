@@ -57,9 +57,8 @@ public:
     bool read(std::uint64_t offset, std::uint32_t size, std::uint8_t* dst, const std::uint8_t* partition) const;
     // The changed file placed at disc offset `offset` and its disc path ("/a/b"); null in the partition or past it.
     [[nodiscard]] const DiscNode* placed_file(std::uint64_t offset, const std::string** path = nullptr) const;
-    [[nodiscard]] std::uint64_t changed_files() const noexcept { return placed_.size(); }
-    [[nodiscard]] const DiscNode& root() const noexcept { return root_; }
 
+    [[nodiscard]] std::uint64_t changed_files() const noexcept { return placed_.size(); }
     // A disc file's bytes, its pieces read (the DOL's patches: main.dol is a file Riivolution can patch).
     static std::vector<std::uint8_t> materialize(const DiscNode& file, const std::uint8_t* partition,
                                                  std::uint64_t partition_size);

@@ -310,14 +310,14 @@ NativeGameAudio::~NativeGameAudio() {
 namespace {
 // A guest address's bytes in the native game's regions.
 std::byte* native_game_resolve(void* user, std::uint32_t address, std::uint32_t size) {
-    const auto& memory = *static_cast<const GuestMemoryV1*>(user);
-    const GuestMemoryFastRegionV1& fast = memory.fast_regions[address >> 28u];
+    const auto& memory = *static_cast<const GuestMemory*>(user);
+    const GuestMemoryFastRegion& fast = memory.fast_regions[address >> 28u];
     const std::uint32_t offset = address & 0x0FFF'FFFFu;
     if (fast.host_base != nullptr && offset <= fast.size && size <= fast.size - offset) {
         return fast.host_base + offset;
     }
     for (std::uint32_t i = 0; i < memory.region_count; ++i) {
-        const GuestMemoryRegionV1& region = memory.regions[i];
+        const GuestMemoryRegion& region = memory.regions[i];
         if (address - region.guest_base < region.size && size <= region.size - (address - region.guest_base)) {
             return region.host_base + (address - region.guest_base);
         }
@@ -326,8 +326,8 @@ std::byte* native_game_resolve(void* user, std::uint32_t address, std::uint32_t 
 }
 }  // namespace
 
-bool NativeGameAudio::dsp_command(const std::uint32_t* words, std::uint32_t count, const GuestMemoryV1& memory) {
-    const JAudioGuestMemory guest{const_cast<GuestMemoryV1*>(&memory), &native_game_resolve};
+bool NativeGameAudio::dsp_command(const std::uint32_t* words, std::uint32_t count, const GuestMemory& memory) {
+    const JAudioGuestMemory guest{const_cast<GuestMemory*>(&memory), &native_game_resolve};
     JAudioHostMixer& mixer = state_->mixer;
     const auto word = [&](std::uint32_t index) { return index < count ? words[index] : 0u; };
     if (count == 0u) {

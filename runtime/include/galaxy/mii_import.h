@@ -26,7 +26,6 @@ using MiiPreparer = std::function<bool(MiiRecord&)>;
 
 // The Miis a file holds, its empty slots left out (any console's: mii_formats.h). `error` says why there are none.
 [[nodiscard]] std::vector<MiiRecord> read_miis(std::span<const std::byte> bytes, std::string* error);
-
 struct MiiMergeResult {
     unsigned added = 0;        // into free slots
     unsigned updated = 0;      // a Mii the database holds (its create ID), changed since

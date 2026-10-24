@@ -26,8 +26,8 @@ std::string startup_failure() {
 FramePeCompletionToken render_frame(
     const std::byte* fifo_data,
     std::size_t fifo_size,
-    GuestMemoryV1* memory,
-    const NativeServicesV1* services,
+    GuestMemory* memory,
+    const GxServices* services,
     bool present_swap_chain,
     std::uint32_t displayed_xfb_addr) {
     return backend().render_frame(
@@ -43,41 +43,18 @@ void wait_for_render_idle() {
     backend().wait_for_render_idle();
 }
 
-void wait_for_render_fifo_effects_idle() {
-    backend().wait_for_render_fifo_effects_idle();
-}
-
-void wait_for_frame_pe_completion(FramePeCompletionToken token) {
-    backend().wait_for_frame_pe_completion(token);
-}
-
 bool wait_for_frame_pe_completion_for(
     FramePeCompletionToken token,
     std::uint32_t timeout_ms) {
     return backend().wait_for_frame_pe_completion_for(token, timeout_ms);
 }
 
-bool render_queue_has_space() {
-    return backend().render_queue_has_space();
-}
-
-void set_pointer_response(PointerResponseStamp stamp) noexcept { backend().set_pointer_response(stamp); }
-void set_prerecorded_movie_content(bool movie) noexcept { backend().set_prerecorded_movie_content(movie); }
 void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, std::uint32_t y, std::uint32_t u,
                         std::uint32_t v, std::uint32_t width, std::uint32_t height) noexcept {
     backend().attach_movie_frame(name, frame, frame_rate, y, u, v, width, height);
 }
 bool movie_replacement_showing() noexcept { return MovieReplacements::showing(); }
 void set_safety_scene_surround(float intensity) noexcept { backend().set_safety_scene_surround(intensity); }
-
-bool enqueue_pointer_depth_capture(const std::shared_ptr<PointerDepthCapture>& capture) {
-    return backend().enqueue_pointer_depth_capture(capture);
-}
-
-void attach_pointer_depth_capture(
-    const std::shared_ptr<PointerDepthCapture>& capture, std::size_t fifo_offset) {
-    backend().attach_pointer_depth_capture(capture, fifo_offset);
-}
 
 void attach_fifo_marker(FifoMarker marker, std::size_t fifo_offset) noexcept {
     backend().attach_fifo_marker(marker, fifo_offset);
@@ -100,10 +77,6 @@ void attach_stripe_particle(std::size_t stream_offset, std::uint32_t particle, s
     backend().attach_stripe_particle({stream_offset, particle, age_lifetime, strip});
 }
 
-bool capture_pointer_depth(std::span<std::uint32_t> pixels) {
-    return backend().capture_pointer_depth(pixels);
-}
-
 bool peek_efb(
     std::uint16_t x,
     std::uint16_t y,
@@ -116,41 +89,14 @@ bool peek_efb_published(
     std::uint16_t x,
     std::uint16_t y,
     EfbPeekKind kind,
-    std::uint32_t& value) {
-    return backend().peek_efb_published(x, y, kind, 0u, value);
-}
-
-bool peek_efb_published(
-    std::uint16_t x,
-    std::uint16_t y,
-    EfbPeekKind kind,
     std::uint16_t token,
     std::uint32_t& value) {
     return backend().peek_efb_published(x, y, kind, token, value);
 }
 
-void present_cached_xfb(
-    std::uint32_t displayed_xfb_addr,
-    bool present_swap_chain) {
-    backend().present_cached_xfb(displayed_xfb_addr, present_swap_chain);
-}
-
-void scan_pe_events(
-    const std::byte* fifo_data,
-    std::size_t fifo_size,
-    GuestMemoryV1* memory,
-    const NativeServicesV1* services) {
-    backend().scan_pe_events_on_sim_thread(
-        fifo_data, fifo_size, memory, services);
-}
-
 void set_indexed_load_host_order(bool host_order) noexcept {
     extern std::atomic<bool> g_indexed_load_host_order;
     g_indexed_load_host_order.store(host_order, std::memory_order_relaxed);
-}
-
-void install_guest_dirty_tracker(GuestMemoryV1* memory) noexcept {
-    backend().install_guest_dirty_tracker(memory);
 }
 
 void notify_guest_memory_write(
@@ -171,24 +117,8 @@ std::uint64_t xfb_copy_count() noexcept {
     return backend().xfb_copy_count();
 }
 
-std::uint64_t xfb_causal_trace_frame_index() noexcept {
-    return backend().xfb_causal_trace_frame_index();
-}
-
 XfbPresentStats xfb_present_stats() noexcept {
     return backend().xfb_present_stats();
-}
-
-XfbMeasurementCadenceStats xfb_measurement_cadence_stats() noexcept {
-    return backend().xfb_measurement_cadence_stats();
-}
-
-void reset_xfb_measurement_window_stats() noexcept {
-    backend().reset_xfb_measurement_window_stats();
-}
-
-void shutdown() {
-    backend().shutdown();
 }
 
 }  // namespace galaxy::gx

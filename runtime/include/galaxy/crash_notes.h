@@ -44,12 +44,4 @@ inline void note(const char* text) noexcept {
     copy_line(g_recent[index % kRecentCount], text);
 }
 
-// The kept events, oldest first.
-template <class Visit>
-void for_each_recent(Visit visit) {
-    const std::uint32_t written = g_recent_written.load(std::memory_order_relaxed);
-    const std::uint32_t kept = written < kRecentCount ? written : static_cast<std::uint32_t>(kRecentCount);
-    for (std::uint32_t i = written - kept; i != written; ++i) visit(g_recent[i % kRecentCount].data());
-}
-
 }  // namespace galaxy::crash_notes

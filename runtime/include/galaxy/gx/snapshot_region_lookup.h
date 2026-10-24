@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-#include "galaxy/native_api.h"
+#include "galaxy/guest_memory.h"
 #include <cstdint>
 #include <span>
 
@@ -10,7 +10,7 @@ namespace galaxy::gx::detail {
 // Certify the actual immutable view, without sorting it: overlapping views
 // must retain the generic resolver's first-containing-region semantics.
 [[nodiscard]] inline bool snapshot_regions_are_disjoint_sorted(
-    std::span<const GuestMemoryRegionV1> regions) noexcept {
+    std::span<const GuestMemoryRegion> regions) noexcept {
     std::uint64_t previous_end = 0;
     for (const auto& region : regions) {
         const std::uint64_t end = static_cast<std::uint64_t>(region.guest_base) + region.size;
@@ -27,7 +27,7 @@ namespace galaxy::gx::detail {
 // A request crossing adjacent regions is still unmapped, just as with the
 // original single-region resolver; this never joins separately owned buffers.
 [[nodiscard]] inline const std::byte* resolve_sorted_snapshot_region(
-    std::span<const GuestMemoryRegionV1> regions,
+    std::span<const GuestMemoryRegion> regions,
     std::uint32_t address, std::uint32_t size) noexcept {
     if (size == 0u) return nullptr;
     std::size_t low = 0u, high = regions.size();

@@ -66,10 +66,6 @@ inline constexpr Topology kTopologyPointList = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
     return Rect{left, top, right, bottom};
 }
 
-[[nodiscard]] inline bool is_null(Table table) noexcept {
-    return table.ptr == 0;
-}
-
 }  // namespace galaxy::gx::gpu
 
 namespace galaxy::gx::vk {
@@ -172,10 +168,6 @@ inline constexpr Topology kTopologyPointList = D3D_PRIMITIVE_TOPOLOGY_POINTLIST;
 
 [[nodiscard]] inline Rect rect(std::int32_t left, std::int32_t top, std::int32_t right, std::int32_t bottom) noexcept {
     return Rect{static_cast<LONG>(left), static_cast<LONG>(top), static_cast<LONG>(right), static_cast<LONG>(bottom)};
-}
-
-[[nodiscard]] inline bool is_null(Table table) noexcept {
-    return table.ptr == 0;
 }
 
 // An RGBA8 texture that is rendered to and sampled (XFB copies); empty when it cannot be created.

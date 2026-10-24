@@ -90,7 +90,6 @@ inline void store(void* p, v128 v) noexcept { _mm_storeu_si128(static_cast<__m12
                          static_cast<char>(b14), static_cast<char>(b15));
 }
 [[nodiscard]] inline v128 splat16(std::uint16_t x) noexcept { return _mm_set1_epi16(static_cast<short>(x)); }
-[[nodiscard]] inline v128 zero() noexcept { return _mm_setzero_si128(); }
 [[nodiscard]] inline v128 or_(v128 a, v128 b) noexcept { return _mm_or_si128(a, b); }
 [[nodiscard]] inline v128 and_(v128 a, v128 b) noexcept { return _mm_and_si128(a, b); }
 [[nodiscard]] inline v128 andnot(v128 a, v128 b) noexcept { return _mm_andnot_si128(a, b); }

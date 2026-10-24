@@ -138,9 +138,6 @@ public:
                      void* allocate_context, D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width,
                      std::uint32_t height);
 
-    // TLAS of the last traced scene (valid on the GPU timeline after trace_scene).
-    [[nodiscard]] D3D12_GPU_VIRTUAL_ADDRESS scene_tlas() const noexcept;
-
     // The game camera's view matrix (3x4 rows, world to eye) of the open scene; null when the
     // scene has none. The lighting history follows it from frame to frame.
     void set_camera(const std::array<float, 12>* view) noexcept;
@@ -279,7 +276,6 @@ public:
     [[nodiscard]] float glow_exposure(bool model) const noexcept {
         return lighting_active() ? (model ? glow_model_exposure_ : glow_exposure_) : 1.0f;
     }
-    [[nodiscard]] float glow_spill(bool model) const noexcept { return model ? glow_model_spill_ : glow_spill_; }
 
 private:
     static constexpr unsigned kResultSlots = 16u;
@@ -294,8 +290,6 @@ private:
     // The eye's adaptation in the picture sums (ray_tracing.cpp kPictureStarColour + 16; rt_lighting.hlsl kAdaptation):
     // its factor, known.
     static constexpr std::uint64_t kPictureAdaptation = 208u;
-    // The glow emitters' first float4 element in the emitters' buffer (rt_lighting.hlsl kGlowElements).
-    static constexpr std::uint32_t kGlowElements = 1u + 4u * kEmitTriangles + kEmitTriangles + kGlowEmitters;
     // g_emit_tris: header, 4 per scene emitter, the running power (scene then glow), 4 per glow emitter, glow powers.
     static constexpr std::uint64_t kEmitBufferBytes =
         (1ull + 5ull * kEmitTriangles + 6ull * kGlowEmitters) * 16u;

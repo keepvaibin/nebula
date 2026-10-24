@@ -1610,9 +1610,9 @@ V main(uint id : SV_VertexID) {
         constexpr std::uint32_t stride = 32768u;
         std::vector<std::byte> bytes(18u * stride);
         for (unsigned i = 0u; i < 18u; ++i) bytes[i * stride] = static_cast<std::byte>(i);
-        galaxy::GuestMemoryRegionV1 region{
+        galaxy::GuestMemoryRegion region{
             address, static_cast<std::uint32_t>(bytes.size()), bytes.data()};
-        galaxy::GuestMemoryV1 memory{};
+        galaxy::GuestMemory memory{};
         memory.regions = &region;
         memory.region_count = 1u;
         TexImage image{};
@@ -1702,9 +1702,9 @@ V main(uint id : SV_VertexID) {
         cache.backend().set_upload_list(list.Get());
         constexpr std::uint32_t address = 0x10000000u;
         std::array<std::byte, 1024> bytes{};
-        galaxy::GuestMemoryRegionV1 region{
+        galaxy::GuestMemoryRegion region{
             address, static_cast<std::uint32_t>(bytes.size()), bytes.data()};
-        galaxy::GuestMemoryV1 memory{};
+        galaxy::GuestMemory memory{};
         memory.region_count = 1u;
         memory.regions = &region;
         TexImage image{};
@@ -1774,9 +1774,9 @@ V main(uint id : SV_VertexID) {
         for (std::size_t i = 0; i < bytes.size(); ++i) {
             bytes[i] = static_cast<std::byte>((i * 2654435761u) >> 13u);
         }
-        galaxy::GuestMemoryRegionV1 region{
+        galaxy::GuestMemoryRegion region{
             address, static_cast<std::uint32_t>(bytes.size()), bytes.data()};
-        galaxy::GuestMemoryV1 memory{};
+        galaxy::GuestMemory memory{};
         memory.region_count = 1u;
         memory.regions = &region;
         struct Case {
@@ -1963,9 +1963,9 @@ V main(uint id : SV_VertexID) {
         for (unsigned block = 0; block < 4u; ++block) {
             bytes[block * 128u] = static_cast<std::byte>(block + 1u);
         }
-        galaxy::GuestMemoryRegionV1 region{
+        galaxy::GuestMemoryRegion region{
             address, static_cast<std::uint32_t>(bytes.size()), bytes.data()};
-        galaxy::GuestMemoryV1 memory{};
+        galaxy::GuestMemory memory{};
         memory.region_count = 1u;
         memory.regions = &region;
         TexImage image{};
@@ -2035,8 +2035,8 @@ V main(uint id : SV_VertexID) {
         constexpr std::uint32_t size = width * height * 4u;
         static_assert(size > (1u << 20u));
         std::vector<std::byte> bytes(size, std::byte{0x55});
-        galaxy::GuestMemoryRegionV1 region{address, size, bytes.data()};
-        galaxy::GuestMemoryV1 memory{};
+        galaxy::GuestMemoryRegion region{address, size, bytes.data()};
+        galaxy::GuestMemory memory{};
         memory.region_count = 1u;
         memory.regions = &region;
         TexImage image{};
@@ -2095,8 +2095,8 @@ V main(uint id : SV_VertexID) {
         cache.backend().set_upload_list(list.Get());
         constexpr std::uint32_t address = 0x10000000u;
         std::array<std::byte, 2048> bytes{};
-        galaxy::GuestMemoryRegionV1 region{address, static_cast<std::uint32_t>(bytes.size()), bytes.data()};
-        galaxy::GuestMemoryV1 memory{};
+        galaxy::GuestMemoryRegion region{address, static_cast<std::uint32_t>(bytes.size()), bytes.data()};
+        galaxy::GuestMemory memory{};
         memory.region_count = 1u;
         memory.regions = &region;
         TexImage image{};

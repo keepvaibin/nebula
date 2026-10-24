@@ -554,10 +554,10 @@ bool indexed_dependencies_cover_nonmonotonic_reads() {
             positions[offset + 1u] = static_cast<std::byte>(values[component] & 0xffu);
         }
     }
-    std::array<galaxy::GuestMemoryRegionV1, 2> regions{{
+    std::array<galaxy::GuestMemoryRegion, 2> regions{{
         {guest_base, static_cast<std::uint32_t>(positions.size()), positions.data()},
         {tex_base, static_cast<std::uint32_t>(positions.size()), positions.data()}}};
-    galaxy::GuestMemoryV1 memory{};
+    galaxy::GuestMemory memory{};
     memory.regions = regions.data();
     memory.region_count = static_cast<std::uint32_t>(regions.size());
     GxState state;
@@ -739,10 +739,10 @@ bool prepared_vertex_inputs_preserve_mixed_layouts() {
         bytes[offset] = static_cast<std::byte>(bits >> 8u);
         bytes[offset + 1u] = static_cast<std::byte>(bits & 0xffu);
     };
-    std::array<galaxy::GuestMemoryRegionV1, 3> regions{{
+    std::array<galaxy::GuestMemoryRegion, 3> regions{{
         {position_base, 64u, positions.data()}, {color_base, 64u, colors.data()},
         {tex_base, 64u, texcoords.data()}}};
-    galaxy::GuestMemoryV1 memory{}; memory.regions = regions.data(); memory.region_count = 3u;
+    galaxy::GuestMemory memory{}; memory.regions = regions.data(); memory.region_count = 3u;
     GxState state;
     VertexLoader loader;
     VertexDescriptor desc{};
@@ -816,7 +816,7 @@ bool byte_dequant_and_nbt3_match_cached_decode(
     VertexLoader loader;
     bool ok = true;
     const auto check_routes = [&](GxState& state, std::vector<std::byte>& fifo,
-                                  galaxy::GuestMemoryV1* memory,
+                                  galaxy::GuestMemory* memory,
                                   const GxVertexOut& expected,
                                   bool check_nbt) {
         vertex_ring.begin_frame(0);
@@ -908,7 +908,7 @@ bool byte_dequant_and_nbt3_match_cached_decode(
             }
         }
         std::memcpy(guest.data() + 0x100u, records.data(), records.size());
-        galaxy::GuestMemoryV1 memory{};
+        galaxy::GuestMemory memory{};
         memory.fast_regions[8].host_base = guest.data();
         memory.fast_regions[8].size = static_cast<std::uint32_t>(guest.size());
         std::vector<std::byte> fifo;

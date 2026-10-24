@@ -158,6 +158,12 @@ public:
     [[nodiscard]] bool rt_ab_original() const noexcept { return false; }
     void rt_set_ab_original(bool) noexcept {}
     [[nodiscard]] bool rt_reflections_active() const noexcept { return false; }
+    [[nodiscard]] bool rt_engine() const noexcept { return false; }
+    [[nodiscard]] bool rt_log_seq() const noexcept { return false; }
+    [[nodiscard]] bool rt_scene_untraced() const noexcept { return false; }
+    void rt_set_scene_untraced(bool) noexcept {}
+    void begin_hdr_scene() noexcept {}
+    void end_hdr_scene() noexcept {}
     void rt_begin_scene() {}
     void rt_capture_picture() {}
     void rt_trace_scene() {}
@@ -176,7 +182,6 @@ public:
     [[nodiscard]] bool rt_sun_direction(std::array<float, 3>&) const noexcept { return false; }
     void rt_note_draw(const DrawCall&, const RtDrawInfo&) {}
     [[nodiscard]] float rt_glow_exposure(bool = false) const noexcept { return 1.0f; }
-    [[nodiscard]] float rt_glow_spill(bool) const noexcept { return 0.0f; }
     [[nodiscard]] const void* rt_light_texture() const noexcept { return nullptr; }
     [[nodiscard]] bool rt_light_texture_ready() const noexcept { return false; }
     [[nodiscard]] float rt_light_texture_scale() const noexcept { return 1.0f; }
@@ -277,7 +282,6 @@ public:
     void debug_log_readback();
     void debug_log_backbuffer_readback();
     bool debug_copy_selected_xfb_to_readback(const XfbTexture&) noexcept { return false; }
-    void debug_log_selected_xfb_readback() noexcept {}
     void set_debug_capture_paths(std::string efb_ppm_path, std::string backbuffer_ppm_path);
 
     [[nodiscard]] gpu::Device* device() const noexcept { return vk::Context::get().device(); }

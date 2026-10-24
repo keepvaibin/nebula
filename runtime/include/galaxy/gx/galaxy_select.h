@@ -49,15 +49,6 @@ inline constexpr GalaxyStage kGalaxyStages[] = {
 inline constexpr std::size_t kGalaxyStageCount = sizeof(kGalaxyStages) / sizeof(kGalaxyStages[0]);
 inline constexpr const char* kObservatoryId = "AstroGalaxy";
 inline constexpr const char* kObservatoryName = "COMET OBSERVATORY";
-// The Observatory's entry (kGalaxyStages stars): the save's state. The galaxy tour also enters its scenarios 1-5
-// (AstroGalaxyScenario ScenarioData), 0 the save's.
-inline constexpr const char* kObservatoryStates[] = {"AS IN YOUR SAVE"};
-// The Grand Stars GRAND STARS gives (SpecialStarGrand1-6: Gateway and the five Bowser and Bowser Jr. stages before
-// the last; 7, the Galaxy Reactor's, starts the ending).
-inline constexpr std::uint32_t kGrandStarsGiven = 6u;
-
-// The stars of a stage in kGalaxyStages; 0 for other stages.
-[[nodiscard]] std::uint32_t galaxy_stage_stars(std::string_view id) noexcept;
 
 [[nodiscard]] bool galaxy_select_enabled() noexcept;
 
@@ -69,15 +60,5 @@ void want_galaxy_select_names() noexcept;
 // The game's names in upper case ("" until read).
 [[nodiscard]] std::string galaxy_select_name(std::size_t stage);
 [[nodiscard]] std::string galaxy_select_star_name(std::size_t stage, std::uint32_t star);
-
-// Simulation thread, at a scene's start.
-[[nodiscard]] bool take_galaxy_travel(std::size_t& stage, std::uint32_t& star) noexcept;
-[[nodiscard]] bool take_grand_stars() noexcept;
-[[nodiscard]] bool galaxy_select_names_wanted() noexcept;
-void set_galaxy_select_names(std::vector<std::string> galaxies, std::vector<std::vector<std::string>> stars);
-
-// UTF-16 code units of a game message as the menu font shows them: upper case letters, digits and
-// its punctuation; others are dropped, accents lose their marks.
-[[nodiscard]] std::string galaxy_select_text(const std::vector<std::uint16_t>& units);
 
 }  // namespace galaxy::gx

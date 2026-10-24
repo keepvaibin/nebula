@@ -187,25 +187,6 @@ struct RenderConfig {
     unsigned aspect_mode         = 0;
 };
 
-// Frame-rate choices for a display refreshing at refresh_hz (0 = unknown):
-// the standard rates it can show, its own rate when that is not one of them,
-// then 0 for unlimited. 59 Hz reports count as 60.
-inline constexpr unsigned kStandardFrameRates[] = {30u, 60u, 120u, 144u, 165u, 240u, 360u};
-inline std::vector<unsigned> frame_rate_options(unsigned refresh_hz) {
-    std::vector<unsigned> options;
-    bool listed = false;
-    for (const unsigned rate : kStandardFrameRates) {
-        if (refresh_hz != 0u && rate > refresh_hz + 1u) break;
-        options.push_back(rate);
-        listed = listed || (refresh_hz + 1u >= rate && refresh_hz <= rate + 1u);
-    }
-    if (refresh_hz > 30u && !listed) {
-        options.insert(std::upper_bound(options.begin(), options.end(), refresh_hz), refresh_hz);
-    }
-    options.push_back(0u);
-    return options;
-}
-
 // Frames per second the game picture is presented at. The game renders 60;
 // lower rates present the newest frame on their own cadence, higher rates
 // add interpolated frames between game frames. Unlimited (0) is the display

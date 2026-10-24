@@ -17,7 +17,7 @@
 
 #include "galaxy/gx/gx_bitfields.h"
 #include "galaxy/gx/gx_state.h"
-#include "galaxy/native_api.h"
+#include "galaxy/guest_memory.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -95,12 +95,6 @@ private:
 // (galaxy/simd128.h) with a scalar tail; vertex arrays are the hot path and
 // must never go through per-byte scalar reads.
 // ---------------------------------------------------------------------------
-
-// Swaps `count` 16-bit values from src into dst (may not alias).
-void swap16_block(
-    const std::byte* src,
-    std::uint16_t* dst,
-    std::size_t count);
 
 // Swaps `count` 32-bit values from src into dst (may not alias).
 void swap32_block(
@@ -444,6 +438,7 @@ struct FifoGuestMemoryReadRecorder {
 // ---------------------------------------------------------------------------
 class FifoParser {
 public:
+
     // Parses one frame's accumulated FIFO bytes.  Register loads mutate
     // `state` (including LOAD_INDX resolution through `memory`); draws, EFB
     // copies, PE events, and invalidations are dispatched to `sink`.
@@ -453,17 +448,16 @@ public:
     // offending window is written to `<dump_dir>/frame<N>.gxdump`.
     void run(
         std::span<const std::byte> fifo,
-        GuestMemoryV1* memory,
+        GuestMemory* memory,
         FifoSink& sink,
         GxState& state,
         bool frozen_regions = false);
-
     // Parses all complete top-level commands. If the capture ends in the
     // middle of a command, returns that command's start offset so the caller
     // can retain the tail. Malformed input and CALL_DL windows remain fatal.
     [[nodiscard]] std::size_t run_available(
         std::span<const std::byte> fifo,
-        GuestMemoryV1* memory,
+        GuestMemory* memory,
         FifoSink& sink,
         GxState& state,
         bool frozen_regions = false);
@@ -510,7 +504,7 @@ public:
 
 private:
     struct FrozenRegionScope;
-    const GuestMemoryV1* frozen_sorted_memory_ = nullptr;
+    const GuestMemory* frozen_sorted_memory_ = nullptr;
     struct CachedDisplayListCommand {
         enum class Kind : std::uint8_t {
             Nop,
@@ -620,7 +614,7 @@ private:
 
     void run_window(
         FifoCursor& cursor,
-        GuestMemoryV1* memory,
+        GuestMemory* memory,
         FifoSink& sink,
         GxState& state,
         int depth,
@@ -647,7 +641,7 @@ private:
         GxState& state) const;
     void replay_cached_display_list(
         const CachedDisplayList& cached,
-        GuestMemoryV1* memory,
+        GuestMemory* memory,
         FifoSink& sink,
         GxState& state,
         std::size_t opcode_offset) const;
@@ -667,7 +661,7 @@ private:
     // Resolves a guest physical address range to host memory; throws
     // GxFatalError if the range is unmapped.
     [[nodiscard]] std::span<const std::byte> resolve_guest(
-        GuestMemoryV1* memory,
+        GuestMemory* memory,
         std::uint32_t guest_addr,
         std::uint32_t size,
         const FifoCursor& at) const;
@@ -722,9 +716,6 @@ private:
     // caller that just filled that slot keeps its entry even when the entry
     // alone exceeds the budget.
     void evict_display_list_cache_to_budget(std::size_t skip_index);
-    // Releases every cached entry and its retained capacity. Owning a parser
-    // for a new renderer session must not inherit the previous session's lists.
-    void clear_display_list_cache();
 };
 
 }  // namespace galaxy::gx

@@ -440,8 +440,6 @@ void set_frame_generation(unsigned generated, bool dynamic, float target_fps) no
 
 unsigned frames_presented() noexcept { return g_dlssg_presented; }
 
-unsigned frame_generation_status() noexcept { return g_dlssg_status; }
-
 Microsoft::WRL::ComPtr<ID3D12Device> queue_device(ID3D12Device* device) noexcept {
     if (!g_api.initialized || device == nullptr) {
         return device;
@@ -735,7 +733,6 @@ void tag_backbuffer_region(ID3D12GraphicsCommandList*, unsigned, unsigned, unsig
 void set_frame_generation(unsigned, bool, float) noexcept {}
 bool frame_generation_dynamic() noexcept { return false; }
 unsigned frames_presented() noexcept { return 1u; }
-unsigned frame_generation_status() noexcept { return 0u; }
 bool active() noexcept { return false; }
 bool attach_device(ID3D12Device*, const LUID&) noexcept { return false; }
 bool dlss_supported() noexcept { return false; }

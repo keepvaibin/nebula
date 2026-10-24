@@ -66,7 +66,6 @@ constexpr bool kStreamlineBuilt = true;
 constexpr bool kStreamlineBuilt = false;
 #endif
 
-
 bool detail::ConversionRtvSlot::bind(
     ID3D12Device* device, ID3D12Resource* resource,
     D3D12_CPU_DESCRIPTOR_HANDLE descriptor) {
@@ -580,10 +579,7 @@ static ComPtr<ID3DBlob> compile_hlsl(
     return code;
 }
 
-
-
 }  // namespace
-
 
 bool validate_efb_conversion_shader(std::string& diagnostics) noexcept {
     try {
@@ -599,8 +595,6 @@ bool validate_efb_conversion_shader(std::string& diagnostics) noexcept {
         return false;
     }
 }
-
-
 // ---------------------------------------------------------------------------
 // DescriptorRing
 // ---------------------------------------------------------------------------
@@ -713,9 +707,6 @@ DescriptorRing::Table DescriptorRing::allocate(unsigned count) {
 // stays fatal: UploadRing::allocate throws, so a too-small value fails visibly instead of
 // dropping geometry.
 namespace {
-// Identities of ring buffers and of their segmentations (immutable-upload tokens).
-std::atomic<std::uint64_t> g_upload_ring_identity{1};
-
 
 // Keep malformed or overflowing settings from changing the intended budget.
 [[nodiscard]] std::size_t ring_bytes_per_frame(
@@ -1391,7 +1382,6 @@ HRESULT create_gx_root_signature(
         IID_PPV_ARGS(root_signature));
 }
 
-
 bool RendererD3D12::create_root_signature() {
     d3d_check(
         create_gx_root_signature(
@@ -1465,7 +1455,6 @@ D3D12_SAMPLER_DESC build_sampler_desc_from_key(
     }
     return desc;
 }
-
 
 bool RendererD3D12::create_sampler_heap() {
     default_sampler_valid_.fill(false);
@@ -1900,7 +1889,6 @@ detail::create_efb_conversion_source_views(
     device->CreateShaderResourceView(depth, &view, depth_cpu);
     return {table.gpu, depth_gpu};
 }
-
 bool RendererD3D12::create_clear_pipeline() {
     D3D12_ROOT_PARAMETER param{};
     param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
@@ -2573,7 +2561,6 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
     return true;
 }
 
-
 UploadBuffer RendererD3D12::create_upload_buffer(std::size_t bytes, const char* name) {
     return gpu::create_upload_memory(device_.Get(), bytes, name);
 }
@@ -2816,12 +2803,6 @@ void RendererD3D12::shutdown() {
     }
 }
 
-void RendererD3D12::drain_gpu() {
-    if (queue_ && fence_) {
-        wait_for_gpu();
-    }
-}
-
 void RendererD3D12::apply_pending_resize() {
     const auto extent = host_window::pending_resize_extent.exchange(0u, std::memory_order_acq_rel);
     if (extent == 0u) return;
@@ -2894,7 +2875,6 @@ void RendererD3D12::resize_swap_chain(UINT new_width, UINT new_height, bool forc
                   << new_height << '\n';
     }
 }
-
 
 bool RendererD3D12::enter_exclusive_fullscreen(
     const std::wstring& monitor_device, unsigned width, unsigned height,
@@ -4633,7 +4613,6 @@ bool RendererD3D12::start_replay_playback() {
     return true;
 }
 
-
 // Blend verdicts, then the presented frame's values (t, t of the frame before,
 // jitter) at kFrameValuesElement and a zero element read by game frames. Made
 // at the first frame, zeroed, so every draw can read it.
@@ -4718,7 +4697,6 @@ bool RendererD3D12::ensure_blend_validation() {
     blend_validate_failed_ = false;
     return true;
 }
-
 
 bool RendererD3D12::ensure_stripe_gather(std::uint64_t bytes) {
     if (!stripe_gather_pso_) {
@@ -5710,18 +5688,6 @@ void RendererD3D12::begin_replay_record() {
     replay_source_slot_ = frame_slot_;
 }
 
-void RendererD3D12::end_replay_record(bool keep) {
-    replay_recording_ = false;
-    bool has_display_copy = false;
-    for (const ReplayCopy& copy : replay_copies_) {
-        has_display_copy = has_display_copy || copy.mode == 1u;
-    }
-    replay_valid_ = keep && has_display_copy;
-    if (replay_valid_) {
-        publish_replay_log();
-    }
-}
-
 bool RendererD3D12::ensure_subframe_resources(unsigned xfb_width, unsigned xfb_height) {
     if (!subframe_allocators_[0]) {
         for (auto& allocator : subframe_allocators_) {
@@ -6168,7 +6134,6 @@ void RendererD3D12::release_copy_snapshots(unsigned segment) {
         }
     }
 }
-
 
 constexpr D3D12_RESOURCE_STATES kInterpOutputRead =
     D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE |
@@ -9286,28 +9251,6 @@ bool RendererD3D12::try_complete_pointer_depth_capture_in_place(
     return true;
 }
 
-bool RendererD3D12::try_complete_pointer_depth_capture(
-    std::span<std::uint32_t> pixels) {
-    if (pixels.size() != kEfbWidth * kEfbHeight) {
-        throw std::invalid_argument("pointer depth field requires 640x528 pixels");
-    }
-    if (pointer_depth_capture_fence_ == 0u) {
-        if (pointer_depth_in_frame_pending_) {
-            return false;  // recorded in the open frame; fenced at end_frame
-        }
-        throw std::logic_error("pointer depth completion has no owned fence");
-    }
-    if (completed_fence_value() < pointer_depth_capture_fence_) {
-        return false;
-    }
-    std::uint32_t unused{};
-    copy_efb_readback_pixels(pointer_depth_readback_.Get(), kEfbWidth,
-        kEfbHeight, kEfbWidth * 4u, true, unused, pixels);
-    // Only release utility resources after the entire exact field is copied.
-    pointer_depth_capture_fence_ = 0u;
-    return true;
-}
-
 bool RendererD3D12::ensure_async_peek_field_resources(
     AsyncPeekField& field, EfbPeekKind kind) {
     if (field.allocator && field.command_list && field.target &&
@@ -9975,7 +9918,6 @@ void RendererD3D12::debug_log_readback() {
 // present
 // ---------------------------------------------------------------------------
 
-
 bool RendererD3D12::present(
     const XfbTexture* source, bool capture_backbuffer, bool black) {
     // Diagnostic stall watch, gated on its own opt-in flag. GALAXY_TRACE_STALL_WATCH is unset in the
@@ -10551,6 +10493,5 @@ void RendererD3D12::debug_log_backbuffer_readback() {
     backbuffer_readback_buf_->Unmap(0, &no_write);
     mapped_active = false;
 }
-
 
 }  // namespace galaxy::gx

@@ -572,7 +572,6 @@ unsigned get_next_start_efb_scale() {
     s_lock.unlock_shared();
     return copy;
 }
-
 void stage_next_start_efb_scale(unsigned efb_scale) {
     const unsigned sanitized = std::clamp(efb_scale, 1u, kMaxEfbScale);
     s_lock.lock();

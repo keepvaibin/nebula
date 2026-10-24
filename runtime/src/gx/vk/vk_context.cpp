@@ -739,13 +739,6 @@ void Context::release_address(std::uint64_t address) noexcept {
     free_address_ids_.push_back(static_cast<std::uint32_t>(id));
 }
 
-void Context::destroy_buffer(MappedBuffer& buffer) noexcept {
-    if (buffer.buffer != VK_NULL_HANDLE) {
-        vmaDestroyBuffer(allocator_, buffer.buffer, buffer.allocation);
-    }
-    buffer = {};
-}
-
 void Context::set_name(VkObjectType type, std::uint64_t handle, const char* name) const noexcept {
     if (!debug_names_ || vkSetDebugUtilsObjectNameEXT == nullptr) {
         return;

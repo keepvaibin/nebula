@@ -531,38 +531,8 @@ int main() {
     _wputenv_s(L"GALAXY_RUNTIME_SETTINGS_PATH", settings_path.c_str());
 
     {
-        // Live audio reload: only gains follow the file, and only when its
-        // last-write time changes.
-        const auto stamp = [&settings_path](std::uint64_t file_time) {
-            const HANDLE file = CreateFileW(settings_path.c_str(), FILE_WRITE_ATTRIBUTES,
-                FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr);
-            FILETIME time{static_cast<DWORD>(file_time), static_cast<DWORD>(file_time >> 32u)};
-            const bool ok = file != INVALID_HANDLE_VALUE &&
-                SetFileTime(file, nullptr, nullptr, &time) != FALSE;
-            if (file != INVALID_HANDLE_VALUE) CloseHandle(file);
-            return ok;
-        };
-        write_text(settings_path, "input_mode=keyboard_mouse\ncontrols_version=2\naudio_music_gain=0.5\n");
-        passed &= expect(stamp(133'000'000'000'000'000ull), "fixture time set");
+        write_text(settings_path, "input_mode=controller\n");
         galaxy::load_runtime_settings_from_file();
-        passed &= expect(!galaxy::reload_runtime_audio_settings_if_changed(),
-            "an unchanged file is not re-read");
-        write_text(settings_path, "input_mode=controller\naudio_music_gain=0.25\n");
-        passed &= expect(stamp(133'000'000'000'000'000ull), "fixture time kept");
-        passed &= expect(!galaxy::reload_runtime_audio_settings_if_changed() &&
-                galaxy::get_runtime_settings().audio.music == 0.5f,
-            "same last-write time keeps the loaded gains");
-        passed &= expect(stamp(133'000'000'100'000'000ull), "fixture time advanced");
-        passed &= expect(galaxy::reload_runtime_audio_settings_if_changed(),
-            "a newer file is re-read");
-        passed &= expect(galaxy::get_runtime_settings().audio.music == 0.25f &&
-                galaxy::get_runtime_settings().input_mode ==
-                    galaxy::RuntimeInputMode::KeyboardMouse,
-            "reload applies audio gains only");
-        // The input source Nebula Settings saved meanwhile is the next start's, and the game's save keeps it.
-        passed &= expect(galaxy::save_runtime_settings_to_file() &&
-                read_text(settings_path).find("input_mode=controller\n") != std::string::npos,
-            "a save keeps the input source the file names");
         galaxy::RuntimeSettings changed = galaxy::get_runtime_settings();
         changed.input_mode = galaxy::RuntimeInputMode::Auto;
         galaxy::set_runtime_settings(changed);

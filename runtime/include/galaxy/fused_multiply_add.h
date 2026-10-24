@@ -116,41 +116,6 @@ inline float narrow_sum_rounded_to_odd(double product, double addend) noexcept {
     return fused_detail::narrow_sum_rounded_to_odd(product, addend);
 }
 
-[[nodiscard]] inline double fused_multiply_add_sse2(double a, double b, double c) noexcept {
-    GALAXY_FUSED_NO_CONTRACTION
-    const auto a_bits = std::bit_cast<std::uint64_t>(a);
-    const auto b_bits = std::bit_cast<std::uint64_t>(b);
-    const auto c_bits = std::bit_cast<std::uint64_t>(c);
-    // A zero factor makes the product an exact (signed) zero.
-    if ((a_bits << 1) == 0u || (b_bits << 1) == 0u) return a * b + c;
-    // |a|, |b| in [2^-400, 2^401) and c zero or |c| in [2^-800, 2^801): the
-    // splitting cannot overflow, and no partial product, error term or nonzero
-    // result is subnormal. Guest values outside this never reach the fast paths.
-    const auto a_exponent = static_cast<std::uint32_t>(a_bits >> 52) & 0x7FFu;
-    const auto b_exponent = static_cast<std::uint32_t>(b_bits >> 52) & 0x7FFu;
-    const auto c_exponent = static_cast<std::uint32_t>(c_bits >> 52) & 0x7FFu;
-    if (a_exponent - 623u > 800u || b_exponent - 623u > 800u ||
-        ((c_bits << 1) != 0u && c_exponent - 223u > 1600u)) [[unlikely]] {
-        return std::fma(a, b, c);
-    }
-    // Dekker: product_high + product_low == a*b exactly (Veltkamp split at 27 bits).
-    constexpr double kSplit = 134217729.0;
-    const double a_scaled = a * kSplit;
-    const double a_high = a_scaled - (a_scaled - a);
-    const double a_low = a - a_high;
-    const double b_scaled = b * kSplit;
-    const double b_high = b_scaled - (b_scaled - b);
-    const double b_low = b - b_high;
-    const double product_high = a * b;
-    const double product_low =
-        ((a_high * b_high - product_high) + a_high * b_low + a_low * b_high) + a_low * b_low;
-    // TwoSum: sum_high + sum_low == c + product_high exactly.
-    const double sum_high = c + product_high;
-    const double c_part = sum_high - product_high;
-    const double sum_low = (product_high - (sum_high - c_part)) + (c - c_part);
-    return sum_high + fused_detail::add_rounded_to_odd(sum_low, product_low);
-}
-
 #if GALAXY_FUSED_MULTIPLY_ADD_IS_BASE
 
 // The x86 extension; AArch64's fmadd needs no check.
@@ -179,9 +144,6 @@ inline float narrow_sum_rounded_to_odd(double product, double addend) noexcept {
 [[nodiscard]] GALAXY_FMA3_TARGET inline float fused_multiply_add_fma3(float a, float b, float c) noexcept {
     return _mm_cvtss_f32(_mm_fmadd_ss(_mm_set_ss(a), _mm_set_ss(b), _mm_set_ss(c)));
 }
-[[nodiscard]] GALAXY_FMA3_TARGET inline double fused_multiply_add_fma3(double a, double b, double c) noexcept {
-    return _mm_cvtsd_f64(_mm_fmadd_sd(_mm_set_sd(a), _mm_set_sd(b), _mm_set_sd(c)));
-}
 
 namespace fused_detail {
 
@@ -207,26 +169,6 @@ inline const bool kHostHasFma3 = detect_fma3();
 } // namespace fused_detail
 
 [[nodiscard]] inline bool host_has_fma3() noexcept { return fused_detail::kHostHasFma3; }
-
-// An SSE2 build still runs the instruction on a CPU that has FMA3 (AMD FX and A-series have FMA3 but
-// no AVX2, so their game modules are SSE2 builds); the exact sequence runs only where there is none.
-[[nodiscard]] inline float fused_multiply_add(float a, float b, float c) noexcept {
-#if GALAXY_FUSED_MULTIPLY_ADD_IS_FMA3
-    return fused_multiply_add_fma3(a, b, c);
-#else
-    if (fused_detail::kHostHasFma3) return fused_multiply_add_fma3(a, b, c);
-    return fused_multiply_add_sse2(a, b, c);
-#endif
-}
-
-[[nodiscard]] inline double fused_multiply_add(double a, double b, double c) noexcept {
-#if GALAXY_FUSED_MULTIPLY_ADD_IS_FMA3
-    return fused_multiply_add_fma3(a, b, c);
-#else
-    if (fused_detail::kHostHasFma3) return fused_multiply_add_fma3(a, b, c);
-    return fused_multiply_add_sse2(a, b, c);
-#endif
-}
 
 #endif
 

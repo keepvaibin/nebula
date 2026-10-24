@@ -24,7 +24,6 @@ enum class RtSurfaceClass : std::uint8_t {
     // 5, 6: the reflections' translucent water (rt_reflections.hlsl).
     Crystal = 7,    // clear dielectric named by its object (crystals, ice, gems, glass)
 };
-inline constexpr unsigned kRtSurfaceClasses = 5u;
 
 // Features behind the class (diagnostics).
 inline constexpr std::uint32_t kRtSurfaceEnvMap = 1u << 0u;        // texgen from normals feeds a colour combiner

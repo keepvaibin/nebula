@@ -149,27 +149,6 @@ std::vector<std::uint8_t> every_word_texture() {
     return source;
 }
 
-void check_swaps() {
-    for (std::size_t count : {std::size_t{0}, std::size_t{1}, std::size_t{7}, std::size_t{8}, std::size_t{37}}) {
-        std::vector<std::byte> source(count * 4u);
-        for (std::byte& byte : source) byte = static_cast<std::byte>(random_byte());
-        std::vector<std::uint16_t> out16(count * 2u, 0xAAAAu);
-        galaxy::gx::swap16_block(source.data(), out16.data(), count * 2u);
-        for (std::size_t i = 0; i < count * 2u; ++i) {
-            const auto want = static_cast<std::uint16_t>((std::to_integer<unsigned>(source[i * 2u]) << 8) |
-                                                         std::to_integer<unsigned>(source[i * 2u + 1u]));
-            if (out16[i] != want && ++g_failures <= 20) std::printf("FAIL swap16 count %zu index %zu\n", count * 2u, i);
-        }
-        std::vector<std::uint32_t> out32(count, 0xAAAAAAAAu);
-        galaxy::gx::swap32_block(source.data(), out32.data(), count);
-        for (std::size_t i = 0; i < count; ++i) {
-            std::uint32_t want = 0;
-            for (int b = 0; b < 4; ++b) want = (want << 8) | std::to_integer<unsigned>(source[i * 4u + b]);
-            if (out32[i] != want && ++g_failures <= 20) std::printf("FAIL swap32 count %zu index %zu\n", count, i);
-        }
-    }
-}
-
 void check_rebase() {
     std::vector<std::uint16_t> source(29);
     for (std::size_t i = 0; i < source.size(); ++i) source[i] = static_cast<std::uint16_t>(i * 2000u);
@@ -209,7 +188,6 @@ int main() {
     for (const Format& f : formats) {
         for (const auto& size : sizes) check_texture(f.format, f.name, size[0], size[1]);
     }
-    check_swaps();
     check_rebase();
     std::printf("simd kernel tests (%s): %s\n", GALAXY_SIMD_NEON ? "NEON" : "SSE", g_failures == 0 ? "pass" : "FAIL");
     return g_failures == 0 ? 0 : 1;

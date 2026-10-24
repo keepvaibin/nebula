@@ -132,13 +132,6 @@ inline constexpr std::uint32_t kEnhancedSpot = 1u << 20u;
 inline constexpr std::uint32_t kEnhancedAmbientVertex = 1u << 21u;
 inline constexpr std::uint32_t kEnhancedMaterialVertex = 1u << 22u;
 inline constexpr unsigned kEnhancedTuneShift = 24u;
-// GxPsConstants::uber_ps_header[3] for enhanced pipelines: bits 0-15 the
-// split column in render-target pixels (left of it the game's own lighting,
-// 0 none), bit 16 the ray tracer's reflections are live, bit 17 its lighting
-// is (it supplies the sky light: no hemisphere ambient or sky rim), bit 18
-// the highlights alone (GALAXY_ENHANCED_LIGHTING_VIEW=1), bit 19 colour
-// channel 0 alone (=2).
-inline constexpr std::uint32_t kEnhancedSplitMask = 0xFFFFu;
 inline constexpr std::uint32_t kEnhancedRtReflections = 1u << 16u;
 inline constexpr std::uint32_t kEnhancedRtLighting = 1u << 17u;
 // Ray-traced lighting in the game's units (GALAXY_RT_PHYSICAL): lit draws show their full-light colour.
@@ -323,11 +316,6 @@ struct MemoizedPsoKey {
     // which it means and a mismatched hash cannot be passed silently.
     MemoizedPsoKey(const PsoKey& value, std::uint64_t precomputed_hash)
         : key(value), hash(precomputed_hash) {}
-
-    void assign(const PsoKey& value) {
-        key = value;
-        hash = value.hash();
-    }
 
     // Equality is decided by the key alone. hash is a pure function of key, so
     // including it could not change the outcome; excluding it keeps a

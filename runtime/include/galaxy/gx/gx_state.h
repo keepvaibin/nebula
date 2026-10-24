@@ -211,7 +211,6 @@ public:
         return p;
     }
 
-    [[nodiscard]] Projection projection() const;
     [[nodiscard]] XfTexGen tex_gen(unsigned index) const {
         return decode_xf_texgen(xf_[xf::kTexGenBase + index]);
     }
@@ -306,6 +305,6 @@ private:
 // where the game used to close) and log each register once. Fatal when GALAXY_GX_STRICT=1, and in
 // tests that set it.
 [[nodiscard]] bool unknown_gx_commands_fatal() noexcept;
-void set_unknown_gx_commands_fatal(bool fatal) noexcept;
 
+void set_unknown_gx_commands_fatal(bool fatal) noexcept;
 }  // namespace galaxy::gx

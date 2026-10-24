@@ -46,15 +46,6 @@ inline void opt_out_of_power_throttling_process() noexcept {
     }
 }
 
-inline void opt_out_of_power_throttling_thread() noexcept {
-    THREAD_POWER_THROTTLING_STATE state{};
-    state.Version = THREAD_POWER_THROTTLING_CURRENT_VERSION;
-    state.ControlMask = THREAD_POWER_THROTTLING_EXECUTION_SPEED;
-    state.StateMask = 0;
-    (void)SetThreadInformation(
-        GetCurrentThread(), ThreadPowerThrottling, &state, sizeof(state));
-}
-
 // On a hybrid CPU (performance plus efficiency cores), restrict the calling
 // thread to the CPU set of the highest efficiency class so a critical-path
 // thread is never scheduled onto an efficiency core. Returns the number of

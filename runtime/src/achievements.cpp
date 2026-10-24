@@ -97,5 +97,4 @@ void set_path_for_tests(const std::filesystem::path& path) {
     s_loaded = false;
     s_unlocked.clear();
 }
-
 }  // namespace galaxy::achievements

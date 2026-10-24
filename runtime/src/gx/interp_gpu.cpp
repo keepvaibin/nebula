@@ -580,5 +580,4 @@ void evaluate(const Program& program, const Affine34& camera_t, float t, std::ui
     times.t_prev = t;
     evaluate(program, times, out);
 }
-
 }  // namespace galaxy::gx::interp_gpu

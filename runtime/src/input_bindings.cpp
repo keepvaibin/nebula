@@ -929,7 +929,6 @@ LogicalInput evaluate_pad_bindings(const BindingTable& table, const PadSample& s
                                    float trigger_threshold) noexcept {
     return evaluate_pad_bindings(table, sample, trigger_threshold, 0u, false);
 }
-
 LogicalInput evaluate_pad_bindings(const BindingTable& table, const PadSample& sample,
                                    float trigger_threshold, std::uint32_t previous_pressed,
                                    bool gyro_pointer) noexcept {

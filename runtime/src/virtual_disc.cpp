@@ -206,7 +206,6 @@ DiscNode* VirtualDisc::find_name(std::string_view name) {
     };
     return search(search, root_);
 }
-
 std::vector<std::pair<DiscNode*, std::string>> VirtualDisc::find_names(std::string_view name) {
     std::vector<std::pair<DiscNode*, std::string>> found;
     const auto search = [&](auto&& self, DiscNode& dir, const std::string& path) -> void {

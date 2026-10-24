@@ -44,10 +44,6 @@ namespace galaxy::gx {
 
 class PipelineCacheVk {
 public:
-    PipelineCacheVk() = default;
-    PipelineCacheVk(const PipelineCacheVk&) = delete;
-    PipelineCacheVk& operator=(const PipelineCacheVk&) = delete;
-    ~PipelineCacheVk() noexcept;
 
     bool initialize(VkDevice device, const vk::GxLayout* layout, const std::filesystem::path& cache_dir,
                     unsigned worker_count);
@@ -57,7 +53,6 @@ public:
     // needed. Returns the modules written (0: `error` says why).
     static std::size_t build_shader_seed(const std::filesystem::path& keys, const std::filesystem::path& out,
                                          unsigned threads, std::string& error);
-    void shutdown();  // joins the workers, saves the caches
 
     // Render thread only.
     [[nodiscard]] VkPipeline get(const PsoKey& key, const PixelShaderKey& ps_key, const VertexShaderKey& vs_key);

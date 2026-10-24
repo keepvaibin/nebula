@@ -53,10 +53,6 @@ public:
     TextureDecodePool(const TextureDecodePool&) = delete;
     TextureDecodePool& operator=(const TextureDecodePool&) = delete;
 
-    [[nodiscard]] unsigned worker_count() const noexcept {
-        return static_cast<unsigned>(workers_.size());
-    }
-
     void submit(std::function<void()> job) {
         if (workers_.empty()) {
             run_one(job);
@@ -98,7 +94,6 @@ public:
         std::lock_guard<std::mutex> lock(mutex_);
         return outstanding_;
     }
-
 private:
     void run_one(std::function<void()>& job) {
         try {

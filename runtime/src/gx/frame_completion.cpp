@@ -8,24 +8,6 @@
 
 namespace galaxy::gx {
 
-FramePeCooperativeWaitStep frame_pe_cooperative_wait_step(
-    std::uint64_t elapsed_ms,
-    std::uint32_t timeout_ms,
-    std::uint32_t slice_ms) {
-    if (timeout_ms == 0u || slice_ms == 0u) {
-        throw std::invalid_argument(
-            "GX cooperative PE wait requires nonzero timeout and slice");
-    }
-    if (elapsed_ms >= timeout_ms) {
-        return FramePeCooperativeWaitStep{0u, true};
-    }
-    const std::uint64_t remaining = timeout_ms - elapsed_ms;
-    return FramePeCooperativeWaitStep{
-        static_cast<std::uint32_t>(
-            std::min<std::uint64_t>(remaining, slice_ms)),
-        false};
-}
-
 FramePeCompletionToken FramePeCompletionContract::issue() {
     if (epoch_ == 0u) {
         throw std::logic_error(

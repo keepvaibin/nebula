@@ -14,7 +14,7 @@
 
 #include "galaxy/gx/fifo_parser.h"
 #include "galaxy/gx/gx_state.h"
-#include "galaxy/native_api.h"
+#include "galaxy/guest_memory.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -86,6 +86,7 @@ public:
     void set_dependency_event_sink(DependencyEventSink* sink) noexcept {
         dependency_event_sink_ = sink;
     }
+
     // Reads one draw packet from `cursor` (positioned at the u16 vertex
     // count, immediately after the draw opcode byte).
     //
@@ -101,12 +102,11 @@ public:
         PrimitiveClass primitive,
         std::uint8_t vtxfmt,
         const GxState& state,
-        GuestMemoryV1* memory,
+        GuestMemory* memory,
         UploadRing& vertex_ring,
         UploadRing& index_ring,
         std::uint32_t index_batch_base_vertex = 0,
         bool rebase_indices_to_batch_base = false);
-
     LoadedPrimitive load_with_layout(
         FifoCursor& cursor,
         PrimitiveClass primitive,
@@ -114,7 +114,7 @@ public:
         const GxState& state,
         const VertexDescriptor& desc,
         std::size_t source_vertex_size,
-        GuestMemoryV1* memory,
+        GuestMemory* memory,
         UploadRing& vertex_ring,
         UploadRing& index_ring,
         std::uint32_t index_batch_base_vertex = 0,
@@ -131,7 +131,7 @@ public:
         const GxState& state,
         const VertexDescriptor& desc,
         std::size_t source_vertex_size,
-        GuestMemoryV1* memory,
+        GuestMemory* memory,
         UploadRing& vertex_ring,
         UploadRing& index_ring,
         std::uint32_t index_batch_base_vertex = 0,
@@ -139,7 +139,6 @@ public:
         std::uint32_t precomputed_total_vertices = 0,
         std::uint32_t precomputed_total_indices = 0,
         std::span<const std::uint16_t> precomputed_indices = {});
-
     // `record_indexed_read_ranges` exists because the decoded-vertex cache is
     // the only consumer of DecodedPacketRunVertices::guest_array_reads. When it
     // is false the resolver's read-range accumulator is left null, which makes
@@ -156,7 +155,7 @@ public:
         const GxState& state,
         const VertexDescriptor& desc,
         std::size_t source_vertex_size,
-        GuestMemoryV1* memory,
+        GuestMemory* memory,
         std::uint32_t precomputed_total_vertices = 0,
         std::uint32_t precomputed_total_indices = 0,
         bool record_indexed_read_ranges = true,

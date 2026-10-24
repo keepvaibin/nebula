@@ -12,8 +12,8 @@ namespace {
 constexpr float kPi = 3.14159265358979f;
 
 float word_float(std::uint32_t w) noexcept { return std::bit_cast<float>(w); }
-std::uint32_t float_word(float f) noexcept { return std::bit_cast<std::uint32_t>(f); }
 
+std::uint32_t float_word(float f) noexcept { return std::bit_cast<std::uint32_t>(f); }
 // Unit quaternion (x, y, z, w) of an orthonormal 3x3 (row-major, Affine34
 // layout); false when the matrix is not a rotation within tolerance.
 bool rotation_quaternion(const Affine34& m, float q[4]) noexcept {
@@ -104,7 +104,6 @@ Affine34 load_matrix(const std::uint32_t* words) noexcept {
 void store_matrix(const Affine34& m, std::uint32_t* words) noexcept {
     for (unsigned i = 0; i < 12u; ++i) words[i] = float_word(m[i]);
 }
-
 // XF normal matrices are 3x3 (9 words, row-major) without translation.
 Affine34 load_normal(const std::uint32_t* words) noexcept {
     Affine34 m{};
@@ -123,7 +122,6 @@ void store_normal(const Affine34& m, std::uint32_t* words) noexcept {
         }
     }
 }
-
 // One frame of an object's motion: its origin moved less than half its
 // distance from the eye plus 200 units, no axis scaled by more than 2x, and
 // it turned less than 150 degrees (a teleport, a respawn or a reused slot
@@ -300,7 +298,6 @@ Affine34 eye_at(const EyeMotion& m, const CameraMotion& camera, const Affine34& 
     const Affine34 world = m.still ? m.world.b : affine_motion_at(m.world, t);
     return affine_multiply(camera_t, world);
 }
-
 void normal_motion(const Affine34* a, const Affine34& b, const CameraMotion& camera,
                    NormalMotion& out) noexcept {
     out = NormalMotion{};
@@ -329,40 +326,6 @@ void normal_motion(const Affine34* a, const Affine34& b, const CameraMotion& cam
         affine_motion(world_b, world_b, out.world);
         out.still = true;
     }
-}
-
-Affine34 normal_at(const NormalMotion& m, const CameraMotion& camera, const Affine34& camera_t,
-                   float t) noexcept {
-    (void)camera;
-    Affine34 n = m.still ? m.world.b : affine_motion_at(m.world, t);
-    n[3] = n[7] = n[11] = 0.0f;
-    if (!m.split) {
-        return n;
-    }
-    Affine34 out = affine_multiply(rotation_only(camera_t), n);
-    out[3] = out[7] = out[11] = 0.0f;
-    return out;
-}
-
-float tex_word_at(float a, float b, bool translation, float t) noexcept {
-    if (a == b || !std::isfinite(a) || !std::isfinite(b) || t >= 1.0f) {
-        return b;
-    }
-    if (t <= 0.0f) {
-        return a;
-    }
-    if (translation) {
-        const float d = b - a;
-        if (std::fabs(d) > 0.5f) {
-            a += std::round(d);
-        }
-        if (std::fabs(b - a) > kTexStepLimit) {
-            return b;
-        }
-    } else if (std::fabs(b - a) > 1.0f) {
-        return b;
-    }
-    return a + (b - a) * t;
 }
 
 void tex_matrix_at(const float* a, const float* b, bool spatial, float t, float* out) noexcept {
@@ -397,7 +360,38 @@ void tex_matrix_at(const float* a, const float* b, bool spatial, float t, float*
     }
     for (unsigned i = 0; i < 12u; ++i) out[i] = a[i] * (1.0f - t) + to[i] * t;
 }
-
+float tex_word_at(float a, float b, bool translation, float t) noexcept {
+    if (a == b || !std::isfinite(a) || !std::isfinite(b) || t >= 1.0f) {
+        return b;
+    }
+    if (t <= 0.0f) {
+        return a;
+    }
+    if (translation) {
+        const float d = b - a;
+        if (std::fabs(d) > 0.5f) {
+            a += std::round(d);
+        }
+        if (std::fabs(b - a) > kTexStepLimit) {
+            return b;
+        }
+    } else if (std::fabs(b - a) > 1.0f) {
+        return b;
+    }
+    return a + (b - a) * t;
+}
+Affine34 normal_at(const NormalMotion& m, const CameraMotion& camera, const Affine34& camera_t,
+                   float t) noexcept {
+    (void)camera;
+    Affine34 n = m.still ? m.world.b : affine_motion_at(m.world, t);
+    n[3] = n[7] = n[11] = 0.0f;
+    if (!m.split) {
+        return n;
+    }
+    Affine34 out = affine_multiply(rotation_only(camera_t), n);
+    out[3] = out[7] = out[11] = 0.0f;
+    return out;
+}
 bool texgen_spatial(std::uint32_t texgen) noexcept {
     const std::uint32_t type = (texgen >> 4u) & 7u;
     const std::uint32_t source = (texgen >> 7u) & 0x1Fu;
@@ -457,24 +451,9 @@ void ps_colours_at(const GxPsConstants& a, const GxPsConstants& b, float t, GxPs
         }
     }
 }
-
 bool channel_colours_move(const GxVsConstants& a, const GxVsConstants& b) noexcept {
     return std::memcmp(a.chan_ambient, b.chan_ambient, sizeof(a.chan_ambient)) != 0 ||
            std::memcmp(a.chan_material, b.chan_material, sizeof(a.chan_material)) != 0;
-}
-
-void channel_colours_at(const GxVsConstants& a, const GxVsConstants& b, float t, GxVsConstants& out) noexcept {
-    if (t >= 1.0f) {
-        return;
-    }
-    for (unsigned ch = 0; ch < kMaxColorChannels; ++ch) {
-        for (unsigned c = 0; c < 4u; ++c) {
-            const float am = a.chan_ambient[ch][c], bm = b.chan_ambient[ch][c];
-            const float ma = a.chan_material[ch][c], mb = b.chan_material[ch][c];
-            out.chan_ambient[ch][c] = std::isfinite(am) && std::isfinite(bm) ? am + (bm - am) * t : bm;
-            out.chan_material[ch][c] = std::isfinite(ma) && std::isfinite(mb) ? ma + (mb - ma) * t : mb;
-        }
-    }
 }
 
 void light_at(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion& camera,
@@ -553,7 +532,19 @@ void light_at(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion
         out[13u + i] = float_word(d[i]);
     }
 }
-
+void channel_colours_at(const GxVsConstants& a, const GxVsConstants& b, float t, GxVsConstants& out) noexcept {
+    if (t >= 1.0f) {
+        return;
+    }
+    for (unsigned ch = 0; ch < kMaxColorChannels; ++ch) {
+        for (unsigned c = 0; c < 4u; ++c) {
+            const float am = a.chan_ambient[ch][c], bm = b.chan_ambient[ch][c];
+            const float ma = a.chan_material[ch][c], mb = b.chan_material[ch][c];
+            out.chan_ambient[ch][c] = std::isfinite(am) && std::isfinite(bm) ? am + (bm - am) * t : bm;
+            out.chan_material[ch][c] = std::isfinite(ma) && std::isfinite(mb) ? ma + (mb - ma) * t : mb;
+        }
+    }
+}
 std::uint8_t used_lights(const GxVsConstants& constants) noexcept {
     std::uint32_t mask = 0u;
     const std::uint32_t channels = std::min<std::uint32_t>(constants.uber_vs_header[1], 2u);
@@ -695,5 +686,4 @@ void palette_at(const PaletteMotion& m, const std::uint32_t* a, const std::uint3
         }
     }
 }
-
 }  // namespace galaxy::gx

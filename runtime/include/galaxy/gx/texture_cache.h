@@ -31,7 +31,7 @@
 #include "galaxy/gx/texture_decode_pool.h"
 #include "galaxy/gx/texture_pack.h"
 #include "galaxy/gx/movie_replacement.h"
-#include "galaxy/native_api.h"
+#include "galaxy/guest_memory.h"
 
 #include <array>
 #include <bitset>
@@ -162,7 +162,7 @@ public:
         const TexImage& image,
         const TexMode& mode,
         const TlutRef& tlut,
-        GuestMemoryV1* memory);
+        GuestMemory* memory);
     // Render-owner only: register cached binding use without decoding/reading RAM.
     // Retired/alias handles are harmless misses and never regain ownership.
     void touch_cached_handle(const TextureHandle& handle);
@@ -174,7 +174,7 @@ public:
     [[nodiscard]] bool load_tlut(
         std::uint32_t src_reg,
         std::uint32_t dest_reg,
-        GuestMemoryV1* memory);
+        GuestMemory* memory);
 
     // EFB copy-to-texture landed at `guest_addr`: alias it.  Overwrites any
     // existing overlapping entry (decoded or previous copy).
@@ -294,8 +294,8 @@ public:
         packs_.configure(settings);
     }
     void apply_texture_packs();
-    [[nodiscard]] TexturePacks::Stats texture_pack_stats() const noexcept { return packs_.stats(); }
 
+    [[nodiscard]] TexturePacks::Stats texture_pack_stats() const noexcept { return packs_.stats(); }
     // HD movie replacements (movie_replacement.h): `frame`'s planes in place of the game's movie planes (the I8
     // textures at the mark's addresses) until the next call; null draws the game's own. Uploads through the current
     // upload list. True when what those addresses resolve to changed.

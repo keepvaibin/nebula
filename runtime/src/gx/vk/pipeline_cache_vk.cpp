@@ -365,13 +365,6 @@ std::size_t PipelineCacheVk::UberKeyHasher::operator()(const UberKey& key) const
     return static_cast<std::size_t>(combine64(pso.hash(), key.variant));
 }
 
-PipelineCacheVk::~PipelineCacheVk() noexcept {
-    try {
-        shutdown();
-    } catch (...) {
-    }
-}
-
 bool PipelineCacheVk::initialize(VkDevice device, const vk::GxLayout* layout, const std::filesystem::path& cache_dir,
                                  unsigned worker_count) {
     device_ = device;
@@ -438,55 +431,6 @@ bool PipelineCacheVk::initialize(VkDevice device, const vk::GxLayout* layout, co
     std::fprintf(stderr, "[pipeline-cache-vk] shaders=%zu seed-shaders=%zu keys=%zu workers=%u\n", spirv_.size(),
                  seed_index_.size(), entries_.size(), workers);
     return true;
-}
-
-void PipelineCacheVk::shutdown() {
-    if (device_ == VK_NULL_HANDLE) {
-        return;
-    }
-    {
-        std::lock_guard<std::mutex> lock(jobs_mutex_);
-        stopping_ = true;
-        jobs_.clear();
-    }
-    jobs_cv_.notify_all();
-    for (std::thread& worker : workers_) {
-        worker.join();
-    }
-    workers_.clear();
-    if (uber_thread_.joinable()) {
-        uber_thread_.join();
-    }
-    journal_.close();
-    if (flush_thread_.joinable()) {
-        flush_thread_.join();
-    }
-    save_disk();
-    vkDeviceWaitIdle(device_);
-    drain_completions();
-    for (auto& [key, pipeline] : published_) {
-        vkDestroyPipeline(device_, pipeline, nullptr);
-    }
-    for (auto& [key, pipeline] : uber_pipelines_) {
-        vkDestroyPipeline(device_, pipeline, nullptr);
-    }
-    for (auto& [hash, module] : modules_) {
-        vkDestroyShaderModule(device_, module, nullptr);
-    }
-    published_.clear();
-    uber_pipelines_.clear();
-    modules_.clear();
-    input_masks_.clear();
-    in_flight_.clear();
-    uber_ready_.store(false, std::memory_order_release);
-    uber_vs_ = line_gs_ = point_gs_ = VK_NULL_HANDLE;
-    uber_ps_.fill(VK_NULL_HANDLE);
-    memo_pipeline_ = VK_NULL_HANDLE;
-    if (driver_cache_ != VK_NULL_HANDLE) {
-        vkDestroyPipelineCache(device_, driver_cache_, nullptr);
-        driver_cache_ = VK_NULL_HANDLE;
-    }
-    device_ = VK_NULL_HANDLE;
 }
 
 VkShaderModule PipelineCacheVk::module_for(const std::string& hlsl, vk::ShaderStage stage, bool dual_source) {

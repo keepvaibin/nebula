@@ -103,7 +103,6 @@ public:
     [[nodiscard]] bool sampler_anisotropy() const noexcept { return sampler_anisotropy_; }
     // shaderImageGatherExtended: a gather of one chosen channel (FSR 1 EASU's GatherRed/Green/Blue).
     [[nodiscard]] bool gather_extended() const noexcept { return gather_extended_; }
-    [[nodiscard]] bool bc_textures() const noexcept { return bc_textures_; }
     [[nodiscard]] bool depth_clamp() const noexcept { return depth_clamp_; }
     // VK_EXT_depth_clip_enable: clamping without giving up clipping (D3D's rasterizer).
     [[nodiscard]] bool depth_clip_enable() const noexcept { return depth_clip_enable_; }
@@ -124,9 +123,6 @@ public:
     [[nodiscard]] std::uint64_t completed_value();
     // Waits until the GPU has passed `value`; false on a timeout or a lost device.
     bool wait(std::uint64_t value, std::uint64_t timeout_ns = UINT64_MAX);
-    [[nodiscard]] std::uint64_t submitted_value() const noexcept {
-        return submitted_.load(std::memory_order_acquire);
-    }
     // Runs `destroy` once the GPU has passed the next frame submission (submit_frame), which carries any commands
     // being recorded now; peeks and other submissions in between carry none of them (one submitting thread: the
     // render thread).
@@ -152,7 +148,6 @@ public:
     [[nodiscard]] std::shared_ptr<Buffer> create_readback_buffer(std::uint64_t size, const char* name);
     // Makes the GPU's writes to a readback buffer visible to the CPU (after its fence).
     void invalidate(const Buffer& buffer) const noexcept;
-    void destroy_buffer(MappedBuffer& buffer) noexcept;
     void set_name(VkObjectType type, std::uint64_t handle, const char* name) const noexcept;
 
     // The GX address space (gpu::Address): an address's top bits name a buffer and its low kAddressShift bits a byte

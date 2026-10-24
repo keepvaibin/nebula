@@ -18,10 +18,6 @@ class OwnedStorageWorker {
 public:
     using Execute = void (*)(Work&);
     using Wake = void (*)(void*) noexcept;
-    struct Completion {
-        std::unique_ptr<Work> work;
-        std::exception_ptr fatal;
-    };
 
     explicit OwnedStorageWorker(Execute execute)
         : execute_(execute), thread_([this] { run(); }) {}
@@ -36,23 +32,6 @@ public:
         work_ = std::move(work);
         condition_.notify_one();
         return true;
-    }
-    bool completion_pending() const noexcept {
-        return ready_.load(std::memory_order_acquire);
-    }
-    Completion take_completed() {
-        std::lock_guard lock(mutex_);
-        if (!completed_) return {};
-        Completion result{std::move(completed_), std::move(fatal_)};
-        ready_.store(false, std::memory_order_release);
-        occupied_ = false;
-        return result;
-    }
-    void set_wake(Wake wake, void* user) noexcept {
-        std::lock_guard lock(mutex_);
-        wake_ = wake;
-        wake_user_ = user;
-        if (wake_ && ready_.load(std::memory_order_relaxed)) wake_(wake_user_);
     }
     void shutdown() {
         {

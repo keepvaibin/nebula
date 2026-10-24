@@ -25,10 +25,6 @@ namespace galaxy::input {
         (snapshot.nunchuk.c ? 0x4000u : 0u) | (b.home ? 0x8000u : 0u);
 }
 
-struct SyntheticKpadButtons {
-    std::uint32_t hold{}, trigger{}, release{}, retained_press{};
-};
-
 // Some injected Windows keyboard events carry a virtual key but no scan code.
 // Map generic Shift/Control to the left/right bindings.
 [[nodiscard]] constexpr std::uint32_t normalize_native_window_key(
@@ -40,29 +36,6 @@ struct SyntheticKpadButtons {
     if (key == 0x11u) return right_control ? 0xa3u : 0xa2u; // VK_CONTROL
     return key;
 }
-
-// Owned by the guest execution thread. Several 100 Hz device acquisitions can
-// occur before one game-frame read. A press observed between those reads must
-// survive replacement of the latest device sample. At most one edge per bit
-// is represented in a game frame; repeated taps inside that frame coalesce.
-class SyntheticKpadButtonState {
-public:
-    void capture(std::uint32_t hold) noexcept {
-        pending_press_ |= hold & ~latest_hold_;
-        latest_hold_ = hold;
-    }
-    [[nodiscard]] SyntheticKpadButtons consume(bool retain_edges = true) noexcept {
-        const auto previous = current_frame_;
-        const auto retained = retain_edges ? pending_press_ & ~latest_hold_ : 0u;
-        current_frame_ = latest_hold_ | retained;
-        pending_press_ = 0u;
-        return {current_frame_, current_frame_ & ~previous,
-                previous & ~current_frame_, retained};
-    }
-    void reset() noexcept { *this = {}; }
-private:
-    std::uint32_t latest_hold_{}, pending_press_{}, current_frame_{};
-};
 
 // Window messages are a separate producer from the host HID acquisition.
 // Remember a non-repeat key-down even if key-up arrives before the next poll.

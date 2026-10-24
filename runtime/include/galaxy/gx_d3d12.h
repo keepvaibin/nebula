@@ -5,7 +5,7 @@
 #include "galaxy/gx/pointer_response.h"
 #include "galaxy/controller_roster.h"
 #include "galaxy/host_pointer_events.h"
-#include "galaxy/native_api.h"
+#include "galaxy/guest_memory.h"
 
 #include <array>
 #include <cstddef>
@@ -85,25 +85,13 @@ void set_native_settings_content_root(const std::string& utf8_path);
 [[nodiscard]] FramePeCompletionToken render_frame(
     const std::byte* fifo_data,
     std::size_t fifo_size,
-    GuestMemoryV1* memory,
-    const NativeServicesV1* services,
+    GuestMemory* memory,
+    const GxServices* services,
     bool present_swap_chain = true,
     std::uint32_t displayed_xfb_addr = 0);
 
 // Wait until the render queue and in-flight render chunks are fully idle.
 void wait_for_render_idle();
-
-// Wait only until queued native render chunks have reached their FIFO callbacks.
-// Guest-visible GX synchronization points such as GXWaitDrawDone use this so
-// PE finish/token cannot be observed before the native XFB copy exists.
-void wait_for_render_fifo_effects_idle();
-
-// Consume exactly one FIFO capture receipt. Event-free captures do not block
-// the simulation on renderer submission; PE-bearing captures wait for their
-// exact PE-visible completion boundary. Unlike wait_for_render_fifo_effects_idle(),
-// this does not drain later render or present chunks. Tokens are monotonic
-// within a renderer epoch and must be consumed exactly once.
-void wait_for_frame_pe_completion(FramePeCompletionToken token);
 
 // Wait for at most `timeout_ms` for this exact token. Returns true and consumes
 // it exactly once on completion; returns false without consuming it when the
@@ -113,21 +101,6 @@ void wait_for_frame_pe_completion(FramePeCompletionToken token);
     FramePeCompletionToken token,
     std::uint32_t timeout_ms);
 
-// Nonblocking: true when render_frame would enqueue without waiting for the
-// render thread (fewer than the configured depth of render chunks queued).
-[[nodiscard]] bool render_queue_has_space();
-
-// Synchronously reads the native EFB at Wii EFB coordinates. This is the
-// device boundary used by GXPeekARGB/GXPeekZ; callers must pass untranslated
-// 640x528 EFB coordinates.
-// One native-resolution depth field at the existing pointer PE boundary.
-// The caller owns the output until this render utility completes.
-[[nodiscard]] bool capture_pointer_depth(std::span<std::uint32_t> pixels);
-    [[nodiscard]] bool enqueue_pointer_depth_capture(const std::shared_ptr<PointerDepthCapture>& capture);
-// The next render_frame submission records the field when its parser reaches
-// `fifo_offset` bytes into the submitted FIFO; completion publishes as above.
-void attach_pointer_depth_capture(
-    const std::shared_ptr<PointerDepthCapture>& capture, std::size_t fifo_offset);
 // Simulation thread: the next render_frame submission handles `marker` when
 // its parser reaches `fifo_offset` bytes into the submitted FIFO.
 void attach_fifo_marker(FifoMarker marker, std::size_t fifo_offset) noexcept;
@@ -208,9 +181,6 @@ std::size_t game_world_lights(std::span<GameLight> out, std::uint64_t max_age_ms
 // vertices follow. The next render_frame submission carries it.
 void attach_stripe_particle(std::size_t stream_offset, std::uint32_t particle, std::uint32_t age_lifetime,
                             std::uint8_t strip);
-void set_pointer_response(PointerResponseStamp stamp) noexcept;
-// Simulation producer; copied into each owned FIFO chunk and selected XFB.
-void set_prerecorded_movie_content(bool movie) noexcept;
 // Simulation producer: the THP movie frame the game draws (movie_replacement.h); every later submission carries it
 // until the movie closes (frame -1).
 void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, std::uint32_t y, std::uint32_t u,
@@ -225,15 +195,6 @@ void set_safety_scene_surround(float intensity) noexcept;
     EfbPeekKind kind,
     std::uint32_t& value);
 
-// Answers a depth or color peek from the most recently completed asynchronous EFB field of that kind,
-// with no FIFO drain or GPU round trip. Returns false when no field of that kind is published yet. The
-// request is recorded so the render thread starts producing fields, and the caller takes the exact
-// synchronous path.
-[[nodiscard]] bool peek_efb_published(
-    std::uint16_t x,
-    std::uint16_t y,
-    EfbPeekKind kind,
-    std::uint32_t& value);
 // A peek made in draw-sync token `token`'s callback: the field captured where the stream reached that
 // token (GxBackend::peek_efb_published).
 [[nodiscard]] bool peek_efb_published(
@@ -242,25 +203,6 @@ void set_safety_scene_surround(float intensity) noexcept;
     EfbPeekKind kind,
     std::uint16_t token,
     std::uint32_t& value);
-
-// Present an already-rendered XFB after the guest VI callback has selected
-// the displayed buffer. This keeps the host swap-chain cadence tied to the
-// game's own XFB exchange instead of to the pre-VI FIFO copy point.
-void present_cached_xfb(
-    std::uint32_t displayed_xfb_addr,
-    bool present_swap_chain = true);
-
-// Parse newly produced GX FIFO bytes on the simulation thread only for PE
-// finish/token events. This does not render; it raises native hardware
-// interrupt latches through NativeServicesV1 so GXWaitDrawDone/GXSetDrawSync
-// observe completion at the CPU-visible FIFO boundary.
-void scan_pe_events(
-    const std::byte* fifo_data,
-    std::size_t fifo_size,
-    GuestMemoryV1* memory,
-    const NativeServicesV1* services);
-
-void install_guest_dirty_tracker(GuestMemoryV1* memory) noexcept;
 
 // The native game computes the arrays indexed loads read (matrices, lights) in host byte order: before its first
 // frame, its host makes LOAD_INDX read them that way. Everything else the GPU reads stays big-endian.
@@ -295,7 +237,6 @@ struct NativeSettingsOverlaySnapshot {
     unsigned pending_changes = 0;
     bool confirming_display = false;
 };
-
 struct NativeSettingsLayout {
     bool supported = false;
     int panel_x = 0;
@@ -331,31 +272,6 @@ struct XfbPresentStats {
     std::uint64_t last_presented_frame_stamp = 0;
     std::uint64_t last_presented_copy_serial = 0;
     std::uint32_t last_presented_xfb_addr = 0;
-};
-
-// Inter-arrival timing is sampled with std::chrono::steady_clock on the render
-// thread. These are monotonic timing facts about command/presentation cadence;
-// they do not inspect or hash XFB pixels.
-struct XfbMonotonicCadenceStats {
-    std::uint64_t samples = 0;
-    std::uint64_t intervals = 0;
-    std::uint64_t total_interval_ns = 0;
-    std::uint64_t min_interval_ns = 0;
-    std::uint64_t max_interval_ns = 0;
-    std::uint64_t first_sample_ns = 0;
-    std::uint64_t last_sample_ns = 0;
-    // Exact nearest-rank percentiles of the retained interval samples.
-    // A measurement that exceeds the fixed retention bound is explicitly
-    // marked instead of silently reporting an approximate percentile.
-    std::uint64_t p99_interval_ns = 0;
-    std::uint64_t retained_interval_samples = 0;
-    bool interval_samples_overflowed = false;
-    std::uint64_t p95_interval_ns = 0;
-};
-
-struct XfbMeasurementCadenceStats {
-    XfbMonotonicCadenceStats copy_production{};
-    XfbMonotonicCadenceStats first_serial_presentation{};
 };
 
 [[nodiscard]] bool native_settings_overlay_visible() noexcept;
@@ -395,17 +311,6 @@ void native_settings_post_key(std::uintptr_t virtual_key) noexcept;
 
 // Number of EFB display copies submitted to XFB textures by the active backend.
 [[nodiscard]] std::uint64_t xfb_copy_count() noexcept;
-// Opt-in causal trace only. Identifies the last completed renderer frame while GALAXY_TRACE_XFB_CAUSAL is
-// enabled, so a bounded simulation-side XFB trace can select the same frame window without guessing an offset.
-[[nodiscard]] std::uint64_t xfb_causal_trace_frame_index() noexcept;
 [[nodiscard]] XfbPresentStats xfb_present_stats() noexcept;
-[[nodiscard]] XfbMeasurementCadenceStats
-xfb_measurement_cadence_stats() noexcept;
-// The caller must first call wait_for_render_idle(). This defines an uncontaminated measurement boundary and
-// makes the render-thread cadence reset race-free.
-void reset_xfb_measurement_window_stats() noexcept;
-
-// Release all D3D12 resources and destroy the window.
-void shutdown();
 
 }  // namespace galaxy::gx

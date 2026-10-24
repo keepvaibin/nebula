@@ -96,16 +96,15 @@ public:
         }
     }
 
-    [[nodiscard]] std::uint32_t capacity() const noexcept { return capacity_; }
     [[nodiscard]] std::uint32_t used_units() const noexcept { return used_; }
     [[nodiscard]] std::uint64_t epoch() const noexcept { return epoch_; }
+
     [[nodiscard]] std::size_t free_block_count() const noexcept {
         return free_.size();
     }
     [[nodiscard]] std::size_t retired_block_count() const noexcept {
         return retired_.size();
     }
-
 private:
     struct Retired {
         std::uint32_t offset = 0;

@@ -142,13 +142,6 @@ std::vector<unsigned> available_upscalers() {
     return choices;
 }
 
-// The quality row serves every upscaler: it sets the render resolution relative to the INTERNAL
-// RESOLUTION row (QUALITY 1.5x, BALANCED 1.7x, PERFORMANCE 2x, ULTRA PERFORMANCE 3x fewer pixels
-// per axis). Its first mode renders at the internal resolution.
-bool temporal_quality_row_shown() {
-    return true;
-}
-
 // Output scale divided by the quality ratio (native, 1.5, 1.7, 2, 3), at least 1x.
 unsigned quality_render_scale(unsigned output_scale, unsigned quality) {
     static constexpr float kRatio[] = {1.0f, 1.5f, 1.7f, 2.0f, 3.0f};
@@ -192,12 +185,10 @@ unsigned upscaler_render_scale(const RenderConfig& render, unsigned internal) {
     return std::clamp(scale, 1u, std::max(internal, 1u));
 }
 
-
 std::string native_settings_row_text(
     unsigned tab, unsigned row,
     const RenderConfig& render, const RuntimeSettings& runtime,
     const RenderFeatureCaps& caps);
-
 
 std::atomic<bool> s_pointer_focused{false};
 galaxy::host::HostPointerSnapshotCache s_pointer_snapshot;
@@ -420,7 +411,6 @@ bool settings_save_pending() {
     const std::lock_guard<std::mutex> lock(s_settings_save_mutex);
     return s_settings_save_requested || s_settings_save_running;
 }
-
 
 float step_gain(float current, int delta) {
     const float snapped = std::round(current * 20.0f) / 20.0f;
@@ -1051,7 +1041,6 @@ void revert_native_settings_draft() {
     std::cerr << "[settings] reverted\n";
 }
 
-
 // Every overlay change is logged with its new row text.
 void adjust_native_setting_unlogged(int delta);
 
@@ -1442,7 +1431,6 @@ int signed_lparam_x(LPARAM lp) {
 int signed_lparam_y(LPARAM lp) {
     return static_cast<int>(static_cast<short>((lp >> 16) & 0xFFFF));
 }
-
 
 bool hide_os_cursor_enabled() {
     static const bool enabled = [] {
@@ -1964,7 +1952,6 @@ std::string upper_ascii(std::string text) {
     }
     return text;
 }
-
 
 // One step of a row's choice, clamped to its ends.
 unsigned settings_step(unsigned value, unsigned count, int delta) {
@@ -3250,7 +3237,6 @@ bool frame_generation_offered() {
     }();
     return installed && streamline::dlss_supported();
 }
-
 
 // DLSS chosen before it is installed is not applied: the menu asks to
 // download it. Once downloaded this session it applies and runs after a
@@ -4803,7 +4789,6 @@ NativeSettingsOverlaySnapshot native_settings_overlay_snapshot() noexcept {
     }
     return snapshot;
 }
-
 NativeSettingsLayout compute_native_settings_layout(
     unsigned backbuffer_width,
     unsigned backbuffer_height,
@@ -4906,30 +4891,6 @@ void native_settings_post_key(std::uintptr_t virtual_key) noexcept {
     }
 }
 
-void native_settings_wait_saved_for_tests() {
-    std::unique_lock<std::mutex> save_lock(s_settings_save_mutex);
-    s_settings_save_changed.wait(save_lock, [] { return !s_settings_save_requested && !s_settings_save_running; });
-}
-
-RenderConfig native_settings_draft_for_tests() {
-    const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
-    return s_settings_draft;
-}
-
-void native_settings_set_controllers_for_tests(std::span<const galaxy::input::ControllerInfo> controllers,
-                                                std::optional<galaxy::input::DeviceKey> active) {
-    const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
-    s_test_controllers = std::vector<galaxy::input::ControllerInfo>(controllers.begin(), controllers.end());
-    s_test_active_device = active;
-    refresh_controls_devices(true);
-}
-
-std::string native_settings_row_text_for_tests(unsigned row) {
-    const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
-    return native_settings_row_text(s_native_settings_tab.load(std::memory_order_relaxed) % kNativeSettingsTabCount,
-                                   row, s_settings_draft, get_runtime_settings(), get_render_feature_caps());
-}
-
 void native_settings_reset_overlay_state_for_tests() noexcept {
     s_display_confirm_deadline_ms = 0u;
     s_capture_target = galaxy::input::kWiiTargetCount;
@@ -4947,5 +4908,24 @@ void native_settings_reset_overlay_state_for_tests() noexcept {
     s_native_settings_row.store(0u, std::memory_order_relaxed);
     settle_native_settings_row();
 }
-
+std::string native_settings_row_text_for_tests(unsigned row) {
+    const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
+    return native_settings_row_text(s_native_settings_tab.load(std::memory_order_relaxed) % kNativeSettingsTabCount,
+                                   row, s_settings_draft, get_runtime_settings(), get_render_feature_caps());
+}
+void native_settings_set_controllers_for_tests(std::span<const galaxy::input::ControllerInfo> controllers,
+                                                std::optional<galaxy::input::DeviceKey> active) {
+    const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
+    s_test_controllers = std::vector<galaxy::input::ControllerInfo>(controllers.begin(), controllers.end());
+    s_test_active_device = active;
+    refresh_controls_devices(true);
+}
+RenderConfig native_settings_draft_for_tests() {
+    const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
+    return s_settings_draft;
+}
+void native_settings_wait_saved_for_tests() {
+    std::unique_lock<std::mutex> save_lock(s_settings_save_mutex);
+    s_settings_save_changed.wait(save_lock, [] { return !s_settings_save_requested && !s_settings_save_running; });
+}
 }  // namespace galaxy::gx

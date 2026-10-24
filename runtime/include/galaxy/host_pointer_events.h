@@ -11,21 +11,6 @@ namespace galaxy::host {
 
 inline constexpr std::size_t kHostPointerTransitionCapacity = 1024u;
 
-// Cache lifetime uses this precise clock only. Acquisition and Win32 message timestamps stay on
-// the millisecond epoch and must not be passed here. The exclusive boundary expires a 1 ms cache
-// at exactly 1 ms. Invalid or future anchors are rejected before unsigned subtraction, and the
-// result is capped before multiplication.
-[[nodiscard]] constexpr bool host_pointer_poll_cache_fresh(
-    std::uint64_t now_steady_ns,
-    std::uint64_t cached_steady_ns,
-    std::uint64_t configured_cache_ms) noexcept {
-    const std::uint64_t cache_ms =
-        configured_cache_ms > 16u ? 16u : configured_cache_ms;
-    return cache_ms != 0u && cached_steady_ns != 0u &&
-        now_steady_ns >= cached_steady_ns &&
-        now_steady_ns - cached_steady_ns < cache_ms * 1'000'000u;
-}
-
 enum class HostPointerButton : std::uint8_t {
     Left,
     Right,

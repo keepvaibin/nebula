@@ -17,6 +17,7 @@
 
 #include "galaxy/atomic_file.h"
 #include "galaxy/crash_report.h"
+#include "galaxy/discord_presence.h"
 #include "galaxy/mods.h"
 #if defined(NEBULA_HOST_RENDERER)
 #include "galaxy/experimental_ultrawide_aspect.h"
@@ -24,13 +25,12 @@
 #include "galaxy/gx/fifo_parser.h"
 #include "galaxy/mii_import.h"
 #include "galaxy/gx_d3d12.h"
-#include "galaxy/native_api.h"
+#include "galaxy/guest_memory.h"
 #include "galaxy/native_host.h"
 #include "galaxy/native_input.h"
 #include "galaxy/native_thp_video.h"
 #include "galaxy/perf_hint.h"
 #include "galaxy/achievements.h"
-#include "galaxy/discord_presence.h"
 #include "galaxy/runtime_settings.h"
 #include "galaxy/gx/render_config.h"
 
@@ -1374,25 +1374,21 @@ void svc_fatal(void*, const char* text) {
 // draw done) or at the retrace, which also presents; render_frame copies them, so they are released at once. The
 // renderer raises PE events through gNative's callbacks when its parse and the GPU reach them. All of this runs on
 // the simulation thread, where the game makes these calls.
-using galaxy::GuestMemoryRegionV1;
-using galaxy::GuestMemoryV1;
-using galaxy::LogLevelV1;
-using galaxy::NativeServicesV1;
+using galaxy::GuestMemoryRegion;
+using galaxy::GuestMemory;
+using galaxy::GxLogLevel;
+using galaxy::GxServices;
 
-GuestMemoryV1 gMemory{};
-std::vector<GuestMemoryRegionV1> gRegions;
-NativeServicesV1 gNative{};
+GuestMemory gMemory{};
+std::vector<GuestMemoryRegion> gRegions;
+GxServices gNative{};
 const uint8_t* gPending = nullptr;
 size_t gPendingSize = 0;
 std::deque<galaxy::gx::FramePeCompletionToken> gTokens;
 std::atomic<uint64_t> gSubmissions{0};  // render_frame calls with commands: the renderer's frame index
 
-void native_log(void*, LogLevelV1, const char* text) {
+void native_log(void*, GxLogLevel, const char* text) {
     log_line("renderer:", text);
-}
-
-void native_fatal(void*, uint32_t, const char* text) {
-    die("renderer: %s", text);
 }
 
 void native_pe_finish(void*) {
@@ -1421,7 +1417,6 @@ void setup_renderer_memory() {
     gMemory.regions = gRegions.data();
     gMemory.region_count = static_cast<uint32_t>(gRegions.size());
     gNative.log = native_log;
-    gNative.fatal = native_fatal;
     gNative.gx_pe_finish = native_pe_finish;
     gNative.gx_pe_token = native_pe_token;
 }
@@ -1435,7 +1430,7 @@ void ensure_guest_memory() {
 // `size` bytes at a guest address, in the module's arena or image.
 const std::byte* guest_bytes(uint32_t address, uint32_t size) {
     ensure_guest_memory();
-    for (const galaxy::GuestMemoryRegionV1& region : gRegions) {
+    for (const galaxy::GuestMemoryRegion& region : gRegions) {
         if (address - region.guest_base < region.size && size <= region.size - (address - region.guest_base)) {
             return region.host_base + (address - region.guest_base);
         }
@@ -1620,8 +1615,13 @@ void svc_presence(void*, const uint16_t* galaxy, const uint16_t* star, int32_t p
     galaxy::discord::set_activity(activity);
 }
 
-// An achievement the save data meets: unlocked once (achievements.ini), its name for the game's banner.
+// An achievement the save data meets: unlocked once (achievements.ini), its name for the game's banner. The headless
+// host keeps no achievements.
 int svc_achievement(void*, const char* id, uint16_t* name, uint32_t capacity) {
+#if !defined(NEBULA_HOST_RENDERER)
+    (void)id, (void)name, (void)capacity;
+    return 0;
+#else
     if (id == nullptr || !galaxy::achievements::unlock(id)) return 0;
     const char* text = "";
     for (const galaxy::achievements::Info& info : galaxy::achievements::list()) {
@@ -1632,6 +1632,7 @@ int svc_achievement(void*, const char* id, uint16_t* name, uint32_t capacity) {
     if (name != nullptr && capacity != 0u) name[i] = 0u;
     log_line("achievement:", text);
     return 1;
+#endif
 }
 
 // A mod's code patch the game runs natively (NEBULA_PATCH_*), as the mods layer matched it at the start.
@@ -2451,7 +2452,7 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
 // The physical address of a host pointer into the game's memory (0 outside it).
 uint32_t physical_of(const void* pointer) {
     const auto* p = static_cast<const std::byte*>(pointer);
-    for (const galaxy::GuestMemoryRegionV1& region : gRegions) {
+    for (const galaxy::GuestMemoryRegion& region : gRegions) {
         if (region.guest_base < 0x80000000u && p >= region.host_base && p < region.host_base + region.size) {
             return region.guest_base + static_cast<uint32_t>(p - region.host_base);
         }

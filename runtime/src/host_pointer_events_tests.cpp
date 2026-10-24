@@ -1,6 +1,5 @@
 #include "galaxy/host_pointer_events.h"
 #include "galaxy/content_viewport.h"
-#include "galaxy/native_mouse_pointer.h"
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -251,90 +250,6 @@ void commit_published_cursor_poll(
         return;
     }
     baseline = {true, candidate_x, candidate_y};
-}
-
-bool host_pointer_poll_cache_expires_on_precise_fake_clock() {
-    // The coarse GetTickCount64 identity stays constant while precise time and
-    // cursor coordinates advance. Exercise whole-snapshot reuse, not sleeps.
-    constexpr std::uint64_t kStartNs = 5'000'000'000u;
-    constexpr std::uint64_t kUnchangedCoarseIdentityMs = 1'000u;
-    HostPointerSnapshot cached{};
-    std::uint64_t cached_ns = 0u;
-    std::uint64_t acquisitions = 0u;
-    const auto acquire = [&cached, &cached_ns, &acquisitions](
-                             std::uint64_t now_ns,
-                             std::int32_t x,
-                             std::uint64_t configured_ms) {
-        if (galaxy::host::host_pointer_poll_cache_fresh(
-                now_ns, cached_ns, configured_ms)) {
-            return cached;
-        }
-        cached.coordinates = coordinates(x, 200);
-        cached.absolute_sequence = ++acquisitions;
-        cached.absolute_acquired_ms = kUnchangedCoarseIdentityMs;
-        cached_ns = now_ns;
-        return cached;
-    };
-
-    const auto first = acquire(kStartNs, 100, 1u);
-    const auto before_expiry = acquire(kStartNs + 999'999u, 200, 1u);
-    const auto at_expiry = acquire(kStartNs + 1'000'000u, 200, 1u);
-    const auto coarse_clock_still_unchanged =
-        acquire(kStartNs + 15'600'000u, 300, 1u);
-    bool passed = expect(
-        first.coordinates.client_x == 100 && first.absolute_sequence == 1u &&
-            before_expiry.coordinates.client_x == 100 &&
-            before_expiry.absolute_sequence == 1u,
-        "precise pointer cache reuses a coherent snapshot only before 1 ms");
-    passed &= expect(
-        at_expiry.coordinates.client_x == 200 &&
-            at_expiry.absolute_sequence == 2u &&
-            at_expiry.absolute_acquired_ms == first.absolute_acquired_ms,
-        "pointer coordinates refresh at exactly 1 ms without changing the coarse identity clock");
-    passed &= expect(
-        coarse_clock_still_unchanged.coordinates.client_x == 300 &&
-            coarse_clock_still_unchanged.absolute_sequence == 3u &&
-            coarse_clock_still_unchanged.absolute_acquired_ms ==
-                first.absolute_acquired_ms,
-        "unchanged 15.6 ms coarse clock cannot retain a stale 1 ms snapshot");
-
-    const auto disabled_first = acquire(kStartNs + 15'600'000u, 400, 0u);
-    const auto disabled_second = acquire(kStartNs + 15'600'000u, 500, 0u);
-    passed &= expect(
-        disabled_first.coordinates.client_x == 400 &&
-            disabled_second.coordinates.client_x == 500 && acquisitions == 5u,
-        "zero pointer-cache duration reacquires even at identical clock values");
-    return passed;
-}
-
-bool host_pointer_poll_cache_rejects_invalid_clock_and_caps_duration() {
-    using galaxy::host::host_pointer_poll_cache_fresh;
-    constexpr std::uint64_t kAnchorNs = 5'000'000'000u;
-    constexpr std::uint64_t kMaximum =
-        std::numeric_limits<std::uint64_t>::max();
-    bool passed = expect(
-        !host_pointer_poll_cache_fresh(kAnchorNs, 0u, 1u) &&
-            !host_pointer_poll_cache_fresh(0u, kAnchorNs, 1u) &&
-            !host_pointer_poll_cache_fresh(kAnchorNs - 1u, kAnchorNs, 1u),
-        "missing, future, and backwards cache timestamps force acquisition");
-    passed &= expect(
-        host_pointer_poll_cache_fresh(
-            kAnchorNs + 15'999'999u, kAnchorNs, 17u) &&
-            !host_pointer_poll_cache_fresh(
-                kAnchorNs + 16'000'000u, kAnchorNs, 17u) &&
-            host_pointer_poll_cache_fresh(
-                kAnchorNs + 15'999'999u, kAnchorNs, kMaximum) &&
-            !host_pointer_poll_cache_fresh(
-                kAnchorNs + 16'000'000u, kAnchorNs, kMaximum),
-        "oversized pointer-cache durations retain the 16 ms cap without multiplication overflow");
-    passed &= expect(
-        host_pointer_poll_cache_fresh(
-            kMaximum, kMaximum - 999'999u, 1u) &&
-            !host_pointer_poll_cache_fresh(
-                kMaximum, kMaximum - 1'000'000u, 1u) &&
-            !host_pointer_poll_cache_fresh(1u, kMaximum, 1u),
-        "precise cache expiry is safe near the unsigned clock limit");
-    return passed;
 }
 
 bool rejected_poll_is_reconsidered_after_authority_timeout() {
@@ -1840,33 +1755,6 @@ bool published_content_is_coherent_and_bounded() {
     return passed && expect(!bad.load(),"concurrent resize publication never mixes rectangles and surface dimensions");
 }
 
-bool mouse_query_uses_matching_pixel_and_rejects_invalid_edges() {
-    bool passed=true;
-    for (const unsigned width : {608u,748u,832u,1092u,1664u}) {
-        const auto center=galaxy::input::mouse_pointer_query(0.0f,0.0f,width,480u,640u);
-        passed &= expect(center && center->screen_x==width*0.5f &&
-            center->screen_y==240.0f && center->efb_x==320u && center->efb_y==240u,
-            "aspect changes keep normalized mouse/depth coordinates consistent");
-        const auto origin=galaxy::input::mouse_pointer_query(-1.0f,-1.0f,width,480u,640u);
-        passed &= expect(origin && origin->efb_x==0u && origin->efb_y==0u,
-            "first visible content pixel maps to original GX query");
-        const auto menu_edge=galaxy::input::mouse_pointer_position(1.0f,1.0f,width,480u);
-        passed &= expect(menu_edge && menu_edge->x==width && menu_edge->y==480u,
-            "screen-only menu edge stays current without a borrowed depth sample");
-        const auto depth_edge=galaxy::input::mouse_pointer_query(1.0f,1.0f,width,480u,640u);
-        passed &= expect(depth_edge && depth_edge->efb_x==639u && depth_edge->efb_y==479u &&
-            depth_edge->screen_x<width && depth_edge->screen_y<480.0f,
-            "inclusive physical edge uses an interior coordinate and its matching GX pixel");
-    }
-    passed &= expect(!galaxy::input::mouse_pointer_query(
-        std::numeric_limits<float>::quiet_NaN(),0,832,480,640) &&
-        !galaxy::input::mouse_pointer_query(0,0,832,529,640) &&
-        !galaxy::input::mouse_pointer_query(0,0,832,480,641) &&
-        !galaxy::input::mouse_pointer_query(-1.01f,0,832,480,640),
-        "invalid input/unsupported geometry never reuse a different pixel depth");
-    return passed;
-}
-
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -1875,13 +1763,10 @@ int main(int argc, char** argv) {
         return run_sequence_exhaustion_child(argv[2]);
     }
     bool passed = true;
-    passed &= mouse_query_uses_matching_pixel_and_rejects_invalid_edges();
     passed &= authoritative_poll_repairs_an_intervening_message();
     passed &= seed_and_geometry_aba_reject_in_flight_publications();
     passed &= invalid_geometry_and_samples_are_rejected_safely();
     passed &= snapshot_mutation_invocation_matches_its_nothrow_contract();
-    passed &= host_pointer_poll_cache_expires_on_precise_fake_clock();
-    passed &= host_pointer_poll_cache_rejects_invalid_clock_and_caps_duration();
     passed &= rejected_poll_is_reconsidered_after_authority_timeout();
     passed &= stale_center_poll_is_reconsidered_after_rejection_timeout();
     passed &=

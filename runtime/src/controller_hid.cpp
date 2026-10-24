@@ -1766,19 +1766,6 @@ void ensure_controller_hid_started() noexcept {
     }
 }
 
-void stop_controller_hid() noexcept {
-    Hub& h = hub();
-    const std::lock_guard<std::mutex> lock(h.lifecycle);
-    if (!h.started.load(std::memory_order_acquire)) return;
-    if (h.notification != nullptr) {
-        CM_Unregister_Notification(h.notification);
-        h.notification = nullptr;
-    }
-    SetEvent(h.stop_event.get());
-    if (h.worker.joinable()) h.worker.join();
-    h.started.store(false, std::memory_order_release);
-}
-
 std::size_t read_hid_pads(std::span<HidPadState> out, bool consume_gyro) noexcept {
     Hub& h = hub();
     if (!h.started.load(std::memory_order_acquire)) return 0;

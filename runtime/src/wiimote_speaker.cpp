@@ -8,10 +8,6 @@ namespace galaxy::input::speaker {
 
 namespace {
 
-constexpr std::array<std::int32_t, 8> kStepScale{230, 230, 230, 230, 307, 409, 512, 614};
-constexpr std::int32_t kMinimumStep = 127;
-constexpr std::int32_t kMaximumStep = 24576;
-constexpr std::uint32_t kSampleClockHz = 12'000'000u;
 constexpr std::uint32_t kRingMask = Speaker::kRingSamples - 1u;
 static_assert((Speaker::kRingSamples & kRingMask) == 0u, "the ring size is a power of two");
 constexpr std::uint32_t kTaps = Speaker::kTaps;
@@ -81,88 +77,6 @@ void store_le16(std::byte* sample, std::int32_t value) noexcept {
 }
 
 }  // namespace
-
-Config parse_config(std::span<const std::uint8_t, 7> bytes) noexcept {
-    Config config;
-    config.format = bytes[1] == 0x40u ? Format::Pcm8 : Format::Adpcm4;
-    const std::uint32_t divider = static_cast<std::uint32_t>(bytes[2]) | (static_cast<std::uint32_t>(bytes[3]) << 8u);
-    config.sample_rate = divider != 0u ? kSampleClockHz / divider : 0u;
-    config.volume = bytes[4];
-    return config;
-}
-
-std::int16_t decode_adpcm_nibble(AdpcmState& state, std::uint8_t nibble) noexcept {
-    const std::int32_t step = state.step;
-    const std::int32_t difference = ((nibble & 4u) != 0u ? step : 0) + ((nibble & 2u) != 0u ? step >> 1 : 0) +
-        ((nibble & 1u) != 0u ? step >> 2 : 0) + (step >> 3);
-    state.predictor = std::clamp(state.predictor + ((nibble & 8u) != 0u ? -difference : difference), -32768, 32767);
-    state.step = std::clamp((step * kStepScale[nibble & 7u]) >> 8, kMinimumStep, kMaximumStep);
-    return static_cast<std::int16_t>(state.predictor);
-}
-
-void Speaker::write_registers(std::uint32_t offset, std::span<const std::uint8_t> data) noexcept {
-    if (offset >= registers_.size() || data.size() > registers_.size() - offset) return;
-    std::copy(data.begin(), data.end(), registers_.begin() + offset);
-    if (offset <= 1u && offset + data.size() >= 8u) {
-        config_ = parse_config(std::span<const std::uint8_t, 7>(registers_.data() + 1, 7));
-        const bool pcm = config_.format == Format::Pcm8;
-        volume_ = static_cast<float>(pcm ? config_.volume : std::min<std::uint8_t>(config_.volume, 0x7Fu)) /
-            (pcm ? 255.0f : 64.0f);
-        const bool playable = config_.sample_rate <= kMostSampleRate;
-        sample_rate_.store(playable ? config_.sample_rate : 0u, std::memory_order_relaxed);
-    }
-    // The configuration and the play command (0x01 at 0xA20008) start a new stream.
-    adpcm_ = {};
-}
-
-void Speaker::set_enabled(bool enabled) noexcept {
-    if (enabled != enabled_) adpcm_ = {};
-    enabled_ = enabled;
-}
-
-void Speaker::set_muted(bool muted) noexcept {
-    muted_ = muted;
-}
-
-void Speaker::receive(std::span<const std::uint8_t> data) noexcept {
-    if (!enabled_ || config_.sample_rate == 0u || config_.sample_rate > kMostSampleRate) return;
-    const auto bytes = data.first(std::min<std::size_t>(data.size(), 20u));
-    const bool heard = !muted_ && listening_.load(std::memory_order_relaxed);
-    if (config_.format == Format::Pcm8) {
-        if (!heard) return;
-        std::array<float, 20> samples;
-        for (std::size_t i = 0; i < bytes.size(); ++i) {
-            samples[i] = static_cast<float>(static_cast<std::int8_t>(bytes[i]) * 256) * volume_;
-        }
-        push(std::span<const float>(samples.data(), bytes.size()));
-        return;
-    }
-    if (!heard) {
-        for (const std::uint8_t byte : bytes) {
-            (void)decode_adpcm_nibble(adpcm_, static_cast<std::uint8_t>(byte >> 4u));
-            (void)decode_adpcm_nibble(adpcm_, static_cast<std::uint8_t>(byte & 0x0Fu));
-        }
-        return;
-    }
-    std::array<float, 40> samples;
-    std::size_t count = 0;
-    for (const std::uint8_t byte : bytes) {
-        samples[count++] = decode_adpcm_nibble(adpcm_, static_cast<std::uint8_t>(byte >> 4u)) * volume_;
-        samples[count++] = decode_adpcm_nibble(adpcm_, static_cast<std::uint8_t>(byte & 0x0Fu)) * volume_;
-    }
-    push(std::span<const float>(samples.data(), count));
-}
-
-void Speaker::push(std::span<const float> samples) noexcept {
-    const std::uint32_t head = head_.load(std::memory_order_relaxed);
-    const std::uint32_t tail = tail_.load(std::memory_order_acquire);
-    const auto count = static_cast<std::uint32_t>(
-        std::min<std::size_t>(samples.size(), kRingSamples - (head - tail)));
-    for (std::uint32_t i = 0; i < count; ++i) {
-        ring_[(head + i) & kRingMask] = samples[i];
-    }
-    head_.store(head + count, std::memory_order_release);
-}
 
 void Speaker::mix(std::span<std::byte> stereo_le, std::uint32_t output_rate, float gain) noexcept {
     if (!(gain > 0.0f)) {

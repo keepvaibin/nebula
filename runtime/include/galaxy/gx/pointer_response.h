@@ -19,13 +19,6 @@ struct PointerDepthCapture {
     // mapped readback buffer of the renderer's capture ring (640x528 RGBA8,
     // rows contiguous) and a query converts only its pixel. Null: `pixels`.
     const std::uint8_t* rgba{};
-    [[nodiscard]] std::uint32_t depth_at(std::size_t index) const noexcept {
-        if (rgba != nullptr) {
-            const std::uint8_t* pixel = rgba + index * 4u;
-            return (std::uint32_t{pixel[0]} << 16u) | (std::uint32_t{pixel[1]} << 8u) | pixel[2];
-        }
-        return pixels[index];
-    }
     std::atomic<bool> complete{true};
     bool success{};
     std::exception_ptr error;
@@ -41,13 +34,6 @@ struct PointerDepthCapture {
             complete.store(true,std::memory_order_release);
         }
         completion_cv.notify_all();
-    }
-    [[nodiscard]] bool await_until(std::chrono::steady_clock::time_point deadline) {
-        if (complete.load(std::memory_order_acquire)) return true;
-        std::unique_lock<std::mutex> lock(completion_mutex);
-        return completion_cv.wait_until(lock,deadline,[this] {
-            return complete.load(std::memory_order_acquire);
-        });
     }
 };
 struct PointerResponseStamp {

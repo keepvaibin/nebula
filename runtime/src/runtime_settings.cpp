@@ -422,32 +422,6 @@ void load_runtime_settings_from_file() {
     s_audio_settings_write_time = write_time;
 }
 
-bool reload_runtime_audio_settings_if_changed() noexcept {
-    try {
-        const std::uint64_t write_time = settings_file_write_time(settings_path());
-        if (write_time == 0u || write_time == s_audio_settings_write_time) {
-            return false;
-        }
-        RuntimeSettings parsed{};
-        input::ControlsConfig controls = input::default_controls_config();
-        parse_settings_file(parsed, controls);
-        const RuntimeInputMode file_mode = sanitize_settings(parsed).input_mode;
-        apply_env_overrides(parsed);
-        RuntimeSettings settings = get_runtime_settings();
-        settings.audio = parsed.audio;
-        settings.text_speed = parsed.text_speed;
-        settings.language = parsed.language;
-        settings.discord_status = parsed.discord_status;
-        set_runtime_settings(settings);
-        input::set_controls_config(controls);
-        record_input_mode_sync(file_mode, settings.input_mode);
-        s_audio_settings_write_time = write_time;
-        return true;
-    } catch (...) {
-        return false;
-    }
-}
-
 bool save_runtime_settings_to_file() {
     try {
         const RuntimeSettings settings = get_runtime_settings();

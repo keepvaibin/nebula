@@ -98,19 +98,13 @@ public:
     // without it the owner is read from the console's memory, as v1.0.1 does.
     using OwnerResolver = std::uint32_t (*)(std::uint32_t channel, std::uint32_t* route);
     void set_owner_resolver(OwnerResolver resolver) noexcept { owner_resolver_ = resolver; }
+
     [[nodiscard]] const JAudioChannelCategory& channel_category(std::uint32_t channel) const noexcept {
         return categories_[channel < categories_.size() ? channel : 0u];
     }
-    [[nodiscard]] std::uint32_t channel_table() const noexcept { return channel_table_; }
-
     [[nodiscard]] bool configured() const noexcept { return channel_table_ != 0u; }
     [[nodiscard]] std::uint32_t varam() const noexcept { return varam_; }
     [[nodiscard]] const JAudioHostMixerStats& stats() const noexcept { return stats_; }
-
-    // Exposed for unit tests: DSP data memory word at `address`.
-    [[nodiscard]] std::int16_t dram(std::uint32_t address) const noexcept {
-        return address < dram_.size() ? dram_[address] : std::int16_t{0};
-    }
 
 private:
     OwnerResolver owner_resolver_{};

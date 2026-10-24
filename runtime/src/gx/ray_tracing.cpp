@@ -150,7 +150,6 @@ struct RtEmitConstants {
 static_assert(sizeof(RtEmitConstants) == 192u);
 constexpr std::uint32_t kEmitLights = 512u;     // remembered glow lights (rt_lighting.hlsl kEmitLights)
 constexpr std::uint64_t kEmitLightBytes = 64u;  // per remembered light (rt_lighting.hlsl kEmitLightVectors)
-constexpr std::uint32_t kReferenceFlag = 8192u;  // RtLightConstants.flags: the reference (rt_lighting.hlsl kReferenceFlag)
 constexpr std::uint32_t kPhysicalFlag = 16384u;  // the game's light units (rt_lighting.hlsl kPhysicalFlag)
 constexpr std::uint32_t kGlowMaxTriangles = 65536u;
 // A game point light's emitter radius (eye units) other than the star core's (its fitted ball): about a Luma's body,
@@ -1947,7 +1946,6 @@ void SceneRayTracer::note_tev(const RtDrawInfo& info, std::vector<RtTevMaterial>
     }
     records.push_back(record);
 }
-
 
 namespace {
 
@@ -4822,10 +4820,6 @@ void SceneRayTracer::write_reprojection(ID3D12GraphicsCommandList* list, const s
     to_state(list, reproject_.Get(), reproject_state_, D3D12_RESOURCE_STATE_COPY_DEST);
     list->CopyBufferRegion(reproject_.Get(), 0u, reproject_upload_.Get(), offset, sizeof(rows));
     to_state(list, reproject_.Get(), reproject_state_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-}
-
-D3D12_GPU_VIRTUAL_ADDRESS SceneRayTracer::scene_tlas() const noexcept {
-    return tlas_ ? tlas_->GetGPUVirtualAddress() : 0u;
 }
 
 bool SceneRayTracer::fill_constants(const RtSources& sources, Allocate allocate, void* allocate_context,

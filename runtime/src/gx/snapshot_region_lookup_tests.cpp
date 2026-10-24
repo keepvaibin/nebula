@@ -10,9 +10,9 @@
 using namespace galaxy;
 namespace {
 __declspec(noinline) const std::byte* original(
-    const GuestMemoryV1& memory, std::uint32_t address, std::uint32_t size) {
+    const GuestMemory& memory, std::uint32_t address, std::uint32_t size) {
     if (size == 0u) return nullptr;
-    if (const auto* fast = resolve_guest_fast(const_cast<GuestMemoryV1*>(&memory),address,size)) return fast;
+    if (const auto* fast = resolve_guest_fast(const_cast<GuestMemory*>(&memory),address,size)) return fast;
     const auto end = static_cast<std::uint64_t>(address)+size;
     for (std::uint32_t i=0;i<memory.region_count;++i) {
         const auto& r=memory.regions[i];
@@ -22,9 +22,9 @@ __declspec(noinline) const std::byte* original(
     return nullptr;
 }
 __declspec(noinline) const std::byte* candidate(
-    const GuestMemoryV1& memory, std::uint32_t address, std::uint32_t size, bool certified) {
+    const GuestMemory& memory, std::uint32_t address, std::uint32_t size, bool certified) {
     if (size == 0u) return nullptr;
-    if (const auto* fast=resolve_guest_fast(const_cast<GuestMemoryV1*>(&memory),address,size)) return fast;
+    if (const auto* fast=resolve_guest_fast(const_cast<GuestMemory*>(&memory),address,size)) return fast;
     if (certified) return gx::detail::resolve_sorted_snapshot_region(
         {memory.regions,memory.region_count},address,size);
     return original(memory,address,size);
@@ -35,10 +35,10 @@ std::uint32_t next(std::uint32_t& state) {
 }
 int main() {
     std::vector<std::byte> backing(65536u);
-    std::vector<GuestMemoryRegionV1> regions;
+    std::vector<GuestMemoryRegion> regions;
     for(std::uint32_t i=0;i<1024u;++i)
         regions.push_back({0x80000000u+i*64u,32u,backing.data()+i*64u});
-    GuestMemoryV1 memory{};
+    GuestMemory memory{};
     memory.regions=regions.data();memory.region_count=static_cast<std::uint32_t>(regions.size());
     if(!gx::detail::snapshot_regions_are_disjoint_sorted(regions)) return 1;
     unsigned checks=0;
@@ -59,7 +59,7 @@ int main() {
         if(mode==3u)bad[1].host_base=nullptr;
         if(mode==4u){bad.back().guest_base=0xfffffff0u;bad.back().size=32u;}
         if(gx::detail::snapshot_regions_are_disjoint_sorted(bad))return 3;
-        GuestMemoryV1 view{};view.regions=bad.data();view.region_count=static_cast<std::uint32_t>(bad.size());
+        GuestMemory view{};view.regions=bad.data();view.region_count=static_cast<std::uint32_t>(bad.size());
         for(std::uint32_t offset=0;offset<256u;++offset)for(std::uint32_t size=0;size<64u;++size){
             const auto address=0x80000000u+offset;
             if(original(view,address,size)!=candidate(view,address,size,false))return 4;
@@ -71,14 +71,14 @@ int main() {
     memory.fast_regions[8]={static_cast<std::uint32_t>(fast.size()),fast.data()};
     if(candidate(memory,0x80000040u,16u,true)!=fast.data()+64u)return 5;
     memory.fast_regions[8]={};
-    std::array<GuestMemoryRegionV1,2> adjacent{{{0u,32u,backing.data()},
+    std::array<GuestMemoryRegion,2> adjacent{{{0u,32u,backing.data()},
                                              {32u,32u,backing.data()+64u}}};
     if(!gx::detail::snapshot_regions_are_disjoint_sorted(adjacent) ||
        gx::detail::resolve_sorted_snapshot_region(adjacent,31u,2u)!=nullptr ||
        gx::detail::resolve_sorted_snapshot_region(adjacent,0u,32u)!=backing.data() ||
        gx::detail::resolve_sorted_snapshot_region(adjacent,32u,32u)!=backing.data()+64u ||
        gx::detail::resolve_sorted_snapshot_region(adjacent,64u,1u)!=nullptr) return 6;
-    std::array<GuestMemoryRegionV1,1> edge{{{0xffffff00u,256u,backing.data()}}};
+    std::array<GuestMemoryRegion,1> edge{{{0xffffff00u,256u,backing.data()}}};
     if(!gx::detail::snapshot_regions_are_disjoint_sorted(edge) ||
        gx::detail::resolve_sorted_snapshot_region(edge,0xffffffffu,1u)!=backing.data()+255u ||
        gx::detail::resolve_sorted_snapshot_region(edge,0xffffffffu,2u)!=nullptr) return 7;

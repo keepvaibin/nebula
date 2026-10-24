@@ -55,6 +55,7 @@ struct AffineMotion {
     bool rigid = false;     // both decomposed; false: element-wise lerp of a and b
 };
 void affine_motion(const Affine34& a, const Affine34& b, AffineMotion& out) noexcept;
+
 [[nodiscard]] Affine34 affine_motion_at(const AffineMotion& m, float t) noexcept;
 // False when a -> b (eye space, one game frame) cannot be one object's
 // motion: the origin moves more than a third of its distance from the eye
@@ -63,7 +64,6 @@ void affine_motion(const Affine34& a, const Affine34& b, AffineMotion& out) noex
 // camera cut) are shown at b instead of interpolated.
 [[nodiscard]] bool affine_motion_plausible(const Affine34& a, const Affine34& b) noexcept;
 [[nodiscard]] bool affine_motion_plausible(const AffineMotion& m) noexcept;
-
 inline constexpr std::uint32_t kNoPaletteOffset = 0xFFFFFFFFu;
 
 struct TransformRecord {
@@ -125,7 +125,6 @@ public:
     // previous scene, or null. Records outside a scene are ignored.
     const TransformRecord* add(const TransformRecord& record);
 
-    [[nodiscard]] bool scene_open() const noexcept { return scene_open_; }
     [[nodiscard]] bool has_previous() const noexcept { return previous_valid_; }
     [[nodiscard]] std::uint64_t previous_frame() const noexcept { return previous_frame_; }
     [[nodiscard]] std::uint64_t current_frame() const noexcept { return current_frame_; }

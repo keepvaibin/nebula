@@ -136,7 +136,6 @@ class Program {
 public:
     Program() { clear(); }
     void clear();
-    [[nodiscard]] bool empty() const noexcept { return ops.empty(); }
     // Ops added while set are evaluated at the frame presented before (kFlagPrev).
     void at_previous(bool previous) noexcept { flags_ = previous ? kFlagPrev : 0u; }
     // The camera of world-space ops at t = 0 and t = 1 (camera_at of the sequence's camera).
@@ -198,7 +197,7 @@ struct FrameTimes {
 
 // The program into `out` (words of the output buffer; base copies done).
 void evaluate(const Program& program, const FrameTimes& times, std::uint32_t* out);
+
 // Every op at t.
 void evaluate(const Program& program, const Affine34& camera_t, float t, std::uint32_t* out);
-
 }  // namespace galaxy::gx::interp_gpu

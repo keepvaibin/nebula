@@ -66,10 +66,6 @@ struct MonitorInfo {
 [[nodiscard]] std::vector<std::pair<unsigned, unsigned>> monitor_resolutions(
     const MonitorInfo& monitor);
 
-// Refresh rates the monitor offers at one resolution, highest first.
-[[nodiscard]] std::vector<unsigned> monitor_refresh_rates(
-    const MonitorInfo& monitor, unsigned width, unsigned height);
-
 [[nodiscard]] std::string narrow_utf8(std::wstring_view text);
 [[nodiscard]] std::wstring widen_utf8(std::string_view text);
 #endif

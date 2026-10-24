@@ -196,7 +196,6 @@ struct NativeAudioBusGains {
 };
 
 inline constexpr std::uint32_t kNativeAudioUnityGainQ16 = 1u << 16u;
-inline constexpr std::uint32_t kNativeAudioMaximumGainQ16 = 4u << 16u;
 // 10 ms (four DSP subframes): a mute or unmute of a loud low-frequency bus
 // over one 2.5 ms subframe is an audible click.
 inline constexpr std::uint32_t kNativeAudioBusRampSamples = 320u;
@@ -212,11 +211,6 @@ inline constexpr std::uint32_t kNativeAudioBusRampSamples = 320u;
     return static_cast<std::uint32_t>(
         clamped * static_cast<float>(kNativeAudioUnityGainQ16) + 0.5f);
 }
-
-struct NativeAudioBusChannelSnapshot {
-    NativeAudioBus bus{NativeAudioBus::Sfx};
-    std::uint32_t gain_q16{kNativeAudioUnityGainQ16};
-};
 
 // One CPU-thread publisher and one DSP-thread reader. Each channel assignment
 // and its combined gain share one atomic word, so the DSP cannot observe a bus
@@ -235,54 +229,11 @@ public:
         }
     }
 
-    void publish(
-        const NativeAudioBusGains& gains,
-        const std::array<NativeAudioBus, kChannelCount>& buses) noexcept {
-        const std::array<std::uint32_t, 5u> gains_q16{
-            combined_gain_q16(gains.master, gains.music),
-            combined_gain_q16(gains.master, gains.voice),
-            combined_gain_q16(gains.master, gains.sfx),
-            combined_gain_q16(gains.master, gains.ambience),
-            combined_gain_q16(gains.master, gains.cutscene),
-        };
-        for (std::size_t channel = 0u; channel < buses.size(); ++channel) {
-            const NativeAudioBus bus = buses[channel];
-            channels_[channel].store(
-                pack_channel(
-                    bus, gains_q16[static_cast<std::size_t>(bus)]),
-                std::memory_order_release);
-        }
-    }
-
-    [[nodiscard]] NativeAudioBusChannelSnapshot snapshot_channel(
-        std::size_t channel) const noexcept {
-        if (channel >= kChannelCount) {
-            return {};
-        }
-        const std::uint64_t packed =
-            channels_[channel].load(std::memory_order_acquire);
-        return {
-            static_cast<NativeAudioBus>(packed >> 32u),
-            static_cast<std::uint32_t>(packed),
-        };
-    }
-
 private:
     [[nodiscard]] static constexpr std::uint64_t pack_channel(
         NativeAudioBus bus,
         std::uint32_t gain_q16) noexcept {
         return (static_cast<std::uint64_t>(bus) << 32u) | gain_q16;
-    }
-
-    [[nodiscard]] static std::uint32_t combined_gain_q16(
-        float master,
-        float bus) noexcept {
-        const std::uint64_t product =
-            static_cast<std::uint64_t>(native_audio_gain_to_q16(master)) *
-            native_audio_gain_to_q16(bus);
-        return static_cast<std::uint32_t>(std::min<std::uint64_t>(
-            (product + kNativeAudioUnityGainQ16 / 2u) >> 16u,
-            kNativeAudioMaximumGainQ16));
     }
 
     std::array<std::atomic<std::uint64_t>, kChannelCount> channels_{};
@@ -303,11 +254,6 @@ struct NativeDspAudioBusState {
     bool active_channel_valid{};
 };
 
-inline void native_dsp_audio_bus_clear_selection(
-    NativeDspAudioBusState& state) noexcept {
-    state.active_channel_valid = false;
-}
-
 // A gain change on the channel's bus ramps; a channel's first sound, or a new
 // owner on another bus, starts at its own gain so that nothing of a muted bus
 // leaks through a ramp from the previous owner's gain.
@@ -324,23 +270,6 @@ inline void native_audio_bus_set_ramp_target(
         ramp.remaining = kNativeAudioBusRampSamples;
     }
     ramp.target_q16 = gain_q16;
-}
-
-inline void native_dsp_audio_bus_begin_channel(
-    NativeDspAudioBusState& state,
-    std::uint16_t channel,
-    const NativeAudioBusControls* controls) noexcept {
-    if (controls == nullptr ||
-        channel >= NativeAudioBusControls::kChannelCount) {
-        native_dsp_audio_bus_clear_selection(state);
-        return;
-    }
-    NativeAudioBusRamp& ramp = state.ramps[channel];
-    const NativeAudioBusChannelSnapshot snapshot =
-        controls->snapshot_channel(channel);
-    native_audio_bus_set_ramp_target(ramp, snapshot.gain_q16, snapshot.bus);
-    state.active_channel = channel;
-    state.active_channel_valid = true;
 }
 
 [[nodiscard]] inline std::int16_t native_dsp_audio_bus_apply_sample(

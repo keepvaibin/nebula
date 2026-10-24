@@ -8,7 +8,6 @@
 #include "galaxy/pointer_control.h"
 #include "galaxy/rumble.h"
 #include "galaxy/switch_controller.h"
-#include "galaxy/synthetic_kpad_motion.h"
 #include "galaxy/tilt.h"
 
 #define WIN32_LEAN_AND_MEAN
@@ -1004,84 +1003,6 @@ float ray_turn(const tilt::Vec3& a) {
     return std::clamp(f, -1.5f, 1.5f);
 }
 
-void test_tilt() {
-    using namespace tilt;
-    const auto close_to = [](float a, float b, float eps) { return std::fabs(a - b) <= eps; };
-    // Star Ball: the controller's neutral hold is clacXY's zero.
-    const auto neutral = star_ball_clac_xy(remote_gravity(Section::StarBall, {0.0f, 1.0f, 0.0f}));
-    expect(close_to(neutral[0], 0.0f, 1e-4f) && close_to(neutral[1], 0.0f, 1e-4f), "star ball: the neutral hold rolls nowhere");
-    // Tilt right / forward 15 degrees: half of the range, positive.
-    const auto right = star_ball_clac_xy(remote_gravity(Section::StarBall, up_from_angles(15.0f, 0.0f)));
-    const auto forward = star_ball_clac_xy(remote_gravity(Section::StarBall, up_from_angles(0.0f, 15.0f)));
-    const auto left_back = star_ball_clac_xy(remote_gravity(Section::StarBall, up_from_angles(-15.0f, -15.0f)));
-    expect(close_to(right[0], 0.5f, 0.02f) && close_to(right[1], 0.0f, 0.02f), "star ball: 15 degrees right is X +0.5");
-    expect(close_to(forward[1], 0.5f, 0.02f) && close_to(forward[0], 0.0f, 0.02f), "star ball: 15 degrees forward is Y +0.5");
-    expect(left_back[0] < -0.4f && left_back[1] < -0.4f, "star ball: left and back are negative");
-    // The tutorial's raise check: within 30 degrees of (0,-1,0).
-    const Vec3 held = remote_gravity(Section::StarBall, {0.0f, 1.0f, 0.0f});
-    expect(-held[1] > std::cos(30.0f * 3.14159265f / 180.0f), "star ball: the neutral passes the raise check");
-    // A neutral captured in the player's own hold (30 degrees toward the
-    // face) is zero; 15 degrees more forward is +0.5.
-    const Vec3 hold = up_from_angles(0.0f, -30.0f);
-    const auto from_hold = star_ball_clac_xy(remote_gravity(Section::StarBall, relative_up(hold, hold)));
-    const auto more = star_ball_clac_xy(remote_gravity(Section::StarBall, relative_up(up_from_angles(0.0f, -15.0f), hold)));
-    expect(close_to(from_hold[0], 0.0f, 1e-3f) && close_to(from_hold[1], 0.0f, 1e-3f), "star ball: the captured hold is neutral");
-    expect(close_to(more[1], 0.5f, 0.03f), "star ball: tilt is measured from the captured hold");
-    // Stick: full deflection is the full range.
-    const auto stick_right = star_ball_clac_xy(remote_gravity(Section::StarBall, up_from_stick(Section::StarBall, 1.0f, 0.0f)));
-    const auto stick_down = star_ball_clac_xy(remote_gravity(Section::StarBall, up_from_stick(Section::StarBall, 0.0f, -1.0f)));
-    expect(close_to(stick_right[0], 1.0f, 0.02f) && close_to(stick_right[1], 0.0f, 0.02f),
-           "star ball: stick right is full right");
-    expect(close_to(stick_down[1], -1.0f, 0.02f) && close_to(stick_down[0], 0.0f, 0.02f),
-           "star ball: stick down is full back");
-    // Ray: flat neutral does not turn; a twist right turns positive, left
-    // negative, proportionally.
-    expect(ray_turn(remote_gravity(Section::Ray, {0.0f, 1.0f, 0.0f})) == 0.0f, "ray: the neutral hold does not turn");
-    const float twist = ray_turn(remote_gravity(Section::Ray, up_from_angles(20.0f, 0.0f)));
-    expect(close_to(twist, std::sin(20.0f * 3.14159265f / 180.0f), 0.01f), "ray: a 20-degree twist right turns +sin 20");
-    expect(ray_turn(remote_gravity(Section::Ray, up_from_angles(-20.0f, 0.0f))) < -0.3f, "ray: a twist left turns negative");
-    expect(close_to(ray_turn(remote_gravity(Section::Ray, up_from_stick(Section::Ray, 1.0f, 0.0f))),
-                std::sin(kRayStickDegrees * 3.14159265f / 180.0f), 0.01f),
-           "ray: full stick is a 50-degree twist");
-    // Counts: flat is the rest reading; a round trip through the KPAD
-    // conversion gives the game vector back.
-    const Counts rest = accel_counts({0.0f, 0.0f, 1.0f});
-    expect(rest.x == kWiimoteRestAccelX && rest.y == kWiimoteRestAccelY && rest.z == kWiimoteRestAccelZ,
-           "the flat remote is the rest reading");
-    const Vec3 g = remote_gravity(Section::StarBall, up_from_angles(12.0f, 7.0f));
-    const Counts c = accel_counts(g);
-    SyntheticKpadMotionState motion_state{};
-    const auto kpad = sample_synthetic_kpad_motion(Axis10{c.x, c.y, c.z}, motion_state);
-    expect(close_to(-kpad.acceleration[0], g[0], 0.01f) && close_to(kpad.acceleration[2], g[1], 0.01f) &&
-               close_to(-kpad.acceleration[1], g[2], 0.01f),
-           "counts survive the KPAD conversion (game vector = -x, z, -y)");
-    // State: inactive outside sections; the neutral is captured at the start
-    // and again on recenter; a motion controller steers by tilt only, a
-    // controller without motion by the stick.
-    Tilt t{};
-    expect(!t.update(Section::None, nullptr, 0.0f, 0.0f, false).active, "no section: no tilt");
-    const Vec3 start = up_from_angles(5.0f, -20.0f);
-    auto out = t.update(Section::StarBall, &start, 0.0f, 0.0f, false);
-    auto xy = star_ball_clac_xy(out.game);
-    expect(out.active && !out.from_stick && close_to(xy[0], 0.0f, 1e-3f) && close_to(xy[1], 0.0f, 1e-3f),
-           "section start captures the hold as neutral");
-    const Vec3 tilted = up_from_angles(5.0f, -5.0f);
-    xy = star_ball_clac_xy(t.update(Section::StarBall, &tilted, 0.0f, 0.0f, false).game);
-    expect(xy[1] > 0.4f, "tilting forward from the hold rolls forward");
-    xy = star_ball_clac_xy(t.update(Section::StarBall, &tilted, 0.0f, 0.0f, true).game);
-    expect(close_to(xy[1], 0.0f, 1e-3f), "recenter takes the current hold as neutral");
-    out = t.update(Section::StarBall, &tilted, -1.0f, 0.0f, false);
-    xy = star_ball_clac_xy(out.game);
-    expect(!out.from_stick && close_to(xy[0], 0.0f, 1e-3f), "a Pro Controller's stick does not tilt");
-    out = t.update(Section::StarBall, nullptr, -1.0f, 0.0f, false);
-    xy = star_ball_clac_xy(out.game);
-    expect(out.from_stick && xy[0] < -0.9f, "without motion (Xbox, keyboard) the stick steers");
-    out = t.update(Section::StarBall, nullptr, 0.1f, 0.05f, false);
-    xy = star_ball_clac_xy(out.game);
-    expect(close_to(xy[0], 0.0f, 1e-3f) && close_to(xy[1], 0.0f, 1e-3f), "a stick at rest is level");
-    expect(!t.update(Section::None, &tilted, 0.0f, 0.0f, false).active && !t.neutral_valid, "leaving resets the neutral");
-}
-
 void test_recenter_hold() {
     RecenterHold hold{};
     auto out = hold.update(true);
@@ -1560,7 +1481,6 @@ int main(int argc, char** argv) {
     test_recenter_hold();
     test_rumble_encoding();
     test_rumble_gate();
-    test_tilt();
     test_defaults_and_migration();
     test_playstation_and_steam_schemes();
     test_kpad_dots_stable();

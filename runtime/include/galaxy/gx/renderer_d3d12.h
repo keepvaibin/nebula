@@ -67,8 +67,6 @@ struct TextureHandle;
 // runtime-compiled EFB conversion shader cannot ship with HLSL syntax errors.
 [[nodiscard]] bool validate_efb_conversion_shader(
     std::string& diagnostics) noexcept;
-
-
 namespace detail {
 
 // One shared CPU-only conversion RTV. Its contents are the identity being
@@ -109,14 +107,12 @@ inline constexpr DXGI_FORMAT kEfbDepthSrvFormat =
     DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
 inline constexpr DXGI_FORMAT kBackbufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 
-
 // Builds the exact GX graphics root signature used by RendererD3D12. Root
 // CBV b0 is visible to both VS and GS because native GX line/point expansion
 // reads its scale-aware raster constants in the geometry stage.
 [[nodiscard]] HRESULT create_gx_root_signature(
     ID3D12Device* device,
     ID3D12RootSignature** root_signature) noexcept;
-
 
 [[nodiscard]] D3D12_SAMPLER_DESC build_sampler_desc_from_key(
     std::uint32_t key,
@@ -182,7 +178,6 @@ namespace detail {
 create_efb_conversion_source_views(
     ID3D12Device* device, ID3D12Resource* color, ID3D12Resource* depth,
     DescriptorRing& ring);
-
 // Exact color/alpha identity only: rejects filtering, conversion, resampling
 // and any source rectangle that would require shader clamp behavior.
 [[nodiscard]] std::optional<D3D12_BOX> efb_identity_copy_box(
@@ -195,7 +190,6 @@ void record_efb_identity_copy(
     ID3D12Resource* destination, const D3D12_BOX& source_box);
 
 }  // namespace detail
-
 
 class RendererD3D12 final : public UiCanvas {
 public:
@@ -216,7 +210,6 @@ public:
         const TextureHandle* handles, unsigned count, const TextureCache& cache, bool lit_table = false);
     // The texture cache records its uploads into this frame's command list.
     void attach_texture_uploads(TextureCache& cache);
-    void drain_gpu();               // wait while keeping renderer resources alive
     void pump_messages();           // compatibility hook; owner pumps independently
     [[nodiscard]] bool quit_requested() const noexcept;
 
@@ -303,7 +296,6 @@ public:
     [[nodiscard]] float rt_glow_exposure(bool model = false) const noexcept {
         return ray_tracer_.ready() ? ray_tracer_.glow_exposure(model) : 1.0f;
     }
-    [[nodiscard]] float rt_glow_spill(bool model) const noexcept { return ray_tracer_.glow_spill(model); }
     // The last traced scene's lighting as a texture for lit translucents (texture 7).
     [[nodiscard]] bool rt_light_texture_ready() const noexcept {
         return ray_tracer_.ready() && ray_tracer_.light_texture_ready();
@@ -375,7 +367,6 @@ public:
     // swaps) are logged. The completed log is replayed by the sub-frames of
     // its sequence (begin_replay_sequence, present_replay_subframe).
     void begin_replay_record();
-    void end_replay_record(bool keep);
     [[nodiscard]] bool replay_recording() const noexcept { return replay_recording_; }
     [[nodiscard]] bool replay_available() const noexcept { return replay_valid_; }
     // Moves the completed log to playback (sub-frames then replay it); false
@@ -596,8 +587,6 @@ public:
     // readback could not be mapped; the span overload converts instead).
     [[nodiscard]] bool try_complete_pointer_depth_capture_in_place(
         const std::uint8_t*& rgba);
-    [[nodiscard]] bool try_complete_pointer_depth_capture(
-        std::span<std::uint32_t> pixels);
     // Render-owner only. Asynchronous 640x528 EFB fields (depth for GXPeekZ,
     // color for GXPeekARGB) for the simulation thread, one per channel
     // (GxBackend binds a channel to a peek kind and draw-sync token), each on
@@ -655,10 +644,6 @@ public:
     [[nodiscard]] std::uint8_t efb_variant() const noexcept {
         return static_cast<std::uint8_t>(efb_samples_log2() | (efb_hdr_ ? kEfbVariantHdr : 0u));
     }
-    [[nodiscard]] bool efb_hdr() const noexcept { return efb_hdr_; }
-    [[nodiscard]] ID3D12GraphicsCommandList* command_list() const {
-        return command_list_.Get();
-    }
     [[nodiscard]] ID3D12RootSignature* root_signature() const {
         return root_signature_.Get();
     }
@@ -669,7 +654,6 @@ public:
     [[nodiscard]] UploadRing& index_ring() { return index_ring_; }
     [[nodiscard]] UploadRing& constant_ring() { return constant_ring_; }
     [[nodiscard]] UploadRing& matrix_ring() { return matrix_ring_; }
-    [[nodiscard]] DescriptorRing& srv_ring() { return srv_ring_; }
     [[nodiscard]] unsigned frame_slot() const { return frame_slot_; }
     // Live bytes held by the EFB-copy destination cache, in SCALED bytes (each
     // destination is allocated at the internal EFB extent, so its `bytes` grows with

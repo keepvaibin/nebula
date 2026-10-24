@@ -509,30 +509,6 @@ bool append_cached_packet_indices(
 }
 
 // ---------------------------------------------------------------------------
-// swap16_block: byte-swap `count` big-endian 16-bit values from `src` into
-// `dst`, 8 values (16 bytes) per vector.
-// ---------------------------------------------------------------------------
-void swap16_block(
-    const std::byte* src,
-    std::uint16_t* dst,
-    std::size_t count) {
-    const std::byte* in  = src;
-    std::uint8_t*    out = reinterpret_cast<std::uint8_t*>(dst);
-
-    std::size_t i = 0;
-    for (; i + 8 <= count; i += 8, in += 16, out += 16) {
-        simd::store(out, simd::byteswap16(simd::load(in)));
-    }
-    // Scalar tail.
-    for (; i < count; ++i) {
-        const auto hi = static_cast<std::uint8_t>(in[0]);
-        const auto lo = static_cast<std::uint8_t>(in[1]);
-        dst[i] = static_cast<std::uint16_t>((static_cast<std::uint16_t>(hi) << 8) | lo);
-        in += 2;
-    }
-}
-
-// ---------------------------------------------------------------------------
 // The arrays LOAD_INDX reads (matrices, lights) are what the CPU computes: big-endian from the console's CPU, in host
 // order from the native game (set_indexed_load_host_order), where data from files stays big-endian.
 std::atomic<bool> g_indexed_load_host_order{false};
@@ -631,9 +607,9 @@ void FifoParser::write_dump(
 // calls. Mutable and uncertified views retain first-containing-region lookup.
 struct FifoParser::FrozenRegionScope {
     FifoParser& parser;
-    const GuestMemoryV1* previous;
+    const GuestMemory* previous;
 
-    FrozenRegionScope(FifoParser& owner, GuestMemoryV1* memory, bool frozen)
+    FrozenRegionScope(FifoParser& owner, GuestMemory* memory, bool frozen)
         : parser(owner), previous(owner.frozen_sorted_memory_) {
         parser.frozen_sorted_memory_ =
             frozen && memory != nullptr && memory->regions != nullptr &&
@@ -651,7 +627,7 @@ struct FifoParser::FrozenRegionScope {
 // Throws GxFatalError (with the current cursor position) if unmapped.
 // ---------------------------------------------------------------------------
 std::span<const std::byte> FifoParser::resolve_guest(
-    GuestMemoryV1* memory,
+    GuestMemory* memory,
     std::uint32_t guest_addr,
     std::uint32_t size,
     const FifoCursor& at) const {
@@ -674,7 +650,7 @@ std::span<const std::byte> FifoParser::resolve_guest(
             const std::uint64_t req_end =
                 static_cast<std::uint64_t>(guest_addr) + size;
             for (std::uint32_t ri = 0; ri < memory->region_count; ++ri) {
-                const GuestMemoryRegionV1& r = memory->regions[ri];
+                const GuestMemoryRegion& r = memory->regions[ri];
                 const std::uint64_t reg_end =
                     static_cast<std::uint64_t>(r.guest_base) + r.size;
                 if (guest_addr >= r.guest_base && req_end <= reg_end &&
@@ -708,7 +684,7 @@ std::span<const std::byte> FifoParser::resolve_guest(
 // ---------------------------------------------------------------------------
 void FifoParser::run(
     std::span<const std::byte> fifo,
-    GuestMemoryV1* memory,
+    GuestMemory* memory,
     FifoSink& sink,
     GxState& state,
     bool frozen_regions) {
@@ -729,10 +705,9 @@ void FifoParser::run(
         throw;
     }
 }
-
 std::size_t FifoParser::run_available(
     std::span<const std::byte> fifo,
-    GuestMemoryV1* memory,
+    GuestMemory* memory,
     FifoSink& sink,
     GxState& state,
     bool frozen_regions) {
@@ -1053,20 +1028,6 @@ void FifoParser::evict_display_list_cache_to_budget(std::size_t skip_index) {
         // Unlink replay eligibility and release the charged allocations together.
         release_entry(victim);
     }
-}
-
-void FifoParser::clear_display_list_cache() {
-    for (std::size_t index = 0; index < display_list_cache_.size(); ++index) {
-        invalidate_display_list_cache_index(index);
-        display_list_cache_[index] = CachedDisplayList{};
-    }
-    display_list_cache_map_.clear();
-    display_list_cache_page_map_.clear();
-    display_list_free_slots_.clear();
-    display_list_next_unused_ = 0;
-    display_list_victim_cursor_ = 0;
-    cache_bytes_ = 0u;
-    last_display_list_cache_index_ = static_cast<std::size_t>(-1);
 }
 
 void FifoParser::store_cached_display_list(
@@ -1446,7 +1407,7 @@ bool FifoParser::replay_event_free_display_list(
 
 void FifoParser::replay_cached_display_list(
     const CachedDisplayList& cached,
-    GuestMemoryV1* memory,
+    GuestMemory* memory,
     FifoSink& sink,
     GxState& state,
     std::size_t opcode_offset) const {
@@ -1867,7 +1828,7 @@ static bool top_level_command_complete(
 
 void FifoParser::run_window(
     FifoCursor& cursor,
-    GuestMemoryV1* memory,
+    GuestMemory* memory,
     FifoSink& sink,
     GxState& state,
     int depth,

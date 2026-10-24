@@ -122,7 +122,6 @@ std::vector<MiiRecord> read_miis(std::span<const std::byte> bytes, std::string* 
     if (error != nullptr) *error = contents.error;
     return std::move(contents.miis);
 }
-
 MiiMergeResult merge_miis(std::vector<std::byte>& database, std::span<const MiiRecord> miis, const MiiPreparer& prepare,
                           std::vector<std::pair<unsigned, MiiRecord>>* placed) {
     MiiMergeResult result;

@@ -58,7 +58,7 @@
 #include "galaxy/gx/vs_constants.h"
 #include "galaxy/gx/vertex_loader.h"
 #include "galaxy/gx_d3d12.h"
-#include "galaxy/native_api.h"
+#include "galaxy/guest_memory.h"
 #include "galaxy/frame_telemetry.h"
 
 #include <array>
@@ -86,8 +86,6 @@ struct GuestMemoryRange {
     std::uint32_t size = 0;
 };
 
-class GxBackendMemorySnapshotTestAccess;
-
 // Exact guest-visible PE event identity emitted by the lightweight FIFO preclassifier. It is
 // not a byte-pattern scan. The classifier uses FifoParser, so partial commands, draw payloads,
 // BP masks and CALL_DL recursion have the same command-boundary semantics as the renderer.
@@ -114,7 +112,7 @@ public:
     void classify(
         const std::byte* fifo_data,
         std::size_t fifo_size,
-        GuestMemoryV1* memory,
+        GuestMemory* memory,
         std::vector<FramePeEventSignature>& events,
         bool frozen_regions = false);
     std::size_t invalidate_display_list_cache_range(
@@ -218,9 +216,6 @@ inline constexpr std::uint64_t kMix64Prime = 1099511628211ull;
 class GxBackend final : public FifoSink {
 public:
     GxBackend() = default;
-    GxBackend(const GxBackend&) = delete;
-    GxBackend& operator=(const GxBackend&) = delete;
-    ~GxBackend() noexcept override;
 
     // --- Frozen public surface (mirrors gx_d3d12.h) -------------------------
 
@@ -229,27 +224,17 @@ public:
     [[nodiscard]] FramePeCompletionToken render_frame(
         const std::byte* fifo_data,
         std::size_t fifo_size,
-        GuestMemoryV1* memory,
-        const NativeServicesV1* services,
+        GuestMemory* memory,
+        const GxServices* services,
         bool present_swap_chain = true,
         std::uint32_t displayed_xfb_addr = 0);
     void present_cached_xfb(
         std::uint32_t displayed_xfb_addr,
         bool present_swap_chain = true);
     void wait_for_render_idle();
-    void wait_for_render_fifo_effects_idle();
-    void wait_for_frame_pe_completion(FramePeCompletionToken token);
     [[nodiscard]] bool wait_for_frame_pe_completion_for(
         FramePeCompletionToken token,
         std::uint32_t timeout_ms);
-    [[nodiscard]] bool render_queue_has_space();
-    [[nodiscard]] bool capture_pointer_depth(std::span<std::uint32_t> pixels);
-    [[nodiscard]] bool enqueue_pointer_depth_capture(const std::shared_ptr<PointerDepthCapture>& capture);
-    // Simulation thread: the next render_frame submission records this pointer depth field when its
-    // parser reaches `fifo_offset` bytes into the submitted FIFO (the offset of the current gather
-    // tail at the scene boundary). The render thread owns the capture until it publishes.
-    void attach_pointer_depth_capture(
-        const std::shared_ptr<PointerDepthCapture>& capture, std::size_t fifo_offset);
     // Scene boundaries one render chunk carries (3D and 2D, two frames).
     static constexpr std::size_t kFifoMarkersPerChunk = 8u;
     // A stage name as the game reports it (MR::getCurrentStageName), NUL-terminated.
@@ -282,19 +267,6 @@ public:
     [[nodiscard]] bool draw_identity_wanted() const noexcept {
         return draw_identity_wanted_.load(std::memory_order_relaxed);
     }
-    // Render thread: where GameScene image effects begin in the open (or
-    // last) 3D scene (SceneFunction::executeDrawImageEffect marker): the
-    // transform-record index and the byte offset in the chunk's FIFO; -1
-    // before the marker. The split point for an upscaler or HUD-less colour.
-    [[nodiscard]] std::int64_t scene_image_effect_record() const noexcept { return scene_image_effect_record_; }
-    [[nodiscard]] std::int64_t scene_image_effect_offset() const noexcept { return scene_image_effect_offset_; }
-    // Render thread: the 2D layer (GameScene::draw2D, FifoMarker::Scene2DBegin
-    // and Scene2DEnd) in the chunk's FIFO: byte offsets of its entry and of its
-    // epilogue (-1 until the marker), and whether the parser is inside it.
-    // Layout identity markers (kinds 9-11, galaxy/motion_signals.h) follow.
-    [[nodiscard]] std::int64_t scene_2d_begin_offset() const noexcept { return scene_2d_begin_offset_; }
-    [[nodiscard]] std::int64_t scene_2d_end_offset() const noexcept { return scene_2d_end_offset_; }
-    [[nodiscard]] bool scene_2d_open() const noexcept { return scene_2d_open_; }
     // Simulation thread: the game camera for the next SceneBegin marker, the player's up in the world
     // (null when unknown), kept in that camera's eye space for the enhanced sky, and the stage being
     // played (null: unknown, an empty name in the marker).
@@ -327,7 +299,6 @@ public:
     void attach_stripe_particle(const StripeParticleMark& mark) {
         if (producer_stripe_particles_.size() < 65536u) producer_stripe_particles_.push_back(mark);
     }
-    void set_prerecorded_movie_content(bool movie) noexcept { producer_movie_content_=movie; }
     // Simulation thread: the movie frame later submissions carry (movie_replacement.h).
     void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, std::uint32_t y, std::uint32_t u,
                             std::uint32_t v, std::uint32_t width, std::uint32_t height) noexcept {
@@ -349,12 +320,6 @@ public:
         mark.height = static_cast<std::uint16_t>(height);
     }
     void set_safety_scene_surround(float intensity) noexcept { producer_safety_surround_=intensity; }
-    void set_pointer_response(PointerResponseStamp stamp) noexcept {
-        if (stamp.generation==producer_pointer_response_.generation &&
-            stamp.x_bits==producer_pointer_response_.x_bits &&
-            stamp.y_bits==producer_pointer_response_.y_bits) return;
-        producer_pointer_response_=stamp;
-    }
     [[nodiscard]] bool peek_efb(
         std::uint16_t x,
         std::uint16_t y,
@@ -375,21 +340,15 @@ public:
     void scan_pe_events_on_sim_thread(
         const std::byte* fifo_data,
         std::size_t fifo_size,
-        GuestMemoryV1* memory,
-        const NativeServicesV1* services);
-    void install_guest_dirty_tracker(GuestMemoryV1* memory) noexcept;
+        GuestMemory* memory,
+        const GxServices* services);
     void notify_guest_memory_write(
         std::uint32_t address,
         std::uint32_t size) noexcept;
     void pump_messages();
     [[nodiscard]] bool quit_requested() const noexcept;
-    void shutdown();
     [[nodiscard]] std::uint64_t xfb_copy_count() const noexcept;
-    [[nodiscard]] std::uint64_t xfb_causal_trace_frame_index() const noexcept;
     [[nodiscard]] XfbPresentStats xfb_present_stats() const noexcept;
-    [[nodiscard]] XfbMeasurementCadenceStats
-    xfb_measurement_cadence_stats() const noexcept;
-    void reset_xfb_measurement_window_stats() noexcept;
 
     struct DependencyDrawRunRangeCacheKey {
         std::uint64_t cache_token = 0;
@@ -564,8 +523,8 @@ private:
     };
 
     struct MemorySnapshot {
-        GuestMemoryV1 memory{};
-        std::vector<GuestMemoryRegionV1> regions;
+        GuestMemory memory{};
+        std::vector<GuestMemoryRegion> regions;
         std::vector<MemorySnapshotStorage> storage;
         // Rebuilt lazily for this capture only. Entries are slot indices, so
         // storage-vector growth and queue moves cannot leave dangling keys.
@@ -626,8 +585,8 @@ private:
         std::vector<GuestMemoryRange> memory_ranges;
         std::vector<PeEvent> pe_events;
         std::vector<FramePeEventSignature> preclassified_pe_events;
-        GuestMemoryV1* memory = nullptr;
-        const NativeServicesV1* services = nullptr;
+        GuestMemory* memory = nullptr;
+        const GxServices* services = nullptr;
         FramePeCompletionToken pe_completion_token{};
         // Shared with the blocked producer until the worker has classified
         // sealed memory and issued the exact receipt. queue_mutex_ publishes
@@ -689,7 +648,7 @@ private:
         std::uint64_t fence_value = 0;
         std::uint64_t diagnostic_fence_bound_ns = 0;
         std::uint64_t diagnostic_fence_observed_ns = 0;
-        const NativeServicesV1* services = nullptr;
+        const GxServices* services = nullptr;
         std::vector<PeEvent> pe_events;
     };
 
@@ -727,7 +686,7 @@ private:
         std::uint64_t fence_value);
     void poll_completed_frame_effects();
     static void deliver_pe_event(
-        const NativeServicesV1* services,
+        const GxServices* services,
         const PeEvent& event);
     void present_cached_xfb_on_thread(
         std::uint32_t displayed_xfb_addr,
@@ -1385,9 +1344,6 @@ private:
     void report_frame_tail_window() noexcept;
     static void record_monotonic_cadence_sample(
         MonotonicCadenceAccumulator& accumulator) noexcept;
-    [[nodiscard]] static XfbMonotonicCadenceStats
-    snapshot_monotonic_cadence(
-        const MonotonicCadenceAccumulator& accumulator) noexcept;
     static void reset_monotonic_cadence(
         MonotonicCadenceAccumulator& accumulator) noexcept;
     static MemorySnapshotStorage* snapshot_storage_for(
@@ -1398,7 +1354,7 @@ private:
     static std::uint64_t memory_snapshot_used_bytes(
         const MemorySnapshot& snapshot) noexcept;
     void capture_memory_snapshot(
-        GuestMemoryV1* source,
+        GuestMemory* source,
         MemorySnapshot& snapshot,
         const std::vector<GuestMemoryRange>& ranges,
         bool strict_ranges,
@@ -1422,7 +1378,7 @@ private:
     void collect_memory_dependency_ranges(
         const std::byte* fifo_data,
         std::size_t fifo_size,
-        GuestMemoryV1* memory,
+        GuestMemory* memory,
         std::vector<GuestMemoryRange>& out,
         bool& cache_hit);
     void invalidate_dependency_range_cache(
@@ -1452,10 +1408,10 @@ private:
     std::vector<std::byte> dependency_pending_fifo_;
 
     // Valid only inside render_frame_on_thread (parser callbacks need them).
-    GuestMemoryV1* frame_memory_ = nullptr;
+    GuestMemory* frame_memory_ = nullptr;
     bool frame_memory_regions_disjoint_sorted_ = false;
     DependencyEventSink* frame_dependency_event_sink_ = nullptr;
-    const NativeServicesV1* frame_services_ = nullptr;
+    const GxServices* frame_services_ = nullptr;
     std::vector<PeEvent>* frame_pe_events_ = nullptr;
     bool frame_pe_callbacks_enabled_ = true;
 
@@ -1596,8 +1552,6 @@ private:
     };
     std::array<DependencyRangeCacheEntry, 64> dependency_range_cache_{};
     std::uint64_t dependency_range_cache_tick_ = 0;
-    static constexpr std::size_t kDependencyDrawRunRangeCacheMaxBytes =
-        8u * 1024u * 1024u;
     std::unordered_map<
         DependencyDrawRunRangeCacheKey,
         DependencyDrawRunRangeCacheEntry,
@@ -1701,7 +1655,7 @@ private:
     // each merged range. `captured_bytes` is the merged byte count, which is
     // what the budget bounds. On failure `snapshots` is empty.
     [[nodiscard]] static bool capture_decoded_packet_run_dependencies(
-        GuestMemoryV1* memory,
+        GuestMemory* memory,
         const std::vector<VertexDecodeGuestRange>& dependencies,
         std::size_t byte_budget,
         DecodedPacketRunCacheEntry::GuestDependencySnapshots& snapshots,
@@ -1713,7 +1667,7 @@ private:
     // guest write batch and the byte compare is skipped. `new_generation`
     // receives the non-zero generation the caller may record on success.
     [[nodiscard]] static bool decoded_packet_run_dependencies_match(
-        GuestMemoryV1* memory,
+        GuestMemory* memory,
         std::uint64_t entry_generation,
         std::uint64_t current_generation,
         const DecodedPacketRunCacheEntry::GuestDependencySnapshots& snapshots,
@@ -2373,8 +2327,6 @@ private:
     std::atomic<std::uint64_t>
         stat_xfb_highest_first_presented_copy_serial_{0};
 
-    void emit_deferred_gx_stats();
-    void emit_deferred_xfb_causal_trace();
 };
 
 }  // namespace galaxy::gx

@@ -28,35 +28,4 @@ private:
     Cleanup cleanup_;
 };
 
-// Runs the noexcept cleanup only if the callback throws; a failure after the
-// callback returns does not roll it back. The exception still propagates.
-template <typename Callback, typename Cleanup>
-void run_with_exception_cleanup(Callback&& callback, Cleanup cleanup) {
-    static_assert(std::is_nothrow_invocable_v<Cleanup&>);
-    bool completed = false;
-    const ScopeExit scope([&]() noexcept {
-        if (!completed) cleanup();
-    });
-    std::forward<Callback>(callback)();
-    completed = true;
-}
-
-// Omit the handler only when every failure postlude is empty. C++ unwinding and
-// destructors still run. A present handler keeps catch/rethrow semantics and
-// may replace the exception.
-template <typename Callback, typename Handler>
-void run_with_optional_exception_handler(
-    bool required, Callback&& callback, Handler&& handler) {
-    if (!required) {
-        std::forward<Callback>(callback)();
-        return;
-    }
-    try {
-        std::forward<Callback>(callback)();
-    } catch (...) {
-        std::forward<Handler>(handler)();
-        throw;
-    }
-}
-
 }  // namespace galaxy

@@ -32,7 +32,6 @@ struct PointerOwner {
 };
 
 [[nodiscard]] const char* pointer_source_name(PointerSource source) noexcept;
-
 // Radial dead zone with the live range rescaled to 0..1 (XInput's guidance for
 // thumbsticks: per-axis dead zones snap the pointer to the axes).
 struct StickVector {
@@ -68,8 +67,8 @@ inline constexpr float kPointerVisibleLimit = 1.02f;
 // gyro sensitivity 1) is larger than hand tremor (about 0.025 units).
 inline constexpr float kPointerHideFilterSeconds = 0.1f;
 inline constexpr float kDefaultPointerHideRadius = 0.12f;
-inline constexpr float kDefaultPointerHideSeconds = 4.0f;
 
+inline constexpr float kDefaultPointerHideSeconds = 4.0f;
 struct PointerRestHide {
     bool hidden = false;
     bool anchored = false;

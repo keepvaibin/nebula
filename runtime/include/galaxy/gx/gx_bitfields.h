@@ -88,16 +88,12 @@ inline constexpr std::uint8_t kBusClock1 = 0x69;
 inline constexpr std::uint8_t kTexMode0Base = 0x80;     // wrap/filter/lod bias
 inline constexpr std::uint8_t kTexMode1Base = 0x84;     // min/max lod
 inline constexpr std::uint8_t kTexImage0Base = 0x88;    // width/height/format
-inline constexpr std::uint8_t kTexImage1Base = 0x8C;    // TMEM even (ignored)
-inline constexpr std::uint8_t kTexImage2Base = 0x90;    // TMEM odd (ignored)
 inline constexpr std::uint8_t kTexImage3Base = 0x94;    // physical addr >> 5
 inline constexpr std::uint8_t kTexTlutBase = 0x98;      // TLUT ref
 inline constexpr std::uint8_t kTexHighBankOffset = 0x20;  // maps 4-7
 inline constexpr std::uint8_t kTevColorEnvBase = 0xC0;  // even regs, 16 stages
 inline constexpr std::uint8_t kTevAlphaEnvBase = 0xC1;  // odd regs, 16 stages
 inline constexpr std::uint8_t kTevRegisterBase = 0xE0;  // 0xE0-0xE7 RA/BG pairs
-inline constexpr std::uint8_t kFogRangeBase = 0xE8;     // 0xE8-0xED
-inline constexpr std::uint8_t kFogRangeCount = 6;
 inline constexpr std::uint8_t kFogParam0 = 0xEE;
 inline constexpr std::uint8_t kFogParam1 = 0xEF;
 inline constexpr std::uint8_t kFogParam2 = 0xF0;
@@ -184,7 +180,6 @@ enum class TevAlphaArg : std::uint8_t {
 enum class TevBias : std::uint8_t { Zero = 0, AddHalf, SubHalf, Compare };
 enum class TevScale : std::uint8_t { X1 = 0, X2, X4, Half };
 enum class TevCompareKind : std::uint8_t { R8 = 0, GR16, BGR24, RGB8 };
-enum class TevCompareOp : std::uint8_t { Gt = 0, Eq };
 
 enum class CompareFunc : std::uint8_t {
     Never = 0, Less, Equal, LEqual, Greater, NEqual, GEqual, Always,
@@ -369,16 +364,6 @@ struct TevStageConfig {
     std::uint8_t kcsel;
     std::uint8_t kasel;
 
-    [[nodiscard]] constexpr bool color_is_compare() const {
-        return color_bias == TevBias::Compare;
-    }
-    [[nodiscard]] constexpr TevCompareKind color_compare_kind() const {
-        return static_cast<TevCompareKind>(
-            static_cast<std::uint8_t>(color_scale));
-    }
-    [[nodiscard]] constexpr TevCompareOp color_compare_op() const {
-        return color_sub ? TevCompareOp::Eq : TevCompareOp::Gt;
-    }
 };
 
 [[nodiscard]] constexpr TevStageConfig assemble_tev_stage(
@@ -709,12 +694,6 @@ struct EfbCopyParams {
         0u,
     };
 }
-
-// XF 0x1020-0x1026: six coefficients plus type word (0=perspective, 1=ortho).
-struct Projection {
-    float coeffs[6];
-    bool orthographic;
-};
 
 struct XfTexGen {
     bool generate_stq;              // false = ST output

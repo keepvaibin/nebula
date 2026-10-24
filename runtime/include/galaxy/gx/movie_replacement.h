@@ -30,7 +30,6 @@ namespace galaxy::gx {
 // The movie frame a submission draws (the game's THPGXYuv2RgbDraw), carried with it to the render thread.
 struct MovieFrameMark {
     static constexpr std::int32_t kNone = -1;     // no movie in this submission
-    static constexpr std::int32_t kOpening = -2;  // the movie is opening: decoding may start
     std::array<char, 64> name{};  // the disc path, e.g. /MovieData/PrologueA.thp
     std::int32_t frame = kNone;
     float frame_rate = 0.0f;

@@ -20,7 +20,7 @@ struct Info {
 // True when `id` is in the catalogue and was not unlocked yet; it is then saved as unlocked.
 bool unlock(std::string_view id);
 [[nodiscard]] bool unlocked(std::string_view id);
+
 // Tests: the file kept (achievements.ini in the settings folder when empty) and the cache dropped.
 void set_path_for_tests(const std::filesystem::path& path);
-
 }  // namespace galaxy::achievements

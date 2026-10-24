@@ -61,23 +61,12 @@ public:
         return immutable_upload_calls_;
     }
 
-    // Peak bytes used within a single frame segment, and the segment size. These show
-    // whether the ring's configured size is resident memory or only reserved address
-    // space. The rings are upload buffers (D3D12_HEAP_TYPE_UPLOAD, host-visible Vulkan memory) mapped for the life
-    // of the process, so the reservation is bytes_per_frame * frames_in_flight (240 MiB
-    // by default). Physical pages are committed only for the parts that were written,
-    // so the physical cost tracks the peak cursor rather than the reservation. Exhaustion
-    // is fatal, so the floor for any reduction is peak_bytes_per_frame().
-    [[nodiscard]] std::size_t peak_bytes_per_frame() const {
-        return peak_bytes_per_frame_;
-    }
     // The peak since the last call (diagnostics windows).
     [[nodiscard]] std::size_t take_peak_bytes_per_frame() noexcept {
         const std::size_t peak = peak_bytes_per_frame_;
         peak_bytes_per_frame_ = 0u;
         return peak;
     }
-    [[nodiscard]] std::size_t bytes_per_frame() const { return bytes_per_frame_; }
     [[nodiscard]] std::size_t total_bytes() const { return bytes_per_frame_ * frames_in_flight_; }
     // CPU view of a GPU address inside this ring; null outside it.
     [[nodiscard]] const std::byte* cpu_at(gpu::Address va) const {

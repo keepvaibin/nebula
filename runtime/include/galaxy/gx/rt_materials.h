@@ -156,7 +156,6 @@ class RtStageSunTable {
 public:
     std::size_t read(std::istream& in);
     [[nodiscard]] const RtStageSun* find(std::string_view stage) const noexcept;
-    [[nodiscard]] std::size_t size() const noexcept { return suns_.size(); }
 
 private:
     std::unordered_map<std::string, RtStageSun> suns_;

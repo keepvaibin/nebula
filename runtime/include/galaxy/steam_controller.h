@@ -37,7 +37,6 @@ inline constexpr unsigned kPuckLastInterface = 5;
 // Input report ids (byte 0). 0x42 (USB) carries a quaternion after the sensors;
 // 0x45 (Bluetooth) and 0x47 (16-bit sensor clock) do not.
 inline constexpr std::uint8_t kReportStateUsb = 0x42;
-inline constexpr std::uint8_t kReportBattery = 0x43;
 inline constexpr std::uint8_t kReportStateBle = 0x45;
 inline constexpr std::uint8_t kReportWirelessStatusX = 0x46;
 inline constexpr std::uint8_t kReportStateShortClock = 0x47;

@@ -53,8 +53,6 @@ public:
     [[nodiscard]] bool has_upload_list() const noexcept { return upload_list_ != nullptr; }
     [[nodiscard]] PlacedTextureAllocator::Stats heap_stats() const { return texture_heap_.stats(); }
 
-    // The renderer stages these CPU views into its frame tables.
-    [[nodiscard]] ID3D12DescriptorHeap* srv_heap() const noexcept { return srv_heap_.Get(); }
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE srv_cpu_base() const noexcept { return srv_cpu_base_; }
     [[nodiscard]] UINT srv_descriptor_stride() const noexcept { return srv_stride_; }
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE null_srv() const noexcept { return null_srv_; }

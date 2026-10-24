@@ -46,7 +46,6 @@ const char* pointer_source_name(PointerSource source) noexcept {
     }
     return "none";
 }
-
 StickVector apply_radial_deadzone(float x, float y, float deadzone) noexcept {
     if (!std::isfinite(x) || !std::isfinite(y)) {
         return {};

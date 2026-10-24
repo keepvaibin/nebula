@@ -98,7 +98,6 @@ void set_frame_generation(unsigned generated, bool dynamic = false, float target
 // Frames the display showed per present, as Streamline last reported (1
 // without frame generation); its status bits (sl::DLSSGStatus, 0 ok).
 [[nodiscard]] unsigned frames_presented() noexcept;
-[[nodiscard]] unsigned frame_generation_status() noexcept;
 
 }  // namespace streamline
 

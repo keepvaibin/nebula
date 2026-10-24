@@ -8,55 +8,6 @@
 namespace galaxy::gx {
 
 inline constexpr std::uint32_t kFramePeCompletionTimeoutMs = 30'000u;
-// Runtime waits are cooperative: one short native wait, then an AI/input deadline service
-// pass. First-use pipeline builds on a valid scene can take several seconds, so the simulation
-// owner allows the same completion budget as the backend rather than aborting a frame that is
-// still progressing. Slices stay short. A wedged renderer still fails at the absolute backend
-// deadline without replacing the owned result.
-inline constexpr std::uint32_t kFramePeCooperativeWaitSliceMs = 1u;
-inline constexpr std::uint32_t kFramePeCooperativeWaitTimeoutMs =
-    kFramePeCompletionTimeoutMs;
-
-struct FramePeCooperativeWaitStep {
-    std::uint32_t wait_ms = 0;
-    bool timed_out = false;
-};
-
-// Pure policy helper for the cooperative wait loop. Tests inject elapsed time directly, which
-// keeps boundary and overflow behaviour deterministic.
-[[nodiscard]] FramePeCooperativeWaitStep frame_pe_cooperative_wait_step(
-    std::uint64_t elapsed_ms,
-    std::uint32_t timeout_ms = kFramePeCooperativeWaitTimeoutMs,
-    std::uint32_t slice_ms = kFramePeCooperativeWaitSliceMs);
-
-// One cooperative PE-wait service slice. The native DSP MRAM rendezvous runs first: its worker
-// is blocked until the CPU-owned guest-memory span is committed. AI then advances without a
-// guest context. The PE wait already owns an undelivered VI edge, and a nested guest interrupt
-// handler here could abandon that frame's completion token.
-//
-// Header-only, so the production ordering can be tested with the real DSP transaction boundary
-// without exposing RuntimeState.
-template <
-    typename ServiceNativeDspWake,
-    typename ThrowIfNativeAudioFailed,
-    typename ServiceAiDma,
-    typename ServiceNativeInput,
-    typename HasPendingAiDeadline>
-void service_frame_pe_realtime_device_slice(
-    ServiceNativeDspWake&& service_native_dsp_wake,
-    ThrowIfNativeAudioFailed&& throw_if_native_audio_failed,
-    ServiceAiDma&& service_ai_dma,
-    ServiceNativeInput&& service_native_input,
-    HasPendingAiDeadline&& has_pending_ai_deadline) {
-    service_native_dsp_wake();
-    throw_if_native_audio_failed();
-    service_ai_dma(nullptr);
-    service_native_input();
-    if (has_pending_ai_deadline()) {
-        service_ai_dma(nullptr);
-    }
-    throw_if_native_audio_failed();
-}
 
 // Monotonic identity for one non-empty GX FIFO capture, owned by the simulation thread. An
 // event-free receipt, preclassified, is ready without a render wait. A PE-bearing token is

@@ -27,7 +27,6 @@ struct Config {
 
     friend bool operator==(const Config&, const Config&) = default;
 };
-[[nodiscard]] Config parse_config(std::span<const std::uint8_t, 7> bytes) noexcept;
 
 // Yamaha ADPCM exactly as the game's encoder (WENCGetEncodeData) tracks it: a nibble is a sign bit and magnitude
 // bits L3 L2 L1; the sample moves by step * L3 + step / 2 * L2 + step / 4 * L1 + step / 8, each term truncated, and
@@ -37,33 +36,17 @@ struct AdpcmState {
     std::int32_t predictor = 0;
     std::int32_t step = 127;
 };
-[[nodiscard]] std::int16_t decode_adpcm_nibble(AdpcmState& state, std::uint8_t nibble) noexcept;
 
 class Speaker {
 public:
     static constexpr std::uint32_t kRingSamples = 8192;
     static constexpr std::uint32_t kTaps = 16;
-    static constexpr std::uint32_t kMostSampleRate = 48000;
-
-    // Producer: the thread that handles the remote's output reports. The decoder follows every report while the
-    // speaker is on, as the remote's own does; samples reach the ring only while the output listens.
-    void write_registers(std::uint32_t offset, std::span<const std::uint8_t> data) noexcept;
-    void set_enabled(bool enabled) noexcept;
-    void set_muted(bool muted) noexcept;
-    // The data bytes of one 0x18 report.
-    void receive(std::span<const std::uint8_t> data) noexcept;
-    [[nodiscard]] Config config() const noexcept { return config_; }
 
     // Consumer: one audio thread, called with each output buffer as the game produces it. Adds the speaker, scaled by
     // `gain`, to both channels of interleaved 16-bit little-endian stereo at `output_rate`.
     void mix(std::span<std::byte> stereo_le, std::uint32_t output_rate, float gain) noexcept;
-    // Decoded samples not yet mixed.
-    [[nodiscard]] std::uint32_t buffered() const noexcept {
-        return head_.load(std::memory_order_acquire) - tail_.load(std::memory_order_acquire);
-    }
 
 private:
-    void push(std::span<const float> samples) noexcept;
 
     // Producer state.
     std::array<std::uint8_t, 10> registers_{};

@@ -238,8 +238,21 @@ bool dependency_range_memo_preserves_exact_keys() {
     return next.insert(0u) && !next.insert(0u) && next.insert(UINT64_MAX);
 }
 
-void throw_guest_memory_fault(void*, std::uint32_t, const char* message) {
-    throw std::runtime_error(message);
+// A byte, or a big-endian word, of a snapshot's memory through its regions; 0 outside them.
+std::uint8_t snapshot_u8(const galaxy::GuestMemory* memory, std::uint32_t address) {
+    for (std::uint32_t i = 0; i < memory->region_count; ++i) {
+        const galaxy::GuestMemoryRegion& region = memory->regions[i];
+        if (address >= region.guest_base && address - region.guest_base < region.size) {
+            return std::to_integer<std::uint8_t>(region.host_base[address - region.guest_base]);
+        }
+    }
+    return 0u;
+}
+
+std::uint32_t snapshot_u32(const galaxy::GuestMemory* memory, std::uint32_t address) {
+    return (std::uint32_t{snapshot_u8(memory, address)} << 24) |
+           (std::uint32_t{snapshot_u8(memory, address + 1u)} << 16) |
+           (std::uint32_t{snapshot_u8(memory, address + 2u)} << 8) | snapshot_u8(memory, address + 3u);
 }
 
 }  // namespace
@@ -273,9 +286,9 @@ public:
         for (std::size_t i = 0; i < live.size(); ++i) {
             live[i] = static_cast<std::byte>(i * 7u + 3u);
         }
-        GuestMemoryRegionV1 region{
+        GuestMemoryRegion region{
             kBase, static_cast<std::uint32_t>(live.size()), live.data()};
-        GuestMemoryV1 memory{};
+        GuestMemory memory{};
         memory.regions = &region;
         memory.region_count = 1u;
         // [16,48) [32,64) [64,80) are one span; [100,104) is separate (gap of
@@ -328,7 +341,7 @@ public:
         // merged into one span that reads past the first host buffer.
         std::vector<std::byte> low(64u, std::byte{0x11});
         std::vector<std::byte> high(64u, std::byte{0x22});
-        std::array<GuestMemoryRegionV1, 2> split{{
+        std::array<GuestMemoryRegion, 2> split{{
             {kBase, 64u, low.data()}, {kBase + 64u, 64u, high.data()}}};
         memory.regions = split.data();
         memory.region_count = 2u;
@@ -387,8 +400,8 @@ public:
     static bool sorted_lookup_follows_owned_snapshot() {
         constexpr std::uint32_t base = 0x80000000u;
         std::vector<std::byte> live(4096u, std::byte{0x31});
-        GuestMemoryRegionV1 region{base, static_cast<std::uint32_t>(live.size()), live.data()};
-        GuestMemoryV1 source{};
+        GuestMemoryRegion region{base, static_cast<std::uint32_t>(live.size()), live.data()};
+        GuestMemory source{};
         source.regions = &region; source.region_count = 1u;
         std::vector<GuestMemoryRange> ranges;
         for (std::uint32_t i = 0; i < 64u; ++i) ranges.push_back({base + i*64u, 32u});
@@ -493,7 +506,7 @@ public:
                  MaskCase{bp::kTevAlphaEnvBase, 64u, 64u, 0u, 32u, 64u, 96u},
                  MaskCase{bp::kTevZEnv1, 4u, 0u, 4u, 8u, 0u, 8u}}) {
             auto backend = std::make_unique<GxBackend>();
-            GuestMemoryV1 memory{};
+            GuestMemory memory{};
             GxState first;
             first.load_bp((static_cast<std::uint32_t>(bp::kGenMode) << 24u) | 1u);
             first.load_bp((static_cast<std::uint32_t>(bp::kTevOrderBase) << 24u) | 70u);
@@ -623,13 +636,13 @@ public:
             list.resize((list.size() + 31u) & ~std::size_t{31u},
                         std::byte{op::kNop});
 
-            GuestMemoryRegionV1 region{address,
+            GuestMemoryRegion region{address,
                 static_cast<std::uint32_t>(list.size()), list.data()};
-            GuestMemoryV1 memory{};
+            GuestMemory memory{};
             memory.region_count = 1u;
             memory.regions = &region;
             std::vector<std::uint32_t> events;
-            NativeServicesV1 services{};
+            GxServices services{};
             services.user = &events;
             services.gx_pe_finish = [](void* user) {
                 static_cast<std::vector<std::uint32_t>*>(user)->push_back(0x20000u);
@@ -713,7 +726,7 @@ public:
 
     static bool dependency_cache_rejects_fifo_fingerprint_collision() {
         auto backend = std::make_unique<GxBackend>();
-        GuestMemoryV1 memory{};
+        GuestMemory memory{};
         const GxState initial;
         std::vector<std::byte> first, second;
         append_cp_write(first, cp::kArrayBaseBase, 0x1000u);
@@ -760,7 +773,7 @@ public:
 
     static bool dependency_cache_preserves_pending_bp_masks() {
         auto backend = std::make_unique<GxBackend>();
-        GuestMemoryV1 memory{};
+        GuestMemory memory{};
         GxState initial;
         initial.load_bp(0x64000080u);
         const std::array<std::byte, 1> fifo{std::byte{op::kNop}};
@@ -806,8 +819,8 @@ public:
             std::vector<std::byte> fifo;
             if (nested) append_call_dl(fifo, 0x800u, static_cast<std::uint32_t>(commands.size()));
             else fifo = commands;
-            GuestMemoryRegionV1 region{0x800u, static_cast<std::uint32_t>(commands.size()), commands.data()};
-            GuestMemoryV1 memory{};
+            GuestMemoryRegion region{0x800u, static_cast<std::uint32_t>(commands.size()), commands.data()};
+            GuestMemory memory{};
             memory.region_count = 1u;
             memory.regions = &region;
             GxState initial;
@@ -859,7 +872,7 @@ public:
         append_be_u32(fifo, 0x64000100u);
         fifo.push_back(std::byte{op::kLoadBpReg});
         append_be_u32(fifo, 0x65000400u);
-        GuestMemoryV1 memory{};
+        GuestMemory memory{};
         for (std::size_t split = 1u; split < fifo.size(); ++split) {
             auto backend = std::make_unique<GxBackend>();
             for (const std::uint32_t mask : {0x00FFFFFFu, 0u, 0xFFu, 0xFFFFu}) {
@@ -959,8 +972,8 @@ public:
         constexpr std::uint32_t base = 0x1000u;
         std::array<std::byte, 256> bytes{};
         for (unsigned i = 0u; i < bytes.size(); ++i) bytes[i] = static_cast<std::byte>(i);
-        GuestMemoryRegionV1 region{base, 256u, bytes.data()};
-        GuestMemoryV1 memory{}; memory.regions = &region; memory.region_count = 1u;
+        GuestMemoryRegion region{base, 256u, bytes.data()};
+        GuestMemory memory{}; memory.regions = &region; memory.region_count = 1u;
         std::vector<GuestMemoryRange> ranges{{base + 64u, 32u}, {base + 16u, 16u},
             {base + 24u, 16u}, {base + 40u, 24u}, {base + 128u, 8u},
             {base + 136u, 8u}, {base + 16u, 8u}, {0xFFFFFFFFu, 0u}};
@@ -989,121 +1002,6 @@ public:
             std::memcmp(edge.regions[0].host_base, bytes.data(), 32u) == 0;
     }
 
-    static bool dirty_writes_cover_both_ram_boundaries() {
-        auto backend = std::make_unique<GxBackend>();
-        GuestMemoryV1 memory{};
-        backend->install_guest_dirty_tracker(&memory);
-        const std::array<GxBackend::GuestWriteRange, 4> expected{{
-            {0x00000000u, 32u}, {0x017FFFE0u, 32u},
-            {0x10000000u, 32u}, {0x13FFFFE0u, 32u}}};
-        for (const std::uint32_t alias : {0u, 0x80000000u, 0xC0000000u}) {
-            for (const bool fast : {false, true}) {
-                for (const std::uint32_t address :
-                     {0u, 0x017FFFFFu, 0x10000000u, 0x13FFFFFFu}) {
-                    if (fast) guest_notify_write(&memory, address | alias, 1u);
-                    else backend->notify_guest_memory_write(address | alias, 1u);
-                }
-                // Non-RAM writes must not create an alias of either bank.
-                if (fast) guest_notify_write(&memory, 0x08000000u | alias, 1u);
-                else backend->notify_guest_memory_write(0x08000000u | alias, 1u);
-                std::vector<GxBackend::GuestWriteRange> ranges;
-                backend->drain_guest_memory_writes(ranges);
-                if (ranges.size() != expected.size()) return false;
-                for (std::size_t i = 0; i < expected.size(); ++i) {
-                    if (ranges[i].guest_addr != expected[i].guest_addr ||
-                        ranges[i].size != expected[i].size) return false;
-                }
-                backend->drain_guest_memory_writes(ranges);
-                if (!ranges.empty()) return false;
-            }
-            // The callback clamps a straddling write to real RAM. Test both
-            // sides of each bank, including MEM1->hole and hole->MEM2.
-            backend->notify_guest_memory_write(0x017FFFFFu | alias, 2u);
-            backend->notify_guest_memory_write(0x0FFFFFFFu | alias, 2u);
-            backend->notify_guest_memory_write(0x13FFFFFFu | alias, 2u);
-            std::vector<GxBackend::GuestWriteRange> ranges;
-            backend->drain_guest_memory_writes(ranges);
-            if (ranges.size() != 3u) return false;
-            for (std::size_t i = 0; i < ranges.size(); ++i) {
-                if (ranges[i].guest_addr != expected[i + 1u].guest_addr ||
-                    ranges[i].size != expected[i + 1u].size) return false;
-            }
-        }
-        return true;
-    }
-
-    static bool dirty_writes_respect_efb_copy_boundaries() {
-        auto backend = std::make_unique<GxBackend>();
-        GuestMemoryV1 memory{};
-        backend->install_guest_dirty_tracker(&memory);
-        // GX copy destinations and tiled footprints use 32-byte units. Model
-        // the observed copy whose end shares a 128-byte page with heap data.
-        constexpr std::uint32_t copy_begin = 0x1326EBA0u;
-        constexpr std::uint32_t copy_end = 0x13274FA0u;
-        const auto check = [&](std::uint32_t address, std::uint32_t size,
-                               bool expected_overlap, bool fast) {
-            if (fast) guest_notify_write(&memory, address, size);
-            else backend->notify_guest_memory_write(address, size);
-            std::vector<GxBackend::GuestWriteRange> ranges;
-            backend->drain_guest_memory_writes(ranges);
-            const bool overlap = std::any_of(ranges.begin(), ranges.end(),
-                [&](const auto& range) {
-                    return range.guest_addr < copy_end &&
-                        static_cast<std::uint64_t>(range.guest_addr) + range.size > copy_begin;
-                });
-            std::vector<GxBackend::GuestWriteRange> drained_again;
-            backend->drain_guest_memory_writes(drained_again);
-            return overlap == expected_overlap && !ranges.empty() && drained_again.empty();
-        };
-        for (const std::uint32_t alias : {0u, 0x80000000u, 0xC0000000u}) {
-            for (const bool fast : {false, true}) {
-                if (!check((copy_begin - 1u) | alias, 1u, false, fast) ||
-                    !check(copy_end | alias, 4u, false, fast) ||
-                    !check(copy_begin | alias, 1u, true, fast) ||
-                    !check((copy_end - 1u) | alias, 1u, true, fast) ||
-                    !check((copy_end - 1u) | alias, 2u, true, fast)) return false;
-            }
-        }
-        return true;
-    }
-
-    static bool dirty_drain_preserves_every_word_and_span() {
-        auto backend = std::make_unique<GxBackend>();
-        GuestMemoryV1 memory{};
-        backend->install_guest_dirty_tracker(&memory);
-        constexpr std::uint32_t base = 0x10000000u;
-        const std::array<std::uint32_t, 3> addresses{
-            base, base + 7u * 2048u, base + 63u * 2048u};
-        std::vector<GxBackend::GuestWriteRange> ranges;
-        for (const auto alias : {0u, 0x80000000u, 0xC0000000u}) {
-            for (const bool fast : {false, true}) {
-                for (const auto address : addresses) {
-                    if (fast) guest_notify_write(&memory, address | alias, 1u);
-                    else backend->notify_guest_memory_write(address | alias, 1u);
-                }
-                backend->drain_guest_memory_writes(ranges);
-                if (ranges.size() != addresses.size()) return false;
-                for (std::size_t i = 0u; i < addresses.size(); ++i) {
-                    if (ranges[i].guest_addr != addresses[i] || ranges[i].size != 32u) return false;
-                }
-                backend->drain_guest_memory_writes(ranges);
-                if (!ranges.empty()) return false;
-                // One span crosses multiple 128KiB summary groups. Endpoints
-                // alone cannot advertise all of its intervening bitmap words.
-                if (fast) guest_notify_write(&memory, (base + 17u) | alias, 0x40023u);
-                else backend->notify_guest_memory_write((base + 17u) | alias, 0x40023u);
-                backend->drain_guest_memory_writes(ranges);
-                if (ranges.size() != 1u || ranges[0].guest_addr != base ||
-                    ranges[0].size != 0x40040u) return false;
-                backend->drain_guest_memory_writes(ranges);
-                if (!ranges.empty()) return false;
-            }
-        }
-        // ABI 23 rejects legacy page-only game/Home modules before execution.
-        // Accepted callers publish through the public notification paths above.
-        return true;
-    }
-
     static bool dependency_discovery_is_independent_and_tracks_dl_versions() {
         auto backend = std::make_unique<GxBackend>();
         constexpr std::uint32_t outer_addr = 0x2000u;
@@ -1117,8 +1015,8 @@ public:
             std::copy(dl.begin(), dl.end(), live.begin());
         };
         write_outer(first_addr);
-        GuestMemoryRegionV1 region{outer_addr, static_cast<std::uint32_t>(live.size()), live.data()};
-        GuestMemoryV1 memory{};
+        GuestMemoryRegion region{outer_addr, static_cast<std::uint32_t>(live.size()), live.data()};
+        GuestMemory memory{};
         memory.region_count = 1u;
         memory.regions = &region;
         std::vector<std::byte> fifo;
@@ -1139,7 +1037,7 @@ public:
             const bool ready = scan.wait_for(std::chrono::seconds(1)) == std::future_status::ready;
             renderer_lock.unlock();
             scan.get();
-            return ready && snapshot.sealed && snapshot.memory.flat_guest_read_base == nullptr;
+            return ready && snapshot.sealed;
         };
         if (!capture_without_render_lock(first)) return false;
         const auto has = [&](std::uint32_t address) {
@@ -1154,8 +1052,8 @@ public:
         // Independent literal BE address oracles verify the first sealed
         // version survives both live mutation and the dependency cache refill.
         return has(outer_addr) && has(second_addr) && !has(first_addr) &&
-            guest_load_u32(&first.memory, outer_addr + 1u, nullptr, 0u) == first_addr &&
-            guest_load_u32(&second.memory, outer_addr + 1u, nullptr, 0u) == second_addr;
+            snapshot_u32(&first.memory, outer_addr + 1u) == first_addr &&
+            snapshot_u32(&second.memory, outer_addr + 1u) == second_addr;
     }
 
     static bool sampler_keys_ignore_only_unsampled_maps() {
@@ -1245,8 +1143,8 @@ public:
         auto backend = std::make_unique<GxBackend>();
         constexpr std::uint32_t address = 0x00001000u;
         std::array<std::byte, 32> bytes{};
-        GuestMemoryRegionV1 region{address, 32u, bytes.data()};
-        GuestMemoryV1 memory{};
+        GuestMemoryRegion region{address, 32u, bytes.data()};
+        GuestMemory memory{};
         memory.regions = &region; memory.region_count = 1u;
         backend->frame_memory_ = &memory;
         backend->state_.load_bp(0x64000000u | (address >> 5u));
@@ -1395,12 +1293,12 @@ public:
             inner.end(),
             live.begin() + (kInnerDl - kMemoryBase));
 
-        GuestMemoryRegionV1 region{
+        GuestMemoryRegion region{
             kMemoryBase,
             static_cast<std::uint32_t>(live.size()),
             live.data(),
         };
-        GuestMemoryV1 memory{};
+        GuestMemory memory{};
         memory.region_count = 1u;
         memory.regions = &region;
         std::vector<std::byte> fifo;
@@ -1423,7 +1321,7 @@ public:
         if (!first.sealed || !first.immutable_range_ownership ||
             first.copied_bytes != outer.size() + inner.size() ||
             first.reused_bytes != 0u ||
-            guest_load_u8(&first.memory, kInnerDl + 9u, nullptr, 0u) !=
+            snapshot_u8(&first.memory, kInnerDl + 9u) !=
                 0x56u) {
             std::cerr << "immutable ownership fixture: first copied="
                       << first.copied_bytes << " reused="
@@ -1446,9 +1344,9 @@ public:
             &memory, second, ranges, true, true);
         if (!second.sealed || second.copied_bytes != inner.size() ||
             second.reused_bytes != outer.size() ||
-            guest_load_u8(&first.memory, kInnerDl + 9u, nullptr, 0u) !=
+            snapshot_u8(&first.memory, kInnerDl + 9u) !=
                 0x56u ||
-            guest_load_u8(&second.memory, kInnerDl + 9u, nullptr, 0u) !=
+            snapshot_u8(&second.memory, kInnerDl + 9u) !=
                 0xA5u) {
             std::cerr << "immutable ownership fixture: second copied="
                       << second.copied_bytes << " reused="
@@ -1468,14 +1366,14 @@ public:
             std::all_of(
                 reused.regions.begin(),
                 reused.regions.end(),
-                [&](const GuestMemoryRegionV1& owned) {
+                [&](const GuestMemoryRegion& owned) {
                     return owned.host_base < live.data() ||
                         owned.host_base >= live.data() + live.size();
                 });
     }
 
     static bool full_capture_reuse_detaches_live_memory(
-        GuestMemoryV1& memory,
+        GuestMemory& memory,
         std::span<std::byte> live_bytes) {
         if (live_bytes.empty()) {
             return false;
@@ -1515,12 +1413,6 @@ public:
             moved.memory.regions[0].host_base != live_bytes.data() &&
             moved.memory.regions[0].host_base[0] == std::byte{0xA7u} &&
             moved.memory.user == nullptr &&
-            moved.memory.read_device == nullptr &&
-            moved.memory.write_device == nullptr &&
-            moved.memory.notify_write == nullptr &&
-            moved.memory.flat_guest_read_base == nullptr &&
-            moved.memory.dirty_page_words == nullptr &&
-            moved.memory.cpu_dirty_page_words == nullptr &&
             std::all_of(
                 moved.storage.begin(),
                 moved.storage.end(),
@@ -1535,12 +1427,12 @@ public:
         for (std::size_t i = 0; i < live.size(); ++i) {
             live[i] = static_cast<std::byte>(i);
         }
-        GuestMemoryRegionV1 region{
+        GuestMemoryRegion region{
             kBase,
             static_cast<std::uint32_t>(live.size()),
             live.data(),
         };
-        GuestMemoryV1 memory{};
+        GuestMemory memory{};
         memory.region_count = 1u;
         memory.regions = &region;
         const std::vector<VertexDecodeGuestRange> dependencies{
@@ -1619,7 +1511,7 @@ public:
         // A descriptor with no backing storage must not become a non-null
         // pointer through address-offset arithmetic. It also cannot shadow
         // a later actual owner of the same guest interval.
-        std::array<GuestMemoryRegionV1, 2> nullable_regions{{
+        std::array<GuestMemoryRegion, 2> nullable_regions{{
             {kBase, static_cast<std::uint32_t>(live.size()), nullptr}, region}};
         memory.regions = nullable_regions.data();
         memory.region_count = 2u;
@@ -1667,7 +1559,7 @@ public:
                 1u, 0u, PrimitiveClass::Points, 0u, state.vertex_desc(0u));
         };
         VertexLoader loader;
-        const auto decode = [&](GuestMemoryV1* memory = nullptr) {
+        const auto decode = [&](GuestMemory* memory = nullptr) {
             const auto desc = state.vertex_desc(0u);
             return loader.decode_cached_packet_run_vertices_with_layout(
                 bytes, 0u, std::span<const CachedDrawPacket>(&packet, 1u),
@@ -1711,8 +1603,8 @@ public:
         for (unsigned i = 0u; i < values.size(); ++i)
             for (unsigned byte = 0u; byte < 4u; ++byte)
                 arrays[i * 4u + byte] = static_cast<std::byte>(values[i] >> (24u - byte * 8u));
-        GuestMemoryRegionV1 region{0x1000u, static_cast<std::uint32_t>(arrays.size()), arrays.data()};
-        GuestMemoryV1 memory{};
+        GuestMemoryRegion region{0x1000u, static_cast<std::uint32_t>(arrays.size()), arrays.data()};
+        GuestMemory memory{};
         memory.regions = &region;
         memory.region_count = 1u;
         bytes = {std::byte{0u}, std::byte{1u}, std::byte{0u}};
@@ -1731,7 +1623,7 @@ public:
 
     static bool worker_stage_seals_before_releasing(
         const NbtFixture& fixture,
-        GuestMemoryV1& memory,
+        GuestMemory& memory,
         std::span<std::byte> live_bytes) {
         auto backend = std::make_unique<GxBackend>();
         GxBackend::FrameChunk queued;
@@ -1757,12 +1649,6 @@ public:
             backend->render_fifo_effects_in_flight_ != 1u ||
             chunk.pe_completion_token != token ||
             chunk.memory != &chunk.memory_snapshot.memory ||
-            chunk.memory->flat_guest_read_base != nullptr ||
-            chunk.memory->read_device != nullptr ||
-            chunk.memory->write_device != nullptr ||
-            chunk.memory->notify_write != nullptr ||
-            chunk.memory->cpu_dirty_page_words != nullptr ||
-            chunk.memory->dirty_page_words != nullptr ||
             std::any_of(chunk.memory_snapshot.storage.begin(),
                         chunk.memory_snapshot.storage.end(),
                         [](const GxBackend::MemorySnapshotStorage& storage) {
@@ -1772,24 +1658,16 @@ public:
         }
         std::fill(live_bytes.begin(), live_bytes.end(), std::byte{0xC5});
         for (std::size_t i = 0; i < before.size(); ++i) {
-            if (guest_load_u8(chunk.memory, kArrayBase +
-                    static_cast<std::uint32_t>(i), nullptr, 0u) !=
+            if (snapshot_u8(chunk.memory, kArrayBase +
+                    static_cast<std::uint32_t>(i)) !=
                 std::to_integer<std::uint8_t>(before[i])) {
                 return false;
             }
         }
-        // A missed dependency is a strict missing read, never a live fallback.
-        bool missing_read_failed = false;
-        NativeServicesV1 fault_services{};
-        fault_services.fatal = &throw_guest_memory_fault;
-        try {
-            (void)guest_load_u8(chunk.memory,
-                kArrayBase + static_cast<std::uint32_t>(before.size()),
-                &fault_services, 0u);
-        } catch (const std::runtime_error& error) {
-            missing_read_failed =
-                std::string(error.what()).find("is not mapped") != std::string::npos;
-        }
+        // A missed dependency is absent from the snapshot, never read from live memory.
+        const bool missing_read_failed =
+            galaxy::resolve_guest_fast(chunk.memory, kArrayBase + static_cast<std::uint32_t>(before.size()), 1u) ==
+            nullptr;
         std::copy(before.begin(), before.end(), live_bytes.begin());
         // Retire the synthetic token only after testing the unchanged boundary.
         backend->frame_pe_completions_.resolve_on_submission(token);
@@ -1807,9 +1685,9 @@ public:
         live[3] = std::byte{0x34};
         live[4] = std::byte{0x56};
         if (!has_event) live.fill(std::byte{0});
-        GuestMemoryRegionV1 region{kDisplayList,
+        GuestMemoryRegion region{kDisplayList,
             static_cast<std::uint32_t>(live.size()), live.data()};
-        GuestMemoryV1 memory{};
+        GuestMemory memory{};
         memory.region_count = 1u;
         memory.regions = &region;
         auto backend = std::make_unique<GxBackend>();
@@ -1853,7 +1731,7 @@ public:
 
     static bool worker_dependency_scan_failure_does_not_release(
         const NbtFixture& fixture,
-        GuestMemoryV1& memory) {
+        GuestMemory& memory) {
         auto backend = std::make_unique<GxBackend>();
         GxBackend::FrameChunk chunk;
         chunk.fifo = fixture.fifo;
@@ -1882,7 +1760,7 @@ public:
 
     static MemorySnapshotNbtProbeResult collect_capture_and_decode(
         const NbtFixture& fixture,
-        GuestMemoryV1& memory,
+        GuestMemory& memory,
         std::span<std::byte> live_bytes) {
         auto backend = std::make_unique<GxBackend>();
         MemorySnapshotNbtProbeResult result;
@@ -1903,12 +1781,6 @@ public:
         result.sealed = snapshot.sealed;
         result.external_aliases_detached =
             snapshot.memory.user == nullptr &&
-            snapshot.memory.read_device == nullptr &&
-            snapshot.memory.write_device == nullptr &&
-            snapshot.memory.notify_write == nullptr &&
-            snapshot.memory.flat_guest_read_base == nullptr &&
-            snapshot.memory.dirty_page_words == nullptr &&
-            snapshot.memory.cpu_dirty_page_words == nullptr &&
             std::all_of(
                 snapshot.storage.begin(),
                 snapshot.storage.end(),
@@ -1970,15 +1842,6 @@ int main() {
         dependency_invalidation_preserves_alias_and_edge_rules(),
         "dependency invalidation preserves all RAM aliases, half-open edges, multiple shapes and u32 end boundaries")) return 1;
     if (!expect(galaxy::gx::GxBackendMemorySnapshotTestAccess::
-        dirty_writes_cover_both_ram_boundaries(),
-        "dirty writes cover MEM1/MEM2 boundaries, aliases and clamped spans without bridging the physical hole")) return 1;
-    if (!expect(galaxy::gx::GxBackendMemorySnapshotTestAccess::
-        dirty_writes_respect_efb_copy_boundaries(),
-        "writes adjacent to a GX copy must not invalidate its GPU contents; overlapping writes must")) return 1;
-    if (!expect(galaxy::gx::GxBackendMemorySnapshotTestAccess::
-        dirty_drain_preserves_every_word_and_span(),
-        "dirty drain must retain every same-group word and span interior")) return 1;
-    if (!expect(galaxy::gx::GxBackendMemorySnapshotTestAccess::
         dependency_discovery_is_independent_and_tracks_dl_versions(),
         "dependency discovery must not wait for rendering and must track dirty nested DL versions")) return 1;
     if (!expect(galaxy::gx::GxBackendMemorySnapshotTestAccess::
@@ -2025,32 +1888,17 @@ int main() {
             kNbtValues[i]);
     }
 
-    galaxy::GuestMemoryRegionV1 region{
+    galaxy::GuestMemoryRegion region{
         kArrayBase,
         static_cast<std::uint32_t>(live_bytes.size()),
         live_bytes.data()};
-    galaxy::GuestMemoryV1 memory{};
+    galaxy::GuestMemory memory{};
     memory.region_count = 1u;
     memory.regions = &region;
     memory.user = &memory;
-    memory.read_device = &reject_device_read;
-    memory.write_device = &reject_device_write;
-    memory.notify_write = &observe_guest_write;
     // Snapshot capture must remove even a capability that bypasses regions.
-    memory.flat_guest_read_base = live_bytes.data();
     std::array<std::atomic_uint64_t, 1> dirty_pages{};
     std::array<std::uint64_t, 1> cpu_dirty_pages{};
-    memory.dirty_page_words = dirty_pages.data();
-    memory.dirty_tracked_base = kArrayBase;
-    memory.dirty_tracked_size = static_cast<std::uint32_t>(live_bytes.size());
-    memory.dirty_page_shift = 12u;
-    memory.dirty_page_word_count = 1u;
-    memory.cpu_dirty_page_words = cpu_dirty_pages.data();
-    memory.cpu_dirty_tracked_base = kArrayBase;
-    memory.cpu_dirty_tracked_size =
-        static_cast<std::uint32_t>(live_bytes.size());
-    memory.cpu_dirty_page_shift = 12u;
-    memory.cpu_dirty_page_word_count = 1u;
 
     bool ok = true;
     ok = expect(guest_range_envelope_never_rejects_live_ranges(),
@@ -2158,7 +2006,6 @@ int main() {
         std::byte{0x5A});
     region.size = static_cast<std::uint32_t>(short_live_bytes.size());
     region.host_base = short_live_bytes.data();
-    memory.flat_guest_read_base = short_live_bytes.data();
     ok = expect(
              galaxy::gx::GxBackendMemorySnapshotTestAccess::
                  worker_dependency_scan_failure_does_not_release(fixture, memory),

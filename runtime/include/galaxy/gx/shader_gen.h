@@ -28,7 +28,6 @@ struct ShaderGenOptions {
 class ShaderGenerator {
 public:
     void set_options(const ShaderGenOptions& options) noexcept { options_ = options; }
-    [[nodiscard]] const ShaderGenOptions& options() const noexcept { return options_; }
 
     // Transforms position/normal through the per-vertex matrix index and applies
     // the key's channel lighting and texgens.

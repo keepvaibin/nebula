@@ -44,7 +44,6 @@ bool unknown_gx_commands_fatal() noexcept {
 void set_unknown_gx_commands_fatal(bool fatal) noexcept {
     s_unknown_commands_fatal.store(fatal ? 1 : 0, std::memory_order_relaxed);
 }
-
 namespace {
 
 // One bit per register already reported; the parsers run on two threads.
@@ -912,22 +911,6 @@ TlutRef GxState::tex_tlut(unsigned map) const {
     const unsigned slot = map & 3u;
     return decode_tlut_ref(
         bp_[bp::kTexTlutBase + bank_offset + slot]);
-}
-
-// ---------------------------------------------------------------------------
-// Projection: XF 0x1020-0x1026 (six float coefficients + type word).
-// ---------------------------------------------------------------------------
-Projection GxState::projection() const {
-    Projection p{};
-    for (unsigned i = 0; i < 6u; ++i) {
-        const std::uint32_t raw = xf_[xf::kProjectionBase + i];
-        // Raw XF words hold IEEE 754 single-precision floats. std::bit_cast gives the host float
-        // without undefined behavior.
-        p.coeffs[i] = std::bit_cast<float>(raw);
-    }
-    // Word 6: 0 = perspective, 1 = orthographic.
-    p.orthographic = (xf_[xf::kProjectionBase + 6u] != 0u);
-    return p;
 }
 
 std::uint64_t GxState::dependency_shape_hash() const noexcept {

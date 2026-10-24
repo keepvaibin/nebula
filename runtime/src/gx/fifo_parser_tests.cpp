@@ -213,7 +213,7 @@ bool test_frozen_fifo_lookup() {
     // recorder is compared byte for byte, including order and shape callbacks.
     for (const std::uint32_t count : {64u, 1024u}) {
         std::vector<std::array<std::byte, 64>> storage(count);
-        std::vector<galaxy::GuestMemoryRegionV1> regions(count);
+        std::vector<galaxy::GuestMemoryRegion> regions(count);
         std::vector<std::byte> fifo;
         for (std::uint32_t i = 0; i < count; ++i) {
             auto& bytes = storage[i];
@@ -229,7 +229,7 @@ bool test_frozen_fifo_lookup() {
             const auto call = frozen_lookup_call(regions[(i * 53u) % count].guest_base);
             fifo.insert(fifo.end(), call.begin(), call.end());
         }
-        galaxy::GuestMemoryV1 memory{};
+        galaxy::GuestMemory memory{};
         memory.regions = regions.data(); memory.region_count = count;
         FifoParser generic, indexed;
         LookupReadRecorder a, b;
@@ -254,11 +254,11 @@ bool test_frozen_fifo_lookup() {
     first[0] = second[0] = std::byte{0x90};
     first[2] = second[2] = std::byte{1};
     first[3] = std::byte{0xA1}; second[3] = std::byte{0xB2};
-    using Region = galaxy::GuestMemoryRegionV1;
+    using Region = galaxy::GuestMemoryRegion;
     const auto compare = [&](std::vector<Region> regions, std::uint32_t address,
                              std::uint32_t size, int expected_draws,
                              std::uint8_t expected_payload, bool fast = false) {
-        galaxy::GuestMemoryV1 memory{};
+        galaxy::GuestMemory memory{};
         memory.regions = regions.data();
         memory.region_count = static_cast<std::uint32_t>(regions.size());
         if (fast) { memory.fast_regions[8].host_base = second.data(); memory.fast_regions[8].size = 64u; }
@@ -295,7 +295,7 @@ bool test_frozen_fifo_lookup() {
 
     // Reuse one parser after changing/reordering a previously certified view.
     std::array<Region,2> regions{{{0x1000u,64u,first.data()},{0x2000u,64u,second.data()}}};
-    galaxy::GuestMemoryV1 memory{};
+    galaxy::GuestMemory memory{};
     memory.regions = regions.data(); memory.region_count = 2;
     FifoParser parser; parser.set_dump_dir("."); TestSink sink; GxState state;
     const auto call = frozen_lookup_call(0x1000u);
@@ -312,7 +312,7 @@ bool test_frozen_fifo_lookup() {
         if (nested) return;
         nested = true;
         std::array<Region,2> inner_regions{{{0x1000u,64u,second.data()},{0x1000u,64u,first.data()}}};
-        galaxy::GuestMemoryV1 inner{};
+        galaxy::GuestMemory inner{};
         inner.regions = inner_regions.data(); inner.region_count = 2;
         TestSink inner_sink; GxState inner_state;
         parser.run(call, &inner, inner_sink, inner_state); // generic nested invocation
@@ -341,7 +341,7 @@ int benchmark_frozen_fifo_lookup() {
     // display-list validation. No profiling clock or read recorder in the loop.
     for (const std::uint32_t count : {64u, 1024u}) {
         std::vector<std::array<std::byte,32>> storage(count);
-        std::vector<galaxy::GuestMemoryRegionV1> regions(count);
+        std::vector<galaxy::GuestMemoryRegion> regions(count);
         std::vector<std::byte> fifo;
         for (std::uint32_t i = 0; i < count; ++i) {
             storage[i][0]=std::byte{0x90}; storage[i][2]=std::byte{1}; storage[i][3]=std::byte{0xA1};
@@ -351,7 +351,7 @@ int benchmark_frozen_fifo_lookup() {
             const auto call=frozen_lookup_call(regions[(i*53u)%count].guest_base);
             fifo.insert(fifo.end(),call.begin(),call.end());
         }
-        galaxy::GuestMemoryV1 memory{}; memory.regions=regions.data(); memory.region_count=count;
+        galaxy::GuestMemory memory{}; memory.regions=regions.data(); memory.region_count=count;
         FifoParser a,b; TestSink sa,sb; GxState ga,gb;
         a.run(fifo,&memory,sa,ga,false); b.run(fifo,&memory,sb,gb,true);
         const auto measure=[&](bool frozen) {
@@ -379,7 +379,7 @@ bool test_display_list_variant_lookup_invalidation() {
         bytes[0] = std::byte{0x90};
         bytes[2] = std::byte{0x01};
         bytes[3] = std::byte{0xA5};
-        galaxy::GuestMemoryV1 memory{};
+        galaxy::GuestMemory memory{};
         memory.fast_regions[8].host_base = bytes.data();
         memory.fast_regions[8].size = static_cast<std::uint32_t>(bytes.size());
         FifoParserProfile profile{};
@@ -836,7 +836,7 @@ bool test_unchanged_display_list_replays_prepared_packet_runs() {
         guest[at + 4] = static_cast<std::byte>(0x20u + packet);
         guest[at + 5] = static_cast<std::byte>(0x30u + packet);
     }
-    galaxy::GuestMemoryV1 memory{};
+    galaxy::GuestMemory memory{};
     memory.fast_regions[8].host_base = guest.data();
     memory.fast_regions[8].size = static_cast<std::uint32_t>(guest.size());
     const std::array<std::byte, 9> call{
@@ -957,7 +957,7 @@ int main(int argc, char** argv) try {
         bytes.resize((bytes.size() + 31u) & ~std::size_t{31u}, std::byte{0});
         std::array<std::byte, 512> guest{};
         std::copy(bytes.begin(), bytes.end(), guest.begin() + 0x100u);
-        galaxy::GuestMemoryV1 memory{};
+        galaxy::GuestMemory memory{};
         memory.fast_regions[8].host_base = guest.data();
         memory.fast_regions[8].size = static_cast<std::uint32_t>(guest.size());
         const std::array<std::byte, 9> call{
@@ -1667,7 +1667,7 @@ int main(int argc, char** argv) try {
         guest[dl_offset + 2] = std::byte{0x01};
         guest[dl_offset + 3] = std::byte{0xEE};
 
-        galaxy::GuestMemoryV1 memory{};
+        galaxy::GuestMemory memory{};
         memory.fast_regions[8].host_base = guest.data();
         memory.fast_regions[8].size =
             static_cast<std::uint32_t>(guest.size());
@@ -1684,7 +1684,7 @@ int main(int argc, char** argv) try {
             parser.run_available(call_dl, &memory, sink, state);
         if (!expect(
                 call_dl_consumed == call_dl.size(),
-                "CALL_DL using GuestMemoryV1 fast_regions was not consumed") ||
+                "CALL_DL using GuestMemory fast_regions was not consumed") ||
             !expect(
                 sink.draws == 3,
                 "CALL_DL fast-region display list did not execute draw")) {
@@ -1813,7 +1813,7 @@ int main(int argc, char** argv) try {
         guest[dl_offset + 8] = std::byte{0x40};
         guest[dl_offset + 9] = std::byte{0x04};
 
-        galaxy::GuestMemoryV1 memory{};
+        galaxy::GuestMemory memory{};
         memory.fast_regions[8].host_base = guest.data();
         memory.fast_regions[8].size =
             static_cast<std::uint32_t>(guest.size());
@@ -1869,7 +1869,7 @@ int main(int argc, char** argv) try {
         guest[dl_offset + 6] = std::byte{0x01};
         guest[dl_offset + 7] = std::byte{0xBB};
 
-        galaxy::GuestMemoryV1 memory{};
+        galaxy::GuestMemory memory{};
         memory.fast_regions[8].host_base = guest.data();
         memory.fast_regions[8].size =
             static_cast<std::uint32_t>(guest.size());
@@ -1922,7 +1922,7 @@ int main(int argc, char** argv) try {
         guest[dl_offset + 6] = std::byte{0x01};
         guest[dl_offset + 7] = std::byte{0xBB};
 
-        galaxy::GuestMemoryV1 memory{};
+        galaxy::GuestMemory memory{};
         memory.fast_regions[8].host_base = guest.data();
         memory.fast_regions[8].size =
             static_cast<std::uint32_t>(guest.size());
@@ -1989,7 +1989,7 @@ int main(int argc, char** argv) try {
         guest[dl_offset + 12] = std::byte{0xBC};
         guest[dl_offset + 13] = std::byte{0xBD};
 
-        galaxy::GuestMemoryV1 memory{};
+        galaxy::GuestMemory memory{};
         memory.fast_regions[8].host_base = guest.data();
         memory.fast_regions[8].size =
             static_cast<std::uint32_t>(guest.size());
@@ -2053,7 +2053,7 @@ int main(int argc, char** argv) try {
         guest[dl_offset + 2] = std::byte{0x01};
         guest[dl_offset + 3] = std::byte{0xEE};
 
-        galaxy::GuestMemoryV1 memory{};
+        galaxy::GuestMemory memory{};
         memory.fast_regions[8].host_base = guest.data();
         memory.fast_regions[8].size =
             static_cast<std::uint32_t>(guest.size());
@@ -2116,7 +2116,7 @@ int main(int argc, char** argv) try {
         guest[dl_offset + 8] = std::byte{0x01};
         guest[dl_offset + 9] = std::byte{0xEE};
 
-        galaxy::GuestMemoryV1 memory{};
+        galaxy::GuestMemory memory{};
         memory.fast_regions[8].host_base = guest.data();
         memory.fast_regions[8].size =
             static_cast<std::uint32_t>(guest.size());

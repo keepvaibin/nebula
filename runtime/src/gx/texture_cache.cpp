@@ -38,7 +38,6 @@
 #include <thread>
 #include <vector>
 
-
 namespace galaxy::gx {
 
 // ---------------------------------------------------------------------------
@@ -228,14 +227,13 @@ std::uint64_t elapsed_us(
             end - start).count());
 }
 
-
 // ---------------------------------------------------------------------------
 // Guest memory access. An unmapped range throws std::runtime_error, which the caller
-// reports as GxFatalError. The texture path has no NativeServicesV1* to report through.
+// reports as GxFatalError. The texture path has no GxServices* to report through.
 // ---------------------------------------------------------------------------
 
 static const std::byte* resolve_guest_tex(
-    GuestMemoryV1* memory,
+    GuestMemory* memory,
     std::uint32_t address,
     std::uint32_t size) {
     if (std::byte* fast = resolve_guest_fast(memory, address, size);
@@ -246,7 +244,7 @@ static const std::byte* resolve_guest_tex(
         const std::uint64_t req_end =
             static_cast<std::uint64_t>(address) + size;
         for (std::uint32_t i = 0; i < memory->region_count; ++i) {
-            const GuestMemoryRegionV1& r = memory->regions[i];
+            const GuestMemoryRegion& r = memory->regions[i];
             if (r.host_base == nullptr) { continue; }
             const std::uint64_t reg_end =
                 static_cast<std::uint64_t>(r.guest_base) + r.size;
@@ -1796,7 +1794,7 @@ std::uint32_t TextureCache::allocate_srv_index() {
 bool TextureCache::load_tlut(
     std::uint32_t src_reg,
     std::uint32_t dest_reg,
-    GuestMemoryV1* memory) {
+    GuestMemory* memory) {
     const TlutTransfer decoded = decode_wii_tlut_transfer(src_reg, dest_reg);
     const std::uint32_t src_addr = decoded.source_address;
     const std::uint32_t dest_byte_offset = decoded.destination_offset;
@@ -2056,7 +2054,6 @@ std::size_t TextureCache::invalidate_guest_range(
     const GuestRange range{guest_addr, size};
     return invalidate_guest_ranges(std::span<const GuestRange>(&range, 1u));
 }
-
 std::size_t TextureCache::invalidate_guest_ranges(
     std::span<const GuestRange> sorted_coalesced_ranges) {
     if (sorted_coalesced_ranges.empty() ||
@@ -2066,7 +2063,6 @@ std::size_t TextureCache::invalidate_guest_ranges(
 
     const bool trace_dirty_detail =
         debug_capture_frame_ != 0u || trace_texture_dirty_detail_enabled();
-
 
     std::size_t evicted = 0;
     for (auto it = decoded_guest_envelope_.may_overlap(sorted_coalesced_ranges)
@@ -2429,7 +2425,7 @@ TextureHandle TextureCache::get(
     const TexImage& image,
     const TexMode& mode,
     const TlutRef& tlut,
-    GuestMemoryV1* memory) {
+    GuestMemory* memory) {
     if (movie_active_ && image.format == TexFormat::I8) [[unlikely]] {
         // A replacement movie's plane in place of the THP's (set_movie_override).
         for (unsigned p = 0; p < 3u; ++p) {

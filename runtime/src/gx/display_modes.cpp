@@ -177,17 +177,4 @@ std::vector<std::pair<unsigned, unsigned>> monitor_resolutions(const MonitorInfo
     return out;
 }
 
-std::vector<unsigned> monitor_refresh_rates(
-    const MonitorInfo& monitor, unsigned width, unsigned height) {
-    std::vector<unsigned> out;
-    for (const DisplayModeInfo& mode : monitor.modes) {
-        if (mode.width == width && mode.height == height &&
-            std::find(out.begin(), out.end(), mode.refresh_hz) == out.end()) {
-            out.push_back(mode.refresh_hz);
-        }
-    }
-    std::sort(out.begin(), out.end(), std::greater<>());
-    return out;
-}
-
 }  // namespace galaxy::gx

@@ -545,8 +545,8 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
     constexpr std::uint32_t kAddress = 0x80100000u;
     std::vector<std::byte> guest(4096u);
     for (std::size_t i = 0; i < guest.size(); ++i) guest[i] = static_cast<std::byte>(i * 31u + 7u);
-    galaxy::GuestMemoryRegionV1 region{kAddress, static_cast<std::uint32_t>(guest.size()), guest.data()};
-    galaxy::GuestMemoryV1 memory{};
+    galaxy::GuestMemoryRegion region{kAddress, static_cast<std::uint32_t>(guest.size()), guest.data()};
+    galaxy::GuestMemory memory{};
     memory.regions = &region;
     memory.region_count = 1u;
     TexImage image{};
