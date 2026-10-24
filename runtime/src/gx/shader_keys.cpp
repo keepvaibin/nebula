@@ -1,8 +1,4 @@
-// shader_keys.cpp: builds canonicalized shader and pipeline keys from GxState.
-//
-// Canonicalization (see shader_keys.h): every field that does not affect code generation for
-// the enabled stage count is zeroed, so FNV-1a hashing gives consistent cache hits. Disabled
-// TEV stages, unused texgens and don't-care blend fields must not fragment the cache.
+// Builds canonical shader and pipeline keys from GxState (see shader_keys.h).
 
 #include "galaxy/gx/shader_keys.h"
 
@@ -42,10 +38,6 @@ namespace {
 
 }  // namespace
 
-// ---------------------------------------------------------------------------
-// PixelShaderKey
-// ---------------------------------------------------------------------------
-
 // RGBA6 keeps 8-bit colour by default: the Flipper's 6-bit colour and its 2x2 dither only band
 // and stipple the picture, and at raised internal resolution the dither shows as a dot grid.
 bool efb_true_color() noexcept {
@@ -61,8 +53,7 @@ bool efb_true_color() noexcept {
 PixelShaderKey build_pixel_shader_key(
     const GxState& state, unsigned efb_scale, bool true_color) {
     PixelShaderKey key{};
-    // Zero-initialise the whole struct first. This covers the padding between num_tev_stages..flags
-    // and the trailing stages[] entries, so the hash is deterministic for any stage count.
+    // hash() and operator== read every byte, so unused stages and fields must be zero.
     std::memset(&key, 0, sizeof(key));
 
     const GenMode gm = state.gen_mode();
@@ -82,19 +73,18 @@ PixelShaderKey build_pixel_shader_key(
     key.alpha_comp1 = static_cast<std::uint8_t>(ac.comp1);
     key.alpha_logic = static_cast<std::uint8_t>(ac.logic);
 
-    // flags: bit0 late_ztest (zcomploc = 0 means Z test AFTER texturing)
+    // flags: bit0 late_ztest (zcomploc = 0: Z test after texturing)
     //        bit1 z_texture   (TEV Z env op != disable)
-    //        bit2 dst_alpha   (GXSetDstAlpha ENABLED on an RGBA6 EFB)
+    //        bit2 dst_alpha   (GXSetDstAlpha enabled on an RGBA6 EFB)
     //        bits3-4 z_texture op (BP 0xF5 bits 2-3: 1=add, 2=replace)
     //        bits5-6 z_texture format (BP 0xF5 bits 0-1: 0=Z8,1=Z16,2=Z24X8)
+    //        bit7 dual-source TEV alpha (needs_dual_src_alpha)
     // SMG clears colour and depth with a fullscreen quad whose depth comes from a Z24X8 texture via
-    // GX_ZT_REPLACE (MainLoopFramework::clearEfb). Without this the quad writes geometric near-depth
-    // and corrupts the depth buffer.
+    // GX_ZT_REPLACE (MainLoopFramework::clearEfb).
     //
-    // The dst_alpha override applies only when GXSetDstAlpha is enabled. Otherwise the fragment keeps
-    // its TEV alpha so blending works. alpha_update also gates it (Dolphin PixelShaderGen
-    // useDstAlpha): with EFB alpha writes masked off, the constant never reaches the EFB, and the
-    // override would still corrupt the blend factors.
+    // dst_alpha also requires alpha_update, as in Dolphin's PixelShaderGen (useDstAlpha): with EFB
+    // alpha writes masked, the constant never reaches the EFB and must not replace the TEV alpha
+    // the blend factors read.
     const PeControl pe = state.pe_control();
     const BlendMode bm = state.blend_mode();
     const bool late_ztest = !pe.early_z;
@@ -115,9 +105,9 @@ PixelShaderKey build_pixel_shader_key(
         (pe.pixel_format & 0x7u) |
         (pe.pixel_format == 1u && true_color ? 0x10u
          : (pe.pixel_format == 1u && bm.dither) ? 0x08u : 0u));
-    // Scale is a per-draw constant, so one prepared material covers every internal resolution. The
-    // distinct mode keeps the identity and source of static-scale DXBC in the persistent shader cache.
-    static_cast<void>(efb_scale);  // Kept for the public call signature.
+    // The EFB scale is a per-draw constant, so one shader serves every internal resolution and
+    // `efb_scale` is unused. Dither keys use 0xff, apart from the fixed-scale values 0-15.
+    static_cast<void>(efb_scale);
     key.efb_scale_minus_one = static_cast<std::uint8_t>(
         (key.output_flags & 0x08u) != 0u ? 0xffu : 0u);
 
@@ -153,15 +143,10 @@ PixelShaderKey build_pixel_shader_key(
         }
     }
 
-    // Encodes each active TEV stage. Stages beyond num_tev_stages stay zero because `key` is
-    // value-initialised. The explicit memset is redundant but kept: hash() is a byte-wise FNV over
-    // sizeof(PixelShaderKey), and equality is byte-wise too (has_unique_object_representations_v is
-    // asserted for this type). Every byte must be determinate, so keep at least one of the two zeroings.
     for (unsigned s = 0; s < key.num_tev_stages; ++s) {
         const TevStageConfig cfg = state.tev_stage(s);
 
-        // color_env word: the raw BP bit packing is rebuilt from the decoded fields, so the key carries
-        // exactly what the shader key encoding needs. Bits match TevStagePacked.color_env (BP 0xC0+2*s).
+        // color_env word, rebuilt from the decoded fields in the BP 0xC0+2*s bit layout.
         const std::uint32_t color_env =
             (static_cast<std::uint32_t>(cfg.color_d)             & 0xFu)        |
             ((static_cast<std::uint32_t>(cfg.color_c)            & 0xFu) << 4u) |
@@ -194,11 +179,10 @@ PixelShaderKey build_pixel_shader_key(
             (cfg.order.tex_enable ? (1u << 6u) : 0u)                            |
             ((static_cast<std::uint32_t>(cfg.order.ras_channel)  & 0x7u) << 7u);
 
-        // ksel word: kcsel(4:0) | kasel(9:5) | resolved swap swizzles.
-        // Swap tables are in the even/odd KSEL register pairs: table t = {red: reg(2t) bits 0-1,
-        // green: reg(2t) bits 2-3, blue: reg(2t+1) bits 0-1, alpha: reg(2t+1) bits 2-3}.
-        // ras_swap and tex_swap select the table. As in Dolphin's PixelShaderGen.cpp, the resolved
-        // 4-channel swizzle is baked per stage into the key, so different tables give different keys.
+        // ksel word: kcsel(4:0) | kasel(9:5) | resolved swap swizzles. Swap table t sits in KSEL
+        // registers 2t and 2t+1: red = reg(2t) bits 0-1, green = reg(2t) bits 2-3, blue =
+        // reg(2t+1) bits 0-1, alpha = reg(2t+1) bits 2-3. ras_swap and tex_swap select the tables;
+        // as in Dolphin's PixelShaderGen, the key holds the resolved swizzles, not the tables.
         const TevKSel ras_even = state.tev_ksel(cfg.ras_swap * 2u);
         const TevKSel ras_odd  = state.tev_ksel(cfg.ras_swap * 2u + 1u);
         const TevKSel tex_even = state.tev_ksel(cfg.tex_swap * 2u);
@@ -215,11 +199,10 @@ PixelShaderKey build_pixel_shader_key(
             (static_cast<std::uint32_t>(tex_odd.swap_red)    << 22u) |
             (static_cast<std::uint32_t>(tex_odd.swap_green)  << 24u);
 
-        // A stage's texture, rasterized colour and konst values matter only through its eight combiner
-        // inputs. When a stage selects none of a source, its order bits, swap table and konst selector
-        // cannot change the output, so leftover register state must not compile a duplicate shader.
-        // Z textures read the last sampled texel regardless of the combiner, and indirect stages pass
-        // texture coordinates forward, so the texture order is kept when either applies.
+        // A stage's texture, rasterized colour and konst values matter only through its eight
+        // combiner inputs. When no input selects a source, its order bits, swap table and konst
+        // selector cannot change the output and are cleared. The texture order is kept when a Z
+        // texture (which reads the last sampled texel) or an indirect stage is active.
         const TevColorArg color_inputs[4] = {
             cfg.color_a, cfg.color_b, cfg.color_c, cfg.color_d};
         const TevAlphaArg alpha_inputs[4] = {
@@ -258,16 +241,9 @@ PixelShaderKey build_pixel_shader_key(
 
         key.stages[s] = TevStagePacked{color_env, alpha_env, canonical_order, ksel};
     }
-    // Stages beyond num_tev_stages are zero from the value-initialisation of `key`. The hash is a
-    // byte-wise FNV over the whole struct, so this zeroing is required even though the stage count
-    // is the real key input.
 
     return key;
 }
-
-// ---------------------------------------------------------------------------
-// VertexShaderKey
-// ---------------------------------------------------------------------------
 
 VertexShaderKey build_vertex_shader_key(const GxState& state) {
     VertexShaderKey key{};
@@ -277,10 +253,9 @@ VertexShaderKey build_vertex_shader_key(const GxState& state) {
     key.num_texgens = gm.num_texgens;
     key.num_chans   = gm.num_color_chans;
 
-    // flags: bit0 per-vertex posmtx index present in the vertex stream,
-    //        bit1 lighting enabled (any channel has lighting_enable set).
-    // The pnmtx flag comes from CP VCD_LO bit 0 (the per-vertex matrix index in the vertex
-    // descriptor), because GxState's public API does not expose the VCD directly.
+    // flags: bit0 per-vertex position matrix index (CP VCD_LO bit 0),
+    //        bit1 lighting enabled on any channel, bit2 dual-tex enable,
+    //        bit5 kVsKeyFiniteLightAttn (set below).
     const std::uint32_t vcd_lo = state.cp(cp::kVcdLo);
     const bool per_vertex_posmtx = (vcd_lo & 1u) != 0u;
 
@@ -293,9 +268,8 @@ VertexShaderKey build_vertex_shader_key(const GxState& state) {
         }
     }
 
-    // Dual-tex (post-transform matrix) enable: XF 0x1012 bit 0 (Dolphin XFMemory.h XFMEM_DUALTEX /
-    // DualTexInfo.enabled). Gates the post-matrix multiply in the VS. It affects codegen, so it is
-    // part of the key.
+    // Dual-tex (post-transform matrix) enable: XF 0x1012 bit 0 (XFMEM_DUALTEX in Dolphin's
+    // XFMemory.h). Gates the post-matrix multiply in the VS.
     const bool dual_tex =
         (state.xf(xf::kDualTexTrans) & 1u) != 0u;
 
@@ -304,9 +278,8 @@ VertexShaderKey build_vertex_shader_key(const GxState& state) {
         (lighting_active   ? 0x02u : 0u) |
         (dual_tex          ? 0x04u : 0u));
 
-    // Per-texgen per-vertex texture matrix index (VCD_LO bits 1-8). It affects VS codegen
-    // (per-vertex index vs CP MatrixIndexA/B default). Masked to the active texgen count so inactive
-    // bits do not fragment the cache.
+    // Per-vertex texture matrix index per texgen (VCD_LO bits 1-8), instead of CP MatrixIndexA/B;
+    // masked to the active texgens.
     const std::uint32_t active_mask =
         (key.num_texgens >= 8u) ? 0xFFu : ((1u << key.num_texgens) - 1u);
     key.texmtx_idx_mask =
@@ -375,10 +348,6 @@ VertexShaderKey build_vertex_shader_key(const GxState& state) {
     return key;
 }
 
-// ---------------------------------------------------------------------------
-// RenderStateKey
-// ---------------------------------------------------------------------------
-
 RenderStateKey build_render_state_key(const GxState& state) {
     RenderStateKey key{};
     std::memset(&key, 0, sizeof(key));
@@ -417,9 +386,8 @@ RenderStateKey build_render_state_key(const GxState& state) {
             (1u << 8u) |
             ((static_cast<std::uint32_t>(bm.logic_mode) & 0xFu) << 9u);
     }
-    // EFB write masks (cmode0 bits 3/4): bit25 = color_update, bit26 = alpha_update. GX z-clear and
-    // z-prepass draws disable the colour update while writing depth. Without honouring these masks,
-    // the clear quads would wipe the colour EFB they are meant only to z-fill.
+    // EFB write masks (cmode0 bits 3/4): bit25 = color_update, bit26 = alpha_update. Z-clear and
+    // z-prepass draws write depth with the colour update off.
     if (bm.color_update) {
         key.blend_bits |= (1u << 25u);
     }

@@ -8,15 +8,14 @@
 
 namespace galaxy::gx::detail {
 
-// Exact address/size keys for one dependency scan. At most half of the inline
-// slots are occupied, bounding probes and avoiding heap work for small scans.
-// Large scans retain the standard hash table, constructed only on overflow.
+// The address/size keys seen by one dependency scan: an inline open-addressed table kept at
+// most half full, moved to an unordered_set past 32 keys.
 class DependencyRangeMemo {
 public:
     [[nodiscard]] bool insert(std::uint64_t key) {
         if (overflow_) return overflow_->insert(key).second;
 
-        // Mix both address and size; compare the complete key after probing.
+        // Mixes address and size; slots compare the whole key.
         const std::uint64_t hash = (key ^ (key >> 32u)) * 0x9E3779B97F4A7C15ull;
         std::size_t slot = static_cast<std::size_t>(hash >> 58u);
         for (;;) {
@@ -44,7 +43,7 @@ public:
             }
             return overflow_->insert(key).second;
         } catch (...) {
-            // Keep the complete inline set if allocation fails during promotion.
+            // On allocation failure the inline set stays complete.
             overflow_.reset();
             throw;
         }

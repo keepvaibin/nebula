@@ -1,4 +1,4 @@
-// vertex_loader_tests.cpp -- regression tests for canonical GX vertex output.
+// Tests for VertexLoader's vertex and index output, the upload rings and ResidentVertexArena.
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX

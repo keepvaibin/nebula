@@ -6,10 +6,10 @@
 
 namespace galaxy::gx {
 
-// Belongs to one immutable decoded payload and is never shared between cache
-// entries; replacing the payload replaces the token. Buffer ownership and
-// consecutive segment generations establish byte validity. Guest dependency
-// validation and the renderer's GPU fence are still required.
+// Where one immutable decoded payload was last uploaded, per upload-ring frame slot.
+// UploadRing::upload_immutable skips the copy when the same ring places the payload at the
+// same offset one segment generation later. One token per payload, never shared between cache
+// entries; it does not replace guest dependency checks or the GPU fence.
 struct ImmutableUploadToken {
     struct Slot {
         std::uint64_t resource_identity = 0;

@@ -1,11 +1,7 @@
 #pragma once
 
-// Raw CP/XF/BP register bitfield decode for the GX command stream.
-// Header-only constexpr, no Windows/D3D12 includes. Unit-testable offline
-// against captured .gxdump streams.
-//
-// Bit layouts follow the Wii GX hardware registers as programmed by the
-// RVL SDK GX library (the only producer of the RMGE01 FIFO stream).
+// GX CP/XF/BP register addresses and constexpr bitfield decoders. Layouts follow the hardware
+// registers as the RVL SDK GX library programs them.
 
 #include <cstdint>
 
@@ -22,10 +18,8 @@ namespace galaxy::gx {
     return ((value >> index) & 1u) != 0u;
 }
 
-// ---------------------------------------------------------------------------
-// BP (Blitting Processor / pixel pipeline) register addresses.
-// A LOAD_BP_REG payload is one u32: register = bits 31:24, value = bits 23:0.
-// ---------------------------------------------------------------------------
+// BP (blitting processor, the pixel pipeline) registers. A LOAD_BP_REG payload is one u32:
+// register = bits 31:24, value = bits 23:0.
 namespace bp {
 inline constexpr std::uint8_t kGenMode = 0x00;
 inline constexpr std::uint8_t kDisplayCopyFilterBase = 0x01; // 0x01-0x04
@@ -37,10 +31,8 @@ inline constexpr std::uint8_t kIndCmdBase = 0x10;       // 0x10-0x1F per ind sta
 inline constexpr std::uint8_t kScissorTopLeft = 0x20;
 inline constexpr std::uint8_t kScissorBottomRight = 0x21;
 inline constexpr std::uint8_t kSuLpSize = 0x22;         // line/point size
-// BPMEM_PERF0_TRI/BPMEM_PERF0_QUAD: real-hardware perf-query triangle/quad
-// counters. Confirmed inert for rendered output in Dolphin's BPWritten
-// reference (both cases are a bare `return;` feeding only the perf-query
-// counter subsystem, never TEV/shader/blend/rasterizer state).
+// BPMEM_PERF0_TRI/BPMEM_PERF0_QUAD: performance-counter registers with no effect on rendering
+// (Dolphin's BPWritten ignores them).
 inline constexpr std::uint8_t kPerf0TriBase = 0x23;     // 0x23-0x24
 inline constexpr std::uint8_t kRas1Ss0 = 0x25;          // ind tex scale 0
 inline constexpr std::uint8_t kRas1Ss1 = 0x26;          // ind tex scale 1
@@ -73,10 +65,9 @@ inline constexpr std::uint8_t kCopyClearBoundingBox2 = 0x56;
 inline constexpr std::uint8_t kCopyClearPixelPerf = 0x57;
 inline constexpr std::uint8_t kRevBits = 0x58;
 inline constexpr std::uint8_t kScissorOffset = 0x59;
-// The last register of the TMEM load block before the TLUT loads (0x64-0x65): its write
-// starts a load of the lines it counts. GXTexModeSync (RMGE01 0x804BA0F8) writes it as
-// 0x63000000, a load of nothing that orders texture-mode changes behind the texture work
-// before them. The game links no GXPreLoadEntireTexture: a nonzero count is not its stream.
+// TMEM load start: a write loads the number of lines it holds. GXTexModeSync (RMGE01
+// 0x804BA0F8) writes 0x63000000, an empty load that orders texture-mode changes after earlier
+// texture work. The game does not link GXPreLoadEntireTexture, so a nonzero count never occurs.
 inline constexpr std::uint8_t kTexLoadStart = 0x63;
 inline constexpr std::uint8_t kTlutSrcAddr = 0x64;      // main memory >> 5
 inline constexpr std::uint8_t kTlutDest = 0x65;         // TMEM offset + count
@@ -105,14 +96,10 @@ inline constexpr std::uint8_t kTevZEnv1 = 0xF5;
 inline constexpr std::uint8_t kTevKSelBase = 0xF6;      // 0xF6-0xFD, 2 stages/reg
 }  // namespace bp
 
-// ---------------------------------------------------------------------------
-// CP (Command Processor) register addresses (LOAD_CP_REG: u8 reg + u32 value).
-// ---------------------------------------------------------------------------
+// CP (command processor) registers (LOAD_CP_REG: u8 reg + u32 value).
 namespace cp {
-// 0x00/0x10/0x20: real-hardware CP registers of unknown purpose (Dolphin's
-// own CPMemory.h names them UNKNOWN_00/UNKNOWN_10/UNKNOWN_20). Inert for
-// vertex/geometry state in Dolphin's LoadCPReg reference: stored, never
-// consulted by any downstream state.
+// 0x00/0x10/0x20: registers of unknown purpose (UNKNOWN_00/10/20 in Dolphin's CPMemory.h)
+// with no effect on vertex state; stored, never read.
 inline constexpr std::uint8_t kUnknown00 = 0x00;
 inline constexpr std::uint8_t kUnknown10 = 0x10;
 inline constexpr std::uint8_t kUnknown20 = 0x20;
@@ -127,30 +114,22 @@ inline constexpr std::uint8_t kArrayBaseBase = 0xA0;    // +attr index (0-15)
 inline constexpr std::uint8_t kArrayStrideBase = 0xB0;
 }  // namespace cp
 
-// ---------------------------------------------------------------------------
-// XF (Transform Unit) memory addresses (LOAD_XF_REG: count, base, values).
-// ---------------------------------------------------------------------------
+// XF (transform unit) memory (LOAD_XF_REG: count, base, values).
 namespace xf {
 inline constexpr std::uint16_t kPosMatricesBase = 0x0000;  // 0x000-0x0FF
 inline constexpr std::uint16_t kNormalMatricesBase = 0x0400;
 inline constexpr std::uint16_t kPostMatricesBase = 0x0500;
 inline constexpr std::uint16_t kLightsBase = 0x0600;
-// XFMEM_ERROR..XFMEM_UNKNOWN_1007 (0x1000-0x1007) and XFMEM_VTXSPECS
-// (0x1008): real Flipper XF status/diagnostic registers. Confirmed inert for
-// rendering output (Dolphin's XFRegWritten treats 0x1000-0x1006 as literal
-// no-ops, 0x1007 is unhandled/unknown-but-inert, and 0x1008 only toggles an
-// internal CP/XF consistency-check flag with no shader/geometry effect).
+// XFMEM_ERROR..XFMEM_UNKNOWN_1007 (0x1000-0x1007) and XFMEM_VTXSPECS (0x1008): status and
+// diagnostic registers with no effect on rendering (Dolphin's XFRegWritten ignores
+// 0x1000-0x1007; 0x1008 only feeds a CP/XF consistency check).
 inline constexpr std::uint16_t kStatusRegsBase = 0x1000;
 inline constexpr std::uint16_t kNumChannels = 0x1009;
-inline constexpr std::uint16_t kDualTexTrans = 0x1012;  // bit 0 = dual-tex
-                                                        // (post-matrix) enable
-                                                        // 0x1013-0x1017: XFMEM_UNKNOWN_GROUP_1, genuinely unknown/undocumented on real
-                                                        // hardware (Dolphin's own XFRegWritten default case: analytics/log only, no xfmem
-                                                        // state mutation). 0x1018-0x1019: XFMEM_SETMATRIXINDA/B, the XF-side latch of the
-                                                        // current position/texture matrix index. This backend sources every matrix-index
-                                                        // consumer (vertex_loader.cpp, shader_gen.cpp, gx_backend.cpp) from the CP-side
-                                                        // kMatrixIndexA/kMatrixIndexB copy that the real SDK keeps synchronized. The XF
-                                                        // latch is therefore never read here; it is ignored, not stubbed.
+inline constexpr std::uint16_t kDualTexTrans = 0x1012;  // bit 0: dual-tex (post-matrix) enable
+// 0x1013-0x1017: XFMEM_UNKNOWN_GROUP_1, undocumented (Dolphin's XFRegWritten only logs them).
+// 0x1018-0x1019: XFMEM_SETMATRIXINDA/B, the XF copy of the current matrix indices. Every
+// consumer reads the CP copy (cp::kMatrixIndexA/B), which the SDK keeps in step, so these are
+// stored and never read.
 inline constexpr std::uint16_t kUnknownGroup1Base = 0x1013;  // 0x1013-0x1019
 inline constexpr std::uint16_t kAmbientColorBase = 0x100A;  // 0x100A-0x100B
 inline constexpr std::uint16_t kMaterialColorBase = 0x100C; // 0x100C-0x100D
@@ -161,10 +140,6 @@ inline constexpr std::uint16_t kTexGenBase = 0x1040;        // 0x1040-0x1047
 inline constexpr std::uint16_t kPostTexGenBase = 0x1050;    // dual-tex transforms
 inline constexpr std::uint16_t kViewportBase = 0x101A;      // 6 floats
 }  // namespace xf
-
-// ---------------------------------------------------------------------------
-// Enumerations.
-// ---------------------------------------------------------------------------
 
 enum class TevColorArg : std::uint8_t {
     CPrev = 0, APrev, C0, A0, C1, A1, C2, A2,
@@ -233,10 +208,6 @@ enum class ColorComponentFormat : std::uint8_t {
 enum class TexGenType : std::uint8_t {
     Regular = 0, EmbossMap = 1, Color0 = 2, Color1 = 3,
 };
-
-// ---------------------------------------------------------------------------
-// Decoded register views.
-// ---------------------------------------------------------------------------
 
 struct GenMode {
     std::uint8_t num_texgens;       // 0-8
@@ -339,8 +310,7 @@ struct TevOrder {
     };
 }
 
-// Fully describes one TEV stage; the unit of shader keying and the bit-packed
-// uber-shader stage array.  Assembled by GxState from four BP register reads.
+// One TEV stage, the unit of shader keying, assembled by GxState from four BP registers.
 struct TevStageConfig {
     // Color env (BP 0xC0 + 2*stage).
     TevColorArg color_a, color_b, color_c, color_d;
@@ -749,11 +719,8 @@ struct XfChannelCtrl {
     };
 }
 
-// ---------------------------------------------------------------------------
-// Vertex descriptor: VCD_LO/VCD_HI (which attributes, direct vs indexed) plus
-// VAT A/B/C for one of the eight vertex formats (component types and counts).
-// ---------------------------------------------------------------------------
-
+// Vertex descriptor: VCD_LO/VCD_HI (which attributes, direct or indexed) plus VAT A/B/C for
+// one of the eight vertex formats (component types and counts).
 struct VertexAttribute {
     VcdType vcd;                    // not present / direct / index8 / index16
     std::uint8_t count;             // component count selector (e.g. xy vs xyz)
@@ -765,7 +732,7 @@ struct VertexDescriptor {
     bool has_pn_matrix_index;       // per-vertex position matrix index byte
     bool has_tex_matrix_index[8];   // per-vertex texture matrix index bytes
     VertexAttribute position;
-    VertexAttribute normal;         // count: 0=3 normals? 0=single, 1=NBT
+    VertexAttribute normal;         // count: 0 = normal only, 1 = NBT
     VertexAttribute color[2];
     VertexAttribute texcoord[8];
     bool byte_dequant;              // VAT_A bit 30
@@ -836,9 +803,8 @@ struct VertexDescriptor {
     return d;
 }
 
-// Wii LOADTLUT and texture TLUT references use the same absolute TMEM slot
-// domain. No implicit 0x80000 bias is added. GameCube's source-address mask
-// is deliberately absent from this RMGE01 Wii runtime.
+// Wii TLUT loads and texture TLUT references address TMEM alike, with no 0x80000 bias; the
+// GameCube source-address mask does not apply.
 inline constexpr std::uint32_t kTmemBytes = 0x100000u;
 [[nodiscard]] constexpr bool cull_all_suppresses_primitive(
     CullMode cull, PrimitiveClass primitive) noexcept {

@@ -1,19 +1,9 @@
 #pragma once
 
-// FifoParser: opcode dispatch over the captured GX FIFO byte stream.
+// GX FIFO command parser: dispatches the big-endian command stream to GxState and a FifoSink.
 //
-// Hard-fail contract (repo rule): an unknown opcode, a truncated payload, or
-// an unresolvable guest pointer throws GxFatalError after dumping the
-// surrounding FIFO window to a .gxdump file replayable in GxSandbox. Unknown
-// CP/XF/BP state writes are fatal before state mutation. Hardware-observed
-// no-op command bytes are accepted only where explicitly classified.
-//
-// Endianness: all FIFO payloads are big-endian. FifoCursor provides checked
-// scalar reads for opcodes and register payloads (a few bytes each) and a
-// raw take() window so bulk consumers (VertexLoader) can run the SIMD
-// byte-swap kernels below over whole vertex arrays instead of per-byte reads.
-//
-// No Windows/D3D12 includes; unit-testable offline.
+// An unknown opcode, a truncated payload or an unmapped guest pointer throws GxFatalError after
+// the FIFO is written to a .gxdump file. Hardware no-op opcodes are accepted only where listed.
 
 #include "galaxy/gx/gx_bitfields.h"
 #include "galaxy/gx/gx_state.h"
@@ -54,8 +44,7 @@ inline constexpr std::size_t kHostMarkerBytes = 12u;
 
 inline constexpr int kMaxDisplayListDepth = 4;
 
-// Fatal parse error.  Carries the stream offset and offending opcode so the
-// .gxdump writer and the log line can pinpoint the failure.
+// Fatal parse error, with the FIFO offset and opcode of the failure.
 class GxFatalError : public std::runtime_error {
 public:
     GxFatalError(
@@ -74,9 +63,8 @@ private:
     std::uint8_t opcode_;
 };
 
-// Internal streaming signal: the top-level capture ended in the middle of a
-// command. VI retraces are not GX command boundaries, so the caller retains
-// bytes from command_offset() and retries when more FIFO data arrives.
+// The top-level capture ended inside a command. VI retraces are not command boundaries, so
+// the caller keeps the bytes from command_offset() and retries when more FIFO data arrives.
 class FifoNeedMoreData final : public std::exception {
 public:
     explicit FifoNeedMoreData(std::size_t command_offset)
@@ -90,27 +78,19 @@ private:
     std::size_t command_offset_;
 };
 
-// ---------------------------------------------------------------------------
-// Bulk big-endian -> little-endian conversion kernels: 16-byte vectors
-// (galaxy/simd128.h) with a scalar tail; vertex arrays are the hot path and
-// must never go through per-byte scalar reads.
-// ---------------------------------------------------------------------------
-
-// Swaps `count` 32-bit values from src into dst (may not alias).
+// Byte-swaps `count` big-endian 32-bit values from src into dst (no aliasing), 16 bytes per
+// vector with a scalar tail.
 void swap32_block(
     const std::byte* src,
     std::uint32_t* dst,
     std::size_t count);
 
-// ---------------------------------------------------------------------------
-// FifoCursor: checked reads over one command stream (top-level FIFO buffer or
-// a CALL_DL guest window).  All reads throw GxFatalError on underrun.
-// ---------------------------------------------------------------------------
+// Checked big-endian reads over one command stream (the top-level FIFO or a CALL_DL window).
+// An underrun throws GxFatalError, or FifoNeedMoreData when recover_truncation is set.
 struct FifoCursor {
     std::span<const std::byte> data;
     std::size_t offset = 0;
-    // Offset of this window within the frame's top-level FIFO capture (zero
-    // for the top level itself); used for error reporting and .gxdump.
+    // Added to `offset` in error reports: 0 at top level, the CALL_DL opcode offset in a list.
     std::size_t base_offset = 0;
     std::size_t command_offset = 0;
     bool recover_truncation = false;
@@ -141,8 +121,7 @@ struct FifoCursor {
         return v;
     }
 
-    // Hands out a raw window of `size` bytes and advances past it.  Bulk
-    // consumers pair this with swap16_block/swap32_block; no per-byte loop.
+    // Returns the next `size` bytes unswapped, for bulk consumers, and advances past them.
     std::span<const std::byte> take(std::size_t size) {
         require(size);
         const auto window = data.subspan(offset, size);
@@ -195,11 +174,8 @@ struct CachedDrawPacketRun {
     std::size_t index_count = 0;
 };
 
-// ---------------------------------------------------------------------------
-// FifoSink: parser callbacks for everything that is not a plain register
-// load.  Register loads are routed directly into the GxState passed to run().
-// GxBackend implements this interface.
-// ---------------------------------------------------------------------------
+// Parser callbacks for everything but register loads, which go straight to the GxState passed
+// to run(). Implemented by GxBackend.
 struct FifoSink {
     virtual ~FifoSink() = default;
 
@@ -217,25 +193,22 @@ struct FifoSink {
         (void)offset;
     }
 
-    // Byte count of the in-band vertex payload for a draw. The parser uses
-    // this to verify that the complete command is present before invoking
-    // on_draw, keeping callbacks transactional across capture boundaries.
+    // Byte count of a draw's inline vertex payload. The parser checks that the whole command
+    // is present before calling on_draw, so no callback sees a command cut by a capture boundary.
     [[nodiscard]] virtual std::size_t draw_payload_size(
         std::uint8_t vtxfmt,
         std::uint16_t vertex_count) const = 0;
 
-    // Draw command (0x80-0xBF).  The cursor is positioned at the u16 vertex
-    // count; the implementation must consume the entire vertex payload
-    // (normally by handing the cursor to VertexLoader).
+    // Draw command (0x80-0xBF). The cursor is at the u16 vertex count; the implementation must
+    // consume the whole vertex payload (normally through VertexLoader).
     virtual void on_draw(
         PrimitiveClass primitive,
         std::uint8_t vtxfmt,
         FifoCursor& cursor) = 0;
 
-    // Cached display-list replay may contain long runs of draw packets with no
-    // intervening state command. A sink can opt into a prepared run so it can
-    // resolve immutable draw state once while the parser still replays each
-    // packet in order and verifies exact cursor consumption.
+    // Brackets a cached run of `draw_count` draws with no state command between them, so the
+    // sink can resolve draw state once; the parser still replays and checks each packet.
+    // end_cached_draw_run follows only when this returns true.
     [[nodiscard]] virtual bool begin_cached_draw_run(
         PrimitiveClass primitive,
         std::uint8_t vtxfmt,
@@ -247,11 +220,9 @@ struct FifoSink {
     }
     virtual void end_cached_draw_run() {}
 
-    // Optional fast path for cached display-list runs made entirely of
-    // consecutive compatible draw packets with identical VCD/VAT state. A
-    // sink may concatenate packets whose primitive restart semantics are
-    // preserved by concatenation; the parser falls back to exact
-    // packet-by-packet replay when this returns false.
+    // Fast path for a cached run of draws with one primitive and vertex format whose packets can
+    // be concatenated without changing the primitives drawn. Returning false makes the parser
+    // replay the packets one by one.
     [[nodiscard]] virtual bool on_cached_simple_draw_run(
         PrimitiveClass primitive,
         std::uint8_t vtxfmt,
@@ -266,10 +237,8 @@ struct FifoSink {
         return false;
     }
 
-    // Prepared form of the same fast path. The parser builds the synthetic
-    // u16-count + concatenated vertex payload once when a display list enters
-    // the cache; replay can then hand that exact payload to the sink without
-    // allocating or copying per frame.
+    // The same run with its payload built once when the list is cached: a u16 total vertex
+    // count followed by the concatenated vertex data.
     [[nodiscard]] virtual bool on_cached_prepared_draw_run(
         PrimitiveClass primitive,
         std::uint8_t vtxfmt,
@@ -288,9 +257,8 @@ struct FifoSink {
         return false;
     }
 
-    // Packet-preserving fast path for cached runs that cannot be raw
-    // concatenated (for example strips and fans). The sink must replay every
-    // packet in order; this only removes parser dispatch overhead.
+    // Fast path for a cached run kept as separate packets (strips, fans): the sink draws every
+    // packet in order.
     [[nodiscard]] virtual bool on_cached_packet_draw_run(
         std::uint64_t cache_token,
         std::size_t packet_run_index,
@@ -319,18 +287,14 @@ struct FifoSink {
     // Combine with GxState::efb_copy(exec_command) for the full snapshot.
     virtual void on_efb_copy(std::uint32_t exec_command) = 0;
 
-    // BP 0x45 / 0x47 / 0x48: GXDrawDone and draw-sync tokens. These must be
-    // routed back into the runtime's PE interrupt machinery.
+    // BP 0x45 / 0x47 / 0x48: GXDrawDone and draw-sync tokens, raised as PE interrupts.
     virtual void on_pe_finish() = 0;
     virtual void on_pe_token(std::uint16_t token, bool interrupt) = 0;
 
-    // The BP write pattern emitted by GXInvalidateTexAll(); the only texture
-    // invalidation signal (explicit invalidation, no content hashing).
+    // BP 0x66 written with 0, as GXInvalidateTexAll() does.
     virtual void on_invalidate_textures() = 0;
 
-    // BP 0x65 (TLUT dest/trigger) was written: a palette transfer from guest
-    // memory (source latched in BP 0x64) into the TMEM TLUT bank must execute
-    // now.  Default no-op so offline replay sinks need not care.
+    // BP 0x65 written: the palette at the BP 0x64 address loads into TMEM now.
     virtual void on_tlut_load() {}
 
     // Opcode 0x48 (vertex cache invalidate): informational.
@@ -366,8 +330,7 @@ struct FifoParserProfile {
     std::uint64_t call_dl_cache_misses = 0;
     std::uint64_t call_dl_cache_stores = 0;
     std::uint64_t call_dl_cache_uncacheable = 0;
-    // First-sight lists: the parse that records them (nested commands
-    // included) and the cache store that prepares their replay.
+    // Cache misses: parsing the list (nested commands included) and storing it for replay.
     std::uint64_t call_dl_miss_parse_us = 0;
     std::uint64_t call_dl_store_us = 0;
     std::uint64_t call_dl_replay_command_count = 0;
@@ -385,8 +348,7 @@ struct FifoParserProfile {
     std::uint64_t call_dl_replay_draw_us = 0;
     std::uint64_t call_dl_replay_misc_count = 0;
     std::uint64_t call_dl_replay_misc_us = 0;
-    // Preserve sub-microsecond category work across commands/runs. The public
-    // us totals above are derived from these inclusive category accumulators.
+    // Nanosecond sums behind the replay *_us fields above, so sub-microsecond commands count.
     std::uint64_t call_dl_replay_state_ns = 0;
     std::uint64_t call_dl_replay_indx_ns = 0;
     std::uint64_t call_dl_replay_draw_ns = 0;
@@ -416,9 +378,7 @@ struct FifoGuestMemoryReadRecorder {
     virtual void record_guest_memory_read(
         std::uint32_t guest_addr,
         std::uint32_t size) = 0;
-    // The render-side ordered capture needs the exact bytes at the instant
-    // CALL_DL or LOAD_INDX resolves them. Legacy range scans keep the cheaper
-    // address/size callback through this default forwarding method.
+    // The bytes as CALL_DL or LOAD_INDX resolves them; the default passes on only the range.
     virtual void record_guest_memory_read_bytes(
         std::uint32_t guest_addr,
         std::span<const std::byte> bytes) {
@@ -433,28 +393,27 @@ struct FifoGuestMemoryReadRecorder {
     }
 };
 
-// ---------------------------------------------------------------------------
-// FifoParser.
-// ---------------------------------------------------------------------------
 class FifoParser {
 public:
 
-    // Parses one frame's accumulated FIFO bytes.  Register loads mutate
-    // `state` (including LOAD_INDX resolution through `memory`); draws, EFB
-    // copies, PE events, and invalidations are dispatched to `sink`.
-    // CALL_DL recurses into guest memory windows up to kMaxDisplayListDepth.
+    // Parses one frame's FIFO bytes. Register loads update `state` (LOAD_INDX reads `memory`);
+    // draws, EFB copies, PE events and invalidations go to `sink`. CALL_DL recurses up to
+    // kMaxDisplayListDepth. Before a GxFatalError propagates, the FIFO is written to
+    // `<dump_dir>/frame<N>.gxdump`.
     //
-    // Throws GxFatalError per the hard-fail contract; before throwing, the
-    // offending window is written to `<dump_dir>/frame<N>.gxdump`.
+    // `frozen_regions` promises that memory's region table does not change during the call,
+    // sink and recorder callbacks included. The parser then checks once that the regions are
+    // sorted and disjoint and resolves pointers by binary search; otherwise the first region
+    // containing the range wins. Nested calls restore the enclosing setting.
     void run(
         std::span<const std::byte> fifo,
         GuestMemory* memory,
         FifoSink& sink,
         GxState& state,
         bool frozen_regions = false);
-    // Parses all complete top-level commands. If the capture ends in the
-    // middle of a command, returns that command's start offset so the caller
-    // can retain the tail. Malformed input and CALL_DL windows remain fatal.
+    // Parses every complete top-level command and returns the offset of the first incomplete
+    // one (the end when there is none) for the caller to retain. A truncated CALL_DL window
+    // is still fatal.
     [[nodiscard]] std::size_t run_available(
         std::span<const std::byte> fifo,
         GuestMemory* memory,
@@ -462,26 +421,14 @@ public:
         GxState& state,
         bool frozen_regions = false);
 
-    // frozen_regions promises the region pointer, count and descriptors stay
-    // immutable throughout this invocation, including sink/recorder callbacks.
-    // Each invocation still verifies sorted, disjoint, mapped extents before using
-    // indexed lookup. Generic inputs retain first-containing-region resolution and
-    // fast-region precedence. Nested calls and exceptions restore the enclosing
-    // capability.
-
-    // Directory for .gxdump failure artifacts (default: current directory).
+    // Directory for .gxdump files (default: current directory).
     void set_dump_dir(std::string dump_dir);
 
-    // Optional per-run profiler. The parser never owns this pointer; callers
-    // set it only while gathering diagnostics.
-    //
-    // A nonnull profile enables both counts and per-command clocks. Ordinary
-    // parsing uses a null profile. Cached replay categories include sink work
-    // and batched run teardown; the replay total is inclusive, recorded once.
+    // Optional profiler, not owned. Null (the default) skips all counting and per-command
+    // clocks. Cached-replay categories include sink work.
     void set_profile(FifoParserProfile* profile) { profile_ = profile; }
 
-    // Optional read recorder for dependency scanning. The parser never owns
-    // this pointer; normal rendering leaves it null.
+    // Optional read recorder for dependency scanning, not owned; null in normal rendering.
     void set_memory_read_recorder(FifoGuestMemoryReadRecorder* recorder) {
         memory_read_recorder_ = recorder;
     }
@@ -597,10 +544,8 @@ private:
     struct DisplayListCacheKeyHash {
         [[nodiscard]] std::size_t operator()(
             const DisplayListCacheKey& key) const noexcept {
-            // CALL_DL addresses and sizes are 32-byte aligned. Whole-word
-            // FNV mixing leaves five identical low bits, producing long
-            // chains in power-of-two bucket tables. Mix high bits downward
-            // before bucket selection; exact key equality still decides hits.
+            // CALL_DL addresses and sizes are 32-byte aligned, so their low five bits are zero;
+            // the splitmix64 finalizer spreads the key over power-of-two bucket tables.
             std::uint64_t hash = (std::uint64_t{key.guest_addr} << 32u) |
                 key.byte_size;
             hash ^= hash >> 30u;
@@ -678,18 +623,11 @@ private:
     std::uint64_t display_list_cache_tick_ = 0;
     std::uint64_t display_list_cache_token_ = 0;
     std::size_t last_display_list_cache_index_ = static_cast<std::size_t>(-1);
-    // Gameplay touches hundreds of small display lists per frame, so a small cache
-    // forces most nested lists to be re-parsed every frame.
-    // Keep the fixed-capacity cache off the parser object's stack; each entry
-    // owns several replay vectors, and diagnostics/tests construct parsers as
-    // local variables.
+    // Gameplay calls hundreds of display lists per frame, all of which should stay cached. The
+    // slots live on the heap because tests construct parsers as local variables.
     static constexpr std::size_t kDisplayListCacheCapacity = 2048;
-    // The entry count alone is not a memory bound: one entry may hold a 4 MiB
-    // list plus a duplicate of every draw payload, so a full cache can retain
-    // gigabytes. `cache_bytes_` sums retained vector CAPACITY, including invalid
-    // slots whose buffers await reuse. A store over budget reclaims invalid
-    // storage before evicting least-recently-used valid entries. Eviction only
-    // costs a later re-parse of that list.
+    // Retained vector capacity of every slot, invalid ones included. One entry can hold a 4 MiB
+    // list plus a copy of its draw payloads, so the cache is bounded in bytes as well as slots.
     std::uint64_t cache_bytes_ = 0;
     std::vector<CachedDisplayList> display_list_cache_ =
         std::vector<CachedDisplayList>(kDisplayListCacheCapacity);
@@ -707,14 +645,11 @@ private:
         display_list_cache_page_map_{};
 
     [[nodiscard]] std::uint64_t display_list_cache_budget_bytes() const;
-    // Sums the retained capacity of one cached entry. Pure observation: it must
-    // be callable for a live entry without changing any cache state.
+    // Retained capacity of one entry's vectors.
     [[nodiscard]] static std::uint64_t display_list_cache_entry_bytes(
         const CachedDisplayList& cached) noexcept;
-    // Releases invalid storage, then drops least-recently-used valid entries
-    // until cache_bytes_ fits the budget. `skip_index` is never evicted, so a
-    // caller that just filled that slot keeps its entry even when the entry
-    // alone exceeds the budget.
+    // Frees invalid slots' storage, then evicts least-recently-used entries until cache_bytes_
+    // fits the budget. `skip_index`, the slot just filled, is kept even if it alone exceeds it.
     void evict_display_list_cache_to_budget(std::size_t skip_index);
 };
 

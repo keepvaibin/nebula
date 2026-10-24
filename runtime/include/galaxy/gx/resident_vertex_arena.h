@@ -1,26 +1,17 @@
 #pragma once
 
-// ResidentVertexArena: the allocator behind GPU-resident decoded vertices.
+// ResidentVertexArena: allocator for GPU-resident decoded vertices.
 //
-// A decoded packet-run cache entry is immutable: its vertices are a pure
-// function of the cached display-list bytes, the VCD/VAT/array key and the
-// byte-validated indirect array snapshot. Re-copying those vertices into the
-// per-frame upload ring on every replay (tens of MB per frame in dense scenes)
-// buys nothing, so each entry instead owns one block of a persistently mapped
-// buffer that draws reference directly.
-//
-// The arena is plain bookkeeping over unit (vertex) offsets; it owns no GPU
-// object and includes no D3D12 header, so its retirement rules are unit
-// tested directly. Rules:
-//   * allocate() is first-fit from the lowest offset, so entries created in
-//     replay order are laid out contiguously and adjacent runs can still merge
-//     into one draw batch.
-//   * release() never makes a block reusable immediately: the GPU may still be
-//     reading it for any frame recorded up to now. The block becomes free only
-//     after advance_frame() has been called `frames_in_flight` more times,
-//     i.e. after the renderer has waited for the frame that last used it.
-//   * reset() forgets everything (device teardown) and bumps epoch(); offsets
-//     from an older epoch must not be used.
+// A decoded packet-run cache entry depends only on the cached display-list bytes, the
+// VCD/VAT/array key and the validated indexed-array snapshot, so its vertices live in one block
+// of a persistently mapped buffer that draws reference directly, instead of being copied into
+// the upload ring on every replay. The arena tracks vertex offsets only and owns no GPU object.
+//   * allocate() is first-fit from the lowest offset, so entries created in replay order stay
+//     contiguous and adjacent runs can merge into one draw batch.
+//   * A released block becomes free only after `frames_in_flight` more advance_frame() calls,
+//     once the GPU can no longer be reading it.
+//   * reset() forgets everything (device teardown) and bumps epoch(); offsets from an older
+//     epoch are invalid.
 
 #include <algorithm>
 #include <cstddef>
@@ -77,9 +68,9 @@ public:
         retired_.push_back(Retired{offset, units, serial_});
     }
 
-    // Retirement depth in advance_frame() calls. Interpolated redraw replays
-    // a game frame's draws until its ring segment comes round again: the
-    // caller then advances once per game frame with the segment count.
+    // Retirement depth in advance_frame() calls. Interpolated redraws replay a game frame's
+    // draws until its ring segment comes round again, so the caller then advances once per
+    // game frame with the segment count.
     void set_frames_in_flight(unsigned frames_in_flight) noexcept {
         frames_in_flight_ = frames_in_flight == 0u ? 1u : frames_in_flight;
     }

@@ -6,10 +6,9 @@
 
 namespace galaxy::gx {
 
-// Conservative set of 64-KiB pages, folded into 64 bits. A shared byte must
-// produce a shared bit; collisions only send extra work to the exact check.
-// Addresses are already canonicalized by the caller. Match the exact overlap
-// check's wide half-open end rather than wrapping guest address arithmetic.
+// The 64 KiB pages a range touches, folded into 64 bits: overlapping ranges always share a
+// bit, and false sharing only sends work to the exact check. The address is canonical; the
+// end is computed in 64 bits, as in the exact check, so it never wraps.
 [[nodiscard]] constexpr std::uint64_t dependency_page_mask(
     std::uint32_t canonical_address, std::uint32_t size) noexcept {
     if (size == 0u) return 0u;

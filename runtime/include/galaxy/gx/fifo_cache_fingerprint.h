@@ -8,10 +8,9 @@
 
 namespace galaxy::gx {
 
-// Lookup filter only: a matching fingerprint must still pass the cache's size
-// and exact FIFO byte comparison. Four independent word lanes avoid a serial
-// per-byte multiply chain; memcpy allows unaligned input and never reads past
-// the span.
+// Lookup filter only: a matching fingerprint must still pass the cache's size and exact FIFO
+// byte comparison. Four independent 64-bit lanes avoid one serial multiply chain; memcpy
+// handles unaligned input.
 [[nodiscard]] inline std::uint64_t dependency_fifo_fingerprint(
     std::span<const std::byte> bytes) noexcept {
     constexpr std::uint64_t prime = 1099511628211ull;

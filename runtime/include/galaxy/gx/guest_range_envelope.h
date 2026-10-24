@@ -8,10 +8,10 @@
 
 namespace galaxy::gx::detail {
 
-// Rejection filter, never an eviction index. Each band encloses every range
-// published since clear(); removals can leave a larger envelope safely. Split
-// MEM1/MEM2 address domains so their large intervening hole does not turn
-// ordinary MEM1 writes into candidates for an entirely MEM2 texture cache.
+// Quick rejection filter for overlap tests, never an eviction index: per address band (MEM1,
+// MEM2, above), the envelope of every range included since clear(). Removed ranges may leave
+// it too large, which is harmless. Separate bands keep MEM1 writes from matching a cache that
+// holds only MEM2 ranges across the hole between them.
 class ConservativeGuestRangeEnvelope {
 public:
     void clear() noexcept { bands_ = {}; }
@@ -43,8 +43,8 @@ public:
         return false;
     }
 
-    // Same sorted/coalesced non-overlapping range contract as the cache's
-    // precise overlap search; range fields are guest_addr and size.
+    // `ranges` must be sorted and non-overlapping, as for the cache's exact overlap search;
+    // Range has guest_addr and size.
     template <class Range>
     [[nodiscard]] bool may_overlap(std::span<const Range> ranges) const noexcept {
         if (ranges.empty()) return false;

@@ -1,15 +1,7 @@
-// vertex_loader.cpp: VertexLoader implementation.
+// VertexLoader: decodes GX draw packets into GxVertexOut vertices and 16-bit index lists.
 //
-// Converts one GX draw packet (any VCD/VAT combination, direct or indexed
-// attributes) into the canonical GxVertexOut stream plus an index list for
-// triangle/line/point draws written into the frame's upload rings.
-//
-// Design invariants:
-//  - Attribute streams are bounded once, then converted through local endian
-//    loads; each component reads exactly its encoded byte width.
-//  - Color attributes never pass through the swap kernels (see below).
-//  - Unknown/unsupported configurations throw GxFatalError (hard-fail).
-//  - Indexed attributes resolve through GuestMemory; unmapped memory throws GxFatalError.
+// Each component reads exactly its encoded byte width. Unsupported formats and unmapped
+// indexed arrays throw GxFatalError.
 
 #include "galaxy/gx/vertex_loader.h"
 #include "galaxy/gx/vertex_dequant.h"
@@ -37,10 +29,6 @@
 #include <utility>
 
 namespace galaxy::gx {
-
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
 
 namespace {
 
@@ -74,19 +62,12 @@ struct RecordedIndexedArrayRange {
     std::uint64_t end = 0;
 };
 
-// Upper bound on one recorded dependency span. `record_read` accumulates the
-// bytes an indexed attribute actually touched so the decoded-vertex cache can
-// snapshot them and later detect a guest write with a memcmp. Collapsing every
-// read of one attribute into a single [min,max) span would make that span the
-// whole indexed array whenever a run's indices are scattered. Splitting the
-// accumulation at this granularity keeps the snapshot proportional to the bytes
-// actually read (plus bounded read-gap padding) instead of the array's extent.
+// Largest span one recorded read range may grow to. The decoded-vertex cache snapshots the
+// recorded bytes to detect guest writes, so scattered indices into a large array are recorded
+// as several bounded spans instead of one span covering the whole array.
 constexpr std::uint32_t kRecordedRangeChunkBytes = 64u * 1024u;
 
-// A read within this distance of either edge of the current chunk is absorbed
-// into that chunk rather than opening a new one and padding the gap into the
-// snapshot. Beyond it the gap is skipped entirely: the snapshot must cover the
-// bytes that were read, and it does not have to cover bytes that were not.
+// A read within this distance of the open span extends it; a farther read starts a new span.
 constexpr std::uint32_t kRecordedRangeGapBytes = 256u;
 
 [[noreturn]] static void throw_unmapped_indexed_array(
@@ -103,10 +84,8 @@ constexpr std::uint32_t kRecordedRangeGapBytes = 256u;
         fifo_offset, 0);
 }
 
-// Per-draw cache for CP array-backed indexed attributes. SMG gameplay replays
-// many small cached display-list draws; each draw often fetches position,
-// normal, color, and texcoord attributes from the same guest memory regions for
-// every vertex. Cache only the resolved mapping bounds, never data contents.
+// Resolves indexed attribute addresses for one draw. Each attribute keeps the guest region it
+// last hit (mapping bounds only, never data); the ranges read are recorded when requested.
 class IndexedArrayResolver {
 public:
     explicit IndexedArrayResolver(
@@ -148,14 +127,13 @@ public:
         if (read_ranges_ == nullptr) {
             return;
         }
-        // Closed chunks were already appended in read order; emit the one
-        // remaining active chunk per attribute in stable attribute order.
+        // Closed spans are already in read order; each attribute's open span follows, in
+        // attribute order.
         for (RecordedIndexedArrayRange& range : read_range_accum_) {
             finish_chunk(range);
         }
         if (read_ranges_->empty()) {
-            // The decode result normally starts empty. Transfer the finished
-            // vector instead of allocating and copying the same ranges again.
+            // The decode result normally starts empty, so the vector is moved, not copied.
             *read_ranges_ = std::move(read_range_finished_);
         } else {
             read_ranges_->insert(read_ranges_->end(),
@@ -186,10 +164,9 @@ private:
             current = RecordedIndexedArrayRange{true, address, end};
             return;
         }
-        // Extend the newest chunk while the read stays inside it or within the
-        // small padding window; otherwise close it and start a new one. The
-        // span always contains every byte that was read, so the snapshot still
-        // covers exactly the data the decode depended on.
+        // The open span grows while the read is within kRecordedRangeGapBytes of it and the
+        // span stays within kRecordedRangeChunkBytes; otherwise a new span starts. Every byte
+        // read lies in some span.
         const bool inside = address >= current.begin && end <= current.end;
         if (inside) {
             return;
@@ -202,8 +179,7 @@ private:
         const bool still_bounded =
             extended_end - extended_begin <= kRecordedRangeChunkBytes;
         if (contiguous_enough && still_bounded) {
-            // Indices need not be monotonic. Retain the entire union even
-            // when this read precedes the first read of the active chunk.
+            // Indices are not monotonic, so the read may lie before the span.
             current.begin = extended_begin;
             current.end = extended_end;
             return;
@@ -266,12 +242,9 @@ private:
 
     GuestMemory* memory_ = nullptr;
     std::array<ResolvedGuestRange, 16> ranges_{};
-    // Only the active chunk needs per-attribute state. Closed chunks already
-    // live in read_range_finished_; retaining them twice adds heap churn.
+    // The open span of each attribute.
     std::array<RecordedIndexedArrayRange, 16> read_range_accum_{};
-    // Closed chunks, including a bounded gap-fill prefix for the span of the
-    // current chunk. Emitted after the last read so ranges reach the caller in
-    // a deterministic order.
+    // Closed spans in read order, handed to the caller by emit_recorded_ranges().
     std::vector<VertexDecodeGuestRange> read_range_finished_;
 
     void finish_chunk(RecordedIndexedArrayRange& range) {
@@ -289,7 +262,6 @@ private:
     DependencyEventSink* dependency_event_sink_ = nullptr;
 };
 
-// Read a big-endian u16 from an arbitrary host byte pointer.
 [[nodiscard]] static std::uint16_t read_be_u16(const std::byte* p)
 {
     return static_cast<std::uint16_t>(
@@ -297,8 +269,7 @@ private:
          static_cast<std::uint16_t>(std::to_integer<std::uint8_t>(p[1])));
 }
 
-// Byte size of one element for position / normal / texcoord component formats.
-// ComponentFormat: U8=0, S8=1, U16=2, S16=3, F32=4.
+// Byte size of one position, normal or texcoord component.
 [[nodiscard]] static std::size_t component_byte_size(std::uint8_t fmt)
 {
     switch (static_cast<ComponentFormat>(fmt)) {
@@ -314,8 +285,7 @@ private:
     }
 }
 
-// Byte size of one color element.
-// ColorComponentFormat: RGB565=0, RGB888=1, RGBX8888=2, RGBA4444=3, RGBA6666=4, RGBA8888=5.
+// Byte size of one color.
 [[nodiscard]] static std::size_t color_byte_size(std::uint8_t fmt)
 {
     switch (static_cast<ColorComponentFormat>(fmt)) {
@@ -332,11 +302,9 @@ private:
     }
 }
 
-// VertexAttribute::count for position/texcoord:
-//   0 = XY (2 components), 1 = XYZ (3 components).
-// Normal always has 3 components. NBT stores normal, tangent, and binormal
-// triples; normal_index_3 selects whether indexed NBT uses one shared index or
-// three separate indices.
+// VertexAttribute::count: position 0 = XY, 1 = XYZ; texcoord 0 = S, 1 = ST. A normal always
+// has three components; with NBT (count 1) the vertex carries normal, tangent and binormal,
+// and normal_index_3 selects one shared index or three.
 [[nodiscard]] static std::size_t pos_component_count(std::uint8_t count)
 {
     return (count == 0) ? 2u : 3u;   // XY / XYZ
@@ -347,7 +315,7 @@ private:
     return (count == 0) ? 1u : 2u;   // S / ST
 }
 
-// De-quantise a fixed-point scalar to float.
+// Fixed-point component to float.
 [[nodiscard]] static float dequant_u8(std::uint8_t v, std::uint8_t shift)
 {
     return detail::dequantize_vertex_integer(v, shift);
@@ -365,9 +333,7 @@ private:
     return detail::dequantize_vertex_integer(static_cast<std::int16_t>(v), shift);
 }
 
-// Decode `count` float32 big-endian components from `src` into `dst`.
-// Vertex attributes contain at most three components. The bulk swap helper's
-// four-lane SIMD path cannot run here, so convert directly in one local loop.
+// Decodes up to three big-endian float32 components, too few for swap32_block's four lanes.
 static void decode_floats(
     const std::byte* src,
     float* dst,
@@ -376,14 +342,13 @@ static void decode_floats(
     assert(count <= 3);
     for (std::size_t i = 0; i < count; ++i) {
         std::uint32_t word;
-        // Unaligned and alias-safe; exactly four bytes, including edge inputs.
+        // Unaligned and alias-safe.
         std::memcpy(&word, src + i * sizeof(word), sizeof(word));
         dst[i] = std::bit_cast<float>(galaxy::byte_swap_u32(word));
     }
 }
 
-// Decode `count` components of the given ComponentFormat from big-endian `src`
-// into `dst` floats, applying fixed-point de-quantisation where appropriate.
+// Decodes `count` big-endian components of `fmt`; fixed-point formats are scaled by 2^-shift.
 static void decode_components(
     const std::byte* src,
     float* dst,
@@ -433,10 +398,8 @@ static void decode_components(
     }
 }
 
-// GX normal data is not controlled by the VAT fixed-point shift field used by
-// position/texcoord attributes. It is stored as a fixed fractional vector:
-// U8=0.7, S8=1.6, U16=0.15, S16=1.14, or raw F32. Feeding raw S8/S16 into
-// lighting/emboss makes dot products and texture offsets explode.
+// Normals ignore the VAT shift: their fixed-point formats are U8 0.7, S8 1.6, U16 0.15 and
+// S16 1.14 (or F32).
 static void decode_normal_components(
     const std::byte* src,
     float* dst,
@@ -482,12 +445,8 @@ static void decode_normal_components(
     }
 }
 
-// Decode one GX color value from big-endian bytes into a packed RGBA8 uint32.
-// The output is (R<<24)|(G<<16)|(B<<8)|A so that byte 0 = R in little-endian
-// memory, matching DXGI_FORMAT_R8G8B8A8_UNORM.
-//
-// Do not byte-swap these bytes: they are already in the right per-channel order
-// in the FIFO stream.
+// Decodes one color to (R << 24) | (G << 16) | (B << 8) | A. Color bytes are stored in
+// channel order and are never byte-swapped.
 [[nodiscard]] static std::uint32_t decode_color(
     const std::byte* src,
     ColorComponentFormat fmt)
@@ -535,7 +494,6 @@ static void decode_normal_components(
         const std::uint32_t g6 = (v >> 12) & 0x3Fu;
         const std::uint32_t b6 = (v >>  6) & 0x3Fu;
         const std::uint32_t a6 =  v        & 0x3Fu;
-        // Expand 6-bit to 8-bit: (val << 2) | (val >> 4).
         const std::uint32_t r8 = (r6 << 2) | (r6 >> 4);
         const std::uint32_t g8 = (g6 << 2) | (g6 >> 4);
         const std::uint32_t b8 = (b6 << 2) | (b6 >> 4);
@@ -552,7 +510,7 @@ static void decode_normal_components(
     }
 }
 
-// Decode position or normal from a big-endian source pointer into GxVertexOut.
+// U8/S8 positions and texcoords use the VAT shift only when byte_dequant is set.
 static void decode_pos(
     const std::byte* src,
     GxVertexOut& out,
@@ -647,10 +605,6 @@ static void decode_tex(
     }
 }
 
-// ---------------------------------------------------------------------------
-// source_vertex_size helpers
-// ---------------------------------------------------------------------------
-
 static std::size_t attr_direct_size_pos(const VertexAttribute& attr)
 {
     return component_byte_size(attr.format) * pos_component_count(attr.count);
@@ -701,10 +655,8 @@ struct PreparedVertexInputs {
     std::array<std::uint32_t, 12> array_strides{};
     std::uint32_t normal_vector_bytes = 0u;
     std::uint8_t default_position_matrix = 0u;
-    // Bit `ti` set when texture coordinate channel `ti` is present in the
-    // vertex stream (Direct/Index8/Index16). The decode loops use it to skip
-    // the channels that can only write two zeros and consume no bytes. Ordinary
-    // draws often leave most of the eight channels empty.
+    // Bit `ti` set when texcoord `ti` is in the vertex stream; absent channels are written as
+    // (0, 0) without decoding.
     std::uint8_t active_texcoord_mask = 0u;
 };
 
@@ -716,8 +668,7 @@ PreparedVertexInputs prepare_vertex_inputs(
         inputs.default_position_matrix = static_cast<std::uint8_t>(
             state.cp(cp::kMatrixIndexA) & 0x3fu);
     }
-    // The draw/run owns one fixed CP layout. Resolve its sizes and indexed
-    // array settings once, keeping per-vertex reads and byte conversion below.
+    // Sizes and array registers are fixed for the draw, so they are resolved once here.
     for (unsigned attr = 0u; attr < inputs.element_bytes.size(); ++attr) {
         const VertexAttribute& attribute = attr == 0u ? desc.position :
             attr == 1u ? desc.normal : attr < 4u ? desc.color[attr - 2u] :
@@ -765,18 +716,13 @@ void decode_vertex_stream(
             has_tex_matrix_index_mask |= static_cast<std::uint8_t>(1u << ti);
         }
     }
-    // Both predicates are pure functions of the per-draw layout, so evaluate
-    // them once instead of once per vertex. `off != src_stride` below still
-    // proves the same byte consumption.
     const bool normal_needs_three_indices = normal_uses_three_indices(desc);
     const bool normal_carries_nbt = normal_has_nbt(desc);
     const std::uint32_t normal_index_width =
         (desc.normal.vcd == VcdType::Index8) ? 1u : 2u;
     for (std::uint32_t vi = 0; vi < vtx_count; ++vi) {
-        // Decode into cached memory and write the finished vertex with one
-        // sequential copy. `verts` is normally upload-heap memory, which is
-        // write-combined on a discrete GPU, and scattered field stores there each
-        // stall. The zeroing of absent texture coordinates is one such case.
+        // Decoded on the stack and copied out whole: `verts` is usually write-combined upload
+        // memory, where scattered stores are slow.
         GxVertexOut out;
         const std::byte* vsrc =
             raw_ptr + static_cast<std::size_t>(vi) * src_stride;
@@ -788,10 +734,7 @@ void decode_vertex_stream(
         if (desc.has_pn_matrix_index) {
             pnmtx_idx = std::to_integer<std::uint8_t>(vsrc[off++]);
         }
-        // `desc.has_tex_matrix_index` is a per-draw constant, so its 8-bit
-        // pattern is available as a mask: iterate only the indices the stream
-        // actually carries and let the zero initializer above cover the rest.
-        // `off` therefore advances by exactly the same amount as before.
+        // Texture matrix indices absent from the stream stay 0.
         for (unsigned ti = 0; ti < 8; ++ti) {
             if ((has_tex_matrix_index_mask & (1u << ti)) != 0u) {
                 texmtx_idx[ti] = std::to_integer<std::uint8_t>(vsrc[off++]);
@@ -958,18 +901,8 @@ void decode_vertex_stream(
             float* uv = out.uv[ti];
             const unsigned attr_idx = 4u + ti;
 
-            // A channel absent from the stream must still deliver (0, 0) to the shader, which is
-            // what GX hardware and Dolphin supply for an absent attribute. `out` is raw upload-ring
-            // memory, not a value-initialized object: GxVertexOut has no default member
-            // initializers and UploadRing::allocate only bumps a cursor, so whatever the previous
-            // frame left at this offset is still there. Skipping the store would hand that stale
-            // pair to the vertex shader.
-            //
-            // The cached packet-run path zeroes the same fields (decoded.vertices.resize()
-            // value-initializes the whole 144-byte vertex, then the decode fills only the present
-            // channels), so both decode paths agree. This is eight bytes per absent channel per
-            // vertex, not per component, and the D3D12 input layout binds all eight TEXCOORDs
-            // unconditionally whether or not the VS samples them.
+            // An absent channel reads (0, 0), as on GX hardware. The store is needed: `out` is
+            // uninitialized, and the input layout binds all eight TEXCOORDs.
             if ((inputs.active_texcoord_mask & (1u << ti)) == 0u) {
                 out.uv[ti][0] = 0.0f;
                 out.uv[ti][1] = 0.0f;
@@ -1021,9 +954,8 @@ void emit_primitive_indices(
     std::uint32_t vtx_count,
     std::uint32_t index_vertex_bias,
     std::size_t fifo_error_offset) {
-    // Prove the largest index once per packet, rather than checking every
-    // emitted index. Incomplete independent primitives do not reference their
-    // trailing vertices; degenerate packets reference none at all.
+    // Checks the largest index once per packet instead of every index. The trailing vertices
+    // of an incomplete primitive are never referenced.
     std::uint32_t referenced_vertices = 0u;
     switch (primitive) {
     case PrimitiveClass::Quads:
@@ -1157,16 +1089,11 @@ bool detail::rebase_cached_indices(std::span<const std::uint16_t> source,
     return true;
 }
 
-// ---------------------------------------------------------------------------
-// VertexLoader::source_vertex_size
-// ---------------------------------------------------------------------------
-
 std::size_t VertexLoader::source_vertex_size(const VertexDescriptor& desc)
 {
     std::size_t sz = 0;
 
-    // Matrix index bytes (always 1 byte each when present, regardless of
-    // the attribute type; these are always Direct in the FIFO).
+    // Matrix indices are always one direct byte each.
     if (desc.has_pn_matrix_index) {
         sz += 1;
     }
@@ -1176,7 +1103,6 @@ std::size_t VertexLoader::source_vertex_size(const VertexDescriptor& desc)
         }
     }
 
-    // Position.
     switch (desc.position.vcd) {
     case VcdType::None:   break;
     case VcdType::Direct: sz += attr_direct_size_pos(desc.position); break;
@@ -1184,7 +1110,6 @@ std::size_t VertexLoader::source_vertex_size(const VertexDescriptor& desc)
     case VcdType::Index16: sz += 2; break;
     }
 
-    // Normal.
     switch (desc.normal.vcd) {
     case VcdType::None:   break;
     case VcdType::Direct: sz += attr_direct_size_nrm(desc.normal); break;
@@ -1196,7 +1121,6 @@ std::size_t VertexLoader::source_vertex_size(const VertexDescriptor& desc)
         break;
     }
 
-    // Color0, Color1.
     for (unsigned c = 0; c < 2; ++c) {
         switch (desc.color[c].vcd) {
         case VcdType::None:   break;
@@ -1206,7 +1130,6 @@ std::size_t VertexLoader::source_vertex_size(const VertexDescriptor& desc)
         }
     }
 
-    // Texcoords 0-7.
     for (unsigned t = 0; t < 8; ++t) {
         switch (desc.texcoord[t].vcd) {
         case VcdType::None:   break;
@@ -1218,10 +1141,6 @@ std::size_t VertexLoader::source_vertex_size(const VertexDescriptor& desc)
 
     return sz;
 }
-
-// ---------------------------------------------------------------------------
-// VertexLoader::load: main entry point
-// ---------------------------------------------------------------------------
 
 LoadedPrimitive VertexLoader::load(
     FifoCursor& cursor,
@@ -1266,15 +1185,11 @@ LoadedPrimitive VertexLoader::load_with_layout(
     const std::uint16_t vtx_count = cursor.read_u16();
 
     if (vtx_count == 0) {
-        // Nothing to do; return an empty primitive.
         LoadedPrimitive empty{};
         empty.source_class = primitive;
         return empty;
     }
 
-    // ---------------------------------------------------------------------------
-    // Allocate output vertex buffer in the upload ring.
-    // ---------------------------------------------------------------------------
     const std::size_t vb_size = static_cast<std::size_t>(vtx_count) *
                                  sizeof(GxVertexOut);
     const UploadRing::Allocation vb = vertex_ring.allocate(vb_size, 16);
@@ -1292,9 +1207,6 @@ LoadedPrimitive VertexLoader::load_with_layout(
         ? (base_vertex - index_batch_base_vertex)
         : 0u;
 
-    // ---------------------------------------------------------------------------
-    // Take the raw FIFO window for all vertex data in one shot.
-    // ---------------------------------------------------------------------------
     const std::size_t total_raw  = src_stride * vtx_count;
     const std::span<const std::byte> raw = cursor.take(total_raw);
     const std::byte* raw_ptr = raw.data();
@@ -1302,19 +1214,11 @@ LoadedPrimitive VertexLoader::load_with_layout(
     IndexedArrayResolver array_resolver(
         memory, nullptr, dependency_event_sink_);
 
-    // ---------------------------------------------------------------------------
-    // Decode each vertex.
-    // ---------------------------------------------------------------------------
     const PreparedVertexInputs inputs = prepare_vertex_inputs(desc, state);
     decode_vertex_stream(
         raw_ptr, vtx_count, src_stride, desc, inputs,
         array_resolver, fifo_error_offset, verts);
 
-    // ---------------------------------------------------------------------------
-    // Build index list.
-    // ---------------------------------------------------------------------------
-
-    // Compute the maximum index count.
     std::uint32_t max_indices = 0;
     switch (primitive) {
     case PrimitiveClass::Quads:
