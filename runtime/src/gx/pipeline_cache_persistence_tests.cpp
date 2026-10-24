@@ -1059,7 +1059,7 @@ bool busy_writer_retry(const std::filesystem::path& root) {
 struct IsolatedFiles {
     std::filesystem::path root;
     IsolatedFiles() {
-        // Stay inside the build tree; never touch LOCALAPPDATA or the user cache.
+        // Stay inside the build tree; never touch LOCALAPPDATA or the game's own cache.
         root = std::filesystem::absolute(std::filesystem::current_path() / "generated" /
             ("cache-persistence-test-" + std::to_string(GetCurrentProcessId()) + "-" +
              std::to_string(GetTickCount64())));

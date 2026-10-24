@@ -1,3 +1,4 @@
+// The Win32 game window's own thread (window_owner.h).
 #include "galaxy/gx/window_owner.h"
 #include "galaxy/windows_power.h"
 #include <future>
