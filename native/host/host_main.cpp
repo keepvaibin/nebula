@@ -30,6 +30,7 @@
 #include "galaxy/native_input.h"
 #include "galaxy/native_thp_video.h"
 #include "galaxy/perf_hint.h"
+#include "galaxy/platform_time.h"
 #include "galaxy/pointer_control.h"
 #include "galaxy/achievements.h"
 #include "galaxy/stats.h"
@@ -76,6 +77,7 @@ inline int64_t perf_hint_retrace() noexcept { return 0; }
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <limits>
 #include <mutex>
 #include <optional>
 #include <span>
@@ -1851,6 +1853,14 @@ void svc_vi_frame(void*, uint32_t xfb, int black, uint32_t retrace) {
     gXfb.store(xfb, std::memory_order_relaxed);
     gRetraces.store(retrace, std::memory_order_relaxed);
 #if defined(NEBULA_HOST_RENDERER)
+    // GALAXY_TRACE_VI_TIMES=1: each retrace's time, where a scripted press begins (press-to-present measurements).
+    static const bool trace_vi = [] {
+        const char* value = std::getenv("GALAXY_TRACE_VI_TIMES");
+        return value != nullptr && value[0] != '\0' && value[0] != '0';
+    }();
+    if (trace_vi) std::fprintf(stderr, "[latency] retrace vi=%u qpc=%lld\n", retrace, static_cast<long long>(galaxy::qpc_now()));
+#endif
+#if defined(NEBULA_HOST_RENDERER)
 #if defined(_WIN32)
     galaxy::timeline::record(galaxy::timeline::Event::GuestFrame, retrace, xfb);
 #endif
@@ -2092,6 +2102,54 @@ size_t idle_wiimote_report(uint8_t id, uint8_t* report) {
 }
 #endif
 
+#if defined(NEBULA_HOST_RENDERER)
+// The stand-in remote's reports are built on the WPAD thread every 10 ms and on the game's thread when it reads its
+// remotes (svc_wpad_sample), one at a time; the WPAD thread's next one then comes 10 ms after the game's.
+std::mutex gVirtualReportLock;
+std::atomic<int64_t> gVirtualSampledNs{std::numeric_limits<int64_t>::min() / 2};  // the game's last, steady clock
+std::atomic<bool> gVirtualReports{true};  // the game takes the stand-in's reports (not a real remote's)
+
+galaxy::input::WiimoteInputSnapshot virtual_snapshot() {
+    return galaxy::host::native_game_wiimote_snapshot(
+        gRetraces.load(std::memory_order_relaxed), gWpadDpd.load(std::memory_order_relaxed) != 0,
+        gStarPointerMode.load(std::memory_order_relaxed), static_cast<uint8_t>(gTiltSection.load(std::memory_order_relaxed)));
+}
+
+void send_virtual_report(const galaxy::input::WiimoteInputSnapshot& snapshot) {
+    // Every report renews the motor's state (a stale one stops), as the console's remote keeps its motor bit.
+    galaxy::host::native_game_rumble(gMotor.load(std::memory_order_relaxed), gStarPointerMode.load(std::memory_order_relaxed));
+    uint8_t report[galaxy::input::kMaxWiimoteInputReportBytes];
+    const auto built = galaxy::input::build_wiimote_input_report(
+        static_cast<uint8_t>(gWpadReport.load(std::memory_order_relaxed)), snapshot, report);
+    if (built.status == galaxy::input::WiimoteReportBuildStatus::Ok && built.size > 1) {
+        // From the report id, past the HID header; the exact pointer its IR dots stand for, when there is one.
+        const NebulaWpadPointer pointer{snapshot.pointer_x, snapshot.pointer_y};
+        gModule.wpad_shake(0, (snapshot.shake ? 1u : 0u) | (snapshot.nunchuk_shake ? 2u : 0u));
+        gModule.wpad_report(0, report + 1, built.size - 1, snapshot.pointer_exact ? &pointer : nullptr);
+    }
+}
+#endif
+
+void svc_wpad_sample(void*, uint32_t chan) {
+#if defined(NEBULA_HOST_RENDERER)
+    // GALAXY_WPAD_SAMPLE=0: only the 10 ms reports (the timing before reports followed the game's reads).
+    static const bool enabled = [] {
+        const char* value = std::getenv("GALAXY_WPAD_SAMPLE");
+        return value == nullptr || value[0] != '0';
+    }();
+    if (!enabled || chan != 0 || gWpadStarted.load(std::memory_order_acquire) == 0 ||
+        !gVirtualReports.load(std::memory_order_acquire)) {
+        return;
+    }
+    const std::lock_guard<std::mutex> lock(gVirtualReportLock);
+    send_virtual_report(virtual_snapshot());
+    gVirtualSampledNs.store(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now().time_since_epoch()).count(),
+                            std::memory_order_release);
+#else
+    (void)chan;
+#endif
+}
+
 void wpad_thread() {
     name_thread(L"Nebula Host WPAD");
     while (!gWpadStarted.load(std::memory_order_acquire)) {
@@ -2120,6 +2178,7 @@ void wpad_thread() {
         gModule.wpad_shake(0, 0);
         gModule.wpad_connect(0, 1, on ? &*remote : &connection);
         galaxy::host::real_wiimote_set_active(on);
+        gVirtualReports.store(!on, std::memory_order_release);
         device_when_real = galaxy::host::last_input_device();
         next = Clock::now() + period;
         log_line("[wiimote]", on ? "in use" : "keyboard, mouse and controllers in use");
@@ -2176,17 +2235,22 @@ void wpad_thread() {
         }
 #endif
         sleep_until_precise(next);
+#if !defined(NEBULA_HOST_RENDERER)
         next += period;
         const uint8_t id = static_cast<uint8_t>(gWpadReport.load(std::memory_order_relaxed));
-#if !defined(NEBULA_HOST_RENDERER)
         uint8_t idle[22];
         gModule.wpad_report(0, idle, idle_wiimote_report(id, idle), nullptr);
         continue;
 #else
-        const int32_t mode = gStarPointerMode.load(std::memory_order_relaxed);
-        const auto snapshot = galaxy::host::native_game_wiimote_snapshot(
-            gRetraces.load(std::memory_order_relaxed), gWpadDpd.load(std::memory_order_relaxed) != 0, mode,
-            static_cast<uint8_t>(gTiltSection.load(std::memory_order_relaxed)));
+        // The game read within the last 10 ms: the next report 10 ms after its.
+        const Clock::time_point sampled{std::chrono::nanoseconds(gVirtualSampledNs.load(std::memory_order_acquire))};
+        if (!real && sampled + period > next) {
+            next = sampled + period;
+            continue;
+        }
+        next += period;
+        std::unique_lock<std::mutex> report_lock(gVirtualReportLock);
+        const auto snapshot = virtual_snapshot();
 #if defined(NEBULA_REAL_WIIMOTE)
         if (real) {
             // Another device used (in Auto): back to the keyboard, mouse and controllers, with this report.
@@ -2197,16 +2261,7 @@ void wpad_thread() {
             use_remote(false);
         }
 #endif
-        // Every report renews the motor's state (a stale one stops), as the console's remote keeps its motor bit.
-        galaxy::host::native_game_rumble(gMotor.load(std::memory_order_relaxed), mode);
-        uint8_t report[galaxy::input::kMaxWiimoteInputReportBytes];
-        const auto built = galaxy::input::build_wiimote_input_report(id, snapshot, report);
-        if (built.status == galaxy::input::WiimoteReportBuildStatus::Ok && built.size > 1) {
-            // From the report id, past the HID header; the exact pointer its IR dots stand for, when there is one.
-            const NebulaWpadPointer pointer{snapshot.pointer_x, snapshot.pointer_y};
-            gModule.wpad_shake(0, (snapshot.shake ? 1u : 0u) | (snapshot.nunchuk_shake ? 2u : 0u));
-            gModule.wpad_report(0, report + 1, built.size - 1, snapshot.pointer_exact ? &pointer : nullptr);
-        }
+        send_virtual_report(snapshot);
 #endif
     }
 }
@@ -3025,6 +3080,7 @@ int main(int argc, char** argv) {
     services.settings_input = svc_settings_input;
     services.sharp_2d = svc_sharp_2d;
     services.button_icons = svc_button_icons;
+    services.wpad_sample = svc_wpad_sample;
     services.gx_stripe_particle = svc_gx_stripe_particle;
     services.disc_fst = svc_disc_fst;
     services.disc_read = svc_disc_read;

@@ -7,6 +7,10 @@
 #include "Game/Util/SingletonHolder.hpp"
 #include <revolution/wpad.h>
 
+#ifdef TARGET_PC
+extern "C" void __NebulaWPADSample(void);
+#endif
+
 #define KPAD_STATUS_ARRAY_SIZE 120
 
 WPadReadDataInfo::WPadReadDataInfo() : mStatusArray(), mValidStatusCount() {
@@ -44,6 +48,10 @@ WPadHolder::WPadHolder() : mReadDataInfoArray(), mMode(WPAD_SENSOR_BAR_POS_TOP) 
 
 void WPadHolder::updateReadDataOnly() {
     WPadReadDataInfo* pReadData;
+#ifdef TARGET_PC
+    // The newest input, not the last report's (up to 10 ms old).
+    __NebulaWPADSample();
+#endif
 
     for (s32 chan = WPAD_CHAN0; chan < WPAD_MAX_CONTROLLERS; chan++) {
         pReadData = &mReadDataInfoArray[chan];

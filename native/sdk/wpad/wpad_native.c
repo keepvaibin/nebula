@@ -133,6 +133,13 @@ NEBULA_GAME_API void nebula_game_wpad_battery(uint32_t chan, uint32_t level) {
     nebula_raise_interrupt(__OS_INTERRUPT_PI_SI);
 }
 
+/* Before the game reads its remotes each frame (WPadHolder): the host's newest input in a report now, decoded here
+   (the controller interrupt runs as interrupts are enabled again) so KPADRead has it this frame. */
+void __NebulaWPADSample(void) {
+    nebula_host()->wpad_sample(nebula_host()->user, 0);
+    OSRestoreInterrupts(OSDisableInterrupts());
+}
+
 /* The shake presses on the remote (device 0) or its Nunchuk (1) since the last call (WPadHVSwing). */
 u32 __NebulaWPADTakeShakePresses(s32 chan, s32 device) {
     if (chan < 0 || chan >= kChannels || device < 0 || device > 1) {

@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 24u
+#define NEBULA_GAME_API_VERSION 25u
 
 /* A physical range of the game's memory and where it is in the host process: what the GPU's addresses resolve to. */
 typedef struct NebulaGameMemoryRegion {
@@ -449,6 +449,9 @@ typedef struct NebulaHostServices {
     void (*sharp_2d)(void* user, uint32_t on);
     /* The button icons as the player's controller and the setting have them now (NebulaButtonIcons). */
     void (*button_icons)(void* user, NebulaButtonIcons* icons);
+    /* The game reads remote `chan` now (each frame, before KPADRead): the host's newest input in a report at once
+       (nebula_game_wpad_report, from this thread), rather than at its next one. */
+    void (*wpad_sample)(void* user, uint32_t chan);
 } NebulaHostServices;
 
 enum {

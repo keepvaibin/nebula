@@ -3207,7 +3207,7 @@ void apply_button_script_env(
         if (vi_in_script_window(current_vi, start, duration)) {
             apply_script_buttons(overlay, fields[2], env_name);
             // A step's first report is logged with its time, as a pointer jump is, for input-to-present measurements.
-            thread_local std::string logged;
+            static std::string logged;  // under the report lock (native_host.h), as every report is built
             const std::string step = fields[0] + ':' + fields[2];
             if (current_vi == start && logged != step) {
                 logged = step;
@@ -3465,8 +3465,8 @@ void apply_pointer_path_env(
     overlay.pointer_y = std::clamp(y, -1.0f, 1.0f);
     // A jump (a quarter of the picture or more in one step) is logged with its time: the first report that carries it
     // is built now, for input-to-present measurements against the present snapshots' times.
-    thread_local float last_x = x;
-    thread_local float last_y = y;
+    static float last_x = x;  // under the report lock, as every report is built
+    static float last_y = y;
     if (std::fabs(x - last_x) + std::fabs(y - last_y) >= 0.5f) {
         std::cerr << "[latency] pointer jump vi=" << current_vi << " x=" << x << " y=" << y << " qpc=" << galaxy::qpc_now()
                   << '\n';
