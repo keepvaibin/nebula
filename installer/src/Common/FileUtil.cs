@@ -23,8 +23,6 @@ namespace Nebula
             using (var sha = SHA256.Create()) return Hex(sha.ComputeHash(bytes));
         }
 
-        public static string Sha256Text(string text) { return Sha256Bytes(Encoding.UTF8.GetBytes(text)); }
-
         public static string Hex(byte[] bytes)
         {
             var builder = new StringBuilder(bytes.Length * 2);
@@ -433,38 +431,6 @@ namespace Nebula
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool GetVolumeInformationW(string root, StringBuilder volumeName, uint volumeNameSize, out uint serial, out uint maxComponentLength, out uint flags, StringBuilder fileSystemName, uint fileSystemNameSize);
-
-        [StructLayout(LayoutKind.Sequential)]
-        public struct MEMORYSTATUSEX
-        {
-            public uint dwLength;
-            public uint dwMemoryLoad;
-            public ulong ullTotalPhys;
-            public ulong ullAvailPhys;
-            public ulong ullTotalPageFile;
-            public ulong ullAvailPageFile;
-            public ulong ullTotalVirtual;
-            public ulong ullAvailVirtual;
-            public ulong ullAvailExtendedVirtual;
-        }
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        public static extern bool GlobalMemoryStatusEx(ref MEMORYSTATUSEX buffer);
-
-        public static ulong TotalPhysicalMemory()
-        {
-            var status = new MEMORYSTATUSEX();
-            status.dwLength = (uint)Marshal.SizeOf(typeof(MEMORYSTATUSEX));
-            return GlobalMemoryStatusEx(ref status) ? status.ullTotalPhys : 0;
-        }
-
-        public static ulong AvailablePhysicalMemory()
-        {
-            var status = new MEMORYSTATUSEX();
-            status.dwLength = (uint)Marshal.SizeOf(typeof(MEMORYSTATUSEX));
-            return GlobalMemoryStatusEx(ref status) ? status.ullAvailPhys : 0;
-        }
 
         [DllImport("user32.dll")]
         public static extern bool SetProcessDpiAwarenessContext(IntPtr context);

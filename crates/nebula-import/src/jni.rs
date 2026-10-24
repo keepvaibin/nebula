@@ -1,14 +1,14 @@
-//! Android's interface (dev.nebula.galaxy.Importer): the disc image arrives as a file descriptor from the system's
-//! file picker, so the app never needs storage permissions.
+//! Android's interface (dev.nebula.galaxy.Importer). The disc image arrives as a file descriptor from the system's
+//! file picker, so the app needs no storage permission.
 
 #![allow(non_snake_case)]
 
-use crate::{build_pak, identify, DiscFile};
+use crate::{identify, json_string, DiscFile, Partition};
 use jni_sys::{jboolean, jclass, jint, jlong, jobject, jstring, jvalue, JNIEnv, JNI_FALSE};
 use std::ffi::{CStr, CString};
 use std::path::PathBuf;
 
-/// Our own copy of the picker's descriptor: Java closes its own.
+/// A duplicate of the picker's descriptor: Java closes the original.
 fn disc_from_fd(fd: jint) -> Result<DiscFile, String> {
     #[cfg(unix)]
     {
@@ -47,32 +47,19 @@ unsafe fn rust_string(env: *mut JNIEnv, text: jstring) -> Option<String> {
     Some(value)
 }
 
-fn json_escape(text: &str) -> String {
-    let mut out = String::with_capacity(text.len() + 2);
-    for c in text.chars() {
-        match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
-            c => out.push(c),
-        }
-    }
-    out
-}
-
 /// `{"supported":…,"gameId":…,"title":…,"format":…,"message":…}`; on a failure, supported false and the reason.
 #[no_mangle]
 pub unsafe extern "system" fn Java_dev_nebula_galaxy_Importer_identify(env: *mut JNIEnv, _: jclass, fd: jint) -> jstring {
     let json = match disc_from_fd(fd).and_then(|disc| identify(disc).map_err(|error| format!("{error:#}"))) {
         Ok(identity) => format!(
-            "{{\"supported\":{},\"gameId\":\"{}\",\"title\":\"{}\",\"format\":\"{}\",\"message\":\"{}\"}}",
+            "{{\"supported\":{},\"gameId\":{},\"title\":{},\"format\":{},\"message\":{}}}",
             identity.supported,
-            json_escape(&identity.game_id),
-            json_escape(&identity.title),
-            json_escape(&identity.format),
-            json_escape(&identity.message)
+            json_string(&identity.game_id),
+            json_string(&identity.title),
+            json_string(&identity.format),
+            json_string(&identity.message)
         ),
-        Err(message) => format!("{{\"supported\":false,\"message\":\"{}\"}}", json_escape(&message)),
+        Err(message) => format!("{{\"supported\":false,\"message\":{}}}", json_string(&message)),
     };
     new_string(env, &json)
 }
@@ -110,8 +97,11 @@ pub unsafe extern "system" fn Java_dev_nebula_galaxy_Importer_build(
         }
         keep != JNI_FALSE
     };
-    let result = disc_from_fd(fd)
-        .and_then(|disc| build_pak(disc, &PathBuf::from(output), &mut report).map_err(|error| format!("{error:#}")));
+    let result = disc_from_fd(fd).and_then(|disc| {
+        Partition::from_disc(disc)
+            .and_then(|mut partition| partition.write_pak(&PathBuf::from(output), &mut report))
+            .map_err(|error| format!("{error:#}"))
+    });
     match result {
         Ok(_) => std::ptr::null_mut(),
         Err(message) => new_string(env, &message),

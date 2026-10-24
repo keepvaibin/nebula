@@ -16,11 +16,7 @@ namespace Nebula.Setup
         private InstalledInfo installed;
         private readonly Panel choose = new Panel(), work = new Panel();
         private readonly TextBox input = new TextBox(), root = new TextBox(), log = new TextBox();
-        private readonly CheckBox desktop = new CheckBox(), license = new CheckBox(), dlss = new CheckBox(), dlssLicense = new CheckBox();
-        private readonly LinkLabel licenseLink = new LinkLabel();
-        private Dictionary<string, object> toolchainPins;
-        private long toolchainDownloadBytes;
-        private int summaryTopBelowLicense;
+        private readonly CheckBox desktop = new CheckBox(), dlss = new CheckBox(), dlssLicense = new CheckBox();
         private readonly RadioButton modeRepair = new RadioButton(), modeRestore = new RadioButton(), modeUninstall = new RadioButton(), modeInstall = new RadioButton();
         private readonly Label summary = new Label(), step = new Label(), elapsed = new Label();
         private readonly ProgressBar overall = new ProgressBar(), stepBar = new ProgressBar();
@@ -50,7 +46,6 @@ namespace Nebula.Setup
             Controls.Add(work);
             work.Visible = false;
             UiScale.Apply(this);
-            summaryTopBelowLicense = summary.Top;
             UpdateChoices();
             clockTimer.Interval = 1000;
             clockTimer.Tick += delegate { elapsed.Text = "Elapsed " + clock.Elapsed.ToString(@"hh\:mm\:ss"); };
@@ -62,33 +57,12 @@ namespace Nebula.Setup
             };
         }
 
-        /// <summary>
-        /// Follows the chosen action and install folder: the start button names the action, and the license row
-        /// shows only when Start would ask for it (InstallEngine.BuildToolsLicenseRequired), an install or repair
-        /// into a folder without the compiler. Hidden, the text below takes its place.
-        /// </summary>
+        /// <summary>The start button names the chosen action.</summary>
         private void UpdateChoices()
         {
             InstallMode mode = installed == null ? InstallMode.Install : InstallIntent.ForPackage(installed.Version, BuildInfo.Version);
             start.Text = installed == null ? "Install" : modeRestore.Checked ? "Restore" : modeUninstall.Checked ? "Uninstall" :
                 mode == InstallMode.Update ? "Update" : "Repair";
-
-            Toolchain toolchain = null;
-            try { toolchain = new Toolchain(toolchainPins, new InstallLayout(root.Text.Trim()).Toolchains); }
-            catch (ArgumentException) { }
-            catch (NotSupportedException) { }
-            catch (IOException) { }
-            bool ready = toolchain != null && toolchain.IsReady;
-            bool installing = installed == null || modeRepair.Checked;
-            bool needed = installing && mode != InstallMode.Update && !ready;
-            license.Visible = licenseLink.Visible = needed;
-            summary.Top = needed ? summaryTopBelowLicense : license.Top;
-            summary.Text = (ready
-                    ? "Setup compiles the game from your copy with the C++ compiler already installed."
-                    : "Setup compiles the game from your copy and downloads a C++ compiler (" +
-                      FileUtil.FormatBytes(toolchainDownloadBytes) + ") when needed.") + "\r\n\r\n" +
-                "Requires Windows 10 or 11 (64-bit), 8 GB of RAM, " + FileUtil.FormatBytes(InstallEngine.RequiredFreeBytes) +
-                " of free disk space and a DirectX 12 GPU.";
         }
 
         private Label AddLabel(Control parent, string text, int x, int y, int width, int height)
@@ -134,7 +108,7 @@ namespace Nebula.Setup
                 modeInstall.Checked = true;
             }
 
-            // An installed copy keeps the game it was compiled from; it is asked for only when that copy is gone.
+            // An install keeps its packed game; the game is asked for only when that is gone.
             if (installed == null || !InstallEngine.RetainedGameValid(layout))
             {
                 AddLabel(choose, installed == null ? "Your game: ISO, RVZ or extracted folder."
@@ -214,24 +188,11 @@ namespace Nebula.Setup
                 y += 32;
             }
 
-            toolchainPins = Json.Parse(Payload.ReadText("toolchain.json"));
-            var toolchain = new Toolchain(toolchainPins, layout.Toolchains);
-            toolchainDownloadBytes = toolchain.DownloadBytes;
-            license.Text = "I accept the Microsoft Visual Studio Build Tools license";
-            license.Location = new Point(20, y);
-            license.Size = new Size(620, 24);
-            choose.Controls.Add(license);
-            licenseLink.Text = "Read license";
-            licenseLink.Location = new Point(644, y + 3);
-            licenseLink.Size = new Size(100, 22);
-            licenseLink.LinkClicked += delegate { Process.Start(toolchain.LicenseUrl); };
-            choose.Controls.Add(licenseLink);
-            y += 32;
-
             summary.Location = new Point(20, y);
             summary.Size = new Size(720, 170);
+            summary.Text = "Requires Windows 10 or 11 (64-bit), 8 GB of RAM, " + FileUtil.FormatBytes(InstallEngine.RequiredFreeBytes) +
+                " of free disk space and a DirectX 12 GPU.";
             choose.Controls.Add(summary);
-            root.TextChanged += delegate { UpdateChoices(); };
             foreach (var radio in new[] { modeRepair, modeRestore, modeUninstall })
                 radio.CheckedChanged += delegate { UpdateChoices(); };
 
@@ -328,11 +289,6 @@ namespace Nebula.Setup
             if (game.Length == 0) game = null;
             if (mode == InstallMode.Install && game == null) { Fail("Choose your Super Mario Galaxy ISO, RVZ or extracted folder."); return; }
             if (game != null && !File.Exists(game) && !Directory.Exists(game)) { Fail("The selected game was not found: " + game); return; }
-            if (InstallEngine.BuildToolsLicenseRequired(mode, new Toolchain(toolchainPins, layout.Toolchains)) && !license.Checked)
-            {
-                UpdateChoices();
-                Fail("Accept the Microsoft Visual Studio Build Tools license to continue."); return;
-            }
             if (dlss.Checked && !dlssLicense.Checked)
             {
                 dlssLicense.ForeColor = Color.Firebrick;
@@ -341,16 +297,10 @@ namespace Nebula.Setup
             }
             var problems = InstallEngine.CheckRequirements(layout.Root.Length > 3 ? Path.GetDirectoryName(layout.Root) ?? layout.Root : layout.Root);
             if (problems.Count > 0) { Fail(string.Join("\r\n", problems)); return; }
-            string lowMemory = InstallEngine.LowMemoryWarning();
-            if (lowMemory != null && MessageBox.Show(this, lowMemory + "\r\n\r\nInstall anyway?", "Nebula Setup",
-                    MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) != DialogResult.Yes)
-                return;
 
             var request = new InstallRequest
             {
-                Mode = mode, GameInput = game, InstallRoot = layout.Root, DesktopShortcut = desktop.Checked, InstallDlss = dlss.Checked,
-                SourceOverride = options.ContainsKey("source") ? options["source"] : null,
-                CompileJobs = options.ContainsKey("jobs") ? int.Parse(options["jobs"]) : 0
+                Mode = mode, GameInput = game, InstallRoot = layout.Root, DesktopShortcut = desktop.Checked, InstallDlss = dlss.Checked
             };
             choose.Visible = false;
             work.Visible = true;
@@ -381,7 +331,7 @@ namespace Nebula.Setup
             cancelButton.Click += delegate { Close(); };
             if (failure == null)
             {
-                step.Text = engine.ModuleUpdateNotice ?? ("Nebula " + BuildInfo.Version + " is installed.");
+                step.Text = "Nebula " + BuildInfo.Version + " is installed.";
                 if (engine.DlssFailure != null)
                     MessageBox.Show(this, "NVIDIA DLSS was not installed: " + engine.DlssFailure + "\r\n\r\nYou can install it later from the game's graphics settings.",
                         "Nebula Setup", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -421,7 +371,7 @@ namespace Nebula.Setup
             }
         }
 
-        // ---- IInstallProgress, called from the worker thread ----------------------
+        // IInstallProgress, called from the worker thread.
 
         public void Report(double fraction, string text, double stepFraction)
         {

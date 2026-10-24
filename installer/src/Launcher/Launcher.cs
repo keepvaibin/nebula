@@ -140,7 +140,8 @@ namespace Nebula.Launcher
                 LaunchOptions.ValidatePair(App);
                 if (Portable) LaunchOptions.PreserveUserData(NebulaPaths.DataRoot, "portable-" + BuildInfo.Version);
                 Directory.CreateDirectory(NebulaPaths.Saves);
-                var start = LaunchOptions.Create(App, Content, FileUtil.FinalPath(NebulaPaths.Saves), Recording);
+                string saves = FileUtil.FinalPath(NebulaPaths.Saves);
+                var start = LaunchOptions.Create(App, Content, saves, Recording);
                 if (Recording == RecordingMode.None)
                 {
                     using (Process.Start(start)) { }
@@ -150,14 +151,14 @@ namespace Nebula.Launcher
                 Recording = RecordingMode.None;
                 try { Save(); } catch (Exception) { }
                 Recording = mode;
-                StartRecorded(start);
+                StartRecorded(start, saves);
                 return null;
             }
             catch (Exception error) { return error.Message; }
         }
 
-        // The runtime holds a named mutex while it runs (runtime_instance.cpp). Automated sessions use private
-        // lease names (GALAXY_INSTANCE_LEASE), so only the player's lease counts, not every NebulaRuntime.exe process.
+        // The game's lease: a named mutex it holds while it runs.
+        // TODO: create the lease in NebulaNative (native/host/host_main.cpp); without it this never sees the game running.
         internal static bool RuntimeLeaseHeld()
         {
             Mutex lease;
@@ -173,12 +174,12 @@ namespace Nebula.Launcher
         }
 
         // A game that stopped responding can keep the lease after its window is gone. Offers to end this
-        // install's runtime, then waits for the lease.
+        // install's game, then waits for the lease.
         private bool EndRunningGame()
         {
-            string exe = Path.Combine(App, "NebulaRuntime.exe");
+            string exe = Path.Combine(App, "NebulaNative.exe");
             var running = new List<Process>();
-            foreach (var process in Process.GetProcessesByName("NebulaRuntime"))
+            foreach (var process in Process.GetProcessesByName("NebulaNative"))
             {
                 try
                 {
@@ -205,14 +206,13 @@ namespace Nebula.Launcher
             }
         }
 
-        private void StartRecorded(ProcessStartInfo start)
+        private void StartRecorded(ProcessStartInfo start, string saves)
         {
             string session = Sessions.Create("diagnostics");
             start.EnvironmentVariables["GALAXY_CRASH_DUMP_DIR"] = session;
             start.EnvironmentVariables["GALAXY_FRAME_TIMELINE_PATH"] = Path.Combine(session, "timeline.bin");
             var launchFiles = new Dictionary<string, object>();
-            foreach (string name in new[] { "NebulaRuntime.exe", "RMGE01_game.dll", "RMGE01_home_button.dll",
-                "RMGE01_dsp.dll", "RMGE01_boot_image.bin", "runtime-env.json", "Nebula.exe" })
+            foreach (string name in new[] { "NebulaNative.exe", "smg_game.dll", "Nebula.exe" })
             {
                 string path = Path.Combine(App, name);
                 if (File.Exists(path)) launchFiles[name] = FileUtil.Sha256File(path);
@@ -224,7 +224,7 @@ namespace Nebula.Launcher
             var sessionInfo = new Dictionary<string, object>
             {
                 { "startUtc", DateTime.UtcNow.ToString("o") }, { "pid", null }, { "monitoring", true },
-                { "recording", Recording.ToString() }, { "content", Content }, { "saves", start.EnvironmentVariables["GALAXY_NAND_ROOT"] },
+                { "recording", Recording.ToString() }, { "content", Content }, { "saves", saves },
                 { "app", App }, { "displayMode", graphics.DisplayMode }, { "window", graphics.WindowWidth + "x" + graphics.WindowHeight },
                 { "aspect", GraphicsSettings.AspectNames[graphics.Aspect] }, { "efbScale", graphics.MatchOutput ? 0 : graphics.EfbScale },
                 { "detailedRendererTimings", Recording == RecordingMode.Detailed },
@@ -236,7 +236,7 @@ namespace Nebula.Launcher
             Sessions.Capture(game, session, true);
             sessionInfo["pid"] = game.Id;
             try { Json.Save(Path.Combine(session, "session.json"), sessionInfo); }
-            catch (IOException) { } // The pre-launch identity and live reader remain.
+            catch (IOException) { } // session.json keeps its pre-launch contents; the capture goes on.
             catch (UnauthorizedAccessException) { }
         }
     }
@@ -301,7 +301,7 @@ namespace Nebula.Launcher
         private readonly CheckBox mipmaps = new CheckBox(), occlusion = new CheckBox(), hudOutput = new CheckBox(),
             rayTracing = new CheckBox();
         // The GPUs the game can run on, the automatic choice first; the Graphics card row shows with two or more.
-        private readonly List<GpuAdapter> gpus = GpuAdapters.List(GraphicsSettings.PackagePrefersIntegratedGpu()) ?? new List<GpuAdapter>();
+        private readonly List<GpuAdapter> gpus = GpuAdapters.List() ?? new List<GpuAdapter>();
         private readonly ComboBox gpuBox = new ComboBox();
         // Ray tracing and DLSS follow the GPU the game will run on (RefreshGpuOptions).
         private bool rayTracingOffered;
@@ -370,8 +370,8 @@ namespace Nebula.Launcher
             var pages = new List<TabPage> { display, image, input, sound, generalPage };
             if (ModsPage.Available(session.App))
             {
-                // Nebula 2: the game's mods list (the game reads and imports them: ModsPage). Added with the others:
-                // TabPages.Insert is ignored before the control has a window.
+                // The game's mods (ModsPage). Added with the others: TabPages.Insert is ignored before the control
+                // has a window.
                 var modsTab = new TabPage("Mods");
                 pages.Add(modsTab);
                 new ModsPage(modsTab, session.App, session.Content);
@@ -603,7 +603,6 @@ namespace Nebula.Launcher
             RefreshDisplayNotice();
         }
 
-        // ---- Controls -----------------------------------------------------------
         private int Scheme { get { return Math.Max(0, editScheme.SelectedIndex); } }
 
         private void BuildControlsTab(TabPage page)
@@ -1328,12 +1327,8 @@ namespace Nebula.Launcher
                 {
                     samples = new StreamWriter(Path.Combine(session, "process.csv"));
                     samples.WriteLine("elapsedSeconds,cpuSeconds,workingSetBytes");
-                    // Per-thread CPU, alongside the process-wide row. process.csv cannot say which thread spends the time, and
-                    // the process-wide total does not show whether CPU rises when the frame rate falls. CPU rate per second is
-                    // the comparable signal. CPU per produced frame mostly reflects the frame rate (it grows as 1/frame_rate for
-                    // any slow pipeline), and it cannot tell executing from waiting.
-                    //
-                    // The column set matches tools/perf_session.ps1, so session_report.ps1's threads.csv parser reads it unchanged.
+                    // Per-thread CPU beside the process-wide row, which cannot say which thread spends the time. The
+                    // columns are those tools/session_report.ps1 reads from threads.csv.
                     threads = new StreamWriter(Path.Combine(session, "threads.csv"));
                     threads.WriteLine("elapsedSeconds,threadId,cpu100ns,threadState,waitReason,priorityLevel,name");
                 }
@@ -1347,9 +1342,8 @@ namespace Nebula.Launcher
                         samples.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0:F3},{1:F6},{2}",
                             elapsed, process.TotalProcessorTime.TotalSeconds, process.WorkingSet64));
                         samples.Flush();
-                        // A thread can exit between enumerating the collection and reading its properties, so one bad thread must
-                        // not lose the whole sample. A thread that has never run reports a zero TotalProcessorTime. That is a real
-                        // value, not an error.
+                        // A thread can exit between the enumeration and the reads: it is skipped, not the whole sample. A
+                        // thread that never ran reports zero CPU time, a real value.
                         foreach (System.Diagnostics.ProcessThread t in process.Threads)
                         {
                             try

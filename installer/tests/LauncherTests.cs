@@ -120,14 +120,14 @@ namespace Nebula.Launcher
 
         static void GpuCases()
         {
-            var real = GpuAdapters.List(false);
+            var real = GpuAdapters.List();
             Check(real != null && real.Count >= 1 && real.Select(g => g.Id).Distinct().Count() == real.Count, "DXGI lists this PC's GPUs, each once: " +
                   (real == null ? "none" : string.Join(", ", real.Select(g => g.Name + " " + g.Id))));
             Check(Rtx.Id == "10de:2860:3fa1103c" && Rtx.IsNvidiaRtx && !Integrated.IsNvidiaRtx,
                   "a GPU's id is the runtime's gpu_identity, and an NVIDIA RTX GPU is recognised");
 
             var original = GpuAdapters.Source;
-            GpuAdapters.Source = lowPower => lowPower ? new List<GpuAdapter> { Integrated, Rtx } : new List<GpuAdapter> { Rtx, Integrated };
+            GpuAdapters.Source = () => new List<GpuAdapter> { Rtx, Integrated };
             string adapterIni = Path.Combine(NebulaPaths.DataRoot, "adapter.ini");
             try
             {
@@ -182,7 +182,7 @@ namespace Nebula.Launcher
 
             // A hybrid laptop: the built-in panel hangs off the integrated GPU, the NVIDIA GPU has no outputs.
             var hybrid = new List<GpuAdapter> { Gpu(Rtx), Gpu(Integrated, panel) };
-            string copied = "This display is connected to the " + Integrated.Name + ", so each frame is copied to it from the " + Rtx.Name + ".";
+            string copied = "Connected to the " + Integrated.Name + "; frames are copied from the " + Rtx.Name + ".";
             Check(GpuAdapters.DisplayNotice(hybrid, "", panel) == copied && GpuAdapters.DisplayNotice(hybrid, Rtx.Id, panel) == copied,
                   "hybrid laptop, NVIDIA GPU (chosen or Automatic): " + copied);
             Check(GpuAdapters.DisplayNotice(hybrid, Integrated.Id, panel) == null, "hybrid laptop, integrated GPU: no notice");
@@ -194,7 +194,7 @@ namespace Nebula.Launcher
             var docked = new List<GpuAdapter> { Gpu(Rtx, hdmi), Gpu(Integrated, panel) };
             Check(GpuAdapters.DisplayNotice(docked, Rtx.Id, hdmi) == null &&
                   GpuAdapters.DisplayNotice(docked, Integrated.Id, hdmi) ==
-                      "This display is connected to the " + Rtx.Name + ", so each frame is copied to it from the " + Integrated.Name + ".",
+                      "Connected to the " + Rtx.Name + "; frames are copied from the " + Integrated.Name + ".",
                   "an external display on the NVIDIA GPU: notice only with the integrated GPU chosen");
             Check(GpuAdapters.DisplayNotice(docked, Rtx.Id, @"\\.\DISPLAY9") == null && GpuAdapters.DisplayNotice(docked, Rtx.Id, "") == null,
                   "a display no listed GPU names (USB, remote) has no notice");
@@ -202,17 +202,17 @@ namespace Nebula.Launcher
 
             var twins = new List<GpuAdapter> { Gpu(Rtx, panel), new GpuAdapter { Name = Rtx.Name, VendorId = Rtx.VendorId, DeviceId = Rtx.DeviceId, SubSysId = 0x12345678 } };
             Check(GpuAdapters.DisplayNotice(twins, twins[1].Id, panel) ==
-                      "This display is connected to the " + Rtx.Name + " #1, so each frame is copied to it from the " + Rtx.Name + " #2.",
+                      "Connected to the " + Rtx.Name + " #1; frames are copied from the " + Rtx.Name + " #2.",
                   "two GPUs of one model are named as in the Graphics card list");
 
             // This PC through DXGI. Software adapters are listed here only (the game never renders on them): the
             // Microsoft Basic Render Driver has no outputs, so choosing it shows the notice on real lists.
-            var all = GpuAdapters.Enumerate(false, true);
+            var all = GpuAdapters.Enumerate(true);
             var monitors = DisplayInfo.Enumerate();
             Console.WriteLine("INFO: DXGI adapters with software: " + string.Join("; ", all.Select(g => g.Name + " " + g.Id + " outputs=[" + string.Join(",", g.Outputs) + "]")));
             Console.WriteLine("INFO: monitors: " + string.Join("; ", monitors.Select(m => m.Device + (m.Primary ? " (main)" : ""))));
             Check(monitors.All(m => all.Count(g => g.Drives(m.Device)) <= 1), "every monitor is an output of at most one GPU");
-            var hardware = GpuAdapters.List(false);
+            var hardware = GpuAdapters.List();
             Check(hardware != null && hardware.All(h => all.Exists(g => g.Id == h.Id)) && hardware.Count < all.Count,
                   "the game's list leaves out software adapters");
             foreach (var m in monitors)
@@ -221,8 +221,8 @@ namespace Nebula.Launcher
                     var connected = all.Find(other => other.Drives(m.Device));
                     string text = GpuAdapters.DisplayNotice(hardware, g.Id, m.Device);
                     Check(connected == null || g.Drives(m.Device) ? text == null
-                              : text == "This display is connected to the " + GpuAdapters.Label(hardware, connected) +
-                                        ", so each frame is copied to it from the " + GpuAdapters.Label(hardware, g) + ".",
+                              : text == "Connected to the " + GpuAdapters.Label(hardware, connected) +
+                                        "; frames are copied from the " + GpuAdapters.Label(hardware, g) + ".",
                           "real lists, " + g.Name + " and " + m.Device + ": " + (text ?? "no notice"));
                 }
             var main = DisplayInfo.Find(monitors, "");
@@ -236,7 +236,7 @@ namespace Nebula.Launcher
             Check(GpuAdapters.DisplayNotice(all, driver.Id, main.Device) == null,
                   "real lists: the GPU the main monitor is connected to has no notice (" + driver.Name + ")");
             string real = GpuAdapters.DisplayNotice(all, basic.Id, main.Device);
-            Check(real == "This display is connected to the " + driver.Name + ", so each frame is copied to it from the " + basic.Name + ".",
+            Check(real == "Connected to the " + driver.Name + "; frames are copied from the " + basic.Name + ".",
                   "real lists, " + basic.Name + " chosen: " + real);
         }
 
@@ -246,7 +246,7 @@ namespace Nebula.Launcher
             var original = GpuAdapters.Source;
             // The integrated GPU drives this PC's main monitor, the RTX GPU none: the hybrid laptop's layout.
             string mainMonitor = DisplayInfo.Find(DisplayInfo.Enumerate(), "").Device;
-            GpuAdapters.Source = lowPower => new List<GpuAdapter> { Gpu(Rtx), Gpu(Integrated, mainMonitor) };
+            GpuAdapters.Source = () => new List<GpuAdapter> { Gpu(Rtx), Gpu(Integrated, mainMonitor) };
             File.WriteAllText(GraphicsSettings.ConfigPath, "gpu=" + Integrated.Id + "\n");
             try
             {
@@ -265,14 +265,12 @@ namespace Nebula.Launcher
                           (string)gpuBox.Items[0] == "Automatic (" + Rtx.Name + ")" && (string)gpuBox.Items[1] == Rtx.Name &&
                           (string)gpuBox.Items[2] == Integrated.Name,
                           "with two GPUs the Display tab has a Graphics card list: Automatic (the GPU it picks), then each GPU");
-                    Check(gpuBox.Parent.Controls.OfType<Label>().Any(l => l.Text.StartsWith("The game starts on this graphics card. While it is running")),
-                          "the Graphics card row says a change made while the game runs applies at its next start");
                     int rowStep = mode.Top - monitor.Top;
                     Check(notice.Text == "" && notice.Top > monitor.Bottom && notice.Top < mode.Top,
                           "the integrated GPU drives the monitor: no notice; its place is between the Monitor and Display mode rows");
                     Shot(form, Path.Combine(outDir, "gpu-display-match.png"));
                     gpuBox.SelectedIndex = 1;
-                    Check(notice.Text == "This display is connected to the " + Integrated.Name + ", so each frame is copied to it from the " + Rtx.Name + "." &&
+                    Check(notice.Text == "Connected to the " + Integrated.Name + "; frames are copied from the " + Rtx.Name + "." &&
                           mode.Top - monitor.Top == rowStep + notice.Height && notice.Bottom <= mode.Top,
                           "the RTX GPU chosen: the notice shows directly below the Monitor row and the rows below move down");
                     Shot(form, Path.Combine(outDir, "gpu-display-notice.png"));
@@ -345,7 +343,7 @@ namespace Nebula.Launcher
                 }
                 Check(!LaunchSession.RuntimeLeaseHeld(), "the test's lease is released");
                 // One GPU: no Graphics card row and no notice; the Monitor row is the first.
-                GpuAdapters.Source = lowPower => new List<GpuAdapter> { Gpu(Rtx, mainMonitor) };
+                GpuAdapters.Source = () => new List<GpuAdapter> { Gpu(Rtx, mainMonitor) };
                 using (var form = new SettingsForm(session))
                 {
                     CreateHandles(form);
@@ -359,7 +357,7 @@ namespace Nebula.Launcher
                 }
                 // This PC's own lists: a GPU the main monitor is not connected to, when it has one.
                 GpuAdapters.Source = original;
-                var real = GpuAdapters.List(false);
+                var real = GpuAdapters.List();
                 var main = DisplayInfo.Find(DisplayInfo.Enumerate(), "");
                 var other = real == null ? null : real.Find(g => !g.Drives(main.Device));
                 if (real == null || real.Count < 2 || other == null || !real.Exists(g => g.Drives(main.Device)))
@@ -437,8 +435,6 @@ namespace Nebula.Launcher
                   "Wiimote sounds are saved with the other volumes");
             File.Delete(path);
         }
-
-        // ---- Save export and import ----------------------------------------------------------------------------
 
         static byte[] Noise(int length, int seed)
         {
@@ -789,28 +785,18 @@ namespace Nebula.Launcher
                 GpuFormCases(later, outDir);
                 RecordingEncodingCases(later.App);
 
-                // TryLaunch starts <App>\NebulaRuntime.exe, here a stub that records its arguments.
+                // TryLaunch starts <App>\NebulaNative.exe, here a stub that records its arguments.
                 string marker = Path.Combine(later.App, "stub-launch.txt");
                 if (File.Exists(marker)) File.Delete(marker);
-                string error = null;
-                for (int attempt = 0; attempt < 120; attempt++)
-                {
-                    error = later.TryLaunch();
-                    if (error != "Nebula is already running.") break;
-                    Thread.Sleep(1000); // another session on this machine; wait for it
-                }
-                if (error == "Nebula is already running.")
-                {
-                    Console.WriteLine("SKIP: launch arguments (another NebulaRuntime stayed open for 2 minutes)");
-                    return 0;
-                }
-                Check(error == null, "TryLaunch starts the runtime: " + (error ?? "ok"));
+                string error = later.TryLaunch();
+                Check(error == null, "TryLaunch starts the game: " + (error ?? "ok"));
                 for (int i = 0; i < 100 && !File.Exists(marker); i++) Thread.Sleep(100);
-                Check(File.Exists(marker), "stub runtime ran");
+                Check(File.Exists(marker), "stub game ran");
                 string[] lines = File.ReadAllLines(marker);
-                Check(lines.Length >= 3 && lines[0] == later.Content, "runtime receives the content folder: " + (lines.Length > 0 ? lines[0] : ""));
-                Check(lines[1] == Path.Combine(later.App, "RMGE01_game.dll"), "runtime receives the module path");
-                Check(lines[2].StartsWith(dataRoot, StringComparison.OrdinalIgnoreCase), "saves live under the data root: " + lines[2]);
+                Check(lines.Length == 4 && lines[0] == "--pak" && lines[1] == Path.Combine(later.Content, "game.pak"),
+                      "the game receives game.pak: " + string.Join(" ", lines));
+                Check(lines[2] == "--nand" && lines[3].StartsWith(dataRoot, StringComparison.OrdinalIgnoreCase),
+                      "saves live under the data root: " + (lines.Length > 3 ? lines[3] : ""));
                 return 0;
             }
             catch (Exception error)

@@ -4,7 +4,7 @@ using System.IO;
 namespace Nebula
 {
     /// <summary>
-    /// Per-user locations. Everything under <see cref="InstallRoot"/> is
+    /// Per-user locations. Everything under an install root (<see cref="InstallLayout"/>) is
     /// replaceable; everything under <see cref="DataRoot"/> (saves, settings,
     /// caches, sessions) survives update, rollback and uninstall.
     /// </summary>
@@ -66,7 +66,7 @@ namespace Nebula
         public string Versions { get { return Path.Combine(root, "versions"); } }
         public string Current { get { return Path.Combine(root, "current.json"); } }
         public string Content { get { return Path.Combine(root, "content"); } }
-        public string GameInputs { get { return Path.Combine(root, "game-inputs"); } }
+        /// <summary>The compiler and the Nebula source of installs that compiled the game; an install removes them.</summary>
         public string Toolchains { get { return Path.Combine(root, "toolchain"); } }
         public string Sources { get { return Path.Combine(root, "source"); } }
         public string Staging { get { return Path.Combine(root, "staging"); } }

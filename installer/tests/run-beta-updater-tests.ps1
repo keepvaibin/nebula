@@ -1,3 +1,4 @@
+# Install-mode and update-channel selection (BetaChannelTests.cs), without network, install or game.
 $ErrorActionPreference='Stop'
 $repo=Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $scratch=Join-Path $env:TEMP ('nebula-updater-tests-'+[guid]::NewGuid().ToString('N'))
@@ -19,16 +20,4 @@ $compiler=Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 if($LASTEXITCODE -ne 0) {throw 'C# setup compilation failed.'}
 & $exe
 if($LASTEXITCODE -ne 0) {throw 'Updater selection cases failed.'}
-$tokens=$null; $errors=$null
-$ast=[Management.Automation.Language.Parser]::ParseFile((Join-Path $repo 'installer\build-release.ps1'),[ref]$tokens,[ref]$errors)
-if($errors.Count) {throw 'Release script parse failed.'}
-$nameAssignment=$ast.Find({param($node) $node -is [Management.Automation.Language.AssignmentStatementAst] -and $node.Left.Extent.Text -eq '$setupName'},$true)
-if(-not $nameAssignment) {throw 'Beta asset naming assignment missing.'}
-$assign=[scriptblock]::Create($nameAssignment.Extent.Text)
-foreach($Version in @('0.1.0-preview.3','0.1.1-beta.1','0.2.0')) {
- . $assign
- $expected=if($Version -match '-beta\.') {'Nebula-Beta-Setup.exe'} else {'Nebula-Setup.exe'}
- if($setupName -ne $expected) {throw "Wrong asset name for $Version"}
-}
 Remove-Item -LiteralPath $scratch -Recurse -Force
-Write-Output 'PASS: production release-script asset naming (3 versions); signature filename derives from selected setup path. No setup built or installed.'

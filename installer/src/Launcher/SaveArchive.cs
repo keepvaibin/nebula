@@ -10,8 +10,8 @@ using System.Text;
 namespace Nebula.Launcher
 {
     /// <summary>
-    /// The checks the runtime applies to the save files it keeps (native_host.cpp is_valid_rmge_game_data,
-    /// is_valid_rmge_banner, is_valid_rfl_database).
+    /// Checks of the save files the game reads: GameData.bin's layout and checksum, the save banner's header, and the
+    /// Mii database's magic numbers and CRC.
     /// </summary>
     internal static class SaveFormat
     {
@@ -111,7 +111,7 @@ namespace Nebula.Launcher
     /// <summary>
     /// Export and import of the saves folder (the runtime's NAND root). An export holds the files the game reads and
     /// the folders above them, each with its NTFS streams (galaxy.isfs.meta holds the ISFS metadata) as separate zip
-    /// entries, so an imported export is the same tree. /tmp is left out: the runtime clears it on every start.
+    /// entries, so an imported export is the same tree. /tmp is left out: it only holds files a save stages.
     /// Archive layout: nebula-saves.json (items with sizes and SHA-256), saves/&lt;path&gt;, streams/&lt;path&gt;/&lt;stream&gt;.
     /// </summary>
     internal static class SaveArchive
@@ -144,8 +144,6 @@ namespace Nebula.Launcher
 
         /// <summary>Called after each staged folder or file (tests fail an import part-way).</summary>
         internal static Action<string> Staged = delegate { };
-
-        // ---- Export -----------------------------------------------------------------------------------------------
 
         /// <summary>Writes Nebula-Saves-yyyyMMdd-HHmmss.zip into <paramref name="folder"/> and returns its path.</summary>
         public static string Export(string folder)
@@ -225,8 +223,6 @@ namespace Nebula.Launcher
             return "streams/" + (path.Length == 0 ? "" : path + "/") + stream;
         }
 
-        // ---- Import -----------------------------------------------------------------------------------------------
-
         /// <summary>
         /// Replaces the saves with those of an exported zip, another zip of a saves folder, or a saves folder. The new
         /// tree is staged beside the saves and compared with the source first; the current saves are moved to
@@ -241,7 +237,6 @@ namespace Nebula.Launcher
             SaveItem save = items.FirstOrDefault(i => !i.IsFolder && i.Path == GameDataPath);
             if (save == null) throw new InvalidDataException("No Super Mario Galaxy save (GameData.bin) was found.");
             if (!SaveFormat.IsGameData(save.Data)) throw new InvalidDataException("GameData.bin is not a valid Super Mario Galaxy save.");
-            // The runtime would set these aside as well.
             LeaveOutInvalid(items, BannerPath, SaveFormat.IsBanner, "The save banner (banner.bin) is not valid and was left out.", notes);
             LeaveOutInvalid(items, MiiDatabasePath, SaveFormat.IsMiiDatabase, "The Mii data (RFL_DB.dat) is not valid and was left out.", notes);
             items = WithFolders(items);
@@ -344,8 +339,6 @@ namespace Nebula.Launcher
             }
             return backup;
         }
-
-        // ---- Sources ----------------------------------------------------------------------------------------------
 
         internal static List<SaveItem> ReadSource(string source)
         {

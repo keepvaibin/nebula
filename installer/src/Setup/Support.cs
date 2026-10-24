@@ -2,14 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Reflection;
 using System.Security.Cryptography;
 using Microsoft.Win32;
 
 namespace Nebula.Setup
 {
-    /// <summary>Files embedded in Nebula-Setup.exe by the release build.</summary>
+    /// <summary>Files build-native-setup.ps1 embeds in Nebula-Setup.exe.</summary>
     internal static class Payload
     {
         private static Stream Open(string name)
@@ -17,11 +16,6 @@ namespace Nebula.Setup
             var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(name);
             if (stream == null) throw new FileNotFoundException("This setup is missing its embedded " + name + ".");
             return stream;
-        }
-
-        public static string ReadText(string name)
-        {
-            using (var reader = new StreamReader(Open(name))) return reader.ReadToEnd();
         }
 
         public static void Extract(string name, string path)
@@ -33,19 +27,11 @@ namespace Nebula.Setup
         }
     }
 
-    /// <summary>The currently installed version, read from current.json and its install.json.</summary>
+    /// <summary>The currently installed version, read from current.json; its folder must hold a readable install.json.</summary>
     internal sealed class InstalledInfo
     {
-        private Dictionary<string, object> install;
         public string Version { get; private set; }
         public string Previous { get; private set; }
-        public string Directory { get; private set; }
-        public string ModuleKey { get { return Json.Str(install, "moduleKey"); } }
-        public string Commit { get { return Json.Str(install, "commit"); } }
-        public string ModuleSourceCommit { get { return Json.Str(install, "moduleSourceCommit") ?? Commit; } }
-        public string ModuleIsa { get { return Json.Str(install, "moduleIsa") ?? "SSE2"; } }
-        /// <summary>InstallEngine.ModuleGeneration of the installed modules; 1 before it was recorded.</summary>
-        public long ModuleGeneration { get { return Math.Max(1L, Json.Long(install, "moduleGeneration")); } }
 
         public static InstalledInfo Read(InstallLayout layout)
         {
@@ -56,38 +42,13 @@ namespace Nebula.Setup
                 var info = new InstalledInfo();
                 info.Version = Json.Str(current, "version");
                 info.Previous = Json.Str(current, "previous");
-                info.Directory = layout.VersionDir(info.Version);
-                string installJson = Path.Combine(info.Directory, "install.json");
+                string installJson = Path.Combine(layout.VersionDir(info.Version), "install.json");
                 if (!File.Exists(installJson)) return null;
-                info.install = Json.Load(installJson);
-                if (info.Previous != null && !System.IO.Directory.Exists(layout.VersionDir(info.Previous))) info.Previous = null;
+                Json.Load(installJson);
+                if (info.Previous != null && !Directory.Exists(layout.VersionDir(info.Previous))) info.Previous = null;
                 return info;
             }
             catch (Exception) { return null; }
-        }
-
-        public bool FilesIntact(params string[] names)
-        {
-            var files = Json.Obj(install, "files");
-            foreach (var name in names)
-            {
-                string path = Path.Combine(Directory, name);
-                if (files == null || !File.Exists(path) || FileUtil.Sha256File(path) != Json.Str(files, name)) return false;
-            }
-            return true;
-        }
-
-        public void CopyFiles(string target, params string[] names)
-        {
-            foreach (var name in names) File.Copy(Path.Combine(Directory, name), Path.Combine(target, name), true);
-        }
-
-        public IEnumerable<string> RuntimeDllNames()
-        {
-            var files = Json.Obj(install, "files");
-            if (files == null) return Enumerable.Empty<string>();
-            return files.Keys.Where(n => n.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)
-                && !n.StartsWith("RMGE01_", StringComparison.OrdinalIgnoreCase)).ToList();
         }
     }
 
@@ -262,9 +223,8 @@ namespace Nebula.Setup
             return SelectNewer(json, BuildInfo.Version);
         }
 
-        // Betas require an explicit first download. Separate asset names also
-        // keep already-installed preview updaters (which lack this filter) from
-        // offering a beta as an ordinary update.
+        // A beta updates to betas only, a release to releases only. A beta's setup has its own asset name, so an
+        // updater without this filter, which looks for Nebula-Setup.exe alone, never offers it.
         internal static ReleaseInfo SelectNewer(string json, string installedVersion)
         {
             bool beta = IsBetaVersion(installedVersion);
@@ -308,8 +268,8 @@ namespace Nebula.Setup
             string exe = Path.Combine(folder, "Nebula-Setup.exe");
             string sig = exe + ".sig";
             if (File.Exists(exe)) File.Delete(exe);
-            Downloader.Fetch(release.SignatureUrl, sig, null, 0, null, cancel);
-            Downloader.Fetch(release.SetupUrl, exe, null, 0, onBytes, cancel);
+            Downloader.Fetch(release.SignatureUrl, sig, null, cancel);
+            Downloader.Fetch(release.SetupUrl, exe, onBytes, cancel);
             if (!VerifySignature(exe, sig))
             {
                 File.Delete(exe);

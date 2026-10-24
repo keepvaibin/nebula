@@ -16,7 +16,7 @@ namespace Nebula
 
     /// <summary>
     /// Runs a child process inside a kill-on-close job object, so canceling
-    /// or closing the setup also stops every compiler it started.
+    /// or closing the setup also stops the program it started.
     /// </summary>
     internal sealed class ProcessRunner : IDisposable
     {
@@ -43,18 +43,10 @@ namespace Nebula
         /// Run a program to completion. Each output line goes to <paramref name="onLine"/>.
         /// Returns the exit code; throws when canceled.
         /// </summary>
-        public int Run(string fileName, IList<string> arguments, string workingDirectory,
-            IDictionary<string, string> environment, Action<string> onLine, CancellationToken cancel)
+        public int Run(string fileName, IList<string> arguments, string workingDirectory, Action<string> onLine,
+            CancellationToken cancel)
         {
-            return RunCommandLine(fileName, JoinArguments(arguments), workingDirectory, environment, onLine, cancel);
-        }
-
-        /// <summary>Run with a preformatted command line, for programs such as
-        /// msiexec that parse their own quoting.</summary>
-        public int RunCommandLine(string fileName, string commandLine, string workingDirectory,
-            IDictionary<string, string> environment, Action<string> onLine, CancellationToken cancel)
-        {
-            var start = new ProcessStartInfo(fileName, commandLine);
+            var start = new ProcessStartInfo(fileName, JoinArguments(arguments));
             start.UseShellExecute = false;
             start.CreateNoWindow = true;
             start.RedirectStandardOutput = true;
@@ -62,11 +54,6 @@ namespace Nebula
             start.StandardOutputEncoding = Encoding.UTF8;
             start.StandardErrorEncoding = Encoding.UTF8;
             start.WorkingDirectory = workingDirectory;
-            if (environment != null)
-            {
-                start.EnvironmentVariables.Clear();
-                foreach (var pair in environment) start.EnvironmentVariables[pair.Key] = pair.Value;
-            }
             using (var process = new Process())
             {
                 process.StartInfo = start;

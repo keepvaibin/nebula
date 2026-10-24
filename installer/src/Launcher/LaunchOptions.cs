@@ -12,55 +12,23 @@ namespace Nebula.Launcher
     internal static class LaunchOptions
     {
         /// <summary>
-        /// The runtime reads display and graphics settings from config.ini (the
-        /// settings app and the in-game menu edit it); only paths and diagnostics
-        /// travel on the command line and in the environment.
+        /// The game reads display and graphics settings from config.ini (the settings app and the in-game menu
+        /// edit it); only paths and diagnostics travel on the command line and in the environment.
         /// </summary>
         public static ProcessStartInfo Create(string app, string content, string saves, RecordingMode recording)
         {
-            string native = Path.Combine(app, "NebulaNative.exe");
-            if (File.Exists(native))
-            {
-                // Nebula 2 (the native game): the disc image and the saves on its command line; settings, mods and
-                // shaders in its own data folder.
-                var game = new ProcessStartInfo(native,
-                    "--pak " + ProcessRunner.Quote(Path.Combine(content, "game.pak")) + " --nand " + ProcessRunner.Quote(saves));
-                game.UseShellExecute = false;
-                game.CreateNoWindow = true;
-                game.WorkingDirectory = app;
-                game.RedirectStandardOutput = game.RedirectStandardError = recording != RecordingMode.None;
-                if (game.RedirectStandardOutput) game.StandardOutputEncoding = game.StandardErrorEncoding = Encoding.UTF8;
-                foreach (var name in game.EnvironmentVariables.Keys.Cast<string>().Where(n => n.StartsWith("GALAXY_", StringComparison.OrdinalIgnoreCase)).ToList())
-                    game.EnvironmentVariables.Remove(name);
-                game.EnvironmentVariables["GALAXY_STREAMLINE_DIR"] = GraphicsSettings.StreamlineDir;
-                ApplyRecording(game, recording);
-                return game;
-            }
-            var start = new ProcessStartInfo(Path.Combine(app, "NebulaRuntime.exe"),
-                ProcessRunner.Quote(content) + " " + ProcessRunner.Quote(Path.Combine(app, "RMGE01_game.dll")));
-            start.UseShellExecute = false;
-            start.CreateNoWindow = true;
-            start.WorkingDirectory = app;
-            start.RedirectStandardOutput = start.RedirectStandardError = recording != RecordingMode.None;
-            // The runtime's narrow output is UTF-8 (its manifest sets the process code page).
-            if (start.RedirectStandardOutput) start.StandardOutputEncoding = start.StandardErrorEncoding = Encoding.UTF8;
-            foreach (var name in start.EnvironmentVariables.Keys.Cast<string>().Where(n => n.StartsWith("GALAXY_", StringComparison.OrdinalIgnoreCase)).ToList())
-                start.EnvironmentVariables.Remove(name);
-            foreach (var entry in (System.Collections.IList)Json.ParseAny(File.ReadAllText(Path.Combine(app, "runtime-env.json"))))
-            {
-                // A nameless entry (a wrapped list, Native39's runtime-env.json) is skipped, not fatal.
-                var pair = entry as Dictionary<string, object>;
-                string name = pair != null ? Json.Str(pair, "name") : null;
-                if (string.IsNullOrEmpty(name)) continue;
-                start.EnvironmentVariables[name] = Json.Str(pair, "value") ?? "";
-            }
-            var env = start.EnvironmentVariables;
-            env["GALAXY_NAND_ROOT"] = saves;
-            env["GALAXY_STREAMLINE_DIR"] = GraphicsSettings.StreamlineDir;
-            env["GALAXY_NATIVE_THP_VIDEO_DECODE"] = "1";
-            env["GALAXY_DUSK_DSP_HLE"] = "0";
-            ApplyRecording(start, recording);
-            return start;
+            var game = new ProcessStartInfo(Path.Combine(app, "NebulaNative.exe"),
+                "--pak " + ProcessRunner.Quote(Path.Combine(content, "game.pak")) + " --nand " + ProcessRunner.Quote(saves));
+            game.UseShellExecute = false;
+            game.CreateNoWindow = true;
+            game.WorkingDirectory = app;
+            game.RedirectStandardOutput = game.RedirectStandardError = recording != RecordingMode.None;
+            if (game.RedirectStandardOutput) game.StandardOutputEncoding = game.StandardErrorEncoding = Encoding.UTF8;
+            foreach (var name in game.EnvironmentVariables.Keys.Cast<string>().Where(n => n.StartsWith("GALAXY_", StringComparison.OrdinalIgnoreCase)).ToList())
+                game.EnvironmentVariables.Remove(name);
+            game.EnvironmentVariables["GALAXY_STREAMLINE_DIR"] = GraphicsSettings.StreamlineDir;
+            ApplyRecording(game, recording);
+            return game;
         }
 
         internal static void ApplyRecording(ProcessStartInfo start, RecordingMode mode)
@@ -70,11 +38,7 @@ namespace Nebula.Launcher
             foreach (var flag in new[] { "GALAXY_TRACE_PRESENT_STATS", "GALAXY_MONITOR_POINTER_LATENCY",
                 "GALAXY_MONITOR_FRAME_TAILS", "GALAXY_MONITOR_DISPLAY_LAYOUT", "GALAXY_FRAME_TELEMETRY" })
                 env[flag] = record ? "1" : "0";
-            env["GALAXY_TRACE_IOS_ANOMALIES"] = record ? "1" : "0";
-            env["GALAXY_DIAGNOSTIC_IOS_COUNTERS"] = detailed ? "1" : "0";
-            env["GALAXY_TRACE_NATIVE_THP_BOUNDARY"] = detailed ? "1" : "0";
             env["GALAXY_TRACE_GX_STALLS"] = detailed ? "1" : "0";
-            env["GALAXY_SIM_PROFILE"] = detailed ? "1" : "0";
             env["GALAXY_FRAME_TIMELINE"] = record ? "1" : "0";
             env["GALAXY_FRAME_TIMELINE_EVENTS"] = "4000000";
             env["GALAXY_GPU_TIMESTAMPS"] = detailed ? "1" : "0";

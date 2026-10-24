@@ -4,10 +4,14 @@
     python tools/rust_licenses.py <package> <target triple> <output> "<binary description>"
 
 Walks the package's normal (not build or dev) dependencies for that target from `cargo metadata`, leaving out
-procedural macros (they run in the compiler), and writes each
-crate's name, version, license expression, repository and license files (LICENSE*, COPYING*, NOTICE*, UNLICENSE*)
-in the format of docs/licenses/rust-dependencies.txt. A crate that ships no license file is listed with its
-declared expression.
+procedural macros (they run in the compiler), and writes each crate's name, version, license expression,
+repository and license files (LICENSE*, COPYING*, NOTICE*, UNLICENSE*). A crate that ships no license file is
+listed with its declared expression. The two lists in docs/licenses:
+
+    python tools/rust_licenses.py nebula-import x86_64-pc-windows-msvc docs/licenses/rust-dependencies.txt
+        "nebula-import.exe (Windows Setup's importer)"
+    python tools/rust_licenses.py nebula-import aarch64-linux-android docs/licenses/rust-dependencies-android.txt
+        "libnebula_import.so (the Android app's setup)"
 """
 import json
 import pathlib
