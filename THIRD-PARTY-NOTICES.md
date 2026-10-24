@@ -189,20 +189,6 @@ game activity. Copyright (C) 1997-2026 Sam Lantinga. License: Zlib, its `LICENSE
   [docs/licenses/rust-dependencies-android.txt](docs/licenses/rust-dependencies-android.txt)
   (`tools/rust_licenses.py`), which the app shows under Open source licenses.
 
-## Tools downloaded by Setup
-
-Setup downloads these from their publishers and checks pinned SHA-256 hashes. Nebula does not
-redistribute them.
-
-- clang-cl and lld-link (LLVM 23, Apache-2.0 WITH LLVM-exception) from llvm-mingw 20260922,
-  <https://github.com/mstorsjo/llvm-mingw>.
-- Microsoft MSVC 14.44 C++ runtime headers and libraries and Windows SDK 10.0.26100 packages
-  from the Visual Studio 2022 release manifest, under the Microsoft Visual Studio Build Tools
-  license, which the user accepts in Setup (<https://go.microsoft.com/fwlink/?LinkId=2179911>).
-  The Microsoft C++ runtime DLLs from that download are copied next to the game.
-- CMake 3.31.6 (BSD-3-Clause), <https://github.com/Kitware/CMake>.
-- Ninja 1.12.1 (Apache-2.0), <https://github.com/ninja-build/ninja>.
-
 ## Earlier MIT license
 
 Nebula was developed under the name GalaxyRecomp. Revisions before the change to

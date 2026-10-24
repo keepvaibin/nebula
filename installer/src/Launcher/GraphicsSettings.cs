@@ -49,26 +49,25 @@ namespace Nebula.Launcher
         /// </summary>
         public static GpuAdapter TargetAdapter(string gpu)
         {
-            return GpuAdapters.Resolve(GpuAdapters.List(PackagePrefersIntegratedGpu()), gpu);
+            return GpuAdapters.Resolve(GpuAdapters.List(), gpu);
         }
 
         /// <summary>
         /// The GPU the game will run on is an NVIDIA RTX GPU. Without DXGI's list, the runtime's record of
-        /// its last run (adapter.ini, written with this package's GPU preference) decides; with no record,
-        /// any RTX adapter in the machine, unless this package prefers the integrated GPU.
+        /// its last run on the high-performance GPU (adapter.ini) decides; with no record, any RTX adapter
+        /// in the machine.
         /// </summary>
         public static bool DlssAdapter(string gpu)
         {
             GpuAdapter target = TargetAdapter(gpu);
             if (target != null) return target.IsNvidiaRtx;
-            bool lowPower = PackagePrefersIntegratedGpu();
-            var values = AdapterRecord(lowPower);
+            var values = AdapterRecord(true);
             string vendor, description;
             if (values != null && values.TryGetValue("vendor_id", out vendor) && values.TryGetValue("description", out description))
             {
                 return vendor == "4318" && description.IndexOf("RTX", StringComparison.OrdinalIgnoreCase) >= 0;
             }
-            return !lowPower && DlssPackage.RtxAdapterPresent();
+            return DlssPackage.RtxAdapterPresent();
         }
 
         /// <summary>
@@ -82,17 +81,18 @@ namespace Nebula.Launcher
             string rt, id;
             if (target != null)
             {
-                var record = AdapterRecord(null);
+                var record = AdapterRecord(false);
                 if (record != null && record.TryGetValue("id", out id) && id == target.Id)
                     return record.TryGetValue("ray_tracing", out rt) && rt == "1";
                 return target.IsNvidiaRtx;
             }
-            var values = AdapterRecord(PackagePrefersIntegratedGpu());
+            var values = AdapterRecord(true);
             return values != null && values.TryGetValue("ray_tracing", out rt) && rt == "1";
         }
 
-        // adapter.ini when it was written with the given GPU preference (any, for null); otherwise null.
-        private static Dictionary<string, string> AdapterRecord(bool? lowPower)
+        // adapter.ini; with highPerformanceOnly, only when the game wrote it running with the high-performance GPU
+        // preference (its default). Null otherwise.
+        private static Dictionary<string, string> AdapterRecord(bool highPerformanceOnly)
         {
             string path = Path.Combine(NebulaPaths.DataRoot, "adapter.ini");
             try
@@ -105,8 +105,7 @@ namespace Nebula.Launcher
                     if (equals > 0) values[line.Substring(0, equals).Trim()] = line.Substring(equals + 1).Trim();
                 }
                 string preference;
-                return lowPower == null ||
-                       (values.TryGetValue("gpu_preference", out preference) && (preference == "low") == lowPower.Value)
+                return !highPerformanceOnly || (values.TryGetValue("gpu_preference", out preference) && preference != "low")
                     ? values : null;
             }
             catch (IOException) { }
@@ -114,26 +113,6 @@ namespace Nebula.Launcher
             return null;
         }
 
-        /// <summary>runtime-env.json beside the launcher selects the integrated GPU (GALAXY_GPU_PREFERENCE=low).</summary>
-        public static bool PackagePrefersIntegratedGpu()
-        {
-            try
-            {
-                string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "runtime-env.json");
-                if (!File.Exists(path)) return false;
-                foreach (var entry in (System.Collections.IList)Json.ParseAny(File.ReadAllText(path)))
-                {
-                    var pair = entry as Dictionary<string, object>;
-                    if (pair != null && Json.Str(pair, "name") == "GALAXY_GPU_PREFERENCE")
-                        return string.Equals(Json.Str(pair, "value"), "low", StringComparison.OrdinalIgnoreCase);
-                }
-            }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
-            catch (ArgumentException) { }
-            catch (InvalidCastException) { }
-            return false;
-        }
         public static string UpscalerName(int value)
         {
             if (value == 3) return DlssInstalled() ? "NVIDIA DLSS" : "NVIDIA DLSS (download)";

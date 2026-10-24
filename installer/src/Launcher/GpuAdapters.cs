@@ -25,17 +25,17 @@ namespace Nebula.Launcher
     }
 
     /// <summary>
-    /// The hardware GPUs the game can render on, in the order its automatic choice tries them
-    /// (DXGI's high-performance order, or minimum power with GALAXY_GPU_PREFERENCE=low).
+    /// The hardware GPUs the game can render on, in the order its automatic choice tries them (DXGI's
+    /// high-performance order).
     /// </summary>
     internal static class GpuAdapters
     {
         /// <summary>Replaced by tests; null when DXGI cannot be asked.</summary>
-        internal static Func<bool, List<GpuAdapter>> Source = lowPowerFirst => Enumerate(lowPowerFirst, false);
+        internal static Func<List<GpuAdapter>> Source = () => Enumerate(false);
 
-        public static List<GpuAdapter> List(bool lowPowerFirst)
+        public static List<GpuAdapter> List()
         {
-            try { return Source(lowPowerFirst); }
+            try { return Source(); }
             catch (COMException) { return null; }
             catch (InvalidCastException) { return null; }
             catch (DllNotFoundException) { return null; }
@@ -74,10 +74,10 @@ namespace Nebula.Launcher
         }
 
         private const uint SoftwareAdapter = 2; // DXGI_ADAPTER_FLAG_SOFTWARE
-        private const int HighPerformance = 2, MinimumPower = 1; // DXGI_GPU_PREFERENCE
+        private const int HighPerformance = 2; // DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE
 
         // Software adapters (WARP, the Microsoft Basic Render Driver) are never the game's; tests list them.
-        internal static List<GpuAdapter> Enumerate(bool lowPowerFirst, bool software)
+        internal static List<GpuAdapter> Enumerate(bool software)
         {
             Guid factoryId = typeof(IDXGIFactory1).GUID;
             object created;
@@ -91,7 +91,7 @@ namespace Nebula.Launcher
                 {
                     object item;
                     int result = factory6 != null
-                        ? factory6.EnumAdapterByGpuPreference(index, lowPowerFirst ? MinimumPower : HighPerformance, ref adapterId, out item)
+                        ? factory6.EnumAdapterByGpuPreference(index, HighPerformance, ref adapterId, out item)
                         : EnumAdapters1((IDXGIFactory1)created, index, out item);
                     if (result != 0) break; // DXGI_ERROR_NOT_FOUND ends the list
                     var adapter = (IDXGIAdapter1)item;

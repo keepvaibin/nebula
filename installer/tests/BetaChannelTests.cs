@@ -31,23 +31,6 @@ namespace Nebula.Setup
                 InstallIntent.ForPackage("0.1.0-preview.2", "0.1.1-beta.4") != InstallMode.Update)
                 throw new Exception("Downloaded setup did not select fresh install, update or repair correctly.");
             Console.WriteLine("PASS: production install/update/repair selection for fresh, beta and preview installations.");
-            ModuleCompatibility.CheckVersions(23, 23, 2, 1, 3, 23, 2, 1, 3);
-            ModuleCompatibility.CheckVersions(23, 23, 2, 1, 7, 23, 2, 1, 3);
-            foreach (var values in new[] {new uint[]{22,23,2,1,3}, new uint[]{23,22,2,1,3}, new uint[]{23,23,1,1,3}, new uint[]{23,23,2,0,3}, new uint[]{23,23,2,1,1}})
-            {
-                bool rejected = false;
-                try { ModuleCompatibility.CheckVersions(values[0],values[1],values[2],values[3],values[4],23,2,1,3); }
-                catch (InvalidOperationException) { rejected = true; }
-                if (!rejected) throw new Exception("Incompatible compiled game accepted.");
-            }
-            foreach (string path in new[] {"../outside.obj", "C:\\outside.obj", "game/file.dll", "game/file.obj:stream"})
-            {
-                bool rejected = false;
-                try { RelinkCache.CheckedPath(System.IO.Path.GetTempPath(), path); }
-                catch (System.IO.InvalidDataException) { rejected = true; }
-                if (!rejected) throw new Exception("Unsafe retained-object path accepted.");
-            }
-            Console.WriteLine("PASS: ABI mismatch, required DSP capabilities and retained-object path checks.");
             var preview = Release("0.1.0-preview.3", false, "Nebula-Setup.exe", true);
             var beta = Release("0.1.1-beta.2", false, "Nebula-Beta-Setup.exe", true);
             var stable = Release("0.2.0", false, "Nebula-Setup.exe", true);
@@ -56,8 +39,8 @@ namespace Nebula.Setup
             Expect("0.1.1-beta.1", "0.1.1-beta.2", stable, beta, preview);
             Expect("0.1.1-beta.2", null, stable, beta, preview);
             Expect("0.2.0", null, beta, preview, stable);
-            // Channel filtering still works if a beta is accidentally aliased to the ordinary name.
-            // Publishing such an alias would affect old clients.
+            // A beta published under the ordinary asset name is still kept out of the release channel (and the other
+            // way round); updaters without the channel filter would offer it.
             Expect("0.1.0-preview.2", null, Release("0.9.0-beta.1", false, "Nebula-Setup.exe", true));
             Expect("0.1.1-beta.1", null, Release("0.1.1-beta.3", false, "Nebula-Setup.exe", true));
             Expect("0.1.1-beta.1", null, Release("0.1.1-beta.3", true, "Nebula-Beta-Setup.exe", true));

@@ -12,8 +12,7 @@ namespace Nebula.Setup
     {
         /// <summary>
         /// Nebula-Setup.exe [--update | --apply-update | --uninstall | --rollback]
-        ///   [--input PATH] [--root PATH] [--source ZIP|DIR] [--jobs N] [--desktop-shortcut]
-        ///   [--unattended] [--remove-user-data] [--accept-build-tools-license]
+        ///   [--input PATH] [--root PATH] [--desktop-shortcut] [--unattended] [--remove-user-data]
         /// </summary>
         [STAThread]
         private static int Main(string[] args)
@@ -24,7 +23,7 @@ namespace Nebula.Setup
                 string arg = args[i];
                 if (!arg.StartsWith("--")) continue;
                 bool hasValue = i + 1 < args.Length && !args[i + 1].StartsWith("--")
-                    && (arg == "--input" || arg == "--root" || arg == "--source" || arg == "--jobs");
+                    && (arg == "--input" || arg == "--root");
                 options[arg.Substring(2)] = hasValue ? args[++i] : "";
             }
             NativeMethods.SetProcessDpiAwarenessContext(new IntPtr(-4));
@@ -51,14 +50,8 @@ namespace Nebula.Setup
                         (options.ContainsKey("apply-update") ? InstallMode.Update : InstallIntent.ForPackage(current.Version, BuildInfo.Version)),
                     GameInput = options.ContainsKey("input") ? options["input"] : null,
                     InstallRoot = root,
-                    SourceOverride = options.ContainsKey("source") ? options["source"] : null,
-                    DesktopShortcut = options.ContainsKey("desktop-shortcut"),
-                    CompileJobs = options.ContainsKey("jobs") ? int.Parse(options["jobs"]) : 0
+                    DesktopShortcut = options.ContainsKey("desktop-shortcut")
                 };
-                if (InstallEngine.BuildToolsLicenseRequired(request.Mode,
-                        new Toolchain(Json.Parse(Payload.ReadText("toolchain.json")), layout.Toolchains)) &&
-                    !options.ContainsKey("accept-build-tools-license"))
-                    throw new InvalidOperationException("Unattended installs that download the compiler must pass --accept-build-tools-license.");
                 var engine = new InstallEngine(request, new SilentProgress(), CancellationToken.None);
                 engine.Run();
                 return 0;
