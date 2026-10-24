@@ -29,12 +29,12 @@ for i in range(first + 1, first + count):
     y, x = np.unravel_index(np.argmax(c), c.shape)
     h, w = c.shape
 
-    def sub(v, n, axis):
-        m = c[(y + (v if axis == 0 else 0)) % h, (x + (v if axis == 1 else 0)) % w]
-        return m
+    def at(oy, ox):
+        return c[(y + oy) % h, (x + ox) % w]
 
-    dy = (sub(1, h, 0) - sub(-1, h, 0)) / (2 * (2 * c[y, x] - sub(1, h, 0) - sub(-1, h, 0)) + 1e-12)
-    dx = (sub(1, w, 1) - sub(-1, w, 1)) / (2 * (2 * c[y, x] - sub(1, w, 1) - sub(-1, w, 1)) + 1e-12)
+    # Sub-pixel peak: a parabola through the peak and its two neighbours on each axis.
+    dy = (at(1, 0) - at(-1, 0)) / (2 * (2 * c[y, x] - at(1, 0) - at(-1, 0)) + 1e-12)
+    dx = (at(0, 1) - at(0, -1)) / (2 * (2 * c[y, x] - at(0, 1) - at(0, -1)) + 1e-12)
     yy = (y if y < h // 2 else y - h) + dy
     xx = (x if x < w // 2 else x - w) + dx
     out.append(f"{i}:{xx:+.2f},{yy:+.2f}")
