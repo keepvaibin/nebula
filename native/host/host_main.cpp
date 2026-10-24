@@ -33,6 +33,11 @@
 #include "galaxy/pointer_control.h"
 #include "galaxy/achievements.h"
 #include "galaxy/stats.h"
+#if defined(_WIN32) && !defined(NEBULA_HOST_SDL)
+// A real Wii Remote over Windows HID (wiimote_hid.h).
+#define NEBULA_REAL_WIIMOTE 1
+#include "galaxy/wiimote_hid.h"
+#endif
 #include "galaxy/runtime_settings.h"
 #include "galaxy/gx/render_config.h"
 
@@ -72,6 +77,7 @@ inline int64_t perf_hint_retrace() noexcept { return 0; }
 #include <fstream>
 #include <functional>
 #include <mutex>
+#include <optional>
 #include <span>
 #include <string>
 #include <thread>
@@ -274,6 +280,7 @@ struct Module {
     decltype(&nebula_game_wpad_connect) wpad_connect;
     decltype(&nebula_game_wpad_report) wpad_report;
     decltype(&nebula_game_wpad_shake) wpad_shake;
+    decltype(&nebula_game_wpad_battery) wpad_battery;
     void (*debug_dump)();  // optional: the module's thread report
 };
 Module gModule;
@@ -332,6 +339,8 @@ void load_module(const fs::path& path) {
     gModule.wpad_connect = reinterpret_cast<decltype(gModule.wpad_connect)>(find_symbol(module, "nebula_game_wpad_connect"));
     gModule.wpad_report = reinterpret_cast<decltype(gModule.wpad_report)>(find_symbol(module, "nebula_game_wpad_report"));
     gModule.wpad_shake = reinterpret_cast<decltype(gModule.wpad_shake)>(find_symbol(module, "nebula_game_wpad_shake"));
+    gModule.wpad_battery =
+        reinterpret_cast<decltype(gModule.wpad_battery)>(find_symbol(module, "nebula_game_wpad_battery"));
 #if defined(_WIN32)
     gModule.debug_dump = reinterpret_cast<void (*)()>(GetProcAddress(static_cast<HMODULE>(module), "nebula_game_debug_dump"));
 #else
@@ -1730,6 +1739,9 @@ void svc_button_icons(void*, NebulaButtonIcons* icons) {
         icons->places[i] = spec.places[i];
     }
 #endif
+#if defined(NEBULA_REAL_WIIMOTE)
+    icons->wii_remote = galaxy::host::real_wiimote_in_use() ? 1u : 0u;
+#endif
 }
 std::atomic<uint32_t> gTiltSection{0};
 std::atomic<bool> gMotor{false};
@@ -2092,11 +2104,77 @@ void wpad_thread() {
     idle_wiimote_calibration(connection.eeprom, connection.extension_calibration);
 #endif
     connection.extension = 1;  // WPAD_DEV_FREESTYLE: the Nunchuk
-    connection.battery = 0xC0;
+    connection.battery = 4;  // full
     gModule.wpad_connect(0, 1, &connection);
     const auto period = std::chrono::milliseconds(10);
     auto next = Clock::now() + period;
+#if defined(NEBULA_REAL_WIIMOTE)
+    galaxy::host::ensure_real_wiimote_started();
+    // A real Wii Remote: `remote` while one is connected (its calibration), `real` while the game plays with it.
+    std::optional<NebulaWiimoteConnection> remote;
+    bool real = false;
+    std::optional<galaxy::input::DeviceKey> device_when_real;
+    const auto use_remote = [&](bool on) {
+        if (on == real || (on && !remote.has_value())) return;
+        real = on;
+        gModule.wpad_shake(0, 0);
+        gModule.wpad_connect(0, 1, on ? &*remote : &connection);
+        galaxy::host::real_wiimote_set_active(on);
+        device_when_real = galaxy::host::last_input_device();
+        next = Clock::now() + period;
+        log_line("[wiimote]", on ? "in use" : "keyboard, mouse and controllers in use");
+    };
+#endif
     for (;;) {
+#if defined(NEBULA_REAL_WIIMOTE)
+        // A real Wii Remote's reports go to the game as they arrive, with its own calibration: in the Wii Remote input
+        // mode while it is connected, in Auto from its first button press until a key, a mouse button or a controller
+        // is used. The keyboard, mouse and controllers are read every 10 ms meanwhile (for that, and the settings menu).
+        std::array<uint8_t, 22> real_report{};
+        std::size_t real_size = 0;
+        galaxy::host::RealWiimoteConnection real_connection{};
+        const auto until_tick =
+            std::chrono::duration_cast<std::chrono::milliseconds>(next - Clock::now()).count();
+        const galaxy::host::RealWiimoteEvent event = galaxy::host::real_wiimote_wait(
+            real ? static_cast<uint32_t>(std::clamp<long long>(until_tick, 0, 10)) : 0u, real_report, real_size,
+            real_connection);
+        const bool wii_remote_mode =
+            galaxy::get_runtime_input_mode_state().mode == galaxy::RuntimeInputMode::RealWiimote;
+        if (event == galaxy::host::RealWiimoteEvent::Connected) {
+            NebulaWiimoteConnection attached{};
+            std::memcpy(attached.eeprom, real_connection.eeprom.data(), sizeof(attached.eeprom));
+            std::memcpy(attached.extension_calibration, real_connection.extension_calibration.data(),
+                        sizeof(attached.extension_calibration));
+            attached.extension = real_connection.nunchuk ? 1u : 0u;
+            attached.battery = real_connection.battery;
+            remote = attached;
+            if (real) {
+                gModule.wpad_connect(0, 1, &*remote);  // its Nunchuk in or out
+            } else if (wii_remote_mode) {
+                use_remote(true);
+            }
+            continue;
+        }
+        if (event == galaxy::host::RealWiimoteEvent::Disconnected) {
+            use_remote(false);
+            remote.reset();
+            continue;
+        }
+        if (event == galaxy::host::RealWiimoteEvent::Battery) {
+            if (remote.has_value()) remote->battery = real_connection.battery;
+            if (real) gModule.wpad_battery(0, real_connection.battery);
+            continue;
+        }
+        if (event == galaxy::host::RealWiimoteEvent::Report) {
+            const std::span<const uint8_t> bytes(real_report.data(), real_size);
+            if (!real && (wii_remote_mode || galaxy::host::real_wiimote_buttons_held(bytes))) use_remote(true);
+            if (real) gModule.wpad_report(0, real_report.data(), real_size, nullptr);
+            continue;
+        }
+        if (real && Clock::now() < next) {
+            continue;
+        }
+#endif
         sleep_until_precise(next);
         next += period;
         const uint8_t id = static_cast<uint8_t>(gWpadReport.load(std::memory_order_relaxed));
@@ -2109,6 +2187,16 @@ void wpad_thread() {
         const auto snapshot = galaxy::host::native_game_wiimote_snapshot(
             gRetraces.load(std::memory_order_relaxed), gWpadDpd.load(std::memory_order_relaxed) != 0, mode,
             static_cast<uint8_t>(gTiltSection.load(std::memory_order_relaxed)));
+#if defined(NEBULA_REAL_WIIMOTE)
+        if (real) {
+            // Another device used (in Auto): back to the keyboard, mouse and controllers, with this report.
+            if (galaxy::get_runtime_input_mode_state().mode == galaxy::RuntimeInputMode::RealWiimote ||
+                galaxy::host::last_input_device() == device_when_real) {
+                continue;
+            }
+            use_remote(false);
+        }
+#endif
         // Every report renews the motor's state (a stale one stops), as the console's remote keeps its motor bit.
         galaxy::host::native_game_rumble(gMotor.load(std::memory_order_relaxed), mode);
         uint8_t report[galaxy::input::kMaxWiimoteInputReportBytes];
@@ -2133,14 +2221,27 @@ void svc_wpad_control(void*, uint32_t chan, uint32_t what, uint32_t value) {
         break;
     case NEBULA_WPAD_FORMAT:
         gWpadReport.store(report_id_for_format(value), std::memory_order_relaxed);
+#if defined(NEBULA_REAL_WIIMOTE)
+        galaxy::host::real_wiimote_set_report(report_id_for_format(value));
+#endif
         break;
     case NEBULA_WPAD_DPD:
         gWpadDpd.store(value != 0, std::memory_order_relaxed);
+#if defined(NEBULA_REAL_WIIMOTE)
+        galaxy::host::real_wiimote_set_ir(value != 0);
+#endif
         break;
     case NEBULA_WPAD_MOTOR:
         gMotor.store(value != 0, std::memory_order_relaxed);
-#if defined(NEBULA_HOST_RENDERER)
+#if defined(NEBULA_REAL_WIIMOTE)
+        if (!galaxy::host::real_wiimote_in_use()) {
+            galaxy::host::native_game_rumble(value != 0, gStarPointerMode.load(std::memory_order_relaxed));
+        }
+#elif defined(NEBULA_HOST_RENDERER)
         galaxy::host::native_game_rumble(value != 0, gStarPointerMode.load(std::memory_order_relaxed));
+#endif
+#if defined(NEBULA_REAL_WIIMOTE)
+        galaxy::host::real_wiimote_set_rumble(value != 0);
 #endif
         break;
     default:

@@ -14,9 +14,8 @@ namespace NebulaIcons {
     // The A button over people and signs (IconAButton's own pictures) as the icons have it, in `pActor`'s layout, when
     // the icons changed since `*pShown` (the layout's own count, 0 at first).
     void applyToLayout(LayoutActor* pActor, u32* pShown);
-    // A Wii Remote is in the player's hand: the game's pictures of one (how to shake it to spin, tilt it to roll the
-    // Star Ball or steer the Ray) show only then. The native game reads none yet (its Wii Remote input mode only turns
-    // the pointer and controllers off): the keyboard, mouse and controllers stand in for it, so none show.
+    // A real Wii Remote is in the player's hand (the host's NebulaButtonIcons::wii_remote): the game's pictures of one
+    // (how to shake it to spin, tilt it to roll the Star Ball or steer the Ray) show only then.
     bool wiiRemoteInUse();
 };  // namespace NebulaIcons
 #endif

@@ -556,13 +556,12 @@ namespace NebulaIcons {
         if (sCellState == CellsUnread) {
             sCellState = findCells();
         }
-        if (sCellState != CellsFound) {
-            return;
-        }
         NebulaButtonIcons now;
         memset(&now, 0, sizeof(now));
         __NebulaButtonIcons(&now);
-        if (memcmp(&now, &sShown, sizeof(now)) == 0) {
+        // The Wii Remote's pictures follow the remote even when the icons cannot be drawn.
+        sShown.wii_remote = now.wii_remote;
+        if (sCellState != CellsFound || memcmp(&now, &sShown, sizeof(now)) == 0) {
             return;
         }
         u8* pStored[NEBULA_BUTTON_ICONS];
@@ -597,7 +596,7 @@ namespace NebulaIcons {
     }
 
     bool wiiRemoteInUse() {
-        return false;
+        return sShown.wii_remote != 0;
     }
 
     void applyToLayout(LayoutActor* pActor, u32* pShown) {

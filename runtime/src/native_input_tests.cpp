@@ -1,11 +1,13 @@
-// The virtual Wii Remote's input reports and IR dots, the
+// The virtual Wii Remote's input reports and IR dots, a real Wii Remote's output reports and replies, the
 // settings-overlay pad and the input-script integer fields.
 
 #include "galaxy/native_input.h"
 #include "galaxy/native_settings_pad.h"
+#include "galaxy/wiimote_hid.h"
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cmath>
@@ -942,6 +944,121 @@ bool basic_ir_decoder_preserves_low_ff_visible_coordinates() {
     return passed;
 }
 
+// A real Wii Remote's output reports and replies (WiiBrew's layouts).
+bool real_wiimote_protocol() {
+    namespace wm = galaxy::input::wiimote;
+    bool ok = true;
+    std::array<std::uint8_t, wm::kOutputBytes> out{};
+    out.fill(0xee);
+    ok &= expect(wm::build_report_mode(0x37, true, true, out) == 3u && out[0] == 0x12 && out[1] == 0x05 &&
+                     out[2] == 0x37 && out[3] == 0x00,
+                 "report mode: continuous with the motor on, the rest zeroed");
+    ok &= expect(wm::build_rumble(false, out) == 2u && out[0] == 0x10 && out[1] == 0x00, "motor off");
+    ok &= expect(wm::build_leds(0x01, false, out) == 2u && out[0] == 0x11 && out[1] == 0x10, "LED 1");
+    ok &= expect(wm::build_enable(wm::kOutIrLogic, true, false, out) == 2u && out[0] == 0x1a && out[1] == 0x04,
+                 "IR logic on");
+    ok &= expect(wm::build_read(wm::kRegisters, wm::kExtensionCalibration, 32, false, out) == 7u && out[0] == 0x17 &&
+                     out[1] == 0x04 && out[2] == 0xa4 && out[3] == 0x00 && out[4] == 0x20 && out[5] == 0x00 &&
+                     out[6] == 32,
+                 "read: space, 24-bit address, 16-bit size");
+    const std::uint8_t sensitivity[2] = {0x63, 0x03};
+    ok &= expect(wm::build_write(wm::kRegisters, 0xb0001a, sensitivity, true, out) == 22u && out[0] == 0x16 &&
+                     out[1] == 0x05 && out[2] == 0xb0 && out[3] == 0x00 && out[4] == 0x1a && out[5] == 2 &&
+                     out[6] == 0x63 && out[7] == 0x03 && out[8] == 0x00,
+                 "write: 16 data bytes after the size");
+    std::array<std::uint8_t, 17> too_long{};
+    ok &= expect(wm::build_write(wm::kRegisters, 0, too_long, false, out) == 0u, "a write holds at most 16 bytes");
+    ok &= expect(wm::ir_mode_for_report(0x33) == 3u && wm::ir_mode_for_report(0x37) == 1u &&
+                     wm::ir_mode_for_report(0x31) == 0u,
+                 "IR mode follows the data report");
+    const auto setup = wm::ir_setup(1);
+    ok &= expect(setup[0].address == 0xb00030 && setup[0].data[0] == 0x08 && setup[1].size == 9u &&
+                     setup[1].data[6] == 0xaa && setup[3].address == 0xb00033 && setup[3].data[0] == 1u &&
+                     setup[4].address == 0xb00030,
+                 "IR setup: enable, sensitivity level 3, mode, enable");
+
+    const std::uint8_t status[7] = {0x20, 0x00, 0x00, 0x0a, 0x00, 0x00, 0xc8};
+    const wm::Status parsed = wm::parse_status(status);
+    ok &= expect(parsed.valid && parsed.extension && parsed.ir && parsed.battery == 0xc8, "status flags and battery");
+    std::array<std::uint8_t, 22> reply{};
+    reply[0] = 0x21;
+    reply[3] = 0x90;  // 10 bytes, no error
+    reply[4] = 0x00;
+    reply[5] = 0x20;
+    reply[6] = 0xab;
+    const wm::ReadReply read = wm::parse_read_reply(reply);
+    ok &= expect(read.valid && read.error == 0u && read.address == 0x0020 && read.data.size() == 10u &&
+                     read.data[0] == 0xab,
+                 "read reply: size, error, address");
+    const std::uint8_t ack[5] = {0x22, 0x00, 0x00, 0x16, 0x00};
+    const wm::Ack parsed_ack = wm::parse_ack(ack);
+    ok &= expect(parsed_ack.valid && parsed_ack.report == 0x16 && parsed_ack.error == 0u, "write acknowledged");
+    const std::uint8_t nunchuk[6] = {0x00, 0x00, 0xa4, 0x20, 0x00, 0x00};
+    const std::uint8_t classic[6] = {0x00, 0x00, 0xa4, 0x20, 0x01, 0x01};
+    ok &= expect(wm::is_nunchuk(nunchuk) && !wm::is_nunchuk(classic), "a Nunchuk by its id");
+    ok &= expect(wm::is_data_report(0x37) && !wm::is_data_report(0x21), "data reports 0x30-0x3f");
+    ok &= expect(wm::battery_level(0xc8) == 4u && wm::battery_level(0x40) == 2u && wm::battery_level(0x10) == 1u &&
+                     wm::battery_level(0x02) == 0u,
+                 "battery levels");
+    return ok;
+}
+
+// The hand-off of a real remote's state and reports to the host's WPAD thread.
+bool real_wiimote_handoff() {
+    using galaxy::host::RealWiimoteEvent;
+    bool ok = true;
+    galaxy::host::RealWiimoteHandoff handoff;
+    std::array<std::uint8_t, 22> report{};
+    std::size_t size = 0;
+    galaxy::host::RealWiimoteConnection got{};
+    const auto next = [&] { return handoff.wait(std::chrono::milliseconds(0), report, size, got); };
+    const std::uint8_t a[3] = {0x37, 0x01, 0x02};
+    const std::uint8_t b[3] = {0x37, 0x03, 0x04};
+    ok &= expect(next() == RealWiimoteEvent::None && !handoff.in_use(), "nothing at first");
+    handoff.report(a);
+    ok &= expect(next() == RealWiimoteEvent::None, "a report before the connection is dropped");
+    galaxy::host::RealWiimoteConnection connection{};
+    connection.nunchuk = true;
+    connection.battery = 4;
+    handoff.connected(connection);
+    handoff.report(a);
+    ok &= expect(next() == RealWiimoteEvent::Connected && got.nunchuk && got.battery == 4u && !handoff.in_use(),
+                 "the connection first, not in use until the host plays with it");
+    handoff.set_active(true);
+    ok &= expect(handoff.in_use(), "in use once active");
+    ok &= expect(next() == RealWiimoteEvent::Report && size == 3u && report[1] == 0x01, "then its report");
+    ok &= expect(next() == RealWiimoteEvent::None, "then nothing");
+    handoff.report(a);
+    handoff.disconnected();
+    handoff.connected(connection);
+    handoff.report(b);
+    ok &= expect(next() == RealWiimoteEvent::Connected, "a drop and return the host missed reads as connected");
+    ok &= expect(next() == RealWiimoteEvent::Report && report[1] == 0x03 && next() == RealWiimoteEvent::None,
+                 "only the new connection's report");
+    handoff.connected(connection);
+    handoff.disconnected();
+    ok &= expect(next() == RealWiimoteEvent::Disconnected && !handoff.in_use() && next() == RealWiimoteEvent::None,
+                 "a connection gone before the host read it reads as gone, once");
+    handoff.report(a);
+    ok &= expect(next() == RealWiimoteEvent::None, "no reports while disconnected");
+    handoff.connected(connection);
+    ok &= expect(next() == RealWiimoteEvent::Connected, "connected again");
+    handoff.battery(1);
+    ok &= expect(next() == RealWiimoteEvent::Battery && got.battery == 1u, "a battery change");
+    for (std::uint8_t i = 0; i < 40; ++i) {
+        const std::uint8_t r[2] = {0x30, i};
+        handoff.report(r);
+    }
+    bool ordered = true;
+    for (std::uint8_t i = 8; i < 40; ++i) ordered = ordered && next() == RealWiimoteEvent::Report && report[1] == i;
+    ok &= expect(ordered && next() == RealWiimoteEvent::None, "a full ring keeps the newest 32, oldest first");
+    const std::uint8_t idle[3] = {0x37, 0x60, 0x60};  // accelerometer bits only
+    const std::uint8_t a_held[3] = {0x37, 0x00, 0x08};
+    ok &= expect(!galaxy::host::real_wiimote_buttons_held(idle) && galaxy::host::real_wiimote_buttons_held(a_held),
+                 "a button press, not the accelerometer's low bits");
+    return ok;
+}
+
 }  // namespace
 
 int main() {
@@ -969,5 +1086,7 @@ int main() {
     ok &= all_supported_input_report_modes_build();
     ok &= rejects_unsupported_modes();
     ok &= reports_small_output_buffer();
+    ok &= real_wiimote_protocol();
+    ok &= real_wiimote_handoff();
     return ok ? 0 : 1;
 }

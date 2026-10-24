@@ -6,6 +6,12 @@ PlayStation controllers (DualShock 4, DualSense, DualSense Edge), the Steam
 Controller (2026) and generic HID game controllers work at the same time; every
 Wii input can be rebound.
 
+A real Wii Remote (RVL-CNT-01 or -TR, with or without a Nunchuk) paired in Windows' Bluetooth settings is read
+directly: the game gets its own reports as they arrive (buttons, accelerometer, IR camera, Nunchuk), its own
+calibration, its battery level, and drives its motor; the game's pictures of a Wii Remote show while it is in use.
+With INPUT on auto it takes over at its first button press and hands back when a key, a mouse button or a controller
+is used; INPUT on Wii Remote uses it alone. Its speaker's sounds play from the PC. A test session never opens it.
+
 ## Default maps
 
 Controllers follow Super Mario Galaxy on Nintendo Switch (3D All-Stars; the

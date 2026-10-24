@@ -7,6 +7,7 @@
 #include "galaxy/platform_time.h"
 #include "galaxy/jaudio_host_mixer.h"
 #include "galaxy/controller_hid.h"
+#include "galaxy/wiimote_hid.h"
 #include "galaxy/input_bindings.h"
 #include "galaxy/native_input.h"
 #include "galaxy/native_settings_pad.h"
@@ -1861,7 +1862,8 @@ input::ButtonIconSpec button_icons(bool menu) noexcept {
     case ButtonIcons::Nintendo: style = ButtonIconStyle::Nintendo; break;
     case ButtonIcons::PlayStation: style = ButtonIconStyle::PlayStation; break;
     case ButtonIcons::Auto:
-        // A controller of no known family shows a Wii Remote's.
+        // A real Wii Remote's own while one is in use; a controller of no known family shows them too.
+        if (real_wiimote_in_use()) break;
         switch (pad.value_or(ControlScheme::Keyboard)) {
         case ControlScheme::Xbox:
         case ControlScheme::Steam: style = ButtonIconStyle::Xbox; break;

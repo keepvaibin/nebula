@@ -114,6 +114,7 @@ add_library(galaxy_native_input STATIC
     runtime/src/steam_controller.cpp
     runtime/src/switch_controller.cpp
     runtime/src/tilt.cpp
+    runtime/src/wiimote_protocol.cpp
     runtime/src/wiimote_speaker.cpp)
 target_link_libraries(galaxy_native_input PUBLIC galaxy_runtime_abi)
 galaxy_host_options(galaxy_native_input)
@@ -134,7 +135,8 @@ add_library(galaxy_native_host STATIC
     runtime/src/mod_import.cpp
     runtime/src/crash_report.cpp
     runtime/src/discord_presence.cpp
-    runtime/src/controller_hid.cpp)
+    runtime/src/controller_hid.cpp
+    runtime/src/wiimote_hid.cpp)
 target_link_libraries(galaxy_native_host
     PUBLIC
         galaxy_runtime_abi

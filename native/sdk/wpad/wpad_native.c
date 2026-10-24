@@ -36,6 +36,7 @@ typedef struct {
     _Atomic int connectEvent; /* 1 connect, 2 disconnect, 0 none */
     _Atomic u32 shakeHeld;        /* nebula_game_wpad_shake's bits */
     _Atomic u32 shakePresses[2];  /* presses not yet taken: the remote's, the Nunchuk's */
+    _Atomic u32 pendingBattery;   /* nebula_game_wpad_battery's level plus one; 0 none */
     u8 eeprom[0x2A];
     u8 extCalibration[32];
     u32 pendingDevType;
@@ -122,6 +123,14 @@ NEBULA_GAME_API void nebula_game_wpad_shake(uint32_t chan, uint32_t held) {
             atomic_fetch_add(&c->shakePresses[device], 1);
         }
     }
+}
+
+NEBULA_GAME_API void nebula_game_wpad_battery(uint32_t chan, uint32_t level) {
+    if (chan >= kChannels) {
+        return;
+    }
+    atomic_store(&sChannels[chan].pendingBattery, (level > 4u ? 4u : level) + 1u);
+    nebula_raise_interrupt(__OS_INTERRUPT_PI_SI);
 }
 
 /* The shake presses on the remote (device 0) or its Nunchuk (1) since the last call (WPadHVSwing). */
@@ -431,6 +440,10 @@ static void controller_interrupt(__OSInterrupt interrupt, OSContext* context) {
             if (c->connectCallback != NULL) {
                 c->connectCallback(chan, WPAD_ERR_NO_CONTROLLER);
             }
+        }
+        const u32 battery = atomic_exchange(&c->pendingBattery, 0);
+        if (battery != 0 && c->connected) {
+            c->info.battery = (u8)(battery - 1u);
         }
         if (c->connected) {
             u32 tail = atomic_load_explicit(&c->tail, memory_order_relaxed);

@@ -487,12 +487,13 @@ bool game_collection(HDEVINFO set, SP_DEVINFO_DATA& info) {
     return false;
 }
 
-std::vector<HidCandidate> enumerate_hid_pads() {
-    std::vector<HidCandidate> found;
+// Every HID interface present: `visit(path, set, info)` for each (the set's device info gives its compatible ids).
+template <class Visit>
+void for_each_hid_interface(Visit visit) {
     GUID hid_guid{};
     HidD_GetHidGuid(&hid_guid);
     const HDEVINFO set = SetupDiGetClassDevsW(&hid_guid, nullptr, nullptr, DIGCF_PRESENT | DIGCF_DEVICEINTERFACE);
-    if (set == INVALID_HANDLE_VALUE) return found;
+    if (set == INVALID_HANDLE_VALUE) return;
     SP_DEVICE_INTERFACE_DATA iface{};
     iface.cbSize = sizeof(iface);
     for (DWORD index = 0; SetupDiEnumDeviceInterfaces(set, nullptr, &hid_guid, index, &iface); ++index) {
@@ -505,29 +506,44 @@ std::vector<HidCandidate> enumerate_hid_pads() {
         SP_DEVINFO_DATA info{};
         info.cbSize = sizeof(info);
         if (!SetupDiGetDeviceInterfaceDetailW(set, &iface, detail, needed, nullptr, &info)) continue;
-        const std::wstring path = detail->DevicePath;
+        visit(std::wstring(detail->DevicePath), set, info);
+    }
+    SetupDiDestroyDeviceInfoList(set);
+}
+
+// A HID interface's attributes, opened without access (attributes and the top-level collection only); the probe
+// handle in `probe` when asked for.
+std::optional<HIDD_ATTRIBUTES> hid_attributes(const std::wstring& path, UniqueHandle* probe = nullptr) {
+    UniqueHandle handle(CreateFileW(path.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0,
+                                    nullptr));
+    if (handle.get() == INVALID_HANDLE_VALUE) return std::nullopt;
+    HIDD_ATTRIBUTES attributes{};
+    attributes.Size = sizeof(attributes);
+    if (!HidD_GetAttributes(handle.get(), &attributes)) return std::nullopt;
+    if (probe != nullptr) *probe = std::move(handle);
+    return attributes;
+}
+
+std::vector<HidCandidate> enumerate_hid_pads() {
+    std::vector<HidCandidate> found;
+    for_each_hid_interface([&](const std::wstring& path, HDEVINFO set, SP_DEVINFO_DATA& info) {
         // Only the vendors with their own drivers and game collections are opened.
         const bool known_vendor = contains_ci(path, L"057e") || contains_ci(path, L"054c") ||
                                   contains_ci(path, L"28de");
-        if (!known_vendor && !game_collection(set, info)) continue;
-        // Opened without access: attributes and the top-level collection only.
-        UniqueHandle probe(CreateFileW(path.c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
-                                       OPEN_EXISTING, 0, nullptr));
-        if (probe.get() == INVALID_HANDLE_VALUE) continue;
-        HIDD_ATTRIBUTES attributes{};
-        attributes.Size = sizeof(attributes);
-        if (!HidD_GetAttributes(probe.get(), &attributes)) continue;
-        auto product = find_product(attributes.VendorID, attributes.ProductID);
-        if (!product) product = find_generic(probe.get(), attributes.VendorID, path);
-        if (!product) continue;
-        if (sv::is_puck_product(attributes.ProductID)) {
+        if (!known_vendor && !game_collection(set, info)) return;
+        UniqueHandle probe;
+        const std::optional<HIDD_ATTRIBUTES> attributes = hid_attributes(path, &probe);
+        if (!attributes) return;
+        auto product = find_product(attributes->VendorID, attributes->ProductID);
+        if (!product) product = find_generic(probe.get(), attributes->VendorID, path);
+        if (!product) return;
+        if (sv::is_puck_product(attributes->ProductID)) {
             // Interfaces 2..5 carry controllers; the others are not game pads.
             const int mi = interface_number(path);
-            if (mi < static_cast<int>(sv::kPuckFirstInterface) || mi > static_cast<int>(sv::kPuckLastInterface)) continue;
+            if (mi < static_cast<int>(sv::kPuckFirstInterface) || mi > static_cast<int>(sv::kPuckLastInterface)) return;
         }
-        found.push_back({path, attributes.VendorID, attributes.ProductID, *product});
-    }
-    SetupDiDestroyDeviceInfoList(set);
+        found.push_back({path, attributes->VendorID, attributes->ProductID, *product});
+    });
     return found;
 }
 
@@ -1709,10 +1725,32 @@ std::uint64_t controller_hid_now_us() noexcept {
     return steady_us();
 }
 
+bool hidden_test_session() noexcept {
+    static const bool hidden = env_flag("GALAXY_HIDE_WINDOW");
+    return hidden;
+}
+
 bool rumble_output_disabled() noexcept {
     // Test sessions (hidden window) never drive a motor.
-    static const bool disabled = env_flag("GALAXY_HIDE_WINDOW");
-    return disabled;
+    return hidden_test_session();
+}
+
+std::vector<std::wstring> hid_interface_paths(std::uint16_t vendor, std::span<const std::uint16_t> products) {
+    std::vector<std::wstring> found;
+    try {
+        wchar_t vendor_text[8];
+        std::swprintf(vendor_text, std::size(vendor_text), L"%04x", vendor);
+        for_each_hid_interface([&](const std::wstring& path, HDEVINFO, SP_DEVINFO_DATA&) {
+            if (!contains_ci(path, vendor_text)) return;
+            const std::optional<HIDD_ATTRIBUTES> attributes = hid_attributes(path);
+            if (attributes && attributes->VendorID == vendor &&
+                std::find(products.begin(), products.end(), attributes->ProductID) != products.end()) {
+                found.push_back(path);
+            }
+        });
+    } catch (...) {
+    }
+    return found;
 }
 
 void publish_rumble_request(const RumbleRequest& published) noexcept {

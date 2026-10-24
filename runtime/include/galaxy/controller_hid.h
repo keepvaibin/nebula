@@ -16,6 +16,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <span>
+#include <string>
+#include <vector>
 
 namespace galaxy::host {
 
@@ -87,5 +89,11 @@ std::size_t read_hid_pads(std::span<HidPadState> out, bool consume_gyro) noexcep
 // enumerated synchronously and numbered in order.
 std::size_t hid_controllers(std::span<input::ControllerInfo> out) noexcept;
 [[nodiscard]] bool hid_controller_present_now() noexcept;
+
+// The HID interfaces present of `vendor`'s `products`, by device path (a real Wii Remote's, wiimote_hid.cpp).
+[[nodiscard]] std::vector<std::wstring> hid_interface_paths(std::uint16_t vendor,
+                                                           std::span<const std::uint16_t> products);
+// A test session (GALAXY_HIDE_WINDOW set and not 0, false, off or no): it drives no motor and takes no Wii Remote.
+[[nodiscard]] bool hidden_test_session() noexcept;
 
 }  // namespace galaxy::host
