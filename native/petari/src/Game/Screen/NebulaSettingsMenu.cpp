@@ -56,6 +56,7 @@ namespace {
     const f32 cSliderValue = 64.0f;  // its value after it
     const s32 cRepeatDelay = 18;     // an arrow held down: the frames before it steps again, then between steps
     const s32 cRepeatEvery = 5;
+    const f32 cRowButtonRadius = 11.0f;  // a row's own buttons have the rows' corners, near enough (the rows': 12)
     const f32 cReach = 8.0f;  // how far past a button's edge above and below the pointer still has it
     const f32 cMinSqueeze = 0.6f;  // the narrowest a line of text is drawn
     const f32 cKeyGap = 6.0f;  // a key from its word
@@ -91,6 +92,12 @@ namespace {
     const u32 cTrack = 0x4A527428;
     const u32 cSliderTrack = 0xCBD6EBFF;
     const u32 cSliderFill = 0x6FA6EAFF;
+    const u32 cRowButtonFill = 0xE4F6FFFF;  // a row's own button: its face, its ring, the edge under it
+    const u32 cRowButtonRing = 0x5CC4F0FF;
+    const u32 cRowButtonLit = 0xFFFFFFFF;  // focused
+    const u32 cRowButtonLitRing = 0x2F9AEEFF;
+    const u32 cRowButtonEdge = 0x3E86C8FF;
+    const u32 cRowButtonOff = 0xEEF1F6FF;  // unavailable
     const u32 cThumb = 0x7EA8E8FF;
     const u32 cButtonText = 0x505050FF;
 
@@ -173,7 +180,9 @@ namespace {
     // setting's arrow back or on, a slider's knob.
     enum { ChipLess = -1, ChipMore = -2, ChipKnob = -3 };
     struct RowChip {
-        Chip mChip;
+        Chip mChip;    // its word (the game's button art stays hidden: its ends are a fixed pill)
+        Window* mEdge;  // drawn as a box with the rows' corners: a darker edge under its face
+        Window* mFace;
         s32 mRow;  // mRows' index; -1 unused
         s32 mButton;
         u32 mVersion;
@@ -415,6 +424,17 @@ namespace {
         NebulaText::get(pDst, capacity, key == KeyApply && controls ? "KeySpace" : cKeys[key]);
     }
 
+    // `a` to `b` by `t` (0 to 1), each channel.
+    u32 mix(u32 a, u32 b, f32 t) {
+        u32 out = 0;
+        for (s32 shift = 0; shift < 32; shift += 8) {
+            const f32 from = static_cast< f32 >(a >> shift & 0xFF);
+            const f32 to = static_cast< f32 >(b >> shift & 0xFF);
+            out |= static_cast< u32 >(from + (to - from) * t + 0.5f) << shift;
+        }
+        return out;
+    }
+
     u32 darker(u32 rgba) {
         const u32 r = (rgba >> 24 & 0xFF) * 3 / 4;
         const u32 g = (rgba >> 16 & 0xFF) * 3 / 4;
@@ -620,6 +640,7 @@ private:
     void dragSlider(const NebulaSettingsView& rView, f32 x);
     RowChip& useRowChip(s32 index, s32 row, s32 button, u32 version, const wchar_t* pWord);
     void placeChip(Chip& rChip, f32 x, f32 y, f32 width, f32 height, bool focused);
+    void placeRowBox(RowChip& rPooled, f32 x, f32 y, f32 width, f32 height, f32 radius, bool focused, bool off);
     void placeButton(Button& rButton, f32 x, f32 y, f32 width);
     void placeRowButtons(const NebulaSettingsView& rView);
     void placeRows(const NebulaSettingsView& rView);
@@ -917,11 +938,24 @@ bool NebulaSettingsScreen::build() {
     for (s32 i = 0; i < cRowChipsMax; i++) {
         char name[16];
         snprintf(name, sizeof(name), "NsRowBtn%d", static_cast< int >(i));
-        if (!makeChip(mKits, mList, &mRowChips[i].mChip, name, false, cRowButtonSize, cButtonText)) {
+        RowChip& rPooled = mRowChips[i];
+        if (!makeChip(mKits, mList, &rPooled.mChip, name, false, cRowButtonSize, cButtonText)) {
             return false;
         }
-        mRowChips[i].mRow = -1;
-        mRowChips[i].mChip.mRoot->SetVisible(false);
+        // The box behind the word.
+        snprintf(name, sizeof(name), "NsRowBtnE%d", static_cast< int >(i));
+        rPooled.mEdge = makeWindow(mKits, rPooled.mChip.mRoot, name);
+        snprintf(name, sizeof(name), "NsRowBtnF%d", static_cast< int >(i));
+        rPooled.mFace = makeWindow(mKits, rPooled.mChip.mRoot, name);
+        if (rPooled.mEdge == nullptr || rPooled.mFace == nullptr) {
+            return false;
+        }
+        paint(rPooled.mEdge, cRowButtonEdge, cRowButtonEdge);
+        rPooled.mChip.mRoot->RemoveChild(rPooled.mChip.mText);
+        rPooled.mChip.mRoot->AppendChild(rPooled.mChip.mText);
+        rPooled.mChip.mArt->SetVisible(false);
+        rPooled.mRow = -1;
+        rPooled.mChip.mRoot->SetVisible(false);
     }
     mDropLine = makeWindow(mKits, mList, "NsDropLine");
     if (mDropLine == nullptr) {
@@ -1653,6 +1687,24 @@ void NebulaSettingsScreen::placeChip(Chip& rChip, f32 x, f32 y, f32 width, f32 h
     rChip.mLayers[LayerShine]->mAlpha = toAlpha(rChip.mFocusLevel * 0.7f);
 }
 
+// A row's own button `width` x `height` centred on (x, y): a box with the rows' corners over its darker edge (a knob:
+// round). Focused, it grows a little, its face whitens and its ring darkens; unavailable, it is grey.
+void NebulaSettingsScreen::placeRowBox(RowChip& rPooled, f32 x, f32 y, f32 width, f32 height, f32 radius, bool focused, bool off) {
+    Chip& rChip = rPooled.mChip;
+    rChip.mFocusLevel += ((focused ? 1.0f : 0.0f) - rChip.mFocusLevel) * 0.35f;
+    rChip.mX = x;
+    rChip.mWidth = width;
+    rChip.mHeight = height;
+    const f32 grow = 1.0f + 0.05f * rChip.mFocusLevel;
+    rChip.mRoot->mTranslate = nw4r::math::VEC3(x, y, 0.0f);
+    rChip.mRoot->mScale = nw4r::math::VEC2(grow, grow);
+    shape(rPooled.mEdge, 0.0f, -2.5f, width, height, radius);
+    shape(rPooled.mFace, 0.0f, 0.0f, width, height, radius);
+    rPooled.mEdge->SetVisible(!off);
+    paint(rPooled.mFace, off ? cRowButtonOff : mix(cRowButtonFill, cRowButtonLit, rChip.mFocusLevel),
+          off ? cFrameRing : mix(cRowButtonRing, cRowButtonLitRing, rChip.mFocusLevel));
+}
+
 // A button's art for `width`, its key and word centred together on it; it grows and shines under the pointer.
 void NebulaSettingsScreen::placeButton(Button& rButton, f32 x, f32 y, f32 width) {
     Chip& rChip = rButton.mChip;
@@ -1901,7 +1953,7 @@ void NebulaSettingsScreen::placeRowButtons(const NebulaSettingsView& rView) {
             const s32 direction = a == 0 ? -1 : 1;
             const bool focused = !asking && ((row == mHoverRow && mHoverArrow == direction) ||
                                              (row == static_cast< s32 >(rView.selected) && mHeldArrow == direction));
-            placeChip(rPooled.mChip, rRow.mArrowX[a], y, cArrowWidth, cRowButtonHeight, focused);
+            placeRowBox(rPooled, rRow.mArrowX[a], y, cArrowWidth, cRowButtonHeight, cRowButtonRadius, focused, false);
             const f32 dx = rPooled.mInkX;
             const f32 dy = cCapLift * cArrowSize + rPooled.mInkY;
             const f32 turn = a == 0 ? 1.0f : -1.0f;
@@ -1911,11 +1963,13 @@ void NebulaSettingsScreen::placeRowButtons(const NebulaSettingsView& rView) {
             RowChip& rPooled = useRowChip(next++, i, ChipKnob, 0, L"");
             const f32 at = static_cast< f32 >(rData.slider_at) / static_cast< f32 >(rData.slider_steps > 0 ? rData.slider_steps : 1);
             const bool focused = !asking && (row == mSliderRow || (row == mHoverRow && mHoverSlider));
-            placeChip(rPooled.mChip, rRow.mSliderLeft + (rRow.mSliderRight - rRow.mSliderLeft) * at, y, cKnobSize, cKnobSize, focused);
+            placeRowBox(rPooled, rRow.mSliderLeft + (rRow.mSliderRight - rRow.mSliderLeft) * at, y, cKnobSize, cKnobSize, cKnobSize * 0.5f,
+                        focused, false);
         }
         f32 x = mRight - 8.0f;
         for (s32 b = rRow.mButtonCount - 1; b >= 0 && next < cRowChipsMax; b--) {
-            Chip& rChip = useRowChip(next++, i, b, rRow.mButtonsVersion, rRow.mButtonWords[b]).mChip;
+            RowChip& rPooled = useRowChip(next++, i, b, rRow.mButtonsVersion, rRow.mButtonWords[b]);
+            Chip& rChip = rPooled.mChip;
             const f32 word = rChip.mText->mSize.width;
             const f32 width = word + 40.0f > cRowButtonMin ? word + 40.0f : cRowButtonMin;
             x -= width * 0.5f;
@@ -1925,7 +1979,7 @@ void NebulaSettingsScreen::placeRowButtons(const NebulaSettingsView& rView) {
                                   !mPointerMode) ||
                                  (row == mHoverRow && b == mHoverRowButton);
             const bool off = (rRow.mButtonsOff & 1u << b) != 0;
-            placeChip(rChip, x, y, width, cRowButtonHeight, focused);
+            placeRowBox(rPooled, x, y, width, cRowButtonHeight, cRowButtonRadius, focused && !off, off);
             setTextColor(rChip.mText, off ? cDisabled : cButtonText, off ? cDisabled : cButtonText);
             rChip.mText->mTranslate = nw4r::math::VEC3(0.0f, textCentre(0.0f, cRowButtonSize), 0.0f);
             x -= width * 0.5f + cRowButtonGap;
