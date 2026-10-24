@@ -26,14 +26,14 @@ using namespace NebulaUi;
 
 namespace {
     // Screen units (NebulaUi::readScreen): 456 high, 810 wide at 16:9.
-    const f32 cMargin = 22.0f;     // the window from the screen's edges
+    const f32 cMargin = 16.0f;     // the window from the screen's edges
     const f32 cMaxWidth = 900.0f;  // a wide screen keeps a window that reads as one
     const f32 cPad = 26.0f;        // the window's inside
     const f32 cTitleSize = 21.0f;
     const f32 cTabHeight = 30.0f;
     const f32 cTabSize = 12.5f;
     const f32 cTabGap = 5.0f;
-    const f32 cRowHeight = 50.0f;
+    const f32 cRowHeight = 52.0f;
     const f32 cRowGap = 3.0f;  // between two rows' frames
     const f32 cModHeight = 40.0f;  // a mod in the MODS page's lists
     const f32 cTextSize = 15.5f;
@@ -56,6 +56,7 @@ namespace {
     const f32 cSliderValue = 64.0f;  // its value after it
     const s32 cRepeatDelay = 18;     // an arrow held down: the frames before it steps again, then between steps
     const s32 cRepeatEvery = 5;
+    const f32 cEdgeDrop = 2.0f;  // a row's own button's darker edge under it; the two centred together on the row
     const f32 cRowButtonRadius = 11.0f;  // a row's own buttons have the rows' corners, near enough (the rows': 12)
     const f32 cReach = 8.0f;  // how far past a button's edge above and below the pointer still has it
     const f32 cMinSqueeze = 0.6f;  // the narrowest a line of text is drawn
@@ -1696,9 +1697,9 @@ void NebulaSettingsScreen::placeRowBox(RowChip& rPooled, f32 x, f32 y, f32 width
     rChip.mWidth = width;
     rChip.mHeight = height;
     const f32 grow = 1.0f + 0.05f * rChip.mFocusLevel;
-    rChip.mRoot->mTranslate = nw4r::math::VEC3(x, y, 0.0f);
+    rChip.mRoot->mTranslate = nw4r::math::VEC3(x, y + cEdgeDrop * 0.5f, 0.0f);
     rChip.mRoot->mScale = nw4r::math::VEC2(grow, grow);
-    shape(rPooled.mEdge, 0.0f, -2.5f, width, height, radius);
+    shape(rPooled.mEdge, 0.0f, -cEdgeDrop, width, height, radius);
     shape(rPooled.mFace, 0.0f, 0.0f, width, height, radius);
     rPooled.mEdge->SetVisible(!off);
     paint(rPooled.mFace, off ? cRowButtonOff : mix(cRowButtonFill, cRowButtonLit, rChip.mFocusLevel),
@@ -2038,7 +2039,9 @@ void NebulaSettingsScreen::placeRows(const NebulaSettingsView& rView) {
         // row that only shows something fainter.
         const bool selected = row == static_cast< s32 >(rView.selected) && !asking;
         const bool fixed = (rData.flags & (NEBULA_SETTINGS_ROW_CHANGES | NEBULA_SETTINGS_ROW_BUTTONS)) == 0;
-        paint(rRow.mFrame, selected ? cHighlightFill : fixed ? cFrameFixed : cFrameFill, selected ? cHighlightRing : cFrameRing);
+        // The others' ring in their fill: their whole box shows (the ring's colour is near the window's).
+        const u32 fill = selected ? cHighlightFill : fixed ? cFrameFixed : cFrameFill;
+        paint(rRow.mFrame, fill, selected ? cHighlightRing : fill);
         shape(rRow.mFrame, (mLeft + mRight) * 0.5f, 0.0f, mRight - mLeft, cRowHeight - cRowGap, 12.0f);
         // A setting's arrows around its value, or its slider with its value after it, at the row's end in the same
         // place on every row; the label narrowed to the room left.
@@ -2053,7 +2056,8 @@ void NebulaSettingsScreen::placeRows(const NebulaSettingsView& rView) {
             const f32 room = box - 12.0f;
             const f32 squeeze = rRow.mValueWidth > room && rRow.mValueWidth > 0.0f ? clamp(room / rRow.mValueWidth, 0.55f, 1.0f) : 1.0f;
             rRow.mValue->mScale = nw4r::math::VEC2(squeeze, 1.0f);
-            rRow.mValue->mTranslate = nw4r::math::VEC3(end - cArrowWidth - cRowButtonGap - box * 0.5f, textCentre(0.0f, cTextSize), 0.0f);
+            rRow.mValue->mTranslate =
+                nw4r::math::VEC3(end - cArrowWidth - cRowButtonGap - box * 0.5f, textCentre(cEdgeDrop * 0.5f, cTextSize), 0.0f);
             labelRoom = start - labelX - 12.0f;
         } else if (hasSlider(rData)) {
             rRow.mSliderLeft = start + cKnobSize * 0.5f;
@@ -2061,14 +2065,15 @@ void NebulaSettingsScreen::placeRows(const NebulaSettingsView& rView) {
             const f32 at = static_cast< f32 >(rData.slider_at) / static_cast< f32 >(rData.slider_steps);
             const f32 knob = rRow.mSliderLeft + (rRow.mSliderRight - rRow.mSliderLeft) * at;
             const f32 trackLeft = rRow.mSliderLeft - cSliderHeight * 0.5f;
-            shape(rRow.mSliderTrack, (trackLeft + rRow.mSliderRight + cSliderHeight * 0.5f) * 0.5f, 0.0f,
+            // On the knob's face, as the arrows' values are.
+            shape(rRow.mSliderTrack, (trackLeft + rRow.mSliderRight + cSliderHeight * 0.5f) * 0.5f, cEdgeDrop * 0.5f,
                   rRow.mSliderRight - rRow.mSliderLeft + cSliderHeight, cSliderHeight, cSliderHeight * 0.5f);
-            shape(rRow.mSliderFill, (trackLeft + knob) * 0.5f, 0.0f, knob - trackLeft, cSliderHeight, cSliderHeight * 0.5f);
+            shape(rRow.mSliderFill, (trackLeft + knob) * 0.5f, cEdgeDrop * 0.5f, knob - trackLeft, cSliderHeight, cSliderHeight * 0.5f);
             rRow.mSliderTrack->SetVisible(true);
             rRow.mSliderFill->SetVisible(true);
             const f32 squeeze = rRow.mValueWidth > cSliderValue && rRow.mValueWidth > 0.0f ? clamp(cSliderValue / rRow.mValueWidth, 0.55f, 1.0f) : 1.0f;
             rRow.mValue->mScale = nw4r::math::VEC2(squeeze, 1.0f);
-            rRow.mValue->mTranslate = nw4r::math::VEC3(mValueRight, textCentre(0.0f, cTextSize), 0.0f);
+            rRow.mValue->mTranslate = nw4r::math::VEC3(mValueRight, textCentre(cEdgeDrop * 0.5f, cTextSize), 0.0f);
             labelRoom = start - labelX - 12.0f;
         } else {
             // A value too long for the room its label leaves is narrowed to fit.

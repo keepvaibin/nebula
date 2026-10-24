@@ -147,6 +147,8 @@ struct RenderConfig {
     // Game picture aspect, an index of kAspectRatios (0 follows the window's shape). Applied at the next video
     // frame.
     unsigned aspect_mode         = 0;
+
+    friend bool operator==(const RenderConfig&, const RenderConfig&) = default;
 };
 
 // Frames per second the game picture is presented at. The game renders 60; lower rates present the newest frame on

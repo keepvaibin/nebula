@@ -1116,27 +1116,48 @@ void adjust_native_setting(int delta) {
     }
 }
 
+// What a step of a setting can change: the drafts, the settings that change at once, and the row's text (for what lives
+// elsewhere, as the galaxy chosen to travel to). Two values may read the same (anti-aliasing's modes while MSAA runs).
+struct SettingsStepState {
+    RenderConfig render;
+    RuntimeSettings runtime;
+    galaxy::input::ControlsConfig controls;
+    RuntimeInputMode input_mode;
+    galaxy::input::DeviceKey device;
+    std::string text;
+    friend bool operator==(const SettingsStepState&, const SettingsStepState&) = default;
+};
+
 // A step that goes round at the ends (the pointer's arrows): on, or where it can go no further, back to the other end.
 void step_native_setting_round(int direction) {
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
     const unsigned tab = s_native_settings_tab.load(std::memory_order_relaxed) % kNativeSettingsTabCount;
     const unsigned row = s_native_settings_row.load(std::memory_order_relaxed);
-    const auto text = [tab, row] {
-        return native_settings_row_text(tab, row, s_settings_draft, get_runtime_settings(), get_render_feature_caps());
+    // A binding (on: wait for an input) and the reset (on: the defaults) are no lists: stepped as the keys step them.
+    if (tab == kControlsTab &&
+        (controls_row(row).kind == ControlsRow::Binding || controls_row(row).kind == ControlsRow::Reset)) {
+        adjust_native_setting(direction);
+        return;
+    }
+    const auto state = [tab, row] {
+        return SettingsStepState{s_settings_draft, get_runtime_settings(), s_controls_draft, s_input_mode_draft,
+                                 s_controls_device,
+                                 native_settings_row_text(tab, row, s_settings_draft, get_runtime_settings(),
+                                                          get_render_feature_caps())};
     };
-    const std::string before = text();
+    const SettingsStepState before = state();
     adjust_native_setting_unlogged(direction);
-    if (text() == before) {
+    if (state() == before) {
         // At its end: stepped back as far as it goes.
         for (unsigned guard = 0u; guard < 256u; ++guard) {
-            const std::string was = text();
+            const SettingsStepState was = state();
             adjust_native_setting_unlogged(-direction);
-            if (text() == was) break;
+            if (state() == was) break;
         }
     }
-    const std::string after = text();
+    const SettingsStepState after = state();
     if (after != before) {
-        std::cerr << "[settings] " << after << '\n';
+        std::cerr << "[settings] " << after.text << '\n';
     }
 }
 
@@ -1188,6 +1209,7 @@ void adjust_native_setting_unlogged(int delta) {
             return;
         case ControlsRow::Device: {
             refresh_controls_devices(true);
+            if (s_controls_devices.count == 0u) return;
             const unsigned current = static_cast<unsigned>(
                 galaxy::input::resolve_device(s_controls_devices, s_controls_device));
             const unsigned next = step(current, static_cast<unsigned>(s_controls_devices.count));
@@ -2547,9 +2569,21 @@ std::string s_mii_status;
 std::atomic<int> s_mii_count{-1};
 std::atomic<bool> s_mii_dialog_open{false};
 
+// A picker or Explorer may open on the player's desktop: never from a hidden test run (logged instead).
+bool opens_on_desktop(const char* what) {
+    if (!hidden_window_mode_enabled()) {
+        return true;
+    }
+    std::cerr << "[settings] not opened in a hidden run: " << what << '\n';
+    return false;
+}
+
 // The file picker on its own thread (a COM apartment of its own; the game keeps running): the files chosen are
 // imported into the console's Mii database and the running game's.
 void start_mii_import_dialog() {
+    if (!opens_on_desktop("the Mii picker")) {
+        return;
+    }
     if (s_mii_dialog_open.exchange(true, std::memory_order_acq_rel)) {
         return;
     }
@@ -2610,6 +2644,9 @@ void start_mii_import_dialog() {
 // Explorer at a folder (made if missing), off the window's thread.
 void open_folder_in_explorer(const std::filesystem::path& folder) {
     if (folder.empty()) {
+        return;
+    }
+    if (!opens_on_desktop(folder.string().c_str())) {
         return;
     }
     std::thread([folder] {
@@ -2860,6 +2897,9 @@ void run_mod_imports(std::vector<std::filesystem::path> sources) {
 
 // The picker for archives or folders on its own thread (the game keeps running).
 void start_mod_import_dialog(bool folders) {
+    if (!opens_on_desktop("the mod picker")) {
+        return;
+    }
     if (s_mod_dialog_open.exchange(true, std::memory_order_acq_rel)) {
         return;
     }
@@ -4447,7 +4487,7 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
         // right, enter, esc, tab, backspace, space).
         static const std::vector<std::pair<unsigned long, WPARAM>> test_keys = [] {
             std::vector<std::pair<unsigned long, WPARAM>> keys;
-            char value[4096]{};
+            static char value[32768]{};  // a walk through every page's rows runs to some 500 keys
             std::size_t length = 0u;
             if (getenv_s(&length, value, sizeof(value), "GALAXY_TEST_SETTINGS_KEYS") != 0 || length <= 1u) return keys;
             static constexpr std::pair<std::string_view, WPARAM> kNames[] = {

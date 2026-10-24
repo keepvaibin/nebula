@@ -25,6 +25,8 @@ struct RuntimeAudioSettings {
     float cutscene = 1.0f;
     // What the game plays on the Wii Remote speaker, mixed into the output; off unless chosen.
     float wiimote_speaker = 0.0f;
+
+    friend bool operator==(const RuntimeAudioSettings&, const RuntimeAudioSettings&) = default;
 };
 
 // The three languages of the USA disc, as the Wii's SC language codes SCGetLanguage returns.
@@ -39,6 +41,8 @@ struct RuntimeSettings {
     GameLanguage language = GameLanguage::English;
     // Discord shows what the player is doing (galaxy, star, Power Stars) while Discord runs.
     bool discord_status = true;
+
+    friend bool operator==(const RuntimeSettings&, const RuntimeSettings&) = default;
 };
 
 // The language the game runs in this session: the setting when the game first asks (at boot), then

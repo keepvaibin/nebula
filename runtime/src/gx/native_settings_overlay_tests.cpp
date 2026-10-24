@@ -902,6 +902,50 @@ int main() {
         passed &= expect(missing.empty(), "every text the settings menu shows has a text table entry");
     }
 
+    // Every row the pointer changes answers it on every page: a list's arrows step it, going round at its ends (on and
+    // back again comes back to its value), and a slider takes its first and last steps and returns to its own.
+    {
+        using galaxy::gx::NativeSettingsInput;
+        galaxy::gx::native_settings_reset_overlay_state_for_tests();
+        passed &= expect(key(VK_F1), "the menu opens for the pointer checks");
+        unsigned lists = 0u;
+        unsigned sliders = 0u;
+        const std::size_t pages = galaxy::gx::native_settings_view().pages.size();
+        for (unsigned page = 0; page < pages; ++page) {
+            galaxy::gx::native_settings_input(NativeSettingsInput::SelectPage, static_cast<int>(page));
+            for (unsigned i = 0; i < galaxy::gx::native_settings_view().rows.size(); ++i) {
+                const galaxy::gx::NativeSettingsViewRow row = galaxy::gx::native_settings_view().rows[i];
+                if (!row.changes || row.heading || row.inputs || row.buttons || row.mod_list != 0u) continue;
+                galaxy::gx::native_settings_input(NativeSettingsInput::SelectRow, static_cast<int>(i));
+                // The row again (a step may add or remove rows after it: then an empty one fails the check).
+                const auto now = [i] {
+                    const galaxy::gx::NativeSettingsView view = galaxy::gx::native_settings_view();
+                    return i < view.rows.size() ? view.rows[i] : galaxy::gx::NativeSettingsViewRow{};
+                };
+                if (row.slider_steps != 0u) {
+                    galaxy::gx::native_settings_input(NativeSettingsInput::SetValue, 0);
+                    const unsigned first = now().slider_at;
+                    galaxy::gx::native_settings_input(NativeSettingsInput::SetValue, static_cast<int>(row.slider_steps));
+                    const unsigned last = now().slider_at;
+                    galaxy::gx::native_settings_input(NativeSettingsInput::SetValue, static_cast<int>(row.slider_at));
+                    passed &= expect(first == 0u && last == row.slider_steps && now().value == row.value,
+                                     (row.label + ": the slider reaches both ends and returns").c_str());
+                    ++sliders;
+                } else {
+                    galaxy::gx::native_settings_input(NativeSettingsInput::Change, 2);
+                    galaxy::gx::native_settings_input(NativeSettingsInput::Change, -2);
+                    passed &= expect(now().label == row.label && now().value == row.value,
+                                     (row.label + ": its arrows go on and back to " + row.value).c_str());
+                    ++lists;
+                }
+            }
+            galaxy::gx::native_settings_input(NativeSettingsInput::Revert, 0);
+        }
+        std::cerr << "pointer checks: " << lists << " lists, " << sliders << " sliders\n";
+        passed &= expect(lists >= 20u && sliders >= 8u, "every page's lists and sliders were checked");
+        passed &= expect(close_discarding(), "the menu closes after the pointer checks");
+    }
+
     // The checks above applied a change: its settings files are written in the background.
     galaxy::gx::native_settings_wait_saved_for_tests();
     galaxy::gx::native_settings_reset_overlay_state_for_tests();
