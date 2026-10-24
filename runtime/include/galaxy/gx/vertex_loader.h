@@ -17,7 +17,6 @@ namespace galaxy::gx {
 
 class UploadRing;
 struct ImmutableUploadToken;
-class DependencyEventSink;
 
 namespace detail {
 // Adds `bias` to each index; source and destination must not overlap. Returns false if a sum
@@ -70,12 +69,6 @@ struct DecodedPacketRunVertices {
 
 class VertexLoader {
 public:
-    // Non-owning, render-thread-only observation. Null in production's
-    // default path; never changes the resolved indexed attribute pointer.
-    void set_dependency_event_sink(DependencyEventSink* sink) noexcept {
-        dependency_event_sink_ = sink;
-    }
-
     // Reads one draw packet from `cursor`, positioned at the u16 vertex count. Indexed
     // attributes resolve through the CP array registers; an unmapped array throws
     // GxFatalError. Vertices and indices are appended to `vertex_ring` / `index_ring`.
@@ -89,10 +82,10 @@ public:
         UploadRing& index_ring,
         std::uint32_t index_batch_base_vertex = 0,
         bool rebase_indices_to_batch_base = false);
+    // load() with the layout already decoded from the VCD/VAT registers.
     LoadedPrimitive load_with_layout(
         FifoCursor& cursor,
         PrimitiveClass primitive,
-        std::uint8_t vtxfmt,
         const GxState& state,
         const VertexDescriptor& desc,
         std::size_t source_vertex_size,
@@ -102,23 +95,6 @@ public:
         std::uint32_t index_batch_base_vertex = 0,
         bool rebase_indices_to_batch_base = false);
 
-    LoadedPrimitive load_cached_packet_run_with_layout(
-        std::span<const std::byte> bytes,
-        std::size_t base_offset,
-        std::span<const CachedDrawPacket> packets,
-        PrimitiveClass primitive,
-        std::uint8_t vtxfmt,
-        const GxState& state,
-        const VertexDescriptor& desc,
-        std::size_t source_vertex_size,
-        GuestMemory* memory,
-        UploadRing& vertex_ring,
-        UploadRing& index_ring,
-        std::uint32_t index_batch_base_vertex = 0,
-        bool rebase_indices_to_batch_base = false,
-        std::uint32_t precomputed_total_vertices = 0,
-        std::uint32_t precomputed_total_indices = 0,
-        std::span<const std::uint16_t> precomputed_indices = {});
     // `record_indexed_read_ranges` fills guest_array_reads, which only the decoded-vertex cache
     // uses; false skips the range tracking on every indexed attribute read.
     DecodedPacketRunVertices decode_cached_packet_run_vertices_with_layout(
@@ -126,7 +102,6 @@ public:
         std::size_t base_offset,
         std::span<const CachedDrawPacket> packets,
         PrimitiveClass primitive,
-        std::uint8_t vtxfmt,
         const GxState& state,
         const VertexDescriptor& desc,
         std::size_t source_vertex_size,
@@ -167,8 +142,6 @@ public:
     // Byte size of one source vertex, so a packet's vertex data is taken as one window.
     [[nodiscard]] static std::size_t source_vertex_size(
         const VertexDescriptor& desc);
-private:
-    DependencyEventSink* dependency_event_sink_ = nullptr;
 };
 
 }  // namespace galaxy::gx

@@ -30,7 +30,6 @@ public:
     void reset(std::uint32_t capacity_units, unsigned frames_in_flight) {
         free_.clear();
         retired_.clear();
-        capacity_ = capacity_units;
         used_ = 0u;
         frames_in_flight_ = frames_in_flight == 0u ? 1u : frames_in_flight;
         serial_ = 0u;
@@ -123,7 +122,6 @@ private:
 
     std::map<std::uint32_t, std::uint32_t> free_;  // offset -> units
     std::deque<Retired> retired_;
-    std::uint32_t capacity_ = 0;
     std::uint32_t used_ = 0;
     unsigned frames_in_flight_ = 1u;
     std::uint64_t serial_ = 0;

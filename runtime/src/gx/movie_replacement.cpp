@@ -380,7 +380,7 @@ private:
                 continue;
             }
             if ((flags & MF_SOURCE_READERF_CURRENTMEDIATYPECHANGED) != 0u && !read_format()) {
-                fail("its picture size changed to none", E_FAIL);
+                fail("no picture size after a format change", E_FAIL);
                 return;
             }
             if (!sample) continue;

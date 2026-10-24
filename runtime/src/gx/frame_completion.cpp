@@ -1,7 +1,6 @@
 // FramePeCompletionContract: issue, resolution and in-order completion of per-frame PE tokens.
 #include "galaxy/gx/frame_completion.h"
 
-#include <algorithm>
 #include <cstddef>
 #include <limits>
 #include <stdexcept>

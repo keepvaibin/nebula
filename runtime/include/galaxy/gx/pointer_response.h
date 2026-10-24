@@ -4,8 +4,6 @@
 #include <array>
 #include <atomic>
 #include <exception>
-#include <memory>
-#include <chrono>
 #include <condition_variable>
 #include <mutex>
 
@@ -35,7 +33,6 @@ struct PointerDepthCapture {
 };
 struct PointerResponseStamp {
     std::uint64_t serial{}, generation{}, selected_ns{}, processed_ns{}, drawn_ns{};
-    std::uint32_t x_bits{}, y_bits{};
     // GetTickCount64 milliseconds: the age of the pointer sample, not input latency.
     std::uint64_t acquisition_age_ms{};
     bool acquisition_age_known{};

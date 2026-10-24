@@ -5,7 +5,6 @@
 
 #include "galaxy/gx/vertex_loader.h"
 #include "galaxy/gx/vertex_dequant.h"
-#include "galaxy/gx/dependency_event_capture.h"
 
 #include "galaxy/gx/fifo_parser.h"
 #include "galaxy/gx/gx_bitfields.h"
@@ -90,10 +89,8 @@ class IndexedArrayResolver {
 public:
     explicit IndexedArrayResolver(
         GuestMemory* memory,
-        std::vector<VertexDecodeGuestRange>* read_ranges = nullptr,
-        DependencyEventSink* dependency_event_sink = nullptr)
-        : memory_(memory), read_ranges_(read_ranges),
-          dependency_event_sink_(dependency_event_sink) {}
+        std::vector<VertexDecodeGuestRange>* read_ranges = nullptr)
+        : memory_(memory), read_ranges_(read_ranges) {}
 
     [[nodiscard]] const std::byte* resolve(
         unsigned attr_idx,
@@ -114,11 +111,6 @@ public:
             }
         } else {
             resolved = resolve_uncached(address, size, fifo_offset).ptr;
-        }
-        if (dependency_event_sink_ != nullptr) {
-            dependency_event_sink_->guest_read(
-                DependencyReadSource::IndexedVertex,
-                address, std::span<const std::byte>(resolved, size));
         }
         return resolved;
     }
@@ -259,7 +251,6 @@ private:
         range.end = 0;
     }
     std::vector<VertexDecodeGuestRange>* read_ranges_ = nullptr;
-    DependencyEventSink* dependency_event_sink_ = nullptr;
 };
 
 [[nodiscard]] static std::uint16_t read_be_u16(const std::byte* p)
@@ -1158,7 +1149,6 @@ LoadedPrimitive VertexLoader::load(
     return load_with_layout(
         cursor,
         primitive,
-        vtxfmt,
         state,
         desc,
         src_stride,
@@ -1171,7 +1161,6 @@ LoadedPrimitive VertexLoader::load(
 LoadedPrimitive VertexLoader::load_with_layout(
     FifoCursor& cursor,
     PrimitiveClass primitive,
-    std::uint8_t vtxfmt,
     const GxState& state,
     const VertexDescriptor& desc,
     std::size_t src_stride,
@@ -1181,7 +1170,6 @@ LoadedPrimitive VertexLoader::load_with_layout(
     std::uint32_t index_batch_base_vertex,
     bool rebase_indices_to_batch_base)
 {
-    (void)vtxfmt;
     const std::uint16_t vtx_count = cursor.read_u16();
 
     if (vtx_count == 0) {
@@ -1211,8 +1199,7 @@ LoadedPrimitive VertexLoader::load_with_layout(
     const std::span<const std::byte> raw = cursor.take(total_raw);
     const std::byte* raw_ptr = raw.data();
     const std::size_t fifo_error_offset = cursor.base_offset + cursor.offset;
-    IndexedArrayResolver array_resolver(
-        memory, nullptr, dependency_event_sink_);
+    IndexedArrayResolver array_resolver(memory);
 
     const PreparedVertexInputs inputs = prepare_vertex_inputs(desc, state);
     decode_vertex_stream(
@@ -1313,55 +1300,12 @@ LoadedPrimitive VertexLoader::load_with_layout(
     return prim;
 }
 
-LoadedPrimitive VertexLoader::load_cached_packet_run_with_layout(
-    std::span<const std::byte> bytes,
-    std::size_t base_offset,
-    std::span<const CachedDrawPacket> packets,
-    PrimitiveClass primitive,
-    std::uint8_t vtxfmt,
-    const GxState& state,
-    const VertexDescriptor& desc,
-    std::size_t src_stride,
-    GuestMemory* memory,
-    UploadRing& vertex_ring,
-    UploadRing& index_ring,
-    std::uint32_t index_batch_base_vertex,
-    bool rebase_indices_to_batch_base,
-    std::uint32_t precomputed_total_vertices,
-    std::uint32_t precomputed_total_indices,
-    std::span<const std::uint16_t> precomputed_indices) {
-    const DecodedPacketRunVertices decoded =
-        decode_cached_packet_run_vertices_with_layout(
-            bytes,
-            base_offset,
-            packets,
-            primitive,
-            vtxfmt,
-            state,
-            desc,
-            src_stride,
-            memory,
-            precomputed_total_vertices,
-            precomputed_total_indices);
-    return upload_cached_packet_run_vertices(
-        decoded.vertices,
-        base_offset,
-        packets,
-        primitive,
-        vertex_ring,
-        index_ring,
-        index_batch_base_vertex,
-        rebase_indices_to_batch_base,
-        decoded.total_indices,
-        precomputed_indices);
-}
 DecodedPacketRunVertices
 VertexLoader::decode_cached_packet_run_vertices_with_layout(
     std::span<const std::byte> bytes,
     std::size_t base_offset,
     std::span<const CachedDrawPacket> packets,
     PrimitiveClass primitive,
-    std::uint8_t vtxfmt,
     const GxState& state,
     const VertexDescriptor& desc,
     std::size_t src_stride,
@@ -1370,7 +1314,6 @@ VertexLoader::decode_cached_packet_run_vertices_with_layout(
     std::uint32_t precomputed_total_indices,
     bool record_indexed_read_ranges,
     std::vector<GxVertexOut>* reusable_vertices) {
-    (void)vtxfmt;
     DecodedPacketRunVertices decoded{};
     if (packets.empty()) {
         return decoded;
@@ -1456,8 +1399,7 @@ VertexLoader::decode_cached_packet_run_vertices_with_layout(
 
     IndexedArrayResolver array_resolver(
         memory,
-        record_indexed_read_ranges ? &decoded.guest_array_reads : nullptr,
-        dependency_event_sink_);
+        record_indexed_read_ranges ? &decoded.guest_array_reads : nullptr);
     const PreparedVertexInputs inputs = prepare_vertex_inputs(desc, state);
     std::uint32_t dst_vertex = 0;
     for (const CachedDrawPacket& packet : packets) {

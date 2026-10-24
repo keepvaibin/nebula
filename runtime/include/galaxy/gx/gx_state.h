@@ -266,8 +266,8 @@ private:
 };
 
 // Whether a CP, XF or BP write the state does not model, or a TMEM load, throws GxFatalError.
-// Otherwise it is skipped (its length is known, so the stream stays in step) and logged once per
-// register. Fatal when GALAXY_GX_STRICT=1 or after set_unknown_gx_commands_fatal(true).
+// By default it is skipped (its length is known, so the stream stays in step) and logged once
+// per register; tests make it fatal with set_unknown_gx_commands_fatal(true).
 [[nodiscard]] bool unknown_gx_commands_fatal() noexcept;
 
 void set_unknown_gx_commands_fatal(bool fatal) noexcept;

@@ -8,10 +8,8 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
-#include <cerrno>
 #include <chrono>
 #include <cstdio>
-#include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <string>
@@ -21,117 +19,6 @@
 namespace galaxy::gx {
 
 static constexpr std::uint32_t kMaxCachedDisplayListBytes = 4u * 1024u * 1024u;
-
-struct FifoTraceRange {
-    bool enabled{false};
-    std::size_t begin{0};
-    std::size_t end{0};
-};
-
-struct FifoHistoryEntry {
-    std::size_t offset{0};
-    std::uint8_t opcode{0};
-};
-
-thread_local std::array<FifoHistoryEntry, 64> t_fifo_history{};
-thread_local std::size_t t_fifo_history_index = 0;
-thread_local std::size_t t_fifo_history_count = 0;
-
-bool fifo_history_enabled() {
-    static const bool enabled = [] {
-#if defined(_WIN32)
-        char value[16]{};
-        std::size_t length = 0;
-        return getenv_s(
-                   &length, value, sizeof(value),
-                   "GALAXY_TRACE_FIFO_HISTORY") == 0 &&
-               length > 1 && value[0] != '0';
-#else
-        const char* value = std::getenv("GALAXY_TRACE_FIFO_HISTORY");
-        return value != nullptr && value[0] != '\0' && value[0] != '0';
-#endif
-    }();
-    return enabled;
-}
-
-void record_fifo_history(std::size_t offset, std::uint8_t opcode) {
-    t_fifo_history[t_fifo_history_index] = FifoHistoryEntry{offset, opcode};
-    t_fifo_history_index =
-        (t_fifo_history_index + 1u) % t_fifo_history.size();
-    t_fifo_history_count =
-        std::min(t_fifo_history_count + 1u, t_fifo_history.size());
-}
-
-void dump_fifo_history() {
-    if (!fifo_history_enabled()) {
-        std::fprintf(
-            stderr,
-            "[gx-parse] recent command history disabled "
-            "(set GALAXY_TRACE_FIFO_HISTORY=1 to record it)\n");
-        return;
-    }
-    std::fprintf(stderr, "[gx-parse] recent command starts:");
-    const std::size_t first =
-        (t_fifo_history_index + t_fifo_history.size() - t_fifo_history_count) %
-        t_fifo_history.size();
-    for (std::size_t i = 0; i < t_fifo_history_count; ++i) {
-        const FifoHistoryEntry& entry =
-            t_fifo_history[(first + i) % t_fifo_history.size()];
-        std::fprintf(
-            stderr,
-            " 0x%zx:0x%02X",
-            entry.offset,
-            static_cast<unsigned>(entry.opcode));
-    }
-    std::fprintf(stderr, "\n");
-}
-
-const FifoTraceRange& fifo_trace_range() {
-    static const FifoTraceRange range = [] {
-        FifoTraceRange parsed{};
-#if defined(_WIN32)
-        char* env_buf = nullptr;
-        std::size_t env_len = 0;
-        if (_dupenv_s(&env_buf, &env_len, "GALAXY_TRACE_FIFO_RANGE") != 0 ||
-            env_buf == nullptr) {
-            return parsed;
-        }
-        std::string env_text(env_buf);
-        std::free(env_buf);
-#else
-        const char* env_raw = std::getenv("GALAXY_TRACE_FIFO_RANGE");
-        if (env_raw == nullptr) {
-            return parsed;
-        }
-        std::string env_text(env_raw);
-#endif
-        const char* env = env_text.c_str();
-        if (*env == '\0') {
-            return parsed;
-        }
-        char* next = nullptr;
-        const unsigned long begin = std::strtoul(env, &next, 0);
-        if (next == env || (*next != ':' && *next != '-')) {
-            return parsed;
-        }
-        const char* end_text = next + 1;
-        char* end_next = nullptr;
-        const unsigned long end = std::strtoul(end_text, &end_next, 0);
-        if (end_next == end_text || end < begin) {
-            return parsed;
-        }
-        parsed.enabled = true;
-        parsed.begin = static_cast<std::size_t>(begin);
-        parsed.end = static_cast<std::size_t>(end);
-        return parsed;
-    }();
-    return range;
-}
-
-bool should_trace_fifo_offset(std::size_t offset) {
-    const FifoTraceRange& range = fifo_trace_range();
-    return range.enabled && offset >= range.begin && offset <= range.end;
-}
 
 std::uint64_t elapsed_fifo_us(
     std::chrono::steady_clock::time_point start,
@@ -270,32 +157,6 @@ bool FifoParser::display_list_dependencies_match(
         return 0x10000000u + (address - 0xD0000000u);
     }
     return address;
-}
-
-[[nodiscard]] bool ranges_overlap(
-    std::uint32_t a_begin_u32,
-    std::uint32_t a_size,
-    std::uint32_t b_begin_u32,
-    std::uint32_t b_size) noexcept {
-    const std::uint64_t a_begin = a_begin_u32;
-    const std::uint64_t b_begin = b_begin_u32;
-    const std::uint64_t a_end = a_begin + a_size;
-    const std::uint64_t b_end = b_begin + b_size;
-    return a_begin < b_end && b_begin < a_end;
-}
-
-[[nodiscard]] std::uint64_t display_list_cache_page(
-    std::uint64_t canonical_addr) noexcept {
-    constexpr unsigned kPageShift = 12;
-    return canonical_addr >> kPageShift;
-}
-
-[[nodiscard]] std::uint64_t display_list_cache_last_page(
-    std::uint32_t canonical_addr,
-    std::uint32_t size) noexcept {
-    const std::uint64_t begin = canonical_addr;
-    const std::uint64_t end_exclusive = begin + size;
-    return display_list_cache_page(end_exclusive - 1u);
 }
 
 enum class CachedReplayProfileKind : std::uint8_t {
@@ -605,8 +466,7 @@ std::span<const std::byte> FifoParser::resolve_guest(
         if (std::byte* fast = resolve_guest_fast(memory, guest_addr, size);
             fast != nullptr) {
             if (memory_read_recorder_ != nullptr) {
-                memory_read_recorder_->record_guest_memory_read_bytes(
-                    guest_addr, std::span<const std::byte>(fast, size));
+                memory_read_recorder_->record_guest_memory_read(guest_addr, size);
             }
             return std::span<const std::byte>(fast, size);
         }
@@ -631,12 +491,10 @@ std::span<const std::byte> FifoParser::resolve_guest(
             }
         }
         if (host != nullptr) {
-            const std::span<const std::byte> bytes(host, size);
             if (memory_read_recorder_ != nullptr) {
-                memory_read_recorder_->record_guest_memory_read_bytes(
-                    guest_addr, bytes);
+                memory_read_recorder_->record_guest_memory_read(guest_addr, size);
             }
-            return bytes;
+            return std::span<const std::byte>(host, size);
         }
     }
     char addr_buf[12];
@@ -806,22 +664,6 @@ void FifoParser::erase_display_list_cache_index_from_maps(
             display_list_cache_map_.erase(it);
         }
     }
-
-    for (std::uint64_t page = cached.first_page;
-         page <= cached.last_page;
-         ++page) {
-        const auto it = display_list_cache_page_map_.find(page);
-        if (it == display_list_cache_page_map_.end()) {
-            continue;
-        }
-        auto& entries = it->second;
-        entries.erase(
-            std::remove(entries.begin(), entries.end(), index),
-            entries.end());
-        if (entries.empty()) {
-            display_list_cache_page_map_.erase(it);
-        }
-    }
 }
 
 void FifoParser::invalidate_display_list_cache_index(std::size_t index) {
@@ -855,16 +697,6 @@ void FifoParser::index_display_list_cache_entry(std::size_t index) {
         key_entries.end()) {
         key_entries.push_back(index);
     }
-
-    for (std::uint64_t page = cached.first_page;
-         page <= cached.last_page;
-         ++page) {
-        auto& page_entries = display_list_cache_page_map_[page];
-        if (std::find(page_entries.begin(), page_entries.end(), index) ==
-            page_entries.end()) {
-            page_entries.push_back(index);
-        }
-    }
 }
 
 std::uint64_t FifoParser::display_list_cache_entry_bytes(
@@ -886,35 +718,6 @@ std::uint64_t FifoParser::display_list_cache_entry_bytes(
         vector_bytes(cached.draw_run_indices);
 }
 
-std::uint64_t FifoParser::display_list_cache_budget_bytes() const {
-    // 256 MiB holds the display lists of a loaded scene within a low-end machine's memory.
-    // GALAXY_GX_DISPLAY_LIST_CACHE_MB overrides it; 0 disables the byte budget.
-    static const std::uint64_t budget = []() -> std::uint64_t {
-        char value[24]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length, value, sizeof(value),
-                "GALAXY_GX_DISPLAY_LIST_CACHE_MB") != 0 ||
-            length <= 1 || length > sizeof(value)) {
-            return 256ull << 20;
-        }
-        for (std::size_t i = 0; i + 1 < length; ++i) {
-            if (value[i] < '0' || value[i] > '9') {
-                return 256ull << 20;
-            }
-        }
-        char* end = nullptr;
-        errno = 0;
-        const unsigned long long megabytes = std::strtoull(value, &end, 10);
-        if (errno == ERANGE || end == value || *end != '\0' ||
-            megabytes > (std::numeric_limits<std::uint64_t>::max() >> 20)) {
-            return 256ull << 20;
-        }
-        return static_cast<std::uint64_t>(megabytes) << 20;
-    }();
-    return budget;
-}
-
 // Frees a vector's heap block. shrink_to_fit is only a request; the capacity-based budget
 // needs the block gone.
 template <typename T>
@@ -923,9 +726,8 @@ void release_capacity(std::vector<T>& values) {
 }
 
 void FifoParser::evict_display_list_cache_to_budget(std::size_t skip_index) {
-    const std::uint64_t budget = display_list_cache_budget_bytes();
-    if (budget == 0u || cache_bytes_ <= budget) {
-        return;  // disabled or already within budget; entry cap still applies
+    if (cache_bytes_ <= kDisplayListCacheBudgetBytes) {
+        return;
     }
     const auto release_entry = [this](std::size_t index) {
         CachedDisplayList& entry = display_list_cache_[index];
@@ -944,14 +746,15 @@ void FifoParser::evict_display_list_cache_to_budget(std::size_t skip_index) {
     };
     // Invalid slots still hold charged buffers; free those before evicting live entries.
     for (std::size_t index = 0;
-         index < display_list_cache_.size() && cache_bytes_ > budget; ++index) {
+         index < display_list_cache_.size() && cache_bytes_ > kDisplayListCacheBudgetBytes;
+         ++index) {
         if (index != skip_index && !display_list_cache_[index].valid) {
             release_entry(index);
         }
     }
     // Evicts the least recently used entry per pass. An entry depends only on its guest bytes
     // and the CP registers recorded with it, so eviction costs a later re-parse, nothing more.
-    while (cache_bytes_ > budget) {
+    while (cache_bytes_ > kDisplayListCacheBudgetBytes) {
         std::size_t victim = display_list_cache_.size();
         std::uint64_t victim_last_used = 0u;
         for (std::size_t index = 0; index < display_list_cache_.size();
@@ -1034,9 +837,6 @@ void FifoParser::store_cached_display_list(
     target->cache_token = ++display_list_cache_token_;
     target->guest_addr = canonical_addr;
     target->byte_size = byte_size;
-    target->first_page = display_list_cache_page(canonical_addr);
-    target->last_page =
-        display_list_cache_last_page(canonical_addr, byte_size);
     target->last_used = ++display_list_cache_tick_;
     target->bytes = std::move(recording.bytes);
     target->commands = std::move(recording.commands);
@@ -1259,52 +1059,6 @@ void FifoParser::prepare_cached_display_list_draw_runs(
         first.prepared_run_command_count = run_commands.size();
         command_index = run_end;
     }
-}
-
-std::size_t FifoParser::invalidate_display_list_cache_range(
-    std::uint32_t guest_addr,
-    std::uint32_t size) {
-    if (size == 0u) {
-        return 0u;
-    }
-
-    const std::uint32_t canonical_addr =
-        normalize_display_list_guest_addr(guest_addr);
-    const std::uint64_t first_page = display_list_cache_page(canonical_addr);
-    const std::uint64_t last_page =
-        display_list_cache_last_page(canonical_addr, size);
-
-    std::array<bool, 2048> visited{};
-    std::vector<std::size_t> candidates;
-    for (std::uint64_t page = first_page; page <= last_page; ++page) {
-        const auto it = display_list_cache_page_map_.find(page);
-        if (it == display_list_cache_page_map_.end()) {
-            continue;
-        }
-        for (const std::size_t index : it->second) {
-            if (index >= display_list_cache_.size() || visited[index]) {
-                continue;
-            }
-            visited[index] = true;
-            candidates.push_back(index);
-        }
-    }
-
-    std::size_t invalidated = 0;
-    for (const std::size_t index : candidates) {
-        CachedDisplayList& cached = display_list_cache_[index];
-        if (!cached.valid ||
-            !ranges_overlap(
-                canonical_addr,
-                size,
-                cached.guest_addr,
-                cached.byte_size)) {
-            continue;
-        }
-        invalidate_display_list_cache_index(index);
-        ++invalidated;
-    }
-    return invalidated;
 }
 
 // Classify-only replay of a cached list with no PE register write: its CP
@@ -1775,18 +1529,6 @@ void FifoParser::run_window(
             cursor.offset = local_opcode_offset;
             return;
         }
-        if (fifo_history_enabled()) {
-            record_fifo_history(opcode_offset, opcode);
-        }
-        const bool trace = should_trace_fifo_offset(opcode_offset);
-        if (trace) {
-            std::fprintf(
-                stderr,
-                "[gx-trace] depth=%d off=0x%zx op=0x%02X\n",
-                depth,
-                opcode_offset,
-                static_cast<unsigned>(opcode));
-        }
         FifoParserProfile* const profile = profile_;
         const auto command_start = profile != nullptr
             ? std::chrono::steady_clock::now()
@@ -1828,14 +1570,6 @@ void FifoParser::run_window(
         case op::kLoadCpReg: {
             const std::uint8_t  reg = cursor.read_u8();
             const std::uint32_t val = cursor.read_u32();
-            if (trace) {
-                std::fprintf(
-                    stderr,
-                    "[gx-trace]   CP reg=0x%02X val=0x%08X end=0x%zx\n",
-                    static_cast<unsigned>(reg),
-                    val,
-                    cursor.base_offset + cursor.offset);
-            }
             state.load_cp(reg, val);
             if (recording != nullptr && recording->cacheable) {
                 recording->cp_written[canonical_cp_register(reg)] = true;
@@ -1859,16 +1593,6 @@ void FifoParser::run_window(
             const std::uint16_t base     = cursor.read_u16();
             const std::uint16_t count    =
                 static_cast<std::uint16_t>((count_m1 & 0x000Fu) + 1u);
-            if (trace) {
-                std::fprintf(
-                    stderr,
-                    "[gx-trace]   XF count_m1=0x%04X count=%u base=0x%04X end=0x%zx\n",
-                    count_m1,
-                    static_cast<unsigned>(count),
-                    base,
-                    cursor.base_offset + cursor.offset +
-                        static_cast<std::size_t>(count) * 4u);
-            }
 
             // count uses four bits of count_m1, so at most 16 words.
             std::array<std::uint32_t, 16> values{};
@@ -1913,16 +1637,6 @@ void FifoParser::run_window(
                 static_cast<std::uint16_t>((len_addr >> 12) + 1u);
             const std::uint16_t xf_addr  =
                 static_cast<std::uint16_t>(len_addr & 0x0FFFu);
-            if (trace) {
-                std::fprintf(
-                    stderr,
-                    "[gx-trace]   INDX slot=%u idx=%u len=%u xf=0x%03X end=0x%zx\n",
-                    static_cast<unsigned>(array_slot),
-                    static_cast<unsigned>(idx),
-                    static_cast<unsigned>(length),
-                    static_cast<unsigned>(xf_addr),
-                    cursor.base_offset + cursor.offset);
-            }
 
             // The stride register, not the length, spaces the elements: a normal-matrix load
             // reads 9 words from an array of 12-word matrices.
@@ -1973,14 +1687,6 @@ void FifoParser::run_window(
                 cursor.read_u32() & ~std::uint32_t{31u};
             const std::uint32_t byte_size =
                 cursor.read_u32() & ~std::uint32_t{31u};
-            if (trace) {
-                std::fprintf(
-                    stderr,
-                    "[gx-trace]   CALLDL addr=0x%08X size=0x%X end=0x%zx\n",
-                    guest_addr,
-                    byte_size,
-                    cursor.base_offset + cursor.offset);
-            }
             if (byte_size == 0u) {
                 finish_profile(
                     &FifoParserProfile::call_dl_count,
@@ -2147,7 +1853,7 @@ void FifoParser::run_window(
             const std::uint16_t aux = cursor.read_u16();
             const std::uint32_t a = cursor.read_u32();
             const std::uint32_t b = cursor.read_u32();
-            sink.on_host_marker(kind, aux, a, b, opcode_offset);
+            sink.on_host_marker(kind, aux, a, b);
             finish_profile(
                 &FifoParserProfile::nop_count,
                 &FifoParserProfile::nop_us);
@@ -2178,14 +1884,6 @@ void FifoParser::run_window(
 
         case op::kLoadBpReg: {
             const std::uint32_t command = cursor.read_u32();
-            if (trace) {
-                std::fprintf(
-                    stderr,
-                    "[gx-trace]   BP reg=0x%02X val=0x%06X end=0x%zx\n",
-                    static_cast<unsigned>(command >> 24),
-                    command & 0x00FFFFFFu,
-                    cursor.base_offset + cursor.offset);
-            }
             state.load_bp(command);
 
             const std::uint8_t  bp_reg = static_cast<std::uint8_t>(command >> 24);
@@ -2257,15 +1955,6 @@ void FifoParser::run_window(
                     profile->draw_vertices += vertex_count;
                     profile->draw_payload_bytes += payload_size;
                 }
-                if (trace) {
-                    std::fprintf(
-                        stderr,
-                        "[gx-trace]   DRAW fmt=%u count=%u payload=%zu end=0x%zx\n",
-                        static_cast<unsigned>(vtxfmt),
-                        static_cast<unsigned>(vertex_count),
-                        payload_size,
-                        cursor.base_offset + cursor.offset + 2u + payload_size);
-                }
                 probe.require(payload_size);
                 const std::size_t draw_cursor_offset = cursor.offset;
                 sink.on_draw(prim, vtxfmt, cursor);
@@ -2291,8 +1980,7 @@ void FifoParser::run_window(
                 if (log_index < 8u) {
                     std::fprintf(
                         stderr,
-                        "[gx-parse] ignoring hardware no-op opcode 0x%02X "
-                        "at offset 0x%zx\n",
+                        "[gx-parse] hw-noop op=0x%02X off=0x%zx\n",
                         static_cast<unsigned>(opcode),
                         opcode_offset);
                 }
@@ -2336,7 +2024,6 @@ void FifoParser::run_window(
                         static_cast<unsigned>(fmt),
                         payload_size);
                 }
-                dump_fifo_history();
                 std::fprintf(stderr, "\n[gx-parse] window:");
                 const std::size_t local = cursor.offset - 1u;
                 const std::size_t begin =

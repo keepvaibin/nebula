@@ -3,11 +3,9 @@
 #include "galaxy/gx/shader_keys.h"
 
 #include "galaxy/gx/gx_state.h"
-#include "galaxy/gx/render_config.h"
 #include "galaxy/gx/uber_constants.h"
 
 #include <algorithm>
-#include <cstdlib>
 #include <cstring>
 
 namespace galaxy::gx {
@@ -37,18 +35,6 @@ namespace {
 }
 
 }  // namespace
-
-// RGBA6 keeps 8-bit colour by default: the Flipper's 6-bit colour and its 2x2 dither only band
-// and stipple the picture, and at raised internal resolution the dither shows as a dot grid.
-bool efb_true_color() noexcept {
-    static const bool true_color = [] {
-        char value[8]{};
-        std::size_t length = 0u;
-        return !(getenv_s(&length, value, sizeof(value), "GALAXY_EFB_TRUE_COLOR") == 0 && length > 1u &&
-                 value[0] == '0');
-    }();
-    return true_color;
-}
 
 PixelShaderKey build_pixel_shader_key(
     const GxState& state, unsigned efb_scale, bool true_color) {

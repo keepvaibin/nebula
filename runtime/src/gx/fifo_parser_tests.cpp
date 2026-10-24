@@ -190,18 +190,12 @@ std::array<std::byte, 9> frozen_lookup_call(std::uint32_t address, std::uint32_t
 }
 
 struct LookupReadRecorder final : galaxy::gx::FifoGuestMemoryReadRecorder {
-    std::vector<std::byte> bytes;
     std::vector<std::uint32_t> ranges;
     std::vector<std::uint32_t> shapes;
     std::function<void()> callback;
     void record_guest_memory_read(std::uint32_t address, std::uint32_t size) override {
         ranges.push_back(address);
         ranges.push_back(size);
-    }
-    void record_guest_memory_read_bytes(std::uint32_t address,
-                                       std::span<const std::byte> data) override {
-        record_guest_memory_read(address, static_cast<std::uint32_t>(data.size()));
-        bytes.insert(bytes.end(), data.begin(), data.end());
         if (callback) callback();
     }
     void record_guest_dependency_shape_read(std::uint32_t address, std::uint32_t size) override {
@@ -211,8 +205,8 @@ struct LookupReadRecorder final : galaxy::gx::FifoGuestMemoryReadRecorder {
 };
 
 bool test_frozen_fifo_lookup() {
-    // Cold CALL_DL parsing and cached LOAD_INDX replay; recorded reads are compared byte for
-    // byte, order and shape callbacks included.
+    // Cold CALL_DL parsing and cached LOAD_INDX replay; the recorded read ranges, in order, and
+    // the shape callbacks must match the generic lookup.
     for (const std::uint32_t count : {64u, 1024u}) {
         std::vector<std::array<std::byte, 64>> storage(count);
         std::vector<galaxy::GuestMemoryRegion> regions(count);
@@ -244,7 +238,7 @@ bool test_frozen_fifo_lookup() {
             generic.run(fifo, &memory, sink_a, state_a);
             if (!expect(indexed.run_available(fifo, &memory, sink_b, state_b, true) == fifo.size(),
                         "frozen parse consumes the same commands")) return false;
-            if (!expect(a.ranges == b.ranges && a.bytes == b.bytes && a.shapes == b.shapes &&
+            if (!expect(a.ranges == b.ranges && a.shapes == b.shapes &&
                         sink_a.draws == sink_b.draws && sink_a.last_draw_payload_first == sink_b.last_draw_payload_first &&
                         state_a.xf(0) == 0x3F800000u && state_b.xf(0) == state_a.xf(0) &&
                         state_a.consume_dirty() == state_b.consume_dirty(),
@@ -280,7 +274,7 @@ bool test_frozen_fifo_lookup() {
                       (expected_draws < 0 ? !error_a.empty() : error_a.empty() && sa.draws == expected_draws) &&
                       sa.draws == sb.draws && sa.last_draw_payload_first == expected_payload &&
                       sa.last_draw_payload_first == sb.last_draw_payload_first &&
-                      ra.ranges == rb.ranges && ra.bytes == rb.bytes && ra.shapes == rb.shapes,
+                      ra.ranges == rb.ranges && ra.shapes == rb.shapes,
                       "uncertified/boundary/fast views preserve generic result and fault");
     };
     if (!compare({{0x1000u,64u,first.data()},{0x1000u,64u,second.data()}},0x1000u,32u,1,0xA1u) ||
@@ -746,7 +740,7 @@ std::uint64_t bp_write_observation_digest() {
 
 // GxBackend's decoded-vertex cache keys packet runs by (cache_token, packet_run_index). An
 // unchanged CALL_DL must replay a run already seen without decoding it again, and changed list
-// bytes must give a new identity even without a dirty-range notification.
+// bytes must give a new identity.
 bool test_unchanged_display_list_replays_prepared_packet_runs() {
     struct MemoSink final : FifoSink {
         [[nodiscard]] std::size_t draw_payload_size(
@@ -855,14 +849,6 @@ bool test_unchanged_display_list_replays_prepared_packet_runs() {
     if (!run() || !expect(sink.packet_runs == 5 && sink.last_token != token &&
                           sink.memo_hits == 3,
                           "edited CALL_DL must replay under a new identity")) return false;
-    // A dirty-range invalidation also retires the identity.
-    const std::uint64_t edited_token = sink.last_token;
-    if (!expect(parser.invalidate_display_list_cache_range(0x00000004u, 1u) == 1u,
-                "dirty range overlapping the list must invalidate it")) return false;
-    if (!run() || !run() ||
-        !expect(profile.call_dl_cache_misses == 3u && sink.last_token != edited_token &&
-                sink.last_token != token,
-                "invalidated CALL_DL must not reuse a retired identity")) return false;
     return true;
 }
 
@@ -1411,7 +1397,7 @@ int main(int argc, char** argv) try {
         } catch (const GxFatalError&) {
             threw = true;
         }
-        if (!expect(!threw, "release builds skip unknown CP and BP writes") ||
+        if (!expect(!threw, "unknown CP and BP writes are skipped by default") ||
             !expect(state.cp(0x31u) == 0u && state.bp(0x05u) == 0u &&
                         state.cp(galaxy::gx::cp::kMatrixIndexA) == 0x12345678u && state.consume_dirty() == 0u,
                     "a skipped write changes no register or dirty state")) {
@@ -1429,7 +1415,7 @@ int main(int argc, char** argv) try {
         } catch (const GxFatalError&) {
             threw = true;
         }
-        if (!expect(!threw, "release builds skip unknown XF addresses") ||
+        if (!expect(!threw, "unknown XF addresses are skipped by default") ||
             !expect(state.xf(known_xf) == 0x00000123u && state.xf(static_cast<std::uint16_t>(known_xf + 1u)) == 0u,
                     "a mixed XF transfer keeps its known word and drops the unknown one")) {
             return 1;
@@ -1441,7 +1427,7 @@ int main(int argc, char** argv) try {
         } catch (const GxFatalError&) {
             threw = true;
         }
-        if (!expect(!threw, "release builds skip a TMEM load of lines")) return 1;
+        if (!expect(!threw, "a TMEM load of lines is skipped by default")) return 1;
         galaxy::gx::set_unknown_gx_commands_fatal(true);
     }
 
@@ -1696,54 +1682,6 @@ int main(int argc, char** argv) try {
         if (!expect(
                 profile.call_dl_cache_hits == 2,
                 "validated changed CALL_DL did not repopulate the cache")) {
-            return 1;
-        }
-
-        const std::size_t non_overlapping_same_page_invalidated =
-            parser.invalidate_display_list_cache_range(0x00000000u, 0x80u);
-        if (!expect(
-                non_overlapping_same_page_invalidated == 0u,
-                "display-list page index invalidated a non-overlapping same-page range")) {
-            return 1;
-        }
-        const std::size_t cached_after_unrelated_dirty_consumed =
-            parser.run_available(call_dl, &memory, sink, state);
-        if (!expect(
-                cached_after_unrelated_dirty_consumed == call_dl.size(),
-                "CALL_DL after unrelated same-page dirty range was not consumed") ||
-            !expect(
-                sink.draws == 7,
-                "CALL_DL after unrelated same-page dirty range did not replay draw")) {
-            return 1;
-        }
-        if (!expect(
-                profile.call_dl_cache_hits == 3,
-                "unrelated same-page dirty range should keep the cached CALL_DL")) {
-            return 1;
-        }
-
-        guest[dl_offset + 3] = std::byte{0xF0};
-        const std::size_t invalidated =
-            parser.invalidate_display_list_cache_range(0x0000011Fu, 1u);
-        if (!expect(
-                invalidated == 1u,
-                "display-list dirty physical range did not invalidate aliased cache entry")) {
-            return 1;
-        }
-        const std::size_t changed_call_dl_consumed =
-            parser.run_available(call_dl, &memory, sink, state);
-        if (!expect(
-                changed_call_dl_consumed == call_dl.size(),
-                "changed CALL_DL display list was not consumed") ||
-            !expect(
-                sink.draws == 8,
-                "changed CALL_DL did not execute draw")) {
-            return 1;
-        }
-        if (!expect(
-                profile.call_dl_cache_misses == 3 &&
-                profile.call_dl_cache_stores == 3,
-                "changed CALL_DL bytes did not invalidate the cache entry")) {
             return 1;
         }
         parser.set_profile(nullptr);

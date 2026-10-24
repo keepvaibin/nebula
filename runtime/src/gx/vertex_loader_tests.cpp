@@ -489,21 +489,32 @@ bool cached_packet_run_preserves_triangle_strip_boundaries(
     const galaxy::gx::VertexDescriptor desc = state.vertex_desc(0);
     const std::size_t source_size =
         galaxy::gx::VertexLoader::source_vertex_size(desc);
-    const galaxy::gx::LoadedPrimitive prim =
-        loader.load_cached_packet_run_with_layout(
+    const std::span<const galaxy::gx::CachedDrawPacket> packet_span{
+        packets.data(), packets.size()};
+    const galaxy::gx::PrimitiveClass primitive = triangle_tails
+        ? galaxy::gx::PrimitiveClass::Triangles
+        : galaxy::gx::PrimitiveClass::TriangleStrip;
+    const galaxy::gx::DecodedPacketRunVertices decoded =
+        loader.decode_cached_packet_run_vertices_with_layout(
             std::span<const std::byte>{bytes.data(), bytes.size()},
             0,
-            std::span<const galaxy::gx::CachedDrawPacket>{
-                packets.data(), packets.size()},
-            triangle_tails ? galaxy::gx::PrimitiveClass::Triangles
-                           : galaxy::gx::PrimitiveClass::TriangleStrip,
-            0,
+            packet_span,
+            primitive,
             state,
             desc,
             source_size,
-            nullptr,
+            nullptr);
+    const galaxy::gx::LoadedPrimitive prim =
+        loader.upload_cached_packet_run_vertices(
+            decoded.vertices,
+            0,
+            packet_span,
+            primitive,
             vertex_ring,
-            index_ring);
+            index_ring,
+            0,
+            false,
+            decoded.total_indices);
 
     bool ok = true;
     ok = expect(prim.indexed, "cached packet strip run was not indexed") && ok;
@@ -595,9 +606,9 @@ bool indexed_dependencies_cover_nonmonotonic_reads() {
         const std::array<CachedDrawPacket, 1> packets{{
             {0x90u, static_cast<std::uint16_t>(indices.size()), 0u, 0u, indices.size() * 4u}}};
         const auto tracked = loader.decode_cached_packet_run_vertices_with_layout(
-            fifo, 0u, packets, PrimitiveClass::Triangles, 0u, state, desc, 4u, &memory);
+            fifo, 0u, packets, PrimitiveClass::Triangles, state, desc, 4u, &memory);
         const auto untracked = loader.decode_cached_packet_run_vertices_with_layout(
-            fifo, 0u, packets, PrimitiveClass::Triangles, 0u, state, desc, 4u, &memory, 0u, 0u, false);
+            fifo, 0u, packets, PrimitiveClass::Triangles, state, desc, 4u, &memory, 0u, 0u, false);
         if (!expect(tracked.vertices.size() == indices.size() &&
                     tracked.total_vertices == untracked.total_vertices &&
                     tracked.total_indices == untracked.total_indices &&
@@ -689,7 +700,7 @@ bool small_vertex_components_preserve_bits() {
             {0x90u, static_cast<std::uint16_t>(vertex_count), prefix, prefix,
              static_cast<std::size_t>(source_stride) * vertex_count}}};
         const auto decoded = loader.decode_cached_packet_run_vertices_with_layout(
-            fifo, 0u, packets, PrimitiveClass::Triangles, 0u, state, desc, source_stride, nullptr);
+            fifo, 0u, packets, PrimitiveClass::Triangles, state, desc, source_stride, nullptr);
         if (!expect(decoded.vertices.size() == vertex_count,
                     "small-component conversion changed the vertex count")) return false;
         for (unsigned vertex = 0u; vertex < vertex_count; ++vertex) {
@@ -791,7 +802,7 @@ bool prepared_vertex_inputs_preserve_mixed_layouts() {
             packets.push_back(CachedDrawPacket{0xb8u, 1u, offset, offset, stride});
         }
         const auto decoded = loader.decode_cached_packet_run_vertices_with_layout(
-            fifo, 0u, packets, PrimitiveClass::Points, 0u, state, desc, stride, &memory);
+            fifo, 0u, packets, PrimitiveClass::Points, state, desc, stride, &memory);
         if (!expect(decoded.vertices.size() == 3u && decoded.guest_array_reads.size() == 3u,
                     "mixed run preserves vertices and exactly three indexed dependencies")) return false;
         for (unsigned vertex = 0u; vertex < 3u; ++vertex) {
@@ -840,7 +851,7 @@ bool byte_dequant_and_nbt3_match_cached_decode(
             {0x90u, 1u, 0u, 0u, fifo.size() - 2u}}};
         const VertexDescriptor desc = state.vertex_desc(0);
         const auto cached = loader.decode_cached_packet_run_vertices_with_layout(
-            fifo, 0, packets, PrimitiveClass::Triangles, 0, state, desc,
+            fifo, 0, packets, PrimitiveClass::Triangles, state, desc,
             VertexLoader::source_vertex_size(desc), memory);
         bool pass = expect(cursor.offset == fifo.size() && prim.index_count == 0,
                            "incomplete packet consumption/draw count changed");
@@ -1084,7 +1095,7 @@ bool generated_index_boundaries_preserve_topology(ID3D12Device* device) {
                         FifoCursor cursor;
                         cursor.data = fifo;
                         cursor.base_offset = 0x1200u;
-                        prim = loader.load_with_layout(cursor, test.primitive, 0u, state,
+                        prim = loader.load_with_layout(cursor, test.primitive, state,
                             desc, 0u, nullptr, vertices, indices, 0u, true);
                         if (!expect(cursor.offset == fifo.size(), "index expansion changed FIFO consumption")) return false;
                     }

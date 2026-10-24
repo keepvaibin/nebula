@@ -183,14 +183,12 @@ struct FifoSink {
     // commands follow: 1 J3D shape packet, 2 NameObj draw, 3 JPA emitter
     // pass, 4 JPA particle. Motion signals (galaxy/motion_signals.h): 5 draw
     // category or scene phase, 6 scene signals, 7 pass, 8 light load.
-    // `offset` is the marker's byte offset in the span passed to this run.
     virtual void on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a,
-                                std::uint32_t b, std::size_t offset) {
+                                std::uint32_t b) {
         (void)kind;
         (void)aux;
         (void)a;
         (void)b;
-        (void)offset;
     }
 
     // Byte count of a draw's inline vertex payload. The parser checks that the whole command
@@ -375,16 +373,10 @@ struct FifoParserProfile {
 
 struct FifoGuestMemoryReadRecorder {
     virtual ~FifoGuestMemoryReadRecorder() = default;
+    // A guest range resolved for CALL_DL or LOAD_INDX.
     virtual void record_guest_memory_read(
         std::uint32_t guest_addr,
         std::uint32_t size) = 0;
-    // The bytes as CALL_DL or LOAD_INDX resolves them; the default passes on only the range.
-    virtual void record_guest_memory_read_bytes(
-        std::uint32_t guest_addr,
-        std::span<const std::byte> bytes) {
-        record_guest_memory_read(
-            guest_addr, static_cast<std::uint32_t>(bytes.size()));
-    }
     virtual void record_guest_dependency_shape_read(
         std::uint32_t guest_addr,
         std::uint32_t size) {
@@ -441,13 +433,6 @@ public:
     void set_event_classification_only(bool enabled) {
         event_classification_only_ = enabled;
     }
-
-    // Invalidates cached CALL_DL replays whose guest byte window overlaps a
-    // dirty guest-memory range. The address may be physical or a MEM1/MEM2
-    // cached/uncached CPU alias.
-    std::size_t invalidate_display_list_cache_range(
-        std::uint32_t guest_addr,
-        std::uint32_t size);
 
 private:
     struct FrozenRegionScope;
@@ -510,8 +495,6 @@ private:
         std::uint64_t cache_token = 0;
         std::uint32_t guest_addr = 0;
         std::uint32_t byte_size = 0;
-        std::uint64_t first_page = 0;
-        std::uint64_t last_page = 0;
         std::uint64_t last_used = 0;
         std::vector<std::byte> bytes;
         std::vector<CachedDisplayListCommand> commands;
@@ -626,8 +609,11 @@ private:
     // Gameplay calls hundreds of display lists per frame, all of which should stay cached. The
     // slots live on the heap because tests construct parsers as local variables.
     static constexpr std::size_t kDisplayListCacheCapacity = 2048;
-    // Retained vector capacity of every slot, invalid ones included. One entry can hold a 4 MiB
-    // list plus a copy of its draw payloads, so the cache is bounded in bytes as well as slots.
+    // One entry can hold a 4 MiB list plus a copy of its draw payloads, so the cache is bounded
+    // in bytes as well as slots. 256 MiB holds the display lists of a loaded scene within a
+    // low-end machine's memory.
+    static constexpr std::uint64_t kDisplayListCacheBudgetBytes = 256ull << 20;
+    // Retained vector capacity of every slot, invalid ones included.
     std::uint64_t cache_bytes_ = 0;
     std::vector<CachedDisplayList> display_list_cache_ =
         std::vector<CachedDisplayList>(kDisplayListCacheCapacity);
@@ -641,15 +627,13 @@ private:
         DisplayListCacheKey,
         std::vector<std::size_t>,
         DisplayListCacheKeyHash> display_list_cache_map_{};
-    std::unordered_map<std::uint64_t, std::vector<std::size_t>>
-        display_list_cache_page_map_{};
 
-    [[nodiscard]] std::uint64_t display_list_cache_budget_bytes() const;
     // Retained capacity of one entry's vectors.
     [[nodiscard]] static std::uint64_t display_list_cache_entry_bytes(
         const CachedDisplayList& cached) noexcept;
     // Frees invalid slots' storage, then evicts least-recently-used entries until cache_bytes_
-    // fits the budget. `skip_index`, the slot just filled, is kept even if it alone exceeds it.
+    // fits kDisplayListCacheBudgetBytes. `skip_index`, the slot just filled, is kept even if it
+    // alone exceeds the budget.
     void evict_display_list_cache_to_budget(std::size_t skip_index);
 };
 

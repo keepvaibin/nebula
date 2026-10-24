@@ -290,15 +290,14 @@ struct MemoizedPsoKeyHasher {
     }
 };
 
-// RGBA6 EFB colour precision: 8-bit (the default) or the hardware's 6-bit colour with its 2x2
-// dither (GALAXY_EFB_TRUE_COLOR=0). 8-bit colour also flattens the game's checker dither
-// textures (detail::flatten_texel_checker) and removes the checker dither baked into some art
-// (detail::remove_texel_checker).
-[[nodiscard]] bool efb_true_color() noexcept;
+// `true_color` selects an RGBA6 EFB's colour precision: 8-bit, or the hardware's 6-bit colour
+// with its 2x2 dither. The renderer always uses 8-bit: the 6-bit colour and dither only band and
+// stipple the picture, and at raised internal resolution the dither shows as a dot grid. Only
+// shader_gen_tests requests the dither.
 [[nodiscard]] PixelShaderKey build_pixel_shader_key(
     const GxState& state, unsigned efb_scale, bool true_color);
 [[nodiscard]] inline PixelShaderKey build_pixel_shader_key(const GxState& state, unsigned efb_scale) {
-    return build_pixel_shader_key(state, efb_scale, efb_true_color());
+    return build_pixel_shader_key(state, efb_scale, true);
 }
 [[nodiscard]] VertexShaderKey build_vertex_shader_key(const GxState& state);
 [[nodiscard]] RenderStateKey build_render_state_key(const GxState& state);

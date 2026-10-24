@@ -33,14 +33,10 @@
 #include <memory>
 #include <optional>
 #include <span>
-#include <string>
 #include <unordered_map>
 #include <vector>
 
 namespace galaxy::gx {
-
-class RendererD3D12;
-class DependencyEventSink;
 
 struct RGBA8 {
     std::uint8_t r = 0;
@@ -177,9 +173,6 @@ public:
     std::size_t invalidate_guest_ranges(
         std::span<const GuestRange> sorted_coalesced_ranges);
 
-    // Debug: treat every frame as invalidated (A/B fidelity testing).
-    bool debug_invalidate_every_frame = false;
-
     // The GPU side: views by srv_index, upload staging, textures (texture_backend.h).
     [[nodiscard]] const TextureBackend& backend() const noexcept { return backend_; }
     [[nodiscard]] TextureBackend& backend() noexcept { return backend_; }
@@ -199,8 +192,8 @@ public:
         return decoded_guest_bytes_;
     }
 
-    // Each live entry is charged its committed allocation (a shared resource once per entry). Retired resources
-    // awaiting their fence are not counted; this is not total VRAM residency.
+    // Each live decoded entry is charged its committed allocation. Retired resources awaiting their fence are not
+    // counted; this is not total VRAM residency.
     struct DecodedMapStats {
         std::uint64_t resident_bytes = 0;   // committed allocation bytes per live entry
         std::uint64_t budget_bytes = 0;
@@ -210,15 +203,6 @@ public:
         std::size_t lru_entries = 0;
     };
     [[nodiscard]] DecodedMapStats decoded_map_stats() const noexcept;
-
-    // Set for one dependency-capturing render parse; null otherwise.
-    void set_dependency_event_sink(DependencyEventSink* sink) noexcept {
-        dependency_event_sink_ = sink;
-    }
-    // Frame number tagged on capture log lines; 0 logs nothing.
-    void set_debug_capture_frame(std::uint64_t frame) noexcept {
-        debug_capture_frame_ = frame;
-    }
 
     // Called after the renderer has waited for this frame slot's fence.
     void begin_frame(unsigned frame_slot, unsigned frames_in_flight);
@@ -242,8 +226,8 @@ public:
     // Asynchronous first-use decode. While allowed, a miss creates the texture and records its staging copy and SRV
     // on this thread, and only the decode into the staging memory runs on a worker. The caller guarantees the guest
     // bytes passed to get() stay unchanged until finish_pending_decodes() (true for a sealed frame memory snapshot),
-    // which must run before the upload command list executes and rethrows the first decode failure. Paths that
-    // read decoded pixels stay synchronous.
+    // which must run before the upload command list executes and rethrows the first decode failure. Texture-pack
+    // dumps, which read the decoded pixels, stay synchronous.
     void set_async_decode_allowed(bool allowed) noexcept {
         async_decode_allowed_ = allowed;
     }
@@ -278,8 +262,6 @@ public:
     [[nodiscard]] bool movie_handle(std::uint32_t srv_index) const noexcept;
 
 private:
-    DependencyEventSink* dependency_event_sink_ = nullptr;
-    std::uint64_t debug_capture_frame_ = 0u;
     struct Key {
         std::uint32_t guest_addr;
         std::uint16_t width;
@@ -305,46 +287,6 @@ private:
         // Its texture-pack replacement (bound, or awaited while the decoded original shows).
         std::uint32_t pack_slot = TexturePacks::kNone;
         bool pack_waiting = false;
-    };
-    // Adapted from Aurora's MIT-licensed TextureContentKey and bounded LRU:
-    // encounter/aurora@77326d45415a64c40e560cebd2cdef0a0f08d840,
-    // lib/gx/texture.cpp::TextureContentKey/find_content_texture/
-    // cache_content_texture. Keep exact source bytes in the key so equality
-    // cannot alias distinct guest textures after a hash collision.
-    struct ContentKey {
-        std::uint16_t width = 0;
-        std::uint16_t height = 0;
-        std::uint8_t format = 0;
-        std::uint8_t levels = 0;
-        std::uint8_t generated_mips = 0;
-        std::uint8_t tlut_format = 0;
-        std::vector<std::uint8_t> source;
-        std::vector<std::uint8_t> palette;
-        // Finalized once after both byte vectors are captured. All resident
-        // keys and their LRU copies are immutable; container operations must
-        // not walk potentially megabytes of source bytes again to hash them.
-        std::size_t bucket_hash = 0;
-
-        bool operator==(const ContentKey& other) const {
-            // The cached digest is derived data, not texture identity.
-            return width == other.width && height == other.height &&
-                format == other.format && levels == other.levels &&
-                generated_mips == other.generated_mips &&
-                tlut_format == other.tlut_format &&
-                source == other.source && palette == other.palette;
-        }
-    };
-    struct ContentKeyHasher {
-        [[nodiscard]] std::size_t operator()(const ContentKey& key) const noexcept {
-            return key.bucket_hash;
-        }
-    };
-    [[nodiscard]] static std::size_t hash_content_key(const ContentKey& key);
-    struct ContentEntry {
-        gpu::TextureRef texture;
-        std::uint64_t bytes = 0;
-        std::uint64_t allocation_bytes = 0;
-        std::list<ContentKey>::iterator lru;
     };
     struct EfbAliasKey {
         std::uint32_t guest_addr;
@@ -403,16 +345,6 @@ private:
     std::uint64_t decoded_guest_bytes_ = 0;
     std::uint64_t decoded_evicted_bytes_ = 0;
     std::uint64_t decoded_evicted_entries_ = 0;
-    std::unordered_map<ContentKey, ContentEntry, ContentKeyHasher>
-        content_entries_;
-    std::list<ContentKey> content_lru_;
-    std::uint64_t content_bytes_ = 0;
-    std::uint64_t content_lookups_ = 0;
-    std::uint64_t content_hits_ = 0;
-    std::uint64_t content_decoded_misses_ = 0;
-    std::uint64_t content_retained_bytes_ = 0;
-    std::uint64_t content_evicted_bytes_ = 0;
-    std::uint64_t content_evicted_entries_ = 0;
     // Full GX texture descriptor -> EFB-copy alias (checked before decode).
     std::unordered_map<EfbAliasKey, Entry, EfbAliasKeyHasher> efb_aliases_;
     detail::ConservativeGuestRangeEnvelope alias_guest_envelope_;
@@ -434,8 +366,6 @@ private:
     };
     std::vector<PooledTexture> texture_pool_;
     std::uint64_t texture_pool_bytes_ = 0;
-    std::uint64_t texture_pool_reuses_ = 0;
-    std::uint64_t texture_pool_drops_ = 0;
     void pool_retired_texture(Entry& entry);
     bool take_pooled_texture(
         std::uint32_t width, std::uint32_t height, unsigned levels,

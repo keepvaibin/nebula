@@ -8,7 +8,6 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
@@ -62,10 +61,8 @@ XfbPresentSelection select_xfb_for_present(
     const XfbTexture* latest,
     const XfbTexture* last_valid_selected,
     std::uint64_t current_frame_stamp,
-    std::uint64_t max_preserved_age,
-    std::uint64_t last_presented_frame_stamp) {
+    std::uint64_t max_preserved_age) {
     XfbPresentSelection selection{};
-    static_cast<void>(last_presented_frame_stamp);
     if (!requested_specific) {
         selection.selected = latest;
         return selection;
@@ -373,7 +370,6 @@ XfbTexture* EfbCopyManager::acquire_xfb(
         // but no resource. Retry allocation instead of returning that entry.
         if (entry.width == wanted_w && entry.height == wanted_h &&
             entry.texture) {
-            static_cast<void>(frame_index);
             return &entry;
         }
         // Size changed: drop the old texture and recreate it below.

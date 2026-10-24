@@ -11,31 +11,21 @@
 #include <atomic>
 #include <bit>
 #include <cstdio>
-#include <cstdlib>
-#include <cstring>
 
 namespace galaxy::gx {
 
 namespace {
 
-std::atomic<int> s_unknown_commands_fatal{-1};
+std::atomic<bool> s_unknown_commands_fatal{false};
 
 }  // namespace
 
 bool unknown_gx_commands_fatal() noexcept {
-    int fatal = s_unknown_commands_fatal.load(std::memory_order_relaxed);
-    if (fatal < 0) {
-        char value[8]{};
-        std::size_t length = 0u;
-        fatal = getenv_s(&length, value, sizeof(value), "GALAXY_GX_STRICT") == 0 && length == 2u &&
-                value[0] == '1' ? 1 : 0;
-        s_unknown_commands_fatal.store(fatal, std::memory_order_relaxed);
-    }
-    return fatal != 0;
+    return s_unknown_commands_fatal.load(std::memory_order_relaxed);
 }
 
 void set_unknown_gx_commands_fatal(bool fatal) noexcept {
-    s_unknown_commands_fatal.store(fatal ? 1 : 0, std::memory_order_relaxed);
+    s_unknown_commands_fatal.store(fatal, std::memory_order_relaxed);
 }
 namespace {
 
@@ -53,7 +43,7 @@ void reject(const char* message, std::uint8_t opcode,
     index = std::min<std::uint32_t>(index, Words * 64u - 1u);
     const std::uint64_t bit = std::uint64_t{1} << (index & 63u);
     if ((reported[index >> 6u].fetch_or(bit, std::memory_order_relaxed) & bit) != 0u) return;
-    std::fprintf(stderr, "%s; skipped, later writes of this register are not logged\n", message);
+    std::fprintf(stderr, "%s\n", message);
     crash_notes::note(message);
 }
 
