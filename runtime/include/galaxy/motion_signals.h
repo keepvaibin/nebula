@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-// Game-side motion signals for frame interpolation and motion vectors: the
-// recompiled build's generation-20 site hooks, and in the native build the
-// game's own calls (Petari's MotionSignal, Game/Util/MotionSignal.hpp), which
-// write the same host markers.
+// Game-side motion signals for frame interpolation and motion vectors: host
+// markers the game writes through its own calls (Petari's MotionSignal,
+// Game/Util/MotionSignal.hpp).
 //
-// Object epochs: a counter per guest object (LiveActor, its J3DModel, a JPA
+// Object epochs: a counter per game object (LiveActor, its J3DModel, a JPA
 // emitter), bumped when the game resets the object's position or starts a new
 // life (MR::resetPosition, LiveActor::makeActorAppeared / makeActorDead,
 // MarioAccess::setTrans / setBaseMtx, JPABaseEmitter::init). Draw-identity
@@ -22,14 +21,14 @@
 // Host markers (op 0xF0, kind byte): 1-4 draw identity (fifo_parser.h); 5 draw
 // category or scene phase; 6 scene signals (first marker of a 3D scene); 7
 // pass; 8 light load; 9-11 the 2D layer's identity (layout pane, layout
-// actor, star pointer).
+// actor, star pointer); 12 material.
 //
 // 2D layer: GameScene::draw2D's entry and epilogue are FIFO markers like the
 // 3D scene's (gx::FifoMarker::Scene2DBegin / Scene2DEnd). Layout markers sit
 // at the start of a pane's, layout actor's or star pointer's draw: a function
 // entry or the path after its visibility test, never inside a GXBegin.
 //
-// No Windows/D3D12 includes (unit-tested offline).
+// No Windows or D3D12 includes: the header is unit-tested on its own.
 
 #include <algorithm>
 #include <cstddef>
@@ -38,16 +37,13 @@
 
 namespace galaxy::motion {
 
-// SiteHookKind::LightLoad arguments.
+// The light load a kMarkerLight marker reports (its aux field).
 enum class LightSite : std::uint32_t {
     ActorLightInfo = 0,
     Coin = 1,
     PointLight = 2,
     AllWhite = 3,
     Player = 4,
-    // MR::requestPointLight entry: r3 the actor, r4 its position, r5 its colour, f1 its brightness at the
-    // reference distance. Not a GX light load (no host marker).
-    PointRequest = 5,
 };
 
 // Host marker kinds.

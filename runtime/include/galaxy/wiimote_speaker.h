@@ -1,9 +1,8 @@
 #pragma once
 
-// The Wii Remote speaker. The game configures it through register block 0xA20000 and streams 4-bit Yamaha ADPCM or
-// signed 8-bit PCM to it in output report 0x18 (WiiBrew, Wiimote: Speaker). The emulated remote decodes each report
-// on the thread that receives it into one single-producer, single-consumer ring of mono samples at the speaker rate.
-// The audio output resamples that ring into the game's output; a controller with a speaker can read the same stream.
+// The Wii Remote speaker's playback side: a single-producer, single-consumer ring of mono samples at the speaker
+// rate (the game streams 4-bit Yamaha ADPCM or signed 8-bit PCM in output report 0x18; WiiBrew, Wiimote: Speaker),
+// resampled into the game's audio output.
 
 #include <array>
 #include <atomic>
@@ -13,29 +12,6 @@
 #include <span>
 
 namespace galaxy::input::speaker {
-
-enum class Format : std::uint8_t { Adpcm4, Pcm8 };
-
-// The configuration written to 0xA20001: 00 FF RR RR VV 00 00. FF 0x40 selects signed 8-bit PCM, anything else
-// 4-bit ADPCM. RR RR (little endian) divides 12 MHz into the sample rate of either format; the game streams 40 ADPCM
-// samples every 6.667 ms with 2000 (6000 Hz). VV is the volume, 0x40 for unity with ADPCM and 0xFF with PCM; the game
-// writes the console's speaker volume setting (0..0x7F, 0x58 by default).
-struct Config {
-    Format format = Format::Adpcm4;
-    std::uint32_t sample_rate = 0;
-    std::uint8_t volume = 0;
-
-    friend bool operator==(const Config&, const Config&) = default;
-};
-
-// Yamaha ADPCM exactly as the game's encoder (WENCGetEncodeData) tracks it: a nibble is a sign bit and magnitude
-// bits L3 L2 L1; the sample moves by step * L3 + step / 2 * L2 + step / 4 * L1 + step / 8, each term truncated, and
-// the step is scaled by 230, 230, 230, 230, 307, 409, 512 or 614 / 256 and kept within 127..24576. The first sample
-// of each byte is in the high nibble.
-struct AdpcmState {
-    std::int32_t predictor = 0;
-    std::int32_t step = 127;
-};
 
 class Speaker {
 public:
@@ -47,16 +23,7 @@ public:
     void mix(std::span<std::byte> stereo_le, std::uint32_t output_rate, float gain) noexcept;
 
 private:
-
-    // Producer state.
-    std::array<std::uint8_t, 10> registers_{};
-    Config config_{};
-    AdpcmState adpcm_{};
-    float volume_ = 0.0f;
-    bool enabled_ = false;
-    bool muted_ = true;
-
-    // Shared. On the heap: the owner (the emulated address space) often lives on the stack in tests.
+    // Shared with the producer.
     std::unique_ptr<float[]> ring_ = std::make_unique<float[]>(kRingSamples);
     std::atomic<std::uint32_t> head_{0};
     std::atomic<std::uint32_t> tail_{0};

@@ -1,10 +1,9 @@
 #pragma once
 
 // Controller vibration that mirrors the virtual Wii Remote's motor. The game
-// drives the motor itself (WPadRumble::updateRumble 0x803AC3E8 ->
-// WPADControlMotor 0x804D9000); its on/off bit reaches the emulated Wii Remote
-// in every output report. No host-made patterns: the bit goes through the
-// motor model below to the controller that drives the remote.
+// drives the motor itself (WPadRumble::updateRumble -> WPADControlMotor); its
+// on/off bit goes through the motor model below to the controller in use,
+// with no patterns of the host's own.
 //
 // Encodings: Switch Pro Controller HD rumble per dekuNukem
 // Nintendo_Switch_Reverse_Engineering (rumble_data_table.md); Pro Controller 2
@@ -62,9 +61,9 @@ inline constexpr float kSwitchHighShare = 0.35f;
 inline constexpr float kXInputSpeedMin = 0.15f;
 [[nodiscard]] float switch_low_amplitude(std::uint8_t level, std::uint8_t strength) noexcept;
 
-// Switch Pro Controller
-// One actuator's 4 bytes: high band (frequency + amplitude) and low band.
-// Frequency in Hz (40.875-1252), amplitude 0..1 (values above 1 clamp to 1).
+// Switch Pro Controller: one actuator's 4 bytes, high band (frequency +
+// amplitude) then low band. Frequency in Hz (40.875-1252), amplitude 0..1
+// (values above 1 clamp to 1).
 [[nodiscard]] std::array<std::uint8_t, 4> encode_switch_hd_rumble(
     float high_hz, float high_amplitude, float low_hz, float low_amplitude) noexcept;
 // 00 01 40 40: 320 Hz / 160 Hz at zero amplitude.
@@ -79,7 +78,7 @@ std::size_t build_switch_pro_rumble_report(std::uint8_t packet_number,
                                            const std::array<std::uint8_t, 8>& rumble,
                                            std::span<std::uint8_t> out) noexcept;
 
-// Switch 2 Pro Controller (USB HID output report 0x02, 64 bytes)
+// Switch 2 Pro Controller: USB HID output report 0x02, 64 bytes.
 inline constexpr std::uint8_t kSwitch2RumbleReport = 0x02;
 inline constexpr std::size_t kSwitch2RumbleReportBytes = 64;
 inline constexpr std::uint16_t kSwitch2HighFrequency = 0x187;
@@ -95,14 +94,12 @@ inline constexpr std::uint16_t kSwitch2MaxAmplitude = 29000;
 std::size_t build_switch2_rumble_report(std::uint8_t sequence, std::uint8_t level, std::uint8_t strength,
                                         std::span<std::uint8_t> out) noexcept;
 
-// Xbox (XInput)
 struct XInputMotors {
     std::uint16_t left = 0;   // low-frequency (heavy) motor
     std::uint16_t right = 0;  // high-frequency (light) motor
 };
 [[nodiscard]] XInputMotors xinput_motor_speeds(std::uint8_t level, std::uint8_t strength) noexcept;
 
-// Safety gate
 // The physical motor runs only while the motor level is above zero, the game has published
 // its state within kStallUs (a stalled game never leaves a motor running), the game window
 // has focus, no pause or HOME menu is open and vibration is on (strength not zero). A closed

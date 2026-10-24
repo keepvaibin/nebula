@@ -128,8 +128,8 @@ void publish_host_pointer_seed(
         input.client_width,
         input.client_height,
     };
-    // Geometry publication is not a cursor acquisition. Preserve the actual
-    // prior sample's time when retaining it; a synthetic center has no sample.
+    // A geometry publication is not a cursor sample: a retained point keeps
+    // its sample time, a seeded centre has none.
     if (input.force_center || !initialized) {
         current.absolute_acquired_ms = 0;
     }

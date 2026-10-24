@@ -1,30 +1,18 @@
+// The virtual Wii Remote's input reports, IR dots and shake pattern, the
+// settings-overlay pad and the input-script integer fields.
+
 #include "galaxy/native_input.h"
-#include "galaxy/gx/pointer_response.h"
-#include "galaxy/synthetic_kpad_buttons.h"
 #include "galaxy/native_settings_pad.h"
-#include "galaxy/experimental_ultrawide_aspect.h"
 
 #include <algorithm>
 #include <array>
-#include <atomic>
-#include <bit>
-#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cmath>
-#include <condition_variable>
-#include <deque>
 #include <iostream>
 #include <limits>
-#include <memory>
-#include <mutex>
-#include <sstream>
 #include <span>
-#include <stdexcept>
-#include <string>
-#include <thread>
-#include <utility>
-#include <vector>
+#include <string_view>
 
 namespace {
 
@@ -179,42 +167,6 @@ bool expect_bytes(
     return true;
 }
 
-std::vector<std::byte> fake_input_report(std::uint8_t marker) {
-    return {
-        std::byte{galaxy::input::kWiimoteHidInput},
-        std::byte{0x31u},
-        std::byte{marker}};
-}
-
-struct FakeNativeHidState {
-    std::mutex mutex;
-    std::condition_variable wake;
-    bool block_open{};
-    bool block_writes{};
-    bool fail_open{};
-    bool fail_write{};
-    bool stop_requested{};
-    bool open_entered{};
-    bool open_succeeded{};
-    bool write_entered{};
-    bool closed{};
-    std::size_t input_reports_polled{};
-    bool pause_second_poll{};
-    bool second_poll_entered{};
-    bool release_second_poll{};
-    std::deque<std::vector<std::byte>> input_reports;
-    std::vector<std::vector<std::byte>> output_reports;
-};
-
-struct FakeFailureNotification {
-    std::atomic<std::uint32_t> calls{};
-};
-
-void note_fake_hid_failure(void* user) noexcept {
-    auto* notification = static_cast<FakeFailureNotification*>(user);
-    notification->calls.fetch_add(1u, std::memory_order_release);
-}
-
 struct DecodedIrDot {
     bool visible = false;
     std::uint16_t x = 0x03ffu;
@@ -309,43 +261,6 @@ bool normalizes_xinput_axes() {
            expect(
                galaxy::input::normalize_xinput_axis(8000, kDeadzone) > 0.0f,
                "XInput just outside deadzone is nonzero");
-}
-
-bool raw_key_trace_mask_is_lazy_and_bit_exact() {
-    constexpr std::array<int, 16> virtual_keys{
-        100, 101, 102, 103, 104, 105, 106, 107,
-        108, 109, 110, 111, 112, 113, 114, 115,
-    };
-
-    std::size_t query_count = 0u;
-    const std::uint32_t suppressed_mask =
-        galaxy::input::collect_native_raw_key_trace_mask(
-            false, virtual_keys, [&](int) {
-                ++query_count;
-                return true;
-            });
-    bool passed = expect(
-        suppressed_mask == 0u && query_count == 0u,
-        "suppressed raw-key tracing does not query the key-state provider");
-
-    std::array<int, 16> observed_keys{};
-    query_count = 0u;
-    const std::uint32_t collected_mask =
-        galaxy::input::collect_native_raw_key_trace_mask(
-            true, virtual_keys, [&](int virtual_key) {
-                observed_keys[query_count++] = virtual_key;
-                return virtual_key == 100 || virtual_key == 107 ||
-                    virtual_key == 115;
-            });
-    constexpr std::uint32_t expected_mask =
-        (1u << 2u) | (1u << 9u) | (1u << 17u);
-    passed &= expect(
-        query_count == virtual_keys.size() && observed_keys == virtual_keys,
-        "raw-key tracing queries every provider key exactly once in order");
-    passed &= expect(
-        collected_mask == expected_mask,
-        "raw-key tracing preserves the established bits 2 through 17 mapping");
-    return passed;
 }
 
 bool publishes_native_pointer_as_ir_dots() {
@@ -591,7 +506,7 @@ bool preserves_ir_coordinates_across_report_modes() {
         built33.status == galaxy::input::WiimoteReportBuildStatus::Ok &&
             built36.status == galaxy::input::WiimoteReportBuildStatus::Ok &&
             built37.status == galaxy::input::WiimoteReportBuildStatus::Ok,
-        "all IR-bearing modes build for cross-mode coordinate proof");
+        "all IR-bearing modes build");
 
     const DecodedIrDot extended0 = decode_extended_ir_dot(
         std::span<const std::uint8_t>(report33).subspan(7u, 3u));
@@ -811,7 +726,7 @@ bool accel_low_bits_do_not_change_core_button_semantics() {
            expect(
                (report[2] & 0x1fu) == 0x1fu &&
                    (report[3] & 0x9fu) == 0x9fu,
-               "RMGE01 button masks retain every pressed core button");
+               "the game's button masks keep every pressed core button");
 }
 
 bool packs_nunchuk_extension_bytes() {
@@ -1104,7 +1019,6 @@ int main() {
     ok &= basic_ir_decoder_preserves_low_ff_visible_coordinates();
     ok &= native_input_script_unsigned_fields_fail_closed();
     ok &= normalizes_xinput_axes();
-    ok &= raw_key_trace_mask_is_lazy_and_bit_exact();
     ok &= publishes_native_pointer_as_ir_dots();
     ok &= stress_publishes_native_pointer_ir_edges();
     ok &= publishes_camera_space_ir_for_kpad_pointer_position();

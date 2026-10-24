@@ -20,8 +20,8 @@ struct ContentViewport {
 
 inline constexpr double kWiiContentAspect = 16.0 / 9.0;
 
-// Preserve the game's original native 4:3 movie path (including its authored
-// crop). Custom widescreen gameplay uses the original 16:9 movie composition.
+// Movies keep their 16:9 composition at every gameplay aspect except 4:3, where
+// the game's own 4:3 movie path (with its authored crop) applies.
 [[nodiscard]] inline double presentation_content_aspect(double gameplay_aspect,
     bool prerecorded_movie) noexcept {
     return prerecorded_movie && std::abs(gameplay_aspect-4.0/3.0)>1e-10
@@ -34,9 +34,9 @@ struct PresentationContentSnapshot {
     std::uint64_t generation{};
 };
 
-// One render-thread writer publishes the rectangle actually used for the final
-// blit. Input readers have bounded retries and reject a resize mismatch. Every
-// payload word is atomic, including during an interrupted publication.
+// The rectangle of the final blit, published by the render thread (the one
+// writer) as sequence-locked atomic words. Input readers retry a bounded
+// number of times and reject a snapshot of another surface size.
 class PresentationContentPublication {
     std::atomic<std::uint64_t> version_{0}, extent_{0}, rectangle_{0};
 public:

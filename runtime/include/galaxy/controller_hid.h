@@ -2,10 +2,11 @@
 
 // Switch Pro Controller, Switch 2 Pro Controller, PlayStation (DualShock 4,
 // DualSense, DualSense Edge), Steam Controller and generic game controller
-// (generic_hid.h) acquisition over Windows HID. One worker thread blocks on an overlapped ReadFile per device plus a
-// device-change event (CM_Register_Notification on the HID interface class),
-// so it costs nothing while idle and wakes at the controller's report rate.
-// The input consumer only copies the latest decoded state.
+// (generic_hid.h) input over Windows HID. One worker thread blocks on an
+// overlapped ReadFile per device plus a device-change event
+// (CM_Register_Notification on the HID interface class), so it costs nothing
+// while idle and wakes at the controller's report rate. The input consumer
+// only copies the latest decoded state.
 
 #include "galaxy/controller_roster.h"
 #include "galaxy/input_bindings.h"
@@ -46,14 +47,13 @@ struct HidPadState {
     std::uint8_t slot = 0;
 };
 
-// ---- Vibration ----------------------------------------------------------------
-// The virtual Wii Remote's motor bit (rumble.h) mirrored to the controller in
-// use. The emulation thread publishes the game's state with every virtual
-// input report; the controller worker drives the motor (XInput, HID output
-// reports) and turns it off when publications stop for rumble::kStallUs, the
-// window loses focus, a pause or HOME menu opens, the controller disconnects
-// or the process exits. Test sessions (hidden window, GALAXY_RUMBLE_TRACE)
-// never drive a motor.
+// Vibration: the virtual Wii Remote's motor bit (rumble.h) mirrored to the
+// controller in use. The game thread publishes the game's state with every
+// Wii Remote input report; the controller worker drives the motor (XInput, HID
+// output reports) and turns it off when publications stop for
+// rumble::kStallUs, the window loses focus, a pause or HOME menu opens, the
+// controller disconnects or the process exits. A hidden window (test
+// sessions) never drives a motor.
 struct RumbleTarget {
     enum class Kind : std::uint8_t { None, XInput, Hid };
     Kind kind = Kind::None;
