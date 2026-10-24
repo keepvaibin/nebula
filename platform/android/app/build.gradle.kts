@@ -7,7 +7,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-// Built elsewhere and not kept here (tools/build_android_app.ps1 passes them):
+// Built elsewhere and not kept here (build_apk.ps1 passes them):
 //   nebula.sdlDir   SDL's source, whose Java half (org.libsdl.app) must match the libSDL3.so it built
 //   nebula.jniDir   the native libraries by ABI (libmain, libSDL3, libsmg_game, libnebula_import)
 //   nebula.assetsDir  assets made by the build (licenses/, the texts the About screen shows)
