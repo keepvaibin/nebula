@@ -1,3 +1,4 @@
+// Tests of FramePeCompletionContract and the FIFO PE-event preclassifier (FramePeEventClassifier).
 #include "galaxy/gx/frame_completion.h"
 #include "galaxy/gx/gx_backend.h"
 

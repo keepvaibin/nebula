@@ -1,3 +1,5 @@
+// XFB present selection and serial accounting, the EFB conversion shader, and EFB-copy geometry tests.
+
 #include "galaxy/gx/efb_copy.h"
 #include "galaxy/gx/renderer_d3d12.h"
 #include "galaxy/gx/texture_cache.h"
@@ -371,9 +373,7 @@ int main() {
     }
 
     {
-        // A missing XFB whose last copy is still inside the preserve bound must be held, not
-        // replaced. last_valid's stamp (9) is 1 frame behind current_frame_stamp (10), and
-        // max_preserved_age is 2, so the miss is within the bound.
+        // A miss inside the preserve bound (last copy at stamp 9, now 10, bound 2) keeps the last valid XFB.
         const galaxy::gx::XfbPresentSelection selection =
             galaxy::gx::select_xfb_for_present(
                 true,
@@ -394,10 +394,8 @@ int main() {
     }
 
     {
-        // Past the bound the miss is sustained, so the selection must fall
-        // forward to latest() rather than re-present one frozen frame forever.
-        // last_valid's stamp (9) is 21 frames behind current_frame_stamp (30)
-        // and max_preserved_age is 2.
+        // Past the bound (last copy at stamp 9, now 30, bound 2) the miss is sustained: latest() replaces the
+        // frozen frame.
         const galaxy::gx::XfbPresentSelection selection =
             galaxy::gx::select_xfb_for_present(
                 true,
@@ -416,10 +414,8 @@ int main() {
     }
 
     {
-        // The bound must not expire a merely trailing buffer: a named XFB that
-        // is still receiving copies advances its stamp with the frame, so a
-        // double/triple-buffered flip never ages out. This is the case whose
-        // regression is the visible per-flip black/flash strobe.
+        // The bound never expires a merely trailing buffer: a named XFB still receiving copies advances its stamp
+        // every frame, so a double/triple-buffered flip never ages out (expiring it would flash black every flip).
         const galaxy::gx::XfbTexture trailing_one_frame = make_xfb(0x01004000u, 29u);
         const galaxy::gx::XfbPresentSelection selection =
             galaxy::gx::select_xfb_for_present(

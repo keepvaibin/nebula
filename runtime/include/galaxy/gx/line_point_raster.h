@@ -1,8 +1,7 @@
 #pragma once
 
-// GX line/point raster state shared by the native backend and GPU tests.
-// BP 0x22 stores both widths in sixths of a logical EFB pixel; the D3D12
-// geometry expansion uses physical pixels after the internal-resolution scale.
+// GX line and point raster parameters for the line/point geometry shaders. BP 0x22 (SU_LPSIZE) gives both
+// widths in sixths of a logical EFB pixel; the expansion works in physical pixels at the EFB scale.
 
 #include <array>
 #include <cstdint>
@@ -21,9 +20,8 @@ struct LinePointRasterParams {
 };
 static_assert(sizeof(LinePointRasterParams) == 32u);
 
-// `viewport_half_width` / `viewport_half_height` are the raw XF viewport wd/ht.
-// Valid GX viewports have wd > 0 and ht < 0. Until they are programmed, the
-// caller passes the full logical EFB as a fallback.
+// `viewport_half_width` / `viewport_half_height` are the raw XF viewport wd/ht; a valid GX viewport has wd > 0
+// and ht < 0. Any other viewport (not yet programmed) takes the fallback EFB size.
 [[nodiscard]] LinePointRasterParams make_line_point_raster_params(
     std::uint32_t su_lp_size,
     const std::array<std::uint32_t, 8>& texcoord_s_registers,

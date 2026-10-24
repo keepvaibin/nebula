@@ -1,3 +1,5 @@
+// Yaz0, RARC and TPL readers for the settings overlay's game art (game_asset_extract.h).
+
 #include "galaxy/gx/game_asset_extract.h"
 
 #include <bit>

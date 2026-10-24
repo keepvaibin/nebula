@@ -2,16 +2,11 @@
 
 // TextureDecodePool: a small fixed worker pool for first-use texture decodes.
 //
-// A decode is a pure function of guest bytes that the frame's sealed memory
-// snapshot keeps immutable until the frame is submitted, plus a palette copy
-// owned by the job. The render thread records the staging->texture copy at the
-// point of first use (preserving upload order on the command list) and only
-// the CPU fill of the staging bytes runs here. wait_all() must return before
-// the command list that reads those bytes is executed; the waiting thread
-// runs queued jobs itself instead of idling.
-//
-// No D3D12 or Windows dependency, so the join/exception contract is unit
-// tested directly.
+// A job reads guest bytes that the frame's sealed memory snapshot keeps unchanged until the frame is submitted,
+// and a palette copy it owns. The render thread records the staging-to-texture copy at first use (keeping upload
+// order on the command list); only the fill of the staging bytes runs here. wait_all() must return before the
+// command list that reads those bytes executes; the waiting thread runs queued jobs itself.
+// Free of D3D12 and Windows, so its join and exception contract is unit-tested directly.
 
 #include <condition_variable>
 #include <cstddef>
@@ -66,8 +61,8 @@ public:
         work_cv_.notify_one();
     }
 
-    // Blocks until every submitted job has finished, helping with queued ones.
-    // Rethrows the first job exception (once) after all jobs are done.
+    // Blocks until every submitted job has finished, running queued ones itself, then rethrows the first job
+    // exception (once).
     void wait_all() {
         run_queued_on_caller();
         std::unique_lock<std::mutex> lock(mutex_);
@@ -79,8 +74,7 @@ public:
         }
     }
 
-    // Same join without rethrowing; for unwinding paths. Returns false if a
-    // job failed (the error is consumed).
+    // The same join for unwinding paths: returns false if a job failed (the error is consumed).
     bool wait_all_noexcept() noexcept {
         try {
             wait_all();

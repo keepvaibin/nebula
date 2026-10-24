@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// Checks VsConstantsCpuCache against a full fill_vs_constants over random GX state changes, and the octahedral
+// sky-up encoding.
 #include "galaxy/gx/vs_constants.h"
 #include <algorithm>
 #include <cmath>
@@ -48,7 +50,6 @@ int main(int argc, char**) {
         ok &= std::memcmp(&got,&control,sizeof(got))==0;
 #endif
         if(!ok){std::printf("FAILED VS image at %u kind %u dirty %x\n",i,kind,dirty);return 1;}
-        // Matrix selectors at the clamped tail and post-row wrap boundaries.
         if((i%64u)==0u) {cache={};}
     }
     std::printf("PASS 8192 complete VS images: matrices, lights, indices, VCD, projection, colors, post texgen, raster, scale, frame/reset\n");

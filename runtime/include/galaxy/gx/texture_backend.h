@@ -2,8 +2,8 @@
 #pragma once
 
 // TextureCache's GPU side: shader views by slot, mapped upload staging, textures, and the recorded upload of a
-// texture's levels. The cache's logic (keys, content and decoded maps, aliases, eviction, retirement) is shared;
-// each API implements this class (texture_backend_d3d12.cpp, vk/texture_backend_vk.cpp).
+// texture's levels. The cache's logic (keys, maps, aliases, eviction, retirement) is shared; each API implements
+// this class (texture_backend_d3d12.cpp, vk/texture_backend_vk.cpp).
 
 #include "galaxy/gx/gpu_types.h"
 

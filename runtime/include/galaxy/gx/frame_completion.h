@@ -1,5 +1,7 @@
 #pragma once
 
+// Per-frame completion tokens for submitted GX FIFO captures and the state machine that orders them.
+
 #include "galaxy/frame_cadence_diagnostics.h"
 
 #include <cstdint>
@@ -7,19 +9,18 @@
 
 namespace galaxy::gx {
 
+// Longest wait for a frame's GPU fence before the renderer reports a hang.
 inline constexpr std::uint32_t kFramePeCompletionTimeoutMs = 30'000u;
 
-// Monotonic identity for one non-empty GX FIFO capture, owned by the simulation thread. An
-// event-free receipt, preclassified, is ready without a render wait. A PE-bearing token is
-// published by the render thread after that capture's native fence and callbacks complete.
+// Identifies one non-empty GX FIFO capture; held by the simulation thread. A capture without PE events is
+// ready without a render wait; one with PE events completes when the render thread has seen its GPU fence and
+// run its PE callbacks.
 struct FramePeCompletionToken {
-    // `epoch` changes on every successful contract reset. `value` is monotonic only within an epoch.
-    // Both are needed for identity, so a token kept across renderer shutdown and reinitialize never
-    // aliases a new frame.
+    // `epoch` advances on each contract reset and `value` within an epoch, so a token kept across a renderer
+    // shutdown and reinitialize never matches a new frame.
     std::uint64_t epoch = 0;
     std::uint64_t value = 0;
-    // Classification comes from the exact FIFO preclassifier. It is diagnostic only; completion order
-    // and readiness stay with FramePeCompletionContract.
+    // EventFree or EventBearing, by the issuing call; read only by diagnostics (frame cadence, timeline).
     cadence::FrameTokenKind kind = cadence::FrameTokenKind::None;
 
     [[nodiscard]] explicit operator bool() const noexcept {
@@ -45,17 +46,16 @@ struct FramePeCompletionStats {
     std::uint64_t fence_pending = 0;
 };
 
-// Thread-agnostic state machine for frame-specific PE completion. Callers own synchronization. It does not
-// depend on Win32 or D3D12, so fence order and token conservation are testable.
+// Per-frame PE completion state machine. Callers synchronize. Free of Win32 and D3D12 so it can be unit tested.
 //
-// Resolution is FIFO-exact. A frame shown to be event-free by the FIFO preclassifier is issued ready, since it
-// has no guest-visible PE boundary. A frame with PE callbacks binds to one strictly newer native GPU fence.
-// Completion advances only from the front, and each wait is consumed once, in issuance order.
+// A frame with no PE event is issued ready, since the game cannot observe when it finishes. A frame with PE
+// events resolves to a strictly newer GPU fence (or on submission). Tokens complete in issue order, and each is
+// waited on and consumed once, in the same order. Any misuse throws std::logic_error.
 class FramePeCompletionContract {
 public:
     [[nodiscard]] FramePeCompletionToken issue();
-    // Issues a receipt for a FIFO capture that an exact parser proved has no PE FINISH or TOKEN event.
-    // The receipt is ready at once unless an older PE-bearing token still blocks the frontier.
+    // A token for a FIFO capture the preclassifier found free of PE FINISH and TOKEN events. It is ready at
+    // once unless an older token is still pending.
     [[nodiscard]] FramePeCompletionToken issue_event_free();
     void resolve_on_submission(FramePeCompletionToken token);
     void resolve_to_fence(
@@ -69,8 +69,8 @@ public:
     void consume_wait(FramePeCompletionToken token);
 
     [[nodiscard]] FramePeCompletionStats stats() const noexcept;
-    // Proves internal conservation and a fully consumed frontier. This is the shutdown and reinitialize
-    // gate: pending or unconsumed tokens are errors, never state a reset may erase.
+    // Throws unless every issued token has completed and been consumed. reset() calls it: a token still
+    // pending at shutdown is an error, not state to discard.
     void audit_drained() const;
     void reset();
 

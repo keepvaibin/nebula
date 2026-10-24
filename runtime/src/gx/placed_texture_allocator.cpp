@@ -1,3 +1,5 @@
+// PlacedTextureAllocator (placed_texture_allocator.h): first-fit ranges in D3D12 heaps, committed fallback.
+
 #include "galaxy/gx/placed_texture_allocator.h"
 
 #include <atomic>

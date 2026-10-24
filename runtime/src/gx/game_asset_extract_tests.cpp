@@ -1,3 +1,5 @@
+// Game asset extraction: TPL decodes, malformed containers, RARC lookup and the disk loader.
+
 #include "galaxy/gx/game_asset_extract.h"
 
 #include <algorithm>

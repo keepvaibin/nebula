@@ -11,7 +11,6 @@ namespace galaxy::gx {
 
 namespace {
 
-// Throw a std::runtime_error with a D3D12 HRESULT decorated message.
 [[noreturn]] void d3d_fail(HRESULT hr, const char* label) {
     std::ostringstream ss;
     ss << "[TextureCache] " << label
@@ -162,8 +161,7 @@ void TextureBackend::record_upload(ID3D12Resource* texture, bool reused, const U
                                    std::uint64_t offset, std::uint32_t width, std::uint32_t height, unsigned levels,
                                    const std::uint64_t* offsets, const std::uint32_t* pitches) {
     if (reused) {
-        // A retired texture rests in the shader-resource state; the copies
-        // below expect the copy-destination state.
+        // A retired texture rests in the shader-resource state; the copies need copy-destination.
         D3D12_RESOURCE_BARRIER bar{};
         bar.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
         bar.Transition.pResource   = texture;

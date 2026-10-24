@@ -1,21 +1,13 @@
 #pragma once
 
-// TextureCache: decodes GX texture formats from guest memory into GPU textures and serves the
-// descriptor used by the per-draw texture table.
+// TextureCache: decodes GX textures from guest memory into GPU textures and serves their descriptors to the
+// per-draw texture table.
 //
-// Address-cache invalidation is explicit. An opt-in bounded content cache may retain identical decoded
-// static resources after those entries are dropped:
-//   1. the parser reports the BP pattern emitted by GXInvalidateTexAll()
-//      (FifoSink::on_invalidate_textures -> invalidate_all()), or
-//   2. an EFB copy registers over an overlapping guest address range
-//      (register_efb_copy overwrites conflicting aliases), or
-//   3. the runtime reports a guest-memory write overlapping a cached texture range
-//      (invalidate_guest_range).
-// A guest write must invalidate both decoded RAM address entries and GPU-side EFB-copy aliases, because
-// later CPU-decoded buffers can reuse the same guest addresses.
-//
-// EFB-copy aliases: once register_efb_copy() claims a matching guest address, size and format, get()
-// returns the GPU-side copy directly. The stale guest bytes are never re-decoded.
+// Entries are dropped only explicitly: on GXInvalidateTexAll() (FifoSink::on_invalidate_textures ->
+// invalidate_all()), on an EFB copy over an overlapping guest range (register_efb_copy), and on a guest write
+// overlapping a cached range (invalidate_guest_range), which drops decoded entries and EFB-copy aliases alike
+// because later CPU-written buffers can reuse those addresses. For a texture matching an EFB-copy alias's
+// address, size and format, get() returns the GPU-side copy; its guest bytes are never decoded.
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -67,8 +59,8 @@ void decode_color_tiles(TexFormat format, const std::uint8_t* src,
 void decode_intensity_tiles(TexFormat format, const std::uint8_t* src,
                             std::uint32_t width, std::uint32_t height,
                             RGBA8* out);
-// Native enhancement only: preserve the premultiplied-alpha box filter and
-// rounding of every output byte. Source and destination storage are distinct.
+// One generated level for the enhanced-mipmaps option: a premultiplied-alpha 2x2 box filter with fixed
+// rounding. `source` and `dest` must be distinct.
 void generate_rgba8_mip_level(const std::vector<RGBA8>& source,
                              std::uint32_t source_width, std::uint32_t source_height,
                              std::vector<RGBA8>& dest,
@@ -78,11 +70,10 @@ void generate_rgba8_mip_level(const std::vector<RGBA8>& source,
 // magnified, as a grid of dots; it becomes the two values' rounded average. Returns whether it was one.
 bool flatten_texel_checker(std::vector<RGBA8>& pixels, std::uint32_t width, std::uint32_t height);
 // A level whose texel-scale detail is a one-texel checker over its content: the art's ordered dither, baked in before
-// the texture was compressed (lawns, turf, sand, concrete, bed cloth; 90 of 3,202 dumped textures). Detected where
-// at least a fifth of the texels differ from their four neighbours' mean by 2 levels or more and the sign of that
-// difference follows one checker phase in at least 95 % of them (other textures: 0.6 % median). Each colour channel
-// loses the checker at its local amplitude (the 3x3 mean of the difference against the checker); the content and
-// alpha stay. Returns whether it was one.
+// the texture was compressed (lawns, turf, sand, concrete, bed cloth). Detected where at least a fifth of the texels
+// differ from their four neighbours' mean by 2 levels or more and the sign of that difference follows one checker
+// phase in at least 95 % of them. Each colour channel loses the checker at its local amplitude (the 3x3 mean of the
+// difference against the checker); the content and alpha stay. Returns whether it was one.
 bool remove_texel_checker(std::vector<RGBA8>& pixels, std::uint32_t width, std::uint32_t height);
 // Caller validates the complete block-rounded source footprint. Edge tiles
 // advance by all 64 source bytes but write only pixels inside width/height.
@@ -109,9 +100,8 @@ void decode_c14x2_tiles(const std::uint8_t* src,
 [[nodiscard]] std::uint8_t efb_copy_alias_texture_format(
     std::uint8_t copy_format);
 
-// GX block-rounded source footprint. Authored mip levels are contiguous;
-// generated enhancement levels must pass guest_levels=1. Reject invalid
-// dimensions/formats/level counts before any cache lookup or guest read.
+// GX block-rounded guest footprint of `guest_levels` contiguous authored levels (1 for a generated chain).
+// Throws on invalid dimensions, formats or level counts.
 [[nodiscard]] std::uint32_t texture_guest_byte_size(
     TexFormat format, std::uint32_t width, std::uint32_t height,
     unsigned guest_levels = 1u);
@@ -153,31 +143,25 @@ public:
     bool preallocate_upload_arenas(unsigned frames_in_flight);
     void shutdown();
 
-    // Returns the GPU texture for the given image registers, decoding from
-    // guest memory on first use (I4/I8/IA4/IA8/RGB565/RGB5A3/RGBA8/C4/C8/
-    // C14X2/CMPR, untiled from 4x4/8x4/8x8 blocks).  Palettized formats
-    // combine with the TLUT loaded at `tlut.tmem_offset`.  An unmapped guest
-    // range is a GxFatalError (hard-fail).
+    // The GPU texture for the image registers, decoded from guest memory on first use. Palettized formats use
+    // the TLUT at `tlut.tmem_offset`. Throws on an unmapped guest range (reported as GxFatalError).
     [[nodiscard]] TextureHandle get(
         const TexImage& image,
         const TexMode& mode,
         const TlutRef& tlut,
         GuestMemory* memory);
-    // Render-owner only: register cached binding use without decoding/reading RAM.
-    // Retired/alias handles are harmless misses and never regain ownership.
+    // Render thread only: marks a cached handle used (LRU) without reading guest memory. Retired and EFB-alias
+    // handles are ignored.
     void touch_cached_handle(const TextureHandle& handle);
 
-    // BP 0x64/0x65: copy a palette from guest memory into the TMEM-modelled
-    // TLUT bank. Return whether bytes changed; retire a texture only if bytes
-    // in its own palette changed, including partial overlapping transfers.
-    // Callers can retain bindings on identical reloads.
+    // BP 0x64/0x65: copies a palette from guest memory into the TLUT bank (TMEM). Returns whether bytes changed;
+    // retires only textures whose own palette bytes changed, so bindings survive identical reloads.
     [[nodiscard]] bool load_tlut(
         std::uint32_t src_reg,
         std::uint32_t dest_reg,
         GuestMemory* memory);
 
-    // EFB copy-to-texture landed at `guest_addr`: alias it.  Overwrites any
-    // existing overlapping entry (decoded or previous copy).
+    // Aliases an EFB copy-to-texture at `guest_addr`, retiring every overlapping decoded entry and older copy.
     [[nodiscard]] bool register_efb_copy(
         std::uint32_t guest_addr,
         const EfbCopyParams& params,
@@ -210,17 +194,13 @@ public:
         return index >= kSrvHeapCapacity || retired_srv_indices_[index];
     }
 
-    // Guest source bytes are useful for invalidation diagnostics but do not
-    // describe decoded RGBA8 allocations. Keep this metric separate from the
-    // allocation budget; decoded textures use guest dimensions, not EFB scale.
+    // Guest source bytes of the decoded entries (a diagnostic; the budget counts allocations).
     [[nodiscard]] std::uint64_t decoded_entry_guest_bytes() const noexcept {
         return decoded_guest_bytes_;
     }
 
-    // The live map charges each entry's device-reported committed allocation.
-    // Shared content is conservatively charged per entry. Retired resources
-    // remain alive until their fence and are outside this live-map budget;
-    // this is not a measurement of total or unique physical VRAM residency.
+    // Each live entry is charged its committed allocation (a shared resource once per entry). Retired resources
+    // awaiting their fence are not counted; this is not total VRAM residency.
     struct DecodedMapStats {
         std::uint64_t resident_bytes = 0;   // committed allocation bytes per live entry
         std::uint64_t budget_bytes = 0;
@@ -231,16 +211,11 @@ public:
     };
     [[nodiscard]] DecodedMapStats decoded_map_stats() const noexcept;
 
-    // Command list new-texture uploads are recorded on (CopyTextureRegion +
-    // barrier to PIXEL_SHADER_RESOURCE).  Set by GxBackend each frame before
-    // parsing; decoded textures are DEFAULT-heap Texture2D resources, so the
-    // staged copy must ride the frame's command list.
-    // Scoped to one opt-in render parse. Null in the normal rendering path.
+    // Set for one dependency-capturing render parse; null otherwise.
     void set_dependency_event_sink(DependencyEventSink* sink) noexcept {
         dependency_event_sink_ = sink;
     }
-    // Existing capture markers are bounded by the backend's requested frames.
-    // Zero leaves normal cache behavior and logging unchanged.
+    // Frame number tagged on capture log lines; 0 logs nothing.
     void set_debug_capture_frame(std::uint64_t frame) noexcept {
         debug_capture_frame_ = frame;
     }
@@ -264,13 +239,11 @@ public:
         return count;
     }
 
-    // Asynchronous first-use decode. While allowed, a miss creates the texture,
-    // records its staging copy and SRV exactly as before, and hands only the
-    // CPU decode into that staging memory to a worker. The caller promises the
-    // guest bytes passed to get() stay unchanged until finish_pending_decodes()
-    // (true for a sealed frame memory snapshot). finish_pending_decodes() must
-    // run before the upload command list is executed; it rethrows the first
-    // decode failure. Debug paths that read decoded pixels stay synchronous.
+    // Asynchronous first-use decode. While allowed, a miss creates the texture and records its staging copy and SRV
+    // on this thread, and only the decode into the staging memory runs on a worker. The caller guarantees the guest
+    // bytes passed to get() stay unchanged until finish_pending_decodes() (true for a sealed frame memory snapshot),
+    // which must run before the upload command list executes and rethrows the first decode failure. Paths that
+    // read decoded pixels stay synchronous.
     void set_async_decode_allowed(bool allowed) noexcept {
         async_decode_allowed_ = allowed;
     }
@@ -393,23 +366,15 @@ private:
                                                std::uint16_t width, std::uint16_t height, bool generated_mips,
                                                std::uint32_t guest_byte_size);
     void wait_for_replacement(const Key& key, Entry& entry, std::uint32_t slot);
-    // Decoded-map LRU maintenance. `decoded_lru_touch` moves a key to the most
-    // recently used end; `decoded_lru_forget` removes it. Both are no-ops when
-    // the key is absent, so the invalidation paths can call them unguarded.
+    // Decoded-map LRU: touch moves a key to the most recently used end, forget removes it; both ignore an absent key.
     void decoded_lru_touch(const Key& key);
     void decoded_lru_forget(const Key& key);
-    // Removes a key from the LRU and subtracts its footprint from the resident
-    // total. Every explicit `entries_` removal must call this so the total can
-    // never drift above the real residency.
+    // Removes a key from the LRU and its footprint from the resident total; every entries_ removal calls it.
     void decoded_lru_release(const Key& key, Entry& entry);
-    // Records a newly inserted `entries_` entry in the LRU and adds its footprint
-    // to the resident total, then enforces the budget. The inverse of
-    // `decoded_lru_release`, and the only writer of `decoded_lru_` /
-    // `decoded_resident_bytes_` besides it, so the total cannot drift.
+    // The inverse for a newly inserted entry, then evicts down to the budget.
     void decoded_lru_track(const Key& key);
-    // Pushes the decoded map back under its byte bound, oldest first, retiring
-    // each victim through `retire()` so no resource is destroyed while a
-    // submitted command list may still reference it.
+    // Evicts oldest first down to the byte bound, through retire(): no resource is destroyed while a submitted
+    // command list may still reference it.
     void decoded_lru_evict_to_budget();
     void release_upload_arenas();
     struct UploadAllocation {
@@ -430,8 +395,7 @@ private:
 
     std::unordered_map<Key, Entry, KeyHasher> entries_;
     detail::ConservativeGuestRangeEnvelope decoded_guest_envelope_;
-    // Bounded decoded allocation cache. Eviction retires resources and CPU
-    // descriptors through their frame slot, preserving in-flight GPU use.
+    // LRU order of entries_ for the decoded budget (front: most recently used).
     std::list<Key> decoded_lru_;
     std::unordered_map<Key, std::list<Key>::iterator, KeyHasher>
         decoded_lru_pos_;
@@ -477,9 +441,7 @@ private:
         std::uint32_t width, std::uint32_t height, unsigned levels,
         gpu::TextureRef& texture, std::uint64_t& allocation_bytes);
     std::vector<UploadArenaFrame> upload_arenas_;
-    // Render-thread scratch storage for first-use texture decode/upload.
-    // Keeping capacity between misses avoids heap churn during gameplay while
-    // preserving exact decode bytes and GPU upload semantics.
+    // Render-thread decode scratch, kept between misses to avoid reallocating.
     std::vector<std::vector<RGBA8>> level_pixels_scratch_;
     std::unique_ptr<TextureDecodePool> decode_pool_;
     TexturePacks packs_;
@@ -515,7 +477,6 @@ private:
     std::uint64_t pack_stats_frame_ = 0;
     std::uint64_t pack_apply_ns_ = 0;      // render-thread time in apply_texture_packs (uploads, swaps)
     std::uint64_t pack_apply_max_ns_ = 0;  // its longest frame
-    // Decoded textures are placed in shared heaps (placed_texture_allocator.h).
     bool async_decode_allowed_ = false;
     bool async_decode_pending_ = false;
     std::uint64_t async_decode_jobs_ = 0;
@@ -523,20 +484,19 @@ private:
     std::vector<std::uint32_t> level_pitches_scratch_;
     unsigned current_frame_slot_ = 0;
 
+    // Decoded textures are placed in shared heaps (placed_texture_allocator.h).
     TextureBackend backend_;
     std::uint32_t next_srv_index_ = 0;
     std::vector<std::uint32_t> free_srv_indices_;
     // Heap size and retirement bitmap must describe the same index domain.
     static constexpr std::uint32_t kSrvHeapCapacity = 4096u;
-    // Fixed storage: no allocation on cached binds. Resource identity is checked
-    // against entries_ before a copied key can affect its LRU position.
+    // Decoded key by SRV slot, for touch_cached_handle (fixed storage: no allocation on a cached bind).
     std::array<std::optional<Key>, kSrvHeapCapacity> decoded_srv_keys_{};
     std::bitset<kSrvHeapCapacity> retired_srv_indices_;
     // Kept monotonic across shutdown/reinitialization, like resource lifetimes.
     std::uint64_t retirement_revision_ = 0;
 
-    // Absolute TMEM address domain, including every encoded TLUT slot and
-    // maximum transfer/palette extent. Entries remain raw big endian.
+    // All of TMEM, so every TLUT slot and the largest transfer or palette fit. Entries stay big-endian.
     static constexpr std::size_t kTlutBankBytes = kTmemBytes;
     std::uint8_t tlut_bank_[kTlutBankBytes]{};
 };

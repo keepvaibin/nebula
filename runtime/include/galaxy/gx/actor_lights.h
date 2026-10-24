@@ -4,17 +4,16 @@
 // The game's actor lights under ray tracing.
 //
 // Characters and most lit objects take GX lights 0 and 1 from an ActorLightInfo
-// (LightFunction::loadActorLightInfo: LightInfo A and B; loadLightInfoCoin: A only). A light with
-// the follow-camera flag is loaded at a fixed eye-space position, so it turns with the camera; one
-// without it sits at a world position. With ray tracing on, the scene draws' palette snapshots move
-// the camera-following lights to the scene's key light: light 0 towards it and light 1 opposite.
-// The key is the game's visible sun, else the sun its sky shows, else the world-fixed light most
-// lit draws take (the backend counts them); the ray tracer lights the scene from the same key. Colours, attenuation (always 1:
-// the loader's GXInitLightAttn(1, 0, 0, 1, 0, 0)) and ambient stay the game's, and so do world-fixed
-// lights. The interpolated sub-frames move a light by its world position, which for a light along
-// a world direction is that direction at every camera.
+// (LightFunction::loadActorLightInfo: LightInfo A and B; loadLightInfoCoin: A only). A light with the
+// follow-camera flag is loaded at a fixed eye-space position, so it turns with the camera; one without it sits at
+// a world position. With ray tracing on and GALAXY_RT_ACTOR_LIGHTS set, the scene draws' palette snapshots move
+// the follow-camera lights to the scene's key light: light 0 towards it and light 1 opposite. The key is the
+// game's visible sun, else the sun its sky shows, else the world-fixed light most lit draws take; the ray tracer
+// lights the scene from the same key. Colours, attenuation (always 1: the loader's
+// GXInitLightAttn(1, 0, 0, 1, 0, 0)), ambient and world-fixed lights stay the game's. The interpolated sub-frames
+// move a light by its world position, which for a light along a world direction is that direction at every camera.
 //
-// No Windows/D3D12 includes (unit-tested offline).
+// No Windows or D3D12 includes, so unit tests can use it.
 
 #include "galaxy/gx/frame_interpolation.h"
 #include "galaxy/motion_signals.h"
@@ -29,8 +28,8 @@ namespace galaxy::gx {
 // Distance (eye units) of a light along a direction: within a degree of it for objects up to
 // 175000 units from the camera.
 inline constexpr float kActorLightDistance = 1.0e7f;
-// A world-fixed light this far from the camera (eye units) or farther lights the scene from a
-// direction (the ray tracer's world-light rule, native_runtime.cpp note_game_light).
+// A world-fixed light this far from the camera (eye units) or farther counts as a directional key light
+// (GxBackend::note_rt_world_key).
 inline constexpr float kActorLightFar = 20000.0f;
 // XF words of one light: colour 3, position 10-12.
 inline constexpr unsigned kXfLightWords = 16u;

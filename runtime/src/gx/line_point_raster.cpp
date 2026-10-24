@@ -1,3 +1,4 @@
+// Decodes SU_LPSIZE, the texcoord S registers and the XF viewport into LinePointRasterParams.
 #include "galaxy/gx/line_point_raster.h"
 #include "galaxy/gx/render_config.h"
 
@@ -27,6 +28,7 @@ LinePointRasterParams make_line_point_raster_params(
         : static_cast<float>(std::max(fallback_efb_height, 1u));
     const float physical_scale = static_cast<float>(scale);
 
+    // Bits 18 and 19 of a texcoord's SU_SSIZE register enable the line and point texture offsets.
     std::uint32_t line_texcoord_mask = 0u;
     std::uint32_t point_texcoord_mask = 0u;
     for (unsigned texcoord = 0u; texcoord < texcoord_s_registers.size(); ++texcoord) {
@@ -39,8 +41,7 @@ LinePointRasterParams make_line_point_raster_params(
         }
     }
 
-    // GX's line/point texture-offset selectors encode reciprocal divisors.
-    // Selector zero disables the offset; 1..7 map exactly as on hardware.
+    // Texture-offset selector to the n of its 1/n offset: 0 none, 1-5 give 1/16 to 1, 6 and 7 act as 5.
     static constexpr std::array<std::uint32_t, 8> kTextureOffsetDivisors{
         0u, 16u, 8u, 4u, 2u, 1u, 1u, 1u};
     const unsigned line_offset = (su_lp_size >> 16u) & 0x7u;

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// Checks sorted_dirty_ranges_overlap against a linear scan at range boundaries and random ranges.
 #include "galaxy/gx/sorted_dirty_ranges.h"
 #include <array>
 #include <cstdio>

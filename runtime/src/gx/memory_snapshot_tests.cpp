@@ -1,3 +1,5 @@
+// Tests of GxBackend's guest-memory snapshots, dependency discovery and the caches keyed on them.
+
 #include "galaxy/gx/gx_backend.h"
 #include "galaxy/gx/dependency_draw_memo.h"
 #include "galaxy/gx/dependency_range_memo.h"
@@ -735,9 +737,8 @@ public:
         bool hit = false;
         backend->collect_memory_dependency_ranges(
             first.data(), first.size(), &memory, ranges, hit);
-        // Obtain the other FIFO's hash from production, not a parallel helper.
-        // A fixture with an unused hash algorithm can otherwise pass without
-        // ever reaching the exact-byte guard it claims to exercise.
+        // The other FIFO's hash comes from the backend itself, so the collision
+        // really reaches the exact-byte comparison.
         auto other = std::make_unique<GxBackend>();
         other->collect_memory_dependency_ranges(
             second.data(), second.size(), &memory, ranges, hit);
@@ -1481,20 +1482,15 @@ public:
                 matched_generation)) {
             return false;
         }
-        // Once an entry is recorded as validated for the generation that matched, the same generation
-        // must short-circuit to "still valid" without consulting guest memory. The per-frame replay path
-        // relies on that. The write below is not reflected in a new generation, so it cannot reach this
-        // replay, just as a write after the frame's snapshot cannot.
+        // An entry validated for the current generation is trusted without reading guest memory; the
+        // write below has no new generation, like a write after the frame's snapshot.
         live[17] = std::byte{0x5A};
         if (!GxBackend::decoded_packet_run_dependencies_match(
                 &memory, matched_generation, kCurrentGeneration, snapshots,
                 matched_generation)) {
             return false;
         }
-        // The same entry must NOT be trusted under a different generation, and
-        // must be caught by the byte compare there. This is the invariant that
-        // makes the short-circuit safe: a new write batch always changes the
-        // generation, and the changed generation always re-reads guest memory.
+        // Under another generation the byte compare runs and catches the write.
         if (GxBackend::decoded_packet_run_dependencies_match(
                 &memory, kCurrentGeneration, kOtherGeneration, snapshots,
                 matched_generation)) {

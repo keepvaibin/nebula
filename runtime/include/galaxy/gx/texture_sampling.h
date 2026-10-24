@@ -1,5 +1,7 @@
 #pragma once
 
+// The set of texture maps a draw samples, from its TEV and indirect state.
+
 #include "galaxy/gx/gx_state.h"
 #include "galaxy/gx/uber_constants.h"
 
@@ -8,11 +10,9 @@
 
 namespace galaxy::gx {
 
-// Adapted from Aurora (MIT, encounter/aurora@77326d4, lib/gx/shader_info.cpp,
-// build_shader_info), which adds each used indirect stage's texmap to the
-// sampled texture set. The specialized shader samples every configured
-// indirect stage, so each needs a binding and a memory snapshot even when no
-// TEV stage names its map.
+// Adapted from Aurora (MIT, encounter/aurora@77326d4, lib/gx/shader_info.cpp, build_shader_info): the shader
+// samples every configured indirect stage, so each needs a binding and a memory snapshot even when no TEV stage
+// names its map.
 [[nodiscard]] inline std::uint8_t sampled_texture_map_mask(
     const GxState& state) noexcept {
     const GenMode mode = state.gen_mode();
@@ -35,12 +35,10 @@ namespace galaxy::gx {
             order.texmap >= kMaxTextureMaps) {
             continue;
         }
-        // Match PS-key canonicalization. With no z-textures and no indirect stages, a sample
-        // contributes only through a TEXC/TEXA combiner input, so other enabled maps are not
-        // bound or snapshotted; binding them would decode images whose samples are dead.
-        // Keep every configured direct map for the z-texture and indirect paths: z-textures
-        // use the last raw sample, and indirect coordinates carry state between stages
-        // independently of their color/alpha inputs.
+        // Matches the pixel-shader key's canonicalization. Without z-textures or indirect stages a sample
+        // contributes only through a TEXC/TEXA combiner input, so other enabled maps are not bound (that would
+        // decode images whose samples are dead). With either, every enabled map is kept: z-textures use the last
+        // raw sample, and indirect coordinates carry state between stages regardless of the combiner inputs.
         bool needed = z_texture || indirect_stages != 0u;
         if (!needed) {
             const std::uint32_t color = state.bp(static_cast<std::uint8_t>(

@@ -1,3 +1,5 @@
+// Tests of LinePointRasterParams decoding and of the line/point geometry shaders and PSO selection, rasterized
+// on WARP.
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #pragma warning(push, 0)

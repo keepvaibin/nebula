@@ -20,10 +20,6 @@
 
 namespace galaxy::gx {
 
-// ---------------------------------------------------------------------------
-// Hashes and names
-// ---------------------------------------------------------------------------
-
 bool texture_format_palettized(TexFormat format) noexcept {
     return format == TexFormat::C4 || format == TexFormat::C8 || format == TexFormat::C14X2;
 }
@@ -189,10 +185,6 @@ std::string texture_pack_name(const TexturePackName& name) {
     return text;
 }
 
-// ---------------------------------------------------------------------------
-// DDS
-// ---------------------------------------------------------------------------
-
 namespace {
 
 std::uint32_t read32(const std::uint8_t* p) noexcept {
@@ -306,10 +298,6 @@ bool parse_dds(std::span<const std::uint8_t> file, DdsLayout& out) noexcept {
     out.levels = kept;
     return kept != 0u;
 }
-
-// ---------------------------------------------------------------------------
-// TexturePacks
-// ---------------------------------------------------------------------------
 
 namespace {
 

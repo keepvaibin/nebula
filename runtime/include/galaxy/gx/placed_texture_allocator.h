@@ -5,8 +5,8 @@
 //
 // A placed resource returns its range when the resource object is destroyed:
 // the allocator attaches a small COM object as private data, and D3D12
-// releases it with the resource. Callers keep the rule of releasing a texture
-// only after the GPU has finished with it.
+// releases it with the resource. Callers release a texture only after the GPU
+// has finished with it.
 
 #ifndef NOMINMAX
 #define NOMINMAX
