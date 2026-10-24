@@ -84,6 +84,10 @@ struct WiimoteInputSnapshot {
     bool pointer_exact = false;
     float pointer_x = 0.0f;
     float pointer_y = 0.0f;
+    // Shake buttons held (or a controller's motion shake): the game swings once per press (nebula_game_wpad_shake);
+    // the accelerometer readings stay as they are.
+    bool shake = false;
+    bool nunchuk_shake = false;
 };
 
 [[nodiscard]] float normalize_xinput_axis(
@@ -134,12 +138,6 @@ void publish_wiimote_ir_dots(
     float pointer_x,
     float pointer_y,
     bool active) noexcept;
-
-[[nodiscard]] bool advance_wiimote_shake_accel(
-    WiimoteInputSnapshot& snapshot,
-    bool pressed,
-    bool& previous_pressed,
-    std::uint8_t& remaining_frames) noexcept;
 
 enum class WiimoteReportBuildStatus {
     Ok,

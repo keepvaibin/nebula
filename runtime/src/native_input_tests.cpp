@@ -1,4 +1,4 @@
-// The virtual Wii Remote's input reports, IR dots and shake pattern, the
+// The virtual Wii Remote's input reports and IR dots, the
 // settings-overlay pad and the input-script integer fields.
 
 #include "galaxy/native_input.h"
@@ -586,75 +586,6 @@ bool clearing_ir_never_reuses_stale_dots() {
     return passed;
 }
 
-bool advances_shake_as_wiimote_accelerometer_report_bytes() {
-    bool previous_pressed = false;
-    std::uint8_t remaining_frames = 0;
-    galaxy::input::WiimoteInputSnapshot idle{};
-    bool passed = expect(
-        !galaxy::input::advance_wiimote_shake_accel(
-            idle, false, previous_pressed, remaining_frames),
-        "idle shake helper does not publish acceleration");
-    passed &= expect(
-        idle.accel.x == galaxy::input::kWiimoteRestAccelX,
-        "idle shake leaves accel x at hardware rest");
-    passed &= expect(
-        idle.accel.y == galaxy::input::kWiimoteRestAccelY,
-        "idle shake leaves accel y at hardware rest");
-    passed &= expect(
-        idle.accel.z == galaxy::input::kWiimoteRestAccelZ,
-        "idle shake leaves accel z at hardware rest");
-
-    galaxy::input::WiimoteInputSnapshot first{};
-    passed &= expect(
-        galaxy::input::advance_wiimote_shake_accel(
-            first, true, previous_pressed, remaining_frames),
-        "shake edge publishes first acceleration frame");
-    passed &= expect(previous_pressed, "shake edge latches previous pressed");
-    passed &= expect(remaining_frames == 11u, "shake edge queues remaining frames");
-    std::array<std::uint8_t, galaxy::input::kMaxWiimoteInputReportBytes> report{};
-    auto result = galaxy::input::build_wiimote_input_report(0x31, first, report);
-    constexpr std::array<std::uint8_t, 7> first_expected{
-        0xa1, 0x31, 0x00, 0x00, 0x44, 0x80, 0xb4};
-    passed &= expect(
-        result.status == galaxy::input::WiimoteReportBuildStatus::Ok,
-        "first shake acceleration report builds");
-    passed &= expect_bytes(
-        std::span<const std::uint8_t>(report).first(result.size),
-        first_expected,
-        "first shake acceleration report bytes");
-
-    galaxy::input::WiimoteInputSnapshot second{};
-    passed &= expect(
-        galaxy::input::advance_wiimote_shake_accel(
-            second, true, previous_pressed, remaining_frames),
-        "held shake publishes second acceleration frame");
-    passed &= expect(remaining_frames == 10u, "held shake advances countdown");
-    result = galaxy::input::build_wiimote_input_report(0x31, second, report);
-    constexpr std::array<std::uint8_t, 7> second_expected{
-        0xa1, 0x31, 0x00, 0x00, 0xbc, 0x80, 0x4c};
-    passed &= expect(
-        result.status == galaxy::input::WiimoteReportBuildStatus::Ok,
-        "second shake acceleration report builds");
-    passed &= expect_bytes(
-        std::span<const std::uint8_t>(report).first(result.size),
-        second_expected,
-        "second shake acceleration report bytes");
-
-    for (int i = 0; i < 10; ++i) {
-        galaxy::input::WiimoteInputSnapshot frame{};
-        passed &= expect(
-            galaxy::input::advance_wiimote_shake_accel(
-                frame, true, previous_pressed, remaining_frames),
-            "shake countdown publishes exactly twelve frames");
-    }
-    galaxy::input::WiimoteInputSnapshot expired{};
-    passed &= expect(
-        !galaxy::input::advance_wiimote_shake_accel(
-            expired, true, previous_pressed, remaining_frames),
-        "held shake does not retrigger without a new edge");
-    return passed;
-}
-
 bool builds_core_button_report() {
     galaxy::input::WiimoteInputSnapshot snapshot{};
     snapshot.buttons.left = true;
@@ -1025,7 +956,6 @@ int main() {
     ok &= native_pointer_ir_sweeps_are_monotonic();
     ok &= preserves_ir_coordinates_across_report_modes();
     ok &= clearing_ir_never_reuses_stale_dots();
-    ok &= advances_shake_as_wiimote_accelerometer_report_bytes();
     ok &= builds_core_button_report();
     ok &= packs_hardware_accelerometer_low_bits_into_button_bytes();
     ok &= accel_low_bits_do_not_change_core_button_semantics();

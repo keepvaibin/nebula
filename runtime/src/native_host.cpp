@@ -2265,26 +2265,6 @@ bool service_binding_capture(std::span<const LivePad> pads) {
     return true;
 }
 
-bool advance_nunchuk_shake_accel(
-    galaxy::input::WiimoteInputSnapshot& snapshot,
-    bool pressed,
-    bool& previous_pressed,
-    std::uint8_t& remaining_frames) {
-    if (pressed && !previous_pressed) {
-        remaining_frames = 12;
-    }
-    previous_pressed = pressed;
-    if (remaining_frames == 0) {
-        return false;
-    }
-    const bool phase = (remaining_frames & 1u) != 0u;
-    snapshot.nunchuk.accel.x = phase ? 0x02f0u : 0x0110u;
-    snapshot.nunchuk.accel.y = 0x0200u;
-    snapshot.nunchuk.accel.z = phase ? 0x0130u : 0x02d0u;
-    --remaining_frames;
-    return true;
-}
-
 bool foreground_process_window(HWND& window) {
     window = GetForegroundWindow();
     if (window == nullptr || !IsWindow(window) || !IsWindowVisible(window)) {
@@ -3373,7 +3353,7 @@ NativeInputScriptOverlay build_native_input_script_overlay(std::uint64_t current
 }
 
 // In a tilt section (tilt.h) the virtual remote's accelerometer reports the controller's tilt or the stick's;
-// elsewhere it keeps its rest reading. A shake pulse applied afterwards still overrides it.
+// elsewhere it keeps its rest reading.
 void apply_tilt_accel(galaxy::input::WiimoteInputSnapshot& snapshot,
                       galaxy::input::tilt::Tilt& state,
                       galaxy::input::tilt::Section section,
@@ -3591,13 +3571,7 @@ galaxy::input::WiimoteInputSnapshot build_replayed_hid_input_snapshot(
              ? (pad(XINPUT_GAMEPAD_X) || pad(XINPUT_GAMEPAD_Y) ||
                 pad(XINPUT_GAMEPAD_RIGHT_SHOULDER))
              : (key(17) || key(22)));
-    static bool s_replay_previous_shake = false;
-    static std::uint8_t s_replay_shake_frames = 0;
-    (void)galaxy::input::advance_wiimote_shake_accel(
-        snapshot,
-        shake_pressed,
-        s_replay_previous_shake,
-        s_replay_shake_frames);
+    snapshot.shake = shake_pressed;
     return snapshot;
 }
 
@@ -4243,19 +4217,14 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
     const bool shake_pressed =
         script.shake || held(WiiTarget::Shake) || motion_shake_remote;
     static bool s_previous_shake = false;
-    static std::uint8_t s_shake_frames = 0;
     if (shake_pressed && !s_previous_shake) {
         std::cerr << "[input-shake] vi=" << current_vi << " source="
                   << (motion_shake_remote ? "motion" : held(WiiTarget::Shake) ? "binding" : "script")
                   << " tilt-section=" << galaxy::input::tilt::section_name(tilt_section) << '\n';
     }
-    (void)galaxy::input::advance_wiimote_shake_accel(
-        snapshot, shake_pressed, s_previous_shake, s_shake_frames);
-    static bool s_previous_nunchuk_shake = false;
-    static std::uint8_t s_nunchuk_shake_frames = 0;
-    (void)advance_nunchuk_shake_accel(
-        snapshot, held(WiiTarget::NunchukShake) || motion_shake_nunchuk,
-        s_previous_nunchuk_shake, s_nunchuk_shake_frames);
+    s_previous_shake = shake_pressed;
+    snapshot.shake = shake_pressed;
+    snapshot.nunchuk_shake = held(WiiTarget::NunchukShake) || motion_shake_nunchuk;
     return snapshot;
 }
 

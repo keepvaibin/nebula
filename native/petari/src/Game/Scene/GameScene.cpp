@@ -269,6 +269,9 @@ void GameScene::draw() const {
             const char* equals = strchr(action.stage, '=');
             if (strncmp(action.stage, kRead, sizeof(kRead) - 1) == 0) {
                 MR::setPictureBookChapterAlreadyRead(atoi(action.stage + sizeof(kRead) - 1));
+            } else if (strcmp(action.stage, "SpinAndStarPointer") == 0) {
+                // The story's grant of the spin and the pointer (the Gateway's Luma), which an early save lacks.
+                MR::onGameEventFlagEnableToSpinAndStarPointer();
             } else if (equals != nullptr) {
                 static char sName[sizeof(action.stage)];
                 snprintf(sName, sizeof(sName), "%.*s", (int)(equals - action.stage), action.stage);

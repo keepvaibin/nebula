@@ -271,6 +271,7 @@ struct Module {
     decltype(&nebula_game_memory_regions) memory_regions;
     decltype(&nebula_game_wpad_connect) wpad_connect;
     decltype(&nebula_game_wpad_report) wpad_report;
+    decltype(&nebula_game_wpad_shake) wpad_shake;
     void (*debug_dump)();  // optional: the module's thread report
 };
 Module gModule;
@@ -328,6 +329,7 @@ void load_module(const fs::path& path) {
     gModule.memory_regions = reinterpret_cast<decltype(gModule.memory_regions)>(find_symbol(module, "nebula_game_memory_regions"));
     gModule.wpad_connect = reinterpret_cast<decltype(gModule.wpad_connect)>(find_symbol(module, "nebula_game_wpad_connect"));
     gModule.wpad_report = reinterpret_cast<decltype(gModule.wpad_report)>(find_symbol(module, "nebula_game_wpad_report"));
+    gModule.wpad_shake = reinterpret_cast<decltype(gModule.wpad_shake)>(find_symbol(module, "nebula_game_wpad_shake"));
 #if defined(_WIN32)
     gModule.debug_dump = reinterpret_cast<void (*)()>(GetProcAddress(static_cast<HMODULE>(module), "nebula_game_debug_dump"));
 #else
@@ -1967,6 +1969,7 @@ void wpad_thread() {
         if (built.status == galaxy::input::WiimoteReportBuildStatus::Ok && built.size > 1) {
             // From the report id, past the HID header; the exact pointer its IR dots stand for, when there is one.
             const NebulaWpadPointer pointer{snapshot.pointer_x, snapshot.pointer_y};
+            gModule.wpad_shake(0, (snapshot.shake ? 1u : 0u) | (snapshot.nunchuk_shake ? 2u : 0u));
             gModule.wpad_report(0, report + 1, built.size - 1, snapshot.pointer_exact ? &pointer : nullptr);
         }
 #endif
@@ -2077,7 +2080,8 @@ int svc_hbm(void*, uint32_t what, uint32_t) {
 //     with them (the Observatory's domes restored, lit and furnished as the game shows them for that many).
 //   GALAXY_TEST_EVENT_FLAGS=name[,name=value...]: the save's stored event flags on and event values set from the second
 //     scene frame, before the Grand Stars (with GALAXY_TEST_GRAND_STARS>=3, LibraryOpenNewStarCount=0 opens the Library
-//     and its first storybook chapter; PictureBookAlreadyRead=n: chapters 1-n read, which the Library's book lists).
+//     and its first storybook chapter; PictureBookAlreadyRead=n: chapters 1-n read, which the Library's book lists;
+//     SpinAndStarPointer: the spin and pointer the Gateway's Luma grants).
 //   GALAXY_TEST_EVENTS actors@frame: the live actors with a model, by model name and position (where to teleport).
 std::atomic<bool> gTourDone{false};
 

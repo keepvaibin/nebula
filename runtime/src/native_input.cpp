@@ -365,26 +365,6 @@ void publish_wiimote_ir_dots(
         8};
 }
 
-bool advance_wiimote_shake_accel(
-    WiimoteInputSnapshot& snapshot,
-    bool pressed,
-    bool& previous_pressed,
-    std::uint8_t& remaining_frames) noexcept {
-    if (pressed && !previous_pressed) {
-        remaining_frames = 12;
-    }
-    previous_pressed = pressed;
-    if (remaining_frames == 0) {
-        return false;
-    }
-    const bool phase = (remaining_frames & 1u) != 0u;
-    snapshot.accel.x = phase ? 0x02f0u : 0x0110u;
-    snapshot.accel.y = 0x0200u;
-    snapshot.accel.z = phase ? 0x0130u : 0x02d0u;
-    --remaining_frames;
-    return true;
-}
-
 std::size_t wiimote_input_report_size(std::uint8_t report_mode) noexcept {
     switch (report_mode) {
     case 0x30:

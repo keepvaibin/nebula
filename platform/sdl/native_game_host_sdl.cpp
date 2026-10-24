@@ -51,23 +51,6 @@ const in::ControlsConfig& live_controls() {
     return config;
 }
 
-bool advance_nunchuk_shake_accel(in::WiimoteInputSnapshot& snapshot, bool pressed, bool& previous_pressed,
-                                 std::uint8_t& remaining_frames) {
-    if (pressed && !previous_pressed) {
-        remaining_frames = 12;
-    }
-    previous_pressed = pressed;
-    if (remaining_frames == 0) {
-        return false;
-    }
-    const bool phase = (remaining_frames & 1u) != 0u;
-    snapshot.nunchuk.accel.x = phase ? 0x02f0u : 0x0110u;
-    snapshot.nunchuk.accel.y = 0x0200u;
-    snapshot.nunchuk.accel.z = phase ? 0x0130u : 0x02d0u;
-    --remaining_frames;
-    return true;
-}
-
 // The on-screen controls as the bindings' output.
 in::LogicalInput touch_logic(const sdl::InputState& state) {
     in::LogicalInput logic{};
@@ -240,7 +223,7 @@ in::WiimoteInputSnapshot native_game_wiimote_snapshot(std::uint64_t, bool ir_ena
     const bool pointer_active = s_pointer_ms != 0 && now - s_pointer_ms <= s_hold_ms;
     in::publish_wiimote_ir_dots(snapshot, s_pointer_x, s_pointer_y, pointer_active && ir_enabled);
 
-    // Tilt sections steer with the stick; a shake pulse overrides the reading.
+    // Tilt sections steer with the stick.
     static in::tilt::Tilt s_tilt{};
     const in::tilt::Tilt::Output tilt = s_tilt.update(section, nullptr, logic.stick_x, logic.stick_y, false);
     if (tilt.active) {
@@ -249,13 +232,8 @@ in::WiimoteInputSnapshot native_game_wiimote_snapshot(std::uint64_t, bool ir_ena
         snapshot.accel.y = counts.y;
         snapshot.accel.z = counts.z;
     }
-    static bool s_shake = false;
-    static std::uint8_t s_shake_frames = 0;
-    (void)in::advance_wiimote_shake_accel(snapshot, held(in::WiiTarget::Shake), s_shake, s_shake_frames);
-    static bool s_nunchuk_shake = false;
-    static std::uint8_t s_nunchuk_shake_frames = 0;
-    (void)advance_nunchuk_shake_accel(snapshot, held(in::WiiTarget::NunchukShake), s_nunchuk_shake,
-                                      s_nunchuk_shake_frames);
+    snapshot.shake = held(in::WiiTarget::Shake);
+    snapshot.nunchuk_shake = held(in::WiiTarget::NunchukShake);
     return snapshot;
 }
 
