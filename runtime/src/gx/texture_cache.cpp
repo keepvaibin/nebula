@@ -1,9 +1,5 @@
-// texture_cache.cpp: GX texture decode and D3D12 resource upload.
-//
-// Address-cache invalidation is explicit. An optional exact-content cache reuses identical
-// decoded static textures. An unmapped guest range or unknown format is a fatal error.
-// There is one non-shader-visible SRV heap; the renderer copies slots into the frame's
-// shader-visible DescriptorRing before each draw.
+// GX texture decode from guest memory into GPU textures. An unmapped guest range or unknown format is fatal.
+// The SRV heap is not shader-visible; the renderer copies its slots into the frame's descriptor ring per draw.
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -14,25 +10,18 @@
 
 #include "galaxy/gx/texture_cache.h"
 #include "galaxy/gx/rt_materials.h"
-#include "galaxy/gx/dependency_event_capture.h"
 
 #include "galaxy/gx/render_config.h"
-#include "galaxy/gx/shader_keys.h"
 #include "galaxy/windows_power.h"
 
 #include <algorithm>
 #include <array>
-#include <bit>
 #include "galaxy/simd128.h"
-#include <cassert>
 #include <cerrno>
 #include <chrono>
-#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
-#include <limits>
-#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <thread>
@@ -40,65 +29,16 @@
 
 namespace galaxy::gx {
 
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
 namespace {
 
 static constexpr std::uint64_t kUploadArenaChunkBytes = 16ull << 20;
-static constexpr std::uint64_t kContentCacheBudgetBytes = 64ull << 20;
-static constexpr std::size_t kContentCacheMaxEntries = 4096u;
 
-// Bound retained device allocations, including decoded RGBA8 mip levels and
-// allocation alignment. Guest compressed bytes can be much smaller and are
-// retained only as a separate invalidation/telemetry metric. This bound covers
-// the live decoded map; frame-retired and content-cache owners are separate.
-static constexpr std::uint64_t kDecodedResidentBudgetDefaultBytes = 64ull << 20;
+// Bound on the live decoded map's committed allocations (RGBA8 levels plus alignment, not guest bytes).
+// Frame-retired textures are outside it.
+static constexpr std::uint64_t kDecodedResidentBudgetBytes = 64ull << 20;
 
-std::uint64_t decoded_resident_budget_bytes() {
-    static const std::uint64_t budget = [] {
-        char value[32]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length, value, sizeof(value),
-                "GALAXY_GX_DECODED_TEXTURE_BUDGET_MB") != 0 ||
-            length <= 1u || length > sizeof(value)) {
-            return kDecodedResidentBudgetDefaultBytes;
-        }
-        for (std::size_t i = 0; i + 1u < length; ++i) {
-            if (value[i] < '0' || value[i] > '9') {
-                return kDecodedResidentBudgetDefaultBytes;
-            }
-        }
-        char* end = nullptr;
-        errno = 0;
-        const unsigned long long mb = std::strtoull(value, &end, 10);
-        if (errno == ERANGE || end == value || *end != '\0' ||
-            mb > (std::numeric_limits<std::uint64_t>::max() >> 20)) {
-            return kDecodedResidentBudgetDefaultBytes;
-        }
-        // 0 disables the bound.
-        if (mb == 0ul) {
-            return std::numeric_limits<std::uint64_t>::max();
-        }
-        return static_cast<std::uint64_t>(mb) << 20;
-    }();
-    return budget;
-}
-
-bool decoded_content_cache_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        return getenv_s(
-                   &length, value, sizeof(value),
-                   "GALAXY_GX_CONTENT_TEXTURE_CACHE") == 0 &&
-               length > 1u && value[0] != '0' &&
-               value[0] != 'n' && value[0] != 'N';
-    }();
-    return enabled;
-}
+// Bound on the recycled-texture pool (pool_retired_texture).
+static constexpr std::uint64_t kTexturePoolCapBytes = 256ull << 20;
 
 std::uint64_t align_up(std::uint64_t value, std::uint64_t alignment) {
     return (value + alignment - 1u) & ~(alignment - 1u);
@@ -114,17 +54,6 @@ bool trace_gx_stalls_enabled() {
                    sizeof(value),
                    "GALAXY_TRACE_GX_STALLS") == 0 &&
                length > 1 && value[0] != '0';
-    }();
-    return enabled;
-}
-
-bool trace_texture_dirty_detail_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        return getenv_s(&length, value, sizeof(value),
-                   "GALAXY_TRACE_GX_TEXTURE_DIRTY_DETAIL") == 0 &&
-            length > 1u && value[0] != '0';
     }();
     return enabled;
 }
@@ -151,20 +80,6 @@ const TextureCache::GuestRange* first_overlapping_dirty_range(
         if (it->size != 0u) return &*it;
     }
     return nullptr;
-}
-
-bool trace_texture_uploads_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        return getenv_s(
-                   &length,
-                   value,
-                   sizeof(value),
-                   "GALAXY_TRACE_TEXTURE_UPLOADS") == 0 &&
-               length > 1 && value[0] != '0';
-    }();
-    return enabled;
 }
 
 std::uint64_t read_env_u64(const char* name, std::uint64_t fallback) {
@@ -227,11 +142,7 @@ std::uint64_t elapsed_us(
             end - start).count());
 }
 
-// ---------------------------------------------------------------------------
-// Guest memory access. An unmapped range throws std::runtime_error, which the caller
-// reports as GxFatalError. The texture path has no GxServices* to report through.
-// ---------------------------------------------------------------------------
-
+// Throws std::runtime_error on an unmapped range (there is no GxServices here); the caller reports GxFatalError.
 static const std::byte* resolve_guest_tex(
     GuestMemory* memory,
     std::uint32_t address,
@@ -259,14 +170,9 @@ static const std::byte* resolve_guest_tex(
     throw std::runtime_error(ss.str());
 }
 
-// ---------------------------------------------------------------------------
-// Big-endian 16-bit read from an arbitrary byte pointer (TLUT / texture data).
-// ---------------------------------------------------------------------------
-
-// --- Tile kernels (galaxy/simd128.h: SSE on x86, NEON on AArch64) --------
-// Each kernel decodes one complete (unclipped) tile with exactly the scalar
-// arithmetic; clipped edge tiles keep the scalar loops. RGBA8 is stored as
-// bytes r,g,b,a, i.e. little-endian u32 r | g<<8 | b<<16 | a<<24.
+// SIMD tile kernels (galaxy/simd128.h: SSE on x86, NEON on AArch64). Each decodes one complete tile with the
+// scalar loops' arithmetic; clipped edge tiles use the scalar loops. RGBA8 is stored as bytes r,g,b,a
+// (little-endian u32 r | g<<8 | b<<16 | a<<24).
 using simd::v128;
 [[nodiscard]] static inline v128 load_tile16(const std::uint8_t* p) noexcept {
     return simd::load(p);
@@ -331,10 +237,6 @@ static inline void rgb5a3x8_to_rgba(v128 v, RGBA8* row0, RGBA8* row1) noexcept {
         (static_cast<std::uint16_t>(p[0]) << 8) | p[1]);
 }
 
-// ---------------------------------------------------------------------------
-// TLUT entry decode helpers. Each entry is 2 big-endian bytes.
-// ---------------------------------------------------------------------------
-
 [[nodiscard]] static unsigned full_mip_chain_levels(
     std::uint32_t width,
     std::uint32_t height) {
@@ -363,8 +265,8 @@ static inline void rgb5a3x8_to_rgba(v128 v, RGBA8* row0, RGBA8* row1) noexcept {
 [[nodiscard]] static bool should_generate_native_mips(
     const TexImage& image,
     const TexMode& mode) {
-    // Only tiled textures get a generated mip chain. A clamped texture is a decal placed by a
-    // texture matrix (eyes, HUD digits). Blended lower levels would wash out its small detail.
+    // Only repeating textures get a generated mip chain: a clamped texture is a decal placed by a texture matrix
+    // (eyes, HUD digits) whose small detail blended lower levels would wash out.
     if ((static_cast<unsigned>(mode.min_filter) & 0x3u) != 0u ||
         mode.min_filter != TexMinFilter::Linear ||
         mode.mag_filter != TexMagFilter::Linear ||
@@ -373,9 +275,7 @@ static inline void rgb5a3x8_to_rgba(v128 v, RGBA8* row0, RGBA8* row1) noexcept {
         !generated_mips_color_format(image.format)) {
         return false;
     }
-    // The shared settings lock/copy is needed only when this option can affect
-    // the resource. Authored mips, nearest filtering, small and intensity-only
-    // textures have a complete decision from their guest descriptors.
+    // The settings (a lock and a copy) are read only once the guest descriptor allows generated mips.
     return get_render_config().enhanced_mipmaps;
 }
 
@@ -492,9 +392,8 @@ void detail::generate_rgba8_mip_level(
                 const RGBA8& p2 = source[top + source_width];
                 const RGBA8& p3 = source[top + source_width + 1u];
                 if (((p0.a ^ p1.a) | (p0.a ^ p2.a) | (p0.a ^ p3.a)) == 0u) {
-                    // For equal nonzero alpha, it cancels exactly from
-                    // (alpha * sum + 2 * alpha) / (4 * alpha). Keep the
-                    // original zero RGB for fully transparent input.
+                    // Equal nonzero alpha cancels from (alpha * sum + 2 * alpha) / (4 * alpha).
+                    // Fully transparent input keeps zero RGB.
                     RGBA8 pixel{};
                     if (p0.a != 0u) {
                         pixel = {
@@ -604,16 +503,9 @@ namespace {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Per-format decode functions.
-// Each writes `width * height` RGBA8 pixels into `out` (row-major, no padding).
-// `src` points into guest memory at the base of the texture.
-// CI palettes live in the cache's absolute TMEM byte bank. The caller validates
-// the full palette extent at tlut.tmem_offset * 512; each entry occupies 2 bytes.
-// ---------------------------------------------------------------------------
-
-// The block formats below use raster pixel order inside each tile.
-
+// Per-format decoders: each writes width * height RGBA8 pixels (row-major, unpadded) to `out` from the
+// texture's guest base `src`, in raster order inside each tile. CI palettes live in the cache's TMEM byte bank;
+// the caller validates the full palette extent at tlut.tmem_offset * 512 (2 bytes per entry).
 template <TexFormat Format>
 void decode_intensity_tiles_impl(
     const std::uint8_t* src,
@@ -622,8 +514,7 @@ void decode_intensity_tiles_impl(
     RGBA8* out) {
     static_assert(Format == TexFormat::I4 || Format == TexFormat::I8 ||
                   Format == TexFormat::IA4 || Format == TexFormat::IA8);
-    // All four formats use a 32-byte tile. Clip once per tile, then decode
-    // contiguous valid rows without per-pixel destination edge tests.
+    // All four formats use a 32-byte tile; clipping is per tile, not per pixel.
     constexpr std::uint32_t block_width = Format == TexFormat::IA8 ? 4u : 8u;
     constexpr std::uint32_t block_height = Format == TexFormat::I4 ? 8u : 4u;
     constexpr std::uint32_t row_bytes = 32u / block_height;
@@ -672,8 +563,7 @@ void decode_intensity_tiles_impl(
                 const std::uint8_t* row = src + py * row_bytes;
                 RGBA8* dst = out + static_cast<std::size_t>(base_y + py) * width + base_x;
                 if constexpr (Format == TexFormat::I4) {
-                    // High nibble first; write both pixels without a half
-                    // selector branch. I4/I8 replicate intensity into ALPHA.
+                    // High nibble first. I4 and I8 replicate intensity into alpha.
                     std::uint32_t px = 0u;
                     for (; px + 1u < columns; px += 2u) {
                         const std::uint8_t byte = row[px / 2u];
@@ -706,8 +596,7 @@ void decode_intensity_tiles_impl(
                     }
                 }
             }
-            // Padding remains part of the validated guest footprint, even
-            // though no destination pixel needs the clipped source texels.
+            // A clipped tile still occupies its full 32 bytes.
             src += 32u;
         }
     }
@@ -745,8 +634,7 @@ static void decode_color_tiles_impl(
                 const std::uint8_t* row = src + py * 8u;
                 RGBA8* dst = out + static_cast<std::size_t>(base_y + py) * width + base_x;
                 for (std::uint32_t px = 0; px < columns; ++px) {
-                    // Direct color and TLUT entries share the same GX word
-                    // encoding. Format is fixed for this entire decode.
+                    // Direct colour and TLUT entries share the GX word encoding.
                     dst[px] = decode_tlut_entry(row + px * 2u, Format);
                 }
             }
@@ -836,8 +724,7 @@ void detail::decode_rgba8_tiles(
 
 namespace {
 
-// C4/C8 indices use either raw entry conversion or an already decoded small
-// palette. Clip once per tile for both paths, preserving 32-byte tile padding.
+// C4/C8: `lookup` converts a raw palette entry or reads a decoded palette. A clipped tile still occupies 32 bytes.
 template <TexFormat Format, typename PaletteLookup>
 static void decode_small_index_tiles_impl(
     const std::uint8_t* src,
@@ -887,8 +774,7 @@ static void decode_with_small_palette(
     const auto raw_lookup = [entries, format](std::uint32_t index) {
         return decode_tlut_entry(entries + index * 2u, format);
     };
-    // Amortize table construction only when it removes at least three of
-    // every four color conversions. Tiny textures retain the original path.
+    // Decode the palette up front only when that saves at least three of every four entry conversions.
     if (pixels < Entries * 4u) {
         decode(raw_lookup);
         return;
@@ -953,14 +839,8 @@ void detail::decode_c14x2_tiles(
 
 namespace {
 
-// ---------------------------------------------------------------------------
-// CMPR (S3TC / DXT1): 8x8 pixel blocks, each containing four 4x4 DXT1 sub-blocks.
-// GX sub-block layout within the 8x8 block:
-//   sub[0]=top-left, sub[1]=top-right, sub[2]=bottom-left, sub[3]=bottom-right.
-// ---------------------------------------------------------------------------
-
-// Decode one 4x4 DXT1 sub-block from 8 bytes into a 4x4 patch of `out`.
-// (ox, oy) is the top-left corner of the patch in the full image.
+// CMPR (S3TC/DXT1): 8x8 blocks of four 4x4 DXT1 sub-blocks in the order top-left, top-right, bottom-left,
+// bottom-right. Decodes one 8-byte sub-block into the 4x4 patch of `out` at (ox, oy), clipped to the image.
 static void decode_dxt1_subblock(
     const std::uint8_t* block,
     std::uint32_t ox,
@@ -976,7 +856,6 @@ static void decode_dxt1_subblock(
     const std::uint16_t c0 = read_be16(block);
     const std::uint16_t c1 = read_be16(block + 2);
 
-    // Expand color0 and color1 from RGB565.
     auto expand565 = [](std::uint16_t v) -> RGBA8 {
         const std::uint8_t r5 = static_cast<std::uint8_t>((v >> 11) & 0x1Fu);
         const std::uint8_t g6 = static_cast<std::uint8_t>((v >>  5) & 0x3Fu);
@@ -1025,9 +904,8 @@ static void decode_dxt1_subblock(
         };
     }
 
-    // Each source byte holds one row, leftmost selector in its top two bits.
-    // Keep row offsets as integers: advancing a pointer after the last clipped
-    // row could otherwise form an address beyond the output's one-past end.
+    // One selector byte per row, leftmost pixel in its top two bits. Rows advance an integer offset: a pointer
+    // advanced past the last clipped row could point beyond one-past-the-end of `out`.
     std::size_t offset = static_cast<std::size_t>(oy) * width + ox;
     if (columns == 4u) {
         for (std::uint32_t py = 0; py < rows; ++py, offset += width) {
@@ -1056,11 +934,8 @@ void detail::decode_cmpr_tiles(
     std::uint32_t width,
     std::uint32_t height,
     RGBA8* out) {
-    // Outer loop: 8x8 GX macro-blocks.
     const std::uint32_t macro_x = (width  + 7u) / 8u;
     const std::uint32_t macro_y = (height + 7u) / 8u;
-    // Sub-block layout within each 8x8 macro-block:
-    // sub0=(0,0), sub1=(4,0), sub2=(0,4), sub3=(4,4).
     static constexpr std::uint32_t kSubOffX[4] = {0u, 4u, 0u, 4u};
     static constexpr std::uint32_t kSubOffY[4] = {0u, 0u, 4u, 4u};
 
@@ -1078,15 +953,11 @@ void detail::decode_cmpr_tiles(
 
 namespace {
 
-// ---------------------------------------------------------------------------
-// Compute raw byte size of a mip0 level for each format.
-// ---------------------------------------------------------------------------
-
+// Guest byte size of one level, in whole blocks.
 [[nodiscard]] static std::uint32_t tex_data_size(
     TexFormat fmt,
     std::uint32_t width,
     std::uint32_t height) {
-    // Round up to block dimensions first.
     auto blocks = [](std::uint32_t dim, std::uint32_t block) {
         return (dim + block - 1u) / block;
     };
@@ -1187,7 +1058,7 @@ static void decode_texture_levels(
             throw std::runtime_error(
                 "[TextureCache] get: unhandled TexFormat");
         }
-        if (efb_true_color() && !detail::flatten_texel_checker(level_pixels[l], lw, lh)) {
+        if (!detail::flatten_texel_checker(level_pixels[l], lw, lh)) {
             detail::remove_texel_checker(level_pixels[l], lw, lh);
         }
         src += tex_data_size(format, lw, lh);
@@ -1245,26 +1116,6 @@ static void write_staging_levels(
 }
 
 } // anonymous namespace
-
-std::size_t TextureCache::hash_content_key(const ContentKey& key) {
-    std::uint64_t hash = fnv1a64(key.source.data(), key.source.size());
-    const auto mix = [&hash](std::uint64_t value) {
-        hash ^= value + 0x9E3779B97F4A7C15ull +
-            (hash << 6u) + (hash >> 2u);
-    };
-    mix(fnv1a64(key.palette.data(), key.palette.size()));
-    mix(key.width);
-    mix(key.height);
-    mix(key.format);
-    mix(key.levels);
-    mix(key.generated_mips);
-    mix(key.tlut_format);
-    return static_cast<std::size_t>(hash);
-}
-
-// ---------------------------------------------------------------------------
-// TextureCache public API
-// ---------------------------------------------------------------------------
 
 std::uint8_t efb_copy_alias_texture_format(std::uint8_t copy_format) {
     return efb_copy_alias_texture_format_impl(copy_format);
@@ -1353,10 +1204,9 @@ void TextureCache::begin_frame(
         throw std::runtime_error("[TextureCache] upload arena frame count changed");
     }
 
-    // RendererD3D12::begin_frame has already waited for this slot's fence,
-    // so every resource retired during this slot's previous use is GPU-idle.
-    // Keep its CPU descriptor alive too: handles selected earlier in a frame
-    // can still be copied into a new table after another lookup evicts them.
+    // The renderer has waited for this slot's fence, so everything retired in its previous use is GPU-idle.
+    // Descriptors retire with the frame too: a handle chosen earlier in a frame can still be copied into a
+    // table after a later lookup evicts it.
     auto& retired = retired_entries_[frame_slot];
     // Reserve before publishing any slots, so allocation failure cannot leave
     // a partially reclaimed list that would publish duplicate slots on retry.
@@ -1452,7 +1302,7 @@ bool TextureCache::preallocate_upload_arenas(unsigned frames_in_flight) {
 TextureCache::DecodedMapStats TextureCache::decoded_map_stats() const noexcept {
     DecodedMapStats stats;
     stats.resident_bytes = decoded_resident_bytes_;
-    stats.budget_bytes = decoded_resident_budget_bytes();
+    stats.budget_bytes = kDecodedResidentBudgetBytes;
     stats.evicted_bytes = decoded_evicted_bytes_;
     stats.evicted_entries = decoded_evicted_entries_;
     stats.entries = entries_.size();
@@ -1491,9 +1341,8 @@ void TextureCache::decoded_lru_forget(const Key& key) {
 }
 
 void TextureCache::decoded_lru_release(const Key& key, Entry& entry) {
-    // Single removal path for the decoded map. It keeps the resident-byte total and the LRU
-    // consistent with entries_. Every explicit removal goes through here: a total that drifts
-    // high makes the eviction loop evict textures that are still within budget.
+    // Every entries_ removal goes through here: a resident total that drifts high would evict textures that are
+    // within budget.
     decoded_resident_bytes_ -= std::min<std::uint64_t>(
         decoded_resident_bytes_, entry.allocation_bytes);
     decoded_guest_bytes_ -= std::min<std::uint64_t>(
@@ -1529,14 +1378,13 @@ void TextureCache::decoded_lru_track(const Key& key) {
 }
 
 void TextureCache::decoded_lru_evict_to_budget() {
-    const std::uint64_t budget = decoded_resident_budget_bytes();
+    constexpr std::uint64_t budget = kDecodedResidentBudgetBytes;
     if (decoded_resident_bytes_ <= budget) {
         return;
     }
-    // Retire rather than destroy. retire() parks the resource in the current frame slot's list,
-    // which is cleared only after that slot's fence has been waited on, so a submitted command
-    // list that still references the texture stays valid. Its CPU SRV slot is reclaimed at the
-    // same fence; live plus in-flight retired descriptors must fit kSrvHeapCapacity.
+    // Victims are retired, not destroyed: retire() parks the resource and its SRV slot in the current frame slot's
+    // list until that slot's fence has been waited on, so submitted command lists stay valid. Live plus in-flight
+    // retired descriptors must fit kSrvHeapCapacity.
     while (!decoded_lru_.empty() &&
            decoded_resident_bytes_ > budget) {
         const Key victim = decoded_lru_.back();
@@ -1549,37 +1397,13 @@ void TextureCache::decoded_lru_evict_to_budget() {
         const std::uint64_t victim_bytes = it->second.allocation_bytes;
         decoded_evicted_bytes_ += victim_bytes;
         ++decoded_evicted_entries_;
-        // Uses the same helper as the explicit invalidation paths, so the byte total and the LRU
-        // cannot drift apart. decoded_guest_envelope_ is left unchanged: it only widens, so an
-        // evicted range keeps the envelope conservative. A later scan may test "may overlap" when it
-        // cannot. That costs a fast path and never returns a stale texture. The envelope is rebuilt
-        // whenever entries_ empties.
+        // decoded_guest_envelope_ only widens: an evicted range keeps it conservative (a scan may see a false
+        // "may overlap", never a stale texture) until it is rebuilt when entries_ empties.
         decoded_lru_release(victim, it->second);
-        // Retired, not destroyed: `retire()` parks the resource in the current
-        // frame slot's list, which is cleared only after that slot's fence has
-        // been waited on, so an already-submitted command list that still
-        // references this texture stays valid. The SRV index also remains valid
-        // until that slot's next begin_frame, when it returns to the free list.
         retire(std::move(it->second));
         entries_.erase(it);
     }
 }
-
-namespace {
-std::uint64_t texture_pool_cap_bytes() {
-    static const std::uint64_t cap = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        if (getenv_s(&length, value, sizeof(value), "GALAXY_TEXTURE_POOL_MB") == 0 &&
-            length > 0) {
-            const unsigned long mb = std::strtoul(value, nullptr, 10);
-            return static_cast<std::uint64_t>(mb) << 20;
-        }
-        return std::uint64_t{256} << 20;
-    }();
-    return cap;
-}
-}  // namespace
 
 // Called from begin_frame for a slot whose fence has been waited on: the
 // texture is GPU-idle and still in the shader-resource state.
@@ -1587,8 +1411,7 @@ void TextureCache::pool_retired_texture(Entry& entry) {
     if (!entry.texture || entry.handle.from_efb_copy || entry.allocation_bytes == 0u) {
         return;
     }
-    if (texture_pool_bytes_ + entry.allocation_bytes > texture_pool_cap_bytes()) {
-        ++texture_pool_drops_;
+    if (texture_pool_bytes_ + entry.allocation_bytes > kTexturePoolCapBytes) {
         return;
     }
     std::uint32_t width = 0, height = 0, levels = 0;
@@ -1617,7 +1440,6 @@ bool TextureCache::take_pooled_texture(
         texture_pool_bytes_ -= pooled.allocation_bytes;
         texture_pool_[i] = std::move(texture_pool_.back());
         texture_pool_.pop_back();
-        ++texture_pool_reuses_;
         return true;
     }
     return false;
@@ -1671,28 +1493,6 @@ void TextureCache::shutdown() {
                   << " used-bytes=" << heap.used_bytes << " placed=" << heap.placed
                   << " committed-fallbacks=" << heap.committed_fallbacks << '\n';
     }
-    if (decoded_content_cache_enabled()) {
-        std::cerr << "[gx-content-cache] lookups=" << content_lookups_
-                  << " exact-hits=" << content_hits_
-                  << " decoded-misses=" << content_decoded_misses_
-                  << " retained-bytes=" << content_retained_bytes_
-                  << " evicted-entries=" << content_evicted_entries_
-                  << " evicted-bytes=" << content_evicted_bytes_
-                  << " live-entries=" << content_entries_.size()
-                  << " live-bytes=" << content_bytes_
-                  // Content-cache totals include allocation and exact CPU keys.
-                  // Decoded-map bytes charge allocations separately per entry.
-                  << " decoded-map-entries=" << entries_.size()
-                  << " decoded-map-guest-bytes=" << decoded_entry_guest_bytes()
-                  << " decoded-map-resident-kind=committed-allocation-per-entry"
-                  << " decoded-map-resident-bytes=" << decoded_resident_bytes_
-                  << " decoded-map-budget-bytes="
-                  << decoded_resident_budget_bytes()
-                  << " decoded-map-evicted-entries=" << decoded_evicted_entries_
-                  << " decoded-map-evicted-bytes=" << decoded_evicted_bytes_
-                  << " decoded-map-lru-entries=" << decoded_lru_.size()
-                  << '\n';
-    }
     entries_.clear();
     decoded_guest_envelope_.clear();
     decoded_lru_.clear();
@@ -1702,15 +1502,6 @@ void TextureCache::shutdown() {
     decoded_guest_bytes_ = 0;
     decoded_evicted_bytes_ = 0;
     decoded_evicted_entries_ = 0;
-    content_entries_.clear();
-    content_lru_.clear();
-    content_bytes_ = 0;
-    content_lookups_ = 0;
-    content_hits_ = 0;
-    content_decoded_misses_ = 0;
-    content_retained_bytes_ = 0;
-    content_evicted_bytes_ = 0;
-    content_evicted_entries_ = 0;
     efb_aliases_.clear();
     alias_guest_envelope_.clear();
     retired_entries_.clear();
@@ -1787,10 +1578,6 @@ std::uint32_t TextureCache::allocate_srv_index() {
     return next_srv_index_++;
 }
 
-// ---------------------------------------------------------------------------
-// load_tlut: BP 0x64 / 0x65
-// ---------------------------------------------------------------------------
-
 bool TextureCache::load_tlut(
     std::uint32_t src_reg,
     std::uint32_t dest_reg,
@@ -1809,20 +1596,13 @@ bool TextureCache::load_tlut(
 
     const std::byte* src_ptr =
         resolve_guest_tex(memory, src_addr, transfer);
-    if (dependency_event_sink_ != nullptr) {
-        dependency_event_sink_->guest_read(
-            DependencyReadSource::Tlut, src_addr,
-            std::span<const std::byte>(src_ptr, transfer));
-    }
-    // An identical reload changes no decoded palette. Keep dependency reads
-    // observable, but avoid retiring/redecoding every texture using this slot.
+    // An identical reload changes no palette.
     if (std::memcmp(tlut_bank_ + dest_byte_offset, src_ptr, transfer) == 0) {
         return false;
     }
-    // One transfer can touch several slots, and a C14X2 palette can span many slots even when
-    // its first slot is outside the transfer. Compare each overlapping palette before replacing
-    // the bank. A changed transfer can still leave this texture's palette unchanged (C4 uses only
-    // the first 32 bytes of a 512-byte C8-slot reload).
+    // One transfer can touch several slots, and a C14X2 palette can span many slots even when its first slot is
+    // outside the transfer, so each overlapping palette is compared before the bank is replaced. A changed transfer
+    // can leave a texture's palette unchanged (C4 uses only the first 32 bytes of a 512-byte slot).
     const std::uint32_t transfer_end = dest_byte_offset + transfer;
     for (auto it = entries_.begin(); it != entries_.end(); ) {
         std::uint32_t palette_bytes = 0u;
@@ -1856,10 +1636,6 @@ bool TextureCache::load_tlut(
     return true;
 }
 
-// ---------------------------------------------------------------------------
-// register_efb_copy
-// ---------------------------------------------------------------------------
-
 bool TextureCache::register_efb_copy(
     std::uint32_t guest_addr,
     const EfbCopyParams& params,
@@ -1892,23 +1668,12 @@ bool TextureCache::register_efb_copy(
         {},
     };
 
-    // Called on every copy. The renderer keys destination textures by address and format, so one
-    // address can alternate resources. Exact same-resource aliases are remembered here, but the
-    // function does not return before overlap eviction has retired stale decoded textures and
-    // older EFB aliases.
+    // Called on every copy. The renderer keys destination textures by address and format, so one address can
+    // alternate resources. A same-resource alias still runs the overlap eviction below before returning.
     const auto current_alias_it = efb_aliases_.find(alias_key);
     const bool current_alias_same_resource =
         current_alias_it != efb_aliases_.end() &&
         gpu::raw(current_alias_it->second.texture) == gpu::raw(texture);
-    if (debug_capture_frame_ != 0u) {
-        std::cerr << "[cap-alias-copy] frame=" << debug_capture_frame_
-                  << " addr=0x" << std::hex << guest_addr
-                  << " resource=" << gpu::raw(texture) << std::dec
-                  << " bytes=" << guest_byte_size
-                  << " wh=" << alias_width << 'x' << alias_height
-                  << " format=" << static_cast<unsigned>(alias_key.format)
-                  << " same-resource=" << current_alias_same_resource << '\n';
-    }
 
     const auto overlaps = [](std::uint64_t a_begin, std::uint64_t a_end,
                              std::uint64_t b_begin, std::uint64_t b_end) {
@@ -1919,9 +1684,8 @@ bool TextureCache::register_efb_copy(
     const std::uint64_t new_end =
         new_begin + guest_byte_size;
 
-    // Evict decoded entries and older EFB aliases whose guest byte ranges
-    // overlap the newly captured copy. Galaxy reuses capture work buffers for
-    // glass/blur effects; exact-address eviction leaves stale GPU aliases.
+    // Evict every decoded entry and older alias overlapping the copy, not only the same address: the game reuses
+    // capture buffers for glass and blur effects.
     bool evicted_overlap = false;
     for (auto it = decoded_guest_envelope_.may_overlap(guest_addr, guest_byte_size)
              ? entries_.begin() : entries_.end(); it != entries_.end(); ) {
@@ -1947,14 +1711,6 @@ bool TextureCache::register_efb_copy(
             gpu::raw(it->second.texture) == gpu::raw(texture);
         if (!is_current_same_resource &&
             overlaps(new_begin, new_end, alias_begin, alias_end)) {
-            if (dependency_event_sink_ != nullptr) {
-                dependency_event_sink_->alias_retire(
-                    DependencyAliasKey{it->first.guest_addr,
-                                       it->first.width, it->first.height,
-                                       it->first.format},
-                    reinterpret_cast<std::uintptr_t>(
-                        gpu::raw(it->second.texture)));
-            }
             retire(std::move(it->second));
             it = efb_aliases_.erase(it);
             evicted_overlap = true;
@@ -1963,26 +1719,19 @@ bool TextureCache::register_efb_copy(
         }
     }
 
-    // Publish every new/extended alias footprint. Removal never shrinks the
-    // filter; a fresh empty map can reset it before its first publication.
+    // Removal never shrinks the envelope; an empty map resets it.
     if (efb_aliases_.empty()) alias_guest_envelope_.clear();
     alias_guest_envelope_.include(guest_addr, guest_byte_size);
     if (current_alias_same_resource) {
         const bool footprint_changed =
             current_alias_it->second.handle.guest_byte_size != guest_byte_size;
         current_alias_it->second.handle.guest_byte_size = guest_byte_size;
-        if (dependency_event_sink_ != nullptr) {
-            dependency_event_sink_->alias_copy(
-                DependencyAliasKey{alias_key.guest_addr, alias_key.width,
-                                   alias_key.height, alias_key.format},
-                reinterpret_cast<std::uintptr_t>(gpu::raw(texture)));
-        }
         return evicted_overlap || footprint_changed;
     }
 
     const std::uint32_t srv_idx = allocate_srv_index();
 
-    // A 2D texture view: the resource passed in is a Texture2D (created by the renderer's EFB copy path).
+    // The renderer's EFB copy path creates a Texture2D.
     backend_.write_view(srv_idx, gpu::raw(texture), 1u);
 
     TextureHandle handle{};
@@ -2001,32 +1750,13 @@ bool TextureCache::register_efb_copy(
 
     auto alias_it = efb_aliases_.find(alias_key);
     if (alias_it != efb_aliases_.end()) {
-        if (dependency_event_sink_ != nullptr) {
-            dependency_event_sink_->alias_retire(
-                DependencyAliasKey{alias_it->first.guest_addr,
-                                   alias_it->first.width,
-                                   alias_it->first.height,
-                                   alias_it->first.format},
-                reinterpret_cast<std::uintptr_t>(
-                    gpu::raw(alias_it->second.texture)));
-        }
         retire(std::move(alias_it->second));
         alias_it->second = std::move(entry);
     } else {
         efb_aliases_.emplace(alias_key, std::move(entry));
     }
-    if (dependency_event_sink_ != nullptr) {
-        dependency_event_sink_->alias_copy(
-            DependencyAliasKey{alias_key.guest_addr, alias_key.width,
-                               alias_key.height, alias_key.format},
-            reinterpret_cast<std::uintptr_t>(handle.resource));
-    }
     return true;
 }
-
-// ---------------------------------------------------------------------------
-// invalidate_all
-// ---------------------------------------------------------------------------
 
 void TextureCache::invalidate_all() {
     for (auto& [key, entry] : entries_) {
@@ -2044,10 +1774,6 @@ void TextureCache::invalidate_all() {
     // Retired SRV slots return to the free list after their frame-slot fence.
 }
 
-// ---------------------------------------------------------------------------
-// get: primary texture fetch
-// ---------------------------------------------------------------------------
-
 std::size_t TextureCache::invalidate_guest_range(
     std::uint32_t guest_addr,
     std::uint32_t size) {
@@ -2061,39 +1787,12 @@ std::size_t TextureCache::invalidate_guest_ranges(
         return 0u;
     }
 
-    const bool trace_dirty_detail =
-        debug_capture_frame_ != 0u || trace_texture_dirty_detail_enabled();
-
     std::size_t evicted = 0;
     for (auto it = decoded_guest_envelope_.may_overlap(sorted_coalesced_ranges)
              ? entries_.begin() : entries_.end(); it != entries_.end(); ) {
         const std::uint64_t tex_begin = it->first.guest_addr;
         const std::uint64_t tex_end = tex_begin + it->second.handle.guest_byte_size;
-        const GuestRange* dirty = first_overlapping_dirty_range(
-            sorted_coalesced_ranges,
-            tex_begin,
-            tex_end);
-        if (dirty != nullptr) {
-            const std::uint64_t dirty_begin = dirty->guest_addr;
-            const std::uint64_t dirty_end = dirty_begin + dirty->size;
-            if (trace_dirty_detail) {
-                std::cerr << "[gx-texture-dirty-detail] kind=decoded"
-                          << " dirty=0x" << std::hex << std::uppercase
-                          << static_cast<std::uint32_t>(dirty_begin)
-                          << "..0x" << static_cast<std::uint32_t>(dirty_end)
-                          << " tex=0x" << static_cast<std::uint32_t>(tex_begin)
-                          << "..0x" << static_cast<std::uint32_t>(tex_end)
-                          << std::dec << std::nouppercase
-                          << " size=" << dirty->size
-                          << " texsize=" << (tex_end - tex_begin)
-                          << " fmt=" << static_cast<unsigned>(it->first.format)
-                          << " wh=" << it->first.width << 'x'
-                          << it->first.height
-                          << " levels=" << static_cast<unsigned>(it->first.levels)
-                          << " genmips="
-                          << static_cast<unsigned>(it->first.generated_mips)
-                          << '\n';
-            }
+        if (first_overlapping_dirty_range(sorted_coalesced_ranges, tex_begin, tex_end) != nullptr) {
             decoded_lru_release(it->first, it->second);
             retire(std::move(it->second));
             it = entries_.erase(it);
@@ -2107,38 +1806,7 @@ std::size_t TextureCache::invalidate_guest_ranges(
         const std::uint64_t alias_begin = it->first.guest_addr;
         const std::uint64_t alias_end =
             alias_begin + it->second.handle.guest_byte_size;
-        const GuestRange* dirty = first_overlapping_dirty_range(
-            sorted_coalesced_ranges,
-            alias_begin,
-            alias_end);
-        if (dirty != nullptr) {
-            const std::uint64_t dirty_begin = dirty->guest_addr;
-            const std::uint64_t dirty_end = dirty_begin + dirty->size;
-            if (trace_dirty_detail) {
-                std::cerr << "[gx-texture-dirty-detail] kind=efb-alias"
-                          << " frame=" << debug_capture_frame_
-                          << " resource=" << gpu::raw(it->second.texture)
-                          << " dirty=0x" << std::hex << std::uppercase
-                          << static_cast<std::uint32_t>(dirty_begin)
-                          << "..0x" << static_cast<std::uint32_t>(dirty_end)
-                          << " alias=0x" << static_cast<std::uint32_t>(alias_begin)
-                          << "..0x" << static_cast<std::uint32_t>(alias_end)
-                          << std::dec << std::nouppercase
-                          << " size=" << dirty->size
-                          << " aliassize=" << (alias_end - alias_begin)
-                          << " fmt=" << static_cast<unsigned>(it->first.format)
-                          << " wh=" << it->first.width << 'x'
-                          << it->first.height
-                          << '\n';
-            }
-            if (dependency_event_sink_ != nullptr) {
-                dependency_event_sink_->alias_retire(
-                    DependencyAliasKey{it->first.guest_addr,
-                                       it->first.width, it->first.height,
-                                       it->first.format},
-                    reinterpret_cast<std::uintptr_t>(
-                        gpu::raw(it->second.texture)));
-            }
+        if (first_overlapping_dirty_range(sorted_coalesced_ranges, alias_begin, alias_end) != nullptr) {
             retire(std::move(it->second));
             it = efb_aliases_.erase(it);
             ++evicted;
@@ -2148,10 +1816,6 @@ std::size_t TextureCache::invalidate_guest_ranges(
     }
     return evicted;
 }
-
-// ---------------------------------------------------------------------------
-// Texture packs
-// ---------------------------------------------------------------------------
 
 namespace {
 
@@ -2212,8 +1876,8 @@ void TextureCache::apply_texture_packs() {
         invalidate_all();
         pack_waiters_.clear();
     }
-    // Uploads within ~3 ms a frame (at least one): the rest wait for the next frames, so a pack's first textures
-    // never stall a frame (a 2048x2048 level chain is 22 MB to stage).
+    // At most ~3 ms of uploads a frame (at least one); the rest wait, so a pack's first textures never stall a
+    // frame (a 2048x2048 level chain is 22 MB to stage).
     constexpr auto kApplyBudget = std::chrono::microseconds(3000);
     std::size_t done = 0;
     for (; done < pack_uploads_.size(); ++done) {
@@ -2440,16 +2104,8 @@ TextureHandle TextureCache::get(
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
 
-    if (debug_invalidate_every_frame) {
-        invalidate_all();
-    }
-    const auto invalidate_end = trace_stalls
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
-
-    // 2. Build cache key. The mip chain length and source are part of the key. The game
-    // hand-authors lower mip levels (fog, lava and water tinting; see Dolphin PRs #6118 and
-    // #6875), so authored mips must never alias the generated mip chains used for filtering.
+    // The key includes the chain length and whether it is generated: the game hand-authors lower levels (fog, lava
+    // and water tinting; Dolphin PRs #6118 and #6875), so authored mips must never alias generated chains.
     unsigned levels = 1;
     unsigned guest_levels = 1;
     bool generated_mips = false;
@@ -2478,8 +2134,7 @@ TextureHandle TextureCache::get(
     key.width       = image.width;
     key.height      = image.height;
     key.format      = static_cast<std::uint8_t>(image.format);
-    // Only indexed formats use a TLUT. Keying direct formats on the BP palette registers, which
-    // may hold a previous texture's palette, created duplicate decodes of identical guest images.
+    // Only indexed formats key on the TLUT: the palette registers may still name a previous texture's palette.
     if (image.format == TexFormat::C4 || image.format == TexFormat::C8 ||
         image.format == TexFormat::C14X2) {
         key.tlut_format = static_cast<std::uint8_t>(tlut.format);
@@ -2496,9 +2151,8 @@ TextureHandle TextureCache::get(
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
 
-    // 3. EFB alias hit.  The full descriptor match prevents a stale
-    // full-screen capture from being sampled by a later small texture that
-    // reuses the same heap address.
+    // EFB alias hit. Matching the full descriptor keeps a stale full-screen capture from being sampled by a later,
+    // smaller texture at the same address.
     {
         const EfbAliasKey alias_key{
             image.guest_addr,
@@ -2509,14 +2163,6 @@ TextureHandle TextureCache::get(
         };
         const auto alias_it = efb_aliases_.find(alias_key);
         if (alias_it != efb_aliases_.end()) {
-            if (dependency_event_sink_ != nullptr) {
-                dependency_event_sink_->alias_bind(
-                    DependencyAliasKey{alias_key.guest_addr,
-                                       alias_key.width, alias_key.height,
-                                       alias_key.format},
-                    reinterpret_cast<std::uintptr_t>(
-                        alias_it->second.handle.resource));
-            }
             return alias_it->second.handle;
         }
     }
@@ -2524,7 +2170,6 @@ TextureHandle TextureCache::get(
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
 
-    // 4. Cache hit.
     {
         const auto it = entries_.find(key);
         if (it != entries_.end()) {
@@ -2536,10 +2181,8 @@ TextureHandle TextureCache::get(
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
 
-    // 5. Decode all guest mip levels.  Guest layout: authored levels are
-    // contiguous and block-aligned; the whole authored chain is resolved as one
-    // guest range (hard-fail unchanged). Native enhanced mips read mip0 only
-    // and generate lower levels from the decoded RGBA base.
+    // Miss: decode. Authored levels are contiguous and block-aligned and resolve as one guest range; generated mips
+    // read level 0 only.
     const std::uint32_t w = image.width;
     const std::uint32_t h = image.height;
 
@@ -2548,8 +2191,7 @@ TextureHandle TextureCache::get(
     const std::uint32_t tlut_byte_offset =
         static_cast<std::uint32_t>(tlut.tmem_offset) * 512u;
 
-    // Validate before either content-key reads or the unconditionally used
-    // CI decoder. Invalid caller descriptors must never become host reads.
+    // Validate the palette extent before any read: an invalid descriptor must never become a host read.
     std::uint32_t required_palette_bytes = 0u;
     switch (image.format) {
     case TexFormat::C4: required_palette_bytes = 32u; break;
@@ -2563,14 +2205,8 @@ TextureHandle TextureCache::get(
         throw std::runtime_error("[TextureCache] palette exceeds TMEM");
     }
 
-    const std::byte* guest_bytes =
-        resolve_guest_tex(memory, image.guest_addr, total_guest_size);
-    if (dependency_event_sink_ != nullptr) {
-        dependency_event_sink_->guest_read(
-            DependencyReadSource::Texture, image.guest_addr,
-            std::span<const std::byte>(guest_bytes, total_guest_size));
-    }
-    const auto* src = reinterpret_cast<const std::uint8_t*>(guest_bytes);
+    const auto* src = reinterpret_cast<const std::uint8_t*>(
+        resolve_guest_tex(memory, image.guest_addr, total_guest_size));
     // The ray tracer's material table names textures by the texture-pack key of their base level.
     std::uint16_t rt_material = 0u;
     std::uint64_t pack = 0u;
@@ -2621,80 +2257,6 @@ TextureHandle TextureCache::get(
             }
         }
     }
-    std::optional<ContentKey> content_key;
-    if (decoded_content_cache_enabled() &&
-        !debug_invalidate_every_frame && total_guest_size != 0u &&
-        total_guest_size <= kContentCacheBudgetBytes) {
-        auto& content = content_key.emplace();
-        content.width = image.width;
-        content.height = image.height;
-        content.format = static_cast<std::uint8_t>(image.format);
-        content.levels = static_cast<std::uint8_t>(levels);
-        content.generated_mips = generated_mips ? 1u : 0u;
-        content.source.assign(src, src + total_guest_size);
-
-        // Matches Aurora's content-key rule: palette bytes are part of the identity, so a TLUT reload
-        // cannot return stale colors.
-        std::uint32_t palette_bytes = 0u;
-        switch (image.format) {
-        case TexFormat::C4: palette_bytes = 16u * 2u; break;
-        case TexFormat::C8: palette_bytes = 256u * 2u; break;
-        case TexFormat::C14X2: palette_bytes = 16384u * 2u; break;
-        default: break;
-        }
-        if (palette_bytes != 0u) {
-            if (tlut_byte_offset + palette_bytes > kTlutBankBytes) {
-                // Preserve the existing decoder's behavior for malformed
-                // TLUT references; no cache entry may alias unknown bytes.
-                content_key.reset();
-            } else {
-                content.tlut_format =
-                    static_cast<std::uint8_t>(tlut.format);
-                content.palette.assign(
-                    tlut_bank_ + tlut_byte_offset,
-                    tlut_bank_ + tlut_byte_offset + palette_bytes);
-            }
-        }
-        if (content_key.has_value()) {
-            content_key->bucket_hash = hash_content_key(*content_key);
-            // Decode from the exact bytes used to identify this resource.
-            // The non-opt-in path retains its existing guest-memory access.
-            src = content_key->source.data();
-            ++content_lookups_;
-            if (auto it = content_entries_.find(*content_key);
-                it != content_entries_.end()) {
-                ++content_hits_;
-                content_lru_.splice(
-                    content_lru_.begin(), content_lru_, it->second.lru);
-                it->second.lru = content_lru_.begin();
-                const std::uint32_t srv_idx = allocate_srv_index();
-                backend_.write_view(srv_idx, gpu::raw(it->second.texture), levels);
-
-                Entry entry{};
-                entry.texture = it->second.texture;
-                entry.allocation_bytes = it->second.allocation_bytes;
-                entry.handle.resource = gpu::raw(entry.texture);
-                entry.handle.srv_index = srv_idx;
-                entry.handle.width = static_cast<std::uint16_t>(w);
-                entry.handle.height = static_cast<std::uint16_t>(h);
-                entry.handle.mip_levels = static_cast<std::uint8_t>(levels);
-                entry.handle.from_efb_copy = false;
-                entry.handle.generated_mips = generated_mips;
-                entry.handle.guest_byte_size = total_guest_size;
-                entry.handle.rt_material = rt_material;
-                entry.handle.pack = pack;
-                const TextureHandle handle = entry.handle;
-                if (entries_.empty()) decoded_guest_envelope_.clear();
-                decoded_guest_envelope_.include(image.guest_addr, total_guest_size);
-                const auto inserted = entries_.emplace(key, std::move(entry)).first;
-                decoded_lru_track(key);
-                if (pack_slot != TexturePacks::kNone) {
-                    wait_for_replacement(key, inserted->second, pack_slot);
-                }
-                return handle;
-            }
-        }
-    }
     const auto resolve_end = trace_stalls
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
@@ -2713,10 +2275,8 @@ TextureHandle TextureCache::get(
                       << " size=" << total_guest_size
                       << " regions=" << (memory ? memory->region_count : 0u)
                       << " fast=" << (fast_available ? 1u : 0u)
-                      << " invalidate-us="
-                      << elapsed_us(get_start, invalidate_end)
                       << " config-us="
-                      << elapsed_us(invalidate_end, config_end)
+                      << elapsed_us(get_start, config_end)
                       << " key-us=" << elapsed_us(config_end, key_end)
                       << " alias-us=" << elapsed_us(key_end, alias_end)
                       << " cache-us=" << elapsed_us(alias_end, cache_end)
@@ -2725,27 +2285,13 @@ TextureHandle TextureCache::get(
                       << '\n';
         }
     }
-    // Opt-in decoded-texture dump: GALAXY_GX_CAPTURE_TEXDIR=<dir> writes
-    // every newly decoded mip0 as <dir>/tex_<addr>_f<fmt>.ppm (RGB) and
-    // .pgm (alpha).  Zero cost unless the env var is set.
-    static const std::string tex_dump_dir = [] {
-        char value[MAX_PATH]{};
-        std::size_t length = 0;
-        if (getenv_s(&length, value, sizeof(value),
-                     "GALAXY_GX_CAPTURE_TEXDIR") != 0 || length <= 1) {
-            return std::string{};
-        }
-        return std::string(value);
-    }();
     const bool palettized = image.format == TexFormat::C4 ||
         image.format == TexFormat::C8 || image.format == TexFormat::C14X2;
-    // Only the pixel fill moves off-thread. Paths that inspect decoded pixels
-    // on this thread, and malformed palette formats whose decode must fail at
-    // the point of use, keep the synchronous decode.
+    // Only the pixel fill moves off-thread. Texture-pack dumps, which read the decoded pixels here, and invalid
+    // palette formats, which must throw here, stay synchronous.
     const bool async_decode = async_decode_allowed_ &&
         texture_decode_format_supported(image.format) &&
-        (!palettized || static_cast<unsigned>(tlut.format) <= 2u) &&
-        !trace_texture_uploads_enabled() && tex_dump_dir.empty() && !pack_dump;
+        (!palettized || static_cast<unsigned>(tlut.format) <= 2u) && !pack_dump;
     if (level_pixels_scratch_.size() < levels) {
         level_pixels_scratch_.resize(levels);
     }
@@ -2759,10 +2305,9 @@ TextureHandle TextureCache::get(
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
 
-    // 5. Upload to D3D12. One staging buffer holds every level at a 512-aligned placed footprint
-    // (row pitch 256-aligned). It is copied into a DEFAULT-heap Texture2D with MipLevels=N through
-    // the frame command list. The shader samples Texture2D, so the bound resource must be a real
-    // texture. A buffer SRV in a Texture2D slot is undefined behavior and hangs the GPU.
+    // One staging buffer holds every level at a 512-aligned placed footprint (256-aligned row pitch), copied into a
+    // DEFAULT-heap Texture2D on the frame's command list. The shader samples Texture2D: a buffer SRV in that slot
+    // is undefined behaviour and hangs the GPU.
     if (!backend_.has_upload_list()) {
         throw std::runtime_error(
             "[TextureCache] get: no upload command list set");
@@ -2820,13 +2365,9 @@ TextureHandle TextureCache::get(
         }
         const TexFormat format = image.format;
         const TlutFormat tlut_format = tlut.format;
-        // Not `src`: with the content cache on it points into a key that may
-        // be evicted before the job runs. The guest bytes are the same bytes
-        // and stay immutable until finish_pending_decodes() (caller contract).
-        const auto* const guest_src =
-            reinterpret_cast<const std::uint8_t*>(guest_bytes);
+        // The guest bytes stay unchanged until finish_pending_decodes() (caller contract).
         decode_pool_->submit(
-            [format, tlut_format, guest_src, w, h, guest_levels, levels,
+            [format, tlut_format, guest_src = src, w, h, guest_levels, levels,
              generated_mips, dst_base, offsets = std::move(offsets),
              pitches = std::move(pitches), palette = std::move(palette)]() {
                 thread_local std::vector<std::vector<RGBA8>> scratch;
@@ -2894,68 +2435,9 @@ TextureHandle TextureCache::get(
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
 
-    // Logs each new texture decode with a content fingerprint.
-    const auto tex_log_start = trace_stalls
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
-    static int s_tex_logs = 0;
-    if (trace_texture_uploads_enabled() && s_tex_logs < 24) {
-        ++s_tex_logs;
-        std::uint32_t nonzero = 0;
-        const std::vector<RGBA8>& base = level_pixels[0];
-        const std::uint32_t total = std::min<std::uint32_t>(
-            static_cast<std::uint32_t>(base.size()), 4096);
-        for (std::uint32_t i = 0; i < total; ++i) {
-            const auto* px = reinterpret_cast<const std::uint8_t*>(&base[i]);
-            if (px[0] | px[1] | px[2] | px[3]) ++nonzero;
-        }
-        std::fprintf(stderr,
-            "[tex] addr=%08X fmt=%u %ux%u mips=%u native=%u tlut=%u/%u srv=%u "
-            "nonzero=%u/%u px0=%08X\n",
-            image.guest_addr, static_cast<unsigned>(image.format), w, h,
-            levels,
-            generated_mips ? 1u : 0u,
-            static_cast<unsigned>(tlut.format), tlut.tmem_offset, srv_idx,
-            nonzero, total,
-            *reinterpret_cast<const std::uint32_t*>(&base[0]));
-    }
-    const auto tex_log_end = trace_stalls
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
-
-    // Decoded-texture dump (tex_dump_dir above); never async.
     const auto tex_dump_start = trace_stalls
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
-    if (!tex_dump_dir.empty()) {
-        const std::vector<RGBA8>& base = level_pixels[0];
-        char path[MAX_PATH]{};
-        std::snprintf(path, sizeof(path), "%s/tex_%08X_f%u.ppm",
-                      tex_dump_dir.c_str(), image.guest_addr,
-                      static_cast<unsigned>(image.format));
-        FILE* f = nullptr;
-        if (fopen_s(&f, path, "wb") == 0 && f != nullptr) {
-            std::fprintf(f, "P6\n%u %u\n255\n", w, h);
-            for (std::uint32_t i = 0; i < w * h; ++i) {
-                const auto* px =
-                    reinterpret_cast<const std::uint8_t*>(&base[i]);
-                std::fwrite(px, 1, 3, f);
-            }
-            std::fclose(f);
-        }
-        std::snprintf(path, sizeof(path), "%s/tex_%08X_f%u_a.pgm",
-                      tex_dump_dir.c_str(), image.guest_addr,
-                      static_cast<unsigned>(image.format));
-        if (fopen_s(&f, path, "wb") == 0 && f != nullptr) {
-            std::fprintf(f, "P5\n%u %u\n255\n", w, h);
-            for (std::uint32_t i = 0; i < w * h; ++i) {
-                const auto* px =
-                    reinterpret_cast<const std::uint8_t*>(&base[i]);
-                std::fwrite(px + 3, 1, 1, f);
-            }
-            std::fclose(f);
-        }
-    }
     if (pack_dump) {
         // Synchronous decode in dump mode: level_pixels holds the base level.
         packs_.dump(pack_name, w, h, reinterpret_cast<const std::uint8_t*>(level_pixels[0].data()));
@@ -2975,48 +2457,6 @@ TextureHandle TextureCache::get(
     if (pack_slot != TexturePacks::kNone) {
         wait_for_replacement(key, decoded->second, pack_slot);
     }
-    if (content_key.has_value()) {
-        ++content_decoded_misses_;
-        // The key lives in both the map and LRU list; count both copies.
-        std::uint64_t retained_bytes = 2u *
-            (content_key->source.size() + content_key->palette.size());
-        retained_bytes += allocation_bytes;
-        if (retained_bytes <= kContentCacheBudgetBytes) {
-            content_lru_.push_front(*content_key);
-            const auto [it, inserted] = content_entries_.emplace(
-                std::move(*content_key),
-                ContentEntry{
-                    // A budget eviction may already have removed this entry.
-                    // Its returned resource remains owned through the frame's
-                    // retirement fence; retain it without another map lookup.
-                    gpu::texture_ref(result.resource),
-                    retained_bytes,
-                    allocation_bytes,
-                    content_lru_.begin()});
-            if (inserted) {
-                content_bytes_ += retained_bytes;
-                content_retained_bytes_ += retained_bytes;
-            } else {
-                content_lru_.pop_front();
-                content_lru_.splice(
-                    content_lru_.begin(), content_lru_, it->second.lru);
-                it->second.lru = content_lru_.begin();
-            }
-            while ((content_bytes_ > kContentCacheBudgetBytes ||
-                    content_entries_.size() > kContentCacheMaxEntries) &&
-                   !content_lru_.empty()) {
-                const auto oldest = content_entries_.find(
-                    content_lru_.back());
-                if (oldest != content_entries_.end()) {
-                    content_bytes_ -= oldest->second.bytes;
-                    content_evicted_bytes_ += oldest->second.bytes;
-                    ++content_evicted_entries_;
-                    content_entries_.erase(oldest);
-                }
-                content_lru_.pop_back();
-            }
-        }
-    }
     const auto emplace_end = trace_stalls
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
@@ -3030,8 +2470,6 @@ TextureHandle TextureCache::get(
                       << image.guest_addr << std::dec
                       << " entry-us="
                       << elapsed_us(entry_build_start, entry_build_end)
-                      << " texlog-us="
-                      << elapsed_us(tex_log_start, tex_log_end)
                       << " texdump-us="
                       << elapsed_us(tex_dump_start, tex_dump_end)
                       << " emplace-us="

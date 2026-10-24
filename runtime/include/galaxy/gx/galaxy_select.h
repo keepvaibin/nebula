@@ -1,17 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-// The GAME page's galaxy select (GALAXY_GALAXY_SELECT=1, set in preview packages for testing):
-// any galaxy and star, entered with the game's own stage change
-// (MR::requestChangeStageInGameMoving) at the simulation thread's next scene. The names shown are
-// the game's own, read from its message data through MR::getGalaxyNameOnCurrentLanguage and
-// MR::getScenarioNameOnCurrentLanguage the first time the page asks for them.
+// The GAME page's galaxy select: its stage list and the page's requests. galaxy_select_enabled() is false, so the
+// page does not offer it.
 
 #include <cstddef>
 #include <cstdint>
 #include <string>
-#include <string_view>
-#include <vector>
 
 namespace galaxy::gx {
 
@@ -20,14 +15,11 @@ struct GalaxyStage {
     std::uint32_t stars;  // scenarios that can be entered (1..stars)
 };
 
-// By dome (Terrace, Fountain, Kitchen, Bedroom, Engine Room, Garden), then the rest.
-// stars leaves out the hidden scenarios (ScenarioData IsHidden, numbered after the others): the game sizes
-// its per-scenario data by the count without them (ScenarioData::getScenarioNum), so entering one directly
-// indexes past those arrays (IceVolcanoGalaxy 6 crashed in SpinDriverPathStorageScenario::setup).
+// By dome (Terrace, Fountain, Kitchen, Bedroom, Engine Room, Garden), then the rest. `stars` leaves out the hidden
+// scenarios (ScenarioData IsHidden, numbered after the others): the game sizes its per-scenario data without them
+// (ScenarioData::getScenarioNum), so entering one directly indexes past those arrays.
 inline constexpr GalaxyStage kGalaxyStages[] = {
-    // The Comet Observatory in the state the save has reached (the game's own choice,
-    // StorySequenceExecutor::calcAproposScenarioNoOnAstroGalaxy). Not a galaxy to the game's name lookup: shown as
-    // kObservatoryName. Its power follows the save's Grand Stars (request_grand_stars).
+    // The Comet Observatory; the game's name lookup does not know it, so it is shown as kObservatoryName.
     {"AstroGalaxy", 1u},
     {"EggStarGalaxy", 5u}, {"HoneyBeeKingdomGalaxy", 5u}, {"SurfingLv1Galaxy", 1u},
     {"FlipPanelExGalaxy", 1u}, {"TriLegLv1Galaxy", 1u},
@@ -52,12 +44,10 @@ inline constexpr const char* kObservatoryName = "COMET OBSERVATORY";
 
 [[nodiscard]] bool galaxy_select_enabled() noexcept;
 
-// Menu side.
 void request_galaxy_travel(std::size_t stage, std::uint32_t star) noexcept;
-// Grand Stars 1-kGrandStarsGiven in the current save file, then the Observatory.
 void request_grand_stars() noexcept;
 void want_galaxy_select_names() noexcept;
-// The game's names in upper case ("" until read).
+// The stage and star names; empty when not known.
 [[nodiscard]] std::string galaxy_select_name(std::size_t stage);
 [[nodiscard]] std::string galaxy_select_star_name(std::size_t stage, std::uint32_t star);
 

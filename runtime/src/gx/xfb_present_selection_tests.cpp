@@ -1,3 +1,5 @@
+// XFB present selection and serial accounting, the EFB conversion shader, and EFB-copy geometry tests.
+
 #include "galaxy/gx/efb_copy.h"
 #include "galaxy/gx/renderer_d3d12.h"
 #include "galaxy/gx/texture_cache.h"
@@ -107,7 +109,6 @@ int main() {
         make_xfb(0x01004000u, 29u);
     const galaxy::gx::XfbTexture latest = make_xfb(0x01002000u, 30u);
     const galaxy::gx::XfbTexture last_valid = make_xfb(0x01003000u, 9u);
-    const std::uint64_t never_presented = ~std::uint64_t{0};
 
     {
         const galaxy::gx::XfbPresentSelection selection =
@@ -117,8 +118,7 @@ int main() {
                 &latest,
                 nullptr,
                 30u,
-                2u,
-                never_presented);
+                2u);
         passed &= expect(
             selection.selected == &latest,
             "unspecified XFB request selects latest copied XFB");
@@ -135,8 +135,7 @@ int main() {
                 &latest,
                 &last_valid,
                 30u,
-                2u,
-                never_presented);
+                2u);
         passed &= expect(
             selection.selected == &requested_current,
             "explicit current VI-selected XFB is selected exactly");
@@ -156,8 +155,7 @@ int main() {
                 &latest,
                 &last_valid,
                 30u,
-                20u,
-                never_presented);
+                20u);
         passed &= expect(
             selection.selected == &requested_stale,
             "explicit stale VI-selected XFB is preserved, not replaced by latest");
@@ -177,56 +175,15 @@ int main() {
                 &latest,
                 &last_valid,
                 30u,
-                60u,
-                requested_one_stamp_stale.frame_stamp);
+                60u);
         passed &= expect(
             selection.selected == &requested_one_stamp_stale,
-            "duplicate stale VI-selected XFB remains guest-selected within the preserve window");
+            "stale VI-selected XFB remains guest-selected within the preserve window");
         passed &= expect(
             selection.requested_stale &&
                 selection.stale_preserved &&
                 !selection.stale_expired,
-            "duplicate stale VI-selected XFB reports stale-preserved state");
-    }
-
-    {
-        const galaxy::gx::XfbPresentSelection selection =
-            galaxy::gx::select_xfb_for_present(
-                true,
-                &requested_one_stamp_stale,
-                &latest,
-                &last_valid,
-                30u,
-                60u,
-                latest.frame_stamp);
-        passed &= expect(
-            selection.selected == &requested_one_stamp_stale,
-            "older already-presented VI-selected XFB remains guest-selected within the preserve window");
-        passed &= expect(
-            selection.requested_stale &&
-                selection.stale_preserved &&
-                !selection.stale_expired,
-            "older already-presented VI-selected XFB reports stale-preserved state");
-    }
-
-    {
-        const galaxy::gx::XfbPresentSelection selection =
-            galaxy::gx::select_xfb_for_present(
-                true,
-                &requested_one_stamp_stale,
-                &latest,
-                &last_valid,
-                30u,
-                60u,
-                requested_one_stamp_stale.frame_stamp - 1u);
-        passed &= expect(
-            selection.selected == &requested_one_stamp_stale,
-            "newer unpresented stale VI-selected XFB is honored within the preserve window");
-        passed &= expect(
-            selection.requested_stale &&
-                selection.stale_preserved &&
-                !selection.stale_expired,
-            "newer unpresented stale VI-selected XFB reports stale-preserved state");
+            "stale VI-selected XFB within the preserve window reports stale-preserved state");
     }
 
     {
@@ -237,8 +194,7 @@ int main() {
                 &latest,
                 &last_valid,
                 30u,
-                2u,
-                never_presented);
+                2u);
         passed &= expect(
             selection.selected == &requested_stale,
             "expired stale VI-selected XFB remains guest-selected");
@@ -257,8 +213,7 @@ int main() {
                 &latest,
                 &last_valid,
                 30u,
-                1u,
-                never_presented);
+                1u);
         passed &= expect(
             selection.selected == &requested_one_stamp_stale,
             "one-copy stale VI-selected XFB is still selected exactly");
@@ -277,8 +232,7 @@ int main() {
                 &latest,
                 &last_valid,
                 latest.frame_stamp,
-                1u,
-                never_presented);
+                1u);
         passed &= expect(
             selection.selected == &requested_one_stamp_stale,
             "same-clock one-copy stale VI-selected XFB is still selected");
@@ -297,8 +251,7 @@ int main() {
                 &latest,
                 &last_valid,
                 65u,
-                30u,
-                requested_one_stamp_stale.frame_stamp);
+                30u);
         passed &= expect(
             selection.selected == &requested_one_stamp_stale,
             "present-aged stale VI-selected XFB remains guest-selected");
@@ -317,8 +270,7 @@ int main() {
                 &latest,
                 &last_valid,
                 100u,
-                60u,
-                never_presented);
+                60u);
         passed &= expect(
             selection.selected == &requested_one_stamp_stale,
             "far-expired explicit VI-selected XFB remains guest-selected");
@@ -337,8 +289,7 @@ int main() {
                 &latest,
                 &last_valid,
                 30u,
-                0u,
-                never_presented);
+                0u);
         passed &= expect(
             selection.selected == &requested_one_stamp_stale,
             "zero-age stale policy still honors an explicit stale VI buffer");
@@ -357,8 +308,7 @@ int main() {
                 &latest,
                 &last_valid,
                 30u,
-                30u,
-                never_presented);
+                30u);
         passed &= expect(
             selection.selected == &last_valid,
             "unknown/missing explicit XFB preserves the last valid VI-selected XFB");
@@ -371,9 +321,7 @@ int main() {
     }
 
     {
-        // A missing XFB whose last copy is still inside the preserve bound must be held, not
-        // replaced. last_valid's stamp (9) is 1 frame behind current_frame_stamp (10), and
-        // max_preserved_age is 2, so the miss is within the bound.
+        // A miss inside the preserve bound (last copy at stamp 9, now 10, bound 2) keeps the last valid XFB.
         const galaxy::gx::XfbPresentSelection selection =
             galaxy::gx::select_xfb_for_present(
                 true,
@@ -381,8 +329,7 @@ int main() {
                 &latest,
                 &last_valid,
                 10u,
-                2u,
-                never_presented);
+                2u);
         passed &= expect(
             selection.selected == &last_valid,
             "missing explicit XFB preserves last valid selection inside the preserve bound");
@@ -394,10 +341,8 @@ int main() {
     }
 
     {
-        // Past the bound the miss is sustained, so the selection must fall
-        // forward to latest() rather than re-present one frozen frame forever.
-        // last_valid's stamp (9) is 21 frames behind current_frame_stamp (30)
-        // and max_preserved_age is 2.
+        // Past the bound (last copy at stamp 9, now 30, bound 2) the miss is sustained: latest() replaces the
+        // frozen frame.
         const galaxy::gx::XfbPresentSelection selection =
             galaxy::gx::select_xfb_for_present(
                 true,
@@ -405,8 +350,7 @@ int main() {
                 &latest,
                 &last_valid,
                 30u,
-                2u,
-                never_presented);
+                2u);
         passed &= expect(
             selection.selected == &latest,
             "missing explicit XFB past the preserve bound falls forward to latest");
@@ -416,10 +360,8 @@ int main() {
     }
 
     {
-        // The bound must not expire a merely trailing buffer: a named XFB that
-        // is still receiving copies advances its stamp with the frame, so a
-        // double/triple-buffered flip never ages out. This is the case whose
-        // regression is the visible per-flip black/flash strobe.
+        // The bound never expires a merely trailing buffer: a named XFB still receiving copies advances its stamp
+        // every frame, so a double/triple-buffered flip never ages out (expiring it would flash black every flip).
         const galaxy::gx::XfbTexture trailing_one_frame = make_xfb(0x01004000u, 29u);
         const galaxy::gx::XfbPresentSelection selection =
             galaxy::gx::select_xfb_for_present(
@@ -428,8 +370,7 @@ int main() {
                 &latest,
                 &last_valid,
                 30u,
-                2u,
-                never_presented);
+                2u);
         passed &= expect(
             selection.selected == &trailing_one_frame,
             "a stale-but-present named XFB is honoured, never aged out");
@@ -447,8 +388,7 @@ int main() {
                 &latest,
                 nullptr,
                 30u,
-                2u,
-                never_presented);
+                2u);
         passed &= expect(
             selection.selected == nullptr,
             "missing explicit XFB with no previous VI selection does not use latest");

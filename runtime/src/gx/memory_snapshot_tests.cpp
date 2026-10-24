@@ -1,3 +1,5 @@
+// Tests of GxBackend's guest-memory snapshots, dependency discovery and the caches keyed on them.
+
 #include "galaxy/gx/gx_backend.h"
 #include "galaxy/gx/dependency_draw_memo.h"
 #include "galaxy/gx/dependency_range_memo.h"
@@ -367,7 +369,7 @@ public:
         std::vector<Expected> expected;
         std::uint32_t random = 0x8badf00du;
         for (std::uint32_t round = 0u; round < 8u; ++round) {
-            backend->capture_memory_snapshot(nullptr, snapshot, {}, true, false);
+            backend->capture_memory_snapshot(nullptr, snapshot, {}, true);
             expected.clear();
             const std::uint32_t count = round == 1u ? 8u : 3000u;
             for (std::uint32_t i = 0u; i < count; ++i) {
@@ -407,7 +409,7 @@ public:
         for (std::uint32_t i = 0; i < 64u; ++i) ranges.push_back({base + i*64u, 32u});
         auto backend = std::make_unique<GxBackend>();
         GxBackend::MemorySnapshot snapshot;
-        backend->capture_memory_snapshot(&source, snapshot, ranges, true, false);
+        backend->capture_memory_snapshot(&source, snapshot, ranges, true);
         if (!snapshot.sealed || !snapshot.regions_disjoint_sorted || snapshot.regions.size()!=64u)
             return false;
         auto moved = std::move(snapshot);
@@ -440,9 +442,9 @@ public:
         moved.memory.fast_regions[8] = {};
         // Reusing a pooled object for a live/non-strict/null view clears the
         // previous certificate, even if its backing storage is retained.
-        backend->capture_memory_snapshot(&source, moved, {}, false, false);
+        backend->capture_memory_snapshot(&source, moved, {}, false);
         if (!moved.sealed || moved.regions_disjoint_sorted) return false;
-        backend->capture_memory_snapshot(nullptr, moved, {}, true, false);
+        backend->capture_memory_snapshot(nullptr, moved, {}, true);
         return !moved.sealed && !moved.regions_disjoint_sorted && moved.regions.empty();
     }
     static bool texture_dependency_memos_follow_sampled_maps() {
@@ -735,9 +737,8 @@ public:
         bool hit = false;
         backend->collect_memory_dependency_ranges(
             first.data(), first.size(), &memory, ranges, hit);
-        // Obtain the other FIFO's hash from production, not a parallel helper.
-        // A fixture with an unused hash algorithm can otherwise pass without
-        // ever reaching the exact-byte guard it claims to exercise.
+        // The other FIFO's hash comes from the backend itself, so the collision
+        // really reaches the exact-byte comparison.
         auto other = std::make_unique<GxBackend>();
         other->collect_memory_dependency_ranges(
             second.data(), second.size(), &memory, ranges, hit);
@@ -901,15 +902,6 @@ public:
 
     static bool dependency_invalidation_preserves_alias_and_edge_rules() {
         auto backend = std::make_unique<GxBackend>();
-        backend->immutable_range_cache_.resize(2u);
-        const auto arm_immutable = [&](std::uint32_t address, std::uint32_t size) {
-            backend->immutable_range_cache_[0] = {};
-            backend->immutable_range_cache_[0].guest_base = address;
-            backend->immutable_range_cache_[0].size = size;
-            backend->immutable_range_cache_[0].valid = true;
-            backend->immutable_range_cache_[1] = {};
-            backend->immutable_range_cache_[1].valid = true; // empty range
-        };
         // Literal physical interval oracle, independent of the overlap helper.
         // Cache shapes use any of the six RAM mappings; dirty ranges always
         // come from the physical tracker and are sorted/coalesced by callers.
@@ -934,14 +926,10 @@ public:
                             auto& entry = backend->dependency_range_cache_[0];
                             entry.valid = true;
                             entry.shape_ranges = {{alias + offset, size}, {alias + 0x8000u, 0u}};
-                            arm_immutable(alias + offset, size);
                             backend->invalidate_dependency_range_cache(writes);
-                            backend->invalidate_immutable_range_cache(writes);
                             const bool expected = static_cast<std::uint64_t>(dirty_begin) < end &&
                                 static_cast<std::uint64_t>(dirty_begin) + dirty_size > begin;
-                            if (entry.valid == expected ||
-                                backend->immutable_range_cache_[0].valid == expected ||
-                                !backend->immutable_range_cache_[1].valid) return false;
+                            if (entry.valid == expected) return false;
                         }
                     }
                 }
@@ -956,15 +944,11 @@ public:
         // A range ending at 2^32 must not wrap and overlap low RAM.
         entry.valid = true;
         entry.shape_ranges = {{0xFFFFFFE0u, 32u}};
-        arm_immutable(0xFFFFFFE0u, 32u);
         backend->invalidate_dependency_range_cache({{0u, 32u}, {0xFFFFFFF0u, 16u}});
-        backend->invalidate_immutable_range_cache({{0u, 32u}, {0xFFFFFFF0u, 16u}});
-        if (entry.valid || backend->immutable_range_cache_[0].valid) return false;
+        if (entry.valid) return false;
         entry.valid = true;
-        arm_immutable(0xFFFFFFE0u, 32u);
         backend->invalidate_dependency_range_cache({{0u, 32u}});
-        backend->invalidate_immutable_range_cache({{0u, 32u}});
-        return entry.valid && backend->immutable_range_cache_[0].valid;
+        return entry.valid;
     }
 
     static bool snapshot_range_merge_preserves_exact_owned_bytes() {
@@ -977,26 +961,24 @@ public:
         std::vector<GuestMemoryRange> ranges{{base + 64u, 32u}, {base + 16u, 16u},
             {base + 24u, 16u}, {base + 40u, 24u}, {base + 128u, 8u},
             {base + 136u, 8u}, {base + 16u, 8u}, {0xFFFFFFFFu, 0u}};
-        for (const bool immutable : {false, true}) {
-            for (unsigned permutation = 0u; permutation < ranges.size(); ++permutation) {
-                GxBackend::MemorySnapshot snapshot;
-                backend->capture_memory_snapshot(&memory, snapshot, ranges, true, immutable);
-                if (!snapshot.sealed || snapshot.regions.size() != 2u) return false;
-                // Independent union: [16,96) and [128,144), with no gaps copied.
-                const auto& first = snapshot.regions[0]; const auto& second = snapshot.regions[1];
-                if (first.guest_base != base + 16u || first.size != 80u ||
-                    second.guest_base != base + 128u || second.size != 16u ||
-                    first.host_base == bytes.data() + 16u || second.host_base == bytes.data() + 128u ||
-                    std::memcmp(first.host_base, bytes.data() + 16u, 80u) != 0 ||
-                    std::memcmp(second.host_base, bytes.data() + 128u, 16u) != 0) return false;
-                std::rotate(ranges.begin(), ranges.begin() + 1u, ranges.end());
-            }
+        for (unsigned permutation = 0u; permutation < ranges.size(); ++permutation) {
+            GxBackend::MemorySnapshot snapshot;
+            backend->capture_memory_snapshot(&memory, snapshot, ranges, true);
+            if (!snapshot.sealed || snapshot.regions.size() != 2u) return false;
+            // Independent union: [16,96) and [128,144), with no gaps copied.
+            const auto& first = snapshot.regions[0]; const auto& second = snapshot.regions[1];
+            if (first.guest_base != base + 16u || first.size != 80u ||
+                second.guest_base != base + 128u || second.size != 16u ||
+                first.host_base == bytes.data() + 16u || second.host_base == bytes.data() + 128u ||
+                std::memcmp(first.host_base, bytes.data() + 16u, 80u) != 0 ||
+                std::memcmp(second.host_base, bytes.data() + 128u, 16u) != 0) return false;
+            std::rotate(ranges.begin(), ranges.begin() + 1u, ranges.end());
         }
         // A union ending at 2^32 retains its last byte instead of wrapping.
         region.guest_base = 0xFFFFFFE0u; region.size = 32u;
         GxBackend::MemorySnapshot edge;
         backend->capture_memory_snapshot(&memory, edge,
-            {{0xFFFFFFF0u, 16u}, {0xFFFFFFE0u, 20u}, {0u, 0u}}, true, false);
+            {{0xFFFFFFF0u, 16u}, {0xFFFFFFE0u, 20u}, {0u, 0u}}, true);
         return edge.sealed && edge.regions.size() == 1u &&
             edge.regions[0].guest_base == 0xFFFFFFE0u && edge.regions[0].size == 32u &&
             std::memcmp(edge.regions[0].host_base, bytes.data(), 32u) == 0;
@@ -1032,7 +1014,7 @@ public:
                 bool hit = false;
                 backend->collect_memory_dependency_ranges(fifo.data(), fifo.size(),
                     &memory, ranges, hit);
-                backend->capture_memory_snapshot(&memory, snapshot, ranges, true, false);
+                backend->capture_memory_snapshot(&memory, snapshot, ranges, true);
             });
             const bool ready = scan.wait_for(std::chrono::seconds(1)) == std::future_status::ready;
             renderer_lock.unlock();
@@ -1263,115 +1245,6 @@ public:
             backend->frame_queue_.front().efb_peek_request == nullptr;
     }
 
-    static bool immutable_nested_display_list_versions_and_reuse() {
-        constexpr std::uint32_t kMemoryBase = 0x00002000u;
-        constexpr std::uint32_t kOuterDl = kMemoryBase + 0x100u;
-        constexpr std::uint32_t kInnerDl = kMemoryBase + 0x200u;
-        constexpr std::uint32_t kDisplayListSize = 32u;
-        std::vector<std::byte> live(0x300u, std::byte{0});
-        std::vector<std::byte> outer;
-        append_call_dl(outer, kInnerDl, kDisplayListSize);
-        outer.resize(kDisplayListSize, std::byte{0});
-        std::copy(
-            outer.begin(),
-            outer.end(),
-            live.begin() + (kOuterDl - kMemoryBase));
-        const std::array<std::byte, kDisplayListSize> inner{
-            std::byte{op::kLoadBpReg},
-            std::byte{bp::kBpMask},
-            std::byte{0xFF},
-            std::byte{0xFF},
-            std::byte{0xFF},
-            std::byte{op::kLoadBpReg},
-            std::byte{0x48},
-            std::byte{0x12},
-            std::byte{0x34},
-            std::byte{0x56},
-        };
-        std::copy(
-            inner.begin(),
-            inner.end(),
-            live.begin() + (kInnerDl - kMemoryBase));
-
-        GuestMemoryRegion region{
-            kMemoryBase,
-            static_cast<std::uint32_t>(live.size()),
-            live.data(),
-        };
-        GuestMemory memory{};
-        memory.region_count = 1u;
-        memory.regions = &region;
-        std::vector<std::byte> fifo;
-        append_call_dl(fifo, kOuterDl, static_cast<std::uint32_t>(outer.size()));
-
-        auto backend = std::make_unique<GxBackend>();
-        std::vector<GuestMemoryRange> ranges;
-        bool cache_hit = false;
-        backend->collect_memory_dependency_ranges(
-            fifo.data(), fifo.size(), &memory, ranges, cache_hit);
-        if (cache_hit || ranges.size() != 2u) {
-            std::cerr << "immutable ownership fixture: initial cacheHit="
-                      << cache_hit << " ranges=" << ranges.size() << '\n';
-            return false;
-        }
-
-        GxBackend::MemorySnapshot first;
-        backend->capture_memory_snapshot(
-            &memory, first, ranges, true, true);
-        if (!first.sealed || !first.immutable_range_ownership ||
-            first.copied_bytes != outer.size() + inner.size() ||
-            first.reused_bytes != 0u ||
-            snapshot_u8(&first.memory, kInnerDl + 9u) !=
-                0x56u) {
-            std::cerr << "immutable ownership fixture: first copied="
-                      << first.copied_bytes << " reused="
-                      << first.reused_bytes << " ranges="
-                      << first.regions.size() << '\n';
-            return false;
-        }
-
-        live[(kInnerDl - kMemoryBase) + 9u] = std::byte{0xA5};
-        const std::vector<GxBackend::GuestWriteRange> dirty{
-            {kInnerDl + 9u, 1u}};
-        backend->invalidate_dependency_range_cache(dirty);
-        backend->invalidate_immutable_range_cache(dirty);
-        ranges.clear();
-        backend->collect_memory_dependency_ranges(
-            fifo.data(), fifo.size(), &memory, ranges, cache_hit);
-
-        GxBackend::MemorySnapshot second;
-        backend->capture_memory_snapshot(
-            &memory, second, ranges, true, true);
-        if (!second.sealed || second.copied_bytes != inner.size() ||
-            second.reused_bytes != outer.size() ||
-            snapshot_u8(&first.memory, kInnerDl + 9u) !=
-                0x56u ||
-            snapshot_u8(&second.memory, kInnerDl + 9u) !=
-                0xA5u) {
-            std::cerr << "immutable ownership fixture: second copied="
-                      << second.copied_bytes << " reused="
-                      << second.reused_bytes << " ranges="
-                      << second.regions.size() << '\n';
-            return false;
-        }
-
-        GxBackend::MemorySnapshot reused;
-        backend->capture_memory_snapshot(
-            &memory, reused, ranges, true, true);
-        return reused.sealed && reused.copied_bytes == 0u &&
-            reused.reused_bytes == outer.size() + inner.size() &&
-            reused.regions.size() == second.regions.size() &&
-            reused.regions[0].host_base == second.regions[0].host_base &&
-            reused.regions[1].host_base == second.regions[1].host_base &&
-            std::all_of(
-                reused.regions.begin(),
-                reused.regions.end(),
-                [&](const GuestMemoryRegion& owned) {
-                    return owned.host_base < live.data() ||
-                        owned.host_base >= live.data() + live.size();
-                });
-    }
-
     static bool full_capture_reuse_detaches_live_memory(
         GuestMemory& memory,
         std::span<std::byte> live_bytes) {
@@ -1481,20 +1354,15 @@ public:
                 matched_generation)) {
             return false;
         }
-        // Once an entry is recorded as validated for the generation that matched, the same generation
-        // must short-circuit to "still valid" without consulting guest memory. The per-frame replay path
-        // relies on that. The write below is not reflected in a new generation, so it cannot reach this
-        // replay, just as a write after the frame's snapshot cannot.
+        // An entry validated for the current generation is trusted without reading guest memory; the
+        // write below has no new generation, like a write after the frame's snapshot.
         live[17] = std::byte{0x5A};
         if (!GxBackend::decoded_packet_run_dependencies_match(
                 &memory, matched_generation, kCurrentGeneration, snapshots,
                 matched_generation)) {
             return false;
         }
-        // The same entry must NOT be trusted under a different generation, and
-        // must be caught by the byte compare there. This is the invariant that
-        // makes the short-circuit safe: a new write batch always changes the
-        // generation, and the changed generation always re-reads guest memory.
+        // Under another generation the byte compare runs and catches the write.
         if (GxBackend::decoded_packet_run_dependencies_match(
                 &memory, kCurrentGeneration, kOtherGeneration, snapshots,
                 matched_generation)) {
@@ -1563,7 +1431,7 @@ public:
             const auto desc = state.vertex_desc(0u);
             return loader.decode_cached_packet_run_vertices_with_layout(
                 bytes, 0u, std::span<const CachedDrawPacket>(&packet, 1u),
-                PrimitiveClass::Points, 0u, state, desc,
+                PrimitiveClass::Points, state, desc,
                 VertexLoader::source_vertex_size(desc), memory);
         };
         const auto equal_vertices = [](const auto& a, const auto& b) {
@@ -1621,143 +1489,6 @@ public:
         return !(key() == stride_key) && !equal_vertices(decode(&memory), stride);
     }
 
-    static bool worker_stage_seals_before_releasing(
-        const NbtFixture& fixture,
-        GuestMemory& memory,
-        std::span<std::byte> live_bytes) {
-        auto backend = std::make_unique<GxBackend>();
-        GxBackend::FrameChunk queued;
-        queued.fifo = fixture.fifo;
-        queued.memory = &memory;
-        queued.worker_memory_snapshot = true;
-        backend->frame_pe_completions_.reset();
-        queued.pe_completion_token = backend->frame_pe_completions_.issue();
-        queued.pe_completion_requires_resolution = true;
-        queued.fifo_effects_pending = true;
-        backend->render_fifo_effects_in_flight_ = 1u;
-        // Mirror queue handoff: ownership moves before the worker seals it.
-        GxBackend::FrameChunk chunk = std::move(queued);
-        chunk.cpu_reads_pending = true;
-        backend->render_cpu_reads_in_flight_ = 1u;
-        const FramePeCompletionToken token = chunk.pe_completion_token;
-        const std::vector<std::byte> before(live_bytes.begin(), live_bytes.end());
-        backend->prepare_worker_memory_snapshot(chunk);
-        if (!chunk.memory_snapshot_active || !chunk.memory_snapshot_strict ||
-            !chunk.memory_snapshot.sealed || chunk.cpu_reads_pending ||
-            backend->render_cpu_reads_in_flight_ != 0u ||
-            !chunk.fifo_effects_pending ||
-            backend->render_fifo_effects_in_flight_ != 1u ||
-            chunk.pe_completion_token != token ||
-            chunk.memory != &chunk.memory_snapshot.memory ||
-            std::any_of(chunk.memory_snapshot.storage.begin(),
-                        chunk.memory_snapshot.storage.end(),
-                        [](const GxBackend::MemorySnapshotStorage& storage) {
-                            return storage.used && storage.source != nullptr;
-                        })) {
-            return false;
-        }
-        std::fill(live_bytes.begin(), live_bytes.end(), std::byte{0xC5});
-        for (std::size_t i = 0; i < before.size(); ++i) {
-            if (snapshot_u8(chunk.memory, kArrayBase +
-                    static_cast<std::uint32_t>(i)) !=
-                std::to_integer<std::uint8_t>(before[i])) {
-                return false;
-            }
-        }
-        // A missed dependency is absent from the snapshot, never read from live memory.
-        const bool missing_read_failed =
-            galaxy::resolve_guest_fast(chunk.memory, kArrayBase + static_cast<std::uint32_t>(before.size()), 1u) ==
-            nullptr;
-        std::copy(before.begin(), before.end(), live_bytes.begin());
-        // Retire the synthetic token only after testing the unchanged boundary.
-        backend->frame_pe_completions_.resolve_on_submission(token);
-        backend->frame_pe_completions_.consume_wait(token);
-        backend->frame_pe_completions_.audit_drained();
-        return missing_read_failed;
-    }
-
-    static bool worker_pe_classification_uses_sealed_display_list(bool has_event) {
-        constexpr std::uint32_t kDisplayList = 0x00002000u;
-        std::array<std::byte, 32u> live{};
-        live[0] = std::byte{op::kLoadBpReg};
-        live[1] = std::byte{0x48};
-        live[2] = std::byte{0x00};
-        live[3] = std::byte{0x34};
-        live[4] = std::byte{0x56};
-        if (!has_event) live.fill(std::byte{0});
-        GuestMemoryRegion region{kDisplayList,
-            static_cast<std::uint32_t>(live.size()), live.data()};
-        GuestMemory memory{};
-        memory.region_count = 1u;
-        memory.regions = &region;
-        auto backend = std::make_unique<GxBackend>();
-        backend->frame_pe_completions_.reset();
-        GxBackend::FrameChunk chunk;
-        append_call_dl(chunk.fifo, kDisplayList,
-            static_cast<std::uint32_t>(live.size()));
-        chunk.memory = &memory;
-        chunk.worker_memory_snapshot = true;
-        chunk.cpu_reads_pending = true;
-        backend->render_cpu_reads_in_flight_ = 1u;
-        const auto submitted = std::make_shared<FramePeCompletionToken>();
-        chunk.worker_submission_token = submitted;
-        backend->prepare_worker_memory_snapshot(chunk);
-        // A later writer may change the token or remove it. Classification
-        // and subsequent rendering must continue to use the sealed bytes.
-        live.fill(std::byte{0});
-        FramePeEventClassifier verifier;
-        std::vector<FramePeEventSignature> verified;
-        verifier.classify(chunk.fifo.data(), chunk.fifo.size(),
-            chunk.memory, verified);
-        const bool valid = chunk.memory_snapshot.sealed &&
-            !chunk.cpu_reads_pending && chunk.pe_events_preclassified &&
-            chunk.pe_event_free_receipt == !has_event &&
-            *submitted == chunk.pe_completion_token &&
-            submitted->kind == (has_event
-                ? cadence::FrameTokenKind::EventBearing
-                : cadence::FrameTokenKind::EventFree) &&
-            backend->frame_pe_completions_.probe_wait(*submitted) ==
-                (has_event ? FramePeWaitState::Pending : FramePeWaitState::Complete) &&
-            chunk.fifo_effects_pending == has_event &&
-            verified == chunk.preclassified_pe_events &&
-            (has_event ? (verified.size() == 1u &&
-                verified[0].kind == FramePeEventSignature::Kind::Token &&
-                verified[0].token == 0x3456u) : verified.empty());
-        if (has_event) backend->frame_pe_completions_.resolve_on_submission(*submitted);
-        backend->frame_pe_completions_.consume_wait(*submitted);
-        backend->frame_pe_completions_.audit_drained();
-        return valid;
-    }
-
-    static bool worker_dependency_scan_failure_does_not_release(
-        const NbtFixture& fixture,
-        GuestMemory& memory) {
-        auto backend = std::make_unique<GxBackend>();
-        GxBackend::FrameChunk chunk;
-        chunk.fifo = fixture.fifo;
-        // Broad array capture clips to the mapped region, so shortening NBT
-        // storage alone can seal successfully and fault only at decode. An
-        // unmapped CALL_DL instead requires a live read during the prepass,
-        // before capture/seal/release, and deterministically fails that scan.
-        constexpr std::uint32_t kUnmappedDisplayList = 0xF0000000u;
-        append_call_dl(chunk.fifo, kUnmappedDisplayList, 32u);
-        chunk.memory = &memory;
-        chunk.worker_memory_snapshot = true;
-        chunk.cpu_reads_pending = true;
-        backend->render_cpu_reads_in_flight_ = 1u;
-        bool failed = false;
-        try {
-            backend->prepare_worker_memory_snapshot(chunk);
-        } catch (const GxFatalError& error) {
-            failed = std::string(error.what()).find(
-                "unresolvable guest pointer 0xF0000000") != std::string::npos;
-        }
-        return failed && chunk.cpu_reads_pending &&
-            backend->render_cpu_reads_in_flight_ == 1u &&
-            chunk.memory == &memory && !chunk.memory_snapshot_active &&
-            !chunk.memory_snapshot.sealed && !chunk.memory_snapshot_strict;
-    }
-
     static MemorySnapshotNbtProbeResult collect_capture_and_decode(
         const NbtFixture& fixture,
         GuestMemory& memory,
@@ -1788,7 +1519,7 @@ public:
                     return !storage.used || storage.source == nullptr;
                 });
 
-        // Prove delayed parsing owns immutable bytes. If any vertex component
+        // Prove delayed parsing owns its bytes. If any vertex component
         // still aliases live guest memory, the decoded NBT values become zero.
         std::fill(live_bytes.begin(), live_bytes.end(), std::byte{0});
 
@@ -1807,7 +1538,6 @@ public:
             0u,
             std::span<const CachedDrawPacket>(&packet, 1u),
             PrimitiveClass::Points,
-            0u,
             backend->dependency_state_,
             desc,
             VertexLoader::source_vertex_size(desc),
@@ -1861,9 +1591,7 @@ int main() {
             "terminal worker failure wakes queued EFB peek and detaches stack storage")) {
         return 1;
     }
-    if (_putenv_s("GALAXY_DEPENDENCY_SNAPSHOT_BROAD_INDEX_RANGES", "1") != 0 ||
-        _putenv_s("GALAXY_RENDER_MEMORY_SNAPSHOT_RANGES", "") != 0 ||
-        _putenv_s("GALAXY_PE_EVENTS_GPU_FENCE", "1") != 0) {
+    if (_putenv_s("GALAXY_PE_EVENTS_GPU_FENCE", "1") != 0) {
         std::cerr << "FAIL: could not establish deterministic snapshot settings\n";
         return 1;
     }
@@ -1923,11 +1651,6 @@ int main() {
              "decoded vertex key lost a consumed input or retained unrelated CPU state") && ok;
     ok = expect(
              galaxy::gx::GxBackendMemorySnapshotTestAccess::
-                 immutable_nested_display_list_versions_and_reuse(),
-             "immutable nested display-list ownership did not version and reuse exact ranges") &&
-        ok;
-    ok = expect(
-             galaxy::gx::GxBackendMemorySnapshotTestAccess::
                  full_capture_reuse_detaches_live_memory(memory, live_bytes),
              "full pooled snapshot retained or reused a live-memory alias") &&
         ok;
@@ -1937,19 +1660,6 @@ int main() {
              "decoded vertex cache accepted stale or partial guest dependencies") &&
         ok;
 
-    ok = expect(
-             galaxy::gx::GxBackendMemorySnapshotTestAccess::
-                 worker_stage_seals_before_releasing(fixture, memory, live_bytes),
-             "worker snapshot release retained live bytes or resolved PE early") && ok;
-
-    ok = expect(
-             galaxy::gx::GxBackendMemorySnapshotTestAccess::
-                 worker_pe_classification_uses_sealed_display_list(true),
-             "worker PE classification did not retain the sealed display-list token") && ok;
-    ok = expect(
-             galaxy::gx::GxBackendMemorySnapshotTestAccess::
-                 worker_pe_classification_uses_sealed_display_list(false),
-             "worker event-free sealed display list did not publish a ready receipt") && ok;
     galaxy::gx::MemorySnapshotNbtProbeResult result;
     try {
         result = galaxy::gx::GxBackendMemorySnapshotTestAccess::
@@ -2006,10 +1716,6 @@ int main() {
         std::byte{0x5A});
     region.size = static_cast<std::uint32_t>(short_live_bytes.size());
     region.host_base = short_live_bytes.data();
-    ok = expect(
-             galaxy::gx::GxBackendMemorySnapshotTestAccess::
-                 worker_dependency_scan_failure_does_not_release(fixture, memory),
-             "failed worker dependency scan released the live-memory obligation") && ok;
     bool short_range_hard_failed = false;
     try {
         (void)galaxy::gx::GxBackendMemorySnapshotTestAccess::

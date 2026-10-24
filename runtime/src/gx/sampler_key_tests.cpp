@@ -1,3 +1,5 @@
+// Sampler key packing, sampler descriptors, sampler table caches, and guest texture and copy footprints.
+
 #include "galaxy/gx/gx_backend.h"
 
 #include <cmath>
@@ -202,8 +204,7 @@ int main() {
     passed &= expect(heap_caches[0].get_or_allocate(table_b).created,
         "teardown clears retained heap identity even for unchanged settings");
 
-    // Production reset(config) keeps descriptors, but retained tables must not consume capacity needed by a legal
-    // new frame's working set.
+    // reset(config) keeps descriptors, but retained tables must not take capacity a new frame's working set needs.
     galaxy::gx::SamplerTableCache lifetime_cache;
     bool lifetime_fit = true;
     for (unsigned frame = 0u; frame < 8u; ++frame) {
@@ -263,7 +264,7 @@ int main() {
 
     galaxy::gx::SamplerTableCache table_cache;
     for (unsigned frame = 0u; frame < 4u; ++frame) {
-        // Exercise the production same-config fenced reset, not teardown.
+        // The same-config fenced reset, not teardown.
         table_cache.reset(table_a.config);
         for (unsigned i = 0u; i < 255u; ++i) {
             auto key = table_a;

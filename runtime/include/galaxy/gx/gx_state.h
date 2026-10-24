@@ -1,10 +1,7 @@
 #pragma once
 
-// GxState: the full emulated GX register file (CP / XF / BP) plus decoded
-// views and dirty tracking. Mutated only by FifoParser register loads;
-// read by GxBackend to build shader keys, render state, and constants.
-//
-// No Windows/D3D12 includes, so it is unit-testable offline.
+// GX register file (CP, XF, BP) with decoded views and dirty tracking. Written by FifoParser,
+// read by GxBackend.
 
 #include "galaxy/gx/gx_bitfields.h"
 
@@ -28,8 +25,6 @@ public:
         kDirtyVsConstants = 1u << 7,  // projection / channels / matrix indices
     };
 
-    // --- Mutators (called by FifoParser) -----------------------------------
-
     // LOAD_CP_REG (opcode 0x08).
     void load_cp(std::uint8_t reg, std::uint32_t value);
 
@@ -39,22 +34,18 @@ public:
         const std::uint32_t* values,
         std::uint16_t count);
 
-    // LOAD_INDX A-D (opcodes 0x20-0x38): indexed XF write resolved by the
-    // parser from the guest-side array (SMG matrix skinning path).
-    // `source` = array slot << 16 | element index (the load signature's
-    // name for the matrix; the array base alternates between buffers).
+    // LOAD_INDX A-D (opcodes 0x20-0x38): XF write of an array element the parser read.
+    // `source` = array slot << 16 | element index, which names the matrix in the load
+    // signature (the array base alternates between buffers).
     void load_xf_indexed(
         std::uint16_t xf_addr,
         const std::uint32_t* values,
         std::uint16_t count,
         std::uint32_t source = 0u);
 
-    // LOAD_BP_REG (opcode 0x61): payload = register(31:24) | value(23:0).
-    // Honors the one-shot BP 0xFE write mask for the immediately following
-    // write, per hardware semantics.
+    // LOAD_BP_REG (opcode 0x61): payload = register(31:24) | value(23:0). A BP 0xFE write
+    // mask applies to the next write only.
     void load_bp(std::uint32_t command);
-
-    // --- Raw access ---------------------------------------------------------
 
     [[nodiscard]] std::uint32_t cp(std::uint8_t reg) const {
         return cp_[reg];
@@ -65,40 +56,24 @@ public:
     [[nodiscard]] std::uint32_t bp(std::uint8_t reg) const {
         return bp_[reg];
     }
-    // Raw XF memory base (0x2000 words): used for bulk palette snapshots
-    // (memcpy instead of a per-word loop on the per-draw hot path).
+    // XF memory (0x2000 words), for bulk palette copies.
     [[nodiscard]] const std::uint32_t* xf_raw() const {
         return xf_.data();
     }
 
-    // --- XF matrix-palette write tracking -----------------------------------
-    //
-    // Tracks which parts of the XF matrix palette the guest has written since
-    // the renderer last took a snapshot of it. GxBackend::flush_draw_state asks
-    // one question: did anything in the palette change? The answer decides whether
-    // the frame's existing GPU ring allocation for the palette can be reused.
-    //
-    // The snapshot is always the whole 6656 bytes (xf_raw()[0 .. kMatrixPaletteWords)).
-    // A fresh ring allocation has no inherited contents, so its head and tail must be
-    // written even when one 4-row matrix changed. The saving is the allocation, not the
-    // copy: the game reloads matrices per object via LOAD_INDX, and a draw whose matrices
-    // did not move keeps the previous snapshot's GPU address and skips both the allocation
-    // and the memcpy.
-    //
-    // Granularity is 32 words (128 bytes), a whole number of the 16-byte float4s the shader
-    // indexes (mtx_palette[base + (w >> 2)]). A chunk boundary therefore never splits an
-    // element the shader reads. This keeps a span-limited copy safe to add later. No code
-    // copies a partial span today.
+    // XF matrix palette write tracking. GxBackend::flush_draw_state keeps the previous palette
+    // snapshot while nothing in it changed; otherwise it copies all 6656 bytes
+    // (xf_raw()[0 .. kMatrixPaletteWords)) into a fresh ring allocation, which has no prior
+    // contents. Chunks are 32 words (128 bytes), a whole number of the float4s the shader
+    // indexes (mtx_palette[base + (w >> 2)]), so no chunk boundary splits an element.
     static constexpr std::uint32_t kMatrixPaletteWords = 0x0680u;  // XF 0x0000-0x067F
     static constexpr std::uint32_t kMatrixPaletteChunkWords = 32u;
     static constexpr std::uint32_t kMatrixPaletteChunkCount =
         kMatrixPaletteWords / kMatrixPaletteChunkWords;  // 52
 
-    // One bit per touched chunk. Re-armed per mutation and cleared by the
-    // consumer once it has snapshotted the palette; both run on the same thread
-    // that mutates the register file, so the bits need no atomics.
-    // Default-constructed (all zero) is the correct initial state: nothing has
-    // been snapshotted yet, so every chunk is unknown and a snapshot is owed.
+    // One bit per written chunk, set by XF writes and cleared by the consumer after its
+    // snapshot, both on the thread that owns the register file. Starts clear: the consumer
+    // tracks separately which chunks its snapshot holds.
     [[nodiscard]] constexpr std::uint64_t xf_palette_dirty() const noexcept {
         return xf_palette_dirty_;
     }
@@ -118,21 +93,20 @@ public:
         clear_xf_palette_bits(xf_palette_dirty_, first, last);
     }
 
-    // Exact dependency-key hash. Cached with this parser-owned register file;
-    // copies retain both banks and cache, CP/BP mutations invalidate it.
+    // Hash of the registers that decide which guest memory draws read; cached until a CP or BP
+    // write changes one of them.
     [[nodiscard]] std::uint64_t dependency_shape_hash() const noexcept;
-    // Exactly the normalized words hashed above. Cross-owner caches must
-    // compare these words after their hash admission; a hash is not identity.
+    // The words hashed above. A cache shared across GxState instances must compare these after
+    // a hash match.
     using DependencyShapeWords = std::array<std::uint32_t, 143>;
     [[nodiscard]] const DependencyShapeWords& dependency_shape_words() const noexcept {
         (void)dependency_shape_hash();
         return dependency_shape_words_;
     }
 
-    // Local reuse while this exact register owner is mutated by its parser.
-    // Copies/assignments can carry equal revisions for different banks: never
-    // use this as a cross-owner or persistent cache key. Zero is saturated and
-    // requires recomputation on every query, avoiding generation wrap reuse.
+    // Advances whenever the dependency shape may have changed. Meaningful only within one
+    // instance: copies can share a revision with different registers. After wrapping it stays
+    // zero, which callers treat as changed on every query.
     [[nodiscard]] std::uint64_t dependency_shape_revision() const noexcept {
         return dependency_shape_revision_;
     }
@@ -141,8 +115,6 @@ public:
     [[nodiscard]] std::uint32_t pending_bp_write_mask() const noexcept {
         return bp_mask_;
     }
-
-    // --- Decoded views ------------------------------------------------------
 
     [[nodiscard]] GenMode gen_mode() const {
         return decode_gen_mode(bp_[bp::kGenMode]);
@@ -186,9 +158,8 @@ public:
     // env, TREF half, and KSEL half registers.
     [[nodiscard]] TevStageConfig tev_stage(unsigned stage) const;
 
-    // TEV registers 0xE0-0xE7: RA/BG pairs.  Bit 23 of the RA word routes the
-    // write to the konstant color bank instead of the blending registers, so
-    // both banks are tracked; index 0 = PREV/REG0..2, konst index 0..3.
+    // TEV registers 0xE0-0xE7: RA/BG pairs. Bit 23 of a write selects the konst color bank
+    // instead of the blending registers, so both banks are kept: PREV, REG0-REG2 and K0-K3.
     [[nodiscard]] std::array<std::array<std::int32_t, 4>, 4>
         tev_register_values() const;
     [[nodiscard]] std::array<std::uint32_t, 4> tev_register_colors() const;
@@ -234,8 +205,6 @@ public:
         return cp_[cp::kArrayStrideBase + attr];
     }
 
-    // --- Dirty tracking -----------------------------------------------------
-
     [[nodiscard]] std::uint32_t consume_dirty() {
         const std::uint32_t d = dirty_;
         dirty_ = 0;
@@ -271,11 +240,10 @@ private:
         dependency_shape_hash_valid_ = false;
         if (dependency_shape_revision_ != 0u) ++dependency_shape_revision_;
     }
-    // Both public XF mutators validate the entire transfer before this shared
-    // write/dirty pass. Keep unchecked application inaccessible to callers.
+    // Writes a validated transfer and sets its dirty bits; private because it checks nothing.
     void apply_validated_xf(std::uint16_t base, const std::uint32_t* values,
         std::uint16_t count);
-    // A transfer with unknown addresses (release builds): only its known words.
+    // A transfer with unknown addresses: applies only its known words.
     void apply_known_xf(std::uint16_t base, const std::uint32_t* values,
         std::uint16_t count);
     std::array<std::uint32_t, 0x100> cp_{};
@@ -285,13 +253,10 @@ private:
     std::array<std::uint32_t, 8> tev_ra_bg_latch_{};
     // Konstant color bank shadowed from BP 0xE0-0xE7 writes with bit 23 set.
     std::array<std::uint32_t, 8> konst_ra_bg_{};
-    // One-shot write mask armed by BP 0xFE, applied to the next
-    // BP write only.
+    // Write mask armed by BP 0xFE for the next BP write only.
     std::uint32_t bp_mask_ = 0x00FFFFFFu;
     std::uint32_t dirty_ = ~0u;
-    // Bits 0..kMatrixPaletteChunkCount-1: chunks of the XF matrix palette the
-    // guest has written since the last consumer snapshot. See
-    // xf_palette_dirty() for what the consumer does with them.
+    // Palette chunks written since the consumer's last snapshot (see xf_palette_dirty()).
     std::uint64_t xf_palette_dirty_ = 0u;
     std::uint32_t matrix_writes_ = 0u;
     mutable std::uint64_t dependency_shape_hash_ = 0u;
@@ -300,10 +265,9 @@ private:
     std::uint64_t dependency_shape_revision_ = 1u;
 };
 
-// A CP, XF or BP write the state does not model, or a TMEM load. Release builds skip it (the command's
-// length is known, so the stream stays in step and the write changes nothing; a frame may draw wrongly
-// where the game used to close) and log each register once. Fatal when GALAXY_GX_STRICT=1, and in
-// tests that set it.
+// Whether a CP, XF or BP write the state does not model, or a TMEM load, throws GxFatalError.
+// By default it is skipped (its length is known, so the stream stays in step) and logged once
+// per register; tests make it fatal with set_unknown_gx_commands_fatal(true).
 [[nodiscard]] bool unknown_gx_commands_fatal() noexcept;
 
 void set_unknown_gx_commands_fatal(bool fatal) noexcept;

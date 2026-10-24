@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The vector kernels (galaxy/simd128.h: SSE on x86, NEON on AArch64) against per-pixel references written from the
-// GX formats: texture tile decoders, FIFO byte swaps and cached index rebasing. Runs on every platform build.
+// Tests the vector code (galaxy/simd128.h: SSE on x86, NEON on AArch64) in the texture tile decoders and cached index
+// rebasing against scalar references written from the GX formats.
 
 #include "galaxy/gx/fifo_parser.h"
 #include "galaxy/gx/texture_cache.h"

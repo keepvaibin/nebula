@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// Guest address lookup over a memory snapshot's region list: binary search when the list is sorted and disjoint.
 #pragma once
 
 #include "galaxy/guest_memory.h"
@@ -7,8 +8,8 @@
 
 namespace galaxy::gx::detail {
 
-// Certify the actual immutable view, without sorting it: overlapping views
-// must retain the generic resolver's first-containing-region semantics.
+// True when every region is mapped, nonempty and inside the 32-bit address space, and the list is sorted without
+// overlap. The list is not sorted here: an overlapping list keeps the generic resolver's first-match order.
 [[nodiscard]] inline bool snapshot_regions_are_disjoint_sorted(
     std::span<const GuestMemoryRegion> regions) noexcept {
     std::uint64_t previous_end = 0;
@@ -23,9 +24,8 @@ namespace galaxy::gx::detail {
     return true;
 }
 
-// Precondition: the exact regions span was certified above and remains frozen.
-// A request crossing adjacent regions is still unmapped, just as with the
-// original single-region resolver; this never joins separately owned buffers.
+// For a list that passed snapshot_regions_are_disjoint_sorted and has not changed since. A request that
+// crosses into an adjacent region is unmapped: separate buffers are never joined.
 [[nodiscard]] inline const std::byte* resolve_sorted_snapshot_region(
     std::span<const GuestMemoryRegion> regions,
     std::uint32_t address, std::uint32_t size) noexcept {

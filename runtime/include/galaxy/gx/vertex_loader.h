@@ -1,16 +1,8 @@
 #pragma once
 
-// VertexLoader: converts one GX draw packet (any VCD/VAT combination, direct
-// or indexed attributes) into the canonical GxVertexOut stream plus an index
-// list for triangle/line/point draws written into the frame's upload rings.
-//
-// Quads / strips / fans are converted to indexed triangle lists with shared
-// vertices (not duplicated), cutting upload bandwidth on low-end hardware.
-// Fixed-stride attribute blocks are consumed via FifoCursor::take() and the
-// bulk SIMD byte-swap kernels, not per-byte scalar reads.
-//
-// No Windows/D3D12 includes, so it is unit-testable offline. UploadRing is the
-// renderer's linear per-frame allocator, forward-declared here.
+// VertexLoader: decodes GX draw packets (any VCD/VAT layout, direct or indexed attributes) into
+// GxVertexOut vertices and 16-bit index lists in the frame's upload rings. Quads, strips and
+// fans become indexed triangle lists that share vertices.
 
 #include "galaxy/gx/fifo_parser.h"
 #include "galaxy/gx/gx_state.h"
@@ -25,22 +17,18 @@ namespace galaxy::gx {
 
 class UploadRing;
 struct ImmutableUploadToken;
-class DependencyEventSink;
 
 namespace detail {
-// Source/destination are distinct, valid native-endian index storage. Returns
-// false if any mathematical sum exceeds 65535; the caller must reject the draw.
+// Adds `bias` to each index; source and destination must not overlap. Returns false if a sum
+// exceeds 65535, and the caller must then reject the draw.
 [[nodiscard]] bool rebase_cached_indices(std::span<const std::uint16_t> source,
                                         std::uint32_t bias,
                                         std::uint16_t* destination) noexcept;
 }  // namespace detail
 
-// Canonical post-load vertex.  One fixed input layout for every PSO keeps
-// pipeline permutations down and the loader branch-free per attribute.
-//
-// uv carries every GX texture-coordinate channel.  mtx_indices carries the
-// per-vertex position/normal matrix index plus all eight texture matrix
-// indices; the vertex shader indexes the XF matrix palette with these.
+// Decoded vertex: one input layout for every pipeline. uv holds all eight texture coordinates;
+// mtx_indices holds the position/normal matrix index and the eight texture matrix indices
+// that the vertex shader uses to index the XF matrix palette.
 struct GxVertexOut {
     float position[3];
     float normal[3];
@@ -81,22 +69,9 @@ struct DecodedPacketRunVertices {
 
 class VertexLoader {
 public:
-    // Non-owning, render-thread-only observation. Null in production's
-    // default path; never changes the resolved indexed attribute pointer.
-    void set_dependency_event_sink(DependencyEventSink* sink) noexcept {
-        dependency_event_sink_ = sink;
-    }
-
-    // Reads one draw packet from `cursor` (positioned at the u16 vertex
-    // count, immediately after the draw opcode byte).
-    //
-    // - Direct attributes come from the FIFO via take() + bulk swap.
-    // - Indexed attributes resolve through the CP array base/stride registers
-    //   into guest memory; an unmapped array is a GxFatalError.
-    // - All eight GX texcoord channels are preserved; multi-texture effects
-    //   must not alias absent channels to zero.
-    //
-    // Vertices and indices are appended to `vertex_ring` / `index_ring`.
+    // Reads one draw packet from `cursor`, positioned at the u16 vertex count. Indexed
+    // attributes resolve through the CP array registers; an unmapped array throws
+    // GxFatalError. Vertices and indices are appended to `vertex_ring` / `index_ring`.
     LoadedPrimitive load(
         FifoCursor& cursor,
         PrimitiveClass primitive,
@@ -107,10 +82,10 @@ public:
         UploadRing& index_ring,
         std::uint32_t index_batch_base_vertex = 0,
         bool rebase_indices_to_batch_base = false);
+    // load() with the layout already decoded from the VCD/VAT registers.
     LoadedPrimitive load_with_layout(
         FifoCursor& cursor,
         PrimitiveClass primitive,
-        std::uint8_t vtxfmt,
         const GxState& state,
         const VertexDescriptor& desc,
         std::size_t source_vertex_size,
@@ -120,38 +95,13 @@ public:
         std::uint32_t index_batch_base_vertex = 0,
         bool rebase_indices_to_batch_base = false);
 
-    // Byte size of one source vertex for the given descriptor, used to
-    // take() the whole packet in a single window before conversion.
-    LoadedPrimitive load_cached_packet_run_with_layout(
-        std::span<const std::byte> bytes,
-        std::size_t base_offset,
-        std::span<const CachedDrawPacket> packets,
-        PrimitiveClass primitive,
-        std::uint8_t vtxfmt,
-        const GxState& state,
-        const VertexDescriptor& desc,
-        std::size_t source_vertex_size,
-        GuestMemory* memory,
-        UploadRing& vertex_ring,
-        UploadRing& index_ring,
-        std::uint32_t index_batch_base_vertex = 0,
-        bool rebase_indices_to_batch_base = false,
-        std::uint32_t precomputed_total_vertices = 0,
-        std::uint32_t precomputed_total_indices = 0,
-        std::span<const std::uint16_t> precomputed_indices = {});
-    // `record_indexed_read_ranges` exists because the decoded-vertex cache is
-    // the only consumer of DecodedPacketRunVertices::guest_array_reads. When it
-    // is false the resolver's read-range accumulator is left null, which makes
-    // IndexedArrayResolver::record_read() an argument check instead of a
-    // min/max update on every indexed attribute of every decoded vertex, and
-    // leaves DecodedPacketRunVertices::guest_array_reads empty rather than
-    // filled and discarded.
+    // `record_indexed_read_ranges` fills guest_array_reads, which only the decoded-vertex cache
+    // uses; false skips the range tracking on every indexed attribute read.
     DecodedPacketRunVertices decode_cached_packet_run_vertices_with_layout(
         std::span<const std::byte> bytes,
         std::size_t base_offset,
         std::span<const CachedDrawPacket> packets,
         PrimitiveClass primitive,
-        std::uint8_t vtxfmt,
         const GxState& state,
         const VertexDescriptor& desc,
         std::size_t source_vertex_size,
@@ -174,11 +124,9 @@ public:
         std::span<const std::uint16_t> precomputed_indices = {},
         ImmutableUploadToken* upload_token = nullptr);
 
-    // Index half of upload_cached_packet_run_vertices for vertices that are
-    // already GPU-visible: `vertex_byte_offset` is where `vertex_count`
-    // canonical vertices start in their (caller-owned) buffer, and
-    // base_vertex = vertex_byte_offset / sizeof(GxVertexOut). Rebasing,
-    // non-indexed triangle detection and index emission are identical.
+    // The index half of upload_cached_packet_run_vertices, for vertices already on the GPU:
+    // `vertex_count` vertices start at `vertex_byte_offset` in a caller-owned buffer, so
+    // base_vertex = vertex_byte_offset / sizeof(GxVertexOut).
     LoadedPrimitive upload_cached_packet_run_indices(
         std::size_t vertex_byte_offset,
         std::uint32_t vertex_count,
@@ -191,10 +139,9 @@ public:
         std::uint32_t total_indices = 0,
         std::span<const std::uint16_t> precomputed_indices = {});
 
+    // Byte size of one source vertex, so a packet's vertex data is taken as one window.
     [[nodiscard]] static std::size_t source_vertex_size(
         const VertexDescriptor& desc);
-private:
-    DependencyEventSink* dependency_event_sink_ = nullptr;
 };
 
 }  // namespace galaxy::gx

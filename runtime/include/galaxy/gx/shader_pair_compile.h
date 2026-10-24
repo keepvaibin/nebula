@@ -1,5 +1,7 @@
 #pragma once
 
+// Compiles a GX vertex/pixel shader pair in parallel.
+
 #include <functional>
 #include <future>
 #include <string>
@@ -8,9 +10,9 @@
 
 namespace galaxy::gx {
 
-// Both sources stay immutable for the whole call. The compiler must allow
-// concurrent invocations and receives no renderer, cache or guest state. The
-// caller publishes to the cache and creates the PSO after both results exist.
+// The vertex shader compiles on a worker thread, the pixel shader on the caller's. `compiler` must be safe to run
+// concurrently and sees no renderer, cache or game state; the caller publishes both results and creates the PSO
+// afterwards. Neither source may change during the call.
 template <class Compiler>
 [[nodiscard]] auto compile_independent_shader_pair(
     const std::string& vertex_source,
@@ -26,9 +28,8 @@ template <class Compiler>
         });
     Result pixel = std::invoke(
         compiler, pixel_source, "ps_5_1", "gx_ps");
-    // get() rethrows a worker exception. If pixel compilation throws first, the
-    // future's destructor joins the worker before the sources go out of scope, and
-    // no partial result is published.
+    // get() rethrows the worker's exception. If the pixel compile throws, the future's destructor joins the worker
+    // before the sources go out of scope.
     return std::pair<Result, Result>{vertex.get(), std::move(pixel)};
 }
 

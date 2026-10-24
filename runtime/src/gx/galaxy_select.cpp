@@ -2,8 +2,8 @@
 #include "galaxy/gx/galaxy_select.h"
 
 #include <atomic>
-#include <cstdlib>
 #include <mutex>
+#include <vector>
 
 namespace galaxy::gx {
 namespace {
@@ -19,13 +19,7 @@ std::vector<std::vector<std::string>> g_star_names;
 }  // namespace
 
 bool galaxy_select_enabled() noexcept {
-    static const bool enabled = [] {
-        char value[8]{};
-        std::size_t length = 0u;
-        return getenv_s(&length, value, sizeof(value), "GALAXY_GALAXY_SELECT") == 0 && length > 1u &&
-               value[0] == '1';
-    }();
-    return enabled;
+    return false;
 }
 
 void request_galaxy_travel(std::size_t stage, std::uint32_t star) noexcept {

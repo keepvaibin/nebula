@@ -377,7 +377,7 @@ void test_packs(Gpu& gpu, const std::filesystem::path& root) {
     std::vector<std::uint8_t> bc1 = dds_header(64u, 64u, 7u, fourcc("DXT1"), 0u);
     bc1.resize(bc1.size() + 2048u + 512u + 128u + 32u + 8u + 8u + 8u, 0x11u);
     write_file(game / (texture_pack_name(dds) + ".dds"), bc1);
-    // The same DDS name in an earlier folder loses; a PNG of the DDS's name in the same folder loses to the DDS.
+    // A PNG of the DDS's name in the same folder loses to the DDS.
     write_png(game / (texture_pack_name(dds) + ".png"), 64u, 64u, sevens.data());
     // Not a texture name: counted as a file, not indexed.
     { std::ofstream out(game / "readme.png"); out << "x"; }

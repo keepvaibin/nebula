@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// Checks resolve_sorted_snapshot_region against the linear region scan, and times both.
 #include "galaxy/gx/snapshot_region_lookup.h"
 #include <algorithm>
 #include <array>
@@ -49,8 +50,8 @@ int main() {
         if(original(memory,address,size)!=candidate(memory,address,size,true)) return 2;
         ++checks;
     }
-    // First-match overlap/order, malformed geometry and alias boundaries must
-    // never receive the certificate. Pointer equality checks actual ownership.
+    // Unsorted, overlapping, empty, unmapped and 32-bit-overflowing lists fail the check, and the generic path
+    // still matches the linear scan.
     for(unsigned mode=0;mode<5u;++mode) {
         auto bad=regions;
         if(mode==0u)std::swap(bad[0],bad[1]);
@@ -66,7 +67,7 @@ int main() {
             ++checks;
         }
     }
-    // Fast table remains first even when its bytes differ from region storage.
+    // The fast table takes precedence over the region list.
     std::vector<std::byte> fast(65536u);
     memory.fast_regions[8]={static_cast<std::uint32_t>(fast.size()),fast.data()};
     if(candidate(memory,0x80000040u,16u,true)!=fast.data()+64u)return 5;
@@ -83,8 +84,8 @@ int main() {
        gx::detail::resolve_sorted_snapshot_region(edge,0xffffffffu,1u)!=backing.data()+255u ||
        gx::detail::resolve_sorted_snapshot_region(edge,0xffffffffu,2u)!=nullptr) return 7;
     printf("snapshot lookup differential checks=%u PASS\n",checks);
-    // Separate synthetic cost, not gameplay/FPS: same1024fragment view, fixed
-    // addresses in every rotated block; observable checksum prevents elision.
+    // Lookup cost, binary search against the linear scan over the same 1024 regions and queries; the printed
+    // checksum keeps the loops from being optimized away.
     std::array<std::uint32_t,4096> queries{};
     for(auto& q:queries)q=0x80000000u+(next(random)%1024u)*64u;
     for(unsigned block=0;block<6u;++block)for(unsigned pass=0;pass<2u;++pass){

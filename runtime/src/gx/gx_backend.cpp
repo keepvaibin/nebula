@@ -1,7 +1,5 @@
-// gx_backend.cpp: GxBackend, the top-level orchestrator for the live GX pipeline.
-//
-// gx_shim.cpp implements the frozen galaxy::gx public API in gx_d3d12.h as a thin wrapper
-// around this backend.
+// GxBackend: decodes the game's GX command stream and drives the renderer.
+// gx_shim.cpp exposes it through the galaxy::gx API in gx_d3d12.h.
 
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
@@ -28,11 +26,8 @@
 #include "galaxy/gx/gx_backend.h"
 #include "galaxy/gx/dependency_draw_memo.h"
 #include "galaxy/gx/dependency_range_memo.h"
-#include "galaxy/gx/dependency_page_mask.h"
 #include "galaxy/gx/fifo_cache_fingerprint.h"
 #include "galaxy/gx/rt_tev_eval.h"
-#include "galaxy/gx/dependency_event_capture.h"
-#include "galaxy/gx/owned_fifo_event_replay.h"
 
 #include "galaxy/frame_cadence_diagnostics.h"
 #include "galaxy/gx/enhanced_lighting.h"
@@ -130,13 +125,11 @@ std::uint32_t pack_sampler_key(
         | (max_lod << 24);
 }
 
-// Helpers: build GxVsConstants from current GxState and the render ring.
-
 namespace {
 
 static_assert(kEfbWidth == 640u && kEfbHeight == 528u);
 
-// The alpha test keeps every fragment (both compares against the references, combined).
+// True when the alpha test passes every fragment.
 bool alpha_test_keeps_all(const PixelShaderKey& key) noexcept {
     const auto always = static_cast<std::uint8_t>(CompareFunc::Always);
     const auto never = static_cast<std::uint8_t>(CompareFunc::Never);
@@ -157,224 +150,9 @@ bool alpha_test_keeps_all(const PixelShaderKey& key) noexcept {
     return false;
 }
 
-std::vector<std::uint64_t> read_capture_frame_list() {
-    std::vector<std::uint64_t> frames;
-    char list[1024]{};
-    std::size_t list_length = 0;
-    if (getenv_s(
-            &list_length, list, sizeof(list),
-            "GALAXY_GX_CAPTURE_FRAMES") == 0 &&
-        list_length > 1u) {
-        char* cursor = list;
-        while (*cursor != '\0') {
-            char* end = nullptr;
-            const auto frame = std::strtoull(cursor, &end, 10);
-            if (end == cursor) {
-                ++cursor;
-                continue;
-            }
-            if (frame != 0u) {
-                frames.push_back(static_cast<std::uint64_t>(frame));
-            }
-            cursor = end;
-        }
-    }
-
-    if (frames.empty()) {
-        char value[32]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length, value, sizeof(value),
-                "GALAXY_GX_CAPTURE_FRAME") == 0 &&
-            length > 1u) {
-            const auto frame = std::strtoull(value, nullptr, 10);
-            if (frame != 0u) {
-                frames.push_back(static_cast<std::uint64_t>(frame));
-            }
-        }
-    }
-
-    std::sort(frames.begin(), frames.end());
-    frames.erase(std::unique(frames.begin(), frames.end()), frames.end());
-    return frames;
-}
-
-std::vector<std::uint64_t> read_u64_list_env(const char* env_name) {
-    std::vector<std::uint64_t> values;
-    char list[1024]{};
-    std::size_t list_length = 0;
-    if (getenv_s(&list_length, list, sizeof(list), env_name) != 0 ||
-        list_length <= 1u) {
-        return values;
-    }
-
-    char* cursor = list;
-    while (*cursor != '\0') {
-        char* end = nullptr;
-        const auto value = std::strtoull(cursor, &end, 10);
-        if (end == cursor) {
-            ++cursor;
-            continue;
-        }
-        if (value != 0u) {
-            values.push_back(static_cast<std::uint64_t>(value));
-        }
-        cursor = end;
-    }
-
-    std::sort(values.begin(), values.end());
-    values.erase(std::unique(values.begin(), values.end()), values.end());
-    return values;
-}
-
-bool diagnostic_texture_invalidate_requested(std::uint64_t frame) {
-    static const std::vector<std::uint64_t> frames =
-        read_u64_list_env("GALAXY_GX_INVALIDATE_FRAMES");
-    return std::binary_search(frames.begin(), frames.end(), frame);
-}
-
-const std::string& capture_request_file() {
-    static const std::string path = [] {
-        char value[MAX_PATH]{};
-        std::size_t length = 0u;
-        return getenv_s(&length, value, sizeof(value),
-                        "GALAXY_GX_CAPTURE_REQUEST_FILE") == 0 && length > 1u
-            ? std::string(value) : std::string{};
-    }();
-    return path;
-}
-
-// Render-worker capture of substantial FIFO chunks. Disabled runs never touch a file. Each
-// decimal request selects one substantial FIFO chunk, not a whole game frame. Empty VI and
-// presentation submissions, and the 32-byte control chunks on the Gateway route, do not
-// consume a request. Files are polled at most 10 times per second; a pending request expires
-// after 10 seconds.
-std::uint64_t live_capture_frame = 0u;
-
-void poll_live_capture_request(std::uint64_t frame, std::size_t fifo_size) {
-    constexpr std::size_t minimum_capture_fifo_bytes = 4096u;
-    const auto& path = capture_request_file();
-    if (path.empty()) return;
-    static std::uint64_t examined_frame = 0u;
-    static std::uint64_t last_request = 0u;
-    static std::uint64_t pending_request = 0u;
-    static std::uint64_t pending_since = 0u;
-    static std::uint64_t last_poll = 0u;
-    if (examined_frame == frame) return;
-    examined_frame = frame;
-    const auto now = galaxy::steady_ms();
-    if (pending_request != 0u) {
-        if (now - pending_since > 10000u) {
-            std::cerr << "[capture-request] request=" << pending_request
-                      << " expired=1 scope=intrusive-substantial-chunk-not-performance\n";
-            pending_request = 0u;
-        } else if (fifo_size >= minimum_capture_fifo_bytes) {
-            live_capture_frame = frame;
-            std::cerr << "[capture-request] request=" << pending_request
-                      << " frame=" << frame << " fifo-bytes=" << fifo_size
-                      << " scope=intrusive-substantial-chunk-not-performance\n";
-            pending_request = 0u;
-            return;
-        }
-    }
-    if (last_poll != 0u && now - last_poll < 100u) return;
-    last_poll = now;
-    std::array<char, 32> text{};
-#if defined(_WIN32)
-    const HANDLE file = CreateFileA(path.c_str(), GENERIC_READ,
-        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
-        OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (file == INVALID_HANDLE_VALUE) return;
-    DWORD count = 0u;
-    const BOOL read = ReadFile(file, text.data(), static_cast<DWORD>(text.size()), &count, nullptr);
-    CloseHandle(file);
-#else
-    std::FILE* const file = std::fopen(path.c_str(), "rb");
-    if (file == nullptr) return;
-    const std::size_t count = std::fread(text.data(), 1u, text.size(), file);
-    const bool read = std::ferror(file) == 0;
-    std::fclose(file);
-#endif
-    if (!read || count == 0u || count == text.size()) return;
-    std::string_view token(text.data(), count);
-    if (token.back() == '\n') {
-        token.remove_suffix(1u);
-        if (!token.empty() && token.back() == '\r') token.remove_suffix(1u);
-    }
-    if (token.empty() || token.front() < '0' || token.front() > '9') return;
-    std::uint64_t request = 0u;
-    const auto parsed = std::from_chars(token.data(), token.data() + token.size(), request);
-    if (parsed.ec != std::errc{} || parsed.ptr != token.data() + token.size() ||
-        request <= last_request) return;
-    last_request = request;
-    pending_request = request;
-    pending_since = now;
-    if (fifo_size >= minimum_capture_fifo_bytes) {
-        live_capture_frame = frame;
-        pending_request = 0u;
-        std::cerr << "[capture-request] request=" << request << " frame=" << frame
-                  << " fifo-bytes=" << fifo_size
-                  << " scope=intrusive-substantial-chunk-not-performance\n";
-    }
-}
-
-bool capture_frame_requested(std::uint64_t frame) {
-    static const std::vector<std::uint64_t> frames =
-        read_capture_frame_list();
-    // Opt-in extension of the same bounded capture: small effect/copy chunks
-    // following the substantial scene chunk otherwise escape its observation.
-    // At most eight adjacent renderer chunks, never continuous tracing.
-    static const unsigned live_capture_chunks = [] {
-        char value[16]{};
-        std::size_t length = 0u;
-        if (getenv_s(&length, value, sizeof(value),
-                "GALAXY_GX_CAPTURE_REQUEST_CHUNKS") != 0 || length <= 1u)
-            return 1u;
-        unsigned chunks = 0u;
-        const auto parsed = std::from_chars(value, value + length - 1u, chunks);
-        return parsed.ec == std::errc{} && parsed.ptr == value + length - 1u &&
-            chunks >= 1u && chunks <= 8u ? chunks : 1u;
-    }();
-    return (live_capture_frame != 0u && frame >= live_capture_frame &&
-            frame - live_capture_frame < live_capture_chunks) ||
-           std::binary_search(frames.begin(), frames.end(), frame);
-}
-
-// The adjacent pass-record range shares a single readback slot. Capture
-// pixels only at its requested boundary; later chunks still record copy,
-// resource and composite identities without reusing a pending GPU buffer.
-bool capture_owned_xfb_enabled() {
-    static const bool enabled = [] {
-        char value[8]{}; std::size_t length = 0u;
-        return getenv_s(&length, value, sizeof(value),
-            "GALAXY_GX_CAPTURE_OWNED_XFB") == 0 && length > 1u && value[0] == '1';
-    }();
-    return enabled;
-}
-
-// One source/destination pair from the same real XFB copy, within the existing eight-chunk
-// request bound. The substantial-chunk snapshot can belong to a newer EFB than the selected
-// display XFB; never call those a matched pair.
-bool capture_owned_xfb_requested(std::uint64_t frame) {
-    static std::uint64_t captured_request_frame = 0u; // Render-worker owned.
-    if (!capture_owned_xfb_enabled() || live_capture_frame == 0u ||
-        live_capture_frame == captured_request_frame || frame < live_capture_frame ||
-        frame - live_capture_frame >= 8u) return false;
-    captured_request_frame = live_capture_frame;
-    return true;
-}
-
-bool capture_pixel_frame_requested(std::uint64_t frame) {
-    static const std::vector<std::uint64_t> frames = read_capture_frame_list();
-    return (!capture_owned_xfb_enabled() && live_capture_frame != 0u &&
-            frame == live_capture_frame) ||
-           std::binary_search(frames.begin(), frames.end(), frame);
-}
-
 // Test aid for runs without a display: every Nth swap-chain present is read
 // back and written to GALAXY_PRESENT_SNAPSHOT_DIR\present_<n>.ppm, limited to
 // presents GALAXY_PRESENT_SNAPSHOT_FIRST..GALAXY_PRESENT_SNAPSHOT_LAST.
-// GALAXY_PRESENT_SNAPSHOT_PAIR=n also writes the n presents after each (1: a pair).
 std::uint64_t g_snapshot_presents = 0u;
 
 std::string present_snapshot_path() {
@@ -385,7 +163,6 @@ std::string present_snapshot_path() {
             ? std::strtoull(value, nullptr, 10) : fallback;
     };
     static const std::uint64_t every = read_u64("GALAXY_PRESENT_SNAPSHOT_EVERY", 0u);
-    static const std::uint64_t after = read_u64("GALAXY_PRESENT_SNAPSHOT_PAIR", 0u);
     static const std::uint64_t first = read_u64("GALAXY_PRESENT_SNAPSHOT_FIRST", 0u);
     static const std::uint64_t last = read_u64(
         "GALAXY_PRESENT_SNAPSHOT_LAST", std::numeric_limits<std::uint64_t>::max());
@@ -398,87 +175,10 @@ std::string present_snapshot_path() {
     }();
     const std::uint64_t presents = ++g_snapshot_presents;
     if (every == 0u || directory.empty() || presents < first || presents > last ||
-        presents % every > std::min(after, every - 1u)) {
+        presents % every != 0u) {
         return {};
     }
     return directory + "\\present_" + std::to_string(presents) + ".ppm";
-}
-
-bool capture_present_requested(std::uint64_t request) {
-    static const std::vector<std::uint64_t> requests =
-        read_u64_list_env("GALAXY_GX_CAPTURE_PRESENT_REQUESTS");
-    return std::binary_search(requests.begin(), requests.end(), request);
-}
-
-bool capture_frame_list_enabled() {
-    if (!capture_request_file().empty()) return true;
-    static const bool enabled = [] {
-        char value[1024]{};
-        std::size_t length = 0;
-        return getenv_s(
-                   &length, value, sizeof(value),
-                   "GALAXY_GX_CAPTURE_FRAMES") == 0 &&
-               length > 1u;
-    }();
-    return enabled;
-}
-
-bool capture_draw_log_enabled() {
-    static const bool enabled = [] {
-        char value[8]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length, value, sizeof(value),
-                "GALAXY_GX_CAPTURE_DRAW_LOG") != 0 ||
-            length <= 1u) {
-            return false;
-        }
-        return std::strtoull(value, nullptr, 10) != 0u;
-    }();
-    return enabled;
-}
-
-bool capture_composites_only_enabled() {
-    static const bool enabled = [] {
-        char value[8]{};
-        std::size_t length = 0;
-        return getenv_s(&length, value, sizeof(value),
-            "GALAXY_GX_CAPTURE_COMPOSITES_ONLY") == 0 &&
-            length > 1u && value[0] == '1';
-    }();
-    return enabled;
-}
-
-std::string numbered_capture_path(
-    const char* env_name,
-    std::uint64_t frame) {
-    char value[MAX_PATH]{};
-    std::size_t length = 0;
-    if (getenv_s(&length, value, sizeof(value), env_name) != 0 ||
-        length <= 1u) {
-        return {};
-    }
-
-    std::filesystem::path path(value);
-    const std::string suffix = "_" + std::to_string(frame);
-    const std::string stem = path.stem().string();
-    const std::string ext = path.extension().string();
-    path.replace_filename(stem + suffix + ext);
-    return path.string();
-}
-
-std::string capture_output_path(const char* env_name, std::uint64_t frame) {
-    if (capture_frame_list_enabled()) {
-        return numbered_capture_path(env_name, frame);
-    }
-
-    char value[MAX_PATH]{};
-    std::size_t length = 0;
-    if (getenv_s(&length, value, sizeof(value), env_name) != 0 ||
-        length <= 1u) {
-        return {};
-    }
-    return value;
 }
 
 class PeEventSink final : public FifoSink {
@@ -501,10 +201,8 @@ public:
         (void)cursor.take(draw_payload_size(vtxfmt, vertex_count));
     }
 
-    // Initial parsing validates every draw's extent. Cached replay verifies
-    // unchanged list bytes and VCD/VAT dependencies before offering these
-    // draw-only runs. This sink has no draw side effects; PE state commands
-    // remain separate and replay in their original order.
+    // Cached draw runs arrive already validated (extent, list bytes, VCD/VAT). This sink ignores
+    // draws; PE commands still replay in their original order.
     [[nodiscard]] bool on_cached_prepared_draw_run(
         PrimitiveClass,
         std::uint8_t,
@@ -557,18 +255,6 @@ private:
     const GxServices* services_;
 };
 
-bool trace_efb_copy_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        return getenv_s(
-                   &length, value, sizeof(value),
-                   "GALAXY_TRACE_EFB_COPY") == 0 &&
-               length > 1 && value[0] != '0';
-    }();
-    return enabled;
-}
-
 std::uint64_t read_env_u64(const char* name, std::uint64_t fallback) {
     char value[32]{};
     std::size_t length = 0;
@@ -598,70 +284,6 @@ std::uint64_t trace_cycles() noexcept {
 #else
     return static_cast<std::uint64_t>(galaxy::qpc_now());
 #endif
-}
-
-// GALAXY_LIGHTING_CENSUS=1: each scene material's lighting state once ([light-census]) and the
-// enhanced-lighting flushes every 300 frames ([enh-stats]).
-bool lighting_census_enabled() {
-    static const bool enabled = read_env_u64("GALAXY_LIGHTING_CENSUS", 0u) != 0u;
-    return enabled;
-}
-
-bool trace_xfb_causal_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        return getenv_s(
-                   &length,
-                   value,
-                   sizeof(value),
-                   "GALAXY_TRACE_XFB_CAUSAL") == 0 &&
-               length > 1 && value[0] != '0';
-    }();
-    return enabled;
-}
-
-bool trace_xfb_causal_frame(std::uint64_t frame) {
-    if (!trace_xfb_causal_enabled()) {
-        return false;
-    }
-    static const std::uint64_t start_frame =
-        read_env_u64("GALAXY_TRACE_XFB_CAUSAL_START_FRAME", 1u);
-    // The trace is bounded even when the caller sets no limit. It is a causal diagnostic, not a
-    // shipping telemetry stream.
-    static const std::uint64_t max_frames = std::min<std::uint64_t>(
-        read_env_u64("GALAXY_TRACE_XFB_CAUSAL_MAX_FRAMES", 600u),
-        10'000u);
-    return frame >= start_frame && frame - start_frame < max_frames;
-}
-
-// Unlike the streaming causal trace above, this mode collects a small, fixed record set on the
-// render thread and formats it only after that thread has stopped. It remains usable while AI
-// DMA is active: stderr writes from a render callback are not real-time safe.
-bool trace_xfb_causal_deferred_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        return getenv_s(
-                   &length,
-                   value,
-                   sizeof(value),
-                   "GALAXY_TRACE_XFB_CAUSAL_DEFERRED") == 0 &&
-               length > 1 && value[0] != '0';
-    }();
-    return enabled;
-}
-
-bool trace_xfb_causal_deferred_frame(std::uint64_t frame) {
-    if (!trace_xfb_causal_deferred_enabled()) {
-        return false;
-    }
-    static const std::uint64_t start_frame =
-        read_env_u64("GALAXY_TRACE_XFB_CAUSAL_DEFERRED_START_FRAME", 1u);
-    static const std::uint64_t max_frames = std::min<std::uint64_t>(
-        read_env_u64("GALAXY_TRACE_XFB_CAUSAL_DEFERRED_MAX_FRAMES", 64u),
-        128u);
-    return frame >= start_frame && frame - start_frame < max_frames;
 }
 
 // Test hook: GALAXY_TEST_RENDER_STALL_MS=<ms>,<every N render chunks> makes
@@ -707,494 +329,34 @@ bool trace_gx_stalls_enabled() {
     return enabled;
 }
 
-bool trace_gx_microprofile_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        return getenv_s(
-                   &length,
-                   value,
-                   sizeof(value),
-                   "GALAXY_TRACE_GX_MICROPROFILE") == 0 &&
-               length > 1 && value[0] != '0';
-    }();
-    return enabled;
-}
+// select_xfb_for_present holds the last good frame while the VI-selected XFB is briefly not
+// presentable (it is re-acquired as the next copy target during a double or triple buffer flip),
+// and falls forward to the latest copy only after a sustained miss. 30 presents (about 0.5 s) ride
+// out the 1-3 frame jitter of a flip or of the render queue and still end a real freeze.
+constexpr std::uint64_t kMaxXfbPreserveAge = 30u;
 
-bool trace_gx_stats_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        return getenv_s(
-                   &length,
-                   value,
-                   sizeof(value),
-                   "GALAXY_TRACE_GX_STATS") == 0 &&
-               length > 1 && value[0] != '0';
-    }();
-    return enabled;
-}
-
-bool shader_cache_periodic_flush_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        return getenv_s(
-                   &length,
-                   value,
-                   sizeof(value),
-                   "GALAXY_SHADER_CACHE_PERIODIC_FLUSH") == 0 &&
-               length > 1 && value[0] != '0' && value[0] != 'n' &&
-               value[0] != 'N';
-    }();
-    return enabled;
-}
-
-bool trace_xfb_present_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        return getenv_s(
-                   &length, value, sizeof(value),
-                   "GALAXY_TRACE_XFB_PRESENT") == 0 &&
-               length > 1 && value[0] != '0';
-    }();
-    return enabled;
-}
-
-std::uint64_t trace_xfb_present_interval() {
-    static const std::uint64_t interval =
-        std::max<std::uint64_t>(
-            1u,
-            read_env_u64("GALAXY_TRACE_XFB_PRESENT_INTERVAL", 120u));
-    return interval;
-}
-
-std::uint64_t trace_gx_microprofile_interval() {
-    static const std::uint64_t interval =
-        std::max<std::uint64_t>(
-            1u,
-            read_env_u64("GALAXY_TRACE_GX_MICROPROFILE_INTERVAL", 1u));
-    return interval;
-}
-
-std::uint64_t max_xfb_preserve_age() {
-    // select_xfb_for_present holds the last good frame when the VI-selected XFB is transiently not
-    // presentable, which happens while that buffer is re-acquired as the next copy target during a
-    // double or triple buffer flip. The fall-forward to latest() on "missing_expired" applies only
-    // to a sustained miss, a buffer that never receives a copy. It must not fire on the 1-3 frame
-    // jitter of a normal flip or of the async render pipeline, or every flip would show a different
-    // buffer for one frame. 30 presents (about 0.5 s) clears pipeline jitter and still breaks a true
-    // multi-frame freeze.
-    static const std::uint64_t age =
-        std::clamp<std::uint64_t>(
-            read_env_u64("GALAXY_XFB_MAX_PRESERVE_AGE", 30u),
-            0u,
-            600u);
-    return age;
-}
-
-// Per-draw instrumentation sampling. The per-draw clocks sit on the render thread's critical
-// path, so they cannot be always on. Gating them behind an intrusive flag would leave a routine
-// recording unable to attribute time. GALAXY_GX_FRAME_TIMING_SAMPLE=N enables per-draw
-// instrumentation for one frame in every N, so one recording holds attributed sample frames and
-// frames at production speed. N <= 1 disables sampling (the default).
+// GALAXY_GX_FRAME_TIMING_SAMPLE=N times every draw of one frame in N (N >= 2), so a recording holds
+// attributed frames among frames at full speed; the per-draw clocks are too costly for every frame.
 bool frame_gx_timing_sample_enabled(std::uint64_t frame_index) {
     static const std::uint64_t period = read_env_u64(
         "GALAXY_GX_FRAME_TIMING_SAMPLE", 0u);
     if (period < 2u) {
         return false;
     }
-    // Caller passes the same pre-increment index trace_gx_microprofile uses.
+    // frame_index is the count before this frame's increment.
     return (frame_index + 1u) % period == 0u;
 }
 
-// There is no accessor for the sampling period. `frame_time_sample_` is true once per period,
-// not on every frame, so a store stride derived from the period would suppress the samples.
-// `frame_time_detail_` is the flag that is true every frame. The ring bounds its occupancy by
-// reservoir sampling.
-
-// GALAXY_PE_PRECLASSIFY=0 skips the simulation thread's second FIFO parse;
-// every capture then takes the render thread's resolution path.
-bool pe_preclassify_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        if (getenv_s(&length, value, sizeof(value), "GALAXY_PE_PRECLASSIFY") != 0 ||
-            length <= 1u) {
-            return true;
-        }
-        return value[0] != '0' && value[0] != 'n' && value[0] != 'N';
-    }();
-    return enabled;
-}
-
-bool display_list_dirty_invalidate_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length,
-                value,
-                sizeof(value),
-                "GALAXY_DISPLAY_LIST_DIRTY_INVALIDATE") != 0 ||
-            length <= 1u) {
-            return false;
-        }
-        return value[0] != '0' && value[0] != 'n' && value[0] != 'N';
-    }();
-    return enabled;
-}
-
-// The decoded-packet-run vertex cache reuses CPU-decoded vertices across identical display-list
-// replays. A busy SMG frame replays tens of thousands of draws from cached display lists. With
-// the cache off, every packet run re-decodes its source vertices and copies them into the frame
-// ring. That re-decode is on the render thread's critical path, so the cache is on by default.
-// Set GALAXY_GX_DECODED_VERTEX_CACHE=0 to restore the uncached path when bisecting geometry
-// regressions.
-//
-// A hit is taken only when the whole decode input is identical:
-//   - the key holds the display-list token and packet-run index (so the source bytes and packet
-//     boundaries match), the VCD/VAT words and the indexed array base and stride registers;
-//   - guest-write notifications invalidate every overlapping entry before the frame's first
-//     replay. The retained snapshot bytes are compared against live guest memory once per
-//     generation, as a backstop against a coalesced or missed notification.
-// A miss, a stale reject, or an entry that could not capture a complete dependency snapshot falls
-// through to the uncached decode path below.
-bool decoded_vertex_cache_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length,
-                value,
-                sizeof(value),
-                "GALAXY_GX_DECODED_VERTEX_CACHE") != 0 ||
-            length <= 1u) {
-            return true;
-        }
-        return value[0] != '0' && value[0] != 'n' && value[0] != 'N';
-    }();
-    return enabled;
-}
-
-// A cache entry whose guest input did not change describes the same vertices on consecutive
-// frames. When enabled, the entry's ImmutableUploadToken lets UploadRing::upload_immutable() keep
-// the bytes it already copied into the per-frame segment, so each replayed packet run skips one
-// full vertex-buffer copy per frame.
-//
-// Reuse is taken only when the ring can prove the bytes are intact. Allocations are monotonic
-// within a frame segment. The token records the segment generation of its own upload, and reuse
-// requires that generation to be exactly one behind the current one. Any intervening allocation
-// in that slot changes the generation, and the call falls back to a plain copy. The failure mode
-// is therefore an extra copy, never a reused overwritten buffer.
-bool immutable_vertex_upload_reuse_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        if (getenv_s(&length, value, sizeof(value),
-                     "GALAXY_GX_IMMUTABLE_VERTEX_UPLOAD_REUSE") != 0 ||
-            length <= 1u) {
-            return true;
-        }
-        return value[0] != '0' && value[0] != 'n' && value[0] != 'N';
-    }();
-    return enabled;
-}
-
-// Validated decoded packet-run entries draw from one persistent buffer instead
-// of being copied into the frame vertex ring on every replay. Default on;
-// GALAXY_GX_RESIDENT_DECODED_VERTICES=0 restores the ring copy for A/B runs.
-bool resident_decoded_vertices_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        if (getenv_s(&length, value, sizeof(value),
-                     "GALAXY_GX_RESIDENT_DECODED_VERTICES") != 0 ||
-            length <= 1u) {
-            return true;
-        }
-        return value[0] != '0' && value[0] != 'n' && value[0] != 'N';
-    }();
-    return enabled;
-}
-
-// First-use texture decodes run on TextureDecodePool workers when the chunk
-// carries a sealed memory snapshot. GALAXY_GX_ASYNC_TEXTURE_DECODE=0 keeps
-// every decode on the render thread.
-bool async_texture_decode_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        if (getenv_s(&length, value, sizeof(value),
-                     "GALAXY_GX_ASYNC_TEXTURE_DECODE") != 0 ||
-            length <= 1u) {
-            return true;
-        }
-        return value[0] != '0' && value[0] != 'n' && value[0] != 'N';
-    }();
-    return enabled;
-}
-
-// Dirty ranges reach invalidation sorted and coalesced (coalesce_dirty_ranges on every path), so each cached entry's
-// dependencies take a binary search instead of a scan of every range. Battlerock 1080p, RTX 5090: render thread
-// 219.8 -> 201.0 ms/s, the function 2.3% -> 0.2% of its samples, presented frames identical (2026-10-18).
-// GALAXY_GX_SORTED_VERTEX_INVALIDATION=0 keeps the scan.
-bool sorted_vertex_invalidation_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0u;
-        if (getenv_s(&length, value, sizeof(value),
-                     "GALAXY_GX_SORTED_VERTEX_INVALIDATION") != 0 ||
-            length <= 1u) {
-            return true;
-        }
-        return value[0] != '0' && value[0] != 'n' && value[0] != 'N';
-    }();
-    return enabled;
-}
-
-bool vertex_dependency_page_filter_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0u;
-        return getenv_s(&length, value, sizeof(value),
-                   "GALAXY_GX_VERTEX_DEPENDENCY_PAGE_FILTER") == 0 && length > 1u &&
-               value[0] != '0' && value[0] != 'n' && value[0] != 'N';
-    }();
-    return enabled;
-}
-
-bool lazy_vertex_invalidation_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0u;
-        return getenv_s(&length, value, sizeof(value),
-                   "GALAXY_GX_LAZY_VERTEX_INVALIDATION") == 0 && length > 1u &&
-               value[0] != '0' && value[0] != 'n' && value[0] != 'N';
-    }();
-    return enabled;
-}
-
-bool async_render_thread_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length,
-                value,
-                sizeof(value),
-                "GALAXY_ASYNC_RENDER_THREAD") != 0 ||
-            length <= 1u) {
-            return true;
-        }
-        return value[0] != '0' && value[0] != 'n' && value[0] != 'N';
-    }();
-    return enabled;
-}
-
-// Experimental two-stage ownership handoff: the render worker seals a strict
-// dependency snapshot before recording GPU commands, then releases the CPU
-// owner. The ordinary live-read barrier remains the default.
-bool worker_memory_snapshot_enabled() {
-    static const bool enabled = [] {
-        char value[8]{};
-        std::size_t length = 0;
-        return getenv_s(
-                   &length, value, sizeof(value),
-                   "GALAXY_RENDER_WORKER_MEMORY_SNAPSHOT") == 0 &&
-               length > 1u && value[0] == '1';
-    }();
-    return enabled;
-}
-
-bool ordered_dependency_capture_enabled() {
-    static const bool enabled = [] {
-        char value[8]{};
-        std::size_t length = 0;
-        return getenv_s(
-                   &length, value, sizeof(value),
-                   "GALAXY_GX_ORDERED_DEPENDENCY_CAPTURE") == 0 &&
-               length > 1u && value[0] != '0';
-    }();
-    return enabled;
-}
-
-bool ordered_packet_replay_enabled() {
-    static const bool enabled = [] {
-        char value[8]{};
-        std::size_t length = 0;
-        return getenv_s(
-                   &length, value, sizeof(value),
-                   "GALAXY_GX_ORDERED_PACKET_REPLAY") == 0 &&
-               length > 1u && value[0] != '0';
-    }();
-    return enabled;
-}
-
-std::vector<GuestMemoryRange> render_memory_snapshot_ranges() {
-    std::vector<GuestMemoryRange> ranges;
-    char value[1024]{};
-    std::size_t length = 0;
-    if (getenv_s(
-            &length,
-            value,
-            sizeof(value),
-            "GALAXY_RENDER_MEMORY_SNAPSHOT_RANGES") != 0 ||
-        length <= 1u) {
-        return ranges;
-    }
-
-    const std::string text(value);
-    std::size_t offset = 0;
-    while (offset <= text.size()) {
-        const std::size_t sep = text.find(';', offset);
-        const std::string entry = text.substr(
-            offset,
-            (sep == std::string::npos ? text.size() : sep) - offset);
-        const std::size_t colon = entry.find(':');
-        if (colon != std::string::npos) {
-            const std::uint64_t base = std::strtoull(
-                entry.substr(0, colon).c_str(), nullptr, 0);
-            const std::uint64_t size = std::strtoull(
-                entry.substr(colon + 1u).c_str(), nullptr, 0);
-            if (base <= std::numeric_limits<std::uint32_t>::max() &&
-                size != 0u &&
-                size <= std::numeric_limits<std::uint32_t>::max() &&
-                base + size <=
-                    static_cast<std::uint64_t>(
-                        std::numeric_limits<std::uint32_t>::max()) +
-                        1ull) {
-                ranges.push_back(GuestMemoryRange{
-                    static_cast<std::uint32_t>(base),
-                    static_cast<std::uint32_t>(size),
-                });
-            }
-        }
-        if (sep == std::string::npos) {
-            break;
-        }
-        offset = sep + 1u;
-    }
-    return ranges;
-}
-
+// Compact snapshots copy only the dependency ranges a chunk reads; they apply whenever the renderer
+// does not wait on live memory.
 bool compact_memory_snapshot_enabled() {
-    static const bool enabled = [] {
-        char value[8]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length, value, sizeof(value),
-                "GALAXY_RENDER_MEMORY_SNAPSHOT_COMPACT") != 0 ||
-            length <= 1u) {
-            return !get_gx_timing_config().render_live_memory_wait;
-        }
-        return value[0] != '0';
-    }();
+    static const bool enabled = !get_gx_timing_config().render_live_memory_wait;
     return enabled;
 }
 
-bool immutable_range_ownership_enabled() {
-    static const bool enabled = [] {
-        char value[8]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length,
-                value,
-                sizeof(value),
-                "GALAXY_RENDER_IMMUTABLE_RANGE_OWNERSHIP") != 0 ||
-            length <= 1u) {
-            return false;
-        }
-        return value[0] != '0';
-    }();
-    return enabled;
-}
-
-bool parallel_memory_snapshot_copy_enabled() {
-    static const bool enabled = [] {
-        char value[8]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length, value, sizeof(value),
-                "GALAXY_RENDER_MEMORY_SNAPSHOT_PARALLEL") != 0 ||
-            length <= 1u) {
-            return false;
-        }
-        return value[0] != '0';
-    }();
-    return enabled;
-}
-
-bool broad_dependency_index_ranges_enabled() {
-    static const bool enabled = [] {
-        char value[8]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length, value, sizeof(value),
-                "GALAXY_DEPENDENCY_SNAPSHOT_BROAD_INDEX_RANGES") != 0 ||
-            length <= 1u) {
-            return true;
-        }
-        return value[0] != '0';
-    }();
-    return enabled;
-}
-
-std::uint64_t exact_cached_dependency_vertex_budget() {
-    static const std::uint64_t budget =
-        std::clamp<std::uint64_t>(
-            read_env_u64(
-                "GALAXY_DEPENDENCY_EXACT_CACHED_VERTEX_BUDGET",
-                4096u),
-            0u,
-            1u << 20u);
-    return budget;
-}
-
-// A video frame the game did not redraw is not presented again, so the swap
-// chain's present rate (what frame-rate overlays count) is the game's frame
-// rate. GALAXY_SKIP_DUPLICATE_XFB_PRESENTS=0 presents every video frame.
-bool skip_duplicate_xfb_presents_enabled() {
-    static const bool enabled = [] {
-        char value[8]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length,
-                value,
-                sizeof(value),
-                "GALAXY_SKIP_DUPLICATE_XFB_PRESENTS") != 0 ||
-            length <= 1u) {
-            return true;
-        }
-        return value[0] != '0';
-    }();
-    return enabled;
-}
-
-std::size_t snapshot_copy_worker_count() {
-    static const std::size_t count = [] {
-        const unsigned logical_cores = std::max(1u, std::thread::hardware_concurrency());
-        const std::uint64_t default_count =
-            logical_cores >= 12u ? 4u : (logical_cores >= 6u ? 3u : 2u);
-        return static_cast<std::size_t>(
-            std::clamp<std::uint64_t>(
-                read_env_u64(
-                    "GALAXY_RENDER_MEMORY_SNAPSHOT_COPY_WORKERS",
-                    default_count),
-                1u,
-                8u));
-    }();
-    return count;
-}
-
-std::uint64_t snapshot_parallel_copy_threshold() {
-    static const std::uint64_t threshold =
-        read_env_u64(
-            "GALAXY_RENDER_MEMORY_SNAPSHOT_PARALLEL_THRESHOLD",
-            8ull * 1024ull * 1024ull);
-    return threshold;
-}
+// A dependency scan finds exact ranges for at most this many cached-run vertices; past it, cached
+// runs record their arrays' broad ranges.
+constexpr std::uint64_t kExactCachedDependencyVertexBudget = 4096u;
 
 void record_guest_memory_range(
     std::vector<GuestMemoryRange>& ranges,
@@ -1223,8 +385,7 @@ void normalize_guest_memory_ranges(std::vector<GuestMemoryRange>& ranges) {
             return a.guest_base < b.guest_base ||
                 (a.guest_base == b.guest_base && a.size < b.size);
         });
-    // Compact into the already owned vector. Output never passes the current
-    // input, so aliasing the read/write storage is safe and retains capacity.
+    // Merge in place: the write index never passes the read index.
     std::size_t out = 0u;
     for (const GuestMemoryRange& range : ranges) {
         if (range.size == 0u) {
@@ -1468,8 +629,7 @@ bool dependency_ranges_overlap(
             1u + (static_cast<unsigned>(mode.max_lod_x16) + 15u) / 16u;
         guest_levels = std::min(wanted, full_chain);
     }
-    // Generated host mips consume only guest mip zero, regardless of the
-    // enhancement setting. Dependency discovery needs no settings lookup.
+    // Host-generated mips read only guest level 0, so no setting changes the footprint.
 
     std::uint64_t total = 0;
     for (unsigned level = 0; level < guest_levels; ++level) {
@@ -1528,19 +688,13 @@ public:
             GxBackend::DependencyDrawRunRangeCacheKeyHash>&
             draw_run_cache,
         std::uint64_t& draw_run_cache_tick,
-        std::size_t& draw_run_cache_bytes,
-        std::atomic<std::uint64_t>& stat_draw_run_cache_hits,
-        std::atomic<std::uint64_t>& stat_draw_run_cache_misses,
-        std::atomic<std::uint64_t>& stat_draw_run_cache_evictions)
+        std::size_t& draw_run_cache_bytes)
         : state_(state),
           memory_(memory),
           ranges_(ranges),
           draw_run_cache_(draw_run_cache),
           draw_run_cache_tick_(draw_run_cache_tick),
-          draw_run_cache_bytes_(draw_run_cache_bytes),
-          stat_draw_run_cache_hits_(stat_draw_run_cache_hits),
-          stat_draw_run_cache_misses_(stat_draw_run_cache_misses),
-          stat_draw_run_cache_evictions_(stat_draw_run_cache_evictions) {}
+          draw_run_cache_bytes_(draw_run_cache_bytes) {}
 
     [[nodiscard]] std::size_t draw_payload_size(
         std::uint8_t vtxfmt,
@@ -1664,13 +818,6 @@ public:
         (void)base_offset;
         (void)total_indices;
         (void)precomputed_indices;
-        const std::uint64_t exact_budget = exact_cached_dependency_vertex_budget();
-        // Zero retains the configured broad-first policy, including fallthrough.
-        if (exact_budget == 0u &&
-            record_broad_cached_draw_dependencies_if_over_budget(
-                vtxfmt, total_vertices)) {
-            return true;
-        }
         const GxBackend::DependencyDrawRunRangeCacheKey cache_key{
             cache_token,
             packet_run_index,
@@ -1685,22 +832,14 @@ public:
             for (const GuestMemoryRange& range : cache_it->second.ranges) {
                 record_dependency_range(range.guest_base, range.size);
             }
-            stat_draw_run_cache_hits_.fetch_add(
-                1u,
-                std::memory_order_relaxed);
             return true;
         }
-        // Hits reuse addresses proved by immutable indices and exact state;
-        // current attribute bytes are still copied/validated by their owners.
-        // Only an actual scan consumes the nonzero exact-discovery budget.
-        if (exact_budget != 0u &&
-            record_broad_cached_draw_dependencies_if_over_budget(
+        // A hit reuses addresses proved by immutable indices and exact state (the attribute bytes
+        // are still copied by their owners); only a scan uses the exact-discovery budget.
+        if (record_broad_cached_draw_dependencies_if_over_budget(
                 vtxfmt, total_vertices)) {
             return true;
         }
-        stat_draw_run_cache_misses_.fetch_add(
-            1u,
-            std::memory_order_relaxed);
 
         const VertexDescriptor desc = state_.vertex_desc(vtxfmt);
         const std::size_t stride = VertexLoader::source_vertex_size(desc);
@@ -1766,9 +905,7 @@ private:
     [[nodiscard]] bool record_broad_cached_draw_dependencies_if_over_budget(
         std::uint8_t vtxfmt,
         std::uint64_t vertices) {
-        const std::uint64_t budget = exact_cached_dependency_vertex_budget();
-        if (budget == 0u ||
-            exact_cached_dependency_vertices_ + vertices > budget) {
+        if (exact_cached_dependency_vertices_ + vertices > kExactCachedDependencyVertexBudget) {
             return record_broad_draw_dependencies_for_vtxfmt(vtxfmt);
         }
         exact_cached_dependency_vertices_ += vertices;
@@ -1840,9 +977,6 @@ private:
                 draw_run_cache_bytes_,
                 it->second.byte_size);
             draw_run_cache_.erase(it);
-            stat_draw_run_cache_evictions_.fetch_add(
-                1u,
-                std::memory_order_relaxed);
         }
     }
 
@@ -1928,14 +1062,9 @@ private:
 
     [[nodiscard]] bool record_broad_draw_dependencies_for_vtxfmt(
         std::uint8_t vtxfmt) {
-        if (!broad_dependency_index_ranges_enabled()) {
-            return false;
-        }
-        // This sink owns one parse interval over the same register instance;
-        // no state assignment/restore occurs while it is active. A revision
-        // identifies mutations exactly here, whereas a hash alone cannot
-        // justify omitting required snapshot reads. Zero forbids reuse after
-        // counter saturation. Changes conservatively start a new format mask.
+        // The memo is keyed on the state's mutation revision, not a hash: this sink owns the parse
+        // of one register instance, so the revision identifies every change exactly (zero, after the
+        // counter saturates, forbids reuse).
         if (broad_draw_memo_.contains(state_.dependency_shape_revision(), vtxfmt)) {
             return true;
         }
@@ -2224,9 +1353,6 @@ private:
         GxBackend::DependencyDrawRunRangeCacheKeyHash>& draw_run_cache_;
     std::uint64_t& draw_run_cache_tick_;
     std::size_t& draw_run_cache_bytes_;
-    std::atomic<std::uint64_t>& stat_draw_run_cache_hits_;
-    std::atomic<std::uint64_t>& stat_draw_run_cache_misses_;
-    std::atomic<std::uint64_t>& stat_draw_run_cache_evictions_;
     detail::DependencyRangeMemo emitted_range_keys_;
     detail::BroadDrawDependencyMemo broad_draw_memo_;
     std::uint64_t exact_cached_dependency_vertices_ = 0;
@@ -2258,62 +1384,6 @@ private:
     std::vector<GuestMemoryRange>& shape_ranges_;
 };
 
-class RenderDependencyReadRecorder final
-    : public FifoGuestMemoryReadRecorder {
-public:
-    explicit RenderDependencyReadRecorder(DependencyEventSink& sink)
-        : sink_(sink) {}
-
-    void record_guest_memory_read(std::uint32_t,
-                                  std::uint32_t) override {
-        throw std::logic_error(
-            "GX ordered capture requires exact parser read bytes");
-    }
-    void record_guest_memory_read_bytes(
-        std::uint32_t guest_addr,
-        std::span<const std::byte> bytes) override {
-        sink_.guest_read(DependencyReadSource::Parser,
-                         guest_addr, bytes);
-    }
-
-private:
-    DependencyEventSink& sink_;
-};
-
-class ScopedRenderDependencyCapture final {
-public:
-    ScopedRenderDependencyCapture(
-        FifoParser& parser,
-        VertexLoader& vertex_loader,
-        TextureCache& texture_cache,
-        DependencyEventSink*& backend_sink,
-        FifoGuestMemoryReadRecorder& parser_recorder,
-        DependencyEventSink& sink)
-        : parser_(parser), vertex_loader_(vertex_loader),
-          texture_cache_(texture_cache), backend_sink_(backend_sink) {
-        parser_.set_memory_read_recorder(&parser_recorder);
-        vertex_loader_.set_dependency_event_sink(&sink);
-        texture_cache_.set_dependency_event_sink(&sink);
-        backend_sink_ = &sink;
-    }
-    ScopedRenderDependencyCapture(
-        const ScopedRenderDependencyCapture&) = delete;
-    ScopedRenderDependencyCapture& operator=(
-        const ScopedRenderDependencyCapture&) = delete;
-    ~ScopedRenderDependencyCapture() {
-        backend_sink_ = nullptr;
-        texture_cache_.set_dependency_event_sink(nullptr);
-        vertex_loader_.set_dependency_event_sink(nullptr);
-        parser_.set_memory_read_recorder(nullptr);
-    }
-
-private:
-    FifoParser& parser_;
-    VertexLoader& vertex_loader_;
-    TextureCache& texture_cache_;
-    DependencyEventSink*& backend_sink_;
-};
-
 std::uint64_t trace_gx_stall_threshold_us() {
     static const std::uint64_t threshold =
         read_env_u64("GALAXY_TRACE_GX_STALL_US", 1000u);
@@ -2328,8 +1398,7 @@ std::uint64_t elapsed_us(
             end - start).count());
 }
 
-// Optional calling-thread counters. Availability is separate from value: zero
-// is a valid counter sample, and failed queries must never enter subtraction.
+// A per-thread counter sample; `available` is false when the query failed (zero is a valid value).
 struct ThreadCounterSample {
     std::uint64_t value = 0u;
     bool available = false;
@@ -2345,11 +1414,10 @@ ThreadCounterSample thread_cycle_count() noexcept {
 #if defined(_WIN32)
     ULONG64 cycles = 0u;
     if (QueryThreadCycleTime(GetCurrentThread(), &cycles) == FALSE) return {};
-    // Raw count, never converted to time. Frequency and instrumentation affect
-    // its interpretation; this counter alone cannot distinguish work/waits.
+    // Raw cycles, not convertible to time.
     return {static_cast<std::uint64_t>(cycles), true};
 #else
-    return {};  // no per-thread cycle counter; thread_cpu_time_100ns is the measure there
+    return {};  // no per-thread cycle counter here; thread_cpu_time_100ns covers it
 #endif
 }
 
@@ -2366,8 +1434,7 @@ bool pso_cycles_requested() {
 
 ThreadCounterSample thread_cpu_time_100ns() noexcept {
 #if defined(_WIN32)
-    // Kernel+user CPU duration in 100ns units. Granularity is host-dependent;
-    // wall minus CPU also includes blocking, not solely scheduler preemption.
+    // Kernel plus user CPU time of this thread, in 100 ns units.
     FILETIME creation{};
     FILETIME exit{};
     FILETIME kernel{};
@@ -2382,9 +1449,6 @@ ThreadCounterSample thread_cpu_time_100ns() noexcept {
     ULARGE_INTEGER user_ticks{};
     user_ticks.LowPart = user.dwLowDateTime;
     user_ticks.HighPart = user.dwHighDateTime;
-    // Kernel + user, both already 100 ns ticks. Self-consistent with the sample
-    // taken at the top of render_frame_on_thread, so the delta is a real CPU-time
-    // delta for this thread, independent of how often it was descheduled.
     return {kernel_ticks.QuadPart + user_ticks.QuadPart, true};
 #else
     timespec now{};
@@ -2393,27 +1457,9 @@ ThreadCounterSample thread_cpu_time_100ns() noexcept {
 #endif
 }
 
-// Always-on flush timing, sampled one call in kFlushTimingSampleStride so the meter does not
-// become the measured path.
-//
-// The `*_us` fields inside `flush_draw_state` are gated on
-// `frame_microprofile_enabled_ || trace_gx_stalls_enabled()`, so they exist only when extra
-// steady_clock reads run on every frame. Their values are upper bounds that include the
-// profiler's own overhead, so they cannot size the real work.
-// One steady_clock pair per draw costs render-thread time on a large frame, so the clock is read
-// for only one call in kFlushTimingSampleStride.
-//
-// Report fields:
-//   - `flush-mean-us` = frame_flush_total_us_ / frame_flush_timed_samples_ is the per-call cost,
-//     the mean over the sampled calls. Compare builds with this field.
-//   - `flush-total-us` is the sum over the sampled calls only, roughly 1/64 of the frame's flush
-//     work. It is not scaled up, because that assumes the sample is representative. It is a
-//     diagnostic for the sampler (see the note at its print site).
-//   - `flush-timed-samples` is the denominator and the sampler's health signal. If it is 0, no
-//     call was timed and the other two fields are not meaningful.
-//
-// `frame_flush_timed_calls_` is monotonic across the session; see the note where the per-frame
-// counters are reset.
+// Always-on flush timing: one call in kFlushTimingSampleStride is timed, so the clock reads stay
+// off the render thread's per-draw cost. flush-mean-us (total / samples) is the per-call cost;
+// flush-total-us sums the sampled calls only and is not scaled up.
 constexpr std::uint64_t kFlushTimingSampleStride = 64u;
 
 struct ScopedFlushTiming {
@@ -2426,10 +1472,8 @@ struct ScopedFlushTiming {
         std::uint64_t& call_count,
         std::uint64_t& sampled_total_us,
         std::uint64_t& sampled_count) noexcept {
-        // Every Nth call of the session. `call_count` is monotonic, so the residue walks all 64 values
-        // and the samples spread across call positions regardless of how many flushes a frame makes. Do
-        // not tie this to a per-frame counter: with a stride of 64 and fewer flushes per frame than that,
-        // only call 0 of each frame would be sampled.
+        // call_count runs across the session, not per frame, so the samples spread over every call
+        // position even when a frame makes fewer than 64 flushes.
         if ((call_count % kFlushTimingSampleStride) == 0u) {
             start = std::chrono::steady_clock::now();
             this->sampled_total_us = &sampled_total_us;
@@ -2450,135 +1494,6 @@ struct ScopedFlushTiming {
     ScopedFlushTiming(const ScopedFlushTiming&) = delete;
     ScopedFlushTiming& operator=(const ScopedFlushTiming&) = delete;
 };
-
-bool capture_all_textures_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        return getenv_s(
-                   &length, value, sizeof(value),
-                   "GALAXY_GX_CAPTURE_TEXTURES") == 0 &&
-               length > 1 && value[0] != '0';
-    }();
-    return enabled;
-}
-
-bool capture_tev_log_enabled(unsigned draw_index) {
-    static const std::uint64_t start = read_env_u64(
-        "GALAXY_GX_CAPTURE_TEV_DRAW_START", 2329u);
-    static const std::uint64_t end = read_env_u64(
-        "GALAXY_GX_CAPTURE_TEV_DRAW_END", 2334u);
-    return draw_index >= start && draw_index <= end;
-}
-
-std::uint32_t capture_texaddr_target() {
-    static const std::uint32_t texaddr = static_cast<std::uint32_t>(
-        read_env_u64("GALAXY_GX_CAPTURE_TEV_TEXADDR", 0u));
-    return texaddr;
-}
-
-bool capture_texaddr_log_enabled(std::uint32_t guest_addr) {
-    const std::uint32_t texaddr = capture_texaddr_target();
-    return texaddr != 0u && guest_addr == texaddr;
-}
-
-bool trace_thp_draw_enabled() {
-    static const bool enabled =
-        read_env_u64("GALAXY_TRACE_THP_DRAW", 0u) != 0u;
-    return enabled;
-}
-
-bool trace_thp_draw_all_enabled() {
-    static const bool enabled =
-        read_env_u64("GALAXY_TRACE_THP_DRAW_ALL", 0u) != 0u;
-    return enabled;
-}
-
-std::uint64_t trace_thp_draw_first_n() {
-    static const std::uint64_t first_n =
-        read_env_u64("GALAXY_TRACE_THP_DRAW_FIRST_N", 0u);
-    return first_n;
-}
-
-bool trace_thp_draw_frame_enabled(std::uint64_t frame) {
-    if (!trace_thp_draw_enabled()) {
-        return false;
-    }
-    static const std::uint64_t start =
-        read_env_u64("GALAXY_TRACE_THP_DRAW_START_VI", 0u);
-    static const std::uint64_t end =
-        read_env_u64("GALAXY_TRACE_THP_DRAW_END_VI", UINT64_MAX);
-    return frame >= start && frame <= end;
-}
-
-[[nodiscard]] bool tex_image_is_i8(const TexImage& image) {
-    return image.format == TexFormat::I8 && image.guest_addr != 0u &&
-           image.width != 0u && image.height != 0u;
-}
-
-[[nodiscard]] bool looks_like_thp_yuv_draw(
-    const GxState& state,
-    PrimitiveClass primitive,
-    const LoadedPrimitive& prim) {
-    const GenMode gen = state.gen_mode();
-    if ((primitive != PrimitiveClass::Quads &&
-         primitive != PrimitiveClass::Quads2) ||
-        prim.vertex_count != 4u ||
-        gen.num_texgens < 2u ||
-        gen.num_tev_stages != 4u) {
-        return false;
-    }
-
-    const TexImage y = state.tex_image(0);
-    const TexImage u = state.tex_image(1);
-    const TexImage v = state.tex_image(2);
-    if (!tex_image_is_i8(y) || !tex_image_is_i8(u) || !tex_image_is_i8(v)) {
-        return false;
-    }
-
-    const bool half_chroma =
-        u.width * 2u == y.width && v.width * 2u == y.width &&
-        u.height * 2u == y.height && v.height * 2u == y.height;
-    const TevOrder s0 = state.tev_order(0);
-    const TevOrder s1 = state.tev_order(1);
-    const TevOrder s2 = state.tev_order(2);
-    const TevOrder s3 = state.tev_order(3);
-    const bool thp_orders =
-        s0.tex_enable && s0.texmap == 1u && s0.texcoord == 1u &&
-        s1.tex_enable && s1.texmap == 2u && s1.texcoord == 1u &&
-        s2.tex_enable && s2.texmap == 0u && s2.texcoord == 0u &&
-        !s3.tex_enable;
-    return half_chroma && thp_orders;
-}
-
-[[nodiscard]] std::uint32_t trace_tex_data_size(const TexImage& image) {
-    const auto blocks = [](std::uint32_t dim, std::uint32_t block) {
-        return (dim + block - 1u) / block;
-    };
-    switch (image.format) {
-    case TexFormat::I4:
-        return blocks(image.width, 8u) * blocks(image.height, 8u) * 32u;
-    case TexFormat::I8:
-    case TexFormat::IA4:
-        return blocks(image.width, 8u) * blocks(image.height, 4u) * 32u;
-    case TexFormat::IA8:
-    case TexFormat::RGB565:
-    case TexFormat::RGB5A3:
-        return blocks(image.width, 4u) * blocks(image.height, 4u) * 32u;
-    case TexFormat::RGBA8:
-        return blocks(image.width, 4u) * blocks(image.height, 4u) * 64u;
-    case TexFormat::C4:
-        return blocks(image.width, 8u) * blocks(image.height, 8u) * 32u;
-    case TexFormat::C8:
-        return blocks(image.width, 8u) * blocks(image.height, 4u) * 32u;
-    case TexFormat::C14X2:
-        return blocks(image.width, 4u) * blocks(image.height, 4u) * 32u;
-    case TexFormat::CMPR:
-        return blocks(image.width, 8u) * blocks(image.height, 8u) * 32u;
-    default:
-        return 0u;
-    }
-}
 
 [[nodiscard]] const std::byte* resolve_guest_const_bytes(
     GuestMemory* memory,
@@ -2615,174 +1530,17 @@ bool trace_thp_draw_frame_enabled(std::uint64_t frame) {
     return nullptr;
 }
 
-void trace_thp_plane_stats(
-    const char* label,
-    const TexImage& image,
-    GuestMemory* memory) {
-    const std::uint32_t size = trace_tex_data_size(image);
-    const std::byte* bytes =
-        resolve_guest_const_bytes(memory, image.guest_addr, size);
-    if (bytes == nullptr || size == 0u) {
-        std::fprintf(stderr,
-            "[thptex] %s addr=%08X size=%ux%u fmt=%u bytes=%u unmapped\n",
-            label, image.guest_addr, image.width, image.height,
-            static_cast<unsigned>(image.format), size);
-        return;
-    }
-
-    std::uint8_t min_value = 255u;
-    std::uint8_t max_value = 0u;
-    std::uint64_t sum = 0u;
-    std::uint32_t nonzero = 0u;
-    std::uint32_t changes = 0u;
-    std::uint8_t previous =
-        static_cast<std::uint8_t>(std::to_integer<unsigned char>(bytes[0]));
-    for (std::uint32_t i = 0; i < size; ++i) {
-        const std::uint8_t value =
-            static_cast<std::uint8_t>(std::to_integer<unsigned char>(bytes[i]));
-        min_value = std::min(min_value, value);
-        max_value = std::max(max_value, value);
-        sum += value;
-        nonzero += value != 0u ? 1u : 0u;
-        if (i != 0u && value != previous) {
-            ++changes;
-        }
-        previous = value;
-    }
-    const double mean = static_cast<double>(sum) / static_cast<double>(size);
-    std::fprintf(stderr,
-        "[thptex] %s addr=%08X size=%ux%u fmt=%u bytes=%u "
-        "min=%u max=%u mean=%.3f nonzero=%u changes=%u first=",
-        label, image.guest_addr, image.width, image.height,
-        static_cast<unsigned>(image.format), size,
-        static_cast<unsigned>(min_value), static_cast<unsigned>(max_value),
-        mean, nonzero, changes);
-    const std::uint32_t sample_count = std::min<std::uint32_t>(16u, size);
-    for (std::uint32_t i = 0; i < sample_count; ++i) {
-        const std::uint8_t value =
-            static_cast<std::uint8_t>(std::to_integer<unsigned char>(bytes[i]));
-        std::fprintf(stderr, "%s%02X", i == 0u ? "" : ",", value);
-    }
-    std::fprintf(stderr, "\n");
-}
-
-void trace_thp_draw_state(
-    std::uint64_t frame,
-    unsigned draw_index,
-    PrimitiveClass primitive,
-    const LoadedPrimitive& prim,
-    const GxState& state,
-    const PixelShaderKey& ps_key,
-    GuestMemory* memory,
-    UploadRing& vertex_ring,
-    bool force_log) {
-    const GenMode gen = state.gen_mode();
-    const bool exact = looks_like_thp_yuv_draw(state, primitive, prim);
-    if (!exact && !force_log && !trace_thp_draw_all_enabled()) {
-        return;
-    }
-    if (!exact && !force_log &&
-        (gen.num_tev_stages < 4u || gen.num_texgens < 2u ||
-         prim.vertex_count > 8u)) {
-        return;
-    }
-
-    std::fprintf(stderr,
-        "[thpdraw] frame=%llu draw=%u exact=%u prim=%u vtx=%u idx=%u "
-        "texgens=%u tev=%u cmode=0x%06X/0x%06X zmode=0x%02X "
-        "acmp=0x%06X\n",
-        static_cast<unsigned long long>(frame), draw_index, exact ? 1u : 0u,
-        static_cast<unsigned>(primitive), prim.vertex_count, prim.index_count,
-        static_cast<unsigned>(gen.num_texgens),
-        static_cast<unsigned>(gen.num_tev_stages),
-        state.bp(static_cast<std::uint8_t>(0x41)),
-        state.bp(static_cast<std::uint8_t>(0x42)),
-        state.bp(static_cast<std::uint8_t>(0x40)),
-        state.bp(bp::kAlphaCompare));
-    const auto regs = state.tev_register_colors();
-    const auto konst = state.tev_konst_colors();
-    std::fprintf(stderr,
-        "[thpdraw] regs prev=%08X r0=%08X r1=%08X r2=%08X "
-        "k0=%08X k1=%08X k2=%08X k3=%08X\n",
-        regs[0], regs[1], regs[2], regs[3],
-        konst[0], konst[1], konst[2], konst[3]);
-    for (unsigned s = 0; s < gen.num_tev_stages && s < 4u; ++s) {
-        const TevStageConfig cfg = state.tev_stage(s);
-        std::fprintf(stderr,
-            "[thptev] stage=%u cenv=0x%06X aenv=0x%06X order=0x%03X "
-            "map=%u coord=%u ten=%u kc=%u ka=%u dest=%u/%u\n",
-            s, ps_key.stages[s].color_env, ps_key.stages[s].alpha_env,
-            ps_key.stages[s].order,
-            static_cast<unsigned>(cfg.order.texmap),
-            static_cast<unsigned>(cfg.order.texcoord),
-            cfg.order.tex_enable ? 1u : 0u,
-            static_cast<unsigned>(cfg.kcsel),
-            static_cast<unsigned>(cfg.kasel),
-            static_cast<unsigned>(cfg.color_dest),
-            static_cast<unsigned>(cfg.alpha_dest));
-    }
-    for (unsigned m = 0; m < 3u; ++m) {
-        const TexImage image = state.tex_image(m);
-        const TexMode mode = state.tex_mode(m);
-        std::fprintf(stderr,
-            "[thptex] map=%u addr=%08X size=%ux%u fmt=%u wrap=%u/%u "
-            "min=%u mag=%u lod=%u..%u bias=%d\n",
-            m, image.guest_addr, image.width, image.height,
-            static_cast<unsigned>(image.format),
-            static_cast<unsigned>(mode.wrap_s),
-            static_cast<unsigned>(mode.wrap_t),
-            static_cast<unsigned>(mode.min_filter),
-            static_cast<unsigned>(mode.mag_filter),
-            static_cast<unsigned>(mode.min_lod_x16),
-            static_cast<unsigned>(mode.max_lod_x16),
-            static_cast<int>(mode.lod_bias_x32));
-    }
-    trace_thp_plane_stats("Y", state.tex_image(0), memory);
-    trace_thp_plane_stats("U", state.tex_image(1), memory);
-    trace_thp_plane_stats("V", state.tex_image(2), memory);
-
-    void* ring_cpu = vertex_ring.mapped();
-    if (ring_cpu == nullptr) {
-        std::fprintf(stderr, "[thpdraw] vertices unavailable\n");
-        return;
-    }
-    const auto* verts = reinterpret_cast<const GxVertexOut*>(
-        static_cast<const std::byte*>(ring_cpu) + prim.vertex_byte_offset);
-    const std::uint32_t vertex_limit =
-        std::min<std::uint32_t>(prim.vertex_count, 8u);
-    for (std::uint32_t v = 0; v < vertex_limit; ++v) {
-        std::fprintf(stderr,
-            "[thpvtx] v=%u pos=(%.3f,%.3f,%.3f) "
-            "uv0=(%.6f,%.6f) uv1=(%.6f,%.6f) col0=%08X mi=%08X/%08X/%08X\n",
-            v, verts[v].position[0], verts[v].position[1],
-            verts[v].position[2], verts[v].uv[0][0], verts[v].uv[0][1],
-            verts[v].uv[1][0], verts[v].uv[1][1],
-            verts[v].color0, verts[v].mtx_indices[0],
-            verts[v].mtx_indices[1], verts[v].mtx_indices[2]);
-    }
-}
-
-// Converts the raw XF projection registers to a column-major 4x4 matrix stored row-major (HLSL
-// row_major float4x4 == stored row-by-row).
-// GX perspective (type=0): maps to a left-hand clip space with z in [0,1].
-// GX orthographic (type=1): same re-mapping.
-//
-// Build GxPsConstants from current GxState.
 void fill_ps_constants(const GxState& state, GxPsConstants& out) {
     std::memset(&out, 0, sizeof(out));
 
     const GenMode gm = state.gen_mode();
 
-    // TEV stage_config words. TevStagePacked is 4 x u32, laid out identically to uber_constants
-    // GxPsConstants::stage_config[stage][0..3].
+    // stage_config[s]: colour env (BP 0xC0 + 2s), alpha env (BP 0xC1 + 2s), TEV order, ksel.
     for (unsigned s = 0; s < gm.num_tev_stages && s < kMaxTevStages; ++s) {
-        // color_env: BP 0xC0 + 2*stage
         out.stage_config[s][0] =
             state.bp(static_cast<std::uint8_t>(bp::kTevColorEnvBase + s * 2u));
-        // alpha_env: BP 0xC1 + 2*stage
         out.stage_config[s][1] =
             state.bp(static_cast<std::uint8_t>(bp::kTevAlphaEnvBase + s * 2u));
-        // Repack TevOrder for this stage into low 12 bits of word 2.
         const TevOrder ord = state.tev_order(s);
         out.stage_config[s][2] =
               (static_cast<std::uint32_t>(ord.texmap)      )
@@ -2799,9 +1557,8 @@ void fill_ps_constants(const GxState& state, GxPsConstants& out) {
             | (static_cast<std::uint32_t>(kasel) << 5);
     }
 
-    // TEV blending registers: PREV (index 0) and REG0-2 (indices 1-3).
-    // Hardware stores signed 11-bit channel values; the shader converts these
-    // back to int registers before running Dolphin-style TEV math.
+    // TEV registers PREV, REG0-2 (signed 11-bit per channel); the shader converts them back to
+    // integers for the TEV math.
     {
         const auto regs = state.tev_register_values();
         for (unsigned r = 0; r < 4; ++r) {
@@ -2812,24 +1569,23 @@ void fill_ps_constants(const GxState& state, GxPsConstants& out) {
         }
     }
 
-    // Konst K0-K3: same packing convention as tev_konst_colors().
+    // Konst colours K0-K3, RGBA8 from tev_konst_colors().
     {
         const auto krgba = state.tev_konst_colors();
         for (unsigned k = 0; k < 4; ++k) {
             const std::uint32_t v = krgba[k];
-            out.konst[k][0] = ((v >> 24) & 0xFFu) / 255.0f;  // R
-            out.konst[k][1] = ((v >> 16) & 0xFFu) / 255.0f;  // G
-            out.konst[k][2] = ((v >>  8) & 0xFFu) / 255.0f;  // B
-            out.konst[k][3] = ((v       ) & 0xFFu) / 255.0f; // A
+            out.konst[k][0] = ((v >> 24) & 0xFFu) / 255.0f;
+            out.konst[k][1] = ((v >> 16) & 0xFFu) / 255.0f;
+            out.konst[k][2] = ((v >>  8) & 0xFFu) / 255.0f;
+            out.konst[k][3] = ((v       ) & 0xFFu) / 255.0f;
         }
     }
 
-    // Alpha compare.
     {
         const AlphaCompare ac = state.alpha_compare();
         out.alpha_refs[0] = ac.ref0 / 255.0f;
         out.alpha_refs[1] = ac.ref1 / 255.0f;
-        // Pack comp0|comp1|logic into a float-encoded uint for the uber shader.
+        // comp0 | comp1 << 3 | logic << 6, passed as the bits of a float.
         const std::uint32_t packed =
               static_cast<std::uint32_t>(ac.comp0)
             | (static_cast<std::uint32_t>(ac.comp1) << 3)
@@ -2843,10 +1599,9 @@ void fill_ps_constants(const GxState& state, GxPsConstants& out) {
             : 0.0f;
     }
 
-    // Fog A (BP 0xEE) and C (BP 0xF1 bits 0-19) are 20-bit packed floats, unpacked here on the
-    // CPU the same way Dolphin's PixelShaderManager SetFogParamChanged stores GetA()/GetC().
-    // B magnitude (u24) and B shift (u5) stay integral: both are exactly representable in float,
-    // and the PS recovers them with uint() casts.
+    // Fog A (BP 0xEE) and C (BP 0xF1 bits 0-19) are 20-bit packed floats, unpacked here as
+    // Dolphin's PixelShaderManager does. B magnitude (u24) and shift (u5) are exact in float; the
+    // shader reads them back with uint().
     {
         const FogParams fp = state.fog();
         out.fog_params[0] =
@@ -2856,18 +1611,14 @@ void fill_ps_constants(const GxState& state, GxPsConstants& out) {
         out.fog_params[2] = static_cast<float>(fp.b_shift_raw & 0x1Fu);
         out.fog_params[3] =
             std::bit_cast<float>(fog_param_float_bits(fp.c_raw));
-        // color rgb as normalized floats in [4..6].
         out.fog_params[4] = ((fp.color_rgb >> 16) & 0xFFu) / 255.0f;
         out.fog_params[5] = ((fp.color_rgb >>  8) & 0xFFu) / 255.0f;
         out.fog_params[6] = ((fp.color_rgb      ) & 0xFFu) / 255.0f;
-        // Projection flag (1.0 = orthographic; FogProjection enum).
-        out.fog_params[7] = fp.projection ? 1.0f : 0.0f;
+        out.fog_params[7] = fp.projection ? 1.0f : 0.0f;  // 1 = orthographic
     }
 
-    // Texture dimensions and GX texture-coordinate scale. Dolphin keeps both
-    // in the same constant: xy are the sampled texture dimensions; zw are
-    // BP 0x30-0x3F scale_minus_1 + 1 for the texcoord channel. Indirect TEV
-    // uses the coord scale before sampling the selected texmap.
+    // xy: texture size; zw: texcoord scale (BP 0x30-0x3F, scale_minus_1 + 1), which indirect TEV
+    // applies before sampling.
     for (unsigned m = 0; m < kMaxTextureMaps; ++m) {
         const TexImage img = state.tex_image(m);
         const float w = static_cast<float>(img.width  > 0 ? img.width  : 1);
@@ -2890,8 +1641,8 @@ void fill_ps_constants(const GxState& state, GxPsConstants& out) {
     out.ztex_params[0] =
         static_cast<float>(state.bp(bp::kTevZEnv0) & 0xFFFFFFu) / 16777216.0f;
 
-    // Indirect TEV commands and constants. Matrix packing mirrors Dolphin's
-    // pixel constants: rows are {ma,mc,me,17-scale} and {mb,md,mf,17-scale}.
+    // Indirect TEV commands and matrices; matrix rows are {ma,mc,me,17-scale} and
+    // {mb,md,mf,17-scale}, as in Dolphin's pixel constants.
     for (unsigned word = 0; word < 16; ++word) {
         out.ind_cmd[word / 4u][word & 3u] =
             state.bp(static_cast<std::uint8_t>(bp::kIndCmdBase + word));
@@ -2960,30 +1711,18 @@ void gx_topology_for_primitive(
 //   0x0500-0x05FF  post-transform (dual-tex) matrices (64 rows x 4 words)
 //   0x0600-0x067F  light objects (8 lights x 16 words; color word 3,
 //                  cos-atten 4-6, dist-atten 7-9, pos 10-12, dir 13-15)
-// One contiguous snapshot 0x0000-0x067F keeps the upload a single memcpy and
-// lets the VS fetch matrices AND lights from the same structured buffer.
+// One contiguous range keeps the upload a single memcpy and lets the vertex shader fetch matrices
+// and lights from one structured buffer.
 inline constexpr std::size_t kMatrixPaletteWords = 0x0680u;  // 0x0000-0x067F
-// The palette upload copies only the chunks `GxState` reports as written, so this bound and
-// GxState's must describe the same word range. Otherwise the upload would silently skip words
-// inside the palette or copy past its end.
+// The upload copies the chunks GxState marks written, so both must cover the same words.
 static_assert(
     kMatrixPaletteWords == galaxy::gx::GxState::kMatrixPaletteWords,
     "backend palette bound must match the tracked GxState palette range");
 
 }  // anonymous namespace
 
-FramePeEventClassifier::FramePeEventClassifier(bool event_only)
-    : event_only_(event_only) {
-    parser_.set_event_classification_only(event_only_);
-    static const bool verify = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        return getenv_s(&length, value, sizeof(value), "GALAXY_PE_CLASSIFY_VERIFY") == 0 &&
-            length > 1u && value[0] != '0';
-    }();
-    if (event_only_ && verify) {
-        verifier_ = std::make_unique<FramePeEventClassifier>(false);
-    }
+FramePeEventClassifier::FramePeEventClassifier() {
+    parser_.set_event_classification_only(true);
 }
 
 void FramePeEventClassifier::reset() {
@@ -2991,12 +1730,9 @@ void FramePeEventClassifier::reset() {
         throw std::logic_error(
             "GX PE event classifier reset during an active parse");
     }
-    if (verifier_ != nullptr) {
-        verifier_->reset();
-    }
     state_ = GxState{};
     parser_ = FifoParser{};
-    parser_.set_event_classification_only(event_only_);
+    parser_.set_event_classification_only(true);
     parser_.set_dump_dir("generated");
     pending_fifo_.clear();
 }
@@ -3045,43 +1781,13 @@ void FramePeEventClassifier::classify(
         throw;
     }
     active_events_ = nullptr;
-    if (verifier_ != nullptr) {
-        verifier_->classify(fifo_data, fifo_size, memory, verifier_events_, frozen_regions);
-        ++verified_chunks_;
-        if (verifier_events_ != events) {
-            ++verify_mismatches_;
-            if (verify_mismatches_ <= 16u) {
-                std::cerr << "[pe-classify-verify] mismatch chunk=" << verified_chunks_
-                          << " lean-events=" << events.size()
-                          << " full-events=" << verifier_events_.size()
-                          << " fifo-bytes=" << fifo_size << '\n';
-            }
-        }
-        if ((verified_chunks_ % 6000u) == 0u) {
-            std::cerr << "[pe-classify-verify] chunks=" << verified_chunks_
-                      << " mismatches=" << verify_mismatches_ << '\n';
-        }
-    }
-}
-
-std::size_t FramePeEventClassifier::invalidate_display_list_cache_range(
-    std::uint32_t guest_addr,
-    std::uint32_t size) {
-    if (verifier_ != nullptr) {
-        (void)verifier_->invalidate_display_list_cache_range(guest_addr, size);
-    }
-    return parser_.invalidate_display_list_cache_range(guest_addr, size);
 }
 
 std::size_t FramePeEventClassifier::draw_payload_size(
     std::uint8_t vtxfmt,
     std::uint16_t vertex_count) const {
-    // Recompute the layout only when a CP register that describes it moved.
-    // This is an exact test, not a heuristic: `vertex_desc(vtxfmt)` reads
-    // exactly CP VCD_LO, VCD_HI and VAT_A/B/C[vtxfmt], and
-    // `source_vertex_size()` is a pure function of that descriptor. The parser
-    // writes those registers through the same `state_` this sink reads, so a
-    // draw observes the register values that were in effect for it.
+    // The stride depends only on CP VCD_LO/HI and VAT_A/B/C[vtxfmt], so it is recomputed only when
+    // one of them changes.
     if (vtxfmt >= vtx_payload_stride_memo_.size()) {
         return VertexLoader::source_vertex_size(state_.vertex_desc(vtxfmt)) *
             static_cast<std::size_t>(vertex_count);
@@ -3180,32 +1886,13 @@ void FramePeEventClassifier::on_invalidate_textures() {}
 void FramePeEventClassifier::on_tlut_load() {}
 void FramePeEventClassifier::on_invalidate_vertex_cache() {}
 
-std::size_t GxBackend::invalidate_dirty_display_list_ranges(
-    FifoParser& parser,
-    const std::vector<GxBackend::GuestWriteRange>& ranges) {
-    if (!display_list_dirty_invalidate_enabled()) {
-        return 0;
-    }
-    std::size_t invalidated = 0;
-    for (const GxBackend::GuestWriteRange& range : ranges) {
-        invalidated += parser.invalidate_display_list_cache_range(
-            range.guest_addr,
-            range.size);
-    }
-    return invalidated;
-}
-
 void GxBackend::reset_fifo_session_state() {
-    // The render parser, direct-event parser, dependency scanner, and PE
-    // preclassifier consume the same command stream on different schedules.
-    // Reset them atomically while no producer or render thread exists. A
-    // stale state register or incomplete command tail in only one mirror can
-    // otherwise change command boundaries and forge an event-free receipt.
+    // The render parser, event parser, dependency scanner and PE preclassifier read the same command
+    // stream on different schedules, so all of them reset together, while no producer or render
+    // thread runs: stale state or a partial command in one of them would shift command boundaries.
     state_ = GxState{};
     state_.mark_all_dirty();
-    // Replacing the parser releases every cached display list of the previous
-    // session together with the retained vector capacity, so the new session
-    // starts from an empty cache with exact byte accounting.
+    // A new parser also drops the previous session's display-list cache and its capacity.
     parser_ = FifoParser{};
     parser_.set_dump_dir("generated");
     pending_fifo_.clear();
@@ -3233,7 +1920,7 @@ void GxBackend::reset_fifo_session_state() {
     decoded_packet_run_cache_.clear();
     decoded_packet_run_cache_tick_ = 0u;
     decoded_packet_run_cache_bytes_ = 0u;
-    // Runs before the renderer (re)initializes: nothing can still read it.
+    // Runs before the renderer initializes, so nothing still reads the buffer.
     release_resident_vertex_buffer();
     std::vector<GxVertexOut>{}.swap(decoded_packet_vertex_scratch_);
     vertex_layout_cache_ = {};
@@ -3254,9 +1941,7 @@ void GxBackend::reset_fifo_session_state() {
     cached_draw_run_state_call_ = {};
     frame_fifo_profile_.reset();
 
-    // Parsed register state feeds these derived CPU/GPU caches. They cannot
-    // survive a renderer teardown: several entries contain descriptor or
-    // resource identities owned by the old D3D12 session.
+    // Derived state below holds descriptors and resources of the previous renderer session.
     ps_key_ = {};
     vs_key_ = {};
     render_state_key_ = {};
@@ -3277,9 +1962,7 @@ void GxBackend::reset_fifo_session_state() {
     matrix_palette_stale_ = true;
     current_palette_required_ = true;
     inline_matrices_stale_ = true;
-    // No palette bytes are valid anywhere until an upload lands in the new
-    // allocation; the ring segment is reused, so the previous frame's chunks
-    // must not be treated as current.
+    // The ring segment is reused, so no palette chunk is valid until the next upload.
     xf_palette_valid_ = 0u;
     frame_bindings_dirty_ = true;
     texture_bindings_dirty_ = true;
@@ -3287,20 +1970,14 @@ void GxBackend::reset_fifo_session_state() {
     current_texture_map_mask_valid_ = false;
     current_texture_binding_key_ = {};
     current_texture_binding_key_mask_ = 0u;
-    // clear_texture_binding_table_cache() also clears
-    // current_texture_binding_key_valid_, so a remembered key can never outlive
-    // the frame-local tables it was captured alongside.
+    // Also clears current_texture_binding_key_valid_, so no key outlives its tables.
     clear_texture_binding_table_cache();
     texture_handle_cache_.clear();
     dirty_texture_ranges_scratch_.clear();
 
-    // The new EFB/XFB resources have no relationship to the old session's
-    // seed, frame stamps, or registry addresses.
+    // Frame stamps, seeding and XFB addresses restart with the new EFB/XFB resources.
     frame_index_ = 0u;
     timing_frame_index_.store(0u, std::memory_order_relaxed);
-    causal_trace_frame_index_.store(0u, std::memory_order_relaxed);
-    deferred_xfb_causal_count_ = 0u;
-    deferred_xfb_causal_dropped_ = 0u;
     efb_seeded_ = false;
     present_epoch_ = 0u;
     xfb_serial_accounting_ = {};
@@ -3320,39 +1997,17 @@ void GxBackend::reset_fifo_session_state() {
     }
 }
 
-// GxBackend lifecycle
-
 bool GxBackend::initialize(int w, int h) {
     if (initialized_) {
         return true;
     }
 
-    if (worker_memory_snapshot_enabled()) {
-        const GxTimingConfig& timing = get_gx_timing_config();
-        if (!async_render_thread_enabled() ||
-            !timing.render_live_memory_wait || timing.render_memory_snapshot ||
-            !timing.pe_events_gpu_fence || immutable_range_ownership_enabled()) {
-            throw std::logic_error(
-                "[GxBackend] worker memory snapshot requires asynchronous live "
-                "memory waiting, GPU-fenced PE events, and pooled strict copies");
-        }
-    }
-
     cadence_diagnostics_ = cadence::global_session_if_enabled();
 
-    // Reset runs before native resource acquisition. It audits the previous session and advances
-    // the token epoch, so a failed prior session cannot be hidden by renderer reinitialization, and
-    // an old token can never alias this one.
+    // Before any resource is created: the reset audits the previous session and advances the token
+    // epoch, so no token of an earlier session can alias one of this session.
     frame_pe_completions_.reset();
     reset_fifo_session_state();
-    deferred_gx_stats_count_ = 0;
-    deferred_gx_stats_dropped_ = 0;
-    // Reservoir state must reset with the ring it indexes: a stale `seen_` would
-    // make the first replacement index of the new session out of range for the
-    // new sample count, and a stale rng would correlate the two sessions' rows.
-    deferred_gx_stats_seen_ = 0;
-    deferred_gx_stats_rng_ = 0x9e3779b97f4a7c15ull;
-    deferred_gx_stats_first_drop_frame_ = 0;
 
     const RenderConfig cfg = get_render_config();
 
@@ -3380,14 +2035,11 @@ bool GxBackend::initialize(int w, int h) {
         renderer_.shutdown();
         return false;
     }
-    // The resident decoded-vertex buffer (a 64 MB upload heap) is created with the renderer rather
-    // than at first use in gameplay, where its creation is slow.
-    if (resident_decoded_vertices_enabled()) {
-        (void)ensure_resident_vertex_buffer();
-    }
+    // The resident decoded-vertex buffer (a 64 MB upload heap) is created here: creating it at first
+    // use stalls gameplay.
+    (void)ensure_resident_vertex_buffer();
     renderer_.create_first_use_resources();
 
-    // Determine shader-cache directory.
     std::filesystem::path cache_dir;
 #if defined(_WIN32)
     {
@@ -3410,8 +2062,7 @@ bool GxBackend::initialize(int w, int h) {
     }
 #endif
 
-    // Worker count: keep low-end systems conservative, but let high-end
-    // machines warm cached PSOs before gameplay reaches shader-heavy scenes.
+    // Few compile workers on small CPUs; more on large ones, to warm cached PSOs early.
     const unsigned logical_cores = std::thread::hardware_concurrency();
     const unsigned worker_count =
         (logical_cores > 8u) ? 4u : (logical_cores > 4u) ? 2u : 1u;
@@ -3437,9 +2088,7 @@ bool GxBackend::initialize(int w, int h) {
     render_fifo_effects_in_flight_ = 0;
     pending_frame_effects_.clear();
     pending_pointer_depth_capture_ = {};
-    if (async_render_thread_enabled()) {
-        render_thread_ = std::thread(&GxBackend::render_thread_main, this);
-    }
+    render_thread_ = std::thread(&GxBackend::render_thread_main, this);
     if (read_env_u64("GALAXY_FRAME_TELEMETRY", 1u) != 0u) {
         try {
             frame_telemetry_ = std::make_unique<galaxy::telemetry::Publisher>([this] {
@@ -3538,192 +2187,20 @@ GxBackend::MemorySnapshotStorage* GxBackend::snapshot_storage_for(
     return target;
 }
 
-void GxBackend::prune_immutable_range_cache(std::size_t incoming_bytes) {
-    if (incoming_bytes > kImmutableRangeCacheMaxBytes) {
-        throw std::runtime_error(
-            "[GxBackend] immutable range exceeds ownership cache budget");
-    }
-    while (immutable_range_cache_.size() >= kImmutableRangeCacheMaxEntries ||
-           immutable_range_cache_bytes_ >
-               kImmutableRangeCacheMaxBytes - incoming_bytes) {
-        auto victim = immutable_range_cache_.end();
-        for (auto it = immutable_range_cache_.begin();
-             it != immutable_range_cache_.end();
-             ++it) {
-            if (it->bytes == nullptr || it->bytes.use_count() != 1u) {
-                continue;
-            }
-            if (victim == immutable_range_cache_.end() ||
-                (!it->valid && victim->valid) ||
-                (it->valid == victim->valid &&
-                 it->last_used < victim->last_used)) {
-                victim = it;
-            }
-        }
-        if (victim == immutable_range_cache_.end()) {
-            throw std::runtime_error(
-                "[GxBackend] immutable range ownership cache exhausted by in-flight frames");
-        }
-        immutable_range_cache_bytes_ -= victim->bytes->size();
-        // Swap-and-pop instead of erase(victim). This loop can drop many entries in one pass, and erase
-        // from the middle of a std::vector shifts every later element, so dropping k of n entries costs
-        // O(k*n) moves. Swap-and-pop is O(1) per eviction.
-        //
-        // The victim is still chosen by the scan above, so the eviction order is unchanged. Nothing
-        // addresses this cache by position: acquire_immutable_range matches on guest_base/size/
-        // source_identity, invalidate_immutable_range_cache walks every entry, and clear() empties it.
-        // last_used comes from a monotonic tick, so the tie-break is total and the LRU order does not
-        // depend on physical layout.
-        *victim = std::move(immutable_range_cache_.back());
-        immutable_range_cache_.pop_back();
-    }
-}
-
-std::shared_ptr<std::vector<std::byte>> GxBackend::acquire_immutable_range(
-    std::uint32_t guest_base,
-    const std::byte* source,
-    std::uint32_t size,
-    bool& reused) {
-    reused = false;
-    if (source == nullptr || size == 0u) {
-        throw std::runtime_error(
-            "[GxBackend] immutable range ownership received an empty source");
-    }
-    for (ImmutableRangeCacheEntry& entry : immutable_range_cache_) {
-        if (entry.valid && entry.guest_base == guest_base &&
-            entry.size == size && entry.source_identity == source &&
-            entry.bytes != nullptr) {
-            entry.last_used = ++immutable_range_cache_tick_;
-            reused = true;
-            return entry.bytes;
-        }
-    }
-
-    prune_immutable_range_cache(size);
-    auto bytes = std::make_shared<std::vector<std::byte>>(size);
-    std::memcpy(bytes->data(), source, size);
-    immutable_range_cache_.push_back(ImmutableRangeCacheEntry{
-        guest_base,
-        size,
-        source,
-        bytes,
-        ++immutable_range_cache_tick_,
-        true,
-    });
-    immutable_range_cache_bytes_ += size;
-    return bytes;
-}
-
-void GxBackend::invalidate_immutable_range_cache(
-    const std::vector<GuestWriteRange>& ranges) noexcept {
-    if (ranges.empty()) {
-        return;
-    }
-    for (ImmutableRangeCacheEntry& entry : immutable_range_cache_) {
-        if (!entry.valid) {
-            continue;
-        }
-        // Both production callers pass the same coalesced physical dirty
-        // ranges used by dependency invalidation. Normalize the owned alias
-        // once rather than checking every entry/write pair.
-        if (sorted_dirty_ranges_overlap(
-                std::span<const GuestWriteRange>{ranges},
-                normalize_dependency_guest_addr(entry.guest_base), entry.size)) {
-            entry.valid = false;
-        }
-    }
-}
-
 void GxBackend::copy_memory_snapshot_storage(MemorySnapshot& snapshot) {
-    const auto copy_one = [](MemorySnapshotStorage* storage) {
-        std::memcpy(storage->bytes.data(), storage->source, storage->size);
-        storage->copied = true;
-        // Sealed packets own their bytes. Never retain a dormant live alias.
-        storage->source = nullptr;
-    };
-    if (!parallel_memory_snapshot_copy_enabled() || snapshot_copy_worker_count() <= 1u) {
-        // Normal serial capture needs no heap-allocated work list or second
-        // walk. Preserve storage order and detach each copied live alias.
-        for (MemorySnapshotStorage& storage : snapshot.storage) {
-            if (storage.used && !storage.copied &&
-                storage.source != nullptr && storage.size != 0u) {
-                copy_one(&storage);
-            }
-        }
-        return;
-    }
-    std::vector<MemorySnapshotStorage*> pending;
-    pending.reserve(snapshot.storage.size());
-    std::uint64_t pending_bytes = 0;
     for (MemorySnapshotStorage& storage : snapshot.storage) {
-        if (!storage.used || storage.copied ||
-            storage.source == nullptr || storage.size == 0u) {
-            continue;
-        }
-        pending.push_back(&storage);
-        pending_bytes += storage.size;
-    }
-
-    if (pending.empty()) {
-        return;
-    }
-
-    const std::size_t worker_count = std::min<std::size_t>(
-        snapshot_copy_worker_count(),
-        pending.size());
-    if (worker_count <= 1u ||
-        pending_bytes < snapshot_parallel_copy_threshold()) {
-        for (MemorySnapshotStorage* storage : pending) {
-            copy_one(storage);
-        }
-        return;
-    }
-
-    std::atomic<std::size_t> next_index{0};
-    const auto copy_next = [&] {
-        for (;;) {
-            const std::size_t index =
-                next_index.fetch_add(1u, std::memory_order_relaxed);
-            if (index >= pending.size()) {
-                break;
-            }
-            copy_one(pending[index]);
-        }
-    };
-
-    std::vector<std::thread> workers;
-    workers.reserve(worker_count - 1u);
-    try {
-        for (std::size_t i = 1u; i < worker_count; ++i) {
-            workers.emplace_back(copy_next);
-        }
-        copy_next();
-    } catch (...) {
-        for (std::thread& worker : workers) {
-            if (worker.joinable()) {
-                worker.join();
-            }
-        }
-        for (MemorySnapshotStorage* storage : pending) {
-            if (!storage->copied) {
-                copy_one(storage);
-            }
-        }
-        return;
-    }
-
-    for (std::thread& worker : workers) {
-        if (worker.joinable()) {
-            worker.join();
+        if (storage.used && !storage.copied &&
+            storage.source != nullptr && storage.size != 0u) {
+            std::memcpy(storage.bytes.data(), storage.source, storage.size);
+            storage.copied = true;
+            // The snapshot owns the copy; drop the pointer into live memory.
+            storage.source = nullptr;
         }
     }
 }
 
 std::uint64_t GxBackend::memory_snapshot_used_bytes(
     const MemorySnapshot& snapshot) noexcept {
-    if (snapshot.immutable_range_ownership) {
-        return snapshot.copied_bytes;
-    }
     std::uint64_t bytes = 0;
     for (const MemorySnapshotStorage& storage : snapshot.storage) {
         if (storage.used && storage.copied) {
@@ -3737,15 +2214,10 @@ void GxBackend::capture_memory_snapshot(
     GuestMemory* source,
     MemorySnapshot& snapshot,
     const std::vector<GuestMemoryRange>& dependency_ranges,
-    bool strict_ranges,
-    bool immutable_range_ownership) {
+    bool strict_ranges) {
     snapshot.storage_used_count = 0u;
     snapshot.storage_lookup_active = false;
-    snapshot.immutable_ranges.clear();
     snapshot.regions_disjoint_sorted = false;
-    snapshot.copied_bytes = 0u;
-    snapshot.reused_bytes = 0u;
-    snapshot.immutable_range_ownership = false;
     if (source == nullptr) {
         snapshot.memory = {};
         snapshot.regions.clear();
@@ -3766,12 +2238,6 @@ void GxBackend::capture_memory_snapshot(
     }
 
     std::vector<GuestMemoryRange> ranges = dependency_ranges;
-    const std::vector<GuestMemoryRange> configured_ranges =
-        render_memory_snapshot_ranges();
-    ranges.insert(
-        ranges.end(),
-        configured_ranges.begin(),
-        configured_ranges.end());
     normalize_guest_memory_ranges(ranges);
 
     snapshot.memory = *source;
@@ -3781,11 +2247,6 @@ void GxBackend::capture_memory_snapshot(
     snapshot.regions.reserve(
         source->region_count +
         static_cast<std::uint32_t>(ranges.size()));
-
-    if (immutable_range_ownership && !strict_ranges) {
-        throw std::runtime_error(
-            "[GxBackend] immutable range ownership requires strict dependency ranges");
-    }
 
     if (strict_ranges) {
         const auto append_snapshot_copy =
@@ -3811,11 +2272,8 @@ void GxBackend::capture_memory_snapshot(
                         }
                     }
                     if (source_region == nullptr) {
-                        if (strict_ranges) {
-                            throw std::runtime_error(
-                                "[GxBackend] compact memory snapshot range is unmapped");
-                        }
-                        break;
+                        throw std::runtime_error(
+                            "[GxBackend] compact memory snapshot range is unmapped");
                     }
 
                     const std::uint64_t copy_end =
@@ -3830,22 +2288,7 @@ void GxBackend::capture_memory_snapshot(
                     copy.size = copy_size;
                     std::byte* source_bytes =
                         source_region->host_base + source_offset;
-                    if (immutable_range_ownership) {
-                        bool reused = false;
-                        auto owned = acquire_immutable_range(
-                            copy.guest_base,
-                            source_bytes,
-                            copy_size,
-                            reused);
-                        copy.host_base = owned->data();
-                        if (reused) {
-                            snapshot.reused_bytes += copy_size;
-                        } else {
-                            snapshot.copied_bytes += copy_size;
-                        }
-                        snapshot.immutable_ranges.push_back(std::move(owned));
-                        snapshot.regions.push_back(copy);
-                    } else if (MemorySnapshotStorage* storage =
+                    if (MemorySnapshotStorage* storage =
                                    snapshot_storage_for(
                                        snapshot,
                                        source_bytes,
@@ -3868,13 +2311,9 @@ void GxBackend::capture_memory_snapshot(
         snapshot.memory.region_count =
             static_cast<std::uint32_t>(snapshot.regions.size());
         snapshot.memory.regions = snapshot.regions.data();
-        if (!immutable_range_ownership) {
-            copy_memory_snapshot_storage(snapshot);
-        }
-        snapshot.immutable_range_ownership = immutable_range_ownership;
-        // Avoid binary-search overhead on tiny views. Strict capture's output
-        // is normally sorted/disjoint, but certify actual output rather than
-        // assuming it from the dependency list or from the source mappings.
+        copy_memory_snapshot_storage(snapshot);
+        // Small views keep the linear lookup; larger ones use binary search only when the regions
+        // are verified sorted and disjoint.
         snapshot.regions_disjoint_sorted = snapshot.regions.size() >= 32u &&
             detail::snapshot_regions_are_disjoint_sorted(snapshot.regions);
         snapshot.sealed = true;
@@ -3928,17 +2367,15 @@ void GxBackend::collect_memory_dependency_ranges(
 
     const std::span<const std::byte> fifo(fifo_data, fifo_size);
     const bool cacheable = dependency_pending_fifo_.empty();
-    // This fingerprint is a lookup filter; matching entries still compare the
-    // complete FIFO bytes and exact initial state below before restoring state.
+    // The fingerprint only filters; a hit still compares the whole FIFO and the initial state.
     const std::uint64_t fifo_hash =
         cacheable ? dependency_fifo_fingerprint(fifo) : 0u;
     const std::uint64_t state_hash =
         cacheable ? dependency_shape_state_hash(dependency_state_) : 0u;
     const auto shape_words = cacheable ? dependency_state_.dependency_shape_words()
                                       : GxState::DependencyShapeWords{};
-    // Whole-FIFO hits restore final parser state. The one-shot mask can alter
-    // both writes in this FIFO and a later chunk even with identical banks.
-    // Draw-range keys only describe already-decoded state and do not need it.
+    // A hit restores the final parser state, and the pending one-shot BP write mask changes how this
+    // FIFO and later ones parse, so it is part of the key.
     const std::uint32_t pending_bp_write_mask =
         dependency_state_.pending_bp_write_mask();
     if (cacheable) {
@@ -3958,18 +2395,10 @@ void GxBackend::collect_memory_dependency_ranges(
             dependency_state_ = entry.final_state;
             entry.last_used = ++dependency_range_cache_tick_;
             cache_hit = true;
-            stat_dependency_cache_hits_.fetch_add(
-                1u,
-                std::memory_order_relaxed);
             return;
         }
     }
 
-    if (cacheable) {
-        stat_dependency_cache_misses_.fetch_add(
-            1u,
-            std::memory_order_relaxed);
-    }
     std::vector<GuestMemoryRange> shape_ranges;
     DependencyRangeSink sink(
         dependency_state_,
@@ -3977,10 +2406,7 @@ void GxBackend::collect_memory_dependency_ranges(
         out,
         dependency_draw_run_range_cache_,
         dependency_draw_run_range_cache_tick_,
-        dependency_draw_run_range_cache_bytes_,
-        stat_dependency_draw_run_cache_hits_,
-        stat_dependency_draw_run_cache_misses_,
-        stat_dependency_draw_run_cache_evictions_);
+        dependency_draw_run_range_cache_bytes_);
     DependencyParserReadRecorder recorder(out, shape_ranges);
     dependency_parser_.set_memory_read_recorder(&recorder);
     try {
@@ -4031,9 +2457,8 @@ void GxBackend::collect_memory_dependency_ranges(
     dependency_parser_.set_memory_read_recorder(nullptr);
 
     normalize_guest_memory_ranges(shape_ranges);
-    // CALL_DL bytes are both the dependency shape and the render input. Owning every recursively
-    // visited display-list range keeps compact snapshots independent of the parser cache, so cache
-    // invalidation and delayed parsing are correct on their own.
+    // Display lists reached by CALL_DL are render input too, so the snapshot owns their bytes and
+    // does not depend on the parser's display-list cache.
     out.insert(out.end(), shape_ranges.begin(), shape_ranges.end());
     normalize_guest_memory_ranges(out);
 
@@ -4246,24 +2671,9 @@ void GxBackend::report_frame_tail_window() noexcept {
                <<(a.monitor_intervals?a.monitor_total_ns/a.monitor_intervals/1000u:0u)
                <<' '<<name<<"-p95-upper-us="<<percentile(95u)<<' '<<name<<"-p99-upper-us="<<percentile(99u)
                <<' '<<name<<"-max-us="<<a.monitor_max_ns/1000u;
-            // Percentile staircase, so the shape of the interval distribution is visible rather than
-            // summarized.
-            //
-            // Percentiles are used instead of the full 1 ms histogram. Printing every non-zero bin makes
-            // rows too wide, and spike windows would spread the bins so far that the bulk becomes a few
-            // counts among many. Each reported percentile is a value inside the bulk.
-            //
-            // A bulk set by a continuous process spreads smoothly, so the ladder steps evenly. A bulk
-            // quantized to display retraces plateaus instead, because most intervals land in one or two
-            // 16.67 ms bands and several adjacent ranks report the same bin. What matters is how evenly the
-            // ladder steps, not the absolute values.
-            //
-            // Read it alongside `-intervals=`. At a 1 ms bin width, several cut points can resolve to the
-            // same bin simply because the window holds few intervals, which would look like a plateau. A
-            // plateau is evidence only in a window with tens of intervals.
-            //
-            // Gated by GALAXY_MONITOR_FRAME_TAILS like the rest of this row. It adds no per-frame work: the
-            // bins are counted once per interval.
+            // Percentile ladder (1 ms bins) to show the shape of the interval distribution: even steps
+            // for a continuous process, plateaus for intervals quantized to display retraces. Meaningful
+            // only in a window with tens of intervals.
             row<<' '<<name<<"-pct-upper-us="
                <<percentile(5u)<<'/'<<percentile(10u)<<'/'<<percentile(25u)<<'/'
                <<percentile(50u)<<'/'<<percentile(75u)<<'/'<<percentile(90u);
@@ -4438,9 +2848,6 @@ void GxBackend::notify_guest_memory_write(
         const std::uint32_t last_page =
             static_cast<std::uint32_t>(
                 (end - 1u - tracked_begin) >> kDirtyPageShift);
-        // The CPU-side callback arrives with absolute addresses and has no
-        // tracker geometry to read, so keep the explicit bounds check before
-        // handing the page range to the shared bulk publisher.
         if (last_page >= kDirtyPageCount) {
             return;
         }
@@ -4489,9 +2896,7 @@ void GxBackend::drain_guest_memory_writes(
         }
     };
 
-    // Both dirty producers restrict writes to MEM1/MEM2 and their aliases.
-    // The physical address hole cannot contain dirty bits. Keep the bitmap's
-    // guest-address indexing, but avoid scanning the hole on every submission.
+    // Dirty bits exist only for MEM1 and MEM2, so the scan skips the physical hole between them.
     constexpr std::size_t kBytesPerWord = kDirtyPageSize * 64u;
     constexpr std::size_t kMem1EndWord =
         (kMem1PhysicalBase + kMem1Size - kDirtyTrackedBase) / kBytesPerWord;
@@ -4503,13 +2908,9 @@ void GxBackend::drain_guest_memory_writes(
                   kMem2BeginWord < kDirtyPageWordCount);
     const std::size_t word_count = dirty_page_words_.size();
     for (std::size_t word_index = 0; word_index < word_count;) {
-        // Visit the bitmap a group of 64 words at a time and read the group's
-        // summary word first. Empty groups (the overwhelming majority: the
-        // tracked window is 320 MiB, so a group spans 128 KiB of guest RAM)
-        // cost one load instead of 64. A group with no summary bit set has
-        // held no publication since the previous drain of this group, because
-        // producers set the summary bit unconditionally and this loop clears
-        // the group's summary bits before exchanging any word of it.
+        // Words are visited in groups of 64 through the group's summary word, so an empty group
+        // (most of them) costs one load. Producers always set the summary bit, and this loop clears
+        // the summary before exchanging any word of the group, so no publication is missed.
         const std::size_t group = word_index / 64u;
         std::uint64_t pending = 0u;
         if (group < dirty_word_summary_.size()) {
@@ -4536,18 +2937,13 @@ void GxBackend::drain_guest_memory_writes(
             if (candidate >= group_end) {
                 continue;
             }
-            // A summary bit is a hint: producers set it before (or together
-            // with) the page bit, and the authoritative answer is the word.
+            // The summary bit is only a hint; the word itself is authoritative.
             if (dirty_page_words_[candidate].load(std::memory_order_relaxed) ==
                 0u) {
                 continue;
             }
             word_index = candidate;
-            // An empty word needs no locked exchange. A concurrent producer
-            // that marks it after this observation leaves its bit for the next
-            // drain, just as it would after an exchange that returned zero.
-            // Never clear a nonempty word with a plain store: preserve
-            // concurrent additions.
+            // Exchange, not store: a bit a producer sets concurrently must survive.
             std::uint64_t bits = dirty_page_words_[candidate].exchange(
                 0u, std::memory_order_relaxed);
             while (bits != 0u) {
@@ -4662,18 +3058,13 @@ void GxBackend::invalidate_dependency_range_cache(
     if (ranges.empty()) {
         return;
     }
-    invalidate_dirty_display_list_ranges(dependency_parser_, ranges);
-
     std::uint64_t invalidated = 0;
     for (DependencyRangeCacheEntry& entry : dependency_range_cache_) {
         if (!entry.valid || entry.shape_ranges.empty()) {
             continue;
         }
         bool overlaps = false;
-        // Dirty ranges come from the physical RAM tracker and are coalesced
-        // before each caller reaches this method. Their ends are monotonic.
-        // Search once per recorded shape rather than normalizing every
-        // shape/dirty pair. Keep the same half-open overlap and alias rules.
+        // The dirty ranges are coalesced and sorted, so each shape range takes one search.
         for (const GuestMemoryRange& shape : entry.shape_ranges) {
             if (shape.size == 0u) {
                 continue;
@@ -4697,19 +3088,13 @@ void GxBackend::invalidate_dependency_range_cache(
             ++invalidated;
         }
     }
-    if (invalidated != 0u) {
-        stat_dependency_cache_invalidations_.fetch_add(
-            invalidated,
-            std::memory_order_relaxed);
-    }
 }
 
 std::size_t GxBackend::DecodedPacketRunCacheKeyHash::operator()(
     const DecodedPacketRunCacheKey& key) const noexcept {
     std::uint64_t hash = 1469598103934665603ull;
     const auto mix = [&hash](std::uint64_t value) noexcept {
-        // Each typed field contributes once. This hash only selects an
-        // in-memory bucket; complete key equality remains authoritative.
+        // Bucket selection only; lookups still compare the whole key.
         hash = (hash ^ value) * 1099511628211ull;
     };
     mix(key.cache_token);
@@ -4726,8 +3111,7 @@ std::size_t GxBackend::DecodedPacketRunCacheKeyHash::operator()(
     for (const std::uint32_t value : key.array_base_stride) {
         mix(value);
     }
-    // Aligned addresses and narrow register fields need their upper bits
-    // diffused into the bucket bits after whole-word mixing.
+    // Finalizer: spreads the high bits of aligned addresses into the bucket bits.
     hash ^= hash >> 30u;
     hash *= 0xBF58476D1CE4E5B9ull;
     hash ^= hash >> 27u;
@@ -4751,9 +3135,8 @@ GxBackend::DecodedPacketRunCacheKey GxBackend::decoded_packet_run_cache_key(
     key.vat_a = state_.cp(static_cast<std::uint8_t>(cp::kVatABase + vtxfmt));
     key.vat_b = state_.cp(static_cast<std::uint8_t>(cp::kVatBBase + vtxfmt));
     key.vat_c = state_.cp(static_cast<std::uint8_t>(cp::kVatCBase + vtxfmt));
-    // The decoder reads only the default position index, and only when the
-    // packet has no PNMTXIDX. Texture-matrix defaults are consumed by fresh
-    // VS constants, not by decoded vertices. Keep them out of this CPU cache.
+    // Decoded vertices depend on the default position matrix index only when the format has no
+    // PNMTXIDX; texture-matrix defaults reach the shader through constants instead.
     key.matrix_index_a = desc.has_pn_matrix_index ? 0u :
         state_.cp(cp::kMatrixIndexA) & 0x3fu;
     for (unsigned attr = 0; attr < 12u; ++attr) {
@@ -4800,10 +3183,8 @@ bool GxBackend::capture_decoded_packet_run_dependencies(
                                           : lhs.end < rhs.end;
         });
 
-    // Merge only overlapping or touching reads: the union covers exactly the
-    // bytes that were read, never a gap. A merge must also stay inside one
-    // host mapping; two adjacent guest regions that are not contiguous on the
-    // host are kept as separate ranges.
+    // Merge only overlapping or touching reads within one host mapping, so the union holds exactly
+    // the bytes that were read.
     const auto resolve = [&](std::uint64_t begin, std::uint64_t end)
         -> const std::byte* {
         if (end - begin >
@@ -4865,12 +3246,9 @@ bool GxBackend::decoded_packet_run_dependencies_match(
     bool regions_disjoint_sorted)
     noexcept {
     new_generation = current_generation;
-    // Fast path: this entry was already compared against live guest memory after the latest
-    // guest-write batch. Guest writes reach the render thread only through render_frame()'s drained
-    // ranges, which are applied (bumping the generation) before the frame's first replay. The render
-    // thread sees a frozen snapshot of guest memory for the rest of the frame, so a key replayed
-    // thousands of times per frame pays the snapshot compare once. Any write that could change these
-    // bytes bumps the generation and forces the full compare.
+    // Already compared since the last guest-write batch. Writes reach the render thread only as the
+    // ranges render_frame() drains, which bump the generation before the frame's first replay, so
+    // an entry replayed many times in a frame is compared once.
     if (entry_generation != 0u && entry_generation == current_generation &&
         !snapshots.empty()) {
         return true;
@@ -4930,9 +3308,8 @@ bool GxBackend::ensure_resident_vertex_buffer() {
 }
 
 void GxBackend::release_resident_vertex_buffer() noexcept {
-    // Callers guarantee the GPU no longer reads the buffer (session reset
-    // before renderer initialization, or shutdown after drain_gpu()). The
-    // arena reset bumps its epoch, so every entry's block becomes invalid.
+    // The GPU no longer reads the buffer (session reset before renderer initialization, or shutdown
+    // after drain_gpu()). The arena reset bumps its epoch, invalidating every entry's block.
     resident_vertex_buffer_ = {};
     resident_vertex_mapped_ = nullptr;
     resident_vertex_gpu_ = 0;
@@ -4957,7 +3334,7 @@ void GxBackend::release_decoded_entry_residency(
 }
 
 bool GxBackend::make_decoded_entry_resident(DecodedPacketRunCacheEntry& entry) {
-    if (!resident_decoded_vertices_enabled() || entry.vertices.empty() ||
+    if (entry.vertices.empty() ||
         entry.vertices.size() >
             static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max())) {
         return false;
@@ -4975,8 +3352,7 @@ bool GxBackend::make_decoded_entry_resident(DecodedPacketRunCacheEntry& entry) {
     if (!offset.has_value()) {
         return false;
     }
-    // Written once; the block is never rewritten while it belongs to this
-    // entry, so no in-flight frame can observe a partial update.
+    // Written once while the block belongs to this entry, so no in-flight frame sees a partial write.
     std::memcpy(
         resident_vertex_mapped_ +
             static_cast<std::size_t>(*offset) * sizeof(GxVertexOut),
@@ -5028,16 +3404,11 @@ void GxBackend::prune_decoded_packet_run_cache() {
 
 std::size_t GxBackend::invalidate_dirty_decoded_packet_run_ranges(
     const std::vector<GuestWriteRange>& ranges) noexcept {
-    // Every batch of guest-write notifications must invalidate the per-entry snapshot validation,
-    // including an empty batch. The generation assert below means "no write has been observed since
-    // this entry was compared", and only this function can observe writes. Bumping unconditionally
-    // keeps that true without depending on which caller passed a range list. The increment is one
-    // add per frame.
+    // Every batch, empty or not, starts a new generation: an entry's validated generation means no
+    // write has been seen since its bytes were compared.
     ++decoded_packet_run_generation_;
     if (decoded_packet_run_generation_ == 0u) {
-        // Wrapped. An older, unused entry can still hold generation 1;
-        // renumbering alone would turn it into a false already-validated hit.
-        // The rare wrap must reset every validation stamp before reusing 1.
+        // On wrap, clear every stamp first, or an old entry stamped 1 would pass as validated.
         for (auto& [key, entry] : decoded_packet_run_cache_) {
             entry.validated_generation = 0u;
         }
@@ -5047,56 +3418,20 @@ std::size_t GxBackend::invalidate_dirty_decoded_packet_run_ranges(
         return 0;
     }
 
-    if (lazy_vertex_invalidation_enabled()) {
-        // Admission requires a complete immutable snapshot of every indirect vertex-array read. A new
-        // generation forces the first real reuse to compare those bytes against this chunk's frozen
-        // memory. A mismatch takes the original decode and upload path with a fresh upload token. Keep
-        // the generation bump, including the wrap reset, even for empty batches: a notification never
-        // permits skipping byte validation. Byte-budget pruning still bounds retained cold entries.
-        return 0;
-    }
-
+    // The ranges arrive sorted and coalesced (coalesce_dirty_ranges), so each dependency takes a
+    // binary search.
     std::size_t invalidated = 0;
-    const bool use_sorted_ranges = sorted_vertex_invalidation_enabled();
-    const bool page_filter = vertex_dependency_page_filter_enabled();
-    std::uint64_t dirty_page_mask = 0u;
-    if (page_filter) {
-        for (const GuestWriteRange& dirty : ranges) {
-            dirty_page_mask |= dependency_page_mask(
-                normalize_dependency_guest_addr(dirty.guest_addr), dirty.size);
-            if (dirty_page_mask == ~std::uint64_t{0}) break;
-        }
-    }
     for (auto it = decoded_packet_run_cache_.begin();
          it != decoded_packet_run_cache_.end();) {
-        if (page_filter && (it->second.guest_array_page_mask & dirty_page_mask) == 0u) {
-            ++it;
-            continue;
-        }
         bool overlaps = false;
-        if (use_sorted_ranges) {
-            for (const VertexDecodeGuestRange& dependency :
-                 it->second.guest_array_reads) {
-                if (sorted_dirty_ranges_overlap(
-                        std::span<const GuestWriteRange>{ranges},
-                        normalize_dependency_guest_addr(dependency.guest_base),
-                        dependency.size)) {
-                    overlaps = true;
-                    break;
-                }
-            }
-        } else {
-            for (const GuestWriteRange& dirty : ranges) {
-                for (const VertexDecodeGuestRange& dependency :
-                     it->second.guest_array_reads) {
-                    if (dependency_ranges_overlap(
-                            dirty.guest_addr, dirty.size,
-                            dependency.guest_base, dependency.size)) {
-                        overlaps = true;
-                        break;
-                    }
-                }
-                if (overlaps) break;
+        for (const VertexDecodeGuestRange& dependency :
+             it->second.guest_array_reads) {
+            if (sorted_dirty_ranges_overlap(
+                    std::span<const GuestWriteRange>{ranges},
+                    normalize_dependency_guest_addr(dependency.guest_base),
+                    dependency.size)) {
+                overlaps = true;
+                break;
             }
         }
         if (overlaps) {
@@ -5110,8 +3445,6 @@ std::size_t GxBackend::invalidate_dirty_decoded_packet_run_ranges(
     }
     return invalidated;
 }
-
-// Per-frame rendering
 
 void GxBackend::scan_pe_events_on_sim_thread(
     const std::byte* fifo_data,
@@ -5156,8 +3489,8 @@ void GxBackend::scan_pe_events_on_sim_thread(
     }
 }
 
-// Producer (sim thread): snapshot the frame and hand it to the render thread. Blocks only when
-// the consumer is a full frame behind.
+// Producer (simulation thread): copies the frame and hands it to the render thread. Blocks only
+// while the queue is full.
 FramePeCompletionToken GxBackend::render_frame(
     const std::byte* fifo_data,
     std::size_t fifo_size,
@@ -5170,78 +3503,19 @@ FramePeCompletionToken GxBackend::render_frame(
         return {};
     }
 
-    if (!async_render_thread_enabled()) {
-        FrameChunk chunk;
-        chunk.pointer_response=producer_pointer_response_;
-        take_attached_pointer_depth_capture(chunk, fifo_size);
-        take_attached_fifo_markers(chunk, fifo_size);
-        take_attached_stripe_particles(chunk, fifo_size);
-        chunk.prerecorded_movie=producer_movie_content_;
-        chunk.safety_surround=producer_safety_surround_;
-        chunk.movie_frame=producer_movie_frame_;
-        chunk.services = services;
-        chunk.memory = memory;
-        chunk.present_swap_chain = present_swap_chain;
-        chunk.displayed_xfb_addr = displayed_xfb_addr;
-        if (fifo_data != nullptr && fifo_size > 0) {
-            chunk.fifo.assign(fifo_data, fifo_data + fifo_size);
-            std::lock_guard<std::mutex> lock(queue_mutex_);
-            chunk.pe_completion_token = frame_pe_completions_.issue();
-            chunk.fifo_effects_pending = true;
-            chunk.pe_completion_requires_resolution = true;
-            if (cadence_diagnostics_ != nullptr) {
-                cadence_diagnostics_->record_token_issued(
-                    chunk.pe_completion_token.kind);
-            }
-        }
-        drain_guest_memory_writes(chunk.dirty_ranges);
-        coalesce_dirty_ranges(chunk.dirty_ranges);
-        invalidate_dirty_display_list_ranges(event_parser_, chunk.dirty_ranges);
-        render_frame_on_thread(chunk);
-        return chunk.pe_completion_token;
-    }
-
-    const bool trace_gx_stats = trace_gx_stats_enabled();
     const bool trace_gx_stalls = trace_gx_stalls_enabled();
-    const bool trace_gx_microprofile = trace_gx_microprofile_enabled();
-    // Producer and renderer use the same diagnostic sampling interval. Read
-    // only the atomically published completed-frame ordinal here: frame_index_
-    // belongs to the renderer. Queued chunks can make their sampled intervals
-    // differ; the ordinal supplies no guest-memory ownership or timing guarantee.
+    // frame_index_ belongs to the render thread; the producer samples on its published copy.
     const bool producer_time_detail =
-        trace_gx_stats || trace_gx_stalls ||
+        trace_gx_stalls ||
         frame_gx_timing_sample_enabled(
             timing_frame_index_.load(std::memory_order_relaxed));
     const bool fifo_empty = fifo_data == nullptr || fifo_size == 0u;
-    const bool worker_snapshot = worker_memory_snapshot_enabled();
-    if (worker_snapshot && !fifo_empty && memory == nullptr) {
-        throw std::logic_error(
-            "[GxBackend] worker memory snapshot has no guest memory owner");
-    }
     std::vector<GuestWriteRange>& drained_dirty_ranges = drain_scratch_ranges_;
     drain_guest_memory_writes(drained_dirty_ranges);
     coalesce_dirty_ranges(drained_dirty_ranges);
     if (fifo_empty) {
         if (!drained_dirty_ranges.empty()) {
-            if (!worker_snapshot) {
-                invalidate_dependency_range_cache(drained_dirty_ranges);
-            }
-            invalidate_dirty_display_list_ranges(
-                event_parser_,
-                drained_dirty_ranges);
-            if (display_list_dirty_invalidate_enabled() && !worker_snapshot) {
-                for (const GuestWriteRange& range : drained_dirty_ranges) {
-                    (void)pe_event_classifier_
-                        .invalidate_display_list_cache_range(
-                            range.guest_addr,
-                            range.size);
-                }
-            }
-            if (!worker_snapshot) {
-                invalidate_dirty_display_list_ranges(
-                    dependency_parser_,
-                    drained_dirty_ranges);
-            }
+            invalidate_dependency_range_cache(drained_dirty_ranges);
             pending_async_dirty_ranges_.insert(
                 pending_async_dirty_ranges_.end(),
                 drained_dirty_ranges.begin(),
@@ -5261,14 +3535,8 @@ FramePeCompletionToken GxBackend::render_frame(
         return {};
     }
     galaxy::timeline::record(galaxy::timeline::Event::SubmitBegin, fifo_size);
-    // The start sample must be taken on exactly the frames that consume it: `producer_time_detail`,
-    // not the narrower `trace_gx_stats || trace_gx_stalls`. The wait is measured under
-    // `producer_time_detail`, which includes `frame_gx_timing_sample_enabled`. Reading the start only
-    // on the narrower condition left sampled frames with a default-constructed time_point, so
-    // steady_clock::now() - time_point{} produced an epoch-sized duration in producer_wait_ns. The
-    // field measures the simulation thread's coupling to the renderer (queue_space_cv_.wait,
-    // GALAXY_RENDER_QUEUE_DEPTH). Gating both sides on the same predicate costs one clock read per
-    // sampled or traced frame and nothing on an ordinary frame.
+    // Taken under the same condition that measures producer_wait_ns (the simulation thread's wait
+    // for queue space), so a measured frame never subtracts a default time_point.
     const auto wait_start = producer_time_detail
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
@@ -5284,7 +3552,6 @@ FramePeCompletionToken GxBackend::render_frame(
     chunk.memory   = memory;
     chunk.present_swap_chain = present_swap_chain;
     chunk.displayed_xfb_addr = displayed_xfb_addr;
-    chunk.worker_memory_snapshot = worker_snapshot;
     const GxTimingConfig& timing = get_gx_timing_config();
     if (!timing.vi_render_fifo_wait && !timing.pe_events_gpu_fence) {
         scan_pe_events_on_sim_thread(fifo_data, fifo_size, memory, services);
@@ -5303,8 +3570,6 @@ FramePeCompletionToken GxBackend::render_frame(
         memory != nullptr;
     const bool compact_snapshot =
         snapshot_memory && compact_memory_snapshot_enabled();
-    const bool immutable_range_ownership =
-        compact_snapshot && immutable_range_ownership_enabled();
     {
         std::unique_lock<std::mutex> lock(queue_mutex_);
         const auto queued_render_chunks = [this] {
@@ -5337,8 +3602,6 @@ FramePeCompletionToken GxBackend::render_frame(
                     std::chrono::steady_clock::now().time_since_epoch()).count());
             const std::uint64_t stalled_at = render_chunk_started_ns_ + kRenderStallNs;
             if (now >= stalled_at) {
-                ++stalled_queue_admissions_;
-                stalled_queue_max_depth_ = std::max(stalled_queue_max_depth_, queued + 1u);
                 break;
             }
             queue_space_cv_.wait_for(lock, std::chrono::nanoseconds(stalled_at - now));
@@ -5359,8 +3622,7 @@ FramePeCompletionToken GxBackend::render_frame(
                     wait_end - wait_start).count());
         }
         if (render_thread_error_ != nullptr) {
-            // Hard-fail: surface the render-thread failure on the sim thread
-            // instead of presenting a frozen display forever.
+            // Rethrow the render thread's failure here rather than leave a frozen display.
             std::exception_ptr error = render_thread_error_;
             render_thread_error_ = nullptr;
             std::rethrow_exception(error);
@@ -5378,13 +3640,11 @@ FramePeCompletionToken GxBackend::render_frame(
             dirty_range_pool_.pop_back();
             chunk.dirty_ranges.clear();
         }
-        if ((snapshot_memory || worker_snapshot) &&
-            !memory_snapshot_pool_.empty()) {
+        if (snapshot_memory && !memory_snapshot_pool_.empty()) {
             chunk.memory_snapshot = std::move(memory_snapshot_pool_.back());
             memory_snapshot_pool_.pop_back();
         }
-        if ((compact_snapshot || worker_snapshot) &&
-            !memory_range_pool_.empty()) {
+        if (compact_snapshot && !memory_range_pool_.empty()) {
             chunk.memory_ranges = std::move(memory_range_pool_.back());
             memory_range_pool_.pop_back();
             chunk.memory_ranges.clear();
@@ -5405,26 +3665,7 @@ FramePeCompletionToken GxBackend::render_frame(
     coalesce_dirty_ranges(chunk.dirty_ranges);
     chunk.dirty_range_count = chunk.dirty_ranges.size();
     chunk.dirty_bytes = dirty_range_bytes(chunk.dirty_ranges);
-    // In worker-snapshot mode these caches and parser belong exclusively to
-    // the worker. Dirty ranges travel with the FIFO, including empty-chunk
-    // writes, and are applied before its dependency prepass.
-    if (!worker_snapshot) {
-        invalidate_dependency_range_cache(chunk.dirty_ranges);
-        invalidate_immutable_range_cache(chunk.dirty_ranges);
-    }
-    invalidate_dirty_display_list_ranges(event_parser_, drained_dirty_ranges);
-    // invalidate_dependency_range_cache above invalidates the CPU-owned dependency parser. Worker
-    // mode does so in its ordered prepass.
-    if (timing.pe_events_gpu_fence) {
-        if (display_list_dirty_invalidate_enabled() && !worker_snapshot) {
-            for (const GuestWriteRange& range : chunk.dirty_ranges) {
-                (void)pe_event_classifier_
-                    .invalidate_display_list_cache_range(
-                        range.guest_addr,
-                        range.size);
-            }
-        }
-    }
+    invalidate_dependency_range_cache(chunk.dirty_ranges);
     if (snapshot_memory) {
         if (compact_snapshot) {
             const auto dependency_scan_start = producer_time_detail
@@ -5458,8 +3699,7 @@ FramePeCompletionToken GxBackend::render_frame(
             memory,
             chunk.memory_snapshot,
             chunk.memory_ranges,
-            chunk.memory_snapshot_strict,
-            immutable_range_ownership);
+            chunk.memory_snapshot_strict);
         if (!chunk.memory_snapshot.sealed) {
             throw std::runtime_error(
                 "[GxBackend] render memory snapshot was not sealed");
@@ -5471,31 +3711,13 @@ FramePeCompletionToken GxBackend::render_frame(
                     snapshot_end - snapshot_start).count());
         }
         chunk.snapshot_bytes = memory_snapshot_used_bytes(chunk.memory_snapshot);
-        chunk.snapshot_reused_bytes = chunk.memory_snapshot.reused_bytes;
-        if (trace_gx_stats) {
-            stat_dependency_scan_ns_.fetch_add(
-                chunk.dependency_scan_ns,
-                std::memory_order_relaxed);
-            stat_snapshot_ns_.fetch_add(
-                chunk.snapshot_ns,
-                std::memory_order_relaxed);
-            stat_snapshot_bytes_.fetch_add(
-                chunk.snapshot_bytes,
-                std::memory_order_relaxed);
-            stat_snapshot_ranges_.fetch_add(
-                static_cast<std::uint64_t>(chunk.snapshot_range_count),
-                std::memory_order_relaxed);
-        }
         chunk.memory = &chunk.memory_snapshot.memory;
         chunk.memory_snapshot_active = true;
-        chunk.immutable_range_ownership = immutable_range_ownership;
     }
-    if (timing.pe_events_gpu_fence && !worker_snapshot && pe_preclassify_enabled()) {
-        // Classify the immutable FIFO copy and the exact memory view the render parser will consume. In
-        // snapshot mode, classifying live guest memory before capture let a concurrent native DMA write
-        // make CALL_DL/LOAD_INDX command boundaries disagree after an event-free receipt was issued.
-        const auto classification_start =
-            (producer_time_detail || trace_gx_microprofile)
+    if (timing.pe_events_gpu_fence) {
+        // Classify the chunk's own FIFO copy against the memory view the render parser reads: live
+        // memory could change under a concurrent DMA and move CALL_DL/LOAD_INDX command boundaries.
+        const auto classification_start = producer_time_detail
                 ? std::chrono::steady_clock::now()
                 : std::chrono::steady_clock::time_point{};
         pe_event_classifier_.classify(
@@ -5506,7 +3728,7 @@ FramePeCompletionToken GxBackend::render_frame(
             chunk.memory_snapshot_active && chunk.memory_snapshot.sealed &&
                 chunk.memory == &chunk.memory_snapshot.memory &&
                 chunk.memory_snapshot.regions_disjoint_sorted);
-        if (producer_time_detail || trace_gx_microprofile) {
+        if (producer_time_detail) {
             chunk.pe_classification_ns = static_cast<std::uint64_t>(
                 std::chrono::duration_cast<std::chrono::nanoseconds>(
                     std::chrono::steady_clock::now() - classification_start)
@@ -5530,7 +3752,6 @@ FramePeCompletionToken GxBackend::render_frame(
         if (snapshot_us >= trace_gx_stall_threshold_us()) {
             std::cerr << "[gx-memory-snapshot] us=" << snapshot_us
                       << " copied-bytes=" << chunk.snapshot_bytes
-                      << " reused-bytes=" << chunk.snapshot_reused_bytes
                       << " ranges=" << chunk.snapshot_range_count
                       << " range-bytes=" << chunk.snapshot_range_bytes
                       << " strict=" << (chunk.memory_snapshot_strict ? 1 : 0)
@@ -5539,9 +3760,6 @@ FramePeCompletionToken GxBackend::render_frame(
     }
 
     chunk.producer_wait_ns = producer_wait_ns;
-    const auto worker_submission = worker_snapshot
-        ? std::make_shared<FramePeCompletionToken>() : nullptr;
-    chunk.worker_submission_token = worker_submission;
     {
         std::unique_lock<std::mutex> lock(queue_mutex_);
         if (render_thread_error_ != nullptr) {
@@ -5552,7 +3770,6 @@ FramePeCompletionToken GxBackend::render_frame(
         if (stop_render_thread_) {
             // Same retention bound as the render thread's return path.
             if (chunk.memory_snapshot_active) {
-                chunk.memory_snapshot.immutable_ranges.clear();
                 if (memory_snapshot_pool_.size() < kChunkPoolRetainedBuffers) {
                     memory_snapshot_pool_.push_back(
                         std::move(chunk.memory_snapshot));
@@ -5569,29 +3786,19 @@ FramePeCompletionToken GxBackend::render_frame(
             chunk.pe_events_preclassified &&
             chunk.preclassified_pe_events.empty();
         chunk.pe_event_free_receipt = event_free_receipt;
-        if (!worker_snapshot) {
-            submitted_token = event_free_receipt
-                ? frame_pe_completions_.issue_event_free()
-                : frame_pe_completions_.issue();
-        }
+        submitted_token = event_free_receipt
+            ? frame_pe_completions_.issue_event_free()
+            : frame_pe_completions_.issue();
         chunk.pe_completion_token = submitted_token;
-        chunk.pe_completion_requires_resolution =
-            !worker_snapshot && !event_free_receipt;
+        chunk.pe_completion_requires_resolution = !event_free_receipt;
         frame_queue_.push_back(std::move(chunk));
         queue_depth_after_push = frame_queue_.size();
-    }
-    if (trace_gx_stats) {
-        stat_queue_wait_ns_.fetch_add(
-            producer_wait_ns,
-            std::memory_order_relaxed);
     }
     if (cadence_diagnostics_ != nullptr) {
         cadence_diagnostics_->record_phase(
             cadence::TimingPhase::ProducerQueueWait,
             diagnostic_queue_wait_ns);
-        if (!worker_snapshot) {
-            cadence_diagnostics_->record_token_issued(submitted_token.kind);
-        }
+        cadence_diagnostics_->record_token_issued(submitted_token.kind);
     }
     // Publication and token accounting precede wakeup; diagnostics do not.
     queue_cv_.notify_one();
@@ -5609,18 +3816,6 @@ FramePeCompletionToken GxBackend::render_frame(
             cadence::TimingPhase::LiveMemoryReadBarrierWait};
         wait_for_render_cpu_reads_idle();
     }
-    if (worker_submission) {
-        // The live-read wait acquires the mutex used by the worker to publish
-        // this token, so the producer sees it only after a successful seal.
-        submitted_token = *worker_submission;
-        if (!submitted_token) {
-            throw std::logic_error(
-                "worker memory snapshot released without a classified receipt");
-        }
-        if (cadence_diagnostics_ != nullptr) {
-            cadence_diagnostics_->record_token_issued(submitted_token.kind);
-        }
-    }
     galaxy::timeline::record(galaxy::timeline::Event::SubmitEnd, submitted_token.value,
                              static_cast<std::uint64_t>(submitted_token.kind));
     return submitted_token;
@@ -5628,16 +3823,6 @@ FramePeCompletionToken GxBackend::render_frame(
 
 void GxBackend::wait_for_render_idle() {
     if (!initialized_) {
-        return;
-    }
-
-    if (!async_render_thread_enabled()) {
-        std::unique_lock<std::mutex> lock(queue_mutex_);
-        if (render_thread_error_ != nullptr) {
-            std::exception_ptr error = render_thread_error_;
-            render_thread_error_ = nullptr;
-            std::rethrow_exception(error);
-        }
         return;
     }
 
@@ -5664,35 +3849,11 @@ void GxBackend::wait_for_render_cpu_reads_idle() {
         return;
     }
 
-    if (!async_render_thread_enabled()) {
-        std::unique_lock<std::mutex> lock(queue_mutex_);
-        if (render_thread_error_ != nullptr) {
-            std::exception_ptr error = render_thread_error_;
-            render_thread_error_ = nullptr;
-            std::rethrow_exception(error);
-        }
-        return;
-    }
-
     const GxTimingConfig& timing = get_gx_timing_config();
-    // When the renderer consumes the producer's sealed snapshot it does not read live guest RAM.
-    // render_frame() points the chunk at its own copy before publishing it, and the render thread
-    // reads only `chunk.memory_snapshot_active ? &chunk.memory_snapshot.memory : chunk.memory` (see
-    // render_frame_on_thread). Every dependency range the request touches is in that sealed copy, so
-    // a producer write to live RAM cannot reach a queued chunk.
-    //
-    // Draining the whole queue in that case is not a barrier. It only serializes: the producer waits
-    // for the renderer to finish this frame before starting the next, so the frame rate becomes
-    // producer + renderer rather than max(producer, renderer). The 3-deep queue exists to decouple
-    // them.
-    //
-    // The bounded queue-depth wait below uses the same predicate as render_frame()'s push, so the
-    // renderer is never more than render_queue_depth frames behind. render_cpu_reads_in_flight_ is
-    // still decremented by mark_frame_cpu_reads_done() on every completion, so shutdown conservation
-    // and wait_for_render_fifo_effects_idle() are unaffected.
-    //
-    // Live-memory mode is unchanged: there `chunk.memory` is live guest RAM, and the full drain is a
-    // real correctness requirement.
+    // When the renderer reads its own snapshot, or reads guest memory live by design (the game's
+    // GXDrawDone discipline bounds its writes), this waits only for queue space, as render_frame()'s
+    // push does; a full drain would serialize the two threads. Otherwise the renderer reads memory
+    // the game is about to change, and the queue must drain.
     const std::size_t queue_depth_limit = timing.render_queue_depth;
     const bool renderer_owns_its_memory =
         timing.render_memory_snapshot || timing.render_live_memory_reads;
@@ -5713,13 +3874,8 @@ void GxBackend::wait_for_render_cpu_reads_idle() {
             return true;
         }
         if (renderer_owns_its_memory) {
-            // The queue-depth gate alone. `render_cpu_reads_in_flight_` must not
-            // be required here: it is decremented by mark_frame_cpu_reads_done(),
-            // which the render thread may reach only after popping the chunk,
-            // while this call happens after a push that already filled the queue
-            // to the limit. Waiting for both would deadlock the producer against
-            // the very backlog it is waiting to shrink. Depth is also the only
-            // condition that has to hold for the next push to succeed.
+            // Depth only: render_cpu_reads_in_flight_ drops after the render thread pops a chunk,
+            // so also waiting for it here can deadlock against a full queue.
             return queued_render_chunks() < queue_depth_limit;
         }
         return queued_render_chunks() == 0u &&
@@ -5740,68 +3896,30 @@ bool GxBackend::wait_for_frame_pe_completion_for(
             "frame-specific PE completion wait used an uninitialized GX backend");
     }
 
-    const bool asynchronous = async_render_thread_enabled();
     const auto deadline = std::chrono::steady_clock::now() +
         std::chrono::milliseconds(timeout_ms);
+    std::unique_lock<std::mutex> lock(queue_mutex_);
     for (;;) {
-        // The synchronous renderer has no consumer thread to poll native fence
-        // progress. Polling is nonblocking; PE callbacks are still delivered
-        // before the contract frontier advances.
-        if (!asynchronous) {
-            poll_completed_frame_effects();
+        if (render_thread_error_ != nullptr) {
+            std::exception_ptr error = render_thread_error_;
+            render_thread_error_ = nullptr;
+            std::rethrow_exception(error);
         }
-
-        {
-            std::unique_lock<std::mutex> lock(queue_mutex_);
-            if (render_thread_error_ != nullptr) {
-                std::exception_ptr error = render_thread_error_;
-                render_thread_error_ = nullptr;
-                std::rethrow_exception(error);
-            }
-            if (frame_pe_completions_.probe_wait(token) ==
-                FramePeWaitState::Complete) {
-                frame_pe_completions_.consume_wait(token);
-                galaxy::timeline::record(galaxy::timeline::Event::TokenConsumed, token.value);
-                return true;
-            }
-            if (!asynchronous) {
-                const auto pending = std::find_if(
-                    pending_frame_effects_.begin(),
-                    pending_frame_effects_.end(),
-                    [token](const PendingFrameEffects& effects) {
-                        return effects.pe_completion_token == token;
-                    });
-                if (pending == pending_frame_effects_.end()) {
-                    throw std::logic_error(
-                        "synchronous frame PE token has no exact GPU fence");
-                }
-            }
-            if (stop_render_thread_) {
-                throw std::runtime_error(
-                    "render thread stopped before frame-specific PE completion");
-            }
-            if (timeout_ms == 0u ||
-                std::chrono::steady_clock::now() >= deadline) {
-                return false;
-            }
-            if (asynchronous) {
-                (void)queue_space_cv_.wait_until(lock, deadline);
-                continue;
-            }
+        if (frame_pe_completions_.probe_wait(token) ==
+            FramePeWaitState::Complete) {
+            frame_pe_completions_.consume_wait(token);
+            galaxy::timeline::record(galaxy::timeline::Event::TokenConsumed, token.value);
+            return true;
         }
-
-        // In synchronous mode no condition-variable publisher exists. Sleep a
-        // maximum of one millisecond, then poll the exact fence again. This is
-        // still bounded by the caller's absolute slice deadline.
-        const auto now = std::chrono::steady_clock::now();
-        if (now >= deadline) {
+        if (stop_render_thread_) {
+            throw std::runtime_error(
+                "render thread stopped before frame-specific PE completion");
+        }
+        if (timeout_ms == 0u ||
+            std::chrono::steady_clock::now() >= deadline) {
             return false;
         }
-        const auto one_millisecond =
-            std::chrono::duration_cast<std::chrono::steady_clock::duration>(
-                std::chrono::milliseconds(1));
-        std::this_thread::sleep_for(
-            std::min(deadline - now, one_millisecond));
+        (void)queue_space_cv_.wait_until(lock, deadline);
     }
 }
 
@@ -6075,9 +4193,6 @@ void GxBackend::begin_identity_scene() {
     identity_continuity_ = 0u;
     identity_continuity_particle_ = false;
     identity_category_ = motion::kNoCategory;
-    scene_camera_epoch_known_ = false;
-    scene_image_effect_record_ = -1;
-    scene_image_effect_offset_ = -1;
     state_.reset_matrix_load_signature();
 }
 
@@ -6094,7 +4209,7 @@ std::uint64_t GxBackend::record_identity() noexcept {
 }
 
 void GxBackend::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a,
-                               std::uint32_t b, std::size_t offset) {
+                               std::uint32_t b) {
     if (kind < identity_markers_by_kind_.size()) {
         if (identity_markers_by_kind_[kind]++ == 0u && rt_log_glows()) [[unlikely]] {
             std::fprintf(stderr, "[rt-identity] first marker of kind %u\n", static_cast<unsigned>(kind));
@@ -6115,7 +4230,7 @@ void GxBackend::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32
         return;
     }
     if (kind >= motion::kMarkerCategory) {
-        on_motion_marker(kind, aux, a, b, offset);
+        on_motion_marker(kind, aux, a, b);
         return;
     }
     // The drawing object for the material census and the named classes: a NameObj's draws follow
@@ -6129,8 +4244,8 @@ void GxBackend::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32
         rt_object_ = a;
         rt_object_fake_shadow_ = renderer_.rt_lighting() && rt_fake_shadow_object(a);
     } else if (kind == motion::kMarkerShapePacket) {
-        // A model from a draw buffer (its shape packet), not the shadow drawer before it: the shadow
-        // drawers draw with GX directly (measured: Gold Leaf's Chomps were hidden with their shadows).
+        // A model from a draw buffer: a shadow drawer draws through GX directly, so the flag of the
+        // object before it does not apply.
         rt_object_fake_shadow_ = false;
     } else if (kind == motion::kMarkerEmitter || kind == motion::kMarkerParticle) {
         rt_object_ = 0u;
@@ -6149,17 +4264,6 @@ void GxBackend::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32
         // match, else the slot holds a new particle (TransformHistory::add).
         identity_continuity_ = b >> 16u;
         tag = b & 0xFFFFu;
-    } else if (motion_trace_signals()) [[unlikely]] {
-        // Shape packets, NameObjs and emitters carry their object's epoch
-        // above the pass bit (generation 20): a change is a new identity.
-        const auto epoch = static_cast<std::uint16_t>(aux >> 1u);
-        const auto [it, inserted] = trace_object_epochs_.try_emplace(a, epoch);
-        if (!inserted && it->second != epoch) {
-            std::fprintf(stderr, "[motion-identity] new-life kind=%u object=%08X epoch=%u->%u scene=%llu\n",
-                         static_cast<unsigned>(kind), a, static_cast<unsigned>(it->second),
-                         static_cast<unsigned>(epoch), static_cast<unsigned long long>(identity_scene_index_));
-            it->second = epoch;
-        }
     }
     set_identity_marker(kind, aux, a, static_cast<std::uint32_t>(tag));
 }
@@ -6172,15 +4276,13 @@ void GxBackend::set_identity_marker(std::uint8_t kind, std::uint16_t aux, std::u
     state_.reset_matrix_load_signature();
 }
 
-void GxBackend::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a, std::uint32_t b,
-                                 std::size_t offset) {
+void GxBackend::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a, std::uint32_t b) {
     switch (kind) {
     case motion::kMarkerCategory: {
         ++motion_category_markers_;
         // The game's sky lists (MR::DrawBufferType Sky 1, Air 2, AstroDomeSky 0x23) until the next list, draw type or
-        // phase. Its sun list (Sun 3: the sun's disc and glow) is neither sky nor scene: the key light is the sun, and
-        // its glow in the sky's light counted it twice and, as the sky's level is its mean, darkened the rest of the sky
-        // (Sea Slide's shade sides, sweep1).
+        // phase. The sun list (Sun 3: its disc and glow) is neither sky nor scene: the sun is the key light, and its glow
+        // in the sky's light would count it twice and, the sky's level being its mean, darken the rest of the sky.
         const bool list = aux == motion::kCategoryBufferOpa || aux == motion::kCategoryBufferXlu;
         rt_sky_buffer_ = list && ((a & 0xFFFFu) == 1u || (a & 0xFFFFu) == 2u || (a & 0xFFFFu) == 0x23u);
         rt_sun_buffer_ = list && (a & 0xFFFFu) == 3u;
@@ -6196,9 +4298,6 @@ void GxBackend::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint
         } else if (aux == motion::kCategoryDrawType) {
             rt_draw_buffer_ = 0xFFFFu;   // a draw type's list (plants, oceans, ropes): no buffer
         }
-        if (scene_2d_open_) {
-            ++scene_2d_categories_;
-        }
         if (!history_scene_) {
             return;
         }
@@ -6207,15 +4306,6 @@ void GxBackend::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint
             phase = static_cast<std::uint8_t>(a);
             if (phase == static_cast<std::uint8_t>(motion::ScenePhase::ImageEffect)) {
                 ++motion_image_effect_markers_;
-                scene_image_effect_record_ = static_cast<std::int64_t>(transform_history_.current().size());
-                scene_image_effect_offset_ =
-                    static_cast<std::int64_t>(parse_span_base_ + offset) - static_cast<std::int64_t>(parse_span_prefix_);
-                if (motion_trace_signals()) [[unlikely]] {
-                    std::fprintf(stderr, "[gx-phase] image-effect scene=%llu record=%lld chunk-offset=%lld\n",
-                                 static_cast<unsigned long long>(identity_scene_index_),
-                                 static_cast<long long>(scene_image_effect_record_),
-                                 static_cast<long long>(scene_image_effect_offset_));
-                }
             }
         }
         identity_category_ = motion::encode_category(phase, aux, a);
@@ -6224,8 +4314,8 @@ void GxBackend::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint
     case motion::kMarkerScene:
         ++motion_scene_markers_;
         if ((aux & motion::kSceneCameraCut) != 0u) {
-            // A cut with this many objects appearing or reset: a stage was loaded (another sky and
-            // other lights). Measured: 3043-4507 at stage loads, 0 at cuts within one.
+            // A cut with this many objects appearing or reset is a stage load (another sky and other
+            // lights): stage loads bring thousands, cuts within a stage none.
             constexpr std::uint32_t kStageObjectEvents = 256u;
             rt_scene_cut_ = true;
             rt_cut_objects_ = std::max(rt_cut_objects_, b);
@@ -6236,8 +4326,6 @@ void GxBackend::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint
         if (!history_scene_) {
             return;
         }
-        scene_camera_epoch_ = a;
-        scene_camera_epoch_known_ = true;
         // The game cut the view: the temporal upscaler's history is invalid.
         if (temporal_scene_ && (aux & motion::kSceneCameraCut) != 0u) {
             renderer_.reset_temporal_history();
@@ -6246,10 +4334,6 @@ void GxBackend::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint
             InterpScene& scene = interp_scenes_[interp_scene_];
             scene.camera_epoch = a;
             scene.camera_epoch_known = true;
-        }
-        if (motion_trace_signals() && (aux & motion::kSceneCameraCut) != 0u) [[unlikely]] {
-            std::fprintf(stderr, "[gx-scene] camera-cut scene=%llu epoch=%u object-events=%u\n",
-                         static_cast<unsigned long long>(identity_scene_index_), a, b);
         }
         return;
     case motion::kMarkerPass:
@@ -6264,15 +4348,6 @@ void GxBackend::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint
             begin_side_layer(kMirrorLayer);
         } else if (side_layer_ == kMirrorLayer) {
             end_side_layer();
-        }
-        if (motion_trace_signals()) [[unlikely]] {
-            static std::uint64_t lines = 0u;
-            if (lines++ < 200u) {
-                std::fprintf(stderr, "[gx-pass] %s scene=%llu history-scene=%d\n",
-                             aux == static_cast<std::uint16_t>(motion::PassMarker::MirrorBegin) ? "mirror-begin"
-                                                                                                 : "mirror-end",
-                             static_cast<unsigned long long>(identity_scene_index_), history_scene_ ? 1 : 0);
-            }
         }
         return;
     case motion::kMarkerLight: {
@@ -6291,13 +4366,6 @@ void GxBackend::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint
     case motion::kMarkerLayoutPane:
     case motion::kMarkerLayoutActor:
     case motion::kMarkerStarPointer: {
-        const std::size_t index = static_cast<std::size_t>(kind - motion::kMarkerLayoutPane);
-        if (scene_2d_open_) {
-            ++scene_2d_layout_markers_[index];
-            ++layout_markers_in_2d_[index];
-        } else {
-            ++layout_markers_outside_2d_[index];
-        }
         if (side_layer_ == kScreenLayer) {
             // The pane, layout actor or pointer layout names the draws after it.
             ++layer_identity_markers_[kScreenLayer];
@@ -6312,45 +4380,14 @@ void GxBackend::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint
     }
 }
 
-// GameScene::draw2D's entry and epilogue (FifoMarker::Scene2DBegin/End): the
-// 2D layer's FIFO span in the chunk. Recording only.
-void GxBackend::on_scene_2d_marker(bool begin, std::size_t chunk_offset) {
-    if (begin && scene_phase_) {
+// GameScene::draw2D's entry (FifoMarker::Scene2DBegin).
+void GxBackend::on_scene_2d_begin() {
+    if (scene_phase_) {
         // GameScene::draw3D returned before its clearZBuffer (movie, nerve):
         // the scene ends here.
         on_fifo_marker(FifoMarker::SceneEnd, nullptr);
     }
-    if (begin) {
-        scene_2d_open_ = true;
-        ++scene_2d_serial_;
-        ++window_2d_scenes_;
-        scene_2d_begin_offset_ = static_cast<std::int64_t>(chunk_offset);
-        scene_2d_end_offset_ = -1;
-        scene_2d_layout_markers_ = {};
-        scene_2d_categories_ = 0u;
-        return;
-    }
-    scene_2d_open_ = false;
-    scene_2d_end_offset_ = static_cast<std::int64_t>(chunk_offset);
-    if (motion_trace_signals() && (scene_2d_serial_ <= 30u || scene_2d_serial_ % 600u == 0u)) [[unlikely]] {
-        std::fprintf(stderr,
-                     "[gx-2d] scene=%llu begin=%lld end=%lld panes=%u layout-actors=%u star-pointer=%u "
-                     "categories=%u total-in-2d(pane/actor/star)=%llu/%llu/%llu outside-2d=%llu/%llu/%llu\n",
-                     static_cast<unsigned long long>(scene_2d_serial_),
-                     static_cast<long long>(scene_2d_begin_offset_), static_cast<long long>(scene_2d_end_offset_),
-                     scene_2d_layout_markers_[0], scene_2d_layout_markers_[1], scene_2d_layout_markers_[2],
-                     scene_2d_categories_, static_cast<unsigned long long>(layout_markers_in_2d_[0]),
-                     static_cast<unsigned long long>(layout_markers_in_2d_[1]),
-                     static_cast<unsigned long long>(layout_markers_in_2d_[2]),
-                     static_cast<unsigned long long>(layout_markers_outside_2d_[0]),
-                     static_cast<unsigned long long>(layout_markers_outside_2d_[1]),
-                     static_cast<unsigned long long>(layout_markers_outside_2d_[2]));
-    }
-}
-
-bool GxBackend::motion_trace_signals() noexcept {
-    static const bool enabled = read_env_u64("GALAXY_MOTION_TRACE_SIGNALS", 0u) != 0u;
-    return enabled;
+    ++window_2d_scenes_;
 }
 
 void GxBackend::take_attached_stripe_particles(FrameChunk& chunk, std::size_t fifo_size) {
@@ -6373,29 +4410,6 @@ void GxBackend::take_attached_stripe_particles(FrameChunk& chunk, std::size_t fi
 
 void GxBackend::note_stripe_particles(const FrameChunk& chunk) {
     motion_stripe_marks_ += chunk.stripe_particles.size();
-    if (!motion_trace_signals()) {
-        return;
-    }
-    static std::uint64_t lines = 0u;
-    if (lines >= 400u) {
-        return;
-    }
-    // One strip = consecutive marks of one strip id with rising offsets.
-    std::size_t strips = 0u;
-    std::uint32_t min_age = 0xFFFFu, max_age = 0u;
-    for (std::size_t i = 0; i < chunk.stripe_particles.size(); ++i) {
-        const StripeParticleMark& mark = chunk.stripe_particles[i];
-        if (i == 0u || mark.strip != chunk.stripe_particles[i - 1u].strip ||
-            mark.offset <= chunk.stripe_particles[i - 1u].offset) {
-            ++strips;
-        }
-        min_age = std::min(min_age, mark.age_lifetime >> 16u);
-        max_age = std::max(max_age, mark.age_lifetime >> 16u);
-    }
-    ++lines;
-    std::fprintf(stderr, "[gx-stripe] scene=%llu marks=%zu strips=%zu first-offset=%zu age=%u..%u\n",
-                 static_cast<unsigned long long>(identity_scene_index_), chunk.stripe_particles.size(), strips,
-                 chunk.stripe_particles.front().offset, min_age, max_age);
 }
 
 void GxBackend::take_attached_fifo_markers(FrameChunk& chunk, std::size_t fifo_size) noexcept {
@@ -6543,11 +4557,10 @@ bool GxBackend::rt_geometry_draw() const noexcept {
            rt_phase_ == static_cast<std::uint8_t>(ScenePhase::ListOpa);
 }
 
-// Late geometry: opaque draws after the screen capture (indirect-textured models: Rosalina), after the trace.
+// Late geometry: opaque draws after the screen capture (indirect-textured models), after the trace.
 bool GxBackend::rt_late_draw() const noexcept {
     static_assert(static_cast<std::uint8_t>(motion::ScenePhase::AfterIndirect) == kRtLatePhase);
-    // Alpha-tested late draws too (Rosalina's dress and eyes, obs79 outcome log: "untraced p8 [atest]"): traced whole,
-    // as the alpha-tested geometry of the other phases (rt_alpha_draw).
+    // Alpha-tested and card draws of this phase are traced too, as in the other phases (rt_alpha_draw).
     return (rt_state_eligible_ || rt_alpha_draw() || rt_card_draw()) && scene_phase_ && side_layer_ == kSceneLayer &&
            renderer_.rt_late_open() && rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::AfterIndirect);
 }
@@ -6613,14 +4626,10 @@ std::uint32_t GxBackend::debake_channels() const {
         material != nullptr && material->emission != RtEmission::None) {
         return 0u;
     }
-    // Unlit channels coloured by their vertices (bits 0-1); lit channels (bits 2-3: GALAXY_RT_DEBAKE_LIT=0 none).
+    // Unlit channels coloured by their vertices (bits 0-1); lit channels (bits 2-3; none with GALAXY_RT_DEBAKE_LIT=0).
     // Vertex colours hold baked light on the terrain only (MR::DrawBufferType ClippedMapParts 0, Planet 4, PlanetLow 5,
-    // Environment 6-7, IndirectPlanet 0x1D, and the draw types' lists): the game lights its actors (the player, NPCs,
-    // enemies) as they move, and its map objects (houses, toys, blocks, props) paint their vertices with their own
-    // colours. Each vertex colour over its brightest channel turned Toy Time's toy's black hair and its robot's dark
-    // panels white. A lit channel whose material colour comes from an actor's or map object's vertices is that paint
-    // too: de-baked by its facing fit, the Airship Armada's pink Octoombas went dark crimson (d84: pink with the
-    // de-bake off, as the game shows them).
+    // Environment 6-7, IndirectPlanet 0x1D, and the draw types' lists): the game lights its actors as they move, and
+    // map objects paint their vertices with their own colours, lit channels included, so neither is de-baked.
     static const bool lit_enabled = read_env_u64("GALAXY_RT_DEBAKE_LIT", 1u) != 0u;
     const std::uint32_t buffer = rt_draw_buffer_ & 0xFFFFu;
     const bool terrain = buffer == 0xFFFFu || buffer == 0x00u || buffer == 0x04u || buffer == 0x05u ||
@@ -6660,8 +4669,8 @@ void GxBackend::build_rt_tev(RtTevMaterial& tev, RtTevStage* stages_out, float f
         stage.scale_s = static_cast<float>((s_scale & 0xFFFFu) + 1u) / static_cast<float>(std::max<unsigned>(image.width, 1u));
         stage.scale_t = static_cast<float>((t_scale & 0xFFFFu) + 1u) / static_cast<float>(std::max<unsigned>(image.height, 1u));
         // A texture whose coordinates the vertex normals generate: an environment map, the game's painted reflection
-        // (pad[0] 1; header bit 7: the draw has one). Under physical light the traced reflection takes its place.
-        // GALAXY_RT_PAINTED_REFLECTION=1 keeps them (A/B).
+        // (pad[0] 1; header bit 7: the draw has one). Under physical light the traced reflection takes its place;
+        // GALAXY_RT_PAINTED_REFLECTION=1 keeps them.
         static const bool painted = read_env_u64("GALAXY_RT_PAINTED_REFLECTION", 0u) != 0u;
         stage.pad[0] = 0u;
         if (!painted && ((packed.order >> 6u) & 1u) != 0u && coord < texgens) {
@@ -6748,13 +4757,10 @@ void GxBackend::build_rt_tev(RtTevMaterial& tev, RtTevStage* stages_out, float f
     }
 }
 
-// Paint or baked light (apply_debake_model), from a model's distinct vertex colours. Light baked over a model's curved
-// surfaces takes hundreds to thousands of values; shading painted by hand a handful of exact ones (Toy Time's robot:
-// 808080 and FFFFFF stripes on its grille, the grey shoulders: white once divided by their brightest channel; Space
-// Junk's green panels: three). Measured (GALAXY_RT_DEBAKE_LOG, sampled at most 2048 vertices a batch): painted models
-// 2-12 values, baked ones 39-4096 (Good Egg, Gusty Garden, Honeyhive, Space Junk, Toy Time, Freezeflame). Hue is no
-// cue: the artists baked coloured light (Good Egg's terrain: up to 36 saturated hues). One flat colour is paint too.
-// `hue_count` (saturated hues within 0.15 of chromaticity) for the log.
+// Paint or baked light (apply_debake_model), from a model's distinct vertex colours (at most 2048 sampled per batch):
+// light baked over curved surfaces takes hundreds to thousands of values (39 or more in the game's models), shading
+// painted by hand a handful of exact ones (2-12). Hue is no cue, as the baked light is often coloured. One flat colour
+// is paint too. `hue_count` (saturated hues within 0.15 of chromaticity) is for the log.
 bool debake_colours_baked(const std::unordered_set<std::uint32_t>& colours, unsigned& hue_count, float& lo, float& hi) {
     std::vector<std::array<float, 3>> hues;
     lo = 1.0f;
@@ -6800,7 +4806,7 @@ void debake_sh9(const float* n, float* y) {
 // The light baked into a model's vertex colours as a function of the surface's facing: per channel the least-squares
 // fit of nine spherical harmonics of the vertex normal to the colour (Ramamoorthi & Hanrahan 2001: a distant light's
 // irradiance lies almost wholly in these bands), solved by Cholesky with a small ridge (1e-3 of the mean diagonal).
-// What the facing does not explain stays: paint (Toy Time's robot's grille stripes, on faces facing alike), occlusion.
+// What the facing does not explain stays: paint, occlusion.
 void GxBackend::fit_debake_light(DebakeModel& model) {
     model.fitted = false;
     if (model.samples.size() < 32u) {
@@ -6984,8 +4990,7 @@ std::uint32_t GxBackend::apply_debake_model(std::uint32_t channels) {
             return channels & ~3u;
         }
     }
-    // GALAXY_RT_DEBAKE_LEVEL=1: de-baked to the model's brightest vertex (too bright: Good Egg's stone and wood
-    // clipped white, b8); else the program's neutral level.
+    // GALAXY_RT_DEBAKE_LEVEL=1: de-baked to the model's brightest vertex; else to the program's neutral level.
     static const bool brightest = read_env_u64("GALAXY_RT_DEBAKE_LEVEL", 0u) != 0u;
     debake_model_level_ = brightest ? model.level : 0u;
     return channels;
@@ -7056,8 +5061,8 @@ std::uint32_t GxBackend::debake_state() {
         words(&stages[s].color_env, 4u);
     }
     // A baked model's unlit channels: every vertex as bright as its brightest (the surface as the game shows it fully
-    // lit, the programs' doubling and clamping included), not the program's neutral level (its texture 1:1: half the
-    // game's lit brightness and duller: Good Egg's wood ring 246,155,58 where the game shows 250,242,103).
+    // lit, the programs' doubling and clamping included), not the program's neutral level, which shows the texture
+    // 1:1 at about half the game's lit brightness.
     const auto model_level = [this](std::uint32_t state) {
         if (debake_model_level_ != 0u) {
             for (unsigned c = 0; c < 2u; ++c) {
@@ -7178,18 +5183,15 @@ bool GxBackend::rt_card_draw() const noexcept {
     return material != nullptr && material->foliage;
 }
 
-// An alpha-tested opaque draw outside the foliage table: most such tests cut little or nothing (the Observatory's
-// wood panels, rocks, bells, Gearmos, Buoy Base's far models; v68w outcome log: 41 objects in five galaxies left out
-// of the traced scene), so it is traced whole and the rays test its texture's alpha (kRtDrawAlphaTest).
-// GALAXY_RT_ALPHA_GEOMETRY=0 leaves them out as before.
+// An alpha-tested opaque draw outside the foliage table: most such tests cut little or nothing, so it is traced
+// whole and the rays test its texture's alpha (kRtDrawAlphaTest). GALAXY_RT_ALPHA_GEOMETRY=0 leaves them out.
 bool GxBackend::rt_alpha_draw() const noexcept {
     static const bool enabled = read_env_u64("GALAXY_RT_ALPHA_GEOMETRY", 1u) != 0u;
     if (!enabled || !rt_card_eligible_ || rt_card_draw()) {
         return false;
     }
-    // A particle texture the table names a light source, drawn as opaque geometry, is that light's surface: traced
-    // (Bowser's Star Reactor's fire-bar balls: their opaque core in phase 1, alpha-tested, untraced as a particle,
-    // reasons 0xA0 in GALAXY_RT_UNTRACED; never a light source, they showed as dark discs).
+    // A particle texture the table names a light source, drawn as opaque geometry, is that light's surface and is
+    // traced; other particle textures and the sky are not.
     const RtMaterial* const material = current_rt_material_ != 0u ? rt_material(current_rt_material_) : nullptr;
     return material == nullptr || ((!material->particle || material->emission != RtEmission::None) && !material->sky &&
                                     !material->hide);
@@ -7207,8 +5209,7 @@ bool GxBackend::rt_glow_draw() const noexcept {
 }
 
 // Light sprites: alpha-blended draws of the translucent phases whose texture the material table names as a
-// light (the Observatory's walkway lamps are an alpha-blended glow effect): captured with the glows, their
-// light found from what they add to the picture.
+// light: captured with the glows, their light found from what they add to the picture.
 bool GxBackend::rt_sprite_light_draw() const noexcept {
     if (!rt_sprite_eligible_ || !scene_phase_ || side_layer_ != kSceneLayer || !renderer_.rt_glow_open()) {
         return false;
@@ -7284,8 +5285,8 @@ void GxBackend::begin_rt_stage() {
     note_rt_stage();
 }
 
-// The loaded stage and its row of the sun table: the game's own report (native builds), else the recompiled game's
-// memory (GameSystem's scene controller holds the name inline at +0x20).
+// The loaded stage and its row of the sun table: the game's own report, else guest memory as the original program
+// lays it out (GameSystem's scene controller holds the name inline at +0x20).
 void GxBackend::note_rt_stage() {
     constexpr std::uint32_t kGameSystemPointer = 0x806A1228u;
     const auto word = [this](std::uint32_t address, std::uint32_t& out) {
@@ -7349,8 +5350,7 @@ bool GxBackend::rt_fake_shadow_object(std::uint32_t object) {
     static constexpr char kShadow[] = "\x89\x65\x95\x60\x89\xE6";           // 影描画
     static constexpr char kPlateShadow[] = "\x94\xC2\x8F\xF3\x83\x56\x83\x83";  // 板状シャ...
     // The drop shadows only (sphere, oval, cylinder, box volumes, plates, water-surface circles): the line,
-    // electric-rail and ring-beam volumes draw effects the traced light does not replace (census: 11
-    // drawer kinds, render-fix census_*_mat.tsv).
+    // electric-rail and ring-beam volumes draw effects the traced light does not replace.
     static constexpr char kLine[] = "\x83\x89\x83\x43\x83\x93";       // ライン
     static constexpr char kRail[] = "\x93\x64\x8C\x82";               // 電撃
     static constexpr char kRing[] = "\x83\x8A\x83\x93\x83\x4F";       // リング
@@ -7373,8 +5373,8 @@ bool GxBackend::rt_traced_clear_draw() const noexcept {
 
 bool GxBackend::rt_hidden_draw() const noexcept {
     // GALAXY_RT_HIDE_MIRROR=1: the game's mirror pass (the world drawn from the mirrored camera into the
-    // texture mirrors project) is not drawn under traced reflections. Off by default: in Freezeflame the
-    // second Mario stayed with it on (mf1: the inverted Mario is drawn after the reflection composite).
+    // texture mirrors project) is not drawn under traced reflections. Off by default: mirrored draws made after
+    // the reflection composite stay either way.
     static const bool hide_mirror = read_env_u64("GALAXY_RT_HIDE_MIRROR", 0u) != 0u;
     if (rt_mirror_pass_ && hide_mirror && renderer_.rt_reflections_active()) {
         return true;
@@ -7393,7 +5393,7 @@ bool GxBackend::rt_hidden_draw() const noexcept {
         return true;
     }
     // The alpha-shadow phase draws one object, Mario's drop shadow (MarioActor::drawShadow, the only member of
-    // MR::DrawType_AlphaShadow): under the traced shadows it was a second, crisp shadow straight under him in the air.
+    // MR::DrawType_AlphaShadow); under the traced shadows it would be a second one.
     if (rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::AlphaShadow)) {
         return true;
     }
@@ -7412,13 +5412,12 @@ bool GxBackend::rt_hidden_draw() const noexcept {
         (debug_hide_material_phase >= 255u || rt_phase_ == static_cast<std::uint8_t>(debug_hide_material_phase))) {
         return true;
     }
-    // The game's own mirror copies drawn after the trace (Mario's reflection under Freezeflame's ice:
-    // MarioActor::drawReflectModel in the indirect phase) carry a mirrored position matrix. Under traced
-    // reflections they doubled what the trace reflects (two Marios, user); GALAXY_RT_KEEP_GAME_MIRRORS=1 keeps them.
+    // The game's own mirror copies drawn after the trace (Mario's reflection under ice: MarioActor::drawReflectModel in
+    // the indirect phase) carry a mirrored position matrix; under traced reflections they would double what the trace
+    // reflects. GALAXY_RT_KEEP_GAME_MIRRORS=1 keeps them.
     static const bool keep_mirrors = read_env_u64("GALAXY_RT_KEEP_GAME_MIRRORS", 0u) != 0u;
-    // In the translucent phases too: the Observatory glass's Mario clone (user: "a clone that goes up and down instead
-    // of ray tracing"). The opaque phases keep any mirrored geometry the game builds with a negative scale.
-    // And the image-effect phase: Mario's blended copy under the Observatory glass is drawn there (isoU, phase 9).
+    // The translucent and image-effect phases draw such copies too (Mario's blended copy under glass). The opaque
+    // phases keep any mirrored geometry the game builds with a negative scale.
     const bool mirror_phase = rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::AfterIndirect) ||
                               rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::Xlu) ||
                               rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::ListXlu) ||
@@ -7442,8 +5441,8 @@ bool GxBackend::rt_hidden_draw() const noexcept {
     return material != nullptr && material->hide;
 }
 
-// The current object's name, Shift-JIS bytes with blanks as '_': as the native game reported it (game_object_name),
-// else NameObj::mName (+4) in the recompiled game's memory. Returns a key for the name (0 for none).
+// The current object's name, Shift-JIS bytes with blanks as '_': as the game reported it (game_object_name), else
+// NameObj::mName (+4) in guest memory. Returns a key for the name (0 for none).
 std::uint32_t GxBackend::rt_object_name(char* out, std::size_t size) {
     out[0] = 0;
     if (rt_object_ == 0u) {
@@ -7581,8 +5580,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         return false;
     }
     // What the traced lighting hides from the picture (the game's drop-shadow volumes, the table's faked
-    // light cones) stays out of the traced scene too: Mario's invisible shadow box, extruded down along
-    // gravity, cast a rectangular shadow on the stone under him and a second one down Good Egg's rim.
+    // light cones) stays out of the traced scene too, or an invisible shadow volume would cast its own shadow.
     if (rt_hidden_draw() && !rt_traced_clear_draw()) {
         outcome("hidden");
         return false;
@@ -7607,8 +5605,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     // MR::clearZBuffer: a depth write through a flattened viewport puts the far plane under
     // everything drawn before (the sky and air layers); that geometry occludes nothing.
     // After the scene's trace a depth clear starts no new traced scene: the water window drawn since stays open for its
-    // trace (Good Egg clears the depth late in its frame; the restart closed the window untraced, its water and glass
-    // never reflected).
+    // trace (some stages clear the depth late in the frame).
     if (flat && (render_state_key_.zmode_bits & (1u << 4u)) != 0u) {
         if (!rt_scene_traced_) {
             renderer_.rt_begin_scene();
@@ -7640,10 +5637,9 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
                        clear->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Water)) &&
                       (position == VcdType::Index8 || position == VcdType::Index16);
     }
-    // A helper row (an environment map) is the draw's own surface when it is the only texture the draw samples: the
-    // crystal blocks' and the Observatory's rotating platforms' clear material is a highlight map alone (user: the
-    // green platforms should reflect like glass). So is it when every texture the draw samples is a helper: Melty
-    // Molten's glass spheres map an indirect lens and an environment map (user: the glass balls must reflect).
+    // A helper row (an environment map) is the draw's own surface when it is the only texture the draw samples (clear
+    // materials made of a highlight map alone), or when every texture it samples is a helper (glass spheres mapping an
+    // indirect lens and an environment map).
     bool own_helper = std::popcount(current_texture_map_mask_) == 1;
     if (!own_helper && current_texture_map_mask_ != 0u) {
         own_helper = true;
@@ -7673,7 +5669,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     }
     // A blended coat the table names metal (the Observatory's gold rings: an environment-mapped layer the translucent
     // phase draws over the model's dark base, after the composite): a surface of the water pass, its traced reflection
-    // in place of the game's painted one (user: the metal rings around the core look matte).
+    // in place of the game's painted one.
     bool metal_coat = false;
     if (translucent && !lens && !clear_added && !clear_blended && renderer_.rt_water_open() && scene_phase_ &&
         side_layer_ == kSceneLayer &&
@@ -7702,9 +5698,8 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
                              << 5u);
     }
     bool water = translucent && !lens && !glow && (clear_added || clear_blended || metal_coat || traced || rt_water_draw());
-    // An opaque late draw the table names water or crystal (Freezeflame's ice, drawn after the indirect
-    // capture with the game's own refraction): a surface of the water pass, its reflections laid over what it
-    // drew (user: the ice reflects nothing; Mario stood on it unmirrored).
+    // An opaque late draw the table names water or crystal (ice drawn after the indirect capture with the game's own
+    // refraction): a surface of the water pass, its reflections laid over what it drew.
     bool opaque_clear = false;
     if (!water && translucent && !glow && !lens && rt_late_draw() && renderer_.rt_water_open()) {
         const RtMaterial* const clear = rt_material(current_rt_material_);
@@ -7779,7 +5774,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
             return false;
         }
         // Sky domes and backdrops drawn among the scene (after its depth clear): never traced, or every
-        // ray towards the sun meets them (measured: Dusty Dune's DesertSky left the desert unlit).
+        // ray towards the sun meets them.
         if (material->sky && !glow) {
             return false;
         }
@@ -7881,12 +5876,9 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
                     }
                 }
             }
-            // The table's shadow 0 was read but never applied: Good Egg's planet shells blocked its
-            // sun everywhere (measured sb29: every surface blocked 100-200 units out).
-            // A helper row (an environment map, a mask) speaks for its texture, not for the draw.
-            // A clear dielectric (crystal, ice, glass) passes about 91 % of the light ((1 - F)^2 at F0 0.047):
-            // it casts no traced shadow. Opaque, the Star Festival's crystal cages shadowed the floor black,
-            // and it showed through their highlight shells as a dark rim.
+            // No traced shadow from a material the table marks shadow 0 (a helper row, an environment map or
+            // a mask, speaks for its texture, not for the draw), nor from a clear dielectric (crystal, ice,
+            // glass), which passes about 91 % of the light ((1 - F)^2 at F0 0.047).
             if (const RtMaterial* shade = rt_material(current_rt_material_);
                 (shade != nullptr && !shade->shadow && !shade->helper) ||
                 surface.surface_class == RtSurfaceClass::Crystal) {
@@ -7998,9 +5990,8 @@ RtView GxBackend::scene_depth_view(const ScaledGxViewport& viewport) const {
     RtView view{};
     view.projection = {projection(0u), projection(1u), projection(2u), projection(3u)};
     // The scene's depth is drawn with the temporal upscaler's jitter (apply_scene_jitter: clip x + jx w, so the
-    // projection's x offset B becomes B - jx; y likewise). Passes rebuild every sample's position from that depth:
-    // with the projection without the jitter each sample sat up to half a pixel off its surface, a different half
-    // each frame, and creases and edges alternated between their two surfaces' shading.
+    // projection's x offset B becomes B - jx; y likewise). Passes rebuild every sample's position from that depth, so
+    // the view carries the jitter too, or each sample would land up to half a pixel off its surface.
     if (temporal_scene_ && state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u) {
         const float scale = static_cast<float>(renderer_.efb_scale());
         const float width = 2.0f * std::fabs(std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(xf::kViewportBase)))) * scale;
@@ -8053,18 +6044,13 @@ void GxBackend::apply_scene_ao() {
     renderer_.record_scene_ao();
 }
 
-// The scene's key light (actor_lights.h): the game's visible sun (the ray tracer's: GALAXY_RT_SUN
-// overrides it), else the sun its sky shows (rt_sky_sun.h), else the world-fixed GX light 0 most of
-// the previous scene's lit draws took (the light the game lights its planets and actors from in
-// that place; the stage's last one while they take none), else none. The ray tracer lights a scene
-// without the game's sun from that key, and each scene's follow-camera lights go towards it;
-// without a key, or without the scene camera, they stay the game's. A key that comes or goes moves
-// them over kActorLightRampScenes scenes from or back to the game's positions, and a key that
-// changes turns over a few scenes. GALAXY_RT_ACTOR_LIGHTS=1 moves them; =2 moves them and keys the ray tracer in
-// odd scenes only, at once (a frame-to-frame comparison). Off by default: the characters keep the game's
-// lights (moved to the key, a camera behind Mario lit his far side: penguins olive, the Toad ship's dome dull
-// and faceted, Mario and Rosalina dark; measured dg56d against dg56a, 2026-10-15); the traced shadows,
-// occlusion and lights act on top of them.
+// The scene's key light (actor_lights.h): the game's visible sun (GALAXY_RT_SUN overrides it), else the sun its sky
+// shows (rt_sky_sun.h), else the world-fixed GX light 0 most of the previous scene's lit draws took (the stage's last
+// one while they take none), else none. The ray tracer lights a scene without the game's sun from that key.
+// GALAXY_RT_ACTOR_LIGHTS=1 also turns each scene's follow-camera lights towards the key (over kActorLightRampScenes
+// scenes when a key comes or goes, over a few when it changes; without a key or the scene camera they stay the
+// game's); =2 does that and keys the ray tracer in odd scenes only, for frame-to-frame comparison. Off by default:
+// the characters keep the game's lights, with the traced shadows, occlusion and lights on top.
 void GxBackend::aim_rt_scene_lights(const std::array<float, 12>* view) {
     static const std::uint64_t mode = read_env_u64("GALAXY_RT_ACTOR_LIGHTS", 0u);
     const std::array<RtWorldKey, 8> candidates = rt_world_keys_;
@@ -8089,10 +6075,8 @@ void GxBackend::aim_rt_scene_lights(const std::array<float, 12>* view) {
     ++rt_light_serial_;
     rt_light_tracking_ = view != nullptr && mode != 0u;
     // The ray tracer's key (a stage without the game's sun: its table sun, the sun its sky shows, the bright
-    // side of a daylight sky) holds whatever the actor lights do; GALAXY_RT_KEY=0: none. Turning the actor
-    // lights off (build 59) took it along: the table's suns (Honeyhive, Gusty Garden, Gold Leaf, Battlerock,
-    // Bigmouth, Drip Drop) went out and their characters cast no shadow (user: penguins and animals without
-    // shadows sometimes; key69 Drip Drop "sun present=0").
+    // side of a daylight sky) holds whatever the actor lights do, so stages lit only by a table sun keep their
+    // shadows; GALAXY_RT_KEY=0: none.
     static const bool key_on = read_env_u64("GALAXY_RT_KEY", 1u) != 0u;
     const bool keying = view != nullptr && (mode != 0u || key_on);
     if (view != nullptr) {
@@ -8159,8 +6143,7 @@ void GxBackend::aim_rt_scene_lights(const std::array<float, 12>* view) {
         // A stage without the game's sun or a table row: its key is the game's own world-fixed white light
         // (700000 700000 700000, the direction it shades its characters from), decided once per stage: on when
         // the sky detectors find a sun or a daylight sky in its first 120 scenes, fixed in the world from then
-        // on. Aimed per scene at what the camera's sky showed, the key swung with the view (user: the sun
-        // randomly changing; Rolling Gizmo re-aimed 17 times in one stop, fh72d).
+        // on, so the key does not swing with the view.
         if (rt_fixed_key_stage_ != rt_stage_hash_) {
             rt_fixed_key_stage_ = rt_stage_hash_;
             rt_fixed_key_on_ = false;
@@ -8431,16 +6414,6 @@ void GxBackend::trace_rt_scene() {
 void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* view, std::uint32_t sky_up,
                                bool sky_up_known, const SceneStage* stage) {
     flush_pending_draw_batch();
-    {
-        static const std::uint64_t trace_from = read_env_u64("GALAXY_TRACE_DRAW_ORDER", 0u);
-        if (trace_from != 0u && frame_index_ >= trace_from && (frame_index_ - trace_from) < 8u &&
-            frame_index_ < trace_from + 6000u) [[unlikely]] {
-            std::fprintf(stderr, "[draw-order] frame=%llu marker=%s phase=%u\n",
-                         static_cast<unsigned long long>(frame_index_),
-                         marker == FifoMarker::SceneBegin ? "scene-begin" : "scene-end", static_cast<unsigned>(rt_phase_));
-        }
-    }
-    ++scene_markers_seen_;
     if (marker == FifoMarker::SceneBegin) {
         end_side_layer();
     }
@@ -8448,14 +6421,14 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
     if (marker == FifoMarker::SceneBegin) {
         ao_view_set_ = false;
         ao_scene_applied_ = !ambient_occlusion_;
-        // The game names its stage (native builds): a new one starts the tracer's stage state over.
+        // The game names its stage: a new one starts the tracer's stage state over.
         if (stage != nullptr && (*stage)[0] != 0 && (!scene_stage_known_ || *stage != scene_stage_)) {
             scene_stage_ = *stage;
             scene_stage_known_ = true;
             begin_rt_stage();
         }
-        // The file select is the game's own picture: no stage light or world to trace, and its menu lights colour the
-        // heads (owner: traced, it looked horrible; Mario's skin went white).
+        // The file select stays the game's own picture: there is no stage light or world to trace, and its menu
+        // lights colour the heads.
         {
             static constexpr char kFileSelect[] = "FileSelect";
             renderer_.rt_set_scene_untraced(scene_stage_known_ &&
@@ -8570,10 +6543,6 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
         }
     } else {
         if (history_scene_) {
-            static const bool motion_debug = read_env_u64("GALAXY_MOTION_DEBUG", 0u) != 0u;
-            if (motion_debug && motion_scene_) {
-                renderer_.record_motion_debug_view();
-            }
             transform_history_.end_scene();
             if (interp_recording_ && interp_scenes_[interp_scene_].valid) {
                 end_record_layer(kSceneLayer);
@@ -8591,19 +6560,6 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
             // A cut: most transforms have no previous counterpart.
             if (temporal_scene_ && stats.records >= 16u && stats.matched * 2u < stats.records) {
                 renderer_.reset_temporal_history();
-            }
-            static const bool trace_motion = read_env_u64("GALAXY_MOTION_TRACE", 0u) != 0u;
-            if (trace_motion && (motion_trace_scenes_++ % 120u) == 0u) {
-                std::cerr << "[motion] frame=" << renderer_.frame_index()
-                          << " records=" << stats.records
-                          << " matched=" << stats.matched
-                          << " identified=" << stats.identified
-                          << " previous=" << stats.previous_records
-                          << " prev-frame-gap="
-                          << (transform_history_.current_frame() -
-                              transform_history_.previous_frame())
-                          << " camera=" << (transform_history_.camera_known() ? 1 : 0)
-                          << " writers=" << (motion_scene_ ? 1 : 0) << '\n';
             }
         }
         temporal_scene_ = false;
@@ -8700,10 +6656,6 @@ bool GxBackend::peek_efb(
         return false;
     }
 
-    if (!async_render_thread_enabled()) {
-        return renderer_.peek_efb(x, y, kind, value);
-    }
-
     EfbPeekRequest request;
     request.x = x;
     request.y = y;
@@ -8740,42 +6692,12 @@ bool GxBackend::peek_efb(
 
 // A display copy completed a game frame's log: its scene (the one recording
 // when the copy landed) is the one to interpolate when its present arrives.
-// GALAXY_INTERP_EVENTS=first,last: one line per interpolation event while the
-// latest log serial is in [first, last].
-void GxBackend::interp_event(const char* what, std::uint64_t a, std::uint64_t b) const {
-    static const std::pair<std::uint64_t, std::uint64_t> range = [] {
-        char value[64]{};
-        std::size_t length = 0u;
-        std::pair<std::uint64_t, std::uint64_t> r{1u, 0u};
-        if (getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_EVENTS") == 0 && length > 1u) {
-            const char* const end = value + std::strlen(value);
-            std::uint64_t first = 0u, last = 0u;
-            const auto [comma, error] = std::from_chars(value, end, first);
-            if (error == std::errc{} && comma != end && *comma == ',' &&
-                std::from_chars(comma + 1, end, last).ec == std::errc{}) {
-                r = {first, last};
-            }
-        }
-        return r;
-    }();
-    const std::uint64_t serial = renderer_.replay_serial();
-    if (serial < range.first || serial > range.second) {
-        return;
-    }
-    const std::int64_t now = galaxy::qpc_now();
-    std::ostringstream message;
-    message << "[interp-event] qpc=" << now << " log=" << serial << ' ' << what
-            << ' ' << a << ' ' << b << '\n';
-    std::cerr << message.str();
-}
-
 void GxBackend::note_interp_log_completion() {
     const std::uint64_t serial = renderer_.replay_serial();
     if (serial == interp_seen_serial_) {
         return;
     }
     interp_seen_serial_ = serial;
-    interp_event("log-closed", renderer_.replay_available() ? 1u : 0u, renderer_.replay_xfb_addr());
     if (!renderer_.replay_available()) {
         return;
     }
@@ -8812,12 +6734,11 @@ void GxBackend::start_interp_sequence(std::uint32_t xfb_addr) {
         presented_max_fps(cfg), cfg.vsync_interval, renderer_.display_refresh_hz()));
     // VSync with the display's vblanks timed: every slot is a vblank (every n-th for a rate below the refresh, kept
     // above 60), so each picture's moment is the one its vblank shows. The game's 60 Hz is not locked to the
-    // display, so content time follows the slots (no lead). GALAXY_INTERP_VBLANK_SLOTS=0: the QPC clock (A/B).
-    static const bool vblank_slots = read_env_u64("GALAXY_INTERP_VBLANK_SLOTS", 1u) != 0u;
+    // display, so content time follows the slots (no lead).
     std::int64_t vblank = 0;
     std::int64_t vblank_period = 0;
     const bool on_vblanks =
-        vblank_slots && cfg.vsync_interval != 0u && renderer_.vblank_grid(vblank, vblank_period);
+        cfg.vsync_interval != 0u && renderer_.vblank_grid(vblank, vblank_period);
     std::int64_t vblanks_per_slot = 1;
     const auto fit_rate_to_vblanks = [&] {
         const double refresh = static_cast<double>(frequency) / static_cast<double>(vblank_period);
@@ -8840,11 +6761,6 @@ void GxBackend::start_interp_sequence(std::uint32_t xfb_addr) {
     }
     interp_last_played_serial_ = played;
     note_game_frame_cadence(now);
-    interp_event("start", played, xfb_addr);
-    static const std::uint64_t trace_level = read_env_u64("GALAXY_INTERP_TRACE", 0u);
-    if (trace_level >= 2u) {
-        std::cerr << "[interp-start] seq=" << interp_sequence_serial_ << " log=" << played << '\n';
-    }
     interp_sequence_.active = true;
     interp_sequence_.flush_requested = false;
     interp_sequence_.classified = false;
@@ -8911,12 +6827,11 @@ void GxBackend::start_interp_sequence(std::uint32_t xfb_addr) {
     }
 }
 
-// B18: the scene before the starting one was never on screen (its log was
+// When the scene before the starting one was never on screen (its log was
 // replaced before a present started it, or its sequence ended before showing
-// anything). The sub-frames then start from the scene shown last, records
-// matched through the skipped scenes, instead of from a frame never shown.
-// Vertex blending needs consecutive logs (prepare_vertex_blend) and stays off
-// for such a sequence.
+// anything), the sub-frames start from the scene shown last, records matched
+// through the skipped scenes. Vertex blending needs consecutive logs
+// (prepare_vertex_blend) and stays off for such a sequence.
 void GxBackend::select_interp_before() {
     const unsigned scene = interp_sequence_.scene;
     interp_sequence_.before = (scene + 3u) % 4u;
@@ -8926,20 +6841,13 @@ void GxBackend::select_interp_before() {
         static_cast<unsigned>(interp_shown_scene_) == scene) {
         return;
     }
-    // GALAXY_INTERP_CHAIN=0: start from the scene before regardless (A/B).
-    static const bool chain = read_env_u64("GALAXY_INTERP_CHAIN", 1u) != 0u;
     const unsigned shown = static_cast<unsigned>(interp_shown_scene_);
     const unsigned depth = (scene + 4u - shown) % 4u;  // 2 or 3 scenes back
     const InterpScene& target = interp_scenes_[scene];
-    bool consecutive = chain && target.valid && target.serial != 0u;
+    bool consecutive = target.valid && target.serial != 0u;
     for (unsigned step = 1u; consecutive && step <= depth; ++step) {
         const InterpScene& older = interp_scenes_[(scene + 4u - step) % 4u];
         consecutive = older.valid && older.serial + step == target.serial;
-    }
-    static const bool trace = read_env_u64("GALAXY_INTERP_TRACE", 0u) != 0u;
-    if (trace) {
-        std::cerr << "[interp-chain] seq=" << interp_sequence_serial_ << " depth=" << depth
-                  << " chained=" << (consecutive ? 1 : 0) << '\n';
     }
     if (!consecutive) {
         ++interp_unchained_skips_;
@@ -8958,35 +6866,17 @@ void GxBackend::select_interp_before() {
     ++interp_chained_sequences_;
 }
 
-// B22: as many sub-frames per game frame as the GPU fits. A sub-frame
-// replays the whole frame, so a game frame costs about (k + 1) sub-frame
-// times (measured with GPU timestamps). k drops at once when over budget and
-// rises one step after 10 s under it; with none left, one is tried again
+// As many sub-frames per game frame as the GPU fits in 15 ms (of the 16.7 ms frame). A sub-frame
+// replays the whole frame, so a game frame costs about (k + 1) sub-frame times. k drops at once
+// when over budget and rises one step after 10 s under it; with none left, one is tried again
 // every 20 s. A capped sequence runs the slot clock at 60 * (k + 1).
-// GALAXY_INTERP_GPU_BUDGET_MS: GPU time per game frame (default 15 of 16.7);
-// GALAXY_INTERP_GPU_GOVERNOR=0 turns it off.
 unsigned GxBackend::interp_gpu_governor(double& rate) {
+    constexpr double budget_ms = 15.0;
     const unsigned configured = interp_stopping_ ? 0u : interp_frames_;
-    static const bool enabled = read_env_u64("GALAXY_INTERP_GPU_GOVERNOR", 1u) != 0u;
-    static const double budget_ms = [] {
-        char value[32]{};
-        std::size_t length = 0u;
-        const double ms = getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_GPU_BUDGET_MS") == 0 &&
-                                  length > 1u
-            ? std::strtod(value, nullptr) : 0.0;
-        return ms > 0.0 ? ms : 15.0;
-    }();
     if (configured == 0u) {
         return configured;
     }
     const unsigned allowed = std::min(configured, interp_cadence_cap_);
-    if (!enabled) {
-        if (allowed < configured) {
-            ++interp_gpu_capped_;
-            rate = 60.0 * static_cast<double>(allowed + 1u);
-        }
-        return allowed;
-    }
     const std::uint64_t serial = interp_sequence_serial_;
     if (serial - interp_gpu_checked_ >= 30u && serial >= interp_gpu_warm_until_) {
         interp_gpu_checked_ = serial;
@@ -9031,7 +6921,6 @@ unsigned GxBackend::interp_gpu_governor(double& rate) {
 // of one more sub-frame is undone at its first miss when the game misses none
 // on its own. Tries follow a clean interval that doubles after each failed
 // one (8 s to 64 s) and halves after one that held.
-// GALAXY_INTERP_CADENCE_GOVERNOR=0 turns it off.
 void GxBackend::restart_interp_governors() {
     const std::int64_t now = galaxy::qpc_now();
     const std::int64_t frequency = galaxy::qpc_frequency();
@@ -9049,11 +6938,7 @@ void GxBackend::restart_interp_governors() {
 }
 
 void GxBackend::note_game_frame_cadence(std::int64_t now_qpc) {
-    static const bool enabled = read_env_u64("GALAXY_INTERP_CADENCE_GOVERNOR", 1u) != 0u;
     static const std::int64_t frequency = galaxy::qpc_frequency();
-    if (!enabled) {
-        return;
-    }
     const std::int64_t period = frequency * 1001 / 60000;
     if (interp_cadence_last_qpc_ == 0 || now_qpc - interp_cadence_last_qpc_ > 4 * frequency) {
         // First frame, or a pause (menu, load): a new window.
@@ -9088,8 +6973,8 @@ void GxBackend::note_game_frame_cadence(std::int64_t now_qpc) {
         if (trying) {
             interp_cadence_interval_s_ = std::min(interp_cadence_interval_s_ * 2u, 64u);
         }
-        // The replay at t = 1 alone costs the game its frames (measured to
-        // take a quarter of a frame or more, not a load hitch).
+        // The replay at t = 1 alone costs the game its frames when it takes a
+        // quarter of a frame or more.
         const double replay_ms = renderer_.subframe_gpu_ema_ms();
         if (cap == 0u && renderer_.temporal_interpolation() && replay_ms * 4.0 >= 1000.0 / 60.0) {
             renderer_.suspend_temporal_interpolation(replay_ms);
@@ -9152,7 +7037,6 @@ void GxBackend::supersede_interp_sequence() {
     }
     interp_sequence_.active = false;
     ++interp_superseded_;
-    interp_event("superseded", interp_last_played_serial_, interp_sequence_.next);
 }
 
 std::string GxBackend::interp_snapshot_path(const char* suffix) const {
@@ -9165,9 +7049,7 @@ std::string GxBackend::interp_snapshot_path(const char* suffix) const {
     }();
     static const std::uint64_t first = read_env_u64("GALAXY_INTERP_SNAPSHOT_FIRST", 0u);
     static const std::uint64_t last = read_env_u64("GALAXY_INTERP_SNAPSHOT_LAST", 0u);
-    static const std::uint64_t every = std::max<std::uint64_t>(read_env_u64("GALAXY_INTERP_SNAPSHOT_EVERY", 1u), 1u);
-    if (directory.empty() || interp_sequence_serial_ < first || interp_sequence_serial_ > last ||
-        (interp_sequence_serial_ - first) % every != 0u) {
+    if (directory.empty() || interp_sequence_serial_ < first || interp_sequence_serial_ > last) {
         return {};
     }
     return directory + "\\seq_" + std::to_string(interp_sequence_serial_) + "_" + suffix + ".ppm";
@@ -9256,15 +7138,7 @@ void GxBackend::advance_interp_sequence(bool flush) {
                 return getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_FORCE_T") == 0 && length > 1u
                     ? std::clamp(std::strtod(value, nullptr), 0.0, 1.0) : -1.0;
             }();
-            // GALAXY_INTERP_COPY_AB=1: sequences alternate redirected and guarded copies; =3 adds
-            // a third with neither (A/B in one run, diagnostics).
-            static const std::uint64_t copy_ab = read_env_u64("GALAXY_INTERP_COPY_AB", 0u);
-            if (copy_ab != 0u) {
-                const std::uint64_t phase = interp_sequence_serial_ % (copy_ab == 3u ? 3u : 2u);
-                renderer_.set_subframe_copy_redirect(phase == 0u ? 1 : phase == 1u ? 0 : 2);
-            }
             const bool presented = render_interp_subframe(static_cast<float>(force_t >= 0.0 ? force_t : t));
-            interp_event("sub", interp_last_played_serial_, static_cast<std::uint64_t>(t * 1000.0));
             if (!snapshot.empty()) {
                 renderer_.set_subframe_capture(false);
                 renderer_.set_capture_waits(false);
@@ -9286,7 +7160,6 @@ void GxBackend::advance_interp_sequence(bool flush) {
             return;
         }
         sequence.active = false;
-        interp_event("real", interp_last_played_serial_, static_cast<std::uint64_t>(std::max(0.0, t) * 1000.0));
         interp_snapshot_path_ = interp_snapshot_path("real");
         renderer_.set_capture_waits(!interp_snapshot_path_.empty());
         interp_presenting_real_ = true;
@@ -9566,25 +7439,13 @@ void GxBackend::report_interp_stats() {
 bool GxBackend::render_interp_subframe(float t) {
     const InterpScene& scene = interp_scenes_[interp_sequence_.scene];
     const InterpScene& before_scene = interp_scenes_[interp_sequence_.before];
-    // Matched records of the scene before (through skipped scenes: B18).
+    // Matched records of the scene before (through skipped scenes: select_interp_before).
     const std::vector<std::int32_t>& matched_index =
         interp_sequence_.chained ? interp_chain_prev_ : scene.prev_index;
     // The screen layer (HUD, titles, fades, cinema bars) moves like the scene: the game names each layout pane,
     // layout actor and star pointer (layout markers), so a panel that appears or goes is its own identity and
-    // never pairs the panels after it with others (without names, paired by draw order, it did: see-through
-    // fades, dark HUD icons, a title gone for a sub-frame). GALAXY_INTERP_SCREEN_MOTION=0 draws it as the game
-    // frame has it (diagnostics).
-    static const bool screen_motion = read_env_u64("GALAXY_INTERP_SCREEN_MOTION", 1u) != 0u;
-    const InterpScene::LayerRange& screen_range = scene.layers[kScreenLayer];
-    const bool snap_screen = !screen_motion && screen_range.count != 0u;
-    if (snap_screen && !interp_sequence_.classified) {
-        interp_screen_prev_.assign(matched_index.begin(), matched_index.end());
-        const std::size_t end = std::min(screen_range.first + screen_range.count, interp_screen_prev_.size());
-        for (std::size_t r = screen_range.first; r < end; ++r) {
-            interp_screen_prev_[r] = -1;
-        }
-    }
-    const std::vector<std::int32_t>& prev_index = snap_screen ? interp_screen_prev_ : matched_index;
+    // never pairs the panels after it with others.
+    const std::vector<std::int32_t>& prev_index = matched_index;
     if (!scene.valid) {
         renderer_.note_replay_failure(9u);
         return false;
@@ -9611,12 +7472,11 @@ bool GxBackend::render_interp_subframe(float t) {
         camera_motion(before_valid && before_scene.view_known ? &before_scene.view : nullptr,
                       scene.view_known ? &scene.view : nullptr, interp_camera_move_, cut_limits,
                       interp_camera_);
-        // The game's camera epoch (generation 20) changes when the view was set
-        // without blending: a hard cut whatever the thresholds say. The
-        // thresholds remain for cuts the game does not flag.
+        // The game's camera epoch changes when the view was set without blending:
+        // a hard cut whatever the thresholds say. The thresholds catch cuts the
+        // game does not flag.
         const bool game_cut = before_valid && scene.camera_epoch_known && before_scene.camera_epoch_known &&
                               scene.camera_epoch != before_scene.camera_epoch;
-        const bool threshold_cut = interp_camera_.cut;
         if (game_cut && interp_camera_.known) {
             interp_camera_.cut = true;
         }
@@ -9624,46 +7484,6 @@ bool GxBackend::render_interp_subframe(float t) {
         if (interp_camera_.cut) {
             ++interp_camera_cuts_;
             ++(game_cut ? interp_game_cuts_ : interp_threshold_cuts_);
-        }
-        static const std::uint64_t dump_records = read_env_u64("GALAXY_INTERP_DUMP_RECORDS", 0u);
-        if (dump_records != 0u && interp_sequence_serial_ == dump_records) {
-            const auto& current = transform_history_.previous();  // the playing scene's records
-            std::ostringstream out;
-            out << "[interp-records] seq=" << interp_sequence_serial_ << " count=" << count
-                << " history-previous=" << current.size() << '\n';
-            for (std::size_t r = 0; r < count; ++r) {
-                const std::int32_t m = prev_index[r];
-                const GxVsConstants& now = scene.constants[r];
-                out << "  r=" << r << " m=" << m << " pv=" << int(scene.per_vertex[r])
-                    << " pal=" << scene.palette[r]
-                    << " id=" << std::hex << (r < current.size() ? current[r].identity : 0u) << std::dec
-                    << " t=(" << now.inline_pos_matrix[0][3] << ',' << now.inline_pos_matrix[1][3] << ','
-                    << now.inline_pos_matrix[2][3] << ')';
-                if (before_valid && m >= 0 && static_cast<std::size_t>(m) < before_scene.constants.size()) {
-                    const GxVsConstants& b = before_scene.constants[static_cast<std::size_t>(m)];
-                    out << " prev=(" << b.inline_pos_matrix[0][3] << ',' << b.inline_pos_matrix[1][3] << ','
-                        << b.inline_pos_matrix[2][3] << ')';
-                }
-                out << '\n';
-            }
-            std::cerr << out.str();
-        }
-        static const bool trace_camera = read_env_u64("GALAXY_INTERP_TRACE_CAMERA", 0u) != 0u;
-        if (trace_camera) {
-            std::ostringstream line;
-            line << "[interp-camera] seq=" << interp_sequence_serial_ << " scene=" << interp_sequence_.scene
-                 << " known=" << interp_camera_.known << " rigid=" << interp_camera_.rigid
-                 << " cut=" << interp_camera_.cut << " game-cut=" << game_cut << " threshold-cut=" << threshold_cut
-                 << " epochs=" << (before_scene.camera_epoch_known ? static_cast<std::int64_t>(before_scene.camera_epoch) : -1)
-                 << '/' << (scene.camera_epoch_known ? static_cast<std::int64_t>(scene.camera_epoch) : -1)
-                 << " moved=" << interp_camera_.moved
-                 << " turn=" << interp_camera_.turn_degrees << " before-valid=" << before_valid
-                 << " records=" << count << " before-records=" << before_scene.constants.size() << " Va=";
-            for (float v : before_scene.view) line << v << ',';
-            line << " Vb=";
-            for (float v : scene.view) line << v << ',';
-            line << '\n';
-            std::cerr << line.str();
         }
         // Mirror-pass records move with their own camera: no world split; a cut
         // of the scene camera cuts them too.
@@ -9774,45 +7594,9 @@ bool GxBackend::render_interp_subframe(float t) {
                 interp_moving_.push_back(motion);
             }
         }
-        if (trace_camera) {
-            std::size_t matched = 0u, inline_records = 0u, inline_unmatched = 0u, snapped = 0u;
-            for (std::size_t r = 0; r < count; ++r) {
-                matched += prev_index[r] >= 0 ? 1u : 0u;
-                if (scene.per_vertex[r] == 0u) {
-                    ++inline_records;
-                    inline_unmatched += prev_index[r] < 0 ? 1u : 0u;
-                }
-            }
-            for (const InterpRecordMotion& moving : interp_moving_) {
-                snapped += moving.position.snapped ? 1u : 0u;
-            }
-            std::size_t pairs_without_before = 0u, palette_snapped_slots = 0u;
-            for (const InterpPaletteMotion& entry : interp_palette_motions_) {
-                pairs_without_before += entry.before < 0 ? 1u : 0u;
-                palette_snapped_slots += entry.motion.snapped;
-            }
-            std::ostringstream line;
-            line << "[interp-seq] seq=" << interp_sequence_serial_ << " records=" << count
-                 << " matched=" << matched << " inline=" << inline_records
-                 << " inline-unmatched=" << inline_unmatched << " inline-snapped=" << snapped
-                 << " moving=" << interp_moving_.size() << " palette-pairs=" << interp_palette_motions_.size()
-                 << " pairs-without-before=" << pairs_without_before
-                 << " palette-snapped-slots=" << palette_snapped_slots
-                 << " palettes=" << scene.palette_count << '/' << before_scene.palette_count;
-            // Records per draw phase (galaxy/motion_signals.h; the last is none).
-            std::array<std::uint32_t, 11> phase_records{};
-            for (const std::uint32_t category : scene.category) {
-                const std::uint8_t phase = motion::category_phase(category);
-                ++phase_records[phase < 10u ? phase : 10u];
-            }
-            line << " phase-records=";
-            for (std::size_t i = 0; i < phase_records.size(); ++i) line << (i != 0u ? "," : "") << phase_records[i];
-            line << '\n';
-            std::cerr << line.str();
-        }
         const auto blend_start = std::chrono::steady_clock::now();
         // Vertex blending pairs draws with the log run before: not for a
-        // sequence chained past a skipped scene (B18).
+        // sequence chained past a skipped scene (select_interp_before).
         renderer_.prepare_vertex_blend(before_valid && !interp_sequence_.chained
                                            ? std::span<const std::int32_t>(prev_index)
                                            : std::span<const std::int32_t>{});
@@ -9850,12 +7634,6 @@ bool GxBackend::render_interp_subframe(float t) {
     const Affine34 camera_t = camera_at(interp_camera_, t);
     interp_moving_records_ += interp_moving_.size();
     interp_ps_moving_total_ += interp_ps_moving_.size();
-    // GALAXY_INTERP_VERIFY=1 with GALAXY_INTERP_FORCE_T=0: every matched block at
-    // t = 0 must equal the previous frame's (diagnostics).
-    static const bool verify = read_env_u64("GALAXY_INTERP_VERIFY", 0u) != 0u;
-    if (verify && t == 0.0f && interp_sequence_.next == 0u) {
-        verify_interp_program(scene, before_scene, camera_t);
-    }
     // The frame presented before: earlier in this sequence, or this sequence's
     // t = 0 when it was the scene before at t = 1. Anything else (a frame
     // presented alone, a cut, a gap) starts the upscaler's history again.
@@ -9871,7 +7649,6 @@ bool GxBackend::render_interp_subframe(float t) {
         time.reset = true;
     }
     const Affine34 camera_prev = time.t_prev == t ? camera_t : camera_at(interp_camera_, time.t_prev);
-    check_interp_eval(scene, camera_t, t, camera_prev, time.t_prev);
     if (!renderer_.present_replay_subframe(time, camera_t, camera_prev)) {
         return false;
     }
@@ -9885,9 +7662,6 @@ bool GxBackend::render_interp_subframe(float t) {
 // and the replay recorded once over them.
 bool GxBackend::prepare_interp_sequence(const InterpScene& scene, const InterpScene& before_scene,
                                         bool before_valid) {
-    // GALAXY_INTERP_PARTS: bit 0 inline position, 1 texture matrices, 2 projection, 3 palette,
-    // 4 vertex blending, 5 colours (diagnostics).
-    static const std::uint64_t parts = read_env_u64("GALAXY_INTERP_PARTS", 0x3Fu);
     constexpr std::size_t kWords = kMatrixPaletteWords;
     const std::size_t count = scene.constants.size();
     const auto before_palette = [&](std::int32_t shadow) -> const std::uint32_t* {
@@ -9903,25 +7677,22 @@ bool GxBackend::prepare_interp_sequence(const InterpScene& scene, const InterpSc
     interp_palette_slot_.assign(interp_palette_motions_.size(), -1);
     interp_palette_source_.clear();
     interp_palette_entry_.clear();
-    if ((parts & 8u) != 0u) {
-        for (const InterpRecordMotion& moving : interp_moving_) {
-            if (moving.palette < 0) continue;
-            std::int32_t& slot = interp_palette_slot_[static_cast<std::size_t>(moving.palette)];
-            if (slot < 0) {
-                slot = static_cast<std::int32_t>(interp_palette_source_.size());
-                interp_palette_source_.push_back(scene.constants[moving.record].mtx_palette_base);
-                interp_palette_entry_.push_back(moving.palette);
-            }
+    for (const InterpRecordMotion& moving : interp_moving_) {
+        if (moving.palette < 0) continue;
+        std::int32_t& slot = interp_palette_slot_[static_cast<std::size_t>(moving.palette)];
+        if (slot < 0) {
+            slot = static_cast<std::int32_t>(interp_palette_source_.size());
+            interp_palette_source_.push_back(scene.constants[moving.record].mtx_palette_base);
+            interp_palette_entry_.push_back(moving.palette);
         }
     }
-    const bool colours = (parts & 0x20u) != 0u;
     // Temporal upscaling of the replays: the motion vector fields of each
     // moving block at the frame presented before (blocks the program leaves
     // alone carry their own transform there: no motion).
     const bool motion = renderer_.temporal_interpolation();
     interp_layout_ = {static_cast<std::uint32_t>(interp_moving_.size()),
                       static_cast<std::uint32_t>(interp_palette_source_.size()),
-                      colours ? static_cast<std::uint32_t>(interp_ps_moving_.size()) : 0u,
+                      static_cast<std::uint32_t>(interp_ps_moving_.size()),
                       motion ? static_cast<std::uint32_t>(interp_palette_source_.size()) : 0u};
     const interp_gpu::Layout& layout = interp_layout_;
     for (std::size_t s = 0; s < interp_moving_.size(); ++s) {
@@ -9934,10 +7705,10 @@ bool GxBackend::prepare_interp_sequence(const InterpScene& scene, const InterpSc
         // The inline matrix's ends: the frame before's and this one's.
         const float* const position_a = before != nullptr ? &before->inline_pos_matrix[0][0] : nullptr;
         const float* const position_b = &recorded.inline_pos_matrix[0][0];
-        if (moving.position_moves && (parts & 1u) != 0u) {
+        if (moving.position_moves) {
             interp_program_.eye(base + interp_gpu::kVsPosition, moving.position, position_a, position_b);
         }
-        if (moving.tex_moves && before != nullptr && (parts & 2u) != 0u) {
+        if (moving.tex_moves && before != nullptr) {
             // Per texgen: projection and environment maps lerp whole; texture
             // coordinate matrices scroll (wrap-aware) or step.
             for (unsigned i = 0; i < kMaxTexGens; ++i) {
@@ -9949,10 +7720,10 @@ bool GxBackend::prepare_interp_sequence(const InterpScene& scene, const InterpSc
                                            &recorded.inline_post_matrices[i][0][0], spatial);
             }
         }
-        if (moving.colour_moves && before != nullptr && colours) {
+        if (moving.colour_moves && before != nullptr) {
             interp_program_.channel_colours(base, *before, recorded);
         }
-        if (moving.projection_moves && before != nullptr && (parts & 4u) != 0u) {
+        if (moving.projection_moves && before != nullptr) {
             interp_program_.projection(base, *before, recorded);
         }
         std::int32_t palette_slot = -1;
@@ -9968,10 +7739,10 @@ bool GxBackend::prepare_interp_sequence(const InterpScene& scene, const InterpSc
         }
         if (motion) {
             interp_program_.at_previous(true);
-            if (moving.position_moves && (parts & 1u) != 0u) {
+            if (moving.position_moves) {
                 interp_program_.eye(base + interp_gpu::kVsMotionPrevPos, moving.position, position_a, position_b);
             }
-            if (moving.projection_moves && before != nullptr && (parts & 4u) != 0u) {
+            if (moving.projection_moves && before != nullptr) {
                 interp_program_.projection_params(base, *before, recorded);
             }
             if (palette_slot >= 0) {
@@ -9997,13 +7768,11 @@ bool GxBackend::prepare_interp_sequence(const InterpScene& scene, const InterpSc
             interp_program_.at_previous(false);
         }
     }
-    if (colours) {
-        for (std::size_t k = 0; k < interp_ps_moving_.size(); ++k) {
-            const auto [p, q] = interp_ps_moving_[k];
-            interp_ps_slot_[p] = static_cast<std::int32_t>(k);
-            interp_program_.ps_colours(layout.ps_offset(static_cast<std::uint32_t>(k)) / 4u,
-                                       before_scene.ps_constants[q], scene.ps_constants[p]);
-        }
+    for (std::size_t k = 0; k < interp_ps_moving_.size(); ++k) {
+        const auto [p, q] = interp_ps_moving_[k];
+        interp_ps_slot_[p] = static_cast<std::int32_t>(k);
+        interp_program_.ps_colours(layout.ps_offset(static_cast<std::uint32_t>(k)) / 4u,
+                                   before_scene.ps_constants[q], scene.ps_constants[p]);
     }
     interp_program_ops_ += interp_program_.ops.size();
     interp_program_words_ += interp_program_.payload.size();
@@ -10014,281 +7783,8 @@ bool GxBackend::prepare_interp_sequence(const InterpScene& scene, const InterpSc
     sequence.ps_slot = interp_ps_slot_;
     sequence.palette_source = interp_palette_source_;
     sequence.program = &interp_program_;
-    sequence.vertex_blend = (parts & 0x10u) != 0u;
+    sequence.vertex_blend = true;
     return renderer_.begin_replay_sequence(sequence);
-}
-
-// The output the replay reads, built on the CPU: each block as recorded, then
-// the program at t (interp_gpu::evaluate).
-void GxBackend::build_interp_reference(const InterpScene& scene, const interp_gpu::FrameTimes& times,
-                                       std::vector<std::uint32_t>& out) const {
-    const interp_gpu::Layout& layout = interp_layout_;
-    out.assign(layout.bytes() / 4u, 0u);
-    for (std::size_t s = 0; s < interp_moving_.size(); ++s) {
-        std::memcpy(out.data() + layout.vs_offset(static_cast<std::uint32_t>(s)) / 4u,
-                    &scene.constants[interp_moving_[s].record], sizeof(GxVsConstants));
-    }
-    for (std::size_t q = 0; q < interp_palette_entry_.size(); ++q) {
-        const InterpPaletteMotion& entry = interp_palette_motions_[static_cast<std::size_t>(interp_palette_entry_[q])];
-        const std::uint32_t* words = scene.palettes.data() + static_cast<std::size_t>(entry.shadow) * kMatrixPaletteWords;
-        std::memcpy(out.data() + layout.palette_offset(static_cast<std::uint32_t>(q)) / 4u, words,
-                    interp_gpu::kPaletteBytes);
-        if (q < layout.prev_palette_count) {
-            std::memcpy(out.data() + layout.prev_palette_offset(static_cast<std::uint32_t>(q)) / 4u, words,
-                        interp_gpu::kPrevPaletteBytes);
-        }
-    }
-    for (std::size_t k = 0; k < layout.ps_count; ++k) {
-        std::memcpy(out.data() + layout.ps_offset(static_cast<std::uint32_t>(k)) / 4u,
-                    &scene.ps_constants[interp_ps_moving_[k][0]], sizeof(GxPsConstants));
-    }
-    interp_gpu::evaluate(interp_program_, times, out.data());
-}
-
-// GALAXY_INTERP_VERIFY: at t = 0 every matched record's moving block must equal
-// the previous frame's (positions, projection, texture matrices) and every
-// palette with a previous snapshot its words.
-void GxBackend::verify_interp_program(const InterpScene& scene, const InterpScene& before_scene,
-                                      const Affine34& camera_t) {
-    std::vector<std::uint32_t> out;
-    interp_gpu::FrameTimes times{};
-    times.camera = camera_t;
-    times.camera_prev = camera_t;
-    build_interp_reference(scene, times, out);
-    const interp_gpu::Layout& layout = interp_layout_;
-    // Differences by kind: deliberate ones (a camera cut, an implausible jump snapped to b, a sprite flip taking b's
-    // rotation, a texture matrix stepping) show the new frame at t = 0 by design; the rest are faults.
-    enum Kind : unsigned { Projection, Texture, TextureStep, Position, PositionSnapped, Normal, Light, Cut, Kinds };
-    static constexpr const char* kNames[Kinds] = {"projection", "texture", "texture-step", "position",
-                                                  "position-snapped", "normal", "light", "cut"};
-    std::array<std::size_t, Kinds> off{};
-    std::array<float, Kinds> worst{};
-    std::size_t checked = 0u, unread_off = 0u;
-    // GALAXY_INTERP_VERIFY=2: the first large differences of each kind, with what produced them.
-    static const bool verbose = read_env_u64("GALAXY_INTERP_VERIFY", 0u) >= 2u;
-    static std::array<unsigned, Kinds> printed{};
-    static const std::uint64_t verbose_from = read_env_u64("GALAXY_INTERP_VERIFY_FROM", 0u);
-    std::string detail;
-    const auto note = [&](Kind kind, float x, float y) {
-        const float relative = std::fabs(x - y) / (1.0f + std::fabs(y));
-        if (!(relative <= 1e-3f)) {
-            ++off[kind];
-            worst[kind] = std::max(worst[kind], std::isfinite(relative) ? relative : 1e30f);
-            if (verbose && interp_sequence_serial_ >= verbose_from && !(relative <= 0.05f) && printed[kind] < 12u) {
-                ++printed[kind];
-                std::ostringstream s;
-                s << "[interp-verify-detail] seq=" << interp_sequence_serial_ << ' ' << kNames[kind] << " got=" << x
-                  << " was=" << y << ' ' << detail << '\n';
-                std::cerr << s.str();
-            }
-        }
-    };
-    for (std::size_t s = 0; s < interp_moving_.size(); ++s) {
-        const InterpRecordMotion& moving = interp_moving_[s];
-        if (moving.prev < 0) continue;
-        const GxVsConstants& was = before_scene.constants[static_cast<std::size_t>(moving.prev)];
-        GxVsConstants built{};
-        std::memcpy(&built, out.data() + layout.vs_offset(static_cast<std::uint32_t>(s)) / 4u, sizeof(built));
-        ++checked;
-        for (unsigned i = 0; i < 16u; ++i) {
-            note(Projection, (&built.projection[0][0])[i], (&was.projection[0][0])[i]);
-        }
-        const GxVsConstants& now = scene.constants[moving.record];
-        if (verbose) {
-            std::ostringstream text;
-            text << "record=" << moving.record << " texgens=" << now.num_texgens << " config=0x" << std::hex
-              << now.texgen_config[0][0] << std::dec;
-            detail = text.str();
-        }
-        for (unsigned i = 0; i < kMaxTexGens * 12u; ++i) {
-            const float x = (&built.inline_tex_matrices[0][0][0])[i];
-            note(x == (&now.inline_tex_matrices[0][0][0])[i] ? TextureStep : Texture, x,
-                 (&was.inline_tex_matrices[0][0][0])[i]);
-        }
-        if (scene.per_vertex[moving.record] == 0u) {
-            unsigned layer = kSceneLayer;
-            for (unsigned l = 0; l < scene.layers.size(); ++l) {
-                if (scene.in_layer(l, moving.record)) layer = l;
-            }
-            const bool snapped = moving.position.snapped || moving.position.flipped || layer_camera(layer).cut;
-            for (unsigned i = 0; i < 12u; ++i) {
-                note(snapped ? PositionSnapped : Position, (&built.inline_pos_matrix[0][0])[i],
-                     (&was.inline_pos_matrix[0][0])[i]);
-            }
-        }
-    }
-    // Only the words the palette's records read count (position, normal and light blocks by its masks; texture and
-    // post matrices); the others keep the current frame's values and are never read.
-    for (std::size_t q = 0; q < interp_palette_entry_.size(); ++q) {
-        const InterpPaletteMotion& entry = interp_palette_motions_[static_cast<std::size_t>(interp_palette_entry_[q])];
-        if (entry.before < 0) continue;
-        const bool cut = layer_camera(entry.layer).cut;
-        const std::uint32_t* was =
-            before_scene.palettes.data() + static_cast<std::size_t>(entry.before) * kMatrixPaletteWords;
-        const std::uint32_t* got = out.data() + layout.palette_offset(static_cast<std::uint32_t>(q)) / 4u;
-        const std::uint32_t* now = entry.shadow >= 0
-            ? scene.palettes.data() + static_cast<std::size_t>(entry.shadow) * kMatrixPaletteWords : nullptr;
-        for (std::size_t w = 0; w < kMatrixPaletteWords; ++w) {
-            if (got[w] == was[w]) continue;
-            const float x = std::bit_cast<float>(got[w]);
-            const float y = std::bit_cast<float>(was[w]);
-            if (verbose) {
-                std::ostringstream s;
-                s << "palette=" << q << " word=0x" << std::hex << w << std::dec
-                  << " now=" << (now != nullptr ? std::bit_cast<float>(now[w]) : 0.0f) << " cut=" << cut
-                  << " ortho=" << entry.orthographic << " split=" << entry.motion.split;
-                if (w >= kXfNormalBase && w < kXfNormalBase + 90u) {
-                    const NormalMotion& n = entry.motion.normal[(w - kXfNormalBase) / 9u];
-                    s << " normal(split=" << n.split << " still=" << n.still << " rigid=" << n.world.rigid
-                      << " theta=" << n.world.theta << ')';
-                } else if (w < 120u) {
-                    const EyeMotion& e = entry.motion.position[w / 12u];
-                    s << " eye(split=" << e.split << " still=" << e.still << " rigid=" << e.world.rigid
-                      << " theta=" << e.world.theta << ')';
-                }
-                detail = s.str();
-            }
-            if (w < 120u) {
-                const unsigned k = static_cast<unsigned>(w / 12u);
-                if (((entry.position_mask >> k) & 1u) == 0u) {
-                    ++unread_off;
-                    continue;
-                }
-                const EyeMotion& m = entry.motion.position[k];
-                note(m.snapped || m.flipped || cut ? PositionSnapped : Position, x, y);
-            } else if (w < 256u || (w >= kXfPostBase && w < kXfLightBase)) {
-                // A texture animation that steps shows its new frame (tex_matrix).
-                note(now != nullptr && got[w] == now[w] ? TextureStep : Texture, x, y);
-            } else if (w >= kXfNormalBase && w < kXfNormalBase + 90u &&
-                       ((entry.normal_mask >> ((w - kXfNormalBase) / 9u)) & 1u) != 0u) {
-                const auto k = static_cast<unsigned>((w - kXfNormalBase) / 9u);
-                const EyeMotion& m = entry.motion.position[k];
-                note(cut ? Cut : entry.motion.position_changed[k] != 0u && (m.snapped || m.flipped) ? PositionSnapped
-                                                                                                  : Normal,
-                     x, y);
-            } else if (w >= kXfLightBase && ((entry.light_mask >> ((w - kXfLightBase) / 16u)) & 1u) != 0u) {
-                // The colour word holds RGBA8 bytes: compared as integers.
-                if ((w - kXfLightBase) % 16u == 3u) {
-                    if (got[w] != was[w]) {
-                        ++off[cut ? Cut : Light];
-                    }
-                } else {
-                    note(cut ? Cut : Light, x, y);
-                }
-            } else {
-                ++unread_off;
-            }
-        }
-    }
-    std::ostringstream line;
-    line << "[interp-verify] seq=" << interp_sequence_serial_ << " checked=" << checked;
-    for (unsigned k = 0; k < Kinds; ++k) {
-        if (off[k] != 0u) {
-            line << ' ' << kNames[k] << '=' << off[k] << '/' << worst[k];
-        }
-    }
-    line << " unread-off=" << unread_off << '\n';
-    std::cerr << line.str();
-}
-
-// GALAXY_INTERP_EVAL_CHECK=<n>: every n-th sequence the GPU evaluation of its
-// first sub-frame is read back and compared with the CPU reference: copied
-// words exactly, each op's output to float precision of its magnitude
-// (rounded colours and integers within one step).
-void GxBackend::check_interp_eval(const InterpScene& scene, const Affine34& camera_t, float t,
-                                  const Affine34& camera_prev, float t_prev) {
-    static const std::uint64_t every = read_env_u64("GALAXY_INTERP_EVAL_CHECK", 0u);
-    if (every == 0u) {
-        return;
-    }
-    std::vector<std::uint32_t> got;
-    float got_t = 0.0f;
-    if (renderer_.take_eval_readback(got, got_t) && !interp_eval_expected_.empty()) {
-        const std::vector<std::uint32_t>& want = interp_eval_expected_;
-        const std::size_t words = std::min(got.size(), want.size());
-        std::vector<std::uint8_t> covered(words, 0u);
-        std::size_t ops_off = 0u, copies_off = 0u;
-        float worst = 0.0f;
-        std::ostringstream detail;
-        unsigned listed = 0u;
-        for (const interp_gpu::Op& op : interp_eval_ops_) {
-            const std::uint32_t kind = interp_gpu::op_kind(op.control);
-            const std::uint32_t n = kind == 0u ? 12u : kind == 1u ? 9u : kind == 5u ? 6u : kind == 4u ? 1u
-                                                                                    : interp_gpu::op_count(op.control);
-            if (op.dst + n > words) continue;
-            float magnitude = 0.0f, error = 0.0f;
-            bool step = false;
-            for (std::uint32_t i = 0; i < n; ++i) {
-                const std::uint32_t x = got[op.dst + i], y = want[op.dst + i];
-                covered[op.dst + i] = 1u;
-                if (kind == 4u) {
-                    for (unsigned shift = 0; shift < 32u; shift += 8u) {
-                        const int dx = static_cast<int>((x >> shift) & 0xFFu) - static_cast<int>((y >> shift) & 0xFFu);
-                        step = step || dx > 1 || dx < -1;
-                    }
-                } else if (kind == 3u) {
-                    const std::int64_t d = static_cast<std::int64_t>(static_cast<std::int32_t>(x)) -
-                                           static_cast<std::int32_t>(y);
-                    step = step || d > 1 || d < -1;
-                } else if (kind != 6u) {
-                    magnitude = std::max(magnitude, std::fabs(std::bit_cast<float>(y)));
-                    error = std::max(error, std::fabs(std::bit_cast<float>(x) - std::bit_cast<float>(y)));
-                } else {
-                    step = step || x != y;
-                }
-            }
-            const float relative = error / (1.0f + magnitude);
-            if (step || !(relative <= 2e-5f)) {
-                ++ops_off;
-                worst = std::max(worst, step ? 1.0f : relative);
-                if (listed++ < 6u) {
-                    detail << " op(kind=" << kind << " dst=" << op.dst << " rel=" << relative << ')';
-                }
-            }
-        }
-        constexpr std::size_t kVsWords = interp_gpu::kVsBytes / 4u;
-        const std::size_t vs_words = interp_layout_.vs_count * kVsWords;
-        std::size_t reported_slot = ~std::size_t{0};
-        for (std::size_t w = 0; w < words; ++w) {
-            if (covered[w] == 0u && got[w] != want[w]) {
-                if (copies_off++ < 4u) {
-                    detail << " copy(word=" << w << ' ' << got[w] << "!=" << want[w] << ')';
-                }
-                // A VS block copied from another record's constants: which record its words are.
-                const std::size_t slot = w / kVsWords;
-                if (w < vs_words && slot != reported_slot && slot < interp_moving_.size()) {
-                    reported_slot = slot;
-                    const std::uint32_t* block = got.data() + slot * kVsWords;
-                    std::int64_t match = -1;
-                    for (std::size_t r = 0; r < scene.constants.size() && match < 0; ++r) {
-                        if (std::memcmp(&scene.constants[r].texgen_config, block + 16u, 40u * 4u) == 0) {
-                            match = static_cast<std::int64_t>(r);
-                        }
-                    }
-                    detail << " block(slot=" << slot << " field=" << w % kVsWords << " record="
-                           << interp_moving_[slot].record << " gpu-matches-record=" << match
-                           << " cpu-base=" << scene.constants[interp_moving_[slot].record].mtx_palette_base
-                           << " gpu-base=" << block[51] << ')';
-                }
-            }
-        }
-        std::cerr << "[interp-eval-check] seq=" << interp_eval_expected_seq_ << " t=" << got_t << " words=" << words
-                  << " ops=" << interp_eval_ops_.size() << " ops-off=" << ops_off << " copies-off=" << copies_off
-                  << " worst=" << worst << detail.str() << '\n';
-        interp_eval_expected_.clear();
-    }
-    if (interp_sequence_.next == 0u && interp_eval_expected_.empty() && interp_sequence_serial_ % every == 0u) {
-        interp_gpu::FrameTimes times{};
-        times.camera = camera_t;
-        times.t = t;
-        times.camera_prev = camera_prev;
-        times.t_prev = t_prev;
-        times.previous_only = t >= 1.0f;
-        build_interp_reference(scene, times, interp_eval_expected_);
-        interp_eval_expected_seq_ = interp_sequence_serial_;
-        interp_eval_ops_ = interp_program_.ops;
-        renderer_.request_eval_readback();
-    }
 }
 
 bool GxBackend::skip_for_present_rate() {
@@ -10317,45 +7813,38 @@ void GxBackend::present_cached_xfb(
         return;
     }
 
-    if (async_render_thread_enabled()) {
-        {
-            std::unique_lock<std::mutex> lock(queue_mutex_);
-            if (render_thread_error_ != nullptr) {
-                std::exception_ptr error = render_thread_error_;
-                render_thread_error_ = nullptr;
-                std::rethrow_exception(error);
-            }
-            if (stop_render_thread_) {
+    {
+        std::unique_lock<std::mutex> lock(queue_mutex_);
+        if (render_thread_error_ != nullptr) {
+            std::exception_ptr error = render_thread_error_;
+            render_thread_error_ = nullptr;
+            std::rethrow_exception(error);
+        }
+        if (stop_render_thread_) {
+            return;
+        }
+        if (!frame_queue_.empty()) {
+            FrameChunk& back = frame_queue_.back();
+            if (back.present_only) {
+                back.displayed_xfb_addr = displayed_xfb_addr;
+                queue_cv_.notify_one();
                 return;
             }
-            if (!frame_queue_.empty()) {
-                FrameChunk& back = frame_queue_.back();
-                if (back.present_only) {
-                    back.displayed_xfb_addr = displayed_xfb_addr;
-                    queue_cv_.notify_one();
-                    return;
-                }
-                if (!back.efb_peek_only &&
-                    !back.present_only && !back.present_swap_chain) {
-                    back.present_swap_chain = true;
-                    back.displayed_xfb_addr = displayed_xfb_addr;
-                    queue_cv_.notify_one();
-                    return;
-                }
+            if (!back.efb_peek_only &&
+                !back.present_only && !back.present_swap_chain) {
+                back.present_swap_chain = true;
+                back.displayed_xfb_addr = displayed_xfb_addr;
+                queue_cv_.notify_one();
+                return;
             }
-            FrameChunk chunk;
-            chunk.present_only = true;
-            chunk.present_swap_chain = true;
-            chunk.displayed_xfb_addr = displayed_xfb_addr;
-            frame_queue_.push_back(std::move(chunk));
         }
-        queue_cv_.notify_one();
-        return;
+        FrameChunk chunk;
+        chunk.present_only = true;
+        chunk.present_swap_chain = true;
+        chunk.displayed_xfb_addr = displayed_xfb_addr;
+        frame_queue_.push_back(std::move(chunk));
     }
-
-    present_cached_xfb_on_thread(
-        displayed_xfb_addr,
-        false);
+    queue_cv_.notify_one();
 }
 
 // Consumer loop (render thread): frames execute in submission order; queued
@@ -10366,24 +7855,16 @@ void GxBackend::render_thread_main() {
 #if defined(_WIN32)
     SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
 #endif
-    // Hybrid CPUs: keep the FIFO parser on performance cores with the
-    // simulation thread; the scheduler still balances inside that set.
-    // Opt-in together with the simulation thread's placement.
-    if (read_env_u64("GALAXY_PIN_PERFORMANCE_CORES", 0u) != 0u) {
-        (void)galaxy::host::pin_current_thread_to_performance_cores();
-    }
     {
-        // Opt the whole process out of EcoQoS / execution-speed throttling so
-        // hybrid CPUs (Intel P/E/LP-E cores, laptops) do not park the
-        // simulation, render or DSP threads on efficiency cores. Once only.
+        // Opt the process out of EcoQoS throttling, so hybrid CPUs do not park the
+        // simulation, render or DSP threads on efficiency cores.
         static std::once_flag power_throttling_once;
         std::call_once(power_throttling_once, [] {
             galaxy::host::opt_out_of_power_throttling_process();
 #if defined(_WIN32)
-            // Request 1 ms timer granularity. Without it Sleep/cv timeouts and
-            // waitable timers round to the 15.6 ms scheduler tick whenever no
-            // other process has raised it, which delays render-thread fence
-            // polling and every sub-frame wait by up to a full tick.
+            // 1 ms timer granularity: otherwise sleeps, condition-variable timeouts and
+            // waitable timers round to the 15.6 ms scheduler tick, delaying fence
+            // polling and every sub-frame wait.
             if (HMODULE winmm = LoadLibraryW(L"winmm.dll")) {
                 using TimeBeginPeriodFn = UINT(WINAPI*)(UINT);
                 if (auto begin = reinterpret_cast<TimeBeginPeriodFn>(
@@ -10481,11 +7962,8 @@ void GxBackend::render_thread_main() {
                     lock.lock();
                 }
             } else if (idle_present || poll_frame_effects || poll_pointer_depth) {
-                // Completion polling occurs outside queue_mutex_ at the top of
-                // the worker loop. Yielding under an empty queue without checking
-                // a fence cannot observe an imminent completion; it only delays
-                // that next poll. Park once, with newly submitted work and shutdown
-                // still interrupting the wait through the existing predicate.
+                // Fences are polled at the top of the loop, outside queue_mutex_:
+                // park for at most 1 ms, woken early by new work or a stop.
                 queue_cv_.wait_for(lock, std::chrono::milliseconds(1), [this] {
                     return stop_render_thread_ || !frame_queue_.empty();
                 });
@@ -10540,9 +8018,6 @@ void GxBackend::render_thread_main() {
                     frame_queue_.pop_front();
                     chunk.present_swap_chain = present.present_swap_chain;
                     chunk.displayed_xfb_addr = present.displayed_xfb_addr;
-                    if (interp_recording_) [[unlikely]] {
-                        interp_event("merged-present", present.displayed_xfb_addr, chunk.fifo.size());
-                    }
                 }
                 if (chunk.efb_peek_only) {
                     active_peek = chunk.efb_peek_request;
@@ -10585,10 +8060,6 @@ void GxBackend::render_thread_main() {
                     active_pointer_depth.reset();
                 } else if (chunk.present_only) {
                     // An interpolation sequence presents the latest frame itself.
-                    if (interp_recording_) [[unlikely]] {
-                        interp_event("vi-present", chunk.displayed_xfb_addr,
-                                     interp_log_waiting_ ? 1u : 0u);
-                    }
                     if (chunk.displayed_xfb_addr == kNoDisplayedXfbAddr) {
                         supersede_interp_sequence();
                         interp_log_waiting_ = false;
@@ -10609,7 +8080,6 @@ void GxBackend::render_thread_main() {
                     if (interp_sequence_.active && interp_sequence_.flush_requested) {
                         advance_interp_sequence(true);
                     }
-                    prepare_worker_memory_snapshot(chunk);
                     if (const RenderStallInjection& stall = render_stall_injection(); stall.ms != 0u) {
                         static std::uint32_t chunks = 0u;
                         if (++chunks % stall.every == 0u) {
@@ -10670,12 +8140,8 @@ void GxBackend::render_thread_main() {
             queue_space_cv_.notify_all();
         } else if (have_chunk) {
             std::lock_guard<std::mutex> lock(queue_mutex_);
-            // Every return path funnels through the two blocks below, so the
-            // pool caps live here rather than at each push site. Dropping a
-            // buffer only costs one re-allocation the next time the queue grows
-            // past it; retaining it past the in-flight bound keeps its peak
-            // capacity for the rest of the session. See
-            // kChunkPoolRetainedBuffers in gx_backend.h.
+            // Every chunk returns its buffers here. Past kChunkPoolRetainedBuffers a buffer is
+            // dropped (one re-allocation later) rather than kept at its peak capacity.
             if (fifo_pool_.size() < kChunkPoolRetainedBuffers) {
                 fifo_pool_.push_back(std::move(chunk.fifo));
             }
@@ -10689,10 +8155,8 @@ void GxBackend::render_thread_main() {
                 }
             }
             if (chunk.memory_snapshot_active) {
-                // Guest bytes are consumed synchronously while command lists
-                // are recorded. GPU work references only upload/default-heap
-                // resources whose frame slots retire on their exact fence.
-                chunk.memory_snapshot.immutable_ranges.clear();
+                // Guest bytes are consumed while command lists are recorded; GPU work references
+                // only upload and default-heap resources, which retire on their own fences.
                 if (memory_snapshot_pool_.size() < kChunkPoolRetainedBuffers) {
                     memory_snapshot_pool_.push_back(
                         std::move(chunk.memory_snapshot));
@@ -10757,8 +8221,7 @@ bool GxBackend::peek_efb_published(
     EfbPeekKind kind,
     std::uint16_t token,
     std::uint32_t& value) {
-    if (!initialized_ || !async_render_thread_enabled() ||
-        x >= kEfbWidth || y >= kEfbHeight) {
+    if (!initialized_ || x >= kEfbWidth || y >= kEfbHeight) {
         return false;
     }
     AsyncPeekFieldState& state = async_peek_[async_peek_channel(kind, token)];
@@ -10885,18 +8348,6 @@ void GxBackend::execute_efb_peek_on_thread(FrameChunk& chunk) {
         auto& capture=*chunk.pointer_depth_capture;
         const auto start=std::chrono::steady_clock::now();
         try {
-            static const bool defer_pointer_depth =
-                read_env_u64("GALAXY_ASYNC_POINTER_DEPTH_READBACK", 0u) != 0u;
-            if (defer_pointer_depth) {
-                const auto fence_value = renderer_.submit_pointer_depth_capture();
-                if (fence_value == 0u) {
-                    throw std::runtime_error("owned pointer depth submission failed");
-                }
-                const std::lock_guard<std::mutex> lock(queue_mutex_);
-                pending_pointer_depth_capture_ = {
-                    chunk.pointer_depth_capture, fence_value, start};
-                return;
-            }
             capture.success=renderer_.capture_pointer_depth(capture.pixels);
             if (!capture.success) throw std::runtime_error("owned pointer depth capture failed");
         } catch (...) {
@@ -10921,14 +8372,6 @@ void GxBackend::execute_efb_peek_on_thread(FrameChunk& chunk) {
             request->depth_pixels.empty()
                 ? renderer_.peek_efb(request->x, request->y, request->kind, value)
                 : renderer_.capture_pointer_depth(request->depth_pixels);
-        // GALAXY_TRACE_PEEKS=1: every EFB peek with the scene state it read (diagnostics).
-        static const bool trace_peeks = read_env_u64("GALAXY_TRACE_PEEKS", 0u) != 0u;
-        if (trace_peeks && request->depth_pixels.empty()) [[unlikely]] {
-            std::fprintf(stderr, "[peek] frame=%llu scene=%d phase=%u layer=%u kind=%u x=%u y=%u value=%08x ok=%d\n",
-                         static_cast<unsigned long long>(renderer_.frame_index()), scene_phase_ ? 1 : 0,
-                         static_cast<unsigned>(rt_phase_), side_layer_, static_cast<unsigned>(request->kind),
-                         request->x, request->y, value, success ? 1 : 0);
-        }
         {
             std::lock_guard<std::mutex> lock(request->mutex);
             request->value = value;
@@ -10944,133 +8387,6 @@ void GxBackend::execute_efb_peek_on_thread(FrameChunk& chunk) {
             request->cv.notify_one();
         }
     }
-}
-
-void GxBackend::prepare_worker_memory_snapshot(FrameChunk& chunk) {
-    if (!chunk.worker_memory_snapshot) {
-        return;
-    }
-    if (!chunk.cpu_reads_pending || chunk.memory == nullptr ||
-        chunk.memory_snapshot_active) {
-        throw std::logic_error(
-            "[GxBackend] invalid worker memory snapshot ownership transition");
-    }
-
-    // The CPU owner is still blocked by wait_for_render_cpu_reads_idle(). No
-    // live reads may remain after the release below. A failed scan/copy leaves
-    // that obligation pending and propagates through render_thread_error_;
-    // it never resumes using a partial snapshot or falls back to live RAM.
-    const bool trace = trace_gx_stats_enabled() || trace_gx_stalls_enabled();
-    const auto scan_start = trace ? std::chrono::steady_clock::now()
-                                 : std::chrono::steady_clock::time_point{};
-    {
-        const cadence::ScopedPhaseTimer scan_timer{
-            cadence_diagnostics_, cadence::TimingPhase::WorkerDependencyScan};
-        invalidate_dependency_range_cache(chunk.dirty_ranges);
-        invalidate_immutable_range_cache(chunk.dirty_ranges);
-        {
-            std::lock_guard<std::mutex> parser_lock(parser_cache_mutex_);
-            invalidate_dirty_display_list_ranges(parser_, chunk.dirty_ranges);
-        }
-        // The decoded-packet-run vertex cache is keyed on the display-list token. The display lists were
-        // invalidated above, so entries reachable from them are already unreachable. Invalidating the
-        // decoded cache here too keeps the per-generation snapshot assert valid in this mode. Without the
-        // generation bump, an entry captured against the previous snapshot could be marked valid for the
-        // new one and skip its byte compare. The range list is already built, so this is cheap, and both
-        // invalidation paths stay symmetric.
-        (void)invalidate_dirty_decoded_packet_run_ranges(chunk.dirty_ranges);
-        collect_memory_dependency_ranges(
-            chunk.fifo.data(), chunk.fifo.size(), chunk.memory,
-            chunk.memory_ranges, chunk.dependency_cache_hit);
-    }
-    if (trace) {
-        chunk.dependency_scan_ns = static_cast<std::uint64_t>(
-            std::chrono::duration_cast<std::chrono::nanoseconds>(
-                std::chrono::steady_clock::now() - scan_start).count());
-    }
-    chunk.snapshot_range_count = chunk.memory_ranges.size();
-    chunk.snapshot_range_bytes = guest_memory_range_bytes(chunk.memory_ranges);
-    chunk.memory_snapshot_strict = true;
-    const auto copy_start = trace ? std::chrono::steady_clock::now()
-                                 : std::chrono::steady_clock::time_point{};
-    {
-        const cadence::ScopedPhaseTimer copy_timer{
-            cadence_diagnostics_, cadence::TimingPhase::WorkerSnapshotCopy};
-        capture_memory_snapshot(
-            chunk.memory, chunk.memory_snapshot, chunk.memory_ranges, true, false);
-    }
-    if (!chunk.memory_snapshot.sealed) {
-        throw std::runtime_error(
-            "[GxBackend] worker memory snapshot was not detached and sealed");
-    }
-    if (trace) {
-        chunk.snapshot_ns = static_cast<std::uint64_t>(
-            std::chrono::duration_cast<std::chrono::nanoseconds>(
-                std::chrono::steady_clock::now() - copy_start).count());
-    }
-    chunk.snapshot_bytes = memory_snapshot_used_bytes(chunk.memory_snapshot);
-    chunk.snapshot_reused_bytes = chunk.memory_snapshot.reused_bytes;
-    if (trace_gx_stats_enabled()) {
-        stat_dependency_scan_ns_.fetch_add(
-            chunk.dependency_scan_ns, std::memory_order_relaxed);
-        stat_snapshot_ns_.fetch_add(chunk.snapshot_ns, std::memory_order_relaxed);
-        stat_snapshot_bytes_.fetch_add(
-            chunk.snapshot_bytes, std::memory_order_relaxed);
-        stat_snapshot_ranges_.fetch_add(
-            static_cast<std::uint64_t>(chunk.snapshot_range_count),
-            std::memory_order_relaxed);
-    }
-    // The queue moves this chunk before sealing. From this point its view and
-    // owned storage remain on the worker until synchronous command recording
-    // finishes; only then are their vectors recycled under queue_mutex_. GPU
-    // resources and PE completion still retire through the existing fences.
-    chunk.memory = &chunk.memory_snapshot.memory;
-    chunk.memory_snapshot_active = true;
-    chunk.immutable_range_ownership = false;
-    // A worker snapshot did not exist at producer submission. Classifying
-    // live CALL_DL bytes there could publish an event-free receipt for a
-    // different view. Classification and rendering consume the sealed bytes.
-    if (get_gx_timing_config().pe_events_gpu_fence) {
-        if (display_list_dirty_invalidate_enabled()) {
-            for (const GuestWriteRange& range : chunk.dirty_ranges) {
-                (void)pe_event_classifier_.invalidate_display_list_cache_range(
-                    range.guest_addr, range.size);
-            }
-        }
-        const auto classify_start = trace
-            ? std::chrono::steady_clock::now()
-            : std::chrono::steady_clock::time_point{};
-        pe_event_classifier_.classify(
-            chunk.fifo.data(), chunk.fifo.size(), chunk.memory,
-            chunk.preclassified_pe_events,
-            chunk.memory_snapshot_active && chunk.memory_snapshot.sealed &&
-                chunk.memory == &chunk.memory_snapshot.memory &&
-                chunk.memory_snapshot.regions_disjoint_sorted);
-        chunk.pe_events_preclassified = true;
-        if (trace) {
-            chunk.pe_classification_ns = static_cast<std::uint64_t>(
-                std::chrono::duration_cast<std::chrono::nanoseconds>(
-                    std::chrono::steady_clock::now() - classify_start).count());
-        }
-    }
-    if (chunk.worker_submission_token) {
-        if (!chunk.pe_events_preclassified || chunk.pe_completion_token) {
-            throw std::logic_error("worker snapshot receipt has invalid ownership");
-        }
-        const std::lock_guard<std::mutex> lock(queue_mutex_);
-        chunk.pe_event_free_receipt = chunk.preclassified_pe_events.empty();
-        chunk.pe_completion_token = chunk.pe_event_free_receipt
-            ? frame_pe_completions_.issue_event_free()
-            : frame_pe_completions_.issue();
-        chunk.pe_completion_requires_resolution = !chunk.pe_event_free_receipt;
-        if (chunk.pe_completion_requires_resolution) {
-            ++render_fifo_effects_in_flight_;
-            chunk.fifo_effects_pending = true;
-        }
-        *chunk.worker_submission_token = chunk.pe_completion_token;
-        chunk.worker_submission_token.reset();
-    }
-    mark_frame_cpu_reads_done(chunk);
 }
 
 void GxBackend::mark_frame_cpu_reads_done(FrameChunk& chunk) {
@@ -11115,9 +8431,8 @@ void GxBackend::queue_frame_fifo_effects_fence(
         return;
     }
     if (chunk.pe_events.empty()) {
-        // No guest-visible PE signal exists for this capture. This runs after close, ordered queue
-        // submission and queue signal succeed, and before optional presentation. Resolve at that
-        // submission boundary. Later work is queue-ordered, so no GPU-idle wait is needed.
+        // No PE event in this capture: its token resolves at this submission boundary (after close,
+        // submit and signal; before any present). Later work is queue-ordered, so no GPU-idle wait.
         mark_frame_fifo_effects_done(chunk);
         return;
     }
@@ -11280,8 +8595,6 @@ void GxBackend::present_cached_xfb_on_thread(
     }
     const std::uint64_t current_present_epoch =
         present_epoch_ + (count_game_xfb_present ? 1u : 0u);
-    const std::uint64_t present_requests =
-        stat_xfb_present_requests_.load(std::memory_order_relaxed);
     const bool display_xfb_unknown =
         displayed_xfb_addr == kUnknownDisplayedXfbAddr;
     const bool display_xfb_none =
@@ -11320,8 +8633,7 @@ void GxBackend::present_cached_xfb_on_thread(
             latest,
             last_valid,
             current_xfb_stamp,
-            max_xfb_preserve_age(),
-            last_presented_xfb_stamp_.load(std::memory_order_relaxed));
+            kMaxXfbPreserveAge);
     selected = selection.selected;
     if (count_game_xfb_present && selection.stale_preserved) {
         ++stat_xfb_present_stale_preserved_;
@@ -11339,36 +8651,6 @@ void GxBackend::present_cached_xfb_on_thread(
         ++stat_xfb_present_missing_fallbacks_;
     }
     if (selected == nullptr) {
-        if (count_game_xfb_present && requested_specific_xfb &&
-            trace_xfb_present_enabled()) {
-            std::cerr << "[xfb-present] frame=" << frame_index_
-                      << " request=" << present_requests
-                      << " missing=1"
-                      << " selected=0x" << std::hex << displayed_xfb_addr
-                      << " latest=0x"
-                      << (latest != nullptr ? latest->guest_addr : 0u)
-                      << std::dec
-                      << " misses="
-                      << stat_xfb_present_misses_.load(
-                             std::memory_order_relaxed)
-                      << " stale-fallbacks="
-                      << stat_xfb_present_stale_fallbacks_.load(
-                             std::memory_order_relaxed)
-                      << " missing-fallbacks="
-                      << stat_xfb_present_missing_fallbacks_.load(
-                             std::memory_order_relaxed)
-                      << " missing-preserved="
-                      << stat_xfb_present_missing_preserved_.load(
-                             std::memory_order_relaxed)
-                       << " repeated-or-stale-serial-requests="
-                       << stat_xfb_repeated_or_stale_serial_requests_.load(
-                             std::memory_order_relaxed)
-                      << " stale-expired="
-                      << (selection.stale_expired ? 1 : 0)
-                      << " missing-expired="
-                      << (selection.missing_expired ? 1 : 0)
-                      << '\n';
-        }
         if (sleep_if_missing) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
@@ -11380,97 +8662,17 @@ void GxBackend::present_cached_xfb_on_thread(
     const bool skip_duplicate_present =
         count_game_xfb_present &&
         duplicate_stamp &&
-        skip_duplicate_xfb_presents_enabled() &&
         !native_settings_overlay_visible();
     if (count_game_xfb_present && !skip_duplicate_present &&
         !native_settings_overlay_visible() && skip_for_present_rate()) {
         return;
     }
-    if (count_game_xfb_present && trace_xfb_present_enabled() &&
-        (present_requests <= 8u ||
-         present_requests % trace_xfb_present_interval() == 0u)) {
-        std::cerr << "[xfb-present] frame=" << frame_index_
-                  << " request=" << present_requests
-                  << " selected=0x" << std::hex << displayed_xfb_addr
-                  << " registry=0x" << selected->guest_addr
-                  << " latest=0x"
-                  << (latest != nullptr ? latest->guest_addr : 0u)
-                  << std::dec
-                  << " requested-stale="
-                  << (selection.requested_stale ? 1 : 0)
-                  << " stale-fallback=0"
-                  << " stale-preserved="
-                  << (selection.stale_preserved ? 1 : 0)
-                  << " missing-fallback=0"
-                  << " missing-preserved="
-                  << (selection.missing_preserved ? 1 : 0)
-                  << " stamp=" << selected->frame_stamp
-                  << " serial=" << selected->copy_serial
-                  << " duplicate=" << (duplicate_stamp ? 1 : 0)
-                  << " duplicate-skip="
-                  << (skip_duplicate_present ? 1 : 0)
-                  << " misses="
-                  << stat_xfb_present_misses_.load(
-                         std::memory_order_relaxed)
-                  << " stale-fallbacks="
-                  << stat_xfb_present_stale_fallbacks_.load(
-                         std::memory_order_relaxed)
-                  << " missing-fallbacks="
-                  << stat_xfb_present_missing_fallbacks_.load(
-                         std::memory_order_relaxed)
-                  << " stale-preserved-total="
-                  << stat_xfb_present_stale_preserved_.load(
-                         std::memory_order_relaxed)
-                  << " missing-preserved-total="
-                  << stat_xfb_present_missing_preserved_.load(
-                         std::memory_order_relaxed)
-                   << " repeated-or-stale-serial-requests="
-                   << stat_xfb_repeated_or_stale_serial_requests_.load(
-                         std::memory_order_relaxed)
-                  << '\n';
-    }
     if (skip_duplicate_present) {
         record_skipped_duplicate_xfb_present(*selected);
-        if (trace_xfb_present_enabled()) {
-            std::cerr << "[xfb-present] frame=" << frame_index_
-                      << " request=" << present_requests
-                      << " duplicate-skip=1"
-                      << " selected=0x" << std::hex << displayed_xfb_addr
-                      << " registry=0x" << selected->guest_addr
-                      << std::dec
-                      << " stamp=" << selected->frame_stamp
-                      << " serial=" << selected->copy_serial
-                      << " duplicate=1"
-                       << " repeated-or-stale-serial-requests="
-                       << stat_xfb_repeated_or_stale_serial_requests_.load(
-                             std::memory_order_relaxed)
-                      << " misses="
-                      << stat_xfb_present_misses_.load(
-                             std::memory_order_relaxed)
-                      << " skipped-duplicates="
-                      << stat_xfb_present_skipped_duplicate_presents_.load(
-                             std::memory_order_relaxed)
-                      << '\n';
-        }
         return;
     }
-    // Capture an already selected, normally presented XFB. Render-chunk EFB
-    // diagnostics can show intermediate work and must not serve as proof of
-    // what the VI presentation actually contained. This opt-in readback does
-    // not add a presentation or change framebuffer selection/ownership.
-    const bool capture_present = count_game_xfb_present &&
-        capture_present_requested(present_requests);
-    const auto capture_begin = capture_present
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
-    if (capture_present) {
-        const std::string path = numbered_capture_path(
-            "GALAXY_GX_CAPTURE_PRESENT_PPM", present_requests);
-        renderer_.debug_log_backbuffer_readback();
-        renderer_.set_debug_capture_paths({}, path);
-    }
     const std::string snapshot_path = !interp_snapshot_path_.empty() ? interp_snapshot_path_
-        : (capture_present || !count_game_xfb_present) ? std::string{} : present_snapshot_path();
+        : !count_game_xfb_present ? std::string{} : present_snapshot_path();
     if (!snapshot_path.empty()) {
         renderer_.set_debug_capture_paths({}, snapshot_path);
     }
@@ -11478,16 +8680,13 @@ void GxBackend::present_cached_xfb_on_thread(
         !duplicate_stamp) {
         note_interp_real_present();
     }
-    bool capture_recorded = false;
     bool replayed = false;
     if (interp_presenting_real_ && renderer_.temporal_interpolation()) {
         // The temporal upscaler takes every presented frame from the replays:
         // the sequence's frame at t = 1 too (one history).
-        const bool capture = capture_present || !snapshot_path.empty();
-        renderer_.set_subframe_capture(capture);
+        renderer_.set_subframe_capture(!snapshot_path.empty());
         replayed = renderer_.replay_playing() && render_interp_subframe(1.0f);
         renderer_.set_subframe_capture(false);
-        capture_recorded = replayed && capture;
         if (!replayed) {
             // Shown without the upscaler: the next sequence starts its history again.
             interp_shown_serial_ = 0u;
@@ -11499,33 +8698,15 @@ void GxBackend::present_cached_xfb_on_thread(
     }
     if (!replayed) {
         renderer_.begin_frame(true);
-        // Present-only frames do not acquire or resize XFB textures. Keep
-        // EfbCopyManager retirement/recycling tied to render frames that can
-        // actually produce GXCopyDisp resources; otherwise the split
-        // render-then-present cadence advances XFB lifetime twice per VI.
-        capture_recorded = renderer_.present(
-            selected, capture_present || !snapshot_path.empty());
+        // Present-only frames acquire no XFB textures, so EfbCopyManager retirement advances with
+        // render frames only; otherwise render-then-present would age XFBs twice per VI.
+        (void)renderer_.present(selected, !snapshot_path.empty());
     }
     if (!snapshot_path.empty()) {
         renderer_.set_debug_capture_paths({}, {});
     }
     if (!replayed) {
         renderer_.end_frame();
-    }
-    if (capture_present) {
-        renderer_.set_debug_capture_paths({}, {});
-        std::cerr << "[gx-present-capture] request=" << present_requests
-                  << " capture-recorded=" << capture_recorded
-                  << " xfb=0x" << std::hex << selected->guest_addr << std::dec
-                  << " serial=" << selected->copy_serial
-                  << " stamp=" << selected->frame_stamp
-                  << " begin-steady-ns=" <<
-            std::chrono::duration_cast<std::chrono::nanoseconds>(
-                capture_begin.time_since_epoch()).count()
-                  << " present-return-steady-ns=" <<
-            std::chrono::duration_cast<std::chrono::nanoseconds>(
-                std::chrono::steady_clock::now().time_since_epoch()).count()
-                  << " boundary=normal-present-only physical-display-time=unmeasured\n";
     }
     if (count_game_xfb_present) {
         present_epoch_ = current_present_epoch;
@@ -11537,69 +8718,20 @@ void GxBackend::present_cached_xfb_on_thread(
 }
 
 void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
-    // GALAXY_DIAG_RENDER_BURN_US: busy CPU time per render chunk (diagnostic,
-    // emulates a slower render thread), starting GALAXY_DIAG_RENDER_BURN_AFTER_MS
-    // after the first render chunk (default 0).
-    {
-        const auto read_u64 = [](const char* name) {
-            char value[24]{};
-            std::size_t length = 0;
-            if (getenv_s(&length, value, sizeof(value), name) != 0 || length <= 1u) {
-                return std::uint64_t{0};
-            }
-            return static_cast<std::uint64_t>(std::strtoull(value, nullptr, 10));
-        };
-        static const std::uint64_t burn_us = read_u64("GALAXY_DIAG_RENDER_BURN_US");
-        static const std::uint64_t burn_after_ms = read_u64("GALAXY_DIAG_RENDER_BURN_AFTER_MS");
-        static const auto first_chunk = std::chrono::steady_clock::now();
-        if (burn_us != 0u &&
-            std::chrono::steady_clock::now() - first_chunk >= std::chrono::milliseconds(burn_after_ms)) {
-            const auto until = std::chrono::steady_clock::now() + std::chrono::microseconds(burn_us);
-            while (std::chrono::steady_clock::now() < until) {
-#if defined(_M_X64) || defined(__x86_64__)
-                _mm_pause();
-#elif defined(__aarch64__)
-                __asm__ __volatile__("yield");
-#endif
-            }
-        }
-    }
     render_pointer_response_=chunk.pointer_response;
     render_movie_content_=chunk.prerecorded_movie;
     render_safety_surround_=chunk.safety_surround;
     render_movie_frame_=chunk.movie_frame;
     const bool trace_gx_stalls = trace_gx_stalls_enabled();
-    const bool trace_gx_microprofile = trace_gx_microprofile_enabled();
-    const bool trace_gx_stats = trace_gx_stats_enabled();
     const bool defer_pe_events_to_gpu_fence =
         get_gx_timing_config().pe_events_gpu_fence;
-    frame_microprofile_enabled_ = trace_gx_microprofile &&
-        ((frame_index_ + 1u) % trace_gx_microprofile_interval() == 0u);
-    const bool frame_profile_enabled =
-        frame_microprofile_enabled_ || trace_gx_stalls;
-    // One decision per frame for the per-draw clock reads. Draw-path sites read frame_time_detail_
-    // instead of re-evaluating `frame_microprofile_enabled_ || trace_gx_stalls_enabled()` for every
-    // draw.
-    //
-    // Default behavior: fully on under an intrusive run, fully off otherwise. A requested sample
-    // interval also enables it for one frame in N, so a routine recording contains some fully
-    // attributed frames while the rest run at production speed.
+    // Per-draw clock reads run on stall-traced and sampled frames only.
     frame_time_sample_ = frame_gx_timing_sample_enabled(frame_index_);
-    frame_time_detail_ =
-        frame_microprofile_enabled_ || trace_gx_stalls || frame_time_sample_;
-    // CPU-cycle witness for the `flush-pso` window. It is independent of `frame_time_detail_`:
-    // enabling wall-clock per-draw instrumentation to get cycle data would distort the wall clock the
-    // cycles are meant to interpret. Off unless requested. `GALAXY_GX_PSO_CYCLES=1` turns it on, and
-    // so does detailed mode, since a run already paying for trace_gx_stalls may as well carry the
-    // witness.
+    frame_time_detail_ = trace_gx_stalls || frame_time_sample_;
+    // Thread CPU time and cycles of the frame and of its PSO resolution, on request or with the stall trace.
     pso_cycles_enabled = pso_cycles_requested() || trace_gx_stalls;
-    // Routine monitoring must not need the instrumentation it measures. Per-frame phase timing is
-    // about 14 steady_clock reads; per-draw instrumentation is thousands. Sampling is therefore
-    // always on, while the line that prints it stays bounded by the deferred stats ring or the
-    // explicit stats flag.
+    // Per-frame phase timing takes a few clock reads and is always on.
     constexpr bool frame_timing_enabled = true;
-    // Kernel queries are intrusive diagnostics, not routine frame monitoring.
-    // Use the existing explicit cycle/stall opt-in for both counters.
     const ThreadCounterSample frame_cpu_start = pso_cycles_enabled
         ? thread_cpu_time_100ns() : ThreadCounterSample{};
     const ThreadCounterSample frame_cycles_start = pso_cycles_enabled
@@ -11625,12 +8757,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     frame_flush_pso_cycles_valid_ = pso_cycles_enabled;
     frame_flush_total_us_ = 0;
     frame_flush_timed_samples_ = 0;
-    // frame_flush_timed_calls_ is not reset here. It is the sampling counter for `ScopedFlushTiming`,
-    // whose stride is 64, and a frame makes fewer flush calls than that. Resetting it per frame would
-    // leave `call % 64 == 0` true only for call 0: every frame would time exactly one flush, always
-    // the first, and `flush-mean-us` would describe the first flush of each frame rather than a
-    // typical batch. Kept monotonic, the counter walks every residue mod 64 across the session, so
-    // samples spread over call positions regardless of frame size.
+    // frame_flush_timed_calls_ runs across frames (ScopedFlushTiming).
     frame_pso_memo_hits_ = 0;
     frame_pso_get_calls_ = 0;
     frame_pso_get_us_ = 0;
@@ -11638,10 +8765,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     frame_flush_calls_ = 0;
     frame_pso_resolutions_ = 0;
     frame_pso_route_early_ = 0;
-    // Baseline for the per-frame pipeline-compile deltas published on the
-    // `[gx-frame-timing]` line. `compile_stats()` is clock-free and reads
-    // monotonic counters (two of them atomics, because prewarm workers write
-    // them too), so this is one copy in the frame reset and no per-draw cost.
+    // Baseline for the per-frame pipeline-compile deltas on the [gx-frame-timing] line.
     frame_compile_stats_baseline_ = pipeline_cache_.compile_stats();
     frame_replay_prepared_batches_ = 0;
     frame_replay_packet_batches_ = 0;
@@ -11685,10 +8809,8 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             cadence_diagnostics_, cadence::TimingPhase::RenderBegin};
         {
             const RenderConfig render = get_render_config();
-            // Under ray-traced lighting the traced light replaces enhanced lighting: its de-lit characters
-            // relit by the trace washed faces out (Mario's pale face and missing eyes on the file select and the
-            // Observatory, user Native41; fe176 against fe076). Per-pixel lighting stays: the configuration every
-            // ray-traced picture was tuned and verified in.
+            // Under ray-traced lighting the traced light replaces enhanced lighting (de-lit characters relit by
+            // the trace wash out). Per-pixel lighting stays: the ray-traced picture is tuned with it.
             const bool enhanced = render.enhanced_lighting && !renderer_.rt_lighting();
             ambient_occlusion_ =
                 render.ambient_occlusion && !renderer_.rt_lighting() && renderer_.ambient_occlusion_ready();
@@ -11699,26 +8821,8 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                 shader_key_hashes_valid_ = false;
                 current_pipeline_ = nullptr;
             }
-            // GALAXY_ENHANCED_LIGHTING_SPLIT=f: left of f x the viewport width the game's own lighting.
-            static const float split = [] {
-                char value[32]{};
-                std::size_t length = 0;
-                return getenv_s(&length, value, sizeof(value), "GALAXY_ENHANCED_LIGHTING_SPLIT") == 0 && length > 1u
-                           ? std::clamp(static_cast<float>(std::atof(value)), 0.0f, 1.0f)
-                           : 0.0f;
-            }();
-            enhanced_split_ = split;
-            if (lighting_census_enabled() && frame_index_ % 300u == 0u) [[unlikely]] {
-                std::fprintf(stderr, "[enh-stats] frame=%llu flushes=%u uber=%u\n",
-                             static_cast<unsigned long long>(frame_index_), enhanced_flushes_,
-                             enhanced_uber_flushes_);
-                enhanced_flushes_ = 0u;
-                enhanced_uber_flushes_ = 0u;
-            }
-            static const std::uint64_t view = read_env_u64("GALAXY_ENHANCED_LIGHTING_VIEW", 0u);
             enhanced_ps_flags_ = (renderer_.rt_reflections_active() ? kEnhancedRtReflections : 0u) |
-                                 (renderer_.rt_lighting() ? kEnhancedRtLighting : 0u) |
-                                 (view == 1u ? kEnhancedView : view == 2u ? kEnhancedViewChannel : 0u);
+                                 (renderer_.rt_lighting() ? kEnhancedRtLighting : 0u);
         }
         renderer_.begin_frame(chunk.present_swap_chain);
         {
@@ -11737,12 +8841,8 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             if (!interp_recording_) {
                 interp_shown_scene_ = -1;
             }
-            // GALAXY_DRAW_IDENTITY=0 never asks the game for draw identities,
-            // =1 always does (tests at 60).
-            static const std::uint64_t identity_env = read_env_u64("GALAXY_DRAW_IDENTITY", 2u);
-            const bool wanted = identity_env == 2u
-                ? (interp_recording_ || renderer_.temporal_mode() || renderer_.rt_active())
-                : identity_env != 0u;
+            const bool wanted =
+                interp_recording_ || renderer_.temporal_mode() || renderer_.rt_active();
             if (draw_identity_wanted_.load(std::memory_order_relaxed) != wanted) {
                 draw_identity_wanted_.store(wanted, std::memory_order_relaxed);
             }
@@ -11751,9 +8851,8 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             rt_shadow_casters_wanted_.store(offscreen_casters && renderer_.rt_lighting(), std::memory_order_relaxed);
             interp_scenes_in_chunk_ = 0u;
         }
-        // begin_frame() applies a pending internal-resolution change, so copies must use the scale the
-        // EFB actually has. Reading the setting separately could race a change made in between and size
-        // one frame's copies for the other scale.
+        // begin_frame() applies a pending internal-resolution change, so copies take the scale the EFB
+        // has now, not the setting, which can change in between.
         if (renderer_.efb_scale() != efb_copies_.efb_scale()) {
             efb_copies_.set_efb_scale(renderer_.efb_scale());
         }
@@ -11804,15 +8903,6 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         // New decoded textures upload through this frame's command list.
         renderer_.attach_texture_uploads(texture_cache_);
         {
-            // Tests: GALAXY_TEXTURE_PACK_TOGGLE_FRAMES=N flips the setting every N frames, as the menu does.
-            static const std::uint64_t toggle_frames = read_env_u64("GALAXY_TEXTURE_PACK_TOGGLE_FRAMES", 0u);
-            if (toggle_frames != 0u && frame_index_ != 0u && frame_index_ % toggle_frames == 0u) {
-                RenderConfig flipped = get_render_config();
-                flipped.texture_packs = !flipped.texture_packs;
-                set_render_config(flipped);
-                std::fprintf(stderr, "[texture-pack] toggle frame=%llu packs=%u\n",
-                             static_cast<unsigned long long>(frame_index_), flipped.texture_packs ? 1u : 0u);
-            }
             const RenderConfig render = get_render_config();
             if (const std::uint64_t generation = texture_pack_mod_folders_generation();
                 generation != texture_pack_mods_generation_) {
@@ -11886,27 +8976,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         TextureCache& cache;
         ~TextureDecodeJoin() { cache.finish_pending_decodes_noexcept(); }
     } texture_decode_join{texture_cache_};
-    if (diagnostic_texture_invalidate_requested(frame_index_ + 1u)) {
-        texture_cache_.invalidate_all();
-        texture_handle_cache_.clear();
-        clear_texture_binding_table_cache();
-        texture_bindings_dirty_ = true;
-        std::cerr << "[gx-diagnostic] invalidated decoded texture cache at frame "
-                  << (frame_index_ + 1u) << '\n';
-    }
     std::size_t dirty_texture_evictions = 0u;
-    // Include the immediately preceding chunk: a selected XFB can have been
-    // copied before the requested readback chunk. Keep the existing markers
-    // bounded to this small neighborhood, without per-primitive scene logs.
-    poll_live_capture_request(frame_index_ + 1u, fifo_size);
-    capture_composites_ = capture_composites_only_enabled() &&
-        (capture_frame_requested(frame_index_ + 1u) ||
-         capture_frame_requested(frame_index_ + 2u));
-    texture_cache_.set_debug_capture_frame(
-        capture_composites_ ||
-            (capture_draw_log_enabled() && capture_frame_requested(frame_index_ + 1u))
-            ? frame_index_ + 1u : 0u);
-    std::size_t dirty_display_list_invalidations = 0u;
     std::size_t dirty_decoded_vertex_invalidations = 0u;
     std::unique_lock<std::mutex> parser_lock;
     {
@@ -11926,47 +8996,13 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         }
         {
             const cadence::ScopedPhaseTimer timer{
-                cadence_diagnostics_, cadence::TimingPhase::RenderDisplayListInvalidation};
-            dirty_display_list_invalidations =
-                invalidate_dirty_display_list_ranges(parser_, chunk.dirty_ranges);
-        }
-        {
-            const cadence::ScopedPhaseTimer timer{
                 cadence_diagnostics_, cadence::TimingPhase::RenderDecodedVertexInvalidation};
             dirty_decoded_vertex_invalidations =
                 invalidate_dirty_decoded_packet_run_ranges(chunk.dirty_ranges);
         }
     }
-    if (trace_gx_stats) {
-        stat_dirty_ranges_.fetch_add(
-            static_cast<std::uint64_t>(chunk.dirty_range_count),
-            std::memory_order_relaxed);
-        stat_dirty_bytes_.fetch_add(
-            chunk.dirty_bytes,
-            std::memory_order_relaxed);
-        stat_dirty_texture_evictions_.fetch_add(
-            dirty_texture_evictions,
-            std::memory_order_relaxed);
-        stat_dirty_display_list_invalidations_.fetch_add(
-            dirty_display_list_invalidations,
-            std::memory_order_relaxed);
-    }
-    if (dirty_texture_evictions != 0u && trace_gx_stats) {
-        std::cerr << "[gx-texture-dirty] frame=" << (frame_index_ + 1u)
-                  << " ranges=" << chunk.dirty_ranges.size()
-                  << " bytes=" << chunk.dirty_bytes
-                  << " evicted=" << dirty_texture_evictions << '\n';
-    }
-    if (dirty_display_list_invalidations != 0u && trace_gx_stats) {
-        std::cerr << "[gx-display-list-dirty] frame=" << (frame_index_ + 1u)
-                  << " ranges=" << chunk.dirty_ranges.size()
-                  << " bytes=" << chunk.dirty_bytes
-                  << " invalidated=" << dirty_display_list_invalidations
-                  << '\n';
-    }
-    // Every transient GPU address/table below belongs to the ring segment
-    // selected by begin_frame(). The persistent GX register state may be
-    // unchanged, but those bindings must be materialized in this frame slot.
+    // GPU addresses and tables belong to the ring segment begin_frame() selected, so every binding
+    // is written again in this frame slot even when the GX state did not change.
     frame_bindings_dirty_ = true;
     current_matrix_palette_ = 0;
     matrix_palette_stale_ = true;
@@ -11981,81 +9017,15 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     // will provide the actual values once processed from the FIFO.
     renderer_.bind_efb(nullptr);
 
-    // GX semantics: the EFB persists across frames and is cleared only by an EFB copy with the clear
-    // bit set (handled in on_efb_copy with the latched copy-clear registers). Clearing every frame
-    // with stale latched colors caused purple, blue and white frame flicker. One initial clear
-    // (depth = FAR) seeds the targets.
+    // GX keeps the EFB across frames; only an EFB copy with the clear bit set clears it (on_efb_copy,
+    // with the latched copy-clear registers). One initial clear (depth = far) seeds the targets.
     if (!efb_seeded_) {
         efb_seeded_ = true;
         renderer_.clear_efb(0u, 0u, 0x00FFFFFFu, true, true, true);
     }
 
-    // Opt-in GPU capture. The default path performs no readback or
-    // synchronization. GALAXY_GX_CAPTURE_FRAME=N records one frame; diagnostic
-    // runs can use GALAXY_GX_CAPTURE_FRAMES=A,B,C to write numbered PPMs.
-    const bool capture_this_frame =
-        capture_pixel_frame_requested(frame_index_ + 1u);
-    if (capture_this_frame) {
-        renderer_.set_debug_capture_paths(
-            capture_output_path("GALAXY_GX_CAPTURE_PPM", frame_index_ + 1u),
-            capture_output_path(
-                "GALAXY_GX_CAPTURE_BACKBUFFER_PPM", frame_index_ + 1u));
-    } else {
-        renderer_.set_debug_capture_paths({}, {});
-    }
-    capture_draws_ = capture_frame_requested(frame_index_ + 1u) && capture_draw_log_enabled() &&
-        !capture_composites_only_enabled();
-    capture_all_textures_ = capture_this_frame && capture_all_textures_enabled();
-    capture_draw_idx_ = 0;
-    capture_readback_recorded_ = false;
-    // This is a process environment value, like the other capture and trace selectors in this file.
-    // Without `static` it re-entered the CRT environment lock on every frame for a value that cannot
-    // change.
-    static const unsigned capture_readback_draw_selection = [] {
-        char value[32]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length, value, sizeof(value),
-                "GALAXY_GX_CAPTURE_DRAW") != 0 ||
-            length == 0) {
-            return ~0u;
-        }
-        return static_cast<unsigned>(std::strtoul(value, nullptr, 10));
-    }();
-    capture_readback_draw_ = capture_readback_draw_selection;
-
-    std::optional<OwnedDependencyEvents> ordered_dependency_events;
-    std::optional<RenderDependencyReadRecorder> ordered_read_recorder;
-    std::optional<ScopedRenderDependencyCapture> ordered_capture_scope;
-    const bool packet_replay_requested = ordered_packet_replay_enabled();
-    std::vector<std::byte> packet_parser_input;
-    bool packet_parser_input_over_limit = false;
-    if (packet_replay_requested && fifo_data != nullptr && fifo_size != 0u) {
-        const OwnedFifoPacket::Limits limits{};
-        packet_parser_input_over_limit =
-            pending_fifo_.size() > limits.fifo_bytes ||
-            fifo_size > limits.fifo_bytes -
-                            std::min(pending_fifo_.size(), limits.fifo_bytes);
-        if (!packet_parser_input_over_limit) {
-            packet_parser_input.reserve(pending_fifo_.size() + fifo_size);
-            packet_parser_input.insert(
-                packet_parser_input.end(),
-                pending_fifo_.begin(), pending_fifo_.end());
-            packet_parser_input.insert(
-                packet_parser_input.end(), fifo_data, fifo_data + fifo_size);
-        }
-    }
-    if ((ordered_dependency_capture_enabled() || packet_replay_requested) &&
-        fifo_data != nullptr && fifo_size != 0u) {
-        ordered_dependency_events.emplace();
-        ordered_read_recorder.emplace(*ordered_dependency_events);
-        ordered_capture_scope.emplace(
-            parser_, vertex_loader_, texture_cache_,
-            frame_dependency_event_sink_, *ordered_read_recorder,
-            *ordered_dependency_events);
-    }
     parser_.set_profile(
-        frame_profile_enabled ? &frame_fifo_profile_ : nullptr);
+        trace_gx_stalls ? &frame_fifo_profile_ : nullptr);
     const auto parse_start = frame_timing_enabled
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
@@ -12073,13 +9043,10 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             memory == &chunk.memory_snapshot.memory &&
             chunk.memory_snapshot.regions_disjoint_sorted;
         frame_services_ = services;
-        // A sealed snapshot keeps every texture's guest bytes immutable until
-        // this chunk is submitted, so first-use decodes may run on workers.
-        // Live-memory reads already sample guest RAM after the game moved on
-        // (as the GPU does); a worker decoding the same bytes before this
-        // chunk is submitted reads them within the same window.
+        // A sealed snapshot keeps texture bytes unchanged until this chunk is submitted, so first-use
+        // decodes may run on workers. With live-memory reads a worker reads the bytes within the same
+        // window the render thread would.
         texture_cache_.set_async_decode_allowed(
-            async_texture_decode_enabled() &&
             ((chunk.memory_snapshot_active && chunk.memory_snapshot.sealed &&
               memory == &chunk.memory_snapshot.memory) ||
              (!chunk.memory_snapshot_active &&
@@ -12132,11 +9099,9 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                     }
                     if (split.marker < 0) {
                         record_pointer_depth_capture_in_frame(chunk);
-                    } else if (split.marker == static_cast<int>(FifoMarker::Scene2DBegin) ||
-                               split.marker == static_cast<int>(FifoMarker::Scene2DEnd)) {
-                        on_scene_2d_marker(split.marker == static_cast<int>(FifoMarker::Scene2DBegin),
-                                           split.offset - prefix);
-                    } else {
+                    } else if (split.marker == static_cast<int>(FifoMarker::Scene2DBegin)) {
+                        on_scene_2d_begin();
+                    } else if (split.marker != static_cast<int>(FifoMarker::Scene2DEnd)) {
                         const auto index = static_cast<std::size_t>(split.view);
                         const bool sky_up = split.view >= 0 && (chunk.fifo_marker_sky_up_mask & (1u << index)) != 0u;
                         on_fifo_marker(static_cast<FifoMarker>(split.marker),
@@ -12222,67 +9187,6 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         frame_pe_events_ = saved_pe_events;
         frame_pe_callbacks_enabled_ = saved_pe_callbacks_enabled;
     }
-    ordered_capture_scope.reset();
-    if (ordered_dependency_events.has_value()) {
-        if (packet_replay_requested) {
-            if (packet_parser_input_over_limit) {
-                std::cerr << "[gx-ordered-packet] frame="
-                          << (frame_index_ + 1u)
-                          << " skipped=parser-input-limit\n";
-            } else {
-                try {
-                    const auto packet = capture_owned_fifo_events(
-                        packet_parser_input, *ordered_dependency_events,
-                        {chunk.present_swap_chain, chunk.displayed_xfb_addr});
-                    const auto replayed = replay_owned_fifo_events(packet);
-                    const bool equal = owned_fifo_events_equal(
-                        *ordered_dependency_events, replayed);
-                    std::cerr << "[gx-ordered-packet] frame="
-                              << (frame_index_ + 1u)
-                              << " fifo-bytes=" << packet.fifo().size()
-                              << " ops=" << packet.ordered_ops().size()
-                              << " replay-equal=" << (equal ? 1 : 0)
-                              << " external-resources="
-                              << (ordered_dependency_events->has_external_resources()
-                                      ? 1 : 0)
-                              << '\n';
-                    if (!equal) {
-                        throw std::logic_error(
-                            "GX ordered packet replay changed event stream");
-                    }
-                } catch (const std::length_error& error) {
-                    // Opt-in capture may exceed its byte/op budget; the live
-                    // render parse and guest-visible PE/XFB order continue.
-                    std::cerr << "[gx-ordered-packet] frame="
-                              << (frame_index_ + 1u)
-                              << " skipped=" << error.what() << '\n';
-                }
-            }
-        }
-        std::size_t read_count = 0u;
-        std::size_t alias_copies = 0u;
-        std::size_t alias_binds = 0u;
-        std::size_t alias_retires = 0u;
-        for (const auto& event : ordered_dependency_events->events()) {
-            switch (event.kind) {
-            case OwnedDependencyEvents::Kind::GuestRead: ++read_count; break;
-            case OwnedDependencyEvents::Kind::AliasCopy: ++alias_copies; break;
-            case OwnedDependencyEvents::Kind::AliasBind: ++alias_binds; break;
-            case OwnedDependencyEvents::Kind::AliasRetire: ++alias_retires; break;
-            default: break;
-            }
-        }
-        std::cerr << "[gx-ordered-dependencies] frame=" << (frame_index_ + 1u)
-                  << " events=" << ordered_dependency_events->events().size()
-                  << " reads=" << read_count
-                  << " bytes=" << ordered_dependency_events->captured_bytes()
-                  << " alias-copies=" << alias_copies
-                  << " alias-binds=" << alias_binds
-                  << " alias-retires=" << alias_retires
-                  << " external-resources="
-                  << (ordered_dependency_events->has_external_resources() ? 1 : 0)
-                  << '\n';
-    }
     if (chunk.pe_events_preclassified) {
         if (!defer_pe_events_to_gpu_fence) {
             throw std::logic_error(
@@ -12343,19 +9247,8 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         : 0u;
     mark_frame_cpu_reads_done(chunk);
 
-    if (capture_this_frame && !capture_readback_recorded_) {
-        if (capture_readback_draw_ != ~0u) {
-            std::cerr << "[efb-dump] requested draw "
-                      << capture_readback_draw_
-                      << " was not issued; capturing frame end\n";
-        }
-        capture_readback_recorded_ = renderer_.debug_copy_efb_to_readback();
-    }
-
-    // Present every VI after the first valid XFB. Some VI retraces only update EFB/texture side
-    // effects or queue no FIFO at all. If those retraces skip the swap chain, flip-model cadence
-    // collapses and the frame shows gaps even though the game keeps advancing. Before the first XFB
-    // exists, keep the window hidden unless a diagnostic capture asks for a backbuffer.
+    // Every VI presents once a valid XFB exists, including retraces that queued no FIFO, or the
+    // flip-model cadence collapses into gaps. Before the first XFB the window stays hidden.
     if (chunk.present_swap_chain) {
         ++stat_xfb_present_requests_;
     }
@@ -12391,52 +9284,16 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             latest_xfb,
             last_valid_xfb,
             current_xfb_stamp,
-            max_xfb_preserve_age(),
-            last_presented_xfb_stamp_.load(std::memory_order_relaxed));
+            kMaxXfbPreserveAge);
     selected_xfb = selection.selected;
     bool stale_fallback = false;
     bool missing_fallback = false;
     if (chunk.present_swap_chain && selection.stale_preserved) {
         ++stat_xfb_present_stale_preserved_;
-        if (trace_xfb_present_enabled()) {
-            std::cerr << "[xfb-present] frame=" << frame_index_
-                      << " render-stale=1"
-                      << " selected=0x" << std::hex
-                      << chunk.displayed_xfb_addr
-                      << " stale-registry=0x" << selected_xfb->guest_addr
-                      << " latest=0x" << latest_xfb->guest_addr
-                      << std::dec
-                      << " stale-stamp=" << selected_xfb->frame_stamp
-                      << " latest-stamp=" << latest_xfb->frame_stamp
-                      << " stale-fallback=0"
-                      << " stale-preserved=1"
-                      << " stale-fallbacks="
-                      << stat_xfb_present_stale_fallbacks_.load(
-                             std::memory_order_relaxed)
-                      << " stale-preserved-total="
-                      << stat_xfb_present_stale_preserved_.load(
-                             std::memory_order_relaxed)
-                      << '\n';
-        }
     }
     if (chunk.present_swap_chain && selection.stale_expired) {
         stale_fallback = true;
         ++stat_xfb_present_stale_fallbacks_;
-        if (trace_xfb_present_enabled()) {
-            std::cerr << "[xfb-present] frame=" << frame_index_
-                      << " render-stale-expired=1"
-                      << " selected=0x" << std::hex
-                      << chunk.displayed_xfb_addr
-                      << " latest=0x"
-                      << (latest_xfb != nullptr ? latest_xfb->guest_addr : 0u)
-                      << " fallback-selected=0x"
-                      << (selected_xfb != nullptr ? selected_xfb->guest_addr : 0u)
-                      << std::dec
-                      << " stale-fallbacks="
-                      << stat_xfb_present_stale_fallbacks_.load(
-                             std::memory_order_relaxed)
-                      << '\n';
-        }
     }
     if (chunk.present_swap_chain && selection.missing) {
         ++stat_xfb_present_misses_;
@@ -12449,32 +9306,6 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         ++stat_xfb_present_missing_fallbacks_;
     }
     if (selection.missing) {
-        if (trace_xfb_present_enabled()) {
-            std::cerr << "[xfb-present] frame=" << frame_index_
-                      << " render-missing=1"
-                      << " selected=0x" << std::hex
-                      << chunk.displayed_xfb_addr
-                      << " latest=0x"
-                      << (latest_xfb != nullptr ? latest_xfb->guest_addr : 0u)
-                      << std::dec
-                      << " misses="
-                      << stat_xfb_present_misses_.load(
-                             std::memory_order_relaxed)
-                      << " missing-fallback=0"
-                      << " missing-preserved="
-                      << (selection.missing_preserved ? 1 : 0)
-                      << " missing-fallbacks="
-                      << stat_xfb_present_missing_fallbacks_.load(
-                             std::memory_order_relaxed)
-                      << " missing-preserved-total="
-                      << stat_xfb_present_missing_preserved_.load(
-                             std::memory_order_relaxed)
-                      << " stale-expired="
-                      << (selection.stale_expired ? 1 : 0)
-                      << " missing-expired="
-                      << (selection.missing_expired ? 1 : 0)
-                      << '\n';
-        }
     }
     if (selected_xfb == nullptr && !requested_specific_xfb &&
         !display_xfb_none) {
@@ -12487,22 +9318,16 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     const bool skip_duplicate_present =
         chunk.present_swap_chain &&
         duplicate_xfb_present &&
-        skip_duplicate_xfb_presents_enabled() &&
-        !capture_this_frame &&
         !native_settings_overlay_visible();
     const bool skip_rate_present =
         chunk.present_swap_chain &&
         selected_xfb != nullptr &&
         !skip_duplicate_present &&
-        !capture_this_frame &&
         !native_settings_overlay_visible() &&
         skip_for_present_rate();
-    const bool capture_backbuffer =
-        capture_this_frame && selected_xfb != nullptr;
     bool present_swap_chain =
-        capture_backbuffer ||
-        (chunk.present_swap_chain && selected_xfb != nullptr &&
-         !skip_duplicate_present && !skip_rate_present);
+        chunk.present_swap_chain && selected_xfb != nullptr &&
+        !skip_duplicate_present && !skip_rate_present;
     const bool present_black = chunk.present_swap_chain && display_xfb_none;
     if (present_black) {
         supersede_interp_sequence();
@@ -12512,43 +9337,22 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     }
     if (interp_recording_) {
         note_interp_log_completion();
-        if (chunk.present_swap_chain) {
-            interp_event("chunk-decision", selected_xfb != nullptr ? selected_xfb->copy_serial : 0u,
-                         1u | (duplicate_xfb_present ? 2u : 0u) | (skip_duplicate_present ? 4u : 0u) |
-                             (skip_rate_present ? 8u : 0u) | (present_swap_chain ? 16u : 0u) |
-                             (interp_log_waiting_ ? 32u : 0u) | (capture_backbuffer ? 64u : 0u));
-        }
-        static const bool trace_interp = read_env_u64("GALAXY_INTERP_TRACE", 0u) != 0u;
-        static std::uint64_t traced = 0u;
-        if (trace_interp && (traced++ % 240u) == 0u) {
-            std::cerr << "[interp-chunk] frames=" << interp_frames_
-                      << " scenes=" << interp_scenes_in_chunk_
-                      << " log-serial=" << renderer_.replay_serial()
-                      << " log=" << (renderer_.replay_available() ? 1 : 0)
-                      << " waiting=" << (interp_log_waiting_ ? 1 : 0)
-                      << " sequence=" << (interp_sequence_.active ? 1 : 0)
-                      << " present=" << (present_swap_chain ? 1 : 0) << '\n';
-        }
         // The ready frame's own present: its sub-frames come first, the real
         // frame after them (started by the render loop after this chunk).
-        if (present_swap_chain) {
-            interp_event("chunk-present", selected_xfb != nullptr ? selected_xfb->guest_addr : 0u,
-                         chunk.displayed_xfb_addr);
-        }
         // As on the VI-present path, a present while a completed log waits
-        // starts that log's sequence: the VI may still name the previous
-        // XFB (the guest flips at the next retrace), so a present the
-        // duplicate or rate checks would drop still starts it. Dropping it
-        // skipped the waiting frame when the next one closed first.
+        // starts that log's sequence, even one the duplicate or rate checks
+        // would drop: the VI may still name the previous XFB (the guest flips
+        // at the next retrace), and the waiting frame would be skipped when
+        // the next one closes first.
         if (interp_log_waiting_ && chunk.present_swap_chain && selected_xfb != nullptr &&
-            !capture_backbuffer && renderer_.replay_available()) {
+            renderer_.replay_available()) {
             interp_start_pending_ = true;
             present_swap_chain = false;
         } else if (interp_sequence_.active && present_swap_chain) {
             // Another frame presents now: the playing one is superseded.
             supersede_interp_sequence();
         }
-        if (present_swap_chain && !capture_backbuffer && !duplicate_xfb_present) {
+        if (present_swap_chain && !duplicate_xfb_present) {
             note_interp_real_present();
         }
     }
@@ -12560,34 +9364,14 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         : 0u;
     std::uint64_t present_record_us = 0;
     if (present_swap_chain) {
-        if (trace_xfb_present_enabled() &&
-            (stale_fallback || missing_fallback ||
-             selection.stale_preserved || selection.missing_preserved) &&
-            selected_xfb != nullptr) {
-            std::cerr << "[xfb-present] frame=" << frame_index_
-                      << " render-selected=0x" << std::hex
-                      << selected_xfb->guest_addr
-                      << std::dec
-                      << " stamp=" << selected_xfb->frame_stamp
-                      << " serial=" << selected_xfb->copy_serial
-                      << " stale-fallback=" << (stale_fallback ? 1 : 0)
-                      << " stale-preserved="
-                      << (selection.stale_preserved ? 1 : 0)
-                      << " missing-fallback="
-                      << (missing_fallback ? 1 : 0)
-                      << " missing-preserved="
-                      << (selection.missing_preserved ? 1 : 0)
-                      << '\n';
-        }
         const auto present_record_start = frame_timing_enabled
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
-        const std::string snapshot_path =
-            capture_backbuffer ? std::string{} : present_snapshot_path();
+        const std::string snapshot_path = present_snapshot_path();
         if (!snapshot_path.empty()) {
             renderer_.set_debug_capture_paths({}, snapshot_path);
         }
-        renderer_.present(selected_xfb, capture_backbuffer || !snapshot_path.empty());
+        renderer_.present(selected_xfb, !snapshot_path.empty());
         if (!snapshot_path.empty()) {
             renderer_.set_debug_capture_paths({}, {});
         }
@@ -12600,28 +9384,6 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     }
     if (skip_duplicate_present) {
         record_skipped_duplicate_xfb_present(*selected_xfb);
-        if (trace_xfb_present_enabled()) {
-            std::cerr << "[xfb-present] frame=" << frame_index_
-                      << " render-duplicate-skip=1"
-                      << " selected=0x" << std::hex
-                      << chunk.displayed_xfb_addr
-                      << " registry=0x" << selected_xfb->guest_addr
-                      << std::dec
-                      << " stamp=" << selected_xfb->frame_stamp
-                      << " serial=" << selected_xfb->copy_serial
-                      << " duplicate=1"
-                      << " duplicate-skip=1"
-                       << " repeated-or-stale-serial-requests="
-                       << stat_xfb_repeated_or_stale_serial_requests_.load(
-                             std::memory_order_relaxed)
-                      << " misses="
-                      << stat_xfb_present_misses_.load(
-                             std::memory_order_relaxed)
-                      << " skipped-duplicates="
-                      << stat_xfb_present_skipped_duplicate_presents_.load(
-                             std::memory_order_relaxed)
-                      << '\n';
-        }
     }
     const auto end_frame_start = frame_timing_enabled
         ? std::chrono::steady_clock::now()
@@ -12675,26 +9437,16 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     const auto gpu_submit_end = frame_timing_enabled
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
-    // Both helpers are nonblocking polls. A capture's immutable paths were
-    // bound before recording, so a later render frame can safely retire its
-    // completed GPU copy without stalling VI cadence or retargeting the file.
-    renderer_.debug_log_readback();
+    // Nonblocking: a later frame writes a finished present snapshot.
     renderer_.debug_log_backbuffer_readback();
 
     ++frame_index_;
     timing_frame_index_.store(frame_index_, std::memory_order_relaxed);
-    if (trace_xfb_causal_enabled() || trace_xfb_causal_deferred_enabled()) {
-        causal_trace_frame_index_.store(
-            frame_index_, std::memory_order_relaxed);
-    }
     const auto render_end = frame_timing_enabled
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
-    // Per-frame pipeline-compile attribution. Every counter in CompileStats is
-    // monotonic within a session, so the subtraction cannot underflow
-    // (PipelineCache::shutdown() is the only resetter and it ends the session).
-    // Published on the `[gx-frame-timing]` line so a tail frame can be tied to a
-    // compile count directly instead of inferred from `flush-pso-us` alone.
+    // Per-frame pipeline-compile counts for the [gx-frame-timing] line. CompileStats counters only
+    // grow within a session (PipelineCache::shutdown() ends it), so the subtraction cannot underflow.
     {
         const PipelineCache::CompileStats now = pipeline_cache_.compile_stats();
         const PipelineCache::CompileStats& was = frame_compile_stats_baseline_;
@@ -12713,102 +9465,17 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     const ThreadCounterSample frame_cycles_interval = thread_counter_interval(
         frame_cycles_start, pso_cycles_enabled
             ? thread_cycle_count() : ThreadCounterSample{});
-    if (trace_gx_stats) {
-        stat_render_ns_.fetch_add(
-            static_cast<std::uint64_t>(
-                std::chrono::duration_cast<std::chrono::nanoseconds>(
-                    render_end - render_start).count()),
-            std::memory_order_relaxed);
-    }
 
-    if (trace_xfb_causal_frame(frame_index_)) {
-        const std::uint64_t host_steady_ns =
-            static_cast<std::uint64_t>(
-                std::chrono::duration_cast<std::chrono::nanoseconds>(
-                    std::chrono::steady_clock::now().time_since_epoch())
-                    .count());
-        std::cerr << "[xfb-causal-frame] frame=" << frame_index_
-                  << " host-steady-ns=" << host_steady_ns
-                  << " fifo-bytes=" << fifo_size
-                  << " fifo-complete=" << (pending_fifo_.empty() ? 1 : 0)
-                  << " pending-fifo=" << pending_fifo_.size()
-                  << " parsed-copy-exec="
-                  << (frame_xfb_copies_ + frame_tex_copies_)
-                  << " parsed-xfb-copy-exec=" << frame_xfb_copies_
-                  << " parsed-texture-copy-exec=" << frame_tex_copies_
-                  << " present-only=" << (chunk.present_only ? 1 : 0)
-                  << " present-request="
-                  << (chunk.present_swap_chain ? 1 : 0)
-                  << " present-submitted=" << (present_swap_chain ? 1 : 0)
-                  << " requested-xfb=0x" << std::hex
-                  << chunk.displayed_xfb_addr
-                  << " selected-xfb=0x"
-                  << (selected_xfb != nullptr ? selected_xfb->guest_addr : 0u)
-                  << std::dec
-                  << " selected-serial="
-                  << (selected_xfb != nullptr ? selected_xfb->copy_serial : 0u)
-                  << " global-xfb-copies="
-                  << stat_xfb_copies_.load(std::memory_order_relaxed)
-                  << " producer-wait-us=" << (chunk.producer_wait_ns / 1000u)
-                  << " pe-classified-events="
-                  << chunk.preclassified_pe_events.size()
-                  << " pe-rendered-events=" << chunk.pe_events.size()
-                  << '\n';
-    }
 
-    if (trace_xfb_causal_deferred_frame(frame_index_)) {
-        if (deferred_xfb_causal_count_ < deferred_xfb_causal_.size()) {
-            DeferredXfbCausalRecord& record =
-                deferred_xfb_causal_[deferred_xfb_causal_count_++];
-            record.frame_index = frame_index_;
-            record.fifo_bytes = fifo_size;
-            record.fifo_complete = pending_fifo_.empty();
-            record.copy_exec_count = frame_xfb_copies_ + frame_tex_copies_;
-            record.xfb_copy_count = frame_xfb_copies_;
-            record.texture_copy_count = frame_tex_copies_;
-            record.present_only = chunk.present_only;
-            record.present_request = chunk.present_swap_chain;
-            record.present_submitted = present_swap_chain;
-            record.selected_xfb =
-                selected_xfb != nullptr ? selected_xfb->guest_addr : 0u;
-            record.selected_serial =
-                selected_xfb != nullptr ? selected_xfb->copy_serial : 0u;
-            record.global_xfb_copies =
-                stat_xfb_copies_.load(std::memory_order_relaxed);
-            record.pe_classified_events = chunk.preclassified_pe_events.size();
-            record.pe_rendered_events = chunk.pe_events.size();
-        } else {
-            ++deferred_xfb_causal_dropped_;
-        }
-    }
 
-    // frame_time_sample_ is included so a bounded sample reports what it measured. Without it the
-    // sampled frame accumulates every per-draw field and prints nothing, because frame_profile_enabled
-    // covers only the two intrusive flags. Nothing changes unless GALAXY_GX_FRAME_TIMING_SAMPLE >= 2.
-    //
-    // Field trustworthiness on a sampled frame:
-    //   - Always valid: total-us, parse-us, submit-us, begin-*-us (per-frame reads are
-    //     unconditional), and the clock-free counters: flush-calls, pso-resolutions,
-    //     pso-route-early, pso-route-memo, pso-route-get.
-    //   - Valid because frame_time_detail_ is true on this frame: flush-us, flush-pso-us,
-    //     pso-get-us, pso-get-max-us, flush-*-us, vertex-load-us, draw-record-us, cached-vertex-*-us.
-    //   - Valid on a sampled frame: producer-wait-us, snapshot-us and dependency-scan-us. Their
-    //     start clock and measurement are both gated on `producer_time_detail`, which includes
-    //     `frame_gx_timing_sample_enabled`. On an ordinary frame these three are gated off and read 0.
-    //   - Exactly 0 on a sampled frame, by design and not as a measurement: the fifo-* `*-us` fields.
-    //     Per-command FIFO timing has its own gate, GALAXY_TRACE_GX_MICROPROFILE, because per-command
-    //     clock reads would charge the parser they measure. The fifo-* count fields stay valid, so a
-    //     0 in `fifo-command-us` here means "not timed", not "free".
-    if (frame_profile_enabled || frame_time_sample_) {
+    // [gx-frame-timing]: stall-traced frames over GALAXY_TRACE_GX_STALL_US (selected=1) and frames
+    // sampled by GALAXY_GX_FRAME_TIMING_SAMPLE (sample=1). The per-draw *-us fields are measured on
+    // those frames only (detail=1); fifo-*-us fields only with the stall trace (the parser profile).
+    if (trace_gx_stalls || frame_time_sample_) {
         const std::uint64_t total_us = elapsed_us(render_start, render_end);
-        // Wall-clock distance since the previously emitted frame line. `total-us` covers only the span
-        // this function owns (render_start to render_end), so alone it cannot tell a render thread busy
-        // for 22 ms inside a 155 ms frame from one busy for 22 ms inside a 22 ms frame. On the low-end
-        // machine every wait field on this line reads 0, while `[gx-queue-wait]` records the simulation
-        // thread blocked for long intervals against a small queue limit. Those cannot both describe a
-        // merely backlogged render thread, so its real period must be measured rather than inferred.
-        // Emitted frames only: on a sampled run the value averages over the sample interval, not a
-        // single frame.
+        // Wall-clock time since the previous emitted line: total-us covers only this function's span,
+        // so it cannot tell a busy render thread from an idle one. On a sampled run it spans the
+        // sample interval.
         std::uint64_t frame_interval_us = 0u;
         if (last_frame_timing_emit_valid_) {
             frame_interval_us = elapsed_us(last_frame_timing_emit_, render_start);
@@ -12818,41 +9485,23 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         const std::uint64_t parse_us = elapsed_us(parse_start, parse_end);
         const std::uint64_t submit_us = elapsed_us(parse_end, gpu_submit_end);
         const std::uint64_t producer_wait_us = chunk.producer_wait_ns / 1000u;
-        // Sampling is always on, so the printing side stays bounded. Otherwise every over-threshold
-        // frame would add a line to a routine recording. Explicit stats and stall runs, and microprofile
-        // windows, print as before. Routine runs get the same sample through the deferred stats ring.
-        if (trace_gx_stats || frame_microprofile_enabled_ ||
-            frame_time_sample_ ||
+        if (frame_time_sample_ ||
             total_us >= trace_gx_stall_threshold_us() ||
             producer_wait_us >= trace_gx_stall_threshold_us()) {
             std::ostringstream timing_message;
             timing_message << "[gx-frame-timing] frame=" << frame_index_
-                  // Why this frame printed. The line has two independent reasons, and they select different frames:
-                  //   selected=1 - total_us or producer-wait crossed GALAXY_TRACE_GX_STALL_US, a stall. These are
-                  //                the only frames a default run prints, so statistics over them describe the worst
-                  //                frames, not the session.
-                  //   sample=1   - a fixed-stride sample chosen by GALAXY_GX_FRAME_TIMING_SAMPLE. Periodic work may
-                  //                alias this stride, so stall rows are kept too.
-                  // A frame can be both. Filter on selected=0 for the unbiased set, and never mix the two when
-                  // averaging. This field comes first, because every later field is interpretable only once the
-                  // reader knows which population the row came from.
+                  // A frame can be both selected and sampled; selected=0 rows are the unbiased sample.
                   << " selected="
                   << ((total_us >= trace_gx_stall_threshold_us() ||
                        producer_wait_us >= trace_gx_stall_threshold_us())
                           ? 1
                           : 0)
                   << " sample=" << (frame_time_sample_ ? 1 : 0)
-                  << " profile=" << (frame_profile_enabled ? 1 : 0)
+                  << " profile=" << (trace_gx_stalls ? 1 : 0)
                   << " detail=" << (frame_time_detail_ ? 1 : 0)
                   << " fifo-bytes=" << fifo_size
                   << " total-us=" << total_us
-                  // Time since the previous emitted row, which can span many
-                  // rendered frames. It is not an exclusive idle interval and
-                  // cannot be compared with one frame's total to infer saturation.
                   << " frame-interval-us=" << frame_interval_us
-                  // Optional CPU duration beside wall time. Their gap includes
-                  // blocking and descheduling; it cannot attribute either cause
-                  // alone. Interpret only available samples at matched settings.
                   << " thread-cpu-us=" << frame_cpu_interval.value / 10u
                   << " thread-cpu-valid=" << (frame_cpu_interval.available ? 1 : 0)
                   << " thread-cycles=" << frame_cycles_interval.value
@@ -12891,8 +9540,6 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                   << " dirty-ranges=" << chunk.dirty_range_count
                   << " dirty-bytes=" << chunk.dirty_bytes
                   << " dirty-tex-evictions=" << dirty_texture_evictions
-                  << " dirty-dl-invalidations="
-                  << dirty_display_list_invalidations
                   << " dirty-decoded-vtx-invalidations="
                   << dirty_decoded_vertex_invalidations
                   << " draws=" << frame_draws_issued_
@@ -12917,34 +9564,12 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                   << " flush-pso-cycles-valid=" << (frame_flush_pso_cycles_valid_ ? 1 : 0)
                   << " pso-memo-hits=" << frame_pso_memo_hits_
                   << " pso-get-calls=" << frame_pso_get_calls_
-                  // No "early out" field here. frame_draws_issued_ counts only draws that entered on_draw or the
-                  // generic on_cached_draw_run_draw loop. The packet and simple paths count their draws through
-                  // pending_draw_batch_.draw_count and never touch frame_draws_issued_, so subtracting these
-                  // counters from it gives a meaningless number. The flush-level split is pso-route-early,
-                  // pso-route-memo and pso-route-get, which are counted per flush_draw_state call.
                   << " pso-get-us=" << frame_pso_get_us_
                   << " pso-get-max-us=" << frame_pso_get_max_us_
-                  // Clock-free attribution. flush-calls is the denominator for
-                  // every *_us field. Within a frame, draws partition exactly
-                  // into early-out + memo + get(), and that sum must equal
-                  // pso-resolutions. All three are counted unconditionally, so
-                  // the partition holds whether or not timing was instrumented.
+                  // pso-route-early + pso-route-memo + pso-route-get = pso-resolutions. flush-us times the
+                  // flush bodies (detail=1 only, early reuse excluded); flush-total-us and flush-mean-us
+                  // come from ScopedFlushTiming's sampled whole calls.
                   << " flush-calls=" << frame_flush_calls_
-                  // Three distinct measurements of the same function; do not
-                  // divide one by another's denominator.
-                  //
-                  // `flush-us` times every body path only when detail=1. It
-                  // excludes early reuse and is zero/unavailable when detail=0.
-                  // For a detailed frame its body-path mean is flush-us divided
-                  // by (flush-calls - pso-route-early), if that count is nonzero.
-                  //
-                  // `flush-total-us` / `flush-mean-us` come from the sampler:
-                  // ScopedFlushTiming wraps the *call site* and times 1 call in
-                  // every kFlushTimingSampleStride, so they DO include early-out
-                  // calls and are the per-call cost to compare across
-                  // builds with the same sampling policy. The body sum and
-                  // sampled whole-call estimate overlap; do not add them or
-                  // infer a unique cause from their difference.
                   << " flush-total-us=" << frame_flush_total_us_
                   << " flush-timed-samples=" << frame_flush_timed_samples_
                   << " flush-mean-us="
@@ -12954,36 +9579,16 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                           : 0u)
                   << " pso-resolutions=" << frame_pso_resolutions_
                   << " pso-route-early=" << frame_pso_route_early_
-                  // Per-frame pipeline work actually performed. `pso-resolutions`
-                  // above counts *requests*; these count builds. Their difference
-                  // is requests served from memory, which is the partition that
-                  // separates "this frame is slow because it is compiling" from
-                  // "this frame is slow because it is waiting on a compile a
-                  // worker started". `pso-compiles = 0` on a frame with a large
-                  // `flush-pso-us` falsifies the wait reading and moves the cause
-                  // to the library-load or memo path.
+                  // Builds done this frame, against the resolutions requested above.
                   << " pso-compiles=" << frame_pso_compiles_
                   << " pso-library-loads=" << frame_pso_library_loads_
                   << " pso-shader-pairs=" << frame_shader_pair_compiles_
-                  // FXC microseconds this frame, beside `flush-pso-us` and
-                  // `pso-compiles`. This is the pair that settles whether a slow
-                  // frame is compiled work or waiting: a large `flush-pso-us`
-                  // with `pso-blob-us` near 0 is not FXC, and one with a large
-                  // `pso-blob-us` is. Counts alone cannot separate them.
                   << " pso-blob-us=" << frame_blob_compile_us_
                   << " pso-blobs-from-cache=" << frame_blobs_from_cache_
-                  // Derive the other two routes rather than storing them: the
-                  // memo and get() routes are already counted by
-                  // frame_pso_memo_hits_ and frame_pso_get_calls_, and a second
-                  // pair of members incremented at the same two sites would be
-                  // a duplicate field, not an independent measurement.
                   << " pso-route-memo=" << frame_pso_memo_hits_
                   << " pso-route-get=" << frame_pso_get_calls_
-                  // Batched replay path split. replay-generic-draws counts
-                  // individual draws that went through the per-packet fallback,
-                  // i.e. draws the two batched paths refused. The packet counter
-                  // is OFFERS, not acceptances: the parser's own
-                  // fifo-call-dl-replay-packet-run-count is the acceptance count.
+                  // replay-generic-draws: draws the batched paths refused. The packet and simple counts
+                  // are offers; fifo-call-dl-replay-packet-run-count counts accepted packet runs.
                   << " replay-prepared-batches="
                   << frame_replay_prepared_batches_
                   << " replay-packet-offers=" << frame_replay_packet_batches_
@@ -13000,8 +9605,6 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                   << " cached-vertex-upload-us=" << frame_cached_vertex_upload_us_
                   << " immutable-vertex-reused-bytes=" << renderer_.vertex_ring().reused_bytes()
                   << " immutable-vertex-copied-bytes=" << renderer_.vertex_ring().copied_bytes()
-                  // Entered-count for the immutable path. Read the two byte counters above only relative to this:
-                  // both are 0 both when the path was never entered and when every byte was a copy.
                   << " immutable-vertex-uploads=" << renderer_.vertex_ring().immutable_upload_calls()
                   << " draw-record-us=" << frame_draw_record_us_
                   << " efb-copy-us=" << frame_efb_copy_us_
@@ -13020,8 +9623,6 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                          sizeof(GxVertexOut)
                   << " decoded-vtx-cache-bytes="
                   << decoded_packet_run_cache_bytes_
-                  // Decoded GPU texture residency against its bound. Reported on the sampled frame line rather than
-                  // only at shutdown, so it is visible during a run.
                   << " decoded-tex-resident-bytes="
                   << texture_cache_.decoded_map_stats().resident_bytes
                   << " decoded-tex-budget-bytes="
@@ -13032,9 +9633,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                   << texture_cache_.decoded_map_stats().evicted_bytes
                   << " decoded-tex-entries="
                   << texture_cache_.decoded_map_stats().entries
-                  // EFB-copy destination cache, a resolution-scaled GPU pool. Its bytes are SCALED: each destination
-                  // is allocated at the internal EFB extent, so the size grows with efb_scale^2 while the budget
-                  // stays fixed. Reported next to the field before it, so one run covers both budgeted GPU pools.
+                  // EFB-copy destinations are allocated at the internal resolution (bytes grow with efb_scale^2).
                   << " efb-copy-dest-bytes="
                   << renderer_.efb_copy_dest_bytes()
                   << " efb-copy-dest-budget-bytes="
@@ -13122,227 +9721,12 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                   << frame_fifo_profile_.hw_noop_us
                   << '\n';
             std::cerr << timing_message.str();
-            if (frame_microprofile_enabled_ &&
-                frame_fifo_profile_.call_dl_count != 0) {
-                std::array<
-                    const FifoParserProfile::CallDisplayListEntry*,
-                    FifoParserProfile::kCallDisplayListEntryCapacity>
-                    call_dl_entries{};
-                std::size_t call_dl_entry_count = 0;
-                for (const auto& entry : frame_fifo_profile_.call_dl_entries) {
-                    if (entry.count != 0) {
-                        call_dl_entries[call_dl_entry_count++] = &entry;
-                    }
-                }
-                std::sort(
-                    call_dl_entries.begin(),
-                    call_dl_entries.begin() + call_dl_entry_count,
-                    [](const auto* lhs, const auto* rhs) {
-                        return lhs->us > rhs->us;
-                    });
-
-                const std::size_t limit =
-                    std::min<std::size_t>(call_dl_entry_count, 8);
-                for (std::size_t i = 0; i < limit; ++i) {
-                    const auto& entry = *call_dl_entries[i];
-                    std::cerr << std::dec
-                              << "[gx-dl-profile] frame=" << frame_index_
-                              << " rank=" << (i + 1u)
-                              << " addr=0x" << std::hex << entry.guest_addr
-                              << std::dec
-                              << " size=" << entry.byte_size
-                              << " calls=" << entry.count
-                              << " us=" << entry.us
-                              << " bytes=" << entry.bytes
-                              << " overflow="
-                              << frame_fifo_profile_.call_dl_profile_overflow
-                              << '\n';
-                }
-            }
         }
     }
 
-    // Two independent arms, not intersected:
-    //   * `trace_gx_stats` keeps its once-per-600-frames cadence.
-    //   * `frame_time_sample_` records every sampled frame. Gating it on the 600-frame cadence too
-    //     would make a short sample period emit too few rows to build a distribution.
-    // Output stays bounded: the sample period is set by the operator (period <= 1 disables sampling),
-    // the ring holds kDeferredGxStatsCapacity rows and reports drops, and nothing prints per frame.
-    // The rows are written once at shutdown by emit_deferred_gx_stats().
-    if ((trace_gx_stats && frame_index_ % 600 == 0) || frame_time_sample_) {
-        const std::uint64_t render_ns =
-            stat_render_ns_.exchange(0, std::memory_order_relaxed);
-        const std::uint64_t queue_wait_ns =
-            stat_queue_wait_ns_.exchange(0, std::memory_order_relaxed);
-        const std::uint64_t dependency_scan_ns =
-            stat_dependency_scan_ns_.exchange(0, std::memory_order_relaxed);
-        const std::uint64_t dependency_cache_hits =
-            stat_dependency_cache_hits_.exchange(
-                0,
-                std::memory_order_relaxed);
-        const std::uint64_t dependency_cache_misses =
-            stat_dependency_cache_misses_.exchange(
-                0,
-                std::memory_order_relaxed);
-        const std::uint64_t dependency_cache_invalidations =
-            stat_dependency_cache_invalidations_.exchange(
-                0,
-                std::memory_order_relaxed);
-        const std::uint64_t dependency_draw_run_cache_hits =
-            stat_dependency_draw_run_cache_hits_.exchange(
-                0,
-                std::memory_order_relaxed);
-        const std::uint64_t dependency_draw_run_cache_misses =
-            stat_dependency_draw_run_cache_misses_.exchange(
-                0,
-                std::memory_order_relaxed);
-        const std::uint64_t dependency_draw_run_cache_evictions =
-            stat_dependency_draw_run_cache_evictions_.exchange(
-                0,
-                std::memory_order_relaxed);
-        const std::uint64_t snapshot_ns =
-            stat_snapshot_ns_.exchange(0, std::memory_order_relaxed);
-        const std::uint64_t snapshot_bytes =
-            stat_snapshot_bytes_.exchange(0, std::memory_order_relaxed);
-        const std::uint64_t snapshot_ranges =
-            stat_snapshot_ranges_.exchange(0, std::memory_order_relaxed);
-        const std::uint64_t dirty_ranges =
-            stat_dirty_ranges_.exchange(0, std::memory_order_relaxed);
-        const std::uint64_t dirty_bytes =
-            stat_dirty_bytes_.exchange(0, std::memory_order_relaxed);
-        const std::uint64_t dirty_texture_evictions_total =
-            stat_dirty_texture_evictions_.exchange(
-                0,
-                std::memory_order_relaxed);
-        const std::uint64_t dirty_display_list_invalidations_total =
-            stat_dirty_display_list_invalidations_.exchange(
-                0,
-                std::memory_order_relaxed);
-        DeferredGxStatsSample sample{};
-        sample.frame_index = frame_index_;
-        sample.total_draws = stat_draws_issued_;
-        sample.total_no_pso = stat_draws_no_pso_;
-        sample.frame_draws = frame_draws_issued_;
-        sample.frame_no_pso = frame_draws_no_pso_;
-        sample.xfb_copies = stat_xfb_copies_.load(std::memory_order_relaxed);
-        sample.tex_copies = stat_tex_copies_;
-        sample.specialized_hits = pipeline_cache_.specialized_hits();
-        sample.uber_fallbacks = pipeline_cache_.uber_fallbacks();
-        sample.has_latest_xfb = efb_copies_.latest() != nullptr;
-        sample.present = xfb_present_stats();
-        sample.stale_fallbacks = stat_xfb_present_stale_fallbacks_.load(
-            std::memory_order_relaxed);
-        sample.missing_fallbacks = stat_xfb_present_missing_fallbacks_.load(
-            std::memory_order_relaxed);
-        sample.stale_preserved = stat_xfb_present_stale_preserved_.load(
-            std::memory_order_relaxed);
-        sample.missing_preserved = stat_xfb_present_missing_preserved_.load(
-            std::memory_order_relaxed);
-        sample.render_ns = render_ns;
-        sample.queue_wait_ns = queue_wait_ns;
-        sample.dependency_scan_ns = dependency_scan_ns;
-        sample.dependency_cache_hits = dependency_cache_hits;
-        sample.dependency_cache_misses = dependency_cache_misses;
-        sample.dependency_cache_invalidations = dependency_cache_invalidations;
-        sample.dependency_draw_run_cache_hits =
-            dependency_draw_run_cache_hits;
-        sample.dependency_draw_run_cache_misses =
-            dependency_draw_run_cache_misses;
-        sample.dependency_draw_run_cache_evictions =
-            dependency_draw_run_cache_evictions;
-        sample.snapshot_ns = snapshot_ns;
-        sample.snapshot_bytes = snapshot_bytes;
-        sample.snapshot_ranges = snapshot_ranges;
-        sample.dirty_ranges = dirty_ranges;
-        sample.dirty_bytes = dirty_bytes;
-        sample.dirty_texture_evictions = dirty_texture_evictions_total;
-        sample.dirty_display_list_invalidations =
-            dirty_display_list_invalidations_total;
-        sample.palette_uploads = stat_palette_uploads_;
-        sample.inline_matrix_uploads = stat_inline_matrix_uploads_;
-        // Clock-free attribution for this sampled frame. These are the per-frame
-        // counters `flush_draw_state` already maintains unconditionally, so a
-        // routine sample carries them without any instrumentation cost and
-        // without the sampling bias that makes `[gx-frame-timing]` unusable for
-        // per-frame questions (it only prints frames that crossed the stall
-        // threshold). See DeferredGxStatsSample for the two ratios this enables.
-        sample.draws = frame_draws_issued_;
-        sample.draw_batches = frame_draw_batches_;
-        sample.flush_calls = frame_flush_calls_;
-        sample.pso_resolutions = frame_pso_resolutions_;
-        sample.pso_route_early = frame_pso_route_early_;
-        // The `get()` route is `frame_pso_get_calls_` and the memo route is
-        // `frame_pso_memo_hits_`; the `pso-route-memo` / `pso-route-get` names
-        // exist only in the `[gx-frame-timing]` printer.
-        sample.pso_route_memo = frame_pso_memo_hits_;
-        sample.pso_route_get = frame_pso_get_calls_;
-        // The *_ns fields above are exchanged from atomics that only accumulate
-        // under trace_gx_stats/stalls; they legitimately read 0 on a routine
-        // sample. Carry them anyway so an explicitly traced run gets the same
-        // row shape and the two runs stay directly comparable.
-        sample.flush_pso_ns = frame_flush_pso_us_ * 1000u;
-        sample.vertex_load_ns = frame_vertex_load_us_ * 1000u;
-        sample.cached_vertex_upload_ns = frame_cached_vertex_upload_us_ * 1000u;
-        sample.draw_record_ns = frame_draw_record_us_ * 1000u;
-        // Store whenever this frame was chosen as a sample frame, and let the ring decide how to fit it.
-        //
-        // `frame_time_sample_` is true once per GALAXY_GX_FRAME_TIMING_SAMPLE period, not on every frame.
-        // It is `frame_time_detail_` that is true on every frame, so the per-draw clocks do not alias.
-        // Do not add a period-derived stride here: it would compose with the period instead of replacing
-        // it. The period already bounds the row rate.
-        //
-        // The period does not bound the ring. Capacity is kDeferredGxStatsCapacity (128) rows, so a short
-        // period overflows within a long session. The reservoir path below keeps the retained rows a
-        // uniform draw over the whole session at any period.
-        if (frame_time_sample_) {
-            ++deferred_gx_stats_seen_;
-            if (deferred_gx_stats_count_ < deferred_gx_stats_.size()) {
-                deferred_gx_stats_[deferred_gx_stats_count_++] = sample;
-            } else {
-                // Reservoir sampling: replace a uniformly chosen existing row instead of discarding this one.
-                //
-                // Keeping the first capacity rows would describe only the opening of a session, because slow
-                // windows arrive after scene changes and a front-loaded ring never sees them.
-                //
-                // Algorithm R over a fixed-size array: for the N-th sample (N 1-based), keep it with probability
-                // capacity/N by choosing a uniform index in [0, N). If that index is inside the ring, it
-                // overwrites that row; otherwise the sample is dropped. Each retained row is then a uniform draw
-                // from the whole session, at fixed memory and two integer ops per stored sample.
-                //
-                // The generator is a plain xorshift64*, held per backend: this runs on the render thread, so
-                // there is no shared state and no libc rand (which would lock). Determinism is also useful: the
-                // same session shape yields the same rows.
-                std::uint64_t rng = deferred_gx_stats_rng_;
-                rng ^= rng >> 12;
-                rng ^= rng << 25;
-                rng ^= rng >> 27;
-                deferred_gx_stats_rng_ = rng;
-                const std::uint64_t index =
-                    (rng * 2685821657736338717ull) % deferred_gx_stats_seen_;
-                if (index < deferred_gx_stats_.size()) {
-                    deferred_gx_stats_[static_cast<std::size_t>(index)] = sample;
-                }
-                // No stderr write on this thread: render_frame_on_thread is the
-                // critical path and redirected stderr can block. That rule is why
-                // emit_deferred_gx_stats() exists as a separate shutdown-time dump.
-                if (deferred_gx_stats_dropped_ == 0u) {
-                    deferred_gx_stats_first_drop_frame_ = frame_index_;
-                }
-                ++deferred_gx_stats_dropped_;
-            }
-        }
-        stat_palette_uploads_ = 0;
-        stat_inline_matrix_uploads_ = 0;
-    }
-
-    // Retire completed CPU-only persistence without waiting on disk I/O.
-    // Explicit diagnostic flushes and shutdown retain their synchronous policy.
+    // Retire completed pipeline-cache writes without waiting on disk I/O.
     pipeline_cache_.poll_disk_flush();
-    constexpr std::uint64_t kFlushInterval = 600;
-    if (shader_cache_periodic_flush_enabled() &&
-        frame_index_ % kFlushInterval == 0) {
-        pipeline_cache_.flush_disk();
-    } else if (pipeline_cache_.has_unsaved_records()) {
+    if (pipeline_cache_.has_unsaved_records()) {
         // Preserve learned configurations during play without serializing cache
         // validation, reflection or replacement writes with frame submission.
         static auto last_unsaved_flush = std::chrono::steady_clock::now();
@@ -13355,11 +9739,8 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     ReportPipelineCoverage();
 }
 
-// Routine, clock-free cache-coverage report. The per-miss `[gx-pso-miss]` line is gated on
-// GALAXY_TRACE_GX_STALL_US, so a session that built many pipelines below that threshold logged
-// almost nothing. This prints only when the on-disk coverage changes, so it costs one comparison
-// per frame. If `shader-records-on-disk` keeps tracking `shader-records`, the cache has reached
-// full coverage and the remaining misses are new configurations.
+// Pipeline-cache coverage, printed only when the on-disk coverage changes. While
+// shader-records-on-disk keeps up with shader-records, the remaining misses are new configurations.
 void GxBackend::ReportPipelineCoverage() {
     const PipelineCache::CompileStats stats = pipeline_cache_.compile_stats();
     if (stats.shader_records_on_disk == last_reported_shader_records_ &&
@@ -13378,9 +9759,6 @@ void GxBackend::ReportPipelineCoverage() {
               << " shader-pair-compiles=" << stats.shader_pair_compiles
               << " blobs-from-cache=" << stats.blobs_from_cache << '\n';
 }
-
-// flush_draw_state: build shader/render keys, upload constants, return PSO.
-// Returns nullptr when no pipeline is ready (draw is skipped).
 
 GxBackend::TextureBindingKey GxBackend::capture_texture_binding_key(
     std::uint8_t map_mask) const {
@@ -13440,10 +9818,6 @@ GxBackend::TextureHandleKey GxBackend::texture_handle_key(
         static_cast<std::uint8_t>(palettized ? tlut.format : TlutFormat{}),
         static_cast<std::uint16_t>(palettized ? tlut.tmem_offset : 0u),
         static_cast<std::uint8_t>(std::min<unsigned>(levels, 255u)),
-        // `TextureHandleKey::generated_mips` is std::uint8_t, and every sibling field above is explicitly
-        // cast. This one was a bare `1u : 0u` ternary, which MSVC rejects as a narrowing conversion in an
-        // initializer list (C2397). The runtime target builds at /W4 /WX. The value is 0 or 1 either way,
-        // so the cast changes only the diagnostic.
         static_cast<std::uint8_t>(generated_mips ? 1u : 0u),
     };
 }
@@ -13472,18 +9846,15 @@ void GxBackend::clear_frame_texture_binding_table_cache() {
     frame_texture_tables_.clear();
     frame_texture_binding_tables_.clear();
     frame_texture_handle_cache_.clear();
-    // Any code that drops these tables also invalidates the remembered binding
-    // key. Keeping the two together is what lets flush_draw_state trust a still
-    // valid key without re-deriving it from the BP register file on every draw:
-    // a key whose table no longer exists can never be answered from the cache.
+    // Dropping the tables invalidates the remembered binding key with them, so flush_draw_state can
+    // trust a valid key without re-deriving it from the BP registers.
     current_texture_binding_key_valid_ = false;
 }
 
 void GxBackend::clear_texture_binding_table_cache() {
     clear_frame_texture_binding_table_cache();
-    // The cross-frame cache is texture_handle_cache_, which the handle lookup below reads. Frame-local
-    // tables in frame_texture_binding_tables_ own CPU descriptors valid only for the current frame, so
-    // they cannot persist across frames.
+    // frame_texture_binding_tables_ own CPU descriptors valid for the current frame only;
+    // texture_handle_cache_ is the cache that persists across frames.
     dirty_texture_aliases_.clear();
 }
 
@@ -13636,11 +10007,8 @@ void GxBackend::prune_dirty_texture_binding_tables() {
 
 gpu::Pipeline* GxBackend::flush_draw_state(
     gpu::TopologyType primitive_topology_type) {
-    // Per-frame decision, hoisted out of the per-draw path.
     const bool time_detail = frame_time_detail_;
-    // Always-on, clock-free. This is the denominator for every *_us field below. Without it, a
-    // flush-us total cannot be attributed to a few slow flushes or many cheap ones, and those two
-    // readings call for different fixes. One increment on a per-frame member.
+    // Always counted: the denominator of every *_us field.
     ++frame_flush_calls_;
     const auto topology_key =
         static_cast<std::uint8_t>(primitive_topology_type);
@@ -13675,9 +10043,8 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         return current_pipeline_;
     }
 
-    // Intrusive/sample-frame body timing excludes the reuse decision. Ordinary
-    // play must not pay two diagnostic clock reads for every body path.
-    // Sampled whole-call timing remains separate and includes the preflight.
+    // Body timing, on detail frames only, excludes the reuse decision above; ScopedFlushTiming's
+    // sampled whole-call timing includes it.
     const auto flush_start = time_detail
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
@@ -13691,22 +10058,16 @@ gpu::Pipeline* GxBackend::flush_draw_state(
     const bool tev_c_dirty = (dirty & GxState::kDirtyTevConstants) != 0;
     const bool vs_c_dirty = (dirty & GxState::kDirtyVsConstants) != 0;
 
-    // sampled_texture_map_mask walks every TEV stage (a tev_order decode plus an IND_CMD read per
-    // stage). Per-object LOAD_INDX matrix uploads set kDirtyXfMatrices and nothing that can move the
-    // mask, so recompute it only when a flush carries kDirtyTev, or when the state reset dropped the
-    // memo.
+    // sampled_texture_map_mask walks every TEV stage; only kDirtyTev can move the mask (per-object
+    // matrix loads set kDirtyXfMatrices alone), so it is recomputed only then or after a reset.
     if (!current_texture_map_mask_valid_ || tev_dirty) {
         current_texture_map_mask_ = sampled_texture_map_mask(state_);
         current_texture_map_mask_valid_ = true;
     }
     const std::uint8_t texture_map_mask = current_texture_map_mask_;
-    // TextureBindingKey is a pure function of (map_mask, the sampled maps'
-    // TexMode0/1, TexImage0/3 and TexTlut words). All of those are BP registers
-    // that set GxState::kDirtyTex, and every path that drops the frame-local
-    // table cache also clears current_texture_binding_key_valid_ (see
-    // clear_frame_texture_binding_table_cache). Reuse the last capture unless
-    // one of those inputs is known to have moved; a busy replayed display list
-    // rebinds the same materials for thousands of consecutive draws.
+    // TextureBindingKey depends only on the map mask and the sampled maps' TexMode0/1, TexImage0/3
+    // and TexTlut words, all BP registers that set kDirtyTex, so the last key is reused until one of
+    // them changes (dropping the table cache also invalidates it).
     const bool texture_binding_key_fresh =
         current_texture_binding_key_valid_ &&
         dirty != ~0u &&
@@ -13717,9 +10078,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         ? current_texture_binding_key_
         : capture_texture_binding_key(texture_map_mask);
     // Lit translucents: blended (not additive) scene draws of the translucent phases while the ray
-    // tracer's lighting texture is ready, with map 7 free for it. The opaque draws after the screen
-    // capture (Rosalina) take it too: drawn after the composite, they kept the game's full light in a
-    // darker, traced scene.
+    // tracer's lighting texture is ready, with map 7 free for it.
     {
         const BlendMode b = state_.blend_mode();
         using motion::ScenePhase;
@@ -13729,8 +10088,8 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             b.dst_factor != BlendFactor::SrcColor && b.dst_factor != BlendFactor::InvSrcColor &&
             (rt_phase_ == static_cast<std::uint8_t>(ScenePhase::Xlu) ||
              rt_phase_ == static_cast<std::uint8_t>(ScenePhase::ListXlu));
-        // GALAXY_RT_LIT_LATE=1: the opaque draws after the screen capture take the light texture too. Off: it turned
-        // Rosalina see-through and dark (isoLL, build 90).
+        // GALAXY_RT_LIT_LATE=1: the opaque draws after the screen capture take the light texture too. Off by
+        // default: those draws turn see-through and dark with it.
         static const bool lit_late = read_env_u64("GALAXY_RT_LIT_LATE", 0u) != 0u;
         const bool late = lit_late && !b.blend_enable && !b.logic_op_enable && b.color_update &&
                           rt_phase_ == static_cast<std::uint8_t>(ScenePhase::AfterIndirect);
@@ -13812,8 +10171,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         if (fit && cpu_vs_constants_.sky_up_known != 0u) {
             // The level it is de-baked to: its baked light at the player's up, the exposure's reference (a white surface
             // facing the player's up shows white), the up taken into the model's space by its position matrix; at most
-            // its most lit facing's, at least a quarter of it. Its most lit facing's alone overexposed: Good Egg's
-            // hand-shaded stone path (fit 1.03 where its upward faces hold 0.52-0.77) went white.
+            // its most lit facing's, at least a quarter of it.
             float up[3];
             decode_octahedral(cpu_vs_constants_.sky_up, up);
             const unsigned row = std::min(state_.cp(cp::kMatrixIndexA) & 0x3Fu, 61u);
@@ -13860,14 +10218,11 @@ gpu::Pipeline* GxBackend::flush_draw_state(
     {
         // Perspective scene draws only: the view vector is the eye-space position. The material
         // follows the keys, which change only with their dirty bits.
-        // GALAXY_RT_DELIGHT=0 (diagnostics): the game's lit colour stays under traced lighting.
-        // Off by default: de-lighting measured no change to the light (Honeyhive, DELIGHT 0 vs 1 identical,
-        // hha / hhb) while its enhanced path clamped the TEV where the game wraps: Battlerock's chrome lost
-        // its dark bands (front x1.9, fc46) and Toy Time's screw heads turned white.
+        // GALAXY_RT_DELIGHT=1: the opaque draws are de-lit under traced lighting. Off by default: de-lighting
+        // does not change the traced light, and its enhanced path clamps the TEV where the game wraps.
         static const bool delight = read_env_u64("GALAXY_RT_DELIGHT", 0u) != 0u;
         // The traced lighting de-lights the opaque phases only (it relights what it traces); translucent
-        // draws (water, glass, seaweed) keep the game's lit colour: de-lit, Beach Bowl's lagoon came out
-        // 40,168,182 -> 82,230,234 with reflections off (measured wd41a), the seaweed nearly black.
+        // draws (water, glass, seaweed) keep the game's lit colour.
         using motion::ScenePhase;
         const bool opaque_phase = rt_phase_ == static_cast<std::uint8_t>(ScenePhase::OpaBeforeVolumeShadow) ||
                                   rt_phase_ == static_cast<std::uint8_t>(ScenePhase::OpaBeforeSilhouette) ||
@@ -13926,75 +10281,6 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         render_state_key_.primitive_topology != topology_key || render_state_key_.samples_log2 != samples_log2;
     render_state_key_.primitive_topology = topology_key;
     render_state_key_.samples_log2 = samples_log2;
-    if (lighting_census_enabled() && scene_phase_ && side_layer_ == kSceneLayer) [[unlikely]] {
-        static std::unordered_set<std::uint64_t> seen;
-        if (seen.insert(current_vs_hash_ * 31u ^ current_ps_hash_).second) {
-            const RtSurface surface = classify_rt_surface(vs_key_, ps_key_);
-            char line[2048];
-            int n = std::snprintf(line, sizeof(line),
-                "[light-census] frame=%llu class=%u feat=0x%02X env=%u enh=0x%08X blend=0x%08X topo=%u chans=%u "
-                "ctrl=%08X,%08X,%08X,%08X mat=%08X,%08X amb=%08X,%08X tg=",
-                static_cast<unsigned long long>(frame_index_), static_cast<unsigned>(surface.surface_class),
-                static_cast<unsigned>(surface.features), static_cast<unsigned>(surface.env_stage),
-                enhanced_lighting_material(vs_key_, ps_key_), render_state_key_.blend_bits, static_cast<unsigned>(topology_key),
-                static_cast<unsigned>(vs_key_.num_chans),
-                vs_key_.channel[0], vs_key_.channel[1], vs_key_.channel[2], vs_key_.channel[3],
-                state_.xf(xf::kMaterialColorBase), state_.xf(static_cast<std::uint16_t>(xf::kMaterialColorBase + 1u)),
-                state_.xf(xf::kAmbientColorBase), state_.xf(static_cast<std::uint16_t>(xf::kAmbientColorBase + 1u)));
-            for (unsigned i = 0; i < vs_key_.num_texgens && i < 8u && n < 1700; ++i) {
-                n += std::snprintf(line + n, sizeof(line) - n, "%08X,", vs_key_.texgen[i]);
-            }
-            n += std::snprintf(line + n, sizeof(line) - n, " st=");
-            for (unsigned s = 0; s < ps_key_.num_tev_stages && s < 16u && n < 1700; ++s) {
-                n += std::snprintf(line + n, sizeof(line) - n, "%06X/%06X/%03X,", ps_key_.stages[s].color_env,
-                                   ps_key_.stages[s].alpha_env, ps_key_.stages[s].order);
-            }
-            std::uint32_t mask = 0u;
-            for (unsigned c = 0; c < 4u; ++c) {
-                const XfChannelCtrl ctrl = decode_xf_channel_ctrl(vs_key_.channel[c]);
-                if (ctrl.lighting_enable) mask |= ctrl.light_mask;
-            }
-            for (unsigned l = 0; l < 8u && n < 1800; ++l) {
-                if ((mask & (1u << l)) == 0u && l != 0u) continue;
-                const auto w = [&](unsigned k) {
-                    return std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(0x600u + 16u * l + k)));
-                };
-                n += std::snprintf(line + n, sizeof(line) - n,
-                                   " L%u=%08X p(%.0f,%.0f,%.0f) d(%.2f,%.2f,%.2f) a(%.2f,%.2f,%.2f) k(%.2f,%.2f,%.2f)",
-                                   l, state_.xf(static_cast<std::uint16_t>(0x600u + 16u * l + 3u)), w(10), w(11),
-                                   w(12), w(13), w(14), w(15), w(4), w(5), w(6), w(7), w(8), w(9));
-            }
-            std::fprintf(stderr, "%s\n", line);
-        }
-    }
-    {
-        const BlendMode marks = state_.blend_mode();
-        // GALAXY_TRACE_DRAW_ORDER=N: every draw of chunk frames N to N+7 with its
-        // scene phase, layer, blend, depth and projection (diagnostics).
-        static const std::uint64_t trace_from = read_env_u64("GALAXY_TRACE_DRAW_ORDER", 0u);
-        if (trace_from != 0u && frame_index_ >= trace_from && (frame_index_ - trace_from) < 8u &&
-            frame_index_ < trace_from + 6000u) [[unlikely]] {
-            const ZMode z = state_.z_mode();
-            const auto xf_float = [this](std::uint16_t address) {
-                return std::bit_cast<float>(state_.xf(address));
-            };
-            std::fprintf(stderr,
-                         "[draw-order] frame=%llu scene=%d phase=%u layer=%u blend=%d src=%u dst=%u cu=%d au=%d "
-                         "z=%d/%d proj=%c vp=%.0f,%.0f,%.0f,%.0f stages=%u ind=%u chan=%08x\n",
-                         static_cast<unsigned long long>(frame_index_), scene_phase_ ? 1 : 0,
-                         static_cast<unsigned>(rt_phase_), static_cast<unsigned>(side_layer_),
-                         marks.blend_enable ? 1 : 0, static_cast<unsigned>(marks.src_factor),
-                         static_cast<unsigned>(marks.dst_factor), marks.color_update ? 1 : 0,
-                         marks.alpha_update ? 1 : 0, z.test_enable ? 1 : 0, z.update_enable ? 1 : 0,
-                         state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u ? 'P' : 'O',
-                         static_cast<double>(xf_float(xf::kViewportBase)),
-                         static_cast<double>(xf_float(static_cast<std::uint16_t>(xf::kViewportBase + 1u))),
-                         static_cast<double>(xf_float(static_cast<std::uint16_t>(xf::kViewportBase + 3u))),
-                         static_cast<double>(xf_float(static_cast<std::uint16_t>(xf::kViewportBase + 4u))),
-                         static_cast<unsigned>(state_.gen_mode().num_tev_stages),
-                         static_cast<unsigned>(state_.gen_mode().num_ind_stages), state_.xf(xf::kChannelCtrlBase));
-        }
-    }
     if (renderer_.rt_active()) {
         // Traced geometry: unblended triangles (no logic op) that write colour and depth under a
         // perspective projection. Shadow volumes, z-only passes and screen quads stay out, and so
@@ -14016,8 +10302,8 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             !blend.logic_op_enable && !blend.subtract && blend.color_update && blend.dst_factor == BlendFactor::One &&
             render_state_key_.cull != static_cast<std::uint8_t>(CullMode::All) &&
             state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u;
-        // Water and clear materials are models (indexed positions): particles (steam, smoke, haze with
-        // indirect warps) are direct-vertex sprites, and as water they turned into dark quads.
+        // Water and clear materials are models (indexed positions); particles (steam, smoke, haze with
+        // indirect warps) are direct-vertex sprites and never water.
         const VcdType position = state_.vertex_desc(0u).position.vcd;
         rt_sprite_eligible_ =
             topology_key == static_cast<std::uint8_t>(gpu::kTopologyTypeTriangle) && blend.blend_enable &&
@@ -14080,25 +10366,13 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         const auto pso_start = time_detail
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
-        // Explicit raw-cycle diagnostics for this PSO-resolution interval.
-        // Includes instrumentation executed inside the interval. Compare only
-        // matched operating points; cycle share alone does not identify waits.
+        // Thread cycles of this PSO resolution (GALAXY_GX_PSO_CYCLES), instrumentation included.
         const ThreadCounterSample pso_cycles_start = pso_cycles_enabled
             ? thread_cycle_count() : ThreadCounterSample{};
-        // Reject an unchanged key before touching the memo or the published
-        // map. A matrix-only flush uploads owed snapshots below without
-        // entering this key-resolution block. For other dirt with an unchanged
-        // key, the memo probe and the map probe below could only ever
-        // return the pipeline already in `current_pipeline_`: current_vs_hash_,
-        // current_ps_hash_, render_state_key_ and the topology are all
-        // matrix-independent, and the palette is uploaded below by its own
-        // stale flag rather than through the PSO.
-        //
-        // The memoized hash is tested first, because a differing hash proves
-        // the keys differ: that rejects the common "different material" case
-        // with one 64-bit compare instead of the full 32-byte key comparison.
-        // An equal hash still confirms the key exactly, so this cannot change
-        // which pipeline is resolved.
+        // An unchanged key resolves to current_pipeline_: the shader hashes, render state and topology
+        // do not depend on matrices, and the palette uploads by its own stale flag. The hash is
+        // compared first (a different hash proves a different key); an equal hash is confirmed
+        // against the whole key.
         const bool pso_key_changed =
             current_pipeline_ == nullptr ||
             current_pipeline_is_uber_ ||
@@ -14106,15 +10380,10 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             current_pso_key_hash_ != pso_key_hash ||
             !(current_pso_key_ == pso_key);
         if (pso_key_changed) {
-            // Reached the resolution decision at all. Counted unconditionally
-            // so the three routes below always sum to this and nothing is
-            // inferred from a possibly-uninstrumented sibling counter.
+            // Always counted, so the three routes sum to it.
             ++frame_pso_resolutions_;
-            // Resolve through the frame-scoped memo first. The same PsoKey
-            // recurs many times per frame (one material alternating with a
-            // few others), and the published map cannot change between
-            // begin_frame()'s drain_completions() and the last draw of the
-            // frame, so a hit here returns exactly what get() would return.
+            // The frame-scoped memo first: the published map cannot change between begin_frame()'s
+            // drain_completions() and the frame's last draw, so a hit returns what get() would.
             gpu::Pipeline* resolved = nullptr;
             // One indexed probe. The hash picks the victim; the exact key
             // confirms the hit, so a collision is a miss, never a wrong
@@ -14128,11 +10397,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             bool resolved_uber = false;
             if (memo_hit) {
                 resolved = memo_slot.pipeline;
-                // Always-on, not gated by time_detail: the memo hit ratio and
-                // the get() call count are the two numbers that decide whether
-                // this block is the frame's critical path, and reading them
-                // must not require the instrumentation that perturbs it. One
-                // increment on a per-frame member, no branch added.
+                // Always counted, like the get() calls.
                 ++frame_pso_memo_hits_;
             } else {
                 ++frame_pso_get_calls_;
@@ -14181,36 +10446,19 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         }
     }
     if (current_pipeline_ == nullptr) {
-        // The driver refused the pipeline in every form and no uber stand-in exists (the pipeline cache logged why):
-        // the draw is skipped. GALAXY_STRICT_PIPELINES=1 stops instead (tests that must see every draw).
-        static const bool strict = [] {
-            char value[8]{};
-            std::size_t length = 0;
-            return getenv_s(&length, value, sizeof(value), "GALAXY_STRICT_PIPELINES") == 0 && value[0] == '1';
-        }();
-        if (strict) {
-            throw std::runtime_error("[GxBackend] failed to create required graphics pipeline");
-        }
+        // The driver refused the pipeline in every form and no uber stand-in exists (the pipeline cache logged
+        // why): the draw is skipped.
         return nullptr;
     }
     current_pipeline_aux_ = current_pipeline_is_uber_ ? 0u
         : (render_state_key_.blend_bits & kRenderStateMotionTarget) != 0u ? 1u
         : (render_state_key_.blend_bits & kRenderStateReactiveTarget) != 0u ? 2u : 0u;
-    if (enhanced && lighting_census_enabled()) [[unlikely]] {
-        ++enhanced_flushes_;
-        enhanced_uber_flushes_ += current_pipeline_is_uber_ ? 1u : 0u;
-    }
 
-    // Snapshot the XF matrix palette only when the matrices changed (kDirtyXfMatrices). Re-uploading
-    // the full palette on every TEV or render-state change exhausts the per-frame matrix ring, which
-    // fails with "UploadRing 'matrix' exhausted". Draws whose matrices are unchanged reuse the last
-    // snapshot's GPU VA, which stays valid until begin_frame() rewinds the ring at the next frame.
-    // The in-shader palette base is 0 because the root SRV is bound at the snapshot's own VA.
-    //
-    // The snapshot is kMatrixPaletteWords * 4 = 6656 bytes (XF 0x0000-0x067F) and stays a whole-palette
-    // copy: a fresh ring allocation has no inherited contents, so its head and tail must be written
-    // even when a single 4-row matrix moved. `xf_palette_valid_` saves the allocation on draws where
-    // nothing moved; it does not shrink the copy.
+    // The XF matrix palette is snapshot only when the matrices changed (kDirtyXfMatrices); uploading it
+    // on every TEV or render-state change would exhaust the per-frame matrix ring. Other draws reuse
+    // the last snapshot's address, valid until begin_frame() rewinds the ring; the shader's palette
+    // base is 0 because the root SRV points at the snapshot. A snapshot is the whole palette
+    // (kMatrixPaletteWords * 4 = 6656 bytes), as a fresh ring allocation inherits nothing.
     const unsigned active_texgen_mask =
         vs_key_.num_texgens >= 8u
             ? 0xFFu
@@ -14275,18 +10523,15 @@ gpu::Pipeline* GxBackend::flush_draw_state(
     }
     if (palette_required &&
         (matrix_palette_stale_ || current_matrix_palette_ == 0)) {
-        // This block can run per draw. Keep clock sampling opt-in; routine
-        // upload counts/bytes below remain independent of detailed timing.
+        // Clock reads on detail frames only; the upload counts below are always kept.
         const auto matrix_start = time_detail
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
         const std::size_t palette_bytes =
             kMatrixPaletteWords * sizeof(std::uint32_t);
         UploadRing::Allocation mtx_alloc{};
-        // Dirty chunks decide whether the existing allocation is reusable. If not, the new immutable
-        // allocation needs the complete XF palette: its unwritten head and tail have no inherited valid
-        // contents, and patching a prior allocation could change already recorded draws. One complete
-        // copy replaces the former head, middle and tail copies.
+        // Dirty chunks decide whether the existing allocation is reusable. A new allocation takes the
+        // whole palette: it inherits nothing, and patching an earlier one would change recorded draws.
         const std::uint64_t palette_todo =
             (state_.xf_palette_dirty() | ~xf_palette_valid_) &
             xf_palette_chunk_mask;
@@ -14322,14 +10567,10 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             // complete image valid without computing a redundant dirty span.
             xf_palette_valid_ = xf_palette_chunk_mask;
             state_.clear_xf_palette_dirty(0u, GxState::kMatrixPaletteChunkCount - 1u);
-            ++stat_palette_uploads_;
             frame_matrix_upload_bytes_ += palette_bytes;
         }
-        // `palette_todo == 0` means every chunk is already valid in this frame
-        // slot, which also means a previous upload set `current_matrix_palette_`
-        // to a GPU address inside this frame's segment. A fresh allocation would
-        // burn 6.6 KB of the matrix ring only to store bytes that are already
-        // there, so reuse the address and skip it.
+        // Every chunk is valid in this frame slot, so current_matrix_palette_ already points into this
+        // frame's segment.
         matrix_palette_stale_ = false;
         if (time_detail) {
             frame_flush_matrix_us_ +=
@@ -14358,36 +10599,18 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         apply_uber_vs_key(vs_key_, *reinterpret_cast<GxVsConstants*>(vs_alloc.cpu));
         current_vs_constants_ = vs_alloc.gpu;
         inline_matrices_stale_ = false;
-        ++stat_inline_matrix_uploads_;
         if (time_detail) {
             frame_flush_constants_us_ +=
                 elapsed_us(constants_start, std::chrono::steady_clock::now());
         }
     }
 
-    // Refresh the texture descriptor table when any texture register changed.
-    //
-    // `tex_dirty` is the complete set of inputs this block consumes:
-    //   - `frame_bindings_dirty_` and `texture_bindings_dirty_` are its own two terms, and
-    //   - `texture_binding_changed` is true whenever the captured `TextureBindingKey` differs from
-    //     the remembered one. A capture is taken only when one of those two flags is set or
-    //     `kDirtyTex` moved, and `current_texture_binding_key_valid_` is false while those flags are
-    //     set. So "the key changed" can only be observed under `tex_dirty`. With `tex_dirty == false`,
-    //     the capture this flush would take is byte-identical to the applied one, and the probe below
-    //     can only return `current_texture_table_` and `current_sampler_table_` unchanged.
-    //
-    // `dirty_texture_aliases_` is the one piece of state that outlives a single flush.
-    // `prune_dirty_texture_binding_tables()` clears it, and the tables it prunes are keyed by the
-    // previous flush's binding key. It is still consulted when non-empty, even with `tex_dirty` false.
-    // Otherwise an EFB-alias copy followed by matrix-only flushes would accumulate entries for the rest
-    // of the frame.
-    //
-    // This guard is the steady state during gameplay, not an edge case. SMG re-uploads XF matrices per
-    // object via LOAD_INDX, so after the frame's first draw nearly every flush carries
-    // `kDirtyXfMatrices` alone. Without this guard, each draw would pay a binding-key hash and a map
-    // probe to re-derive a result that cannot have moved. `dirty == ~0u` is unreachable here: a
-    // full-dirty flush always leaves `dirty_needs_body` true, and the early-out above requires all
-    // three binding flags to be false.
+    // Texture tables are refreshed only when a texture input changed. tex_dirty covers every input:
+    // the binding key is captured only under kDirtyTex or the two binding flags, so otherwise the
+    // result would be the current tables. dirty_texture_aliases_ outlives a flush (cleared by
+    // prune_dirty_texture_binding_tables()) and is honoured even without tex_dirty, or an EFB-alias
+    // copy followed by matrix-only flushes would keep its entries for the rest of the frame. Most
+    // flushes carry kDirtyXfMatrices alone (the game loads matrices per object with LOAD_INDX).
     if (tex_dirty || !dirty_texture_aliases_.empty()) {
         const auto texture_start = time_detail
             ? std::chrono::steady_clock::now()
@@ -14399,11 +10622,10 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             prune_dirty_texture_binding_tables();
         }
 
-        // A draw that samples no map still gets real tables (null SRVs and
-        // the default samplers): the renderer skips null tables, which leaves
-        // the root tables undefined after a command-list reset, and an uber
-        // pixel shader samples every enabled map even when the combiner
-        // ignores it (an AMD iGPU page-faulted on exactly that).
+        // A draw that samples no map still gets real tables (null SRVs and the default samplers):
+        // the renderer skips null tables, leaving the root tables undefined after a command-list
+        // reset, and an uber pixel shader samples every enabled map even when the combiner ignores
+        // it, which faults on some GPUs.
         {
             bool binding_cache_hit = false;
             // Texture tables point into the frame-local shader-visible SRV
@@ -14585,16 +10807,13 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         GxPsConstants ps_c{};
         fill_ps_constants(state_, ps_c);
         ps_c.ztex_params[1] = 1.0f / static_cast<float>(renderer_.efb_scale());
-        // A glow's gain (output_flags bit 5): under physical light 1 (the game's additive effects as it drew them:
-        // their light reaches the scene as the engine's emitting geometry; raised to a light source's radiance times
-        // the exposure, b40-b71, their whole halos saturated into white blobs); the art model's glow exposure otherwise.
-        // The lighting texture's scale (bit 6).
+        // A glow's gain (output_flags bit 5): 1 under physical light (the game's additive effects as it drew them;
+        // their light reaches the scene as the engine's emitting geometry), the art model's glow exposure otherwise.
         ps_c.ztex_params[2] = (ps_key_.output_flags & 0x20u) == 0u ? 0.0f
                               : renderer_.rt_physical() ? 1.0f
                                                         : renderer_.rt_glow_exposure(glow_kind_ == 2u);
-        // The lighting texture's scale; 0 leaves a lit translucent unlit: a table light source (its own light) or a
-        // clear surface (glass, crystal, ice, water: the lit scene through it; lit again, Melty Molten's crystals went
-        // near black and Bowser's Star Reactor's fire bars dark).
+        // The lighting texture's scale (bit 6); 0 leaves a lit translucent unlit: a table light source (its own light)
+        // or a clear surface (glass, crystal, ice, water: the lit scene shows through it).
         bool takes_light = (ps_key_.output_flags & 0x40u) != 0u;
         float recolour = 0.0f;
         if (const RtMaterial* const m = rt_material(current_rt_material_);
@@ -14603,8 +10822,8 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             const bool clear = m->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Crystal) ||
                                m->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Water);
             takes_light = takes_light && !emits && !clear;
-            // `recolour`: a light source's sprite in the table's colour (the Observatory's walkway lamps: the game
-            // draws their glow blue, the table and the owner give them warm white), as RGB8 + 1, negated.
+            // `recolour`: a light source's sprite in the table's colour rather than the one the game draws its glow
+            // in, as RGB8 + 1, negated.
             if (emits && m->recolour) {
                 const auto byte = [](float v) {
                     return static_cast<std::uint32_t>(std::lround(std::clamp(v, 0.0f, 1.0f) * 255.0f));
@@ -14629,16 +10848,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         }
         apply_uber_ps_key(ps_key_, ps_c);
         if ((ps_key_.reserved & kPsKeyEnhancedLighting) != 0u) {
-            std::uint32_t column = 0u;
-            if (enhanced_split_ > 0.0f) {
-                // The viewport's left edge plus the fraction of its width, in render-target pixels.
-                const float wd = std::bit_cast<float>(state_.xf(xf::kViewportBase));
-                const float left = std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(xf::kViewportBase + 3u))) -
-                                   static_cast<float>(state_.efb_scissor().offset.x) - 342.0f - wd;
-                const float x = (left + enhanced_split_ * 2.0f * wd) * static_cast<float>(renderer_.efb_scale());
-                column = static_cast<std::uint32_t>(std::clamp(x, 1.0f, 65535.0f));
-            }
-            ps_c.uber_ps_header[3] = enhanced_ps_flags_ | column | enhanced_material_bits;
+            ps_c.uber_ps_header[3] = enhanced_ps_flags_ | enhanced_material_bits;
         }
 
         UploadRing::Allocation ps_alloc =
@@ -14704,7 +10914,6 @@ void GxBackend::flush_pending_draw_batch() {
         return;
     }
 
-    // Per-frame decision, hoisted out of the per-draw path.
     const bool time_detail = frame_time_detail_;
     const auto draw_record_start = time_detail
         ? std::chrono::steady_clock::now()
@@ -14714,7 +10923,7 @@ void GxBackend::flush_pending_draw_batch() {
         pending_stripe_vertices_.clear();
     }
     // A hidden draw stays out of the picture and of the traced scene, unless the engine traces it (clear glass whose
-    // game draw paints a fake reflection: hidden, its geometry the engine's glass; it was dropped here, b40-b57).
+    // game draw paints a fake reflection: hidden, its geometry the engine's glass).
     if (pending_draw_batch_.rt && (!pending_draw_batch_.hidden || pending_draw_batch_.traced)) {
         renderer_.rt_note_draw(pending_draw_batch_.call, pending_draw_batch_.rt_info);
     }
@@ -14731,8 +10940,6 @@ void GxBackend::flush_pending_draw_batch() {
     ++frame_draw_batches_;
     pending_draw_batch_ = {};
 }
-
-// FifoSink callbacks
 
 const GxBackend::VertexLayoutCacheEntry& GxBackend::cached_vertex_layout(
     std::uint8_t vtxfmt) const {
@@ -14782,20 +10989,14 @@ bool GxBackend::begin_cached_draw_run(
         throw std::runtime_error(
             "GxBackend: nested cached display-list draw run");
     }
-    if (frame_dependency_event_sink_ != nullptr ||
-        capture_draws_ || capture_texaddr_target() != 0u ||
-        trace_thp_draw_frame_enabled(frame_index_ + 1u)) {
-        return false;
-    }
-
     gpu::Topology topology{};
     gpu::TopologyType topology_type{};
     gx_topology_for_primitive(primitive, topology, topology_type);
 
     const EfbScissor efb_sc = state_.efb_scissor();
     const ScissorRect sc = efb_sc.rect;
-    // The legacy rejection counter also covers fully culled polygons.
-    // Lines and points remain visible under GX_CULL_ALL.
+    // The reject flag also covers fully culled polygons; lines and points stay visible under
+    // GX_CULL_ALL.
     cached_draw_run_scissor_reject_ =
         cull_all_suppresses_primitive(state_.gen_mode().cull, primitive) ||
         sc.x1 < sc.x0 || sc.y1 < sc.y0 ||
@@ -14876,9 +11077,7 @@ bool GxBackend::on_cached_simple_draw_run(
     std::size_t base_offset,
     std::span<const CachedDrawPacket> packets) {
     ++frame_replay_simple_batches_;
-    // A captured frame logs every draw: its runs take the per-draw path.
-    if (frame_dependency_event_sink_ != nullptr ||
-        packets.size() <= 1u || cached_draw_run_active_ || capture_draws_) {
+    if (packets.size() <= 1u || cached_draw_run_active_) {
         return false;
     }
 
@@ -14988,7 +11187,7 @@ bool GxBackend::on_cached_prepared_draw_run(
     std::uint8_t opcode,
     std::size_t source_draw_count) {
     ++frame_replay_prepared_batches_;
-    if (source_draw_count <= 1u || cached_draw_run_active_ || capture_draws_) {
+    if (source_draw_count <= 1u || cached_draw_run_active_) {
         return false;
     }
     if (prepared_payload.size() < 2u) {
@@ -15058,7 +11257,7 @@ bool GxBackend::on_cached_packet_draw_run(
     std::uint32_t total_indices,
     std::span<const std::uint16_t> precomputed_indices) {
     ++frame_replay_packet_batches_;
-    if (packets.size() <= 1u || cached_draw_run_active_ || capture_draws_) {
+    if (packets.size() <= 1u || cached_draw_run_active_) {
         return false;
     }
 
@@ -15194,13 +11393,11 @@ bool GxBackend::on_cached_packet_draw_run(
         cached_draw_run_batch_compatible_known_ = false;
     }
 
-    // Per-frame decision, hoisted out of the per-draw path.
     const bool time_detail = frame_time_detail_;
     const auto vertex_start = time_detail
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
     const bool decoded_cache_enabled =
-        decoded_vertex_cache_enabled() &&
         cache_token != 0u &&
         total_vertices != 0u &&
         static_cast<std::size_t>(total_vertices) * sizeof(GxVertexOut) <=
@@ -15307,8 +11504,7 @@ bool GxBackend::on_cached_packet_draw_run(
                         append_to_pending && cached_draw_run_primitive_indexed_,
                         entry.total_indices,
                         precomputed_indices,
-                        immutable_vertex_upload_reuse_enabled()
-                            ? &entry.upload_token : nullptr);
+                        &entry.upload_token);
                 }
                 if (time_detail) {
                     frame_cached_vertex_upload_us_ +=
@@ -15332,17 +11528,14 @@ bool GxBackend::on_cached_packet_draw_run(
                 base_offset,
                 packets,
                 primitive,
-                vtxfmt,
                 state_,
                 layout.desc,
                 layout.source_size,
                 frame_memory_,
                 parser_provided_totals ? total_vertices : 0u,
                 parser_provided_totals ? total_indices : 0u,
-                // guest_array_reads feeds only the decoded-vertex cache below.
-                // With that cache off (the default) the ranges would be
-                // accumulated per indexed attribute per vertex and then dropped,
-                // so do not ask for them at all.
+                // The guest array reads feed only the decoded-vertex cache, so
+                // they are collected only when this run can enter it.
                 decoded_cache_enabled,
                 reuse_packet_scratch ? &decoded_packet_vertex_scratch_ : nullptr);
         if (append_to_pending && pending_draw_batch_.resident) {
@@ -15369,10 +11562,8 @@ bool GxBackend::on_cached_packet_draw_run(
         if (reuse_packet_scratch &&
             decoded.vertices.capacity() <=
                 kDecodedPacketRunCacheMaxEntryBytes / sizeof(GxVertexOut)) {
-            // Bound retained capacity as well as requested size: vector growth
-            // may allocate more than the requested vertex count.
-            // Upload completed synchronously; the mapped GPU ring owns its copy.
-            // No cached entry borrows this vector and the next decode zeroes it.
+            // The ring holds the uploaded copy, so the vector returns to the scratch slot; the
+            // capacity bound applies because growth can exceed the requested size.
             decoded.vertices.swap(decoded_packet_vertex_scratch_);
         }
         DecodedPacketRunCacheEntry::GuestDependencySnapshots
@@ -15406,12 +11597,6 @@ bool GxBackend::on_cached_packet_draw_run(
                 entry.guest_array_reads.push_back(
                     VertexDecodeGuestRange{range.guest_base, range.size});
             }
-            entry.guest_array_page_mask = 0u;
-            for (const VertexDecodeGuestRange& dependency : entry.guest_array_reads) {
-                entry.guest_array_page_mask |= dependency_page_mask(
-                    normalize_dependency_guest_addr(dependency.guest_base), dependency.size);
-                if (entry.guest_array_page_mask == ~std::uint64_t{0}) break;
-            }
             entry.guest_array_snapshots = std::move(dependency_snapshots);
             if (auto existing =
                     decoded_packet_run_cache_.find(decoded_cache_key);
@@ -15428,9 +11613,8 @@ bool GxBackend::on_cached_packet_draw_run(
             }
             prune_decoded_packet_run_cache();
         } else if (decoded_cache_enabled) {
-            // A cache entry without a complete immutable dependency snapshot
-            // could become a false hit later. Do not retain an older entry for
-            // this key when the replacement cannot be validated.
+            // Without a complete dependency snapshot the replacement cannot be validated, so the
+            // older entry for this key is dropped rather than kept as a possible false hit.
             if (auto existing =
                     decoded_packet_run_cache_.find(decoded_cache_key);
                 existing != decoded_packet_run_cache_.end()) {
@@ -15564,7 +11748,7 @@ void GxBackend::on_cached_draw_run_draw(
             : std::chrono::steady_clock::time_point{};
         const VertexLayoutCacheEntry& layout = cached_vertex_layout(vtxfmt);
         vertex_loader_.load_with_layout(
-            cursor, primitive, vtxfmt, state_, layout.desc,
+            cursor, primitive, state_, layout.desc,
             layout.source_size, frame_memory_, renderer_.vertex_ring(),
             renderer_.index_ring());
         if (time_detail) {
@@ -15609,14 +11793,13 @@ void GxBackend::on_cached_draw_run_draw(
         cached_draw_run_batch_compatible_known_ = false;
     }
 
-    // Per-frame decision, hoisted out of the per-draw path.
     const bool time_detail = frame_time_detail_;
     const auto vertex_start = time_detail
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
     const VertexLayoutCacheEntry& layout = cached_vertex_layout(vtxfmt);
     const LoadedPrimitive prim = vertex_loader_.load_with_layout(
-        cursor, primitive, vtxfmt, state_, layout.desc, layout.source_size,
+        cursor, primitive, state_, layout.desc, layout.source_size,
         frame_memory_, renderer_.vertex_ring(), renderer_.index_ring(),
         append_to_pending && cached_draw_run_primitive_indexed_
             ? pending_draw_batch_.base_vertex
@@ -15715,23 +11898,12 @@ void GxBackend::on_draw(
     std::uint8_t vtxfmt,
     FifoCursor& cursor)
 {
-    static const std::uint64_t abort_after_draws =
-        read_env_u64("GALAXY_GX_ABORT_AFTER_DRAWS", 0u);
-    if (abort_after_draws != 0u &&
-        frame_draws_issued_ + frame_draws_no_pso_ >= abort_after_draws) {
-        throw GxFatalError(
-            "GX FIFO: excessive draw count in one frame",
-            cursor.command_offset,
-            0xFFu);
-    }
     display_copy_on_output_ = false;
     if (cached_draw_run_active_) {
         on_cached_draw_run_draw(primitive, vtxfmt, cursor);
         return;
     }
 
-    const unsigned draw_index = capture_draw_idx_;
-    // Per-frame decision, hoisted out of the per-draw path.
     const bool time_detail = frame_time_detail_;
     gpu::Topology topology{};
     gpu::TopologyType topology_type{};
@@ -15746,9 +11918,7 @@ void GxBackend::on_draw(
         sc.y0 >= static_cast<std::int32_t>(kEfbHeight);
     const bool cull_reject =
         cull_all_suppresses_primitive(state_.gen_mode().cull, primitive);
-    if (cull_reject || (scissor_reject && !capture_draws_ &&
-        capture_texaddr_target() == 0u &&
-        !trace_thp_draw_frame_enabled(frame_index_ + 1u))) {
+    if (cull_reject || scissor_reject) {
         const VertexLayoutCacheEntry& layout = cached_vertex_layout(vtxfmt);
         const std::uint16_t vertex_count = cursor.read_u16();
         cursor.take(
@@ -15786,7 +11956,7 @@ void GxBackend::on_draw(
             : std::chrono::steady_clock::time_point{};
         const VertexLayoutCacheEntry& layout = cached_vertex_layout(vtxfmt);
         vertex_loader_.load_with_layout(
-            cursor, primitive, vtxfmt, state_, layout.desc,
+            cursor, primitive, state_, layout.desc,
             layout.source_size, frame_memory_, renderer_.vertex_ring(),
             renderer_.index_ring());
         if (time_detail) {
@@ -15796,7 +11966,6 @@ void GxBackend::on_draw(
         return;
     }
 
-    // Map scissor from GX state.
     const gpu::Rect scissor_rect = gpu::rect(
         sc.x0 < 0 ? 0 : sc.x0, sc.y0 < 0 ? 0 : sc.y0, sc.x1 + 1, sc.y1 + 1);
 
@@ -15855,7 +12024,7 @@ void GxBackend::on_draw(
         : std::chrono::steady_clock::time_point{};
     const VertexLayoutCacheEntry& layout = cached_vertex_layout(vtxfmt);
     const LoadedPrimitive prim = vertex_loader_.load_with_layout(
-        cursor, primitive, vtxfmt, state_, layout.desc, layout.source_size,
+        cursor, primitive, state_, layout.desc, layout.source_size,
         frame_memory_, renderer_.vertex_ring(), renderer_.index_ring(),
         append_to_pending && primitive_indexed
             ? pending_draw_batch_.base_vertex
@@ -15896,37 +12065,8 @@ void GxBackend::on_draw(
         }
     }
 
-    const std::uint64_t current_trace_frame = frame_index_ + 1u;
-    if (trace_thp_draw_frame_enabled(current_trace_frame)) {
-        const std::uint64_t ordinal = frame_draws_issued_;
-        const std::uint64_t first_n = trace_thp_draw_first_n();
-        const bool force_log =
-            trace_thp_draw_all_enabled() && first_n != 0u &&
-            ordinal <= first_n;
-        const bool exact = looks_like_thp_yuv_draw(state_, primitive, prim);
-        if (exact || force_log ||
-            (trace_thp_draw_all_enabled() && first_n == 0u)) {
-            const unsigned trace_draw_index =
-                static_cast<unsigned>(
-                    std::min<std::uint64_t>(
-                        ordinal,
-                        static_cast<std::uint64_t>(
-                            std::numeric_limits<unsigned>::max())));
-            trace_thp_draw_state(
-                current_trace_frame,
-                trace_draw_index,
-                primitive,
-                prim,
-                state_,
-                ps_key_,
-                frame_memory_,
-                renderer_.vertex_ring(),
-                force_log);
-        }
-    }
 
-    // Build the vertex / index buffer views from the loaded primitive's ring
-    // offsets.  Both rings are persistently mapped upload buffers.
+    // Vertex and index views at the primitive's offsets in the (persistently mapped) rings.
     const gpu::VertexView vbv = gpu::vertex_view(
         renderer_.vertex_ring().gpu_base() + prim.vertex_byte_offset,
         prim.vertex_count * static_cast<std::uint32_t>(sizeof(GxVertexOut)), static_cast<std::uint32_t>(sizeof(GxVertexOut)));
@@ -15943,645 +12083,6 @@ void GxBackend::on_draw(
     call.index_view     = ibv;
     call.index_count    = prim.index_count;
 
-    // GALAXY_GX_TRACE_STALE_LIGHTS=1: lit draws whose spotlight or specular lights carry an
-    // out-of-range direction (an XF light object the game never gave one), once per texture and
-    // light.
-    static const bool trace_stale_lights = read_env_u64("GALAXY_GX_TRACE_STALE_LIGHTS", 0u) != 0u;
-    if (trace_stale_lights && (vs_key_.flags & 0x02u) != 0u) {
-        static std::set<std::pair<std::uint32_t, unsigned>> seen;
-        const std::uint32_t texture = state_.tex_image(state_.tev_order(0).texmap).guest_addr;
-        for (const std::uint32_t control : vs_key_.channel) {
-            if ((control & 0x202u) != 0x202u) continue;
-            const unsigned lights = ((control >> 2u) & 0xFu) | (((control >> 11u) & 0xFu) << 4u);
-            for (unsigned n = 0; n < 8u; ++n) {
-                if ((lights & (1u << n)) == 0u) continue;
-                const std::uint16_t base = static_cast<std::uint16_t>(xf::kLightsBase + 16u * n);
-                float dir[3]{};
-                bool stale = false;
-                for (unsigned i = 0; i < 3u; ++i) {
-                    dir[i] = std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(base + 13u + i)));
-                    stale = stale || !(std::abs(dir[i]) <= 1.0e18f);
-                }
-                if (stale && seen.emplace(texture, n).second) {
-                    std::fprintf(stderr,
-                        "[xf-stale-light] frame=%llu tex0=%08X light=%u dir=(%g,%g,%g) colour=%08X\n",
-                        static_cast<unsigned long long>(frame_index_), texture, n,
-                        static_cast<double>(dir[0]), static_cast<double>(dir[1]),
-                        static_cast<double>(dir[2]), state_.xf(static_cast<std::uint16_t>(base + 3u)));
-                }
-            }
-        }
-    }
-
-    TexImage tex0{};
-    TevOrder ord0{};
-    bool capture_texaddr_detail = false;
-    const bool texaddr_capture_enabled = capture_texaddr_target() != 0u;
-    if (capture_draws_ || texaddr_capture_enabled) {
-        ord0 = state_.tev_order(0);
-        tex0 = state_.tex_image(ord0.texmap);
-        capture_texaddr_detail =
-            capture_texaddr_log_enabled(tex0.guest_addr);
-    }
-    if (!capture_texaddr_detail && texaddr_capture_enabled) {
-        for (unsigned m = 0; m < kMaxTextureMaps; ++m) {
-            if (capture_texaddr_log_enabled(state_.tex_image(m).guest_addr)) {
-                capture_texaddr_detail = true;
-                break;
-            }
-        }
-    }
-
-    if (capture_composites_) {
-        bool effect_quad = false;
-        if (prim.vertex_count <= 8u) {
-            for (unsigned map = 0; map < kMaxTextureMaps; ++map) {
-                if ((current_texture_map_mask_ & (1u << map)) == 0u) continue;
-                const TexImage image = state_.tex_image(map);
-                effect_quad |=
-                    (image.width == 640u && image.height == 456u) ||
-                    (image.width == 320u && image.height == 228u) ||
-                    (image.width == 160u && image.height == 114u) ||
-                    (image.width == 80u && image.height == 57u) ||
-                    (image.width == 160u && image.height == 160u);
-            }
-        }
-        if (effect_quad) {
-            std::fprintf(stderr,
-                "[cap-composite] frame=%llu draw=%u pipeline=%p table=0x%llX "
-                "blend=%06X alpha=%06X depth=%02X scissor=%ld,%ld,%ld,%ld "
-                "viewport=%g,%g,%g,%g,%g,%g\n",
-                static_cast<unsigned long long>(frame_index_ + 1u), draw_index,
-                static_cast<void*>(call.pipeline),
-                static_cast<unsigned long long>(call.texture_table.ptr),
-                state_.bp(0x41u), state_.bp(bp::kAlphaCompare), state_.bp(0x40u),
-                call.scissor.left, call.scissor.top, call.scissor.right, call.scissor.bottom,
-                call.xf_viewport[0], call.xf_viewport[1], call.xf_viewport[2],
-                call.xf_viewport[3], call.xf_viewport[4], call.xf_viewport[5]);
-            for (const auto& [key, table] : frame_texture_tables_) {
-                if (table.ptr != call.texture_table.ptr) continue;
-                for (unsigned map = 0; map < kMaxTextureMaps; ++map) {
-                    if ((key.map_mask & (1u << map)) == 0u) continue;
-                    const TexImage image = state_.tex_image(map);
-                    std::fprintf(stderr,
-                        "[cap-composite-map] frame=%llu draw=%u map=%u "
-                        "addr=%08X resource=0x%llX srv=%u wh=%ux%u fmt=%u\n",
-                        static_cast<unsigned long long>(frame_index_ + 1u), draw_index,
-                        map, image.guest_addr,
-                        static_cast<unsigned long long>(key.resources[map]),
-                        key.srv_indices[map], key.widths[map], key.heights[map],
-                        static_cast<unsigned>(image.format));
-                }
-                break;
-            }
-        }
-    }
-
-    // Per-draw state line for the captured frame (GALAXY_GX_CAPTURE_FRAME),
-    // or for a specific texture address when diagnosing unstable frame slices.
-    if (capture_draws_ || capture_texaddr_detail) {
-        const unsigned log_draw_index =
-            capture_draws_ ? capture_draw_idx_++ : draw_index;
-        // Inspect the table key used to copy the actual descriptors. Do not
-        // call TextureCache::get here: that could change the binding under
-        // investigation. This reverse lookup runs only in requested captures.
-        if (capture_draws_) {
-            std::fprintf(stderr,
-                "[cap-binding] frame=%llu draw=%u table=0x%llX mask=0x%02X\n",
-                static_cast<unsigned long long>(frame_index_ + 1u),
-                log_draw_index,
-                static_cast<unsigned long long>(current_texture_table_.ptr),
-                static_cast<unsigned>(current_texture_map_mask_));
-            for (const auto& [key, table] : frame_texture_tables_) {
-                if (table.ptr != current_texture_table_.ptr) continue;
-                for (unsigned map = 0; map < kMaxTextureMaps; ++map) {
-                    if ((key.map_mask & (1u << map)) == 0u) continue;
-                    const TexImage image = state_.tex_image(map);
-                    std::fprintf(stderr,
-                        "[cap-binding-map] frame=%llu draw=%u map=%u "
-                        "addr=%08X resource=0x%llX srv=%u wh=%ux%u fmt=%u\n",
-                        static_cast<unsigned long long>(frame_index_ + 1u),
-                        log_draw_index, map, image.guest_addr,
-                        static_cast<unsigned long long>(key.resources[map]),
-                        key.srv_indices[map], key.widths[map], key.heights[map],
-                        static_cast<unsigned>(image.format));
-                }
-                break;
-            }
-        }
-        std::fprintf(stderr,
-            "[capdraw] %u prim=%u n=%u cmode=0x%06X/0x%06X acmp=0x%06X "
-            "zmode=0x%02X stages=%u psflags=0x%02X rs=0x%08X "
-            "tex0=%08X/%ux%u/f%u ten=%d\n",
-            log_draw_index,
-            static_cast<unsigned>(primitive), prim.vertex_count,
-            state_.bp(static_cast<std::uint8_t>(0x41)),
-            state_.bp(static_cast<std::uint8_t>(0x42)),
-            state_.bp(bp::kAlphaCompare),
-            state_.bp(static_cast<std::uint8_t>(0x40)),
-            static_cast<unsigned>(state_.gen_mode().num_tev_stages),
-            static_cast<unsigned>(ps_key_.flags),
-            render_state_key_.blend_bits,
-            tex0.guest_addr, tex0.width, tex0.height,
-            static_cast<unsigned>(tex0.format),
-            ord0.tex_enable ? 1 : 0);
-        if (capture_draws_) {
-            // EFB-pixel bounds of the draw and its full shading state, so
-            // pixels in the captured image map back to draws. Vertices are
-            // read from the upload ring: resident decoded-vertex-cache draws
-            // need GALAXY_GX_DECODED_VERTEX_CACHE=0.
-            float box[4]{1e30f, 1e30f, -1e30f, -1e30f};
-            void* ring_cpu = renderer_.vertex_ring().mapped();
-            if (ring_cpu != nullptr) {
-                const auto* verts = reinterpret_cast<const GxVertexOut*>(
-                    static_cast<const std::byte*>(ring_cpu) +
-                    prim.vertex_byte_offset);
-                float projection[4][4]{};
-                fill_vs_projection(state_, projection);
-                const auto vp = [this](unsigned i) {
-                    return std::bit_cast<float>(state_.xf(
-                        static_cast<std::uint16_t>(xf::kViewportBase + i)));
-                };
-                for (std::uint32_t v = 0; v < prim.vertex_count; ++v) {
-                    const unsigned row =
-                        std::min<unsigned>(verts[v].mtx_indices[0] & 0x3Fu, 61u);
-                    const float in[4]{verts[v].position[0], verts[v].position[1],
-                                      verts[v].position[2], 1.0f};
-                    float eye[4]{0.0f, 0.0f, 0.0f, 1.0f};
-                    for (unsigned r = 0; r < 3; ++r) {
-                        for (unsigned c = 0; c < 4; ++c) {
-                            eye[r] += std::bit_cast<float>(state_.xf(
-                                static_cast<std::uint16_t>((row + r) * 4u + c))) * in[c];
-                        }
-                    }
-                    float clip[4]{};
-                    for (unsigned r = 0; r < 4; ++r) {
-                        for (unsigned c = 0; c < 4; ++c) {
-                            clip[r] += projection[r][c] * eye[c];
-                        }
-                    }
-                    if (!(clip[3] > 1e-6f)) continue;
-                    const float x = vp(3u) - 342.0f + vp(0u) * clip[0] / clip[3];
-                    const float y = vp(4u) - 342.0f + vp(1u) * clip[1] / clip[3];
-                    box[0] = std::min(box[0], x);
-                    box[1] = std::min(box[1], y);
-                    box[2] = std::max(box[2], x);
-                    box[3] = std::max(box[3], y);
-                }
-            }
-            std::fprintf(stderr,
-                "[capbox] %u box=%.0f,%.0f,%.0f,%.0f vcd=%08X/%08X chans=%u "
-                "cc=%08X,%08X,%08X,%08X mat=%08X,%08X amb=%08X,%08X "
-                "texgens=%u dual=%u vsflags=%02X\n",
-                log_draw_index, box[0], box[1], box[2], box[3],
-                state_.cp(cp::kVcdLo), state_.cp(cp::kVcdHi),
-                static_cast<unsigned>(state_.gen_mode().num_color_chans),
-                state_.xf(xf::kChannelCtrlBase + 0u),
-                state_.xf(xf::kChannelCtrlBase + 1u),
-                state_.xf(xf::kChannelCtrlBase + 2u),
-                state_.xf(xf::kChannelCtrlBase + 3u),
-                state_.xf(xf::kMaterialColorBase + 0u),
-                state_.xf(xf::kMaterialColorBase + 1u),
-                state_.xf(xf::kAmbientColorBase + 0u),
-                state_.xf(xf::kAmbientColorBase + 1u),
-                static_cast<unsigned>(state_.gen_mode().num_texgens),
-                state_.xf(xf::kDualTexTrans),
-                static_cast<unsigned>(vs_key_.flags));
-            for (unsigned tg = 0; tg < state_.gen_mode().num_texgens &&
-                                  tg < kMaxTexGens; ++tg) {
-                std::fprintf(stderr, "[capbox]   texgen%u=%08X post=%08X\n", tg,
-                    state_.xf(static_cast<std::uint16_t>(xf::kTexGenBase + tg)),
-                    state_.xf(static_cast<std::uint16_t>(xf::kPostTexGenBase + tg)));
-            }
-            for (unsigned st = 0; st < state_.gen_mode().num_tev_stages; ++st) {
-                std::fprintf(stderr,
-                    "[capbox]   stage%u cenv=%06X aenv=%06X ord=%03X ksel=%08X ind=%08X\n",
-                    st, ps_key_.stages[st].color_env, ps_key_.stages[st].alpha_env,
-                    ps_key_.stages[st].order, ps_key_.stages[st].ksel,
-                    ps_key_.ind_cmd[st / 4u][st & 3u]);
-            }
-            const auto konst = state_.tev_konst_colors();
-            std::fprintf(stderr, "[capbox]   k=%08X,%08X,%08X,%08X nind=%u\n",
-                konst[0], konst[1], konst[2], konst[3],
-                static_cast<unsigned>(ps_key_.num_ind_stages));
-        }
-        {
-            const auto xf_float = [this](std::uint16_t address) {
-                return std::bit_cast<float>(state_.xf(address));
-            };
-            const ScissorRect scissor = state_.scissor();
-            const EfbScissor efb_scissor = state_.efb_scissor();
-            std::fprintf(stderr,
-                "[capdraw]   proj=%c vp=%.1f,%.1f,%.1f,%.1f,%.0f,%.0f "
-                "sc=%d,%d,%d,%d off=%d,%d pnmtx=%u\n",
-                state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u ? 'P' : 'O',
-                static_cast<double>(xf_float(xf::kViewportBase)),
-                static_cast<double>(xf_float(static_cast<std::uint16_t>(xf::kViewportBase + 1u))),
-                static_cast<double>(xf_float(static_cast<std::uint16_t>(xf::kViewportBase + 3u))),
-                static_cast<double>(xf_float(static_cast<std::uint16_t>(xf::kViewportBase + 4u))),
-                static_cast<double>(xf_float(static_cast<std::uint16_t>(xf::kViewportBase + 2u))),
-                static_cast<double>(xf_float(static_cast<std::uint16_t>(xf::kViewportBase + 5u))),
-                scissor.x0, scissor.y0, scissor.x1, scissor.y1,
-                efb_scissor.offset.x, efb_scissor.offset.y,
-                static_cast<unsigned>(state_.cp(cp::kMatrixIndexA) & 0x3Fu));
-        }
-        const auto regs = state_.tev_register_colors();
-        std::fprintf(stderr,
-            "[capdraw]   tev0 cenv=0x%06X aenv=0x%06X ord=0x%03X "
-            "ksel0=0x%08X chan0=0x%08X mat0=0x%08X amb0=0x%08X "
-            "prev=%08X r0=%08X r1=%08X r2=%08X k0=%08X\n",
-            ps_key_.stages[0].color_env,
-            ps_key_.stages[0].alpha_env,
-            ps_key_.stages[0].order,
-            ps_key_.stages[0].ksel,
-            state_.xf(static_cast<std::uint16_t>(0x100Eu)),
-            state_.xf(static_cast<std::uint16_t>(xf::kMaterialColorBase)),
-            state_.xf(static_cast<std::uint16_t>(xf::kAmbientColorBase)),
-            regs[0], regs[1], regs[2], regs[3],
-            state_.tev_konst_colors()[0]);
-        const bool capture_detail =
-            capture_tev_log_enabled(log_draw_index) ||
-            capture_texaddr_detail;
-        const bool capture_textures =
-            capture_detail || (capture_draws_ && capture_all_textures_);
-        if (capture_detail) {
-            const unsigned stages = state_.gen_mode().num_tev_stages;
-            for (unsigned s = 0; s < stages; ++s) {
-                std::fprintf(stderr,
-                    "[captev] draw=%u stage=%u cenv=0x%06X "
-                    "aenv=0x%06X order=0x%03X ksel=0x%08X\n",
-                    draw_index, s,
-                    ps_key_.stages[s].color_env,
-                    ps_key_.stages[s].alpha_env,
-                    ps_key_.stages[s].order,
-                    ps_key_.stages[s].ksel);
-            }
-            std::fprintf(stderr,
-                "[captev] channels=%08X,%08X,%08X,%08X "
-                "material=%08X,%08X ambient=%08X,%08X\n",
-                state_.xf(xf::kChannelCtrlBase + 0u),
-                state_.xf(xf::kChannelCtrlBase + 1u),
-                state_.xf(xf::kChannelCtrlBase + 2u),
-                state_.xf(xf::kChannelCtrlBase + 3u),
-                state_.xf(xf::kMaterialColorBase + 0u),
-                state_.xf(xf::kMaterialColorBase + 1u),
-                state_.xf(xf::kAmbientColorBase + 0u),
-                state_.xf(xf::kAmbientColorBase + 1u));
-            std::fprintf(stderr,
-                "[capxf] draw=%u numtex=%u numchan=%u vcdlo=%08X "
-                "mtxA=%08X mtxB=%08X dual=%08X\n",
-                draw_index,
-                static_cast<unsigned>(state_.gen_mode().num_texgens),
-                static_cast<unsigned>(state_.gen_mode().num_color_chans),
-                state_.cp(cp::kVcdLo),
-                state_.cp(cp::kMatrixIndexA),
-                state_.cp(cp::kMatrixIndexB),
-                state_.xf(xf::kDualTexTrans));
-            for (unsigned tg = 0; tg < state_.gen_mode().num_texgens &&
-                                  tg < kMaxTexGens; ++tg) {
-                std::fprintf(stderr,
-                    "[capxf] draw=%u texgen%u=%08X post%u=%08X\n",
-                    draw_index, tg,
-                    state_.xf(static_cast<std::uint16_t>(
-                        xf::kTexGenBase + tg)),
-                    tg,
-                    state_.xf(static_cast<std::uint16_t>(
-                        xf::kPostTexGenBase + tg)));
-                const unsigned shift = tg < 4u ? 6u + 6u * tg
-                                                : 6u * (tg - 4u);
-                const std::uint32_t indices = tg < 4u
-                    ? state_.cp(cp::kMatrixIndexA)
-                    : state_.cp(cp::kMatrixIndexB);
-                const unsigned tex_row =
-                    std::min<unsigned>((indices >> shift) & 0x3Fu, 61u);
-                const XfPostTexGen post = state_.post_tex_gen(tg);
-                const unsigned post_row = post.matrix_index & 0x3Fu;
-                for (unsigned r = 0; r < 3; ++r) {
-                    std::fprintf(stderr,
-                        "[capmtx] draw=%u texgen%u texrow%u=(%g,%g,%g,%g) "
-                        "postrow%u=(%g,%g,%g,%g)\n",
-                        draw_index, tg, tex_row + r,
-                        std::bit_cast<float>(state_.xf(
-                            static_cast<std::uint16_t>(
-                                (tex_row + r) * 4u + 0u))),
-                        std::bit_cast<float>(state_.xf(
-                            static_cast<std::uint16_t>(
-                                (tex_row + r) * 4u + 1u))),
-                        std::bit_cast<float>(state_.xf(
-                            static_cast<std::uint16_t>(
-                                (tex_row + r) * 4u + 2u))),
-                        std::bit_cast<float>(state_.xf(
-                            static_cast<std::uint16_t>(
-                                (tex_row + r) * 4u + 3u))),
-                        (post_row + r) & 0x3Fu,
-                        std::bit_cast<float>(state_.xf(
-                            static_cast<std::uint16_t>(
-                                xf::kPostMatricesBase +
-                                (((post_row + r) & 0x3Fu) * 4u) + 0u))),
-                        std::bit_cast<float>(state_.xf(
-                            static_cast<std::uint16_t>(
-                                xf::kPostMatricesBase +
-                                (((post_row + r) & 0x3Fu) * 4u) + 1u))),
-                        std::bit_cast<float>(state_.xf(
-                            static_cast<std::uint16_t>(
-                                xf::kPostMatricesBase +
-                                (((post_row + r) & 0x3Fu) * 4u) + 2u))),
-                        std::bit_cast<float>(state_.xf(
-                            static_cast<std::uint16_t>(
-                                xf::kPostMatricesBase +
-                                (((post_row + r) & 0x3Fu) * 4u) + 3u))));
-                }
-            }
-            for (unsigned light = 0; light < 2; ++light) {
-                const std::uint16_t base = static_cast<std::uint16_t>(
-                    xf::kLightsBase + light * 16u);
-                std::fprintf(stderr,
-                    "[caplight] draw=%u light%u "
-                    "%08X %08X %08X %08X  %08X %08X %08X %08X  "
-                    "%08X %08X %08X %08X  %08X %08X %08X %08X\n",
-                    draw_index, light,
-                    state_.xf(base + 0u), state_.xf(base + 1u),
-                    state_.xf(base + 2u), state_.xf(base + 3u),
-                    state_.xf(base + 4u), state_.xf(base + 5u),
-                    state_.xf(base + 6u), state_.xf(base + 7u),
-                    state_.xf(base + 8u), state_.xf(base + 9u),
-                    state_.xf(base + 10u), state_.xf(base + 11u),
-                    state_.xf(base + 12u), state_.xf(base + 13u),
-                    state_.xf(base + 14u), state_.xf(base + 15u));
-            }
-        }
-        if (capture_textures) {
-            for (unsigned m = 0; m < 8; ++m) {
-                const TexImage image = state_.tex_image(m);
-                const TexMode mode = state_.tex_mode(m);
-                std::fprintf(stderr,
-                    "[captex] draw=%u map=%u addr=%08X size=%ux%u fmt=%u "
-                    "wrap=%u/%u min=%u mag=%u lod=%u..%u bias=%d\n",
-                    draw_index, m, image.guest_addr,
-                    image.width, image.height,
-                    static_cast<unsigned>(image.format),
-                    static_cast<unsigned>(mode.wrap_s),
-                    static_cast<unsigned>(mode.wrap_t),
-                    static_cast<unsigned>(mode.min_filter),
-                    static_cast<unsigned>(mode.mag_filter),
-                    static_cast<unsigned>(mode.min_lod_x16),
-                    static_cast<unsigned>(mode.max_lod_x16),
-                    static_cast<int>(mode.lod_bias_x32));
-            }
-        }
-        if (capture_detail) {
-            void* ring_cpu = renderer_.vertex_ring().mapped();
-            if (ring_cpu != nullptr) {
-                const auto* verts = reinterpret_cast<const GxVertexOut*>(
-                    static_cast<const std::byte*>(ring_cpu) +
-                    prim.vertex_byte_offset);
-                const std::uint32_t vertex_limit =
-                    std::min<std::uint32_t>(prim.vertex_count, 16u);
-                // Matrix memory rows the vertices address (position/normal
-                // and per-vertex texture matrix indices), and the raw normals.
-                std::uint64_t rows_seen = 0u;
-                std::uint32_t normal_rows_seen = 0u;
-                for (std::uint32_t v = 0; v < prim.vertex_count; ++v) {
-                    const std::uint32_t pn = verts[v].mtx_indices[0] & 0x3Fu;
-                    rows_seen |= std::uint64_t{1} << std::min(pn, 61u);
-                    normal_rows_seen |= 1u << (pn & 31u);
-                    for (unsigned tg = 0; tg < 8u; ++tg) {
-                        const std::uint32_t word = tg < 3u ? verts[v].mtx_indices[0]
-                            : tg < 7u ? verts[v].mtx_indices[1] : verts[v].mtx_indices[2];
-                        const unsigned shift = tg < 3u ? 8u + 8u * tg : tg < 7u ? 8u * (tg - 3u) : 0u;
-                        const std::uint32_t row = (word >> shift) & 0xFFu;
-                        if (row != 0u) rows_seen |= std::uint64_t{1} << std::min(row, 61u);
-                    }
-                }
-                for (unsigned row = 0; row < 62u; ++row) {
-                    if ((rows_seen & (std::uint64_t{1} << row)) == 0u) continue;
-                    for (unsigned r = 0; r < 3u; ++r) {
-                        const auto w = [this, row, r](unsigned c) {
-                            return std::bit_cast<float>(state_.xf(
-                                static_cast<std::uint16_t>((row + r) * 4u + c)));
-                        };
-                        std::fprintf(stderr, "[caprow] draw=%u row%u+%u=(%g,%g,%g,%g)\n",
-                            draw_index, row, r, w(0), w(1), w(2), w(3));
-                    }
-                }
-                for (unsigned row = 0; row < 32u; ++row) {
-                    if ((normal_rows_seen & (1u << row)) == 0u) continue;
-                    const auto w = [this, row](unsigned c) {
-                        return std::bit_cast<float>(state_.xf(
-                            static_cast<std::uint16_t>(0x400u + 3u * row + c)));
-                    };
-                    std::fprintf(stderr, "[capnrm] draw=%u row%u=(%g,%g,%g / %g,%g,%g / %g,%g,%g)\n",
-                        draw_index, row, w(0), w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8));
-                }
-                for (std::uint32_t v = 0; v < vertex_limit; ++v) {
-                    std::fprintf(stderr, "[capvtx] draw=%u v%u nrm=(%g,%g,%g) col0=%08X mi=%08X/%08X\n",
-                        draw_index, v, verts[v].normal[0], verts[v].normal[1], verts[v].normal[2],
-                        verts[v].color0, verts[v].mtx_indices[0], verts[v].mtx_indices[1]);
-                }
-                for (unsigned light = 0; light < 8u; ++light) {
-                    const std::uint16_t base = static_cast<std::uint16_t>(xf::kLightsBase + light * 16u);
-                    const auto f = [this, base](unsigned k) {
-                        return std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(base + k)));
-                    };
-                    std::fprintf(stderr,
-                        "[caplight8] draw=%u light%u col=%08X cos=(%g,%g,%g) dist=(%g,%g,%g) "
-                        "pos=(%g,%g,%g) dir=(%g,%g,%g)\n",
-                        draw_index, light, state_.xf(static_cast<std::uint16_t>(base + 3u)),
-                        f(4u), f(5u), f(6u), f(7u), f(8u), f(9u), f(10u), f(11u), f(12u),
-                        f(13u), f(14u), f(15u));
-                }
-                const XfTexGen tg0 = state_.tex_gen(0);
-                const XfPostTexGen post0 = state_.post_tex_gen(0);
-                float capture_projection[4][4]{};
-                fill_vs_projection(state_, capture_projection);
-                const unsigned tex_row0 =
-                    std::min<unsigned>(
-                        (state_.cp(cp::kMatrixIndexA) >> 6u) & 0x3Fu, 61u);
-                const unsigned post_row0 = post0.matrix_index & 0x3Fu;
-                for (std::uint32_t v = 0; v < vertex_limit; ++v) {
-                    float coord[4]{0.0f, 0.0f, 1.0f, 1.0f};
-                    if (tg0.source_row == 0u) {
-                        coord[0] = verts[v].position[0];
-                        coord[1] = verts[v].position[1];
-                        coord[2] = verts[v].position[2];
-                    } else if (tg0.source_row == 1u) {
-                        coord[0] = verts[v].normal[0];
-                        coord[1] = verts[v].normal[1];
-                        coord[2] = verts[v].normal[2];
-                    } else if (tg0.source_row >= 5u &&
-                               tg0.source_row <= 12u) {
-                        const unsigned uv_index = tg0.source_row - 5u;
-                        coord[0] = verts[v].uv[uv_index][0];
-                        coord[1] = verts[v].uv[uv_index][1];
-                    }
-                    if (!tg0.input_form_abc1) {
-                        coord[2] = 1.0f;
-                    }
-                    float res[3]{0.0f, 0.0f, 1.0f};
-                    const unsigned tex_rows =
-                        tg0.generate_stq ? 3u : 2u;
-                    for (unsigned r = 0; r < tex_rows; ++r) {
-                        for (unsigned c = 0; c < 4; ++c) {
-                            res[r] += coord[c] *
-                                std::bit_cast<float>(state_.xf(
-                                    static_cast<std::uint16_t>(
-                                        (tex_row0 + r) * 4u + c)));
-                        }
-                    }
-                    if ((state_.xf(xf::kDualTexTrans) & 1u) != 0u) {
-                        if (post0.normalize) {
-                            const float len2 =
-                                res[0] * res[0] +
-                                res[1] * res[1] +
-                                res[2] * res[2];
-                            if (len2 > 0.0f) {
-                                const float inv_len = 1.0f / std::sqrt(len2);
-                                res[0] *= inv_len;
-                                res[1] *= inv_len;
-                                res[2] *= inv_len;
-                            }
-                        }
-                        float post_res[3]{};
-                        for (unsigned r = 0; r < 3; ++r) {
-                            const unsigned row = (post_row0 + r) & 0x3Fu;
-                            post_res[r] = std::bit_cast<float>(state_.xf(
-                                static_cast<std::uint16_t>(
-                                    xf::kPostMatricesBase +
-                                    row * 4u + 3u)));
-                            for (unsigned c = 0; c < 3; ++c) {
-                                post_res[r] += res[c] *
-                                    std::bit_cast<float>(state_.xf(
-                                        static_cast<std::uint16_t>(
-                                            xf::kPostMatricesBase +
-                                            row * 4u + c)));
-                            }
-                        }
-                        res[0] = post_res[0];
-                        res[1] = post_res[1];
-                        res[2] = post_res[2];
-                    }
-                    float sample_u = res[0];
-                    float sample_v = res[1];
-                    if (res[2] != 0.0f) {
-                        sample_u /= res[2];
-                        sample_v /= res[2];
-                    }
-                    const unsigned pos_row =
-                        std::min<unsigned>(
-                            verts[v].mtx_indices[0] & 0x3Fu, 61u);
-                    const float in_pos[4]{
-                        verts[v].position[0], verts[v].position[1],
-                        verts[v].position[2], 1.0f};
-                    float world_pos[4]{0.0f, 0.0f, 0.0f, 1.0f};
-                    for (unsigned r = 0; r < 3; ++r) {
-                        for (unsigned c = 0; c < 4; ++c) {
-                            world_pos[r] +=
-                                std::bit_cast<float>(state_.xf(
-                                    static_cast<std::uint16_t>(
-                                        (pos_row + r) * 4u + c))) *
-                                in_pos[c];
-                        }
-                    }
-                    float clip_pos[4]{};
-                    for (unsigned r = 0; r < 4; ++r) {
-                        for (unsigned c = 0; c < 4; ++c) {
-                            clip_pos[r] += capture_projection[r][c] *
-                                world_pos[c];
-                        }
-                    }
-                    const float inv_clip_w =
-                        clip_pos[3] != 0.0f ? 1.0f / clip_pos[3] : 0.0f;
-                    std::fprintf(stderr,
-                        "[capdraw]   v%u pos=(%g,%g,%g) uv0=(%g,%g) "
-                        "tex0=(%g,%g,%g)->(%g,%g) ndc=(%g,%g,%g) "
-                        "col0=%08X mi=0x%08X/%08X/%08X\n",
-                        v, verts[v].position[0], verts[v].position[1],
-                        verts[v].position[2], verts[v].uv[0][0],
-                        verts[v].uv[0][1],
-                        res[0], res[1], res[2], sample_u, sample_v,
-                        clip_pos[0] * inv_clip_w,
-                        clip_pos[1] * inv_clip_w,
-                        clip_pos[2] * inv_clip_w,
-                        verts[v].color0,
-                        verts[v].mtx_indices[0],
-                        verts[v].mtx_indices[1],
-                        verts[v].mtx_indices[2]);
-                }
-            }
-        }
-
-        if (draw_index == capture_readback_draw_) {
-            void* ring_cpu = renderer_.vertex_ring().mapped();
-            if (ring_cpu != nullptr) {
-                const auto* vertices = reinterpret_cast<const GxVertexOut*>(
-                    static_cast<const std::byte*>(ring_cpu) +
-                    prim.vertex_byte_offset);
-                float projection[4][4]{};
-                fill_vs_projection(state_, projection);
-                const float proj_raw[6]{
-                    std::bit_cast<float>(state_.xf(xf::kProjectionBase + 0u)),
-                    std::bit_cast<float>(state_.xf(xf::kProjectionBase + 1u)),
-                    std::bit_cast<float>(state_.xf(xf::kProjectionBase + 2u)),
-                    std::bit_cast<float>(state_.xf(xf::kProjectionBase + 3u)),
-                    std::bit_cast<float>(state_.xf(xf::kProjectionBase + 4u)),
-                    std::bit_cast<float>(state_.xf(xf::kProjectionBase + 5u))};
-                const ScissorRect target_scissor = state_.scissor();
-                std::fprintf(stderr,
-                    "[capxform] draw=%u proj=(%g,%g,%g,%g,%g,%g;t=%u) "
-                    "vp=(%g,%g,%g,%g,%g,%g) scissor=(%d,%d)-(%d,%d)\n",
-                    draw_index,
-                    proj_raw[0], proj_raw[1], proj_raw[2],
-                    proj_raw[3], proj_raw[4], proj_raw[5],
-                    state_.xf(xf::kProjectionBase + 6u),
-                    call.xf_viewport[0], call.xf_viewport[1],
-                    call.xf_viewport[2], call.xf_viewport[3],
-                    call.xf_viewport[4], call.xf_viewport[5],
-                    target_scissor.x0, target_scissor.y0,
-                    target_scissor.x1, target_scissor.y1);
-                const std::uint32_t vertex_limit =
-                    std::min<std::uint32_t>(prim.vertex_count, 16u);
-                for (std::uint32_t v = 0; v < vertex_limit; ++v) {
-                    const GxVertexOut& vertex = vertices[v];
-                    const unsigned row = std::min(
-                        vertex.mtx_indices[0] & 0x3Fu, 61u);
-                    float matrix[3][4]{};
-                    for (unsigned r = 0; r < 3; ++r) {
-                        for (unsigned c = 0; c < 4; ++c) {
-                            matrix[r][c] = std::bit_cast<float>(
-                                state_.xf(static_cast<std::uint16_t>(
-                                    (row + r) * 4u + c)));
-                        }
-                    }
-                    const float in[4]{
-                        vertex.position[0], vertex.position[1],
-                        vertex.position[2], 1.0f};
-                    float world[4]{0.0f, 0.0f, 0.0f, 1.0f};
-                    for (unsigned r = 0; r < 3; ++r) {
-                        for (unsigned c = 0; c < 4; ++c) {
-                            world[r] += matrix[r][c] * in[c];
-                        }
-                    }
-                    float clip[4]{};
-                    for (unsigned r = 0; r < 4; ++r) {
-                        for (unsigned c = 0; c < 4; ++c) {
-                            clip[r] += projection[r][c] * world[c];
-                        }
-                    }
-                    const float inv_w =
-                        clip[3] != 0.0f ? 1.0f / clip[3] : 0.0f;
-                    std::fprintf(stderr,
-                        "[capxform] v%u row=%u in=(%g,%g,%g) "
-                        "world=(%g,%g,%g) clip=(%g,%g,%g,%g) "
-                        "ndc=(%g,%g,%g)\n",
-                        v, row, in[0], in[1], in[2],
-                        world[0], world[1], world[2],
-                        clip[0], clip[1], clip[2], clip[3],
-                        clip[0] * inv_w, clip[1] * inv_w,
-                        clip[2] * inv_w);
-                }
-            }
-        }
-    }
 
     const std::size_t vertex_byte_end =
         prim.vertex_byte_offset +
@@ -16646,102 +12147,23 @@ void GxBackend::on_draw(
         pending_stripe_vertices_.insert(pending_stripe_vertices_.end(), draw_stripe_vertices_.begin(),
                                         draw_stripe_vertices_.end());
     }
-    if (capture_draws_ && draw_index == capture_readback_draw_) {
-        flush_pending_draw_batch();
-        capture_readback_recorded_ = renderer_.debug_copy_efb_to_readback();
-        std::cerr << "[efb-dump] after-draw=" << draw_index
-                  << " capture-recorded=" << capture_readback_recorded_ << '\n';
-    }
 }
 
 void GxBackend::on_efb_copy(std::uint32_t exec_command) {
     flush_pending_draw_batch();
     const EfbCopyParams params = state_.efb_copy(exec_command);
-    if (frame_dependency_event_sink_ != nullptr && params.copy_to_xfb) {
-        frame_dependency_event_sink_->xfb_copy(
-            params.dest_addr, exec_command);
-    }
     if (params.copy_to_xfb) {
         galaxy::timeline::record(galaxy::timeline::Event::XfbCopy, params.dest_addr);
-    }
-    const std::uint32_t effective_exec_command =
-        state_.bp(bp::kCopyExecute);
-    const bool raw_copy_to_xfb = (exec_command & (1u << 14u)) != 0u;
-    const bool effective_copy_to_xfb =
-        (effective_exec_command & (1u << 14u)) != 0u;
-    if (trace_xfb_causal_frame(frame_index_ + 1u)) {
-        std::cerr << "[xfb-causal-copy] frame=" << (frame_index_ + 1u)
-                  << " exec=0x" << std::hex << exec_command
-                  << " effective-exec=0x" << effective_exec_command
-                  << " dest=0x" << params.dest_addr << std::dec
-                  << " raw-copy-to-xfb-bit="
-                  << (raw_copy_to_xfb ? 1 : 0)
-                  << " effective-copy-to-xfb-bit="
-                  << (effective_copy_to_xfb ? 1 : 0)
-                  << " decoded-copy-to-xfb="
-                  << (params.copy_to_xfb ? 1 : 0)
-                  << " raw-classification-match="
-                  << (raw_copy_to_xfb == params.copy_to_xfb ? 1 : 0)
-                  << " effective-classification-match="
-                  << (effective_copy_to_xfb == params.copy_to_xfb ? 1 : 0)
-                  << '\n';
     }
     const bool time_copy = frame_time_detail_;
     const auto copy_start = time_copy
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
 
-    if (trace_efb_copy_enabled() || capture_draws_ || capture_composites_) {
-        std::cerr << std::dec
-                  << "[efb-copy] frame=" << frame_index_
-                  << " kind=" << (params.copy_to_xfb ? "xfb" : "tex")
-                  << " exec=0x" << std::hex << exec_command
-                  << " dst=0x" << params.dest_addr
-                  << std::dec
-                  << " stride=" << params.dest_stride
-                  << " src=(" << params.src_x << ',' << params.src_y
-                  << ' ' << params.src_width << 'x' << params.src_height
-                  << ") yscale=" << params.y_scale_raw
-                  << " scaley=" << (params.scale_y ? 1 : 0)
-                  << " fmt=" << static_cast<unsigned>(params.target_format)
-                  << " clear=" << (params.clear ? 1 : 0)
-                  << " f2f=" << static_cast<unsigned>(params.frame_to_field)
-                  << " yuv=" << (params.yuv ? 1 : 0)
-                  << " color-mask=" << state_.blend_mode().color_update
-                  << " alpha-mask=" << state_.blend_mode().alpha_update
-                  << " depth-mask=" << state_.z_mode().update_enable
-                  << " pixel-format=" << static_cast<unsigned>(state_.pe_control().pixel_format)
-                  << " phase=" << static_cast<unsigned>(rt_phase_) << " scene=" << (scene_phase_ ? 1 : 0)
-                  << '\n';
-    }
 
     if (params.copy_to_xfb) {
-        static const bool capture_before_xfb = [] {
-            char value[8]{};
-            std::size_t length = 0;
-            return getenv_s(&length, value, sizeof(value),
-                "GALAXY_GX_CAPTURE_EFB_BEFORE_XFB") == 0 && length > 1u && value[0] == '1';
-        }();
-        if (capture_before_xfb && capture_pixel_frame_requested(frame_index_ + 1u) &&
-            !capture_readback_recorded_) {
-            capture_readback_recorded_ = renderer_.debug_copy_efb_to_readback();
-            std::cerr << "[efb-pre-xfb-capture] frame=" << (frame_index_ + 1u)
-                      << " capture-recorded=" << capture_readback_recorded_
-                      << " dest=0x" << std::hex << params.dest_addr << std::dec
-                      << " src=" << params.src_x << ',' << params.src_y << ' '
-                      << params.src_width << 'x' << params.src_height
-                      << " stride=" << params.dest_stride << " clear=" << params.clear << '\n';
-        }
         XfbTexture* xfb = efb_copies_.acquire_xfb(params, frame_index_);
         if (xfb != nullptr) {
-            const bool capture_owned = capture_owned_xfb_requested(frame_index_ + 1u);
-            bool owned_efb_recorded = false;
-            if (capture_owned) {
-                renderer_.set_debug_capture_paths(
-                    capture_output_path("GALAXY_GX_CAPTURE_PPM", frame_index_ + 1u),
-                    capture_output_path("GALAXY_GX_CAPTURE_BACKBUFFER_PPM", frame_index_ + 1u));
-                owned_efb_recorded = renderer_.debug_copy_efb_to_readback();
-            }
             end_side_layer();
             mirror_opened_scene_ = false;
             renderer_.copy_efb_to_xfb(params, *xfb);
@@ -16773,70 +12195,17 @@ void GxBackend::on_efb_copy(std::uint32_t exec_command) {
             xfb->prerecorded_movie=render_movie_content_;
             xfb->safety_surround=render_safety_surround_;
             efb_copies_.mark_xfb_copied(*xfb, frame_index_);
-            if (capture_owned) {
-                const bool owned_xfb_recorded =
-                    renderer_.debug_copy_selected_xfb_to_readback(*xfb);
-                std::cerr << "[owned-xfb-capture] source-chunk=" << (frame_index_ + 1u)
-                    << " efb-recorded=" << owned_efb_recorded
-                    << " xfb-recorded=" << owned_xfb_recorded
-                    << " matched-copy-recorded=" << (owned_efb_recorded && owned_xfb_recorded)
-                    << " serial=" << xfb->copy_serial << " stamp=" << xfb->frame_stamp
-                    << " addr=0x" << std::hex << params.dest_addr << std::dec
-                    << " src=" << params.src_x << ',' << params.src_y << ' '
-                    << params.src_width << 'x' << params.src_height
-                    << " dest=" << xfb->width << 'x' << xfb->height
-                    << " scope=optional-copy-capture-not-performance\n";
-            }
             ++stat_xfb_copies_;
             ++frame_xfb_copies_;
             record_monotonic_cadence_sample(xfb_copy_production_cadence_);
         }
     } else {
-        static const bool capture_before_texture =
-            read_env_u64("GALAXY_GX_CAPTURE_EFB_BEFORE_TEXTURE_COPY", 0u) == 1u;
-        static const std::uint64_t capture_texture_format =
-            read_env_u64("GALAXY_GX_CAPTURE_EFB_BEFORE_TEXTURE_FORMAT", UINT64_MAX);
-        static const std::uint64_t capture_texture_source_x =
-            read_env_u64("GALAXY_GX_CAPTURE_EFB_BEFORE_TEXTURE_SOURCE_X", UINT64_MAX);
-        static const std::uint64_t capture_texture_source_y =
-            read_env_u64("GALAXY_GX_CAPTURE_EFB_BEFORE_TEXTURE_SOURCE_Y", UINT64_MAX);
-        // ..._DEST: only copies to that guest address (decimal); ..._SKIP: after that many of them.
-        static const std::uint64_t capture_texture_dest =
-            read_env_u64("GALAXY_GX_CAPTURE_EFB_BEFORE_TEXTURE_DEST", UINT64_MAX);
-        static std::uint64_t capture_texture_skip = read_env_u64("GALAXY_GX_CAPTURE_EFB_BEFORE_TEXTURE_SKIP", 0u);
-        const bool dest_matches = capture_texture_dest == UINT64_MAX || capture_texture_dest == params.dest_addr;
-        const bool skipped = dest_matches && capture_texture_dest != UINT64_MAX && capture_texture_skip != 0u;
-        if (skipped) {
-            --capture_texture_skip;
-        }
-        if (capture_before_texture && dest_matches && !skipped &&
-            (capture_texture_dest != UINT64_MAX || capture_pixel_frame_requested(frame_index_ + 1u)) &&
-            (capture_texture_format == UINT64_MAX ||
-             capture_texture_format == static_cast<std::uint64_t>(params.target_format)) &&
-            (capture_texture_source_x == UINT64_MAX || capture_texture_source_x == params.src_x) &&
-            (capture_texture_source_y == UINT64_MAX || capture_texture_source_y == params.src_y) &&
-            !capture_readback_recorded_) {
-            if (capture_texture_dest != UINT64_MAX) {
-                renderer_.set_debug_capture_paths(capture_output_path("GALAXY_GX_CAPTURE_PPM", frame_index_ + 1u), {});
-            }
-            capture_readback_recorded_ = renderer_.debug_copy_efb_to_readback();
-            std::cerr << "[efb-pre-texture-capture] frame=" << (frame_index_ + 1u)
-                      << " capture-recorded=" << capture_readback_recorded_
-                      << " dest=0x" << std::hex << params.dest_addr << std::dec
-                      << " src=" << params.src_x << ',' << params.src_y << ' '
-                      << params.src_width << 'x' << params.src_height
-                      << " stride=" << params.dest_stride
-                      << " format=" << static_cast<unsigned>(params.target_format)
-                      << " clear=" << params.clear << '\n';
-        }
-        ++stat_tex_copies_;
         ++frame_tex_copies_;
         // Depth-source copy when the PE pixel format is Z24 at copy time
         // (Dolphin BPStructs: is_depth_copy = zcontrol.pixel_format == Z24).
         const bool is_depth_copy = state_.pe_control().pixel_format == 3u;
         // A colour copy right after a display copy takes the picture it showed (with the 2D layer), as the
-        // console's single EFB holds it: a level start captured the scene behind the game's black cover there and
-        // showed it for two frames (DLSS, HUD at output resolution).
+        // console's single EFB holds it, not the scene the output-resolution 2D layer was drawn over.
         const bool from_display = display_copy_on_output_ && !is_depth_copy && !params.clear;
         display_copy_on_output_ = display_copy_on_output_ && !params.clear;
         const bool alias_updated = from_display
@@ -16844,12 +12213,9 @@ void GxBackend::on_efb_copy(std::uint32_t exec_command) {
             : renderer_.copy_efb_to_texture(params, texture_cache_, is_depth_copy);
         if (alias_updated) {
             ++frame_efb_alias_updates_;
-            // The same guest address may alternate between format-keyed GPU
-            // resources. BP texture registers need not be rewritten after a
-            // copy, so force the next draw to copy the latest alias SRV into
-            // any shader-visible frame table that actually referenced this
-            // alias. Reusing the same D3D12 texture updates its contents in
-            // place; an existing SRV table remains valid.
+            // One guest address can alternate between format-keyed GPU resources, and the game need not
+            // rewrite the BP texture registers after a copy, so the next draw refreshes every frame table
+            // that referenced this alias. A reused texture is updated in place; its SRV stays valid.
             mark_texture_binding_alias_dirty(params);
             texture_bindings_dirty_ = true;
         } else {
@@ -16860,8 +12226,7 @@ void GxBackend::on_efb_copy(std::uint32_t exec_command) {
     // GX clear-on-copy: the copy command's clear bit wipes the copy's source rect with the latched
     // copy-clear registers, honoring the PE write masks (Dolphin BPStructs BPMEM_TRIGGER_EFB_COPY:
     // ClearScreen(srcRect) with colorEnable = blendmode.colorupdate, alphaEnable =
-    // blendmode.alphaupdate, zEnable = zmode.updateenable). A full-target clear here wiped EFB content
-    // that later copies in the same frame still needed.
+    // blendmode.alphaupdate, zEnable = zmode.updateenable); later copies of the frame still read the rest.
     if (params.clear) {
         const BlendMode bm = state_.blend_mode();
         const ZMode zm = state_.z_mode();
@@ -16893,9 +12258,6 @@ void GxBackend::on_efb_copy(std::uint32_t exec_command) {
 
 void GxBackend::on_pe_finish() {
     flush_pending_draw_batch();
-    if (frame_dependency_event_sink_ != nullptr) {
-        frame_dependency_event_sink_->pe_finish();
-    }
     if (!frame_pe_callbacks_enabled_) {
         return;
     }
@@ -16914,8 +12276,7 @@ void GxBackend::on_pe_finish() {
             "GX PE_FINISH requires a native gx_pe_finish service");
     }
     frame_services_->gx_pe_finish(frame_services_->user);
-    // The required callback stays authoritative. The optional trace is capped so it can observe the
-    // signal without flooding stderr, since these callbacks fire on every GXDrawDone.
+    // The optional log is capped: these callbacks fire on every GXDrawDone.
     static int s_pe_done_logs = 0;
     if (frame_services_ != nullptr && frame_services_->log != nullptr &&
         s_pe_done_logs < 4) {
@@ -16958,9 +12319,6 @@ void GxBackend::on_pe_token(std::uint16_t token, bool interrupt) {
     flush_pending_draw_batch();
     if (token != 0u) {
         record_async_peek_fields_at_token(token);
-    }
-    if (frame_dependency_event_sink_ != nullptr) {
-        frame_dependency_event_sink_->pe_token(token, interrupt);
     }
     if (!frame_pe_callbacks_enabled_) {
         return;
@@ -17017,9 +12375,8 @@ void GxBackend::on_tlut_load() {
         return;
     }
     flush_pending_draw_batch();
-    // BP 0x64 (source) is latched by GxState; BP 0x65 (dest) triggers this. Without this transfer,
-    // every palettized (C4/C8/C14X2) texture decodes against a zeroed TLUT bank, which shows as black
-    // or garbage UI and fonts.
+    // BP 0x64 (source) is latched by GxState; BP 0x65 (destination) triggers the load into TMEM, which
+    // palettized (C4/C8/C14X2) textures decode against.
     if (frame_memory_ == nullptr) {
         return;
     }
@@ -17037,10 +12394,8 @@ void GxBackend::on_tlut_load() {
 
 void GxBackend::on_invalidate_vertex_cache() {
     flush_pending_draw_batch();
-    // GXInvalidateVtxCache invalidates the hardware vertex cache, not guest
-    // array memory. Decoded host vertices use dirty-write invalidation plus an
-    // exact dependency-byte check before every hit; clearing the whole cache
-    // here would discard otherwise-valid display-list reuse.
+    // GXInvalidateVtxCache invalidates the hardware vertex cache, not guest array memory. Decoded
+    // vertices are already invalidated by guest writes and checked byte for byte before each hit.
 }
 
 }  // namespace galaxy::gx

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// Overlap test of a physical guest range against GxBackend's sorted dirty ranges.
 #pragma once
 
 #include <algorithm>
@@ -7,10 +8,9 @@
 
 namespace galaxy::gx {
 
-// Ranges are nonempty physical dirty ranges, sorted and coalesced by GxBackend;
-// the caller normalizes the cached/uncached alias. Because the ranges do not
-// overlap, their ends increase monotonically, so only the first end past the
-// dependency start can overlap.
+// `ranges` are nonempty physical ranges, sorted and coalesced by GxBackend; the caller strips the
+// cached/uncached alias from `physical_address`. Disjoint sorted ranges have increasing ends, so only the first
+// range ending past the start can overlap.
 template <typename Range>
 [[nodiscard]] bool sorted_dirty_ranges_overlap(
     std::span<const Range> ranges,

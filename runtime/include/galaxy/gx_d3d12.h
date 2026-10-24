@@ -1,5 +1,8 @@
 #pragma once
 
+// The renderer API the host calls (D3D12 or Vulkan behind one GxBackend): window, GX FIFO submission and
+// presentation, the game's scene and light reports, and the native settings overlay.
+
 #include "galaxy/gx/frame_completion.h"
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx/pointer_response.h"
@@ -16,6 +19,8 @@
 
 namespace galaxy::gx {
 
+// render_frame's displayed_xfb_addr when the XFB the VI shows is unknown (the newest copy is presented) and when
+// the VI shows black.
 inline constexpr std::uint32_t kUnknownDisplayedXfbAddr = 0xFFFFFFFFu;
 inline constexpr std::uint32_t kNoDisplayedXfbAddr = 0xFFFFFFFEu;
 
@@ -30,8 +35,8 @@ struct HostPointerState {
     int client_width = 0;
     int client_height = 0;
     std::uint64_t absolute_sequence = 0;
-    // GetTickCount64 milliseconds of the coherent absolute-position publication identified by
-    // absolute_sequence. This is a host clock, not the Wii time base used by HID report deadlines.
+    // GetTickCount64 time (ms) at which the position of absolute_sequence was published; a host clock, not the
+    // Wii time base of HID report deadlines.
     std::uint64_t absolute_acquired_ms = 0;
     std::uint32_t debug_flags = 0;
     std::uint32_t debug_error = 0;
@@ -43,7 +48,7 @@ struct HostClientExtent {
     int height = 0;
 };
 
-// Read the actual native client area independently of mouse movement/focus.
+// The window's current client area, read directly rather than from the pointer state.
 [[nodiscard]] HostClientExtent current_host_client_extent() noexcept;
 
 // The picture shape selected by the aspect setting, latched each video frame: the window's client
@@ -66,22 +71,20 @@ enum class EfbPeekKind : std::uint8_t {
     Depth,
 };
 
-// Creates the Win32 window and the D3D12 device, swap chain, command queue, root signature, PSO and
-// upload buffers. Returns false on failure.
+// Creates the window and the renderer (device, swap chain, queues, root signature, pipelines, upload buffers).
+// Returns false on failure.
 bool initialize(int width, int height);
-// Why initialize failed, when the renderer knows (else empty): the player's error message.
+// The reason initialize failed, as shown to the player; empty when unknown.
 std::string startup_failure();
 
-// Records the game dump's content root (GamePaths::content_root). The native settings overlay reads
-// read-only UI assets from it (see galaxy/gx/game_asset_extract.h), so it can use the game's own art.
-// Call once, before the overlay is first shown. If unset or wrong, the overlay keeps its solid-color fallback.
+// The game dump's content root (GamePaths::content_root), from which the settings overlay reads the game's UI art
+// (game_asset_extract.h). Call once, before the overlay is first shown; without it the overlay draws solid colors.
 void set_native_settings_content_root(const std::string& utf8_path);
 
-// Parses accumulated GX FIFO bytes, issues D3D12 draw calls, and optionally presents. An empty capture
-// submits no GX work and may only request a cached-XFB present. memory and services resolve display-list
-// guest addresses and indexed vertex-array reads. A non-empty capture returns one monotonic completion
-// token; an empty capture returns an invalid token. An exact FIFO preclassification makes event-free
-// receipts immediately ready, while PE-bearing tokens keep exact fence and callback completion semantics.
+// Parses a captured GX FIFO, records its draws and optionally presents. `memory` and `services` resolve
+// display-list addresses and indexed vertex-array reads. An empty capture submits no GX work (at most a present
+// of the cached XFB) and returns an invalid token. Other tokens complete in submission order: at once for a
+// capture without a PE FINISH or TOKEN event, else after its GPU fence and PE callbacks.
 [[nodiscard]] FramePeCompletionToken render_frame(
     const std::byte* fifo_data,
     std::size_t fifo_size,
@@ -90,13 +93,12 @@ void set_native_settings_content_root(const std::string& utf8_path);
     bool present_swap_chain = true,
     std::uint32_t displayed_xfb_addr = 0);
 
-// Wait until the render queue and in-flight render chunks are fully idle.
+// Blocks until the render queue and every in-flight render chunk are idle.
 void wait_for_render_idle();
 
-// Wait for at most `timeout_ms` for this exact token. Returns true and consumes
-// it exactly once on completion; returns false without consuming it when the
-// slice expires. Renderer failures, stale tokens, and shutdown still hard-fail.
-// A zero timeout is a nonblocking probe.
+// Waits up to `timeout_ms` for `token`. Returns true and consumes the token on completion, false without
+// consuming it on timeout; a zero timeout polls. A renderer failure, a stale token or a stopped render thread
+// throws.
 [[nodiscard]] bool wait_for_frame_pe_completion_for(
     FramePeCompletionToken token,
     std::uint32_t timeout_ms);
@@ -112,12 +114,12 @@ void attach_scene_view(const float view[12], const float* up = nullptr, const ch
 // Simulation thread, at each SceneBegin: whether the renderer reads
 // draw-identity markers (frame interpolation or motion vectors are on).
 [[nodiscard]] bool draw_identity_wanted() noexcept;
-// Simulation thread: whether the game keeps clipped actors whose shadows can reach the view drawn (the ray tracer
-// lights the scene; GALAXY_RT_OFFSCREEN_CASTERS=0 never).
+// Simulation thread: whether the game keeps drawing clipped actors whose shadows can reach the view (while the ray
+// tracer lights the scene, unless GALAXY_RT_OFFSCREEN_CASTERS=0).
 [[nodiscard]] bool rt_shadow_casters_wanted() noexcept;
 // Simulation thread (BrightSun::control): the world direction towards the game's visible sun and
-// the distance of its model from the camera. The ray tracer lights the scene from it while it
-// keeps arriving.
+// the distance of its model from the camera. The ray tracer lights the scene from it while updates
+// keep arriving.
 void set_game_sun(const std::array<float, 3>& direction, float distance) noexcept;
 // The direction (and distance) when one arrived within `max_age_ms`.
 [[nodiscard]] bool game_sun(std::array<float, 3>& direction, std::uint64_t max_age_ms,
@@ -135,7 +137,7 @@ void set_traced_sun(const std::array<float, 3>& direction, bool present) noexcep
 // and gives it its finish.
 void set_star_core(const std::array<float, 3>& position, float scale) noexcept;
 [[nodiscard]] bool star_core(std::array<float, 3>& position, float& scale, std::uint64_t max_age_ms) noexcept;
-// How many have arrived.
+// Number of set_game_sun calls so far.
 [[nodiscard]] std::uint64_t game_sun_updates() noexcept;
 // Simulation thread: the game's lights as it loads them for drawing. A point light
 // (LightFunction::loadPointLightInfo: world position, colour 0-1, the distance at which its GX
@@ -176,17 +178,18 @@ struct GameLight {
 // The lights noted within `max_age_ms` (not black), at most `out.size()`; returns the count.
 std::size_t game_point_lights(std::span<GameLight> out, std::uint64_t max_age_ms) noexcept;
 std::size_t game_world_lights(std::span<GameLight> out, std::uint64_t max_age_ms) noexcept;
-// Simulation thread: one particle of a JPA stripe at `stream_offset` of the
-// live GX stream (GuestAddressSpace::gx_stream_position); its two strip
-// vertices follow. The next render_frame submission carries it.
+// Simulation thread: one particle of a JPA stripe at `stream_offset` bytes into the next submitted FIFO; its two
+// strip vertices follow. The next render_frame submission carries it.
 void attach_stripe_particle(std::size_t stream_offset, std::uint32_t particle, std::uint32_t age_lifetime,
                             std::uint8_t strip);
-// Simulation producer: the THP movie frame the game draws (movie_replacement.h); every later submission carries it
+// Simulation thread: the THP movie frame the game draws (movie_replacement.h); every later submission carries it
 // until the movie closes (frame -1).
 void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, std::uint32_t y, std::uint32_t u,
                         std::uint32_t v, std::uint32_t width, std::uint32_t height) noexcept;
 // Any thread: a replacement video's frames show for the open movie (its THP frames need no decode).
 [[nodiscard]] bool movie_replacement_showing() noexcept;
+// The grey (0 black to 1 white) of the borders around a fitted picture for the scene being drawn: the strap
+// screen's white backing as it fades.
 void set_safety_scene_surround(float intensity) noexcept;
 
 [[nodiscard]] bool peek_efb(
@@ -204,27 +207,25 @@ void set_safety_scene_surround(float intensity) noexcept;
     std::uint16_t token,
     std::uint32_t& value);
 
-// The native game computes the arrays indexed loads read (matrices, lights) in host byte order: before its first
-// frame, its host makes LOAD_INDX read them that way. Everything else the GPU reads stays big-endian.
+// The native game builds the arrays LOAD_INDX reads (matrices, lights) in host byte order; the host sets this
+// before the first frame. Everything else the GPU reads stays big-endian.
 void set_indexed_load_host_order(bool host_order) noexcept;
 
 void notify_guest_memory_write(
     std::uint32_t address,
     std::uint32_t size) noexcept;
 
-// Pump Win32 messages; call periodically from the guest execution loop.
+// Pumps window messages; the host's main loop calls it periodically.
 void pump_messages();
 [[nodiscard]] bool quit_requested() noexcept;
 
-// Polls the latest host pointer state for the runtime window. Normal play uses
-// client-area mouse messages; frame-time OS cursor polling is opt-in because it
-// can trail live WM_MOUSEMOVE coordinates on Remote Desktop.
+// The latest pointer state of the native window, from its client-area mouse messages and the OS cursor position.
 [[nodiscard]] HostPointerState poll_host_pointer_state() noexcept;
 [[nodiscard]] host::HostPointerTransitionPoll poll_host_pointer_transition(
     std::uint64_t after_sequence) noexcept;
 
-// Cold native settings overlay, drawn after the XFB blit and before Present. F1 is global while the native
-// window has focus. All changes enter through the renderer window thread's key-message path.
+// Native settings overlay, drawn after the XFB blit and before Present. F1 toggles it whenever the native window
+// has focus; every change arrives through the window thread's key messages.
 struct NativeSettingsOverlaySnapshot {
     bool visible = false;
     bool dirty = false;
@@ -252,9 +253,8 @@ struct NativeSettingsLayout {
 struct XfbPresentStats {
     std::uint64_t requests = 0;
     std::uint64_t presented = 0;
-    // Counts game-timed present requests only. Auxiliary frame-rate-decoupling re-presents are excluded. This
-    // is serial identity, not pixel or content identity: a newer XfbTexture::copy_serial is counted once, at its
-    // first game-timed presentation. Replaying an older A/B pair cannot advance the counter.
+    // Game-timed presents of a new XfbTexture::copy_serial, each counted once at its first presentation.
+    // Frame-rate-decoupling re-presents and replays of an older copy do not count.
     std::uint64_t first_serial_presentations = 0;
     std::uint64_t misses = 0;
     std::uint64_t stale_fallbacks = 0;

@@ -2,15 +2,12 @@
 
 // EfbCopyManager: tracks the XFB textures produced by GXCopyDisp.
 //
-// Presentation model: the game double/triple-buffers XFBs in guest memory; every
-// PE_COPY_EXECUTE with copy_to_xfb set blits the EFB into the XFB texture
-// registered at the copy's destination address. GxBackend presents the XFB
-// selected by the guest VI/XFB manager; latest() is only the source when the
-// caller has no explicit VI-selected address yet.
+// The game double/triple-buffers XFBs in guest memory; every PE_COPY_EXECUTE with copy_to_xfb set blits the EFB
+// into the XFB texture registered at the copy's destination address. GxBackend presents the XFB the guest VI
+// selects; latest() is the source only while no VI-selected address is known.
 //
-// The XFB is never converted to YUV and never written back to guest memory;
-// a guest CPU read of the XFB range is a hard-fail tripwire on the
-// native_host side, not handled here.
+// The XFB is never converted to YUV or written back to guest memory; a guest CPU read of the XFB range is a
+// hard-fail tripwire on the host side.
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -19,16 +16,14 @@
 #define NOMINMAX
 #endif
 #include "galaxy/gx/gpu_types.h"
-
 #include "galaxy/gx/gx_bitfields.h"
-// kMaxEfbScale lives in render_config.h and std::clamp lives in <algorithm>.
-// This header uses both, so it includes both directly.
+#include "galaxy/gx/pointer_response.h"
 #include "galaxy/gx/render_config.h"
 
 #include <algorithm>
 #include <cstddef>
-#include "galaxy/gx/pointer_response.h"
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <unordered_map>
 #include <vector>
@@ -38,8 +33,7 @@ namespace galaxy::gx {
 struct XfbTexture {
     gpu::TextureRef texture;  // RGBA8
     std::uint32_t guest_addr = 0;
-    // Physical GPU dimensions after EFB scaling. The guest address/stride and
-    // VI selection remain in logical Wii units and are never multiplied.
+    // GPU dimensions after EFB scaling; the guest address, stride and VI selection stay in Wii units.
     std::uint16_t width = 0;
     std::uint16_t height = 0;       // after logical y-scale and EFB scale
     std::uint64_t frame_stamp = 0;  // frame index of the last copy into it
@@ -48,8 +42,7 @@ struct XfbTexture {
     // Scene-owned surround travels with this copy, never with a later producer.
     float safety_surround{};
     std::uint64_t copy_serial = 0;  // monotonically published copy order
-    // Render-thread-only state. A resident texture has one current copy_serial, so this
-    // counts the first presentation of each copy without an unbounded set of serials.
+    // Render thread only: the serial last counted as presented, so each copy's first presentation counts once.
     mutable std::uint64_t last_accounted_present_serial =
         ~std::uint64_t{0};
     gpu::CpuDescriptor rtv{};
@@ -57,9 +50,8 @@ struct XfbTexture {
     bool rtv_valid = false;
 };
 
-// Bounded accounting of monotonically assigned EFB -> XFB copy serials. Exact identity
-// comes from the resident texture's accounted serial; the global high-water below is
-// for diagnostics only. No pixel or content identity is inferred here.
+// Presentation accounting of EFB -> XFB copy serials. A first presentation is decided by the texture's own
+// accounted serial; the high-water mark is diagnostic only.
 struct XfbSerialAccountingState {
     bool has_presented = false;
     std::uint64_t highest_presented_serial = 0;
@@ -98,17 +90,14 @@ struct XfbPresentSelection {
     const XfbTexture* latest,
     const XfbTexture* last_valid_selected,
     std::uint64_t current_frame_stamp,
-    std::uint64_t max_preserved_age,
-    std::uint64_t last_presented_frame_stamp);
+    std::uint64_t max_preserved_age);
 
 [[nodiscard]] std::uint16_t compute_xfb_copy_height(
     std::uint16_t src_height,
     std::uint32_t y_scale_raw,
     bool scale_y);
 
-// GPU-only EFB-copy surfaces retain the configured internal resolution. Guest
-// addresses, strides, and VI selection remain in native Wii units; only the
-// backing D3D12 texture dimensions are scaled.
+// EFB-copy textures are at the internal resolution; guest addresses, strides and VI selection stay in Wii units.
 struct ScaledEfbCopyExtent {
     std::uint16_t width = 0;
     std::uint16_t height = 0;
@@ -119,9 +108,8 @@ struct ScaledEfbCopyExtent {
     std::uint16_t logical_height,
     unsigned efb_scale) noexcept;
 
-// Default-off bloom path. Late color workspaces are distinguished from earlier
-// mask/depth passes by copy rectangle, format, stride and flags, not only by
-// dimensions. Guest memory is unchanged.
+// The game's bloom workspace copies (used when native effect copies are off): late colour workspaces differ from
+// earlier mask and depth passes by copy rectangle, format, stride and flags, not only by size.
 [[nodiscard]] bool is_galaxy_bloom_workspace_copy(
     const EfbCopyParams& params,
     bool is_depth_copy) noexcept;
@@ -171,8 +159,7 @@ struct ScaledEfbRect {
     }
 };
 
-// Both helpers below run once per draw and are defined inline so the compiler can
-// inline them into the caller. Arithmetic and result types are unchanged.
+// Inline: this and compute_scaled_gx_viewport run once per draw.
 [[nodiscard]] inline ScaledEfbRect compute_scaled_efb_rect(
     std::int32_t logical_left,
     std::int32_t logical_top,
@@ -183,9 +170,7 @@ struct ScaledEfbRect {
     unsigned efb_scale) noexcept {
     const std::int64_t scale = static_cast<std::int64_t>(
         std::clamp(efb_scale, 1u, kMaxEfbScale));
-    // The public helper accepts arbitrary unsigned target extents, while its
-    // D3D12_RECT-compatible result is signed 32-bit. Saturate before the
-    // narrowing cast even though production EFB extents are much smaller.
+    // Target extents are arbitrary unsigned values; saturate to the signed 32-bit D3D12_RECT range before narrowing.
     constexpr std::int64_t kRectLimit =
         std::numeric_limits<std::int32_t>::max();
     const std::int64_t target_width = std::min(
@@ -222,8 +207,7 @@ struct ScaledGxViewport {
     }
 };
 
-// XF layout: wd, ht, zRange, xOrig, yOrig, farZ. Defined here for the same
-// per-draw inlining reason as `compute_scaled_efb_rect` above.
+// XF viewport layout: wd, ht, zRange, xOrig, yOrig, farZ.
 [[nodiscard]] inline ScaledGxViewport compute_scaled_gx_viewport(
     const float xf_viewport[6],
     unsigned efb_scale) noexcept {

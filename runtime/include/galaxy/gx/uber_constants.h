@@ -1,15 +1,13 @@
 #pragma once
 
-// GPU-visible constant buffer layouts shared by the uber pipelines and every
-// specialized shader.  The HLSL side mirrors these structs field-for-field;
-// the static_asserts below are the single source of truth for offsets.
+// Constant buffer layouts shared by the uber and the specialized GX shaders. The HLSL mirrors these structs field
+// for field; the static_asserts below pin the offsets.
 //
-// Both shader families share the same layouts and root signature so that
-// promoting a draw from the uber pipeline to a specialized PSO is a pure
-// pipeline-pointer swap with no binding changes.  Specialized shaders simply
-// ignore stage_config (their TEV program is baked into the code).
+// Both shader families use the same layouts and root signature, so moving a draw from the uber pipeline to a
+// specialized PSO changes only the pipeline. Specialized shaders ignore stage_config (their TEV program is
+// compiled in).
 //
-// No Windows/D3D12 includes.
+// No Windows or D3D12 includes.
 
 #include <cstddef>
 #include <cstdint>
@@ -21,8 +19,7 @@ inline constexpr unsigned kMaxTextureMaps = 8;
 inline constexpr unsigned kMaxTexGens = 8;
 inline constexpr unsigned kMaxColorChannels = 2;
 
-// alignas(256) matches the D3D12 CBV placement-alignment requirement; the
-// trailing pad it introduces is intentional.
+// alignas(256): D3D12 constant buffers start on 256-byte boundaries.
 #if defined(_MSC_VER)
 #pragma warning(push)
 #pragma warning(disable : 4324)  // structure padded due to alignment specifier
@@ -30,10 +27,9 @@ inline constexpr unsigned kMaxColorChannels = 2;
 
 // Pixel-stage constants (root CBV b1).
 struct alignas(256) GxPsConstants {
-    // Bit-packed TevStagePacked words; consumed only by the uber pixel
-    // shader's interpretation loop.
+    // TevStagePacked words, read only by the uber pixel shader.
     std::uint32_t stage_config[kMaxTevStages][4];
-    // TEV blending registers PREV, REG0-2 as signed values divided by 255.
+    // TEV color registers PREV, REG0-2 as signed values divided by 255.
     float tev_regs[4][4];
     // Konstant color bank K0-K3.
     float konst[4][4];
@@ -42,10 +38,8 @@ struct alignas(256) GxPsConstants {
     float alpha_refs[4];
     // a, b_magnitude, b_shift, c, color.rgb, proj flag.
     float fog_params[8];
-    // Per-map texture width/height and GX texcoord S/T scale
-    // (BP 0x30-0x3F scale_minus_1 + 1). Pixel shaders convert rasterized
-    // texcoords through GX fixed-point space with zw, then normalize samples
-    // by xy.
+    // Per map: texture width and height, and the GX texcoord S/T scale (BP 0x30-0x3F scale_minus_1 + 1). Pixel
+    // shaders take rasterized texcoords through GX fixed-point space with zw, then normalize samples by xy.
     float tex_dims[kMaxTextureMaps][4];
     // x = Z-texture bias (BP 0xF4, 24-bit) / 2^24;
     // y = reciprocal physical EFB scale for RGBA6 dithering;
@@ -78,21 +72,20 @@ static_assert(offsetof(GxPsConstants, ind_misc) == 736);
 static_assert(offsetof(GxPsConstants, uber_ps_header) == 752);
 static_assert(sizeof(GxPsConstants) == 768);
 
-// Vertex-stage constants (root CBV b0). The XF matrix palette itself rides in a
-// structured buffer (root SRV), not here. It is large and is re-snapshotted
-// whenever LOAD_INDX mutates it mid-frame.
+// Vertex-stage constants (root CBV b0). The XF matrix palette is a structured buffer (root SRV) instead: it is
+// large and is snapshotted again whenever LOAD_INDX changes it mid-frame.
 struct alignas(256) GxVsConstants {
     float projection[4][4];
-    // Raw texgen + post-texgen config words; consumed by the uber vertex
-    // shader's texgen loop.
+    // Raw texgen and post-texgen config words, read by the uber vertex shader.
     std::uint32_t texgen_config[kMaxTexGens][2];
     float chan_ambient[kMaxColorChannels][4];
     float chan_material[kMaxColorChannels][4];
     std::uint32_t num_texgens;
     std::uint32_t num_chans;
-    // bit0 per-vertex posmtx, bit1 lighting enable; bits 2-3: an unlit channel 0 / 1's vertex colour is de-baked to its
-    // program's neutral light; bits 4-5: a lit channel is (its vertex colour's hue, the light at the neutral level); the
-    // levels in bits 8-15, 16-23 (physical ray tracing: the art's baked light removed).
+    // Bit 0 per-vertex posmtx, bit 1 lighting enable. Physical ray tracing (the art's baked light removed): bits 2-3
+    // de-bake unlit channel 0 / 1's vertex colour to its program's neutral light; bits 4-5 keep a lit channel's
+    // vertex colour hue and light it at the neutral level; bit 6 de-bakes by debake_sh; bit 7 marks a draw lit by the
+    // player light rig (its level, not its hue); bits 8-15 and 16-23 hold the levels.
     std::uint32_t flags;
     // Index of this draw's palette snapshot within the frame's matrix buffer.
     std::uint32_t mtx_palette_base;
@@ -110,9 +103,8 @@ struct alignas(256) GxVsConstants {
     float inline_pos_matrix[3][4];
     float inline_tex_matrices[kMaxTexGens][3][4];
     float inline_post_matrices[kMaxTexGens][3][4];
-    // Physical viewport dimensions and exact BP 0x22 widths after applying
-    // the authoritative EFB scale: width, height, line width, point size.
-    // Geometry shaders read this at HLSL packoffset(c65).
+    // Physical viewport width and height, line width and point size (BP 0x22) at the EFB scale. Geometry shaders
+    // read it at HLSL packoffset(c65).
     float line_point_raster[4];
     // Line mask, point mask, line divisor, point divisor for GX texture
     // coordinate offsets. Geometry shaders read this at packoffset(c66).
@@ -133,10 +125,11 @@ struct alignas(256) GxVsConstants {
     float motion_prev_pos[3][4];
     float motion_params[4];
     std::uint32_t motion_ctrl[4];
-    // Physical ray tracing (flags bit 6): the model's light baked into its vertex colours as a function of the surface's
-    // facing (GxBackend::fit_debake_light): nine spherical harmonics of the object-space normal a channel (r 0-8, g
-    // 9-17, b 18-26), and its value at the most lit sampled facing (rgb). A de-baked channel's vertex colour is raised
-    // by that over its own facing's value: the light's fall-off and colour leave it, its paint and occlusion stay.
+    // Physical ray tracing (flags bit 6): the model's light baked into its vertex colours as a function of the
+    // surface's facing (GxBackend::fit_debake_light): nine spherical-harmonic coefficients of the object-space normal
+    // per channel (r 0-8, g 9-17, b 18-26), and its value at the most lit sampled facing (rgb). A de-baked channel's
+    // vertex colour is raised by that over its own facing's value: the light's fall-off and colour leave it, its
+    // paint and occlusion stay.
     float debake_sh[7][4];
     float debake_peak[4];
 };

@@ -13,12 +13,11 @@
 
 namespace galaxy::gx {
 
-// Linear per-frame allocator over one persistently mapped upload buffer,
-// partitioned into kFramesInFlight segments so frame N never overwrites
-// memory the GPU is still reading for frame N-1.
+// Linear per-frame allocator over one persistently mapped upload buffer, split into one segment per frame in
+// flight so a frame never overwrites data the GPU still reads for an earlier one.
 class UploadRing {
 public:
-    // Caller must have retired all GPU references to this resource.
+    // Releases the buffer; the caller has retired every GPU reference to it.
     void reset() noexcept;
     struct Allocation {
         std::byte* cpu = nullptr;
@@ -39,24 +38,19 @@ public:
     bool resegment(std::size_t bytes_per_frame, unsigned frames_in_flight);
     void begin_frame(unsigned frame_slot);
 
-    // Bump-allocates within the current frame segment. Exhaustion is a GxFatalError:
-    // geometry is never dropped silently.
-    // Alignment must be a nonzero power of two. Rejected requests do not
-    // consume bytes or advance the segment's content generation.
+    // Bump-allocates in the current frame's segment; `alignment` must be a nonzero power of two. Exhaustion
+    // throws rather than dropping geometry. A rejected request consumes nothing.
     Allocation allocate(std::size_t size, std::size_t alignment);
 
+    // Allocates `size` bytes and copies `source` into them, unless `token` records the same allocation in this
+    // slot's previous use, whose bytes are still in place.
     Allocation upload_immutable(
         const void* source, std::size_t size, std::size_t alignment,
         ImmutableUploadToken& token);
     [[nodiscard]] std::uint64_t reused_bytes() const { return reused_bytes_; }
     [[nodiscard]] std::uint64_t copied_bytes() const { return copied_bytes_; }
-    // Number of upload_immutable() calls this frame. reused_bytes() and copied_bytes()
-    // are only meaningful relative to this count: both are zero for a frame in which
-    // the immutable path was never entered, which looks the same on the timing line as
-    // a frame in which it was entered and classified every byte as a copy. The call
-    // count is the field that separates "the reuse path is not reached" from "the
-    // counters are not observed". The increment costs one add on a path that already
-    // does a memcpy or a map lookup.
+    // Number of upload_immutable() calls this frame; separates a frame that never took that path from one that
+    // copied every byte.
     [[nodiscard]] std::uint64_t immutable_upload_calls() const {
         return immutable_upload_calls_;
     }
@@ -83,7 +77,7 @@ private:
     gpu::BufferRef buffer_;
     const char* name_ = "";
     std::byte* mapped_ = nullptr;
-    // This committed buffer keeps its address until it is replaced by initialize.
+    // Stable until initialize replaces the buffer.
     gpu::Address gpu_base_ = 0;
     std::size_t bytes_per_frame_ = 0;
     std::size_t capacity_ = 0;

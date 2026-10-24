@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// UploadRing, and gpu::create_upload_memory for D3D12.
 #include "galaxy/gx/upload_ring.h"
 
 #include <algorithm>
@@ -22,10 +23,6 @@
 
 namespace galaxy::gx {
 
-// ---------------------------------------------------------------------------
-// UploadRing
-// ---------------------------------------------------------------------------
-
 namespace {
 std::atomic<std::uint64_t> g_upload_ring_identity{1};
 }  // namespace
@@ -41,7 +38,7 @@ bool UploadRing::initialize(
         bytes_per_frame > std::numeric_limits<std::size_t>::max() / frames_in_flight) {
         return false;
     }
-    // Prepare all fallible state before replacing the retained mapped buffer.
+    // Everything that can fail runs before the current buffer is replaced.
     const std::size_t total = std::max(bytes_per_frame * frames_in_flight, capacity);
     gpu::UploadMemory memory = gpu::create_upload_memory(device, total, name);
     if (!memory) {
@@ -113,8 +110,7 @@ UploadRing::Allocation UploadRing::allocate(std::size_t size, std::size_t alignm
     if (alignment == 0u || (alignment & (alignment - 1u)) != 0u) {
         throw std::runtime_error("UploadRing alignment is not a nonzero power of two");
     }
-    // Unsigned negation gives the exact padding without cursor+alignment
-    // overflow. Prove both padding and payload fit before forming addresses.
+    // Padding by unsigned negation cannot overflow; padding and payload are checked before any address is formed.
     const std::size_t padding = (std::size_t{0} - cursor_) & (alignment - 1u);
     const std::size_t remaining = bytes_per_frame_ - (cursor_ - segment_base_);
     if (padding > remaining || size > remaining - padding)
@@ -125,16 +121,13 @@ UploadRing::Allocation UploadRing::allocate(std::size_t size, std::size_t alignm
             std::to_string(bytes_per_frame_) + " B");
     const std::size_t aligned = cursor_ + padding;
     cursor_ = aligned + size;
-    // Peak within the segment, i.e. the bytes of this frame's segment that were
-    // actually handed out. This is the only sound floor for shrinking
-    // `bytes_per_frame_`, and it is what separates the ring's reserved size from
-    // the physical memory it really backs.
+    // Bytes this frame's segment has handed out: the floor for shrinking bytes_per_frame_.
     const std::size_t frame_used = cursor_ - segment_base_;
     if (frame_used > peak_bytes_per_frame_) {
         peak_bytes_per_frame_ = frame_used;
     }
-    // Fence-only chunks reset the frame slot but never touch vertex bytes.
-    // Count only segment uses that can actually replace their contents.
+    // A slot's generation advances on its first nonzero allocation only: fence-only chunks begin the frame but
+    // write no bytes.
     if (size != 0 && segment_allocation_pending_) {
         ++slot_generations_[active_slot_];
         segment_allocation_pending_ = false;
@@ -150,17 +143,14 @@ UploadRing::Allocation UploadRing::upload_immutable(
     const void* source, std::size_t size, std::size_t alignment,
     ImmutableUploadToken& token) {
     const Allocation result = allocate(size, alignment);
-    // Counted before any early classification, so the field counts every entry into the
-    // immutable path. The two byte counters below are read against it.
     ++immutable_upload_calls_;
     if (token.slots.size() != frames_in_flight_) {
         token.slots.assign(frames_in_flight_, {});
     }
     auto& previous = token.slots[active_slot_];
     const std::uint64_t generation = slot_generations_[active_slot_];
-    // Monotonic allocation prevents earlier writes in this segment from
-    // overlapping this allocation. Requiring the previous segment generation
-    // excludes intervening frames that might have overwritten the old bytes.
+    // Allocation within a segment is monotonic, so nothing written earlier this frame overlaps. Requiring the
+    // slot's previous generation rules out a use in between that overwrote the bytes.
     const bool reuse = generation > 1 &&
         previous.resource_identity == resource_identity_ &&
         previous.generation == generation - 1 &&

@@ -169,10 +169,7 @@ void convert_nv12_to_movie_planes(const std::uint8_t* y, std::int32_t y_pitch, c
     }
 }
 
-// ---------------------------------------------------------------------------
-// The decoder thread
-// ---------------------------------------------------------------------------
-
+// Decodes one replacement file on its own thread, up to kAhead frames ahead of the game.
 class MovieReplacements::Decoder {
 public:
     Decoder(std::filesystem::path file, double rate, std::function<TextureBackend::UploadChunk(std::uint64_t)> stager)
@@ -383,7 +380,7 @@ private:
                 continue;
             }
             if ((flags & MF_SOURCE_READERF_CURRENTMEDIATYPECHANGED) != 0u && !read_format()) {
-                fail("its picture size changed to none", E_FAIL);
+                fail("no picture size after a format change", E_FAIL);
                 return;
             }
             if (!sample) continue;
@@ -480,8 +477,6 @@ private:
     double convert_ms_ = 0.0;
     std::thread thread_;
 };
-
-// ---------------------------------------------------------------------------
 
 MovieReplacements::MovieReplacements() = default;
 

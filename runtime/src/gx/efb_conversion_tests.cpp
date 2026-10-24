@@ -1,3 +1,5 @@
+// Texture decode, EFB-copy conversion, texture cache and XFB tests: CPU oracles and D3D12 WARP readbacks.
+
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #pragma warning(push, 0)
@@ -124,8 +126,7 @@ bool test_intensity_tile_decode() {
         std::vector<std::uint8_t> source(byte_count + prefix, 0xEDu);
         for (std::uint32_t i = 0; i < byte_count; ++i) {
             if (format == TexFormat::IA8) {
-                // 256x256 covers all 65,536 (A,I) pairs, not only matching or correlated channels.
-                // Smaller cases keep tile variation.
+                // The 256x256 case covers all 65,536 (A,I) pairs.
                 const auto word = i / 2u;
                 source[prefix + i] = static_cast<std::uint8_t>(
                     (i & 1u) == 0u ? word >> 8u : word);
@@ -143,8 +144,7 @@ bool test_intensity_tile_decode() {
         }
         for (std::uint32_t y = 0; y < height; ++y) {
             for (std::uint32_t x = 0; x < width; ++x) {
-                // Independent global-pixel address oracle that includes padding in every tile. It does
-                // not traverse the decoder's row loops.
+                // Independent address oracle: global pixel -> tile -> texel, tile padding included.
                 const auto tile = (y / tile_height) * blocks_x + x / tile_width;
                 const auto pixel = (y % tile_height) * tile_width + x % tile_width;
                 const auto offset = prefix + tile * 32u;
@@ -256,8 +256,8 @@ bool test_generated_mip_uniform_alpha() {
             source, width, height, actual, dest_width, dest_height);
         if (!expect(actual.size() == dest_width * dest_height,
                     "generated mip retains exact output extent")) return false;
-        // Scalar premultiplied-alpha rule, including thin and empty footprints and integer
-        // rounding. No uniform-alpha special case.
+        // Oracle: the general premultiplied-alpha rule (thin and empty footprints, integer rounding), with no
+        // uniform-alpha shortcut.
         for (std::uint32_t y = 0u; y < dest_height; ++y) {
             for (std::uint32_t x = 0u; x < dest_width; ++x) {
                 std::array<std::uint32_t, 4> sums{};
@@ -503,8 +503,7 @@ bool test_direct_color_tile_decode() {
     const auto same = [](RGBA8 a, RGBA8 b) {
         return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
     };
-    // Independent arithmetic expansion of GX channel fields, including both RGB5A3 encodings.
-    // No production lookup or conversion helper is used.
+    // Independent arithmetic expansion of the GX channel fields, both RGB5A3 encodings included.
     const auto color = [](std::uint16_t word, TexFormat format) -> RGBA8 {
         const auto e5 = [](unsigned n) { return static_cast<std::uint8_t>(8u * n + n / 4u); };
         if (format == TexFormat::RGB565) {
@@ -569,9 +568,8 @@ bool test_small_index_tile_decode() {
     using galaxy::gx::RGBA8;
     using galaxy::gx::TexFormat;
     using galaxy::gx::TlutFormat;
-    // Every tile-tail width/height plus full tiles, multiple tiles and both
-    // sides of the raw/predecoded palette threshold. Keep the pixel oracle
-    // independent: it computes each tiled source address from destination x/y.
+    // Every tile-tail width and height, full and multiple tiles, and both sides of the raw/decoded palette threshold.
+    // The oracle computes each tiled source address from the destination x/y.
     constexpr auto sizes = [] {
         constexpr std::array<std::uint32_t, 18> dimensions{
             1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u,
@@ -645,8 +643,7 @@ bool test_small_index_tile_decode() {
                     }
                     std::vector<std::uint8_t> bank(prefix + entries * 2u, 0xE7u);
                     std::vector<RGBA8> output(width * height + 2u, guard);
-                    // Reuses the same input and output pointers with changed colors. No table may survive
-                    // into the next call or palette format.
+                    // The same pointers with a changed palette: no decoded table may survive into the next call.
                     for (unsigned round = 0u; round < 2u; ++round) {
                         std::vector<std::uint16_t> words(entries);
                         for (unsigned i = 0u; i < entries; ++i) {
@@ -725,7 +722,7 @@ Pixel oracle_convert(
     };
     if (coefficients[0] == 0u && coefficients[1] == 0u &&
         coefficients[2] == 0u) {
-        // Product startup policy while the filter registers are unprogrammed.
+        // Unprogrammed (all-zero) filter registers act as middle = 64.
         coefficients[1] = 64u;
     }
     const std::uint32_t coefficient_sum =
@@ -1378,8 +1375,8 @@ V main(uint id : SV_VertexID) {
             !detail::efb_identity_copy_box(params, false, 1u, 16u, 15u),
             "depth and destination resampling cannot bypass conversion");
         std::size_t checked = 0u;
-        // Actual EFB extents stress sampler coordinate precision, including
-        // 16x, while upload only initializes the tested rect and its neighbors.
+        // Full EFB extents (up to 16x) stress sampler coordinate precision; only the tested rectangle and its
+        // neighbours are uploaded.
         for (const unsigned scale : {1u, 3u, 6u, 16u}) {
             const UINT source_width = kEfbWidth * scale;
             const UINT source_height = kEfbHeight * scale;
@@ -1474,9 +1471,7 @@ V main(uint id : SV_VertexID) {
         desc.SampleDesc.Count = 1u;
         desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
         ComPtr<ID3D12Resource> a, b;
-        // A plain array, not a braced initializer list. An initializer_list deduces to
-        // `ComPtr<ID3D12Resource>* const`, which `auto*` cannot bind, and `auto&&` binds it as a
-        // const proxy with no operator->. A plain array keeps the element type a non-const `ComPtr*`.
+        // A std::array, not a braced list: an initializer_list's elements are const, which `auto*` cannot bind.
         std::array<ComPtr<ID3D12Resource>*, 2> targets{&a, &b};
         for (auto* target : targets) {
             check_hr(device_->CreateCommittedResource(&properties, D3D12_HEAP_FLAG_NONE,
@@ -1521,8 +1516,7 @@ V main(uint id : SV_VertexID) {
         manager.mark_xfb_copied(*original, 1u);
         auto* original_resource = original->texture.Get();
         const auto original_serial = original->copy_serial;
-        // Initial allocation needs no retirement list. Resizing before the first begin_frame
-        // deliberately exercises the ownership failure path.
+        // A resize before the first begin_frame has no retirement list: the ownership failure path.
         params.src_width = 16u;
         bool rejected = false;
         try { (void)manager.acquire_xfb(params, 2u); }
@@ -1583,8 +1577,7 @@ V main(uint id : SV_VertexID) {
         params.src_width = 41u;
         passed &= expect(manager.acquire_xfb(params, 15u)->texture.Get() == other.Get(),
             "second size is reusable only after its own retirement slot is reclaimed");
-        // No command lists are submitted. Production begin_frame calls are preceded by the
-        // matching renderer fence waits.
+        // No command lists are submitted; in the renderer each begin_frame follows its fence wait.
         manager.shutdown();
         return passed;
     }
@@ -1604,12 +1597,13 @@ V main(uint id : SV_VertexID) {
         check_hr(device_->CreateCommandList(0u, D3D12_COMMAND_LIST_TYPE_DIRECT,
             allocator.Get(), nullptr, IID_PPV_ARGS(&list)), "Create allocation budget list");
         cache.backend().set_upload_list(list.Get());
-        // 256x256 CMPR: 32 KB of guest bytes, 256 KB decoded, so 18 of them
-        // exceed the 1 MB test budget whatever the placement alignment.
+        // 1024x1024 CMPR: 512 KiB of guest bytes and 4 MiB decoded, so 18 of them exceed the 64 MiB budget while
+        // their guest bytes stay far below it.
         constexpr std::uint32_t address = 0x10000000u;
-        constexpr std::uint32_t stride = 32768u;
-        std::vector<std::byte> bytes(18u * stride);
-        for (unsigned i = 0u; i < 18u; ++i) bytes[i * stride] = static_cast<std::byte>(i);
+        constexpr std::uint32_t stride = 512u * 1024u;
+        constexpr unsigned kTextures = 18u;
+        std::vector<std::byte> bytes(kTextures * stride);
+        for (unsigned i = 0u; i < kTextures; ++i) bytes[i * stride] = static_cast<std::byte>(i);
         galaxy::GuestMemoryRegion region{
             address, static_cast<std::uint32_t>(bytes.size()), bytes.data()};
         galaxy::GuestMemory memory{};
@@ -1617,7 +1611,7 @@ V main(uint id : SV_VertexID) {
         memory.region_count = 1u;
         TexImage image{};
         image.guest_addr = address;
-        image.width = image.height = 256u;
+        image.width = image.height = 1024u;
         image.format = TexFormat::CMPR;
         TexMode mode{};
         mode.min_filter = TexMinFilter::Near;
@@ -1633,30 +1627,24 @@ V main(uint id : SV_VertexID) {
             cache.decoded_map_stats().resident_bytes == allocation,
             "ordinary texture hit does not charge allocation twice");
         TextureHandle last{};
-        for (unsigned i = 1u; i < 18u; ++i) {
+        for (unsigned i = 1u; i < kTextures; ++i) {
             image.guest_addr = address + i * stride;
             last = cache.get(image, mode, TlutRef{}, &memory);
         }
         const auto stats = cache.decoded_map_stats();
-        passed &= expect(stats.budget_bytes == (1u << 20u) &&
+        passed &= expect(stats.budget_bytes == (64ull << 20u) &&
             stats.resident_bytes <= stats.budget_bytes && stats.evicted_entries > 0u &&
             stats.resident_bytes == stats.entries * allocation &&
             stats.evicted_bytes == stats.evicted_entries * allocation &&
             stats.entries == stats.lru_entries && cache.srv_index_retired(first.srv_index),
             "allocation budget evicts compressed entries before guest bytes reach the bound");
-        passed &= expect(first.resource->GetDesc().Width == 256u &&
+        passed &= expect(first.resource->GetDesc().Width == 1024u &&
             first.srv_index != last.srv_index,
             "budget eviction keeps the old resource and descriptor alive for this frame");
         cache.invalidate_all();
         passed &= expect(cache.decoded_map_stats().resident_bytes == 0u &&
             cache.decoded_entry_guest_bytes() == 0u && cache.decoded_map_stats().lru_entries == 0u,
             "invalidation clears allocation and guest-byte accounting together");
-        image.guest_addr = address;
-        const auto content_hit = cache.get(image, mode, TlutRef{}, &memory);
-        passed &= expect(content_hit.resource == first.resource &&
-            content_hit.srv_index != first.srv_index &&
-            cache.decoded_map_stats().resident_bytes == allocation,
-            "content reuse carries allocation size through the new address-cache entry");
         cache.begin_frame(1u, kFramesInFlight);
         passed &= expect(cache.srv_index_retired(first.srv_index),
             "another frame slot cannot reclaim a budget-evicted descriptor");
@@ -1669,14 +1657,13 @@ V main(uint id : SV_VertexID) {
         const auto mip_desc = mipped.resource->GetDesc();
         const auto mip_allocation = device_->GetResourceAllocationInfo(0u, 1u, &mip_desc).SizeInBytes;
         passed &= expect(mip_desc.MipLevels > 1u &&
-            cache.decoded_map_stats().resident_bytes == allocation + mip_allocation,
+            cache.decoded_map_stats().resident_bytes == mip_allocation,
             "mipped compressed texture charges its complete allocation");
         std::printf("Decoded allocation budget: source=%u allocation=%llu live=%llu evicted=%llu\n",
             stride, static_cast<unsigned long long>(allocation),
             static_cast<unsigned long long>(stats.resident_bytes),
             static_cast<unsigned long long>(stats.evicted_bytes));
-        // No lists are submitted here. Production waits each owning slot's
-        // fence before begin_frame reclaims its descriptors and resources.
+        // No list is submitted; in the renderer each begin_frame follows its slot's fence wait.
         cache.backend().set_upload_list(nullptr);
         cache.shutdown();
         passed &= expect(cache.decoded_map_stats().resident_bytes == 0u &&
@@ -1684,89 +1671,8 @@ V main(uint id : SV_VertexID) {
         return passed;
     }
 
-    bool test_content_texture_identity() {
-        using namespace galaxy::gx;
-        bool passed = true;
-        auto cache_owner = std::make_unique<TextureCache>();
-        TextureCache& cache = *cache_owner;
-        if (!cache.initialize(device_.Get())) {
-            throw std::runtime_error("initialize content identity cache");
-        }
-        cache.begin_frame(0u, kFramesInFlight);
-        ComPtr<ID3D12CommandAllocator> allocator;
-        ComPtr<ID3D12GraphicsCommandList> list;
-        check_hr(device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
-            IID_PPV_ARGS(&allocator)), "Create content identity allocator");
-        check_hr(device_->CreateCommandList(0u, D3D12_COMMAND_LIST_TYPE_DIRECT,
-            allocator.Get(), nullptr, IID_PPV_ARGS(&list)), "Create content identity command list");
-        cache.backend().set_upload_list(list.Get());
-        constexpr std::uint32_t address = 0x10000000u;
-        std::array<std::byte, 1024> bytes{};
-        galaxy::GuestMemoryRegion region{
-            address, static_cast<std::uint32_t>(bytes.size()), bytes.data()};
-        galaxy::GuestMemory memory{};
-        memory.region_count = 1u;
-        memory.regions = &region;
-        TexImage image{};
-        image.guest_addr = address;
-        image.width = image.height = 4u;
-        image.format = TexFormat::RGB565;
-        TexMode mode{};
-        mode.min_filter = TexMinFilter::Near;
-        const auto original = cache.get(image, mode, TlutRef{}, &memory);
-        image.guest_addr = address + 32u;
-        const auto twin = cache.get(image, mode, TlutRef{}, &memory);
-        passed &= expect(twin.resource == original.resource && twin.srv_index != original.srv_index,
-            "identical captured content shares its resource across guest addresses");
-        image.guest_addr = address + 64u;
-        image.width = 2u; // same 32-byte tile, different resource extent
-        const auto narrow = cache.get(image, mode, TlutRef{}, &memory);
-        passed &= expect(narrow.resource != original.resource && narrow.resource->GetDesc().Width == 2u,
-            "equal tiled source bytes do not alias distinct texture dimensions");
-        image.guest_addr = address + 96u;
-        image.width = 4u;
-        image.format = TexFormat::RGB5A3;
-        const auto other_format = cache.get(image, mode, TlutRef{}, &memory);
-        passed &= expect(other_format.resource != original.resource,
-            "equal captured bytes do not alias different decoding formats");
-        image.guest_addr = address + 128u;
-        image.format = TexFormat::RGB565;
-        bytes[128u] = std::byte{0xf8};
-        const auto changed_source = cache.get(image, mode, TlutRef{}, &memory);
-        passed &= expect(changed_source.resource != original.resource,
-            "a changed captured source byte produces a different content resource");
-        image.guest_addr = address;
-        cache.invalidate_all();
-        const auto restored = cache.get(image, mode, TlutRef{}, &memory);
-        passed &= expect(restored.resource == original.resource && restored.srv_index != original.srv_index,
-            "immutable content keys remain usable after decoded-address invalidation");
-
-        image.guest_addr = address + 256u;
-        image.width = image.height = 8u;
-        image.format = TexFormat::C4;
-        const auto indexed = cache.get(image, mode, TlutRef{0u, TlutFormat::IA8}, &memory);
-        const auto equal_palette = cache.get(image, mode, TlutRef{1u, TlutFormat::IA8}, &memory);
-        const auto other_palette_format = cache.get(image, mode, TlutRef{0u, TlutFormat::RGB565}, &memory);
-        passed &= expect(equal_palette.resource == indexed.resource &&
-            other_palette_format.resource != indexed.resource,
-            "equal palette bytes reuse content while palette decoding format remains distinct");
-        bytes[768u] = bytes[769u] = std::byte{0xff};
-        passed &= expect(cache.load_tlut((address + 768u) >> 5u, 1u << 10u, &memory),
-            "changed palette word updates the content identity fixture");
-        const auto changed_palette = cache.get(image, mode, TlutRef{0u, TlutFormat::IA8}, &memory);
-        const auto unchanged_palette = cache.get(image, mode, TlutRef{1u, TlutFormat::IA8}, &memory);
-        passed &= expect(changed_palette.resource != indexed.resource &&
-            unchanged_palette.resource == indexed.resource,
-            "changed captured palette bytes separate content without losing unrelated palette reuse");
-        // Resource/identity fixture only; no command list is submitted.
-        cache.backend().set_upload_list(nullptr);
-        cache.shutdown();
-        return passed;
-    }
-
-    // Async first-use decode must upload the same bytes as the synchronous decode, in the same
-    // frame, for every format family (full SIMD tiles and clipped edges). This holds even when
-    // the TLUT bank is reloaded after the lookup and before the workers are joined.
+    // Async first-use decode uploads the same bytes as the synchronous decode, in the same frame, for every format
+    // family (full SIMD tiles and clipped edges), even when the TLUT bank is reloaded between lookup and join.
     bool test_async_texture_decode_matches_sync() {
         using namespace galaxy::gx;
         constexpr std::uint32_t address = 0x10000000u;
@@ -1958,11 +1864,6 @@ V main(uint id : SV_VertexID) {
         cache.backend().set_upload_list(list.Get());
         constexpr std::uint32_t address = 0x10000000u;
         std::array<std::byte, 512> bytes{};
-        // Distinct content prevents the optional decoded-content cache from
-        // turning the four lookups into shared-resource hits.
-        for (unsigned block = 0; block < 4u; ++block) {
-            bytes[block * 128u] = static_cast<std::byte>(block + 1u);
-        }
         galaxy::GuestMemoryRegion region{
             address, static_cast<std::uint32_t>(bytes.size()), bytes.data()};
         galaxy::GuestMemory memory{};
@@ -1998,8 +1899,7 @@ V main(uint id : SV_VertexID) {
             cache.srv_index_retired(first.srv_index) &&
             !cache.srv_index_retired(other_slot.srv_index),
             "another frame slot cannot reclaim the retired CPU descriptor");
-        // No command list is submitted by this lifetime fixture. In production,
-        // returning to slot 0 requires its renderer fence wait first.
+        // No command list is submitted; in the renderer, returning to slot 0 waits for its fence first.
         cache.begin_frame(0u, kFramesInFlight);
         passed &= expect(cache.srv_index_retired(first.srv_index),
             "reclaimed slot retains its retired identity until allocation");
@@ -2014,74 +1914,10 @@ V main(uint id : SV_VertexID) {
         return passed;
     }
 
-    bool test_oversized_content_texture_retirement() {
-        using namespace galaxy::gx;
-        bool passed = true;
-        auto cache_owner = std::make_unique<TextureCache>();
-        TextureCache& cache = *cache_owner;
-        if (!cache.initialize(device_.Get())) {
-            throw std::runtime_error("initialize oversized content cache");
-        }
-        cache.begin_frame(0u, kFramesInFlight);
-        ComPtr<ID3D12CommandAllocator> allocator;
-        ComPtr<ID3D12GraphicsCommandList> list;
-        check_hr(device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,
-            IID_PPV_ARGS(&allocator)), "Create oversized texture allocator");
-        check_hr(device_->CreateCommandList(0u, D3D12_COMMAND_LIST_TYPE_DIRECT,
-            allocator.Get(), nullptr, IID_PPV_ARGS(&list)), "Create oversized texture command list");
-        cache.backend().set_upload_list(list.Get());
-        constexpr std::uint32_t address = 0x10000000u;
-        constexpr std::uint16_t width = 1024u, height = 512u;
-        constexpr std::uint32_t size = width * height * 4u;
-        static_assert(size > (1u << 20u));
-        std::vector<std::byte> bytes(size, std::byte{0x55});
-        galaxy::GuestMemoryRegion region{address, size, bytes.data()};
-        galaxy::GuestMemory memory{};
-        memory.region_count = 1u;
-        memory.regions = &region;
-        TexImage image{};
-        image.guest_addr = address;
-        image.width = width;
-        image.height = height;
-        image.format = TexFormat::RGBA8;
-        TexMode mode{};
-        mode.min_filter = TexMinFilter::Near;
-        const auto revision = cache.retirement_revision();
-        // The isolated test process enables the content cache and limits the
-        // decoded map to 1MiB. This 2MiB entry therefore evicts itself inside
-        // get(), before its content-cache resource is published.
-        const auto decoded = cache.get(image, mode, TlutRef{}, &memory);
-        passed &= expect(decoded.resource != nullptr &&
-            decoded.guest_byte_size == size && cache.srv_index_retired(decoded.srv_index) &&
-            cache.retirement_revision() == revision + 1u,
-            "oversized first decode returns a fence-retained resource after self-eviction");
-        const auto reused = cache.get(image, mode, TlutRef{}, &memory);
-        passed &= expect(reused.resource == decoded.resource &&
-            reused.srv_index != decoded.srv_index && cache.srv_index_retired(reused.srv_index) &&
-            cache.retirement_revision() == revision + 2u,
-            "content hit reuses the resource with a distinct still-valid CPU descriptor");
-        passed &= expect(reused.resource->GetDesc().Width == width &&
-            reused.resource->GetDesc().Height == height,
-            "self-evicted content resource remains bindable through the frame");
-        cache.begin_frame(1u, kFramesInFlight);
-        cache.begin_frame(0u, kFramesInFlight);
-        // No list is submitted. Production waits the owning slot's fence before
-        // reclamation; the content cache still owns this resource afterward.
-        const auto after_fence = cache.get(image, mode, TlutRef{}, &memory);
-        passed &= expect(after_fence.resource == decoded.resource &&
-            after_fence.srv_index == reused.srv_index &&
-            cache.retirement_revision() == revision + 3u,
-            "content retention survives decoded-resource fence reclamation");
-        cache.backend().set_upload_list(nullptr);
-        cache.shutdown();
-        return passed;
-    }
-
     bool test_texture_cache_ranges() {
         using namespace galaxy::gx;
         bool passed = true;
-        // Full Wii TMEM is embedded in the cache. Windows' default test stack cannot hold its 1 MiB
-        // bank plus the caller and harness frames.
+        // On the heap: the cache embeds all of TMEM, too large for the default stack.
         auto cache_owner = std::make_unique<TextureCache>();
         TextureCache& cache = *cache_owner;
         if (!cache.initialize(device_.Get())) throw std::runtime_error("initialize WARP texture cache");
@@ -2215,8 +2051,7 @@ V main(uint id : SV_VertexID) {
         passed &= expect(decal.mip_levels == 1u && !decal.generated_mips,
             "a clamped texture keeps its single authored level");
 
-        // Completes the recorded upload before retirement and shutdown. This test owns its queue and
-        // waits for GPU completion, not just CPU submit.
+        // Execute the recorded uploads and wait for the GPU before retirement and shutdown.
         check_hr(list->Close(), "Close texture cache uploads");
         ID3D12CommandList* lists[]{list.Get()};
         queue_->ExecuteCommandLists(1u, lists);
@@ -2502,8 +2337,8 @@ PSIn main(uint id : SV_VertexID) {
                 native_depth ? source.Get() : companion_source.Get(), source_ring);
             source_gpu = views[native_depth ? 1u : 0u];
             srv_heap = source_ring.heap();
-            // Poisons every frame descriptor and reuses both segments. Only the persistent source view
-            // can produce the expected non-null pixels.
+            // Null every frame descriptor in both segments: only the persistent source view can produce the
+            // expected pixels.
             const UINT stride = device_->GetDescriptorHandleIncrementSize(
                 D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
             for (unsigned frame = 0u; frame < 6u; ++frame) {
@@ -2789,8 +2624,7 @@ bool test_uniform_dither_readbacks() {
                     (input.shader.stages[0].color_env & ~15u) | 8u; // D = texture.
                 input.shader.stages[0].alpha_env =
                     (input.shader.stages[0].alpha_env & ~(7u << 4u)) | (4u << 4u);
-                // The base depth fixture does not rely on TEV's texture swap. This color oracle requires
-                // explicit RGBA.
+                // Identity texture swap (RGBA), which this colour oracle needs and the depth fixture does not set.
                 input.shader.stages[0].ksel =
                     (input.shader.stages[0].ksel & ((1u << 18u) - 1u)) | (0xe4u << 18u);
                 input.state.pixfmt = 1u;
@@ -2869,7 +2703,7 @@ bool test_gx_pixel_readbacks() {
             for (bool disabled_tail : {false, true}) {
                 input = gx_pixel_fixture();
                 input.shader.flags = static_cast<std::uint8_t>(1u | 2u | (2u << 3u) | (format << 5u));
-                // Deliberately reverse TEV's texture swap independently of Z.
+                // A reversed TEV texture swap, which the Z texture must ignore.
                 input.shader.stages[0].ksel = (input.shader.stages[0].ksel & ((1u << 18u) - 1u)) |
                     (3u << 19u) | (2u << 21u) | (1u << 23u);
                 if (disabled_tail) {
@@ -3229,9 +3063,8 @@ bool test_warp_against_oracle() {
                 depth_label);
         }
 
-        // GXPeekZ reads one native EFB pixel. At scaled internal resolutions that maps to one
-        // deterministic physical texel, never a bilinear blend. Four logical blocks exercise both
-        // edges and exact z24 endpoints, with non-selected subpixels kept adversarial.
+        // GXPeekZ reads one EFB pixel: at a scaled resolution one fixed physical texel, never a blend. Four logical
+        // pixels cover both edges and the z24 endpoints; every other subpixel holds a different depth.
         constexpr std::array<std::uint32_t, 4> kPeekDepths{
             0x000000u,
             0x123456u,
@@ -3367,39 +3200,16 @@ int main(int argc, char** argv) {
             return 1;
         }
     }
-    if (argc == 2 && std::strcmp(argv[1], "--content-key-hash") == 0) {
-        if (_putenv_s("GALAXY_GX_CONTENT_TEXTURE_CACHE", "1") != 0 ||
-            _putenv_s("GALAXY_GX_DECODED_TEXTURE_BUDGET_MB", "0") != 0) {
-            std::fprintf(stderr, "FAILED: configure content identity regression\n");
-            return 1;
-        }
+    if (argc == 2 && std::strcmp(argv[1], "--decoded-allocation-budget") == 0) {
         try {
             WarpConversionHarness harness;
-            return harness.test_content_texture_identity() ? 0 : 1;
+            return harness.test_decoded_allocation_budget() ? 0 : 1;
         } catch (const std::exception& error) {
-            std::fprintf(stderr, "FAILED: content identity regression: %s\n", error.what());
+            std::fprintf(stderr, "FAILED: decoded allocation budget: %s\n", error.what());
             return 1;
         }
     }
-    if (argc == 2 && (std::strcmp(argv[1], "--oversized-content-cache") == 0 ||
-                     std::strcmp(argv[1], "--decoded-allocation-budget") == 0)) {
-        // Cache settings are memoized on first access. Use a fresh process and configure the CRT
-        // environment before any harness or cache is constructed.
-        if (_putenv_s("GALAXY_GX_CONTENT_TEXTURE_CACHE", "1") != 0 ||
-            _putenv_s("GALAXY_GX_DECODED_TEXTURE_BUDGET_MB", "1") != 0) {
-            std::fprintf(stderr, "FAILED: configure oversized content cache regression\n");
-            return 1;
-        }
-        try {
-            WarpConversionHarness harness;
-            return (std::strcmp(argv[1], "--decoded-allocation-budget") == 0
-                ? harness.test_decoded_allocation_budget()
-                : harness.test_oversized_content_texture_retirement()) ? 0 : 1;
-        } catch (const std::exception& error) {
-            std::fprintf(stderr, "FAILED: oversized content cache regression: %s\n", error.what());
-            return 1;
-        }
-    }
+    // Any other argument runs the default suite.
     bool passed = test_cpu_oracle();
     passed &= test_scissor_offset();
     passed &= test_direct_color_tile_decode();

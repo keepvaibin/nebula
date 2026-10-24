@@ -4,9 +4,9 @@
 
 namespace galaxy::gx::detail {
 
-// One DependencyRangeSink parse interval, over one unassigned GxState owner.
-// State changes conservatively forget prior formats; a saturated revision
-// disables reuse. Mark only after all required ranges were captured.
+// Vertex formats whose dependency ranges one DependencyRangeSink parse has already captured at
+// the current dependency-shape revision of one GxState. A new revision, or the saturated
+// revision 0, forgets them. mark() only after every range the draw needs is captured.
 class BroadDrawDependencyMemo {
 public:
     [[nodiscard]] bool contains(std::uint64_t revision, std::uint8_t format) noexcept {

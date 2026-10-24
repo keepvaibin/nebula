@@ -1,17 +1,14 @@
+// Tests of FramePeCompletionContract and the FIFO PE-event preclassifier (FramePeEventClassifier).
 #include "galaxy/gx/frame_completion.h"
 #include "galaxy/gx/gx_backend.h"
 
 #include <array>
-#include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 #include <exception>
 #include <iostream>
-#include <memory>
 #include <stdexcept>
 #include <string_view>
-#include <utility>
 #include <vector>
 
 namespace {
@@ -22,7 +19,6 @@ using galaxy::gx::FramePeCompletionToken;
 using galaxy::gx::FramePeEventClassifier;
 using galaxy::gx::FramePeEventSignature;
 using galaxy::gx::FramePeWaitState;
-using galaxy::gx::GxBackend;
 
 bool expect(bool condition, std::string_view message) {
     if (!condition) {
@@ -394,48 +390,13 @@ bool fifo_preclassifier_follows_display_lists() {
 
     classifier.classify(
         call_dl.data(), call_dl.size(), &memory, events);
-    if (!expect(
-            events == std::vector<FramePeEventSignature>{
-                FramePeEventSignature{
-                    FramePeEventSignature::Kind::Token,
-                    0xCAFEu,
-                    true}},
-            "cached CALL_DL draw fast path preserves following PE identity")) {
-        return false;
-    }
-
-    guest[kDisplayListOffset + 6u] = std::byte{0xBE};
-    guest[kDisplayListOffset + 7u] = std::byte{0xEF};
-    const std::size_t invalidated =
-        classifier.invalidate_display_list_cache_range(
-            0x80000106u,
-            2u);
-    classifier.classify(
-        call_dl.data(), call_dl.size(), &memory, events);
-    return expect(invalidated == 1u,
-                  "dirty CALL_DL bytes invalidate one classifier cache entry") &&
-        expect(
-            events == std::vector<FramePeEventSignature>{
-                FramePeEventSignature{
-                    FramePeEventSignature::Kind::Token,
-                    0xBEEFu,
-                    true}},
-            "classifier observes changed CALL_DL event identity after invalidation");
-}
-
-struct BackendPeProbe {
-    std::atomic_uint64_t finishes{0u};
-    std::atomic_uint64_t tokens{0u};
-};
-
-void backend_pe_finish(void* user) {
-    static_cast<BackendPeProbe*>(user)->finishes.fetch_add(
-        1u, std::memory_order_relaxed);
-}
-
-void backend_pe_token(void* user, std::uint16_t, bool) {
-    static_cast<BackendPeProbe*>(user)->tokens.fetch_add(
-        1u, std::memory_order_relaxed);
+    return expect(
+        events == std::vector<FramePeEventSignature>{
+            FramePeEventSignature{
+                FramePeEventSignature::Kind::Token,
+                0xCAFEu,
+                true}},
+        "cached CALL_DL draw fast path preserves following PE identity");
 }
 
 bool duplicate_stale_and_out_of_order_fail() {

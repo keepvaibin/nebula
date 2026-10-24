@@ -1,3 +1,5 @@
+// Tests for FifoParser, GxState and the shader key builders.
+
 #include "galaxy/gx/fifo_parser.h"
 #include "galaxy/gx/shader_keys.h"
 #include "galaxy/gx/uber_constants.h"
@@ -188,18 +190,12 @@ std::array<std::byte, 9> frozen_lookup_call(std::uint32_t address, std::uint32_t
 }
 
 struct LookupReadRecorder final : galaxy::gx::FifoGuestMemoryReadRecorder {
-    std::vector<std::byte> bytes;
     std::vector<std::uint32_t> ranges;
     std::vector<std::uint32_t> shapes;
     std::function<void()> callback;
     void record_guest_memory_read(std::uint32_t address, std::uint32_t size) override {
         ranges.push_back(address);
         ranges.push_back(size);
-    }
-    void record_guest_memory_read_bytes(std::uint32_t address,
-                                       std::span<const std::byte> data) override {
-        record_guest_memory_read(address, static_cast<std::uint32_t>(data.size()));
-        bytes.insert(bytes.end(), data.begin(), data.end());
         if (callback) callback();
     }
     void record_guest_dependency_shape_read(std::uint32_t address, std::uint32_t size) override {
@@ -209,8 +205,8 @@ struct LookupReadRecorder final : galaxy::gx::FifoGuestMemoryReadRecorder {
 };
 
 bool test_frozen_fifo_lookup() {
-    // Exercise both cold CALL_DL decoding and cached LOAD_INDX replay. The
-    // recorder is compared byte for byte, including order and shape callbacks.
+    // Cold CALL_DL parsing and cached LOAD_INDX replay; the recorded read ranges, in order, and
+    // the shape callbacks must match the generic lookup.
     for (const std::uint32_t count : {64u, 1024u}) {
         std::vector<std::array<std::byte, 64>> storage(count);
         std::vector<galaxy::GuestMemoryRegion> regions(count);
@@ -242,7 +238,7 @@ bool test_frozen_fifo_lookup() {
             generic.run(fifo, &memory, sink_a, state_a);
             if (!expect(indexed.run_available(fifo, &memory, sink_b, state_b, true) == fifo.size(),
                         "frozen parse consumes the same commands")) return false;
-            if (!expect(a.ranges == b.ranges && a.bytes == b.bytes && a.shapes == b.shapes &&
+            if (!expect(a.ranges == b.ranges && a.shapes == b.shapes &&
                         sink_a.draws == sink_b.draws && sink_a.last_draw_payload_first == sink_b.last_draw_payload_first &&
                         state_a.xf(0) == 0x3F800000u && state_b.xf(0) == state_a.xf(0) &&
                         state_a.consume_dirty() == state_b.consume_dirty(),
@@ -278,7 +274,7 @@ bool test_frozen_fifo_lookup() {
                       (expected_draws < 0 ? !error_a.empty() : error_a.empty() && sa.draws == expected_draws) &&
                       sa.draws == sb.draws && sa.last_draw_payload_first == expected_payload &&
                       sa.last_draw_payload_first == sb.last_draw_payload_first &&
-                      ra.ranges == rb.ranges && ra.bytes == rb.bytes && ra.shapes == rb.shapes,
+                      ra.ranges == rb.ranges && ra.shapes == rb.shapes,
                       "uncertified/boundary/fast views preserve generic result and fault");
     };
     if (!compare({{0x1000u,64u,first.data()},{0x1000u,64u,second.data()}},0x1000u,32u,1,0xA1u) ||
@@ -477,10 +473,7 @@ bool test_xf_matrix_span_updates() {
                 }
             }
         }
-        // The element type is `std::uint16_t`, so each literal must be spelled as one. An
-        // unsuffixed `0x0040u` is `unsigned int`, which MSVC reports as C4244 inside a braced
-        // initializer list; the project builds with `/WX`. The list lower in this file uses the
-        // same spelling.
+        // Casts keep MSVC's C4244 (an error under /WX) off the braced list.
         for (const std::uint16_t bank :
              {static_cast<std::uint16_t>(0x0040u),
               static_cast<std::uint16_t>(0x0420u),
@@ -492,8 +485,8 @@ bool test_xf_matrix_span_updates() {
                 std::array<std::uint32_t, 0x2000> expected{};
                 std::copy_n(state.xf_raw(), expected.size(), expected.begin());
                 const unsigned src = bank + 1u, dst = bank + dst_offset;
-                // Independent ordered-copy model, including forward alias
-                // propagation. A memmove/snapshot is not equivalent here.
+                // Word-by-word copy, so overlapping writes propagate forward as in the XF
+                // write loop; memmove would differ.
                 for (unsigned i = 0u; i < 12u; ++i) expected[dst + i] = expected[src + i];
                 if (indexed) state.load_xf_indexed(static_cast<std::uint16_t>(dst), state.xf_raw() + src, 12u);
                 else state.load_xf(static_cast<std::uint16_t>(dst), state.xf_raw() + src, 12u);
@@ -506,23 +499,13 @@ bool test_xf_matrix_span_updates() {
     return true;
 }
 
-// `GxState::xf_palette_dirty()` lets the renderer reuse the frame's existing GPU snapshot
-// of the XF matrix palette instead of allocating a new one. The renderer half needs a
-// D3D12 device and is not tested here. This test covers the producer contract, where a
-// missed write would show up: a chunk the guest wrote but never armed would let the
-// renderer reuse a snapshot that is missing that write.
+// GxState::xf_palette_dirty() must arm every chunk a write touches: an unarmed chunk would let
+// the renderer reuse a palette snapshot that lacks the write.
 bool test_xf_palette_chunk_tracking() {
-    // A using-declaration cannot name a namespace (`xf` is one), so names are qualified at
-    // each use.
     GxState state;
-    // A consumer that has uploaded nothing starts with an all-clear mask and
-    // compensates with "not yet valid", so the first upload is always full.
     if (!expect(state.xf_palette_dirty() == 0u,
                 "palette dirty mask starts clear")) return false;
 
-    // A chunk is 32 words = 128 bytes, a whole number of the 16-byte float4s
-    // the shader indexes, so one 4-row object matrix can never span a chunk
-    // boundary without arming both sides of it.
     const std::array<std::uint32_t, 12> object_matrix{
         1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u};
     state.load_xf(0x0040u, object_matrix.data(), 12u);
@@ -530,15 +513,11 @@ bool test_xf_palette_chunk_tracking() {
     if (!expect(state.xf_palette_dirty() == (1ull << 2u),
                 "one object matrix arms exactly its own palette chunk")) return false;
 
-    // Only touched chunks are armed: a second object in a distant chunk must
-    // add its bit and leave the first one alone.
     state.load_xf(0x0400u, object_matrix.data(), 12u);
     (void)state.consume_dirty();
     if (!expect(state.xf_palette_dirty() == ((1ull << 2u) | (1ull << 32u)),
                 "a distant second matrix adds only its own chunk bit")) return false;
 
-    // A span that crosses a chunk boundary arms both chunks, and clearing the
-    // span as a whole is what the uploader does, so the result must be clean.
     state.load_xf(0x001Eu, object_matrix.data(), 4u);
     (void)state.consume_dirty();
     if (!expect(state.xf_palette_dirty() ==
@@ -548,9 +527,8 @@ bool test_xf_palette_chunk_tracking() {
     if (!expect(state.xf_palette_dirty() == 0u,
                 "clearing the whole palette span leaves no armed chunk")) return false;
 
-    // `load_xf_indexed` is the path SMG uses for object/skin matrices (LOAD_INDX A-D), so it
-    // has to arm the same bits as the direct write. A re-issued write of identical data must
-    // leave the mask at rest; the renderer would otherwise re-upload a span that did not move.
+    // LOAD_INDX (object and skin matrices) arms the same bits as a direct write; rewriting
+    // identical data arms nothing.
     const std::array<std::uint32_t, 12> skin_matrix{
         21u, 22u, 23u, 24u, 25u, 26u, 27u, 28u, 29u, 30u, 31u, 32u};
     state.load_xf_indexed(0x0080u, skin_matrix.data(), 12u);
@@ -564,18 +542,13 @@ bool test_xf_palette_chunk_tracking() {
     state.clear_xf_palette_dirty(4u, 4u);
     if (!expect(state.xf_palette_dirty() == 0u,
                 "clearing one chunk clears exactly that chunk")) return false;
-    // Clearing a span that was never armed is a no-op, not an underflow.
+    // Clearing a span that was never armed is a no-op.
     state.load_xf_indexed(0x0080u, skin_matrix.data(), 12u);
     (void)state.consume_dirty();
     state.clear_xf_palette_dirty(4u, GxState::kMatrixPaletteChunkCount - 1u);
     if (!expect(state.xf_palette_dirty() == 0u,
                 "clearing a trailing span clears only what was armed")) return false;
 
-    // Palette tracking is a property of matrix memory only. The XF high bank
-    // cannot alias it (`validate_xf_write` classifies every address), and a CP
-    // write touches neither, so neither may arm a chunk: an over-armed bit only
-    // costs an upload, but an assertion here is what keeps a future high-bank
-    // write from silently sharing the low bank's state.
     state.load_xf(
         static_cast<std::uint16_t>(galaxy::gx::xf::kNumTexGens),
         object_matrix.data(), 1u);
@@ -598,9 +571,7 @@ inline std::uint64_t dependency_reference_mix_u32(std::uint64_t hash, std::uint3
 std::uint64_t reference_dependency_shape_state_hash(const GxState& state) noexcept {
     std::uint64_t hash = 1469598103934665603ull;
 
-    // Dependency capture only needs the shape of guest-memory reads. Camera,
-    // lighting, and matrix values change constantly but do not alter which
-    // vertex arrays, display lists, TLUTs, or texture ranges are snapshotted.
+    // The inputs of GxState::dependency_shape_hash, written out independently.
     hash = dependency_reference_mix_u32(hash, state.cp(cp::kVcdLo));
     hash = dependency_reference_mix_u32(hash, state.cp(cp::kVcdHi));
     for (std::uint8_t fmt = 0; fmt < 8u; ++fmt) {
@@ -624,8 +595,8 @@ std::uint64_t reference_dependency_shape_state_hash(const GxState& state) noexce
     }
 
     hash = dependency_reference_mix_u32(hash, state.bp(bp::kGenMode));
-    // Masked future writes observe selector bits even when current samples
-    // are dead. Arithmetic/swap/z-format bits do not enter dependency shape.
+    // Selector bits count even for unused stages (a later masked write can expose them);
+    // arithmetic, swap and z-format bits do not.
     for (unsigned stage = 0; stage < kMaxTevStages; ++stage) {
         const std::uint32_t color = state.bp(static_cast<std::uint8_t>(
             bp::kTevColorEnvBase + 2u * stage)) & 0xFFFFu;
@@ -727,9 +698,8 @@ void test_dependency_hash_cache() {
 }
 
 namespace {
-// Golden observation stream, produced by the GxState source with SHA256
-// 5b6086e311213272bf404ff47744de03581bc27e69a1fb96f2931b22ce484ed6. It covers 46422
-// writes across every BP address/bit, masks, shared TEV banks, copies and faults.
+// Digest of GxState's observable state across 46422 BP writes (every address and bit, masks,
+// shared TEV banks, copies and faults); main compares it with a golden value.
 std::uint64_t bp_write_observation_digest() {
     GxState state;
     std::uint64_t digest=1469598103934665603ull;
@@ -768,12 +738,9 @@ std::uint64_t bp_write_observation_digest() {
 }
 }
 
-// End-to-end contract the backend's decoded-vertex/resident batch cache relies
-// on. A sink that memoizes "decoded" packet runs by (cache_token,
-// packet_run_index) -- exactly the identity GxBackend keys its decoded vertex
-// cache with -- must (1) replay an unchanged CALL_DL without any per-packet
-// decode once it has seen the run, and (2) never see an old identity again after
-// the display-list bytes change, even with no dirty-range notification.
+// GxBackend's decoded-vertex cache keys packet runs by (cache_token, packet_run_index). An
+// unchanged CALL_DL must replay a run already seen without decoding it again, and changed list
+// bytes must give a new identity.
 bool test_unchanged_display_list_replays_prepared_packet_runs() {
     struct MemoSink final : FifoSink {
         [[nodiscard]] std::size_t draw_payload_size(
@@ -882,19 +849,11 @@ bool test_unchanged_display_list_replays_prepared_packet_runs() {
     if (!run() || !expect(sink.packet_runs == 5 && sink.last_token != token &&
                           sink.memo_hits == 3,
                           "edited CALL_DL must replay under a new identity")) return false;
-    // A dirty-range invalidation also retires the identity.
-    const std::uint64_t edited_token = sink.last_token;
-    if (!expect(parser.invalidate_display_list_cache_range(0x00000004u, 1u) == 1u,
-                "dirty range overlapping the list must invalidate it")) return false;
-    if (!run() || !run() ||
-        !expect(profile.call_dl_cache_misses == 3u && sink.last_token != edited_token &&
-                sink.last_token != token,
-                "invalidated CALL_DL must not reuse a retired identity")) return false;
     return true;
 }
 
 int main(int argc, char** argv) try {
-    // Strict (GALAXY_GX_STRICT=1) unless a case below selects the release behaviour.
+    // Unknown GX commands throw, except in the cases below that test the default (skip).
     galaxy::gx::set_unknown_gx_commands_fatal(true);
     if (const std::uint64_t digest = bp_write_observation_digest(); digest != 0x38ae405df5b176beull) {
         std::cerr << "BP write observation regression: digest 0x" << std::hex << digest << std::dec << '\n';
@@ -951,9 +910,8 @@ int main(int argc, char** argv) try {
                     sink.pe_finishes == 0,
                     "ordinary masked BP side effects used raw command")) return 1;
         bp_write(0x45u, 2u);
-        // Cached CALL_DL replay has the same effective-value/repeat contract.
-        // CALL_DL length is in 32-byte blocks. Pad with NOPs so the final BP
-        // commands are inside the declared display-list window.
+        // Cached CALL_DL replay must give the same side effects. CALL_DL sizes are multiples of
+        // 32 bytes, so the list is padded with NOPs.
         bytes.resize((bytes.size() + 31u) & ~std::size_t{31u}, std::byte{0});
         std::array<std::byte, 512> guest{};
         std::copy(bytes.begin(), bytes.end(), guest.begin() + 0x100u);
@@ -1020,9 +978,8 @@ int main(int argc, char** argv) try {
     }
 
     {
-        // These writes change GPU uniforms, not shader programs. Exercise the
-        // enable/type transitions separately so narrowing dirty bits cannot
-        // accidentally reuse a pipeline when codegen actually changes.
+        // Uniform-only writes keep every key; the enable and type transitions below must change
+        // the pixel key.
         GxState uniform_state;
         const auto write = [&](std::uint8_t reg, std::uint32_t value) {
             uniform_state.load_bp((static_cast<std::uint32_t>(reg) << 24u) | value);
@@ -1081,9 +1038,8 @@ int main(int argc, char** argv) try {
     }
 
     {
-        // Compare the cached dependency hash to a fresh state rebuilt from the
-        // entire raw register file, after every classified write. This detects
-        // a missed invalidation without adding counters to production code.
+        // After each classified write the cached dependency hash must match a fresh state rebuilt
+        // from the raw registers, which catches a missed invalidation.
         GxState state;
         for (unsigned reg = 0; reg < 256u; ++reg) {
             if (reg == galaxy::gx::bp::kBpMask) continue;
@@ -1157,9 +1113,7 @@ int main(int argc, char** argv) try {
     }
 
     {
-        // Every boundary in the backend's explicitly consumed XF inventory
-        // remains accepted. Gaps between these ranges are intentionally not
-        // part of the inventory.
+        // Both ends of every classified XF range are accepted.
         GxState classified_xf_state;
         constexpr std::array<std::uint16_t, 23> kClassifiedXfAddresses{
             0x0000u, 0x00FFu,
@@ -1190,13 +1144,8 @@ int main(int argc, char** argv) try {
     }
 
     {
-        // XFMEM_ERROR..XFMEM_VTXSPECS (0x1000-0x1008): real-hardware
-        // status/diagnostic registers confirmed inert for rendering output
-        // (Dolphin's XFRegWritten treats 0x1000-0x1006 as literal no-ops,
-        // 0x1007 as unhandled-but-inert, and 0x1008/VTXSPECS as an
-        // internal-only consistency-check flag). Titan/strap boot writes
-        // XFMEM_ERROR=0x1000 during GX init; this must not hard-fail or
-        // mark any dependent state dirty.
+        // XF 0x1000-0x1008 (status and diagnostic registers, written during GX init) are stored
+        // without dirty bits.
         GxState status_reg_state;
         (void)status_reg_state.consume_dirty();  // discard initial ~0u
         for (std::uint16_t addr = galaxy::gx::xf::kStatusRegsBase;
@@ -1219,11 +1168,8 @@ int main(int argc, char** argv) try {
     }
 
     {
-        // CP 0x00/0x10/0x20: real-hardware registers of unknown purpose,
-        // confirmed inert in Dolphin's own LoadCPReg reference (named
-        // UNKNOWN_00/UNKNOWN_10/UNKNOWN_20 there too). Strap/boot GX init
-        // writes register=0x20 value=0; this must not hard-fail or mark
-        // any dependent state dirty.
+        // CP 0x00/0x10/0x20 (unknown purpose; GX init writes 0x20 = 0) are accepted without
+        // dirty bits.
         GxState unknown_cp_state;
         (void)unknown_cp_state.consume_dirty();  // discard initial ~0u
         for (const std::uint8_t reg : {galaxy::gx::cp::kUnknown00,
@@ -1240,12 +1186,8 @@ int main(int argc, char** argv) try {
     }
 
     {
-        // BP 0x23/0x24 (BPMEM_PERF0_TRI/BPMEM_PERF0_QUAD): real-hardware
-        // perf-query triangle/quad counters, confirmed inert for rendered
-        // output in Dolphin's BPWritten reference (bare `return;`, no
-        // TEV/shader/blend/rasterizer effect). Strap/boot GX init writes
-        // register=0x23 value=0; this must not hard-fail or mark any
-        // dependent state dirty.
+        // BP 0x23/0x24 (performance counters; GX init writes 0x23 = 0) are accepted without
+        // dirty bits.
         GxState perf_bp_state;
         (void)perf_bp_state.consume_dirty();  // discard initial ~0u
         for (std::uint8_t reg = galaxy::gx::bp::kPerf0TriBase;
@@ -1264,13 +1206,8 @@ int main(int argc, char** argv) try {
     }
 
     {
-        // XF 0x1013-0x1019 (XFMEM_UNKNOWN_GROUP_1 + SETMATRIXINDA/B): the
-        // unknown-group registers are inert on real hardware, and this
-        // backend's matrix-index consumers (vertex_loader.cpp,
-        // shader_gen.cpp, gx_backend.cpp) exclusively read the CP-side
-        // kMatrixIndexA/B copy, so the XF latch is write-only/unread here.
-        // Strap/boot GX init writes register=0x1018; this must not
-        // hard-fail or mark any dependent state dirty.
+        // XF 0x1013-0x1019 (unknown group and the XF matrix-index copy; GX init writes 0x1018)
+        // are stored without dirty bits.
         GxState matrix_ind_state;
         (void)matrix_ind_state.consume_dirty();  // discard initial ~0u
         for (std::uint16_t addr = galaxy::gx::xf::kUnknownGroup1Base;
@@ -1294,8 +1231,8 @@ int main(int argc, char** argv) try {
     }
 
     {
-        // Addresses that the old high-nibble CP dispatch aliased into a known
-        // register must now fail without changing the canonical register.
+        // An unknown CP address beside a known register (0x31) is rejected without changing the
+        // known one.
         GxState cp_state;
         cp_state.load_cp(galaxy::gx::cp::kMatrixIndexA, 0x12345678u);
         (void)cp_state.consume_dirty();
@@ -1443,9 +1380,9 @@ int main(int argc, char** argv) try {
     }
 
     {
-        // Release builds: an unknown CP, XF or BP write and a TMEM load of lines are skipped
-        // without changing any register, the write mask or the dirty state, and a transfer that
-        // mixes known and unknown XF addresses keeps its known words.
+        // Non-fatal mode (the default): an unknown CP, XF or BP write and a TMEM load of lines are
+        // skipped without changing any register, the write mask or the dirty state, and a
+        // transfer that mixes known and unknown XF addresses keeps its known words.
         galaxy::gx::set_unknown_gx_commands_fatal(false);
         GxState state;
         state.load_cp(galaxy::gx::cp::kMatrixIndexA, 0x12345678u);
@@ -1460,7 +1397,7 @@ int main(int argc, char** argv) try {
         } catch (const GxFatalError&) {
             threw = true;
         }
-        if (!expect(!threw, "release builds skip unknown CP and BP writes") ||
+        if (!expect(!threw, "unknown CP and BP writes are skipped by default") ||
             !expect(state.cp(0x31u) == 0u && state.bp(0x05u) == 0u &&
                         state.cp(galaxy::gx::cp::kMatrixIndexA) == 0x12345678u && state.consume_dirty() == 0u,
                     "a skipped write changes no register or dirty state")) {
@@ -1478,7 +1415,7 @@ int main(int argc, char** argv) try {
         } catch (const GxFatalError&) {
             threw = true;
         }
-        if (!expect(!threw, "release builds skip unknown XF addresses") ||
+        if (!expect(!threw, "unknown XF addresses are skipped by default") ||
             !expect(state.xf(known_xf) == 0x00000123u && state.xf(static_cast<std::uint16_t>(known_xf + 1u)) == 0u,
                     "a mixed XF transfer keeps its known word and drops the unknown one")) {
             return 1;
@@ -1490,15 +1427,14 @@ int main(int argc, char** argv) try {
         } catch (const GxFatalError&) {
             threw = true;
         }
-        if (!expect(!threw, "release builds skip a TMEM load of lines")) return 1;
+        if (!expect(!threw, "a TMEM load of lines is skipped by default")) return 1;
         galaxy::gx::set_unknown_gx_commands_fatal(true);
     }
 
     {
-        // GXTexModeSync's FIFO command (RMGE01 0x804BA0F8: 0x61, then 0x63000000; the
-        // 2026-10-14 crash report's fatal command): a TMEM load of nothing. It parses, changes
-        // no register or dirty state and consumes an armed write mask; a load of lines is
-        // still rejected.
+        // GXTexModeSync's FIFO command (RMGE01 0x804BA0F8: 0x61, then 0x63000000), a TMEM load
+        // of nothing: it parses, changes no register or dirty state and consumes an armed write
+        // mask. A load of lines is still rejected.
         FifoParser sync_parser;
         GxState sync_state;
         TestSink sync_sink;
@@ -1746,54 +1682,6 @@ int main(int argc, char** argv) try {
         if (!expect(
                 profile.call_dl_cache_hits == 2,
                 "validated changed CALL_DL did not repopulate the cache")) {
-            return 1;
-        }
-
-        const std::size_t non_overlapping_same_page_invalidated =
-            parser.invalidate_display_list_cache_range(0x00000000u, 0x80u);
-        if (!expect(
-                non_overlapping_same_page_invalidated == 0u,
-                "display-list page index invalidated a non-overlapping same-page range")) {
-            return 1;
-        }
-        const std::size_t cached_after_unrelated_dirty_consumed =
-            parser.run_available(call_dl, &memory, sink, state);
-        if (!expect(
-                cached_after_unrelated_dirty_consumed == call_dl.size(),
-                "CALL_DL after unrelated same-page dirty range was not consumed") ||
-            !expect(
-                sink.draws == 7,
-                "CALL_DL after unrelated same-page dirty range did not replay draw")) {
-            return 1;
-        }
-        if (!expect(
-                profile.call_dl_cache_hits == 3,
-                "unrelated same-page dirty range should keep the cached CALL_DL")) {
-            return 1;
-        }
-
-        guest[dl_offset + 3] = std::byte{0xF0};
-        const std::size_t invalidated =
-            parser.invalidate_display_list_cache_range(0x0000011Fu, 1u);
-        if (!expect(
-                invalidated == 1u,
-                "display-list dirty physical range did not invalidate aliased cache entry")) {
-            return 1;
-        }
-        const std::size_t changed_call_dl_consumed =
-            parser.run_available(call_dl, &memory, sink, state);
-        if (!expect(
-                changed_call_dl_consumed == call_dl.size(),
-                "changed CALL_DL display list was not consumed") ||
-            !expect(
-                sink.draws == 8,
-                "changed CALL_DL did not execute draw")) {
-            return 1;
-        }
-        if (!expect(
-                profile.call_dl_cache_misses == 3 &&
-                profile.call_dl_cache_stores == 3,
-                "changed CALL_DL bytes did not invalidate the cache entry")) {
             return 1;
         }
         parser.set_profile(nullptr);
@@ -2153,9 +2041,8 @@ int main(int argc, char** argv) try {
     }
 
     {
-        // Use the actual shader key as the dependency oracle, independently of
-        // the BP dirty predicate. Exercise every blend word and every bit edge
-        // with each PE format, destination-alpha mode and tested EFB scale.
+        // The pixel shader key itself is the oracle for the BP dirty bits: every blend word and
+        // bit flip, for each PE format, constant-alpha mode and EFB scale.
         std::uint64_t checked = 0u;
         for (std::uint32_t format = 0u; format < 4u; ++format) {
             for (std::uint32_t replacement : {0u, 0x17fu}) {

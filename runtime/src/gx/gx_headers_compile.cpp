@@ -1,5 +1,5 @@
-// Includes every galaxy/gx header so each stays self-contained and clean under
-// /W4 /WX /permissive-. The constexpr decoders are exercised at compile time.
+// Builds the core galaxy/gx headers in one unit under /W4 /WX /permissive- and checks the constexpr register
+// decoders at compile time.
 
 #include "galaxy/gx/efb_copy.h"
 #include "galaxy/gx/fifo_parser.h"
@@ -94,8 +94,8 @@ static_assert(kStandardEfbCopyFilter.filter_upper() == 0u);
 static_assert(kStandardEfbCopyFilter.filter_middle() == 64u);
 static_assert(kStandardEfbCopyFilter.filter_lower() == 0u);
 
-// GPU-shared constant layouts must keep this shape; changing them requires the
-// matching HLSL edit and a shader-cache version bump.
+// D3D12 constant buffers start on 256-byte boundaries. A layout change also needs the matching HLSL edit and a
+// kShaderCacheVersion bump (pipeline_cache.cpp).
 static_assert(sizeof(GxPsConstants) % 256 == 0);
 static_assert(sizeof(GxVsConstants) % 256 == 0);
 

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-// CPU preparation only. Every changed draw still receives a complete immutable
-// constant-ring allocation; this cache never owns or patches GPU upload memory.
+// GxVsConstants filled from GxState on the CPU, and a cache of the last fill. Every changed draw still gets a
+// complete constant-ring allocation; nothing here touches GPU upload memory.
 #include "galaxy/gx/gx_state.h"
 #include "galaxy/gx/uber_constants.h"
 #include "galaxy/gx/line_point_raster.h"
@@ -25,13 +25,11 @@ inline void fill_vs_projection(const GxState& state, float out[4][4]) {
     const float F = std::bit_cast<float>(state.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 5u)));
     const std::uint32_t type = state.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u));
 
-    // GX NDC z is [-1 (near), 0 (far)]. It maps to D3D [0, 1] by negating the GX clip z,
-    // so ndc_d3d = -ndc_gx is in [0 (far), 1 (near)]: a reversed-Z buffer, as in Dolphin's
-    // VertexShaderGen.cpp. The GX far plane lands at ndc 0, away from the clip boundary.
-    // Mapping far to 1.0 let float error clip SMG's far-plane depth-clear quad and the skybox.
-    // This composes with the XF viewport depth range and the flipped depth compare functions
-    // (see pipeline_cache). Dolphin's (1 - 1e-7) factor keeps far-plane geometry inside the
-    // clip volume; DepthClipEnable stays TRUE.
+    // GX NDC z runs from -1 (near) to 0 (far). Negating the GX clip z gives D3D's [0, 1] reversed (far 0, near 1),
+    // as Dolphin's VertexShaderGen.cpp does; the XF viewport depth range and the flipped depth compares
+    // (pipeline_cache) complete the mapping. With far at 1.0, float error clips SMG's far-plane depth-clear quad
+    // and the skybox. Dolphin's (1 - 1e-7) factor keeps far-plane geometry inside the clip volume with
+    // DepthClipEnable on.
     constexpr float kFarEps = 1.0f - 1e-7f;
     if (type == 0) {
         // Perspective: GX clip z = z*E + F, clip w = -z. D3D clip z = -(z*E + F) * (1 - 1e-7).
@@ -229,9 +227,7 @@ struct VsConstantsCpuCache {
     // The scene's sky up (GxVsConstants::sky_up, sky_up_known), kept across fills.
     std::uint32_t sky_up = 0u;
     std::uint32_t sky_up_known = 0u;
-    // GxVsConstants::flags bits 2-3: an unlit channel 0 / 1's vertex colour is de-baked to its neutral light; bits 4-5:
-    // a lit channel's (its vertex colour keeps its hue, the enhanced pixel shader lights it at its neutral light);
-    // bits 8-15, 16-23: the levels (GxBackend::debake_state).
+    // GxVsConstants::flags above bits 0-1: the ray tracer's de-bake controls (GxBackend), kept across fills.
     std::uint32_t debake = 0u;
     // GxVsConstants::debake_sh, debake_peak (flags bit 6).
     float debake_sh[7][4]{};
@@ -239,8 +235,8 @@ struct VsConstantsCpuCache {
 
     const GxVsConstants& update(const GxState& state, std::uint32_t dirty,
         unsigned current_scale, bool frame_bindings_dirty) {
-        // Matrix-only admission keeps the CP/XF/BP-derived fields from the last complete image.
-        // Other dirty combinations and frame or scale changes take the full preparation path.
+        // When only XF matrices changed, refresh the inline matrices and keep the rest of the last full fill;
+        // any other change, dirty frame bindings or a new scale refill everything.
         if (valid && !frame_bindings_dirty && efb_scale == current_scale &&
             dirty == GxState::kDirtyXfMatrices) {
             refresh_vs_inline_matrices(state, constants);
