@@ -129,6 +129,8 @@ namespace {
 
 static_assert(kEfbWidth == 640u && kEfbHeight == 528u);
 
+std::atomic<unsigned> s_layer_2d_scale{0u};
+
 // True when the alpha test passes every fragment.
 bool alpha_test_keeps_all(const PixelShaderKey& key) noexcept {
     const auto always = static_cast<std::uint8_t>(CompareFunc::Always);
@@ -6632,6 +6634,7 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
         frame_bindings_dirty_ = true;
     }
     if (marker == FifoMarker::SceneEnd) {
+        s_layer_2d_scale.store(renderer_.efb_scale(), std::memory_order_relaxed);
         begin_side_layer(kScreenLayer);
     }
     // While ray tracing runs the scene layer draws into the HDR scene EFB (renderer_d3d12 begin_hdr_scene): from here,
@@ -12459,6 +12462,10 @@ void GxBackend::on_invalidate_vertex_cache() {
     flush_pending_draw_batch();
     // GXInvalidateVtxCache invalidates the hardware vertex cache, not guest array memory. Decoded
     // vertices are already invalidated by guest writes and checked byte for byte before each hit.
+}
+
+unsigned layer_2d_scale() noexcept {
+    return s_layer_2d_scale.load(std::memory_order_relaxed);
 }
 
 }  // namespace galaxy::gx

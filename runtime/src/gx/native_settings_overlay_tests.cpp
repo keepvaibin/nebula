@@ -382,8 +382,8 @@ int main() {
     passed &= expect(key(VK_TAB), "Tab enters the controls page");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
     passed &= expect(
-        snapshot.tab == 2u && snapshot.row_count == 30u,
-        "keyboard controls: source, device, 25 bindings, pointer speed, invert, reset");
+        snapshot.tab == 2u && snapshot.row_count == 31u,
+        "keyboard controls: source, device, 25 bindings, pointer speed, invert, pair Joy-Con, reset");
     passed &= expect(galaxy::gx::native_settings_row_text_for_tests(1u) == "EDIT: KEYBOARD AND MOUSE",
                      "the device row starts on the keyboard and mouse");
     passed &= expect(key(VK_RIGHT) && galaxy::gx::native_settings_overlay_snapshot().pending_changes == 1u,
@@ -416,22 +416,30 @@ int main() {
     // Up from the first binding row wraps to RESET TO DEFAULTS at the end.
     passed &= expect(key(VK_UP) && key(VK_UP) && key(VK_UP), "up wraps to the reset row");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
-    passed &= expect(snapshot.row == 29u, "the last row is selected");
+    passed &= expect(snapshot.row == 30u, "the last row is selected");
     passed &= expect(key(VK_RETURN) && key(VK_SPACE), "Enter on reset restores defaults; Space applies");
     passed &= expect(galaxy::input::get_controls_config() == galaxy::input::default_controls_config(),
                      "defaults restored");
+    // The row above it opens the Pair Joy-Con screen, which holds the keys until Escape leaves it, the menu still open.
+    passed &= expect(key(VK_UP) && galaxy::gx::native_settings_row_text_for_tests(29u) == "PAIR JOY-CON",
+                     "pair Joy-Con sits above reset");
+    passed &= expect(key(VK_RETURN) && key(VK_DOWN) && galaxy::gx::native_settings_overlay_snapshot().row == 29u,
+                     "the Pair Joy-Con screen holds the keys");
+    passed &= expect(key(VK_ESCAPE) && galaxy::gx::native_settings_overlay_visible() && key(VK_DOWN) &&
+                         galaxy::gx::native_settings_overlay_snapshot().row == 30u,
+                     "Escape leaves the Pair Joy-Con screen and keeps the menu");
     // The device row lists the attached controllers and switches the table shown.
     passed &= expect(key(VK_DOWN) && key(VK_DOWN) && key(VK_RIGHT), "device row selects the Xbox controller");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
-    passed &= expect(snapshot.row_count == 35u,
+    passed &= expect(snapshot.row_count == 36u,
                      "Xbox adds stick and pointer deadzones, pointer hide, vibration and its strength");
     passed &= expect(galaxy::gx::native_settings_row_text_for_tests(1u) == "EDIT: XBOX CONTROLLER",
                      "the Xbox controller is named");
-    passed &= expect(key(VK_RIGHT) && galaxy::gx::native_settings_overlay_snapshot().row_count == 39u,
+    passed &= expect(key(VK_RIGHT) && galaxy::gx::native_settings_overlay_snapshot().row_count == 40u,
                      "Switch Pro adds motion, sensitivity, gyro and gyro sensitivity rows");
     passed &= expect(galaxy::gx::native_settings_row_text_for_tests(1u) == "EDIT: SWITCH PRO CONTROLLER (BT)",
                      "the Switch Pro Controller is named with its link");
-    passed &= expect(key(VK_RIGHT) && galaxy::gx::native_settings_overlay_snapshot().row_count == 39u,
+    passed &= expect(key(VK_RIGHT) && galaxy::gx::native_settings_overlay_snapshot().row_count == 40u,
                      "the DualSense has motion rows too");
     passed &= expect(galaxy::gx::native_settings_row_text_for_tests(1u) == "EDIT: DUALSENSE (USB)  ACTIVE",
                      "the active controller is marked");
@@ -449,7 +457,7 @@ int main() {
     galaxy::gx::native_settings_set_controllers_for_tests(
         std::span<const ControllerInfo>(controllers.data(), 2u), std::nullopt);
     passed &= expect(galaxy::gx::native_settings_row_text_for_tests(1u) == "EDIT: KEYBOARD AND MOUSE" &&
-                         galaxy::gx::native_settings_overlay_snapshot().row_count == 30u,
+                         galaxy::gx::native_settings_overlay_snapshot().row_count == 31u,
                      "an unplugged controller is no longer offered");
     galaxy::gx::native_settings_set_controllers_for_tests(controllers, std::nullopt);
     passed &= expect(key(VK_RIGHT) && galaxy::gx::native_settings_row_text_for_tests(1u) == "EDIT: XBOX CONTROLLER",

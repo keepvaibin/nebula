@@ -159,7 +159,8 @@ struct Device {
     OVERLAPPED read_ov{};
     bool read_pending = false;
     bool resume = false;   // read_event set by hand to continue a burst
-    bool failed = false;   // read error; the next rescan reopens it
+    bool failed = false;   // read error (or `gone`): the worker drops it; the setup thread opens it again
+    bool gone = false;     // no longer listed
     std::vector<std::uint8_t> buffer;
     USHORT output_length = 64;
     sw::StickCal left{};
@@ -177,7 +178,7 @@ struct Device {
     std::uint32_t motion_shakes = 0;
     std::uint32_t motion_shakes_logged = 0;
     std::unique_ptr<WinUsbPipes> winusb;
-    std::size_t slot = 0;
+    std::size_t slot = kMaxHidPads;  // given when the worker takes it in
     // Output packet number after initialisation (0x10 rumble reports).
     std::uint8_t packet = 0;
     // PlayStation.
@@ -198,6 +199,15 @@ struct Device {
     // Steam Controller.
     sv::SensorClock steam_clock{};
     std::uint64_t steam_settings_due_us = 0;
+    // Joy-Con: its side (a charging grip's by the controller's own report), the half it is paired with (a pair
+    // publishes in its right half's slot), its last state and whether its shoulder (L or R) is held.
+    sw::JoyConSide joycon = sw::JoyConSide::None;
+    bool grip = false;
+    Device* partner = nullptr;
+    sw::DecodedState joycon_state{};
+    bool joycon_shoulder = false;
+    std::uint32_t joycon_buttons = 0;  // held at its last report
+    std::uint8_t joycon_presses = 0;
     // Generic HID controller: the parser's description, the layout taken from
     // it and the last values (a device may spread them over several reports).
     UniquePreparsed preparsed;
@@ -212,6 +222,12 @@ struct Device {
     std::uint8_t rumble_sequence = 0;
     std::uint64_t rumble_sent_us = 0;
     UniqueHandle write_event;
+    // The output report in flight without waiting (post_output): one at a time.
+    std::vector<std::uint8_t> post_buffer;
+    OVERLAPPED post_ov{};
+    UniqueHandle post_event;
+    bool post_pending = false;
+    std::uint64_t post_started_us = 0;
 };
 
 struct Published {
@@ -256,6 +272,9 @@ struct Hub {
     std::array<std::atomic<HANDLE>, kMaxHidPads> hid_rumble_handles{};
     std::array<std::atomic<std::uint16_t>, kMaxHidPads> hid_rumble_lengths{};
     std::array<std::atomic<std::uint8_t>, kMaxHidPads> hid_rumble_off{};
+    // Joy-Con halves and pairs (under `lock`) and the Pair Joy-Con screen.
+    JoyConStatus joycon{};
+    std::atomic<bool> joycon_pairing{false};
 };
 
 // Never destroyed: the worker may still be blocked when the process exits.
@@ -318,6 +337,10 @@ struct ProductInfo {
 std::optional<ProductInfo> find_product(USHORT vendor, USHORT product) noexcept {
     if (vendor == sw::kNintendoVendorId) {
         if (product == sw::kProControllerProductId) return ProductInfo{ControlScheme::SwitchPro, "Switch Pro Controller", {}};
+        // Joy-Con: one controller per pair, read as a Pro Controller's halves.
+        if (product == sw::kJoyConLeftProductId) return ProductInfo{ControlScheme::SwitchPro, "Joy-Con (L)", {}};
+        if (product == sw::kJoyConRightProductId) return ProductInfo{ControlScheme::SwitchPro, "Joy-Con (R)", {}};
+        if (product == sw::kChargingGripProductId) return ProductInfo{ControlScheme::SwitchPro, "Joy-Con", {}};
         if (product == sw::kPro2ControllerProductId) {
             return ProductInfo{ControlScheme::SwitchPro2, "Switch 2 Pro Controller", {}};
         }
@@ -690,7 +713,8 @@ bool subcommand(Device& device, OverlappedIo& io, std::uint8_t& packet, std::uin
     return false;
 }
 
-bool usb_command(Device& device, OverlappedIo& io, std::uint8_t command, bool wait) {
+bool usb_command(Device& device, OverlappedIo& io, std::uint8_t command, bool wait,
+                 std::vector<std::uint8_t>* reply = nullptr) {
     std::vector<std::uint8_t> out(std::max<std::size_t>(device.output_length, 64u));
     std::vector<std::uint8_t> in(std::max<std::size_t>(device.buffer.size(), 64u));
     (void)sw::build_usb_command(command, out);
@@ -701,6 +725,7 @@ bool usb_command(Device& device, OverlappedIo& io, std::uint8_t command, bool wa
         DWORD got = 0;
         if (io.read(in.data(), static_cast<DWORD>(in.size()), 60, got) && got >= 2u &&
             in[0] == sw::kReportUsbAck && in[1] == command) {
+            if (reply != nullptr) reply->assign(in.begin(), in.begin() + got);
             return true;
         }
     }
@@ -710,6 +735,18 @@ bool usb_command(Device& device, OverlappedIo& io, std::uint8_t command, bool wa
 void init_switch_pro(Device& device) {
     OverlappedIo io(device.handle.get());
     std::uint8_t packet = 0;
+    std::vector<std::uint8_t> data;
+    // A Joy-Con names its side (a charging grip's interface holds whichever is in it): by USB status before the
+    // handshake, else by the device info subcommand after it. An interface that names none (an empty grip slot) stays
+    // no controller.
+    const bool joycon = device.grip || device.joycon != sw::JoyConSide::None;
+    sw::JoyConSide side = sw::JoyConSide::None;
+    if (joycon && !device.bluetooth && usb_command(device, io, sw::kUsbStatus, true, &data) && data.size() >= 4u) {
+        side = sw::joycon_side_of_type(data[3]);
+    }
+    if (device.grip && side == sw::JoyConSide::None) {
+        return;  // an empty rail (the setup thread asks again)
+    }
     if (!device.bluetooth) {
         if (usb_command(device, io, sw::kUsbHandshake, true)) {
             (void)usb_command(device, io, sw::kUsbHighSpeed, true);
@@ -719,7 +756,14 @@ void init_switch_pro(Device& device) {
             device.bluetooth = true;  // no USB acknowledgement
         }
     }
-    std::vector<std::uint8_t> data;
+    if (joycon && side == sw::JoyConSide::None &&
+        subcommand(device, io, packet, sw::kSubcommandDeviceInfo, {}, 0, &data) && data.size() >= 3u) {
+        side = sw::joycon_side_of_type(data[2]);
+    }
+    if (joycon) {
+        device.joycon = side != sw::JoyConSide::None ? side : device.joycon;
+        device.model_name = device.joycon == sw::JoyConSide::Left ? "Joy-Con (L)" : "Joy-Con (R)";
+    }
     bool user_left = false;
     bool user_right = false;
     const std::uint8_t user_length = 22;
@@ -764,7 +808,10 @@ void init_switch_pro(Device& device) {
     (void)subcommand(device, io, packet, sw::kSubcommandEnableVibration, std::span(&vibration, 1), 0, nullptr);
     (void)subcommand(device, io, packet, sw::kSubcommandPlayerLights, std::span(&player_one, 1), 0, nullptr);
     device.packet = packet;
-    std::cerr << "[controller] switch pro (" << (device.bluetooth ? "bluetooth" : "usb")
+    std::cerr << "[controller] " << (device.joycon == sw::JoyConSide::Left    ? "joy-con (l)"
+                                     : device.joycon == sw::JoyConSide::Right ? "joy-con (r)"
+                                                                              : "switch pro")
+              << " (" << (device.bluetooth ? "bluetooth" : "usb")
               << ") report 0x30 " << (mode_ok ? "on" : "unconfirmed") << ", imu "
               << (imu_ok ? "on" : "unconfirmed") << '\n';
 }
@@ -929,6 +976,48 @@ bool write_output(Device& device, const std::uint8_t* report, std::size_t built)
     return write_report(device.handle.get(), device.write_event.get(), report, static_cast<DWORD>(length), 30);
 }
 
+// An output report sent without waiting for it (the motors): the worker never stalls on a busy radio, so every
+// controller's reports keep arriving as they come. One is in flight per device; Busy while the last is still going out
+// (the caller tries again at its next turn); one stuck past kPostStuckUs is cancelled.
+enum class Post { Sent, Busy, Failed };
+constexpr std::uint64_t kPostStuckUs = 100'000;
+
+void finish_post(Device& device, bool wait) {
+    if (!device.post_pending) return;
+    DWORD done = 0;
+    if (!wait && !GetOverlappedResult(device.handle.get(), &device.post_ov, &done, FALSE) &&
+        GetLastError() == ERROR_IO_INCOMPLETE) {
+        if (steady_us() - device.post_started_us < kPostStuckUs) return;
+        wait = true;
+    }
+    if (wait) {
+        CancelIoEx(device.handle.get(), &device.post_ov);
+        GetOverlappedResult(device.handle.get(), &device.post_ov, &done, TRUE);
+    }
+    device.post_pending = false;
+}
+
+Post post_output(Device& device, const std::uint8_t* report, std::size_t built) {
+    const std::size_t length = device.output_length;
+    if (built == 0 || built > length || length > kLargestOutputReport) return Post::Failed;
+    finish_post(device, false);
+    if (device.post_pending) return Post::Busy;
+    if (!device.post_event) device.post_event.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    if (!device.post_event) return Post::Failed;
+    device.post_buffer.assign(report, report + built);
+    device.post_buffer.resize(length, 0u);
+    device.post_ov = OVERLAPPED{};
+    device.post_ov.hEvent = device.post_event.get();
+    ResetEvent(device.post_event.get());
+    if (WriteFile(device.handle.get(), device.post_buffer.data(), static_cast<DWORD>(length), nullptr, &device.post_ov)) {
+        return Post::Sent;
+    }
+    if (GetLastError() != ERROR_IO_PENDING) return Post::Failed;
+    device.post_pending = true;
+    device.post_started_us = steady_us();
+    return Post::Sent;
+}
+
 bool send_playstation_effects(Device& device, ps::Effects effects) {
     effects.sequence = device.ps_sequence++;
     std::array<std::uint8_t, kLargestOutputReport> report{};
@@ -1006,15 +1095,23 @@ void send_steam_settings(Device& device, std::uint64_t now) {
 
 class Worker {
 public:
+    // The reports, the motors and the pairs, here; listing the controllers and setting up new ones (seconds on a slow
+    // radio), on a setup thread of its own, so a controller connecting, a USB device plugged in or a busy radio never
+    // holds back another controller's input.
     void run(HANDLE stop, HANDLE rescan, HANDLE rumble) {
-        rescan_devices();
+        setup_done_.reset(CreateEventW(nullptr, FALSE, FALSE, nullptr));
+        if (!setup_done_) return;
+        setup_ = std::thread([this, stop, rescan] {
+            SetThreadDescription(GetCurrentThread(), L"nebula-controller-setup");
+            setup_main(stop, rescan);
+        });
         service_device_timers();
         for (;;) {
             std::array<HANDLE, 3 + kMaxHidPads> waits{};
             std::array<Device*, 3 + kMaxHidPads> owners{};
             DWORD count = 0;
             waits[count++] = stop;
-            waits[count++] = rescan;
+            waits[count++] = setup_done_.get();
             waits[count++] = rumble;
             for (auto& device : devices_) {
                 if (device->read_pending) {
@@ -1028,19 +1125,24 @@ public:
             const DWORD result = WaitForMultipleObjects(count, waits.data(), FALSE, wait_timeout_ms());
             if (result == WAIT_OBJECT_0) break;
             if (result == WAIT_OBJECT_0 + 1) {
-                rescan_devices();
+                take_setup();
             } else if (result >= WAIT_OBJECT_0 + 3 && result < WAIT_OBJECT_0 + count) {
                 Device* device = owners[result - WAIT_OBJECT_0];
                 complete_read(*device);
             } else if (result != WAIT_OBJECT_0 + 2 && result != WAIT_TIMEOUT) {
                 break;  // WAIT_FAILED: leave rather than spin
             }
+            drop_failed();
             service_rumble();
             service_device_timers();
         }
+        SetEvent(stop);  // the setup thread too
+        setup_.join();
         stop_xinput_rumble();
         for (auto& device : devices_) close_device(*device);
         devices_.clear();
+        for (auto& device : setup_ready_) close_device(*device);
+        setup_ready_.clear();
     }
 
 private:
@@ -1052,35 +1154,133 @@ private:
         }
     }
 
-    void rescan_devices() {
-        const std::uint64_t scan_start = steady_us();
-        const auto candidates = enumerate_hid_pads();
-        std::cerr << "[controller] scan " << candidates.size() << " controller interface(s) in "
-                  << (steady_us() - scan_start) / 1000u << " ms\n";
-        // Drop devices that disappeared.
-        for (auto it = devices_.begin(); it != devices_.end();) {
-            const bool present = std::any_of(candidates.begin(), candidates.end(),
-                                             [&](const HidCandidate& c) { return c.path == (*it)->path; });
-            if (present && !(*it)->failed) {
-                ++it;
-            } else {
-                close_device(**it);
-                it = devices_.erase(it);
+    // The setup thread: at each device change (and every kGripProbeMs while a charging grip has an empty rail), the
+    // controllers listed; the new ones opened and set up, then handed to the worker with the paths seen.
+    void setup_main(HANDLE stop, HANDLE rescan) {
+        std::vector<std::wstring> refused;      // could not be opened: reported once
+        std::vector<std::wstring> empty_rails;  // a charging grip's interface with no Joy-Con: asked again
+        for (bool first = true;; first = false) {
+            if (!first) {
+                const HANDLE waits[2] = {stop, rescan};
+                const DWORD result =
+                    WaitForMultipleObjects(2, waits, FALSE, empty_rails.empty() ? INFINITE : kGripProbeMs);
+                if (result != WAIT_OBJECT_0 + 1 && result != WAIT_TIMEOUT) return;
             }
+            const std::uint64_t scan_start = steady_us();
+            const auto candidates = enumerate_hid_pads();
+            std::cerr << "[controller] scan " << candidates.size() << " controller interface(s) in "
+                      << (steady_us() - scan_start) / 1000u << " ms\n";
+            const auto listed = [&](const std::wstring& path) {
+                return std::any_of(candidates.begin(), candidates.end(), [&](const HidCandidate& c) { return c.path == path; });
+            };
+            // A path missing from this scan is reported again when it returns.
+            std::erase_if(refused, [&](const std::wstring& path) { return !listed(path); });
+            std::erase_if(empty_rails, [&](const std::wstring& path) { return !listed(path); });
+            for (const HidCandidate& candidate : candidates) {
+                if (WaitForSingleObject(stop, 0) == WAIT_OBJECT_0) return;
+                bool known = false;
+                std::size_t open = 0;
+                AcquireSRWLockShared(&setup_lock_);
+                known = std::find(open_paths_.begin(), open_paths_.end(), candidate.path) != open_paths_.end();
+                open = open_paths_.size();
+                ReleaseSRWLockShared(&setup_lock_);
+                if (known) continue;
+                if (open >= kMaxHidPads) break;
+                std::unique_ptr<Device> device = open_device(candidate, refused);
+                if (!device) continue;
+                const bool rail = std::find(empty_rails.begin(), empty_rails.end(), candidate.path) != empty_rails.end();
+                if (device->grip && device->joycon == sw::JoyConSide::None) {
+                    if (!rail) {
+                        empty_rails.push_back(candidate.path);
+                        std::cerr << "[controller] charging grip: a rail with no Joy-Con\n";
+                    }
+                    continue;  // closed; asked again
+                }
+                if (rail) std::erase(empty_rails, candidate.path);
+                AcquireSRWLockExclusive(&setup_lock_);
+                open_paths_.push_back(device->path);
+                setup_ready_.push_back(std::move(device));
+                ReleaseSRWLockExclusive(&setup_lock_);
+            }
+            AcquireSRWLockExclusive(&setup_lock_);
+            setup_seen_.clear();
+            for (const HidCandidate& candidate : candidates) setup_seen_.push_back(candidate.path);
+            setup_seen_fresh_ = true;
+            ReleaseSRWLockExclusive(&setup_lock_);
+            SetEvent(setup_done_.get());
         }
-        for (const HidCandidate& candidate : candidates) {
-            if (devices_.size() >= kMaxHidPads) break;
-            const bool known = std::any_of(devices_.begin(), devices_.end(),
-                                           [&](const auto& d) { return d->path == candidate.path; });
-            if (!known) open_device(candidate);
+    }
+
+    // What the setup thread found: the devices no longer listed go; the new ones each take a slot, then publish (a
+    // Joy-Con half pairs instead), then read.
+    void take_setup() {
+        std::vector<std::unique_ptr<Device>> ready;
+        std::vector<std::wstring> seen;
+        bool fresh = false;
+        AcquireSRWLockExclusive(&setup_lock_);
+        ready.swap(setup_ready_);
+        if (setup_seen_fresh_) {
+            seen.swap(setup_seen_);
+            setup_seen_fresh_ = false;
+            fresh = true;
         }
-        // A path missing from this scan is reported again when it returns.
-        refused_.erase(std::remove_if(refused_.begin(), refused_.end(),
-                                      [&](const std::wstring& path) {
-                                          return std::none_of(candidates.begin(), candidates.end(),
-                                                              [&](const HidCandidate& c) { return c.path == path; });
-                                      }),
-                       refused_.end());
+        ReleaseSRWLockExclusive(&setup_lock_);
+        if (fresh) {
+            for (auto& device : devices_) {
+                if (std::find(seen.begin(), seen.end(), device->path) == seen.end()) {
+                    device->failed = true;
+                    device->gone = true;
+                }
+            }
+            drop_failed();
+        }
+        for (auto& device : ready) {
+            device->slot = free_slot();
+            if (device->slot >= kMaxHidPads) {
+                forget_path(device->path);
+                close_device(*device);
+                continue;
+            }
+            Device& ref = *device;
+            devices_.push_back(std::move(device));
+            if (ref.joycon == sw::JoyConSide::None && !ref.puck && !ref.grip) {
+                publish_device(ref);
+            }
+            issue_read(ref);
+        }
+        update_joycon_pairs();
+    }
+
+    // Devices whose reads failed or that are no longer listed: their pairs broken, closed and forgotten. A failed
+    // read asks the setup thread to look again (a stack that reset opens it again).
+    void drop_failed() {
+        bool again = false;
+        bool halves = false;
+        for (auto it = devices_.begin(); it != devices_.end();) {
+            Device& device = **it;
+            if (!device.failed) {
+                ++it;
+                continue;
+            }
+            again = again || !device.gone;
+            halves = halves || device.joycon != sw::JoyConSide::None;
+            if (Device* partner = device.partner) {
+                unpublish_device(*partner);
+                partner->partner = nullptr;
+                device.partner = nullptr;
+            }
+            close_device(device);
+            forget_path(device.path);
+            it = devices_.erase(it);
+        }
+        if (halves) update_joycon_pairs();
+        if (again) SetEvent(rescan_handle_);
+    }
+
+    void forget_path(const std::wstring& path) {
+        AcquireSRWLockExclusive(&setup_lock_);
+        std::erase(open_paths_, path);
+        ReleaseSRWLockExclusive(&setup_lock_);
     }
 
     std::size_t free_slot() const {
@@ -1092,7 +1292,8 @@ private:
         return kMaxHidPads;
     }
 
-    void open_device(const HidCandidate& candidate) {
+    // On the setup thread: the device opened and set up for its kind (null: it could not be opened).
+    static std::unique_ptr<Device> open_device(const HidCandidate& candidate, std::vector<std::wstring>& refused) {
         auto device = std::make_unique<Device>();
         device->path = candidate.path;
         device->scheme = candidate.info.scheme;
@@ -1100,19 +1301,19 @@ private:
         device->ps_model = candidate.info.ps_model;
         device->link = link_of(candidate);
         device->puck = sv::is_puck_product(candidate.product);
-        device->slot = free_slot();
-        if (device->slot >= kMaxHidPads) return;
+        device->joycon = sw::joycon_side_of_product(candidate.product);
+        device->grip = candidate.vendor == sw::kNintendoVendorId && candidate.product == sw::kChargingGripProductId;
         device->handle.reset(CreateFileW(candidate.path.c_str(), GENERIC_READ | GENERIC_WRITE,
                                          FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING,
                                          FILE_FLAG_OVERLAPPED, nullptr));
         if (device->handle.get() == INVALID_HANDLE_VALUE) {
             const DWORD error = GetLastError();
-            if (std::find(refused_.begin(), refused_.end(), candidate.path) == refused_.end()) {
-                refused_.push_back(candidate.path);
+            if (std::find(refused.begin(), refused.end(), candidate.path) == refused.end()) {
+                refused.push_back(candidate.path);
                 std::cerr << "[controller] " << device->model_name << ": cannot open the device (error " << error
                           << ")\n";
             }
-            return;
+            return nullptr;
         }
         PHIDP_PREPARSED_DATA preparsed = nullptr;
         HIDP_CAPS caps{};
@@ -1160,10 +1361,7 @@ private:
         default:
             break;
         }
-        Device& ref = *device;
-        devices_.push_back(std::move(device));
-        if (!ref.puck) publish_device(ref);
-        issue_read(ref);
+        return device;
     }
 
     void publish_device(Device& device) {
@@ -1178,19 +1376,79 @@ private:
             published.connected = true;
             published.state.connected = true;
             published.state.scheme = device.scheme;
-            published.state.left = device.left;
+            published.state.left = device.partner != nullptr ? device.partner->left : device.left;
             published.state.right = device.right;
             published.state.slot = static_cast<std::uint8_t>(device.slot);
             published.info.scheme = device.scheme;
             published.info.slot = static_cast<std::uint8_t>(device.slot);
-            published.info.link = device.link;
-            published.info.model = device.model_name;
+            // A pair is Bluetooth when either half is.
+            published.info.link = device.partner != nullptr && device.partner->link == ControllerLink::Bluetooth
+                                      ? ControllerLink::Bluetooth
+                                      : device.link;
+            published.info.model = device.partner != nullptr ? "Joy-Con (L/R)" : device.model_name;
             published.info.note = device.needs_driver ? "needs WinUSB" : nullptr;
             ReleaseSRWLockExclusive(&hub().lock);
         }
         if (device.scheme == ControlScheme::Steam) device.steam_settings_due_us = now;
-        std::cerr << "[controller] connected " << input::control_scheme_id(device.scheme) << ' ' << device.model_name
+        std::cerr << "[controller] connected " << input::control_scheme_id(device.scheme) << ' '
+                  << (device.partner != nullptr ? "Joy-Con (L/R)" : device.model_name)
                   << (device.bluetooth ? " bluetooth" : device.puck ? " wireless" : " usb") << '\n';
+    }
+
+    // Joy-Con halves pair (sw::pair_joycons): a pair publishes as one controller in its right half's slot; a half
+    // without its partner publishes nothing. Then the status the Pair Joy-Con screen shows.
+    void update_joycon_pairs() {
+        std::vector<Device*> halves;
+        for (auto& d : devices_) {
+            if (d->joycon != sw::JoyConSide::None && !d->failed) halves.push_back(d.get());
+        }
+        const auto index_of = [&](const Device* d) {
+            const auto it = std::find(halves.begin(), halves.end(), d);
+            return it == halves.end() ? -1 : static_cast<int>(it - halves.begin());
+        };
+        std::vector<sw::JoyConHalf> state(halves.size());
+        for (std::size_t i = 0; i < halves.size(); ++i) {
+            state[i].side = halves[i]->joycon;
+            state[i].partner = index_of(halves[i]->partner);
+            state[i].shoulder = halves[i]->joycon_shoulder;
+        }
+        const bool screen = hub().joycon_pairing.load(std::memory_order_acquire);
+        joycon_pairing_seen_ = screen;
+        const sw::JoyConPairing pairing = sw::pair_joycons(state, screen);
+        if (pairing.made) {
+            ++joycon_paired_;
+            std::cerr << "[controller] joy-con paired\n";
+        }
+        if (pairing.changed) {
+            // Every half whose partner changed leaves its old pair, then the new pairs publish.
+            for (std::size_t i = 0; i < halves.size(); ++i) {
+                Device* now = state[i].partner >= 0 ? halves[static_cast<std::size_t>(state[i].partner)] : nullptr;
+                if (now != halves[i]->partner) {
+                    unpublish_device(*halves[i]);
+                    halves[i]->partner = now;
+                }
+            }
+            for (Device* half : halves) {
+                if (half->joycon == sw::JoyConSide::Right && half->partner != nullptr && !half->published) {
+                    publish_device(*half);
+                }
+            }
+        }
+        JoyConStatus status{};
+        for (const Device* half : halves) {
+            const bool left = half->joycon == sw::JoyConSide::Left;
+            status.lefts = static_cast<std::uint8_t>(status.lefts + (left ? 1u : 0u));
+            status.rights = static_cast<std::uint8_t>(status.rights + (left ? 0u : 1u));
+            status.left_held = status.left_held || (left && half->joycon_shoulder);
+            status.right_held = status.right_held || (!left && half->joycon_shoulder);
+            status.pairs = static_cast<std::uint8_t>(status.pairs + (!left && half->partner != nullptr ? 1u : 0u));
+            std::uint8_t& presses = left ? status.left_presses : status.right_presses;
+            presses = static_cast<std::uint8_t>(presses + half->joycon_presses);
+        }
+        status.paired = joycon_paired_;
+        AcquireSRWLockExclusive(&hub().lock);
+        hub().joycon = status;
+        ReleaseSRWLockExclusive(&hub().lock);
     }
 
     void unpublish_device(Device& device) {
@@ -1212,6 +1470,7 @@ private:
             ReleaseSRWLockExclusive(&hub().rumble_device_lock);
         }
         if (device.rumble_on) {
+            finish_post(device, true);  // the off report after the last one
             if (!device.write_event) device.write_event.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
             (void)write_rumble_off(device.handle.get(), device.write_event.get(), device.output_length,
                                    off_kind_of(device));
@@ -1221,6 +1480,7 @@ private:
 
     void close_device(Device& device) {
         stop_device_rumble(device);
+        finish_post(device, true);
         if (device.read_pending && !device.resume) {
             CancelIoEx(device.handle.get(), &device.read_ov);
             DWORD done = 0;
@@ -1257,7 +1517,6 @@ private:
             }
             device.read_pending = false;
             device.failed = true;
-            SetEvent(rescan_handle_);
             return;
         }
         device.resume = true;
@@ -1274,9 +1533,8 @@ private:
         }
         DWORD got = 0;
         if (!GetOverlappedResult(device.handle.get(), &device.read_ov, &got, FALSE)) {
-            // Unplugged or the stack reset: reopen on the rescan.
+            // Unplugged or the stack reset: dropped, then opened again if it is still listed.
             device.failed = true;
-            SetEvent(rescan_handle_);
             return;
         }
         handle_report(device, got);
@@ -1337,6 +1595,37 @@ private:
         const std::span<const std::uint8_t> report(device.buffer.data(), size);
         sw::DecodedState decoded{};
         if (!decode(device, report, decoded)) return;
+        // A Joy-Con half keeps its state for its pair, which publishes in the right half's slot; the pointer and the
+        // tilt follow the right half alone, a shake of either counts (as a Nunchuk's does on the console).
+        Device* target = &device;
+        bool pointing = true;
+        sw::DecodedState moved = decoded;  // the motion this report carries (a Joy-Con half's own)
+        if (device.joycon != sw::JoyConSide::None) {
+            const bool left = device.joycon == sw::JoyConSide::Left;
+            if (!left) sw::turn_right_joycon_imu(decoded);
+            device.joycon_state = decoded;
+            const bool held =
+                (decoded.buttons & input::pad::bit(left ? input::pad::kLeftShoulderBit : input::pad::kRightShoulderBit)) != 0u;
+            // Pairs change by the shoulders only on the Pair Joy-Con screen; its status follows every press and
+            // shoulder, so the screen opens on what is held and counted now.
+            const bool screen = hub().joycon_pairing.load(std::memory_order_acquire);
+            const bool shoulder_changed = held != device.joycon_shoulder;
+            const bool pressed = (decoded.buttons & ~device.joycon_buttons) != 0u;
+            device.joycon_shoulder = held;
+            device.joycon_buttons = decoded.buttons;
+            device.joycon_presses = static_cast<std::uint8_t>(device.joycon_presses + (pressed ? 1u : 0u));
+            if (screen != joycon_pairing_seen_ || shoulder_changed || pressed) {
+                update_joycon_pairs();
+            }
+            if (device.partner == nullptr) return;
+            Device& right = left ? *device.partner : device;
+            const Device& left_half = left ? device : *device.partner;
+            moved = decoded;
+            // The pair's state is the right half's motion (combine_joycons); each half's own feeds its shakes.
+            decoded = sw::combine_joycons(left_half.joycon_state, right.joycon_state);
+            target = &right;
+            pointing = !left;
+        }
         refresh_config();
         const input::SchemeTuning& tuning = config_.tune(device.scheme);
         const std::uint64_t now = steady_us();
@@ -1358,18 +1647,18 @@ private:
         sw::MotionSettings motion{};
         motion.shake = tuning.motion_shake != input::MotionShake::Off;
         motion.shake_sensitivity = tuning.shake_sensitivity;
-        motion.gyro_pointer = tuning.gyro_pointer;
+        motion.gyro_pointer = tuning.gyro_pointer && pointing;
         motion.gyro_sensitivity = tuning.gyro_sensitivity;
         motion.picture_aspect = static_cast<float>(galaxy::kWiiContentAspect);
-        for (std::size_t i = 0; i < decoded.imu_count; ++i) {
+        for (std::size_t i = 0; i < moved.imu_count; ++i) {
             // Switch Pro: three samples 5 ms apart; the others one per report,
             // timed by the controller's clock where it has one.
             const bool pro = device.scheme == ControlScheme::SwitchPro;
-            const float dt = pro ? 0.005f : decoded.imu_dt > 0.0f ? decoded.imu_dt : dt_report;
-            const std::uint64_t t = pro ? now - static_cast<std::uint64_t>((decoded.imu_count - 1u - i) * 5000u) : now;
-            const sw::SwitchMotion::Output out = device.motion.feed(decoded.imu[i], dt, t, motion);
+            const float dt = pro ? 0.005f : moved.imu_dt > 0.0f ? moved.imu_dt : dt_report;
+            const std::uint64_t t = pro ? now - static_cast<std::uint64_t>((moved.imu_count - 1u - i) * 5000u) : now;
+            const sw::SwitchMotion::Output out = device.motion.feed(moved.imu[i], dt, t, motion);
             shake_started |= out.shake_started;
-            const sw::ImuSample& s = decoded.imu[i];
+            const sw::ImuSample& s = moved.imu[i];
             const float g = std::sqrt(s.accel[0] * s.accel[0] + s.accel[1] * s.accel[1] + s.accel[2] * s.accel[2]);
             const float rate = std::sqrt(s.gyro[0] * s.gyro[0] + s.gyro[1] * s.gyro[1] + s.gyro[2] * s.gyro[2]);
             if (std::isfinite(g) && std::isfinite(rate)) {
@@ -1380,27 +1669,29 @@ private:
             gyro_x += out.pointer_x;
             gyro_y += out.pointer_y;
         }
-        if (decoded.imu_count != 0u) {
+        if (moved.imu_count != 0u) {
             ++device.imu_reports;
         }
         log_motion(device, now, motion);
         AcquireSRWLockExclusive(&hub().lock);
-        Published& published = hub().pads[device.slot];
+        Published& published = hub().pads[target->slot];
         published.connected = true;
         HidPadState& state = published.state;
         state.connected = true;
-        state.scheme = device.scheme;
+        state.scheme = target->scheme;
         state.decoded = decoded;
-        state.left = device.left;
-        state.right = device.right;
+        state.left = target->partner != nullptr ? target->partner->left : target->left;
+        state.right = target->right;
         if (shake_started) state.shake_until_us = now + sw::SwitchMotion::kShakeHoldUs;
-        state.gyro_x = std::clamp(state.gyro_x + gyro_x, -4.0f, 4.0f);
-        state.gyro_y = std::clamp(state.gyro_y + gyro_y, -4.0f, 4.0f);
-        state.imu_live = decoded.imu_count != 0u;
-        state.gyro_rest_windows = device.motion.rest_windows();
-        state.gravity = device.motion.gravity();
-        state.gravity_valid = device.motion.gravity_ready();
-        state.slot = static_cast<std::uint8_t>(device.slot);
+        if (pointing) {
+            state.gyro_x = std::clamp(state.gyro_x + gyro_x, -4.0f, 4.0f);
+            state.gyro_y = std::clamp(state.gyro_y + gyro_y, -4.0f, 4.0f);
+            state.imu_live = decoded.imu_count != 0u;
+            state.gyro_rest_windows = device.motion.rest_windows();
+            state.gravity = device.motion.gravity();
+            state.gravity_valid = device.motion.gravity_ready();
+        }
+        state.slot = static_cast<std::uint8_t>(target->slot);
         ReleaseSRWLockExclusive(&hub().lock);
     }
 
@@ -1462,8 +1753,11 @@ private:
         }
         DWORD timer_ms = xinput_on_ != 0u ? 25u : 0u;
         for (auto& device : devices_) {
-            const bool target = request.target.kind == RumbleTarget::Kind::Hid &&
-                                request.target.slot == device->slot;
+            // A Joy-Con pair is its right half's slot; its left half rumbles with it.
+            const std::size_t slot = device->joycon == sw::JoyConSide::Left && device->partner != nullptr
+                                         ? device->partner->slot
+                                         : device->slot;
+            const bool target = request.target.kind == RumbleTarget::Kind::Hid && request.target.slot == slot;
             if (service_hid_rumble(*device, target ? level : std::uint8_t{0}, request.strength, now)) {
                 const DWORD period = device->scheme == ControlScheme::SwitchPro2 ? 10u : 25u;
                 timer_ms = timer_ms == 0u ? period : std::min(timer_ms, period);
@@ -1514,7 +1808,7 @@ private:
             return false;
         }
         if (want) arm_crash_stop(device, length, off_kind_of(device));
-        (void)write_report(device.handle.get(), device.write_event.get(), report.data(), static_cast<DWORD>(length), 30);
+        if (post_output(device, report.data(), built) == Post::Busy) return true;  // again at the next turn
         device.rumble_sent_us = now;
         device.rumble_on = want;
         device.rumble_level = level;
@@ -1548,7 +1842,7 @@ private:
             return false;
         }
         if (want) arm_crash_stop(device, device.output_length, off_kind_of(device));
-        (void)write_output(device, report.data(), built);
+        if (post_output(device, report.data(), built) == Post::Busy) return true;  // again at the next turn
         device.rumble_sent_us = now;
         device.rumble_on = want;
         device.rumble_value = motor;
@@ -1575,7 +1869,7 @@ private:
             return false;
         }
         if (want) arm_crash_stop(device, device.output_length, OffKind::Steam);
-        (void)write_output(device, report.data(), built);
+        if (post_output(device, report.data(), built) == Post::Busy) return true;
         device.rumble_sent_us = now;
         device.rumble_on = want;
         device.rumble_value = speed;
@@ -1647,11 +1941,24 @@ private:
     static constexpr std::uint64_t kSteamRumbleGapUs = 10'000;
     static constexpr unsigned kPlayStationModeAttempts = 5;
 
+    static constexpr DWORD kGripProbeMs = 2000;
+
     std::vector<std::unique_ptr<Device>> devices_;
-    std::vector<std::wstring> refused_;
+    // The setup thread and what it hands over (under setup_lock_): devices ready to read, the paths of the last scan,
+    // and every path open here or handed over.
+    std::thread setup_;
+    UniqueHandle setup_done_;
+    SRWLOCK setup_lock_ = SRWLOCK_INIT;
+    std::vector<std::unique_ptr<Device>> setup_ready_;
+    std::vector<std::wstring> setup_seen_;
+    bool setup_seen_fresh_ = false;
+    std::vector<std::wstring> open_paths_;
     input::ControlsConfig config_ = input::default_controls_config();
     std::uint64_t config_generation_ = 0;
     DWORD rumble_timer_ms_ = 0;
+    // Joy-Con: the Pair Joy-Con screen as the pairs last saw it, and the pairs made.
+    bool joycon_pairing_seen_ = false;
+    std::uint32_t joycon_paired_ = 0;
     std::uint64_t timer_due_us_ = 0;
     std::uint8_t xinput_on_ = 0;        // XInput motors this worker turned on
     std::uint8_t xinput_want_mask_ = 0;
@@ -1835,6 +2142,18 @@ std::size_t hid_controllers(std::span<input::ControllerInfo> out) noexcept {
     } catch (...) {
     }
     return count;
+}
+
+JoyConStatus joycon_status() noexcept {
+    Hub& h = hub();
+    AcquireSRWLockShared(&h.lock);
+    const JoyConStatus status = h.joycon;
+    ReleaseSRWLockShared(&h.lock);
+    return status;
+}
+
+void set_joycon_pairing(bool on) noexcept {
+    hub().joycon_pairing.store(on, std::memory_order_release);
 }
 
 bool hid_controller_present_now() noexcept {

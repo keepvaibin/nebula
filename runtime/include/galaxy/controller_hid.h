@@ -21,7 +21,7 @@
 
 namespace galaxy::host {
 
-inline constexpr std::size_t kMaxHidPads = 8;
+inline constexpr std::size_t kMaxHidPads = 16;
 
 struct HidPadState {
     bool connected = false;
@@ -89,6 +89,24 @@ std::size_t read_hid_pads(std::span<HidPadState> out, bool consume_gyro) noexcep
 // enumerated synchronously and numbered in order.
 std::size_t hid_controllers(std::span<input::ControllerInfo> out) noexcept;
 [[nodiscard]] bool hid_controller_present_now() noexcept;
+
+// Joy-Con halves: those connected, whether a left half's L or a right half's R is held, and the pairs (each pair is
+// one controller; a half without its partner is none). `paired` grows with every pair made. While the Pair Joy-Con
+// screen is open (set_joycon_pairing), a left and a right whose L and R are held together pair, leaving the partners
+// they had; otherwise the only unpaired left and the only unpaired right pair by themselves.
+struct JoyConStatus {
+    std::uint8_t lefts = 0;
+    std::uint8_t rights = 0;
+    bool left_held = false;
+    bool right_held = false;
+    std::uint8_t pairs = 0;
+    std::uint32_t paired = 0;
+    std::uint8_t left_presses = 0;  // button presses on the left halves, counted round (while the screen shows)
+    std::uint8_t right_presses = 0;
+    friend bool operator==(const JoyConStatus&, const JoyConStatus&) = default;
+};
+[[nodiscard]] JoyConStatus joycon_status() noexcept;
+void set_joycon_pairing(bool on) noexcept;
 
 // The HID interfaces present of `vendor`'s `products`, by device path (a real Wii Remote's, wiimote_hid.cpp).
 [[nodiscard]] std::vector<std::wstring> hid_interface_paths(std::uint16_t vendor,

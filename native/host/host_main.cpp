@@ -1563,7 +1563,14 @@ void copy_settings_text(char (&field)[N], const std::string& text) {
 #if defined(NEBULA_HOST_RENDERER)
 static_assert(static_cast<uint32_t>(galaxy::gx::NativeSettingsStatus::Leave) == NEBULA_SETTINGS_STATUS_LEAVE &&
               static_cast<uint32_t>(galaxy::gx::NativeSettingsStatus::ModsRestartAsk) == NEBULA_SETTINGS_STATUS_MODS_RESTART_ASK &&
-              static_cast<uint32_t>(galaxy::gx::NativeSettingsStatus::KeepDisplay) == NEBULA_SETTINGS_STATUS_KEEP_DISPLAY,
+              static_cast<uint32_t>(galaxy::gx::NativeSettingsStatus::KeepDisplay) == NEBULA_SETTINGS_STATUS_KEEP_DISPLAY &&
+              static_cast<uint32_t>(galaxy::gx::NativeSettingsStatus::JoyCon) == NEBULA_SETTINGS_STATUS_JOYCON &&
+              galaxy::gx::kJoyConLeftBit == NEBULA_JOYCON_LEFT && galaxy::gx::kJoyConRightBit == NEBULA_JOYCON_RIGHT &&
+              galaxy::gx::kJoyConLeftHeldBit == NEBULA_JOYCON_LEFT_HELD &&
+              galaxy::gx::kJoyConRightHeldBit == NEBULA_JOYCON_RIGHT_HELD &&
+              galaxy::gx::kJoyConPairedBit == NEBULA_JOYCON_PAIRED &&
+              galaxy::gx::kJoyConLeftPressesShift == NEBULA_JOYCON_LEFT_PRESSES_SHIFT &&
+              galaxy::gx::kJoyConRightPressesShift == NEBULA_JOYCON_RIGHT_PRESSES_SHIFT,
               "the settings statuses are numbered alike");
 static_assert(static_cast<uint32_t>(galaxy::gx::NativeSettingsInput::Open) == NEBULA_SETTINGS_OPEN &&
               static_cast<uint32_t>(galaxy::gx::NativeSettingsInput::Revert) == NEBULA_SETTINGS_REVERT &&
@@ -1750,6 +1757,15 @@ void svc_button_icons(void*, NebulaButtonIcons* icons) {
 
 // GALAXY_EXPORT_ART=<folder>: Nebula's own pictures (NebulaIcons) as a texture pack, pack/RMG/tex1_..._5.png at their
 // HD size, named by the texture the game draws; previews in native/ and hd/; pack-names.txt pairs them.
+// The scale the renderer last drew the 2D layer at (gx_backend: the EFB in use when the scene ends).
+uint32_t svc_layer_2d_scale(void*) {
+#if defined(NEBULA_HOST_RENDERER)
+    return galaxy::gx::layer_2d_scale();
+#else
+    return 0u;
+#endif
+}
+
 uint32_t svc_art_export(void*, const NebulaArtExport* art) {
 #if defined(NEBULA_HOST_RENDERER)
     static const std::filesystem::path folder = [] {
@@ -3136,6 +3152,7 @@ int main(int argc, char** argv) {
     services.button_icons = svc_button_icons;
     services.wpad_sample = svc_wpad_sample;
     services.art_export = svc_art_export;
+    services.layer_2d_scale = svc_layer_2d_scale;
     services.gx_stripe_particle = svc_gx_stripe_particle;
     services.disc_fst = svc_disc_fst;
     services.disc_read = svc_disc_read;

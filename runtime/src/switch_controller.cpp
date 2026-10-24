@@ -270,6 +270,110 @@ std::size_t build_usb_command(std::uint8_t cmd, std::span<std::uint8_t> out) noe
     return 2;
 }
 
+JoyConSide joycon_side_of_type(std::uint8_t type) noexcept {
+    return type == 1u ? JoyConSide::Left : type == 2u ? JoyConSide::Right : JoyConSide::None;
+}
+
+JoyConSide joycon_side_of_product(std::uint16_t product) noexcept {
+    return product == kJoyConLeftProductId    ? JoyConSide::Left
+           : product == kJoyConRightProductId ? JoyConSide::Right
+                                              : JoyConSide::None;
+}
+
+void turn_right_joycon_imu(DecodedState& state) noexcept {
+    for (std::size_t i = 0; i < state.imu_count; ++i) {
+        ImuSample& sample = state.imu[i];
+        sample.accel[0] = -sample.accel[0];
+        sample.accel[1] = -sample.accel[1];
+        sample.gyro[0] = -sample.gyro[0];
+        sample.gyro[1] = -sample.gyro[1];
+    }
+}
+
+DecodedState combine_joycons(const DecodedState& left, const DecodedState& right) noexcept {
+    using namespace pad;
+    constexpr std::uint32_t kLeftButtons = bit(kDpadUpBit) | bit(kDpadDownBit) | bit(kDpadLeftBit) |
+                                           bit(kDpadRightBit) | bit(kLeftShoulderBit) | bit(kBackBit) |
+                                           bit(kLeftStickBit) | bit(kCaptureBit);
+    constexpr std::uint32_t kRightButtons = bit(kSouthBit) | bit(kEastBit) | bit(kWestBit) | bit(kNorthBit) |
+                                            bit(kRightShoulderBit) | bit(kStartBit) | bit(kRightStickBit) |
+                                            bit(kHomeBit);
+    DecodedState out = right;
+    out.buttons = (left.buttons & kLeftButtons) | (right.buttons & kRightButtons);
+    out.left_trigger = left.left_trigger;
+    out.right_trigger = right.right_trigger;
+    out.stick_raw[0] = left.stick_raw[0];
+    out.stick_raw[1] = left.stick_raw[1];
+    out.simple = false;
+    return out;
+}
+
+JoyConPairing pair_joycons(std::span<JoyConHalf> halves, bool pairing_screen) noexcept {
+    const auto valid = [&](int i) { return i >= 0 && static_cast<std::size_t>(i) < halves.size(); };
+    JoyConPairing result{};
+    bool& changed = result.changed;
+    // A partner that is gone, or not the other side, or not paired back, frees its half.
+    for (std::size_t i = 0; i < halves.size(); ++i) {
+        JoyConHalf& h = halves[i];
+        if (h.partner < 0) continue;
+        const bool ok = valid(h.partner) && halves[h.partner].partner == static_cast<int>(i) &&
+                        halves[h.partner].side != h.side && h.side != JoyConSide::None;
+        if (!ok) {
+            h.partner = -1;
+            changed = true;
+        }
+    }
+    const auto join = [&](int l, int r) {
+        for (const int i : {l, r}) {
+            const int old = halves[i].partner;
+            if (valid(old)) halves[old].partner = -1;
+        }
+        halves[l].partner = r;
+        halves[r].partner = l;
+        changed = true;
+    };
+    if (pairing_screen) {
+        // The held halves, unpaired ones first.
+        const auto held = [&](JoyConSide side, bool unpaired) {
+            for (std::size_t i = 0; i < halves.size(); ++i) {
+                const JoyConHalf& h = halves[i];
+                if (h.side == side && h.shoulder && (!unpaired || h.partner < 0)) return static_cast<int>(i);
+            }
+            return -1;
+        };
+        int l = held(JoyConSide::Left, true);
+        int r = held(JoyConSide::Right, true);
+        if (l < 0 || r < 0) {
+            // A pair holding both, else any two held.
+            for (std::size_t i = 0; i < halves.size() && (l < 0 || r < 0); ++i) {
+                const JoyConHalf& h = halves[i];
+                if (h.side == JoyConSide::Left && h.shoulder && valid(h.partner) && halves[h.partner].shoulder) {
+                    l = static_cast<int>(i);
+                    r = h.partner;
+                }
+            }
+            if (l < 0 || r < 0) {
+                l = l >= 0 ? l : held(JoyConSide::Left, false);
+                r = r >= 0 ? r : held(JoyConSide::Right, false);
+            }
+        }
+        if (l >= 0 && r >= 0) {
+            if (halves[l].partner != r) join(l, r);
+            result.made = true;
+        }
+        return result;
+    }
+    int l = -1, r = -1, lefts = 0, rights = 0;
+    for (std::size_t i = 0; i < halves.size(); ++i) {
+        const JoyConHalf& h = halves[i];
+        if (h.partner >= 0) continue;
+        if (h.side == JoyConSide::Left && lefts++ == 0) l = static_cast<int>(i);
+        if (h.side == JoyConSide::Right && rights++ == 0) r = static_cast<int>(i);
+    }
+    if (lefts == 1 && rights == 1) join(l, r);
+    return result;
+}
+
 SubcommandReply match_subcommand_reply(std::span<const std::uint8_t> r, std::uint8_t subcommand,
                                        std::uint32_t spi_address) noexcept {
     SubcommandReply reply{};

@@ -1,7 +1,7 @@
 # Controls
 
 The game sees one Wii Remote with a Nunchuk on channel 0. Keyboard, mouse,
-Xbox (XInput) controllers, Switch Pro Controllers, Switch 2 Pro Controllers,
+Xbox (XInput) controllers, Switch Pro Controllers, Joy-Con (a pair as one controller), Switch 2 Pro Controllers,
 PlayStation controllers (DualShock 4, DualSense, DualSense Edge), the Steam
 Controller (2026) and generic HID game controllers work at the same time; every
 Wii input can be rebound. The game gets their state the moment it reads its remotes each frame (a report built then),
@@ -128,6 +128,27 @@ motion) is ignored. `keyboard_mouse` and `controller` keep only that source.
   `tune.<controller>.vibration` turns it on or off and
   `tune.<controller>.rumble` sets the strength (10-100 %). A real Wii Remote
   receives the game's own motor commands.
+
+## Joy-Con
+
+Pair each Joy-Con in Windows' Bluetooth settings first (hold the sync button on its rail), or attach both to the
+charging grip by USB. A left and a right half then play as one controller, Joy-Con (L/R), with the Switch layout and
+icons: the left half's stick, D-pad, L, ZL, Minus and Capture, the right half's buttons, stick, R, ZR, Plus and HOME.
+The right half points and tilts, a shake of either half counts, and both halves vibrate.
+
+One left and one right half pair by themselves, at every start. With more halves connected (two players, or to swap
+halves), CONTROLS > PAIR JOY-CON: hold L on a left half and R on a right half. One held shoulder alone never splits
+another pair; two held halves pair, as on the Switch's Change Grip/Order screen. Pairs are not kept between starts.
+An empty rail on the charging grip is checked every 2 s, so a Joy-Con slid in later is found.
+
+## How controllers are read
+
+One thread waits on every controller and handles each report as it arrives (decoding, a Joy-Con pair's two halves,
+motion: 43 ns a report, timed in `galaxy_controls_tests`); the game takes the newest state when it reads its remotes.
+Listing devices and setting up a newly connected controller (up to about a second over Bluetooth) run on a second
+thread, and vibration reports are sent without waiting for them, so a controller connecting, a USB device plugged in
+or a busy radio never delays another controller's input. Reports come at the controller's own rate (Joy-Con and Pro
+Controllers send report 0x30 60 times a second over Bluetooth).
 
 ## Remapping
 

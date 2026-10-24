@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -397,6 +398,146 @@ void test_switch_pro_decoding() {
     const ImuCal parsed_cal = parse_imu_cal(imu);
     expect(approx(parsed_cal.accel_scale[0], 1.0f / 4096.0f, 1e-8f) && parsed_cal.gyro_offset[1] == 10,
            "IMU calibration parse");
+}
+
+// What the controller worker does with each Joy-Con report, timed (a pair: both halves' reports decoded, the right
+// half's sensor turned, the halves combined, each half's three motion samples fed, the pairs checked): the worker's
+// own share of a press's way to the game, printed for the record.
+void time_joycon_reports() {
+    using namespace switch_hid;
+    const ImuCal imu_cal{};
+    auto l = full_report();
+    auto r = full_report();
+    l[5] = 0x40;
+    r[3] = 0x40;
+    put_s16(&l[17], 4096);
+    put_s16(&r[17], 4096);
+    SwitchMotion left_motion{};
+    SwitchMotion right_motion{};
+    MotionSettings settings{};
+    settings.shake = true;
+    settings.gyro_pointer = true;
+    std::vector<JoyConHalf> halves(2);
+    halves[0].side = JoyConSide::Left;
+    halves[1].side = JoyConSide::Right;
+    constexpr int kReports = 200000;
+    std::uint32_t sink = 0;
+    const auto start = std::chrono::steady_clock::now();
+    for (int i = 0; i < kReports; ++i) {
+        l[1] = static_cast<std::uint8_t>(i);
+        r[1] = static_cast<std::uint8_t>(i);
+        DecodedState left{};
+        DecodedState right{};
+        sink += decode_pro_report(l, imu_cal, left) ? 1u : 0u;
+        sink += decode_pro_report(r, imu_cal, right) ? 1u : 0u;
+        turn_right_joycon_imu(right);
+        const DecodedState pair = combine_joycons(left, right);
+        sink += pair.buttons;
+        const std::uint64_t t = static_cast<std::uint64_t>(i) * 15000u;
+        for (std::size_t k = 0; k < left.imu_count; ++k) sink += left_motion.feed(left.imu[k], 0.005f, t, settings).shake_started;
+        for (std::size_t k = 0; k < right.imu_count; ++k) sink += right_motion.feed(right.imu[k], 0.005f, t, settings).shake_started;
+        sink += pair_joycons(halves, false).changed ? 1u : 0u;
+    }
+    const double ns = std::chrono::duration<double, std::nano>(std::chrono::steady_clock::now() - start).count();
+    const double each = ns / kReports / 2.0;
+    std::printf("[timing] a Joy-Con report in the worker (decode, turn, combine, 3 motion samples, pairs): %.0f ns\n", each);
+    expect(sink != 0u && each < 50000.0, "a Joy-Con report takes the worker well under a millisecond");
+}
+
+void test_joycons() {
+    using namespace switch_hid;
+    expect(joycon_side_of_type(1) == JoyConSide::Left && joycon_side_of_type(2) == JoyConSide::Right &&
+               joycon_side_of_type(3) == JoyConSide::None,
+           "device info types: 1 left, 2 right, 3 a Pro Controller");
+    expect(joycon_side_of_product(kJoyConLeftProductId) == JoyConSide::Left &&
+               joycon_side_of_product(kJoyConRightProductId) == JoyConSide::Right &&
+               joycon_side_of_product(kChargingGripProductId) == JoyConSide::None &&
+               joycon_side_of_product(kProControllerProductId) == JoyConSide::None,
+           "Joy-Con products; a charging grip's side comes from the controller");
+
+    const ImuCal imu_cal{};
+    auto l = full_report();
+    l[3] = 0x08;                 // a right-side bit a left half never sends: masked out
+    l[4] = 0x01 | 0x08 | 0x20;   // Minus, left stick, Capture
+    l[5] = 0x02 | 0x40 | 0x80;   // Up, L, ZL
+    put_u12_pair(&l[6], 3000, 1000);
+    put_s16(&l[17], 4096);
+    DecodedState left{};
+    expect(decode_pro_report(l, imu_cal, left), "a left half's 0x30 decodes");
+    auto r = full_report();
+    r[3] = 0x04 | 0x40 | 0x80;   // B, R, ZR
+    r[4] = 0x02 | 0x04 | 0x10;   // Plus, right stick, Home
+    r[5] = 0x01;                 // a left-side bit a right half never sends: masked out
+    put_u12_pair(&r[9], 1500, 2500);
+    put_s16(&r[13], 100);        // accel x
+    put_s16(&r[15], 200);        // accel y
+    put_s16(&r[17], 4096);       // accel z
+    put_s16(&r[19], 143);        // gyro x
+    put_s16(&r[21], 286);        // gyro y
+    DecodedState right{};
+    expect(decode_pro_report(r, imu_cal, right), "a right half's 0x30 decodes");
+    const ImuSample before = right.imu[0];
+    turn_right_joycon_imu(right);
+    expect(right.imu[0].accel[0] == -before.accel[0] && right.imu[0].accel[1] == -before.accel[1] &&
+               right.imu[0].accel[2] == before.accel[2] && right.imu[0].gyro[0] == -before.gyro[0] &&
+               right.imu[0].gyro[1] == -before.gyro[1] && right.imu[0].gyro[2] == before.gyro[2],
+           "a right half's sensor reads its first two axes negated");
+
+    const DecodedState pair = combine_joycons(left, right);
+    expect(pair.buttons == (pad::bit(pad::kBackBit) | pad::bit(pad::kLeftStickBit) | pad::bit(pad::kCaptureBit) |
+                            pad::bit(pad::kDpadUpBit) | pad::bit(pad::kLeftShoulderBit) | pad::bit(pad::kSouthBit) |
+                            pad::bit(pad::kRightShoulderBit) | pad::bit(pad::kStartBit) |
+                            pad::bit(pad::kRightStickBit) | pad::bit(pad::kHomeBit)),
+           "a pair takes each half's own buttons");
+    expect(pair.left_trigger && pair.right_trigger, "ZL from the left half, ZR from the right");
+    expect(pair.stick_raw[0] == 3000 && pair.stick_raw[1] == 1000 && pair.stick_raw[2] == 1500 &&
+               pair.stick_raw[3] == 2500,
+           "each stick from its half");
+    expect(pair.imu_count == right.imu_count && pair.imu[0].gyro[0] == right.imu[0].gyro[0],
+           "the pair's motion is the right half's");
+    const PadSample sample = pad_sample_from(pair, ControlScheme::SwitchPro, StickCal{}, StickCal{}, 0.12f, 0.12f);
+    const LogicalInput logic = evaluate_pad_bindings(default_binding_table(ControlScheme::SwitchPro), sample,
+                                                     96.0f / 255.0f);
+    expect(logic.held(WiiTarget::Plus) && logic.held(WiiTarget::Home) && logic.held(WiiTarget::DpadUp),
+           "a pair drives the Switch bindings");
+
+    // Pairing.
+    std::array<JoyConHalf, 2> two{{{JoyConSide::Left, -1, false}, {JoyConSide::Right, -1, false}}};
+    JoyConPairing pairing = pair_joycons(two, false);
+    expect(pairing.changed && !pairing.made && two[0].partner == 1 && two[1].partner == 0,
+           "the only left and right pair by themselves");
+    expect(!pair_joycons(two, false).changed, "a pair stays as it is");
+    two[0].shoulder = two[1].shoulder = true;
+    pairing = pair_joycons(two, true);
+    expect(!pairing.changed && pairing.made, "on the screen, a pair holding both is made again (the screen confirms it)");
+    std::array<JoyConHalf, 3> extra{{{JoyConSide::Left, -1, false}, {JoyConSide::Left, -1, false},
+                                     {JoyConSide::Right, -1, false}}};
+    expect(!pair_joycons(extra, false).changed && extra[2].partner == -1, "two lefts for one right wait for the screen");
+    extra[1].shoulder = true;
+    pairing = pair_joycons(extra, true);
+    expect(!pairing.changed && !pairing.made, "the screen waits for both shoulders");
+    extra[2].shoulder = true;
+    pairing = pair_joycons(extra, true);
+    expect(pairing.changed && pairing.made && extra[1].partner == 2 && extra[2].partner == 1 && extra[0].partner == -1,
+           "on the screen, L and R held together pair those two");
+    // Another pair's L held while two new halves are held: the new ones pair, the other pair stays.
+    std::array<JoyConHalf, 4> others{{{JoyConSide::Left, 1, true}, {JoyConSide::Right, 0, false},
+                                      {JoyConSide::Left, -1, true}, {JoyConSide::Right, -1, true}}};
+    pairing = pair_joycons(others, true);
+    expect(pairing.made && others[2].partner == 3 && others[3].partner == 2 && others[0].partner == 1 &&
+               others[1].partner == 0,
+           "a held shoulder of another pair never splits it");
+    std::array<JoyConHalf, 4> swap{{{JoyConSide::Left, 1, false}, {JoyConSide::Right, 0, true},
+                                    {JoyConSide::Left, 3, true}, {JoyConSide::Right, 2, false}}};
+    pairing = pair_joycons(swap, true);
+    expect(pairing.changed && pairing.made && swap[2].partner == 1 && swap[1].partner == 2 && swap[0].partner == -1 &&
+               swap[3].partner == -1,
+           "pairing two halves of two pairs on the screen leaves the partners they had");
+    std::array<JoyConHalf, 2> stale{{{JoyConSide::Left, 1, false}, {JoyConSide::Right, -1, false}}};
+    expect(pair_joycons(stale, true).changed && stale[0].partner == -1, "a partner that does not pair back is let go");
+    std::array<JoyConHalf, 2> same{{{JoyConSide::Left, 1, true}, {JoyConSide::Left, 0, true}}};
+    expect(pair_joycons(same, false).changed && same[0].partner == -1 && same[1].partner == -1,
+           "two halves of one side never pair");
 }
 
 void test_switch2_decoding() {
@@ -1513,6 +1654,8 @@ int main(int argc, char** argv) {
     test_evaluation();
     test_chord_and_capture();
     test_switch_pro_decoding();
+    test_joycons();
+    time_joycon_reports();
     test_switch2_decoding();
     test_motion();
     test_pointer_ownership();

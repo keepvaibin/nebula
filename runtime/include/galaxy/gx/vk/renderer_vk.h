@@ -203,6 +203,9 @@ public:
     [[nodiscard]] bool quit_requested() const noexcept;
 
     void begin_frame(bool present_swap_chain = true);
+    // D3D12 waits for its swap chain's frame latency here (a frame begun without a present that presents after all);
+    // Vulkan paces at the image acquire in present().
+    void wait_for_frame_latency_before_present() {}
     std::uint64_t end_frame(bool present_swap_chain = true, SubmissionCallback on_submitted = nullptr,
                             void* submission_context = nullptr);
     [[nodiscard]] std::uint64_t completed_fence_value() const;

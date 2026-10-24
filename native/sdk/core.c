@@ -131,6 +131,10 @@ u32 __NebulaArtExport(const NebulaArtExport* art) {
     return sHost->art_export(sHost->user, art);
 }
 
+u32 __NebulaLayer2DScale(void) {
+    return sHost->layer_2d_scale(sHost->user);
+}
+
 s32 __NebulaHomeMenu(u32 what, u32 value) {
     return sHost->hbm(sHost->user, what, value);
 }

@@ -280,6 +280,9 @@ struct XfbPresentStats {
 // resolution while they show, whatever the HUD's (the game module's sharp_2d).
 void request_sharp_2d(bool on) noexcept;
 [[nodiscard]] bool sharp_2d_requested() noexcept;
+// The scale the 2D layer was last drawn at (the EFB in use as the scene ended: the output EFB, else the render EFB),
+// over the Wii's 640 x 456; 0 before the first scene ends. Any thread.
+[[nodiscard]] unsigned layer_2d_scale() noexcept;
 
 // The native game's HOME Menu with the console menu's choices, taking the keyboard and controllers while open: return
 // to the game, reset, or leave it (the console's Wii Menu), the last two after "are you sure?". The game opens it
@@ -354,7 +357,16 @@ enum class NativeSettingsStatus : unsigned {
     GpuRestart,       // the new graphics card applies at the next start
     Leave,            // leaving with changes not applied: apply or discard them first
     ModsRestartAsk,   // mod changes applied: restart now? (yes: Apply, later: Close)
+    JoyCon,           // Pair Joy-Con: status_number has the halves (kJoyCon* bits); Close leaves
 };
+// The Pair Joy-Con screen's status_number (nebula_game_api.h's NEBULA_JOYCON_*, checked alike in host_main.cpp).
+inline constexpr int kJoyConLeftBit = 1;       // a left half is connected
+inline constexpr int kJoyConRightBit = 2;      // a right half is connected
+inline constexpr int kJoyConLeftHeldBit = 4;   // its L is held
+inline constexpr int kJoyConRightHeldBit = 8;  // its R is held
+inline constexpr int kJoyConPairedBit = 16;    // a pair was just made
+inline constexpr int kJoyConLeftPressesShift = 8;    // 4 bits: the left halves' button presses, counted round
+inline constexpr int kJoyConRightPressesShift = 12;  // 4 bits: the right halves'
 struct NativeSettingsView {
     bool open = false;
     unsigned page = 0u;

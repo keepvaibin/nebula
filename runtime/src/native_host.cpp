@@ -454,8 +454,9 @@ private:
         }
 
         sample_rate_ = sample_rate;
+        // The first sample's time, to line a recording's audio up with its snapshots ("[snapshot] ... qpc=").
         std::cout << "[audio] WAV dump enabled: " << path_
-                  << " max-bytes=" << max_bytes() << '\n';
+                  << " max-bytes=" << max_bytes() << " qpc=" << galaxy::qpc_now() << '\n';
         return true;
     }
 

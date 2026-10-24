@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 26u
+#define NEBULA_GAME_API_VERSION 28u
 
 /* A physical range of the game's memory and where it is in the host process: what the GPU's addresses resolve to. */
 typedef struct NebulaGameMemoryRegion {
@@ -267,6 +267,17 @@ enum {
     NEBULA_SETTINGS_STATUS_GPU_RESTART,      /* the new graphics card applies at the next start */
     NEBULA_SETTINGS_STATUS_LEAVE,            /* leaving with changes not applied: apply them or discard them? */
     NEBULA_SETTINGS_STATUS_MODS_RESTART_ASK, /* mod changes applied: restart now? yes: APPLY, later: CLOSE */
+    NEBULA_SETTINGS_STATUS_JOYCON,           /* Pair Joy-Con: `status_number` NEBULA_JOYCON_* bits; CLOSE leaves */
+};
+/* The Pair Joy-Con screen's halves (NEBULA_SETTINGS_STATUS_JOYCON). */
+enum {
+    NEBULA_JOYCON_LEFT = 1,       /* a left half is connected */
+    NEBULA_JOYCON_RIGHT = 2,      /* a right half is connected */
+    NEBULA_JOYCON_LEFT_HELD = 4,  /* a left half's L is held */
+    NEBULA_JOYCON_RIGHT_HELD = 8, /* a right half's R is held */
+    NEBULA_JOYCON_PAIRED = 16,    /* a pair was just made: the screen closes in a moment */
+    NEBULA_JOYCON_LEFT_PRESSES_SHIFT = 8,   /* 4 bits: the left halves' button presses, counted round */
+    NEBULA_JOYCON_RIGHT_PRESSES_SHIFT = 12, /* 4 bits: the right halves' */
 };
 
 /* The hints name the keys or the buttons of what the player last used. A controller's buttons change, close, undo and
@@ -470,6 +481,9 @@ typedef struct NebulaHostServices {
     /* GALAXY_EXPORT_ART=<folder>: Nebula's own pictures written there (NebulaArtExport). NULL asks whether an export
        is on: 1, else 0 (the game then paints nothing for it). */
     uint32_t (*art_export)(void* user, const NebulaArtExport* art);
+    /* The scale the 2D layer was last drawn at: its 640 x 456 picture times this (the window's while sharp_2d is on);
+       0 before the first frame. */
+    uint32_t (*layer_2d_scale)(void* user);
 } NebulaHostServices;
 
 enum {

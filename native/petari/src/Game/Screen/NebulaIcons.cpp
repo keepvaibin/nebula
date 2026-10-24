@@ -457,12 +457,22 @@ namespace {
         return pPicture + (((y / 4) * (pictureWidth / 4) + x / 4) * 16 + (y % 4) * 4 + x % 4) * 2;
     }
 
-    // The canvas into a picture `pictureWidth` wide (RGB5A3, 4x4 tiles of big-endian texels) at (x, y).
-    void encodeInto(const Canvas& rCanvas, u8* pPicture, s32 pictureWidth, s32 x, s32 y) {
+    // The canvas into a picture `pictureWidth` wide (RGB5A3, 4x4 tiles of big-endian texels) at (x, y); `dither`
+    // spreads a gradient's steps (ordered, 4 x 4) so its 5 bits a channel show no bands.
+    void encodeInto(const Canvas& rCanvas, u8* pPicture, s32 pictureWidth, s32 x, s32 y, bool dither = false) {
+        static const u8 cBayer[16] = {0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5};
         for (s32 py = 0; py < rCanvas.mHeight; py++) {
             for (s32 px = 0; px < rCanvas.mWidth; px++) {
                 u8* pTexel = texelAt(pPicture, pictureWidth, x + px, y + py);
-                const u16 texel = encode(rCanvas.mPixels[py * rCanvas.mWidth + px]);
+                Rgba c = rCanvas.mPixels[py * rCanvas.mWidth + px];
+                if (dither) {
+                    const f32 step = (cBayer[(py & 3) * 4 + (px & 3)] + 0.5f) / 16.0f - 0.5f;
+                    const f32 levels = c.a >= 0.94f ? 31.0f : 15.0f;
+                    c.r += step / levels;
+                    c.g += step / levels;
+                    c.b += step / levels;
+                }
+                const u16 texel = encode(c);
                 pTexel[0] = static_cast< u8 >(texel >> 8);
                 pTexel[1] = static_cast< u8 >(texel);
             }
@@ -826,6 +836,299 @@ namespace {
         OSReport("NebulaIcons: exported the icons\n");
     }
 
+    // The Pair Joy-Con picture: each half a texture of Nebula's own (RGB5A3): a Joy-Con's front drawn simply, in the
+    // owner's drawing's style (thin dark outlines, its colour, dark grey parts: its rail, its shoulder over the top
+    // curve, its stick, four plain buttons, Minus or Plus, Capture or HOME), a little raised off the page (a soft shadow
+    // under it and its buttons, a highlight down its round side). A half's body is 12.07 x 37.1 units in the middle of
+    // its picture's cJoyConBox, its parts where the drawing has them. Its looks: not connected (grey), in its colour, and
+    // its shoulder held (clicked down). Painted at the screen's pixels per unit on each axis (as its 2D layer draws it),
+    // so drawn without scaling and without mipmaps, a band of rows at a time.
+    const f32 cJcBodyWidth = NebulaIcons::cJoyConBody[0];
+    const f32 cJcBodyHeight = NebulaIcons::cJoyConBody[1];
+    const f32 cJcOutline = 0.12f;
+    const s32 cJcMaxSide = 1024;  // GX's largest texture: past it (or past cJcMaxTexels), a picture is a little magnified
+    const s32 cJcMaxTexels = 1024 * 512;
+    const s32 cJcBand = 16;  // rows painted at once (whole 4 x 4 tiles)
+    const s32 cJcPictures = 2 * NebulaIcons::JoyConLooks;
+    const s32 cJcOrder[NebulaIcons::JoyConLooks] = {NebulaIcons::JoyConShown, NebulaIcons::JoyConAway, NebulaIcons::JoyConHeld};
+    const OSTime cJcRetireMs = 250;  // a set no longer shown keeps its memory this long (frames still drawing it)
+    const s32 cJcSteady = 3;         // a density asked for this many frames running before a set is painted for it
+
+    // One density's pictures, every half in every look (painted in cJcOrder, both halves of a look in turn), in the
+    // game's image (GX reads textures only from the game's memory).
+    struct JoyConSet {
+        u8* mTexels[2][NebulaIcons::JoyConLooks];
+        nw4r::lyt::TexMap mMaps[2][NebulaIcons::JoyConLooks];
+        s32 mWidth;  // each picture's texels
+        s32 mHeight;
+        f32 mPixelsX;  // its pixels per unit
+        f32 mPixelsY;
+        s32 mNext;  // the picture being painted (cJcPictures: all are)
+        s32 mRow;   // its rows painted
+        OSTime mSpent;
+        s32 mCalls;
+        OSTime mRetired;  // when the screen stopped showing it (0: it never showed)
+    };
+    JoyConSet sJoyConSets[2];
+    s32 sJoyConShown = -1;  // the set whose pictures the screen shows, or -1
+    s32 sJoyConWidth = 0;   // the density asked for, as each picture's texels (0: none yet)
+    s32 sJoyConHeight = 0;
+    f32 sJoyConPixelsX = 0.0f;
+    f32 sJoyConPixelsY = 0.0f;
+    s32 sJoyConAsked = 0;  // the frames running it has been asked for
+    alignas(32) u8 sJoyConTexels[2][cJcPictures * cJcMaxTexels * 2];
+    Rgba sJoyConBand[cJcMaxSide * cJcBand];
+
+    // Where a band of a half's picture is painted: pixels per unit on each axis, the pixels per unit an edge is smoothed
+    // over, the body's place in the picture (units, centred) and the band's first row in it.
+    struct JcFrame {
+        f32 mPixelsX;
+        f32 mPixelsY;
+        f32 mEdge;
+        f32 mLeft;
+        f32 mTop;
+        s32 mRow;
+    };
+
+    Rgba mix(const Rgba& rA, const Rgba& rB, f32 t) {
+        const Rgba c = {rA.r + (rB.r - rA.r) * t, rA.g + (rB.g - rA.g) * t, rA.b + (rB.b - rA.b) * t, rA.a + (rB.a - rA.a) * t};
+        return c;
+    }
+
+    Rgba shaded(const Rgba& rColour, f32 light) {
+        const Rgba white = {1.0f, 1.0f, 1.0f, rColour.a};
+        const Rgba black = {0.0f, 0.0f, 0.0f, rColour.a};
+        return light >= 0.0f ? mix(rColour, white, light) : mix(rColour, black, -light);
+    }
+
+    // Every pixel of the band whose centre lies in units (u0, v0)-(u1, v1) of the half: coloured by `colour(u, v, d)`
+    // where `distance(u, v)` (units, negative inside) puts it in the shape, anti-aliased over a pixel.
+    template < typename Distance, typename Colour >
+    void fillUnits(Canvas& rCanvas, const JcFrame& rFrame, f32 u0, f32 v0, f32 u1, f32 v1, Distance distance, Colour colour) {
+        const f32 rowFirst = static_cast< f32 >(rFrame.mRow);
+        const f32 rowEnd = static_cast< f32 >(rFrame.mRow + rCanvas.mHeight);
+        const s32 x0 = static_cast< s32 >(NebulaUi::clamp((rFrame.mLeft + u0) * rFrame.mPixelsX - 1.0f, 0.0f, static_cast< f32 >(rCanvas.mWidth)));
+        const s32 x1 = static_cast< s32 >(NebulaUi::clamp((rFrame.mLeft + u1) * rFrame.mPixelsX + 2.0f, 0.0f, static_cast< f32 >(rCanvas.mWidth)));
+        const s32 y0 = static_cast< s32 >(NebulaUi::clamp((rFrame.mTop + v0) * rFrame.mPixelsY - 1.0f, rowFirst, rowEnd));
+        const s32 y1 = static_cast< s32 >(NebulaUi::clamp((rFrame.mTop + v1) * rFrame.mPixelsY + 2.0f, rowFirst, rowEnd));
+        for (s32 py = y0; py < y1; py++) {
+            const f32 v = (py + 0.5f) / rFrame.mPixelsY - rFrame.mTop;
+            for (s32 px = x0; px < x1; px++) {
+                const f32 u = (px + 0.5f) / rFrame.mPixelsX - rFrame.mLeft;
+                const f32 d = distance(u, v);
+                const f32 cover = coverOf(d * rFrame.mEdge);
+                if (cover > 0.0f) {
+                    rCanvas.blend(px, py - rFrame.mRow, colour(u, v, d), cover);
+                }
+            }
+        }
+    }
+
+    f32 circleDistance(f32 u, f32 v, f32 cu, f32 cv, f32 radius) {
+        return __builtin_sqrtf((u - cu) * (u - cu) + (v - cv) * (v - cv)) - radius;
+    }
+
+    // A box centred on (cx, cy), `hx` x `hy` from its middle, its corners round `radius` (as Shape, for any corners).
+    f32 boxDistance(f32 u, f32 v, f32 cx, f32 cy, f32 hx, f32 hy, f32 radius) {
+        const Shape box = {cx, cy, hx, hy, radius};
+        return box.distance(u, v);
+    }
+
+    // A half's shapes in `o`, units from its outer side (the left half's left, the right half's right) toward its rail.
+    // Its body: a box whose outer corners are round (the top 6.3, the foot 8, more than half its width, as drawn) and
+    // inner ones nearly square. Each corner's arc is centred `radius` in from both its sides, so it meets them where it
+    // turns into them; within the square between that centre and the corner, the distance is the arc's.
+    f32 bodyDistance(f32 o, f32 v) {
+        const f32 w = cJcBodyWidth;
+        const f32 h = cJcBodyHeight;
+        const f32 dx = -o > o - w ? -o : o - w;
+        const f32 dy = -v > v - h ? -v : v - h;
+        f32 d = dx > 0.0f && dy > 0.0f ? __builtin_sqrtf(dx * dx + dy * dy) : (dx > dy ? dx : dy);
+        const f32 inner = 0.25f;
+        const f32 radii[4] = {6.3f, 8.0f, inner, inner};  // outer top, outer foot, inner top, inner foot
+        for (s32 i = 0; i < 4; i++) {
+            const f32 r = radii[i];
+            const f32 cu = i < 2 ? r : w - r;
+            const f32 cv = (i & 1) == 0 ? r : h - r;
+            const bool zone = (i < 2 ? o < cu : o > cu) && ((i & 1) == 0 ? v < cv : v > cv);
+            if (zone) {
+                d = __builtin_sqrtf((o - cu) * (o - cu) + (v - cv) * (v - cv)) - r;
+            }
+        }
+        return d;
+    }
+
+    // Its rail along the inner side, with its foot.
+    f32 railDistance(f32 o, f32 v) {
+        const f32 half = NebulaIcons::cJoyConRail * 0.5f;
+        const f32 rail = boxDistance(o, v, cJcBodyWidth + half, 17.57f, half, 15.63f, 0.35f);
+        const f32 foot = boxDistance(o, v, cJcBodyWidth + 0.88f, 32.9f, 0.5f, 0.7f, 0.25f);
+        return rail < foot ? rail : foot;
+    }
+
+    // Its shoulder: a band over the top curve, outside the body, its ends cut square.
+    f32 shoulderDistance(f32 o, f32 v) {
+        const f32 d = bodyDistance(o, v);
+        const f32 out = d - NebulaIcons::cJoyConShoulder;
+        const f32 band = -d > out ? -d : out;
+        const f32 end = o - (cJcBodyWidth - 2.07f);
+        const f32 ends = v - 4.7f > end ? v - 4.7f : end;
+        return band > ends ? band : ends;
+    }
+
+    void paintJoyCon(Canvas& rCanvas, const JcFrame& rFrame, s32 half, s32 look) {
+        const bool left = half == 0;
+        const bool shown = look != NebulaIcons::JoyConAway;
+        const bool held = look == NebulaIcons::JoyConHeld;
+        const Rgba body = rgba(shown ? NebulaIcons::cJoyConColours[half] : 0xD3D8E1FF);
+        const Rgba outline = rgba(shown ? 0x1E2024FF : 0x8D939EFF);
+        const Rgba part = rgba(shown ? 0x43464BFF : 0xAAB0BAFF);  // the rail, the shoulder, the buttons
+        const Rgba white = rgba(0xFFFFFFFF);
+        // The half's own coordinates: `o` from its outer side.
+        const auto outer = [left](f32 u) { return left ? u : cJcBodyWidth - u; };
+        const f32 uMin = left ? -0.5f : -2.0f;
+        const f32 uMax = left ? cJcBodyWidth + 2.0f : cJcBodyWidth + 0.5f;
+        rCanvas.clear();
+        // Held, the shoulder sits a little lower and thinner (clicked down).
+        const f32 press = held ? 0.22f : 0.0f;
+        const auto shoulderShape = [&](f32 u, f32 v) {
+            return shoulderDistance(outer(u), v - press) + press * 0.5f;
+        };
+        const auto whole = [&](f32 u, f32 v) {
+            const f32 o = outer(u);
+            const f32 a = bodyDistance(o, v);
+            const f32 b = railDistance(o, v);
+            const f32 c = shoulderDistance(o, v);
+            const f32 ab = a < b ? a : b;
+            return ab < c ? ab : c;
+        };
+        // A soft shadow under the whole half, down and to the right.
+        fillUnits(rCanvas, rFrame, uMin, -1.0f, uMax + 1.0f, cJcBodyHeight + 1.5f,
+                  [&](f32 u, f32 v) { return whole(u - 0.35f, v - 0.45f) - 0.6f; },
+                  [&](f32, f32, f32 d) {
+                      Rgba c = rgba(0x1E2A44FF);
+                      c.a = 0.2f * NebulaUi::clamp(-d / 1.2f, 0.0f, 1.0f);
+                      return c;
+                  });
+        // A shape in a colour with its outline.
+        const auto outlined = [&](f32 u0, f32 v0, f32 u1, f32 v1, auto distance, auto colour) {
+            fillUnits(rCanvas, rFrame, u0, v0, u1, v1, distance,
+                      [&](f32 u, f32 v, f32 d) { return d > -cJcOutline ? outline : colour(u, v, d); });
+        };
+        // The rail, the shoulder (dark grey; darker pressed), then the body: a highlight down its round side, a little
+        // darker toward the rail.
+        outlined(uMin, 1.5f, uMax, 34.0f, [&](f32 u, f32 v) { return railDistance(outer(u), v); },
+                 [&](f32, f32, f32) { return part; });
+        outlined(uMin, -1.0f, uMax, 6.5f, shoulderShape,
+                 [&](f32, f32, f32) { return held ? shaded(part, -0.25f) : part; });
+        outlined(0.0f, 0.0f, cJcBodyWidth, cJcBodyHeight, [&](f32 u, f32 v) { return bodyDistance(outer(u), v); },
+                 [&](f32 u, f32 v, f32 d) {
+                     const f32 o = outer(u);
+                     const f32 shine = NebulaUi::clamp(1.0f - __builtin_fabsf(o - 1.7f) / 1.5f, 0.0f, 1.0f) *
+                                       NebulaUi::clamp(-(d + cJcOutline) / 0.5f, 0.0f, 1.0f);
+                     const f32 shade = NebulaUi::clamp((o - (cJcBodyWidth - 2.57f)) / 2.5f, 0.0f, 1.0f) * 0.07f;
+                     return shaded(mix(body, white, shine * 0.16f), -shade - 0.03f * v / cJcBodyHeight);
+                 });
+        // A raised part: its shadow under it, its face lit from above.
+        const auto raised = [&](f32 cu, f32 cv, f32 reach, auto distance, const Rgba& rFace) {
+            fillUnits(rCanvas, rFrame, cu - reach, cv - reach, cu + reach + 0.3f, cv + reach + 0.3f,
+                      [&](f32 u, f32 v) { return distance(u - 0.1f, v - 0.16f) - 0.05f; },
+                      [&](f32, f32, f32) {
+                          Rgba c = rgba(0x000000FF);
+                          c.a = 0.22f;
+                          return c;
+                      });
+            outlined(cu - reach, cv - reach, cu + reach, cv + reach, distance,
+                     [&, cv, reach](f32, f32 v, f32) { return shaded(rFace, 0.1f * (cv - v) / reach); });
+        };
+        // The stick: its ring and its cap (the stick and the buttons a little toward the outer side, as drawn).
+        const f32 middle = cJcBodyWidth * 0.5f + (left ? 0.335f : -0.385f);
+        const f32 su = middle;
+        const f32 sv = left ? 9.58f : 19.66f;
+        raised(su, sv, 2.9f, [=](f32 u, f32 v) { return circleDistance(u, v, su, sv, 2.88f); }, part);
+        outlined(su - 2.3f, sv - 2.3f, su + 2.3f, sv + 2.3f,
+                 [=](f32 u, f32 v) { return circleDistance(u, v, su, sv, 2.27f); },
+                 [&](f32 u, f32 v, f32) {
+                     const f32 t = NebulaUi::clamp((u - su + v - sv) / 4.5f + 0.5f, 0.0f, 1.0f);
+                     return shaded(part, 0.08f - 0.14f * t);
+                 });
+        // Four plain buttons: the direction buttons on the left, the face buttons on the right.
+        const f32 gu = middle;
+        const f32 gv = left ? 20.0f : 9.41f;
+        const f32 du[4] = {0.0f, 0.0f, -1.0f, 1.0f};
+        const f32 dv[4] = {-1.0f, 1.0f, 0.0f, 0.0f};
+        for (s32 i = 0; i < 4; i++) {
+            const f32 cu = gu + du[i] * 2.77f;
+            const f32 cv = gv + dv[i] * 2.77f;
+            raised(cu, cv, 1.3f, [=](f32 u, f32 v) { return circleDistance(u, v, cu, cv, 1.3f); }, part);
+        }
+        if (left) {
+            // Minus, and Capture (a rounded square), placed from the rail.
+            const f32 w = cJcBodyWidth;
+            raised(w - 1.94f, 3.65f, 1.4f, [w](f32 u, f32 v) { return segmentDistance(u, v, w - 2.91f, 3.65f, w - 0.97f, 3.65f) - 0.33f; },
+                   part);
+            raised(w - 3.65f, 27.1f, 1.2f, [w](f32 u, f32 v) { return boxDistance(u, v, w - 3.65f, 27.1f, 1.05f, 1.05f, 0.33f); },
+                   part);
+        } else {
+            // Plus, and HOME (a round button).
+            raised(1.94f, 3.65f, 1.4f,
+                   [](f32 u, f32 v) {
+                       const f32 a = segmentDistance(u, v, 0.97f, 3.65f, 2.91f, 3.65f);
+                       const f32 b = segmentDistance(u, v, 1.94f, 2.68f, 1.94f, 4.62f);
+                       return (a < b ? a : b) - 0.33f;
+                   },
+                   part);
+            raised(3.6f, 26.6f, 1.25f, [](f32 u, f32 v) { return circleDistance(u, v, 3.6f, 26.6f, 1.2f); }, part);
+        }
+    }
+
+    // Set `index` made ready for the density asked for, its pictures unpainted (each a whole number of 32-byte
+    // blocks: whole 4 x 4 tiles).
+    void startJoyConSet(s32 index) {
+        JoyConSet& rSet = sJoyConSets[index];
+        memset(&rSet, 0, sizeof(rSet));
+        const u32 bytes = static_cast< u32 >(sJoyConWidth * sJoyConHeight * 2);
+        for (s32 i = 0; i < cJcPictures; i++) {
+            rSet.mTexels[i % 2][cJcOrder[i / 2]] = sJoyConTexels[index] + bytes * i;
+        }
+        rSet.mWidth = sJoyConWidth;
+        rSet.mHeight = sJoyConHeight;
+        rSet.mPixelsX = sJoyConPixelsX;
+        rSet.mPixelsY = sJoyConPixelsY;
+    }
+
+    // The next band of rows of the set's picture being painted, painted and encoded; the picture ready once its last.
+    void paintJoyConBand(JoyConSet& rSet) {
+        const s32 half = rSet.mNext % 2;
+        const s32 look = cJcOrder[rSet.mNext / 2];
+        const s32 rows = rSet.mHeight - rSet.mRow < cJcBand ? rSet.mHeight - rSet.mRow : cJcBand;
+        Canvas canvas = {sJoyConBand, rSet.mWidth, rows, 1.0f};
+        const JcFrame frame = {rSet.mPixelsX,
+                               rSet.mPixelsY,
+                               rSet.mPixelsX < rSet.mPixelsY ? rSet.mPixelsX : rSet.mPixelsY,
+                               (rSet.mWidth / rSet.mPixelsX - cJcBodyWidth) * 0.5f,
+                               (rSet.mHeight / rSet.mPixelsY - cJcBodyHeight) * 0.5f,
+                               rSet.mRow};
+        paintJoyCon(canvas, frame, half, look);
+        u8* pTexels = rSet.mTexels[half][look];
+        encodeInto(canvas, pTexels, rSet.mWidth, 0, rSet.mRow, true);
+        rSet.mRow += rows;
+        if (rSet.mRow < rSet.mHeight) {
+            return;
+        }
+        DCStoreRange(pTexels, static_cast< u32 >(rSet.mWidth * rSet.mHeight * 2));
+        nw4r::lyt::TexMap& rMap = rSet.mMaps[half][look];
+        rMap.SetImage(pTexels);
+        rMap.SetSize(static_cast< u16 >(rSet.mWidth), static_cast< u16 >(rSet.mHeight));
+        rMap.SetTexelFormat(GX_TF_RGB5A3);
+        rMap.SetWrapMode(GX_CLAMP, GX_CLAMP);
+        rMap.SetMipMap(false);
+        rMap.SetFilter(GX_LINEAR, GX_LINEAR);
+        rMap.SetLOD(0.0f, 0.0f);
+        rSet.mNext++;
+        rSet.mRow = 0;
+    }
+
     // Each of the IconAButton layout's pictures of A, ours in its place while it draws.
     const s32 cSwapsMax = 8;
     struct Swaps {
@@ -900,6 +1203,70 @@ namespace NebulaIcons {
 
     bool wiiRemoteInUse() {
         return sShown.wii_remote != 0;
+    }
+
+    void setJoyConDensity(f32 pixelsX, f32 pixelsY) {
+        const f32 width = cJoyConBox[0] * pixelsX;
+        const f32 height = cJoyConBox[1] * pixelsY;
+        if (!(width >= 4.0f && height >= 4.0f)) {
+            return;
+        }
+        f32 fit = cJcMaxSide / width < cJcMaxSide / height ? cJcMaxSide / width : cJcMaxSide / height;
+        const f32 area = __builtin_sqrtf((cJcMaxTexels - 8.0f * cJcMaxSide) / (width * height));  // room for the tiles' rounding
+        fit = fit < area ? fit : area;
+        fit = fit < 1.0f ? fit : 1.0f;
+        // Whole 4 x 4 tiles: a picture's few extra texels widen its box a little (joyConPictureSize), at the density.
+        const s32 w = (static_cast< s32 >(__builtin_ceilf(width * fit)) + 3) & ~3;
+        const s32 h = (static_cast< s32 >(__builtin_ceilf(height * fit)) + 3) & ~3;
+        sJoyConAsked = w == sJoyConWidth && h == sJoyConHeight ? sJoyConAsked + 1 : 1;
+        sJoyConWidth = w;
+        sJoyConHeight = h;
+        sJoyConPixelsX = pixelsX * fit;
+        sJoyConPixelsY = pixelsY * fit;
+    }
+
+    bool paintJoyConAhead(u32 budgetMicros) {
+        const auto asked = [](const JoyConSet& rSet) { return rSet.mWidth == sJoyConWidth && rSet.mHeight == sJoyConHeight; };
+        if (sJoyConWidth == 0 || (sJoyConShown >= 0 && asked(sJoyConSets[sJoyConShown]))) {
+            return false;
+        }
+        const s32 index = sJoyConShown == 0 ? 1 : 0;
+        JoyConSet& rSet = sJoyConSets[index];
+        const OSTime start = OSGetTime();
+        if (!asked(rSet)) {
+            // A density settles over a few frames (the 2D layer's scale follows the window); a set the screen showed is
+            // still being drawn for a few frames after it stops.
+            if (sJoyConAsked < cJcSteady || (rSet.mRetired != 0 && OSTicksToMilliseconds(start - rSet.mRetired) < cJcRetireMs)) {
+                return true;
+            }
+            startJoyConSet(index);
+        }
+        do {
+            paintJoyConBand(rSet);
+        } while (rSet.mNext < cJcPictures && OSTicksToMicroseconds(OSGetTime() - start) < budgetMicros);
+        rSet.mSpent += OSGetTime() - start;
+        rSet.mCalls++;
+        if (rSet.mNext < cJcPictures) {
+            return true;
+        }
+        OSReport("NebulaIcons: Joy-Con pictures %d x %d painted in %d us over %d frames\n", static_cast< int >(rSet.mWidth),
+                 static_cast< int >(rSet.mHeight), static_cast< int >(OSTicksToMicroseconds(rSet.mSpent)),
+                 static_cast< int >(rSet.mCalls));
+        if (sJoyConShown >= 0) {
+            sJoyConSets[sJoyConShown].mRetired = OSGetTime();
+        }
+        sJoyConShown = index;
+        return false;
+    }
+
+    nw4r::lyt::TexMap* joyConPicture(s32 half, s32 look) {
+        return sJoyConShown >= 0 ? &sJoyConSets[sJoyConShown].mMaps[half][look] : nullptr;
+    }
+
+    void joyConPictureSize(f32* pWidth, f32* pHeight) {
+        const JoyConSet* pSet = sJoyConShown >= 0 ? &sJoyConSets[sJoyConShown] : nullptr;
+        *pWidth = pSet != nullptr ? pSet->mWidth / pSet->mPixelsX : cJoyConBox[0];
+        *pHeight = pSet != nullptr ? pSet->mHeight / pSet->mPixelsY : cJoyConBox[1];
     }
 
     void drawWithIcons(const LayoutActor* pActor) {

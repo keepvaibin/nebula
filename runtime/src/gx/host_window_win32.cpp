@@ -3,6 +3,7 @@
 // overlay and HOME Menu (state, keys, drawing through a renderer's UiCanvas) and the host API that reads them.
 
 #include "galaxy/gx/host_window_win32.h"
+#include "galaxy/controller_hid.h"
 
 #include "galaxy/gx/display_modes.h"
 #include "galaxy/gx/galaxy_select.h"
@@ -809,6 +810,7 @@ enum class ControlsRow {
     ShakeSensitivity,
     GyroPointer,
     GyroSensitivity,
+    PairJoyCon,
     Reset,
 };
 
@@ -818,6 +820,72 @@ struct ControlsRowInfo {
 };
 
 constexpr unsigned kControlsBindingRow0 = 2u;
+
+// The Pair Joy-Con screen (CONTROLS > PAIR JOY-CON): open while the controller worker pairs the halves whose L and R
+// are held; it closes a moment after a pair is made, or with Escape or B.
+bool s_joycon_pairing = false;
+std::uint32_t s_joycon_paired_at_open = 0u;
+std::uint64_t s_joycon_paired_ms = 0u;
+std::uint64_t s_joycon_opened_ms = 0u;
+constexpr std::uint64_t kJoyConPairedShowMs = 1500u;
+
+// The Joy-Con halves as the controller worker has them. GALAXY_TEST_JOYCON=<bits>[,<bits>@<ms>...] (NEBULA_JOYCON_*
+// bits, each from that many milliseconds after the Pair Joy-Con screen opens) stands in for them: screenshots and
+// recordings of the screen without Joy-Con, 16 making a pair.
+galaxy::host::JoyConStatus joycon_status_now() {
+    struct Step {
+        int bits = 0;
+        std::uint64_t at_ms = 0;
+    };
+    static const std::vector<Step> test = [] {
+        std::vector<Step> steps;
+        char value[128]{};
+        std::size_t length = 0;
+        if (getenv_s(&length, value, sizeof(value), "GALAXY_TEST_JOYCON") != 0 || length <= 1u) return steps;
+        for (const char* p = value; *p != '\0';) {
+            Step step;
+            step.bits = std::atoi(p);
+            while (*p != '\0' && *p != '@' && *p != ',') ++p;
+            if (*p == '@') step.at_ms = static_cast<std::uint64_t>(std::atoll(++p));
+            while (*p != '\0' && *p != ',') ++p;
+            if (*p == ',') ++p;
+            steps.push_back(step);
+        }
+        return steps;
+    }();
+    if (test.empty()) {
+        return galaxy::host::joycon_status();
+    }
+    const std::uint64_t since = s_joycon_pairing ? GetTickCount64() - s_joycon_opened_ms : 0u;
+    int bits = test.front().bits;
+    for (const Step& step : test) {
+        if (step.at_ms <= since) bits = step.bits;
+    }
+    galaxy::host::JoyConStatus status{};
+    status.lefts = (bits & kJoyConLeftBit) != 0 ? 1u : 0u;
+    status.rights = (bits & kJoyConRightBit) != 0 ? 1u : 0u;
+    status.left_held = (bits & kJoyConLeftHeldBit) != 0;
+    status.right_held = (bits & kJoyConRightHeldBit) != 0;
+    status.paired = (bits & kJoyConPairedBit) != 0 ? 1u : 0u;
+    status.left_presses = static_cast<std::uint8_t>(bits >> kJoyConLeftPressesShift & 15);
+    status.right_presses = static_cast<std::uint8_t>(bits >> kJoyConRightPressesShift & 15);
+    return status;
+}
+
+void open_joycon_pairing() {
+    s_joycon_pairing = true;
+    s_joycon_opened_ms = GetTickCount64();
+    s_joycon_paired_at_open = joycon_status_now().paired;
+    s_joycon_paired_ms = 0u;
+    galaxy::host::set_joycon_pairing(true);
+    std::cerr << "[settings] pair joy-con\n";
+}
+
+void close_joycon_pairing() {
+    if (!s_joycon_pairing) return;
+    s_joycon_pairing = false;
+    galaxy::host::set_joycon_pairing(false);
+}
 
 std::vector<ControlsRow> controls_tail_rows() {
     using galaxy::input::scheme_has_motion;
@@ -836,6 +904,8 @@ std::vector<ControlsRow> controls_tail_rows() {
         rows.push_back(ControlsRow::GyroPointer);
         rows.push_back(ControlsRow::GyroSensitivity);
     }
+    // Pairing Joy-Con is on every page (its place never moves as halves come and go).
+    rows.push_back(ControlsRow::PairJoyCon);
     rows.push_back(ControlsRow::Reset);
     return rows;
 }
@@ -1181,7 +1251,8 @@ void step_native_setting_round(int direction) {
     const unsigned row = s_native_settings_row.load(std::memory_order_relaxed);
     // A binding (on: wait for an input) and the reset (on: the defaults) are no lists: stepped as the keys step them.
     if (tab == kControlsTab &&
-        (controls_row(row).kind == ControlsRow::Binding || controls_row(row).kind == ControlsRow::Reset)) {
+        (controls_row(row).kind == ControlsRow::Binding || controls_row(row).kind == ControlsRow::Reset ||
+         controls_row(row).kind == ControlsRow::PairJoyCon)) {
         adjust_native_setting(direction);
         return;
     }
@@ -1304,6 +1375,9 @@ void adjust_native_setting_unlogged(int delta) {
         case ControlsRow::GyroSensitivity:
             tuning.gyro_sensitivity = step_float(tuning.gyro_sensitivity, 0.1f, 0.2f, 5.0f);
             return;
+        case ControlsRow::PairJoyCon:
+            if (delta > 0) open_joycon_pairing();
+            return;
         case ControlsRow::Reset:
             if (delta > 0) {
                 s_controls_draft.table(s_controls_scheme) =
@@ -1396,6 +1470,7 @@ void set_native_settings_visible(bool visible) {
     if (!visible) {
         // Closing discards an unapplied draft, an unconfirmed display and an
         // unanswered DLSS question.
+        close_joycon_pairing();
         dlss_dismiss_prompt();
         revert_display_settings();
         s_settings_draft = get_render_config();
@@ -1456,7 +1531,7 @@ bool handle_controls_key(WPARAM key, bool was_down, bool from_pad) {
             start_controls_capture(info.target);
             return true;
         }
-        if (info.kind == ControlsRow::Reset) {
+        if (info.kind == ControlsRow::Reset || info.kind == ControlsRow::PairJoyCon) {
             adjust_native_setting(1);
             return true;
         }
@@ -1481,7 +1556,8 @@ std::size_t selected_settings_buttons() {
     const unsigned tab = s_native_settings_tab.load(std::memory_order_relaxed) % kNativeSettingsTabCount;
     const unsigned row = s_native_settings_row.load(std::memory_order_relaxed);
     if (tab == kControlsTab) {
-        return controls_row(row).kind == ControlsRow::Reset ? 1u : 0u;
+        const ControlsRow kind = controls_row(row).kind;
+        return kind == ControlsRow::Reset || kind == ControlsRow::PairJoyCon ? 1u : 0u;
     }
     if (!settings_page_tab(tab)) {
         return 0u;
@@ -1634,6 +1710,15 @@ bool handle_native_settings_key(WPARAM key, bool was_down, bool from_pad = false
     }
     if (key == galaxy::host::kBindingCaptureKey && !s_native_settings_visible.load(std::memory_order_relaxed)) {
         (void)galaxy::host::take_controller_binding_capture();
+        return true;
+    }
+    if (s_joycon_pairing && s_native_settings_visible.load(std::memory_order_relaxed)) {
+        // The Pair Joy-Con screen: its one answer (Back) is Escape, B, A, Enter, Space, Backspace or F1; the rest
+        // waits (a paired Joy-Con's L and R must not turn the pages meanwhile).
+        if (!was_down && (accept || key == VK_ESCAPE || key == VK_F1 || key == VK_RETURN || key == VK_SPACE ||
+                          key == VK_BACK)) {
+            close_joycon_pairing();
+        }
         return true;
     }
     if (s_settings_leave_asking && s_native_settings_visible.load(std::memory_order_relaxed)) {
@@ -3573,6 +3658,8 @@ std::string native_settings_row_text(
             std::snprintf(text, sizeof(text), "GYRO SENSITIVITY: %.1f",
                           static_cast<double>(tuning.gyro_sensitivity));
             return text;
+        case ControlsRow::PairJoyCon:
+            return "PAIR JOY-CON";
         case ControlsRow::Reset:
             return std::string("RESET ") + galaxy::input::control_scheme_label(s_controls_scheme) + " TO DEFAULTS";
         }
@@ -4786,6 +4873,16 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
         status = view.help;
         status_color = muted;
         break;
+    case NativeSettingsStatus::JoyCon:
+        std::snprintf(line, sizeof(line), "%s  ESC/B BACK",
+                      (view.status_number & kJoyConPairedBit) != 0 ? "JOY-CON PAIRED"
+                      : (view.status_number & (kJoyConLeftBit | kJoyConRightBit)) == (kJoyConLeftBit | kJoyConRightBit)
+                          ? "HOLD L ON THE LEFT JOY-CON AND R ON THE RIGHT ONE"
+                          : "CONNECT A LEFT AND A RIGHT JOY-CON");
+        status = pad_hints(line);
+        break;
+    default:
+        break;
     }
     if (!status.empty()) {
         ui_text(renderer, panel_x + 28, footer_y, footer_scale, ui_fit_text(std::move(status), footer_scale, panel_w - 56),
@@ -4891,6 +4988,9 @@ NativeSettingsView build_native_settings_view() {
             if (info.kind == ControlsRow::Reset) {
                 shown.buttons = true;
                 shown.value = "RESET";
+            } else if (info.kind == ControlsRow::PairJoyCon) {
+                shown.buttons = true;
+                shown.value = "PAIR";
             }
         }
         view.rows.push_back(std::move(shown));
@@ -4903,7 +5003,23 @@ NativeSettingsView build_native_settings_view() {
     }
 
     const std::uint64_t now_ms = GetTickCount64();
-    if (s_settings_leave_asking) {
+    if (s_joycon_pairing) {
+        // The halves; a pair made since the screen opened shows a moment, then the screen closes.
+        const galaxy::host::JoyConStatus joycons = joycon_status_now();
+        if (joycons.paired != s_joycon_paired_at_open && s_joycon_paired_ms == 0u) {
+            s_joycon_paired_ms = now_ms;
+            std::cerr << "[settings] joy-con paired\n";
+        }
+        view.status = NativeSettingsStatus::JoyCon;
+        view.status_number = (joycons.lefts != 0u ? kJoyConLeftBit : 0) | (joycons.rights != 0u ? kJoyConRightBit : 0) |
+                             (joycons.left_held ? kJoyConLeftHeldBit : 0) | (joycons.right_held ? kJoyConRightHeldBit : 0) |
+                             (s_joycon_paired_ms != 0u ? kJoyConPairedBit : 0) |
+                             (joycons.left_presses & 15) << kJoyConLeftPressesShift |
+                             (joycons.right_presses & 15) << kJoyConRightPressesShift;
+        if (s_joycon_paired_ms != 0u && now_ms - s_joycon_paired_ms >= kJoyConPairedShowMs) {
+            close_joycon_pairing();
+        }
+    } else if (s_settings_leave_asking) {
         view.status = NativeSettingsStatus::Leave;
         view.status_number = static_cast<int>(pending_settings_changes());
     } else if (s_mods_restart_ask.load(std::memory_order_acquire)) {
@@ -5524,7 +5640,7 @@ void native_settings_input(NativeSettingsInput input, int arg) {
         break;
     }
     // The page and its rows wait while a question is up (keep the display? leave without applying?).
-    if (!visible || s_settings_leave_asking || settings_display_confirming() ||
+    if (!visible || s_settings_leave_asking || s_joycon_pairing || settings_display_confirming() ||
         s_mods_restart_ask.load(std::memory_order_acquire)) {
         return;
     }

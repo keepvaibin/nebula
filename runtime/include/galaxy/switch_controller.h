@@ -1,6 +1,6 @@
 #pragma once
 
-// Nintendo Switch Pro Controller (HID, USB + Bluetooth) and Switch 2 Pro
+// Nintendo Switch Pro Controller and Joy-Con (HID, USB + Bluetooth) and Switch 2 Pro
 // Controller (USB) report decoding, calibration parsing, motion helpers.
 // Protocol facts follow dekuNukem/Nintendo_Switch_Reverse_Engineering and
 // SDL's zlib-licensed SDL_hidapi_switch.c / SDL_hidapi_switch2.c (see
@@ -18,6 +18,9 @@ namespace galaxy::input::switch_hid {
 inline constexpr std::uint16_t kNintendoVendorId = 0x057e;
 inline constexpr std::uint16_t kProControllerProductId = 0x2009;
 inline constexpr std::uint16_t kPro2ControllerProductId = 0x2069;
+inline constexpr std::uint16_t kJoyConLeftProductId = 0x2006;
+inline constexpr std::uint16_t kJoyConRightProductId = 0x2007;
+inline constexpr std::uint16_t kChargingGripProductId = 0x200e;  // a Joy-Con per HID interface
 
 // Input report ids (Switch Pro Controller).
 inline constexpr std::uint8_t kReportSubcommandReply = 0x21;
@@ -28,12 +31,14 @@ inline constexpr std::uint8_t kReportUsbAck = 0x81;
 inline constexpr std::uint8_t kOutputSubcommand = 0x01;
 inline constexpr std::uint8_t kOutputUsbCommand = 0x80;
 // Subcommands.
+inline constexpr std::uint8_t kSubcommandDeviceInfo = 0x02;
 inline constexpr std::uint8_t kSubcommandSetReportMode = 0x03;
 inline constexpr std::uint8_t kSubcommandSpiRead = 0x10;
 inline constexpr std::uint8_t kSubcommandPlayerLights = 0x30;
 inline constexpr std::uint8_t kSubcommandEnableImu = 0x40;
 inline constexpr std::uint8_t kSubcommandEnableVibration = 0x48;
 // USB (0x80) commands.
+inline constexpr std::uint8_t kUsbStatus = 0x01;
 inline constexpr std::uint8_t kUsbHandshake = 0x02;
 inline constexpr std::uint8_t kUsbHighSpeed = 0x03;
 inline constexpr std::uint8_t kUsbForceHid = 0x04;
@@ -118,6 +123,38 @@ std::size_t build_subcommand(std::uint8_t packet_number, std::uint8_t subcommand
 std::size_t build_spi_read(std::uint8_t packet_number, std::uint32_t address, std::uint8_t length,
                            std::span<std::uint8_t> out) noexcept;
 std::size_t build_usb_command(std::uint8_t command, std::span<std::uint8_t> out) noexcept;
+
+// The Joy-Con a controller is. A controller names its type in the device info reply (subcommand 0x02, data byte 2)
+// over Bluetooth and in the USB status reply (0x81 0x01, byte 3): 1 Joy-Con (L), 2 Joy-Con (R), 3 Pro Controller.
+enum class JoyConSide : std::uint8_t { None, Left, Right };
+[[nodiscard]] JoyConSide joycon_side_of_type(std::uint8_t type) noexcept;
+[[nodiscard]] JoyConSide joycon_side_of_product(std::uint16_t product) noexcept;
+
+// A right Joy-Con's sensor sits turned half a turn from the left one's and the Pro Controller's: its first two axes
+// (decode_pro_report's frame) are negated, so both halves read alike.
+void turn_right_joycon_imu(DecodedState& state) noexcept;
+
+// A Joy-Con pair as one controller, both halves decoded with decode_pro_report: the left half's D-pad, L, ZL, Minus,
+// Capture and stick (and its click), the right half's face buttons, R, ZR, Plus, Home and stick; the motion is the
+// right half's, the hand that points as a Wii Remote's does.
+[[nodiscard]] DecodedState combine_joycons(const DecodedState& left, const DecodedState& right) noexcept;
+
+// Which Joy-Con halves pair. Each half: its side, its partner's index (-1 none) and whether its shoulder (L on a left
+// half, R on a right one) is held. Halves already paired stay paired. While the Pair Joy-Con screen is open, a left
+// and a right whose shoulders are both held pair: two unpaired ones first, then a pair holding both (it stays as it
+// is), then any two (leaving the partners they had), so a held shoulder of another pair alone never splits it.
+// Otherwise the only unpaired left and the only unpaired right pair by themselves. Fills `partner` (one entry per
+// half): `changed` when a partner changed, `made` when the screen made a pair or a pair held both.
+struct JoyConHalf {
+    JoyConSide side = JoyConSide::None;
+    int partner = -1;
+    bool shoulder = false;
+};
+struct JoyConPairing {
+    bool changed = false;
+    bool made = false;
+};
+JoyConPairing pair_joycons(std::span<JoyConHalf> halves, bool pairing_screen) noexcept;
 
 // A 0x21 reply to `subcommand` (ack bit set). For SPI reads also checks the
 // echoed address and returns the data bytes.

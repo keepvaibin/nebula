@@ -6,6 +6,7 @@
 #include "Game/Screen/LayoutActor.hpp"
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include "Game/Screen/LayoutManager.hpp"
+#include "Game/Screen/NebulaIcons.hpp"
 #include "Game/Screen/NebulaPaneKit.hpp"
 #include "Game/Screen/NebulaUi.hpp"
 #include "Game/System/NebulaCutsceneSkip.hpp"
@@ -68,6 +69,18 @@ namespace {
     const f32 cHintGap = 18.0f;
     const f32 cQuestionWidth = 470.0f;
     const f32 cQuestionHeight = 180.0f;
+    const f32 cQuestionMargin = 22.0f;  // the answers from the window's sides and foot
+    const f32 cQuestionRing = 6.4f;     // the window's white ring (measured), inside its edges
+    // The Pair Joy-Con question: the letters L and R, the halves (the owner's drawing, cJoyConUnit of the menu's units
+    // to its each; NebulaIcons paints them), its text and its answer, as far from each other as the answer is from the
+    // window's ring.
+    const f32 cJoyConUnit = 3.4f;
+    const f32 cJoyConGap = 5.36f;  // between the rails
+    const f32 cJoyConCentre = cJoyConGap * 0.5f + NebulaIcons::cJoyConRail + NebulaIcons::cJoyConBody[0] * 0.5f;  // a body's middle
+    const f32 cJoyConLetter = 1.0f;             // a letter toward its half's outer side
+    const f32 cJoyConLetterGap = 6.0f;          // the letters' feet to the shoulders' tops, menu units
+    const u32 cJoyConPaintAhead = 1500;         // painting the pictures a frame, us: on the Controls page
+    const u32 cJoyConPaintShown = 6000;         // and on the Pair Joy-Con screen
     const f32 cHomeWidth = 340.0f;  // the HOME Menu's window: its title over its buttons, one above the other
     const f32 cHomeButtonWidth = 250.0f;
     const f32 cHomeGap = 12.0f;
@@ -142,8 +155,22 @@ namespace {
          {"SettingsChoiceRestart", "SettingsChoiceLater", nullptr},
          {NEBULA_SETTINGS_APPLY, NEBULA_SETTINGS_CLOSE, 0},
          {KeyApply, KeyBack, 0}},
+        // Its text follows the halves (fillTexts).
+        {NEBULA_SETTINGS_STATUS_JOYCON, "SettingsJoyConPress", "SettingsJoyConPress", 1,
+         {"SettingsBack", nullptr, nullptr},
+         {NEBULA_SETTINGS_CLOSE, 0, 0},
+         {KeyBack, 0, 0}},
     };
     const s32 cQuestionNum = sizeof(cQuestions) / sizeof(cQuestions[0]);
+
+    // A half of the Pair Joy-Con picture: its texture (made when the screen first shows) and its shoulder's letter.
+    struct JoyConHalf {
+        Picture* mPicture;
+        TextBox* mLetter;
+        nw4r::lyt::TexMap* mMap;  // its picture's texture as set
+        s32 mPresses;  // its button presses as last seen (-1: not yet)
+        f32 mPop;      // a press's pop, 1 at the press and down to 0
+    };
 
     // The HOME Menu (the host's NEBULA_HBM_VIEW): its rows top to bottom, then "are you sure?" about the choice it asks
     // about (1 leave, 2 reset), answered no or yes as the game's own questions are.
@@ -286,6 +313,40 @@ namespace {
         wchar_t pattern[256];
         NebulaText::get(pattern, 256, pId);
         expand(pDst, capacity, pattern, ppArgs, argCount);
+    }
+
+    // A line too long in a language written without spaces (Japanese, Chinese), in two: between the characters at its
+    // middle, moved on past closing punctuation, which never starts a line. False when it has a break already.
+    bool breakUnspaced(wchar_t* pText, s32 capacity) {
+        s32 length = 0;
+        while (pText[length] != 0) {
+            if (pText[length] == L'\n') {
+                return false;
+            }
+            length++;
+        }
+        if (length < 2 || length + 1 >= capacity) {
+            return false;
+        }
+        s32 at = 0;
+        static const wchar_t cClosing[] = L"\u3001\u3002\uFF0C\uFF0E\uFF01\uFF1F\uFF09\u300D\u300F)!?.,";
+        at = length / 2;
+        const auto closing = [](wchar_t c) {
+            for (const wchar_t* p = cClosing; *p != 0; p++) {
+                if (*p == c) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        while (at < length - 1 && closing(pText[at])) {
+            at++;
+        }
+        for (s32 i = length; i >= at; i--) {
+            pText[i + 1] = pText[i];
+        }
+        pText[at] = L'\n';
+        return true;
     }
 
     // NebulaText's `pId` with {n} as `number`.
@@ -635,6 +696,8 @@ private:
     void fillTexts(const NebulaSettingsView& rView, const NebulaSettingsView* pShown);
     void fillButton(Button& rButton, const char* pWordId);
     void setQuestion(s32 question);
+    void placeJoyCon(f32 top);
+    void paintJoyCon(u32 budgetMicros, f32* pPixelsX, f32* pPixelsY) const;
     void fillHome(s32 homeView);
     void readPointer(const NebulaSettingsView& rView);
     void readHomePointer(f32 x, f32 y);
@@ -716,6 +779,11 @@ private:
     TextBox* mQuestionText;
     Button mChoices[ChoiceNum];
     s32 mChoiceCount;
+    Pane* mJoyCon;  // the Pair Joy-Con picture
+    JoyConHalf mHalves[2];
+    bool mJoyConPaired;  // the pair's chime played
+    s32 mJoyConBits;     // the Pair Joy-Con screen's status_number this frame (NEBULA_JOYCON_*)
+    f32 mQuestionInk;    // the question text's height from its first capitals' tops to its last baseline
 
     NebulaSettingsView mShown;  // the host's view as drawn
     f32 mOpen;                  // 0 away, 1 in place
@@ -779,7 +847,7 @@ NebulaSettingsScreen::NebulaSettingsScreen()
     : LayoutActor("NebulaSettingsMenu", true), mBuilt(false), mRoot(nullptr), mDim(nullptr), mMenu(nullptr), mPage(nullptr), mShadow(nullptr),
       mPanel(nullptr), mTitle(nullptr), mList(nullptr), mHighlight(nullptr), mTrack(nullptr), mThumb(nullptr), mStatus(nullptr),
       mStatusWidth(0.0f), mStatusRoom(-1.0f), mQuestion(nullptr), mQuestionDim(nullptr), mQuestionShadow(nullptr), mQuestionPanel(nullptr),
-      mQuestionText(nullptr), mChoiceCount(0), mOpen(0.0f), mClosing(false), mQuestionShown(-1), mHome(false), mHomeView(-1),
+      mQuestionText(nullptr), mChoiceCount(0), mJoyCon(nullptr), mJoyConPaired(false), mJoyConBits(0), mQuestionInk(0.0f), mOpen(0.0f), mClosing(false), mQuestionShown(-1), mHome(false), mHomeView(-1),
       mFocusButton(nullptr), mFrame(0), mScroll(0.0f),
       mScrollTarget(0.0f), mHighlightY(0.0f), mPointerMode(false), mPointerX(0.0f), mPointerY(0.0f), mPointerRow(-1), mHoverRow(-1),
       mHoverTab(-1), mPressing(false), mPressRow(-1), mPressY(0.0f), mPressScroll(0.0f), mScrollDrag(false), mDraggedAt(-1), mHoverArrow(0),
@@ -787,6 +855,7 @@ NebulaSettingsScreen::NebulaSettingsScreen()
       mPanelHeight(0.0f), mLeft(0.0f), mRight(0.0f), mTitleY(0.0f), mTabY(0.0f), mListTop(0.0f), mListBottom(0.0f), mStatusY(0.0f),
       mHintsY(0.0f), mFooterY(0.0f), mValueRight(0.0f) {
     memset(mTabs, 0, sizeof(mTabs));
+    memset(mHalves, 0, sizeof(mHalves));
     memset(mTabWordWidths, 0, sizeof(mTabWordWidths));
     memset(mRows, 0, sizeof(mRows));
     memset(mRowChips, 0, sizeof(mRowChips));
@@ -1026,6 +1095,23 @@ bool NebulaSettingsScreen::build() {
             return false;
         }
     }
+    mJoyCon = makeGroup(mQuestion, "NsJoyCon");
+    if (mJoyCon == nullptr) {
+        return false;
+    }
+    for (s32 half = 0; half < 2; half++) {
+        char name[16];
+        snprintf(name, sizeof(name), "NsJc%dL", static_cast< int >(half));
+        mHalves[half].mLetter = makeText(mKits, mJoyCon, name, 4);
+        if (mHalves[half].mLetter == nullptr) {
+            return false;
+        }
+        setTextStyle(mHalves[half].mLetter, cTextSize, cText, cText, 4);
+        setText(mHalves[half].mLetter, half == 0 ? L"L" : L"R");
+        mHalves[half].mMap = nullptr;
+        mHalves[half].mPresses = -1;
+    }
+    mJoyCon->SetVisible(false);
     mQuestion->SetVisible(false);
     setInfluencedAlphaRecursive(mRoot, 0);
     return true;
@@ -1276,10 +1362,39 @@ void NebulaSettingsScreen::fillTexts(const NebulaSettingsView& rView, const Nebu
         return;
     }
     const Question& rQuestion = cQuestions[question];
-    getNumbered(text, 256, rView.status_number == 1 ? rQuestion.mTextOne : rQuestion.mText, rView.status_number);
+    const char* pText = rView.status_number == 1 ? rQuestion.mTextOne : rQuestion.mText;
+    if (rView.status == NEBULA_SETTINGS_STATUS_JOYCON) {
+        // Paired, both halves here (hold L and R), or one missing (connect them).
+        const s32 halves = NEBULA_JOYCON_LEFT | NEBULA_JOYCON_RIGHT;
+        pText = (rView.status_number & NEBULA_JOYCON_PAIRED) != 0 ? "SettingsJoyConPaired"
+                : (rView.status_number & halves) == halves     ? "SettingsJoyConPress"
+                                                               : "SettingsJoyConConnect";
+    }
+    getNumbered(text, 256, pText, rView.status_number);
     setTextSize(mQuestionText, cTextSize + 1.0f);
     setText(mQuestionText, text);
-    measure(mQuestionText, cQuestionWidth - 48.0f, &width, &height);
+    // Too long for its window: broken at its spaces (or, written without spaces, in two), then smaller if need be.
+    const f32 room = cQuestionWidth - 48.0f;
+    measure(mQuestionText, 4000.0f, &width, &height);
+    if (width > room) {
+        bool spaced = false;
+        for (const wchar_t* p = text; *p != 0; p++) {
+            spaced = spaced || *p == L' ';
+        }
+        if (spaced) {
+            wrapWords(mQuestionText, text, room, &width, &height);
+        } else if (breakUnspaced(text, 256)) {
+            setText(mQuestionText, text);
+            measure(mQuestionText, 4000.0f, &width, &height);
+        }
+    }
+    f32 size = cTextSize + 1.0f;
+    if (width > room) {
+        size *= clamp(room / width, 0.75f, 1.0f);
+        setTextSize(mQuestionText, size);
+        measure(mQuestionText, 4000.0f, &width, &height);
+    }
+    mQuestionInk = height - (cCapTop + 1.0f - cBaseline) * size;
     // The answers' keys follow what the player last used.
     for (s32 i = 0; i < mChoiceCount; i++) {
         Button& rChoice = mChoices[i];
@@ -1300,6 +1415,12 @@ void NebulaSettingsScreen::setQuestion(s32 question) {
         }
     }
     mQuestion->SetVisible(question >= 0);
+    mJoyCon->SetVisible(question >= 0 && cQuestions[question].mStatus == NEBULA_SETTINGS_STATUS_JOYCON);
+    mJoyConPaired = false;
+    for (s32 half = 0; half < 2; half++) {
+        mHalves[half].mPresses = -1;
+        mHalves[half].mPop = 0.0f;
+    }
 }
 
 // The HOME Menu as the host has it: its title and rows, or "are you sure?" and its answers; the selected one focused.
@@ -2177,17 +2298,119 @@ void NebulaSettingsScreen::place(const NebulaSettingsView& rView) {
         x += (rHint.mWordWidth + cHintGap) * hintScale;
     }
 
-    // The question, centred on the window, its answers along its foot.
+    // The question, centred on the window, its answers along its foot; Pair Joy-Con's picture over its text.
     if (asking) {
         mQuestionDim->mAlpha = 96;
-        const f32 answersY = -cQuestionHeight * 0.5f + 22.0f + cButtonHeight * 0.5f;
-        const f32 textY = (cQuestionHeight * 0.5f + answersY + cButtonHeight * 0.5f) * 0.5f;
+        // Pair Joy-Con: from the top, the letters, the halves, the text and the answer, each as far from the next as
+        // the answer is from the window's ring (the text by its capitals' tops and its baseline).
+        const bool joycon = rView.status == NEBULA_SETTINGS_STATUS_JOYCON;
+        const f32 picture = cCapHeight * cTextSize + cJoyConLetterGap +
+                            (NebulaIcons::cJoyConShoulder + NebulaIcons::cJoyConBody[1]) * cJoyConUnit;
+        const f32 gap = cQuestionMargin - cQuestionRing;
+        const f32 height = joycon ? cQuestionMargin * 2.0f + gap * 2.0f + picture + mQuestionInk + cButtonHeight : cQuestionHeight;
+        mQuestionPanel->mSize = nw4r::lyt::Size(cQuestionWidth, height);
+        mQuestionShadow->mSize = nw4r::lyt::Size(cQuestionWidth, height);
+        const f32 answersY = -height * 0.5f + cQuestionMargin + cButtonHeight * 0.5f;
+        const f32 top = height * 0.5f - cQuestionMargin;
+        const f32 textY = joycon ? top - picture - gap - mQuestionInk * 0.5f
+                                 : (height * 0.5f + answersY + cButtonHeight * 0.5f) * 0.5f;
         mQuestionText->mTranslate = nw4r::math::VEC3(0.0f, textCentre(textY, cTextSize + 1.0f), 0.0f);
-        const f32 width = (cQuestionWidth - 44.0f - cButtonGap * (mChoiceCount - 1)) / (mChoiceCount > 0 ? mChoiceCount : 1);
+        if (joycon) {
+            placeJoyCon(top);
+        }
+        const f32 width = (cQuestionWidth - cQuestionMargin * 2.0f - cButtonGap * (mChoiceCount - 1)) / (mChoiceCount > 0 ? mChoiceCount : 1);
         for (s32 i = 0; i < mChoiceCount; i++) {
-            placeButton(mChoices[i], -cQuestionWidth * 0.5f + 22.0f + width * 0.5f + i * (width + cButtonGap), answersY, width);
+            placeButton(mChoices[i], -cQuestionWidth * 0.5f + cQuestionMargin + width * 0.5f + i * (width + cButtonGap), answersY,
+                        width);
         }
     }
+}
+
+// The Pair Joy-Con picture under `top` (the letters' cap tops): the halves side by side, their rails cJoyConGap apart,
+// the letters L and R over their shoulders. Each half's picture is painted at the 2D layer's pixels per unit
+// (NebulaIcons) and placed on its pixels. While the shoulders are to be held the letters bob; held, a shoulder clicks
+// down and its letter takes the half's colour. A button pressed on a half pops it a little; paired, a chime.
+void NebulaSettingsScreen::placeJoyCon(f32 top) {
+    const s32 bits = mJoyConBits;
+    const f32 k = cJoyConUnit;
+    const bool paired = (bits & NEBULA_JOYCON_PAIRED) != 0;
+    const bool both = (bits & (NEBULA_JOYCON_LEFT | NEBULA_JOYCON_RIGHT)) == (NEBULA_JOYCON_LEFT | NEBULA_JOYCON_RIGHT);
+    if (paired && !mJoyConPaired) {
+        MR::startSystemSE("SE_SY_TALK_OK");
+    }
+    mJoyConPaired = paired;
+    const f32 phase = static_cast< f32 >(mFrame % 72) / 72.0f;
+    const f32 wave = 1.0f - __builtin_fabsf(phase * 2.0f - 1.0f);  // 0..1..0 over 1.2 s
+    f32 pixelsX;
+    f32 pixelsY;
+    paintJoyCon(cJoyConPaintShown, &pixelsX, &pixelsY);
+    f32 box[2];
+    NebulaIcons::joyConPictureSize(&box[0], &box[1]);
+    // On the layer's pixels: the pictures' sides are whole texels from their centres.
+    const auto snap = [](f32 value, f32 pixels) { return __builtin_floorf(value * pixels + 0.5f) / pixels; };
+    const f32 letterY = top - cCapHeight * cTextSize * 0.5f;
+    const f32 bodyY = top - cCapHeight * cTextSize - cJoyConLetterGap -
+                      (NebulaIcons::cJoyConShoulder + NebulaIcons::cJoyConBody[1] * 0.5f) * k;
+    for (s32 half = 0; half < 2; half++) {
+        JoyConHalf& rHalf = mHalves[half];
+        const bool left = half == 0;
+        const bool connected = (bits & (left ? NEBULA_JOYCON_LEFT : NEBULA_JOYCON_RIGHT)) != 0;
+        const bool held = (bits & (left ? NEBULA_JOYCON_LEFT_HELD : NEBULA_JOYCON_RIGHT_HELD)) != 0;
+        const s32 look = !connected ? NebulaIcons::JoyConAway : held ? NebulaIcons::JoyConHeld : NebulaIcons::JoyConShown;
+        // A press on the half: a pop (none for the presses counted before the screen saw them).
+        const s32 presses = bits >> (left ? NEBULA_JOYCON_LEFT_PRESSES_SHIFT : NEBULA_JOYCON_RIGHT_PRESSES_SHIFT) & 15;
+        if (rHalf.mPresses >= 0 && presses != rHalf.mPresses && connected) {
+            rHalf.mPop = 1.0f;
+        }
+        rHalf.mPresses = presses;
+        rHalf.mPop = clamp(rHalf.mPop - 1.0f / 7.0f, 0.0f, 1.0f);
+        // Nothing of the half until its pictures are painted (the Controls page paints them ahead).
+        nw4r::lyt::TexMap* pMap = NebulaIcons::joyConPicture(half, look);
+        rHalf.mLetter->SetVisible(pMap != nullptr);
+        if (pMap == nullptr) {
+            if (rHalf.mPicture != nullptr) {
+                rHalf.mPicture->SetVisible(false);
+            }
+            continue;
+        }
+        if (rHalf.mPicture == nullptr) {
+            char name[16];
+            snprintf(name, sizeof(name), "NsJc%dP", static_cast< int >(half));
+            rHalf.mPicture = makePicture(mJoyCon, name, pMap);
+            if (rHalf.mPicture == nullptr) {
+                continue;
+            }
+            rHalf.mPicture->mBasePosition = 4;
+        } else if (pMap != rHalf.mMap) {
+            rHalf.mPicture->GetMaterial()->SetTexture(0, *pMap);
+        }
+        rHalf.mMap = pMap;
+        rHalf.mPicture->SetVisible(true);
+        // A pop swells it a touch and lifts it.
+        const f32 pop = rHalf.mPop * rHalf.mPop;
+        const f32 lift = pop * 0.3f * k;
+        const f32 x = (left ? -cJoyConCentre : cJoyConCentre) * k;
+        rHalf.mPicture->mSize = nw4r::lyt::Size(box[0] * k, box[1] * k);
+        rHalf.mPicture->mScale = nw4r::math::VEC2(1.0f + pop * 0.02f, 1.0f + pop * 0.02f);
+        rHalf.mPicture->mTranslate = nw4r::math::VEC3(snap(x, pixelsX), snap(bodyY, pixelsY) + lift, 0.0f);
+        // The letters bob down toward their shoulders (never into the window's margin).
+        const f32 bob = both && !paired && !held ? wave * 0.7f * k : 0.0f;
+        rHalf.mLetter->mTranslate = nw4r::math::VEC3(x + (left ? -cJoyConLetter : cJoyConLetter) * k,
+                                                     textCentre(letterY - bob + lift, cTextSize), 0.0f);
+        const u32 letter = !connected ? cDisabled : held || paired ? NebulaIcons::cJoyConColours[half] : cText;
+        setTextColor(rHalf.mLetter, letter, letter);
+    }
+}
+
+// The Pair Joy-Con pictures at the 2D layer's density, painted for about `budgetMicros` this frame; that density in
+// pixels per menu unit.
+void NebulaSettingsScreen::paintJoyCon(u32 budgetMicros, f32* pPixelsX, f32* pPixelsY) const {
+    const u32 scale = __NebulaLayer2DScale();
+    const f32 layer = scale != 0u ? static_cast< f32 >(scale) : 3.0f;
+    *pPixelsX = 640.0f * layer / mWidth;
+    *pPixelsY = 456.0f * layer / mHeight;
+    NebulaIcons::setJoyConDensity(*pPixelsX * cJoyConUnit, *pPixelsY * cJoyConUnit);
+    (void)NebulaIcons::paintJoyConAhead(budgetMicros);
 }
 
 // The HOME Menu's window centred on the screen: the title over the rows, or the question over its answers.
@@ -2285,11 +2508,24 @@ void NebulaSettingsScreen::step(const NebulaSettingsView& rView, s32 homeView) {
     if (scaleX != mScaleX || __builtin_fabsf(width - mWidth) > 0.5f || __builtin_fabsf(height - mHeight) > 0.5f) {
         arrange();
     }
+    if (!mHome && rView.page == rView.controls_page && rView.status != NEBULA_SETTINGS_STATUS_JOYCON) {
+        f32 pixelsX;
+        f32 pixelsY;
+        paintJoyCon(cJoyConPaintAhead, &pixelsX, &pixelsY);  // the Pair Joy-Con screen's pictures, ready before it opens
+    }
+    // The Pair Joy-Con screen's halves change with every press: its picture follows them each frame, its text only what
+    // it says (which halves are here, paired).
+    NebulaSettingsView view;
+    memcpy(&view, &rView, sizeof(view));
+    mJoyConBits = view.status == NEBULA_SETTINGS_STATUS_JOYCON ? view.status_number : 0;
+    if (view.status == NEBULA_SETTINGS_STATUS_JOYCON) {
+        view.status_number &= NEBULA_JOYCON_LEFT | NEBULA_JOYCON_RIGHT | NEBULA_JOYCON_PAIRED;
+    }
     if (mHome) {
         if (homeView >= 0 && homeView != mHomeView) {
             fillHome(homeView);
         }
-    } else if (rView.open && memcmp(&rView, &mShown, sizeof(rView)) != 0) {
+    } else if (view.open && memcmp(&view, &mShown, sizeof(view)) != 0) {
         // What changed, as the game's menus sound it.
         if (rView.page != mShown.page) {
             MR::startSystemSE("SE_SY_GALAMAP_PAGE_CHANGE");
@@ -2318,8 +2554,8 @@ void NebulaSettingsScreen::step(const NebulaSettingsView& rView, s32 homeView) {
         if (rView.status == NEBULA_SETTINGS_STATUS_APPLIED && mShown.status != NEBULA_SETTINGS_STATUS_APPLIED) {
             MR::startSystemSE("SE_SY_TALK_OK");
         }
-        fillTexts(rView, &mShown);
-        memcpy(&mShown, &rView, sizeof(rView));
+        fillTexts(view, &mShown);
+        memcpy(&mShown, &view, sizeof(view));
     }
     if (wanted && !mClosing) {
         readPointer(mShown);
