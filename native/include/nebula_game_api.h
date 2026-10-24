@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 20u
+#define NEBULA_GAME_API_VERSION 21u
 
 /* A physical range of the game's memory and where it is in the host process: what the GPU's addresses resolve to. */
 typedef struct NebulaGameMemoryRegion {
@@ -88,11 +88,18 @@ enum {
     NEBULA_WPAD_DISCONNECT,
 };
 
-/* The HOME Menu (hbm). NEBULA_HBM_POLL returns the choice so far: -1 none yet, 0 close, 1 leave the game, 2 reset. */
+/* The HOME Menu (hbm). NEBULA_HBM_POLL returns the choice so far: -1 none yet, 0 close, 1 leave the game, 2 reset.
+   The host keeps the menu (its keys and controllers' buttons) and the game draws it: NEBULA_HBM_VIEW returns -1 while
+   it is closed, else the selected answer in bits 0-7 and in bits 8-15 the choice it asks about (0 none: the list,
+   whose rows are close, reset and leave; 1 leave or 2 reset: "are you sure?", whose answers are no and yes); its
+   value is 1 when the game draws what it returns (the host then draws no menu of its own). */
 enum {
     NEBULA_HBM_OPEN = 1, /* value: 1 on a 16:9 screen */
     NEBULA_HBM_POLL,
     NEBULA_HBM_CLOSE,    /* closed at once (a reset or power event) */
+    NEBULA_HBM_VIEW,     /* value: 1 drawing it */
+    NEBULA_HBM_POINT,    /* value: the answer under the pointer, selected */
+    NEBULA_HBM_CHOOSE,   /* value: the answer clicked */
 };
 
 /* A test request (test_scene_frame). */
@@ -189,6 +196,12 @@ enum {
     NEBULA_SETTINGS_ROW_NAME = 4,        /* its value is a name (a monitor, a controller, a mod, a galaxy): shown as is */
     NEBULA_SETTINGS_ROW_ACTIVE = 8,      /* its value is the controller in use */
     NEBULA_SETTINGS_ROW_LABEL_NAME = 16, /* its label is a name (a mod's, its option's): shown as is */
+    NEBULA_SETTINGS_ROW_BUTTONS = 32,    /* its value is its buttons' words, '|' between them ('-' before one:
+                                            unavailable): left and right move between them (`selected_button`), A
+                                            presses one */
+    NEBULA_SETTINGS_ROW_MOD_OFF = 64,    /* the MODS page: a mod in the list of mods off (with HEADING: its title) */
+    NEBULA_SETTINGS_ROW_MOD_ON = 128,    /* a mod in the list of mods on, the higher one winning (with HEADING: its title) */
+    NEBULA_SETTINGS_ROW_HELD = 256,      /* the mod picked up to move: the arrows move it */
 };
 
 /* What the line under the page says (with `status_number` or `status_text` where it has one). */
@@ -209,6 +222,7 @@ enum {
     NEBULA_SETTINGS_STATUS_MODS_RESTART,     /* the mod changes apply at the next start */
     NEBULA_SETTINGS_STATUS_GPU_RESTART,      /* the new graphics card applies at the next start */
     NEBULA_SETTINGS_STATUS_LEAVE,            /* leaving with changes not applied: apply them or discard them? */
+    NEBULA_SETTINGS_STATUS_MODS_RESTART_ASK, /* mod changes applied: restart now? yes: APPLY, later: CLOSE */
 };
 
 /* The hints name the keys or the buttons of what the player last used. A controller's buttons change, close, undo and
@@ -237,6 +251,10 @@ typedef struct NebulaSettingsView {
     uint32_t first_row;
     uint32_t row_count;
     uint32_t selected;      /* counted from the page's first row */
+    uint32_t selected_button; /* the selected row's, when it has buttons */
+    /* The MODS page's lists (off, on): the place in its list of each one's first row sent, and their lengths. */
+    uint32_t mod_list_first[2];
+    uint32_t mod_list_count[2];
     NebulaSettingsRow rows[NEBULA_SETTINGS_ROWS];
     char help[192];
     uint32_t status; /* NEBULA_SETTINGS_STATUS_* */
@@ -253,6 +271,8 @@ enum {
     NEBULA_SETTINGS_CHANGE,      /* arg: -1 or 1, the selected row's value */
     NEBULA_SETTINGS_APPLY,
     NEBULA_SETTINGS_REVERT,
+    NEBULA_SETTINGS_PRESS,       /* arg: the selected row's button */
+    NEBULA_SETTINGS_MOVE_MOD,    /* the selected mod dropped: arg >> 16 the list (1 off, 2 on), its low 16 bits the place */
 };
 
 typedef struct NebulaHostServices {

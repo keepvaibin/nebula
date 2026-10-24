@@ -233,11 +233,13 @@ int main() {
 
     // Graphics page with no upscaler and the native quality mode: 0 heading, 1 upscaling, 2 quality
     // mode, 3 internal resolution, 4 sharpening, 5 anti-aliasing, 6 MSAA, 7 heading, 8 interpolation,
-    // 9 frame rate limit, 10 heading, 11 texture filtering, 12 mipmaps, 13 lighting, 14 ambient occlusion.
+    // 9 frame rate limit, 10 heading, 11 texture filtering, 12 mipmaps, 13 lighting, 14 ambient occlusion,
+    // 15 heading, 16 texture packs, (17 their replacements while on), dump textures, their folder, heading, movies' folder.
     passed &= expect(key(VK_TAB), "Tab enters the graphics page");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
-    passed &= expect(snapshot.tab == 1u && snapshot.row == 1u && snapshot.row_count == 15u,
-                     "graphics page: resolution, frame rate and detail sections");
+    const unsigned texture_rows = galaxy::gx::get_render_config().texture_packs ? 7u : 6u;
+    passed &= expect(snapshot.tab == 1u && snapshot.row == 1u && snapshot.row_count == 15u + texture_rows,
+                     "graphics page: resolution, frame rate, detail, texture pack and movie sections");
     passed &= expect(key(VK_DOWN) && key(VK_DOWN), "down moves to the internal resolution");
     passed &= expect(key(VK_LEFT), "left lowers the internal resolution in the draft");
     passed &= expect(
@@ -293,7 +295,7 @@ int main() {
     galaxy::gx::set_render_config(render);
     passed &= expect(reopen() && page_start(), "reopening takes the new live settings");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
-    passed &= expect(snapshot.tab == 1u && snapshot.row_count == 16u,
+    passed &= expect(snapshot.tab == 1u && snapshot.row_count == 16u + texture_rows,
                      "with FSR 1 and SMAA the page also has the SMAA quality row");
     passed &= expect(key(VK_LEFT), "left lowers the upscaler");
     passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "quality mode row is adjustable");
@@ -531,7 +533,7 @@ int main() {
                      "up returns to text speed");
     passed &= expect(key(VK_TAB), "Tab enters the mods page");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
-    passed &= expect(snapshot.tab == 5u && snapshot.row_count >= 5u, "mods page has its folder and session rows");
+    passed &= expect(snapshot.tab == 5u && snapshot.row_count >= 3u, "mods page has its two lists and its buttons");
     passed &= expect(key(VK_TAB), "Tab enters the system page");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
     passed &= expect(snapshot.tab == 6u && snapshot.row_count == 7u, "system page has the graphics card and six status rows");
@@ -702,6 +704,40 @@ int main() {
             controls_split = controls_split && row.label.find(": ") == std::string::npos;
         }
         passed &= expect(controls_split, "the controls page's rows come as label and value");
+
+        // A row of buttons (the MODS page's, under its two lists): Left and Right move between them (none past either
+        // end), Space and the pointer press one, the row starts at its first when selected again. RESCAN only: the
+        // others open a file picker or a folder, or act on a mod.
+        galaxy::gx::native_settings_input(NativeSettingsInput::SelectPage, 5);
+        int buttons = -1;
+        view = galaxy::gx::native_settings_view();
+        for (unsigned i = 0; i < view.rows.size(); ++i) {
+            if (view.rows[i].buttons) buttons = static_cast<int>(i);
+        }
+        passed &= expect(view.rows.size() >= 3u && view.rows[0].heading && view.rows[0].mod_list == 1u &&
+                             view.rows[0].label == "DISABLED",
+                         "the MODS page starts with the list of mods off");
+        galaxy::gx::native_settings_input(NativeSettingsInput::SelectRow, buttons);
+        view = galaxy::gx::native_settings_view();
+        passed &= expect(buttons >= 0 &&
+                             view.rows[static_cast<unsigned>(buttons)].value ==
+                                 "IMPORT FILE|IMPORT FOLDER|-OPTIONS|OPEN FOLDER|RESCAN" &&
+                             view.selected_button == 0u,
+                         "the MODS page's buttons are the launcher's, the first selected");
+        for (int i = 0; i < 5; ++i) (void)key(VK_RIGHT);
+        passed &= expect(galaxy::gx::native_settings_view().selected_button == 4u,
+                         "Right moves to the last button and stays there");
+        passed &= expect(key(VK_SPACE) && galaxy::gx::native_settings_view().selected_button == 4u,
+                         "Space presses the selected button (RESCAN)");
+        passed &= expect(key(VK_LEFT) && galaxy::gx::native_settings_view().selected_button == 3u, "Left moves back");
+        galaxy::gx::native_settings_input(NativeSettingsInput::Press, 4);
+        passed &= expect(galaxy::gx::native_settings_view().selected_button == 4u, "the pointer's press selects its button");
+        galaxy::gx::native_settings_input(NativeSettingsInput::Press, 5);
+        passed &= expect(galaxy::gx::native_settings_view().selected_button == 4u, "a press past the row's buttons does nothing");
+        galaxy::gx::native_settings_input(NativeSettingsInput::SelectPage, 4);
+        galaxy::gx::native_settings_input(NativeSettingsInput::SelectPage, 5);
+        galaxy::gx::native_settings_input(NativeSettingsInput::SelectRow, buttons);
+        passed &= expect(galaxy::gx::native_settings_view().selected_button == 0u, "selected again, the row starts at its first");
         passed &= expect(close_discarding(), "the menu closes after the view checks");
     }
 
@@ -756,7 +792,16 @@ int main() {
                         }
                         at = comma == std::string::npos ? row.value.size() : comma + 2u;
                     }
-                } else if (!row.name && row.value != "PRESS RIGHT") {
+                } else if (row.buttons) {
+                    // Each button's word (after the '-' of one unavailable).
+                    for (std::size_t at = 0u; at <= row.value.size();) {
+                        const std::size_t bar = std::min(row.value.find('|', at), row.value.size());
+                        const std::size_t start = at < bar && row.value[at] == '-' ? at + 1u : at;
+                        const std::string word = row.value.substr(start, bar - start);
+                        if (!word.empty()) check(word);
+                        at = bar + 1u;
+                    }
+                } else if (!row.name) {
                     check(row.value);
                 }
             }
@@ -773,8 +818,7 @@ int main() {
             return -1;
         };
         const auto steps = [](const galaxy::gx::NativeSettingsViewRow& row) {
-            return row.changes && !row.heading && !row.inputs && row.value != "PRESS RIGHT" && row.label != "  PLACE" &&
-                   row.label.rfind("RESET ", 0) != 0u;
+            return row.changes && !row.heading && !row.inputs && !row.buttons && row.label.rfind("RESET ", 0) != 0u;
         };
         const auto step_through = [&](const std::string& label, const std::function<void()>& each) {
             int row = find_row(label);

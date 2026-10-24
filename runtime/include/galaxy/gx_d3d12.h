@@ -281,13 +281,18 @@ struct XfbPresentStats {
 void request_sharp_2d(bool on) noexcept;
 [[nodiscard]] bool sharp_2d_requested() noexcept;
 
-// The native game's HOME Menu: Nebula's panel with the console menu's choices, drawn over the frame and taking the
-// keyboard, controllers and mouse while open. The game opens it (HBMInit) and polls each frame: -1 nothing chosen yet,
-// 0 return to the game, 1 Wii Menu (leave the game), 2 reset.
+// The native game's HOME Menu with the console menu's choices, taking the keyboard and controllers while open: return
+// to the game, reset, or leave it (the console's Wii Menu), the last two after "are you sure?". The game opens it
+// (HBMInit) and polls each frame: -1 nothing chosen yet, 0 return to the game, 1 leave the game, 2 reset. The game
+// draws it from home_menu_view (NEBULA_HBM_VIEW, `drawing`) and sends the pointer's answers; until it draws it, the
+// host draws its own panel.
 void home_menu_open() noexcept;
 [[nodiscard]] int home_menu_poll() noexcept;
 void home_menu_close() noexcept;
 [[nodiscard]] bool home_menu_visible() noexcept;
+[[nodiscard]] int home_menu_view(bool drawing) noexcept;
+void home_menu_point(unsigned answer) noexcept;
+void home_menu_choose(unsigned answer) noexcept;
 [[nodiscard]] bool native_window_input_captured() noexcept;
 [[nodiscard]] NativeSettingsOverlaySnapshot
 native_settings_overlay_snapshot() noexcept;
@@ -325,6 +330,9 @@ struct NativeSettingsViewRow {
     bool inputs = false;   // its value lists inputs (keys, buttons, sticks), each named on its own
     bool active = false;   // its value is the controller in use
     bool label_name = false;  // its label is a name (a mod's, its option's): shown as is
+    bool buttons = false;     // its value is its buttons' words, '|' between them
+    unsigned mod_list = 0u;   // the MODS page's lists: 1 off, 2 on (a mod, or the list's title)
+    bool held = false;        // a mod picked up to move
 };
 enum class NativeSettingsStatus : unsigned {
     Help,             // the selected row's description
@@ -343,6 +351,7 @@ enum class NativeSettingsStatus : unsigned {
     ModsRestart,      // the mod changes apply at the next start
     GpuRestart,       // the new graphics card applies at the next start
     Leave,            // leaving with changes not applied: apply or discard them first
+    ModsRestartAsk,   // mod changes applied: restart now? (yes: Apply, later: Close)
 };
 struct NativeSettingsView {
     bool open = false;
@@ -352,6 +361,7 @@ struct NativeSettingsView {
     unsigned input = 0u;  // what the player last used: 0 keyboard, 1 Xbox-style, 2 Nintendo, 3 PlayStation
     std::vector<NativeSettingsViewRow> rows;
     unsigned selected = 0u;
+    unsigned selected_button = 0u;  // the selected row's, when it has buttons
     std::string help;
     NativeSettingsStatus status = NativeSettingsStatus::Help;
     int status_number = 0;
@@ -360,7 +370,7 @@ struct NativeSettingsView {
 // The menu as it stands. The first call hands the drawing to the game: the overlay draws nothing of its own after.
 [[nodiscard]] NativeSettingsView native_settings_view();
 // The pointer's input to the menu (the game's own menu takes the pointer; the window thread the keyboard and pads).
-enum class NativeSettingsInput : unsigned { Open = 1, Close, SelectPage, SelectRow, Change, Apply, Revert };
+enum class NativeSettingsInput : unsigned { Open = 1, Close, SelectPage, SelectRow, Change, Apply, Revert, Press, MoveMod };
 void native_settings_input(NativeSettingsInput input, int arg);
 
 // Number of EFB display copies submitted to XFB textures by the active backend.

@@ -246,7 +246,8 @@ it closes stay hidden from the game until released.
 | `F1` | View+Menu, Share+Options, Minus+Plus | Open or close |
 | `Tab` / Page Down, Page Up | RB/R, LB/L | Next, previous page |
 | Up / Down | D-pad or left stick up/down | Select row |
-| Left / Right | D-pad or left stick left/right, A | Change the selected row; open a folder, import |
+| Left / Right | D-pad or left stick left/right, A | Change the selected row |
+| Left / Right, `Space` | D-pad or left stick left/right, A | A row of buttons (Import file, Open): select one, press it |
 | `Enter` | Y | Apply (CONTROLS: `Space`/Y) |
 | `Backspace` | X | Undo the draft (CONTROLS binding row: clear) |
 | `Esc` | B or Menu/Plus | Close |
@@ -257,12 +258,28 @@ with changes not applied asks first: `Enter`/Y applies them and closes, `Backspa
 back to the page (each is also a button to click). The hints along the bottom name the keys or buttons of whatever
 was used last.
 
+The Mods page is two lists, as in Nebula Settings: the mods off on the left, the mods on on the right (the higher one
+wins where two change the same file or texture). Drag a mod with the pointer (hold A or the left button on it, let go
+where the line shows), or press A (`Space`) on it, move it with the D-pad or stick (left: off, right: on, up and down:
+its place) and press A again to put it down. The buttons under the lists import a file or a folder, open the selected
+mod's options, open the mods folder and read it again. Changes wait for Apply, which then offers to restart (mods load
+at the start); removing a mod is in Nebula Settings. Texture packs, texture dumps and the movies folder are on the
+Graphics page.
+
 On Switch controllers the menu uses the console's meaning: A changes, B closes. PlayStation: Cross changes, Circle
 closes, Square clears, Triangle applies. Pages: Display, Graphics, Controls, Audio, General (text speed, language,
 Discord, Miis), Mods and System. Audio and text speed changes apply live; a new language applies when Nebula next
 starts, as the game reads it once at boot. Settings files are written through flushed sibling temporaries
 and atomically replaced; a failed save stays dirty and is retried on the next
 close or at shutdown.
+
+## HOME Menu
+
+Home (`H`; Home on Switch, PS on PlayStation, Steam on Steam controllers) opens the HOME Menu over the paused game:
+Return to game, Reset and Quit to desktop (the console's Wii Menu); Reset and Quit ask first, as the console does. Up
+and Down (or Left and Right) select, `Enter`/`Space`/A chooses, `Esc`/`Backspace`/B goes back (from the list: closes
+it); the pointer selects what it is over and a click chooses it. The game draws it in its own style, in
+the played language, with the console HOME Menu's sounds.
 
 Diagnostic environment variables for input and audio are listed in
 [DIAGNOSTICS.md](DIAGNOSTICS.md).

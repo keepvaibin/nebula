@@ -1548,10 +1548,12 @@ void copy_settings_text(char (&field)[N], const std::string& text) {
 
 #if defined(NEBULA_HOST_RENDERER)
 static_assert(static_cast<uint32_t>(galaxy::gx::NativeSettingsStatus::Leave) == NEBULA_SETTINGS_STATUS_LEAVE &&
+              static_cast<uint32_t>(galaxy::gx::NativeSettingsStatus::ModsRestartAsk) == NEBULA_SETTINGS_STATUS_MODS_RESTART_ASK &&
               static_cast<uint32_t>(galaxy::gx::NativeSettingsStatus::KeepDisplay) == NEBULA_SETTINGS_STATUS_KEEP_DISPLAY,
               "the settings statuses are numbered alike");
 static_assert(static_cast<uint32_t>(galaxy::gx::NativeSettingsInput::Open) == NEBULA_SETTINGS_OPEN &&
-              static_cast<uint32_t>(galaxy::gx::NativeSettingsInput::Revert) == NEBULA_SETTINGS_REVERT,
+              static_cast<uint32_t>(galaxy::gx::NativeSettingsInput::Revert) == NEBULA_SETTINGS_REVERT &&
+              static_cast<uint32_t>(galaxy::gx::NativeSettingsInput::MoveMod) == NEBULA_SETTINGS_MOVE_MOD,
               "the settings inputs are numbered alike");
 #endif
 
@@ -1586,9 +1588,19 @@ void svc_settings_view(void*, NebulaSettingsView* view) {
         view->rows[i].flags = (row.heading ? NEBULA_SETTINGS_ROW_HEADING : 0u) |
                               (row.changes ? NEBULA_SETTINGS_ROW_CHANGES : 0u) | (row.name ? NEBULA_SETTINGS_ROW_NAME : 0u) |
                               (row.active ? NEBULA_SETTINGS_ROW_ACTIVE : 0u) |
-                              (row.label_name ? NEBULA_SETTINGS_ROW_LABEL_NAME : 0u);
+                              (row.label_name ? NEBULA_SETTINGS_ROW_LABEL_NAME : 0u) |
+                              (row.buttons ? NEBULA_SETTINGS_ROW_BUTTONS : 0u) |
+                              (row.mod_list == 1u ? NEBULA_SETTINGS_ROW_MOD_OFF : 0u) |
+                              (row.mod_list == 2u ? NEBULA_SETTINGS_ROW_MOD_ON : 0u) | (row.held ? NEBULA_SETTINGS_ROW_HELD : 0u);
     }
     view->selected = static_cast<uint32_t>(selected);
+    view->selected_button = source.selected_button;
+    for (std::size_t r = 0; r < total; ++r) {
+        const galaxy::gx::NativeSettingsViewRow& row = source.rows[r];
+        if (row.mod_list == 0u || row.mod_list > 2u || row.heading) continue;
+        if (r < first) ++view->mod_list_first[row.mod_list - 1u];
+        ++view->mod_list_count[row.mod_list - 1u];
+    }
     copy_settings_text(view->help, source.help);
     view->status = static_cast<uint32_t>(source.status);
     view->status_number = source.status_number;
@@ -1599,7 +1611,7 @@ void svc_settings_view(void*, NebulaSettingsView* view) {
 // The pointer's input to the settings menu: NEBULA_SETTINGS_* are galaxy::gx::NativeSettingsInput's values.
 void svc_settings_input(void*, uint32_t action, int32_t arg) {
 #if defined(NEBULA_HOST_RENDERER)
-    if (action >= NEBULA_SETTINGS_OPEN && action <= NEBULA_SETTINGS_REVERT) {
+    if (action >= NEBULA_SETTINGS_OPEN && action <= NEBULA_SETTINGS_MOVE_MOD) {
         galaxy::gx::native_settings_input(static_cast<galaxy::gx::NativeSettingsInput>(action), arg);
     }
 #else
@@ -2144,14 +2156,15 @@ void svc_ai_control(void*, uint32_t what, uint32_t value) {
     gAiWake.notify_one();
 }
 
-int svc_hbm(void*, uint32_t what, uint32_t) {
+int svc_hbm(void*, uint32_t what, uint32_t value) {
 #if defined(NEBULA_HOST_RENDERER)
     switch (what) {
     case NEBULA_HBM_OPEN:
         galaxy::gx::home_menu_open();
         return 0;
     case NEBULA_HBM_POLL: {
-        // GALAXY_TEST_HOME_ROW=<row>:<polls>: picks a row by the keys a player would press.
+        // GALAXY_TEST_HOME_ROW=<row>:<polls>: picks a row by the keys a player would press, and answers yes when it
+        // asks (reset, leave).
         static const char* test = std::getenv("GALAXY_TEST_HOME_ROW");
         static unsigned polls = 0;
         if (test != nullptr && galaxy::gx::home_menu_visible()) {
@@ -2161,6 +2174,10 @@ int svc_hbm(void*, uint32_t what, uint32_t) {
                     galaxy::gx::native_settings_post_key(VK_DOWN);
                 }
                 galaxy::gx::native_settings_post_key(VK_RETURN);
+                if (row != 0) {
+                    galaxy::gx::native_settings_post_key(VK_RIGHT);
+                    galaxy::gx::native_settings_post_key(VK_RETURN);
+                }
             }
         }
         return galaxy::gx::home_menu_poll();
@@ -2168,12 +2185,20 @@ int svc_hbm(void*, uint32_t what, uint32_t) {
     case NEBULA_HBM_CLOSE:
         galaxy::gx::home_menu_close();
         return 0;
+    case NEBULA_HBM_VIEW:
+        return galaxy::gx::home_menu_view(value != 0u);
+    case NEBULA_HBM_POINT:
+        galaxy::gx::home_menu_point(value);
+        return 0;
+    case NEBULA_HBM_CHOOSE:
+        galaxy::gx::home_menu_choose(value);
+        return 0;
     default:
         return 0;
     }
 #else
-    (void)what;
-    return 0;  // headless: the menu closes at once
+    (void)value;
+    return what == NEBULA_HBM_VIEW ? -1 : 0;  // headless: the menu closes at once
 #endif
 }
 

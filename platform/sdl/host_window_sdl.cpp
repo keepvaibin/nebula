@@ -840,6 +840,15 @@ bool home_menu_visible() noexcept {
     return galaxy::sdl::g_home_visible.load(std::memory_order_acquire);
 }
 
+// The activity shows its own HOME Menu: the game draws none.
+int home_menu_view(bool) noexcept {
+    return -1;
+}
+
+void home_menu_point(unsigned) noexcept {}
+
+void home_menu_choose(unsigned) noexcept {}
+
 void native_settings_post_key(std::uintptr_t) noexcept {}
 
 }  // namespace galaxy::gx

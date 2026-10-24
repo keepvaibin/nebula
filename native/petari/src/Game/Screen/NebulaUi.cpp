@@ -202,6 +202,97 @@ namespace NebulaUi {
         pText->mSize = nw4r::lyt::Size(size * 2.0f, size * 2.0f);
     }
 
+    namespace {
+        // A glyph picture's coverage at (x, y) of its sheet, 0-15: its alpha where it has one, else its intensity. The
+        // sheets are the console's tiled formats.
+        s32 coverage(const nw4r::ut::Glyph& rGlyph, s32 x, s32 y) {
+            const u8* pData = static_cast< const u8* >(rGlyph.pTexture);
+            const s32 tilesAcross = (rGlyph.texWidth + 7) / 8;
+            switch (rGlyph.texFormat) {
+            case GX_TF_I4: {
+                const u8 byte = pData[((y / 8) * tilesAcross + x / 8) * 32 + (y % 8) * 4 + (x % 8) / 2];
+                return (x & 1) == 0 ? byte >> 4 : byte & 0xF;
+            }
+            case GX_TF_IA4:
+                return pData[((y / 4) * tilesAcross + x / 8) * 32 + (y % 4) * 8 + x % 8] >> 4;
+            case GX_TF_I8:
+                return pData[((y / 4) * tilesAcross + x / 8) * 32 + (y % 4) * 8 + x % 8] >> 4;
+            case GX_TF_IA8:
+                return pData[(((y / 4) * ((rGlyph.texWidth + 3) / 4) + x / 4) * 16 + (y % 4) * 4 + x % 4) * 2] >> 4;
+            default:
+                return -1;
+            }
+        }
+
+        // The ink box of `code`'s picture, in its cell's pixels (x from the cell's left, y from its top); false when
+        // the picture cannot be read or holds no ink.
+        bool inkBox(const nw4r::ut::Font* pFont, u16 code, s32* pLeft, s32* pTop, s32* pRight, s32* pBottom) {
+            nw4r::ut::Glyph glyph;
+            pFont->GetGlyph(&glyph, code);
+            if (glyph.pTexture == nullptr) {
+                return false;
+            }
+            *pLeft = glyph.widths.glyphWidth;
+            *pTop = glyph.height;
+            *pRight = -1;
+            *pBottom = -1;
+            for (s32 y = 0; y < glyph.height; y++) {
+                for (s32 x = 0; x < glyph.widths.glyphWidth; x++) {
+                    const s32 ink = coverage(glyph, glyph.cellX + x, glyph.cellY + y);
+                    if (ink < 0) {
+                        return false;
+                    }
+                    if (ink >= 4) {
+                        *pLeft = x < *pLeft ? x : *pLeft;
+                        *pRight = x > *pRight ? x : *pRight;
+                        *pTop = y < *pTop ? y : *pTop;
+                        *pBottom = y > *pBottom ? y : *pBottom;
+                    }
+                }
+            }
+            return *pRight >= 0;
+        }
+    };  // namespace
+
+    bool inkOffset(const TextBox* pText, f32* pX, f32* pY) {
+        const nw4r::ut::Font* pFont = pText->mpFont;
+        const wchar_t* pString = pText->mTextBuf;
+        if (pFont == nullptr || pString == nullptr || pString[0] == 0 || pFont->GetWidth() <= 0 || pFont->GetHeight() <= 0) {
+            return false;
+        }
+        // The text's glyphs side by side as the writer sets them (its space between them), their ink boxes joined.
+        const f32 scaleX = pText->mFontSize.width / pFont->GetWidth();
+        const f32 scaleY = pText->mFontSize.height / pFont->GetHeight();
+        f32 cursor = 0.0f;
+        f32 left = 1e9f;
+        f32 right = -1e9f;
+        s32 top = 0x7FFF;
+        s32 bottom = -0x7FFF;
+        for (const wchar_t* p = pString; *p != 0; p++) {
+            const nw4r::ut::CharWidths widths = pFont->GetCharWidths(static_cast< u16 >(*p));
+            s32 l, t, r, b;
+            if (!inkBox(pFont, static_cast< u16 >(*p), &l, &t, &r, &b)) {
+                return false;
+            }
+            if (p != pString) {
+                cursor += pText->mCharSpace / scaleX;
+            }
+            left = cursor + widths.left + l < left ? cursor + widths.left + l : left;
+            right = cursor + widths.left + r + 1 > right ? cursor + widths.left + r + 1 : right;
+            top = t < top ? t : top;
+            bottom = b + 1 > bottom ? b + 1 : bottom;
+            cursor += widths.charWidth;
+        }
+        s32 aLeft, aTop, aRight, aBottom;
+        if (!inkBox(pFont, L'A', &aLeft, &aTop, &aRight, &aBottom)) {
+            return false;
+        }
+        *pX = ((left + right) * 0.5f - cursor * 0.5f) * scaleX;
+        // The cell's y runs down, the layout's up.
+        *pY = -((top + bottom) * 0.5f - (aTop + aBottom + 1) * 0.5f) * scaleY;
+        return true;
+    }
+
     f32 clamp(f32 v, f32 lo, f32 hi) {
         return v < lo ? lo : v > hi ? hi : v;
     }

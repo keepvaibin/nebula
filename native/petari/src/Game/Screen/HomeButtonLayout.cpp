@@ -120,7 +120,11 @@ void HomeButtonLayout::exeDeactive() {
 void HomeButtonLayout::exeActive() {
     if (MR::isFirstStep(this)) {
         AudWrap::getSystem()->enterHomeButtonMenu();
+#ifdef TARGET_PC
+        // Natively the game draws the menu (NebulaSettingsMenu), under the game's own pointer.
+#else
         MR::startStarPointerModeHomeButton(this);
+#endif
         GameSystemFunction::onHomeButtonMenuBeginAllRumble();
         MR::setWPadHolderModeHomeButton();
 

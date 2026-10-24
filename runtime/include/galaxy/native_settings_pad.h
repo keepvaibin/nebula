@@ -8,7 +8,7 @@
 namespace galaxy::input {
 
 // Controller access to the native settings overlay. View+Menu (XInput Back+Start) toggles it.
-// While it is open, the pad drives it: the D-pad or left stick moves and changes, A changes,
+// While it is open, the pad drives it: the D-pad or left stick moves and changes, A changes (or chooses in the HOME Menu),
 // Y applies, X reverts, LB/RB switch pages, and B or Menu closes it. The game sees a neutral pad.
 // Buttons held across a toggle, or while the overlay is open, stay hidden from the game until
 // released, so the chord never reaches the pause menu and the closing press never reaches the
@@ -39,6 +39,9 @@ inline constexpr std::uint8_t kKeyLeft = 0x25u;
 inline constexpr std::uint8_t kKeyUp = 0x26u;
 inline constexpr std::uint8_t kKeyRight = 0x27u;
 inline constexpr std::uint8_t kKeyDown = 0x28u;
+// A: no keyboard key has it (VK_EXECUTE). The settings menu reads it as Right (it changes the setting); the HOME
+// Menu's question as choosing, while the D-pad's left and right move between its answers.
+inline constexpr std::uint8_t kKeyAccept = 0x2Bu;
 
 inline constexpr std::uint64_t kRepeatDelayMs = 400u;
 inline constexpr std::uint64_t kRepeatIntervalMs = 110u;
@@ -107,7 +110,7 @@ struct NativeSettingsPadStep {
         } else {
             if ((pressed & kShoulderLeft) != 0u) emit(kKeyPreviousPage);
             if ((pressed & kShoulderRight) != 0u) emit(kKeyNextPage);
-            if ((pressed & kA) != 0u) emit(kKeyRight);
+            if ((pressed & kA) != 0u) emit(kKeyAccept);
             if ((pressed & kY) != 0u) emit(kKeyApply);
             if ((pressed & kX) != 0u) emit(kKeyRevert);
             const auto direction = static_cast<std::uint16_t>(pressed & kDirections);

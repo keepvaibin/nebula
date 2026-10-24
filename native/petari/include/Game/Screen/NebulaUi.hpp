@@ -99,6 +99,10 @@ namespace NebulaUi {
     nw4r::lyt::Size glyphFontSize(const TextBox* pText, f32 size);
     // The game's picture font: a glyph sized like text, centred on its place.
     void setGlyph(TextBox* pText, s32 code, f32 size);
+    // Where the ink of `pText`'s text (its font, at its size) is: its middle from the middle of the text's width (x) and
+    // from the middle of a capital A's ink, where textCentre puts a capital's middle (y, up), in the box's units. Read
+    // from the font's own glyph pictures; false when one cannot be read.
+    bool inkOffset(const TextBox* pText, f32* pX, f32* pY);
     f32 clamp(f32 v, f32 lo, f32 hi);
     f32 easeOut(f32 t);
     u8 toAlpha(f32 a);

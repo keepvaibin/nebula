@@ -1791,6 +1791,16 @@ std::size_t connected_controllers(std::span<input::ControllerInfo> out) noexcept
 }
 
 std::optional<input::DeviceKey> last_input_device() noexcept {
+    // GALAXY_TEST_LAST_INPUT=<n>: input::ControlScheme n is the one in use whatever else gives input (hidden runs show
+    // the menus' buttons for each controller).
+    static const int s_test_scheme = [] {
+        const std::optional<std::string> scheme = read_env_string_uncached("GALAXY_TEST_LAST_INPUT");
+        return scheme.has_value() ? std::atoi(scheme->c_str()) : -1;
+    }();
+    if (s_test_scheme >= 0 && s_test_scheme < static_cast<int>(input::kControlSchemeCount)) {
+        return input::DeviceKey{static_cast<input::ControlScheme>(s_test_scheme),
+                                s_test_scheme == 0 ? input::kKeyboardSlot : std::uint8_t{0}};
+    }
     const std::uint32_t key = g_last_input.load(std::memory_order_relaxed);
     if (key == kLastInputNone) return std::nullopt;
     if (key == kLastInputKeyboard) return input::DeviceKey{input::ControlScheme::Keyboard, input::kKeyboardSlot};

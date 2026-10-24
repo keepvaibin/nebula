@@ -73,7 +73,7 @@ bool settings_pad_toggles_navigates_and_hides_buttons() {
     ok &= expect(only_key(s, pad::kKeyLeft), "left stick adjusts inside the overlay");
     s = step(0u, true, 640u);
     s = step(pad::kA, true, 650u);
-    ok &= expect(only_key(s, pad::kKeyRight), "A changes the selected setting");
+    ok &= expect(only_key(s, pad::kKeyAccept), "A changes the selected setting (the overlay reads it as Right)");
     s = step(pad::kShoulderRight, true, 660u);
     ok &= expect(only_key(s, pad::kKeyNextPage), "RB selects the next page");
     s = step(pad::kShoulderLeft, true, 670u);
