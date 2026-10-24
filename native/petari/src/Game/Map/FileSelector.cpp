@@ -389,6 +389,9 @@ bool FileSelector::updateQuitQuestion() {
         mIsAskingQuit = true;
         invalidateSelectAll();
         clearPointing();
+        // "Please choose a file." is drawn over every layout: it goes while the question is up, as before the game's
+        // own questions.
+        MR::deactiveStarPointerGuidance();
         mQuitWindow->appearYesNoWithText(NebulaQuitButton::getQuestion());
         return true;
     }
@@ -410,6 +413,7 @@ bool FileSelector::updateQuitQuestion() {
     mIsAskingQuit = false;
     mQuitButton->resume();
     validateSelectAll();
+    MR::activeStarPointerGuidance();
     return false;
 }
 #endif

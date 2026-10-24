@@ -436,6 +436,12 @@ namespace MR {
         }
     }
 
+#ifdef TARGET_PC
+    bool isActiveStarPointerGuidance() {
+        return ::getStarPointerDirector()->mGuidance != nullptr && ::getStarPointerDirector()->mGuidance->mIsActive;
+    }
+#endif
+
     void tryShowTimeoutedStarPointerGuidance() {
         if (::getStarPointerDirector()->mGuidance != nullptr) {
             ::getStarPointerDirector()->mGuidance->tryResetTimeout();

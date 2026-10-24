@@ -71,6 +71,7 @@ namespace {
     s32 sStallSteps = 0;
     SysInfoWindow* sWindow = nullptr;
     bool sNeedRelease = false;  // + was held when the last prompt or skip ended
+    bool sGuidanceWasActive = false;  // the pointer guidance, off while the question is up (it draws over it)
     bool sSkipDemo = false;     // the skip runs a demo on (else it stops a movie)
     bool sMovieSkip = false;
     bool sEndRequested = false;
@@ -263,6 +264,8 @@ namespace NebulaCutsceneSkip {
             }
             sState = State_Prompt;
             mute(true);
+            sGuidanceWasActive = MR::isActiveStarPointerGuidance();
+            MR::deactiveStarPointerGuidance();
             sWindow->appearYesNoWithText(promptText());
             report("asked");
             break;
@@ -281,6 +284,9 @@ namespace NebulaCutsceneSkip {
             sWindow->calcAnim();
             if (!MR::isDead(sWindow)) {
                 break;
+            }
+            if (sGuidanceWasActive) {
+                MR::activeStarPointerGuidance();
             }
             if (!sWindow->isSelectedYes() || !isSkippableNow()) {
                 sState = State_Idle;

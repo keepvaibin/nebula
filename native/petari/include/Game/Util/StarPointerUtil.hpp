@@ -38,6 +38,11 @@ namespace MR {
     bool isExistStarPointerGuidanceFrame1P();
     void activeStarPointerGuidance();
     void deactiveStarPointerGuidance();
+#ifdef TARGET_PC
+    // Whether the guidance may show. The system draws it over every layout, so Nebula's own windows turn it off while
+    // they are up (as the game does before its own) and restore this after.
+    bool isActiveStarPointerGuidance();
+#endif
     void tryShowTimeoutedStarPointerGuidance();
     bool isExistStarPointerTarget(const LiveActor*);
     void setStarPointerTargetRadius3d(LiveActor*, f32);
