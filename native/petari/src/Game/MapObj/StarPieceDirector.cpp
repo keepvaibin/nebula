@@ -5,6 +5,9 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Screen/StarPointerDirector.hpp"
 #include "Game/Util.hpp"
+#ifdef TARGET_PC
+#include "Game/System/NebulaAchievements.hpp"
+#endif
 
 namespace NrvStarPieceShooter {
     NEW_NERVE(HostTypeNrvWait, StarPieceShooter, Wait);
@@ -214,6 +217,9 @@ bool StarPieceDirector::gotByPlayer() {
     }
 
     MR::addStarPiece(1);
+#ifdef TARGET_PC
+    NebulaAchievements::countStat(NebulaStat_StarBits, 1);
+#endif
     MR::startSystemSE("SE_SY_STAR_PIECE_GET");
 
     mQueueNewGetSound = true;

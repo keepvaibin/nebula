@@ -5,6 +5,9 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
+#ifdef TARGET_PC
+#include "Game/System/NebulaAchievements.hpp"
+#endif
 
 #define COIN_NUM_MIN 0
 #define COIN_NUM_MAX 999
@@ -25,6 +28,9 @@ void ScenePlayingResult::incCoin(int num) {
     s32 prevNum = mCoinNum;
     s32 currNum = MR::clamp(mCoinNum + num, COIN_NUM_MIN, COIN_NUM_MAX);
     mCoinNum = currNum;
+#ifdef TARGET_PC
+    NebulaAchievements::countStat(NebulaStat_Coins, num);
+#endif
 
     ::requestOneUpIfNeed(prevNum, currNum, COIN_STEP_NUM);
 }

@@ -19,6 +19,7 @@
 #include <nw4r/lyt/picture.h>
 #include <nw4r/lyt/textBox.h>
 #include <nw4r/lyt/window.h>
+#include <nw4r/ut/Font.h>
 #include <revolution/os.h>
 #include <revolution/tpl.h>
 
@@ -91,7 +92,11 @@ namespace {
                 continue;
             }
             if (fontSize > 0.0f) {
-                pText->SetFontSize(nw4r::lyt::Size(fontSize, fontSize));
+                // A picture-font glyph is scaled by the box's own font (the message font, 27 wide for 33 high): its
+                // width follows that font's proportions so the picture keeps its own.
+                const nw4r::ut::Font* pFont = pText->mpFont;
+                const f32 aspect = pFont != nullptr && pFont->GetHeight() > 0 ? static_cast< f32 >(pFont->GetWidth()) / pFont->GetHeight() : 1.0f;
+                pText->SetFontSize(nw4r::lyt::Size(fontSize * aspect, fontSize));
             }
             pText->SetTextPositionH(0);
             pText->SetTextPositionV(0);

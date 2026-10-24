@@ -74,6 +74,9 @@ void __NebulaGameStage(const char* name);
 void __NebulaPresence(const u16* galaxy, const u16* star, s32 power_stars);
 // An achievement the save data meets: 1 when newly unlocked, its name in `name` (NebulaHostServices::achievement).
 s32 __NebulaAchievement(const char* id, u16* name, u32 capacity);
+s32 __NebulaAchievementDate(const char* id);
+void __NebulaStatAdd(const char* name, u64 delta);
+u64 __NebulaStatGet(const char* name);
 // A game object's name for the renderer (object_name in nebula_game_api.h).
 void __NebulaObjectName(const void* pObject, const char* pName);
 // How far a model's traced light reaches (light_reach in nebula_game_api.h).

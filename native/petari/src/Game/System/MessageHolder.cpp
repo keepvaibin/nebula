@@ -4,6 +4,10 @@
 #include "Game/System/GameSystemObjHolder.hpp"
 #include "Game/Util/FileUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
+#ifdef TARGET_PC
+#include "Game/System/NebulaText.hpp"
+#include <cstring>
+#endif
 #include <JSystem/JKernel/JKRArchive.hpp>
 
 #define SYSTEMMESSAGE_ARC "/Memory/SystemMessage.arc"
@@ -65,6 +69,21 @@ namespace {
 };  // namespace
 
 bool MessageData::getMessageDirect(TalkMessageInfo* pMessageInfo, const char* pMessage) const {
+#ifdef TARGET_PC
+    // Nebula's own talk (Nebula_<id>: the Achievement Luma's): an Observatory Luma's talk settings (a normal talk in
+    // its balloon, with its voice and camera) and Nebula's words in the played language.
+    static const char cNebula[] = "Nebula_";
+    if (strncmp(pMessage, cNebula, sizeof(cNebula) - 1) == 0) {
+        const wchar_t* pText = NebulaText::getTalk(pMessage + sizeof(cNebula) - 1);
+        const s32 templateIndex = findMessageIndex("AstroGalaxy_Tico034");
+        if (pText == nullptr || templateIndex < 0 || templateIndex >= mInfoBlock->mItemCount) {
+            return false;
+        }
+        getMessage(pMessageInfo, 0, templateIndex);
+        pMessageInfo->_0 = reinterpret_cast< u8* >(const_cast< wchar_t* >(pText));
+        return true;
+    }
+#endif
     s32 messageIndex = findMessageIndex(pMessage);
 
     if (messageIndex >= 0 && messageIndex < mInfoBlock->mItemCount) {

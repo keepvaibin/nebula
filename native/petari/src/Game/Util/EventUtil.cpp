@@ -16,6 +16,9 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <cstdio>
+#ifdef TARGET_PC
+#include "Game/System/NebulaAchievements.hpp"
+#endif
 
 void EventUtil_FORCE_MATCH_STRINGS() {
     MR::isEqualString("\203\156\203\140\203\175\203\212\203\111\217\211\225\317\220\147" /* ハチマリオ初変身 */, "\203\156\203\140\203\175\203\212\203\111\217\211\225\317\220\147" /* ハチマリオ初変身 */);
@@ -80,12 +83,18 @@ namespace MR {
 
     void incPlayerLeft() {
         GameDataFunction::addPlayerLeft(1);
+#ifdef TARGET_PC
+        NebulaAchievements::countStat(NebulaStat_OneUps, 1);
+#endif
     }
 
     void decPlayerLeft() {
         GameDataFunction::addPlayerLeft(-1);
         GameDataFunction::addMissPoint(1);
         GameDataFunction::incPlayerMissNum();
+#ifdef TARGET_PC
+        NebulaAchievements::countStat(NebulaStat_LivesLost, 1);
+#endif
     }
 
     bool isPlayerLeftSupply() {
@@ -99,6 +108,9 @@ namespace MR {
     void incPlayerGameOverNum() {
         GameDataFunction::addMissPoint(3);
         GameDataFunction::incPlayerMissNum();
+#ifdef TARGET_PC
+        NebulaAchievements::countStat(NebulaStat_GameOvers, 1);
+#endif
     }
 
     bool isPlayerLeftSupplyByMissAndGameOver() {

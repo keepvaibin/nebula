@@ -7,6 +7,8 @@
 #include "Game/Screen/MarioMeter.hpp"
 #include "Game/Screen/MarioSubMeter.hpp"
 #include "Game/Screen/MissLayout.hpp"
+#include "Game/NPC/NebulaAchievementLuma.hpp"
+#include "Game/Screen/NebulaAchievementBoard.hpp"
 #include "Game/Screen/NebulaAchievementToast.hpp"
 #include "Game/Screen/NoteCounter.hpp"
 #include "Game/Screen/OneUpBoard.hpp"
@@ -14,6 +16,7 @@
 #include "Game/Screen/YesNoLayout.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/Util/SceneUtil.hpp"
 
 GameSceneLayoutHolder::GameSceneLayoutHolder()
     : NameObj("\203\121\201\133\203\200\203\126\201\133\203\223\202\314\203\214\203\103\203\101\203\105\203\147\225\333\216\235" /* ゲームシーンのレイアウト保持 */), mCameraInfo(nullptr), mInformationMessage(nullptr), mMarioMeter(nullptr), mMarioSubMeter(nullptr),
@@ -54,6 +57,11 @@ GameSceneLayoutHolder::GameSceneLayoutHolder()
 #ifdef TARGET_PC
     mAchievementToast = new NebulaAchievementToast();
     mAchievementToast->initWithoutIter();
+    mAchievementBoard = nullptr;
+    if (NebulaAchievementLuma::isHere()) {
+        mAchievementBoard = new NebulaAchievementBoard();
+        mAchievementBoard->initWithoutIter();
+    }
 #endif
 }
 

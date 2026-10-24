@@ -31,6 +31,7 @@
 #include "galaxy/native_thp_video.h"
 #include "galaxy/perf_hint.h"
 #include "galaxy/achievements.h"
+#include "galaxy/stats.h"
 #include "galaxy/runtime_settings.h"
 #include "galaxy/gx/render_config.h"
 
@@ -1505,6 +1506,33 @@ int svc_achievement(void*, const char* id, uint16_t* name, uint32_t capacity) {
 #endif
 }
 
+int32_t svc_achievement_date(void*, const char* id) {
+#if !defined(NEBULA_HOST_RENDERER)
+    (void)id;
+    return 0;
+#else
+    return id != nullptr ? galaxy::achievements::unlocked_date(id) : 0;
+#endif
+}
+
+// The all-time counters the achievement board shows (stats.ini). The headless host keeps none.
+void svc_stat_add(void*, const char* name, uint64_t delta) {
+#if defined(NEBULA_HOST_RENDERER)
+    if (name != nullptr) galaxy::stats::add(name, delta);
+#else
+    (void)name, (void)delta;
+#endif
+}
+
+uint64_t svc_stat_get(void*, const char* name) {
+#if defined(NEBULA_HOST_RENDERER)
+    return name != nullptr ? galaxy::stats::get(name) : 0u;
+#else
+    (void)name;
+    return 0u;
+#endif
+}
+
 // A mod's code patch the game runs natively (NEBULA_PATCH_*), as the mods layer matched it at the start.
 int svc_code_patch(void*, uint32_t id, uint32_t* value) {
     static_assert(galaxy::mods::kPatchFlipPanelGroup == NEBULA_PATCH_FLIP_PANEL_GROUP &&
@@ -2080,7 +2108,8 @@ int svc_hbm(void*, uint32_t what, uint32_t) {
 //   GALAXY_TEST_EVENT_FLAGS=name[,name=value...]: the save's stored event flags on and event values set from the second
 //     scene frame, before the Grand Stars (with GALAXY_TEST_GRAND_STARS>=3, LibraryOpenNewStarCount=0 opens the Library
 //     and its first storybook chapter; PictureBookAlreadyRead=n: chapters 1-n read, which the Library's book lists;
-//     SpinAndStarPointer: the spin and pointer the Gateway's Luma grants; Achievement:<id>: that achievement's pop-up).
+//     SpinAndStarPointer: the spin and pointer the Gateway's Luma grants; Achievement:<id>: that achievement's pop-up; AchievementBoard: the
+//     Observatory's achievement board).
 //   GALAXY_TEST_EVENTS actors@frame: the live actors with a model, by model name and position (where to teleport).
 std::atomic<bool> gTourDone{false};
 
@@ -2261,6 +2290,10 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
 // other power events close the game.
 [[noreturn]] void svc_power(void*, uint32_t what) {
     log_line("host:", what == NEBULA_POWER_RESTART ? "restart" : "the game ended");
+#if defined(NEBULA_HOST_RENDERER)
+    galaxy::achievements::flush();
+    galaxy::stats::flush();
+#endif
     std::fflush(stdout);
 #if defined(_WIN32)
     if (what == NEBULA_POWER_RESTART) {
@@ -2751,6 +2784,9 @@ int main(int argc, char** argv) {
     services.code_patch = svc_code_patch;
     services.presence = svc_presence;
     services.achievement = svc_achievement;
+    services.achievement_date = svc_achievement_date;
+    services.stat_add = svc_stat_add;
+    services.stat_get = svc_stat_get;
     services.gx_stripe_particle = svc_gx_stripe_particle;
     services.disc_fst = svc_disc_fst;
     services.disc_read = svc_disc_read;
@@ -2945,6 +2981,10 @@ int main(int argc, char** argv) {
     }
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
     galaxy::timeline::dump();
+#endif
+#if defined(NEBULA_HOST_RENDERER)
+    galaxy::achievements::flush();
+    galaxy::stats::flush();
 #endif
     std::fflush(stdout);
     std::_Exit(0);

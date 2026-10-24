@@ -1,8 +1,8 @@
 # Changing Nebula's text and graphics
 
-Nebula adds a few things to the game's screens: the Quit to desktop button, the quit and cutscene questions, and the
-achievement pop-up. They are built from the game's own layouts, fonts and textures, and their text comes from one table
-in every language the game was released in. A mod can change any of it, and a translation into a language the game
+Nebula adds a few things to the game's screens: the Quit to desktop button, the quit and cutscene questions, the
+achievement pop-up, the achievement board and the Observatory's Achievement Luma. They are built from the game's own
+layouts, fonts and textures, and their text comes from one table in every language the game was released in. A mod can change any of it, and a translation into a language the game
 never had can bring its own.
 
 ## What is on screen and where it comes from
@@ -12,8 +12,9 @@ never had can bring its own.
 | Quit to desktop button (file select) | `QuitToDesktop` | `LayoutData/FileSelect.arc`, its Start button |
 | Quit question | `QuitQuestion` | the game's question window (`LayoutData/SysInfoWindow.arc`), its own Yes and No |
 | Cutscene question | `SkipCutsceneQuestion` | the same window |
-| Achievement pop-up | `AchievementGet`, `Achievement.<id>` | `LayoutData/InformationWindow.arc` (window `InfoWinC`, text `ConfirmC`, glyph icons `ConfirmU`); icons below |
-| Achievement descriptions (settings, achievement board) | `AchievementHint.<id>` | |
+| Achievement pop-up | `AchievementGet`, `Achievement.<id>` (`Achievement.<id>.Luigi` instead on a Luigi file, when there is one), `AchievementsUnlocked` (three or more at once, `{n}` their number) | `LayoutData/InformationWindow.arc` (window `InfoWinC`, text `ConfirmC`, glyph icons `ConfirmU`); icons below |
+| Achievement board | `BoardTitle`, `TabAll`, `TabStory`, `TabChallenges`, `TabExtras`, `TabStats`, `FilterAll`, `FilterUnlocked`, `FilterLocked`, `BoardCount`, `BoardPercent`, `BoardEmptyUnlocked`, `BoardEmptyLocked`, `Achievement.<id>`, `AchievementHint.<id>` (once unlocked), `AchievementLocked`, `StatsFile`, `StatsAllTime`, `Stat...`, `PlayTime`, `DateFormat`, `DigitGroup`, `HintTabs`, `HintMove`, `BoardBack` | `LayoutData/InformationWindow.arc` (text), `SysInfoWindowMini.arc` (windows), `BackButton.arc` (buttons), `MapGalaxyBg.arc` (the galaxy map's backdrop, its frame hidden) |
+| Achievement Luma's talk (the Observatory) | `LumaGreeting`, then `LumaBoard` on the next page | the game's talk balloon (`LayoutData/TalkBalloonEvent.arc`) |
 
 The ids and every built-in translation are in [`localization/NebulaText.tsv`](../localization/NebulaText.tsv).
 
@@ -53,9 +54,15 @@ SkipCutsceneQuestion = Skip this scene?
 Achievement.first_star = Your First Power Star
 ```
 
-- `\n` is a line break (text boxes do not wrap; break long questions yourself), `\\` a backslash.
+- `\n` is a line break, `\\` a backslash. The questions and the pop-up keep their lines as written (break long
+  questions yourself). The board's descriptions and the Luma's talk are broken to fit their box, measured with the
+  box's own font: lines as even as they can be; never at a French space before `!`, `?`, `:`, `;` or `»`, or after
+  `«`; Japanese and Chinese between characters, never before closing punctuation or a small kana.
 - `{galaxy:InternalName}` is that galaxy's name from the game's own text, for example `{galaxy:HeavensDoorGalaxy}`
   (Gateway Galaxy). The internal names are the folder names in `StageData`.
+- `{message:Id}` is one of the game's own messages without its tags: `{message:Layout_MapGrandGalaxyOne}` to
+  `...Six` are the domes (the Terrace to the Garden), `{message:CometName_Red}` the Speedy Comet.
+- `{player}` is the player's name as the game writes it: Mario, or Luigi on a Luigi file.
 - Ids not in the file keep Nebula's own text.
 - `language = EuGerman` (any folder from the table) uses Nebula's built-in German for every id the file does not
   list. A German translation mod that replaces the files in `UsEnglish` needs only this line.
@@ -125,21 +132,25 @@ Each achievement shows a picture from the game's own files, chosen in
 
 | Icon | From | Used for |
 |---|---|---|
-| The Terrace, Fountain, Kitchen, Bedroom, Engine Room and Garden domes | `LayoutData/MapDomeIcon.arc`, `mymapdome1.tpl` to `mymapdome6.tpl` | Welcome Aboard and the five Bowser galaxies, each the dome its Grand Star opens |
-| Luigi's, Mario's and Peach's faces | `LayoutData/MiiIcon.arc`, `mymiiluigi.tpl`, `mymiimario.tpl`, `mymiipeach.tpl` | Found You, Luigi!, Luigi's Time to Shine, Green Means Go; Faster Than Your Shadow; The Universe Reborn |
-| The storybook's front cover | `ObjectData/PictureBookTexture.arc`, `PictureBookCoverFront.bti` (its right half) | Story of the Stars |
+| The Terrace, Fountain, Kitchen, Bedroom, Engine Room and Garden domes | `LayoutData/MapDomeIcon.arc`, `mymapdome1.tpl` to `mymapdome6.tpl` | Welcome Aboard, Mega Takedown, Reactor Overload, Sink the Fleet, Anti-Matter? I Barely Know Her!, Too Hot to Handle: each the dome its Grand Star opens |
+| Luigi's, Mario's and Peach's faces | `LayoutData/MiiIcon.arc`, `mymiiluigi.tpl`, `mymiimario.tpl`, `mymiipeach.tpl` | Found You, Luigi! (Another... Me?), Super Luigi Galaxy, Green Means Go; Light-Years Ahead; The Universe Reborn |
+| The storybook's front cover | `ObjectData/PictureBookTexture.arc`, `PictureBookCoverFront.bti` (its right half) | The Mother of Stars |
 | Power Star | picture font `7` | A Star Is Born, Halfway There |
-| crown | `P` | Superstar! |
+| crown | `P` | Super Mario Galaxy; the pop-up for several at once |
 | rainbow star | `W` | Grand Finale |
-| shooting star | `e` | Comet Chaser, One-Hit Wonder, Beat the Clock, Comet Sighting |
+| shooting star | `e` | Comet Chaser, One-Hit Wonder, Beat the Clock, Wish Upon A Star |
 | purple coin | `N` | Purple Reign |
 | question mark | `Z` | Hidden Treasures |
 | Green Star | `O` | Going Green |
 | Silver Star | `J` | Trial Run |
 | Hungry Luma | `c` | All You Can Eat, Snack Time |
 | Star Bit | `;` | Star Bit Tycoon, Pocketful of Star Bits |
-| 1-Up Mushroom | `a` | Life of the Party |
-| Red Star | `S` | Taking Flight |
+| 1-Up Mushroom | `a` | 1UP Hoarder |
+| Mario's head | `B` | Life of the Party |
+| coin | `A` | Coin-noisseur |
+| Grand Star | `K` | One-Life Wonder |
+| Life Mushroom | `b` | Cosmic Immortal |
+| Red Star | `S` | All Aboard Air Mario! |
 
 A texture pack that replaces one of these textures, or the picture font's sheet, changes the icon with it. A texture a
 mod's files lack shows the Power Star instead.

@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 18u
+#define NEBULA_GAME_API_VERSION 19u
 
 /* A physical range of the game's memory and where it is in the host process: what the GPU's addresses resolve to. */
 typedef struct NebulaGameMemoryRegion {
@@ -302,6 +302,13 @@ typedef struct NebulaHostServices {
     /* An achievement the save data meets (galaxy::achievements' id): 1 when it was not unlocked before, with its
        English name (UTF-16, NUL-terminated, at most `capacity` units; `name` may be NULL); else 0. */
     int (*achievement)(void* user, const char* id, uint16_t* name, uint32_t capacity);
+    /* The day an achievement was unlocked in the player's time zone (year * 10000 + month * 100 + day); 0 when it is
+       locked; 1 when it is unlocked on a day that cannot be read. */
+    int32_t (*achievement_date)(void* user, const char* id);
+    /* Nebula's all-time counters across save files (galaxy::stats: "jumps", "spins", "deaths"...): `delta` added, or
+       the count. */
+    void (*stat_add)(void* user, const char* name, uint64_t delta);
+    uint64_t (*stat_get)(void* user, const char* name);
 } NebulaHostServices;
 
 enum {

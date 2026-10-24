@@ -44,6 +44,9 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <JSystem/JKernel/JKRHeap.hpp>
 #include <JSystem/JUtility/JUTVideo.hpp>
+#ifdef TARGET_PC
+#include "Game/System/NebulaAchievements.hpp"
+#endif
 
 void MarioActor_FORCE_MATCH_SDATA2() {
     (void)1000.0f;
@@ -1335,6 +1338,9 @@ void MarioActor::updateSwingAction() {
     u8 action = selectAction("\203\130\203\163\203\223\203\101\203\136\203\142\203\116" /* スピンアタック */);
     switch (action) {
     case 1: {
+#ifdef TARGET_PC
+        NebulaAchievements::countStat(NebulaStat_Spins, 1);
+#endif
         bool didSpinPunch = true;
         if (!mMario->mMovementStates._F && isJumping() && !mMario->isDamaging() && !mMario->mMovementStates._2B) {
             bool tmp = false;

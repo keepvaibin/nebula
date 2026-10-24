@@ -9,6 +9,9 @@ namespace GameSceneFunction {
     void requestPowerStarGetDemo();
     void requestGrandStarGetDemo();
     void requestShowGalaxyMap();
+#ifdef TARGET_PC
+    void requestShowNebulaBoard();  // the Observatory's achievement board (NebulaAchievementLuma)
+#endif
     void requestStaffRoll();
     bool isExecScenarioOpeningCamera();
     bool isExecScenarioStarter();

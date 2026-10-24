@@ -55,6 +55,8 @@
 #ifdef TARGET_PC
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Screen/GameSceneLayoutHolder.hpp"
+#include "Game/NPC/NebulaAchievementLuma.hpp"
+#include "Game/Screen/NebulaAchievementBoard.hpp"
 #include "Game/Screen/NebulaAchievementToast.hpp"
 #include "Game/System/NebulaAchievements.hpp"
 #include "Game/Util/MessageUtil.hpp"
@@ -86,6 +88,9 @@ namespace NrvGameScene {
     NEW_NERVE(GameSceneTimeUp, GameScene, TimeUp);
     NEW_NERVE(GameSceneGalaxyMap, GameScene, GalaxyMap);
     NEW_NERVE(GameSceneStaffRoll, GameScene, StaffRoll);
+#ifdef TARGET_PC
+    NEW_NERVE(GameSceneNebulaBoard, GameScene, NebulaBoard);
+#endif
 };  // namespace NrvGameScene
 
 GameScene::GameScene()
@@ -158,6 +163,10 @@ void GameScene::init() {
         LightFunction::initLightData();
         initSequences();
         SceneFunction::startActorPlacement();
+#ifdef TARGET_PC
+        // Nebula's Achievement Luma joins the Observatory's own actors.
+        NebulaAchievementLuma::tryCreate();
+#endif
         GameSceneFunction::loadScenarioWaveData();
         MR::createStarPiece();
         MR::completeCameraParameters();
@@ -178,6 +187,13 @@ void GameScene::init() {
 
 #ifdef TARGET_PC
 namespace {
+    // The achievement board asked for by the Achievement Luma: it opens once the scene is in plain play, not paused,
+    // in a demo or behind a wipe; a scene that starts drops the request.
+    bool sBoardRequested = false;
+    // Tests (GALAXY_TEST_EVENT_FLAGS=AchievementBoard): asked for in the first scene with a board, past the restart the
+    // test's Grand Stars cause.
+    bool sTestBoard = false;
+
     // Discord (__NebulaPresence): the galaxy and its star in the game's own words, and the Power Stars collected.
     void reportPresence() {
         const char* pStage = MR::getCurrentStageName();
@@ -192,6 +208,7 @@ namespace {
 void GameScene::start() {
     AudWrap::getSceneMgr()->startScene();
 #ifdef TARGET_PC
+    sBoardRequested = false;
     reportPresence();
     NebulaAchievements::evaluate();
 #endif
@@ -210,6 +227,15 @@ void GameScene::update() {
     updateNerve();
 #ifdef TARGET_PC
     NebulaAchievements::update();
+    if (sTestBoard && MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder) && MR::getGameSceneLayoutHolder()->mAchievementBoard != nullptr) {
+        sTestBoard = false;
+        requestShowNebulaBoard();
+    }
+    if (sBoardRequested && isNerve(GET_NERVE(GameScene, GameSceneAction)) && MR::isWipeOpen() && !MR::isWipeActive() &&
+        !MR::isDemoActive()) {
+        sBoardRequested = false;
+        setNerve(GET_NERVE(GameScene, GameSceneNebulaBoard));
+    }
     // Nebula's achievement pop-up runs in play only: the pause menu, the map, a star's get sequence and movies hold it
     // where it is.
     if (isNerve(GET_NERVE(GameScene, GameSceneAction)) && MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder) &&
@@ -277,11 +303,17 @@ void GameScene::draw() const {
             static const char kRead[] = "PictureBookAlreadyRead=";
             const char* equals = strchr(action.stage, '=');
             static const char kAchievement[] = "Achievement:";
-            if (strncmp(action.stage, kAchievement, sizeof(kAchievement) - 1) == 0) {
+            if (strcmp(action.stage, "AchievementBoard") == 0) {
+                // The Achievement Luma's board, as if it had been asked (in the Observatory), at the next update.
+                sTestBoard = true;
+            } else if (strncmp(action.stage, kAchievement, sizeof(kAchievement) - 1) == 0) {
                 // Its pop-up, unlocked or not (pictures of every icon and name).
                 NebulaAchievements::showForTest(action.stage + sizeof(kAchievement) - 1);
             } else if (strncmp(action.stage, kRead, sizeof(kRead) - 1) == 0) {
                 MR::setPictureBookChapterAlreadyRead(atoi(action.stage + sizeof(kRead) - 1));
+            } else if (strcmp(action.stage, "LuigiFile") == 0) {
+                // The file played as a Luigi file from here (its name; the stage built next reads it).
+                snprintf(GameDataFunction::getCurrentGameDataHolder()->mName, sizeof(GameDataHolder::mName), "luigi1");
             } else if (strcmp(action.stage, "SpinAndStarPointer") == 0) {
                 // The story's grant of the spin and the pointer (the Gateway's Luma), which an early save lacks.
                 MR::onGameEventFlagEnableToSpinAndStarPointer();
@@ -369,6 +401,9 @@ void GameScene::requestPowerStarGetDemo() {
 }
 
 void GameScene::requestGrandStarGetDemo() {
+#ifdef TARGET_PC
+    NebulaAchievements::onGrandStarGet();
+#endif
     setNerve(GET_NERVE(GameScene, GameSceneGrandStarGet));
 }
 
@@ -594,10 +629,14 @@ void GameScene::draw2D() const {
     CategoryList::drawXlu(MR::DrawBufferType_0x26);
     CategoryList::execute(MR::DrawType_WipeLayout);
 #ifdef TARGET_PC
-    // Nebula's achievement pop-up over every other 2D element (the HUD's counters and their models included), in play.
+    // Nebula's achievement pop-up over every other 2D element (the HUD's counters and their models included), in play;
+    // its board over everything while it is open.
     if (isNerve(GET_NERVE(GameScene, GameSceneAction)) && MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder) &&
         MR::getGameSceneLayoutHolder()->mAchievementToast != nullptr) {
         MR::getGameSceneLayoutHolder()->mAchievementToast->drawOnTop();
+    }
+    if (isNerve(GET_NERVE(GameScene, GameSceneNebulaBoard))) {
+        MR::getGameSceneLayoutHolder()->mAchievementBoard->drawOnTop();
     }
     MotionSignal::scene2D(false);
 #endif
@@ -681,6 +720,30 @@ bool GameScene::isPermitToPauseMenu() const {
 void GameScene::requestShowGalaxyMap() {
     setNerve(GET_NERVE(GameScene, GameSceneGalaxyMap));
 }
+
+#ifdef TARGET_PC
+void GameScene::requestShowNebulaBoard() {
+    if (MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder) && MR::getGameSceneLayoutHolder()->mAchievementBoard != nullptr) {
+        sBoardRequested = true;
+    }
+}
+
+// As the galaxy map: the world held, the pointer in its menu mode, the board's own frame each frame.
+void GameScene::exeNebulaBoard() {
+    NebulaAchievementBoard* pBoard = MR::getGameSceneLayoutHolder()->mAchievementBoard;
+    if (MR::isFirstStep(this)) {
+        MR::startStarPointerModePauseMenu(this);
+        pBoard->open();
+    }
+    pBoard->update();
+    if (!pBoard->isOpen()) {
+        MR::endStarPointerMode(this);
+        setNerve(GET_NERVE(GameScene, GameSceneAction));
+    } else {
+        CategoryList::execute(MR::MovementType_LayoutOnPause);
+    }
+}
+#endif
 
 void GameScene::requestStaffRoll() {
     setNerve(GET_NERVE(GameScene, GameSceneStaffRoll));

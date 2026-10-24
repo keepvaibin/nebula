@@ -45,6 +45,10 @@ namespace MR {
     void playSceneForScenarioOpeningCamera();
     const JMapIdInfo& getCurrentMarioStartIdInfo();
     s32 getStartPosNum();
+#ifdef TARGET_PC
+    // A start of the main zone (its MarioNo): where Mario arrives and the way he faces (degrees); false if it has none.
+    bool getMarioStartPose(s32 marioNo, TVec3f* pTrans, TVec3f* pRotate);
+#endif
     s32 getCurrentStartZoneId();
     const JMapIdInfo& getInitializeStartIdInfo();
     JKRMemArchive* getStageArchive(const char*);

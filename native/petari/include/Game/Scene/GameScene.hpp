@@ -42,6 +42,9 @@ public:
     void exeTimeUp();
     void exeGalaxyMap();
     void exeStaffRoll();
+#ifdef TARGET_PC
+    void exeNebulaBoard();
+#endif
     void initSequences();
     void initEffect();
     void drawMirror() const;
@@ -53,6 +56,10 @@ public:
     void startStagePlayRetry();
     bool isPermitToPauseMenu() const;
     void requestShowGalaxyMap();
+#ifdef TARGET_PC
+    // Nebula's achievement board (the Observatory's Achievement Luma): the world held while it is open.
+    void requestShowNebulaBoard();
+#endif
     void requestStaffRoll();
     bool isDrawMirror() const;
     void stageClear();

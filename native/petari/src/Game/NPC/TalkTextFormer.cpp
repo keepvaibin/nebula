@@ -2,6 +2,7 @@
 #include <nebula_game_api.h>
 #include "Game/NPC/TalkMessageCtrl.hpp"
 #include "Game/System/NebulaCutsceneSkip.hpp"
+#include "Game/System/NebulaText.hpp"
 #include "Game/Screen/CustomTagProcessor.hpp"
 #include "Game/System/Language.hpp"
 #include "Game/Util/LayoutUtil.hpp"
@@ -21,6 +22,24 @@ namespace {
 
         return pTextBox;
     }
+
+#ifdef TARGET_PC
+    // The first text box at or under the pane (a balloon's Text00 holds its text and the text's shadow).
+    nw4r::lyt::TextBox* findTextBox(LayoutActor* pActor, const char* pPaneName) {
+        nw4r::lyt::TextBox* pTextBox = getTextBoxPane(pActor, pPaneName);
+        nw4r::lyt::Pane* pPane = MR::getPane(pActor, pPaneName);
+        if (pTextBox != nullptr || pPane == nullptr) {
+            return pTextBox;
+        }
+        for (nw4r::lyt::PaneList::Iterator it = pPane->GetChildList().GetBeginIter(); it != pPane->GetChildList().GetEndIter(); ++it) {
+            pTextBox = findTextBox(pActor, it->mName);
+            if (pTextBox != nullptr) {
+                return pTextBox;
+            }
+        }
+        return nullptr;
+    }
+#endif
 };  // namespace
 
 namespace MR {
@@ -109,6 +128,11 @@ TalkTextFormer::TalkTextFormer(LayoutActor* pActor, const char* pPaneName) : mHo
 void TalkTextFormer::formMessage(const wchar_t* pMessage, s32 mode) {
     mMsg = pMessage;
     _8 = mode;
+#ifdef TARGET_PC
+    if (NebulaText::isTalk(pMessage)) {
+        NebulaText::fitTalk(pMessage, ::findTextBox(mHostActor, mPaneName));
+    }
+#endif
 
     MR::setTextBoxMessageRecursive(mHostActor, mPaneName, mMsg);
     MR::initTagProcessorRecursive(mHostActor, mPaneName, _8);

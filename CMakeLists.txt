@@ -91,7 +91,8 @@ target_link_libraries(galaxy_atomic_file PUBLIC galaxy_runtime_abi)
 add_library(galaxy_runtime_settings STATIC
     runtime/src/runtime_settings.cpp
     runtime/src/input_bindings.cpp
-    runtime/src/achievements.cpp)
+    runtime/src/achievements.cpp
+    runtime/src/stats.cpp)
 target_link_libraries(galaxy_runtime_settings PUBLIC galaxy_runtime_abi galaxy_atomic_file)
 galaxy_host_options(galaxy_runtime_settings)
 
@@ -559,6 +560,7 @@ set(rt runtime/src)
 galaxy_test(galaxy_atomic_file_tests SOURCES ${rt}/atomic_file_tests.cpp LIBS galaxy_atomic_file)
 galaxy_test(galaxy_runtime_settings_tests SOURCES ${rt}/runtime_settings_tests.cpp LIBS galaxy_runtime_settings)
 galaxy_test(galaxy_achievements_tests SOURCES ${rt}/achievements_tests.cpp LIBS galaxy_runtime_settings)
+galaxy_test(galaxy_stats_tests SOURCES ${rt}/stats_tests.cpp LIBS galaxy_runtime_settings)
 galaxy_test(galaxy_controls_tests SOURCES ${rt}/controls_tests.cpp LIBS galaxy_runtime_settings galaxy_native_input)
 galaxy_test(galaxy_pad_controller_tests SOURCES ${rt}/pad_controller_tests.cpp
     LIBS galaxy_runtime_settings galaxy_native_input)

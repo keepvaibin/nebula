@@ -209,6 +209,18 @@ namespace MR {
         return getStageDataHolder()->getStartPosNum();
     }
 
+#ifdef TARGET_PC
+    bool getMarioStartPose(s32 marioNo, TVec3f* pTrans, TVec3f* pRotate) {
+        const JMapInfoIter iter = getStageDataHolder()->makeMarioJMapInfoIter(JMapIdInfo(marioNo, 0));
+        if (!iter.isValid()) {
+            return false;
+        }
+        MR::getJMapInfoTrans(iter, pTrans);
+        MR::getJMapInfoRotate(iter, pRotate);
+        return true;
+    }
+#endif
+
     s32 getCurrentStartZoneId() {
         return getStageDataHolder()->getCurrentStartZoneId();
     }

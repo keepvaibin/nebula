@@ -43,6 +43,8 @@ the Petari decompilation by SMGCommunity, compiled for the PC with the changes a
   and ambient occlusion.
 - In-game settings (F1, View + Menu on Xbox, Minus + Plus on Switch).
 - Skippable cutscenes (+ during a cutscene) and Quit to desktop on the file select.
+- 34 achievements, each with a pop-up when it is reached. From the Gateway's Grand Star on, a Luma near Mario's start
+  in the Comet Observatory shows them all: tabs, filters and play stats.
 - Text speed: dialogue and Rosalina's storybook at the original pace, 2x, 3x or instant.
 - English, French and Spanish, the languages of the USA release.
 - Mii import for the file icons from a Wii, DS, 3DS, Wii U, Switch, Mii Studio or Mii Creator. Settings > GENERAL

@@ -289,7 +289,18 @@ public:
     }
 
 private:
-    static constexpr std::uint32_t kMaxBytes = 32000u * 4u * 15u;
+    // 15 s of 32 kHz stereo, or GALAXY_AUDIO_WAV_DUMP_SECONDS (up to an hour) for a longer recording.
+    static std::uint32_t max_bytes() {
+        static const std::uint32_t bytes = [] {
+            unsigned long seconds = 15ul;
+            if (const std::optional<std::string> value = read_env_string("GALAXY_AUDIO_WAV_DUMP_SECONDS")) {
+                const unsigned long parsed = std::strtoul(value->c_str(), nullptr, 10);
+                if (parsed > 0ul && parsed <= 3600ul) seconds = parsed;
+            }
+            return 32000u * 4u * static_cast<std::uint32_t>(seconds);
+        }();
+        return bytes;
+    }
 
     bool append_locked(std::span<const std::byte> pcm_le, std::uint32_t sample_rate) {
         if (out_.is_open() && sample_rate_ != sample_rate) {
@@ -306,12 +317,12 @@ private:
         if (pcm_le.empty()) {
             return true;
         }
-        if (data_bytes_ >= kMaxBytes) {
+        if (data_bytes_ >= max_bytes()) {
             return true;
         }
         std::size_t write_size = std::min<std::size_t>(
             pcm_le.size(),
-            static_cast<std::size_t>(kMaxBytes - data_bytes_));
+            static_cast<std::size_t>(max_bytes() - data_bytes_));
         write_size &= ~std::size_t{3};
         if (write_size == 0) {
             return true;
@@ -442,7 +453,7 @@ private:
 
         sample_rate_ = sample_rate;
         std::cout << "[audio] WAV dump enabled: " << path_
-                  << " max-bytes=" << kMaxBytes << '\n';
+                  << " max-bytes=" << max_bytes() << '\n';
         return true;
     }
 
@@ -3293,6 +3304,63 @@ void apply_pointer_sweep_env(
     overlay.pointer_y = 0.0f;
 }
 
+struct PointerPathPoint {
+    std::uint64_t vi;
+    float x;
+    float y;
+};
+
+// GALAXY_INPUT_POINTER_PATH "vi:x:y;vi:x:y;...": the pointer glides between those points (VIs ascending), on screen
+// from the first to the last. Parsed again only when the value changes.
+void apply_pointer_path_env(
+    NativeInputScriptOverlay& overlay,
+    std::uint64_t current_vi) {
+    const std::optional<std::string> script = read_env_string("GALAXY_INPUT_POINTER_PATH");
+    if (!script.has_value()) {
+        return;
+    }
+    thread_local std::string parsed;
+    thread_local std::vector<PointerPathPoint> points;
+    if (*script != parsed) {
+        std::vector<PointerPathPoint> next;
+        for (const std::string& segment : split_script_fields(*script, ';')) {
+            if (segment.empty()) {
+                continue;
+            }
+            const std::vector<std::string> fields = split_script_fields(segment, ':');
+            if (fields.size() != 3u) {
+                throw std::runtime_error("invalid native input pointer path segment");
+            }
+            const PointerPathPoint point{parse_script_u64(fields[0], "GALAXY_INPUT_POINTER_PATH"),
+                                         parse_script_float(fields[1], "GALAXY_INPUT_POINTER_PATH"),
+                                         parse_script_float(fields[2], "GALAXY_INPUT_POINTER_PATH")};
+            if (!next.empty() && point.vi < next.back().vi) {
+                throw std::runtime_error("native input pointer path VIs must ascend");
+            }
+            next.push_back(point);
+        }
+        points = std::move(next);
+        parsed = *script;
+    }
+    if (points.empty() || current_vi < points.front().vi || current_vi > points.back().vi) {
+        return;
+    }
+    // The first point at or after this VI, and the one before it.
+    const auto after = std::lower_bound(points.begin(), points.end(), current_vi,
+                                        [](const PointerPathPoint& point, std::uint64_t vi) { return point.vi < vi; });
+    float x = after->x;
+    float y = after->y;
+    if (after != points.begin() && after->vi != current_vi) {
+        const PointerPathPoint& before = *(after - 1);
+        const float t = static_cast<float>(current_vi - before.vi) / static_cast<float>(after->vi - before.vi);
+        x = before.x + (after->x - before.x) * t;
+        y = before.y + (after->y - before.y) * t;
+    }
+    overlay.has_pointer = true;
+    overlay.pointer_x = std::clamp(x, -1.0f, 1.0f);
+    overlay.pointer_y = std::clamp(y, -1.0f, 1.0f);
+}
+
 void apply_pointer_script_envs(
     NativeInputScriptOverlay& overlay,
     std::uint64_t current_vi) {
@@ -3322,6 +3390,7 @@ void apply_pointer_script_envs(
             waypoint[2], waypoint[3]);
     }
     apply_pointer_sweep_env(overlay, current_vi);
+    apply_pointer_path_env(overlay, current_vi);
 }
 
 NativeInputScriptOverlay build_native_input_script_overlay(std::uint64_t current_vi) {

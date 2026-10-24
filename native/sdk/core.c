@@ -99,6 +99,18 @@ s32 __NebulaAchievement(const char* id, u16* name, u32 capacity) {
     return sHost->achievement(sHost->user, id, name, capacity);
 }
 
+s32 __NebulaAchievementDate(const char* id) {
+    return sHost->achievement_date(sHost->user, id);
+}
+
+void __NebulaStatAdd(const char* name, u64 delta) {
+    sHost->stat_add(sHost->user, name, delta);
+}
+
+u64 __NebulaStatGet(const char* name) {
+    return sHost->stat_get(sHost->user, name);
+}
+
 uint32_t __NebulaObjectId(const void* object); /* memory.c */
 
 void __NebulaObjectName(const void* object, const char* name) {
