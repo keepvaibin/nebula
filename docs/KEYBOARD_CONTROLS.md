@@ -30,6 +30,9 @@ ZR/RT/R2 as a spin button and ZL/LT/L2 as crouch.
 | 1, 2 | `1`, `2` (and numpad) | - | - | - | - |
 | Shake (Nunchuk) | - | - | - | - | - |
 
+A tap of Plus or Minus pauses (the console waited for the button to be held 12 frames and for the remote to be still);
+a press made while A or B is held pauses once they are let go.
+
 B (controllers) never shoots Star Bits: it is Wii B (back) only while a
 screen with a Back action is open, Wii A (jump) otherwise. The runtime reads
 the game's pointer mode (`StarPointerOnOffController::mMode`): HOME menu,

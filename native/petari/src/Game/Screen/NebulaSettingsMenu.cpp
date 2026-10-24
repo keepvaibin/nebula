@@ -48,7 +48,7 @@ namespace {
     const f32 cRowButtonGap = 8.0f;
     const f32 cRowButtonMin = 76.0f;
     const f32 cArrowWidth = 58.0f;
-    const f32 cArrowSize = 16.0f;
+    const f32 cArrowSize = 20.0f;
     const f32 cValueMin = 120.0f;  // a setting's value between its arrows, the same on every row
     const f32 cValueMax = 250.0f;
     const f32 cSliderHeight = 8.0f;  // a slider's track; its knob is the game's round button
