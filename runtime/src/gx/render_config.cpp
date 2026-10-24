@@ -56,7 +56,7 @@ static std::uint64_t file_write_time(const std::filesystem::path& path) noexcept
 #endif
 }
 
-static void trim(char* s, std::size_t len, char* out, std::size_t out_cap) {
+static void trim(char* s, char* out, std::size_t out_cap) {
     const char* p = s;
     while (*p == ' ' || *p == '\t') ++p;
     std::size_t n = std::strlen(p);
@@ -64,7 +64,6 @@ static void trim(char* s, std::size_t len, char* out, std::size_t out_cap) {
     n = std::min(n, out_cap - 1);
     std::memcpy(out, p, n);
     out[n] = '\0';
-    (void)len;
 }
 
 static unsigned parse_uint(const char* v, unsigned def) {
@@ -129,63 +128,6 @@ static unsigned parse_aspect_mode(const char* v, unsigned def) {
         if (_stricmp(v, kAspectNames[i]) == 0) return i;
     }
     return def;
-}
-
-static bool read_env_bool(const char* name, bool fallback) {
-    char value[16]{};
-    std::size_t length = 0;
-    if (getenv_s(&length, value, sizeof(value), name) != 0 || length <= 1u) {
-        return fallback;
-    }
-
-    char normalized[16]{};
-    const std::size_t count =
-        std::min<std::size_t>(length - 1u, sizeof(normalized) - 1u);
-    for (std::size_t i = 0; i < count; ++i) {
-        normalized[i] = static_cast<char>(
-            std::tolower(static_cast<unsigned char>(value[i])));
-    }
-    if (std::strcmp(normalized, "0") == 0 ||
-        std::strcmp(normalized, "false") == 0 ||
-        std::strcmp(normalized, "no") == 0 ||
-        std::strcmp(normalized, "off") == 0) {
-        return false;
-    }
-    if (std::strcmp(normalized, "1") == 0 ||
-        std::strcmp(normalized, "true") == 0 ||
-        std::strcmp(normalized, "yes") == 0 ||
-        std::strcmp(normalized, "on") == 0) {
-        return true;
-    }
-    return fallback;
-}
-
-static unsigned read_env_uint_clamped(
-    const char* name,
-    unsigned fallback,
-    unsigned minimum,
-    unsigned maximum) {
-    char value[32]{};
-    std::size_t length = 0;
-    if (getenv_s(&length, value, sizeof(value), name) != 0 || length <= 1u) {
-        return fallback;
-    }
-
-    for (const unsigned char* p =
-             reinterpret_cast<const unsigned char*>(value); *p != '\0'; ++p) {
-        if (std::isdigit(*p) == 0) return fallback;
-    }
-
-    char* end = nullptr;
-    errno = 0;
-    const unsigned long parsed = std::strtoul(value, &end, 10);
-    if (end == value || end == nullptr || *end != '\0' || errno == ERANGE) {
-        return fallback;
-    }
-    return static_cast<unsigned>(std::clamp<unsigned long>(
-        parsed,
-        minimum,
-        maximum));
 }
 
 static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
@@ -280,8 +222,8 @@ static void parse_ini(FILE* f, RenderConfig& cfg) {
         if (static_cast<std::size_t>(eq - line) >= sizeof(key_buf) ||
             std::strlen(eq + 1) >= sizeof(val_buf)) continue;
         *eq = '\0';
-        trim(line, static_cast<std::size_t>(eq - line), key_buf, sizeof(key_buf));
-        trim(eq + 1, std::strlen(eq + 1), val_buf, sizeof(val_buf));
+        trim(line, key_buf, sizeof(key_buf));
+        trim(eq + 1, val_buf, sizeof(val_buf));
         if (key_buf[0] == '#' || key_buf[0] == ';' || key_buf[0] == '\0') continue;
         apply_kv(cfg, key_buf, val_buf);
     }
@@ -336,16 +278,6 @@ static void apply_env_overrides(RenderConfig& cfg) {
     apply_env(cfg, "GALAXY_TEXTURE_PACK_BUDGET_MB", "texture_pack_budget_mb");
     apply_env(cfg, "GALAXY_WINDOW_WIDTH", "window_width");
     apply_env(cfg, "GALAXY_WINDOW_HEIGHT", "window_height");
-    // Launch variable of earlier launchers and the test tools:
-    // GALAXY_FULLSCREEN selects borderless.
-    {
-        char value[16]{};
-        std::size_t length = 0;
-        if (getenv_s(&length, value, sizeof(value), "GALAXY_FULLSCREEN") == 0 && length > 1u) {
-            cfg.display_mode = read_env_bool("GALAXY_FULLSCREEN", false) ? kDisplayBorderless
-                                                                        : kDisplayWindowed;
-        }
-    }
     apply_env(cfg, "GALAXY_DISPLAY_MODE", "display_mode");
     apply_env(cfg, "GALAXY_MONITOR", "monitor");
     apply_env(cfg, "GALAXY_GPU", "gpu");
@@ -429,10 +361,6 @@ static void clamp_feature_caps(RenderFeatureCaps& caps) {
     }
 }
 
-static bool experimental_frame_rate_decouple_allowed() {
-    return read_env_bool("GALAXY_EXPERIMENTAL_FRAME_RATE_DECOUPLE", false);
-}
-
 static std::filesystem::path config_path() {
 #if defined(_WIN32)
     SetLastError(ERROR_SUCCESS);
@@ -478,47 +406,7 @@ void set_frame_generation_running(bool running) noexcept {
 bool frame_generation_running() noexcept { return s_frame_generation_running.load(std::memory_order_relaxed); }
 
 GxTimingConfig resolve_gx_timing_config_from_environment() {
-    GxTimingConfig config{};
-    // The upper bound is a test-enabling ceiling, not a policy. The default stays in GxTimingConfig
-    // (3, the triple-buffered profile). An operator can select up to 8 through an environment value
-    // instead of a rebuild.
-    //
-    // The render chunk queue is the simulation thread's only hard coupling to the renderer.
-    // render_frame() blocks in queue_space_cv_.wait until fewer than render_queue_depth non-present
-    // chunks are outstanding. With the ceiling at 3, the renderer's share of simulation stalls
-    // could not be tested, because the ceiling allowed only depth 3.
-    //
-    // Depth 4 is handled and logged, never rejected. Raising the depth changes timing only. Each
-    // depth step retains one MemorySnapshot, not a copy of guest memory, because snapshots are
-    // recycled through memory_snapshot_pool_. 8 stays bounded on a low-end machine.
-    // Revert the ceiling to 3 if a deeper queue raises end-to-end input latency or grows the
-    // working set.
-    config.render_queue_depth = read_env_uint_clamped(
-        "GALAXY_RENDER_QUEUE_DEPTH",
-        config.render_queue_depth,
-        1u,
-        8u);
-    config.vi_render_fifo_wait = read_env_bool(
-        "GALAXY_VI_RENDER_FIFO_WAIT",
-        config.vi_render_fifo_wait);
-    config.pe_events_gpu_fence = read_env_bool(
-        "GALAXY_PE_EVENTS_GPU_FENCE",
-        config.pe_events_gpu_fence);
-    config.render_live_memory_wait = read_env_bool(
-        "GALAXY_RENDER_LIVE_MEMORY_WAIT",
-        config.render_live_memory_wait);
-    const bool snapshot_requested = read_env_bool(
-        "GALAXY_RENDER_MEMORY_SNAPSHOT",
-        !config.render_live_memory_wait);
-    config.render_memory_snapshot =
-        !config.render_live_memory_wait && snapshot_requested;
-    config.render_live_memory_reads =
-        !config.render_live_memory_wait && !config.render_memory_snapshot &&
-        read_env_bool("GALAXY_RENDER_LIVE_MEMORY", false);
-    config.pe_events_at_consumption = read_env_bool(
-        "GALAXY_PE_EVENTS_AT_CONSUMPTION",
-        config.pe_events_at_consumption);
-    return config;
+    return GxTimingConfig{};
 }
 
 const GxTimingConfig& get_gx_timing_config() {
@@ -556,12 +444,6 @@ void set_render_config(const RenderConfig& cfg) {
     s_lock.unlock();
 }
 
-unsigned get_next_start_efb_scale() {
-    s_lock.lock_shared();
-    const unsigned copy = s_next_start_efb_scale;
-    s_lock.unlock_shared();
-    return copy;
-}
 void stage_next_start_efb_scale(unsigned efb_scale) {
     const unsigned sanitized = std::clamp(efb_scale, 1u, kMaxEfbScale);
     s_lock.lock();
@@ -602,9 +484,8 @@ void load_render_config_from_file() {
     file_gpu.back() = '\0';
 
     apply_env_overrides(cfg);
-    if (!experimental_frame_rate_decouple_allowed()) {
-        cfg.frame_rate_decouple = false;
-    }
+    // Frame-rate decoupling is not offered: its key is read but stays off.
+    cfg.frame_rate_decouple = false;
     clamp_unimplemented_features(cfg);
 
     s_lock.lock();
@@ -638,9 +519,7 @@ bool reload_render_config_if_changed() {
     file_gpu.back() = '\0';
     apply_env_overrides(cfg);
     cfg.gpu = session_gpu;
-    if (!experimental_frame_rate_decouple_allowed()) {
-        cfg.frame_rate_decouple = false;
-    }
+    cfg.frame_rate_decouple = false;
     clamp_unimplemented_features(cfg);
 
     s_lock.lock();

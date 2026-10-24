@@ -197,20 +197,19 @@ inline std::vector<std::pair<unsigned, unsigned>> aspect_window_sizes(
     return sizes;
 }
 
-// The GX backend's timing policy, resolved once at start (get_gx_timing_config) so every subsystem acts on the same
-// values.
+// The GX backend's timing policy (get_gx_timing_config), the same for every subsystem.
 struct GxTimingConfig {
-    unsigned render_queue_depth = 3;
+    // Non-present render chunks the game thread may have outstanding before render_frame() waits for the render
+    // thread.
+    unsigned render_queue_depth = 2;
     bool vi_render_fifo_wait = false;
     bool pe_events_gpu_fence = true;
-    bool render_live_memory_wait = true;
+    bool render_live_memory_wait = false;
     bool render_memory_snapshot = false;
-    // GALAXY_RENDER_LIVE_MEMORY=1 with neither the live-read barrier nor the
-    // snapshot: the render thread reads guest RAM directly while the
-    // simulation runs ahead (the hardware's GP model, Dolphin's dual-core
-    // model). PE completion stays on real GPU fences, so the game's own
+    // Neither the live-read barrier nor a snapshot: the render thread reads guest RAM directly while the game runs
+    // ahead (the hardware's GP model, Dolphin's dual-core model). PE completion stays on GPU fences, so the game's own
     // GXDrawDone discipline bounds how far ahead it writes.
-    bool render_live_memory_reads = false;
+    bool render_live_memory_reads = true;
     // With pe_events_gpu_fence, a capture's PE finish/token events are delivered once its command list is submitted
     // (every guest-memory read of the capture, texture decodes included, is complete by then) instead of at the GPU
     // fence. Nothing the GPU produces is read back through guest memory (EFB copies stay GPU resources; peeks use
@@ -270,12 +269,11 @@ void set_render_config(const RenderConfig& cfg);
 
 // The EFB scale config.ini keeps for the next start. The overlay sets it with the live value so config.ini and the
 // running renderer agree.
-[[nodiscard]] unsigned get_next_start_efb_scale();
 void stage_next_start_efb_scale(unsigned efb_scale);
 [[nodiscard]] RenderFeatureCaps get_render_feature_caps();
 void set_render_feature_caps(const RenderFeatureCaps& caps);
 
-// resolve_* is uncached, for tests; runtime code uses get_gx_timing_config(), resolved once.
+// Both return GxTimingConfig{}; runtime code uses get_gx_timing_config().
 [[nodiscard]] GxTimingConfig resolve_gx_timing_config_from_environment();
 [[nodiscard]] const GxTimingConfig& get_gx_timing_config();
 

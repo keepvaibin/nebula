@@ -114,20 +114,7 @@ std::vector<SettingsRow> settings_page(unsigned tab, const RenderConfig& draft, 
                                        const RenderFeatureCaps& caps);
 bool settings_page_tab(unsigned tab) { return tab != 2u && tab != 3u; }
 
-bool temporal_interpolation_allowed() {
-    // A temporal upscaler upscales every presented frame. GALAXY_TEMPORAL_INTERPOLATION=0 keeps it at 60
-    // (diagnostics).
-    static const bool allowed = [] {
-        char value[8]{};
-        std::size_t length = 0u;
-        return !(getenv_s(&length, value, sizeof(value), "GALAXY_TEMPORAL_INTERPOLATION") == 0 &&
-                 length > 1u && value[0] == '0');
-    }();
-    return allowed;
-}
-
 // The temporal upscaler this configuration runs (2 FSR 3, 3 DLSS), 0 none.
-// Without temporal interpolation it limits the frame rate to 60.
 unsigned temporal_upscaler(const RenderConfig& render) {
     if (render.upscaler == 2u && fsr3_available()) return 2u;
     if (render.upscaler == 3u && streamline::dlss_supported()) return 3u;
@@ -329,21 +316,6 @@ unsigned native_settings_first_row(unsigned first, unsigned selected, unsigned c
     return std::min(first, count - kNativeSettingsVisibleRows);
 }
 
-bool native_settings_ui_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length, value, sizeof(value),
-                "GALAXY_NATIVE_SETTINGS_UI") != 0 ||
-            length <= 1) {
-            return true;
-        }
-        return value[0] != '0' && value[0] != 'n' && value[0] != 'N';
-    }();
-    return enabled;
-}
-
 // Writes both settings files when something changed. Each atomic replace flushes the disk, which a busy or
 // scanned disk can hold for tens of milliseconds and more.
 bool write_dirty_settings_files() {
@@ -369,9 +341,7 @@ bool write_dirty_settings_files() {
                 true,
                 std::memory_order_acq_rel);
         if (!already_reported) {
-            std::cerr
-                << "[settings] atomic persistence failed; dirty state "
-                   "retained for retry\n";
+            std::cerr << "[settings] save failed; kept for retry\n";
         }
         return false;
     }
@@ -425,21 +395,12 @@ bool display_settings_differ(const RenderConfig& a, const RenderConfig& b) {
 
 const MonitorInfo* settings_monitor(const RenderConfig& render);
 
-// The refresh rate the picture will be shown at with these settings.
-// GALAXY_DISPLAY_REFRESH_HZ: the refresh rate the menu and the pacing assume
-// (hidden test runs; a remote desktop session reports its virtual display's).
-unsigned refresh_override_hz() {
-    static const unsigned hz = [] {
-        char value[16]{};
-        std::size_t length = 0u;
-        return getenv_s(&length, value, sizeof(value), "GALAXY_DISPLAY_REFRESH_HZ") == 0 && length > 1u
-            ? static_cast<unsigned>(std::strtoul(value, nullptr, 10)) : 0u;
-    }();
-    return hz;
-}
+// The refresh rate the menu assumes in place of the display's (tests; 0 in the game).
+std::atomic<unsigned> s_refresh_override_hz{0u};
 
+// The refresh rate the picture will be shown at with these settings.
 unsigned settings_refresh_hz(const RenderConfig& render) {
-    if (const unsigned hz = refresh_override_hz(); hz != 0u) {
+    if (const unsigned hz = s_refresh_override_hz.load(std::memory_order_relaxed); hz != 0u) {
         return hz;
     }
     const MonitorInfo* monitor = settings_monitor(render);
@@ -475,9 +436,6 @@ std::vector<unsigned> interpolation_targets(const RenderConfig& render, Interpol
     const bool generated = mode == Interpolation::kFrameGeneration;
     // NVIDIA's fixed frame generation makes whole multiples of the game's 60.
     const bool sixties = generated && streamline::frame_generation_supported() && !streamline::frame_generation_dynamic();
-    if (!generated && temporal_upscaler(render) != 0u && !temporal_interpolation_allowed()) {
-        return targets;
-    }
     const unsigned most = generated && streamline::frame_generation_supported()
         ? 60u * (streamline::frame_generation_max() + 1u) : 1000u;
     for (const unsigned rate : {120u, 144u, 165u, 180u, 240u, 360u}) {
@@ -1335,9 +1293,6 @@ bool handle_native_settings_key(WPARAM key, bool was_down, bool from_pad = false
         return handle_home_menu_key(key, was_down);
     }
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
-    if (!native_settings_ui_enabled()) {
-        return false;
-    }
     if (!from_pad) {
         galaxy::host::note_keyboard_input();
     }
@@ -1428,91 +1383,12 @@ int signed_lparam_y(LPARAM lp) {
     return static_cast<int>(static_cast<short>((lp >> 16) & 0xFFFF));
 }
 
-bool hide_os_cursor_enabled() {
-    static const bool enabled = [] {
-        char value[8]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length, value, sizeof(value),
-                "GALAXY_HIDE_OS_CURSOR") != 0 ||
-            length <= 1) {
-            return true;
-        }
-        return value[0] != '0' && value[0] != 'n' && value[0] != 'N';
-    }();
-    return enabled;
-}
-
-bool capture_mouse_buttons_enabled() {
-    static const bool enabled = [] {
-        char value[8]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length, value, sizeof(value),
-                "GALAXY_CAPTURE_MOUSE_BUTTONS") != 0 ||
-            length <= 1) {
-            // Win32 only guarantees that a release outside the client is
-            // delivered after the press owner captures the mouse.  Losing
-            // that edge leaves the native Wiimote A/B state held indefinitely.
-            return true;
-        }
-        return value[0] != '0' && value[0] != 'n' && value[0] != 'N';
-    }();
-    return enabled;
-}
-
-galaxy::host::HostPointerCursorPollMode mouse_ir_cursor_poll_mode() {
-    static const galaxy::host::HostPointerCursorPollMode mode = [] {
-        char value[8]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length, value, sizeof(value),
-                "GALAXY_MOUSE_IR_CURSOR_POLL") != 0 ||
-            length <= 1) {
-            return galaxy::host::HostPointerCursorPollMode::Adaptive;
-        }
-        if (value[0] == 'a' || value[0] == 'A') {
-            return galaxy::host::HostPointerCursorPollMode::Adaptive;
-        }
-        if (value[0] == '0' || value[0] == 'n' || value[0] == 'N') {
-            return galaxy::host::HostPointerCursorPollMode::Disabled;
-        }
-        return galaxy::host::HostPointerCursorPollMode::Forced;
-    }();
-    return mode;
-}
-
-std::uint64_t mouse_ir_message_recent_ms() {
-    static const std::uint64_t value = [] {
-        char text[16]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length, text, sizeof(text),
-                "GALAXY_MOUSE_IR_MESSAGE_RECENT_MS") != 0 ||
-            length <= 1) {
-            return 120ull;
-        }
-        return std::min<std::uint64_t>(
-            std::strtoull(text, nullptr, 10), 1000ull);
-    }();
-    return value;
-}
-
-std::uint64_t mouse_ir_stale_center_reject_ms() {
-    static const std::uint64_t value = [] {
-        char text[16]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length, text, sizeof(text),
-                "GALAXY_MOUSE_IR_STALE_CENTER_REJECT_MS") != 0 ||
-            length <= 1) {
-            return 5000ull;
-        }
-        return std::min<std::uint64_t>(
-            std::strtoull(text, nullptr, 10), 30000ull);
-    }();
-    return value;
-}
+constexpr galaxy::host::HostPointerCursorPollMode kCursorPollMode =
+    galaxy::host::HostPointerCursorPollMode::Adaptive;
+// A client-area mouse message counts as recent for 120 ms; a centered cursor sample after one is rejected as stale for
+// 5 s (classify_host_pointer_client_message_timing).
+constexpr std::uint64_t kPointerMessageRecentMs = 120u;
+constexpr std::uint64_t kStaleCenterRejectMs = 5000u;
 
 void maybe_hide_os_cursor() {
     const HWND hwnd = reinterpret_cast<HWND>(
@@ -1520,7 +1396,7 @@ void maybe_hide_os_cursor() {
     const bool focused =
         s_pointer_focused.load(std::memory_order_relaxed) ||
         (hwnd != nullptr && GetForegroundWindow() == hwnd);
-    if (hide_os_cursor_enabled() && focused) {
+    if (focused) {
         SetCursor(nullptr);
     }
 }
@@ -1602,7 +1478,7 @@ bool seed_pointer_from_client(
     const bool remote_session = GetSystemMetrics(SM_REMOTESESSION) != 0;
     const auto poll_authority =
         galaxy::host::select_host_pointer_cursor_poll_authority(
-            mouse_ir_cursor_poll_mode(), remote_session, false);
+            kCursorPollMode, remote_session, false);
     POINT cursor{};
     if (poll_authority.poll_enabled &&
         poll_authority.authoritative && GetCursorPos(&cursor) &&
@@ -3397,14 +3273,6 @@ bool flush_native_settings_if_dirty() {
     return true;  // queued: the worker reports a failed write and keeps the settings dirty
 }
 
-unsigned refresh_override_hz() {
-    return gx::refresh_override_hz();
-}
-
-bool temporal_interpolation_allowed() {
-    return gx::temporal_interpolation_allowed();
-}
-
 unsigned upscaler_render_scale(const RenderConfig& render, unsigned internal) {
     return gx::upscaler_render_scale(render, internal);
 }
@@ -3451,7 +3319,7 @@ void poll_render_config_file() {
         set_render_config(after);
         host_window::follow_window_rearm.store(true, std::memory_order_release);
     }
-    std::cerr << "[settings] config.ini changed outside the game; applied\n";
+    std::cerr << "[settings] config.ini reloaded\n";
     if (const std::string gpu = next_start_gpu(); gpu != gpu_before) {
         std::cerr << "[settings] gpu=" << gpu << " applies at the next start\n";
     }
@@ -3806,7 +3674,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         const bool focused =
             s_pointer_focused.load(std::memory_order_relaxed) ||
             GetForegroundWindow() == hwnd;
-        if (hide_os_cursor_enabled() && focused) {
+        if (focused) {
             SetCursor(nullptr);
             return TRUE;
         }
@@ -3842,16 +3710,15 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == WM_LBUTTONDOWN || msg == WM_LBUTTONDBLCLK) {
         galaxy::host::publish_native_pointer_input_origin(true, input_message_injected());
         update_pointer_button(hwnd, lp, true, true);
-        if (capture_mouse_buttons_enabled()) {
-            SetCapture(hwnd);
-        }
+        // Win32 delivers a release outside the client only to the window that captured the mouse; a lost release
+        // would leave the Wii Remote's A or B held.
+        SetCapture(hwnd);
         maybe_hide_os_cursor();
         return 0;
     }
     if (msg == WM_LBUTTONUP) {
         update_pointer_button(hwnd, lp, true, false);
-        if (capture_mouse_buttons_enabled() &&
-            !s_pointer_right_button.load(std::memory_order_relaxed) &&
+        if (!s_pointer_right_button.load(std::memory_order_relaxed) &&
             GetCapture() == hwnd) {
             ReleaseCapture();
         }
@@ -3861,16 +3728,13 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == WM_RBUTTONDOWN || msg == WM_RBUTTONDBLCLK) {
         galaxy::host::publish_native_pointer_input_origin(true, input_message_injected());
         update_pointer_button(hwnd, lp, false, true);
-        if (capture_mouse_buttons_enabled()) {
-            SetCapture(hwnd);
-        }
+        SetCapture(hwnd);
         maybe_hide_os_cursor();
         return 0;
     }
     if (msg == WM_RBUTTONUP) {
         update_pointer_button(hwnd, lp, false, false);
-        if (capture_mouse_buttons_enabled() &&
-            !s_pointer_left_button.load(std::memory_order_relaxed) &&
+        if (!s_pointer_left_button.load(std::memory_order_relaxed) &&
             GetCapture() == hwnd) {
             ReleaseCapture();
         }
@@ -4339,7 +4203,7 @@ void draw_home_menu(UiCanvas& renderer) {
 void draw_native_settings_hint(UiCanvas& renderer) {
     static std::uint64_t s_hint_until_ms = 0u;
     static bool s_hint_done = false;
-    if (s_hint_done || !native_settings_ui_enabled()) {
+    if (s_hint_done) {
         return;
     }
     const std::uint64_t now = GetTickCount64();
@@ -4418,7 +4282,6 @@ HostPointerState poll_host_pointer_state() noexcept {
     constexpr std::uint32_t kPointerDebugLocalPollAuthority = 1u << 16u;
     constexpr std::uint32_t kPointerDebugRemoteSession = 1u << 17u;
     constexpr std::uint32_t kPointerDebugSelectedCursorPollOutside = 1u << 18u;
-    const std::uint64_t recent_pointer_move_ms = mouse_ir_message_recent_ms();
     const bool message_left_button =
         s_pointer_left_button.load(std::memory_order_relaxed);
     const bool message_right_button =
@@ -4453,13 +4316,13 @@ HostPointerState poll_host_pointer_state() noexcept {
     const galaxy::host::HostPointerClientMessageTiming client_message_timing =
         galaxy::host::classify_host_pointer_client_message_timing(
             pointer_now_ms, cached_snapshot.last_client_message_ms,
-            recent_pointer_move_ms, mouse_ir_stale_center_reject_ms());
+            kPointerMessageRecentMs, kStaleCenterRejectMs);
     const bool recent_client_move = client_message_timing.recent;
     const bool remote_session = GetSystemMetrics(SM_REMOTESESSION) != 0;
     const galaxy::host::HostPointerCursorPollAuthorityDecision
         cursor_poll_authority =
             galaxy::host::select_host_pointer_cursor_poll_authority(
-                mouse_ir_cursor_poll_mode(), remote_session,
+                kCursorPollMode, remote_session,
                 recent_client_move);
     if (remote_session) {
         state.debug_flags |= kPointerDebugRemoteSession;
@@ -4892,5 +4755,8 @@ RenderConfig native_settings_draft_for_tests() {
 void native_settings_wait_saved_for_tests() {
     std::unique_lock<std::mutex> save_lock(s_settings_save_mutex);
     s_settings_save_changed.wait(save_lock, [] { return !s_settings_save_requested && !s_settings_save_running; });
+}
+void host_window::native_settings_set_refresh_override_for_tests(unsigned hz) noexcept {
+    s_refresh_override_hz.store(hz, std::memory_order_relaxed);
 }
 }  // namespace galaxy::gx

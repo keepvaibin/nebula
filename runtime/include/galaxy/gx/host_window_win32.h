@@ -49,11 +49,10 @@ extern std::atomic<std::uintptr_t> pointer_hwnd;
 extern std::atomic<bool> temporal_interp_suspended;  // RendererD3D12::suspend_temporal_interpolation
 extern std::atomic<bool> ray_tracing_offered;        // the RAY TRACING row is offered
 extern std::atomic<bool> rtx_adapter;                // the session's GPU is an NVIDIA RTX (DLSS)
-[[nodiscard]] bool temporal_interpolation_allowed();
 [[nodiscard]] unsigned upscaler_render_scale(const RenderConfig& render, unsigned internal);
 void save_native_settings_now();
-// GALAXY_DISPLAY_REFRESH_HZ, else 0.
-[[nodiscard]] unsigned refresh_override_hz();
 LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+// The refresh rate the settings menu assumes in place of the display's (0: the display's own).
+void native_settings_set_refresh_override_for_tests(unsigned hz) noexcept;
 
 }  // namespace galaxy::gx::host_window

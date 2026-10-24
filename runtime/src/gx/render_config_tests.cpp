@@ -254,13 +254,6 @@ int main() {
         galaxy::gx::load_render_config_from_file();
         passed &= expect(galaxy::gx::get_render_config().max_fps == 60.0f,
             "an oversized value cannot hide a malformed suffix beyond the parser buffer");
-        for (const char* disabled : {"false", "off", "no", "0"}) {
-            ScopedEnv experimental("GALAXY_EXPERIMENTAL_FRAME_RATE_DECOUPLE", disabled);
-            ScopedEnv decouple("GALAXY_FRAME_RATE_DECOUPLE", "1");
-            galaxy::gx::load_render_config_from_file();
-            passed &= expect(!galaxy::gx::get_render_config().frame_rate_decouple,
-                "all documented false spellings keep experimental decoupling disabled");
-        }
         {
             const auto unicode_path = root / L"\u03a9-\u65e5-settings.ini";
             ScopedWideEnv unicode_override(L"GALAXY_RENDER_CONFIG_PATH", unicode_path.c_str());
@@ -325,101 +318,16 @@ int main() {
         "default Release config keeps a 60 Hz cap for non-realtime-VI launches "
         "and the flip-discard swap chain");
 
-    const galaxy::gx::GxTimingConfig timing_defaults{};
+    const galaxy::gx::GxTimingConfig& timing = galaxy::gx::get_gx_timing_config();
     passed &= expect(
-        timing_defaults.render_queue_depth == 3 &&
-            !timing_defaults.vi_render_fifo_wait &&
-            timing_defaults.pe_events_gpu_fence &&
-            timing_defaults.render_live_memory_wait &&
-            !timing_defaults.render_memory_snapshot,
-        "default GX timing config is the Release q3/0/1/1/no-snapshot profile");
-
-    {
-        ScopedEnv queue_depth("GALAXY_RENDER_QUEUE_DEPTH", "");
-        ScopedEnv vi_wait("GALAXY_VI_RENDER_FIFO_WAIT", "");
-        ScopedEnv pe_fence("GALAXY_PE_EVENTS_GPU_FENCE", "");
-        ScopedEnv live_wait("GALAXY_RENDER_LIVE_MEMORY_WAIT", "");
-        ScopedEnv snapshot("GALAXY_RENDER_MEMORY_SNAPSHOT", "");
-        const galaxy::gx::GxTimingConfig resolved =
-            galaxy::gx::resolve_gx_timing_config_from_environment();
-        const galaxy::gx::GxTimingConfig& shared =
-            galaxy::gx::get_gx_timing_config();
-        passed &= expect(
-            resolved.render_queue_depth == 3 &&
-                !resolved.vi_render_fifo_wait &&
-                resolved.pe_events_gpu_fence &&
-                resolved.render_live_memory_wait &&
-                !resolved.render_memory_snapshot,
-            "no-env GX timing resolution matches the Release q3/0/1/1/no-snapshot profile");
-        passed &= expect(
-            shared.render_queue_depth == resolved.render_queue_depth &&
-                shared.vi_render_fifo_wait == resolved.vi_render_fifo_wait &&
-                shared.pe_events_gpu_fence == resolved.pe_events_gpu_fence &&
-                shared.render_live_memory_wait ==
-                    resolved.render_live_memory_wait &&
-                shared.render_memory_snapshot ==
-                    resolved.render_memory_snapshot,
-            "runtime GX timing getter publishes the resolved no-env profile");
-    }
-
-    {
-        ScopedEnv queue_depth("GALAXY_RENDER_QUEUE_DEPTH", "1");
-        ScopedEnv vi_wait("GALAXY_VI_RENDER_FIFO_WAIT", "1");
-        ScopedEnv pe_fence("GALAXY_PE_EVENTS_GPU_FENCE", "0");
-        ScopedEnv live_wait("GALAXY_RENDER_LIVE_MEMORY_WAIT", "0");
-        ScopedEnv snapshot("GALAXY_RENDER_MEMORY_SNAPSHOT", "1");
-        const galaxy::gx::GxTimingConfig resolved =
-            galaxy::gx::resolve_gx_timing_config_from_environment();
-        passed &= expect(
-            resolved.render_queue_depth == 1 &&
-                resolved.vi_render_fifo_wait &&
-                !resolved.pe_events_gpu_fence &&
-                !resolved.render_live_memory_wait &&
-                resolved.render_memory_snapshot,
-            "explicit GX timing env values preserve the q1/1/0/0/snapshot bisect");
-    }
-
-    {
-        ScopedEnv queue_depth("GALAXY_RENDER_QUEUE_DEPTH", "2");
-        ScopedEnv vi_wait("GALAXY_VI_RENDER_FIFO_WAIT", "off");
-        ScopedEnv pe_fence("GALAXY_PE_EVENTS_GPU_FENCE", "yes");
-        ScopedEnv live_wait("GALAXY_RENDER_LIVE_MEMORY_WAIT", "TRUE");
-        ScopedEnv snapshot("GALAXY_RENDER_MEMORY_SNAPSHOT", "off");
-        const galaxy::gx::GxTimingConfig resolved =
-            galaxy::gx::resolve_gx_timing_config_from_environment();
-        passed &= expect(
-            resolved.render_queue_depth == 2 &&
-                !resolved.vi_render_fifo_wait &&
-                resolved.pe_events_gpu_fence &&
-                resolved.render_live_memory_wait &&
-                !resolved.render_memory_snapshot,
-            "GX timing env parser accepts q2 and unambiguous boolean spellings");
-    }
-
-    {
-        ScopedEnv queue_depth("GALAXY_RENDER_QUEUE_DEPTH", "99");
-        ScopedEnv live_wait("GALAXY_RENDER_LIVE_MEMORY_WAIT", "1");
-        ScopedEnv snapshot("GALAXY_RENDER_MEMORY_SNAPSHOT", "1");
-        const galaxy::gx::GxTimingConfig resolved =
-            galaxy::gx::resolve_gx_timing_config_from_environment();
-        // The ceiling is 8, so the queue-depth experiment is reachable without a rebuild. The default is 3.
-        // The case proves the clamp is applied: 99 must never be accepted as written.
-        passed &= expect(
-            resolved.render_queue_depth == 8 &&
-                !resolved.render_memory_snapshot,
-            "GX timing resolution clamps queue depth and reports the effective live-memory mode");
-    }
-
-    {
-        ScopedEnv queue_depth("GALAXY_RENDER_QUEUE_DEPTH", "6");
-        ScopedEnv live_wait("GALAXY_RENDER_LIVE_MEMORY_WAIT", "1");
-        ScopedEnv snapshot("GALAXY_RENDER_MEMORY_SNAPSHOT", "1");
-        const galaxy::gx::GxTimingConfig resolved =
-            galaxy::gx::resolve_gx_timing_config_from_environment();
-        passed &= expect(
-            resolved.render_queue_depth == 6,
-            "a queue depth above the default is selectable for the decoupling bisect");
-    }
+        timing.render_queue_depth == 2 &&
+            !timing.vi_render_fifo_wait &&
+            timing.pe_events_gpu_fence &&
+            !timing.render_live_memory_wait &&
+            !timing.render_memory_snapshot &&
+            timing.render_live_memory_reads &&
+            timing.pe_events_at_consumption,
+        "GX timing is the shipped profile: queue depth 2, live memory reads, PE events at submission");
 
     galaxy::gx::RenderConfig config{};
     config.msaa_samples = 8;
@@ -455,14 +363,8 @@ int main() {
 
     galaxy::gx::stage_next_start_efb_scale(0u);
     passed &= expect(
-        galaxy::gx::get_next_start_efb_scale() == 1u &&
-            galaxy::gx::get_render_config().efb_scale == galaxy::gx::kMaxEfbScale,
-        "next-start EFB scale clamps low without changing the live scale");
-    galaxy::gx::stage_next_start_efb_scale(99u);
-    passed &= expect(
-        galaxy::gx::get_next_start_efb_scale() == galaxy::gx::kMaxEfbScale &&
-            galaxy::gx::get_render_config().efb_scale == galaxy::gx::kMaxEfbScale,
-        "next-start EFB scale clamps high independently of the live scale");
+        galaxy::gx::get_render_config().efb_scale == galaxy::gx::kMaxEfbScale,
+        "staging the next-start EFB scale leaves the live scale");
 
     {
         const std::filesystem::path root =
@@ -523,8 +425,7 @@ int main() {
 
         galaxy::gx::load_render_config_from_file();
         passed &= expect(
-            galaxy::gx::get_render_config().efb_scale == 2u &&
-                galaxy::gx::get_next_start_efb_scale() == 2u,
+            galaxy::gx::get_render_config().efb_scale == 2u,
             "a new startup promotes the persisted staged scale to the active scale");
         std::filesystem::remove_all(root);
     }
@@ -713,12 +614,11 @@ int main() {
 
     {
         ScopedEnv decouple("GALAXY_FRAME_RATE_DECOUPLE", "1");
-        ScopedEnv experimental("GALAXY_EXPERIMENTAL_FRAME_RATE_DECOUPLE", "0");
         galaxy::gx::load_render_config_from_file();
     }
     passed &= expect(
         !galaxy::gx::get_render_config().frame_rate_decouple,
-        "frame-rate decouple remains gated behind the experimental opt-in");
+        "frame-rate decoupling stays off");
 
     galaxy::gx::RenderFeatureCaps caps{};
     caps.d3d12_device_created = true;
