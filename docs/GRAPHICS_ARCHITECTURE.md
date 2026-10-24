@@ -109,9 +109,17 @@ comparisons and the alpha test, so comparisons against `ref/255` behave as on ha
 
 - **Display copies** (`GXCopyDisp`): the XFB registry maps each guest XFB address to a texture;
   the copy applies the vertical scale. Nothing is written back to guest memory.
-- **Presentation**: the XFB the game's video interface selected. While the selection is between
-  valid states, the previous valid XFB stays on screen. Frames the game did not redraw are not
-  presented again.
+- **Presentation**: each game frame as soon as it is drawn. The game queues three XFBs and its
+  video interface names a frame two retraces after drawing it (47 ms from the copy to the present
+  at 60 fps). The render chunk with a frame's display copy into one of the XFBs the VI has named
+  presents it, and a retrace shows the newest finished copy in place of the one it names
+  (`newest_finished_xfb`). Retraces present instead while the VI is black, the settings overlay
+  shows, or another clock paces presents (interpolation, a temporal upscaler, frame generation).
+  Pointer jump to present: 60 fps 59.7 ms before, 32.6 ms after; 120 fps interpolated 43.6 ms,
+  31.4 ms; the low-end stand-in at 60 fps 61.7 ms, 34.9 ms. `GALAXY_PRESENT_ON_COPY=0` and
+  `GALAXY_PRESENT_NEWEST_XFB=0` restore the game's timing. While the selection is between valid
+  states, the previous valid XFB stays on screen. Frames the game did not redraw are not presented
+  again.
 - **Texture copies** (`GXCopyTex`): the EFB region goes into a texture registered at the
   destination address; a later texture load from that address binds it directly. Shadows,
   water, depth of field and screen transitions use these.

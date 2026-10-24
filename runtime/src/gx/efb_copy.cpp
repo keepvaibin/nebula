@@ -55,6 +55,10 @@ XfbSerialAccountingEvent account_xfb_present_serial(
     return event;
 }
 
+const XfbTexture* newest_finished_xfb(const XfbTexture* named, const XfbTexture* latest) noexcept {
+    return named != nullptr && latest != nullptr && latest->copy_serial > named->copy_serial ? latest : named;
+}
+
 XfbPresentSelection select_xfb_for_present(
     bool requested_specific,
     const XfbTexture* requested,
@@ -125,6 +129,10 @@ constexpr std::size_t kMaxIdleXfbTextures = 8u;
 }
 
 }  // namespace
+
+std::uint32_t xfb_physical_address(std::uint32_t address) noexcept {
+    return normalize_xfb_guest_addr(address);
+}
 
 bool EfbCopyManager::initialize(gpu::Device* device, unsigned efb_scale) {
     device_ = device;

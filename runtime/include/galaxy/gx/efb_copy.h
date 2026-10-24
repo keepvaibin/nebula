@@ -92,6 +92,12 @@ struct XfbPresentSelection {
     std::uint64_t current_frame_stamp,
     std::uint64_t max_preserved_age);
 
+// The XFB shown when a VI names `named`: the newest finished copy when it is newer (the game shows a frame two VIs
+// after drawing it, three XFBs in turn), else the named one, which the selection above then takes as the request.
+[[nodiscard]] const XfbTexture* newest_finished_xfb(const XfbTexture* named, const XfbTexture* latest) noexcept;
+// A guest XFB address without its cached or uncached alias base, as copies and the XFB registry hold it.
+[[nodiscard]] std::uint32_t xfb_physical_address(std::uint32_t address) noexcept;
+
 [[nodiscard]] std::uint16_t compute_xfb_copy_height(
     std::uint16_t src_height,
     std::uint32_t y_scale_raw,

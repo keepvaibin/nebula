@@ -3105,6 +3105,12 @@ void RendererD3D12::invalidate_gx_bindings() {
     bound_viewport_valid_ = false;
 }
 
+void RendererD3D12::wait_for_frame_latency_before_present() {
+    if (has_presented_swap_chain_) {
+        wait_for_frame_latency_if_needed(trace_present_stats_enabled());
+    }
+}
+
 void RendererD3D12::begin_frame(bool present_swap_chain) {
     // Display and size changes apply here, between command-list recordings.
     // They wait for the GPU themselves, so they come before any per-slot state

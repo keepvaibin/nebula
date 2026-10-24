@@ -972,6 +972,15 @@ private:
     // Interpolated redraw (present rate above 60, temporal upscaler off):
     // this render chunk records a replay log and per-record VS constants.
     bool interp_recording_ = false;
+    // Render thread: the chunk being rendered made a display (XFB) copy into an XFB a VI has shown, and the copy
+    // serial last presented when its chunk ended (present_on_copy_enabled).
+    bool xfb_copied_in_chunk_ = false;
+    std::uint64_t copy_presented_serial_ = 0u;
+    // The guest XFBs the VI has named (the game's display buffers), so a copy elsewhere (a capture) never presents.
+    std::array<std::uint32_t, 4> vi_named_xfbs_{};
+    std::size_t vi_named_xfb_next_ = 0u;
+    [[nodiscard]] bool is_vi_named_xfb(std::uint32_t guest_addr) const noexcept;
+    void note_vi_named_xfb(std::uint32_t guest_addr) noexcept;
     unsigned interp_frames_ = 0;          // interpolated frames per game frame
     unsigned interp_scenes_in_chunk_ = 0;
     std::int32_t current_replay_record_ = -1;

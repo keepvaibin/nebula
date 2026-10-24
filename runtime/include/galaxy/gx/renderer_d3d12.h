@@ -216,6 +216,9 @@ public:
     // present(), after GX/EFB work is recorded but before the backbuffer is
     // selected, so gameplay work is not paced by DWM too early.
     void begin_frame(bool present_swap_chain = true);
+    // The frame-latency wait begin_frame(true) takes, for a frame begun without a present that presents after all (a
+    // game frame shown when its display copy is made).
+    void wait_for_frame_latency_before_present();
     // Called after the queue signal, before pacing and Present; the context is not retained.
     using SubmissionCallback = void (*)(void* context, std::uint64_t fence_value);
     // Closes, submits and signals the frame's fence. Presenting (optional) comes after

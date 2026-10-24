@@ -4,6 +4,7 @@
 #include "galaxy/wii_device_data.h"
 
 #include "galaxy/native_audio_queue.h"
+#include "galaxy/platform_time.h"
 #include "galaxy/jaudio_host_mixer.h"
 #include "galaxy/controller_hid.h"
 #include "galaxy/input_bindings.h"
@@ -3369,6 +3370,16 @@ void apply_pointer_path_env(
     overlay.has_pointer = true;
     overlay.pointer_x = std::clamp(x, -1.0f, 1.0f);
     overlay.pointer_y = std::clamp(y, -1.0f, 1.0f);
+    // A jump (a quarter of the picture or more in one step) is logged with its time: the first report that carries it
+    // is built now, for input-to-present measurements against the present snapshots' times.
+    thread_local float last_x = x;
+    thread_local float last_y = y;
+    if (std::fabs(x - last_x) + std::fabs(y - last_y) >= 0.5f) {
+        std::cerr << "[latency] pointer jump vi=" << current_vi << " x=" << x << " y=" << y << " qpc=" << galaxy::qpc_now()
+                  << '\n';
+    }
+    last_x = x;
+    last_y = y;
 }
 
 void apply_pointer_script_envs(

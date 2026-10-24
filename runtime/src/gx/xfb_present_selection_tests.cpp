@@ -742,6 +742,23 @@ int main() {
                     galaxy::gx::kMaxEfbScale + galaxy::gx::kMaxEfbScale / 2u,
             "EFB peek geometry clamps unsupported scales before selecting a texel");
     }
+    // A VI shows the newest finished copy in the place of an older one it names; a named copy as new as any stays.
+    {
+        galaxy::gx::XfbTexture shown = make_xfb(0x10f10500u, 10u);
+        galaxy::gx::XfbTexture drawn = make_xfb(0x10fb9b20u, 11u);
+        shown.copy_serial = 20u;
+        drawn.copy_serial = 21u;
+        passed &= expect(galaxy::gx::newest_finished_xfb(&shown, &drawn) == &drawn,
+                         "a VI naming the older of two copies shows the newer");
+        passed &= expect(galaxy::gx::newest_finished_xfb(&drawn, &drawn) == &drawn,
+                         "a VI naming the newest copy shows it");
+        passed &= expect(galaxy::gx::newest_finished_xfb(&drawn, &shown) == &drawn,
+                         "an older latest never replaces a newer named copy");
+        passed &= expect(galaxy::gx::newest_finished_xfb(nullptr, &drawn) == nullptr,
+                         "a name not found stays missing for the selection");
+        passed &= expect(galaxy::gx::newest_finished_xfb(&shown, nullptr) == &shown,
+                         "without a latest copy the named one stays");
+    }
     passed &= expect(
         galaxy::gx::efb_copy_alias_texture_format(7u) ==
             static_cast<std::uint8_t>(galaxy::gx::TexFormat::I8),
