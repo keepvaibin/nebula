@@ -1,11 +1,10 @@
 /* The one machine-specific piece of the native OS layer: switching between game threads' stacks.
 
-   Game threads (OSThread) run one at a time on the simulation thread, as on the console's single core; each has
-   its own stack, allocated by the game in its arena (where the GPU can see stack data). nebula_switch_stack saves
-   the callee-saved state on the current stack, stores the stack pointer to *from_sp, loads to_sp and restores
-   the state found there. A new stack is prepared by nebula_prepare_stack so that the first switch to it enters
-   nebula_thread_trampoline, which calls entry(arg). The calling conventions: Win64 (x86-64), System V (x86-64)
-   and AAPCS64 (arm64). */
+   Game threads (OSThread) run one at a time on the simulation thread, as on the console's single core; each has its
+   own stack in the game's arena (where the GPU can see stack data). nebula_switch_stack saves the callee-saved state
+   on the current stack, stores the stack pointer to *from_sp, loads to_sp and restores the state found there. A new
+   stack is prepared by nebula_prepare_stack so that the first switch to it enters nebula_thread_trampoline, which
+   calls entry(arg). The calling conventions: Win64 (x86-64), System V (x86-64) and AAPCS64 (arm64). */
 #include <stddef.h>
 #include <stdint.h>
 

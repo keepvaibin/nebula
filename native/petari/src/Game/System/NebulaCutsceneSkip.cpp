@@ -39,7 +39,7 @@ namespace {
     const s32 cStallSteps = 600;          // a demo's clock held this long waits on the player: the skip ends there
     const u32 cSkipMaxMicros = 15000000;  // a skip that has not ended by then shows the game as it is
 
-    // The demos + skips (the owner's list), by their time sheets; EscapeDriverApr only in the launch star lessons.
+    // The demos + skips, by their time sheets; EscapeDriverApr only in the launch star lessons.
     const char* const cSkippableSheets[] = {
         // The Comet Observatory's story
         "RossetaTalk1", "RosettaDomeRecoverDemo", "RosettaToachProgressDemo", "RosettaSuperGStarDemo",

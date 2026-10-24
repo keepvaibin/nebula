@@ -1,8 +1,8 @@
 """console_address_audit.py <native dir> [<petari dir>]: fails (exit 1) on any native-built line that tests a host pointer
 against the console's memory map: a pointer cast to an integer on the same line as an address-sized constant
 (0x10000000 and up: MEM1 0x80000000, MEM2 0x90000000, uncached 0xC0000000, physical masks 0x7FFFFFFF/0x1FFFFFFF ...).
-Host heaps live above 4 GiB, so such a test is constant natively; J3DMaterial::getMaterialAnm's `< 0xC0000000`
-turned off every material animation. Console-only preprocessor branches (#ifndef TARGET_PC, the #else of #ifdef
+Host heaps live above 4 GiB, so such a test is constant natively (J3DMaterial::getMaterialAnm's `< 0xC0000000` would
+reject every material animation). Console-only preprocessor branches (#ifndef TARGET_PC, the #else of #ifdef
 TARGET_PC, __MWERKS__) are skipped. Pointer truncations to 32 bits are compile errors (-Werror=pointer-to-int-cast,
 -Werror=void-pointer-to-int-cast), so only full-width casts reach this audit. Run by the module build."""
 import os
@@ -19,7 +19,7 @@ ADDRESS = re.compile(r"\b0[xX]([0-9A-Fa-f]{8})[uUlL]*\b")
 # Lines that match the pattern but test no pointer: (file, text on the line, reason).
 ALLOWED = [
     ("sdk/os/tests/os_scheduler_tests.c", "OSCachedToPhysical(mem1)",
-     "checks the SDK's OSCachedToPhysical against the console definition for blocks of the emulated arena"),
+     "checks the SDK's OSCachedToPhysical against the console definition for blocks of the arena"),
     ("petari/libs/JSystem/include/JSystem/JAudio2/JAISound.hpp", "(u32)id << 16", "an 8-bit sound group ID"),
 ]
 CONSOLE_IFDEF = {"__MWERKS__"}

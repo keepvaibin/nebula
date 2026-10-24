@@ -407,7 +407,7 @@ struct JASTrack : public JASPoolAllocObject_MultiThreaded< JASTrack > {
     /* 0x248 */ JGadget::TLinkListNode mNode;
 
 #ifdef TARGET_PC
-    // TList's node offset (JGadget::NEBULA_NODE_OFFSET_OF_T); the console's was the literal -0x248.
+    // TList's node offset (JGadget::NEBULA_NODE_OFFSET_OF_T); the console's code uses the literal -0x248.
     static int nebulaListNodeOffset() {
         return -(int)offsetof(JASTrack, mNode);
     }

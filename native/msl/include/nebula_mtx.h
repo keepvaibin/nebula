@@ -7,7 +7,7 @@
 #define NEBULA_MTX_H
 
 #include <math.h>
-#if defined(__SSE2__) && !defined(NEBULA_MTX_SCALAR)
+#if defined(__SSE2__)
 #include <emmintrin.h>
 #endif
 
@@ -28,7 +28,7 @@ static inline void PSMTXCopy(const Mtx src, Mtx dst) {
 
 /* ab = a * b, both 3x4 with the implied (0, 0, 0, 1) row. */
 static inline void PSMTXConcat(const Mtx a, const Mtx b, Mtx ab) {
-#if defined(__SSE2__) && !defined(NEBULA_MTX_SCALAR)
+#if defined(__SSE2__)
     const __m128 b0 = _mm_loadu_ps(b[0]), b1 = _mm_loadu_ps(b[1]), b2 = _mm_loadu_ps(b[2]);
     const __m128 lane3 = _mm_castsi128_ps(_mm_set_epi32(-1, 0, 0, 0));
     __m128 r[3];

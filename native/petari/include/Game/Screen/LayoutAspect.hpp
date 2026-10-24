@@ -5,9 +5,9 @@
 
 class LayoutManager;
 
-// Layouts on a picture wider or narrower than 16:9 (MR::getDisplay), as v1.0.1's layout repairs
-// (runtime/include/galaxy/layout_aspect*.h): full-screen backings cover the wider canvas, HUD panes follow the canvas
-// edges, and the cinema bars stay at the screen edges. Run by LayoutManager::calcAnimWithoutLocationAdjust.
+// Layouts on a picture wider or narrower than 16:9 (MR::getDisplay): full-screen backings cover the wider canvas, HUD
+// panes follow the canvas edges, and the cinema bars stay at the screen edges. Run by
+// LayoutManager::calcAnimWithoutLocationAdjust.
 namespace LayoutAspect {
     // After the animation, before the matrices: backing sizes are absolute, so the animation keeps every other value.
     void extendBackings(LayoutManager* pManager);

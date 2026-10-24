@@ -120,8 +120,8 @@ void FunctionAsyncExecutor::waitForEnd(const char* pName) {
 
 #ifdef TARGET_PC
     // A function startOnMainThread ran at once (its caller was the main thread) has no entry: it has ended. The console
-    // read past the list's end here and waited on whatever entry lay there; natively that was a stale one that never
-    // ends (ResourceHolderManager::createAndAddInner on the main thread: choosing a storybook chapter hung the game).
+    // reads past the list's end here and waits on whatever entry lies there; natively that can be a stale entry that
+    // never ends (ResourceHolderManager::createAndAddInner on the main thread would hang).
     if (cur == lst) {
         OSUnlockMutex(&MR::MutexHolder< 2 >::sMutex);
         return;

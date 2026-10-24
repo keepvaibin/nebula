@@ -18,7 +18,7 @@
 
 namespace {
     // The strap screen's white backing (PicBG) as it shows, under the fader's black (LogoFader::draw blends its rate as
-    // a byte): the grey of the borders around a fitted picture, as v1.0.1 draws them.
+    // a byte): the grey of the borders around a fitted picture.
     f32 getStrapSurround(const SimpleLayout* pStrap, const LogoFader* pFader) {
         if (pStrap == nullptr || pFader == nullptr || pStrap->mFlag.mIsDead || pStrap->mFlag.mIsHidden) {
             return 0.0f;
@@ -107,8 +107,8 @@ void LogoScene::init() {
     } else
 #endif
 #ifdef TARGET_PC
-        // The strap screen covered the system archive's load and asked for a button press. Natively the load runs
-        // behind black (the fader starts blank) and the title follows as soon as it and the save data are ready.
+        // The console's strap screen covers the system archive's load and asks for a button press. Natively the load
+        // runs behind black (the fader starts blank) and the title follows as soon as it and the save data are ready.
         initNerve(GET_NERVE_ANON(LogoSceneWaitReadDoneSystemArchive));
 #else
         initNerve(GET_NERVE_ANON(LogoSceneStrapFadein));

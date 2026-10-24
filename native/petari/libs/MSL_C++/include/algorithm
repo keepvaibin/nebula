@@ -166,7 +166,7 @@ namespace std {
         static const int SELECTION_SORT_MIN = 20;
 #ifdef TARGET_PC
         // The console's pivots sit at a quarter and three quarters of the range: its iterators (pointers) are 4 bytes.
-        // Natively sizeof(TIt) is 8, which put the second pivot past the end of short ranges.
+        // Natively sizeof(TIt) is 8, which would put the second pivot past the end of short ranges.
         static const long PIVOT_PARTS = 4;
 #else
         static const long PIVOT_PARTS = static_cast< long >(sizeof(TIt));

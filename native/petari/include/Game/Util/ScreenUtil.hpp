@@ -16,8 +16,8 @@ namespace MR {
     f32 getSafetyVIScreenWidthRatio();
     s32 getScreenWidth();
 #ifdef TARGET_PC
-    // The picture's shape, as v1.0.1's dynamic aspect: the host latches the output's shape at each retrace, and the
-    // screen width, the camera's aspect and the layout canvas follow it (wide == 0: the Wii's 16:9).
+    // The picture's shape: the host latches the output's shape at each retrace, and the screen width, the camera's
+    // aspect and the layout canvas follow it (wide == 0: the Wii's 16:9).
     inline const NebulaDisplay& getDisplay() {
         return *__NebulaDisplay();
     }

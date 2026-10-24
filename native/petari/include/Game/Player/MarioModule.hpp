@@ -54,7 +54,7 @@ public:
     f32 getAnimationFrame() const;
     void changeAnimation(const char*, u32);
 #ifdef TARGET_PC
-    // A call with a long argument: the console's s32/u32 were long (types.h, NebulaLongCall).
+    // A call with a long argument: the console's s32/u32 are long (types.h, NebulaLongCall).
     template < typename L >
     typename NebulaLongCall< void, L >::Type changeAnimation(const char* pName, L n) {
         changeAnimation(pName, (u32)n);
@@ -93,7 +93,7 @@ public:
     TVec3f& getCamDirZ() const;
     void startPadVib(u32);
 #ifdef TARGET_PC
-    // A call with a long argument: the console's s32/u32 were long (types.h, NebulaLongCall).
+    // A call with a long argument: the console's s32/u32 are long (types.h, NebulaLongCall).
     template < typename L >
     typename NebulaLongCall< void, L >::Type startPadVib(L n) {
         startPadVib((u32)n);

@@ -106,7 +106,7 @@ void ScenarioSelectScene::calcAnim() {
 
     if (res) {
 #ifdef TARGET_PC
-        // The scene built its perspective once, at boot: follow the picture's aspect as it changes.
+        // The scene builds its perspective once, at boot: follow the picture's aspect as it changes.
         mCameraContext->updateProjectionMtx();
 #endif
         mScenarioLayout->calcAnim();

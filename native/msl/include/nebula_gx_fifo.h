@@ -4,8 +4,8 @@
    place, or a display list being recorded into game memory.
 
    Space is reserved once per command, not per value (docs/NATIVE_PERFORMANCE.md): the writer's position lives in
-   memory that the byte stores may alias, so each separate reservation reloads and stores it, and one reservation
-   followed by stores through a local pointer is about three times faster for a matrix load or a vertex. */
+   memory that the byte stores may alias, so each separate reservation reloads and stores it; one reservation followed
+   by stores through a local pointer does not. */
 #ifndef NEBULA_GX_FIFO_H
 #define NEBULA_GX_FIFO_H
 
@@ -53,7 +53,6 @@ static inline void __NebulaGXStoreF32(uint8_t* p, float v) {
     __NebulaGXStore32(p, bits);
 }
 
-/* One value. */
 static inline void __NebulaGXPut8(uint8_t v) {
     *__NebulaGXReserve(1) = v;
 }
@@ -69,8 +68,6 @@ static inline void __NebulaGXPut32(uint32_t v) {
 static inline void __NebulaGXPutF32(float v) {
     __NebulaGXStoreF32(__NebulaGXReserve(4), v);
 }
-
-/* Whole commands. */
 
 /* BP register load (GX_WRITE_RA_REG): 0x61, the register word. */
 static inline void __NebulaGXCmdBP(uint32_t reg) {

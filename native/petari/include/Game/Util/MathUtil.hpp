@@ -33,7 +33,7 @@ namespace MR {
     /// @return The pseudorandom integer.
     s32 getRandom(s32 min, s32 max);
 #ifdef TARGET_PC
-    // A call with a long argument: the console's s32/u32 were long (types.h, NebulaLongCall).
+    // A call with a long argument: the console's s32/u32 are long (types.h, NebulaLongCall).
     template < typename A, typename B >
     inline typename NebulaLongCall< s32, A, B >::Type getRandom(A min, B max) {
         return getRandom((s32)min, (s32)max);
@@ -584,7 +584,7 @@ namespace MR {
     /// @retval `max` if the integer is greater than or equal to `max`.
     /// @retval `x` if the integer is greater than `min` and less than `max`.
 #ifdef TARGET_PC
-    // A call with a long argument: the console's s32/u32 were long (types.h, NebulaLongCall).
+    // A call with a long argument: the console's s32/u32 are long (types.h, NebulaLongCall).
     inline s32 clamp(s32 x, s32 min, s32 max);
     template < typename A, typename B, typename C >
     inline typename NebulaLongCall< s32, A, B, C >::Type clamp(A x, B min, C max) {

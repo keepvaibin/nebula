@@ -22,8 +22,9 @@ file(GLOB_RECURSE game_sources CONFIGURE_DEPENDS
     "${petari}/src/nw4r/*.cpp" "${petari}/src/nw4r/*.c"
     "${petari}/src/RVLFaceLib/*.c" "${petari}/src/RVLFaceLib/*.cpp")
 # The SDK code the native layer reuses (docs/NATIVE_PORT.md, "Platform boundary"): GX but its FIFO (sdk/gx/gx_fifo.c),
-# display-list building, the MEM heaps, KPAD's processing, the disc's file system (dvdfs.c), U8 archives (arc.c), the Wii Remote speaker's encoder (wenc.c), and the OS's scheduler, alarms, synchronisation and arenas
-# on the native OS core (sdk/os/os_native.c).
+# display-list building, the MEM heaps, KPAD's processing, the disc's file system (dvdfs.c), U8 archives (arc.c), the
+# Wii Remote speaker's encoder (wenc.c), and the OS's scheduler, alarms, synchronisation and arenas on the native OS
+# core (sdk/os/os_native.c).
 file(GLOB sdk_sources CONFIGURE_DEPENDS
     "${petari}/src/RVL_SDK/gx/*.c"
     "${petari}/src/RVL_SDK/gd/*.c"
@@ -119,13 +120,13 @@ target_compile_options(smg_game PRIVATE
     "-ffile-prefix-map=${petari}=petari" "-ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=native"
     $<$<COMPILE_LANGUAGE:CXX>:-nostdinc++ -fno-rtti -fno-exceptions -fno-sized-deallocation -fno-aligned-allocation
         -fno-threadsafe-statics>
-    # Every new-expression tests the allocation before constructing, as the console's compiler did: JKRHeap's
+    # Every new-expression tests the allocation before constructing, as the console's compiler does: JKRHeap's
     # operator new and the sound pools' (JASPoolAllocObject) return null when full, and the game checks
     # (JAISeMgr::newSe_). Standard C++ lets the compiler drop those checks for an operator new that is not
-    # noexcept, and a full sound pool ran JAISe's constructor on null (owner's crashes, 2026-10-20).
+    # noexcept, which would run JAISe's constructor on null when a sound pool is full.
     $<$<COMPILE_LANGUAGE:CXX>:-fcheck-new>
     # The Microsoft C++ ABI sizes a member pointer by its class's inheritance, known only where the class is complete;
-    # a unit seeing just a declaration would use another size than its callers (NameObj methods once did).
+    # a unit seeing just a declaration would use another size than its callers.
     $<$<AND:$<PLATFORM_ID:Windows>,$<COMPILE_LANGUAGE:CXX>>:-fcomplete-member-pointers>
     -Wno-register -Wno-c++11-narrowing)
 

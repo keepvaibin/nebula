@@ -3,11 +3,10 @@ than 32 bits in the game module's sources (the build's compile_commands.json; co
 -DCMAKE_EXPORT_COMPILE_COMMANDS=ON).
 
 The module builds with -fno-strict-float-cast-overflow, so clang saturates such a conversion at the narrow type: 296
-degrees as an s16 binary angle (x 182.04) became 32767, 180 degrees, and every object placed rotated past 180 degrees
-was turned (the Observatory's Terrace and Fountain domes, 2026-10-19). The Wii converts to 32 bits (fctiwz, saturating
+degrees as an s16 binary angle (x 182.04) becomes 32767, 180 degrees. The Wii converts to 32 bits (fctiwz, saturating
 there) and its halfword or byte store keeps the low bits, which wraps: -11651, -64 degrees. Each such conversion goes
-through 32 bits explicitly, (s16)(s32)(x), as native/tools/fcast rewrote them. Allowed: the OSf32to* stand-ins for the
-quantized paired-single stores (os.h, OSFastCast.h), which saturate on the console too, and Nebula's own SDK (sdk/)."""
+through 32 bits explicitly, (s16)(s32)(x). Allowed: the OSf32to* stand-ins for the quantized paired-single stores
+(os.h, OSFastCast.h), which saturate on the console too, and Nebula's own SDK (sdk/)."""
 import argparse
 import concurrent.futures
 import json

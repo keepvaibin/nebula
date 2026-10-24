@@ -21,8 +21,8 @@ namespace {
 
     const u32 cRequesters = 64;
     // A requester silent for more frames than this keeps its light only while the game clips it: a clipped actor runs
-    // no control, which is where it asks (a Luma behind the camera went dark and stopped lighting what the camera
-    // sees). One that died, or that the game runs but that stopped asking, lets its light fade out.
+    // no control, which is where it asks. One that died, or that the game runs but that stopped asking, lets its light
+    // fade out.
     const u32 cRequestGap = 2;
     Requester sRequesters[cRequesters];
     u32 sRequesterCount;

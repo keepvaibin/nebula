@@ -34,14 +34,6 @@ void GXProject(f32 x, f32 y, f32 z, const f32 mtx[3][4], const f32* pm, const f3
 // clang-format off
 
 #ifdef TARGET_PC
-// The paired-single loads and stores to the write-gather pipe: the same floats in the same order.
-static void WriteProjPS(const f32 proj[6], volatile void* dest) {
-    (void)dest;
-    for (int i = 0; i < 6; i++) {
-        GX_WRITE_F32(proj[i]);
-    }
-}
-
 static void Copy6Floats(const f32 src[6], f32 dst[6]) {
     for (int i = 0; i < 6; i++) {
         dst[i] = src[i];
@@ -126,35 +118,7 @@ void GXGetProjectionv(f32* ptr) {
 
 // clang-format off
 
-#ifdef TARGET_PC
-static void WriteMTXPS3x3from3x4(void* mtx, volatile void* dest) {
-    const f32(*m)[4] = (const f32(*)[4])mtx;
-    (void)dest;
-    for (int r = 0; r < 3; r++) {
-        for (int c = 0; c < 3; c++) {
-            GX_WRITE_F32(m[r][c]);
-        }
-    }
-}
-
-static void WriteMTXPS4x3(const f32 src[3][4], volatile void* dst) {
-    (void)dst;
-    for (int r = 0; r < 3; r++) {
-        for (int c = 0; c < 4; c++) {
-            GX_WRITE_F32(src[r][c]);
-        }
-    }
-}
-
-static void WriteMTXPS4x2(const f32 mtx[3][4], volatile void* dest) {
-    (void)dest;
-    for (int r = 0; r < 2; r++) {
-        for (int c = 0; c < 4; c++) {
-            GX_WRITE_F32(mtx[r][c]);
-        }
-    }
-}
-#else
+#ifndef TARGET_PC
 static void  WriteMTXPS3x3from3x4(register void* mtx, register volatile void* dest) {
     register f32 a00_a01, a02_a03, a10_a11;
     register f32 a12_a13, a20_a21, a22_a23;

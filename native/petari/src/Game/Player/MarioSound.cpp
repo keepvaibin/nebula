@@ -15,9 +15,8 @@ struct SoundList {
         u32 _0;
         u8 _4[4];
 
-        // The console's first byte of the word (its play kind and water variant). Big-endian, _4[0] is that byte; on a
-        // little-endian PC it is the word's last, so every level sound started as a plain sound with no lifetime and
-        // a looping one (Mario's slide on a roof or into a planet's hole) played on for minutes.
+        // The console's first byte of the word (its play kind and water variant): _4[0] on the big-endian console, the
+        // word's last byte on a little-endian host.
         u8 kind() const {
             return static_cast< u8 >(_0 >> 24);
         }
