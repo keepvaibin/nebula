@@ -55,7 +55,7 @@ namespace MR {
     void startBckPlayer(const char*, const BckCtrlData&);
     void startBckPlayer(const char*, s32);
 #ifdef TARGET_PC
-    // A call with a long argument: the console's s32/u32 were long (types.h, NebulaLongCall).
+    // A call with a long argument: the console's s32/u32 are long (types.h, NebulaLongCall).
     template < typename L >
     inline typename NebulaLongCall< void, L >::Type startBckPlayer(const char* pName, L frame) {
         startBckPlayer(pName, (s32)frame);

@@ -812,10 +812,10 @@ static void RFLiCheckHeaderCRCAsync(RFLiExCallback callback) {
 /* The database's Miis changed (an import while the game runs): MiiSelect collects them again when it next opens. */
 u32 __NebulaMiiGeneration = 0;
 
-/* A Mii from another console or tool made acceptable to this one, then the checks RFLiGetCharData makes: a birthday
- * the console would not take none, a special Mii kept on this console (RFLiCheckValidInfo refuses one that may
- * travel), a favourite colour past the twelve the first, a Mii without a name the Mii Channel's "no name". Pure: any
- * thread. */
+/* A Mii from another console or tool made acceptable to this one, then checked as RFLiGetCharData checks it: a
+ * birthday the console would not take is cleared, a special Mii stays on this console (RFLiCheckValidInfo refuses one
+ * that may travel), a favourite colour past the twelve becomes the first, and a Mii without a name takes the Mii
+ * Channel's "no name". Pure: any thread. */
 NEBULA_GAME_API uint32_t nebula_game_mii_prepare(uint8_t* record) {
     static const u16 scDayMax[12 + 1] = {0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
     static const char scNoName[] = "no name";

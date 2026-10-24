@@ -54,8 +54,8 @@ public:
 
     inline J3DMaterialAnm* getMaterialAnm() {
 #ifdef TARGET_PC
-        // The console's test (a cached MEM1/MEM2 address, below 0xC0000000) rejects every host heap address above
-        // 3 GiB, which turned off every material animation (BTP, BRK, BTK, BPK). The field only ever holds NULL or a
+        // The console's test (a cached MEM1/MEM2 address, below 0xC0000000) would reject every host heap address
+        // above 3 GiB and with it every material animation (BTP, BRK, BTK, BPK). The field only ever holds NULL or a
         // MaterialAnmBuffer entry.
         return mMaterialAnm;
 #else

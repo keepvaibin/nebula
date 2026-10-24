@@ -11,9 +11,9 @@ class SysInfoWindow;
 // several per frame, every page of its talks shown whole and turned at once (TalkStateEvent::talk, the storybook), so
 // everything it does still happens; a question it asks, a save prompt, or a wait on the player (its clock held)
 // ends the skip there. The picture and sound then fade back in.
-// Skippable (the owner's list): the prerendered movies, a galaxy's opening camera tour, the Comet Observatory's story
-// scenes and the lessons the game starts itself, stars returning to the Observatory, and the bosses' scenes. Talks
-// Mario starts, a star's get, Mario flying into a galaxy, questions, saves and the levels' own short scenes are not.
+// Skippable: the prerendered movies, a galaxy's opening camera tour, the Comet Observatory's story scenes and the
+// lessons the game starts itself, stars returning to the Observatory, and the bosses' scenes. Talks Mario starts, a
+// star's get, Mario flying into a galaxy, questions, saves and the levels' own short scenes are not.
 namespace NebulaCutsceneSkip {
     void init();                // GameSystem::initAfterStationedResourceLoaded
     void update();              // GameSystem::update, once per step

@@ -10,7 +10,7 @@
 #include <nw4r/lyt/pane.h>
 
 namespace {
-    // How a pane follows a canvas wider or taller than the authored 608x456 (v1.0.1's layout_aspect_fits.h).
+    // How a pane follows a canvas wider or taller than the authored 608x456.
     enum {
         FitLeft = 1 << 0,  // the branch moves with the left edge
         FitRight = 1 << 1,
@@ -90,8 +90,7 @@ namespace {
         {"PauseMenu", "BG", FitWidth | FitHeight},
         {"PauseMenu", "PicStagebase", FitWidth | FitExtendUp},
         {"PauseMenu", "PicStagebase1", FitWidth | FitExtendDown},
-        // The pause menu's counters sit where the HUD's do, so they follow the same edges (v1.0.1 kept them in the
-        // 16:9 middle with the menu, and they moved in from the HUD's corners on pausing).
+        // The pause menu's counters sit where the HUD's do, so they follow the same edges.
         {"PauseMenu", "Star", FitLeft},
         {"PauseMenu", "Mario", FitLeft},
         {"PauseMenu", "Coin", FitRight},
