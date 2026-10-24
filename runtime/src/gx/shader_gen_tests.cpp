@@ -1,12 +1,7 @@
-// shader_gen_tests.cpp: offline check that every ShaderGenerator codegen path emits HLSL
-// that FXC accepts.
-//
-// The generator compiles synchronously on the first PSO miss, so a codegen syntax error
-// would otherwise show up as missing geometry during play. The key matrix covers texgen
-// types and sources, per-channel lighting, TEV compare modes, swap tables, every fog type,
-// z-texturing and alpha-test permutations. Each generated shader is passed to D3DCompile.
-//
-// Exit code = number of failures (0 = pass).
+// ShaderGenerator tests: every codegen path emits HLSL that FXC accepts, since a syntax error
+// would otherwise show as missing geometry in play. The key matrix covers texgen types and
+// sources, per-channel lighting, TEV compare modes, swap tables, every fog type, z-texturing
+// and alpha-test permutations. Exit code: the number of failures.
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -139,8 +134,7 @@ void check_not_contains(
     }
 }
 
-// One TEV stage with sane defaults: d=Zero c=Zero b=Zero a=Zero, lerp mode,
-// clamp, dest PREV, texture enabled on map/coord 0, ras chan 0.
+// One clamped lerp TEV stage writing PREV, textured from map/coord 0, ras chan 0.
 galaxy::gx::TevStagePacked basic_stage() {
     galaxy::gx::TevStagePacked st{};
     // color_env: a=TexColor(8) b=RasColor(10) c=Konst(14) d=CPrev(0),
@@ -281,9 +275,8 @@ void check_independent_pair_compilation() {
 int main() {
     using namespace galaxy::gx;
 
-    {   // Aurora GX pipeline normalization: RGB8/RGB565 have no EFB alpha.
-        // Destination-alpha factors share a PSO key with ONE/ZERO. RGBA6 keeps the original
-        // factors and is a distinct key.
+    {   // RGB8/RGB565 have no EFB alpha, so destination-alpha factors share a PSO key with
+        // ONE/ZERO (as in Aurora's GX pipeline normalization); RGBA6 keeps its factors.
         GxState state;
         const auto write_bp = [&state](std::uint8_t reg, std::uint32_t value) {
             state.load_bp((static_cast<std::uint32_t>(reg) << 24u) | value);
@@ -416,8 +409,7 @@ int main() {
         "gs_5_1",
         "gs_gx_point_expansion");
 
-    // ---- Vertex shaders ----------------------------------------------------
-
+    // Vertex shaders.
     {   // Minimal: no texgens, one unlit channel.
         VertexShaderKey k{};
         std::memset(&k, 0, sizeof(k));
@@ -568,7 +560,7 @@ int main() {
         run_vs(k, "vs_texgen_x8");
     }
 
-    // ---- Motion-vector variants --------------------------------------------
+    // Motion-vector variants.
     {
         const ShaderGenerator gen;
         for (unsigned variant = 0; variant < 4u; ++variant) {
@@ -657,7 +649,7 @@ int main() {
         }
     }
 
-    // ---- Enhanced lighting ----------------------------------------------------
+    // Enhanced lighting.
     {
         const ShaderGenerator gen;
         // Vertex stage: lit (normal matrix) and unlit environment-mapped (position matrix),
@@ -783,9 +775,9 @@ int main() {
             std::printf("ok: enhanced_lighting_material\n");
         }
 
-        // The game's actor material ([light-census]: lights 0+1 and the alpha light, three stages),
-        // compiled as the pipeline cache does (level 1): the enhanced variant's FXC time next to the
-        // game's own (printed, not checked).
+        // The game's actor material (lights 0 and 1 and the alpha light, three stages), compiled as
+        // the pipeline cache does (level 1); the enhanced variant's FXC time is printed beside the
+        // game's own, not checked.
         PixelShaderKey actor{};
         std::memset(&actor, 0, sizeof(actor));
         actor.num_tev_stages = 3;
@@ -825,8 +817,7 @@ int main() {
         }
     }
 
-    // ---- Pixel shaders ------------------------------------------------------
-
+    // Pixel shaders.
     {   // Baseline lerp stage, no fog, trivial alpha test.
         PixelShaderKey k{};
         std::memset(&k, 0, sizeof(k));
@@ -913,9 +904,8 @@ int main() {
         check_compiles(src, "ps_5_1", "ps_indirect_tev_compiles");
     }
 
-    {   // Indirect texcoord scale is a 4-bit GX shift. Values above 8 are
-        // Indirect texcoord scale is a 4-bit GX shift. Values above 8 are legal and must not be
-        // clamped, or subtle effect maps become over-amplified.
+    {   // The indirect texcoord scale is a 4-bit GX shift; values above 8 are legal and must not be
+        // clamped, or effect maps are over-amplified.
         PixelShaderKey k{};
         std::memset(&k, 0, sizeof(k));
         k.num_tev_stages = 1;
@@ -939,8 +929,6 @@ int main() {
     }
 
     {  // libogc maps the bump alpha modes to BP raster channels 5-7.
-        // The test locks that mapping, so translucent indirect materials do not regress to zero
-        // or the wrong bump mode.
         PixelShaderKey k{};
         std::memset(&k, 0, sizeof(k));
         k.num_tev_stages = 3;
@@ -970,9 +958,8 @@ int main() {
         check_compiles(src, "ps_5_1", "ps_ras_channel_bump_mapping_compiles");
     }
 
-    {   // GX still applies an active indirect coordinate op even when that
-        // GX applies an active indirect coordinate op even when the stage's regular texture lookup
-        // is disabled. Wrap and add-prev state must stay faithful, not be treated as a disabled indirect.
+    {   // GX applies an active indirect coordinate op even when the stage's regular texture lookup
+        // is disabled, so wrap and add-prev state still update.
         PixelShaderKey k{};
         std::memset(&k, 0, sizeof(k));
         k.num_tev_stages = 1;
@@ -1035,8 +1022,7 @@ int main() {
     }
 
     {   // Hardware falls back to texcoord 0 when an indirect order points past
-        // the active texgen count. Keep that explicit so effects don't sample
-        // an uninitialized semantic lane.
+        // the active texgen count, rather than an uninitialized semantic lane.
         PixelShaderKey k{};
         std::memset(&k, 0, sizeof(k));
         k.num_tev_stages = 1;

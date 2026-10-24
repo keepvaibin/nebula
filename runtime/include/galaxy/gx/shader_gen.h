@@ -6,7 +6,6 @@
 // TEV math runs in float. Each stage result is quantized to the 8-bit lattice
 // (floor(x * 255 + 0.5) / 255) before compare ops and the alpha test, so comparisons against
 // ref/255 are exact.
-// No Windows or D3D12 dependencies.
 
 #include "galaxy/gx/shader_keys.h"
 

@@ -8,8 +8,6 @@
 // output with every key decision taken at run time, so a draw whose
 // specialized pipeline is still compiling renders with the uber pipeline of
 // its render state instead of stalling the render thread.
-//
-// No Windows/D3D12 includes.
 
 #include "galaxy/gx/shader_keys.h"
 #include "galaxy/gx/uber_constants.h"
