@@ -16,7 +16,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <cstdio>
-#include <JSystem/JAudio2/JAISound.hpp>
 #include <cstring>
 #include <nebula_game_api.h>
 #include <nw4r/lyt/layout.h>
@@ -58,10 +57,6 @@ namespace {
     const f32 cSliderValue = 64.0f;  // its value after it
     const s32 cRepeatDelay = 18;     // an arrow held down: the frames before it steps again, then between steps
     const s32 cRepeatEvery = 5;
-    // The cursor's tick, softer than the game's menus (their few buttons sit far apart, these rows close together) and
-    // at most once in this many frames, so a pointer passing over several rows makes one.
-    const f32 cCursorVolume = 0.3f;
-    const u32 cCursorFrames = 15;
     const f32 cEdgeDrop = 2.0f;  // a row's own button's darker edge under it; the two centred together on the row
     const f32 cRowButtonRadius = 11.0f;  // a row's own buttons have the rows' corners, near enough (the rows': 12)
     const f32 cReach = 8.0f;  // how far past a button's edge above and below the pointer still has it
@@ -642,7 +637,6 @@ private:
     void setQuestion(s32 question);
     void fillHome(s32 homeView);
     void readPointer(const NebulaSettingsView& rView);
-    void cursorSound();
     void readHomePointer(f32 x, f32 y);
     void clickRow(const NebulaSettingsView& rView, s32 row);
     void dragSlider(const NebulaSettingsView& rView, f32 x);
@@ -731,8 +725,6 @@ private:
     s32 mHomeView;       // the host's NEBULA_HBM_VIEW as drawn; -1 none
     Button* mFocusButton;  // the HOME Menu's selected answer
     s32 mFrame;
-    u32 mTicks;       // frames stepped, for the cursor's tick
-    u32 mCursorTick;  // when the cursor last ticked
     f32 mScroll;
     f32 mScrollTarget;
     f32 mHighlightY;
@@ -788,7 +780,7 @@ NebulaSettingsScreen::NebulaSettingsScreen()
       mPanel(nullptr), mTitle(nullptr), mList(nullptr), mHighlight(nullptr), mTrack(nullptr), mThumb(nullptr), mStatus(nullptr),
       mStatusWidth(0.0f), mStatusRoom(-1.0f), mQuestion(nullptr), mQuestionDim(nullptr), mQuestionShadow(nullptr), mQuestionPanel(nullptr),
       mQuestionText(nullptr), mChoiceCount(0), mOpen(0.0f), mClosing(false), mQuestionShown(-1), mHome(false), mHomeView(-1),
-      mFocusButton(nullptr), mFrame(0), mTicks(0), mCursorTick(0), mScroll(0.0f),
+      mFocusButton(nullptr), mFrame(0), mScroll(0.0f),
       mScrollTarget(0.0f), mHighlightY(0.0f), mPointerMode(false), mPointerX(0.0f), mPointerY(0.0f), mPointerRow(-1), mHoverRow(-1),
       mHoverTab(-1), mPressing(false), mPressRow(-1), mPressY(0.0f), mPressScroll(0.0f), mScrollDrag(false), mDraggedAt(-1), mHoverArrow(0),
       mHoverSlider(false), mHeldArrow(0), mHeldFrames(0), mSliderRow(-1), mHoverRowButton(-1), mHoverButton(nullptr), mScaleX(1.0f), mWidth(0.0f), mHeight(0.0f), mPanelWidth(0.0f),
@@ -1354,18 +1346,12 @@ void NebulaSettingsScreen::fillHome(s32 homeView) {
 // The pointer, in the menu's units: over a page's button, a row (its buttons, its arrows, its slider), the footer's
 // buttons or the question's. Moving it picks the row under it; A chooses what it is over.
 void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
-    const s32 lastTab = mHoverTab;
-    const s32 lastRow = mHoverRow;
-    const s32 lastRowButton = mHoverRowButton;
-    const s32 lastArrow = mHoverArrow;
-    Button* pLastButton = mHoverButton;
     mHoverRow = -1;
     mHoverTab = -1;
     mHoverRowButton = -1;
     mHoverArrow = 0;
     mHoverSlider = false;
     mHoverButton = nullptr;
-    const s32 lastModButton = mHoverModButton;
     mHoverModButton = -1;
     // A binding that waits for an input takes the mouse's buttons itself, wherever the pointer is.
     if (!MR::isStarPointerInScreen(WPAD_CHAN0) || rView.status == NEBULA_SETTINGS_STATUS_CAPTURE_KEY ||
@@ -1435,12 +1421,7 @@ void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
             }
         }
     }
-    if ((mHoverButton != nullptr && mHoverButton != pLastButton) || (mHoverTab >= 0 && mHoverTab != lastTab) ||
-        (mHoverRowButton >= 0 && (mHoverRowButton != lastRowButton || mHoverRow != lastRow)) ||
-        (mHoverArrow != 0 && (mHoverArrow != lastArrow || mHoverRow != lastRow)) ||
-        (mHoverModButton >= 0 && mHoverModButton != lastModButton)) {
-        cursorSound();
-    }
+
     // A slider held down follows the pointer along it; an arrow held down steps again and again, stopping at the end.
     if (mSliderRow >= 0) {
         if (MR::testCorePadButtonA(WPAD_CHAN0)) {
@@ -2233,22 +2214,10 @@ void NebulaSettingsScreen::placeHome() {
 
 // A frame: open or close as the host's menus do (dropping in, rising away), the pointer, the sounds of what changed.
 // The settings menu shows when both would (the host never opens both).
-void NebulaSettingsScreen::cursorSound() {
-    if (mTicks - mCursorTick < cCursorFrames) {
-        return;
-    }
-    mCursorTick = mTicks;
-    JAISoundHandle* pHandle = MR::startSystemSE("SE_SY_BUTTON_CURSOR_ON");
-    if (pHandle != nullptr && pHandle->isSoundAttached()) {
-        (*pHandle)->getAuxiliary().moveVolume(cCursorVolume, 0);
-    }
-}
-
 void NebulaSettingsScreen::step(const NebulaSettingsView& rView, s32 homeView) {
     if (!mBuilt) {
         return;
     }
-    mTicks++;
     const bool wanted = rView.open || homeView >= 0;
     const bool home = !rView.open;
     if (wanted && (!isShown() || mClosing || home != mHome)) {
@@ -2335,7 +2304,7 @@ void NebulaSettingsScreen::step(const NebulaSettingsView& rView, s32 homeView) {
             mDragRow = -1;
             mDragging = false;
         } else if (rView.selected != mShown.selected) {
-            cursorSound();
+            // Moving through the rows is silent; a change or a press sounds.
             if (static_cast< s32 >(rView.selected) != mPointerRow) {
                 mPointerMode = false;  // the keys or a controller moved it: the pointer waits until it moves
             }
