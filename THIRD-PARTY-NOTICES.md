@@ -74,8 +74,6 @@ in `runtime/src/ppc_float.cpp` is used under GPL version 3.
   `runtime/src/ppc_estimate_reference_tests.h` adapts the same code and values from
   `Source/UnitTests/Common/FloatUtilsTest.cpp` and `Source/UnitTests/Core/PowerPC/TestValues.h`.
   Copyright 2018, 2021 Dolphin Emulator Project.
-- `third_party/dolphin-free-dsp-rom/` holds the project's replacement DSP instruction and coefficient
-  ROMs. Source, revision, hashes and license texts are in that folder's `README.md`.
 
 These files are used under GPL version 3 in this `GPL-3.0-only` work.
 
@@ -142,15 +140,15 @@ above). Its conversions were checked against Nebula's byte for byte.
 
 ## nod and other Rust crates
 
-`nebula-recomp.exe` reads disc images with the `nod` crate 1.4.4 by Luke Street
-(<https://github.com/encounter/nod>, MIT OR Apache-2.0). `nod` contains the Wii common keys
-needed to read a Wii disc partition.
+Setup's game importer, `nebula-import.exe` (`crates/nebula-import`), reads disc images with the
+`nod` crate 1.4.4 by Luke Street (<https://github.com/encounter/nod>, MIT OR Apache-2.0). `nod`
+contains the Wii common keys needed to read a Wii disc partition.
 
-`nebula-recomp.exe` links about 80 crates (`Cargo.lock`) under MIT, Apache-2.0, BSD-2-Clause,
-BSD-3-Clause, Zlib, Unlicense or Unicode-3.0 terms, and the C libraries zstd (BSD-3-Clause),
-liblzma (0BSD) and bzip2 (bzip2 license). Their license texts are in
-[docs/licenses/rust-dependencies.txt](docs/licenses/rust-dependencies.txt), which is installed with
-Nebula. The `nod` and `powerpc` crates ship no license file; both declare `MIT OR Apache-2.0`.
+`nebula-import.exe` links 45 crates (`Cargo.lock`) under MIT, Apache-2.0, BSD-2-Clause,
+BSD-3-Clause, Zlib or 0BSD terms, and the C libraries zstd (BSD-3-Clause), liblzma (0BSD) and
+bzip2 (bzip2 license). Their license texts are in
+[docs/licenses/rust-dependencies.txt](docs/licenses/rust-dependencies.txt). The `nod` crate ships
+no license file; it declares `MIT OR Apache-2.0`.
 
 ## Vulkan renderer libraries
 
@@ -187,7 +185,7 @@ game activity. Copyright (C) 1997-2026 Sam Lantinga. License: Zlib, its `LICENSE
   <https://github.com/Kotlin/kotlinx.coroutines>: Apache-2.0. Copyright JetBrains s.r.o. and
   Kotlin Programming Language contributors.
 - `libnebula_import.so` (`crates/nebula-import`, setup from the player's disc image) links `nod`
-  and 52 other crates; their license texts are in
+  and 41 other crates; their license texts are in
   [docs/licenses/rust-dependencies-android.txt](docs/licenses/rust-dependencies-android.txt)
   (`tools/rust_licenses.py`), which the app shows under Open source licenses.
 
