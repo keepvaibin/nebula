@@ -468,17 +468,9 @@ add_library(galaxy_gx STATIC
     runtime/src/perf_hint.cpp
     runtime/src/gx/game_asset_extract.cpp
 )
-# AMD FidelityFX FSR 3.1 (MIT): the FidelityFX SDK 1.1.4 `sdk` directory
-# after its own build (bin/ffx_sdk holds the static libraries with the
-# compiled shaders). Empty builds the runtime without FSR 3.
-set(GALAXY_FIDELITYFX_SDK "" CACHE PATH "FidelityFX SDK 1.1.4 sdk directory with built bin/ffx_sdk")
-if(GALAXY_FIDELITYFX_SDK)
-    target_include_directories(galaxy_gx PRIVATE "${GALAXY_FIDELITYFX_SDK}/include")
-    target_link_libraries(galaxy_gx PRIVATE
-        "${GALAXY_FIDELITYFX_SDK}/bin/ffx_sdk/ffx_fsr3upscaler_x64.lib"
-        "${GALAXY_FIDELITYFX_SDK}/bin/ffx_sdk/ffx_backend_dx12_x64.lib")
-    target_compile_definitions(galaxy_gx PRIVATE GALAXY_WITH_FSR3=1)
-endif()
+# AMD FSR 3 (cmake/fidelityfx.cmake).
+include(cmake/fidelityfx.cmake)
+target_link_libraries(galaxy_gx PRIVATE nebula_fidelityfx)
 # NVIDIA Streamline 2.14.1 headers (MIT, third_party/streamline) for DLSS: the
 # runtime loads the signed binaries from the user's vendor folder at run time.
 # Empty builds the runtime without DLSS.
@@ -617,27 +609,11 @@ if(MSVC)
     endforeach()
 endif()
 
-# The Vulkan GX backend (docs/VULKAN.md): its shader path and tests now, galaxy_gx_vk and NebulaNativeVk as they
-# land. Off by default; the dependencies are checkouts named by the cache paths below.
+# The Vulkan GX backend (docs/VULKAN.md): NebulaNativeVk, its library and tests; dependencies from
+# cmake/vulkan_deps.cmake.
 option(NEBULA_VULKAN "Build the Vulkan GX backend" OFF)
 if(NEBULA_VULKAN)
-    set(NEBULA_VULKAN_HEADERS_DIR "" CACHE PATH "Vulkan-Headers checkout (include/vulkan)")
-    set(NEBULA_VOLK_DIR "" CACHE PATH "volk checkout (volk.h)")
-    set(NEBULA_VMA_DIR "" CACHE PATH "VulkanMemoryAllocator checkout (include/vk_mem_alloc.h)")
-    set(NEBULA_GLSLANG_DIR "" CACHE PATH "glslang release (include, lib)")
-    set(NEBULA_SPIRV_TOOLS_DIR "" CACHE PATH "SPIRV-Tools checkout (include/spirv-tools: the validator's C API)")
-    add_library(nebula_vulkan_deps INTERFACE)
-    target_include_directories(nebula_vulkan_deps INTERFACE
-        "${NEBULA_VULKAN_HEADERS_DIR}/include" "${NEBULA_VOLK_DIR}" "${NEBULA_VMA_DIR}/include"
-        "${NEBULA_GLSLANG_DIR}/include" "${NEBULA_SPIRV_TOOLS_DIR}/include")
-    target_compile_definitions(nebula_vulkan_deps INTERFACE
-        NEBULA_GPU_VULKAN VK_NO_PROTOTYPES $<$<PLATFORM_ID:Windows>:VK_USE_PLATFORM_WIN32_KHR NOMINMAX>)
-    set(nebula_glslang_libs glslang MachineIndependent GenericCodeGen OSDependent SPIRV SPIRV-Tools-opt SPIRV-Tools
-        glslang-default-resource-limits)
-    foreach(lib IN LISTS nebula_glslang_libs)
-        find_library(nebula_glslang_${lib} NAMES ${lib} PATHS "${NEBULA_GLSLANG_DIR}/lib" NO_DEFAULT_PATH REQUIRED)
-        target_link_libraries(nebula_vulkan_deps INTERFACE "${nebula_glslang_${lib}}")
-    endforeach()
+    include(cmake/vulkan_deps.cmake)
 
     add_executable(galaxy_vk_shader_tests
         runtime/src/gx/vk/shader_compile_vk_tests.cpp
