@@ -10,10 +10,9 @@ $ForbiddenExtensions = @(
     ".iso", ".rso", ".rvz", ".szs", ".thp", ".wad", ".wbfs", ".wia",
     ".bin", ".pak", ".nds", ".sel", ".brres", ".bmg", ".rarc"
 )
-# Clean-room Dolphin DSP ROM replacements (see the folder's README.md).
+# The Android build's shader seed: pipeline keys (hashes of GX state) the PC's galaxy tour captured, no game data.
 $AllowedBinaries = @(
-    "third_party/dolphin-free-dsp-rom/dsp_rom.bin",
-    "third_party/dolphin-free-dsp-rom/dsp_coef.bin"
+    "platform/android/vk_seed_keys.bin"
 )
 $ForbiddenBuildExtensions = @(
     ".dll", ".exe", ".exp", ".ilk", ".lib", ".obj", ".pdb"

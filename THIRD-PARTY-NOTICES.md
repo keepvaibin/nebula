@@ -62,26 +62,19 @@ attribution; this entry records the source and credits its authors.
 - Revisions used: `83463764b8acda394e058b0c689a10b8561fc380`, `9b7b9913e4ab60b9c57fa4be56b8da308e76d06e`
 - License: GNU General Public License version 3; full text in this repository's `LICENSE`
 
-WiiCompiled's `runtime/include/isa/ppc_isa_float.h` carries `GPL-2.0-or-later` and
-"Copyright 2018 Dolphin Emulator Project". Nebula's adaptation of its paired-single arithmetic
-in `runtime/src/ppc_float.cpp` is used under GPL version 3.
+`runtime/include/galaxy/native_audio_queue.h` adapts its Wii audio interface PCM byte order.
 
-## Dolphin (GPL-2.0-or-later)
+## AMD FidelityFX SDK 1.1.4 (MIT)
 
-- Upstream: <https://github.com/dolphin-emu/dolphin>, revision `e6f3ae17627e4344da95b13424af5baf4c892b08`
-- `runtime/include/galaxy/ppc_estimate.h` adapts the reciprocal and reciprocal square root estimate
-  tables and interpolation from `Source/Core/Common/FloatUtils.cpp`. The test reference
-  `runtime/src/ppc_estimate_reference_tests.h` adapts the same code and values from
-  `Source/UnitTests/Common/FloatUtilsTest.cpp` and `Source/UnitTests/Core/PowerPC/TestValues.h`.
-  Copyright 2018, 2021 Dolphin Emulator Project.
+The FSR 3 upscaler and its DX12 backend, built from <https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK>
+(tag `v1.1.4`, downloaded and checked by SHA-256 at configure time) and linked into `NebulaNative.exe`. Copyright (c)
+2023-2024 Advanced Micro Devices, Inc. License: MIT, the SDK's `LICENSE.txt`.
 
-These files are used under GPL version 3 in this `GPL-3.0-only` work.
+## libarchive 3.8.1, xz 5.8.1, zlib 1.3.1
 
-## Berkeley SoftFloat Release 3e (BSD-3-Clause)
-
-- Upstream: <https://www.jhauser.us/arithmetic/SoftFloat.html>
-- Copyright 2011-2018 The Regents of the University of California
-- License: `third_party/berkeley-softfloat-3/COPYING.txt`
+`third_party/archive/` holds the libraries the mod importer reads zip, 7z and rar archives with: libarchive (BSD-2-Clause,
+`third_party/archive/libarchive/COPYING`), xz's liblzma (0BSD, `third_party/archive/xz/COPYING.0BSD`) and zlib (Zlib,
+`third_party/archive/zlib/LICENSE`).
 
 ## SMAA (MIT)
 
