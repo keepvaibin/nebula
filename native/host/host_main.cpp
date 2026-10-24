@@ -1,5 +1,5 @@
 // The native game's host (docs/NATIVE_PORT.md, "Module layout"): loads the game module (smg_game.dll), gives it
-// Nebula's services (nebula_game_api.h) and runs it. Built two ways:
+// Nebula's services (nebula_game_api.h) and runs it. Built three ways:
 //   - nebula_native_host (native/CMakeLists.txt): headless. The GX stream is released as it arrives and PE events
 //     answered at once; audio is paced but not played; no remotes connect.
 //   - NebulaNative (the top-level build, NEBULA_HOST_RENDERER): the stream goes to Nebula's D3D12 renderer, which
@@ -81,7 +81,6 @@ inline int64_t perf_hint_retrace() noexcept { return 0; }
 #include <shellapi.h>
 #include <intrin.h>
 #include <dbghelp.h>
-#include <tlhelp32.h>
 #else
 #include <dlfcn.h>
 #include <fcntl.h>
@@ -127,9 +126,8 @@ void log_line(const char* tag, const char* text) {
     std::fflush(stdout);
 }
 
-// ---- Crash reports (galaxy/crash_report.h): why Nebula stopped, as a code with what to do --------------------------
-
-// What the failing thread knew, kept for the report (gathered on that thread: its activity is its own).
+// Crash reports (galaxy/crash_report.h): why Nebula stopped, as a code with what to do. What the failing thread knew,
+// kept for the report (gathered on that thread: its activity is its own).
 galaxy::crash::Facts gCrashFacts;
 char gCrashText[1024];
 char gCrashActivityFile[512];
@@ -169,14 +167,11 @@ fs::path crash_folder() {
     return fs::path("crashes");
 }
 
-// The player sees the report (hidden test runs and the headless host do not): GALAXY_HIDE_WINDOW or
-// GALAXY_CRASH_DIALOG=0 keep it in its file. GALAXY_CRASH_DIALOG_TEXT=<file>: tests; the dialog's text goes there.
+// The player sees the report; hidden test runs (GALAXY_HIDE_WINDOW) and the headless host keep it in its file.
 bool crash_dialog_wanted() {
 #if defined(NEBULA_HOST_RENDERER) || defined(NEBULA_HOST_SDL)
-    if (const char* test = std::getenv("GALAXY_CRASH_DIALOG_TEXT"); test != nullptr && test[0] != 0) return true;
     const char* hidden = std::getenv("GALAXY_HIDE_WINDOW");
-    const char* dialog = std::getenv("GALAXY_CRASH_DIALOG");
-    return !(hidden != nullptr && hidden[0] != 0 && hidden[0] != '0') && !(dialog != nullptr && dialog[0] == '0');
+    return !(hidden != nullptr && hidden[0] != 0 && hidden[0] != '0');
 #else
     return false;
 #endif
@@ -728,12 +723,9 @@ bool wait_while_suspended() {
 // The audio interface's clock: a block taken every block's length (4 bytes a stereo sample at the AI rate), on
 // fixed deadlines, as the console's DMA engine runs. With an output device the period follows the device's own clock:
 // at most 1 % shorter while fewer blocks than the sink's restart level wait there unplayed, longer while more, so the
-// queue holds about that level and the two clocks never drift apart.
-// It never waits for the device. The thread before b105 took the next block only once fewer than two waited, and
-// measured each period from its own wake-up: it ran at 94.5 % of the AI rate (54 blocks a second for 57), the device ran
-// dry over and over (stutter), and once the sink had stopped the dry voice, to restart it at four blocks, two waiting
-// blocks never played: the AI stopped, the game's sounds never ended, its sound pools filled and the next sound was
-// built on a null allocation (the owner's crashes, 2026-10-20). Silent or failed devices leave the clock as it is.
+// queue holds about that level and the two clocks never drift apart. It never waits for the device: an audio
+// interface that stalls leaves the game's sounds playing forever until its sound pools run out. A silent or failed
+// device leaves the clock as it is.
 void ai_thread() {
     name_thread(L"Nebula Host AI");
     Clock::time_point next{};
@@ -774,8 +766,8 @@ void ai_thread() {
         (void)start;
 #endif
         gAiBlocks.fetch_add(1, std::memory_order_relaxed);
-        // Tests: GALAXY_TEST_AI_STALL_AFTER=<blocks> stops the interrupts there, as a dead output once did: the game's
-        // sounds never end and its sound pools fill (the game must refuse new sounds, never crash).
+        // GALAXY_TEST_AI_STALL_AFTER=<blocks>: no interrupt after that many blocks. The game's sounds then never end and
+        // its sound pools fill; it must refuse new sounds, not crash.
         static const uint64_t stall_after = [] {
             const char* value = std::getenv("GALAXY_TEST_AI_STALL_AFTER");
             return value != nullptr ? std::strtoull(value, nullptr, 10) : 0ull;
@@ -793,10 +785,10 @@ void ai_thread() {
     }
 }
 
-// The display's retrace at 60 Hz, as v1.0.1 paces the game: the console's NTSC 59.94 would repeat a frame every 17 s on
-// a 60 Hz display. A late wake-up skips the fields it missed, as a display does, rather than delivering them back to
-// back. On Android the retrace follows the display's own vsync (every second one at 120 Hz), so frames never drift
-// against it and each stays on screen for the same time; the host's clock takes over where the display gives none.
+// The display's retrace at 60 Hz: the console's NTSC 59.94 would repeat a frame every 17 s on a 60 Hz display. A late
+// wake-up skips the fields it missed, as a display does, rather than delivering them back to back. On Android the
+// retrace follows the display's own vsync (every second one at 120 Hz), so frames never drift against it and each
+// stays on screen for the same time; the host's clock takes over where the display gives none.
 void vi_thread() {
     name_thread(L"Nebula Host VI");
     const auto period = std::chrono::nanoseconds(1000000000ull / 60);
@@ -848,14 +840,12 @@ void vi_thread() {
     }
 }
 
-// Services
-
 void svc_log(void*, const char* text) {
     log_line("game:", text);
 }
 
 #if defined(_WIN32)
-// Tests (GALAXY_TRACE_THREAD_CPU=1): each thread's CPU time and context switches over the last second, by name (or,
+// GALAXY_TRACE_THREAD_CPU=1: each thread's CPU time and context switches over the last second, by name (or,
 // unnamed, the module and offset it started at), busiest first; threads under 0.5 ms/s are counted in the total only.
 // The report's own cost (a snapshot of every thread in the system) is left out of the reporting thread's figure.
 void report_thread_cpu(double tsc_hz) {
@@ -978,118 +968,6 @@ void report_thread_cpu(double tsc_hz) {
     QueryThreadCycleTime(GetCurrentThread(), &report_end);
     report_cycles += report_end - report_start;
 }
-
-// Tests (GALAXY_PROFILE_THREAD=<thread name>): samples that thread's instruction pointer about every millisecond and
-// logs its busiest functions every 10 s ("profile:", from the process's symbols through dbghelp, loaded here). Only the
-// instruction pointer is read while the thread is suspended: an unwind could wait on a lock the thread holds.
-void profile_thread_main(std::wstring target_name) {
-    name_thread(L"Nebula Host Profiler");
-    HANDLE target = nullptr;
-    while (target == nullptr) {
-        const HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
-        THREADENTRY32 entry{};
-        entry.dwSize = sizeof(entry);
-        for (BOOL more = snapshot != INVALID_HANDLE_VALUE && Thread32First(snapshot, &entry); more && target == nullptr;
-             more = Thread32Next(snapshot, &entry)) {
-            if (entry.th32OwnerProcessID != GetCurrentProcessId()) {
-                continue;
-            }
-            const HANDLE thread = OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE,
-                                             entry.th32ThreadID);
-            PWSTR description = nullptr;
-            if (thread != nullptr && SUCCEEDED(GetThreadDescription(thread, &description)) && description != nullptr &&
-                target_name == description) {
-                target = thread;
-            } else if (thread != nullptr) {
-                CloseHandle(thread);
-            }
-            LocalFree(description);
-        }
-        if (snapshot != INVALID_HANDLE_VALUE) {
-            CloseHandle(snapshot);
-        }
-        if (target == nullptr) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        }
-    }
-    using SymInitializeFn = BOOL(WINAPI*)(HANDLE, PCSTR, BOOL);
-    using SymSetOptionsFn = DWORD(WINAPI*)(DWORD);
-    using SymFromAddrFn = BOOL(WINAPI*)(HANDLE, DWORD64, PDWORD64, PSYMBOL_INFO);
-    const HMODULE dbghelp = LoadLibraryW(L"dbghelp.dll");
-    const auto sym_initialize =
-        dbghelp != nullptr ? reinterpret_cast<SymInitializeFn>(GetProcAddress(dbghelp, "SymInitialize")) : nullptr;
-    const auto sym_set_options =
-        dbghelp != nullptr ? reinterpret_cast<SymSetOptionsFn>(GetProcAddress(dbghelp, "SymSetOptions")) : nullptr;
-    const auto sym_from_addr =
-        dbghelp != nullptr ? reinterpret_cast<SymFromAddrFn>(GetProcAddress(dbghelp, "SymFromAddr")) : nullptr;
-    bool symbols = false;
-    std::unordered_map<uint64_t, uint32_t> counts;
-    uint64_t samples = 0;
-    const HANDLE timer = CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
-    auto next_report = Clock::now() + std::chrono::seconds(10);
-    for (;;) {
-        LARGE_INTEGER due;
-        due.QuadPart = -10000;  // 1 ms
-        if (timer != nullptr && SetWaitableTimer(timer, &due, 0, nullptr, nullptr, FALSE)) {
-            WaitForSingleObject(timer, INFINITE);
-        } else {
-            Sleep(1);
-        }
-        if (SuspendThread(target) == static_cast<DWORD>(-1)) {
-            return;
-        }
-        CONTEXT context{};
-        context.ContextFlags = CONTEXT_CONTROL;
-        const bool ok = GetThreadContext(target, &context) != FALSE;
-        ResumeThread(target);
-        if (ok) {
-            counts[context.Rip]++;
-            samples++;
-        }
-        if (Clock::now() < next_report || samples == 0) {
-            continue;
-        }
-        next_report += std::chrono::seconds(10);
-        if (!symbols && sym_initialize != nullptr && sym_set_options != nullptr) {
-            sym_set_options(0x00000002 /* SYMOPT_UNDNAME */ | 0x00000004 /* SYMOPT_DEFERRED_LOADS */);
-            symbols = sym_initialize(GetCurrentProcess(), nullptr, TRUE) != FALSE;
-        }
-        std::unordered_map<std::string, uint32_t> functions;
-        for (const auto& [address, count] : counts) {
-            std::string name;
-            alignas(SYMBOL_INFO) char storage[sizeof(SYMBOL_INFO) + 256] = {};
-            auto* symbol = reinterpret_cast<SYMBOL_INFO*>(storage);
-            symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
-            symbol->MaxNameLen = 255;
-            DWORD64 displacement = 0;
-            if (symbols && sym_from_addr != nullptr && sym_from_addr(GetCurrentProcess(), address, &displacement, symbol)) {
-                name = symbol->Name;
-            } else {
-                HMODULE owner = nullptr;
-                char path[MAX_PATH] = "?";
-                if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                                       reinterpret_cast<LPCWSTR>(address), &owner)) {
-                    GetModuleFileNameA(owner, path, sizeof(path));
-                }
-                const char* file = std::strrchr(path, '\\');
-                name = file != nullptr ? file + 1 : path;
-            }
-            functions[name] += count;
-        }
-        std::vector<std::pair<std::string, uint32_t>> rows(functions.begin(), functions.end());
-        std::sort(rows.begin(), rows.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
-        char text[320];
-        std::snprintf(text, sizeof(text), "%ls: %llu samples", target_name.c_str(), (unsigned long long)samples);
-        log_line("profile:", text);
-        for (size_t i = 0; i < rows.size() && i < 30; ++i) {
-            std::snprintf(text, sizeof(text), "  %5.1f%%  %s", 100.0 * rows[i].second / (double)samples,
-                          rows[i].first.c_str());
-            log_line("profile:", text);
-        }
-        counts.clear();
-        samples = 0;
-    }
-}
 #endif
 
 #if defined(_WIN32)
@@ -1211,8 +1089,7 @@ __attribute__((no_sanitize("address", "undefined")))
 LONG CALLBACK crash_handler(EXCEPTION_POINTERS* info) {
     const DWORD code = info->ExceptionRecord->ExceptionCode;
     // A C++ exception, logged where it is thrown (the first 32): one thrown on the game's own stacks cannot unwind
-    // through them and ends the process before any filter runs (b107: the Mii picker ended with 0xE06D7363 and no
-    // line). Handled or not, the line says what was thrown.
+    // through them and ends the process before any filter runs. Handled or not, the line says what was thrown.
     if (code == 0xE06D7363u) {
         static std::atomic<unsigned> logged{0u};
         if (logged.fetch_add(1u, std::memory_order_relaxed) < 32u) {
@@ -1273,8 +1150,8 @@ void abort_handler(int) {
 }
 
 // The last filter: an exception no frame handled, of any kind. A C++ exception that leaves a thread through C or
-// system frames reaches no terminate handler: the process ended with 0xE06D7363 and no line or dump (b107: the Mii
-// picker).
+// system frames reaches no terminate handler, so without this filter the process would end with 0xE06D7363 and no
+// line or dump.
 LONG WINAPI unhandled_filter(EXCEPTION_POINTERS* info) {
     if (gCrashing.exchange(1) != 0) {
         return EXCEPTION_CONTINUE_SEARCH;
@@ -1327,13 +1204,6 @@ int show_crash_report_dialog() {
                           MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0)),
                       L'\0');
     MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), wide.data(), static_cast<int>(wide.size()));
-    if (const wchar_t* test = _wgetenv(L"GALAXY_CRASH_DIALOG_TEXT"); test != nullptr && test[0] != 0) {
-        if (FILE* out = _wfopen(test, L"wb")) {
-            std::fwrite(text.data(), 1, text.size(), out);
-            std::fclose(out);
-        }
-        return 0;
-    }
     if (MessageBoxW(nullptr, wide.c_str(), L"Nebula stopped", MB_ICONERROR | MB_YESNO | MB_SETFOREGROUND | MB_TOPMOST) ==
         IDYES) {
         const std::wstring select = L"/select,\"" + file.wstring() + L"\"";
@@ -1368,12 +1238,12 @@ void svc_fatal(void*, const char* text) {
 }
 
 #if defined(NEBULA_HOST_RENDERER)
-// The renderer. The game's memory is its guest memory: the module's physical regions and the cached and uncached
-// mirrors of MEM1 and MEM2 (virtual addresses in display lists). The command stream reaches it in frames: the spans
-// since the last submission, contiguous in the ring's double mapping, go to render_frame at a PE marker (draw sync,
-// draw done) or at the retrace, which also presents; render_frame copies them, so they are released at once. The
-// renderer raises PE events through gNative's callbacks when its parse and the GPU reach them. All of this runs on
-// the simulation thread, where the game makes these calls.
+// The renderer. The game's memory is the renderer's GuestMemory: the module's physical regions and the cached and
+// uncached mirrors of MEM1 and MEM2 (virtual addresses in display lists). The command stream reaches it in frames:
+// the spans since the last submission, contiguous in the ring's double mapping, go to render_frame at a PE marker
+// (draw sync, draw done) or at the retrace, which also presents; render_frame copies them, so they are released at
+// once. The renderer raises PE events through gNative's callbacks when its parse and the GPU reach them. All of this
+// runs on the simulation thread, where the game makes these calls.
 using galaxy::GuestMemoryRegion;
 using galaxy::GuestMemory;
 using galaxy::GxLogLevel;
@@ -1427,7 +1297,7 @@ void ensure_guest_memory() {
     std::call_once(gMemoryOnce, setup_renderer_memory);
 }
 
-// `size` bytes at a guest address, in the module's arena or image.
+// `size` bytes at a console address, in the module's arena or image.
 const std::byte* guest_bytes(uint32_t address, uint32_t size) {
     ensure_guest_memory();
     for (const galaxy::GuestMemoryRegion& region : gRegions) {
@@ -1461,8 +1331,7 @@ void submit_frame_unchecked(bool present, uint32_t xfb) {
 }
 
 // The renderer's hard failures (the GX parser's: an unknown command, a truncated payload) end the game with their
-// line and a dump. Thrown on the game's stacks they could not unwind through its frames: the process ended with
-// 0xE06D7363 and nothing logged (b107, the Mii icon picker).
+// line and a dump. Caught here: thrown on the game's stacks they could not unwind through its frames.
 void submit_frame(bool present, uint32_t xfb) {
     try {
         submit_frame_unchecked(present, xfb);
@@ -1643,7 +1512,7 @@ int svc_code_patch(void*, uint32_t id, uint32_t* value) {
     const auto it = gMods->code_patches.find(id);
     if (it == gMods->code_patches.end()) return 0;
     if (value != nullptr) *value = it->second;
-    // The first time the game uses each: evidence in the log that a mod's code change runs.
+    // Logged the first time the game uses each.
     static std::atomic<uint64_t> logged{0};
     if (id < 64u && (logged.fetch_or(uint64_t{1} << id) & (uint64_t{1} << id)) == 0u) {
         char text[64];
@@ -1775,7 +1644,7 @@ void note_mod_file(uint64_t offset) {
 
 void svc_disc_read(void*, uint64_t offset, uint32_t size, void* dst, uint32_t slot) {
     gDiscReads.fetch_add(1, std::memory_order_relaxed);
-    // Tests: a slow drive (each read takes this long), so waits on loads are exercised.
+    // GALAXY_TEST_DISC_DELAY_US: a slow drive (each read takes this long), so waits on loads are exercised.
     static const uint32_t test_delay_us = [] {
         const char* value = std::getenv("GALAXY_TEST_DISC_DELAY_US");
         return value != nullptr ? static_cast<uint32_t>(std::strtoul(value, nullptr, 10)) : 0u;
@@ -1827,7 +1696,7 @@ void svc_vi_frame(void*, uint32_t xfb, int black, uint32_t retrace) {
     if (!gRegions.empty()) {
         submit_frame(true, xfb == 0 || black ? galaxy::gx::kNoDisplayedXfbAddr : xfb);
     }
-    // GALAXY_TEST_MII_IMPORT=<retrace>:<file> (tests): imports the file at that retrace, as the settings do.
+    // GALAXY_TEST_MII_IMPORT=<retrace>:<file>: imports the file at that retrace, as the settings do.
     {
         static const char* const test_import = std::getenv("GALAXY_TEST_MII_IMPORT");
         static bool test_imported = false;
@@ -1847,9 +1716,9 @@ void svc_vi_frame(void*, uint32_t xfb, int black, uint32_t retrace) {
         const uint32_t placed = gModule.mii_install(slot, reinterpret_cast<const uint8_t*>(mii.data()));
         std::fprintf(stderr, "[mii] slot %u %s\n", slot, placed != 0u ? "installed" : "left for the next start");
     }
-    // The output's shape (the window's, or the chosen aspect) is latched once this retrace's picture is presented, as
-    // v1.0.1 does: queued frames finish first, so a picture is never fitted with the next frame's camera and layouts.
-    if (galaxy::experimental_dynamic_aspect_requested()) {
+    // The output's shape (the window's, or the chosen aspect) is latched once this retrace's picture is presented:
+    // queued frames finish first, so a picture is never fitted with the next frame's camera and layouts.
+    {
         const auto client = galaxy::gx::aspect_latch_extent();
         if (client.width > 1 && client.height > 1 &&
             galaxy::experimental_dynamic_aspect_change_pending(client.width, client.height)) {
@@ -1865,18 +1734,14 @@ void svc_vi_frame(void*, uint32_t xfb, int black, uint32_t retrace) {
 #endif
 }
 
-// The shape the game draws for (display_native.c makes v1.0.1's policy of it): the latched output shape, or a fixed
-// GALAXY_EXPERIMENTAL_ULTRAWIDE_ASPECT; headless, the Wii's 16:9.
+// The shape the game draws for (display_native.c turns it into the game's screen width and camera aspect): the
+// latched output shape; headless, the Wii's 16:9.
 uint32_t svc_display_extent(void*) {
 #if defined(NEBULA_HOST_RENDERER)
-    if (galaxy::experimental_dynamic_aspect_requested()) {
-        return static_cast<uint32_t>(galaxy::g_experimental_dynamic_aspect_word.load(std::memory_order_acquire));
-    }
-    if (const auto& fixed = galaxy::experimental_ultrawide_aspect_from_env(); fixed && !galaxy::native_four_three(*fixed)) {
-        return static_cast<uint32_t>(std::lround(fixed->content_aspect * 1000.0)) << 16 | 1000u;
-    }
-#endif
+    return static_cast<uint32_t>(galaxy::g_experimental_dynamic_aspect_word.load(std::memory_order_acquire));
+#else
     return 0;
+#endif
 }
 
 void svc_scene_surround(void*, float intensity) {
@@ -1924,34 +1789,6 @@ void svc_game_light(void*, uint32_t kind, uint32_t id, const float* v) {
     default:
         break;
     }
-    // GALAXY_TRACE_GAME_LIGHTS=1: every 10 s, the lights of each kind since the last line and the sun's direction.
-    static const bool trace = std::getenv("GALAXY_TRACE_GAME_LIGHTS") != nullptr;
-    if (trace && kind <= NEBULA_LIGHT_PLAYER) [[unlikely]] {
-        static std::array<std::uint32_t, NEBULA_LIGHT_PLAYER + 1> counts{};
-        static std::array<float, 17> area{};
-        if (kind == NEBULA_LIGHT_AREA) {
-            std::copy(v, v + 17, area.begin());
-        }
-        static std::array<float, 4> sun{};
-        static auto last = std::chrono::steady_clock::now();
-        ++counts[kind];
-        if (kind == NEBULA_LIGHT_SUN) {
-            sun = {v[0], v[1], v[2], v[3]};
-        }
-        const auto now = std::chrono::steady_clock::now();
-        if (now - last >= std::chrono::seconds(10)) {
-            last = now;
-            std::fprintf(stderr,
-                         "[game-light] sun=%u star-core=%u point=%u request=%u world=%u area=%u player=%u "
-                         "sun-direction=(%.3f %.3f %.3f) distance=%.0f area-ambient=(%.2f %.2f %.2f) "
-                         "key=(%.2f %.2f %.2f) at (%.0f %.0f %.0f)%s fill=(%.2f %.2f %.2f)%s\n",
-                         counts[0], counts[1], counts[2], counts[3], counts[4], counts[5], counts[6], sun[0], sun[1],
-                         sun[2], sun[3], area[0], area[1], area[2], area[3], area[4], area[5], area[6], area[7],
-                         area[8], area[9] != 0.0f ? " camera" : "", area[10], area[11], area[12],
-                         area[16] != 0.0f ? " camera" : "");
-            counts = {};
-        }
-    }
 #else
     (void)kind;
     (void)id;
@@ -1995,20 +1832,12 @@ void svc_fs_request(void*, const NebulaFsRequest* request, uint32_t slot) {
     gFsOps.fetch_add(1, std::memory_order_relaxed);
     const NebulaFsRequest r = *request;
     gFs.post([r, slot] {
-        const int32_t result = fs_run(r);
-        static const bool trace = std::getenv("NEBULA_TRACE_NAND") != nullptr;
-        if (trace) {
-            char text[400];
-            std::snprintf(text, sizeof(text), "nand op %u path %s path2 %s fd %d size %u mode %u -> %d", r.op,
-                          r.path != nullptr ? r.path : "-", r.path2 != nullptr ? r.path2 : "-", r.fd, r.size, r.mode, result);
-            log_line("host:", text);
-        }
-        gModule.fs_complete(slot, result);
+        gModule.fs_complete(slot, fs_run(r));
     });
 }
 
-// The system settings v1.0.1's SYSCONF gives the game (native_host.cpp, create_default_sysconf_file): its pointer
-// mapping (native_input's virtual sensor bar) assumes the bar above the screen.
+// The system settings (SYSCONF) of a new console, as the game reads them. The pointer mapping (native_input's
+// virtual sensor bar) assumes the bar above the screen.
 uint32_t svc_sc_get(void*, uint32_t item) {
     switch (item) {
     case NEBULA_SC_LANGUAGE:
@@ -2040,7 +1869,7 @@ uint32_t svc_sc_get(void*, uint32_t item) {
     }
 }
 
-// Remote 0: Nebula's controls (v1.0.1's bindings, keyboard and mouse, controllers) as a Wii Remote with a Nunchuk,
+// Remote 0: Nebula's controls (the bindings, keyboard and mouse, controllers) as a Wii Remote with a Nunchuk,
 // connected when the game starts WPAD and reporting 100 times a second in the format the game asks for. Headless, the
 // same remote at rest: the game sees a connected controller (no "connect the Wii Remote" pause) and no input.
 std::atomic<int> gWpadStarted{0};
@@ -2061,8 +1890,8 @@ uint8_t report_id_for_format(uint32_t format) {
 }
 
 #if !defined(NEBULA_HOST_RENDERER)
-// v1.0.1's virtual remote (native_host.cpp): its EEPROM calibration (IR, then the accelerometer's 0 g and 1 g, each
-// twice) and its Nunchuk's (accelerometer 0 g and 1 g, stick maximum, minimum and centre).
+// The virtual remote's EEPROM calibration, as native_host.cpp gives it: IR, then the accelerometer's 0 g and 1 g, each
+// twice; and its Nunchuk's: accelerometer 0 g and 1 g, stick maximum, minimum and centre.
 void idle_wiimote_calibration(uint8_t (&eeprom)[0x2A], uint8_t (&nunchuk)[32]) {
     static const uint8_t ir[11] = {0x7f, 0xa2, 0x8b, 0x80, 0xa2, 0x80, 0x5d, 0x30, 0x7f, 0x5d, 0x0c};
     static const uint8_t accel[10] = {0x80, 0x80, 0x80, 0x00, 0x99, 0x99, 0x99, 0x00, 0x00, 0xa0};
@@ -2129,7 +1958,7 @@ void wpad_thread() {
 #else
         const int32_t mode = gStarPointerMode.load(std::memory_order_relaxed);
         const auto snapshot = galaxy::host::native_game_wiimote_snapshot(
-            id, gRetraces.load(std::memory_order_relaxed), gWpadDpd.load(std::memory_order_relaxed) != 0, mode,
+            gRetraces.load(std::memory_order_relaxed), gWpadDpd.load(std::memory_order_relaxed) != 0, mode,
             static_cast<uint8_t>(gTiltSection.load(std::memory_order_relaxed)));
         // Every report renews the motor's state (a stale one stops), as the console's remote keeps its motor bit.
         galaxy::host::native_game_rumble(gMotor.load(std::memory_order_relaxed), mode);
@@ -2170,7 +1999,7 @@ void svc_wpad_control(void*, uint32_t chan, uint32_t what, uint32_t value) {
 }
 void svc_wpad_speaker_data(void*, uint32_t, const uint8_t*, uint32_t) {}
 
-// The JAudio DSP program: v1.0.1's host version mixes each subframe when the CPU releases its last channel group
+// The JAudio DSP program, run on the host: it mixes each subframe when the CPU releases its last channel group
 // (JASDSPChannel::updateAll's releaseHalt(3), a one-word command). Headless, the subframe completes unmixed.
 int svc_audio_dsp(void*, const uint32_t* words, uint32_t count) {
 #if defined(NEBULA_HOST_RENDERER)
@@ -2209,7 +2038,7 @@ int svc_hbm(void*, uint32_t what, uint32_t) {
         galaxy::gx::home_menu_open();
         return 0;
     case NEBULA_HBM_POLL: {
-        // Tests (hidden window): GALAXY_TEST_HOME_ROW=<row>:<polls> picks a row by the keys a player would press.
+        // GALAXY_TEST_HOME_ROW=<row>:<polls>: picks a row by the keys a player would press.
         static const char* test = std::getenv("GALAXY_TEST_HOME_ROW");
         static unsigned polls = 0;
         if (test != nullptr && galaxy::gx::home_menu_visible()) {
@@ -2235,7 +2064,7 @@ int svc_hbm(void*, uint32_t what, uint32_t) {
 #endif
 }
 
-// Test hooks for hidden runs, as v1.0.1's runtime has them; the game performs them with its own calls each scene frame.
+// Test hooks for hidden runs; the game performs them with its own calls each scene frame.
 //   GALAXY_TEST_GALAXY_TOUR=<file of "Stage scenario" lines>: each stop in turn, GALAXY_TEST_GALAXY_TOUR_FRAMES scene
 //     frames apart (default 1200), through MR::requestChangeStageInGameMoving.
 //   GALAXY_TEST_TELEPORT=x,y,z,frame[/x,y,z,frame...]: MR::setPlayerPos at those scene frames, held 30 frames (the
@@ -2460,8 +2289,8 @@ uint32_t physical_of(const void* pointer) {
     return 0;
 }
 
-// A THP frame's video component is one baseline JPEG whose SOF0 gives the movie's size; v1.0.1's decoder writes its
-// planes in GX's I8 tiling. The planes are then the renderer's to re-read, as after the console's decode.
+// A THP frame's video component is one baseline JPEG whose SOF0 gives the movie's size; the decoder writes its planes
+// in GX's I8 tiling. The planes are then the renderer's to re-read, as after the console's decode.
 int32_t svc_thp_video_decode(void*, const void* frame, uint32_t size, void* y, void* u, void* v) {
     gMovieFrames.fetch_add(1, std::memory_order_relaxed);
     if (galaxy::gx::movie_replacement_showing()) {
@@ -2517,10 +2346,8 @@ int32_t svc_thp_video_decode(void*, const void*, uint32_t, void*, void*, void*) 
 }  // namespace
 
 #if defined(NEBULA_HOST_RENDERER)
-// v1.0.1's renderer as it shipped: the package's runtime-env.json values for every setting this executable reads (41),
-// applied where the environment does not set them. Frames are identical with and without (Battlerock, 4 frames
-// compared); the render thread's present pacer was the difference (2026-10-18). Smooth present stays on: its wait is
-// now a timer, and it keeps the present intervals even.
+// The renderer settings read from the environment, at their shipped values (installer/runtime-env.json) where the
+// environment does not set them.
 void apply_shipped_renderer_defaults() {
     static const struct {
         const char* name;
@@ -2541,10 +2368,7 @@ void apply_shipped_renderer_defaults() {
         {"GALAXY_GX_SORTED_VERTEX_INVALIDATION", "1"},
         {"GALAXY_GX_UBER", "1"},
         {"GALAXY_HIDE_OS_CURSOR", "1"},
-        {"GALAXY_MOUSE_IR_ABSOLUTE_X_SCALE", "1.0"},
-        {"GALAXY_MOUSE_IR_ABSOLUTE_Y_SCALE", "1.0"},
         {"GALAXY_MOUSE_IR_CURSOR_POLL", "auto"},
-        {"GALAXY_MOUSE_IR_HOLD_MS", "500"},
         {"GALAXY_MOUSE_IR_MESSAGE_RECENT_MS", "120"},
         {"GALAXY_NATIVE_BLOOM_WORKSPACE", "1"},
         {"GALAXY_PE_EVENTS_GPU_FENCE", "1"},
@@ -2567,10 +2391,6 @@ void apply_shipped_renderer_defaults() {
         {"GALAXY_VI_RENDER_FIFO_WAIT", "0"},
         {"GALAXY_WAIT_FOR_FRAME_LATENCY", "0"},
         {"GALAXY_XFB_MAX_PRESERVE_AGE", "30"},
-#if defined(NEBULA_HOST_SDL)
-        // The picture takes the display's shape, any shape (the Windows launcher sets it from its aspect setting).
-        {"GALAXY_EXPERIMENTAL_DYNAMIC_ASPECT", "1"},
-#endif
     };
     for (const auto& setting : kDefaults) {
         size_t length = 0;
@@ -2634,9 +2454,9 @@ bool read_game_dol(const fs::path& path, std::string& id, std::vector<std::uint8
     return true;
 }
 
-// The launcher's mod tools: NebulaNative --import-mod <folder or archive>... or --list-mods [--game <id>] [--pak
-// <game.pak>]; the mods
-// folder beside the settings (as the game uses it). One JSON line on stdout; exit code 0 when everything succeeded.
+// The launcher's mod tools: NebulaNative --import-mod <folder or archive>..., --remove-mod <id> or --list-mods
+// [--game <id>] [--pak <game.pak>], on the mods folder beside the settings (as the game uses it). One JSON line on
+// stdout; exit code 0 when everything succeeded.
 int run_mods_tool() {
     std::vector<fs::path> args;
 #if defined(_WIN32)
@@ -2752,12 +2572,12 @@ int main(int argc, char** argv) {
     apply_shipped_renderer_defaults();
 #endif
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
-    // GALAXY_FRAME_TIMELINE=1: the frame pipeline's events (frame_timeline.h), as v1.0.1 records them, written at exit.
+    // GALAXY_FRAME_TIMELINE=1: the frame pipeline's events (frame_timeline.h), written at exit.
     galaxy::timeline::initialize_from_environment();
 #endif
 #if defined(NEBULA_HOST_RENDERER) && defined(_WIN32)
-    // As v1.0.1 starts: physical-pixel DPI awareness before any window (sizes and mouse coordinates in pixels), and
-    // CRT assertion and error reports to stderr instead of dialogs.
+    // Physical-pixel DPI awareness before any window (sizes and mouse coordinates in pixels), and CRT assertion and
+    // error reports to stderr instead of dialogs.
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     _CrtSetReportMode(_CRT_ASSERT, _CRTDBG_MODE_FILE);
     _CrtSetReportFile(_CRT_ASSERT, _CRTDBG_FILE_STDERR);
@@ -2767,36 +2587,12 @@ int main(int argc, char** argv) {
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX | SEM_NOGPFAULTERRORBOX);
 #endif
 #if defined(_WIN32)
-    // Tests: the logical processors the process may use (hex mask; 0xF = two cores with SMT, a 2C/4T laptop's shape).
+    // GALAXY_TEST_CPU_AFFINITY: the logical processors the process may use (hex mask; 0xF = two cores with SMT, a
+    // 2C/4T laptop's shape).
     if (const char* mask = std::getenv("GALAXY_TEST_CPU_AFFINITY")) {
         SetProcessAffinityMask(GetCurrentProcess(), static_cast<DWORD_PTR>(std::strtoull(mask, nullptr, 16)));
     }
     install_crash_reporter();
-    if (const wchar_t* name = _wgetenv(L"GALAXY_PROFILE_THREAD"); name != nullptr && name[0] != 0) {
-        std::thread(profile_thread_main, std::wstring(name)).detach();
-    }
-    // Validation of the crash path, as v1.0.1's: once the game has started (GALAXY_CRASH_TEST_DELAY_MS, 5 s), 1 faults
-    // a host thread; texture faults one loading a texture pack image; fatal is the game's own fatal stop; gpu the
-    // renderer losing the graphics card. Each ends with its report (crash_report.h).
-    if (const char* test = std::getenv("GALAXY_CRASH_TEST"); test != nullptr && test[0] != 0 && test[0] != '0') {
-        const std::string kind = test;
-        const char* delay = std::getenv("GALAXY_CRASH_TEST_DELAY_MS");
-        const unsigned long ms = delay != nullptr ? std::strtoul(delay, nullptr, 10) : 5000ul;
-        std::thread([kind, ms] {
-            std::this_thread::sleep_for(std::chrono::milliseconds(ms));
-            if (kind == "texture") {
-                const galaxy::crash::ScopedActivity activity(galaxy::crash::Activity::TexturePack,
-                                                             "test/tex1_64x64_0123456789abcdef_14.png");
-                *static_cast<volatile int*>(nullptr) = 1;
-            } else if (kind == "fatal") {
-                svc_fatal(nullptr, "test: the game's fatal stop");
-            } else if (kind == "gpu") {
-                die("renderer: [RendererD3D12] Present HRESULT=0x887A0005");
-            } else {
-                *static_cast<volatile int*>(nullptr) = 1;
-            }
-        }).detach();
-    }
 #endif
 #if defined(NEBULA_HOST_RENDERER)
     if (argc >= 2 && (std::strcmp(argv[1], "--import-mod") == 0 || std::strcmp(argv[1], "--list-mods") == 0 ||
@@ -2970,14 +2766,8 @@ int main(int argc, char** argv) {
     services.light_reach = svc_light_reach;
     services.traced_sun = svc_traced_sun;
 #if defined(NEBULA_HOST_RENDERER)
-    // Every aspect follows the output's shape through the live aspect path, as v1.0.1 sets it; explicit aspect
-    // variables (tests) are kept. Before the renderer starts: it reads the choice once.
-    if (std::getenv("GALAXY_EXPERIMENTAL_DYNAMIC_ASPECT") == nullptr && std::getenv("GALAXY_EXPERIMENTAL_NATIVE_4_3") == nullptr &&
-        std::getenv("GALAXY_EXPERIMENTAL_ULTRAWIDE_ASPECT") == nullptr) {
-        _putenv_s("GALAXY_EXPERIMENTAL_DYNAMIC_ASPECT", "1");
-    }
     // The player's settings and display configuration (GALAXY_RUNTIME_SETTINGS_PATH / GALAXY_RENDER_CONFIG_PATH in
-    // tests), loaded before the window as v1.0.1 does; the settings overlay reads its frame art from the game files.
+    // tests), loaded before the window; the settings overlay reads its frame art from the game files.
     try {
         galaxy::load_runtime_settings_from_file();
         galaxy::gx::load_render_config_from_file();
@@ -2991,8 +2781,8 @@ int main(int argc, char** argv) {
         galaxy::discord::set_enabled_provider([] { return galaxy::get_runtime_settings().discord_status; });
         galaxy::discord::start(id != nullptr ? id : kDiscordClientId);
     }
-    // The environment is final from here: the input poll's many reads per report are served once from a table (each
-    // read otherwise scans the whole environment block, 100 reports a second).
+    // The environment is final from here: the input report's reads are served from a table (each read otherwise scans
+    // the whole environment block, 100 reports a second).
     galaxy::host::set_env_flag_cache_enabled(true);
     const galaxy::gx::RenderConfig render_config = galaxy::gx::get_render_config();
     if (!galaxy::gx::initialize(static_cast<int>(render_config.window_width),
@@ -3003,8 +2793,8 @@ int main(int argc, char** argv) {
     galaxy::gx::set_indexed_load_host_order(true);
     gAudio = new galaxy::host::NativeGameAudio();  // lives as long as the process (the AI thread is detached)
     gAudio->set_channel_owner(gModule.audio_channel_owner);
-    // The live controls' links to the window, as v1.0.1 installs them: the mouse as the pointer, keyboard capture and
-    // controller navigation while the settings overlay or the HOME Menu is open.
+    // The live controls' links to the window: the mouse as the pointer, keyboard capture and controller navigation
+    // while the settings overlay or the HOME Menu is open.
     galaxy::host::install_host_pointer_provider([]() noexcept {
         galaxy::host::HostPointerState state{};
         const galaxy::gx::HostPointerState pointer = galaxy::gx::poll_host_pointer_state();
@@ -3018,9 +2808,6 @@ int main(int argc, char** argv) {
         state.client_width = pointer.client_width;
         state.client_height = pointer.client_height;
         state.absolute_sequence = pointer.absolute_sequence;
-        state.absolute_acquired_ms = pointer.absolute_acquired_ms;
-        state.debug_flags = pointer.debug_flags;
-        state.debug_error = pointer.debug_error;
         state.debug_window = pointer.debug_window;
         return state;
     });

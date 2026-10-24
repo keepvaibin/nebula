@@ -333,9 +333,9 @@ void test_square_oscillator() {
 }
 
 // Volume categories: a sound's category is decided at its first render, so
-// its gain applies from its first sample (the muted-music leak at a sound's
-// start); a gain change ramps over one subframe; a new sound on the channel
-// takes its own category at once, without a ramp from the previous owner.
+// its gain applies from its first sample; a gain change ramps; a new sound on
+// the channel takes its own category at once, without a ramp from the previous
+// owner.
 void test_bus_categories() {
     using galaxy::audio::kJasDspChannelsPointer;
     Guest guest;

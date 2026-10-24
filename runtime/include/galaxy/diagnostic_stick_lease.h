@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Diagnostic host-input lease. No guest-memory or Windows input mutation.
+// GALAXY_INPUT_STICK_COMMAND_FILE: a stick (and A button) command another process writes while the game runs, held
+// for its duration.
 #pragma once
 
 #include <algorithm>
@@ -39,7 +40,6 @@ parse_diagnostic_stick_command(std::string_view text) noexcept {
     if (std::count(text.begin(), text.end(), ':') == 4u) {
         const auto level = text.substr(last_separator + 1u);
         if (level != "0" && level != "1") return std::nullopt;
-        // Retain the ordinary four-field parser and every validation below.
         a = level == "1";
         text = text.substr(0u, last_separator);
     }
@@ -80,8 +80,7 @@ parse_diagnostic_stick_command(std::string_view text) noexcept {
     return command;
 }
 
-// Owned only by the HID snapshot consumer thread. Clock samples are
-// monotonic host milliseconds, not VI counts or gameplay/simulation time.
+// Used by the input report's thread only. Times are monotonic host milliseconds.
 class DiagnosticStickLease {
 public:
     void cancel() noexcept { command_.duration_ms = 0u; }
@@ -92,8 +91,7 @@ public:
             cancel();
             return;
         }
-        // A terminal file remains on disk. It cannot extend an existing
-        // deadline, resurrect an expired/cancelled lease, or rewind identity.
+        // The last command stays on disk: a sequence already seen neither extends nor revives its lease.
         if (parsed->sequence <= last_sequence_) return;
         last_sequence_ = parsed->sequence;
         command_ = *parsed;

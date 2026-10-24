@@ -117,7 +117,7 @@ enum {
 };
 
 /* The picture's shape as the game draws it (__NebulaDisplay), from the output's shape the host latches at each retrace
-   (display_extent), as v1.0.1's dynamic aspect: the camera, the 2D screen and the layouts widen with it. */
+   (display_extent): the camera, the 2D screen and the layouts widen with it. */
 typedef struct NebulaDisplay {
     int32_t wide;          /* 0: the Wii's 16:9, nothing changes */
     float content_aspect;  /* width / height, 4:3 to 32:9 */

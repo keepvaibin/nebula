@@ -8,12 +8,8 @@
 
 namespace galaxy::host {
 
-// Host implementation of RMGE01's JAudio DSP command interface.
-//
-// The game's audio thread, JASDriver and every JASChannel update keep running
-// as translated code. Only DSPSendCommands2 (0x804962C0) and DspBoot
-// (0x804961E0) become host calls: the command words the game would mail to
-// the DSP are consumed here as plain function arguments.
+// The game's JAudio DSP program, run on the host. The game's audio thread, JASDriver and the JASChannel updates run
+// as usual; the command words it mails to the DSP (NativeGameAudio::dsp_command) arrive here as function arguments:
 //
 //   0x81 setup table   CH_BUF, DSPRES_FILTER, DSPADPCM_FILTER, FX_BUF
 //   0x8E VARAM         base of the wave memory the channel addresses use
@@ -32,7 +28,7 @@ namespace galaxy::host {
 // the surround fold-down to stereo and the output gain (mixer level / 4096).
 struct JAudioGuestMemory {
     void* user{};
-    // Host pointer to `size` contiguous guest bytes at virtual `address`.
+    // Host pointer to `size` contiguous bytes of game memory at virtual `address`.
     std::byte* (*resolve)(void* user, std::uint32_t address, std::uint32_t size){};
 
     [[nodiscard]] std::byte* at(std::uint32_t address, std::uint32_t size) const {
@@ -73,7 +69,7 @@ class JAudioHostMixer {
 public:
     JAudioHostMixer();
 
-    // 0x81: msgs[0] low half = channel count; tables are guest addresses.
+    // 0x81: msgs[0] low half = channel count; tables are console addresses.
     void setup(std::uint32_t command, std::uint32_t channel_table,
                std::uint32_t resampler_table, std::uint32_t adpcm_table,
                std::uint32_t fx_table, const JAudioGuestMemory& memory);
@@ -88,14 +84,14 @@ public:
     // the caller then posts the game's AUDIOMSG_DSP.
     bool release_halt(std::uint32_t message, const JAudioGuestMemory& memory);
     void note_ignored_command() noexcept { ++stats_.ignored_commands; }
-    // Volume categories. The runtime passes the category gains once per audio frame (`master` is applied at
-    // the output, not here). A channel's category is decided once per sound, at the sound's first render, when
-    // the game has linked the channel to its owner (TChannel +0x008 is set by playStart and cleared after that
-    // render). The gain then applies from the sound's first sample. A changed gain ramps over 80 samples.
+    // Volume categories. The host passes the category gains once per audio frame (`master` is applied at the
+    // output, not here). A channel's category is decided once per sound, at the sound's first render, when the game
+    // has linked the channel to its owner (TChannel +0x008 is set by playStart and cleared after that render). The
+    // gain then applies from the sound's first sample. A changed gain ramps over four subframes (320 samples).
     // Until the first call, every gain is 1.
     void set_bus_gains(const galaxy::audio::NativeAudioBusGains& gains) noexcept;
-    // The native game names the sound on a channel itself (its sound ID; route 1 effect, 2 sequence, 3 stream, 0 none);
-    // without it the owner is read from the console's memory, as v1.0.1 does.
+    // The game names the sound on a channel itself (its sound ID; route 1 effect, 2 sequence, 3 stream, 0 none);
+    // without a resolver the owner is read from the game's JAudio structures (resolve_jaudio_channel_owner).
     using OwnerResolver = std::uint32_t (*)(std::uint32_t channel, std::uint32_t* route);
     void set_owner_resolver(OwnerResolver resolver) noexcept { owner_resolver_ = resolver; }
 

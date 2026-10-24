@@ -1,12 +1,6 @@
 #include "galaxy/frame_cadence_diagnostics.h"
 
-#include <algorithm>
 #include <chrono>
-#include <iomanip>
-#include <limits>
-#include <ostream>
-#include <stdexcept>
-#include <vector>
 
 namespace galaxy::cadence {
 namespace {
@@ -24,12 +18,6 @@ void update_max(
                std::memory_order_relaxed,
                std::memory_order_relaxed)) {
     }
-}
-
-std::uint64_t steady_clock_read(void*) noexcept {
-    const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
-        std::chrono::steady_clock::now().time_since_epoch()).count();
-    return elapsed > 0 ? static_cast<std::uint64_t>(elapsed) : 0u;
 }
 
 }  // namespace
@@ -65,18 +53,13 @@ void Session::record_token_issued(FrameTokenKind kind) noexcept {
     }
 }
 
-std::uint64_t sample_now_ns_if_enabled(
-    const Session* session,
-    MonotonicReadFn reader,
-    void* user) noexcept {
-    if (session == nullptr || !session->enabled() || reader == nullptr) {
+std::uint64_t steady_now_ns_if_enabled(const Session* session) noexcept {
+    if (session == nullptr || !session->enabled()) {
         return 0u;
     }
-    return reader(user);
-}
-
-std::uint64_t steady_now_ns_if_enabled(const Session* session) noexcept {
-    return sample_now_ns_if_enabled(session, &steady_clock_read, nullptr);
+    const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+    return elapsed > 0 ? static_cast<std::uint64_t>(elapsed) : 0u;
 }
 
 ScopedPhaseTimer::ScopedPhaseTimer(

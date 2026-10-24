@@ -1,3 +1,5 @@
+// The native game's Windows host services (native_host.cpp): input reports, vibration, the virtual Wii devices and
+// the game's audio output.
 #pragma once
 
 #include "galaxy/controller_roster.h"
@@ -27,53 +29,9 @@
 
 namespace galaxy::host {
 
-// Environment flags read through native_host.cpp's read_env_flag are cached by
-// literal name once this is enabled (the runtime enables it after boot
-// configuration; tests leave it off so ScopedEnv changes stay visible).
+// Once enabled, environment variables the input report reads are cached by literal name. The host enables it after
+// its startup configuration; tests leave it off so the variables they change stay visible.
 void set_env_flag_cache_enabled(bool enabled) noexcept;
-
-// Phases of the opt-in slow-input anomaly ledger. Host steady-clock
-// diagnostics only; they do not sample or alter Wii time.
-enum class NativeInputPollStage : std::size_t {
-    Reconnect, Cadence, Script, Focus, Keys, Controller, Pointer,
-    PointerRemainder, Report, DeliverySelection, DeliveryCopy, DeliveryClock,
-    DeliveryReply, Count
-};
-struct NativeInputPollBreakdown {
-    bool enabled{};
-    std::uint64_t serial{};
-    std::uint64_t total_ns{};
-    std::uint64_t diagnostic_file_ns{}; // Nested in Script; not additive.
-    std::array<std::uint64_t, static_cast<std::size_t>(NativeInputPollStage::Count)> stage_ns{};
-    std::uint32_t delivery_buffer{};
-    std::uint32_t delivery_request{};
-    std::uint32_t delivery_bytes{};
-};
-
-class NativeAudioSink;
-
-// The absolute-position cache and the button-transition journal have
-// independent counters, so a sequence number identifies a pointer publication
-// only together with its domain.
-enum class HostPointerSequenceDomain : std::uint8_t {
-    None,
-    AbsolutePosition,
-    ButtonTransition,
-};
-
-// Spellings used by the runtime trace and its parsers; keep them stable.
-[[nodiscard]] constexpr std::string_view host_pointer_sequence_domain_name(
-    HostPointerSequenceDomain domain) noexcept {
-    switch (domain) {
-    case HostPointerSequenceDomain::None:
-        return "none";
-    case HostPointerSequenceDomain::AbsolutePosition:
-        return "absolute-position";
-    case HostPointerSequenceDomain::ButtonTransition:
-        return "button-transition";
-    }
-    return "invalid";
-}
 
 struct HostPointerState {
     bool window_focused = false;
@@ -86,23 +44,13 @@ struct HostPointerState {
     int client_width = 0;
     int client_height = 0;
     std::uint64_t absolute_sequence = 0;
-    // Host GetTickCount64 milliseconds, not Wii time-base ticks.
-    std::uint64_t absolute_acquired_ms = 0;
-    std::uint32_t debug_flags = 0;
-    std::uint32_t debug_error = 0;
+    // The game window (HWND), to tell whether a click lands on it.
     std::uintptr_t debug_window = 0;
-};
-
-// Private host policy; not part of the generated-module ABI. Host cursor
-// identity is (domain, sequence, acquired_ms), never the sequence alone.
-enum class SyntheticKpadPointerOrigin : std::uint8_t {
-    None, PhysicalMouse, KeyboardPointer, Controller, Script, Replay,
 };
 
 using HostPointerProvider = HostPointerState (*)() noexcept;
 using HostPointerTransitionProvider = HostPointerTransitionPoll (*)(
     std::uint64_t after_sequence) noexcept;
-using HostPointerClock = std::uint64_t (*)() noexcept;
 using NativeKeyboardCaptureProvider = bool (*)() noexcept;
 using NativeSettingsVisibleProvider = bool (*)() noexcept;
 using NativeSettingsKeySink = void (*)(std::uintptr_t virtual_key) noexcept;
@@ -111,7 +59,7 @@ void install_host_pointer_provider(HostPointerProvider provider) noexcept;
 void install_host_pointer_transition_provider(
     HostPointerTransitionProvider provider) noexcept;
 // The settings overlay owns window-key navigation; while it is visible,
-// polled keyboard state is not forwarded to the guest. Null disables capture.
+// polled keyboard state is not forwarded to the game. Null disables capture.
 void install_native_keyboard_capture_provider(
     NativeKeyboardCaptureProvider provider) noexcept;
 [[nodiscard]] bool native_keyboard_capture_active() noexcept;
@@ -157,128 +105,33 @@ void note_keyboard_input() noexcept;
 // Synchronous check (settings UI only): a controller is attached now.
 [[nodiscard]] bool controller_present_now() noexcept;
 
-struct AudioSinkStats {
-    std::uint64_t initialization_attempts{};
-    std::uint64_t preinitialize_calls{};
-    std::uint64_t submit_initialization_checks{};
-    std::uint64_t submit_initialization_attempts{};
-    std::uint64_t preinitialize_elapsed_us{};
-    std::uint64_t first_submit_initialization_wait_us{};
-    std::uint32_t initialization_thread_id{};
-    std::uint32_t first_submit_thread_id{};
-    bool initialization_ready{};
-    bool preinitialized_before_guest{};
-    bool first_submit_observed{};
-    bool first_submit_initialized_backend{};
-    std::uint64_t submitted_buffers{};
-    std::uint64_t completed_buffers{};
-    std::uint64_t queue_empty_events{};
-    std::uint64_t dropped_buffers{};
-    std::uint64_t queue_wait_events{};
-    std::uint64_t total_queue_wait_ms{};
-    std::uint64_t submit_delta_events{};
-    std::uint64_t total_submit_delta_us{};
-    std::uint64_t max_submit_delta_us{};
-    std::uint64_t measurement_window_max_submit_delta_us{};
-    std::uint64_t measurement_window_accepted_buffers{};
-    std::uint64_t measurement_window_accepted_buffers_32000{};
-    std::uint64_t measurement_window_accepted_stereo_frames_32000{};
-    std::uint64_t measurement_window_accepted_buffers_48000{};
-    std::uint64_t measurement_window_accepted_stereo_frames_48000{};
-    std::uint64_t measurement_window_accepted_sample_rate_change_events{};
-    std::uint64_t measurement_window_submitted_buffers{};
-    std::uint64_t measurement_window_submitted_buffers_32000{};
-    std::uint64_t measurement_window_submitted_stereo_frames_32000{};
-    std::uint64_t measurement_window_submitted_buffers_48000{};
-    std::uint64_t measurement_window_submitted_stereo_frames_48000{};
-    std::uint64_t measurement_window_sample_rate_change_events{};
-    std::uint64_t measurement_window_started_buffers{};
-    std::uint64_t measurement_window_started_buffers_32000{};
-    std::uint64_t measurement_window_started_stereo_frames_32000{};
-    std::uint64_t measurement_window_started_buffers_48000{};
-    std::uint64_t measurement_window_started_stereo_frames_48000{};
-    std::uint64_t measurement_window_started_sample_rate_change_events{};
-    std::uint64_t measurement_window_frequency_ratio_apply_calls{};
-    std::uint64_t measurement_window_frequency_ratio_inherited_buffers{};
-    std::uint64_t measurement_window_frequency_ratio_change_actions{};
-    std::uint64_t measurement_window_frequency_ratio_apply_errors{};
-    std::uint64_t measurement_window_buffer_start_callback_core_work_count{};
-    std::uint64_t measurement_window_buffer_start_callback_core_work_total_ns{};
-    std::uint64_t measurement_window_buffer_start_callback_core_work_max_ns{};
-    std::uint64_t measurement_window_buffer_start_callback_core_work_over_1_ms{};
-    std::uint64_t measurement_window_buffer_start_callback_core_work_over_2_ms{};
-    std::uint64_t measurement_window_voice_recreation_events{};
-    std::uint64_t measurement_window_rate_drain_events{};
-    std::uint64_t measurement_window_empty_buffer_end_boundaries{};
-    std::uint64_t measurement_window_unobserved_buffer_end_boundaries{};
-    std::uint32_t measurement_window_pending_buffers{};
-    std::uint64_t measurement_window_submit_delta_events{};
-    std::uint64_t measurement_window_total_submit_delta_us{};
-    std::uint64_t measurement_window_submit_delta_over_expected{};
-    std::uint64_t measurement_window_submit_delta_over_25_ms{};
-    std::uint64_t submit_delta_over_expected{};
-    std::uint64_t submit_delta_over_25_ms{};
-    std::uint64_t submit_failure_events{};
-    std::uint64_t source_start_failure_events{};
-    std::uint64_t voice_error_events{};
-    std::uint64_t engine_critical_error_events{};
-    std::uint64_t callback_wake_error_events{};
-    std::uint64_t frequency_ratio_apply_calls{};
-    std::uint64_t frequency_ratio_change_actions{};
-    std::uint64_t frequency_ratio_apply_error_events{};
-    bool frequency_ratio_snapshot_coherent = true;
-    std::uint64_t source_voice_creation_events{};
-    std::uint64_t voice_recreation_events{};
-    std::uint64_t rate_drain_events{};
-    std::uint64_t engine_glitches_since_start{};
-    std::uint64_t measurement_window_engine_glitches{};
-    std::uint64_t pending_overflow_events{};
-    std::uint64_t empty_recovery_events{};
-    std::uint64_t total_empty_us{};
-    std::uint64_t empty_over_1_ms{};
-    std::uint64_t empty_over_5_ms{};
-    std::uint32_t queued_buffers{};
-    std::uint32_t synthetic_queued_buffers{};
-    std::uint32_t pending_buffers{};
-    std::uint32_t max_queued_buffers{};
-    std::uint32_t max_synthetic_queued_buffers{};
-    std::uint32_t max_pending_buffers{};
-    std::uint32_t max_queue_depth_delta{};
-    std::uint32_t max_queue_wait_ms{};
-    std::uint32_t max_empty_us{};
-    std::uint32_t queue_limit{};
-    std::uint32_t prebuffer_buffers{};
-};
-
 struct GamePaths {
     std::filesystem::path content_root;
 };
 
 GamePaths locate_game(const std::filesystem::path& input);
 
-// The native game's host (native/host): the live controls (bindings, keyboard and mouse, controllers) as one
-// Wii Remote input snapshot for `report_mode` (0x30..0x37), and the virtual remote's EEPROM (DPD and
-// accelerometer calibration) and Nunchuk calibration for its connection.
-// `star_pointer_mode` (-1 none) and `tilt_section` (0 none, 1 Star Ball, 2 Ray) are what the game reports: the
-// control mapping's menu or play context and the tilt steering, which v1.0.1 reads from the console's memory.
+// The live controls (bindings, keyboard and mouse, controllers) as one Wii Remote input snapshot at retrace
+// `current_vi`, and the virtual remote's EEPROM (DPD and accelerometer calibration) and Nunchuk calibration.
+// `star_pointer_mode` (-1 none) and `tilt_section` (0 none, 1 Star Ball, 2 Ray) come from the game: the control
+// mapping's menu or play context and the tilt steering.
 [[nodiscard]] galaxy::input::WiimoteInputSnapshot native_game_wiimote_snapshot(
-    std::uint8_t report_mode,
     std::uint64_t current_vi,
     bool ir_enabled,
     std::int32_t star_pointer_mode,
     std::uint8_t tilt_section);
-// The game's motor bit to the controller in use, held off in menus (the HOME Menu, pause, error) as v1.0.1 does.
-// Renew it with every input report: a motor whose state goes stale stops.
+// The game's motor bit to the controller in use, held off in menus (the HOME Menu, pause, error). Renew it with every
+// input report: a motor whose state goes stale stops.
 void native_game_rumble(bool motor_on, std::int32_t star_pointer_mode) noexcept;
 void native_game_wiimote_calibration(
     std::uint8_t (&eeprom)[0x2A],
     std::uint8_t (&nunchuk_calibration)[32]);
-// A valid, empty Mii database (RFL_DB.dat) for a NAND that has none, as v1.0.1 creates.
+// A valid, empty Mii database (RFL_DB.dat) for a NAND that has none.
 [[nodiscard]] std::vector<std::byte> native_game_empty_mii_database();
 
-// The native game's sound: the JAudio DSP program on the host (JAudioHostMixer, as v1.0.1 runs it) over the game's
-// DSP memory, which the native game keeps in the console's byte order, and the audio interface's blocks played on the
-// output device (the 1.0.1 sink: XAudio2, master volume, WAV dump, device recovery).
+// The game's sound: the JAudio DSP program run on the host (JAudioHostMixer) over the game's DSP memory, which the
+// game keeps in the console's byte order, and the audio interface's blocks played on the output device (XAudio2,
+// master volume, WAV dump).
 class NativeGameAudio {
 public:
     NativeGameAudio();
@@ -301,7 +154,7 @@ public:
     void set_paused(bool paused);
     // The game's name for the sound on a DSP channel (nebula_game_audio_channel_owner), for the volume categories.
     void set_channel_owner(std::uint32_t (*owner)(std::uint32_t channel, std::uint32_t* route));
-    // The DSP program's counters, as v1.0.1 logs them ([jaudio] ...).
+    // The DSP program's counters for the [jaudio] log line.
     [[nodiscard]] std::string stats_line() const;
 
 private:

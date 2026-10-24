@@ -1,3 +1,5 @@
+// The game's volume categories for the host's DSP mixer (jaudio_host_mixer.cpp): each DSP channel's category from
+// its sound, and the per-channel gain ramps.
 #pragma once
 
 #include <algorithm>
@@ -29,9 +31,8 @@ struct NativeAudioBusDecision {
         NativeAudioBusClassification::DeterministicSfxFallback};
 };
 
-// Galaxy's JAudio IDs store the archive section in the high byte and the
-// SoundInfo category in the next byte. Unknown IDs deliberately join SFX:
-// muting music or voices must never accidentally mute an unclassified cue.
+// The game's JAudio sound IDs hold the archive section in the high byte and the SoundInfo category in the next.
+// Unknown IDs join SFX, so muting music or voices never mutes an unclassified cue.
 [[nodiscard]] constexpr NativeAudioBusDecision
 native_audio_bus_from_sound_id(std::uint32_t sound_id) noexcept {
     const std::uint32_t section = (sound_id >> 24u) & 0xffu;
@@ -72,10 +73,8 @@ native_audio_bus_from_sound_id(std::uint32_t sound_id) noexcept {
     }
 }
 
-// If a live JAudio owner cannot be resolved, the channel encoding is the only
-// stable information carried into the DSP record. Galaxy streams/sequence
-// voices use PCM16, while ordinary effects use ADPCM or PCM8. Any unfamiliar
-// format still falls back to SFX rather than acquiring another bus by chance.
+// Without a resolved owner, the channel's sample format decides: the game's streams and sequence voices use PCM16,
+// ordinary effects ADPCM or PCM8. Any other format falls back to SFX.
 [[nodiscard]] constexpr NativeAudioBusDecision
 native_audio_bus_from_channel_format(
     std::uint16_t block_samples,
@@ -114,7 +113,7 @@ struct JAudioChannelOwner {
 inline constexpr std::uint32_t kJasDspChannelsPointer = 0x806A2BD0u;
 inline constexpr std::uint32_t kJasDspChannelSize = 0x1cu;
 
-// `read_u32(address)` returns the big-endian guest word, or 0 if unmapped.
+// `read_u32(address)` returns the big-endian word at a console address, or 0 if unmapped.
 template <class ReadU32>
 [[nodiscard]] JAudioChannelOwner resolve_jaudio_channel_owner(
     const ReadU32& read_u32,
@@ -183,9 +182,8 @@ template <class ReadU32>
     return decision;
 }
 
-// Per-bus gains. `master` multiplies each bus here; the runtime publishes 1
-// because it applies the master gain once, at the final output, so that it
-// also covers audio mixed outside these channels (the movie player).
+// Per-bus gains. `master` multiplies each bus here; the host passes 1 because it applies the master gain once, at
+// the final output, so that it also covers audio mixed outside these channels (the movie player).
 struct NativeAudioBusGains {
     float master{1.0f};
     float music{1.0f};
@@ -202,8 +200,7 @@ inline constexpr std::uint32_t kNativeAudioBusRampSamples = 320u;
 
 [[nodiscard]] inline std::uint32_t native_audio_gain_to_q16(
     float gain) noexcept {
-    // Runtime settings are sanitized too, but this boundary remains defensive
-    // because it is independently unit-testable and may receive future APIs.
+    // NaN and negative gains are silence.
     if (!(gain >= 0.0f)) {
         return 0u;
     }
@@ -212,32 +209,7 @@ inline constexpr std::uint32_t kNativeAudioBusRampSamples = 320u;
         clamped * static_cast<float>(kNativeAudioUnityGainQ16) + 0.5f);
 }
 
-// One CPU-thread publisher and one DSP-thread reader. Each channel assignment
-// and its combined gain share one atomic word, so the DSP cannot observe a bus
-// from one publication with a gain from another. The DSP snapshots once per
-// selected channel record; sample reads use only worker-owned ramp state and
-// therefore perform no atomics, locks, or allocations.
-class NativeAudioBusControls final {
-public:
-    static constexpr std::size_t kChannelCount = 64u;
-
-    NativeAudioBusControls() noexcept {
-        for (auto& channel : channels_) {
-            channel.store(
-                pack_channel(NativeAudioBus::Sfx, kNativeAudioUnityGainQ16),
-                std::memory_order_relaxed);
-        }
-    }
-
-private:
-    [[nodiscard]] static constexpr std::uint64_t pack_channel(
-        NativeAudioBus bus,
-        std::uint32_t gain_q16) noexcept {
-        return (static_cast<std::uint64_t>(bus) << 32u) | gain_q16;
-    }
-
-    std::array<std::atomic<std::uint64_t>, kChannelCount> channels_{};
-};
+inline constexpr std::size_t kNativeAudioDspChannelCount = 64u;
 
 struct NativeAudioBusRamp {
     std::uint32_t current_q16{kNativeAudioUnityGainQ16};
@@ -248,7 +220,7 @@ struct NativeAudioBusRamp {
 };
 
 struct NativeDspAudioBusState {
-    std::array<NativeAudioBusRamp, NativeAudioBusControls::kChannelCount>
+    std::array<NativeAudioBusRamp, kNativeAudioDspChannelCount>
         ramps{};
     std::uint16_t active_channel{};
     bool active_channel_valid{};
