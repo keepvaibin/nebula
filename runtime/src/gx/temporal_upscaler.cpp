@@ -1,3 +1,4 @@
+// FSR 3.1 behind TemporalUpscaler (temporal_upscaler.h).
 #include "galaxy/gx/temporal_upscaler.h"
 
 #include <array>

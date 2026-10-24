@@ -1,3 +1,4 @@
+// PostProcessor: the D3D12 presentation chain (post_process.h).
 #include "galaxy/gx/post_process.h"
 #include "galaxy/gx/renderer_d3d12.h"
 
@@ -838,8 +839,8 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
     Constants c{};
     set_post_input_size(c, source_width, source_height);
 
-    // Enlarging on both axes with sharpening: one pass straight into the target. The two-pass
-    // form wrote and read a window-sized intermediate for every presented frame.
+    // Enlarging on both axes with sharpening: enlargement and RCAS in one pass straight into the
+    // target, without a window-sized intermediate.
     if (plan.resample && plan.rcas && rcas_scaled_ && target_width >= source_width &&
         target_height >= source_height) {
         Constants s = c;

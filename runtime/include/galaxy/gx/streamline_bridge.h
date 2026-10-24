@@ -1,13 +1,12 @@
 #pragma once
 
 // NVIDIA Streamline (DLSS super resolution, DLSS Frame Generation with Reflex),
-// loaded at run time from a vendor folder the user installs: Nebula ships none
-// of NVIDIA's binaries. The
-// interposer must carry Streamline's signature; Streamline runs with manual
-// hooking (only the swap chain's presentation and the command queue pass
-// through its proxies) and without over-the-air updates. Render thread only.
-// Built without the SDK headers (GALAXY_STREAMLINE_SDK), every call reports
-// Streamline as absent.
+// loaded at run time from a vendor folder the player installs: Nebula ships
+// none of NVIDIA's binaries. The interposer must carry Streamline's signature;
+// Streamline runs with manual hooking (only the swap chain's presentation and
+// the command queue pass through its proxies) and without over-the-air
+// updates. Render thread only. Built without the SDK headers
+// (GALAXY_STREAMLINE_SDK), every call reports Streamline as absent.
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -96,7 +95,7 @@ void tag_hudless(ID3D12GraphicsCommandList* list, ID3D12Resource* hudless, unsig
 // reach `target_fps` (0: the display's refresh rate). Applied when it changes.
 void set_frame_generation(unsigned generated, bool dynamic = false, float target_fps = 0.0f) noexcept;
 // Frames the display showed per present, as Streamline last reported (1
-// without frame generation); its status bits (sl::DLSSGStatus, 0 ok).
+// without frame generation).
 [[nodiscard]] unsigned frames_presented() noexcept;
 
 }  // namespace streamline

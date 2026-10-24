@@ -9,10 +9,9 @@
 //
 // All GX draws target the offscreen EFB (color RGBA8 + depth
 // D24_UNORM_S8_UINT, which keeps 24-bit Z parity with the Wii). present()
-// aspect-fits an XFB into the swap-chain backbuffer; that blit is where
-// post-processing and ray tracing would be injected.
+// aspect-fits an XFB into the swap-chain backbuffer.
 //
-// begin_frame() is also the sole PSO-publication point: it drains the
+// begin_frame() is the sole PSO-publication point: it drains the
 // PipelineCache completion queue before any command-list recording starts.
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -63,8 +62,7 @@ namespace galaxy::gx {
 class TextureCache;
 struct TextureHandle;
 
-// Deterministic, device-free validation used by native tests so changes to the
-// runtime-compiled EFB conversion shader cannot ship with HLSL syntax errors.
+// Compiles the runtime EFB conversion shader without a device (tests).
 [[nodiscard]] bool validate_efb_conversion_shader(
     std::string& diagnostics) noexcept;
 namespace detail {
@@ -92,9 +90,8 @@ private:
 }  // namespace detail
 
 inline constexpr DXGI_FORMAT kEfbColorFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
-// The ray tracer's HDR scene EFB (the scene layer while ray tracing runs; RendererD3D12::begin_hdr_scene): the traced
-// light unclamped, sRGB-encoded past 1 as below it, until the camera pass at the scene's end turns it into the RGBA8
-// EFB's picture.
+// The ray tracer's HDR scene EFB (RendererD3D12::begin_hdr_scene): unclamped traced light, sRGB-encoded above 1 as
+// below, until the camera pass at the scene's end resolves it into the RGBA8 EFB.
 inline constexpr DXGI_FORMAT kEfbHdrColorFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
 // Motion vectors for temporal upscaling: render pixels, current -> previous.
 inline constexpr DXGI_FORMAT kMotionVectorFormat = DXGI_FORMAT_R16G16_FLOAT;
@@ -107,7 +104,7 @@ inline constexpr DXGI_FORMAT kEfbDepthSrvFormat =
     DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
 inline constexpr DXGI_FORMAT kBackbufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 
-// Builds the exact GX graphics root signature used by RendererD3D12. Root
+// Builds the GX graphics root signature used by RendererD3D12. Root
 // CBV b0 is visible to both VS and GS because native GX line/point expansion
 // reads its scale-aware raster constants in the geometry stage.
 [[nodiscard]] HRESULT create_gx_root_signature(
@@ -118,7 +115,7 @@ inline constexpr DXGI_FORMAT kBackbufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
     std::uint32_t key,
     const RenderConfig& cfg) noexcept;
 
-// Shader-visible descriptor allocator with the same per-frame segmentation.
+// Shader-visible descriptor allocator, segmented per frame in flight like the upload rings.
 class DescriptorRing {
 public:
     // Caller must have retired all GPU references to this heap.
@@ -198,8 +195,8 @@ public:
     // present-blit pipeline, and all rings.
     bool initialize(int window_width, int window_height, unsigned efb_scale);
     [[nodiscard]] std::string startup_failure() const { return {}; }
-    // Creates the EFB-peek and pointer-depth resources up front. Creating them on first
-    // use stalled the first frame that showed the pointer.
+    // Creates the EFB-peek and pointer-depth resources up front, so the first frame
+    // that shows the pointer does not stall creating them.
     void create_first_use_resources();
     void shutdown();                // full GPU drain, then release
     // A persistently mapped upload buffer; empty when it cannot be created.
@@ -210,7 +207,7 @@ public:
         const TextureHandle* handles, unsigned count, const TextureCache& cache, bool lit_table = false);
     // The texture cache records its uploads into this frame's command list.
     void attach_texture_uploads(TextureCache& cache);
-    void pump_messages();           // compatibility hook; owner pumps independently
+    void pump_messages();           // no-op: window_owner_ pumps the window's messages
     [[nodiscard]] bool quit_requested() const noexcept;
 
     // Advances the frame ring: waits on the fence of frame N-kFramesInFlight
@@ -219,20 +216,16 @@ public:
     // present(), after GX/EFB work is recorded but before the backbuffer is
     // selected, so gameplay work is not paced by DWM too early.
     void begin_frame(bool present_swap_chain = true);
-    // Closes, submits, and signals once the GPU command stream has accepted
-    // this frame. Swap-chain presentation is optional and intentionally comes
-    // after the resource fence so DWM/display pacing cannot block command
-    // allocator and upload-ring reuse.
-    // Called synchronously after successful queue signal/readback binding,
-    // before optional pacing/Present. The context is never retained.
+    // Called after the queue signal, before pacing and Present; the context is not retained.
     using SubmissionCallback = void (*)(void* context, std::uint64_t fence_value);
+    // Closes, submits and signals the frame's fence. Presenting (optional) comes after
+    // the signal so display pacing cannot delay command-allocator and upload-ring reuse.
     std::uint64_t end_frame(
         bool present_swap_chain = true,
         SubmissionCallback on_submitted = nullptr,
         void* submission_context = nullptr);
     [[nodiscard]] std::uint64_t completed_fence_value() const;
-    // Bounded wait for one exact queue signal. Used only by the explicitly
-    // synchronous renderer path; normal async rendering never drains the GPU.
+    // Bounded wait for one queue signal (the synchronous rendering path only).
     void wait_for_fence_value(std::uint64_t fence_value);
 
     // Binds EFB RTV+DSV and applies the viewport from the XF viewport regs.
@@ -265,11 +258,11 @@ public:
     // next to everything already resident.
     [[nodiscard]] bool efb_scale_fits_memory(unsigned scale) const;
 
-    // Temporal upscaling (upscaler mode 2). At the start of the guest's 3D
-    // scene: whether the temporal path runs for it and, if so, the scene's
-    // sub-pixel jitter in render pixels (applied to perspective projections).
-    // The temporal upscaler (FSR 3) is selected and available.
+    // A temporal upscaler (FSR 3 or DLSS) is selected and available.
     [[nodiscard]] bool temporal_mode() const;
+    // At the start of the guest's 3D scene: whether the temporal path runs for
+    // it and, if so, the scene's sub-pixel jitter in render pixels (applied to
+    // perspective projections).
     [[nodiscard]] bool scene_temporal_begin(float& jitter_x, float& jitter_y);
     // After a temporal scene_temporal_begin: clears the motion target for
     // the scene. False when it could not be created (no motion writers).
@@ -345,8 +338,6 @@ public:
     // never ended) writes its picture to the EFB and restores it. Sub-frames replay both.
     void begin_hdr_scene();
     void end_hdr_scene();
-    // The ray tracer's glow bloom of `slot` added to the EFB (a scene's end and its sub-frames).
-    // The cinematic finish over the EFB (a scene's end; sub-frames replay it on their picture).
     // After the translucent phases: the water drawn since the trace reflects (its composite is
     // recorded for the sub-frames' replays).
     void rt_trace_water();
@@ -566,25 +557,22 @@ public:
     // diagnostic buffers never suppress the required blit/presentation.
     bool present(const XfbTexture* source, bool capture_backbuffer = false, bool black = false);
 
-    // Bring-up diagnostics: record an EFB-to-readback copy into the current
-    // command list (call while recording). Readback and PPM encoding are
-    // polled asynchronously after end_frame(); normal rendering never drains
-    // the GPU for an opt-in capture.
+    // Reads the EFB's 640x528 depth field into `pixels`.
     [[nodiscard]] bool capture_pointer_depth(std::span<std::uint32_t> pixels);
-    // Render-owner only. Keeps shared GXPeek utility resources owned until the
-    // entire exact field has been copied by try_complete_pointer_depth_capture.
+    // Render-owner only. Keeps the shared GXPeek resources owned until
+    // try_complete_pointer_depth_capture_in_place has taken the field.
     [[nodiscard]] std::uint64_t submit_pointer_depth_capture();
     // Records the pointer depth field capture into the frame's own command
     // list at the current point of the stream (the simulation thread marks the
     // FIFO offset of the scene boundary). The readback completes at this
-    // frame's fence; try_complete_pointer_depth_capture publishes it. False
-    // while another pointer field is still owned.
+    // frame's fence; try_complete_pointer_depth_capture_in_place publishes it.
+    // False while another pointer field is still owned.
     [[nodiscard]] bool record_pointer_depth_capture_in_frame();
     [[nodiscard]] std::uint64_t pointer_depth_capture_fence() const noexcept {
         return pointer_depth_capture_fence_;
     }
-    // In place: on completion `rgba` names the mapped field (null when the
-    // readback could not be mapped; the span overload converts instead).
+    // On completion `rgba` names the mapped field (null when the readback
+    // could not be mapped).
     [[nodiscard]] bool try_complete_pointer_depth_capture_in_place(
         const std::uint8_t*& rgba);
     // Render-owner only. Asynchronous 640x528 EFB fields (depth for GXPeekZ,
@@ -655,11 +643,8 @@ public:
     [[nodiscard]] UploadRing& constant_ring() { return constant_ring_; }
     [[nodiscard]] UploadRing& matrix_ring() { return matrix_ring_; }
     [[nodiscard]] unsigned frame_slot() const { return frame_slot_; }
-    // Live bytes held by the EFB-copy destination cache, in SCALED bytes (each
-    // destination is allocated at the internal EFB extent, so its `bytes` grows with
-    // efb_scale^2 while the 192 MiB budget stays fixed). Reported against its budget so
-    // a run can show whether the pool is saturating. It is a resolution-scaled GPU pool
-    // that is not a render target.
+    // Bytes held by the EFB-copy destination cache. Destinations are allocated at the
+    // internal resolution, so this grows with efb_scale^2 against a fixed budget.
     [[nodiscard]] std::uint64_t efb_copy_dest_bytes() const {
         return efb_copy_dests_bytes_;
     }
@@ -692,32 +677,21 @@ public:
     [[nodiscard]] D3D12_GPU_DESCRIPTOR_HANDLE sampler_table_for(
         const std::uint32_t keys[8]);
 
-    // Lazily loads and uploads the native-settings-overlay corner texture
-    // (see the member comment below). Safe to call every frame -- after
-    // the first attempt (success or failure) it is a no-op. Called by the
-    // free-function draw_native_settings_overlay() (see renderer_d3d12.cpp)
-    // once it knows the panel layout, hence public rather than a private
-    // detail of this class alone.
+    // Loads and uploads the settings overlay's corner texture on the first call;
+    // later calls do nothing.
     void ensure_native_settings_corner_texture_loaded() override;
-    // Draws one textured quad (screen pixel coordinates) using the
-    // extracted-game-asset texture, with UV min/max so the same texture can
-    // be flipped/mirrored for each panel corner without four separate
-    // textures. No-op if the corner texture failed to load.
+    // Draws one quad of the corner texture (screen pixel coordinates); the UV
+    // range mirrors it for each panel corner. No-op if the texture failed to load.
     void draw_ui_textured_quad(
         int x, int y, int w, int h,
         float u0, float v0, float u1, float v1,
         const std::array<float, 4>& tint) override;
 
-    // Lazily creates the solid-fill quad root signature/PSO. Unlike the corner texture,
-    // this never depends on game assets, so it always succeeds once the device exists.
-    // Draw-call based on purpose: ClearRenderTargetView with a non-null pRects faulted
-    // inside nvwgf2umx.dll (STATUS_STACK_BUFFER_OVERRUN) on one driver build for the
-    // overlay's panel and text rects. Full-target clears (pRects == nullptr) are
-    // unaffected and still used elsewhere.
+    // Creates the solid-fill quad root signature and PSO on first use. Solid quads
+    // are draws, not rect-limited clears: ClearRenderTargetView with non-null pRects
+    // faults inside nvwgf2umx.dll (STATUS_STACK_BUFFER_OVERRUN) on some NVIDIA drivers.
     void ensure_native_settings_solid_pipeline_loaded();
-    // Draws one flat-colored quad (screen pixel coordinates) via a real
-    // draw call rather than a rect-limited clear. No-op (and does not
-    // create device resources) until first called after the device exists.
+    // Draws one flat-colored quad (screen pixel coordinates).
     void draw_ui_solid_quad(
         int x, int y, int w, int h,
         const std::array<float, 4>& color) override;
@@ -736,10 +710,8 @@ private:
     void refresh_display_rate();
     void wait_for_frame_latency_if_needed(bool collect_present_telemetry);
     void wait_for_gpu();            // shutdown/resize only
-    // Applies a pending live window resize, if one is recorded (see
-    // the coherent extent mailbox in renderer_d3d12.cpp). No-op when none is pending.
-    // Only ever called from begin_frame(), i.e. between frames with no
-    // in-flight command-list recording on this renderer.
+    // Applies a pending window resize (the extent mailbox in renderer_d3d12.cpp).
+    // Called only from begin_frame(), between command-list recordings.
     void apply_pending_resize();
     // Resizes the swap-chain buffers; `force` also when the size is unchanged
     // (required after a fullscreen transition with the flip model).
@@ -1415,7 +1387,7 @@ private:
     double subframe_gpu_ms_ = 0.0;
     std::uint64_t subframe_gpu_samples_ = 0;
     double subframe_gpu_ema_ms_ = 0.0;
-    // The same by copy path (0: guard, 1: redirected, 2: neither), for A/B runs.
+    // The same by copy path (0: guard, 1: redirected, 2: neither).
     std::array<std::uint8_t, kSubframeAllocators> subframe_timestamp_redirect_{};
     std::array<double, 3> subframe_path_gpu_ms_{};
     std::array<std::uint64_t, 3> subframe_path_gpu_samples_{};
@@ -1458,13 +1430,10 @@ private:
     PlacedTextureAllocator efb_copy_heap_{
         D3D12_HEAP_FLAG_ALLOW_ONLY_RT_DS_TEXTURES, 128ull << 20};
 
-    // Native settings overlay: the game's own window-frame corner texture (extracted
-    // read-only from files/LayoutData/FileSelect.arc; see galaxy/gx/game_asset_extract.h),
-    // drawn at all four panel corners so the overlay reads as part of Super Mario
-    // Galaxy's own UI instead of a flat placeholder rectangle. Loaded lazily and once,
-    // the first time the overlay is shown. Every part of this is optional: if the asset
-    // cannot be read or decoded (for example, a different game dump), the overlay keeps
-    // its solid-color corners.
+    // Settings overlay: the game's window-frame corner texture (read from
+    // files/LayoutData/FileSelect.arc, galaxy/gx/game_asset_extract.h), drawn at the
+    // panel's four corners. Loaded once, when the overlay is first shown; without it
+    // the overlay keeps solid-color corners.
     Microsoft::WRL::ComPtr<ID3D12RootSignature> ui_texture_root_sig_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> ui_texture_pipeline_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> ui_texture_srv_heap_;
@@ -1540,7 +1509,7 @@ private:
     bool bound_scissor_valid_ = false;
     bool bound_viewport_valid_ = false;
 
-    // Bring-up EFB readback (debug_copy_efb_to_readback / debug_log_readback).
+    // Debug EFB readback (debug_copy_efb_to_readback / debug_log_readback).
     Microsoft::WRL::ComPtr<ID3D12Resource> readback_buf_;
     bool readback_pending_ = false;
     std::uint64_t readback_fence_value_ = 0;
@@ -1626,35 +1595,18 @@ private:
         UINT height = 0;
         D3D12_CPU_DESCRIPTOR_HANDLE rtv{};
         bool rtv_valid = false;
-        // Last copy that used this destination, for the bound below. A copy
-        // destination is a pure function of its key, so dropping an entry can
-        // only cost a later re-creation; it can never change a presented pixel.
+        // Last copy that used this destination, for the bound below. A destination
+        // is a pure function of its key, so evicting one only costs a re-creation.
         std::uint64_t last_used = 0;
         // Resident bytes of `texture`, for the byte budget below.
         std::uint64_t bytes = 0;
     };
-    // Bounded. This map holds one committed D3D12 texture per destination key.
-    // Each is that copy's SCALED destination extent at kEfbColorFormat (RGBA8),
-    // so the size varies with both the copy's logical extent and the internal
-    // scale. At the full 640x456 EFB extent: 1.11 MB at 1x, 17.81 MB at 4x,
-    // 40.08 MB at 6x.
-    //
-    // Budgeted in BYTES, not entries: the per-entry cost varies with the scale
-    // AND with the copy extent, so an entry count cannot bound residency. The
-    // accounting charges the driver's own `GetResourceAllocationInfo` size rather
-    // than a computed w*h*bpp, so it follows the resource if the format changes.
-    // The default is well above the expected per-scene working set (a handful of
-    // XFBs across a couple of formats plus one bloom workspace), so a legitimate
-    // set should not thrash. Override with GALAXY_EFB_COPY_DEST_BUDGET_MB; 0 disables the bound.
-    //
-    // Without a bound, only a failed allocation or full shutdown removed an entry, so
-    // every distinct (addr, format, depth, bloom) the game copied to stayed resident for
-    // the life of the process.
-    //
-    // The adapter's reported vram-mb value on integrated graphics is a compatibility
-    // constant, not a separate memory pool: a default-heap texture is system memory
-    // either way. The bound exists because the map was unbounded, not because it
-    // oversubscribes a reported 128 MB pool; there is no such pool.
+    // One texture per destination key, at the copy's scaled extent in kEfbColorFormat
+    // (a full 640x456 copy: 1.11 MB at 1x, 17.81 MB at 4x, 40.08 MB at 6x). Bounded in
+    // bytes, not entries, since an entry's cost varies with the copy extent and the
+    // internal scale; sizes are the driver's GetResourceAllocationInfo. The default is
+    // well above a scene's working set (a few XFBs across a couple of formats plus one
+    // bloom workspace). Override with GALAXY_EFB_COPY_DEST_BUDGET_MB; 0 disables the bound.
     std::unordered_map<std::uint64_t, EfbCopyDest> efb_copy_dests_;
     std::uint64_t efb_copy_dests_tick_ = 0;
     std::uint64_t efb_copy_dests_bytes_ = 0;
@@ -1671,11 +1623,11 @@ private:
     // Interpolation: copy textures retired during a game-frame ring segment.
     std::array<RetiredResourceList, kInterpSegments> retired_segment_textures_;
 
-    // Conversion blit pipeline (root sig lives in a module static next to
-    // the present-blit one) + cached CPU-only descriptors for conversion
-    // destinations. Non-shader-visible RTV descriptors are consumed at record
-    // time, so every copy rebinds the same CPU-only scratch slot. EFB source
-    // SRVs occupy an immutable prefix of the active shader-visible heap.
+    // Conversion blit pipeline (its root signature is a module static beside the
+    // present blit's) and CPU-only descriptors for conversion destinations. RTV
+    // descriptors are consumed at record time, so every copy rebinds the same
+    // CPU-only scratch slot. EFB source SRVs occupy an immutable prefix of the
+    // active shader-visible heap.
     Microsoft::WRL::ComPtr<ID3D12PipelineState> conv_pipeline_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> conv_rtv_heap_;
     D3D12_CPU_DESCRIPTOR_HANDLE conv_scratch_rtv_{};
@@ -1683,7 +1635,7 @@ private:
     std::optional<DescriptorRing::Table> conv_efb_source_table_;
     D3D12_GPU_DESCRIPTOR_HANDLE conv_efb_color_srv_{};
     D3D12_GPU_DESCRIPTOR_HANDLE conv_efb_depth_srv_{};
-    // The masked EFB clears' pipelines (color / alpha only), per EFB sample count (log2), made at first use.
+    // The masked EFB clears (color / alpha only): shaders and pipelines, made at first use.
     Microsoft::WRL::ComPtr<ID3DBlob> clear_vs_;
     Microsoft::WRL::ComPtr<ID3DBlob> clear_ps_;
     // Per EFB variant (efb_variant: samples, then HDR).
@@ -1692,10 +1644,8 @@ private:
     Microsoft::WRL::ComPtr<ID3D12RootSignature> motion_debug_root_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> motion_debug_pipeline_;
 
-    // Synchronous GXPeekARGB/GXPeekZ bridge. Peeks execute on the render
-    // thread through a tiny 1x1 conversion target and readback buffer, so
-    // CPU EFB access observes the native D3D12 EFB without mapping the EFB
-    // aperture as fake RAM.
+    // Synchronous GXPeekARGB/GXPeekZ: the render thread copies the pixel through
+    // a 1x1 conversion target into a readback buffer.
     Microsoft::WRL::ComPtr<ID3D12CommandAllocator> peek_allocator_;
     Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> peek_command_list_;
     Microsoft::WRL::ComPtr<ID3D12Resource> peek_target_;

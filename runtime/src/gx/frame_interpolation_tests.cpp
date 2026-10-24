@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// Tests of frame interpolation, the actor-light aim and the sky-sun search.
 #include "galaxy/gx/frame_interpolation.h"
 #include "galaxy/gx/actor_lights.h"
 #include "galaxy/gx/rt_sky_sun.h"

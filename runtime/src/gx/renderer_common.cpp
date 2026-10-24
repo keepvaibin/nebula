@@ -212,7 +212,7 @@ float4 main(V v) : SV_Target {
 
 namespace {
 
-// Fullscreen triangle with UV. No vertex buffer needed.
+// Fullscreen triangle with UVs, without a vertex buffer.
 constexpr char kBlitVs[] =
     "struct V { float4 pos:SV_Position; float2 uv:TEXCOORD0; };"
     "V main(uint id:SV_VertexID){"
@@ -268,9 +268,8 @@ struct V { float4 p:SV_Position; float2 uv:TEXCOORD0; };
 float4 main(V v) : SV_Target { return t.Sample(s, v.uv) * tint; }
 )HLSL";
 
-// Flat-colored quad, draw-call based. Used by the native settings overlay's
-// panel background and text glyphs instead of a rect-limited
-// ClearRenderTargetView -- see ensure_native_settings_solid_pipeline_loaded.
+// Flat-coloured quad: the settings overlay's panel background and text glyphs
+// (ensure_native_settings_solid_pipeline_loaded).
 constexpr char kUiSolidQuadVs[] = R"HLSL(
 cbuffer C : register(b0) {
     int4 rect;
@@ -394,8 +393,7 @@ EfbConversionShaderConstants make_efb_conversion_constants(
     float fw_mid = static_cast<float>(params.filter_middle());
     float fw_low = static_cast<float>(params.filter_lower());
     if (fw_up == 0.0f && fw_mid == 0.0f && fw_low == 0.0f) {
-        // Preserve the existing startup behavior when GXInit has not yet
-        // programmed BP 0x53/0x54.
+        // BP 0x53/0x54 not programmed yet (before GXInit): the centre row alone.
         fw_mid = 64.0f;
     }
 
@@ -612,10 +610,6 @@ std::uint64_t read_megabyte_budget(
     return static_cast<std::uint64_t>(megabytes) * kMegabyte;
 }
 
-// Byte budget for the EFB-copy destination cache. It is hoisted out of the eviction site so the
-// value in use can be reported with the live bytes. The pool's allocation scales with
-// efb_scale^2 while this budget stays fixed, so it is the one resolution-scaled GPU pool that is
-// neither a render target nor visible in any recording.
 std::uint64_t efb_copy_dest_budget_bytes() {
     static const std::uint64_t bytes = read_megabyte_budget(
         "GALAXY_EFB_COPY_DEST_BUDGET_MB", UINT64_C(192) << 20, false);
@@ -662,8 +656,8 @@ void PresentPacer::reset() noexcept {
     timer_tried_ = false;
 }
 
-// The present pacer spins (yields) only for its last 0.2 ms: Battlerock 1080p, render thread 197 ms/s with the
-// yield loop for the whole wait, 99 ms/s with the timer alone (median worst interval 16.82 -> 17.18 ms).
+// The pacer yields only for the last 0.2 ms before a target and sleeps before that: yielding through the
+// whole wait costs the render thread about twice the CPU time.
 constexpr double kPaceSpinMs = 0.2;
 
 #if defined(_WIN32)
@@ -705,10 +699,10 @@ void PresentPacer::sleep_before(double remaining_ms) {
 #endif
 
 double PresentPacer::pace(unsigned vsync_interval, float max_fps) {
-    // Runtime gameplay is paced by the native VI scheduler. A tiny bounded
-    // render-thread delay can still smooth the handoff to DXGI when the VI edge
-    // arrives a little early; keep it capped so it cannot become a producer
-    // throttle or hide missing XFBs with duplicated presents.
+    // Gameplay is paced by the VI scheduler. A bounded render-thread wait
+    // smooths the handoff to DXGI when a VI edge arrives a little early; the cap
+    // keeps it from throttling the producer or hiding missing XFBs behind
+    // duplicated presents.
     const bool realtime_paced = realtime_vi_paces_present();
     const std::uint64_t realtime_wait_cap_us =
         realtime_paced && smooth_realtime_present_enabled()

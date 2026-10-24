@@ -1,8 +1,7 @@
 #pragma once
 
-// Monitors and their display modes, for the display settings (monitor,
-// fullscreen resolution and refresh rate) and the internal-resolution cap.
-// The monitor list is Windows-only; no D3D12.
+// Monitors and their display modes, for the display settings (monitor, fullscreen resolution and refresh rate) and
+// the internal-resolution cap. The monitor list is Windows-only.
 
 #if defined(_WIN32)
 #ifndef WIN32_LEAN_AND_MEAN
@@ -58,7 +57,7 @@ struct MonitorInfo {
 // Primary monitor first, then the others in desktop order (left to right).
 [[nodiscard]] std::vector<MonitorInfo> enumerate_monitors();
 
-// The monitor with this device name, else the primary, else null.
+// The monitor with this device name, else the primary, else the first; null when there is none.
 [[nodiscard]] const MonitorInfo* find_monitor(
     const std::vector<MonitorInfo>& monitors, std::wstring_view device);
 

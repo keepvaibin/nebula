@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// Affine transform math and the per-scene transform matching (transform_history.h).
 #include "galaxy/gx/transform_history.h"
 
 #include "galaxy/motion_signals.h"

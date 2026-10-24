@@ -9,10 +9,10 @@
 // Identity comes from the game: draw-identity markers name the object that
 // draws (J3D shape packet, NameObj, JPA emitter or particle) and a record's
 // identity is that marker with the number of matrix loads since it. Records
-// with an identity match the previous record of the same identity exactly.
-// Without markers (a module older than generation 19) the match is a render
-// signature (vertex/pixel shader keys, position array base, vertex
-// descriptor) plus the nearest previous record by eye-space translation.
+// with an identity match the previous record of the same identity exactly;
+// records without one match by render signature (vertex/pixel shader keys,
+// position array base, vertex descriptor) and the nearest previous record by
+// eye-space translation.
 // No allocation in steady state; no Windows/D3D12 includes (unit-tested).
 
 #include <array>

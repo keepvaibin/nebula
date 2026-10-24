@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// Tests of the affine helpers and the TransformHistory matching.
 #include "galaxy/gx/transform_history.h"
 
 #include <cmath>

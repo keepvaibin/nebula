@@ -103,9 +103,7 @@ struct EfbClearValues {
     std::uint32_t ar, std::uint32_t gb, std::uint32_t z24,
     std::uint8_t pixel_format) noexcept;
 
-// Exact 16-dword root-constant payload consumed by the EFB conversion shader.
-// Exposed so device-only validation can exercise the production shader and
-// the production clamp/coefficient setup without creating a game window.
+// The EFB conversion shader's root constants (16 dwords).
 struct EfbConversionShaderConstants {
     std::array<float, 16> values{};
 };
@@ -151,9 +149,9 @@ static_assert(sizeof(UiSolidQuadConstants) == 13u * sizeof(std::uint32_t));
     unsigned logical_efb_height,
     unsigned reduction_width = 0u) noexcept;
 
-// Builds the production 1x1 GXPeek conversion payload. Color peeks box-reduce
-// the complete scaled logical-pixel block; depth peeks address the exact
-// point-selected physical texel recorded in EfbPeekSamplingGeometry.
+// The 1x1 GXPeek conversion constants. Color peeks box-reduce the complete
+// scaled logical-pixel block; depth peeks address the exact point-selected
+// physical texel recorded in EfbPeekSamplingGeometry.
 [[nodiscard]] EfbConversionShaderConstants make_efb_peek_conversion_constants(
     const EfbPeekSamplingGeometry& sampling,
     EfbPeekKind kind) noexcept;
@@ -204,16 +202,16 @@ public:
 private:
     std::int64_t frequency_ = 0;
     std::int64_t last_qpc_ = 0;
-    // A high-resolution waitable timer (Windows 10 1803+): it sleeps to the target instead of spinning on
-    // SwitchToThread, which cost the render thread about 100 ms of CPU a second. Null: Sleep and yield.
+    // A high-resolution waitable timer (Windows 10 1803+), so a wait sleeps instead of spinning on
+    // SwitchToThread. Null: Sleep and yield.
     void* timer_ = nullptr;
     bool timer_tried_ = false;
     // Sleeps toward a target `remaining_ms` away, waking kPaceSpinMs early; yields when closer.
     void sleep_before(double remaining_ms);
 };
 
-// One fully resolved draw.  The renderer sets PSO / root arguments only when
-// they differ from the previous draw (cheap CPU-side batching).
+// One fully resolved draw. The renderer sets the pipeline and root arguments
+// only where they differ from the previous draw.
 struct DrawCall {
     gpu::Pipeline* pipeline = nullptr;
     gpu::Address vs_constants = 0;   // root CBV b0

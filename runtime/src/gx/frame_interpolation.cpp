@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// Camera, transform, palette, light and colour interpolation between two game frames (frame_interpolation.h).
 #include "galaxy/gx/frame_interpolation.h"
 
 #include <algorithm>

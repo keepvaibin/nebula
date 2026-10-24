@@ -1,5 +1,8 @@
 #pragma once
 
+// The owner of the game window: a thread that creates it, runs its message loop and destroys it (Win32), or the
+// window the SDL host lends the renderer.
+
 #if !defined(_WIN32)
 namespace galaxy::gx {
 // The game window's owner on SDL platforms: the host creates the window on its main thread (platform/sdl) and lends
@@ -35,8 +38,8 @@ struct WindowOwnerConfig {
     bool show{};
 };
 
-// Owns HWND creation, native modal loops and destruction, independent of guest
-// execution and GPU recording. The consumer calls start/stop.
+// Creates the window on its own thread and runs its message loop there (native modal loops included), independent of
+// the game and render threads; stop destroys it on that thread.
 class WindowOwner {
 public:
     WindowOwner() = default;

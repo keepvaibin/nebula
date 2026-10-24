@@ -1,3 +1,5 @@
+// The rendering settings: config.ini loading and saving, the GALAXY_<KEY> overrides, and the data folders beside
+// config.ini.
 #include "galaxy/gx/render_config.h"
 #include "galaxy/atomic_file.h"
 #include "galaxy/platform_paths.h"
@@ -29,7 +31,7 @@ namespace galaxy::gx {
 
 namespace {
 
-// Full replacement and snapshots are protected by the same lock.
+// Guarded by s_lock.
 static RenderConfig s_config{};
 static unsigned s_next_start_efb_scale = 1u;
 static RenderFeatureCaps s_feature_caps{};
@@ -53,10 +55,6 @@ static std::uint64_t file_write_time(const std::filesystem::path& path) noexcept
     return path.empty() || error ? 0u : static_cast<std::uint64_t>(time.time_since_epoch().count());
 #endif
 }
-
-// ---------------------------------------------------------------------------
-// Minimal key=value INI parser
-// ---------------------------------------------------------------------------
 
 static void trim(char* s, std::size_t len, char* out, std::size_t out_cap) {
     const char* p = s;
@@ -271,8 +269,7 @@ static void parse_ini(FILE* f, RenderConfig& cfg) {
     char line[512];
     while (std::fgets(line, sizeof(line), f)) {
         if (std::strchr(line, '\n') == nullptr && !std::feof(f)) {
-            // A physical overlong record is ignored as a whole. Its suffix
-            // must not become another setting on the next fgets call.
+            // An overlong line is skipped whole, so its tail does not read as another setting.
             int c;
             do { c = std::fgetc(f); } while (c != '\n' && c != EOF);
             continue;
@@ -356,8 +353,7 @@ static void apply_env_overrides(RenderConfig& cfg) {
 }
 
 static void clamp_unimplemented_features(RenderConfig& cfg) {
-    // Keep config/env keys parseable for forward compatibility, but never let
-    // the live renderer claim unsupported paths are active.
+    // Clamps every value into its range; settings the renderer does not implement stay parseable but off.
     cfg.efb_scale = std::clamp(cfg.efb_scale, 1u, kMaxEfbScale);
     cfg.vsync_interval = std::clamp(cfg.vsync_interval, 0u, 2u);
     cfg.swap_chain_frame_latency =
@@ -374,8 +370,7 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.temporal_quality = std::min(cfg.temporal_quality, 4u);
     cfg.spatial_quality = std::min(cfg.spatial_quality, 4u);
     cfg.sharpness = std::min(cfg.sharpness, 100u);
-    // Win32 client geometry is signed-int based even though DXGI dimensions
-    // are UINT. Keep direct API callers inside the common representable range.
+    // Win32 client geometry is int while DXGI's is UINT: keep sizes representable in both.
     constexpr unsigned kMaxWindowDimension =
         static_cast<unsigned>(std::numeric_limits<int>::max());
     cfg.window_width = std::clamp(cfg.window_width, 1u, kMaxWindowDimension);
@@ -450,12 +445,11 @@ static std::filesystem::path config_path() {
         override_path.resize(copied);
         return std::filesystem::path(override_path);
     }
-    // An explicitly empty or failed override must never redirect a save into
-    // the user's default configuration by accident.
+    // An empty or unreadable override never falls back to the default config.ini.
     if (GetLastError() != ERROR_ENVVAR_NOT_FOUND) return {};
 
 #else
-    // An explicitly empty override must never redirect a save into the user's default configuration.
+    // An empty override never falls back to the default config.ini.
     if (const char* override_path = std::getenv("GALAXY_RENDER_CONFIG_PATH"); override_path != nullptr) {
         return override_path[0] != '\0' ? std::filesystem::path(override_path) : std::filesystem::path{};
     }
@@ -465,10 +459,6 @@ static std::filesystem::path config_path() {
 }
 
 }  // namespace
-
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
 
 RenderConfig get_render_config() {
     s_lock.lock_shared();
@@ -673,9 +663,8 @@ bool save_render_config_to_file() {
     if (path.empty()) {
         return false;
     }
-    // The game never chooses the GPU: it writes back the gpu the file names now, which Nebula Settings may
-    // have changed since the game last read it (the in-game menu was open, or the change is younger than
-    // the next check).
+    // The game never chooses the GPU: it writes back the gpu the file names now, which Nebula Settings may have
+    // changed since the game last read it.
     {
         if (FILE* f = galaxy::open_path(path, "r"); f != nullptr) {
             RenderConfig file{};

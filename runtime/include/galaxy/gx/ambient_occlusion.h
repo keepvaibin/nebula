@@ -1,5 +1,7 @@
 #pragma once
 
+// Ambient occlusion of the D3D12 renderer's 3D scene.
+
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif

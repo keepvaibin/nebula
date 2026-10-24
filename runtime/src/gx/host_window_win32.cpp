@@ -89,7 +89,7 @@ constexpr bool kStreamlineBuilt = true;
 constexpr bool kStreamlineBuilt = false;
 #endif
 
-// DLSS before it is installed (defined after the adapter selection below).
+// DLSS offered before it is installed (defined below).
 bool dlss_offered();
 bool dlss_installed_now();
 bool frame_generation_offered();
@@ -251,11 +251,10 @@ std::atomic<bool> s_native_settings_save_error{false};
 std::atomic<unsigned> s_native_settings_tab{0};
 std::atomic<unsigned> s_native_settings_row{0};
 
-// Settings menu draft. Display and graphics rows edit s_settings_draft; Enter
-// (Y on a controller) applies it, Backspace (X) reverts it and closing the
-// menu discards it. Audio rows change the live mix. A display change
-// (monitor, mode, resolution, refresh rate) stays only when it is kept within
-// kDisplayConfirmMs. All guarded by s_native_settings_mutex.
+// Settings menu draft. Display and graphics rows edit s_settings_draft; Enter (Y on a controller) applies it,
+// Backspace (X) reverts it and closing the menu discards it. Audio rows change the live mix. A display change
+// (monitor, mode, resolution, refresh rate) stays only when it is kept within kDisplayConfirmMs. All guarded by
+// s_native_settings_mutex.
 RenderConfig s_settings_draft{};
 std::vector<MonitorInfo> s_settings_monitors;
 std::uint64_t s_display_confirm_deadline_ms = 0u;
@@ -263,9 +262,8 @@ RenderConfig s_display_confirm_previous{};
 std::uint64_t s_settings_applied_ms = 0u;
 constexpr std::uint64_t kDisplayConfirmMs = 15000u;
 
-// The display driver's monitors and modes, read at start and again when Windows reports a display change
-// (WM_DISPLAYCHANGE): reading them takes the driver tens of milliseconds on some PCs, which opening the
-// settings menu (under the lock the render thread takes) must not wait on.
+// The display driver's monitors and modes, read at start and on WM_DISPLAYCHANGE: enumerating them can take tens of
+// milliseconds, which opening the settings menu (under the lock the render thread takes) must not wait on.
 std::mutex s_monitor_cache_mutex;
 std::vector<MonitorInfo> s_monitor_cache;
 
@@ -283,11 +281,10 @@ std::vector<MonitorInfo> cached_monitors() {
     return s_monitor_cache;
 }
 
-// CONTROLS page (tab 2): a draft of the bindings/tuning and of the input
-// source, applied together with the other pages. The edited device (keyboard
-// and mouse or an attached controller) selects the scheme whose table the rows
-// show. A binding row waiting for an input is s_capture_target
-// (kWiiTargetCount: none). Guarded by s_native_settings_mutex.
+// CONTROLS page (tab 2): a draft of the bindings/tuning and of the input source, applied together with the other
+// pages. The edited device (keyboard and mouse or an attached controller) selects the scheme whose table the rows
+// show. A binding row waiting for an input is s_capture_target (kWiiTargetCount: none). Guarded by
+// s_native_settings_mutex.
 constexpr unsigned kControlsTab = 2u;
 galaxy::input::ControlsConfig s_controls_draft = galaxy::input::default_controls_config();
 RuntimeInputMode s_input_mode_draft = RuntimeInputMode::Auto;
@@ -452,10 +449,9 @@ unsigned settings_refresh_hz(const RenderConfig& render) {
     return monitor != nullptr ? monitor->current.refresh_hz : 0u;
 }
 
-// GRAPHICS > FRAME RATE. INTERPOLATION OFF presents the game's own frames (FRAME RATE LIMIT 30
-// or 60); NATIVE adds Nebula's interpolated frames up to the TARGET FRAME RATE; DLSS FRAME
-// GENERATION has NVIDIA's generated frames reach it. The target is max_fps (0: the display's
-// refresh rate); frame_generation selects DLSS.
+// GRAPHICS > FRAME RATE. INTERPOLATION OFF presents the game's own frames (FRAME RATE LIMIT 30 or 60); NATIVE adds
+// Nebula's interpolated frames up to the TARGET FRAME RATE; DLSS FRAME GENERATION has NVIDIA's generated frames reach
+// it. The target is max_fps (0: the display's refresh rate); frame_generation selects DLSS.
 enum class Interpolation : unsigned { kOff, kNative, kFrameGeneration };
 
 Interpolation interpolation_of(const RenderConfig& render) {
@@ -1564,9 +1560,8 @@ void invalidate_pointer_focus_once() noexcept {
 }
 
 void clear_pointer_window_state(HWND hwnd) noexcept {
-    // Focus/capture ownership controls buttons, not pointer geometry. The
-    // global cursor poll remains authoritative while this HWND is unfocused;
-    // only WM_MOUSELEAVE or an actual outside sample may publish sensor loss.
+    // Losing focus or capture releases the buttons, not the pointer: the cursor poll stays authoritative while the
+    // window is unfocused, and only WM_MOUSELEAVE or a sample outside the window reports the pointer lost.
     clear_pointer_buttons();
     if (hwnd != nullptr && GetCapture() == hwnd) {
         ReleaseCapture();
@@ -1601,11 +1596,9 @@ bool seed_pointer_from_client(
                 });
         });
 
-    // A stationary cursor already inside the game window may not generate WM_MOUSEMOVE after
-    // launch, resize, or refocus. The geometry seed above is inactive, so acquire the real local
-    // cursor here and publish it with the same compare-before-publish rule used by the normal
-    // first-poll fallback. Without this, the synthetic valid/outside seed can mask
-    // native_runtime's independent cursor recovery indefinitely.
+    // A stationary cursor inside the window sends no WM_MOUSEMOVE after launch, resize or refocus, and the seed above
+    // is inactive: publish the real cursor now, with the first-poll fallback's compare-before-publish rule, so the
+    // synthetic seed does not stand in for it.
     const bool remote_session = GetSystemMetrics(SM_REMOTESESSION) != 0;
     const auto poll_authority =
         galaxy::host::select_host_pointer_cursor_poll_authority(
@@ -1674,7 +1667,7 @@ AcquiredHostPointerCoordinates update_pointer_absolute(
         height,
     };
     const std::uint64_t now_ms = static_cast<std::uint64_t>(GetTickCount64());
-    // Preserve queued acquisition time instead of refreshing it at dispatch.
+    // The time the message was queued, not dispatched.
     const DWORD message_age = static_cast<DWORD>(now_ms) -
         static_cast<DWORD>(GetMessageTime());
     const std::uint64_t pointer_now_ms = message_age <= 0x7fffffffu && message_age <= now_ms
@@ -1724,9 +1717,8 @@ bool input_message_injected() noexcept {
     return GetCurrentInputMessageSource(&source) && source.originId == IMO_INJECTED;
 }
 
-// While the game window is in front the display stays on and the PC stays
-// awake: Windows does not count controller input as activity. Window thread
-// only.
+// While the game window is in front the display stays on and the PC stays awake: Windows does not count controller
+// input as activity. Window thread only.
 void hold_display_on(bool hold) noexcept {
     static const HANDLE request = [] {
         REASON_CONTEXT reason{};
@@ -1832,12 +1824,9 @@ std::array<std::uint8_t, 7> ui_glyph(char ch) {
     }
 }
 
-// Draw-call based (see ensure_native_settings_solid_pipeline_loaded). ClearRenderTargetView with a
-// rect list (NumRects > 0) faulted inside nvwgf2umx.dll with STATUS_STACK_BUFFER_OVERRUN on an
-// RTX 5090 (driver 32.0.15.9597). That fail-fast bypasses this process's SEH and terminate handlers.
-// The fault reproduced at the same offset with a batch size of 48 and with the corner texture path
-// off, so the trigger is the rect-limited clear itself. Full-target clears (NumRects == 0,
-// pRects == nullptr) are unaffected and still used elsewhere in this file.
+// A drawn quad, not ClearRenderTargetView with a rect list: rect-limited clears fault inside the NVIDIA driver
+// (nvwgf2umx.dll, STATUS_STACK_BUFFER_OVERRUN, driver 32.0.15.9597), a fail-fast that bypasses the process's SEH
+// and terminate handlers. Full-target clears are unaffected.
 void ui_rect(
     UiCanvas& renderer,
     int x,
@@ -1880,7 +1869,7 @@ void ui_text(
             return bitmap;
         };
         if (ch == kGlyphNTilde) {
-            // Two rows of tilde, one row clear of the N: squeezed into the cell, it read as a plain N.
+            // A two-row tilde above the cell, one row clear of the N: squeezed into the cell it reads as a plain N.
             static const std::uint64_t tilde = bitmap_of({0x0Du, 0x16u, 0x00u, 0x00u, 0x00u, 0x00u, 0x00u});
             renderer.draw_ui_glyph(cursor_x, y - 3 * scale, scale, tilde, color);
         }
@@ -3220,8 +3209,8 @@ bool dlss_installed_now() {
     return s_dlss_installed_now && !streamline::dlss_supported();
 }
 
-// DLSS Frame Generation (DISPLAY: FRAME GENERATION): offered while it runs, or with DLSS once its
-// plugins are installed (it loads when the game starts with it on).
+// DLSS Frame Generation (GRAPHICS > INTERPOLATION): offered while it runs, or with DLSS once its plugins are
+// installed (it loads when the game starts with it on).
 bool frame_generation_offered() {
     if (streamline::frame_generation_supported()) {
         return true;
@@ -3238,9 +3227,8 @@ bool frame_generation_offered() {
     return installed && streamline::dlss_supported();
 }
 
-// DLSS chosen before it is installed is not applied: the menu asks to
-// download it. Once downloaded this session it applies and runs after a
-// restart (FSR 1 until then).
+// DLSS chosen before it is installed is not applied: the menu asks to download it. Once downloaded this session it
+// applies and runs after a restart (FSR 1 until then).
 bool dlss_hold_back(RenderConfig& applied, const RenderConfig& live) {
     if (applied.upscaler != 3u || live.upscaler == 3u || !dlss_offered() || s_dlss_installed_now) {
         return false;
@@ -3355,10 +3343,9 @@ std::string dlss_footer(std::uint64_t now_ms, bool& error) {
 
 namespace host_window {
 
-// The internal resolution that fills the display: the smallest scale whose
-// 640x456 game picture covers the monitor's current mode, or the swap chain
-// in exclusive fullscreen. Higher scales cost GPU time and memory without
-// adding pixels the display can show.
+// The internal resolution that fills the display: the smallest scale whose 640x456 game picture covers the monitor's
+// current mode, or the swap chain in exclusive fullscreen. Higher scales cost GPU time and memory without adding
+// pixels the display can show.
 unsigned display_efb_scale_cap() {
     UINT width = 0u;
     UINT height = 0u;
@@ -3523,9 +3510,8 @@ OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_h
     OpenedWindow opened;
     quit_request.store(false, std::memory_order_release);
     const bool hidden_window = hidden_window_mode_enabled();
-    // The configured monitor and display mode. Exclusive fullscreen starts as
-    // borderless on that monitor; the first frame's display check switches
-    // the mode once the swap chain exists. Hidden test windows stay windowed.
+    // The configured monitor and display mode. Exclusive fullscreen starts as borderless on that monitor; the first
+    // frame's display check switches the mode once the swap chain exists. Hidden test windows stay windowed.
     const RenderConfig start_config = get_render_config();
     const unsigned start_mode = hidden_window
         ? kDisplayWindowed : std::min(start_config.display_mode, kDisplayExclusive);
@@ -3576,15 +3562,13 @@ OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_h
     backbuffer_width   = static_cast<UINT>(actual_window_width);
     backbuffer_height  = static_cast<UINT>(actual_window_height);
 
-    // Win32 window.
     {
         WNDCLASSEXW wc{};
         wc.cbSize        = sizeof(wc);
         wc.style         = CS_HREDRAW | CS_VREDRAW;
         wc.lpfnWndProc   = wnd_proc;
         wc.hInstance     = GetModuleHandleW(nullptr);
-        // Keep a normal class cursor whenever the unfocused window receives
-        // hit testing. WM_SETCURSOR hides it only while this game owns focus.
+        // The arrow while the window is unfocused; WM_SETCURSOR hides it while the game has focus.
         wc.hCursor       = LoadCursorA(nullptr, IDC_ARROW);
         wc.hIcon         = static_cast<HICON>(LoadImageW(wc.hInstance, MAKEINTRESOURCEW(1), IMAGE_ICON,
             GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), LR_DEFAULTCOLOR));
@@ -3627,11 +3611,8 @@ OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_h
         settings_window.store(
             reinterpret_cast<std::uintptr_t>(opened.window), std::memory_order_release);
         borderless_active.store(fullscreen_window, std::memory_order_release);
-        // A centered geometry seed is not evidence that the OS cursor is in
-        // the client. The first real message or authoritative cursor poll
-        // acquires visibility.
-        // The owner publishes real geometry/input through WM_SIZE/WM_SETFOCUS.
-        // Do not reseed from this thread after it has begun processing messages.
+        // No pointer seed from this thread: the window thread publishes geometry and input through WM_SIZE and
+        // WM_SETFOCUS, and the first real message or cursor poll places the pointer.
         opened.shown = !hidden_window;
     }
     return opened;
@@ -3751,7 +3732,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == WM_EXITSIZEMOVE &&
         !host_window::borderless_active.load(std::memory_order_acquire) &&
         !host_window::exclusive_fullscreen_active.load(std::memory_order_acquire)) {
-        // A window size the user dragged to becomes the windowed size.
+        // A size the player drags the window to becomes the windowed size.
         RECT client{};
         if (GetClientRect(hwnd, &client) && client.right > 0 && client.bottom > 0) {
             RenderConfig render = get_render_config();
@@ -3928,10 +3909,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
     if (msg == WM_SIZE) {
         seed_pointer_from_client(hwnd, false);
-        // wp == SIZE_MINIMIZED collapses the client rect to a bogus 0x0 (or
-        // near-0) size; ignore it rather than requesting a degenerate resize
-        // that would fail ResizeBuffers and leave the swap chain untouched
-        // until the next real WM_SIZE anyway.
+        // Minimizing reports a 0x0 (or near-0) client, which ResizeBuffers would refuse.
         if (wp != SIZE_MINIMIZED) {
             const int new_width = LOWORD(lp);
             const int new_height = HIWORD(lp);
@@ -4098,14 +4076,8 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
     ui_rect(renderer, panel_x, panel_y, panel_w, panel_h, panel);
     ui_rect(renderer, panel_x, panel_y, 6, panel_h, rail);
 
-    // Corner decoration lifted from the game's own file-select window frame
-    // (see galaxy/gx/game_asset_extract.h) so the panel reads as part of
-    // Super Mario Galaxy's own UI rather than a flat placeholder. The
-    // source texture is one rounded top-left corner; the other three
-    // corners reuse it mirrored via UV min/max, so a single small texture
-    // covers the whole panel border. Silently does nothing if the asset
-    // couldn't be loaded (a different game dump, etc.) -- the solid rect
-    // above already stands on its own.
+    // Corners from the game's own file-select window frame (game_asset_extract.h): one rounded top-left corner,
+    // mirrored through the UVs for the other three. Nothing is drawn when the texture could not be loaded.
     renderer.ensure_native_settings_corner_texture_loaded();
     {
         constexpr int kCornerPx = 20;
@@ -4140,8 +4112,8 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
     const char* tabs[] = {"DISPLAY", "GRAPHICS", "CONTROLS", "AUDIO", "GENERAL", "MODS", "SYSTEM"};
     static_assert(std::size(tabs) == kNativeSettingsTabCount);
     int tab_x = panel_x + 28;
-    // The labels share the panel width; the longest is eight 6-unit glyphs
-    // plus a gap, so the label scale shrinks on narrow panels.
+    // The labels share the panel width; the longest is eight 6-unit glyphs plus a gap, so the label scale shrinks on
+    // narrow panels.
     const int tab_step = (panel_w - 56) / static_cast<int>(kNativeSettingsTabCount);
     const int tab_scale = std::clamp(tab_step / 54, 1, scale);
     for (unsigned i = 0; i < kNativeSettingsTabCount; ++i) {
@@ -4363,8 +4335,7 @@ void draw_home_menu(UiCanvas& renderer) {
     }
 }
 
-// For the first seconds of a session, until the overlay is first opened, a
-// one-line hint names the keys that open it.
+// For the first seconds of a session, until the overlay is first opened, a one-line hint names the keys that open it.
 void draw_native_settings_hint(UiCanvas& renderer) {
     static std::uint64_t s_hint_until_ms = 0u;
     static bool s_hint_done = false;
@@ -4463,17 +4434,17 @@ HostPointerState poll_host_pointer_state() noexcept {
     state.absolute_acquired_ms = cached_snapshot.absolute_acquired_ms;
     if (s_system_menu_active.load(std::memory_order_acquire) ||
         host_window::move_size_active.load(std::memory_order_acquire)) {
-        // Native modal interaction has released guest button ownership.
-        // Do not let the authoritative cursor poll reacquire focus inside it.
+        // A system menu or move/size loop owns the mouse: the game sees no buttons, and the cursor poll does not take
+        // the pointer back meanwhile.
         state.left_button = false;
         state.right_button = false;
         return state;
     }
 
-    // Prefer real client-area mouse messages over frame-time cursor polling. On Remote Desktop and some
-    // cursor-hidden paths, GetCursorPos can report a stale centered position for long stretches while
-    // WM_MOUSEMOVE still carries the live client coordinates. The seed path does not increment the event
-    // sequence; startup centering is inactive until a real cursor acquisition succeeds.
+    // Client-area mouse messages win over the per-frame cursor poll: on Remote Desktop and with a hidden cursor,
+    // GetCursorPos can report a stale centered position for long stretches while WM_MOUSEMOVE carries the live
+    // coordinates. The seed does not advance the event sequence, so startup centering stays inactive until a real
+    // cursor sample arrives.
     const std::uint64_t event_seq = cached_snapshot.event_sequence;
     const std::uint64_t leave_seq = cached_snapshot.leave_sequence;
     const bool cached_inside = cached_snapshot.coordinates.inside_client;
@@ -4549,17 +4520,14 @@ HostPointerState poll_host_pointer_state() noexcept {
                     if (likely_stale_center_poll) {
                         state.debug_flags |= kPointerDebugRejectedStaleCenter;
                     }
-                    // RDP behavior varies by host: on some sessions
-                    // GetCursorPos trails WM_MOUSEMOVE, while on others the
-                    // client message stream stalls. Let cursor polling take
-                    // over once the last client message is no longer fresh,
-                    // but keep rejecting the known stale-centered sample.
+                    // Under Remote Desktop GetCursorPos trails WM_MOUSEMOVE on some hosts while on others the
+                    // messages stall: the poll takes over once the last client message is no longer fresh, still
+                    // rejecting the stale centered sample.
                     const bool cursor_poll_recovers_visibility =
                         (!cached_inside && !recent_client_move) ||
                         event_seq <= leave_seq;
-                    // Local polling is authoritative at the native input
-                    // cadence. Adaptive remote polling becomes authoritative
-                    // only after the client-message coordinate has aged out.
+                    // Local polling is authoritative at the input cadence; adaptive remote polling only once the
+                    // client-message coordinate has aged out.
                     const galaxy::host::HostPointerCursorPollSelection
                         cursor_poll_selection =
                             galaxy::host::select_host_pointer_cursor_poll({
@@ -4602,10 +4570,8 @@ HostPointerState poll_host_pointer_state() noexcept {
                                                           PublishedInside;
                                 });
                         if (publication_accepted) {
-                            // Only a poll that won the snapshot publication
-                            // race becomes the accepted baseline. Rejected or
-                            // superseded candidates must remain eligible after
-                            // the authority/stale-center timeout expires.
+                            // Only a poll that won the publication becomes the baseline; rejected or
+                            // superseded samples stay eligible once the authority/stale-center timeout expires.
                             s_pointer_last_cursor_poll_x.store(
                                 cursor_x, std::memory_order_relaxed);
                             s_pointer_last_cursor_poll_y.store(
@@ -4642,9 +4608,8 @@ HostPointerState poll_host_pointer_state() noexcept {
                     }
                 }
             }
-            // WndProc can publish a newer movement, leave, or resize while
-            // GetCursorPos/ScreenToClient is in flight. A rejected cursor
-            // candidate must not return the older cached tuple to HID.
+            // The window procedure may have published a newer move, leave or resize during
+            // GetCursorPos/ScreenToClient: report the latest snapshot, not the older cached one.
             const galaxy::host::HostPointerSnapshot final_snapshot =
                 s_pointer_snapshot.snapshot();
             state.client_width = final_snapshot.coordinates.client_width;

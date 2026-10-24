@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// Post-processing settings, pass planning, FSR 1 constants, the AA self-test and the overlay's status text.
 #include "galaxy/gx/post_process_settings.h"
 #include "galaxy/gx/render_config.h"
 
@@ -186,7 +187,7 @@ std::string post_process_caps_text(const PostProcessStatus& status) {
 }
 
 #if defined(NEBULA_GPU_VULKAN)
-// Temporal upscaling is D3D12-only so far (temporal_upscaler.cpp).
+// Temporal upscaling is D3D12 only (temporal_upscaler.cpp).
 bool fsr3_available() noexcept { return false; }
 #endif
 

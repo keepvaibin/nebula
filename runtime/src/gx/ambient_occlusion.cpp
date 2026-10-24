@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// AmbientOcclusion: GTAO from the EFB depth, multiplied into the scene colour (ambient_occlusion.h).
 #include "galaxy/gx/ambient_occlusion.h"
 
 #include "galaxy/gx/renderer_d3d12.h"
