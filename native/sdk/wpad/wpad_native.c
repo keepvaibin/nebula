@@ -34,6 +34,8 @@ typedef struct {
     _Atomic u32 head; /* next write (host) */
     _Atomic u32 tail; /* next read (simulation) */
     _Atomic int connectEvent; /* 1 connect, 2 disconnect, 0 none */
+    _Atomic u32 shakeHeld;        /* nebula_game_wpad_shake's bits */
+    _Atomic u32 shakePresses[2];  /* presses not yet taken: the remote's, the Nunchuk's */
     u8 eeprom[0x2A];
     u8 extCalibration[32];
     u32 pendingDevType;
@@ -107,6 +109,27 @@ NEBULA_GAME_API void nebula_game_wpad_report(uint32_t chan, const uint8_t* repor
     r->pointerY = pointer != NULL ? pointer->y : 0.0f;
     atomic_store_explicit(&c->head, head + 1, memory_order_release);
     nebula_raise_interrupt(__OS_INTERRUPT_PI_SI);
+}
+
+NEBULA_GAME_API void nebula_game_wpad_shake(uint32_t chan, uint32_t held) {
+    if (chan >= kChannels) {
+        return;
+    }
+    Channel* c = &sChannels[chan];
+    const u32 previous = atomic_exchange(&c->shakeHeld, held);
+    for (u32 device = 0; device < 2; device++) {
+        if ((held & ~previous) & (1u << device)) {
+            atomic_fetch_add(&c->shakePresses[device], 1);
+        }
+    }
+}
+
+/* The shake presses on the remote (device 0) or its Nunchuk (1) since the last call (WPadHVSwing). */
+u32 __NebulaWPADTakeShakePresses(s32 chan, s32 device) {
+    if (chan < 0 || chan >= kChannels || device < 0 || device > 1) {
+        return 0;
+    }
+    return atomic_exchange(&sChannels[chan].shakePresses[device], 0);
 }
 
 /* Calibration as WPADHIDParser.c's getDevConfig and getExtConfig apply it. */

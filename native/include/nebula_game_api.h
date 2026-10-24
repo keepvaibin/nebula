@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 17u
+#define NEBULA_GAME_API_VERSION 18u
 
 /* A physical range of the game's memory and where it is in the host process: what the GPU's addresses resolve to. */
 typedef struct NebulaGameMemoryRegion {
@@ -380,6 +380,9 @@ NEBULA_GAME_API void nebula_game_wpad_connect(uint32_t chan, int connected, cons
    real remote). */
 NEBULA_GAME_API void nebula_game_wpad_report(uint32_t chan, const uint8_t* report, size_t size,
                                              const NebulaWpadPointer* pointer);
+/* The shake buttons held on a controller standing in for a remote (bit 0: the remote's, bit 1: the Nunchuk's): each
+   press is one swing for the game's swing detector, the frame it is pressed. Any thread; called on every change. */
+NEBULA_GAME_API void nebula_game_wpad_shake(uint32_t chan, uint32_t held);
 
 #ifdef __cplusplus
 }

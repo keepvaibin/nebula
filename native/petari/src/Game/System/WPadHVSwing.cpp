@@ -1,10 +1,26 @@
 #include "Game/System/WPadHVSwing.hpp"
 #include "Game/System/WPad.hpp"
 
+#ifdef TARGET_PC
+#include <revolution/wpad.h>
+
+extern "C" u32 __NebulaWPADTakeShakePresses(s32 chan, s32 device);
+
+namespace {
+    // A shake press's swing lasts as long as a flick of the remote keeps the detector above its threshold.
+    const s32 cNebulaShakeSwingFrames = 6;
+};  // namespace
+#endif
+
 WPadHVSwing::WPadHVSwing(const WPad* pPad, u32 channel)
     : mPad(pPad), mChannel(channel), mDistanceSwingThreshold(1.0f), mIsSwing(), mIsSwingLatched(), mSwingLatchedFrames(),
       mSwingBelowThresholdFrames(), mIsTriggerSwing(), mSwingThreshold(0.4f), mSwingDetected(), mSwingTriggered(), mSwingHoldFrames(),
-      mSwingCooldownFrames() {
+      mSwingCooldownFrames()
+#ifdef TARGET_PC
+      ,
+      mNebulaShakePresses(0), mNebulaShakeFrames(0), mIsNebulaShaking(false)
+#endif
+{
 }
 
 void WPadHVSwing::updateSwing() {
@@ -92,7 +108,47 @@ void WPadHVSwing::updateCentrifugal() {
     }
 }
 
+#ifdef TARGET_PC
+// A shake button (a controller without motion sensors, or a key) swings directly, the frame it is pressed: each press is
+// a new swing (the flag drops for one frame first if a press's swing is still up), held for cNebulaShakeSwingFrames.
+// Without presses the accelerometer decides, as on the console.
+bool WPadHVSwing::updateNebulaShake() {
+    mNebulaShakePresses += __NebulaWPADTakeShakePresses(mPad->mChannel, mChannel == WPAD_DEV_CORE ? 0 : 1);
+    if (mNebulaShakeFrames == 0 && mNebulaShakePresses == 0 && !mIsNebulaShaking) {
+        return false;
+    }
+
+    bool isSwing = false;
+    if (mNebulaShakeFrames > 0 && !(mNebulaShakePresses > 0 && mNebulaShakeFrames < cNebulaShakeSwingFrames - 1)) {
+        mNebulaShakeFrames--;
+        isSwing = true;
+    } else if (mNebulaShakePresses > 0 && !mIsNebulaShaking) {
+        mNebulaShakePresses--;
+        mNebulaShakeFrames = cNebulaShakeSwingFrames - 1;
+        isSwing = true;
+    } else {
+        mNebulaShakeFrames = 0;
+    }
+
+    mIsNebulaShaking = isSwing;
+    mIsSwing = isSwing;
+    mIsSwingLatched = isSwing;
+    mSwingLatchedFrames = isSwing ? mSwingLatchedFrames + 1 : 0;
+    mSwingBelowThresholdFrames = isSwing ? 0 : mSwingBelowThresholdFrames + 1;
+    mSwingDetected = false;
+    mSwingTriggered = false;
+    mSwingHoldFrames = 0;
+    mIsTriggerSwing = mSwingLatchedFrames == 1;
+    return true;
+}
+#endif
+
 void WPadHVSwing::update() {
+#ifdef TARGET_PC
+    if (updateNebulaShake()) {
+        return;
+    }
+#endif
     updateSwing();
     updateCentrifugal();
 
