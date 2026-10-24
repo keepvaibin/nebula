@@ -2049,7 +2049,7 @@ bool TextureCache::set_movie_override(const MovieFrameMark& mark, const MovieRep
                     retire(std::move(old));
                 }
                 std::uint64_t bytes = 0;
-                plane.texture = backend_.create_texture(w, h, 1u, bytes);
+                plane.texture = backend_.create_texture(w, h, 1u, bytes, true);
                 plane.width = w;
                 plane.height = h;
                 plane.uploaded = false;

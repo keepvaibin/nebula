@@ -37,8 +37,9 @@ public:
     void write_view(std::uint32_t index, vk::Texture* texture, unsigned levels);
     [[nodiscard]] UploadChunk create_upload_chunk(std::uint64_t size);
     static void release_upload_chunk(UploadChunk& chunk) noexcept;
+    // RGBA8, or one byte per texel whose view repeats it in every channel (`grey`, a movie plane).
     [[nodiscard]] gpu::TextureRef create_texture(
-        std::uint32_t width, std::uint32_t height, unsigned levels, std::uint64_t& allocation_bytes);
+        std::uint32_t width, std::uint32_t height, unsigned levels, std::uint64_t& allocation_bytes, bool grey = false);
     [[nodiscard]] static bool poolable(vk::Texture* texture, std::uint32_t& width, std::uint32_t& height,
                                        std::uint32_t& levels);
     [[nodiscard]] static bool alias_compatible(vk::Texture* texture, std::uint32_t& width, std::uint32_t& height);

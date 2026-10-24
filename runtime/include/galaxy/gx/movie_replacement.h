@@ -4,8 +4,8 @@
 // HD movie replacements: a video file (MP4 and what else the platform decodes) in place of one of the game's THP
 // movies. The game still plays its THP (its timing, sound, subtitles and rumble follow it); each frame it draws,
 // the texture cache shows the replacement's frame of the same time in place of the THP's Y, U and V planes, at the
-// replacement's resolution. The planes are JPEG's full-range BT.601 YCbCr, as the game's TEV converts them; each is an
-// RGBA8 texture with the plane's value in every channel, as GX expands an I8 texture.
+// replacement's resolution. The planes are JPEG's full-range BT.601 YCbCr, as the game's TEV converts them; each is a
+// one-byte texture whose view repeats its value in every channel, as GX expands an I8 texture.
 //
 // Files: <folder>/<name>.<ext> for the disc's /MovieData/<name>.thp, from the folders configure() gives (a later folder
 // wins). Decoding runs on its own thread a few frames ahead into upload buffers; the render thread only records copies.
@@ -40,7 +40,7 @@ struct MovieFrameMark {
     std::uint16_t height = 0;
 };
 
-// A decoded frame: Y (width x height) and U, V (half each way) as RGBA8 in one upload buffer.
+// A decoded frame: Y (width x height) and U, V (half each way), a byte per texel, in one upload buffer.
 struct MovieReplacementFrame {
     std::int32_t frame = -1;
     std::uint32_t width = 0;
@@ -50,8 +50,8 @@ struct MovieReplacementFrame {
     std::array<std::uint32_t, 3> pitches{};
 };
 
-// Full-range BT.601 planes of a BGRA picture (tightly packed rows of `stride` bytes), written as RGBA8 replicated
-// texels at `offsets`/`pitches` (Y full size, U and V at half each way, rounding up).
+// Full-range BT.601 planes of a BGRA picture (tightly packed rows of `stride` bytes), a byte per texel at
+// `offsets`/`pitches` (Y full size, U and V at half each way, rounding up).
 void convert_bgra_to_movie_planes(const std::uint8_t* bgra, std::uint32_t width, std::uint32_t height,
                                   std::int32_t stride, std::uint8_t* out, const std::array<std::uint64_t, 3>& offsets,
                                   const std::array<std::uint32_t, 3>& pitches) noexcept;

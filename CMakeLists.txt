@@ -480,7 +480,7 @@ if(GALAXY_STREAMLINE_SDK)
     target_compile_definitions(galaxy_gx PRIVATE GALAXY_WITH_STREAMLINE=1)
 endif()
 # HD movie replacements decode through Media Foundation (movie_replacement.cpp).
-target_link_libraries(galaxy_gx PRIVATE mfplat mfreadwrite mfuuid)
+target_link_libraries(galaxy_gx PRIVATE mfplat mfreadwrite mfuuid d3d11)
 target_link_libraries(galaxy_gx
     PUBLIC
         galaxy_native_host
@@ -703,7 +703,7 @@ if(NEBULA_VULKAN)
         target_compile_options(galaxy_gx_vk PRIVATE /GS- /GR- /Oi /favor:INTEL64)
     endif()
     if(WIN32)
-        target_link_libraries(galaxy_gx_vk PRIVATE mfplat mfreadwrite mfuuid)
+        target_link_libraries(galaxy_gx_vk PRIVATE mfplat mfreadwrite mfuuid d3d11)
     endif()
 
     add_executable(NebulaNativeVk native/host/host_main.cpp runtime/src/native_thp_video.cpp)

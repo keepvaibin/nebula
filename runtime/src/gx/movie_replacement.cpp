@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// HD movie replacements (movie_replacement.h): Media Foundation's source reader on Windows decodes the file (its
-// colour conversion to RGB follows the video's own matrix and range); the planes are JPEG's YCbCr of that picture.
+// HD movie replacements (movie_replacement.h): Media Foundation's source reader on Windows decodes the file, on the
+// GPU's video decoder where it has one for the format (through a D3D11 device), else in software; the planes are
+// JPEG's YCbCr of that picture.
 
 #include "galaxy/gx/movie_replacement.h"
 
@@ -12,6 +13,7 @@
 #include <cstring>
 #include <iostream>
 #include <system_error>
+#include <thread>
 
 #if defined(_WIN32)
 #ifndef WIN32_LEAN_AND_MEAN
@@ -21,6 +23,8 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <d3d11.h>
+#include <d3d10.h>
 #include <mfapi.h>
 #include <mfidl.h>
 #include <mfreadwrite.h>
@@ -56,51 +60,140 @@ std::uint64_t movie_plane_layout(std::uint32_t width, std::uint32_t height, std:
         size = (size + TextureBackend::kPlacementAlignment - 1u) &
                ~static_cast<std::uint64_t>(TextureBackend::kPlacementAlignment - 1u);
         offsets[p] = size;
-        pitches[p] = (w * 4u + TextureBackend::kPitchAlignment - 1u) & ~(TextureBackend::kPitchAlignment - 1u);
+        pitches[p] = (w + TextureBackend::kPitchAlignment - 1u) & ~(TextureBackend::kPitchAlignment - 1u);
         size += static_cast<std::uint64_t>(pitches[p]) * h;
     }
     return size;
 }
+
+namespace {
+
+std::uint8_t clamp_byte(std::int32_t value) {
+    return static_cast<std::uint8_t>(std::clamp(value, 0, 255));
+}
+
+// Rows of a picture converted in bands on a few worker threads and the calling one: a 4K frame's planes in a few
+// milliseconds on a four-core CPU, where one thread would take most of a frame's time.
+class RowBands {
+public:
+    RowBands() {
+        const unsigned cores = std::max(1u, std::thread::hardware_concurrency());
+        const unsigned helpers = std::min(3u, cores > 2u ? cores / 2u : 0u);
+        for (unsigned i = 0; i < helpers; ++i) {
+            workers_.emplace_back([this, i] { work(i); });
+        }
+    }
+    ~RowBands() {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            stop_ = true;
+        }
+        start_.notify_all();
+        for (std::thread& worker : workers_) worker.join();
+    }
+
+    // fn(first, end) over [0, rows), one band per thread; returns when every band is done. One caller at a time.
+    void run(std::uint32_t rows, const std::function<void(std::uint32_t, std::uint32_t)>& fn) {
+        const auto bands = static_cast<std::uint32_t>(workers_.size() + 1u);
+        if (bands == 1u || rows < 64u) {
+            fn(0u, rows);
+            return;
+        }
+        const std::lock_guard<std::mutex> caller(caller_);
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            fn_ = &fn;
+            rows_ = rows;
+            bands_ = bands;
+            pending_ = bands - 1u;
+            ++generation_;
+        }
+        start_.notify_all();
+        fn(rows * (bands - 1u) / bands, rows);
+        std::unique_lock<std::mutex> lock(mutex_);
+        done_.wait(lock, [&] { return pending_ == 0u; });
+        fn_ = nullptr;
+    }
+
+private:
+    void work(unsigned band) {
+        std::uint64_t seen = 0;
+        for (;;) {
+            const std::function<void(std::uint32_t, std::uint32_t)>* fn = nullptr;
+            std::uint32_t begin = 0;
+            std::uint32_t end = 0;
+            {
+                std::unique_lock<std::mutex> lock(mutex_);
+                start_.wait(lock, [&] { return stop_ || generation_ != seen; });
+                if (stop_) return;
+                seen = generation_;
+                fn = fn_;
+                begin = rows_ * band / bands_;
+                end = rows_ * (band + 1u) / bands_;
+            }
+            (*fn)(begin, end);
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (--pending_ == 0u) done_.notify_one();
+        }
+    }
+
+    std::vector<std::thread> workers_;
+    std::mutex caller_;
+    std::mutex mutex_;
+    std::condition_variable start_;
+    std::condition_variable done_;
+    const std::function<void(std::uint32_t, std::uint32_t)>* fn_ = nullptr;
+    std::uint32_t rows_ = 0;
+    std::uint32_t bands_ = 1;
+    std::uint32_t pending_ = 0;
+    std::uint64_t generation_ = 0;
+    bool stop_ = false;
+};
+
+RowBands& row_bands() {
+    static RowBands bands;
+    return bands;
+}
+
+}  // namespace
 
 void convert_bgra_to_movie_planes(const std::uint8_t* bgra, std::uint32_t width, std::uint32_t height,
                                   std::int32_t stride, std::uint8_t* out, const std::array<std::uint64_t, 3>& offsets,
                                   const std::array<std::uint32_t, 3>& pitches) noexcept {
     // JFIF: Y = .299R + .587G + .114B; Cb = 128 - .168736R - .331264G + .5B; Cr = 128 + .5R - .418688G - .081312B
     // (16-bit fixed point), chroma from each 2x2 block's mean.
-    const auto replicate = [](int value) {
-        const auto v = static_cast<std::uint32_t>(std::clamp(value, 0, 255));
-        return v * 0x01010101u;
-    };
-    for (std::uint32_t y = 0; y < height; ++y) {
-        const std::uint8_t* row = bgra + static_cast<std::ptrdiff_t>(y) * stride;
-        auto* luma = reinterpret_cast<std::uint32_t*>(out + offsets[0] + static_cast<std::uint64_t>(y) * pitches[0]);
-        for (std::uint32_t x = 0; x < width; ++x) {
-            const int b = row[x * 4u];
-            const int g = row[x * 4u + 1u];
-            const int r = row[x * 4u + 2u];
-            luma[x] = replicate((19595 * r + 38470 * g + 7471 * b + 32768) >> 16);
-        }
-    }
     const std::uint32_t cw = (width + 1u) / 2u;
     const std::uint32_t ch = (height + 1u) / 2u;
-    for (std::uint32_t y = 0; y < ch; ++y) {
-        const std::uint32_t y0 = y * 2u;
-        const std::uint32_t y1 = std::min(y0 + 1u, height - 1u);
-        const std::uint8_t* row0 = bgra + static_cast<std::ptrdiff_t>(y0) * stride;
-        const std::uint8_t* row1 = bgra + static_cast<std::ptrdiff_t>(y1) * stride;
-        auto* cb = reinterpret_cast<std::uint32_t*>(out + offsets[1] + static_cast<std::uint64_t>(y) * pitches[1]);
-        auto* cr = reinterpret_cast<std::uint32_t*>(out + offsets[2] + static_cast<std::uint64_t>(y) * pitches[2]);
-        for (std::uint32_t x = 0; x < cw; ++x) {
-            const std::uint32_t x0 = x * 2u * 4u;
-            const std::uint32_t x1 = std::min(x * 2u + 1u, width - 1u) * 4u;
-            const int b = row0[x0] + row0[x1] + row1[x0] + row1[x1];
-            const int g = row0[x0 + 1u] + row0[x1 + 1u] + row1[x0 + 1u] + row1[x1 + 1u];
-            const int r = row0[x0 + 2u] + row0[x1 + 2u] + row1[x0 + 2u] + row1[x1 + 2u];
-            // Sums of four: the coefficients carry a quarter.
-            cb[x] = replicate(128 + ((-11059 * r - 21709 * g + 32768 * b + 131072) >> 18));
-            cr[x] = replicate(128 + ((32768 * r - 27439 * g - 5329 * b + 131072) >> 18));
+    row_bands().run(ch, [&](std::uint32_t first, std::uint32_t end) {
+        for (std::uint32_t j = first; j < end; ++j) {
+            const std::uint32_t y0 = j * 2u;
+            const std::uint32_t y1 = std::min(y0 + 1u, height - 1u);
+            for (std::uint32_t y = y0; y <= y1; ++y) {
+                const std::uint8_t* row = bgra + static_cast<std::ptrdiff_t>(y) * stride;
+                std::uint8_t* luma = out + offsets[0] + static_cast<std::uint64_t>(y) * pitches[0];
+                for (std::uint32_t x = 0; x < width; ++x) {
+                    const int b = row[x * 4u];
+                    const int g = row[x * 4u + 1u];
+                    const int r = row[x * 4u + 2u];
+                    luma[x] = clamp_byte((19595 * r + 38470 * g + 7471 * b + 32768) >> 16);
+                }
+            }
+            const std::uint8_t* row0 = bgra + static_cast<std::ptrdiff_t>(y0) * stride;
+            const std::uint8_t* row1 = bgra + static_cast<std::ptrdiff_t>(y1) * stride;
+            std::uint8_t* cb = out + offsets[1] + static_cast<std::uint64_t>(j) * pitches[1];
+            std::uint8_t* cr = out + offsets[2] + static_cast<std::uint64_t>(j) * pitches[2];
+            for (std::uint32_t x = 0; x < cw; ++x) {
+                const std::uint32_t x0 = x * 2u * 4u;
+                const std::uint32_t x1 = std::min(x * 2u + 1u, width - 1u) * 4u;
+                const int b = row0[x0] + row0[x1] + row1[x0] + row1[x1];
+                const int g = row0[x0 + 1u] + row0[x1 + 1u] + row1[x0 + 1u] + row1[x1 + 1u];
+                const int r = row0[x0 + 2u] + row0[x1 + 2u] + row1[x0 + 2u] + row1[x1 + 2u];
+                // Sums of four: the coefficients carry a quarter.
+                cb[x] = clamp_byte(128 + ((-11059 * r - 21709 * g + 32768 * b + 131072) >> 18));
+                cr[x] = clamp_byte(128 + ((32768 * r - 27439 * g - 5329 * b + 131072) >> 18));
+            }
         }
-    }
+    });
 }
 
 MovieYuvTransform movie_yuv_transform(bool bt709, bool full_range) noexcept {
@@ -137,36 +230,48 @@ void convert_nv12_to_movie_planes(const std::uint8_t* y, std::int32_t y_pitch, c
                                   const MovieYuvTransform& t, std::uint8_t* out,
                                   const std::array<std::uint64_t, 3>& offsets,
                                   const std::array<std::uint32_t, 3>& pitches) noexcept {
-    const auto replicate = [](std::int32_t value) {
-        return static_cast<std::uint32_t>(std::clamp(value, 0, 255)) * 0x01010101u;
-    };
     const std::uint32_t cw = (width + 1u) / 2u;
     const std::uint32_t ch = (height + 1u) / 2u;
+    // A source already in JPEG's YCbCr (full-range BT.601): the planes are its own bytes.
+    const bool identity = t.y0 == 0 && t.ky == 65536 && t.kyb == 0 && t.kyr == 0 && t.kbb == 65536 && t.kbr == 0 &&
+                          t.krb == 0 && t.krr == 65536;
     const std::int32_t luma_bias = 32768 - t.ky * t.y0;
-    for (std::uint32_t j = 0; j < ch; ++j) {
-        const std::uint8_t* chroma = uv + static_cast<std::ptrdiff_t>(j) * uv_pitch;
-        auto* cb_out = reinterpret_cast<std::uint32_t*>(out + offsets[1] + static_cast<std::uint64_t>(j) * pitches[1]);
-        auto* cr_out = reinterpret_cast<std::uint32_t*>(out + offsets[2] + static_cast<std::uint64_t>(j) * pitches[2]);
-        const std::uint32_t rows = std::min(2u, height - j * 2u);
-        const std::uint8_t* luma_rows[2] = {y + static_cast<std::ptrdiff_t>(j * 2u) * y_pitch,
-                                            y + static_cast<std::ptrdiff_t>(j * 2u + rows - 1u) * y_pitch};
-        std::uint32_t* luma_out[2] = {
-            reinterpret_cast<std::uint32_t*>(out + offsets[0] + static_cast<std::uint64_t>(j * 2u) * pitches[0]),
-            reinterpret_cast<std::uint32_t*>(out + offsets[0] + static_cast<std::uint64_t>(j * 2u + rows - 1u) * pitches[0])};
-        for (std::uint32_t i = 0; i < cw; ++i) {
-            const std::int32_t cb = static_cast<std::int32_t>(chroma[i * 2u]) - 128;
-            const std::int32_t cr = static_cast<std::int32_t>(chroma[i * 2u + 1u]) - 128;
-            cb_out[i] = replicate(128 + ((t.kbb * cb + t.kbr * cr + 32768) >> 16));
-            cr_out[i] = replicate(128 + ((t.krb * cb + t.krr * cr + 32768) >> 16));
-            const std::int32_t bias = luma_bias + t.kyb * cb + t.kyr * cr;
-            const std::uint32_t x0 = i * 2u;
-            const std::uint32_t x1 = std::min(x0 + 1u, width - 1u);
+    row_bands().run(ch, [&](std::uint32_t first, std::uint32_t end) {
+        for (std::uint32_t j = first; j < end; ++j) {
+            const std::uint8_t* chroma = uv + static_cast<std::ptrdiff_t>(j) * uv_pitch;
+            std::uint8_t* cb_out = out + offsets[1] + static_cast<std::uint64_t>(j) * pitches[1];
+            std::uint8_t* cr_out = out + offsets[2] + static_cast<std::uint64_t>(j) * pitches[2];
+            const std::uint32_t rows = std::min(2u, height - j * 2u);
             for (std::uint32_t r = 0; r < rows; ++r) {
-                luma_out[r][x0] = replicate((t.ky * luma_rows[r][x0] + bias) >> 16);
-                luma_out[r][x1] = replicate((t.ky * luma_rows[r][x1] + bias) >> 16);
+                const std::uint8_t* luma = y + static_cast<std::ptrdiff_t>(j * 2u + r) * y_pitch;
+                std::uint8_t* luma_out = out + offsets[0] + static_cast<std::uint64_t>(j * 2u + r) * pitches[0];
+                if (identity) {
+                    std::memcpy(luma_out, luma, width);
+                    continue;
+                }
+                for (std::uint32_t i = 0; i < cw; ++i) {
+                    const std::int32_t cb = static_cast<std::int32_t>(chroma[i * 2u]) - 128;
+                    const std::int32_t cr = static_cast<std::int32_t>(chroma[i * 2u + 1u]) - 128;
+                    const std::int32_t bias = luma_bias + t.kyb * cb + t.kyr * cr;
+                    const std::uint32_t x0 = i * 2u;
+                    const std::uint32_t x1 = std::min(x0 + 1u, width - 1u);
+                    luma_out[x0] = clamp_byte((t.ky * luma[x0] + bias) >> 16);
+                    luma_out[x1] = clamp_byte((t.ky * luma[x1] + bias) >> 16);
+                }
+            }
+            for (std::uint32_t i = 0; i < cw; ++i) {
+                if (identity) {
+                    cb_out[i] = chroma[i * 2u];
+                    cr_out[i] = chroma[i * 2u + 1u];
+                    continue;
+                }
+                const std::int32_t cb = static_cast<std::int32_t>(chroma[i * 2u]) - 128;
+                const std::int32_t cr = static_cast<std::int32_t>(chroma[i * 2u + 1u]) - 128;
+                cb_out[i] = clamp_byte(128 + ((t.kbb * cb + t.kbr * cr + 32768) >> 16));
+                cr_out[i] = clamp_byte(128 + ((t.krb * cb + t.krr * cr + 32768) >> 16));
             }
         }
-    }
+    });
 }
 
 // Decodes one replacement file on its own thread, up to kAhead frames ahead of the game.
@@ -266,9 +371,24 @@ private:
         }
         ComPtr<IMFAttributes> attributes;
         ComPtr<IMFSourceReader> reader;
-        HRESULT hr = MFCreateAttributes(&attributes, 2);
+        HRESULT hr = MFCreateAttributes(&attributes, 3);
         if (SUCCEEDED(hr)) hr = attributes->SetUINT32(MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING, TRUE);
         if (SUCCEEDED(hr)) hr = attributes->SetUINT32(MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, TRUE);
+        // The GPU's video decoder: Media Foundation uses it only through a D3D device manager. A 4K picture is then
+        // decoded on the GPU and only copied back; without one (no D3D11 video device), software decoding.
+        ComPtr<ID3D11Device> video_device;
+        ComPtr<IMFDXGIDeviceManager> device_manager;
+        UINT reset_token = 0;
+        if (SUCCEEDED(hr) &&
+            SUCCEEDED(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr,
+                                        D3D11_CREATE_DEVICE_VIDEO_SUPPORT | D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr,
+                                        0, D3D11_SDK_VERSION, &video_device, nullptr, nullptr)) &&
+            SUCCEEDED(MFCreateDXGIDeviceManager(&reset_token, &device_manager)) &&
+            SUCCEEDED(device_manager->ResetDevice(video_device.Get(), reset_token))) {
+            ComPtr<ID3D10Multithread> multithread;
+            if (SUCCEEDED(video_device.As(&multithread))) multithread->SetMultithreadProtected(TRUE);
+            attributes->SetUnknown(MF_SOURCE_READER_D3D_MANAGER, device_manager.Get());
+        }
         if (SUCCEEDED(hr)) hr = MFCreateSourceReaderFromURL(file_.c_str(), attributes.Get(), &reader);
         if (FAILED(hr)) {
             fail("cannot open", hr);

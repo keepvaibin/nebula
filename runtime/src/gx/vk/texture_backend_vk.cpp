@@ -80,12 +80,29 @@ void TextureBackend::release_upload_chunk(UploadChunk& chunk) noexcept {
 }
 
 gpu::TextureRef TextureBackend::create_texture(
-    std::uint32_t width, std::uint32_t height, unsigned levels, std::uint64_t& allocation_bytes) {
+    std::uint32_t width, std::uint32_t height, unsigned levels, std::uint64_t& allocation_bytes, bool grey) {
     auto texture = vk::Context::get().create_texture(
-        width, height, levels, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-        false, nullptr);
+        width, height, levels, grey ? VK_FORMAT_R8_UNORM : VK_FORMAT_R8G8B8A8_UNORM,
+        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, false, nullptr);
     if (!texture) {
         throw std::runtime_error("[TextureCache] create default texture failed");
+    }
+    if (grey) {
+        // The value in every channel, as GX expands an I8 texture.
+        const VkDevice device = vk::Context::get().device();
+        VkImageViewCreateInfo view_info{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+        view_info.image = texture->image;
+        view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        view_info.format = VK_FORMAT_R8_UNORM;
+        view_info.components = {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_R,
+                                VK_COMPONENT_SWIZZLE_R};
+        view_info.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, levels, 0, 1};
+        VkImageView view = VK_NULL_HANDLE;
+        if (vkCreateImageView(device, &view_info, nullptr, &view) != VK_SUCCESS) {
+            throw std::runtime_error("[TextureCache] create grey texture view failed");
+        }
+        vkDestroyImageView(device, texture->view, nullptr);
+        texture->view = view;
     }
     allocation_bytes = texture->allocation_bytes;
     return texture;
@@ -128,7 +145,7 @@ void TextureBackend::record_upload(vk::Texture* texture, bool reused, const Uplo
         VkBufferImageCopy& region = regions[l];
         region = {};
         region.bufferOffset = offset + offsets[l];
-        region.bufferRowLength = pitches[l] / 4u;  // in texels
+        region.bufferRowLength = pitches[l] / (texture->format == VK_FORMAT_R8_UNORM ? 1u : 4u);  // in texels
         region.bufferImageHeight = 0;
         region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, l, 0, 1};
         region.imageExtent = {std::max<std::uint32_t>(1u, width >> l), std::max<std::uint32_t>(1u, height >> l), 1};

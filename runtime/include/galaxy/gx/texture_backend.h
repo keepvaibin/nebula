@@ -32,13 +32,13 @@ public:
     void shutdown();
     [[nodiscard]] bool ready() const noexcept { return device_ != nullptr && srv_heap_ != nullptr; }
 
-    // An RGBA8 Texture2D view of `levels` mips in slot `index`.
+    // A Texture2D view of `levels` mips in slot `index`: RGBA8, or a one-byte texture's value in every channel.
     void write_view(std::uint32_t index, ID3D12Resource* texture, unsigned levels);
     [[nodiscard]] UploadChunk create_upload_chunk(std::uint64_t size);
     static void release_upload_chunk(UploadChunk& chunk) noexcept;
-    // A DEFAULT-heap RGBA8 texture in the copy-destination state.
+    // A DEFAULT-heap texture in the copy-destination state: RGBA8, or one byte per texel (`grey`, a movie plane).
     [[nodiscard]] gpu::TextureRef create_texture(
-        std::uint32_t width, std::uint32_t height, unsigned levels, std::uint64_t& allocation_bytes);
+        std::uint32_t width, std::uint32_t height, unsigned levels, std::uint64_t& allocation_bytes, bool grey = false);
     // A texture made by create_texture that the pool may hand out again for the same extent.
     [[nodiscard]] static bool poolable(ID3D12Resource* texture, std::uint32_t& width, std::uint32_t& height,
                                        std::uint32_t& levels);
