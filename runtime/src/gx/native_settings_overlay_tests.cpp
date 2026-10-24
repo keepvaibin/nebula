@@ -507,7 +507,16 @@ int main() {
     passed &= expect(key(VK_RIGHT) && key(VK_RIGHT) && shown(0u) == "TEXT SPEED: INSTANT", "text speed reaches instant");
     passed &= expect(key(VK_RIGHT) && shown(0u) == "TEXT SPEED: INSTANT", "text speed stops at instant");
     passed &= expect(key(VK_LEFT) && key(VK_LEFT) && shown(0u) == "TEXT SPEED: 2X", "left lowers text speed");
+    // A setting changed elsewhere while the menu is open keeps that value when the menu applies its own.
+    runtime = galaxy::get_runtime_settings();
+    const float voice = runtime.audio.voice;
+    runtime.audio.voice = 0.5f;
+    galaxy::set_runtime_settings(runtime);
     passed &= expect(key(VK_RETURN) && galaxy::get_runtime_settings().text_speed == 2u, "Enter applies the text speed");
+    passed &= expect_near(galaxy::get_runtime_settings().audio.voice, 0.5f, "apply keeps a setting changed elsewhere");
+    runtime = galaxy::get_runtime_settings();
+    runtime.audio.voice = voice;
+    galaxy::set_runtime_settings(runtime);
     passed &= expect(galaxy::get_runtime_settings().button_icons == galaxy::ButtonIcons::Auto, "button icons start Auto");
     passed &= expect(key(VK_DOWN) && galaxy::gx::native_settings_overlay_snapshot().row == 1u, "down selects button icons");
     passed &= expect(key(VK_RIGHT) && shown(1u) == "BUTTON ICONS: WII" &&

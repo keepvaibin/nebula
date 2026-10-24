@@ -160,12 +160,16 @@ cbuffer GxVertexBlend : register(b2) {
 ByteAddressBuffer vb_prev : register(t1, space1);
 StructuredBuffer<uint4> vb_verdict : register(t2, space1);
 static float vb_t;
+// Turned visible or invisible: the new colour; a channel that jumps by more than half: its new value.
 uint vb_color(uint a, uint b) {
+    if (((a & 0xFFu) == 0u) != ((b & 0xFFu) == 0u)) {
+        return b;
+    }
     uint c = 0u;
     [unroll] for (uint s = 0u; s < 32u; s += 8u) {
         const float x = float((a >> s) & 0xFFu);
         const float y = float((b >> s) & 0xFFu);
-        c |= uint(round(lerp(x, y, vb_t))) << s;
+        c |= uint(abs(y - x) > 128.0 ? y : round(lerp(x, y, vb_t))) << s;
     }
     return c;
 }

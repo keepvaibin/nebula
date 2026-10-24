@@ -339,6 +339,12 @@ constexpr const char* kNativeSettingsTabNames[] = {"DISPLAY", "GRAPHICS", "CONTR
 // stays only when it is kept within kDisplayConfirmMs. All guarded by s_native_settings_mutex.
 RenderConfig s_settings_draft{};
 RuntimeSettings s_runtime_draft{};
+RuntimeSettings s_runtime_base{};  // the game's settings when s_runtime_draft was taken
+
+void reset_runtime_draft() {
+    s_runtime_draft = get_runtime_settings();
+    s_runtime_base = s_runtime_draft;
+}
 std::vector<MonitorInfo> s_settings_monitors;
 std::uint64_t s_display_confirm_deadline_ms = 0u;
 RenderConfig s_display_confirm_previous{};
@@ -715,22 +721,34 @@ unsigned lighting_mode(const RenderConfig& render) {
     return render.enhanced_lighting ? 2u : render.per_pixel_lighting ? 1u : 0u;
 }
 
-// The game's settings the menu changed (its input mode is the controls draft's).
-unsigned runtime_changes() {
-    const RuntimeSettings live = get_runtime_settings();
+// The game's settings the menu changed since it took them (its input mode is the controls draft's), each merged into
+// `live` when given: a setting changed elsewhere meanwhile keeps that value unless the menu changed it too.
+unsigned runtime_draft_changes(RuntimeSettings* live) {
     const RuntimeSettings& d = s_runtime_draft;
+    const RuntimeSettings& b = s_runtime_base;
+    // A setting added to RuntimeSettings is drafted here too: these bindings stop compiling until it is.
+    [[maybe_unused]] const auto& [mode, audio, text_speed, language, discord_status, button_icons] = d;
+    [[maybe_unused]] const auto& [master, music, sfx, voice, ambience, cutscene, wiimote_speaker] = d.audio;
+    RuntimeSettings scratch{};
+    RuntimeSettings& out = live != nullptr ? *live : scratch;
     unsigned changes = 0u;
-    changes += d.audio.master != live.audio.master;
-    changes += d.audio.music != live.audio.music;
-    changes += d.audio.sfx != live.audio.sfx;
-    changes += d.audio.voice != live.audio.voice;
-    changes += d.audio.ambience != live.audio.ambience;
-    changes += d.audio.cutscene != live.audio.cutscene;
-    changes += d.audio.wiimote_speaker != live.audio.wiimote_speaker;
-    changes += d.text_speed != live.text_speed;
-    changes += d.language != live.language;
-    changes += d.discord_status != live.discord_status;
-    changes += d.button_icons != live.button_icons;
+    const auto take = [&changes](const auto& draft, const auto& base, auto& into) {
+        if (draft != base) {
+            into = draft;
+            ++changes;
+        }
+    };
+    take(d.audio.master, b.audio.master, out.audio.master);
+    take(d.audio.music, b.audio.music, out.audio.music);
+    take(d.audio.sfx, b.audio.sfx, out.audio.sfx);
+    take(d.audio.voice, b.audio.voice, out.audio.voice);
+    take(d.audio.ambience, b.audio.ambience, out.audio.ambience);
+    take(d.audio.cutscene, b.audio.cutscene, out.audio.cutscene);
+    take(d.audio.wiimote_speaker, b.audio.wiimote_speaker, out.audio.wiimote_speaker);
+    take(d.text_speed, b.text_speed, out.text_speed);
+    take(d.language, b.language, out.language);
+    take(d.discord_status, b.discord_status, out.discord_status);
+    take(d.button_icons, b.button_icons, out.button_icons);
     return changes;
 }
 
@@ -771,7 +789,7 @@ unsigned pending_settings_changes() {
         (d.texture_packs && d.texture_pack_preload != live.texture_pack_preload);
     changes += d.texture_dump != live.texture_dump;
     changes += controls_changes();
-    changes += runtime_changes();
+    changes += runtime_draft_changes(nullptr);
     changes += mods_draft_changes();
     return changes;
 }
@@ -1080,10 +1098,9 @@ void apply_native_settings_draft() {
     const bool display_changed = display_settings_differ(live, applied);
     const unsigned changes = pending_settings_changes();
     commit_mods_draft();
-    // The game's settings as drafted, the input mode as the controls applied it.
-    RuntimeSettings runtime = s_runtime_draft;
-    runtime.input_mode = get_runtime_settings().input_mode;
-    if (!(runtime == get_runtime_settings())) {
+    // The game's settings the menu changed, over the live ones (the controls applied the input mode).
+    RuntimeSettings runtime = get_runtime_settings();
+    if (runtime_draft_changes(&runtime) != 0u) {
         set_runtime_settings(runtime);
     }
     if (applied.internal_follow_window) {
@@ -1098,7 +1115,7 @@ void apply_native_settings_draft() {
         host_window::follow_window_rearm.store(true, std::memory_order_release);
     }
     s_settings_draft = get_render_config();
-    s_runtime_draft = get_runtime_settings();
+    reset_runtime_draft();
     if (dlss_asked) {
         s_settings_draft.upscaler = 3u;  // the row shows what the question is about
     }
@@ -1117,7 +1134,7 @@ void apply_native_settings_draft() {
 
 void revert_native_settings_draft() {
     s_settings_draft = get_render_config();
-    s_runtime_draft = get_runtime_settings();
+    reset_runtime_draft();
     reset_controls_draft();
     revert_mods_draft();
     std::cerr << "[settings] reverted\n";
@@ -1371,7 +1388,7 @@ void set_native_settings_visible(bool visible) {
         // A fresh draft, monitor list and controller list each time the menu opens.
         s_settings_monitors = cached_monitors();
         s_settings_draft = get_render_config();
-        s_runtime_draft = get_runtime_settings();
+        reset_runtime_draft();
         reset_controls_draft();
         refresh_controls_devices(true);
         settle_native_settings_row();
@@ -1382,7 +1399,7 @@ void set_native_settings_visible(bool visible) {
         dlss_dismiss_prompt();
         revert_display_settings();
         s_settings_draft = get_render_config();
-        s_runtime_draft = get_runtime_settings();
+        reset_runtime_draft();
         reset_controls_draft();
         flush_native_settings_if_dirty();
     }

@@ -980,6 +980,8 @@ private:
     std::array<std::uint32_t, 4> vi_named_xfbs_{};
     std::size_t vi_named_xfb_next_ = 0u;
     [[nodiscard]] bool is_vi_named_xfb(std::uint32_t guest_addr) const noexcept;
+    // Sub-frames show between game frames now (interpolation on and its governors allowing at least one).
+    [[nodiscard]] bool subframes_shown() const;
     void note_vi_named_xfb(std::uint32_t guest_addr) noexcept;
     unsigned interp_frames_ = 0;          // interpolated frames per game frame
     unsigned interp_scenes_in_chunk_ = 0;

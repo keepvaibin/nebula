@@ -380,9 +380,10 @@ static float vb_t_prev;
 static float2 vb_jitter;
 // The vertex's object-space position in the frame presented before (motion vectors).
 static float3 vb_pos_prev;
-// A colour that turns visible or invisible (its alpha, the low byte, leaves or reaches zero) or jumps by more than
-// half its range shows the new colour, as a coordinate step does: blended, a pane invisible in one frame and
-// shading in the next lets the scene behind it flash between them (closing the pause menu at 240 fps).
+// A colour that turns visible or invisible (its alpha, the low byte, leaves or reaches zero) shows the new colour,
+// and a channel that jumps by more than half its range its new value, as a coordinate step does: blended, a pane
+// invisible in one frame and shading in the next lets the scene behind it flash between them (closing the pause menu
+// at 240 fps). uber_vs.hlsl has the same.
 uint vb_color(uint a, uint b) {
     if (((a & 0xFFu) == 0u) != ((b & 0xFFu) == 0u)) {
         return b;
@@ -391,10 +392,7 @@ uint vb_color(uint a, uint b) {
     [unroll] for (uint s = 0u; s < 32u; s += 8u) {
         const float x = float((a >> s) & 0xFFu);
         const float y = float((b >> s) & 0xFFu);
-        if (abs(y - x) > 128.0) {
-            return b;
-        }
-        c |= uint(round(lerp(x, y, vb_t))) << s;
+        c |= uint(abs(y - x) > 128.0 ? y : round(lerp(x, y, vb_t))) << s;
     }
     return c;
 }
