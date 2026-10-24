@@ -1,35 +1,23 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// a*b+c rounded once (IEEE fusedMultiplyAdd, round to nearest) without the C runtime.
 #pragma once
 
-// a*b+c rounded once (IEEE fusedMultiplyAdd, round to nearest), always native.
+// Use these instead of std::fma/fmaf: on an SSE2 build std::fma calls the C runtime, which on a CPU without FMA3
+// computes it with an integer soft-float routine, far too slow for the THP movie decoder's hundreds of thousands of
+// fused operations a frame. tools/audit_repo.ps1 rejects std::fma in the runtime outside this header.
 //
-// Use these instead of std::fma/fmaf. On an SSE2 build std::fma is a call into
-// the C runtime, and on a CPU without FMA3 the C runtime computes it with an
-// integer soft-float routine. The THP movie decoder makes ~290,000 fused
-// operations per 640x368 frame; through that routine a frame took 150-220 ms
-// instead of about 1 ms, and every cutscene ran at a few frames per second.
-// tools/audit_repo.ps1 rejects std::fma in the runtime outside this header.
+// AArch64 has the instruction in its base set (fused_multiply_add: fmadd). x86 has fused_multiply_add_fma3 (vfmadd,
+// on CPUs with FMA3) and fused_multiply_add_sse2, an exact sequence of plain binary64 arithmetic with the same result
+// on any CPU.
 //
-// AArch64 has the instruction in its base set (fmadd) and always uses it. FMA3
-// builds (clang -mfma, MSVC /arch:AVX2) use vfmadd. SSE2 builds use the exact
-// sequences below, which are plain binary64 arithmetic on any CPU. Both give the same bits for every operand the
-// sequences admit; the rest go to std::fma, see fused_multiply_add_sse2(double).
-//
-// binary32: the product of two binary32 values is exact in binary64, so only
-// the sum rounds. Narrowing that sum rounds a second time, which can differ
-// from one rounding only when the sum is inexact and lies exactly on a
-// binary32 rounding boundary. Then the sum is moved one binary64 ulp toward the
-// exact value (rounding to odd), and the narrowing rounds once (Boldo and
-// Melquiond, "Emulation of a FMA and correctly rounded sums: proved algorithms
+// The product of two binary32 values is exact in binary64, so only the sum rounds. Narrowing that sum rounds a
+// second time, which can differ from one rounding only when the sum is inexact and lies exactly on a binary32
+// rounding boundary. Then the sum is moved one binary64 ulp toward the exact value (rounding to odd), and the
+// narrowing rounds once (Boldo and Melquiond, "Emulation of a FMA and correctly rounded sums: proved algorithms
 // using rounding to odd", IEEE Trans. Computers 57(4), 2008, theorem 1).
 //
-// binary64: Dekker's exact product and TwoSum give a*b+c exactly as three
-// binary64 terms. The two low terms are added with rounding to odd and the
-// final addition rounds once (the same paper, section 5).
-//
-// Both assume the host rounds to nearest, which Nebula never changes. FTZ/DAZ
-// (fast-float modules) cannot reach them: no admitted operand gives a
-// subnormal intermediate.
+// The sequence assumes the host rounds to nearest, which Nebula never changes. FTZ/DAZ cannot reach it: no operand
+// gives a subnormal intermediate.
 
 #include <bit>
 #include <cmath>
@@ -45,21 +33,15 @@
 #endif
 #endif
 
-#if defined(__FMA__) || (defined(_MSC_VER) && !defined(__clang__) && defined(__AVX2__))
-#define GALAXY_FUSED_MULTIPLY_ADD_IS_FMA3 1
-#else
-#define GALAXY_FUSED_MULTIPLY_ADD_IS_FMA3 0
-#endif
-
-// Lets a function use FMA3 intrinsics in an SSE2 translation unit. MSVC needs
-// nothing: it accepts every intrinsic whatever /arch is.
+// Lets a function use FMA3 intrinsics in an SSE2 translation unit. MSVC needs nothing: it accepts every
+// intrinsic whatever /arch is.
 #if defined(__clang__) || defined(__GNUC__)
 #define GALAXY_FMA3_TARGET __attribute__((target("fma")))
 #else
 #define GALAXY_FMA3_TARGET
 #endif
 
-// The exact sequences need every product and sum rounded on its own.
+// The exact sequence needs every product and sum rounded on its own.
 #if defined(__clang__)
 #define GALAXY_FUSED_NO_CONTRACTION _Pragma("clang fp contract(off)")
 #else
@@ -70,13 +52,13 @@ namespace galaxy {
 namespace fused_detail {
 
 [[nodiscard]] inline std::uint64_t step_toward(std::uint64_t bits, double error) noexcept {
-    // bits is a nonzero finite binary64; one ulp further from zero when the
-    // error has its sign, one ulp closer otherwise.
+    // bits is a nonzero finite binary64; one ulp further from zero when the error has its sign, one ulp closer
+    // otherwise.
     return std::signbit(error) == ((bits >> 63) != 0u) ? bits + 1u : bits - 1u;
 }
 
-// x + y rounded to odd: the rounded sum when exact, otherwise whichever
-// neighbour of the exact sum has an odd last bit.
+// x + y rounded to odd: the rounded sum when exact, otherwise whichever neighbour of the exact sum has an odd last
+// bit.
 [[nodiscard]] inline double add_rounded_to_odd(double x, double y) noexcept {
     GALAXY_FUSED_NO_CONTRACTION
     const double sum = x + y;
@@ -106,9 +88,8 @@ inline float narrow_sum_rounded_to_odd(double product, double addend) noexcept {
     const double addend = static_cast<double>(c);
     const double sum = product + addend;
     const auto bits = std::bit_cast<std::uint64_t>(sum);
-    // The 29 bits below binary32 precision are not exactly one half, and the
-    // magnitude is zero or at least the smallest normal binary32 (below it,
-    // binary32 keeps fewer bits and the boundaries move).
+    // The 29 bits below binary32 precision are not exactly one half, and the magnitude is zero or at least the
+    // smallest normal binary32 (below it, binary32 keeps fewer bits and the boundaries move).
     if ((bits & 0x1FFF'FFFFull) != 0x1000'0000ull &&
         (bits & 0x7FFF'FFFF'FFFF'FFFFull) - 1u >= 0x3810'0000'0000'0000ull - 1u) [[likely]] {
         return static_cast<float>(sum);
@@ -129,18 +110,10 @@ inline float narrow_sum_rounded_to_odd(double product, double addend) noexcept {
 #endif
 }
 
-[[nodiscard]] inline double fused_multiply_add(double a, double b, double c) noexcept {
-#if defined(_MSC_VER) && !defined(__clang__)
-    return std::fma(a, b, c);
-#else
-    return __builtin_fma(a, b, c);
-#endif
-}
-
 #else
 
-// The instruction. A caller not compiled for FMA3 must check host_has_fma3()
-// first, and in clang it is inlined only into GALAXY_FMA3_TARGET functions.
+// The instruction. A caller not compiled for FMA3 must check host_has_fma3() first, and in clang it is inlined
+// only into GALAXY_FMA3_TARGET functions.
 [[nodiscard]] GALAXY_FMA3_TARGET inline float fused_multiply_add_fma3(float a, float b, float c) noexcept {
     return _mm_cvtss_f32(_mm_fmadd_ss(_mm_set_ss(a), _mm_set_ss(b), _mm_set_ss(c)));
 }
@@ -163,7 +136,7 @@ namespace fused_detail {
 #endif
 }
 
-// Read on every fused operation of an SSE2 build: a plain load, set once when the image loads.
+// Set once, when the image loads.
 inline const bool kHostHasFma3 = detect_fma3();
 
 } // namespace fused_detail

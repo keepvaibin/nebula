@@ -194,10 +194,9 @@ std::filesystem::path settings_path() {
     return folder.empty() ? folder : folder / "runtime_settings.ini";
 }
 
-// Files written by an older controls version carry that version's defaults:
-// those bindings move to the current defaults, and a version-1 file's
-// keyboard_mouse becomes auto (the one-source modes are overrides since
-// version 2). Choices that differ from the old defaults stay.
+// A file of an older controls version carries that version's defaults: those bindings move to the
+// current defaults, and a version-1 file's keyboard_mouse becomes auto (from version 2 the one-source
+// modes are overrides). Choices that differ from the old defaults stay.
 void migrate_settings_file(RuntimeSettings& settings, input::ControlsConfig& controls,
                            unsigned version) {
     if (version >= input::kControlsVersion) {
@@ -373,9 +372,6 @@ void set_runtime_settings(const RuntimeSettings& settings) {
 
 namespace {
 
-// Last-write time of the settings file the audio keys were last read from.
-std::uint64_t s_audio_settings_write_time = 0u;
-
 // A running session never changes its input source because the file changed: a real Wii Remote, or a
 // controller that is not connected, would fail it. The source the file names (Nebula Settings may have saved
 // a new one) is written back by the game's saves unless the game changed its own source since the file was
@@ -390,36 +386,17 @@ void record_input_mode_sync(RuntimeInputMode file_mode, RuntimeInputMode live_mo
     s_settings_lock.unlock();
 }
 
-std::uint64_t settings_file_write_time(const std::filesystem::path& path) noexcept {
-#if defined(_WIN32)
-    WIN32_FILE_ATTRIBUTE_DATA data{};
-    if (path.empty() ||
-        !GetFileAttributesExW(path.c_str(), GetFileExInfoStandard, &data)) {
-        return 0u;
-    }
-    return (static_cast<std::uint64_t>(data.ftLastWriteTime.dwHighDateTime) << 32u) |
-        data.ftLastWriteTime.dwLowDateTime;
-#else
-    std::error_code error;
-    const auto time = path.empty() ? std::filesystem::file_time_type{} : std::filesystem::last_write_time(path, error);
-    return path.empty() || error ? 0u : static_cast<std::uint64_t>(time.time_since_epoch().count());
-#endif
-}
-
 }  // namespace
 
 void load_runtime_settings_from_file() {
     RuntimeSettings settings{};
     input::ControlsConfig controls = input::default_controls_config();
-    const std::filesystem::path path = settings_path();
-    const std::uint64_t write_time = settings_file_write_time(path);
     parse_settings_file(settings, controls);
     const RuntimeInputMode file_mode = sanitize_settings(settings).input_mode;
     apply_env_overrides(settings);
     set_runtime_settings(settings);
     input::set_controls_config(controls);
     record_input_mode_sync(file_mode, get_runtime_settings().input_mode);
-    s_audio_settings_write_time = write_time;
 }
 
 bool save_runtime_settings_to_file() {

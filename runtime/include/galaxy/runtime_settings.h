@@ -1,3 +1,4 @@
+// Player settings in runtime_settings.ini: input mode, audio gains, text speed, language, Discord status.
 #pragma once
 
 #include <filesystem>
@@ -5,6 +6,8 @@
 
 namespace galaxy {
 
+// Auto: keyboard, mouse and every controller are live together and the pointer follows whichever moved
+// last. KeyboardMouse and Controller keep only that source.
 enum class RuntimeInputMode : std::uint32_t {
     Auto = 0,
     KeyboardMouse = 1,
@@ -18,19 +21,13 @@ struct RuntimeAudioSettings {
     float sfx = 1.0f;
     float voice = 1.0f;
     float ambience = 1.0f;
-    // In-engine cutscene sounds (the game's DEMO sound category) and the
-    // pre-rendered movies' audio.
+    // In-engine cutscene sounds (the game's DEMO sound category) and the movies' audio.
     float cutscene = 1.0f;
-    // What the game plays on the Wii Remote speaker, mixed into the output.
-    // Off unless chosen, also for files written before the key existed.
+    // What the game plays on the Wii Remote speaker, mixed into the output; off unless chosen.
     float wiimote_speaker = 0.0f;
 };
 
-// Auto: keyboard, mouse and every controller are live together and the pointer
-// follows whichever moved last. KeyboardMouse and Controller are overrides that
-// keep only that source.
-// The game's language: the three the USA disc carries. Values are the Wii's SC language codes, which
-// SCGetLanguage returns.
+// The three languages of the USA disc, as the Wii's SC language codes SCGetLanguage returns.
 enum class GameLanguage : std::uint8_t { English = 1, French = 3, Spanish = 4 };
 
 struct RuntimeSettings {
@@ -38,7 +35,7 @@ struct RuntimeSettings {
     RuntimeAudioSettings audio{};
     // Steps of dialogue text revealed per frame: 1 the game's pace, 2 or 3; 4 each page at once (instant).
     unsigned text_speed = 1u;
-    // The language to start the game in. A change takes effect at the next start.
+    // Takes effect at the next start.
     GameLanguage language = GameLanguage::English;
     // Discord shows what the player is doing (galaxy, star, Power Stars) while Discord runs.
     bool discord_status = true;
@@ -52,9 +49,8 @@ struct RuntimeSettings {
 // "english", "french" or "spanish" (runtime_settings.ini).
 [[nodiscard]] const char* game_language_key(GameLanguage language) noexcept;
 
-// A coherent input-source snapshot. The generation changes only when the selected input mode changes,
-// so device FIFOs can reject reports acquired under an older source. Unrelated audio-setting writes are
-// not treated as an input transition.
+// The generation changes only when the input mode changes, so device FIFOs can reject reports acquired
+// under an older source.
 struct RuntimeInputModeState {
     RuntimeInputMode mode = RuntimeInputMode::Auto;
     std::uint64_t generation = 1u;
@@ -67,8 +63,8 @@ void set_runtime_settings(const RuntimeSettings& settings);
 // published. Gains use the C numeric locale and complete finite tokens. A malformed value keeps its prior
 // or default gain.
 void load_runtime_settings_from_file();
-// Invalid explicit paths and formatting/write/replace failures return false;
-// a bad override never redirects a save to the normal user settings file.
+// Returns false on an invalid explicit path or a failed write; a bad override never redirects the save to
+// the normal settings file.
 [[nodiscard]] bool save_runtime_settings_to_file();
 // The folder of the settings file (GALAXY_RUNTIME_SETTINGS_PATH's, else Nebula's data folder); empty when unknown.
 [[nodiscard]] std::filesystem::path runtime_settings_folder() noexcept;

@@ -38,9 +38,8 @@ int main() {
         galaxy::thp::decode_video(input, 16, 16, y, u, std::span(v).first(63)) == 0) return 3;
     std::cout << "THP bounds, EOF, tiled constant image and dimension checks passed\n";
 
-    // Every coefficient set, random quantizers: the exact SSE2 and FMA3 kernels
-    // give identical planes. DC code "0" is size 4; AC code "1" is run 0 size
-    // 4, so each block is 0 + 4 bits, then 63 x (1 + 4 bits).
+    // Every coefficient set, random quantizers: the exact SSE2 and FMA3 kernels give identical planes. DC code "0"
+    // is size 4; AC code "1" is run 0 size 4, so each block is 0 + 4 bits, then 63 x (1 + 4 bits).
     std::mt19937 random(0x7468'7031u);
     const bool fma3 = galaxy::host_has_fma3();
     for (unsigned frame = 0; frame < 200; ++frame) {

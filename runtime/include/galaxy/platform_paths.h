@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// Nebula's data folder and file opening on every platform. The folder is %LOCALAPPDATA%\Nebula on Windows (the
+// variable, as the shader cache and crash dumps read it, so a test's private one holds everything; the shell's folder
+// without it); elsewhere NEBULA_DATA_DIR (the Android app sets it to its private files folder), else
+// $XDG_DATA_HOME/Nebula, else ~/.local/share/Nebula.
 #pragma once
-
-// Nebula's settings folder and file opening on every platform: %LOCALAPPDATA%\Nebula on Windows (the variable, as
-// the shader cache and crash dumps read it, so a test's private one holds everything; the shell's folder without it);
-// elsewhere
-// NEBULA_DATA_DIR (the Android host sets it to the app's private files folder), else $XDG_DATA_HOME/Nebula, else
-// ~/.local/share/Nebula.
 
 #include <cstdio>
 #include <cstdlib>

@@ -58,7 +58,7 @@ struct ModInfo {
     bool loose = false;                       // loose files placed by name
     std::vector<std::string> languages;       // the language folders it changes (UsEnglish, EuFrench, ...)
     bool own_text = true;                     // its text stands in for a language it lacks
-    unsigned code_patches = 0;                // patches over the game's code with no native equivalent yet
+    unsigned code_patches = 0;                // patches over the game's code with no native equivalent
     unsigned native_patches = 0;              // patches over the game's code that run natively
     unsigned changed_files = 0;               // disc files it changes (its choices as they stand)
     unsigned changed_textures = 0;            // textures its packs replace
@@ -67,7 +67,7 @@ struct ModInfo {
     std::string problem;  // why it does nothing for this game (for another game, unreadable XML)
 };
 
-// nebula_game_api.h's NEBULA_PATCH_* (the native equivalents of code patches mods_layer recognises).
+// nebula_game_api.h's NEBULA_PATCH_*: native equivalents of the code patches mods.cpp recognises.
 enum : std::uint32_t {
     kPatchFlipPanelGroup = 1,
     kPatchFlipPanelObserverGroup,

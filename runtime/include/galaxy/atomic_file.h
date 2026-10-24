@@ -1,3 +1,4 @@
+// Crash-safe replacement of small text files (settings, achievements).
 #pragma once
 
 #include <filesystem>
@@ -5,19 +6,16 @@
 
 namespace galaxy::io {
 
-// Writes a complete UTF-8/ASCII text payload to a uniquely named sibling and
-// atomically replaces the destination after the write, flush and close calls
-// succeed. On failure the old destination is left untouched and cleanup of
-// this call's own sibling is attempted. Cleanup/power-loss durability still
-// depends on the filesystem; a collided preexisting sibling is never removed.
+// Writes `contents` to a uniquely named sibling, then replaces the destination with it once the write,
+// flush and close succeed. On failure the destination is untouched and the sibling is deleted; a
+// preexisting file that holds the sibling's name is never removed.
 [[nodiscard]] bool write_text_file_atomically(
     const std::filesystem::path& destination,
     std::string_view contents) noexcept;
 
 namespace detail {
 
-// Fault-injection seam for the ownership boundary after CREATE_NEW refuses a
-// preexisting sibling. Production callers use the ordinary writer above.
+// Tests: `on_collision` runs each time a sibling name is already taken.
 [[nodiscard]] bool write_text_file_atomically_with_collision_hook(
     const std::filesystem::path& destination,
     std::string_view contents,

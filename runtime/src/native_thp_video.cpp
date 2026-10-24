@@ -1,9 +1,8 @@
 // Adapted from encounter/aurora 3227d76c60e1e782ca576610bce61c9e7744d8be
 // lib/dolphin/thp/THPDec.cpp and lib/internal.hpp::ByteReader.
 // Copyright (c) 2022 Luke Street. MIT; full notice in THIRD-PARTY-NOTICES.md.
-// Galaxy changes: bounded input/planes, validated dimensions, EOF propagation,
-// reject restart streams, SDK quarter-IDCT policy, no Aurora runtime dependency,
-// fused multiply-adds without the C runtime (galaxy/fused_multiply_add.h).
+// Changes: bounded input and planes, validated dimensions, EOF propagation, restart streams refused, the SDK's
+// quarter-IDCT behaviour, no Aurora runtime, fused multiply-adds without the C runtime (galaxy/fused_multiply_add.h).
 #include "galaxy/native_thp_video.h"
 #include "galaxy/fused_multiply_add.h"
 #include <cstddef>
@@ -52,7 +51,6 @@ private:
 #endif
 
 namespace {
-// Error codes
 constexpr s32 kBadSyntax = 3;
 constexpr s32 kBadPrecision = 10;
 constexpr s32 kUnsupportedMarker = 11;
@@ -79,7 +77,7 @@ constexpr float kC6 = kC2 - kC2MinusC6;
 
 constexpr float kOutputBias = 128.0f * 8.0f;
 
-// Whether to reproduce a bug from SDK THP that swaps columns 3 and 4 in _quarterIDCT
+// The SDK's THP _quarterIDCT swaps columns 3 and 4; the decoder does the same.
 constexpr bool kBuggyQuarterIdct = true;
 
 bool read_segment(ByteReader& reader, const u8*& data, size_t& size) noexcept {
@@ -355,10 +353,8 @@ s32 parse_headers(std::span<const u8> file, DecodeContext& context) noexcept {
   }
 }
 
-// Bit reader with a 64-bit cache. Bytes past the end read as zero; the reader is
-// marked invalid once more bits than the stream holds have been consumed. The
-// byte-at-a-time reader this replaces consumed the available bits before reporting
-// EOF, and this matches that behavior.
+// Bit reader with a 64-bit cache. Bytes past the end read as zero; the reader turns invalid once more bits than
+// the stream holds have been consumed.
 class BitReader {
 public:
   BitReader(std::span<const u8> data, size_t byteOffset) noexcept
@@ -392,11 +388,6 @@ public:
     if (!valid() || mAvailableBits - mConsumedBits < 8) return false;
     value = static_cast<u8>(peek(8));
     return true;
-  }
-
-  void byte_align() noexcept {
-    const unsigned remainder = static_cast<unsigned>(mConsumedBits & 7u);
-    if (remainder != 0) skip(static_cast<u8>(8u - remainder));
   }
 
 private:

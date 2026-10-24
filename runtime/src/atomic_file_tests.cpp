@@ -1,3 +1,4 @@
+// Tests for galaxy/atomic_file.h: name collisions, a locked destination, an invalid parent.
 #include "galaxy/atomic_file.h"
 
 #define WIN32_LEAN_AND_MEAN

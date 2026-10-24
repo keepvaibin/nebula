@@ -20,8 +20,8 @@ inline constexpr std::size_t kMiiDatabaseSlots = 100;
 // The Wii's limit of favourite Miis (its Mii Channel; the game's icon picker holds that many).
 inline constexpr unsigned kMiiFavoriteLimit = 10;
 using MiiRecord = std::array<std::byte, kMiiRecordSize>;
-// The game's own checks of a Mii for its database, after it makes what the console would refuse acceptable (a
-// birthday it does not take, a special Mii not kept local, no name); empty: a stored, non-temporary create ID only.
+// The game's checks of a Mii for its database, run after fixing what the console would refuse (a birthday it does
+// not take, a special Mii not kept local, no name). Empty: only a stored, non-temporary create ID is required.
 using MiiPreparer = std::function<bool(MiiRecord&)>;
 
 // The Miis a file holds, its empty slots left out (any console's: mii_formats.h). `error` says why there are none.

@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Why Nebula stopped, as a code the player can look up (docs/ERROR_CODES.md): what the crash handler knows about the
-// fault (where, which thread was doing what, the mods this session and the last mod file the game read) turned into
-// a code, a sentence and what to do. classify() and format_report() take no locks and allocate nothing: they run in a
-// process that just crashed.
+// Turns what the crash handler knows (where, which thread was doing what, this session's mods, the last mod file the
+// game read) into a code the player can look up (docs/ERROR_CODES.md), a sentence and what to do. classify() and
+// format_report() take no locks and allocate nothing: they run in a process that just crashed.
 #pragma once
 
 #include <cstddef>
@@ -30,12 +29,12 @@ private:
 // The calling thread's activity, its file copied (UTF-8) into `file`. For the crash handler on the failing thread.
 Activity current_activity(char* file, std::size_t size) noexcept;
 
-// The disc reader: the game read `disc_path`, a file mod `mod` supplies. Kept with the time; one thread calls it.
+// The disc reader: the game read `disc_path` from mod `mod`. Kept with the time; one thread calls it.
 void note_mod_read(std::string_view mod, std::string_view disc_path) noexcept;
 // The last such read as "<mod>: <disc path>" in `out` and seconds since it; false when there was none.
 bool last_mod_read(char* out, std::size_t size, double* seconds_ago) noexcept;
 
-// The mods this session started with, for reports: one line each ("name (game files, code)"); `change_game`: one
+// The mods this session started with, one line each ("name (game files, code)"); `change_game`: at least one
 // changes the game's files or code (not only textures or movies).
 void set_session_mods(std::string_view lines, bool change_game) noexcept;
 std::string_view session_mods() noexcept;

@@ -28,7 +28,7 @@ struct ImportResult {
     std::uint64_t files = 0;
     std::uint64_t bytes = 0;
     std::string kinds;          // what it holds, as the MODS page lists it ("RIIVOLUTION, TEXTURES")
-    std::string message;        // for the user (success or why it failed)
+    std::string message;        // shown to the player: what was imported, or why it failed
 };
 
 // Whether `path` is an archive the importer reads (by its signature; a file named .zip that is not one is refused).

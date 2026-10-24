@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// Crash-log facts known before a crash: a few fixed lines (build, CPU, GPU) and the last notable events
+// (a skipped graphics command, a recovered error), each a copy into a static buffer.
 #pragma once
-
-// What a crash log needs that is known before the crash: a few fixed lines (build, CPU, GPU) and
-// the last notable events (a skipped graphics command, a recovered error). Writing costs a copy
-// into a static buffer; nothing is read until the process fails (native_runtime.cpp's crash log).
 
 #include <array>
 #include <atomic>
