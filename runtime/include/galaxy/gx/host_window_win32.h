@@ -31,6 +31,8 @@ inline constexpr DWORD kWindowStyle = WS_OVERLAPPEDWINDOW;
 inline constexpr UINT kSettingsKeyMessage = WM_USER + 0x43;
 // Render-thread display change (lParam: const WindowPlacement*), sent and completed on the window thread.
 inline constexpr UINT kPlaceWindowMessage = WM_USER + 0x44;
+// Tests (GALAXY_TEST_WINDOW_SIZES): the client area resized to wParam x lParam, as a drag of the window's edge would.
+inline constexpr UINT kTestResizeMessage = WM_USER + 0x45;
 struct WindowPlacement {
     DWORD style = 0;
     RECT rect{};

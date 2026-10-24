@@ -78,6 +78,7 @@ using host_window::wnd_proc;
 using host_window::kSettingsKeyMessage;
 using host_window::kWindowStyle;
 using host_window::kPlaceWindowMessage;
+using host_window::kTestResizeMessage;
 using host_window::WindowPlacement;
 
 namespace {
@@ -3560,6 +3561,14 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == WM_DISPLAYCHANGE) {
         store_monitor_cache(enumerate_monitors());
     }
+    if (msg == kTestResizeMessage) {
+        RECT rect{0, 0, static_cast<LONG>(wp), static_cast<LONG>(lp)};
+        (void)AdjustWindowRectEx(&rect, static_cast<DWORD>(GetWindowLongPtrW(hwnd, GWL_STYLE)), FALSE,
+                                 static_cast<DWORD>(GetWindowLongPtrW(hwnd, GWL_EXSTYLE)));
+        (void)SetWindowPos(hwnd, nullptr, 0, 0, rect.right - rect.left, rect.bottom - rect.top,
+                           SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+        return 0;
+    }
     if (msg == kPlaceWindowMessage) {
         const auto* placement = reinterpret_cast<const WindowPlacement*>(lp);
         if (placement != nullptr) {
@@ -3902,6 +3911,37 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
         while (next_key < test_keys.size() && key_presents >= test_keys[next_key].first) {
             handle_native_settings_key(test_keys[next_key].second, false);
             ++next_key;
+        }
+        // GALAXY_TEST_WINDOW_SIZES=<present>:<width>x<height>,...: the window resized at those presents, whatever is
+        // open (a live resize).
+        struct TestSize {
+            unsigned long at;
+            unsigned long width;
+            unsigned long height;
+        };
+        static const std::vector<TestSize> test_sizes = [] {
+            std::vector<TestSize> sizes;
+            char value[512]{};
+            std::size_t length = 0u;
+            if (getenv_s(&length, value, sizeof(value), "GALAXY_TEST_WINDOW_SIZES") != 0 || length <= 1u) return sizes;
+            for (char* item = value; item != nullptr && *item != '\0';) {
+                char* end = nullptr;
+                TestSize size{std::strtoul(item, &end, 10), 0u, 0u};
+                if (end != nullptr && *end == ':') size.width = std::strtoul(end + 1, &end, 10);
+                if (end != nullptr && *end == 'x') size.height = std::strtoul(end + 1, &end, 10);
+                if (size.width != 0u && size.height != 0u) sizes.push_back(size);
+                item = end != nullptr ? std::strchr(end, ',') : nullptr;
+                if (item != nullptr) ++item;
+            }
+            return sizes;
+        }();
+        static std::size_t next_size = 0u;
+        while (next_size < test_sizes.size() && key_presents >= test_sizes[next_size].at) {
+            const HWND window = reinterpret_cast<HWND>(host_window::pointer_hwnd.load(std::memory_order_acquire));
+            if (window != nullptr) {
+                (void)PostMessageW(window, kTestResizeMessage, test_sizes[next_size].width, test_sizes[next_size].height);
+            }
+            ++next_size;
         }
     }
     if (!s_native_settings_visible.load(std::memory_order_relaxed)) {
