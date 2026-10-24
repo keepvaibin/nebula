@@ -252,8 +252,10 @@ it closes stay hidden from the game until released.
 | `Backspace` | X | Undo the draft (CONTROLS binding row: clear) |
 | `Esc` | B or Menu/Plus | Close |
 
-The pointer (mouse or Wii Remote) works it too: the row under it is selected, a click changes it (on its left arrow,
-back) or does what it does, a page's button, Apply and Back are clicked; the mouse wheel moves the selection. Closing
+The pointer (mouse or Wii Remote) works it too: the row under it is selected. A setting's arrows step it (held, they
+repeat) and go round at the ends, where the keys stop; a click elsewhere on the row steps it on. Volumes, sharpening
+and the controls' numbers are sliders: drag the knob, or click the track. Holding A or the left button on the list and
+moving drags it; a page's button, Apply and Back are clicked; the mouse wheel moves the selection. Closing
 with changes not applied asks first: `Enter`/Y applies them and closes, `Backspace`/X discards them, `Esc`/B goes
 back to the page (each is also a button to click). The hints along the bottom name the keys or buttons of whatever
 was used last.

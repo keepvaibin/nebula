@@ -254,7 +254,7 @@ namespace NebulaUi {
         }
     };  // namespace
 
-    bool inkOffset(const TextBox* pText, f32* pX, f32* pY) {
+    bool inkOffset(const TextBox* pText, f32* pX, f32* pY, f32* pWidth, f32* pHeight) {
         const nw4r::ut::Font* pFont = pText->mpFont;
         const wchar_t* pString = pText->mTextBuf;
         if (pFont == nullptr || pString == nullptr || pString[0] == 0 || pFont->GetWidth() <= 0 || pFont->GetHeight() <= 0) {
@@ -288,6 +288,10 @@ namespace NebulaUi {
             return false;
         }
         *pX = ((left + right) * 0.5f - cursor * 0.5f) * scaleX;
+        if (pWidth != nullptr && pHeight != nullptr) {
+            *pWidth = (right - left) * scaleX;
+            *pHeight = (bottom - top) * scaleY;
+        }
         // The cell's y runs down, the layout's up.
         *pY = -((top + bottom) * 0.5f - (aTop + aBottom + 1) * 0.5f) * scaleY;
         return true;

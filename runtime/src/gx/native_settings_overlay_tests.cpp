@@ -738,6 +738,38 @@ int main() {
         galaxy::gx::native_settings_input(NativeSettingsInput::SelectPage, 5);
         galaxy::gx::native_settings_input(NativeSettingsInput::SelectRow, buttons);
         passed &= expect(galaxy::gx::native_settings_view().selected_button == 0u, "selected again, the row starts at its first");
+
+        // Sliders: the mix's volumes (0 to 200% in fives), the pointer sets one by its step; Left and Right still step.
+        galaxy::gx::native_settings_input(NativeSettingsInput::SelectPage, 3);
+        galaxy::gx::native_settings_input(NativeSettingsInput::SelectRow, 0);
+        passed &= expect(galaxy::gx::native_settings_view().rows[0].slider_steps == 40u, "the master volume is a slider of 40 steps");
+        galaxy::gx::native_settings_input(NativeSettingsInput::SetValue, 10);
+        view = galaxy::gx::native_settings_view();
+        passed &= expect(view.rows[0].slider_at == 10u && view.rows[0].value == "50%", "the pointer sets it to 50%");
+        passed &= expect(key(VK_RIGHT) && galaxy::gx::native_settings_view().rows[0].value == "55%", "Right steps it on");
+        galaxy::gx::native_settings_input(NativeSettingsInput::SetValue, 20);
+        passed &= expect(galaxy::gx::native_settings_view().rows[0].value == "100%", "and back to 100%");
+        galaxy::gx::native_settings_input(NativeSettingsInput::SelectPage, 1);
+        bool sharpening = false;
+        for (const galaxy::gx::NativeSettingsViewRow& row : galaxy::gx::native_settings_view().rows) {
+            sharpening = sharpening || (row.label == "SHARPENING" && row.slider_steps == 10u);
+        }
+        passed &= expect(sharpening, "sharpening is a slider of 10 steps");
+
+        // The pointer's arrows go round at a list's ends: two steps of a two-value setting come back to where it was.
+        galaxy::gx::native_settings_input(NativeSettingsInput::SelectPage, 0);
+        view = galaxy::gx::native_settings_view();
+        unsigned mode_row = 0u;
+        for (unsigned i = 0; i < view.rows.size(); ++i) {
+            if (view.rows[i].label == "DISPLAY MODE") mode_row = i;
+        }
+        galaxy::gx::native_settings_input(NativeSettingsInput::SelectRow, static_cast<int>(mode_row));
+        const std::string mode = galaxy::gx::native_settings_view().rows[mode_row].value;
+        galaxy::gx::native_settings_input(NativeSettingsInput::Change, 2);
+        const std::string next_mode = galaxy::gx::native_settings_view().rows[mode_row].value;
+        galaxy::gx::native_settings_input(NativeSettingsInput::Change, 2);
+        passed &= expect(mode_row != 0u && next_mode != mode && galaxy::gx::native_settings_view().rows[mode_row].value == mode,
+                         "the display mode goes round both ways from either end");
         passed &= expect(close_discarding(), "the menu closes after the view checks");
     }
 

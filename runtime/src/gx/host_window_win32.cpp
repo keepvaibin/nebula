@@ -124,6 +124,9 @@ struct SettingsRow {
     std::function<void(RenderConfig&, unsigned)> press;
     std::uint8_t list = 0u;  // the MODS page's lists: 1 off, 2 on (a mod, or the list's title)
     bool held = false;       // a mod picked up to move
+    // A setting along a range (a slider): its steps from the first value and where it is.
+    std::uint16_t slider_steps = 0u;
+    std::uint16_t slider_at = 0u;
 };
 
 // A row of buttons; its value is their words with '|' between them (NEBULA_SETTINGS_ROW_BUTTONS).
@@ -1113,6 +1116,30 @@ void adjust_native_setting(int delta) {
     }
 }
 
+// A step that goes round at the ends (the pointer's arrows): on, or where it can go no further, back to the other end.
+void step_native_setting_round(int direction) {
+    const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
+    const unsigned tab = s_native_settings_tab.load(std::memory_order_relaxed) % kNativeSettingsTabCount;
+    const unsigned row = s_native_settings_row.load(std::memory_order_relaxed);
+    const auto text = [tab, row] {
+        return native_settings_row_text(tab, row, s_settings_draft, get_runtime_settings(), get_render_feature_caps());
+    };
+    const std::string before = text();
+    adjust_native_setting_unlogged(direction);
+    if (text() == before) {
+        // At its end: stepped back as far as it goes.
+        for (unsigned guard = 0u; guard < 256u; ++guard) {
+            const std::string was = text();
+            adjust_native_setting_unlogged(-direction);
+            if (text() == was) break;
+        }
+    }
+    const std::string after = text();
+    if (after != before) {
+        std::cerr << "[settings] " << after << '\n';
+    }
+}
+
 void adjust_native_setting_unlogged(int delta) {
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
     const unsigned tab =
@@ -1434,6 +1461,90 @@ void press_settings_button(unsigned button) {
     }
     std::cerr << "[settings] " << page[row].label << ": " << page[row].buttons[button] << '\n';
     page[row].press(s_settings_draft, button);
+}
+
+// A setting along a range, as its slider shows it: its steps from the first value and the step it is at; no steps for
+// any other row. The mix's volumes run 0 to 200% in fives, the controls' numbers as adjust_native_setting steps them.
+struct SliderPlace {
+    unsigned steps = 0u;
+    unsigned at = 0u;
+};
+
+SliderPlace settings_slider(unsigned tab, unsigned row, const std::vector<SettingsRow>& page) {
+    SliderPlace place;
+    if (settings_page_tab(tab)) {
+        if (row < page.size()) {
+            place.steps = page[row].slider_steps;
+            place.at = page[row].slider_at;
+        }
+        return place;
+    }
+    const auto along = [&place](float value, float first, float step, float last) {
+        place.steps = static_cast<unsigned>(std::lround((last - first) / step));
+        place.at = static_cast<unsigned>(std::clamp(std::lround((value - first) / step), 0l, static_cast<long>(place.steps)));
+    };
+    if (tab == 3u) {
+        const RuntimeSettings settings = get_runtime_settings();
+        const float gains[] = {settings.audio.master, settings.audio.music, settings.audio.sfx, settings.audio.voice,
+                               settings.audio.ambience, settings.audio.cutscene, settings.audio.wiimote_speaker};
+        if (row < std::size(gains)) along(gains[row], 0.0f, 0.05f, 2.0f);
+        return place;
+    }
+    if (tab != kControlsTab) return place;
+    const galaxy::input::SchemeTuning& tuning = s_controls_draft.tune(s_controls_scheme);
+    switch (controls_row(row).kind) {
+    case ControlsRow::PointerSpeed: along(tuning.pointer_speed, 0.2f, 0.2f, 6.0f); break;
+    case ControlsRow::StickDeadzone: along(tuning.stick_deadzone, 0.0f, 0.02f, 0.5f); break;
+    case ControlsRow::PointerDeadzone: along(tuning.pointer_deadzone, 0.0f, 0.02f, 0.5f); break;
+    case ControlsRow::PointerHide: along(tuning.pointer_hide_seconds, 0.0f, 1.0f, 30.0f); break;
+    case ControlsRow::VibrationStrength: along(static_cast<float>(tuning.rumble), 10.0f, 10.0f, 100.0f); break;
+    case ControlsRow::ShakeSensitivity:
+        along(static_cast<float>(tuning.shake_sensitivity), 1.0f, 1.0f, static_cast<float>(galaxy::input::kShakeSensitivitySteps));
+        break;
+    case ControlsRow::GyroSensitivity: along(tuning.gyro_sensitivity, 0.2f, 0.1f, 5.0f); break;
+    default: break;
+    }
+    return place;
+}
+
+// The selected setting's slider moved to step `target` (the pointer dragging it), stepped there as Left and Right would.
+void set_slider(unsigned target) {
+    const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
+    const unsigned tab = s_native_settings_tab.load(std::memory_order_relaxed) % kNativeSettingsTabCount;
+    const unsigned row = s_native_settings_row.load(std::memory_order_relaxed);
+    const auto place = [&] {
+        return settings_slider(tab, row, settings_page_tab(tab) ? settings_page(tab, s_settings_draft, get_runtime_settings(),
+                                                                                get_render_feature_caps())
+                                                                  : std::vector<SettingsRow>{});
+    };
+    const auto text = [tab, row] {
+        return native_settings_row_text(tab, row, s_settings_draft, get_runtime_settings(), get_render_feature_caps());
+    };
+    const std::string before = text();
+    SliderPlace now = place();
+    target = std::min(target, now.steps);
+    if (tab == 3u && now.steps != 0u && now.at != target) {
+        // A volume straight to its step (the mix changes live).
+        RuntimeSettings settings = get_runtime_settings();
+        float* const gains[] = {&settings.audio.master, &settings.audio.music,    &settings.audio.sfx,
+                                &settings.audio.voice,  &settings.audio.ambience, &settings.audio.cutscene,
+                                &settings.audio.wiimote_speaker};
+        if (row < std::size(gains)) {
+            *gains[row] = static_cast<float>(target) * 0.05f;
+            set_runtime_settings(settings);
+            s_native_settings_dirty.store(true, std::memory_order_release);
+        }
+    }
+    for (unsigned guard = 0u; tab != 3u && now.steps != 0u && now.at != target && guard < 64u; ++guard) {
+        adjust_native_setting_unlogged(now.at < target ? 1 : -1);
+        const unsigned was = now.at;
+        now = place();
+        if (now.at == was) break;
+    }
+    const std::string after = text();
+    if (after != before) {
+        std::cerr << "[settings] " << after << '\n';
+    }
 }
 
 // Closing: at once, or with changes not applied, after asking (apply them, discard them, or stay).
@@ -2228,6 +2339,8 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render) {
                             std::clamp(static_cast<int>(std::min(draft.sharpness, 100u)) + delta * 10, 0, 100));
                     },
                     "CONTRAST-ADAPTIVE SHARPENING OF THE FINAL IMAGE"});
+    rows.back().slider_steps = 10u;
+    rows.back().slider_at = static_cast<std::uint16_t>(std::min(render.sharpness, 100u) / 10u);
     {
         std::string value = anti_aliasing_row_text(render.aa_mode, render.smaa_quality, get_post_process_status());
         if (const std::size_t colon = value.find(": "); colon != std::string::npos) value.erase(0, colon + 2u);
@@ -4703,6 +4816,11 @@ NativeSettingsView build_native_settings_view() {
         view.rows.push_back(std::move(shown));
     }
     view.selected_button = view.selected < view.rows.size() && view.rows[view.selected].buttons ? selected_settings_button() : 0u;
+    for (unsigned row = 0; row < view.rows.size(); ++row) {
+        const SliderPlace place = settings_slider(tab, row, page);
+        view.rows[row].slider_steps = place.steps;
+        view.rows[row].slider_at = place.at;
+    }
 
     const std::uint64_t now_ms = GetTickCount64();
     if (s_settings_leave_asking) {
@@ -5359,12 +5477,19 @@ void native_settings_input(NativeSettingsInput input, int arg) {
         return;
     }
     case NativeSettingsInput::Change:
-        if (arg != 0) adjust_native_setting(arg < 0 ? -1 : 1);
+        if (arg == -2 || arg == 2) {
+            step_native_setting_round(arg / 2);
+        } else if (arg != 0) {
+            adjust_native_setting(arg < 0 ? -1 : 1);
+        }
         return;
     case NativeSettingsInput::Press:
         if (arg >= 0 && static_cast<std::size_t>(arg) < selected_settings_buttons()) {
             press_settings_button(static_cast<unsigned>(arg));
         }
+        return;
+    case NativeSettingsInput::SetValue:
+        if (arg >= 0) set_slider(static_cast<unsigned>(arg));
         return;
     case NativeSettingsInput::MoveMod: {
         // The selected mod dropped into a list (arg >> 16: 1 off, 2 on) at a place (its low bits; 0 the top).

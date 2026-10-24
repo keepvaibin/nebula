@@ -1553,7 +1553,8 @@ static_assert(static_cast<uint32_t>(galaxy::gx::NativeSettingsStatus::Leave) == 
               "the settings statuses are numbered alike");
 static_assert(static_cast<uint32_t>(galaxy::gx::NativeSettingsInput::Open) == NEBULA_SETTINGS_OPEN &&
               static_cast<uint32_t>(galaxy::gx::NativeSettingsInput::Revert) == NEBULA_SETTINGS_REVERT &&
-              static_cast<uint32_t>(galaxy::gx::NativeSettingsInput::MoveMod) == NEBULA_SETTINGS_MOVE_MOD,
+              static_cast<uint32_t>(galaxy::gx::NativeSettingsInput::MoveMod) == NEBULA_SETTINGS_MOVE_MOD &&
+              static_cast<uint32_t>(galaxy::gx::NativeSettingsInput::SetValue) == NEBULA_SETTINGS_SET_VALUE,
               "the settings inputs are numbered alike");
 #endif
 
@@ -1591,7 +1592,11 @@ void svc_settings_view(void*, NebulaSettingsView* view) {
                               (row.label_name ? NEBULA_SETTINGS_ROW_LABEL_NAME : 0u) |
                               (row.buttons ? NEBULA_SETTINGS_ROW_BUTTONS : 0u) |
                               (row.mod_list == 1u ? NEBULA_SETTINGS_ROW_MOD_OFF : 0u) |
-                              (row.mod_list == 2u ? NEBULA_SETTINGS_ROW_MOD_ON : 0u) | (row.held ? NEBULA_SETTINGS_ROW_HELD : 0u);
+                              (row.mod_list == 2u ? NEBULA_SETTINGS_ROW_MOD_ON : 0u) | (row.held ? NEBULA_SETTINGS_ROW_HELD : 0u) |
+                              (row.slider_steps != 0u ? NEBULA_SETTINGS_ROW_SLIDER : 0u) |
+                              (row.inputs ? NEBULA_SETTINGS_ROW_BINDING : 0u);
+        view->rows[i].slider_steps = static_cast<uint16_t>(row.slider_steps);
+        view->rows[i].slider_at = static_cast<uint16_t>(row.slider_at);
     }
     view->selected = static_cast<uint32_t>(selected);
     view->selected_button = source.selected_button;
@@ -1611,7 +1616,7 @@ void svc_settings_view(void*, NebulaSettingsView* view) {
 // The pointer's input to the settings menu: NEBULA_SETTINGS_* are galaxy::gx::NativeSettingsInput's values.
 void svc_settings_input(void*, uint32_t action, int32_t arg) {
 #if defined(NEBULA_HOST_RENDERER)
-    if (action >= NEBULA_SETTINGS_OPEN && action <= NEBULA_SETTINGS_MOVE_MOD) {
+    if (action >= NEBULA_SETTINGS_OPEN && action <= NEBULA_SETTINGS_SET_VALUE) {
         galaxy::gx::native_settings_input(static_cast<galaxy::gx::NativeSettingsInput>(action), arg);
     }
 #else

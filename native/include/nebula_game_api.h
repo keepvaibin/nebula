@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 21u
+#define NEBULA_GAME_API_VERSION 22u
 
 /* A physical range of the game's memory and where it is in the host process: what the GPU's addresses resolve to. */
 typedef struct NebulaGameMemoryRegion {
@@ -202,6 +202,8 @@ enum {
     NEBULA_SETTINGS_ROW_MOD_OFF = 64,    /* the MODS page: a mod in the list of mods off (with HEADING: its title) */
     NEBULA_SETTINGS_ROW_MOD_ON = 128,    /* a mod in the list of mods on, the higher one winning (with HEADING: its title) */
     NEBULA_SETTINGS_ROW_HELD = 256,      /* the mod picked up to move: the arrows move it */
+    NEBULA_SETTINGS_ROW_SLIDER = 512,    /* a setting along a range: `slider_steps` from its first value, at `slider_at` */
+    NEBULA_SETTINGS_ROW_BINDING = 1024,  /* a control's binding: changing it waits for an input */
 };
 
 /* What the line under the page says (with `status_number` or `status_text` where it has one). */
@@ -238,6 +240,8 @@ typedef struct NebulaSettingsRow {
     char label[64];
     char value[96];
     uint32_t flags; /* NEBULA_SETTINGS_ROW_* */
+    uint16_t slider_steps;
+    uint16_t slider_at;
 } NebulaSettingsRow;
 
 typedef struct NebulaSettingsView {
@@ -268,11 +272,12 @@ enum {
     NEBULA_SETTINGS_CLOSE,       /* as B or Escape: it asks first when changes wait */
     NEBULA_SETTINGS_SELECT_PAGE, /* arg: the page */
     NEBULA_SETTINGS_SELECT_ROW,  /* arg: the row */
-    NEBULA_SETTINGS_CHANGE,      /* arg: -1 or 1, the selected row's value */
+    NEBULA_SETTINGS_CHANGE,      /* arg: -1 or 1, the selected row's value; -2 or 2 the same, going round at its ends */
     NEBULA_SETTINGS_APPLY,
     NEBULA_SETTINGS_REVERT,
     NEBULA_SETTINGS_PRESS,       /* arg: the selected row's button */
     NEBULA_SETTINGS_MOVE_MOD,    /* the selected mod dropped: arg >> 16 the list (1 off, 2 on), its low 16 bits the place */
+    NEBULA_SETTINGS_SET_VALUE,   /* arg: the step the selected setting's slider is dragged to */
 };
 
 typedef struct NebulaHostServices {

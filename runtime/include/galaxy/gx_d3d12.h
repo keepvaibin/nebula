@@ -333,6 +333,8 @@ struct NativeSettingsViewRow {
     bool buttons = false;     // its value is its buttons' words, '|' between them
     unsigned mod_list = 0u;   // the MODS page's lists: 1 off, 2 on (a mod, or the list's title)
     bool held = false;        // a mod picked up to move
+    unsigned slider_steps = 0u;  // a setting along a range: its steps, and the one it is at
+    unsigned slider_at = 0u;
 };
 enum class NativeSettingsStatus : unsigned {
     Help,             // the selected row's description
@@ -370,7 +372,7 @@ struct NativeSettingsView {
 // The menu as it stands. The first call hands the drawing to the game: the overlay draws nothing of its own after.
 [[nodiscard]] NativeSettingsView native_settings_view();
 // The pointer's input to the menu (the game's own menu takes the pointer; the window thread the keyboard and pads).
-enum class NativeSettingsInput : unsigned { Open = 1, Close, SelectPage, SelectRow, Change, Apply, Revert, Press, MoveMod };
+enum class NativeSettingsInput : unsigned { Open = 1, Close, SelectPage, SelectRow, Change, Apply, Revert, Press, MoveMod, SetValue };
 void native_settings_input(NativeSettingsInput input, int arg);
 
 // Number of EFB display copies submitted to XFB textures by the active backend.
