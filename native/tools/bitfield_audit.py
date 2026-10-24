@@ -3,7 +3,7 @@
 CodeWarrior allocates bitfields from the most significant bit of their unit; clang on a little-endian host from the
 least significant. Code that names one field at a time cannot tell, but code that also sees the unit (a cast of the
 struct to a word, a union of the struct with a word or bytes, a struct laid over file or hardware data) reads the
-fields at other bits natively (J3DModelX::Flags: Mario's shadow drew in colour). Printed for review:
+fields at other bits natively. Printed for review:
   CAST   a pointer to a bitfield struct cast to or from another pointee type
   UNION  a union holding a bitfield struct (or bitfields) beside other members
   COPY   a byte copy or compare to or from a struct that holds bitfields

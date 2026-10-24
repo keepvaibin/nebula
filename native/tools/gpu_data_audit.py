@@ -1,11 +1,11 @@
 """Whole-program audit: memory the GPU or a DMA engine reads, by the type the CPU wrote it as.
 
 The GPU reads textures, palettes, vertex arrays and display lists in the console's byte order. Natively a u16, u32,
-f32 or a struct of them written by the CPU lands in host order, so the GPU sees it byte-swapped (clearZTexData, a u32
-Z24X8 texture, put every 3D draw behind the cleared depth). Every pointer handed to the GPU (GX/GD/J3DGD calls taking
-memory, physical-address conversions) or made coherent for it (DC flush/store) is printed with the declaration it
-points into and that declaration's element type: BYTE sites are safe; every other one must be file data, data
-converted to the console's order, or memory the GPU only writes.
+f32 or a struct of them written by the CPU lands in host order, so the GPU sees it byte-swapped (a u32 Z24X8 texture
+reads as another depth). Every pointer handed to the GPU (GX/GD/J3DGD calls taking memory, physical-address
+conversions) or made coherent for it (DC flush/store) is printed with the declaration it points into and that
+declaration's element type: BYTE sites are safe; every other one must be file data, data converted to the console's
+order, or memory the GPU only writes.
 
     python gpu_data_audit.py <compile_commands.json> <out.txt> [jobs]     (pip install clang; LIBCLANG=path/to/libclang)
 """

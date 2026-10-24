@@ -1,5 +1,5 @@
-"""Lists every implicit 64-to-32-bit conversion in a build log (configure with -DNEBULA_AUDIT_NARROWING=ON), one
-line per site with its source text, grouped by conversion kind.
+"""Lists every implicit 64-to-32-bit conversion in a build log (an audit build with
+-DNEBULA_AUDIT_FLAGS=-Wshorten-64-to-32), one line per site with its source text, grouped by conversion kind.
 
     python narrowing.py build.log [--kind REGEX] [--file REGEX]
 """

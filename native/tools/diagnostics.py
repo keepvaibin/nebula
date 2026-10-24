@@ -1,6 +1,6 @@
 """Lists the unique sites of chosen diagnostics in an audit build log, with source text.
 
-    python warnings.py build.log -W array-bounds [-W uninitialized ...] [--counts]
+    python diagnostics.py build.log -W array-bounds [-W uninitialized ...] [--counts]
 """
 import argparse
 import collections

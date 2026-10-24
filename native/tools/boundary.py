@@ -1,6 +1,7 @@
-"""boundary.py <obj dir> <out dir>: the game module's external interface, from its objects. Every symbol some
-object references and no object defines, demangled, grouped by owner (RVL SDK area by prefix, MSL/C library,
-compiler runtime, C++ runtime), with how many objects reference it. Writes boundary.tsv and prints a summary."""
+"""boundary.py <obj dir> <out dir>: the game module's external interface, from its objects (a module build's
+CMakeFiles/smg_game.dir). Every symbol some object references and no object defines, demangled, grouped by owner
+(RVL SDK area by prefix, MSL/C library, compiler runtime, C++ runtime), with how many objects reference it. Writes
+boundary.tsv and prints a summary."""
 import collections
 import os
 import re
