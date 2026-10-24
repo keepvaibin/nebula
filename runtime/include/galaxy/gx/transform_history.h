@@ -32,16 +32,13 @@ using Affine34 = std::array<float, 12>;
 void affine_transform_point(const Affine34& m, const float p[3], float out[3]) noexcept;
 // |v| without the squares overflowing (a GX light's direction can hold 1e31-scale values) or underflowing.
 [[nodiscard]] float vector_length(const float v[3]) noexcept;
-// The transform at t between a (t = 0) and b (t = 1): translation and scale
-// lerp, rotation slerp (after removing per-axis scale). Matrices with shear,
-// mismatched handedness or no clean rotation lerp element-wise.
-[[nodiscard]] Affine34 affine_interpolate(const Affine34& a, const Affine34& b, float t) noexcept;
-// affine_interpolate split in two: the pair's decomposition once, then any
-// number of t (a sequence of sub-frames evaluates each pair several times).
-// Each 3x3 part is polar-decomposed, M = R S (R a rotation, S the stretch:
-// scale and shear, and the reflection of a mirrored matrix): R slerps, S and
-// the translation lerp. Rigid, scaled and blended (envelope) matrices thus
-// interpolate alike.
+// The transform between a (t = 0) and b (t = 1): the pair's decomposition
+// once, then any number of t (a sequence of sub-frames evaluates each pair
+// several times). Each 3x3 part is polar-decomposed, M = R S (R a rotation,
+// S the stretch: scale and shear, and the reflection of a mirrored matrix):
+// R slerps, S and the translation lerp. Rigid, scaled and blended (envelope)
+// matrices thus interpolate alike; a pair that does not decompose or differs
+// in handedness lerps element-wise.
 struct AffineMotion {
     Affine34 a{};
     Affine34 b{};
@@ -57,13 +54,6 @@ struct AffineMotion {
 void affine_motion(const Affine34& a, const Affine34& b, AffineMotion& out) noexcept;
 
 [[nodiscard]] Affine34 affine_motion_at(const AffineMotion& m, float t) noexcept;
-// False when a -> b (eye space, one game frame) cannot be one object's
-// motion: the origin moves more than a third of its distance from the eye
-// (plus 30 units), an axis scales by more than 2x, or it turns more than
-// 90 degrees. Such pairs (a mismatched record, a reused palette slot, a
-// camera cut) are shown at b instead of interpolated.
-[[nodiscard]] bool affine_motion_plausible(const Affine34& a, const Affine34& b) noexcept;
-[[nodiscard]] bool affine_motion_plausible(const AffineMotion& m) noexcept;
 inline constexpr std::uint32_t kNoPaletteOffset = 0xFFFFFFFFu;
 
 struct TransformRecord {

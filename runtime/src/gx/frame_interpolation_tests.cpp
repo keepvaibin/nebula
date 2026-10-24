@@ -162,16 +162,6 @@ void test_tex_matrices() {
           "position and normal texgens are spatial; texture coordinates and emboss are not");
 }
 
-void test_tex_words() {
-    check(tex_word_at(150.25f, 151.25f, true, 0.0f) == 150.25f, "t=0 is a exactly (integer scroll)");
-    check(tex_word_at(0.0f, 0.4f, true, 1.0f) == 0.4f, "t=1 is b exactly");
-    check(near(tex_word_at(0.95f, 0.05f, true, 0.5f), 1.0f) || near(tex_word_at(0.95f, 0.05f, true, 0.5f), 0.0f),
-          "a wrapped scroll interpolates forward");
-    check(near(tex_word_at(0.0f, 0.1f, true, 0.5f), 0.05f), "a scroll interpolates");
-    check(tex_word_at(0.0f, 0.4f, true, 0.5f) == 0.4f, "an atlas step does not slide");
-    check(near(tex_word_at(1.0f, 0.5f, false, 0.5f), 0.75f), "scale terms interpolate");
-}
-
 void test_light_and_palette() {
     const Affine34 va = camera(0.0f, 0.0f, 0.0f, 0.0f);
     const Affine34 vb = camera(0.3f, 100.0f, 0.0f, 0.0f);
@@ -438,7 +428,6 @@ int main() {
     test_camera_cut();
     test_static_object_under_moving_camera();
     test_moving_object_and_teleport();
-    test_tex_words();
     test_light_and_palette();
     test_actor_lights();
     test_sky_sun();

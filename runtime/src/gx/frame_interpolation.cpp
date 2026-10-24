@@ -361,26 +361,6 @@ void tex_matrix_at(const float* a, const float* b, bool spatial, float t, float*
     }
     for (unsigned i = 0; i < 12u; ++i) out[i] = a[i] * (1.0f - t) + to[i] * t;
 }
-float tex_word_at(float a, float b, bool translation, float t) noexcept {
-    if (a == b || !std::isfinite(a) || !std::isfinite(b) || t >= 1.0f) {
-        return b;
-    }
-    if (t <= 0.0f) {
-        return a;
-    }
-    if (translation) {
-        const float d = b - a;
-        if (std::fabs(d) > 0.5f) {
-            a += std::round(d);
-        }
-        if (std::fabs(b - a) > kTexStepLimit) {
-            return b;
-        }
-    } else if (std::fabs(b - a) > 1.0f) {
-        return b;
-    }
-    return a + (b - a) * t;
-}
 Affine34 normal_at(const NormalMotion& m, const CameraMotion& camera, const Affine34& camera_t,
                    float t) noexcept {
     (void)camera;

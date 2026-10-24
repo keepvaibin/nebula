@@ -69,16 +69,23 @@ void test_affine() {
     check(!affine_inverse(singular, inv), "singular rejected");
 }
 
+// The transform at t between a and b.
+Affine34 interpolate(const Affine34& a, const Affine34& b, float t) {
+    AffineMotion m;
+    affine_motion(a, b, m);
+    return affine_motion_at(m, t);
+}
+
 void test_interpolate() {
     const Affine34 a = rotation_y(0.0f, 0.0f, 0.0f, -10.0f);
     const Affine34 b = rotation_y(1.5707963f, 10.0f, 0.0f, -10.0f);
-    const Affine34 mid = affine_interpolate(a, b, 0.5f);
+    const Affine34 mid = interpolate(a, b, 0.5f);
     const Affine34 expect = rotation_y(0.7853982f, 5.0f, 0.0f, -10.0f);
     bool ok = true;
     for (unsigned i = 0; i < 12u; ++i) ok = ok && near(mid[i], expect[i], 1e-4f);
     check(ok, "slerp halfway between 0 and 90 degrees is 45 degrees");
-    const Affine34 at0 = affine_interpolate(a, b, 0.0f);
-    const Affine34 at1 = affine_interpolate(a, b, 1.0f);
+    const Affine34 at0 = interpolate(a, b, 0.0f);
+    const Affine34 at1 = interpolate(a, b, 1.0f);
     bool ends = true;
     for (unsigned i = 0; i < 12u; ++i) ends = ends && near(at0[i], a[i]) && near(at1[i], b[i]);
     check(ends, "interpolation ends at its inputs");
@@ -88,7 +95,7 @@ void test_interpolate() {
         sa[r * 4u + 0u] *= 2.0f;
         sb[r * 4u + 0u] *= 4.0f;
     }
-    const Affine34 sm = affine_interpolate(sa, sb, 0.5f);
+    const Affine34 sm = interpolate(sa, sb, 0.5f);
     const float sx = std::sqrt(sm[0] * sm[0] + sm[4] * sm[4] + sm[8] * sm[8]);
     const float sy = std::sqrt(sm[1] * sm[1] + sm[5] * sm[5] + sm[9] * sm[9]);
     check(near(sx, 3.0f, 1e-3f) && near(sy, 1.0f, 1e-3f), "per-axis scale lerps");
@@ -96,9 +103,9 @@ void test_interpolate() {
     // Shear: rotation and stretch of the polar decomposition, ends exact.
     Affine34 shear = affine_identity();
     shear[1] = 0.5f;
-    const Affine34 lm = affine_interpolate(affine_identity(), shear, 0.5f);
+    const Affine34 lm = interpolate(affine_identity(), shear, 0.5f);
     check(lm[1] > 0.2f && lm[1] < 0.3f && std::fabs(lm[0] - 1.0f) < 0.05f, "shear interpolates");
-    const Affine34 shear_end = affine_interpolate(affine_identity(), shear, 1.0f);
+    const Affine34 shear_end = interpolate(affine_identity(), shear, 1.0f);
     bool shear_ends = true;
     for (unsigned i = 0; i < 12u; ++i) shear_ends = shear_ends && near(shear_end[i], shear[i], 1e-4f);
     check(shear_ends, "shear interpolation ends at its input");
@@ -109,7 +116,7 @@ void test_interpolate() {
         blend_a[i] = 0.5f * rotation_y(0.0f, 0.0f, 0.0f, 0.0f)[i] + 0.5f * rotation_x(0.6f)[i];
         blend_b[i] = 0.5f * rotation_y(1.0f, 0.0f, 0.0f, 0.0f)[i] + 0.5f * rotation_x(0.6f)[i];
     }
-    const Affine34 blend_mid = affine_interpolate(blend_a, blend_b, 0.5f);
+    const Affine34 blend_mid = interpolate(blend_a, blend_b, 0.5f);
     const auto column_length = [](const Affine34& m, unsigned c) {
         return std::sqrt(m[c] * m[c] + m[4u + c] * m[4u + c] + m[8u + c] * m[8u + c]);
     };
@@ -117,21 +124,9 @@ void test_interpolate() {
     check(column_length(blend_mid, 0u) > std::min(size_a, size_b) - 1e-3f, "a blended joint matrix does not shrink");
     // 180 degree flip stays a rotation (no collapse through the origin).
     const Affine34 flip = rotation_y(3.1415926f, 0.0f, 0.0f, 0.0f);
-    const Affine34 half = affine_interpolate(affine_identity(), flip, 0.5f);
+    const Affine34 half = interpolate(affine_identity(), flip, 0.5f);
     const float len = std::sqrt(half[0] * half[0] + half[4] * half[4] + half[8] * half[8]);
     check(near(len, 1.0f, 1e-3f), "half of a flip keeps unit scale");
-    // Motion plausibility (eye space, one game frame).
-    const Affine34 at_1000 = rotation_y(0.0f, 0.0f, 0.0f, -1000.0f);
-    check(affine_motion_plausible(at_1000, rotation_y(0.1f, 20.0f, 0.0f, -1000.0f)),
-          "a small step and turn is motion");
-    check(!affine_motion_plausible(at_1000, rotation_y(0.0f, 0.0f, 0.0f, -100.0f)),
-          "a jump of 900 units at 1000 is not");
-    check(!affine_motion_plausible(at_1000, rotation_y(2.0f, 0.0f, 0.0f, -1000.0f)),
-          "a turn above 90 degrees is not");
-    Affine34 grown = at_1000;
-    for (unsigned r = 0; r < 3u; ++r) grown[r * 4u + 1u] *= 3.0f;
-    check(!affine_motion_plausible(at_1000, grown), "a 3x scale step is not");
-    check(affine_motion_plausible(affine_identity(), shear), "shear within limits is motion");
     // One decomposition evaluated at several t (a sequence's sub-frames).
     AffineMotion m;
     affine_motion(a, b, m);
@@ -142,11 +137,6 @@ void test_interpolate() {
         for (unsigned i = 0; i < 12u; ++i) steps = steps && near(at[i], want[i], 1e-4f);
     }
     check(steps, "one decomposition serves every t");
-    AffineMotion turn, step;
-    affine_motion(at_1000, rotation_y(2.0f, 0.0f, 0.0f, -1000.0f), turn);
-    affine_motion(at_1000, rotation_y(0.1f, 20.0f, 0.0f, -1000.0f), step);
-    check(!affine_motion_plausible(turn) && affine_motion_plausible(step),
-          "plausibility from the decomposition");
 }
 
 void test_matching_reordered() {

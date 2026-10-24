@@ -86,12 +86,10 @@ void normal_motion(const Affine34* a, const Affine34& b, const CameraMotion& cam
 
 [[nodiscard]] Affine34 normal_at(const NormalMotion& m, const CameraMotion& camera,
                                  const Affine34& camera_t, float t) noexcept;
-// Texture-coordinate matrices are lerped element-wise; a translation that
-// changed by more than half a repeat wrapped and is unwrapped first; one that
-// still moves by more than `kTexStepLimit` repeats is a discrete step (an
-// atlas cell) and shows b. t = 0 is a and t = 1 is b exactly.
+// A texture-coordinate translation that changed by more than half a repeat
+// wrapped and is unwrapped first; one that still moves by more than this many
+// repeats is a discrete step (an atlas cell) and shows b.
 inline constexpr float kTexStepLimit = 0.25f;
-[[nodiscard]] float tex_word_at(float a, float b, bool translation, float t) noexcept;
 // One texture matrix (3 rows of 4) at t, decided as a whole. `spatial`
 // (generated from position, normal or binormals: projection, environment
 // and shadow maps): every element lerps. Otherwise (fed by texture
