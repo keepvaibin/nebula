@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// SceneRayTracer (ray_tracing.h): scene geometry and acceleration structures, the lighting trace, the picture capture
+// and the composite. The camera, engine, reflection and water passes are in ray_tracing_*.cpp.
 #include "galaxy/gx/ray_tracing.h"
 #include "galaxy/gx/rt_materials.h"
 #include "galaxy/gx/rt_surfaces.h"
@@ -185,9 +187,8 @@ constexpr std::uint32_t kAuthoredSpot = 2u;
 // AuthoredLight.flags (rt_lighting.hlsl kAuthoredStar): a star: its power by its size.
 constexpr std::uint32_t kAuthoredStar = 4u;
 // AuthoredLight.flags (rt_lighting.hlsl kAuthoredStrip): a long emitter, a light per cell. Its draw is split into
-// pieces of kStripTriangles, numbered in the light's identity: an emitter group holds 64 cells and a cable's
-// triangles are long (256 of them crossed more than 64 cells, cells shared slots, and the garden's cables became two
-// lights 1,000-1,800 units wide hanging under the island). 32 triangles never fill the slots.
+// pieces of kStripTriangles, numbered in the light's identity. An emitter group holds 64 cells and a cable's triangles
+// are long: 32 of them never cross more cells than that, so no two cells share a slot.
 constexpr std::uint32_t kAuthoredStrip = 8u;
 constexpr std::uint32_t kStripTriangles = 32u;
 // Glow light flags (rt_lighting.hlsl kGlowEffect): the table names the glow a particle (no light).
@@ -637,7 +638,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     lighting_enabled_ = env_float("GALAXY_RT_LIGHT", 1.0f) != 0.0f;
     // Quality (config rt_quality, GALAXY_RT_QUALITY): high traces every pixel of the internal resolution with 4
     // sky and occlusion rays, 4 sun shadow rays and two glow lights per sample; medium one pixel per 2 x 2 with
-    // 2, 1 and one (user: use the ray tracing hardware, more rays; two modes, high with everything).
+    // 2 sky rays, 1 sun ray and one glow light.
     high_quality_ = get_render_config().rt_quality == 1u;
     // Low (rt_quality 2): RTX 3050-class cards: one sample per 3 x 3 internal pixels, one sky ray, one sun ray.
     low_quality_ = get_render_config().rt_quality == 2u;
@@ -707,7 +708,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     day_environment_ = std::clamp(env_float("GALAXY_RT_DAY_ENVIRONMENT", 0.92f), 0.3f, 1.2f);
     relief_ = std::clamp(env_float("GALAXY_RT_RELIEF", 3.0f), 0.0f, 64.0f);
     delight_ = env_float("GALAXY_RT_DELIGHT", 1.0f) != 0.0f;
-    // A quarter of 2: 1 was still too rough on grass and sand (owner 2026-10-20: rough, but in between).
+    // Relief from the de-light map's shading: 1 and above read too rough on grass and sand.
     delight_relief_ = std::clamp(env_float("GALAXY_RT_DELIGHT_RELIEF", 0.5f), 0.0f, 32.0f);
     gi_ = env_float("GALAXY_RT_GI", 1.0f) != 0.0f;
     core_radius_ = std::clamp(env_float("GALAXY_RT_CORE_RADIUS", 1667.0f), 1.0f, 100000.0f);
@@ -723,8 +724,8 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     }
     sun_direction_ = env_triple("GALAXY_RT_SUN", sun_direction_);
     sun_color_ = env_triple("GALAXY_RT_SUN_COLOR", sun_color_);
-    // The sun's angular radius in degrees: the real sun's 0.27 (its shadows as crisp as daylight's; at 1 degree four
-    // times too soft, owner: the sun does not feel strong). A stage's rt-suns size (a moon, a key) is its own.
+    // The sun's angular radius in degrees: the real sun's 0.27, for shadows as crisp as daylight's. A stage's rt-suns
+    // row sets its own size (a moon, a key).
     sun_size_ = std::clamp(env_float("GALAXY_RT_SUN_SIZE", 0.27f), 0.0f, 30.0f);
     key_size_ = std::clamp(env_float("GALAXY_RT_KEY_SIZE", 1.5f), 0.0f, 30.0f);
     sun_min_elevation_ = std::clamp(env_float("GALAXY_RT_SUN_MIN_ELEVATION", 30.0f), 0.0f, 89.0f);
@@ -1619,7 +1620,7 @@ void SceneRayTracer::report() {
                   static_cast<double>(physical_exposure_), static_cast<double>(adaptation_cpu_));
     std::cerr << line;
     if (delight_pso_) {
-        // Texture de-lighting: maps made so far, held now and their memory.
+        // Texture de-lighting: maps made, maps held and their memory.
         // Draws: seen, not paint, no material map, no texture key, with a map, without one yet.
         std::fprintf(stderr,
                      "[rt-delight] made=%llu held=%zu kb=%llu draws=%llu not-paint=%llu no-map=%llu no-key=%llu "
@@ -1634,7 +1635,7 @@ void SceneRayTracer::report() {
         // Physical emitters: the last scene's emitting draws and triangles.
         std::fprintf(stderr, "[rt-emit] draws=%zu triangles=%u glow-draws=%zu glow-triangles=%u", emit_ranges_.size(),
                      emit_triangles_, glow_emitters_.size(), glow_emit_count_);
-        // The emitting materials since the last report (table id: triangles), for mat_id.py.
+        // The emitting materials since the last report (table id: triangles).
         for (const auto& [id, triangles] : emit_materials_) {
             std::fprintf(stderr, " %u:%llu", static_cast<unsigned>(id), static_cast<unsigned long long>(triangles));
         }
@@ -2134,8 +2135,8 @@ void SceneRayTracer::run_delight(ID3D12GraphicsCommandList* list) {
     list->SetPipelineState(delight_pso_.Get());
     // GALAXY_RT_DELIGHT_STRENGTH (default 0.5): the share of each texel's measured shading the map takes out, in the
     // wrap word's bits 8-15 (rt_delight.hlsl). Retinex cannot tell painted light from a pattern of one colour (a
-    // stone's cracks, sand's grain): taking it all out left Deep Dark's walls and sand flat and grey (owner; b97
-    // A/B against 0.5 and off: half keeps the pattern and the game's warm sand, and takes half the painted light).
+    // stone's cracks, sand's grain): taking all of it out flattens such textures to grey, while half keeps the pattern
+    // and the texture's hue and removes half the painted light.
     static const std::uint32_t strength =
         static_cast<std::uint32_t>(std::lround(std::clamp(env_float("GALAXY_RT_DELIGHT_STRENGTH", 0.5f), 0.0f, 1.0f) *
                                                255.0f));
@@ -2307,8 +2308,8 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
                 // Under physical light an area light of its own triangles (GlowEmitterCS): its radiance the table's colour
                 // times the table's radiance (at least 1: what it shows), lit from the next frame.
                 // GALAXY_RT_GLOW_EMITTERS=0: none (the art glow lights take them); GALAXY_RT_GLOW_ISOTROPIC=0: each
-                // triangle a two-sided flat panel (the sprite faces the camera: its light turned with the view and
-                // stopped at the sprite's plane, a hard edge across the Terrace dome, b30).
+                // triangle a two-sided flat panel. Isotropic is the default because a sprite faces the camera: as a
+                // panel its light turns with the view and stops at the sprite's plane in a hard edge.
                 static const bool glow_emitters = env_float("GALAXY_RT_GLOW_EMITTERS", 1.0f) != 0.0f;
                 static const bool isotropic = env_float("GALAXY_RT_GLOW_ISOTROPIC", 1.0f) != 0.0f;
                 if (glow_emitters && !material->no_light && !material->hide &&
@@ -2420,7 +2421,7 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
             intensity = 0.0f;
         }
         if (emits && material->emission != RtEmission::None && !material->no_light && !material->seen) {
-            // Physical: a light source of the table is an area light of its own triangles (emitter_light), its
+            // Physical: a light source of the table is an area light of its own triangles (EmitTriangleCS), its
             // radiance what it shows; not the art model's light at its centre. A `seen` one shows its radiance
             // (the G-buffer's emitters) while the game's point light there is its light.
             if (emit_triangles_ + entry.triangle_count <= kEmitTriangles) {
@@ -2686,10 +2687,8 @@ std::uint32_t SceneRayTracer::sample_factor(std::uint32_t width, std::uint32_t h
     if (factor_override_ != 0u) {
         return factor_override_;
     }
-    // The internal resolution decides the samples (user: set the internal resolution, ray tracing and DLSS work
-    // off it): high traces every pixel up to 4K-class pictures (3840 x 2160) and one per 2 x 2 past them (the
-    // 6x EFB's 3840 x 3168 traced at 12 million samples ran Native41 at 48 fps on an RTX 5090); medium one per
-    // 2 x 2, low one per 3 x 3.
+    // The internal resolution decides the samples: high traces every pixel up to 4K-class pictures (3840 x 2160)
+    // and one per 2 x 2 past them; medium one per 2 x 2, low one per 3 x 3.
     const std::uint64_t pixels = static_cast<std::uint64_t>(width) * height;
     if (high_quality_) {
         return pixels > 8'400'000u ? 2u : 1u;
@@ -2751,7 +2750,7 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT scene_format) {
     // Physical: the emitting draws' ranges while their triangles are written, then the triangles (t24; a stand-in).
     params[kLightEmitTris].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
     params[kLightEmitTris].Descriptor.ShaderRegister = 24u;
-    // The emitters' reservoirs (rt_lighting.hlsl emitter_light_reused): the last traced frame's, this frame's.
+    // Reservoir slots (t25, u8), which no shader declares; bound to stand-ins.
     params[kLightReservoirIn].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
     params[kLightReservoirIn].Descriptor.ShaderRegister = 25u;
     params[kLightReservoirOut].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
@@ -2773,8 +2772,8 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT scene_format) {
     rsd.pParameters = params;
     rsd.NumStaticSamplers = 2u;
     rsd.pStaticSamplers = wrap;
-    // The trace tests alpha maps straight from the descriptor heap: shader model 6.6 and resource binding tier 3
-    // (else alpha-tested draws are traced solid). GALAXY_RT_ALPHA_TEST=0: solid.
+    // The textured trace (alpha maps and textures straight from the descriptor heap): shader model 6.6 and resource
+    // binding tier 3. GALAXY_RT_ALPHA_TEST=0 turns it off.
     {
         D3D12_FEATURE_DATA_SHADER_MODEL model{D3D_SHADER_MODEL_6_6};
         D3D12_FEATURE_DATA_D3D12_OPTIONS options{};
@@ -2785,8 +2784,8 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT scene_format) {
                           options.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_3 &&
                           env_float("GALAXY_RT_ALPHA_TEST", 1.0f) != 0.0f;
     }
-    // The engine reads every texture, TEV record and buffer it traces straight from the descriptor heap: ray tracing
-    // needs shader model 6.6 and resource binding tier 3 (every DXR 1.1 GPU the game's ray tracing supports).
+    // The engine reads every texture, TEV record and buffer it traces straight from the descriptor heap, so the
+    // lighting needs the textured trace.
     if (!light_textured_) {
         std::cerr << "[rt] lighting unavailable: shader model 6.6 and resource binding tier 3 needed\n";
         return false;
@@ -2796,8 +2795,8 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT scene_format) {
         !compute(light_root_.Get(), g_rt_star_sphere_cs, sizeof(g_rt_star_sphere_cs), star_sphere_pso_)) {
         return false;
     }
-    // Texture de-lighting (rt_delight.hlsl) reads the textures from the descriptor heap: only with the textured
-    // trace. Its root: the constants (b0), the scratch buffer (u0).
+    // Texture de-lighting (rt_delight.hlsl) reads the textures from the descriptor heap. Its root: the constants
+    // (b0), the scratch buffer (u0).
     if (light_textured_) {
         D3D12_ROOT_PARAMETER delight_params[2]{};
         delight_params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
@@ -2825,7 +2824,7 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT scene_format) {
         emit_triangle_pso_.Reset();
         emit_scan_pso_.Reset();
     }
-    // The traced sky reads its draws' textures from the descriptor heap: only with the textured trace.
+    // The traced sky reads its draws' textures from the descriptor heap.
     if (!light_textured_ ||
         !compute(light_root_.Get(), g_rt_sky_probe_tex_cs, sizeof(g_rt_sky_probe_tex_cs), sky_probe_pso_) ||
         !compute(light_root_.Get(), g_rt_sky_trace_sh_cs, sizeof(g_rt_sky_trace_sh_cs), sky_trace_sh_pso_)) {
@@ -2903,7 +2902,7 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT scene_format) {
     D3D12_ROOT_SIGNATURE_DESC emit_rsd{};
     emit_rsd.NumParameters = kEmitCount;
     emit_rsd.pParameters = emit_params;
-    // The glow light sources read their textures from the frame's heap (GlowEmitterCS, with the textured lighting).
+    // The glow light sources read their textures from the frame's heap (GlowEmitterCS).
     emit_rsd.Flags = light_textured_ ? D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED
                                      : D3D12_ROOT_SIGNATURE_FLAG_NONE;
     if (!serialize(emit_rsd, emit_root_) ||
@@ -3227,11 +3226,9 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     // The sun the game shows (its BrightSun, else the stage table's): the physical light's direction too.
     bool visible_sun = false;
     {
-        // The game's visible sun (GALAXY_RT_SUN overrides it), else the scene's key light (the sun
-        // its sky shows or the world-fixed light its lit draws take, set_key_light); without
-        // either, no sun light. The
-        // sun's colour: the game's world-fixed light from the same direction, else
-        // GALAXY_RT_SUN_COLOR; the key's: its own.
+        // The game's visible sun (GALAXY_RT_SUN overrides it), else the scene's key light (the sun its sky shows or
+        // the world-fixed light its lit draws take, set_key_light); without either, no sun light. The sun's colour:
+        // the game's world-fixed light from the same direction, else GALAXY_RT_SUN_COLOR; the key's: its own.
         std::array<float, 3> l = sun_direction_;
         float sun_distance = 0.0f;
         bool sun_present = sun_direction(l, &sun_distance);
@@ -3248,19 +3245,18 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         // sun's direction): it would shadow everything near the camera.
         c.sun_reach = sun_distance > 0.0f ? 0.5f * sun_distance : 1.0e6f;
         // The game's visible sun lights from the side the sky shows it on (its BrightSun), its shafts from its disc.
-        // A sky's painted sun often stands below the playfield's horizon (Hurry-Scurry's 17 degrees under its
-        // platforms, Good Egg's behind the planet: no direct sunlight reached them, b84 direct-light views; owner: the
-        // sun does not apply): it is held over the player's horizon (below).
+        // A sky's painted sun often stands below the playfield's horizon (Good Egg's is behind the planet), where it
+        // would light nothing directly, so it is held over the player's horizon (below).
         // Where the sky shows the sun (world): the shafts' centre, whatever lift the light takes below.
         const std::array<float, 3> shown_direction = l;
         // The light's elevation over the player's horizon (the ground under the player, by the game's gravity), its
-        // compass direction kept: the game's sun model (BrightSun) at least GALAXY_RT_SUN_MIN_ELEVATION (30) degrees up;
-        // a key light (no sun model in the stage's sky) between GALAXY_RT_KEY_MIN_ELEVATION (50) and
-        // GALAXY_RT_SUN_MAX_ELEVATION (65) degrees: high as a midday sun, so an enclosed playfield is lit across (low,
-        // a tube or wall shadows half of every floor: owner, half lighting on all textures, Bowser's Star Reactor) while
-        // the characters' shadows still show beside them (straight overhead they hide under them). A key the sky map
-        // shows (key_shown_: the sky detector's bright spot of a backdrop) is held as a key, its shafts from the spot.
-        // Physical light holds its final direction the same way (hold_light, below).
+        // compass direction kept: the game's sun model (BrightSun) at least GALAXY_RT_SUN_MIN_ELEVATION (30) degrees
+        // up; a key light (no sun model in the stage's sky) between GALAXY_RT_KEY_MIN_ELEVATION (50) and
+        // GALAXY_RT_SUN_MAX_ELEVATION (65) degrees: high as a midday sun, so an enclosed playfield is lit across
+        // (lower, a tube or wall shadows half of every floor) while the characters' shadows still show beside them
+        // (straight overhead they hide under them). A key the sky map shows (key_shown_: the sky detector's bright spot
+        // of a backdrop) is held as a key, its shafts from the spot. Physical light holds its final direction the same
+        // way (hold_light, below).
         const bool lift_sun = sun_present && !keyed && !sun_override_;
         const bool lift_key = sun_present && keyed && !sun_override_;
         if (lift_sun || lift_key) {
@@ -3354,9 +3350,8 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     // x N.L, 1) in display-encoded colour. Every traced surface's colour is its colour at white light (lit draws:
     // header bit 31; unlit draws are drawn at their program's neutral light), so the light is in the game's units in
     // linear light (white 1): the sky's radiance the ambient, the sun's irradiance over pi the rest of the full light.
-    // A surface facing the sun unshadowed shows its colour as the game draws it, one in shade at the ambient. The sun
-    // comes from the key light's position, where the game lights from (the visible BrightSun is its lens flare: on Good
-    // Egg it stands on the horizon while the key is 35 degrees up).
+    // A surface facing the sun unshadowed shows its colour as the game draws it, one in shade at the ambient. Where the
+    // game shows no sun, the light comes from the key light's position, where the game lights from (below).
     GameAreaLight area{};
     RtUpload sky_record_table{};
     RtUpload emit_range_table{};
@@ -3372,8 +3367,8 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
             return v <= 0.04045f ? v / 12.92f : std::pow((v + 0.055f) / 1.055f, 2.4f);
         };
         // In the game's own units, each channel as the stage sets it: the sky the ambient, the sun the rest of the full
-        // light (ambient + key, as the game clamps it). Not divided by the full light: that made every stage's light
-        // white and as bright as day, a dim blue stage (Ghostly) washed out and grey (sweep1, 2026-10-19).
+        // light (ambient + key, as the game clamps it). Not divided by the full light, which would make every stage's
+        // light white and as bright as day.
         for (unsigned i = 0; i < 3u; ++i) {
             const float full = lin(area.ambient[i] + area.lights[0].color[i]);
             const float sky = lin(area.ambient[i]);
@@ -3383,10 +3378,8 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         }
         // A stage without a sun (rt-suns none: Melty Molten's glowing haze) gives the table's `strength` share of the
         // key's light to its sky, an overcast sky (physical_overcast): open ground lit from above, a soft shadow under
-        // whatever stands on it. The key stood 35 degrees below the player's horizon there and lit nothing: the lava's
-        // red light alone turned the stone red and Mario's overalls black (b16); the whole key from the haze read as
-        // the game's daylight (b18; user: something in between). In the table's colour when it has one (Melty's golden
-        // sky at half its tint; white light made the lava world read as the game's grey stone, b17). The camera stays
+        // whatever stands on it. The key itself stands below the player's horizon there and would light nothing,
+        // leaving the lava's red light alone. The sky takes the table's colour when it has one. The camera stays
         // exposed for the stage's own light (its key as a sun 30 degrees up): a dimmer haze leaves the lava brighter.
         const auto luma3 = [](const float* rgb) { return 0.2126f * rgb[0] + 0.7152f * rgb[1] + 0.0722f * rgb[2]; };
         const bool overcast = stage_sun_ != nullptr && stage_sun_->source == RtStageSun::Source::None && !sun_override_;
@@ -3436,8 +3429,8 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
                 c.tev_info[1] = static_cast<std::uint32_t>(sky_tev_records_.size());
             }
         }
-        // The emitting draws' ranges for EmitTriangleCS (their triangles' TEV programs need the scene's records).
-        // The scene's emitting triangles (EmitTriangleCS), then the glow emitters the last frame wrote (GlowEmitterCS).
+        // The emitting draws' ranges for EmitTriangleCS (which needs the scene's TEV records): the scene's emitting
+        // triangles, then the glow emitters the last frame wrote (GlowEmitterCS).
         const std::uint32_t scene_emitters = tev_table != 0u ? emit_triangles_ : 0u;
         if (emit_triangle_pso_ && emit_scan_pso_ && scene_emitters + glow_emit_count_ != 0u) {
             if (!emit_tris_ &&
@@ -3459,13 +3452,11 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         // The real sun's disc (0.533 degrees across): penumbrae as wide as distance from the caster makes them.
         c.sun[3] = std::tan(0.2665f * 3.14159265f / 180.0f);
         std::copy(scene_up_.begin(), scene_up_.end(), c.up);
-        // The textures' de-light maps (GBufferCS's relief, the hits' albedo): their relief height (on: above 0).
+        // The textures' de-light maps (EngineGBufferCS's relief, the hits' albedo): their relief height (on: above 0).
         c.up[3] = delight_ && delight_pso_ ? std::max(delight_relief_, 1e-3f) : 0.0f;
-        // From the sun the game shows where it shows one (user: Dusty Dune's sun shone from the top left while the
-        // shadows followed the key light, a lighting rig for the characters, and the picture looked untraced); a night
-        // stage's moon (rt-suns `moon`) from where the table puts it; else from the key light's position. The
-        // prologue's moon row took the key's position (700000, 700000, 700000) whatever direction it gave (b106 moon
-        // a/b: the same lamp-post shadow either way).
+        // From the sun the game shows where it shows one (the key light is a lighting rig for the characters, and
+        // shadows that follow it do not match the visible sun); a night stage's moon (rt-suns `moon`) from where the
+        // table puts it; else from the key light's position.
         const bool table_moon = stage_sun_ != nullptr && stage_sun_->source == RtStageSun::Source::Moon && !sun_override_;
         const std::array<float, 3>& key =
             table_moon ? std::array<float, 3>{stage_sun_->direction[0], stage_sun_->direction[1], stage_sun_->direction[2]}
@@ -3484,9 +3475,9 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         }
         // Whatever it comes from, the light keeps its elevation band over the player's horizon (eye space: scene_up_):
         // a sun the sky shows at least GALAXY_RT_SUN_MIN_ELEVATION up, anything else (the key, the game's stage key
-        // light, the baked-light fit) between GALAXY_RT_KEY_MIN_ELEVATION and GALAXY_RT_SUN_MAX_ELEVATION. The stage
-        // key was taken as it stood: Bowser's Star Reactor (no sun, no key) lit its floors from 7 degrees, half of
-        // every floor in the tube's shadow (owner: half lighting on all textures; b86 [rt-light] eye 0.955,0.043,0.292).
+        // light, the baked-light fit) between GALAXY_RT_KEY_MIN_ELEVATION and GALAXY_RT_SUN_MAX_ELEVATION. A stage key
+        // as it stands can be a few degrees over the horizon (Bowser's Star Reactor), leaving half of every floor in
+        // shadow.
         const auto hold_light = [&](bool shown) {
             if (sun_override_) {
                 return;
@@ -3525,11 +3516,9 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
             }
             // The Comet Observatory (rt-suns `core`): night in space, lit by its star core and its lamps. The game's
             // key (a world-fixed light at 700000, 700000, 700000, the same in every galaxy) is no sun there: traced as
-            // one it threw daylight shadows (the telescope ring's across the Fountain dome, user 2026-10-19). It keeps
-            // the table's `strength` share as moonlight in the table's colour; the core carries the light (its ball a
-            // sphere light, below). The camera stays exposed for the stage's full light. A night stage's moon (rt-suns
-            // `moon`) the same: its key a moon, the night kept (the prologue's full key lit it as day: owner, too
-            // bright for night; without one Mario stood unlit and shadowless).
+            // one it throws daylight shadows. It keeps the table's `strength` share as moonlight in the table's colour;
+            // the core carries the light (its ball a sphere light, below). The camera stays exposed for the stage's
+            // full light. A night stage's moon (rt-suns `moon`) is treated the same: its key a moon, the night kept.
             if (stage_sun_ != nullptr &&
                 (stage_sun_->source == RtStageSun::Source::Core || stage_sun_->source == RtStageSun::Source::Moon) &&
                 !sun_override_) {
@@ -3594,9 +3583,8 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
                     e[r] = camera_[r * 4u] * core[0] + camera_[r * 4u + 1u] * core[1] + camera_[r * 4u + 2u] * core[2] +
                            camera_[r * 4u + 3u];
                 }
-                // Its ball at full revival (six domes) is 600 units across its radius: the game's own sizes run
-                // from 100 to 600 with the domes (behaviour understood from the Petari decompilation, SMGCommunity:
-                // AstroCore's sensor table), and the fitted balls measure 102 and 599.
+                // Its ball's radius at full revival (six domes) is 600 units: the game's sizes run from 100 to 600
+                // with the domes (AstroCore's sensor table in the Petari decompilation).
                 constexpr float kRevivedRadius = 600.0f;
                 const float size = std::min(core_ball_radius_ / kRevivedRadius, 1.5f);
                 float l = core_light_ * size * size;
@@ -3619,8 +3607,8 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
                         hue[k] = core_colour_[k] * warm / seen;
                     }
                 }
-                // Half its colour, as the sun's: a glowing ball's picture is more saturated than its light (at its
-                // full colour the Observatory's white floor and rings turned orange-pink, b83-b84).
+                // Half its colour, as the sun's: a glowing ball's picture is more saturated than its light, and its
+                // full colour tints white surfaces orange-pink.
                 for (float& v : hue) {
                     v = warm + 0.5f * (v - warm);
                 }
@@ -3693,7 +3681,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
               (show_term_ == 8u ? 512u : 0u) | (high_quality_ ? 1024u : 0u) |
               (light_textured_ && surface_uv_ && draw_texture_table_ != 0u ? 4096u : 0u) |
               (physical_active_ ? kPhysicalFlag : 0u);
-    // Diagnostics (rt_lighting.hlsl emitter_light_reused): GALAXY_RT_EMIT_REUSE=0 no temporal reuse (bit 15),
+    // Diagnostic flag bits no current shader reads: GALAXY_RT_EMIT_REUSE=0 no temporal reuse (bit 15),
     // GALAXY_RT_EMIT_CANDIDATES=n the candidates per sample (bits 16-23; 0: the quality's).
     {
         static const bool reuse = env_float("GALAXY_RT_EMIT_REUSE", 1.0f) != 0.0f;
@@ -3798,7 +3786,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     list->SetComputeRootShaderResourceView(kLightScene, tlas_->GetGPUVirtualAddress());
     list->SetComputeRootDescriptorTable(kLightDepth, depth_srv);
     list->SetComputeRootShaderResourceView(kLightPrevZ, light_z_[previous]->GetGPUVirtualAddress());
-    // The old filters' histories and reservoirs are gone: stand-ins in their slots (no kept shader reads them).
+    // Stand-ins in the history and reservoir slots, which no shader reads.
     list->SetComputeRootShaderResourceView(kLightPrevHistory, positions_->GetGPUVirtualAddress());
     list->SetComputeRootShaderResourceView(kLightHistoryIn, positions_->GetGPUVirtualAddress());
     list->SetComputeRootShaderResourceView(kLightPicture, picture_->GetGPUVirtualAddress());
@@ -4190,7 +4178,6 @@ void SceneRayTracer::capture_picture(ID3D12GraphicsCommandList* list, const RtSo
                             glow);
         end_pass(list, lights_timed, kPassLights);
     }
-    static_cast<void>(emit);
     to_state(list, picture_.Get(), picture_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     to_state(list, picture_sums_.Get(), picture_sums_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     end_pass(list, timed, kPassCapture);

@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// SceneRayTracer: translucent water. The scene's blended draws of the water class (seas, lakes,
-// pools; noted from the trace to the end of the translucent phases) are transformed by the same
-// geometry pass into their own buffers, become their own acceleration structure, and the
-// reflections trace the water's surface from the picture the translucent phases left
-// (RtReflections::trace_water).
+// SceneRayTracer's translucent water: the blended water-class draws noted after the trace get their own acceleration
+// structure, and the reflections trace their surface from the picture the translucent phases left.
 #include "galaxy/gx/ray_tracing.h"
 
 #include <cstring>
@@ -124,11 +121,10 @@ void SceneRayTracer::flush_water(ID3D12GraphicsCommandList* list, const RtSource
     }
 }
 
-// The trace wrote its per-draw tables into the upload ring of the renderer frame it ran in; the water trace runs
-// renderer frames later (a game frame spans several), when that space can hold newer uploads, and its reflections and
-// the engine's glass read the draws' textures and TEV records at their hits (stale TEV records there sent texture
-// fetches through garbage views: the GPU hung under Dusty Dune's crystals). Draws noted since the trace only append to
-// the tables, so the trace's indices and counts hold.
+// Uploads the per-draw tables again for the water trace. The trace wrote them into the upload ring of its renderer
+// frame; the water trace runs renderer frames later (a game frame spans several), when that space may hold newer
+// uploads, and stale TEV records would send its texture fetches through invalid views and hang the GPU. Draws noted
+// since the trace only append to the tables, so the trace's indices and counts still hold.
 void SceneRayTracer::refresh_draw_tables(Allocate allocate, void* allocate_context) {
     if (draw_texture_table_ != 0u) {
         draw_texture_table_ = 0u;
@@ -275,8 +271,7 @@ int SceneRayTracer::trace_water(ID3D12GraphicsCommandList* list, const RtSources
         to_state(list, sky_radiance_.Get(), sky_radiance_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     }
     RtReflectScene scene = reflect_scene(slot);
-    // GALAXY_RT_LOG_CAMERA=1: the camera's world position and view direction (positions for test
-    // teleports into the water).
+    // GALAXY_RT_LOG_CAMERA=1: logs the camera's world position and view direction (for test teleports into the water).
     static const bool log_camera = [] {
         char value[8]{};
         std::size_t length = 0u;
@@ -291,7 +286,7 @@ int SceneRayTracer::trace_water(ID3D12GraphicsCommandList* list, const RtSources
         std::cerr << "[rt-camera] water=" << logged << " eye=" << eye[0] << ',' << eye[1] << ',' << eye[2]
                   << " forward=" << -m[8] << ',' << -m[9] << ',' << -m[10] << '\n';
     }
-    // The engine's glass and crystal (rt_engine.hlsl EngineClearCS), the EFB depth the conversion table's second view.
+    // The engine's glass and crystal (rt_engine.hlsl EngineClearCS); the EFB depth is the table's second view.
     if (engine_active() && engine_clear_wanted_) {
         D3D12_GPU_DESCRIPTOR_HANDLE depth_table = color_depth_table;
         depth_table.ptr += texture_view_increment_;

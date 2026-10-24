@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-// Surface classes of ray-traced draws, read from the draw's GX shader keys. The game marks its
-// shiny materials in the fixed-function state itself: an environment map is a texture looked up
-// through a texgen from normals (gold, silver and chrome decorations), a specular highlight is a
-// lit channel with the specular light function, and water, ice and lava distort their textures
-// through indirect stages. Map geometry carries baked vertex colour without lighting ("unlit");
-// its emitters are the unlit pixels that are bright, which the shaders decide per pixel.
+// Surface classes of ray-traced draws, read from the draw's GX shader keys.
+// The game marks its shiny materials in the fixed-function state: an environment map is a texture looked up through a
+// texgen from normals (gold, silver and chrome decorations), a specular highlight is a lit channel with the specular
+// light function, and water, ice and lava distort their textures through indirect stages. Map geometry carries baked
+// vertex colour without lighting (unlit); the shaders find its emitters per pixel.
 
 #include "galaxy/gx/shader_keys.h"
 

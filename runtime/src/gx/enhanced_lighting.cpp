@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// Enhanced lighting's tuning and per-draw material words (enhanced_lighting.h).
 #include "galaxy/gx/enhanced_lighting.h"
 
 #include "galaxy/gx/gx_bitfields.h"
@@ -87,7 +88,7 @@ std::uint32_t enhanced_table_material(const RtMaterial* material) noexcept {
 
 std::uint32_t enhanced_lighting_material(const VertexShaderKey& vs, const PixelShaderKey& ps) noexcept {
     const RtSurface surface = classify_rt_surface(vs, ps);
-    // Texcoords from normals that a colour combiner reads (environment maps).
+    // Environment maps: texture coordinates generated from normals that a colour combiner reads.
     std::uint32_t env = 0u;
     const unsigned stages = std::min<unsigned>(ps.num_tev_stages, 16u);
     const unsigned texgens = std::min<unsigned>(vs.num_texgens, 8u);
@@ -105,7 +106,7 @@ std::uint32_t enhanced_lighting_material(const VertexShaderKey& vs, const PixelS
             env |= 1u << coord;
         }
     }
-    // Colour channel 0 lit with a diffuse light function; its lights and sources.
+    // Colour channel 0 lit with a diffuse light function: its light mask, functions and colour sources.
     std::uint32_t material = env;
     const XfChannelCtrl colour = decode_xf_channel_ctrl(vs.channel[0]);
     if ((surface.features & kRtSurfaceUnlit) == 0u && vs.num_chans != 0u && colour.lighting_enable &&

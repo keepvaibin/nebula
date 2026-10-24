@@ -1,17 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-// Enhanced lighting (RenderConfig::enhanced_lighting): the game's own lights and materials shaded
-// per pixel. A lit colour channel keeps its ambient (shadow side) and ambient-plus-light (fully lit)
-// colours; each light keeps its authored falloff and the lights add in linear light under a soft
-// shoulder instead of the channel clamp. The ambient is the sky: a hemisphere about the player's up
-// (the game's gravity; the view's up without it), and its reflection off the surface (Fresnel with
-// the surface's roughness, Karis' fit of the split-sum lookup) takes its share from the diffuse
-// light. The key light's highlight is GGX at physical strength, its lobe widened by the normal's
-// change across the pixel (Tokuyoshi and Kaplanyan's specular antialiasing). Environment-mapped
-// materials (the game's metals, crystals and ice) get a Fresnel gain on their environment lookups and
-// a metal highlight in their own colour. Unlit, non-environment-mapped draws (baked map geometry)
-// are unchanged; ambient occlusion (ambient_occlusion.h) darkens them with the rest of the scene.
+// Enhanced lighting (RenderConfig::enhanced_lighting): the game's own lights and materials shaded per pixel.
+// A lit colour channel keeps its ambient (shadow side) and ambient-plus-light (fully lit) colours; each light keeps its
+// authored falloff, and the lights add in linear light under a soft shoulder instead of the channel clamp. The ambient
+// is a sky hemisphere about the player's up (the game's gravity, else the view's up), and its Fresnel reflection
+// (Karis' fit of the split-sum lookup) takes its share from the diffuse light. The key light's highlight is GGX, its
+// lobe widened by the normal's change across the pixel (Tokuyoshi and Kaplanyan's specular antialiasing).
+// Environment-mapped materials (metals, crystals, ice) get a Fresnel gain on their environment lookups and a metal
+// highlight in their own colour. Unlit, non-environment-mapped draws (baked map geometry) are left as the game draws
+// them.
 
 #include "galaxy/gx/shader_keys.h"
 
@@ -38,13 +36,13 @@ struct EnhancedLightingTuning {
 // names above); the defaults without it.
 [[nodiscard]] const EnhancedLightingTuning& enhanced_lighting_tuning();
 
-// The ind_reserved material word of an enhanced draw (shader_keys.h kEnhanced*), zero when the
-// draw is neither lit nor environment-mapped (enhanced lighting leaves it as the game draws it).
-// The keys are the draw's own, before the enhanced bits are set.
 struct RtMaterial;
 // The material table's roughness and metalness for an enhanced draw's uber header (kEnhancedTable*;
 // 0 without an entry or without either value).
 [[nodiscard]] std::uint32_t enhanced_table_material(const RtMaterial* material) noexcept;
+// The ind_reserved material word of an enhanced draw (shader_keys.h kEnhanced*), zero when the
+// draw is neither lit nor environment-mapped (enhanced lighting leaves it as the game draws it).
+// The keys are the draw's own, before the enhanced bits are set.
 [[nodiscard]] std::uint32_t enhanced_lighting_material(const VertexShaderKey& vs,
                                                        const PixelShaderKey& ps) noexcept;
 

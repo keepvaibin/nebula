@@ -52,7 +52,7 @@ std::array<GameAreaLight, 2> g_area_lights{};
 std::array<std::chrono::steady_clock::time_point, 2> g_area_time{};
 std::array<bool, 2> g_area_known{};
 
-// A light is its guest info (id) when it has one, else its position.
+// A light is matched by its guest info (id) when it has one, else by position.
 template <std::size_t N>
 void note_light(std::array<NotedLight, N>& lights, const std::array<float, 3>& position,
                 const std::array<float, 3>& color, float half_distance = 0.0f, std::uint32_t id = 0u) {
@@ -159,8 +159,8 @@ std::uint64_t game_sun_updates() noexcept {
 void note_game_point_light(std::uint32_t info, const std::array<float, 3>& position,
                            const std::array<float, 3>& color, float half_distance) noexcept {
     {
-        // The requests carry every light; this one copies the nearest requester's (a module without the request
-        // site never sends them).
+        // While requests arrive (note_game_point_request) they carry every point light, and this nearest-light copy
+        // is ignored; a game module without the request site sends only this.
         const std::lock_guard<std::mutex> lock(g_game_lights_mutex);
         if (std::chrono::steady_clock::now() - g_point_request_seen < std::chrono::seconds(1)) {
             return;

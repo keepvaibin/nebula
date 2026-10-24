@@ -92,7 +92,8 @@ public:
     // The fence value the next scene's texture views wait for before begin_scene (0: none; ~0: they are still in
     // unsubmitted work, and that scene draws untextured).
     [[nodiscard]] std::uint64_t texture_views_fence() const noexcept;
-    // A renderer frame was submitted with this fence value: the scenes closed before it are done with it then.
+    // A renderer frame is submitted with `fence_value`: the texture views of scenes closed before it are free once it
+    // completes.
     void note_submission(std::uint64_t fence_value) noexcept;
     void begin_scene() noexcept;
     void add_draw(const RtDraw& draw, const RtDrawInfo& info);
@@ -144,8 +145,7 @@ public:
     [[nodiscard]] bool lighting_active() const noexcept {
         return ready_ && lighting_enabled_ && !ab_original_ && !scene_untraced_;
     }
-    // A scene shown as the game draws it under ray tracing (the file select: no stage, no world, its own menu
-    // lights tinting the heads; traced, Mario's skin went white).
+    // A scene shown untraced, as the game draws it (the file select: no stage or world, only its menu lights).
     void set_scene_untraced(bool untraced) noexcept { scene_untraced_ = untraced; }
     [[nodiscard]] bool scene_untraced() const noexcept { return scene_untraced_; }
     // The traced light is in the game's units (GALAXY_RT_PHYSICAL): lit draws show their full-light colour.
@@ -153,19 +153,19 @@ public:
     // GALAXY_RT_AB=1 (test runs): every other present shows the game's own picture (no traced
     // lighting, reflections or finish); the traced frames carry a mark in the EFB's top-left corner.
     [[nodiscard]] bool ab_original() const noexcept { return ab_original_; }
-    // The frame about to be drawn (GxBackend at its scene's start: the present it will become).
+    // GxBackend at a scene's start: whether the present it becomes shows the game's own picture.
     void set_ab_original(bool original) noexcept { ab_original_ = ab_ && original; }
     // The present the scene being drawn will be shown in (the snapshots' numbering).
     void set_presents(std::uint64_t presents) noexcept { presents_ = presents; }
     // The traced sun's world direction (towards it: GALAXY_RT_SUN, else the game's visible sun)
     // and the distance of the game's sun model (0: none); false without a sun.
     [[nodiscard]] bool sun_direction(std::array<float, 3>& world, float* distance = nullptr) const noexcept;
-    // Held: the game's sun stays where it last arrived however long ago (GxBackend: it arrived
-    // since the last camera cut); else it lasts 2 s.
+    // While held (GxBackend: the sun arrived since the last camera cut) the game's sun keeps its last
+    // direction however old it is; otherwise it expires after 2 s.
     void hold_sun(bool held) noexcept { sun_held_ = held; }
     // The open scene's key light while the game shows no sun (GxBackend: the world-fixed light its
-    // lit draws take): world direction towards it, colour (0-1), how far it has come in (0-1) and
-    // whether the sky shows it. It lights the scene as the sun does; one the sky does not show has
+    // lit draws take): world direction towards it, colour (0-1), strength (0-1, as it fades in and out)
+    // and whether the sky shows it. It lights the scene as the sun does; one the sky does not show has
     // soft shadows (no disc: GALAXY_RT_KEY_SIZE degrees).
     void set_key_light(bool valid, const std::array<float, 3>& world, const std::array<float, 3>& color,
                        float strength, bool shown) noexcept;
@@ -176,7 +176,7 @@ public:
     // direction towards it and its strength (0-1); false at night, in space, or with
     // GALAXY_RT_SKY_KEY=0.
     [[nodiscard]] bool sky_key(std::array<float, 3>& world, float& strength) const noexcept;
-    // Another sky (GxBackend: a stage was loaded): the map starts over.
+    // A new sky (GxBackend: a stage loaded): the sky map starts over.
     void reset_sky() noexcept;
     // The loaded stage's row of the sun table (rt_materials.h; null: none): its colour, strength,
     // disc and shafts apply to the sun the scene is lit by.
@@ -202,13 +202,12 @@ public:
                    std::uint32_t height, int slot, bool reproject, unsigned efb_scale);
     // Before a sub-frame's replay: its camera (world to eye at t), for the composites it runs.
     void write_reprojection(ID3D12GraphicsCommandList* list, const std::array<float, 12>& camera_t);
-    // The end of the scene: its finished picture (EFB colour and depth, NON_PIXEL_SHADER_RESOURCE,
-    // as two consecutive SRVs at `color_depth_table` in the bound heap) becomes the light the
-    // next frame's rays read where they hit.
-    // The glows drawn since the trace become lights: their eye-space triangles (geometry pass on the
-    // same sources) and what they added to the picture since snapshot_glow_base().
-    // `game_srv`: the game's own opaque picture (the lighting composite's source; 0: none), whose light
-    // past the film shoulder joins the bloom.
+    // At the scene's end: its finished picture (EFB colour and depth, NON_PIXEL_SHADER_RESOURCE, two
+    // consecutive SRVs at `color_depth_table` in the bound heap) becomes the light the next frame's rays
+    // read where they hit, and the glows drawn since the trace become lights (their eye-space triangles,
+    // from a geometry pass on the same sources, and what they added to the picture since
+    // snapshot_glow_base()). `game_srv`: the game's own opaque picture (the lighting composite's source;
+    // 0: none), whose light past the film shoulder joins the bloom.
     void capture_picture(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
                          void* allocate_context, D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table, std::uint32_t width,
                          std::uint32_t height, D3D12_GPU_DESCRIPTOR_HANDLE game_srv = {});
@@ -224,11 +223,10 @@ public:
     // HDR scene EFB's light (`picture_table`, NON_PIXEL and PIXEL_SHADER_RESOURCE) through bloom and the tone curve
     // into the RGBA8 EFB (`target`); without physical light the picture as it is, clamped.
     [[nodiscard]] bool camera_ready() const noexcept { return camera_pso_ && camera_widen_pso_; }
-    // The ray tracing engine (ray_tracing_engine.cpp, rt_engine.hlsl): under physical light with the textured
-    // lighting (the only lighting). set_engine_picture: the EFB's colour for the trace that follows
-    // (NON_PIXEL_SHADER_RESOURCE during it; the renderer transitions it).
-    // The engine's clear surfaces (rt_engine.hlsl EngineClearCS) of slot `slot` over the picture (`scene_srv`: its copy
-    // at the water's trace), with the water's composite.
+    // The ray tracing engine (ray_tracing_engine.cpp, rt_engine.hlsl), active under physical, textured lighting.
+    // composite_clear: the engine's clear surfaces (rt_engine.hlsl EngineClearCS) of `slot` over the picture
+    // (`scene_srv`: its copy at the water's trace), with the water's composite. set_engine_picture: the EFB colour
+    // the next trace reads (NON_PIXEL_SHADER_RESOURCE during it; the renderer transitions it).
     void composite_clear(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
                          D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width, std::uint32_t height, unsigned slot,
                          bool reproject, D3D12_GPU_DESCRIPTOR_HANDLE scene_srv);
@@ -287,8 +285,8 @@ private:
     // Physical glow light sources (rt_lighting.hlsl GlowEmitterCS, kGlowEmitters): the table's glow draws' triangles in
     // the emitters' buffer after the scene's, in world space, lit from the next frame.
     static constexpr std::uint32_t kGlowEmitters = 16384u;
-    // The eye's adaptation in the picture sums (ray_tracing.cpp kPictureStarColour + 16; rt_lighting.hlsl kAdaptation):
-    // its factor, known.
+    // Offset of the eye's adaptation in the picture sums (ray_tracing.cpp kPictureStarColour + 16; rt_lighting.hlsl
+    // kAdaptation): its factor and whether it is known.
     static constexpr std::uint64_t kPictureAdaptation = 208u;
     // g_emit_tris: header, 4 per scene emitter, the running power (scene then glow), 4 per glow emitter, glow powers.
     static constexpr std::uint64_t kEmitBufferBytes =
@@ -370,8 +368,8 @@ private:
     // The engine's views and constants for this trace (false: it does not run, the scene is not traced).
     bool engine_prepare(std::uint32_t width, std::uint32_t height, unsigned slot, RtEngineConstants& c,
                         std::uint32_t& flags);
-    // Its passes, the frame's constants (`constants`, `bytes`, the engine block at `engine_at`) re-uploaded per a-trous
-    // step; `frame` rebound after.
+    // Records the engine's passes. The frame's constants (`constants`, `bytes`, the engine block at `engine_at`) are
+    // re-uploaded per a-trous step, and `frame` is rebound after.
     void trace_engine(ID3D12GraphicsCommandList* list, Allocate allocate, void* allocate_context, const void* constants,
                       std::size_t bytes, std::size_t engine_at, D3D12_GPU_VIRTUAL_ADDRESS frame, unsigned slot);
     // Slot `slot` holds the engine's result for a width x height frame.
@@ -477,9 +475,7 @@ private:
     std::vector<std::array<std::uint32_t, 4>> draw_textures_;
     // The views g_draw_tex names: each scene's own block (set_texture_views), copied from the texture cache as
     // its draws arrive and kept until the GPU is done with the scene. The frame's descriptor ring rewinds its
-    // tables at every renderer frame, while a scene's traces read its draws' textures renderer frames later
-    // (measured: the lit Observatory's alpha-tested occluder read alpha 0 on single frames, its shadow and the
-    // core's highlight under it flashing).
+    // tables at every renderer frame, while a scene's traces read its draws' textures renderer frames later.
     struct TextureViewBlock {
         std::uint64_t fence = 0;   // the submission after its scene closed (0: none)
         bool closed = false;       // its scene closed, not yet submitted
@@ -509,8 +505,8 @@ private:
     D3D12_GPU_VIRTUAL_ADDRESS draw_texture_table_ = 0;
     // Physical: texture de-lighting (rt_delight.hlsl). Per texture-pack key the shading painted into the texture
     // (R8_SNORM log units, mips), made on the GPU in the trace of the scene that first shows the texture as a traced
-    // draw's material and read from the next scene on (by GBufferCS for the composite, by the hits' TEV). Kept across
-    // scenes; past kDelightBytes or the views the least recently drawn go. GALAXY_RT_DELIGHT=0: off.
+    // draw's material and read from the next scene on (by EngineGBufferCS for the composite, by the hits' TEV). Kept
+    // across scenes; past kDelightBytes or the views the least recently drawn go. GALAXY_RT_DELIGHT=0: off.
     struct DelightMap {
         Microsoft::WRL::ComPtr<ID3D12Resource> texture;
         std::uint32_t slot = 0;      // its view: delight_view_first_ + slot
@@ -834,8 +830,8 @@ private:
     std::array<std::uint32_t, kLensSlots> lens_count_{};
     std::uint32_t lens_draws_ = 0u;
     bool lens_ready_ = false;
-    float lens_strength_ = 1.0f;      // GALAXY_RT_LENS: the bending (0: none)
-    bool lens_view_ = false;          // GALAXY_RT_LENS_VIEW: rings at the found sizes
+    float lens_strength_ = 1.0f;      // the bending (0: none)
+    bool lens_view_ = false;          // rings at the found sizes
     // The material table's stars among the scene draws (`star`: the Observatory's core, Melty Molten's suns):
     // their first triangle and count in the scene's triangles; StarSphereCS fits each one's ball into the
     // lighting result after its samples (rt_lighting.hlsl kStarSlots).
@@ -847,8 +843,8 @@ private:
     // kStarSlots balls and the stars' colour over time (rt_lighting.hlsl kStarColour), each with the frame it was
     // taken (+1; 0: free) and whether the colour was copied.
     static constexpr unsigned kBallReadbacks = 4u;
-    // Then the pixel probe's two records (GALAXY_RT_PROBE: rt_lighting.hlsl TraceCS).
-    // The probe's two records, then the engine reference's comparison (rt_engine.hlsl EngineFinalCS) and a spare.
+    // After the balls and the colour: the pixel probe's two records (GALAXY_RT_PROBE: rt_engine.hlsl EngineGBufferCS),
+    // the engine reference's comparison (rt_engine.hlsl EngineFinalCS) and a spare.
     static constexpr unsigned kProbeRecords = 4u;
     static constexpr unsigned kBallReadbackBytes = kStarSlots * 16u + 16u + kProbeRecords * 16u;
     // GALAXY_RT_PROBE=x,y (diagnostics): an EFB pixel whose sample reports, once a second, the draw the camera sees and
@@ -872,10 +868,8 @@ private:
     std::uint64_t star_colour_from_frame_ = ~0ull;   // copies taken after it hold this stage's colour
     Microsoft::WRL::ComPtr<ID3D12PipelineState> star_sphere_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> authored_emit_pso_;
-    // GALAXY_RT_AUTHORED_POWER: a Luma's light (intensity 1). At 40000, under the old rational soft caps, a Luma, a
-    // lamp or a firefly lit the Observatory garden by +4 to +25 % and the lit plaza read 0.81 of the game's picture
-    // (user: the lights light nothing). 60000 with the logarithmic roll-off (rt_lighting.hlsl soft_light): the
-    // garden's posts +61 %, the Luma +69 %, the plaza at 0.96 of the game's picture.
+    // GALAXY_RT_AUTHORED_POWER: a Luma's light (intensity 1). Sized for the logarithmic roll-off (rt_lighting.hlsl
+    // soft_light): lamps and Lumas visibly light their surroundings while a lit scene stays near the game's brightness.
     float authored_power_ = 60000.0f;
     std::uint64_t authored_frames_ = 0u;
     std::uint32_t glow_triangles_ = 0u;
@@ -925,7 +919,7 @@ private:
     D3D12_RESOURCE_STATES water_surfaces_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     // Late opaque draws (kRtLatePhase) from the trace to the scene's end: drawn after the trace, they join
     // the scene as a second instance: in this frame's water reflections, then (moved to the next frame's
-    // camera) in its shadows, sky occlusion and reflections. Rosalina was in none of them.
+    // camera) in its shadows, sky occlusion and reflections (Rosalina is one: the game draws her after the capture).
     std::vector<RtDraw> late_draws_;
     std::uint32_t late_triangles_ = 0u;
     std::size_t late_flushed_draws_ = 0u;
@@ -1082,9 +1076,9 @@ private:
     float night_ = 1.0f;            // GALAXY_RT_NIGHT: the sky and bounce light under a black sky (relative)
     float daylight_ = 0.35f;        // GALAXY_RT_DAYLIGHT: the sky's luminance that gives it in full
     float glow_boost_ = 0.4f;       // GALAXY_RT_GLOW_BOOST: extra light of a glowing surface
-    // GALAXY_RT_GLOW_EXPOSURE: colour scale of the glows themselves. 1 (as the game draws them): the
-    // exposure matches the lit picture to the game's, and a scale on every additive draw blew planets'
-    // atmospheres and halos out to white (measured: Gateway, the Observatory).
+    // GALAXY_RT_GLOW_EXPOSURE: colour scale of the glows themselves. 1 draws them as the game does: the
+    // exposure already matches the lit picture to the game's, and a scale on every additive draw washes
+    // planets' atmospheres and halos out to white.
     float glow_exposure_ = 1.0f;
     float glow_spill_ = 0.7f;       // GALAXY_RT_GLOW_SPILL: share of a glow's excess that turns it white
     float glow_model_exposure_ = 1.0f;  // GALAXY_RT_GLOW_MODEL_EXPOSURE: glowing models (a star's surface)
@@ -1113,7 +1107,7 @@ private:
     float sun_cap_ = 2.5f;          // GALAXY_RT_SUN_CAP: the night lights' soft cap where the star core's light rules
     // The night key (moon, a stage's red star) adds its light on the faces it reaches (GALAXY_RT_NIGHT_KEY,
     // its strength per stage in rt-suns.tsv); by day the environment's art level (GALAXY_RT_DAY_ENVIRONMENT,
-    // map geometry; characters and objects stay at kDayLevel).
+    // map geometry only).
     float night_key_ = 0.5f;
     float day_environment_ = 0.92f;
     float sky_ibl_ = 0.8f;          // GALAXY_RT_SKY_IBL: rays reaching the sky take the light of their
