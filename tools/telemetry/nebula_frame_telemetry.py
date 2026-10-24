@@ -1,4 +1,4 @@
-"""Read Nebula's bounded Windows IPC; XFB serials are not content/simulation proof."""
+"""Reads the frame telemetry a running game publishes (runtime/include/galaxy/frame_telemetry.h)."""
 from __future__ import annotations
 
 import ctypes
@@ -56,7 +56,7 @@ class Rates:
 
 
 class Client:
-    """No file logs, allocation on game threads, or blocking IPC acquisition."""
+    """One process's telemetry, read without ever blocking on the writer."""
     def __init__(self):
         self.kernel = ctypes.WinDLL("kernel32", use_last_error=True)
         for name in ("OpenFileMappingW", "OpenMutexW", "OpenProcess"):

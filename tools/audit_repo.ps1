@@ -1,3 +1,5 @@
+# Checks the tracked files: no game content, build outputs, oversized files or credentials, and no
+# C runtime fma call in the runtime.
 [CmdletBinding()]
 param()
 
@@ -75,8 +77,8 @@ foreach ($RelativePath in $TrackedFiles) {
             }
         }
         # On an SSE2 build std::fma is a C runtime call, a soft-float routine on CPUs
-        # without FMA3 (THP cutscenes ran at a few frames per second). Tests may use
-        # it as the reference.
+        # without FMA3, far too slow for the THP decoder. Tests may use it as the
+        # reference.
         if ($RelativePath -like 'runtime/*' -and $File.Extension -in @(".cpp", ".h", ".inl") -and
             $RelativePath -notlike '*_tests.cpp' -and $RelativePath -ne 'runtime/include/galaxy/fused_multiply_add.h' -and
             $Text -match '(std::|[^\w.])fmaf?\s*\(') {

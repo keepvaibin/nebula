@@ -1,12 +1,12 @@
 """Digest of a Nebula frame timeline (GALAXY_FRAME_TIMELINE=1, runtime/include/galaxy/frame_timeline.h).
 
-Usage: python timeline_digest.py <timeline.bin> [--skip-seconds N] [--csv out.csv]
+Usage: python timeline_digest.py <timeline.bin> [--skip-seconds N]
 
 Every timestamp in the file is QPC. The report covers:
-  chain      per render chunk: submit -> render start -> guest reads done ->
+  chain      per render chunk: submit -> render start -> game memory reads done ->
              command list submitted -> GPU start/end -> fence observed -> token
              consumed by the simulation thread
-  vi         VI edge cadence and the delay from edge to the guest-visible level
+  vi         VI edge cadence and the delay from edge to the game-visible level
   present    Present call cadence, new-XFB cadence (copy serial changes), and
              DXGI frame statistics: how many display refreshes each present
              stayed on screen and how many presents never reached the screen
@@ -76,7 +76,7 @@ def main():
     print(f'[timeline] pid={pid} events={len(records)} written={written} span-s={span_s:.1f} qpc-hz={freq}')
     print('[timeline-counts] ' + ' '.join(f'{EVENTS.get(e, e)}={c}' for e, c in sorted(counts.items())))
 
-    # ---------------------------------------------------------------- chains
+    # Chains.
     submit_begin = {}
     pending_source = {}
     by_token = defaultdict(dict)
@@ -143,7 +143,6 @@ def main():
     gpu_exec_all = [(g['end'] - g['begin']) * ms for g in gpu.values() if 'begin' in g and 'end' in g]
     print(f'[timeline-gpu] all-command-lists exec-ms {stats(gpu_exec_all)}')
 
-    # ---------------------------------------------------------------- VI
     # VI delivery lateness: consume time minus the deadline (timeline ticks
     # at 60.75 MHz). The two clocks share no known offset, so report the
     # spread above the run's smallest value: a constant offset cancels.
@@ -167,7 +166,7 @@ def main():
             delays.append((vi_latched[li] - e) * ms)
     print(f'[timeline-vi] edge-to-latched-ms {stats(delays)}')
 
-    # ---------------------------------------------------------------- present
+    # Presents.
     pb = [r for r in records if r[1] == 14]
     pe = {r[2]: r[0] for r in records if r[1] == 15}
     present_iv = [(b[0] - a[0]) * ms for a, b in zip(pb, pb[1:])]
@@ -219,7 +218,7 @@ def main():
     print('[timeline-display] refreshes-between-displayed-presents ' +
           ' '.join(f'{k}:{v}' for k, v in sorted(on_screen.items())))
 
-    # ---------------------------------------------------------------- waits
+    # Waits.
     def paired(begin_ev, end_ev):
         open_at = {}
         out = []
@@ -234,7 +233,7 @@ def main():
     slot = paired(22, 23)
 
     # Draw-done windows: from the draw-done submission until its PE events
-    # were delivered (finish raised for the guest). The share of that window
+    # were delivered (finish raised for the game). The share of that window
     # the simulation thread spent idle-waiting says whether the game had
     # anything else to run while it waited for the render thread and GPU.
     idle_spans = []

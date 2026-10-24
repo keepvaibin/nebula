@@ -1,4 +1,4 @@
-"""Capture existing once-per-second IPC without suspending gameplay."""
+"""Records a running game's frame telemetry: sample_interval.py <pid> <seconds 1..60> <output.json>"""
 import json
 import sys
 import time
@@ -22,4 +22,4 @@ if rows:
     print(json.dumps({k: sum(r[k] for r in rows)/len(rows) for k in
                       ('copy_hz', 'first_return_hz', 'game_return_hz', 'repeat_hz')}))
 else:
-    raise SystemExit('No fresh telemetry; no FPS claim')
+    raise SystemExit('No telemetry from the process')
