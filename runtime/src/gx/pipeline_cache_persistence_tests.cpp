@@ -208,7 +208,7 @@ struct PipelineCachePersistenceTestAccess {
         bool resolved = false, threw = false;
         try {
             if (startup) {
-                cache.wait_for_cached_pso_prewarm(1u);
+                cache.wait_for_cached_pso_prewarm();
                 const auto it = cache.published_.find(MemoizedPsoKey{record});
                 resolved = it != cache.published_.end();
                 if (resolved) result = it->second.Get();
@@ -526,7 +526,7 @@ struct PipelineCachePersistenceTestAccess {
         PipelineCache cache;
         cache.worker_error_ = std::make_exception_ptr(std::runtime_error("worker fixture failure"));
         cache.in_flight_.insert(MemoizedPsoKey{key(1u)});
-        try { cache.wait_for_cached_pso_prewarm(1u); }
+        try { cache.wait_for_cached_pso_prewarm(); }
         catch (const std::runtime_error& e) {
             return std::string(e.what()) == "worker fixture failure";
         }

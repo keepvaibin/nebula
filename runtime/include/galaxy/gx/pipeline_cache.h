@@ -11,8 +11,8 @@
 //     before any command-list recording, so a PSO pointer never changes while a
 //     list is recording.
 //
-// Lookup: a published specialized PSO is returned. Otherwise, in hybrid uber mode,
-// a draw whose render state has an uber pipeline draws with it while a worker
+// Lookup: a published specialized PSO is returned. Otherwise a draw whose
+// render state has an uber pipeline draws with it while a worker
 // compiles the specialization; without one the specialization is compiled
 // synchronously, since skipping the draw would show as missing geometry.
 //
@@ -203,7 +203,6 @@ private:
     // once per session on uber_compile_thread_ and is read-only once uber_blobs_ready_ is set;
     // PSOs per (render state, output variant) are built by the compile
     // workers and published to uber_psos_ by drain_completions().
-    enum class UberMode : std::uint8_t { Off, Hybrid, Force };
     struct UberPsoKey {
         RenderStateKey render_state{};
         std::uint32_t variant = 0;
@@ -223,7 +222,8 @@ private:
             return static_cast<std::size_t>(combine64(hash, key.variant));
         }
     };
-    UberMode uber_mode_ = UberMode::Off;
+    // Set by initialize(); a cache that was never initialized has no uber pipelines.
+    bool uber_enabled_ = false;
     std::thread uber_compile_thread_;
     std::atomic<bool> uber_blobs_ready_{false};
     Microsoft::WRL::ComPtr<ID3DBlob> uber_vs_blob_;
@@ -240,7 +240,7 @@ private:
     std::uint64_t uber_async_specializations_ = 0;
     void compile_uber_blobs() noexcept;
     [[nodiscard]] ID3D12PipelineState* uber_pipeline(
-        const RenderStateKey& render_state, unsigned variant, bool create_now);
+        const RenderStateKey& render_state, unsigned variant);
     [[nodiscard]] Microsoft::WRL::ComPtr<ID3D12PipelineState> create_uber_pso(
         const RenderStateKey& render_state, unsigned variant);
     void enqueue_uber_pso(const UberPsoKey& key);
@@ -386,8 +386,6 @@ private:
         const VertexShaderKey& vs_key,
         bool fast_first,
         bool* fast_compiled);
-    // Opt-in fresh-cache seed import; see pipeline_cache.cpp. Never throws.
-    void import_fresh_cache_seed() noexcept;
     void load_disk_cache();
     void load_pso_key_cache();
     void load_pipeline_library();
@@ -396,7 +394,7 @@ private:
         const PsoKey& key, ShaderPair& out) const;
     [[nodiscard]] std::uint64_t enqueue_cached_pso_prewarm(
         unsigned worker_count);
-    void wait_for_cached_pso_prewarm(std::uint64_t enqueued);
+    void wait_for_cached_pso_prewarm();
     [[nodiscard]] bool wait_for_in_flight_pso(
         const MemoizedPsoKey& memoized,
         ID3D12PipelineState*& out);
