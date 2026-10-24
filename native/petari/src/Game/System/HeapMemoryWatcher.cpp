@@ -1,4 +1,7 @@
 #include "Game/System/HeapMemoryWatcher.hpp"
+#ifdef TARGET_PC
+#include "Game/Screen/NebulaIcons.hpp"
+#endif
 #include "Game/Util/MemoryUtil.hpp"
 #include <JSystem/JKernel/JKRExpHeap.hpp>
 #include <JSystem/JKernel/JKRSolidHeap.hpp>
@@ -145,7 +148,12 @@ void HeapMemoryWatcher::createHeaps() {
     u32 wpadHeapSize = OSRoundUp32B(WPADGetWorkMemorySize()) + 0xD0;
     mWPadHeap = ::createExpHeap(wpadHeapSize, pRootHeapGDDR, false);
     mHomeButtonLayoutHeap = ::createExpHeap(0x80000, HeapMemoryWatcher::sRootHeapGDDR3, false);
+#ifdef TARGET_PC
+    // Room for what Nebula keeps the whole game (the picture font's icon sheets).
+    mStationedHeapGDDR = ::createExpHeap(0x1400000 + NebulaIcons::cStationedBytes, HeapMemoryWatcher::sRootHeapGDDR3, false);
+#else
     mStationedHeapGDDR = ::createExpHeap(0x1400000, HeapMemoryWatcher::sRootHeapGDDR3, false);
+#endif
     createGameHeap();
 }
 

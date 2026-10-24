@@ -9,11 +9,17 @@ class LayoutActor;
 // buttons: the host names the style (the controller in use, or the one chosen) and the button each stands for
 // (NebulaHostServices::button_icons). Every text and layout that shows a button through the picture font shows them.
 namespace NebulaIcons {
+    // The stationed GDDR heap's room for our sheets, widths and code map (HeapMemoryWatcher); a font that needs more
+    // keeps its own icons.
+    const u32 cStationedBytes = 0x100000;
+    // Once the stationed resources are loaded (the picture font among them), before the stationed heaps shrink to fit:
+    // the font's sheets, widths and code map of ours.
+    void init();
     // Each frame: the icons again when the host's choice changed.
     void update();
-    // The A button over people and signs (IconAButton's own pictures) as the icons have it, in `pActor`'s layout, when
-    // the icons changed since `*pShown` (the layout's own count, 0 at first).
-    void applyToLayout(LayoutActor* pActor, u32* pShown);
+    // `pActor` (an IconAButton) drawn with the A button over people and signs as the icons have it: ours in place of
+    // its own two pictures while it draws, its own after.
+    void drawWithIcons(const LayoutActor* pActor);
     // A real Wii Remote is in the player's hand (the host's NebulaButtonIcons::wii_remote): the game's pictures of one
     // (how to shake it to spin, tilt it to roll the Star Ball or steer the Ray) show only then.
     bool wiiRemoteInUse();

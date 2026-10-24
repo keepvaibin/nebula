@@ -127,6 +127,10 @@ void __NebulaButtonIcons(NebulaButtonIcons* icons) {
     sHost->button_icons(sHost->user, icons);
 }
 
+u32 __NebulaArtExport(const NebulaArtExport* art) {
+    return sHost->art_export(sHost->user, art);
+}
+
 s32 __NebulaHomeMenu(u32 what, u32 value) {
     return sHost->hbm(sHost->user, what, value);
 }

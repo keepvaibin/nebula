@@ -4794,7 +4794,11 @@ NativeSettingsView build_native_settings_view() {
     NativeSettingsView view;
     view.pages.assign(std::begin(kNativeSettingsTabNames), std::end(kNativeSettingsTabNames));
     view.controls_page = kControlsTab;
-    if (const auto device = galaxy::host::last_input_device()) {
+    // The hints show the buttons the icons do: a chosen style whatever is in hand, else what the player last used.
+    const ButtonIcons icons = get_runtime_settings().button_icons;
+    if (icons == ButtonIcons::Xbox || icons == ButtonIcons::Nintendo || icons == ButtonIcons::PlayStation) {
+        view.input = icons == ButtonIcons::Xbox ? 1u : icons == ButtonIcons::Nintendo ? 2u : 3u;
+    } else if (const auto device = galaxy::host::last_input_device()) {
         switch (device->scheme) {
         case galaxy::input::ControlScheme::Keyboard: break;
         case galaxy::input::ControlScheme::SwitchPro:

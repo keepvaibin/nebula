@@ -41,6 +41,8 @@
 #endif
 #include "galaxy/runtime_settings.h"
 #include "galaxy/gx/render_config.h"
+#include "galaxy/gx/rt_materials.h"
+#include "galaxy/gx/texture_pack.h"
 
 #if defined(_WIN32)
 #include <crtdbg.h>
@@ -1745,6 +1747,58 @@ void svc_button_icons(void*, NebulaButtonIcons* icons) {
     icons->wii_remote = galaxy::host::real_wiimote_in_use() ? 1u : 0u;
 #endif
 }
+
+// GALAXY_EXPORT_ART=<folder>: Nebula's own pictures (NebulaIcons) as a texture pack, pack/RMG/tex1_..._5.png at their
+// HD size, named by the texture the game draws; previews in native/ and hd/; pack-names.txt pairs them.
+uint32_t svc_art_export(void*, const NebulaArtExport* art) {
+#if defined(NEBULA_HOST_RENDERER)
+    static const std::filesystem::path folder = [] {
+        const char* value = std::getenv("GALAXY_EXPORT_ART");
+        if (value == nullptr || value[0] == '\0') return std::filesystem::path{};
+        // This run's names only.
+        std::error_code error;
+        std::filesystem::create_directories(value, error);
+        std::FILE* names = std::fopen((std::filesystem::path(value) / "pack-names.txt").string().c_str(), "wb");
+        if (names != nullptr) std::fclose(names);
+        return std::filesystem::path(value);
+    }();
+    if (folder.empty()) return 0u;
+    if (art == nullptr) return 1u;
+    const auto write = [](const std::filesystem::path& file, uint32_t width, uint32_t height, const uint8_t* rgba) {
+        std::error_code error;
+        std::filesystem::create_directories(file.parent_path(), error);
+        if (rgba == nullptr || width == 0u || height == 0u || !galaxy::gx::write_png(file, width, height, rgba)) {
+            log_line("[art]", ("could not write " + file.string()).c_str());
+        }
+    };
+    std::string line = art->name != nullptr ? art->name : "";
+    constexpr uint32_t kRgb5a3 = static_cast<uint32_t>(galaxy::gx::TexFormat::RGB5A3);
+    if (art->texels != nullptr && art->format == kRgb5a3 && art->width % 4u == 0u && art->height % 4u == 0u) {
+        galaxy::gx::TexturePackName name{};
+        name.width = static_cast<uint16_t>(art->width);
+        name.height = static_cast<uint16_t>(art->height);
+        name.format = static_cast<uint8_t>(art->format);
+        name.hash = galaxy::gx::texture_pack_hash(static_cast<const uint8_t*>(art->texels),
+                                                  static_cast<std::size_t>(art->width) * art->height * 2u);
+        const std::string stem = galaxy::gx::texture_pack_name(name);
+        write(folder / "pack" / "RMG" / (stem + ".png"), art->hd_width, art->hd_height, art->hd);
+        line += "\t" + stem;
+    }
+    if (art->name != nullptr) {
+        write(folder / "native" / (std::string(art->name) + ".png"), art->width, art->height, art->rgba);
+        write(folder / "hd" / (std::string(art->name) + ".png"), art->hd_width, art->hd_height, art->hd);
+    }
+    std::FILE* names = std::fopen((folder / "pack-names.txt").string().c_str(), "ab");
+    if (names != nullptr) {
+        std::fprintf(names, "%s\n", line.c_str());
+        std::fclose(names);
+    }
+    return 1u;
+#else
+    (void)art;
+    return 0u;
+#endif
+}
 std::atomic<uint32_t> gTiltSection{0};
 std::atomic<bool> gMotor{false};
 
@@ -3081,6 +3135,7 @@ int main(int argc, char** argv) {
     services.sharp_2d = svc_sharp_2d;
     services.button_icons = svc_button_icons;
     services.wpad_sample = svc_wpad_sample;
+    services.art_export = svc_art_export;
     services.gx_stripe_particle = svc_gx_stripe_particle;
     services.disc_fst = svc_disc_fst;
     services.disc_read = svc_disc_read;

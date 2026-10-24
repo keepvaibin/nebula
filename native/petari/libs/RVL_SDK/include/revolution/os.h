@@ -86,6 +86,9 @@ void __NebulaSharp2D(u32 on);
 // The button icons the game shows now (button_icons in nebula_game_api.h).
 struct NebulaButtonIcons;
 void __NebulaButtonIcons(struct NebulaButtonIcons* icons);
+// Nebula's own pictures for GALAXY_EXPORT_ART (art_export in nebula_game_api.h); NULL asks whether one is on.
+struct NebulaArtExport;
+u32 __NebulaArtExport(const struct NebulaArtExport* art);
 // The host's HOME Menu as the game draws it (NEBULA_HBM_VIEW, NEBULA_HBM_POINT, NEBULA_HBM_CHOOSE).
 s32 __NebulaHomeMenu(u32 what, u32 value);
 // A game object's name for the renderer (object_name in nebula_game_api.h).

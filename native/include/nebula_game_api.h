@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 25u
+#define NEBULA_GAME_API_VERSION 26u
 
 /* A physical range of the game's memory and where it is in the host process: what the GPU's addresses resolve to. */
 typedef struct NebulaGameMemoryRegion {
@@ -232,6 +232,21 @@ typedef struct NebulaButtonIcons {
     uint8_t places[NEBULA_BUTTON_ICONS];
     uint8_t wii_remote; /* a real Wii Remote is in use: the game's pictures of one show */
 } NebulaButtonIcons;
+
+/* A picture of Nebula's own (its button icons) for GALAXY_EXPORT_ART: `texels` the texture the game draws, which names
+   it in a texture pack (none for a preview alone), `rgba` the same as RGBA8 and `hd` the picture `hd_width` x
+   `hd_height` (both straight alpha), `name` its preview's path ("PlayStation/face-south"). */
+typedef struct NebulaArtExport {
+    const char* name;
+    const void* texels;
+    uint32_t width;
+    uint32_t height;
+    uint32_t format; /* GX_TF_* */
+    const uint8_t* rgba;
+    const uint8_t* hd;
+    uint32_t hd_width;
+    uint32_t hd_height;
+} NebulaArtExport;
 
 /* What the line under the page says (with `status_number` or `status_text` where it has one). */
 enum {
@@ -452,6 +467,9 @@ typedef struct NebulaHostServices {
     /* The game reads remote `chan` now (each frame, before KPADRead): the host's newest input in a report at once
        (nebula_game_wpad_report, from this thread), rather than at its next one. */
     void (*wpad_sample)(void* user, uint32_t chan);
+    /* GALAXY_EXPORT_ART=<folder>: Nebula's own pictures written there (NebulaArtExport). NULL asks whether an export
+       is on: 1, else 0 (the game then paints nothing for it). */
+    uint32_t (*art_export)(void* user, const NebulaArtExport* art);
 } NebulaHostServices;
 
 enum {

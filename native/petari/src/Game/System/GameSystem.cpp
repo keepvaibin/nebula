@@ -182,6 +182,7 @@ void GameSystem::initAfterStationedResourceLoaded() {
     mErrorWatcher->initAfterResourceLoaded();
     mSystemWipeHolder = MR::createSystemWipeHolder();
 #ifdef TARGET_PC
+    NebulaIcons::init();
     NebulaCutsceneSkip::init();
     NebulaSettingsMenu::init();
 #endif

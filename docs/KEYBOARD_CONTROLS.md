@@ -42,7 +42,13 @@ ZR/RT/R2 as a spin button and ZL/LT/L2 as crouch.
 The game's button icons (A, B, C, Z, 1, 2, Plus and Minus in its text: the title screen, dialogue, tutorials, menus)
 show the button each is bound to on the controller in use: Xbox's in their colours, Switch and PlayStation buttons
 white, shoulders, triggers and stick clicks by name. A keyboard or a controller of no known family shows the Wii's.
-General > Button icons keeps one style (Wii, Xbox, Nintendo Switch, PlayStation) whatever is in use.
+General > Button icons keeps one style (Wii, Xbox, Nintendo Switch, PlayStation) whatever is in use; Xbox, Nintendo
+Switch and PlayStation show in the settings menu's hints too (with Wii and Auto they follow what was last used).
+
+The icons are textures of Nebula's own beside the game's, which keep their content: a texture pack's replacements of the
+game's icons still show with the Wii style, and Nebula's show as drawn unless a pack names them. The Nebula HD Button
+Icons pack has them at eight times their size; `GALAXY_EXPORT_ART=<folder>` writes it again (`pack/`, with previews in
+`native/` and `hd/`).
 
 A tap of Plus or Minus pauses (the console waited for the button to be held 12 frames and for the remote to be still);
 a press made while A or B is held pauses once they are let go.
