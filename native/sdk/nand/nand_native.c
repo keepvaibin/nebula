@@ -183,8 +183,6 @@ static void prepare_info(NANDFileInfo* info, const char* path, u8 access) {
     info->accType = access;
 }
 
-/* Opening */
-
 static s32 open_common(const char* path, NANDFileInfo* info, u8 access, u32 op, NANDCallback callback,
                        NANDCommandBlock* block, BOOL async) {
     prepare_info(info, path, access);
@@ -234,8 +232,6 @@ s32 NANDCloseAsync(NANDFileInfo* info, NANDCallback callback, NANDCommandBlock* 
 s32 NANDSafeCloseAsync(NANDFileInfo* info, NANDCallback callback, NANDCommandBlock* block) {
     return run_async(file_op(NEBULA_FS_SAFE_CLOSE, info), callback, block);
 }
-
-/* Data */
 
 static Slot* transfer(u32 op, NANDFileInfo* info, void* buffer, u32 length) {
     Slot* slot = file_op(op, info);
@@ -289,8 +285,6 @@ s32 NANDGetLength(NANDFileInfo* info, u32* length) {
 s32 NANDGetLengthAsync(NANDFileInfo* info, u32* length, NANDCallback callback, NANDCommandBlock* block) {
     return run_async(get_length(info, length), callback, block);
 }
-
-/* Files and directories */
 
 static Slot* create(u32 op, const char* path, u8 perm, u8 attr) {
     Slot* slot = path_op(op, path);

@@ -35,7 +35,7 @@ int __NebulaTestSceneFrame(void* action) {
     return sHost->test_scene_frame(sHost->user, (NebulaTestAction*)action);
 }
 
-/* The console's hardware registers, which some kept code still names (private/flipper.h): plain memory natively. */
+/* The console's hardware registers that kept code names (private/flipper.h): plain memory natively. */
 vu16 __VIRegs[0x3B];
 vu32 __PIRegs[0xC];
 vu16 __DSPRegs[0x20];
@@ -125,8 +125,7 @@ NEBULA_GAME_API int nebula_game_memory_regions(NebulaGameMemoryRegion* out, int 
     return count;
 }
 
-/* An SDK function the native layer does not implement yet (sdk/stubs). The game reaching one is a gap to fill,
-   never something to step over. */
+/* An SDK function the native layer does not implement (sdk/stubs): reaching one stops the game with its name. */
 void nebula_sdk_missing(const char* name) {
     nebula_fatal("the game called %s, which the native SDK layer does not implement yet", name);
 }

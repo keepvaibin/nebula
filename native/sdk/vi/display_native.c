@@ -1,6 +1,6 @@
-/* The picture's shape the game draws for, as v1.0.1's dynamic aspect (experimental_ultrawide_aspect.h): the host
-   latches the output's shape at each retrace and the game's screen width, camera aspect and layout canvas follow it.
-   Retraces and the game run on the simulation thread, so a frame never sees half a change. */
+/* The picture's shape the game draws for: the host latches the output's shape at each retrace and the game's screen
+   width, camera aspect and layout canvas follow it. Retraces and the game run on the simulation thread, so a frame
+   never sees half a change. */
 #include <math.h>
 
 #include <nebula_game_api.h>

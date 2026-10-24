@@ -1,6 +1,6 @@
 # Builds the game module (native/CMakeLists.txt) on Windows with clang++ and Ninja, inside the MSVC environment
 # (for the C runtime and Windows SDK libraries the link needs).
-#   native\build.ps1 -Petari D:\NebulaWork\petari -Build D:\NebulaWork\port\build-game [-Config Release] [-Target smg_game]
+#   native\build.ps1 -Petari native\petari -Build build\game [-Config Release] [-Target smg_game]
 param(
     [Parameter(Mandatory = $true)][string]$Petari,
     [Parameter(Mandatory = $true)][string]$Build,

@@ -71,8 +71,7 @@ static Deferred sDeferred[kDeferred];
 static u32 sDeferredCount;
 static BOOL sInitialized;
 
-/* Host entry points (any thread). */
-
+/* The host's entry points, called from any thread. */
 NEBULA_GAME_API void nebula_game_wpad_connect(uint32_t chan, int connected, const NebulaWiimoteConnection* connection) {
     if (chan >= kChannels) {
         return;
@@ -110,8 +109,7 @@ NEBULA_GAME_API void nebula_game_wpad_report(uint32_t chan, const uint8_t* repor
     nebula_raise_interrupt(__OS_INTERRUPT_PI_SI);
 }
 
-/* Calibration (WPADHIDParser.c: getDevConfig, getExtConfig) */
-
+/* Calibration as WPADHIDParser.c's getDevConfig and getExtConfig apply it. */
 static const s16 kDummyObjX[] = {127, 896, 896, 127};
 static const s16 kDummyObjY[] = {93, 93, 674, 674};
 
@@ -239,8 +237,7 @@ static void apply_extension_calibration(Channel* c) {
     c->stickOriginSet = FALSE;
 }
 
-/* Report decoding (WPADHIDParser.c: __a1_3x_data_type, __parse_dpd_data) */
-
+/* Report decoding as WPADHIDParser.c's __a1_3x_data_type and __parse_dpd_data do it. */
 static void parse_dpd(Channel* c, WPADStatus* s, int fmt, const u8* d, int len) {
     if (fmt == 3) {
         for (int i = 0; i < WPAD_DPD_MAX_OBJECTS; i++) {
@@ -367,8 +364,6 @@ static void decode(Channel* c, const u8* d) {
     c->status = full;
 }
 
-/* The controller interrupt */
-
 static void defer(WPADCallback callback, s32 chan, s32 result) {
     if (callback == NULL) {
         return;
@@ -448,8 +443,6 @@ BOOL __NebulaWPADExactPointer(s32 chan, Vec2* pos) {
     pos->y = c->pointerY;
     return TRUE;
 }
-
-/* The API */
 
 void WPADInit(void) {
     if (sInitialized) {
@@ -612,7 +605,7 @@ s32 WPADGetInfoAsync(s32 chan, WPADInfo* info, WPADCallback callback) {
     return WPAD_ERR_NONE;
 }
 
-/* A virtual remote's Mii area is blank, as its EEPROM (v1.0.1's device model). */
+/* A virtual remote's Mii area is blank. */
 s32 WPADReadFaceData(s32 chan, void* buffer, u32 length, u32 address, WPADCallback callback) {
     (void)address;
     if (!sChannels[chan].connected) {

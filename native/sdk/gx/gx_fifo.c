@@ -55,8 +55,6 @@ extern volatile void* __memReg;
 
 NebulaGXWriter __NebulaGXWriter;
 
-/* The command ring */
-
 enum { kRingSize = 16u << 20 };
 
 static uint8_t* sRing;          /* kRingSize bytes, mapped again at sRing + kRingSize */
@@ -191,8 +189,6 @@ NEBULA_GAME_API void nebula_game_gx_release(size_t size) {
 #endif
     }
 }
-
-/* The CPU FIFO objects */
 
 static __GXFifoObj sCPUFifo;
 static __GXFifoObj sGPFifo;

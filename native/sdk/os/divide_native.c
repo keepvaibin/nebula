@@ -4,8 +4,8 @@
    trap there, so a trap inside the game module is finished with the console's result: the quotient as above, the
    remainder as the console's code computes it (a - q * b), and execution continues after the instruction. Nothing is
    done on the normal path. Windows delivers the trap as an exception, Linux and macOS as SIGFPE. arm64's sdiv and
-   udiv do not trap (x / 0 is 0, which is PowerPC's result but for a negative dividend): sites that divide by zero are
-   fixed in their source (__nebula_divw, nebula_prelude.h). */
+   udiv do not trap (x / 0 is 0, which is PowerPC's result but for a negative dividend): sites that divide by zero
+   divide with __nebula_divw (nebula_prelude.h) in their source. */
 #include <stdint.h>
 
 #include "nebula_sdk.h"
@@ -99,7 +99,8 @@ static void ppc_divide(const DivideInsn* insn, int64_t divisor, uint64_t* rax, u
     }
 }
 
-/* Sites seen, for the log: a trap costs microseconds, so a site that traps every frame is fixed in its source instead. */
+/* Sites seen, for the log: a trap costs microseconds, so a site that traps every frame divides with __nebula_divw in
+   its source instead. */
 static struct {
     uintptr_t offset;
     int count;

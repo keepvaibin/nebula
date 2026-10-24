@@ -1,5 +1,6 @@
-/* Native-port hot-path micro-benchmarks behind docs/NATIVE_PERFORMANCE.md: each pair is the previous code and its
-   replacement, built with the game module's flags. Times are per operation (ns) and cycles at the measured TSC rate.
+/* Hot-path micro-benchmarks behind docs/NATIVE_PERFORMANCE.md's before/after columns: each pair is the slower and the
+   faster form of one path, built with the game module's flags. Times are per operation (ns) and cycles at the
+   calibrated TSC rate.
    Windows/x86-64:
      clang -O3 -fsigned-char -fno-strict-aliasing -fno-strict-float-cast-overflow -fno-math-errno -fuse-ld=lld
            hotpath_bench.c -o hotpath_bench.exe
@@ -81,7 +82,7 @@ static void bench_interrupts(void) {
     enum { N = 2000000 };
     uint64_t t = tsc();
     for (int i = 0; i < N; i++) { sEnabledA = 0; restore_current(1); }
-    report("A1 OSRestoreInterrupts(TRUE), QPC deadline check (now)", tsc() - t, N);
+    report("A1 OSRestoreInterrupts(TRUE), QPC deadline check", tsc() - t, N);
     t = tsc();
     for (int i = 0; i < N; i++) { sEnabledB = 0; restore_candidate(1); }
     report("A2 OSRestoreInterrupts(TRUE), one atomic pending word", tsc() - t, N);
@@ -108,14 +109,14 @@ static inline void put32(uint32_t v) {
 }
 static inline void putf32(float f) { uint32_t b; memcpy(&b, &f, 4); put32(b); }
 
-/* GXLoadPosMtxImm today: one write per value. */
+/* GXLoadPosMtxImm with a reservation per value. */
 NOINLINE void load_mtx_current(const float m[3][4], uint32_t id) {
     put8(0x10);
     put32((uint32_t)(id * 4) | 0xB0000u);
     for (int r = 0; r < 3; r++)
         for (int c = 0; c < 4; c++) putf32(m[r][c]);
 }
-/* Candidate: room for the whole command checked once, the bytes written through a local pointer. */
+/* Room for the whole command checked once, the bytes written through a local pointer. */
 static inline void st32(uint8_t* p, uint32_t v) { v = __builtin_bswap32(v); memcpy(p, &v, 4); }
 NOINLINE void load_mtx_candidate(const float m[3][4], uint32_t id) {
     uint8_t* p = reserve(1 + 4 + 48);
@@ -161,7 +162,7 @@ static void bench_writer(void) {
     gW.ptr = sFifo; gW.end = sFifo + (1 << 20);
     uint64_t t = tsc();
     for (int i = 0; i < N; i++) load_mtx_current(m, (uint32_t)i & 7);
-    report("B1 GXLoadPosMtxImm (53 B), a reserve per value (now)", tsc() - t, N);
+    report("B1 GXLoadPosMtxImm (53 B), a reserve per value", tsc() - t, N);
     gW.ptr = sFifo;
     t = tsc();
     for (int i = 0; i < N; i++) load_mtx_candidate(m, (uint32_t)i & 7);
@@ -169,7 +170,7 @@ static void bench_writer(void) {
     gW.ptr = sFifo;
     t = tsc();
     for (int i = 0; i < N; i++) vertex_current(v, 0xFF00FF00u);
-    report("B3 vertex pos3f+clr+tex2f (24 B), a reserve per value (now)", tsc() - t, N);
+    report("B3 vertex pos3f+clr+tex2f (24 B), a reserve per value", tsc() - t, N);
     gW.ptr = sFifo;
     t = tsc();
     for (int i = 0; i < N; i++) vertex_per_call(v, 0xFF00FF00u);
@@ -204,7 +205,7 @@ static void bench_rsqrt(void) {
     float acc = 0.0f;
     uint64_t t = tsc();
     for (int i = 0; i < N; i++) acc = tutil_sqrt_current(acc + 2.0f);
-    report("C1 TUtil::sqrt, estimate = 1/sqrtf (now), dependent", tsc() - t, N);
+    report("C1 TUtil::sqrt, estimate = 1/sqrtf, dependent", tsc() - t, N);
     float acc2 = 0.0f;
     t = tsc();
     for (int i = 0; i < N; i++) acc2 = tutil_sqrt_candidate(acc2 + 2.0f);
@@ -221,8 +222,8 @@ static void bench_rsqrt(void) {
         if (e1 > worstNow) worstNow = e1;
         if (e2 > worstCand) worstCand = e2;
     }
-    printf("   worst relative error: now %.3g, rsqrtss+Newton %.3g (float ulp 6e-8) [%g %g %g]\n", worstNow, worstCand,
-           acc, acc2, acc3);
+    printf("   worst relative error: 1/sqrtf+Newton %.3g, rsqrtss+Newton %.3g (float ulp 6e-8) [%g %g %g]\n",
+           worstNow, worstCand, acc, acc2, acc3);
 }
 
 /* D: float to int conversion, as colour packing does it */

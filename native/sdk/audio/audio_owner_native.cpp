@@ -1,10 +1,9 @@
 // The sound on each DSP channel, for the host's volume categories (music, voices, effects, ambience, cutscenes), from
-// the game's own objects. v1.0.1 walked the console's memory from fixed addresses, which the native game does not
-// have. Each step is checked by type, not guessed from memory: a DSP channel's JASChannel is the one whose update
-// callback it carries and which points back at it; the JASChannel's callback says what its data is (a track's channel
-// manager or a stream); the track's root (or the stream) names the sound that owns it (JAISe, JAISeq, JAIStream set
-// it when built). Called on the game's audio thread, which starts and ends the channels; every object it reads lives
-// in a pool or inside a sound, so a sound ending meanwhile leaves a stale name, never a bad read.
+// the game's own objects, each step checked by type: a DSP channel's JASChannel is the one whose update callback it
+// carries and which points back at it; the JASChannel's callback says what its data is (a track's channel manager or a
+// stream); the track's root (or the stream) names the sound that owns it (JAISe, JAISeq and JAIStream set it when
+// built). Called on the game's audio thread, which starts and ends the channels; every object it reads lives in a pool
+// or inside a sound, so a sound ending meanwhile leaves a stale name, never a bad read.
 #include <nebula_game_api.h>
 
 #include "JSystem/JAudio2/JAISound.hpp"

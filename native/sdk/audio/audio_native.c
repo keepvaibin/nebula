@@ -18,13 +18,9 @@
 
 const NebulaHostServices* nebula_host(void);
 
-/* DSP */
-
 int __NebulaDSPCommands(const u32* words, u32 count) {
     return nebula_host()->audio_dsp(nebula_host()->user, words, count);
 }
-
-/* AI */
 
 static AIDCallback sDMACallback;
 static BOOL sAIInitialized;
@@ -87,8 +83,6 @@ void AIStopDMA(void) {
 void AISetDSPSampleRate(u32 rate) {
     nebula_host()->ai_control(nebula_host()->user, NEBULA_AI_RATE, rate != 0 ? 48000 : 32000);
 }
-
-/* AR: aralt.c natively */
 
 enum { kARBase = 0x4000 };
 

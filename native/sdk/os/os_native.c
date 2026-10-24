@@ -54,9 +54,8 @@ void OSSetMEM1ArenaLo(void*);
 void OSSetMEM1ArenaHi(void*);
 void OSSetMEM2ArenaLo(void*);
 
-/* Log: whole lines to the host's log (stderr before the host attaches); a report without its newline yet waits for
-   the rest of its line, as the console's output did. */
-
+/* The host's log takes whole lines (stderr before the host attaches): a report without its newline waits for the rest
+   of its line. */
 static char sLogLine[1024];
 static size_t sLogLength;
 static atomic_flag sLogLock = ATOMIC_FLAG_INIT;
@@ -202,9 +201,7 @@ OSTick OSGetTick(void) {
     return (OSTick)(game_time() + sCalendarBase);
 }
 
-/* Pending work and waking the simulation thread
-
-   sPending: device interrupts in OS_INTERRUPTMASK's bit order (interrupt n is bit 31 - n), so the deliverable set is
+/* sPending: device interrupts in OS_INTERRUPTMASK's bit order (interrupt n is bit 31 - n), so the deliverable set is
    pending & ~mask, and the decrementer in bit 32, which no mask covers. Host threads set bits; the simulation thread
    clears them as it delivers. sIdle is set while the simulation thread sleeps for want of work: a raiser signals only
    then (both sides use sequentially consistent order, so one of them always sees the other). */
@@ -406,8 +403,6 @@ static void clock_rearm(void) {
     pthread_mutex_unlock(&sClockLock);
 }
 #endif
-
-/* Interrupts */
 
 static BOOL sInterruptsEnabled; /* the simulation thread's MSR[EE] */
 static __OSExceptionHandler sExceptionHandlers[16];
@@ -620,8 +615,7 @@ void __NebulaIdle(void) {
     }
 }
 
-/* Contexts: the registers are the host's; what remains of OSContext is which one is current. */
-
+/* The registers are the host's; what remains of OSContext is which one is current. */
 void OSSetCurrentContext(OSContext* context) {
     sCurrentContext = context;
 }
@@ -643,8 +637,6 @@ void OSFillFPUContext(OSContext* context) {
 uintptr_t __attribute__((noinline)) OSGetStackPointer(void) {
     return (uintptr_t)__builtin_frame_address(0);
 }
-
-/* Threads */
 
 typedef struct {
     void* (*func)(void*);
@@ -707,18 +699,18 @@ void* __NebulaPrepareThread(void* (*func)(void*), void* param, void* stackTop, u
     return nebula_prepare_stack(top, stackSize - 48, thread_main, start);
 }
 
-/* Native stacks. A game thread runs on a stack from the pool at the top of MEM2 (in the arena, where the GPU can read
-   stack data the game gives GX), not on the buffer the game gives OSCreateThread: that is sized for the console's
-   code, and x64 frames are larger (an AddressSanitizer build's larger still, with exceptions dispatched on the current
-   stack). A guard below each stack makes an overflow fault instead of overwriting the heap. A slot is reused once its
-   thread has exited or been cancelled. */
+/* A game thread runs on a stack from the pool at the top of MEM2 (in the arena, where the GPU can read stack data the
+   game gives GX), not on the buffer the game gives OSCreateThread: that is sized for the console's code, and x64
+   frames are larger (an AddressSanitizer build's larger still, with exceptions dispatched on the current stack). A
+   guard below each stack makes an overflow fault instead of overwriting the heap. A slot is reused once its thread has
+   exited or been cancelled. */
 #if defined(__has_feature)
 #if __has_feature(address_sanitizer)
 #define NEBULA_STACK_MIN 0x100000u /* AddressSanitizer frames are several times larger */
 #endif
 #endif
 #ifndef NEBULA_STACK_MIN
-#define NEBULA_STACK_MIN 0x40000u /* 256 KB: the deepest measured (boot to the title screen) is 13.5 KB */
+#define NEBULA_STACK_MIN 0x40000u /* 256 KB: the game's deepest stack, boot to the title screen, is 13.5 KB */
 #endif
 enum { kStackGuard = 0x4000u, kStackMin = NEBULA_STACK_MIN, kStackSlots = 64 };
 
@@ -829,8 +821,6 @@ void* __NebulaBootStackEnd(void) {
     return nebula_arena_base() + kBootStackTop - kBootStackSize;
 }
 
-/* Error handlers, shutdown functions, power and reset */
-
 OSErrorHandler __OSErrorTable[17];
 u32 __OSFpscrEnableBits = 0xF8;
 
@@ -899,8 +889,6 @@ BOOL __DVDTestAlarm(const OSAlarm* alarm) {
     return FALSE;
 }
 
-/* Reports */
-
 void OSReport(const char* format, ...) {
     va_list args;
     va_start(args, format);
@@ -922,8 +910,6 @@ void OSPanic(const char* file, int line, const char* format, ...) {
     snprintf(text, sizeof(text), "the game stopped (OSPanic) at %s:%d: %s", file, line, message);
     fatal_text(text);
 }
-
-/* Boot */
 
 static void (*sGameMain)(void);
 static void* sHostStack;
