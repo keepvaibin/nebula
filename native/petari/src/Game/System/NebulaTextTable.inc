@@ -1101,5 +1101,17 @@ const NebulaTextRow cNebulaTextRows[] = {
      {L"Open folder", nullptr, L"Ouvrir le dossier", L"Ouvrir le dossier", L"Abrir carpeta", L"Abrir carpeta", L"Ordner \u00F6ffnen", L"Apri cartella", L"Map openen", L"Abrir pasta", L"\u30D5\u30A9\u30EB\u30C0\u30FC\u3092\u958B\u304F", L"\uD3F4\uB354 \uC5F4\uAE30", L"\u6253\u5F00\u6587\u4EF6\u5939", L"\u958B\u555F\u8CC7\u6599\u593E"}},
     {"S.COULD_NOT_RESTART",
      {L"Could not restart", nullptr, L"Red\u00E9marrage impossible", L"Red\u00E9marrage impossible", L"No se pudo reiniciar", L"No se pudo reiniciar", L"Neustart nicht m\u00F6glich", L"Impossibile riavviare", L"Opnieuw starten lukt niet", L"N\u00E3o foi poss\u00EDvel reiniciar", L"\u518D\u8D77\u52D5\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F", L"\uB2E4\uC2DC \uC2DC\uC791\uD560 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4", L"\u65E0\u6CD5\u91CD\u65B0\u542F\u52A8", L"\u7121\u6CD5\u91CD\u65B0\u555F\u52D5"}},
+    {"S.BUTTON_ICONS",
+     {L"Button icons", nullptr, L"Ic\u00F4nes des boutons", L"Ic\u00F4nes des boutons", L"Iconos de botones", L"Iconos de botones", L"Tastensymbole", L"Icone dei pulsanti", L"Knoppictogrammen", L"\u00CDcones dos bot\u00F5es", L"\u30DC\u30BF\u30F3\u30A2\u30A4\u30B3\u30F3", L"\uBC84\uD2BC \uC544\uC774\uCF58", L"\u6309\u952E\u56FE\u6807", L"\u6309\u9375\u5716\u793A"}},
+    {"S.WII",
+     {L"Wii", nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr}},
+    {"S.XBOX",
+     {L"Xbox", nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr}},
+    {"S.NINTENDO_SWITCH",
+     {L"Nintendo Switch", nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr}},
+    {"S.PLAYSTATION",
+     {L"PlayStation", nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr}},
+    {"S.THE_BUTTONS_THE_GAME'S_ICONS_SHOW._AUTO:_THE_CONTROLLER_IN_USE",
+     {L"The buttons the game's icons show. Auto: the controller in use.", nullptr, L"Les boutons que montrent les ic\u00F4nes du jeu. Auto : la manette utilis\u00E9e.", L"Les boutons que montrent les ic\u00F4nes du jeu. Auto : la manette utilis\u00E9e.", L"Los botones que muestran los \u00EDconos del juego. Autom\u00E1tico: el control en uso.", L"Los botones que muestran los iconos del juego. Autom\u00E1tico: el mando en uso.", L"Die Tasten, die die Symbole des Spiels zeigen. Automatisch: der verwendete Controller.", L"I pulsanti mostrati dalle icone del gioco. Automatico: il controller in uso.", L"De knoppen die de pictogrammen van het spel tonen. Automatisch: de gebruikte controller.", L"Os bot\u00F5es que os \u00EDcones do jogo mostram. Autom\u00E1tico: o controle em uso.", L"\u30B2\u30FC\u30E0\u306E\u30A2\u30A4\u30B3\u30F3\u304C\u793A\u3059\u30DC\u30BF\u30F3\u3002\u81EA\u52D5\uFF1A\u4F7F\u7528\u4E2D\u306E\u30B3\u30F3\u30C8\u30ED\u30FC\u30E9\u30FC", L"\uAC8C\uC784 \uC544\uC774\uCF58\uC774 \uBCF4\uC5EC \uC8FC\uB294 \uBC84\uD2BC. \uC790\uB3D9: \uC0AC\uC6A9 \uC911\uC778 \uCEE8\uD2B8\uB864\uB7EC", L"\u6E38\u620F\u56FE\u6807\u663E\u793A\u7684\u6309\u952E\u3002\u81EA\u52A8\uFF1A\u6B63\u5728\u4F7F\u7528\u7684\u63A7\u5236\u5668", L"\u904A\u6232\u5716\u793A\u986F\u793A\u7684\u6309\u9375\u3002\u81EA\u52D5\uFF1A\u6B63\u5728\u4F7F\u7528\u7684\u63A7\u5236\u5668"}},
 };
 // clang-format on

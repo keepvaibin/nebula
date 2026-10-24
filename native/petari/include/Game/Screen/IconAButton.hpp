@@ -29,4 +29,7 @@ public:
     /* 0x20 */ TVec2f mFollowPos;
     /* 0x28 */ LayoutActor* mFollowActor;
     /* 0x2C */ char mFollowPaneName[24];
+#ifdef TARGET_PC
+    u32 mNebulaIcons;  // the icons shown (NebulaIcons::applyToLayout)
+#endif
 };

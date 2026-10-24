@@ -29,6 +29,10 @@ struct RuntimeAudioSettings {
     friend bool operator==(const RuntimeAudioSettings&, const RuntimeAudioSettings&) = default;
 };
 
+// The style of the game's button icons: the controller in use (a Wii Remote's for the keyboard and controllers it does
+// not know), or one style always.
+enum class ButtonIcons : std::uint8_t { Auto, Wii, Xbox, Nintendo, PlayStation };
+
 // The three languages of the USA disc, as the Wii's SC language codes SCGetLanguage returns.
 enum class GameLanguage : std::uint8_t { English = 1, French = 3, Spanish = 4 };
 
@@ -41,6 +45,7 @@ struct RuntimeSettings {
     GameLanguage language = GameLanguage::English;
     // Discord shows what the player is doing (galaxy, star, Power Stars) while Discord runs.
     bool discord_status = true;
+    ButtonIcons button_icons = ButtonIcons::Auto;
 
     friend bool operator==(const RuntimeSettings&, const RuntimeSettings&) = default;
 };
@@ -52,6 +57,8 @@ struct RuntimeSettings {
 [[nodiscard]] bool running_game_language(GameLanguage& language) noexcept;
 // "english", "french" or "spanish" (runtime_settings.ini).
 [[nodiscard]] const char* game_language_key(GameLanguage language) noexcept;
+// "auto", "wii", "xbox", "nintendo" or "playstation" (runtime_settings.ini).
+[[nodiscard]] const char* button_icons_key(ButtonIcons icons) noexcept;
 
 // The generation changes only when the input mode changes, so device FIFOs can reject reports acquired
 // under an older source.

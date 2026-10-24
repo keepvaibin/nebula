@@ -155,7 +155,10 @@ The game module routes two call sites through the host: `GameScene::draw3D` from
 `GameScene::draw` (`0x8033E820`) and the closing `MR::clearZBuffer` of `draw3D` (`0x8033F024`).
 The render thread splits its parse at those points (`FifoMarker::SceneBegin`, `SceneEnd`). With
 `hud_output_resolution`, the finished 3D image is resampled into an output EFB at the window's
-integer scale and the 2D layer (HUD, menus) is drawn there.
+integer scale and the 2D layer (HUD, menus) is drawn there. Without it, a window wider than 16:9 or
+narrower than 4:3 still takes that path at the scale that keeps the layouts' density at the Wii's
+own (`layout_density_scale`: their logical width past 16:9, or height under 4:3, spreads over the
+same 640x456 picture; 2x at 21:9 and 32:9, 3x at 9:16), at most the window's.
 
 The optional FSR 3 path (built with the AMD FidelityFX SDK) uses the same split: sub-pixel jitter
 on perspective draws inside the 3D scene (`GxBackend::apply_scene_jitter`), the EFB depth, and

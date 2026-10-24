@@ -147,6 +147,12 @@ void apply_kv(RuntimeSettings& settings, const char* key, const char* value) {
         }
     } else if (std::strcmp(key, "discord_status") == 0) {
         settings.discord_status = value[0] != '0';
+    } else if (std::strcmp(key, "button_icons") == 0) {
+        for (unsigned i = 0; i <= static_cast<unsigned>(ButtonIcons::PlayStation); ++i) {
+            if (_stricmp(value, button_icons_key(static_cast<ButtonIcons>(i))) == 0) {
+                settings.button_icons = static_cast<ButtonIcons>(i);
+            }
+        }
     } else if (std::strcmp(key, "language") == 0) {
         for (const GameLanguage language : {GameLanguage::English, GameLanguage::French, GameLanguage::Spanish}) {
             if (_stricmp(value, game_language_key(language)) == 0) settings.language = language;
@@ -335,6 +341,11 @@ bool running_game_language(GameLanguage& language) noexcept {
     return true;
 }
 
+const char* button_icons_key(ButtonIcons icons) noexcept {
+    static constexpr const char* kKeys[] = {"auto", "wii", "xbox", "nintendo", "playstation"};
+    return kKeys[std::min<std::size_t>(static_cast<std::size_t>(icons), std::size(kKeys) - 1u)];
+}
+
 const char* game_language_key(GameLanguage language) noexcept {
     switch (language) {
     case GameLanguage::French: return "french";
@@ -427,6 +438,7 @@ bool save_runtime_settings_to_file() {
                  << "text_speed=" << settings.text_speed << '\n'
                  << "language=" << game_language_key(settings.language) << '\n'
                  << "discord_status=" << (settings.discord_status ? 1 : 0) << '\n'
+                 << "button_icons=" << button_icons_key(settings.button_icons) << '\n'
                  << input::format_controls_settings(input::get_controls_config());
         if (!contents) {
             return false;

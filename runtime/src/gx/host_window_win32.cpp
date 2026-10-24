@@ -3315,6 +3315,22 @@ std::vector<SettingsRow> game_page(const RuntimeSettings& runtime) {
                         }
                     },
                     "HOW FAST DIALOGUE TEXT APPEARS. INSTANT: EACH PAGE AT ONCE"});
+    {
+        static constexpr const char* kIcons[] = {"AUTO", "WII", "XBOX", "NINTENDO SWITCH", "PLAYSTATION"};
+        rows.push_back({"BUTTON ICONS", kIcons[std::min<std::size_t>(static_cast<std::size_t>(runtime.button_icons), 4u)],
+                        [](RenderConfig&, int delta) {
+                            // Changes live (no apply).
+                            RuntimeSettings settings = get_runtime_settings();
+                            const auto next = static_cast<ButtonIcons>(
+                                settings_step(static_cast<unsigned>(settings.button_icons), 5u, delta));
+                            if (next != settings.button_icons) {
+                                settings.button_icons = next;
+                                set_runtime_settings(settings);
+                                s_native_settings_dirty.store(true, std::memory_order_release);
+                            }
+                        },
+                        "THE BUTTONS THE GAME'S ICONS SHOW. AUTO: THE CONTROLLER IN USE"});
+    }
     rows.push_back({"LANGUAGE", game_language_name(runtime.language),
                     [](RenderConfig&, int delta) {
                         // Saved now; the game switches at the next start (game_language_for_boot).

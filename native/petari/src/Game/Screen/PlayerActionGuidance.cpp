@@ -8,6 +8,9 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#ifdef TARGET_PC
+#include "Game/Screen/NebulaIcons.hpp"
+#endif
 
 namespace {
     static const s32 sSuspendFrame = 60;
@@ -53,6 +56,12 @@ void PlayerActionGuidance::control() {
 
     _37 = _36;
     _36 = false;
+#ifdef TARGET_PC
+    // Pictures of a Wii Remote (shaking it, tilting it) only with one in hand.
+    if (!NebulaIcons::wiiRemoteInUse()) {
+        _35 = false;
+    }
+#endif
 }
 
 void PlayerActionGuidance::init(const JMapInfoIter& rIter) {

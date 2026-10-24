@@ -1,4 +1,5 @@
 #include "galaxy/gx/render_config.h"
+#include "galaxy/experimental_ultrawide_aspect.h"
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -78,6 +79,21 @@ private:
 
 int main() {
     bool passed = true;
+
+    {
+        // The 2D layer's scale for the Wii's own layout density: 16:9 and 4:3 as the Wii, two at 21:9 and 32:9,
+        // three at 9:16, four at 9:21 and narrower; no shape (the game's 16:9) one.
+        const auto at = [](double aspect) {
+            return galaxy::layout_density_scale(galaxy::make_experimental_ultrawide_aspect(aspect));
+        };
+        passed = expect(at(16.0 / 9.0) == 1u && at(4.0 / 3.0) == 1u && at(16.0 / 10.0) == 1u, "Wii shapes at 1x") &&
+                 passed;
+        passed = expect(at(21.0 / 9.0) == 2u && at(32.0 / 9.0) == 2u && at(5.0) == 2u, "wide shapes at 2x") && passed;
+        passed = expect(at(1.0) == 2u && at(9.0 / 16.0) == 3u && at(9.0 / 21.0) == 4u && at(0.2) == 4u,
+                        "narrow shapes by their height") &&
+                 passed;
+        passed = expect(galaxy::layout_density_scale(std::nullopt) == 1u, "no shape at 1x") && passed;
+    }
 
     {
         const auto same = [](const std::vector<unsigned>& got, std::initializer_list<unsigned> want) {

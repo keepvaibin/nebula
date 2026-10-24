@@ -23,6 +23,7 @@
 #include <cstring>
 #include <iostream>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -1464,6 +1465,42 @@ void test_kpad_dots_stable() {
 
 }  // namespace
 
+// The game's button icons: each Wii button's first controller input in the style asked; B in menus the button that
+// goes back there; the Wii's own icons where nothing on the controller is bound.
+void test_button_icons() {
+    const BindingTable xbox = default_binding_table(ControlScheme::Xbox);
+    const auto icon = [](const ButtonIconSpec& spec, ButtonIcon which) {
+        return std::pair<ButtonGlyph, unsigned>(spec.glyphs[static_cast<std::size_t>(which)],
+                                                spec.places[static_cast<std::size_t>(which)]);
+    };
+    using Glyph = std::pair<ButtonGlyph, unsigned>;
+    const ButtonIconSpec play = button_icon_spec(ButtonIconStyle::Xbox, xbox, false);
+    expect(play.style == ButtonIconStyle::Xbox, "the style asked");
+    expect(icon(play, ButtonIcon::A) == Glyph{ButtonGlyph::Face, 0u}, "Xbox: A is the south button");
+    expect(icon(play, ButtonIcon::B) == Glyph{ButtonGlyph::Shoulder, 0u}, "Xbox in play: B is LB (Star Bits)");
+    expect(icon(play, ButtonIcon::Z) == Glyph{ButtonGlyph::Trigger, 0u}, "Xbox: Z is LT");
+    expect(icon(play, ButtonIcon::C) == Glyph{ButtonGlyph::Stick, 0u}, "Xbox: C is the left stick's click");
+    expect(icon(play, ButtonIcon::Plus) == Glyph{ButtonGlyph::Start, 0u}, "Xbox: Plus is Menu");
+    expect(icon(play, ButtonIcon::Minus) == Glyph{ButtonGlyph::Back, 0u}, "Xbox: Minus is View");
+    expect(icon(play, ButtonIcon::Pad) == Glyph{ButtonGlyph::Keep, 0u}, "the Control Pad keeps the Wii's own");
+    expect(icon(play, ButtonIcon::One) == Glyph{ButtonGlyph::Keep, 0u}, "Xbox: 1 has no button: the Wii's own icon");
+    const ButtonIconSpec menu = button_icon_spec(ButtonIconStyle::Xbox, xbox, true);
+    expect(icon(menu, ButtonIcon::B) == Glyph{ButtonGlyph::Face, 1u}, "Xbox in menus: B is the east button (back)");
+    const ButtonIconSpec nintendo =
+        button_icon_spec(ButtonIconStyle::Nintendo, default_binding_table(ControlScheme::SwitchPro), true);
+    expect(icon(nintendo, ButtonIcon::A) == Glyph{ButtonGlyph::Face, 1u}, "Switch: A is the east button");
+    expect(icon(nintendo, ButtonIcon::B) == Glyph{ButtonGlyph::Face, 0u}, "Switch in menus: B is the south button");
+    const ButtonIconSpec wii = button_icon_spec(ButtonIconStyle::Wii, xbox, false);
+    bool kept = true;
+    for (const ButtonGlyph glyph : wii.glyphs) kept = kept && glyph == ButtonGlyph::Keep;
+    expect(kept, "the Wii style keeps every icon");
+    BindingTable remapped = xbox;
+    remapped[WiiTarget::A] = {};
+    remapped[WiiTarget::A][0] = InputSource{SourceKind::Button, static_cast<std::uint8_t>(pad::kNorthBit)};
+    expect(icon(button_icon_spec(ButtonIconStyle::Xbox, remapped, false), ButtonIcon::A) == Glyph{ButtonGlyph::Face, 3u},
+           "a rebound A shows the button it is bound to");
+}
+
 int main(int argc, char** argv) {
     // The launcher's ControlsSettings mirrors these defaults; this prints them
     // for a cross-check.
@@ -1491,6 +1528,7 @@ int main(int argc, char** argv) {
     test_defaults_and_migration();
     test_playstation_and_steam_schemes();
     test_kpad_dots_stable();
+    test_button_icons();
     if (g_failures != 0) {
         std::cerr << g_failures << " controls test(s) failed\n";
         return 1;

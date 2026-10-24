@@ -1791,16 +1791,23 @@ std::size_t connected_controllers(std::span<input::ControllerInfo> out) noexcept
     return count + hid_controllers(out.subspan(count));
 }
 
-std::optional<input::DeviceKey> last_input_device() noexcept {
-    // GALAXY_TEST_LAST_INPUT=<n>: input::ControlScheme n is the one in use whatever else gives input (hidden runs show
-    // the menus' buttons for each controller).
+namespace {
+// GALAXY_TEST_LAST_INPUT=<n>: input::ControlScheme n is the one in use whatever else gives input, as if attached (hidden
+// runs show the menus' buttons for each controller); -1 without it.
+int test_last_input_scheme() noexcept {
     static const int s_test_scheme = [] {
         const std::optional<std::string> scheme = read_env_string_uncached("GALAXY_TEST_LAST_INPUT");
-        return scheme.has_value() ? std::atoi(scheme->c_str()) : -1;
+        const int value = scheme.has_value() ? std::atoi(scheme->c_str()) : -1;
+        return value >= 0 && value < static_cast<int>(input::kControlSchemeCount) ? value : -1;
     }();
-    if (s_test_scheme >= 0 && s_test_scheme < static_cast<int>(input::kControlSchemeCount)) {
-        return input::DeviceKey{static_cast<input::ControlScheme>(s_test_scheme),
-                                s_test_scheme == 0 ? input::kKeyboardSlot : std::uint8_t{0}};
+    return s_test_scheme;
+}
+}  // namespace
+
+std::optional<input::DeviceKey> last_input_device() noexcept {
+    if (const int test_scheme = test_last_input_scheme(); test_scheme >= 0) {
+        return input::DeviceKey{static_cast<input::ControlScheme>(test_scheme),
+                                test_scheme == 0 ? input::kKeyboardSlot : std::uint8_t{0}};
     }
     const std::uint32_t key = g_last_input.load(std::memory_order_relaxed);
     if (key == kLastInputNone) return std::nullopt;
@@ -1811,6 +1818,82 @@ std::optional<input::DeviceKey> last_input_device() noexcept {
 
 void note_keyboard_input() noexcept {
     g_last_input.store(kLastInputKeyboard, std::memory_order_relaxed);
+}
+
+input::ButtonIconSpec button_icons(bool menu) noexcept {
+    using input::ButtonIconStyle;
+    using input::ControlScheme;
+    // The game's thread asks each frame. The controller last used stays while the mouse and keys are (a pad's player
+    // may aim with the mouse) as long as a controller is attached; the keyboard alone shows a Wii Remote's.
+    // The pads attached: read once a second and when the last input's device changes (the roster asks XInput's empty
+    // slots, which is slow).
+    static std::array<ControlScheme, input::kMaxControllers> s_attached{};
+    static std::size_t s_attached_count = 0u;
+    static std::uint64_t s_attached_checked_ms = 0u;
+    static std::optional<input::DeviceKey> s_device;
+    static std::optional<ControlScheme> s_pad;
+    const std::optional<input::DeviceKey> device = last_input_device();
+    const std::uint64_t now_ms = GetTickCount64();
+    if (device != s_device || now_ms - s_attached_checked_ms >= 1000u) {
+        s_device = device;
+        s_attached_checked_ms = now_ms;
+        std::array<input::ControllerInfo, input::kMaxControllers> attached{};
+        s_attached_count = connected_controllers(attached);
+        for (std::size_t i = 0; i < s_attached_count; ++i) s_attached[i] = attached[i].scheme;
+    }
+    const auto attached = [](ControlScheme scheme) {
+        return static_cast<int>(scheme) == test_last_input_scheme() ||
+               std::find(s_attached.begin(), s_attached.begin() + s_attached_count, scheme) !=
+                   s_attached.begin() + s_attached_count;
+    };
+    // The pad in use while it is attached; else the family remembered while such a pad is attached, else the first
+    // pad attached, else none.
+    if (device.has_value() && input::scheme_is_gamepad(device->scheme) && attached(device->scheme)) {
+        s_pad = device->scheme;
+    } else if (s_pad.has_value() && !attached(*s_pad)) {
+        s_pad = s_attached_count != 0u ? std::optional<ControlScheme>(s_attached[0]) : std::nullopt;
+    }
+    const std::optional<ControlScheme> pad = s_pad;
+    ButtonIconStyle style = ButtonIconStyle::Wii;
+    switch (get_runtime_settings().button_icons) {
+    case ButtonIcons::Wii: break;
+    case ButtonIcons::Xbox: style = ButtonIconStyle::Xbox; break;
+    case ButtonIcons::Nintendo: style = ButtonIconStyle::Nintendo; break;
+    case ButtonIcons::PlayStation: style = ButtonIconStyle::PlayStation; break;
+    case ButtonIcons::Auto:
+        // A controller of no known family shows a Wii Remote's.
+        switch (pad.value_or(ControlScheme::Keyboard)) {
+        case ControlScheme::Xbox:
+        case ControlScheme::Steam: style = ButtonIconStyle::Xbox; break;
+        case ControlScheme::SwitchPro:
+        case ControlScheme::SwitchPro2: style = ButtonIconStyle::Nintendo; break;
+        case ControlScheme::PlayStation: style = ButtonIconStyle::PlayStation; break;
+        case ControlScheme::Keyboard:
+        case ControlScheme::Generic: break;
+        }
+        break;
+    }
+    // The bindings of the controller in use; a style chosen without one takes its own family's. A chosen style shows
+    // the bound buttons by place (an 8BitDo pad seen as an Xbox one, with Nintendo's labels).
+    const ControlScheme scheme = pad.has_value() ? *pad
+                                 : style == ButtonIconStyle::Nintendo    ? ControlScheme::SwitchPro
+                                 : style == ButtonIconStyle::PlayStation ? ControlScheme::PlayStation
+                                                                         : ControlScheme::Xbox;
+    // Worked out again only when the bindings, the style, the controller or the context change.
+    static std::uint64_t s_generation = ~std::uint64_t{0};
+    static ButtonIconStyle s_style = ButtonIconStyle::Wii;
+    static ControlScheme s_scheme = ControlScheme::Keyboard;
+    static bool s_menu = false;
+    static input::ButtonIconSpec s_spec;
+    const std::uint64_t generation = input::controls_config_generation();
+    if (generation != s_generation || style != s_style || scheme != s_scheme || menu != s_menu) {
+        s_generation = generation;
+        s_style = style;
+        s_scheme = scheme;
+        s_menu = menu;
+        s_spec = input::button_icon_spec(style, input::get_controls_config().table(scheme), menu);
+    }
+    return s_spec;
 }
 
 void publish_native_window_key_state(std::uint32_t key, bool down) noexcept {
@@ -3121,6 +3204,14 @@ void apply_button_script_env(
         const std::uint64_t duration = parse_script_u64(fields[1], env_name);
         if (vi_in_script_window(current_vi, start, duration)) {
             apply_script_buttons(overlay, fields[2], env_name);
+            // A step's first report is logged with its time, as a pointer jump is, for input-to-present measurements.
+            thread_local std::string logged;
+            const std::string step = fields[0] + ':' + fields[2];
+            if (current_vi == start && logged != step) {
+                logged = step;
+                std::cerr << "[latency] buttons " << fields[2] << " vi=" << current_vi << " qpc=" << galaxy::qpc_now()
+                          << '\n';
+            }
         }
     }
 }

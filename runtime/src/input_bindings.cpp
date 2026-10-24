@@ -1040,4 +1040,64 @@ std::uint64_t controls_config_generation() noexcept {
     return g_controls_generation.load(std::memory_order_acquire);
 }
 
+namespace {
+
+struct GlyphPlace {
+    ButtonGlyph glyph = ButtonGlyph::Keep;
+    std::uint8_t place = 0u;
+};
+
+GlyphPlace glyph_of(InputSource source) noexcept {
+    if (source.kind == SourceKind::AxisPositive) {
+        if (source.code == static_cast<std::uint8_t>(PadAxis::LeftTrigger)) return {ButtonGlyph::Trigger, 0u};
+        if (source.code == static_cast<std::uint8_t>(PadAxis::RightTrigger)) return {ButtonGlyph::Trigger, 1u};
+        return {};
+    }
+    if (source.kind != SourceKind::Button) return {};
+    switch (source.code) {
+    case pad::kSouthBit: return {ButtonGlyph::Face, 0u};
+    case pad::kEastBit: return {ButtonGlyph::Face, 1u};
+    case pad::kWestBit: return {ButtonGlyph::Face, 2u};
+    case pad::kNorthBit: return {ButtonGlyph::Face, 3u};
+    case pad::kLeftShoulderBit: return {ButtonGlyph::Shoulder, 0u};
+    case pad::kRightShoulderBit: return {ButtonGlyph::Shoulder, 1u};
+    case pad::kLeftStickBit: return {ButtonGlyph::Stick, 0u};
+    case pad::kRightStickBit: return {ButtonGlyph::Stick, 1u};
+    case pad::kStartBit: return {ButtonGlyph::Start, 0u};
+    case pad::kBackBit: return {ButtonGlyph::Back, 0u};
+    case pad::kHomeBit: return {ButtonGlyph::Home, 0u};
+    case pad::kDpadUpBit:
+    case pad::kDpadDownBit:
+    case pad::kDpadLeftBit:
+    case pad::kDpadRightBit: return {ButtonGlyph::Dpad, 0u};
+    default: return {};
+    }
+}
+
+}  // namespace
+
+ButtonIconSpec button_icon_spec(ButtonIconStyle style, const BindingTable& table, bool menu) noexcept {
+    ButtonIconSpec spec;
+    spec.style = style;
+    if (style == ButtonIconStyle::Wii) return spec;
+    // HOME and the Control Pad look alike on every controller: the Wii's own stay (Keep).
+    static constexpr WiiTarget kTargets[static_cast<std::size_t>(ButtonIcon::Home)] = {
+        WiiTarget::A, WiiTarget::B, WiiTarget::C, WiiTarget::Z, WiiTarget::One, WiiTarget::Two, WiiTarget::Plus,
+        WiiTarget::Minus};
+    const auto first = [&table](WiiTarget target) {
+        for (const InputSource source : table[target]) {
+            const GlyphPlace found = glyph_of(source);
+            if (found.glyph != ButtonGlyph::Keep) return found;
+        }
+        return GlyphPlace{};
+    };
+    for (std::size_t i = 0; i < std::size(kTargets); ++i) {
+        GlyphPlace found = i == static_cast<std::size_t>(ButtonIcon::B) && menu ? first(WiiTarget::JumpBack) : GlyphPlace{};
+        if (found.glyph == ButtonGlyph::Keep) found = first(kTargets[i]);
+        spec.glyphs[i] = found.glyph;
+        spec.places[i] = found.place;
+    }
+    return spec;
+}
+
 }  // namespace galaxy::input

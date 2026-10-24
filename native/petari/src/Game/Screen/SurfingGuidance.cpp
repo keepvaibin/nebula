@@ -3,6 +3,9 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#ifdef TARGET_PC
+#include "Game/Screen/NebulaIcons.hpp"
+#endif
 
 namespace {
     NEW_NERVE(SurfingGuidanceFadeIn, SurfingGuidance, FadeIn);
@@ -37,6 +40,12 @@ void SurfingGuidance_FORCE_MATCH_STRINGS(LayoutActor* pActor) {
 }
 
 void SurfingGuidance::activate() {
+#ifdef TARGET_PC
+    // Pictures of a Wii Remote (tilting it) only with one in hand; the tutorial runs on without them.
+    if (!NebulaIcons::wiiRemoteInUse()) {
+        return;
+    }
+#endif
     appear();
 }
 

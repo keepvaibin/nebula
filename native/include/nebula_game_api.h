@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 22u
+#define NEBULA_GAME_API_VERSION 23u
 
 /* A physical range of the game's memory and where it is in the host process: what the GPU's addresses resolve to. */
 typedef struct NebulaGameMemoryRegion {
@@ -205,6 +205,32 @@ enum {
     NEBULA_SETTINGS_ROW_SLIDER = 512,    /* a setting along a range: `slider_steps` from its first value, at `slider_at` */
     NEBULA_SETTINGS_ROW_BINDING = 1024,  /* a control's binding: changing it waits for an input */
 };
+
+/* The game's button icons (its picture font's A, B, C, Z, 1, 2, Plus, Minus, HOME and Control Pad, in this order):
+   their style and, for each, the controller's button it stands for (galaxy::input::ButtonIconSpec). */
+#define NEBULA_BUTTON_ICONS 10
+enum {
+    NEBULA_ICON_STYLE_WII = 0,
+    NEBULA_ICON_STYLE_XBOX,
+    NEBULA_ICON_STYLE_NINTENDO,
+    NEBULA_ICON_STYLE_PLAYSTATION,
+};
+enum {
+    NEBULA_ICON_KEEP = 0, /* the Wii's own icon */
+    NEBULA_ICON_FACE,     /* place: 0 south, 1 east, 2 west, 3 north */
+    NEBULA_ICON_SHOULDER, /* place: 0 left, 1 right */
+    NEBULA_ICON_TRIGGER,
+    NEBULA_ICON_STICK,    /* the stick's click */
+    NEBULA_ICON_START,    /* Xbox Menu, Plus, Options */
+    NEBULA_ICON_BACK,     /* Xbox View, Minus, Share or Create */
+    NEBULA_ICON_HOME,
+    NEBULA_ICON_DPAD,
+};
+typedef struct NebulaButtonIcons {
+    uint8_t style; /* NEBULA_ICON_STYLE_* */
+    uint8_t glyphs[NEBULA_BUTTON_ICONS]; /* NEBULA_ICON_KEEP... */
+    uint8_t places[NEBULA_BUTTON_ICONS];
+} NebulaButtonIcons;
 
 /* What the line under the page says (with `status_number` or `status_text` where it has one). */
 enum {
@@ -420,6 +446,8 @@ typedef struct NebulaHostServices {
     /* 1 while a Nebula screen with small text shows (the settings menu, the achievement board): the 2D layer at the
        window's resolution whatever the HUD's; 0 after. */
     void (*sharp_2d)(void* user, uint32_t on);
+    /* The button icons as the player's controller and the setting have them now (NebulaButtonIcons). */
+    void (*button_icons)(void* user, NebulaButtonIcons* icons);
 } NebulaHostServices;
 
 enum {

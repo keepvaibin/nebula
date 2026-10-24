@@ -30,6 +30,7 @@
 #include "galaxy/native_input.h"
 #include "galaxy/native_thp_video.h"
 #include "galaxy/perf_hint.h"
+#include "galaxy/pointer_control.h"
 #include "galaxy/achievements.h"
 #include "galaxy/stats.h"
 #include "galaxy/runtime_settings.h"
@@ -1711,6 +1712,25 @@ uint32_t svc_gx_peek_efb(void*, uint16_t x, uint16_t y, uint32_t type, uint16_t 
 }
 
 std::atomic<int32_t> gStarPointerMode{-1};
+
+void svc_button_icons(void*, NebulaButtonIcons* icons) {
+    *icons = NebulaButtonIcons{};
+#if defined(NEBULA_HOST_RENDERER)
+    static_assert(galaxy::input::kButtonIconCount == NEBULA_BUTTON_ICONS &&
+                  static_cast<int>(galaxy::input::ButtonIconStyle::PlayStation) == NEBULA_ICON_STYLE_PLAYSTATION &&
+                  static_cast<int>(galaxy::input::ButtonGlyph::Dpad) == NEBULA_ICON_DPAD);
+    const int32_t mode = gStarPointerMode.load(std::memory_order_relaxed);
+    const bool menu = mode >= 0 && static_cast<uint32_t>(mode) < galaxy::input::kStarPointerModeCount &&
+                      galaxy::input::play_context_from_star_pointer_mode(static_cast<uint32_t>(mode)) !=
+                          galaxy::input::PlayContext::Play;
+    const galaxy::input::ButtonIconSpec spec = galaxy::host::button_icons(menu);
+    icons->style = static_cast<uint8_t>(spec.style);
+    for (size_t i = 0; i < NEBULA_BUTTON_ICONS; ++i) {
+        icons->glyphs[i] = static_cast<uint8_t>(spec.glyphs[i]);
+        icons->places[i] = spec.places[i];
+    }
+#endif
+}
 std::atomic<uint32_t> gTiltSection{0};
 std::atomic<bool> gMotor{false};
 
@@ -2903,6 +2923,7 @@ int main(int argc, char** argv) {
     services.settings_view = svc_settings_view;
     services.settings_input = svc_settings_input;
     services.sharp_2d = svc_sharp_2d;
+    services.button_icons = svc_button_icons;
     services.gx_stripe_particle = svc_gx_stripe_particle;
     services.disc_fst = svc_disc_fst;
     services.disc_read = svc_disc_read;

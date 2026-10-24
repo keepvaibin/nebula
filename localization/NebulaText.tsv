@@ -545,3 +545,9 @@ S.IMPORT_FOLDER	Import folder		Importer un dossier	Importer un dossier	Importar 
 S.OPTIONS	Options		Options	Options	Opciones	Opciones	Optionen	Opzioni	Opties	Opções	オプション	옵션	选项	選項
 S.OPEN_FOLDER	Open folder		Ouvrir le dossier	Ouvrir le dossier	Abrir carpeta	Abrir carpeta	Ordner öffnen	Apri cartella	Map openen	Abrir pasta	フォルダーを開く	폴더 열기	打开文件夹	開啟資料夾
 S.COULD_NOT_RESTART	Could not restart		Redémarrage impossible	Redémarrage impossible	No se pudo reiniciar	No se pudo reiniciar	Neustart nicht möglich	Impossibile riavviare	Opnieuw starten lukt niet	Não foi possível reiniciar	再起動できませんでした	다시 시작할 수 없습니다	无法重新启动	無法重新啟動
+S.BUTTON_ICONS	Button icons		Icônes des boutons	Icônes des boutons	Iconos de botones	Iconos de botones	Tastensymbole	Icone dei pulsanti	Knoppictogrammen	Ícones dos botões	ボタンアイコン	버튼 아이콘	按键图标	按鍵圖示
+S.WII	Wii													
+S.XBOX	Xbox													
+S.NINTENDO_SWITCH	Nintendo Switch													
+S.PLAYSTATION	PlayStation													
+S.THE_BUTTONS_THE_GAME'S_ICONS_SHOW._AUTO:_THE_CONTROLLER_IN_USE	The buttons the game's icons show. Auto: the controller in use.		Les boutons que montrent les icônes du jeu. Auto : la manette utilisée.	Les boutons que montrent les icônes du jeu. Auto : la manette utilisée.	Los botones que muestran los íconos del juego. Automático: el control en uso.	Los botones que muestran los iconos del juego. Automático: el mando en uso.	Die Tasten, die die Symbole des Spiels zeigen. Automatisch: der verwendete Controller.	I pulsanti mostrati dalle icone del gioco. Automatico: il controller in uso.	De knoppen die de pictogrammen van het spel tonen. Automatisch: de gebruikte controller.	Os botões que os ícones do jogo mostram. Automático: o controle em uso.	ゲームのアイコンが示すボタン。自動：使用中のコントローラー	게임 아이콘이 보여 주는 버튼. 자동: 사용 중인 컨트롤러	游戏图标显示的按键。自动：正在使用的控制器	遊戲圖示顯示的按鍵。自動：正在使用的控制器

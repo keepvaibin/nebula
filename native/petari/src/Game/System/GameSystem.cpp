@@ -35,6 +35,7 @@
 #ifdef TARGET_PC
 #include "Game/Screen/NebulaMenuFocus.hpp"
 #include "Game/Screen/NebulaSettingsMenu.hpp"
+#include "Game/Screen/NebulaIcons.hpp"
 #include "Game/System/NebulaCutsceneSkip.hpp"
 #endif
 
@@ -259,6 +260,7 @@ void GameSystem::update() {
 #ifdef TARGET_PC
     NebulaMenuFocus::update();
     NebulaSettingsMenu::update();
+    NebulaIcons::update();
     // The skip's question waits under the settings menu.
     if (!NebulaSettingsMenu::isFreezingScene()) {
         NebulaCutsceneSkip::update();

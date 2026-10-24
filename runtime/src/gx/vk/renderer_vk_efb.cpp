@@ -621,10 +621,15 @@ void RendererVk::swap_efb_sets() {
 }
 
 bool RendererVk::begin_output_efb() {
-    if (output_efb_active_ || !get_render_config().hud_output_resolution) {
+    if (output_efb_active_) {
         return false;
     }
-    const unsigned scale = output_efb_scale_for_window();
+    // Without hud_output_resolution the game's layouts keep at least the Wii's own density on a window wider than
+    // 16:9 or narrower than 4:3, never above the window's.
+    const unsigned scale = get_render_config().hud_output_resolution
+        ? output_efb_scale_for_window()
+        : std::min(output_efb_scale_for_window(),
+                   galaxy::layout_density_scale(galaxy::experimental_effective_host_aspect()));
     if (scale <= efb_scale_) {
         return false;
     }

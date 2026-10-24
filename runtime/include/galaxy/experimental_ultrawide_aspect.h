@@ -89,6 +89,18 @@ make_experimental_ultrawide_aspect(double content_aspect) noexcept {
     return ExperimentalUltrawideAspect{aspect, width};
 }
 
+// The smallest integer EFB scale at which the 2D layouts keep the Wii's own density: past 16:9 their logical width
+// spreads over the same 640 columns (half of them at 32:9), narrower than 4:3 their logical height over the same rows.
+[[nodiscard]] inline unsigned layout_density_scale(
+    const std::optional<ExperimentalUltrawideAspect>& shape) noexcept {
+    if (!shape) {
+        return 1u;
+    }
+    const double wide = shape->guest_screen_width / 832.0;
+    const double tall = (4.0 / 3.0) / std::min(shape->content_aspect, 4.0 / 3.0);
+    return static_cast<unsigned>(std::ceil(std::max({1.0, wide, tall}) - 1e-6));
+}
+
 [[nodiscard]] inline std::optional<ExperimentalUltrawideAspect>
 experimental_aspect_from_dynamic_word(std::uint64_t word) noexcept {
     const auto extent = static_cast<std::uint32_t>(word);

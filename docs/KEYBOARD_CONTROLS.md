@@ -30,6 +30,11 @@ ZR/RT/R2 as a spin button and ZL/LT/L2 as crouch.
 | 1, 2 | `1`, `2` (and numpad) | - | - | - | - |
 | Shake (Nunchuk) | - | - | - | - | - |
 
+The game's button icons (A, B, C, Z, 1, 2, Plus and Minus in its text: the title screen, dialogue, tutorials, menus)
+show the button each is bound to on the controller in use: Xbox's in their colours, Switch and PlayStation buttons
+white, shoulders, triggers and stick clicks by name. A keyboard or a controller of no known family shows the Wii's.
+General > Button icons keeps one style (Wii, Xbox, Nintendo Switch, PlayStation) whatever is in use.
+
 A tap of Plus or Minus pauses (the console waited for the button to be held 12 frames and for the remote to be still);
 a press made while A or B is held pauses once they are let go.
 

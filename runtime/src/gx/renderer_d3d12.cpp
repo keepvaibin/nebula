@@ -7208,13 +7208,18 @@ bool RendererD3D12::begin_output_efb() {
     const bool temporal = scene_temporal_;
     scene_temporal_ = false;
     // Nebula's screens with small text are drawn at the window's resolution whatever the HUD's (sharp_2d): at the
-    // internal scale their letters would lose strokes on a wide or large window.
-    if (output_efb_active_ || (!temporal && !get_render_config().hud_output_resolution && !sharp_2d_requested())) {
+    // internal scale their letters would lose strokes on a wide or large window. Otherwise the game's layouts keep at
+    // least the Wii's own density on a window wider than 16:9 or narrower than 4:3, never above the window's.
+    const bool full = temporal || get_render_config().hud_output_resolution || sharp_2d_requested();
+    const unsigned layout = full ? 0u : galaxy::layout_density_scale(galaxy::experimental_effective_host_aspect());
+    if (output_efb_active_ || (!full && layout <= efb_scale_)) {
         return false;
     }
     // A temporal upscaler outputs the internal resolution; the 2D layer alone
     // goes to the window's.
-    const unsigned scale = temporal ? temporal_output_w_ / kEfbWidth : output_efb_scale_for_window();
+    const unsigned scale = temporal ? temporal_output_w_ / kEfbWidth
+                           : full   ? output_efb_scale_for_window()
+                                    : std::min(output_efb_scale_for_window(), layout);
     if (scale == 0u || scale < efb_scale_ || (scale == efb_scale_ && !temporal) ||
         !ensure_output_efb(scale)) {
         temporal_history_valid_ = false;

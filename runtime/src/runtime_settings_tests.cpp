@@ -559,6 +559,23 @@ int main() {
             read_text(settings_path).find("text_speed=2") != std::string::npos,
         "text speed is saved with the other settings");
 
+    using galaxy::ButtonIcons;
+    write_text(settings_path, "button_icons=playstation\n");
+    galaxy::load_runtime_settings_from_file();
+    passed &= expect(galaxy::get_runtime_settings().button_icons == ButtonIcons::PlayStation, "PlayStation icons load");
+    write_text(settings_path, "button_icons=sega\n");
+    galaxy::load_runtime_settings_from_file();
+    passed &= expect(galaxy::get_runtime_settings().button_icons == ButtonIcons::Auto, "an unknown icon style is Auto");
+    {
+        galaxy::RuntimeSettings chosen = galaxy::get_runtime_settings();
+        chosen.button_icons = ButtonIcons::Nintendo;
+        galaxy::set_runtime_settings(chosen);
+    }
+    passed &= expect(
+        galaxy::save_runtime_settings_to_file() &&
+            read_text(settings_path).find("button_icons=nintendo") != std::string::npos,
+        "the icon style is saved with the other settings");
+
     using galaxy::GameLanguage;
     write_text(settings_path, "language=french\n");
     galaxy::load_runtime_settings_from_file();

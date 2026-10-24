@@ -123,6 +123,10 @@ void __NebulaSharp2D(u32 on) {
     sHost->sharp_2d(sHost->user, on);
 }
 
+void __NebulaButtonIcons(NebulaButtonIcons* icons) {
+    sHost->button_icons(sHost->user, icons);
+}
+
 s32 __NebulaHomeMenu(u32 what, u32 value) {
     return sHost->hbm(sHost->user, what, value);
 }

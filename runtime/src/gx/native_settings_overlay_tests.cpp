@@ -507,9 +507,9 @@ int main() {
 
     passed &= expect(key(VK_TAB), "Tab enters the general page");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
-    passed &= expect(snapshot.tab == 4u && snapshot.row_count == 7u,
-                     "general page has text speed, language, Discord status and Mii import (a heading, import, count, "
-                     "folder)");
+    passed &= expect(snapshot.tab == 4u && snapshot.row_count == 8u,
+                     "general page has text speed, button icons, language, Discord status and Mii import (a heading, "
+                     "import, count, folder)");
     passed &= expect(galaxy::get_runtime_settings().text_speed == 1u, "text speed starts at the game's pace");
     passed &= expect(key(VK_RIGHT) && galaxy::get_runtime_settings().text_speed == 2u, "right raises text speed live");
     passed &= expect(key(VK_RIGHT) && key(VK_RIGHT) && galaxy::get_runtime_settings().text_speed == 4u,
@@ -517,7 +517,17 @@ int main() {
     passed &= expect(key(VK_RIGHT) && galaxy::get_runtime_settings().text_speed == 4u, "text speed stops at instant");
     passed &= expect(key(VK_LEFT) && key(VK_LEFT) && galaxy::get_runtime_settings().text_speed == 2u,
                      "left lowers text speed");
-    passed &= expect(key(VK_DOWN) && galaxy::gx::native_settings_overlay_snapshot().row == 1u, "down selects language");
+    passed &= expect(galaxy::get_runtime_settings().button_icons == galaxy::ButtonIcons::Auto, "button icons start Auto");
+    passed &= expect(key(VK_DOWN) && galaxy::gx::native_settings_overlay_snapshot().row == 1u, "down selects button icons");
+    passed &= expect(key(VK_RIGHT) && galaxy::get_runtime_settings().button_icons == galaxy::ButtonIcons::Wii,
+                     "right chooses the Wii's icons, live");
+    passed &= expect(key(VK_RIGHT) && key(VK_RIGHT) && key(VK_RIGHT) && key(VK_RIGHT) &&
+                         galaxy::get_runtime_settings().button_icons == galaxy::ButtonIcons::PlayStation,
+                     "button icons stop at PlayStation");
+    passed &= expect(key(VK_LEFT) && key(VK_LEFT) && key(VK_LEFT) && key(VK_LEFT) &&
+                         galaxy::get_runtime_settings().button_icons == galaxy::ButtonIcons::Auto,
+                     "left returns to Auto");
+    passed &= expect(key(VK_DOWN) && galaxy::gx::native_settings_overlay_snapshot().row == 2u, "down selects language");
     passed &= expect(galaxy::get_runtime_settings().language == galaxy::GameLanguage::English, "language starts as English");
     passed &= expect(key(VK_RIGHT) && galaxy::get_runtime_settings().language == galaxy::GameLanguage::French,
                      "right chooses French");
@@ -526,10 +536,10 @@ int main() {
     passed &= expect(key(VK_LEFT) && key(VK_LEFT) && galaxy::get_runtime_settings().language == galaxy::GameLanguage::English,
                      "left returns to English");
     passed &= expect(galaxy::get_runtime_settings().discord_status, "Discord status starts on");
-    passed &= expect(key(VK_DOWN) && galaxy::gx::native_settings_overlay_snapshot().row == 2u, "down selects Discord status");
+    passed &= expect(key(VK_DOWN) && galaxy::gx::native_settings_overlay_snapshot().row == 3u, "down selects Discord status");
     passed &= expect(key(VK_RIGHT) && !galaxy::get_runtime_settings().discord_status, "right turns Discord status off");
     passed &= expect(key(VK_RIGHT) && galaxy::get_runtime_settings().discord_status, "right turns it back on");
-    passed &= expect(key(VK_UP) && key(VK_UP) && galaxy::gx::native_settings_overlay_snapshot().row == 0u,
+    passed &= expect(key(VK_UP) && key(VK_UP) && key(VK_UP) && galaxy::gx::native_settings_overlay_snapshot().row == 0u,
                      "up returns to text speed");
     passed &= expect(key(VK_TAB), "Tab enters the mods page");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();

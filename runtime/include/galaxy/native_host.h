@@ -100,6 +100,8 @@ void cancel_controller_binding_capture() noexcept;
 std::size_t connected_controllers(std::span<input::ControllerInfo> out) noexcept;
 // The device that last gave input, a controller or the keyboard and mouse.
 [[nodiscard]] std::optional<input::DeviceKey> last_input_device() noexcept;
+// The game's button icons now (ButtonIcons setting, the controller last used and its bindings); `menu`: a menu shows.
+[[nodiscard]] input::ButtonIconSpec button_icons(bool menu) noexcept;
 // A person typed or clicked (overlay keys included).
 void note_keyboard_input() noexcept;
 // Synchronous check (settings UI only): a controller is attached now.

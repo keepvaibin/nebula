@@ -3,6 +3,9 @@
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include <cstdio>
+#ifdef TARGET_PC
+#include "Game/Screen/NebulaIcons.hpp"
+#endif
 
 namespace NrvIconAButton {
     NEW_NERVE(IconAButtonNrvOpen, IconAButton, Open);
@@ -20,6 +23,9 @@ IconAButton::IconAButton(bool connectToScene, bool connectToPause) : LayoutActor
     }
 
     mFollowPaneName[0] = '\0';
+#ifdef TARGET_PC
+    mNebulaIcons = 0;
+#endif
 }
 
 void IconAButton::init(const JMapInfoIter& rIter) {
@@ -46,6 +52,9 @@ bool IconAButton::isWait() {
 }
 
 void IconAButton::open() {
+#ifdef TARGET_PC
+    NebulaIcons::applyToLayout(this, &mNebulaIcons);
+#endif
     appear();
     updateFollowPos();
     MR::showPane(this, "PicPlate");
@@ -121,6 +130,10 @@ void IconAButton::exeTerm() {
 }
 
 void IconAButton::control() {
+#ifdef TARGET_PC
+    // The player's controller can change while it shows.
+    NebulaIcons::applyToLayout(this, &mNebulaIcons);
+#endif
     updateFollowPos();
 }
 

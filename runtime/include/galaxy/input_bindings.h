@@ -391,4 +391,23 @@ struct KeyList {
 void set_controls_config(const ControlsConfig& config);
 [[nodiscard]] std::uint64_t controls_config_generation() noexcept;
 
+// The game's button icons (its picture font's A, B, C, Z, 1, 2, Plus, Minus, HOME and Control Pad): the style they are
+// drawn in and, for each, the controller's button its Wii button is bound to.
+enum class ButtonIconStyle : std::uint8_t { Wii, Xbox, Nintendo, PlayStation };
+enum class ButtonIcon : std::uint8_t { A, B, C, Z, One, Two, Plus, Minus, Home, Pad };
+inline constexpr std::size_t kButtonIconCount = 10;
+// What an icon shows: the Wii's own (Keep); a face button by place (0 south, 1 east, 2 west, 3 north); a shoulder, a
+// trigger or a stick's click (0 left, 1 right); Start (Xbox Menu, Plus, Options), Back (View, Minus, Share or Create),
+// Home; the D-pad.
+enum class ButtonGlyph : std::uint8_t { Keep, Face, Shoulder, Trigger, Stick, Start, Back, Home, Dpad };
+struct ButtonIconSpec {
+    ButtonIconStyle style = ButtonIconStyle::Wii;
+    std::array<ButtonGlyph, kButtonIconCount> glyphs{};
+    std::array<std::uint8_t, kButtonIconCount> places{};
+    friend bool operator==(const ButtonIconSpec&, const ButtonIconSpec&) = default;
+};
+// The icons in `style` for a controller's `table`: each Wii button's first controller input. In menus B is the button
+// that goes back there (JumpBack's), in play Wii B's own. HOME and the Control Pad keep the Wii's own.
+[[nodiscard]] ButtonIconSpec button_icon_spec(ButtonIconStyle style, const BindingTable& table, bool menu) noexcept;
+
 }  // namespace galaxy::input
