@@ -589,7 +589,7 @@ PSOut main(PSIn pin) {
         } else if (efb_scale_minus_one == 0u) {
             dither_xy = gx_bit0(int2(pin.pos.xy));
         } else {
-            // Legacy keys: min(scale - 1, kMaxEfbScale - 1) + 1.
+            // Integer EFB scale: min(scale - 1, kMaxEfbScale - 1) + 1.
             dither_xy = gx_bit0(int2(pin.pos.xy) / int(min(efb_scale_minus_one, 15u) + 1u));
         }
         dither_rgb = (dither_rgb - (dither_rgb >> 6)) + (dither_xy.x ^ dither_xy.y) * 2 + dither_xy.y;
@@ -667,8 +667,8 @@ PSOut main(PSIn pin) {
             const float3 light = max(tex[7].Load(int3(lit_at, 0)).rgb, 0.0);
             lin *= (output_flags & 0x80u) != 0u ? min(light, 1.15) : light;
         } else if (ztex_params.w < 0.0) {
-            // A light source the table shows in its own colour (`recolour`: RGB8 + 1, negated): its peak kept (a blue
-            // glow's luminance is a fifth of its peak: warm white at that luminance showed grey).
+            // A light source the table shows in its own colour (`recolour`: RGB8 + 1, negated) keeps its peak, not its
+            // luminance: a blue glow's luminance is a fifth of its peak.
             const uint code = uint(-ztex_params.w) - 1u;
             const float3 c = float3(code & 255u, (code >> 8u) & 255u, (code >> 16u) & 255u) / 255.0;
             const float3 hue = c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4);
