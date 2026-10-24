@@ -98,6 +98,8 @@ bool dlss_prompt_key(WPARAM key, bool was_down);
 void dlss_dismiss_prompt();
 void poll_dlss_download();
 std::string dlss_footer(std::uint64_t now_ms, bool& error);
+NativeSettingsStatus dlss_status(std::uint64_t now_ms);
+constexpr int kDlssDownloadMegabytes = 31;  // NVIDIA's DLSS files, as downloaded
 
 // Settings pages built from rows (DISPLAY, GRAPHICS, GAME, MODS, SYSTEM: settings_page): a label, the
 // value for the draft, how left/right change the draft (none: the row is fixed) and a help line; a
@@ -109,6 +111,7 @@ struct SettingsRow {
     std::string help;
     bool heading = false;
     std::string key;  // names the row across rebuilds (a mod's place row)
+    std::uint8_t names = 0u;  // the mod's own words, shown as they are: 1 its label, 2 its value
 };
 std::vector<SettingsRow> settings_page(unsigned tab, const RenderConfig& draft, const RuntimeSettings& runtime,
                                        const RenderFeatureCaps& caps);
@@ -237,6 +240,12 @@ std::atomic<bool> s_native_settings_dirty{false};
 std::atomic<bool> s_native_settings_save_error{false};
 std::atomic<unsigned> s_native_settings_tab{0};
 std::atomic<unsigned> s_native_settings_row{0};
+// The native game draws the menu (it read native_settings_view): the overlay draws nothing of its own.
+std::atomic<bool> s_settings_drawn_by_game{false};
+// Leaving with changes not applied asks first: apply them, discard them, or stay. Under s_native_settings_mutex.
+bool s_settings_leave_asking = false;
+// The pages, in order.
+constexpr const char* kNativeSettingsTabNames[] = {"DISPLAY", "GRAPHICS", "CONTROLS", "AUDIO", "GENERAL", "MODS", "SYSTEM"};
 
 // Settings menu draft. Display and graphics rows edit s_settings_draft; Enter (Y on a controller) applies it,
 // Backspace (X) reverts it and closing the menu discards it. Audio rows change the live mix. A display change
@@ -1196,6 +1205,7 @@ void cycle_native_settings_tab(int delta) {
 
 void set_native_settings_visible(bool visible) {
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
+    s_settings_leave_asking = false;
     if (visible && !s_native_settings_visible.load(std::memory_order_relaxed)) {
         // A fresh draft, monitor list and controller list each time the menu opens.
         s_settings_monitors = cached_monitors();
@@ -1288,6 +1298,16 @@ bool handle_controls_key(WPARAM key, bool was_down, bool from_pad) {
 
 bool mods_move_key(WPARAM key, bool was_down);
 
+// Closing: at once, or with changes not applied, after asking (apply them, discard them, or stay).
+void request_native_settings_close() {
+    const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
+    if (pending_settings_changes() != 0u) {
+        s_settings_leave_asking = true;
+        return;
+    }
+    set_native_settings_visible(false);
+}
+
 bool handle_native_settings_key(WPARAM key, bool was_down, bool from_pad = false) {
     if (s_home_menu_visible.load(std::memory_order_acquire)) {
         return handle_home_menu_key(key, was_down);
@@ -1298,6 +1318,30 @@ bool handle_native_settings_key(WPARAM key, bool was_down, bool from_pad = false
     }
     if (key == galaxy::host::kBindingCaptureKey && !s_native_settings_visible.load(std::memory_order_relaxed)) {
         (void)galaxy::host::take_controller_binding_capture();
+        return true;
+    }
+    if (s_settings_leave_asking && s_native_settings_visible.load(std::memory_order_relaxed)) {
+        // Changes not applied: Enter, Space or Y applies them and closes, Backspace or X discards them and closes,
+        // Escape, B or F1 goes back to the page. Every other key waits for the answer.
+        if (was_down) {
+            return true;
+        }
+        if (key == VK_RETURN || key == VK_SPACE) {
+            s_settings_leave_asking = false;
+            apply_native_settings_draft();
+            // A new display waits to be kept, and DLSS to be downloaded, on the page; anything else closes.
+            const NativeSettingsStatus dlss = dlss_status(GetTickCount64());
+            if (!settings_display_confirming() && dlss != NativeSettingsStatus::DlssAsk &&
+                dlss != NativeSettingsStatus::DlssRestart) {
+                set_native_settings_visible(false);
+            }
+        } else if (key == VK_BACK) {
+            s_settings_leave_asking = false;
+            revert_native_settings_draft();
+            set_native_settings_visible(false);
+        } else if (key == VK_ESCAPE || key == VK_F1) {
+            s_settings_leave_asking = false;
+        }
         return true;
     }
     if (key != VK_F1 && s_native_settings_visible.load(std::memory_order_relaxed) &&
@@ -1315,7 +1359,7 @@ bool handle_native_settings_key(WPARAM key, bool was_down, bool from_pad = false
         const bool visible = s_native_settings_visible.load(
             std::memory_order_relaxed);
         if (visible) {
-            set_native_settings_visible(false);
+            request_native_settings_close();
             return true;
         }
         set_native_settings_visible(true);
@@ -1334,7 +1378,7 @@ bool handle_native_settings_key(WPARAM key, bool was_down, bool from_pad = false
             revert_display_settings();
             return true;
         }
-        set_native_settings_visible(false);
+        request_native_settings_close();
         return true;
     case VK_RETURN:
         if (was_down) {
@@ -1727,11 +1771,14 @@ void ui_text(
             cursor_x += 4 * scale;
             continue;
         }
-        // UTF-8 Ç/ç and Ñ/ñ (C3 87/A7, C3 91/B1); any other two-byte letter draws as one blank cell.
+        // UTF-8 Ç/ç and Ñ/ñ (C3 87/A7, C3 91/B1); any other letter of several bytes draws as one blank cell.
         if (static_cast<unsigned char>(ch) == 0xC3u && i + 1u < text.size()) {
             const auto next = static_cast<unsigned char>(text[++i]);
             ch = next == 0x87u || next == 0xA7u ? kGlyphCCedilla
                : next == 0x91u || next == 0xB1u ? kGlyphNTilde : '\0';
+        } else if (static_cast<unsigned char>(ch) >= 0xC0u) {
+            while (i + 1u < text.size() && (static_cast<unsigned char>(text[i + 1u]) & 0xC0u) == 0x80u) ++i;
+            ch = '\0';
         }
         const auto bitmap_of = [](const std::array<std::uint8_t, 7>& rows) {
             std::uint64_t bitmap = 0u;
@@ -1758,7 +1805,8 @@ void ui_text(
 int ui_text_width(std::string_view text, int scale) {
     int width = 0;
     for (std::size_t i = 0; i < text.size(); ++i) {
-        if (static_cast<unsigned char>(text[i]) == 0xC3u && i + 1u < text.size()) {
+        // A letter of several UTF-8 bytes is one cell.
+        while (i + 1u < text.size() && (static_cast<unsigned char>(text[i + 1u]) & 0xC0u) == 0x80u) {
             ++i;
         }
         width += (text[i] == ' ' ? 4 : 6) * scale;
@@ -1811,6 +1859,18 @@ const char* exposed_text(const RenderFeatureStatus& status) {
     return status.settings_exposed ? "READY" : "HIDDEN";
 }
 
+// A name as the menu shows it, shortened to `width` characters (the overlay's font draws it in capitals).
+std::string mods_ui_text(std::string_view text, std::size_t width) {
+    std::size_t characters = 0u;
+    std::size_t cut = text.size();
+    for (std::size_t i = 0; i < text.size(); ++i) {
+        if ((static_cast<unsigned char>(text[i]) & 0xC0u) == 0x80u) continue;
+        if (characters == width - 3u) cut = i;
+        ++characters;
+    }
+    return characters <= width ? std::string(text) : std::string(text.substr(0, cut)) + "...";
+}
+
 std::string upper_ascii(std::string text) {
     for (char& ch : text) {
         if (ch >= 'a' && ch <= 'z') ch = static_cast<char>(ch - 'a' + 'A');
@@ -1835,9 +1895,8 @@ std::vector<SettingsRow> display_page(const RenderConfig& render) {
             for (std::size_t i = 0; i < s_settings_monitors.size(); ++i) {
                 if (&s_settings_monitors[i] == monitor) index = i;
             }
-            std::string name = monitor->name.empty() ? std::string("DISPLAY") : monitor->name;
-            if (name.size() > 22u) name.resize(22u);
-            std::snprintf(text, sizeof(text), "%u %s", static_cast<unsigned>(index + 1u), upper_ascii(name).c_str());
+            const std::string name = monitor->name.empty() ? std::string("Display") : mods_ui_text(monitor->name, 22u);
+            std::snprintf(text, sizeof(text), "%u %s", static_cast<unsigned>(index + 1u), name.c_str());
             value = text;
         }
         SettingsRow row{"MONITOR", value, nullptr, "THE DISPLAY THE GAME RUNS ON"};
@@ -2302,20 +2361,6 @@ bool mods_restart_pending() {
     return s_mods_scanned && galaxy::mods::mods_differ_from_session(s_mods);
 }
 
-// A name for the overlay's font (its upper-case ASCII), shortened to fit the label column.
-std::string mods_ui_text(std::string_view text, std::size_t width) {
-    std::string out;
-    for (const char c : text) {
-        const auto u = static_cast<unsigned char>(c);
-        out.push_back(u >= 0x80u ? '?' : static_cast<char>(std::toupper(u)));
-    }
-    if (out.size() > width) {
-        out.resize(width - 3u);
-        out += "...";
-    }
-    return out;
-}
-
 // Mod import (the MODS page's rows and files dropped on the window): one batch at a time on its own thread; the
 // IMPORT MOD row shows its progress and result.
 std::mutex s_mod_import_mutex;
@@ -2597,8 +2642,9 @@ std::vector<SettingsRow> mods_page(const RenderConfig& render) {
                 what += (what.empty() ? "" : ", ") + std::to_string(overlap.textures) +
                         (overlap.textures == 1u ? " TEXTURE" : " TEXTURES");
             }
-            kinds += ". " + (overlap.other_above ? what + " REPLACED BY " : "REPLACES " + what + " OF ") +
-                     mods_ui_text(overlap.other, 24u);
+            // The other mod's name apart from the words, so that the menu can name both ("OVERRIDDEN BY: X (2 FILES)").
+            kinds += std::string(overlap.other_above ? ". OVERRIDDEN BY: " : ". OVERRIDES: ") + mods_ui_text(overlap.other, 24u) +
+                     " (" + what + ")";
         }
         const bool inert = !mod.problem.empty() && !mod.files && !mod.textures && !mod.movies && !mod.loose;
         SettingsRow named{mods_ui_text(mod.id, 26u), inert ? mods_ui_text(mod.problem, 22u) : (mod.enabled ? "ON" : "OFF"),
@@ -2619,6 +2665,7 @@ std::vector<SettingsRow> mods_page(const RenderConfig& render) {
                           },
                           kinds.empty() ? std::string("NOTHING THIS GAME USES") : kinds};
         named.key = "mod:" + mod.id;
+        named.names = 1u;
         rows.push_back(std::move(named));
         if (!mod.enabled) {
             rows.push_back(remove_row(i, mod.id));
@@ -2634,7 +2681,7 @@ std::vector<SettingsRow> mods_page(const RenderConfig& render) {
             // A mod's option name as its menu shows it, without the colon some end in.
             std::string_view name = option.name;
             while (!name.empty() && (name.back() == ':' || name.back() == ' ')) name.remove_suffix(1);
-            rows.push_back({"  " + mods_ui_text(name, 24u), value,
+            SettingsRow choice{"  " + mods_ui_text(name, 24u), value,
                             [i, o](RenderConfig&, int delta) {
                                 const std::lock_guard<std::mutex> change_lock(s_mods_mutex);
                                 if (i >= s_mods.size() || o >= s_mods[i].options.size()) return;
@@ -2648,7 +2695,9 @@ std::vector<SettingsRow> mods_page(const RenderConfig& render) {
                                 }
                             },
                             other_region ? std::string("MADE FOR ANOTHER REGION'S DISC: IT MAY NOT WORK WITH THIS ONE")
-                                         : mods_ui_text(option.section, 30u)});
+                                         : mods_ui_text(option.section, 30u)};
+            choice.names = option.selected != 0u ? 3u : 1u;
+            rows.push_back(std::move(choice));
         }
         // Text in the language played: the mod's own (in a language it has) or the game's.
         const bool covers = std::find(mod.languages.begin(), mod.languages.end(), playing) != mod.languages.end();
@@ -2868,8 +2917,7 @@ std::vector<SettingsRow> game_page(const RuntimeSettings& runtime) {
 std::vector<SettingsRow> system_page(const RenderFeatureCaps& caps) {
     std::vector<SettingsRow> rows;
     {
-        std::string name = upper_ascii(caps.adapter_description.data());
-        if (name.size() > 24u) name.resize(24u);
+        std::string name = mods_ui_text(caps.adapter_description.data(), 32u);
         while (!name.empty() && name.back() == ' ') name.pop_back();
         rows.push_back({"GRAPHICS CARD", name, nullptr, "CHOSEN IN NEBULA SETTINGS. A CHANGE APPLIES AT THE NEXT START"});
     }
@@ -3191,7 +3239,7 @@ void poll_dlss_download() {
 std::string dlss_footer(std::uint64_t now_ms, bool& error) {
     switch (s_dlss_offer) {
     case DlssOffer::Ask:
-        return "DOWNLOAD NVIDIA DLSS (31 MB)? ENTER/Y YES  ESC/B NO";
+        return "DOWNLOAD NVIDIA DLSS (" + std::to_string(kDlssDownloadMegabytes) + " MB)? ENTER/Y YES  ESC/B NO";
     case DlssOffer::Downloading:
         return "INSTALLING NVIDIA DLSS...";
     case DlssOffer::Ready:
@@ -3205,6 +3253,21 @@ std::string dlss_footer(std::uint64_t now_ms, bool& error) {
         return {};
     default:
         return {};
+    }
+}
+
+// The DLSS offer as the menu's status: its two questions, the install, a failure for a moment; Help when there is
+// none.
+NativeSettingsStatus dlss_status(std::uint64_t now_ms) {
+    bool error = false;
+    if (dlss_footer(now_ms, error).empty()) {
+        return NativeSettingsStatus::Help;
+    }
+    switch (s_dlss_offer) {
+    case DlssOffer::Ask: return NativeSettingsStatus::DlssAsk;
+    case DlssOffer::Downloading: return NativeSettingsStatus::DlssInstalling;
+    case DlssOffer::Ready: return NativeSettingsStatus::DlssRestart;
+    default: return NativeSettingsStatus::DlssFailed;
     }
 }
 
@@ -3708,6 +3771,17 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
         return (msg == WM_XBUTTONDOWN || msg == WM_XBUTTONUP) ? TRUE : 0;
     }
+    if (msg == WM_MOUSEWHEEL && s_native_settings_visible.load(std::memory_order_relaxed)) {
+        // The wheel moves the settings menu's selection a row a notch, as the arrow keys; never while a binding
+        // waits for its input.
+        const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
+        if (controls_capturing()) return 0;
+        static int s_wheel = 0;
+        s_wheel += GET_WHEEL_DELTA_WPARAM(wp);
+        for (; s_wheel >= WHEEL_DELTA; s_wheel -= WHEEL_DELTA) (void)handle_native_settings_key(VK_UP, false);
+        for (; s_wheel <= -WHEEL_DELTA; s_wheel += WHEEL_DELTA) (void)handle_native_settings_key(VK_DOWN, false);
+        return 0;
+    }
     if (msg == WM_LBUTTONDOWN || msg == WM_LBUTTONDBLCLK) {
         galaxy::host::publish_native_pointer_input_origin(true, input_message_injected());
         update_pointer_button(hwnd, lp, true, true);
@@ -3853,6 +3927,8 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
+NativeSettingsView build_native_settings_view();
+
 void draw_native_settings_overlay(UiCanvas& renderer) {
     poll_dlss_download();
     {
@@ -3882,15 +3958,15 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
             set_native_settings_visible(true);
         }
         // GALAXY_TEST_SETTINGS_KEYS=<present>:<key>,...: keys pressed in the menu at those presents (up, down, left,
-        // right, enter, esc).
+        // right, enter, esc, tab, backspace, space).
         static const std::vector<std::pair<unsigned long, WPARAM>> test_keys = [] {
             std::vector<std::pair<unsigned long, WPARAM>> keys;
-            char value[512]{};
+            char value[4096]{};
             std::size_t length = 0u;
             if (getenv_s(&length, value, sizeof(value), "GALAXY_TEST_SETTINGS_KEYS") != 0 || length <= 1u) return keys;
             static constexpr std::pair<std::string_view, WPARAM> kNames[] = {
                 {"up", VK_UP}, {"down", VK_DOWN}, {"left", VK_LEFT}, {"right", VK_RIGHT}, {"enter", VK_RETURN},
-                {"esc", VK_ESCAPE}};
+                {"esc", VK_ESCAPE}, {"tab", VK_TAB}, {"backspace", VK_BACK}, {"space", VK_SPACE}};
             std::string_view rest(value);
             while (!rest.empty()) {
                 const std::size_t comma = rest.find(',');
@@ -3944,7 +4020,9 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
             ++next_size;
         }
     }
-    if (!s_native_settings_visible.load(std::memory_order_relaxed)) {
+    // The native game draws the menu itself (native_settings_view).
+    if (!s_native_settings_visible.load(std::memory_order_relaxed) ||
+        s_settings_drawn_by_game.load(std::memory_order_acquire)) {
         return;
     }
 
@@ -4005,8 +4083,8 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
         "SETTINGS",
         text);
 
-    const char* tabs[] = {"DISPLAY", "GRAPHICS", "CONTROLS", "AUDIO", "GENERAL", "MODS", "SYSTEM"};
-    static_assert(std::size(tabs) == kNativeSettingsTabCount);
+    const char* const* tabs = kNativeSettingsTabNames;
+    static_assert(std::size(kNativeSettingsTabNames) == kNativeSettingsTabCount);
     int tab_x = panel_x + 28;
     // The labels share the panel width; the longest is eight 6-unit glyphs plus a gap, so the label scale shrinks on
     // narrow panels.
@@ -4024,18 +4102,9 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
     }
 
     const std::lock_guard<std::recursive_mutex> settings_lock(s_native_settings_mutex);
-    expire_display_confirmation();
-    expire_controls_capture();
-    if (tab == kControlsTab) {
-        refresh_controls_devices(false);
-    }
-    const RenderConfig row_render = s_settings_draft;
-    const RuntimeSettings row_runtime = get_runtime_settings();
-    const RenderFeatureCaps row_caps = get_render_feature_caps();
-    const unsigned row_count = native_settings_row_count(tab);
-    const unsigned selected_row =
-        std::min(s_native_settings_row.load(std::memory_order_relaxed),
-                 row_count == 0u ? 0u : row_count - 1u);
+    const NativeSettingsView view = build_native_settings_view();
+    const unsigned row_count = static_cast<unsigned>(view.rows.size());
+    const unsigned selected_row = view.selected;
     // Pages longer than the panel scroll to keep the selection visible.
     const unsigned visible_rows = std::min(row_count, kNativeSettingsVisibleRows);
     s_settings_first_row = native_settings_first_row(s_settings_first_row, selected_row, row_count);
@@ -4054,30 +4123,13 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
     const int row_left = panel_x + 70;
     const int row_right = panel_x + panel_w - 48;
     const int row_gap = 12 * scale;
-    const bool page_tab = settings_page_tab(tab);
-    const std::vector<SettingsRow> page =
-        page_tab ? settings_page(tab, row_render, row_runtime, row_caps) : std::vector<SettingsRow>{};
-    std::string help;
     for (unsigned row = s_settings_first_row; row < s_settings_first_row + visible_rows; ++row) {
         const int y =
             layout.rows_y + static_cast<int>(row - s_settings_first_row) * layout.row_step;
-        std::string label;
-        std::string value;
-        bool heading = false;
-        bool changes = true;
-        if (page_tab && row < page.size()) {
-            label = page[row].label;
-            value = page[row].value;
-            heading = page[row].heading;
-            changes = static_cast<bool>(page[row].change);
-            if (row == selected_row) help = page[row].help;
-        } else {
-            label = native_settings_row_text(tab, row, row_render, row_runtime, row_caps);
-            if (const std::size_t colon = label.find(": "); colon != std::string::npos) {
-                value = label.substr(colon + 2u);
-                label.resize(colon);
-            }
-        }
+        std::string label = view.rows[row].label;
+        const std::string& value = view.rows[row].value;
+        const bool heading = view.rows[row].heading;
+        const bool changes = view.rows[row].changes;
         if (heading) {
             label = ui_fit_text(std::move(label), scale, row_right - (panel_x + 36));
             const int rule_x = panel_x + 44 + ui_text_width(label, scale);
@@ -4113,53 +4165,65 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
     const int footer_scale = std::min(2, scale);
     const int footer_step = footer_scale == 1 ? 18 : 28;
     std::string status;
-    std::array<float, 4> status_color = muted;
-    const std::uint64_t now_ms = GetTickCount64();
+    std::array<float, 4> status_color = accent;
     const bool controls_page = tab == kControlsTab;
-    if (controls_capturing()) {
-        status = s_controls_scheme == galaxy::input::ControlScheme::Keyboard
-            ? "PRESS A KEY OR MOUSE BUTTON  ESC CANCEL"
-            : "PRESS A BUTTON, STICK OR TRIGGER  ESC CANCEL";
-        status_color = accent;
-    } else if (s_controls_message_until_ms > now_ms) {
-        status = s_controls_message;
+    char line[96]{};
+    switch (view.status) {
+    case NativeSettingsStatus::CaptureKey:
+        status = "PRESS A KEY OR MOUSE BUTTON  ESC CANCEL";
+        break;
+    case NativeSettingsStatus::CapturePad:
+        status = "PRESS A BUTTON, STICK OR TRIGGER  ESC CANCEL";
+        break;
+    case NativeSettingsStatus::Message:
+        status = view.status_text;
         status_color = error;
-    } else if (bool dlss_error = false; !(status = dlss_footer(now_ms, dlss_error)).empty()) {
+        break;
+    case NativeSettingsStatus::DlssAsk:
+    case NativeSettingsStatus::DlssInstalling:
+    case NativeSettingsStatus::DlssRestart:
+    case NativeSettingsStatus::DlssFailed: {
+        bool dlss_error = false;
+        status = dlss_footer(GetTickCount64(), dlss_error);
         status_color = dlss_error ? error : accent;
-    } else if (settings_display_confirming()) {
-        const std::uint64_t left_ms = s_display_confirm_deadline_ms > now_ms
-            ? s_display_confirm_deadline_ms - now_ms : 0u;
-        char line[96]{};
-        std::snprintf(line, sizeof(line),
-                      "KEEP DISPLAY? ENTER/Y KEEP  ESC/B UNDO  %u",
-                      static_cast<unsigned>((left_ms + 999u) / 1000u));
+        break;
+    }
+    case NativeSettingsStatus::KeepDisplay:
+        std::snprintf(line, sizeof(line), "KEEP DISPLAY? ENTER/Y KEEP  ESC/B UNDO  %d", view.status_number);
         status = pad_hints(line);
-        status_color = accent;
-    } else if (s_native_settings_save_error.load(std::memory_order_acquire)) {
+        break;
+    case NativeSettingsStatus::SaveFailed:
         status = "SAVE FAILED - RETRY ON NEXT CLOSE";
         status_color = error;
-    } else if (const unsigned pending = pending_settings_changes(); pending != 0u) {
-        char line[96]{};
+        break;
+    case NativeSettingsStatus::Pending:
         std::snprintf(line, sizeof(line),
-                      controls_page ? "%u CHANGE%s  SPACE/Y APPLY  ESC/B DISCARD"
-                                    : "%u CHANGE%s  ENTER/Y APPLY  BACKSPACE/X UNDO",
-                      pending, pending == 1u ? "" : "S");
+                      controls_page ? "%d CHANGE%s  SPACE/Y APPLY  ESC/B DISCARD"
+                                    : "%d CHANGE%s  ENTER/Y APPLY  BACKSPACE/X UNDO",
+                      view.status_number, view.status_number == 1 ? "" : "S");
         status = pad_hints(line);
-        status_color = accent;
-    } else if (s_settings_applied_ms != 0u && now_ms - s_settings_applied_ms < 2500u) {
+        break;
+    case NativeSettingsStatus::Leave:
+        std::snprintf(line, sizeof(line), "%d CHANGE%s NOT APPLIED  ENTER/Y APPLY  BACKSPACE/X DISCARD  ESC/B STAY",
+                      view.status_number, view.status_number == 1 ? "" : "S");
+        status = pad_hints(line);
+        break;
+    case NativeSettingsStatus::Applied:
         status = "APPLIED";
-        status_color = accent;
-    } else if (GameLanguage running{}; tab == 4u && running_game_language(running) && running != row_runtime.language) {
+        break;
+    case NativeSettingsStatus::LanguageRestart:
         status = "THE NEW LANGUAGE APPLIES WHEN NEBULA RESTARTS";
-        status_color = accent;
-    } else if (tab == 5u && mods_restart_pending()) {
+        break;
+    case NativeSettingsStatus::ModsRestart:
         status = "MOD CHANGES APPLY WHEN NEBULA RESTARTS";
-        status_color = accent;
-    } else if (tab == 6u && gpu_change_pending(row_render, row_caps)) {
+        break;
+    case NativeSettingsStatus::GpuRestart:
         status = "THE NEW GRAPHICS CARD APPLIES WHEN NEBULA RESTARTS";
-        status_color = accent;
-    } else if (!help.empty()) {
-        status = help;
+        break;
+    case NativeSettingsStatus::Help:
+        status = view.help;
+        status_color = muted;
+        break;
     }
     if (!status.empty()) {
         ui_text(renderer, panel_x + 28, footer_y, footer_scale, ui_fit_text(std::move(status), footer_scale, panel_w - 56),
@@ -4180,6 +4244,117 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
         pad_hints(controls_page ? "ENTER/A ADD INPUT  BACKSPACE/X CLEAR  ESC/B CLOSE"
                                 : "ARROWS/D-PAD MOVE+CHANGE  ESC/B CLOSE"),
         muted);
+}
+
+// The menu as it stands: its pages, the open page's rows (label, value, a heading or not, whether it changes), the
+// selection and what the line under the page says, in the order the overlay always chose it. Takes the menu's lock.
+NativeSettingsView build_native_settings_view() {
+    NativeSettingsView view;
+    view.pages.assign(std::begin(kNativeSettingsTabNames), std::end(kNativeSettingsTabNames));
+    view.controls_page = kControlsTab;
+    if (const auto device = galaxy::host::last_input_device()) {
+        switch (device->scheme) {
+        case galaxy::input::ControlScheme::Keyboard: break;
+        case galaxy::input::ControlScheme::SwitchPro:
+        case galaxy::input::ControlScheme::SwitchPro2: view.input = 2u; break;
+        case galaxy::input::ControlScheme::PlayStation: view.input = 3u; break;
+        default: view.input = 1u; break;
+        }
+    }
+    view.open = s_native_settings_visible.load(std::memory_order_relaxed);
+    const unsigned tab = s_native_settings_tab.load(std::memory_order_relaxed) % kNativeSettingsTabCount;
+    view.page = tab;
+    if (!view.open) {
+        return view;
+    }
+    const std::lock_guard<std::recursive_mutex> settings_lock(s_native_settings_mutex);
+    expire_display_confirmation();
+    expire_controls_capture();
+    if (tab == kControlsTab) {
+        refresh_controls_devices(false);
+    }
+    const RenderConfig row_render = s_settings_draft;
+    const RuntimeSettings row_runtime = get_runtime_settings();
+    const RenderFeatureCaps row_caps = get_render_feature_caps();
+    const unsigned row_count = native_settings_row_count(tab);
+    view.selected = std::min(s_native_settings_row.load(std::memory_order_relaxed), row_count == 0u ? 0u : row_count - 1u);
+    const bool page_tab = settings_page_tab(tab);
+    const std::vector<SettingsRow> page =
+        page_tab ? settings_page(tab, row_render, row_runtime, row_caps) : std::vector<SettingsRow>{};
+    view.rows.reserve(row_count);
+    for (unsigned row = 0; row < row_count; ++row) {
+        NativeSettingsViewRow shown;
+        shown.changes = true;
+        if (page_tab && row < page.size()) {
+            shown.label = page[row].label;
+            shown.value = page[row].value;
+            shown.heading = page[row].heading;
+            shown.changes = static_cast<bool>(page[row].change);
+            shown.label_name = (page[row].names & 1u) != 0u;
+            shown.name = (page[row].names & 2u) != 0u;
+            if (row == view.selected) view.help = page[row].help;
+        } else {
+            shown.label = native_settings_row_text(tab, row, row_render, row_runtime, row_caps);
+            if (const std::size_t colon = shown.label.find(": "); colon != std::string::npos) {
+                shown.value = shown.label.substr(colon + 2u);
+                shown.label.resize(colon);
+            }
+        }
+        shown.name = shown.name || (tab == 0u && shown.label == "MONITOR") || (tab == 6u && shown.label == "GRAPHICS CARD") ||
+                     (tab == 4u && (shown.label == "GALAXY" || shown.label == "STAR"));
+        if (tab == kControlsTab) {
+            // The controller being set up by its own name (the overlay's row has it in capitals), and the bindings as
+            // lists of inputs.
+            const ControlsRowInfo info = controls_row(row);
+            if (info.kind == ControlsRow::Device) {
+                const galaxy::input::DeviceEntry& entry =
+                    s_controls_devices.entries[galaxy::input::resolve_device(s_controls_devices, s_controls_device)];
+                shown.value = entry.label.data();
+                shown.name = true;
+                shown.active = entry.active;
+            }
+            const bool capturing = controls_capturing() && s_capture_target == static_cast<std::size_t>(info.target);
+            if (info.kind == ControlsRow::Binding && !capturing) {
+                shown.value = galaxy::input::format_target_bindings(s_controls_scheme,
+                                                                    s_controls_draft.table(s_controls_scheme)[info.target]);
+            }
+            shown.inputs = info.kind == ControlsRow::Binding;
+        }
+        view.rows.push_back(std::move(shown));
+    }
+
+    const std::uint64_t now_ms = GetTickCount64();
+    if (s_settings_leave_asking) {
+        view.status = NativeSettingsStatus::Leave;
+        view.status_number = static_cast<int>(pending_settings_changes());
+    } else if (controls_capturing()) {
+        view.status = s_controls_scheme == galaxy::input::ControlScheme::Keyboard ? NativeSettingsStatus::CaptureKey
+                                                                                   : NativeSettingsStatus::CapturePad;
+    } else if (s_controls_message_until_ms > now_ms) {
+        view.status = NativeSettingsStatus::Message;
+        view.status_text = s_controls_message;
+    } else if (const NativeSettingsStatus dlss = dlss_status(now_ms); dlss != NativeSettingsStatus::Help) {
+        view.status = dlss;
+        view.status_number = kDlssDownloadMegabytes;
+    } else if (settings_display_confirming()) {
+        const std::uint64_t left_ms = s_display_confirm_deadline_ms > now_ms ? s_display_confirm_deadline_ms - now_ms : 0u;
+        view.status = NativeSettingsStatus::KeepDisplay;
+        view.status_number = static_cast<int>((left_ms + 999u) / 1000u);
+    } else if (s_native_settings_save_error.load(std::memory_order_acquire)) {
+        view.status = NativeSettingsStatus::SaveFailed;
+    } else if (const unsigned pending = pending_settings_changes(); pending != 0u) {
+        view.status = NativeSettingsStatus::Pending;
+        view.status_number = static_cast<int>(pending);
+    } else if (s_settings_applied_ms != 0u && now_ms - s_settings_applied_ms < 2500u) {
+        view.status = NativeSettingsStatus::Applied;
+    } else if (GameLanguage running{}; tab == 4u && running_game_language(running) && running != row_runtime.language) {
+        view.status = NativeSettingsStatus::LanguageRestart;
+    } else if (tab == 5u && mods_restart_pending()) {
+        view.status = NativeSettingsStatus::ModsRestart;
+    } else if (tab == 6u && gpu_change_pending(row_render, row_caps)) {
+        view.status = NativeSettingsStatus::GpuRestart;
+    }
+    return view;
 }
 
 // The HOME Menu panel, centred over the frame. The mouse picks a row by hovering and chooses with a click.
@@ -4613,6 +4788,18 @@ bool native_settings_overlay_visible() noexcept {
     return s_native_settings_visible.load(std::memory_order_relaxed);
 }
 
+namespace {
+std::atomic<bool> s_sharp_2d_requested{false};
+}  // namespace
+
+void request_sharp_2d(bool on) noexcept {
+    s_sharp_2d_requested.store(on, std::memory_order_relaxed);
+}
+
+bool sharp_2d_requested() noexcept {
+    return s_sharp_2d_requested.load(std::memory_order_relaxed);
+}
+
 bool native_window_input_captured() noexcept {
     return s_native_settings_visible.load(std::memory_order_relaxed) ||
         s_home_menu_visible.load(std::memory_order_relaxed) ||
@@ -4724,6 +4911,59 @@ bool native_settings_handle_window_key(
         was_down);
 }
 
+NativeSettingsView native_settings_view() {
+    s_settings_drawn_by_game.store(true, std::memory_order_release);
+    return host_window::build_native_settings_view();
+}
+
+void native_settings_input(NativeSettingsInput input, int arg) {
+    const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
+    const bool visible = s_native_settings_visible.load(std::memory_order_relaxed);
+    switch (input) {
+    case NativeSettingsInput::Open:
+        set_native_settings_visible(true);
+        return;
+    case NativeSettingsInput::Close:
+        if (visible) (void)handle_native_settings_key(VK_ESCAPE, false, true);
+        return;
+    case NativeSettingsInput::Apply:
+        if (visible) (void)handle_native_settings_key(VK_RETURN, false, true);
+        return;
+    case NativeSettingsInput::Revert:
+        if (visible) (void)handle_native_settings_key(VK_BACK, false, true);
+        return;
+    default:
+        break;
+    }
+    // The page and its rows wait while a question is up (keep the display? leave without applying?).
+    if (!visible || s_settings_leave_asking || settings_display_confirming()) {
+        return;
+    }
+    switch (input) {
+    case NativeSettingsInput::SelectPage: {
+        const int current = static_cast<int>(s_native_settings_tab.load(std::memory_order_relaxed) % kNativeSettingsTabCount);
+        if (arg >= 0 && arg < static_cast<int>(kNativeSettingsTabCount) && arg != current) {
+            cycle_native_settings_tab(arg - current);
+        }
+        return;
+    }
+    case NativeSettingsInput::SelectRow: {
+        const unsigned tab = s_native_settings_tab.load(std::memory_order_relaxed) % kNativeSettingsTabCount;
+        if (arg >= 0 && static_cast<unsigned>(arg) < native_settings_row_count(tab) &&
+            !native_settings_heading(tab, static_cast<unsigned>(arg))) {
+            end_controls_capture();
+            s_native_settings_row.store(static_cast<unsigned>(arg), std::memory_order_relaxed);
+        }
+        return;
+    }
+    case NativeSettingsInput::Change:
+        if (arg != 0) adjust_native_setting(arg < 0 ? -1 : 1);
+        return;
+    default:
+        return;
+    }
+}
+
 void home_menu_open() noexcept {
     s_home_menu_row.store(0u, std::memory_order_relaxed);
     s_home_menu_choice.store(-1, std::memory_order_relaxed);
@@ -4753,6 +4993,8 @@ void native_settings_post_key(std::uintptr_t virtual_key) noexcept {
 
 void native_settings_reset_overlay_state_for_tests() noexcept {
     s_display_confirm_deadline_ms = 0u;
+    s_settings_leave_asking = false;
+    s_settings_drawn_by_game.store(false, std::memory_order_relaxed);
     s_capture_target = galaxy::input::kWiiTargetCount;
     s_controls_scheme = galaxy::input::ControlScheme::Keyboard;
     s_controls_device = {};

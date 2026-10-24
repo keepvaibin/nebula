@@ -1533,6 +1533,89 @@ uint64_t svc_stat_get(void*, const char* name) {
 #endif
 }
 
+#if defined(NEBULA_HOST_RENDERER)
+// UTF-8 text into a fixed field, cut at a whole character, always terminated.
+template <std::size_t N>
+void copy_settings_text(char (&field)[N], const std::string& text) {
+    std::size_t length = std::min(text.size(), N - 1u);
+    while (length > 0u && length < text.size() && (static_cast<unsigned char>(text[length]) & 0xC0u) == 0x80u) {
+        --length;
+    }
+    std::memcpy(field, text.data(), length);
+    field[length] = '\0';
+}
+#endif
+
+#if defined(NEBULA_HOST_RENDERER)
+static_assert(static_cast<uint32_t>(galaxy::gx::NativeSettingsStatus::Leave) == NEBULA_SETTINGS_STATUS_LEAVE &&
+              static_cast<uint32_t>(galaxy::gx::NativeSettingsStatus::KeepDisplay) == NEBULA_SETTINGS_STATUS_KEEP_DISPLAY,
+              "the settings statuses are numbered alike");
+static_assert(static_cast<uint32_t>(galaxy::gx::NativeSettingsInput::Open) == NEBULA_SETTINGS_OPEN &&
+              static_cast<uint32_t>(galaxy::gx::NativeSettingsInput::Revert) == NEBULA_SETTINGS_REVERT,
+              "the settings inputs are numbered alike");
+#endif
+
+// The settings menu for the game's own (NebulaSettingsMenu): the overlay's state, which the game draws from then on.
+// The headless host has no settings menu: always closed.
+void svc_settings_view(void*, NebulaSettingsView* view) {
+    std::memset(view, 0, sizeof(*view));
+#if defined(NEBULA_HOST_RENDERER)
+    const galaxy::gx::NativeSettingsView source = galaxy::gx::native_settings_view();
+    view->open = source.open ? 1u : 0u;
+    view->page = source.page;
+    view->page_count = static_cast<uint32_t>(std::min<std::size_t>(source.pages.size(), NEBULA_SETTINGS_PAGES));
+    for (uint32_t i = 0; i < view->page_count; ++i) {
+        copy_settings_text(view->pages[i], source.pages[i]);
+    }
+    view->controls_page = source.controls_page;
+    view->input = source.input;
+    // A long page (many mods) is sent in part: the rows around the selection, more than the menu shows at once.
+    const std::size_t total = source.rows.size();
+    const std::size_t selected = std::min<std::size_t>(source.selected, total == 0u ? 0u : total - 1u);
+    const std::size_t first = total <= NEBULA_SETTINGS_ROWS
+                                  ? 0u
+                                  : std::min(selected - std::min<std::size_t>(selected, NEBULA_SETTINGS_ROWS / 2u),
+                                             total - NEBULA_SETTINGS_ROWS);
+    view->total_rows = static_cast<uint32_t>(total);
+    view->first_row = static_cast<uint32_t>(first);
+    view->row_count = static_cast<uint32_t>(std::min<std::size_t>(total - first, NEBULA_SETTINGS_ROWS));
+    for (uint32_t i = 0; i < view->row_count; ++i) {
+        const galaxy::gx::NativeSettingsViewRow& row = source.rows[first + i];
+        copy_settings_text(view->rows[i].label, row.label);
+        copy_settings_text(view->rows[i].value, row.value);
+        view->rows[i].flags = (row.heading ? NEBULA_SETTINGS_ROW_HEADING : 0u) |
+                              (row.changes ? NEBULA_SETTINGS_ROW_CHANGES : 0u) | (row.name ? NEBULA_SETTINGS_ROW_NAME : 0u) |
+                              (row.active ? NEBULA_SETTINGS_ROW_ACTIVE : 0u) |
+                              (row.label_name ? NEBULA_SETTINGS_ROW_LABEL_NAME : 0u);
+    }
+    view->selected = static_cast<uint32_t>(selected);
+    copy_settings_text(view->help, source.help);
+    view->status = static_cast<uint32_t>(source.status);
+    view->status_number = source.status_number;
+    copy_settings_text(view->status_text, source.status_text);
+#endif
+}
+
+// The pointer's input to the settings menu: NEBULA_SETTINGS_* are galaxy::gx::NativeSettingsInput's values.
+void svc_settings_input(void*, uint32_t action, int32_t arg) {
+#if defined(NEBULA_HOST_RENDERER)
+    if (action >= NEBULA_SETTINGS_OPEN && action <= NEBULA_SETTINGS_REVERT) {
+        galaxy::gx::native_settings_input(static_cast<galaxy::gx::NativeSettingsInput>(action), arg);
+    }
+#else
+    (void)action, (void)arg;
+#endif
+}
+
+// Nebula's screens with small text (sharp_2d): the 2D layer at the window's resolution while they show.
+void svc_sharp_2d(void*, uint32_t on) {
+#if defined(NEBULA_HOST_RENDERER)
+    galaxy::gx::request_sharp_2d(on != 0u);
+#else
+    (void)on;
+#endif
+}
+
 // A mod's code patch the game runs natively (NEBULA_PATCH_*), as the mods layer matched it at the start.
 int svc_code_patch(void*, uint32_t id, uint32_t* value) {
     static_assert(galaxy::mods::kPatchFlipPanelGroup == NEBULA_PATCH_FLIP_PANEL_GROUP &&
@@ -2787,6 +2870,9 @@ int main(int argc, char** argv) {
     services.achievement_date = svc_achievement_date;
     services.stat_add = svc_stat_add;
     services.stat_get = svc_stat_get;
+    services.settings_view = svc_settings_view;
+    services.settings_input = svc_settings_input;
+    services.sharp_2d = svc_sharp_2d;
     services.gx_stripe_particle = svc_gx_stripe_particle;
     services.disc_fst = svc_disc_fst;
     services.disc_read = svc_disc_read;

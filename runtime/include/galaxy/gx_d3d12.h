@@ -16,6 +16,7 @@
 #include <optional>
 #include <string>
 #include <span>
+#include <vector>
 
 namespace galaxy::gx {
 
@@ -275,6 +276,10 @@ struct XfbPresentStats {
 };
 
 [[nodiscard]] bool native_settings_overlay_visible() noexcept;
+// Nebula's screens with small text (the settings menu, the achievement board) ask for the 2D layer at the window's
+// resolution while they show, whatever the HUD's (the game module's sharp_2d).
+void request_sharp_2d(bool on) noexcept;
+[[nodiscard]] bool sharp_2d_requested() noexcept;
 
 // The native game's HOME Menu: Nebula's panel with the console menu's choices, drawn over the frame and taking the
 // keyboard, controllers and mouse while open. The game opens it (HBMInit) and polls each frame: -1 nothing chosen yet,
@@ -308,6 +313,55 @@ void native_settings_set_controllers_for_tests(std::span<const input::Controller
 [[nodiscard]] RenderConfig native_settings_draft_for_tests();
 // Delivers an overlay key to the window thread (controller navigation).
 void native_settings_post_key(std::uintptr_t virtual_key) noexcept;
+
+// The settings menu as it stands, for the native game's own menu (NebulaSettingsMenu) and the overlay alike: the
+// pages, the open page's rows (the overlay's English), the selection and what the line under the page says.
+struct NativeSettingsViewRow {
+    std::string label;
+    std::string value;
+    bool heading = false;  // a section's title, never selected
+    bool changes = false;  // left and right change it
+    bool name = false;     // its value is a name (a monitor, a controller, a graphics card): shown as is
+    bool inputs = false;   // its value lists inputs (keys, buttons, sticks), each named on its own
+    bool active = false;   // its value is the controller in use
+    bool label_name = false;  // its label is a name (a mod's, its option's): shown as is
+};
+enum class NativeSettingsStatus : unsigned {
+    Help,             // the selected row's description
+    CaptureKey,       // a binding waits for a key or mouse button
+    CapturePad,       // a binding waits for a button, stick or trigger
+    Message,          // a message for a moment (status_text)
+    DlssAsk,          // download DLSS? (yes: Apply, no: Close)
+    DlssInstalling,   // DLSS downloads and installs
+    DlssRestart,      // DLSS installed: restart now? (yes: Apply, later: Close)
+    DlssFailed,       // DLSS was not installed
+    KeepDisplay,      // keep the new display? (status_number seconds left)
+    SaveFailed,       // the settings could not be written
+    Pending,          // status_number changes wait to be applied
+    Applied,          // just applied
+    LanguageRestart,  // the new language applies at the next start
+    ModsRestart,      // the mod changes apply at the next start
+    GpuRestart,       // the new graphics card applies at the next start
+    Leave,            // leaving with changes not applied: apply or discard them first
+};
+struct NativeSettingsView {
+    bool open = false;
+    unsigned page = 0u;
+    std::vector<std::string> pages;
+    unsigned controls_page = 0u;
+    unsigned input = 0u;  // what the player last used: 0 keyboard, 1 Xbox-style, 2 Nintendo, 3 PlayStation
+    std::vector<NativeSettingsViewRow> rows;
+    unsigned selected = 0u;
+    std::string help;
+    NativeSettingsStatus status = NativeSettingsStatus::Help;
+    int status_number = 0;
+    std::string status_text;
+};
+// The menu as it stands. The first call hands the drawing to the game: the overlay draws nothing of its own after.
+[[nodiscard]] NativeSettingsView native_settings_view();
+// The pointer's input to the menu (the game's own menu takes the pointer; the window thread the keyboard and pads).
+enum class NativeSettingsInput : unsigned { Open = 1, Close, SelectPage, SelectRow, Change, Apply, Revert };
+void native_settings_input(NativeSettingsInput input, int arg);
 
 // Number of EFB display copies submitted to XFB textures by the active backend.
 [[nodiscard]] std::uint64_t xfb_copy_count() noexcept;

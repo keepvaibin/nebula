@@ -5,6 +5,9 @@
 class ButtonPaneController;
 class LuigiLetter;
 class SysInfoWindow;
+#ifdef TARGET_PC
+class NebulaPauseSettingsButton;
+#endif
 
 class PauseMenu : public LayoutActor {
 public:
@@ -43,4 +46,7 @@ public:
     /* 0x44 */ TVec2f mCoinNumPos;
     /* 0x4C */ TVec2f mStarPieceNumPos;
     /* 0x54 */ bool _54;
+#ifdef TARGET_PC
+    NebulaPauseSettingsButton* mSettingsButton;  // Nebula's settings menu, from the lower band
+#endif
 };

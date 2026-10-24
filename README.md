@@ -41,7 +41,7 @@ the Petari decompilation by SMGCommunity, compiled for the PC with the changes a
 - Aspect ratios from 4:3 to 32:9, internal resolution up to 16x, frame interpolation above 60 FPS.
 - Anti-aliasing (SMAA, FXAA, MSAA), AMD FSR 3 and NVIDIA DLSS upscaling, anisotropic filtering, per-pixel lighting
   and ambient occlusion.
-- In-game settings (F1, View + Menu on Xbox, Minus + Plus on Switch).
+- In-game settings in the game's own style (F1, View + Menu on Xbox, Minus + Plus on Switch, or the pause menu).
 - Skippable cutscenes (+ during a cutscene) and Quit to desktop on the file select.
 - 34 achievements, each with a pop-up when it is reached. From the Gateway's Grand Star on, a Luma near Mario's start
   in the Comet Observatory shows them all: tabs, filters and play stats.

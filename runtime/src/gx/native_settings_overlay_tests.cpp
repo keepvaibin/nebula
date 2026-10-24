@@ -9,13 +9,17 @@
 #define NOMINMAX
 #include <Windows.h>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iostream>
+#include <set>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -59,6 +63,25 @@ bool key(std::uintptr_t virtual_key, bool was_down = false) {
     return galaxy::gx::native_settings_handle_window_key(
         virtual_key,
         was_down);
+}
+
+// NebulaSettingsMenu's NebulaText id for a host text: "S." and the text, its spaces as _ and each number (digits, a
+// decimal point between digits) as #.
+std::string settings_text_id(std::string_view text) {
+    std::string id = "S.";
+    for (std::size_t i = 0; i < text.size();) {
+        if (text[i] < '0' || text[i] > '9') {
+            id += text[i] == ' ' ? '_' : text[i];
+            ++i;
+            continue;
+        }
+        while (i < text.size() && ((text[i] >= '0' && text[i] <= '9') ||
+                                   (text[i] == '.' && i + 1u < text.size() && text[i + 1u] >= '0' && text[i + 1u] <= '9'))) {
+            ++i;
+        }
+        id += '#';
+    }
+    return id;
 }
 
 bool layout_inside(
@@ -123,8 +146,14 @@ int main() {
 
     // Display page: rows edit a draft; Enter applies, Backspace undoes. Rows: 0 heading, 1 monitor,
     // 2 mode, 3 resolution, 4 refresh rate, 5 aspect ratio, 6 vsync, 7 heading, 8 HUD resolution.
+    // Leaving with changes not applied asks first; Backspace discards them and closes.
+    const auto close_discarding = [&] {
+        bool ok = key(VK_ESCAPE);
+        if (galaxy::gx::native_settings_overlay_visible()) ok = ok && key(VK_BACK);
+        return ok && !galaxy::gx::native_settings_overlay_visible();
+    };
     const auto reopen = [&] {
-        return key(VK_ESCAPE) && key(VK_F1) &&
+        return close_discarding() && key(VK_F1) &&
                galaxy::gx::native_settings_overlay_visible();
     };
     // A page from its first setting row: back one page and forward again.
@@ -586,7 +615,7 @@ int main() {
     _putenv_s(
         "GALAXY_RUNTIME_SETTINGS_PATH",
         (blocking_parent / "runtime.ini").string().c_str());
-    passed &= expect(key(VK_ESCAPE), "Escape closes the overlay");
+    passed &= expect(close_discarding(), "Escape closes the overlay");
     galaxy::gx::native_settings_wait_saved_for_tests();
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
     passed &= expect(
@@ -610,8 +639,198 @@ int main() {
             std::filesystem::is_regular_file(recovered_runtime),
         "successful retry atomically persists both files and clears error state");
 
+    // Leaving with changes not applied: asked, Escape stays, Enter applies and closes, Backspace discards and closes.
+    {
+        using galaxy::gx::NativeSettingsInput;
+        using galaxy::gx::NativeSettingsStatus;
+        galaxy::gx::native_settings_reset_overlay_state_for_tests();
+        galaxy::gx::RenderConfig base = galaxy::gx::get_render_config();
+        base.vsync_interval = 0u;
+        galaxy::gx::set_render_config(base);
+        const auto vsync_row = [&] {
+            const galaxy::gx::NativeSettingsView view = galaxy::gx::native_settings_view();
+            for (unsigned i = 0; i < view.rows.size(); ++i) {
+                if (view.rows[i].label == "VSYNC") return static_cast<int>(i);
+            }
+            return -1;
+        };
+        passed &= expect(key(VK_F1) && galaxy::gx::native_settings_overlay_visible(), "the menu opens for the leave checks");
+        galaxy::gx::native_settings_input(NativeSettingsInput::SelectRow, vsync_row());
+        galaxy::gx::native_settings_input(NativeSettingsInput::Change, 1);
+        passed &= expect(galaxy::gx::native_settings_view().status == NativeSettingsStatus::Pending &&
+                             galaxy::gx::native_settings_view().status_number == 1,
+                         "the pointer picks the vsync row and changes it: one change waits");
+        passed &= expect(key(VK_ESCAPE) && galaxy::gx::native_settings_overlay_visible() &&
+                             galaxy::gx::native_settings_view().status == NativeSettingsStatus::Leave,
+                         "Escape with a change not applied asks instead of closing");
+        passed &= expect(key(VK_DOWN) && key(VK_ESCAPE) && galaxy::gx::native_settings_overlay_visible() &&
+                             galaxy::gx::native_settings_view().status == NativeSettingsStatus::Pending,
+                         "the question waits for its answer; Escape again stays on the page");
+        passed &= expect(key(VK_ESCAPE) && key(VK_RETURN) && !galaxy::gx::native_settings_overlay_visible() &&
+                             galaxy::gx::get_render_config().vsync_interval != 0u,
+                         "Enter applies the change and closes");
+        passed &= expect(key(VK_F1), "the menu opens again");
+        galaxy::gx::native_settings_input(NativeSettingsInput::SelectRow, vsync_row());
+        galaxy::gx::native_settings_input(NativeSettingsInput::Change, 1);
+        galaxy::gx::native_settings_input(NativeSettingsInput::Close, 0);
+        passed &= expect(galaxy::gx::native_settings_view().status == NativeSettingsStatus::Leave,
+                         "the pointer's close asks too");
+        passed &= expect(key(VK_BACK) && !galaxy::gx::native_settings_overlay_visible() &&
+                             galaxy::gx::get_render_config().vsync_interval != 0u,
+                         "Backspace discards the change and closes");
+
+        // The view: every page, rows split into label and value, headings, and the pointer's choices.
+        passed &= expect(key(VK_F1), "the menu opens for the view checks");
+        galaxy::gx::NativeSettingsView view = galaxy::gx::native_settings_view();
+        passed &= expect(view.open && view.pages.size() == 7u && view.pages[0] == "DISPLAY" && view.controls_page == 2u,
+                         "the view lists the seven pages and the controls page");
+        passed &= expect(!view.rows.empty() && view.rows[0].heading && !view.rows[view.selected].heading,
+                         "a page starts with a heading; the selection is never one");
+        galaxy::gx::native_settings_input(NativeSettingsInput::SelectRow, 0);
+        passed &= expect(galaxy::gx::native_settings_view().selected == view.selected, "the pointer cannot select a heading");
+        galaxy::gx::native_settings_input(NativeSettingsInput::SelectPage, 3);
+        view = galaxy::gx::native_settings_view();
+        bool split = view.page == 3u && view.rows.size() == 7u;
+        for (const galaxy::gx::NativeSettingsViewRow& row : view.rows) {
+            split = split && row.label.find(": ") == std::string::npos && !row.value.empty() && row.value.back() == '%';
+        }
+        passed &= expect(split, "the audio page's rows come as label and percentage");
+        galaxy::gx::native_settings_input(NativeSettingsInput::SelectPage, 2);
+        view = galaxy::gx::native_settings_view();
+        bool controls_split = view.page == 2u && view.rows.size() > 3u;
+        for (const galaxy::gx::NativeSettingsViewRow& row : view.rows) {
+            controls_split = controls_split && row.label.find(": ") == std::string::npos;
+        }
+        passed &= expect(controls_split, "the controls page's rows come as label and value");
+        passed &= expect(close_discarding(), "the menu closes after the view checks");
+    }
+
+    // Every text the menu shows has its entry in the game's text table, so the game's menu shows it in every language:
+    // each page's rows, every value each row steps through (with every value of each other row on its page), each line
+    // under the page. Names are shown as they are; inputs ("SPACE, MOUSELEFT") are named one by one.
+    {
+        using galaxy::gx::NativeSettingsInput;
+        std::set<std::string> ids;
+        std::ifstream table(NEBULA_TEXT_TABLE);
+        for (std::string line; std::getline(table, line);) {
+            ids.insert(line.substr(0, line.find('\t')));
+        }
+        // A text without an entry of its own is named piece by piece, as the game's menu does: the words before a
+        // closing "(...)" and those inside it, then its sentences, the words before ": " and after it, a list's items.
+        const std::function<bool(std::string_view)> covered = [&](std::string_view text) {
+            if (text.empty() || ids.count(settings_text_id(text)) != 0u) return true;
+            std::size_t at = std::string_view::npos;
+            std::size_t second_end = text.size();
+            if (text.back() == ')' && (at = text.rfind(" (")) != std::string_view::npos) {
+                second_end = text.size() - 1u;
+            } else {
+                for (const std::string_view separator : {". ", ": ", ", "}) {
+                    if ((at = text.find(separator)) != std::string_view::npos) break;
+                }
+            }
+            if (at == std::string_view::npos) return false;
+            std::string_view first = text.substr(0, at);
+            while (!first.empty() && first.back() == ' ') first.remove_suffix(1u);
+            return covered(first) && covered(text.substr(at + 2u, second_end - at - 2u));
+        };
+        std::set<std::string> missing;
+        const auto check = [&](std::string_view text) {
+            if (!text.empty() && !covered(text)) missing.insert(std::string(text));
+        };
+        const auto check_view = [&] {
+            const galaxy::gx::NativeSettingsView view = galaxy::gx::native_settings_view();
+            for (const std::string& page : view.pages) check(page);
+            for (const galaxy::gx::NativeSettingsViewRow& row : view.rows) {
+                if (!row.label_name) {
+                    check(row.label.rfind("  ", 0) == 0u ? std::string_view(row.label).substr(2u) : std::string_view(row.label));
+                }
+                if (row.inputs) {
+                    for (std::size_t at = 0u; at < row.value.size();) {
+                        const std::size_t comma = row.value.find(", ", at);
+                        const std::string input =
+                            row.value.substr(at, comma == std::string::npos ? std::string::npos : comma - at);
+                        // Words ("Space", "MouseLeft") have entries; a key or button's own letters ("F", "LB") are
+                        // shown as they are.
+                        if (std::any_of(input.begin(), input.end(), [](char c) { return c >= 'a' && c <= 'z'; })) {
+                            check(input);
+                        }
+                        at = comma == std::string::npos ? row.value.size() : comma + 2u;
+                    }
+                } else if (!row.name && row.value != "PRESS RIGHT") {
+                    check(row.value);
+                }
+            }
+            check(view.help);
+            check(view.status_text);
+        };
+        // The rows that change a setting (not one that opens a folder, imports, travels or waits for an input), found by
+        // their labels as rows come and go.
+        const auto find_row = [](const std::string& label) {
+            const galaxy::gx::NativeSettingsView view = galaxy::gx::native_settings_view();
+            for (unsigned i = 0; i < view.rows.size(); ++i) {
+                if (view.rows[i].label == label) return static_cast<int>(i);
+            }
+            return -1;
+        };
+        const auto steps = [](const galaxy::gx::NativeSettingsViewRow& row) {
+            return row.changes && !row.heading && !row.inputs && row.value != "PRESS RIGHT" && row.label != "  PLACE" &&
+                   row.label.rfind("RESET ", 0) != 0u;
+        };
+        const auto step_through = [&](const std::string& label, const std::function<void()>& each) {
+            int row = find_row(label);
+            if (row < 0) return;
+            galaxy::gx::native_settings_input(NativeSettingsInput::SelectRow, row);
+            const std::string first = galaxy::gx::native_settings_view().rows[static_cast<unsigned>(row)].value;
+            for (int n = 0; n < 40; ++n) {
+                galaxy::gx::native_settings_input(NativeSettingsInput::Change, 1);
+                each();
+                row = find_row(label);
+                if (row < 0 || galaxy::gx::native_settings_view().rows[static_cast<unsigned>(row)].value == first) break;
+                galaxy::gx::native_settings_input(NativeSettingsInput::SelectRow, row);
+            }
+        };
+        galaxy::gx::native_settings_reset_overlay_state_for_tests();
+        // Every kind of controller, for the controls page's rows and button names.
+        const std::array<ControllerInfo, 7> every_controller{
+            attached(ControlScheme::Xbox, 0, ControllerLink::Usb, "Xbox controller"),
+            attached(ControlScheme::SwitchPro, 0, ControllerLink::Bluetooth, "Switch Pro Controller"),
+            attached(ControlScheme::SwitchPro2, 0, ControllerLink::Usb, "Switch 2 Pro Controller"),
+            attached(ControlScheme::PlayStation, 0, ControllerLink::Usb, "DualSense"),
+            attached(ControlScheme::PlayStation, 1, ControllerLink::Bluetooth, "DualShock 4"),
+            attached(ControlScheme::Steam, 0, ControllerLink::Wireless, "Steam Controller"),
+            attached(ControlScheme::Generic, 0, ControllerLink::Usb, "Gamepad"),
+        };
+        galaxy::gx::native_settings_set_controllers_for_tests(every_controller, DeviceKey{ControlScheme::Xbox, 0});
+        passed &= expect(key(VK_F1), "the menu opens for the text checks");
+        for (unsigned page = 0; page < 7u; ++page) {
+            galaxy::gx::native_settings_input(NativeSettingsInput::SelectPage, static_cast<int>(page));
+            check_view();
+            std::vector<std::string> labels;
+            for (const galaxy::gx::NativeSettingsViewRow& row : galaxy::gx::native_settings_view().rows) {
+                if (steps(row)) labels.push_back(row.label);
+            }
+            for (const std::string& outer : labels) {
+                step_through(outer, [&] {
+                    check_view();
+                    for (const std::string& inner : labels) {
+                        if (inner != outer) step_through(inner, check_view);
+                    }
+                });
+            }
+            galaxy::gx::native_settings_input(NativeSettingsInput::Revert, 0);
+        }
+        passed &= expect(close_discarding(), "the menu closes after the text checks");
+        for (const std::string& text : missing) {
+            std::cerr << "no text table entry: " << settings_text_id(text) << "\t" << text << '\n';
+        }
+        passed &= expect(missing.empty(), "every text the settings menu shows has a text table entry");
+    }
+
+    // The checks above applied a change: its settings files are written in the background.
+    galaxy::gx::native_settings_wait_saved_for_tests();
     galaxy::gx::native_settings_reset_overlay_state_for_tests();
-    std::filesystem::remove_all(root);
+    std::error_code removed;
+    std::filesystem::remove_all(root, removed);
     if (!passed) {
         return 1;
     }

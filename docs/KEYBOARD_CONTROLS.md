@@ -232,28 +232,35 @@ Nintendo_Switch_Reverse_Engineering notes. The code is an independent
 implementation; no source was copied. The gyro pointer's axes follow
 JoyShockMapper's description of player and world space.
 
-## Settings overlay
+## Settings menu
 
-`F1`, View+Menu (Xbox, Steam), Share+Options (PlayStation) or Minus+Plus (Switch) opens or closes the settings
-overlay; a one-line hint names them for the first seconds of a session.
-Autorepeat never toggles it. While it is open the game sees no keyboard or
-controller input, and buttons held when it closes stay hidden from the game
-until released.
+`F1`, View+Menu (Xbox, Steam), Share+Options (PlayStation), Minus+Plus (Switch) or the pause menu's Settings button
+opens the settings menu; a one-line hint names the keys for the first seconds of a session. Autorepeat never toggles
+it. The game draws it in its own style (the quit question's window, its buttons and message font) and holds still
+while it is shown: the scene stops, the music pauses and the game's sounds fade out, a movie waits; all of it resumes
+once the menu has risen away. While it is open the game sees no keyboard or controller input, and buttons held when
+it closes stay hidden from the game until released.
 
 | Keyboard | Controller | Settings action |
 |---|---|---|
 | `F1` | View+Menu, Share+Options, Minus+Plus | Open or close |
 | `Tab` / Page Down, Page Up | RB/R, LB/L | Next, previous page |
 | Up / Down | D-pad or left stick up/down | Select row |
-| Left / Right | D-pad or left stick left/right, A | Change the selected row |
+| Left / Right | D-pad or left stick left/right, A | Change the selected row; open a folder, import |
 | `Enter` | Y | Apply (CONTROLS: `Space`/Y) |
 | `Backspace` | X | Undo the draft (CONTROLS binding row: clear) |
-| `Esc` | B or Menu/Plus | Close; an unapplied draft is discarded |
+| `Esc` | B or Menu/Plus | Close |
 
-On Switch controllers the overlay uses the console's meaning: A changes, B
-closes. PlayStation: Cross changes, Circle closes, Square clears, Triangle applies. Pages: DISPLAY, GRAPHICS, CONTROLS, AUDIO and GENERAL (text speed,
-language). AUDIO and text speed changes apply live; a new language applies when
-Nebula next starts, as the game reads it once at boot. Settings files are written through flushed sibling temporaries
+The pointer (mouse or Wii Remote) works it too: the row under it is selected, a click changes it (on its left arrow,
+back) or does what it does, a page's button, Apply and Back are clicked; the mouse wheel moves the selection. Closing
+with changes not applied asks first: `Enter`/Y applies them and closes, `Backspace`/X discards them, `Esc`/B goes
+back to the page (each is also a button to click). The hints along the bottom name the keys or buttons of whatever
+was used last.
+
+On Switch controllers the menu uses the console's meaning: A changes, B closes. PlayStation: Cross changes, Circle
+closes, Square clears, Triangle applies. Pages: Display, Graphics, Controls, Audio, General (text speed, language,
+Discord, Miis), Mods and System. Audio and text speed changes apply live; a new language applies when Nebula next
+starts, as the game reads it once at boot. Settings files are written through flushed sibling temporaries
 and atomically replaced; a failed save stays dirty and is retried on the next
 close or at shutdown.
 

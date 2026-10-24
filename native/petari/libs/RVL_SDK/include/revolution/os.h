@@ -77,6 +77,12 @@ s32 __NebulaAchievement(const char* id, u16* name, u32 capacity);
 s32 __NebulaAchievementDate(const char* id);
 void __NebulaStatAdd(const char* name, u64 delta);
 u64 __NebulaStatGet(const char* name);
+// Nebula's settings menu (NebulaHostServices::settings_view and settings_input).
+struct NebulaSettingsView;
+void __NebulaSettingsView(struct NebulaSettingsView* view);
+void __NebulaSettingsInput(u32 action, s32 arg);
+// The 2D layer at the window's resolution while a Nebula screen with small text shows (sharp_2d).
+void __NebulaSharp2D(u32 on);
 // A game object's name for the renderer (object_name in nebula_game_api.h).
 void __NebulaObjectName(const void* pObject, const char* pName);
 // How far a model's traced light reaches (light_reach in nebula_game_api.h).

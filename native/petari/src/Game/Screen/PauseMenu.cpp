@@ -14,6 +14,10 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#ifdef TARGET_PC
+#include "Game/Screen/NebulaPauseSettingsButton.hpp"
+#include "Game/Screen/NebulaSettingsMenu.hpp"
+#endif
 
 namespace {
     const s32 cBackSequenceFadeFrame = 90;
@@ -39,6 +43,9 @@ namespace NrvPauseMenu {
 PauseMenu::PauseMenu()
     : LayoutActor("\203\174\201\133\203\131\203\201\203\152\203\205\201\133" /* ポーズメニュー */, true), _20(), _24(), _28(0.0f, 50.0f), _30(), mLuigiLetter(), _38(), mStageTitleOffset(0.0f, 39.0f),
       mCoinNumPos(0.0f, 0.0f), mStarPieceNumPos(0.0f, 0.0f), _54(true) {
+#ifdef TARGET_PC
+    mSettingsButton = nullptr;
+#endif
 }
 
 void PauseMenu::init(const JMapInfoIter& rIter) {
@@ -101,6 +108,11 @@ void PauseMenu::init(const JMapInfoIter& rIter) {
         MR::hidePaneRecursive(this, "LetterButton");
     }
 
+#ifdef TARGET_PC
+    mSettingsButton = new NebulaPauseSettingsButton();
+    mSettingsButton->initWithoutIter();
+#endif
+
     initNerve(GET_NERVE(PauseMenu, PauseMenuNrvSelecting));
 }
 
@@ -138,6 +150,10 @@ void PauseMenu::appear() {
         _38->appear();
     }
 
+#ifdef TARGET_PC
+    mSettingsButton->show();
+#endif
+
     setNerve(GET_NERVE(PauseMenu, PauseMenuNrvSelecting));
     LayoutActor::appear();
 
@@ -172,6 +188,9 @@ void PauseMenu::draw() const {
 
 void PauseMenu::kill() {
     LayoutActor::kill();
+#ifdef TARGET_PC
+    mSettingsButton->kill();
+#endif
 
     if (_54) {
         MR::activateDefaultGameLayout();
@@ -262,11 +281,18 @@ void PauseMenu::forceToWaitAllButton() {
     if (!b) {
         _38->forceToWait();
     }
+
+#ifdef TARGET_PC
+    mSettingsButton->getButton()->forceToWait();
+#endif
 }
 
 void PauseMenu::exeSelecting() {
     bool isPointingTrigger = _20->isPointingTrigger() || (_24 != nullptr && _24->isPointingTrigger()) ||
                              (!(_38 == nullptr || _38->isHidden()) && _38->isPointingTrigger());
+#ifdef TARGET_PC
+    isPointingTrigger = isPointingTrigger || mSettingsButton->getButton()->isPointingTrigger();
+#endif
 
     if (isPointingTrigger) {
         MR::startSystemSE("SE_SY_SELECT_PAUSE_ITEM");
@@ -278,6 +304,13 @@ void PauseMenu::exeSelecting() {
         setNerve(GET_NERVE(PauseMenu, PauseMenuNrvDecided));
         return;
     }
+
+#ifdef TARGET_PC
+    if (mSettingsButton->getButton()->trySelect()) {
+        setNerve(GET_NERVE(PauseMenu, PauseMenuNrvDecided));
+        return;
+    }
+#endif
 
     bool isAnimStopped = isPaneAnimStoppedWithoutButton() && !_20->isAppearing() && (_24 == nullptr || !_24->isAppearing()) &&
                          ((_38 == nullptr || _38->isHidden()) || !_38->isAppearing());
@@ -312,7 +345,18 @@ void PauseMenu::exeDecided() {
                 setNerve(GET_NERVE(PauseMenu, PauseMenuNrvConfirm));
             }
         }
-    } else {
+    }
+#ifdef TARGET_PC
+    // Settings: the menu drops in over the pause menu, which waits under it with its buttons ready.
+    else if (mSettingsButton->getButton()->mIsSelected) {
+        if (mSettingsButton->getButton()->isDecidedWait()) {
+            NebulaSettingsMenu::requestOpen();
+            forceToWaitAllButton();
+            setNerve(GET_NERVE(PauseMenu, PauseMenuNrvSelecting));
+        }
+    }
+#endif
+    else {
         bool isLetterHidden = _38 == nullptr || _38->isHidden();
 
         if (!isLetterHidden && _38->mIsSelected) {
@@ -342,6 +386,10 @@ void PauseMenu::exeDisappear() {
         if (!b) {
             _38->disappear();
         }
+
+#ifdef TARGET_PC
+        mSettingsButton->hide();
+#endif
     }
 
     if (isPaneAnimStoppedWithoutButton() && _20->isHidden() && (_24 == nullptr || _24->isHidden())) {

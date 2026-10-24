@@ -111,6 +111,18 @@ u64 __NebulaStatGet(const char* name) {
     return sHost->stat_get(sHost->user, name);
 }
 
+void __NebulaSettingsView(NebulaSettingsView* view) {
+    sHost->settings_view(sHost->user, view);
+}
+
+void __NebulaSettingsInput(u32 action, s32 arg) {
+    sHost->settings_input(sHost->user, action, arg);
+}
+
+void __NebulaSharp2D(u32 on) {
+    sHost->sharp_2d(sHost->user, on);
+}
+
 uint32_t __NebulaObjectId(const void* object); /* memory.c */
 
 void __NebulaObjectName(const void* object, const char* name) {

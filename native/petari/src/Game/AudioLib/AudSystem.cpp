@@ -586,6 +586,29 @@ void AudSystem::fadeOutForQuit() {
     mStreamMgr.getParams()->moveVolume(0.0f, 30);
     mSeMgr.getParams()->moveVolume(0.0f, 30);
 }
+
+// Nebula's settings menu (NebulaSettingsMenu): as for the pause menu, the music fades out, the game's sounds end and the
+// system's (the menu's own) play on; the menu stops the music once faded. On its close everything returns as it was.
+// Over the pause or HOME Menu only the sound effects' volumes change, and that menu's close restores the rest.
+// `stayFaded`: the music stays faded on the close, under the cutscene skip's question or its unseen run (the skip
+// brings it back).
+void AudSystem::holdForSettingsMenu(bool hold, bool stayFaded) {
+    const bool otherMenu = isPauseMenuActive() || isHomeButtonMenuActive();
+    if (hold) {
+        if (!otherMenu) {
+            mSeqMgr.getParams()->moveVolume(0.0f, 12);
+            mStreamMgr.getParams()->moveVolume(0.0f, 12);
+            setVolumeZeroForce(MenuType_Pause);
+        }
+        setSeVolumeSet(AudSystemVolumeController::VolumeSet_PauseMenu, 12);
+        return;
+    }
+    if (!otherMenu && !stayFaded) {
+        mSeqMgr.getParams()->moveVolume(AudParams::masterVolBgm, 20);
+        mStreamMgr.getParams()->moveVolume(AudParams::masterVolStream, 20);
+    }
+    recoverSeVolumeSet(20);
+}
 #endif
 
 void AudSystem::exitPauseMenu() {

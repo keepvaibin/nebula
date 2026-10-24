@@ -1,7 +1,7 @@
 # Changing Nebula's text and graphics
 
 Nebula adds a few things to the game's screens: the Quit to desktop button, the quit and cutscene questions, the
-achievement pop-up, the achievement board and the Observatory's Achievement Luma. They are built from the game's own
+achievement pop-up, the achievement board, the Observatory's Achievement Luma and the settings menu. They are built from the game's own
 layouts, fonts and textures, and their text comes from one table in every language the game was released in. A mod can change any of it, and a translation into a language the game
 never had can bring its own.
 
@@ -15,8 +15,25 @@ never had can bring its own.
 | Achievement pop-up | `AchievementGet`, `Achievement.<id>` (`Achievement.<id>.Luigi` instead on a Luigi file, when there is one), `AchievementsUnlocked` (three or more at once, `{n}` their number) | `LayoutData/InformationWindow.arc` (window `InfoWinC`, text `ConfirmC`, glyph icons `ConfirmU`); icons below |
 | Achievement board | `BoardTitle`, `TabAll`, `TabStory`, `TabChallenges`, `TabExtras`, `TabStats`, `FilterAll`, `FilterUnlocked`, `FilterLocked`, `BoardCount`, `BoardPercent`, `BoardEmptyUnlocked`, `BoardEmptyLocked`, `Achievement.<id>`, `AchievementHint.<id>` (once unlocked), `AchievementLocked`, `StatsFile`, `StatsAllTime`, `Stat...`, `PlayTime`, `DateFormat`, `DigitGroup`, `HintTabs`, `HintMove`, `BoardBack` | `LayoutData/InformationWindow.arc` (text), `SysInfoWindowMini.arc` (windows), `BackButton.arc` (buttons), `MapGalaxyBg.arc` (the galaxy map's backdrop, its frame hidden) |
 | Achievement Luma's talk (the Observatory) | `LumaGreeting`, then `LumaBoard` on the next page | the game's talk balloon (`LayoutData/TalkBalloonEvent.arc`) |
+| Settings menu (`F1`, the pause menu's Settings) | `SettingsTitle`, `SettingsApply`, `SettingsBack`, `SettingsHint...`, `Key...`, `Settings...` (the line under the page, the questions and their answers), `SettingsJoin...`, and `S.<text>` for each of the host's texts (below) | `LayoutData/SysInfoWindow.arc` (the dimmer and window), `InformationWindow.arc` (text), `SysInfoWindowMini.arc` (the highlight), `BackButton.arc` (buttons), `PauseMenu.arc` (its Settings button) |
 
 The ids and every built-in translation are in [`localization/NebulaText.tsv`](../localization/NebulaText.tsv).
+
+The settings menu's pages and rows come from Nebula's host, in English capitals; each has the id `S.` and that text with
+its spaces as `_` and each number as `#`, and its translation names the numbers `{0}`, `{1}`... in their order:
+
+```
+S.DISPLAY_MODE = Anzeigemodus
+S.#_FPS = {0} FPS
+S.#X_#X# = {0}× · {1}×{2}
+```
+
+A text with no entry of its own is translated piece by piece: the words before a closing `(...)` and those inside it,
+then its sentences, the words before `: ` and after it, a list's items (`8X (OFF WITH MSAA)` is `S.#X` and
+`S.OFF_WITH_MSAA`), joined by `SettingsJoinAside`, `SettingsJoinSentence`, `SettingsJoinLabel` and `SettingsJoinList`
+(`{0} ({1})`, `{0}。{1}` in Japanese...). Names (a monitor, a graphics card, a controller, a mod) are shown as they
+are unless the table has them whole (`S.Keyboard_and_mouse`). A test (`galaxy_native_settings_overlay_tests`) steps
+every row of every page through its values and fails on a text the table cannot name.
 
 ## Languages
 

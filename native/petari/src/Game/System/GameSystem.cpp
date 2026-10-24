@@ -34,6 +34,7 @@
 #include <revolution.h>
 #ifdef TARGET_PC
 #include "Game/Screen/NebulaMenuFocus.hpp"
+#include "Game/Screen/NebulaSettingsMenu.hpp"
 #include "Game/System/NebulaCutsceneSkip.hpp"
 #endif
 
@@ -181,6 +182,7 @@ void GameSystem::initAfterStationedResourceLoaded() {
     mSystemWipeHolder = MR::createSystemWipeHolder();
 #ifdef TARGET_PC
     NebulaCutsceneSkip::init();
+    NebulaSettingsMenu::init();
 #endif
     mSceneController->initAfterStationedResourceLoaded();
     mSequenceDirector->initAfterResourceLoaded();
@@ -225,8 +227,14 @@ void GameSystem::draw() {
     mSequenceDirector->draw();
 #ifdef TARGET_PC
     NebulaCutsceneSkip::draw();
-#endif
+    // The settings menu covers everything, the wipes too; the pointer is drawn over it.
+    const bool isSettingsShown = NebulaSettingsMenu::isShown();
+    if (!isSettingsShown) {
+        mObjHolder->drawStarPointer();
+    }
+#else
     mObjHolder->drawStarPointer();
+#endif
     mObjHolder->drawBeforeEndRender();
 
     if (mSystemWipeHolder != nullptr) {
@@ -234,6 +242,12 @@ void GameSystem::draw() {
     }
 
     mErrorWatcher->draw();
+#ifdef TARGET_PC
+    if (isSettingsShown) {
+        NebulaSettingsMenu::draw();
+        mObjHolder->drawStarPointer();
+    }
+#endif
     mHomeButtonLayout->draw();
     SingletonHolder< GameSystemResetAndPowerProcess >::get()->draw();
 }
@@ -244,7 +258,11 @@ void GameSystem::update() {
     mObjHolder->update();
 #ifdef TARGET_PC
     NebulaMenuFocus::update();
-    NebulaCutsceneSkip::update();
+    NebulaSettingsMenu::update();
+    // The skip's question waits under the settings menu.
+    if (!NebulaSettingsMenu::isFreezingScene()) {
+        NebulaCutsceneSkip::update();
+    }
 #endif
     mHomeButtonLayout->movement();
 
@@ -276,14 +294,15 @@ void GameSystem::updateSceneController() {
     }
 
 #ifdef TARGET_PC
-    // The cutscene skip's question and its fade out hold the scene still, as the HOME Menu does (a movie resumes in
-    // step after it).
+    // The cutscene skip's question and its fade out, and the settings menu, hold the scene still as the HOME Menu does
+    // (a movie resumes in step after them).
     const bool isSkipPrompt = NebulaCutsceneSkip::isFreezingScene();
-    if (isSkipPrompt) {
+    const bool isSettingsMenu = NebulaSettingsMenu::isFreezingScene();
+    if (isSkipPrompt || isSettingsMenu) {
         isSceneUpdate = false;
     }
     mHomeButtonStateNotifier->update(mHomeButtonLayout->isActive() || GameSystemFunction::isOccurredSystemWarning() ||
-                                     isSkipPrompt);
+                                     isSkipPrompt || isSettingsMenu);
 #else
     mHomeButtonStateNotifier->update(mHomeButtonLayout->isActive() || GameSystemFunction::isOccurredSystemWarning());
 #endif
@@ -300,7 +319,7 @@ void GameSystem::updateSceneController() {
         mSceneController->updateScene();
     }
 #ifdef TARGET_PC
-    else if (isSkipPrompt && mSystemWipeHolder != nullptr) {
+    else if (isSkipPrompt && !isSettingsMenu && mSystemWipeHolder != nullptr) {
         // The skip's fade to black runs over the held scene.
         mSystemWipeHolder->movement();
     }

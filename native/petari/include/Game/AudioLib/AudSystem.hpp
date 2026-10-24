@@ -79,6 +79,7 @@ public:
     void muteForCutsceneSkip(bool mute);
     void silenceSeForCutsceneSkip(bool silent);
     void fadeOutForQuit();
+    void holdForSettingsMenu(bool hold, bool stayFaded);
 #endif
     void exitPauseMenu();
     void updatePauseMenu();

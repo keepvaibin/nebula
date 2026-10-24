@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 19u
+#define NEBULA_GAME_API_VERSION 20u
 
 /* A physical range of the game's memory and where it is in the host process: what the GPU's addresses resolve to. */
 typedef struct NebulaGameMemoryRegion {
@@ -176,6 +176,85 @@ typedef struct NebulaFsRequest {
     uint32_t attribute;
 } NebulaFsRequest;
 
+/* Nebula's settings menu as the host has it now (settings_view), for the game to draw in its own windows and words.
+   The host keeps the settings, their pages, the draft and its apply, and takes the keyboard and controllers while the
+   menu is open; the game shows it (and takes the pointer, settings_input). Texts are the host's own, in English
+   (UTF-8): the game names each in the played language (NebulaSettingsMenu). */
+#define NEBULA_SETTINGS_PAGES 8
+#define NEBULA_SETTINGS_ROWS 96
+
+enum {
+    NEBULA_SETTINGS_ROW_HEADING = 1,     /* a section's title: never selected */
+    NEBULA_SETTINGS_ROW_CHANGES = 2,     /* left and right change its value */
+    NEBULA_SETTINGS_ROW_NAME = 4,        /* its value is a name (a monitor, a controller, a mod, a galaxy): shown as is */
+    NEBULA_SETTINGS_ROW_ACTIVE = 8,      /* its value is the controller in use */
+    NEBULA_SETTINGS_ROW_LABEL_NAME = 16, /* its label is a name (a mod's, its option's): shown as is */
+};
+
+/* What the line under the page says (with `status_number` or `status_text` where it has one). */
+enum {
+    NEBULA_SETTINGS_STATUS_HELP = 0,         /* the selected row's description (`help`) */
+    NEBULA_SETTINGS_STATUS_CAPTURE_KEY,      /* a binding waits for a key or mouse button */
+    NEBULA_SETTINGS_STATUS_CAPTURE_PAD,      /* a binding waits for a button, stick or trigger */
+    NEBULA_SETTINGS_STATUS_MESSAGE,          /* a message for a moment (`status_text`) */
+    NEBULA_SETTINGS_STATUS_DLSS_ASK,         /* download DLSS? yes: NEBULA_SETTINGS_APPLY, no: NEBULA_SETTINGS_CLOSE */
+    NEBULA_SETTINGS_STATUS_DLSS_INSTALLING,  /* DLSS downloads and installs */
+    NEBULA_SETTINGS_STATUS_DLSS_RESTART,     /* DLSS installed: restart now? yes: APPLY, later: CLOSE */
+    NEBULA_SETTINGS_STATUS_DLSS_FAILED,      /* DLSS was not installed */
+    NEBULA_SETTINGS_STATUS_KEEP_DISPLAY,     /* keep the new display? (`status_number` seconds before it reverts) */
+    NEBULA_SETTINGS_STATUS_SAVE_FAILED,      /* the settings file could not be written */
+    NEBULA_SETTINGS_STATUS_PENDING,          /* `status_number` changes wait to be applied */
+    NEBULA_SETTINGS_STATUS_APPLIED,          /* just applied */
+    NEBULA_SETTINGS_STATUS_LANGUAGE_RESTART, /* the new language applies at the next start */
+    NEBULA_SETTINGS_STATUS_MODS_RESTART,     /* the mod changes apply at the next start */
+    NEBULA_SETTINGS_STATUS_GPU_RESTART,      /* the new graphics card applies at the next start */
+    NEBULA_SETTINGS_STATUS_LEAVE,            /* leaving with changes not applied: apply them or discard them? */
+};
+
+/* The hints name the keys or the buttons of what the player last used. A controller's buttons change, close, undo and
+   apply as an Xbox controller's A, B, X and Y; a Switch controller's by their labels, as on the console. */
+enum {
+    NEBULA_SETTINGS_INPUT_KEYBOARD = 0,
+    NEBULA_SETTINGS_INPUT_XBOX,        /* Xbox, Steam and other controllers: A B X Y, LB RB */
+    NEBULA_SETTINGS_INPUT_NINTENDO,    /* Switch Pro and Switch 2 Pro: A B X Y, L R */
+    NEBULA_SETTINGS_INPUT_PLAYSTATION, /* cross circle square triangle, L1 R1 */
+};
+
+typedef struct NebulaSettingsRow {
+    char label[64];
+    char value[96];
+    uint32_t flags; /* NEBULA_SETTINGS_ROW_* */
+} NebulaSettingsRow;
+
+typedef struct NebulaSettingsView {
+    uint32_t open;
+    uint32_t page;
+    uint32_t page_count;
+    char pages[NEBULA_SETTINGS_PAGES][24];
+    uint32_t controls_page; /* the page whose rows are bindings (its hints differ) */
+    uint32_t input;         /* what the player last used, for the hints: NEBULA_SETTINGS_INPUT_* */
+    uint32_t total_rows;    /* the page's rows; `rows` holds `row_count` of them from `first_row`, around the selection */
+    uint32_t first_row;
+    uint32_t row_count;
+    uint32_t selected;      /* counted from the page's first row */
+    NebulaSettingsRow rows[NEBULA_SETTINGS_ROWS];
+    char help[192];
+    uint32_t status; /* NEBULA_SETTINGS_STATUS_* */
+    int32_t status_number;
+    char status_text[160];
+} NebulaSettingsView;
+
+/* The player's input to the settings menu (settings_input); the keyboard and controllers reach it through the host. */
+enum {
+    NEBULA_SETTINGS_OPEN = 1,
+    NEBULA_SETTINGS_CLOSE,       /* as B or Escape: it asks first when changes wait */
+    NEBULA_SETTINGS_SELECT_PAGE, /* arg: the page */
+    NEBULA_SETTINGS_SELECT_ROW,  /* arg: the row */
+    NEBULA_SETTINGS_CHANGE,      /* arg: -1 or 1, the selected row's value */
+    NEBULA_SETTINGS_APPLY,
+    NEBULA_SETTINGS_REVERT,
+};
+
 typedef struct NebulaHostServices {
     uint32_t version;
     uint32_t size;
@@ -309,6 +388,13 @@ typedef struct NebulaHostServices {
        the count. */
     void (*stat_add)(void* user, const char* name, uint64_t delta);
     uint64_t (*stat_get)(void* user, const char* name);
+    /* The settings menu as it stands (NebulaSettingsView); while the game draws it, the host draws none of its own. */
+    void (*settings_view)(void* user, NebulaSettingsView* view);
+    /* The pointer's input to the settings menu (NEBULA_SETTINGS_*). */
+    void (*settings_input)(void* user, uint32_t action, int32_t arg);
+    /* 1 while a Nebula screen with small text shows (the settings menu, the achievement board): the 2D layer at the
+       window's resolution whatever the HUD's; 0 after. */
+    void (*sharp_2d)(void* user, uint32_t on);
 } NebulaHostServices;
 
 enum {

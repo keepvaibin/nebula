@@ -7201,7 +7201,9 @@ void RendererD3D12::record_scene_ao() {
 bool RendererD3D12::begin_output_efb() {
     const bool temporal = scene_temporal_;
     scene_temporal_ = false;
-    if (output_efb_active_ || (!temporal && !get_render_config().hud_output_resolution)) {
+    // Nebula's screens with small text are drawn at the window's resolution whatever the HUD's (sharp_2d): at the
+    // internal scale their letters would lose strokes on a wide or large window.
+    if (output_efb_active_ || (!temporal && !get_render_config().hud_output_resolution && !sharp_2d_requested())) {
         return false;
     }
     // A temporal upscaler outputs the internal resolution; the 2D layer alone

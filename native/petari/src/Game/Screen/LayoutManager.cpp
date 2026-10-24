@@ -631,6 +631,18 @@ void LayoutManager::initTextBoxRecursive(nw4r::lyt::Pane* pPane, nw4r::lyt::Pane
 }
 
 void LayoutManager::animateRecursive(u32& rIndex, nw4r::lyt::Pane* pPane) {
+#ifdef TARGET_PC
+    // Panes added after the layout was read (Nebula's screens: NebulaPaneKit) come after its own, outside the pane
+    // list, and have no controllers.
+    if (rIndex >= mPaneCount) {
+        pPane->AnimateSelf(1);
+        rIndex++;
+        for (nw4r::lyt::PaneList::Iterator it = pPane->mChildList.GetBeginIter(); it != pPane->mChildList.GetEndIter(); ++it) {
+            animateRecursive(rIndex, &*it);
+        }
+        return;
+    }
+#endif
     if (mPaneInfoList[rIndex].mPaneCtrl != nullptr) {
         mPaneInfoList[rIndex].mPaneCtrl->calcAnim();
     }

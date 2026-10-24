@@ -595,6 +595,9 @@ foreach(name shader_gen fifo_parser vertex_loader simd_kernel vs_constants rt_te
         line_point_raster xf_lighting sorted_dirty_ranges native_settings_overlay post_process efb_conversion)
     galaxy_test(galaxy_${name}_tests SOURCES ${gxs}/${name}_tests.cpp LIBS galaxy_gx)
 endforeach()
+# The game's text table: every text the settings menu shows has its entry.
+target_compile_definitions(galaxy_native_settings_overlay_tests PRIVATE
+    NEBULA_TEXT_TABLE="${CMAKE_CURRENT_SOURCE_DIR}/localization/NebulaText.tsv")
 foreach(mode content-key-hash oversized-content-cache decoded-allocation-budget)
     add_test(NAME galaxy_efb_conversion_tests_${mode} COMMAND galaxy_efb_conversion_tests --${mode})
 endforeach()
