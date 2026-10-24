@@ -53,6 +53,12 @@ void Manual2P::init(const JMapInfoIter& rIter) {
 
     mBackButton = new BackButton("\203\175\203\152\203\205\203\101\203\213\202\314\226\337\202\351\203\173\203\136\203\223" /* マニュアルの戻るボタン */, true);
     mBackButton->initWithoutIter();
+#ifdef TARGET_PC
+    // The D-pad and stick turn the pages here (NebulaMenuFocus leaves these buttons to the pointer).
+    mLeftPaneCtrl->mIsNebulaFocusable = false;
+    mRightPaneCtrl->mIsNebulaFocusable = false;
+    mBackButton->mPaneCtrl->mIsNebulaFocusable = false;
+#endif
 
     initNerve(GET_NERVE_ANON(Manual2PNrvAppear));
     MR::connectToSceneLayout(this);

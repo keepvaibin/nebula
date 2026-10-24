@@ -33,6 +33,7 @@
 #include <nw4r/lyt/init.h>
 #include <revolution.h>
 #ifdef TARGET_PC
+#include "Game/Screen/NebulaMenuFocus.hpp"
 #include "Game/System/NebulaCutsceneSkip.hpp"
 #endif
 
@@ -242,6 +243,7 @@ void GameSystem::update() {
     mSceneController->checkRequestAndChangeScene();
     mObjHolder->update();
 #ifdef TARGET_PC
+    NebulaMenuFocus::update();
     NebulaCutsceneSkip::update();
 #endif
     mHomeButtonLayout->movement();

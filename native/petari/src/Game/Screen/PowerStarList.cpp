@@ -313,6 +313,10 @@ ButtonPaneController* PowerStarList::createButtonController(const char* pParam1,
 
     pController->mWaitAnimName = "Wait";
     pController->invalidateAppearance();
+#ifdef TARGET_PC
+    // The D-pad and stick turn the pages here (NebulaMenuFocus leaves these buttons to the pointer).
+    pController->mIsNebulaFocusable = false;
+#endif
 
     return pController;
 }

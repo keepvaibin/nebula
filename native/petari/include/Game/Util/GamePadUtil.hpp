@@ -36,6 +36,16 @@ namespace MR {
     /// @return `true` if down is pressed, `false` otherwise.
     bool testCorePadButtonDown(s32 channel);
 
+    /// @brief Determines if left on the given Wii Remote's +Control Pad is pressed.
+    /// @param channel The handle to the Wii Remote.
+    /// @return `true` if left is pressed, `false` otherwise.
+    bool testCorePadButtonLeft(s32 channel);
+
+    /// @brief Determines if right on the given Wii Remote's +Control Pad is pressed.
+    /// @param channel The handle to the Wii Remote.
+    /// @return `true` if right is pressed, `false` otherwise.
+    bool testCorePadButtonRight(s32 channel);
+
     /// @brief Determines if the A Button on the given Wii Remote is pressed.
     /// @param channel The handle to the Wii Remote.
     /// @return `true` if the A Button is pressed, `false` otherwise.

@@ -268,6 +268,13 @@ namespace NebulaCutsceneSkip {
             break;
         }
         case State_Prompt:
+            // + again answers No.
+            if (!MR::testCorePadButtonPlus(WPAD_CHAN0)) {
+                sNeedRelease = false;
+            } else if (!sNeedRelease && MR::testCorePadTriggerPlus(WPAD_CHAN0)) {
+                sNeedRelease = true;
+                sWindow->decideNo();
+            }
             MR::requestStarPointerModeSaveLoad(sWindow);
             MR::updateStarPointerModeWhileSceneHeld();
             sWindow->movement();

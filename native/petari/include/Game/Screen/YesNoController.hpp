@@ -19,6 +19,9 @@ public:
     bool isDisappearStart() const;
     void setSE(const char*, const char*, const char*);
     bool trySelect();
+#ifdef TARGET_PC
+    void decideNo();
+#endif
     void emitEffectIfExist(const char*);
     void deleteEffectIfExist(const char*);
     void forceDeleteEffectAllIfExist();

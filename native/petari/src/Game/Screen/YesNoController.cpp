@@ -77,6 +77,16 @@ bool YesNoController::trySelect() {
     return mButtonNoPaneCtrl->trySelect();
 }
 
+#ifdef TARGET_PC
+// No, as if it were pointed and A pressed: its sound, its decide animation, the window's close.
+void YesNoController::decideNo() {
+    if (isNerve(GET_NERVE(YesNoController, YesNoControllerNrvSelecting)) && !mButtonNoPaneCtrl->isHidden()) {
+        mButtonNoPaneCtrl->decide();
+        setNerve(GET_NERVE(YesNoController, YesNoControllerNrvDecided));
+    }
+}
+#endif
+
 void YesNoController::emitEffectIfExist(const char* pEffectName) {
     if (MR::isExistEffectKeeper(mHost)) {
         MR::emitEffect(mHost, pEffectName);

@@ -52,6 +52,7 @@ public:
     void appear(const char*, SysInfoType, SysInfoTextPos, SysInfoMessageType);
 #ifdef TARGET_PC
     void appearYesNoWithText(const wchar_t* pText);
+    void decideNo();
 #endif
     void disappear();
     void forceKill();

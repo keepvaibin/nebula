@@ -112,6 +112,10 @@ void PictureBookLayout::init(const JMapInfoIter& rIter) {
 
         mCloseButton = new PictureBookCloseButton(true);
         mCloseButton->initWithoutIter();
+#ifdef TARGET_PC
+        // While a page shows, A and the D-pad turn the pages: NebulaMenuFocus leaves the close button to the pointer.
+        mCloseButton->getPaneCtrl()->mIsNebulaFocusable = false;
+#endif
     }
 
     initNerve(GET_NERVE(PictureBookLayout, PictureBookLayoutNrvFadeIn));

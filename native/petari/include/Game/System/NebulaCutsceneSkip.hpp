@@ -5,8 +5,8 @@
 class SysInfoWindow;
 
 // Nebula's cutscene skip. + during a skippable cutscene holds the game still (as the HOME Menu does) and asks "Are you
-// sure you would like to skip this cutscene?" in the game's own Yes/No window, its sound faded out. No resumes it where
-// it stopped. Yes fades the held picture to black as the game's own fades do; a prerendered movie then ends as the
+// sure you would like to skip this cutscene?" in the game's own Yes/No window, its sound faded out. No, or + again,
+// resumes it where it stopped. Yes fades the held picture to black as the game's own fades do; a prerendered movie then ends as the
 // game's own skip ends it (MoviePlayingSequence::trySkip), anything else runs to its end unseen, the game's own steps
 // several per frame, every page of its talks shown whole and turned at once (TalkStateEvent::talk, the storybook), so
 // everything it does still happens; a question it asks, a save prompt, or a wait on the player (its clock held)

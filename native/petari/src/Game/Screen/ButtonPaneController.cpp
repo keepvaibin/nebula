@@ -1,5 +1,8 @@
 #include "Game/Screen/ButtonPaneController.hpp"
 #include "Game/LiveActor/Nerve.hpp"
+#ifdef TARGET_PC
+#include "Game/Screen/NebulaMenuFocus.hpp"
+#endif
 #include "Game/Util/GamePadUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
@@ -25,7 +28,12 @@ ButtonPaneController::ButtonPaneController(LayoutActor* pHost, const char* pPane
     : NerveExecutor(pPaneName), mHost(pHost), mPaneName(pPaneName), mBoundingPaneName(pBoundingPaneName), mAnimIndex(animIndex), _18(param5),
       mPointingAnimStartFrame(0.0f), mIsSelected(false), mIsPointing(false), _22(true), _23(false), mAppearAnimName("ButtonAppear"),
       mWaitAnimName("ButtonWait"), mDecideAnimName("ButtonDecide"), mPointingAnimName("ButtonSelectIn"), mNotPointingAnimName("ButtonSelectOut"),
-      mDisappearAnimName("ButtonEnd") {
+      mDisappearAnimName("ButtonEnd")
+#ifdef TARGET_PC
+      ,
+      mIsNebulaFocusable(true)
+#endif
+{
     if (!MR::isExistPaneCtrl(pHost, pPaneName)) {
         MR::createAndAddPaneCtrl(pHost, pPaneName, 1);
     }
@@ -68,6 +76,9 @@ bool ButtonPaneController::trySelect() {
     }
 
     mIsPointing = true;
+#ifdef TARGET_PC
+    NebulaMenuFocus::offer(this);
+#endif
 
     if (mDecideAnimName != nullptr && isPointing() && MR::testDPDMenuPadDecideTrigger()) {
         mIsSelected = true;
@@ -138,6 +149,12 @@ bool ButtonPaneController::isDecidedWait() const {
     return isNerve(GET_NERVE(ButtonPaneController, ButtonPaneControllerNrvDecidedWait));
 }
 
+#ifdef TARGET_PC
+bool ButtonPaneController::isNotPointing() const {
+    return isNerve(GET_NERVE(ButtonPaneController, ButtonPaneControllerNrvNotPointing));
+}
+#endif
+
 bool ButtonPaneController::onPointing() {
     mIsPointing = true;
 
@@ -181,6 +198,12 @@ void ButtonPaneController::setNerveAtAnimStopped(const Nerve* pNerve) {
 }
 
 bool ButtonPaneController::isPointingPane() const {
+#ifdef TARGET_PC
+    // While the D-pad or stick moves the highlight, it alone says which button is pointed.
+    if (NebulaMenuFocus::isActive()) {
+        return mIsPointing && NebulaMenuFocus::isFocused(this);
+    }
+#endif
     return mIsPointing && MR::isStarPointerPointingPane(mHost, mBoundingPaneName, 0, true, "\216\343" /* 弱 */);
 }
 

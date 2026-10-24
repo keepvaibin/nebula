@@ -234,6 +234,11 @@ void MiiSelectIcon::createButton() {
 
     _28 = new ButtonPaneController(this, "MiiIcon", "PicMii", 0, true);
     _28->_22 = false;
+#ifdef TARGET_PC
+    // MiiSelect turns its pages with the D-pad and stick (NebulaMenuFocus leaves its icons to the pointer).
+    _24->mIsNebulaFocusable = false;
+    _28->mIsNebulaFocusable = false;
+#endif
 }
 
 void MiiSelectIcon::createFaceImageObj() {

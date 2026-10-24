@@ -201,6 +201,12 @@ void SysInfoWindow::appearYesNoWithText(const wchar_t* pText) {
     appear();
     mYesNoSelector->appear();
 }
+
+void SysInfoWindow::decideNo() {
+    if (mYesNoSelector != nullptr) {
+        mYesNoSelector->decideNo();
+    }
+}
 #endif
 
 const char* SysInfoWindow::getLayoutName() const {

@@ -274,6 +274,10 @@ void MiiSelect::createButtons() {
 
         _20[i] = new ButtonPaneController(this, pane[i], bound[i], 0, true);
         _20[i]->_22 = false;
+#ifdef TARGET_PC
+        // The D-pad and stick turn the pages here (NebulaMenuFocus leaves these buttons to the pointer).
+        _20[i]->mIsNebulaFocusable = false;
+#endif
     }
 }
 
