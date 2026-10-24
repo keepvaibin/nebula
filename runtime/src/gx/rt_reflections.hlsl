@@ -1,27 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Ray-traced reflections of the game frame's metal, glossy and water surfaces (DXR 1.1 inline
-// ray queries, cs_6_5) and their composite into the EFB (vs/ps_6_0). Compiled by DXC at build time.
+// Ray-traced reflections of the game frame's metal, glossy and water surfaces (DXR 1.1 inline ray queries, cs_6_5)
+// and their composite into the EFB (vs/ps_6_0).
 //
-// The lighting's samples (one per g_factor x g_factor EFB pixels) with the triangle its camera ray
-// met: the draw's GX surface class (rt_surfaces.h) selects the lobe width, Fresnel reflectance,
-// strength and cover, which the material table's roughness and metalness for the draw's texture
-// replace (rt_materials.h), the vertex normals give the shading normal. One reflection ray samples the
-// GGX distribution of visible normals. Where it hits geometry this frame shows, it brings that
-// pixel's colour times this frame's ray-traced lighting there. Elsewhere the environment memory
-// answers: per world direction from the camera, the colour and distance the frame showed there
-// last (refreshed every frame, fading where the camera no longer looks); a hit it agrees with brings
-// that colour, a ray that leaves the scene the sky it showed. Light nothing knows has no confidence,
-// and confidence weights the light and scales the reflection: the surface keeps its own colour
-// where the reflected light is unknown. Metal reflections take the hue of the surface; surfaces
-// bright under this frame's lighting (lamps, lava, glowing cores and what glows light) reflect
-// nothing.
-// Results accumulate along the reflected image's motion (through the virtual image point for sharp
-// lobes, the surface for wide ones), clamped to the spread of the known light around them, then pass
-// two edge-aware a-trous filters as wide as the lobe. The composite adds k * reflection and takes away
-// k * (cover + (1 - cover) * reflection) of the surface's own colour (cover 1: a blend towards the
-// reflection; cover 0: a screen, never darker than the game's own shading), k the class strength
-// times Schlick's Fresnel term at the pixel's own view angle times the sample's weight; sub-frames
-// first move the pixel to the traced frame's camera.
+// Each lighting sample (one per g_factor x g_factor EFB pixels) takes its lobe width, Fresnel reflectance, strength
+// and cover from its draw's GX surface class (rt_surfaces.h), or from the material table's roughness and metalness
+// (rt_materials.h); the vertex normals give the shading normal. One ray samples the GGX distribution of visible
+// normals. A hit the frame shows brings that pixel's colour times this frame's traced lighting there. Elsewhere the
+// environment memory answers: per world direction from the camera, the colour and distance the frame last showed
+// there, fading where the camera stops looking. Unknown light has no confidence; confidence weights the light and
+// scales the reflection, so a surface keeps its own colour where the reflected light is unknown. Metal reflections
+// take the surface's hue; surfaces bright under this frame's lighting (lamps, lava, glowing cores) reflect nothing.
+// Results accumulate along the reflected image's motion (through the virtual image point for sharp lobes, the
+// surface for wide ones), clamped to the spread of the known light around them, then pass two edge-aware a-trous
+// filters as wide as the lobe. The composite adds k * reflection and removes k * (cover + (1 - cover) * reflection)
+// of the surface's own colour (cover 1: a blend towards the reflection; cover 0: a screen, never darker than the
+// game's shading), k being the class strength times Schlick's Fresnel term at the pixel's view angle times the
+// sample's weight. Sub-frames first move the pixel to the traced frame's camera.
 
 static const float kPi = 3.14159265f;
 static const float kGlowCutoff = 0.004f;   // rt_lighting.hlsl g_emit.x (GALAXY_RT_GLOW_CUTOFF default)
@@ -29,10 +23,6 @@ static const float kGlowReach = 6000.0f;   // ... g_emit.y (GALAXY_RT_GLOW_REACH
 static const uint kNoSurface = 15u;
 static const uint kProbeSize = 64u;
 static const float kSkyDistance = 1.0e9f;
-
-// ---------------------------------------------------------------------------------------------
-// Shared helpers
-// ---------------------------------------------------------------------------------------------
 
 float3 pixel_direction(float4 projection, float4 viewport, float2 pixel)
 {
@@ -107,8 +97,8 @@ float3 physical_encode(float3 c)
 }
 
 // Strong light rolled off softly: c ln(1 + l / c) in luminance, its hue kept. Weak light passes unchanged and strong
-// light keeps a falloff all the way to its source. The rational l / (1 + l / c) it replaced flattened a lamp's light
-// into a disc with a rim (user, 2026-10-17: a harsh, clear radius around the lights).
+// light keeps a falloff all the way to its source, where a rational l / (1 + l / c) flattens a lamp's light into a
+// disc with a hard rim.
 float3 soft_light(float3 light, float c)
 {
     const float l = luminance(light);
@@ -191,10 +181,6 @@ float fresnel(float f0, float alpha, float cos_theta)
     const float m2 = m * m;
     return f0 + (f90 - f0) * (m2 * m2 * m);
 }
-
-// ---------------------------------------------------------------------------------------------
-// Environment memory, trace, accumulation and filter
-// ---------------------------------------------------------------------------------------------
 
 cbuffer RtReflect : register(b0)
 {
@@ -287,7 +273,7 @@ RaytracingAccelerationStructure g_scene : register(t0);
 ByteAddressBuffer g_positions : register(t1);       // per triangle three eye-space vertices
 // Per triangle, 16 bytes: vertex normals (octahedral 16:16, 1-65535 per axis, 0 none), draw flags.
 ByteAddressBuffer g_surfaces : register(t2);
-StructuredBuffer<uint4> g_light : register(t3);     // this frame's lighting (rt_lighting.hlsl SpatialBCS)
+StructuredBuffer<uint4> g_light : register(t3);     // this frame's lighting
 Texture2D<float4> g_color : register(t4);           // EFB colour of the opaque scene
 Texture2D<float> g_efb_depth : register(t5);
 StructuredBuffer<uint4> g_prev_info : register(t6);
@@ -328,8 +314,8 @@ RWByteAddressBuffer g_stats : register(u4);
 // Per world direction from the camera (octahedral, kProbeSize^2): light and its freshness (halves),
 // distance, unused.
 RWStructuredBuffer<uint4> g_memory : register(u5);
-// Per sample, from the lighting's camera ray (rt_lighting.hlsl TraceCS): triangle + 1 (0 none) and
-// its barycentrics (halves). Read only.
+// Per sample, from the camera ray (rt_engine.hlsl EngineGBufferCS): triangle + 1 (0 none) and its barycentrics
+// (halves). Read only.
 RWStructuredBuffer<uint2> g_primary : register(u6);
 // Per tile of 8x8 samples: 1 where a sample reflects.
 RWStructuredBuffer<uint> g_tiles : register(u7);
@@ -468,8 +454,6 @@ bool average(uint offset, out float3 light)
     return sum.w != 0u;
 }
 
-// What the frame shows at `pixel`: the lit colour and the distance of its surface (kSkyDistance
-// for the sky); false outside the viewport.
 // The angle a reflection ray of this sample may stray by from its neighbours' (radians): the water's ripples
 // and waves bend each pixel's normal its own way (WaterTraceCS); 0 elsewhere.
 static float g_spread = 0.0f;
@@ -504,6 +488,8 @@ float pixel_size(float z)
     return abs(z) * 2.0f / max(abs(g_projection.x) * g_viewport.z, 1e-4f);
 }
 
+// What the frame shows at `pixel`: the lit colour and the distance of its surface (kSkyDistance
+// for the sky); false outside the viewport.
 bool shown_at(float2 pixel, out float3 light, out float distance, float blur = 0.0f)
 {
     light = float3(0.0f, 0.0f, 0.0f);
@@ -519,8 +505,8 @@ bool shown_at(float2 pixel, out float3 light, out float distance, float blur = 0
         if (distance >= g_sky_distance) {
             distance = kSkyDistance;
         } else if ((g_flags & 32u) == 0u) {
-            // Physical: in linear light, as the lighting's composite lights that pixel (the game's colour times the
-            // light in display encoding read shade darker and light brighter than the picture shows them).
+            // Physical: in linear light, as the lighting's composite lights that pixel (multiplied in display
+            // encoding, shade reads darker and light brighter than the picture shows them).
             light = (g_flags & kReflectPhysical) != 0u ? physical_encode(srgb_to_linear(light) * lighting_at(c))
                                                         : light * lighting_at(c);
         }
@@ -540,7 +526,7 @@ void ReflectMemoryCS(uint3 id : SV_DispatchThreadID)
     const uint4 stored = g_memory[index];
     float4 memory = unpack_rgb_w(stored.xy);
     float distance = asfloat(stored.z);
-    // A new stage (g_flags bit 8): nothing remembered (the last stage's colours showed in reflections).
+    // A new stage (g_flags bit 8) clears the memory, so the last stage's colours never show in reflections.
     if ((g_flags & 256u) != 0u) {
         memory = float4(0.0f, 0.0f, 0.0f, 0.0f);
         distance = kSkyDistance;
@@ -627,12 +613,9 @@ float sky_map_light(float3 d, out float3 light)
     return sum.w / max(weight, 1e-4f);
 }
 
-// ---------------------------------------------------------------------------------------------
 // Sky capture: the backdrop is drawn around the camera (no parallax), so every frame's sky pixels
 // give its colour per world direction. Kept for the stage at about 0.2 degrees per texel, it is
 // what a mirror shows of the sky out of view (the environment memory's 64^2 texels blur it).
-// ---------------------------------------------------------------------------------------------
-
 static const uint kSkySize = 1024u;
 
 // The frame's sky at `pixel`: false where a surface nearer than the backdrops covers it.
@@ -717,11 +700,8 @@ float sky_captured(float3 d, out float3 light)
     return sum.w;
 }
 
-// ---------------------------------------------------------------------------------------------
 // Draw light: each draw's mean lit colour over the samples this frame shows of it. A reflection ray
 // whose hit the frame does not show (behind the object, off screen) takes its draw's colour there.
-// ---------------------------------------------------------------------------------------------
-
 [numthreads(64, 1, 1)]
 void DrawLightClearCS(uint3 id : SV_DispatchThreadID)
 {
@@ -819,9 +799,9 @@ static const uint kMetalClass = 2u;
 // name: penguins, glassy domes, painted sheen) keeps its reflection screened over its look.
 static const uint kBareMetalClass = 8u;
 static const float kDielectricF0 = 0.04f;
-// Metal is never too rough to mirror what stands around it (user: everything metal shines; no metal may look matte):
-// the table's 32 metals at roughness 0.78 reflected nothing past the cut-off (0.65), at 0.58 a faint blur (user: still
-// matte). At most 0.35, the reflection clear and at full strength; the table's lower values stay.
+// Metal is never too rough to mirror what stands around it: past the cut-off (0.65) a rough metal reflects nothing,
+// and just under it only a faint blur. Capped at 0.35, its reflection is clear and at full strength; the table's lower
+// values stay.
 static const float kMetalRoughnessMax = 0.35f;
 
 // A spot light's share along `from_light` (normalised, from the light): full inside the inner part of
@@ -856,8 +836,8 @@ bool passes_through(uint instance, uint primitive, float2 b)
     }
 #if RT_TEXTURED
     // A rippled surface's rays (g_spread) read the frame over their footprint, which already holds the cut-outs
-    // as the game drew them: per ray, a lattice bar or its hole speckled Buoy Base's water (v72w). Its rays
-    // take alpha-tested draws whole; mirrors and metal test each texel.
+    // as the game drew them; tested per ray, a lattice bar or its hole speckles the water. Its rays take
+    // alpha-tested draws whole; mirrors and metal test each texel.
     if (instance != 0u || (g_flags & 2048u) == 0u || g_spread > 0.0f || g_reflect_blur > 0.0f) {
         return false;
     }
@@ -903,19 +883,10 @@ bool lit_from(float3 origin, float3 direction, float length)
     return query.CommittedStatus() != COMMITTED_TRIANGLE_HIT;
 }
 
-// The highlights the scene's lights put on a surface at `p` (ray origin `origin`): the sun with one
-// shadow ray; the local lights (the game's point lights and every glow light within reach: Lumas,
-// lamps, stars, fire) each by its irradiance at `p` (power / (pi (d^2 + r^2)), windowed to its reach
-// as the lighting's) times its GGX lobe, all of them, times g_local_gain; the strongest one's shadow
-// ray decides whether it counts (one ray, no noise from choosing).
-// ---------------------------------------------------------------------------------------------
-// Tile light lists: each group of 8 x 8 samples keeps the glow lights (the highlights') whose reach meets the box
-// around its samples' surface points; its samples weigh only those. Lights beyond a tile's reach
-// add nothing to any of its samples, so the result is the same at a fraction of the work. A bit per
-// light of the frame's list, walked in its order (rt_lighting.hlsl: a list of the first 128 lights
-// added dropped different lights each frame).
-// ---------------------------------------------------------------------------------------------
-
+// Tile light lists: each group of 8 x 8 samples keeps the glow lights whose reach meets the box around its samples'
+// surface points, and its samples weigh only those. Lights beyond a tile's reach add nothing to any of its samples,
+// so the result is the same at a fraction of the work. The list is a bit per light of the frame's list, walked in
+// its order, so the same lights count every frame (a list of the first lights added drops different ones each frame).
 static const uint kTileWords = 16u;   // a bit per light of the frame's list (rt_lighting.hlsl kEmitLights)
 
 groupshared uint s_tile_bounds[6];      // min x y z, max x y z (order-preserving uints)
@@ -1001,11 +972,15 @@ void keep_highlight(inout Highlight top[3], Highlight h)
     }
 }
 
+// The highlights the scene's lights put on a surface at `p` (ray origin `origin`): the sun with one shadow ray; the
+// local lights (the game's point lights and every glow light within reach: Lumas, lamps, stars, fire) each by its
+// irradiance at `p` (power / (pi (d^2 + r^2)), windowed to its reach as the lighting's) times its GGX lobe, all of
+// them, times g_local_gain, less the shadowed share of the strongest two.
 float3 highlights(uint2 s, float3 p, float3 origin, float3 n, float3 v, float alpha, float f0, bool tiled)
 {
     // Specular anti-aliasing (Kaplanyan 2016): a rippled surface's normals vary across the pixel by about half
-    // g_spread; the lobe widens by that variance, its peak lowered to keep the energy. One-pixel sun glints
-    // became a smooth glitter path (user: the water's noise; Buoy Base towards its low sun, v70w).
+    // g_spread; the lobe widens by that variance, its peak lowered to keep the energy, so one-pixel sun glints
+    // become a smooth glitter path.
     alpha = min(sqrt(alpha * alpha + 0.5f * g_spread * g_spread), 1.0f);
     float3 sum = float3(0.0f, 0.0f, 0.0f);
     if (any(g_sun_light.rgb > 0.0f)) {
@@ -1073,8 +1048,8 @@ float3 highlights(uint2 s, float3 p, float3 origin, float3 n, float3 v, float al
         }
     }
     // The two strongest each take a shadow ray, counted by their lead over the third (as the lighting's
-    // rank_confidence); the rest are unshadowed. One ray for the strongest alone switched a highlight's shadow on
-    // and off where two lights' highlights crossed.
+    // rank_confidence); the rest are unshadowed. With a ray for the strongest alone, a highlight's shadow switches
+    // on and off where two lights' highlights cross.
     [unroll] for (uint r = 0u; r < 2u; ++r) {
         const float confidence = top[r].weight > 0.0f ? saturate((top[r].weight - top[2].weight) / (0.5f * top[r].weight))
                                                       : 0.0f;
@@ -1126,13 +1101,11 @@ float3 sky_behind(float3 l)
 }
 
 #if RT_TEXTURED
-// ---------------------------------------------------------------------------------------------
 // Physical light at the hits off screen (g_flags bit 12 with the textured hits): the hit lit as the lighting lights
-// the scene (rt_lighting.hlsl physical_hit, emitter_light, physical_sky_irradiance, physical_exposure; keep in step):
+// the scene (rt_lighting.hlsl physical_sky_irradiance, physical_exposure; keep in step):
 // its draw's TEV program the albedo (a table light source its radiance), the sun behind a shadow ray, the traced sky's
 // irradiance, the game's point lights at their own falloff, and the emitting triangles by resampled importance with one
-// shadow ray. A gold arch by night mirrors the lamp-lit tiles behind the camera, not a flat night level.
-// ---------------------------------------------------------------------------------------------
+// shadow ray. A mirror by night shows the lamp-lit surfaces behind the camera, not a flat night level.
 static const float kDelightRange = 1.25f;      // rt_lighting.hlsl kDelightRange
 static const uint kEmitTriangles = 65536u;     // ray_tracing.cpp kEmitTriangles
 static const uint kGlowEmitters = 16384u;      // rt_lighting.hlsl g_emit_tris layout
@@ -1267,7 +1240,7 @@ float physical_random(inout uint seed)
     return float(seed >> 8u) * (1.0f / 16777216.0f);
 }
 
-// The emitting triangles' light at `p` (normal `n`, shadow ray from `origin`), as rt_lighting.hlsl emitter_light.
+// The emitting triangles' light at `p` (normal `n`, shadow ray from `origin`), picked by resampled importance.
 float3 physical_emitters(float3 p, float3 n, float3 origin, uint candidates, uint seed)
 {
     if (g_emit_count == 0u || g_emit_view == 0xFFFFFFFFu) {
@@ -1415,12 +1388,12 @@ bool physical_hit_light(uint tri, float2 b, float3 x, float3 l, out float3 light
 }
 #endif
 
-// High quality: what a reflection ray hits where the frame does not show it, shaded by ray tracing (user: the
-// water and the metal reflect what is around them, not only what the screen holds). Its draw's material
-// texture at the hit's texture coordinates (detail by distance), times the vertices' colour 0 or the draw's
-// colour, at the art's level: by day the day model's open ground, faces turned from the sun at 0.7 and in
-// the sun's shadow at 0.65 of it (one shadow ray from the hit), by night the night level; the point lights add
-// their light as the lighting adds it. Late geometry (instance 1) has no records: false.
+// High quality: what a reflection ray hits where the frame does not show it, shaded by ray tracing, so water and
+// metal reflect what is around them, not only what the screen holds. Its draw's material texture at the hit's
+// texture coordinates (detail by distance), times the vertices' colour 0 or the draw's colour, at the art's level:
+// by day the day model's open ground, faces turned from the sun at 0.7 and in the sun's shadow at 0.65 of it (one
+// shadow ray from the hit), by night the night level; the point lights add their light as the lighting adds it.
+// Late geometry (instance 1) has no records: false.
 bool hit_shade(uint instance, uint tri, float2 b, float3 x, float3 l, float distance, out float3 light,
                out float coverage)
 {
@@ -1451,8 +1424,8 @@ bool hit_shade(uint instance, uint tri, float2 b, float3 x, float3 l, float dist
         const Texture2D<float4> map = ResourceDescriptorHeap[NonUniformResourceIndex(d.x)];
         // Coarser where a rippled surface's rays spread (g_spread over the pixel's own angle).
         const float pixel_angle = 2.0f / max(abs(g_projection.x) * g_viewport.z, 1e-4f);
-        // Water's reflections over their footprint of the game's own pixels too (g_reflect_blur, EFB pixels): the
-        // reflection of what the frame does not show (the tower below the camera) aliased into grain at lod 0.
+        // Water's reflections also read over their footprint of the game's own pixels (g_reflect_blur, EFB pixels):
+        // at lod 0 the reflection of what the frame does not show aliases into grain.
         const float lod = clamp(log2(max(distance * g_hit.w * (1.0f + g_spread / pixel_angle + g_reflect_blur), 1.0f)),
                                 0.0f, 8.0f);
         float3 texel = map.SampleLevel(g_wrap, uv, lod).rgb;
@@ -1501,9 +1474,8 @@ bool hit_shade(uint instance, uint tri, float2 b, float3 x, float3 l, float dist
         day_level *= (1.0f - 0.35f * (1.0f - vis)) * (1.0f - 0.3f * (1.0f - saturate(shaped / 0.8f)));
         sunlit = vis * saturate(shaped / 0.5f);
     }
-    // The point lights on the hit, unshadowed, as the lighting adds them (rt_lighting.hlsl SpatialBCS): by night
-    // under the soft cap that rises where the star core's light rules, by day half of them rolling off on sunlit
-    // ground (user: the gold ring beside the star core mirrored a flat, unlit floor).
+    // The point lights on the hit, unshadowed, as the lighting adds them: by night under the soft cap that rises where
+    // the star core's light rules, by day half of them rolling off on sunlit ground.
     float3 points = float3(0.0f, 0.0f, 0.0f);
     float core_weight = 0.0f;
     float all_weight = 0.0f;
@@ -1542,12 +1514,11 @@ struct Reflected
     bool mapped;    // the sky from the lighting's map
 };
 
-// What a metal (metalness `metal`) reflects of `light` in its surface's colour (the hue of `base`, luminance 1): a pale
-// metal (silver, steel) the world's own colours through its hue, a strongly coloured one (gold, Bowser's green
-// arches) the world's brightness in its hue, as the game draws them (an intensity environment map times the material
-// colour; a product with a world of the opposite colour went dark and muddy: the gold ring mirrored an olive night,
-// the green arches turned brown), towards white at grazing angles (Schlick; `vm` the cosine between the eye and the
-// reflecting facet).
+// What a metal (metalness `metal`) reflects of `light` in its surface's colour (the hue of `base`, luminance 1), as
+// the game draws metal (an intensity environment map times the material colour): a pale metal (silver, steel) shows
+// the world's own colours through its hue, a strongly coloured one (gold, Bowser's green arches) the world's
+// brightness in its hue, since a plain product with a world of the opposite colour turns dark and muddy. Towards
+// white at grazing angles (Schlick; `vm` the cosine between the eye and the reflecting facet).
 float3 metal_reflect(float3 light, float3 base, float vm, float metal)
 {
     const float3 hue = min(base / max(luminance(base), 0.1f), 3.0f);
@@ -1738,11 +1709,6 @@ float sample_strength(uint4 info)
     return float((info.z >> 4u) & 15u) / 15.0f;
 }
 
-// A draw's reflection parameters (GGX alpha, strength, F0, metalness) and perceptual roughness: its
-// class's, with the material table's roughness and metalness for its texture where it names them. A
-// surface rougher than g_rough_cutoff reflects nothing worth a ray; below it, metal and dielectric
-// alike (a dielectric's Fresnel term keeps its reflection to grazing views).
-// A metal the table names (its metalness) becomes bare metal (`surface_class` kBareMetalClass).
 // g_draws word 6 bit 6 (ray_tracing.cpp kDrawTableMirror): the table's `mirror` on an opaque surface.
 static const uint kDrawTableMirror = 64u;
 // A mirror's metalness in the composite: Fresnel 0.75 face-on (the polished class's 0.25, 0.77 of the way to metal's
@@ -1755,6 +1721,11 @@ bool mirror_draw(uint draw)
     return (g_flags & 128u) != 0u && draw < g_draw_count && (g_draws.Load(draw * 48u + 24u) & kDrawTableMirror) != 0u;
 }
 
+// A draw's reflection parameters (GGX alpha, strength, F0, metalness) and perceptual roughness: its
+// class's, with the material table's roughness and metalness for its texture where it names them. A
+// surface rougher than g_rough_cutoff reflects nothing worth a ray; below it, metal and dielectric
+// alike (a dielectric's Fresnel term keeps its reflection to grazing views).
+// A metal the table names (its metalness) becomes bare metal (`surface_class` kBareMetalClass).
 float4 draw_material(inout uint surface_class, uint draw, out float roughness)
 {
     float4 params = g_class[surface_class];
@@ -1767,8 +1738,7 @@ float4 draw_material(inout uint surface_class, uint draw, out float roughness)
     const uint m16 = words >> 16u;
     if (m16 != 0xFFFFu) {
         // The table's light sources (its emission: coins, the giant ? coin) keep their painted look and own
-        // glow: as bare metal their glow gave way to the dark sky they mirror (ma7 3900 ? coin 245,202,6 ->
-        // 186,133,4).
+        // glow; as bare metal their glow would give way to the dark sky they mirror.
         const uint emission = g_draws.Load(draw * 48u + 8u);
         const bool emits = (emission & 4u) != 0u && (emission & 3u) != 0u && (emission & 8u) == 0u;
         if (surface_class == kMetalClass && !emits) {
@@ -1891,8 +1861,8 @@ void ReflectTraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
             }
             float roughness;
             float4 params = draw_material(surface_class, record.w >> 16u, roughness);
-            // A mirror (the table's `mirror`): clear and polished, its reflection untinted (ray_params), Fresnel 0.6
-            // face-on in the composite (its metalness share there).
+            // A mirror (the table's `mirror`): clear and polished, its reflection untinted (ray_params), Fresnel 0.75
+            // face-on in the composite (kMirrorF0Share, its metalness share there).
             float4 ray_params = params;
             if (mirror_draw(record.w >> 16u)) {
                 surface_class = kMirrorClass;
@@ -1911,9 +1881,9 @@ void ReflectTraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
             const float3 lit = base * lighting_at(q);
             const float peak = max(lit.r, max(lit.g, lit.b));
             const float saturation = (peak - min(lit.r, min(lit.g, lit.b))) / max(peak, 1e-3f);
-            // Metal emits nothing: a bright metal is bright by what it reflects (its painted reflection is taken out
-            // under physical light: counted an emitter, Gold Leaf's star outline, an environment map alone, went
-            // black).
+            // Metal emits nothing: a bright metal is bright by what it reflects. Counted as an emitter, a metal
+            // drawn by its environment map alone turns black under physical light, which takes its painted
+            // reflection out.
             const bool metal_class = surface_class == kMetalClass || surface_class == kBareMetalClass;
             const float emitter = surface_class == 3u ? smoothstep(0.75f, 1.0f, peak)
                                 : surface_class == 4u ? smoothstep(0.75f, 1.0f, peak) * smoothstep(0.35f, 0.6f, saturation)
@@ -1933,14 +1903,13 @@ void ReflectTraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
                 highlight = r.highlight;
                 // Painted dielectrics and clear ones (ice, crystal, opaque water) take the sky's reflection
                 // at half its confidence: what stands around them reads in their reflection, the bright sky
-                // or aurora only half (rf2: Freezeflame's crystals took the dark sky at cover 0.8).
-                // Clear crystal and glass take it whole (their painted look stays under it, F0 0.17).
+                // or aurora only half. Clear crystal and glass take it whole (their painted look stays under
+                // it; GALAXY_RT_REFLECT_CRYSTAL F0 0.35).
                 const bool painted = (surface_class == 0u || surface_class == 1u || surface_class == 3u) && params.w < 0.5f;
                 const bool clear = surface_class == 4u;
                 confidence = (painted || clear) && sky_source(r.source) ? r.confidence * 0.5f : r.confidence;
                 // A metal's ray that leaves the scene sees at least the metal's own environment map, the probe the game
-                // made for it (its painted look, base): the traced world where the ray meets it, never black space
-                // (Space Junk's chrome mirrored black where the game shows its studio).
+                // made for it (its painted look, base): the traced world where the ray meets it, never black space.
                 if ((metal_class || surface_class == 7u) && sky_source(r.source)) {
                     light = max(light, base);
                 }
@@ -1992,10 +1961,8 @@ void ReflectTraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
     }
 }
 
-// ---------------------------------------------------------------------------------------------
 // Under the water: sunlight focused by the surface's waves onto what lies below (caustics) and
-// scattered towards the camera along its view (shafts)
-// ---------------------------------------------------------------------------------------------
+// scattered towards the camera along its view (shafts).
 
 // The water pass's state after its samples in g_under (WaterTraceCS thread 0): [0] the surface's plane
 // (its offset along its normal, eye space), camera under water (1); [1] the surface's normal out of the water,
@@ -2095,7 +2062,7 @@ float ripple_tap(float2 c, float o, float2 size)
 // The water's normal bent by the ripples its picture shows: the slope of its luminance relative to
 // its level across two of the game's 640 x 456 pixels each way, each tap the mean over one of them (the
 // waves, not the texture's fine grain or the render's aliasing). The scale is the game's, not the samples':
-// tied to the sample spacing, High's every-pixel samples bent each ray its own way and speckled the water.
+// tied to the sample spacing, High's every-pixel samples would bend each ray its own way and speckle the water.
 float3 rippled(int2 q, float3 n)
 {
     if (g_ripple <= 0.0f) {
@@ -2316,10 +2283,9 @@ bool water_wave(uint tri, float2 b, float3 hit, float3 n, out float3 wave)
 }
 #endif
 
-// Translucent water (seas, lakes, pools drawn blended after the trace) and clear crystals and glass
-// drawn the same way: the camera ray meets the
-// water draws' own triangles in front of the surface the EFB holds behind them; the vertex normals
-// bent by the ripples give the normal; one reflection ray as on the opaque surfaces, its light from
+// Translucent water (seas, lakes, pools drawn blended after the trace) and clear crystals and glass drawn the same
+// way: the camera ray meets the water draws' own triangles in front of the surface the EFB holds behind them; the
+// vertex normals bent by the ripples give the normal; one reflection ray as on the opaque surfaces, its light from
 // the lit picture as the translucent phases left it. Glows over the water (white) keep their colour.
 [numthreads(8, 8, 1)]
 void WaterTraceCS(uint3 id : SV_DispatchThreadID)
@@ -2353,9 +2319,9 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
         ray.TMax = far_plane(g_depth, depth) ? 4.0f * g_range
                                               : length(through) * -depth_to_eye_z(g_depth, depth) * 1.003f + 1.0f;
         // The water layer facing the camera: a swimmable surface is drawn twice at the same height, its top
-        // (normals up) and its underside (normals down); the nearer of the two by rounding flipped per pixel
-        // between the reflecting top and the non-reflecting underside, the dots on the water at any resolution and
-        // setting. Any layer only where none faces the camera (from under the water).
+        // (normals up) and its underside (normals down), and the nearer of the two flips per pixel by rounding
+        // between the reflecting top and the non-reflecting underside, dotting the water. Any layer only where none
+        // faces the camera (from under the water).
         bool hit_water = false;
         float water_t = 0.0f;
         uint water_tri = 0u;
@@ -2441,8 +2407,7 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
             // The game's own waves (its wave map, water_wave) bend the reflected ray: read at the pixel's footprint
             // they are smooth from pixel to pixel. Without them the reflection is traced off the calm surface and the
             // composite moves the image with procedural waves (water_distortion): rays bent per pixel by those
-            // (up to 17 degrees) scattered the image into glitter, the more the higher the resolution (user, Native42
-            // at 6x: "barely any reflection and so much flicker").
+            // (up to 17 degrees) would scatter the image into glitter, the more the higher the resolution.
             float3 wave = n;
             bool game_waves = false;
             if (!crystal && !coat) {
@@ -2484,12 +2449,11 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
                 tint_all = 1u;
                 tint_deep = floor_distance - water_t > 300.0f ? 1u : 0u;
             }
-            // Seen from under the water the surface mirrors the water below it (its normal faces the camera: the mirror
-            // ray goes down, never to the bright world above, which washed the view out when it did): Snell's window
-            // overhead, total internal reflection past it (the composite's water_inside_fresnel). Without it the logs,
-            // island and penguins above showed through the surface as through clear glass (owner, b100 Beach Bowl).
-            // Falling water is turbulent: no mirror image in it (the island mirrored in Beach Bowl's waterfall, x81bb);
-            // the game's own streaks and foam stay.
+            // Seen from under the water the surface mirrors the water below it (its normal faces the camera, so the
+            // mirror ray goes down, never to the bright world above): Snell's window overhead, total internal
+            // reflection past it (the composite's water_inside_fresnel). Without it, what stands above the water shows
+            // through the surface as through clear glass. Falling water is turbulent: no mirror image in it; the game's
+            // own streaks and foam stay.
             if (params.y > 0.0f && emitter < 1.0f && !fall) {
                 reflected = true;
                 // Water: a mirror (no lobe jitter: the composite's distortion is its roughness).
@@ -2514,9 +2478,8 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
                 g_spread = 0.0f;
                 highlight = min(glints, 1.5f) * (surface == kWaterSurface ? 0.5f : 1.0f);
                 // Water mirrors what stands over it in full, and the sky at no more than the water's own
-                // brightness: the sky's hues and clouds read in it, its light adds none (the bright sky
-                // bleached the far lagoon, measured wb36; user: reflect the sky, never overexposed). The scale
-                // is the sky's average against the water's colour, so the sky keeps its own detail.
+                // brightness: the sky's hues and clouds read in it, but its light never bleaches the far water.
+                // The scale is the sky's average against the water's colour, so the sky keeps its own detail.
                 confidence = r.confidence;
                 if (surface == kWaterSurface && r.source >= kSkyShown) {
                     float3 sky_average;
@@ -2749,7 +2712,7 @@ float4 filtered_light(uint2 id, uint index, uint4 info, bool first, out float3 h
         // average over the 3 x 3 samples on the same plane (one pass each, the second twice as wide).
         // Water's light too, in the first pass: a sample outside the range of its neighbours on the plane
         // (a ray its ripple sent to another object, the sky or the shore) is clamped into that range, then
-        // blended with them by distance (user: the water's fuzz and noise, the reflections kept).
+        // blended with them by distance.
         const int reach = first ? 1 : 2;
         const bool water_light = first && surface_class == kWaterSurface;
         const float z = asfloat(info.y);
@@ -2880,10 +2843,7 @@ void ReflectFilterCS(uint3 id : SV_DispatchThreadID, uint3 group : SV_GroupID, u
     }
 }
 
-// ---------------------------------------------------------------------------------------------
-// Composite: dst * (1 - k) + k * reflection (dual-source blend: src0 + dst * src1)
-// ---------------------------------------------------------------------------------------------
-
+// Composite: dst * (1 - k) + k * reflection (dual-source blend: src0 + dst * src1).
 cbuffer RtReflectComposite : register(b0)
 {
     float4 m_projection;
@@ -3017,8 +2977,8 @@ Blend blend_samples(float2 pixel, float3 p, bool water)
                                   class_params(kMetalClass).y, metal);
             // Samples too rough to reflect (ReflectTraceCS: highlights only) take no reflected light,
             // only their glint.
-            // Opaque dielectrics reflect half as much at grazing angles as Schlick has it (the bright sky
-            // outlined objects); metal, water and glass keep it.
+            // Opaque dielectrics reflect half as much at grazing angles as Schlick has it (at its full
+            // strength the bright sky outlines objects); metal, water and glass keep it.
             const bool clear = surface_class >= 4u || metal > 0.5f;
             const float graze = clear ? 1.0f : 0.5f;
             const float alpha_k = max(rough * rough, 1e-3f);
@@ -3070,10 +3030,9 @@ CompositeOut finish(Blend b, uint view, float3 under_add, float3 under_keep)
 {
     CompositeOut result;
     const float k = saturate(b.k_sum / b.weight);
-    // A light's glint on clear glass and crystal up to white: a point of the sun on a curved clear surface (at 0.35 the
-    // brightest a glass sphere showed was a grey smudge: user, nothing glass-like may look matte). Elsewhere 0.35: the
-    // broad sheen of large metal panels and rock tips went white with it (user: Space Junk washed out, Battlerock's
-    // peaks too bright).
+    // A light's glint on clear glass and crystal goes up to white: a point of the sun on a curved clear surface, which
+    // capped at 0.35 reads as a grey smudge. Elsewhere 0.35, so the broad sheen of large metal panels and rock tips
+    // stays short of white.
     const float3 highlight = min(b.glint / b.weight, b.nearest_class == kCrystal ? 1.0f : 0.35f);
     const float3 kept = saturate(1.0f - b.covered / b.weight);
     if (view == 1u || view == 4u) {
@@ -3196,7 +3155,7 @@ float3 under_at(float2 pixel, float limit, out float z, out float found)
 // The floor under the water at `pixel`, softened over a sample each way: water scatters, and the
 // game's thin projected caustic lines on the sand fade instead of showing as outlines. Taps with
 // nothing behind the water leave the mean; `found` is the share that had something. At least 1.5 of the
-// game's own pixels each way (High's sample spacing alone left the refracted floor grainy), and `spread`
+// game's own pixels each way (High's sample spacing alone leaves the refracted floor grainy), and `spread`
 // pixels where the ripples scatter the view of it (half the refraction's displacement, up to 12): deep or
 // wavy water shows its floor soft, as water does.
 float3 under_soft(float2 pixel, float limit, out float z, out float found, float spread = 0.0f)
@@ -3282,14 +3241,9 @@ float2 water_distortion(float3 p, float3 n, float2 pixel)
     return clamp(eye_to_pixel(m_projection, m_viewport, moved) - pixel, -limit, limit);
 }
 
-// The translucent water's reflections (WaterTraceCS), after the water is drawn: Fresnel-weighted
-// reflection and highlights over the water's body, which shows the floor through the rippled surface
-// (refracted, lit by the sun the ripples focus) and deepens the game's water colour towards blue with
-// the depth of water the light crosses. Sub-frames move the pixel to the traced frame's camera along the
-// water the samples hold there. What the EFB holds in front of the water keeps its colour.
 // The brightest the game's drawn water may be at `at`: the mean luminance of eight taps two pixels round plus 1.5
 // deviations. Isolated bright texels (the foam flecks of a tiled water texture) shimmer as glitter once the picture
-// moves; a wave or a gradient over a few pixels is within it (owner 2026-10-20: no water glitter anywhere).
+// moves; a wave or a gradient over a few pixels is within it.
 float water_speck_limit(float2 at, float2 lo, float2 hi)
 {
     float sum = 0.0f;
@@ -3311,6 +3265,11 @@ float3 water_unspeckled(float3 c, float limit)
     return l > limit && l > 1e-4f ? c * (limit / l) : c;
 }
 
+// The translucent water's reflections (WaterTraceCS), after the water is drawn: Fresnel-weighted
+// reflection and highlights over the water's body, which shows the floor through the rippled surface
+// (refracted, lit by the sun the ripples focus) and deepens the game's water colour towards blue with
+// the depth of water the light crosses. Sub-frames move the pixel to the traced frame's camera along the
+// water the samples hold there. What the EFB holds in front of the water keeps its colour.
 CompositeOut WaterCompositePS(float4 position : SV_Position)
 {
     if (!inside(m_viewport, position.xy) || position.x < m_split + 1.0f) {
@@ -3405,7 +3364,7 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
             const float3 bent = refract(v, n, 0.75f);
             float3 floor_at = any(bent != 0.0f) ? p + bent * span : straight;
             // The refracted lookup where what it meets lies behind the water, the straight one where not,
-            // blended by that share (a switch per pixel showed as speckles on the shallows).
+            // blended by that share (a switch per pixel speckles the shallows).
             float bent_z;
             float bent_found;
             const float2 bent_pixel = eye_to_pixel(m_projection, m_viewport, floor_at);
@@ -3469,49 +3428,17 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
             const int2 own = int2(clamp(position.xy, lo, hi));
             const float3 drawn = abs(m_scene.Load(int3(own, 0)).rgb - m_opaque.Load(int3(own, 0)).rgb);
             edge = smoothstep(0.002f, 0.012f, drawn.r + drawn.g + drawn.b);
-            // The traced water body. Its tone: the game's water colour (each galaxy's own hue and its
-            // gradient from shore to deep) averaged over a wide disc of water pixels, so that no texel of
-            // its tiled texture reaches the picture (it showed as specks and tiling; measured wv0-wv4: not
-            // the waves). Its detail: the seabed under it (lit by the traced light, with its shadows) over
-            // its own average on the same disc, energy-neutral, with the shallows' caustics, fading with
-            // depth; read where the waves' refraction moves it. The traced reflections go over it.
-            const bool moved = water_z(pixel + wobble) != 0.0f;
-            const float2 centre_at = clamp(position.xy + (moved ? wobble : 0.0f), lo, hi);
             {
-                // Derived: kept share of the game's water = deep + (1 - deep) T, T = exp(-sigma path):
-                // path 30 0.92/0.97/0.99, 150 0.68/0.87/0.94, no floor found (500) 0.39/0.70/0.83.
+                // The traced water body: the game's drawn water (bright specks held down) with the shallows'
+                // caustics, kept by the transmittance T = exp(-sigma path) to the floor; the rest is the deep
+                // water's colour (the drawn colour times 0.3, 0.55, 0.7). The kept share, deep + (1 - deep) T, is
+                // 0.92/0.97/0.99 at path 30, 0.68/0.87/0.94 at 150 and 0.39/0.70/0.83 with no floor found (500).
                 const float3 drawn_water =
                     water_unspeckled(m_scene.Load(int3(int2(clamp(position.xy, lo, hi)), 0)).rgb,
                                      water_speck_limit(clamp(position.xy, lo, hi), lo, hi));
                 const float3 through = exp(-float3(0.004f, 0.0022f, 0.0016f) * path_c);
                 const float3 deep = drawn_water * float3(0.3f, 0.55f, 0.7f);
                 water = lerp(deep, drawn_water * caustic_gain, through);
-            }
-            if (false) {
-            const float wide = clamp(60.0f * px_per_unit, 8.0f, 48.0f);
-            float3 tone = float3(0.0f, 0.0f, 0.0f);
-            float3 floor_mean = float3(0.0f, 0.0f, 0.0f);
-            float taps = 0.0f;
-            [unroll] for (uint k = 0u; k < 16u; ++k) {
-                const float a = float(k) * 2.39996f;
-                const int2 q = int2(clamp(centre_at + float2(cos(a), sin(a)) * (wide * sqrt((float(k) + 0.5f) / 16.0f)), lo, hi));
-                if (water_z(pixel + (float2(q) + 0.5f - position.xy)) != 0.0f) {
-                    tone += m_scene.Load(int3(q, 0)).rgb;
-                    floor_mean += m_opaque.Load(int3(q, 0)).rgb;
-                    taps += 1.0f;
-                }
-            }
-            if (taps < 1.0f) {
-                tone = m_scene.Load(int3(int2(centre_at), 0)).rgb;
-                floor_mean = m_opaque.Load(int3(int2(centre_at), 0)).rgb;
-                taps = 1.0f;
-            }
-            tone /= taps;
-            floor_mean /= taps;
-            const float3 seabed = m_opaque.Load(int3(int2(centre_at), 0)).rgb;
-            const float3 detail = clamp(seabed / max(floor_mean, 0.02f), 0.4f, 1.8f) * caustic_gain;
-            const float clear = exp(-path_c / 90.0f);
-            water = tone * lerp(float3(1.0f, 1.0f, 1.0f), detail, clear);
             }
         } else {
             const float2 centre_at = clamp(position.xy + wobble, lo, hi);
@@ -3631,14 +3558,13 @@ CompositeOut UnderwaterPS(float4 position : SV_Position)
         add += sun * sum * (span / 8.0f) * (shafts * 5e-5f * phase);
     }
     // The water between the camera and what the pixel shows: its light fades with the depth of water
-    // it crosses and the light the water scatters takes its place: clear for the first 600 units
-    // (the player sees what they do), a light blue-teal veil over the far distance (measured: 250
-    // units and 0.0008 per unit left Beach Bowl's lagoon murky).
+    // it crosses and the light the water scatters takes its place: clear for the first 600 units, so the
+    // player sees what is near, then a light blue-teal veil over the far distance (a shorter clear range or a
+    // denser veil turns a lagoon murky).
     {
         const float span = max((sky ? 1500.0f : min(length(p), 4000.0f)) - 600.0f, 0.0f);
         const float3 t = exp(-float3(0.00032f, 0.00016f, 0.00012f) * span);
-        // The veil's colour 40 % of the way from the sea's blue-teal to a warm grey (owner: under water the blue too
-        // strong; a little yellow to balance it).
+        // The veil's colour 40 % of the way from the sea's blue-teal to a warm grey, which tempers the blue.
         const float3 scatter = (sun * 0.4f + 0.25f) * lerp(float3(0.07f, 0.4f, 0.78f), float3(0.47f, 0.43f, 0.35f), 0.4f);
         add = add * t + scatter * (1.0f - t);
         keep *= t;

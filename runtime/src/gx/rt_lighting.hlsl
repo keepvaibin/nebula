@@ -1,16 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Ray-traced lighting of the game frame's opaque scene (DXR 1.1 inline ray queries, cs_6_5) and
-// its composite into the EFB (vs/ps_6_0). Compiled by DXC at build time.
+// its composite into the EFB (vs/ps_6_0).
 //
-// The game's own lights relight every opaque surface. Its visible sun: a direction with a
-// disc, whose shadow ray decides each sample's direct light (n.l where it reaches the sky).
-// Its point lights: one picked per sample in proportion to its unshadowed light, with a shadow
-// ray to it. The sky and what surrounds the surface: a ray that leaves the scene brings 1,
-// tinted towards the sky's colour; a ray that hits geometry brings the light that surface sends
-// back, read from the previous frame's finished picture where the surface was visible (its
-// brightest pixels count as emitters), darker the closer the hit. The surface's colour is
-// multiplied by the weighted sum: lit faces brighten in the lights' colours, shadows fall away
-// from them and take the colours around them.
+// Each sample traces the sun (a shadow ray towards its disc), one point light picked in proportion to its
+// unshadowed light, and sky and bounce rays: a ray that leaves the scene brings the sky's light, one that hits
+// geometry brings the light that surface sends back, read from the previous frame's finished picture. The
+// surface's colour is multiplied by the weighted sum.
 //
 // Samples are taken once per g_factor x g_factor EFB pixels, accumulate over frames along the
 // game camera's motion and pass two edge-aware filters. The composite reads them at each
@@ -79,7 +74,7 @@ cbuffer RtLight : register(b0)
     float g_sun_cap;            // the night's soft cap on added light where the core's light rules
     uint2 g_core_pad;
     float4 g_point_radius[kPointLights / 4u];   // per point light (4 a vector): its emitter's radius
-    uint g_reference_bounces;   // the reference's bounces (ReferenceCS)
+    uint g_reference_bounces;   // the reference's bounces
     float g_reference_exposure; // its exposure over the geometric mean of its light
     uint g_reference_reset;     // 1: it starts again this frame (the camera moved)
     uint g_emit_scene;          // the scene's emitting triangles among g_tev_info.z (the rest: glow emitters)
@@ -126,21 +121,20 @@ ByteAddressBuffer g_picture_sums : register(t12);        // sky r g b n, scene r
                                                          // the sky's luminance over time, known
 ByteAddressBuffer g_positions : register(t13);           // per triangle: its eye-space vertices
 ByteAddressBuffer g_surfaces : register(t14);            // per triangle: vertex normals, draw flags
-ByteAddressBuffer g_draws : register(t18);              // per draw (kDrawStride): see kDrawStride
-                                                         // its mean luminance, known (SkyLightShCS)
+ByteAddressBuffer g_draws : register(t18);              // per draw (kDrawStride)
 RWStructuredBuffer<float> g_z : register(u0);
 RWStructuredBuffer<uint> g_normal : register(u1);
 RWStructuredBuffer<uint4> g_final : register(u4);
 RWStructuredBuffer<uint2> g_primary : register(u5);      // triangle + 1 (0: none), barycentrics
-// The reference (ReferenceCS): per sample its summed light and paths, then its depth at the start; after the samples
-// its exposure.
+// The emitter passes' output (EmitTriangleCS, EmitScanCS: g_emit_tris's layout) and the traced sky's (SkyProbeCS,
+// SkyTraceShCS: g_sky_map's).
 RWStructuredBuffer<float4> g_reference : register(u6);
 // The traced sky (kPhysicalFlag, g_full_light.w): octahedral over world directions, +y the pole, kSkyMapSize^2 texels of
 // the sky's light in units of the stage's full light (linear), then its 9 spherical-harmonic coefficients (rgb).
 // SkyProbeCS and SkyTraceShCS write it (g_reference's slot).
 StructuredBuffer<float4> g_sky_map : register(t22);
-// kPhysicalFlag: per EFB pixel its shading normal (pack_normal) and the texture's de-lighting there
-// (pack_pixel_delight; 0: none), GBufferCS, for the composite's per-pixel sun and albedo.
+// kPhysicalFlag: per EFB pixel its shading normal (pack_pixel_normal) and the texture's de-lighting there
+// (pack_pixel_delight; 0: none), from EngineGBufferCS, for the composite's per-pixel sun and albedo.
 RWStructuredBuffer<uint2> g_pixels : register(u7);
 // Physical emitters (kPhysicalFlag, g_tev_info.z triangles): while EmitTriangleCS runs the emitting draws' ranges, then
 // the emitting triangles as float4 elements: 0 the count and total power; at 1 + 4 i v0 and area, e1 and two-sided, e2,
@@ -173,7 +167,7 @@ static const uint kDrawStride = 48u;
 static const uint kDrawTableFoliage = 4u;   // g_draws word 6: alpha-cut foliage cards
 static const uint kDrawTableStar = 8u;      // g_draws word 6: a star's burning surface (the star core)
 // g_draws word 6: a light source the table recolours (`recolour`): its light and its surface in the table's colour (the
-// emission word's), not its TEV output (the Observatory's entrance stars: a pale environment-mapped metal, khaki).
+// emission word's), not its TEV output (the Observatory's entrance stars are a pale environment-mapped metal).
 static const uint kDrawTableRecolour = 128u;
 // g_draws word 6: a light source only near a glow light (`near-glow`: within kNearGlowReach of the size of a glow light
 // source's light, GlowEmitterCS's triangle about its centre): the Observatory's entrance stars are one material and
@@ -191,19 +185,16 @@ static const uint kStarColour = kStarSums + kStarSlots * 16u;
 // light's log2 sum (x 256, signed) and count over the surfaces GlowBaseCS samples (cleared by SkyStateCS).
 static const uint kAdaptation = kStarColour + 16u;
 // A scene lit at this share of the stage's full light or more (the surfaces' geometric mean) is exposed as the stage's
-// light sets it; a dimmer one is metered up to it as a camera meters (the ratio, not its square root: the picture is a
-// camera's, and at the square root shaded and sunless views kept half their darkness and lost their colours, owner
-// b81: the Reactor, the Dark Matter Plant, the Airship's hull), at most 4 times (two stops: a night stays darker than
-// a day). A sunlit view's surfaces (open ground, walls, shade) average about a fifth of the full light: Good Egg
-// measured 0.21 (b27, through the film shoulder), so day stages keep their exposure; the stage's own dimness is the
-// static exposure's (physical_exposure).
+// light sets it; a dimmer one is metered up to it by the full ratio, as a camera meters (the square root would keep
+// half the darkness of shaded and sunless views), at most 4 times (two stops: a night stays darker than a day). A
+// sunlit view's surfaces (open ground, walls, shade) average about a fifth of the full light, so day stages keep their
+// exposure; the stage's own dimness is the static exposure's (physical_exposure).
 static const float kAdaptationReference = 0.2f;
 static const float kAdaptationMost = 4.0f;
 // Highlight priority: the metering brightens a view no further than shows the brightest tenth of its surfaces' light at
-// the stage's full light on the picture (a camera exposed for its sunlit parts: the sunny-16 rule). Metered on the shade's geometric
-// mean alone, a sunlit view with much shade was brightened up to 4 times and its sunlit ground pushed into the tone
-// curve's shoulder, pale (owner, b83: the sun does not feel strong). The light in log2 buckets of 0.75 stops from
-// 1/256 to 16 of the full light (GlowBaseCS), read and cleared by SkyStateCS.
+// the stage's full light (a camera exposed for its sunlit parts: the sunny-16 rule). Metered on the geometric mean
+// alone, a sunlit view with much shade would push its sunlit ground into the tone curve's shoulder. The light is
+// binned in log2 buckets of 0.75 stops from 1/256 to 16 of the full light (GlowBaseCS), read and cleared by SkyStateCS.
 static const uint kAdaptationBuckets = 16u;
 static const uint kAdaptationHistogram = kAdaptation + 16u;
 static const float kAdaptationBright = 0.1f;
@@ -218,8 +209,7 @@ static const uint kClearClass = 7u;
 // The share of the light a clear solid stops on its way through: its facets refract and totally reflect most rays
 // away from the straight path, so the light behind a cut crystal is a partial, mottled shadow (about 0.4 of the light
 // arrives), not the 0.91 a flat pane passes ((1 - F)^2) nor a solid's full shadow. Decided per shadow ray by a hash
-// (the denoiser averages it); the sun's and the lights' rays alike (b82 had the lights' only: no crystal shadowed the
-// sun, owner).
+// (the denoiser averages it), for the sun's and the lights' rays alike.
 static const float kClearShadow = 0.6f;
 // The lighting multiplies the game's colour by at most this; the composite rolls it off on a film
 // shoulder from kLitKnee (apply_light).
@@ -249,8 +239,8 @@ float3 film_light(float3 c, float3 m)
     const float3 hue = lit * ((knee + room * (1.0f - exp(-(peak - knee) / room))) / peak);
     const float3 knees = max(c, kLitKnee);
     const float3 rooms = max(1.0f - knees, 1e-4f);
-    // Below its knee a channel keeps its light; the shoulder's exponent only for the part above it (a white
-    // texel's room is 1e-4: exp of the part below overflowed to inf, and lerp(lit, -inf, 0) is NaN, black).
+    // Below its knee a channel keeps its light; the shoulder's exponent takes only the part above it (with a white
+    // texel's room of 1e-4, exp of the part below overflows to inf, and lerp(lit, -inf, 0) is NaN).
     const float3 channels = lerp(lit, knees + rooms * (1.0f - exp(-max(lit - knees, 0.0f) / rooms)), step(knees, lit));
     return lerp(hue, channels, smoothstep(1.6f, 3.5f, peak));
 }
@@ -285,10 +275,6 @@ uint emit_identity(uint material, uint cell)
 // A found spot light whose faces were not seen this frame (which way they face is unknown): the cosine
 // field holds kSpotUnknown + its cone's cosine.
 static const float kSpotUnknown = -4.0f;
-
-// ---------------------------------------------------------------------------------------------
-// Shared helpers
-// ---------------------------------------------------------------------------------------------
 
 float3 pixel_direction(float4 projection, float4 viewport, float2 pixel)
 {
@@ -359,7 +345,7 @@ float3 unpack_normal(uint v)
 }
 
 // A pixel's shading normal (12 bits an axis, octahedral) and the share of its colour that is not the game's painted
-// reflection (8 bits, 255: all of it; GBufferCS).
+// reflection (8 bits, 255: all of it; EngineGBufferCS).
 uint pack_pixel_normal(float3 n, float own)
 {
     n /= abs(n.x) + abs(n.y) + abs(n.z);
@@ -381,8 +367,8 @@ float3 unpack_pixel_smooth_normal(uint v)
     return normalize(n);
 }
 
-// A pixel's de-lighting (GBufferCS): the normal its texture's relief bends (octahedral, 10 bits an axis) and the light
-// painted into its texel (log units, 12 bits over +-kDelightRange, never 0: 0 is none).
+// A pixel's de-lighting (EngineGBufferCS): the normal its texture's relief bends (octahedral, 10 bits an axis) and the
+// light painted into its texel (log units, 12 bits over +-kDelightRange, never 0: 0 is none).
 uint pack_pixel_delight(float3 n, float shading)
 {
     n /= abs(n.x) + abs(n.y) + abs(n.z);
@@ -421,8 +407,7 @@ float3 unpack_vertex_normal(uint v)
     return normalize(n);
 }
 
-// A colour's luminance after the finish's tone (rt_post.hlsl shoulder, then grade's filmic S at
-// strength `grade`).
+// A colour's luminance after the finish's tone: a shoulder from 0.95, then a filmic S at strength `grade`.
 float finished_luminance(float3 c, float grade)
 {
     const float3 over = max(c - 0.95f, 0.0f);
@@ -451,9 +436,7 @@ float3 unpack_r11g11b10(uint p)
                   f16tof32(((p >> 22u) & 0x3FFu) << 5u));
 }
 
-// ---------------------------------------------------------------------------------------------
-// Picture capture (end of the scene): each sample's light and eye z for the next frame's rays
-// ---------------------------------------------------------------------------------------------
+// Picture capture (end of the scene): each sample's light and eye z for the next frame's rays.
 
 cbuffer RtCapture : register(b0)
 {
@@ -480,7 +463,7 @@ cbuffer RtCapture : register(b0)
     uint c_exposure;         // SkyStateCS: 1 the exposure follows the lighting, 2 it starts over at 1
                              // (a new stage) (bits 0-1); GlowBaseCS: bit 0 measure it, bit 2 through the finish's
                              // tone; both: bit 3 physical (eye adaptation in linear light)
-    float c_grade;           // the finish's grade strength (rt_post.hlsl grade)
+    float c_grade;           // the finish's grade strength
 };
 Texture2D<float4> c_color : register(t0);
 Texture2D<float> c_depth_tex : register(t1);
@@ -538,7 +521,7 @@ void SurfaceEmitCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
         if (z != 0.0f) {
             const float3 base = unpack_r11g11b10(c_glow_base[index]);
             const float added = luminance(unpack_r11g11b10(c_glow[index]));
-            // Night only: by day the sun glare sprites over bright sand made it a light.
+            // Night only: by day sun glare sprites over bright sand would count as glowing.
             const float day = c_sums.Load(36u) != 0u ? saturate(asfloat(c_sums.Load(32u)) / c_daylight) : 1.0f;
             const float glowing = smoothstep(0.1f, 0.4f, added) *
                                   smoothstep(0.55f, 0.85f, max(base.r, max(base.g, base.b))) *
@@ -858,8 +841,8 @@ void CaptureCS(uint3 id : SV_DispatchThreadID)
     const int2 q = int2(min(id.xy * c_factor, c_target_size - 1u));
     float3 color = block_color(id.xy);
     if ((c_divide & 2u) != 0u) {
-        // Under a bright sky the glows' bloom at 75 % (the game's sun glare sprites veiled daylight; star
-        // bits, Lumas and lamps keep most of their halo).
+        // Under a bright sky the glows bloom at 75 %, so the game's sun glare sprites do not veil daylight;
+        // star bits, Lumas and lamps keep most of their halo.
         const float day_glow = c_sums.Load(36u) != 0u ? saturate(asfloat(c_sums.Load(32u)) / c_daylight) : 1.0f;
         c_glow[index] = pack_r11g11b10(max(color - unpack_r11g11b10(c_glow_base[index]), 0.0f) *
                                        (1.0f - 0.25f * day_glow));
@@ -874,7 +857,7 @@ void CaptureCS(uint3 id : SV_DispatchThreadID)
             // Without this frame's sky and bounce light (no feedback through it); the sun's
             // light stays, for the bounce it sends.
             const uint4 f = c_final[index];
-            // A star's sample (its relief share carries the mark, TraceCS), one in four: the game's own colour.
+            // A star's sample (its relief share carries the mark), one in four: the game's own colour.
             const float mark = f16tof32(f.w & 0xFFFFu);
             if (mark < -0.5f && ((id.x | id.y) & 1u) == 0u && float(q.x) >= c_split) {
                 const uint star = uint(round(-mark - 1.0f));
@@ -890,14 +873,13 @@ void CaptureCS(uint3 id : SV_DispatchThreadID)
             float keep = abs(f16tof32(f.y >> 16u));
             const float3 m = float3(f16tof32(f.x), f16tof32(f.x >> 16u), f16tof32(f.y));
             const float lit = luminance(m);
-            // The light the composite's film shoulder rolled off (lava, fire, lamps, bright sunlit
-            // surfaces) blooms as the glows do.
-            // A small light source's halo (SpatialBCS): its colour joins the bloom.
+            // A small light source's halo: its colour joins the bloom.
             const float halo = f16tof32(f.w >> 16u);
             if (halo > 0.0f && (c_divide & 2u) != 0u && float(q.x) >= c_split) {
                 c_glow[index] = pack_r11g11b10(unpack_r11g11b10(c_glow[index]) + color * halo);
             }
-            // Only where the light passes the knee at all (most samples do not).
+            // The light the composite's film shoulder rolls off (lava, fire, lamps) blooms as the glows do, only
+            // where the light passes the knee at all (most samples do not).
             if ((c_divide & 2u) != 0u && float(q.x) >= c_split && max(m.r, max(m.g, m.b)) > 1.0f) {
                 const float3 game = c_game.Load(int3(q, 0)).rgb;
                 // Hot light only (lava, fire, lamps): sunlit ground does not glow.
@@ -945,14 +927,12 @@ void CaptureCS(uint3 id : SV_DispatchThreadID)
     c_sums.InterlockedAdd(base + 12u, 1u);
 }
 
-// ---------------------------------------------------------------------------------------------
 // Glow lights: the game's additive translucent draws whose texture the material table names as a
 // light (lamp halos, fire, lava sparks, electricity) are light sources; other glows are effects whose
 // halo shows in the bloom only. Each glow draw's eye-space triangles (the geometry pass) and what the
 // translucent phases added to the picture where they lie give the light's centre (weighted by that
 // light) and spread; its power and colour are the table's. The lights are remembered in world space
-// while out of view or hidden, and fade where their place is in view and no longer glows.
-// ---------------------------------------------------------------------------------------------
+// while out of view or hidden, and fade where their place is in view but does not glow.
 
 cbuffer RtEmit : register(b0)
 {
@@ -986,22 +966,21 @@ RWByteAddressBuffer e_list : register(u2);            // count, total; per light
 
 static const uint kEmitLights = 512u;          // ray_tracing.cpp kEmitLights
 static const float kEmitLargest = 700.0f;      // eye units: a glow wider than this is no light
-static const float kEmitForget = 0.004f;       // a light no longer seen that cannot reach the camera's
-                                               // surroundings (its light there below this) fades fast
+static const float kEmitForget = 0.004f;       // an unseen light that cannot reach the camera's surroundings
+                                               // (its light there below this) fades fast
 
 groupshared float4 s_glow_a[64];
 groupshared float4 s_glow_b[64];
 groupshared float s_glow_area[64];
 
 // Emitter clusters. One draw can hold many separate light sources: a model's lamp heads, a particle system's
-// fireflies, the sparkles round a Luma. As one light they sat at their common centre, often in mid-air, and a
-// spread-out set (fireflies over a garden) was taken for an atmosphere and lit nothing (user, 2026-10-17: every
-// light source emits). Each emitter pass groups a draw's triangles by the world cell their centre lies in
-// (kClusterCell units a side, up to kClusters cells; beyond that cells share a slot by hash), then joins cells
-// whose extents come within kClusterGap of each other, so a light straddling a cell edge stays one light. Each
-// joined set is one light, at the draw's full table intensity; a draw that was one light (a lamp, a Luma) still is.
+// fireflies, the sparkles round a Luma. As one light they would sit at their common centre, often in mid-air.
+// Each emitter pass groups a draw's triangles by the world cell their centre lies in (kClusterCell units a side,
+// up to kClusters cells; beyond that cells share a slot by hash), then joins cells whose extents come within
+// kClusterGap of each other, so a light straddling a cell edge stays one light. Each joined set is one light, at
+// the draw's full table intensity; a compact draw (a lamp, a Luma) stays one light.
 // The first pass notes each triangle's slot (s_cluster_tri); each claimed slot then sums its own triangles in a
-// fixed order (the same light every frame: summing by atomic adds in arrival order made the lights jitter).
+// fixed order, so the light is the same every frame (atomic adds in arrival order would make it jitter).
 static const uint kClusters = 64u;
 static const float kClusterCell = 120.0f;
 static const float kClusterGap = 30.0f;
@@ -1193,13 +1172,13 @@ void cluster_join(uint gi, uint count)
 // intensity; it takes the table's colour.
 static const uint kGlowTableIntensity = 4u;
 static const uint kGlowTableColor = 8u;
-static const uint kGlowLens = 16u;      // a black hole's lens draw: no light (rt_post.hlsl PostLensCS)
+static const uint kGlowLens = 16u;      // a black hole's lens draw: no light
 static const uint kGlowEffect = 32u;    // the table names it a particle: an effect, its halo in the bloom only
 static const uint kGlowPhysical = 64u;  // a table light source under physical light: GlowEmitterCS makes it an area light
 
 // A light's power by its size: a flame, a glow or a star of radius r lights its surroundings in proportion to
 // its area (a 60-unit glow as the table gives it, a 500-unit fire at the limit). Characters and items (Lumas,
-// coins) keep the table's power whatever their size (a big Luma at 6x washed the Observatory fountain, v53a).
+// coins) keep the table's power whatever their size, so a large Luma does not flood its surroundings.
 float light_size(float radius, float limit)
 {
     const float s = radius / 60.0f;
@@ -1274,17 +1253,16 @@ void glow_light(float4 a, float4 b, float area_sum, uint record, uint cell)
         power = tint / max(luminance(tint), 1e-6f) * (intensity * e_authored_power) * light_size(radius, 64.0f);
     } else if ((flags & kGlowEffect) != 0u) {
         // The table's particles are effects: they light what is near them as the picture shows them, at most
-        // a fifth of a Luma (an Octoomba's head light, sparks, a flame; user: anything that glows lights its
-        // surroundings). Uncapped, the sparkles around a Luma summed to 0.4-0.9e6 per light, 10-22 Lumas
-        // (rp13 Observatory [rt-emit]); a fifth of a Luma is 8000.
+        // a fifth of a Luma (an Octoomba's head light, sparks, a flame). Uncapped, the sparkles around a Luma
+        // sum to tens of Lumas per light.
         power *= min(1.0f, 0.2f * e_authored_power / max(luminance(power), 1e-6f));
     } else {
         // Any other glow (a lamp's, a model's) lights what is near it as the picture shows it, at most half
-        // a Luma: everything that glows lights its surroundings.
+        // a Luma.
         power *= min(1.0f, 0.5f * e_authored_power / max(luminance(power), 1e-6f));
     }
-    // The light is as large as its sprite: its light spreads softly from the whole glow. (At half the sprite, a lamp's
-    // light fell to a sharp hot spot that jittered as the sprite moved: plaza flicker 0.36 -> 0.51.)
+    // The light is as large as its sprite and spreads softly from the whole glow; a smaller light makes a sharp hot
+    // spot that jitters as the sprite moves.
     if (luminance(power) >= 4.0f && radius <= kEmitLargest) {
         emit_found(float4(transform(e_to_world, centre), radius), float4(power, 0.0f), float4(0.0f, 0.0f, 0.0f, 0.0f),
                    kEmitSourceGlow | (record / 32u), emit_identity(e_draws.Load(record + 16u), cell));
@@ -1445,7 +1423,7 @@ static const uint kAuthoredTint = 1u;
 static const uint kAuthoredSpot = 2u;
 static const uint kAuthoredStar = 4u;   // a star: its power by its size (light_size)
 // A long emitter (a power cable): every cell its own light, none joined. A chain of lights along it lights what lies
-// beside it as the tube does; joined, a cable crossing the Observatory was one light at its middle, on the ground.
+// beside it as the tube does; joined, a long cable would be one light at its middle.
 static const uint kAuthoredStrip = 8u;
 
 groupshared float4 s_authored_n[64];   // face normal sum (twice the area), facing evidence (area)
@@ -1493,8 +1471,7 @@ void authored_light(float4 b, float w, float4 n, float4 seen, uint record, uint 
             return;
         } else if ((flags & kAuthoredStrip) != 0u) {
             // A strip's stretch not seen this frame reports nothing (its remembered light keeps its colour and fades
-            // out of view): every stretch of the Observatory's cables reporting, 2,436 lights overflowed the 2,048
-            // the frame holds, and the visible ones were dropped.
+            // out of view), so long cables do not overflow the kEmitFound lights a frame holds.
             return;
         } else {
             unknown = 1.0f;
@@ -1524,8 +1501,7 @@ void authored_light(float4 b, float w, float4 n, float4 seen, uint record, uint 
     }
     if (luminance(power) >= 4.0f) {
         // A strip's stretch is a light as wide as half its cell: the chain of lights along a cable overlaps into one
-        // glow (as points a few units wide, the light along the garden cable lay in separate beads), and its shadows
-        // soften as a tube that size casts them.
+        // glow instead of separate beads, and its shadows soften as a tube that size casts them.
         const float radius = (flags & kAuthoredStrip) != 0u ? max(spread, 0.5f * kClusterCell) : max(spread, 1.0f);
         emit_found(float4(transform(e_to_world, at_point), radius), float4(power, unknown), spot,
                    kEmitSourceTable | (record / 32u), emit_identity(asuint(shape.x), cell));
@@ -1646,8 +1622,8 @@ static const uint kEmitLightVectors = 4u;   // float4s per remembered light (ray
 
 // One group: the remembered lights take this frame's glow lights (each the remembered light of its identity, else
 // the nearest within reach of both), the others take free slots, unseen lights fade, then the list for sampling.
-// Matched by distance alone, a lamp's light went to a sparkle beside it in some frames while its own faded as
-// gone: the planter lamps of the Observatory plaza flashed (210 -> 151 -> 208 levels on the stone beside one).
+// Matching by distance alone would hand a lamp's light to a sparkle beside it in some frames while its own faded,
+// and the lamp would flash.
 [numthreads(kEmitLights, 1, 1)]
 void EmitMergeCS(uint gi : SV_GroupIndex)
 {
@@ -1749,7 +1725,7 @@ void EmitMergeCS(uint gi : SV_GroupIndex)
             // Out of view it keeps lighting the stage at any distance; one too far to light anything within
             // 20000 units of the camera fades over seconds (the list keeps room for the lights that matter here).
             // A particle's light (a fifth of a Luma or less: sparkles, stardust) fades over about a second once
-            // unseen: kept like a lamp's, the passing sparkles of the Observatory garden filled all kEmitLights.
+            // unseen, so passing sparkles do not fill all kEmitLights.
             const float reach = sqrt(luminance(lb.rgb) / (kPi * kEmitForget));
             const bool far = length(e) > reach + 20000.0f;
             const bool particle = luminance(lb.rgb) <= kParticleLight * e_authored_power;
@@ -1790,8 +1766,8 @@ void EmitMergeCS(uint gi : SV_GroupIndex)
                 }
                 e_lights[slot] = asfloat(e_found.Load4(16u + n * kEmitStride));
                 // A new light fades in: a particle's as it does when seen again, any other from a quarter of its power
-                // (about 8 frames to full). At full power at once, a cable's stretch at the picture's edge, seen in
-                // one frame and not the next, popped in as a glow over the garden's cliff.
+                // (about 8 frames to full), so a light seen for a single frame (a cable's stretch at the picture's
+                // edge) does not pop in.
                 const float3 power = asfloat(e_found.Load3(16u + n * kEmitStride + 16u));
                 const bool particle = luminance(power) <= kParticleLight * e_authored_power;
                 e_lights[slot + 1u] = float4(power * (particle ? 0.05f : 0.25f), 0.0f);
@@ -1824,37 +1800,6 @@ void EmitMergeCS(uint gi : SV_GroupIndex)
         e_list.Store2(0u, uint2(uint(s_emit_scan[gi].y), asuint(s_emit_scan[gi].x)));
     }
 }
-
-// ---------------------------------------------------------------------------------------------
-// Glow bloom: what the glows added (the light of cores, lamps, Lumas) above a threshold, at a
-// quarter of the samples, blurred across and down (sigma 10 texels), added to the picture at the
-// scene's end: the corona an over-exposed emitter shows.
-// ---------------------------------------------------------------------------------------------
-
-cbuffer RtBloom : register(b0)
-{
-    uint2 b_size;               // bloom texels (2x2 samples each)
-    uint2 b_sample_size;
-    float b_threshold;          // glow luminance that starts to bloom
-    float b_strength;
-    uint b_axis;                // blur: 0 across, 1 down
-    uint b_pad;
-};
-
-cbuffer RtBloomComposite : register(b0)
-{
-    float2 o_scale;             // bloom texels per EFB pixel
-    uint2 o_size;
-    float o_strength;
-    float o_split;              // GALAXY_RT_SPLIT: left of it the game's own picture
-    uint2 o_light_size;         // the lighting's samples (0: no halo mask)
-    uint o_factor;              // EFB pixels per sample side
-    uint3 o_pad;
-};
-
-// ---------------------------------------------------------------------------------------------
-// Lighting passes (one thread per sample)
-// ---------------------------------------------------------------------------------------------
 
 bool pixel_point(int2 q, out float3 p)
 {
@@ -1924,8 +1869,8 @@ float3 eye_to_world(float3 d)
 // sends at the game's exposure, in its own colours and over its directions (image-based light). The stage's ambient
 // (g_sky_radiance) says how much light a surface open to the sky gets: what the backdrop sends short of it comes from
 // every direction in the ambient's colour; a backdrop brighter than it is taken down to it. A dark space backdrop so
-// lights little (Good Egg's deep blue raised to the ambient tinted its stone lavender, expo1); a glowing one lights in
-// its own colour (Melty Molten's lava horizon; grey under the ambient's colour alone).
+// lights little and keeps its hue from tinting the stage; a glowing one (Melty Molten's lava horizon) lights in its
+// own colour.
 float physical_sky_mean()
 {
     return luminance(g_sky_map[kSkyMapSize * kSkyMapSize].rgb * 0.282095f);
@@ -1951,7 +1896,7 @@ float3 physical_sky_fill()
 // overcast sky (Moon and Spencer 1942; CIE S 011/E:2003 type 1), its radiance (1 + 2 cos) / 3 of the zenith's by the
 // angle from the player's up, three times brighter overhead than at the horizon; below the horizon the horizon's.
 // Scaled so that open ground gets the light of a uniform sky (zenith 9/7, horizon 3/7 of it): whatever stands on the
-// ground shades it most straight below (a uniform haze left Mario's shadow a faint blur, b18).
+// ground shades it most straight below, so a character's shadow stays visible under an overcast sky.
 float physical_overcast(float3 d)
 {
     return g_sky_radiance.w > 0.0f ? (3.0f + 6.0f * max(dot(d, g_up.xyz), 0.0f)) / 7.0f : 1.0f;
@@ -2009,9 +1954,8 @@ float3 physical_sky_irradiance(float3 n)
 // kPhysicalFlag: the camera's exposure: a white surface facing the player's up (the ground under the player, by the
 // game's gravity; g_up), lit by the open sky and the sun at its angle, shows at the stage's full light (the game's
 // ambient + key: a dim stage stays as dim as the game sets it, a coloured one keeps its colour). Exposed for the sun as
-// a photographer's sunny-16 rule is: at no less than 30 degrees up (cosine 0.5). With the sun below the player's
-// horizon the reference was lit by the sky alone and the exposure rose twentyfold (Melty Molten: key 35 degrees below,
-// its lava's light flooding the ground orange, sweep1).
+// a photographer's sunny-16 rule is: at no less than 30 degrees up (cosine 0.5), so a sun below the player's horizon
+// does not leave the reference lit by the sky alone and raise the exposure many times over.
 float physical_adaptation()
 {
     return g_picture_sums.Load(kAdaptation + 4u) != 0u ? asfloat(g_picture_sums.Load(kAdaptation)) : 1.0f;
@@ -2038,9 +1982,8 @@ float3 rgb8(uint c)
 
 // Foliage cards: the scene holds the alpha-tested ones whole, their cut-outs filled. A hit on a card
 // counts where the raster drew it (the depth at the hit's pixel lies on the card's plane), not where it
-// saw through it (a farther depth, the sky); hidden or out of view, at the cards' mean coverage (Gusty
-// Garden's flower and leaf cards: 0.46-0.57 of their texels), a number from the primitive and `salt` (the
-// sample, the frame, the ray) deciding.
+// saw through it (a farther depth, the sky); hidden or out of view, at the cards' mean coverage (about half
+// their texels), a number from the primitive and `salt` (the sample, the frame, the ray) deciding.
 static const float kCardCoverage = 0.5f;
 
 bool traced_card(uint flags)
@@ -2071,9 +2014,8 @@ bool alpha_draw(uint flags)
 // The alpha test of a hit at eye-space `h` on `primitive` (its g_surfaces flags word `flags`): 1 where the draw's
 // own TEV program and alpha compare keep the texel (it stops the ray), 0 where the test cuts it (the ray goes on
 // through a lattice's hole, between a fern's fronds), -1 untested (not an alpha-tested draw, or no TEV records:
-// solid, or the card's own rule). The coordinates from the hit's barycentrics on its eye-space triangle. (The draw's
-// record count comes from g_tev_info: a root descriptor has no size, and GetDimensions on g_draw_tex read 0, which
-// left every alpha-tested hit to the card's rule: off screen, half the rays through the whole card.)
+// solid, or the card's own rule). The coordinates come from the hit's barycentrics on its eye-space triangle. The
+// draw's record count comes from g_tev_info: g_draw_tex is a root descriptor, which has no size for GetDimensions.
 int alpha_test(uint primitive, uint flags, float3 h)
 {
 #if RT_TEXTURED
@@ -2109,7 +2051,7 @@ int alpha_test(uint primitive, uint flags, float3 h)
 
 // Whether a candidate hit at eye-space `h` on `primitive` (its g_surfaces flags word `flags`) stops a ray. An
 // alpha-tested draw or card stops it where its texture's alpha passes its test (exact leaf, fence and lattice
-// shadows; Beach Bowl's grass dithered the seabed under the water with the cards' mean coverage).
+// shadows); an untested card follows the raster's depth where it is in view, else the cards' mean coverage.
 bool card_blocks(uint primitive, uint flags, float3 h, uint salt)
 {
     const int tested = alpha_test(primitive, flags, h);
@@ -2146,16 +2088,7 @@ bool card_blocks(uint primitive, uint flags, float3 h, uint salt)
     return card_hash(primitive, salt) < kCardCoverage;
 }
 
-// ---------------------------------------------------------------------------------------------
-// Tile light lists: each group of 8 x 8 samples keeps the glow lights whose reach meets the box
-// around its samples' surface points; its samples weigh only those. Lights beyond a tile's reach
-// add nothing to any of its samples, so the result is the same at a fraction of the work. The list
-// is a bit per light of the frame's list, walked in its order: a list of the first 128 lights the
-// threads happened to add dropped different lights each frame where more were in reach (a tile over
-// a depth edge reaches many), flashing tile-shaped blocks on the Observatory plaza's walkways.
-// ---------------------------------------------------------------------------------------------
-
-// The surface a sample shows (TraceCS, ReferenceCS): the triangle the camera ray meets at the raster depth gives the
+// The surface a sample shows (EngineGBufferCS): the triangle the camera ray meets at the raster depth gives the
 // face normal, the shading normal from its vertex normals, and a ray origin lifted off the flat face where those
 // normals bend away from it (the shadow terminator, Hanika 2021). Geometry the scene leaves out (blended and indirect
 // draws) takes the normal from the depth.
@@ -2214,9 +2147,8 @@ Surface primary_surface(int2 q, float3 p)
     RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
     query.TraceRayInline(g_scene, RAY_FLAG_NONE, kSceneMask, ray);
     // The candidate nearest the raster's depth, whatever its kind: the raster drew a surface there (its alpha test
-    // passed), so when no triangle meets the depth closely that one is it. Without it Bowser's Star Reactor's fire-bar
-    // balls (alpha-tested, a few units off the raster's depth) had no draw at their pixels (probe b82: no triangle at a
-    // lit pixel 1566 units out): never a light source, shaded as dark discs.
+    // passed), so when no triangle meets the depth closely that one is it. Alpha-tested geometry a few units off the
+    // raster's depth (Bowser's Star Reactor's fire-bar balls) would otherwise have no draw at its pixels.
     float nearest_gap = span * 0.03f + 8.0f;
     uint nearest_tri = 0u;
     float2 nearest_b = float2(0.0f, 0.0f);
@@ -2256,13 +2188,13 @@ Surface primary_surface(int2 q, float3 p)
     return s;
 }
 
-// Whether the sun is seen from `origin` along `direction` (a point inside its disc); the blocker's distance in
-// `blocker` (0: open). `card`: the sample lies on a foliage card, which the cards close beside it do not shade.
-// Candidates a ray's traversal weighs before it takes the one it is at as its hit (bounded work per ray: layered
-// alpha cards, Dusty Dune's hourglass sand, ran a dispatch past the GPU's watchdog). 64 alpha cards along one ray are
-// as good as a wall.
+// Candidates a ray's traversal weighs before it takes the one it is at as its hit. This bounds the work per ray:
+// layered alpha cards (Dusty Dune's hourglass sand) can otherwise run a dispatch past the GPU's watchdog. 64 alpha
+// cards along one ray are as good as a wall.
 static const uint kMaxCandidates = 64u;
 
+// Whether the sun is seen from `origin` along `direction` (a point inside its disc); the blocker's distance in
+// `blocker` (0: open). `card`: the sample lies on a foliage card, which the cards close beside it do not shade.
 bool sun_visible(float3 origin, float3 direction, bool card, uint salt, out float blocker)
 {
     blocker = 0.0f;
@@ -2311,12 +2243,10 @@ bool sun_visible(float3 origin, float3 direction, bool card, uint salt, out floa
     return true;
 }
 
-// ---------------------------------------------------------------------------------------------
 // Physical emitters (kPhysicalFlag): every triangle of the scene's emitting draws (the material table's light sources:
 // lava, lamps, Lumas) is an area light. What it shows is what it sends: its radiance is its draw's TEV output in linear
 // light (units of a white surface under white light), its power pi L A (two-sided: twice). EmitTriangleCS writes them,
-// EmitScanCS the running power; TraceCS picks them by resampled importance (emitter_light).
-// ---------------------------------------------------------------------------------------------
+// EmitScanCS the running power, by which the engine (rt_engine.hlsl) picks them.
 
 float4 emit_element(uint e)
 {
@@ -2388,8 +2318,7 @@ float emit_random(inout uint seed)
     return float(seed >> 8u) * (1.0f / 16777216.0f);
 }
 
-// A light point's target for resampling at `p` (normal `n`): the luminance of its light there unshadowed, as
-// emitter_light weighs its candidates (eye space).
+// A light point's target for resampling at `p` (normal `n`): the luminance of its light there unshadowed (eye space).
 float emitter_target(float3 p, float3 n, float3 y, float3 face, float3 radiance, float beam, float sides, out float3 light,
                      float near2 = 1e-4f)
 {
@@ -2418,11 +2347,9 @@ float3 eye_direction_to_world(float3 d)
 }
 
 void reference_material(uint tri, float2 b, out float3 albedo, out float3 emission);
-float3 physical_hit(uint tri, float2 b, float3 x, float3 direction, uint salt);
 
-// ---------------------------------------------------------------------------------------------
 // Reference (GALAXY_RT_REFERENCE=1, g_flags bit 13): a path tracer for a still camera, the image the real-time passes
-// are measured against; not a player setting. Per sample and frame one path. At every vertex: the sun (a shadow ray
+// are compared with; not a player setting. Per sample and frame one path. At every vertex: the sun (a shadow ray
 // inside its disc), and one light of all the game's point lights and glow lights, chosen in proportion to its
 // unshadowed light there, with a shadow ray to a point of its emitter (the sum of all over the chance of the one
 // chosen: unbiased). Then a cosine-sampled bounce, shaded where it hits from the scene (its draw's texture times its
@@ -2433,7 +2360,6 @@ float3 physical_hit(uint tri, float2 b, float3 x, float3 direction, uint salt);
 // that a white surface would show (1: as drawn), summed in float32 per sample while the camera holds still; a sample
 // whose depth changes (an actor moving through it) starts again on its own. Late geometry (instance 1: Rosalina)
 // has no records: a path that meets it ends there.
-// ---------------------------------------------------------------------------------------------
 
 // The sRGB transfer functions (IEC 61966-2-1).
 float3 srgb_to_linear(float3 c)
@@ -2454,14 +2380,14 @@ float3 linear_to_srgb(float3 c)
 // emitters are: each triangle (e_triangles: this frame's eye space) into the emitters' glow segment (e_glow_out:
 // g_emit_tris) in world space, its radiance the table's colour (linear) times the table's radiance, its power 2 pi L A
 // times the share of its quad its texture lights (an additive sprite adds texel x alpha: a fire sprite's soft blob about
-// a quarter; counted whole, the Observatory kitchen's overlapping fire sprites flooded the oven white, b26).
+// a quarter), so overlapping fire sprites do not flood what they light.
 // What emits is what the game drew. A triangle with vertex normals (e_glow_normals: the glow geometry's surfaces) is
 // a surface that glows (the Observatory's star lamps' glowing bodies, their glow texture projected from their normals;
 // lamp glass): it emits from its outward face (the side its normals point to; one-sided, power pi L A) at the table's
 // radiance times the share of it its texture lights. A triangle without normals is a sprite standing for a glowing
 // volume (a flame): its light leaves evenly in every direction (sides 2: emitter_facing 1/2, power 2 pi L A) from the
-// triangle shrunk about its centre to the share of it its texture lights. Lit as panels facing the camera (word 6 =
-// 0) the sprites' light turned with the view and stopped at their plane (a hard edge across the Terrace dome, b30).
+// triangle shrunk about its centre to the share of it its texture lights. Lit as one-sided panels facing the camera,
+// the sprites' light would turn with the view and stop at their plane.
 // The next frame's lighting samples them after the scene's emitters (they draw after this frame's trace).
 // e_draws: per glow emitter draw (32 bytes) its first glow triangle, count, first glow emitter, colour (RGBA8), radiance,
 // its texture's view in the descriptor heap (~0: none), 1 isotropic.
@@ -2585,38 +2511,6 @@ void reference_material(uint tri, float2 b, out float3 albedo, out float3 emissi
     }
 }
 
-// A bounce ray's hit in the game's light units (TraceCS with kPhysicalFlag): the surface's albedo times the sun on it
-// (N.L, one shadow ray inside the sun's disc) and the open sky. Not its emission: the emitters' light comes by
-// emitter_light (counting it here as well would count it twice); the reference, which samples no triangles, keeps it.
-float3 physical_hit(uint tri, float2 b, float3 x, float3 direction, uint salt)
-{
-    float3 albedo;
-    float3 emission;
-    reference_material(tri, b, albedo, emission);
-    const float3 v0 = asfloat(g_positions.Load3(tri * 36u));
-    const float3 v1 = asfloat(g_positions.Load3(tri * 36u + 12u));
-    const float3 v2 = asfloat(g_positions.Load3(tri * 36u + 24u));
-    const float3 face = cross(v1 - v0, v2 - v0);
-    if (dot(face, face) <= 1e-24f) {
-        return emission;
-    }
-    float3 ng = normalize(face);
-    ng = dot(ng, direction) > 0.0f ? -ng : ng;
-    const float3 w = float3(1.0f - b.x - b.y, b.x, b.y);
-    float3 lifted = v0 * w.x + v1 * w.y + v2 * w.z;
-    float3 n;
-    smooth_surface(tri, w, v0, v1, v2, ng, n, lifted);
-    float3 sun = float3(0.0f, 0.0f, 0.0f);
-    const float nl = dot(n, g_sun.xyz);
-    if (nl > 0.0f && any(g_sun_light.rgb > 0.0f)) {
-        float blocker;
-        if (sun_visible(lifted + ng * (0.2f + abs(x.z) * 4e-4f), g_sun.xyz, false, salt, blocker)) {
-            sun = g_sun_light.rgb * nl;
-        }
-    }
-    return albedo * (sun + physical_sky_irradiance(n));
-}
-
 #if RT_TEXTURED
 // Physical emitters: the triangles (one thread each) of the emitting draws' ranges (g_emit_tris here: the range count,
 // then per range at 16 + 16 r its first scene triangle, triangle count, draw | two-sided << 31 and first emitter) into
@@ -2656,8 +2550,6 @@ void EmitTriangleCS(uint3 id : SV_DispatchThreadID)
         bool pass;
         radiance += srgb_to_linear(saturate(tev_evaluate(draw, g_tev_info.x, tri, kPoints[k], pass).rgb));
     }
-    // Their mean: the triangle's radiance (97752e9 lost the division, and every model light source lit the scene at
-    // seven times what it shows and its table intensity says).
     radiance /= 7.0f;
     // Brighter than it shows by the table's intensity where that passes 1 (a glowing bulb's luminance over its painted
     // colour); the table's lesser art intensities (Luma units) leave it as it shows. Outside the table's glowing region
@@ -2722,19 +2614,6 @@ void EmitScanCS(uint gi : SV_GroupIndex)
         g_reference[0] = float4(asfloat(total), s_emit_running[1023], 0.0f, 0.0f);
     }
 }
-#endif
-
-#if RT_TEXTURED
-// ---------------------------------------------------------------------------------------------
-// Physical: the light the game baked into its surfaces, for the light the stage is lit by (inverse lighting: Marschner
-// & Greenberg 1997; irradiance as nine spherical harmonics, Ramamoorthi & Hanrahan 2001). Per visible sample of a draw
-// whose vertex colours carry baked light (de-baked, not a light source; every second sample on both axes): its baked
-// light, the TEV output with the vertices' colours as the game baked them over the output at the program's neutral light,
-// both on a grey texture, in linear light (1: white light, the traced light's units), and its world normal's spherical
-// harmonics, summed as the normal equations of a least-squares fit (A: 9 x 9 symmetric, 45 values; B: 9 x 3, 27).
-// SceneRayTracer::fit_baked_light solves them and takes the sun (the first band's direction) and the sky (the rest).
-// ---------------------------------------------------------------------------------------------
-
 #endif
 
 #if RT_TEXTURED
@@ -2975,9 +2854,6 @@ void StarSphereCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
     g_final[g_sample_size.x * g_sample_size.y + star] = asuint(ball);
 }
 
-// kPhysicalFlag: per EFB pixel the shading normal of the surface its camera ray meets at the raster's depth (the
-// smooth vertex normals, primary_surface), for the composite's per-pixel sun. A ray per pixel, once per traced frame;
-// the frame's in-between pictures read it where their pixels lay in it.
 #if RT_TEXTURED
 // Coordinate `u` of an axis under GX addressing `mode` (0 clamp, 1 repeat, 2 mirror), for a repeating sampler: clamped
 // and mirrored coordinates kept half a texel (`half`) inside so the filter never reaches the far edge.
@@ -2998,11 +2874,10 @@ float2 delight_uv(float2 uv, uint wrap, float2 half)
 }
 
 // The relief's height for painted shading `s` (log units): saturating at +-kReliefSpan, so a painted outline or a deep
-// painted shadow (a dark plank border, measured Good Egg build delight3) is a shallow groove, not a cliff.
+// painted shadow (a dark plank border) is a shallow groove, not a cliff.
 static const float kReliefSpan = 0.35f;
 // The steepest relief slope (tan 20 degrees): the painted light says little of shape, and a sun 20 degrees up or more
-// never leaves a surface black for it. Steeper, bent normals turned whole bands of a surface from the sun (the dark
-// ring along Good Egg's rim: 75 degrees in delight2/3, still a line at 35 in delight4).
+// never leaves a surface black for it. Steeper, bent normals turn whole bands of a surface away from the sun.
 static const float kReliefSlope = 0.36f;
 
 float relief_height(float s)
@@ -3089,9 +2964,7 @@ bool delight_surface(uint tri, float2 b, float3 p, float3 ng, float pixel_width,
 }
 #endif
 
-// ---------------------------------------------------------------------------------------------
 // The lighting as a texture for the translucent draws after the trace (one texel per sample).
-// ---------------------------------------------------------------------------------------------
 
 cbuffer RtLightTexture : register(b0)
 {
@@ -3110,17 +2983,15 @@ float4 LightTexturePS(float4 position : SV_Position) : SV_Target0
     }
     // A blended translucent (seaweed, glass, leaf cards) takes the light of the surface behind it, and
     // that surface lies in the translucent's own shadow: it keeps at most half of the darkening (more
-    // light it takes whole). Measured wb33/wb36: Beach Bowl's seaweed 115,111,36 -> 27,52,25.
+    // light it takes whole).
     // Physical: the translucents are drawn in the game's light, the traced light is in its units (white 1).
     const float3 m = float3(f16tof32(v.x), f16tof32(v.x >> 16u), f16tof32(v.y)) / max(t_full.rgb, 1e-3f);
     return float4(max(m, 0.5f + 0.5f * m), 1.0f);
 }
 
-// ---------------------------------------------------------------------------------------------
 // Composite: the EFB colour (a copy of it) under the lighting. Less light darkens it in
 // proportion; more light brightens it in proportion up to a knee, then rolls off towards white
 // without passing it (apply_light).
-// ---------------------------------------------------------------------------------------------
 
 cbuffer RtComposite : register(b0)
 {
@@ -3144,7 +3015,7 @@ StructuredBuffer<uint4> m_light : register(t0);
 Texture2D<float> m_efb_depth : register(t1);
 StructuredBuffer<float4> m_reproject : register(t2);
 Texture2D<float4> m_color : register(t3);
-// m_flags bit 3 (physical): the traced frame's per-pixel shading normals and de-lighting (GBufferCS).
+// m_flags bit 3 (physical): the traced frame's per-pixel shading normals and de-lighting (EngineGBufferCS).
 StructuredBuffer<uint2> m_pixels : register(t4);
 
 // The traced frame's shading normal at its pixel `q`.
@@ -3154,7 +3025,7 @@ float3 traced_normal(int2 q)
     return unpack_pixel_smooth_normal(m_pixels[uint(c.y) * m_target_size.x + uint(c.x)].x);
 }
 
-// The share of its colour that is not the game's painted reflection (GBufferCS).
+// The share of its colour that is not the game's painted reflection (EngineGBufferCS).
 float traced_own(int2 q)
 {
     const int2 c = clamp(q, int2(0, 0), int2(m_target_size) - 1);
@@ -3180,9 +3051,9 @@ float3 apply_light(float3 c, float3 m)
 
 // The turn to the eye of star `star`'s ball at eye position `p` (traced frame): the ball's normal where the eye
 // ray first meets it (StarSphereCS's sphere through its vertices) against the direction to the eye. Its model's
-// faces are flat and so are its vertex normals: a turn taken from either is constant over each face (user: the
-// suns show square facets, Native44). The actor's position is not the ball's centre (build 60). Where the ray
-// passes the fitted sphere (a model not quite round) the surface point the depth gives; 0.6 without a ball.
+// faces are flat and so are its vertex normals, so a turn taken from either would be constant over each face; the
+// actor's position is not the ball's centre either. Where the ray passes the fitted sphere (a model not quite round)
+// the surface point the depth gives; 0.6 without a ball.
 float star_mu(float3 p, uint star)
 {
     if (star >= kStarSlots) {
@@ -3205,17 +3076,16 @@ float star_mu(float3 p, uint star)
 
 // A star's burning surface (the star core, the suns): the game's own colour at each stage (the Observatory's core
 // runs from red to blue as the domes revive it), a little brighter and with its texture twice as deep (the colour
-// against its neighbourhood, per channel: where the game's colour is at full brightness in some channel, the lit
-// core's green and blue, a brightness ratio clipped away and left it flatter than the game's, s.d. 6.4 against
-// 9.5). The ball brightens towards its centre and dims at its limb (mu: the ball's turn to the eye, star_mu). Past
-// full brightness it keeps its hue and the excess whitens it a little.
+// against its neighbourhood, per channel: a brightness ratio would clip away the detail of channels already at full
+// brightness). The ball brightens towards its centre and dims at its limb (mu: the ball's turn to the eye, star_mu).
+// Past full brightness it keeps its hue and the excess whitens it a little.
 static const float kStarDetail = 1.0f;
 
 float3 star_surface(int2 c, float z, float mu, float3 color)
 {
-    // Its neighbourhood 3 game pixels around at every internal resolution (3 EFB pixels were half a game pixel
-    // at 6x: no contrast, the fire's texture washed out under the heat, user: suns without their texture), on
-    // its own surface only (what stands in front, a ring or a character, drew a bright or dark line along it).
+    // Its neighbourhood 3 game pixels around at every internal resolution (at a fixed 3 EFB pixels a high internal
+    // resolution loses the texture's contrast), on its own surface only (what stands in front, a ring or a
+    // character, would draw a bright or dark line along it).
     const int r = max(int(round(3.0f * m_efb_scale)), 1);
     const int2 ring[8] = {int2(-1, -1), int2(0, -1), int2(1, -1), int2(-1, 0), int2(1, 0), int2(-1, 1), int2(0, 1), int2(1, 1)};
     const float limit = abs(z) * 0.02f + 2.0f;
@@ -3230,8 +3100,7 @@ float3 star_surface(int2 c, float z, float mu, float3 color)
     }
     const float3 detail = count > 0.0f ? color - around / count : float3(0.0f, 0.0f, 0.0f);
     // Limb (mu 0.2) 1.01 of the game's colour, centre 1.38; over the disc about 1.2. The detail joins after the
-    // brightness is brought back under full: scaled with it, the lanes of a nearly full colour rose towards its
-    // cells (s.d. 8.6 against the game's 9.5).
+    // brightness is brought back under full; scaled with it, it would flatten a nearly full colour.
     const float3 lit = color * (1.15f * (0.8f + 0.4f * mu));
     const float peak = max(lit.r, max(lit.g, lit.b));
     return saturate(lit / max(peak, 1.0f) + max(peak - 1.0f, 0.0f) * 0.2f + detail * kStarDetail);
@@ -3263,9 +3132,9 @@ CompositeOut ClearCompositePS(float4 position : SV_Position)
     if (any(traced < 0) || any(traced >= int2(m_sample_size))) {
         discard;
     }
-    // A discarded pixel's shader runs on: its read stays in the buffer (m_light is a root view, unchecked). A sub-frame's
-    // reprojected pixel off the traced frame (or NaN behind the camera) read far outside it, and the GPU hung under
-    // frame interpolation (b103 settings matrix: every 120 fps run, DXGI_ERROR_DEVICE_HUNG at this draw by DRED).
+    // A discarded pixel's shader runs on, so its read must stay in the buffer (m_light is a root view, unchecked): a
+    // sub-frame's reprojected pixel off the traced frame (or NaN behind the camera) would read far outside it and hang
+    // the GPU.
     traced = clamp(traced, int2(0, 0), int2(m_sample_size) - 1);
     // GALAXY_RT_ENGINE_VIEW=6 (m_flags bit 3): the composite's coverage, magenta.
     if ((m_flags & 8u) != 0u) {
@@ -3342,9 +3211,7 @@ CompositeOut CompositePS(float4 position : SV_Position)
     // The light samples around the pixel (3 x 3 about the nearest, a tent 1.5 samples wide), each weighed by
     // its depth against this surface's plane extended to it: samples on another surface (a step's face, an
     // object in front) drop out and those on this one blend smoothly, so a shadow or crease edge follows the
-    // geometry's full-resolution edge instead of the light's sample grid (user: shadow and depth clipping at
-    // the edges in the Observatory, build 55; the 4-tap bilinear with a flat depth test switched samples per
-    // pixel along the floor rings' steps).
+    // geometry's full-resolution edge instead of the light's sample grid.
     const int2 centre = int2(floor(a + 0.5f));
     const float tolerance = abs(p.z) * 0.004f + 0.25f + (abs(gradient.x) + abs(gradient.y)) * float(m_factor) * 0.5f;
     float3 sum = float3(0.0f, 0.0f, 0.0f);

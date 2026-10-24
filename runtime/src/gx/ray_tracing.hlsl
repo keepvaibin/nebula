@@ -230,9 +230,8 @@ float2 texgen_uv(uint4 draw, uint4 draw2, uint vertex, uint gen, uint palette_ba
     return stq && res.z != 0.0f ? res.xy / res.z : res.xy;
 }
 
-// One thread per output triangle: three eye-space vertices (36 bytes) in draw order and its
-// surface record (16 bytes). A dispatch
-// covers the draws noted since the last one (g_triangle_count triangles from g_triangle_base).
+// One thread per output triangle: three eye-space vertices (36 bytes) in draw order and its surface record
+// (16 bytes). A dispatch covers the draws noted since the last one (g_triangle_count triangles from g_triangle_base).
 [numthreads(64, 1, 1)]
 void GeometryCS(uint3 id : SV_DispatchThreadID)
 {

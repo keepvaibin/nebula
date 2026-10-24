@@ -56,10 +56,10 @@ static const uint kEngineClearNoShade = 8192u; // =6: the reflection ray, its hi
 static const uint kEngineHitNoLights = 16384u;  // =7: hits without the lights' sample
 static const uint kEngineHitNoSky = 32768u;     // =8: hits without the sky ray
 static const uint kEngineClearNoTev = 65536u;   // =9: glass reflection hits without their TEV colour
-static const uint kEngineBounceCache = 131072u;
+static const uint kEngineBounceCache = 131072u; // GALAXY_RT_ENGINE_BOUNCES (default on): hits take the cached light
 static const uint kEngineWaterLight = 524288u;  // last frame's water (kEvWaterScene, kEvWaterPositions) shades light
 static const uint kEngineReference = 262144u;   // GALAXY_RT_ENGINE_REFERENCE: the converged reference accumulates
-                                                 // (g_engine_params: x its buffer's view, y paths so far, z bounces)  // GALAXY_RT_ENGINE_BOUNCES (default on): hits take the cached light
+                                                 // (g_engine_params: x its buffer's view, y paths so far, z bounces)
 
 // The water draws' clear records (kEvClearDraws, word per draw: roughness in bits 0-15, flags above).
 static const uint kClearGlass = 1u << 16u;   // the engine's: glass or crystal (not mirror glass, not a metal coat)
@@ -78,8 +78,8 @@ static const float kClearF0 = 0.08f;
 static const float kPaintRoughness = 0.2f;
 // A light source's surface as the camera shows it: its colour at most this many times white under the full light. Its
 // light (the table's intensity: a Luma or lamp at 6, the radiance a lamp needs to show on what is near it in daylight)
-// reaches the scene whole; seen at that radiance its surface went white on the tone curve (star bits, coins: owner,
-// washed out). The display range, not the light, is limited.
+// reaches the scene whole; shown at that radiance, star bits and coins would burn white on the tone curve. The display
+// range, not the light, is limited.
 static const float kEmitterShown = 1.5f;
 
 // A light source's or a faint glow's surface as the camera shows it, over its colour (EngineFinalCS's).
@@ -92,9 +92,8 @@ static const float kFireflyRatio = 2.0f;
 // The share of the backdrop's colour (its chroma about its luminance) in the light it sends onto surfaces. A painted
 // sky, like a photograph of one, is far more saturated than a sky's light: the game's blue in linear light holds ten to
 // fifteen times its red, a clear sky's light (CIE clear sky, chromaticity about 0.27, 0.29) two to three times. At its
-// full colour the shade under it went navy and the scene's whites violet (Beach Bowl's sand, Hurry-Scurry's
-// checkerboard, Space Junk's metal: owner, colour loss). Reflections keep the backdrop as it shows (a mirror shows
-// the picture of the sky).
+// full colour the shade under it turns navy and white surfaces violet. Reflections keep the backdrop as it shows (a
+// mirror shows the picture of the sky).
 static const float kSkyLightChroma = 0.4f;
 
 float3 sky_light_colour(float3 radiance)
@@ -122,8 +121,6 @@ float3 safe_light(float3 c)
 {
     return all(c == c) && all(c < 6.0e4f) ? max(c, 0.0f) : float3(0.0f, 0.0f, 0.0f);
 }
-
-// --- G-buffer -----------------------------------------------------------------------------------------------------
 
 struct GSurface {
     bool valid;
@@ -167,7 +164,7 @@ GSurface gb_load(uint view, uint pixel, float4 projection, int2 q)
     return s;
 }
 
-// The full-resolution G-buffer, and the composite's per-pixel normal and de-lighting (g_pixels, as GBufferCS).
+// The full-resolution G-buffer, and the composite's per-pixel normal and de-lighting (g_pixels).
 [numthreads(8, 8, 1)]
 void EngineGBufferCS(uint3 id : SV_DispatchThreadID)
 {
@@ -214,9 +211,9 @@ void EngineGBufferCS(uint3 id : SV_DispatchThreadID)
             const uint draw = draw_flags >> 16u;
             s.draw = draw;
             // A clear surface (crystal, glass, gems) is drawn over or refracting what lies behind it: its pixel is not
-            // its TEV's output, so the painted reflection's share of that output is not its share of the pixel (the
-            // share darkened Melty Molten's crystal cages and the star chips inside them to black). It keeps the
-            // game's colour; the traced specular adds its Fresnel reflection.
+            // its TEV's output, so the painted reflection's share of that output is not its share of the pixel, and
+            // taking it out would darken what shows through to black. It keeps the game's colour; the traced specular
+            // adds its Fresnel reflection.
             const bool clear = ((draw_flags >> 8u) & 15u) == kClearClass;
             s.flags |= clear ? kGbClear : 0u;
             if (!clear && draw < g_tev_info.x && (g_tev.Load(draw * kTevRecordBytes) & 0x80u) != 0u) {
@@ -225,8 +222,8 @@ void EngineGBufferCS(uint3 id : SV_DispatchThreadID)
                 const float3 full = srgb_to_linear(saturate(tev_evaluate_mode(draw, g_tev_info.x, tri, bary, 0u, pass).rgb));
                 const float3 bare =
                     srgb_to_linear(saturate(tev_evaluate_mode(draw, g_tev_info.x, tri, bary, kTevNoEnvironment, pass).rgb));
-                // A luminance ratio: the tint a coloured metal or glass carries in its environment stage stays (per
-                // channel, b72-b77, Bubble Blast's gold star turned silver and its green cages grey).
+                // A luminance ratio, so the tint a coloured metal or glass carries in its environment stage stays (a
+                // per-channel ratio would take it out: gold to silver, green glass to grey).
                 own = luminance(full) > 1e-4f ? saturate(luminance(bare) / luminance(full)) : 1.0f;
                 const float3 white =
                     srgb_to_linear(saturate(tev_evaluate_mode(draw, g_tev_info.x, tri, bary, kTevWhiteEnvironment, pass).rgb));
@@ -234,9 +231,8 @@ void EngineGBufferCS(uint3 id : SV_DispatchThreadID)
                 // bare), at least its own colour's: its hue where that colour is a coloured metal's (gold, copper:
                 // saturated in linear light, as their measured reflectance: gold's blue a third of its red), neutral
                 // where it is a grey metal's warm or cool cast (silver, iron); chrome (bare near black) as the stage
-                // passes it. The bare colour alone was a diffuse colour, dark (b80: Bubble Blast's gold star olive);
-                // white less bare alone lost gold's hue (silver, b77); every hue kept turned Battlerock's grey metal
-                // gold (b81).
+                // passes it. The bare colour alone is a diffuse colour and too dark (gold reads olive); white less bare
+                // alone loses gold's hue; keeping every hue would tint grey metals.
                 const float3 passed = saturate(white - bare);
                 const float bare_peak = max(bare.r, max(bare.g, bare.b));
                 const float saturation = 1.0f - min(bare.r, min(bare.g, bare.b)) / max(bare_peak, 1e-4f);
@@ -264,8 +260,8 @@ void EngineGBufferCS(uint3 id : SV_DispatchThreadID)
                 if (intensity < 1.0f && (g_draws.Load(record + 24u) & kDrawTableStar) == 0u) {
                     // A faintly glowing material (intensity below 1: coins, star chips, Boos, the garden's flowers)
                     // is a surface: lit, shaded and reflecting as any other, its glow (its colour times the
-                    // intensity) added. Shown as a light source at its colour, a coin was a flat sticker (owner: the
-                    // giant ? coin, b82), too bright in a dark stage and dull in a bright one.
+                    // intensity) added. Shown as a light source at its colour, a coin would read as a flat sticker,
+                    // too bright in a dark stage and dull in a bright one.
                     s.flags |= kGbGlow;
                     s.emission = intensity;
                 } else {
@@ -273,8 +269,9 @@ void EngineGBufferCS(uint3 id : SV_DispatchThreadID)
                     // the table's glowing region of its texture (a candle stand's flame, not its wood).
                     s.flags |= kGbEmitter;
                     s.emission = max(intensity, 1.0f);
-                    // Its colour the radiance its light carries (EmitTriangleCS, reference_material: the draw's TEV
-                    // output), not the game's shading of it in the EFB (Bowser's Star Reactor's fireballs: dark discs).
+                    // Its colour is the radiance its light carries (EmitTriangleCS, reference_material: the draw's TEV
+                    // output), not the game's shading of it in the EFB, which can be dark (the Star Reactor's
+                    // fireballs).
                     if ((g_draws.Load(record + 24u) & kDrawTableRecolour) != 0u) {
                         emitted = srgb_to_linear(rgb8(table.x));
                     } else if (draw < g_tev_info.x) {
@@ -287,7 +284,7 @@ void EngineGBufferCS(uint3 id : SV_DispatchThreadID)
         // The texel's albedo: the EFB's colour, the light painted into it and its painted reflection taken out.
         const Texture2D<float4> picture = ResourceDescriptorHeap[engine_view(kEvPicture)];
         const float3 color = srgb_to_linear(saturate(picture.Load(int3(q, 0)).rgb));
-        // Past 1 it keeps its hue (clipping each channel turned the de-lit gold of Dusty Dune's sand peach).
+        // Past 1 it keeps its hue (clipping each channel would shift de-lit golden sand towards peach).
         const float3 lifted = max(color * (delit ? exp(-shading) : 1.0f) * own, 0.0f);
         s.albedo = lifted / max(max(lifted.r, max(lifted.g, lifted.b)), 1.0f);
         if (emitted.x >= 0.0f) {
@@ -296,10 +293,8 @@ void EngineGBufferCS(uint3 id : SV_DispatchThreadID)
         // A metal of a colour no metal has is paint (or a dye coat) over metal: a dielectric. Measured metal
         // reflectances are greyish (silver, aluminium, iron, chrome) or warm (copper, gold, brass: hue about 8 to 60
         // degrees); a strongly teal, blue, green, olive, violet or pure red one reflects as paint does (its colour its
-        // albedo, a clear coat at F0 0.04 over it). As a metal its whole colour was its environment's: Space Junk's
-        // teal platform turned the nebula's violet, the Airship Armada's olive hull the backdrop's navy (b81-b83).
-        // The coat is a lacquer's (kPaintRoughness): at the metal's own roughness Flipswitch's red spiked blocks
-        // showed no shine (owner).
+        // albedo, a clear coat at F0 0.04 over it); as a metal its whole colour would be its environment's. The coat is
+        // a lacquer's (kPaintRoughness): at the metal's own roughness painted blocks show no shine.
         if (s.metallic > 0.0f) {
             const float3 c = metal_colour.x >= 0.0f ? metal_colour : s.albedo;
             const float peak = max(c.r, max(c.g, c.b));
@@ -355,8 +350,6 @@ void EngineGBufferCS(uint3 id : SV_DispatchThreadID)
     gb.Store4(pixel * 32u + 16u, w1);
 }
 
-// --- BRDF ---------------------------------------------------------------------------------------------------------
-
 float3 fresnel_schlick(float3 f0, float cos_theta)
 {
     const float f = pow(1.0f - saturate(cos_theta), 5.0f);
@@ -392,7 +385,7 @@ float3 specular_f0(GSurface s)
 }
 
 // The GGX lobe's alpha for the sun's highlight: at least the sun's disc (g_sun.w, the tangent of its radius) wide. A
-// polished surface reflects the disc, not a point; the lobe at its own alpha met the sampled direction in a spike.
+// polished surface reflects the disc, not a point; at its own alpha the lobe meets the sampled direction in a spike.
 float sun_alpha(float alpha)
 {
     return max(alpha, g_sun.w);
@@ -468,8 +461,6 @@ float3 ggx_vndf(float3 n, float3 v, float alpha, float2 u)
     return f[0] * hl.x + f[1] * hl.y + f[2] * hl.z;
 }
 
-// --- Visibility and the light at a ray's hit ----------------------------------------------------------------------
-
 // A shadow ray from `origin` to `target` (stopping `margin` short of it): true when nothing the scene's lights are
 // blocked by lies between.
 bool engine_visible(float3 origin, float3 target, float margin, uint salt)
@@ -493,8 +484,7 @@ bool engine_visible(float3 origin, float3 target, float margin, uint salt)
         }
         const bool late_hit = query.CandidateInstanceID() != 0u;
         const uint hit = late_hit ? 0u : g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u);
-        // A clear solid (its draws carry no shadow for the lighting before the engine) stops kClearShadow of the
-        // light (b81: crystals cast none).
+        // A clear solid stops kClearShadow of the light (the lighting without the engine gives its draws no shadow).
         const bool clear = !late_hit && ((hit >> 8u) & 15u) == kClearClass;
         if (late_hit ||
             (clear ? card_hash(query.CandidatePrimitiveIndex(), salt ^ 0x5BD1E995u) < kClearShadow
@@ -522,16 +512,15 @@ float3 sun_direction_sample(float2 u)
     return sun_direction_spread(u, g_sun.w);
 }
 
-// --- Light under water (kEngineWaterLight) ------------------------------------------------------------------------
-// Clear ocean water's diffuse attenuation per eye unit (about a centimetre: Mario stands 160 tall), red, green, blue:
-// Jerlov type I, Kd = 0.35, 0.065, 0.019 per metre at 650, 550, 450 nm. The beam's own attenuation (c = 0.36, 0.08,
-// 0.03) left 36 metres down navy (b97, Beach Bowl's deep fish): the light scattered out of the beam still goes down.
-// Half of it: the game's water is drawn clearer than the sea (owner: under water the blue too strong).
+// Light under water (kEngineWaterLight): clear ocean water's diffuse attenuation per eye unit (about a centimetre:
+// Mario stands 160 tall), red, green, blue: Jerlov type I, Kd = 0.35, 0.065, 0.019 per metre at 650, 550, 450 nm,
+// halved because the game's water is drawn clearer than the sea. Kd, not the beam attenuation (c = 0.36, 0.08, 0.03):
+// the light scattered out of the beam still goes down.
 static const float3 kWaterAttenuation = float3(0.00175f, 0.000325f, 0.000095f);
-// The share of the water's hue shift the light under it keeps (the rest dims it evenly): at the sea's own the
-// game's lagoons went teal and their depths cyan-blue (owner, b97-b98: tone the blue down).
+// The share of the water's hue shift the light under it keeps (the rest dims it evenly); the sea's full shift turns
+// shallow water teal and its depths cyan-blue.
 static const float kWaterHue = 0.35f;
-// A slight warm balance on the light under water, its luminance kept (owner: add a little yellow).
+// A slight warm balance on the light under water, its luminance kept.
 static const float3 kWaterWarm = float3(1.05f, 1.01f, 0.86f) / dot(float3(1.05f, 1.01f, 0.86f), float3(0.2126f, 0.7152f, 0.0722f));
 // Forward scattering widens the sun's disc with the depth: tan 0.5 degrees per metre (100 units), at most 10 degrees.
 static const float kWaterSpread = 0.0000873f;
@@ -635,8 +624,6 @@ Hit engine_trace(float3 origin, float3 direction, uint salt)
     return h;
 }
 
-// --- The lights: emitting triangles, the game's point lights, the star core -----------------------------------------
-
 struct LightSample {
     float3 y;          // eye position on the emitter (a sphere light's: on its shadow sphere)
     float3 face;       // its face's normal (eye; a sphere light's: outward)
@@ -646,10 +633,10 @@ struct LightSample {
     float area;        // a triangle's area (its near field: engine_light_target)
 };
 
-// The game's point lights (g_points: its lamps, the Octoombas' bulbs; the old lighting's g_point_light weight) and the
-// Comet Observatory's star core light a surface as the game's falloff has it: colour x weight x n.l x h^2 / (h^2 + d^2)
-// (h the light's half distance; the on-axis light of a glowing disc of radius h and radiance colour x weight), what
-// the lighting before the engine showed. Their shadows are traced to a point on the hemisphere of a sphere of the
+// The game's point lights (g_points: its lamps, the Octoombas' bulbs; weight g_point_light) and the Comet
+// Observatory's star core light a surface as the game's falloff has it: colour x weight x n.l x h^2 / (h^2 + d^2)
+// (h the light's half distance; the on-axis light of a glowing disc of radius h and radiance colour x weight), as the
+// lighting without the engine shows them. Their shadows are traced to a point on the hemisphere of a sphere of the
 // light's radius (g_point_radius: a lamp's 60 units, the core's ball) that faces the surface: soft, never through the
 // lamp's own body or the core's ball. Chosen among the emitting triangles in proportion to 4 pi^2 h^2 L (a sphere of
 // radius h and radiance L sends that).
@@ -852,9 +839,9 @@ float3 engine_hit_radiance(Hit h, float3 origin, float3 direction, bool emission
     const float3 start = lifted + ng * (0.2f + abs(x.z) * 4e-4f);
     // Every bounce after the first: a hit the picture showed when this slot's lighting last ran (its sample in
     // g_final, the same surface by depth) sends its whole diffuse light then (direct and indirect, a radiance cache)
-    // in place of the direct light alone. One bounce left shade lit only by the sky that reaches it: Bowser's Star
-    // Reactor's walls near black, Beach Bowl's shaded sand navy (b81 against the game's picture). Light sources keep
-    // their own emission; the series converges as each bounce takes the albedo (below 1).
+    // in place of the direct light alone. With one bounce, shade is lit only by the sky that reaches it (enclosed walls
+    // near black, shaded sand navy). Light sources keep their own emission; the series converges as each bounce takes
+    // the albedo (below 1).
     if (!any(emission > 0.0f) && any(albedo > 0.0f) && (g_engine_info.x & kEngineBounceCache) != 0u &&
         x.z < -g_near) {
         const float2 q = eye_to_pixel(g_projection, g_viewport, x);
@@ -896,8 +883,7 @@ float3 engine_hit_radiance(Hit h, float3 origin, float3 direction, bool emission
     return albedo * m + (emission_wanted ? emission : float3(0.0f, 0.0f, 0.0f));
 }
 
-// --- ReSTIR DI (the lights) ---------------------------------------------------------------------------------------
-
+// ReSTIR DI reservoir of a light sample.
 struct Reservoir {
     LightSample s;
     float w_sum;
@@ -969,7 +955,7 @@ Reservoir reservoir_load(uint view, uint index)
     r.s.y = transform(g_to_eye, asfloat(r0.xyz));
     r.s.face = normalize(rotate3(g_to_eye, unpack_normal(r1.x)));
     r.s.radiance = float3(f16tof32(r1.y), f16tof32(r1.y >> 16u), f16tof32(r1.z));
-    // Its area kept: reused without it, a triangle's near field (engine_light_target) went unbounded next to the light.
+    // The area bounds a reused triangle's near field (engine_light_target) next to the light.
     r.s.beam = float(r1.w & 0xFFFFu);
     r.s.sides = float((r1.w >> 16u) & 3u);
     r.s.area = area_decode(r1.w >> 18u);
@@ -1053,8 +1039,8 @@ void EngineDirectCS(uint3 id : SV_DispatchThreadID)
     // The lights (emitting triangles, the game's point lights, the star core): candidates by power.
     const float tris = g_tev_info.z != 0u ? max(emit_element(0u).y, 0.0f) : 0.0f;
     const float spheres = spheres_total();
-    // Eight candidates (sixteen at High): at four, the Observatory's star core and its dozens of lamps left the floor's
-    // direct light speckled, and the denoiser spread the speckle into blotches (b83, direct-light view).
+    // Eight candidates (sixteen at High): with four, a scene of many lamps (the Observatory's star core and its dozens
+    // of lamps) leaves the direct light speckled, and the denoiser spreads the speckle into blotches.
     const uint candidates = (g_flags & 1024u) != 0u ? 16u : 8u;
     if (tris + spheres > 0.0f) {
         [loop] for (uint k = 0u; k < candidates; ++k) {
@@ -1144,8 +1130,7 @@ void EngineDirectSpatialCS(uint3 id : SV_DispatchThreadID)
     direct.Store4(pixel * 16u, uint4(pack_half2(sum.r, sum.g), (d.y & 0xFFFF0000u) | f32tof16(sum.b), d.z, d.w));
 }
 
-// --- ReSTIR GI (half resolution) ----------------------------------------------------------------------------------
-
+// ReSTIR GI reservoir of an indirect sample (half resolution).
 struct GiReservoir {
     float3 x;          // the sample's hit (eye)
     float3 hn;         // its normal (eye)
@@ -1257,8 +1242,8 @@ void EngineIndirectCS(uint3 id : SV_DispatchThreadID)
     gi_update(r, x, hn, radiance, target, target * kPi / cos_theta, 1.0f, seed);
     uint prev_pixel;
     if (engine_reproject(s.p, s.n, prev_pixel)) {
-        // The last frame's final reservoir of the half-resolution sample covering that pixel.
-        // The last frame's temporal reservoir (not its spatially reused one: their gain compounded into blobs).
+        // The last frame's temporal reservoir of the half-resolution sample covering that pixel (not its spatially
+        // reused one: reusing that compounds the gain into blobs).
         const uint2 hp = uint2(prev_pixel % g_target_size.x, prev_pixel / g_target_size.x) / 2u;
         GiReservoir previous = gi_load(engine_view(kEvGiPrev), min(hp.y, half_size.y - 1u) * half_size.x +
                                                                     min(hp.x, half_size.x - 1u));
@@ -1355,8 +1340,6 @@ void EngineIndirectSpatialCS(uint3 id : SV_DispatchThreadID)
     out_light.Store2(index * 8u, uint2(pack_half2(m.r, m.g), f32tof16(m.b) | (1u << 31u)));
 }
 
-// --- Specular -----------------------------------------------------------------------------------------------------
-
 [numthreads(8, 8, 1)]
 void EngineSpecularCS(uint3 id : SV_DispatchThreadID)
 {
@@ -1395,8 +1378,6 @@ void EngineSpecularCS(uint3 id : SV_DispatchThreadID)
     result = safe_light(result);
     out_spec.Store2(pixel * 8u, uint2(pack_half2(result.r, result.g), pack_half2(result.b, min(distance, 6.0e4f))));
 }
-
-// --- Denoiser -----------------------------------------------------------------------------------------------------
 
 // The half-resolution indirect light at a full-resolution pixel: its four nearest half-resolution samples weighed by
 // depth and normal against this surface.
@@ -1458,7 +1439,7 @@ void EngineTemporalCS(uint3 id : SV_DispatchThreadID)
     specular = safe_light(specular);
     // The neighbourhood's specular range (clamping the history), and the brightest of the 8 neighbours' direct light
     // and specular: a new sample above them is a firefly (one light sample's spike), lowered to them before it enters
-    // the history (spread by the a-trous's variance and kept by the history, spikes grew into blobs: b58-b72).
+    // the history; otherwise the a-trous's variance spreads it and the history keeps it, growing spikes into blobs.
     float3 lo = specular;
     float3 hi = specular;
     float top_direct = 0.0f;
@@ -1482,9 +1463,8 @@ void EngineTemporalCS(uint3 id : SV_DispatchThreadID)
     }
     {
         // Past kFireflyRatio x the brightest neighbour: a small light is found by a few pixels first (4 candidates a
-        // frame by power) and spatial reuse spreads it over the next frames; lowered to the neighbours' level outright,
-        // those first finds never entered the history and a Luma's or a bulb's light pool stayed away (owner: lights
-        // that do not reach).
+        // frame by power) and spatial reuse spreads it over the next frames. Lowered to the neighbours' level outright,
+        // those first finds would never enter the history, and a Luma's or a bulb's light pool would never appear.
         const float3 own_direct = safe_light(float3(f16tof32(dv.x), f16tof32(dv.x >> 16u), f16tof32(dv.y)));
         const float l = luminance(own_direct);
         const float cap_direct = kFireflyRatio * top_direct;
@@ -1632,8 +1612,7 @@ void EngineAtrousCS(uint3 id : SV_DispatchThreadID)
     float ws_sum = 0.0f;
     float spec_power = lerp(128.0f, 8.0f, s.roughness);
     // A short diffuse history (a moving character, a disocclusion) borrows from neighbours of less like normals: n.n^2
-    // at one frame to n.n^64 from eight (Mario's gloves kept their raw indirect noise mid-dash under n.n^64 and ^8:
-    // b70, b76).
+    // at one frame to n.n^64 from eight. A fixed n.n^64 (or ^8) leaves a moving character's raw indirect noise.
     const float history = f16tof32(engine_buffer(kEvHistDiffuse).Load(pixel * 16u + 4u) >> 16u);
     const float normal_power = lerp(2.0f, 64.0f, saturate((history - 1.0f) / 7.0f));
     // A reflection spreads no wider than its lobe: a polished surface's (one ray along a near-mirror direction, a sharp
@@ -1679,12 +1658,10 @@ void EngineAtrousCS(uint3 id : SV_DispatchThreadID)
     }
 }
 
-// --- Clear surfaces (glass, crystal) -------------------------------------------------------------------------------
-
 // The light a glass reflection's ray brings back from its hit: emission plus its colour under the sun (one shadow ray,
 // opaque traversal: alpha cards count as solid) and the open sky (its irradiance harmonics: no ray). Light from the
 // emitters and the bounce are left to the opaque surfaces' own reflections: the glass shows them faintly at F. Cheap
-// and bounded per glass pixel (the full hit lighting under every crystal of Dusty Dune and Space Junk hung the GPU).
+// and bounded per glass pixel: the full hit lighting under a screen full of crystals can hang the GPU.
 float3 clear_hit_radiance(Hit h, float3 origin, float3 direction)
 {
     if (!h.surface) {
@@ -1743,8 +1720,8 @@ struct ClearHit {
 };
 
 // The nearest clear surface (the engine's glass) along the camera ray between `t_min` and `t_max` (none when the
-// span is empty: a ray whose start passes its end is undefined, and hung the GPU where glass lies on the surface
-// behind it, Dusty Dune b41).
+// span is empty: a ray whose start passes its end is undefined and can hang the GPU where glass lies on the surface
+// behind it).
 ClearHit clear_trace(float3 dir, float t_min, float t_max)
 {
     ClearHit h;
@@ -1763,8 +1740,8 @@ ClearHit clear_trace(float3 dir, float t_min, float t_max)
     ray.Direction = dir;
     ray.TMin = t_min;
     ray.TMax = t_max;
-    // The nearest surface of the water window (opaque traversal: the closest hit alone; reporting every candidate
-    // through Dusty Dune's layered sand surfaces ran past the GPU's watchdog), the engine's when it is glass.
+    // The nearest surface of the water window, the engine's when it is glass. Opaque traversal, the closest hit alone:
+    // reporting every candidate through layered surfaces (Dusty Dune's sand) can run past the GPU's watchdog.
     RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
     query.TraceRayInline(water, RAY_FLAG_NONE, 0xFFu, ray);
     query.Proceed();
@@ -1782,10 +1759,10 @@ ClearHit clear_trace(float3 dir, float t_min, float t_max)
 }
 
 // What a glass wall at `h` (camera ray `dir`) sends towards the camera by reflection: its sky, scene and emitters along
-// a GGX visible-normal ray at the table's roughness (the hit lit as the engine's specular hits; the front wall only:
-// the far wall's reflection looks into what the glass holds, Dusty Dune's hourglass sand, hundreds of cards a ray, past
-// the GPU's watchdog, for a reflection its front wall dims), and the sun's highlight behind a shadow ray; out: the
-// wall's transmittance.
+// a GGX visible-normal ray at the table's roughness (the hit lit as the engine's specular hits), and the sun's
+// highlight behind a shadow ray; out: the wall's transmittance. Only the front wall traces a ray: the far wall's
+// reflection looks into what the glass holds (an hourglass's sand: hundreds of cards a ray, past the GPU's watchdog),
+// for a reflection the front wall dims.
 float3 clear_wall(ClearHit h, float3 dir, uint pixel, uint layer, out float transmit)
 {
     const ByteAddressBuffer positions = ResourceDescriptorHeap[engine_view(kEvWaterPositions)];
@@ -1905,12 +1882,12 @@ void EngineClearCS(uint3 id : SV_DispatchThreadID)
     engine_buffer(kEvClear).Store4(pixel * 16u, result);
 }
 
-// --- The converged reference (GALAXY_RT_ENGINE_REFERENCE) -------------------------------------------------------
-// The engine's diffuse light (m) at a surface as one unbiased path: at every vertex the sun and the lights behind
-// shadow rays (as the direct light: the emitters' light by next-event estimation only), the sky where the cosine ray
-// leaves the scene, the hit's albedo (reference_material, as the engine's hits) carried on; Russian roulette from the
-// third bounce. No reservoirs, no history, no radiance cache, no denoiser: the same scene, materials and light, so
-// what the real-time passes add or lose shows against it ([rt-reference-engine], EngineFinalCS).
+// The converged reference (GALAXY_RT_ENGINE_REFERENCE): the engine's diffuse light (m) at a surface as one unbiased
+// path. At every vertex the sun and the lights behind shadow rays (as the direct light: the emitters' light by
+// next-event estimation only), the sky where the cosine ray leaves the scene, the hit's albedo (reference_material, as
+// the engine's hits) carried on; Russian roulette from the third bounce. No reservoirs, no history, no radiance cache,
+// no denoiser: the same scene, materials and light, so what the real-time passes add or lose shows against it
+// ([rt-reference-engine], EngineFinalCS).
 float3 reference_path(float3 p, float3 n, float3 ng, bool card, inout uint seed, uint salt)
 {
     float3 total = float3(0.0f, 0.0f, 0.0f);
@@ -2015,16 +1992,15 @@ void EngineFinalCS(uint3 id : SV_DispatchThreadID)
         z = s.p.z;
         if ((s.flags & kGbEmitter) != 0u) {
             // A light source shows what it sends: its emitted colour (the G-buffer's: the draw's TEV output at full
-            // light, the table's for a recoloured one) times its radiance, at most kEmitterShown, past the composite's
-            // albedo (the picture's colour less its painted reflection: an environment-mapped lamp kept almost none of
-            // it, the Observatory's entrance stars at own 0.003 showing khaki reflections only, b90).
+            // light, the table's for a recoloured one) times its radiance, at most kEmitterShown, rather than the
+            // composite's albedo (the picture's colour less its painted reflection), of which an environment-mapped
+            // lamp keeps almost nothing.
             specular = s.albedo * (min(s.emission, kEmitterShown) * exposure);
             whole = specular;
         } else if ((s.flags & kGbClear) != 0u) {
             // A clear solid shows the scene behind it as the game refracted it (its picture is the lit, exposed scene
-            // through it: the albedo view, d84, shows Melty Molten's crystals and their star chips as the game does),
-            // passed at 1 - F; lit again by the light at its own surface it went black (b77-b81). Its reflection is
-            // the traced specular's.
+            // through it), passed at 1 - F; lighting it again at its own surface would darken it to black. Its
+            // reflection is the traced specular's.
             const uint4 a = engine_buffer((g_engine_info.w & 1u) == 0u ? kEvAtrousA : kEvAtrousB).Load4(pixel * 16u);
             diffuse = (1.0f - kClearF0).xxx;
             specular = float3(f16tof32(a.z), f16tof32(a.z >> 16u), f16tof32(a.w)) * exposure;
@@ -2064,8 +2040,8 @@ void EngineFinalCS(uint3 id : SV_DispatchThreadID)
             if ((s.flags & kGbGlow) != 0u) {
                 // Its glow over its lit colour, in the colours the game paints it (the picture's: a coin's gold
                 // gradient and its embossed ?), in the specular term (the composite does not take it times the albedo,
-                // which for a metal is its painted reflection's remainder). In the metal's reflectance, one colour,
-                // a coin was a flat disc (owner: the ? coin, b90).
+                // which for a metal is its painted reflection's remainder). In the metal's reflectance alone, one
+                // colour, a coin would read as a flat disc.
                 const Texture2D<float4> painted = ResourceDescriptorHeap[engine_view(kEvPicture)];
                 specular += srgb_to_linear(saturate(painted.Load(int3(q, 0)).rgb)) * (s.emission * exposure);
             }

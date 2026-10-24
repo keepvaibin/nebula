@@ -7,6 +7,8 @@
 //   ByteAddressBuffer g_tev       per draw a 128-byte record (RtTevMaterial, rt_types.h), then the stages
 //   ByteAddressBuffer g_tri_uv    per triangle kTriUvStride bytes (ray_tracing.hlsl GeometryCS)
 //   SamplerState g_wrap_point
+//   float4 g_up                   the de-light maps' switch (g_up.w > 0; rt_lighting.hlsl)
+//   float kDelightRange           the de-light maps' range (rt_lighting.hlsl)
 
 static const uint kTevRecordBytes = 128u;
 static const uint kTevStageBytes = 32u;
@@ -131,8 +133,8 @@ static const uint kTevNoEnvironment = 4u; // tev_evaluate_mode: its environment 
 static const uint kTevWhiteEnvironment = 8u;  // tev_evaluate_mode: its environment maps white (its reflectance)
 
 // Draw `draw`'s TEV output at triangle `tri`, barycentrics `b` (display-encoded RGBA, 0-1), and whether its alpha
-// passes the draw's alpha compare. A draw without a record (`count` records) is white and passes. `mode`:
-// kTevGreyTexture, kTevBakedColours (not de-baked: the light the game baked in).
+// passes the draw's alpha compare. A draw without a record (`count` records) is white and passes. `mode`: the
+// kTev* flags above.
 float4 tev_evaluate_mode(uint draw, uint count, uint tri, float2 b, uint mode, out bool alpha_pass)
 {
     alpha_pass = true;
@@ -351,8 +353,6 @@ float4 tev_evaluate_mode(uint draw, uint count, uint tri, float2 b, uint mode, o
     return float4(fragment) / 255.0f;
 }
 
-// Whether triangle `tri` at barycentrics `b` lies in its emitter's glowing region of the material texture (record pad[2]
-// bits 8-31: u0, v0, u1, v1 in 63rds; 0: all of it), at its coordinates there wrapped into the texture.
 // The texture coordinate the table's glowing region is tested at (tev_glows_at), in the region's 0-1 space.
 float2 tev_region_uv(uint draw, uint count, uint tri, float2 b)
 {
@@ -367,6 +367,8 @@ float2 tev_region_uv(uint draw, uint count, uint tri, float2 b)
     return frac((uv01.xy * (1.0f - b.x - b.y) + uv01.zw * b.x + uv2 * b.y) * asfloat(g_tev.Load2(record + 120u)));
 }
 
+// Whether triangle `tri` at barycentrics `b` lies in its emitter's glowing region of the material texture (record
+// pad[2] bits 8-31: u0, v0, u1, v1 in 63rds; 0: all of it), at its coordinates there wrapped into the texture.
 bool tev_glows_at(uint draw, uint count, uint tri, float2 b)
 {
     if (draw >= count) {
