@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// RtReflections (rt_reflections.h): the reflection and water passes' pipelines, buffers and dispatches.
 #include "galaxy/gx/rt_reflections.h"
 #include "galaxy/gx/render_config.h"
 
@@ -268,13 +269,12 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
                         std::clamp(v[3], 0.0f, 1.0f), std::clamp(v[4], 0.0f, 1.0f)};
     };
     materials_ = {};
-    // The game's own shading of its shiny surfaces carries a reflection (its environment maps). Physical light takes
-    // it out (GBufferCS, the per-pixel record's share) and the traced reflection screens over what remains at full
+    // The game's own shading of its shiny surfaces carries a reflection (its environment maps). Physical light takes it
+    // out (EngineGBufferCS, the per-pixel record's share) and the traced reflection screens over what remains at full
     // strength (cover 0); GALAXY_RT_PAINTED_REFLECTION=1 keeps the painted one, the traced one at half strength over
-    // it. The table's metals (bare metal, class 8) are their reflection: the traced one takes the
-    // painted one's place (cover 1) where it is known, the game's own colour where it is not (ReflectTraceCS),
-    // so the lighting's shade never dulls the chrome (screened over it at half strength, Battlerock's discs did
-    // not change). Environment maps the table does not name (penguins, glassy domes) stay screened.
+    // it. The table's bare metals (class 8) look like their reflection: the traced one takes the painted one's place
+    // (cover 1) where it is known, the game's own colour where it is not (ReflectTraceCS), so the lighting's shade
+    // never dulls the chrome. Environment maps the table does not name (penguins, glassy domes) stay screened.
     // Translucent water is a surface of water (F0 0.02): little reflection looking down, most of it
     // at grazing angles.
     materials_[0] = material("GALAXY_RT_REFLECT_DIFFUSE", {0.6f, 0.04f, 0.0f, 0.0f, 0.0f});
@@ -289,24 +289,18 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     materials_[4] = material("GALAXY_RT_REFLECT_WATER", {0.04f, 0.25f, 1.0f, 0.0f, 0.8f});
     // A calm, glassy surface (roughness 0.03) of water, F0 0.02 (n 1.333): its Fresnel reflects 2 % looking straight
     // down, 6 % at 60 degrees from the normal, 21 % at 75, 61 % at 85 and all of it at grazing angles, so the near water
-    // shows its body and seabed and the far water mirrors the islands, palms and sky; cover 1: the reflection takes the
+    // shows its body and seabed and the far water mirrors the islands, palms and sky. Cover 1: the reflection takes the
     // place of that share of the water's own light (L = F reflected + (1 - F) body). The sky's part is never brighter
-    // than the water (WaterTraceCS), so nothing bleaches. F0 0.2-0.5 with cover 0.3-0.6 by quality (builds 55-102) laid
-    // a third to a half of the bright surroundings over water seen from above: the near lagoon turned milky once the
-    // water pass ran again (b103, Beach Bowl), and the waves' glints (scaled by F0) showed as glitter.
+    // than the water (WaterTraceCS), so nothing bleaches. A higher F0 or a partial cover lays the bright surroundings
+    // over water seen from above, turning it milky, and the waves' glints (scaled by F0) show as glitter.
     materials_[kWaterClass] = material("GALAXY_RT_WATER", {0.03f, 0.02f, 1.0f, 0.0f, 1.0f});
     materials_[kWaterClass + 1u] = materials_[kWaterClass];
-    // Crystals, ice, gems and glass (named in rt_surfaces.cpp): clear dielectric, its reflection
-    // white and Fresnel-weighted.
-    // A diamond's F0 (n 2.42: ((n - 1) / (n + 1))^2 = 0.17) and cover 1, the physical split: the reflection takes F of
-    // the colour, 17 % face on and nearly all of it at grazing angles; the rest is the game's own look of the gem (what
-    // passes through it and the light it gathers inside, its brilliance). F0 0.45 and cover 0.8 (no material reflects
-    // so much face on) turned Melty Molten's and Freezeflame's crystals into dark mirrors of their surroundings (user:
-    // dull); at 0.25 / 0.4 the glass spheres looked as the game draws them (user: glass and crystal must reflect). Screened
-    // over it at cover 0, the bright canopy only lifted the Observatory fountain's glass into a flat, pale disc (v53a).
-    // F0 0.35 (user: every glass far more reflective; at 0.17 Space Junk's glass spheres and crystal read matte): its
-    // rays that leave the scene keep its painted look (ReflectTraceCS, WaterTraceCS), so a strong mirror never shows a
-    // dark one of empty space.
+    // Crystals, ice, gems and glass (named in rt_surfaces.cpp): clear dielectric, its reflection white and
+    // Fresnel-weighted. Cover 1 is the physical split: the reflection takes F of the colour, the rest is the game's own
+    // look of the gem (what passes through it and the light it gathers inside). F0 0.35 is above a diamond's (n 2.42:
+    // ((n - 1) / (n + 1))^2 = 0.17), at which glass spheres and crystals read matte; much higher turns crystals into
+    // dark mirrors of their surroundings. Its rays that leave the scene keep its painted look (ReflectTraceCS,
+    // WaterTraceCS), so a strong mirror never shows a dark one of empty space.
     materials_[7] = material("GALAXY_RT_REFLECT_CRYSTAL", {0.05f, 0.35f, 1.0f, 0.0f, 1.0f});
     view_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_REFLECT_VIEW", 0.0f), 0.0f, 9.0f));
     history_frames_ =
@@ -332,8 +326,8 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     waves_ = std::clamp(env_float("GALAXY_RT_WAVES", 1.0f), 0.0f, 4.0f);
     draw_trust_ = std::clamp(env_float("GALAXY_RT_REFLECT_DRAW_TRUST", 0.75f), 0.0f, 1.0f);
     sky_trust_ = std::clamp(env_float("GALAXY_RT_REFLECT_SKY_TRUST", 1.0f), 0.0f, 1.0f);
-    // The water body (the game's water darkened with its depth) is off: it lifted whole pictures, not only
-    // the water (Honeyhive RT/game 1.32 with it, 1.00 without, lighting off: measured hha / hr2).
+    // The water body (the game's water darkened with its depth) is off by default: it brightens the whole picture,
+    // not only the water.
     water_cover_ = std::clamp(env_float("GALAXY_RT_WATER_COVER", 0.0f), 0.0f, 1.0f);
     foam_ = std::clamp(env_float("GALAXY_RT_WATER_FOAM", 0.6f), 0.0f, 2.0f);
     shallow_caustics_ = std::clamp(env_float("GALAXY_RT_WATER_SHALLOW_CAUSTICS", 0.6f), 0.0f, 4.0f);
@@ -356,8 +350,8 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
         }
     }
     // Committed resources start zeroed: a new environment memory and captured sky are empty. Kept ones (ray
-    // tracing turned off and on in the stage) hold what the stage has shown: started empty, the reflections took
-    // the sky they had remembered since the stage began from its average instead (Ghostly Galaxy's dome).
+    // tracing turned off and on within a stage) hold what the stage has shown, so the reflections keep the sky they
+    // remember instead of falling back to its average.
     const bool new_memory = memory_.resource == nullptr;
     const bool new_sky = sky_.resource == nullptr;
     if (!create_pipelines(color_format) ||
@@ -572,7 +566,7 @@ bool RtReflections::create_pipelines(DXGI_FORMAT color_format) {
     samplers[1].AddressU = samplers[1].AddressV = samplers[1].AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
     samplers[1].ShaderRegister = 1u;
     // High quality samples the hits' textures from the frame's descriptor heap: shader model 6.6 and
-    // resource binding tier 3 (else the hits off screen stay as before).
+    // resource binding tier 3 (without them the hits off screen are not textured).
     {
         D3D12_FEATURE_DATA_SHADER_MODEL model{D3D_SHADER_MODEL_6_6};
         D3D12_FEATURE_DATA_D3D12_OPTIONS options{};
@@ -1076,8 +1070,8 @@ void RtReflections::trace_water(ID3D12GraphicsCommandList* list, const RtReflect
     }
     const UINT groups_x = (scene.sample_width + 7u) / 8u;
     const UINT groups_y = (scene.sample_height + 7u) / 8u;
-    // The samples' buffers: the opaque pass made them before the engine took its place (it skips it), and the water
-    // pass refused every frame without them (no traced water reflection from then to b103).
+    // The water pass makes the samples' buffers itself: under the engine the opaque pass, which would make them, does
+    // not run.
     if (!ensure_buffers(scene.sample_width * scene.sample_height, groups_x * groups_y, false) ||
         !ensure_water_buffers()) {
         if (log_seq_) {

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// Surface classes of ray-traced draws (rt_surfaces.h) and the GALAXY_RT_MATERIALS census.
 #include "galaxy/gx/rt_surfaces.h"
 
 #include "galaxy/gx/gx_bitfields.h"
@@ -99,8 +100,8 @@ RtSurface classify_rt_surface(const VertexShaderKey& vs, const PixelShaderKey& p
 }
 
 RtSurfaceClass rt_named_class(std::string_view name, RtSurfaceClass gx) noexcept {
-    // Name fragments of the game's clear materials (case-insensitive), from the [rt-material]
-    // census (STATUS.md): environment-mapped or lit, they are dielectrics, not metal.
+    // Name fragments (case-insensitive) of the game's clear materials: environment-mapped or glossy in the GX state,
+    // they are dielectrics, not metal.
     static constexpr std::string_view kCrystal[] = {"crystal", "ice", "gem", "glass", "jewel", "diamond", "bubble"};
     if (gx != RtSurfaceClass::Metal && gx != RtSurfaceClass::Glossy) {
         return gx;

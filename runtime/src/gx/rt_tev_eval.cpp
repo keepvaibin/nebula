@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// The GX TEV program evaluated on the CPU (rt_tev_eval.h).
 #include "galaxy/gx/rt_tev_eval.h"
 
 #include <algorithm>

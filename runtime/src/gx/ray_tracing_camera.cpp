@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// SceneRayTracer: the camera (rt_camera.hlsl). While ray tracing runs, the scene layer draws into the renderer's HDR
-// scene EFB; at the scene's end the camera turns its light into the RGBA8 EFB's picture: bloom from the light itself
+// SceneRayTracer's camera (rt_camera.hlsl): turns the HDR scene EFB's light into the RGBA8 EFB's picture with bloom
 // and the tone curve. RendererD3D12::begin_hdr_scene / end_hdr_scene swap the EFBs.
 #include "galaxy/gx/ray_tracing.h"
 
@@ -47,8 +46,8 @@ constexpr std::uint32_t kCameraPhysical = 1u;
 constexpr std::uint32_t kCameraAces = 2u;
 constexpr std::uint32_t kCameraClip = 4u;
 constexpr std::uint32_t kNoLevel = 0xFFFFFFFFu;
-// The pyramid's levels: the coarsest a 64th of the picture's side (at 1280 pixels, 20: a blur about a fifth of the
-// picture wide).
+// Bloom pyramid levels: the coarsest is a 64th of the picture's side (20 texels at 1280 pixels, a blur about a fifth of
+// the picture wide).
 constexpr std::uint32_t kCameraLevels = 6u;
 
 float env_value(const char* name, float fallback) {
@@ -88,8 +87,8 @@ bool SceneRayTracer::create_camera_pipelines(DXGI_FORMAT scene_format, DXGI_FORM
     camera_bloom_ = std::clamp(env_value("GALAXY_RT_CAMERA_BLOOM", 0.04f), 0.0f, 1.0f);
     camera_tone_ = static_cast<std::uint32_t>(std::clamp(env_value("GALAXY_RT_TONEMAP", 0.0f), 0.0f, 2.0f));
     camera_shafts_ = std::clamp(env_value("GALAXY_RT_CAMERA_SHAFTS", 1.0f), 0.0f, 8.0f);
-    // The picture's colour and depth views (t0, t1: the conversion table); the pyramid's levels down and up (u0, u1)
-    // and up again (t2).
+    // The picture's colour and depth views (t0, t1: the renderer's EFB conversion table); the pyramid's down and up
+    // levels (u0, u1) and the up levels again for the final draw (t2).
     D3D12_DESCRIPTOR_RANGE picture{};
     picture.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     picture.NumDescriptors = 2u;
@@ -262,10 +261,10 @@ bool SceneRayTracer::camera_finish(ID3D12GraphicsCommandList* list, D3D12_GPU_DE
         c.bloom = camera_bloom_;
         c.from[0] = levels[0].width;
         c.from[1] = levels[0].height;
-        // The sun's shafts, from a sun the sky shows in front of the camera (on the picture or off it), into the
-        // downward pyramid's first texels.
+        // The sun's shafts go into the downward pyramid's first texels. They start from the disc the sky shows in front
+        // of the camera (sun_visible, on the picture or off it), not from the light's direction, which may be lifted
+        // over the player's horizon.
         const LightSlot* const slot = light_slot_ >= 0 ? &light_slots_[static_cast<unsigned>(light_slot_)] : nullptr;
-        // From the disc the sky shows (sun_visible), not the light's direction (lifted over the player's horizon).
         if (slot != nullptr && slot->sun_shown && camera_shafts_ > 0.0f && slot->sun_visible[2] < -0.05f &&
             slot->width == width && slot->height == height) {
             const std::array<float, 4>& pr = slot->view.projection;
@@ -277,8 +276,7 @@ bool SceneRayTracer::camera_finish(ID3D12GraphicsCommandList* list, D3D12_GPU_DE
             const float stage = stage_sun_ != nullptr && stage_sun_->shafts >= 0.0f ? stage_sun_->shafts : 1.0f;
             c.sun[0] = vp[0] + (ndc_x + 1.0f) * 0.5f * vp[2];
             c.sun[1] = vp[1] + (1.0f - ndc_y) * 0.5f * vp[3];
-            // GALAXY_RT_LOG_SUN=1 (diagnostics): where the shafts' sun falls on the picture, every 120 frames (the
-            // traced light's direction, eye space: the same vector lights the scene).
+            // GALAXY_RT_LOG_SUN=1: logs the shafts' sun (eye space) and where it falls on the picture every 120 frames.
             static const bool log_sun = env_value("GALAXY_RT_LOG_SUN", 0.0f) != 0.0f;
             static std::uint32_t logged = 0u;
             if (log_sun && (logged++ % 120u) == 0u) {

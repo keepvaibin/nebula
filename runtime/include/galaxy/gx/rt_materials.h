@@ -1,39 +1,41 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-// The ray tracer's material and light table: textures named by their texture-pack key (XXH64 of
-// the base level, as community texture packs name them) carry a surface (class, roughness,
-// metalness) and, for light sources, an emission: a point or spot light at the object (Lumas, star
-// bits, fire and ice enemies, a boss's glowing weak spot, a headlamp) or light from the surface
-// itself to what sees it (lava, magma). The table holds hashes and numbers only, no game data.
+// The ray tracer's material and light table. Rows are keyed by texture-pack hash (XXH64 of the base level, as
+// community texture packs name textures) and give a surface (class, roughness, metalness) and, for light sources, an
+// emission: a point or spot light at the object (Lumas, star bits, a headlamp) or light from the surface itself
+// (lava, magma). The table holds hashes and numbers only, no game data.
 //
-// Files: GALAXY_RT_MATERIALS_FILE (several separated by ';'), else rt-materials.tsv and then
-// rt-materials-lights.tsv beside the executable. Tab-separated, each with a header naming its
-// columns:
-//   hash  class  roughness  metallic  r  g  b  intensity  range  pulse  cone  shadow  (others ignored)
-// A later row for the same texture (in the same or a later file) replaces only the fields it fills,
-// so a lights file can carry emissions alone over the surfaces file.
-// hash: a texture-pack name (tex1_<w>x<h>[_m]_<16 hex>_<format>) or the 16 hex digits alone.
-// class: '+'-joined tokens. Surfaces: diffuse, glossy, metal, glass, crystal, ice, water, foliage,
-// fabric, skin, unlit, sky, particle (never traced geometry or water). Lights: emitter (point light; a spot light with a cone),
-// emissive-area (area light), tint (the emission takes the colour the draw shows: Luma and star-bit
-// colours live in the game's colour registers, not in the shared texture), strip (a long emitter, a power cable: a
-// light per 120-unit stretch along it instead of one for the whole object). helper: a lookup texture
-// (environment, indirect or mask map) that never decides a draw's material. skip: never a light.
-// hide: a light effect the game fakes (a beam, a cone, a flare) that the traced light replaces; not
-// drawn while the ray-traced lighting is on. unlit-only: only the draws the game does not light
-// emit (a lamp's glass beside its lit housing in one texture). painted: its brightness changes are the material's own
-// (a face, lettering, a picture), not painted light: never de-lit (rt_delight.hlsl). traced: a clear surface the
-// engine traces (rt_engine.hlsl EngineClearCS: its reflection and what shows through) whose game draw paints a fake
-// reflection: the draw is not shown under the engine, its geometry still traced. seen: a light source's surface that
-// shows its radiance while its light is the game's own point light there (an Octoomba's bulb): no light of its own.
-// own (first, `material` rows): the row alone, not on top of its texture's (a glass material whose textures the table
-// names particles).
-// roughness: GGX perceptual 0-1; metallic 0-1; r g b: 0-1; intensity: relative to a Luma (1);
-// range: eye units (0: from the intensity); pulse: Hz (0: steady); cone: a spot light's half angle in
-// degrees around the draw's mean normal (0: all around); shadow: 0 or 1; glow: the light source's own
-// surface brightness in the intensity's units, apart from the light it sends (empty: the intensity): an
-// area light's surface brightens by it, a point light's halo takes that share of its colour.
+// Files: GALAXY_RT_MATERIALS_FILE (several separated by ';'), else rt-materials.tsv then rt-materials-lights.tsv
+// beside the executable. Tab-separated, with a header row naming the columns:
+//   hash  class  roughness  metallic  r  g  b  intensity  range  pulse  cone  shadow  glow  stage  region  object
+//   material  (others ignored)
+// A later row for the same texture, in the same or a later file, replaces only the fields it fills, so a lights file
+// can add emissions over the surfaces file.
+//
+// hash: a texture-pack name (tex1_<w>x<h>[_m]_<16 hex>_<format>), the 16 hex digits alone, or `untextured`.
+// class: '+'-joined tokens.
+//   Surfaces: diffuse, glossy, metal, glass, crystal, ice, water, foliage, fabric, skin, unlit, sky, particle (never
+//   traced geometry or water).
+//   Lights: emitter (a point light; a spot light with a cone), emissive-area (an area light), tint (the emission takes
+//   the colour the draw shows, for lights whose colour is in the game's colour registers rather than the shared
+//   texture), strip (a long emitter such as a power cable: one light per 120-unit stretch).
+//   helper: a lookup texture (environment, indirect or mask map) that never decides a draw's material.
+//   skip: never a light.
+//   hide: a light effect the game fakes (a beam, a cone, a flare) that the traced light replaces; not drawn while the
+//   ray-traced lighting is on.
+//   unlit-only: only the draws the game does not light emit (a lamp's glass beside its lit housing in one texture).
+//   painted: its brightness changes are the material's own (a face, lettering, a picture), so it is never de-lit
+//   (rt_delight.hlsl).
+//   traced: a clear surface the engine traces (rt_engine.hlsl EngineClearCS) whose game draw paints a fake
+//   reflection; the draw is hidden under the engine, its geometry still traced.
+//   seen: a light source's surface that shows its radiance while the game's own point light there is its light.
+//   own (first, in `material` rows): the row alone, not on top of its texture's row.
+// roughness: GGX perceptual, 0-1. metallic: 0-1. r g b: 0-1. intensity: relative to a Luma (1).
+// range: eye units (0: from the intensity). pulse: Hz (0: steady). cone: a spot light's half angle in degrees around
+// the draw's mean normal (0: all around). shadow: 0 or 1. glow: the light source's own surface brightness in the
+// intensity's units (empty: the intensity); an area light's surface brightens by it, a point light's halo takes that
+// share of its colour.
 
 #include <cstddef>
 #include <cstdint>
@@ -79,8 +81,8 @@ struct RtMaterial {
     float pulse = 0.0f;
     float cone = 0.0f;                    // degrees; 0: a point light
     float glow = -1.0f;                   // < 0: the intensity
-    // An emitter's glowing part of its texture (u0, v0, u1, v1; the table's `region`): Gusty Garden's spin bulbs glow,
-    // their leaves (the same texture's other half) do not.
+    // An emitter's glowing part of its texture (u0, v0, u1, v1; the table's `region`), for a texture that also holds
+    // parts that do not glow.
     float region[4] = {0.0f, 0.0f, 1.0f, 1.0f};
     // Surface relief from the texture's detail under the sun (ground, rock, bark, cloth; none on
     // skin, paint, metal, glass): the strength of the per-pixel normal its brightness gives.
@@ -126,18 +128,20 @@ private:
     std::size_t skipped_ = 0;
 };
 
-// A stage's sun: GALAXY_RT_SUNS_FILE, else rt-suns.tsv beside the executable; tab-separated with a
-// header naming its columns:
-//   stage  source  x  y  z  r  g  b  strength  size  shafts  day  (others ignored)
-// stage: the game's stage name (EggStarGalaxy). source: game (the game's visible sun, else the one its
-// sky shows: as without a row), table (x y z: the world direction towards the sun, where the sky
-// shows it), none (no sun or sky key: the stage's own lights carry it), core (the Comet Observatory: its star core is the
-// light, a sphere of radiance `core` (relative to a white surface under the stage's full light); the key keeps the
-// `strength` share as moonlight in r g b), moon (a night stage's moon: x y z its world direction, the `strength` share
-// of the stage's key in r g b, the camera exposed for the stage's full light). r g b: its colour (0-1); strength: its light relative to the default; size: the disc's
-// radius in degrees; shafts: the light shafts' strength (GALAXY_RT_POST_SHAFTS); day: 1 the day model (the
-// art as drawn with modern shadows), 0 the night model (lit by its lights), between a blend; empty: by the
-// brightness of its sky. Empty fields keep the defaults.
+// A stage's sun: GALAXY_RT_SUNS_FILE, else rt-suns.tsv beside the executable. Tab-separated, with a header row naming
+// the columns:
+//   stage  source  x  y  z  r  g  b  strength  size  shafts  day  ambient  core  (others ignored)
+// stage: the game's stage name (EggStarGalaxy).
+// source: game (the game's visible sun, else the one its sky shows; the same as no row); table (x y z: the world
+//   direction towards the sun, where the sky shows it); none (no sun or sky key: the stage's own lights carry it);
+//   core (the Comet Observatory: its star core is the light, a sphere of radiance `core` relative to a white surface
+//   under the stage's full light; the key keeps the `strength` share as moonlight in r g b); moon (a night stage's
+//   moon: x y z its world direction, the `strength` share of the stage's key in r g b, the camera exposed for the
+//   stage's full light).
+// r g b: its colour (0-1). strength: its light relative to the default. size: the disc's radius in degrees.
+// shafts: the light shafts' strength (times GALAXY_RT_CAMERA_SHAFTS). day: 1 the day model (the art as drawn, with
+//   modern shadows), 0 the night model (lit by its lights), a blend between; empty: from the sky's brightness.
+// ambient: the night model's open-art level (times GALAXY_RT_NIGHT_LEVEL). Empty fields keep the defaults.
 struct RtStageSun {
     enum class Source : std::uint8_t { Game = 0, Table = 1, None = 2, Core = 3, Moon = 4 };
     Source source = Source::Game;
@@ -176,8 +180,8 @@ private:
 [[nodiscard]] std::uint32_t rt_material_identity(std::string_view name) noexcept;
 // The table's material for a material identity (RtMaterialTable::identity_index; 0: none).
 [[nodiscard]] std::uint16_t rt_material_by_identity(std::uint32_t identity) noexcept;
-// The hash a row keyed `untextured` takes: on the stage its row names, surfaces without texture coordinates
-// (vertex-coloured models: the Observatory's power cables) take that row; no texture row can name them.
+// The hash of a row keyed `untextured`: on that row's stage, surfaces without texture coordinates (vertex-coloured
+// models such as the Observatory's power cables) take it, since no texture row can name them.
 inline constexpr std::uint64_t kRtUntexturedHash = 0xFFFFFFFFFFFFFFFFull;
 // The loaded stage's material for its untextured surfaces (0: the stage has no `untextured` row).
 [[nodiscard]] std::uint16_t rt_stage_untextured_material() noexcept;

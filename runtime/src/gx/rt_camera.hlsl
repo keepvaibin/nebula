@@ -1,9 +1,11 @@
-// The camera of the ray-traced picture (ray_tracing_camera.cpp; renderer_d3d12.cpp begin_hdr_scene / end_hdr_scene).
+// SPDX-License-Identifier: GPL-3.0-only
+// The camera of the ray-traced picture (ray_tracing_camera.cpp; renderer_d3d12.cpp begin_hdr_scene / end_hdr_scene):
+// the HDR scene EFB through sun shafts, bloom and a tone curve into the RGBA8 EFB.
 //
 // While ray tracing runs, the scene layer draws into an HDR EFB (RGBA16F): the traced light is unclamped, the game's
 // own draws keep their values (the TEV output is clamped and quantised as on the hardware; their blends add past 1),
 // and every value is sRGB-encoded, past 1 as below it, so the game's blends behave as they do in the RGBA8 EFB. At
-// the scene's end the camera turns it into the RGBA8 EFB's picture, once, as a camera does:
+// the scene's end the camera turns it into the RGBA8 EFB's picture once:
 //
 // - Bloom: the light a lens scatters around what it images. The picture's light (linear) down a pyramid of halving
 //   levels (a 4 x 4 tent each), then back up (each level plus the coarser one upsampled with a 3 x 3 tent of bilinear
@@ -178,8 +180,9 @@ void CameraShaftsCS(uint3 id : SV_DispatchThreadID)
         const float eye_z = -c_depth_params.y / (ndc + c_depth_params.x);
         if (depth <= c_far + 1e-6f || -eye_z > c_sky_distance) {
             const float2 off = at - c_sun.xy;
-            // Each sample's light at most 8 (exposed): 32 jittered steps per quarter texel land on the sun's few
-            // disc pixels or miss them, and the disc's full radiance made dotted streaks across the sky (Good Egg b69).
+            // Each sample's light is capped at 8 (exposed): 32 jittered steps per quarter texel either land on the
+            // sun's few disc pixels or miss them, and the disc's full radiance would draw dotted streaks across the
+            // sky.
             float3 light = picture_light(s);
             light *= min(1.0f, 8.0f / max(dot(light, float3(0.2126f, 0.7152f, 0.0722f)), 1e-4f));
             sum += light * (decay * exp(-dot(off, off) / (reach * reach)));

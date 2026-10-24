@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-// The sun a galaxy's sky shows. The picture capture adds every fourth sky sample's colour into
-// bins by world direction (rt_lighting.hlsl CaptureCS: octahedral, +y the pole); the map keeps
-// each bin's colour as the camera turns. The sun is the map's brightest place where it stands
-// out from the rest of the sky and no place away from it comes close (white clouds spread over
-// the sky do not make one).
-//
-// No Windows/D3D12 includes (unit-tested offline).
+// The sun a galaxy's sky shows, found in a map of the sky's colour by world direction.
+// The picture capture adds every fourth sky sample's colour into octahedral bins (rt_lighting.hlsl CaptureCS, +y the
+// pole); the map keeps each bin's colour as the camera turns. The sun is the map's brightest place where it stands out
+// from the rest of the sky and no place away from it comes close, so white clouds spread over the sky do not make one.
+// No Windows or D3D12 includes, so the unit tests use it without a GPU.
 
 #include <algorithm>
 #include <array>
@@ -84,14 +82,11 @@ struct SkySun {
 
 class SkyMap {
 public:
-    // Bins seen before a sun is looked for; bins 30 degrees or more from it; how far the sun
-    // stands above the rest of the sky (and at least x the rest) and above the brightest bin
-    // away from it, and its least luminance (0-1). Measured (smoke\sky2, sky3): a sky's sun (Good
-    // Egg, within 5 degrees of its BrightSun) 0.86-0.99 with the brightest bin away 0.50-0.51;
-    // skies without one, their brightest bins clouds or horizon haze (Gusty Garden, Honeyhive, the
-    // Observatory's horizon) 0.75-0.97 with bins away within 0.08-0.22 of them. A sun stands no
-    // lower than kMinHeight (world y of its direction; measured suns -0.04 to 0.02, a white place
-    // seen while a stage loaded -0.42).
+    // Bins seen before a sun is looked for; bins 30 degrees or more from it; how far the sun stands above the median
+    // of the rest of the sky (and at least kOverRestScale times it) and above the brightest bin away from it; its
+    // least luminance (0-1). A painted sun peaks near 0.9-1.0 with nothing away from it above about 0.5, while clouds
+    // and horizon haze reach similar peaks with bins away within about 0.2 of them. A sun stands no lower than
+    // kMinHeight (world y of its direction), which rules out bright places seen below the horizon while a stage loads.
     static constexpr unsigned kMinBins = 24u;
     static constexpr unsigned kMinDistantBins = 8u;
     static constexpr float kDistantCos = 0.866f;
@@ -205,12 +200,11 @@ public:
         return sun;
     }
 
-    // The key light of a daylight sky that shows no sun: from the side its light comes from (the
-    // luminance-weighted mean direction over the sphere, directions not seen at the mean of those
-    // seen; kKeyDefaultSide when the sky is even), kKeyHeight above the horizon: an afternoon sun,
-    // whose shadows read. Daylight: the mean luminance of the bins seen; none below kKeyDayStart,
-    // full at kKeyDayFull. Measured (smoke\daykey1 [rt-sky] rest): Honeyhive 0.40-0.45, Gold Leaf
-    // 0.45-0.59, the Observatory's night 0.13-0.24.
+    // The key light of a daylight sky that shows no sun: from the side its light comes from (the luminance-weighted
+    // mean direction over the sphere, unseen directions at the mean of those seen; kKeyDefaultSide when the sky is
+    // even), kKeyHeight above the horizon like an afternoon sun, whose shadows read. Daylight is the mean luminance of
+    // the bins seen: none below kKeyDayStart, full at kKeyDayFull (daylight skies sit around 0.4-0.6, night skies
+    // below 0.25).
     static constexpr float kKeyHeight = 0.766f;   // 50 degrees
     static constexpr float kKeyDayStart = 0.25f;
     static constexpr float kKeyDayFull = 0.4f;

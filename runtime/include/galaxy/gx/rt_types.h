@@ -118,7 +118,7 @@ inline constexpr std::uint32_t kRtDrawClassMask = 0xFu << kRtDrawClassShift;
 inline constexpr std::uint32_t kRtLatePhase = 8u;
 
 // A texture a draw samples: its view in the texture cache's CPU descriptor heap (D3D12_CPU_DESCRIPTOR_HANDLE::ptr) and
-// its resource (ID3D12Resource; null: none). Opaque here so the Vulkan build, which traces nothing yet, shares the type.
+// its resource (ID3D12Resource; null: none), opaque here so the Vulkan build, which does not trace, shares the type.
 // For texture de-lighting its texture-pack key (0: none, an EFB copy) and size.
 struct RtTextureSource {
     std::uintptr_t view = 0;
@@ -129,9 +129,9 @@ struct RtTextureSource {
     std::uint8_t levels = 1;
 };
 
-// Diagnostics for GALAXY_RT_DUMP: the draw's GX projection (A-F), viewport depth range, cull
-// mode and SceneFunction phase; colour channel 0 (XF control word, ambient and material RGBA8)
-// and the first two lights of its mask (index, eye-space position and direction, RGBA8).
+// A draw's state beyond its geometry: its GX projection (A-F), viewport depth range, cull mode and SceneFunction
+// phase; colour channel 0 (XF control word, ambient and material RGBA8) and the first two lights of its mask (index,
+// eye-space position and direction, RGBA8), which GALAXY_RT_DUMP also writes out; then its surface, material and TEV.
 struct RtDrawInfo {
     std::array<float, 6> projection{};
     float min_depth = 0.0f;

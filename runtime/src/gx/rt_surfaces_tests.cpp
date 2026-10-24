@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// classify_rt_surface (rt_surfaces.h) on hand-built GX shader keys.
 #include "galaxy/gx/rt_surfaces.h"
 
 #include <cstdint>

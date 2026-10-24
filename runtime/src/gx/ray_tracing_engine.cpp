@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// SceneRayTracer: the ray tracing engine (rt_engine.hlsl, docs/RAY_TRACING_ENGINE.md). Under physical light with the
-// textured lighting (shader model 6.6) it takes the lighting's place between the emitters and the composite: the
-// G-buffer, ReSTIR DI, ReSTIR GI, GGX specular and the denoiser, into the slot's full-resolution result that the
-// composite and the sub-frames read. Its buffers stay unordered-access (the slot results excepted) and are reached
-// through views in the scene's descriptor block (rt_engine.hlsl g_engine_views).
+// SceneRayTracer's ray tracing engine (rt_engine.hlsl, docs/RAY_TRACING_ENGINE.md): G-buffer, ReSTIR DI and GI, GGX
+// specular and the denoiser, replacing the lighting passes under physical light with the textured lighting.
+// Its buffers stay unordered-access (the slot results excepted) and are reached through views in the scene's
+// descriptor block (rt_engine.hlsl g_engine_views).
 #include "galaxy/gx/ray_tracing.h"
 
 #include "rt_engine_atrous_cs.h"
@@ -34,7 +33,7 @@ enum EngineView : std::uint32_t {
     kEvGBuffer, kEvGBufferPrev, kEvDiTemp, kEvDi, kEvDiPrev, kEvDirect, kEvGiTemp, kEvGi, kEvGiPrev, kEvGiOut,
     kEvSpecular, kEvHistDiffuse, kEvHistDiffusePrev, kEvHistSpecular, kEvHistSpecularPrev, kEvAtrousA, kEvAtrousB,
     kEvSlot, kEvPicture, kEvCount,
-    // The clear-surface pass's (trace_engine_clear), after the trace's.
+    // The clear-surface pass's views (trace_engine_clear) follow the trace's.
     kEvWaterScene = kEvCount, kEvWaterPositions, kEvWaterSurfaces, kEvClearDraws, kEvClear, kEvClearEnd,
 };
 static_assert(kEvClearEnd <= 24u);
@@ -207,7 +206,7 @@ bool SceneRayTracer::engine_prepare(std::uint32_t width, std::uint32_t height, u
                                     std::uint32_t& flags) {
     engine_running_ = false;
     if (!engine_active() || engine_picture_ == nullptr || !ensure_engine_buffers(width, height)) {
-        // A trace without it: its histories are stale when it runs again.
+        // A trace without the engine leaves its histories stale.
         engine_fresh_ = true;
         return false;
     }
@@ -246,7 +245,7 @@ bool SceneRayTracer::engine_prepare(std::uint32_t width, std::uint32_t height, u
         }
     }
     std::copy(std::begin(views), std::end(views), c.views);
-    // Light under water: the last water pass's surfaces (still readable: the next one rebuilds them after this trace).
+    // Light under water reads the last water pass's surfaces; the next water pass rebuilds them after this trace.
     bool water_light = false;
     if (water_light_ && water_light_triangles_ != 0u && water_tlas_ && water_positions_ &&
         water_positions_state_ == D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE) {
@@ -273,8 +272,8 @@ bool SceneRayTracer::engine_prepare(std::uint32_t width, std::uint32_t height, u
     c.info[1] = 0u;
     c.info[2] = slot;
     c.info[3] = 0u;
-    // The converged reference: once a present from GALAXY_RT_REFERENCE_FROM on (a still view), its sums started over
-    // when the picture's size changes.
+    // GALAXY_RT_ENGINE_REFERENCE: a converged reference for a still view, one path per present from
+    // GALAXY_RT_REFERENCE_FROM on; its sums restart when the picture's size changes.
     engine_reference_running_ = false;
     if (engine_reference_ && engine_reference_pso_ && presents_ >= reference_from_ &&
         presents_ != engine_reference_present_) {

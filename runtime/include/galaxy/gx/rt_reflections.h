@@ -47,8 +47,8 @@ struct RtReflectLights {
 };
 
 // Physical light (GALAXY_RT_PHYSICAL) at the hits a reflection ray finds off screen: lit as the lighting lights the
-// scene (rt_lighting.hlsl physical_hit and emitter_light), from the lighting's own inputs. Its buffers are raw views in
-// the frame's descriptor heap (high quality's textured hits; ~0: none).
+// scene, from the lighting's own inputs. Its buffers are raw views in the frame's descriptor heap (high quality's
+// textured hits; ~0: none).
 struct RtReflectPhysical {
     bool on = false;
     std::array<float, 4> sky_radiance{};   // rt_lighting.hlsl g_sky_radiance (w: an overcast sky)
@@ -68,8 +68,8 @@ struct RtReflectPhysical {
 struct RtReflectScene {
     std::array<float, 4> projection{};      // GX projection A-D
     // Physical light: the open sky's ambient as the picture shows it (display-encoded, at the camera's exposure). A
-    // reflection sees the sky at least this bright, as the lighting lights a surface (its backdrop and the ambient's
-    // fill): chrome in space mirrored black where every matte surface took the ambient.
+    // reflection sees the sky at least this bright, the fill the lighting gives every matte surface; without it chrome
+    // in space mirrors black.
     std::array<float, 3> sky_fill{};
     std::array<float, 4> depth{};           // D3D projection [2][2], [2][3]; viewport min, max depth
     std::array<float, 4> viewport{};        // EFB pixels
@@ -145,7 +145,7 @@ public:
     // depth are two consecutive SRVs at `color_depth` (NON_PIXEL_SHADER_RESOURCE).
     void trace(ID3D12GraphicsCommandList* list, const RtReflectScene& scene, unsigned slot, void* constants_cpu,
                D3D12_GPU_VIRTUAL_ADDRESS constants_gpu, D3D12_GPU_DESCRIPTOR_HANDLE color_depth);
-    // The lighting of `slot` was not traced: neither are its reflections.
+    // The lighting of `slot` is not traced: neither are its reflections.
     void invalidate(unsigned slot) noexcept;
     // A new stage: the environment memory starts over at the next trace.
     void reset_memory() noexcept { memory_reset_ = true; }
