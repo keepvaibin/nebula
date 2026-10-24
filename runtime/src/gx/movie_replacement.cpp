@@ -37,8 +37,9 @@ namespace galaxy::gx {
 
 namespace {
 
-constexpr std::size_t kAhead = 4;         // decoded frames kept ahead of the game
-constexpr std::size_t kPoolLimit = 12;    // upload buffers a movie may hold (ahead, shown, in flight)
+// Decoded frames kept ahead of the game: 133 ms at 60 fps, room for a slow frame of the decoder or the copy back.
+constexpr std::size_t kAhead = 8;
+constexpr std::size_t kPoolLimit = 16;    // upload buffers a movie may hold (ahead, shown, in flight)
 constexpr const char* kExtensions[] = {".mp4", ".m4v", ".mov", ".mkv", ".webm", ".avi", ".wmv"};
 std::atomic<bool> s_showing{false};
 
@@ -274,11 +275,44 @@ void convert_nv12_to_movie_planes(const std::uint8_t* y, std::int32_t y_pitch, c
     });
 }
 
+#if defined(_WIN32)
+namespace {
+
+// The GPU's video decoder for every movie: Media Foundation uses it only through a D3D device manager. Made once, ahead
+// of the first movie (MovieReplacements::configure), so a movie's first frames are not held up by it; null where the
+// GPU has no D3D11 video device (the movies decode in software).
+Microsoft::WRL::ComPtr<IMFDXGIDeviceManager> video_device_manager() {
+    static std::once_flag once;
+    static Microsoft::WRL::ComPtr<ID3D11Device> device;
+    static Microsoft::WRL::ComPtr<IMFDXGIDeviceManager> manager;
+    std::call_once(once, [] {
+        UINT reset_token = 0;
+        Microsoft::WRL::ComPtr<IMFDXGIDeviceManager> made;
+        if (FAILED(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr,
+                                     D3D11_CREATE_DEVICE_VIDEO_SUPPORT | D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0,
+                                     D3D11_SDK_VERSION, &device, nullptr, nullptr)) ||
+            FAILED(MFCreateDXGIDeviceManager(&reset_token, &made)) ||
+            FAILED(made->ResetDevice(device.Get(), reset_token))) {
+            device.Reset();
+            return;
+        }
+        Microsoft::WRL::ComPtr<ID3D10Multithread> multithread;
+        if (SUCCEEDED(device.As(&multithread))) multithread->SetMultithreadProtected(TRUE);
+        manager = made;
+    });
+    return manager;
+}
+
+}  // namespace
+#endif
+
 // Decodes one replacement file on its own thread, up to kAhead frames ahead of the game.
 class MovieReplacements::Decoder {
 public:
+    // `rate`: the THP's frame rate, or 0 while it is not known (the game opens the movie before it reads the
+    // header; set_rate gives it with the first frame).
     Decoder(std::filesystem::path file, double rate, std::function<TextureBackend::UploadChunk(std::uint64_t)> stager)
-        : file_(std::move(file)), rate_(rate > 0.0 ? rate : 30.0), stager_(std::move(stager)) {
+        : file_(std::move(file)), rate_(rate > 0.0 ? rate : 0.0), stager_(std::move(stager)) {
         thread_ = std::thread([this] { run(); });
     }
     ~Decoder() {
@@ -294,6 +328,8 @@ public:
     bool take(std::int32_t frame, std::int32_t shown, MovieReplacementFrame& out) {
         std::lock_guard<std::mutex> lock(mutex_);
         wanted_ = frame;
+        if (!(rate_ > 0.0)) return false;
+        number_ready();
         // The game went back (a loop or a restart) or far ahead of what is decoded: start again there.
         const bool behind = shown >= 0 && frame + 2 < shown;
         const bool ahead = !ready_.empty() && ready_.back().frame + static_cast<std::int32_t>(kAhead) * 4 < frame;
@@ -316,6 +352,14 @@ public:
         return true;
     }
 
+    void set_rate(double rate) {
+        if (!(rate > 0.0)) return;
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (rate_ > 0.0) return;
+        rate_ = rate;
+        number_ready();
+    }
+
     [[nodiscard]] bool failed() const {
         std::lock_guard<std::mutex> lock(mutex_);
         return failed_;
@@ -328,6 +372,26 @@ public:
     }
 
 private:
+    // The rate frames are numbered by (mutex_ held, rate known). A file at the THP's nominal rate (60 for 59.94) is the
+    // THP frame for frame and is numbered by its own rate, which keeps it in step to the end (the THP's rate would
+    // drift a frame every 17 s); other rates are placed by time.
+    double index_rate() const {
+        return file_rate_ > 0.0 && std::abs(file_rate_ - rate_) < 0.5 ? file_rate_ : rate_;
+    }
+    // A frame's number from its presentation time, counted from the file's first frame: an H.264 file with B-frames
+    // starts a few frames after 0, which would otherwise show every frame that many early.
+    std::int32_t frame_at(std::int64_t time) const {
+        return static_cast<std::int32_t>(
+            std::llround(static_cast<double>(time - start_time_) * 1.0e-7 * index_rate()));
+    }
+    // Frames decoded before the rate was known get their numbers (mutex_ held).
+    void number_ready() {
+        if (!(rate_ > 0.0)) return;
+        for (MovieReplacementFrame& ready : ready_) {
+            if (ready.frame < 0) ready.frame = frame_at(ready.time);
+        }
+    }
+
     std::shared_ptr<TextureBackend::UploadChunk> buffer(std::uint64_t size) {
         // A pooled buffer only this pool still holds (the cache drops its hold when the GPU has copied it).
         for (const auto& chunk : pool_) {
@@ -374,19 +438,8 @@ private:
         HRESULT hr = MFCreateAttributes(&attributes, 3);
         if (SUCCEEDED(hr)) hr = attributes->SetUINT32(MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING, TRUE);
         if (SUCCEEDED(hr)) hr = attributes->SetUINT32(MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, TRUE);
-        // The GPU's video decoder: Media Foundation uses it only through a D3D device manager. A 4K picture is then
-        // decoded on the GPU and only copied back; without one (no D3D11 video device), software decoding.
-        ComPtr<ID3D11Device> video_device;
-        ComPtr<IMFDXGIDeviceManager> device_manager;
-        UINT reset_token = 0;
-        if (SUCCEEDED(hr) &&
-            SUCCEEDED(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr,
-                                        D3D11_CREATE_DEVICE_VIDEO_SUPPORT | D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr,
-                                        0, D3D11_SDK_VERSION, &video_device, nullptr, nullptr)) &&
-            SUCCEEDED(MFCreateDXGIDeviceManager(&reset_token, &device_manager)) &&
-            SUCCEEDED(device_manager->ResetDevice(video_device.Get(), reset_token))) {
-            ComPtr<ID3D10Multithread> multithread;
-            if (SUCCEEDED(video_device.As(&multithread))) multithread->SetMultithreadProtected(TRUE);
+        // Decoded on the GPU and only copied back where it can (video_device_manager), else in software.
+        if (const ComPtr<IMFDXGIDeviceManager> device_manager = video_device_manager(); SUCCEEDED(hr) && device_manager) {
             attributes->SetUnknown(MF_SOURCE_READER_D3D_MANAGER, device_manager.Get());
         }
         if (SUCCEEDED(hr)) hr = MFCreateSourceReaderFromURL(file_.c_str(), attributes.Get(), &reader);
@@ -423,6 +476,7 @@ private:
         UINT32 top = 0;
         LONG stride = 0;
         MovieYuvTransform transform{};
+        double file_rate = 0.0;
         const auto read_format = [&]() {
             ComPtr<IMFMediaType> current;
             if (FAILED(reader->GetCurrentMediaType(kVideo, &current))) return false;
@@ -454,14 +508,24 @@ private:
             const bool bt709 = matrix == MFVideoTransferMatrix_BT709 ||
                                (matrix != MFVideoTransferMatrix_BT601 && coded_height >= 720u);
             transform = movie_yuv_transform(bt709, range == MFNominalRange_0_255);
+            UINT32 numerator = 0;
+            UINT32 denominator = 0;
+            file_rate = SUCCEEDED(MFGetAttributeRatio(current.Get(), MF_MT_FRAME_RATE, &numerator, &denominator)) &&
+                                numerator != 0u && denominator != 0u
+                            ? static_cast<double>(numerator) / static_cast<double>(denominator)
+                            : 0.0;
             return width >= 2u && height >= 2u;
         };
         if (!read_format()) {
             fail("no picture size", E_FAIL);
             return;
         }
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            file_rate_ = file_rate;
+        }
         std::cerr << "[movie] " << file_.filename().string() << " " << width << "x" << height
-                  << (nv12 ? " nv12" : " rgb32") << "\n";
+                  << (nv12 ? " nv12" : " rgb32") << " at " << file_rate << " fps\n";
         std::array<std::uint64_t, 3> offsets{};
         std::array<std::uint32_t, 3> pitches{};
         bool first = true;
@@ -480,7 +544,13 @@ private:
                 PROPVARIANT position;
                 PropVariantInit(&position);
                 position.vt = VT_I8;
-                position.hVal.QuadPart = static_cast<LONGLONG>(static_cast<double>(seek) / rate_ * 1.0e7);
+                double rate = 0.0;
+                {
+                    std::lock_guard<std::mutex> lock(mutex_);
+                    rate = index_rate();
+                }
+                position.hVal.QuadPart =
+                    static_cast<LONGLONG>(static_cast<double>(seek) / rate * 1.0e7) + start_time_;
                 reader->SetCurrentPosition(GUID_NULL, position);
                 PropVariantClear(&position);
                 first = true;
@@ -504,9 +574,16 @@ private:
                 return;
             }
             if (!sample) continue;
-            const auto frame = static_cast<std::int32_t>(std::llround(static_cast<double>(timestamp) * 1.0e-7 * rate_));
+            // Numbered now if the game has given the THP's rate; else when it does (the first frames, decoded
+            // while the game reads the movie's header).
+            std::int32_t frame = -1;
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                if (start_time_ < 0) start_time_ = timestamp;
+                if (rate_ > 0.0) frame = frame_at(timestamp);
+            }
             // Catching up after a seek or a slow start: frames the game has passed are not converted.
-            if (!first && frame + 1 < wanted) continue;
+            if (!first && frame >= 0 && frame + 1 < wanted) continue;
             first = false;
             const std::uint64_t size = movie_plane_layout(width, height, offsets, pitches);
             std::shared_ptr<TextureBackend::UploadChunk> chunk;
@@ -561,6 +638,7 @@ private:
                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
             MovieReplacementFrame decoded{};
             decoded.frame = frame;
+            decoded.time = timestamp;
             decoded.width = width;
             decoded.height = height;
             decoded.staging = std::move(chunk);
@@ -568,6 +646,14 @@ private:
             decoded.pitches = pitches;
             std::lock_guard<std::mutex> lock(mutex_);
             if (seek_to_ >= 0) continue;  // a seek came in meanwhile: this frame is from before it
+            if (decoded.frame < 0 && rate_ > 0.0) decoded.frame = frame_at(decoded.time);
+            if (decoded_ == 0u) {
+                std::cerr << "[movie] first frame after "
+                          << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() -
+                                                                                   opened_)
+                                 .count()
+                          << " ms\n";
+            }
             ready_.push_back(std::move(decoded));
             ++decoded_;
             convert_ms_ += ms;
@@ -581,7 +667,10 @@ private:
 #endif
 
     std::filesystem::path file_;
-    double rate_;
+    double rate_;  // the THP's frame rate; 0 until the game's first frame gives it (mutex_)
+    double file_rate_ = 0.0;  // the file's own frame rate, 0 when it has none (mutex_)
+    std::int64_t start_time_ = -1;  // the first frame's presentation time, 100 ns units (mutex_)
+    std::chrono::steady_clock::time_point opened_ = std::chrono::steady_clock::now();
     std::function<TextureBackend::UploadChunk(std::uint64_t)> stager_;
     std::vector<std::shared_ptr<TextureBackend::UploadChunk>> pool_;  // decoder thread only
     mutable std::mutex mutex_;
@@ -609,6 +698,10 @@ void MovieReplacements::configure(std::vector<std::filesystem::path> folders,
     if (folders != folders_) {
         close();
         folders_ = std::move(folders);
+#if defined(_WIN32)
+        // The video decoder's device, ready before the first movie opens.
+        if (!folders_.empty()) std::thread([] { (void)video_device_manager(); }).detach();
+#endif
     }
     stager_ = std::move(stager);
 }
@@ -679,11 +772,13 @@ const MovieReplacementFrame* MovieReplacements::frame(const MovieFrameMark& mark
         s_showing.store(false, std::memory_order_relaxed);
         return nullptr;
     }
+    decoder_->set_rate(mark.frame_rate);
     MovieReplacementFrame next{};
     if (decoder_->take(mark.frame, shown_.frame, next)) {
         shown_ = std::move(next);
-    } else if (shown_.frame < 0 || shown_.frame + 2 < mark.frame) {
-        ++late_;
+    }
+    if (shown_.frame < mark.frame) {
+        ++late_;  // the game's frame is not decoded yet: an older one shows (or the THP's, before the first)
     }
     if (shown_.frame < 0 || !shown_.staging) return nullptr;
     // Within a few frames of the game's: the THP's decode may stop (it resumes if the decoder falls behind).

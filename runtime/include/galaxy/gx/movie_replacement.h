@@ -43,6 +43,7 @@ struct MovieFrameMark {
 // A decoded frame: Y (width x height) and U, V (half each way), a byte per texel, in one upload buffer.
 struct MovieReplacementFrame {
     std::int32_t frame = -1;
+    std::int64_t time = 0;  // the file's presentation time, 100 ns units
     std::uint32_t width = 0;
     std::uint32_t height = 0;
     std::shared_ptr<TextureBackend::UploadChunk> staging;

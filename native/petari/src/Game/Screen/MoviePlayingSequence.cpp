@@ -264,6 +264,11 @@ void MoviePlayingSequence::exeWait() {
 
 void MoviePlayingSequence::exePlayWait() {
     if (MR::isFirstStep(this)) {
+#ifdef TARGET_PC
+        // An HD replacement's decoder starts here, the play wait before the THP opens, so its first frames are ready
+        // with the game's.
+        __NebulaMovieFrame(::getMovieName(mInfo), -2, 0.0f, nullptr, nullptr, nullptr, 0, 0);
+#endif
         MR::startStarPointerModeDemo(this);
         MR::stopSubBGM(60);
         MR::stopStageBGM(60);
