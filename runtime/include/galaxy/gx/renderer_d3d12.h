@@ -358,6 +358,9 @@ public:
     void begin_replay_record();
     [[nodiscard]] bool replay_recording() const noexcept { return replay_recording_; }
     [[nodiscard]] bool replay_available() const noexcept { return replay_valid_; }
+    // The next present is a game frame shown without sub-frames while interpolating (a movie, no scene): it holds for
+    // a whole game frame (present_sync_interval).
+    void set_present_game_frame(bool game_frame) noexcept { present_game_frame_ = game_frame; }
     // Moves the completed log to playback (sub-frames then replay it); false
     // when none is ready.
     bool start_replay_playback();
@@ -1008,6 +1011,7 @@ private:
     // and the sampler heap advance once per game frame.
     enum class RingMode : std::uint8_t { Normal, Temporal, Interp };
     RingMode ring_mode_ = RingMode::Normal;
+    bool present_game_frame_ = false;
     unsigned ring_segment_ = 0;
     std::array<std::uint64_t, kInterpSegments> ring_segment_fence_{};
     bool ring_advance_pending_ = true;

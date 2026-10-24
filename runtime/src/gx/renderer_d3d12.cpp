@@ -3475,6 +3475,7 @@ void RendererD3D12::refresh_display_rate() {
 }
 
 UINT RendererD3D12::present_sync_interval(unsigned configured, float max_fps) {
+    const bool game_frame = std::exchange(present_game_frame_, false);
     if (configured != 1u) {
         return configured;
     }
@@ -3485,8 +3486,11 @@ UINT RendererD3D12::present_sync_interval(unsigned configured, float max_fps) {
     if (hz <= 0.0) {
         return 1u;
     }
-    // EnumDisplaySettings reports whole hertz: 119 for 119.88, 239 for 239.76.
-    const double rate = present_frame_rate(max_fps, configured, hz);
+    // EnumDisplaySettings reports whole hertz: 119 for 119.88, 239 for 239.76. A game frame without sub-frames
+    // holds for its whole 60 Hz frame (4 refreshes at 240 Hz) rather than the next refresh after it is ready, which
+    // drifts against the display.
+    const double rate = game_frame ? std::min(60.0, present_frame_rate(max_fps, configured, hz))
+                                   : present_frame_rate(max_fps, configured, hz);
     const double multiple = std::round(hz / rate);
     if (multiple >= 2.0 && multiple <= 4.0 &&
         std::abs(hz - rate * multiple) <= 0.015 * hz) {

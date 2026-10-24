@@ -232,6 +232,7 @@ public:
     [[nodiscard]] std::uint64_t matrix_segment_serial() const noexcept { return 0u; }
     // A completed log waits (interpolation mode); start_replay_playback makes it the playing one.
     [[nodiscard]] bool replay_available() const noexcept { return ready_valid_; }
+    void set_present_game_frame(bool) noexcept {}
     bool start_replay_playback();
     [[nodiscard]] bool replay_playing() const noexcept { return run_valid_; }
     // A present rate above 60.

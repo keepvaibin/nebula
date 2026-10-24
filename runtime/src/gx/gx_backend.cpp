@@ -8676,10 +8676,12 @@ void GxBackend::present_cached_xfb_on_thread(
     if (!snapshot_path.empty()) {
         renderer_.set_debug_capture_paths({}, snapshot_path);
     }
-    if (interp_recording_ && count_game_xfb_present && !interp_presenting_real_ &&
-        !duplicate_stamp) {
+    const bool game_frame_only =
+        interp_recording_ && count_game_xfb_present && !interp_presenting_real_ && !duplicate_stamp;
+    if (game_frame_only) {
         note_interp_real_present();
     }
+    renderer_.set_present_game_frame(game_frame_only);
     bool replayed = false;
     if (interp_presenting_real_ && renderer_.temporal_interpolation()) {
         // The temporal upscaler takes every presented frame from the replays:
