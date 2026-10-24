@@ -1,5 +1,9 @@
 #pragma once
 
+// The virtual Wii Remote's input reports: the snapshot they are built from,
+// IR dots for the pointer, the shake accelerometer pattern and the mouse
+// pointer projection.
+
 #include "galaxy/content_viewport.h"
 
 #include <array>
@@ -22,17 +26,15 @@ inline constexpr std::uint16_t kWiimoteRestAccelX = 0x01fc;
 inline constexpr std::uint16_t kWiimoteRestAccelY = 0x0204;
 inline constexpr std::uint16_t kWiimoteRestAccelZ = 0x0264;
 
-// Parse the decimal grammar accepted by native input-script integer fields.
-// The grammar is intentionally narrower than the CRT conversion routines:
-// ASCII digits only, no sign or whitespace, and no modulo wrap on overflow.
-// `value` is changed only on success.
+// An integer field of the input scripts: ASCII digits only, no sign or
+// whitespace, and overflow fails instead of wrapping. `value` is changed only
+// on success.
 [[nodiscard]] bool parse_native_input_script_u64(
     std::string_view text,
     std::uint64_t& value) noexcept;
 
-// Resolve a marker-relative script offset without permitting either the text
-// conversion or anchor addition to wrap. `start_vi` is changed only on
-// success.
+// `anchor_vi` plus the script offset `offset_text`, failing on overflow.
+// `start_vi` is changed only on success.
 [[nodiscard]] bool resolve_native_input_script_start_vi(
     std::uint64_t anchor_vi,
     std::string_view offset_text,
@@ -94,15 +96,13 @@ struct WiimoteInputSnapshot {
     std::uint8_t center,
     std::uint8_t positive) noexcept;
 
-// The Windows client and the Wii presentation viewport are deliberately
-// separate. A resizable native window may contain letterbox/pillarbox space;
-// those pixels are not valid sensor-bar coordinates.
+// The picture inside the window client: letterbox and pillarbox pixels are
+// not pointer coordinates.
 using NativePointerViewport = galaxy::ContentViewport;
 
 struct NativeMousePointerSample {
-    // Diagnostic/button-ownership metadata only. Pointer projection is based
-    // on the global cursor's geometry inside the game content viewport and
-    // intentionally continues while the window is unfocused.
+    // Not used by the projection, which follows the cursor over the content
+    // viewport while the window is unfocused too.
     bool window_focused = false;
     bool absolute_valid = false;
     bool inside_client = false;
@@ -121,36 +121,13 @@ struct NativeMousePointerProjection {
     bool visible = false;
 };
 
-// Project one coherent client-area acquisition to native [-1,+1] pointer
-// coordinates. Known outside-client or outside-viewport samples are invalid;
-// transient acquisition-loss holding remains a caller-owned timeline policy.
-//
-// This generalizes the direct client-dimension normalization used by the CC0
-// Dusklight menu pointer (src/dusk/menu_pointer.cpp) with explicit viewport,
-// validity, and edge-gain contracts for Nebula's raw Wii HID producer.
+// One client-area cursor sample as pointer coordinates, -1..1 across the
+// content viewport. A sample outside the client or the viewport is not
+// visible; holding the pointer through a lost sample is the caller's choice.
+// Scales below 1 lower the gain in the centre band (native_input.cpp).
+// Follows Dusklight's menu pointer (CC0, src/dusk/menu_pointer.cpp).
 [[nodiscard]] NativeMousePointerProjection project_native_mouse_pointer(
     const NativeMousePointerSample& sample) noexcept;
-
-// Build the diagnostic-only raw-key mask without touching the provider when
-// no trace record will be emitted. Bits 2..17 retain their established wire
-// order; the provider is queried exactly once per key, in array order.
-template <typename KeyDown>
-[[nodiscard]] std::uint32_t collect_native_raw_key_trace_mask(
-    bool collect,
-    const std::array<int, 16>& virtual_keys,
-    KeyDown&& key_down) {
-    if (!collect) {
-        return 0u;
-    }
-
-    std::uint32_t raw_key_mask = 0u;
-    for (std::size_t index = 0; index < virtual_keys.size(); ++index) {
-        if (key_down(virtual_keys[index])) {
-            raw_key_mask |= 1u << (index + 2u);
-        }
-    }
-    return raw_key_mask;
-}
 
 void publish_wiimote_ir_dots(
     WiimoteInputSnapshot& snapshot,

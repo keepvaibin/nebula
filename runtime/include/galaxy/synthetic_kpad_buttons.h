@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: CC0-1.0
-// Frame-owned current/previous press state adapted from TwilitRealm/dusklight,
-// src/dusk/action_bindings.cpp::{updateActionBindings,getActionBindTrig},
-// revision 40457c6adb381928e4b5fef6ed459ed291edd5e2 (CC0).
-// Galaxy changes: packed Wii masks, separate producer/consumer clocks and a
-// rising-edge latch. Acquisition helpers below are independently written.
+// The game window's key presses and levels for the input report. The press latch follows the per-frame press state
+// of TwilitRealm/dusklight, src/dusk/action_bindings.cpp::{updateActionBindings,getActionBindTrig}, revision
+// 40457c6adb381928e4b5fef6ed459ed291edd5e2 (CC0), with separate producer and consumer clocks.
 #pragma once
 
 #include "galaxy/native_input.h"
@@ -12,18 +10,6 @@
 #include <cstdint>
 
 namespace galaxy::input {
-
-[[nodiscard]] inline std::uint32_t synthetic_kpad_button_mask(
-    const WiimoteInputSnapshot& snapshot) noexcept {
-    const auto& b = snapshot.buttons;
-    return (b.left ? 0x0001u : 0u) | (b.right ? 0x0002u : 0u) |
-        (b.down ? 0x0004u : 0u) | (b.up ? 0x0008u : 0u) |
-        (b.plus ? 0x0010u : 0u) | (b.two ? 0x0100u : 0u) |
-        (b.one ? 0x0200u : 0u) | (b.b ? 0x0400u : 0u) |
-        (b.a ? 0x0800u : 0u) | (b.minus ? 0x1000u : 0u) |
-        (snapshot.nunchuk.z ? 0x2000u : 0u) |
-        (snapshot.nunchuk.c ? 0x4000u : 0u) | (b.home ? 0x8000u : 0u);
-}
 
 // Some injected Windows keyboard events carry a virtual key but no scan code.
 // Map generic Shift/Control to the left/right bindings.
@@ -37,9 +23,8 @@ namespace galaxy::input {
     return key;
 }
 
-// Window messages are a separate producer from the host HID acquisition.
-// Remember a non-repeat key-down even if key-up arrives before the next poll.
-// Held-key levels still come from the OS. This latch never fabricates repeats.
+// Keeps a non-repeat key-down from the window thread until the input report consumes it, even when the key-up
+// arrives first. It never makes up repeats.
 class NativeWindowKeyPressLatch {
 public:
     void publish(std::uint32_t key) noexcept {

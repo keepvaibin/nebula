@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// The C11 Annex K functions the runtime uses (getenv_s, fopen_s), Microsoft's _dupenv_s, _stricmp and _putenv_s, and
+// MAX_PATH, for C libraries without them (Android, Linux, macOS): platform/sdl/CMakeLists.txt includes this before
+// every runtime source there. Results match Microsoft's: a variable that is not set gives 0 and a length of 0.
 #pragma once
-
-// The C11 Annex K functions the runtime uses (getenv_s, fopen_s), Microsoft's _dupenv_s, _stricmp and _strnicmp,
-// and MAX_PATH, where the C library lacks them (Android, Linux, macOS): included before every runtime source there
-// (platform/sdl/CMakeLists.txt). Same results as Microsoft's: a variable that is not set gives 0 and a length of 0.
 
 #if !defined(_WIN32)
 
@@ -53,10 +52,6 @@ inline int _dupenv_s(char** buffer, std::size_t* length, const char* name) {
 
 inline int _stricmp(const char* a, const char* b) {
     return strcasecmp(a, b);
-}
-
-inline int _strnicmp(const char* a, const char* b, std::size_t count) {
-    return strncasecmp(a, b, count);
 }
 
 inline int _putenv_s(const char* name, const char* value) {

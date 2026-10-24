@@ -41,8 +41,7 @@ std::uint16_t rfl_crc(std::span<const std::byte> bytes) {
 std::vector<std::byte> create_empty_rfl_database() {
     std::vector<std::byte> db(kRflDatabaseSize, std::byte{0});
     write_be32(db, 0x0000, kRflOfficialMagic);
-    // The fallback is copyright-neutral: a valid empty FaceLib container, with no packed face
-    // feature data.
+    // Copyright-neutral: a valid empty FaceLib container with no face data.
     write_be32(db, kRflDatabaseIsolationOffset, 0x80000000u);
     write_be32(db, kRflDatabaseHiddenOffset + 0x00, kRflHiddenMagic);
     write_be16(db, kRflDatabaseHiddenOffset + 0x04, 0xFFFFu);
@@ -87,9 +86,8 @@ std::array<std::uint8_t, 256> create_virtual_nunchuk_registers(
     }
 
     regs.fill(0);
-    // Captured RVL-CNT-01 Nunchuk calibration: accelerometer 0G/1G plus stick max/min/center.
-    // Reports stay aligned with these centers, since title screens that require a neutral Control
-    // Stick accept the virtual device only then.
+    // A real RVL-CNT-01 Nunchuk's calibration: accelerometer 0G/1G, stick max/min/centre. Reports stay
+    // centred on these values: a title screen that needs a neutral Control Stick accepts the device only then.
     const std::array<std::uint8_t, 16> calibration{
         0x7d, 0x7e, 0x7a, 0x3c, 0xb1, 0xaf, 0xae, 0x1b,
         0xe0, 0x15, 0x7b, 0xe6, 0x1d, 0x81, 0x23, 0x78};

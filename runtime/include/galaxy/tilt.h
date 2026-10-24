@@ -1,8 +1,8 @@
 #pragma once
 
 // Tilt sections (Star Ball, ray surfing): the game steers them with the Wii
-// Remote accelerometer only (SphereAccelSensorController::clacXY 0x80330230,
-// SurfRay::updateRotate 0x803327C4, both through MR::getCorePadAcceleration;
+// Remote accelerometer only (SphereAccelSensorController::clacXY and
+// SurfRay::updateRotate, both through MR::getCorePadAcceleration;
 // SpherePadController's stick path is overridden), so a controller without
 // that sensor cannot play them. While one is active the virtual remote's
 // accelerometer reports a gravity direction built from the tilt of the
@@ -11,14 +11,14 @@
 // WASD); elsewhere it stays at rest.
 //
 // The game's vector is the remote's calibrated raw reading
-// (WPadAcceleration::update 0x803AA9D0: (-kpad.x, kpad.z, -kpad.y)), the
-// gravity reaction in the remote frame: +X out of the left side, +Y toward the
+// (WPadAcceleration::update: (-kpad.x, kpad.z, -kpad.y)), the gravity
+// reaction in the remote frame: +X out of the left side, +Y toward the
 // expansion port, +Z out of the A face (Wiibrew calibration poses).
 // - Star Ball: held upright like a joystick (TamakoroTutorial waits for
-//   (0,-1,0) within 30 degrees, 0x8033B460). clacXY's neutral leans the top
-//   10 degrees away from the face; X and Y are the lean beyond 5 degrees,
-//   full at 25, right and forward positive (calcDirSphereMove: X camera
-//   right, Y camera forward).
+//   (0,-1,0) within 30 degrees). clacXY's neutral leans the top 10 degrees
+//   away from the face; X and Y are the lean beyond 5 degrees, full at 25,
+//   right and forward positive (calcDirSphereMove: X camera right, Y camera
+//   forward).
 // - Ray: held flat, pointing at the screen, twisted to steer
 //   (updateRotate uses X and Z; Z <= -0.7 with |X| <= 0.15 is no turn).
 // The controller's normal hold (captured when the section starts, or with
@@ -56,9 +56,8 @@ inline constexpr float kRayStickDegrees = 50.0f;
 inline constexpr float kStarBallLeanDegrees = 10.0f;
 [[nodiscard]] Vec3 remote_gravity(Section section, const Vec3& relative) noexcept;
 
-// 10-bit accelerometer counts for the snapshot: the inverse of
-// synthetic_kpad_motion.h (100 counts per g, rest (0x1FC, 0x204, 0x264) for
-// the remote lying flat).
+// 10-bit accelerometer counts for the WiimoteInputSnapshot: 100 counts per g,
+// rest (0x1FC, 0x204, 0x264) for the remote lying flat.
 struct Counts {
     std::uint16_t x = 0;
     std::uint16_t y = 0;

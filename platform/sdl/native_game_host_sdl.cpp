@@ -39,7 +39,7 @@ constexpr std::uint64_t kStickPointerHoldMs = 3000;
 // after the pointer arrives, and reads the remote once a frame (a shorter press can fall between two reads).
 constexpr std::uint8_t kTapPressReports = 10;
 constexpr std::uint64_t kTapHoverMs = 200;
-constexpr float kTriggerThreshold = 96.0f / 255.0f;  // as GALAXY_XINPUT_TRIGGER_THRESHOLD's default
+constexpr float kTriggerThreshold = 96.0f / 255.0f;  // the Windows host's XInput trigger threshold
 
 const in::ControlsConfig& live_controls() {
     static in::ControlsConfig config = in::get_controls_config();
@@ -114,7 +114,7 @@ float g_rumble_strength = 1.0f;
 
 }  // namespace
 
-in::WiimoteInputSnapshot native_game_wiimote_snapshot(std::uint8_t, std::uint64_t, bool ir_enabled,
+in::WiimoteInputSnapshot native_game_wiimote_snapshot(std::uint64_t, bool ir_enabled,
                                                       std::int32_t star_pointer_mode, std::uint8_t tilt_section) {
     const in::PlayContext context =
         star_pointer_mode >= 0 && static_cast<std::uint32_t>(star_pointer_mode) < in::kStarPointerModeCount
@@ -287,10 +287,7 @@ void install_native_keyboard_capture_provider(NativeKeyboardCaptureProvider) noe
 void install_native_settings_pad_hooks(NativeSettingsVisibleProvider, NativeSettingsKeySink) noexcept {}
 void set_env_flag_cache_enabled(bool) noexcept {}
 
-// ---------------------------------------------------------------------------------------------------------------------
-// Sound: the JAudio DSP program on the game's command words, its blocks through an SDL audio stream
-// ---------------------------------------------------------------------------------------------------------------------
-
+// Sound: the JAudio DSP program on the game's command words, its blocks through an SDL audio stream.
 struct NativeGameAudio::State {
     JAudioHostMixer mixer;
     SDL_AudioStream* stream = nullptr;
@@ -308,7 +305,7 @@ NativeGameAudio::~NativeGameAudio() {
 }
 
 namespace {
-// A guest address's bytes in the native game's regions.
+// An address's bytes in the native game's regions.
 std::byte* native_game_resolve(void* user, std::uint32_t address, std::uint32_t size) {
     const auto& memory = *static_cast<const GuestMemory*>(user);
     const GuestMemoryFastRegion& fast = memory.fast_regions[address >> 28u];

@@ -2,16 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
-#include <condition_variable>
-#include <deque>
 #include <limits>
-#include <mutex>
-#include <ostream>
-#include <stdexcept>
-#include <thread>
-#include <utility>
-
-#include "galaxy/windows_power.h"
 
 namespace galaxy::input {
 
@@ -84,10 +75,9 @@ void write_core_buttons(
     if (buttons.minus) byte1 |= 0x10u;
     if (buttons.home) byte1 |= 0x80u;
     if (include_accel_lsb) {
-        // A real Wii Remote carries the accelerometer's available low bits in
-        // otherwise-unused core-button bits. RMGE01's raw-HID decoder masks
-        // these bits out of the button word before extracting them again.
-        // Y0 and Z0 are not present in the normal report formats.
+        // The Wii Remote carries the accelerometer's low bits in unused
+        // core-button bits; WPAD masks them out of the button word. Y0 and Z0
+        // are not in the normal report formats.
         byte0 |= static_cast<std::uint8_t>(
             (clamp_axis10(snapshot.accel.x) & 0x03u) << 5u);
         byte1 |= static_cast<std::uint8_t>(
@@ -340,11 +330,10 @@ void publish_wiimote_ir_dots(
     constexpr int kKpadFrameMaxXRaw = 997;
     constexpr int kKpadFrameMaxYRaw = 725;
     constexpr int kPrimaryHalfSeparation = 80;
-    // The raw IR camera raster is not the KPAD pointing space: RMGE01's
-    // WPAD/KPAD stack applies EEPROM DPD calibration, the below-screen
-    // sensor-bar offset and its own scale, giving 226 raw camera units per
-    // KPAD unit with neutral at (510, 487). Compensating here keeps the guest
-    // decoding real Wiimote reports with no KPAD/WPAD host hook.
+    // The IR camera raster is not KPAD's pointing space: WPAD/KPAD apply the
+    // EEPROM DPD calibration, the below-screen sensor-bar offset and their own
+    // scale, 226 camera units per KPAD unit with neutral at (510, 487). The
+    // dots are placed so that the game's own KPAD decoding yields the pointer.
     constexpr float kKpadPointerRawUnitsPerHostUnit = 226.0f;
     constexpr float kKpadPointerNeutralXRaw = 510.0f;
     constexpr float kKpadPointerNeutralYRaw = 487.0f;
@@ -415,10 +404,6 @@ std::size_t wiimote_input_report_size(std::uint8_t report_mode) noexcept {
         return 0;
     }
 }
-
-namespace {
-
-}  // namespace
 
 WiimoteReportBuildResult build_wiimote_input_report(
     std::uint8_t report_mode,

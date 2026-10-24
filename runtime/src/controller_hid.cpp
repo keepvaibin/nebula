@@ -169,8 +169,8 @@ struct Device {
     sw::SwitchMotion motion{};
     std::uint64_t last_report_us = 0;
     std::uint64_t imu_reports = 0;
-    // Motion in the session log (log_motion): since the last summary, the peak acceleration away from 1 g and
-    // the peak turn rate, and the shakes started.
+    // Motion since the last [controller-motion] line (log_motion): peak acceleration away from 1 g, peak turn
+    // rate, shakes started.
     std::uint64_t motion_logged_us = 0;
     float motion_peak_g = 0.0f;
     float motion_peak_rate = 0.0f;
@@ -241,8 +241,8 @@ struct Hub {
     SRWLOCK lock = SRWLOCK_INIT;
     std::array<Published, kMaxHidPads> pads{};
     std::atomic<bool> started{false};
-    // Vibration: the game state from the emulation thread, and what runs on
-    // the devices (read without locks by stop_all_rumble).
+    // Vibration: the game's state from the game thread, and the motors running
+    // on the devices (read without locks by stop_all_rumble).
     SRWLOCK rumble_lock = SRWLOCK_INIT;
     RumbleRequest rumble_request{};
     std::uint64_t rumble_published_us = 0;
@@ -860,15 +860,9 @@ bool env_flag(const char* name) noexcept {
     return !(text == "0" || text == "false" || text == "off" || text == "no");
 }
 
-bool rumble_trace_enabled() noexcept {
-    static const bool enabled = env_flag("GALAXY_RUMBLE_TRACE");
-    return enabled;
-}
-
 // GALAXY_TEST_RUMBLE_TARGET=xinput:N, switch:N, playstation:N or steam:N,
-// honoured only while output is disabled: the controller a trace session
-// reports as vibrating, with the window counted as focused (a hidden window
-// never is).
+// honoured only while output is disabled: the controller the published request
+// names, with the window counted as focused (a hidden window never is).
 RumbleTarget test_rumble_target() noexcept {
     static const RumbleTarget target = [] {
         RumbleTarget parsed{};
@@ -900,82 +894,10 @@ RumbleTarget test_rumble_target() noexcept {
     return target;
 }
 
-const char* rumble_target_kind_name(const RumbleTarget& target) noexcept {
-    switch (target.kind) {
-    case RumbleTarget::Kind::XInput: return "xinput";
-    case RumbleTarget::Kind::Hid:
-        switch (target.scheme) {
-        case ControlScheme::PlayStation: return "playstation";
-        case ControlScheme::Steam: return "steam";
-        default: return "switch";
-        }
-    default: return "none";
-    }
-}
-
 // The 0..255 speed of the light motor that PlayStation controllers are driven
 // with, as the Xbox light motor is.
 std::uint8_t playstation_motor(std::uint8_t level, std::uint8_t strength) noexcept {
     return static_cast<std::uint8_t>(input::rumble::xinput_motor_speeds(level, strength).right >> 8);
-}
-
-// GALAXY_RUMBLE_TRACE: what the controller in use would receive, logged at
-// every change of the gated motor state (nothing is sent to any device).
-void trace_rumble_output(const RumbleRequest& request, std::uint64_t now) noexcept {
-    static bool s_logged = false;
-    static std::uint8_t s_level = 0;
-    static RumbleTarget s_target{};
-    static std::uint8_t s_strength = 0;
-    static unsigned s_rows = 0;
-    input::rumble::GateInputs gate{};
-    gate.game_motor_on = request.level != 0u;
-    gate.now_us = now;
-    gate.published_us = now;
-    gate.focused = request.focused;
-    gate.paused = request.paused;
-    gate.strength = request.strength;
-    const bool has_target = request.target.kind != RumbleTarget::Kind::None;
-    const bool run = has_target && input::rumble::motor_should_run(gate);
-    const std::uint8_t level = run ? request.level : 0u;
-    if (s_logged && level == s_level && request.target == s_target && request.strength == s_strength) return;
-    if (s_rows >= 4000u) return;
-    ++s_rows;
-    s_logged = true;
-    s_level = level;
-    s_target = request.target;
-    s_strength = request.strength;
-    const char* reason = run ? "" : request.level == 0u ? " game-off" : !has_target ? " no-controller"
-                                  : request.strength == 0u ? " vibration-off" : !request.focused ? " unfocused"
-                                  : request.paused ? " paused" : " gate";
-    char line[256]{};
-    int used = std::snprintf(line, sizeof(line), "[rumble-out] us=%llu target=%s:%u motor=%s%s bit=%u level=%u strength=%u",
-                             static_cast<unsigned long long>(now), rumble_target_kind_name(request.target),
-                             static_cast<unsigned>(request.target.slot), run ? "on" : "off", reason,
-                             request.motor_on ? 1u : 0u, static_cast<unsigned>(level),
-                             static_cast<unsigned>(request.strength));
-    if (used > 0 && static_cast<std::size_t>(used) < sizeof(line)) {
-        if (request.target.kind == RumbleTarget::Kind::XInput) {
-            const input::rumble::XInputMotors speeds = input::rumble::xinput_motor_speeds(level, request.strength);
-            used += std::snprintf(line + used, sizeof(line) - static_cast<std::size_t>(used), " xinput=%u/%u",
-                                  static_cast<unsigned>(speeds.left), static_cast<unsigned>(speeds.right));
-        } else if (request.target.kind == RumbleTarget::Kind::Hid && request.target.scheme == ControlScheme::PlayStation) {
-            used += std::snprintf(line + used, sizeof(line) - static_cast<std::size_t>(used), " playstation=%u/%u",
-                                  0u, static_cast<unsigned>(playstation_motor(level, request.strength)));
-        } else if (request.target.kind == RumbleTarget::Kind::Hid && request.target.scheme == ControlScheme::Steam) {
-            const input::rumble::XInputMotors speeds = input::rumble::xinput_motor_speeds(level, request.strength);
-            used += std::snprintf(line + used, sizeof(line) - static_cast<std::size_t>(used), " steam=%u/%u",
-                                  static_cast<unsigned>(speeds.left), static_cast<unsigned>(speeds.right));
-        } else if (request.target.kind == RumbleTarget::Kind::Hid) {
-            const std::array<std::uint8_t, 8> pro = input::rumble::switch_pro_motor_rumble(level, request.strength);
-            std::array<std::uint8_t, input::rumble::kSwitch2RumbleReportBytes> pro2{};
-            (void)input::rumble::build_switch2_rumble_report(0, level, request.strength, pro2);
-            used += std::snprintf(line + used, sizeof(line) - static_cast<std::size_t>(used),
-                                  " pro=%02x%02x%02x%02x.%02x%02x%02x%02x pro2=%02x%02x%02x%02x%02x", pro[0],
-                                  pro[1], pro[2], pro[3], pro[4], pro[5], pro[6], pro[7], pro2[2], pro2[3], pro2[4],
-                                  pro2[5], pro2[6]);
-        }
-    }
-    std::cerr << line << '\n';
 }
 
 // A neutral light bar colour, set once.
@@ -1136,7 +1058,7 @@ private:
                                            [&](const auto& d) { return d->path == candidate.path; });
             if (!known) open_device(candidate);
         }
-        // A path that no longer enumerates can be reported again if it returns.
+        // A path missing from this scan is reported again when it returns.
         refused_.erase(std::remove_if(refused_.begin(), refused_.end(),
                                       [&](const std::wstring& path) {
                                           return std::none_of(candidates.begin(), candidates.end(),
@@ -1345,9 +1267,9 @@ private:
         issue_read(device);
     }
 
-    // The session log's motion line: every shake started (at most one line a second), and every 10 s with
-    // movement a summary (the shake thresholds of the sensitivity set, the peaks seen), so a report of shakes
-    // that do nothing shows whether the controller's motion arrives and whether it starts shakes.
+    // The [controller-motion] log line: after a shake starts (at most once a second), and every 10 s while the
+    // controller moves, with the shake thresholds of the sensitivity set and the peaks seen. A log then shows
+    // whether the controller's motion arrives and whether it starts shakes.
     static void log_motion(Device& device, std::uint64_t now, const sw::MotionSettings& motion) {
         const bool shook = device.motion_shakes != device.motion_shakes_logged;
         const bool due = now - device.motion_logged_us >= (shook ? 1'000'000ull : 10'000'000ull);
@@ -1386,7 +1308,7 @@ private:
                 break;
             }
             if (!sv::decode_report(report, device.steam_clock, decoded)) return false;
-            if (!device.published) publish_device(device);  // a puck controller that connected before we looked
+            if (!device.published) publish_device(device);  // a puck controller connected before the device opened
             return true;
         case ControlScheme::Generic:
             return decode_generic(device, report, decoded);
@@ -1732,7 +1654,7 @@ void ensure_controller_hid_started() noexcept {
         h.stop_event.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
         h.rescan_event.reset(CreateEventW(nullptr, FALSE, FALSE, nullptr));
         // Created once and never replaced: publish_rumble_request signals it
-        // from the emulation thread.
+        // from the game thread.
         if (!h.rumble_event) h.rumble_event.reset(CreateEventW(nullptr, FALSE, FALSE, nullptr));
         if (h.stop_event.get() == nullptr || h.rescan_event.get() == nullptr || h.rumble_event.get() == nullptr) {
             return;
@@ -1788,8 +1710,8 @@ std::uint64_t controller_hid_now_us() noexcept {
 }
 
 bool rumble_output_disabled() noexcept {
-    // Test sessions (hidden window) and trace sessions never drive a motor.
-    static const bool disabled = env_flag("GALAXY_HIDE_WINDOW") || env_flag("GALAXY_RUMBLE_TRACE");
+    // Test sessions (hidden window) never drive a motor.
+    static const bool disabled = env_flag("GALAXY_HIDE_WINDOW");
     return disabled;
 }
 
@@ -1818,7 +1740,6 @@ void publish_rumble_request(const RumbleRequest& published) noexcept {
     h.rumble_request = request;
     h.rumble_published_us = now;
     ReleaseSRWLockExclusive(&h.rumble_lock);
-    if (rumble_trace_enabled()) trace_rumble_output(request, now);
     const bool changed = previous.level != request.level || previous.strength != request.strength ||
                          !(previous.target == request.target) || previous.focused != request.focused ||
                          previous.paused != request.paused;

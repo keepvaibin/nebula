@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#pragma once
-
-// Data the console's devices hold, as the hosts give it to the game: an empty Mii database (FaceLib), a virtual Wii
+// Data the console's devices hold, as the host gives it to the game: an empty Mii database (FaceLib), a virtual Wii
 // Remote's EEPROM and a Nunchuk's registers (calibration and identity).
+#pragma once
 
 #include <array>
 #include <cstddef>

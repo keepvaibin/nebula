@@ -5,9 +5,8 @@
 
 namespace galaxy {
 
-// For cleanup that is required on both normal return and native unwinding.
-// The callback cannot throw and the guard cannot move, so a live scope owns
-// exactly one cleanup. This does not intercept or replace an exception.
+// Runs `cleanup` when the scope ends, by return or by an exception. The cleanup cannot throw and the guard
+// cannot move, so each scope runs its cleanup exactly once.
 template <typename Cleanup>
 class ScopeExit final {
     static_assert(std::is_nothrow_invocable_v<Cleanup&>);

@@ -391,8 +391,8 @@ void pump_events(int timeout_ms) noexcept {
     static auto report_time = std::chrono::steady_clock::now();
     const std::int64_t wait_start = galaxy::gx::vk::thread_cpu_ns();
 #if defined(__ANDROID__)
-    // SDL's timed event wait polls without sleeping on Android (98% of a core, measured): the events are pumped here
-    // and the thread sleeps between pumps.
+    // SDL's timed event wait polls without sleeping on Android, keeping a core busy: the events are pumped here and
+    // the thread sleeps between pumps.
     SDL_PumpEvents();
     bool any = SDL_PollEvent(&event);
     if (!any && timeout_ms > 0) {
@@ -628,9 +628,7 @@ extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeSurf
 }
 #endif
 
-// ---------------------------------------------------------------------------------------------------------------------
-// The renderer's window (host_window.h)
-// ---------------------------------------------------------------------------------------------------------------------
+// The renderer's window (host_window.h).
 
 namespace galaxy::gx::host_window {
 
@@ -783,9 +781,7 @@ VkSurfaceKHR create_vulkan_surface(VkInstance instance, NativeWindow window) {
 
 }  // namespace galaxy::gx::host_window
 
-// ---------------------------------------------------------------------------------------------------------------------
-// The window functions the host and the backend call (gx_d3d12.h)
-// ---------------------------------------------------------------------------------------------------------------------
+// The window functions the host and the backend call (gx_d3d12.h).
 
 namespace galaxy::gx {
 

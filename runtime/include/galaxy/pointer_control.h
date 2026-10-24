@@ -53,8 +53,8 @@ inline constexpr float kStickPointerLimit = 1.0f;
 inline constexpr float kGyroPointerLimit = 1.35f;
 inline constexpr float kPointerVisibleLimit = 1.02f;
 
-// The Switch ports hide the gyro pointer when it is not being used and bring it back
-// only with R (recenter). The controller-owned pointer, low-passed over
+// As in the game's Switch release, the gyro pointer hides when it is not being used and
+// comes back only with R (recenter). The controller-owned pointer, low-passed over
 // kPointerHideFilterSeconds so a one-report spike does not count, is compared with an
 // anchor: while it stays within `radius` of the anchor a timer runs, and after
 // `hide_seconds` the pointer hides. Hand tremor and small jerks inside the radius never
@@ -108,16 +108,14 @@ struct RecenterHold {
     Output update(bool down) noexcept;
 };
 
-// ---- Context-dependent B -----------------------------------------------------
-// StarPointerOnOffController::mMode (RMGE01): the index of the highest-priority
-// pointer mode requested this frame. Order from updateMode's jump table
-// (0x805C74DC): 0 HOME button menu, 1 error window, 2 pause menu, 3 logo,
-// 4 title, 5 file select, 6 scenario select, 7 pause menu, 8 yes/no choice,
-// 9 picture book, 10-14 demos, 15 1P invalid / 2P valid, 16-17 sphere
-// selector, 18 launch star, 19 command stream, 20-21 blue star, 22 star bit
-// target, 23 big bubble, 24 base, 25 game. Menus are the modes of screens
-// with a Back action (0-9, 16, 17); everything else, and an unreadable mode,
-// is play.
+// StarPointerOnOffController::mMode: the index of the highest-priority
+// pointer mode requested this frame, in updateMode's order: 0 HOME button
+// menu, 1 error window, 2 pause menu, 3 logo, 4 title, 5 file select,
+// 6 scenario select, 7 pause menu, 8 yes/no choice, 9 picture book,
+// 10-14 demos, 15 1P invalid / 2P valid, 16-17 sphere selector, 18 launch
+// star, 19 command stream, 20-21 blue star, 22 star bit target, 23 big
+// bubble, 24 base, 25 game. Menus are the modes of screens with a Back action
+// (0-9, 16, 17); everything else, and an unreadable mode, is play.
 inline constexpr std::uint32_t kStarPointerModeCount = 26;
 enum class PlayContext : std::uint8_t { Menu, Play };
 [[nodiscard]] PlayContext play_context_from_star_pointer_mode(std::uint32_t mode) noexcept;

@@ -1,3 +1,4 @@
+// The settings overlay's controller chord and navigation (native_host.cpp routes every pad through it).
 #pragma once
 
 #include <array>

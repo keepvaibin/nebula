@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// Thread naming, the power-throttling opt-out and performance-core selection for the host's threads.
 #pragma once
 
 #if defined(_WIN32)
@@ -153,7 +154,6 @@ inline void name_current_thread(const wchar_t* name) noexcept {
 #endif
 }
 inline void opt_out_of_power_throttling_process() noexcept {}
-inline void opt_out_of_power_throttling_thread() noexcept {}
 inline unsigned pin_current_thread_to_performance_cores() noexcept { return 0u; }
 }  // namespace galaxy::host
 #endif

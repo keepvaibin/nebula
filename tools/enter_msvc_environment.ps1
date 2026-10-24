@@ -1,3 +1,5 @@
+# Loads the Visual Studio x64 developer environment (and its CMake and Ninja) into the current
+# PowerShell session; dot-source it.
 function Find-VsInstallRoot {
     $VsWhere = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"
     if (Test-Path -LiteralPath $VsWhere) {

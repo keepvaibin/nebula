@@ -137,9 +137,6 @@ private fun Page(modifier: Modifier = Modifier, content: @Composable () -> Unit)
     }
 }
 
-// ---------------------------------------------------------------------------------------------------------------------
-// Setup
-
 @Composable
 private fun WelcomeScreen(onChoose: () -> Unit) {
     Page {
@@ -222,7 +219,7 @@ private fun DiscScreen(model: LauncherModel, onChoose: () -> Unit) {
             identity.supported -> {
                 Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = Night.Success, modifier = Modifier.size(56.dp))
                 Gap(12.dp)
-                // The disc's own title is in capitals.
+                // Not identity.title: the disc's own title is in capitals.
                 Text("Super Mario Galaxy", style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
                 Gap(4.dp)
                 Lead("${identity.gameId} · North America · ${identity.format}")
@@ -332,9 +329,6 @@ private fun ImportScreen(model: LauncherModel, onPlay: () -> Unit) {
     }
 }
 
-// ---------------------------------------------------------------------------------------------------------------------
-// Home
-
 @Composable
 private fun HomeScreen(model: LauncherModel, onPlay: () -> Unit) {
     val install = model.install
@@ -430,9 +424,6 @@ private fun controllerNames(): List<String> = InputDevice.getDeviceIds().toList(
         (sources and InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK
     if (pad && !device.isVirtual) device.name else null
 }.distinct()
-
-// ---------------------------------------------------------------------------------------------------------------------
-// Settings
 
 @Composable
 private fun SettingsScreen(model: LauncherModel, onChoose: () -> Unit, onShareLog: () -> Unit) {
@@ -585,9 +576,6 @@ private fun SettingsScreen(model: LauncherModel, onChoose: () -> Unit, onShareLo
         )
     }
 }
-
-// ---------------------------------------------------------------------------------------------------------------------
-// About
 
 @Composable
 private fun AboutScreen(model: LauncherModel) {

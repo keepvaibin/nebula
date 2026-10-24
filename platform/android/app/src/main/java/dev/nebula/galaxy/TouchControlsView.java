@@ -124,10 +124,6 @@ final class TouchControlsView extends View {
         invalidate();
     }
 
-    boolean controlsShown() {
-        return shown;
-    }
-
     /** Shown or hidden (hidden: every finger is the pointer). Hiding releases whatever was held. */
     void setControlsShown(boolean value) {
         if (shown == value) {
@@ -221,9 +217,6 @@ final class TouchControlsView extends View {
         final double angle = Math.toRadians(degrees);
         place(button, (float) (centre.x + reach * Math.cos(angle)), (float) (centre.y - reach * Math.sin(angle)), radius);
     }
-
-    // ------------------------------------------------------------------------------------------------------------
-    // Touch
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
@@ -407,9 +400,6 @@ final class TouchControlsView extends View {
         if (a >= 202.5 && a < 337.5) bits |= DOWN;
         return bits;
     }
-
-    // ------------------------------------------------------------------------------------------------------------
-    // Drawing
 
     @Override
     protected void onDraw(Canvas canvas) {

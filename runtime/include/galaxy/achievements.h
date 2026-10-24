@@ -4,9 +4,8 @@
 #include <span>
 #include <string_view>
 
-// Nebula's achievements: goals that take real play (every comet, every hidden star, Luigi's 120...), none that the
-// story hands out. The game checks them against its save data (NebulaAchievements, at each stage start) and asks the
-// host to unlock; they are the player's, kept across files in achievements.ini next to the settings.
+// Nebula's achievements. The game checks them against its save data (NebulaAchievements, at each stage start) and
+// asks the host to unlock them; they are kept across save files in achievements.ini next to the settings.
 namespace galaxy::achievements {
 
 struct Info {
@@ -21,6 +20,6 @@ struct Info {
 bool unlock(std::string_view id);
 [[nodiscard]] bool unlocked(std::string_view id);
 
-// Tests: the file kept (achievements.ini in the settings folder when empty) and the cache dropped.
+// Tests: sets the file (empty: achievements.ini in the settings folder) and drops the cache.
 void set_path_for_tests(const std::filesystem::path& path);
 }  // namespace galaxy::achievements

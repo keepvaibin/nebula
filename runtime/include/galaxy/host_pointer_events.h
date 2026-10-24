@@ -1,5 +1,9 @@
 #pragma once
 
+// The Windows mouse pointer as the Wii Remote pointer sees it: the coordinate
+// snapshot shared by the window procedure and cursor polling, the rules that
+// decide which sample wins, and the journal of button transitions.
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -33,18 +37,18 @@ struct HostPointerCoordinates {
     std::int32_t client_height = 0;
 };
 
-// One coherent publication of the absolute-pointer state read by the native HID adapter.
-// Coordinates, visibility, sequence counters and sample time come from the same producer update.
-// Reading them separately can mix parts of different mouse messages.
+// The absolute pointer state the Wii Remote report is built from. Coordinates, visibility, sequence
+// counters and sample time are published together; reading them separately can mix parts of
+// different mouse messages.
 struct HostPointerSnapshot {
     HostPointerCoordinates coordinates{};
     std::uint64_t absolute_sequence = 0;
     std::uint64_t event_sequence = 0;
-    // Acquisition time for the coordinates. Cursor polling may advance it, but must never make an old
+    // Acquisition time of the coordinates. Cursor polling may advance it, but never makes an old
     // Win32 client message look recent.
     std::uint64_t absolute_acquired_ms = 0;
-    // Authority clock, advanced only by WM_MOUSEMOVE and button messages that carry client coordinates.
-    // Cursor polling leaves it unchanged.
+    // Advanced only by WM_MOUSEMOVE and button messages that carry client coordinates; cursor
+    // polling leaves it unchanged.
     std::uint64_t last_client_message_ms = 0;
     std::uint64_t leave_sequence = 0;
 };
@@ -68,10 +72,10 @@ struct HostPointerIrAvailabilityDecision {
     bool invalid_sample_hold_allowed = false;
 };
 
-// IR coordinate ownership is geometric, not focus-based. A known outside coordinate is an explicit
-// sensor-bar loss. Only an invalid coordinate uses the bounded uncertainty hold. Focus still governs
-// keyboard and button ownership and OS-cursor visibility, but must not stop global cursor tracking
-// over the game client.
+// IR availability follows geometry, not focus: a known outside coordinate is a sensor-bar loss, and
+// only an invalid coordinate may use the bounded hold. Focus governs keyboard and button ownership
+// and OS-cursor visibility, but cursor tracking over the game client continues without it. The
+// first parameter (focus) is unused.
 [[nodiscard]] constexpr HostPointerIrAvailabilityDecision
 select_host_pointer_ir_availability(
     bool,
@@ -83,9 +87,9 @@ select_host_pointer_ir_availability(
     };
 }
 
-// Mouse buttons belong to the visible game client under the cursor, not to the focused window.
-// Clicking an unfocused game window must still reach the Wii Remote A/B report. An overlapping app
-// or a known outside coordinate must not inject a game click.
+// Mouse buttons belong to the visible game client under the cursor, not to the focused window: a
+// click on an unfocused game window reaches the Wii Remote A/B report, while an overlapping window
+// or a known outside coordinate never produces a game click. The first parameter (focus) is unused.
 [[nodiscard]] constexpr bool select_host_pointer_mouse_button_delivery(
     bool,
     bool absolute_valid,
@@ -96,9 +100,9 @@ select_host_pointer_ir_availability(
         game_window_under_cursor;
 }
 
-// Pure cursor-poll selection policy. The baseline is the last poll whose snapshot publication
-// succeeded. A rejected candidate is not installed as the baseline, so an unchanged candidate can
-// be reconsidered after the client-message authority/stale-center timeout expires.
+// Whether a cursor poll publishes. The baseline is the last poll whose publication succeeded; a
+// rejected candidate does not become the baseline, so an unchanged candidate is reconsidered once
+// the client-message authority or stale-center timeout expires.
 struct HostPointerCursorPollSelectionInput {
     bool accepted_baseline_valid = false;
     std::int32_t accepted_baseline_x = 0;
@@ -135,10 +139,10 @@ struct HostPointerCursorPollAuthorityDecision {
     bool stale_center_guard_allowed = false;
 };
 
-// Local GetCursorPos sampling is independent of the render thread's message pump and stays
-// authoritative at the native HID clock. The exception is RDP: some hosts return a stale centered
-// GetCursorPos while WM_MOUSEMOVE carries the live coordinate. Adaptive mode therefore keeps the
-// message authoritative only while it is recent. Forced mode trusts polling even in a remote session.
+// GetCursorPos sampling does not depend on the render thread's message pump and is authoritative at
+// the Wii Remote report rate. The exception is RDP: some hosts return a stale centred GetCursorPos
+// while WM_MOUSEMOVE carries the live coordinate, so in a remote session Adaptive mode lets a recent
+// message take precedence. Forced mode trusts polling even in a remote session.
 [[nodiscard]] constexpr HostPointerCursorPollAuthorityDecision
 select_host_pointer_cursor_poll_authority(
     HostPointerCursorPollMode mode,
@@ -156,9 +160,8 @@ select_host_pointer_cursor_poll_authority(
     };
 }
 
-// Seeding client geometry does not acquire a real cursor coordinate. A forced center for a new
-// renderer window starts inactive. Only a non-forced geometry refresh keeps an earlier
-// inside-client state.
+// Seeding client geometry does not acquire a cursor coordinate: a forced centre for a new window
+// starts outside, and only a non-forced geometry refresh keeps an earlier inside-client state.
 [[nodiscard]] constexpr bool
 select_host_pointer_seed_inside(bool previously_inside_client,
                                 bool force_center) noexcept {
@@ -169,18 +172,18 @@ struct HostPointerSeedPublicationInput {
     std::int32_t client_width = 0;
     std::int32_t client_height = 0;
     bool force_center = false;
-    // Legacy caller field; geometry seeding does not use this as sample time.
+    // Not read: seeding is not a cursor sample.
     std::uint64_t acquired_ms = 0;
 };
 
-// Publishes client geometry without treating the synthetic center as a visible cursor. The absolute
-// identity advances only when the renderer's seed or resize path reports a geometry change.
+// Publishes client geometry without treating the seeded centre as a visible cursor. The absolute
+// identity advances only when the seed or a resize changes the geometry.
 void publish_host_pointer_seed(
     HostPointerSnapshot& current,
     const HostPointerSeedPublicationInput& input) noexcept;
 
-// A same-size window move changes ScreenToClient's coordinate epoch without
-// acquiring a cursor or moving the retained point. Reject older in-flight polls.
+// A same-size window move changes what ScreenToClient returns without moving the
+// retained point; advancing the absolute identity rejects polls already in flight.
 void invalidate_host_pointer_geometry(HostPointerSnapshot& current) noexcept;
 
 struct HostPointerClientCoordinatePublicationInput {
@@ -198,9 +201,9 @@ void publish_host_pointer_client_coordinate(
     HostPointerSnapshot& current,
     const HostPointerClientCoordinatePublicationInput& input) noexcept;
 
-// Publishes an authoritative Win32 visibility loss (WM_MOUSELEAVE, focus loss or capture
-// cancellation). Advancing event_sequence makes an older cursor poll fail its compare-before-publish
-// check, so it cannot revive the pointer after the newer event.
+// Publishes a Win32 visibility loss (WM_MOUSELEAVE, focus loss or capture cancellation). Advancing
+// event_sequence makes an older cursor poll fail its compare-before-publish check, so it cannot
+// revive the pointer after the newer event.
 void publish_host_pointer_window_visibility_loss(
     HostPointerSnapshot& current) noexcept;
 
@@ -220,10 +223,10 @@ enum class HostPointerCursorInsidePublicationResult : std::uint8_t {
     PublishedInside,
 };
 
-// Applies a selected inside-client sample only while the cached event and geometry used to classify
-// it are still current. Each accepted absolute acquisition advances both identities, including
-// outside-to-inside recovery at an unchanged coordinate. absolute_acquired_ms therefore always
-// matches the absolute_sequence returned with it.
+// Applies a selected inside-client sample only while the event and geometry it was classified
+// against are still current. Each accepted acquisition advances both identities, including
+// outside-to-inside recovery at an unchanged coordinate, so absolute_acquired_ms always matches
+// the absolute_sequence returned with it.
 [[nodiscard]] HostPointerCursorInsidePublicationResult
 apply_host_pointer_cursor_inside_publication(
     HostPointerSnapshot& current,
@@ -244,8 +247,8 @@ enum class HostPointerFallbackInsidePublicationResult : std::uint8_t {
     PublishedInside,
 };
 
-// First-acquisition fallback, used before a coordinate-bearing event has filled the cached geometry.
-// Both observed identities are used for revalidation, and an accepted acquisition advances both.
+// The first acquisition, before a coordinate-bearing message has filled the geometry. Both observed
+// identities are revalidated, and an accepted acquisition advances both.
 [[nodiscard]] HostPointerFallbackInsidePublicationResult
 apply_host_pointer_fallback_inside_publication(
     HostPointerSnapshot& current,
@@ -268,8 +271,8 @@ enum class HostPointerCursorOutsidePublicationResult : std::uint8_t {
 };
 
 // Applies an authoritative outside-client observation only if the message sequence and client bounds
-// still match the snapshot used to classify it. A slow GetCursorPos or ScreenToClient call therefore
-// cannot overwrite a newer WndProc coordinate or resize.
+// still match the snapshot it was classified against, so a slow GetCursorPos or ScreenToClient call
+// cannot overwrite a newer window-procedure coordinate or resize.
 [[nodiscard]] HostPointerCursorOutsidePublicationResult
 apply_host_pointer_cursor_outside_publication(
     HostPointerSnapshot& current,
@@ -280,17 +283,17 @@ struct HostPointerCaptureCleanupDecision {
     bool clear_window_state = false;
 };
 
-// ReleaseCapture sends WM_CAPTURECHANGED after a normal final button-up. That must not turn a pointer
-// still inside the client into a synthetic leave. WM_CANCELMODE, and capture loss while a button is
-// held, remain cleanup events.
+// ReleaseCapture sends WM_CAPTURECHANGED after a normal final button-up; that does not turn a pointer
+// still inside the client into a leave. WM_CANCELMODE, and capture loss while a button is held, are
+// cleanup events.
 [[nodiscard]] HostPointerCaptureCleanupDecision
 select_host_pointer_capture_cleanup(
     bool cancel_mode,
     bool button_pressed) noexcept;
 
-// A small multi-writer transactional cache. Mutations run under the same lock as snapshot(), so
-// read-modify-write publications cannot lose sequence increments, and readers never see a torn
-// tuple. Mutators must not call back into this cache.
+// The snapshot behind one lock shared by every writer and reader: read-modify-write publications
+// cannot lose sequence increments, and readers never see a torn snapshot. Mutations must not call
+// back into the cache.
 class HostPointerSnapshotCache {
 public:
     HostPointerSnapshotCache() = default;
@@ -344,9 +347,8 @@ struct HostPointerTransitionPoll {
 };
 
 // Bounded, non-destructive transition journal. Each reader keeps its own sequence cursor and reads
-// the event after it. A reader more than kHostPointerTransitionCapacity events behind gets the
-// Overflow result, which is fatal to the caller, because silent resynchronization would lose button
-// edges.
+// the event after it. A reader more than kHostPointerTransitionCapacity events behind gets Overflow,
+// which the caller treats as fatal: resynchronizing silently would lose button edges.
 class HostPointerEventRing {
 public:
     HostPointerEventRing() = default;
@@ -357,16 +359,16 @@ public:
     HostPointerEventRing(HostPointerEventRing&&) = delete;
     HostPointerEventRing& operator=(HostPointerEventRing&&) = delete;
 
-    // Returns true only when the logical level changes and a transition is recorded. Repeated down or up
-    // messages are ignored and leave the sequence unchanged.
+    // True when the button's level changed and a transition was recorded; a repeated down or up
+    // message leaves the sequence unchanged.
     bool accept_button_transition(
         HostPointerButton button,
         bool down,
         const HostPointerCoordinates& coordinates,
         std::uint64_t absolute_acquired_ms) noexcept;
 
-    // Both invalidation paths start a new input epoch, release both logical buttons, and publish one
-    // CancelAll transition in that epoch.
+    // Both start a new focus epoch, release both buttons and publish one CancelAll transition in
+    // that epoch.
     void invalidate_focus(
         const HostPointerCoordinates& coordinates,
         std::uint64_t absolute_acquired_ms) noexcept;

@@ -258,9 +258,7 @@ public class GameActivity extends SDLActivity {
         }
     }
 
-    // ----------------------------------------------------------------------------------------------------------------
-    // Called by libmain.so (host_window_sdl.cpp, on SDL's thread)
-
+    // Called by libmain.so (host_window_sdl.cpp, on SDL's thread).
     public void showHomeMenu() {
         runOnUiThread(() -> {
             if (homeMenu != null) {
@@ -271,6 +269,7 @@ public class GameActivity extends SDLActivity {
         });
     }
 
+    // Called by libmain.so (host_window_sdl.cpp, on SDL's thread).
     public void hideHomeMenu() {
         runOnUiThread(() -> {
             if (homeMenu != null) {
@@ -279,9 +278,6 @@ public class GameActivity extends SDLActivity {
             }
         });
     }
-
-    // ----------------------------------------------------------------------------------------------------------------
-    // Controllers and the touch controls
 
     private void applyControlsVisibility() {
         if (controls != null) {
@@ -361,8 +357,6 @@ public class GameActivity extends SDLActivity {
         }
         return super.dispatchGenericMotionEvent(event);
     }
-
-    // ----------------------------------------------------------------------------------------------------------------
 
     /** SDL's surface, telling the renderer when it goes and comes back (host_window.h's surface withdrawal). */
     static final class GameSurface extends SDLSurface {

@@ -1,3 +1,6 @@
+// Mouse pointer snapshot publication, cursor-poll selection and the button
+// transition journal.
+
 #include "galaxy/host_pointer_events.h"
 #include "galaxy/content_viewport.h"
 
@@ -969,7 +972,7 @@ bool geometry_and_known_outside_are_authoritative_for_ir_availability() {
     bool passed =
         expect(focused_inside.acquired_inside_available &&
                    !focused_inside.invalid_sample_hold_allowed,
-               "focused valid inside acquisition makes guest IR available");
+               "focused valid inside acquisition makes the IR available");
 
     const auto unfocused_inside =
         galaxy::host::select_host_pointer_ir_availability(false, true, true);

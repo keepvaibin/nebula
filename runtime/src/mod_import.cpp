@@ -26,12 +26,6 @@
 #include <system_error>
 
 #if defined(_WIN32)
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
 #include <windows.h>
 #include <shellapi.h>
 #else
@@ -428,7 +422,7 @@ bool remove_mod(const fs::path& mods_folder, const std::string& id, std::string*
         return false;
     }
 #if defined(_WIN32)
-    // To the recycle bin: the user can get it back.
+    // To the recycle bin, so it can be restored.
     std::wstring from = folder.wstring();
     from.push_back(L'\0');
     SHFILEOPSTRUCTW operation{};

@@ -16,7 +16,6 @@
 #include <iterator>
 #include <map>
 #include <mutex>
-#include <algorithm>
 #include <set>
 #include <sstream>
 
@@ -57,8 +56,6 @@ std::optional<fs::path> child_any_case(const fs::path& dir, std::string_view nam
     }
     return std::nullopt;
 }
-
-// --- Riivolution --------------------------------------------------------------------------------------------------
 
 struct FilePatch {
     std::string disc, external;
@@ -385,8 +382,6 @@ std::vector<Patch> generate_patches(const RiivDisc& d, const std::string& game_i
     return active;
 }
 
-// --- Mod folders ---------------------------------------------------------------------------------------------------
-
 // The disc's top-level folders of every release: a mod folder holding one of them is files in the disc's layout.
 constexpr const char* kDiscFolders[] = {"AudioRes", "LayoutData", "MapPartsData", "MovieData", "ObjectData",
                                          "ParticleData", "StageData", "SystemData", "UsEnglish", "UsFrench",
@@ -446,7 +441,7 @@ void list_files(const fs::path& dir, const std::string& prefix, std::set<std::st
     }
 }
 
-// The texture names (tex1_..., no custom level or _arb) of a pack folder.
+// The texture names of a pack folder (tex1_..., mip levels left out, _arb dropped).
 void list_textures(const fs::path& dir, std::set<std::string>& out) {
     std::error_code error;
     for (auto it = fs::recursive_directory_iterator(dir, fs::directory_options::skip_permission_denied, error);
@@ -967,9 +962,10 @@ struct DolTable {
     std::uint32_t size;
 };
 
-// Native equivalents of known patches to the console's code, by their exact bytes for a release (the disc's region):
-// each sets the game's NEBULA_PATCH_* switch (nebula_game_api.h); id 0: the console's alone (Nebula has its own).
-// Kaizo Mario Galaxy Rebalanced 2.1 (NTSC and the shared UEJ patches) and Super Lillie Galaxy's crash debugger.
+// Native equivalents of known patches to the console's code, matched by their exact bytes for a release (the disc's
+// region): each sets the game's NEBULA_PATCH_* switch (nebula_game_api.h); id 0 has no native counterpart because
+// Nebula does the job itself. Covers Kaizo Mario Galaxy Rebalanced 2.1 (NTSC and the shared UEJ patches) and Super
+// Lillie Galaxy's crash debugger.
 struct NativeCodePatch {
     char region;
     std::uint32_t address;

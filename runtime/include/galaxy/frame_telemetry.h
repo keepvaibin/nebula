@@ -1,3 +1,4 @@
+// Frame counts published once a second in shared memory for the monitoring tools (tools/telemetry).
 #pragma once
 
 #include <array>
@@ -7,17 +8,17 @@
 
 namespace galaxy::telemetry {
 
-// Windows local-session IPC, little endian, 32 uint64 words (256 bytes).
-// Mapping: Local\Nebula.FrameTelemetry.v1.<PID>; mutex: same + .Guard.
-// Readers take the mutex with a zero timeout and validate process creation
-// FILETIME, schema, active flag and QPC freshness. No render-thread IPC writes.
-// 19=worker CPU100ns (OS granularity),20=max atomic sample us,24=worker cycles.
-// Display fields21..23 are startup settings, not live resize dimensions.
+// A local-session mapping Local\Nebula.FrameTelemetry.v1.<pid> of 32 little-endian uint64 words, guarded by the
+// mutex <mapping name>.Guard. Readers take the mutex with a zero timeout and check the process creation FILETIME, the
+// schema, the active flag and the QPC stamp's age. Words: 0 magic, 1 schema, 2 size, 3 pid, 4 creation FILETIME,
+// 5 serial, 6 QPC stamp, 7 QPC frequency, 8 active, 9..17 Counts, 18 steady-clock ns, 19 publisher thread CPU time
+// (100 ns), 20 longest publication (us), 21..23 the startup width, height and internal scale (not live), 24 publisher
+// thread cycles. The publisher runs on its own thread, never the render thread.
 inline constexpr std::uint64_t kMagic = 0x47414c5854463031ull;
 inline constexpr std::size_t kWords = 32;
 using Packet = std::array<std::uint64_t, kWords>;
-// copies, first game-timed serial Present returns, game-timed returns, repeats,
-// last serial/stamp/address, last production/first-return steady nanoseconds.
+// Frame-buffer copies, first Present returns of a new game-timed serial, game-timed returns, repeats, the last
+// serial, stamp and address, and the steady-clock ns of the last production and of its first return.
 using Counts = std::array<std::uint64_t, 9>;
 
 class Publisher {

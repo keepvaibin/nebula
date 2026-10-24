@@ -1,6 +1,5 @@
-// The inverse DCT and scan loop of native_thp_video.cpp, which includes this
-// file once per fused multiply-add: `madd` is declared by the including
-// namespace (see there). Every other name comes from native_thp_video.cpp.
+// The inverse DCT and scan loop of native_thp_video.cpp, which includes this file once per fused multiply-add:
+// the including namespace declares `madd`; every other name comes from native_thp_video.cpp.
 
 using FloatRow = std::array<float, 8>;
 
@@ -149,7 +148,6 @@ s32 decode_scan(std::span<const u8> file, DecodeContext& context, u8* tileY, u8*
   BitReader bits{file, context.scanOffset};
   const u16 mcuColumns = static_cast<u16>((context.width + 15) / 16);
   const u16 mcuRows = static_cast<u16>((context.height + 15) / 16);
-  u32 restartCount = 0;
   for (u16 mcuY = 0; mcuY < mcuRows; ++mcuY) {
     for (u16 mcuX = 0; mcuX < mcuColumns; ++mcuX) {
       const u16 lumaX = static_cast<u16>(mcuX * 16);
@@ -166,14 +164,6 @@ s32 decode_scan(std::span<const u8> file, DecodeContext& context, u8* tileY, u8*
           !decode_and_write_block(bits, context, 2, tileV, chromaWidth, chromaHeight,
                                   static_cast<u16>(mcuX * 8), static_cast<u16>(mcuY * 8))) {
         return kBadSyntax;
-      }
-
-      if (context.restartInterval != 0 && ++restartCount == context.restartInterval) {
-        bits.byte_align();
-        restartCount = 0;
-        for (Component& component : context.components) {
-          component.predictedDc = 0;
-        }
       }
     }
   }

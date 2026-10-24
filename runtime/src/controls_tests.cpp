@@ -1,6 +1,7 @@
 // Remappable controls: binding model, ini round trip, evaluation, chord
 // mapping, Switch report decoding, the motion integrator, pointer ownership,
-// the stick pointer, the jump/back context rule and settings migration.
+// the stick pointer, the jump/back context rule, tilt sections, vibration and
+// settings migration.
 
 #include "galaxy/input_bindings.h"
 #include "galaxy/native_input.h"
@@ -20,7 +21,6 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
-#include <fstream>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -709,7 +709,7 @@ double hide_time(Path&& at, double seconds, double report_s = 0.015) {
 
 void test_rest_hide() {
     using P = std::array<float, 2>;
-    // A perfectly still pointer hides after the default 4 s.
+    // A still pointer hides after the default 4 s.
     const double still = hide_time([](double) { return P{0.3f, -0.2f}; }, 6.0);
     expect(still >= 3.99 && still <= 4.03, "a still pointer hides after 4 s");
     // Tremor (+-0.025 units at 9 Hz) plus small jerks (0.08 units for 60 ms,
@@ -970,9 +970,9 @@ void test_rumble_gate() {
     expect(!rb::motor_should_run(clock_back), "a publication from the future is not trusted");
 }
 
-// RMGE01 SphereAccelSensorController::clacXY for the Wii Remote (0x80330230):
-// X from (a.x, |a.y|), Y the signed angle of (-a.y, a.z) from (cos 10, sin
-// 10); 5-degree dead zone, full at 25 degrees.
+// SphereAccelSensorController::clacXY for the Wii Remote: X from (a.x, |a.y|),
+// Y the signed angle of (-a.y, a.z) from (cos 10, sin 10); 5-degree dead zone,
+// full at 25 degrees.
 std::array<float, 2> star_ball_clac_xy(const tilt::Vec3& a) {
     constexpr float kDeg = 3.14159265f / 180.0f;
     const float dead = 5.0f * kDeg, full = 25.0f * kDeg, lean = 10.0f * kDeg;
@@ -992,15 +992,85 @@ std::array<float, 2> star_ball_clac_xy(const tilt::Vec3& a) {
     return {shape(x), shape(y)};
 }
 
-// RMGE01 SurfRay::updateRotate's turn input (0x80332820): turning when
-// a.z > -0.7 or |a.x| > 0.15; amount a.x pushed away from zero by
-// clamp(-a.z, 0, 1), clamped to 1.5.
+// SurfRay::updateRotate's turn input: turning when a.z > -0.7 or
+// |a.x| > 0.15; amount a.x pushed away from zero by clamp(-a.z, 0, 1),
+// clamped to 1.5.
 float ray_turn(const tilt::Vec3& a) {
     if (!(a[2] > -0.7f || std::fabs(a[0]) > 0.15f)) return 0.0f;
     float f = a[0];
     const float extra = std::clamp(-a[2], 0.0f, 1.0f);
     if (f > 0.0f) f += extra; else if (f < 0.0f) f -= extra;
     return std::clamp(f, -1.5f, 1.5f);
+}
+
+void test_tilt() {
+    using namespace tilt;
+    const auto close_to = [](float a, float b, float eps) { return std::fabs(a - b) <= eps; };
+    // Star Ball: the controller's neutral hold is clacXY's zero.
+    const auto neutral = star_ball_clac_xy(remote_gravity(Section::StarBall, {0.0f, 1.0f, 0.0f}));
+    expect(close_to(neutral[0], 0.0f, 1e-4f) && close_to(neutral[1], 0.0f, 1e-4f), "star ball: the neutral hold rolls nowhere");
+    // Tilt right / forward 15 degrees: half of the range, positive.
+    const auto right = star_ball_clac_xy(remote_gravity(Section::StarBall, up_from_angles(15.0f, 0.0f)));
+    const auto forward = star_ball_clac_xy(remote_gravity(Section::StarBall, up_from_angles(0.0f, 15.0f)));
+    const auto left_back = star_ball_clac_xy(remote_gravity(Section::StarBall, up_from_angles(-15.0f, -15.0f)));
+    expect(close_to(right[0], 0.5f, 0.02f) && close_to(right[1], 0.0f, 0.02f), "star ball: 15 degrees right is X +0.5");
+    expect(close_to(forward[1], 0.5f, 0.02f) && close_to(forward[0], 0.0f, 0.02f), "star ball: 15 degrees forward is Y +0.5");
+    expect(left_back[0] < -0.4f && left_back[1] < -0.4f, "star ball: left and back are negative");
+    // The tutorial's raise check: within 30 degrees of (0,-1,0).
+    const Vec3 held = remote_gravity(Section::StarBall, {0.0f, 1.0f, 0.0f});
+    expect(-held[1] > std::cos(30.0f * 3.14159265f / 180.0f), "star ball: the neutral passes the raise check");
+    // A neutral captured in the player's own hold (30 degrees toward the
+    // face) is zero; 15 degrees more forward is +0.5.
+    const Vec3 hold = up_from_angles(0.0f, -30.0f);
+    const auto from_hold = star_ball_clac_xy(remote_gravity(Section::StarBall, relative_up(hold, hold)));
+    const auto more = star_ball_clac_xy(remote_gravity(Section::StarBall, relative_up(up_from_angles(0.0f, -15.0f), hold)));
+    expect(close_to(from_hold[0], 0.0f, 1e-3f) && close_to(from_hold[1], 0.0f, 1e-3f), "star ball: the captured hold is neutral");
+    expect(close_to(more[1], 0.5f, 0.03f), "star ball: tilt is measured from the captured hold");
+    // Stick: full deflection is the full range.
+    const auto stick_right = star_ball_clac_xy(remote_gravity(Section::StarBall, up_from_stick(Section::StarBall, 1.0f, 0.0f)));
+    const auto stick_down = star_ball_clac_xy(remote_gravity(Section::StarBall, up_from_stick(Section::StarBall, 0.0f, -1.0f)));
+    expect(close_to(stick_right[0], 1.0f, 0.02f) && close_to(stick_right[1], 0.0f, 0.02f),
+           "star ball: stick right is full right");
+    expect(close_to(stick_down[1], -1.0f, 0.02f) && close_to(stick_down[0], 0.0f, 0.02f),
+           "star ball: stick down is full back");
+    // Ray: flat neutral does not turn; a twist right turns positive, left
+    // negative, proportionally.
+    expect(ray_turn(remote_gravity(Section::Ray, {0.0f, 1.0f, 0.0f})) == 0.0f, "ray: the neutral hold does not turn");
+    const float twist = ray_turn(remote_gravity(Section::Ray, up_from_angles(20.0f, 0.0f)));
+    expect(close_to(twist, std::sin(20.0f * 3.14159265f / 180.0f), 0.01f), "ray: a 20-degree twist right turns +sin 20");
+    expect(ray_turn(remote_gravity(Section::Ray, up_from_angles(-20.0f, 0.0f))) < -0.3f, "ray: a twist left turns negative");
+    expect(close_to(ray_turn(remote_gravity(Section::Ray, up_from_stick(Section::Ray, 1.0f, 0.0f))),
+                std::sin(kRayStickDegrees * 3.14159265f / 180.0f), 0.01f),
+           "ray: full stick is a 50-degree twist");
+    // Counts: the flat remote is the rest reading.
+    const Counts rest = accel_counts({0.0f, 0.0f, 1.0f});
+    expect(rest.x == kWiimoteRestAccelX && rest.y == kWiimoteRestAccelY && rest.z == kWiimoteRestAccelZ,
+           "the flat remote is the rest reading");
+    // State: inactive outside sections; the neutral is captured at the start
+    // and again on recenter; a motion controller steers by tilt only, a
+    // controller without motion by the stick.
+    Tilt t{};
+    expect(!t.update(Section::None, nullptr, 0.0f, 0.0f, false).active, "no section: no tilt");
+    const Vec3 start = up_from_angles(5.0f, -20.0f);
+    auto out = t.update(Section::StarBall, &start, 0.0f, 0.0f, false);
+    auto xy = star_ball_clac_xy(out.game);
+    expect(out.active && !out.from_stick && close_to(xy[0], 0.0f, 1e-3f) && close_to(xy[1], 0.0f, 1e-3f),
+           "section start captures the hold as neutral");
+    const Vec3 tilted = up_from_angles(5.0f, -5.0f);
+    xy = star_ball_clac_xy(t.update(Section::StarBall, &tilted, 0.0f, 0.0f, false).game);
+    expect(xy[1] > 0.4f, "tilting forward from the hold rolls forward");
+    xy = star_ball_clac_xy(t.update(Section::StarBall, &tilted, 0.0f, 0.0f, true).game);
+    expect(close_to(xy[1], 0.0f, 1e-3f), "recenter takes the current hold as neutral");
+    out = t.update(Section::StarBall, &tilted, -1.0f, 0.0f, false);
+    xy = star_ball_clac_xy(out.game);
+    expect(!out.from_stick && close_to(xy[0], 0.0f, 1e-3f), "a Pro Controller's stick does not tilt");
+    out = t.update(Section::StarBall, nullptr, -1.0f, 0.0f, false);
+    xy = star_ball_clac_xy(out.game);
+    expect(out.from_stick && xy[0] < -0.9f, "without motion (Xbox, keyboard) the stick steers");
+    out = t.update(Section::StarBall, nullptr, 0.1f, 0.05f, false);
+    xy = star_ball_clac_xy(out.game);
+    expect(close_to(xy[0], 0.0f, 1e-3f) && close_to(xy[1], 0.0f, 1e-3f), "a stick at rest is level");
+    expect(!t.update(Section::None, &tilted, 0.0f, 0.0f, false).active && !t.neutral_valid, "leaving resets the neutral");
 }
 
 void test_recenter_hold() {
@@ -1392,67 +1462,6 @@ void test_kpad_dots_stable() {
     expect(monotonic, "a steady sweep moves the dots in single small steps");
 }
 
-int imu_replay(const char* path) {
-    // Feeds a recorded Pro Controller stream (pro_passive.py --raw: "<time>
-    // <report hex>") through the decoder and SwitchMotion; prints drift.
-    std::ifstream file(path);
-    if (!file) {
-        std::cerr << "cannot open " << path << '\n';
-        return 2;
-    }
-    switch_hid::SwitchMotion motion{};
-    switch_hid::ImuCal cal{};
-    switch_hid::MotionSettings settings{};
-    double t0 = -1.0;
-    float x = 0.0f, y = 0.0f, peak = 0.0f;
-    // The live pointer (every sample, from the first report) through the
-    // default still-pointer rule.
-    float live_x = 0.0f, live_y = 0.0f;
-    PointerRestHide hide{};
-    double hidden_at = -1.0;
-    int reports = 0, shakes = 0;
-    std::string hex;
-    double time = 0.0;
-    while (file >> time >> hex) {
-        std::vector<std::uint8_t> bytes;
-        for (std::size_t i = 0; i + 1 < hex.size(); i += 2) {
-            bytes.push_back(static_cast<std::uint8_t>(std::stoul(hex.substr(i, 2), nullptr, 16)));
-        }
-        switch_hid::DecodedState decoded{};
-        if (!switch_hid::decode_pro_report(bytes, cal, decoded)) continue;
-        if (t0 < 0.0) t0 = time;
-        const auto us = static_cast<std::uint64_t>((time - t0) * 1e6);
-        for (std::size_t i = 0; i < decoded.imu_count; ++i) {
-            const auto out = motion.feed(decoded.imu[i], 0.005f, us, settings);
-            live_x += out.pointer_x;
-            live_y -= out.pointer_y;
-            // Drift is counted after the first second (one rest window has
-            // measured the bias that the stored calibration would remove).
-            if (us < 1'000'000u) continue;
-            x += out.pointer_x;
-            y += out.pointer_y;
-            shakes += out.shake_started ? 1 : 0;
-            peak = std::max(peak, std::sqrt(x * x + y * y));
-        }
-        if (hide.update(live_x, live_y, us + 1'000'000u, true, false, true, kDefaultPointerHideSeconds,
-                        kDefaultPointerHideRadius)) {
-            if (hidden_at < 0.0) hidden_at = static_cast<double>(us) * 1e-6;
-        } else {
-            hidden_at = -1.0;
-        }
-        ++reports;
-    }
-    const auto& bias = motion.gyro_bias();
-    std::printf("reports=%d span=%.1fs rest-windows=%u bias-dps=(%.3f,%.3f,%.3f) drift-after-1s-units=(%.4f,%.4f) "
-                "peak-units=%.4f shakes=%d gravity=(%.3f,%.3f,%.3f) hide-radius=%.2f hide-seconds=%.1f "
-                "hidden-at-s=%.3f hidden-at-end=%d\n",
-                reports, time - t0, motion.rest_windows(), bias[0] * 57.2958f, bias[1] * 57.2958f,
-                bias[2] * 57.2958f, x, y, peak, shakes, motion.gravity()[0], motion.gravity()[1],
-                motion.gravity()[2], kDefaultPointerHideRadius, kDefaultPointerHideSeconds, hidden_at,
-                hide.hidden ? 1 : 0);
-    return 0;
-}
-
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -1461,9 +1470,6 @@ int main(int argc, char** argv) {
     if (argc > 1 && std::strcmp(argv[1], "--print-defaults") == 0) {
         std::cout << format_controls_settings(default_controls_config());
         return 0;
-    }
-    if (argc > 2 && std::strcmp(argv[1], "--imu-replay") == 0) {
-        return imu_replay(argv[2]);
     }
     test_names_round_trip();
     test_ini_round_trip();
@@ -1481,6 +1487,7 @@ int main(int argc, char** argv) {
     test_recenter_hold();
     test_rumble_encoding();
     test_rumble_gate();
+    test_tilt();
     test_defaults_and_migration();
     test_playstation_and_steam_schemes();
     test_kpad_dots_stable();
