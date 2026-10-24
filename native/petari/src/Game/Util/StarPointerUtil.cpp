@@ -498,12 +498,22 @@ namespace MR {
         return ::getStarPointerLayout(channel)->mRadius;
     }
 
+#ifdef TARGET_PC
+    // The 2D position menus and layouts test is this frame's, where the pointer is drawn (StarPointerLayout).
+    TVec2f* getStarPointerScreenPosition(s32 channel) {
+        return &::getStarPointerController(channel)->mInfo.mPos;
+    }
+
+    TVec2f getStarPointerScreenPositionOrEdge(s32 channel) {
+        TVec2f pos(::getStarPointerController(channel)->mInfo.mPos);
+#else
     TVec2f* getStarPointerScreenPosition(s32 channel) {
         return &::getStarPointerController(channel)->mPastInfo.mPos;
     }
 
     TVec2f getStarPointerScreenPositionOrEdge(s32 channel) {
         TVec2f pos(::getStarPointerController(channel)->mPastInfo.mPos);
+#endif
         StarPointerFunction::forceInsideScreenEdge(&pos);
         return pos;
     }
