@@ -346,10 +346,13 @@ bool present_on_copy_enabled() {
 }
 
 // The XFB a VI shows: the newest finished copy in the place of the one it names (newest_finished_xfb), a game frame
-// sooner (47 ms from the copy to the present at 60 fps before). GALAXY_PRESENT_NEWEST_XFB=0 shows the named (A/B).
-const XfbTexture* displayed_xfb(const XfbTexture* named, const XfbTexture* latest, bool latest_displayed) {
+// sooner (47 ms from the copy to the present at 60 fps before). Not while frames interpolate: their sequence ends on
+// the frame the VI names, and the newer one shown before its sub-frames would step time back each game frame (fades
+// and motion see-saw at 60 Hz). GALAXY_PRESENT_NEWEST_XFB=0 shows the named (A/B).
+const XfbTexture* displayed_xfb(const XfbTexture* named, const XfbTexture* latest, bool latest_displayed,
+                                bool interpolating) {
     static const bool enabled = read_env_u64("GALAXY_PRESENT_NEWEST_XFB", 1u) != 0u;
-    return enabled && latest_displayed ? newest_finished_xfb(named, latest) : named;
+    return enabled && latest_displayed && !interpolating ? newest_finished_xfb(named, latest) : named;
 }
 
 // GALAXY_GX_FRAME_TIMING_SAMPLE=N times every draw of one frame in N (N >= 2), so a recording holds
@@ -8653,7 +8656,7 @@ void GxBackend::present_cached_xfb_on_thread(
         ? nullptr
         : (requested_specific_xfb
             ? displayed_xfb(efb_copies_.find_xfb(displayed_xfb_addr), latest,
-                            latest != nullptr && is_vi_named_xfb(latest->guest_addr))
+                            latest != nullptr && is_vi_named_xfb(latest->guest_addr), interp_recording_)
             : latest);
     const std::uint64_t current_xfb_stamp =
         latest != nullptr
@@ -9319,7 +9322,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         ? nullptr
         : (requested_specific_xfb
             ? displayed_xfb(efb_copies_.find_xfb(chunk.displayed_xfb_addr), latest_xfb,
-                            latest_xfb != nullptr && is_vi_named_xfb(latest_xfb->guest_addr))
+                            latest_xfb != nullptr && is_vi_named_xfb(latest_xfb->guest_addr), interp_recording_)
             : latest_xfb);
     const std::uint64_t current_xfb_stamp =
         latest_xfb != nullptr

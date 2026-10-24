@@ -293,9 +293,10 @@ at the start); removing a mod is in Nebula Settings. Texture packs, texture dump
 Graphics page.
 
 On Switch controllers the menu uses the console's meaning: A changes, B closes. PlayStation: Cross changes, Circle
-closes, Square clears, Triangle applies. Pages: Display, Graphics, Controls, Audio, General (text speed, language,
-Discord, Miis), Mods and System. Audio and text speed changes apply live; a new language applies when Nebula next
-starts, as the game reads it once at boot. Settings files are written through flushed sibling temporaries
+closes, Square clears, Triangle applies. Pages: Display, Graphics, Controls, Audio, General (text speed, button
+icons, language, Discord, Miis), Mods and System. Every change waits for Apply, the mix and text speed included;
+closing the menu or Undo drops what was not applied. A new language applies when Nebula next starts, as the game
+reads it once at boot. Settings files are written through flushed sibling temporaries
 and atomically replaced; a failed save stays dirty and is retried on the next
 close or at shutdown.
 

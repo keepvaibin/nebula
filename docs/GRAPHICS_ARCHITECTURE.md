@@ -182,6 +182,13 @@ replay reads, and matched draws blend their vertices with the older frame's. The
 command list is recorded once per pair. Two governors keep the game at 60: GPU time per
 presented frame (as many frames as fit in 15 ms) and VIs the game misses.
 
+A vertex colour that turns visible or invisible (alpha to or from zero) or jumps by more than
+half its range between the two frames shows the newer value, as a texture coordinate that steps
+does. The sequence ends on the frame the VI names: a retrace shows that frame, not a newer
+finished copy (which a 60 fps present shows), or each game frame would step back in time.
+Measured at 240 fps: closing the pause menu lit one game frame's sub-frames 18 levels above both
+frames; fades see-sawed 5-8 levels every game frame; both gone.
+
 With a temporal upscaler (DLSS, FSR 3) at rates that are multiples of 60,
 every presented frame, the one at t = 1 included, is a replay with its own jitter phase and
 motion vectors relative to the frame presented before it, upscaled once. When no sub-frame fits

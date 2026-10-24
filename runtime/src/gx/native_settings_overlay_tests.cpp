@@ -465,16 +465,11 @@ int main() {
     runtime.audio.music = 1.0f;
     runtime.audio.sfx = 0.65f;
     galaxy::set_runtime_settings(runtime);
+    passed &= expect(key(VK_BACK), "Backspace takes the mix as it is now");
     passed &= expect(key(VK_LEFT), "left adjusts master gain");
-    passed &= expect_near(
-        galaxy::get_runtime_settings().audio.master,
-        0.95f,
-        "audio page decreases master gain");
+    passed &= expect_near(galaxy::get_runtime_settings().audio.master, 1.0f, "the mix waits for apply");
+    passed &= expect(galaxy::gx::native_settings_overlay_snapshot().pending_changes == 1u, "the gain is pending");
     passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "music row is adjustable");
-    passed &= expect_near(
-        galaxy::get_runtime_settings().audio.music,
-        1.05f,
-        "audio page increases music gain");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
     passed &= expect(
         snapshot.row_count == 7u,
@@ -482,63 +477,65 @@ int main() {
     passed &= expect(
         key(VK_DOWN) && key(VK_DOWN) && key(VK_DOWN) && key(VK_LEFT),
         "ambience row is independently adjustable");
-    passed &= expect_near(
-        galaxy::get_runtime_settings().audio.ambience,
-        0.95f,
-        "audio page decreases ambience gain");
-    passed &= expect_near(
-        galaxy::get_runtime_settings().audio.sfx,
-        0.65f,
-        "audio page leaves SFX unchanged while adjusting ambience");
     passed &= expect(key(VK_DOWN) && key(VK_LEFT), "cutscene row is adjustable");
-    passed &= expect_near(
-        galaxy::get_runtime_settings().audio.cutscene,
-        0.95f,
-        "audio page decreases cutscene gain");
     passed &= expect_near(
         galaxy::get_runtime_settings().audio.wiimote_speaker,
         0.0f,
         "Wiimote sounds start off");
     passed &= expect(key(VK_DOWN) && key(VK_RIGHT), "Wiimote sounds row is adjustable");
-    passed &= expect_near(
-        galaxy::get_runtime_settings().audio.wiimote_speaker,
-        0.05f,
-        "audio page raises Wiimote sounds");
+    passed &= expect(key(VK_RETURN), "Enter applies the mix");
+    passed &= expect_near(galaxy::get_runtime_settings().audio.master, 0.95f, "audio page decreases master gain");
+    passed &= expect_near(galaxy::get_runtime_settings().audio.music, 1.05f, "audio page increases music gain");
+    passed &= expect_near(galaxy::get_runtime_settings().audio.ambience, 0.95f, "audio page decreases ambience gain");
+    passed &= expect_near(galaxy::get_runtime_settings().audio.sfx, 0.65f,
+                          "audio page leaves SFX unchanged while adjusting ambience");
+    passed &= expect_near(galaxy::get_runtime_settings().audio.cutscene, 0.95f, "audio page decreases cutscene gain");
+    passed &= expect_near(galaxy::get_runtime_settings().audio.wiimote_speaker, 0.05f,
+                          "audio page raises Wiimote sounds");
+    passed &= expect(galaxy::gx::native_settings_overlay_snapshot().pending_changes == 0u, "nothing pending after apply");
 
     passed &= expect(key(VK_TAB), "Tab enters the general page");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
     passed &= expect(snapshot.tab == 4u && snapshot.row_count == 8u,
                      "general page has text speed, button icons, language, Discord status and Mii import (a heading, "
                      "import, count, folder)");
+    // Each row's text (the draft) and the setting in force (applied).
+    const auto shown = [](unsigned row) { return galaxy::gx::native_settings_row_text_for_tests(row); };
     passed &= expect(galaxy::get_runtime_settings().text_speed == 1u, "text speed starts at the game's pace");
-    passed &= expect(key(VK_RIGHT) && galaxy::get_runtime_settings().text_speed == 2u, "right raises text speed live");
-    passed &= expect(key(VK_RIGHT) && key(VK_RIGHT) && galaxy::get_runtime_settings().text_speed == 4u,
-                     "text speed reaches instant");
-    passed &= expect(key(VK_RIGHT) && galaxy::get_runtime_settings().text_speed == 4u, "text speed stops at instant");
-    passed &= expect(key(VK_LEFT) && key(VK_LEFT) && galaxy::get_runtime_settings().text_speed == 2u,
-                     "left lowers text speed");
+    passed &= expect(key(VK_RIGHT) && shown(0u) == "TEXT SPEED: 2X" && galaxy::get_runtime_settings().text_speed == 1u,
+                     "right raises text speed, waiting for apply");
+    passed &= expect(key(VK_RIGHT) && key(VK_RIGHT) && shown(0u) == "TEXT SPEED: INSTANT", "text speed reaches instant");
+    passed &= expect(key(VK_RIGHT) && shown(0u) == "TEXT SPEED: INSTANT", "text speed stops at instant");
+    passed &= expect(key(VK_LEFT) && key(VK_LEFT) && shown(0u) == "TEXT SPEED: 2X", "left lowers text speed");
+    passed &= expect(key(VK_RETURN) && galaxy::get_runtime_settings().text_speed == 2u, "Enter applies the text speed");
     passed &= expect(galaxy::get_runtime_settings().button_icons == galaxy::ButtonIcons::Auto, "button icons start Auto");
     passed &= expect(key(VK_DOWN) && galaxy::gx::native_settings_overlay_snapshot().row == 1u, "down selects button icons");
-    passed &= expect(key(VK_RIGHT) && galaxy::get_runtime_settings().button_icons == galaxy::ButtonIcons::Wii,
-                     "right chooses the Wii's icons, live");
-    passed &= expect(key(VK_RIGHT) && key(VK_RIGHT) && key(VK_RIGHT) && key(VK_RIGHT) &&
-                         galaxy::get_runtime_settings().button_icons == galaxy::ButtonIcons::PlayStation,
-                     "button icons stop at PlayStation");
-    passed &= expect(key(VK_LEFT) && key(VK_LEFT) && key(VK_LEFT) && key(VK_LEFT) &&
+    passed &= expect(key(VK_RIGHT) && shown(1u) == "BUTTON ICONS: WII" &&
                          galaxy::get_runtime_settings().button_icons == galaxy::ButtonIcons::Auto,
-                     "left returns to Auto");
+                     "right chooses the Wii's icons, waiting for apply");
+    passed &= expect(key(VK_RIGHT) && key(VK_RIGHT) && key(VK_RIGHT) && key(VK_RIGHT) &&
+                         shown(1u) == "BUTTON ICONS: PLAYSTATION",
+                     "button icons stop at PlayStation");
+    passed &= expect(key(VK_BACK) && shown(1u) == "BUTTON ICONS: AUTO" &&
+                         galaxy::get_runtime_settings().button_icons == galaxy::ButtonIcons::Auto,
+                     "Backspace undoes the choice");
     passed &= expect(key(VK_DOWN) && galaxy::gx::native_settings_overlay_snapshot().row == 2u, "down selects language");
     passed &= expect(galaxy::get_runtime_settings().language == galaxy::GameLanguage::English, "language starts as English");
-    passed &= expect(key(VK_RIGHT) && galaxy::get_runtime_settings().language == galaxy::GameLanguage::French,
-                     "right chooses French");
-    passed &= expect(key(VK_RIGHT) && key(VK_RIGHT) && galaxy::get_runtime_settings().language == galaxy::GameLanguage::Spanish,
-                     "language stops at Spanish");
-    passed &= expect(key(VK_LEFT) && key(VK_LEFT) && galaxy::get_runtime_settings().language == galaxy::GameLanguage::English,
-                     "left returns to English");
+    passed &= expect(key(VK_RIGHT) && galaxy::get_runtime_settings().language == galaxy::GameLanguage::English &&
+                         galaxy::gx::native_settings_overlay_snapshot().pending_changes == 1u,
+                     "right chooses French, waiting for apply");
+    passed &= expect(key(VK_RIGHT) && key(VK_RIGHT) && key(VK_LEFT) &&
+                         galaxy::gx::native_settings_overlay_snapshot().pending_changes == 1u,
+                     "language steps stop at Spanish and come back to French");
+    passed &= expect(key(VK_LEFT) && galaxy::gx::native_settings_overlay_snapshot().pending_changes == 0u,
+                     "left returns to English: nothing pending");
     passed &= expect(galaxy::get_runtime_settings().discord_status, "Discord status starts on");
     passed &= expect(key(VK_DOWN) && galaxy::gx::native_settings_overlay_snapshot().row == 3u, "down selects Discord status");
-    passed &= expect(key(VK_RIGHT) && !galaxy::get_runtime_settings().discord_status, "right turns Discord status off");
-    passed &= expect(key(VK_RIGHT) && galaxy::get_runtime_settings().discord_status, "right turns it back on");
+    passed &= expect(key(VK_RIGHT) && galaxy::get_runtime_settings().discord_status && key(VK_RETURN) &&
+                         !galaxy::get_runtime_settings().discord_status,
+                     "right turns Discord status off when applied");
+    passed &= expect(key(VK_RIGHT) && key(VK_RETURN) && galaxy::get_runtime_settings().discord_status,
+                     "right turns it back on when applied");
     passed &= expect(key(VK_UP) && key(VK_UP) && key(VK_UP) && galaxy::gx::native_settings_overlay_snapshot().row == 0u,
                      "up returns to text speed");
     passed &= expect(key(VK_TAB), "Tab enters the mods page");

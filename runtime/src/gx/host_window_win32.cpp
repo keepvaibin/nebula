@@ -333,11 +333,12 @@ std::atomic<bool> s_mods_restart_ask{false};
 // The pages, in order.
 constexpr const char* kNativeSettingsTabNames[] = {"DISPLAY", "GRAPHICS", "CONTROLS", "AUDIO", "GENERAL", "MODS", "SYSTEM"};
 
-// Settings menu draft. Display and graphics rows edit s_settings_draft; Enter (Y on a controller) applies it,
-// Backspace (X) reverts it and closing the menu discards it. Audio rows change the live mix. A display change
-// (monitor, mode, resolution, refresh rate) stays only when it is kept within kDisplayConfirmMs. All guarded by
-// s_native_settings_mutex.
+// Settings menu draft. Display and graphics rows edit s_settings_draft, the game's settings (the audio mix, text
+// speed, button icons, language, Discord status) s_runtime_draft; Enter (Y on a controller) applies them, Backspace
+// (X) reverts them and closing the menu discards them. A display change (monitor, mode, resolution, refresh rate)
+// stays only when it is kept within kDisplayConfirmMs. All guarded by s_native_settings_mutex.
 RenderConfig s_settings_draft{};
+RuntimeSettings s_runtime_draft{};
 std::vector<MonitorInfo> s_settings_monitors;
 std::uint64_t s_display_confirm_deadline_ms = 0u;
 RenderConfig s_display_confirm_previous{};
@@ -714,6 +715,25 @@ unsigned lighting_mode(const RenderConfig& render) {
     return render.enhanced_lighting ? 2u : render.per_pixel_lighting ? 1u : 0u;
 }
 
+// The game's settings the menu changed (its input mode is the controls draft's).
+unsigned runtime_changes() {
+    const RuntimeSettings live = get_runtime_settings();
+    const RuntimeSettings& d = s_runtime_draft;
+    unsigned changes = 0u;
+    changes += d.audio.master != live.audio.master;
+    changes += d.audio.music != live.audio.music;
+    changes += d.audio.sfx != live.audio.sfx;
+    changes += d.audio.voice != live.audio.voice;
+    changes += d.audio.ambience != live.audio.ambience;
+    changes += d.audio.cutscene != live.audio.cutscene;
+    changes += d.audio.wiimote_speaker != live.audio.wiimote_speaker;
+    changes += d.text_speed != live.text_speed;
+    changes += d.language != live.language;
+    changes += d.discord_status != live.discord_status;
+    changes += d.button_icons != live.button_icons;
+    return changes;
+}
+
 unsigned pending_settings_changes() {
     const RenderConfig live = get_render_config();
     const RenderConfig& d = s_settings_draft;
@@ -751,6 +771,7 @@ unsigned pending_settings_changes() {
         (d.texture_packs && d.texture_pack_preload != live.texture_pack_preload);
     changes += d.texture_dump != live.texture_dump;
     changes += controls_changes();
+    changes += runtime_changes();
     changes += mods_draft_changes();
     return changes;
 }
@@ -936,7 +957,7 @@ unsigned native_settings_row_count(unsigned tab) {
     tab %= kNativeSettingsTabCount;
     if (settings_page_tab(tab)) {
         return static_cast<unsigned>(
-            settings_page(tab, s_settings_draft, get_runtime_settings(), get_render_feature_caps()).size());
+            settings_page(tab, s_settings_draft, s_runtime_draft, get_render_feature_caps()).size());
     }
     return tab == 2u ? controls_row_count() : 7u;
 }
@@ -947,7 +968,7 @@ bool native_settings_heading(unsigned tab, unsigned row) {
     if (!settings_page_tab(tab)) {
         return false;
     }
-    const auto page = settings_page(tab, s_settings_draft, get_runtime_settings(), get_render_feature_caps());
+    const auto page = settings_page(tab, s_settings_draft, s_runtime_draft, get_render_feature_caps());
     return row < page.size() && page[row].heading;
 }
 
@@ -1059,6 +1080,12 @@ void apply_native_settings_draft() {
     const bool display_changed = display_settings_differ(live, applied);
     const unsigned changes = pending_settings_changes();
     commit_mods_draft();
+    // The game's settings as drafted, the input mode as the controls applied it.
+    RuntimeSettings runtime = s_runtime_draft;
+    runtime.input_mode = get_runtime_settings().input_mode;
+    if (!(runtime == get_runtime_settings())) {
+        set_runtime_settings(runtime);
+    }
     if (applied.internal_follow_window) {
         // The draft's scale is the one the menu opened with; the live scale
         // may have followed the window since.
@@ -1071,6 +1098,7 @@ void apply_native_settings_draft() {
         host_window::follow_window_rearm.store(true, std::memory_order_release);
     }
     s_settings_draft = get_render_config();
+    s_runtime_draft = get_runtime_settings();
     if (dlss_asked) {
         s_settings_draft.upscaler = 3u;  // the row shows what the question is about
     }
@@ -1089,6 +1117,7 @@ void apply_native_settings_draft() {
 
 void revert_native_settings_draft() {
     s_settings_draft = get_render_config();
+    s_runtime_draft = get_runtime_settings();
     reset_controls_draft();
     revert_mods_draft();
     std::cerr << "[settings] reverted\n";
@@ -1105,7 +1134,7 @@ void adjust_native_setting(int delta) {
     const unsigned row = s_native_settings_row.load(std::memory_order_relaxed);
     const auto text = [tab, row] {
         return native_settings_row_text(tab, row, s_settings_draft,
-                                        get_runtime_settings(),
+                                        s_runtime_draft,
                                         get_render_feature_caps());
     };
     const std::string before = text();
@@ -1140,9 +1169,9 @@ void step_native_setting_round(int direction) {
         return;
     }
     const auto state = [tab, row] {
-        return SettingsStepState{s_settings_draft, get_runtime_settings(), s_controls_draft, s_input_mode_draft,
+        return SettingsStepState{s_settings_draft, s_runtime_draft, s_controls_draft, s_input_mode_draft,
                                  s_controls_device,
-                                 native_settings_row_text(tab, row, s_settings_draft, get_runtime_settings(),
+                                 native_settings_row_text(tab, row, s_settings_draft, s_runtime_draft,
                                                           get_render_feature_caps())};
     };
     const SettingsStepState before = state();
@@ -1177,14 +1206,14 @@ void adjust_native_setting_unlogged(int delta) {
     };
 
     if (settings_page_tab(tab)) {
-        const auto page = settings_page(tab, draft, get_runtime_settings(), get_render_feature_caps());
+        const auto page = settings_page(tab, draft, s_runtime_draft, get_render_feature_caps());
         if (row < page.size() && page[row].change) {
             page[row].change(draft, delta);
         }
         return;
     }
 
-    RuntimeSettings settings = get_runtime_settings();
+    RuntimeSettings& settings = s_runtime_draft;
     if (tab == kControlsTab) {
         using galaxy::input::ControlScheme;
         galaxy::input::SchemeTuning& tuning = s_controls_draft.tune(s_controls_scheme);
@@ -1270,18 +1299,12 @@ void adjust_native_setting_unlogged(int delta) {
         return;
     }
     if (tab == 3u) {
-        // The mix changes live (no apply).
         float* const gains[] = {&settings.audio.master, &settings.audio.music,
                                 &settings.audio.sfx, &settings.audio.voice,
                                 &settings.audio.ambience, &settings.audio.cutscene,
                                 &settings.audio.wiimote_speaker};
         if (row >= std::size(gains)) return;
-        const float next = step_gain(*gains[row], delta);
-        if (next != *gains[row]) {
-            *gains[row] = next;
-            set_runtime_settings(settings);
-            s_native_settings_dirty.store(true, std::memory_order_release);
-        }
+        *gains[row] = step_gain(*gains[row], delta);
     }
 }
 
@@ -1348,6 +1371,7 @@ void set_native_settings_visible(bool visible) {
         // A fresh draft, monitor list and controller list each time the menu opens.
         s_settings_monitors = cached_monitors();
         s_settings_draft = get_render_config();
+        s_runtime_draft = get_runtime_settings();
         reset_controls_draft();
         refresh_controls_devices(true);
         settle_native_settings_row();
@@ -1358,6 +1382,7 @@ void set_native_settings_visible(bool visible) {
         dlss_dismiss_prompt();
         revert_display_settings();
         s_settings_draft = get_render_config();
+        s_runtime_draft = get_runtime_settings();
         reset_controls_draft();
         flush_native_settings_if_dirty();
     }
@@ -1444,7 +1469,7 @@ std::size_t selected_settings_buttons() {
     if (!settings_page_tab(tab)) {
         return 0u;
     }
-    const std::vector<SettingsRow> page = settings_page(tab, s_settings_draft, get_runtime_settings(), get_render_feature_caps());
+    const std::vector<SettingsRow> page = settings_page(tab, s_settings_draft, s_runtime_draft, get_render_feature_caps());
     return row < page.size() ? page[row].buttons.size() : 0u;
 }
 
@@ -1477,7 +1502,7 @@ void press_settings_button(unsigned button) {
     if (!settings_page_tab(tab) || settings_display_confirming()) {
         return;
     }
-    const std::vector<SettingsRow> page = settings_page(tab, s_settings_draft, get_runtime_settings(), get_render_feature_caps());
+    const std::vector<SettingsRow> page = settings_page(tab, s_settings_draft, s_runtime_draft, get_render_feature_caps());
     if (row >= page.size() || button >= page[row].buttons.size() || !page[row].press) {
         return;
     }
@@ -1506,7 +1531,7 @@ SliderPlace settings_slider(unsigned tab, unsigned row, const std::vector<Settin
         place.at = static_cast<unsigned>(std::clamp(std::lround((value - first) / step), 0l, static_cast<long>(place.steps)));
     };
     if (tab == 3u) {
-        const RuntimeSettings settings = get_runtime_settings();
+        const RuntimeSettings& settings = s_runtime_draft;
         const float gains[] = {settings.audio.master, settings.audio.music, settings.audio.sfx, settings.audio.voice,
                                settings.audio.ambience, settings.audio.cutscene, settings.audio.wiimote_speaker};
         if (row < std::size(gains)) along(gains[row], 0.0f, 0.05f, 2.0f);
@@ -1535,26 +1560,24 @@ void set_slider(unsigned target) {
     const unsigned tab = s_native_settings_tab.load(std::memory_order_relaxed) % kNativeSettingsTabCount;
     const unsigned row = s_native_settings_row.load(std::memory_order_relaxed);
     const auto place = [&] {
-        return settings_slider(tab, row, settings_page_tab(tab) ? settings_page(tab, s_settings_draft, get_runtime_settings(),
+        return settings_slider(tab, row, settings_page_tab(tab) ? settings_page(tab, s_settings_draft, s_runtime_draft,
                                                                                 get_render_feature_caps())
                                                                   : std::vector<SettingsRow>{});
     };
     const auto text = [tab, row] {
-        return native_settings_row_text(tab, row, s_settings_draft, get_runtime_settings(), get_render_feature_caps());
+        return native_settings_row_text(tab, row, s_settings_draft, s_runtime_draft, get_render_feature_caps());
     };
     const std::string before = text();
     SliderPlace now = place();
     target = std::min(target, now.steps);
     if (tab == 3u && now.steps != 0u && now.at != target) {
-        // A volume straight to its step (the mix changes live).
-        RuntimeSettings settings = get_runtime_settings();
+        // A volume straight to its step.
+        RuntimeSettings& settings = s_runtime_draft;
         float* const gains[] = {&settings.audio.master, &settings.audio.music,    &settings.audio.sfx,
                                 &settings.audio.voice,  &settings.audio.ambience, &settings.audio.cutscene,
                                 &settings.audio.wiimote_speaker};
         if (row < std::size(gains)) {
             *gains[row] = static_cast<float>(target) * 0.05f;
-            set_runtime_settings(settings);
-            s_native_settings_dirty.store(true, std::memory_order_release);
         }
     }
     for (unsigned guard = 0u; tab != 3u && now.steps != 0u && now.at != target && guard < 64u; ++guard) {
@@ -3305,58 +3328,38 @@ std::vector<SettingsRow> game_page(const RuntimeSettings& runtime) {
     std::snprintf(text, sizeof(text), "%uX", std::clamp(runtime.text_speed, 1u, 4u));
     rows.push_back({"TEXT SPEED", runtime.text_speed >= 4u ? std::string("INSTANT") : std::string(text),
                     [](RenderConfig&, int delta) {
-                        // Changes live (no apply).
-                        RuntimeSettings settings = get_runtime_settings();
-                        const unsigned next = settings_step(std::clamp(settings.text_speed, 1u, 4u) - 1u, 4u, delta) + 1u;
-                        if (next != settings.text_speed) {
-                            settings.text_speed = next;
-                            set_runtime_settings(settings);
-                            s_native_settings_dirty.store(true, std::memory_order_release);
-                        }
+                        RuntimeSettings& settings = s_runtime_draft;
+                        settings.text_speed = settings_step(std::clamp(settings.text_speed, 1u, 4u) - 1u, 4u, delta) + 1u;
                     },
                     "HOW FAST DIALOGUE TEXT APPEARS. INSTANT: EACH PAGE AT ONCE"});
     {
         static constexpr const char* kIcons[] = {"AUTO", "WII", "XBOX", "NINTENDO SWITCH", "PLAYSTATION"};
         rows.push_back({"BUTTON ICONS", kIcons[std::min<std::size_t>(static_cast<std::size_t>(runtime.button_icons), 4u)],
                         [](RenderConfig&, int delta) {
-                            // Changes live (no apply).
-                            RuntimeSettings settings = get_runtime_settings();
-                            const auto next = static_cast<ButtonIcons>(
+                            RuntimeSettings& settings = s_runtime_draft;
+                            settings.button_icons = static_cast<ButtonIcons>(
                                 settings_step(static_cast<unsigned>(settings.button_icons), 5u, delta));
-                            if (next != settings.button_icons) {
-                                settings.button_icons = next;
-                                set_runtime_settings(settings);
-                                s_native_settings_dirty.store(true, std::memory_order_release);
-                            }
                         },
                         "THE BUTTONS THE GAME'S ICONS SHOW. AUTO: THE CONTROLLER IN USE"});
     }
     rows.push_back({"LANGUAGE", game_language_name(runtime.language),
                     [](RenderConfig&, int delta) {
-                        // Saved now; the game switches at the next start (game_language_for_boot).
-                        RuntimeSettings settings = get_runtime_settings();
+                        // Saved when applied; the game switches at the next start (game_language_for_boot).
+                        RuntimeSettings& settings = s_runtime_draft;
                         std::size_t index = 0u;
                         for (std::size_t i = 0; i < std::size(kGameLanguages); ++i) {
                             if (kGameLanguages[i] == settings.language) index = i;
                         }
-                        const GameLanguage next = kGameLanguages[settings_step(
+                        settings.language = kGameLanguages[settings_step(
                             static_cast<unsigned>(index), static_cast<unsigned>(std::size(kGameLanguages)), delta)];
-                        if (next != settings.language) {
-                            settings.language = next;
-                            set_runtime_settings(settings);
-                            s_native_settings_dirty.store(true, std::memory_order_release);
-                        }
                     },
                     "THE GAME'S TEXT AND MENUS"});
     rows.push_back({"DISCORD STATUS", runtime.discord_status ? std::string("ON") : std::string("OFF"),
                     [](RenderConfig&, int delta) {
                         if (delta == 0) return;
-                        RuntimeSettings settings = get_runtime_settings();
-                        settings.discord_status = !settings.discord_status;
-                        set_runtime_settings(settings);
-                        s_native_settings_dirty.store(true, std::memory_order_release);
+                        s_runtime_draft.discord_status = !s_runtime_draft.discord_status;
                     },
-                    "SHOWS YOUR GALAXY AND STAR IN DISCORD WHILE IT RUNS"});
+                    "SHOWS YOUR CURRENT GALAXY AND MISSION IN DISCORD"});
     {
         rows.push_back({"MIIS", {}, nullptr, {}, true});
         std::string status;
@@ -4820,7 +4823,7 @@ NativeSettingsView build_native_settings_view() {
         refresh_controls_devices(false);
     }
     const RenderConfig row_render = s_settings_draft;
-    const RuntimeSettings row_runtime = get_runtime_settings();
+    const RuntimeSettings row_runtime = s_runtime_draft;
     const RenderFeatureCaps row_caps = get_render_feature_caps();
     const unsigned row_count = native_settings_row_count(tab);
     view.selected = std::min(s_native_settings_row.load(std::memory_order_relaxed), row_count == 0u ? 0u : row_count - 1u);
@@ -5650,7 +5653,7 @@ void native_settings_reset_overlay_state_for_tests() noexcept {
 std::string native_settings_row_text_for_tests(unsigned row) {
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
     return native_settings_row_text(s_native_settings_tab.load(std::memory_order_relaxed) % kNativeSettingsTabCount,
-                                   row, s_settings_draft, get_runtime_settings(), get_render_feature_caps());
+                                   row, s_settings_draft, s_runtime_draft, get_render_feature_caps());
 }
 void native_settings_set_controllers_for_tests(std::span<const galaxy::input::ControllerInfo> controllers,
                                                 std::optional<galaxy::input::DeviceKey> active) {
