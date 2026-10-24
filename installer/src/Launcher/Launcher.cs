@@ -236,7 +236,7 @@ namespace Nebula.Launcher
             Sessions.Capture(game, session, true);
             sessionInfo["pid"] = game.Id;
             try { Json.Save(Path.Combine(session, "session.json"), sessionInfo); }
-            catch (IOException) { } // The pre-launch identity and live reader remain.
+            catch (IOException) { } // session.json keeps its pre-launch contents; the capture goes on.
             catch (UnauthorizedAccessException) { }
         }
     }
@@ -603,7 +603,6 @@ namespace Nebula.Launcher
             RefreshDisplayNotice();
         }
 
-        // ---- Controls -----------------------------------------------------------
         private int Scheme { get { return Math.Max(0, editScheme.SelectedIndex); } }
 
         private void BuildControlsTab(TabPage page)
@@ -1328,12 +1327,8 @@ namespace Nebula.Launcher
                 {
                     samples = new StreamWriter(Path.Combine(session, "process.csv"));
                     samples.WriteLine("elapsedSeconds,cpuSeconds,workingSetBytes");
-                    // Per-thread CPU, alongside the process-wide row. process.csv cannot say which thread spends the time, and
-                    // the process-wide total does not show whether CPU rises when the frame rate falls. CPU rate per second is
-                    // the comparable signal. CPU per produced frame mostly reflects the frame rate (it grows as 1/frame_rate for
-                    // any slow pipeline), and it cannot tell executing from waiting.
-                    //
-                    // The column set matches tools/perf_session.ps1, so session_report.ps1's threads.csv parser reads it unchanged.
+                    // Per-thread CPU beside the process-wide row, which cannot say which thread spends the time. The
+                    // columns are those tools/session_report.ps1 reads from threads.csv.
                     threads = new StreamWriter(Path.Combine(session, "threads.csv"));
                     threads.WriteLine("elapsedSeconds,threadId,cpu100ns,threadState,waitReason,priorityLevel,name");
                 }
@@ -1347,9 +1342,8 @@ namespace Nebula.Launcher
                         samples.WriteLine(string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0:F3},{1:F6},{2}",
                             elapsed, process.TotalProcessorTime.TotalSeconds, process.WorkingSet64));
                         samples.Flush();
-                        // A thread can exit between enumerating the collection and reading its properties, so one bad thread must
-                        // not lose the whole sample. A thread that has never run reports a zero TotalProcessorTime. That is a real
-                        // value, not an error.
+                        // A thread can exit between the enumeration and the reads: it is skipped, not the whole sample. A
+                        // thread that never ran reports zero CPU time, a real value.
                         foreach (System.Diagnostics.ProcessThread t in process.Threads)
                         {
                             try

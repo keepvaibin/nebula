@@ -66,7 +66,7 @@ namespace Nebula.Launcher
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         private static extern IntPtr SendMessage(IntPtr control, int message, IntPtr wParam, string lParam);
 
-        /// <summary>NebulaNative.exe beside the launcher (Nebula 2): the tab shows only then.</summary>
+        /// <summary>The game (NebulaNative.exe) is beside the launcher: the tab shows only then.</summary>
         public static bool Available(string app)
         {
             return File.Exists(Path.Combine(app, "NebulaNative.exe"));
@@ -249,8 +249,6 @@ namespace Nebula.Launcher
             foreach (var control in actions) control.Enabled = !value;
             ShowDetails(lastList);
         }
-
-        // ---- The game's mods ------------------------------------------------------
 
         // The game as a tool: its output's one JSON line, or null with `error` set. Any thread.
         private Dictionary<string, object> Tool(IEnumerable<string> arguments, out string error)
@@ -449,8 +447,6 @@ namespace Nebula.Launcher
             };
         }
 
-        // ---- The lists --------------------------------------------------------------
-
         private void SortOff()
         {
             off.Sort((a, b) => string.Compare(a.Id, b.Id, StringComparison.OrdinalIgnoreCase));
@@ -518,8 +514,6 @@ namespace Nebula.Launcher
                 details.Text = mods[0].Id + ": " + mods[0].Kinds.ToLowerInvariant() + (mods[0].Notes.Length != 0 ? ". " + mods[0].Notes + "." : ".");
             else details.Text = mods.Count > 1 ? mods.Count + " selected." : "";
         }
-
-        // ---- Changes ----------------------------------------------------------------
 
         // Into the enabled list at `at` (0 is the top), in their order.
         private void Enable(List<Mod> mods, int at)
@@ -738,8 +732,6 @@ namespace Nebula.Launcher
             }
         }
 
-        // ---- Drag and drop ----------------------------------------------------------
-
         private void OnDragOver(ListView view, DragEventArgs e)
         {
             if (e.Data.GetDataPresent(DataFormats.FileDrop))
@@ -820,8 +812,6 @@ namespace Nebula.Launcher
             dropAt = -1;
             if (at >= 0) Enable(set.Mods, at);
         }
-
-        // ---- Import, remove, folder -------------------------------------------------
 
         private void ImportFiles()
         {

@@ -436,8 +436,6 @@ namespace Nebula.Launcher
             File.Delete(path);
         }
 
-        // ---- Save export and import ----------------------------------------------------------------------------
-
         static byte[] Noise(int length, int seed)
         {
             var bytes = new byte[length];

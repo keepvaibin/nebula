@@ -126,15 +126,12 @@ namespace Nebula.Launcher
         public static readonly string[] TextureFilters = { "Trilinear", "2x anisotropic", "4x anisotropic", "8x anisotropic", "16x anisotropic" };
         public static readonly string[] LightingModes = { "Enhanced", "Per pixel", "Per vertex (original)" };
         private static readonly int[] Anisotropy = { 1, 2, 4, 8, 16 };
-        private static readonly int[] StandardFrameRates = { 30, 60, 120, 144, 165, 240, 360 };
 
-        // The runtime's frame_rate_options: standard rates the display can
-        // show, its own rate when that is not one of them, then 0 (unlimited).
         /// <summary>
         /// The frame rates an interpolation mode offers, lowest first: 30 and 60 without one; else
         /// the standard rates below the display's, then the display's own (0, "match refresh rate").
         /// With DLSS upscaling native interpolation runs at multiples of 60. The runtime keeps the
-        /// same list (renderer_d3d12.cpp interpolation_targets).
+        /// same list (host_window_win32.cpp interpolation_targets).
         /// </summary>
         public static List<int> InterpolationTargets(int mode, int refreshHz, bool dlss)
         {
@@ -152,24 +149,6 @@ namespace Nebula.Launcher
             return targets;
         }
 
-        public static List<int> FrameRates(int refreshHz)
-        {
-            var rates = new List<int>();
-            bool listed = false;
-            foreach (int rate in StandardFrameRates)
-            {
-                if (refreshHz != 0 && rate > refreshHz + 1) break;
-                rates.Add(rate);
-                listed = listed || (refreshHz + 1 >= rate && refreshHz <= rate + 1);
-            }
-            if (refreshHz > 30 && !listed)
-            {
-                int at = rates.FindIndex(r => r > refreshHz);
-                rates.Insert(at < 0 ? rates.Count : at, refreshHz);
-            }
-            rates.Add(0);
-            return rates;
-        }
         // Width:height of each aspect choice; Auto has none.
         private static readonly int[,] AspectRatios = { { 0, 0 }, { 4, 3 }, { 3, 2 }, { 16, 10 }, { 16, 9 }, { 21, 9 }, { 32, 9 } };
         // Window heights offered for a fixed aspect when the width comes out whole.

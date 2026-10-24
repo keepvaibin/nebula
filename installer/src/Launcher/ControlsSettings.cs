@@ -292,7 +292,6 @@ namespace Nebula.Launcher
             if (version < 2 && InputMode == ModeKeyboardMouse) InputMode = ModeAuto;
         }
 
-        // ---- names ---------------------------------------------------------------
         public static string FormatSource(int scheme, InputSource source)
         {
             switch (source.Kind)
@@ -389,7 +388,6 @@ namespace Nebula.Launcher
             return list.ToArray();
         }
 
-        // ---- ini -------------------------------------------------------------------
         public static ControlsSettings Load()
         {
             var settings = new ControlsSettings();

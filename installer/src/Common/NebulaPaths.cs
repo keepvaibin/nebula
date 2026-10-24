@@ -4,7 +4,7 @@ using System.IO;
 namespace Nebula
 {
     /// <summary>
-    /// Per-user locations. Everything under <see cref="InstallRoot"/> is
+    /// Per-user locations. Everything under an install root (<see cref="InstallLayout"/>) is
     /// replaceable; everything under <see cref="DataRoot"/> (saves, settings,
     /// caches, sessions) survives update, rollback and uninstall.
     /// </summary>
