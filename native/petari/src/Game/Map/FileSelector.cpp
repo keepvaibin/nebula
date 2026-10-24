@@ -1,6 +1,9 @@
 #include "Game/Map/FileSelector.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/FileSelectCameraController.hpp"
+#ifdef TARGET_PC
+#include "Game/Screen/NebulaMenuFocus.hpp"
+#endif
 #include "Game/Map/FileSelectEffect.hpp"
 #include "Game/Map/FileSelectFunc.hpp"
 #include "Game/Map/FIleSelectItem.hpp"
@@ -144,7 +147,7 @@ FileSelector::FileSelector(const char* pName)
       mBgmState(), mSelectEffect()
 #ifdef TARGET_PC
       ,
-      mQuitButton(), mQuitWindow(), mIsAskingQuit(false), mQuitFrames(-1)
+      mQuitButton(), mQuitWindow(), mIsAskingQuit(false), mQuitFrames(-1), mIsQuitFocusWanted(false)
 #endif
 {
 }
@@ -349,6 +352,10 @@ void FileSelector::createInfoMessage() {
 void FileSelector::createSysInfoWindow() {
     mSysInfoWindow = MR::createSysInfoWindow();
     MR::connectToSceneLayout(mSysInfoWindow);
+#ifdef TARGET_PC
+    // Its questions (create, copy, delete) come from choosing a file: B goes back, as the Back button does.
+    mSysInfoWindow->setBackAnswersNo(true);
+#endif
 
     mSysInfoWindowMini = MR::createSysInfoWindowMiniExecuteWithChildren();
     MR::connectToSceneLayout(mSysInfoWindowMini);
@@ -361,6 +368,7 @@ void FileSelector::createQuitButton() {
 
     mQuitWindow = MR::createSysInfoWindow();
     MR::connectToSceneLayout(mQuitWindow);
+    mQuitWindow->setBackAnswersNo(true);
 }
 
 // Quit to desktop shows while a file is being chosen and nothing else holds the top of the screen: a file's
@@ -368,6 +376,47 @@ void FileSelector::createQuitButton() {
 void FileSelector::updateQuitButton() {
     const bool isChoosing = isNerve(GET_NERVE(FileSelector, FileSelectorNrvFileSelect));
     mQuitButton->setShown(isChoosing && (mIsAskingQuit || (MR::isDead(mFileInfo) && !MR::isExistStarPointerGuidanceFrame1P())));
+}
+
+// Nebula's menu focus: the files that can be chosen, where they are on screen (the pointer's target on each, its centre
+// 900 above the file). While the D-pad or stick holds the highlight, the file it is on stands for the one the pointer
+// would point at: it lights up as pointed, and A chooses it.
+void FileSelector::offerFilesToMenuFocus() {
+    for (int i = 0; i < mItems->getObjNum(); i++) {
+        FileSelectItem* pItem = static_cast< FileSelectItem* >(mItems->getActor(i));
+        TVec2f screen;
+        if (!pItem->mIsInvalidateSelect && MR::calcScreenPosition(&screen, pItem->mPosition + TVec3f(0.0f, 900.0f, 0.0f))) {
+            NebulaMenuFocus::offerTarget(pItem, screen);
+        }
+    }
+    if (!NebulaMenuFocus::isActive() || !isNerve(GET_NERVE(FileSelector, FileSelectorNrvFileSelect))) {
+        mIsQuitFocusWanted = false;
+    }
+    if (!NebulaMenuFocus::isActive()) {
+        return;
+    }
+    _C0 = nullptr;
+    for (int i = 0; i < mItems->getObjNum(); i++) {
+        FileSelectItem* pItem = static_cast< FileSelectItem* >(mItems->getActor(i));
+        if (NebulaMenuFocus::isTargetFocused(pItem)) {
+            _C0 = pItem;
+        }
+    }
+
+    // Up from a file at the top: Quit to desktop, in the corner a file's information holds. The information goes (no
+    // file is pointed at), the button shows, the highlight moves to it. Another press first keeps the files.
+    if (isNerve(GET_NERVE(FileSelector, FileSelectorNrvFileSelect)) && _C0 != nullptr &&
+        NebulaMenuFocus::getUnmovedPress() == NebulaMenuFocus::Direction_Up) {
+        mIsQuitFocusWanted = true;
+    } else if (NebulaMenuFocus::getPress() != NebulaMenuFocus::Direction_None) {
+        mIsQuitFocusWanted = false;
+    }
+    if (mIsQuitFocusWanted) {
+        _C0 = nullptr;
+        if (mQuitButton->takeMenuFocus()) {
+            mIsQuitFocusWanted = false;
+        }
+    }
 }
 
 // The quit question; true while it holds the file select.
@@ -412,6 +461,8 @@ bool FileSelector::updateQuitQuestion() {
 
     mIsAskingQuit = false;
     mQuitButton->resume();
+    // A pad that chose Quit finds its highlight back on it.
+    mIsQuitFocusWanted = NebulaMenuFocus::isActive();
     validateSelectAll();
     MR::activeStarPointerGuidance();
     return false;
@@ -1118,6 +1169,7 @@ void FileSelector::exeFileSelect() {
         if (updateQuitQuestion()) {
             return;
         }
+        offerFilesToMenuFocus();
 #endif
         updateFileInfo();
     }
@@ -1358,6 +1410,9 @@ void FileSelector::exeCopySelect() {
     }
 
     MR::requestFileSelectCopyGuidance();
+#ifdef TARGET_PC
+    offerFilesToMenuFocus();
+#endif
     updateFileInfo();
 
     if (mBackButton->isPointing()) {

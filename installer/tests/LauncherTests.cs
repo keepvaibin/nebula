@@ -76,6 +76,38 @@ namespace Nebula.Launcher
             }
         }
 
+        // The pad in Nebula's dialogs: a press acts once, a held direction repeats at the game's pace, what is held as
+        // a dialog opens does nothing, A and B act when pressed.
+        static void PadMenuCases()
+        {
+            var input = new PadMenuInput();
+            var none = new PadState();
+            var right = new PadState { Right = true };
+            var up = new PadState { Up = true };
+            var confirm = new PadState { Confirm = true };
+            var back = new PadState { Back = true };
+            input.HoldCurrent(none);
+            Check(input.Step(right, 0) == PadMenuInput.Action.Next, "pad: a press moves once");
+            Check(input.Step(right, 100) == PadMenuInput.Action.None && input.Step(right, 299) == PadMenuInput.Action.None,
+                "pad: held, nothing before the repeat delay");
+            Check(input.Step(right, 300) == PadMenuInput.Action.Next, "pad: the first repeat at 300 ms");
+            Check(input.Step(right, 350) == PadMenuInput.Action.None && input.Step(right, 383) == PadMenuInput.Action.Next,
+                "pad: then every 83 ms");
+            Check(input.Step(none, 400) == PadMenuInput.Action.None && input.Step(up, 410) == PadMenuInput.Action.Previous,
+                "pad: up goes back");
+            Check(input.Step(confirm, 420) == PadMenuInput.Action.Confirm && input.Step(confirm, 500) == PadMenuInput.Action.None,
+                "pad: A acts once per press");
+            Check(input.Step(back, 510) == PadMenuInput.Action.Back, "pad: B cancels");
+
+            var opened = new PadMenuInput();
+            opened.HoldCurrent(new PadState { Down = true, Confirm = true });
+            Check(opened.Step(new PadState { Down = true, Confirm = true }, 0) == PadMenuInput.Action.None &&
+                  opened.Step(new PadState { Down = true, Confirm = true }, 2000) == PadMenuInput.Action.None,
+                "pad: what is held as a dialog opens does nothing, even held on");
+            Check(opened.Step(none, 2100) == PadMenuInput.Action.None && opened.Step(confirm, 2110) == PadMenuInput.Action.Confirm,
+                "pad: released and pressed again, it acts");
+        }
+
         // A form that is never shown creates no child windows; reading Handle creates them.
         static void CreateHandles(Control control)
         {
@@ -778,6 +810,7 @@ namespace Nebula.Launcher
                 Check(!string.IsNullOrEmpty(dataRoot) && NebulaPaths.DataRoot == dataRoot, "NEBULA_DATA_ROOT replaces the user data root");
                 string outDir = args[0];
                 WindowSizeCases();
+                PadMenuCases();
                 AudioCases();
                 GeneralCases();
                 SharedFileCases();

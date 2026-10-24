@@ -5,6 +5,9 @@
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#ifdef TARGET_PC
+#include "Game/Screen/NebulaMenuFocus.hpp"
+#endif
 
 namespace {
     static const s32 hOutScreenTime = 60;
@@ -126,7 +129,13 @@ void StarPointerGuidance::checkRequest1P() {
     }
     mRequestTime1P++;
 
-    if (!MR::isStarPointerInScreen(WPAD_CHAN0)) {
+#ifdef TARGET_PC
+    // A pad that holds the menu (Nebula's menu focus) needs no pointer: the frame asking for it goes.
+    const bool isPointerWanted = !MR::isStarPointerInScreen(WPAD_CHAN0) && !NebulaMenuFocus::isActive();
+#else
+    const bool isPointerWanted = !MR::isStarPointerInScreen(WPAD_CHAN0);
+#endif
+    if (isPointerWanted) {
         if (mOutScreenTime > ::hOutScreenTime || mRequestTime1P == 1) {
             if (mSpineGuidance->isCurrentNerve(GET_NERVE(StarPointerGuidance, HostTypeNrvWaitBlueStarGuide))) {
                 mSpineGuidance->setNerve(GET_NERVE(StarPointerGuidance, HostTypeNrvEndBlueStarGuide));

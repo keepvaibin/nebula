@@ -151,6 +151,7 @@ public:
     void createQuitButton();
     void updateQuitButton();
     bool updateQuitQuestion();
+    void offerFilesToMenuFocus();
 #endif
 
     /* 0x8C */ FileSelectCameraController* mCameraController;
@@ -186,5 +187,6 @@ public:
     SysInfoWindow* mQuitWindow;  // its own: the file select's window keeps its messages' text positions
     bool mIsAskingQuit;
     s32 mQuitFrames;  // from Yes: the fade to black, then the game's own way out
+    bool mIsQuitFocusWanted;  // Up from the top files: the highlight goes to Quit to desktop once it shows
 #endif
 };

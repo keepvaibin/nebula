@@ -25,7 +25,12 @@ namespace NrvSysInfoWindow {
 
 SysInfoWindow::SysInfoWindow(SysInfoWindowType windowType, SysInfoExecuteType executeType)
     : LayoutActor("\203\126\203\130\203\145\203\200\227\160\203\103\203\223\203\164\203\110\203\201\201\133\203\126\203\207\203\223\203\105\203\102\203\223\203\150\203\105" /* システム用インフォメーションウィンドウ */, true), mWindowType(windowType), mType(Type_Key), mYesNoSelector(nullptr),
-      mIconAButton(nullptr), mTextParentPaneName(nullptr), mWindowParentPaneName(nullptr), _38(executeType == ExecuteType_Children) {
+      mIconAButton(nullptr), mTextParentPaneName(nullptr), mWindowParentPaneName(nullptr), _38(executeType == ExecuteType_Children)
+#ifdef TARGET_PC
+      ,
+      mIsBackAnswersNo(false)
+#endif
+{
     switch (windowType) {
     case WindowType_Normal:
         mTextParentPaneName = "InfoWindow";
@@ -202,6 +207,10 @@ void SysInfoWindow::appearYesNoWithText(const wchar_t* pText) {
     mYesNoSelector->appear();
 }
 
+void SysInfoWindow::setBackAnswersNo(bool on) {
+    mIsBackAnswersNo = on;
+}
+
 void SysInfoWindow::decideNo() {
     if (mYesNoSelector != nullptr) {
         mYesNoSelector->decideNo();
@@ -241,6 +250,11 @@ void SysInfoWindow::exeWait() {
             setNerve(GET_NERVE(SysInfoWindow, SysInfoWindowNrvDisappear));
         }
     } else if (mYesNoSelector != nullptr) {
+#ifdef TARGET_PC
+        if (mIsBackAnswersNo && MR::testSystemTriggerB()) {
+            mYesNoSelector->decideNo();
+        }
+#endif
         if (mYesNoSelector->isDisappearStart()) {
             setNerve(GET_NERVE(SysInfoWindow, SysInfoWindowNrvDisappear));
         }

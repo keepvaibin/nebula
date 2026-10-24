@@ -92,7 +92,7 @@ namespace Nebula.Launcher
             Controls.Add(new TextBox
             {
                 Text = notes.Replace("\r\n", "\n").Replace("\n", "\r\n"), Multiline = true, ReadOnly = true,
-                ScrollBars = ScrollBars.Vertical, Location = new Point(16, 46), Size = new Size(488, 190)
+                ScrollBars = ScrollBars.Vertical, Location = new Point(16, 46), Size = new Size(488, 190), TabStop = false
             });
             dontAsk.Text = "Don't ask again";
             dontAsk.Location = new Point(16, 250);
@@ -106,6 +106,8 @@ namespace Nebula.Launcher
             Controls.Add(later);
             AcceptButton = update;
             CancelButton = later;
+            ActiveControl = update;
+            new PadNavigator(this);
             UiScale.Apply(this);
         }
     }
@@ -145,6 +147,8 @@ namespace Nebula.Launcher
             Controls.Add(bar);
             Controls.Add(stop);
             CancelButton = stop;
+            ActiveControl = stop;
+            new PadNavigator(this);
             UiScale.Apply(this);
             Shown += delegate { Start(); };
         }

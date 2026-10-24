@@ -1,6 +1,7 @@
 #include "Game/Screen/NebulaQuitButton.hpp"
 
 #ifdef TARGET_PC
+#include "Game/Screen/NebulaMenuFocus.hpp"
 #include "Game/Screen/ButtonPaneController.hpp"
 #include "Game/Screen/LayoutManager.hpp"
 #include "Game/System/NebulaText.hpp"
@@ -156,6 +157,14 @@ void NebulaQuitButton::control() {
     }
 
     mButton->update();
+}
+
+bool NebulaQuitButton::takeMenuFocus() {
+    if (!mButton->isWait() && !mButton->isNotPointing()) {
+        return false;
+    }
+    NebulaMenuFocus::setFocus(mButton);
+    return true;
 }
 
 void NebulaQuitButton::setShown(bool shown) {

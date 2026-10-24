@@ -226,6 +226,7 @@ namespace {
 namespace NebulaCutsceneSkip {
     void init() {
         sWindow = MR::createSysInfoWindow();
+        sWindow->setBackAnswersNo(true);
         sWindow->kill();
     }
 

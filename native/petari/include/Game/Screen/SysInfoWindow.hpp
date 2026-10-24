@@ -53,6 +53,8 @@ public:
 #ifdef TARGET_PC
     void appearYesNoWithText(const wchar_t* pText);
     void decideNo();
+    // B answers No (a question the player opened from a menu, as Back closes Nebula's menus). Off by default.
+    void setBackAnswersNo(bool on);
 #endif
     void disappear();
     void forceKill();
@@ -75,6 +77,9 @@ public:
     /* 0x30 */ const char* mTextParentPaneName;
     /* 0x34 */ const char* mWindowParentPaneName;
     /* 0x38 */ bool _38;
+#ifdef TARGET_PC
+    bool mIsBackAnswersNo;
+#endif
 };
 
 namespace MR {

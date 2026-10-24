@@ -1,6 +1,7 @@
 #include "Game/Screen/NebulaAchievementBoard.hpp"
 
 #ifdef TARGET_PC
+#include "Game/Screen/NebulaMenuFocus.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/GalaxyMapBackground.hpp"
 #include "Game/Screen/LayoutCoreUtil.hpp"
@@ -131,9 +132,6 @@ namespace {
 
     const s32 cFadeFrames = 20;  // to black, and back from it
     const s32 cSwitchFrames = 12;
-    const s32 cRepeatDelay = 18;
-    const s32 cRepeatInterval = 5;
-    const f32 cStickHold = 0.6f;
 
     // The game's window with a ring (SysInfoWindowMini's): its corner texture is 24 across, so a window drawn at
     // scale k has corners of radius 24k.
@@ -582,8 +580,7 @@ struct NebulaBoardParts {
     bool mOverBack;
     f32 mPointerX;
     f32 mPointerY;
-    s32 mHeld;
-    s32 mHeldFrames;
+    NebulaMenuFocus::Repeat mRepeat;  // the D-pad and stick, read as every Nebula menu reads them
     s32 mFrame;
     s32 mSwitchFrame;
     s32 mSwitchDirection;
@@ -804,32 +801,6 @@ namespace {
 
     bool isInGroup(s32 tab, s32 group) {
         return tab == TabAll || (tab == TabStory && group == 0) || (tab == TabChallenges && group == 1) || (tab == TabExtras && group == 2);
-    }
-
-    s32 readDirection() {
-        if (MR::testCorePadButtonUp(WPAD_CHAN0)) {
-            return 1;
-        }
-        if (MR::testCorePadButtonDown(WPAD_CHAN0)) {
-            return 2;
-        }
-        if (MR::testCorePadButtonLeft(WPAD_CHAN0)) {
-            return 3;
-        }
-        if (MR::testCorePadButtonRight(WPAD_CHAN0)) {
-            return 4;
-        }
-        const f32 x = MR::getSubPadStickX(WPAD_CHAN0);
-        const f32 y = MR::getSubPadStickY(WPAD_CHAN0);
-        const f32 ax = x < 0.0f ? -x : x;
-        const f32 ay = y < 0.0f ? -y : y;
-        if (ax < cStickHold && ay < cStickHold) {
-            return 0;
-        }
-        if (ay >= ax) {
-            return y > 0.0f ? 1 : 2;
-        }
-        return x > 0.0f ? 4 : 3;
     }
 
     // The screen in board units (LayoutAspect's canvas, its width made square).
@@ -1302,6 +1273,12 @@ namespace {
         MR::startSystemSE("SE_SY_GALAMAP_PAGE_CHANGE");
     }
 
+    // A row of tabs or filters wraps: past the last comes the first. The list slides in from the side moved toward.
+    void stepTab(NebulaBoardParts* p, s32 delta) {
+        selectTab(p, (p->mTab + delta + TabNum) % TabNum);
+        p->mSwitchDirection = delta;
+    }
+
     void selectFilter(NebulaBoardParts* p, s32 mode) {
         if (mode < 0 || mode >= FilterNum || mode == p->mFilterMode) {
             return;
@@ -1317,48 +1294,30 @@ namespace {
         MR::startSystemSE("SE_SY_TALK_FOCUS_ITEM");
     }
 
-    // The D-pad and stick: a press, then repeats while held.
-    s32 readPress(NebulaBoardParts* p) {
-        const s32 direction = readDirection();
-        if (direction != p->mHeld) {
-            p->mHeld = direction;
-            p->mHeldFrames = 0;
-            return direction;
-        }
-        if (direction == 0) {
-            return 0;
-        }
-        p->mHeldFrames++;
-        if (p->mHeldFrames >= cRepeatDelay && (p->mHeldFrames - cRepeatDelay) % cRepeatInterval == 0) {
-            return direction;
-        }
-        return 0;
-    }
-
     void moveFocus(NebulaBoardParts* p, s32 direction) {
         const s32 beforeZone = p->mZone;
         const s32 before = p->mZone == ZoneTabs ? p->mTabFocus : p->mZone == ZoneFilter ? p->mFilterMode : p->mCardFocus;
         if (p->mZone == ZoneTabs) {
             // Left and right change the tab; down reaches the filters (the list on the stats page).
-            if (direction == 3) {
-                selectTab(p, p->mTab - 1);
-            } else if (direction == 4) {
-                selectTab(p, p->mTab + 1);
-            } else if (direction == 2) {
+            if (direction == NebulaMenuFocus::Direction_Left) {
+                stepTab(p, -1);
+            } else if (direction == NebulaMenuFocus::Direction_Right) {
+                stepTab(p, 1);
+            } else if (direction == NebulaMenuFocus::Direction_Down) {
                 p->mZone = p->mTab != TabStats ? ZoneFilter : ZoneList;
                 p->mCardFocus = 0;
                 followFocus(p);
             }
         } else if (p->mZone == ZoneFilter) {
             // Left and right change the filter; up to the tabs, down to the list.
-            if (direction == 3) {
-                selectFilter(p, p->mFilterMode - 1);
-            } else if (direction == 4) {
-                selectFilter(p, p->mFilterMode + 1);
-            } else if (direction == 1) {
+            if (direction == NebulaMenuFocus::Direction_Left) {
+                selectFilter(p, (p->mFilterMode + FilterNum - 1) % FilterNum);
+            } else if (direction == NebulaMenuFocus::Direction_Right) {
+                selectFilter(p, (p->mFilterMode + 1) % FilterNum);
+            } else if (direction == NebulaMenuFocus::Direction_Up) {
                 p->mZone = ZoneTabs;
                 p->mTabFocus = p->mTab;
-            } else if (direction == 2) {
+            } else if (direction == NebulaMenuFocus::Direction_Down) {
                 p->mZone = ZoneList;
                 p->mCardFocus = 0;
                 followFocus(p);
@@ -1366,33 +1325,33 @@ namespace {
         } else if (p->mTab == TabStats || p->mShownNum == 0) {
             // Nothing to choose: up and down scroll, up at the top reaches the tabs.
             const f32 step = cTileHeight + cGap;
-            if (direction == 1) {
+            if (direction == NebulaMenuFocus::Direction_Up) {
                 if (p->mScrollTarget <= 0.5f) {
                     p->mZone = p->mTab != TabStats ? ZoneFilter : ZoneTabs;
                     p->mTabFocus = p->mTab;
                 }
                 p->mScrollTarget = clamp(p->mScrollTarget - step, 0.0f, getMaxScroll(p));
-            } else if (direction == 2) {
+            } else if (direction == NebulaMenuFocus::Direction_Down) {
                 p->mScrollTarget = clamp(p->mScrollTarget + step, 0.0f, getMaxScroll(p));
             }
         } else {
             const s32 columns = p->mColumns;
             s32 focus = p->mCardFocus < 0 ? 0 : p->mCardFocus;
-            if (direction == 1) {
+            if (direction == NebulaMenuFocus::Direction_Up) {
                 if (focus < columns) {
                     p->mZone = ZoneFilter;
                 } else {
                     focus -= columns;
                 }
-            } else if (direction == 2) {
+            } else if (direction == NebulaMenuFocus::Direction_Down) {
                 if (focus + columns < p->mShownNum) {
                     focus += columns;
                 } else if (focus / columns < (p->mShownNum - 1) / columns) {
                     focus = p->mShownNum - 1;
                 }
-            } else if (direction == 3 && focus % columns > 0) {
+            } else if (direction == NebulaMenuFocus::Direction_Left && focus % columns > 0) {
                 focus--;
-            } else if (direction == 4 && focus % columns < columns - 1 && focus + 1 < p->mShownNum) {
+            } else if (direction == NebulaMenuFocus::Direction_Right && focus % columns < columns - 1 && focus + 1 < p->mShownNum) {
                 focus++;
             }
             p->mCardFocus = focus;
@@ -1841,7 +1800,7 @@ void NebulaAchievementBoard::open() {
     p->mPointerMode = false;
     p->mPointerIn = false;
     p->mOverBack = false;
-    p->mHeld = 0;
+    NebulaMenuFocus::holdCurrent(&p->mRepeat);
     p->mFrame = 0;
     p->mSwitchFrame = 0;
     p->mSwitchDirection = 0;
@@ -2126,11 +2085,11 @@ void NebulaAchievementBoard::exeWait() {
         return;
     }
     if (MR::testCorePadTriggerMinus(WPAD_CHAN0)) {
-        selectTab(p, p->mTab - 1);
+        stepTab(p, -1);
     } else if (MR::testCorePadTriggerPlus(WPAD_CHAN0)) {
-        selectTab(p, p->mTab + 1);
+        stepTab(p, 1);
     }
-    const s32 press = readPress(p);
+    const s32 press = NebulaMenuFocus::readPress(&p->mRepeat);
     if (press != 0) {
         if (p->mPointerMode) {
             // The D-pad takes over from where the pointer was.
