@@ -1,5 +1,6 @@
 #include "galaxy/achievements.h"
 #include "galaxy/gx_d3d12.h"
+#include "galaxy/gx/host_window_win32.h"
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx/temporal_upscaler.h"
 #include "galaxy/input_bindings.h"
@@ -77,10 +78,8 @@ bool layout_inside(
 
 int main() {
     bool passed = true;
-    const ScopedEnv ui_env("GALAXY_NATIVE_SETTINGS_UI");
     // The frame rate targets follow the display: a 240 Hz one here, whatever this machine has.
-    const ScopedEnv refresh_env("GALAXY_DISPLAY_REFRESH_HZ");
-    _putenv_s("GALAXY_DISPLAY_REFRESH_HZ", "240");
+    galaxy::gx::host_window::native_settings_set_refresh_override_for_tests(240u);
     const ScopedEnv render_path_env("GALAXY_RENDER_CONFIG_PATH");
     const ScopedEnv runtime_path_env("GALAXY_RUNTIME_SETTINGS_PATH");
 
@@ -91,7 +90,6 @@ int main() {
     const std::filesystem::path initial_render = root / "initial-render.ini";
     const std::filesystem::path initial_runtime = root / "initial-runtime.ini";
     std::filesystem::remove_all(root);
-    _putenv_s("GALAXY_NATIVE_SETTINGS_UI", "1");
     _putenv_s(
         "GALAXY_RENDER_CONFIG_PATH",
         initial_render.string().c_str());
@@ -222,10 +220,9 @@ int main() {
     passed &= expect(key(VK_RETURN), "Enter applies");
     passed &= expect(
         galaxy::gx::get_render_config().efb_scale == 1u &&
-            galaxy::gx::get_next_start_efb_scale() == 1u &&
             galaxy::gx::native_settings_overlay_snapshot().pending_changes == 0u &&
             !galaxy::gx::native_settings_overlay_snapshot().confirming_display,
-        "Enter applies the scale live, stages it and needs no display confirmation");
+        "Enter applies the scale live and needs no display confirmation");
     passed &= expect(key(VK_LEFT), "left below 1x selects matching the output");
     passed &= expect(
         galaxy::gx::native_settings_draft_for_tests().internal_follow_window,

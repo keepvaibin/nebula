@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// NVIDIA Streamline at run time: DLSS super resolution, DLSS Frame Generation and Reflex (streamline_bridge.h).
 #include "galaxy/gx/streamline_bridge.h"
 
 #include "galaxy/gx/temporal_upscaler.h"
@@ -133,7 +134,7 @@ void attach_frame_generation(const sl::AdapterInfo& info) {
         g_api.get_feature_function(sl::kFeaturePCL, "slPCLSetMarker", pcl_marker) != sl::Result::eOk ||
         set_options == nullptr || get_state == nullptr || reflex_options == nullptr || reflex_sleep == nullptr ||
         pcl_marker == nullptr) {
-        std::cerr << "[streamline] the DLSS Frame Generation plugins' functions are missing\n";
+        std::cerr << "[streamline] DLSS Frame Generation plugin functions missing\n";
         return;
     }
     g_api.dlssg_set_options = reinterpret_cast<PFun_slDLSSGSetOptions*>(set_options);
@@ -221,8 +222,8 @@ bool startup(const std::wstring& directory, bool frame_generation) noexcept {
         const auto installed = [&](const wchar_t* name) {
             return GetFileAttributesW((g_directory + L"\\" + name).c_str()) != INVALID_FILE_ATTRIBUTES;
         };
-        // Loaded whenever it is installed, whatever the setting: frame generation then switches on and off in
-        // the settings without a restart (user: no other game needs one). Loading it does not turn it on.
+        // Loaded whenever it is installed, whatever the setting, so frame generation switches on and off without
+        // a restart. Loading it does not turn it on.
         const bool dlssg = installed(L"sl.dlss_g.dll") && installed(L"nvngx_dlssg.dll") &&
                            installed(L"sl.reflex.dll") && installed(L"sl.pcl.dll");
         if (frame_generation && !dlssg) {
@@ -275,7 +276,7 @@ bool attach_device(ID3D12Device* device, const LUID& adapter) noexcept {
     if (g_api.get_feature_function(sl::kFeatureDLSS, "slDLSSGetOptimalSettings", optimal) != sl::Result::eOk ||
         g_api.get_feature_function(sl::kFeatureDLSS, "slDLSSSetOptions", options) != sl::Result::eOk ||
         optimal == nullptr || options == nullptr) {
-        std::cerr << "[streamline] the DLSS plugin's functions are missing\n";
+        std::cerr << "[streamline] DLSS plugin functions missing\n";
         return false;
     }
     g_api.dlss_get_optimal_settings = reinterpret_cast<PFun_slDLSSGetOptimalSettings*>(optimal);
@@ -534,9 +535,8 @@ public:
             in.depth == nullptr || in.motion == nullptr || in.output == nullptr) {
             return false;
         }
-        // A second evaluation before the present (an interpolated sub-frame, a second scene) takes a new frame:
-        // Streamline rejects different constants under one token ("Setting different 'common' constants
-        // multiple times within the same frame", evaluate failed; user session 234656, 59 in u72).
+        // A second evaluation before the present (an interpolated sub-frame, a second scene) takes a new frame
+        // token: Streamline rejects different common constants under one token and fails the evaluation.
         static std::uint32_t evaluated = 0xFFFFFFFFu;
         if (streamline::frame_index() == evaluated) {
             ++g_frame_index;
@@ -561,14 +561,7 @@ public:
         identity(constants.clipToLensClip);
         identity(constants.clipToPrevClip);
         identity(constants.prevClipToClip);
-        static const float jitter_sign = [] {
-            char value[8]{};
-            std::size_t length = 0u;
-            return getenv_s(&length, value, sizeof(value), "GALAXY_DLSS_JITTER_SIGN") == 0 && length > 1u &&
-                           value[0] == '-'
-                       ? -1.0f : 1.0f;
-        }();
-        constants.jitterOffset = sl::float2(jitter_sign * in.jitter_x, jitter_sign * in.jitter_y);
+        constants.jitterOffset = sl::float2(in.jitter_x, in.jitter_y);
         constants.mvecScale = sl::float2(1.0f / static_cast<float>(in.render_width),
                                          1.0f / static_cast<float>(in.render_height));
         constants.cameraPinholeOffset = sl::float2(0.0f, 0.0f);

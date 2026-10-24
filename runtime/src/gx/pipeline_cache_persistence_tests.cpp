@@ -71,14 +71,9 @@ private:
     std::atomic<ULONG> references_{1u};
 };
 
-// No D3D device: the fixture stops at a deliberately blocked lease/open, then fails serialization on
-// the retry. It exercises the real flush_disk gate.
-//
-// The base must be ID3D12PipelineLibrary1, the interface of the member ComPtr<ID3D12PipelineLibrary1>
-// in pipeline_cache.h. Production gets it through IID_PPV_ARGS with the PipelineLibrary1 IID.
-// ID3D12PipelineLibrary1 adds one vtable slot, LoadPipeline, over the base, so a RetryPipelineLibrary*
-// cannot convert to it. The fixture implements only that new slot. The other overrides belong to the
-// correct ancestors (ID3D12PipelineLibrary, ID3D12DeviceChild, ID3D12Object, IUnknown).
+// A pipeline library without a device, for the real flush_disk gate: the test blocks the lease or the
+// temp file, then lets serialization fail on the retry. It derives from ID3D12PipelineLibrary1, the
+// interface of PipelineCache::pipeline_library_, which adds one vtable slot (LoadPipeline).
 class RetryPipelineLibrary final : public ID3D12PipelineLibrary1 {
 public:
     unsigned serialize_attempts = 0u;
@@ -120,9 +115,6 @@ public:
         if (out != nullptr) *out = nullptr;
         return E_NOTIMPL;
     }
-    // The one slot ID3D12PipelineLibrary1 adds over ID3D12PipelineLibrary. The
-    // fixture never loads a pipeline, so E_NOTIMPL is the same answer the other
-    // Load* overrides give and no test path reaches it.
     HRESULT STDMETHODCALLTYPE LoadPipeline(LPCWSTR,
         const D3D12_PIPELINE_STATE_STREAM_DESC*, REFIID, void** out) override {
         if (out != nullptr) *out = nullptr;
@@ -216,7 +208,7 @@ struct PipelineCachePersistenceTestAccess {
         bool resolved = false, threw = false;
         try {
             if (startup) {
-                cache.wait_for_cached_pso_prewarm(1u);
+                cache.wait_for_cached_pso_prewarm();
                 const auto it = cache.published_.find(MemoizedPsoKey{record});
                 resolved = it != cache.published_.end();
                 if (resolved) result = it->second.Get();
@@ -345,8 +337,8 @@ struct PipelineCachePersistenceTestAccess {
             std::cout << "[completion-retirement-fixture] stage=" << stage
                       << " exception=" << exception_kind << " existing=" << existing_published
                       << " retired=" << retired << " published=" << published << '\n';
-            // Avoid the 30 s wait on the known broken preimage. Once retired, exercise the real get retry through
-            // cached stages and the mock driver.
+            // Only a retired marker is retried (an unretired one would wait 30 s); the retry runs get() through
+            // the cached stages and the mock driver.
             ID3D12PipelineState* retry = retired ? cache.get(record, {}, {}) : nullptr;
             const bool retained_existing = !existing_published || retry == existing.Get();
             passed = threw && queue_empty && retired && retry != nullptr && retained_existing &&
@@ -359,11 +351,8 @@ struct PipelineCachePersistenceTestAccess {
         PipelineCache cache;
         set_directory(cache, dir);
         auto* library = new RetryPipelineLibrary;
-        // Attach takes exactly InterfaceType*, and MSVC's ComPtr declares it non-template, so a
-        // RetryPipelineLibrary* is not accepted by template deduction even though the upcast is implicit.
-        // The static_assert keeps the fixture matched if the member's interface type in pipeline_cache.h
-        // moves: the base must stay the same type, or the vtable slot count stops matching what
-        // IID_PPV_ARGS returns.
+        // ComPtr::Attach takes exactly the member's interface type, hence the cast; the fixture must
+        // derive from that type for its vtable to match.
         static_assert(std::is_base_of_v<
                           ID3D12PipelineLibrary1, RetryPipelineLibrary>,
                       "fixture must derive from the member's exact interface type");
@@ -537,14 +526,13 @@ struct PipelineCachePersistenceTestAccess {
         PipelineCache cache;
         cache.worker_error_ = std::make_exception_ptr(std::runtime_error("worker fixture failure"));
         cache.in_flight_.insert(MemoizedPsoKey{key(1u)});
-        try { cache.wait_for_cached_pso_prewarm(1u); }
+        try { cache.wait_for_cached_pso_prewarm(); }
         catch (const std::runtime_error& e) {
             return std::string(e.what()) == "worker fixture failure";
         }
         return false;
     }
-    // The hot path reads an atomic gate instead of taking job_mutex_ on every request. This checks that the gate
-    // still exposes a failed worker to the render thread.
+    // get()'s atomic gate (worker_failed_) exposes a failed worker to the render thread.
     static bool worker_failure_gate_visible() {
         PipelineCache cache;
         if (cache.worker_failed_.load(std::memory_order_acquire)) return false;
@@ -1071,7 +1059,7 @@ bool busy_writer_retry(const std::filesystem::path& root) {
 struct IsolatedFiles {
     std::filesystem::path root;
     IsolatedFiles() {
-        // Stay inside the build tree; never touch LOCALAPPDATA or the user cache.
+        // Stay inside the build tree; never touch LOCALAPPDATA or the game's own cache.
         root = std::filesystem::absolute(std::filesystem::current_path() / "generated" /
             ("cache-persistence-test-" + std::to_string(GetCurrentProcessId()) + "-" +
              std::to_string(GetTickCount64())));
@@ -1155,8 +1143,8 @@ bool asynchronous_persistence(const std::filesystem::path& dir, bool fail_write,
     const auto poll_us = std::chrono::duration<double, std::micro>(polled-poll_begin).count();
     std::cout << "[async-cache-fixture] fail=" << fail_write << " shutdown=" << shutdown_with_work
               << " request-us=" << request_us << " held-writer-poll-us=" << poll_us << '\n';
-    // The 30-second gate timeout makes a mistakenly synchronous call measurable instead of hanging the
-    // suite. The check allows for scheduling noise.
+    // A synchronous submission would block on the held write (up to the 30 s gate timeout); the 1 s
+    // bound leaves room for scheduling noise.
     passed &= expect(request_us < 1000000.0 && poll_us < 1000000.0,
         "normal submission/poll does not wait for held file writes");
     return passed;

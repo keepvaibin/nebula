@@ -176,7 +176,7 @@ void self_test_on_warp() {
 }
 
 // The scene passes on a 64x64 EFB-like target with a stair-stepped edge and an alpha ramp:
-// they change colour near the edge, right of the split only, and never the alpha.
+// they change colour near the edge and never the alpha.
 void scene_aa_on_warp() {
     using Microsoft::WRL::ComPtr;
     ComPtr<IDXGIFactory4> factory;
@@ -281,7 +281,7 @@ void scene_aa_on_warp() {
         ID3D12DescriptorHeap* heaps[] = {ring.heap()};
         list->SetDescriptorHeaps(1, heaps);
         ran = post.record_scene_aa(list.Get(), ring, target.Get(), rtv, kSize, kSize, kSize, kSize, display,
-                                   display, 0.5f, 1u, 1u);
+                                   display, 1u, 1u);
         b.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
         b.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
         list->ResourceBarrier(1, &b);
@@ -304,18 +304,15 @@ void scene_aa_on_warp() {
         AaRun ran = AaRun::kNone;
         const auto out = run(aa, kSize, ran);
         bool alpha_kept = true;
-        bool left_kept = true;
-        unsigned right_changed = 0u;
+        unsigned changed = 0u;
         for (unsigned y = 0; y < kSize; ++y) {
             for (unsigned x = 0; x < kSize; ++x) {
                 const unsigned i = y * kPitch + x * 4u;
                 alpha_kept = alpha_kept && out[i + 3u] == pattern[i + 3u];
                 const bool same = out[i] == pattern[i] && out[i + 1u] == pattern[i + 1u] &&
                                   out[i + 2u] == pattern[i + 2u];
-                if (x < kSize / 2u) {
-                    left_kept = left_kept && same;
-                } else if (!same) {
-                    ++right_changed;
+                if (!same) {
+                    ++changed;
                 }
             }
         }
@@ -323,10 +320,8 @@ void scene_aa_on_warp() {
         expect(ran == want, what.c_str());
         what = std::string(name) + " keeps the alpha the game left";
         expect(alpha_kept, what.c_str());
-        what = std::string(name) + " leaves the picture left of the split";
-        expect(left_kept, what.c_str());
-        what = std::string(name) + " smooths the edge right of it";
-        expect(right_changed >= 8u, what.c_str());
+        what = std::string(name) + " smooths the edge";
+        expect(changed >= 8u, what.c_str());
     };
     check(Aa::kSmaa, AaRun::kSmaa, "SMAA");
     check(Aa::kFxaa, AaRun::kFxaa, "FXAA");

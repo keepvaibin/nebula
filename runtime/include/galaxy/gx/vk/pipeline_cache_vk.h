@@ -1,15 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#pragma once
-
-// PipelineCacheVk: GX pipelines on Vulkan (docs/VULKAN.md), the interface GxBackend uses on PipelineCache.
+// GX pipelines on Vulkan (docs/VULKAN.md), with the interface GxBackend uses on PipelineCache.
 //
 // A pipeline is its key's specialised shaders (ShaderGenerator's HLSL, compiled by glslang) with its render state. A
 // key seen for the first time draws with the uber pipeline of its render state while a worker builds the specialised
 // one; drain_completions publishes finished pipelines at the frame boundary, so the render thread never waits for a
 // compile once the uber shaders exist. SPIR-V (by its HLSL's hash, so a changed generator never serves stale code),
 // the keys seen and the driver's VkPipelineCache persist in cache_dir; a later session builds every known pipeline
-// on the workers at start. GALAXY_GX_UBER as on D3D12: 1 = this hybrid (default), force = the uber pipelines for every
-// draw, 0 = none (a first use builds its pipeline on the render thread).
+// on the workers at start.
 //
 // Driver compatibility (docs/VULKAN.md): a pipeline the driver refuses is built again without each optional feature it
 // uses (CompatBit, cheapest loss first; for a specialised pipeline also with the other TEV zero form), and a feature
@@ -17,8 +14,8 @@
 // remembered as refused and drawn by its uber pipeline (none: the draw is skipped). The first launch on a driver
 // build tests the uber pipelines of every pixel-shader variant and feature in the background; what it and the
 // fallbacks found is kept in vk_compat.txt for that driver build. The first refusal logs the driver's result, the
-// pipeline's state, the driver's own log (host_window::driver_log) and the shaders' HLSL. GALAXY_VK_SHADER_DUMP=<dir>
-// writes every module's HLSL and SPIR-V there.
+// pipeline's state, the driver's own log (host_window::driver_log) and the shaders' HLSL.
+#pragma once
 
 #include "galaxy/gx/shader_gen.h"
 #include "galaxy/gx/shader_keys.h"
@@ -176,9 +173,7 @@ private:
     std::atomic<bool> prewarm_enqueued_{false};
     std::atomic<bool> seed_drained_{false};  // every seeded pipeline built: save_disk deletes the seeds
 
-    // Uber shaders: built on their own thread at start (with GALAXY_GX_UBER=force, before initialize returns).
-    enum class UberMode { Hybrid, Force, Off };
-    UberMode uber_mode_ = UberMode::Hybrid;
+    // Uber shaders: built on their own thread at start.
     std::thread uber_thread_;
     std::atomic<bool> uber_ready_{false};
     bool uber_probed_ = false;  // diagnose_uber's cut-down forms run (uber thread)
@@ -207,7 +202,6 @@ private:
     std::condition_variable jobs_cv_;
     std::deque<Entry> jobs_;
     std::vector<Completion> completions_;
-    bool stopping_ = false;
     std::vector<std::thread> workers_;
     std::thread flush_thread_;
     std::atomic<bool> flush_done_{true};
@@ -238,7 +232,6 @@ private:
     vk::CompileJournal journal_;
     std::string driver_key_;
     bool compat_known_ = false;  // vk_compat.txt was this driver build's
-    std::string shader_dump_dir_;
 
     std::atomic<std::uint64_t> pso_compiles_{0};
     std::atomic<std::uint64_t> shader_compiles_{0};

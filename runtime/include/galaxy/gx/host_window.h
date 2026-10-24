@@ -41,18 +41,17 @@ extern std::atomic<unsigned> efb_scale_rejected;
 extern std::atomic<bool> move_size_active;
 // The window was closed.
 extern std::atomic<bool> quit_request;
-// Live window resize (any size and aspect ratio without a restart): the window records the latest client size,
-// width << 32 | height; the render thread resizes the swap chain at the top of begin_frame, the one place already
-// between frames with no command list recording, so every GPU object changes on the thread that owns it.
+// The latest client size (width << 32 | height), recorded by the window. The render thread resizes the swap chain at
+// the top of begin_frame, between frames with no command list recording, so every GPU object changes on the thread
+// that owns it.
 extern std::atomic<std::uint64_t> pending_resize_extent;
-// Set by the overlay when Match Output is switched on, so the render thread derives the scale for the current
-// window right away.
+// Set by the overlay when Match Output is switched on, so the render thread derives the scale for the current window.
 extern std::atomic<bool> follow_window_rearm;
-// The window's drawing surface withdrawn (Android: the activity out of sight, or the fold moving it to the other
+// The window's drawing surface is withdrawn (Android: the activity out of sight, or a fold moving it to the other
 // display). The platform sets surface_withdrawn and then takes surface_use, which the renderer holds from acquiring a
-// swap-chain image until it is presented: once the platform has it, no present uses the surface. The renderer drops
-// its swap chain and surface at its next frame and presents nothing until surface_withdrawn is cleared, then makes
-// both again for the window. Windows never withdraws its window's surface.
+// swap-chain image until it is presented, so once the platform holds it no present uses the surface. The renderer
+// drops its swap chain and surface at its next frame, presents nothing until surface_withdrawn is cleared, then
+// recreates both. Windows never withdraws its window's surface.
 extern std::atomic<bool> surface_withdrawn;
 extern std::timed_mutex surface_use;
 

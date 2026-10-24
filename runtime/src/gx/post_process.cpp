@@ -1,9 +1,9 @@
+// PostProcessor: the D3D12 presentation chain (post_process.h).
 #include "galaxy/gx/post_process.h"
 #include "galaxy/gx/renderer_d3d12.h"
 
 #include <algorithm>
 #include <bit>
-#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -464,8 +464,7 @@ void PostProcessor::draw(ID3D12GraphicsCommandList* list, DescriptorRing& srv_ri
                          std::initializer_list<ID3D12Resource*> inputs,
                          std::initializer_list<DXGI_FORMAT> formats,
                          const D3D12_VIEWPORT& viewport,
-                         const Constants& constants,
-                         const D3D12_RECT* scissor) {
+                         const Constants& constants) {
     const DescriptorRing::Table table = srv_ring.allocate(3);
     const UINT increment = device_->GetDescriptorHandleIncrementSize(
         D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -499,7 +498,7 @@ void PostProcessor::draw(ID3D12GraphicsCommandList* list, DescriptorRing& srv_ri
         static_cast<LONG>(viewport.TopLeftX + viewport.Width),
         static_cast<LONG>(viewport.TopLeftY + viewport.Height)};
     list->RSSetViewports(1, &viewport);
-    list->RSSetScissorRects(1, scissor != nullptr ? scissor : &full);
+    list->RSSetScissorRects(1, &full);
     list->DrawInstanced(3, 1, 0, 0);
 }
 
@@ -575,7 +574,7 @@ AaRun PostProcessor::record_scene_aa(ID3D12GraphicsCommandList* list, Descriptor
                                      ID3D12Resource* color, D3D12_CPU_DESCRIPTOR_HANDLE color_rtv,
                                      unsigned width, unsigned height, unsigned picture_width,
                                      unsigned picture_height, unsigned display_width,
-                                     unsigned display_height, float split, std::uint64_t frame_index,
+                                     unsigned display_height, std::uint64_t frame_index,
                                      unsigned frames_in_flight) {
     if (!ready_ || color == nullptr || width == 0u || height == 0u) {
         return AaRun::kNone;
@@ -618,14 +617,11 @@ AaRun PostProcessor::record_scene_aa(ID3D12GraphicsCommandList* list, Descriptor
     list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     const D3D12_VIEWPORT viewport{
         0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height), 0.0f, 1.0f};
-    const LONG left = std::clamp(static_cast<LONG>(std::lround(std::clamp(split, 0.0f, 1.0f) * width)), 0l,
-                                 static_cast<LONG>(width));
-    const D3D12_RECT output{left, 0, static_cast<LONG>(width), static_cast<LONG>(height)};
     Constants c{};
     set_post_input_size(c, width, height);
     if (pass == AaRun::kFxaa) {
         list->OMSetRenderTargets(1, &color_rtv, FALSE, nullptr);
-        draw(list, srv_ring, fxaa_rgb_.Get(), {source}, {kColorFormat}, viewport, c, &output);
+        draw(list, srv_ring, fxaa_rgb_.Get(), {source}, {kColorFormat}, viewport, c);
         return pass;
     }
     constexpr float kZero[4] = {0.0f, 0.0f, 0.0f, 0.0f};
@@ -647,7 +643,7 @@ AaRun PostProcessor::record_scene_aa(ID3D12GraphicsCommandList* list, Descriptor
     transition(list, weights_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     list->OMSetRenderTargets(1, &color_rtv, FALSE, nullptr);
     draw(list, srv_ring, smaa_blend_rgb_.Get(), {source, weights_.resource.Get()},
-         {kColorFormat, kColorFormat}, viewport, c, &output);
+         {kColorFormat, kColorFormat}, viewport, c);
     return pass;
 }
 
@@ -838,8 +834,8 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
     Constants c{};
     set_post_input_size(c, source_width, source_height);
 
-    // Enlarging on both axes with sharpening: one pass straight into the target. The two-pass
-    // form wrote and read a window-sized intermediate for every presented frame.
+    // Enlarging on both axes with sharpening: enlargement and RCAS in one pass straight into the
+    // target, without a window-sized intermediate.
     if (plan.resample && plan.rcas && rcas_scaled_ && target_width >= source_width &&
         target_height >= source_height) {
         Constants s = c;

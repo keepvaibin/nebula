@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// The Vulkan driver identification and known-bug table (device_quirks_vk.h).
 #include "galaxy/gx/vk/device_quirks_vk.h"
 
 #include <cstdio>

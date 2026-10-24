@@ -1,3 +1,4 @@
+// WindowOwner: the window is created and destroyed on its own thread, also when stop() ends a modal loop.
 #include "galaxy/gx/window_owner.h"
 #include <atomic>
 #include <chrono>

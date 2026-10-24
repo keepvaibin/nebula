@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// The interpolation program's ops against the CPU interpolation of frame_interpolation.h.
 #include "galaxy/gx/interp_gpu.h"
 
 #include <bit>

@@ -71,8 +71,8 @@ std::string describe_render_state(const RenderStateKey& rs) {
 
 // GALAXY_VK_TEST_REFUSE=<names, comma-separated>: pipelines using those features (dual-source, depth-clip,
 // depth-clamp, logic-op, geometry) or of that kind (specialised, uber, uber-vs: with the uber vertex shader) are
-// refused as a driver would, so the fallbacks run on any GPU. GALAXY_VK_TEST_CRASH_AT=<n>: the process aborts inside the n-th specialised build (the
-// compile journal's test).
+// refused as a driver would, so the fallbacks run on any GPU. GALAXY_VK_TEST_CRASH_AT=<n>: the process aborts inside
+// the n-th specialised build (the compile journal's test).
 struct TestRefusals {
     bool dual_source = false;
     bool depth_clip = false;
@@ -104,11 +104,6 @@ const TestRefusals& test_refusals() {
         return r;
     }();
     return refusals;
-}
-
-void write_text(const std::filesystem::path& path, const std::string& text) {
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    out.write(text.data(), static_cast<std::streamsize>(text.size()));
 }
 
 std::uint64_t elapsed_us(std::chrono::steady_clock::time_point start) {
@@ -202,9 +197,8 @@ std::string apply_probe(std::string source, const UberProbe& probe) {
 }
 
 // The SPIR-V this build's compiler makes of two fixed shaders, hashed. SPIR-V on disk and the driver refusals recorded
-// with it belong to the compiler that made them: glslang of the same version but another build makes other SPIR-V for
-// the same HLSL (2026-10-19: the PC's build of 16.6.0 against the phone's; the Adreno 840 refused the PC's vertex
-// shaders and accepted the phone's), so files of another compiler are dropped rather than trusted.
+// with it belong to the compiler that made them: two builds of the same glslang version can make different SPIR-V of
+// the same HLSL, which one driver refuses and accepts, so files of another compiler are dropped.
 std::uint64_t compiler_identity() {
     static const std::uint64_t identity = [] {
         ShaderGenOptions options;
@@ -377,13 +371,11 @@ bool PipelineCacheVk::initialize(VkDevice device, const vk::GxLayout* layout, co
         generator_defaults_.scalar_byte_masks = true;
         generator_defaults_.tev_zero_from_constant = quirks.tev_zero_from_constant;
         driver_key_ = vk::driver_key(vk::Context::get().identity());
-        const char* dump = std::getenv("GALAXY_VK_SHADER_DUMP");
-        shader_dump_dir_ = dump != nullptr ? dump : "";
     }
     load_compat();
     // Pipelines a crashed process was building: never again on this driver build.
     for (const vk::CompileJournal::Left& left : journal_.open(cache_dir_ / "vk_compiling.bin")) {
-        std::fprintf(stderr, "[vk-compat] the driver crashed building %s pipeline %016llx last time: not built again\n",
+        std::fprintf(stderr, "[vk-compat] %s pipeline %016llx crashed the driver last launch; skipped\n",
                      left.kind == kJournalSpecialised ? "specialised" : "uber",
                      static_cast<unsigned long long>(left.key));
         std::lock_guard<std::mutex> lock(compat_mutex_);
@@ -391,19 +383,7 @@ bool PipelineCacheVk::initialize(VkDevice device, const vk::GxLayout* layout, co
     }
     save_compat();
     load_disk();
-    stopping_ = false;
-    {
-        const char* value = std::getenv("GALAXY_GX_UBER");
-        const std::string mode = value != nullptr && value[0] != '\0' ? value : "1";
-        uber_mode_ = mode == "force" ? UberMode::Force
-            : (mode == "0" || mode == "off") ? UberMode::Off
-                                              : UberMode::Hybrid;
-    }
-    if (uber_mode_ == UberMode::Force) {
-        compile_uber_shaders();
-    } else if (uber_mode_ == UberMode::Hybrid) {
-        uber_thread_ = std::thread([this] { compile_uber_shaders(); });
-    }
+    uber_thread_ = std::thread([this] { compile_uber_shaders(); });
 #if defined(__ANDROID__)
     // One thread builds the known pipelines at start on Android: Dolphin's DriverDetails
     // BUG_BROKEN_MULTITHREADED_SHADER_PRECOMPILATION (Android drivers crash on parallel precompiles).
@@ -414,7 +394,7 @@ bool PipelineCacheVk::initialize(VkDevice device, const vk::GxLayout* layout, co
         workers_.emplace_back([this] { worker_main(); });
     }
     // Every pipeline a previous session used is built again up front.
-    if (uber_mode_ != UberMode::Force) {
+    {
         std::lock_guard<std::mutex> lock(entries_mutex_);
         std::lock_guard<std::mutex> compat_lock(compat_mutex_);
         for (const Entry& entry : entries_) {
@@ -473,15 +453,6 @@ VkShaderModule PipelineCacheVk::module_for(const std::string& hlsl, vk::ShaderSt
             }
             return VK_NULL_HANDLE;
         }
-    }
-    if (!shader_dump_dir_.empty()) {
-        char name[64];
-        std::snprintf(name, sizeof(name), "%016llx.%s", static_cast<unsigned long long>(hash),
-                      stage == vk::ShaderStage::Vertex ? "vs" : stage == vk::ShaderStage::Geometry ? "gs" : "ps");
-        const std::filesystem::path base = std::filesystem::path(shader_dump_dir_) / name;
-        write_text(std::filesystem::path(base) += ".hlsl", hlsl);
-        write_text(std::filesystem::path(base) += ".spv",
-                   std::string(reinterpret_cast<const char*>(spirv.data()), spirv.size() * sizeof(std::uint32_t)));
     }
     VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
     info.codeSize = spirv.size() * sizeof(std::uint32_t);
@@ -886,7 +857,7 @@ VkPipeline PipelineCacheVk::build(const Entry& entry) {
     const VkShaderModule vs = module_for(vs_hlsl, vk::ShaderStage::Vertex, false);
     const VkShaderModule ps = module_for(ps_hlsl, vk::ShaderStage::Fragment, dual_source);
     if (vs == VK_NULL_HANDLE || ps == VK_NULL_HANDLE) {
-        return VK_NULL_HANDLE;  // our compile failed (module_for logged it)
+        return VK_NULL_HANDLE;  // the HLSL compile failed (module_for logged it)
     }
     {
         std::lock_guard<std::mutex> lock(compat_mutex_);
@@ -1006,10 +977,9 @@ void PipelineCacheVk::classify_refusal(const RenderStateKey& rs, const std::stri
     }
     static std::atomic<int> reported{0};
     if (reported.fetch_add(1, std::memory_order_relaxed) < 8) {
-        std::fprintf(stderr, "[vk-compat] the refused pipeline's vertex shader with a simple pixel shader: %s (%d); its "
-                     "pixel shader with a simple vertex shader: %s (%d)\n", rejected(vs_result) ? "refused" : "accepted",
-                     static_cast<int>(vs_result), rejected(ps_result) ? "refused" : "accepted",
-                     static_cast<int>(ps_result));
+        std::fprintf(stderr, "[vk-compat] refused pipeline: VS with simple PS %s (%d), PS with simple VS %s (%d)\n",
+                     rejected(vs_result) ? "refused" : "accepted", static_cast<int>(vs_result),
+                     rejected(ps_result) ? "refused" : "accepted", static_cast<int>(ps_result));
     }
 }
 
@@ -1326,8 +1296,7 @@ VkPipeline PipelineCacheVk::uber_pipeline(const RenderStateKey& render_state, un
     if (pipeline == VK_NULL_HANDLE && !transient) {
         // Accepted in no form: the variant's shaders themselves (every render state fails alike).
         uber_refused_.fetch_or(1u << variant, std::memory_order_acq_rel);
-        std::fprintf(stderr, "[vk-compat] uber variant %u refused: its draws are built specialised when first drawn\n",
-                     variant);
+        std::fprintf(stderr, "[vk-compat] uber variant %u refused; its draws build specialised pipelines\n", variant);
         save_compat();
     }
     if (!transient) {
@@ -1351,7 +1320,7 @@ bool PipelineCacheVk::unqueue(const PsoKey& key) {
 }
 
 VkPipeline PipelineCacheVk::stand_in(const PsoKey& key, const PixelShaderKey& ps_key) {
-    if (!uber_ready_.load(std::memory_order_acquire) && uber_mode_ != UberMode::Off) {
+    if (!uber_ready_.load(std::memory_order_acquire)) {
         // The uber shaders are compiling (a second at most): wait for them rather than drop the draw.
         for (int i = 0; i < 2000 && !uber_ready_.load(std::memory_order_acquire) && uber_thread_.joinable(); ++i) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -1383,10 +1352,7 @@ void PipelineCacheVk::worker_main() {
         Entry entry;
         {
             std::unique_lock<std::mutex> lock(jobs_mutex_);
-            jobs_cv_.wait(lock, [this] { return stopping_ || !jobs_.empty(); });
-            if (stopping_) {
-                return;
-            }
+            jobs_cv_.wait(lock, [this] { return !jobs_.empty(); });
             entry = jobs_.front();
             jobs_.pop_front();
         }
@@ -1403,11 +1369,6 @@ void PipelineCacheVk::worker_main() {
 }
 
 VkPipeline PipelineCacheVk::get(const PsoKey& key, const PixelShaderKey& ps_key, const VertexShaderKey& vs_key) {
-    if (uber_mode_ == UberMode::Force && uber_ready_.load(std::memory_order_relaxed)) {
-        ++uber_fallbacks_;
-        last_get_used_uber_ = true;
-        return uber_pipeline(key.render_state, uber_ps_variant(ps_key));
-    }
     last_get_used_uber_ = false;
     if (memo_pipeline_ != VK_NULL_HANDLE && memo_key_ == key) {
         ++specialized_hits_;

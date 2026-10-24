@@ -1,7 +1,7 @@
-// Presentation post-processing passes (post_process.cpp).
+// Presentation post-processing passes (post_process.cpp, vk/post_process_vk.cpp).
 //
-// post_process.cpp composes one source per pass from this file and the
-// vendored libraries, defining exactly one PASS_* macro:
+// The build (for fxc) and vk/post_process_vk.cpp compose one source per pass
+// from this file and the vendored libraries, defining exactly one PASS_* macro:
 //   POST_SECTION 1        common declarations
 //   SMAA.hlsl             (SMAA passes)  or  ffx_a.h, POST_SECTION 2, ffx_fsr1.h (FSR passes)
 //   POST_SECTION 3        entry points

@@ -1,5 +1,7 @@
 #pragma once
 
+// Ambient occlusion of the D3D12 renderer's 3D scene.
+
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -48,16 +50,11 @@ public:
         unsigned samples = 1;
         bool hdr = false;                 // the colour is the HDR scene EFB (kEfbHdrColorFormat)
         RtView view{};                    // the scene's projection, depth range and viewport (EFB pixels)
-        int timing_slot = -1;             // GALAXY_TRACE_AO: the frame slot whose timestamps this pass writes
     };
     // Records the occlusion and multiplies it into `color_rtv`'s RGB. Leaves this pass's root signatures, pipeline
     // and render target bound. Returns false when nothing was recorded.
     bool record(ID3D12GraphicsCommandList* list, DescriptorRing& ring, const Inputs& in, std::uint64_t frame_index,
                 unsigned frames_in_flight);
-
-    // GALAXY_TRACE_AO=1: the passes' GPU times (distances, occlusion, denoise, multiply), averaged over 300 frames,
-    // to stderr.
-    void read_timing(std::uint64_t timestamp_frequency, unsigned frame_slot);
 
 private:
     struct Target {
@@ -86,15 +83,6 @@ private:
     Target raw_;       // occlusion, eye distance (R16G16F)
     Target denoised_;
     std::vector<Retired> retired_;
-    // GALAXY_TRACE_AO timing: a timestamp before and after each pass, per frame slot.
-    static constexpr unsigned kStamps = 5u;
-    bool timed_ = false;
-    Microsoft::WRL::ComPtr<ID3D12QueryHeap> queries_;
-    Microsoft::WRL::ComPtr<ID3D12Resource> readback_;
-    std::array<bool, 4> pending_{};
-    std::array<double, kStamps> ms_sum_{};  // per pass, then the total
-    double ms_max_ = 0.0;
-    unsigned samples_ = 0;
 };
 
 }  // namespace galaxy::gx

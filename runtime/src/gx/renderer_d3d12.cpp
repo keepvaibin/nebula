@@ -1,3 +1,5 @@
+// RendererD3D12: device and swap chain, EFB targets and copies, draws, presentation, and the
+// replayed sub-frames of frame interpolation.
 #include "galaxy/gx/renderer_d3d12.h"
 #include "galaxy/gx/interp_eval.h"
 #include "galaxy/gx/host_window_win32.h"
@@ -28,11 +30,9 @@
 #pragma warning(pop)
 
 #include <algorithm>
-#include <cstdarg>
 #include <cwchar>
 #include <atomic>
 #include <bit>
-#include <cctype>
 #include <chrono>
 #include <cerrno>
 #include <cmath>
@@ -81,16 +81,11 @@ bool detail::ConversionRtvSlot::bind(
     return true;
 }
 
-// ---------------------------------------------------------------------------
-// Module-level state for things the frozen header can't hold
-// ---------------------------------------------------------------------------
-
 namespace {
 
-// Blit root signature. Lifetime matches RendererD3D12; stored here because the frozen
-// header has no slot for it.
+// Present-blit root signature; lives as long as the RendererD3D12.
 static ComPtr<ID3D12RootSignature> s_blit_root_sig;
-// EFB-copy conversion blit root signature (same lifetime pattern).
+// EFB-copy conversion blit root signature.
 static ComPtr<ID3D12RootSignature> s_conv_root_sig;
 static ComPtr<ID3D12RootSignature> s_clear_root_sig;
 
@@ -107,19 +102,6 @@ std::uint64_t elapsed_us(
     return static_cast<std::uint64_t>(
         std::chrono::duration_cast<std::chrono::microseconds>(
             end - begin).count());
-}
-
-bool trace_renderer_startup_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        return getenv_s(
-                   &length, value, sizeof(value),
-                   "GALAXY_TRACE_RENDERER_STARTUP") == 0 &&
-               length > 1 && value[0] != '0' && value[0] != 'n' &&
-               value[0] != 'N';
-    }();
-    return enabled;
 }
 
 // The tier as major x 10 + minor (D3D12_RAYTRACING_TIER_1_1 is 11), 0 without ray tracing. The tiers are
@@ -146,8 +128,7 @@ void copy_adapter_description(
     }
 }
 
-// GALAXY_GPU_PREFERENCE=low selects the minimum-power (integrated) adapter
-// first, e.g. to measure on a hybrid machine's iGPU.
+// GALAXY_GPU_PREFERENCE=low selects the minimum-power (integrated) adapter first.
 DXGI_GPU_PREFERENCE adapter_preference() {
     char value[16]{};
     std::size_t length = 0;
@@ -168,116 +149,6 @@ bool trace_present_stats_enabled() {
                length > 1 && value[0] != '0';
     }();
     return enabled;
-}
-
-// Textual per-frame probes can block in redirected Windows stderr. Keep the
-// independent cadence/Present counters enabled for measurement; request these
-// additional messages explicitly when investigating a particular stall.
-bool trace_stall_watch_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        return getenv_s(&length, value, sizeof(value),
-                        "GALAXY_TRACE_STALL_WATCH") == 0 &&
-               length > 1 && value[0] == '1';
-    }();
-    return enabled;
-}
-
-bool trace_present_luma_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        return getenv_s(
-                   &length, value, sizeof(value),
-                   "GALAXY_TRACE_PRESENT_LUMA") == 0 &&
-               length > 1 && value[0] != '0' && value[0] != 'n' &&
-               value[0] != 'N';
-    }();
-    return enabled;
-}
-
-std::uint64_t trace_present_luma_interval() {
-    static const std::uint64_t interval = [] {
-        char value[32]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length, value, sizeof(value),
-                "GALAXY_TRACE_PRESENT_LUMA_INTERVAL") != 0 ||
-            length <= 1) {
-            return std::uint64_t{60};
-        }
-        return std::clamp<std::uint64_t>(
-            std::strtoull(value, nullptr, 10),
-            std::uint64_t{1},
-            std::uint64_t{3600});
-    }();
-    return interval;
-}
-
-bool trace_present_luma_frame(std::uint64_t frame) {
-    return trace_present_luma_enabled() &&
-           frame % trace_present_luma_interval() == 0u;
-}
-
-enum class BackbufferPreBlitClearMode {
-    Disabled,
-    Black,
-    Diagnostic,
-};
-
-// Truthy values seed the backbuffer with a magenta sentinel that the XFB blit
-// should overwrite completely; use "black" when testing a black scrub instead.
-BackbufferPreBlitClearMode backbuffer_pre_blit_clear_mode() {
-    static const BackbufferPreBlitClearMode mode = [] {
-        char value[32]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length,
-                value,
-                sizeof(value),
-                "GALAXY_CLEAR_BACKBUFFER_BEFORE_XFB_BLIT") != 0 ||
-            length <= 1) {
-            return BackbufferPreBlitClearMode::Disabled;
-        }
-        for (char& ch : value) {
-            ch = static_cast<char>(
-                std::tolower(static_cast<unsigned char>(ch)));
-        }
-        if (std::strcmp(value, "0") == 0 ||
-            std::strcmp(value, "false") == 0 ||
-            std::strcmp(value, "no") == 0 ||
-            std::strcmp(value, "off") == 0) {
-            return BackbufferPreBlitClearMode::Disabled;
-        }
-        if (std::strcmp(value, "black") == 0) {
-            return BackbufferPreBlitClearMode::Black;
-        }
-        return BackbufferPreBlitClearMode::Diagnostic;
-    }();
-    return mode;
-}
-
-std::uint32_t crc32_update_raw(
-    std::uint32_t crc,
-    const std::uint8_t* data,
-    std::size_t size) {
-    static const std::array<std::uint32_t, 256> table = [] {
-        std::array<std::uint32_t, 256> values{};
-        for (std::size_t i = 0; i < values.size(); ++i) {
-            std::uint32_t c = static_cast<std::uint32_t>(i);
-            for (unsigned bit = 0; bit < 8u; ++bit) {
-                c = (c & 1u) != 0u ? 0xEDB88320u ^ (c >> 1u) : c >> 1u;
-            }
-            values[i] = c;
-        }
-        return values;
-    }();
-
-    for (std::size_t i = 0; i < size; ++i) {
-        crc = table[(crc ^ data[i]) & 0xFFu] ^ (crc >> 8u);
-    }
-    return crc;
 }
 
 // Frame GPU timestamps (two queries and a resolve per command list) are always on: Match Output's GPU budget reads
@@ -327,35 +198,6 @@ bool flip_discard_enabled() {
     return enabled;
 }
 
-bool dred_diagnostics_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        return getenv_s(
-                   &length, value, sizeof(value),
-                   "GALAXY_D3D_DRED") == 0 &&
-               length > 1 && value[0] != '0' && value[0] != 'n' &&
-               value[0] != 'N';
-    }();
-    return enabled;
-}
-
-// With GALAXY_D3D_DRED: a breadcrumb context (PIX unicode marker) that the
-// device-removal dump prints next to the operation where the GPU stopped.
-void dred_marker(ID3D12GraphicsCommandList* list, const wchar_t* format, ...) {
-    if (!dred_diagnostics_enabled() || list == nullptr) {
-        return;
-    }
-    wchar_t text[96]{};
-    va_list args;
-    va_start(args, format);
-    const int length = std::vswprintf(text, sizeof(text) / sizeof(text[0]), format, args);
-    va_end(args);
-    if (length > 0) {
-        list->SetMarker(0u, text, static_cast<UINT>((std::wcslen(text) + 1u) * sizeof(wchar_t)));
-    }
-}
-
 unsigned swap_chain_frame_latency() {
     static const unsigned latency = [] {
         char value[16]{};
@@ -377,13 +219,9 @@ unsigned swap_chain_frame_latency() {
     return latency;
 }
 
-// Installed physical memory, in MiB, or 0 if it cannot be queried.
-//
-// Reported alongside the adapter's dedicated/shared figures because on a unified
-// memory adapter (integrated graphics) the usable graphics budget is the OS cap of
-// one-half of system memory, so neither number is interpretable without it. On a
-// discrete adapter this is context only. Queried once; the value cannot change
-// during a session.
+// Installed physical memory in MiB (0 if it cannot be queried). Logged with the
+// adapter's figures: on a unified-memory adapter the graphics budget is the OS cap
+// of half of system memory.
 std::uint64_t host_ram_mb() {
     static const std::uint64_t megabytes = [] {
         MEMORYSTATUSEX status{};
@@ -539,8 +377,7 @@ static void dump_device_removal(ID3D12Device* dev) {
 
     ComPtr<ID3D12InfoQueue> iq;
     if (SUCCEEDED(dev->QueryInterface(IID_PPV_ARGS(&iq)))) {
-        // Print only ERROR/CORRUPTION severity. Warnings (e.g. clear-value mismatches) flood the
-        // tail and bury the actual illegal call.
+        // ERROR/CORRUPTION only: warnings (clear-value mismatches) would bury the illegal call.
         const UINT64 count = iq->GetNumStoredMessages();
         int printed = 0;
         for (UINT64 i = 0; i < count && printed < 20; ++i) {
@@ -595,9 +432,6 @@ bool validate_efb_conversion_shader(std::string& diagnostics) noexcept {
         return false;
     }
 }
-// ---------------------------------------------------------------------------
-// DescriptorRing
-// ---------------------------------------------------------------------------
 
 void DescriptorRing::reset() noexcept {
     *this = DescriptorRing{};
@@ -688,51 +522,25 @@ DescriptorRing::Table DescriptorRing::allocate(unsigned count) {
     return Table{cpu, gpu};
 }
 
-// ---------------------------------------------------------------------------
-// RendererD3D12 helpers
-// ---------------------------------------------------------------------------
-
-// Upload rings are created with CreateCommittedResource on D3D12_HEAP_TYPE_UPLOAD and mapped
-// for the life of the process, so bytes_per_frame * frames_in_flight is resident memory that
-// is never released. The defaults total (64+16+8+32) MiB * 2 slots = 240 MiB, plus a
-// shader-visible descriptor heap.
-//
-// On an integrated adapter that is a share of system memory, because there is no separate
-// pool. DXGI's DedicatedVideoMemory there is a fixed compatibility value, not VRAM (Intel
-// graphics-memory FAQ, support article 000020962: 128 MB "for compatibility with applications
-// that don't correctly comprehend a fully unified memory architecture"). The graphics share is
-// capped at half of installed RAM.
-//
-// Each ring can be overridden in MiB so the budget can be measured on the target. Exhaustion
-// stays fatal: UploadRing::allocate throws, so a too-small value fails visibly instead of
-// dropping geometry.
+// Upload rings are committed UPLOAD-heap resources mapped for the life of the process, so
+// bytes_per_frame * frames_in_flight stays reserved: (64+16+8+32) MiB * 2 slots = 240 MiB, plus a
+// shader-visible descriptor heap. An UPLOAD heap's untouched pages are never backed, so unused
+// reservation costs address space and commit, not memory; [gpu-rings] logs the reservation and
+// UploadRing tracks each ring's peak use. On an integrated adapter the memory is system memory;
+// DXGI's DedicatedVideoMemory there is a fixed compatibility value, not VRAM (Intel support article
+// 000020962: 128 MB), and the graphics share is capped at half of installed RAM. Exhaustion is
+// fatal: UploadRing::allocate throws rather than dropping geometry.
 namespace {
 
-// Keep malformed or overflowing settings from changing the intended budget.
-[[nodiscard]] std::size_t ring_bytes_per_frame(
-    const char* variable,
-    std::size_t default_bytes) {
-    const auto bytes = read_megabyte_budget(
-        variable, default_bytes, true, std::numeric_limits<std::size_t>::max());
-    constexpr std::size_t kFloorBytes = 1u * 1024u * 1024u;
-    return std::max(kFloorBytes, static_cast<std::size_t>(bytes));
-}
-
-// The adapter chosen for this session, published for the ring budgeting below.
-// Set once during initialize() before any ring is created, read from the same
-// thread on that path only; no other thread can observe the intermediate state
-// because the render thread does not start until initialize() returns.
+// The session's adapter, for unified-memory detection. Written once in initialize(),
+// before any ring is created and before the render thread starts.
 DXGI_ADAPTER_DESC1 g_selected_adapter_desc{};
 bool g_selected_adapter_valid = false;
 
-// True when the adapter has no meaningful pool of its own, i.e. graphics memory is system
-// memory (integrated graphics).
-//
-// Detected structurally rather than by vendor ID, because the condition is about the memory
-// architecture. DXGI's dedicated figure is negligible next to the shared figure, and on this
-// class of part it is the fictitious compatibility value (see the ring-sizing comment above,
-// and Intel FAQ 000020962). The threshold is loose (256 MiB dedicated, with shared an order of
-// magnitude larger), so a low-end discrete part with a small real pool is not classed as unified.
+// Whether graphics memory is system memory (integrated graphics), judged by the memory
+// figures rather than the vendor: at most 256 MiB dedicated (the compatibility value on
+// such parts) with at least 8x that shared, so a low-end discrete part with a small real
+// pool is not classed as unified.
 [[nodiscard]] bool adapter_is_unified_memory() {
     if (!g_selected_adapter_valid) {
         return false;
@@ -744,79 +552,32 @@ bool g_selected_adapter_valid = false;
         shared >= dedicated * 8ull;
 }
 
-// Upload-ring budget per frame, in bytes, for one ring.
-//
-// Scaling down the reservation on unified-memory adapters has no behavioural trade-off, so it is
-// the default rather than an environment-variable choice:
-//
-//   * A ring is created with CreateCommittedResource, but on an UPLOAD heap the untouched part is
-//     never written and so never backed by physical pages. Reserving less removes address space
-//     and page-file commit the workload was not using. UploadRing::peak_bytes_per_frame() reports
-//     how much is used, so the reservation can be checked against actual use.
-//   * Exhaustion is loud: UploadRing::allocate throws with the ring name, the request size and
-//     the frame usage. A too-small ring fails on the first frame that needs the space.
-//
-// The unified-memory defaults below are not smaller than the dedicated ones. The vertex ring
-// peaks at 117,361 vertices in one frame; at sizeof(GxVertexOut) == 144 that is 16.1 MiB, which
-// would not fit a 16 MiB ring. The recorded peak sizes these defaults for a real worst case, and
-// shrinking them without that evidence fails at launch. [gpu-rings] reports unified-memory=0/1
-// and the per-ring peak, so a run on the target gives the numbers needed to size the rings.
-// Until then the reservation stays as it was.
-[[nodiscard]] std::size_t default_ring_bytes_per_frame(
-    std::size_t dedicated_default_bytes,
-    std::size_t unified_default_bytes) {
-    return adapter_is_unified_memory() ? unified_default_bytes
-                                       : dedicated_default_bytes;
-}
-
-// DLSS before it is installed. On an NVIDIA RTX adapter the UPSCALER row lists
-// DLSS; applying it asks to download it. The launcher next to this runtime
-// (Nebula.exe --install-dlss) shows NVIDIA's license and downloads the files,
-// and the setting is saved so Streamline loads at the next start (it must load
-// before the device exists). Guarded by s_native_settings_mutex.
-
 }  // namespace
 
-// Out-of-line so the budget can be reported without exposing the anonymous-namespace
-// helper, and so both the eviction site and the telemetry read the same value.
 std::uint64_t RendererD3D12::efb_copy_dest_budget_bytes() {
     return galaxy::gx::efb_copy_dest_budget_bytes();
 }
 
-static std::size_t vb_per_frame_bytes() {
-    // Worst observed frame: 117,361 vertices x 144 B = 16.1 MiB, so 64 MiB leaves about 4x headroom.
-    return ring_bytes_per_frame(
-        "GALAXY_GPU_VERTEX_RING_MB",
-        default_ring_bytes_per_frame(64u * 1024u * 1024u, 64u * 1024u * 1024u));
+// Worst observed frame: 117,361 vertices x 144 B = 16.1 MiB, so 64 MiB leaves about 4x headroom.
+static constexpr std::size_t vb_per_frame_bytes() {
+    return 64u * 1024u * 1024u;
 }
-static std::size_t ib_per_frame_bytes() {
-    // No recorded counter bounds this ring's demand; the default is kept until a peak is measured.
-    return ring_bytes_per_frame(
-        "GALAXY_GPU_INDEX_RING_MB",
-        default_ring_bytes_per_frame(16u * 1024u * 1024u, 16u * 1024u * 1024u));
+static constexpr std::size_t ib_per_frame_bytes() {
+    return 16u * 1024u * 1024u;
 }
-static std::size_t cb_per_frame_bytes() {
-    return ring_bytes_per_frame(
-        "GALAXY_GPU_CONSTANT_RING_MB",
-        default_ring_bytes_per_frame(8u * 1024u * 1024u, 8u * 1024u * 1024u));
+static constexpr std::size_t cb_per_frame_bytes() {
+    return 8u * 1024u * 1024u;
 }
-static std::size_t mtx_per_frame_bytes() {
-    // No recorded counter bounds this ring's demand; the default is kept until a peak is measured.
-    return ring_bytes_per_frame(
-        "GALAXY_GPU_MATRIX_RING_MB",
-        default_ring_bytes_per_frame(32u * 1024u * 1024u, 32u * 1024u * 1024u));
+// A busy frame reloads the XF palette many times (per-object and skinned matrices via LOAD_INDX).
+static constexpr std::size_t mtx_per_frame_bytes() {
+    return 32u * 1024u * 1024u;
 }
-// 32 MiB default. A busy frame re-loads the XF palette many times (per-object and skinned
-// matrices via LOAD_INDX), so the headroom is needed. peak_bytes_per_frame() reports actual use,
-// so this figure can be tightened against measurements.
 static constexpr unsigned    kSrvPerFrame = 32768u;
-// Color and depth EFB sources never change during a renderer lifetime. Keep
-// their two views outside the rewound frame segments instead of copying a
-// descriptor into the frame ring for every EFB conversion. TextureCache's own
-// SRV indices are independent of this prefix.
-// EFB, output EFB and sub-frame EFB conversion sources; the ray-traced scenes' texture views.
+// The descriptor ring's persistent prefix, outside the rewound frame segments: the EFB
+// conversion sources (the EFB's views, the output EFB's, the MSAA depth's, then the HDR scene
+// EFBs', live and sub-frame: 10), the ray-traced scenes' texture views and the de-light views.
+// TextureCache's own SRV indices are independent of this prefix.
 static constexpr unsigned    kRtTextureViews = SceneRayTracer::kTextureViewScenes * SceneRayTracer::kTextureViewsPerScene;
-// The EFB's views, the output EFB's, the MSAA depth's, then the HDR scene EFBs' (live and sub-frame): 10.
 static constexpr unsigned    kPersistentSrvDescriptors = 10u + kRtTextureViews + SceneRayTracer::kDelightViews;
 
 void RendererD3D12::wait_for_gpu() {
@@ -830,9 +591,8 @@ void RendererD3D12::wait_for_gpu() {
 }
 
 bool RendererD3D12::create_efb_targets(unsigned efb_scale) {
-    // Aurora MIT lib/window.cpp and lib/gx/gx.cpp keep logical Wii size
-    // separate from the physical target. Apply that rule to Galaxy's D3D12
-    // resources without changing guest EFB/XFB addresses or dimensions.
+    // The physical targets scale; guest EFB/XFB addresses and dimensions keep the
+    // Wii's logical size (as Aurora's lib/window.cpp and lib/gx/gx.cpp do).
     //
     // Both resources are created before anything is replaced: a failure
     // (out of video memory) leaves the current targets untouched. On success
@@ -1476,10 +1236,8 @@ void RendererD3D12::reset_sampler_frame() {
 
     const RenderConfig cfg = get_render_config();
     const std::uint32_t config_key = sampler_config_key(cfg);
-    // Retain tables only in the heap where they were written. A table found in
-    // a different slot's cache has no initialized descriptors in this heap.
-    // Each heap warms independently, retaining its eight-descriptor tables
-    // until its sampler configuration changes.
+    // Tables are retained only in the heap they were written in (another slot's
+    // tables have no descriptors here), until the sampler configuration changes.
     sampler_tables_[sampler_slot_].reset(config_key);
 
     default_sampler_table_ = sampler_heap_->GetGPUDescriptorHandleForHeapStart();
@@ -1550,13 +1308,9 @@ D3D12_GPU_DESCRIPTOR_HANDLE RendererD3D12::sampler_table_for(
     return gpu;
 }
 
-// ---------------------------------------------------------------------------
-// EFB-copy conversion pipeline: root signature (16 root constants + one SRV
-// table + static linear/point clamp samplers) and the blit PSO.
-// ---------------------------------------------------------------------------
-
+// EFB-copy conversion pipeline: root signature (16 root constants, one SRV
+// table, static linear and point clamp samplers) and the blit PSO.
 bool RendererD3D12::create_conversion_pipeline() {
-    // Root signature.
     {
         D3D12_DESCRIPTOR_RANGE range{};
         range.RangeType          = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
@@ -1942,10 +1696,6 @@ ID3D12PipelineState* RendererD3D12::clear_pipeline(bool color) {
     return pipeline.Get();
 }
 
-// ---------------------------------------------------------------------------
-// initialize / shutdown / pump_messages
-// ---------------------------------------------------------------------------
-
 bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb_scale) {
     efb_scale_   = std::clamp(efb_scale, 1u, kMaxEfbScale);
     frame_slot_ = 0;
@@ -1963,9 +1713,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
     window_ = opened.window;
     window_shown_ = opened.shown;
 
-    // D3D12 debug layer and GPU-based validation: opt-in via GALAXY_D3D_DEBUG (1 = debug layer,
-    // 2 = plus GPU validation). GPU-based validation slows the GPU considerably and the debug layer
-    // adds CPU overhead per call, so neither is enabled by default in _DEBUG builds.
+    // GALAXY_D3D_DEBUG: 1 enables the D3D12 debug layer, 2 also GPU-based validation.
     unsigned d3d_debug_level = 0;
     {
         char buf[16]{};
@@ -1989,29 +1737,11 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
                 }
             }
         }
-        // DRED: auto breadcrumbs + page-fault reporting for device-removal
-        // triage. Keep it opt-in; forcing it on during normal play adds
-        // diagnostic driver work to every launch/frame.
-        if (dred_diagnostics_enabled()) {
-            ComPtr<ID3D12DeviceRemovedExtendedDataSettings> dred;
-            if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&dred)))) {
-                dred->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
-                dred->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
-            }
-        }
         // DLSS: Streamline must be running before the swap chain exists. It
-        // starts whenever the user installed it (GALAXY_STREAMLINE=0 skips
-        // it), so DLSS can be chosen in the settings without a restart.
-        {
-            char value[8]{};
-            std::size_t length = 0u;
-            const bool skip = getenv_s(&length, value, sizeof(value), "GALAXY_STREAMLINE") == 0 &&
-                              length > 1u && value[0] == '0';
-            if (!skip) {
-                (void)streamline::startup(streamline::default_directory(),
-                                          get_render_config().frame_generation != 0u);
-            }
-        }
+        // starts whenever it is installed, so DLSS can be chosen in the
+        // settings without a restart.
+        (void)streamline::startup(streamline::default_directory(),
+                                  get_render_config().frame_generation != 0u);
         UINT flags = 0;
         if (d3d_debug_level >= 1) {
             flags |= DXGI_CREATE_FACTORY_DEBUG;
@@ -2019,11 +1749,10 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
         ComPtr<IDXGIFactory4> factory;
         d3d_check(CreateDXGIFactory2(flags, IID_PPV_ARGS(&factory)), "CreateDXGIFactory2");
 
-        // DXGI's high-performance order is a preference, not a guarantee
-        // that entry zero can create the device. Check every hardware adapter
-        // in that order and retain the first usable D3D12 device. A legacy
-        // enumeration covers systems without IDXGIFactory6 or a failed
-        // preferred enumeration. Do not silently select a software adapter.
+        // Every hardware adapter is tried in preference order and the first that
+        // creates a D3D12 device is kept (entry zero may not). Legacy enumeration
+        // covers systems without IDXGIFactory6 or a failed preferred enumeration.
+        // A software adapter is never selected.
         ComPtr<IDXGIAdapter1> adapter;
         DXGI_ADAPTER_DESC1 adapter_desc{};
         auto try_adapter = [&](IDXGIAdapter1* candidate) {
@@ -2044,11 +1773,10 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
             device_ = std::move(candidate_device);
             return true;
         };
-        // The GPU chosen in Nebula Settings (config.ini gpu) comes first. Windows' own GPU preference
-        // (Graphics settings, the NVIDIA control panel) orders only the automatic choice below, so a
-        // chosen GPU is used whatever it says. One that is not present or cannot create a device leaves
-        // the automatic choice. Windows can list a GPU twice (a virtual display adds an entry); the
-        // entries are searched in the automatic choice's order, so it takes the one Windows prefers.
+        // The GPU chosen in the settings (config.ini gpu) comes first, whatever Windows' GPU preference
+        // says; that preference orders only the automatic choice below, which also covers a chosen GPU
+        // that is missing or cannot create a device. Windows can list a GPU twice (a virtual display
+        // adds an entry); searching in the automatic order takes the entry Windows prefers.
         ComPtr<IDXGIFactory6> preferred_factory;
         const bool preference_order = SUCCEEDED(factory.As(&preferred_factory));
         const auto enumerate = [&](UINT index, ComPtr<IDXGIAdapter1>& candidate) {
@@ -2109,10 +1837,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
             throw std::runtime_error(
                 "No hardware D3D12 adapter supports feature level 11_0");
         }
-        // Publish the selected adapter for the ring budgeting below. Assigned only
-        // here, after every failure path, so `adapter_is_unified_memory()` can
-        // never read a partially-populated description: it is guarded by its own
-        // validity flag as well.
+        // Published after every failure path, for adapter_is_unified_memory().
         g_selected_adapter_desc = adapter_desc;
         g_selected_adapter_valid = true;
         host_window::rtx_adapter.store(adapter_desc.VendorId == 0x10DEu &&
@@ -2129,12 +1854,8 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
             std::cout << "[gpu] adapter=\"" << narrow << "\""
                       << " vram-mb="
                       << (adapter_desc.DedicatedVideoMemory / (1024 * 1024))
-                      // vram-mb alone is misleading on integrated graphics, where it is a fixed compatibility value
-                      // (Intel reports 128 MB for applications that do not comprehend a unified memory architecture;
-                      // see the ring-sizing comment above). The real budget there is SharedSystemMemory, which the OS
-                      // caps at one-half of installed RAM and which is a limit, not a reservation. Emitting all three
-                      // fields together lets a reader tell the cases apart: a large dedicated figure means a separate
-                      // pool exists; a dedicated figure far below shared means unified memory.
+                      // On integrated graphics vram-mb is a fixed compatibility value and the budget is shared-mb
+                      // (capped by the OS at half of host RAM): a dedicated figure far below shared means unified memory.
                       << " shared-mb="
                       << (adapter_desc.SharedSystemMemory / (1024 * 1024))
                       << " host-ram-mb=" << host_ram_mb()
@@ -2149,15 +1870,9 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
             galaxy::crash_notes::set(galaxy::crash_notes::Fixed::Gpu, gpu);
         }
 
-        // Live debug-layer message callback (opt-in, same GALAXY_D3D_DEBUG
-        // gate as EnableDebugLayer above): flushes ERROR/CORRUPTION messages
-        // to stderr the instant they're produced, not just at
-        // device-removal time. A driver-side hard fail-fast (e.g. a
-        // STATUS_STACK_BUFFER_OVERRUN inside the UMD) tears the whole
-        // process down before any later "dump stored messages on removal"
-        // code can run, so only an immediate callback has a chance of
-        // catching the validation error -- if any -- for the API call that
-        // triggered it.
+        // With the debug layer: ERROR/CORRUPTION messages go to stderr as they are produced.
+        // A driver fail-fast (STATUS_STACK_BUFFER_OVERRUN in the UMD) ends the process before
+        // the stored messages could be dumped at device removal.
         if (d3d_debug_level >= 1) {
             ComPtr<ID3D12InfoQueue1> iq1;
             if (SUCCEEDED(device_->QueryInterface(IID_PPV_ARGS(&iq1)))) {
@@ -2323,7 +2038,6 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
                 "Create timestamp readback");
         }
 
-        // Swap chain.
         DXGI_SWAP_CHAIN_DESC1 scd{};
         scd.BufferCount  = kSwapChainBuffers;
         scd.Width        = host_window::backbuffer_width;
@@ -2390,24 +2104,20 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
             }
         }
 
-        // Command allocators.
         for (unsigned i = 0; i < kFramesInFlight; ++i)
             d3d_check(device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&allocators_[i])), "CreateCommandAllocator");
         d3d_check(device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, allocators_[0].Get(), nullptr, IID_PPV_ARGS(&command_list_)), "CreateCommandList");
         command_list_->SetName(L"GxFrameList");
         d3d_check(command_list_->Close(), "CommandList Close init");
 
-        // Fence.
         d3d_check(device_->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence_)), "CreateFence");
         fence_event_ = CreateEventW(nullptr, FALSE, FALSE, nullptr);
         if (!fence_event_) throw std::runtime_error("CreateEvent failed");
 
-        // EFB render targets.
         // A saved scale above what this display can show is clamped here.
         efb_scale_ = std::min(efb_scale_, host_window::display_efb_scale_cap());
         if (!create_efb_targets(efb_scale_)) return false;
 
-        // Root signatures.
         if (!create_root_signature()) return false;
 
         // Blit root signature: one SRV table + static linear-clamp sampler.
@@ -2441,7 +2151,6 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
             d3d_check(device_->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(), IID_PPV_ARGS(&s_blit_root_sig)), "CreateBlitRS");
         }
 
-        // Blit pipeline.
         {
             const ComPtr<ID3DBlob> vs = compile_hlsl(blit_vertex_shader_source().data(), blit_vertex_shader_source().size(), "vs_5_1", "main");
             const ComPtr<ID3DBlob> ps = compile_hlsl(blit_pixel_shader_source().data(), blit_pixel_shader_source().size(), "ps_5_1", "main");
@@ -2490,10 +2199,8 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
             }
         }
 
-        // Sampler heap.
         if (!create_sampler_heap()) return false;
 
-        // Upload + descriptor rings.
         // Each ring reserves its largest segmentation (interpolation, temporal), so a frame-rate or
         // upscaler change only re-segments it: no 300-400 MB of upload memory created mid-game.
         constexpr unsigned kMostSegments = std::max({kFramesInFlight, kInterpSegments, kRingSegments});
@@ -2519,12 +2226,9 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
         if (!create_conversion_pipeline()) return false;
         if (!create_clear_pipeline()) return false;
 
-        // Reserved upload-ring bytes, emitted with the `[gpu]` adapter line so the two are read together:
-        // the reservation is only meaningful next to the adapter that has to back it. This is the
-        // configuration, not the usage. A mapped D3D12_HEAP_TYPE_UPLOAD buffer only commits physical pages
-        // for the ranges actually written, so the resident cost tracks the per-frame peak rather than
-        // bytes_per_frame * frames_in_flight. The peak is reported per ring below and at shutdown; the
-        // pairing is what makes the 240 MiB default checkable against a real workload.
+        // Reserved upload-ring bytes, logged next to the [gpu] adapter line. A mapped UPLOAD buffer
+        // commits pages only for the ranges written, so residency follows each ring's per-frame peak,
+        // not this reservation.
         {
             const auto ring_reserved_mb = [](std::size_t bytes) {
                 return (bytes * kFramesInFlight) / (1024u * 1024u);
@@ -2541,7 +2245,6 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
                              ring_reserved_mb(ib_per_frame_bytes()) +
                              ring_reserved_mb(cb_per_frame_bytes()) +
                              ring_reserved_mb(mtx_per_frame_bytes())
-                      << " note=reservation-not-residency"
                       << '\n';
         }
 
@@ -2549,11 +2252,6 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
         reconcile_ray_tracing();
         // The settings menu's pipeline compiles its shaders: here, not inside the frame that first opens it.
         ensure_native_settings_solid_pipeline_loaded();
-
-        if (trace_renderer_startup_enabled()) {
-            std::cout << "[Renderer] OK  EFB=" << kEfbWidth * efb_scale_
-                      << "x" << kEfbHeight * efb_scale_ << "\n";
-        }
     } catch (const std::exception& e) {
         std::cerr << "[Renderer] initialize failed: " << e.what() << "\n";
         return false;
@@ -2633,9 +2331,8 @@ void RendererD3D12::shutdown() {
     if (queue_ && fence_) {
         retain_shutdown_failure("GPU drain", [&] { wait_for_gpu(); });
     }
-    // A diagnostic copy can be the final submitted command list. Drain only
-    // here, after benchmark execution has ended, then hand its CPU data to the
-    // bounded background PPM writers before any D3D resources are released.
+    // A diagnostic copy can be the last submitted list: its data goes to the
+    // background PPM writers before any D3D resource is released.
     retain_shutdown_failure("EFB diagnostic readback", [&] {
         debug_log_readback();
     });
@@ -2727,15 +2424,10 @@ void RendererD3D12::shutdown() {
     backbuffer_readback_buf_.Reset();
     backbuffer_readback_pending_ = false;
     backbuffer_readback_fence_value_ = 0;
-    backbuffer_readback_capture_ = false;
-    backbuffer_readback_luma_trace_ = false;
     backbuffer_readback_width_ = backbuffer_readback_height_ =
         backbuffer_readback_row_pitch_ = 0;
     next_backbuffer_capture_path_.clear();
     backbuffer_readback_capture_path_.clear();
-    backbuffer_readback_frame_ = 0;
-    backbuffer_readback_xfb_addr_ = 0;
-    backbuffer_readback_xfb_stamp_ = 0;
     selected_xfb_readback_buf_.Reset();
     selected_xfb_readback_source_.Reset();
     selected_xfb_readback_pending_ = false;
@@ -2747,8 +2439,7 @@ void RendererD3D12::shutdown() {
         std::cerr << "[efb-copy-work] requests=" << efb_copy_requests_
                   << " shader-copies=" << efb_shader_copies_
                   << " identity-copies=" << efb_identity_copies_
-                  << " identity-payload-bytes=" << efb_identity_payload_bytes_
-                  << " scope=whole-renderer-lifetime\n";
+                  << " identity-payload-bytes=" << efb_identity_payload_bytes_ << '\n';
     }
     efb_copy_requests_ = 0u;
     efb_shader_copies_ = 0u;
@@ -2824,11 +2515,9 @@ void RendererD3D12::resize_swap_chain(UINT new_width, UINT new_height, bool forc
         return;
     }
 
-    // ResizeBuffers requires every reference to the existing backbuffers to
-    // be released first, and requires the GPU to be done with them. The EFB
-    // color/depth targets, blit pipeline, and root signature are unaffected
-    // -- present() always blits EFB/XFB content into whatever backbuffer
-    // size is current, so only the swap chain's own resources change here.
+    // ResizeBuffers needs every backbuffer reference released and the GPU done
+    // with them. Only the swap chain's resources change: present() blits into
+    // whatever backbuffer size is current.
     wait_for_gpu();
     for (auto& buffer : backbuffers_) {
         buffer.Reset();
@@ -2845,10 +2534,7 @@ void RendererD3D12::resize_swap_chain(UINT new_width, UINT new_height, bool forc
         std::cerr << "[Renderer] resize: ResizeBuffers failed hr=0x"
                   << std::hex << static_cast<unsigned long>(resize_hr)
                   << std::dec << "; swap chain left at prior size\n";
-        // The swap chain no longer owns valid buffers at this point (they
-        // were released above); a failed ResizeBuffers is unrecoverable
-        // in-place, so surface it the same way other fatal device errors
-        // are surfaced rather than continuing to present into empty slots.
+        // The backbuffers are already released, so a failed ResizeBuffers is fatal.
         d3d_check(resize_hr, "ResizeBuffers");
         return;
     }
@@ -2866,9 +2552,7 @@ void RendererD3D12::resize_swap_chain(UINT new_width, UINT new_height, bool forc
 
     host_window::backbuffer_width = new_width;
     host_window::backbuffer_height = new_height;
-    // The swap chain was fully drained and recreated at the new size; the
-    // frame-latency waitable object and has_presented_swap_chain_ gate on
-    // the OLD swap chain's present history, which no longer applies.
+    // The frame-latency wait gates on the previous buffers' present history.
     has_presented_swap_chain_ = false;
     if (trace_present_stats_enabled()) {
         std::cerr << "[Renderer] resized backbuffer to " << new_width << "x"
@@ -3042,26 +2726,8 @@ void RendererD3D12::ensure_native_settings_corner_texture_loaded() {
     }
     ui_corner_texture_load_attempted_ = true;
 
-    // Diagnostic-only isolation switch, never set automatically. It lets a crash repro separate the
-    // creation of the corner-texture SRV, root signature and PSO from clear_ui_rects as the trigger.
-    {
-        char disable_value[16]{};
-        std::size_t disable_length = 0;
-        const bool disabled =
-            getenv_s(
-                &disable_length, disable_value, sizeof(disable_value),
-                "GALAXY_DISABLE_SETTINGS_CORNER_TEXTURE") == 0 &&
-            disable_length > 1 && disable_value[0] != '0' &&
-            disable_value[0] != 'n' && disable_value[0] != 'N';
-        if (disabled) {
-            return;
-        }
-    }
-
-    // Read-only extraction from the user's own game dump -- never fatal if
-    // it fails (a different game revision, a missing/renamed asset, or a
-    // decode format this reader doesn't cover): the overlay already has a
-    // working solid-color fallback, so this is purely cosmetic upside.
+    // Read from the game's files. Any failure (another game revision, a missing
+    // asset, an unsupported format) leaves the overlay's solid-color corners.
     if (host_window::native_settings_content_root.empty()) {
         return;
     }
@@ -3143,11 +2809,8 @@ void RendererD3D12::ensure_native_settings_corner_texture_loaded() {
         src.PlacedFootprint.Footprint.Height = tex->height;
         src.PlacedFootprint.Footprint.Depth = 1;
         src.PlacedFootprint.Footprint.RowPitch = row_pitch;
-        // Recorded into the frame's already-open command list (present()
-        // calls this from inside its own recording scope): the copy and
-        // the state transition both land in the same submission as the
-        // rest of this frame's work, so no extra synchronization is
-        // needed beyond the normal per-frame fence.
+        // Recorded into the frame's open command list (present() calls this
+        // while recording), so the frame fence covers the copy.
         D3D12_RESOURCE_BARRIER barrier{};
         barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
         barrier.Transition.pResource = ui_corner_texture_.Get();
@@ -3156,8 +2819,7 @@ void RendererD3D12::ensure_native_settings_corner_texture_loaded() {
             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
         barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 
-        // SRV heap (one descriptor) + root signature + pipeline, created
-        // once alongside the texture itself.
+        // SRV heap (one descriptor), root signature and pipeline.
         D3D12_DESCRIPTOR_HEAP_DESC srv_heap_desc{};
         srv_heap_desc.NumDescriptors = 1;
         srv_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
@@ -3248,8 +2910,8 @@ void RendererD3D12::ensure_native_settings_corner_texture_loaded() {
             device_->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&ui_texture_pipeline_)),
             "create UI texture PSO");
 
-        // All fallible preparation is complete. From here to publication no
-        // resource can be released by the cosmetic fallback after recording.
+        // Recorded after everything that can throw, so the catch below never
+        // releases a resource the command list uses.
         command_list_->CopyTextureRegion(&dst, 0, 0, 0, &src, nullptr);
         command_list_->ResourceBarrier(1, &barrier);
 
@@ -3257,8 +2919,7 @@ void RendererD3D12::ensure_native_settings_corner_texture_loaded() {
         ui_corner_texture_height_ = tex->height;
         ui_corner_texture_ready_ = true;
     } catch (const std::exception& e) {
-        // Cosmetic-only path: log and keep the existing solid-color
-        // fallback rather than propagating a fatal error for a UI asset.
+        // Not fatal: the overlay keeps its solid-color corners.
         std::cerr << "[Renderer] native settings corner texture unavailable: "
                   << e.what() << '\n';
         ui_corner_texture_.Reset();
@@ -3419,17 +3080,12 @@ void RendererD3D12::draw_ui_glyph(
 }
 
 void RendererD3D12::pump_messages() {
-    // HWND ownership and all native modal loops stay on window_owner_.
-    // Guest checkpoints must never dispatch a Win32 modal loop themselves.
+    // The window and its modal loops belong to window_owner_.
 }
 
 bool RendererD3D12::quit_requested() const noexcept {
     return host_window::quit_request.load(std::memory_order_acquire);
 }
-
-// ---------------------------------------------------------------------------
-// Frame lifecycle
-// ---------------------------------------------------------------------------
 
 void RendererD3D12::invalidate_gx_bindings() {
     bound_pipeline_ = nullptr;
@@ -3450,17 +3106,8 @@ void RendererD3D12::invalidate_gx_bindings() {
 }
 
 void RendererD3D12::begin_frame(bool present_swap_chain) {
-    // Diagnostic stall watch, gated on its own opt-in flag. GALAXY_TRACE_STALL_WATCH is unset in the
-    // shipped runtime-env.json, and trace_stall_watch_enabled() holds a function-local
-    // `static const bool`, so with the flag off this is a constant false and clang deletes the
-    // timestamps, the subtraction and the branch below outright.
-    const bool stall_watch = trace_stall_watch_enabled();
-    const auto stall_watch_begin_frame_start = stall_watch
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
-    // Live resize lands here: the one point guaranteed to be between frames
-    // with no in-flight command-list recording on this renderer. Contains
-    // its own full GPU-idle wait, so it belongs before any per-slot state
+    // Display and size changes apply here, between command-list recordings.
+    // They wait for the GPU themselves, so they come before any per-slot state
     // below is touched.
     host_window::poll_render_config_file();
     reconcile_display_state();
@@ -3484,7 +3131,7 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
     reconcile_ray_tracing();
     {
         if (temporal_interp_suspended_ && temporal_interp_key() != temporal_interp_key_) {
-            // Other settings: measured again.
+            // The settings changed: decided again.
             temporal_interp_suspended_ = false;
             host_window::temporal_interp_suspended.store(false, std::memory_order_relaxed);
         }
@@ -3524,7 +3171,6 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
             // The logs name memory of the rings just rebuilt.
             run_valid_ = false;
             prev_run_valid_ = false;
-            copy_writes_.clear();
             replay_textures_.clear();
             play_textures_.clear();
             run_textures_.clear();
@@ -3642,8 +3288,6 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
         }
     }
 
-    read_scene_aa_timing();
-    ambient_occlusion_.read_timing(timestamp_frequency_, frame_slot_);
     ray_tracer_.begin_frame(frame_index_);
 
     const auto reset_start = collect_begin_timing
@@ -3660,7 +3304,6 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
         dump_device_removal(device_.Get());
         d3d_check(command_reset_hr, "CommandList Reset");
     }
-    dred_marker(command_list_.Get(), L"frame slot=%u", frame_slot_);
     if (timestamp_query_heap_) {
         command_list_->EndQuery(
             timestamp_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
@@ -3749,20 +3392,6 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
             reset_start,
             std::chrono::steady_clock::now());
     }
-    if (stall_watch) {
-        const double stall_watch_ms = std::chrono::duration<double, std::milli>(
-            std::chrono::steady_clock::now() -
-            stall_watch_begin_frame_start).count();
-        if (stall_watch_ms > 12.0) {
-            std::ostringstream message;
-            message << "[stall-watch] begin_frame took " << stall_watch_ms
-                      << "ms latency-wait-us=" << last_latency_wait_us_
-                      << " frame-slot-wait-us=" << last_frame_slot_wait_us_
-                      << " timestamp-read-us=" << last_timestamp_read_us_
-                      << " begin-reset-us=" << last_begin_reset_us_ << '\n';
-            std::cerr << message.str();
-        }
-    }
 }
 
 void RendererD3D12::wait_for_frame_latency_if_needed(
@@ -3811,13 +3440,6 @@ bool RendererD3D12::vblank_grid(std::int64_t& vblank, std::int64_t& period) cons
 }
 
 void RendererD3D12::refresh_display_rate() {
-    if (const unsigned hz = host_window::refresh_override_hz(); hz != 0u) {
-        if (display_refresh_hz_ != hz) {
-            std::cerr << "[display] refresh-hz=" << hz << " (GALAXY_DISPLAY_REFRESH_HZ)\n";
-        }
-        display_refresh_hz_ = hz;
-        return;
-    }
     // The vblanks' own rate when they are timed (the mode reports whole hertz: 239 or 240 for 239.76).
     std::int64_t vblank = 0;
     std::int64_t period = 0;
@@ -3874,7 +3496,6 @@ UINT RendererD3D12::present_sync_interval(unsigned configured, float max_fps) {
 }
 
 void RendererD3D12::present_to_swap_chain() {
-    const bool stall_watch = trace_stall_watch_enabled();
     const RenderConfig cfg = get_render_config();
     const bool generating = frame_generation_running();
     // With frame generation the sync interval is 0 or 1 (Streamline paces the generated frames).
@@ -3883,9 +3504,6 @@ void RendererD3D12::present_to_swap_chain() {
     const UINT present_flags =
         (vsync == 0 && tearing_supported_ && !exclusive_fullscreen_active_) ? DXGI_PRESENT_ALLOW_TEARING
                                            : 0u;
-    const auto stall_watch_pace_start = stall_watch
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
     // Interpolation presents on its own slot clock.
     const double pace_wait_ms =
         ring_mode_ == RingMode::Interp ? 0.0 : present_pacer_.pace(cfg.vsync_interval, presented_max_fps(cfg));
@@ -3893,29 +3511,12 @@ void RendererD3D12::present_to_swap_chain() {
         telemetry_pace_wait_ms_ += pace_wait_ms;
         telemetry_pace_wait_max_ms_ = std::max(telemetry_pace_wait_max_ms_, pace_wait_ms);
     }
-    if (stall_watch) {
-        const double stall_watch_ms =
-            std::chrono::duration<double, std::milli>(
-                std::chrono::steady_clock::now() -
-                stall_watch_pace_start).count();
-        if (stall_watch_ms > 12.0) {
-            std::ostringstream message;
-            message << "[stall-watch] present pacing took "
-                      << stall_watch_ms
-                      << "ms vsync=" << cfg.vsync_interval
-                      << " max-fps=" << cfg.max_fps << '\n';
-            std::cerr << message.str();
-        }
-    }
     const bool collect_present_telemetry = trace_present_stats_enabled();
     LARGE_INTEGER present_start{};
     LARGE_INTEGER present_end{};
     if (collect_present_telemetry) {
         QueryPerformanceCounter(&present_start);
     }
-    const auto stall_watch_present_start = stall_watch
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
     static std::uint64_t timeline_present_ordinal = 0u;
     const bool timeline_present = galaxy::timeline::enabled();
     if (timeline_present) {
@@ -3969,19 +3570,6 @@ void RendererD3D12::present_to_swap_chain() {
                 galaxy::timeline::record_at(galaxy::timeline::Event::VBlank, timing.qpcVBlank,
                                         timing.qpcRefreshPeriod);
             }
-        }
-    }
-    if (stall_watch) {
-        const double stall_watch_ms =
-            std::chrono::duration<double, std::milli>(
-                std::chrono::steady_clock::now() -
-                stall_watch_present_start).count();
-        if (stall_watch_ms > 12.0) {
-            std::ostringstream message;
-            message << "[stall-watch] IDXGISwapChain::Present took "
-                      << stall_watch_ms << "ms vsync=" << vsync
-                      << " flags=" << present_flags << '\n';
-            std::cerr << message.str();
         }
     }
     if (FAILED(present_hr)) {
@@ -4094,10 +3682,7 @@ void RendererD3D12::present_to_swap_chain() {
                     ? same_serial_or_replay_hz * 100.0 / present_fps
                     : 0.0;
 
-            // cerr is unit-buffered. Assemble one record before touching
-            // the redirected stream so field formatting cannot turn a
-            // single report into dozens of synchronous redirected writes while
-            // the simulation waits for this render submission's token.
+            // cerr is unit-buffered: the record is assembled first so it is one write, not one per field.
             std::ostringstream message;
             message
                 << "[present-stats] fps=" << present_fps
@@ -4120,10 +3705,6 @@ void RendererD3D12::present_to_swap_chain() {
                 << telemetry_latency_wait_max_ms_
                 << " pace-wait-ms(avg/max)=" << pace_wait_avg << "/"
                 << telemetry_pace_wait_max_ms_
-                << " smooth-present="
-                << (smooth_realtime_present_enabled() ? 1 : 0)
-                << " smooth-max-wait-us="
-                << smooth_realtime_present_max_wait_us()
                 << " present-ms(avg/max)=" << present_avg << "/"
                 << telemetry_present_max_ms_
                 << " vsync=" << vsync
@@ -4147,7 +3728,6 @@ void RendererD3D12::present_to_swap_chain() {
                                 : 0.0);
             }
             message
-                << " gpu-scope=completed-renderer-command-lists"
                 << " no-xfb-presents="
                 << telemetry_no_xfb_present_count_
                 << " backbuffer-clears="
@@ -4272,9 +3852,7 @@ std::uint64_t RendererD3D12::end_frame(
         dump_device_removal(device_.Get());
         d3d_check(signal_hr, "Queue Signal");
     }
-    // Readbacks are recorded on this command list, so this exact signal is the
-    // only completion authority they need. Do not make their optional capture
-    // diagnostics a synchronous GPU drain on the render thread.
+    // Readbacks recorded on this list complete at this signal; nothing waits for them here.
     if (readback_pending_ && readback_fence_value_ == 0u) {
         readback_fence_value_ = submitted_fence;
     }
@@ -4285,8 +3863,7 @@ std::uint64_t RendererD3D12::end_frame(
     if (selected_xfb_readback_pending_ && selected_xfb_readback_fence_ == 0u) {
         selected_xfb_readback_fence_ = submitted_fence;
     }
-    // Submission completion and physical presentation have separate owners.
-    // Signal failure never reaches this callback; no GPU wait is introduced.
+    // Reached only after a successful signal; presenting follows.
     if (on_submitted != nullptr) {
         on_submitted(submission_context, submitted_fence);
     }
@@ -4363,10 +3940,6 @@ void RendererD3D12::wait_for_fence_value(std::uint64_t fence_value) {
             " win32=" + std::to_string(wait_error));
     }
 }
-
-// ---------------------------------------------------------------------------
-// Temporal upscaling (upscaler mode 2)
-// ---------------------------------------------------------------------------
 
 bool RendererD3D12::temporal_mode() const {
     const unsigned upscaler = get_render_config().upscaler;
@@ -4514,26 +4087,12 @@ void RendererD3D12::record_motion_debug_view() {
     bind_efb(nullptr);
 }
 
-// ---------------------------------------------------------------------------
-// Interpolated redraw: replay log and sub-frames
-// ---------------------------------------------------------------------------
-
 bool RendererD3D12::interpolation_mode() const {
-    // GALAXY_INTERPOLATION=0 turns it off (diagnostics).
-    static const bool allowed = [] {
-        char value[8]{};
-        std::size_t length = 0u;
-        return !(getenv_s(&length, value, sizeof(value), "GALAXY_INTERPOLATION") == 0 &&
-                 length > 1u && value[0] == '0');
-    }();
-    if (!allowed) {
-        return false;
-    }
     const RenderConfig cfg = get_render_config();
     const double rate = present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, display_refresh_hz_);
     // With a temporal upscaler every presented frame is upscaled, its motion from the frame presented before (any
-    // rate: the slots' t need not divide the game frame evenly).
-    if (temporal_mode() && (!host_window::temporal_interpolation_allowed() || temporal_interp_suspended_)) {
+    // rate: the slots' t need not divide the game frame evenly), unless the GPU could not afford it.
+    if (temporal_mode() && temporal_interp_suspended_) {
         return false;
     }
     return interpolated_frames_per_game_frame(rate) != 0u;
@@ -4592,7 +4151,6 @@ bool RendererD3D12::start_replay_playback() {
     prev_run_valid_ = run_valid_;
     if (run_valid_) {
         std::swap(prev_run_draws_, run_draws_);
-        std::swap(prev_run_copies_, run_copies_);
         std::swap(prev_run_stripes_, run_stripes_);
         prev_run_segment_ = run_segment_;
         prev_run_serial_ = run_serial_;
@@ -4946,7 +4504,6 @@ void RendererD3D12::rt_trace_scene() {
     }
     const D3D12_RESOURCE_DESC desc = depth ? efb_depth_->GetDesc() : D3D12_RESOURCE_DESC{};
     const auto width = static_cast<std::uint32_t>(desc.Width);
-    dred_marker(command_list_.Get(), L"rt scene");
     // The engine's G-buffer reads the EFB's colour (the texels' albedo) during the trace.
     const bool picture = depth && efb_color_ && ray_tracer_.engine_active();
     D3D12_RESOURCE_BARRIER picture_barrier = barrier;
@@ -5039,7 +4596,6 @@ void RendererD3D12::rt_capture_picture() {
     barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
     command_list_->ResourceBarrier(2, barriers);
     const D3D12_RESOURCE_DESC desc = efb_color_->GetDesc();
-    dred_marker(command_list_.Get(), L"rt picture");
     // The conversion views hold the EFB colour, then its depth.
     ray_tracer_.capture_picture(command_list_.Get(), rt_sources(), &RendererD3D12::rt_allocate, this,
                                 conv_efb_color_srv_, static_cast<std::uint32_t>(desc.Width), desc.Height,
@@ -5074,11 +4630,7 @@ void RendererD3D12::end_hdr_scene() {
     record_hdr_end();
 }
 
-// The HDR scene EFB stands in: the EFB's colour so far widened into it (a draw: the formats differ), its depth copied;
-// then the two swap (the set keeps the RGBA8 EFB meanwhile). Sub-frames use their own set (a later frame's scene may
-// be open while they play).
-// GALAXY_RT_LOG_SEQ=n (diagnostics): the ray tracing frame's steps and the EFB colour each meets, renderer frames n to
-// n + 12.
+// GALAXY_RT_LOG_SEQ=n: logs the ray tracing frame's steps and the EFB colour each meets, renderer frames n to n + 12.
 void RendererD3D12::log_rt_seq(const char* step) {
     static const std::uint64_t first = [] {
         char value[24]{};
@@ -5096,6 +4648,9 @@ void RendererD3D12::log_rt_seq(const char* step) {
     }
 }
 
+// The HDR scene EFB stands in: the EFB's colour so far widened into it (a draw: the formats differ), its depth copied;
+// then the two swap (the set keeps the RGBA8 EFB meanwhile). Sub-frames use their own set (a later frame's scene may
+// be open while they play).
 void RendererD3D12::record_hdr_begin() {
     log_rt_seq("hdr-begin");
     if (efb_hdr_) {
@@ -5129,7 +4684,6 @@ void RendererD3D12::record_hdr_begin() {
     barriers[2].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
     barriers[2].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
     command_list_->ResourceBarrier(3u, barriers);
-    dred_marker(command_list_.Get(), L"hdr scene begin");
     const bool widened = ray_tracer_.camera_widen(command_list_.Get(), conv_efb_color_srv_, set.rtv,
                                                   static_cast<std::uint32_t>(desc.Width), desc.Height);
     command_list_->CopyResource(set.depth.Get(), efb_depth_.Get());
@@ -5174,7 +4728,6 @@ void RendererD3D12::record_hdr_end() {
     barriers[2].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
     barriers[2].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
     command_list_->ResourceBarrier(3u, barriers);
-    dred_marker(command_list_.Get(), L"hdr scene camera");
     ray_tracer_.camera_finish(command_list_.Get(), conv_efb_color_srv_, set.rtv, width, desc.Height);
     command_list_->CopyResource(set.depth.Get(), efb_depth_.Get());
     for (D3D12_RESOURCE_BARRIER& barrier : barriers) {
@@ -5292,7 +4845,6 @@ void RendererD3D12::rt_trace_water() {
     command_list_->ResourceBarrier(2, barriers);
     const D3D12_RESOURCE_DESC desc = efb_color_->GetDesc();
     const auto width = static_cast<std::uint32_t>(desc.Width);
-    dred_marker(command_list_.Get(), L"rt water");
     const int slot = ray_tracer_.trace_water(command_list_.Get(), rt_sources(), &RendererD3D12::rt_allocate, this,
                                              conv_efb_color_srv_, width, desc.Height);
     std::swap(barriers[0].Transition.StateBefore, barriers[0].Transition.StateAfter);
@@ -5396,7 +4948,6 @@ void RendererD3D12::record_blend_validation() {
     command_list_->SetComputeRootShaderResourceView(2, table.gpu);
     command_list_->SetComputeRootUnorderedAccessView(3, blend_verdicts_->GetGPUVirtualAddress());
     command_list_->SetComputeRoot32BitConstants(4, 2u, limits, 0u);
-    dred_marker(command_list_.Get(), L"blend-validate pairs=%zu", blend_pairs_.size());
     command_list_->Dispatch(static_cast<UINT>(blend_pairs_.size()), 1u, 1u);
     D3D12_RESOURCE_BARRIER barrier{};
     barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -5462,16 +5013,9 @@ void RendererD3D12::prepare_vertex_blend(std::span<const std::int32_t> previous_
     // order, skipping up to three unmatched draws (one drawn in only one of
     // the frames) to the next one with as many vertices.
     std::fill(fill, fill + count, 0u);
-    // Stripe draws of both logs, by draw index (GALAXY_INTERP_STRIPES=0: paired
-    // as other draws, diagnostics).
-    static const bool stripes = [] {
-        char value[8]{};
-        std::size_t length = 0u;
-        return !(getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_STRIPES") == 0 && length > 1u &&
-                 value[0] == '0');
-    }();
+    // Stripe draws of both logs, by draw index.
     stripe_of_draw_.assign(run_draws_.size(), -1);
-    for (std::size_t i = 0; stripes && i < run_stripes_.draws.size(); ++i) {
+    for (std::size_t i = 0; i < run_stripes_.draws.size(); ++i) {
         const StripeDraw& stripe = run_stripes_.draws[i];
         if (stripe.draw < stripe_of_draw_.size()) stripe_of_draw_[stripe.draw] = static_cast<std::int32_t>(i);
     }
@@ -5486,25 +5030,12 @@ void RendererD3D12::prepare_vertex_blend(std::span<const std::int32_t> previous_
     // Per stripe draw: its draw and first gathered vertex (addresses once the
     // gather buffer is sized).
     std::vector<std::array<std::uint32_t, 2>> stripe_blends;
-    std::vector<std::uint32_t> seen;
-    static const bool trace = [] {
-        char value[8]{};
-        std::size_t length = 0u;
-        return getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_TRACE_BLEND") == 0 &&
-               length > 1u && value[0] != '0';
-    }();
-    std::size_t in_scene = 0u, matched = 0u, paired = 0u, size_differs = 0u, same_buffer = 0u, blended = 0u;
-    std::ostringstream detail;
     for (std::size_t d = 0; d < run_draws_.size(); ++d) {
         const DrawCall& call = run_draws_[d];
         const std::int32_t r = call.replay_record;
         if (r < 0 || static_cast<std::size_t>(r) >= previous_record.size()) continue;
         const std::int32_t m = previous_record[static_cast<std::size_t>(r)];
-        ++in_scene;
         if (m < 0 || m >= records) continue;
-        ++matched;
-        if (seen.size() <= static_cast<std::size_t>(r)) seen.resize(static_cast<std::size_t>(r) + 1u, 0u);
-        const std::uint32_t k = seen[static_cast<std::size_t>(r)]++;
         std::uint32_t at = first[m] + fill[m];
         const std::uint32_t end = std::min(first[m + 1], at + 4u);
         const std::int32_t stripe = stripe_of_draw_[d];
@@ -5520,23 +5051,14 @@ void RendererD3D12::prepare_vertex_blend(std::span<const std::int32_t> previous_
             }
         }
         if (at >= end) {
-            if (first[m] + fill[m] < first[m + 1] && trace && size_differs < 6u) {
-                const DrawCall& next = prev_run_draws_[order[first[m] + fill[m]]];
-                detail << "  size r=" << r << " m=" << m << " k=" << k << " vertices "
-                       << next.vertex_view.SizeInBytes / 144u << "->" << call.vertex_view.SizeInBytes / 144u
-                       << " indices " << next.index_count << "->" << call.index_count << '\n';
-            }
-            size_differs += first[m] + fill[m] < first[m + 1] ? 1u : 0u;
             continue;
         }
         fill[m] = at + 1u - first[m];
-        ++paired;
         const DrawCall& before = prev_run_draws_[order[at]];
         if (call.ps_record >= 0 && before.ps_record >= 0) {
             std::int32_t& pair = run_ps_previous_[static_cast<std::size_t>(call.ps_record)];
             pair = pair == -1 || pair == before.ps_record ? before.ps_record : -2;
         }
-        same_buffer += before.vertex_view.BufferLocation == call.vertex_view.BufferLocation ? 1u : 0u;
         std::uint32_t current_offset = 0u, previous_offset = 0u;
         const int current_buffer =
             locate(call.vertex_view.BufferLocation, call.vertex_view.SizeInBytes, current_offset);
@@ -5609,7 +5131,6 @@ void RendererD3D12::prepare_vertex_blend(std::span<const std::int32_t> previous_
                 }
             }
             stripe_blends.push_back({static_cast<std::uint32_t>(d), base});
-            ++blended;
             continue;
         }
         if (pairs_checked && before.vertex_view.BufferLocation != call.vertex_view.BufferLocation &&
@@ -5622,24 +5143,6 @@ void RendererD3D12::prepare_vertex_blend(std::span<const std::int32_t> previous_
                                     static_cast<std::uint32_t>(current_buffer) |
                                         (static_cast<std::uint32_t>(previous_buffer) << 1u)});
             run_blend_vertices_[d] = {before.vertex_view.BufferLocation, slot};
-            ++blended;
-        }
-    }
-    // Texture copies of both logs paired by destination and order: those whose
-    // source rectangle moved (screen boxes that follow an object).
-    moving_copies_ = 0u;
-    for (std::size_t c = 0; c < run_copies_.size(); ++c) {
-        const ReplayCopy& copy = run_copies_[c];
-        if (copy.mode != 0u || copy.dest == nullptr) continue;
-        std::size_t ordinal = 0u;
-        for (std::size_t k = 0; k < c; ++k) ordinal += run_copies_[k].dest == copy.dest ? 1u : 0u;
-        for (const ReplayCopy& was : prev_run_copies_) {
-            if (was.mode != 0u || was.dest != copy.dest) continue;
-            if (ordinal-- != 0u) continue;
-            moving_copies_ += was.width == copy.width && was.height == copy.height &&
-                                      (was.geometry[0] != copy.geometry[0] || was.geometry[1] != copy.geometry[1])
-                                  ? 1u : 0u;
-            break;
         }
     }
     if (!stripe_gather_.empty()) {
@@ -5653,14 +5156,6 @@ void RendererD3D12::prepare_vertex_blend(std::span<const std::int32_t> previous_
         }
     }
     blend_validate_pending_ = !blend_pairs_.empty() || !stripe_gather_.empty();
-    if (trace) {
-        std::cerr << "[interp-blend] log=" << run_serial_ << " draws=" << run_draws_.size()
-                  << " in-scene=" << in_scene << " matched-record=" << matched << " paired=" << paired
-                  << " same-buffer=" << same_buffer << " size-differs=" << size_differs
-                  << " blended=" << blended << " stripe-draws=" << stripe_blends.size()
-                  << " stripe-vertices=" << stripe_gather_.size() << " moving-copies=" << moving_copies_ << '\n'
-                  << detail.str();
-    }
 }
 
 void RendererD3D12::begin_replay_record() {
@@ -5682,9 +5177,6 @@ void RendererD3D12::begin_replay_record() {
     }
     replay_recording_ = true;
     replay_start_output_active_ = output_efb_active_;
-    std::erase_if(copy_writes_, [this](const CopyWrite& write) {
-        return write.serial + kInterpSegments < replay_serial_;
-    });
     replay_source_slot_ = frame_slot_;
 }
 
@@ -5788,13 +5280,6 @@ void RendererD3D12::note_copy_write(ID3D12Resource* dest) {
             replay_textures_.written.end()) {
         replay_textures_.written.push_back(dest);
     }
-    for (CopyWrite& write : copy_writes_) {
-        if (write.dest == dest) {
-            write.serial = replay_serial_;
-            return;
-        }
-    }
-    copy_writes_.push_back({dest, replay_serial_});
 }
 
 ID3D12Resource* RendererD3D12::acquire_subframe_scratch(ID3D12Resource* dest) {
@@ -5874,16 +5359,6 @@ void RendererD3D12::record_subframe_guard(bool save) {
     flush();
 }
 
-bool RendererD3D12::copy_redirect_enabled() {
-    static const bool enabled = [] {
-        char value[8]{};
-        std::size_t length = 0u;
-        return !(getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_COPY_REDIRECT") == 0 &&
-                 length > 1u && value[0] == '0');
-    }();
-    return enabled;
-}
-
 bool RendererD3D12::ensure_replay_store(ReplayTextures& log) {
     if (srv_increment_ == 0u) {
         srv_increment_ = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -5906,8 +5381,7 @@ bool RendererD3D12::ensure_replay_store(ReplayTextures& log) {
 void RendererD3D12::note_replay_texture_table(D3D12_GPU_DESCRIPTOR_HANDLE table,
                                               const D3D12_CPU_DESCRIPTOR_HANDLE* sources,
                                               ID3D12Resource* const* copies) {
-    if (!replay_recording_ || ring_mode_ != RingMode::Interp || !copy_redirect_enabled() ||
-        table.ptr == 0u) {
+    if (!replay_recording_ || ring_mode_ != RingMode::Interp || table.ptr == 0u) {
         return;
     }
     ReplayTextures& log = replay_textures_;
@@ -6057,37 +5531,6 @@ void RendererD3D12::take_replay_snapshots(std::uint64_t table) {
         command_list_->ResourceBarrier(2u, barriers);
         log.snapshots.emplace_back(source, static_cast<std::uint32_t>(index));
         ++copy_redirect_stats_.snapshots;
-        // GALAXY_INTERP_TRACE: which copy texture is read before its write
-        // (the copy that wrote it in an earlier log, when still known).
-        // =2: every one.
-        static const int trace = [] {
-            char value[8]{};
-            std::size_t length = 0u;
-            return getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_TRACE") == 0 &&
-                   length > 1u ? value[0] - '0' : 0;
-        }();
-        static std::uint64_t traced = 0u;
-        if (trace > 0 && (trace >= 2 || traced++ % 120u == 0u)) {
-            const ReplayCopy* writer = nullptr;
-            for (const auto* copies : {&play_copies_, &run_copies_}) {
-                for (const ReplayCopy& logged : *copies) {
-                    if (logged.dest == source) writer = &logged;
-                }
-            }
-            const D3D12_RESOURCE_DESC desc = source->GetDesc();
-            std::ostringstream message;
-            message << "[interp-snapshot] log=" << replay_serial_ << " texture=" << desc.Width << 'x'
-                    << desc.Height << ":fmt" << static_cast<unsigned>(desc.Format);
-            if (writer != nullptr) {
-                message << " copy dest=0x" << std::hex << writer->params.dest_addr << std::dec
-                        << " src=" << writer->params.src_x << ',' << writer->params.src_y << ' '
-                        << writer->params.src_width << 'x' << writer->params.src_height
-                        << " format=" << static_cast<unsigned>(writer->format)
-                        << " half=" << writer->params.half_scale << " depth=" << writer->depth;
-            }
-            message << '\n';
-            std::cerr << message.str();
-        }
     }
 }
 
@@ -6481,7 +5924,6 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
     std::swap(command_list_, entry.list);
     {
         const Restore restore{*this, active, recording};
-        dred_marker(command_list_.Get(), L"replay log=%llu", static_cast<unsigned long long>(run_serial_));
         const bool interp_rings = ring_mode_ == RingMode::Interp;
         ID3D12DescriptorHeap* heaps[] = {
             srv_ring_.heap(),
@@ -6495,47 +5937,26 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
         subframe_guarded_.clear();
         // Copy redirection: the log's texture copies go to stand-ins, its
         // read-before-write copy textures read the recording frame's snapshots.
-        const bool want_redirect = subframe_copy_redirect_ >= 0 ? subframe_copy_redirect_ == 1
-                                                                : copy_redirect_enabled();
-        const bool redirect = interp_rings && want_redirect && copy_redirect_enabled() &&
-                              !run_textures_.incomplete;
+        const bool want_redirect = subframe_copy_redirect_ < 0 || subframe_copy_redirect_ == 1;
+        const bool redirect = interp_rings && want_redirect && !run_textures_.incomplete;
         redirect_.clear();
         patched_tables_.clear();
         if (redirect) {
             for (const auto& [source, snapshot] : run_textures_.snapshots) {
                 redirect_[source] = snapshot;
             }
-        } else if (interp_rings && want_redirect && copy_redirect_enabled()) {
+        } else if (interp_rings && want_redirect) {
             ++copy_redirect_stats_.fallback_logs;
         }
-        // Without redirection: copy textures a later frame already rewrote (or,
-        // by default, every one) keep their content.
-        static const bool copy_guard = [] {
-            char value[8]{};
-            std::size_t length = 0u;
-            return !(getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_COPY_GUARD") == 0 &&
-                     length > 1u && value[0] == '0');
-        }();
+        // Without redirection every copy texture the log writes is saved and
+        // restored around the sub-frame: real frames read copies of earlier
+        // frames (feedback blur, camera-cut cover), never a sub-frame's.
         for (const ReplayCopy& copy : run_copies_) {
-            if (!copy_guard || redirect || subframe_copy_redirect_ == 2) break;
+            if (redirect || subframe_copy_redirect_ == 2) break;
             if (copy.mode != 0u || copy.dest == nullptr) continue;
             bool listed = false;
             for (const auto& guarded : subframe_guarded_) listed = listed || guarded.first == copy.dest;
             if (listed) continue;
-            bool rewritten = false;
-            for (const CopyWrite& write : copy_writes_) {
-                rewritten = rewritten || (write.dest == copy.dest && write.serial >= run_serial_);
-            }
-            // Every destination is restored after the sub-frame: real frames read
-            // copies of earlier frames (feedback blur, camera-cut cover), never a
-            // sub-frame's. GALAXY_INTERP_COPY_GUARD=2 keeps only rewritten ones.
-            static const bool rewritten_only = [] {
-                char value[8]{};
-                std::size_t length = 0u;
-                return getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_COPY_GUARD") == 0 &&
-                       length > 1u && value[0] == '2';
-            }();
-            if (rewritten_only && !rewritten) continue;
             if (ID3D12Resource* scratch = acquire_subframe_scratch(copy.dest)) {
                 subframe_guarded_.emplace_back(copy.dest, scratch);
             }
@@ -6595,32 +6016,7 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
         entry.blend_segment = prev_run_segment_;
         const D3D12_GPU_VIRTUAL_ADDRESS output = interp_output_->GetGPUVirtualAddress();
         std::uint64_t blended = 0u;
-        // GALAXY_INTERP_GPU_PROFILE=<n>: every n-th recording takes a timestamp
-        // around each copy and clear (diagnostics).
-        static const std::uint64_t profile_every = [] {
-            char value[16]{};
-            std::size_t length = 0u;
-            return getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_GPU_PROFILE") == 0 && length > 1u
-                ? std::strtoull(value, nullptr, 10) : 0ull;
-        }();
-        const bool profile = profile_every != 0u && timestamp_frequency_ != 0u && !replay_profile_.armed &&
-                             ++replay_profile_recordings_ % profile_every == 0u && ensure_replay_profile();
-        if (profile) {
-            replay_profile_.segments.clear();
-            replay_profile_.list = &entry;
-            command_list_->EndQuery(replay_profile_.heap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 0u);
-        }
-        const auto mark = [&](std::uint32_t kind, std::uint32_t detail) {
-            if (profile && replay_profile_.segments.size() + 1u < kReplayProfileQueries) {
-                replay_profile_.segments.push_back({kind, detail});
-                command_list_->EndQuery(replay_profile_.heap.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
-                                        static_cast<UINT>(replay_profile_.segments.size()));
-            }
-        };
         for (const ReplayOp& op : run_ops_) {
-            if (op.kind == ReplayKind::Copy || op.kind == ReplayKind::Clear) {
-                mark(0u, op.index);
-            }
             switch (op.kind) {
             case ReplayKind::Draw: {
                 DrawCall call = run_draws_[op.index];
@@ -6648,9 +6044,6 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
                 if (!redirect_.empty() && call.texture_table.ptr != 0u) {
                     call.texture_table = patch_replay_table(call.texture_table);
                 }
-                dred_marker(command_list_.Get(), L"replay draw %u blend=%u slot=%u rec=%d n=%u",
-                            op.index, call.blend_vertices != 0u ? 1u : 0u, call.blend_slot, call.replay_record,
-                            call.index_count);
                 draw(call);
                 break;
             }
@@ -6737,20 +6130,6 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
                 record_hdr_end();
                 break;
             }
-            if (op.kind == ReplayKind::Copy) {
-                const ReplayCopy& copy = run_copies_[op.index];
-                mark(1u + copy.mode, op.index);
-            } else if (op.kind == ReplayKind::Clear) {
-                mark(4u, op.index);
-            }
-        }
-        if (profile) {
-            mark(0u, ~0u);
-            command_list_->ResolveQueryData(replay_profile_.heap.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 0u,
-                                            static_cast<UINT>(replay_profile_.segments.size() + 1u),
-                                            replay_profile_.readback.Get(), 0u);
-            replay_profile_.armed = true;
-            replay_profile_.fence = 0u;
         }
         // The log ends after its display copy, on the output EFB when it switched.
         if (output_efb_active_) {
@@ -6883,8 +6262,6 @@ bool RendererD3D12::present_replay_subframe(const SubframeTime& given, const Aff
         };
         std::swap(command_list_, subframe_eval_list_);
         const Swap swap{*this};
-        dred_marker(command_list_.Get(), L"subframe log=%llu t=%.3f", static_cast<unsigned long long>(run_serial_),
-                    static_cast<double>(time.t));
         if (subframe_query_heap_) {
             command_list_->EndQuery(subframe_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, index * 4u);
         }
@@ -7015,10 +6392,6 @@ bool RendererD3D12::present_replay_subframe(const SubframeTime& given, const Aff
             matrix_segment_fence_[matrix_segment_] = std::max(matrix_segment_fence_[matrix_segment_], fence);
         }
     }
-    if (replay_profile_.armed && replay_profile_.list == replay && replay_profile_.fence == 0u) {
-        replay_profile_.fence = fence;
-    }
-    report_replay_profile();
     sequence_.first = false;
     vertex_blend_draws_ += replay->blended_draws;
     subframe_guarded_total_ += replay->guarded;
@@ -7146,84 +6519,6 @@ void RendererD3D12::record_subframe_upscale(const ReplayList& entry, const Subfr
         swap_efb_sets();
     }
     replay_recording_ = recording;
-}
-
-bool RendererD3D12::ensure_replay_profile() {
-    if (replay_profile_.heap) {
-        return true;
-    }
-    D3D12_QUERY_HEAP_DESC qd{};
-    qd.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
-    qd.Count = kReplayProfileQueries;
-    if (FAILED(device_->CreateQueryHeap(&qd, IID_PPV_ARGS(&replay_profile_.heap)))) {
-        return false;
-    }
-    D3D12_HEAP_PROPERTIES hp{};
-    hp.Type = D3D12_HEAP_TYPE_READBACK;
-    D3D12_RESOURCE_DESC rd{};
-    rd.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    rd.Width = kReplayProfileQueries * sizeof(std::uint64_t);
-    rd.Height = 1;
-    rd.DepthOrArraySize = 1;
-    rd.MipLevels = 1;
-    rd.SampleDesc.Count = 1;
-    rd.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    if (FAILED(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_COPY_DEST,
-                                                nullptr, IID_PPV_ARGS(&replay_profile_.readback)))) {
-        replay_profile_.heap.Reset();
-        return false;
-    }
-    return true;
-}
-
-// One sampled replay's GPU time: the draws before each copy or clear, each copy
-// (by kind and size) and each clear.
-void RendererD3D12::report_replay_profile() {
-    if (!replay_profile_.armed || replay_profile_.fence == 0u || completed_fence_value() < replay_profile_.fence) {
-        return;
-    }
-    replay_profile_.armed = false;
-    const std::size_t count = replay_profile_.segments.size() + 1u;
-    void* mapped = nullptr;
-    const D3D12_RANGE range{0, count * sizeof(std::uint64_t)};
-    if (FAILED(replay_profile_.readback->Map(0, &range, &mapped))) {
-        return;
-    }
-    std::vector<std::uint64_t> ticks(count);
-    std::memcpy(ticks.data(), mapped, count * sizeof(std::uint64_t));
-    const D3D12_RANGE none{0, 0};
-    replay_profile_.readback->Unmap(0, &none);
-    const double to_ms = 1000.0 / static_cast<double>(timestamp_frequency_);
-    double draws = 0.0, copies = 0.0, display = 0.0, output = 0.0, clears = 0.0;
-    std::vector<std::pair<double, std::size_t>> slowest;
-    for (std::size_t i = 0; i < replay_profile_.segments.size(); ++i) {
-        const double ms = ticks[i + 1u] >= ticks[i] ? static_cast<double>(ticks[i + 1u] - ticks[i]) * to_ms : 0.0;
-        switch (replay_profile_.segments[i].kind) {
-        case 0u: draws += ms; break;
-        case 1u: copies += ms; break;
-        case 2u: display += ms; break;
-        case 3u: output += ms; break;
-        default: clears += ms; break;
-        }
-        slowest.emplace_back(ms, i);
-    }
-    std::sort(slowest.begin(), slowest.end(), std::greater<>());
-    std::ostringstream line;
-    line << "[interp-gpu-profile] log=" << run_serial_ << " total-ms="
-         << static_cast<double>(ticks.back() - ticks.front()) * to_ms << " draws-ms=" << draws
-         << " copies-ms=" << copies << " display-copy-ms=" << display << " output-switch-ms=" << output
-         << " clears-ms=" << clears << " copies=" << run_copies_.size() << " slowest:";
-    for (std::size_t k = 0; k < slowest.size() && k < 8u; ++k) {
-        const ReplayProfileSegment& segment = replay_profile_.segments[slowest[k].second];
-        line << ' ' << (segment.kind == 0u ? "draws" : segment.kind == 4u ? "clear" : "copy") << '=' << slowest[k].first;
-        if (segment.kind >= 1u && segment.kind <= 3u && segment.detail < run_copies_.size()) {
-            const ReplayCopy& copy = run_copies_[segment.detail];
-            line << '(' << copy.width << 'x' << copy.height << " fmt" << static_cast<unsigned>(copy.format)
-                 << (copy.depth ? " depth" : "") << ')';
-        }
-    }
-    line << '\n';
-    std::cerr << line.str();
 }
 
 bool RendererD3D12::take_eval_readback(std::vector<std::uint32_t>& words, float& t) {
@@ -7428,10 +6723,6 @@ bool RendererD3D12::record_temporal_upscale(unsigned output_scale) {
     temporal_history_valid_ = recorded;
     return recorded;
 }
-
-// ---------------------------------------------------------------------------
-// Output-resolution EFB (HUD split)
-// ---------------------------------------------------------------------------
 
 unsigned RendererD3D12::output_efb_scale_for_window() const {
     const auto aspect = galaxy::experimental_effective_host_aspect();
@@ -7845,64 +7136,20 @@ void RendererD3D12::record_scene_aa() {
         post_process_.settings().aa == PostProcessSettings::Aa::kOff) {
         return;
     }
-    // The 640x456 picture the display copy takes decides AUTO. GALAXY_AA_SPLIT=<0..1>: the part
-    // of the picture left of it stays unfiltered (A/B captures).
-    static const float split = [] {
-        char value[16]{};
-        std::size_t length = 0u;
-        return getenv_s(&length, value, sizeof(value), "GALAXY_AA_SPLIT") == 0 && length > 1u
-            ? std::clamp(static_cast<float>(std::strtod(value, nullptr)), 0.0f, 1.0f) : 0.0f;
-    }();
     if (replay_recording_) [[unlikely]] {
         replay_ops_.push_back({ReplayKind::SceneAa, 0u});
     }
+    // The 640x456 picture the display copy takes decides AUTO.
     const auto aspect = galaxy::experimental_effective_host_aspect();
     const galaxy::ContentViewport content = galaxy::fit_content_viewport(
         static_cast<int>(host_window::backbuffer_width), static_cast<int>(host_window::backbuffer_height),
         aspect ? aspect->content_aspect : galaxy::kWiiContentAspect);
-    static const bool timed = [] {
-        char value[8]{};
-        std::size_t length = 0u;
-        return getenv_s(&length, value, sizeof(value), "GALAXY_TRACE_SCENE_AA") == 0 && length > 1u &&
-               value[0] == '1';
-    }();
-    const bool time_pass = timed && !replay_playing_ && timestamp_frequency_ != 0u;
-    if (time_pass && !scene_aa_queries_) {
-        D3D12_QUERY_HEAP_DESC qhd{};
-        qhd.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
-        qhd.Count = kFramesInFlight * 2u;
-        D3D12_HEAP_PROPERTIES hp{};
-        hp.Type = D3D12_HEAP_TYPE_READBACK;
-        D3D12_RESOURCE_DESC rd{};
-        rd.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-        rd.Width = kFramesInFlight * 2u * sizeof(std::uint64_t);
-        rd.Height = 1;
-        rd.DepthOrArraySize = 1;
-        rd.MipLevels = 1;
-        rd.SampleDesc.Count = 1;
-        rd.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-        if (FAILED(device_->CreateQueryHeap(&qhd, IID_PPV_ARGS(&scene_aa_queries_))) ||
-            FAILED(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_COPY_DEST,
-                                                    nullptr, IID_PPV_ARGS(&scene_aa_readback_)))) {
-            scene_aa_queries_.Reset();
-        }
-    }
-    if (time_pass && scene_aa_queries_) {
-        command_list_->EndQuery(scene_aa_queries_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, frame_slot_ * 2u);
-    }
     const D3D12_RESOURCE_DESC desc = efb_color_->GetDesc();
-    const AaRun ran = post_process_.record_scene_aa(
+    static_cast<void>(post_process_.record_scene_aa(
         command_list_.Get(), srv_ring_, efb_color_.Get(), efb_rtv_, static_cast<unsigned>(desc.Width),
         desc.Height, kEfbWidth * efb_scale_, 456u * efb_scale_,
         static_cast<unsigned>(std::max(content.width, 1)), static_cast<unsigned>(std::max(content.height, 1)),
-        split, frame_index_, kFramesInFlight);
-    if (time_pass && scene_aa_queries_ && ran != AaRun::kNone) {
-        command_list_->EndQuery(scene_aa_queries_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, frame_slot_ * 2u + 1u);
-        command_list_->ResolveQueryData(scene_aa_queries_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, frame_slot_ * 2u, 2u,
-                                        scene_aa_readback_.Get(),
-                                        static_cast<UINT64>(frame_slot_) * 2u * sizeof(std::uint64_t));
-        scene_aa_pending_[frame_slot_] = static_cast<std::uint8_t>(ran);
-    }
+        frame_index_, kFramesInFlight));
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
     invalidate_gx_bindings();
     bound_rt_aux_ = 0xFFu;
@@ -7936,8 +7183,6 @@ void RendererD3D12::record_scene_ao() {
     in.samples = efb_msaa_.samples;
     in.hdr = efb_hdr_;
     in.view = scene_ao_view_;
-    in.timing_slot = replay_playing_ ? -1 : static_cast<int>(frame_slot_);
-    dred_marker(command_list_.Get(), L"ambient occlusion");
     static_cast<void>(ambient_occlusion_.record(command_list_.Get(), srv_ring_, in, frame_index_, kFramesInFlight));
     std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
     command_list_->ResourceBarrier(1, &barrier);
@@ -7947,38 +7192,6 @@ void RendererD3D12::record_scene_ao() {
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
     invalidate_gx_bindings();
     bound_rt_aux_ = 0xFFu;
-}
-
-void RendererD3D12::read_scene_aa_timing() {
-    const std::uint8_t pass = scene_aa_pending_[frame_slot_];
-    if (pass == 0u || !scene_aa_readback_) {
-        return;
-    }
-    scene_aa_pending_[frame_slot_] = 0u;
-    const SIZE_T offset = static_cast<SIZE_T>(frame_slot_) * 2u * sizeof(std::uint64_t);
-    const D3D12_RANGE range{offset, offset + 2u * sizeof(std::uint64_t)};
-    void* mapped = nullptr;
-    if (FAILED(scene_aa_readback_->Map(0, &range, &mapped))) {
-        return;
-    }
-    const auto* ticks = reinterpret_cast<const std::uint64_t*>(static_cast<const std::byte*>(mapped) + offset);
-    const double ms = ticks[1] >= ticks[0]
-        ? static_cast<double>(ticks[1] - ticks[0]) * 1000.0 / static_cast<double>(timestamp_frequency_) : 0.0;
-    const D3D12_RANGE none{0, 0};
-    scene_aa_readback_->Unmap(0, &none);
-    scene_aa_ms_sum_ += ms;
-    scene_aa_ms_max_ = std::max(scene_aa_ms_max_, ms);
-    if (++scene_aa_samples_ < 300u) {
-        return;
-    }
-    const D3D12_RESOURCE_DESC desc = efb_color_ ? efb_color_->GetDesc() : D3D12_RESOURCE_DESC{};
-    std::cerr << "[scene-aa] pass=" << (pass == static_cast<std::uint8_t>(AaRun::kSmaa) ? "smaa" : "fxaa")
-              << " quality=" << unsigned(post_process_.settings().smaa_quality) << " efb=" << desc.Width << 'x'
-              << desc.Height << " gpu-ms(avg/max)=" << scene_aa_ms_sum_ / scene_aa_samples_ << '/'
-              << scene_aa_ms_max_ << " samples=" << scene_aa_samples_ << '\n';
-    scene_aa_ms_sum_ = 0.0;
-    scene_aa_ms_max_ = 0.0;
-    scene_aa_samples_ = 0u;
 }
 
 bool RendererD3D12::begin_output_efb() {
@@ -8076,10 +7289,6 @@ bool RendererD3D12::copy_output_efb_to_texture(const EfbCopyParams& params, Text
     swap_efb_sets();
     return updated;
 }
-
-// ---------------------------------------------------------------------------
-// EFB binding and clearing
-// ---------------------------------------------------------------------------
 
 void RendererD3D12::bind_efb(const float xf_vp[6]) {
     if (replay_recording_) [[unlikely]] {
@@ -8204,86 +7413,9 @@ void RendererD3D12::clear_efb(
     }
 }
 
-// ---------------------------------------------------------------------------
-// draw
-// ---------------------------------------------------------------------------
-
-void RendererD3D12::check_draw_addresses(const DrawCall& call) {
-    static std::uint32_t reported = 0u;
-    if (reported >= 40u) {
-        return;
-    }
-    const auto known = [this](D3D12_GPU_VIRTUAL_ADDRESS va, std::uint64_t bytes) {
-        const auto in = [va, bytes](D3D12_GPU_VIRTUAL_ADDRESS base, std::uint64_t size) {
-            return base != 0u && va >= base && va + bytes <= base + size;
-        };
-        return in(vertex_ring_.gpu_base(), vertex_ring_.total_bytes()) ||
-               in(index_ring_.gpu_base(), index_ring_.total_bytes()) ||
-               in(constant_ring_.gpu_base(), constant_ring_.total_bytes()) ||
-               in(matrix_ring_.gpu_base(), matrix_ring_.total_bytes()) ||
-               in(resident_vertex_base_, resident_vertex_bytes_) ||
-               (blend_verdicts_ && in(blend_verdicts_->GetGPUVirtualAddress(), blend_verdicts_->GetDesc().Width)) ||
-               (interp_output_ && in(interp_output_->GetGPUVirtualAddress(), interp_output_bytes_));
-    };
-    const auto check = [&](const char* field, D3D12_GPU_VIRTUAL_ADDRESS va, std::uint64_t bytes) {
-        if (va == 0u || known(va, bytes) || reported >= 40u) {
-            return;
-        }
-        ++reported;
-        std::cerr << "[draw-address] field=" << field << " va=0x" << std::hex << va << std::dec
-                  << " bytes=" << bytes << " replaying=" << (replay_playing_ ? 1 : 0)
-                  << " blend=" << (call.blend_vertices != 0u ? 1 : 0)
-                  << " record=" << call.ps_record << '\n';
-    };
-    check("vs-constants", call.vs_constants, 16u);
-    check("ps-constants", call.ps_constants, 16u);
-    check("matrix-palette", call.matrix_palette, 16u);
-    check("blend-vertices", call.blend_vertices, 144u);
-    check("vertex-view", call.vertex_view.BufferLocation, call.vertex_view.SizeInBytes);
-    check("index-view", call.index_view.BufferLocation, call.index_view.SizeInBytes);
-    // A blended draw reads the earlier vertices at SV_VertexID * stride: every
-    // index must be below the vertex count, and the earlier run must be whole.
-    if (call.blend_vertices != 0u && call.vertex_view.StrideInBytes != 0u && call.index_count != 0u &&
-        reported < 40u) {
-        const std::uint32_t vertices = call.vertex_view.SizeInBytes / call.vertex_view.StrideInBytes;
-        std::uint32_t highest = 0u;
-        if (call.index_view.BufferLocation != 0u) {
-            const auto* indices = reinterpret_cast<const std::uint16_t*>(index_ring_.cpu_at(call.index_view.BufferLocation));
-            highest = 0u;
-            for (std::uint32_t i = 0u; indices != nullptr && i < call.index_count; ++i) {
-                highest = std::max<std::uint32_t>(highest, indices[i]);
-            }
-        } else {
-            highest = call.index_count - 1u;
-        }
-        const std::uint64_t reach = (static_cast<std::uint64_t>(highest) + 1u) * call.vertex_view.StrideInBytes;
-        if (highest >= vertices || !known(call.blend_vertices, reach)) {
-            ++reported;
-            std::cerr << "[draw-address] blend highest-index=" << highest << " vertices=" << vertices
-                      << " earlier=0x" << std::hex << call.blend_vertices << std::dec << " reach=" << reach
-                      << " in-known-buffer=" << (known(call.blend_vertices, reach) ? 1 : 0)
-                      << " resident=0x" << std::hex << resident_vertex_base_ << std::dec << '+' << resident_vertex_bytes_
-                      << " slot=" << call.blend_slot << '\n';
-        }
-    }
-}
-
 void RendererD3D12::draw(const DrawCall& call) {
     if (efb_msaa_.samples > 1u) {
         efb_msaa_.color_dirty = efb_msaa_.depth_dirty = true;
-    }
-    static const bool validate_addresses = [] {
-        char value[8]{};
-        std::size_t length = 0u;
-        return getenv_s(&length, value, sizeof(value), "GALAXY_VALIDATE_DRAW_ADDRESSES") == 0 &&
-               length > 1u && value[0] == '1';
-    }();
-    if (validate_addresses) [[unlikely]] {
-        check_draw_addresses(call);
-    }
-    if (!replay_playing_) {
-        dred_marker(command_list_.Get(), L"draw rec=%d n=%u vb=%u", call.replay_record, call.index_count,
-                    call.vertex_view.SizeInBytes);
     }
     if (replay_recording_) [[unlikely]] {
         if (call.texture_table.ptr != 0u && !replay_textures_.by_gpu.empty()) {
@@ -8351,11 +7483,9 @@ void RendererD3D12::draw(const DrawCall& call) {
         bound_rt_aux_ = call.aux_target;
     }
 
-    // Per-draw GX scissor, scaled to the EFB and clamped.  GX titles rely on
-    // the scissor for UI clipping and split renders; an empty scissor is a
-    // faithful "rasterize nothing" (also how CullMode::All is expressed).
-    // The raw key is recorded only after a nonempty input has been applied.
-    // Its conversion is deterministic for these fixed EFB extents and scale.
+    // Per-draw GX scissor, scaled to the EFB and clamped. An empty scissor
+    // rasterizes nothing (also how CullMode::All is expressed). The raw input
+    // is cached only after a nonempty one has been applied.
     if (!bound_scissor_valid_ || !bound_scissor_input_valid_ ||
         bound_scissor_input_scale_ != efb_scale_ ||
         call.scissor.left != bound_scissor_input_.left ||
@@ -8389,9 +7519,8 @@ void RendererD3D12::draw(const DrawCall& call) {
         bound_scissor_input_valid_ = true;
     }
 
-    // Per-draw XF viewport. SMG never uses EFB copy-clear. It clears depth by drawing fullscreen
-    // quads with GXSetViewport near==far==1.0, so the quad writes z=FAR regardless of its geometry z.
-    // Without the depth-range plumbing those clear quads wrote z=NEAR, which fails every LEQUAL 3D draw.
+    // Per-draw XF viewport with its depth range: SMG clears depth by drawing fullscreen quads with
+    // GXSetViewport near == far == 1.0, so such a quad writes z = FAR whatever its geometry z.
     // XF layout (hardware/Dolphin xfmem): wd, ht, zRange, xOrig, yOrig, farZ.
     // Depth range (Dolphin BPFunctions::SetScissorAndViewport, the REVERSED-Z form for backends
     // without reversed-range support):
@@ -8427,13 +7556,11 @@ void RendererD3D12::draw(const DrawCall& call) {
         command_list_->IASetPrimitiveTopology(call.topology);
         bound_topology_ = call.topology;
     }
-    // A replayed display list rebinds the same vertex ring allocation for
-    // thousands of consecutive draws, so compare the whole 24-byte view rather
-    // than issuing the call unconditionally. draw() is the only writer of
-    // stream 0 on this command list (the UI helpers, the EFB conversion blit and
-    // the clear quad each own their own pipeline, and every one of them is
-    // followed by invalidate_gx_bindings()), and begin_frame() re-arms the
-    // cached view after the vertex ring has been rewound for the new slot.
+    // A replayed display list rebinds the same vertex-ring allocation for
+    // thousands of consecutive draws, so the view is compared before binding.
+    // Every other writer of stream 0 (the UI helpers, the conversion blit, the
+    // clear quad) is followed by invalidate_gx_bindings(), and begin_frame()
+    // re-arms the cached view after rewinding the vertex ring.
     if (!bound_vertex_view_valid_ ||
         call.vertex_view.BufferLocation != bound_vertex_view_.BufferLocation ||
         call.vertex_view.SizeInBytes != bound_vertex_view_.SizeInBytes ||
@@ -8444,14 +7571,7 @@ void RendererD3D12::draw(const DrawCall& call) {
     }
     if (call.index_count > 0) {
         if (call.index_view.BufferLocation) {
-            // Same redundant-state elision as the vertex view above. A replayed
-            // display list binds the same index-ring allocation for thousands of
-            // consecutive draws, and IASetIndexBuffer is the one per-draw binding
-            // that was still unconditional: it was issued once per draw even when
-            // the whole 20-byte view was unchanged. draw() is the only writer of
-            // the index binding on this command list, and every other writer (the
-            // UI helpers, the EFB conversion blit) is followed by
-            // invalidate_gx_bindings(), which re-arms the cached view.
+            // Compared before binding, as the vertex view above.
             if (!bound_index_view_valid_ ||
                 call.index_view.BufferLocation !=
                     bound_index_view_.BufferLocation ||
@@ -8467,10 +7587,6 @@ void RendererD3D12::draw(const DrawCall& call) {
         }
     }
 }
-
-// ---------------------------------------------------------------------------
-// EFB copy paths
-// ---------------------------------------------------------------------------
 
 std::optional<D3D12_BOX> detail::efb_identity_copy_box(
     const EfbCopyParams& params, bool is_depth_copy, unsigned efb_scale,
@@ -8615,8 +7731,8 @@ void RendererD3D12::record_conversion_blit(
 
 void RendererD3D12::copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& dest) {
     log_rt_seq("xfb");
-    // The caller publishes a new XFB serial only after this returns. A
-    // missing target must fail closed rather than masquerade as a new frame.
+    // The caller publishes a new XFB serial after this returns, so a missing
+    // target throws rather than pass as a new frame.
     if (!dest.texture) {
         throw std::runtime_error("XFB copy has no destination texture");
     }
@@ -8701,12 +7817,10 @@ void RendererD3D12::copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& des
 
 bool RendererD3D12::copy_efb_to_texture(
     const EfbCopyParams& params, TextureCache& textures, bool is_depth_copy) {
-    // SMG composites its visible frame from EFB->texture captures (the scene
-    // is drawn, copied out at 640x456, and the final pass samples the
-    // capture), so this path is required for any 3D pixel to reach the
-    // screen.  The conversion blit applies intensity / gamma / copy filter /
-    // half-scale and serves depth-source copies from efb_depth_ (SMG uses
-    // depth copies for its focus/DOF effects).
+    // SMG composites its visible frame from EFB-to-texture captures (the scene
+    // is copied out at 640x456 and the final pass samples it). The conversion
+    // blit applies intensity, gamma, the copy filter and half-scale, and serves
+    // depth-source copies from efb_depth_ (SMG's focus/DOF effects).
     //
     // half_scale halves BOTH dimensions of the destination (Dolphin
     // TextureCacheBase scaleByHalf); the 2x step through the linear-filtered
@@ -8717,48 +7831,8 @@ bool RendererD3D12::copy_efb_to_texture(
     const UINT dh_unscaled = params.half_scale
         ? std::max<UINT>(1u, params.src_height / 2u)
         : params.src_height;
-    const EffectCopyPolicy& policy = effect_copy_policy();
-    // Diagnostic A/B control only: permits stationary-camera comparison in
-    // one process. No file access or clock sampling in normal play. The
-    // render worker owns this state; missing/malformed input preserves it.
-    static const std::string bloom_comparison_file = [] {
-        char value[MAX_PATH]{};
-        std::size_t length = 0u;
-        return getenv_s(&length, value, sizeof(value),
-            "GALAXY_NATIVE_BLOOM_COMPARISON_FILE") == 0 && length > 1u
-            ? std::string(value) : std::string{};
-    }();
-    static bool comparison_enabled = policy.native_bloom_workspace || policy.native_effect_copies;
-    static ULONGLONG comparison_last_poll = 0u;
-    const bool effect_copy = is_effect_copy(policy, params, is_depth_copy, dw_unscaled, dh_unscaled);
-    const bool bloom_copy =
-        (policy.native_bloom_workspace || policy.native_effect_copies || !bloom_comparison_file.empty()) &&
-        efb_scale_ > 1u && effect_copy;
-    if (bloom_copy && !bloom_comparison_file.empty()) {
-        const auto now = GetTickCount64();
-        if (comparison_last_poll == 0u || now - comparison_last_poll >= 250u) {
-            comparison_last_poll = now;
-            const HANDLE file = CreateFileA(bloom_comparison_file.c_str(),
-                GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-            if (file != INVALID_HANDLE_VALUE) {
-                char token[4]{};
-                DWORD count = 0u;
-                const BOOL read = ReadFile(file, token, sizeof(token), &count, nullptr);
-                CloseHandle(file);
-                const bool valid = read && count >= 1u && count <= 3u &&
-                    (token[0] == '0' || token[0] == '1') &&
-                    (count == 1u || (count == 2u && token[1] == '\n') ||
-                     (count == 3u && token[1] == '\r' && token[2] == '\n'));
-                if (valid && comparison_enabled != (token[0] == '1')) {
-                    comparison_enabled = token[0] == '1';
-                    std::cerr << "[bloom-comparison] native=" << comparison_enabled
-                              << " scope=diagnostic-not-performance\n";
-                }
-            }
-        }
-    }
-    const bool native_bloom = bloom_copy && comparison_enabled;
+    // Effect copies (is_effect_copy) are built at the game's own resolution.
+    const bool native_bloom = efb_scale_ > 1u && is_effect_copy(dw_unscaled, dh_unscaled);
     const ScaledEfbCopyExtent extent = compute_scaled_efb_copy_extent(
         static_cast<std::uint16_t>(dw_unscaled),
         static_cast<std::uint16_t>(dh_unscaled),
@@ -8785,23 +7859,11 @@ bool RendererD3D12::copy_efb_to_texture(
         // overwrites what the next frame's chunks already copied.
         (ring_mode_ == RingMode::Interp ? (replay_serial_ & 1ull) << 42 : 0ull);
 
-    // Bound the destination map. Each entry is one copy's SCALED destination texture, so its size
-    // scales with both the copy's logical extent and `efb_scale_`. At the full 640x456 EFB extent, RGBA8:
-    //
-    //     1x ->  640x 456 ->  1.11 MB
-    //     4x -> 2560x1824 -> 17.81 MB
-    //     6x -> 3840x2736 -> 40.08 MB
-    //
-    // A 192 MiB default holds about 10 full-extent entries at 4x. Most copies are sub-rect masks and
-    // bloom workspaces, which are much smaller; the full-extent figure bounds how far the budget can
-    // be lowered.
-    //
-    // Before this bound the map only grew: only a failed allocation or shutdown removed an entry. Evict
-    // the least recently used entries until the byte budget is met. A destination is a pure function of
-    // its key, so an evicted entry costs at most one later re-creation; the `created` path below rebuilds
-    // the resource, RTV validity and size check as a first use does. `last_used` is stamped on every copy
-    // before this runs, so the entry used by this call is never a victim, and no reference to it is
-    // invalidated by the erases here.
+    // The destination map is bounded in bytes (efb_copy_dests_): the 192 MiB default holds about ten
+    // full-extent copies at 4x, and most copies are much smaller masks and bloom workspaces. Least
+    // recently used entries are evicted until the budget is met. A destination is a pure function of its
+    // key, so an eviction costs at most a later re-creation (the `created` path below). `last_used` is
+    // stamped first, so the entry this call uses is never a victim.
     static const std::uint64_t kEfbCopyDestBudgetBytes =
         efb_copy_dest_budget_bytes();
     EfbCopyDest& dest = efb_copy_dests_[dest_key];
@@ -8812,10 +7874,8 @@ bool RendererD3D12::copy_efb_to_texture(
         if (dest.texture) {
             retired_efb_copy_textures_[frame_slot_].push_back(
                 std::move(dest.texture));
-            // The replaced texture leaves the budget even though its memory is
-            // still owned by the retirement list for kFramesInFlight. Counting
-            // it here would leak the budget; the retirement list is bounded by
-            // time, not by this map, so the accounting stays exact.
+            // The replaced texture leaves the budget now; the retirement list
+            // releases it after kFramesInFlight frames.
             efb_copy_dests_bytes_ -= std::min(
                 efb_copy_dests_bytes_, dest.bytes);
         }
@@ -8874,8 +7934,7 @@ bool RendererD3D12::copy_efb_to_texture(
         }
         dest.width  = w;
         dest.height = h;
-        // Budget by the resource's own allocation size rather than a hand-computed
-        // w*h*bpp, so the accounting follows the format if kEfbColorFormat changes.
+        // Charged at the resource's own allocation size, not w*h*bpp.
         dest.bytes = allocation_bytes;
         efb_copy_dests_bytes_ += dest.bytes;
     }
@@ -8898,12 +7957,8 @@ bool RendererD3D12::copy_efb_to_texture(
             if (victim == efb_copy_dests_.end()) {
                 break;  // only the entry in use remains
             }
-            // Hand the texture to the per-frame-slot retirement list rather than
-            // releasing it here. `retired_efb_copy_textures_[slot]` is cleared at
-            // the start of that slot's next begin_frame(), i.e. after
-            // kFramesInFlight frames of GPU work have retired, so a command list
-            // recorded this frame that still references the victim cannot read a
-            // freed resource. Same retirement path the size-change case uses.
+            // Retired, not released: the slot's list is cleared at its next
+            // begin_frame(), after the GPU work that may still read the victim.
             if (victim->second.texture) {
                 retired_efb_copy_textures_[frame_slot_].push_back(
                     std::move(victim->second.texture));
@@ -9143,7 +8198,7 @@ void RendererD3D12::select_pointer_depth_destination() {
 
 // Mid-stream pointer depth field: the same conversion draw and readback copy
 // as the utility path, recorded into the frame's command list so the frame's
-// own submission carries it. No FIFO split, no utility chunk, no wait.
+// own submission carries it; nothing waits for it.
 bool RendererD3D12::record_pointer_depth_capture_in_frame() {
     if (pointer_depth_in_frame_pending_ || pointer_depth_capture_fence_ != 0u) {
         return false;
@@ -9495,8 +8550,8 @@ bool RendererD3D12::read_efb_pixels(
     }
     ID3D12Resource* target = field ? pointer_depth_target_.Get() : peek_target_.Get();
     ID3D12Resource* readback = field ? pointer_depth_readback_.Get() : peek_readback_.Get();
-    // All preceding uses of these private utility descriptors have completed
-    // their exact fence before the next utility can enter on the render owner.
+    // Every earlier peek completed at its fence before this one could start,
+    // so the descriptor can be rewritten.
     device_->CreateRenderTargetView(target, nullptr, peek_rtv_);
     const bool is_depth = kind == EfbPeekKind::Depth;
     ID3D12Resource* src = is_depth ? efb_depth_.Get() : efb_color_.Get();
@@ -9658,10 +8713,6 @@ void RendererD3D12::copy_efb_readback_pixels(
     const D3D12_RANGE no_write{0, 0};
     readback->Unmap(0, &no_write);
 }
-
-// ---------------------------------------------------------------------------
-// Bring-up EFB readback diagnostics
-// ---------------------------------------------------------------------------
 
 void RendererD3D12::set_debug_capture_paths(
     std::string efb_ppm_path,
@@ -9914,42 +8965,8 @@ void RendererD3D12::debug_log_readback() {
               << static_cast<unsigned>(amax) << ")\n";
 }
 
-// ---------------------------------------------------------------------------
-// present
-// ---------------------------------------------------------------------------
-
 bool RendererD3D12::present(
     const XfbTexture* source, bool capture_backbuffer, bool black) {
-    // Diagnostic stall watch, gated on its own opt-in flag. GALAXY_TRACE_STALL_WATCH is unset in the
-    // shipped runtime-env.json, and trace_stall_watch_enabled() holds a function-local
-    // `static const bool`, so with the flag off this folds to a constant false and clang deletes every
-    // timestamp, subtraction and branch guarded by it in this function.
-    const bool stall_watch = trace_stall_watch_enabled();
-    // Optional diagnostic: measure the wall-clock gap
-    // between successive present() *entries*, independent of the
-    // trace_present_stats_enabled()-gated telemetry below. Everything that
-    // runs between two present() calls -- the OS message pump, checkpoint
-    // servicing, guest simulation -- lands in this gap, so it catches a
-    // stall the begin_frame/Present/overlay-draw-local stall-watch probes
-    // miss entirely because it happens *outside* all of them.
-    if (stall_watch) {
-        static std::chrono::steady_clock::time_point
-            stall_watch_last_present_entry{};
-        const auto stall_watch_now = std::chrono::steady_clock::now();
-        if (stall_watch_last_present_entry.time_since_epoch().count() != 0) {
-            const double stall_watch_gap_ms =
-                std::chrono::duration<double, std::milli>(
-                    stall_watch_now - stall_watch_last_present_entry)
-                    .count();
-            if (stall_watch_gap_ms > 20.0) {
-                std::ostringstream message;
-                message << "[stall-watch] gap between present() entries: "
-                          << stall_watch_gap_ms << "ms\n";
-                std::cerr << message.str();
-            }
-        }
-        stall_watch_last_present_entry = stall_watch_now;
-    }
     const bool can_blit =
         source != nullptr && source->texture && blit_pipeline_ &&
         s_blit_root_sig;
@@ -9997,18 +9014,6 @@ bool RendererD3D12::present(
             "RMGE01 ultrawide aspect requires a full-width Wii XFB copy");
     }
 
-    const std::uint64_t present_frame = frame_index_ + 1u;
-    bool trace_luma = trace_present_luma_frame(present_frame);
-    if (trace_luma) {
-        debug_log_backbuffer_readback();
-        if (backbuffer_readback_pending_) {
-            std::cerr << "[present-luma] skipped=prior-readback-pending frame="
-                      << present_frame << '\n';
-            trace_luma = false;
-        }
-    }
-    const bool record_backbuffer = capture_backbuffer || trace_luma;
-
     const UINT buf_idx = swap_chain_->GetCurrentBackBufferIndex();
     const UINT rtv_stride = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
     D3D12_CPU_DESCRIPTOR_HANDLE back_rtv = rtv_heap_->GetCPUDescriptorHandleForHeapStart();
@@ -10031,10 +9036,8 @@ bool RendererD3D12::present(
         static_cast<int>(host_window::backbuffer_width),static_cast<int>(host_window::backbuffer_height),
         content_aspect);
     if (content_viewport.width <= 0 || content_viewport.height <= 0) {
-        // Resize processing clamps the swap-chain extent to at least 1x1.
-        // fit_content_viewport intentionally rejects degenerate input/pointer
-        // surfaces, but presentation must still have a valid fallback while a
-        // window is transitioning through such an extent.
+        // fit_content_viewport rejects degenerate extents (the swap chain can be
+        // 1x1 mid-resize); the picture then fills the backbuffer.
         content_viewport = galaxy::ContentViewport{
             0, 0, static_cast<int>(host_window::backbuffer_width),
             static_cast<int>(host_window::backbuffer_height)};
@@ -10042,27 +9045,6 @@ bool RendererD3D12::present(
     (void)galaxy::g_presentation_content.publish(
         static_cast<int>(host_window::backbuffer_width),static_cast<int>(host_window::backbuffer_height),
         content_viewport);
-    static const bool trace_layout=[] {
-        char value[8]{};std::size_t size{};
-        return getenv_s(&size,value,sizeof(value),"GALAXY_MONITOR_DISPLAY_LAYOUT")==0 && value[0]=='1';
-    }();
-    if (trace_layout) {
-        const std::array<int,7> current{static_cast<int>(host_window::backbuffer_width),
-            static_cast<int>(host_window::backbuffer_height),
-            content_viewport.left,content_viewport.top,content_viewport.width,content_viewport.height,
-            static_cast<int>(source->prerecorded_movie)};
-        static std::array<int,7> previous{};
-        static unsigned changes{};
-        if (current!=previous && changes<16u) {
-            previous=current;++changes;
-            std::cerr<<"[display-present-layout] generation="<<changes<<" physical-output="
-                <<host_window::backbuffer_width<<'x'<<host_window::backbuffer_height
-                <<" content-rect="<<content_viewport.left<<','<<content_viewport.top<<','<<content_viewport.width<<','<<content_viewport.height
-                <<" selected-aspect="<<(ultrawide?ultrawide->content_aspect:galaxy::kWiiContentAspect)
-                <<" presentation-aspect="<<content_aspect<<" prerecorded-movie="<<source->prerecorded_movie
-                <<" dpi="<<GetDpiForWindow(window_)<<" internal-scale="<<efb_scale_<<'\n';
-        }
-    }
     if (frame_generation_running()) {
         streamline::tag_backbuffer_region(command_list_.Get(), static_cast<unsigned>(content_viewport.left),
                                           static_cast<unsigned>(content_viewport.top),
@@ -10074,18 +9056,12 @@ bool RendererD3D12::present(
         content_viewport.width != static_cast<int>(host_window::backbuffer_width) ||
         content_viewport.height != static_cast<int>(host_window::backbuffer_height);
 
-    const BackbufferPreBlitClearMode clear_mode =
-        backbuffer_pre_blit_clear_mode();
-    if (black || content_has_borders ||
-        clear_mode != BackbufferPreBlitClearMode::Disabled) {
+    if (black || content_has_borders) {
         constexpr float kBlack[4] = {0.0f, 0.0f, 0.0f, 1.0f};
-        constexpr float kDiagnostic[4] = {1.0f, 0.0f, 1.0f, 1.0f};
         const float kSafety[4] = {source->safety_surround, source->safety_surround,
                                  source->safety_surround, 1.0f};
         const float* clear_color = black ? kBlack
-            : clear_mode == BackbufferPreBlitClearMode::Diagnostic
-                ? kDiagnostic
-                : source->safety_surround > 0.0f ? kSafety : kBlack;
+            : source->safety_surround > 0.0f ? kSafety : kBlack;
         command_list_->ClearRenderTargetView(
             back_rtv, clear_color, 0, nullptr);
         ++telemetry_backbuffer_clear_count_;
@@ -10109,10 +9085,8 @@ bool RendererD3D12::present(
         static_cast<LONG>(content_viewport.left + content_viewport.width),
         static_cast<LONG>(content_viewport.top + content_viewport.height)};
 
-    // Switch to blit root signature + pipeline while preserving both shader
-    // visible heaps. The blit path currently uses static samplers, but keeping
-    // the sampler heap bound avoids a D3D12 state footgun for overlays/future
-    // present effects and matches normal GX draw recording.
+    // Both shader-visible heaps stay bound: the blit uses static samplers, but
+    // the overlays and GX recording expect the sampler heap.
     ID3D12DescriptorHeap* heaps[] = {srv_ring_.heap(), sampler_heap_.Get()};
     command_list_->SetDescriptorHeaps(2, heaps);
     if (black) {
@@ -10155,10 +9129,9 @@ bool RendererD3D12::present(
         present_fg_hudless(*source, vp, sci);
     }
 
-    // Native overlays are authored in full client/backbuffer pixels, not Wii
-    // content coordinates. Restore the full-surface raster state after the XFB
-    // blit so overlays stay correctly positioned and captures below include
-    // the complete composited surface (black borders, game, then overlays).
+    // The overlays are drawn in backbuffer pixels, not Wii content coordinates:
+    // the full-surface raster state again, so captures below include the whole
+    // composited surface (borders, game, overlays).
     const D3D12_VIEWPORT overlay_vp{
         0.0f, 0.0f, static_cast<float>(host_window::backbuffer_width),
         static_cast<float>(host_window::backbuffer_height), 0.0f, 1.0f};
@@ -10168,34 +9141,11 @@ bool RendererD3D12::present(
     command_list_->RSSetViewports(1, &overlay_vp);
     command_list_->RSSetScissorRects(1, &overlay_sci);
 
-    {
-        // Gated on the same opt-in flag as the other stall-watch probes; the
-        // flag's function-local static makes this a constant false in the
-        // shipping configuration, so the two clock reads and the branch are
-        // deleted rather than merely skipped.
-        const bool stall_watch_overlay = trace_stall_watch_enabled();
-        const auto stall_watch_overlay_start = stall_watch_overlay
-            ? std::chrono::steady_clock::now()
-            : std::chrono::steady_clock::time_point{};
-        host_window::draw_native_settings_overlay(*this);
-        host_window::draw_native_settings_hint(*this);
-        host_window::draw_home_menu(*this);
-        if (stall_watch_overlay) {
-            const double stall_watch_ms =
-                std::chrono::duration<double, std::milli>(
-                    std::chrono::steady_clock::now() -
-                    stall_watch_overlay_start).count();
-            if (stall_watch_ms > 4.0) {
-                std::ostringstream message;
-                message << "[stall-watch] host_window::draw_native_settings_overlay took "
-                          << stall_watch_ms << "ms\n";
-                std::cerr << message.str();
-            }
-        }
-    }
+    host_window::draw_native_settings_overlay(*this);
+    host_window::draw_native_settings_hint(*this);
+    host_window::draw_home_menu(*this);
 
-    // Transition backbuffer -> PRESENT.
-    if (record_backbuffer) {
+    if (capture_backbuffer) {
         if (backbuffer_readback_pending_) {
             throw std::runtime_error(
                 "backbuffer capture requested while a prior readback is pending");
@@ -10259,27 +9209,20 @@ bool RendererD3D12::present(
         command_list_->ResourceBarrier(1, &capture_barrier);
         backbuffer_readback_pending_ = true;
         backbuffer_readback_fence_value_ = 0u;
-        backbuffer_readback_capture_ = capture_backbuffer;
-        backbuffer_readback_luma_trace_ = trace_luma;
         backbuffer_readback_width_ = w;
         backbuffer_readback_height_ = h;
         backbuffer_readback_row_pitch_ = row_pitch;
-        backbuffer_readback_capture_path_ = capture_backbuffer
-            ? next_backbuffer_capture_path_
-            : std::string{};
-        backbuffer_readback_frame_ = present_frame;
-        backbuffer_readback_xfb_addr_ = source->guest_addr;
-        backbuffer_readback_xfb_stamp_ = source->frame_stamp;
+        backbuffer_readback_capture_path_ = next_backbuffer_capture_path_;
     }
 
+    // Backbuffer -> PRESENT.
     std::swap(bar.Transition.StateBefore, bar.Transition.StateAfter);
     command_list_->ResourceBarrier(1, &bar);
     return capture_backbuffer;
 }
 
-// Extend the existing bounded capture with the actual selected source pixels.
-// The copy and final blit share a command list and exact completion fence.
-// Retain the source until completion; never wait here or change VI selection.
+// Captures the presented XFB itself, in the same command list (and fence) as the
+// final blit. The source is held until the copy completes; nothing waits here.
 bool RendererD3D12::debug_copy_selected_xfb_to_readback(const XfbTexture& source) {
     debug_log_selected_xfb_readback();
     if (selected_xfb_readback_pending_ || next_backbuffer_capture_path_.empty()) {
@@ -10401,12 +9344,7 @@ void RendererD3D12::debug_log_backbuffer_readback() {
     if (FAILED(
             backbuffer_readback_buf_->Map(
                 0, &read_range, &mapped))) {
-        backbuffer_readback_capture_ = false;
-        backbuffer_readback_luma_trace_ = false;
         backbuffer_readback_capture_path_.clear();
-        backbuffer_readback_frame_ = 0;
-        backbuffer_readback_xfb_addr_ = 0;
-        backbuffer_readback_xfb_stamp_ = 0;
         backbuffer_readback_width_ = 0;
         backbuffer_readback_height_ = 0;
         backbuffer_readback_row_pitch_ = 0;
@@ -10429,63 +9367,7 @@ void RendererD3D12::debug_log_backbuffer_readback() {
             row_pitch);
     }
 
-    if (backbuffer_readback_luma_trace_) {
-        const std::uint64_t pixel_count =
-            static_cast<std::uint64_t>(w) * static_cast<std::uint64_t>(h);
-        std::uint64_t luma_sum = 0;
-        std::uint64_t near_black = 0;
-        std::uint8_t min_luma = 255;
-        std::uint8_t max_luma = 0;
-        std::uint32_t crc = 0xFFFFFFFFu;
-        for (UINT y = 0; y < h; ++y) {
-            const std::uint8_t* row =
-                base + static_cast<std::size_t>(y) * row_pitch;
-            crc = crc32_update_raw(
-                crc,
-                row,
-                static_cast<std::size_t>(w) * 4u);
-            for (UINT x = 0; x < w; ++x) {
-                const std::uint8_t r = row[x * 4u + 0u];
-                const std::uint8_t g = row[x * 4u + 1u];
-                const std::uint8_t b = row[x * 4u + 2u];
-                const std::uint8_t luma = static_cast<std::uint8_t>(
-                    (54u * r + 183u * g + 19u * b + 128u) >> 8u);
-                luma_sum += luma;
-                near_black += luma <= 8u ? 1u : 0u;
-                min_luma = std::min(min_luma, luma);
-                max_luma = std::max(max_luma, luma);
-            }
-        }
-        crc ^= 0xFFFFFFFFu;
-        const double mean_luma =
-            pixel_count != 0u
-                ? static_cast<double>(luma_sum) /
-                      static_cast<double>(pixel_count)
-                : 0.0;
-        const double near_black_pct =
-            pixel_count != 0u
-                ? static_cast<double>(near_black) * 100.0 /
-                      static_cast<double>(pixel_count)
-                : 0.0;
-        std::cerr << "[present-luma] frame=" << backbuffer_readback_frame_
-                  << " xfb=0x" << std::hex << backbuffer_readback_xfb_addr_
-                  << " crc32=0x" << crc << std::dec
-                  << " stamp=" << backbuffer_readback_xfb_stamp_
-                  << " mean=" << mean_luma
-                  << " min=" << static_cast<unsigned>(min_luma)
-                  << " max=" << static_cast<unsigned>(max_luma)
-                  << " near-black=" << near_black << "/"
-                  << pixel_count
-                  << " near-black-pct=" << near_black_pct
-                  << '\n';
-    }
-
-    backbuffer_readback_capture_ = false;
-    backbuffer_readback_luma_trace_ = false;
     backbuffer_readback_capture_path_.clear();
-    backbuffer_readback_frame_ = 0;
-    backbuffer_readback_xfb_addr_ = 0;
-    backbuffer_readback_xfb_stamp_ = 0;
     backbuffer_readback_width_ = 0;
     backbuffer_readback_height_ = 0;
     backbuffer_readback_row_pitch_ = 0;

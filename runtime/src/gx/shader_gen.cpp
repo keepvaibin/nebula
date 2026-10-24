@@ -1,17 +1,14 @@
-// shader_gen.cpp: ShaderGenerator. Turns PixelShaderKey and VertexShaderKey into HLSL source strings.
+// ShaderGenerator: HLSL source for PixelShaderKey and VertexShaderKey.
 //
-// Generated shaders use the same constant buffer layout (uber_constants.h) and root signature as the
-// uber pipelines. Promoting a draw from the uber pipeline to a specialized PSO is a pipeline pointer swap.
-//
-// TEV fidelity: regular and compare-mode stages operate on the 8-bit integer lattice. Fog and alpha
-// testing round from the same lattice before applying their fixed-function behaviour.
+// Generated shaders use the uber pipelines' constant buffer layout (uber_constants.h) and root
+// signature, so promoting a draw from the uber pipeline to a specialized PSO is a pipeline swap.
+// Regular and compare-mode TEV stages operate on the 8-bit integer lattice; fog and the alpha test
+// round from the same lattice. The TEV loop is emitted fully unrolled.
 //
 // Behaviour references (clean-room, behaviour only):
 //   texgen, post-matrix, q==0:  Dolphin VertexShaderGen.cpp
 //   lighting:                   Dolphin LightingShaderGen.cpp, XFMemory.h
 //   TEV compare, swap, fog:     Dolphin PixelShaderGen.cpp, BPMemory.h
-//
-// The TEV loop is emitted as fully unrolled, straight-line HLSL.
 
 #include "galaxy/gx/shader_gen.h"
 
@@ -27,10 +24,6 @@
 #include <string>
 
 namespace galaxy::gx {
-
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
 
 namespace {
 
@@ -53,7 +46,7 @@ static void emit(std::ostringstream& s, const char* fmt, Args&&... args) {
 #pragma warning(pop)
 #endif
 
-// ---- TevColorArg -> HLSL int expression (color .rgb channel) --------------
+// TevColorArg as an HLSL int3 expression.
 static const char* color_arg_rgb(TevColorArg arg) {
     switch (arg) {
     case TevColorArg::CPrev:    return "tev_prev_i.rgb";
@@ -76,7 +69,7 @@ static const char* color_arg_rgb(TevColorArg arg) {
     return "int3(0,0,0)";
 }
 
-// ---- TevAlphaArg -> HLSL int expression (scalar) ---------------------------
+// TevAlphaArg as an HLSL int expression.
 static const char* alpha_arg(TevAlphaArg arg) {
     switch (arg) {
     case TevAlphaArg::APrev:    return "tev_prev_i.a";
@@ -91,7 +84,6 @@ static const char* alpha_arg(TevAlphaArg arg) {
     return "0";
 }
 
-// ---- TEV integer combiner helpers -----------------------------------------
 static const char* tev_bias_i(TevBias bias) {
     switch (bias) {
     case TevBias::Zero:    return "0";
@@ -120,7 +112,6 @@ static const char* tev_lerp_round_bias(bool subtract) {
     return subtract ? "127" : "128";
 }
 
-// ---- TEV destination name --------------------------------------------------
 static const char* tev_dest_name(unsigned dest) {
     switch (dest) {
     case 0: return "tev_prev_i";
@@ -131,9 +122,8 @@ static const char* tev_dest_name(unsigned dest) {
     return "tev_prev_i";
 }
 
-// ---- Swap-table swizzle suffix ---------------------------------------------
-// `codes` packs four 2-bit channel selects (r=0,g=1,b=2,a=3) for r/g/b/a in
-// ascending bit pairs.  Returns ".xyzw"-style suffix, or "" for identity.
+// Swap-table swizzle. `codes` packs four 2-bit channel selects (r=0, g=1, b=2,
+// a=3) for r, g, b, a in ascending bit pairs. Returns ".rgba"-style, or "" for identity.
 static std::string swap_suffix(std::uint32_t codes) {
     static const char kCh[4] = {'r', 'g', 'b', 'a'};
     const unsigned c0 = (codes >> 0) & 3u;
@@ -141,7 +131,7 @@ static std::string swap_suffix(std::uint32_t codes) {
     const unsigned c2 = (codes >> 4) & 3u;
     const unsigned c3 = (codes >> 6) & 3u;
     if (c0 == 0u && c1 == 1u && c2 == 2u && c3 == 3u) {
-        return std::string();  // identity: no swizzle
+        return std::string();
     }
     char buf[6] = {'.', kCh[c0], kCh[c1], kCh[c2], kCh[c3]};
     return std::string(buf, 5);
@@ -189,14 +179,12 @@ static unsigned indirect_wrap_mask(std::uint32_t wrap) {
     }
 }
 
-// ---- Alpha compare function -> HLSL boolean expression --------------------
-// ref is the HLSL expression for the reference value (already normalised).
+// Emits an alpha compare's pass condition; `ref_val` is the HLSL expression of the reference.
 static void emit_alpha_test(
     std::ostringstream& s,
     CompareFunc comp,
     const char* sample,
     const char* ref_val) {
-    // Returns the pass condition (if false -> discard).
     switch (comp) {
     case CompareFunc::Never:
         emit(s, "false");
@@ -276,7 +264,7 @@ enum class AlphaTestStaticResult : std::uint8_t {
     return AlphaTestStaticResult::Undetermined;
 }
 
-// ---- fog type name (for the describe() helper) ----------------------------
+// Names for describe().
 static const char* fog_type_name(FogType t) {
     switch (t) {
     case FogType::Off:     return "off";
@@ -289,7 +277,6 @@ static const char* fog_type_name(FogType t) {
     return "unknown";
 }
 
-// ---- compare function name (for the describe() helper) --------------------
 static const char* compare_func_name(CompareFunc f) {
     switch (f) {
     case CompareFunc::Never:   return "NEVER";
@@ -303,10 +290,6 @@ static const char* compare_func_name(CompareFunc f) {
     }
     return "?";
 }
-
-// ===========================================================================
-// Common HLSL preamble shared by VS and PS
-// ===========================================================================
 
 static constexpr const char* kVsConstantsDef = R"HLSL(
 cbuffer GxVsConstants : register(b0) {
@@ -509,9 +492,6 @@ struct VSOut {
 };
 )HLSL";
 
-// ===========================================================================
-// PS struct declarations
-// ===========================================================================
 static constexpr const char* kPsStructs = R"HLSL(
 struct PSIn {
     float4   pos      : SV_Position;
@@ -969,10 +949,6 @@ void main(point VSOut input_vertices[1], inout TriangleStream<VSOut> output) {
 }
 )HLSL";
 
-// ===========================================================================
-// VS emission helpers
-// ===========================================================================
-
 // Emits one light's contribution to the channel accumulator.
 //   - `n`      light index 0-7. XF light objects sit at palette element 0x180 + 4n:
 //              elem+0.w = RGBA8 colour (raw bits), elem+1 = {a0,a1,a2,k0},
@@ -1012,11 +988,10 @@ static void emit_light(
     }
 
     // Attenuation (XF chan ctrl bits 9-10; Dolphin AttenuationFunc:
-    // 0=None, 1=Spec, 2=Dir, 3=Spot).  Every normalize/divide is guarded:
-    // a light positioned exactly at the vertex, a zero distA vector, or a
-    // zero attenuation denominator must yield 0/fallback, never NaN/INF
-    // bleeding into the vertex colors (hardware does fixed-point math and
-    // has no NaN to propagate).
+    // 0=None, 1=Spec, 2=Dir, 3=Spot). Every normalize and divide is guarded:
+    // a light at the vertex, a zero distA or a zero denominator yields 0 or
+    // the fallback, never NaN or INF in the vertex colours (the hardware's
+    // fixed-point math has no NaN).
     switch (ctrl.atten_func) {
     case 1u:  // Spec
         s << "            float3 ldelta = lpos - wpos.xyz;\n";
@@ -1107,14 +1082,9 @@ std::string_view ShaderGenerator::point_geometry_shader_source() noexcept {
         kPointGeometryShader, sizeof(kPointGeometryShader) - 1u};
 }
 
-// ===========================================================================
-// generate_vs
-// ===========================================================================
-
 std::string ShaderGenerator::generate_vs(const VertexShaderKey& key) const {
     std::ostringstream s;
 
-    // Header comment
     const std::string key_desc = ShaderGenerator::describe(key);
     s << "// Specialized VS: " << key_desc << "\n";
     s << "// Generated by Nebula ShaderGenerator\n\n";
@@ -1138,8 +1108,8 @@ std::string ShaderGenerator::generate_vs(const VertexShaderKey& key) const {
 
     const bool dual_tex = (key.flags & 0x04u) != 0u;
 
-    // Does any active channel actually light?  (Channel controls beyond
-    // num_chans are zeroed by the key builder.)
+    // Whether any active channel lights (the key builder zeroes channel controls
+    // beyond num_chans).
     bool lighting_used = false;
     for (unsigned ch = 0; ch < key.num_chans && ch < 2u; ++ch) {
         if (decode_xf_channel_ctrl(key.channel[ch]).lighting_enable ||
@@ -1197,7 +1167,6 @@ float3 nebula_debake_gain(float3 nrm) {
          "    return m > (1.0 / 255.0) ? c / m : c;\n"
          "}\n\n";
 
-    // ---- main() ----
     s << "VSOut main(VSIn v, uint vertex_id : SV_VertexID) {\n";
     s << "    vertex_blend(v, vertex_id);\n";
 
@@ -1388,11 +1357,10 @@ float3 nebula_debake_gain(float3 nrm) {
         s << "    o.ppl_vcol1 = vtx_col1;\n\n";
     }
 
-    // ---- Texgens ----------------------------------------------------------
-    // Full pipeline per Dolphin VertexShaderGen: input-row selection (RAW
-    // pos / RAW normal / tex0-7), 2x4 or 3x4 texture-matrix multiply
-    // (per-vertex index or CP MatrixIndexA/B default), optional normalize +
-    // post-transform (dual-tex) matrix, q==0 clamp.  The PS divides by Q.
+    // Texgens, per Dolphin VertexShaderGen: input-row selection (raw
+    // pos / raw normal / tex0-7), 2x4 or 3x4 texture-matrix multiply
+    // (per-vertex index or CP MatrixIndexA/B default), optional normalize and
+    // post-transform (dual-tex) matrix, q==0 clamp. The PS divides by Q.
     const unsigned ntg = key.num_texgens;
     emit(s, "    // %u active texgen(s)\n", ntg);
 
@@ -1550,14 +1518,9 @@ float3 nebula_debake_gain(float3 nrm) {
     return s.str();
 }
 
-// ===========================================================================
-// generate_ps
-// ===========================================================================
-
 std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
     std::ostringstream s;
 
-    // Header comment
     const std::string key_desc = ShaderGenerator::describe(key);
     s << "// Specialized PS: " << key_desc << "\n";
     s << "// Generated by Nebula ShaderGenerator\n\n";
@@ -1620,11 +1583,10 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
         s << kEnhancedLighting;
     }
 
-    // ---- main() ----
-    // Z-texturing (flags bit1): the fragment depth is replaced by (or offset
-    // with) a value sampled from the LAST TEV stage's texture, so the PS must
-    // export SV_Depth.  SMG's clearEfb idiom: fullscreen quad + Z24X8 texture
-    // of 0xFFFFFF + GX_ZT_REPLACE = clear color AND depth(far) in one draw.
+    // Z-texturing (flags bit 1): the fragment depth is replaced by (or offset
+    // with) a value sampled from the last TEV stage's texture, so the PS must
+    // export SV_Depth. SMG's clearEfb idiom: fullscreen quad + Z24X8 texture
+    // of 0xFFFFFF + GX_ZT_REPLACE clears colour and depth (far) in one draw.
     const bool ztex_on = (key.flags & 0x02u) != 0u;
     const bool early_depth = (key.flags & 0x01u) == 0u;
     const bool export_depth = ztex_on && !early_depth;
@@ -1736,13 +1698,13 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
                      n, spot ? "true" : "false");
             }
             // Lit by the game's player light rig (flags bit 7, GxBackend::rt_player_rig_draw): its level, not its hue
-            // (the prologue's night rig turned Mario's gloves and skin cyan; the traced light gives the colour).
+            // (a rig such as the prologue's cyan night rig would tint the player); the traced light gives the colour.
             s << "                if ((ppl_flags & 128u) != 0u) {\n"
                  "                    enh_avg = dot(enh_avg, float3(0.2126, 0.7152, 0.0722)).xxx;\n"
                  "                }\n";
             // De-baked (GxVsConstants flags bit 4): lit at its program's neutral light (bits 8-15), not the art's full
-            // light, in the full light's hue: the ambient register or the vertices often hold the object's own colour
-            // (Toy Time's toys and robot went white under a grey light).
+            // light, in the full light's hue, since the ambient register or the vertices often hold the object's own
+            // colour.
             s << "                if ((ppl_flags & 16u) != 0u) {\n"
                  "                    const float enh_peak = max(enh_avg.r, max(enh_avg.g, enh_avg.b));\n"
                  "                    enh_avg = (enh_peak > 1e-4 ? enh_avg / enh_peak : float3(1.0, 1.0, 1.0)) *\n"
@@ -2039,9 +2001,9 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
                     tex_swz.c_str());
             }
             if (!has_indirect_cmd && ((enh_env >> texcoord) & 1u) != 0u) {
-                // The game's painted reflection stays as drawn under ray tracing (metals, crystals, sheen):
-                // the traced reflection screens over it (replacing chrome's map by its mean left
-                // Battlerock's disks flat grey against black space). Enhanced lighting alone scales it.
+                // Under ray tracing the game's painted reflection (metals, crystals, sheen) stays as drawn
+                // and the traced reflection screens over it; replacing the map by its mean would flatten
+                // chrome. Enhanced lighting alone scales it.
                 s << "    if (enh_on && (uber_ps_header.w & 0x20000u) == 0u) {\n"
                      "        tex_color_i.rgb = min(int3(round(float3(tex_color_i.rgb) * enh.env_gain)), int3(255,255,255));\n"
                      "    }\n";
@@ -2372,8 +2334,8 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
 
     // The PE consumes the final TEV result on the 8-bit lattice. Unclamped TEV stages can hold wider signed
     // intermediates, but alpha compare, fog/colour output and the alpha==1 blend quirk see only the low 8 bits.
-    // Under ray-traced lighting (enhanced keys, header bit 17) the final result clamps like the inputs
-    // (measured rtpartner dy28: Good Egg's wood rim 255,255,102 -> 11,219,101, green streaks).
+    // Under ray-traced lighting (enhanced keys, header bit 17) the final result clamps like the inputs, so a
+    // channel lifted just past 255 does not wrap.
     if (enhanced) {
         s << "\n    int4 frag_i = (uber_ps_header.w & 0x20000u) != 0u ? clamp(tev_prev_i, 0, 255)"
              " : (tev_prev_i & int4(255,255,255,255));\n";
@@ -2446,10 +2408,9 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
         s << "    // Flipper RGBA6 2x2 Bayer dither, applied before fog.\n";
         s << "    int3 dither_rgb = int3(round(saturate(frag.rgb) * 255.0));\n";
         if (key.efb_scale_minus_one == 0xffu) {
-            // Single-sample pixel centers N+0.5 remain safely inside the
-            // same logical pixel after a float reciprocal/multiply: at the
-            // supported scales/extents, rounding cannot cross a boundary.
-            // Keep legacy key branches unchanged for persistent DXBC reuse.
+            // Pixel centres N+0.5 stay inside their logical pixel after the
+            // float multiply at every supported scale and extent. The integer
+            // scale branches below keep their output, so cached DXBC stays valid.
             s << (scalar_masks ? "    int2 dither_xy = gx_bit0(int2(pin.pos.xy * ztex_params.y));\n"
                                : "    int2 dither_xy = int2(pin.pos.xy * ztex_params.y) & 1;\n");
         } else if (efb_scale == 1u) {
@@ -2555,15 +2516,15 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
     // Under ray-traced light the scene draws into the HDR scene EFB (sRGB-encoded past 1), and these two act in linear
     // light after the TEV's own 8-bit result: a light source's glow (additive, output_flags bit 5) shines at its radiance
     // times the camera's exposure (ztex_params.z); a lit translucent (bit 6) takes the light of the surface behind it
-    // (texture 7: the lighting per sample, exposed), unclamped. An opaque draw after the trace (bit 7: Rosalina,
-    // Freezeflame's ice) takes no emitter's light (the lava under the ice lit it white, measured v52b Freezeflame).
+    // (texture 7: the lighting per sample, exposed), unclamped. An opaque draw after the trace (bit 7, such as
+    // Rosalina or Freezeflame's ice) takes no emitter's light.
     if ((key.output_flags & 0x60u) != 0u) {
         s << "    float3 lin = frag.rgb <= 0.04045 ? frag.rgb / 12.92 : pow((frag.rgb + 0.055) / 1.055, 2.4);\n";
         if ((key.output_flags & 0x20u) != 0u) {
             s << "    lin *= ztex_params.z;\n";
         }
-        // The light texture only for a positive scale (0: a light source or a clear surface, none; read anyway it
-        // took the light at texel 0, 0); a negative one carries the table's colour for a light source shown in it.
+        // The light texture is read only for a positive scale: 0 (a light source or a clear surface) takes none,
+        // and a negative scale carries the table's colour for a light source shown in it.
         if ((key.output_flags & 0x40u) != 0u) {
             s << "    if (ztex_params.w > 0.0) {\n";
             s << "        uint lit_w, lit_h;\n";
@@ -2640,8 +2601,6 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
 
     return s.str();
 }
-
-// describe: stable, human-readable key description
 
 std::string ShaderGenerator::describe(const PixelShaderKey& key) {
     char buf[256];

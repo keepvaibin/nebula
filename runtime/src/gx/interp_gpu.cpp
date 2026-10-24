@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// Interpolation programs and their CPU reference evaluator (interp_gpu.h).
 #include "galaxy/gx/interp_gpu.h"
 
 #include <algorithm>

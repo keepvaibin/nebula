@@ -18,9 +18,6 @@
 #endif
 
 #include <algorithm>
-#include <limits>
-#include <cstdlib>
-#include <cerrno>
 #include <cmath>
 #include <cstring>
 
@@ -99,9 +96,9 @@ float4 main(V v) : SV_Target {
     uint4 texcol_raw;
     if (reduction_width != 0u || filt2.w < 0.0) {
         if (modes.z != 0.0) {
-            // Depth peeks are point reads. src_xform.xy is the exact physical
-            // texel selected by the CPU geometry policy; Load prevents the
-            // multi-texel blend that linear sampling produced at scaled EFB sizes.
+            // Depth peeks are point reads of the physical texel the CPU
+            // geometry selected (src_xform.xy); Load avoids a multi-texel
+            // blend at scaled EFB sizes.
             texcol_raw = pack_depth(
                 srctex.Load(int3(
                     filt2.w < 0.0 ? int2(src_xform.xy + floor(v.pos.xy) * src_xform.zw)
@@ -212,7 +209,7 @@ float4 main(V v) : SV_Target {
 
 namespace {
 
-// Fullscreen triangle with UV. No vertex buffer needed.
+// Fullscreen triangle with UVs, without a vertex buffer.
 constexpr char kBlitVs[] =
     "struct V { float4 pos:SV_Position; float2 uv:TEXCOORD0; };"
     "V main(uint id:SV_VertexID){"
@@ -268,9 +265,8 @@ struct V { float4 p:SV_Position; float2 uv:TEXCOORD0; };
 float4 main(V v) : SV_Target { return t.Sample(s, v.uv) * tint; }
 )HLSL";
 
-// Flat-colored quad, draw-call based. Used by the native settings overlay's
-// panel background and text glyphs instead of a rect-limited
-// ClearRenderTargetView -- see ensure_native_settings_solid_pipeline_loaded.
+// Flat-coloured quad: the settings overlay's panel background and text glyphs
+// (ensure_native_settings_solid_pipeline_loaded).
 constexpr char kUiSolidQuadVs[] = R"HLSL(
 cbuffer C : register(b0) {
     int4 rect;
@@ -287,7 +283,7 @@ V main(uint id : SV_VertexID, uint cell : SV_InstanceID) {
     if (glyph_mode != 0u) {
         uint mask_word = cell < 32u ? glyph_mask.x : glyph_mask.y;
         uint bit = (mask_word >> (cell & 31u)) & 1u;
-        // Match the old CPU integer cell placement/clipping before conversion.
+        // Cells are placed and clipped in integer pixels before the NDC conversion.
         int2 cell_min = rect.xy + int2(cell % 5u, cell / 5u) * rect.zw;
         int2 cell_max = clamp(cell_min + rect.zw, int2(0, 0), int2(screen));
         cell_min = clamp(cell_min, int2(0, 0), int2(screen));
@@ -394,8 +390,7 @@ EfbConversionShaderConstants make_efb_conversion_constants(
     float fw_mid = static_cast<float>(params.filter_middle());
     float fw_low = static_cast<float>(params.filter_lower());
     if (fw_up == 0.0f && fw_mid == 0.0f && fw_low == 0.0f) {
-        // Preserve the existing startup behavior when GXInit has not yet
-        // programmed BP 0x53/0x54.
+        // BP 0x53/0x54 not programmed yet (before GXInit): the centre row alone.
         fw_mid = 64.0f;
     }
 
@@ -535,114 +530,12 @@ SamplerTableCache::Allocation SamplerTableCache::get_or_allocate(const SamplerTa
     return {it->second, inserted};
 }
 
-bool realtime_vi_paces_present() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length, value, sizeof(value), "GALAXY_REALTIME_VI") != 0 ||
-            length <= 1) {
-            return true;
-        }
-        return value[0] != '0' && value[0] != 'n' && value[0] != 'N';
-    }();
-    return enabled;
-}
-
-bool smooth_realtime_present_enabled() {
-    static const bool enabled = [] {
-        char value[16]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length,
-                value,
-                sizeof(value),
-                "GALAXY_SMOOTH_REALTIME_PRESENT") != 0 ||
-            length <= 1) {
-            return true;
-        }
-        return value[0] != '0' && value[0] != 'n' && value[0] != 'N';
-    }();
-    return enabled;
-}
-
-std::uint64_t smooth_realtime_present_max_wait_us() {
-    static const std::uint64_t wait_us = [] {
-        char value[32]{};
-        std::size_t length = 0;
-        if (getenv_s(
-                &length,
-                value,
-                sizeof(value),
-                "GALAXY_SMOOTH_REALTIME_PRESENT_MAX_WAIT_US") != 0 ||
-            length <= 1) {
-            return std::uint64_t{2000};
-        }
-        return std::clamp<std::uint64_t>(
-            std::strtoull(value, nullptr, 10),
-            0u,
-            8000u);
-    }();
-    return wait_us;
-}
-
-std::uint64_t read_megabyte_budget(
-    const char* variable, std::uint64_t default_bytes,
-    bool zero_uses_default,
-    std::uint64_t maximum_bytes) {
-    char value[24]{};
-    std::size_t length = 0u;
-    if (getenv_s(&length, value, sizeof(value), variable) != 0 || length <= 1u) {
-        return default_bytes;
-    }
-    for (const char* digit = value; *digit != '\0'; ++digit) {
-        if (*digit < '0' || *digit > '9') {
-            return default_bytes;
-        }
-    }
-    errno = 0;
-    char* end = nullptr;
-    const unsigned long long megabytes = std::strtoull(value, &end, 10);
-    constexpr std::uint64_t kMegabyte = UINT64_C(1) << 20;
-    if (end == value || *end != '\0' || errno == ERANGE ||
-        megabytes > maximum_bytes / kMegabyte ||
-        (megabytes == 0u && zero_uses_default)) {
-        return default_bytes;
-    }
-    return static_cast<std::uint64_t>(megabytes) * kMegabyte;
-}
-
-// Byte budget for the EFB-copy destination cache. It is hoisted out of the eviction site so the
-// value in use can be reported with the live bytes. The pool's allocation scales with
-// efb_scale^2 while this budget stays fixed, so it is the one resolution-scaled GPU pool that is
-// neither a render target nor visible in any recording.
 std::uint64_t efb_copy_dest_budget_bytes() {
-    static const std::uint64_t bytes = read_megabyte_budget(
-        "GALAXY_EFB_COPY_DEST_BUDGET_MB", UINT64_C(192) << 20, false);
-    return bytes;
+    return UINT64_C(192) << 20;
 }
 
-EffectCopyPolicy effect_copy_policy() noexcept {
-    static const EffectCopyPolicy policy = [] {
-        EffectCopyPolicy result;
-        char value[8]{};
-        std::size_t length = 0u;
-        result.native_bloom_workspace =
-            getenv_s(&length, value, sizeof(value), "GALAXY_NATIVE_BLOOM_WORKSPACE") == 0 && length == 2u &&
-            value[0] == '1';
-        length = 0u;
-        result.native_effect_copies =
-            !(getenv_s(&length, value, sizeof(value), "GALAXY_NATIVE_EFFECT_COPIES") == 0 && length == 2u &&
-              value[0] == '0');
-        return result;
-    }();
-    return policy;
-}
-
-bool is_effect_copy(const EffectCopyPolicy& policy, const EfbCopyParams& params, bool is_depth_copy,
-                    unsigned width, unsigned height) noexcept {
-    return policy.native_effect_copies ? width <= 320u && height <= 228u
-                                       : is_galaxy_bloom_workspace_copy(params, is_depth_copy);
+bool is_effect_copy(unsigned width, unsigned height) noexcept {
+    return width <= 320u && height <= 228u;
 }
 
 PresentPacer::PresentPacer() noexcept : frequency_(galaxy::qpc_frequency()) {}
@@ -662,8 +555,8 @@ void PresentPacer::reset() noexcept {
     timer_tried_ = false;
 }
 
-// The present pacer spins (yields) only for its last 0.2 ms: Battlerock 1080p, render thread 197 ms/s with the
-// yield loop for the whole wait, 99 ms/s with the timer alone (median worst interval 16.82 -> 17.18 ms).
+// The pacer yields only for the last 0.2 ms before a target and sleeps before that: yielding through the
+// whole wait costs the render thread about twice the CPU time.
 constexpr double kPaceSpinMs = 0.2;
 
 #if defined(_WIN32)
@@ -704,18 +597,15 @@ void PresentPacer::sleep_before(double remaining_ms) {
 }
 #endif
 
+// The longest wait for a present's slot at the frame-rate cap.
+constexpr double kSmoothPresentMaxWaitUs = 2000.0;
+
 double PresentPacer::pace(unsigned vsync_interval, float max_fps) {
-    // Runtime gameplay is paced by the native VI scheduler. A tiny bounded
-    // render-thread delay can still smooth the handoff to DXGI when the VI edge
-    // arrives a little early; keep it capped so it cannot become a producer
-    // throttle or hide missing XFBs with duplicated presents.
-    const bool realtime_paced = realtime_vi_paces_present();
-    const std::uint64_t realtime_wait_cap_us =
-        realtime_paced && smooth_realtime_present_enabled()
-            ? smooth_realtime_present_max_wait_us()
-            : 0u;
-    if ((realtime_paced && realtime_wait_cap_us == 0u) ||
-        vsync_interval != 0u ||
+    // Gameplay is paced by the VI scheduler. A bounded render-thread wait
+    // smooths the handoff to DXGI when a VI edge arrives a little early; the cap
+    // keeps it from throttling the producer or hiding missing XFBs behind
+    // duplicated presents.
+    if (vsync_interval != 0u ||
         max_fps <= 0.0f ||
         frequency_ <= 0) {
         last_qpc_ = 0;
@@ -735,25 +625,13 @@ double PresentPacer::pace(unsigned vsync_interval, float max_fps) {
     const auto target =
         last_qpc_ +
         static_cast<std::int64_t>(ticks_per_frame + 0.5);
-    const std::int64_t wait_cap_ticks =
-        realtime_paced
-            ? static_cast<std::int64_t>(
-                  (static_cast<double>(frequency_) *
-                   static_cast<double>(realtime_wait_cap_us)) /
-                  1'000'000.0)
-            : std::numeric_limits<std::int64_t>::max();
     const std::int64_t wait_limit =
-        realtime_paced ? now + wait_cap_ticks
-                       : std::numeric_limits<std::int64_t>::max();
-    while (now < target) {
-        if (realtime_paced && now >= wait_limit) {
-            break;
-        }
-        const std::int64_t capped_target =
-            realtime_paced ? std::min<std::int64_t>(target, wait_limit)
-                           : target;
+        now + static_cast<std::int64_t>(
+                  (static_cast<double>(frequency_) * kSmoothPresentMaxWaitUs) /
+                  1'000'000.0);
+    while (now < target && now < wait_limit) {
         const double remaining_ms =
-            static_cast<double>(capped_target - now) * 1000.0 /
+            static_cast<double>(std::min<std::int64_t>(target, wait_limit) - now) * 1000.0 /
             static_cast<double>(frequency_);
         sleep_before(remaining_ms);
         now = galaxy::qpc_now();
@@ -766,7 +644,7 @@ double PresentPacer::pace(unsigned vsync_interval, float max_fps) {
     const auto max_lag =
         static_cast<std::int64_t>(ticks_per_frame * 2.0);
     last_qpc_ =
-        (now < target && realtime_paced)
+        now < target
             ? now
             : ((now - target > max_lag) ? now : target);
     return wait_ms;

@@ -1,3 +1,4 @@
+// Monitor and display-mode enumeration for the display settings (display_modes.h).
 #include "galaxy/gx/display_modes.h"
 
 #include <algorithm>

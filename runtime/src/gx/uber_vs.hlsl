@@ -204,11 +204,10 @@ void vertex_blend(inout VSIn v, uint id) {
     }
 }
 
-// A vertex colour with its baked light removed: its hue at full brightness (black stays black).
-// Physical ray tracing (flags bit 6): what a de-baked vertex colour is raised by: the model's baked light at its most
-// lit facing (debake_peak: its light at the player's up, GxBackend::flush_draw_state) over the light at this vertex's
-// object-space normal `nrm` (nine spherical harmonics a channel, debake_sh; GxBackend::fit_debake_light), 1/4 to 4.
-// No normal: 1.
+// Physical ray tracing (flags bit 6): the gain of a de-baked vertex colour, the model's baked light at its most lit
+// facing (debake_peak, its light at the player's up; GxBackend::flush_draw_state) over the light at the object-space
+// normal `nrm` (nine spherical harmonics per channel in debake_sh; GxBackend::fit_debake_light), clamped to 1/4..4.
+// Without a normal the gain is 1.
 float3 nebula_debake_gain(float3 nrm) {
     const float len2 = dot(nrm, nrm);
     if (!(len2 > 0.25)) {
@@ -228,6 +227,7 @@ float3 nebula_debake_gain(float3 nrm) {
     return clamp(peak / max(light, peak * 0.25), 0.25, 4.0);
 }
 
+// A vertex colour with its baked light removed: its hue at full brightness (black stays black).
 float3 nebula_debake(float3 c) {
     const float m = max(c.r, max(c.g, c.b));
     return m > (1.0 / 255.0) ? c / m : c;

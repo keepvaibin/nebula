@@ -379,9 +379,9 @@ void main(uint3 group : SV_GroupID, uint lane : SV_GroupIndex) {
 }
 )HLSL";
 
-// At the start of the sequence's first sub-frame (before its draws).
-// Earlier stripe vertices, one 144-byte GxVertexOut per output vertex, from
-// the ring or the resident buffer at the source's byte offset.
+// Earlier stripe vertices, one 144-byte GxVertexOut per output vertex, from the
+// ring or the resident buffer at the source's byte offset; dispatched at the
+// start of a sequence's first sub-frame, before its draws.
 inline constexpr char kStripeGatherCs[] = R"HLSL(
 #ifndef NEBULA_VULKAN
 #define VK_BINDING(n)

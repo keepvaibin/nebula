@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// Presentation post-processing on Vulkan (post_process_vk.h).
 #include "galaxy/gx/vk/post_process_vk.h"
 
 #include "galaxy/gx/vk/shader_compile_vk.h"
@@ -15,7 +16,7 @@
 #include <utility>
 
 namespace galaxy::gx {
-// cmake/post_shader_sources.cmake.
+// The shader sources cmake/post_shader_sources.cmake embeds.
 extern const unsigned char galaxy_post_post_process_hlsl[];
 extern const unsigned char galaxy_post_smaa_hlsl[];
 extern const unsigned char galaxy_post_ffx_a_h[];
@@ -492,7 +493,7 @@ bool PostProcessorVk::poll_ready() {
         std::cerr << "[post-process] compile failed: " << compile_error_.data() << '\n';
     }
     if (!build_pipelines()) {
-        std::cerr << "[post-process] the scaling passes could not be built; presenting with the plain blit\n";
+        std::cerr << "[post-process] scaling pipelines failed; plain blit\n";
         set_reason(status_.skip_reason, "INIT FAILED");
         destroy_pipelines();
         built_ = true;  // not again
@@ -705,22 +706,17 @@ AaRun PostProcessorVk::prepare_scene_aa(VkCommandBuffer commands, const Texture&
 }
 
 void PostProcessorVk::finish_scene_aa(VkCommandBuffer commands, AaRun pass, unsigned width, unsigned height,
-                                      float split, const SetAllocator& allocate) {
+                                      const SetAllocator& allocate) {
     if (pass == AaRun::kNone) {
         return;
     }
     const VkRect2D full{{0, 0}, {width, height}};
-    const auto left = static_cast<std::uint32_t>(
-        std::clamp(std::lround(std::clamp(split, 0.0f, 1.0f) * static_cast<float>(width)), 0l,
-                   static_cast<long>(width)));
-    const VkRect2D output{{static_cast<std::int32_t>(left), 0}, {width - left, height}};
     PostConstants c{};
     set_post_input_size(c, width, height);
     if (pass == AaRun::kFxaa) {
-        draw(commands, fxaa_rgb_, {antialiased_.texture->view}, full, c, allocate, &output);
+        draw(commands, fxaa_rgb_, {antialiased_.texture->view}, full, c, allocate);
     } else {
-        draw(commands, smaa_blend_rgb_, {antialiased_.texture->view, weights_.texture->view}, full, c, allocate,
-             &output);
+        draw(commands, smaa_blend_rgb_, {antialiased_.texture->view, weights_.texture->view}, full, c, allocate);
     }
 }
 

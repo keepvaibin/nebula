@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
+// The pipeline compiles in progress, in a small memory-mapped file (vk_compiling.bin). When a driver's compiler
+// crashes the process inside vkCreateGraphicsPipelines (reported for Adreno 740), the pipeline it was building stays
+// in the file and the next launch never builds it again (PipelineCacheVk). Marking a compile is two stores to memory,
+// no system call.
 #pragma once
-
-// The pipeline compiles in progress, in a small file mapped into memory (vk_compiling.bin). A driver whose compiler
-// crashes the process inside vkCreateGraphicsPipelines (Adreno 740's did on Dusklight's shaders, Dusklight issue
-// 2563) leaves the pipeline it was building in the file; the next launch reads it and never builds that one again
-// (PipelineCacheVk). Marking a compile is two stores to memory: no system call.
 
 #include <atomic>
 #include <cstdint>

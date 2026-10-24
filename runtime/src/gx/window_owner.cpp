@@ -1,3 +1,4 @@
+// The Win32 game window's own thread (window_owner.h).
 #include "galaxy/gx/window_owner.h"
 #include "galaxy/windows_power.h"
 #include <future>
@@ -35,8 +36,7 @@ HWND WindowOwner::start(WindowOwnerConfig config) {
             TranslateMessage(&message);
             DispatchMessageW(&message);
         }
-        // DestroyWindow must run on the creating thread, including startup
-        // failure cleanup and externally requested shutdown during a modal loop.
+        // DestroyWindow must run on the creating thread, also when stop() ends a modal loop.
         if (IsWindow(window)) DestroyWindow(window);
     });
     Started started{};
@@ -57,11 +57,9 @@ void WindowOwner::stop() {
     if (GetCurrentThreadId() == thread_id_) {
         throw std::logic_error("Win32 window owner cannot join itself");
     }
-    // Nested native loops also dispatch HWND messages, so request normal window
-    // cleanup before ending the outer loop.
+    // Nested native loops also dispatch window messages, so the window gets WM_CLOSE before the outer loop ends.
     if (window_ != nullptr) (void)PostMessageW(window_, WM_CLOSE, 0, 0);
-    // WM_QUIT also terminates Win32's nested move/size/menu message loops;
-    // the outer owner loop then destroys its HWND on the same thread.
+    // WM_QUIT also ends Win32's nested move/size/menu loops; the outer loop then destroys the window on its thread.
     (void)PostThreadMessageW(thread_id_, WM_QUIT, 0, 0);
     thread_.join();
     thread_id_ = 0;

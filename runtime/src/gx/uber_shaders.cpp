@@ -1,3 +1,4 @@
+// The embedded uber shader sources (uber_shaders.h).
 #include "galaxy/gx/uber_shaders.h"
 
 namespace galaxy::gx {

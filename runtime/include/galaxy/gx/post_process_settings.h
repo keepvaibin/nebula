@@ -113,7 +113,7 @@ struct PostProcessStatus {
 [[nodiscard]] PostProcessStatus get_post_process_status();
 void set_post_process_status(const PostProcessStatus& status);
 
-// AMD FidelityFX FSR 3.1 is built into this runtime (temporal_upscaler.cpp; the D3D12 renderer).
+// Whether AMD FidelityFX FSR 3.1 is compiled in (temporal_upscaler.cpp; D3D12 only).
 [[nodiscard]] bool fsr3_available() noexcept;
 
 }  // namespace galaxy::gx
