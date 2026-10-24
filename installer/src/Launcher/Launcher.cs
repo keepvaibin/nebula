@@ -527,7 +527,7 @@ namespace Nebula.Launcher
                 string setup = Path.Combine(session.Root, "Nebula-Setup.exe");
                 if (File.Exists(setup)) Process.Start(new ProcessStartInfo(setup, "--update") { WorkingDirectory = session.Root });
             };
-            askUpdates.Text = "Ask about new versions when Nebula starts";
+            askUpdates.Text = "Check for updates at start";
             askUpdates.Location = new Point(222, y + 6);
             askUpdates.Size = new Size(360, 24);
             askUpdates.Checked = session.AskAboutUpdates;

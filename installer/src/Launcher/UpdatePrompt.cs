@@ -76,7 +76,7 @@ namespace Nebula.Launcher
             Text = "Nebula update";
             Font = new Font("Segoe UI", 9.5f);
             AutoScaleMode = AutoScaleMode.None;
-            ClientSize = new Size(520, 330);
+            ClientSize = new Size(520, 290);
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
@@ -85,7 +85,7 @@ namespace Nebula.Launcher
 
             Controls.Add(new Label
             {
-                Text = "Nebula " + release.Version + " is available. You have " + BuildInfo.Version + ".",
+                Text = "Nebula " + release.Version + " is available",
                 Font = new Font("Segoe UI", 11f, FontStyle.Bold), Location = new Point(16, 14), Size = new Size(488, 26)
             });
             string notes = release.Notes.Length > 1500 ? release.Notes.Substring(0, 1500) + "…" : release.Notes;
@@ -94,18 +94,13 @@ namespace Nebula.Launcher
                 Text = notes.Replace("\r\n", "\n").Replace("\n", "\r\n"), Multiline = true, ReadOnly = true,
                 ScrollBars = ScrollBars.Vertical, Location = new Point(16, 46), Size = new Size(488, 190)
             });
-            Controls.Add(new Label
-            {
-                Text = "Update now? Nebula downloads and installs it, then starts the game. Your saves and settings stay.",
-                Location = new Point(16, 242), Size = new Size(488, 36)
-            });
             dontAsk.Text = "Don't ask again";
-            dontAsk.Location = new Point(16, 290);
+            dontAsk.Location = new Point(16, 250);
             dontAsk.Size = new Size(200, 24);
             Controls.Add(dontAsk);
-            var update = new Button { Text = "Update", Location = new Point(300, 286), Size = new Size(100, 32) };
+            var update = new Button { Text = "Update", Location = new Point(300, 246), Size = new Size(100, 32) };
             update.Click += delegate { Choose(true); };
-            var later = new Button { Text = "Not now", Location = new Point(404, 286), Size = new Size(100, 32) };
+            var later = new Button { Text = "Not now", Location = new Point(404, 246), Size = new Size(100, 32) };
             later.Click += delegate { Choose(false); };
             Controls.Add(update);
             Controls.Add(later);
@@ -138,7 +133,7 @@ namespace Nebula.Launcher
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
             TopMost = true;
-            status.Text = "Downloading Nebula " + release.Version + "…";
+            status.Text = "Downloading Nebula " + release.Version;
             status.Location = new Point(16, 14);
             status.Size = new Size(408, 22);
             bar.Location = new Point(16, 44);
@@ -173,7 +168,7 @@ namespace Nebula.Launcher
                     BeginInvoke((Action)delegate
                     {
                         if (!canceled)
-                            MessageBox.Show(this, "The update could not be downloaded: " + error.Message + "\r\n\r\nNebula starts as it is.",
+                            MessageBox.Show(this, "Couldn't download the update.\r\n\r\n" + error.Message,
                                 "Nebula update", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         DialogResult = DialogResult.Cancel;
                         Close();
