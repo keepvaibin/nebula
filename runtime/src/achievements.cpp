@@ -29,7 +29,7 @@ constexpr Info kCatalogue[] = {
     {"ending", Group::Story, "The Universe Reborn", "DEFEAT BOWSER IN BOWSER'S GALAXY REACTOR"},
     {"storybook", Group::Story, "Story of the Stars", "READ EVERY CHAPTER OF ROSALINA'S STORYBOOK"},
 
-    {"stars120", Group::Challenge, "Superstar", "COLLECT ALL 120 POWER STARS"},
+    {"stars120", Group::Challenge, "Superstar!", "COLLECT ALL 120 POWER STARS"},
     {"luigi120", Group::Challenge, "Luigi's Time to Shine", "COLLECT ALL 120 POWER STARS AS LUIGI"},
     {"grandfinale", Group::Challenge, "Grand Finale", "GET THE POWER STAR IN THE GRAND FINALE GALAXY"},
     {"comets", Group::Challenge, "Comet Chaser", "CLEAR EVERY PRANKSTER COMET"},

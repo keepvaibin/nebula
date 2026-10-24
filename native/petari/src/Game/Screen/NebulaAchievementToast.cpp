@@ -11,6 +11,7 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Util/SystemUtil.hpp"
 #include <cstring>
 #include <nw4r/lyt/layout.h>
 #include <nw4r/lyt/material.h>
@@ -29,15 +30,17 @@ namespace {
         StepFall,
     };
 
-    // In the 608x456 canvas's units (the screen's height is 456 at every resolution): the window's padding, the gap
-    // between icon and text, the icon's height, the longest the text may run before it narrows, the window's scale,
-    // and its distance from the screen's right and bottom edges.
+    // In the canvas's units (the screen's height is 456 at every resolution): the window's padding, the gap between
+    // icon and text, the icon's height, the space between the title line and the name, the longest the text may run
+    // before it narrows, the window's scale, and its distance from the screen's right and bottom edges (the same on
+    // screen for both).
     const f32 cPadding = 16.0f;
     const f32 cGap = 14.0f;
     const f32 cIconSize = 60.0f;
+    const f32 cLineSpace = 8.0f;
     const f32 cTextMax = 440.0f;
     const f32 cScale = 0.5f;
-    const f32 cMargin = 10.0f;
+    const f32 cMargin = 8.0f;
 
     const s32 cRiseFrames = 24;
     const s32 cIconDelay = 8;   // the icon pops in once the window is mostly up
@@ -79,7 +82,7 @@ namespace {
     }
 
     // A text pane's boxes (its shadow and its text) at the top-left of their pane; the text's drawn size.
-    void fitText(nw4r::lyt::Pane* pParent, f32 fontSize, f32* pWidth, f32* pHeight) {
+    void fitText(nw4r::lyt::Pane* pParent, f32 fontSize, f32 lineSpace, f32* pWidth, f32* pHeight) {
         *pWidth = 0.0f;
         *pHeight = 0.0f;
         for (nw4r::lyt::PaneList::Iterator it = pParent->GetChildList().GetBeginIter(); it != pParent->GetChildList().GetEndIter(); ++it) {
@@ -92,6 +95,7 @@ namespace {
             }
             pText->SetTextPositionH(0);
             pText->SetTextPositionV(0);
+            pText->mLineSpace = lineSpace;
             // Measured in a wide box: the game's text boxes break lines at their width (the last name's).
             pText->mSize = nw4r::lyt::Size(2000.0f, 400.0f);
             const nw4r::ut::Rect rect = pText->GetTextDrawRect();
@@ -313,7 +317,7 @@ void NebulaAchievementToast::setIcon(const NebulaAchievementIcon* pIcon, f32* pW
     wchar_t picture[8];
     MR::addPictureFontTag(picture, pIcon != nullptr && pIcon->mGlyph != 0 ? pIcon->mGlyph : '7');
     MR::setTextBoxMessageRecursive(this, "ConfirmU", picture);
-    fitText(mGlyph, cIconSize, pWidth, pHeight);
+    fitText(mGlyph, cIconSize, 0.0f, pWidth, pHeight);
     mGlyph->mTranslate = nw4r::math::VEC3(-*pWidth * 0.5f, *pHeight * 0.5f, 0.0f);
     mGlyph->SetVisible(true);
     if (mPicture != nullptr) {
@@ -334,7 +338,7 @@ void NebulaAchievementToast::start(const wchar_t* pName, const NebulaAchievement
 
     f32 textWidth, textHeight, iconWidth, iconHeight;
     setIcon(pIcon, &iconWidth, &iconHeight);
-    fitText(mText, 0.0f, &textWidth, &textHeight);
+    fitText(mText, 0.0f, cLineSpace, &textWidth, &textHeight);
 
     // A long name (some languages) narrows the text to `cTextMax`, keeping the window's height.
     const f32 textScale = textWidth > cTextMax ? cTextMax / textWidth : 1.0f;
@@ -359,14 +363,17 @@ void NebulaAchievementToast::start(const wchar_t* pName, const NebulaAchievement
     MR::startSystemSE("SE_SY_LETTER_APPEAR");
 }
 
-// `rise` 0: just below the screen's bottom edge; 1: `cMargin` above it, `cMargin` in from the right edge. The canvas
-// rules move the branch to the real edges at any aspect ratio.
+// `rise` 0: just below the screen's bottom edge; 1: `cMargin` above it, as far in from the right edge. The canvas
+// rules move the branch to the real edges at any aspect ratio. The game draws its 2D for a 16:9 picture: a pane that
+// adjusts its location (this window, as the HUD's) is drawn three quarters as wide as its units, so its width and its
+// horizontal margin count in those units.
 void NebulaAchievementToast::place(f32 rise, f32 alpha, f32 iconScale) {
     nw4r::lyt::Pane* pRoot = getLayoutManager()->mLayout->mpRootPane;
-    const f32 width = mWidth * cScale;
+    const f32 adjust = mToast->IsLocationAdjust() && MR::isScreen16Per9() ? 0.75f : 1.0f;
+    const f32 width = mWidth * cScale * adjust;
     const f32 height = mHeight * cScale;
     const f32 bottom = -pRoot->mSize.height * 0.5f;
-    mToast->mTranslate.x = pRoot->mSize.width * 0.5f - cMargin - width * 0.5f;
+    mToast->mTranslate.x = pRoot->mSize.width * 0.5f - cMargin * adjust - width * 0.5f;
     mToast->mTranslate.y = bottom - height * 0.5f + rise * (height + cMargin);
     mToast->mAlpha = static_cast< u8 >(255.0f * clamp01(alpha) + 0.5f);
     mIcon->mScale = nw4r::math::VEC2(iconScale, iconScale);

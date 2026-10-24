@@ -129,7 +129,7 @@ Each achievement shows a picture from the game's own files, chosen in
 | Luigi's, Mario's and Peach's faces | `LayoutData/MiiIcon.arc`, `mymiiluigi.tpl`, `mymiimario.tpl`, `mymiipeach.tpl` | Found You, Luigi!, Luigi's Time to Shine, Green Means Go; Faster Than Your Shadow; The Universe Reborn |
 | The storybook's front cover | `ObjectData/PictureBookTexture.arc`, `PictureBookCoverFront.bti` (its right half) | Story of the Stars |
 | Power Star | picture font `7` | A Star Is Born, Halfway There |
-| crown | `P` | Superstar |
+| crown | `P` | Superstar! |
 | rainbow star | `W` | Grand Finale |
 | shooting star | `e` | Comet Chaser, One-Hit Wonder, Beat the Clock, Comet Sighting |
 | purple coin | `N` | Purple Reign |
