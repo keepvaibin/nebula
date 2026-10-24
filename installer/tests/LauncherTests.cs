@@ -46,6 +46,36 @@ namespace Nebula.Launcher
                   command.Arguments == "/select,\"" + Path.GetFullPath(zip) + "\"", "Open folder shows the recording selected in Explorer");
         }
 
+        // The update offer: Update and Not now, Don't ask again unticked; Update ignores the box, Not now keeps it.
+        // Rendered to update-prompt.png.
+        static void UpdatePromptCases(string outDir)
+        {
+            var release = new ReleaseInfo { Version = "9.9.9", Notes = "What changed in this release.\n\n- One fix.\n- Another." };
+            using (var form = new UpdatePromptForm(release))
+            {
+                var buttons = All(form).OfType<Button>().ToList();
+                var box = All(form).OfType<CheckBox>().Single();
+                Check(buttons.Any(b => b.Text == "Update") && buttons.Any(b => b.Text == "Not now") && !box.Checked &&
+                      form.AcceptButton == buttons.First(b => b.Text == "Update"), "the update offer: Update by default, Not now, Don't ask again unticked");
+                CreateHandles(form);
+                form.PerformLayout();
+                using (var bitmap = new Bitmap(form.Width, form.Height))
+                {
+                    form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.Size));
+                    bitmap.Save(Path.Combine(outDir, "update-prompt.png"), ImageFormat.Png);
+                }
+                box.Checked = true;
+                form.Choose(true);
+                Check(form.DialogResult == DialogResult.Yes && !form.DontAskAgain, "Update ignores Don't ask again");
+            }
+            using (var form = new UpdatePromptForm(release))
+            {
+                All(form).OfType<CheckBox>().Single().Checked = true;
+                form.Choose(false);
+                Check(form.DialogResult == DialogResult.No && form.DontAskAgain, "Not now keeps Don't ask again");
+            }
+        }
+
         // A form that is never shown creates no child windows; reading Handle creates them.
         static void CreateHandles(Control control)
         {
@@ -755,6 +785,7 @@ namespace Nebula.Launcher
                 SaveArchiveCases(outDir);
                 Application.EnableVisualStyles();
                 RecordingNoticeCases(outDir);
+                UpdatePromptCases(outDir);
 
                 var first = new LaunchSession();
                 Check(!first.SetupComplete, "no settings.json: setup not complete");

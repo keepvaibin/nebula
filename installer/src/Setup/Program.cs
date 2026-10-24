@@ -11,8 +11,9 @@ namespace Nebula.Setup
     internal static class Program
     {
         /// <summary>
-        /// Nebula-Setup.exe [--update | --apply-update | --uninstall | --rollback]
+        /// Nebula-Setup.exe [--update | --apply-update [--launch] | --uninstall | --rollback]
         ///   [--input PATH] [--root PATH] [--desktop-shortcut] [--unattended] [--remove-user-data]
+        /// --launch starts the game once the update is installed (the launcher's update offer).
         /// </summary>
         [STAThread]
         private static int Main(string[] args)

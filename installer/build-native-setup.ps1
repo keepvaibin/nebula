@@ -20,7 +20,10 @@ param(
     [Parameter(Mandatory = $true)][string]$Bin,
     [string]$OutputDirectory = '',
     [string]$SetupName = '',
-    [string]$Repository = 'keepvaibin/nebula'
+    [string]$Repository = 'keepvaibin/nebula',
+    # The release key's private half (RSA XML). Updates run only a Setup it signed; the default is the release key's
+    # usual place. -SigningKey '' builds an unsigned Setup.
+    [string]$SigningKey = (Join-Path $env:USERPROFILE '.nebula-release-key\nebula-release-private.xml')
 )
 $ErrorActionPreference = 'Stop'
 $installer = Split-Path -Parent $PSCommandPath
@@ -101,6 +104,17 @@ namespace Nebula
         @(Get-ChildItem (Join-Path $installer 'src\Setup\*.cs') | ForEach-Object FullName))
     $hash = (Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash.ToLowerInvariant()
     Write-Host "$SetupName $Version ($commit) $hash"
+    if ($SigningKey -and (Test-Path -LiteralPath $SigningKey)) {
+        $rsa = New-Object System.Security.Cryptography.RSACryptoServiceProvider
+        $rsa.PersistKeyInCsp = $false
+        $rsa.FromXmlString((Get-Content -LiteralPath $SigningKey -Raw))
+        if ($rsa.ToXmlString($false) -ne $publicKey) { throw 'The signing key does not match installer/release-public-key.xml.' }
+        $signature = $rsa.SignData([IO.File]::ReadAllBytes($setup), [Security.Cryptography.CryptoConfig]::MapNameToOID('SHA256'))
+        [IO.File]::WriteAllText("$setup.sig", [Convert]::ToBase64String($signature))
+        Write-Host "Signed $SetupName with the release key."
+    } elseif ($SigningKey) {
+        Write-Warning "No release key at $SigningKey`: $SetupName is unsigned and updates will not run it."
+    }
 } finally {
     Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
 }

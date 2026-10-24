@@ -49,6 +49,7 @@ namespace Nebula.Launcher
                 var session = new LaunchSession();
                 if (!OpensSettings(args, session))
                 {
+                    if (UpdateCheck.OfferBeforeLaunch(session)) return 0;
                     string error = session.TryLaunch();
                     if (error == null) return 0;
                     MessageBox.Show(error, "Nebula", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -94,6 +95,7 @@ namespace Nebula.Launcher
         public string Content;
         public bool SetupComplete;
         public RecordingMode Recording = RecordingMode.None;
+        public bool AskAboutUpdates = true;  // a newer release is offered at each start (UpdateCheck)
 
         public string SettingsFile { get { return Portable ? Path.Combine(App, "portable-settings.json") : NebulaPaths.SettingsFile; } }
 
@@ -115,6 +117,7 @@ namespace Nebula.Launcher
                 long recording = Json.Long(settings, "recording");
                 if (Json.Long(settings, "settingsVersion") >= 4 && recording >= 0 && recording <= 2)
                     Recording = (RecordingMode)recording;
+                if (settings.ContainsKey("askAboutUpdates")) AskAboutUpdates = Json.Bool(settings, "askAboutUpdates");
             }
             catch (Exception) { }
         }
@@ -123,7 +126,8 @@ namespace Nebula.Launcher
         {
             Json.Save(SettingsFile, new Dictionary<string, object>
             {
-                { "settingsVersion", 4 }, { "content", Content }, { "recording", (int)Recording }
+                { "settingsVersion", 4 }, { "content", Content }, { "recording", (int)Recording },
+                { "askAboutUpdates", AskAboutUpdates }
             });
             SetupComplete = true;
         }
@@ -290,6 +294,7 @@ namespace Nebula.Launcher
         private readonly ComboBox monitor = new ComboBox(), mode = new ComboBox(), resolution = new ComboBox(), refresh = new ComboBox();
         private readonly ComboBox aspect = new ComboBox(), internalScale = new ComboBox(), frameRate = new ComboBox();
         private readonly CheckBox vsync = new CheckBox();
+        private readonly CheckBox askUpdates = new CheckBox();
         private readonly ComboBox antiAliasing = new ComboBox(), aaQuality = new ComboBox(), msaa = new ComboBox(),
             upscaler = new ComboBox(),
             dlssQuality = new ComboBox(), textureFilter = new ComboBox(), lighting = new ComboBox(),
@@ -522,6 +527,12 @@ namespace Nebula.Launcher
                 string setup = Path.Combine(session.Root, "Nebula-Setup.exe");
                 if (File.Exists(setup)) Process.Start(new ProcessStartInfo(setup, "--update") { WorkingDirectory = session.Root });
             };
+            askUpdates.Text = "Ask about new versions when Nebula starts";
+            askUpdates.Location = new Point(222, y + 6);
+            askUpdates.Size = new Size(360, 24);
+            askUpdates.Checked = session.AskAboutUpdates;
+            askUpdates.Visible = !session.Portable;
+            advanced.Controls.Add(askUpdates);
 
             var play = new Button { Text = "Save and play", Location = new Point(608, 628), Size = new Size(140, 38) };
             play.Click += delegate { if (Commit()) Play(); };
@@ -1184,6 +1195,7 @@ namespace Nebula.Launcher
                 if (controls.InputMode != ControlsSettings.ModeRealWiimote) controls.InputMode = Math.Max(0, inputSource.SelectedIndex);
                 controls.Save();
                 session.Recording = (RecordingMode)Math.Max(0, recording.SelectedIndex);
+                if (!session.Portable) session.AskAboutUpdates = askUpdates.Checked;
                 session.Save();
                 return true;
             }

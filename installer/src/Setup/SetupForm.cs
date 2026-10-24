@@ -337,6 +337,11 @@ namespace Nebula.Setup
                         "Nebula Setup", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 overall.Value = overall.Maximum;
                 launch.Visible = true;
+                if (options.ContainsKey("launch") && engine.InstalledVersionDir != null)
+                {
+                    Process.Start(new ProcessStartInfo(Path.Combine(engine.InstalledVersionDir, "Nebula.exe")) { WorkingDirectory = engine.InstalledVersionDir });
+                    Close();
+                }
                 return;
             }
             bool canceled = failure is OperationCanceledByUserException || failure is OperationCanceledException;

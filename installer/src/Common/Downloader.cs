@@ -3,7 +3,7 @@ using System.IO;
 using System.Net;
 using System.Threading;
 
-namespace Nebula.Setup
+namespace Nebula
 {
     /// <summary>HTTPS downloads that resume interrupted transfers.</summary>
     internal static class Downloader
@@ -14,7 +14,7 @@ namespace Nebula.Setup
             ServicePointManager.DefaultConnectionLimit = 8;
         }
 
-        public const string UserAgent = "Nebula-Setup";
+        public const string UserAgent = "Nebula";
 
         /// <summary>
         /// Download <paramref name="url"/> to <paramref name="path"/>. An existing
@@ -99,11 +99,12 @@ namespace Nebula.Setup
             }
         }
 
-        public static string GetString(string url, string accept)
+        public static string GetString(string url, string accept, int timeoutMilliseconds = 30000)
         {
             var request = (HttpWebRequest)WebRequest.Create(url);
             request.UserAgent = UserAgent;
-            request.Timeout = 30000;
+            request.Timeout = timeoutMilliseconds;
+            request.ReadWriteTimeout = timeoutMilliseconds;
             if (accept != null) request.Accept = accept;
             using (var response = request.GetResponse())
             using (var reader = new StreamReader(response.GetResponseStream()))
