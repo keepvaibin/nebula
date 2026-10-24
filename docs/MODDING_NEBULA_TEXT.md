@@ -12,7 +12,7 @@ never had can bring its own.
 | Quit to desktop button (file select) | `QuitToDesktop` | `LayoutData/FileSelect.arc`, its Start button |
 | Quit question | `QuitQuestion` | the game's question window (`LayoutData/SysInfoWindow.arc`), its own Yes and No |
 | Cutscene question | `SkipCutsceneQuestion` | the same window |
-| Achievement pop-up | `AchievementGet`, `Achievement.<id>` | `LayoutData/InformationWindow.arc` (window `InfoWinC`, text `ConfirmC`, icon `ConfirmU`); icons from the picture font |
+| Achievement pop-up | `AchievementGet`, `Achievement.<id>` | `LayoutData/InformationWindow.arc` (window `InfoWinC`, text `ConfirmC`, glyph icons `ConfirmU`); icons below |
 | Achievement descriptions (settings, achievement board) | `AchievementHint.<id>` | |
 
 The ids and every built-in translation are in [`localization/NebulaText.tsv`](../localization/NebulaText.tsv).
@@ -120,30 +120,29 @@ finds its panes by name (`InfoWindowCenter`, `InfoWinC`, `ConfirmC`, `ConfirmU`)
 
 ### Achievement icons
 
-Each achievement shows one picture-font glyph, chosen in `native/petari/src/Game/System/NebulaAchievements.cpp`:
+Each achievement shows a picture from the game's own files, chosen in
+`native/petari/src/Game/System/NebulaAchievements.cpp`: a texture, or a glyph of the picture font.
 
-| Glyph code | Picture | Used for |
+| Icon | From | Used for |
 |---|---|---|
-| `7` | Power Star | First Star, Halfway There |
-| `K` | Grand Star | Gateway and the Bowser galaxies |
-| `L` | Luigi | Luigi Found, Luigi's Turn, Enter Luigi |
-| `X` | Peach | The Universe Reborn |
-| `Y` | letter | Bedtime Story |
-| `P` | crown | Every Power Star |
-| `W` | rainbow star | Grand Finale |
-| `e` | shooting star | comets |
-| `B` | Mario | Cosmic Rival |
-| `N` | purple coin | Purple Coin Master |
-| `Z` | question mark | Hidden Treasures |
-| `O` | Green Star | Green Stars |
-| `J` | Silver Star | Trial Run |
-| `c` | Hungry Luma | Well Fed, Snack Time |
-| `;` | Star Bit | Star Bit Bank, Pocketful of Star Bits |
-| `a` | 1-Up Mushroom | Extra Lives |
-| `S` | Red Star | Taking Flight |
+| The Terrace, Fountain, Kitchen, Bedroom, Engine Room and Garden domes | `LayoutData/MapDomeIcon.arc`, `mymapdome1.tpl` to `mymapdome6.tpl` | Welcome Aboard and the five Bowser galaxies, each the dome its Grand Star opens |
+| Luigi's, Mario's and Peach's faces | `LayoutData/MiiIcon.arc`, `mymiiluigi.tpl`, `mymiimario.tpl`, `mymiipeach.tpl` | Found You, Luigi!, Luigi's Time to Shine, Green Means Go; Faster Than Your Shadow; The Universe Reborn |
+| The storybook's front cover | `ObjectData/PictureBookTexture.arc`, `PictureBookCoverFront.bti` (its right half) | Story of the Stars |
+| Power Star | picture font `7` | A Star Is Born, Halfway There |
+| crown | `P` | Superstar |
+| rainbow star | `W` | Grand Finale |
+| shooting star | `e` | Comet Chaser, One-Hit Wonder, Beat the Clock, Comet Sighting |
+| purple coin | `N` | Purple Reign |
+| question mark | `Z` | Hidden Treasures |
+| Green Star | `O` | Going Green |
+| Silver Star | `J` | Trial Run |
+| Hungry Luma | `c` | All You Can Eat, Snack Time |
+| Star Bit | `;` | Star Bit Tycoon, Pocketful of Star Bits |
+| 1-Up Mushroom | `a` | Life of the Party |
+| Red Star | `S` | Taking Flight |
 
-Replacing a glyph's art in the picture font sheet (a texture pack, or `Font.arc`) changes it everywhere the game uses
-that picture.
+A texture pack that replaces one of these textures, or the picture font's sheet, changes the icon with it. A texture a
+mod's files lack shows the Power Star instead.
 
 ## Adding a translation to Nebula itself
 

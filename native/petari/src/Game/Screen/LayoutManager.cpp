@@ -551,6 +551,13 @@ void LayoutManager::initPaneInfo() {
     initPaneInfoRecursive(rIndex, mLayout->mpRootPane);
 }
 
+#ifdef TARGET_PC
+void LayoutManager::rebuildPaneInfo() {
+    delete[] mPaneInfoList;
+    initPaneInfo();
+}
+#endif
+
 void LayoutManager::initPaneInfoRecursive(u32& rIndex, nw4r::lyt::Pane* pPane) {
     nw4r::lyt::PaneList& rPaneList = pPane->mChildList;
 

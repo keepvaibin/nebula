@@ -52,8 +52,8 @@ GameSceneLayoutHolder::GameSceneLayoutHolder()
     mYesNoLayout->initWithoutIter();
 
 #ifdef TARGET_PC
-    // Nebula's achievement pop-up, in every game scene.
-    (new NebulaAchievementToast())->initWithoutIter();
+    mAchievementToast = new NebulaAchievementToast();
+    mAchievementToast->initWithoutIter();
 #endif
 }
 

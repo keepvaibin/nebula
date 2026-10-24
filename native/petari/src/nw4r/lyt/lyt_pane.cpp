@@ -9,6 +9,7 @@
 #include "nw4r/lyt/pane.h"
 #include "nw4r/math/triangular.h"
 #include <cstdio>
+#include <cstring>
 
 namespace nw4r {
     void ReverseYAxis(math::MTX34* pMtx) {
@@ -29,6 +30,24 @@ namespace nw4r {
             PaneBase::~PaneBase() {
             }
         }  // namespace detail
+
+#ifdef TARGET_PC
+        // A pane made in code (Nebula's own panes, Picture(const TexMap&)): at the origin, unscaled, visible.
+        Pane::Pane() {
+            Init();
+            mBasePosition = 4;
+            memset(mName, 0, sizeof(mName));
+            memset(mUserData, 0, sizeof(mUserData));
+            mTranslate = math::VEC3(0.0f, 0.0f, 0.0f);
+            mRotate = math::VEC3(0.0f, 0.0f, 0.0f);
+            mScale = math::VEC2(1.0f, 1.0f);
+            mSize = Size(0.0f, 0.0f);
+            mAlpha = 255;
+            mGlbAlpha = mAlpha;
+            mFlag = 0;
+            SetVisible(true);
+        }
+#endif
 
         Pane::Pane(const res::Pane* pRes) {
             Init();

@@ -53,6 +53,9 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #ifdef TARGET_PC
+#include "Game/Scene/SceneObjHolder.hpp"
+#include "Game/Screen/GameSceneLayoutHolder.hpp"
+#include "Game/Screen/NebulaAchievementToast.hpp"
 #include "Game/System/NebulaAchievements.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #endif
@@ -207,6 +210,12 @@ void GameScene::update() {
     updateNerve();
 #ifdef TARGET_PC
     NebulaAchievements::update();
+    // Nebula's achievement pop-up runs in play only: the pause menu, the map, a star's get sequence and movies hold it
+    // where it is.
+    if (isNerve(GET_NERVE(GameScene, GameSceneAction)) && MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder) &&
+        MR::getGameSceneLayoutHolder()->mAchievementToast != nullptr) {
+        MR::getGameSceneLayoutHolder()->mAchievementToast->update();
+    }
 #endif
 
     bool isTimeUp = MR::isGlobalTimerEnd() && !isNerve(GET_NERVE(GameScene, GameSceneTimeUp)) && MR::isGreaterEqualStep(this, 2);
@@ -267,7 +276,11 @@ void GameScene::draw() const {
             // read (the Library's book lists those).
             static const char kRead[] = "PictureBookAlreadyRead=";
             const char* equals = strchr(action.stage, '=');
-            if (strncmp(action.stage, kRead, sizeof(kRead) - 1) == 0) {
+            static const char kAchievement[] = "Achievement:";
+            if (strncmp(action.stage, kAchievement, sizeof(kAchievement) - 1) == 0) {
+                // Its pop-up, unlocked or not (pictures of every icon and name).
+                NebulaAchievements::showForTest(action.stage + sizeof(kAchievement) - 1);
+            } else if (strncmp(action.stage, kRead, sizeof(kRead) - 1) == 0) {
                 MR::setPictureBookChapterAlreadyRead(atoi(action.stage + sizeof(kRead) - 1));
             } else if (strcmp(action.stage, "SpinAndStarPointer") == 0) {
                 // The story's grant of the spin and the pointer (the Gateway's Luma), which an early save lacks.
@@ -581,6 +594,11 @@ void GameScene::draw2D() const {
     CategoryList::drawXlu(MR::DrawBufferType_0x26);
     CategoryList::execute(MR::DrawType_WipeLayout);
 #ifdef TARGET_PC
+    // Nebula's achievement pop-up over every other 2D element (the HUD's counters and their models included), in play.
+    if (isNerve(GET_NERVE(GameScene, GameSceneAction)) && MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder) &&
+        MR::getGameSceneLayoutHolder()->mAchievementToast != nullptr) {
+        MR::getGameSceneLayoutHolder()->mAchievementToast->drawOnTop();
+    }
     MotionSignal::scene2D(false);
 #endif
 }

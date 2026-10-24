@@ -1,7 +1,6 @@
 // Functions that kept code references but the RMGE01 DOL does not contain (its linker dropped the callers): the
-// ROM font (the IPL's font, which nothing reaches), nw4r's default Pane constructor, the narrow-character text writer,
-// two Mii database helpers and GXGetCullMode. Each stops the game with its name (nebula_sdk_missing) if reached.
-#include <nw4r/lyt/pane.h>
+// ROM font (the IPL's font, which nothing reaches), the narrow-character text writer, two Mii database helpers and
+// GXGetCullMode. Each stops the game with its name (nebula_sdk_missing) if reached.
 #include <nw4r/ut/RomFont.h>
 #include <nw4r/ut/TextWriterBase.h>
 #include <revolution/gx.h>
@@ -39,10 +38,6 @@ namespace nw4r {
             nebula_sdk_missing("nw4r::ut::TextWriterBase<char>::PrintImpl");
         }
     }  // namespace ut
-
-    namespace lyt {
-        Pane::Pane() { nebula_sdk_missing("nw4r::lyt::Pane::Pane()"); }
-    }  // namespace lyt
 }  // namespace nw4r
 
 extern "C" RFLErrcode RFLiFormatAsync(RFLiCallback) {

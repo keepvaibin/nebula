@@ -64,6 +64,11 @@ public:
     void initArc(const char*, const char*);
     void initDrawInfo();
     void initPaneInfo();
+#ifdef TARGET_PC
+    // The pane list again after code changed the layout's tree (moved or added panes); before any pane or group
+    // control exists.
+    void rebuildPaneInfo();
+#endif
     void initPaneInfoRecursive(u32&, nw4r::lyt::Pane*);
     u32 countPanes(nw4r::lyt::Pane*);
     void initGroupCtrlList();

@@ -12,55 +12,128 @@
 #include <revolution/os.h>
 
 namespace {
-    // The picture font's codes (MR::addPictureFontTag) for each pop-up's icon.
-    const s32 cIconPowerStar = '7';
-    const s32 cIconStarBit = ';';
-    const s32 cIconMario = 'B';
-    const s32 cIconSilverStar = 'J';
-    const s32 cIconGrandStar = 'K';
-    const s32 cIconLuigi = 'L';
-    const s32 cIconPurpleCoin = 'N';
-    const s32 cIconGreenStar = 'O';
-    const s32 cIconCrown = 'P';
-    const s32 cIconRedStar = 'S';
-    const s32 cIconRainbowStar = 'W';
-    const s32 cIconPeach = 'X';
-    const s32 cIconLetter = 'Y';
-    const s32 cIconQuestion = 'Z';
-    const s32 cIconOneUp = 'a';
-    const s32 cIconHungryLuma = 'c';
-    const s32 cIconComet = 'e';
+    // Glyphs of the picture font (MR::addPictureFontTag's codes).
+    const NebulaAchievementIcon cIconPowerStar = {'7', nullptr, false, nullptr, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+    const NebulaAchievementIcon cIconStarBit = {';', nullptr, false, nullptr, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+    const NebulaAchievementIcon cIconSilverStar = {'J', nullptr, false, nullptr, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+    const NebulaAchievementIcon cIconPurpleCoin = {'N', nullptr, false, nullptr, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+    const NebulaAchievementIcon cIconGreenStar = {'O', nullptr, false, nullptr, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+    const NebulaAchievementIcon cIconCrown = {'P', nullptr, false, nullptr, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+    const NebulaAchievementIcon cIconRedStar = {'S', nullptr, false, nullptr, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+    const NebulaAchievementIcon cIconRainbowStar = {'W', nullptr, false, nullptr, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+    const NebulaAchievementIcon cIconQuestion = {'Z', nullptr, false, nullptr, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+    const NebulaAchievementIcon cIconOneUp = {'a', nullptr, false, nullptr, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+    const NebulaAchievementIcon cIconHungryLuma = {'c', nullptr, false, nullptr, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+    const NebulaAchievementIcon cIconComet = {'e', nullptr, false, nullptr, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+
+    // Textures: the domes the Grand Stars open, as the Observatory's map shows them (the Terrace, Fountain, Kitchen,
+    // Bedroom, Engine Room and Garden), the faces of the file select's Mii choices, and the storybook's front cover
+    // (the right half of its cover texture).
+    const NebulaAchievementIcon cTextureIcons[] = {
+        {0, "MapDomeIcon.arc", true, "mymapdome1.tpl", 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f},
+        {0, "MapDomeIcon.arc", true, "mymapdome2.tpl", 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f},
+        {0, "MapDomeIcon.arc", true, "mymapdome3.tpl", 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f},
+        {0, "MapDomeIcon.arc", true, "mymapdome4.tpl", 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f},
+        {0, "MapDomeIcon.arc", true, "mymapdome5.tpl", 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f},
+        {0, "MapDomeIcon.arc", true, "mymapdome6.tpl", 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f},
+        {0, "MiiIcon.arc", true, "mymiimario.tpl", 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.2f},
+        {0, "MiiIcon.arc", true, "mymiiluigi.tpl", 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.2f},
+        {0, "MiiIcon.arc", true, "mymiipeach.tpl", 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.2f},
+        {0, "PictureBookTexture.arc", false, "PictureBookCoverFront.bti", 0.5f, 0.0f, 1.0f, 1.0f, 208.0f, 240.0f},
+    };
+    const NebulaAchievementIcon* const cIconDome = &cTextureIcons[0];
+    const NebulaAchievementIcon& cIconMario = cTextureIcons[6];
+    const NebulaAchievementIcon& cIconLuigi = cTextureIcons[7];
+    const NebulaAchievementIcon& cIconPeach = cTextureIcons[8];
+    const NebulaAchievementIcon& cIconStorybook = cTextureIcons[9];
+
+    // Every achievement in the catalogue's order (galaxy::achievements), with its group (0 story, 1 challenge,
+    // 2 extra) and its icon.
+    struct Entry {
+        const char* mId;
+        s32 mGroup;
+        const NebulaAchievementIcon* mIcon;
+    };
+
+    const Entry cEntries[] = {
+        {"first_star", 0, &cIconPowerStar},
+        {"gateway", 0, &cIconDome[0]},
+        {"robot_reactor", 0, &cIconDome[1]},
+        {"star_reactor", 0, &cIconDome[2]},
+        {"airship_armada", 0, &cIconDome[3]},
+        {"dark_matter", 0, &cIconDome[4]},
+        {"lava_reactor", 0, &cIconDome[5]},
+        {"luigi_found", 0, &cIconLuigi},
+        {"halfway", 0, &cIconPowerStar},
+        {"ending", 0, &cIconPeach},
+        {"storybook", 0, &cIconStorybook},
+        {"stars120", 1, &cIconCrown},
+        {"luigi120", 1, &cIconLuigi},
+        {"grandfinale", 1, &cIconRainbowStar},
+        {"comets", 1, &cIconComet},
+        {"daredevil", 1, &cIconComet},
+        {"cosmic", 1, &cIconMario},
+        {"speedy", 1, &cIconComet},
+        {"purplecoins", 1, &cIconPurpleCoin},
+        {"hidden", 1, &cIconQuestion},
+        {"greenstars", 1, &cIconGreenStar},
+        {"trials", 1, &cIconSilverStar},
+        {"lumas", 1, &cIconHungryLuma},
+        {"bank", 1, &cIconStarBit},
+        {"lives", 1, &cIconOneUp},
+        {"first_comet", 2, &cIconComet},
+        {"red_star", 2, &cIconRedStar},
+        {"first_luma", 2, &cIconHungryLuma},
+        {"luigi_play", 2, &cIconLuigi},
+        {"bits1000", 2, &cIconStarBit},
+    };
+    const s32 cEntryNum = sizeof(cEntries) / sizeof(cEntries[0]);
 
     const s32 cQueueMax = 32;
     const s32 cNameLength = 64;
 
     struct Waiting {
         wchar_t mName[cNameLength];
-        s32 mIcon;
+        const NebulaAchievementIcon* mIcon;
     };
 
     Waiting sQueue[cQueueMax];
     s32 sQueued = 0;
     s32 sUpdateFrames = 0;
 
-    // Asks the host to unlock; a new one waits for its pop-up, with its name in the played language (NebulaText's
-    // Achievement.<id>).
-    void tryUnlock(const char* pId, s32 icon) {
-        if (sQueued >= cQueueMax || __NebulaAchievement(pId, nullptr, 0) == 0) {
+    const Entry* findEntry(const char* pId) {
+        for (s32 i = 0; i < cEntryNum; i++) {
+            if (MR::isEqualString(cEntries[i].mId, pId)) {
+                return &cEntries[i];
+            }
+        }
+        return nullptr;
+    }
+
+    // Waits for its pop-up, with its name in the played language (NebulaText's Achievement.<id>).
+    void enqueue(const Entry& rEntry) {
+        if (sQueued >= cQueueMax) {
             return;
         }
         char textId[48];
-        snprintf(textId, sizeof(textId), "Achievement.%s", pId);
+        snprintf(textId, sizeof(textId), "Achievement.%s", rEntry.mId);
         Waiting& rWaiting = sQueue[sQueued++];
         NebulaText::get(rWaiting.mName, cNameLength, textId);
-        rWaiting.mIcon = icon;
+        rWaiting.mIcon = rEntry.mIcon;
+    }
+
+    // Asks the host to unlock what is met; a new one waits for its pop-up.
+    void tryUnlock(bool met, const char* pId) {
+        const Entry* pEntry = met ? findEntry(pId) : nullptr;
+        if (pEntry == nullptr || sQueued >= cQueueMax || __NebulaAchievement(pId, nullptr, 0) == 0) {
+            return;
+        }
+        enqueue(*pEntry);
         OSReport("achievement: %s\n", pId);
     }
 
-    void tryUnlock(bool met, const char* pId, s32 icon) {
-        if (met) {
-            tryUnlock(pId, icon);
-        }
+    void tryUnlock(const char* pId) {
+        tryUnlock(true, pId);
     }
 
     struct Galaxies {
@@ -132,9 +205,9 @@ namespace {
     // Lives and Star Bits change mid-stage; checked at each stage start and once a second.
     void checkCounters() {
         const s32 starBits = GameDataFunction::getStockedStarPieceNum();
-        tryUnlock(starBits >= 1000, "bits1000", cIconStarBit);
-        tryUnlock(starBits >= 9999, "bank", cIconStarBit);
-        tryUnlock(GameDataFunction::getPlayerLeft() >= 99, "lives", cIconOneUp);
+        tryUnlock(starBits >= 1000, "bits1000");
+        tryUnlock(starBits >= 9999, "bank");
+        tryUnlock(GameDataFunction::getPlayerLeft() >= 99, "lives");
     }
 };  // namespace
 
@@ -148,23 +221,23 @@ namespace NebulaAchievements {
         const bool mario = GameDataFunction::isDataMario();
 
         // The story, in the order it is played.
-        tryUnlock("first_star", cIconPowerStar);
-        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarGrand1"), "gateway", cIconGrandStar);
-        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarGrand2"), "robot_reactor", cIconGrandStar);
-        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarGrand3"), "star_reactor", cIconGrandStar);
-        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarGrand4"), "airship_armada", cIconGrandStar);
-        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarGrand5"), "dark_matter", cIconGrandStar);
-        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarGrand6"), "lava_reactor", cIconGrandStar);
-        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarLuigiRescued"), "luigi_found", cIconLuigi);
-        tryUnlock(stars >= 60, "halfway", cIconPowerStar);
-        tryUnlock(GameDataFunction::isOnGameEventFlag("ViewNormalEnding"), "ending", cIconPeach);
-        tryUnlock(GameDataFunction::getPictureBookChapterAlreadyRead() >= 9, "storybook", cIconLetter);
+        tryUnlock("first_star");
+        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarGrand1"), "gateway");
+        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarGrand2"), "robot_reactor");
+        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarGrand3"), "star_reactor");
+        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarGrand4"), "airship_armada");
+        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarGrand5"), "dark_matter");
+        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarGrand6"), "lava_reactor");
+        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarLuigiRescued"), "luigi_found");
+        tryUnlock(stars >= 60, "halfway");
+        tryUnlock(GameDataFunction::isOnGameEventFlag("ViewNormalEnding"), "ending");
+        tryUnlock(GameDataFunction::getPictureBookChapterAlreadyRead() >= 9, "storybook");
 
         // The extras, met along the way.
         const Galaxies galaxies = checkGalaxies();
-        tryUnlock(galaxies.mAnyComet, "first_comet", cIconComet);
-        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarRed1"), "red_star", cIconRedStar);
-        tryUnlock(!mario, "luigi_play", cIconLuigi);
+        tryUnlock(galaxies.mAnyComet, "first_comet");
+        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarRed1"), "red_star");
+        tryUnlock(!mario, "luigi_play");
 
         // The Hungry Lumas that make a galaxy: the alms with a real target (the others are capped at 32767).
         bool anyFed = false, allFed = true;
@@ -179,23 +252,23 @@ namespace NebulaAchievements {
                 allFed = false;
             }
         }
-        tryUnlock(anyFed, "first_luma", cIconHungryLuma);
+        tryUnlock(anyFed, "first_luma");
 
         // The challenges.
-        tryUnlock(stars >= 120 && mario, "stars120", cIconCrown);
-        tryUnlock(stars >= 120 && !mario, "luigi120", cIconLuigi);
-        tryUnlock(GameDataFunction::hasPowerStar("PeachCastleFinalGalaxy", 1), "grandfinale", cIconRainbowStar);
-        tryUnlock(galaxies.mComets, "comets", cIconComet);
-        tryUnlock(galaxies.mDaredevil, "daredevil", cIconComet);
-        tryUnlock(galaxies.mCosmic, "cosmic", cIconMario);
-        tryUnlock(galaxies.mSpeedy, "speedy", cIconComet);
-        tryUnlock(galaxies.mPurpleCoins, "purplecoins", cIconPurpleCoin);
-        tryUnlock(galaxies.mHidden, "hidden", cIconQuestion);
-        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarGreenAll"), "greenstars", cIconGreenStar);
+        tryUnlock(stars >= 120 && mario, "stars120");
+        tryUnlock(stars >= 120 && !mario, "luigi120");
+        tryUnlock(GameDataFunction::hasPowerStar("PeachCastleFinalGalaxy", 1), "grandfinale");
+        tryUnlock(galaxies.mComets, "comets");
+        tryUnlock(galaxies.mDaredevil, "daredevil");
+        tryUnlock(galaxies.mCosmic, "cosmic");
+        tryUnlock(galaxies.mSpeedy, "speedy");
+        tryUnlock(galaxies.mPurpleCoins, "purplecoins");
+        tryUnlock(galaxies.mHidden, "hidden");
+        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarGreenAll"), "greenstars");
         tryUnlock(GameDataFunction::hasPowerStar("TamakoroExLv2Galaxy", 1) && GameDataFunction::hasPowerStar("SurfingLv2Galaxy", 1) &&
                       GameDataFunction::hasPowerStar("CubeBubbleExLv2Galaxy", 1),
-                  "trials", cIconSilverStar);
-        tryUnlock(allFed && anyFed, "lumas", cIconHungryLuma);
+                  "trials");
+        tryUnlock(allFed && anyFed, "lumas");
         checkCounters();
         sUpdateFrames = 0;
     }
@@ -210,11 +283,11 @@ namespace NebulaAchievements {
         }
     }
 
-    const wchar_t* getWaiting(s32* pIcon) {
+    const wchar_t* getWaiting(const NebulaAchievementIcon** ppIcon) {
         if (sQueued == 0) {
             return nullptr;
         }
-        *pIcon = sQueue[0].mIcon;
+        *ppIcon = sQueue[0].mIcon;
         return sQueue[0].mName;
     }
 
@@ -230,6 +303,43 @@ namespace NebulaAchievements {
 
     bool isMoreWaiting() {
         return sQueued > 1;
+    }
+
+    void showForTest(const char* pId) {
+        if (const Entry* pEntry = findEntry(pId)) {
+            enqueue(*pEntry);
+        } else {
+            OSReport("test: no achievement %s\n", pId);
+        }
+    }
+
+    s32 getNum() {
+        return cEntryNum;
+    }
+
+    const char* getId(s32 index) {
+        return index >= 0 && index < cEntryNum ? cEntries[index].mId : nullptr;
+    }
+
+    s32 getGroup(s32 index) {
+        return index >= 0 && index < cEntryNum ? cEntries[index].mGroup : 0;
+    }
+
+    const NebulaAchievementIcon* getIcon(s32 index) {
+        return index >= 0 && index < cEntryNum ? cEntries[index].mIcon : nullptr;
+    }
+
+    s32 getIconTextureNum() {
+        return sizeof(cTextureIcons) / sizeof(cTextureIcons[0]);
+    }
+
+    const NebulaAchievementIcon* getIconTexture(s32 index) {
+        return index >= 0 && index < getIconTextureNum() ? &cTextureIcons[index] : nullptr;
+    }
+
+    s32 findIconTexture(const NebulaAchievementIcon* pIcon) {
+        const s32 index = static_cast< s32 >(pIcon - cTextureIcons);
+        return index >= 0 && index < getIconTextureNum() ? index : -1;
     }
 };  // namespace NebulaAchievements
 #endif
