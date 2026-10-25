@@ -1286,19 +1286,37 @@ float3 physical_emitters(float3 p, float3 n, float3 origin, uint candidates, uin
         if (!(d.w > 0.0f) || !(a.w > 0.0f)) {
             continue;
         }
-        float r1 = physical_random(seed);
-        float r2 = physical_random(seed);
-        if (r1 + r2 > 1.0f) {
-            r1 = 1.0f - r1;
-            r2 = 1.0f - r2;
+        float3 y;
+        float3 face;
+        // An isotropic glow (b.w 2: a sprite standing for a glowing volume) is the sphere of its power about the
+        // triangle's centre, its point on the hemisphere facing `p` (rt_engine.hlsl engine_light_point): one-sided
+        // there. Sides (b.w): 0 one-sided, 1 two-sided (rt_lighting.hlsl emitter_facing).
+        const bool sphere = b.w >= 1.5f;
+        if (sphere) {
+            const float3 centre = a.xyz + (b.xyz + c.xyz) * (1.0f / 3.0f);
+            const float3 axis = normalize(p - centre + float3(0.0f, 0.0f, 1e-4f));
+            const float z = physical_random(seed);
+            const float phi = 2.0f * kPi * physical_random(seed);
+            const float sz = sqrt(max(0.0f, 1.0f - z * z));
+            const float3 helper = abs(axis.z) < 0.999f ? float3(0.0f, 0.0f, 1.0f) : float3(1.0f, 0.0f, 0.0f);
+            const float3 t0 = normalize(cross(helper, axis));
+            const float3 t1 = cross(axis, t0);
+            face = t0 * (sz * cos(phi)) + t1 * (sz * sin(phi)) + axis * z;
+            y = centre + face * sqrt(a.w / (2.0f * kPi));
+        } else {
+            float r1 = physical_random(seed);
+            float r2 = physical_random(seed);
+            if (r1 + r2 > 1.0f) {
+                r1 = 1.0f - r1;
+                r2 = 1.0f - r2;
+            }
+            y = a.xyz + b.xyz * r1 + c.xyz * r2;
+            face = normalize(cross(b.xyz, c.xyz));
         }
-        const float3 y = a.xyz + b.xyz * r1 + c.xyz * r2;
         const float3 to = y - p;
         const float d2 = max(dot(to, to), 1e-4f);
         const float3 dir = to * rsqrt(d2);
-        const float3 face = normalize(cross(b.xyz, c.xyz));
-        // Sides (b.w): 0 one-sided, 1 two-sided, 2 isotropic (rt_lighting.hlsl emitter_facing).
-        const float cos_light = b.w >= 1.5f ? 0.5f : b.w > 0.0f ? abs(-dot(face, dir)) : -dot(face, dir);
+        const float cos_light = !sphere && b.w > 0.0f ? abs(-dot(face, dir)) : -dot(face, dir);
         const float cos_surface = dot(n, dir);
         if (cos_light <= 0.0f || cos_surface <= 0.0f) {
             continue;

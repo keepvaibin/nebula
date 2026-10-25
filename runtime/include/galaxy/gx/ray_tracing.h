@@ -362,6 +362,7 @@ private:
                         std::uint32_t height, std::uint32_t flags, RtUpload& frame);
     void write_dump();
     void log_emitters();
+    void log_physical();
     bool create_lighting_pipelines(DXGI_FORMAT scene_format);
     bool create_camera_pipelines(DXGI_FORMAT scene_format, DXGI_FORMAT display_format);
     bool create_engine_pipelines();
@@ -887,6 +888,17 @@ private:
     std::array<float, 3> emit_last_eye_{};
     bool emit_seen_ = false;
     bool log_emitters_ = false;      // GALAXY_RT_LOG_EMITTERS=1: [rt-emit] every 120 frames
+    // GALAXY_RT_LOG_PHYSICAL=1: [rt-physical] with the emitter log: the physical light sources (the scene's emitting
+    // triangles and the glow emitters) per material and the nearest the camera, from a readback of their buffer.
+    bool log_physical_ = false;
+    bool physical_log_pending_ = false;
+    std::uint32_t physical_log_scene_ = 0u;
+    std::uint32_t physical_log_glows_ = 0u;
+    std::vector<std::uint16_t> physical_log_scene_materials_;  // per scene emitting triangle
+    std::vector<std::uint16_t> physical_log_glow_materials_;   // per glow emitter slot
+    std::vector<std::uint16_t> emit_range_materials_;          // emit_ranges_'s materials
+    std::vector<std::uint16_t> glow_emitter_materials_;        // glow_emitters_'s materials
+    Microsoft::WRL::ComPtr<ID3D12Resource> physical_readback_;
     float glow_cutoff_ = 0.004f;     // GALAXY_RT_GLOW_CUTOFF: a glow light's reach ends where its light is this
     float glow_reach_ = 30000.0f;    // GALAXY_RT_GLOW_REACH: the longest reach (eye units; a star's light)
     float glow_light_ = 1.0f;        // GALAXY_RT_GLOW_LIGHT: the glow lights' gain on surfaces

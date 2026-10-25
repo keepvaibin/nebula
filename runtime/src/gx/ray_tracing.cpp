@@ -45,6 +45,7 @@
 #include <fstream>
 #include <intrin.h>
 #include <iostream>
+#include <map>
 #include <string>
 
 namespace galaxy::gx {
@@ -725,6 +726,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     emission_ = std::clamp(env_float("GALAXY_RT_EMISSION", 40.0f), 0.0f, 256.0f);
     authored_power_ = std::clamp(env_float("GALAXY_RT_AUTHORED_POWER", 60000.0f), 0.0f, 1.0e7f);
     log_emitters_ = env_float("GALAXY_RT_LOG_EMITTERS", 0.0f) != 0.0f;
+    log_physical_ = env_float("GALAXY_RT_LOG_PHYSICAL", 0.0f) != 0.0f;
     ab_ = env_float("GALAXY_RT_AB", 0.0f) != 0.0f;
     glow_cutoff_ = std::clamp(env_float("GALAXY_RT_GLOW_CUTOFF", 0.004f), 1e-5f, 1.0f);
     glow_reach_ = std::clamp(env_float("GALAXY_RT_GLOW_REACH", 30000.0f), 10.0f, 1.0e6f);
@@ -850,6 +852,7 @@ void SceneRayTracer::shutdown() noexcept {
     emit_triangle_pso_.Reset();
     emit_scan_pso_.Reset();
     emit_ranges_.clear();
+    emit_range_materials_.clear();
     emit_triangles_ = 0u;
     for (auto& buffer : light_pixels_) buffer.Reset();
     light_pixels_bytes_ = {};
@@ -1371,6 +1374,10 @@ void SceneRayTracer::begin_frame(std::uint64_t frame_index) {
         emit_log_pending_ = false;
         log_emitters();
     }
+    if (physical_log_pending_ && emit_log_frame_ + kResultDelay <= frame_index) {
+        physical_log_pending_ = false;
+        log_physical();
+    }
     collect_passes(frame_index);
     if (dump_pending_ && dump_frame_ + kResultDelay <= frame_index) {
         dump_pending_ = false;
@@ -1378,6 +1385,89 @@ void SceneRayTracer::begin_frame(std::uint64_t frame_index) {
     }
     if (window_.scenes >= 240u) {
         report();
+    }
+}
+
+// [rt-physical]: the physical light sources of the logged frame (rt_lighting.hlsl g_emit_tris: per scene emitting
+// triangle v0 and area, e1, e2, radiance and power; per glow emitter the same, in world space): per material their
+// count and power, then the nearest the camera (the scene's in eye space, so at their own distance; the glows' from the
+// camera's world position).
+void SceneRayTracer::log_physical() {
+    const D3D12_RANGE range{0, kEmitBufferBytes};
+    void* mapped = nullptr;
+    if (!physical_readback_ || FAILED(physical_readback_->Map(0, &range, &mapped))) {
+        return;
+    }
+    const auto* elements = static_cast<const float*>(mapped);
+    struct Light {
+        float centre[3];
+        float distance;
+        float area;
+        float power;
+        float radiance[3];
+        unsigned material;
+        bool glow;
+    };
+    std::vector<Light> lights;
+    const auto read = [&](std::uint64_t first, unsigned material, bool glow) {
+        const float* a = elements + first * 4u;
+        Light l{};
+        for (unsigned k = 0; k < 3u; ++k) {
+            l.centre[k] = a[k] + (a[4u + k] + a[8u + k]) / 3.0f;
+            l.radiance[k] = a[12u + k];
+        }
+        l.area = a[3];
+        l.power = a[15];
+        l.material = material;
+        l.glow = glow;
+        const float* from = glow ? emit_log_eye_.data() : nullptr;
+        float d2 = 0.0f;
+        for (unsigned k = 0; k < 3u; ++k) {
+            const float d = l.centre[k] - (from != nullptr ? from[k] : 0.0f);
+            d2 += d * d;
+        }
+        l.distance = std::sqrt(d2);
+        if (std::isfinite(l.power) && std::isfinite(l.distance)) {
+            lights.push_back(l);
+        }
+    };
+    for (std::uint32_t i = 0; i < physical_log_scene_ && i < kEmitTriangles; ++i) {
+        read(1u + 4ull * i, i < physical_log_scene_materials_.size() ? physical_log_scene_materials_[i] : 0u, false);
+    }
+    const std::uint64_t glow_elements = 1ull + 5ull * kEmitTriangles + kGlowEmitters;
+    for (std::uint32_t i = 0; i < physical_log_glows_ && i < kGlowEmitters; ++i) {
+        read(glow_elements + 4ull * i, i < physical_log_glow_materials_.size() ? physical_log_glow_materials_[i] : 0u,
+             true);
+    }
+    const D3D12_RANGE no_write{0, 0};
+    physical_readback_->Unmap(0, &no_write);
+    std::map<std::pair<unsigned, bool>, std::array<double, 4>> per;  // count, power, most, area
+    for (const Light& l : lights) {
+        auto& s = per[{l.material, l.glow}];
+        s[0] += 1.0;
+        s[1] += l.power;
+        s[2] = std::max<double>(s[2], l.power);
+        s[3] += l.area;
+    }
+    std::fprintf(stderr, "[rt-physical] frame=%llu scene=%u glows=%u\n", static_cast<unsigned long long>(emit_log_frame_),
+                 physical_log_scene_, physical_log_glows_);
+    for (const auto& [key, s] : per) {
+        std::fprintf(stderr, "[rt-physical]   %s m%u triangles=%.0f power=%.0f most=%.1f area=%.0f\n",
+                     key.second ? "glow" : "scene", key.first, s[0], s[1], s[2], s[3]);
+    }
+    const auto print = [](const char* kind, const Light& l) {
+        std::fprintf(stderr,
+                     "[rt-physical]   %s %s m%u at=%.0f,%.0f,%.0f dist=%.0f area=%.1f power=%.2f radiance=%.3f,%.3f,%.3f\n",
+                     kind, l.glow ? "glow" : "scene", l.material, l.centre[0], l.centre[1], l.centre[2], l.distance,
+                     l.area, l.power, l.radiance[0], l.radiance[1], l.radiance[2]);
+    };
+    std::sort(lights.begin(), lights.end(), [](const Light& a, const Light& b) { return a.power > b.power; });
+    for (std::size_t i = 0; i < std::min<std::size_t>(lights.size(), 12u); ++i) {
+        print("strong", lights[i]);
+    }
+    std::sort(lights.begin(), lights.end(), [](const Light& a, const Light& b) { return a.distance < b.distance; });
+    for (std::size_t i = 0; i < std::min<std::size_t>(lights.size(), 40u); ++i) {
+        print("near", lights[i]);
     }
 }
 
@@ -1890,6 +1980,7 @@ void SceneRayTracer::begin_scene() noexcept {
     texture_view_slots_.clear();
     texture_view_count_ = 0u;
     emit_ranges_.clear();
+    emit_range_materials_.clear();
     emit_triangles_ = 0u;
     // De-light jobs the last scene's trace did not run: their source views are gone with its block.
     for (const DelightJob& job : delight_jobs_) {
@@ -1911,6 +2002,7 @@ void SceneRayTracer::begin_scene() noexcept {
     star_draws_ = 0u;
     glow_lights_.clear();
     glow_emitters_.clear();
+    glow_emitter_materials_.clear();
     glow_emitter_slots_ = 0u;
     authored_.clear();
     glow_materials_.clear();
@@ -2369,6 +2461,7 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
                 if (glow_emitters && !material->no_light && !material->hide &&
                     glow_emitter_slots_ + draw.triangle_count <= kGlowEmitters) {
                     light.flags |= kGlowPhysical;
+                    glow_emitter_materials_.push_back(static_cast<std::uint16_t>(info.rt_material));
                     glow_emitters_.push_back({glow_triangles_, draw.triangle_count, glow_emitter_slots_, light.color,
                                               std::bit_cast<std::uint32_t>(std::max(material->intensity, 1.0f)),
                                               texture_view(info.texture), isotropic ? 1u : 0u, 0u});
@@ -2483,6 +2576,7 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
                                         static_cast<std::uint32_t>(draws_.size() - 1u) |
                                             (info.cull == 0u ? 0x80000000u : 0u),
                                         emit_triangles_});
+                emit_range_materials_.push_back(static_cast<std::uint16_t>(info.rt_material));
                 emit_triangles_ += entry.triangle_count;
                 emit_materials_[info.rt_material] += entry.triangle_count;
             }
@@ -3092,7 +3186,10 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT scene_format) {
                        D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, emit_list_, L"rt emitter list") ||
         (log_emitters_ && !create_buffer(kEmitLogBytes + kEmitLogSums + kEmitFoundBytes, D3D12_HEAP_TYPE_READBACK,
                                          D3D12_RESOURCE_STATE_COPY_DEST,
-                                         D3D12_RESOURCE_FLAG_NONE, emit_readback_, L"rt emitter log"))) {
+                                         D3D12_RESOURCE_FLAG_NONE, emit_readback_, L"rt emitter log")) ||
+        (log_emitters_ && log_physical_ &&
+         !create_buffer(kEmitBufferBytes, D3D12_HEAP_TYPE_READBACK, D3D12_RESOURCE_STATE_COPY_DEST,
+                        D3D12_RESOURCE_FLAG_NONE, physical_readback_, L"rt physical emitter log"))) {
         return false;
     }
     emit_log_pending_ = false;
@@ -4432,6 +4529,29 @@ void SceneRayTracer::capture_glow_lights(ID3D12GraphicsCommandList* list, const 
         to_state(list, emit_tiles_.Get(), emit_tiles_state_, D3D12_RESOURCE_STATE_COPY_SOURCE);
         list->CopyBufferRegion(emit_readback_.Get(), kEmitLogBytes + kEmitLogSums, emit_tiles_.Get(), 0u, kEmitFoundBytes);
         to_state(list, emit_tiles_.Get(), emit_tiles_state_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        if (physical_readback_ && emit_tris_) {
+            const D3D12_RESOURCE_STATES emit_state = emit_tris_state_;
+            to_state(list, emit_tris_.Get(), emit_tris_state_, D3D12_RESOURCE_STATE_COPY_SOURCE);
+            list->CopyBufferRegion(physical_readback_.Get(), 0u, emit_tris_.Get(), 0u, kEmitBufferBytes);
+            to_state(list, emit_tris_.Get(), emit_tris_state_, emit_state);
+            physical_log_scene_ = emit_triangles_;
+            physical_log_glows_ = glow_emitter_slots_;
+            physical_log_scene_materials_.assign(emit_triangles_, 0u);
+            for (std::size_t r = 0; r < emit_ranges_.size() && r < emit_range_materials_.size(); ++r) {
+                const auto& range = emit_ranges_[r];
+                for (std::uint32_t t = 0; t < range[1] && range[3] + t < emit_triangles_; ++t) {
+                    physical_log_scene_materials_[range[3] + t] = emit_range_materials_[r];
+                }
+            }
+            physical_log_glow_materials_.assign(glow_emitter_slots_, 0u);
+            for (std::size_t g = 0; g < glow_emitters_.size() && g < glow_emitter_materials_.size(); ++g) {
+                const auto& emitter = glow_emitters_[g];
+                for (std::uint32_t t = 0; t < emitter[1] && emitter[2] + t < glow_emitter_slots_; ++t) {
+                    physical_log_glow_materials_[emitter[2] + t] = glow_emitter_materials_[g];
+                }
+            }
+            physical_log_pending_ = true;
+        }
         emit_log_authored_materials_ = authored_materials_;
         emit_log_glow_materials_ = glow_materials_;
         emit_log_outcomes_ = std::move(emitter_outcomes_);

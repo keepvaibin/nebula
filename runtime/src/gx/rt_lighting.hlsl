@@ -2395,9 +2395,10 @@ float3 linear_to_srgb(float3 c)
 // a surface that glows (the Observatory's star lamps' glowing bodies, their glow texture projected from their normals;
 // lamp glass): it emits from its outward face (the side its normals point to; one-sided, power pi L A) at the table's
 // radiance times the share of it its texture lights. A triangle without normals is a sprite standing for a glowing
-// volume (a flame): its light leaves evenly in every direction (sides 2: emitter_facing 1/2, power 2 pi L A) from the
-// triangle shrunk about its centre to the share of it its texture lights. Lit as one-sided panels facing the camera,
-// the sprites' light would turn with the view and stop at their plane.
+// volume (a flame): its light leaves evenly in every direction (sides 2, power 2 pi L A) from the triangle shrunk about
+// its centre to the share of it its texture lights, sampled as the sphere of that power about its centre (radius
+// sqrt(A / 2 pi); rt_engine.hlsl engine_light_point), so it reaches past the lamp's own cup below its orb. Lit as
+// one-sided panels facing the camera, the sprites' light would turn with the view and stop at their plane.
 // The next frame's lighting samples them after the scene's emitters (they draw after this frame's trace).
 // e_draws: per glow emitter draw (32 bytes) its first glow triangle, count, first glow emitter, colour (RGBA8), radiance,
 // its texture's view in the descriptor heap (~0: none), 1 isotropic.

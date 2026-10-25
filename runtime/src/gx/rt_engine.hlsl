@@ -740,6 +740,25 @@ bool engine_light_point(uint id, float3 p, inout uint seed, out LightSample l, o
         if (!(d.w > 0.0f) || !(a.w > 0.0f)) {
             return false;
         }
+        l.area = a.w;
+        l.radiance = d.rgb;
+        area_density = 1.0f / a.w;
+        if (b.w >= 1.5f) {
+            // An isotropic glow (a sprite standing for a glowing volume: a lamp's orb, a flame) is the sphere of its
+            // power about the triangle's centre: radius sqrt(A / 2 pi), so its projected area is the sprite's mean over
+            // directions (A / 2) and the hemisphere facing `p`, where its point is drawn as a point light's is, has the
+            // area A. Drawn in the sprite's plane through the centre, its light met the lamp's own cup or holder below
+            // the orb on the way to the ground under it, and the lamp lit nothing there.
+            const float3 centre = a.xyz + (b.xyz + c.xyz) * (1.0f / 3.0f);
+            const float3 axis = normalize(p - centre + float3(0.0f, 0.0f, 1e-4f));
+            const float z = emit_random(seed);
+            const float phi = 2.0f * kPi * emit_random(seed);
+            const float sz = sqrt(max(0.0f, 1.0f - z * z));
+            const float3x3 f = tangent_frame(axis);
+            l.face = f[0] * (sz * cos(phi)) + f[1] * (sz * sin(phi)) + axis * z;
+            l.y = centre + l.face * sqrt(a.w / (2.0f * kPi));
+            return true;
+        }
         float r1 = emit_random(seed);
         float r2 = emit_random(seed);
         if (r1 + r2 > 1.0f) {
@@ -747,12 +766,9 @@ bool engine_light_point(uint id, float3 p, inout uint seed, out LightSample l, o
             r2 = 1.0f - r2;
         }
         l.y = a.xyz + b.xyz * r1 + c.xyz * r2;
-        l.area = a.w;
         l.face = normalize(cross(b.xyz, c.xyz));
-        l.radiance = d.rgb;
         l.beam = c.w;
         l.sides = b.w;
-        area_density = 1.0f / a.w;
         return true;
     }
     const uint i = id & ~kGridSphere;
