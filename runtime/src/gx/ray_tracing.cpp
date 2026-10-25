@@ -457,9 +457,9 @@ D3D12_RESOURCE_BARRIER uav_barrier(ID3D12Resource* resource) {
 
 // A light's direction d held between `lowest` and `highest` degrees over the horizon of `up` (any space, all three in
 // it), its compass direction kept. Near straight above or below (within 60 degrees of the axis, weighed in smoothly)
-// that compass direction is a short vector that swings round as `up` moves, so the light turns toward `away` there
-// instead: its own direction as last traced, so a sun under the player's feet keeps its side rather than flipping
-// between frames (the camera's back before there is one: the shadows fall away from it). d comes back unit length.
+// that compass direction is a short vector that swings round with small changes of d, so the light turns toward
+// `away` there instead: its own direction as last traced, so it keeps its side rather than flipping between frames
+// (the camera's back before there is one: the shadows fall away from it). d comes back unit length.
 void hold_elevation(std::array<float, 3>& d, const std::array<float, 3>& up, float lowest, float highest,
                     const std::array<float, 3>& away) noexcept {
     const float up_length = std::sqrt(up[0] * up[0] + up[1] * up[1] + up[2] * up[2]);
@@ -503,6 +503,9 @@ void hold_elevation(std::array<float, 3>& d, const std::array<float, 3>& up, flo
         }
     }
 }
+
+// The stage's up (world Y): the horizon the light is held over (hold_light).
+constexpr std::array<float, 3> kStageUp{0.0f, 1.0f, 0.0f};
 
 // The unit direction a fraction `amount` of the way from unit `from` to unit `to` along the great circle.
 std::array<float, 3> slerp_direction(const std::array<float, 3>& from, const std::array<float, 3>& to,
@@ -3297,11 +3300,15 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         c.sun_reach = sun_distance > 0.0f ? 0.5f * sun_distance : 1.0e6f;
         // The game's visible sun lights from the side the sky shows it on (its BrightSun), its shafts from its disc.
         // A sky's painted sun often stands below the playfield's horizon (Good Egg's is behind the planet), where it
-        // would light nothing directly, so it is held over the player's horizon (below).
+        // would light nothing directly, so it is held over the stage's horizon (below).
         // Where the sky shows the sun (world): the shafts' centre, whatever lift the light takes below.
         const std::array<float, 3> shown_direction = l;
-        // The light's elevation over the player's horizon (the ground under the player, by the game's gravity), its
-        // compass direction kept: the game's sun model (BrightSun) at least GALAXY_RT_SUN_MIN_ELEVATION (30) degrees
+        // The light's elevation over the stage's horizon (world Y, the up the stage and its sky are built to), its
+        // compass direction kept, so the light stands still in the world as a sun does: the player's own up turns with
+        // every planet (round a small one, over a rim, into another's gravity), and a light held over it swung across
+        // the sky as the player walked (two highlights trading places, the whole scene relit by a long jump), with
+        // nowhere to stand once the sky's sun was under the player's feet. A planet's far side falls in its shade,
+        // lit by the sky. The game's sun model (BrightSun) at least GALAXY_RT_SUN_MIN_ELEVATION (30) degrees
         // up; a key light (no sun model in the stage's sky) between GALAXY_RT_KEY_MIN_ELEVATION (50) and
         // GALAXY_RT_SUN_MAX_ELEVATION (65) degrees: high as a midday sun, so an enclosed playfield is lit across
         // (lower, a tube or wall shadows half of every floor) while the characters' shadows still show beside them
@@ -3311,15 +3318,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         const bool lift_sun = sun_present && !keyed && !sun_override_;
         const bool lift_key = sun_present && keyed && !sun_override_;
         if (lift_sun || lift_key) {
-            // The player's up in world space (scene_up_ is the eye's), else world Y.
-            std::array<float, 3> up{0.0f, 1.0f, 0.0f};
-            if (camera_known_ &&
-                scene_up_[0] * scene_up_[0] + scene_up_[1] * scene_up_[1] + scene_up_[2] * scene_up_[2] > 0.25f) {
-                for (unsigned i = 0; i < 3u; ++i) {
-                    up[i] = camera_[i] * scene_up_[0] + camera_[4u + i] * scene_up_[1] + camera_[8u + i] * scene_up_[2];
-                }
-            }
-            hold_elevation(l, up, lift_sun ? sun_min_elevation_ : key_min_elevation_,
+            hold_elevation(l, kStageUp, lift_sun ? sun_min_elevation_ : key_min_elevation_,
                            lift_sun ? 90.0f : sun_max_elevation_,
                            light_world_valid_ ? light_world_ : std::array<float, 3>{camera_[8], camera_[9], camera_[10]});
         }
@@ -3525,7 +3524,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
                 c.sun[i] = eye[i] / length;
             }
         }
-        // Whatever it comes from, the light keeps its elevation band over the player's horizon (eye space: scene_up_):
+        // Whatever it comes from, the light keeps its elevation band over the stage's horizon (world Y, above):
         // a sun the sky shows at least GALAXY_RT_SUN_MIN_ELEVATION up, anything else (the key, the game's stage key
         // light, the baked-light fit) between GALAXY_RT_KEY_MIN_ELEVATION and GALAXY_RT_SUN_MAX_ELEVATION. A stage key
         // as it stands can be a few degrees over the horizon (Bowser's Star Reactor), leaving half of every floor in
@@ -3550,12 +3549,17 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
             // where it stands.
             const bool continues = light_world_valid_ && light_world_source_ == source &&
                                    light_world_stage_ == stage_sun_ && since < 0.5f;
-            hold_elevation(world, world_up, shown ? sun_min_elevation_ : key_min_elevation_,
+            // A game key that follows the camera (its light rig turns with the view) would turn the shadows with every
+            // camera move: it stays where it stood in the world when the stage's light was first traced.
+            const bool camera_key = !shown && !table_moon && area.lights[0].follows_camera;
+            if (camera_key && continues) {
+                world = light_world_;
+            }
+            hold_elevation(world, kStageUp, shown ? sun_min_elevation_ : key_min_elevation_,
                            shown ? 90.0f : sun_max_elevation_,
                            continues ? light_world_ : std::array<float, 3>{camera_[8], camera_[9], camera_[10]});
-            // The held direction follows the player's up, which turns at once where the game's gravity changes (a
-            // jump onto another planet, a long jump over a small one): the light eases toward it, a quarter of a
-            // second's time constant, as a sun moving across the sky rather than a cut.
+            // A change of the light's own direction (the game's sun or key moving, the sky's sun found again) eases
+            // over a quarter of a second, as a sun moving across the sky rather than a cut.
             if (continues) {
                 world = slerp_direction(light_world_, world, 1.0f - std::exp(-std::max(since, 0.0f) / 0.25f));
             }
