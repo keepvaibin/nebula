@@ -3,11 +3,13 @@
 // the sun and the sky alone. cs_6_6 with RT_TEXTURED: the lighting's scene bindings and helpers (rt_lighting.hlsl,
 // included) and the engine's own buffers by descriptor-heap index (g_engine_views, ray_tracing_engine.cpp).
 //
-// Per frame: EngineGBufferCS (full resolution) -> EngineDirectCS (the sun; ReSTIR DI candidates and temporal reuse) ->
-// EngineDirectSpatialCS (spatial reuse, the shadow ray) -> EngineIndirectCS (half resolution: a cosine ray, its hit lit
-// by the sun, the emitters and the sky; ReSTIR GI temporal reuse) -> EngineIndirectSpatialCS -> EngineSpecularCS (GGX)
-// -> EngineTemporalCS (accumulation with moments) -> EngineAtrousCS x4 (variance-guided a-trous) -> EngineFinalCS
-// (the slot's result at the camera's exposure; the samples' export for the translucent draws and the eye).
+// Per frame: EngineGBufferCS (full resolution) -> EngineDirectCS (the sun's shadow ray; ReSTIR DI candidates and
+// temporal reuse) -> EngineDirectSpatialCS (spatial reuse, the shadow ray) -> EngineShadowBlurCS, EngineShadowPostCS,
+// EngineShadowStabilizeCS (the sun's visibility over its penumbra, a short clamped history) -> EngineIndirectCS (half
+// resolution: a cosine ray, its hit lit by the sun, the emitters and the sky; ReSTIR GI temporal reuse) ->
+// EngineIndirectSpatialCS -> EngineSpecularCS (GGX) -> EngineTemporalCS (accumulation with moments, anti-lag) ->
+// EngineAtrousCS x4 (variance-guided a-trous) -> EngineFinalCS (the sun's light by its filtered visibility; the slot's
+// result at the camera's exposure; the samples' export for the translucent draws and the eye).
 //
 // Units: diffuse light as the lighting's `m` (irradiance over pi: a white surface shows m), specular as radiance; both
 // unexposed in the histories, at the exposure in the slot's result.
@@ -20,7 +22,8 @@ static const uint kEvGBufferPrev = 1u;    // the last traced frame's
 static const uint kEvDiTemp = 2u;         // per pixel two uint4: the direct reservoir after temporal reuse
 static const uint kEvDi = 3u;             // per pixel two uint4: this frame's final direct reservoir
 static const uint kEvDiPrev = 4u;         // the last frame's
-static const uint kEvDirect = 5u;         // per pixel uint4: direct diffuse (m) rgb, direct specular rgb (halves)
+static const uint kEvDirect = 5u;         // per pixel uint4: the lights' direct diffuse (m) rgb (halves); w: the sun's
+                                          // penumbra (kShadow*) and the water its light crosses (halves)
 static const uint kEvGiTemp = 6u;         // per half-pixel two uint4: the indirect reservoir after temporal reuse
 static const uint kEvGi = 7u;             // this frame's temporal indirect reservoir (the next frame's history)
 static const uint kEvGiPrev = 8u;         // the last frame's
@@ -30,23 +33,27 @@ static const uint kEvHistDiffuse = 11u;   // per pixel uint4: diffuse rgb, histo
 static const uint kEvHistDiffusePrev = 12u;
 static const uint kEvHistSpecular = 13u;
 static const uint kEvHistSpecularPrev = 14u;
-static const uint kEvAtrousA = 15u;       // per pixel uint4: diffuse rgb + variance, specular rgb + variance (halves)
-static const uint kEvAtrousB = 16u;
+static const uint kEvAtrousA = 15u;       // per pixel uint4: diffuse rgb + variance, specular rgb + variance (halves);
+static const uint kEvAtrousB = 16u;       // before EngineTemporalCS the sun shadow's blurs (x: visibility, penumbra)
 static const uint kEvSlot = 17u;          // per pixel uint4: this slot's diffuse rgb, specular rgb (halves, exposed), z
 static const uint kEvPicture = 18u;       // the EFB's colour (Texture2D, sRGB-encoded)
+static const uint kEvShadow = 19u;        // per pixel uint: the sun's filtered visibility, its history length (halves)
+static const uint kEvShadowPrev = 20u;    // the last frame's
+static const uint kEvLightGrid = 21u;     // per grid cell kGridSlots uint2: a light (kGridSphere: a point light), its weight
 // The clear-surface pass (EngineClearCS, at the scene's end):
-static const uint kEvWaterScene = 19u;    // the water window's acceleration structure (glass, crystal, water)
-static const uint kEvWaterPositions = 20u;  // its triangles' eye-space vertices (36 bytes)
-static const uint kEvWaterSurfaces = 21u;   // their vertex normals and draw flags (16 bytes; draw in bits 16-31)
-static const uint kEvClearDraws = 22u;    // per water draw: the table's roughness (unorm16), kClear* flags
-static const uint kEvClear = 23u;         // per pixel uint4: reflection rgb (halves, exposed), transmittance, eye z
+static const uint kEvWaterScene = 22u;    // the water window's acceleration structure (glass, crystal, water)
+static const uint kEvWaterPositions = 23u;  // its triangles' eye-space vertices (36 bytes)
+static const uint kEvWaterSurfaces = 24u;   // their vertex normals and draw flags (16 bytes; draw in bits 16-31)
+static const uint kEvClearDraws = 25u;    // per water draw: the table's roughness (unorm16), kClear* flags
+static const uint kEvClear = 26u;         // per pixel uint4: reflection rgb (halves, exposed), transmittance, eye z
 
 static const uint kEngineSpecular = 2u;   // traced specular
 static const uint kEngineIndirect = 4u;   // traced indirect light
 static const uint kEngineView = 0xF0u;    // GALAXY_RT_ENGINE_VIEW (bits 4-7): 1 direct, 2 indirect, 3 specular, 4 noisy,
                                           // 8 the converged reference's diffuse light (GALAXY_RT_ENGINE_REFERENCE),
                                           // 5 the clear surfaces found (magenta), 6 the clear composite's coverage,
-                                          // 7 the composite's albedo (unlit)
+                                          // 7 the composite's albedo (unlit), 11 the sun's filtered visibility, 12 its
+                                          // ray's (one per pixel), 13 the penumbra's radius (white: kShadowRadiusMost)
 static const uint kEnginePoints = 256u;   // the game's point lights and the star core (GALAXY_RT_ENGINE_POINTS)
 static const uint kEngineClearFind = 512u;  // GALAXY_RT_ENGINE_CLEAR=2: the clear pass finds, reflects nothing
 static const uint kEngineClearNoRay = 1024u;  // =3: no reflection ray
@@ -60,6 +67,7 @@ static const uint kEngineBounceCache = 131072u; // GALAXY_RT_ENGINE_BOUNCES (def
 static const uint kEngineWaterLight = 524288u;  // last frame's water (kEvWaterScene, kEvWaterPositions) shades light
 static const uint kEngineReference = 262144u;   // GALAXY_RT_ENGINE_REFERENCE: the converged reference accumulates
                                                  // (g_engine_params: x its buffer's view, y paths so far, z bounces)
+static const uint kEngineNoAntiLag = 1048576u;   // GALAXY_RT_ENGINE_ANTILAG=0: the diffuse history without its anti-lag
 
 // The water draws' clear records (kEvClearDraws, word per draw: roughness in bits 0-15, flags above).
 static const uint kClearGlass = 1u << 16u;   // the engine's: glass or crystal (not mirror glass, not a metal coat)
@@ -132,6 +140,7 @@ struct GSurface {
     float metallic;
     uint flags;        // kGb*
     float emission;    // the light source's radiance over its colour (emitter pixels)
+    float lift;        // how far its shading normals lift it off the face (along ng; surface_start)
     uint draw;
 };
 
@@ -160,7 +169,8 @@ GSurface gb_load(uint view, uint pixel, float4 projection, int2 q)
     s.metallic = float(w0.w & 0xFFu) / 255.0f;
     s.flags = (w0.w >> 8u) & 0xFFu;
     s.draw = w0.w >> 16u;
-    s.emission = asfloat(w1.y);
+    s.emission = f16tof32(w1.y);
+    s.lift = f16tof32(w1.y >> 16u);
     return s;
 }
 
@@ -188,6 +198,7 @@ void EngineGBufferCS(uint3 id : SV_DispatchThreadID)
         s.metallic = 0.0f;
         s.flags = 0u;
         s.emission = 0.0f;
+        s.lift = surface.lift;
         s.draw = 0xFFFFu;
         float own = 1.0f;
         float shading = 0.0f;
@@ -327,7 +338,7 @@ void EngineGBufferCS(uint3 id : SV_DispatchThreadID)
         }
         packed.x = pack_pixel_normal(surface.n, own);
         w0 = gb_word0(s);
-        w1 = uint4(asuint(p.z), asuint(s.emission), surface.primary.x, surface.primary.y);
+        w1 = uint4(asuint(p.z), pack_half2(s.emission, s.lift), surface.primary.x, surface.primary.y);
         if ((id.x % g_factor) == 0u && (id.y % g_factor) == 0u && all(id.xy / g_factor < g_sample_size)) {
             const uint sample = (id.y / g_factor) * g_sample_size.x + id.x / g_factor;
             g_primary[sample] = surface.primary;
@@ -666,20 +677,12 @@ float spheres_total()
     return sum;
 }
 
-// One light point for the surface at `p`, drawn in proportion to power over the emitting triangles (`tris`, their
-// total power) and the point lights (`spheres`): a uniform point on the triangle, or on the sphere's hemisphere facing
-// `p`. `chance`: its probability per unit area. False when none.
-bool engine_light_pick(float3 p, float tris, float spheres, inout uint seed, out LightSample l, out float chance)
+// A light in proportion to its power (`u` in [0, tris + spheres)): an emitting triangle (its index among the emitters)
+// or, with kGridSphere, a point light (its index); its power.
+static const uint kGridSphere = 0x80000000u;
+
+uint engine_light_choose(float tris, float u, out float power)
 {
-    l.y = float3(0.0f, 0.0f, 0.0f);
-    l.face = float3(0.0f, 0.0f, 1.0f);
-    l.radiance = float3(0.0f, 0.0f, 0.0f);
-    l.beam = 0.0f;
-    l.sides = 0.0f;
-    l.area = 0.0f;
-    chance = 0.0f;
-    const float total = tris + spheres;
-    const float u = emit_random(seed) * total;
     if (u < tris) {
         // The triangle whose running power first passes u.
         uint lo = 0u;
@@ -694,6 +697,46 @@ bool engine_light_pick(float3 p, float tris, float spheres, inout uint seed, out
         }
         float4 a, b, c, d;   // v0, area; e1, two-sided; e2, beam; radiance, power
         emit_triangle_of(lo, a, b, c, d);
+        power = d.w;
+        return lo;
+    }
+    float running = tris;
+    uint i = 0u;
+    [loop] for (; i + 1u < g_point_count; ++i) {
+        running += sphere_power(i);
+        if (u < running) {
+            break;
+        }
+    }
+    power = sphere_power(i);
+    return kGridSphere | i;
+}
+
+// A light's centre (eye space): an emitting triangle's centroid, a point light's position.
+float3 engine_light_centre(uint id)
+{
+    if ((id & kGridSphere) != 0u) {
+        return g_points[2u * (id & ~kGridSphere)].xyz;
+    }
+    float4 a, b, c, d;
+    emit_triangle_of(id, a, b, c, d);
+    return a.xyz + (b.xyz + c.xyz) * (1.0f / 3.0f);
+}
+
+// A point on light `id` for the surface at `p`: uniform over a triangle, over the hemisphere of a point light's sphere
+// facing `p`; its density over the light's area (`area_density`: 1 / area).
+bool engine_light_point(uint id, float3 p, inout uint seed, out LightSample l, out float area_density)
+{
+    l.y = float3(0.0f, 0.0f, 0.0f);
+    l.face = float3(0.0f, 0.0f, 1.0f);
+    l.radiance = float3(0.0f, 0.0f, 0.0f);
+    l.beam = 0.0f;
+    l.sides = 0.0f;
+    l.area = 0.0f;
+    area_density = 0.0f;
+    if ((id & kGridSphere) == 0u) {
+        float4 a, b, c, d;   // v0, area; e1, two-sided; e2, beam; radiance, power
+        emit_triangle_of(id, a, b, c, d);
         if (!(d.w > 0.0f) || !(a.w > 0.0f)) {
             return false;
         }
@@ -709,19 +752,11 @@ bool engine_light_pick(float3 p, float tris, float spheres, inout uint seed, out
         l.radiance = d.rgb;
         l.beam = c.w;
         l.sides = b.w;
-        chance = d.w / (total * a.w);
+        area_density = 1.0f / a.w;
         return true;
     }
-    float running = tris;
-    uint i = 0u;
-    [loop] for (; i + 1u < g_point_count; ++i) {
-        running += sphere_power(i);
-        if (u < running) {
-            break;
-        }
-    }
-    const float power = sphere_power(i);
-    if (!(power > 0.0f)) {
+    const uint i = id & ~kGridSphere;
+    if (!(sphere_power(i) > 0.0f)) {
         return false;
     }
     const float3 centre = g_points[2u * i].xyz;
@@ -730,16 +765,125 @@ bool engine_light_pick(float3 p, float tris, float spheres, inout uint seed, out
     // Uniform on the hemisphere about `axis`.
     const float z = emit_random(seed);
     const float phi = 2.0f * kPi * emit_random(seed);
-    const float s = sqrt(max(0.0f, 1.0f - z * z));
+    const float sz = sqrt(max(0.0f, 1.0f - z * z));
     const float3x3 f = tangent_frame(axis);
-    l.face = f[0] * (s * cos(phi)) + f[1] * (s * sin(phi)) + axis * z;
+    l.face = f[0] * (sz * cos(phi)) + f[1] * (sz * sin(phi)) + axis * z;
     l.y = centre + l.face * r;
     const float area = 2.0f * kPi * r * r;
     const float h2 = 1.0f / max(g_points[2u * i + 1u].w, 1e-12f);
     l.radiance = sphere_colour(i) * (h2 / area);
     l.beam = sqrt(h2);
     l.sides = kSidesSphere;
-    chance = power / (total * area);
+    area_density = 1.0f / area;
+    return true;
+}
+
+// One light point for the surface at `p`, drawn in proportion to power over the emitting triangles (`tris`, their
+// total) and the point lights (`spheres`); `chance`: its density as resampling weighs it (the light's share of the power
+// over its area).
+bool engine_light_pick(float3 p, float tris, float spheres, inout uint seed, out LightSample l, out float chance)
+{
+    chance = 0.0f;
+    const float total = tris + spheres;
+    float power;
+    const uint id = engine_light_choose(tris, emit_random(seed) * total, power);
+    float area_density;
+    if (!(power > 0.0f) || !engine_light_point(id, p, seed, l, area_density)) {
+        return false;
+    }
+    chance = power / total * area_density;
+    return true;
+}
+
+// Grid-based light reservoirs (ReGIR: Boksansky, Jukarainen and Wyman, "Rendering Many Lights with Grid-Based
+// Reservoirs", Ray Tracing Gems II, 2021; our own code). Drawn by power alone, a surface's light candidates are the
+// scene's biggest lights wherever it is: beside a lamp, a fire bar or a laser while the star core or a lava sea is in
+// the scene, the near light is rarely a candidate, its light pool stays dark and the few pixels that find it are lowered
+// as fireflies. A grid of cells about the camera keeps per cell kGridSlots lights, each resampled (kGridCandidates drawn
+// by power) by its light at the cell (power over the squared distance from the cell's centre, the cell's half diagonal
+// added): what is near a cell fills it. A surface in a cell draws its candidates from the cell's slots, each weighed by
+// its slot's resampling weight (chained resampled importance sampling: unbiased, a slot holding every light with a
+// light at its cell above zero); outside the grid, by power.
+static const uint kGridCells = 24u;            // a side's cells
+static const float kGridCellSize = 256.0f;     // eye units (Mario stands 160 tall)
+static const uint kGridSlots = 64u;
+static const uint kGridCandidates = 8u;
+
+bool grid_cell(float3 p, out uint cell)
+{
+    cell = 0u;
+    const int3 c = int3(floor(p / kGridCellSize)) + int(kGridCells / 2u);
+    if (any(c < 0) || any(c >= int(kGridCells))) {
+        return false;
+    }
+    cell = (uint(c.z) * kGridCells + uint(c.y)) * kGridCells + uint(c.x);
+    return true;
+}
+
+float3 grid_cell_centre(uint cell)
+{
+    const uint3 c = uint3(cell % kGridCells, (cell / kGridCells) % kGridCells, cell / (kGridCells * kGridCells));
+    return (float3(c) - float(kGridCells / 2u) + 0.5f) * kGridCellSize;
+}
+
+// A cell's slot: kGridCandidates lights drawn by power, one kept in proportion to its light at the cell; its weight
+// (the resampling's sum over the count, over the kept light's target).
+[numthreads(64, 1, 1)]
+void EngineLightGridCS(uint3 id : SV_DispatchThreadID)
+{
+    const uint slot = id.x;
+    if (slot >= kGridCells * kGridCells * kGridCells * kGridSlots) {
+        return;
+    }
+    RWByteAddressBuffer grid = engine_buffer(kEvLightGrid);
+    const float tris = g_tev_info.z != 0u ? max(emit_element(0u).y, 0.0f) : 0.0f;
+    const float spheres = spheres_total();
+    const float total = tris + spheres;
+    if (!(total > 0.0f)) {
+        grid.Store2(slot * 8u, uint2(0u, 0u));
+        return;
+    }
+    const float3 centre = grid_cell_centre(slot / kGridSlots);
+    const float reach2 = 0.75f * kGridCellSize * kGridCellSize;
+    uint seed = emit_hash(slot ^ (g_frame * 0x7FEB352Du) ^ 0x2C1B3C6Du);
+    uint kept = 0u;
+    float kept_target = 0.0f;
+    float weight_sum = 0.0f;
+    [loop] for (uint k = 0u; k < kGridCandidates; ++k) {
+        float power;
+        const uint light = engine_light_choose(tris, emit_random(seed) * total, power);
+        if (!(power > 0.0f)) {
+            continue;
+        }
+        const float3 to = engine_light_centre(light) - centre;
+        const float target = power / (dot(to, to) + reach2);
+        const float w = target / (power / total);
+        weight_sum += w;
+        if (emit_random(seed) * weight_sum < w) {
+            kept = light;
+            kept_target = target;
+        }
+    }
+    const float weight = kept_target > 0.0f ? weight_sum / (float(kGridCandidates) * kept_target) : 0.0f;
+    grid.Store2(slot * 8u, uint2(kept, asuint(weight)));
+}
+
+// One light point for the surface at `p`: from its grid cell's slots, else by power (engine_light_pick).
+bool engine_light_pick_near(float3 p, float tris, float spheres, inout uint seed, out LightSample l, out float chance)
+{
+    uint cell;
+    if (!grid_cell(p, cell)) {
+        return engine_light_pick(p, tris, spheres, seed, l, chance);
+    }
+    chance = 0.0f;
+    const uint slot = cell * kGridSlots + min(uint(emit_random(seed) * float(kGridSlots)), kGridSlots - 1u);
+    const uint2 e = engine_buffer(kEvLightGrid).Load2(slot * 8u);
+    const float weight = asfloat(e.y);
+    float area_density;
+    if (!(weight > 0.0f) || !engine_light_point(e.x, p, seed, l, area_density)) {
+        return false;
+    }
+    chance = area_density / weight;
     return true;
 }
 
@@ -765,7 +909,7 @@ float engine_light_target(float3 p, float3 n, LightSample l, out float3 light)
     return emitter_target(p, n, l.y, l.face, l.radiance, l.beam, l.sides, light, max(l.area / kPi, 1e-4f));
 }
 
-// The lights at `p` (normal `n`; shadow ray from `origin`): `candidates` drawn by engine_light_pick, one kept in
+// The lights at `p` (normal `n`; shadow ray from `origin`): `candidates` drawn by engine_light_pick_near, one kept in
 // proportion to its target (resampled importance sampling), its light behind one shadow ray, weighted to stay unbiased.
 float3 engine_light_sample(float3 p, float3 n, float3 origin, uint candidates, inout uint seed, uint salt)
 {
@@ -781,7 +925,7 @@ float3 engine_light_sample(float3 p, float3 n, float3 origin, uint candidates, i
     [loop] for (uint k = 0u; k < candidates; ++k) {
         LightSample l;
         float chance;
-        if (!engine_light_pick(p, tris, spheres, seed, l, chance)) {
+        if (!engine_light_pick_near(p, tris, spheres, seed, l, chance)) {
             continue;
         }
         float3 light;
@@ -969,6 +1113,62 @@ float light_target(GSurface s, LightSample l, out float3 light)
     return engine_light_target(s.p, s.n, l, light);
 }
 
+// The sun's shadow (after NVIDIA's SIGMA; our own code). EngineDirectCS traces one ray per pixel to a point of the
+// sun's disc and keeps the penumbra its blocker's distance d makes: 0.5 d tan(radius) in eye units (kShadowLit:
+// nothing in the way; 0: the surface faces away). EngineShadowBlurCS and EngineShadowPostCS filter the visibility over
+// that penumbra as the screen shows it, so a shadow cast from close by stays as sharp as daylight makes it and one cast
+// from far is as soft; EngineShadowStabilizeCS keeps a short history (kShadowHistoryMost frames) clamped to the
+// frame's own neighbourhood, so a moving caster leaves no trail. EngineFinalCS lights the surface by the result. In
+// the diffuse light's history (32 frames, unclamped) the sun's shadows took half a second to form and to leave, and
+// its a-trous blurred them to blobs.
+static const float kShadowLit = 65504.0f;        // half's largest
+static const float kShadowLeast = 1e-4f;         // a blocker in contact
+static const float kShadowRadiusMost = 32.0f;    // the blur's radius at most (pixels)
+static const uint kShadowTaps = 12u;             // the blur's sparse taps (with a dense 5 x 5)
+static const float kShadowHistoryMost = 7.0f;    // frames
+static const float kShadowHistoryWeight = 5.0f / 6.0f;  // the history's weight at most (5 frames' accumulation)
+// The fast history of the diffuse light (EngineTemporalCS's anti-lag): frames.
+static const float kFastHistory = 4.0f;
+
+// A pixel's point in the unit square for frame `frame`: interleaved gradient noise (Jimenez 2014) places neighbouring
+// pixels well apart, so the sun's rays in a penumbra average out over a few pixels; each pixel then steps along the R2
+// sequence (Roberts 2018; Wolfe 2019, animating noise with low-discrepancy sequences), so over a few frames its own
+// points cover the square evenly and the short stabilisation (kShadowHistoryMost) settles a still shadow's edge on its
+// mean. A pattern moved at random per frame left the edges flickering at a quarter of their contrast.
+float interleaved_gradient_noise(float2 q)
+{
+    return frac(52.9829189f * frac(dot(q, float2(0.06711056f, 0.00583715f))));
+}
+
+float2 pixel_sample(int2 q, uint frame)
+{
+    const float2 start = float2(interleaved_gradient_noise(float2(q)), interleaved_gradient_noise(float2(q.yx) + 31.0f));
+    return frac(start + float(frame & 1023u) * float2(0.7548776662f, 0.5698402910f));
+}
+
+// Where a ray from surface `s` towards `l` starts (Hanika 2021, "Hacking the Shadow Terminator", gated as Blender
+// Cycles' shadow_ray_offset with its default cutoff): a curved surface drawn in flat triangles, its shading normals
+// smooth, has its faces below the surface those normals describe; a ray the face meets at a grazing angle, from the
+// face, hits the next triangles of the same surface and shades the terminator in steps. Such a ray starts from the
+// point the normals lift the face to (EngineGBufferCS's lift), one the face meets squarely from the face, so contact
+// shadows stay; the bias clears the face itself.
+static const float kTerminatorCutoff = 0.1f;
+
+float3 surface_start(GSurface s, float3 l)
+{
+    const float nl = abs(dot(s.n, l));
+    const float ngl = dot(s.ng, l);
+    const float lifted = nl < kTerminatorCutoff ? saturate(2.0f - (ngl + nl) / kTerminatorCutoff)
+                                                : saturate(1.0f - ngl / kTerminatorCutoff);
+    return s.p + s.ng * (s.lift * lifted + 0.2f + abs(s.p.z) * 4e-4f);
+}
+
+// The world size of a pixel at eye depth `z`.
+float pixel_world_size(float z)
+{
+    return abs(z) * 2.0f / max(abs(g_viewport.z * g_projection.x), 1e-6f);
+}
+
 // The previous frame's pixel of an eye-space point (full resolution), and whether the surface there is this one (its
 // depth and normal agree: draw indices are positions in each frame's own list, not identities).
 bool engine_reproject(float3 p, float3 n, out uint prev_pixel)
@@ -1016,27 +1216,25 @@ void EngineDirectCS(uint3 id : SV_DispatchThreadID)
     }
     uint seed = emit_hash(pixel ^ (g_frame * 0x9E3779B9u));
     const uint salt = pixel * 32u + g_frame * 0x632BE5ABu;
-    const float3 v = normalize(-s.p);
-    const float3 start = s.p + s.ng * (0.2f + abs(s.p.z) * 4e-4f);
-    // The sun: one direction in its disc behind a shadow ray (diffuse as m, specular as radiance).
-    float3 diffuse = float3(0.0f, 0.0f, 0.0f);
-    float3 specular = float3(0.0f, 0.0f, 0.0f);
-    if (any(g_sun_light.rgb > 0.0f)) {
+    // The sun: one direction in its disc behind a shadow ray, kept as the penumbra its blocker makes (the light itself
+    // is EngineFinalCS's, by the filtered visibility).
+    float penumbra = 0.0f;
+    float depth = 0.0f;
+    if (any(g_sun_light.rgb > 0.0f) && dot(s.n, g_sun.xyz) > 0.0f && dot(s.ng, g_sun.xyz) > -0.05f) {
         // Under water the sunlight crosses `depth` of it: attenuated, its disc widened by forward scattering.
-        const float depth = water_depth_along(start, g_sun.xyz);
+        const float3 start = surface_start(s, g_sun.xyz);
+        depth = water_depth_along(start, g_sun.xyz);
         const float spread = depth > 0.0f ? min(g_sun.w + depth * kWaterSpread, kWaterSpreadMost) : g_sun.w;
-        const float3 l = sun_direction_spread(float2(emit_random(seed), emit_random(seed)), spread);
-        const float nl = dot(s.n, l);
+        const float2 u = pixel_sample(q, g_frame);
+        const float3 l = sun_direction_spread(u, spread);
         float blocker;
-        if (nl > 0.0f && dot(s.ng, l) > -0.05f && sun_visible(start, l, (s.flags & kGbCard) != 0u, salt, blocker)) {
-            const float3 through = depth > 0.0f ? water_tint(depth) : float3(1.0f, 1.0f, 1.0f);
-            diffuse = g_sun_light.rgb * nl * through;
-            specular = sun_specular(s, v) * through;
-        }
+        penumbra = sun_visible(surface_start(s, l), l, (s.flags & kGbCard) != 0u, salt, blocker)
+                       ? kShadowLit
+                       : clamp(0.5f * blocker * spread, kShadowLeast, 0.5f * kShadowLit);
     }
-    direct.Store4(pixel * 16u, uint4(pack_half2(diffuse.r, diffuse.g), pack_half2(diffuse.b, specular.r),
-                                     pack_half2(specular.g, specular.b), 0u));
-    // The lights (emitting triangles, the game's point lights, the star core): candidates by power.
+    direct.Store4(pixel * 16u, uint4(0u, 0u, 0u, pack_half2(penumbra, depth)));
+    // The lights (emitting triangles, the game's point lights, the star core): candidates from the pixel's light grid
+    // cell (engine_light_pick_near).
     const float tris = g_tev_info.z != 0u ? max(emit_element(0u).y, 0.0f) : 0.0f;
     const float spheres = spheres_total();
     // Eight candidates (sixteen at High): with four, a scene of many lamps (the Observatory's star core and its dozens
@@ -1046,7 +1244,7 @@ void EngineDirectCS(uint3 id : SV_DispatchThreadID)
         [loop] for (uint k = 0u; k < candidates; ++k) {
             LightSample l;
             float chance;
-            if (!engine_light_pick(s.p, tris, spheres, seed, l, chance)) {
+            if (!engine_light_pick_near(s.p, tris, spheres, seed, l, chance)) {
                 r.m += 1.0f;
                 continue;
             }
@@ -1116,7 +1314,7 @@ void EngineDirectSpatialCS(uint3 id : SV_DispatchThreadID)
     if (r.W > 0.0f) {
         float3 light;
         light_target(s, r.s, light);
-        const float3 start = s.p + s.ng * (0.2f + abs(s.p.z) * 4e-4f);
+        const float3 start = surface_start(s, normalize(r.s.y - s.p));
         if (engine_visible(start, r.s.y, 0.5f + 0.001f * length(r.s.y - start), salt)) {
             diffuse = light * r.W;
         } else {
@@ -1128,6 +1326,233 @@ void EngineDirectSpatialCS(uint3 id : SV_DispatchThreadID)
     const uint4 d = direct.Load4(pixel * 16u);
     const float3 sum = float3(f16tof32(d.x), f16tof32(d.x >> 16u), f16tof32(d.y)) + safe_light(diffuse);
     direct.Store4(pixel * 16u, uint4(pack_half2(sum.r, sum.g), (d.y & 0xFFFF0000u) | f32tof16(sum.b), d.z, d.w));
+}
+
+// A pixel's sun shadow as a stage of its filter reads it: its visibility and penumbra (eye units; kShadowLit, 0: see
+// kShadowLit). Stage 0: the ray's (EngineDirectCS: 1 lit, else 0); 1: the first blur's (kEvAtrousA); 2: the second's
+// (kEvAtrousB).
+float shadow_load(uint stage, uint pixel, out float penumbra)
+{
+    if (stage == 0u) {
+        penumbra = f16tof32(engine_buffer(kEvDirect).Load(pixel * 16u + 12u));
+        return penumbra >= kShadowLit ? 1.0f : 0.0f;
+    }
+    const uint w = engine_buffer(stage == 1u ? kEvAtrousA : kEvAtrousB).Load(pixel * 16u);
+    penumbra = f16tof32(w >> 16u);
+    return f16tof32(w);
+}
+
+// A tap's weight on the pixel's plane (its face normal): 1 on it, 0 from 2 % of its depth off it.
+float shadow_plane_weight(GSurface s, float3 x)
+{
+    return saturate(1.0f - abs(dot(s.ng, x - s.p)) / (abs(s.p.z) * 0.02f + 1.0f));
+}
+
+// One blur of the sun's visibility (stage 0: the rays' into kEvAtrousA; 1: the first blur's into kEvAtrousB). A dense
+// 5 x 5 estimates the penumbra about the pixel (its occluded neighbours', the smaller preferred) and filters within the
+// pixel's own; kShadowTaps taps on a disc of the estimate's radius on screen (at most kShadowRadiusMost pixels, narrowed
+// where the surface is seen at a slant, turned per frame) complete it. A tap counts on the pixel's plane and facing the
+// sun, and the less the smaller its penumbra against the estimate (an umbra's rays do not darken a wide penumbra next
+// to it). Where no ray about the pixel is blocked it stays lit; where every one is and the penumbra is within the 5 x 5,
+// in shadow.
+void shadow_blur(uint2 id, uint stage)
+{
+    if (any(id >= g_target_size)) {
+        return;
+    }
+    const uint pixel = id.y * g_target_size.x + id.x;
+    const int2 q = int2(id);
+    RWByteAddressBuffer dst = engine_buffer(stage == 0u ? kEvAtrousA : kEvAtrousB);
+    float centre_penumbra;
+    const float centre = shadow_load(stage, pixel, centre_penumbra);
+    const GSurface s = gb_load(engine_view(kEvGBuffer), pixel, g_projection, q);
+    if (!s.valid || (s.flags & kGbEmitter) != 0u || centre_penumbra == 0.0f) {
+        dst.Store(pixel * 16u, pack_half2(centre, centre_penumbra));
+        return;
+    }
+    RWByteAddressBuffer gb = engine_buffer(kEvGBuffer);
+    const float size = pixel_world_size(s.p.z);
+    // Pixels to the centre's penumbra radii (none lit: its whole 5 x 5).
+    const float to_centre = centre_penumbra >= kShadowLit ? 0.0f : size / centre_penumbra;
+    float result = 0.0f;
+    float weight = 0.0f;
+    float penumbra = 0.0f;
+    float penumbra_weight = 0.0f;
+    bool lit = false;
+    bool blocked = false;
+    [unroll] for (int j = -2; j <= 2; ++j) {
+        [unroll] for (int i = -2; i <= 2; ++i) {
+            const int2 o = clamp(q + int2(i, j), int2(0, 0), int2(g_target_size) - 1);
+            const uint op = uint(o.y) * g_target_size.x + uint(o.x);
+            float p;
+            const float v = shadow_load(stage, op, p);
+            float w = 1.0f;
+            if (i != 0 || j != 0) {
+                const float z = asfloat(gb.Load(op * 32u + 16u));
+                const float r = length(float2(i, j)) * to_centre;
+                w = z != 0.0f && p != 0.0f
+                        ? exp(-r * r) * shadow_plane_weight(s, eye_position(g_projection, g_viewport, float2(o) + 0.5f, z))
+                        : 0.0f;
+            }
+            result += v * w;
+            weight += w;
+            if (w > 0.0f) {
+                lit = lit || v > 0.0f;
+                blocked = blocked || p < kShadowLit;
+            }
+            const float wp = p < kShadowLit ? w * size / (size + p) : 0.0f;
+            penumbra += p * wp;
+            penumbra_weight += wp;
+        }
+    }
+    result /= weight;
+    if (!blocked || penumbra_weight <= 0.0f) {
+        dst.Store(pixel * 16u, pack_half2(result, kShadowLit));
+        return;
+    }
+    penumbra /= penumbra_weight;
+    const float radius = min(penumbra / size, kShadowRadiusMost);
+    if (!lit && radius <= 2.0f) {
+        dst.Store(pixel * 16u, pack_half2(result, penumbra));
+        return;
+    }
+    // The dense estimate counts as one tap at full weight, as its penumbra.
+    weight = 1.0f;
+    penumbra_weight = 1.0f;
+    const float slant = abs(dot(s.ng, normalize(-s.p)));
+    float2 skew = lerp(1.0f - abs(s.ng.xy), float2(1.0f, 1.0f), slant);
+    skew *= radius / max(max(skew.x, skew.y), 1e-3f);
+    const float turn = float(g_frame & 255u) * 2.3999632f + float(stage) * 1.3f;
+    const float estimate = penumbra;
+    [unroll] for (uint n = 0u; n < kShadowTaps; ++n) {
+        const float r = sqrt((float(n) + 0.5f) / float(kShadowTaps));
+        const float a = float(n) * 2.3999632f + turn;
+        const int2 o = q + int2(round(float2(cos(a), sin(a)) * r * skew));
+        if (any(o < 0) || any(o >= int2(g_target_size))) {
+            continue;
+        }
+        const uint op = uint(o.y) * g_target_size.x + uint(o.x);
+        float p;
+        const float v = shadow_load(stage, op, p);
+        const float z = asfloat(gb.Load(op * 32u + 16u));
+        if (z == 0.0f || p == 0.0f) {
+            continue;
+        }
+        const float w = exp(-r * r) * saturate(p / estimate) *
+                        shadow_plane_weight(s, eye_position(g_projection, g_viewport, float2(o) + 0.5f, z));
+        result += v * w;
+        weight += w;
+        const float wp = p < kShadowLit ? w * size / (size + p) : 0.0f;
+        penumbra += p * wp;
+        penumbra_weight += wp;
+    }
+    dst.Store(pixel * 16u, pack_half2(result / weight, penumbra / penumbra_weight));
+}
+
+[numthreads(8, 8, 1)]
+void EngineShadowBlurCS(uint3 id : SV_DispatchThreadID)
+{
+    shadow_blur(id.xy, 0u);
+}
+
+[numthreads(8, 8, 1)]
+void EngineShadowPostCS(uint3 id : SV_DispatchThreadID)
+{
+    shadow_blur(id.xy, 1u);
+}
+
+// The blurred visibility over its history (kEvShadowPrev at the surface's last place: bilinear over the previous pixels
+// on this surface), clamped about the 5 x 5 neighbourhood's mean by its spread (wider, up to 3 x, as the history grows)
+// and shortened by how far the clamp moved it: a moving shadow is followed within a frame, the residual noise of the
+// blurs averaged over up to kShadowHistoryMost frames.
+[numthreads(8, 8, 1)]
+void EngineShadowStabilizeCS(uint3 id : SV_DispatchThreadID)
+{
+    if (any(id.xy >= g_target_size)) {
+        return;
+    }
+    const uint pixel = id.y * g_target_size.x + id.x;
+    const int2 q = int2(id.xy);
+    RWByteAddressBuffer out_shadow = engine_buffer(kEvShadow);
+    float centre_penumbra;
+    const float input = shadow_load(2u, pixel, centre_penumbra);
+    const GSurface s = gb_load(engine_view(kEvGBuffer), pixel, g_projection, q);
+    if (!s.valid || (s.flags & kGbEmitter) != 0u || centre_penumbra == 0.0f) {
+        out_shadow.Store(pixel * 4u, pack_half2(0.0f, 0.0f));
+        return;
+    }
+    float m1 = 0.0f;
+    float m2 = 0.0f;
+    float sum = 0.0f;
+    [unroll] for (int j = -2; j <= 2; ++j) {
+        [unroll] for (int i = -2; i <= 2; ++i) {
+            const int2 o = clamp(q + int2(i, j), int2(0, 0), int2(g_target_size) - 1);
+            float p;
+            const float v = shadow_load(2u, uint(o.y) * g_target_size.x + uint(o.x), p);
+            const float w = (i == 0 && j == 0) ? 1.0f : (p != 0.0f ? exp(-0.25f * float(i * i + j * j)) : 0.0f);
+            m1 += v * w;
+            m2 += v * v * w;
+            sum += w;
+        }
+    }
+    m1 /= sum;
+    m2 /= sum;
+    float history = 0.0f;
+    float frames = 0.0f;
+    if ((g_flags & 1u) != 0u) {
+        const float3 previous = transform(g_reproject, s.p);
+        if (previous.z < -g_near) {
+            const float2 a = eye_to_pixel(g_history_projection, g_viewport, previous) - 0.5f;
+            const int2 b = int2(floor(a));
+            const float2 f = a - float2(b);
+            const float3 n_prev = normalize(rotate3(g_reproject, s.n));
+            RWByteAddressBuffer gb = engine_buffer(kEvGBufferPrev);
+            RWByteAddressBuffer prev = engine_buffer(kEvShadowPrev);
+            float2 acc = float2(0.0f, 0.0f);
+            float weight = 0.0f;
+            [unroll] for (uint k = 0u; k < 4u; ++k) {
+                const int2 o = b + int2(k & 1u, k >> 1u);
+                if (any(o < 0) || any(o >= int2(g_target_size))) {
+                    continue;
+                }
+                const uint op = uint(o.y) * g_target_size.x + uint(o.x);
+                const uint4 w0 = gb.Load4(op * 32u);
+                const uint w1 = gb.Load(op * 32u + 16u);
+                if (w1 == 0u || abs(asfloat(w1) - previous.z) > 0.02f * abs(previous.z) + 1.0f ||
+                    dot(unpack_normal(w0.x), n_prev) < 0.9f) {
+                    continue;
+                }
+                const float w = ((k & 1u) != 0u ? f.x : 1.0f - f.x) * ((k & 2u) != 0u ? f.y : 1.0f - f.y);
+                const uint h = prev.Load(op * 4u);
+                acc += float2(f16tof32(h), f16tof32(h >> 16u)) * w;
+                weight += w;
+            }
+            if (weight > 1e-3f) {
+                history = acc.x / weight;
+                frames = acc.y / weight;
+            }
+        }
+    }
+    const float spread = sqrt(max(m2 - m1 * m1, 0.0f)) * lerp(3.0f, 1.0f, 1.0f / (1.0f + frames));
+    const float clamped = clamp(history, m1 - spread, m1 + spread);
+    frames *= 1.0f - sqrt(saturate(abs(clamped - history)));
+    const float result = lerp(input, clamped, min(frames / (1.0f + frames), kShadowHistoryWeight));
+    out_shadow.Store(pixel * 4u, pack_half2(saturate(result), min(frames + 1.0f, kShadowHistoryMost)));
+}
+
+// The sun's light on `s` at visibility `visible` (diffuse as m, `specular` as radiance): facing its disc's centre, through
+// the water above it (EngineDirectCS's depth along its light).
+float3 sun_light(GSurface s, uint pixel, float visible, out float3 specular)
+{
+    specular = float3(0.0f, 0.0f, 0.0f);
+    const float nl = dot(s.n, g_sun.xyz);
+    if (visible <= 0.0f || !any(g_sun_light.rgb > 0.0f) || nl <= 0.0f || dot(s.ng, g_sun.xyz) <= -0.05f) {
+        return float3(0.0f, 0.0f, 0.0f);
+    }
+    const float depth = f16tof32(engine_buffer(kEvDirect).Load(pixel * 16u + 12u) >> 16u);
+    const float3 through = (depth > 0.0f ? water_tint(depth) : float3(1.0f, 1.0f, 1.0f)) * visible;
+    specular = sun_specular(s, normalize(-s.p)) * through;
+    return g_sun_light.rgb * nl * through;
 }
 
 // ReSTIR GI reservoir of an indirect sample (half resolution).
@@ -1224,8 +1649,8 @@ void EngineIndirectCS(uint3 id : SV_DispatchThreadID)
     }
     uint seed = emit_hash(index ^ (g_frame * 0x68E31DA4u) ^ 0x1B56C4E9u);
     const uint salt = index * 32u + g_frame * 0x632BE5ABu + 19u;
-    const float3 start = s.p + s.ng * (0.2f + abs(s.p.z) * 4e-4f);
     const float3 d = cosine_direction(s.n, s.ng, float2(emit_random(seed), emit_random(seed)));
+    const float3 start = surface_start(s, d);
     const Hit h = engine_trace(start, d, salt);
     float3 x;
     float3 hn;
@@ -1279,7 +1704,6 @@ void EngineIndirectSpatialCS(uint3 id : SV_DispatchThreadID)
     }
     uint seed = emit_hash(index ^ (g_frame * 0x1B873593u) ^ 0x6A09E667u);
     const uint salt = index * 32u + g_frame * 0x632BE5ABu + 23u;
-    const float3 start = s.p + s.ng * (0.2f + abs(s.p.z) * 4e-4f);
     {
         const GiReservoir own = gi_load(engine_view(kEvGiTemp), index);
         const float t = own.W > 0.0f ? gi_target(s, own.x, own.radiance) : 0.0f;
@@ -1327,7 +1751,8 @@ void EngineIndirectSpatialCS(uint3 id : SV_DispatchThreadID)
         }
     }
     r.W = r.target > 0.0f && r.m > 0.0f ? r.w_sum / (r.m * r.target) : 0.0f;
-    if (reused && r.W > 0.0f && length(r.x) < 9.0e4f && !engine_visible(start, r.x, 0.5f, salt)) {
+    if (reused && r.W > 0.0f && length(r.x) < 9.0e4f &&
+        !engine_visible(surface_start(s, normalize(r.x - s.p)), r.x, 0.5f, salt)) {
         r.W = 0.0f;
     }
     // m = (1/pi) L cos W (this frame's light only: the history keeps the temporal reservoir).
@@ -1364,7 +1789,7 @@ void EngineSpecularCS(uint3 id : SV_DispatchThreadID)
     float3 result = float3(0.0f, 0.0f, 0.0f);
     float distance = 0.0f;
     if (nl > 0.0f && dot(s.ng, l) > 0.0f) {
-        const float3 start = s.p + s.ng * (0.2f + abs(s.p.z) * 4e-4f);
+        const float3 start = surface_start(s, l);
         const Hit h = engine_trace(start, l, salt);
         float3 x;
         float3 hn;
@@ -1407,10 +1832,15 @@ float3 gi_upsampled(GSurface s, int2 q)
     return weight > 1e-4f ? sum / weight : float3(0.0f, 0.0f, 0.0f);
 }
 
-// Temporal accumulation: this frame's diffuse (the direct light's and the indirect light's) and specular (the sun's
-// and the traced reflection's) onto their reprojected histories (bilinear over the previous pixels on this surface),
-// with the first two moments of luminance for the a-trous's variance. History length at most 32 (diffuse) and 16
-// (specular); the specular history is clamped to the 3 x 3 neighbourhood's range (ghosting).
+// Temporal accumulation: this frame's diffuse (the lights' direct light and the indirect light; the sun's is
+// EngineFinalCS's) and specular (the traced reflection) onto their reprojected histories (bilinear over the previous
+// pixels on this surface), with the first two moments of luminance for the a-trous's variance. History length at most
+// 32 (diffuse) and 16 (specular); the specular history is clamped to the 3 x 3 neighbourhood's range (ghosting). The
+// diffuse history's anti-lag (after NVIDIA's ReBLUR, our own code): a fast history of its luminance (kFastHistory
+// frames, kept in the specular history's spare word) against the slow one (the first moment); where they part by more
+// than the noise allows (1.5 x the frames' deviation: three of the fast history's), the light changed (a lamp moved, a
+// caster passed) and the history shortens to follow, to kFastHistory frames at most. A 32-frame history alone kept a
+// moving light's pool, and the dark a character leaves in the bounce light, for half a second.
 [numthreads(8, 8, 1)]
 void EngineTemporalCS(uint3 id : SV_DispatchThreadID)
 {
@@ -1433,8 +1863,7 @@ void EngineTemporalCS(uint3 id : SV_DispatchThreadID)
     const uint4 dv = direct.Load4(pixel * 16u);
     float3 diffuse = float3(f16tof32(dv.x), f16tof32(dv.x >> 16u), f16tof32(dv.y)) + gi_upsampled(s, q);
     const uint2 sv = engine_buffer(kEvSpecular).Load2(pixel * 8u);
-    float3 specular = float3(f16tof32(dv.y >> 16u), f16tof32(dv.z), f16tof32(dv.z >> 16u)) +
-                      float3(f16tof32(sv.x), f16tof32(sv.x >> 16u), f16tof32(sv.y));
+    float3 specular = float3(f16tof32(sv.x), f16tof32(sv.x >> 16u), f16tof32(sv.y));
     diffuse = safe_light(diffuse);
     specular = safe_light(specular);
     // The neighbourhood's specular range (clamping the history), and the brightest of the 8 neighbours' direct light
@@ -1450,8 +1879,7 @@ void EngineTemporalCS(uint3 id : SV_DispatchThreadID)
             const uint op = uint(o.y) * g_target_size.x + uint(o.x);
             const uint4 ndv = direct.Load4(op * 16u);
             const uint2 nsv = engine_buffer(kEvSpecular).Load2(op * 8u);
-            const float3 ns = safe_light(float3(f16tof32(ndv.y >> 16u), f16tof32(ndv.z), f16tof32(ndv.z >> 16u)) +
-                                         float3(f16tof32(nsv.x), f16tof32(nsv.x >> 16u), f16tof32(nsv.y)));
+            const float3 ns = safe_light(float3(f16tof32(nsv.x), f16tof32(nsv.x >> 16u), f16tof32(nsv.y)));
             lo = min(lo, ns);
             hi = max(hi, ns);
             if (i != 0 || j != 0) {
@@ -1481,6 +1909,7 @@ void EngineTemporalCS(uint3 id : SV_DispatchThreadID)
     float3 prev_d = float3(0.0f, 0.0f, 0.0f);
     float3 prev_s = float3(0.0f, 0.0f, 0.0f);
     float2 prev_m = float2(0.0f, 0.0f);
+    float prev_fast = 0.0f;
     float len_d = 0.0f;
     float len_s = 0.0f;
     if ((g_flags & 1u) != 0u) {
@@ -1497,6 +1926,7 @@ void EngineTemporalCS(uint3 id : SV_DispatchThreadID)
             float4 acc_d = float4(0.0f, 0.0f, 0.0f, 0.0f);
             float4 acc_s = float4(0.0f, 0.0f, 0.0f, 0.0f);
             float2 acc_m = float2(0.0f, 0.0f);
+            float acc_fast = 0.0f;
             [unroll] for (uint k = 0u; k < 4u; ++k) {
                 const int2 o = b + int2(k & 1u, k >> 1u);
                 if (any(o < 0) || any(o >= int2(g_target_size))) {
@@ -1515,6 +1945,7 @@ void EngineTemporalCS(uint3 id : SV_DispatchThreadID)
                 acc_d += float4(f16tof32(hd.x), f16tof32(hd.x >> 16u), f16tof32(hd.y), f16tof32(hd.y >> 16u)) * w;
                 acc_s += float4(f16tof32(hs.x), f16tof32(hs.x >> 16u), f16tof32(hs.y), f16tof32(hs.y >> 16u)) * w;
                 acc_m += asfloat(hd.zw) * w;
+                acc_fast += asfloat(hs.z) * w;
                 weight += w;
             }
             if (weight > 1e-3f) {
@@ -1523,6 +1954,7 @@ void EngineTemporalCS(uint3 id : SV_DispatchThreadID)
                 prev_s = acc_s.rgb / weight;
                 len_s = acc_s.a / weight;
                 prev_m = acc_m / weight;
+                prev_fast = acc_fast / weight;
             }
         }
     }
@@ -1530,6 +1962,15 @@ void EngineTemporalCS(uint3 id : SV_DispatchThreadID)
     len_s = min(len_s + 1.0f, 16.0f);
     prev_s = clamp(prev_s, lo, hi);
     const float ld = luminance(diffuse);
+    const float fast = lerp(prev_fast, ld, 1.0f / min(len_d, kFastHistory));
+    if (len_d > kFastHistory && (g_engine_info.x & kEngineNoAntiLag) == 0u) {
+        const float slow = prev_m.x;
+        const float allowed = 1.5f * sqrt(max(prev_m.y - slow * slow, 0.0f)) + 0.02f * max(fast, slow) + 1e-4f;
+        const float lag = abs(fast - slow);
+        if (lag > allowed) {
+            len_d = max(len_d * (allowed / lag) * (allowed / lag), kFastHistory);
+        }
+    }
     const float alpha_d = 1.0f / len_d;
     diffuse = lerp(prev_d, diffuse, alpha_d);
     float2 moments = lerp(prev_m, float2(ld, ld * ld), alpha_d);
@@ -1555,7 +1996,7 @@ void EngineTemporalCS(uint3 id : SV_DispatchThreadID)
     }
     const float variance_s = max(luminance(hi - lo) * luminance(hi - lo) * 0.25f, 1e-6f);
     hist_d.Store4(pixel * 16u, uint4(pack_half2(diffuse.r, diffuse.g), pack_half2(diffuse.b, len_d), asuint(moments)));
-    hist_s.Store4(pixel * 16u, uint4(pack_half2(specular.r, specular.g), pack_half2(specular.b, len_s), 0u, 0u));
+    hist_s.Store4(pixel * 16u, uint4(pack_half2(specular.r, specular.g), pack_half2(specular.b, len_s), asuint(fast), 0u));
     out_a.Store4(pixel * 16u, uint4(pack_half2(diffuse.r, diffuse.g), pack_half2(diffuse.b, variance),
                                     pack_half2(specular.r, specular.g), pack_half2(specular.b, variance_s)));
 }
@@ -2002,14 +2443,22 @@ void EngineFinalCS(uint3 id : SV_DispatchThreadID)
             // through it), passed at 1 - F; lighting it again at its own surface would darken it to black. Its
             // reflection is the traced specular's.
             const uint4 a = engine_buffer((g_engine_info.w & 1u) == 0u ? kEvAtrousA : kEvAtrousB).Load4(pixel * 16u);
+            float3 sun_glint;
+            sun_light(s, pixel, f16tof32(engine_buffer(kEvShadow).Load(pixel * 4u)), sun_glint);
             diffuse = (1.0f - kClearF0).xxx;
-            specular = float3(f16tof32(a.z), f16tof32(a.z >> 16u), f16tof32(a.w)) * exposure;
+            specular = (float3(f16tof32(a.z), f16tof32(a.z >> 16u), f16tof32(a.w)) + sun_glint) * exposure;
             whole = diffuse;
         } else {
             const uint view = (g_engine_info.x & kEngineView) >> 4u;
             const uint4 a = engine_buffer((g_engine_info.w & 1u) == 0u ? kEvAtrousA : kEvAtrousB).Load4(pixel * 16u);
-            diffuse = float3(f16tof32(a.x), f16tof32(a.x >> 16u), f16tof32(a.y));
-            specular = float3(f16tof32(a.z), f16tof32(a.z >> 16u), f16tof32(a.w));
+            // The sun's light by its filtered visibility; views 1 and 4 (the noisy light) take its ray's.
+            float penumbra;
+            const float ray = shadow_load(0u, pixel, penumbra);
+            const float visible = f16tof32(engine_buffer(kEvShadow).Load(pixel * 4u));
+            float3 sun_glint;
+            const float3 sun = sun_light(s, pixel, view == 1u || view == 4u ? ray : visible, sun_glint);
+            diffuse = float3(f16tof32(a.x), f16tof32(a.x >> 16u), f16tof32(a.y)) + sun;
+            specular = float3(f16tof32(a.z), f16tof32(a.z >> 16u), f16tof32(a.w)) + sun_glint;
             whole = diffuse * exposure;
             if ((g_engine_info.x & kEngineReference) != 0u) {
                 RWByteAddressBuffer sums = ResourceDescriptorHeap[asuint(g_engine_params.x)];
@@ -2029,11 +2478,20 @@ void EngineFinalCS(uint3 id : SV_DispatchThreadID)
             }
             if (view == 1u || view == 2u || view == 4u) {
                 const uint4 dv = engine_buffer(kEvDirect).Load4(pixel * 16u);
-                const float3 direct = float3(f16tof32(dv.x), f16tof32(dv.x >> 16u), f16tof32(dv.y));
+                const float3 direct = float3(f16tof32(dv.x), f16tof32(dv.x >> 16u), f16tof32(dv.y)) + sun;
                 diffuse = view == 1u ? direct : view == 2u ? gi_upsampled(s, q) : direct + gi_upsampled(s, q);
                 specular = float3(0.0f, 0.0f, 0.0f);
             } else if (view == 3u) {
                 diffuse = float3(0.0f, 0.0f, 0.0f);
+            }
+            // Views 11 to 13: the sun's shadow, unlit (the filtered visibility, its ray's, the penumbra's radius on
+            // screen over kShadowRadiusMost; facing away black).
+            if (view >= 11u && view <= 13u) {
+                const float radius = penumbra > 0.0f && penumbra < kShadowLit
+                                         ? min(penumbra / pixel_world_size(s.p.z), kShadowRadiusMost) / kShadowRadiusMost
+                                         : 0.0f;
+                diffuse = float3(0.0f, 0.0f, 0.0f);
+                specular = (view == 11u ? visible : view == 12u ? ray : radius).xxx * (0.5f / max(exposure, 1e-6f));
             }
             diffuse *= (1.0f - s.metallic) * exposure;
             specular *= exposure;

@@ -54,12 +54,12 @@ struct RtUpload {
 
 // The ray tracing engine's block at the end of the lighting's constants (rt_lighting.hlsl RtLight g_engine_*).
 struct RtEngineConstants {
-    std::uint32_t views[24];   // its buffers in the descriptor heap (rt_engine.hlsl kEv*)
+    std::uint32_t views[32];   // its buffers in the descriptor heap (rt_engine.hlsl kEv*)
     std::uint32_t size[4];     // full width, height; half width, height
     std::uint32_t info[4];     // flags, a-trous step, slot, a-trous parity
     float params[4];
 };
-static_assert(sizeof(RtEngineConstants) == 144u);
+static_assert(sizeof(RtEngineConstants) == 176u);
 
 class SceneRayTracer {
 public:
@@ -340,6 +340,7 @@ private:
         kPassCamera,        // the camera at the scene's end (bloom, tone curve)
         kPassEngineGBuffer,     // inside the lighting: the engine's passes (rt_engine.hlsl)
         kPassEngineDirect,      // ReSTIR DI, temporal and spatial
+        kPassEngineShadow,      // the sun shadow's two blurs and its stabilisation
         kPassEngineIndirect,    // ReSTIR GI, temporal and spatial (half resolution)
         kPassEngineSpecular,
         kPassEngineDenoise,     // temporal accumulation and the four a-trous iterations
@@ -674,7 +675,7 @@ private:
     // The engine.
     enum EngineBuffer : unsigned {
         kGb0, kGb1, kDiTemp, kDi0, kDi1, kDirect, kGiTemp, kGi0, kGi1, kGiOut, kSpecular, kHistD0, kHistD1, kHistS0,
-        kHistS1, kAtrousA, kAtrousB, kEngineBuffers,
+        kHistS1, kAtrousA, kAtrousB, kShadow0, kShadow1, kEngineBuffers,
     };
     struct EngineBufferSpec {
         std::uint32_t bytes;   // per pixel, or per half-resolution sample
@@ -688,6 +689,7 @@ private:
     bool engine_specular_ = true;   // GALAXY_RT_ENGINE_SPECULAR
     bool engine_points_ = true;     // GALAXY_RT_ENGINE_POINTS: the game's point lights and the star core
     bool engine_bounces_ = true;    // GALAXY_RT_ENGINE_BOUNCES: indirect hits take their cached light (every bounce)
+    bool engine_anti_lag_ = true;   // GALAXY_RT_ENGINE_ANTILAG: the diffuse history's anti-lag
     bool engine_clear_wanted_ = true;  // GALAXY_RT_ENGINE_CLEAR: the clear-surface pass
     std::uint32_t engine_clear_mode_ = 1u;  // GALAXY_RT_ENGINE_CLEAR: 0 off, 1 on, 2-9 diagnostics (rt_engine.hlsl)
     bool engine_fresh_ = true;      // new buffers: no history
@@ -699,6 +701,12 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_gbuffer_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_direct_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_direct_spatial_pso_;
+    // The light grid (rt_engine.hlsl EngineLightGridCS: kGridCells^3 cells x kGridSlots slots x 8 bytes).
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_light_grid_pso_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> engine_light_grid_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_shadow_blur_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_shadow_post_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_shadow_stabilize_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_indirect_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_indirect_spatial_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_specular_pso_;

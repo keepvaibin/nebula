@@ -113,13 +113,16 @@ slot, rewritten each frame: no root-signature limits).
 | # | Pass | Resolution | Output |
 |---|---|---|---|
 | E1 | GBufferCS | full | normal (oct16x2), face normal, albedo (linear, de-lit: EFB colour x exp(-painted shading), the painted reflection out by its luminance share (its tint kept), past 1 scaled by its brightest channel: hue kept), roughness, metallic, class, emission (only inside the table's glowing region of an atlas), eye z, draw id |
-| E2 | DirectInitialCS | full | the sun's disc (one direction, a shadow ray; its specular lobe at least the disc wide); ReSTIR DI: 8 (16 high) light candidates (emissive triangles and the game's point lights by power), temporal reuse (reprojected, M cap 20 x candidates, depth / normal checks); the reservoir keeps the light's area (its near-field bound on reuse) |
+| E1b | LightGridCS | 24^3 cells of 256 units about the camera, 64 slots each | grid-based light reservoirs (ReGIR: Boksansky, Jukarainen and Wyman, Ray Tracing Gems II, 2021): each slot resamples 8 lights drawn by power by their light at the cell (power over the squared distance from its centre, the cell's half diagonal added); a surface in a cell draws its light candidates from its slots, each weighed by its slot's resampling weight (chained RIS), outside the grid by power. Drawn by power alone, the scene's biggest lights (the star core, a lava sea) took the candidates wherever a surface was, and a lamp, laser or fireball beside it went unfound |
+| E2 | DirectInitialCS | full | the sun's disc (one direction: interleaved gradient noise across pixels, the R2 sequence across frames; a shadow ray; kept as the penumbra its blocker makes, 0.5 d tan(radius), and the water its light crosses); ReSTIR DI: 8 (16 high) light candidates (emissive triangles and the game's point lights, from the surface's light grid cell, E1b), temporal reuse (reprojected, M cap 20 x candidates, depth / normal checks); the reservoir keeps the light's area (its near-field bound on reuse) |
 | E3 | DirectSpatialCS | full | 4 spatial neighbours (30 px, normal > 0.9, depth 10%), final shadow ray, diffuse irradiance and specular (GGX) of the kept light; visibility reuse (occluded: W 0, M kept); reservoir stored in world space |
+| E3b | ShadowBlurCS, ShadowPostCS, ShadowStabilizeCS | full | the sun's visibility (after NVIDIA's SIGMA): two blurs, each a dense 5 x 5 estimating the penumbra about the pixel (occluded neighbours', the smaller preferred) and 12 taps on a disc of its radius on screen (at most 32 px, narrowed on slanted surfaces, turned per frame), on the pixel's plane, a smaller penumbra than the estimate counting less; then a history of at most 7 frames (weight at most 5/6) clamped to the 5 x 5 neighbourhood's mean +- its deviation (x 1 to 3 as the history grows), shortened by how far the clamp moved it. Contact shadows stay sharp, far blockers' soft; a moving caster leaves no trail |
 | E4 | IndirectCS | half (one pixel per 2x2, rotating) | cosine ray; hit: emission + albedo x (sun with a shadow ray + one emitter by RIS with a shadow ray + sky SH), or, where the picture showed the hit when its slot last ran, its whole diffuse light then (a radiance cache: every bounce after the first; GALAXY_RT_ENGINE_BOUNCES); miss: sky radiance. ReSTIR GI temporal + spatial reuse (sample point, normal, radiance; Jacobian for the spatial, neighbours past tenfold rejected). The temporal reservoirs are the history; the spatial ones live one frame (fed back, their biased gain compounded into white blobs: Beach Bowl, the Garden doorway, b40-b75) |
 | E5 | SpecularCS | full | GGX VNDF ray, hit shaded as E4 (emission, sun, lights by RIS, sky ray) |
 | E5b | ClearCS (the water's trace) | full | the water window's glass and crystal by their own geometry (closest-hit traversal of the water acceleration structure): up to two thin walls along the camera ray (front, far side), each R = 2F/(1+F), T = (1-F)/(1+F) of the exact dielectric Fresnel (n 1.5), a traced GGX reflection and the sun's highlight; ClearCompositePS with the water's composite: picture behind x T + R, exposed. A `traced` material's game draw is hidden but still captured |
-| E6 | DenoiseTemporalCS | full | diffuse (demodulated) and specular histories, reprojection by depth / normal / draw id, moments, history length; variance clipping of specular history; a new sample past twice its brightest neighbour lowered to that (fireflies; lowered to the neighbours themselves, the first pixels to find a small light never entered the history) |
+| E6 | DenoiseTemporalCS | full | diffuse (demodulated: the lights' and the bounce; the sun's is E3b's) and specular histories, reprojection by depth / normal / draw id, moments, history length; variance clipping of specular history; anti-lag of the diffuse history (a 4-frame fast history of its luminance against the moments' mean: past 1.5 x the frames' deviation the history shortens, to 4 frames at most); a new sample past twice its brightest neighbour lowered to that (fireflies; lowered to the neighbours themselves, the first pixels to find a small light never entered the history) |
 | E7 | DenoiseAtrousCS x4 | full | variance-guided a-trous (steps 1, 2, 4, 8): depth plane, normal^p (p 2 at one frame of history to 64 from eight: moving characters), luminance / sqrt(variance); half-res GI joins through a joint bilateral upsample in the first step; a reflection spreads no wider than its lobe (none below roughness 0.05, full from 0.3) |
+| E7b | FinalCS | full | the sun's diffuse and specular light by E3b's visibility (its facing from the disc's centre, the water's tint) onto the a-trous result; the slot's result at the exposure |
 | E8 | CompositePS | full | albedo x diffuse + specular + emission, x exposure, sRGB-encoded into the HDR scene EFB |
 | E9 | The game's additive draws | full | drawn as the game drew them (gain 1): halos, sparks, number plates, flames are display effects; their light reaches the scene as emitting geometry (raised to radiance x exposure, b40-b71, whole halos saturated into white blobs) |
 | E10 | Camera | full | adaptation from the scene's log luminance, bloom, sun shafts (screen-space radial gather from a visible sun, quarter resolution, weighted by Henyey-Greenstein g 0.76 forward scattering of the pixel's angle from the sun and the air in front of its surface, 1 - exp(-d / sky distance); samples above 8 clamped), tone curve |
@@ -145,13 +148,14 @@ late: the restart closed the water window untraced).
 
 ## 6. Algorithms
 - BRDF: Lambert + GGX (Smith height-correlated visibility, Schlick Fresnel, F0 = lerp(0.04, albedo, metallic)).
-- RIS target: luminance of unshadowed BRDF x Le x G. Candidate pdf: power / total x 1 / area; the sun with probability
-  P_sun = min(0.5, sun share of the unshadowed target estimate).
+- RIS target: luminance of unshadowed BRDF x Le x G. Candidate pdf: in a light grid cell 1 / (the slot's weight x area),
+  outside the grid power / total x 1 / area. The sun is apart (E3b).
 - Temporal reservoir combination: biased 1/M with geometry checks (RTXDI default); visibility reuse keeps M.
 - ReSTIR GI: sample = (hit position, hit normal, outgoing radiance); spatial reuse with the solid-angle Jacobian and
   a shadow ray for the reused sample.
-- Denoiser: SVGF (Schied 2017) with ReLAX's history clamping for specular; history length cap 32 (diffuse), 16
-  (specular).
+- Denoiser: SVGF (Schied 2017) with ReLAX's history clamping for specular and ReBLUR's fast-history anti-lag for
+  diffuse; history length cap 32 (diffuse), 16 (specular). The sun's shadow apart (E3b, after SIGMA): in the diffuse
+  history (32 frames unclamped) and its a-trous it took half a second to form and to leave, and blurred to blobs.
 - Russian roulette / clamps: none on the primary estimators; firefly rejection on the history input (a sample past
   twice its 8 neighbours' brightest lowered to that).
 - Visible surface: the camera ray's triangle within the raster's depth; else the candidate nearest that depth (the
@@ -177,7 +181,8 @@ G-buffer 0.3 ms, DI 1.2 ms, GI 1.5 ms, specular 1.0 ms, denoise 1.0 ms, composit
    [rt-reference-engine] prints the engine's diffuse light against it over the ordinary non-metal surfaces (bias, mean
    error). Good Egg, 4140 paths: -2.5 % bias, 6.8 % mean per-pixel difference. GALAXY_RT_ENGINE_VIEW=8 shows it.
    Diagnostic views: 1 direct, 2 indirect, 3 specular, 7 albedo, 8 reference, 9 / 10 the texture coordinate of the
-   table's glowing region (u / v as 16 hues); GALAXY_RT_PROBE prints [rt-probe-engine] and [rt-probe-uv].
+   table's glowing region (u / v as 16 hues), 11 the sun's filtered visibility, 12 its ray's, 13 the penumbra's radius
+   on screen; GALAXY_RT_PROBE prints [rt-probe-engine] and [rt-probe-uv].
 2. Pictures vs the game and the previous build, hidden runs, frozen bins, rt-images.
 3. Temporal stability: frame-to-frame change of a still view against the game's own (port/tools/flicker.py, 60
    consecutive presents, GALAXY_PRESENT_SNAPSHOT_EVERY=1 with _LAST): Observatory plaza b93, 0.16 / 255 more than

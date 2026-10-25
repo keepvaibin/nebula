@@ -13,7 +13,11 @@
 #include "rt_engine_gbuffer_cs.h"
 #include "rt_engine_indirect_cs.h"
 #include "rt_engine_indirect_spatial_cs.h"
+#include "rt_engine_light_grid_cs.h"
 #include "rt_engine_reference_cs.h"
+#include "rt_engine_shadow_blur_cs.h"
+#include "rt_engine_shadow_post_cs.h"
+#include "rt_engine_shadow_stabilize_cs.h"
 #include "rt_engine_specular_cs.h"
 #include "rt_engine_temporal_cs.h"
 
@@ -32,11 +36,14 @@ using Microsoft::WRL::ComPtr;
 enum EngineView : std::uint32_t {
     kEvGBuffer, kEvGBufferPrev, kEvDiTemp, kEvDi, kEvDiPrev, kEvDirect, kEvGiTemp, kEvGi, kEvGiPrev, kEvGiOut,
     kEvSpecular, kEvHistDiffuse, kEvHistDiffusePrev, kEvHistSpecular, kEvHistSpecularPrev, kEvAtrousA, kEvAtrousB,
-    kEvSlot, kEvPicture, kEvCount,
+    kEvSlot, kEvPicture, kEvShadow, kEvShadowPrev, kEvLightGrid, kEvCount,
     // The clear-surface pass's views (trace_engine_clear) follow the trace's.
     kEvWaterScene = kEvCount, kEvWaterPositions, kEvWaterSurfaces, kEvClearDraws, kEvClear, kEvClearEnd,
 };
-static_assert(kEvClearEnd <= 24u);
+static_assert(kEvClearEnd <= 32u);
+
+// rt_engine.hlsl's light grid: kGridCells^3 cells of kGridSlots slots (a light, its weight).
+constexpr std::uint64_t kEngineGridBytes = 24ull * 24ull * 24ull * 64ull * 8ull;
 
 // rt_engine.hlsl kEngine*.
 constexpr std::uint32_t kEngineOn = 1u;
@@ -54,6 +61,7 @@ constexpr std::uint32_t kEngineClearNoTev = 65536u;
 constexpr std::uint32_t kEngineBounceCache = 131072u;
 constexpr std::uint32_t kEngineReference = 262144u;
 constexpr std::uint32_t kEngineWaterLight = 524288u;
+constexpr std::uint32_t kEngineNoAntiLag = 1048576u;
 
 float env_value(const char* name, float fallback) {
     char value[32]{};
@@ -82,7 +90,8 @@ const SceneRayTracer::EngineBufferSpec SceneRayTracer::kEngineBufferSpecs[kEngin
     {8u, false, L"rt engine specular"},     {16u, false, L"rt engine diffuse history 0"},
     {16u, false, L"rt engine diffuse history 1"}, {16u, false, L"rt engine specular history 0"},
     {16u, false, L"rt engine specular history 1"}, {16u, false, L"rt engine a-trous a"},
-    {16u, false, L"rt engine a-trous b"},
+    {16u, false, L"rt engine a-trous b"},   {4u, false, L"rt engine shadow 0"},
+    {4u, false, L"rt engine shadow 1"},
 };
 
 bool SceneRayTracer::create_engine_pipelines() {
@@ -91,6 +100,7 @@ bool SceneRayTracer::create_engine_pipelines() {
     engine_specular_ = env_value("GALAXY_RT_ENGINE_SPECULAR", 1.0f) != 0.0f;
     engine_points_ = env_value("GALAXY_RT_ENGINE_POINTS", 1.0f) != 0.0f;
     engine_bounces_ = env_value("GALAXY_RT_ENGINE_BOUNCES", 1.0f) != 0.0f;
+    engine_anti_lag_ = env_value("GALAXY_RT_ENGINE_ANTILAG", 1.0f) != 0.0f;
     engine_clear_mode_ = static_cast<std::uint32_t>(std::clamp(env_value("GALAXY_RT_ENGINE_CLEAR", 1.0f), 0.0f, 9.0f));
     engine_clear_wanted_ = engine_clear_mode_ != 0u;
     engine_reference_ = env_value("GALAXY_RT_ENGINE_REFERENCE", 0.0f) != 0.0f;
@@ -110,6 +120,11 @@ bool SceneRayTracer::create_engine_pipelines() {
         compute(g_rt_engine_gbuffer_cs, sizeof(g_rt_engine_gbuffer_cs), engine_gbuffer_pso_) &&
         compute(g_rt_engine_direct_cs, sizeof(g_rt_engine_direct_cs), engine_direct_pso_) &&
         compute(g_rt_engine_direct_spatial_cs, sizeof(g_rt_engine_direct_spatial_cs), engine_direct_spatial_pso_) &&
+        compute(g_rt_engine_light_grid_cs, sizeof(g_rt_engine_light_grid_cs), engine_light_grid_pso_) &&
+        compute(g_rt_engine_shadow_blur_cs, sizeof(g_rt_engine_shadow_blur_cs), engine_shadow_blur_pso_) &&
+        compute(g_rt_engine_shadow_post_cs, sizeof(g_rt_engine_shadow_post_cs), engine_shadow_post_pso_) &&
+        compute(g_rt_engine_shadow_stabilize_cs, sizeof(g_rt_engine_shadow_stabilize_cs),
+                engine_shadow_stabilize_pso_) &&
         compute(g_rt_engine_indirect_cs, sizeof(g_rt_engine_indirect_cs), engine_indirect_pso_) &&
         compute(g_rt_engine_indirect_spatial_cs, sizeof(g_rt_engine_indirect_spatial_cs),
                 engine_indirect_spatial_pso_) &&
@@ -165,6 +180,12 @@ std::uint32_t SceneRayTracer::texture_srv(ID3D12Resource* resource) {
 }
 
 bool SceneRayTracer::ensure_engine_buffers(std::uint32_t width, std::uint32_t height) {
+    if (!engine_light_grid_ &&
+        !create_buffer(kEngineGridBytes, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                       D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, engine_light_grid_, L"rt engine light grid")) {
+        engine_light_grid_.Reset();
+        return false;
+    }
     if (width == engine_width_ && height == engine_height_ && engine_buffers_[0]) {
         return true;
     }
@@ -198,7 +219,8 @@ bool SceneRayTracer::ensure_engine_buffers(std::uint32_t width, std::uint32_t he
     engine_height_ = height;
     engine_fresh_ = true;
     std::cerr << "[rt] engine buffers " << width << 'x' << height << " mb="
-              << ((full * (32u * 5u + 16u + 8u + 16u * 6u + 16u * kLightSlots) + half * (32u * 3u + 8u)) >> 20u) << '\n';
+              << ((full * (32u * 5u + 16u + 8u + 16u * 6u + 4u * 2u + 16u * kLightSlots) + half * (32u * 3u + 8u)) >> 20u)
+              << '\n';
     return true;
 }
 
@@ -238,6 +260,9 @@ bool SceneRayTracer::engine_prepare(std::uint32_t width, std::uint32_t height, u
     views[kEvAtrousB] = uav(kAtrousB);
     views[kEvSlot] = buffer_uav(engine_slots_[slot].Get(), full * 16u);
     views[kEvPicture] = texture_srv(engine_picture_);
+    views[kEvShadow] = uav(kShadow0 + cur);
+    views[kEvShadowPrev] = uav(kShadow0 + prev);
+    views[kEvLightGrid] = buffer_uav(engine_light_grid_.Get(), kEngineGridBytes);
     for (const std::uint32_t view : views) {
         if (view == 0xFFFFFFFFu) {
             engine_fresh_ = true;
@@ -268,7 +293,7 @@ bool SceneRayTracer::engine_prepare(std::uint32_t width, std::uint32_t height, u
                 (engine_clear_mode_ == 5u ? kEngineClearNoBack : 0u) | (engine_clear_mode_ == 6u ? kEngineClearNoShade : 0u) |
                 (engine_clear_mode_ == 7u ? kEngineHitNoLights : 0u) | (engine_clear_mode_ == 8u ? kEngineHitNoSky : 0u) |
                 (engine_clear_mode_ == 9u ? kEngineClearNoTev : 0u) | (engine_bounces_ ? kEngineBounceCache : 0u) |
-                (water_light ? kEngineWaterLight : 0u) | (engine_view_ << 4u);
+                (water_light ? kEngineWaterLight : 0u) | (engine_anti_lag_ ? 0u : kEngineNoAntiLag) | (engine_view_ << 4u);
     c.info[1] = 0u;
     c.info[2] = slot;
     c.info[3] = 0u;
@@ -323,14 +348,22 @@ void SceneRayTracer::trace_engine(ID3D12GraphicsCommandList* list, Allocate allo
     int timed = begin_pass(list);
     run(engine_gbuffer_pso_.Get(), gx, gy);
     end_pass(list, timed, kPassEngineGBuffer);
+    // The light grid (the lights near each cell about the camera), for the surfaces' and the hits' light candidates.
+    timed = begin_pass(list);
+    run(engine_light_grid_pso_.Get(), static_cast<UINT>((kEngineGridBytes / 8u + 63u) / 64u), 1u);
     if (engine_reference_running_) {
         run(engine_reference_pso_.Get(), gx, gy);
         ++engine_reference_paths_;
     }
-    timed = begin_pass(list);
     run(engine_direct_pso_.Get(), gx, gy);
     run(engine_direct_spatial_pso_.Get(), gx, gy);
     end_pass(list, timed, kPassEngineDirect);
+    // The sun's shadow (its blurs in the a-trous buffers, free until the temporal pass).
+    timed = begin_pass(list);
+    run(engine_shadow_blur_pso_.Get(), gx, gy);
+    run(engine_shadow_post_pso_.Get(), gx, gy);
+    run(engine_shadow_stabilize_pso_.Get(), gx, gy);
+    end_pass(list, timed, kPassEngineShadow);
     timed = begin_pass(list);
     run(engine_indirect_pso_.Get(), hx, hy);
     run(engine_indirect_spatial_pso_.Get(), hx, hy);

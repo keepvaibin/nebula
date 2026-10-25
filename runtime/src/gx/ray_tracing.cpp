@@ -130,7 +130,7 @@ struct RtLightConstants {
     float light_fit[4];                   // physical: the camera's exposure, the light fitted to the baked light (1)
     RtEngineConstants engine;             // the ray tracing engine (ray_tracing_engine.cpp)
 };
-static_assert(sizeof(RtLightConstants) == 1360u);
+static_assert(sizeof(RtLightConstants) == 1392u);
 
 // Mirrors cbuffer RtEmit in rt_lighting.hlsl (root constants).
 struct RtEmitConstants {
@@ -319,7 +319,7 @@ enum EmitParameter : UINT {
 };
 
 // The ray tracing engine's views of the clear-surface pass (rt_engine.hlsl kEvWaterScene .. kEvClear).
-constexpr std::uint32_t kEngineClearViews = 19u;
+constexpr std::uint32_t kEngineClearViews = 22u;
 // A result slot's state: read by the composite (pixel) and the picture capture (compute).
 constexpr D3D12_RESOURCE_STATES kLightRead =
     D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
@@ -862,6 +862,11 @@ void SceneRayTracer::shutdown() noexcept {
     engine_gbuffer_pso_.Reset();
     engine_direct_pso_.Reset();
     engine_direct_spatial_pso_.Reset();
+    engine_light_grid_pso_.Reset();
+    engine_light_grid_.Reset();
+    engine_shadow_blur_pso_.Reset();
+    engine_shadow_post_pso_.Reset();
+    engine_shadow_stabilize_pso_.Reset();
     engine_indirect_pso_.Reset();
     engine_indirect_spatial_pso_.Reset();
     engine_specular_pso_.Reset();
@@ -1676,14 +1681,15 @@ void SceneRayTracer::report() {
         std::cerr << line;
         if (n[kPassEngineGBuffer] != 0u) {
             const double engine_ms = call_ms(kPassEngineGBuffer) + call_ms(kPassEngineDirect) +
-                                     call_ms(kPassEngineIndirect) + call_ms(kPassEngineSpecular) +
-                                     call_ms(kPassEngineDenoise) + call_ms(kPassEngineFinal);
+                                     call_ms(kPassEngineShadow) + call_ms(kPassEngineIndirect) +
+                                     call_ms(kPassEngineSpecular) + call_ms(kPassEngineDenoise) +
+                                     call_ms(kPassEngineFinal);
             std::snprintf(line, sizeof(line),
-                          "[rt-engine-pass] gbuffer-ms=%.3f direct-ms=%.3f indirect-ms=%.3f specular-ms=%.3f "
-                          "denoise-ms=%.3f final-ms=%.3f engine-ms=%.3f clear-ms=%.3f clears=%.2f\n",
-                          call_ms(kPassEngineGBuffer), call_ms(kPassEngineDirect), call_ms(kPassEngineIndirect),
-                          call_ms(kPassEngineSpecular), call_ms(kPassEngineDenoise), call_ms(kPassEngineFinal),
-                          engine_ms, call_ms(kPassEngineClear), calls(kPassEngineClear));
+                          "[rt-engine-pass] gbuffer-ms=%.3f direct-ms=%.3f shadow-ms=%.3f indirect-ms=%.3f "
+                          "specular-ms=%.3f denoise-ms=%.3f final-ms=%.3f engine-ms=%.3f clear-ms=%.3f clears=%.2f\n",
+                          call_ms(kPassEngineGBuffer), call_ms(kPassEngineDirect), call_ms(kPassEngineShadow),
+                          call_ms(kPassEngineIndirect), call_ms(kPassEngineSpecular), call_ms(kPassEngineDenoise),
+                          call_ms(kPassEngineFinal), engine_ms, call_ms(kPassEngineClear), calls(kPassEngineClear));
             std::cerr << line;
         }
     }
@@ -3488,12 +3494,22 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
             std::copy(d.begin(), d.end(), c.sun);
             // The game's off-screen shadow casters sweep along it (world: the rotation's transpose).
             std::array<float, 3> world{};
+            std::array<float, 3> world_up{};
             for (unsigned r = 0; r < 3u; ++r) {
                 for (unsigned k = 0; k < 3u; ++k) {
                     world[k] += camera_[r * 4u + k] * d[r];
+                    world_up[k] += camera_[r * 4u + k] * scene_up_[r];
                 }
             }
             set_traced_sun(world, camera_known_);
+            // GALAXY_TRACE_SUN=1: per traced scene the light's world direction, where it comes from (the sun the game
+            // shows, else its key light or the table's moon) and the player's up.
+            static const bool trace_sun = env_float("GALAXY_TRACE_SUN", 0.0f) != 0.0f;
+            if (trace_sun) {
+                std::fprintf(stderr, "[rt-sun] frame=%u source=%s world=(%.3f %.3f %.3f) up=(%.3f %.3f %.3f)\n",
+                             c.frame, shown ? "sun" : table_moon ? "moon" : "key", world[0], world[1], world[2],
+                             world_up[0], world_up[1], world_up[2]);
+            }
         };
         hold_light(visible_sun);
         // The camera's exposure from the game's own stage light: a white surface facing the player's up under its

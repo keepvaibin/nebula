@@ -89,7 +89,7 @@ cbuffer RtLight : register(b0)
     float4 g_light_fit;            // physical: the camera's exposure (x; 0: physical_exposure's own), the light
                                    // fitted to the baked light (y: 1)
     // The ray tracing engine (rt_engine.hlsl; ray_tracing.h RtEngineConstants).
-    uint4 g_engine_views[6];       // its buffers in the descriptor heap (kEv*)
+    uint4 g_engine_views[8];       // its buffers in the descriptor heap (kEv*)
     uint4 g_engine_size;           // full width, height; half width, height
     uint4 g_engine_info;           // flags (kEngine*), a-trous step, slot, a-trous parity
     float4 g_engine_params;
@@ -747,19 +747,25 @@ void SkyStateCS()
         const uint count = c_sums.Load(kAdaptation + 12u);
         const float mean = count != 0u ? exp2(float(asint(c_sums.Load(kAdaptation + 8u))) / (256.0f * float(count))) : 0.0f;
         c_sums.Store2(kAdaptation + 8u, uint2(0u, 0u));
-        // The light at the brightest tenth of the surfaces (the top of the bucket the tenth falls in).
+        // The light at the brightest tenth of the surfaces: within the bucket the tenth falls in, as far down it as the
+        // tenth's share of its count (log2-linear). The bucket's top alone stepped the target by 0.75 stops whenever a
+        // few samples crossed a bucket's edge, and the eased adaptation wandered after it (the lit ground's brightness
+        // drifting by several levels in a still view).
         float bright = 0.0f;
         {
             uint total = 0u;
             [unroll] for (uint b = 0u; b < kAdaptationBuckets; ++b) {
                 total += c_sums.Load(kAdaptationHistogram + b * 4u);
             }
+            const float wanted = kAdaptationBright * float(total);
             uint above = 0u;
             [loop] for (uint k = kAdaptationBuckets; k > 0u; --k) {
-                above += c_sums.Load(kAdaptationHistogram + (k - 1u) * 4u);
-                if (bright == 0.0f && float(above) >= kAdaptationBright * float(total) && total != 0u) {
-                    bright = exp2(-8.0f + 0.75f * float(k));
+                const uint count = c_sums.Load(kAdaptationHistogram + (k - 1u) * 4u);
+                if (bright == 0.0f && total != 0u && count != 0u && float(above + count) >= wanted) {
+                    const float into = saturate((wanted - float(above)) / float(count));
+                    bright = exp2(-8.0f + 0.75f * (float(k) - into));
                 }
+                above += count;
             }
             [unroll] for (uint c = 0u; c < kAdaptationBuckets; ++c) {
                 c_sums.Store(kAdaptationHistogram + c * 4u, 0u);
@@ -2096,6 +2102,7 @@ struct Surface {
     float3 n;          // shading normal
     float3 ng;         // face normal, towards the camera
     float3 lifted;     // the point lifted off the face
+    float lift;        // how far the shading normals lift it, along the face normal (0: flat)
     uint2 primary;     // the triangle + 1 (0: none), barycentrics (halves)
     // A clear crystal or glass surface (surface class 7) lets the lights behind it through: the star bits inside a
     // crystal light it from within.
@@ -2136,6 +2143,7 @@ Surface primary_surface(int2 q, float3 p)
     s.n = surface_normal(q, p);
     s.ng = s.n;
     s.lifted = p;
+    s.lift = 0.0f;
     s.primary = uint2(0u, 0u);
     s.clear = false;
     const float span = length(p);
@@ -2179,10 +2187,12 @@ Surface primary_surface(int2 q, float3 p)
         if (face_length > 1e-12f) {
             s.ng = face / face_length;
             s.ng = dot(s.ng, p) > 0.0f ? -s.ng : s.ng;
-            s.lifted = v0 * w.x + v1 * w.y + v2 * w.z;
+            const float3 hit = v0 * w.x + v1 * w.y + v2 * w.z;
+            s.lifted = hit;
             s.primary = uint2(tri + 1u, f32tof16(b.x) | (f32tof16(b.y) << 16u));
             s.clear = ((g_surfaces.Load(tri * 16u + 12u) >> 8u) & 15u) == kClearClass;
             smooth_surface(tri, w, v0, v1, v2, s.ng, s.n, s.lifted);
+            s.lift = max(dot(s.lifted - hit, s.ng), 0.0f);
         }
     }
     return s;
