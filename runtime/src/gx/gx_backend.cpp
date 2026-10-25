@@ -7465,6 +7465,8 @@ void GxBackend::report_interp_stats() {
             << " presents-during-sequence=" << interp_present_skipped_
             << " snapped-records=" << interp_snapped_
             << " failed=" << interp_failed_
+            << " history-resets=" << interp_history_resets_
+            << " history-carried=" << interp_history_carried_
             << " replay-fail=" << renderer_.replay_failure()
             << " log-gap-ops=" << renderer_.take_log_gap_ops()
             << " real-only=" << real_only
@@ -7561,6 +7563,8 @@ void GxBackend::report_interp_stats() {
     interp_present_skipped_ = 0u;
     interp_snapped_ = 0u;
     interp_failed_ = 0u;
+    interp_history_resets_ = 0u;
+    interp_history_carried_ = 0u;
     interp_sequences_ = 0u;
     interp_real_only_ = {};
     interp_cpu_ms_ = 0.0;
@@ -7798,19 +7802,27 @@ bool GxBackend::render_interp_subframe(float t) {
     const Affine34 camera_t = camera_at(interp_camera_, t);
     interp_moving_records_ += interp_moving_.size();
     interp_ps_moving_total_ += interp_ps_moving_.size();
-    // The frame presented before: earlier in this sequence, or this sequence's
-    // t = 0 when it was the scene before at t = 1. Anything else (a frame
-    // presented alone, a cut, a gap) starts the upscaler's history again.
+    // The frame presented before: earlier in this sequence; this sequence's t = 0 when it was the scene before at
+    // t = 1; or the last sub-frame of the scene before's sequence, at t' of that pair, when the scene arrived first
+    // (on the display's vblanks every sequence ends so: no slot meets t = 1). That frame sits at t' - 1 on this
+    // pair's line: the motion vectors take this pair's motion back over the last 1 - t' of the one before, exact for
+    // steady motion and off by the change in velocity over that part. Anything else (a frame presented alone, a cut,
+    // a gap, skipped scenes) starts the upscaler's history again.
     Renderer::SubframeTime time{};
     time.t = t;
     time.t_prev = t;
+    const bool shown_before = interp_shown_scene_ == static_cast<std::int32_t>(interp_sequence_.before) &&
+                              !(interp_camera_.known && interp_camera_.cut);
     if (interp_shown_serial_ == interp_sequence_serial_ && interp_shown_t_ < t) {
         time.t_prev = interp_shown_t_;
-    } else if (interp_shown_t_ >= 1.0f && interp_shown_scene_ == static_cast<std::int32_t>(interp_sequence_.before) &&
-               !(interp_camera_.known && interp_camera_.cut)) {
+    } else if (interp_shown_t_ >= 1.0f && shown_before) {
         time.t_prev = 0.0f;
+    } else if (shown_before && !interp_sequence_.chained && interp_shown_serial_ + 1u == interp_sequence_serial_) {
+        time.t_prev = interp_shown_t_ - 1.0f;
+        ++interp_history_carried_;
     } else {
         time.reset = true;
+        ++interp_history_resets_;
     }
     const Affine34 camera_prev = time.t_prev == t ? camera_t : camera_at(interp_camera_, time.t_prev);
     if (!renderer_.present_replay_subframe(time, camera_t, camera_prev)) {

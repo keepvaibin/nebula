@@ -1212,6 +1212,8 @@ private:
     std::uint64_t interp_presented_ = 0;
     std::uint64_t interp_dropped_ = 0;
     std::uint64_t interp_failed_ = 0;     // sub-frames that could not be recorded
+    std::uint64_t interp_history_resets_ = 0;  // presented frames that start the temporal upscaler's history again
+    std::uint64_t interp_history_carried_ = 0; // first sub-frames whose frame before ended the pair before
     double interp_cpu_ms_ = 0.0;          // wall time per sub-frame, waits included
     double interp_prepare_ms_ = 0.0;      // classification, program and replay per sequence
     std::array<double, 6> interp_prepare_phase_ms_{};

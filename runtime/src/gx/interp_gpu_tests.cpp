@@ -336,6 +336,74 @@ void test_previous_frame() {
     }
 }
 
+// The frame presented before a sequence's first sub-frame can be the last sub-frame of the pair before (at t' of
+// A -> B, the sequence superseded before its own frame). The next pair's previous-frame ops at t' - 1 give it back
+// for steady motion: an object moving and turning about its own centre at constant rates, a camera moving and
+// turning at constant rates, and a projection drifting as a screen shake does.
+void test_previous_frame_across_pairs() {
+    for (int round = 0; round < 200; ++round) {
+        const float yaw = uniform(-1.0f, 1.0f), yaw_rate = uniform(-0.05f, 0.05f);
+        const float cx = uniform(-50.0f, 50.0f), cvx = uniform(-15.0f, 15.0f), cvz = uniform(-15.0f, 15.0f);
+        Affine34 views[3], objects[3];
+        GxVsConstants projections[3]{};
+        // Uniform scale: a spin then keeps the polar decomposition's stretch, so the turn is all the motion.
+        const float scale = uniform(0.5f, 2.0f);
+        const Affine34 object = rotation(uniform(-3.0f, 3.0f), uniform(-1.4f, 1.4f), uniform(-3.0f, 3.0f), scale, scale,
+                                         scale, uniform(-500.0f, 500.0f), uniform(-200.0f, 200.0f),
+                                         uniform(-2000.0f, -100.0f));
+        const float spin = uniform(-0.1f, 0.1f);  // about the object's own y axis: one axis, one rate
+        const float velocity[3]{uniform(-30.0f, 30.0f), uniform(-30.0f, 30.0f), uniform(-30.0f, 30.0f)};
+        const float shake = uniform(-0.02f, 0.02f);
+        for (int k = 0; k < 3; ++k) {
+            const float f = static_cast<float>(k);
+            views[k] = view(yaw + yaw_rate * f, cx + cvx * f, 100.0f, 500.0f + cvz * f);
+            // The object's own turn after its pose (about its centre), then its translation.
+            objects[k] = affine_multiply(object, rotation(spin * f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f));
+            for (int i = 0; i < 3; ++i) objects[k][i * 4 + 3] += velocity[i] * f;
+            projections[k].projection[0][0] = 1.2f;
+            projections[k].projection[1][1] = 1.6f;
+            projections[k].projection[0][2] = shake * f;
+            projections[k].projection[1][2] = -0.5f * shake * f;
+            projections[k].projection[3][2] = -1.0f;
+        }
+        const Affine34 eye_a = affine_multiply(views[0], objects[0]);
+        const Affine34 eye_b = affine_multiply(views[1], objects[1]);
+        const Affine34 eye_c = affine_multiply(views[2], objects[2]);
+        CameraMotion camera_ab, camera_bc;
+        camera_motion(&views[0], &views[1], 0.0f, CameraCutLimits{}, camera_ab);
+        camera_motion(&views[1], &views[2], 0.0f, CameraCutLimits{}, camera_bc);
+        EyeMotion motion_ab, motion_bc;
+        eye_motion(&eye_a, eye_b, camera_ab, false, motion_ab);
+        eye_motion(&eye_b, eye_c, camera_bc, false, motion_bc);
+        // The pair B -> C as a sequence builds it: the eye at t, and at the frame before for motion vectors.
+        Program program;
+        program.set_endpoint_cameras(camera_at(camera_bc, 0.0f), camera_at(camera_bc, 1.0f));
+        program.at_previous(true);
+        program.eye(0u, motion_bc, &eye_b[0], &eye_c[0]);
+        program.projection_params(12u - kVsMotionPrevProj, projections[1], projections[2]);
+        program.at_previous(false);
+        const float shown = uniform(0.5f, 0.99f);  // the last sub-frame of A -> B
+        FrameTimes times{};
+        times.t = uniform(0.0f, 0.25f);
+        times.camera = camera_at(camera_bc, times.t);
+        times.t_prev = shown - 1.0f;
+        times.camera_prev = camera_at(camera_bc, times.t_prev);
+        std::uint32_t out[16]{};
+        evaluate(program, times, out);
+        // What the frame at `shown` of A -> B drew.
+        const Affine34 drawn = eye_at(motion_ab, camera_ab, camera_at(camera_ab, shown), shown);
+        bool same = true;
+        for (unsigned i = 0; i < 12u; ++i) {
+            same = same && near_word(out[i], std::bit_cast<std::uint32_t>(drawn[i]), 2e-4f);
+        }
+        const float drawn_proj[4]{1.2f, shake * shown, 1.6f, -0.5f * shake * shown};
+        for (unsigned i = 0; i < 4u; ++i) {
+            same = same && std::fabs(std::bit_cast<float>(out[12u + i]) - drawn_proj[i]) <= 1e-6f;
+        }
+        check(same, "the next pair's previous-frame ops at t' - 1 give the frame at t' of the pair before");
+    }
+}
+
 // Endpoint-exact ops: at t = 0 the value is the frame before's bit for bit, at t = 1 this frame's, wherever the
 // objects are (far from the world's origin too, where the world-space round trip loses the low bits), and in
 // between they stay within float error of the plain evaluation.
@@ -444,6 +512,7 @@ int main() {
     test_colours();
     test_layout();
     test_previous_frame();
+    test_previous_frame_across_pairs();
     if (failures != 0) {
         std::printf("%d failure(s)\n", failures);
         return 1;
