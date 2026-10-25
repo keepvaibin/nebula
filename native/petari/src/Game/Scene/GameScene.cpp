@@ -7,6 +7,9 @@
 #include "Game/System/GameDataFunction.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
+#include "Game/LiveActor/ClippingActorHolder.hpp"
+#include "Game/LiveActor/ClippingActorInfo.hpp"
+#include "Game/LiveActor/ClippingDirector.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/System/GameDataHolder.hpp"
 #include "Game/System/GameEventFlagChecker.hpp"
@@ -344,8 +347,17 @@ void GameScene::draw() const {
                 if (pActor == nullptr || pActor->mModelManager == nullptr || MR::isDead(pActor)) {
                     continue;
                 }
-                OSReport("actor %s %.0f %.0f %.0f\n", MR::getModelResName(pActor), pActor->mPosition.x,
-                         pActor->mPosition.y, pActor->mPosition.z);
+                // With the animation it plays (none: no BCK started), its frame and rate; whether its model is shown;
+                // whether the game clips it, and whether it is drawn while clipped, as a ray-traced shadow caster
+                // (ClippingActorInfo::judgeShadowDraw).
+                const char* pBck = MR::getPlayingBckName(pActor);
+                const ClippingActorInfo* pInfo = MR::getClippingDirector()->mActorHolder->find(pActor);
+                OSReport("actor %s %.0f %.0f %.0f bck=%s frame=%.1f rate=%.2f stopped=%d hidden=%d clipped=%d caster=%d\n",
+                         MR::getModelResName(pActor), pActor->mPosition.x, pActor->mPosition.y, pActor->mPosition.z,
+                         pBck != nullptr ? pBck : "none", pBck != nullptr ? MR::getBckFrame(pActor) : 0.0f,
+                         pBck != nullptr ? MR::getBckRate(pActor) : 0.0f, pBck != nullptr && MR::isBckStopped(pActor) ? 1 : 0,
+                         MR::isHiddenModel(pActor) ? 1 : 0, MR::isClipped(pActor) ? 1 : 0,
+                         pInfo != nullptr && pInfo->mShadowDrawn ? 1 : 0);
             }
         } else if (action.kind == NEBULA_TEST_SHAKE_CAMERA) {
             // The shaker keeps its owner only to stop it; nothing stops this one.

@@ -192,6 +192,8 @@ public:
     void request_eval_readback() noexcept { eval_readback_requested_ = true; }
     [[nodiscard]] bool take_eval_readback(std::vector<std::uint32_t>& words, float& t);
     [[nodiscard]] bool temporal_mode() const { return false; }
+    // The 3D image's scale over the Wii's 640 x 456 as it is shown (no temporal upscaler here: the EFB's).
+    [[nodiscard]] unsigned scene_display_scale() const noexcept { return efb_scale_; }
     // A copy right after the display copy, from the output EFB the 2D layer drew in (the EFB itself without one).
     [[nodiscard]] bool copy_output_efb_to_texture(const EfbCopyParams& params, TextureCache& textures);
 

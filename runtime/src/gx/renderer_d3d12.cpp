@@ -4003,6 +4003,13 @@ bool RendererD3D12::temporal_mode() const {
     return (upscaler == 2u && fsr3_available()) || (upscaler == 3u && streamline::dlss_supported());
 }
 
+unsigned RendererD3D12::scene_display_scale() const {
+    if (temporal_ != nullptr && temporal_mode() && temporal_output_w_ > kEfbWidth * efb_scale_) {
+        return temporal_output_w_ / kEfbWidth;
+    }
+    return efb_scale_;
+}
+
 bool RendererD3D12::ensure_motion_target() {
     if (motion_target_ && motion_target_scale_ == efb_scale_) {
         return true;

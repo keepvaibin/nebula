@@ -141,6 +141,8 @@ enum {
     NEBULA_OPTION_DRAW_IDENTITIES, /* 1 while the renderer reads host markers (__NebulaGXHostMarker) */
     NEBULA_OPTION_RT_SHADOW_CASTERS, /* 1 while the ray tracer lights the scene: clipped actors whose shadows can
                                         reach the view stay drawn (ClippingActorInfo::judgeShadowDraw) */
+    NEBULA_OPTION_LOD_SCALE,         /* the 3D image's lines over the console's 456 as shown (1 at its resolution, 0
+                                        before the first scene): LodCtrl's switch distances grow by it */
 };
 
 /* game_light: the game's lights, from the objects that own them; `values` per kind. */

@@ -132,6 +132,8 @@ namespace {
 static_assert(kEfbWidth == 640u && kEfbHeight == 528u);
 
 std::atomic<unsigned> s_layer_2d_scale{0u};
+// The 3D image's scale as shown, at each scene's begin (scene_display_scale).
+std::atomic<unsigned> s_scene_display_scale{0u};
 
 // True when the alpha test passes every fragment.
 bool alpha_test_keeps_all(const PixelShaderKey& key) noexcept {
@@ -6666,6 +6668,9 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
         s_layer_2d_scale.store(renderer_.efb_scale(), std::memory_order_relaxed);
         begin_side_layer(kScreenLayer);
     }
+    if (marker == FifoMarker::SceneBegin) {
+        s_scene_display_scale.store(renderer_.scene_display_scale(), std::memory_order_relaxed);
+    }
     // While ray tracing runs the scene layer draws into the HDR scene EFB (renderer_d3d12 begin_hdr_scene): from here,
     // with the render EFB back.
     if (marker == FifoMarker::SceneBegin && renderer_.rt_active()) {
@@ -12609,6 +12614,10 @@ void boot_step(const char* step) noexcept {
 
 unsigned layer_2d_scale() noexcept {
     return s_layer_2d_scale.load(std::memory_order_relaxed);
+}
+
+unsigned scene_display_scale() noexcept {
+    return s_scene_display_scale.load(std::memory_order_relaxed);
 }
 
 }  // namespace galaxy::gx

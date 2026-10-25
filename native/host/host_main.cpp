@@ -2207,6 +2207,12 @@ uint32_t svc_option(void*, uint32_t what) {
 #else
         return 0;
 #endif
+    case NEBULA_OPTION_LOD_SCALE:
+#if defined(NEBULA_HOST_RENDERER)
+        return galaxy::gx::scene_display_scale();
+#else
+        return 1;
+#endif
     case NEBULA_OPTION_TEST_DUMP_LAYOUTS: {
         static const bool dump = [] {
             const char* value = std::getenv("GALAXY_TEST_DUMP_LAYOUTS");
@@ -2619,7 +2625,8 @@ int svc_hbm(void*, uint32_t what, uint32_t value) {
 //     and its first storybook chapter; PictureBookAlreadyRead=n: chapters 1-n read, which the Library's book lists;
 //     SpinAndStarPointer: the spin and pointer the Gateway's Luma grants; Achievement:<id>: that achievement's pop-up; AchievementBoard: the
 //     Observatory's achievement board).
-//   GALAXY_TEST_EVENTS actors@frame: the live actors with a model, by model name and position (where to teleport).
+//   GALAXY_TEST_EVENTS actors@frame: the live actors with a model, by model name and position (where to teleport),
+//     with the animation they play, and whether they are shown, clipped, or drawn while clipped as shadow casters.
 //   GALAXY_TEST_EVENTS shake@frame: the screen shakes from that frame until the scene ends.
 std::atomic<bool> gTourDone{false};
 

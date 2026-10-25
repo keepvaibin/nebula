@@ -261,6 +261,8 @@ public:
 
     // A temporal upscaler (FSR 3 or DLSS) is selected and available.
     [[nodiscard]] bool temporal_mode() const;
+    // The 3D image's scale over the Wii's 640 x 456 as it is shown: the temporal upscaler's output, else the EFB's.
+    [[nodiscard]] unsigned scene_display_scale() const;
     // At the start of the guest's 3D scene: whether the temporal path runs for
     // it and, if so, the scene's sub-pixel jitter in render pixels (applied to
     // perspective projections).
