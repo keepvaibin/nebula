@@ -1792,8 +1792,8 @@ private:
     }
 
     // Vibration: applies the game's published motor state (rumble::motor_should_run) to the controller in use
-    // and turns every other motor off. Runs after every wake: a device report, a publication, a rescan or the
-    // motor timer.
+    // and turns every other motor off. Runs after every wake: a device report, a publication, the setup thread's
+    // devices, a sent report or the motor timer.
     void service_rumble() {
         Hub& h = hub();
         AcquireSRWLockShared(&h.rumble_lock);
