@@ -6,7 +6,7 @@
 // The including shader declares, with RT_TEXTURED (shader model 6.6, the descriptor heap):
 //   ByteAddressBuffer g_tev       per draw a 128-byte record (RtTevMaterial, rt_types.h), then the stages
 //   ByteAddressBuffer g_tri_uv    per triangle kTriUvStride bytes (ray_tracing.hlsl GeometryCS)
-//   SamplerState g_wrap_point
+//   SamplerState g_wrap_point, g_wrap_linear (repeating samplers)
 //   float4 g_up                   the de-light maps' switch (g_up.w > 0; rt_lighting.hlsl)
 //   float kDelightRange           the de-light maps' range (rt_lighting.hlsl)
 
@@ -131,11 +131,64 @@ static const uint kTevGreyTexture = 1u;   // tev_evaluate_mode: every texture a 
 static const uint kTevBakedColours = 2u;  // tev_evaluate_mode: the vertices' colours as the game baked them
 static const uint kTevNoEnvironment = 4u; // tev_evaluate_mode: its environment maps (painted reflections) black
 static const uint kTevWhiteEnvironment = 8u;  // tev_evaluate_mode: its environment maps white (its reflectance)
+// tev_evaluate_cone without a footprint: every texture's level-0 texel at the coordinates (the traced hits).
+static const float kTevNoCone = -1.0e30f;
+
+// A texture coordinate under GX addressing `mode` (0 clamp, 1 repeat, 2 mirror) for a repeating sampler: clamped and
+// mirrored coordinates kept `half` (half a texel of the level sampled) inside, so the filter never reaches the far edge.
+float tev_address(float u, uint mode, float half)
+{
+    if (mode == 1u) {
+        return u;
+    }
+    if (mode == 2u) {
+        u = 1.0f - abs(frac(u * 0.5f) * 2.0f - 1.0f);
+    }
+    return clamp(u, half, 1.0f - half);
+}
+
+float2 tev_addressed(float2 uv, uint wrap, float2 half)
+{
+    return float2(tev_address(uv.x, wrap & 3u, half.x), tev_address(uv.y, (wrap >> 2u) & 3u, half.y));
+}
+
+// Texture `map` at `coords` (a stage's, under its addressing `wrap`): with a footprint (`cone`: log2 of the pixel's
+// width in eye units over its triangle's square-root area, as tev_cone gives it) filtered at the level the footprint
+// covers there, the coordinates changing by `d1`, `d2` along the triangle's edges, as the raster samples it; without
+// (the traced hits), its level-0 texel, repeating. The hits keep repeating: under their stages' clamping the Good Egg's
+// bounce light lost 8%, so some hit coordinates lie outside the texture where the raster's do not (an open question
+// for the ray tracing review).
+float4 tev_sample(Texture2D<float4> map, float2 coords, uint wrap, float2 d1, float2 d2, float cone)
+{
+    if (cone <= kTevNoCone) {
+        return map.SampleLevel(g_wrap_point, coords, 0.0f);
+    }
+    uint width, height, levels;
+    map.GetDimensions(0u, width, height, levels);
+    const float2 size = float2(width, height);
+    const float det = abs(d1.x * d2.y - d2.x * d1.y) * size.x * size.y;
+    const float lod = clamp(0.5f * log2(max(det, 1e-30f)) + cone, 0.0f, float(levels - 1u));
+    return map.SampleLevel(g_wrap_linear, tev_addressed(coords, wrap, 0.5f * exp2(lod) / size), lod);
+}
+
+// A de-light map at a stage's coordinates (as tev_sample).
+float tev_sample_shading(Texture2D<float> map, float2 coords, uint wrap, float2 d1, float2 d2, float cone)
+{
+    if (cone <= kTevNoCone) {
+        return map.SampleLevel(g_wrap_point, coords, 0.0f);
+    }
+    uint width, height, levels;
+    map.GetDimensions(0u, width, height, levels);
+    const float2 size = float2(width, height);
+    const float det = abs(d1.x * d2.y - d2.x * d1.y) * size.x * size.y;
+    const float lod = clamp(0.5f * log2(max(det, 1e-30f)) + cone, 0.0f, float(levels - 1u));
+    return map.SampleLevel(g_wrap_linear, tev_addressed(coords, wrap, 0.5f * exp2(lod) / size), lod);
+}
 
 // Draw `draw`'s TEV output at triangle `tri`, barycentrics `b` (display-encoded RGBA, 0-1), and whether its alpha
 // passes the draw's alpha compare. A draw without a record (`count` records) is white and passes. `mode`: the
-// kTev* flags above.
-float4 tev_evaluate_mode(uint draw, uint count, uint tri, float2 b, uint mode, out bool alpha_pass)
+// kTev* flags above. `cone`: the footprint its textures are filtered over (tev_sample; kTevNoCone: none).
+float4 tev_evaluate_cone(uint draw, uint count, uint tri, float2 b, uint mode, float cone, out bool alpha_pass)
 {
     alpha_pass = true;
     if (draw >= count) {
@@ -155,6 +208,8 @@ float4 tev_evaluate_mode(uint draw, uint count, uint tri, float2 b, uint mode, o
     const uint3 col0 = g_tri_uv.Load3(a + 48u);
     const uint3 col1 = g_tri_uv.Load3(a + 60u);
     const float2 uv[2] = {uv0_01.xy * w.x + uv0_01.zw * w.y + uv0_2 * w.z, uv1_01.xy * w.x + uv1_01.zw * w.y + uv1_2 * w.z};
+    const float2 edge1[2] = {uv0_01.zw - uv0_01.xy, uv1_01.zw - uv1_01.xy};
+    const float2 edge2[2] = {uv0_2 - uv0_01.xy, uv1_2 - uv1_01.xy};
     float4 v0[3] = {tev_rgba8f(col0.x), tev_rgba8f(col0.y), tev_rgba8f(col0.z)};
     float4 v1[3] = {tev_rgba8f(col1.x), tev_rgba8f(col1.y), tev_rgba8f(col1.z)};
     // Bits 5-6: the baked light of the vertices' colour removed per vertex and set to the program's neutral light
@@ -206,10 +261,14 @@ float4 tev_evaluate_mode(uint draw, uint count, uint tri, float2 b, uint mode, o
             texc = int4(255, 255, 255, 255);
 #if RT_TEXTURED
             const uint view = g_tev.Load(record + 72u + texmap * 4u);
-            const float2 coords = uv[(header >> (8u + 2u * texcoord)) & 1u] * scale;
+            const uint slot = (header >> (8u + 2u * texcoord)) & 1u;
+            const float2 coords = uv[slot] * scale;
+            const float2 d1 = edge1[slot] * scale;
+            const float2 d2 = edge2[slot] * scale;
+            const uint wrap = g_tev.Load(at + 28u);
             if (view != 0xFFFFFFFFu && all(abs(coords) < 1.0e4f)) {
                 const Texture2D<float4> map = ResourceDescriptorHeap[NonUniformResourceIndex(view)];
-                float4 texel = saturate(map.SampleLevel(g_wrap_point, coords, 0.0f));
+                float4 texel = saturate(tev_sample(map, coords, wrap, d1, d2, cone));
                 // Physical: the material texture's albedo, the light painted into it taken out (its de-light map,
                 // record pad[1]; rt_delight.hlsl).
                 const uint painted_view = g_tev.Load(record + 112u);
@@ -217,7 +276,7 @@ float4 tev_evaluate_mode(uint draw, uint count, uint tri, float2 b, uint mode, o
                     const Texture2D<float> painted = ResourceDescriptorHeap[NonUniformResourceIndex(painted_view)];
                     float3 lin = select(texel.rgb <= 0.04045f, texel.rgb / 12.92f,
                                         pow((texel.rgb + 0.055f) / 1.055f, 2.4f)) *
-                                 exp(-painted.SampleLevel(g_wrap_point, coords, 0.0f) * kDelightRange);
+                                 exp(-tev_sample_shading(painted, coords, wrap, d1, d2, cone) * kDelightRange);
                     // Past 1 it keeps its hue (not each channel clipped).
                     lin /= max(max(lin.r, max(lin.g, lin.b)), 1.0f);
                     texel.rgb = select(lin <= 0.0031308f, lin * 12.92f, 1.055f * pow(saturate(lin), 1.0f / 2.4f) - 0.055f);
@@ -387,6 +446,11 @@ bool tev_glows_at(uint draw, uint count, uint tri, float2 b)
     const float2 uv2 = asfloat(g_tri_uv.Load2(a + 16u));
     const float2 uv = frac((uv01.xy * (1.0f - b.x - b.y) + uv01.zw * b.x + uv2 * b.y) * asfloat(g_tev.Load2(record + 120u)));
     return all(uv >= box.xy) && all(uv <= box.zw);
+}
+
+float4 tev_evaluate_mode(uint draw, uint count, uint tri, float2 b, uint mode, out bool alpha_pass)
+{
+    return tev_evaluate_cone(draw, count, tri, b, mode, kTevNoCone, alpha_pass);
 }
 
 float4 tev_evaluate(uint draw, uint count, uint tri, float2 b, out bool alpha_pass)

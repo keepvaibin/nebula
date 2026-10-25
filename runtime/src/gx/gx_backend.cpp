@@ -4739,6 +4739,8 @@ void GxBackend::build_rt_tev(RtTevMaterial& tev, RtTevStage* stages_out, float f
         const std::uint32_t t_scale = state_.bp(static_cast<std::uint8_t>(bp::kTexCoordSizeBase + coord * 2u + 1u));
         stage.scale_s = static_cast<float>((s_scale & 0xFFFFu) + 1u) / static_cast<float>(std::max<unsigned>(image.width, 1u));
         stage.scale_t = static_cast<float>((t_scale & 0xFFFFu) + 1u) / static_cast<float>(std::max<unsigned>(image.height, 1u));
+        const TexMode tex_mode = state_.tex_mode(map);
+        stage.pad[1] = static_cast<std::uint32_t>(tex_mode.wrap_s) | (static_cast<std::uint32_t>(tex_mode.wrap_t) << 2u);
         // A texture whose coordinates the vertex normals generate: an environment map, the game's painted reflection
         // (pad[0] 1; header bit 7: the draw has one). Under physical light the traced reflection takes its place;
         // GALAXY_RT_PAINTED_REFLECTION=1 keeps them.

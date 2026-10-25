@@ -213,6 +213,9 @@ void EngineGBufferCS(uint3 id : SV_DispatchThreadID)
             const float2 bary = float2(f16tof32(surface.primary.y), f16tof32(surface.primary.y >> 16u));
             const float3 next = eye_position(g_projection, g_viewport, float2(q) + float2(1.5f, 0.5f), p.z);
             float3 bent = s.n;
+            // Its draw's textures filtered over the pixel's footprint, as the raster samples them: at their level-0
+            // texels the shares below step from texel to texel, blocks across a magnified texture.
+            const float cone = tev_cone(tri, p, length(next - p));
             if (delight_surface(tri, bary, p, s.ng, length(next - p), bent, shading)) {
                 packed.y = pack_pixel_delight(bent, shading);
                 s.n = bent;
@@ -230,14 +233,15 @@ void EngineGBufferCS(uint3 id : SV_DispatchThreadID)
             if (!clear && draw < g_tev_info.x && (g_tev.Load(draw * kTevRecordBytes) & 0x80u) != 0u) {
                 // The game's painted reflection (environment maps): the traced specular takes its place.
                 bool pass;
-                const float3 full = srgb_to_linear(saturate(tev_evaluate_mode(draw, g_tev_info.x, tri, bary, 0u, pass).rgb));
-                const float3 bare =
-                    srgb_to_linear(saturate(tev_evaluate_mode(draw, g_tev_info.x, tri, bary, kTevNoEnvironment, pass).rgb));
+                const float3 full =
+                    srgb_to_linear(saturate(tev_evaluate_cone(draw, g_tev_info.x, tri, bary, 0u, cone, pass).rgb));
+                const float3 bare = srgb_to_linear(
+                    saturate(tev_evaluate_cone(draw, g_tev_info.x, tri, bary, kTevNoEnvironment, cone, pass).rgb));
                 // A luminance ratio, so the tint a coloured metal or glass carries in its environment stage stays (a
                 // per-channel ratio would take it out: gold to silver, green glass to grey).
                 own = luminance(full) > 1e-4f ? saturate(luminance(bare) / luminance(full)) : 1.0f;
-                const float3 white =
-                    srgb_to_linear(saturate(tev_evaluate_mode(draw, g_tev_info.x, tri, bary, kTevWhiteEnvironment, pass).rgb));
+                const float3 white = srgb_to_linear(
+                    saturate(tev_evaluate_cone(draw, g_tev_info.x, tri, bary, kTevWhiteEnvironment, cone, pass).rgb));
                 // A metal's specular colour at the strength its environment stage passes the environment (white less
                 // bare), at least its own colour's: its hue where that colour is a coloured metal's (gold, copper:
                 // saturated in linear light, as their measured reflectance: gold's blue a third of its red), neutral
@@ -287,7 +291,8 @@ void EngineGBufferCS(uint3 id : SV_DispatchThreadID)
                         emitted = srgb_to_linear(rgb8(table.x));
                     } else if (draw < g_tev_info.x) {
                         bool pass;
-                        emitted = srgb_to_linear(saturate(tev_evaluate(draw, g_tev_info.x, tri, bary, pass).rgb));
+                        emitted =
+                            srgb_to_linear(saturate(tev_evaluate_cone(draw, g_tev_info.x, tri, bary, 0u, cone, pass).rgb));
                     }
                 }
             }
@@ -964,8 +969,8 @@ float3 engine_light_sample(float3 p, float3 n, float3 origin, uint candidates, i
 // The radiance a hit sends back along -direction: its emission (when `emission`) plus its albedo times its light: the
 // sun behind a shadow ray, the lights by resampled importance behind a shadow ray, the sky along one cosine ray.
 // Out: the hit's world-facing normal (for ReSTIR GI).
-float3 engine_hit_radiance(Hit h, float3 origin, float3 direction, bool emission_wanted, inout uint seed, uint salt,
-                           out float3 x, out float3 hn)
+float3 engine_hit_radiance(Hit h, float3 origin, float3 direction, bool emission_wanted, float width, inout uint seed,
+                           uint salt, out float3 x, out float3 hn)
 {
     x = origin + direction * h.t;
     hn = -direction;
@@ -978,7 +983,7 @@ float3 engine_hit_radiance(Hit h, float3 origin, float3 direction, bool emission
     }
     float3 albedo;
     float3 emission;
-    reference_material(h.tri, h.b, albedo, emission);
+    reference_material_cone(h.tri, h.b, width > 0.0f ? tev_cone(h.tri, direction, width) : kTevNoCone, albedo, emission);
     const uint draw = g_surfaces.Load(h.tri * 16u + 12u) >> 16u;
     const uint2 table = g_draws.Load2(min(draw, max(g_draw_count, 1u) - 1u) * kDrawStride + 8u);
     emission *= shown_emission(asfloat(table.y));   // seen: as the camera shows it
@@ -1671,7 +1676,7 @@ void EngineIndirectCS(uint3 id : SV_DispatchThreadID)
     float3 x;
     float3 hn;
     // The emitters' own light reaches this surface by the direct light: not again here.
-    const float3 radiance = safe_light(engine_hit_radiance(h, start, d, false, seed, salt + 3u, x, hn));
+    const float3 radiance = safe_light(engine_hit_radiance(h, start, d, false, 0.0f, seed, salt + 3u, x, hn));
     if (!h.surface) {
         // The sky: a point far along the ray stands for its direction.
         x = start + d * 1.0e5f;
@@ -1809,7 +1814,13 @@ void EngineSpecularCS(uint3 id : SV_DispatchThreadID)
         const Hit h = engine_trace(start, l, salt);
         float3 x;
         float3 hn;
-        const float3 incoming = safe_light(engine_hit_radiance(h, start, l, true, seed, salt + 5u, x, hn));
+        // The reflection's ray cone (Akenine-Moller et al. 2021): the pixel's width at the surface, spreading by the
+        // pixel's angle and the lobe's (alpha, radians): what it sees is filtered over that footprint. At their
+        // level-0 texels, point sampled, a reflection magnifying a texture showed its texels as squares, and one
+        // minifying it sparkled.
+        const float footprint = pixel_world_size(s.p.z);
+        const float width = footprint + h.t * (footprint / max(length(s.p), 1e-3f) + alpha);
+        const float3 incoming = safe_light(engine_hit_radiance(h, start, l, true, width, seed, salt + 5u, x, hn));
         // VNDF sampling's weight: F G2 / G1(v).
         const float nv = max(dot(s.n, v), 1e-4f);
         const float g2_over_g1 = smith_visibility(alpha, nl, nv) * 4.0f * nl * nv / max(smith_g1(alpha, nv), 1e-4f);

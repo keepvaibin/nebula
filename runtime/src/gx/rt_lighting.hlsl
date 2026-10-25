@@ -2489,9 +2489,10 @@ float3 linear_hue(float3 c)
     return peak > 1e-6f ? srgb_to_linear(c / peak) * peak : float3(0.0f, 0.0f, 0.0f);
 }
 
-// What a ray hits on triangle `tri` (barycentrics `b`): its draw's TEV output at the hit (rt_tev.hlsli), and the table's
-// area emission, in linear light.
-void reference_material(uint tri, float2 b, out float3 albedo, out float3 emission)
+// What a ray hits on triangle `tri` (barycentrics `b`): its draw's TEV output at the hit (rt_tev.hlsli; its textures
+// filtered over the ray cone's footprint `cone`, tev_cone, or their level-0 texels at kTevNoCone), and the table's area
+// emission, in linear light.
+void reference_material_cone(uint tri, float2 b, float cone, out float3 albedo, out float3 emission)
 {
     albedo = float3(0.5f, 0.5f, 0.5f);
     emission = float3(0.0f, 0.0f, 0.0f);
@@ -2500,7 +2501,7 @@ void reference_material(uint tri, float2 b, out float3 albedo, out float3 emissi
     // The draw's own TEV program at the hit (its colour channels at full light under kPhysicalFlag).
     if (draw < g_tev_info.x) {
         bool pass;
-        albedo = tev_evaluate(draw, g_tev_info.x, tri, b, pass).rgb;
+        albedo = tev_evaluate_cone(draw, g_tev_info.x, tri, b, 0u, cone, pass).rgb;
     }
 #endif
     albedo = srgb_to_linear(saturate(albedo));
@@ -2520,6 +2521,11 @@ void reference_material(uint tri, float2 b, out float3 albedo, out float3 emissi
     } else if ((table.x & kEmitNamed) != 0u && (table.x & 3u) == kEmitArea && g_emit.w > 0.0f) {
         emission = srgb_to_linear(rgb8(table.x)) * (g_self.z * asfloat(table.y) * g_emit.w);
     }
+}
+
+void reference_material(uint tri, float2 b, out float3 albedo, out float3 emission)
+{
+    reference_material_cone(tri, b, -1.0e30f, albedo, emission);   // kTevNoCone
 }
 
 #if RT_TEXTURED
@@ -2894,6 +2900,20 @@ static const float kReliefSlope = 0.36f;
 float relief_height(float s)
 {
     return kReliefSpan * tanh(s / kReliefSpan);
+}
+
+// A ray cone's footprint on triangle `tri` for tev_evaluate_cone (Akenine-Moller et al. 2021, as delight_surface's
+// level): log2 of its width `width` (eye units, across the ray along `direction`) widened by the ray's slant to the
+// triangle, over the triangle's square-root area.
+float tev_cone(uint tri, float3 direction, float width)
+{
+    const float3 v0 = asfloat(g_positions.Load3(tri * 36u));
+    const float3 e1 = asfloat(g_positions.Load3(tri * 36u + 12u)) - v0;
+    const float3 e2 = asfloat(g_positions.Load3(tri * 36u + 24u)) - v0;
+    const float3 face = cross(e1, e2);
+    const float area = max(length(face), 1e-30f);
+    const float slant = max(abs(dot(face / area, normalize(direction))), 0.05f);
+    return log2(width / slant) - 0.5f * log2(area);
 }
 
 // The light painted into the material texture of triangle `tri` at barycentrics `b` (its de-light map, record pad[1]

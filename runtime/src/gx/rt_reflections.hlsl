@@ -1137,7 +1137,9 @@ float4 physical_sky_texel(uint i)
 
 #define g_tev physical_tev()
 #define g_wrap_point g_wrap
+#define g_wrap_linear g_wrap
 #include "rt_tev.hlsli"
+#undef g_wrap_linear
 #undef g_wrap_point
 #undef g_tev
 
