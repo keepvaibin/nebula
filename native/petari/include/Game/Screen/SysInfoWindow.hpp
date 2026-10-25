@@ -6,6 +6,13 @@ typedef void(MessageChangeFunc)(LayoutActor*, const char*, const char*);
 
 class IconAButton;
 class YesNoController;
+#ifdef TARGET_PC
+namespace nw4r {
+    namespace lyt {
+        class Pane;
+    };  // namespace lyt
+};  // namespace nw4r
+#endif
 
 struct MessageChangeFuncTableEntry {
     MessageChangeFunc* mFuncPtr;
@@ -79,6 +86,31 @@ public:
     /* 0x38 */ bool _38;
 #ifdef TARGET_PC
     bool mIsBackAnswersNo;
+
+    // Nebula: the screen dim (the layout's BG pane) is drawn by the window itself. Where the game opens another system
+    // window after this one, the caller says so after appear(): the dim then holds through this window's end and a few
+    // frames after, and the next window takes it over at its level, so a chain of windows (the save's question,
+    // Saving..., saved, the pause menu's question) never lifts it in between. Otherwise it fades with the window.
+    enum DimHandOver {
+        DimHandOver_None = 0,
+        DimHandOver_Yes = 1,     // when the answer is Yes
+        DimHandOver_No = 2,      // when the answer is No
+        DimHandOver_Always = 3,
+    };
+    void setDimHandOver(u8 when);
+
+private:
+    void updateDim();
+    void drawDim() const;
+    f32 getOwnDim() const;
+
+    nw4r::lyt::Pane* mDimPane;
+    f32 mDim;          // drawn this frame, 0 to 1
+    f32 mDimFloor;     // taken over from the window before
+    s32 mDimLinger;    // frames it still holds after the window closed
+    u32 mDimEpoch;     // the hand-over this window holds the dim under
+    u8 mDimHandOver;   // DimHandOver, from the caller
+    bool mDimHanding;  // closing towards a window that takes the dim
 #endif
 };
 
