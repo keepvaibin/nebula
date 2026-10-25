@@ -22,10 +22,10 @@ public:
         mFarClipLevel = level;
     }
 #ifdef TARGET_PC
-    // Nebula, ray-traced shadows and light: a clipped actor whose shadow, or whose light as a light source, can reach the
-    // view stays drawn as the game left it (its movement, animation and sensors stop as the game's clipping stops them;
-    // the camera still places its model).
-    void judgeShadowDraw();
+    // Nebula, ray-traced shadows and light: whether ray-traced light wants this actor though the view would clip it (its
+    // shadow, or its light as a light source, reaches the view). isJudgedToClip keeps such an actor unclipped, so it
+    // moves, animates and is drawn as a visible one is.
+    bool isWantedForLight(s32 farClipLevel) const;
 #endif
 
     /* 0x00 */ LiveActor* mActor;
@@ -36,8 +36,8 @@ public:
     /* 0x12 */ s16 _12;
     /* 0x14 */ ViewGroupCtrlDataEntry* _14;
 #ifdef TARGET_PC
-    bool mShadowDrawn;   // judgeShadowDraw keeps it in the draw lists while the game clips it
-    f32 mLightReach;     // how far its traced light reaches (0: no light source; < 0: not asked yet)
+    mutable bool mKeptForLight;  // the last clipping judgement kept it unclipped for ray-traced light
+    mutable f32 mLightReach;     // how far its traced light reaches (0: no light source; < 0: not asked yet)
 #endif
 };
 

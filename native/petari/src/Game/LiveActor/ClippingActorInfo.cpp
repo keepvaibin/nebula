@@ -17,7 +17,7 @@ ClippingActorInfo::ClippingActorInfo(LiveActor* pActor) {
     _12 = -1;
     _14 = 0;
 #ifdef TARGET_PC
-    mShadowDrawn = false;
+    mKeptForLight = false;
     mLightReach = -1.0f;
 #endif
     setTypeToSphere(300.0f, 0);
@@ -27,9 +27,6 @@ void ClippingActorInfo::judgeClipping() {
     if (isJudgedToClip()) {
         if (!MR::isClipped(mActor)) {
             mActor->startClipped();
-#ifdef TARGET_PC
-            mShadowDrawn = false;
-#endif
         }
     } else {
         if (MR::isClipped(mActor)) {
@@ -46,35 +43,33 @@ bool ClippingActorInfo::isJudgedToClip() const {
 
     f32 val = _8;
     ClippingJudge* judge = MR::getClippingJudge();
+#ifdef TARGET_PC
+    if (!judge->isJudgedToClipFrustum(*_4, val, farClipLevel)) {
+        mKeptForLight = false;
+        return false;
+    }
+    // Ray-traced light: an actor out of view whose shadow, or whose light, reaches it stays unclipped. Drawn while
+    // clipped it showed frozen where the game stopped it, or in its bind pose if it never moved (a Toad standing in a
+    // T-pose in the light of the plaza).
+    mKeptForLight = isWantedForLight(farClipLevel);
+    return !mKeptForLight;
+#else
     return judge->isJudgedToClipFrustum(*_4, val, farClipLevel);
+#endif
 }
 
 #ifdef TARGET_PC
-void ClippingActorInfo::judgeShadowDraw() {
-    const s32 level = _14->_0 == 1 ? 0 : mFarClipLevel;
-    bool keep = false;
-    if (MR::isClipped(mActor) && !MR::isDead(mActor) && !MR::isNoEntryDrawBuffer(mActor)) {
-        const ClippingJudge* judge = MR::getClippingJudge();
-        if (mLightReach < 0.0f && judge->isLightSourcesWanted()) {
-            // Asked once, while ray-traced light is on: the reach of the model's light (0: none).
-            mLightReach = mActor->mModelManager != nullptr ? __NebulaLightReach(MR::getModelResName(mActor), _8) : 0.0f;
-        }
-        keep = judge->isShadowCasterInView(*_4, _8, level) ||
-               (mLightReach > 0.0f && judge->isLightInView(*_4, _8 + mLightReach));
+bool ClippingActorInfo::isWantedForLight(s32 farClipLevel) const {
+    const ClippingJudge* judge = MR::getClippingJudge();
+    if (!judge->isLightSourcesWanted() || MR::isDead(mActor) || MR::isNoEntryDrawBuffer(mActor)) {
+        return false;
     }
-    if (keep == mShadowDrawn) {
-        return;
+    if (mLightReach < 0.0f) {
+        // Asked once, while ray-traced light is on: the reach of the model's light (0: none).
+        mLightReach = mActor->mModelManager != nullptr ? __NebulaLightReach(MR::getModelResName(mActor), _8) : 0.0f;
     }
-    mShadowDrawn = keep;
-    // An actor the game shows again (endClipped) is back in the draw lists already.
-    if (!MR::isClipped(mActor)) {
-        return;
-    }
-    if (keep) {
-        MR::connectToDrawTemporarily(mActor);
-    } else {
-        MR::disconnectToDrawTemporarily(mActor);
-    }
+    return judge->isShadowCasterInView(*_4, _8, farClipLevel) ||
+           (mLightReach > 0.0f && judge->isLightInView(*_4, _8 + mLightReach));
 }
 #endif
 

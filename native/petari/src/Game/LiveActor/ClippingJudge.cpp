@@ -13,7 +13,7 @@ namespace {
     // clipped casters.
     TVec3f sShadowDirection;
     bool sShadowCasters;
-    // Ray-traced light wants clipped light sources whose light reaches the view (ClippingActorInfo::judgeShadowDraw).
+    // Ray-traced light wants out-of-view light sources whose light reaches the view (ClippingActorInfo::isWantedForLight).
     bool sLightSources;
 };  // namespace
 #endif
