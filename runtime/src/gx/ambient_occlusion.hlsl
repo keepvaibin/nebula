@@ -12,14 +12,14 @@
 // AoCS: occlusion and eye distance from t2 (DepthCS's output) into u0.
 // DenoiseCS: the depth-weighted tent of t1 into u0.
 // ApplyVS/ApplyPS: per EFB pixel the denoised occlusion (depth-weighted bilinear), the colour multiplier of a
-// multiplicative blend.
+// multiplicative blend (g_size.w 1: the occlusion itself, the scene replaced; GALAXY_AO_VIEW).
 
 cbuffer AoConstants : register(b0) {
     float4 g_ray;         // an EFB pixel's eye ray at distance 1: x = px * x + y, y = py * z + w (z = -1)
     float4 g_depth;       // RtView z_scale, z_offset, min_depth, max_depth
     float4 g_viewport;    // the scene viewport in EFB pixels: x, y, width, height
     float4 g_params;      // radius (eye units), visibility exponent, strength, largest radius in occlusion pixels
-    uint4 g_size;         // occlusion target width, height; EFB pixels per occlusion pixel; unused
+    uint4 g_size;         // occlusion target width, height; EFB pixels per occlusion pixel; 1: show the occlusion
 };
 
 Texture2D<float> t_depth : register(t0);       // the EFB's depth
@@ -260,7 +260,11 @@ float multi_bounce(float visibility) {
 float4 ApplyPS(ApplyOut i) : SV_Target {
     const int2 q = int2(i.position.xy);
     const float depth = t_depth.Load(int3(q, 0));
+    const bool view = g_size.w == 1u;
     if (far_plane(depth) || !inside(i.position.xy)) {
+        if (view) {
+            return float4(1.0f, 1.0f, 1.0f, 1.0f);
+        }
         discard;
     }
     const float z = -depth_to_eye_z(depth);
@@ -290,6 +294,9 @@ float4 ApplyPS(ApplyOut i) : SV_Target {
     // The occlusion scales light, linear; the EFB holds display-encoded colour. A pixel it would change by less than a
     // half level (8-bit) keeps its colour without a write.
     const float scale = pow(max(lerp(1.0f, multi_bounce(saturate(visibility)), g_params.z), 0.0f), 1.0f / 2.2f);
+    if (view) {
+        return float4(scale, scale, scale, 1.0f);
+    }
     if (scale > 1.0f - 0.5f / 255.0f) {
         discard;
     }

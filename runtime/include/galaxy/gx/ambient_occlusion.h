@@ -70,7 +70,7 @@ private:
     bool ensure_target(Target& target, DXGI_FORMAT format, unsigned width, unsigned height,
                        std::uint64_t frame_index, unsigned frames_in_flight);
     void transition(ID3D12GraphicsCommandList* list, Target& target, D3D12_RESOURCE_STATES state);
-    [[nodiscard]] ID3D12PipelineState* apply_pipeline(unsigned samples, bool hdr);
+    [[nodiscard]] ID3D12PipelineState* apply_pipeline(unsigned samples, bool hdr, bool view);
 
     ID3D12Device* device_ = nullptr;
     bool ready_ = false;
@@ -78,7 +78,8 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> distance_pass_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> occlusion_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> denoise_;
-    std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, 8> apply_{};  // 1, 2, 4, 8 samples; then HDR
+    // 1, 2, 4, 8 samples; then HDR; then the occlusion view's.
+    std::array<Microsoft::WRL::ComPtr<ID3D12PipelineState>, 16> apply_{};
     Target distance_;  // eye distance per occlusion pixel (R32F)
     Target raw_;       // occlusion, eye distance (R16G16F)
     Target denoised_;

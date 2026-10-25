@@ -109,9 +109,11 @@ void AmbientOcclusion::shutdown() noexcept {
     device_ = nullptr;
 }
 
-// The multiply: the shader's output times the EFB's colour (RGB; the game's alpha stays), no depth.
-ID3D12PipelineState* AmbientOcclusion::apply_pipeline(unsigned samples, bool hdr) {
-    const unsigned index = std::min(static_cast<unsigned>(std::countr_zero(std::max(samples, 1u))), 3u) + (hdr ? 4u : 0u);
+// The multiply: the shader's output times the EFB's colour (RGB; the game's alpha stays), no depth. `view`: the
+// shader's output replaces the colour (GALAXY_AO_VIEW).
+ID3D12PipelineState* AmbientOcclusion::apply_pipeline(unsigned samples, bool hdr, bool view) {
+    const unsigned index = std::min(static_cast<unsigned>(std::countr_zero(std::max(samples, 1u))), 3u) +
+                           (hdr ? 4u : 0u) + (view ? 8u : 0u);
     if (apply_[index]) {
         return apply_[index].Get();
     }
@@ -120,7 +122,7 @@ ID3D12PipelineState* AmbientOcclusion::apply_pipeline(unsigned samples, bool hdr
     pd.VS = code(g_ao_apply_vs, sizeof(g_ao_apply_vs));
     pd.PS = code(g_ao_apply_ps, sizeof(g_ao_apply_ps));
     D3D12_RENDER_TARGET_BLEND_DESC& blend = pd.BlendState.RenderTarget[0];
-    blend.BlendEnable = TRUE;
+    blend.BlendEnable = view ? FALSE : TRUE;
     blend.SrcBlend = D3D12_BLEND_ZERO;
     blend.DestBlend = D3D12_BLEND_SRC_COLOR;
     blend.BlendOp = D3D12_BLEND_OP_ADD;
@@ -201,7 +203,13 @@ bool AmbientOcclusion::record(ID3D12GraphicsCommandList* list, DescriptorRing& r
         in.view.viewport[3] <= 0.0f) {
         return false;
     }
-    ID3D12PipelineState* const apply = apply_pipeline(in.samples, in.hdr);
+    // GALAXY_AO_VIEW=1: the scene shows the occlusion alone (white: open), to judge it by itself.
+    static const bool view = [] {
+        char value[8]{};
+        std::size_t length = 0;
+        return getenv_s(&length, value, sizeof(value), "GALAXY_AO_VIEW") == 0 && length > 1 && value[0] == '1';
+    }();
+    ID3D12PipelineState* const apply = apply_pipeline(in.samples, in.hdr, view);
     // The game's resolution: one occlusion pixel per internal-scale x internal-scale EFB pixels.
     const unsigned divisor = std::max(in.efb_scale, 1u);
     const unsigned width = (in.width + divisor - 1u) / divisor;
@@ -244,6 +252,7 @@ bool AmbientOcclusion::record(ID3D12GraphicsCommandList* list, DescriptorRing& r
     c.size[0] = width;
     c.size[1] = height;
     c.size[2] = divisor;
+    c.size[3] = view ? 1u : 0u;
 
     // Two SRV tables (t0 the EFB depth, t1 an occlusion target, t2 the distances: {denoised} for the distance,
     // occlusion and multiply passes, {raw} for the denoise), then the three targets' UAVs.
