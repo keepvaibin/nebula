@@ -93,6 +93,7 @@ inline int64_t perf_hint_retrace() noexcept { return 0; }
 #include <shellapi.h>
 #include <intrin.h>
 #include <dbghelp.h>
+#include <psapi.h>
 #else
 #include <dlfcn.h>
 #include <fcntl.h>
@@ -136,6 +137,25 @@ void log_line(const char* tag, const char* text) {
     const double t = std::chrono::duration<double>(Clock::now() - kStart).count();
     std::fprintf(stdout, "[%9.3f] %s %s\n", t, tag, text);
     std::fflush(stdout);
+}
+
+// The start, step by step ("boot:" lines, milliseconds from the process's creation): the black screen before the
+// title is their sum.
+void boot_mark(const char* step) {
+    double ms = std::chrono::duration<double, std::milli>(Clock::now() - kStart).count();
+#if defined(_WIN32)
+    FILETIME created{}, exited{}, kernel{}, user{}, now{};
+    if (GetProcessTimes(GetCurrentProcess(), &created, &exited, &kernel, &user)) {
+        GetSystemTimePreciseAsFileTime(&now);
+        const auto ticks = [](const FILETIME& f) {
+            return static_cast<double>((static_cast<std::uint64_t>(f.dwHighDateTime) << 32) | f.dwLowDateTime);
+        };
+        ms = (ticks(now) - ticks(created)) / 1.0e4;
+    }
+#endif
+    char text[128];
+    std::snprintf(text, sizeof(text), "%s at %.0f ms", step, ms);
+    log_line("boot:", text);
 }
 
 // Crash reports (galaxy/crash_report.h): why Nebula stopped, as a code with what to do. What the failing thread knew,
@@ -315,6 +335,85 @@ void* find_symbol(void* module, const char* name) {
     }
     return p;
 }
+
+#if defined(_WIN32)
+// GALAXY_PROFILE_GAME=<seconds>: the game thread (every game thread runs on it) sampled each millisecond from its
+// start for that long, with its callers, into game-profile.txt beside the crash dumps: the modules loaded
+// ("module <base> <size> <name>"), then a line a sample (return addresses, the innermost first).
+// tools/perf/game_profile.py names them from the game module's link map.
+namespace game_profile {
+
+constexpr int kDepth = 24;
+using Frames = std::array<DWORD64, kDepth>;
+
+// The suspended thread's stack from `context`, without allocating (the thread may hold the heap's lock).
+int walk(CONTEXT context, Frames& frames) noexcept {
+    int depth = 0;
+    __try {
+        while (depth < kDepth && context.Rip != 0) {
+            frames[depth++] = context.Rip;
+            DWORD64 image = 0;
+            PRUNTIME_FUNCTION function = RtlLookupFunctionEntry(context.Rip, &image, nullptr);
+            if (function == nullptr) {
+                context.Rip = *reinterpret_cast<const DWORD64*>(context.Rsp);
+                context.Rsp += 8;
+            } else {
+                void* handler = nullptr;
+                DWORD64 establisher = 0;
+                RtlVirtualUnwind(UNW_FLAG_NHANDLER, image, context.Rip, function, &context, &handler, &establisher,
+                                 nullptr);
+            }
+        }
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+    }
+    return depth;
+}
+
+void run(HANDLE thread, double seconds) {
+    std::vector<std::pair<int, Frames>> samples;
+    samples.reserve(static_cast<std::size_t>(seconds * 1200.0) + 16u);
+    const auto until = Clock::now() + std::chrono::duration<double>(seconds);
+    auto next = Clock::now();
+    while (Clock::now() < until && samples.size() < samples.capacity()) {
+        if (SuspendThread(thread) != static_cast<DWORD>(-1)) {
+            CONTEXT context{};
+            context.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+            Frames frames{};
+            const int depth = GetThreadContext(thread, &context) ? walk(context, frames) : 0;
+            ResumeThread(thread);
+            if (depth > 0) samples.emplace_back(depth, frames);
+        }
+        next += std::chrono::milliseconds(1);
+        sleep_until_precise(next);
+    }
+    std::FILE* file = _wfopen((crash_folder() / L"game-profile.txt").c_str(), L"wb");
+    if (file == nullptr) return;
+    std::array<HMODULE, 512> modules{};
+    DWORD needed = 0;
+    if (K32EnumProcessModules(GetCurrentProcess(), modules.data(), static_cast<DWORD>(sizeof(modules)), &needed)) {
+        for (DWORD i = 0; i < needed / sizeof(HMODULE) && i < modules.size(); ++i) {
+            MODULEINFO info{};
+            char name[MAX_PATH] = {};
+            if (K32GetModuleInformation(GetCurrentProcess(), modules[i], &info, sizeof(info)) &&
+                K32GetModuleBaseNameA(GetCurrentProcess(), modules[i], name, MAX_PATH) != 0) {
+                std::fprintf(file, "module %llx %lx %s\n", static_cast<unsigned long long>(reinterpret_cast<std::uintptr_t>(info.lpBaseOfDll)),
+                             static_cast<unsigned long>(info.SizeOfImage), name);
+            }
+        }
+    }
+    for (const auto& [depth, frames] : samples) {
+        std::fputs("sample", file);
+        for (int i = 0; i < depth; ++i) std::fprintf(file, " %llx", static_cast<unsigned long long>(frames[i]));
+        std::fputc('\n', file);
+    }
+    std::fclose(file);
+    char text[96];
+    std::snprintf(text, sizeof(text), "%zu samples in game-profile.txt", samples.size());
+    log_line("profile:", text);
+}
+
+}  // namespace game_profile
+#endif
 
 void load_module(const fs::path& path) {
 #if defined(_WIN32)
@@ -727,6 +826,23 @@ std::mutex gSuspendLock;
 std::condition_variable gSuspendWake;
 bool gSuspended = false;  // guarded by gSuspendLock
 
+// The start runs ahead: the game shows nothing until its first 3D scene (the title's, or a test's galaxy), and its
+// loads advance a step each retrace while it takes well under a millisecond a frame, so until then retraces come every
+// kBootRetrace and one frame a display period is presented. The first 3D scene, or kBootRetraces retraces, end it.
+// GALAXY_BOOT_FAST=0 keeps 60 retraces a second from the start.
+constexpr auto kBootRetrace = std::chrono::microseconds(2000);
+constexpr uint32_t kBootRetraces = 600;
+std::atomic<bool> gBootFast{[] {
+    const char* value = std::getenv("GALAXY_BOOT_FAST");
+    return value == nullptr || value[0] != '0';
+}()};
+
+void end_boot_fast(const char* why) {
+    if (gBootFast.exchange(false, std::memory_order_relaxed)) {
+        boot_mark(why);
+    }
+}
+
 // True when it waited.
 bool wait_while_suspended() {
     std::unique_lock<std::mutex> lock(gSuspendLock);
@@ -808,7 +924,8 @@ void ai_thread() {
 // stays on screen for the same time; the host's clock takes over where the display gives none.
 void vi_thread() {
     name_thread(L"Nebula Host VI");
-    const auto period = std::chrono::nanoseconds(1000000000ull / 60);
+    const auto display_period = std::chrono::nanoseconds(1000000000ull / 60);
+    auto period = gBootFast.load(std::memory_order_relaxed) ? std::chrono::nanoseconds(kBootRetrace) : display_period;
     auto next = Clock::now() + period;
 #if defined(NEBULA_HOST_SDL)
     int64_t vsync_ns = 0;
@@ -833,6 +950,9 @@ void vi_thread() {
         // The last frame's work (the game and render threads' CPU time), to the performance hints (Android).
         [[maybe_unused]] const int64_t work = galaxy::host::perf_hint_retrace();
         gModule.vi_retrace();
+        if (period != display_period && !gBootFast.load(std::memory_order_relaxed)) {
+            period = display_period;
+        }
         next += period;
         const auto now = Clock::now();
         if (now >= next) {
@@ -1488,6 +1608,11 @@ void svc_presence(void*, const uint16_t* galaxy, const uint16_t* star, int32_t p
         if (activity.details.empty()) {
             activity.details = "At the title screen";  // the title's stage has no galaxy name
             activity.state.clear();
+            static bool reached = false;
+            if (!reached) {
+                reached = true;
+                boot_mark("title screen");
+            }
         } else if (activity.state.empty()) {
             activity.state = std::to_string(power_stars) + (power_stars == 1 ? " Power Star" : " Power Stars");
         }
@@ -1684,6 +1809,7 @@ void svc_movie_frame(void*, const char* name, int32_t frame, float frame_rate, u
 void svc_gx_scene_marker(void*, uint32_t marker, const float* view) {
     if (marker == NEBULA_SCENE_3D_BEGIN) {
         gSceneBegins.fetch_add(1, std::memory_order_relaxed);
+        end_boot_fast("first 3D scene");
     }
 #if defined(NEBULA_HOST_RENDERER)
     if (marker == NEBULA_SCENE_3D_BEGIN && view != nullptr) {
@@ -1934,8 +2060,19 @@ void svc_vi_frame(void*, uint32_t xfb, int black, uint32_t retrace) {
 #if defined(_WIN32)
     galaxy::timeline::record(galaxy::timeline::Event::GuestFrame, retrace, xfb);
 #endif
+    if (retrace >= kBootRetraces) {
+        end_boot_fast("start's retraces run out");
+    }
     if (!gRegions.empty()) {
-        submit_frame(true, xfb == 0 || black ? galaxy::gx::kNoDisplayedXfbAddr : xfb);
+        // While the start runs ahead, one frame a display period goes to the screen.
+        bool present = true;
+        if (gBootFast.load(std::memory_order_relaxed)) {
+            static Clock::time_point shown{};
+            const Clock::time_point now = Clock::now();
+            present = now - shown >= std::chrono::milliseconds(16);
+            if (present) shown = now;
+        }
+        submit_frame(present, xfb == 0 || black ? galaxy::gx::kNoDisplayedXfbAddr : xfb);
     }
     // GALAXY_TEST_MII_IMPORT=<retrace>:<file>: imports the file at that retrace, as the settings do.
     {
@@ -2995,6 +3132,7 @@ int main(int argc, char** argv) {
         return run_mods_tool();
     }
 #endif
+    boot_mark("main");
     fs::path pak, nand, module;
     double seconds = 0;
     for (int i = 1; i + 1 < argc; i += 2) {
@@ -3042,7 +3180,9 @@ int main(int argc, char** argv) {
 #endif
 
     open_pak(pak);
+    boot_mark("disc opened");
     load_module(module);
+    boot_mark("game module loaded");
 #if defined(NEBULA_HOST_RENDERER)
     {
         // Mii import: the files in the import folder (next to the settings: any console's Mii files, mii_formats.h)
@@ -3130,6 +3270,7 @@ int main(int argc, char** argv) {
     }
 #endif
 
+    boot_mark("settings and mods");
     static NebulaHostServices services{};
     services.version = NEBULA_GAME_API_VERSION;
     services.size = sizeof(services);
@@ -3203,6 +3344,7 @@ int main(int argc, char** argv) {
         const std::string reason = galaxy::gx::startup_failure();
         die("the renderer did not start%s%s", reason.empty() ? "" : ": ", reason.c_str());
     }
+    boot_mark("renderer started");
     galaxy::gx::set_indexed_load_host_order(true);
     gAudio = new galaxy::host::NativeGameAudio();  // lives as long as the process (the AI thread is detached)
     gAudio->set_channel_owner(gModule.audio_channel_owner);
@@ -3250,6 +3392,16 @@ int main(int argc, char** argv) {
         gModule.run();
     });
 #if defined(_WIN32)
+    if (const char* profile = std::getenv("GALAXY_PROFILE_GAME"); profile != nullptr && std::atof(profile) > 0.0) {
+        const HANDLE sampled = OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION, FALSE,
+                                          GetThreadId(static_cast<HANDLE>(game.native_handle())));
+        if (sampled != nullptr) {
+            std::thread([sampled, seconds = std::atof(profile)] {
+                game_profile::run(sampled, seconds);
+                CloseHandle(sampled);
+            }).detach();
+        }
+    }
     // The simulation thread's CPU time, reported each second (the game and everything it calls on that thread).
     HANDLE game_thread = nullptr;  // its own handle: detach() closes the thread object's
     DuplicateHandle(GetCurrentProcess(), static_cast<HANDLE>(game.native_handle()), GetCurrentProcess(), &game_thread,
@@ -3270,8 +3422,10 @@ int main(int argc, char** argv) {
     }();
 #endif
     game.detach();
+    boot_mark("game started");
 
     const auto end = Clock::now() + std::chrono::duration<double>(seconds > 0 ? seconds : 1e9);
+    bool first_frame = false;
     uint32_t reported = 0;
     auto next_report = Clock::now() + std::chrono::seconds(1);
     while (Clock::now() < end && !gTourDone.load(std::memory_order_relaxed)) {
@@ -3294,6 +3448,10 @@ int main(int argc, char** argv) {
         galaxy::gx::pump_messages();
         if (galaxy::gx::quit_requested()) {
             break;
+        }
+        if (!first_frame && gSubmissions.load(std::memory_order_relaxed) != 0u) {
+            first_frame = true;
+            boot_mark("first game frame");
         }
         if (Clock::now() < next_report) {
             continue;

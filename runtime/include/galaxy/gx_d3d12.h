@@ -278,6 +278,8 @@ struct XfbPresentStats {
 [[nodiscard]] bool native_settings_overlay_visible() noexcept;
 // Nebula's screens with small text (the settings menu, the achievement board) ask for the 2D layer at the window's
 // resolution while they show, whatever the HUD's (the game module's sharp_2d).
+// The renderer's start, step by step ("[boot] renderer ..." lines: milliseconds since the step before).
+void boot_step(const char* step) noexcept;
 void request_sharp_2d(bool on) noexcept;
 [[nodiscard]] bool sharp_2d_requested() noexcept;
 // The scale the 2D layer was last drawn at (the EFB in use as the scene ended: the output EFB, else the render EFB),

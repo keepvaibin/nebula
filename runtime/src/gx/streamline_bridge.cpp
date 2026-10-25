@@ -3,6 +3,7 @@
 #include "galaxy/gx/streamline_bridge.h"
 
 #include "galaxy/gx/temporal_upscaler.h"
+#include "galaxy/gx_d3d12.h"
 #include "galaxy/platform_paths.h"
 
 #include <algorithm>
@@ -262,6 +263,7 @@ bool attach_device(ID3D12Device* device, const LUID& adapter) noexcept {
         std::cerr << "[streamline] slSetD3DDevice: " << result_name(result) << '\n';
         return false;
     }
+    boot_step("streamline: device set");
     LUID luid = adapter;
     sl::AdapterInfo info{};
     info.deviceLUID = reinterpret_cast<std::uint8_t*>(&luid);
@@ -283,8 +285,10 @@ bool attach_device(ID3D12Device* device, const LUID& adapter) noexcept {
     g_api.dlss_set_options = reinterpret_cast<PFun_slDLSSSetOptions*>(options);
     g_api.dlss = true;
     std::cerr << "[streamline] DLSS ready\n";
+    boot_step("streamline: dlss");
     if (g_api.dlssg_loaded) {
         attach_frame_generation(info);
+        boot_step("streamline: frame generation");
     }
     return true;
 }

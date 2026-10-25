@@ -1737,11 +1737,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
                 }
             }
         }
-        // DLSS: Streamline must be running before the swap chain exists. It
-        // starts whenever it is installed, so DLSS can be chosen in the
-        // settings without a restart.
-        (void)streamline::startup(streamline::default_directory(),
-                                  get_render_config().frame_generation != 0u);
+        boot_step("window and display");
         UINT flags = 0;
         if (d3d_debug_level >= 1) {
             flags |= DXGI_CREATE_FACTORY_DEBUG;
@@ -1785,6 +1781,44 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
                 : factory->EnumAdapters1(index, &candidate);
         };
         const std::string chosen_gpu = get_render_config().gpu.data();
+        // DLSS: Streamline, for an NVIDIA RTX GPU only (DLSS runs on nothing else), whenever it is installed, so DLSS
+        // can be chosen in the settings without a restart. It must run before the queue and the swap chain exist (its
+        // proxies make them); the device is handed to it after. It starts beside the device's creation for the GPU
+        // the choice below takes (the chosen one, else the first in Windows' order), and after it when another is
+        // taken in the end. Elsewhere it never loads, which spares a second of the start on a laptop.
+        const auto rtx = [](const DXGI_ADAPTER_DESC1& description) {
+            return description.VendorId == 0x10DEu && std::wcsstr(description.Description, L"RTX") != nullptr;
+        };
+        bool expect_rtx = false;
+        {
+            bool first = true;
+            for (UINT index = 0u;; ++index) {
+                ComPtr<IDXGIAdapter1> candidate;
+                DXGI_ADAPTER_DESC1 description{};
+                if (FAILED(enumerate(index, candidate))) {
+                    break;
+                }
+                if (FAILED(candidate->GetDesc1(&description)) || (description.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0u) {
+                    continue;
+                }
+                const bool chosen = !chosen_gpu.empty() &&
+                                    gpu_identity(description.VendorId, description.DeviceId, description.SubSysId) == chosen_gpu;
+                if (chosen || first) {
+                    expect_rtx = rtx(description);
+                }
+                first = false;
+                if (chosen) {
+                    break;
+                }
+            }
+        }
+        const bool frame_generation = get_render_config().frame_generation != 0u;
+        std::thread streamline_start;
+        if (expect_rtx) {
+            streamline_start = std::thread([frame_generation] {
+                (void)streamline::startup(streamline::default_directory(), frame_generation);
+            });
+        }
         if (!chosen_gpu.empty()) {
             for (UINT index = 0u;; ++index) {
                 ComPtr<IDXGIAdapter1> candidate;
@@ -1833,10 +1867,17 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
                 }
             }
         }
+        if (streamline_start.joinable()) {
+            streamline_start.join();
+        }
         if (!adapter || !device_) {
             throw std::runtime_error(
                 "No hardware D3D12 adapter supports feature level 11_0");
         }
+        if (!expect_rtx && rtx(adapter_desc)) {
+            (void)streamline::startup(streamline::default_directory(), frame_generation);
+        }
+        boot_step("device and streamline");
         // Published after every failure path, for adapter_is_unified_memory().
         g_selected_adapter_desc = adapter_desc;
         g_selected_adapter_valid = true;
@@ -1950,6 +1991,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
             raytracing_tier_code(options5.RaytracingTier);
         const bool dlss_ready = streamline::active() &&
                                 streamline::attach_device(device_.Get(), adapter_desc.AdapterLuid);
+        boot_step("streamline device");
         caps.streamline_bridge_built = kStreamlineBuilt;
         caps.msaa = make_render_feature_status(
             true,
@@ -2115,6 +2157,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
         if (!fence_event_) throw std::runtime_error("CreateEvent failed");
 
         // A saved scale above what this display can show is clamped here.
+        boot_step("queue and swap chain");
         efb_scale_ = std::min(efb_scale_, host_window::display_efb_scale_cap());
         if (!create_efb_targets(efb_scale_)) return false;
 
@@ -2173,6 +2216,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
         }
 
         efb_copy_heap_.initialize(device_.Get());
+        boot_step("targets, root signature, blit");
 
         // Presentation post-processing (SMAA, FSR 1, RCAS, box resample).
         {
@@ -2198,6 +2242,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
                 std::cerr << "[ambient-occlusion] unavailable\n";
             }
         }
+        boot_step("post-process and ambient occlusion");
 
         if (!create_sampler_heap()) return false;
 

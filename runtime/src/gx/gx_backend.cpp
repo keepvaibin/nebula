@@ -125,6 +125,8 @@ std::uint32_t pack_sampler_key(
         | (max_lod << 24);
 }
 
+void boot_step(const char* step) noexcept;
+
 namespace {
 
 static_assert(kEfbWidth == 640u && kEfbHeight == 528u);
@@ -2033,10 +2035,12 @@ bool GxBackend::initialize(int w, int h) {
 
     const RenderConfig cfg = get_render_config();
 
+    boot_step("begins");
     if (!renderer_.initialize(w, h, cfg.efb_scale)) {
         std::cerr << "[GxBackend] RendererD3D12::initialize failed\n";
         return false;
     }
+    boot_step("device rest");
 
     if (!efb_copies_.initialize(renderer_.device(), cfg.efb_scale)) {
         std::cerr << "[GxBackend] EfbCopyManager::initialize failed\n";
@@ -2057,10 +2061,12 @@ bool GxBackend::initialize(int w, int h) {
         renderer_.shutdown();
         return false;
     }
+    boot_step("efb copies and texture cache");
     // The resident decoded-vertex buffer (a 64 MB upload heap) is created here: creating it at first
     // use stalls gameplay.
     (void)ensure_resident_vertex_buffer();
     renderer_.create_first_use_resources();
+    boot_step("first-use resources");
 
     std::filesystem::path cache_dir;
 #if defined(_WIN32)
@@ -2100,6 +2106,7 @@ bool GxBackend::initialize(int w, int h) {
         renderer_.shutdown();
         return false;
     }
+    boot_step("pipeline cache");
 
     initialized_ = true;
     stop_render_thread_ = false;
@@ -12462,6 +12469,14 @@ void GxBackend::on_invalidate_vertex_cache() {
     flush_pending_draw_batch();
     // GXInvalidateVtxCache invalidates the hardware vertex cache, not guest array memory. Decoded
     // vertices are already invalidated by guest writes and checked byte for byte before each hit.
+}
+
+void boot_step(const char* step) noexcept {
+    static std::chrono::steady_clock::time_point last = std::chrono::steady_clock::now();
+    const auto now = std::chrono::steady_clock::now();
+    std::fprintf(stderr, "[boot] renderer %s %.0f ms\n", step,
+                 std::chrono::duration<double, std::milli>(now - last).count());
+    last = now;
 }
 
 unsigned layer_2d_scale() noexcept {

@@ -15,6 +15,18 @@ Environment variables for testing and debugging the runtime. None of them is nee
 | `GALAXY_TRACE_PRESENT_STATS=1` | Log presented and new frames per second |
 | `GALAXY_D3D_DEBUG=1` | Enable the Direct3D 12 debug layer |
 
+## The start and the game thread
+
+Every start logs its steps as `boot:` lines (milliseconds from the process's creation: the disc, the module, the
+renderer, the game, its first frame, the title screen) and the renderer's as `[boot] renderer` lines (milliseconds a
+step).
+
+| Variable | Effect |
+|---|---|
+| `GALAXY_BOOT_FAST=0` | Retraces at 60 a second from the start (by default the black frames before the first 3D scene run ahead) |
+| `GALAXY_PROFILE_GAME=<seconds>` | Sample the game thread each millisecond from its start, with its callers, into `game-profile.txt` beside the crash dumps; `tools/perf/game_profile.py` names them from the game module's link map |
+| `GALAXY_TRACE_THREAD_CPU=1` | Log each thread's CPU time each second |
+
 ## Scripted input
 
 Times are in video frames (60 per second) from the start of the session.
