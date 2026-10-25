@@ -38,8 +38,10 @@ public:
     bool resegment(std::size_t bytes_per_frame, unsigned frames_in_flight);
     void begin_frame(unsigned frame_slot);
 
-    // Bump-allocates in the current frame's segment; `alignment` must be a nonzero power of two. Exhaustion
-    // throws rather than dropping geometry. A rejected request consumes nothing.
+    // Bump-allocates in the current frame's segment, then in the spill region behind the segments (the capacity
+    // past them), which only a resegment or initialize rewinds: spilled() asks the caller to grow the ring at the
+    // next frame boundary. `alignment` must be a nonzero power of two. Exhausting both throws rather than dropping
+    // geometry. A rejected request consumes nothing.
     Allocation allocate(std::size_t size, std::size_t alignment);
 
     // Allocates `size` bytes and copies `source` into them, unless `token` records the same allocation in this
@@ -61,7 +63,33 @@ public:
         peak_bytes_per_frame_ = 0u;
         return peak;
     }
-    [[nodiscard]] std::size_t total_bytes() const { return bytes_per_frame_ * frames_in_flight_; }
+    // A segmentation's per-frame budget: `capacity` in `segments` equal shares and one more share of spill, so a
+    // frame may take twice its budget.
+    [[nodiscard]] static std::size_t budget(std::size_t capacity, unsigned segments) {
+        return capacity / (segments + 1u) & ~std::size_t{0xFFFFu};
+    }
+    // A frame took over half the budget (or spilled): grow at the next frame boundary, to grown_capacity().
+    [[nodiscard]] bool wants_growth() const { return mapped_ != nullptr && high_water_ > bytes_per_frame_ / 2u; }
+    // The capacity whose budget for `segments` is twice the high-water mark: the current one when it suffices, 0
+    // past the 32-bit offsets the rings' consumers use.
+    [[nodiscard]] std::size_t grown_capacity(unsigned segments) const {
+        std::size_t capacity = capacity_;
+        while (budget(capacity, segments) < 2u * high_water_) {
+            if (capacity >= (std::size_t{1} << 31u)) {
+                return 0u;
+            }
+            capacity *= 2u;
+        }
+        return capacity;
+    }
+    // A frame took spill bytes since the last segmentation.
+    [[nodiscard]] bool spilled() const { return spill_cursor_ != spill_base(); }
+    // The most bytes one frame took, segment and spill, since initialize.
+    [[nodiscard]] std::size_t high_water() const { return high_water_; }
+    [[nodiscard]] std::size_t bytes_per_frame() const { return bytes_per_frame_; }
+    [[nodiscard]] std::size_t capacity() const { return capacity_; }
+    // The addressable bytes from gpu_base(): segments and spill.
+    [[nodiscard]] std::size_t total_bytes() const { return capacity_; }
     // CPU view of a GPU address inside this ring; null outside it.
     [[nodiscard]] const std::byte* cpu_at(gpu::Address va) const {
         return va >= gpu_base_ && va < gpu_base_ + total_bytes() ? mapped_ + (va - gpu_base_) : nullptr;
@@ -74,6 +102,8 @@ public:
     [[nodiscard]] std::byte* mapped() const { return mapped_; }
 
 private:
+    [[nodiscard]] std::size_t spill_base() const { return bytes_per_frame_ * frames_in_flight_; }
+
     gpu::BufferRef buffer_;
     const char* name_ = "";
     std::byte* mapped_ = nullptr;
@@ -83,6 +113,10 @@ private:
     std::size_t capacity_ = 0;
     std::size_t segment_base_ = 0;
     std::size_t cursor_ = 0;
+    std::size_t spill_cursor_ = 0;
+    // Spill bytes the current frame took.
+    std::size_t frame_spill_ = 0;
+    std::size_t high_water_ = 0;
     unsigned frames_in_flight_ = 0;
     unsigned active_slot_ = 0;
     bool frame_ready_ = false;

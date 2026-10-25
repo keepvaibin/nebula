@@ -125,6 +125,13 @@ void LodCtrl::update() {
 #endif
         f32 lowDistance = _4;
         f32 middleDistance = _0;
+#ifdef TARGET_PC
+        // Ray-traced light shows every model at full detail: the middle and low models (a planet's few hundred
+        // triangles) light and shadow as the coarse shapes they are. The game's own choices below still hold.
+        if (__NebulaOption(NEBULA_OPTION_RT_SHADOW_CASTERS) != 0) {
+            middleDistance = lowDistance = 3.4e38f;
+        }
+#endif
         if (*_28) {
             hideAllModel();
         } else if (*_1C) {

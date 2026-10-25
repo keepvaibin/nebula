@@ -1189,13 +1189,23 @@ void report_crash(EXCEPTION_POINTERS* info) {
     std::_Exit(4);
 }
 
+// Set while describe_cpp_exception reads a record: a fault there belongs to its own __except, which the vectored
+// handler would otherwise see first and report as the crash.
+thread_local bool tDescribingException = false;
+
 // A C++ exception's record (MSVC's 0xE06D7363: the object, its ThrowInfo, the image base its offsets start from):
-// the thrown type and, for a std::exception, what(). Read under SEH: the record comes from a failing process.
+// the thrown type and, for a std::exception, what(). A rethrow (`throw;`) has neither object nor ThrowInfo. Read
+// under SEH: the record comes from a failing process.
 void describe_cpp_exception(const EXCEPTION_RECORD* record, char* out, std::size_t size) {
     std::snprintf(out, size, "uncaught C++ exception");
     if (record->NumberParameters < 4u) {
         return;
     }
+    if (record->ExceptionInformation[1] == 0u || record->ExceptionInformation[2] == 0u) {
+        std::snprintf(out, size, "uncaught C++ exception (rethrown)");
+        return;
+    }
+    tDescribingException = true;
     __try {
         const auto base = static_cast<uintptr_t>(record->ExceptionInformation[3]);
         const auto* object = reinterpret_cast<const char*>(record->ExceptionInformation[1]);
@@ -1219,12 +1229,16 @@ void describe_cpp_exception(const EXCEPTION_RECORD* record, char* out, std::size
                       what != nullptr ? what : "(not a std::exception)");
     } __except (EXCEPTION_EXECUTE_HANDLER) {
     }
+    tDescribingException = false;
 }
 
 #if defined(__clang__)
 __attribute__((no_sanitize("address", "undefined")))
 #endif
 LONG CALLBACK crash_handler(EXCEPTION_POINTERS* info) {
+    if (tDescribingException) {
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
     const DWORD code = info->ExceptionRecord->ExceptionCode;
     // A C++ exception, logged where it is thrown (the first 32): one thrown on the game's own stacks cannot unwind
     // through them and ends the process before any filter runs. Handled or not, the line says what was thrown.

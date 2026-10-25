@@ -558,20 +558,15 @@ std::uint64_t RendererD3D12::efb_copy_dest_budget_bytes() {
     return galaxy::gx::efb_copy_dest_budget_bytes();
 }
 
-// Worst observed frame: 117,361 vertices x 144 B = 16.1 MiB, so 64 MiB leaves about 4x headroom.
-static constexpr std::size_t vb_per_frame_bytes() {
-    return 64u * 1024u * 1024u;
-}
-static constexpr std::size_t ib_per_frame_bytes() {
-    return 16u * 1024u * 1024u;
-}
-static constexpr std::size_t cb_per_frame_bytes() {
-    return 8u * 1024u * 1024u;
-}
+// The upload rings' first buffers. A segmentation gives each frame an equal share and keeps one more share as
+// spill, so a frame may take twice its budget; a ring whose frames take over half of it grows at the next frame
+// boundary. Worst observed frame without the whole stage drawn: 117,361 vertices x 144 B = 16.1 MiB.
+static constexpr std::size_t kVertexRingBytes = 192u * 1024u * 1024u;
+static constexpr std::size_t kIndexRingBytes = 48u * 1024u * 1024u;
+// Interpolated sub-frames add one VS constant block per scene record each.
+static constexpr std::size_t kConstantRingBytes = 96u * 1024u * 1024u;
 // A busy frame reloads the XF palette many times (per-object and skinned matrices via LOAD_INDX).
-static constexpr std::size_t mtx_per_frame_bytes() {
-    return 32u * 1024u * 1024u;
-}
+static constexpr std::size_t kMatrixRingBytes = 128u * 1024u * 1024u;
 static constexpr unsigned    kSrvPerFrame = 32768u;
 // The descriptor ring's persistent prefix, outside the rewound frame segments: the EFB
 // conversion sources (the EFB's views, the output EFB's, the MSAA depth's, then the HDR scene
@@ -2246,17 +2241,16 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
 
         if (!create_sampler_heap()) return false;
 
-        // Each ring reserves its largest segmentation (interpolation, temporal), so a frame-rate or
-        // upscaler change only re-segments it: no 300-400 MB of upload memory created mid-game.
-        constexpr unsigned kMostSegments = std::max({kFramesInFlight, kInterpSegments, kRingSegments});
-        if (!vertex_ring_  .initialize(device_.Get(), "vertex",   vb_per_frame_bytes(),  kFramesInFlight,
-                                       vb_per_frame_bytes() * std::max(kFramesInFlight, kInterpSegments))) return false;
-        if (!index_ring_   .initialize(device_.Get(), "index",    ib_per_frame_bytes(),  kFramesInFlight,
-                                       ib_per_frame_bytes() * std::max(kFramesInFlight, kInterpSegments))) return false;
-        if (!constant_ring_.initialize(device_.Get(), "constant", cb_per_frame_bytes(),  kFramesInFlight,
-                                       cb_per_frame_bytes() * 4u * kInterpSegments)) return false;
-        if (!matrix_ring_  .initialize(device_.Get(), "matrix",   mtx_per_frame_bytes(), kFramesInFlight,
-                                       mtx_per_frame_bytes() * kMostSegments)) return false;
+        // Every segmentation (interpolation, temporal) shares one buffer per ring, so a frame-rate or upscaler
+        // change only re-segments it: no 300-400 MB of upload memory created mid-game.
+        const auto ring = [&](UploadRing& target, const char* name, std::size_t bytes) {
+            return target.initialize(device_.Get(), name, UploadRing::budget(bytes, kFramesInFlight),
+                                     kFramesInFlight, bytes);
+        };
+        if (!ring(vertex_ring_, "vertex", kVertexRingBytes) || !ring(index_ring_, "index", kIndexRingBytes) ||
+            !ring(constant_ring_, "constant", kConstantRingBytes) || !ring(matrix_ring_, "matrix", kMatrixRingBytes)) {
+            return false;
+        }
         if (!srv_ring_.initialize(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, kSrvPerFrame, kInterpSegments, kPersistentSrvDescriptors)) return false;
         {
             const DescriptorRing::Table views = srv_ring_.allocate_persistent(kRtTextureViews);
@@ -2271,27 +2265,17 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
         if (!create_conversion_pipeline()) return false;
         if (!create_clear_pipeline()) return false;
 
-        // Reserved upload-ring bytes, logged next to the [gpu] adapter line. A mapped UPLOAD buffer
-        // commits pages only for the ranges written, so residency follows each ring's per-frame peak,
-        // not this reservation.
-        {
-            const auto ring_reserved_mb = [](std::size_t bytes) {
-                return (bytes * kFramesInFlight) / (1024u * 1024u);
-            };
-            std::cerr << "[gpu-rings]"
-                      << " vertex-reserved-mb=" << ring_reserved_mb(vb_per_frame_bytes())
-                      << " index-reserved-mb=" << ring_reserved_mb(ib_per_frame_bytes())
-                      << " constant-reserved-mb=" << ring_reserved_mb(cb_per_frame_bytes())
-                      << " matrix-reserved-mb=" << ring_reserved_mb(mtx_per_frame_bytes())
-                      << " unified-memory=" << (adapter_is_unified_memory() ? 1 : 0)
-                      << " frames-in-flight=" << kFramesInFlight
-                      << " total-reserved-mb="
-                      << ring_reserved_mb(vb_per_frame_bytes()) +
-                             ring_reserved_mb(ib_per_frame_bytes()) +
-                             ring_reserved_mb(cb_per_frame_bytes()) +
-                             ring_reserved_mb(mtx_per_frame_bytes())
-                      << '\n';
-        }
+        // Upload-ring buffers, logged next to the [gpu] adapter line.
+        std::cerr << "[gpu-rings]"
+                  << " vertex-mb=" << (kVertexRingBytes >> 20u)
+                  << " index-mb=" << (kIndexRingBytes >> 20u)
+                  << " constant-mb=" << (kConstantRingBytes >> 20u)
+                  << " matrix-mb=" << (kMatrixRingBytes >> 20u)
+                  << " unified-memory=" << (adapter_is_unified_memory() ? 1 : 0)
+                  << " frames-in-flight=" << kFramesInFlight
+                  << " total-mb="
+                  << ((kVertexRingBytes + kIndexRingBytes + kConstantRingBytes + kMatrixRingBytes) >> 20u)
+                  << '\n';
 
         // Ray tracing (config ray_tracing_enabled, GALAXY_RAY_TRACING=1) where offered.
         reconcile_ray_tracing();
@@ -3188,25 +3172,42 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
         }
         const RingMode mode = interpolation_mode() ? RingMode::Interp
             : temporal_mode() ? RingMode::Temporal : RingMode::Normal;
-        if (mode != ring_mode_) {
+        // A ring whose frames took over half their budget (or spilled) grows before the next frame: the whole
+        // stage drawn for traced light, a busier scene than any before.
+        const bool grow = !ring_growth_failed_ &&
+            (vertex_ring_.wants_growth() || index_ring_.wants_growth() || constant_ring_.wants_growth() ||
+             matrix_ring_.wants_growth());
+        if (mode != ring_mode_ || grow) {
             wait_for_gpu();
             const unsigned segments = mode == RingMode::Interp ? kInterpSegments : kFramesInFlight;
             const unsigned matrix_segments = mode == RingMode::Normal ? kFramesInFlight
                 : mode == RingMode::Interp ? kInterpSegments : kRingSegments;
-            // Interpolated sub-frames add one VS constant block per scene
-            // record each; the constant segment holds a whole game frame.
-            const std::size_t constant_bytes = cb_per_frame_bytes() * (mode == RingMode::Interp ? 4u : 1u);
-            const auto place = [&](UploadRing& ring, const char* name, std::size_t bytes, unsigned count) {
-                if (ring.resegment(bytes, count)) {
+            const auto place = [&](UploadRing& ring, const char* name, unsigned count) {
+                const std::size_t had = ring.capacity();
+                std::size_t capacity = ring_growth_failed_ ? had : ring.grown_capacity(count);
+                if (capacity == 0u) {
+                    ring_growth_failed_ = true;
+                    capacity = had;
+                }
+                if (capacity == had) {
+                    return ring.resegment(UploadRing::budget(capacity, count), count);
+                }
+                std::cerr << "[gpu-rings] grow " << name << " frame-high-water-kb=" << (ring.high_water() >> 10u)
+                          << " budget-kb=" << (ring.bytes_per_frame() >> 10u) << " mb=" << (had >> 20u) << "->"
+                          << (capacity >> 20u) << '\n';
+                ring.reset();
+                if (ring.initialize(device_.Get(), name, UploadRing::budget(capacity, count), count, capacity)) {
                     return true;
                 }
-                ring.reset();
-                return ring.initialize(device_.Get(), name, bytes, count);
+                // Out of upload memory: the buffer it had, and no further attempts.
+                ring_growth_failed_ = true;
+                std::cerr << "[gpu-rings] grow " << name << " failed\n";
+                return ring.initialize(device_.Get(), name, UploadRing::budget(had, count), count, had);
             };
-            if (!place(vertex_ring_, "vertex", vb_per_frame_bytes(), segments) ||
-                !place(index_ring_, "index", ib_per_frame_bytes(), segments) ||
-                !place(constant_ring_, "constant", constant_bytes, segments) ||
-                !place(matrix_ring_, "matrix", mtx_per_frame_bytes(), matrix_segments)) {
+            if (!place(vertex_ring_, "vertex", segments) ||
+                !place(index_ring_, "index", segments) ||
+                !place(constant_ring_, "constant", segments) ||
+                !place(matrix_ring_, "matrix", matrix_segments)) {
                 throw std::runtime_error("ring resize failed");
             }
             matrix_segments_ = matrix_segments;

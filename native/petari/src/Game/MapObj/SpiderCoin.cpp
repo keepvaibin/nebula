@@ -3,6 +3,7 @@
 #include "Game/LiveActor/PartsModel.hpp"
 #include "Game/MapObj/SpiderThread.hpp"
 #include "Game/Scene/SceneFunction.hpp"
+#include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
@@ -60,6 +61,22 @@ void SpiderCoin::init(const JMapInfoIter& rIter) {
     MR::registerDemoSimpleCastAll(mCocoonModel);
     makeActorAppeared();
 }
+
+#ifdef TARGET_PC
+// The coin hangs on the spider web its boss sets up (TombSpiderEnvironment). In a scenario without the boss there is
+// no web: the console never ran or showed these coins (their draw distance clipped them, far out of reach), and drawn
+// to the far plane for ray-traced light they hung in empty space and bound to the missing web (a crash in Space Junk's
+// first star). With no web after placement, the coin and its cocoon leave the scene, as unseen as on the console.
+void SpiderCoin::initAfterPlacement() {
+    if (MR::isExistSceneObj(SceneObj_SpiderThread)) {
+        return;
+    }
+    makeActorDead();
+    if (mCocoonModel != nullptr) {
+        mCocoonModel->makeActorDead();
+    }
+}
+#endif
 
 void SpiderCoin::kill() {
     LiveActor::kill();

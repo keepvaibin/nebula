@@ -9034,7 +9034,8 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             if (draw_identity_wanted_.load(std::memory_order_relaxed) != wanted) {
                 draw_identity_wanted_.store(wanted, std::memory_order_relaxed);
             }
-            // Traced shadows from what the game clips (GALAXY_RT_OFFSCREEN_CASTERS=0: never).
+            // The game draws for traced light: the whole stage at full detail, and out-of-view shadow casters and
+            // light sources (NEBULA_OPTION_RT_SHADOW_CASTERS; GALAXY_RT_OFFSCREEN_CASTERS=0: as without it).
             static const bool offscreen_casters = read_env_u64("GALAXY_RT_OFFSCREEN_CASTERS", 1u) != 0u;
             rt_shadow_casters_wanted_.store(offscreen_casters && renderer_.rt_lighting(), std::memory_order_relaxed);
             interp_scenes_in_chunk_ = 0u;

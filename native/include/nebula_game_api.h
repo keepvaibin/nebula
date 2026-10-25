@@ -139,8 +139,9 @@ enum {
     NEBULA_OPTION_TEXT_SPEED = 1, /* 1 to 3: text steps revealed per frame; 4: each page at once */
     NEBULA_OPTION_TEST_DUMP_LAYOUTS, /* tests: 1 logs each layout's pane tree once (GALAXY_TEST_DUMP_LAYOUTS) */
     NEBULA_OPTION_DRAW_IDENTITIES, /* 1 while the renderer reads host markers (__NebulaGXHostMarker) */
-    NEBULA_OPTION_RT_SHADOW_CASTERS, /* 1 while the ray tracer lights the scene: clipped actors whose shadows can
-                                        reach the view stay drawn (ClippingActorInfo::judgeShadowDraw) */
+    NEBULA_OPTION_RT_SHADOW_CASTERS, /* 1 while the ray tracer lights the scene: actors are drawn to the camera's far
+                                        plane at full detail (LodCtrl), and out-of-view ones whose shadow or light
+                                        reaches the view stay unclipped (ClippingActorInfo::isWantedForLight) */
     NEBULA_OPTION_LOD_SCALE,         /* the 3D image's lines over the console's 456 as shown (1 at its resolution, 0
                                         before the first scene): LodCtrl's switch distances grow by it */
 };

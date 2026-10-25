@@ -36,27 +36,41 @@ bool RendererVk::interpolation_mode() const {
 }
 
 // Interp: the upload rings, texture tables and retired textures are segmented per game frame, so a logged frame's
-// data lives until its segment comes round again; Normal: per frame slot. A change waits for an idle GPU.
+// data lives until its segment comes round again; Normal: per frame slot. A change, or a ring whose frames took over
+// half their budget, waits for an idle GPU.
 void RendererVk::update_ring_mode() {
     const RingMode mode = interpolation_mode() ? RingMode::Interp : RingMode::Normal;
-    if (mode == ring_mode_) {
+    const bool grow = !ring_growth_failed_ &&
+        (vertex_ring_.wants_growth() || index_ring_.wants_growth() || constant_ring_.wants_growth() ||
+         matrix_ring_.wants_growth());
+    if (mode == ring_mode_ && !grow) {
         return;
     }
     drain_gpu();
     const bool interp = mode == RingMode::Interp;
     const unsigned segments = interp ? kInterpSegments : kFramesInFlight;
     const VkDevice device = vk::Context::get().device();
-    const auto place = [&](UploadRing& ring, const char* name, std::size_t bytes) {
-        if (ring.resegment(bytes, segments)) {
+    const auto place = [&](UploadRing& ring, const char* name) {
+        const std::size_t had = ring.capacity();
+        std::size_t capacity = ring_growth_failed_ ? had : ring.grown_capacity(segments);
+        if (capacity == 0u) {
+            ring_growth_failed_ = true;
+            capacity = had;
+        }
+        if (capacity == had) {
+            return ring.resegment(UploadRing::budget(capacity, segments), segments);
+        }
+        std::cerr << "[gpu-rings] grow " << name << " frame-high-water-kb=" << (ring.high_water() >> 10u)
+                  << " mb=" << (had >> 20u) << "->" << (capacity >> 20u) << '\n';
+        ring.reset();
+        if (ring.initialize(device, name, UploadRing::budget(capacity, segments), segments, capacity)) {
             return true;
         }
-        ring.reset();
-        return ring.initialize(device, name, bytes, segments);
+        ring_growth_failed_ = true;
+        return ring.initialize(device, name, UploadRing::budget(had, segments), segments, had);
     };
-    // Sub-frames add a constant block per moving record: the constant segment holds four times a frame's.
-    if (!place(vertex_ring_, "vertex", 64u << 20u) || !place(index_ring_, "index", 16u << 20u) ||
-        !place(constant_ring_, "constant", (8u << 20u) * (interp ? 4u : 1u)) ||
-        !place(matrix_ring_, "matrix", 32u << 20u)) {
+    if (!place(vertex_ring_, "vertex") || !place(index_ring_, "index") || !place(constant_ring_, "constant") ||
+        !place(matrix_ring_, "matrix")) {
         throw std::runtime_error("upload ring resize failed");
     }
     // Rebuilt rings may be new buffers: no cached set may name the old ones.

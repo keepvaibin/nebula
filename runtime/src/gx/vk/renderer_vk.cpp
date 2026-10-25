@@ -192,11 +192,14 @@ bool RendererVk::initialize(int window_width, int window_height, unsigned efb_sc
             vk::check(vkCreateQueryPool(device, &query_info, nullptr, &timestamps_), "vkCreateQueryPool");
             timestamp_period_ns_ = vk::Context::get().properties().limits.timestampPeriod;
         }
-        // The rings are Vulkan buffers with GX addresses; their sizes follow the D3D12 renderer's defaults.
-        if (!vertex_ring_.initialize(device, "vertex", 64u << 20u, kFramesInFlight) ||
-            !index_ring_.initialize(device, "index", 16u << 20u, kFramesInFlight) ||
-            !constant_ring_.initialize(device, "constant", 8u << 20u, kFramesInFlight) ||
-            !matrix_ring_.initialize(device, "matrix", 32u << 20u, kFramesInFlight)) {
+        // The rings are Vulkan buffers with GX addresses; their sizes follow the D3D12 renderer's. Every segmentation
+        // shares one buffer per ring.
+        const auto ring = [&](UploadRing& target, const char* name, std::size_t bytes) {
+            return target.initialize(device, name, UploadRing::budget(bytes, kFramesInFlight), kFramesInFlight,
+                                     bytes);
+        };
+        if (!ring(vertex_ring_, "vertex", 192u << 20u) || !ring(index_ring_, "index", 48u << 20u) ||
+            !ring(constant_ring_, "constant", 96u << 20u) || !ring(matrix_ring_, "matrix", 128u << 20u)) {
             std::cerr << "[Renderer] upload rings unavailable\n";
             shutdown();
             return false;

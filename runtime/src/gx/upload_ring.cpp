@@ -60,6 +60,9 @@ bool UploadRing::initialize(
     resource_identity_ = g_upload_ring_identity.fetch_add(1, std::memory_order_relaxed);
     slot_generations_ = std::move(generations);
     segment_base_ = cursor_ = 0u;
+    spill_cursor_ = spill_base();
+    frame_spill_ = 0u;
+    high_water_ = 0u;
     active_slot_ = 0u;
     frame_ready_ = false;
     segment_allocation_pending_ = true;
@@ -80,6 +83,8 @@ bool UploadRing::resegment(std::size_t bytes_per_frame, unsigned frames_in_fligh
     resource_identity_ = g_upload_ring_identity.fetch_add(1, std::memory_order_relaxed);
     slot_generations_.assign(frames_in_flight, 0u);
     segment_base_ = cursor_ = 0u;
+    spill_cursor_ = spill_base();
+    frame_spill_ = 0u;
     active_slot_ = 0u;
     frame_ready_ = false;
     segment_allocation_pending_ = true;
@@ -100,6 +105,7 @@ void UploadRing::begin_frame(unsigned frame_slot) {
     immutable_upload_calls_ = 0;
     segment_base_ = static_cast<std::size_t>(frame_slot) * bytes_per_frame_;
     cursor_       = segment_base_;
+    frame_spill_ = 0u;
     frame_ready_ = true;
 }
 
@@ -111,20 +117,32 @@ UploadRing::Allocation UploadRing::allocate(std::size_t size, std::size_t alignm
         throw std::runtime_error("UploadRing alignment is not a nonzero power of two");
     }
     // Padding by unsigned negation cannot overflow; padding and payload are checked before any address is formed.
-    const std::size_t padding = (std::size_t{0} - cursor_) & (alignment - 1u);
-    const std::size_t remaining = bytes_per_frame_ - (cursor_ - segment_base_);
-    if (padding > remaining || size > remaining - padding)
+    const auto fits = [&](std::size_t at, std::size_t end) {
+        const std::size_t padding = (std::size_t{0} - at) & (alignment - 1u);
+        const std::size_t remaining = end - at;
+        return padding <= remaining && size <= remaining - padding;
+    };
+    std::size_t aligned = 0u;
+    if (fits(cursor_, segment_base_ + bytes_per_frame_)) [[likely]] {
+        aligned = cursor_ + ((std::size_t{0} - cursor_) & (alignment - 1u));
+        cursor_ = aligned + size;
+    } else if (fits(spill_cursor_, capacity_)) {
+        aligned = spill_cursor_ + ((std::size_t{0} - spill_cursor_) & (alignment - 1u));
+        frame_spill_ += aligned + size - spill_cursor_;
+        spill_cursor_ = aligned + size;
+    } else {
         throw std::runtime_error(
             std::string("UploadRing '") + name_ + "' exhausted: request " +
             std::to_string(size) + " B at frame-used " +
-            std::to_string(cursor_ - segment_base_) + "/" +
-            std::to_string(bytes_per_frame_) + " B");
-    const std::size_t aligned = cursor_ + padding;
-    cursor_ = aligned + size;
-    // Bytes this frame's segment has handed out: the floor for shrinking bytes_per_frame_.
-    const std::size_t frame_used = cursor_ - segment_base_;
+            std::to_string(cursor_ - segment_base_ + frame_spill_) + "/" +
+            std::to_string(bytes_per_frame_) + " B and spill " +
+            std::to_string(capacity_ - spill_base()) + " B");
+    }
+    // Bytes this frame has handed out: the floor for its budget.
+    const std::size_t frame_used = cursor_ - segment_base_ + frame_spill_;
     if (frame_used > peak_bytes_per_frame_) {
         peak_bytes_per_frame_ = frame_used;
+        high_water_ = std::max(high_water_, frame_used);
     }
     // A slot's generation advances on its first nonzero allocation only: fence-only chunks begin the frame but
     // write no bytes.

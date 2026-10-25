@@ -621,6 +621,8 @@ private:
     void advance_ring_segment();
     [[nodiscard]] VkDescriptorSet allocate_table_set(VkDescriptorSetLayout layout);
     RingMode ring_mode_ = RingMode::Normal;
+    // An upload ring could not grow (out of upload memory): no further attempts.
+    bool ring_growth_failed_ = false;
     std::array<Segment, kInterpSegments> segments_{};
     unsigned ring_segment_ = 0;
     bool ring_advance_pending_ = false;

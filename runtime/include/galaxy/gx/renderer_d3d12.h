@@ -1016,6 +1016,8 @@ private:
     // and the sampler heap advance once per game frame.
     enum class RingMode : std::uint8_t { Normal, Temporal, Interp };
     RingMode ring_mode_ = RingMode::Normal;
+    // An upload ring could not grow (out of upload memory): no further attempts.
+    bool ring_growth_failed_ = false;
     bool present_game_frame_ = false;
     unsigned ring_segment_ = 0;
     std::array<std::uint64_t, kInterpSegments> ring_segment_fence_{};

@@ -44,6 +44,12 @@ bool ClippingActorInfo::isJudgedToClip() const {
     f32 val = _8;
     ClippingJudge* judge = MR::getClippingJudge();
 #ifdef TARGET_PC
+    // Ray-traced light draws the whole stage to the camera's far plane: an actor's own draw distance (5,000 to 60,000
+    // units by its clip level) was the console's budget, and with it objects stood in the sky without the planet they
+    // sit on, and the traced light lost whatever lay beyond.
+    if (judge->isLightSourcesWanted()) {
+        farClipLevel = 0;
+    }
     if (!judge->isJudgedToClipFrustum(*_4, val, farClipLevel)) {
         mKeptForLight = false;
         return false;
