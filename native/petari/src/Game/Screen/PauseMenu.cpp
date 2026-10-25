@@ -180,6 +180,9 @@ void PauseMenu::appear() {
 
 void PauseMenu::draw() const {
     LayoutActor::draw();
+#ifdef TARGET_PC
+    mSettingsButton->draw();
+#endif
 
     if (mLuigiLetter != nullptr) {
         mLuigiLetter->draw();
@@ -427,6 +430,10 @@ void PauseMenu::exeConfirm() {
 void PauseMenu::exeGameDataSave() {
     if (MR::isFirstStep(this)) {
         GameSequenceFunction::startGameDataSaveSequence(false, true);
+#ifdef TARGET_PC
+        // Its question follows the save (exeConfirm).
+        GameSequenceFunction::setGameDataSaveWindowFollows();
+#endif
     }
 
     if (GameSequenceFunction::isActiveSaveDataHandleSequence()) {

@@ -34,7 +34,12 @@ namespace {
 SaveDataHandleSequence::SaveDataHandleSequence()
     : NerveExecutor("\203\132\201\133\203\165/\203\215\201\133\203\150" /* セーブ/ロード */), mSysConfigFile(), mCurrentUserFile(), mBackupUserFile(), mSaveDataHandler(), mNANDErrorSequence(),
       mSysInfoWindowConfirm(), mSysInfoWindowSave(), _24(), mIsConfirmRemind(), mIsSaveAndQuitMsg(), _2A(), _2B(), _2C(), mWorkUserFile(),
-      mNerveForError(), mTempBuffer(), mOnSaveSuccessFunc(), mJustBeforeSaveFunc(), mSaveIcon() {
+      mNerveForError(), mTempBuffer(), mOnSaveSuccessFunc(), mJustBeforeSaveFunc(), mSaveIcon()
+#ifdef TARGET_PC
+      ,
+      mWindowFollows(false)
+#endif
+{
     mTempBuffer = new (32) u8[SaveDataHandler::getEnoughtTempBufferSize()];
 
     initNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
@@ -124,6 +129,9 @@ void SaveDataHandleSequence::startDeleteUserFile(int index) {
 void SaveDataHandleSequence::startSave(bool isConfirmRemind, bool isSaveAndQuitMsg) {
     mIsConfirmRemind = isConfirmRemind;
     mIsSaveAndQuitMsg = isSaveAndQuitMsg;
+#ifdef TARGET_PC
+    mWindowFollows = false;
+#endif
     mWorkUserFile = mCurrentUserFile;
 
     setNerve(GET_NERVE_ANON(SaveDataHandleSequenceSaveConfirm));
@@ -132,6 +140,9 @@ void SaveDataHandleSequence::startSave(bool isConfirmRemind, bool isSaveAndQuitM
 void SaveDataHandleSequence::startSaveBackup(bool isConfirmRemind, bool isSaveAndQuitMsg) {
     mIsConfirmRemind = isConfirmRemind;
     mIsSaveAndQuitMsg = isSaveAndQuitMsg;
+#ifdef TARGET_PC
+    mWindowFollows = false;
+#endif
     mWorkUserFile = mBackupUserFile;
 
     setNerve(GET_NERVE_ANON(SaveDataHandleSequenceSaveConfirm));
@@ -293,6 +304,13 @@ void SaveDataHandleSequence::exeSaveConfirm() {
         const char* const pSystemMessageId = mIsSaveAndQuitMsg ? "System_Save07" : "System_Save00";
 
         if (!tryConfirm(pSystemMessageId, &isSelectedYes)) {
+#ifdef TARGET_PC
+            // Yes opens Saving...; No, the reminder when there is one.
+            if (MR::isFirstStep(this)) {
+                mSysInfoWindowConfirm->setDimHandOver((_2A ? SysInfoWindow::DimHandOver_None : SysInfoWindow::DimHandOver_Yes) |
+                                                      (mIsConfirmRemind ? SysInfoWindow::DimHandOver_No : SysInfoWindow::DimHandOver_None));
+            }
+#endif
             return;
         }
 
@@ -331,6 +349,12 @@ void SaveDataHandleSequence::exeSave() {
     } else if (trySave()) {
         setNerve(GET_NERVE_ANON(SaveDataHandleSequenceSaveWindowDisappear));
     }
+#ifdef TARGET_PC
+    // Saving... is followed by the done message (or an error's window).
+    else if (MR::isFirstStep(this)) {
+        mSysInfoWindowSave->setDimHandOver(SysInfoWindow::DimHandOver_Always);
+    }
+#endif
 }
 
 void SaveDataHandleSequence::exeSaveWindowDisappear() {
@@ -353,6 +377,11 @@ void SaveDataHandleSequence::exeSaveWindowDisappear() {
 
 void SaveDataHandleSequence::exeSaveDoneKeyWait() {
     if (!tryProcessDoneKeyWait("System_Save02")) {
+#ifdef TARGET_PC
+        if (MR::isFirstStep(this) && mWindowFollows) {
+            mSysInfoWindowSave->setDimHandOver(SysInfoWindow::DimHandOver_Always);
+        }
+#endif
         return;
     }
 
@@ -484,6 +513,12 @@ void SaveDataHandleSequence::exeNoSaveConfirmRemind() {
     bool isSelectedYes = false;
 
     if (!tryConfirm("ConfirmEndGame", &isSelectedYes)) {
+#ifdef TARGET_PC
+        // No asks the save's question again.
+        if (MR::isFirstStep(this)) {
+            mSysInfoWindowConfirm->setDimHandOver(SysInfoWindow::DimHandOver_No);
+        }
+#endif
         return;
     }
 
