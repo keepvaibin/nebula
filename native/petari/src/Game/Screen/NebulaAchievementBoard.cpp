@@ -977,8 +977,8 @@ namespace {
         return x >= cx - w * 0.5f && x <= cx + w * 0.5f && y >= cy - h * 0.5f && y <= cy + h * 0.5f;
     }
 
-    // The pointer: what it is over takes the highlight; A picks a tab, the filter or Back; held A drags the list.
-    // True when Back was picked.
+    // The pointer: what it is over takes the highlight, silently (as in the settings menu); A picks a tab, the filter
+    // or Back; held A drags the list. True when Back was picked.
     bool handlePointer(NebulaBoardParts* p) {
         f32 x, y;
         const bool in = readPointer(p, &x, &y);
@@ -1024,9 +1024,6 @@ namespace {
         p->mOverBack = isInside(x, y, p->mBack.mX, p->mFooterY, p->mBack.mWidth, cBackHeight + 4.0f);
         if (!p->mDragging) {
             if (overTab >= 0) {
-                if (p->mZone != ZoneTabs || p->mTabFocus != overTab) {
-                    MR::startSystemSE("SE_SY_BUTTON_CURSOR_ON");
-                }
                 p->mZone = ZoneTabs;
                 p->mTabFocus = overTab;
             } else if (overFilter >= 0) {
@@ -1034,9 +1031,6 @@ namespace {
                 p->mZone = ZoneList;
                 p->mCardFocus = -1;
             } else {
-                if (overCard >= 0 && (p->mZone != ZoneList || p->mCardFocus != overCard)) {
-                    MR::startSystemSE("SE_SY_BUTTON_CURSOR_ON");
-                }
                 p->mZone = ZoneList;
                 p->mCardFocus = overCard;
             }
@@ -1074,16 +1068,19 @@ namespace {
                 }
                 p->mDragLastY = y;
             }
-        } else if (inList) {
-            // Resting near the list's top or bottom edge scrolls it, faster nearer the edge.
-            const f32 band = 22.0f;
-            if (y > p->mListTop - band) {
-                p->mScrollTarget = clamp(p->mScrollTarget - 4.0f * (y - (p->mListTop - band)) / band, 0.0f, getMaxScroll(p));
-            } else if (y < p->mListBottom + band) {
-                p->mScrollTarget = clamp(p->mScrollTarget + 4.0f * ((p->mListBottom + band) - y) / band, 0.0f, getMaxScroll(p));
-            }
         }
         return false;
+    }
+
+    // The mouse wheel: a row of the page a notch (the stats' tiles or the cards), up toward the top, wherever the
+    // pointer is.
+    void scrollByWheel(NebulaBoardParts* p, s32 wheel) {
+        if (wheel == 0 || p->mDragging) {
+            return;
+        }
+        const f32 row = p->mTab == TabStats || p->mShownNum == 0 ? cTileHeight + cGap : p->mCardHeight + cGap;
+        p->mScrollVelocity = 0.0f;
+        p->mScrollTarget = clamp(p->mScrollTarget - wheel * row / 120.0f, 0.0f, getMaxScroll(p));
     }
 };  // namespace
 
@@ -1414,6 +1411,7 @@ void NebulaAchievementBoard::open() {
     p->mPointerIn = false;
     p->mOverBack = false;
     NebulaMenuFocus::holdCurrent(&p->mRepeat);
+    (void)__NebulaPointerWheel();  // turns from before it opened scroll nothing
     p->mFrame = 0;
     p->mSwitchFrame = 0;
     p->mSwitchDirection = 0;
@@ -1669,9 +1667,11 @@ void NebulaAchievementBoard::exeAppear() {
 
 void NebulaAchievementBoard::exeWait() {
     NebulaBoardParts* p = mParts;
+    const s32 wheel = __NebulaPointerWheel();
     if (MR::isSystemWipeActive()) {
         return;  // the board takes no input while it comes out of the black
     }
+    scrollByWheel(p, wheel);
     if (MR::testSystemTriggerB()) {
         MR::startSystemSE("SE_SY_GALAMAP_WINDOW_CLOSE");
         setNerve(&NrvNebulaAchievementBoard::NebulaAchievementBoardNrvDisappear::sInstance);

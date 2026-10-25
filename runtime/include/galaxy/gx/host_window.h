@@ -31,6 +31,9 @@ extern unsigned backbuffer_width;
 extern unsigned backbuffer_height;
 // Swap-chain presents per second (any source), for the FRAME RATE row.
 extern std::atomic<double> measured_present_hz;
+// The mouse wheel's turn the game has not taken yet (pointer_wheel in nebula_game_api.h), in 120ths of a notch,
+// positive away from the player; the settings menu takes the wheel itself while it shows.
+extern std::atomic<std::int32_t> pointer_wheel;
 // The game's files (set_native_settings_content_root in gx_d3d12.h).
 extern std::string native_settings_content_root;
 extern std::atomic<bool> borderless_active;

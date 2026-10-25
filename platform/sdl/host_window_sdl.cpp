@@ -455,6 +455,13 @@ void pump_events(int timeout_ms) noexcept {
             g_input.finger_y = event.motion.y;
             g_input.finger_ms = galaxy::steady_ms();
             break;
+        case SDL_EVENT_MOUSE_WHEEL: {
+            // In 120ths of a notch, positive away from the player (Windows' WHEEL_DELTA), as the game takes it.
+            const float notches = event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -event.wheel.y : event.wheel.y;
+            galaxy::gx::host_window::pointer_wheel.fetch_add(static_cast<std::int32_t>(std::lround(notches * 120.0f)),
+                                                             std::memory_order_relaxed);
+            break;
+        }
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
         case SDL_EVENT_MOUSE_BUTTON_UP: {
             const bool down = event.type == SDL_EVENT_MOUSE_BUTTON_DOWN;
@@ -635,6 +642,7 @@ namespace galaxy::gx::host_window {
 unsigned backbuffer_width = 0;
 unsigned backbuffer_height = 0;
 std::atomic<double> measured_present_hz{0.0};
+std::atomic<std::int32_t> pointer_wheel{0};
 std::string native_settings_content_root;
 std::atomic<bool> borderless_active{true};
 std::atomic<bool> exclusive_fullscreen_active{false};
@@ -850,5 +858,9 @@ void home_menu_point(unsigned) noexcept {}
 void home_menu_choose(unsigned) noexcept {}
 
 void native_settings_post_key(std::uintptr_t) noexcept {}
+
+std::int32_t take_pointer_wheel() noexcept {
+    return host_window::pointer_wheel.exchange(0, std::memory_order_relaxed);
+}
 
 }  // namespace galaxy::gx

@@ -52,6 +52,7 @@ namespace host_window {
 UINT backbuffer_width = 1280;
 UINT backbuffer_height = 720;
 std::atomic<double> measured_present_hz{0.0};
+std::atomic<std::int32_t> pointer_wheel{0};
 std::string native_settings_content_root;
 std::atomic<std::uintptr_t> settings_window{0};
 std::atomic<bool> borderless_active{false};
@@ -4464,6 +4465,11 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         for (; s_wheel <= -WHEEL_DELTA; s_wheel += WHEEL_DELTA) (void)handle_native_settings_key(VK_DOWN, false);
         return 0;
     }
+    if (msg == WM_MOUSEWHEEL) {
+        // The game's own screens scroll by it (the achievement board).
+        host_window::pointer_wheel.fetch_add(GET_WHEEL_DELTA_WPARAM(wp), std::memory_order_relaxed);
+        return 0;
+    }
     if (msg == WM_LBUTTONDOWN || msg == WM_LBUTTONDBLCLK) {
         galaxy::host::publish_native_pointer_input_origin(true, input_message_injected());
         update_pointer_button(hwnd, lp, true, true);
@@ -5838,5 +5844,9 @@ void native_settings_wait_saved_for_tests() {
 }
 void host_window::native_settings_set_refresh_override_for_tests(unsigned hz) noexcept {
     s_refresh_override_hz.store(hz, std::memory_order_relaxed);
+}
+
+std::int32_t take_pointer_wheel() noexcept {
+    return host_window::pointer_wheel.exchange(0, std::memory_order_relaxed);
 }
 }  // namespace galaxy::gx

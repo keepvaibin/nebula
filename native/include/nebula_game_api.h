@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 28u
+#define NEBULA_GAME_API_VERSION 29u
 
 /* A physical range of the game's memory and where it is in the host process: what the GPU's addresses resolve to. */
 typedef struct NebulaGameMemoryRegion {
@@ -485,6 +485,9 @@ typedef struct NebulaHostServices {
     /* The scale the 2D layer was last drawn at: its 640 x 456 picture times this (the window's while sharp_2d is on);
        0 before the first frame. */
     uint32_t (*layer_2d_scale)(void* user);
+    /* The mouse wheel's turn since the last call, in 120ths of a notch (positive away from the player), while no screen
+       of the host's takes it: the achievement board scrolls by it. */
+    int32_t (*pointer_wheel)(void* user);
 } NebulaHostServices;
 
 enum {

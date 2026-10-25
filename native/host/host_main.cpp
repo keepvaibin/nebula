@@ -1892,6 +1892,15 @@ uint32_t svc_layer_2d_scale(void*) {
 #endif
 }
 
+// The wheel's turn the window gathered since the game last asked.
+int32_t svc_pointer_wheel(void*) {
+#if defined(NEBULA_HOST_RENDERER)
+    return galaxy::gx::take_pointer_wheel();
+#else
+    return 0;
+#endif
+}
+
 uint32_t svc_art_export(void*, const NebulaArtExport* art) {
 #if defined(NEBULA_HOST_RENDERER)
     static const std::filesystem::path folder = [] {
@@ -3318,6 +3327,7 @@ int main(int argc, char** argv) {
     services.wpad_sample = svc_wpad_sample;
     services.art_export = svc_art_export;
     services.layer_2d_scale = svc_layer_2d_scale;
+    services.pointer_wheel = svc_pointer_wheel;
     services.gx_stripe_particle = svc_gx_stripe_particle;
     services.disc_fst = svc_disc_fst;
     services.disc_read = svc_disc_read;

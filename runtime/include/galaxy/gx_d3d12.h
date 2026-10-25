@@ -285,6 +285,9 @@ void request_sharp_2d(bool on) noexcept;
 // The scale the 2D layer was last drawn at (the EFB in use as the scene ended: the output EFB, else the render EFB),
 // over the Wii's 640 x 456; 0 before the first scene ends. Any thread.
 [[nodiscard]] unsigned layer_2d_scale() noexcept;
+// The mouse wheel's turn since the last call, in 120ths of a notch, positive away from the player (host_window's
+// pointer_wheel: the settings menu takes the wheel itself while it shows). Any thread.
+[[nodiscard]] std::int32_t take_pointer_wheel() noexcept;
 
 // The native game's HOME Menu with the console menu's choices, taking the keyboard and controllers while open: return
 // to the game, reset, or leave it (the console's Wii Menu), the last two after "are you sure?". The game opens it
