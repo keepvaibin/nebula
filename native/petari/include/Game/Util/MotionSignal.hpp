@@ -125,6 +125,12 @@ namespace MotionSignal {
     // GameScene::drawMirror: the mirror's draws begin (after isDrawMirror) and end (before its clearZBuffer).
     void mirror(bool begin);
 
+    // Draws only the ray tracer's rays meet, never drawn to the picture (the player's body in the first-person view):
+    // whether the renderer takes them now (it traces the scene and reads the markers that keep them out of the
+    // picture; without both they would be drawn), and their bounds.
+    bool traceOnlyWanted();
+    void traceOnly(bool begin);
+
     // GX light loads (LightFunction, MR::loadLightPlayer).
     void actorLight(const ActorLightInfo* pInfo);
     void coinLight(const LightInfoCoin* pInfo);

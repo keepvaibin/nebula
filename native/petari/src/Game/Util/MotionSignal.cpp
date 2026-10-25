@@ -41,6 +41,7 @@ namespace {
         Kind_StarPointer = 11,
         Kind_Material = 12,
         Kind_Effect = 13,
+        Kind_TraceOnly = 14,
     };
 
     enum {
@@ -224,6 +225,14 @@ namespace MotionSignal {
 
     void mirror(bool begin) {
         __NebulaGXHostMarker(Kind_Pass, begin ? Pass_MirrorBegin : Pass_MirrorEnd, 0, 0);
+    }
+
+    bool traceOnlyWanted() {
+        return __NebulaGXMarkers != 0 && __NebulaOption(NEBULA_OPTION_RT_SHADOW_CASTERS) != 0;
+    }
+
+    void traceOnly(bool begin) {
+        __NebulaGXHostMarker(Kind_TraceOnly, begin ? 1 : 0, 0, 0);
     }
 
     void lightImpl(u16 site, const void* pInfo, u32 followCamera) {

@@ -308,6 +308,7 @@ public:
     [[nodiscard]] bool rt_physical() const noexcept { return ray_tracer_.physical_active(); }
     // The ray tracing engine runs (its clear-surface pass traces the table's `traced` glass).
     [[nodiscard]] bool rt_engine() const noexcept { return ray_tracer_.engine_active(); }
+    [[nodiscard]] bool rt_engine_clear() const noexcept { return ray_tracer_.engine_clear_active(); }
     [[nodiscard]] bool rt_log_seq() const noexcept { return ray_tracer_.log_seq(); }
     [[nodiscard]] bool rt_ab_original() const noexcept { return ray_tracer_.ab_original(); }
     [[nodiscard]] bool rt_scene_untraced() const noexcept { return ray_tracer_.scene_untraced(); }

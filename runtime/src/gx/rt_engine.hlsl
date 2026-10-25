@@ -47,7 +47,11 @@ static const uint kEvWaterScene = 23u;    // the water window's acceleration str
 static const uint kEvWaterPositions = 24u;  // its triangles' eye-space vertices (36 bytes)
 static const uint kEvWaterSurfaces = 25u;   // their vertex normals and draw flags (16 bytes; draw in bits 16-31)
 static const uint kEvClearDraws = 26u;    // per water draw: the table's roughness (unorm16), kClear* flags
-static const uint kEvClear = 27u;         // per pixel uint4: reflection rgb (halves, exposed), transmittance, eye z
+static const uint kEvClear = 27u;         // per pixel 2 uint4 (EngineClearCS): reflection rgb (halves, exposed),
+                                          // transmittance r, eye z, present; transmittance g b, the pixel seen through
+// g_engine_info.y in the clear pass: what the frame has of each kind.
+static const uint kClearHasGlass = 1u;    // the water window's glass (clear_trace)
+static const uint kClearHasSolids = 2u;   // clear solids in the scene (solid_front)
 
 static const uint kEngineSpecular = 2u;   // traced specular
 static const uint kEngineIndirect = 4u;   // traced indirect light
@@ -72,6 +76,8 @@ static const uint kEngineReference = 262144u;   // GALAXY_RT_ENGINE_REFERENCE: t
                                                  // (g_engine_params: x its buffer's view, y paths so far, z bounces)
 static const uint kEngineNoAntiLag = 1048576u;   // GALAXY_RT_ENGINE_ANTILAG=0: the diffuse history without its anti-lag
 static const uint kEngineNoLightHistory = 2097152u;  // GALAXY_RT_ENGINE_LIGHT_HISTORY=0: no temporal light reuse
+static const uint kEngineClearSolidLeft = 4194304u;  // GALAXY_RT_ENGINE_CLEAR=10: a clear solid's light still inside
+                                                     // when its path's segments ran out (red, x 4), alone
 
 // The water draws' clear records (kEvClearDraws, word per draw: roughness in bits 0-15, flags above).
 static const uint kClearGlass = 1u << 16u;   // the engine's: glass or crystal (not mirror glass, not a metal coat)
@@ -628,8 +634,14 @@ Hit engine_trace(float3 origin, float3 direction, uint salt)
         }
         const bool late_hit = query.CandidateInstanceID() != 0u;
         const uint hit = late_hit ? 0u : g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u);
-        if (late_hit || card_blocks(query.CandidatePrimitiveIndex(), hit,
-                                    origin + direction * query.CandidateTriangleRayT(), salt)) {
+        // A clear solid the engine traces stops kClearShadow of these rays, as of the light (engine_visible): its
+        // facets turn most of them off the straight path; the rest see what lies behind it.
+        if (!late_hit && solid_draw(hit)) {
+            if (card_hash(query.CandidatePrimitiveIndex(), salt ^ 0x5BD1E995u) < kClearShadow) {
+                query.CommitNonOpaqueTriangleHit();
+            }
+        } else if (late_hit || card_blocks(query.CandidatePrimitiveIndex(), hit,
+                                           origin + direction * query.CandidateTriangleRayT(), salt)) {
             query.CommitNonOpaqueTriangleHit();
         }
     }
@@ -2462,9 +2474,338 @@ float3 clear_wall(ClearHit h, float3 dir, uint pixel, uint layer, out float tran
     return safe_light(reflected);
 }
 
+// The clear solids (rt_lighting.hlsl kDrawTableSolid: the table's `traced solid`, the crystal cages): in the scene for
+// the other rays (their shadows, kClearShadow) but never a camera ray's surface (kDrawTableUnseen), traced here as
+// closed dielectrics, as RTX Remix's translucent material without thin walls and Whitted's recursion for smooth glass
+// (Unity HDRP's recursive rendering) trace them: the front face's Fresnel reflection; the light refracted in and
+// followed inside, each face it reaches sending its transmitted share out (none under total internal reflection) and
+// reflecting the rest on; what each share meets outside; the row's transmittance colour over the path (Beer-Lambert).
+// A crystal mirrors what stands before it mostly from within: light from the front enters, reflects totally at the
+// far facets and leaves towards the camera. Their index: quartz's (ordinary ray, 589 nm), the mineral of the
+// crystals' habit (hexagonal prisms under pyramidal tips: rock crystal); its critical angle is 40.4 degrees.
+static const float kSolidIor = 1.544f;
+// The internal path's segments at most, and the share of the light below which it ends. Total internal reflection
+// can hold a ray inside a prism for many faces (a light pipe): what is still inside when the path ends leaves as the
+// light that left before it did (its shares scaled by the light inside over the light sent, at most kSolidRest times:
+// a path that sent out little before it ended stands for little).
+static const uint kSolidSegments = 16u;
+static const float kSolidRest = 4.0f;
+static const float kSolidLeast = 0.01f;
+
+// The nearest surface along a ray of a clear solid's paths: the scene's surfaces as engine_trace meets them, and the
+// clear solids' faces when `solids` (inside one: its far faces). A ray leaving a solid passes the others it meets
+// (their own refraction is not followed). `solid`: the hit is a solid's face.
+Hit solid_trace(float3 origin, float3 direction, bool solids, uint salt, out bool solid)
+{
+    RayDesc ray;
+    ray.Origin = origin;
+    ray.Direction = direction;
+    ray.TMin = 0.0f;
+    ray.TMax = 1.0e6f;
+    RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+    query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
+    uint visits = 0u;
+    while (query.Proceed()) {
+        if (++visits > kMaxCandidates) {
+            query.CommitNonOpaqueTriangleHit();
+            query.Abort();
+            break;
+        }
+        const bool late_hit = query.CandidateInstanceID() != 0u;
+        const uint flags = late_hit ? 0u : g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u);
+        if (!late_hit && solid_draw(flags)) {
+            if (solids) {
+                query.CommitNonOpaqueTriangleHit();
+            }
+        } else if (late_hit || card_blocks(query.CandidatePrimitiveIndex(), flags,
+                                           origin + direction * query.CandidateTriangleRayT(), salt)) {
+            query.CommitNonOpaqueTriangleHit();
+        }
+    }
+    Hit h;
+    h.surface = false;
+    h.late = false;
+    h.t = 1.0e6f;
+    h.tri = 0u;
+    h.b = float2(0.0f, 0.0f);
+    solid = false;
+    if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
+        h.t = query.CommittedRayT();
+        h.late = query.CommittedInstanceID() != 0u;
+        h.surface = !h.late && length(origin + direction * h.t) <= g_ambient.w;
+        h.tri = query.CommittedPrimitiveIndex();
+        h.b = query.CommittedTriangleBarycentrics();
+        solid = h.surface && solid_draw(g_surfaces.Load(h.tri * 16u + 12u));
+    }
+    return h;
+}
+
+// The nearest clear solid's face along the camera ray between `t_min` and `t_max` (the raster's depth: what the
+// picture shows in front of it hides it).
+ClearHit solid_front(float3 dir, float t_min, float t_max)
+{
+    ClearHit h;
+    h.hit = false;
+    h.t = t_max;
+    h.tri = 0u;
+    h.b = float2(0.0f, 0.0f);
+    if (!(t_min < t_max)) {
+        return h;
+    }
+    RayDesc ray;
+    ray.Origin = float3(0.0f, 0.0f, 0.0f);
+    ray.Direction = dir;
+    ray.TMin = t_min;
+    ray.TMax = t_max;
+    RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+    query.TraceRayInline(g_scene, RAY_FLAG_NONE, kSceneMask, ray);
+    uint visits = 0u;
+    while (query.Proceed()) {
+        if (++visits > kMaxCandidates) {
+            query.Abort();
+            break;
+        }
+        if (solid_draw(g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u))) {
+            query.CommitNonOpaqueTriangleHit();
+        }
+    }
+    if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
+        h.hit = true;
+        h.t = query.CommittedRayT();
+        h.tri = query.CommittedPrimitiveIndex();
+        h.b = query.CommittedTriangleBarycentrics();
+    }
+    return h;
+}
+
+// A clear solid's absorption per eye unit (Beer-Lambert: its row's colour, linear, is what it passes after its reach,
+// g_draws words 2 and 6); none without a reach.
+float3 solid_absorption(uint tri)
+{
+    const uint draw = min(g_surfaces.Load(tri * 16u + 12u) >> 16u, max(g_draw_count, 1u) - 1u);
+    const float reach = float(g_draws.Load(draw * kDrawStride + 24u) >> 16u);
+    if (!(reach > 0.0f)) {
+        return float3(0.0f, 0.0f, 0.0f);
+    }
+    const uint colour = g_draws.Load(draw * kDrawStride + 8u);
+    const float3 c = srgb_to_linear(float3((colour >> 24u) & 0xFFu, (colour >> 16u) & 0xFFu, (colour >> 8u) & 0xFFu) /
+                                    255.0f);
+    return -log(max(c, 1e-4f)) / reach;
+}
+
+// What a ray leaving a clear solid brings back: the surface it meets as the frame lit it where the picture shows that
+// surface (its pixel's diffuse light, g_final, the same surface by depth: albedo x light, as engine_hit_radiance's
+// cache), else as a glass reflection's hit (clear_hit_radiance: emission, the sun behind a shadow ray, the sky); the
+// backdrop where it leaves the scene.
+float3 solid_seen(Hit h, float3 origin, float3 direction)
+{
+    if (h.surface) {
+        const float3 x = origin + direction * h.t;
+        float3 albedo;
+        float3 emission;
+        reference_material(h.tri, h.b, albedo, emission);
+        if (!any(emission > 0.0f) && x.z < -g_near) {
+            const float2 q = eye_to_pixel(g_projection, g_viewport, x);
+            if (inside(g_viewport, q) && all(q >= 0.0f) && all(q < float2(g_target_size))) {
+                const uint2 sp = uint2(q) / g_factor;
+                if (all(sp < g_sample_size)) {
+                    const uint4 f = g_final[sp.y * g_sample_size.x + sp.x];
+                    if (f.z != 0u && abs(asfloat(f.z) - x.z) <= 0.02f * abs(x.z) + 2.0f) {
+                        const float3 whole = float3(f16tof32(f.x), f16tof32(f.x >> 16u), f16tof32(f.y));
+                        return albedo * max(whole, 0.0f) / max(physical_exposure(), 1e-4f);
+                    }
+                }
+            }
+        }
+    }
+    return clear_hit_radiance(h, origin, direction);
+}
+
+// The picture's pixel showing what a ray meets (its hit at the raster's depth there; where it leaves the scene, a
+// pixel of the backdrop), or -1 where the picture does not show it.
+int2 solid_picture(Hit h, float3 origin, float3 direction)
+{
+    if (h.late) {
+        return int2(-1, -1);
+    }
+    const float3 x = origin + direction * (h.surface ? h.t : 1.0e5f);
+    if (x.z >= -g_near) {
+        return int2(-1, -1);
+    }
+    const float2 q = eye_to_pixel(g_projection, g_viewport, x);
+    if (!inside(g_viewport, q) || any(q < 0.0f) || any(q >= float2(g_target_size))) {
+        return int2(-1, -1);
+    }
+    const float depth = g_efb_depth.Load(int3(int2(q), 0));
+    if (!h.surface) {
+        return far_plane(g_depth, depth) ? int2(q) : int2(-1, -1);
+    }
+    if (far_plane(g_depth, depth)) {
+        return int2(-1, -1);
+    }
+    return abs(depth_to_eye_z(g_depth, depth) - x.z) <= 0.01f * abs(x.z) + 2.0f ? int2(q) : int2(-1, -1);
+}
+
+// A clear surface's light towards the camera: radiance added (before the exposure), and the picture's share at
+// `source` (-1: the camera's own pixel).
+struct ClearLight {
+    float3 r;
+    float3 t;
+    int2 source;
+};
+
+// One share of the light a clear solid passes, along `direction` from `origin` to the hit `h`: the first that leaves
+// it is the picture where the picture shows what it meets (as the frame drew it), the rest and the others traced.
+void solid_share(inout ClearLight o, float3 share, Hit h, float3 origin, float3 direction, inout bool picture,
+                 inout float3 sent)
+{
+    sent += share;
+    if (picture) {
+        picture = false;
+        const int2 source = solid_picture(h, origin, direction);
+        if (source.x >= 0) {
+            o.t = share;
+            o.source = source;
+            return;
+        }
+    }
+    o.r += share * safe_light(solid_seen(h, origin, direction));
+}
+
+// A face of a clear solid at `h` (eye space, `dir` the ray reaching it): its point, its face normal and its shading
+// normal on the side the ray comes from.
+void solid_face(uint tri, float2 b, float3 dir, out float3 x, out float3 ng, out float3 n)
+{
+    const float3 v0 = asfloat(g_positions.Load3(tri * 36u));
+    const float3 v1 = asfloat(g_positions.Load3(tri * 36u + 12u));
+    const float3 v2 = asfloat(g_positions.Load3(tri * 36u + 24u));
+    const float3 w = float3(1.0f - b.x - b.y, b.x, b.y);
+    x = v0 * w.x + v1 * w.y + v2 * w.z;
+    ng = cross(v1 - v0, v2 - v0);
+    ng = dot(ng, ng) > 1e-24f ? normalize(ng) : -dir;
+    ng = dot(ng, dir) > 0.0f ? -ng : ng;
+    float3 lifted = x;
+    smooth_surface(tri, w, v0, v1, v2, ng, n, lifted);
+    if (dot(n, -dir) < 0.02f) {
+        n = ng;
+    }
+}
+
+// The light a clear solid at the camera ray's hit `h` sends towards the camera.
+ClearLight clear_solid(ClearHit h, float3 dir, uint pixel)
+{
+    ClearLight o;
+    o.r = float3(0.0f, 0.0f, 0.0f);
+    o.t = float3(0.0f, 0.0f, 0.0f);
+    o.source = int2(-1, -1);
+    float3 x;
+    float3 ng;
+    float3 n;
+    solid_face(h.tri, h.b, dir, x, ng, n);
+    const float3 v = -dir;
+    const uint draw = min(g_surfaces.Load(h.tri * 16u + 12u) >> 16u, max(g_draw_count, 1u) - 1u);
+    const uint rough = g_draws.Load(draw * kDrawStride + 16u) & 0xFFFFu;
+    const float roughness = rough == 0xFFFFu ? 0.02f : max(float(rough) / 65534.0f, 0.02f);
+    const float alpha = roughness * roughness;
+    const float nv = max(dot(n, v), 1e-4f);
+    const float lift = 0.2f + abs(x.z) * 4e-4f;
+    const float3 start = x + ng * lift;
+    uint seed = emit_hash(pixel ^ (g_frame * 0x5BD1E995u) ^ 0x2F6B1C3Du);
+    const uint salt = pixel * 32u + g_frame * 0x632BE5ABu + 41u;
+    // The front face's reflection: a visible normal, its mirror direction, the light along it; weight F(v.m) G2 / G1.
+    if ((g_engine_info.x & kEngineClearNoRay) == 0u) {
+        const float3 m = ggx_vndf(n, v, alpha, float2(emit_random(seed), emit_random(seed)));
+        const float3 l = reflect(-v, m);
+        const float nl = dot(n, l);
+        if (nl > 0.0f && dot(ng, l) > 0.0f) {
+            bool solid;
+            const Hit hit = solid_trace(start, l, false, salt, solid);
+            const float3 incoming = (g_engine_info.x & kEngineClearNoShade) != 0u
+                                        ? (hit.surface ? float3(0.1f, 0.1f, 0.1f) : float3(1.0f, 1.0f, 1.0f))
+                                        : safe_light(solid_seen(hit, start, l));
+            const float g2_over_g1 = smith_visibility(alpha, nl, nv) * 4.0f * nl * nv / max(smith_g1(alpha, nv), 1e-4f);
+            o.r += incoming * (fresnel_dielectric(dot(v, m), kSolidIor) * g2_over_g1);
+        }
+    }
+    // The sun's highlight, its lobe at least the disc wide.
+    if (any(g_sun_light.rgb > 0.0f) && (g_engine_info.x & kEngineClearNoSun) == 0u) {
+        const float3 ls = g_sun.xyz;
+        const float nls = dot(n, ls);
+        float blocker;
+        if (nls > 0.0f && dot(ng, ls) > 0.0f &&
+            sun_visible(start, sun_direction_sample(float2(emit_random(seed), emit_random(seed))), false, salt + 9u,
+                        blocker)) {
+            const float3 hs = normalize(v + ls);
+            const float a = sun_alpha(alpha);
+            o.r += g_sun_light.rgb * (fresnel_dielectric(dot(v, hs), kSolidIor) * ggx_d(a, dot(n, hs)) *
+                                      smith_visibility(a, nls, nv) * nls * kPi);
+        }
+    }
+    // Inside: refracted at the front face, followed along its internally reflected path; each far face passes its
+    // share out (Fresnel from inside; none beyond the critical angle) and reflects the rest on.
+    const float3 entered = refract(dir, n, 1.0f / kSolidIor);
+    if (!(dot(entered, entered) > 1e-8f)) {
+        return o;
+    }
+    float3 d = normalize(entered);
+    float3 throughput = (1.0f - fresnel_dielectric(nv, kSolidIor)).xxx;
+    float3 p = x - ng * lift;
+    const float3 sigma = solid_absorption(h.tri);
+    bool picture = true;
+    ClearLight inside;
+    inside.r = float3(0.0f, 0.0f, 0.0f);
+    inside.t = float3(0.0f, 0.0f, 0.0f);
+    inside.source = int2(-1, -1);
+    float3 sent = float3(0.0f, 0.0f, 0.0f);
+    [loop] for (uint k = 0u; k < kSolidSegments && max(throughput.r, max(throughput.g, throughput.b)) >= kSolidLeast;
+                ++k) {
+        bool solid;
+        const Hit inner = solid_trace(p, d, true, salt + 3u + 7u * k, solid);
+        throughput *= exp(-sigma * min(inner.t, 1.0e5f));
+        if (!solid) {
+            // What lies inside it (a coin, a star) or, out of an open mesh, beyond it: all of its light.
+            solid_share(inside, throughput, inner, p, d, picture, sent);
+            throughput = float3(0.0f, 0.0f, 0.0f);
+            break;
+        }
+        float3 y;
+        float3 fg;
+        float3 fn;
+        solid_face(inner.tri, inner.b, d, y, fg, fn);
+        const float out_lift = 0.2f + abs(y.z) * 4e-4f;
+        const float fresnel = fresnel_dielectric(dot(-d, fn), 1.0f / kSolidIor);
+        if (fresnel < 1.0f) {
+            const float3 leaving = refract(d, fn, kSolidIor);
+            if (dot(leaving, leaving) > 1e-8f) {
+                const float3 l = normalize(leaving);
+                const float3 q = y - fg * out_lift;
+                bool passed;
+                const Hit outer = solid_trace(q, l, false, salt + 5u + 7u * k, passed);
+                solid_share(inside, throughput * (1.0f - fresnel), outer, q, l, picture, sent);
+            }
+        }
+        throughput *= fresnel;
+        d = reflect(d, fn);
+        p = y + fg * out_lift;
+    }
+    if ((g_engine_info.x & kEngineClearSolidLeft) != 0u) {
+        o.r = float3(4.0f * max(throughput.r, max(throughput.g, throughput.b)), 0.0f, 0.0f) /
+              max(physical_exposure(), 1e-4f);
+        o.t = float3(0.0f, 0.0f, 0.0f);
+        o.source = int2(-1, -1);
+        return o;
+    }
+    const float3 scale = min((sent + throughput) / max(sent, 1e-6f), kSolidRest);
+    o.r += inside.r * scale;
+    o.t = inside.t * scale;
+    o.source = inside.source;
+    return o;
+}
+
 // Per pixel: the camera ray's first clear surface in front of the scene behind it, and a second behind that (the far
-// wall of a capsule or a bottle, seen through the first). Their reflections at the camera's exposure and the light
-// they pass, for the composite (rt_lighting.hlsl ClearCompositePS: the picture behind times T plus R).
+// wall of a capsule or a bottle, seen through the first), or a clear solid traced through (clear_solid). Their
+// reflections at the camera's exposure and the light they pass, for the composite (rt_lighting.hlsl
+// ClearCompositePS: the picture behind, or the picture a solid refracts, times T plus R).
 [numthreads(8, 8, 1)]
 void EngineClearCS(uint3 id : SV_DispatchThreadID)
 {
@@ -2474,6 +2815,7 @@ void EngineClearCS(uint3 id : SV_DispatchThreadID)
     const uint pixel = id.y * g_target_size.x + id.x;
     const int2 q = int2(id.xy);
     uint4 result = uint4(0u, 0u, 0u, 0u);
+    uint4 behind = uint4(pack_half2(1.0f, 1.0f), 0xFFFFFFFFu, 0u, 0u);
     if (((g_engine_info.x & kEngineView) >> 4u) == 5u) {
         // GALAXY_RT_ENGINE_VIEW=5: blue where the pass ran outside the viewport.
         result = uint4(pack_half2(0.0f, 0.0f), pack_half2(0.3f, 1.0f), 0u, 1u);
@@ -2485,9 +2827,26 @@ void EngineClearCS(uint3 id : SV_DispatchThreadID)
         const float t_min = g_near / max(-dir.z, 1e-6f);
         const float t_max = far_plane(g_depth, depth) ? 1.0e6f
                                                       : length(through) * -depth_to_eye_z(g_depth, depth) * 1.003f + 1.0f;
-        const ClearHit front = clear_trace(dir, t_min, t_max);
-        if (front.hit && (g_engine_info.x & kEngineClearFind) != 0u) {
+        // A clear solid, then the glass in front of it (each none where the frame has none: an empty span).
+        const ClearHit solid = solid_front(dir, t_min, (g_engine_info.y & kClearHasSolids) != 0u ? t_max : 0.0f);
+        const ClearHit front =
+            clear_trace(dir, t_min, (g_engine_info.y & kClearHasGlass) != 0u ? (solid.hit ? solid.t : t_max) : 0.0f);
+        if ((front.hit || solid.hit) && (g_engine_info.x & kEngineClearFind) != 0u) {
             result = uint4(pack_half2(0.0f, 0.5f), pack_half2(0.5f, 0.5f), 0u, 1u);
+        } else if (!front.hit && solid.hit) {
+            const ClearLight light = clear_solid(solid, dir, pixel);
+            float3 r = min(light.r * physical_exposure(), 6.0e4f);
+            float3 t = light.t;
+            // GALAXY_RT_ENGINE_VIEW=5: the clear surfaces found, magenta.
+            if (((g_engine_info.x & kEngineView) >> 4u) == 5u) {
+                r = float3(4.0f, 0.0f, 4.0f);
+                t = float3(0.0f, 0.0f, 0.0f);
+            }
+            const float z = (dir * solid.t).z;
+            result = uint4(pack_half2(r.r, r.g), pack_half2(r.b, t.r), asuint(z), 1u);
+            behind = uint4(pack_half2(t.g, t.b),
+                           light.source.x >= 0 ? uint(light.source.x) | (uint(light.source.y) << 16u) : 0xFFFFFFFFu, 0u,
+                           0u);
         } else if (front.hit) {
             float t1;
             float3 r = clear_wall(front, dir, pixel, 0u, t1);
@@ -2507,12 +2866,14 @@ void EngineClearCS(uint3 id : SV_DispatchThreadID)
             }
             const float z = (dir * front.t).z;
             result = uint4(pack_half2(r.r, r.g), pack_half2(r.b, t), asuint(z), 1u);
+            behind = uint4(pack_half2(t, t), 0xFFFFFFFFu, 0u, 0u);
         } else if (((g_engine_info.x & kEngineView) >> 4u) == 5u) {
             // ... and where none was found within the scene's depth, a green veil (the pass and its composite ran).
             result = uint4(pack_half2(0.0f, 0.15f), pack_half2(0.0f, 1.0f), asuint(-t_max), 1u);
         }
     }
-    engine_buffer(kEvClear).Store4(pixel * 16u, result);
+    engine_buffer(kEvClear).Store4(pixel * 32u, result);
+    engine_buffer(kEvClear).Store4(pixel * 32u + 16u, behind);
 }
 
 // The converged reference (GALAXY_RT_ENGINE_REFERENCE): the engine's diffuse light (m) at a surface as one unbiased
@@ -2644,7 +3005,8 @@ void EngineFinalCS(uint3 id : SV_DispatchThreadID)
             const uint4 a = engine_buffer((g_engine_info.w & 1u) == 0u ? kEvAtrousA : kEvAtrousB).Load4(pixel * 16u);
             float3 sun_glint;
             sun_light(s, pixel, f16tof32(engine_buffer(kEvShadow).Load(pixel * 4u)), sun_glint);
-            diffuse = (1.0f - kClearF0).xxx;
+            // View 3 (the traced specular alone): its reflection without what shows through.
+            diffuse = ((g_engine_info.x & kEngineView) >> 4u) == 3u ? float3(0.0f, 0.0f, 0.0f) : (1.0f - kClearF0).xxx;
             specular = (float3(f16tof32(a.z), f16tof32(a.z >> 16u), f16tof32(a.w)) + sun_glint) * exposure;
             whole = diffuse;
         } else {

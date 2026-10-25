@@ -23,6 +23,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
+#include "Game/Util/MotionSignal.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SchedulerUtil.hpp"
@@ -484,6 +485,9 @@ void MarioActor::drawMarioModel() const {
     if (!mFlag.mIsHiddenModel) {
         model->mFlags._1C = false;
         if (mMario->isStatusActive(MarioStatus_FpView)) {
+#ifdef TARGET_PC
+            drawTracedBody(model);
+#endif
             if (_1A1) {
                 return;
             }
@@ -530,6 +534,39 @@ void MarioActor::drawMarioModel() const {
         GXSetDstAlpha(GX_FALSE, 0);
     }
 }
+
+#ifdef TARGET_PC
+// Nebula: the first-person view puts the camera in Mario's head, and the game fades him out of it (calc1stPersonView:
+// nothing of him drawn while the camera is within 300 units). Under the ray tracer his body is still there for its
+// rays, as RTX Remix keeps a first-person player model out of the camera's rays alone (rtx.playerModel): his shadow,
+// and his reflection in crystals, glass, water and mirrors. Drawn whole and opaque as in the third-person view,
+// between trace-only markers the renderer keeps out of the picture; the model's flags and the joints the first-person
+// draw shows are left as that draw leaves them. The accessory model (_A5C) only while the game draws none of him: half
+// faded, it draws that one itself.
+void MarioActor::drawTracedBody(J3DModelX* pModel) const {
+    if (!MotionSignal::traceOnlyWanted()) {
+        return;
+    }
+    const J3DModelX::Flags flags = pModel->mFlags;
+    pModel->setDynamicDL(mCurrModel == 4 ? nullptr : mDL[mCurrDL], mDLSize);
+    MR::showJoint(pModel, "HandR0");
+    MR::showJoint(pModel, "HandL0");
+    MR::showJoint(pModel, "Face0");
+    MotionSignal::traceOnly(true);
+    pModel->setDrawView(0);
+    pModel->directDraw(nullptr);
+    if (_1A1 && !MR::isHiddenModel(_A5C)) {
+        J3DModelX* cool = static_cast< J3DModelX* >(MR::getJ3DModel(_A5C));
+        cool->setDynamicDL(mDL[mCurrDL], mDLSize);
+        cool->directDraw(nullptr);
+    }
+    MotionSignal::traceOnly(false);
+    MR::hideJoint(pModel, "HandR0");
+    MR::hideJoint(pModel, "HandL0");
+    MR::hideJoint(pModel, "Face0");
+    pModel->mFlags = flags;
+}
+#endif
 
 bool MarioActor::isAllHidden() const {
     bool hidden = false;

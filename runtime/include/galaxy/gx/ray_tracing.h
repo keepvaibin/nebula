@@ -235,6 +235,11 @@ public:
     [[nodiscard]] bool engine_active() const noexcept {
         return engine_ready_ && physical_active_ && lighting_active() && light_textured_;
     }
+    // The engine traces the clear surfaces (its clear pass runs with the water window's trace: the table's `traced`
+    // glass and solids).
+    [[nodiscard]] bool engine_clear_active() const noexcept {
+        return engine_active() && engine_clear_wanted_ && reflections_active();
+    }
     void set_engine_picture(ID3D12Resource* picture) noexcept { engine_picture_ = picture; }
     bool camera_widen(ID3D12GraphicsCommandList* list, D3D12_GPU_DESCRIPTOR_HANDLE picture_table,
                       D3D12_CPU_DESCRIPTOR_HANDLE target, std::uint32_t width, std::uint32_t height);
@@ -726,7 +731,7 @@ private:
     bool engine_anti_lag_ = true;   // GALAXY_RT_ENGINE_ANTILAG: the diffuse history's anti-lag
     bool engine_light_history_ = true;   // GALAXY_RT_ENGINE_LIGHT_HISTORY=0: no temporal light reuse
     bool engine_clear_wanted_ = true;  // GALAXY_RT_ENGINE_CLEAR: the clear-surface pass
-    std::uint32_t engine_clear_mode_ = 1u;  // GALAXY_RT_ENGINE_CLEAR: 0 off, 1 on, 2-9 diagnostics (rt_engine.hlsl)
+    std::uint32_t engine_clear_mode_ = 1u;  // GALAXY_RT_ENGINE_CLEAR: 0 off, 1 on, 2-10 diagnostics (rt_engine.hlsl)
     bool engine_fresh_ = true;      // new buffers: no history
     std::uint32_t engine_view_ = 0;  // GALAXY_RT_ENGINE_VIEW (rt_engine.hlsl kEngineView)
     std::uint32_t engine_width_ = 0;
@@ -777,6 +782,8 @@ private:
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 4> engine_clear_;
     std::array<D3D12_RESOURCE_STATES, 4> engine_clear_state_{};
     std::array<bool, 4> engine_clear_valid_{};
+    // The slot's water was traced (trace_water; a frame of clear solids alone traces none, and composites none).
+    std::array<bool, 4> water_traced_{};
     // The lighting's constants and bindings of the trace the engine ran (slot), for the clear pass at the scene's end.
     struct EngineBind {
         bool valid = false;
@@ -891,6 +898,8 @@ private:
     std::array<std::uint32_t, kStarSlots> star_first_{};
     std::array<std::uint32_t, kStarSlots> star_count_{};
     std::uint32_t star_draws_ = 0u;
+    // The scene's clear solids (kDrawTableSolid): the clear pass traces through them.
+    std::uint32_t solid_draws_ = 0u;
     // The balls read back for the star core's light (it follows its ball): a few frames' copies of the result's
     // kStarSlots balls and the stars' colour over time (rt_lighting.hlsl kStarColour), each with the frame it was
     // taken (+1; 0: free) and whether the colour was copied.

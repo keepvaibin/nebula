@@ -181,6 +181,11 @@ constexpr std::uint32_t kDrawTableMirror = 64u;
 constexpr std::uint32_t kDrawTableRecolour = 128u;
 // g_draws word 6 (rt_lighting.hlsl kDrawTableNearGlow): a light source only near a glow light (`near-glow`).
 constexpr std::uint32_t kDrawTableNearGlow = 256u;
+// g_draws word 6 (rt_lighting.hlsl kDrawTableUnseen): a trace-only draw (kRtDrawUnseen), no camera ray's surface.
+constexpr std::uint32_t kDrawTableUnseen = 512u;
+// g_draws word 6 (rt_lighting.hlsl kDrawTableSolid): a clear solid the clear pass traces through (the table's `traced
+// solid`, drawn unseen); bits 16-31 its row's range, the world units its colour is the transmittance after.
+constexpr std::uint32_t kDrawTableSolid = 1024u;
 constexpr float kDrawGlowScale = 16.0f;
 // AuthoredLight.flags (rt_lighting.hlsl kAuthored*): the colour the draw shows; a spot light.
 constexpr std::uint32_t kAuthoredTint = 1u;
@@ -2048,6 +2053,7 @@ void SceneRayTracer::begin_scene() noexcept {
     star_first_ = {};
     star_count_ = {};
     star_draws_ = 0u;
+    solid_draws_ = 0u;
     glow_lights_.clear();
     glow_emitters_.clear();
     glow_emitter_keys_.clear();
@@ -2100,6 +2106,28 @@ void SceneRayTracer::note_tev(const RtDrawInfo& info, std::vector<RtTevMaterial>
     RtTevMaterial record = info.tev;
     record.stage_offset = static_cast<std::uint32_t>(stages.size());
     const unsigned count = std::min(record.header & 0x1Fu, kRtTevMaxStages);
+    // GALAXY_RT_LOG_TEV=<table material id>: that material's TEV program, once (its colours and stages as the hits
+    // evaluate them; rt_types.h RtTevMaterial, RtTevStage).
+    static const std::uint32_t log_tev = static_cast<std::uint32_t>(env_float("GALAXY_RT_LOG_TEV", 0.0f));
+    if (log_tev != 0u && info.rt_material == log_tev) [[unlikely]] {
+        static bool logged = false;
+        if (!logged) {
+            logged = true;
+            std::fprintf(stderr,
+                         "[rt-tev] material=%u header=%08X alpha-test=%08X channel=%08X,%08X,%08X,%08X "
+                         "konst=%08X,%08X,%08X,%08X regs=%08X,%08X,%08X,%08X,%08X,%08X,%08X,%08X\n",
+                         log_tev, record.header, record.alpha_test, record.channel[0], record.channel[1],
+                         record.channel[2], record.channel[3], record.konst[0], record.konst[1], record.konst[2],
+                         record.konst[3], record.regs[0], record.regs[1], record.regs[2], record.regs[3], record.regs[4],
+                         record.regs[5], record.regs[6], record.regs[7]);
+            for (unsigned s = 0; s < count; ++s) {
+                std::fprintf(stderr, "[rt-tev]   stage %u color=%08X alpha=%08X order=%08X ksel=%08X scale=%g,%g env=%u\n",
+                             s, info.tev_stages[s].color_env, info.tev_stages[s].alpha_env, info.tev_stages[s].order,
+                             info.tev_stages[s].ksel, info.tev_stages[s].scale_s, info.tev_stages[s].scale_t,
+                             info.tev_stages[s].pad[0]);
+            }
+        }
+    }
     stages.insert(stages.end(), info.tev_stages.begin(), info.tev_stages.begin() + count);
     for (unsigned m = 0; m < 8u; ++m) {
         record.maps[m] = info.tev_maps[m].resource != nullptr ? texture_view(info.tev_maps[m]) : 0xFFFFFFFFu;
@@ -2641,6 +2669,12 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
                      (static_cast<std::uint32_t>(std::lround(std::min(material->glow / kDrawGlowScale, 1.0f) * 65535.0f))
                       << 16u);
         }
+        // A clear solid the camera's rays pass (the game's draw hidden): the clear pass traces through it.
+        if (material->solid && (info.surface & kRtDrawUnseen) != 0u) {
+            flags = (flags & 0xFFFFu) | kDrawTableSolid |
+                    (static_cast<std::uint32_t>(std::lround(std::clamp(material->range, 0.0f, 65535.0f))) << 16u);
+            ++solid_draws_;
+        }
         // A lamp's lit housing in its glass's texture: only the glass emits.
         const bool emits = !material->unlit_only || (info.surface & kRtDrawLit) == 0u;
         if (!emits) {
@@ -2706,7 +2740,8 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
     }
     draw_colors_.push_back({info.ambient, info.light_index[0] == 0u ? info.light_color[0] : 0u, emission,
                             std::bit_cast<std::uint32_t>(intensity), surface, info.material,
-                            flags | ((info.surface & kRtDrawAlphaTest) != 0u ? kDrawTableAlpha : 0u),
+                            flags | ((info.surface & kRtDrawAlphaTest) != 0u ? kDrawTableAlpha : 0u) |
+                                ((info.surface & kRtDrawUnseen) != 0u ? kDrawTableUnseen : 0u),
                             std::bit_cast<std::uint32_t>(relief), std::bit_cast<std::uint32_t>(info.light[0][0]),
                             std::bit_cast<std::uint32_t>(info.light[0][1]),
                             std::bit_cast<std::uint32_t>(info.light[0][2]), light_kind});
@@ -4178,6 +4213,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     list->SetComputeRootUnorderedAccessView(kLightPixels, light_pixels_[slot]->GetGPUVirtualAddress());
     // The engine; its constants and bindings kept for the clear pass at the scene's end.
     engine_clear_valid_[slot] = false;
+    water_traced_[slot] = false;
     engine_bind_.valid = true;
     {
         engine_bind_.slot = slot;
@@ -4915,15 +4951,19 @@ bool SceneRayTracer::trace_engine_clear(ID3D12GraphicsCommandList* list, Allocat
         !engine_slot(slot, engine_width_, engine_height_)) {
         return refuse("no engine trace for the slot");
     }
-    if (!water_tlas_ || water_triangles_ == 0u || depth_table.ptr == 0u) {
+    const bool glass = water_tlas_ && water_triangles_ != 0u &&
+                       std::any_of(water_clear_.begin(), water_clear_.end(),
+                                   [](std::uint32_t w) { return (w & 0x10000u) != 0u; });
+    if (!water_tlas_ || depth_table.ptr == 0u) {
         return refuse("no water geometry");
     }
-    if (std::none_of(water_clear_.begin(), water_clear_.end(), [](std::uint32_t w) { return (w & 0x10000u) != 0u; })) {
+    if (!glass && solid_draws_ == 0u) {
         return refuse("no glass");
     }
+    // Two records a pixel (rt_engine.hlsl kEvClear).
     const std::uint64_t full = static_cast<std::uint64_t>(engine_width_) * engine_height_;
     if (!engine_clear_[slot]) {
-        if (!create_buffer(full * 16u, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+        if (!create_buffer(full * 32u, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                            D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, engine_clear_[slot], L"rt engine clear")) {
             return false;
         }
@@ -4936,12 +4976,14 @@ bool SceneRayTracer::trace_engine_clear(ID3D12GraphicsCommandList* list, Allocat
         return false;
     }
     std::memcpy(records.cpu, water_clear_.data(), water_clear_.size() * 4u);
+    // Without glass the water window's views are read nowhere (kClearHasGlass); they stay valid views.
+    const std::uint64_t water = std::max(water_triangles_, 1u);
     std::uint32_t views[5] = {
         tlas_view(water_tlas_->GetGPUVirtualAddress()),
-        buffer_view(water_positions_.Get(), 0u, static_cast<std::uint64_t>(water_triangles_) * 36u),
-        buffer_view(water_surfaces_.Get(), 0u, static_cast<std::uint64_t>(water_triangles_) * 16u),
+        buffer_view(water_positions_.Get(), 0u, water * 36u),
+        buffer_view(water_surfaces_.Get(), 0u, water * 16u),
         buffer_view(records.resource, records.offset, record_bytes),
-        buffer_uav(engine_clear_[slot].Get(), full * 16u),
+        buffer_uav(engine_clear_[slot].Get(), full * 32u),
     };
     for (const std::uint32_t view : views) {
         if (view == 0xFFFFFFFFu) {
@@ -4952,7 +4994,8 @@ bool SceneRayTracer::trace_engine_clear(ID3D12GraphicsCommandList* list, Allocat
     std::memcpy(upload.cpu, engine_bind_.constants.data(), engine_bind_.constants.size());
     auto* const engine = reinterpret_cast<RtEngineConstants*>(static_cast<std::byte*>(upload.cpu) + engine_bind_.engine_at);
     std::copy(std::begin(views), std::end(views), engine->views + kEngineClearViews);
-    engine->info[1] = 0u;
+    // rt_engine.hlsl kClearHasGlass, kClearHasSolids.
+    engine->info[1] = (glass ? 1u : 0u) | (solid_draws_ != 0u ? 2u : 0u);
     engine->info[2] = slot;
     constexpr D3D12_RESOURCE_STATES kRead = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     to_state(list, engine_clear_[slot].Get(), engine_clear_state_[slot], D3D12_RESOURCE_STATE_UNORDERED_ACCESS);

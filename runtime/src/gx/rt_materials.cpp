@@ -151,6 +151,7 @@ void apply_class(const std::string& text, RtMaterial& m) {
         else if (token == "strip") m.strip = true;
         else if (token == "painted") m.painted = true;
         else if (token == "traced") m.traced = true;
+        else if (token == "solid") m.solid = true;
         else if (token == "recolour") m.recolour = true;
         else if (token == "near-glow") m.near_glow = true;
         else if (token == "volume") m.volume = true;

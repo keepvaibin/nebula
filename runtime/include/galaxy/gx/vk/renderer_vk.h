@@ -158,6 +158,7 @@ public:
     void rt_set_ab_original(bool) noexcept {}
     [[nodiscard]] bool rt_reflections_active() const noexcept { return false; }
     [[nodiscard]] bool rt_engine() const noexcept { return false; }
+    [[nodiscard]] bool rt_engine_clear() const noexcept { return false; }
     [[nodiscard]] bool rt_log_seq() const noexcept { return false; }
     [[nodiscard]] bool rt_scene_untraced() const noexcept { return false; }
     void rt_set_scene_untraced(bool) noexcept {}

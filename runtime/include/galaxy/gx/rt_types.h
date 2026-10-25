@@ -70,6 +70,9 @@ inline constexpr std::uint32_t kRtDrawAlphaTest = 1u << 17u;
 // RtDrawInfo.surface only: a draw of the game's sky lists (MR::DrawBufferType Sky, Air, Sun and AstroDomeSky, from its
 // draw-buffer markers): the traced sky's geometry (SceneRayTracer's sky probe), never in the scene.
 inline constexpr std::uint32_t kRtDrawSky = 1u << 18u;
+// RtDrawInfo.surface only: a trace-only draw (motion::kMarkerTraceOnly): in the traced scene, never in the picture, so
+// never a camera ray's surface; add_draw marks its draw record (rt_lighting.hlsl kDrawTableUnseen).
+inline constexpr std::uint32_t kRtDrawUnseen = 1u << 19u;
 // RtDraw.vertex_count: the vertex count's bits and the texture slots' generator (+ 1) shifts.
 inline constexpr std::uint32_t kRtVertexCountMask = 0xFFFFFFu;
 inline constexpr std::uint32_t kRtTexGenShift = 24u;

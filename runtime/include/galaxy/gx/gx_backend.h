@@ -817,6 +817,8 @@ private:
     [[nodiscard]] bool rt_hidden_draw() const noexcept;
     // The draw is a clear surface the engine traces (the table's `traced`): not shown, still captured.
     [[nodiscard]] bool rt_traced_clear_draw() const noexcept;
+    // A traced clear solid's draw (the table's `traced solid`): unseen scene geometry, its game draw hidden.
+    [[nodiscard]] bool rt_traced_solid_draw() const noexcept;
     // The current object's name (NameObj::mName) into `out`; its guest address, 0 for none.
     std::uint32_t rt_object_name(char* out, std::size_t size);
     [[nodiscard]] static std::uint16_t rt_material_of(std::uint32_t map_mask,
@@ -825,6 +827,7 @@ private:
     std::uint32_t rt_object_ = 0u;   // the last NameObj marker's object
     bool rt_object_fake_shadow_ = false;  // it is one of the game's shadow drawers (rt_fake_shadow_object)
     bool rt_mirror_pass_ = false;         // the game's mirror pass is drawing (motion::PassMarker)
+    bool rt_trace_only_ = false;          // trace-only draws (motion::kMarkerTraceOnly): traced, never drawn
     std::unordered_map<std::uint32_t, bool> rt_fake_shadow_cache_;
     bool rt_fake_shadow_object(std::uint32_t object);
     std::uint16_t current_rt_material_ = 0u;  // the draw's material table entry (rt_materials.h)

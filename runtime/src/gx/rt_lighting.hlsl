@@ -174,6 +174,18 @@ static const uint kDrawTableRecolour = 128u;
 // source's light, GlowEmitterCS's triangle about its centre): the Observatory's entrance stars are one material and
 // one draw with their gold border; the game marks each star, not the border, with its glow sprite.
 static const uint kDrawTableNearGlow = 256u;
+// g_draws word 6: a trace-only draw (the player's body in the first-person view): the rays meet it, the picture never
+// shows it, so no camera ray's surface is on it (primary_surface).
+static const uint kDrawTableUnseen = 512u;
+// g_draws word 6: a clear solid (the table's `traced solid`: the crystal cages), unseen, the engine's clear pass traces
+// through it (rt_engine.hlsl clear_solid); bits 16-31 the eye units its row's colour is the transmittance after (0: it
+// absorbs nothing).
+static const uint kDrawTableSolid = 1024u;
+
+bool solid_draw(uint flags)
+{
+    return (g_draws.Load(min(flags >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride + 24u) & kDrawTableSolid) != 0u;
+}
 static const float kNearGlowReach = 1.25f;
 // Stars whose balls StarSphereCS fits (g_star_first): one float4 each (eye-space centre, radius; 0: none)
 // after the samples in the results (g_final, m_light).
@@ -2163,6 +2175,10 @@ Surface primary_surface(int2 q, float3 p)
     while (query.Proceed()) {
         // A foliage card is the surface only where the raster drew it (at this pixel's depth).
         const uint candidate = g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u);
+        if ((g_draws.Load(min(candidate >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride + 24u) & kDrawTableUnseen) !=
+            0u) {
+            continue;
+        }
         const float gap = abs(query.CandidateTriangleRayT() - span);
         if (gap < nearest_gap) {
             nearest_gap = gap;
@@ -3245,10 +3261,12 @@ float3 star_surface(int2 c, float z, float mu, float3 color)
     return saturate(lit / max(peak, 1.0f) + max(peak - 1.0f, 0.0f) * 0.2f + detail * kStarDetail);
 }
 
-// The engine's clear surfaces (rt_engine.hlsl EngineClearCS; m_light: the slot's clear buffer, per pixel reflection
-// rgb and transmittance as halves, eye z, present) over the picture at the scene's end (m_color, its copy): what shows
-// through times the walls' transmittance plus their reflections, in linear light. Sub-frames move the point to the
-// traced frame by the scene's depth behind the glass.
+// The engine's clear surfaces (rt_engine.hlsl EngineClearCS; m_light: the slot's clear buffer, two records a pixel:
+// reflection rgb and transmittance red as halves, eye z, present; transmittance green and blue, the picture's pixel
+// seen through it) over the picture at the scene's end (m_color, its copy): what shows through times the
+// transmittance plus the reflections, in linear light. A clear solid refracts: what shows through it is the picture
+// at another pixel (its offset from the traced pixel kept on sub-frames). Sub-frames move the point to the traced
+// frame by the scene's depth behind the glass.
 CompositeOut ClearCompositePS(float4 position : SV_Position)
 {
     CompositeOut result;
@@ -3280,7 +3298,8 @@ CompositeOut ClearCompositePS(float4 position : SV_Position)
         result.color = float4(0.8f, 0.0f, 0.8f, 1.0f);
         return result;
     }
-    const uint4 e = m_light[uint(traced.y) * m_sample_size.x + uint(traced.x)];
+    const uint record = (uint(traced.y) * m_sample_size.x + uint(traced.x)) * 2u;
+    const uint4 e = m_light[record];
     if (e.w == 0u) {
         // GALAXY_RT_ENGINE_VIEW=5 (m_flags bit 2): where the pass wrote nothing, red.
         if ((m_flags & 4u) != 0u) {
@@ -3289,9 +3308,15 @@ CompositeOut ClearCompositePS(float4 position : SV_Position)
         }
         discard;
     }
+    const uint4 e2 = m_light[record + 1u];
     const float3 r = float3(f16tof32(e.x), f16tof32(e.x >> 16u), f16tof32(e.y));
-    const float t = f16tof32(e.y >> 16u);
-    result.color = float4(linear_to_srgb(srgb_to_linear(m_color.Load(int3(c, 0)).rgb) * t + r), 1.0f);
+    const float3 t = float3(f16tof32(e.y >> 16u), f16tof32(e2.x), f16tof32(e2.x >> 16u));
+    int2 seen = c;
+    if (e2.y != 0xFFFFFFFFu) {
+        seen = clamp(c + int2(e2.y & 0xFFFFu, e2.y >> 16u) - traced, int2(m_viewport.xy),
+                     int2(m_viewport.xy + m_viewport.zw) - 1);
+    }
+    result.color = float4(linear_to_srgb(srgb_to_linear(m_color.Load(int3(seen, 0)).rgb) * t + r), 1.0f);
     return result;
 }
 

@@ -187,7 +187,9 @@ int SceneRayTracer::trace_water(ID3D12GraphicsCommandList* list, const RtSources
         std::fprintf(stderr, "[rt-seq] trace_water draws=%zu triangles=%u incomplete=%d\n", water_draws_.size(),
                      water_triangles_, water_incomplete_ ? 1 : 0);
     }
-    if (list == nullptr || allocate == nullptr || water_incomplete_ || water_triangles_ == 0u ||
+    // The water window's surfaces, else the scene's clear solids alone (the clear pass traces them; no water to trace).
+    const bool water = water_triangles_ != 0u;
+    if (list == nullptr || allocate == nullptr || water_incomplete_ || (!water && solid_draws_ == 0u) ||
         !reflections_active() || light_slot_ < 0 || !water_tlas_ || !tlas_ || !positions_ || !surfaces_ ||
         !light_primary_ || color_depth_table.ptr == 0u) {
         if (log_seq_) {
@@ -230,35 +232,37 @@ int SceneRayTracer::trace_water(ID3D12GraphicsCommandList* list, const RtSources
             std::memcpy(waves.cpu, water_waves_.data(), water_waves_.size() * sizeof(water_waves_[0]));
         }
     }
-    D3D12_RAYTRACING_GEOMETRY_DESC geometry{};
-    geometry.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
-    geometry.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
-    geometry.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
-    geometry.Triangles.VertexCount = water_triangles_ * 3u;
-    geometry.Triangles.VertexBuffer.StartAddress = water_positions_->GetGPUVirtualAddress();
-    geometry.Triangles.VertexBuffer.StrideInBytes = 12u;
-    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC build{};
-    build.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
-    build.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD;
-    build.Inputs.NumDescs = 1u;
-    build.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-    build.Inputs.pGeometryDescs = &geometry;
-    build.DestAccelerationStructureData = water_blas_->GetGPUVirtualAddress();
-    build.ScratchAccelerationStructureData = water_scratch_->GetGPUVirtualAddress();
-    list4->BuildRaytracingAccelerationStructure(&build, 0u, nullptr);
-    D3D12_RESOURCE_BARRIER barrier = uav(water_blas_.Get());
-    list->ResourceBarrier(1u, &barrier);
-    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC top{};
-    top.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
-    top.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
-    top.Inputs.NumDescs = 1u;
-    top.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-    top.Inputs.InstanceDescs = water_instance_->GetGPUVirtualAddress();
-    top.DestAccelerationStructureData = water_tlas_->GetGPUVirtualAddress();
-    top.ScratchAccelerationStructureData = water_scratch_->GetGPUVirtualAddress() + water_scratch_tlas_;
-    list4->BuildRaytracingAccelerationStructure(&top, 0u, nullptr);
-    barrier = uav(water_tlas_.Get());
-    list->ResourceBarrier(1u, &barrier);
+    if (water) {
+        D3D12_RAYTRACING_GEOMETRY_DESC geometry{};
+        geometry.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+        geometry.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+        geometry.Triangles.VertexFormat = DXGI_FORMAT_R32G32B32_FLOAT;
+        geometry.Triangles.VertexCount = water_triangles_ * 3u;
+        geometry.Triangles.VertexBuffer.StartAddress = water_positions_->GetGPUVirtualAddress();
+        geometry.Triangles.VertexBuffer.StrideInBytes = 12u;
+        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC build{};
+        build.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+        build.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_BUILD;
+        build.Inputs.NumDescs = 1u;
+        build.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+        build.Inputs.pGeometryDescs = &geometry;
+        build.DestAccelerationStructureData = water_blas_->GetGPUVirtualAddress();
+        build.ScratchAccelerationStructureData = water_scratch_->GetGPUVirtualAddress();
+        list4->BuildRaytracingAccelerationStructure(&build, 0u, nullptr);
+        D3D12_RESOURCE_BARRIER barrier = uav(water_blas_.Get());
+        list->ResourceBarrier(1u, &barrier);
+        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC top{};
+        top.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
+        top.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+        top.Inputs.NumDescs = 1u;
+        top.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+        top.Inputs.InstanceDescs = water_instance_->GetGPUVirtualAddress();
+        top.DestAccelerationStructureData = water_tlas_->GetGPUVirtualAddress();
+        top.ScratchAccelerationStructureData = water_scratch_->GetGPUVirtualAddress() + water_scratch_tlas_;
+        list4->BuildRaytracingAccelerationStructure(&top, 0u, nullptr);
+        barrier = uav(water_tlas_.Get());
+        list->ResourceBarrier(1u, &barrier);
+    }
     // The next trace's light under water reads this water (engine_prepare).
     water_light_triangles_ = water_triangles_;
     // The opaque scene stays readable from its trace until the next scene's geometry.
@@ -298,7 +302,10 @@ int SceneRayTracer::trace_water(ID3D12GraphicsCommandList* list, const RtSources
     scene.water_uv = water_uv_->GetGPUVirtualAddress();
     scene.water_waves = waves.cpu != nullptr ? waves.gpu : 0u;
     scene.water_game_waves = waves.cpu != nullptr && water_game_waves_;
-    reflections_.trace_water(list, scene, slot, upload.cpu, upload.gpu, color_depth_table);
+    water_traced_[slot] = water;
+    if (water) {
+        reflections_.trace_water(list, scene, slot, upload.cpu, upload.gpu, color_depth_table);
+    }
     return static_cast<int>(slot);
 }
 
@@ -313,8 +320,10 @@ void SceneRayTracer::composite_water(ID3D12GraphicsCommandList* list, D3D12_CPU_
     const LightSlot& info = light_slots_[static_cast<unsigned>(slot)];
     reproject = reproject && reproject_;
     const float split = split_ > 0.0f ? info.view.viewport[0] + split_ * info.view.viewport[2] : -1.0f;
-    reflections_.composite_water(list, target, depth_srv, width, height, static_cast<unsigned>(slot),
-                                 reproject ? reproject_->GetGPUVirtualAddress() : 0u, split, scene_srv, opaque_srv);
+    if (water_traced_[static_cast<unsigned>(slot)]) {
+        reflections_.composite_water(list, target, depth_srv, width, height, static_cast<unsigned>(slot),
+                                     reproject ? reproject_->GetGPUVirtualAddress() : 0u, split, scene_srv, opaque_srv);
+    }
     composite_clear(list, target, depth_srv, width, height, static_cast<unsigned>(slot), reproject, scene_srv);
 }
 

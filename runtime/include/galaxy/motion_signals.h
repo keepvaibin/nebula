@@ -60,6 +60,9 @@ inline constexpr std::uint8_t kMarkerLayoutActor = 10u;  // aux kLayoutIn2D, a L
 inline constexpr std::uint8_t kMarkerStarPointer = 11u;  // aux kLayoutIn2D | kStarPointerDirector; a, b vtable (layout)
 inline constexpr std::uint8_t kMarkerMaterial = 12u;     // a the material's identity (rt_material_identity; 0 unknown)
 inline constexpr std::uint8_t kMarkerEffect = 13u;       // a the emitter's effect identity ("Effect/<particle name>")
+// aux 1: the draws up to the next one (aux 0) are the traced scene's alone, never drawn to the picture (the player's
+// body in the first-person view, MarioActor::drawTracedBody).
+inline constexpr std::uint8_t kMarkerTraceOnly = 14u;
 
 // Kind 6 flags.
 inline constexpr std::uint16_t kSceneCameraCut = 1u;  // the view jumped since the previous scene

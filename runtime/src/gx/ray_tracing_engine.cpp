@@ -65,6 +65,7 @@ constexpr std::uint32_t kEngineReference = 262144u;
 constexpr std::uint32_t kEngineWaterLight = 524288u;
 constexpr std::uint32_t kEngineNoAntiLag = 1048576u;
 constexpr std::uint32_t kEngineNoLightHistory = 2097152u;
+constexpr std::uint32_t kEngineClearSolidLeft = 4194304u;
 
 float env_value(const char* name, float fallback) {
     char value[32]{};
@@ -105,7 +106,7 @@ bool SceneRayTracer::create_engine_pipelines() {
     engine_bounces_ = env_value("GALAXY_RT_ENGINE_BOUNCES", 1.0f) != 0.0f;
     engine_anti_lag_ = env_value("GALAXY_RT_ENGINE_ANTILAG", 1.0f) != 0.0f;
     engine_light_history_ = env_value("GALAXY_RT_ENGINE_LIGHT_HISTORY", 1.0f) != 0.0f;
-    engine_clear_mode_ = static_cast<std::uint32_t>(std::clamp(env_value("GALAXY_RT_ENGINE_CLEAR", 1.0f), 0.0f, 9.0f));
+    engine_clear_mode_ = static_cast<std::uint32_t>(std::clamp(env_value("GALAXY_RT_ENGINE_CLEAR", 1.0f), 0.0f, 10.0f));
     engine_clear_wanted_ = engine_clear_mode_ != 0u;
     engine_reference_ = env_value("GALAXY_RT_ENGINE_REFERENCE", 0.0f) != 0.0f;
     water_light_ = env_value("GALAXY_RT_WATER_LIGHT", 1.0f) != 0.0f;
@@ -428,7 +429,8 @@ bool SceneRayTracer::engine_prepare(std::uint32_t width, std::uint32_t height, u
                 (engine_clear_mode_ == 7u ? kEngineHitNoLights : 0u) | (engine_clear_mode_ == 8u ? kEngineHitNoSky : 0u) |
                 (engine_clear_mode_ == 9u ? kEngineClearNoTev : 0u) | (engine_bounces_ ? kEngineBounceCache : 0u) |
                 (water_light ? kEngineWaterLight : 0u) | (engine_anti_lag_ ? 0u : kEngineNoAntiLag) |
-                (engine_light_history_ ? 0u : kEngineNoLightHistory) | (engine_view_ << 4u);
+                (engine_light_history_ ? 0u : kEngineNoLightHistory) |
+                (engine_clear_mode_ == 10u ? kEngineClearSolidLeft : 0u) | (engine_view_ << 4u);
     c.info[1] = 0u;
     c.info[2] = slot;
     c.info[3] = 0u;
