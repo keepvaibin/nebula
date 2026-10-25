@@ -91,11 +91,13 @@ Stop-Process -Id $held.Id -Force; $held.WaitForExit()
 Remove-Item -LiteralPath $runner -Force
 if ($hadSettings) { Move-Item -LiteralPath $fake $runner }
 
-# 5. The installed version starts and reaches the title, hidden, with the test's own settings and app data.
+# 5. The installed version starts and reaches the title, hidden and silent (its sound to a file), with the test's own
+# settings and app data.
 $bin = Join-Path $root "versions\$New"
 $appdata = Join-Path $base 'localappdata'
 New-Item -ItemType Directory -Force $appdata, (Join-Path $base 'nand') | Out-Null
 $env:GALAXY_HIDE_WINDOW = '1'; $env:GALAXY_XINPUT_REQUIRE_FOCUS = '1'; $env:LOCALAPPDATA = $appdata
+$env:GALAXY_AUDIO_WAV_DUMP_ONLY = '1'; $env:GALAXY_AUDIO_WAV_DUMP = Join-Path $base 'audio.wav'
 $env:GALAXY_RENDER_CONFIG_PATH = Join-Path $base 'config.ini'; $env:GALAXY_RUNTIME_SETTINGS_PATH = Join-Path $base 'runtime_settings.ini'
 $env:GALAXY_CRASH_DUMP_DIR = $base
 $log = Join-Path $base 'boot.log'
