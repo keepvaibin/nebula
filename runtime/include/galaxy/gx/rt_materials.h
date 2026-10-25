@@ -183,6 +183,9 @@ private:
 // The hash of a row keyed `untextured`: on that row's stage, surfaces without texture coordinates (vertex-coloured
 // models such as the Observatory's power cables) take it, since no texture row can name them.
 inline constexpr std::uint64_t kRtUntexturedHash = 0xFFFFFFFFFFFFFFFFull;
+// The rows of the game's particle effects (`effect` in the hash column): no texture of their own; each row's `material`
+// names the effects ("Effect/<ParticleNames.bcsv name>", motion::kMarkerEffect) its properties hold for.
+inline constexpr std::uint64_t kRtEffectHash = 0xFFFFFFFFFFFFFFFEull;
 // The loaded stage's material for its untextured surfaces (0: the stage has no `untextured` row).
 [[nodiscard]] std::uint16_t rt_stage_untextured_material() noexcept;
 [[nodiscard]] const RtMaterial* rt_material(std::uint16_t index) noexcept;

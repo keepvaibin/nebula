@@ -42,6 +42,7 @@
 #include <cstdlib>
 #include <cstddef>
 #include <cstring>
+#include <cwchar>
 #include <fstream>
 #include <intrin.h>
 #include <iostream>
@@ -148,9 +149,8 @@ struct RtEmitConstants {
     std::uint32_t factor;
     float authored_power;
     float time;
-    std::uint32_t pad[2];
 };
-static_assert(sizeof(RtEmitConstants) == 192u);
+static_assert(sizeof(RtEmitConstants) == 184u);
 constexpr std::uint32_t kEmitLights = 512u;     // remembered glow lights (rt_lighting.hlsl kEmitLights)
 constexpr std::uint64_t kEmitLightBytes = 64u;  // per remembered light (rt_lighting.hlsl kEmitLightVectors)
 constexpr std::uint32_t kPhysicalFlag = 16384u;  // the game's light units (rt_lighting.hlsl kPhysicalFlag)
@@ -203,6 +203,13 @@ constexpr std::uint32_t kGlowLens = 16u;
 // A table light source drawn as a glow, under physical light: an area light (GlowEmitterCS), not a glow light
 // (rt_lighting.hlsl kGlowPhysical).
 constexpr std::uint32_t kGlowPhysical = 64u;
+// A physical glow light source's flags (glow_emitters_ word 6; rt_lighting.hlsl kGlowEmitter*): a sprite standing for a
+// glowing volume (isotropic; else its own faces emit); its light the colour it draws (the table's `tint`: its TEV output
+// over its triangles, as much of it as its blend adds to the picture; else the table's colour over its texture's
+// coverage); bits 4-6 its source blend factor (GX BlendFactor).
+constexpr std::uint32_t kGlowEmitterIsotropic = 1u;
+constexpr std::uint32_t kGlowEmitterDrawn = 2u;
+constexpr std::uint32_t kGlowEmitterBlendShift = 4u;
 
 // Two values 0-1 as unorm16 (0-65534) in one word, the first in the low half; 0xFFFF where a value
 // is negative (unset).
@@ -316,11 +323,10 @@ enum EmitParameter : UINT {
     kEmitLightsSlot,
     kEmitList,
     kEmitGlowOut,
+    kEmitGlowUv,
     kEmitCount,
 };
 
-// The ray tracing engine's views of the clear-surface pass (rt_engine.hlsl kEvWaterScene .. kEvClear).
-constexpr std::uint32_t kEngineClearViews = 22u;
 // A result slot's state: read by the composite (pixel) and the picture capture (compute).
 constexpr D3D12_RESOURCE_STATES kLightRead =
     D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
@@ -706,7 +712,12 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
         probe_ = getenv_s(&length, value, sizeof(value), "GALAXY_RT_PROBE") == 0 && length > 1u &&
                  sscanf_s(value, "%u,%u", &x, &y) == 2;
         probe_pixel_ = {x, y};
+        float disc[3]{};
+        light_meter_ = getenv_s(&length, value, sizeof(value), "GALAXY_RT_LIGHT_METER") == 0 && length > 1u &&
+                       sscanf_s(value, "%f,%f,%f", &disc[0], &disc[1], &disc[2]) == 3 && disc[2] > 0.0f;
+        light_meter_disc_ = {disc[0], disc[1], disc[2]};
     }
+    emit_log_interval_ = static_cast<std::uint64_t>(std::clamp(env_float("GALAXY_RT_LOG_INTERVAL", 120.0f), 1.0f, 100000.0f));
     // GALAXY_RT_REFERENCE_FROM: the present the engine's reference (GALAXY_RT_ENGINE_REFERENCE) starts at (a still
     // view; before it the real-time lighting alone, at full speed).
     reference_from_ = static_cast<std::uint64_t>(std::max(env_float("GALAXY_RT_REFERENCE_FROM", 0.0f), 0.0f));
@@ -853,6 +864,7 @@ void SceneRayTracer::shutdown() noexcept {
     emit_triangle_pso_.Reset();
     emit_scan_pso_.Reset();
     emit_ranges_.clear();
+    emit_range_keys_.clear();
     emit_range_materials_.clear();
     emit_triangles_ = 0u;
     for (auto& buffer : light_pixels_) buffer.Reset();
@@ -949,6 +961,7 @@ void SceneRayTracer::shutdown() noexcept {
     glow_added_.Reset();
     glow_positions_.Reset();
     glow_surfaces_.Reset();
+    glow_uv_.Reset();
     emit_tiles_.Reset();
     emit_lights_.Reset();
     emit_list_.Reset();
@@ -1332,6 +1345,16 @@ void SceneRayTracer::begin_frame(std::uint64_t frame_index) {
                          static_cast<int>(probe[1]), material(probe[1]), probe[2], static_cast<int>(probe[3]),
                          material(probe[3]), t, static_cast<int>(probe[5]), z, facing);
         }
+        // [rt-light-meter]: the means over the meter's disc of the light sources' direct light, the whole diffuse light
+        // and the sun's (m: a white surface under the stage's full light reads 1).
+        if (light_meter_ && probe[19] != 0u) {
+            const double n = static_cast<double>(probe[19]);
+            std::fprintf(stderr,
+                         "[rt-light-meter] frame=%llu lights=%.4f whole=%.4f sun=%.4f bounce=%.4f filtered=%.4f "
+                         "pixels=%u\n",
+                         static_cast<unsigned long long>(taken), probe[16] / 256.0 / n, probe[17] / 256.0 / n,
+                         probe[18] / 256.0 / n, probe[20] / 256.0 / n, probe[21] / 256.0 / n, probe[19]);
+        }
         // The engine's diffuse light against the converged reference ([rt-reference-engine]): the means over the
         // ordinary non-metal surfaces of the reference's, the engine's and their absolute difference (luminance, the
         // stage's light units), the engine's bias and its mean error relative to the reference.
@@ -1442,19 +1465,26 @@ void SceneRayTracer::log_physical() {
     }
     const D3D12_RANGE no_write{0, 0};
     physical_readback_->Unmap(0, &no_write);
-    std::map<std::pair<unsigned, bool>, std::array<double, 4>> per;  // count, power, most, area
+    // Per material: count, power, most, area, the brightest radiance's luminance, the power-weighted radiance (rgb).
+    std::map<std::pair<unsigned, bool>, std::array<double, 8>> per;
     for (const Light& l : lights) {
         auto& s = per[{l.material, l.glow}];
         s[0] += 1.0;
         s[1] += l.power;
         s[2] = std::max<double>(s[2], l.power);
         s[3] += l.area;
+        s[4] = std::max<double>(s[4], 0.2126 * l.radiance[0] + 0.7152 * l.radiance[1] + 0.0722 * l.radiance[2]);
+        for (unsigned k = 0; k < 3u; ++k) {
+            s[5u + k] += static_cast<double>(l.radiance[k]) * l.power;
+        }
     }
     std::fprintf(stderr, "[rt-physical] frame=%llu scene=%u glows=%u\n", static_cast<unsigned long long>(emit_log_frame_),
                  physical_log_scene_, physical_log_glows_);
     for (const auto& [key, s] : per) {
-        std::fprintf(stderr, "[rt-physical]   %s m%u triangles=%.0f power=%.0f most=%.1f area=%.0f\n",
-                     key.second ? "glow" : "scene", key.first, s[0], s[1], s[2], s[3]);
+        const double w = s[1] > 0.0 ? 1.0 / s[1] : 0.0;
+        std::fprintf(stderr,
+                     "[rt-physical]   %s m%u triangles=%.0f power=%.0f most=%.1f area=%.0f peak=%.3f mean=%.3f,%.3f,%.3f\n",
+                     key.second ? "glow" : "scene", key.first, s[0], s[1], s[2], s[3], s[4], s[5] * w, s[6] * w, s[7] * w);
     }
     const auto print = [](const char* kind, const Light& l) {
         std::fprintf(stderr,
@@ -1917,6 +1947,20 @@ void SceneRayTracer::note_submission(std::uint64_t fence_value) noexcept {
     }
 }
 
+// GALAXY_D3D_DRED=1: a breadcrumb context before each pass, so a removed device's dump names the pass it stopped in
+// (renderer_d3d12.cpp dump_device_removal).
+void SceneRayTracer::dred_marker(ID3D12GraphicsCommandList* list, const wchar_t* name) {
+    static const bool on = env_float("GALAXY_D3D_DRED", 0.0f) != 0.0f;
+    if (on) {
+        list->SetMarker(0u, name, static_cast<UINT>((std::wcslen(name) + 1u) * sizeof(wchar_t)));
+        // The first passes recorded, in order (the breadcrumbs' markers carry no names on every driver).
+        static std::uint32_t recorded = 0u;
+        if (recorded < 600u) {
+            std::fprintf(stderr, "[dred] marker %u %ls\n", recorded++, name);
+        }
+    }
+}
+
 std::uint32_t SceneRayTracer::texture_view(const RtTextureSource& source) {
     if (!texture_views_usable_ || source.resource == nullptr || source.view == 0u || !device_) {
         return 0xFFFFFFFFu;
@@ -1981,6 +2025,7 @@ void SceneRayTracer::begin_scene() noexcept {
     texture_view_slots_.clear();
     texture_view_count_ = 0u;
     emit_ranges_.clear();
+    emit_range_keys_.clear();
     emit_range_materials_.clear();
     emit_triangles_ = 0u;
     // De-light jobs the last scene's trace did not run: their source views are gone with its block.
@@ -2003,6 +2048,9 @@ void SceneRayTracer::begin_scene() noexcept {
     star_draws_ = 0u;
     glow_lights_.clear();
     glow_emitters_.clear();
+    glow_emitter_keys_.clear();
+    glow_tev_records_.clear();
+    glow_tev_stages_.clear();
     glow_emitter_materials_.clear();
     glow_emitter_slots_ = 0u;
     authored_.clear();
@@ -2279,6 +2327,7 @@ void SceneRayTracer::run_delight(ID3D12GraphicsCommandList* list) {
     }
     list->SetComputeRootSignature(delight_root_.Get());
     list->SetComputeRootUnorderedAccessView(1u, delight_scratch_->GetGPUVirtualAddress());
+    dred_marker(list, L"delight");
     list->SetPipelineState(delight_pso_.Get());
     // GALAXY_RT_DELIGHT_STRENGTH (default 0.5): the share of each texel's measured shading the map takes out, in the
     // wrap word's bits 8-15 (rt_delight.hlsl). Retinex cannot tell painted light from a pattern of one colour (a
@@ -2297,6 +2346,7 @@ void SceneRayTracer::run_delight(ID3D12GraphicsCommandList* list) {
     }
     const D3D12_RESOURCE_BARRIER scratch_uav = uav_barrier(delight_scratch_.Get());
     list->ResourceBarrier(1u, &scratch_uav);
+    dred_marker(list, L"delight_mip");
     list->SetPipelineState(delight_mip_pso_.Get());
     for (std::uint32_t l = 1u; l < most_levels; ++l) {
         for (std::size_t i = 0; i < delight_jobs_.size(); ++i) {
@@ -2351,6 +2401,30 @@ void SceneRayTracer::run_delight(ID3D12GraphicsCommandList* list) {
     delight_jobs_.clear();
 }
 
+namespace {
+
+// TEV records and their stages as rt_tev.hlsli reads them: the records, then the stages, each record's stage_offset
+// the byte offset of its first stage in the buffer they are written into at byte `base`.
+std::size_t tev_block_bytes(const std::vector<RtTevMaterial>& records, const std::vector<RtTevStage>& stages) {
+    return records.size() * sizeof(RtTevMaterial) + std::max<std::size_t>(stages.size(), 1u) * sizeof(RtTevStage);
+}
+
+void write_tev_block(const std::vector<RtTevMaterial>& records, const std::vector<RtTevStage>& stages, std::byte* out,
+                     std::size_t base) {
+    const std::size_t record_bytes = records.size() * sizeof(RtTevMaterial);
+    auto* const record_out = reinterpret_cast<RtTevMaterial*>(out);
+    for (std::size_t i = 0; i < records.size(); ++i) {
+        record_out[i] = records[i];
+        record_out[i].stage_offset =
+            static_cast<std::uint32_t>(base + record_bytes + records[i].stage_offset * sizeof(RtTevStage));
+    }
+    if (!stages.empty()) {
+        std::memcpy(out + record_bytes, stages.data(), stages.size() * sizeof(RtTevStage));
+    }
+}
+
+}  // namespace
+
 D3D12_GPU_VIRTUAL_ADDRESS SceneRayTracer::upload_tev(const std::vector<RtTevMaterial>& records,
                                                      const std::vector<RtTevStage>& stages, Allocate allocate,
                                                      void* allocate_context, RtUpload* uploaded,
@@ -2358,25 +2432,17 @@ D3D12_GPU_VIRTUAL_ADDRESS SceneRayTracer::upload_tev(const std::vector<RtTevMate
     if (records.empty()) {
         return 0u;
     }
-    const std::size_t record_bytes = records.size() * sizeof(RtTevMaterial);
-    const std::size_t stage_bytes = std::max<std::size_t>(stages.size(), 1u) * sizeof(RtTevStage);
-    const RtUpload upload = allocate(allocate_context, record_bytes + stage_bytes, 256u);
+    const std::size_t bytes = tev_block_bytes(records, stages);
+    const RtUpload upload = allocate(allocate_context, bytes, 256u);
     if (upload.cpu == nullptr) {
         return 0u;
     }
-    auto* const out = static_cast<RtTevMaterial*>(upload.cpu);
-    for (std::size_t i = 0; i < records.size(); ++i) {
-        out[i] = records[i];
-        out[i].stage_offset = static_cast<std::uint32_t>(record_bytes + records[i].stage_offset * sizeof(RtTevStage));
-    }
-    if (!stages.empty()) {
-        std::memcpy(static_cast<std::byte*>(upload.cpu) + record_bytes, stages.data(), stages.size() * sizeof(RtTevStage));
-    }
+    write_tev_block(records, stages, static_cast<std::byte*>(upload.cpu), 0u);
     if (uploaded != nullptr) {
         *uploaded = upload;
     }
     if (uploaded_bytes != nullptr) {
-        *uploaded_bytes = record_bytes + stage_bytes;
+        *uploaded_bytes = bytes;
     }
     return upload.gpu;
 }
@@ -2452,8 +2518,9 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
                 light.intensity = material->intensity;
                 light.pulse = material->pulse;
                 light.flags = kGlowTableIntensity | (material->tint ? 0u : kGlowTableColor);
-                // Under physical light an area light of its own triangles (GlowEmitterCS): its radiance the table's colour
-                // times the table's radiance (at least 1: what it shows), lit from the next frame.
+                // Under physical light an area light of its own triangles (GlowEmitterCS): its radiance the table's
+                // radiance (at least 1: what it shows) times the table's colour, or for a `tint` light source the colour
+                // it draws (its TEV over its triangles; its record in glow_tev_records_), lit from the next frame.
                 // GALAXY_RT_GLOW_EMITTERS=0: none (the art glow lights take them); GALAXY_RT_GLOW_ISOTROPIC=0: each
                 // triangle a two-sided flat panel. Isotropic is the default because a sprite faces the camera: as a
                 // panel its light turns with the view and stops at the sprite's plane in a hard edge.
@@ -2463,9 +2530,18 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
                     glow_emitter_slots_ + draw.triangle_count <= kGlowEmitters) {
                     light.flags |= kGlowPhysical;
                     glow_emitter_materials_.push_back(static_cast<std::uint16_t>(info.rt_material));
+                    std::uint32_t record = 0xFFFFFFFFu;
+                    if (material->tint) {
+                        record = static_cast<std::uint32_t>(glow_tev_records_.size());
+                        note_tev(info, glow_tev_records_, glow_tev_stages_);
+                    }
+                    const std::uint32_t flags = (isotropic ? kGlowEmitterIsotropic : 0u) |
+                                                (material->tint ? kGlowEmitterDrawn : 0u) |
+                                                (((info.blend >> 1u) & 7u) << kGlowEmitterBlendShift);
                     glow_emitters_.push_back({glow_triangles_, draw.triangle_count, glow_emitter_slots_, light.color,
                                               std::bit_cast<std::uint32_t>(std::max(material->intensity, 1.0f)),
-                                              texture_view(info.texture), isotropic ? 1u : 0u, 0u});
+                                              texture_view(info.texture), flags, record});
+                    glow_emitter_keys_.push_back(info.light_key);
                     glow_emitter_slots_ += draw.triangle_count;
                 }
             } else if (material != nullptr && material->particle) {
@@ -2578,6 +2654,7 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
                                             (info.cull == 0u ? 0x80000000u : 0u),
                                         emit_triangles_});
                 emit_range_materials_.push_back(static_cast<std::uint16_t>(info.rt_material));
+                emit_range_keys_.push_back(info.light_key);
                 emit_triangles_ += entry.triangle_count;
                 emit_materials_[info.rt_material] += entry.triangle_count;
             }
@@ -3045,12 +3122,17 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT scene_format) {
     }
     emit_params[kEmitGlowOut].ParameterType = D3D12_ROOT_PARAMETER_TYPE_UAV;
     emit_params[kEmitGlowOut].Descriptor.ShaderRegister = 3u;
+    emit_params[kEmitGlowUv].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    emit_params[kEmitGlowUv].Descriptor.ShaderRegister = 5u;
     for (auto& param : emit_params) {
         param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     }
     D3D12_ROOT_SIGNATURE_DESC emit_rsd{};
     emit_rsd.NumParameters = kEmitCount;
     emit_rsd.pParameters = emit_params;
+    // The glow light sources' TEV (rt_tev.hlsli) samples their textures as the lighting does.
+    emit_rsd.NumStaticSamplers = 2u;
+    emit_rsd.pStaticSamplers = wrap;
     // The glow light sources read their textures from the frame's heap (GlowEmitterCS).
     emit_rsd.Flags = light_textured_ ? D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED
                                      : D3D12_ROOT_SIGNATURE_FLAG_NONE;
@@ -3179,6 +3261,9 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT scene_format) {
         !create_buffer(static_cast<std::uint64_t>(kGlowMaxTriangles) * 16u, D3D12_HEAP_TYPE_DEFAULT,
                        D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
                        glow_surfaces_, L"rt glow surfaces") ||
+        !create_buffer(static_cast<std::uint64_t>(kGlowMaxTriangles) * kRtTriUvStride, D3D12_HEAP_TYPE_DEFAULT,
+                       D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+                       glow_uv_, L"rt glow texture coordinates") ||
         !create_buffer(kEmitFoundBytes, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                        D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, emit_tiles_, L"rt glow lights") ||
         !create_buffer(kEmitLights * kEmitLightBytes, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
@@ -3195,6 +3280,7 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT scene_format) {
     }
     emit_log_pending_ = false;
     glow_positions_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    glow_uv_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     emit_tiles_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     emit_list_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     emit_seen_ = false;
@@ -3329,6 +3415,13 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         c.probe[0] = probe_sample_[0];
         c.probe[1] = probe_sample_[1];
         c.probe[2] = probe_sample_[0] < sample_width && probe_sample_[1] < sample_height ? 1u : 0u;
+    }
+    if (light_meter_) {
+        const auto px = [](float v, std::uint32_t size) {
+            return static_cast<std::uint32_t>(std::clamp(v * static_cast<float>(size), 0.0f, 4095.0f));
+        };
+        c.probe[3] = px(light_meter_disc_[0], width) | (px(light_meter_disc_[1], height) << 12u) |
+                     (std::clamp(px(light_meter_disc_[2], width) / 4u, 1u, 255u) << 24u);
     }
     c.sky_ibl = sky_ibl_;
     c.fill = fill_;
@@ -3716,6 +3809,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
             }
         }
     }
+    std::array<std::uint32_t, kRtPointLights> point_keys{};   // the point lights' identities (light_remap)
     {
         // The game's point lights nearest in light to the camera, in eye space.
         std::array<GameLight, 32> lights{};
@@ -3727,6 +3821,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
             float half;
             bool core = false;
             float radius = kPointEmitterRadius;   // its emitter's radius
+            std::uint32_t key = 0u;               // its identity (GameLight.key; the star core's own)
         };
         std::array<Candidate, 32> candidates{};
         std::size_t used = 0u;
@@ -3752,7 +3847,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
             const float half = lights[i].half_distance > 1.0f ? lights[i].half_distance : point_radius_;
             const float distance2 = e[0] * e[0] + e[1] * e[1] + e[2] * e[2];
             const float importance = l0 / (1.0f + distance2 / (144.0f * half * half));
-            candidates[used++] = {importance, e, rgb, half, false, kPointEmitterRadius};
+            candidates[used++] = {importance, e, rgb, half, false, kPointEmitterRadius, lights[i].key};
         }
         // The star core: the brightest light of the Comet Observatory, a burning ball whose light grows with its
         // surface as the domes revive it. Its size is its fitted ball (StarSphereCS, read back): the actor's scale
@@ -3797,7 +3892,8 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
                 for (float& v : hue) {
                     v = warm + 0.5f * (v - warm);
                 }
-                candidates[used++] = {1.0e6f, e, {hue[0] * l, hue[1] * l, hue[2] * l}, half, true, core_ball_radius_};
+                candidates[used++] = {1.0e6f, e, {hue[0] * l, hue[1] * l, hue[2] * l}, half, true, core_ball_radius_,
+                                      0xC0DE0001u};
             }
         }
         std::sort(candidates.begin(), candidates.begin() + static_cast<std::ptrdiff_t>(used),
@@ -3826,6 +3922,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
             // Reach: twelve half distances (1/145 of the light, windowed to 0).
             c.points[2u * i][3] = 12.0f * candidates[i].half;
             c.points[2u * i + 1u][3] = 1.0f / (candidates[i].half * candidates[i].half);
+            point_keys[i] = candidates[i].key;
             c.point_radius[i] = candidates[i].radius;
         }
         window_.point_lights += c.point_count;
@@ -3900,7 +3997,12 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
                 light_pixels_state_[next] = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
             }
         }
-        if (!light_pixels_[next] || !engine_prepare(width, height, next, c.engine, c.flags)) {
+        // This trace's lights against the last traced frame's: its reservoirs reach their lights through it.
+        light_remap_view_ = light_remap(allocate, allocate_context, c.emit_scene, c.tev_info[2], point_keys.data(),
+                                        c.point_count);
+        const bool ran = light_pixels_[next] && engine_prepare(width, height, next, c.engine, c.flags);
+        light_remap_commit(ran);
+        if (!ran) {
             return;
         }
     }
@@ -4011,10 +4113,12 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         list->SetComputeRootUnorderedAccessView(kLightReference, sky_probe_map_->GetGPUVirtualAddress());
         list->SetComputeRootShaderResourceView(kLightSkyMap, positions_->GetGPUVirtualAddress());
         list->SetComputeRootShaderResourceView(kLightTev, sky_tev_table);
+        dred_marker(list, L"sky_probe");
         list->SetPipelineState(sky_probe_pso_.Get());
         list->Dispatch(kSkyMapSize / 8u, kSkyMapSize / 8u, 1u);
         const D3D12_RESOURCE_BARRIER probe_uav = uav_barrier(sky_probe_map_.Get());
         list->ResourceBarrier(1u, &probe_uav);
+        dred_marker(list, L"sky_trace_sh");
         list->SetPipelineState(sky_trace_sh_pso_.Get());
         list->Dispatch(1u, 1u, 1u);
         list->ResourceBarrier(1u, &probe_uav);
@@ -4048,10 +4152,12 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         to_state(list, emit_tris_.Get(), emit_tris_state_, kUav);
         list->SetComputeRootShaderResourceView(kLightEmitTris, emit_range_table.gpu);
         list->SetComputeRootUnorderedAccessView(kLightReference, emit_tris_->GetGPUVirtualAddress());
+        dred_marker(list, L"emit_triangle");
         list->SetPipelineState(emit_triangle_pso_.Get());
         list->Dispatch((c.emit_scene + 63u) / 64u, 1u, 1u);
         const D3D12_RESOURCE_BARRIER emit_uav = uav_barrier(emit_tris_.Get());
         list->ResourceBarrier(1u, &emit_uav);
+        dred_marker(list, L"emit_scan");
         list->SetPipelineState(emit_scan_pso_.Get());
         list->Dispatch(1u, 1u, 1u);
         to_state(list, emit_tris_.Get(), emit_tris_state_, kRead);
@@ -4061,6 +4167,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
                                                                               : positions_->GetGPUVirtualAddress());
     // The stars' balls, after the samples in the result (the composite shades the stars on them, reflections that
     // meet a star find its ball): every slot each frame, one without a star this frame written empty.
+    dred_marker(list, L"star_sphere");
     list->SetPipelineState(star_sphere_pso_.Get());
     list->Dispatch(kStarSlots, 1u, 1u);
     // The per-pixel normals and de-lighting of this frame into the slot's buffer (the composite's).
@@ -4092,7 +4199,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         to_state(list, light_final_[slot].Get(), light_final_state_[slot], D3D12_RESOURCE_STATE_COPY_SOURCE);
         list->CopyBufferRegion(ball_readback_.Get(), at, light_final_[slot].Get(),
                                static_cast<UINT64>(sample_width) * sample_height * 16u, kStarSlots * 16u);
-        if (probe_ || engine_reference_running_) {
+        if (probe_ || engine_reference_running_ || light_meter_) {
             list->CopyBufferRegion(ball_readback_.Get(), at + kStarSlots * 16u + 16u, light_final_[slot].Get(),
                                    (static_cast<UINT64>(sample_width) * sample_height + kStarSlots) * 16u,
                                    kProbeRecords * 16u);
@@ -4180,6 +4287,7 @@ void SceneRayTracer::snapshot_glow_base(ID3D12GraphicsCommandList* list, D3D12_G
         list->ResourceBarrier(1u, &barrier);
     }
     list->SetComputeRootSignature(capture_root_.Get());
+    dred_marker(list, L"glow_base");
     list->SetPipelineState(glow_base_pso_.Get());
     list->SetComputeRoot32BitConstants(kCaptureConstants, sizeof(c) / 4u, &c, 0u);
     list->SetComputeRootDescriptorTable(kCaptureSources, color_depth_table);
@@ -4291,6 +4399,7 @@ void SceneRayTracer::capture_picture(ID3D12GraphicsCommandList* list, const RtSo
     }
     to_state(list, picture_sums_.Get(), picture_sums_state_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     list->SetComputeRootSignature(capture_root_.Get());
+    dred_marker(list, L"capture");
     list->SetPipelineState(capture_pso_.Get());
     list->SetComputeRoot32BitConstants(kCaptureConstants, sizeof(c) / 4u, &c, 0u);
     list->SetComputeRootDescriptorTable(kCaptureSources, color_depth_table);
@@ -4314,12 +4423,15 @@ void SceneRayTracer::capture_picture(ID3D12GraphicsCommandList* list, const RtSo
         // The sky light: the bins into the map over time, then its spherical harmonics.
         const D3D12_RESOURCE_BARRIER barrier = uav_barrier(nullptr);
         list->ResourceBarrier(1u, &barrier);
+        dred_marker(list, L"sky_light_map");
         list->SetPipelineState(sky_light_map_pso_.Get());
         list->Dispatch(kSkyBins / 64u, 1u, 1u);
         list->ResourceBarrier(1u, &barrier);
+        dred_marker(list, L"sky_light_sh");
         list->SetPipelineState(sky_light_sh_pso_.Get());
         list->Dispatch(1u, 1u, 1u);
         list->ResourceBarrier(1u, &barrier);
+        dred_marker(list, L"capture");
         list->SetPipelineState(capture_pso_.Get());
         constexpr UINT64 kSkyBytes = kSkyBins * kSkyBinWords * 4u;
         to_state(list, sky_bins_.Get(), sky_bins_state_, D3D12_RESOURCE_STATE_COPY_SOURCE);
@@ -4331,6 +4443,7 @@ void SceneRayTracer::capture_picture(ID3D12GraphicsCommandList* list, const RtSo
         // Glowing surfaces (bright, under their own glow): lights at their own depth.
         const D3D12_RESOURCE_BARRIER barrier = uav_barrier(nullptr);
         list->ResourceBarrier(1u, &barrier);
+        dred_marker(list, L"surface_emit");
         list->SetPipelineState(surface_emit_pso_.Get());
         list->Dispatch((sample_width + 7u) / 8u, (sample_height + 7u) / 8u, 1u);
     }
@@ -4339,6 +4452,7 @@ void SceneRayTracer::capture_picture(ID3D12GraphicsCommandList* list, const RtSo
         const D3D12_RESOURCE_BARRIER barriers[2]{uav_barrier(picture_sums_.Get()), uav_barrier(exposure_sums_.Get())};
         list->ResourceBarrier(2u, barriers);
     }
+    dred_marker(list, L"sky_state");
     list->SetPipelineState(sky_state_pso_.Get());
     list->Dispatch(1u, 1u, 1u);
     // The eased adaptation for the CPU (glow gains), a few frames later.
@@ -4394,14 +4508,16 @@ void SceneRayTracer::capture_glow_lights(ID3D12GraphicsCommandList* list, const 
     emit_last_time_ = now;
     emit_last_eye_ = eye;
     const std::uint32_t glow_draws = glow ? static_cast<std::uint32_t>(glow_draws_.size()) : 0u;
-    // The glow draws' eye-space triangles: the geometry pass into the glow buffers.
+    // The glow draws' eye-space triangles: the geometry pass into the glow buffers; their texture coordinates and
+    // colours (frame flag 2) where a glow light source emits what it draws.
+    const bool glow_uvs = physical_active_ && !glow_tev_records_.empty() && glow_uv_;
     RtUpload table{};
     if (glow_draws != 0u) {
         const std::size_t table_bytes = glow_draws_.size() * sizeof(RtDraw);
         table = allocate(allocate_context, table_bytes, 256u);
         RtUpload frame{};
         if (table.cpu == nullptr || !fill_constants(sources, allocate, allocate_context, glow_draws, 0u,
-                                                    glow_triangles_, 0u, 0u, 0u, frame)) {
+                                                    glow_triangles_, 0u, 0u, glow_uvs ? 2u : 0u, frame)) {
             return;
         }
         std::memcpy(table.cpu, glow_draws_.data(), table_bytes);
@@ -4409,6 +4525,7 @@ void SceneRayTracer::capture_glow_lights(ID3D12GraphicsCommandList* list, const 
         const D3D12_GPU_VIRTUAL_ADDRESS resident = sources.resident.base != 0u ? sources.resident.base
                                                                                : sources.vertex_ring.base;
         list->SetComputeRootSignature(root_.Get());
+        dred_marker(list, L"geometry");
         list->SetPipelineState(geometry_pso_.Get());
         list->SetComputeRootConstantBufferView(kRootFrame, frame.gpu);
         list->SetComputeRootShaderResourceView(kRootDraws, table.gpu);
@@ -4419,9 +4536,16 @@ void SceneRayTracer::capture_glow_lights(ID3D12GraphicsCommandList* list, const 
         list->SetComputeRootShaderResourceView(kRootMatrixRing, sources.matrix_ring.base);
         list->SetComputeRootUnorderedAccessView(kRootPositions, glow_positions_->GetGPUVirtualAddress());
         list->SetComputeRootUnorderedAccessView(kRootSurfaces, glow_surfaces_->GetGPUVirtualAddress());
-        list->SetComputeRootUnorderedAccessView(kRootSurfaceUv, glow_surfaces_->GetGPUVirtualAddress());
+        if (glow_uvs) {
+            to_state(list, glow_uv_.Get(), glow_uv_state_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        }
+        list->SetComputeRootUnorderedAccessView(kRootSurfaceUv, glow_uvs ? glow_uv_->GetGPUVirtualAddress()
+                                                                         : glow_surfaces_->GetGPUVirtualAddress());
         list->Dispatch((glow_triangles_ + 63u) / 64u, 1u, 1u);
         to_state(list, glow_positions_.Get(), glow_positions_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        if (glow_uvs) {
+            to_state(list, glow_uv_.Get(), glow_uv_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        }
         lens_ready_ = lens_draws_ != 0u;
     }
     RtEmitConstants c{};
@@ -4460,6 +4584,7 @@ void SceneRayTracer::capture_glow_lights(ID3D12GraphicsCommandList* list, const 
     list->SetComputeRootUnorderedAccessView(kEmitTiles, emit_tiles_->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kEmitLightsSlot, emit_lights_->GetGPUVirtualAddress());
     list->SetComputeRootUnorderedAccessView(kEmitList, emit_list_->GetGPUVirtualAddress());
+    list->SetComputeRootShaderResourceView(kEmitGlowUv, glow_uv_->GetGPUVirtualAddress());
     const D3D12_RESOURCE_BARRIER all_uav = uav_barrier(nullptr);
     const int emit_timed = begin_pass(list);
     if (glow_draws != 0u) {
@@ -4467,6 +4592,7 @@ void SceneRayTracer::capture_glow_lights(ID3D12GraphicsCommandList* list, const 
         if (lights.cpu != nullptr && glow_lights_.size() == glow_draws_.size()) {
             std::memcpy(lights.cpu, glow_lights_.data(), glow_lights_.size() * sizeof(AuthoredLight));
             list->SetComputeRootShaderResourceView(kEmitDraws, lights.gpu);
+            dred_marker(list, L"glow_emit");
             list->SetPipelineState(glow_emit_pso_.Get());
             list->Dispatch(glow_draws, 1u, 1u);
             list->ResourceBarrier(1u, &all_uav);
@@ -4474,15 +4600,28 @@ void SceneRayTracer::capture_glow_lights(ID3D12GraphicsCommandList* list, const 
     }
     // Physical: the table's glow light sources into the emitters' glow segment (world space) for the next frame.
     glow_emit_count_ = 0u;
+    glow_written_.clear();
     if (glow_draws != 0u && physical_active_ && !glow_emitters_.empty() && glow_emitter_pso_) {
         if (!emit_tris_ && !create_buffer(kEmitBufferBytes, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                                           D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, emit_tris_, L"rt emitters")) {
             emit_tris_.Reset();
         }
-        const RtUpload list_upload =
-            allocate(allocate_context, glow_emitters_.size() * sizeof(glow_emitters_[0]), 256u);
+        // The emitters (32 bytes each; word 7 its TEV record's byte offset in the upload), then their TEV records.
+        const std::size_t list_bytes = glow_emitters_.size() * sizeof(glow_emitters_[0]);
+        const std::size_t tev_bytes = glow_tev_records_.empty() ? 0u : tev_block_bytes(glow_tev_records_, glow_tev_stages_);
+        const RtUpload list_upload = allocate(allocate_context, list_bytes + tev_bytes, 256u);
         if (emit_tris_ && list_upload.cpu != nullptr) {
-            std::memcpy(list_upload.cpu, glow_emitters_.data(), glow_emitters_.size() * sizeof(glow_emitters_[0]));
+            auto* const emitters = static_cast<std::array<std::uint32_t, 8>*>(list_upload.cpu);
+            std::memcpy(emitters, glow_emitters_.data(), list_bytes);
+            for (std::size_t g = 0; g < glow_emitters_.size(); ++g) {
+                if (emitters[g][7] != 0xFFFFFFFFu) {
+                    emitters[g][7] = static_cast<std::uint32_t>(list_bytes + emitters[g][7] * sizeof(RtTevMaterial));
+                }
+            }
+            if (tev_bytes != 0u) {
+                write_tev_block(glow_tev_records_, glow_tev_stages_, static_cast<std::byte*>(list_upload.cpu) + list_bytes,
+                                list_bytes);
+            }
             to_state(list, emit_tris_.Get(), emit_tris_state_, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
             // The glow triangles' surfaces (their vertex normals; the geometry pass keeps them as a UAV).
             D3D12_RESOURCE_STATES surfaces_state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
@@ -4490,6 +4629,7 @@ void SceneRayTracer::capture_glow_lights(ID3D12GraphicsCommandList* list, const 
             list->SetComputeRootShaderResourceView(kEmitDraws, list_upload.gpu);
             list->SetComputeRootShaderResourceView(kEmitAdded, glow_surfaces_->GetGPUVirtualAddress());
             list->SetComputeRootUnorderedAccessView(kEmitGlowOut, emit_tris_->GetGPUVirtualAddress());
+            dred_marker(list, L"glow_emitter");
             list->SetPipelineState(glow_emitter_pso_.Get());
             list->Dispatch(static_cast<UINT>(glow_emitters_.size()), 1u, 1u);
             to_state(list, glow_surfaces_.Get(), surfaces_state, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -4498,6 +4638,12 @@ void SceneRayTracer::capture_glow_lights(ID3D12GraphicsCommandList* list, const 
             list->ResourceBarrier(1u, &glow_uav);
             to_state(list, emit_tris_.Get(), emit_tris_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
             glow_emit_count_ = glow_emitter_slots_;
+            for (std::size_t g = 0; g < glow_emitters_.size() && g < glow_emitter_keys_.size(); ++g) {
+                if (glow_emitters_[g][2] < glow_emit_count_) {
+                    glow_written_.push_back({glow_emitter_keys_[g], glow_emitters_[g][2],
+                                             std::min(glow_emitters_[g][1], glow_emit_count_ - glow_emitters_[g][2])});
+                }
+            }
         }
     }
     // The material table's point lights: one group per draw over its triangles in the scene.
@@ -4508,6 +4654,7 @@ void SceneRayTracer::capture_glow_lights(ID3D12GraphicsCommandList* list, const 
             to_state(list, positions_.Get(), positions_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
             list->SetComputeRootShaderResourceView(kEmitDraws, lights.gpu);
             list->SetComputeRootShaderResourceView(kEmitPositions, positions_->GetGPUVirtualAddress());
+            dred_marker(list, L"authored_emit");
             list->SetPipelineState(authored_emit_pso_.Get());
             list->Dispatch(static_cast<UINT>(authored_.size()), 1u, 1u);
             list->ResourceBarrier(1u, &all_uav);
@@ -4515,12 +4662,13 @@ void SceneRayTracer::capture_glow_lights(ID3D12GraphicsCommandList* list, const 
     }
     end_pass(list, emit_timed, kPassEmit);
     const int merge_timed = begin_pass(list);
+    dred_marker(list, L"emit_merge");
     list->SetPipelineState(emit_merge_pso_.Get());
     list->Dispatch(1u, 1u, 1u);
     end_pass(list, merge_timed, kPassMerge);
     // Every 120 frames or more: a fixed frame residue would never meet the traced frames of an A/B run
     // (every other frame) when it falls on the other parity.
-    if (emit_readback_ && !emit_log_pending_ && frame_index_ >= emit_log_frame_ + 120u) {
+    if (emit_readback_ && !emit_log_pending_ && frame_index_ >= emit_log_frame_ + emit_log_interval_) {
         to_state(list, emit_list_.Get(), emit_list_state_, D3D12_RESOURCE_STATE_COPY_SOURCE);
         list->CopyBufferRegion(emit_readback_.Get(), 0u, emit_list_.Get(), 0u, kEmitLogBytes);
         const D3D12_RESOURCE_STATES sums_state = picture_sums_state_;
@@ -4621,6 +4769,7 @@ void SceneRayTracer::write_light_texture(ID3D12GraphicsCommandList* list, int sl
     list->RSSetViewports(1u, &viewport);
     list->RSSetScissorRects(1u, &scissor);
     list->SetGraphicsRootSignature(light_tex_root_.Get());
+    dred_marker(list, L"light_tex");
     list->SetPipelineState(light_tex_pso_.Get());
     // The translucent draws are drawn in the game's own light: the traced light relative to the stage's full light.
     const std::array<float, 3>& full = light_slot_full_[static_cast<unsigned>(slot)];
@@ -4690,6 +4839,7 @@ void SceneRayTracer::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRI
     list->RSSetViewports(1u, &viewport);
     list->RSSetScissorRects(1u, &scissor);
     list->SetGraphicsRootSignature(composite_root_.Get());
+    dred_marker(list, L"composite");
     list->SetPipelineState(composite_pso_.Get());
     list->SetGraphicsRoot32BitConstants(0u, sizeof(c) / 4u, &c, 0u);
     list->SetGraphicsRootShaderResourceView(1u, engine ? engine_slots_[index]->GetGPUVirtualAddress()
@@ -4850,6 +5000,7 @@ bool SceneRayTracer::trace_engine_clear(ID3D12GraphicsCommandList* list, Allocat
     list->SetComputeRootShaderResourceView(kLightEmitTris, engine_bind_.emit_tris);
     list->SetComputeRootShaderResourceView(kLightReservoirIn, spare);
     list->SetComputeRootUnorderedAccessView(kLightReservoirOut, scratch);
+    dred_marker(list, L"engine_clear");
     list->SetPipelineState(engine_clear_pso_.Get());
     const int timed = begin_pass(list);
     list->Dispatch((engine_width_ + 7u) / 8u, (engine_height_ + 7u) / 8u, 1u);
@@ -4906,6 +5057,7 @@ void SceneRayTracer::composite_clear(ID3D12GraphicsCommandList* list, D3D12_CPU_
     list->RSSetViewports(1u, &viewport);
     list->RSSetScissorRects(1u, &scissor);
     list->SetGraphicsRootSignature(composite_root_.Get());
+    dred_marker(list, L"clear_composite");
     list->SetPipelineState(clear_composite_pso_.Get());
     list->SetGraphicsRoot32BitConstants(0u, sizeof(c) / 4u, &c, 0u);
     list->SetGraphicsRootShaderResourceView(1u, engine_clear_[slot]->GetGPUVirtualAddress());
@@ -5069,6 +5221,7 @@ bool SceneRayTracer::transform_draws(ID3D12GraphicsCommandList* list, const RtSo
     const D3D12_GPU_VIRTUAL_ADDRESS resident = sources.resident.base != 0u ? sources.resident.base
                                                                            : sources.vertex_ring.base;
     list->SetComputeRootSignature(root_.Get());
+    dred_marker(list, L"geometry");
     list->SetPipelineState(geometry_pso_.Get());
     list->SetComputeRootConstantBufferView(kRootFrame, frame.gpu);
     list->SetComputeRootShaderResourceView(kRootDraws, table.gpu);
@@ -5128,6 +5281,7 @@ void SceneRayTracer::flush_geometry(ID3D12GraphicsCommandList* list, const RtSou
                                                                            : sources.vertex_ring.base;
     const int timed = begin_pass(list);
     list->SetComputeRootSignature(root_.Get());
+    dred_marker(list, L"geometry");
     list->SetPipelineState(geometry_pso_.Get());
     list->SetComputeRootConstantBufferView(kRootFrame, frame.gpu);
     list->SetComputeRootShaderResourceView(kRootDraws, table.gpu);
@@ -5538,6 +5692,7 @@ bool SceneRayTracer::trace_scene(ID3D12GraphicsCommandList* list, const RtSource
         D3D12_RESOURCE_BARRIER barrier = transition(stats_.Get(), D3D12_RESOURCE_STATE_COPY_DEST,
                                                     D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         list->ResourceBarrier(1u, &barrier);
+        dred_marker(list, L"validate");
         list->SetPipelineState(validate_pso_.Get());
         list->SetComputeRootShaderResourceView(kRootScene, tlas_->GetGPUVirtualAddress());
         list->SetComputeRootDescriptorTable(kRootDepth, depth_srv);

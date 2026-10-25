@@ -23,9 +23,11 @@
 
 #include <algorithm>
 #include <bit>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <unordered_map>
 
 namespace galaxy::gx {
 namespace {
@@ -36,7 +38,7 @@ using Microsoft::WRL::ComPtr;
 enum EngineView : std::uint32_t {
     kEvGBuffer, kEvGBufferPrev, kEvDiTemp, kEvDi, kEvDiPrev, kEvDirect, kEvGiTemp, kEvGi, kEvGiPrev, kEvGiOut,
     kEvSpecular, kEvHistDiffuse, kEvHistDiffusePrev, kEvHistSpecular, kEvHistSpecularPrev, kEvAtrousA, kEvAtrousB,
-    kEvSlot, kEvPicture, kEvShadow, kEvShadowPrev, kEvLightGrid, kEvCount,
+    kEvSlot, kEvPicture, kEvShadow, kEvShadowPrev, kEvLightGrid, kEvLightRemap, kEvCount,
     // The clear-surface pass's views (trace_engine_clear) follow the trace's.
     kEvWaterScene = kEvCount, kEvWaterPositions, kEvWaterSurfaces, kEvClearDraws, kEvClear, kEvClearEnd,
 };
@@ -62,6 +64,7 @@ constexpr std::uint32_t kEngineBounceCache = 131072u;
 constexpr std::uint32_t kEngineReference = 262144u;
 constexpr std::uint32_t kEngineWaterLight = 524288u;
 constexpr std::uint32_t kEngineNoAntiLag = 1048576u;
+constexpr std::uint32_t kEngineNoLightHistory = 2097152u;
 
 float env_value(const char* name, float fallback) {
     char value[32]{};
@@ -83,8 +86,8 @@ D3D12_RESOURCE_BARRIER all_uavs() {
 // The engine's buffers: bytes per pixel (full resolution) or per half-resolution sample.
 const SceneRayTracer::EngineBufferSpec SceneRayTracer::kEngineBufferSpecs[kEngineBuffers] = {
     {32u, false, L"rt engine gbuffer 0"},   {32u, false, L"rt engine gbuffer 1"},
-    {32u, false, L"rt engine di temp"},     {32u, false, L"rt engine di 0"},
-    {32u, false, L"rt engine di 1"},        {16u, false, L"rt engine direct"},
+    {16u, false, L"rt engine di temp"},     {16u, false, L"rt engine di 0"},
+    {16u, false, L"rt engine di 1"},        {16u, false, L"rt engine direct"},
     {32u, true, L"rt engine gi temp"},      {32u, true, L"rt engine gi 0"},
     {32u, true, L"rt engine gi 1"},         {8u, true, L"rt engine gi out"},
     {8u, false, L"rt engine specular"},     {16u, false, L"rt engine diffuse history 0"},
@@ -101,6 +104,7 @@ bool SceneRayTracer::create_engine_pipelines() {
     engine_points_ = env_value("GALAXY_RT_ENGINE_POINTS", 1.0f) != 0.0f;
     engine_bounces_ = env_value("GALAXY_RT_ENGINE_BOUNCES", 1.0f) != 0.0f;
     engine_anti_lag_ = env_value("GALAXY_RT_ENGINE_ANTILAG", 1.0f) != 0.0f;
+    engine_light_history_ = env_value("GALAXY_RT_ENGINE_LIGHT_HISTORY", 1.0f) != 0.0f;
     engine_clear_mode_ = static_cast<std::uint32_t>(std::clamp(env_value("GALAXY_RT_ENGINE_CLEAR", 1.0f), 0.0f, 9.0f));
     engine_clear_wanted_ = engine_clear_mode_ != 0u;
     engine_reference_ = env_value("GALAXY_RT_ENGINE_REFERENCE", 0.0f) != 0.0f;
@@ -219,13 +223,136 @@ bool SceneRayTracer::ensure_engine_buffers(std::uint32_t width, std::uint32_t he
     engine_height_ = height;
     engine_fresh_ = true;
     std::cerr << "[rt] engine buffers " << width << 'x' << height << " mb="
-              << ((full * (32u * 5u + 16u + 8u + 16u * 6u + 4u * 2u + 16u * kLightSlots) + half * (32u * 3u + 8u)) >> 20u)
+              << ((full * (32u * 2u + 16u * 3u + 16u + 8u + 16u * 6u + 4u * 2u + 16u * kLightSlots) + half * (32u * 3u + 8u)) >>
+                  20u)
               << '\n';
     return true;
 }
 
+std::uint32_t SceneRayTracer::light_remap(Allocate allocate, void* allocate_context, std::uint32_t scene,
+                                          std::uint32_t lights, const std::uint32_t* points, std::uint32_t point_count) {
+    // This trace's lights by draw: the scene's emitting draws (when they are among its lights), then the glow emitters
+    // the last frame wrote (rt_lighting.hlsl emit_triangle_of: from `scene` on).
+    light_groups_.clear();
+    if (scene != 0u) {
+        for (std::size_t r = 0; r < emit_ranges_.size() && r < emit_range_keys_.size(); ++r) {
+            const auto& range = emit_ranges_[r];
+            if (range[3] < scene && emit_range_keys_[r] != 0u) {
+                light_groups_.push_back({emit_range_keys_[r], range[3], std::min(range[1], scene - range[3])});
+            }
+        }
+    }
+    for (const auto& glow : glow_written_) {
+        if (scene + glow[1] < lights && glow[0] != 0u) {
+            light_groups_.push_back({glow[0], scene + glow[1], std::min(glow[2], lights - scene - glow[1])});
+        }
+    }
+    light_points_.assign(points, points + point_count);
+    // A draw drawn again under its key keeps its lights, index for index; a key two draws share (in either trace) keeps
+    // none.
+    constexpr std::size_t kShared = ~std::size_t{0};
+    std::unordered_map<std::uint32_t, std::size_t> last;
+    last.reserve(light_groups_last_.size());
+    for (std::size_t i = 0; i < light_groups_last_.size(); ++i) {
+        const auto [it, inserted] = last.try_emplace(light_groups_last_[i].key, i);
+        if (!inserted) {
+            it->second = kShared;
+        }
+    }
+    std::unordered_map<std::uint32_t, std::uint32_t> now;
+    now.reserve(light_groups_.size());
+    for (const LightGroup& group : light_groups_) {
+        ++now[group.key];
+    }
+    std::vector<std::array<std::uint32_t, 4>> ranges;
+    ranges.reserve(light_groups_.size());
+    for (const LightGroup& group : light_groups_) {
+        const auto it = last.find(group.key);
+        if (it == last.end() || it->second == kShared || now[group.key] != 1u) {
+            continue;
+        }
+        const LightGroup& before = light_groups_last_[it->second];
+        ranges.push_back({before.first, std::min(before.count, group.count), group.first, 0u});
+    }
+    std::sort(ranges.begin(), ranges.end(), [](const auto& a, const auto& b) { return a[0] < b[0]; });
+    std::vector<std::uint32_t> point_map(light_points_last_.size(), 0xFFFFFFFFu);
+    std::uint32_t points_kept = 0u;
+    for (std::size_t i = 0; i < light_points_last_.size(); ++i) {
+        for (std::uint32_t j = 0; j < point_count; ++j) {
+            if (points[j] == light_points_last_[i] && points[j] != 0u) {
+                point_map[i] = j;
+                ++points_kept;
+                break;
+            }
+        }
+    }
+    // GALAXY_RT_LOG_EMITTERS: every 120th trace, how many of its lights the last trace had (by draw and by light).
+    if (log_emitters_ && ++light_remap_traces_ % 120u == 0u) [[unlikely]] {
+        std::uint64_t kept = 0u;
+        for (const auto& range : ranges) {
+            kept += range[1];
+        }
+        std::uint64_t total = 0u;
+        for (const LightGroup& group : light_groups_) {
+            total += group.count;
+        }
+        std::fprintf(stderr,
+                     "[rt-remap] draws=%zu kept=%zu (last %zu) lights=%llu kept=%llu points=%u kept=%u "
+                     "(last %zu)\n",
+                     light_groups_.size(), ranges.size(), light_groups_last_.size(),
+                     static_cast<unsigned long long>(total), static_cast<unsigned long long>(kept), point_count,
+                     points_kept, light_points_last_.size());
+    }
+    // The other way (rt_engine.hlsl engine_light_existed): the same ranges by their first index now, and per point
+    // light now whether it was.
+    std::vector<std::array<std::uint32_t, 4>> now_ranges;
+    now_ranges.reserve(ranges.size());
+    for (const auto& range : ranges) {
+        now_ranges.push_back({range[2], range[1], range[0], 0u});
+    }
+    std::sort(now_ranges.begin(), now_ranges.end(), [](const auto& a, const auto& b) { return a[0] < b[0]; });
+    std::vector<std::uint32_t> point_existed(point_count, 0u);
+    for (const std::uint32_t index : point_map) {
+        if (index < point_count) {
+            point_existed[index] = 1u;
+        }
+    }
+    const std::size_t bytes =
+        16u + ranges.size() * 16u + point_map.size() * 4u + now_ranges.size() * 16u + point_existed.size() * 4u + 4u;
+    const RtUpload upload = allocate(allocate_context, bytes, 256u);
+    if (upload.cpu == nullptr) {
+        return 0xFFFFFFFFu;
+    }
+    auto* const words = static_cast<std::uint32_t*>(upload.cpu);
+    words[0] = static_cast<std::uint32_t>(ranges.size());
+    words[1] = static_cast<std::uint32_t>(point_map.size());
+    words[2] = static_cast<std::uint32_t>(now_ranges.size());
+    words[3] = static_cast<std::uint32_t>(point_existed.size());
+    std::uint32_t* at = words + 4u;
+    std::memcpy(at, ranges.data(), ranges.size() * 16u);
+    at += ranges.size() * 4u;
+    std::memcpy(at, point_map.data(), point_map.size() * 4u);
+    at += point_map.size();
+    std::memcpy(at, now_ranges.data(), now_ranges.size() * 16u);
+    at += now_ranges.size() * 4u;
+    std::memcpy(at, point_existed.data(), point_existed.size() * 4u);
+    at[point_existed.size()] = 0u;
+    return buffer_view(upload.resource, upload.offset, bytes);
+}
+
+void SceneRayTracer::light_remap_commit(bool ran) {
+    if (ran) {
+        light_groups_last_.swap(light_groups_);
+        light_points_last_.swap(light_points_);
+    } else {
+        light_groups_last_.clear();
+        light_points_last_.clear();
+    }
+}
+
 bool SceneRayTracer::engine_prepare(std::uint32_t width, std::uint32_t height, unsigned slot, RtEngineConstants& c,
                                     std::uint32_t& flags) {
+    static_assert(kEvWaterScene == kEngineClearViews, "the clear pass's views follow the trace's");
     engine_running_ = false;
     if (!engine_active() || engine_picture_ == nullptr || !ensure_engine_buffers(width, height)) {
         // A trace without the engine leaves its histories stale.
@@ -263,8 +390,15 @@ bool SceneRayTracer::engine_prepare(std::uint32_t width, std::uint32_t height, u
     views[kEvShadow] = uav(kShadow0 + cur);
     views[kEvShadowPrev] = uav(kShadow0 + prev);
     views[kEvLightGrid] = buffer_uav(engine_light_grid_.Get(), kEngineGridBytes);
-    for (const std::uint32_t view : views) {
-        if (view == 0xFFFFFFFFu) {
+    views[kEvLightRemap] = light_remap_view_;
+    for (std::uint32_t v = 0; v < kEvCount; ++v) {
+        if (views[v] == 0xFFFFFFFFu) {
+            // Once per view: the trace runs without the engine while it has none.
+            static std::uint32_t logged = 0u;
+            if ((logged & (1u << v)) == 0u) {
+                logged |= 1u << v;
+                std::cerr << "[rt] engine view " << v << " unavailable: the scene is not traced\n";
+            }
             engine_fresh_ = true;
             return false;
         }
@@ -293,7 +427,8 @@ bool SceneRayTracer::engine_prepare(std::uint32_t width, std::uint32_t height, u
                 (engine_clear_mode_ == 5u ? kEngineClearNoBack : 0u) | (engine_clear_mode_ == 6u ? kEngineClearNoShade : 0u) |
                 (engine_clear_mode_ == 7u ? kEngineHitNoLights : 0u) | (engine_clear_mode_ == 8u ? kEngineHitNoSky : 0u) |
                 (engine_clear_mode_ == 9u ? kEngineClearNoTev : 0u) | (engine_bounces_ ? kEngineBounceCache : 0u) |
-                (water_light ? kEngineWaterLight : 0u) | (engine_anti_lag_ ? 0u : kEngineNoAntiLag) | (engine_view_ << 4u);
+                (water_light ? kEngineWaterLight : 0u) | (engine_anti_lag_ ? 0u : kEngineNoAntiLag) |
+                (engine_light_history_ ? 0u : kEngineNoLightHistory) | (engine_view_ << 4u);
     c.info[1] = 0u;
     c.info[2] = slot;
     c.info[3] = 0u;
@@ -339,40 +474,42 @@ void SceneRayTracer::trace_engine(ID3D12GraphicsCommandList* list, Allocate allo
     const UINT hy = ((engine_height_ + 1u) / 2u + 7u) / 8u;
     const D3D12_RESOURCE_BARRIER barrier = all_uavs();
     to_state(list, engine_slots_[slot].Get(), engine_slot_state_[slot], D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    const auto run = [&](ID3D12PipelineState* pso, UINT x, UINT y) {
+    const auto run = [&](ID3D12PipelineState* pso, UINT x, UINT y, const wchar_t* name) {
+        dred_marker(list, name);
         list->SetPipelineState(pso);
         list->Dispatch(x, y, 1u);
         list->ResourceBarrier(1u, &barrier);
     };
     // GALAXY_RT_PASS_TIMING: each stage's GPU time ([rt-engine-pass]).
     int timed = begin_pass(list);
-    run(engine_gbuffer_pso_.Get(), gx, gy);
+    run(engine_gbuffer_pso_.Get(), gx, gy, L"engine_gbuffer");
     end_pass(list, timed, kPassEngineGBuffer);
     // The light grid (the lights near each cell about the camera), for the surfaces' and the hits' light candidates.
     timed = begin_pass(list);
-    run(engine_light_grid_pso_.Get(), static_cast<UINT>((kEngineGridBytes / 8u + 63u) / 64u), 1u);
+    run(engine_light_grid_pso_.Get(), static_cast<UINT>((kEngineGridBytes / 8u + 63u) / 64u), 1u,
+        L"engine_light_grid");
     if (engine_reference_running_) {
-        run(engine_reference_pso_.Get(), gx, gy);
+        run(engine_reference_pso_.Get(), gx, gy, L"engine_reference");
         ++engine_reference_paths_;
     }
-    run(engine_direct_pso_.Get(), gx, gy);
-    run(engine_direct_spatial_pso_.Get(), gx, gy);
+    run(engine_direct_pso_.Get(), gx, gy, L"engine_direct");
+    run(engine_direct_spatial_pso_.Get(), gx, gy, L"engine_direct_spatial");
     end_pass(list, timed, kPassEngineDirect);
     // The sun's shadow (its blurs in the a-trous buffers, free until the temporal pass).
     timed = begin_pass(list);
-    run(engine_shadow_blur_pso_.Get(), gx, gy);
-    run(engine_shadow_post_pso_.Get(), gx, gy);
-    run(engine_shadow_stabilize_pso_.Get(), gx, gy);
+    run(engine_shadow_blur_pso_.Get(), gx, gy, L"engine_shadow_blur");
+    run(engine_shadow_post_pso_.Get(), gx, gy, L"engine_shadow_post");
+    run(engine_shadow_stabilize_pso_.Get(), gx, gy, L"engine_shadow_stabilize");
     end_pass(list, timed, kPassEngineShadow);
     timed = begin_pass(list);
-    run(engine_indirect_pso_.Get(), hx, hy);
-    run(engine_indirect_spatial_pso_.Get(), hx, hy);
+    run(engine_indirect_pso_.Get(), hx, hy, L"engine_indirect");
+    run(engine_indirect_spatial_pso_.Get(), hx, hy, L"engine_indirect_spatial");
     end_pass(list, timed, kPassEngineIndirect);
     timed = begin_pass(list);
-    run(engine_specular_pso_.Get(), gx, gy);
+    run(engine_specular_pso_.Get(), gx, gy, L"engine_specular");
     end_pass(list, timed, kPassEngineSpecular);
     timed = begin_pass(list);
-    run(engine_temporal_pso_.Get(), gx, gy);
+    run(engine_temporal_pso_.Get(), gx, gy, L"engine_temporal");
     // The a-trous iterations (steps 1, 2, 4, 8: A to B, B to A, ...) and the final pass (the result in A), each with
     // its step in the frame's constants.
     const auto with_info = [&](std::uint32_t step, std::uint32_t parity) {
@@ -389,13 +526,13 @@ void SceneRayTracer::trace_engine(ID3D12GraphicsCommandList* list, Allocate allo
     };
     for (std::uint32_t i = 0; i < 4u; ++i) {
         if (with_info(1u << i, i & 1u)) {
-            run(engine_atrous_pso_.Get(), gx, gy);
+            run(engine_atrous_pso_.Get(), gx, gy, L"engine_atrous");
         }
     }
     end_pass(list, timed, kPassEngineDenoise);
     timed = begin_pass(list);
     if (with_info(0u, 0u)) {
-        run(engine_final_pso_.Get(), gx, gy);
+        run(engine_final_pso_.Get(), gx, gy, L"engine_final");
     }
     end_pass(list, timed, kPassEngineFinal);
     list->SetComputeRootConstantBufferView(0u, frame);

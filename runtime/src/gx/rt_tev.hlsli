@@ -9,6 +9,7 @@
 //   SamplerState g_wrap_point, g_wrap_linear (repeating samplers)
 //   float4 g_up                   the de-light maps' switch (g_up.w > 0; rt_lighting.hlsl)
 //   float kDelightRange           the de-light maps' range (rt_lighting.hlsl)
+// tev_combine itself reads only its record buffer and the samplers (GlowEmitterCS runs it on the glow records).
 
 static const uint kTevRecordBytes = 128u;
 static const uint kTevStageBytes = 32u;
@@ -84,31 +85,31 @@ int tev_fixed_konst(uint k)
     return k < 4u ? int(255u - 32u * k) : int(256u - 32u * k);
 }
 
-// The konstant colour selection (kcsel) and alpha selection (kasel) over K0-K3 (RGBA8 words at `record` + 24).
-int4 tev_konst(uint record, uint kcsel, uint kasel)
+// The konstant colour selection (kcsel) and alpha selection (kasel) over K0-K3 (RGBA8 words at `record` + 24 of `tev`).
+int4 tev_konst(ByteAddressBuffer tev, uint record, uint kcsel, uint kasel)
 {
     int3 rgb = int3(0, 0, 0);
     if (kcsel <= 7u) {
         const int f = tev_fixed_konst(kcsel);
         rgb = int3(f, f, f);
     } else if (kcsel >= 12u && kcsel <= 15u) {
-        rgb = tev_rgba8(g_tev.Load(record + 24u + (kcsel - 12u) * 4u)).rgb;
+        rgb = tev_rgba8(tev.Load(record + 24u + (kcsel - 12u) * 4u)).rgb;
     } else if (kcsel >= 16u) {
-        const int c = tev_rgba8(g_tev.Load(record + 24u + ((kcsel - 16u) % 4u) * 4u))[(kcsel - 16u) / 4u];
+        const int c = tev_rgba8(tev.Load(record + 24u + ((kcsel - 16u) % 4u) * 4u))[(kcsel - 16u) / 4u];
         rgb = int3(c, c, c);
     }
     int a = 0;
     if (kasel <= 7u) {
         a = tev_fixed_konst(kasel);
     } else if (kasel >= 16u) {
-        a = tev_rgba8(g_tev.Load(record + 24u + ((kasel - 16u) % 4u) * 4u))[(kasel - 16u) / 4u];
+        a = tev_rgba8(tev.Load(record + 24u + ((kasel - 16u) % 4u) * 4u))[(kasel - 16u) / 4u];
     }
     return int4(rgb, a);
 }
 
-int4 tev_register(uint record, uint r)
+int4 tev_register(ByteAddressBuffer tev, uint record, uint r)
 {
-    const uint2 halves = g_tev.Load2(record + 40u + r * 8u);
+    const uint2 halves = tev.Load2(record + 40u + r * 8u);
     const float4 v = float4(f16tof32(halves.x), f16tof32(halves.x >> 16u), f16tof32(halves.y), f16tof32(halves.y >> 16u));
     return int4(round(v * 255.0f));
 }
@@ -185,64 +186,46 @@ float tev_sample_shading(Texture2D<float> map, float2 coords, uint wrap, float2 
     return map.SampleLevel(g_wrap_linear, tev_addressed(coords, wrap, 0.5f * exp2(lod) / size), lod);
 }
 
-// Draw `draw`'s TEV output at triangle `tri`, barycentrics `b` (display-encoded RGBA, 0-1), and whether its alpha
-// passes the draw's alpha compare. A draw without a record (`count` records) is white and passes. `mode`: the
-// kTev* flags above. `cone`: the footprint its textures are filtered over (tev_sample; kTevNoCone: none).
-float4 tev_evaluate_cone(uint draw, uint count, uint tri, float2 b, uint mode, float cone, out bool alpha_pass)
+// A point of a draw for tev_combine: its coordinates in both texture slots and their change along its triangle's edges
+// (tev_sample's footprint), and its rasterised colours 0 and 1 (the vertices', where the record takes them).
+struct TevPoint {
+    float2 uv[2];
+    float2 edge1[2];
+    float2 edge2[2];
+    float4 vertex0;
+    float4 vertex1;
+};
+
+// The TEV output of the draw whose record starts at `record` in `tev` (RtTevMaterial, then its stages) at point `pt`
+// (display-encoded RGBA, 0-1), and whether its alpha passes the draw's alpha compare. `mode`: the kTev* flags above.
+// `cone`: the footprint its textures are filtered over (tev_sample; kTevNoCone: none). `delight`: the material
+// texture's painted light taken out by its de-light map (the record's pad[1]).
+float4 tev_combine(ByteAddressBuffer tev, uint record, TevPoint pt, uint mode, float cone, bool delight,
+                   out bool alpha_pass)
 {
-    alpha_pass = true;
-    if (draw >= count) {
-        return float4(1.0f, 1.0f, 1.0f, 1.0f);
-    }
-    const uint record = draw * kTevRecordBytes;
-    const uint header = g_tev.Load(record);
+    const uint header = tev.Load(record);
     const uint stages = min(header & 0x1Fu, 16u);
-    const uint stage_base = g_tev.Load(record + 104u);
-    // The hit's coordinates in both slots and its rasterised colours (channel material x its light).
-    const float3 w = float3(1.0f - b.x - b.y, b.x, b.y);
-    const uint a = tri * kTriUvStride;
-    const float4 uv0_01 = asfloat(g_tri_uv.Load4(a));
-    const float2 uv0_2 = asfloat(g_tri_uv.Load2(a + 16u));
-    const float4 uv1_01 = asfloat(g_tri_uv.Load4(a + 24u));
-    const float2 uv1_2 = asfloat(g_tri_uv.Load2(a + 40u));
-    const uint3 col0 = g_tri_uv.Load3(a + 48u);
-    const uint3 col1 = g_tri_uv.Load3(a + 60u);
-    const float2 uv[2] = {uv0_01.xy * w.x + uv0_01.zw * w.y + uv0_2 * w.z, uv1_01.xy * w.x + uv1_01.zw * w.y + uv1_2 * w.z};
-    const float2 edge1[2] = {uv0_01.zw - uv0_01.xy, uv1_01.zw - uv1_01.xy};
-    const float2 edge2[2] = {uv0_2 - uv0_01.xy, uv1_2 - uv1_01.xy};
-    float4 v0[3] = {tev_rgba8f(col0.x), tev_rgba8f(col0.y), tev_rgba8f(col0.z)};
-    float4 v1[3] = {tev_rgba8f(col1.x), tev_rgba8f(col1.y), tev_rgba8f(col1.z)};
-    // Bits 5-6: the baked light of the vertices' colour removed per vertex and set to the program's neutral light
-    // (record + 108: the levels), as the vertex shaders do.
-    // Bits 16-17: a lit channel lit at its neutral light (the record's light word), its vertex colour its material.
-    const uint levels = g_tev.Load(record + 108u);
-    const bool baked = (mode & kTevBakedColours) != 0u;
-    [unroll] for (uint k = 0u; k < 3u; ++k) {
-        if ((header & 0x20u) != 0u && !baked) v0[k].rgb = tev_debake(v0[k].rgb) * (float(levels & 0xFFu) / 255.0f);
-        if ((header & 0x40u) != 0u && !baked) v1[k].rgb = tev_debake(v1[k].rgb) * (float((levels >> 8u) & 0xFFu) / 255.0f);
-    }
-    const float4 vertex0 = v0[0] * w.x + v0[1] * w.y + v0[2] * w.z;
-    const float4 vertex1 = v1[0] * w.x + v1[1] * w.y + v1[2] * w.z;
-    const uint4 channels = g_tev.Load4(record + 8u);   // colour 0 material, its light, colour 1 material, its light
+    const uint stage_base = tev.Load(record + 104u);
+    const uint4 channels = tev.Load4(record + 8u);   // colour 0 material, its light, colour 1 material, its light
     float4 ras0 = tev_rgba8f(channels.x);
     float4 ras1 = tev_rgba8f(channels.z);
-    if ((header & (1u << 24u)) != 0u) ras0.rgb = vertex0.rgb;
-    if ((header & (1u << 25u)) != 0u) ras0.a = vertex0.a;
-    if ((header & (1u << 26u)) != 0u) ras1.rgb = vertex1.rgb;
-    if ((header & (1u << 27u)) != 0u) ras1.a = vertex1.a;
+    if ((header & (1u << 24u)) != 0u) ras0.rgb = pt.vertex0.rgb;
+    if ((header & (1u << 25u)) != 0u) ras0.a = pt.vertex0.a;
+    if ((header & (1u << 26u)) != 0u) ras1.rgb = pt.vertex1.rgb;
+    if ((header & (1u << 27u)) != 0u) ras1.a = pt.vertex1.a;
     const int4 ras_in0 = int4(round(saturate(ras0 * tev_rgba8f(channels.y)) * 255.0f));
     const int4 ras_in1 = int4(round(saturate(ras1 * tev_rgba8f(channels.w)) * 255.0f));
 
-    int4 prev = tev_register(record, 0u);
-    int4 c0 = tev_register(record, 1u);
-    int4 c1 = tev_register(record, 2u);
-    int4 c2 = tev_register(record, 3u);
+    int4 prev = tev_register(tev, record, 0u);
+    int4 c0 = tev_register(tev, record, 1u);
+    int4 c1 = tev_register(tev, record, 2u);
+    int4 c2 = tev_register(tev, record, 3u);
     int4 texc = int4(0, 0, 0, 0);
     int4 rasc = int4(0, 0, 0, 0);
     [loop] for (uint s = 0u; s < stages; ++s) {
         const uint at = stage_base + s * kTevStageBytes;
-        const uint4 packed = g_tev.Load4(at);
-        const float2 scale = asfloat(g_tev.Load2(at + 16u));
+        const uint4 packed = tev.Load4(at);
+        const float2 scale = asfloat(tev.Load2(at + 16u));
         const uint color_env = packed.x;
         const uint alpha_env = packed.y;
         const uint order = packed.z;
@@ -260,19 +243,19 @@ float4 tev_evaluate_cone(uint draw, uint count, uint tri, float2 b, uint mode, f
         if (tex_enable && texgens != 0u) {
             texc = int4(255, 255, 255, 255);
 #if RT_TEXTURED
-            const uint view = g_tev.Load(record + 72u + texmap * 4u);
+            const uint view = tev.Load(record + 72u + texmap * 4u);
             const uint slot = (header >> (8u + 2u * texcoord)) & 1u;
-            const float2 coords = uv[slot] * scale;
-            const float2 d1 = edge1[slot] * scale;
-            const float2 d2 = edge2[slot] * scale;
-            const uint wrap = g_tev.Load(at + 28u);
+            const float2 coords = pt.uv[slot] * scale;
+            const float2 d1 = pt.edge1[slot] * scale;
+            const float2 d2 = pt.edge2[slot] * scale;
+            const uint wrap = tev.Load(at + 28u);
             if (view != 0xFFFFFFFFu && all(abs(coords) < 1.0e4f)) {
                 const Texture2D<float4> map = ResourceDescriptorHeap[NonUniformResourceIndex(view)];
                 float4 texel = saturate(tev_sample(map, coords, wrap, d1, d2, cone));
                 // Physical: the material texture's albedo, the light painted into it taken out (its de-light map,
                 // record pad[1]; rt_delight.hlsl).
-                const uint painted_view = g_tev.Load(record + 112u);
-                if (painted_view != 0xFFFFFFFFu && g_up.w > 0.0f && texmap == (g_tev.Load(record + 116u) & 7u)) {
+                const uint painted_view = tev.Load(record + 112u);
+                if (painted_view != 0xFFFFFFFFu && delight && texmap == (tev.Load(record + 116u) & 7u)) {
                     const Texture2D<float> painted = ResourceDescriptorHeap[NonUniformResourceIndex(painted_view)];
                     float3 lin = select(texel.rgb <= 0.04045f, texel.rgb / 12.92f,
                                         pow((texel.rgb + 0.055f) / 1.055f, 2.4f)) *
@@ -287,10 +270,10 @@ float4 tev_evaluate_cone(uint draw, uint count, uint tri, float2 b, uint mode, f
             if ((mode & kTevGreyTexture) != 0u) {
                 texc = int4(128, 128, 128, 255);
             }
-            if ((mode & kTevNoEnvironment) != 0u && g_tev.Load(at + 24u) != 0u) {
+            if ((mode & kTevNoEnvironment) != 0u && tev.Load(at + 24u) != 0u) {
                 texc = int4(0, 0, 0, texc.a);
             }
-            if ((mode & kTevWhiteEnvironment) != 0u && g_tev.Load(at + 24u) != 0u) {
+            if ((mode & kTevWhiteEnvironment) != 0u && tev.Load(at + 24u) != 0u) {
                 texc = int4(255, 255, 255, texc.a);
             }
         } else {
@@ -299,7 +282,7 @@ float4 tev_evaluate_cone(uint draw, uint count, uint tri, float2 b, uint mode, f
         rasc = ras_channel == 0u ? tev_swizzle(ras_in0, ras_swizzle)
                : ras_channel == 1u ? tev_swizzle(ras_in1, ras_swizzle)
                                    : int4(0, 0, 0, 0);
-        const int4 kon = tev_konst(record, ksel & 0x1Fu, (ksel >> 5u) & 0x1Fu);
+        const int4 kon = tev_konst(tev, record, ksel & 0x1Fu, (ksel >> 5u) & 0x1Fu);
 
         const uint color_bias = (color_env >> 16u) & 3u;
         const bool color_sub = ((color_env >> 18u) & 1u) != 0u;
@@ -404,12 +387,55 @@ float4 tev_evaluate_cone(uint draw, uint count, uint tri, float2 b, uint mode, f
     }
     const int4 fragment = prev & int4(255, 255, 255, 255);
     // The alpha compare (ref0 | ref1 << 8 | comp0 << 16 | comp1 << 19 | logic << 22).
-    const uint test = g_tev.Load(record + 4u);
+    const uint test = tev.Load(record + 4u);
     const bool test0 = tev_alpha_compare((test >> 16u) & 7u, fragment.a, int(test & 0xFFu));
     const bool test1 = tev_alpha_compare((test >> 19u) & 7u, fragment.a, int((test >> 8u) & 0xFFu));
     const uint logic = (test >> 22u) & 3u;
     alpha_pass = logic == 0u ? test0 && test1 : logic == 1u ? test0 || test1 : logic == 2u ? test0 != test1 : test0 == test1;
     return float4(fragment) / 255.0f;
+}
+
+// Draw `draw`'s TEV output at triangle `tri`, barycentrics `b` (display-encoded RGBA, 0-1), and whether its alpha
+// passes the draw's alpha compare. A draw without a record (`count` records) is white and passes. `mode`: the
+// kTev* flags above. `cone`: the footprint its textures are filtered over (tev_sample; kTevNoCone: none).
+float4 tev_evaluate_cone(uint draw, uint count, uint tri, float2 b, uint mode, float cone, out bool alpha_pass)
+{
+    alpha_pass = true;
+    if (draw >= count) {
+        return float4(1.0f, 1.0f, 1.0f, 1.0f);
+    }
+    const uint record = draw * kTevRecordBytes;
+    const uint header = g_tev.Load(record);
+    // The hit's coordinates in both slots and its rasterised colours (channel material x its light).
+    const float3 w = float3(1.0f - b.x - b.y, b.x, b.y);
+    const uint a = tri * kTriUvStride;
+    const float4 uv0_01 = asfloat(g_tri_uv.Load4(a));
+    const float2 uv0_2 = asfloat(g_tri_uv.Load2(a + 16u));
+    const float4 uv1_01 = asfloat(g_tri_uv.Load4(a + 24u));
+    const float2 uv1_2 = asfloat(g_tri_uv.Load2(a + 40u));
+    const uint3 col0 = g_tri_uv.Load3(a + 48u);
+    const uint3 col1 = g_tri_uv.Load3(a + 60u);
+    TevPoint pt;
+    pt.uv[0] = uv0_01.xy * w.x + uv0_01.zw * w.y + uv0_2 * w.z;
+    pt.uv[1] = uv1_01.xy * w.x + uv1_01.zw * w.y + uv1_2 * w.z;
+    pt.edge1[0] = uv0_01.zw - uv0_01.xy;
+    pt.edge1[1] = uv1_01.zw - uv1_01.xy;
+    pt.edge2[0] = uv0_2 - uv0_01.xy;
+    pt.edge2[1] = uv1_2 - uv1_01.xy;
+    float4 v0[3] = {tev_rgba8f(col0.x), tev_rgba8f(col0.y), tev_rgba8f(col0.z)};
+    float4 v1[3] = {tev_rgba8f(col1.x), tev_rgba8f(col1.y), tev_rgba8f(col1.z)};
+    // Bits 5-6: the baked light of the vertices' colour removed per vertex and set to the program's neutral light
+    // (record + 108: the levels), as the vertex shaders do.
+    // Bits 16-17: a lit channel lit at its neutral light (the record's light word), its vertex colour its material.
+    const uint levels = g_tev.Load(record + 108u);
+    const bool baked = (mode & kTevBakedColours) != 0u;
+    [unroll] for (uint k = 0u; k < 3u; ++k) {
+        if ((header & 0x20u) != 0u && !baked) v0[k].rgb = tev_debake(v0[k].rgb) * (float(levels & 0xFFu) / 255.0f);
+        if ((header & 0x40u) != 0u && !baked) v1[k].rgb = tev_debake(v1[k].rgb) * (float((levels >> 8u) & 0xFFu) / 255.0f);
+    }
+    pt.vertex0 = v0[0] * w.x + v0[1] * w.y + v0[2] * w.z;
+    pt.vertex1 = v1[0] * w.x + v1[1] * w.y + v1[2] * w.z;
+    return tev_combine(g_tev, record, pt, mode, cone, g_up.w > 0.0f, alpha_pass);
 }
 
 // The texture coordinate the table's glowing region is tested at (tev_glows_at), in the region's 0-1 space.

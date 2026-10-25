@@ -98,6 +98,10 @@ bool parse_hash(const std::string& text, std::uint64_t& hash) {
         hash = kRtUntexturedHash;
         return true;
     }
+    if (lower(text) == "effect") {
+        hash = kRtEffectHash;
+        return true;
+    }
     for (const std::string& part : split(text, '_')) {
         const std::string token = lower(part);
         if (token.size() == 16u &&

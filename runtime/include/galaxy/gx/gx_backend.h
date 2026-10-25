@@ -828,9 +828,22 @@ private:
     std::unordered_map<std::uint32_t, bool> rt_fake_shadow_cache_;
     bool rt_fake_shadow_object(std::uint32_t object);
     std::uint16_t current_rt_material_ = 0u;  // the draw's material table entry (rt_materials.h)
-    // Its parts: the bound textures' entry, and the J3D material's (motion::kMarkerMaterial; 0: none) over it.
+    // Its parts: the bound textures' entry, the J3D material's (motion::kMarkerMaterial; 0: none) over it, and for an
+    // emitter's particles its effect's (motion::kMarkerEffect; 0: none) over the textures'.
     std::uint16_t texture_rt_material_ = 0u;
     std::uint16_t rt_material_identity_ = 0u;
+    std::uint16_t rt_effect_material_ = 0u;
+    // The traced draws' identity from frame to frame (RtDrawInfo.light_key): the last object, model shape, emitter or
+    // particle marker (a particle by its pool node and lifetime), the J3D material's after it, the draws since.
+    std::uint64_t rt_light_object_ = 0u;
+    std::uint32_t rt_light_material_ = 0u;
+    std::uint32_t rt_light_draws_ = 0u;
+    [[nodiscard]] std::uint32_t rt_light_key() noexcept;
+    void refresh_rt_material() noexcept {
+        current_rt_material_ = rt_material_identity_ != 0u ? rt_material_identity_
+                               : rt_effect_material_ != 0u ? rt_effect_material_
+                                                           : texture_rt_material_;
+    }
     unsigned current_rt_map_ = 0xFFu;  // its texture map (else the first bound one; 0xFF none)
     std::uint32_t rt_draw_buffer_ = 0xFFFFu;   // the last draw buffer marker's type (bit 16: translucent)
     bool rt_sky_buffer_ = false;  // the draws are the game's sky lists' (kRtDrawSky) until the next category marker

@@ -85,7 +85,8 @@ cbuffer RtLight : register(b0)
     uint4 g_tev_info;              // TEV records (g_tev) of the scene's draws, of the sky's draws (the sky probe)
     float4 g_up;                   // the player's up in eye space by the game's gravity (else the view's up); the de-light
                                    // maps' relief height in texels per log unit (w; 0: off)
-    uint4 g_probe;                 // GALAXY_RT_PROBE: the probed sample (x, y), on (z)
+    uint4 g_probe;                 // GALAXY_RT_PROBE: the probed sample (x, y), on (z); GALAXY_RT_LIGHT_METER: its disc
+                                   // (w: centre x, y in engine pixels, bits 0-11, 12-23; radius / 4, bits 24-31; 0 off)
     float4 g_light_fit;            // physical: the camera's exposure (x; 0: physical_exposure's own), the light
                                    // fitted to the baked light (y: 1)
     // The ray tracing engine (rt_engine.hlsl; ray_tracing.h RtEngineConstants).
@@ -955,7 +956,6 @@ cbuffer RtEmit : register(b0)
     uint e_factor;              // EFB pixels per sample side
     float e_authored_power;     // a Luma's light (the material table's intensity 1)
     float e_time;               // seconds (pulsing lights)
-    uint2 e_pad;
 };
 Texture2D<float4> e_color : register(t0);
 Texture2D<float> e_depth_tex : register(t1);
@@ -2388,33 +2388,176 @@ float3 linear_to_srgb(float3 c)
 // Physical glow light sources (emit root; kGlowPhysical draws): a table light the game draws as an additive glow (the
 // Observatory's star lights and walkway lamps, launch stars, fire) is an area light of its own triangles, as the scene's
 // emitters are: each triangle (e_triangles: this frame's eye space) into the emitters' glow segment (e_glow_out:
-// g_emit_tris) in world space, its radiance the table's colour (linear) times the table's radiance, its power 2 pi L A
-// times the share of its quad its texture lights (an additive sprite adds texel x alpha: a fire sprite's soft blob about
-// a quarter), so overlapping fire sprites do not flood what they light.
+// g_emit_tris) in world space.
+// Its radiance: for a `tint` light source (kGlowEmitterDrawn) what it draws, the draw's TEV output over the triangle
+// (glow_drawn), linear, as much of it as its blend adds to the picture (its source factor: an alpha-blended flame emits
+// its colour over the share of the pixel its alpha covers), times the table's radiance (at least 1: no less than it
+// shows); so a fire's light has the fire's colour as the game animates it (its particles' colours, their fading) and a
+// sprite the game draws faint sends little. Otherwise the table's colour (linear) times the table's radiance, over the
+// share of the quad its texture lights (an additive sprite adds texel x alpha: a fire sprite's soft blob about a
+// quarter), so overlapping fire sprites do not flood what they light.
 // What emits is what the game drew. A triangle with vertex normals (e_glow_normals: the glow geometry's surfaces) is
 // a surface that glows (the Observatory's star lamps' glowing bodies, their glow texture projected from their normals;
-// lamp glass): it emits from its outward face (the side its normals point to; one-sided, power pi L A) at the table's
-// radiance times the share of it its texture lights. A triangle without normals is a sprite standing for a glowing
-// volume (a flame): its light leaves evenly in every direction (sides 2, power 2 pi L A) from the triangle shrunk about
-// its centre to the share of it its texture lights, sampled as the sphere of that power about its centre (radius
-// sqrt(A / 2 pi); rt_engine.hlsl engine_light_point), so it reaches past the lamp's own cup below its orb. Lit as
-// one-sided panels facing the camera, the sprites' light would turn with the view and stop at their plane.
+// lamp glass): it emits from its outward face (the side its normals point to; one-sided, power pi L A) at its radiance
+// on average over it. A triangle without normals is a sprite standing for a glowing volume (a flame): its light leaves
+// evenly in every direction (sides 2, power 2 pi L A) from the triangle shrunk about its centre to the share of it that
+// glows at its brightest, sampled as the sphere of that power about its centre (radius sqrt(A / 2 pi); rt_engine.hlsl
+// engine_light_point), so it reaches past the lamp's own cup below its orb. Lit as one-sided panels facing the camera,
+// the sprites' light would turn with the view and stop at their plane.
 // The next frame's lighting samples them after the scene's emitters (they draw after this frame's trace).
 // e_draws: per glow emitter draw (32 bytes) its first glow triangle, count, first glow emitter, colour (RGBA8), radiance,
-// its texture's view in the descriptor heap (~0: none), 1 isotropic.
+// its texture's view in the descriptor heap (~0: none), flags (kGlowEmitter*), its TEV record's byte offset in e_draws
+// (RtTevMaterial, then its stages; ~0: none); after them the records.
 RWByteAddressBuffer e_glow_out : register(u3);
 // The glow triangles' surfaces (16 bytes each: three eye-space vertex normals, octahedral, 0 without; the draw's
 // flags), in e_added's slot (GlowEmitterCS reads no added light).
 StructuredBuffer<uint> e_glow_normals : register(t4);
+// The glow triangles' texture coordinates and colours (kTriUvStride each, as g_tri_uv: ray_tracing.hlsl GeometryCS),
+// written for the frames with a kGlowEmitterDrawn draw.
+ByteAddressBuffer e_glow_uv : register(t5);
+
+static const uint kGlowEmitterIsotropic = 1u;   // ray_tracing.cpp kGlowEmitter*: a sprite standing for a glowing volume
+static const uint kGlowEmitterDrawn = 2u;       // its light the colour it draws (the table's `tint`)
+static const uint kGlowEmitterBlendShift = 4u;  // bits 4-6: its source blend factor (GX BlendFactor)
+static const uint kGlowPoints = 16u;            // points a triangle's drawn colour is taken at (glow_drawn)
 
 groupshared float s_coverage[64];
+groupshared float4 s_drawn[64];   // per point: the light it adds (linear rgb), its luminance
+
+// What a glow draw adds to the picture at a point of a triangle: its TEV output `c` (display-encoded) in linear light,
+// times the share of it its source blend factor passes (GX BlendFactor: zero, one, source colour, its inverse, source
+// alpha, its inverse; the destination's alpha, which no glow reads, as one).
+float3 glow_added_light(float4 c, uint factor)
+{
+    const float3 linear_rgb = srgb_to_linear(c.rgb);
+    switch (factor) {
+    case 0u: return float3(0.0f, 0.0f, 0.0f);
+    case 2u: return linear_rgb * c.rgb;
+    case 3u: return linear_rgb * (1.0f - c.rgb);
+    case 4u: return linear_rgb * c.a;
+    case 5u: return linear_rgb * (1.0f - c.a);
+    default: return linear_rgb;
+    }
+}
+
+// Point `k` of kGlowPoints of glow triangle `tri` (a 4 x 4 stratified grid mapped onto the triangle, area-uniform) as
+// tev_combine takes it: its coordinates in both slots, their change along the triangle's edges, its vertex colours.
+TevPoint glow_point(uint tri, uint k)
+{
+    const float2 u = (float2(k & 3u, k >> 2u) + 0.5f) / 4.0f;
+    const float r = sqrt(u.x);
+    const float3 w = float3(1.0f - r, r * (1.0f - u.y), r * u.y);
+    const uint a = tri * kTriUvStride;
+    const float4 uv0_01 = asfloat(e_glow_uv.Load4(a));
+    const float2 uv0_2 = asfloat(e_glow_uv.Load2(a + 16u));
+    const float4 uv1_01 = asfloat(e_glow_uv.Load4(a + 24u));
+    const float2 uv1_2 = asfloat(e_glow_uv.Load2(a + 40u));
+    const uint3 col0 = e_glow_uv.Load3(a + 48u);
+    const uint3 col1 = e_glow_uv.Load3(a + 60u);
+    TevPoint pt;
+    pt.uv[0] = uv0_01.xy * w.x + uv0_01.zw * w.y + uv0_2 * w.z;
+    pt.uv[1] = uv1_01.xy * w.x + uv1_01.zw * w.y + uv1_2 * w.z;
+    pt.edge1[0] = uv0_01.zw - uv0_01.xy;
+    pt.edge1[1] = uv1_01.zw - uv1_01.xy;
+    pt.edge2[0] = uv0_2 - uv0_01.xy;
+    pt.edge2[1] = uv1_2 - uv1_01.xy;
+    pt.vertex0 = tev_rgba8f(col0.x) * w.x + tev_rgba8f(col0.y) * w.y + tev_rgba8f(col0.z) * w.z;
+    pt.vertex1 = tev_rgba8f(col1.x) * w.x + tev_rgba8f(col1.y) * w.y + tev_rgba8f(col1.z) * w.z;
+    return pt;
+}
+
+// One glow emitter: triangle `t` of the draw (its first glow triangle `first`, its first emitter slot `first_slot`) at
+// `radiance` (rgb, linear: on average over the triangle) into the glow segment. `coverage`: for a sprite (`isotropic`
+// without vertex normals), the share of the triangle that glows at the brightest it does (its radiance / coverage
+// there): the triangle is shrunk about its centre to it.
+void glow_emitter_store(uint first, uint first_slot, uint t, bool isotropic, float3 radiance, float coverage)
+{
+    const uint slot = first_slot + t;
+    if (slot >= kGlowEmitters) {
+        return;
+    }
+    float3 v0, v1, v2;
+    const uint tri = first + t;
+    const bool valid = emit_triangle(tri, v0, v1, v2);
+    const uint3 normals = uint3(e_glow_normals[tri * 4u], e_glow_normals[tri * 4u + 1u], e_glow_normals[tri * 4u + 2u]);
+    const bool surface = isotropic && all(normals != 0u);
+    float sides = isotropic ? 2.0f : 1.0f;
+    if (surface) {
+        // Outward: the face turned to the side its vertex normals point to.
+        const float3 outward = unpack_vertex_normal(normals.x) + unpack_vertex_normal(normals.y) +
+                               unpack_vertex_normal(normals.z);
+        if (dot(cross(v1 - v0, v2 - v0), outward) < 0.0f) {
+            const float3 swap = v1;
+            v1 = v2;
+            v2 = swap;
+        }
+        sides = 0.0f;
+    } else if (isotropic) {
+        const float c = max(coverage, 1e-4f);
+        radiance /= c;
+        const float3 centre = (v0 + v1 + v2) / 3.0f;
+        const float shrink = sqrt(c);
+        v0 = centre + (v0 - centre) * shrink;
+        v1 = centre + (v1 - centre) * shrink;
+        v2 = centre + (v2 - centre) * shrink;
+    }
+    const float3 w0 = transform(e_to_world, v0);
+    const float3 e1 = rotate3(e_to_world, v1 - v0);
+    const float3 e2 = rotate3(e_to_world, v2 - v0);
+    const float area = valid ? 0.5f * length(cross(e1, e2)) : 0.0f;
+    const float power = area > 1e-8f ? (sides == 0.0f ? kPi : 2.0f * kPi) * luminance(radiance) * area : 0.0f;
+    const uint at = (kGlowElements + 4u * slot) * 16u;
+    e_glow_out.Store4(at, asuint(float4(w0, area)));
+    e_glow_out.Store4(at + 16u, asuint(float4(e1, sides)));
+    e_glow_out.Store4(at + 32u, asuint(float4(e2, 0.0f)));
+    e_glow_out.Store4(at + 48u, asuint(float4(radiance, power)));
+    e_glow_out.Store4((kGlowPowers + slot) * 16u, asuint(float4(power, 0.0f, 0.0f, 0.0f)));
+}
 
 [numthreads(64, 1, 1)]
 void GlowEmitterCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
 {
     const uint record = group.x * 32u;
-    const uint4 draw = e_draws.Load4(record);
-    // The texture's mean of luminance x alpha over an 8 x 8 grid of its texels (particle textures often have no mips).
+    const uint4 draw = e_draws.Load4(record);   // first glow triangle, count, first emitter slot, colour
+    const float intensity = asfloat(e_draws.Load(record + 16u));
+    const uint flags = e_draws.Load(record + 24u);
+    const uint tev_record = e_draws.Load(record + 28u);
+    const bool isotropic = (flags & kGlowEmitterIsotropic) != 0u;
+    if ((flags & kGlowEmitterDrawn) != 0u && tev_record != 0xFFFFFFFFu) {
+        // Its drawn colour: kGlowPoints points of each triangle, four triangles at a time, each point's texture
+        // filtered over its share of the triangle (the footprint cone: half log2 of the share).
+        const uint factor = (flags >> kGlowEmitterBlendShift) & 7u;
+        const float cone = -0.5f * log2(2.0f * float(kGlowPoints));
+        const uint local = gi / kGlowPoints;
+        const uint k = gi % kGlowPoints;
+        [loop] for (uint base = 0u; base < draw.y; base += 64u / kGlowPoints) {
+            const uint t = base + local;
+            float3 added = float3(0.0f, 0.0f, 0.0f);
+            if (t < draw.y) {
+                bool pass;
+                const float4 c = tev_combine(e_draws, tev_record, glow_point(draw.x + t, k), 0u, cone, false, pass);
+                added = pass ? glow_added_light(saturate(c), factor) : float3(0.0f, 0.0f, 0.0f);
+            }
+            s_drawn[gi] = float4(added, luminance(added));
+            GroupMemoryBarrierWithGroupSync();
+            if (k == 0u && t < draw.y) {
+                float3 sum = float3(0.0f, 0.0f, 0.0f);
+                float peak = 0.0f;
+                [unroll] for (uint j = 0u; j < kGlowPoints; ++j) {
+                    const float4 p = s_drawn[gi + j];
+                    sum += p.rgb;
+                    peak = max(peak, p.a);
+                }
+                const float3 mean = sum / float(kGlowPoints);
+                const float coverage = peak > 0.0f ? luminance(mean) / peak : 1.0f;
+                glow_emitter_store(draw.x, draw.z, t, isotropic, mean * intensity, coverage);
+            }
+            GroupMemoryBarrierWithGroupSync();
+        }
+        return;
+    }
+    // The table's colour over the texture's mean of luminance x alpha over an 8 x 8 grid of its texels (particle
+    // textures often have no mips).
     const uint view = e_draws.Load(record + 20u);
     float own = 1.0f;
     if (view != 0xFFFFFFFFu) {
@@ -2434,50 +2577,11 @@ void GlowEmitterCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
         GroupMemoryBarrierWithGroupSync();
     }
     const float coverage = view != 0xFFFFFFFFu ? s_coverage[0] / 64.0f : 1.0f;
-    const bool isotropic = e_draws.Load(record + 24u) != 0u;
-    const float3 table_radiance = srgb_to_linear(rgb8(draw.w)) * asfloat(e_draws.Load(record + 16u));
+    const float3 table_radiance = srgb_to_linear(rgb8(draw.w)) * intensity;
     for (uint t = gi; t < draw.y; t += 64u) {
-        const uint slot = draw.z + t;
-        if (slot >= kGlowEmitters) {
-            break;
-        }
-        float3 v0, v1, v2;
-        const bool valid = emit_triangle(draw.x + t, v0, v1, v2);
-        const uint tri = draw.x + t;
-        const uint3 normals = uint3(e_glow_normals[tri * 4u], e_glow_normals[tri * 4u + 1u], e_glow_normals[tri * 4u + 2u]);
-        const bool surface = isotropic && all(normals != 0u);
-        float sides = isotropic ? 2.0f : 1.0f;
-        // A surface's radiance on average over it (its glow texture lights part of it: what is seen, GX output_flags
-        // bit 5); a sprite's whole radiance over its shrunk triangle (the same power).
-        float3 radiance = table_radiance * (surface || !isotropic ? coverage : 1.0f);
-        if (surface) {
-            // Outward: the face turned to the side its vertex normals point to.
-            const float3 outward = unpack_vertex_normal(normals.x) + unpack_vertex_normal(normals.y) +
-                                   unpack_vertex_normal(normals.z);
-            if (dot(cross(v1 - v0, v2 - v0), outward) < 0.0f) {
-                const float3 swap = v1;
-                v1 = v2;
-                v2 = swap;
-            }
-            sides = 0.0f;
-        } else if (isotropic) {
-            const float3 centre = (v0 + v1 + v2) / 3.0f;
-            const float shrink = sqrt(max(coverage, 1e-4f));
-            v0 = centre + (v0 - centre) * shrink;
-            v1 = centre + (v1 - centre) * shrink;
-            v2 = centre + (v2 - centre) * shrink;
-        }
-        const float3 w0 = transform(e_to_world, v0);
-        const float3 e1 = rotate3(e_to_world, v1 - v0);
-        const float3 e2 = rotate3(e_to_world, v2 - v0);
-        const float area = valid ? 0.5f * length(cross(e1, e2)) : 0.0f;
-        const float power = area > 1e-8f ? (sides == 0.0f ? kPi : 2.0f * kPi) * luminance(radiance) * area : 0.0f;
-        const uint at = (kGlowElements + 4u * slot) * 16u;
-        e_glow_out.Store4(at, asuint(float4(w0, area)));
-        e_glow_out.Store4(at + 16u, asuint(float4(e1, sides)));
-        e_glow_out.Store4(at + 32u, asuint(float4(e2, 0.0f)));
-        e_glow_out.Store4(at + 48u, asuint(float4(radiance, power)));
-        e_glow_out.Store4((kGlowPowers + slot) * 16u, asuint(float4(power, 0.0f, 0.0f, 0.0f)));
+        // A surface's or panel's radiance on average over it (its glow texture lights part of it: what is seen, GX
+        // output_flags bit 5); a sprite's whole radiance over its shrunk triangle (the same power).
+        glow_emitter_store(draw.x, draw.z, t, isotropic, table_radiance * coverage, coverage);
     }
 }
 #endif

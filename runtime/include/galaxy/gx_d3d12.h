@@ -175,6 +175,8 @@ struct GameLight {
     std::array<float, 3> position{};
     std::array<float, 3> color{};
     float half_distance = 0.0f;
+    // Its identity while it lights (the game's light info or requesting actor; else its slot in the store, bit 31).
+    std::uint32_t key = 0u;
 };
 // The lights noted within `max_age_ms` (not black), at most `out.size()`; returns the count.
 std::size_t game_point_lights(std::span<GameLight> out, std::uint64_t max_age_ms) noexcept;

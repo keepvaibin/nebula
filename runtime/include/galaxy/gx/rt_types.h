@@ -153,6 +153,10 @@ struct RtDrawInfo {
     std::array<std::uint32_t, 4> shading{};
     // Its material table entry (rt_materials.h; 0: none).
     std::uint16_t rt_material = 0;
+    // Its identity from frame to frame (the object, model shape, emitter or particle drawing it, its J3D material and
+    // its draws since them; GxBackend::rt_light_key), which keeps a light it emits the same light from one traced
+    // frame to the next (SceneRayTracer's light remap).
+    std::uint32_t light_key = 0;
     // Its material texture: high quality's reflections sample it where they hit the draw off screen; its map (0-7,
     // 0xFF: none).
     RtTextureSource texture{};
@@ -177,8 +181,8 @@ struct RtDrawInfo {
     RtTevMaterial tev{};
     std::array<RtTevStage, kRtTevMaxStages> tev_stages{};
     std::array<RtTextureSource, 8> tev_maps{};
-    // kRtDrawSky: how the raster blends it: blending (bit 0), the source and destination factors (GX BlendFactor,
-    // bits 1-3 and 4-6), subtract (bit 7), colour writes (bit 8), a logic op (bit 9).
+    // kRtDrawSky, kRtDrawGlow: how the raster blends it: blending (bit 0), the source and destination factors (GX
+    // BlendFactor, bits 1-3 and 4-6), subtract (bit 7), colour writes (bit 8), a logic op (bit 9).
     std::uint32_t blend = 0u;
 };
 

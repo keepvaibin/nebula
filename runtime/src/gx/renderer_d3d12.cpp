@@ -298,9 +298,11 @@ static void dump_device_removal(ID3D12Device* dev) {
                 std::cerr << "[DRED] node " << node_idx << " cmdlist " << name
                           << " executed " << last << "/" << n->BreadcrumbCount
                           << " ops; ops around stop:";
-                const UINT32 from = (last > 6u) ? last - 6u : 0u;
-                const UINT32 to = (last + 6u < n->BreadcrumbCount)
-                    ? last + 6u : n->BreadcrumbCount;
+                // A list stopped in flight: its whole history (its markers, op 0, count its passes).
+                const bool stopped = last < n->BreadcrumbCount && last != 0u;
+                const UINT32 from = stopped ? 0u : (last > 6u) ? last - 6u : 0u;
+                const UINT32 to = stopped ? n->BreadcrumbCount
+                    : (last + 6u < n->BreadcrumbCount) ? last + 6u : n->BreadcrumbCount;
                 for (UINT32 i = from; i < to; ++i) {
                     std::cerr << ' ' << static_cast<unsigned>(n->pCommandHistory[i])
                               << (i + 1u == last ? "<" : "");
@@ -1728,6 +1730,24 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
                     ComPtr<ID3D12Debug1> d1;
                     if (SUCCEEDED(d.As(&d1))) {
                         d1->SetEnableGPUBasedValidation(TRUE);
+                    }
+                }
+            }
+        }
+        // GALAXY_D3D_DRED=1: device-removed extended data (auto breadcrumbs, page faults) for dump_device_removal.
+        {
+            char dred_env[8]{};
+            std::size_t dred_len = 0;
+            if (getenv_s(&dred_len, dred_env, sizeof(dred_env), "GALAXY_D3D_DRED") == 0 && dred_len > 0 &&
+                dred_env[0] != '0') {
+                ComPtr<ID3D12DeviceRemovedExtendedDataSettings> dred;
+                if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&dred)))) {
+                    dred->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+                    dred->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+                    // The passes' markers (SceneRayTracer::dred_marker) as breadcrumb contexts.
+                    ComPtr<ID3D12DeviceRemovedExtendedDataSettings1> dred1;
+                    if (SUCCEEDED(dred.As(&dred1))) {
+                        dred1->SetBreadcrumbContextEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
                     }
                 }
             }

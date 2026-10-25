@@ -372,6 +372,30 @@ private:
     // The engine's views and constants for this trace (false: it does not run, the scene is not traced).
     bool engine_prepare(std::uint32_t width, std::uint32_t height, unsigned slot, RtEngineConstants& c,
                         std::uint32_t& flags);
+    // The light remap (rt_engine.hlsl engine_light_remap): this trace's lights by their draws' keys (the scene's
+    // emitting triangles, then the glow emitters from `scene`, the point lights' `points`) against the last traced
+    // frame's, uploaded; its view, or 0xFFFFFFFF. light_remap_commit keeps this trace's lights as the last (the
+    // engine ran), or forgets them (it did not: the next trace keeps no light's history).
+    struct LightGroup {
+        std::uint32_t key;
+        std::uint32_t first;   // its first light index (rt_lighting.hlsl emit_triangle_of)
+        std::uint32_t count;
+    };
+    std::uint32_t light_remap(Allocate allocate, void* allocate_context, std::uint32_t scene, std::uint32_t lights,
+                              const std::uint32_t* points, std::uint32_t point_count);
+    void light_remap_commit(bool ran);
+    std::vector<LightGroup> light_groups_;        // this trace's
+    std::vector<LightGroup> light_groups_last_;   // the last traced frame's (empty: none)
+    std::vector<std::uint32_t> light_points_;
+    std::vector<std::uint32_t> light_points_last_;
+    std::uint32_t light_remap_view_ = 0xFFFFFFFFu;
+    // GALAXY_RT_LIGHT_METER=x,y,r (fractions of the picture's width and height, r of its width): per traced frame the
+    // light on the ordinary surfaces in that disc ([rt-light-meter]).
+    bool light_meter_ = false;
+    std::array<float, 3> light_meter_disc_{};
+    // GALAXY_RT_LOG_INTERVAL: frames between the emitter logs (GALAXY_RT_LOG_EMITTERS; 120).
+    std::uint64_t emit_log_interval_ = 120u;
+    std::uint64_t light_remap_traces_ = 0u;
     // Records the engine's passes. The frame's constants (`constants`, `bytes`, the engine block at `engine_at`) are
     // re-uploaded per a-trous step, and `frame` is rebound after.
     void trace_engine(ID3D12GraphicsCommandList* list, Allocate allocate, void* allocate_context, const void* constants,
@@ -490,6 +514,10 @@ private:
         ID3D12Resource* resource = nullptr;
     };
     [[nodiscard]] std::uint32_t texture_view(const RtTextureSource& source);
+    static void dred_marker(ID3D12GraphicsCommandList* list, const wchar_t* name);
+    // The engine's views of the clear-surface pass follow the trace's (rt_engine.hlsl kEvWaterScene .. kEvClear;
+    // ray_tracing_engine.cpp asserts it against its views).
+    static constexpr std::uint32_t kEngineClearViews = 23u;
     // A raw (ByteAddressBuffer) view of `bytes` of `resource` from `offset` among this scene's views; ~0 when none is
     // free or the views are unusable.
     [[nodiscard]] std::uint32_t buffer_view(ID3D12Resource* resource, std::uint64_t offset, std::uint64_t bytes);
@@ -640,6 +668,9 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> glow_added_;
     Microsoft::WRL::ComPtr<ID3D12Resource> glow_positions_;
     Microsoft::WRL::ComPtr<ID3D12Resource> glow_surfaces_;
+    // Their texture coordinates and colours (kRtTriUvStride a triangle, as the scene's: GeometryCS), for the light of a
+    // glow emitter that emits what it draws (GlowEmitterCS).
+    Microsoft::WRL::ComPtr<ID3D12Resource> glow_uv_;
     Microsoft::WRL::ComPtr<ID3D12Resource> emit_tiles_;
     Microsoft::WRL::ComPtr<ID3D12Resource> emit_lights_;
     Microsoft::WRL::ComPtr<ID3D12Resource> emit_list_;
@@ -693,6 +724,7 @@ private:
     bool engine_points_ = true;     // GALAXY_RT_ENGINE_POINTS: the game's point lights and the star core
     bool engine_bounces_ = true;    // GALAXY_RT_ENGINE_BOUNCES: indirect hits take their cached light (every bounce)
     bool engine_anti_lag_ = true;   // GALAXY_RT_ENGINE_ANTILAG: the diffuse history's anti-lag
+    bool engine_light_history_ = true;   // GALAXY_RT_ENGINE_LIGHT_HISTORY=0: no temporal light reuse
     bool engine_clear_wanted_ = true;  // GALAXY_RT_ENGINE_CLEAR: the clear-surface pass
     std::uint32_t engine_clear_mode_ = 1u;  // GALAXY_RT_ENGINE_CLEAR: 0 off, 1 on, 2-9 diagnostics (rt_engine.hlsl)
     bool engine_fresh_ = true;      // new buffers: no history
@@ -779,15 +811,23 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> glow_emit_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> glow_emitter_pso_;
     // Physical: this scene's glow draws that are table light sources (GlowEmitterCS): first glow triangle, count, first
-    // glow emitter, colour (RGBA8), radiance (float bits), padding; the glow emitters it wrote, which the next frame's
-    // lighting samples after the scene's emitters.
+    // glow emitter, colour (RGBA8), radiance (float bits), its material texture's view, flags (kGlowEmitter*), its TEV
+    // record in glow_tev_records_ (0xFFFFFFFF: none); the glow emitters it wrote, which the next frame's lighting
+    // samples after the scene's emitters.
     std::vector<std::array<std::uint32_t, 8>> glow_emitters_;
+    std::vector<std::uint32_t> glow_emitter_keys_;   // glow_emitters_'s draws' light keys
+    std::vector<RtTevMaterial> glow_tev_records_;
+    std::vector<RtTevStage> glow_tev_stages_;
+    // The glow emitters the last GlowEmitterCS wrote, which this frame's lighting samples: per draw its light key, first
+    // glow emitter and count.
+    std::vector<std::array<std::uint32_t, 3>> glow_written_;
     std::uint32_t glow_emitter_slots_ = 0u;
     std::uint32_t glow_emit_count_ = 0u;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> emit_merge_pso_;
     D3D12_RESOURCE_STATES glow_base_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     D3D12_RESOURCE_STATES glow_added_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     D3D12_RESOURCE_STATES glow_positions_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    D3D12_RESOURCE_STATES glow_uv_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     D3D12_RESOURCE_STATES emit_tiles_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     D3D12_RESOURCE_STATES emit_list_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     std::vector<RtDraw> glow_draws_;
@@ -809,6 +849,7 @@ private:
     // Physical: the scene's emitting draws as area lights (EmitTriangleCS): first scene triangle, count, draw (bit 31:
     // two-sided), first emitter; the emitters (rt_lighting.hlsl g_emit_tris) and their passes.
     std::vector<std::array<std::uint32_t, 4>> emit_ranges_;
+    std::vector<std::uint32_t> emit_range_keys_;   // emit_ranges_'s draws' light keys (RtDrawInfo.light_key)
     // Per water draw its waves for the reflections (rt_reflections.hlsl g_water_waves, 48 bytes): the wave map's view,
     // then RtDrawInfo.wave_params past its flags' word; per water triangle its texture coordinates (water_uv_).
     std::vector<std::array<std::uint32_t, 12>> water_waves_;
@@ -856,7 +897,8 @@ private:
     static constexpr unsigned kBallReadbacks = 4u;
     // After the balls and the colour: the pixel probe's two records (GALAXY_RT_PROBE: rt_engine.hlsl EngineGBufferCS),
     // the engine reference's comparison (rt_engine.hlsl EngineFinalCS) and a spare.
-    static constexpr unsigned kProbeRecords = 4u;
+    // The probe's records (GALAXY_RT_PROBE: 0, 1, 3), the reference's comparison (2), the light meter's sums (4, 5).
+    static constexpr unsigned kProbeRecords = 6u;
     static constexpr unsigned kBallReadbackBytes = kStarSlots * 16u + 16u + kProbeRecords * 16u;
     // GALAXY_RT_PROBE=x,y (diagnostics): an EFB pixel whose sample reports, once a second, the draw the camera sees and
     // what stops the sun's centre ray from it (draw record, material table entry, distance, instance).

@@ -47,7 +47,28 @@ is not traced and shows the game's picture.
 - Glows: a table light source's own model (indexed positions) shows its radiance times the exposure; the game's
   sprites (halos, flares, fire cards) stay as the game drew them for the display, except a `recolour` light source's:
   shown in the table's colour at the sprite's peak (the Observatory's lamp orbs, tinted pale blue by the game, warm
-  white). Glow sprites a table names a light source are area lights from their drawn triangles (GlowEmitterCS).
+  white). Glow sprites a table names a light source are area lights from their drawn triangles (GlowEmitterCS); a
+  `tint` one emits what it draws: its TEV output over each triangle (16 points, textures filtered over each point's
+  share), linear, times what its source blend factor passes (an alpha-blended flame its colour over its alpha's
+  coverage), times the table's radiance, so a fire's light follows the game's colour keys and fading.
+- Effects: the game's particle effects by name. Each emitter's marker is followed by its effect's (motion::
+  kMarkerEffect: "Effect/<ParticleNames.bcsv name>", the resource's user index in Effect.arc), and a table row with
+  `effect` in the hash column names effects in its material column; its properties hold for the effect's particles over
+  their textures' (particle textures are shared: mr_glow00_ia by 130 effects, a meteor's impact and an apple's alike).
+  Incandescent effects (fires, fireballs, explosions, sparks, fireworks, the meteors; not their smoke, steam, heat
+  haze or dust) emit their drawn colour (`emitter+tint`), each group's brightest drawable colour at a large fire's
+  luminance: 1.38 x a white surface under a full light of 100,000 lx (a hydrocarbon fireball's peak surface emissive
+  power, 450 kW/m2, at emissivity 1: 1678 K; Planck x CIE 1931). That colour comes from the effect archive (the
+  port's tools/fire_rows.py): JPA's TEV stage 0 (JPABaseShape::st_ca, over prm and env and their colour keys) with a
+  texel of 1 bounds what a particle can draw; the row's intensity is 1.38 over its luminance. A meteor's impact is a
+  hypervelocity impact flash, not a fire: measured on the Moon at 1,300-5,800 K (NELIOTA's two-band flashes, 85 %
+  2,000-4,500 K) and at 2,500-5,000 K in the laboratory; its group is taken at the measured range's cool end, 1,850 K
+  (5.36 x full light), which lights the ground under it to about twice the full light at the flash without washing it
+  out ([rt-light-meter] below). The burning rock itself (MeteorStrike/rock, a meteoroid melting in flight) is at the
+  same 1,850 K at its brightest drawn point (0.815 at intensity 1): 6.58; mostly dark crust with glowing cracks, it
+  sends little until it lands. The meteors: trail 1.49 (Meteorite02's yellow at birth), impact 5.62
+  (MeteoriteBreak00's white-yellow debris). The fire textures' own rows emit their drawn colour at 1: smoke drawn with
+  them (black smoke, extinguished fire) sends its own dark colour, a blue fire blue.
 - Metals: where the game maps an environment onto a metal, its specular colour is what the material passes of that
   environment (TEV with the map white less TEV with it black), weighted by how much of its look the map carries; in
   the hue of its own colour where that is a coloured metal's (saturated: gold, copper), neutral for a grey metal's
@@ -114,8 +135,8 @@ slot, rewritten each frame: no root-signature limits).
 |---|---|---|---|
 | E1 | GBufferCS | full | normal (oct16x2), face normal, albedo (linear, de-lit: EFB colour x exp(-painted shading), the painted reflection out by its luminance share (its tint kept), past 1 scaled by its brightest channel: hue kept), roughness, metallic, class, emission (only inside the table's glowing region of an atlas), eye z, draw id |
 | E1b | LightGridCS | 24^3 cells of 256 units about the camera, 64 slots each | grid-based light reservoirs (ReGIR: Boksansky, Jukarainen and Wyman, Ray Tracing Gems II, 2021): each slot resamples 8 lights drawn by power by their light at the cell (power over the squared distance from its centre, the cell's half diagonal added); a surface in a cell draws its light candidates from its slots, each weighed by its slot's resampling weight (chained RIS), outside the grid by power. Drawn by power alone, the scene's biggest lights (the star core, a lava sea) took the candidates wherever a surface was, and a lamp, laser or fireball beside it went unfound |
-| E2 | DirectInitialCS | full | the sun's disc (one direction: interleaved gradient noise across pixels, the R2 sequence across frames; a shadow ray; kept as the penumbra its blocker makes, 0.5 d tan(radius), and the water its light crosses); ReSTIR DI: 8 (16 high) light candidates (emissive triangles and the game's point lights, from the surface's light grid cell, E1b), temporal reuse (reprojected, M cap 20 x candidates, depth / normal checks); the reservoir keeps the light's area (its near-field bound on reuse) |
-| E3 | DirectSpatialCS | full | 4 spatial neighbours (30 px, normal > 0.9, depth 10%), final shadow ray, diffuse irradiance and specular (GGX) of the kept light; visibility reuse (occluded: W 0, M kept); reservoir stored in world space |
+| E2 | DirectInitialCS | full | the sun's disc (one direction: interleaved gradient noise across pixels, the R2 sequence across frames; a shadow ray; kept as the penumbra its blocker makes, 0.5 d tan(radius), and the water its light crosses); ReSTIR DI: 8 (16 high) light candidates (emissive triangles and the game's point lights, from the surface's light grid cell, E1b), temporal reuse (reprojected, M cap 20 x candidates, depth / normal checks) through the light remap (below): a reservoir keeps its light and the point on it, and its sample is rebuilt from the light as this frame has it |
+| E3 | DirectSpatialCS | full | 4 spatial neighbours (30 px, normal > 0.9, depth 10%), final shadow ray, diffuse irradiance and specular (GGX) of the kept light; visibility reuse (occluded: W 0, M kept); reservoir stored as its light, the point on it (a triangle's barycentrics, a sphere's world direction), W and M: 16 bytes |
 | E3b | ShadowBlurCS, ShadowPostCS, ShadowStabilizeCS | full | the sun's visibility (after NVIDIA's SIGMA): two blurs, each a dense 5 x 5 estimating the penumbra about the pixel (occluded neighbours', the smaller preferred) and 12 taps on a disc of its radius on screen (at most 32 px, narrowed on slanted surfaces, turned per frame), on the pixel's plane, a smaller penumbra than the estimate counting less; then a history of at most 7 frames (weight at most 5/6) clamped to the 5 x 5 neighbourhood's mean +- its deviation (x 1 to 3 as the history grows), shortened by how far the clamp moved it. Contact shadows stay sharp, far blockers' soft; a moving caster leaves no trail |
 | E4 | IndirectCS | half (one pixel per 2x2, rotating) | cosine ray; hit: emission + albedo x (sun with a shadow ray + one emitter by RIS with a shadow ray + sky SH), or, where the picture showed the hit when its slot last ran, its whole diffuse light then (a radiance cache: every bounce after the first; GALAXY_RT_ENGINE_BOUNCES); miss: sky radiance. ReSTIR GI temporal + spatial reuse (sample point, normal, radiance; Jacobian for the spatial, neighbours past tenfold rejected). The temporal reservoirs are the history; the spatial ones live one frame (fed back, their biased gain compounded into white blobs: Beach Bowl, the Garden doorway, b40-b75) |
 | E5 | SpecularCS | full | GGX VNDF ray, hit shaded as E4 (emission, sun, lights by RIS, sky ray) |
@@ -151,6 +172,24 @@ late: the restart closed the water window untraced).
 - RIS target: luminance of unshadowed BRDF x Le x G. Candidate pdf: in a light grid cell 1 / (the slot's weight x area),
   outside the grid power / total x 1 / area. The sun is apart (E3b).
 - Temporal reservoir combination: biased 1/M with geometry checks (RTXDI default); visibility reuse keeps M.
+- Light identity (RTXDI's light index mapping, RAB_TranslateLightIndex): every traced draw carries a key from the game's
+  markers (the object, model shape, emitter or particle drawing it, a particle by its pool node and lifetime; its J3D
+  material; its draws since), the point lights theirs (the game's light info). Per trace the lights are grouped by draw
+  key (the scene's emitting draws, the glow emitters the last frame wrote, the point lights), and the last traced
+  frame's groups map onto this trace's index for index (kEvLightRemap; a key two draws share maps nothing). Temporal
+  reuse reads a reservoir's light through it: a light that moved carries its samples along, one no longer drawn ends
+  its history. Kept as a point and a radiance, a sample lit where a light had been (a meteor's flash on the ground for
+  a second after it was gone, at 5 % less a frame) and trailed a moving light. GALAXY_RT_LOG_EMITTERS: [rt-remap].
+- Light change (A-SVGF's temporal gradients, Schied, Peters and Dachsbacher 2018, on RTXDI's reservoirs, as its
+  confidence pass does): each pixel shades the last frame's kept light sample again as this frame has its light (the
+  same light point and weight: no sampling noise in the difference; gone: 0) against the shade the reservoir kept, and
+  flags its own kept sample when its light is new (engine_light_existed: the remap's other way). Over a 5 x 5
+  neighbourhood the mean of the relative change and of the new flags (the new lights' share of the light) is the light
+  change; the diffuse and specular histories weigh this frame (1 - change) / length + change, and ReSTIR GI's temporal
+  reservoir keeps (1 - change) of its weight (Remix's validateLightingChange drops such samples). The diffuse
+  history's own anti-lag compares a fast and a slow history against their variance, which a flash inflates: after a
+  meteor's impact the picture held 0.36 of the full light on the ground 150 frames after the light had gone to 0.01,
+  and showed 0.7 of a 1.9 onset; with the light change, 1.79 of 1.91 and the bounce's own 0.07 two seconds later.
 - ReSTIR GI: sample = (hit position, hit normal, outgoing radiance); spatial reuse with the solid-angle Jacobian and
   a shadow ray for the reused sample.
 - Denoiser: SVGF (Schied 2017) with ReLAX's history clamping for specular and ReBLUR's fast-history anti-lag for
@@ -158,6 +197,12 @@ late: the restart closed the water window untraced).
   history (32 frames unclamped) and its a-trous it took half a second to form and to leave, and blurred to blobs.
 - Russian roulette / clamps: none on the primary estimators; firefly rejection on the history input (a sample past
   twice its 8 neighbours' brightest lowered to that).
+- Diagnostics: GALAXY_RT_ENGINE_VIEW=14 shows the light sources' direct light alone (no sun, no bounce);
+  GALAXY_RT_LIGHT_METER=x,y,r (fractions of the picture) logs per traced frame the means over that disc's surfaces of
+  the light sources' direct light, the whole diffuse light as the picture takes it, the sun's, the bounce's and the
+  filtered light less the sun ([rt-light-meter], the stage's light units); GALAXY_RT_LOG_INTERVAL sets the emitter logs'
+  spacing (120 frames); GALAXY_D3D_DRED=1 records device-removed breadcrumbs, page faults and each ray tracing pass's
+  marker (printed in order as [dred] marker n name, so a stopped list's markers name its passes).
 - Visible surface: the camera ray's triangle within the raster's depth; else the candidate nearest that depth (the
   raster drew a surface there): an alpha-tested light source a few units off was no draw at all.
 

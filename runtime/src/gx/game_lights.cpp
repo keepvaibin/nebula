@@ -77,7 +77,7 @@ void note_light(std::array<NotedLight, N>& lights, const std::array<float, 3>& p
     if (!found || now - slot->seen > kLightGap) {
         slot->first = now;
     }
-    slot->light = {position, color, half_distance};
+    slot->light = {position, color, half_distance, 0u};
     slot->id = id;
     slot->seen = now;
     slot->used = true;
@@ -97,6 +97,7 @@ std::size_t active_lights(const std::array<NotedLight, N>& lights, std::span<Gam
             const float fade = std::clamp((limit - age) / kLightFadeOut, 0.0f, 1.0f);
             GameLight& light = out[count++];
             light = entry.light;
+            light.key = entry.id != 0u ? entry.id : 0x80000000u | static_cast<std::uint32_t>(&entry - lights.data());
             for (float& v : light.color) {
                 v *= in * fade;
             }

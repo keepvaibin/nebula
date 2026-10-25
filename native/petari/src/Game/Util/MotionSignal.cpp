@@ -16,7 +16,11 @@
 #include "JSystem/JUtility/JUTNameTab.hpp"
 #include "JSystem/J3DGraphBase/J3DPacket.hpp"
 #include "JSystem/JParticle/JPAEmitter.hpp"
+#include "JSystem/JParticle/JPAEmitterManager.hpp"
 #include "JSystem/JParticle/JPAParticle.hpp"
+#include "JSystem/JParticle/JPAResource.hpp"
+#include "Game/Effect/ParticleResourceHolder.hpp"
+#include "Game/Util/SystemUtil.hpp"
 #include <nebula_game_api.h>
 #include <nw4r/lyt/pane.h>
 #include <revolution/os.h>
@@ -36,6 +40,7 @@ namespace {
         Kind_LayoutActor = 10,
         Kind_StarPointer = 11,
         Kind_Material = 12,
+        Kind_Effect = 13,
     };
 
     enum {
@@ -104,6 +109,34 @@ namespace {
         const u32 key = static_cast< u32 >(reinterpret_cast< uintptr_t >(pData) >> 4);
         return (key * 2654435761u) & (cModelNames - 1);
     }
+
+    // The particle effects' identities ("Effect/<ParticleNames.bcsv name>", hashed as the material table hashes its
+    // `material` names), by the resource's user index; 0: not yet named.
+    const u32 cEffectNames = 4096;
+    u32 sEffectNames[cEffectNames];
+
+    // An emitter's effect identity: its resource's name in the game's particle archive (Effect.arc), whose
+    // resource manager the emitter draws from; 0 for another archive's resources or an unknown index.
+    u32 effectIdentity(const JPAResource* pResource, const JPABaseEmitter* pEmitter) {
+        const u16 index = pResource->getUsrIdx();
+        if (index >= cEffectNames) {
+            return 0;
+        }
+        const ParticleResourceHolder* pHolder = MR::getParticleResourceHolder();
+        if (pHolder == nullptr || pEmitter->mpEmtrMgr == nullptr ||
+            pEmitter->mpEmtrMgr->getResourceManager(pEmitter->getResourceManagerID()) != pHolder->mResourceMgr) {
+            return 0;
+        }
+        if (sEffectNames[index] == 0) {
+            const char* pName = pHolder->getParticleName(index);
+            if (pName == nullptr) {
+                return 0;
+            }
+            const u32 hash = hashName(hashName(hashName(2166136261u, "Effect", false), "/", false), pName, false);
+            sEffectNames[index] = hash != 0 ? hash : 1;
+        }
+        return sEffectNames[index];
+    }
 };  // namespace
 
 namespace MotionSignal {
@@ -166,6 +199,8 @@ namespace MotionSignal {
     void drawEmitterImpl(const JPAResource* pResource, const JPABaseEmitter* pEmitter, bool child) {
         __NebulaGXHostMarker(Kind_Emitter, static_cast< u16 >(auxEpoch(pEmitter->mMotionEpoch) | (child ? 1 : 0)), id(pEmitter),
                              id(pResource));
+        // The effect its particles belong to, for the material table's effect rows (a fire's light, by its name).
+        __NebulaGXHostMarker(Kind_Effect, 0, effectIdentity(pResource, pEmitter), 0);
     }
 
     // Particles come from a pool: the particle, its pass and its lifetime name it, and its age must continue from the

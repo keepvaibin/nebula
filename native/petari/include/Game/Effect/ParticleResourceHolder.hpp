@@ -24,6 +24,10 @@ public:
     bool isExistInResource(const char* pName, u16* pIndex) const;
     JMapInfo* getAutoEffectListBinary() const;
     int getAutoEffectNum(const char* pGroupName) const;
+#ifdef TARGET_PC
+    // Nebula: a resource's name in ParticleNames.bcsv by its user index (JPAResource::getUsrIdx; null: none).
+    const char* getParticleName(u16 index) const;
+#endif
 
     /* 0x0000 */ JPAResourceManager* mResourceMgr;
     /* 0x0004 */ JMapInfo* mAutoEffectList;

@@ -16,6 +16,17 @@ ParticleResourceHolder::ParticleResourceHolder(const char* pArchiveName)
     countAutoEffectNum();
 }
 
+#ifdef TARGET_PC
+const char* ParticleResourceHolder::getParticleName(u16 index) const {
+    const char* pName = nullptr;
+    if (mParticleNames == nullptr || index >= mParticleNames->getNumEntries() ||
+        !mParticleNames->getValue(index, "name", &pName)) {
+        return nullptr;
+    }
+    return pName;
+}
+#endif
+
 u16 ParticleResourceHolder::getUserIndex(const char* pName) const {
     const JMapInfo* pInfo = mParticleNames;
     int middle;

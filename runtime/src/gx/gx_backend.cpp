@@ -4279,8 +4279,25 @@ std::uint64_t GxBackend::record_identity() noexcept {
     return key != 0u ? key : 1u;
 }
 
+std::uint32_t GxBackend::rt_light_key() noexcept {
+    const std::uint64_t key = mix64(mix64(rt_light_object_, rt_light_material_), rt_light_draws_++);
+    const auto folded = static_cast<std::uint32_t>(key ^ (key >> 32u));
+    return folded != 0u ? folded : 1u;
+}
+
 void GxBackend::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a,
                                std::uint32_t b) {
+    // The traced draws' identity (rt_light_key): an object, a model's shape, an emitter (its object, then its resource
+    // or shape) or a particle (its pool node, its lifetime: the next particle in the node is another) starts it over.
+    if (kind == motion::kMarkerNameObj || kind == motion::kMarkerShapePacket || kind == motion::kMarkerEmitter ||
+        kind == motion::kMarkerParticle) {
+        rt_light_object_ = mix64(mix64(kind, a), kind == motion::kMarkerParticle ? (b & 0xFFFFu) : b);
+        rt_light_material_ = 0u;
+        rt_light_draws_ = 0u;
+    } else if (kind == motion::kMarkerMaterial) {
+        rt_light_material_ = a;
+        rt_light_draws_ = 0u;
+    }
     if (kind < identity_markers_by_kind_.size()) {
         if (identity_markers_by_kind_[kind]++ == 0u && rt_log_glows()) [[unlikely]] {
             std::fprintf(stderr, "[rt-identity] first marker of kind %u\n", static_cast<unsigned>(kind));
@@ -4297,10 +4314,29 @@ void GxBackend::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32
                              static_cast<unsigned>(rt_material_identity_));
             }
         }
-        current_rt_material_ = rt_material_identity_ != 0u ? rt_material_identity_ : texture_rt_material_;
+        refresh_rt_material();
+        return;
+    }
+    // The effect an emitter's particles belong to (its marker follows the emitter's): its table row, where it has one,
+    // over their textures' (a fire's light by its name, whatever its sprites' textures).
+    if (kind == motion::kMarkerEffect) {
+        rt_effect_material_ = rt_material_by_identity(a);
+        if (rt_log_glows()) [[unlikely]] {
+            static std::unordered_set<std::uint32_t> logged;
+            if (a != 0u && logged.size() < 4096u && logged.insert(a).second) {
+                std::fprintf(stderr, "[rt-effect] seen %08X -> material %u\n", a,
+                             static_cast<unsigned>(rt_effect_material_));
+            }
+        }
+        refresh_rt_material();
         return;
     }
     if (kind >= motion::kMarkerCategory) {
+        // A draw list or phase begins: no emitter's particles until the next emitter.
+        if (rt_effect_material_ != 0u) {
+            rt_effect_material_ = 0u;
+            refresh_rt_material();
+        }
         on_motion_marker(kind, aux, a, b);
         return;
     }
@@ -4309,7 +4345,13 @@ void GxBackend::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32
     if (kind != motion::kMarkerShapePacket && rt_material_identity_ != 0u) {
         // A NameObj's own draws, emitters and particles: no J3D material.
         rt_material_identity_ = 0u;
-        current_rt_material_ = texture_rt_material_;
+        refresh_rt_material();
+    }
+    // A particle keeps its emitter's effect; anything else (a new emitter, before its effect marker; an object; a
+    // model's shape) ends it.
+    if (kind != motion::kMarkerParticle && rt_effect_material_ != 0u) {
+        rt_effect_material_ = 0u;
+        refresh_rt_material();
     }
     if (kind == motion::kMarkerNameObj) {
         rt_object_ = a;
@@ -5856,6 +5898,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         }
     }
     info.rt_material = current_rt_material_;
+    info.light_key = rt_light_key();
     // (An untextured draw's map register holds an earlier draw's texture: not logged.)
     if (current_rt_material_ == 0u && !glow && current_texture_map_mask_ != 0u && rt_log_glows()) {
         const unsigned map = ps_key_.stages[0].order & 7u;
@@ -5906,6 +5949,11 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
             info.surface = kRtDrawGlow | kRtDrawLens;
         } else if (glow) {
             info.surface = kRtDrawGlow;
+            // How much of its colour the picture takes (a glow light source emits that; RtDrawInfo.blend).
+            const BlendMode blend = state_.blend_mode();
+            info.blend = (blend.blend_enable ? 1u : 0u) | (static_cast<std::uint32_t>(blend.src_factor) << 1u) |
+                         (static_cast<std::uint32_t>(blend.dst_factor) << 4u) | (blend.subtract ? 0x80u : 0u) |
+                         (blend.color_update ? 0x100u : 0u) | (blend.logic_op_enable ? 0x200u : 0u);
         } else if (water) {
             const RtMaterial* const fall = rt_material(current_rt_material_);
             const RtSurfaceClass water_class = metal_coat ? RtSurfaceClass::Metal : surface.surface_class;
@@ -10851,7 +10899,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
                 }
                 texture_rt_material_ =
                     rt_material_of(texture_map_mask, frame_binding_it->second.texture_handles, current_rt_map_);
-                current_rt_material_ = rt_material_identity_ != 0u ? rt_material_identity_ : texture_rt_material_;
+                refresh_rt_material();
                 binding_cache_hit = true;
                 ++frame_texture_binding_cache_hits_;
             }
@@ -10971,7 +11019,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
                     cached_tables);
                 current_texture_handles_ = texture_handles;
                 texture_rt_material_ = rt_material_of(texture_map_mask, texture_handles, current_rt_map_);
-                current_rt_material_ = rt_material_identity_ != 0u ? rt_material_identity_ : texture_rt_material_;
+                refresh_rt_material();
             }
         }
         current_texture_map_mask_ = texture_map_mask;
