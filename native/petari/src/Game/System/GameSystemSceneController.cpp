@@ -1,6 +1,7 @@
 #include "Game/System/GameSystemSceneController.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/NameObj/NameObjHolder.hpp"
+#include "Game/Scene/GameScene.hpp"
 #include "Game/Scene/IntermissionScene.hpp"
 #include "Game/Scene/PlayTimerScene.hpp"
 #include "Game/Scene/ScenarioSelectScene.hpp"
@@ -260,6 +261,15 @@ void GameSystemSceneController::drawScene() {
         mScenarioSelectScene->draw();
     }
 }
+
+#ifdef TARGET_PC
+void GameSystemSceneController::drawSceneOverlay() {
+    Scene* pScene = getCurrentSceneForExecute();
+    if (pScene != nullptr && MR::isEqualSceneName("Game")) {
+        static_cast< GameScene* >(pScene)->drawOverlay();
+    }
+}
+#endif
 
 NameObjListExecutor* GameSystemSceneController::getNameObjListExecutor() const {
     return mScene->mListExecutor;

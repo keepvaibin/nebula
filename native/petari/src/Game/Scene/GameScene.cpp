@@ -242,10 +242,9 @@ void GameScene::update() {
         sBoardRequested = false;
         setNerve(GET_NERVE(GameScene, GameSceneNebulaBoard));
     }
-    // Nebula's achievement pop-up runs in play only: the pause menu, the map, a star's get sequence and movies hold it
-    // where it is.
-    if (isNerve(GET_NERVE(GameScene, GameSceneAction)) && MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder) &&
-        MR::getGameSceneLayoutHolder()->mAchievementToast != nullptr) {
+    // Nebula's achievement pop-up shows as soon as one is earned, in play, cutscenes, menus and a star's get sequence
+    // alike (the settings menu and the HOME Menu hold the whole scene, the pop-up with it).
+    if (MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder) && MR::getGameSceneLayoutHolder()->mAchievementToast != nullptr) {
         MR::getGameSceneLayoutHolder()->mAchievementToast->update();
     }
 #endif
@@ -655,18 +654,21 @@ void GameScene::draw2D() const {
     CategoryList::drawXlu(MR::DrawBufferType_0x26);
     CategoryList::execute(MR::DrawType_WipeLayout);
 #ifdef TARGET_PC
-    // Nebula's achievement pop-up over every other 2D element (the HUD's counters and their models included), in play;
-    // its board over everything while it is open.
-    if (isNerve(GET_NERVE(GameScene, GameSceneAction)) && MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder) &&
-        MR::getGameSceneLayoutHolder()->mAchievementToast != nullptr) {
-        MR::getGameSceneLayoutHolder()->mAchievementToast->drawOnTop();
-    }
+    // Nebula's achievement board over everything while it is open (its pop-up: drawOverlay).
     if (isNerve(GET_NERVE(GameScene, GameSceneNebulaBoard))) {
         MR::getGameSceneLayoutHolder()->mAchievementBoard->drawOnTop();
     }
     MotionSignal::scene2D(false);
 #endif
 }
+
+#ifdef TARGET_PC
+void GameScene::drawOverlay() const {
+    if (MR::isExistSceneObj(SceneObj_GameSceneLayoutHolder) && MR::getGameSceneLayoutHolder()->mAchievementToast != nullptr) {
+        MR::getGameSceneLayoutHolder()->mAchievementToast->drawOnTop();
+    }
+}
+#endif
 
 bool GameScene::isValidScenarioOpeningCamera() const {
     return MR::hasStartAnimCamera() != false;
@@ -789,6 +791,11 @@ bool GameScene::isDrawMirror() const {
 
 void GameScene::stageClear() {
     if (MR::isFirstStep(this)) {
+#ifdef TARGET_PC
+        // The star just collected (PowerStar sent it with the get sequence's request) unlocks what it completes now,
+        // while its get sequence plays, not when the hub records it.
+        NebulaAchievements::evaluate();
+#endif
         if (isNerve(GET_NERVE(GameScene, GameScenePowerStarGet))) {
             mStageClearSeq->startPowerStarGetDemo();
         } else if (isNerve(GET_NERVE(GameScene, GameSceneGrandStarGet))) {

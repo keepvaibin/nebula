@@ -59,6 +59,9 @@ public:
 #ifdef TARGET_PC
     // Nebula's achievement board (the Observatory's Achievement Luma): the world held while it is open.
     void requestShowNebulaBoard();
+    // Over everything the game draws, the system's wipes included (GameSystem::draw, under the settings menu): Nebula's
+    // achievement pop-up.
+    void drawOverlay() const;
 #endif
     void requestStaffRoll();
     bool isDrawMirror() const;

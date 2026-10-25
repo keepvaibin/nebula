@@ -252,10 +252,9 @@ void NebulaAchievementToast::control() {
 
     switch (mStep) {
     case StepIdle: {
-        // Into play only (GameScene runs it in play): no cutscene, the scene's wipe open and still, no system wipe.
-        const bool free = !MR::isDemoActive() && !MR::isWipeActive() && MR::isWipeOpen() && !MR::isSystemWipeActive();
+        // At once, whatever the scene is doing: over cutscenes and their bars, menus and wipes.
         const NebulaAchievementIcon* pIcon = nullptr;
-        const wchar_t* pName = free ? NebulaAchievements::getWaiting(&pIcon) : nullptr;
+        const wchar_t* pName = NebulaAchievements::getWaiting(&pIcon);
         if (pName != nullptr) {
             start(pName, pIcon);
         }

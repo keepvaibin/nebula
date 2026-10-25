@@ -58,6 +58,10 @@ public:
     void updateSceneDuringResetProcessing();
     void calcAnimScene();
     void drawScene();
+#ifdef TARGET_PC
+    // The game scene's overlay (GameScene::drawOverlay), after the system's wipes.
+    void drawSceneOverlay();
+#endif
     NameObjListExecutor* getNameObjListExecutor() const;
     SceneObjHolder* getSceneObjHolder() const;
     bool isExistSceneObjHolder() const;

@@ -245,6 +245,7 @@ void GameSystem::draw() {
 
     mErrorWatcher->draw();
 #ifdef TARGET_PC
+    mSceneController->drawSceneOverlay();
     if (isSettingsShown) {
         NebulaSettingsMenu::draw();
         mObjHolder->drawStarPointer();

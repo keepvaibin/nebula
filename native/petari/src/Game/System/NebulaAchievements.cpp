@@ -5,6 +5,7 @@
 #include "Game/System/GalaxyStatusAccessor.hpp"
 #include "Game/System/GameDataFunction.hpp"
 #include "Game/System/GameDataHolder.hpp"
+#include "Game/System/GameSequenceFunction.hpp"
 #include "Game/System/NebulaText.hpp"
 #include "Game/Util/JMapInfo.hpp"
 #include "Game/Util/SceneUtil.hpp"
@@ -124,6 +125,46 @@ namespace {
     s32 sPlayFrames = 0;
     const s32 cStatFlushFrames = 60;
     s32 sStatFlushFrames = 0;
+
+    // The star collected in this galaxy (sent with its get sequence) while the save does not hold it yet: the hub's
+    // result sequence records it (GameSequenceFunction::updateGameDataAndSequenceAfterStageResultSequence), after the
+    // scene that follows it has started. Unlocks count it as owned from its get sequence on.
+    const char* sPendingGalaxy = nullptr;
+    s32 sPendingStar = 0;
+    s32 sEvaluatedStars = -1;  // the star total evaluate() last saw (pending included)
+
+    void readPendingStar() {
+        sPendingGalaxy = nullptr;
+        sPendingStar = 0;
+        if (!GameSequenceFunction::hasStageResultSequence()) {
+            return;
+        }
+        const char* pGalaxy = GameSequenceFunction::getClearedStageName();
+        const s32 star = GameSequenceFunction::getClearedPowerStarId();
+        if (pGalaxy != nullptr && pGalaxy[0] != 0 && star > 0 && !GameDataFunction::hasPowerStar(pGalaxy, star)) {
+            sPendingGalaxy = pGalaxy;
+            sPendingStar = star;
+        }
+    }
+
+    bool hasStar(const char* pGalaxy, s32 star) {
+        return GameDataFunction::hasPowerStar(pGalaxy, star) ||
+               (sPendingGalaxy != nullptr && sPendingStar == star && MR::isEqualString(sPendingGalaxy, pGalaxy));
+    }
+
+    // Grand Star n: its event flag (SpecialStarGrand1-7), which the save derives from its galaxy's first star.
+    bool hasGrandStar(s32 n) {
+        static const char* const cGrandStarGalaxies[] = {"HeavensDoorGalaxy",    "TriLegLv1Galaxy",      "KoopaBattleVs1Galaxy",
+                                                         "KoopaJrShipLv1Galaxy", "KoopaBattleVs2Galaxy", "FloaterOtaKingGalaxy",
+                                                         "KoopaBattleVs3Galaxy"};
+        char flag[24];
+        snprintf(flag, sizeof(flag), "SpecialStarGrand%d", n);
+        return GameDataFunction::isOnGameEventFlag(flag) || hasStar(cGrandStarGalaxies[n - 1], 1);
+    }
+
+    s32 countStars() {
+        return MR::getPowerStarNum() + (sPendingGalaxy != nullptr ? 1 : 0);
+    }
 
     const Entry* findEntry(const char* pId) {
         for (s32 i = 0; i < cEntryNum; i++) {
@@ -271,8 +312,7 @@ namespace {
     }
 
     s32 countTrials() {
-        return (GameDataFunction::hasPowerStar("TamakoroExLv2Galaxy", 1) ? 1 : 0) + (GameDataFunction::hasPowerStar("SurfingLv2Galaxy", 1) ? 1 : 0) +
-               (GameDataFunction::hasPowerStar("CubeBubbleExLv2Galaxy", 1) ? 1 : 0);
+        return (hasStar("TamakoroExLv2Galaxy", 1) ? 1 : 0) + (hasStar("SurfingLv2Galaxy", 1) ? 1 : 0) + (hasStar("CubeBubbleExLv2Galaxy", 1) ? 1 : 0);
     }
 
     s32 countGreenStars() {
@@ -305,7 +345,9 @@ namespace NebulaAchievements {
     void evaluate() {
         sFileInPlay = !MR::isEqualStageName("FileSelect");
         // A file in play: the title's stage has none, and a new file meets nothing.
-        const s32 stars = MR::getPowerStarNum();
+        readPendingStar();
+        const s32 stars = countStars();
+        sEvaluatedStars = stars;
         if (stars <= 0) {
             return;
         }
@@ -314,12 +356,12 @@ namespace NebulaAchievements {
 
         // The story, in the order it is played.
         tryUnlock("first_star");
-        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarGrand1"), "gateway");
-        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarGrand2"), "robot_reactor");
-        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarGrand3"), "star_reactor");
-        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarGrand4"), "airship_armada");
-        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarGrand5"), "dark_matter");
-        tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarGrand6"), "lava_reactor");
+        tryUnlock(hasGrandStar(1), "gateway");
+        tryUnlock(hasGrandStar(2), "robot_reactor");
+        tryUnlock(hasGrandStar(3), "star_reactor");
+        tryUnlock(hasGrandStar(4), "airship_armada");
+        tryUnlock(hasGrandStar(5), "dark_matter");
+        tryUnlock(hasGrandStar(6), "lava_reactor");
         tryUnlock(GameDataFunction::isOnGameEventFlag("SpecialStarLuigiRescued"), "luigi_found");
         tryUnlock(stars >= 60, "halfway");
         tryUnlock(GameDataFunction::isOnGameEventFlag("ViewNormalEnding"), "ending");
@@ -340,7 +382,7 @@ namespace NebulaAchievements {
         // The challenges.
         tryUnlock(stars >= 120 && mario, "stars120");
         tryUnlock(stars >= 120 && !mario, "luigi120");
-        tryUnlock(GameDataFunction::hasPowerStar("PeachCastleFinalGalaxy", 1), "grandfinale");
+        tryUnlock(hasStar("PeachCastleFinalGalaxy", 1), "grandfinale");
         tryUnlock(galaxies.mComets, "comets");
         tryUnlock(galaxies.mDaredevil, "daredevil");
         tryUnlock(galaxies.mCosmic, "cosmic");
@@ -397,7 +439,14 @@ namespace NebulaAchievements {
             return;
         }
         sUpdateFrames = 0;
-        if (MR::getPowerStarNum() > 0) {
+        // A star recorded or collected since the last evaluation (a get sequence without the game scene's, the hub's
+        // result sequence): everything it may complete, now.
+        readPendingStar();
+        if (countStars() != sEvaluatedStars) {
+            evaluate();
+            return;
+        }
+        if (countStars() > 0) {
             checkCounters();
         }
     }
