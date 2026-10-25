@@ -35,6 +35,7 @@
 #include "post_fsr_rcas_ps.h"
 #include "post_fsr_rcas_scaled_ps.h"
 #include "post_resample_ps.h"
+#include "post_deband_ps.h"
 #include "post_fxaa_ps.h"
 
 namespace galaxy::gx {
@@ -55,7 +56,7 @@ constexpr ShaderBytes bytes(const BYTE (&code)[N]) noexcept {
 constexpr DXGI_FORMAT kColorFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 constexpr DXGI_FORMAT kEdgesFormat = DXGI_FORMAT_R8G8_UNORM;
 constexpr DXGI_FORMAT kStencilFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-constexpr unsigned kRtvSlots = 4u;
+constexpr unsigned kRtvSlots = 5u;
 
 D3D12_SHADER_BYTECODE code(ShaderBytes shader) noexcept {
     return {shader.data, shader.size};
@@ -227,6 +228,10 @@ bool PostProcessor::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
         create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fsr_rcas_scaled_ps)), kColorFormat, 0,
                         rcas_scaled_) &&
         create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_resample_ps)), kColorFormat, 0, resample_);
+    // Optional: without it the picture goes on as the game drew it.
+    if (!create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_deband_ps)), kColorFormat, 0, deband_)) {
+        std::cerr << "[post-process] deband pipeline unavailable\n";
+    }
     if (!scaling) {
         std::cerr << "[post-process] pipeline creation failed\n";
         shutdown();
@@ -296,6 +301,8 @@ bool PostProcessor::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
 }
 
 void PostProcessor::shutdown() noexcept {
+    deband_.Reset();
+    debanded_ = {};
     ready_ = false;
     status_.initialized = false;
     status_.smaa_ok = false;
@@ -833,6 +840,20 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
         0.0f, 0.0f, static_cast<float>(target_width), static_cast<float>(target_height), 0.0f, 1.0f};
     Constants c{};
     set_post_input_size(c, source_width, source_height);
+
+    // The picture's 8-bit steps smoothed at its own size, before any scaling (PASS_DEBAND).
+    if (deband_ && deband_wanted() &&
+        ensure_target(debanded_, source_width, source_height, kColorFormat, 4u, frame_index, frames_in_flight)) {
+        Constants d = c;
+        set_deband_constants(d, source_height);
+        transition(list, debanded_, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        list->OMSetRenderTargets(1, &debanded_.rtv, FALSE, nullptr);
+        const D3D12_VIEWPORT source_sized{
+            0.0f, 0.0f, static_cast<float>(source_width), static_cast<float>(source_height), 0.0f, 1.0f};
+        draw(list, srv_ring, deband_.Get(), {image}, {kColorFormat}, source_sized, d);
+        transition(list, debanded_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        image = debanded_.resource.Get();
+    }
 
     // Enlarging on both axes with sharpening: enlargement and RCAS in one pass straight into the
     // target, without a window-sized intermediate.

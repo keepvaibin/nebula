@@ -158,6 +158,7 @@ private:
     // Bilinear enlargement and RCAS in one pass (no window-sized intermediate).
     Microsoft::WRL::ComPtr<ID3D12PipelineState> rcas_scaled_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> resample_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> deband_;
     Microsoft::WRL::ComPtr<ID3D12Resource> area_texture_;
     Microsoft::WRL::ComPtr<ID3D12Resource> search_texture_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtv_heap_;
@@ -167,6 +168,8 @@ private:
     Target weights_;
     Target antialiased_;
     Target scaled_;
+    // The debanded picture, source-sized.
+    Target debanded_;
     // SMAA's edge mask: the weight pass runs only where edge detection kept a
     // pixel. `rtv` holds its DSV.
     Target stencil_;

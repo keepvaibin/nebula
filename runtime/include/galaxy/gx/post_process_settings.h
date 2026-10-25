@@ -68,6 +68,11 @@ void set_fsr_easu_constants(PostConstants& constants, float in_width, float in_h
                             float out_height) noexcept;
 // FsrRcasCon: sharpness 0-100 (100 strongest).
 void set_fsr_rcas_constants(PostConstants& constants, unsigned sharpness_percent) noexcept;
+// The deband pass (post_process.hlsl PASS_DEBAND) on a picture `height` lines tall: its reach (48 pixels at 1080
+// lines) and threshold (1.5 levels of 255).
+void set_deband_constants(PostConstants& constants, unsigned height) noexcept;
+// The deband pass runs (GALAXY_DEBAND=0: off, for comparisons).
+[[nodiscard]] bool deband_wanted() noexcept;
 
 // The AA start-up self-test: a 32 x 32 white-over-black edge stepping down one row every four columns, the jagged
 // case both passes exist for. A working pass blends a few dozen pixels along the steps and leaves flat areas alone.

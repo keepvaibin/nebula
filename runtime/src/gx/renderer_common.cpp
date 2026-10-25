@@ -157,8 +157,11 @@ float4 main(V v) : SV_Target {
     }
 
     // The GPU alias represents the texture after the EFB copy bytes are
-    // decoded again, not the unencoded render target. Apply the copy format's
-    // channel/precision behavior here so direct aliases match a RAM roundtrip.
+    // decoded again, not the unencoded render target: the copy format's
+    // channels and precision, so direct aliases match a RAM roundtrip. The
+    // 16-bit colour formats keep 8-bit colour: the game's bloom, depth of field
+    // and screen captures copy at RGB565, and 5-6 bits band every soft glow,
+    // blur and frozen backdrop at a raised resolution.
     uint fmt = uint(filt2.y + 0.5);
     if (fmt == 0u) {             // R4 -> I4
         uint i = (texcol_raw.r & 0xF0u) | (texcol_raw.r >> 4);
@@ -171,21 +174,12 @@ float4 main(V v) : SV_Target {
         texcol_raw = uint4(i, i, i, a);
     } else if (fmt == 3u) {      // RA8 -> IA8
         texcol_raw = texcol_raw.rrra;
-    } else if (fmt == 4u) {      // RGB565
-        texcol_raw.r = (texcol_raw.r & 0xF8u) | (texcol_raw.r >> 5);
-        texcol_raw.g = (texcol_raw.g & 0xFCu) | (texcol_raw.g >> 6);
-        texcol_raw.b = (texcol_raw.b & 0xF8u) | (texcol_raw.b >> 5);
+    } else if (fmt == 4u) {      // RGB565: 8-bit colour kept (below)
         texcol_raw.a = 255u;
-    } else if (fmt == 5u) {      // RGB5A3
+    } else if (fmt == 5u) {      // RGB5A3: 8-bit colour kept, the alpha's 3 bits
         if (texcol_raw.a > 224u) {
-            texcol_raw.r = (texcol_raw.r & 0xF8u) | (texcol_raw.r >> 5);
-            texcol_raw.g = (texcol_raw.g & 0xF8u) | (texcol_raw.g >> 5);
-            texcol_raw.b = (texcol_raw.b & 0xF8u) | (texcol_raw.b >> 5);
             texcol_raw.a = 255u;
         } else {
-            texcol_raw.r = (texcol_raw.r & 0xF0u) | (texcol_raw.r >> 4);
-            texcol_raw.g = (texcol_raw.g & 0xF0u) | (texcol_raw.g >> 4);
-            texcol_raw.b = (texcol_raw.b & 0xF0u) | (texcol_raw.b >> 4);
             texcol_raw.a =
                 (texcol_raw.a & 0xE0u) | (texcol_raw.a >> 3) |
                 (texcol_raw.a >> 6);

@@ -79,7 +79,7 @@ private:
     // The pipelines' SPIR-V, compiled by the worker: vertex and pixel shader per pass.
     enum Program : unsigned {
         kFullscreenVs, kResamplePs, kFxaaPs, kEasuPs, kRcasPs, kRcasScaledPs, kSmaaEdgesVs, kSmaaEdgesPs,
-        kSmaaWeightsVs, kSmaaWeightsPs, kSmaaBlendVs, kSmaaBlendPs, kProgramCount
+        kSmaaWeightsVs, kSmaaWeightsPs, kSmaaBlendVs, kSmaaBlendPs, kDebandPs, kProgramCount
     };
     struct Target {
         std::shared_ptr<Texture> texture;  // its framebuffer is the pass's (with the stencil for edges and weights)
@@ -155,6 +155,9 @@ private:
     Target stencil_;  // shared by edges and weights
     Target antialiased_;
     Target scaled_;
+    // The debanded picture, source-sized, and its pass (optional).
+    Target debanded_;
+    VkPipeline deband_ = VK_NULL_HANDLE;
 };
 
 }  // namespace galaxy::gx::vk

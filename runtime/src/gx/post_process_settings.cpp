@@ -27,6 +27,25 @@ void set_post_input_size(PostConstants& constants, unsigned width, unsigned heig
     constants.rt_metrics[3] = static_cast<float>(height);
 }
 
+void set_deband_constants(PostConstants& constants, unsigned height) noexcept {
+    constants.params[0] = std::max(8.0f, 48.0f * static_cast<float>(height) / 1080.0f);
+    constants.params[1] = 1.5f / 255.0f;
+}
+
+bool deband_wanted() noexcept {
+    static const bool wanted = [] {
+#if defined(_MSC_VER)
+        char value[8]{};
+        std::size_t length = 0u;
+        return getenv_s(&length, value, sizeof(value), "GALAXY_DEBAND") != 0 || length <= 1u || value[0] != '0';
+#else
+        const char* value = std::getenv("GALAXY_DEBAND");
+        return value == nullptr || value[0] != '0';
+#endif
+    }();
+    return wanted;
+}
+
 void set_fsr_easu_constants(PostConstants& c, float in_w, float in_h, float out_w, float out_h) noexcept {
     const auto bits = [](float value) { return std::bit_cast<std::uint32_t>(value); };
     c.con0[0] = bits(in_w / out_w);

@@ -263,6 +263,64 @@ float4 PSMain(FullscreenOut i) : SV_Target {
 }
 #endif
 
+#if defined(PASS_DEBAND)
+// Debanding (after libplacebo's deband by Niklas Haas, from flash3kyuu_deband). The picture is 8-bit: a smooth
+// gradient (a dark sky, fog, a glow, vertex lighting) is a staircase of one-level steps, wide at a raised resolution.
+// A pixel within the threshold (g_params.y) of the mean of four taps around it, at a random angle and distance up to
+// g_params.x pixels, lies on such a staircase and takes the mean; an edge or texture differs by more and stays. A
+// second ring twice as far with half the threshold, where the first one smoothed. A pixel more than two levels from
+// one of its four neighbours is an edge or texture already, and stays without the far taps. The four pixels of a 2x2
+// quad share their taps' angle and distance (their reads fall in the same cache lines). Where that leaves a value
+// between two levels, a triangular dither of one level (Wannamaker 1992) keeps the 8-bit target from stepping it
+// again; whole levels (flat colour, black, the HUD) stay exact.
+Texture2D inputTex : register(t0);
+FullscreenOut VSMain(uint id : SV_VertexID) { return FullscreenTriangle(id); }
+// PCG hash (Jarzynski and Olano 2020).
+uint DebandHash(uint v) {
+    const uint state = v * 747796405u + 2891336453u;
+    const uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+    return (word >> 22u) ^ word;
+}
+float DebandRandom(inout uint seed) {
+    seed = DebandHash(seed);
+    return float(seed >> 8u) * (1.0 / 16777216.0);
+}
+float4 PSMain(FullscreenOut i) : SV_Target {
+    const int2 p = ViewportPixel(i.pos);
+    const float2 texel = g_rt_metrics.xy;
+    const float2 uv = (float2(p) + 0.5) * texel;
+    float3 color = inputTex.SampleLevel(PointSampler, uv, 0).rgb;
+    const float3 near = max(max(abs(inputTex.SampleLevel(PointSampler, uv, 0, int2(1, 0)).rgb - color),
+                                abs(inputTex.SampleLevel(PointSampler, uv, 0, int2(-1, 0)).rgb - color)),
+                            max(abs(inputTex.SampleLevel(PointSampler, uv, 0, int2(0, 1)).rgb - color),
+                                abs(inputTex.SampleLevel(PointSampler, uv, 0, int2(0, -1)).rgb - color)));
+    if (max(near.r, max(near.g, near.b)) > 2.5 / 255.0) {
+        return float4(color, 1.0);
+    }
+    uint seed = DebandHash(uint(p.x >> 1) ^ DebandHash(uint(p.y >> 1)));
+    [loop] for (uint ring = 1u; ring <= 2u; ++ring) {
+        const float distance = DebandRandom(seed) * g_params.x * float(ring);
+        const float angle = DebandRandom(seed) * 6.28318530718;
+        const float2 o = float2(cos(angle), sin(angle)) * distance * texel;
+        const float3 mean = 0.25 * (inputTex.SampleLevel(LinearSampler, uv + o, 0).rgb +
+                                    inputTex.SampleLevel(LinearSampler, uv - o, 0).rgb +
+                                    inputTex.SampleLevel(LinearSampler, uv + float2(-o.y, o.x), 0).rgb +
+                                    inputTex.SampleLevel(LinearSampler, uv + float2(o.y, -o.x), 0).rgb);
+        const float3 keep = step(g_params.y / float(ring), abs(color - mean));
+        color = lerp(mean, color, keep);
+        if (min(keep.r, min(keep.g, keep.b)) > 0.5) {
+            break;
+        }
+    }
+    seed = DebandHash(uint(p.x) ^ DebandHash(uint(p.y) + 0x9E3779B9u));
+    const float3 level = color * 255.0;
+    const float3 between = step(0.02, abs(level - round(level)));
+    const float3 noise = float3(DebandRandom(seed) + DebandRandom(seed), DebandRandom(seed) + DebandRandom(seed),
+                                DebandRandom(seed) + DebandRandom(seed)) - 1.0;
+    return float4(saturate((level + noise * between) / 255.0), 1.0);
+}
+#endif
+
 #if defined(PASS_RESAMPLE)
 // Box filter over each target pixel's source footprint: one bilinear tap per
 // axis when enlarging, up to eight evenly spaced bilinear taps per axis when

@@ -227,6 +227,7 @@ void PostProcessorVk::compile_programs(unsigned smaa_quality, bool quality_only)
         {kSmaaWeightsPs, "PASS_SMAA_WEIGHTS", Library::kSmaa, true, ShaderStage::Fragment},
         {kSmaaBlendVs, "PASS_SMAA_BLEND", Library::kSmaa, false, ShaderStage::Vertex},
         {kSmaaBlendPs, "PASS_SMAA_BLEND", Library::kSmaa, false, ShaderStage::Fragment},
+        {kDebandPs, "PASS_DEBAND", Library::kNone, false, ShaderStage::Fragment},
     };
     for (const Source& source : kSources) {
         if (quality_only && !source.quality_preset) {
@@ -406,6 +407,7 @@ bool PostProcessorVk::build_pipelines() {
     to_color_.rcas = create_pipeline(kFullscreenVs, kRcasPs, color_pass_, kRgba, 0);
     to_color_.rcas_scaled = create_pipeline(kFullscreenVs, kRcasScaledPs, color_pass_, kRgba, 0);
     to_color_.resample = create_pipeline(kFullscreenVs, kResamplePs, color_pass_, kRgba, 0);
+    deband_ = create_pipeline(kFullscreenVs, kDebandPs, color_pass_, kRgba, 0);
     built_ = true;
     const VkRenderPass present = std::exchange(present_pass_, VK_NULL_HANDLE);
     set_present_pass(present);
@@ -439,12 +441,12 @@ void PostProcessorVk::destroy_pipelines() noexcept {
         return;
     }
     const VkDevice device = context.device();
-    for (VkPipeline pipeline : {smaa_edges_, smaa_weights_, smaa_blend_, smaa_blend_rgb_, fxaa_, fxaa_rgb_,
+    for (VkPipeline pipeline : {smaa_edges_, smaa_weights_, smaa_blend_, smaa_blend_rgb_, fxaa_, fxaa_rgb_, deband_,
                                 to_color_.easu, to_color_.rcas, to_color_.rcas_scaled, to_color_.resample,
                                 to_present_.easu, to_present_.rcas, to_present_.rcas_scaled, to_present_.resample}) {
         if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
     }
-    smaa_edges_ = smaa_weights_ = smaa_blend_ = smaa_blend_rgb_ = fxaa_ = fxaa_rgb_ = VK_NULL_HANDLE;
+    smaa_edges_ = smaa_weights_ = smaa_blend_ = smaa_blend_rgb_ = fxaa_ = fxaa_rgb_ = deband_ = VK_NULL_HANDLE;
     to_color_ = {};
     to_present_ = {};
     for (VkRenderPass pass : {edges_pass_, weights_pass_}) {
@@ -479,7 +481,7 @@ void PostProcessorVk::shutdown() noexcept {
     destroy_pipelines();
     area_texture_.reset();
     search_texture_.reset();
-    edges_ = weights_ = stencil_ = antialiased_ = scaled_ = {};
+    edges_ = weights_ = stencil_ = antialiased_ = scaled_ = debanded_ = {};
     spirv_ = {};
     compile_error_ = {};
 }
@@ -744,7 +746,18 @@ PostProcessorVk::PresentStep PostProcessorVk::prepare_present(VkCommandBuffer co
                                              status_.smaa_ok, status_.fxaa_ok);
     PresentStep step{};
     set_post_input_size(step.constants, source_width, source_height);
-    step.input = source.view;
+    // The picture's 8-bit steps smoothed at its own size, before any scaling (PASS_DEBAND).
+    VkImageView input = source.view;
+    if (deband_ != VK_NULL_HANDLE && deband_wanted() &&
+        ensure_target(debanded_, source_width, source_height, kColorFormat, color_pass_, false)) {
+        PostConstants d = step.constants;
+        set_deband_constants(d, source_height);
+        begin_pass(commands, color_pass_, debanded_, false);
+        draw(commands, deband_, {input}, VkRect2D{{0, 0}, {source_width, source_height}}, d, allocate);
+        vkCmdEndRenderPass(commands);
+        input = debanded_.texture->view;
+    }
+    step.input = input;
     // Enlarging on both axes with sharpening: one pass straight into the target.
     if (plan.resample && plan.rcas && last.rcas_scaled != VK_NULL_HANDLE && target_width >= source_width &&
         target_height >= source_height) {
@@ -772,7 +785,7 @@ PostProcessorVk::PresentStep PostProcessorVk::prepare_present(VkCommandBuffer co
             return step;
         }
         begin_pass(commands, color_pass_, scaled_, false);
-        draw(commands, to_color_.easu, {source.view}, window, step.constants, allocate);
+        draw(commands, to_color_.easu, {input}, window, step.constants, allocate);
         vkCmdEndRenderPass(commands);
     } else if (plan.resample) {
         step.constants.params[0] = static_cast<float>(source_width);
@@ -784,7 +797,7 @@ PostProcessorVk::PresentStep PostProcessorVk::prepare_present(VkCommandBuffer co
             return step;
         }
         begin_pass(commands, color_pass_, scaled_, false);
-        draw(commands, to_color_.resample, {source.view}, window, step.constants, allocate);
+        draw(commands, to_color_.resample, {input}, window, step.constants, allocate);
         vkCmdEndRenderPass(commands);
     }
     // RCAS of the scaled picture (or of the source at its own size).

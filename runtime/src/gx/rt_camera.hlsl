@@ -288,7 +288,11 @@ float4 CameraPS(float4 position : SV_Position) : SV_Target0
         c = lerp(c, bloom / float(c_levels), c_bloom);
     }
     c = (c_flags & kCameraClip) != 0u ? saturate(c) : (c_flags & kCameraAces) != 0u ? aces_curve(c) : neutral_curve(c);
-    return float4(srgb_encode(c), saturate(picture.a));
+    // Into 8 bits with a dither (interleaved gradient noise, Jimenez 2014; stochastic rounding): bloom, shafts and
+    // the shoulder's gradients come out smooth instead of in bands.
+    const float u = frac(52.9829189f * frac(dot(float2(p), float2(0.06711056f, 0.00583715f))));
+    const float3 level = floor(saturate(srgb_encode(c)) * 255.0f + u);
+    return float4(level / 255.0f, saturate(picture.a));
 }
 
 // The carry into the HDR scene EFB: the RGBA8 EFB's contents so far, as they are.
