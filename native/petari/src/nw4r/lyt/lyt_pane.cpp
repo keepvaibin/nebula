@@ -1,6 +1,5 @@
 #include "nw4r/lyt/animation.h"
 #ifdef TARGET_PC
-#include "Game/Screen/NebulaFadeGroup.hpp"
 #include "Game/Util/MotionSignal.hpp"
 #endif
 #include "nw4r/lyt/common.h"
@@ -23,12 +22,6 @@ namespace nw4r {
 namespace nw4r {
     namespace lyt {
         NW4R_UT_RUNTIME_TYPEINFO_ROOT_DEFINITION(Pane);
-#ifdef TARGET_PC
-        namespace {
-            // mFlag's bit for a pane CalculateMtx made a fade group (the resource's flags use bits 0-2).
-            const int cFadeGroupBit = 7;
-        };  // namespace
-#endif
 
         namespace detail {
             PaneBase::PaneBase() {
@@ -238,33 +231,14 @@ namespace nw4r {
             f32 glbAlpha = rInfo.GetGlobalAlpha();
             bool influenced = rInfo.IsInfluencedAlpha();
             bool modifyInfo = IsInfluencedAlpha() && mAlpha != 255;
-#ifdef TARGET_PC
-            // Nebula: a fading pane whose layers overlap fades as one picture (NebulaFadeGroup). It and its children
-            // keep full strength; its alpha (with its parents') waits in mPadding for the composite.
-            const bool group = modifyInfo && NebulaFadeGroup::enter(this);
-            detail::SetBit(&mFlag, cFadeGroupBit, group);
-            if (group) {
-                mPadding = mGlbAlpha;
-                mGlbAlpha = 255;
-            }
-#endif
 
             if (modifyInfo) {
                 DrawInfo& rMtInfo = const_cast< DrawInfo& >(rInfo);
-#ifdef TARGET_PC
-                rMtInfo.SetGlobalAlpha(group ? 1.0f : glbAlpha * mAlpha * (1.0f / 255.0f));
-#else
                 rMtInfo.SetGlobalAlpha(glbAlpha * mAlpha * (1.0f / 255.0f));
-#endif
                 rMtInfo.SetInfluencedAlpha(true);
             }
 
             CalculateMtxChild(rInfo);
-#ifdef TARGET_PC
-            if (group) {
-                NebulaFadeGroup::leave();
-            }
-#endif
 
             if (modifyInfo) {
                 DrawInfo& rMtInfo = const_cast< DrawInfo& >(rInfo);
@@ -285,21 +259,12 @@ namespace nw4r {
             }
 
 #ifdef TARGET_PC
-            const bool group = detail::TestBit(mFlag, cFadeGroupBit);
-            if (group) {
-                NebulaFadeGroup::begin(this, rInfo);
-            }
             MotionSignal::layoutPane(this);
 #endif
             DrawSelf(rInfo);
             for (PaneList::Iterator it = mChildList.GetBeginIter(); it != mChildList.GetEndIter(); ++it) {
                 it->Draw(rInfo);
             }
-#ifdef TARGET_PC
-            if (group) {
-                NebulaFadeGroup::end(this, mPadding);
-            }
-#endif
         }
 
         void Pane::DrawSelf(const DrawInfo& rInfo) {

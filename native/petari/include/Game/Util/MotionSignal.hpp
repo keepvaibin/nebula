@@ -135,8 +135,6 @@ namespace MotionSignal {
     // The 2D layer: GameScene::draw2D's bounds, and the pane, layout actor or star pointer whose draws follow.
     void scene2D(bool begin);
     void layoutPane(const nw4r::lyt::Pane* pPane);
-    // The screen copy a pane that fades as one lays back over its drawing (NebulaFadeGroup).
-    void layoutPaneGroup(const nw4r::lyt::Pane* pPane);
     void layoutActor(const LayoutActor* pActor);
     void starPointerLayout(const LayoutActor* pLayout);
     void starPointerDirector(const void* pDirector);

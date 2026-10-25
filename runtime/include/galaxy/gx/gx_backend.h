@@ -1163,19 +1163,38 @@ private:
     std::uint64_t interp_gpu_capped_ = 0;   // sequences with fewer sub-frames
     // Game-frame cadence governor (note_game_frame_cadence).
     void note_game_frame_cadence(std::int64_t now_qpc);
+    // The present rate a sub-frame count gives, and the counts of the next lower and higher rates.
+    [[nodiscard]] double interp_rate_with(unsigned subframes) const;
+    [[nodiscard]] unsigned interp_step_down(unsigned subframes) const;
+    [[nodiscard]] unsigned interp_step_up(unsigned subframes) const;
     unsigned interp_cadence_cap_ = 7u;
-    unsigned interp_cadence_interval_s_ = 8u;
+    unsigned interp_cadence_interval_s_ = 2u;
     std::int64_t interp_cadence_window_qpc_ = 0;
     std::int64_t interp_cadence_last_qpc_ = 0;
-    std::uint32_t interp_cadence_misses_ = 0;
+    std::uint32_t interp_cadence_misses_ = 0;   // in the window: the sub-frames'
+    std::uint32_t interp_cadence_own_ = 0;      // in the window: the game's own
     std::int64_t interp_cadence_change_qpc_ = 0;
     std::int64_t interp_cadence_try_qpc_ = 0;
     std::uint32_t interp_cadence_frames_ = 0;
-    std::uint32_t interp_cadence_stalls_ = 0;           // in the window: four periods or more
     std::int64_t interp_cadence_grace_until_qpc_ = 0;   // misses after a change are not counted
     std::uint64_t interp_cadence_drops_ = 0;
     double interp_cadence_fps_ = 0.0;
-    double interp_cadence_own_misses_ = 0.0;   // per second, without sub-frames
+    double interp_cadence_own_misses_ = 0.0;   // the game's own misses per second: their lowest recent rate
+    // The game thread's time blocked on the render thread (queue space, drains, PE completions, EFB peeks), in QPC
+    // ticks: the sub-frames' share of it tells their misses from the game's own.
+    std::atomic<std::uint64_t> game_wait_qpc_{0};
+    std::uint64_t interp_cadence_wait_seen_ = 0;
+    std::uint64_t interp_cadence_wait_qpc_ = 0;   // in the window
+    // The render thread's time rendering sub-frames (advance_interp_sequence), in QPC ticks.
+    std::uint64_t interp_subframe_qpc_ = 0;
+    std::uint64_t interp_cadence_subframe_seen_ = 0;
+    // A probe of the game's own misses: seconds of them in a row above the lowest rate, the cap a probe lowered and
+    // their rate before it, and the earliest next probe.
+    unsigned interp_cadence_own_windows_ = 0;
+    bool interp_cadence_probe_ = false;
+    unsigned interp_cadence_probe_restore_ = 0;
+    double interp_cadence_probe_misses_ = 0.0;
+    std::int64_t interp_cadence_probe_after_qpc_ = 0;
     // The playing sequence's evaluation program and output slots (prepare_interp_sequence).
     interp_gpu::Program interp_program_;
     interp_gpu::Layout interp_layout_{};

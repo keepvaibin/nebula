@@ -1956,6 +1956,10 @@ void svc_game_context(void*, uint32_t what, int32_t value) {
             std::snprintf(text, sizeof(text), "tilt section %d", static_cast<int>(value));
             log_line("context:", text);
         }
+    } else if (what == NEBULA_CONTEXT_FRAME_GENERATION) {
+#if defined(NEBULA_HOST_RENDERER)
+        galaxy::gx::note_frame_generation_allowed(value != 0);
+#endif
     }
 }
 
@@ -2607,6 +2611,7 @@ int svc_hbm(void*, uint32_t what, uint32_t value) {
 //     SpinAndStarPointer: the spin and pointer the Gateway's Luma grants; Achievement:<id>: that achievement's pop-up; AchievementBoard: the
 //     Observatory's achievement board).
 //   GALAXY_TEST_EVENTS actors@frame: the live actors with a model, by model name and position (where to teleport).
+//   GALAXY_TEST_EVENTS shake@frame: the screen shakes from that frame until the scene ends.
 std::atomic<bool> gTourDone{false};
 
 int svc_test_scene_frame(void*, NebulaTestAction* action) {
@@ -2669,6 +2674,8 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
                         events.push_back({NEBULA_TEST_GET_GRAND_STAR, frame, -1});
                     } else if (kind == "mario" || kind == "luigi") {
                         events.push_back({NEBULA_TEST_SET_PLAYER, frame, kind == "luigi" ? 1 : 0});
+                    } else if (kind == "shake") {
+                        events.push_back({NEBULA_TEST_SHAKE_CAMERA, frame, 0});
                     } else if (kind == "actors") {
                         events.push_back({NEBULA_TEST_LIST_ACTORS, frame, 0});
                     } else if (kind == "wait") {

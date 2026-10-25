@@ -63,6 +63,8 @@ bool flush_native_settings_if_dirty();
 void poll_render_config_file();
 // GALAXY_HIDE_WINDOW: a hidden test window.
 [[nodiscard]] bool hidden_window_mode_enabled();
+// GALAXY_TEST_SHOWN_WINDOW with it: 0 hidden, 1 one pixel on the main monitor, 2 whole in its corner (captures).
+[[nodiscard]] unsigned shown_test_window_mode();
 
 // The game window at the renderer's start, owned by `owner`. Sets backbuffer_width/height; a null window (logged)
 // when it cannot be created.

@@ -1408,6 +1408,24 @@ private:
     std::vector<GuestMemoryRange>& shape_ranges_;
 };
 
+// The vblanks per present slot for a rate on a display of `refresh` hertz: a whole number, the rate kept above 60.
+std::int64_t vblanks_per_slot(double refresh, double rate) {
+    std::int64_t slot = std::max<std::int64_t>(1, static_cast<std::int64_t>(std::ceil(refresh / rate - 0.02)));
+    if (refresh / static_cast<double>(slot) < 61.0) {
+        slot = std::max<std::int64_t>(1, static_cast<std::int64_t>(refresh / 61.0));
+    }
+    return slot;
+}
+
+// Adds its lifetime to the game thread's time blocked on the render thread (GxBackend::game_wait_qpc_).
+struct GameWaitTimer {
+    std::atomic<std::uint64_t>& total;
+    const std::int64_t start = galaxy::qpc_now();
+    ~GameWaitTimer() {
+        total.fetch_add(static_cast<std::uint64_t>(galaxy::qpc_now() - start), std::memory_order_relaxed);
+    }
+};
+
 std::uint64_t trace_gx_stall_threshold_us() {
     static const std::uint64_t threshold =
         read_env_u64("GALAXY_TRACE_GX_STALL_US", 1000u);
@@ -3632,6 +3650,7 @@ FramePeCompletionToken GxBackend::render_frame(
             cadence::steady_now_ns_if_enabled(cadence_diagnostics_);
         const std::size_t stalled_depth_limit =
             std::max(queue_depth_limit, kStalledRenderQueueDepth);
+        const GameWaitTimer game_wait{game_wait_qpc_};
         for (;;) {
             if (stop_render_thread_ || render_thread_error_ != nullptr) {
                 break;
@@ -3873,6 +3892,7 @@ void GxBackend::wait_for_render_idle() {
         return;
     }
 
+    const GameWaitTimer game_wait{game_wait_qpc_};
     std::unique_lock<std::mutex> lock(queue_mutex_);
     queue_space_cv_.wait(lock, [this] {
         return stop_render_thread_ ||
@@ -3905,6 +3925,7 @@ void GxBackend::wait_for_render_cpu_reads_idle() {
     const bool renderer_owns_its_memory =
         timing.render_memory_snapshot || timing.render_live_memory_reads;
 
+    const GameWaitTimer game_wait{game_wait_qpc_};
     std::unique_lock<std::mutex> lock(queue_mutex_);
     const auto queued_render_chunks = [this] {
         return static_cast<std::size_t>(
@@ -3945,6 +3966,7 @@ bool GxBackend::wait_for_frame_pe_completion_for(
 
     const auto deadline = std::chrono::steady_clock::now() +
         std::chrono::milliseconds(timeout_ms);
+    const GameWaitTimer game_wait{game_wait_qpc_};
     std::unique_lock<std::mutex> lock(queue_mutex_);
     for (;;) {
         if (render_thread_error_ != nullptr) {
@@ -6728,6 +6750,7 @@ bool GxBackend::peek_efb(
     queue_cv_.notify_one();
 
     {
+        const GameWaitTimer game_wait{game_wait_qpc_};
         std::unique_lock<std::mutex> lock(request.mutex);
         request.cv.wait(lock, [&request] { return request.done; });
     }
@@ -6790,10 +6813,7 @@ void GxBackend::start_interp_sequence(std::uint32_t xfb_addr) {
     std::int64_t vblanks_per_slot = 1;
     const auto fit_rate_to_vblanks = [&] {
         const double refresh = static_cast<double>(frequency) / static_cast<double>(vblank_period);
-        vblanks_per_slot = std::max<std::int64_t>(1, static_cast<std::int64_t>(std::ceil(refresh / rate - 0.02)));
-        if (refresh / static_cast<double>(vblanks_per_slot) < 61.0) {
-            vblanks_per_slot = std::max<std::int64_t>(1, static_cast<std::int64_t>(refresh / 61.0));
-        }
+        vblanks_per_slot = galaxy::gx::vblanks_per_slot(refresh, rate);
         rate = refresh / static_cast<double>(vblanks_per_slot);
     };
     if (on_vblanks) {
@@ -6916,8 +6936,8 @@ void GxBackend::select_interp_before() {
 
 // As many sub-frames per game frame as the GPU fits in 15 ms (of the 16.7 ms frame). A sub-frame
 // replays the whole frame, so a game frame costs about (k + 1) sub-frame times. k drops at once
-// when over budget and rises one step after 10 s under it; with none left, one is tried again
-// every 20 s. A capped sequence runs the slot clock at 60 * (k + 1).
+// when over budget and rises to the next higher present rate that fits after 10 s under it; with
+// none left, one is tried again every 20 s. A capped sequence runs the slot clock at 60 * (k + 1).
 unsigned GxBackend::interp_gpu_governor(double& rate) {
     constexpr double budget_ms = 15.0;
     const unsigned configured = interp_stopping_ ? 0u : interp_frames_;
@@ -6943,7 +6963,7 @@ unsigned GxBackend::interp_gpu_governor(double& rate) {
                 interp_gpu_cap_ = fits;
                 interp_gpu_cap_serial_ = serial;
             } else if (fits > interp_gpu_cap_ && serial - interp_gpu_cap_serial_ >= 600u) {
-                ++interp_gpu_cap_;
+                interp_gpu_cap_ = std::min(fits, interp_step_up(interp_gpu_cap_));
                 interp_gpu_cap_serial_ = serial;
             }
         }
@@ -6962,13 +6982,16 @@ unsigned GxBackend::interp_gpu_governor(double& rate) {
     return subframes;
 }
 
-// Sub-frames must never cost the game its own frames. Each game frame shown is
-// timed against the VI period: an interval above 1.5 periods missed VIs. The
-// game's own misses are measured while no sub-frames run. Two or more misses
-// per second beyond those take a sub-frame away (half of them at eight); a try
-// of one more sub-frame is undone at its first miss when the game misses none
-// on its own. Tries follow a clean interval that doubles after each failed
-// one (8 s to 64 s) and halves after one that held.
+// Sub-frames must never cost the game its own frames. Each game frame shown is timed against the VI period: an
+// interval above 1.5 periods missed VIs. A miss is the sub-frames' when the interval would not have missed without
+// their render-thread time: the game waited on the render thread, and would have waited that much less (at most what
+// it waited). The rest are the game's own, as a scene's first frames, whose decoding, uploads and pipelines keep the
+// render thread far longer than sub-frames do. Two or more of the sub-frames' misses a second, and no fewer than the
+// game's own, take sub-frames away to the next lower present rate (to half of them at eight). The game's own misses
+// three seconds in a row above their lowest rate are probed, for threads that share a CPU's cores: the next lower
+// rate for a second, kept only if the misses halve. A try of the next higher rate is undone at its first miss of the
+// sub-frames'. Tries and probes follow a clean interval that doubles after each failed one (2 s to 64 s: a scene's
+// first frames back the render thread up for a second or two) and halves after a try that held.
 void GxBackend::restart_interp_governors() {
     const std::int64_t now = galaxy::qpc_now();
     const std::int64_t frequency = galaxy::qpc_frequency();
@@ -6978,46 +7001,61 @@ void GxBackend::restart_interp_governors() {
     interp_gpu_warm_until_ = interp_sequence_serial_ + 60u;
     renderer_.reset_subframe_gpu_ema();
     interp_cadence_cap_ = 7u;
-    interp_cadence_interval_s_ = 8u;
+    interp_cadence_interval_s_ = 2u;
     interp_cadence_try_qpc_ = 0;
     interp_cadence_change_qpc_ = now;
     interp_cadence_last_qpc_ = 0;
     interp_cadence_grace_until_qpc_ = now + frequency * 3 / 2;
+    interp_cadence_own_windows_ = 0u;
+    interp_cadence_probe_ = false;
+    interp_cadence_probe_after_qpc_ = now;
 }
 
 void GxBackend::note_game_frame_cadence(std::int64_t now_qpc) {
     static const std::int64_t frequency = galaxy::qpc_frequency();
+    static const bool trace = read_env_u64("GALAXY_TRACE_PRESENT_STATS", 0u) != 0u;
     const std::int64_t period = frequency * 1001 / 60000;
-    if (interp_cadence_last_qpc_ == 0 || now_qpc - interp_cadence_last_qpc_ > 4 * frequency) {
-        // First frame, or a pause (menu, load): a new window.
-        interp_cadence_last_qpc_ = now_qpc;
+    // Since the frame before: the game's waits on the render thread, and the render thread's sub-frame time.
+    const std::uint64_t waited_total = game_wait_qpc_.load(std::memory_order_relaxed);
+    const auto waited = static_cast<std::int64_t>(waited_total - interp_cadence_wait_seen_);
+    const auto subframe_time = static_cast<std::int64_t>(interp_subframe_qpc_ - interp_cadence_subframe_seen_);
+    interp_cadence_wait_seen_ = waited_total;
+    interp_cadence_subframe_seen_ = interp_subframe_qpc_;
+    const auto restart_window = [&] {
         interp_cadence_window_qpc_ = now_qpc;
         interp_cadence_frames_ = 0u;
         interp_cadence_misses_ = 0u;
+        interp_cadence_own_ = 0u;
+        interp_cadence_wait_qpc_ = 0u;
+    };
+    if (interp_cadence_last_qpc_ == 0 || now_qpc - interp_cadence_last_qpc_ > 4 * frequency) {
+        // First frame, or a pause (menu, load): a new window.
+        interp_cadence_last_qpc_ = now_qpc;
+        restart_window();
         return;
     }
     const std::int64_t interval = now_qpc - interp_cadence_last_qpc_;
     interp_cadence_last_qpc_ = now_qpc;
     if (now_qpc < interp_cadence_grace_until_qpc_) {
         // Just after a rate or upscaler change: its one-time work is no measure.
-        interp_cadence_window_qpc_ = now_qpc;
-        interp_cadence_frames_ = 0u;
-        interp_cadence_misses_ = 0u;
-        interp_cadence_stalls_ = 0u;
+        restart_window();
         return;
     }
     ++interp_cadence_frames_;
-    // One stall of four periods or more in a window (a load, a shader or upscaler being
-    // created) is not the sub-frames' doing: they cost VIs every frame, not one long wait.
-    if (interval > period * 4 && interp_cadence_stalls_++ == 0u) {
-        return;
-    }
-    const std::uint32_t missed =
-        interval > period * 3 / 2 ? static_cast<std::uint32_t>((interval + period / 2) / period) - 1u : 0u;
-    interp_cadence_misses_ += missed;
+    interp_cadence_wait_qpc_ += static_cast<std::uint64_t>(waited);
+    const auto missed_in = [period](std::int64_t span) {
+        return span > period * 3 / 2 ? static_cast<std::uint32_t>((span + period / 2) / period) - 1u : 0u;
+    };
+    const std::uint32_t missed = missed_in(interval);
+    const std::uint32_t own = missed_in(interval - std::min(waited, subframe_time));
+    interp_cadence_misses_ += missed - own;
+    interp_cadence_own_ += own;
     const unsigned running = std::min({interp_frames_, interp_cadence_cap_, interp_gpu_cap_});
     const bool trying = interp_cadence_try_qpc_ != 0 && now_qpc - interp_cadence_try_qpc_ < 4 * frequency;
-    const auto drop = [&](unsigned cap) {
+    const auto drop = [&](unsigned cap, const char* why) {
+        if (trace) {
+            std::cerr << "[interp-cadence] " << why << ' ' << running << "->" << cap << '\n';
+        }
         if (trying) {
             interp_cadence_interval_s_ = std::min(interp_cadence_interval_s_ * 2u, 64u);
         }
@@ -7032,8 +7070,8 @@ void GxBackend::note_game_frame_cadence(std::int64_t now_qpc) {
         interp_cadence_try_qpc_ = 0;
         ++interp_cadence_drops_;
     };
-    if (trying && missed != 0u && running > 0u && interp_cadence_own_misses_ < 0.5) {
-        drop(running - 1u);
+    if (trying && missed != own && running > 0u) {
+        drop(interp_step_down(running), "try undone");
         return;
     }
     const std::int64_t elapsed = now_qpc - interp_cadence_window_qpc_;
@@ -7042,38 +7080,114 @@ void GxBackend::note_game_frame_cadence(std::int64_t now_qpc) {
     }
     const double seconds = static_cast<double>(elapsed) / static_cast<double>(frequency);
     interp_cadence_fps_ = static_cast<double>(interp_cadence_frames_) / seconds;
-    const double misses = static_cast<double>(interp_cadence_misses_) / seconds;
-    interp_cadence_window_qpc_ = now_qpc;
-    interp_cadence_frames_ = 0u;
-    interp_cadence_misses_ = 0u;
-    interp_cadence_stalls_ = 0u;
-    if (running == 0u) {
-        interp_cadence_own_misses_ = 0.5 * (interp_cadence_own_misses_ + misses);
-    } else {
-        interp_cadence_own_misses_ = std::min(interp_cadence_own_misses_, misses);
+    const double theirs = static_cast<double>(interp_cadence_misses_) / seconds;
+    const double own_rate = static_cast<double>(interp_cadence_own_) / seconds;
+    if (trace && interp_cadence_misses_ + interp_cadence_own_ != 0u) {
+        std::cerr << "[interp-cadence] window sub-frame-misses=" << interp_cadence_misses_
+                  << " own-misses=" << interp_cadence_own_ << " running=" << running << " game-wait-ms="
+                  << static_cast<double>(interp_cadence_wait_qpc_) * 1000.0 / static_cast<double>(frequency)
+                  << " seconds=" << seconds << '\n';
     }
-    const double excess = misses - interp_cadence_own_misses_;
-    if (running > 0u && excess >= 2.0) {
-        drop(excess >= 8.0 ? running / 2u : running - 1u);
+    restart_window();
+    if (interp_cadence_probe_) {
+        // The probe's second: misses that halved with fewer sub-frames were theirs, and the lower rate stays;
+        // otherwise they are the game's own at that level, and the sub-frames come back.
+        interp_cadence_probe_ = false;
+        interp_cadence_own_windows_ = 0u;
+        if (own_rate <= interp_cadence_probe_misses_ * 0.5) {
+            interp_cadence_change_qpc_ = now_qpc;
+            ++interp_cadence_drops_;
+        } else {
+            if (trace) {
+                std::cerr << "[interp-cadence] probe undone " << interp_cadence_cap_ << "->"
+                          << interp_cadence_probe_restore_ << '\n';
+            }
+            interp_cadence_cap_ = interp_cadence_probe_restore_;
+            interp_cadence_own_misses_ = interp_cadence_probe_misses_;
+            interp_cadence_interval_s_ = std::min(interp_cadence_interval_s_ * 2u, 64u);
+        }
+        interp_cadence_probe_after_qpc_ = now_qpc + static_cast<std::int64_t>(interp_cadence_interval_s_) * frequency;
         return;
+    }
+    const bool own_excess = running > 0u && own_rate - interp_cadence_own_misses_ >= 2.0;
+    interp_cadence_own_misses_ = std::min(interp_cadence_own_misses_, own_rate);
+    interp_cadence_own_windows_ = own_excess ? interp_cadence_own_windows_ + 1u : 0u;
+    if (running > 0u && theirs >= 2.0 && theirs >= own_rate) {
+        drop(theirs >= 8.0 ? std::min(interp_step_down(running), running / 2u) : interp_step_down(running), "drop");
+        return;
+    }
+    if (interp_cadence_own_windows_ >= 3u && now_qpc >= interp_cadence_probe_after_qpc_) {
+        if (trace) {
+            std::cerr << "[interp-cadence] probe " << running << "->" << interp_step_down(running) << '\n';
+        }
+        interp_cadence_probe_ = true;
+        interp_cadence_probe_restore_ = interp_cadence_cap_;
+        interp_cadence_probe_misses_ = own_rate;
+        interp_cadence_cap_ = interp_step_down(running);
+        interp_cadence_try_qpc_ = 0;
+        return;
+    }
+    if (interp_cadence_try_qpc_ != 0 && now_qpc - interp_cadence_try_qpc_ >= 4 * frequency) {
+        // The try held.
+        interp_cadence_interval_s_ = std::max(interp_cadence_interval_s_ / 2u, 2u);
+        interp_cadence_try_qpc_ = 0;
     }
     if (interp_cadence_cap_ >= interp_frames_) {
         return;
     }
-    // Misses with the GPU this far from its budget came from elsewhere (CPU stalls): the
-    // sub-frames come back after 2 s, all at once.
-    const double sub_ms = renderer_.subframe_gpu_ema_ms();
-    const bool headroom = sub_ms > 0.0 && sub_ms * static_cast<double>(interp_frames_ + 2u) < 1000.0 / 60.0 * 0.5;
-    const std::int64_t wait = headroom ? 2 * frequency
-                                       : static_cast<std::int64_t>(interp_cadence_interval_s_) * frequency;
-    if (now_qpc - interp_cadence_change_qpc_ >= wait) {
-        interp_cadence_cap_ = headroom ? interp_frames_ : interp_cadence_cap_ + 1u;
+    if (now_qpc - interp_cadence_change_qpc_ >= static_cast<std::int64_t>(interp_cadence_interval_s_) * frequency) {
+        const unsigned up = interp_step_up(interp_cadence_cap_);
+        if (trace) {
+            std::cerr << "[interp-cadence] try " << interp_cadence_cap_ << "->" << up << '\n';
+        }
+        interp_cadence_cap_ = up;
         interp_cadence_change_qpc_ = now_qpc;
         interp_cadence_try_qpc_ = now_qpc;
-    } else if (interp_cadence_try_qpc_ != 0 && now_qpc - interp_cadence_try_qpc_ >= 4 * frequency) {
-        interp_cadence_interval_s_ = std::max(interp_cadence_interval_s_ / 2u, 8u);
-        interp_cadence_try_qpc_ = 0;
     }
+}
+
+// The present rate with `subframes` sub-frames per game frame (start_interp_sequence): with all of them the target,
+// else 60 a second for the frame and each sub-frame; with VSync on timed vblanks, a whole number of vblanks a slot.
+double GxBackend::interp_rate_with(unsigned subframes) const {
+    static const std::int64_t frequency = galaxy::qpc_frequency();
+    if (subframes == 0u) {
+        return 60.0;
+    }
+    const RenderConfig cfg = get_render_config();
+    double rate = subframes < interp_frames_
+        ? 60.0 * static_cast<double>(subframes + 1u)
+        : std::max(61.0, present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, renderer_.display_refresh_hz()));
+    std::int64_t vblank = 0;
+    std::int64_t vblank_period = 0;
+    if (cfg.vsync_interval != 0u && renderer_.vblank_grid(vblank, vblank_period) && vblank_period > 0) {
+        const double refresh = static_cast<double>(frequency) / static_cast<double>(vblank_period);
+        rate = refresh / static_cast<double>(vblanks_per_slot(refresh, rate));
+    }
+    return rate;
+}
+
+// The most sub-frames below `subframes` that present at a lower rate (on a 240 Hz display two show 120 Hz, as one
+// does): 0 when none.
+unsigned GxBackend::interp_step_down(unsigned subframes) const {
+    const unsigned from = std::min(subframes, interp_frames_);
+    const double rate = interp_rate_with(from);
+    for (unsigned k = from; k > 0u; --k) {
+        if (interp_rate_with(k - 1u) < rate - 0.5) {
+            return k - 1u;
+        }
+    }
+    return 0u;
+}
+
+// The fewest sub-frames above `subframes` that present at a higher rate: all of them when none.
+unsigned GxBackend::interp_step_up(unsigned subframes) const {
+    const double rate = interp_rate_with(std::min(subframes, interp_frames_));
+    for (unsigned k = subframes + 1u; k < interp_frames_; ++k) {
+        if (interp_rate_with(k) > rate + 0.5) {
+            return k;
+        }
+    }
+    return interp_frames_;
 }
 
 // The next frame's sequence replaces this one before its real frame (at
@@ -7186,7 +7300,9 @@ void GxBackend::advance_interp_sequence(bool flush) {
                 return getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_FORCE_T") == 0 && length > 1u
                     ? std::clamp(std::strtod(value, nullptr), 0.0, 1.0) : -1.0;
             }();
+            const std::int64_t subframe_start = galaxy::qpc_now();
             const bool presented = render_interp_subframe(static_cast<float>(force_t >= 0.0 ? force_t : t));
+            interp_subframe_qpc_ += static_cast<std::uint64_t>(galaxy::qpc_now() - subframe_start);
             if (!snapshot.empty()) {
                 renderer_.set_subframe_capture(false);
                 renderer_.set_capture_waits(false);

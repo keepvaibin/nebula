@@ -242,13 +242,6 @@ namespace MotionSignal {
         }
     }
 
-    void layoutPaneGroup(const nw4r::lyt::Pane* pPane) {
-        if (__NebulaGXMarkers != 0) {
-            // Its own identity: an address inside the pane, not the pane's.
-            layoutImpl(Kind_LayoutPane, layoutAux(), &pPane->mPadding, pPane);
-        }
-    }
-
     void layoutActor(const LayoutActor* pActor) {
         if (__NebulaGXMarkers != 0) {
             layoutImpl(Kind_LayoutActor, layoutAux(), pActor, *reinterpret_cast< void* const* >(pActor));

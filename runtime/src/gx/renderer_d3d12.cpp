@@ -3581,8 +3581,10 @@ void RendererD3D12::present_to_swap_chain() {
     {
         // The target rate: dynamic multi frame generation reaches it, a fixed multiplier is the
         // largest multiple of 60 at or below it.
+        // Only while the game shows play (no menu, window or full-screen page: render_config.h), as NVIDIA's guide
+        // asks; otherwise its own frames alone.
         unsigned generated = 0u;
-        if (generating) {
+        if (generating && frame_generation_allowed()) {
             const double rate = present_frame_rate(cfg.max_fps, cfg.vsync_interval, display_refresh_hz_);
             generated = static_cast<unsigned>(std::clamp<long>(
                 static_cast<long>(rate / 60.0 + 1e-3) - 1, 1, static_cast<long>(streamline::frame_generation_max())));

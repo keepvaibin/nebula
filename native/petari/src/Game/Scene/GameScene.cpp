@@ -7,6 +7,7 @@
 #include "Game/System/GameDataFunction.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
+#include "Game/Util/ObjUtil.hpp"
 #include "Game/System/GameDataHolder.hpp"
 #include "Game/System/GameEventFlagChecker.hpp"
 #include "Game/System/GameEventFlagStorage.hpp"
@@ -15,6 +16,8 @@
 #include "Game/Util/SequenceUtil.hpp"
 #include <cstdio>
 #include <cstring>
+#include "Game/Screen/NebulaSettingsMenu.hpp"
+#include "Game/System/NebulaFrameGen.hpp"
 #include <nebula_game_api.h>
 #include <revolution/os.h>
 #endif
@@ -253,6 +256,14 @@ void GameScene::update() {
 
 void GameScene::draw() const {
 #ifdef TARGET_PC
+    // DLSS Frame Generation while the scene shows play: its own play, its openings and star demos, and no menu,
+    // map, staff roll, movie or settings over it, nor the title and file select.
+    NebulaFrameGen::report(!MR::isStageFileSelect() && !MR::isActiveMoviePlayer() && !NebulaSettingsMenu::isShown() &&
+                           (isNerve(GET_NERVE(GameScene, GameSceneAction)) ||
+                            isNerve(GET_NERVE(GameScene, GameSceneScenarioOpeningCamera)) ||
+                            isNerve(GET_NERVE(GameScene, GameSceneScenarioStarter)) ||
+                            isNerve(GET_NERVE(GameScene, GameScenePowerStarGet)) ||
+                            isNerve(GET_NERVE(GameScene, GameSceneGrandStarGet))));
     // Hidden test runs (the host's GALAXY_TEST_GALAXY_TOUR and GALAXY_TEST_TELEPORT): through the game's own calls.
     // A star taken in a test waits for play (the galaxy's opening camera and starter end in SceneAction, and would
     // replace the get demo); then what PowerStar::exeStageClearDemo does when the player takes it.
@@ -336,6 +347,9 @@ void GameScene::draw() const {
                 OSReport("actor %s %.0f %.0f %.0f\n", MR::getModelResName(pActor), pActor->mPosition.x,
                          pActor->mPosition.y, pActor->mPosition.z);
             }
+        } else if (action.kind == NEBULA_TEST_SHAKE_CAMERA) {
+            // The shaker keeps its owner only to stop it; nothing stops this one.
+            MR::shakeCameraInfinity(nullptr, 0.2f, 2.0f);
         } else if (action.kind == NEBULA_TEST_START_MOVIE) {
             if (MR::isExistSceneObj(SceneObj_MoviePlayingSequenceHolder)) {
                 MR::startMovie(action.scenario);

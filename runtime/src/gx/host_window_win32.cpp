@@ -4055,6 +4055,19 @@ bool hidden_window_mode_enabled() {
     return enabled;
 }
 
+unsigned shown_test_window_mode() {
+    static const unsigned mode = [] {
+        char value[16]{};
+        std::size_t length = 0;
+        if (!hidden_window_mode_enabled() ||
+            getenv_s(&length, value, sizeof(value), "GALAXY_TEST_SHOWN_WINDOW") != 0 || length <= 1) {
+            return 0u;
+        }
+        return std::strcmp(value, "corner") == 0 ? 2u : std::strcmp(value, "edge") == 0 ? 1u : 0u;
+    }();
+    return mode;
+}
+
 // The window's outer rect for a windowed client size on a monitor: limited to
 // the monitor's work area and centered in it.
 RECT windowed_rect_on_monitor(const MonitorInfo& monitor, unsigned width,
@@ -4132,6 +4145,18 @@ OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_h
             (outer.bottom - outer.top) - (frame.bottom - frame.top));
     }
 
+    // A test window shown on the main monitor (GALAXY_TEST_SHOWN_WINDOW), so its frames reach the display as a
+    // player's do and Windows captures them: "corner" whole in the work area's bottom-right corner, "edge" with one
+    // pixel there. Never focused, so nobody types into it.
+    if (const unsigned shown = shown_test_window_mode(); shown != 0u) {
+        RECT work{};
+        if (SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0) == 0) {
+            work = RECT{0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN)};
+        }
+        window_x = shown == 2u ? work.right - actual_window_width : work.right - 1;
+        window_y = shown == 2u ? work.bottom - actual_window_height : work.bottom - 1;
+    }
+
     if (actual_window_width <= 0 || actual_window_height <= 0) {
         std::cerr << "[Renderer] invalid client dimensions\n";
         return {};
@@ -4192,6 +4217,9 @@ OpenedWindow open_game_window(WindowOwner& owner, int window_width, int window_h
         // No pointer seed from this thread: the window thread publishes geometry and input through WM_SIZE and
         // WM_SETFOCUS, and the first real message or cursor poll places the pointer.
         opened.shown = !hidden_window;
+        if (shown_test_window_mode() != 0u) {
+            ShowWindowAsync(opened.window, SW_SHOWNOACTIVATE);
+        }
     }
     return opened;
 }

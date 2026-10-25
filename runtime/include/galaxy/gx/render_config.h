@@ -263,6 +263,10 @@ struct RenderFeatureCaps {
 // raise the rate.
 void set_frame_generation_running(bool running) noexcept;
 [[nodiscard]] bool frame_generation_running() noexcept;
+// The game's report each frame (NEBULA_CONTEXT_FRAME_GENERATION): play is on screen, so generated frames may be
+// added. A report older than 100 ms (loading, other scenes, a game that never reports) counts as no.
+void note_frame_generation_allowed(bool allowed) noexcept;
+[[nodiscard]] bool frame_generation_allowed() noexcept;
 // The rate the game presents at: max_fps, or 60 while frame generation runs.
 [[nodiscard]] inline float presented_max_fps(const RenderConfig& cfg) noexcept {
     return frame_generation_running() ? 60.0f : cfg.max_fps;

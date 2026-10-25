@@ -121,6 +121,7 @@ enum {
     NEBULA_TEST_SET_GRAND_STARS,  /* the save holds Grand Stars 1-`scenario` (their galaxies' first star) */
     NEBULA_TEST_LIST_ACTORS,      /* the scene's live actors with a model, their model name and position, logged */
     NEBULA_TEST_SET_EVENT_FLAG,   /* the save's event flag named `stage` on (GameDataFunction::onGameEventFlag) */
+    NEBULA_TEST_SHAKE_CAMERA,     /* the screen shakes until the scene ends (MR::shakeCameraInfinity, Dodoryu's quake) */
 };
 
 /* The picture's shape as the game draws it (__NebulaDisplay), from the output's shape the host latches at each retrace
@@ -522,6 +523,8 @@ enum {
 enum {
     NEBULA_CONTEXT_STAR_POINTER_MODE = 1, /* StarPointerOnOffController's mode (-1 none): menus and play */
     NEBULA_CONTEXT_TILT_SECTION,          /* 0 none, 1 Mario on a Star Ball, 2 on a Ray: tilt steers */
+    NEBULA_CONTEXT_FRAME_GENERATION,      /* each frame: 1 while the game shows play (no menu, window or full-screen
+                                             page): DLSS Frame Generation may add frames (NebulaFrameGen) */
 };
 
 /* Returns NEBULA_GAME_API_VERSION, or 0 if the host's services are too old. */

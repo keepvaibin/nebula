@@ -409,6 +409,10 @@ void PauseMenu::exeConfirm() {
         const char* pMessageId = ::isInvalidBackAstroDome() ? "PauseMenu_ConfirmEndGame" : "PauseMenu_ConfirmBackAstroDome";
 
         _30->appear(pMessageId, SysInfoWindow::Type_YesNo, SysInfoWindow::TextPos_Center, SysInfoWindow::MessageType_System);
+#ifdef TARGET_PC
+        // Yes fades the screen out from a capture of it: the dim stays in that capture instead of lifting first.
+        _30->setDimHandOver(SysInfoWindow::DimHandOver_Yes);
+#endif
     }
 
     if (MR::isDead(_30)) {

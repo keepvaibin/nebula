@@ -8,6 +8,7 @@
 #include <cstdio>
 #ifdef TARGET_PC
 #include "Game/Screen/LayoutManager.hpp"
+#include "Game/System/NebulaFrameGen.hpp"
 #include "Game/Util/DrawUtil.hpp"
 #include <nw4r/lyt/pane.h>
 #include <nw4r/lyt/textBox.h>
@@ -45,7 +46,7 @@ SysInfoWindow::SysInfoWindow(SysInfoWindowType windowType, SysInfoExecuteType ex
 #ifdef TARGET_PC
       ,
       mIsBackAnswersNo(false), mDimPane(nullptr), mDim(0.0f), mDimFloor(0.0f), mDimLinger(0), mDimEpoch(0),
-      mDimHandOver(DimHandOver_None), mDimHanding(false)
+      mDimHandOver(DimHandOver_None), mDimHanding(false), mFadePane(nullptr), mPanelPane(nullptr), mShadowPane(nullptr)
 #endif
 {
     switch (windowType) {
@@ -76,6 +77,11 @@ void SysInfoWindow::init(const JMapInfoIter& rIter) {
     mIconAButton = MR::createAndSetupIconAButton(this, !_38, false);
 #ifdef TARGET_PC
     mDimPane = MR::getPane(this, "BG");
+    if (mWindowType == WindowType_Normal) {
+        mFadePane = MR::getPane(this, mWindowParentPaneName);
+        mPanelPane = MR::getPane(this, "WinInfo");
+        mShadowPane = MR::getPane(this, "ShaInfo");
+    }
 #endif
 
     initNerve(GET_NERVE(SysInfoWindow, SysInfoWindowNrvAppear));
@@ -92,6 +98,10 @@ void SysInfoWindow::movement() {
 void SysInfoWindow::calcAnim() {
     LayoutActor::calcAnim();
 #ifdef TARGET_PC
+    if (!MR::isDead(this)) {
+        shapeFade();
+        NebulaFrameGen::noteFullscreenUi();
+    }
     updateDim();
 #endif
 
@@ -273,7 +283,8 @@ void SysInfoWindow::decideNo() {
     }
 }
 
-// The BG pane's alpha as the layout would draw it: its own times its influencing parents'.
+// The BG pane's alpha as the layout would draw it: its own times its influencing parents', and for the question
+// window shaped as its drop shadow is (shapeFade).
 f32 SysInfoWindow::getOwnDim() const {
     f32 level = mDimPane->IsVisible() ? mDimPane->mAlpha / 255.0f : 0.0f;
     for (const nw4r::lyt::Pane* pPane = mDimPane->GetParent(); pPane != nullptr && level > 0.0f; pPane = pPane->GetParent()) {
@@ -283,7 +294,23 @@ f32 SysInfoWindow::getOwnDim() const {
             level *= pPane->mAlpha / 255.0f;
         }
     }
-    return level;
+    return mFadePane != nullptr ? level * level * level : level;
+}
+
+// The question window fades its panel, drop shadow and screen dim together, each pane on its own: half faded, the
+// panel showed its own shadow and the dim through it and turned darker than both the screen before and the finished
+// window (150 levels against 163 and 211). Here the panel is whole by 62% of the fade and the shadow and dim follow
+// the fade's cube, so what the panel covers moves from the screen behind to the panel (2 levels below it at most,
+// from 42), with every pane still drawn on its own each frame, as interpolated frames blend them.
+void SysInfoWindow::shapeFade() {
+    if (mFadePane == nullptr || mPanelPane == nullptr || mShadowPane == nullptr) {
+        return;
+    }
+    const f32 fade = mFadePane->mGlbAlpha / 255.0f;
+    const f32 panel = fade * 1.6f < 1.0f ? fade * 1.6f : 1.0f;
+    const f32 shadow = fade * fade * fade;
+    mPanelPane->mGlbAlpha = static_cast< u8 >(panel * (mPanelPane->mAlpha / 255.0f) * 255.0f + 0.5f);
+    mShadowPane->mGlbAlpha = static_cast< u8 >(shadow * (mShadowPane->mAlpha / 255.0f) * 255.0f + 0.5f);
 }
 
 void SysInfoWindow::setDimHandOver(u8 when) {

@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <bit>
 #include <atomic>
+#include <chrono>
+#include <cstdint>
 #include <cerrno>
 #include <cctype>
 #include <cstdio>
@@ -397,6 +399,15 @@ RenderConfig get_render_config() {
 
 namespace {
 std::atomic<bool> s_frame_generation_running{false};
+// The game's latest frame generation report and when it came (steady clock, ms; 0 none yet).
+std::atomic<bool> s_frame_generation_allowed{false};
+std::atomic<std::int64_t> s_frame_generation_report_ms{0};
+constexpr std::int64_t kFrameGenerationReportMs = 100;
+
+std::int64_t steady_ms() noexcept {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::steady_clock::now().time_since_epoch()).count();
+}
 }  // namespace
 
 void set_frame_generation_running(bool running) noexcept {
@@ -404,6 +415,17 @@ void set_frame_generation_running(bool running) noexcept {
 }
 
 bool frame_generation_running() noexcept { return s_frame_generation_running.load(std::memory_order_relaxed); }
+
+void note_frame_generation_allowed(bool allowed) noexcept {
+    s_frame_generation_allowed.store(allowed, std::memory_order_relaxed);
+    s_frame_generation_report_ms.store(steady_ms(), std::memory_order_relaxed);
+}
+
+bool frame_generation_allowed() noexcept {
+    const std::int64_t at = s_frame_generation_report_ms.load(std::memory_order_relaxed);
+    return s_frame_generation_allowed.load(std::memory_order_relaxed) && at != 0 &&
+           steady_ms() - at < kFrameGenerationReportMs;
+}
 
 GxTimingConfig resolve_gx_timing_config_from_environment() {
     return GxTimingConfig{};

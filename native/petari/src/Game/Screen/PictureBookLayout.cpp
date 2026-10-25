@@ -1,4 +1,7 @@
 #include "Game/Screen/PictureBookLayout.hpp"
+#ifdef TARGET_PC
+#include "Game/System/NebulaFrameGen.hpp"
+#endif
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Screen/ButtonPaneController.hpp"
@@ -187,6 +190,9 @@ s32 PictureBookLayout::getChapterMax() {
 }
 
 void PictureBookLayout::control() {
+#ifdef TARGET_PC
+    NebulaFrameGen::noteFullscreenUi();
+#endif
     if (mContentsButtonPaneController == nullptr) {
         return;
     }
