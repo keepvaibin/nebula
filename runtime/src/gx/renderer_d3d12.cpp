@@ -4431,10 +4431,14 @@ void RendererD3D12::record_stripe_gather() {
 void RendererD3D12::reconcile_ray_tracing() {
     const bool wanted =
         get_render_config().ray_tracing_enabled && host_window::ray_tracing_offered.load(std::memory_order_relaxed);
-    if (wanted == ray_tracer_.ready() || (wanted && rt_start_failed_) || !device_) {
+    // A quality change restarts the tracer (its rays, sample grid and pipelines are chosen when it starts): off this
+    // frame, on again the next, as the setting's off and on.
+    const bool requality =
+        wanted && ray_tracer_.ready() && ray_tracer_.quality() != std::min(get_render_config().rt_quality, 2u);
+    if (!requality && (wanted == ray_tracer_.ready() || (wanted && rt_start_failed_) || !device_)) {
         return;
     }
-    if (!wanted) {
+    if (!wanted || requality) {
         // Recorded sub-frame replays composite the tracer's results: none may run again. A scene left open in the
         // HDR scene EFB gives the EFB back as it was.
         if (efb_hdr_) {
@@ -4445,7 +4449,7 @@ void RendererD3D12::reconcile_ray_tracing() {
             entry.sequence = 0u;
         }
         ray_tracer_.shutdown();
-        std::cerr << "[rt] off\n";
+        std::cerr << (requality ? "[rt] quality changed: restarting\n" : "[rt] off\n");
         return;
     }
     char value[8]{};

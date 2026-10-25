@@ -1164,6 +1164,7 @@ void apply_native_settings_draft() {
     applied.ambient_occlusion = next.ambient_occlusion;
     applied.hud_output_resolution = next.hud_output_resolution;
     applied.ray_tracing_enabled = next.ray_tracing_enabled;
+    applied.rt_quality = next.rt_quality;
     applied.texture_packs = next.texture_packs;
     applied.texture_pack_preload = next.texture_pack_preload;
     applied.texture_dump = next.texture_dump;
@@ -2637,19 +2638,16 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render) {
         rows.push_back({"RAY TRACING", render.ray_tracing_enabled ? "ON" : "OFF",
                         [](RenderConfig& draft, int) { draft.ray_tracing_enabled = !draft.ray_tracing_enabled; },
                         "TRACED SHADOWS, SKY AND BOUNCE LIGHT, GLOWS THAT LIGHT THE WORLD"});
-        // rt_quality: 0 medium, 1 high, 2 low; the ray tracer reads it when it starts.
-        static const unsigned started = std::min(get_render_config().rt_quality, 2u);
+        // rt_quality: 0 medium, 1 high, 2 low; a change restarts the ray tracer (RendererD3D12::reconcile_ray_tracing).
         static constexpr unsigned kOrder[] = {2u, 0u, 1u};
         static constexpr const char* kNames[] = {"MEDIUM", "HIGH", "LOW"};
-        std::string value = kNames[std::min(render.rt_quality, 2u)];
-        if (std::min(render.rt_quality, 2u) != started) value += " (NEXT START)";
-        rows.push_back({"RAY TRACING QUALITY", value,
+        rows.push_back({"RAY TRACING QUALITY", kNames[std::min(render.rt_quality, 2u)],
                         [](RenderConfig& draft, int delta) {
                             const unsigned quality = std::min(draft.rt_quality, 2u);
                             const unsigned at = quality == 2u ? 0u : quality == 0u ? 1u : 2u;
                             draft.rt_quality = kOrder[settings_step(at, 3u, delta)];
                         },
-                        "HIGH: MORE LIGHTS PER PIXEL, FULL-RESOLUTION WATER. APPLIES AT THE NEXT START"});
+                        "HIGH: MORE LIGHTS PER PIXEL, FULL-RESOLUTION WATER"});
     }
     // Texture packs (the enabled mods') apply with the settings above; the folders of dumped textures and movies.
     rows.push_back({"TEXTURE PACKS", {}, nullptr, {}, true});

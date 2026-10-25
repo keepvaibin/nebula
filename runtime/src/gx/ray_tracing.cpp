@@ -688,9 +688,10 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     // Quality (config rt_quality, GALAXY_RT_QUALITY): high traces every pixel of the internal resolution with 4
     // sky and occlusion rays, 4 sun shadow rays and two glow lights per sample; medium one pixel per 2 x 2 with
     // 2 sky rays, 1 sun ray and one glow light.
-    high_quality_ = get_render_config().rt_quality == 1u;
+    quality_ = std::min(get_render_config().rt_quality, 2u);
+    high_quality_ = quality_ == 1u;
     // Low (rt_quality 2): RTX 3050-class cards: one sample per 3 x 3 internal pixels, one sky ray, one sun ray.
-    low_quality_ = get_render_config().rt_quality == 2u;
+    low_quality_ = quality_ == 2u;
     rays_ = static_cast<std::uint32_t>(
         std::clamp(env_float("GALAXY_RT_RAYS", high_quality_ ? 4.0f : low_quality_ ? 1.0f : 2.0f), 1.0f, 16.0f));
     range_ = std::clamp(env_float("GALAXY_RT_RANGE", 1600.0f), 10.0f, 100000.0f);

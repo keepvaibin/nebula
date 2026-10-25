@@ -78,6 +78,8 @@ public:
                     DXGI_FORMAT scene_format, DXGI_FORMAT display_format);
     void shutdown() noexcept;
     [[nodiscard]] bool ready() const noexcept { return ready_; }
+    // The quality it started with (config rt_quality: 0 medium, 1 high, 2 low).
+    [[nodiscard]] unsigned quality() const noexcept { return quality_; }
 
     // Start of a renderer frame: results of frames the GPU has finished are collected.
     void begin_frame(std::uint64_t frame_index);
@@ -1032,6 +1034,7 @@ private:
     std::uint32_t rays_ = 2;
     bool light_textured_ = false;  // the lighting's trace reads alpha maps from the descriptor heap (SM 6.6)
     bool low_quality_ = false;   // config rt_quality low: a third of the internal resolution, single rays
+    unsigned quality_ = 1u;       // config rt_quality when it started
     bool high_quality_ = true;  // config rt_quality: high (every pixel, more rays) or medium
     std::uint32_t factor_override_ = 0;
     std::uint32_t history_frames_ = 16;
