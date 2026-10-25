@@ -50,7 +50,10 @@ is not traced and shows the game's picture.
   white). Glow sprites a table names a light source are area lights from their drawn triangles (GlowEmitterCS); a
   `tint` one emits what it draws: its TEV output over each triangle (16 points, textures filtered over each point's
   share), linear, times what its source blend factor passes (an alpha-blended flame its colour over its alpha's
-  coverage), times the table's radiance, so a fire's light follows the game's colour keys and fading.
+  coverage), times the table's radiance, so a fire's light follows the game's colour keys and fading. A `volume` glow
+  (a glowing volume the game draws as geometry: the Dreadnought's beam-go-round flame beams) emits as its sprites do,
+  every way from each triangle, whatever its faces' normals; as a lit surface its ribbons sent their light only away
+  from the disc under them.
 - Effects: the game's particle effects by name. Each emitter's marker is followed by its effect's (motion::
   kMarkerEffect: "Effect/<ParticleNames.bcsv name>", the resource's user index in Effect.arc), and a table row with
   `effect` in the hash column names effects in its material column; its properties hold for the effect's particles over

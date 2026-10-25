@@ -153,6 +153,7 @@ void apply_class(const std::string& text, RtMaterial& m) {
         else if (token == "traced") m.traced = true;
         else if (token == "recolour") m.recolour = true;
         else if (token == "near-glow") m.near_glow = true;
+        else if (token == "volume") m.volume = true;
         else if (token == "seen") {
             m.seen = true;
             if (m.emission == RtEmission::None) m.emission = RtEmission::Point;

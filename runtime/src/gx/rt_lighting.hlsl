@@ -2418,6 +2418,7 @@ ByteAddressBuffer e_glow_uv : register(t5);
 
 static const uint kGlowEmitterIsotropic = 1u;   // ray_tracing.cpp kGlowEmitter*: a sprite standing for a glowing volume
 static const uint kGlowEmitterDrawn = 2u;       // its light the colour it draws (the table's `tint`)
+static const uint kGlowEmitterVolume = 8u;      // a glowing volume drawn as geometry (the table's `volume`)
 static const uint kGlowEmitterBlendShift = 4u;  // bits 4-6: its source blend factor (GX BlendFactor)
 static const uint kGlowPoints = 16u;            // points a triangle's drawn colour is taken at (glow_drawn)
 
@@ -2468,9 +2469,11 @@ TevPoint glow_point(uint tri, uint k)
 
 // One glow emitter: triangle `t` of the draw (its first glow triangle `first`, its first emitter slot `first_slot`) at
 // `radiance` (rgb, linear: on average over the triangle) into the glow segment. `coverage`: for a sprite (`isotropic`
-// without vertex normals), the share of the triangle that glows at the brightest it does (its radiance / coverage
-// there): the triangle is shrunk about its centre to it.
-void glow_emitter_store(uint first, uint first_slot, uint t, bool isotropic, float3 radiance, float coverage)
+// without vertex normals, or a `volume`'s triangle whatever its normals: a beam's ribbon faces one way, its light
+// every way), the share of the triangle that glows at the brightest it does (its radiance / coverage there): the
+// triangle is shrunk about its centre to it.
+void glow_emitter_store(uint first, uint first_slot, uint t, bool isotropic, bool volume, float3 radiance,
+                        float coverage)
 {
     const uint slot = first_slot + t;
     if (slot >= kGlowEmitters) {
@@ -2480,7 +2483,7 @@ void glow_emitter_store(uint first, uint first_slot, uint t, bool isotropic, flo
     const uint tri = first + t;
     const bool valid = emit_triangle(tri, v0, v1, v2);
     const uint3 normals = uint3(e_glow_normals[tri * 4u], e_glow_normals[tri * 4u + 1u], e_glow_normals[tri * 4u + 2u]);
-    const bool surface = isotropic && all(normals != 0u);
+    const bool surface = isotropic && !volume && all(normals != 0u);
     float sides = isotropic ? 2.0f : 1.0f;
     if (surface) {
         // Outward: the face turned to the side its vertex normals point to.
@@ -2523,6 +2526,7 @@ void GlowEmitterCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
     const uint flags = e_draws.Load(record + 24u);
     const uint tev_record = e_draws.Load(record + 28u);
     const bool isotropic = (flags & kGlowEmitterIsotropic) != 0u;
+    const bool volume = (flags & kGlowEmitterVolume) != 0u;
     if ((flags & kGlowEmitterDrawn) != 0u && tev_record != 0xFFFFFFFFu) {
         // Its drawn colour: kGlowPoints points of each triangle, four triangles at a time, each point's texture
         // filtered over its share of the triangle (the footprint cone: half log2 of the share).
@@ -2550,7 +2554,7 @@ void GlowEmitterCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
                 }
                 const float3 mean = sum / float(kGlowPoints);
                 const float coverage = peak > 0.0f ? luminance(mean) / peak : 1.0f;
-                glow_emitter_store(draw.x, draw.z, t, isotropic, mean * intensity, coverage);
+                glow_emitter_store(draw.x, draw.z, t, isotropic, volume, mean * intensity, coverage);
             }
             GroupMemoryBarrierWithGroupSync();
         }
@@ -2581,7 +2585,7 @@ void GlowEmitterCS(uint3 group : SV_GroupID, uint gi : SV_GroupIndex)
     for (uint t = gi; t < draw.y; t += 64u) {
         // A surface's or panel's radiance on average over it (its glow texture lights part of it: what is seen, GX
         // output_flags bit 5); a sprite's whole radiance over its shrunk triangle (the same power).
-        glow_emitter_store(draw.x, draw.z, t, isotropic, table_radiance * coverage, coverage);
+        glow_emitter_store(draw.x, draw.z, t, isotropic, volume, table_radiance * coverage, coverage);
     }
 }
 #endif

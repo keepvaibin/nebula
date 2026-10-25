@@ -72,6 +72,8 @@ struct RtMaterial {
     bool seen = false;                    // shows its radiance; its light is the game's point light there
     bool recolour = false;                // a light source's sprite shown in the table's colour (its luminance kept)
     bool near_glow = false;               // a light source only near its glow light (the game's sprite of it)
+    bool volume = false;                  // a glowing volume drawn as geometry (a beam, a flame jet): its light
+                                          // leaves it every way, whatever its faces' normals (GlowEmitterCS)
     bool shadow = true;
     float roughness = -1.0f;              // < 0: the class's
     float metallic = -1.0f;               // < 0: the class's

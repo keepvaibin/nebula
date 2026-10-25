@@ -209,6 +209,8 @@ constexpr std::uint32_t kGlowPhysical = 64u;
 // coverage); bits 4-6 its source blend factor (GX BlendFactor).
 constexpr std::uint32_t kGlowEmitterIsotropic = 1u;
 constexpr std::uint32_t kGlowEmitterDrawn = 2u;
+// A glowing volume drawn as geometry (the table's `volume`: a beam, a flame jet): a sprite's light, not its faces'.
+constexpr std::uint32_t kGlowEmitterVolume = 8u;
 constexpr std::uint32_t kGlowEmitterBlendShift = 4u;
 
 // Two values 0-1 as unorm16 (0-65534) in one word, the first in the low half; 0xFFFF where a value
@@ -2537,6 +2539,7 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
                     }
                     const std::uint32_t flags = (isotropic ? kGlowEmitterIsotropic : 0u) |
                                                 (material->tint ? kGlowEmitterDrawn : 0u) |
+                                                (material->volume ? kGlowEmitterVolume : 0u) |
                                                 (((info.blend >> 1u) & 7u) << kGlowEmitterBlendShift);
                     glow_emitters_.push_back({glow_triangles_, draw.triangle_count, glow_emitter_slots_, light.color,
                                               std::bit_cast<std::uint32_t>(std::max(material->intensity, 1.0f)),
