@@ -131,6 +131,23 @@ void LodCtrl::update() {
         if (__NebulaOption(NEBULA_OPTION_RT_SHADOW_CASTERS) != 0) {
             middleDistance = lowDistance = 3.4e38f;
         }
+        // Tests (GALAXY_TEST_LOD): a model chosen for every actor, or the high and middle models in turn.
+        static const u32 sTestLod = __NebulaOption(NEBULA_OPTION_TEST_LOD);
+        if (sTestLod != 0 && !*_28) {
+            if (sTestLod == 1 && _10) {
+                showMiddleModel();
+            } else if (sTestLod == 2 && _14) {
+                showLowModel();
+            } else if (sTestLod == 3 && _10) {
+                _8 == mActor ? showMiddleModel() : showHighModel();
+            } else {
+                showHighModel();
+            }
+            if (_8 && _8 != mActor) {
+                MR::copyTransRotateScale(mActor, _8);
+            }
+            return;
+        }
 #endif
         if (*_28) {
             hideAllModel();

@@ -2268,6 +2268,13 @@ uint32_t svc_option(void*, uint32_t what) {
         }();
         return dump ? 1u : 0u;
     }
+    case NEBULA_OPTION_TEST_LOD: {
+        static const uint32_t lod = [] {
+            const char* value = std::getenv("GALAXY_TEST_LOD");
+            return value != nullptr && value[0] >= '1' && value[0] <= '3' ? static_cast<uint32_t>(value[0] - '0') : 0u;
+        }();
+        return lod;
+    }
     default:
         return 0;
     }

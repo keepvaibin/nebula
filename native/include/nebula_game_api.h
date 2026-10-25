@@ -144,6 +144,8 @@ enum {
                                         reaches the view stay unclipped (ClippingActorInfo::isWantedForLight) */
     NEBULA_OPTION_LOD_SCALE,         /* the 3D image's lines over the console's 456 as shown (1 at its resolution, 0
                                         before the first scene): LodCtrl's switch distances grow by it */
+    NEBULA_OPTION_TEST_LOD,          /* tests (GALAXY_TEST_LOD): 1 every LodCtrl shows its middle model, 2 its low
+                                        model, 3 its high and middle models in turn each frame (the switch itself) */
 };
 
 /* game_light: the game's lights, from the objects that own them; `values` per kind. */
