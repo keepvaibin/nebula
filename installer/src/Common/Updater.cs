@@ -20,10 +20,12 @@ namespace Nebula
     /// </summary>
     internal static class Updater
     {
+        /// <summary>The releases list (tests point it at a local server).</summary>
+        internal static string ReleasesUrl = "https://api.github.com/repos/" + BuildInfo.Repository + "/releases?per_page=30";
+
         public static ReleaseInfo FindNewer(int timeoutMilliseconds = 30000)
         {
-            string json = Downloader.GetString("https://api.github.com/repos/" + BuildInfo.Repository + "/releases?per_page=30",
-                "application/vnd.github+json", timeoutMilliseconds);
+            string json = Downloader.GetString(ReleasesUrl, "application/vnd.github+json", timeoutMilliseconds);
             return SelectNewer(json, BuildInfo.Version);
         }
 
@@ -77,15 +79,20 @@ namespace Nebula
             string folder = Path.Combine(directory, "update-" + release.Version);
             string exe = Path.Combine(folder, "Nebula-Setup.exe");
             string sig = exe + ".sig";
-            if (File.Exists(exe)) File.Delete(exe);
-            Downloader.Fetch(release.SignatureUrl, sig, null, cancel);
-            Downloader.Fetch(release.SetupUrl, exe, onBytes, cancel);
-            if (!VerifySignature(exe, sig))
+            // The signature is fetched afresh each time (a release published again under its version has a new one);
+            // the setup resumes a partial download, so a check that fails downloads it once more from the start.
+            for (int attempt = 0; ; attempt++)
             {
+                if (File.Exists(exe)) File.Delete(exe);
+                if (File.Exists(sig)) File.Delete(sig);
+                if (attempt > 0 && File.Exists(exe + ".partial")) File.Delete(exe + ".partial");
+                Downloader.Fetch(release.SignatureUrl, sig, null, cancel);
+                Downloader.Fetch(release.SetupUrl, exe, onBytes, cancel);
+                if (VerifySignature(exe, sig)) return exe;
                 File.Delete(exe);
-                throw new InvalidDataException("The downloaded Nebula " + release.Version + " setup is not signed by the Nebula release key. It was deleted and not run.");
+                if (attempt == 1)
+                    throw new InvalidDataException("The downloaded Nebula " + release.Version + " setup is not signed by the Nebula release key. It was deleted and not run.");
             }
-            return exe;
         }
 
         public static bool VerifySignature(string file, string signatureFile)

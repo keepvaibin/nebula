@@ -77,7 +77,8 @@ the Petari decompilation by SMGCommunity, compiled for the PC with the changes a
 3. Start **Nebula** from the Start menu.
 
 Setup also updates, repairs and uninstalls. Updates are signed; Setup checks the signature against the public key
-built into it before installing.
+built into it before installing. Each update keeps the version before it: **Nebula Setup > Restore the previous
+version** goes back to it (and forward again the same way).
 
 ## Saves
 

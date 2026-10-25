@@ -247,10 +247,16 @@ namespace Nebula.Setup
         /// </summary>
         private void RemoveRecompiledGame()
         {
+            // The previous native version stays for rollback; a recompiled one cannot run this content, so it goes.
+            var current = InstalledInfo.Read(layout);
+            string previous = current != null ? current.Previous : null;
+            bool previousRemoved = false;
             foreach (var dir in Directory.GetDirectories(layout.Versions))
             {
-                if (string.Equals(Path.GetFileName(dir), BuildInfo.Version, StringComparison.OrdinalIgnoreCase)) continue;
+                string name = Path.GetFileName(dir);
+                if (string.Equals(name, BuildInfo.Version, StringComparison.OrdinalIgnoreCase) || !HoldsRecompiledGame(dir)) continue;
                 TryDeleteTree(dir);
+                previousRemoved = previousRemoved || string.Equals(name, previous, StringComparison.OrdinalIgnoreCase);
             }
             TryDeleteTree(layout.Toolchains);
             TryDeleteTree(layout.Sources);
@@ -258,8 +264,14 @@ namespace Nebula.Setup
             {
                 try { File.Delete(file); } catch (IOException) { } catch (UnauthorizedAccessException) { }
             }
-            Json.Save(layout.Current, new Dictionary<string, object> { { "version", BuildInfo.Version }, { "previous", null } });
-            Log("Removed the recompiled game, its compiler and its source.");
+            if (previousRemoved)
+                Json.Save(layout.Current, new Dictionary<string, object> { { "version", BuildInfo.Version }, { "previous", null } });
+        }
+
+        /// <summary>A version folder of the recompiled game (1.x): its runtime or its recompiled modules.</summary>
+        internal static bool HoldsRecompiledGame(string dir)
+        {
+            return File.Exists(Path.Combine(dir, "NebulaRuntime.exe")) || Directory.GetFiles(dir, "RMGE01_*.dll").Length != 0;
         }
 
         private void TryDeleteTree(string dir)
