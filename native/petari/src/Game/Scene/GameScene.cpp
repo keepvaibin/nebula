@@ -276,6 +276,18 @@ void GameScene::draw() const {
         sPendingStar == NEBULA_TEST_GET_GRAND_STAR ? MR::requestGrandStarGetDemo() : MR::requestPowerStarGetDemo();
         sPendingStar = 0;
     }
+    // The settings' galaxy select (its ADVANCED page) names its galaxies and stars in the game's own words, asked once.
+    if (__NebulaGalaxySelectNamesWanted() != 0) {
+        char id[64];
+        u32 stars = 0;
+        for (u32 i = 0; __NebulaGalaxySelectStage(i, id, sizeof(id), &stars) != 0; ++i) {
+            __NebulaGalaxySelectName(i, 0, reinterpret_cast< const u16* >(MR::getGalaxyNameOnCurrentLanguage(id)));
+            for (u32 star = 1; star <= stars; ++star) {
+                __NebulaGalaxySelectName(i, star,
+                                         reinterpret_cast< const u16* >(MR::getScenarioNameOnCurrentLanguage(id, star)));
+            }
+        }
+    }
     NebulaTestAction action;
     if (__NebulaTestSceneFrame(&action)) {
         static char sStage[sizeof(action.stage)];  // the stage change keeps a pointer to the name
@@ -305,9 +317,14 @@ void GameScene::draw() const {
             // The scene's domes and their parts take their state from the save as it is when they are built
             // (AstroMapObjFunction::isAlreadyRevival), so the stage starts again with these stars: set only at the
             // scene's second frame, every dome would stay a shell without its pillars, lamps and glass top, a state
-            // play never reaches.
-            strcpy(sStage, MR::getCurrentStageName());
-            MR::requestChangeStageInGameMoving(sStage, MR::getCurrentScenarioNo());
+            // play never reaches. The galaxy select names the Observatory; tests start the stage played again.
+            if (action.stage[0] != '\0') {
+                strcpy(sStage, action.stage);
+                MR::requestChangeStageInGameMoving(sStage, 1);
+            } else {
+                strcpy(sStage, MR::getCurrentStageName());
+                MR::requestChangeStageInGameMoving(sStage, MR::getCurrentScenarioNo());
+            }
         } else if (action.kind == NEBULA_TEST_SET_EVENT_FLAG) {
             // A stored flag on, past its prerequisites (tryOn checks them; flags the game derives from others, such as
             // the storybook's chapters, follow those). name=value: an event value (LibraryOpenNewStarCount=0 with

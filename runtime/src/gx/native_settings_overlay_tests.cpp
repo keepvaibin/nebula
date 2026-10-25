@@ -124,7 +124,7 @@ int main() {
     passed &= expect(!snapshot.visible, "overlay starts hidden");
     passed &= expect(!snapshot.dirty, "overlay starts clean");
     passed &= expect(!snapshot.save_error, "overlay starts without a save error");
-    passed &= expect(snapshot.tab_count == 7u, "display/graphics/controls/audio/game/mods/system tabs exist");
+    passed &= expect(snapshot.tab_count == 8u, "display/graphics/controls/audio/game/mods/system/advanced tabs exist");
     passed &= expect(snapshot.tab == 0u && snapshot.row == 1u, "the first setting row (below its heading) is selected");
     passed &= expect(
         snapshot.row_count == 9u,
@@ -564,12 +564,16 @@ int main() {
     passed &= expect(snapshot.row == 0u && key(VK_RIGHT) && key(VK_LEFT) &&
                          galaxy::gx::native_settings_overlay_snapshot().pending_changes == 0u,
                      "the graphics card row cannot be changed in game");
+    passed &= expect(key(VK_TAB), "Tab enters the advanced page");
+    snapshot = galaxy::gx::native_settings_overlay_snapshot();
+    passed &= expect(snapshot.tab == 7u && snapshot.row_count == 5u,
+                     "advanced page has the galaxy select heading, galaxy, star and its two buttons");
     passed &= expect(key(VK_TAB), "Tab navigation wraps");
     passed &= expect(
         galaxy::gx::native_settings_overlay_snapshot().tab == 0u,
         "Tab wraps back to video");
     passed &= expect(
-        key(VK_PRIOR) && galaxy::gx::native_settings_overlay_snapshot().tab == 6u,
+        key(VK_PRIOR) && galaxy::gx::native_settings_overlay_snapshot().tab == 7u,
         "Page Up (controller LB) selects the previous page, wrapping");
     passed &= expect(
         key(VK_NEXT) && galaxy::gx::native_settings_overlay_snapshot().tab == 0u,
@@ -708,7 +712,7 @@ int main() {
         // The view: every page, rows split into label and value, headings, and the pointer's choices.
         passed &= expect(key(VK_F1), "the menu opens for the view checks");
         galaxy::gx::NativeSettingsView view = galaxy::gx::native_settings_view();
-        passed &= expect(view.open && view.pages.size() == 7u && view.pages[0] == "DISPLAY" && view.controls_page == 2u,
+        passed &= expect(view.open && view.pages.size() == 8u && view.pages[0] == "DISPLAY" && view.controls_page == 2u,
                          "the view lists the seven pages and the controls page");
         passed &= expect(!view.rows.empty() && view.rows[0].heading && !view.rows[view.selected].heading,
                          "a page starts with a heading; the selection is never one");

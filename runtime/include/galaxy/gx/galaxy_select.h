@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-// The GAME page's galaxy select: its stage list and the page's requests. galaxy_select_enabled() is false, so the
-// page does not offer it.
+// The ADVANCED page's galaxy select: its stage list, the page's requests (taken by the game each scene frame,
+// svc_test_scene_frame) and the names the game gives it in its own words.
 
 #include <cstddef>
 #include <cstdint>
@@ -42,11 +42,16 @@ inline constexpr std::size_t kGalaxyStageCount = sizeof(kGalaxyStages) / sizeof(
 inline constexpr const char* kObservatoryId = "AstroGalaxy";
 inline constexpr const char* kObservatoryName = "COMET OBSERVATORY";
 
-[[nodiscard]] bool galaxy_select_enabled() noexcept;
-
 void request_galaxy_travel(std::size_t stage, std::uint32_t star) noexcept;
 void request_grand_stars() noexcept;
+// The game, once per scene frame: a travel the page asked for (true, once), and the Grand Stars.
+[[nodiscard]] bool take_galaxy_travel(std::size_t& stage, std::uint32_t& star) noexcept;
+[[nodiscard]] bool take_grand_stars() noexcept;
+// The page asks for the names while it has none; the game is asked once (true), then gives them.
 void want_galaxy_select_names() noexcept;
+[[nodiscard]] bool take_galaxy_select_names_wanted() noexcept;
+// A name from the game (star 0: the galaxy's).
+void set_galaxy_select_name(std::size_t stage, std::uint32_t star, std::string name);
 // The stage and star names; empty when not known.
 [[nodiscard]] std::string galaxy_select_name(std::size_t stage);
 [[nodiscard]] std::string galaxy_select_star_name(std::size_t stage, std::uint32_t star);

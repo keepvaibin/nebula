@@ -40,6 +40,7 @@
 #include "galaxy/wiimote_hid.h"
 #endif
 #include "galaxy/runtime_settings.h"
+#include "galaxy/gx/galaxy_select.h"
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx/rt_materials.h"
 #include "galaxy/gx/texture_pack.h"
@@ -1901,6 +1902,30 @@ uint32_t svc_layer_2d_scale(void*) {
 #endif
 }
 
+#if defined(NEBULA_HOST_RENDERER)
+// The settings' galaxy select: its galaxies for the game to name, and the names it gives.
+int svc_galaxy_select_stage(void*, uint32_t index, char* id, uint32_t capacity, uint32_t* stars) {
+    if (index >= galaxy::gx::kGalaxyStageCount || id == nullptr || capacity == 0u) {
+        return 0;
+    }
+    std::snprintf(id, capacity, "%s", galaxy::gx::kGalaxyStages[index].id);
+    if (stars != nullptr) *stars = galaxy::gx::kGalaxyStages[index].stars;
+    return 1;
+}
+
+int svc_galaxy_select_names_wanted(void*) {
+    return galaxy::gx::take_galaxy_select_names_wanted() ? 1 : 0;
+}
+
+void svc_galaxy_select_name(void*, uint32_t index, uint32_t star, const uint16_t* name) {
+    galaxy::gx::set_galaxy_select_name(index, star, message_utf8(name));
+}
+#else
+int svc_galaxy_select_stage(void*, uint32_t, char*, uint32_t, uint32_t*) { return 0; }
+int svc_galaxy_select_names_wanted(void*) { return 0; }
+void svc_galaxy_select_name(void*, uint32_t, uint32_t, const uint16_t*) {}
+#endif
+
 // The wheel's turn the window gathered since the game last asked.
 int32_t svc_pointer_wheel(void*) {
 #if defined(NEBULA_HOST_RENDERER)
@@ -2729,6 +2754,26 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
         }
     }
     ++scene_frames;
+#if defined(NEBULA_HOST_RENDERER)
+    // The settings' galaxy select (ADVANCED page): a travel the player asked for, through the game's own stage change,
+    // and the Grand Stars with the Observatory they power.
+    {
+        std::size_t stage = 0u;
+        std::uint32_t star = 0u;
+        if (galaxy::gx::take_galaxy_travel(stage, star)) {
+            action->kind = NEBULA_TEST_CHANGE_STAGE;
+            action->scenario = static_cast<int32_t>(star);
+            std::snprintf(action->stage, sizeof(action->stage), "%s", galaxy::gx::kGalaxyStages[stage].id);
+            return 1;
+        }
+        if (galaxy::gx::take_grand_stars()) {
+            action->kind = NEBULA_TEST_SET_GRAND_STARS;
+            action->scenario = 6;
+            std::snprintf(action->stage, sizeof(action->stage), "%s", galaxy::gx::kObservatoryId);
+            return 1;
+        }
+    }
+#endif
     static std::vector<std::string> event_flags = [] {
         std::vector<std::string> names;
         if (const char* value = std::getenv("GALAXY_TEST_EVENT_FLAGS")) {
@@ -2757,6 +2802,7 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
         grand_stars_set = true;
         action->kind = NEBULA_TEST_SET_GRAND_STARS;
         action->scenario = grand_stars;
+        action->stage[0] = '\0';  // the stage played starts again with them
         log_line("test:", "grand stars set");
         return 1;
     }
@@ -3344,6 +3390,9 @@ int main(int argc, char** argv) {
     services.art_export = svc_art_export;
     services.layer_2d_scale = svc_layer_2d_scale;
     services.pointer_wheel = svc_pointer_wheel;
+    services.galaxy_select_stage = svc_galaxy_select_stage;
+    services.galaxy_select_names_wanted = svc_galaxy_select_names_wanted;
+    services.galaxy_select_name = svc_galaxy_select_name;
     services.gx_stripe_particle = svc_gx_stripe_particle;
     services.disc_fst = svc_disc_fst;
     services.disc_read = svc_disc_read;

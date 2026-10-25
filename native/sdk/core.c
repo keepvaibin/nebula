@@ -157,6 +157,18 @@ int __NebulaTracedSun(f32* direction) {
     return sHost->traced_sun(sHost->user, direction);
 }
 
+int __NebulaGalaxySelectStage(u32 index, char* id, u32 capacity, u32* stars) {
+    return sHost->galaxy_select_stage(sHost->user, index, id, capacity, stars);
+}
+
+int __NebulaGalaxySelectNamesWanted(void) {
+    return sHost->galaxy_select_names_wanted(sHost->user);
+}
+
+void __NebulaGalaxySelectName(u32 index, u32 star, const u16* name) {
+    sHost->galaxy_select_name(sHost->user, index, star, name);
+}
+
 NEBULA_GAME_API int nebula_game_memory_regions(NebulaGameMemoryRegion* out, int max) {
     NebulaMemoryRegion regions[4];
     int count = 0;

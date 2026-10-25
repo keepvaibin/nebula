@@ -18,10 +18,6 @@ std::vector<std::vector<std::string>> g_star_names;
 
 }  // namespace
 
-bool galaxy_select_enabled() noexcept {
-    return false;
-}
-
 void request_galaxy_travel(std::size_t stage, std::uint32_t star) noexcept {
     if (stage >= kGalaxyStageCount || star == 0u || star > kGalaxyStages[stage].stars) {
         return;
@@ -33,10 +29,44 @@ void request_grand_stars() noexcept {
     g_grand_stars.store(true, std::memory_order_release);
 }
 
+bool take_galaxy_travel(std::size_t& stage, std::uint32_t& star) noexcept {
+    const std::uint64_t travel = g_travel.exchange(0u, std::memory_order_acq_rel);
+    if (travel == 0u) {
+        return false;
+    }
+    stage = static_cast<std::size_t>((travel & 0xFFFFFFFFu) - 1u);
+    star = static_cast<std::uint32_t>(travel >> 32u);
+    return stage < kGalaxyStageCount;
+}
+
+bool take_grand_stars() noexcept {
+    return g_grand_stars.exchange(false, std::memory_order_acq_rel);
+}
+
 void want_galaxy_select_names() noexcept {
     if (!g_names_known.load(std::memory_order_acquire)) {
         g_names_wanted.store(true, std::memory_order_release);
     }
+}
+
+bool take_galaxy_select_names_wanted() noexcept {
+    return g_names_wanted.exchange(false, std::memory_order_acq_rel) && !g_names_known.load(std::memory_order_acquire);
+}
+
+void set_galaxy_select_name(std::size_t stage, std::uint32_t star, std::string name) {
+    if (stage >= kGalaxyStageCount || star > kGalaxyStages[stage].stars) {
+        return;
+    }
+    const std::lock_guard<std::mutex> lock(g_names_mutex);
+    g_galaxy_names.resize(kGalaxyStageCount);
+    g_star_names.resize(kGalaxyStageCount);
+    if (star == 0u) {
+        g_galaxy_names[stage] = std::move(name);
+    } else {
+        g_star_names[stage].resize(kGalaxyStages[stage].stars);
+        g_star_names[stage][star - 1u] = std::move(name);
+    }
+    g_names_known.store(true, std::memory_order_release);
 }
 
 std::string galaxy_select_name(std::size_t stage) {

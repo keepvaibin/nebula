@@ -333,7 +333,8 @@ bool s_settings_leave_asking = false;
 // Apply saved mod changes this session did not start with: the menu asks whether to restart now.
 std::atomic<bool> s_mods_restart_ask{false};
 // The pages, in order.
-constexpr const char* kNativeSettingsTabNames[] = {"DISPLAY", "GRAPHICS", "CONTROLS", "AUDIO", "GENERAL", "MODS", "SYSTEM"};
+constexpr const char* kNativeSettingsTabNames[] = {"DISPLAY", "GRAPHICS", "CONTROLS", "AUDIO", "GENERAL", "MODS", "SYSTEM",
+                                                   "ADVANCED"};
 
 // Settings menu draft. Display and graphics rows edit s_settings_draft, the game's settings (the audio mix, text
 // speed, button icons, language, Discord status) s_runtime_draft; Enter (Y on a controller) applies them, Backspace
@@ -396,7 +397,7 @@ unsigned s_settings_first_row = 0u;
 // The window thread's left/right-resolved code for the key being handled.
 std::uint32_t s_handled_key_normalized = 0u;
 
-constexpr unsigned kNativeSettingsTabCount = 7;
+constexpr unsigned kNativeSettingsTabCount = 8;
 
 // The GENERAL page's languages, in the order LEFT/RIGHT steps through them.
 constexpr GameLanguage kGameLanguages[] = {GameLanguage::English, GameLanguage::French, GameLanguage::Spanish};
@@ -3493,52 +3494,59 @@ std::vector<SettingsRow> game_page(const RuntimeSettings& runtime) {
         rows.push_back(button_row("MIIS FOLDER", {"OPEN"}, [](RenderConfig&, unsigned) { open_mii_folder(); },
                                   "FILES PUT HERE ARE IMPORTED AT EVERY START"));
     }
-    if (galaxy_select_enabled()) {
-        want_galaxy_select_names();
-        const std::size_t stage = std::min(s_galaxy_select_stage, kGalaxyStageCount - 1u);
-        const std::uint32_t star = std::clamp(s_galaxy_select_star, 1u, kGalaxyStages[stage].stars);
-        std::string name = galaxy_select_name(stage);
-        if (name.empty()) {
-            name = std::string_view(kGalaxyStages[stage].id) == kObservatoryId ? std::string(kObservatoryName)
-                                                                                : upper_ascii(kGalaxyStages[stage].id);
-        }
-        rows.push_back({"GALAXY SELECT", {}, nullptr, {}, true});
-        rows.push_back({"GALAXY", name,
-                        [](RenderConfig&, int delta) {
-                            s_galaxy_select_stage = settings_step(
-                                static_cast<unsigned>(std::min(s_galaxy_select_stage, kGalaxyStageCount - 1u)),
-                                static_cast<unsigned>(kGalaxyStageCount), delta);
-                            s_galaxy_select_star = 1u;
-                        },
-                        "ANY GALAXY, FOR TESTING. STARS COLLECTED THERE ARE SAVED"});
-        std::string star_name = galaxy_select_star_name(stage, star);
-        char star_text[96]{};
-        std::snprintf(star_text, sizeof(star_text), star_name.empty() ? "%u" : "%u  %s", star, star_name.c_str());
-        rows.push_back({"STAR", star_text,
-                        [](RenderConfig&, int delta) {
-                            const std::size_t at = std::min(s_galaxy_select_stage, kGalaxyStageCount - 1u);
-                            s_galaxy_select_star = settings_step(s_galaxy_select_star - 1u, kGalaxyStages[at].stars,
-                                                                 delta) + 1u;
-                        },
-                        "THE MISSION TO PLAY"});
-        rows.push_back(button_row("TRAVEL", {"GO"},
-                        [](RenderConfig&, unsigned) {
-                            const std::size_t at = std::min(s_galaxy_select_stage, kGalaxyStageCount - 1u);
-                            request_galaxy_travel(at, std::clamp(s_galaxy_select_star, 1u, kGalaxyStages[at].stars));
-                            std::cerr << "[settings] travel to " << kGalaxyStages[at].id << ' '
-                                      << s_galaxy_select_star << '\n';
-                            set_native_settings_visible(false);
-                        },
-                        "LOADS IT WITH THE GAME OWN STAGE CHANGE, FROM ANY GALAXY"));
-        rows.push_back(button_row("GRAND STARS", {"GET"},
-                        [](RenderConfig&, unsigned) {
-                            request_grand_stars();
-                            std::cerr << "[settings] grand stars\n";
-                            set_native_settings_visible(false);
-                        },
-                        "GIVES THIS SAVE FILE GRAND STARS 1-6 (EVERY DOME POWERED) AND LOADS THE OBSERVATORY. "
-                        "USE A SPARE FILE"));
+    return rows;
+}
+
+// ADVANCED: any galaxy and star, entered with the game's own stage change (names in its own words), and the Grand
+// Stars that power the Observatory.
+std::vector<SettingsRow> advanced_page() {
+    std::vector<SettingsRow> rows;
+    want_galaxy_select_names();
+    const std::size_t stage = std::min(s_galaxy_select_stage, kGalaxyStageCount - 1u);
+    const std::uint32_t star = std::clamp(s_galaxy_select_star, 1u, kGalaxyStages[stage].stars);
+    std::string name = galaxy_select_name(stage);
+    if (name.empty()) {
+        name = std::string_view(kGalaxyStages[stage].id) == kObservatoryId ? std::string(kObservatoryName)
+                                                                            : upper_ascii(kGalaxyStages[stage].id);
     }
+    rows.push_back({"GALAXY SELECT", {}, nullptr, {}, true});
+    rows.push_back({"GALAXY", name,
+                    [](RenderConfig&, int delta) {
+                        s_galaxy_select_stage = settings_step(
+                            static_cast<unsigned>(std::min(s_galaxy_select_stage, kGalaxyStageCount - 1u)),
+                            static_cast<unsigned>(kGalaxyStageCount), delta);
+                        s_galaxy_select_star = 1u;
+                    },
+                    "ANY GALAXY, FOR TESTING. STARS COLLECTED THERE ARE SAVED"});
+    rows.back().names = 2u;  // the game's own name in the played language
+    std::string star_name = galaxy_select_star_name(stage, star);
+    char star_text[96]{};
+    std::snprintf(star_text, sizeof(star_text), star_name.empty() ? "%u" : "%u  %s", star, star_name.c_str());
+    rows.push_back({"STAR", star_text,
+                    [](RenderConfig&, int delta) {
+                        const std::size_t at = std::min(s_galaxy_select_stage, kGalaxyStageCount - 1u);
+                        s_galaxy_select_star = settings_step(s_galaxy_select_star - 1u, kGalaxyStages[at].stars,
+                                                             delta) + 1u;
+                    },
+                    "THE MISSION TO PLAY"});
+    rows.back().names = 2u;
+    rows.push_back(button_row("TRAVEL", {"GO"},
+                    [](RenderConfig&, unsigned) {
+                        const std::size_t at = std::min(s_galaxy_select_stage, kGalaxyStageCount - 1u);
+                        request_galaxy_travel(at, std::clamp(s_galaxy_select_star, 1u, kGalaxyStages[at].stars));
+                        std::cerr << "[settings] travel to " << kGalaxyStages[at].id << ' '
+                                  << s_galaxy_select_star << '\n';
+                        set_native_settings_visible(false);
+                    },
+                    "LOADS IT WITH THE GAME OWN STAGE CHANGE, FROM ANY GALAXY"));
+    rows.push_back(button_row("GRAND STARS", {"GET"},
+                    [](RenderConfig&, unsigned) {
+                        request_grand_stars();
+                        std::cerr << "[settings] grand stars\n";
+                        set_native_settings_visible(false);
+                    },
+                    "GIVES THIS SAVE FILE GRAND STARS 1-6 (EVERY DOME POWERED) AND LOADS THE OBSERVATORY. "
+                    "USE A SPARE FILE"));
     return rows;
 }
 
@@ -3576,6 +3584,7 @@ std::vector<SettingsRow> settings_page(unsigned tab, const RenderConfig& draft, 
     case 4: return game_page(runtime);
     case 5: return mods_page(draft);
     case 6: return system_page(caps);
+    case 7: return advanced_page();
     default: return {};
     }
 }
@@ -4646,7 +4655,7 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
             set_native_settings_visible(true);
         }
         // GALAXY_TEST_SETTINGS_KEYS=<present>:<key>,...: keys pressed in the menu at those presents (up, down, left,
-        // right, enter, esc, tab, backspace, space).
+        // right, enter, esc, tab, backspace, space; f1 opens and closes the menu).
         static const std::vector<std::pair<unsigned long, WPARAM>> test_keys = [] {
             std::vector<std::pair<unsigned long, WPARAM>> keys;
             static char value[32768]{};  // a walk through every page's rows runs to some 500 keys
@@ -4654,7 +4663,7 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
             if (getenv_s(&length, value, sizeof(value), "GALAXY_TEST_SETTINGS_KEYS") != 0 || length <= 1u) return keys;
             static constexpr std::pair<std::string_view, WPARAM> kNames[] = {
                 {"up", VK_UP}, {"down", VK_DOWN}, {"left", VK_LEFT}, {"right", VK_RIGHT}, {"enter", VK_RETURN},
-                {"esc", VK_ESCAPE}, {"tab", VK_TAB}, {"backspace", VK_BACK}, {"space", VK_SPACE}};
+                {"esc", VK_ESCAPE}, {"tab", VK_TAB}, {"backspace", VK_BACK}, {"space", VK_SPACE}, {"f1", VK_F1}};
             std::string_view rest(value);
             while (!rest.empty()) {
                 const std::size_t comma = rest.find(',');

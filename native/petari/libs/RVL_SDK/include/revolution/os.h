@@ -101,6 +101,11 @@ void __NebulaObjectName(const void* pObject, const char* pName);
 f32 __NebulaLightReach(const char* pModel, f32 radius);
 // The traced sun's world direction (traced_sun in nebula_game_api.h): 1, or 0 without one.
 int __NebulaTracedSun(f32* pDirection);
+// The settings' galaxy select (galaxy_select_stage, galaxy_select_names_wanted, galaxy_select_name in
+// nebula_game_api.h): its galaxy `index` (1, or 0 past the last), whether it waits for names, a name in the game's words.
+int __NebulaGalaxySelectStage(u32 index, char* pId, u32 capacity, u32* pStars);
+int __NebulaGalaxySelectNamesWanted(void);
+void __NebulaGalaxySelectName(u32 index, u32 star, const u16* pName);
 // A native equivalent of a mod's code patch (NEBULA_PATCH_* in nebula_game_api.h): 1 with `pValue` set (when not
 // null) while an enabled mod carries it, else 0.
 int __NebulaCodePatch(u32 id, u32* pValue);

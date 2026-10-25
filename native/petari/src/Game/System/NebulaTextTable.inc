@@ -253,6 +253,8 @@ const NebulaTextRow cNebulaTextRows[] = {
      {L"Mods", nullptr, L"Mods", L"Mods", L"Mods", L"Mods", L"Mods", L"Mod", L"Mods", L"Mods", L"MOD", L"\uBAA8\uB4DC", L"\u6A21\u7EC4", L"\u6A21\u7D44"}},
     {"S.SYSTEM",
      {L"System", nullptr, L"Syst\u00E8me", L"Syst\u00E8me", L"Sistema", L"Sistema", L"System", L"Sistema", L"Systeem", L"Sistema", L"\u30B7\u30B9\u30C6\u30E0", L"\uC2DC\uC2A4\uD15C", L"\u7CFB\u7EDF", L"\u7CFB\u7D71"}},
+    {"S.ADVANCED",
+     {L"Advanced", nullptr, L"Avanc\u00E9", L"Avanc\u00E9", L"Avanzado", L"Avanzado", L"Erweitert", L"Avanzate", L"Geavanceerd", L"Avan\u00E7ado", L"\u8A73\u7D30\u8A2D\u5B9A", L"\uACE0\uAE09", L"\u9AD8\u7EA7", L"\u9032\u968E"}},
     {"S.ON",
      {L"On", nullptr, L"Activ\u00E9", L"Activ\u00E9", L"S\u00ED", L"S\u00ED", L"An", L"S\u00EC", L"Aan", L"Ligado", L"\u30AA\u30F3", L"\uCF1C\uAE30", L"\u5F00", L"\u958B"}},
     {"S.OFF",

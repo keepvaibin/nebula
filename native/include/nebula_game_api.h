@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 29u
+#define NEBULA_GAME_API_VERSION 30u
 
 /* A physical range of the game's memory and where it is in the host process: what the GPU's addresses resolve to. */
 typedef struct NebulaGameMemoryRegion {
@@ -490,6 +490,14 @@ typedef struct NebulaHostServices {
     /* The mouse wheel's turn since the last call, in 120ths of a notch (positive away from the player), while no screen
        of the host's takes it: the achievement board scrolls by it. */
     int32_t (*pointer_wheel)(void* user);
+    /* The settings' galaxy select (ADVANCED page): its galaxy `index` (the game's stage name in `id`, `capacity` bytes,
+       and its enterable stars in `stars`): 1, or 0 past the last. */
+    int (*galaxy_select_stage)(void* user, uint32_t index, char* id, uint32_t capacity, uint32_t* stars);
+    /* 1 while the galaxy select waits for its names (galaxy_select_name), else 0. */
+    int (*galaxy_select_names_wanted)(void* user);
+    /* A name for the galaxy select in the game's own words in the played language (UTF-16, NUL-terminated): galaxy
+       `index`'s (`star` 0) or its star's. */
+    void (*galaxy_select_name)(void* user, uint32_t index, uint32_t star, const uint16_t* name);
 } NebulaHostServices;
 
 enum {
