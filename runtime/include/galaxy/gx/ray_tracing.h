@@ -1047,6 +1047,13 @@ private:
     bool key_shown_ = false;
     bool sun_shown_ = false;   // this trace's sun is one the sky shows (the camera's shafts come from it)
     std::array<float, 3> sun_visible_eye_{};   // where the sky shows it (eye space; the light may stand higher)
+    // The light's direction as last traced (world), eased toward each trace's (hold_light): its source (0 the sun the
+    // sky shows, 1 the table's moon, 2 the key light), the stage's sun row and when it was traced.
+    std::array<float, 3> light_world_{};
+    bool light_world_valid_ = false;
+    int light_world_source_ = -1;
+    const RtStageSun* light_world_stage_ = nullptr;
+    std::chrono::steady_clock::time_point light_world_time_{};
     std::array<float, 3> key_direction_{};
     std::array<float, 3> key_color_{};
     float key_strength_ = 0.0f;

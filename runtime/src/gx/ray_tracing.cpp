@@ -455,9 +455,11 @@ D3D12_RESOURCE_BARRIER uav_barrier(ID3D12Resource* resource) {
     return barrier;
 }
 
-// A light's direction d held between `lowest` and `highest` degrees over the horizon of `up` (any space, both in it),
-// its compass direction kept; one straight above or below turns toward `away` (the camera's back: the shadows fall
-// away from it). d comes back unit length.
+// A light's direction d held between `lowest` and `highest` degrees over the horizon of `up` (any space, all three in
+// it), its compass direction kept. Near straight above or below (within 60 degrees of the axis, weighed in smoothly)
+// that compass direction is a short vector that swings round as `up` moves, so the light turns toward `away` there
+// instead: its own direction as last traced, so a sun under the player's feet keeps its side rather than flipping
+// between frames (the camera's back before there is one: the shadows fall away from it). d comes back unit length.
 void hold_elevation(std::array<float, 3>& d, const std::array<float, 3>& up, float lowest, float highest,
                     const std::array<float, 3>& away) noexcept {
     const float up_length = std::sqrt(up[0] * up[0] + up[1] * up[1] + up[2] * up[2]);
@@ -474,19 +476,62 @@ void hold_elevation(std::array<float, 3>& d, const std::array<float, 3>& up, flo
         return;
     }
     const float target = std::clamp(e, min_e, max_e);
-    std::array<float, 3> h{d[0] - e * u[0], d[1] - e * u[1], d[2] - e * u[2]};
-    float h_length = std::sqrt(h[0] * h[0] + h[1] * h[1] + h[2] * h[2]);
-    if (h_length < 1e-3f) {
-        const float along = away[0] * u[0] + away[1] * u[1] + away[2] * u[2];
-        h = {away[0] - along * u[0], away[1] - along * u[1], away[2] - along * u[2]};
-        h_length = std::sqrt(h[0] * h[0] + h[1] * h[1] + h[2] * h[2]);
+    // Its own compass direction (length: the cosine of its elevation) and away's.
+    const std::array<float, 3> h{d[0] - e * u[0], d[1] - e * u[1], d[2] - e * u[2]};
+    const float h_length = std::sqrt(h[0] * h[0] + h[1] * h[1] + h[2] * h[2]);
+    const float along = away[0] * u[0] + away[1] * u[1] + away[2] * u[2];
+    const std::array<float, 3> a{away[0] - along * u[0], away[1] - along * u[1], away[2] - along * u[2]};
+    const float a_length = std::sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]);
+    // Its own direction's weight: none on the axis, whole from 60 degrees off it (cosine 0.5), smoothstep between.
+    const float t = std::clamp(h_length / 0.5f, 0.0f, 1.0f);
+    const float own = a_length > 1e-6f ? t * t * (3.0f - 2.0f * t) : 1.0f;
+    std::array<float, 3> compass{};
+    for (unsigned i = 0; i < 3u; ++i) {
+        compass[i] = (h_length > 1e-6f ? own * h[i] / h_length : 0.0f) +
+                     (a_length > 1e-6f ? (1.0f - own) * a[i] / a_length : 0.0f);
     }
-    if (h_length > 1e-6f) {
+    float c_length = std::sqrt(compass[0] * compass[0] + compass[1] * compass[1] + compass[2] * compass[2]);
+    if (c_length < 1e-3f) {
+        // Its own and away's opposed, equally weighed: its own.
+        compass = h_length > 1e-6f ? h : a;
+        c_length = h_length > 1e-6f ? h_length : a_length;
+    }
+    if (c_length > 1e-6f) {
         const float across = std::sqrt(std::max(1.0f - target * target, 0.0f));
         for (unsigned i = 0; i < 3u; ++i) {
-            d[i] = h[i] / h_length * across + u[i] * target;
+            d[i] = compass[i] / c_length * across + u[i] * target;
         }
     }
+}
+
+// The unit direction a fraction `amount` of the way from unit `from` to unit `to` along the great circle.
+std::array<float, 3> slerp_direction(const std::array<float, 3>& from, const std::array<float, 3>& to,
+                                     float amount) noexcept {
+    const float c = std::clamp(from[0] * to[0] + from[1] * to[1] + from[2] * to[2], -1.0f, 1.0f);
+    const float angle = std::acos(c);
+    std::array<float, 3> out{};
+    if (angle < 1e-4f) {
+        out = to;
+    } else if (angle > 3.14159265f - 1e-3f) {
+        // Opposed: any great circle joins them; the one through the axis `from` is least aligned with.
+        const unsigned k = std::abs(from[0]) < std::abs(from[1]) ? (std::abs(from[0]) < std::abs(from[2]) ? 0u : 2u)
+                                                                 : (std::abs(from[1]) < std::abs(from[2]) ? 1u : 2u);
+        std::array<float, 3> p{};
+        p[k] = 1.0f;
+        const float along = p[0] * from[0] + p[1] * from[1] + p[2] * from[2];
+        for (unsigned i = 0; i < 3u; ++i) p[i] -= along * from[i];
+        const float p_length = std::sqrt(p[0] * p[0] + p[1] * p[1] + p[2] * p[2]);
+        const float turn = amount * 3.14159265f;
+        for (unsigned i = 0; i < 3u; ++i) out[i] = std::cos(turn) * from[i] + std::sin(turn) * p[i] / p_length;
+    } else {
+        const float s = std::sin(angle);
+        const float wf = std::sin((1.0f - amount) * angle) / s;
+        const float wt = std::sin(amount * angle) / s;
+        for (unsigned i = 0; i < 3u; ++i) out[i] = wf * from[i] + wt * to[i];
+    }
+    const float length = std::sqrt(out[0] * out[0] + out[1] * out[1] + out[2] * out[2]);
+    for (float& v : out) v = length > 1e-6f ? v / length : 0.0f;
+    return out;
 }
 
 }  // namespace
@@ -3275,7 +3320,8 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
                 }
             }
             hold_elevation(l, up, lift_sun ? sun_min_elevation_ : key_min_elevation_,
-                           lift_sun ? 90.0f : sun_max_elevation_, {camera_[8], camera_[9], camera_[10]});
+                           lift_sun ? 90.0f : sun_max_elevation_,
+                           light_world_valid_ ? light_world_ : std::array<float, 3>{camera_[8], camera_[9], camera_[10]});
         }
         std::array<float, 3> sun_color = keyed ? key_color_ : sun_color_;
         const RtStageSun* const stage = stage_sun_;
@@ -3488,19 +3534,40 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
             if (sun_override_) {
                 return;
             }
-            std::array<float, 3> d{c.sun[0], c.sun[1], c.sun[2]};
-            hold_elevation(d, scene_up_, shown ? sun_min_elevation_ : key_min_elevation_,
-                           shown ? 90.0f : sun_max_elevation_, {0.0f, 0.0f, 1.0f});
-            std::copy(d.begin(), d.end(), c.sun);
-            // The game's off-screen shadow casters sweep along it (world: the rotation's transpose).
+            // In world space (eye to world: the rotation's transpose), where the light's last direction is kept.
             std::array<float, 3> world{};
             std::array<float, 3> world_up{};
             for (unsigned r = 0; r < 3u; ++r) {
                 for (unsigned k = 0; k < 3u; ++k) {
-                    world[k] += camera_[r * 4u + k] * d[r];
+                    world[k] += camera_[r * 4u + k] * c.sun[r];
                     world_up[k] += camera_[r * 4u + k] * scene_up_[r];
                 }
             }
+            const int source = shown ? 0 : table_moon ? 1 : 2;
+            const auto now = std::chrono::steady_clock::now();
+            const float since = light_world_valid_ ? std::chrono::duration<float>(now - light_world_time_).count() : 1.0e9f;
+            // Half a second without a trace (a load, a pause), another stage or another source: the light starts
+            // where it stands.
+            const bool continues = light_world_valid_ && light_world_source_ == source &&
+                                   light_world_stage_ == stage_sun_ && since < 0.5f;
+            hold_elevation(world, world_up, shown ? sun_min_elevation_ : key_min_elevation_,
+                           shown ? 90.0f : sun_max_elevation_,
+                           continues ? light_world_ : std::array<float, 3>{camera_[8], camera_[9], camera_[10]});
+            // The held direction follows the player's up, which turns at once where the game's gravity changes (a
+            // jump onto another planet, a long jump over a small one): the light eases toward it, a quarter of a
+            // second's time constant, as a sun moving across the sky rather than a cut.
+            if (continues) {
+                world = slerp_direction(light_world_, world, 1.0f - std::exp(-std::max(since, 0.0f) / 0.25f));
+            }
+            light_world_ = world;
+            light_world_valid_ = camera_known_;
+            light_world_source_ = source;
+            light_world_stage_ = stage_sun_;
+            light_world_time_ = now;
+            for (unsigned r = 0; r < 3u; ++r) {
+                c.sun[r] = camera_[r * 4u] * world[0] + camera_[r * 4u + 1u] * world[1] + camera_[r * 4u + 2u] * world[2];
+            }
+            // The game's off-screen shadow casters sweep along it.
             set_traced_sun(world, camera_known_);
             // GALAXY_TRACE_SUN=1: per traced scene the light's world direction, where it comes from (the sun the game
             // shows, else its key light or the table's moon) and the player's up.
