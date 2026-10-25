@@ -300,10 +300,4 @@ namespace GameSequenceFunction {
             ::getSaveDataHandleSequence()->startSave(isConfirmRemind, isSaveAndQuitMsg);
         }
     }
-#ifdef TARGET_PC
-
-    void setGameDataSaveWindowFollows() {
-        ::getSaveDataHandleSequence()->setWindowFollows(true);
-    }
-#endif
 };  // namespace GameSequenceFunction

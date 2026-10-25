@@ -49,9 +49,7 @@ void NebulaPauseSettingsButton::init(const JMapInfoIter& rIter) {
 
     mButton = new ButtonPaneController(this, "NBackDown", "BoxButton2", 0, true);
     mButton->_22 = false;
-    // PauseMenu::draw draws it with the menu's own layout: under the windows that open over the menu (its questions,
-    // the save's) and under Luigi's letter, as the menu's own buttons are.
-    MR::connectToSceneLayoutOnPauseMovementCalcAnim(this);
+    MR::connectToSceneLayoutOnPause(this);
     kill();
 }
 

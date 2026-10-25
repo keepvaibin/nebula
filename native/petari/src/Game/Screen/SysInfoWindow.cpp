@@ -7,11 +7,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <cstdio>
 #ifdef TARGET_PC
-#include "Game/Screen/LayoutManager.hpp"
-#include "Game/Util/DrawUtil.hpp"
-#include <nw4r/lyt/pane.h>
 #include <nw4r/lyt/textBox.h>
-#include <revolution/os.h>
 #endif
 
 namespace {
@@ -19,18 +15,6 @@ namespace {
         {MR::setTextBoxSystemMessageRecursive},
         {MR::setTextBoxGameMessageRecursive},
     };
-#ifdef TARGET_PC
-    // The dim a closing or closed system window still shows, and when it last did (OSGetTime); the hand-overs so far.
-    f32 sDimLeft = 0.0f;
-    OSTime sDimLeftTime = 0;
-    u32 sDimEpoch = 0;
-    // A closed window's dim holds this many frames for the next window (the pause menu's question opens 9 frames
-    // after the save's last window closes), then lifts over 10, as the windows' own end animations do.
-    const s32 cDimLinger = 12;
-    const f32 cDimStep = 0.1f;
-    // A dim left longer ago than this belongs to an earlier screen.
-    const s32 cDimHandOverMs = 100;
-#endif
 };  // namespace
 
 namespace NrvSysInfoWindow {
@@ -44,8 +28,7 @@ SysInfoWindow::SysInfoWindow(SysInfoWindowType windowType, SysInfoExecuteType ex
       mIconAButton(nullptr), mTextParentPaneName(nullptr), mWindowParentPaneName(nullptr), _38(executeType == ExecuteType_Children)
 #ifdef TARGET_PC
       ,
-      mIsBackAnswersNo(false), mDimPane(nullptr), mDim(0.0f), mDimFloor(0.0f), mDimLinger(0), mDimEpoch(0),
-      mDimHandOver(DimHandOver_None), mDimHanding(false)
+      mIsBackAnswersNo(false)
 #endif
 {
     switch (windowType) {
@@ -74,9 +57,6 @@ void SysInfoWindow::init(const JMapInfoIter& rIter) {
     }
 
     mIconAButton = MR::createAndSetupIconAButton(this, !_38, false);
-#ifdef TARGET_PC
-    mDimPane = MR::getPane(this, "BG");
-#endif
 
     initNerve(GET_NERVE(SysInfoWindow, SysInfoWindowNrvAppear));
 }
@@ -91,9 +71,6 @@ void SysInfoWindow::movement() {
 
 void SysInfoWindow::calcAnim() {
     LayoutActor::calcAnim();
-#ifdef TARGET_PC
-    updateDim();
-#endif
 
     if (_38) {
         mIconAButton->calcAnim();
@@ -101,24 +78,7 @@ void SysInfoWindow::calcAnim() {
 }
 
 void SysInfoWindow::draw() const {
-#ifdef TARGET_PC
-    if (mDimPane != nullptr) {
-        // A dim handed over goes the frame the next window opens (this window's update may have run first).
-        if (mDim > 0.0f && !mFlag.mIsHidden && (!mDimHanding || mDimEpoch == sDimEpoch)) {
-            drawDim();
-        }
-        if (!MR::isDead(this)) {
-            const bool shown = mDimPane->IsVisible();
-            mDimPane->SetVisible(false);
-            LayoutActor::draw();
-            mDimPane->SetVisible(shown);
-        }
-    } else {
-        LayoutActor::draw();
-    }
-#else
     LayoutActor::draw();
-#endif
 
     if (_38) {
         mIconAButton->draw();
@@ -126,17 +86,6 @@ void SysInfoWindow::draw() const {
 }
 
 void SysInfoWindow::appear() {
-#ifdef TARGET_PC
-    // The dim a window closing or just closed left takes this one's place until its own is as deep.
-    mDimFloor = 0.0f;
-    if (sDimLeft > 0.0f && OSTicksToMilliseconds(OSGetTime() - sDimLeftTime) < cDimHandOverMs) {
-        mDimFloor = sDimLeft;
-    }
-    mDimEpoch = ++sDimEpoch;
-    sDimLeft = 0.0f;
-    mDimHandOver = DimHandOver_None;
-    mDimHanding = false;
-#endif
     const char* pAnimName = "ButtonAppear";
 
     MR::startPaneAnim(this, mTextParentPaneName, pAnimName, 0);
@@ -209,11 +158,6 @@ void SysInfoWindow::kill() {
 
 void SysInfoWindow::forceKill() {
     kill();
-#ifdef TARGET_PC
-    // Taken away at once: its dim goes with it.
-    mDim = 0.0f;
-    mDimHanding = false;
-#endif
 
     if (mYesNoSelector != nullptr) {
         mYesNoSelector->kill();
@@ -272,68 +216,6 @@ void SysInfoWindow::decideNo() {
         mYesNoSelector->decideNo();
     }
 }
-
-// The BG pane's alpha as the layout would draw it: its own times its influencing parents'.
-f32 SysInfoWindow::getOwnDim() const {
-    f32 level = mDimPane->IsVisible() ? mDimPane->mAlpha / 255.0f : 0.0f;
-    for (const nw4r::lyt::Pane* pPane = mDimPane->GetParent(); pPane != nullptr && level > 0.0f; pPane = pPane->GetParent()) {
-        if (!pPane->IsVisible()) {
-            level = 0.0f;
-        } else if (pPane->IsInfluencedAlpha()) {
-            level *= pPane->mAlpha / 255.0f;
-        }
-    }
-    return level;
-}
-
-void SysInfoWindow::setDimHandOver(u8 when) {
-    mDimHandOver = when;
-}
-
-// Each frame (calcAnim runs for a closed window too): an open window shows its own dim or the one it took over. A
-// closing window handing its dim over holds it, and once closed holds it cDimLinger frames, then lifts it, unless the
-// next window took it; any other closing window fades its dim with itself, as the game does.
-void SysInfoWindow::updateDim() {
-    if (mDimPane == nullptr) {
-        return;
-    }
-    const bool open = !MR::isDead(this);
-    const bool closing = open && isNerve(GET_NERVE(SysInfoWindow, SysInfoWindowNrvDisappear));
-    if (open && (!closing || !mDimHanding)) {
-        const f32 own = getOwnDim();
-        mDim = closing || own > mDimFloor ? own : mDimFloor;
-        mDimLinger = cDimLinger;
-        return;
-    }
-    if (!mDimHanding || mDimEpoch != sDimEpoch) {
-        mDim = 0.0f;
-        return;
-    }
-    if (!open) {
-        if (mDimLinger > 0) {
-            mDimLinger--;
-        } else {
-            mDim = mDim > cDimStep ? mDim - cDimStep : 0.0f;
-        }
-    }
-    if (mDim > 0.0f) {
-        sDimLeft = mDim;
-        sDimLeftTime = OSGetTime();
-    }
-}
-
-// The BG pane alone at the window's dim, where the layout draws it (first, under everything else).
-void SysInfoWindow::drawDim() const {
-    LayoutManager* pManager = getLayoutManager();
-    if (pManager == nullptr || pManager->mIsScreenHidden) {
-        return;
-    }
-    MR::setupDrawForNW4RLayout(1.0f, true);
-    const u8 alpha = mDimPane->mGlbAlpha;
-    mDimPane->mGlbAlpha = static_cast< u8 >(mDim * 255.0f + 0.5f);
-    mDimPane->Draw(pManager->mDrawInfo);
-    mDimPane->mGlbAlpha = alpha;
-}
 #endif
 
 const char* SysInfoWindow::getLayoutName() const {
@@ -389,17 +271,6 @@ void SysInfoWindow::exeDisappear() {
         if (mType == Type_Key) {
             mIconAButton->term();
         }
-#ifdef TARGET_PC
-        // A window the caller opens next (even this frame) takes over the dim this one shows now.
-        const u8 answer = mType == Type_YesNo && mYesNoSelector != nullptr
-                              ? (mYesNoSelector->isSelectedYes() ? DimHandOver_Yes : DimHandOver_No)
-                              : DimHandOver_Always;
-        mDimHanding = (mDimHandOver & answer) != 0 && mDimEpoch == sDimEpoch;
-        if (mDimHanding && mDim > 0.0f) {
-            sDimLeft = mDim;
-            sDimLeftTime = OSGetTime();
-        }
-#endif
     }
 
     if (MR::isPaneAnimStopped(this, mTextParentPaneName, 0)) {

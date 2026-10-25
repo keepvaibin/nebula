@@ -30,13 +30,6 @@ public:
     void startSave(bool, bool);
     void startSaveBackup(bool, bool);
     void startSaveAll();
-#ifdef TARGET_PC
-    // The caller opens a system window when the save is done (the pause menu's question): the done message hands the
-    // screen dim to it (SysInfoWindow::setDimHandOver). Until the next start.
-    void setWindowFollows(bool follows) {
-        mWindowFollows = follows;
-    }
-#endif
     void startSaveTotalMailSize();
     void startLoad(int, bool);
     void storeMiiOrIconId(int, const void*, const u32*);
@@ -100,7 +93,4 @@ public:
     /* 0x3C */ MR::FunctorBase* mOnSaveSuccessFunc;
     /* 0x40 */ MR::FunctorBase* mJustBeforeSaveFunc;
     /* 0x44 */ SaveIcon* mSaveIcon;
-#ifdef TARGET_PC
-    bool mWindowFollows;
-#endif
 };

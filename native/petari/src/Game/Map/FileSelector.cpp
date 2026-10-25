@@ -1346,10 +1346,6 @@ void FileSelector::exeCreateConfirm() {
     if (MR::isFirstStep(this)) {
         mSysInfoWindow->appear("System_FileSelect001", SysInfoWindow::Type_YesNo, SysInfoWindow::TextPos_Center, SysInfoWindow::MessageType_System);
         mSysInfoWindow->setYesNoSelectorSE("SE_SY_BUTTON_CURSOR_ON", "SE_SY_FILE_SEL_NEW_FILE", "SE_SY_TALK_SELECT_NO");
-#ifdef TARGET_PC
-        // Yes saves, under the game's Saving... window.
-        mSysInfoWindow->setDimHandOver(SysInfoWindow::DimHandOver_Yes);
-#endif
     }
 
     if (!MR::isDead(mSysInfoWindow)) {
@@ -1468,10 +1464,6 @@ void FileSelector::exeCopyConfirm() {
 
         mSysInfoWindow->setTextBoxArgNumber(_B8->_140, 0);
         mSysInfoWindow->setTextBoxArgNumber(_B4->_140, 1);
-#ifdef TARGET_PC
-        // Yes saves, under the game's Saving... window.
-        mSysInfoWindow->setDimHandOver(SysInfoWindow::DimHandOver_Yes);
-#endif
     }
 
     if (!MR::isDead(mSysInfoWindow)) {
@@ -1713,10 +1705,6 @@ void FileSelector::exeMiiConfirm() {
         FileSelectFunc::copyMiiName(name, iconId);
         mMiiConfirmIcon->appear(mMiiSelect->getSelectedMiiTexMap(), reinterpret_cast< wchar_t* >(name));
         mSysInfoWindow->setYesNoSelectorSE("SE_SY_BUTTON_CURSOR_ON", "SE_SY_FILE_SEL_MII_CHANGE", "SE_SY_TALK_SELECT_NO");
-#ifdef TARGET_PC
-        // Yes saves, under the game's Saving... window.
-        mSysInfoWindow->setDimHandOver(SysInfoWindow::DimHandOver_Yes);
-#endif
     }
 
     if (!mMiiConfirmIcon->isDisappear() && mSysInfoWindow->isDisappear()) {
@@ -1835,10 +1823,6 @@ void FileSelector::exeDeleteConfirm() {
     if (MR::isFirstStep(this)) {
         mSysInfoWindow->setYesNoSelectorSE("SE_SY_BUTTON_CURSOR_ON", "SE_SY_FILE_SEL_DELETE", "SE_SY_TALK_SELECT_NO");
         mSysInfoWindow->appear("System_FileSelect007", SysInfoWindow::Type_YesNo, SysInfoWindow::TextPos_Center, SysInfoWindow::MessageType_System);
-#ifdef TARGET_PC
-        // Yes saves, under the game's Saving... window.
-        mSysInfoWindow->setDimHandOver(SysInfoWindow::DimHandOver_Yes);
-#endif
     }
 
     if (!MR::isDead(mSysInfoWindow)) {
