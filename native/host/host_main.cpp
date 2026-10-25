@@ -1843,9 +1843,18 @@ uint32_t svc_gx_peek_efb(void*, uint16_t x, uint16_t y, uint32_t type, uint16_t 
 #if defined(NEBULA_HOST_RENDERER)
     const auto kind = type == 0 ? galaxy::gx::EfbPeekKind::Color : galaxy::gx::EfbPeekKind::Depth;
     uint32_t value = 0;
-    if (!galaxy::gx::peek_efb_published(x, y, kind, token, value)) {
+    const bool published = galaxy::gx::peek_efb_published(x, y, kind, token, value);
+    if (!published) {
         submit_frame(false, 0);
         (void)galaxy::gx::peek_efb(x, y, kind, value);
+    }
+    // GALAXY_TRACE_PEEK: every peek, its token, pixel, answer and whether a published field gave it.
+    static const bool trace = std::getenv("GALAXY_TRACE_PEEK") != nullptr;
+    if (trace) {
+        char text[96];
+        std::snprintf(text, sizeof(text), "%s token=%u %u,%u %s 0x%08X", type == 0 ? "argb" : "z", token, x, y,
+                      published ? "field" : "now", value);
+        log_line("peek:", text);
     }
     return value;
 #else
