@@ -26,6 +26,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <cwchar>
+#include <deque>
 #include <iostream>
 #include <memory>
 #include <mutex>
@@ -196,9 +197,13 @@ struct Device {
     std::uint64_t ps_mode_next_us = 0;
     // DualSense Bluetooth output report sequence.
     std::uint8_t ps_sequence = 0;
-    // Steam Controller.
+    // Steam controllers: which one, the 2026 one's sensor clock, the 2015 one's shared axes, and the settings that
+    // turn their keyboard and mouse off (the Deck's watchdog after its first).
+    sv::Model steam_model = sv::Model::Controller;
     sv::SensorClock steam_clock{};
+    sv::ClassicState steam_classic{};
     std::uint64_t steam_settings_due_us = 0;
+    bool steam_configured = false;
     // Joy-Con: its side (a charging grip's by the controller's own report), the half it is paired with (a pair
     // publishes in its right half's slot), its last state and whether its shoulder (L or R) is held.
     sw::JoyConSide joycon = sw::JoyConSide::None;
@@ -222,7 +227,13 @@ struct Device {
     std::uint8_t rumble_sequence = 0;
     std::uint64_t rumble_sent_us = 0;
     UniqueHandle write_event;
-    // The output report in flight without waiting (post_output): one at a time.
+    // Output sent without waiting (queue_output): the reports waiting, and the one in flight.
+    struct Queued {
+        std::vector<std::uint8_t> bytes;
+        bool feature = false;  // a feature report, else an output report
+        bool motor = false;    // a motor's: a newer one replaces it while it waits
+    };
+    std::deque<Queued> outputs;
     std::vector<std::uint8_t> post_buffer;
     OVERLAPPED post_ov{};
     UniqueHandle post_event;
@@ -246,6 +257,7 @@ enum class OffKind : std::uint8_t {
     DualSenseUsb,
     DualSenseBluetooth,
     Steam,
+    SteamDeck,
 };
 
 struct Hub {
@@ -349,8 +361,14 @@ std::optional<ProductInfo> find_product(USHORT vendor, USHORT product) noexcept 
     if (const auto model = ps::model_for_product(vendor, product)) {
         return ProductInfo{ControlScheme::PlayStation, ps::model_name(*model), *model};
     }
-    if (vendor == sv::kValveVendorId && (sv::is_controller_product(product) || sv::is_puck_product(product))) {
-        return ProductInfo{ControlScheme::Steam, "Steam Controller", {}};
+    if (vendor == sv::kValveVendorId) {
+        if (const auto model = sv::model_of_product(product)) {
+            return ProductInfo{ControlScheme::Steam,
+                               *model == sv::Model::Deck      ? "Steam Deck"
+                               : *model == sv::Model::Classic ? "Steam Controller (2015)"
+                                                              : "Steam Controller",
+                               {}};
+        }
     }
     return std::nullopt;
 }
@@ -484,7 +502,7 @@ bool bluetooth_path(const std::wstring& path) {
 
 ControllerLink link_of(const HidCandidate& candidate) {
     if (candidate.info.scheme == ControlScheme::Steam) {
-        if (sv::is_puck_product(candidate.product)) return ControllerLink::Wireless;
+        if (sv::is_receiver_product(candidate.product)) return ControllerLink::Wireless;
         return candidate.product == sv::kControllerBleProductId ? ControllerLink::Bluetooth : ControllerLink::Usb;
     }
     return bluetooth_path(candidate.path) ? ControllerLink::Bluetooth : ControllerLink::Usb;
@@ -547,6 +565,20 @@ std::optional<HIDD_ATTRIBUTES> hid_attributes(const std::wstring& path, UniqueHa
     return attributes;
 }
 
+// The controllers Steam Input reads for this game (SDL_GAMECONTROLLER_IGNORE_DEVICES, set when Steam starts it):
+// read here too, each press would come twice.
+const std::string& steam_input_devices() {
+    static const std::string list = [] {
+        std::array<char, 1024> value{};
+        const DWORD length = GetEnvironmentVariableA("SDL_GAMECONTROLLER_IGNORE_DEVICES", value.data(),
+                                                     static_cast<DWORD>(value.size()));
+        std::string text = length != 0u && length < value.size() ? std::string(value.data(), length) : std::string{};
+        if (!text.empty()) std::cerr << "[controller] left to Steam Input: " << text << '\n';
+        return text;
+    }();
+    return list;
+}
+
 std::vector<HidCandidate> enumerate_hid_pads() {
     std::vector<HidCandidate> found;
     for_each_hid_interface([&](const std::wstring& path, HDEVINFO set, SP_DEVINFO_DATA& info) {
@@ -557,13 +589,14 @@ std::vector<HidCandidate> enumerate_hid_pads() {
         UniqueHandle probe;
         const std::optional<HIDD_ATTRIBUTES> attributes = hid_attributes(path, &probe);
         if (!attributes) return;
+        if (sv::listed_device(steam_input_devices(), attributes->VendorID, attributes->ProductID)) return;
         auto product = find_product(attributes->VendorID, attributes->ProductID);
         if (!product) product = find_generic(probe.get(), attributes->VendorID, path);
         if (!product) return;
-        if (sv::is_puck_product(attributes->ProductID)) {
-            // Interfaces 2..5 carry controllers; the others are not game pads.
-            const int mi = interface_number(path);
-            if (mi < static_cast<int>(sv::kPuckFirstInterface) || mi > static_cast<int>(sv::kPuckLastInterface)) return;
+        // A Steam controller's other interfaces are its keyboard and mouse (a receiver's, its unused ones).
+        if (attributes->VendorID == sv::kValveVendorId &&
+            !sv::is_controller_interface(attributes->ProductID, interface_number(path))) {
+            return;
         }
         found.push_back({path, attributes->VendorID, attributes->ProductID, *product});
     });
@@ -888,6 +921,11 @@ bool write_rumble_off(HANDLE handle, HANDLE event, std::uint16_t output_length, 
     case OffKind::Steam:
         built = sv::build_rumble_report(0, 0, out);
         break;
+    case OffKind::SteamDeck: {
+        std::array<std::uint8_t, sv::kValveFeatureBytes> feature{};
+        return sv::build_deck_rumble_report(0, 0, feature) != 0 &&
+               HidD_SetFeature(handle, feature.data(), static_cast<ULONG>(feature.size()));
+    }
     case OffKind::None:
         break;
     }
@@ -898,7 +936,10 @@ OffKind off_kind_of(const Device& device) noexcept {
     switch (device.scheme) {
     case ControlScheme::SwitchPro: return OffKind::SwitchPro;
     case ControlScheme::SwitchPro2: return OffKind::SwitchPro2;
-    case ControlScheme::Steam: return OffKind::Steam;
+    case ControlScheme::Steam:
+        return device.steam_model == sv::Model::Deck      ? OffKind::SteamDeck
+               : device.steam_model == sv::Model::Classic ? OffKind::None  // its pulses end by themselves
+                                                          : OffKind::Steam;
     case ControlScheme::PlayStation: {
         const bool bluetooth = device.ps_transport == ps::Transport::Bluetooth;
         if (device.ps_model == ps::Model::DualShock4) {
@@ -976,11 +1017,13 @@ bool write_output(Device& device, const std::uint8_t* report, std::size_t built)
     return write_report(device.handle.get(), device.write_event.get(), report, static_cast<DWORD>(length), 30);
 }
 
-// An output report sent without waiting for it (the motors): the worker never stalls on a busy radio, so every
-// controller's reports keep arriving as they come. One is in flight per device; Busy while the last is still going out
-// (the caller tries again at its next turn); one stuck past kPostStuckUs is cancelled.
-enum class Post { Sent, Busy, Failed };
+// Output sent without waiting for it (the motors, a Steam controller's settings): the worker never stalls on a busy
+// radio, so every controller's reports keep arriving as they come. A device's reports go out in order, one in flight
+// (the worker waits on its event and sends the next); a motor report replaces one still waiting; one stuck past
+// kPostStuckUs is cancelled.
 constexpr std::uint64_t kPostStuckUs = 100'000;
+constexpr DWORD kIoctlHidSetFeature = 0x000b0191;  // IOCTL_HID_SET_FEATURE
+constexpr std::size_t kMostQueued = 8;
 
 void finish_post(Device& device, bool wait) {
     if (!device.post_pending) return;
@@ -997,25 +1040,45 @@ void finish_post(Device& device, bool wait) {
     device.post_pending = false;
 }
 
-Post post_output(Device& device, const std::uint8_t* report, std::size_t built) {
-    const std::size_t length = device.output_length;
-    if (built == 0 || built > length || length > kLargestOutputReport) return Post::Failed;
+void pump_output(Device& device) {
     finish_post(device, false);
-    if (device.post_pending) return Post::Busy;
-    if (!device.post_event) device.post_event.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
-    if (!device.post_event) return Post::Failed;
-    device.post_buffer.assign(report, report + built);
-    device.post_buffer.resize(length, 0u);
-    device.post_ov = OVERLAPPED{};
-    device.post_ov.hEvent = device.post_event.get();
-    ResetEvent(device.post_event.get());
-    if (WriteFile(device.handle.get(), device.post_buffer.data(), static_cast<DWORD>(length), nullptr, &device.post_ov)) {
-        return Post::Sent;
+    if (!device.post_event && !device.outputs.empty()) device.post_event.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+    while (!device.post_pending && !device.outputs.empty() && device.post_event) {
+        Device::Queued next = std::move(device.outputs.front());
+        device.outputs.pop_front();
+        device.post_buffer = std::move(next.bytes);
+        device.post_ov = OVERLAPPED{};
+        device.post_ov.hEvent = device.post_event.get();
+        ResetEvent(device.post_event.get());
+        const DWORD size = static_cast<DWORD>(device.post_buffer.size());
+        const BOOL done = next.feature ? DeviceIoControl(device.handle.get(), kIoctlHidSetFeature, device.post_buffer.data(),
+                                                         size, nullptr, 0, nullptr, &device.post_ov)
+                                       : WriteFile(device.handle.get(), device.post_buffer.data(), size, nullptr,
+                                                   &device.post_ov);
+        if (!done && GetLastError() == ERROR_IO_PENDING) {
+            device.post_pending = true;
+            device.post_started_us = steady_us();
+        }
     }
-    if (GetLastError() != ERROR_IO_PENDING) return Post::Failed;
-    device.post_pending = true;
-    device.post_started_us = steady_us();
-    return Post::Sent;
+}
+
+// `report` (`built` bytes; an output report goes out at the handle's full length) after the device's others; a motor
+// report (`motor`) replaces the motor reports waiting unless `replace` is false (the second of a pair).
+void queue_output(Device& device, const std::uint8_t* report, std::size_t built, bool feature, bool motor,
+                  bool replace = true) {
+    const std::size_t length = feature ? built : device.output_length;
+    if (built == 0 || built > length || length > kLargestOutputReport) return;
+    if (motor && replace) {
+        std::erase_if(device.outputs, [](const Device::Queued& queued) { return queued.motor; });
+    }
+    Device::Queued queued;
+    queued.bytes.assign(report, report + built);
+    queued.bytes.resize(length, 0u);
+    queued.feature = feature;
+    queued.motor = motor;
+    if (device.outputs.size() >= kMostQueued) device.outputs.pop_front();
+    device.outputs.push_back(std::move(queued));
+    pump_output(device);
 }
 
 bool send_playstation_effects(Device& device, ps::Effects effects) {
@@ -1082,15 +1145,25 @@ void send_light_bar(Device& device) {
     (void)send_playstation_effects(device, effects);
 }
 
-// The settings the Steam Controller needs from the host: keyboard/mouse
-// emulation off, sensors on. It falls back to the emulation unless they are
-// repeated.
+// The settings a Steam controller needs from the host: its keyboard and mouse off, its sensors on. The 2026 one and
+// the Deck fall back to them unless the settings come again (the Deck's watchdog, every sv::kDeckWatchdogMs); the
+// 2015 one keeps them, sent again now and then for a controller that reconnects.
 void send_steam_settings(Device& device, std::uint64_t now) {
-    device.steam_settings_due_us = now + static_cast<std::uint64_t>(sv::kSettingsRefreshMs) * 1000u;
+    const bool deck = device.steam_model == sv::Model::Deck;
+    device.steam_settings_due_us = now + static_cast<std::uint64_t>(deck ? sv::kDeckWatchdogMs : sv::kSettingsRefreshMs) * 1000u;
     if (rumble_output_disabled()) return;
-    std::array<std::uint8_t, sv::kFeatureReportBytes> report{};
-    if (sv::build_settings_report(report) == 0) return;
-    (void)HidD_SetFeature(device.handle.get(), report.data(), static_cast<ULONG>(report.size()));
+    if (device.steam_model == sv::Model::Controller) {
+        std::array<std::uint8_t, sv::kFeatureReportBytes> report{};
+        const std::size_t built = sv::build_settings_report(report);
+        queue_output(device, report.data(), built, true, false);
+        return;
+    }
+    std::array<std::uint8_t, sv::kValveFeatureBytes> report{};
+    queue_output(device, report.data(), sv::build_clear_mappings_report(report), true, false);
+    const std::size_t built = deck && device.steam_configured ? sv::build_deck_watchdog_report(report)
+                                                              : sv::build_valve_settings_report(device.steam_model, report);
+    queue_output(device, report.data(), built, true, false);
+    device.steam_configured = true;
 }
 
 class Worker {
@@ -1107,8 +1180,9 @@ public:
         });
         service_device_timers();
         for (;;) {
-            std::array<HANDLE, 3 + kMaxHidPads> waits{};
-            std::array<Device*, 3 + kMaxHidPads> owners{};
+            std::array<HANDLE, 3 + 2 * kMaxHidPads> waits{};
+            std::array<Device*, 3 + 2 * kMaxHidPads> owners{};
+            std::array<bool, 3 + 2 * kMaxHidPads> writes{};
             DWORD count = 0;
             waits[count++] = stop;
             waits[count++] = setup_done_.get();
@@ -1116,7 +1190,13 @@ public:
             for (auto& device : devices_) {
                 if (device->read_pending) {
                     owners[count] = device.get();
+                    writes[count] = false;
                     waits[count++] = device->read_event.get();
+                }
+                if (device->post_pending) {
+                    owners[count] = device.get();
+                    writes[count] = true;
+                    waits[count++] = device->post_event.get();
                 }
             }
             // A timer only while a motor runs or device work is due: it
@@ -1128,7 +1208,11 @@ public:
                 take_setup();
             } else if (result >= WAIT_OBJECT_0 + 3 && result < WAIT_OBJECT_0 + count) {
                 Device* device = owners[result - WAIT_OBJECT_0];
-                complete_read(*device);
+                if (writes[result - WAIT_OBJECT_0]) {
+                    pump_output(*device);
+                } else {
+                    complete_read(*device);
+                }
             } else if (result != WAIT_OBJECT_0 + 2 && result != WAIT_TIMEOUT) {
                 break;  // WAIT_FAILED: leave rather than spin
             }
@@ -1300,7 +1384,8 @@ private:
         device->model_name = candidate.info.name;
         device->ps_model = candidate.info.ps_model;
         device->link = link_of(candidate);
-        device->puck = sv::is_puck_product(candidate.product);
+        device->puck = sv::is_receiver_product(candidate.product);
+        device->steam_model = sv::model_of_product(candidate.product).value_or(sv::Model::Controller);
         device->joycon = sw::joycon_side_of_product(candidate.product);
         device->grip = candidate.vendor == sw::kNintendoVendorId && candidate.product == sw::kChargingGripProductId;
         device->handle.reset(CreateFileW(candidate.path.c_str(), GENERIC_READ | GENERIC_WRITE,
@@ -1389,7 +1474,10 @@ private:
             published.info.note = device.needs_driver ? "needs WinUSB" : nullptr;
             ReleaseSRWLockExclusive(&hub().lock);
         }
-        if (device.scheme == ControlScheme::Steam) device.steam_settings_due_us = now;
+        if (device.scheme == ControlScheme::Steam) {
+            device.steam_settings_due_us = now;
+            device.steam_configured = false;
+        }
         std::cerr << "[controller] connected " << input::control_scheme_id(device.scheme) << ' '
                   << (device.partner != nullptr ? "Joy-Con (L/R)" : device.model_name)
                   << (device.bluetooth ? " bluetooth" : device.puck ? " wireless" : " usb") << '\n';
@@ -1471,6 +1559,7 @@ private:
         }
         if (device.rumble_on) {
             finish_post(device, true);  // the off report after the last one
+            device.outputs.clear();
             if (!device.write_event) device.write_event.reset(CreateEventW(nullptr, TRUE, FALSE, nullptr));
             (void)write_rumble_off(device.handle.get(), device.write_event.get(), device.output_length,
                                    off_kind_of(device));
@@ -1481,6 +1570,7 @@ private:
     void close_device(Device& device) {
         stop_device_rumble(device);
         finish_post(device, true);
+        device.outputs.clear();
         if (device.read_pending && !device.resume) {
             CancelIoEx(device.handle.get(), &device.read_ov);
             DWORD done = 0;
@@ -1570,20 +1660,26 @@ private:
         case ControlScheme::PlayStation:
             return ps::decode_report(device.ps_model, device.ps_transport, report, device.ps_cal, device.ps_clock,
                                      decoded);
-        case ControlScheme::Steam:
-            switch (sv::decode_wireless_event(report)) {
+        case ControlScheme::Steam: {
+            const bool classic = device.steam_model == sv::Model::Classic;
+            switch (classic ? sv::decode_classic_wireless_event(report) : sv::decode_wireless_event(report)) {
             case sv::WirelessEvent::Connected:
                 if (!device.published) publish_device(device);
                 return false;
             case sv::WirelessEvent::Disconnected:
                 unpublish_device(device);
+                device.steam_classic = {};
                 return false;
             case sv::WirelessEvent::None:
                 break;
             }
-            if (!sv::decode_report(report, device.steam_clock, decoded)) return false;
-            if (!device.published) publish_device(device);  // a puck controller connected before the device opened
+            const bool state = device.steam_model == sv::Model::Deck ? sv::decode_deck_report(report, decoded)
+                               : classic ? sv::decode_classic_report(report, device.steam_classic, decoded)
+                                         : sv::decode_report(report, device.steam_clock, decoded);
+            if (!state) return false;
+            if (!device.published) publish_device(device);  // a receiver's controller connected before the device opened
             return true;
+        }
         case ControlScheme::Generic:
             return decode_generic(device, report, decoded);
         default:
@@ -1808,7 +1904,7 @@ private:
             return false;
         }
         if (want) arm_crash_stop(device, length, off_kind_of(device));
-        if (post_output(device, report.data(), built) == Post::Busy) return true;  // again at the next turn
+        queue_output(device, report.data(), built, false, true);
         device.rumble_sent_us = now;
         device.rumble_on = want;
         device.rumble_level = level;
@@ -1842,7 +1938,7 @@ private:
             return false;
         }
         if (want) arm_crash_stop(device, device.output_length, off_kind_of(device));
-        if (post_output(device, report.data(), built) == Post::Busy) return true;  // again at the next turn
+        queue_output(device, report.data(), built, false, true);
         device.rumble_sent_us = now;
         device.rumble_on = want;
         device.rumble_value = motor;
@@ -1850,8 +1946,10 @@ private:
         return want;
     }
 
-    // The Steam Controller stops its motors about 50 ms after the last report,
-    // so a held rumble is repeated at sv::kRumbleRepeatMs.
+    // The 2026 Steam Controller stops its motors about 50 ms after the last report, so a held rumble is repeated at
+    // sv::kRumbleRepeatMs; the Deck's run until told otherwise (repeated now and then, as PlayStation's); the 2015
+    // one pulses its pads' haptics for sv::kClassicPulseUs, repeated at sv::kClassicHapticRepeatMs. All on the light
+    // (high-frequency) side.
     bool service_steam_rumble(Device& device, std::uint8_t level, std::uint8_t strength, std::uint64_t now) {
         if (device.failed || !device.published) level = 0u;
         const std::uint16_t speed = input::rumble::xinput_motor_speeds(level, strength).right;
@@ -1859,17 +1957,36 @@ private:
         if (!want && !device.rumble_on) return false;
         const bool changed = want != device.rumble_on || (want && speed != device.rumble_value);
         const std::uint64_t since = now - device.rumble_sent_us;
-        const std::uint64_t repeat = static_cast<std::uint64_t>(sv::kRumbleRepeatMs) * 1000u;
+        const std::uint64_t repeat = device.steam_model == sv::Model::Deck      ? kPlayStationRumbleRefreshUs
+                                     : device.steam_model == sv::Model::Classic ? sv::kClassicHapticRepeatMs * 1000ull
+                                                                                : sv::kRumbleRepeatMs * 1000ull;
         if (!changed && since < repeat) return true;
         if (device.rumble_sent_us != 0u && since < kSteamRumbleGapUs) return true;
-        std::array<std::uint8_t, kLargestOutputReport> report{};
-        const std::size_t built = sv::build_rumble_report(0, speed, report);
-        if (built == 0u || built > device.output_length || device.output_length > report.size()) {
-            device.rumble_on = false;
-            return false;
+        if (device.steam_model == sv::Model::Classic) {
+            // No motor: while it runs, both pads pulse for longer the stronger it is; off, the pulses end.
+            if (want) {
+                std::array<std::uint8_t, sv::kValveFeatureBytes> report{};
+                const std::uint16_t on_us = static_cast<std::uint16_t>(
+                    300u + static_cast<std::uint32_t>(speed) * (sv::kClassicPulsePeriodUs - 1300u) / 65535u);
+                for (std::uint8_t pad = 0; pad < 2; ++pad) {
+                    queue_output(device, report.data(), sv::build_classic_haptic_report(pad, on_us, report), true, true,
+                                 pad == 0);
+                }
+            }
+        } else if (device.steam_model == sv::Model::Deck) {
+            std::array<std::uint8_t, sv::kValveFeatureBytes> report{};
+            if (want) arm_crash_stop(device, report.size(), OffKind::SteamDeck);
+            queue_output(device, report.data(), sv::build_deck_rumble_report(0, speed, report), true, true);
+        } else {
+            std::array<std::uint8_t, kLargestOutputReport> report{};
+            const std::size_t built = sv::build_rumble_report(0, speed, report);
+            if (built == 0u || built > device.output_length || device.output_length > report.size()) {
+                device.rumble_on = false;
+                return false;
+            }
+            if (want) arm_crash_stop(device, device.output_length, OffKind::Steam);
+            queue_output(device, report.data(), built, false, true);
         }
-        if (want) arm_crash_stop(device, device.output_length, OffKind::Steam);
-        if (post_output(device, report.data(), built) == Post::Busy) return true;
         device.rumble_sent_us = now;
         device.rumble_on = want;
         device.rumble_value = speed;

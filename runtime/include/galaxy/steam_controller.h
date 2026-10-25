@@ -13,7 +13,9 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <span>
+#include <string_view>
 
 namespace galaxy::input::steam {
 
@@ -32,6 +34,49 @@ inline constexpr unsigned kPuckLastInterface = 5;
 }
 [[nodiscard]] constexpr bool is_puck_product(std::uint16_t product) noexcept {
     return product == kProteusPuckProductId || product == kNereidPuckProductId;
+}
+
+// The Steam Deck's controls (USB 28de:1205) and the 2015 Steam Controller (USB 28de:1102, or its wireless receiver
+// 28de:1142 with a controller on each of interfaces 1..4): Valve's own reports (a version-1 header, then the state)
+// on one interface each, its others being the keyboard and mouse the controller acts as until told otherwise.
+// Layouts follow SDL's zlib-licensed SDL_hidapi_steamdeck.c and SDL_hidapi_steam.c with Valve's
+// controller_structs.h and controller_constants.h; this is an independent implementation.
+inline constexpr std::uint16_t kDeckProductId = 0x1205;
+inline constexpr std::uint16_t kClassicProductId = 0x1102;
+inline constexpr std::uint16_t kClassicReceiverProductId = 0x1142;
+inline constexpr int kDeckInterface = 2;
+inline constexpr int kClassicInterface = 2;
+inline constexpr int kReceiverFirstInterface = 1;
+inline constexpr int kReceiverLastInterface = 4;
+
+// Steam Input: a game Steam starts gets the controllers Steam reads for it (and offers as an Xbox controller) in
+// SDL_GAMECONTROLLER_IGNORE_DEVICES, "0xVVVV/0xPPPP" entries separated by commas. True when `list` names this one.
+[[nodiscard]] bool listed_device(std::string_view list, std::uint16_t vendor, std::uint16_t product) noexcept;
+
+// Which Steam controller: the 2026 one (this file's first part), the Deck, the 2015 one.
+enum class Model : std::uint8_t { Controller, Deck, Classic };
+[[nodiscard]] constexpr std::optional<Model> model_of_product(std::uint16_t product) noexcept {
+    if (is_controller_product(product) || is_puck_product(product)) return Model::Controller;
+    if (product == kDeckProductId) return Model::Deck;
+    if (product == kClassicProductId || product == kClassicReceiverProductId) return Model::Classic;
+    return std::nullopt;
+}
+// A wireless receiver: its controllers come and go (WirelessEvent).
+[[nodiscard]] constexpr bool is_receiver_product(std::uint16_t product) noexcept {
+    return is_puck_product(product) || product == kClassicReceiverProductId;
+}
+// The interface that carries the controller (-1: any).
+[[nodiscard]] constexpr bool is_controller_interface(std::uint16_t product, int interface_number) noexcept {
+    if (is_puck_product(product)) {
+        return interface_number >= static_cast<int>(kPuckFirstInterface) &&
+               interface_number <= static_cast<int>(kPuckLastInterface);
+    }
+    if (product == kClassicReceiverProductId) {
+        return interface_number >= kReceiverFirstInterface && interface_number <= kReceiverLastInterface;
+    }
+    if (product == kDeckProductId) return interface_number == kDeckInterface;
+    if (product == kClassicProductId) return interface_number == kClassicInterface;
+    return true;
 }
 
 // Input report ids (byte 0). 0x42 (USB) carries a quaternion after the sensors;
@@ -100,5 +145,46 @@ std::size_t build_settings_report(std::span<std::uint8_t> out) noexcept;
 inline constexpr std::size_t kRumbleReportBytes = 10;
 inline constexpr unsigned kRumbleRepeatMs = 40;
 std::size_t build_rumble_report(std::uint16_t left, std::uint16_t right, std::span<std::uint8_t> out) noexcept;
+
+// The Deck's state (message 9). Buttons as the 2026 controller's (L4/R4 = GL/GR, L5/R5 = GL2/GR2, quick access =
+// Capture, pad clicks = LPad/RPad), sticks and analog triggers, one IMU sample. The report as read: with its report
+// number 0 first, or without.
+[[nodiscard]] bool decode_deck_report(std::span<const std::uint8_t> report, switch_hid::DecodedState& out) noexcept;
+
+// The 2015 controller sends its stick and its left pad on the same two axes, a flag saying which (and another that
+// both are in use and alternate): the stick's last values are kept here, and the report number, since a report
+// repeats until the state changes.
+struct ClassicState {
+    std::array<std::int16_t, 2> stick{};
+    std::uint32_t packet = 0;
+    bool primed = false;
+};
+// Its state (message 1): A/B/X/Y, bumpers, the analog triggers, the grips as GL/GR, the stick and its click, the
+// left pad's click (the D-pad when pressed at an edge) as LPad, the right pad as the right stick (turned 15 degrees,
+// as it sits) and its click as the right stick's, one IMU sample once the sensors are on. False for a repeated
+// report or another message.
+[[nodiscard]] bool decode_classic_report(std::span<const std::uint8_t> report, ClassicState& state,
+                                         switch_hid::DecodedState& out) noexcept;
+// A receiver's message 3: its controller connecting or leaving.
+[[nodiscard]] WirelessEvent decode_classic_wireless_event(std::span<const std::uint8_t> report) noexcept;
+
+// Feature reports to the Deck and the 2015 controller: report number 0, then Valve's message (type, length,
+// payload), 65 bytes.
+inline constexpr std::size_t kValveFeatureBytes = 65;
+// Its keyboard and mouse buttons off (sent before the settings).
+std::size_t build_clear_mappings_report(std::span<std::uint8_t> out) noexcept;
+// Its pads no longer the mouse; the Deck's pads not clicking by pressure, the 2015 controller's sensors on.
+std::size_t build_valve_settings_report(Model model, std::span<std::uint8_t> out) noexcept;
+// The Deck turns its mouse back on unless this comes (after build_clear_mappings_report) every kDeckWatchdogMs.
+inline constexpr unsigned kDeckWatchdogMs = 800;
+std::size_t build_deck_watchdog_report(std::span<std::uint8_t> out) noexcept;
+// The Deck's two motors, speeds 0..65535; they run until the next command.
+std::size_t build_deck_rumble_report(std::uint16_t left, std::uint16_t right, std::span<std::uint8_t> out) noexcept;
+// The 2015 controller has no motor: its pads' haptics pulse, `on_us` of each kClassicPulsePeriodUs, for
+// kClassicPulseUs, on one pad (0 or 1); a held rumble repeats every kClassicHapticRepeatMs.
+inline constexpr unsigned kClassicPulsePeriodUs = 5000;
+inline constexpr unsigned kClassicPulseUs = 60000;
+inline constexpr unsigned kClassicHapticRepeatMs = 50;
+std::size_t build_classic_haptic_report(std::uint8_t pad, std::uint16_t on_us, std::span<std::uint8_t> out) noexcept;
 
 }  // namespace galaxy::input::steam

@@ -1,6 +1,7 @@
 #include "galaxy/steam_controller.h"
 
 #include <algorithm>
+#include <optional>
 
 namespace galaxy::input::steam {
 
@@ -15,6 +16,23 @@ constexpr std::uint16_t kImuSendRawGyro = 0x0010;
 constexpr std::uint8_t kFeatureSetSettings = 0x87;
 constexpr std::uint8_t kFeatureReportId = 1;
 constexpr std::uint8_t kOutputHapticRumble = 0x80;
+
+// The Deck and the 2015 controller (controller_structs.h, controller_constants.h).
+constexpr std::uint8_t kMessageClassicState = 1;
+constexpr std::uint8_t kMessageWireless = 3;
+constexpr std::uint8_t kMessageDeckState = 9;
+constexpr std::uint8_t kFeatureClearMappings = 0x81;
+constexpr std::uint8_t kFeatureHapticPulse = 0x8f;
+constexpr std::uint8_t kFeatureRumble = 0xeb;
+constexpr std::uint8_t kSettingLeftPadMode = 7;
+constexpr std::uint8_t kSettingRightPadMode = 8;
+constexpr std::uint8_t kSettingSmoothMouse = 24;
+constexpr std::uint8_t kSettingWirelessPacketVersion = 49;
+constexpr std::uint8_t kSettingLeftPadClickPressure = 52;
+constexpr std::uint8_t kSettingRightPadClickPressure = 53;
+constexpr std::uint16_t kPadModeNone = 7;
+constexpr std::size_t kDeckPayloadBytes = 56;
+constexpr std::size_t kClassicPayloadBytes = 44;
 
 std::int16_t s16(const std::uint8_t* d) noexcept {
     return static_cast<std::int16_t>(static_cast<std::uint16_t>(d[0] | (d[1] << 8)));
@@ -58,6 +76,67 @@ std::uint32_t unified_buttons(std::uint32_t word) noexcept {
         if ((word & entry.source) != 0u) buttons |= pad::bit(entry.bit);
     }
     return buttons;
+}
+
+// Valve's message `type` in a report as read (its report number 0 first, or not): where its payload starts, if it
+// holds `bytes` of it.
+std::optional<std::size_t> valve_payload(std::span<const std::uint8_t> r, std::uint8_t type, std::size_t bytes) noexcept {
+    std::size_t header = 0;
+    if (r.size() >= 3u && r[0] == 0u && r[1] == 1u && r[2] == 0u) {
+        header = 1;
+    } else if (r.size() < 2u || r[0] != 1u || r[1] != 0u) {
+        return std::nullopt;
+    }
+    if (r.size() < header + 4u + bytes || r[header + 2u] != type) return std::nullopt;
+    return header + 4u;
+}
+
+struct ButtonMap {
+    std::uint32_t source;
+    unsigned bit;
+};
+
+template <std::size_t N>
+std::uint32_t map_buttons(std::uint32_t word, const ButtonMap (&map)[N]) noexcept {
+    std::uint32_t buttons = 0;
+    for (const ButtonMap& entry : map) {
+        if ((word & entry.source) != 0u) buttons |= pad::bit(entry.bit);
+    }
+    return buttons;
+}
+
+// The controller's axes (x, y, z) become (x, z, -y) in the common sensor frame; `gyro_y_sign` -1 as the Deck's,
+// +1 as the 2015 controller's gyro (SDL's drivers).
+void put_sensors(const std::uint8_t* accel, const std::uint8_t* gyro, float gyro_y_sign,
+                 switch_hid::DecodedState& out) noexcept {
+    const int ax = s16(accel), ay = s16(accel + 2), az = s16(accel + 4);
+    const int gx = s16(gyro), gy = s16(gyro + 2), gz = s16(gyro + 4);
+    if (ax == 0 && ay == 0 && az == 0 && gx == 0 && gy == 0 && gz == 0) return;
+    switch_hid::ImuSample& sample = out.imu[0];
+    sample.accel = {static_cast<float>(ax) * kAccelGPerCount, static_cast<float>(az) * kAccelGPerCount,
+                    -static_cast<float>(ay) * kAccelGPerCount};
+    sample.gyro = {static_cast<float>(gx) * kGyroRadPerCount, static_cast<float>(gz) * kGyroRadPerCount,
+                   gyro_y_sign * static_cast<float>(gy) * kGyroRadPerCount};
+    out.imu_count = 1;
+}
+
+struct ValveSetting {
+    std::uint8_t number;
+    std::uint16_t value;
+};
+
+std::size_t valve_settings(std::span<std::uint8_t> out, std::span<const ValveSetting> settings) noexcept {
+    if (out.size() < kValveFeatureBytes || settings.size() * 3u + 3u > kValveFeatureBytes) return 0;
+    std::fill(out.begin(), out.begin() + kValveFeatureBytes, std::uint8_t{0});
+    out[1] = kFeatureSetSettings;
+    out[2] = static_cast<std::uint8_t>(3u * settings.size());
+    std::size_t at = 3;
+    for (const auto& [number, value] : settings) {
+        out[at++] = number;
+        out[at++] = static_cast<std::uint8_t>(value & 0xffu);
+        out[at++] = static_cast<std::uint8_t>(value >> 8);
+    }
+    return kValveFeatureBytes;
 }
 
 }  // namespace
@@ -142,6 +221,191 @@ std::size_t build_settings_report(std::span<std::uint8_t> out) noexcept {
         out[at++] = static_cast<std::uint8_t>(setting.value >> 8);
     }
     return kFeatureReportBytes;
+}
+
+bool listed_device(std::string_view list, std::uint16_t vendor, std::uint16_t product) noexcept {
+    // One hexadecimal number (an optional 0x) from `at`, or -1.
+    const auto number = [&list](std::size_t& at) -> long {
+        while (at < list.size() && list[at] == ' ') ++at;
+        if (at + 1u < list.size() && list[at] == '0' && (list[at + 1u] == 'x' || list[at + 1u] == 'X')) at += 2u;
+        long value = 0;
+        std::size_t digits = 0;
+        for (; at < list.size() && digits < 4u; ++at, ++digits) {
+            const char c = list[at];
+            const int d = c >= '0' && c <= '9' ? c - '0' : c >= 'a' && c <= 'f' ? c - 'a' + 10 : c >= 'A' && c <= 'F' ? c - 'A' + 10 : -1;
+            if (d < 0) break;
+            value = value * 16 + d;
+        }
+        return digits != 0u ? value : -1;
+    };
+    std::size_t at = 0;
+    while (at < list.size()) {
+        const long v = number(at);
+        const bool slash = at < list.size() && list[at] == '/';
+        if (slash) ++at;
+        const long p = slash ? number(at) : -1;
+        if (v == vendor && p == product) return true;
+        while (at < list.size() && list[at] != ',') ++at;
+        if (at < list.size()) ++at;
+    }
+    return false;
+}
+
+bool decode_deck_report(std::span<const std::uint8_t> r, switch_hid::DecodedState& out) noexcept {
+    const std::optional<std::size_t> at = valve_payload(r, kMessageDeckState, kDeckPayloadBytes);
+    if (!at) return false;
+    const std::uint8_t* p = r.data() + *at;
+    static constexpr ButtonMap kLow[] = {
+        {0x00000004, pad::kRightShoulderBit}, {0x00000008, pad::kLeftShoulderBit}, {0x00000010, pad::kNorthBit},
+        {0x00000020, pad::kEastBit},          {0x00000040, pad::kWestBit},         {0x00000080, pad::kSouthBit},
+        {0x00000100, pad::kDpadUpBit},        {0x00000200, pad::kDpadRightBit},    {0x00000400, pad::kDpadLeftBit},
+        {0x00000800, pad::kDpadDownBit},      {0x00001000, pad::kBackBit},         {0x00002000, pad::kHomeBit},
+        {0x00004000, pad::kStartBit},         {0x00008000, pad::kGripLeft2Bit},    {0x00010000, pad::kGripRight2Bit},
+        {0x00020000, pad::kLeftPadBit},       {0x00040000, pad::kRightPadBit},     {0x00400000, pad::kLeftStickBit},
+        {0x04000000, pad::kRightStickBit},
+    };
+    static constexpr ButtonMap kHigh[] = {
+        {0x00000200, pad::kGripLeftBit}, {0x00000400, pad::kGripRightBit}, {0x00040000, pad::kCaptureBit},
+    };
+    out = switch_hid::DecodedState{};
+    out.normalized = true;
+    out.buttons = map_buttons(u32(p + 4), kLow) | map_buttons(u32(p + 8), kHigh);
+    out.axes[0] = unit(s16(p + 44));
+    out.axes[1] = unit(s16(p + 46));
+    out.axes[2] = unit(s16(p + 48));
+    out.axes[3] = unit(s16(p + 50));
+    out.axes[4] = std::clamp(static_cast<float>(u16(p + 40)) / 32767.0f, 0.0f, 1.0f);
+    out.axes[5] = std::clamp(static_cast<float>(u16(p + 42)) / 32767.0f, 0.0f, 1.0f);
+    put_sensors(p + 20, p + 26, -1.0f, out);
+    return true;
+}
+
+bool decode_classic_report(std::span<const std::uint8_t> r, ClassicState& state, switch_hid::DecodedState& out) noexcept {
+    const std::optional<std::size_t> at = valve_payload(r, kMessageClassicState, kClassicPayloadBytes);
+    if (!at) return false;
+    const std::uint8_t* p = r.data() + *at;
+    const std::uint32_t packet = u32(p);
+    if (state.primed && packet == state.packet) return false;
+    state.packet = packet;
+    state.primed = true;
+    constexpr std::uint32_t kLeftPadClick = 0x00020000;
+    constexpr std::uint32_t kLeftPadFinger = 0x00080000;
+    constexpr std::uint32_t kRightPadFinger = 0x00100000;
+    constexpr std::uint32_t kStickClick = 0x00400000;
+    constexpr std::uint32_t kPadAndStick = 0x00800000;
+    // The low three bytes are buttons; the fourth and fifth, the triggers.
+    std::uint32_t word = u32(p + 4) & 0x00ffffffu;
+    const std::array<std::int16_t, 2> shared = {static_cast<std::int16_t>(s16(p + 12)), static_cast<std::int16_t>(s16(p + 14))};
+    if ((word & kLeftPadFinger) != 0u) {
+        // The axes are the pad's; the stick keeps its last values while both are in use, else it is centred.
+        if ((word & kPadAndStick) == 0u) state.stick = {};
+    } else {
+        state.stick = shared;
+        // An older firmware clicks the stick as the pad while the pad is not in use.
+        if ((word & kPadAndStick) == 0u && (word & kLeftPadClick) != 0u) word = (word & ~kLeftPadClick) | kStickClick;
+    }
+    static constexpr ButtonMap kMap[] = {
+        {0x00000004, pad::kRightShoulderBit}, {0x00000008, pad::kLeftShoulderBit}, {0x00000010, pad::kNorthBit},
+        {0x00000020, pad::kEastBit},          {0x00000040, pad::kWestBit},         {0x00000080, pad::kSouthBit},
+        {0x00000100, pad::kDpadUpBit},        {0x00000200, pad::kDpadRightBit},    {0x00000400, pad::kDpadLeftBit},
+        {0x00000800, pad::kDpadDownBit},      {0x00001000, pad::kBackBit},         {0x00002000, pad::kHomeBit},
+        {0x00004000, pad::kStartBit},         {0x00008000, pad::kGripLeftBit},     {0x00010000, pad::kGripRightBit},
+        {kLeftPadClick, pad::kLeftPadBit},    {0x00040000, pad::kRightStickBit},   {kStickClick, pad::kLeftStickBit},
+    };
+    out = switch_hid::DecodedState{};
+    out.normalized = true;
+    out.buttons = map_buttons(word, kMap);
+    out.axes[0] = unit(state.stick[0]);
+    out.axes[1] = unit(state.stick[1]);
+    if ((word & kRightPadFinger) != 0u) {
+        // The right pad sits turned: 15 degrees back to level.
+        constexpr float kCos = 0.96592583f;
+        constexpr float kSin = 0.25881905f;
+        const float x = static_cast<float>(s16(p + 16));
+        const float y = static_cast<float>(s16(p + 18));
+        out.axes[2] = unit(static_cast<int>(kCos * x - kSin * y));
+        out.axes[3] = unit(static_cast<int>(kSin * x + kCos * y));
+    }
+    // A trigger's byte spread over its 0..26000 travel.
+    const auto trigger = [](std::uint8_t value) {
+        return std::clamp(static_cast<float>((value << 7) | value) / 26000.0f, 0.0f, 1.0f);
+    };
+    out.axes[4] = trigger(p[7]);
+    out.axes[5] = trigger(p[8]);
+    put_sensors(p + 24, p + 30, 1.0f, out);
+    return true;
+}
+
+WirelessEvent decode_classic_wireless_event(std::span<const std::uint8_t> r) noexcept {
+    const std::optional<std::size_t> at = valve_payload(r, kMessageWireless, 1);
+    if (!at || r[*at - 1u] < 1u) return WirelessEvent::None;
+    if (r[*at] == 1u) return WirelessEvent::Disconnected;
+    if (r[*at] == 2u || r[*at] == 3u) return WirelessEvent::Connected;  // connected, or newly paired
+    return WirelessEvent::None;
+}
+
+std::size_t build_clear_mappings_report(std::span<std::uint8_t> out) noexcept {
+    if (out.size() < kValveFeatureBytes) return 0;
+    std::fill(out.begin(), out.begin() + kValveFeatureBytes, std::uint8_t{0});
+    out[1] = kFeatureClearMappings;
+    return kValveFeatureBytes;
+}
+
+std::size_t build_valve_settings_report(Model model, std::span<std::uint8_t> out) noexcept {
+    using Setting = ValveSetting;
+    static constexpr Setting kDeck[] = {
+        {kSettingSmoothMouse, 0},
+        {kSettingLeftPadMode, kPadModeNone},
+        {kSettingRightPadMode, kPadModeNone},
+        {kSettingLeftPadClickPressure, 0xffff},
+        {kSettingRightPadClickPressure, 0xffff},
+    };
+    static constexpr Setting kClassic[] = {
+        {kSettingWirelessPacketVersion, 2},
+        {kSettingLeftPadMode, kPadModeNone},
+        {kSettingRightPadMode, kPadModeNone},
+        {kSettingSmoothMouse, 0},
+        {kSettingImuMode, kImuSendRawAccel | kImuSendRawGyro},
+    };
+    if (model == Model::Deck) return valve_settings(out, kDeck);
+    if (model == Model::Classic) return valve_settings(out, kClassic);
+    return 0;
+}
+
+std::size_t build_deck_watchdog_report(std::span<std::uint8_t> out) noexcept {
+    static constexpr ValveSetting kWatchdog[] = {{kSettingRightPadMode, kPadModeNone}};
+    return valve_settings(out, kWatchdog);
+}
+
+std::size_t build_deck_rumble_report(std::uint16_t left, std::uint16_t right, std::span<std::uint8_t> out) noexcept {
+    if (out.size() < kValveFeatureBytes) return 0;
+    std::fill(out.begin(), out.begin() + kValveFeatureBytes, std::uint8_t{0});
+    // Rumble type 0, the system's intensity, both speeds, the left motor's gain 2 (SDL's).
+    out[1] = kFeatureRumble;
+    out[6] = static_cast<std::uint8_t>(left & 0xffu);
+    out[7] = static_cast<std::uint8_t>(left >> 8);
+    out[8] = static_cast<std::uint8_t>(right & 0xffu);
+    out[9] = static_cast<std::uint8_t>(right >> 8);
+    out[10] = 2;
+    return kValveFeatureBytes;
+}
+
+std::size_t build_classic_haptic_report(std::uint8_t pad, std::uint16_t on_us, std::span<std::uint8_t> out) noexcept {
+    if (out.size() < kValveFeatureBytes || on_us == 0u || on_us >= kClassicPulsePeriodUs) return 0;
+    std::fill(out.begin(), out.begin() + kValveFeatureBytes, std::uint8_t{0});
+    const std::uint16_t off_us = static_cast<std::uint16_t>(kClassicPulsePeriodUs - on_us);
+    const std::uint16_t count = static_cast<std::uint16_t>(kClassicPulseUs / kClassicPulsePeriodUs);
+    // MsgFireHapticPulse: the pad, the on and off times, the count, a gain of 0 dB, priority 0.
+    out[1] = kFeatureHapticPulse;
+    out[2] = 10;
+    out[3] = pad;
+    out[4] = static_cast<std::uint8_t>(on_us & 0xffu);
+    out[5] = static_cast<std::uint8_t>(on_us >> 8);
+    out[6] = static_cast<std::uint8_t>(off_us & 0xffu);
+    out[7] = static_cast<std::uint8_t>(off_us >> 8);
+    out[8] = static_cast<std::uint8_t>(count & 0xffu);
+    out[9] = static_cast<std::uint8_t>(count >> 8);
+    return kValveFeatureBytes;
 }
 
 std::size_t build_rumble_report(std::uint16_t left, std::uint16_t right, std::span<std::uint8_t> out) noexcept {

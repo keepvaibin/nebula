@@ -3,7 +3,7 @@
 The game sees one Wii Remote with a Nunchuk on channel 0. Keyboard, mouse,
 Xbox (XInput) controllers, Switch Pro Controllers, Joy-Con (a pair as one controller), Switch 2 Pro Controllers,
 PlayStation controllers (DualShock 4, DualSense, DualSense Edge), the Steam
-Controller (2026) and generic HID game controllers work at the same time; every
+Controller (2026 and 2015), the Steam Deck's controls and generic HID game controllers work at the same time; every
 Wii input can be rebound. The game gets their state the moment it reads its remotes each frame (a report built then),
 and every 10 ms between frames: a press made just before a frame's read is in that frame. Measured from the retrace a
 scripted press begins on to the first frame that shows it, at 60 fps: spin 37.3 -> 20.4 ms, pause 37.0 -> 20.3 ms
@@ -140,6 +140,20 @@ One left and one right half pair by themselves, at every start. With more halves
 halves), CONTROLS > PAIR JOY-CON: hold L on a left half and R on a right half. One held shoulder alone never splits
 another pair; two held halves pair, as on the Switch's Change Grip/Order screen. Pairs are not kept between starts.
 An empty rail on the charging grip is checked every 2 s, so a Joy-Con slid in later is found.
+
+## Steam Deck, Steam Controller (2015), 8BitDo
+
+The Steam column covers the Steam Deck's controls and both Steam Controllers. Nebula turns off their keyboard and
+mouse emulation itself (the Deck's every 0.8 s, as it asks). The Deck: sticks, triggers, gyro, both pads' clicks,
+L4/R4/L5/R5 and QAM (unbound), vibration. The 2015 Steam Controller, by USB or its wireless receiver: the stick, the
+right pad as the right stick (the pointer), the left pad's clicks as the D-pad, grips as L4/R4, gyro, and vibration
+through its pads' haptics. Its Bluetooth LE mode (28de:1106) is not read; use the receiver or USB. A game Steam
+starts gets the controllers Steam Input reads in `SDL_GAMECONTROLLER_IGNORE_DEVICES`; Nebula leaves those to Steam
+(they arrive as an Xbox controller), so a press never comes twice.
+
+8BitDo controllers work in each of their modes: X-input as an Xbox controller, Switch as a Pro Controller (stick
+calibration and motion only where the pad answers for them), D-input as a generic controller (rebind on the
+CONTROLS page).
 
 ## How controllers are read
 

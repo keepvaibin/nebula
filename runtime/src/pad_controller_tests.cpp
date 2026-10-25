@@ -578,6 +578,195 @@ void test_steam() {
     expect(rumble[10] == 0, "the rest of the buffer is cleared");
 }
 
+// Valve's own reports (the Deck, the 2015 controller) as read: report number 0, the version-1 header (version, message,
+// length), then the payload from byte 5.
+Bytes valve_report(std::uint8_t message, std::uint8_t length) {
+    Bytes r(65, 0);
+    r[1] = 1;
+    r[3] = message;
+    r[4] = length;
+    return r;
+}
+
+void test_steam_deck() {
+    expect(sv::model_of_product(0x1205) == sv::Model::Deck && sv::model_of_product(0x1102) == sv::Model::Classic &&
+               sv::model_of_product(0x1142) == sv::Model::Classic && sv::model_of_product(0x1302) == sv::Model::Controller &&
+               sv::model_of_product(0x1304) == sv::Model::Controller && !sv::model_of_product(0x1234).has_value(),
+           "Valve products by model");
+    expect(sv::is_receiver_product(0x1142) && sv::is_receiver_product(0x1305) && !sv::is_receiver_product(0x1102) &&
+               !sv::is_receiver_product(0x1205),
+           "receivers: the pucks and the 2015 receiver");
+    expect(sv::is_controller_interface(0x1205, 2) && !sv::is_controller_interface(0x1205, 0) &&
+               !sv::is_controller_interface(0x1205, 1) && sv::is_controller_interface(0x1102, 2) &&
+               !sv::is_controller_interface(0x1102, 1) && sv::is_controller_interface(0x1142, 1) &&
+               sv::is_controller_interface(0x1142, 4) && !sv::is_controller_interface(0x1142, 0) &&
+               !sv::is_controller_interface(0x1142, 5) && sv::is_controller_interface(0x1304, 2) &&
+               !sv::is_controller_interface(0x1304, 1),
+           "only the controller interfaces (not the keyboard and mouse ones)");
+
+    Bytes r = valve_report(9, 64);
+    put32(r, 9, 0x00000080u | 0x00000004u | 0x00001000u | 0x00004000u | 0x00002000u | 0x00000100u | 0x00008000u |
+                    0x00020000u | 0x04000000u);  // A, R, View, Menu, Steam, Up, L5, left pad click, R3
+    put32(r, 13, 0x00000200u | 0x00040000u);     // L4, quick access
+    put16(r, 49, 32767);    // left stick right
+    put16(r, 51, 16384);    // left stick up half
+    put16(r, 53, -32768);   // right stick left
+    put16(r, 55, -16384);   // right stick down half
+    put16(r, 45, 16384);    // left trigger half
+    put16(r, 47, 32767);    // right trigger full
+    put16(r, 25, 16384);    // accel X: 1 g
+    put16(r, 27, 16384);    // accel Y: maps to -Z
+    put16(r, 29, -16384);   // accel Z: maps to Y
+    put16(r, 31, 16384);    // gyro X: 1000 deg/s
+    put16(r, 33, 8192);     // gyro Y: maps to -Z
+    put16(r, 35, -8192);    // gyro Z: maps to Y
+    switch_hid::DecodedState state;
+    expect(sv::decode_deck_report(r, state) && state.normalized, "Deck state decodes");
+    expect(state.buttons == (bit(pad::kSouthBit) | bit(pad::kRightShoulderBit) | bit(pad::kBackBit) |
+                             bit(pad::kStartBit) | bit(pad::kHomeBit) | bit(pad::kDpadUpBit) |
+                             bit(pad::kGripLeft2Bit) | bit(pad::kLeftPadBit) | bit(pad::kRightStickBit) |
+                             bit(pad::kGripLeftBit) | bit(pad::kCaptureBit)),
+           "Deck buttons: as the Steam family's (L4 GL, L5 GL2, quick access Capture)");
+    expect(close_to(state.axes[0], 1.0f) && close_to(state.axes[1], 0.5f, 1e-3f) && close_to(state.axes[2], -1.0f) &&
+               close_to(state.axes[3], -0.5f, 1e-3f),
+           "Deck sticks, Y up positive");
+    expect(close_to(state.axes[4], 0.5f, 1e-3f) && close_to(state.axes[5], 1.0f), "Deck triggers");
+    const float rate = 1000.0f * kPi / 180.0f;
+    expect(state.imu_count == 1 && close_to(state.imu[0].accel[0], 1.0f) && close_to(state.imu[0].accel[1], -1.0f) &&
+               close_to(state.imu[0].accel[2], -1.0f) && close_to(state.imu[0].gyro[0], rate, 1e-2f) &&
+               close_to(state.imu[0].gyro[1], -0.5f * rate, 1e-2f) && close_to(state.imu[0].gyro[2], -0.5f * rate, 1e-2f),
+           "Deck sensors: (x, z, -y)");
+    const Bytes bare(r.begin() + 1, r.end());
+    expect(sv::decode_deck_report(bare, state) && close_to(state.axes[0], 1.0f), "a report without its number");
+    Bytes other = r;
+    other[3] = 1;
+    expect(!sv::decode_deck_report(other, state), "another message is not the Deck's state");
+    expect(!sv::decode_deck_report(Bytes(40, 0), state), "a short report is not state");
+
+    Bytes feature(65, 0xee);
+    expect(sv::build_clear_mappings_report(feature) == 65 && feature[0] == 0 && feature[1] == 0x81 && feature[2] == 0 &&
+               feature[64] == 0,
+           "keyboard and mouse buttons off");
+    expect(sv::build_valve_settings_report(sv::Model::Deck, feature) == 65, "Deck settings length");
+    const std::uint8_t deck_settings[] = {0, 0x87, 15, 24, 0, 0, 7, 7, 0, 8, 7, 0, 52, 0xff, 0xff, 53, 0xff, 0xff, 0};
+    expect(std::memcmp(feature.data(), deck_settings, sizeof(deck_settings)) == 0,
+           "Deck: smooth mouse off, both pads no mouse, no pressure clicks");
+    expect(sv::build_deck_watchdog_report(feature) == 65 && feature[1] == 0x87 && feature[2] == 3 && feature[3] == 8 &&
+               feature[4] == 7 && feature[5] == 0 && feature[6] == 0,
+           "Deck watchdog: the right pad no mouse");
+    expect(sv::build_deck_rumble_report(0x1234, 0xabcd, feature) == 65, "Deck rumble length");
+    const std::uint8_t deck_rumble[] = {0, 0xeb, 0, 0, 0, 0, 0x34, 0x12, 0xcd, 0xab, 2, 0, 0};
+    expect(std::memcmp(feature.data(), deck_rumble, sizeof(deck_rumble)) == 0, "Deck rumble bytes");
+    expect(sv::build_valve_settings_report(sv::Model::Controller, feature) == 0, "the 2026 controller has its own");
+    expect(sv::build_clear_mappings_report(std::span<std::uint8_t>(feature.data(), 64)) == 0, "a short feature buffer");
+}
+
+void test_steam_input_list() {
+    const char* list = "0x28de/0x1205,0x045E/0x028E, 0x057e/0x2009";
+    expect(sv::listed_device(list, 0x28de, 0x1205) && sv::listed_device(list, 0x045e, 0x028e) &&
+               sv::listed_device(list, 0x057e, 0x2009),
+           "Steam Input's devices, any case, spaces after commas");
+    expect(!sv::listed_device(list, 0x28de, 0x1102) && !sv::listed_device(list, 0x1205, 0x28de) &&
+               !sv::listed_device("", 0x28de, 0x1205) && !sv::listed_device("0x28de", 0x28de, 0x1205) &&
+               !sv::listed_device("garbage,,/", 0x28de, 0x1205),
+           "others, an empty list, a vendor alone, garbage");
+}
+
+void test_steam_classic() {
+    Bytes r = valve_report(1, 60);
+    put32(r, 5, 1);                   // report number
+    put32(r, 9, 0x00000080u | 0x00000008u | 0x00008000u | 0x00001000u | 0x00004000u);  // A, LB, left grip, Back, Start
+    r[12] = 100;                      // left trigger byte
+    r[13] = 255;                      // right trigger byte
+    put16(r, 17, 20000);              // the shared axes: the stick (no finger on the pad)
+    put16(r, 19, -10000);
+    sv::ClassicState classic;
+    switch_hid::DecodedState state;
+    expect(sv::decode_classic_report(r, classic, state) && state.normalized, "2015 controller state decodes");
+    expect(state.buttons == (bit(pad::kSouthBit) | bit(pad::kLeftShoulderBit) | bit(pad::kGripLeftBit) |
+                             bit(pad::kBackBit) | bit(pad::kStartBit)),
+           "2015 buttons");
+    expect(close_to(state.axes[0], 20000.0f / 32767.0f) && close_to(state.axes[1], -10000.0f / 32767.0f),
+           "the stick, Y up positive");
+    expect(close_to(state.axes[4], ((100 << 7) | 100) / 26000.0f) && close_to(state.axes[5], 1.0f),
+           "triggers over their travel");
+    expect(!sv::decode_classic_report(r, classic, state), "a repeated report is no new state");
+
+    // A finger on the left pad: the shared axes are the pad's; with the stick in use too, the stick keeps its last.
+    put32(r, 5, 2);
+    put32(r, 9, 0x00080000u | 0x00800000u);
+    put16(r, 17, 5000);
+    put16(r, 19, 5000);
+    expect(sv::decode_classic_report(r, classic, state) && close_to(state.axes[0], 20000.0f / 32767.0f) &&
+               close_to(state.axes[1], -10000.0f / 32767.0f),
+           "pad and stick both in use: the stick keeps its values");
+    put32(r, 5, 3);
+    put32(r, 9, 0x00080000u);
+    expect(sv::decode_classic_report(r, classic, state) && state.axes[0] == 0.0f && state.axes[1] == 0.0f,
+           "the pad alone: the stick is centred");
+
+    // An older firmware's stick click comes as the pad's while the pad is not in use.
+    put32(r, 5, 4);
+    put32(r, 9, 0x00020000u);
+    expect(sv::decode_classic_report(r, classic, state) && state.buttons == bit(pad::kLeftStickBit),
+           "the stick's click from the pad's");
+    put32(r, 5, 5);
+    put32(r, 9, 0x00020000u | 0x00080000u);
+    expect(sv::decode_classic_report(r, classic, state) && state.buttons == bit(pad::kLeftPadBit),
+           "the pad's click with a finger on it");
+
+    // The right pad as the right stick, turned 15 degrees back; its click as the right stick's.
+    put32(r, 5, 6);
+    put32(r, 9, 0x00100000u | 0x00040000u);
+    put16(r, 21, 10000);
+    put16(r, 23, 0);
+    expect(sv::decode_classic_report(r, classic, state) && state.buttons == bit(pad::kRightStickBit) &&
+               close_to(state.axes[2], 0.96592583f * 10000.0f / 32767.0f, 2e-4f) &&
+               close_to(state.axes[3], 0.25881905f * 10000.0f / 32767.0f, 2e-4f),
+           "the right pad, turned level");
+    put32(r, 5, 7);
+    put32(r, 9, 0);
+    expect(sv::decode_classic_report(r, classic, state) && state.axes[2] == 0.0f && state.axes[3] == 0.0f,
+           "no finger on the right pad: centred");
+
+    // Sensors once on: accel (x, z, -y), gyro (x, z, y) as SDL reads this controller.
+    put32(r, 5, 8);
+    put16(r, 29, 16384);
+    put16(r, 31, 16384);
+    put16(r, 33, -16384);
+    put16(r, 35, 16384);
+    put16(r, 37, 8192);
+    put16(r, 39, -8192);
+    const float rate = 1000.0f * kPi / 180.0f;
+    expect(sv::decode_classic_report(r, classic, state) && state.imu_count == 1 &&
+               close_to(state.imu[0].accel[0], 1.0f) && close_to(state.imu[0].accel[1], -1.0f) &&
+               close_to(state.imu[0].accel[2], -1.0f) && close_to(state.imu[0].gyro[0], rate, 1e-2f) &&
+               close_to(state.imu[0].gyro[1], -0.5f * rate, 1e-2f) && close_to(state.imu[0].gyro[2], 0.5f * rate, 1e-2f),
+           "2015 sensors");
+
+    Bytes event = valve_report(3, 1);
+    event[5] = 2;
+    expect(sv::decode_classic_wireless_event(event) == sv::WirelessEvent::Connected, "receiver: connected");
+    event[5] = 3;
+    expect(sv::decode_classic_wireless_event(event) == sv::WirelessEvent::Connected, "receiver: newly paired");
+    event[5] = 1;
+    expect(sv::decode_classic_wireless_event(event) == sv::WirelessEvent::Disconnected, "receiver: gone");
+    const Bytes bare(event.begin() + 1, event.end());
+    expect(sv::decode_classic_wireless_event(bare) == sv::WirelessEvent::Disconnected, "an event without its number");
+    expect(sv::decode_classic_wireless_event(r) == sv::WirelessEvent::None, "state is no wireless event");
+
+    Bytes feature(65, 0xee);
+    expect(sv::build_valve_settings_report(sv::Model::Classic, feature) == 65, "2015 settings length");
+    const std::uint8_t classic_settings[] = {0, 0x87, 15, 49, 2, 0, 7, 7, 0, 8, 7, 0, 24, 0, 0, 48, 0x18, 0, 0};
+    expect(std::memcmp(feature.data(), classic_settings, sizeof(classic_settings)) == 0,
+           "2015: packet version 2, both pads no mouse, smooth mouse off, raw accel and gyro");
+    expect(sv::build_classic_haptic_report(1, 2000, feature) == 65, "haptic pulse length");
+    const std::uint8_t pulse[] = {0, 0x8f, 10, 1, 0xd0, 0x07, 0xb8, 0x0b, 12, 0, 0, 0, 0, 0};
+    expect(std::memcmp(feature.data(), pulse, sizeof(pulse)) == 0, "haptic pulse: pad 1, 2 ms on, 3 ms off, 12 times");
+    expect(sv::build_classic_haptic_report(0, 0, feature) == 0 && sv::build_classic_haptic_report(0, 5000, feature) == 0,
+           "a pulse is on for part of its period");
+}
+
 void test_pad_sample() {
     Bytes r = ds4_usb();
     r[1] = 255;
@@ -787,6 +976,9 @@ int main() {
     test_output_reports();
     test_products();
     test_steam();
+    test_steam_deck();
+    test_steam_classic();
+    test_steam_input_list();
     test_pad_sample();
     test_device_list();
     test_generic();
