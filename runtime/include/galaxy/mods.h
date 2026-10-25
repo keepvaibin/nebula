@@ -135,6 +135,9 @@ void set_mod_enabled(std::vector<ModInfo>& mods, std::size_t index, bool enabled
 // (game_id[3]) and the language (1 English, 2 German, 3 French, 4 Spanish, 5 Italian, 6 Dutch; Japan and Korea have
 // one each). Empty when unknown.
 [[nodiscard]] std::string language_folder(const std::string& game_id, unsigned language);
+// The language folders at the root of a file table, in its order: the region the game names (Us, Eu, Jp, Kr, Cn, Tw)
+// and the language (UsEnglish, EuGerman, ...).
+[[nodiscard]] std::vector<std::string> language_folders(std::span<const std::uint8_t> fst);
 
 // This session's mods (apply_mods records them): the mods and choices it started with, what they changed.
 struct SessionMods {

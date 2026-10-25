@@ -3,6 +3,8 @@
 
 #include <filesystem>
 #include <cstdint>
+#include <span>
+#include <string>
 
 namespace galaxy {
 
@@ -49,6 +51,11 @@ struct RuntimeSettings {
 
     friend bool operator==(const RuntimeSettings&, const RuntimeSettings&) = default;
 };
+
+// The languages on the game's disc as it is read (its language folders, the mods' among them): the language setting
+// offers only these, and a language whose folder is missing starts in English. Every language until it is set.
+void set_disc_languages(std::span<const std::string> folders) noexcept;
+[[nodiscard]] bool game_language_on_disc(GameLanguage language) noexcept;
 
 // The language the game runs in this session: the setting when the game first asks (at boot), then
 // fixed, so a change made while playing never mixes two languages.

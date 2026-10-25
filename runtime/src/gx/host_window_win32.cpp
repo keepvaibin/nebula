@@ -3447,13 +3447,18 @@ std::vector<SettingsRow> game_page(const RuntimeSettings& runtime) {
     rows.push_back({"LANGUAGE", game_language_name(runtime.language),
                     [](RenderConfig&, int delta) {
                         // Saved when applied; the game switches at the next start (game_language_for_boot).
+                        // The languages on the disc as it is read (galaxy::set_disc_languages).
                         RuntimeSettings& settings = s_runtime_draft;
-                        std::size_t index = 0u;
-                        for (std::size_t i = 0; i < std::size(kGameLanguages); ++i) {
-                            if (kGameLanguages[i] == settings.language) index = i;
+                        std::vector<GameLanguage> offered;
+                        for (const GameLanguage language : kGameLanguages) {
+                            if (galaxy::game_language_on_disc(language)) offered.push_back(language);
                         }
-                        settings.language = kGameLanguages[settings_step(
-                            static_cast<unsigned>(index), static_cast<unsigned>(std::size(kGameLanguages)), delta)];
+                        std::size_t index = 0u;
+                        for (std::size_t i = 0; i < offered.size(); ++i) {
+                            if (offered[i] == settings.language) index = i;
+                        }
+                        settings.language = offered[settings_step(static_cast<unsigned>(index),
+                                                                  static_cast<unsigned>(offered.size()), delta)];
                     },
                     "THE GAME'S TEXT AND MENUS"});
     rows.push_back({"DISCORD STATUS", runtime.discord_status ? std::string("ON") : std::string("OFF"),

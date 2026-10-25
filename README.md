@@ -80,6 +80,23 @@ Setup also updates, repairs and uninstalls. Updates are signed; Setup checks the
 built into it before installing. Each update keeps the version before it: **Nebula Setup > Restore the previous
 version** goes back to it (and forward again the same way).
 
+## Languages
+
+Nebula plays the North American disc (RMGE01), in English, French or Spanish: the languages on that disc. Setup
+names each disc's languages before importing it, and the language setting offers the ones on the disc (and those a
+mod adds).
+
+| Disc | Languages |
+|---|---|
+| USA, RMGE01 | English, French, Spanish (read from the disc) |
+| Europe, RMGP01 | English, French, German, Spanish, Italian (GameTDB) |
+| Japan, RMGJ01 | Japanese (GameTDB) |
+| Korea, RMGK01 | Korean (GameTDB) |
+
+GameTDB lists no Wii disc in Chinese; Simplified Chinese came with the NVIDIA Shield TV release in China (RNVW01).
+The Korean release's code also names a Simplified Chinese folder (Language.cpp); no Korean disc has been read here to
+see whether it holds one.
+
 ## Saves
 
 Saves are kept in `%LOCALAPPDATA%\Nebula\saves`, laid out like the Wii's internal memory: the game's save is

@@ -1105,10 +1105,43 @@ std::string language_folder(const std::string& game_id, unsigned language) {
         }
     case 'J': return "JpJapanese";
     case 'K': return "KrKorean";
-    case 'W': return "TwTradChinese";
-    case 'C': return "CnSimpChinese";
-    default: return {};
+    default: return {};  // no other release's folders are known
     }
+}
+
+std::vector<std::string> language_folders(std::span<const std::uint8_t> fst) {
+    std::vector<std::string> folders;
+    const auto u32 = [&fst](std::size_t at) {
+        return static_cast<std::uint32_t>(fst[at]) << 24u | static_cast<std::uint32_t>(fst[at + 1u]) << 16u |
+               static_cast<std::uint32_t>(fst[at + 2u]) << 8u | static_cast<std::uint32_t>(fst[at + 3u]);
+    };
+    if (fst.size() < 12u) return folders;
+    const std::uint32_t count = u32(8u);
+    if (count == 0u || static_cast<std::uint64_t>(count) * 12u > fst.size()) return folders;
+    const std::size_t strings = static_cast<std::size_t>(count) * 12u;
+    // A directory at the root is followed by its nodes, up to the index it gives.
+    for (std::uint32_t index = 1u; index < count;) {
+        const std::size_t entry = static_cast<std::size_t>(index) * 12u;
+        if (fst[entry] == 0u) {
+            ++index;
+            continue;
+        }
+        const std::size_t name_at = strings + (u32(entry) & 0xFFFFFFu);
+        std::string name;
+        for (std::size_t at = name_at; at < fst.size() && fst[at] != 0u; ++at) name.push_back(static_cast<char>(fst[at]));
+        static constexpr std::string_view kRegions[] = {"Us", "Eu", "Jp", "Kr", "Cn", "Tw"};
+        for (const std::string_view region : kRegions) {
+            const std::string_view rest = std::string_view(name).substr(std::min(name.size(), region.size()));
+            if (name.starts_with(region) && !rest.empty() && std::isupper(static_cast<unsigned char>(rest[0])) &&
+                std::all_of(rest.begin(), rest.end(), [](char c) { return std::isalpha(static_cast<unsigned char>(c)) != 0; })) {
+                folders.push_back(name);
+                break;
+            }
+        }
+        const std::uint32_t next = u32(entry + 8u);
+        index = next > index ? next : index + 1u;
+    }
+    return folders;
 }
 
 SessionMods session_mods() {

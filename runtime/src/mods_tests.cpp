@@ -451,6 +451,30 @@ bool layouts() {
                      galaxy::mods::language_folder("RMGP01", 2u) == "EuGerman" &&
                      galaxy::mods::language_folder("RMGJ01", 0u) == "JpJapanese",
                  "language folders by region");
+    {
+        // The root's language folders: UsEnglish (holding EuGerman, not at the root), UsFrench; a file named
+        // UsSpanish, Usb and StageData are none.
+        const char strings[] = "UsEnglish\0EuGerman\0m.arc\0UsFrench\0UsSpanish\0Usb\0StageData\0";
+        const std::size_t offsets[] = {0, 10, 19, 25, 34, 44, 48};
+        std::vector<std::uint8_t> fst(8 * 12 + sizeof(strings), 0);
+        put32(fst, 0, 0x01000000u);
+        put32(fst, 8, 8u);
+        const auto node = [&](std::size_t index, bool dir, std::size_t name, std::uint32_t next) {
+            put32(fst, index * 12, (dir ? 0x01000000u : 0u) | static_cast<std::uint32_t>(offsets[name]));
+            put32(fst, index * 12 + 8, next);
+        };
+        node(1, true, 0, 4);   // UsEnglish/ holds 2 and 3
+        node(2, true, 1, 3);   // UsEnglish/EuGerman/
+        node(3, false, 2, 4);  // UsEnglish/m.arc
+        node(4, true, 3, 5);   // UsFrench/
+        node(5, false, 4, 4);  // UsSpanish (a file)
+        node(6, true, 5, 7);   // Usb/
+        node(7, true, 6, 8);   // StageData/
+        std::memcpy(fst.data() + 8 * 12, strings, sizeof(strings));
+        const std::vector<std::string> found = galaxy::mods::language_folders(fst);
+        ok &= expect(found == std::vector<std::string>{"UsEnglish", "UsFrench"}, "the root's language folders");
+        ok &= expect(galaxy::mods::language_folders(std::vector<std::uint8_t>(5, 0)).empty(), "a short table has none");
+    }
     fs::remove_all(root, ec);
     return ok;
 }

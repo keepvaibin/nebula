@@ -57,17 +57,28 @@ pub struct InputIdentity {
     pub revision: u8,
     /// Read for RMGE01 only.
     pub main_dol_sha1: Option<String>,
+    /// The game partition's language folders (`UsEnglish`, `EuGerman`...); empty when its file table was not read.
+    pub languages: Vec<String>,
     pub supported: bool,
     pub message: String,
 }
 
 impl InputIdentity {
-    fn new(format: String, game_id: String, title: String, revision: u8, main_dol_sha1: Option<String>) -> Self {
+    fn new(
+        format: String,
+        game_id: String,
+        title: String,
+        revision: u8,
+        main_dol_sha1: Option<String>,
+        languages: Vec<String>,
+    ) -> Self {
         let message = if game_id != RMGE01_GAME_ID {
             if game_id.starts_with("RMG") {
                 format!(
-                    "This is {title} ({game_id}), a region Nebula does not support. Nebula supports only the North \
-                     American release, RMGE01."
+                    "This is Super Mario Galaxy for {} ({game_id}, revision {revision}){}. Nebula supports only the \
+                     North American release, RMGE01.",
+                    region_name(&game_id),
+                    in_languages(&languages)
                 )
             } else {
                 format!(
@@ -88,7 +99,7 @@ impl InputIdentity {
         InputIdentity {
             supported: message.is_empty(),
             message: if message.is_empty() {
-                "Supported: Super Mario Galaxy (USA, RMGE01, revision 0).".to_owned()
+                format!("Supported: Super Mario Galaxy (USA, RMGE01, revision 0){}.", in_languages(&languages))
             } else {
                 message
             },
@@ -97,23 +108,99 @@ impl InputIdentity {
             title,
             revision,
             main_dol_sha1,
+            languages,
         }
     }
 
-    /// One JSON object: format, gameId, title, revision, mainDolSha1 (null when not read), supported, message.
+    /// One JSON object: format, gameId, title, revision, mainDolSha1 (null when not read), languages, supported,
+    /// message.
     pub fn to_json(&self) -> String {
+        let languages: Vec<String> = self.languages.iter().map(|language| json_string(language)).collect();
         format!(
-            "{{\"format\":{},\"gameId\":{},\"title\":{},\"revision\":{},\"mainDolSha1\":{},\"supported\":{},\
-             \"message\":{}}}",
+            "{{\"format\":{},\"gameId\":{},\"title\":{},\"revision\":{},\"mainDolSha1\":{},\"languages\":[{}],\
+             \"supported\":{},\"message\":{}}}",
             json_string(&self.format),
             json_string(&self.game_id),
             json_string(&self.title),
             self.revision,
             self.main_dol_sha1.as_deref().map_or_else(|| "null".to_owned(), json_string),
+            languages.join(","),
             self.supported,
             json_string(&self.message)
         )
     }
+}
+
+/// The region of a Super Mario Galaxy game id (its fourth letter), as GameTDB lists the releases.
+fn region_name(game_id: &str) -> String {
+    match game_id.as_bytes().get(3) {
+        Some(b'E') => "USA".to_owned(),
+        Some(b'P') => "Europe".to_owned(),
+        Some(b'J') => "Japan".to_owned(),
+        Some(b'K') => "Korea".to_owned(),
+        Some(letter) => format!("region {}", *letter as char),
+        None => "an unknown region".to_owned(),
+    }
+}
+
+/// ", in English, French and Spanish" for a disc's language folders ("" for none).
+fn in_languages(folders: &[String]) -> String {
+    let names: Vec<&str> = folders.iter().map(|folder| language_name(folder)).collect();
+    match names.len() {
+        0 => String::new(),
+        1 => format!(", in {}", names[0]),
+        n => format!(", in {} and {}", names[..n - 1].join(", "), names[n - 1]),
+    }
+}
+
+/// A language folder's language ("EuGerman": German), or the folder's own name.
+fn language_name(folder: &str) -> &str {
+    match folder {
+        "UsEnglish" | "EuEnglish" => "English",
+        "UsFrench" | "EuFrench" => "French",
+        "UsSpanish" | "EuSpanish" => "Spanish",
+        "EuGerman" => "German",
+        "EuItalian" => "Italian",
+        "EuDutch" => "Dutch",
+        "JpJapanese" => "Japanese",
+        "KrKorean" => "Korean",
+        "CnSimpChinese" => "Simplified Chinese",
+        "TwTradChinese" => "Traditional Chinese",
+        other => other,
+    }
+}
+
+/// A folder the game reads one language from: a region the game knows (Language.cpp) and the language's name.
+fn is_language_folder(name: &str) -> bool {
+    let regions = ["Us", "Eu", "Jp", "Kr", "Cn", "Tw"];
+    regions.iter().any(|region| {
+        name.strip_prefix(region).is_some_and(|rest| {
+            rest.chars().next().is_some_and(|first| first.is_ascii_uppercase())
+                && rest.chars().all(|c| c.is_ascii_alphabetic())
+        })
+    })
+}
+
+/// The language folders at the root of a game partition's file table, in the table's order.
+pub fn language_folders(fst: &[u8]) -> Vec<String> {
+    let Ok(table) = nod::Fst::new(fst) else {
+        return Vec::new();
+    };
+    let mut folders = Vec::new();
+    // Each directory at the root is followed by its nodes, up to the index it gives: skipped.
+    let mut next_root_node = 1usize;
+    for (index, node, name) in table.iter() {
+        if index == 0 || index < next_root_node {
+            continue;
+        }
+        next_root_node = if node.is_dir() { node.length() as usize } else { index + 1 };
+        if let (true, Ok(name)) = (node.is_dir(), name) {
+            if is_language_folder(&name) {
+                folders.push(name.into_owned());
+            }
+        }
+    }
+    folders
 }
 
 /// `text` as a JSON string literal.
@@ -214,20 +301,26 @@ pub fn identify_input(input: &Path) -> Result<InputIdentity> {
         .map_err(|error| anyhow!("{} is not a readable GameCube/Wii disc image: {error}", input.display()))?;
     let header = disc.header();
     let game_id = header.game_id_str().to_owned();
-    let main_dol_sha1 = if header.is_wii() && game_id == RMGE01_GAME_ID {
-        let mut partition =
-            disc.open_partition_kind(PartitionKind::Data).context("the disc's game partition cannot be opened")?;
-        let meta = partition.meta().context("the game partition cannot be read")?;
-        Some(sha1_hex(&meta.raw_dol))
-    } else {
-        None
-    };
+    let mut main_dol_sha1 = None;
+    let mut languages = Vec::new();
+    if header.is_wii() && game_id.starts_with("RMG") {
+        // Another region's languages are read for its message; a partition that cannot be read leaves them out.
+        let opened = disc.open_partition_kind(PartitionKind::Data);
+        if game_id == RMGE01_GAME_ID {
+            let meta = opened.context("the disc's game partition cannot be opened")?.meta().context("the game partition cannot be read")?;
+            main_dol_sha1 = Some(sha1_hex(&meta.raw_dol));
+            languages = language_folders(&meta.raw_fst);
+        } else if let Ok(meta) = opened.and_then(|mut partition| partition.meta()) {
+            languages = language_folders(&meta.raw_fst);
+        }
+    }
     Ok(InputIdentity::new(
         disc.meta().format.to_string(),
         game_id,
         header.game_title_str().to_owned(),
         header.disc_version,
         main_dol_sha1,
+        languages,
     ))
 }
 
@@ -240,12 +333,14 @@ fn identify_folder(data: &Path) -> Result<InputIdentity> {
     let title_end = boot[0x20..0x60].iter().position(|byte| *byte == 0).unwrap_or(0x40);
     let dol = fs::read(data.join("sys").join("main.dol"))
         .with_context(|| format!("{} has no readable sys/main.dol", data.display()))?;
+    let languages = fs::read(data.join("sys").join("fst.bin")).map(|fst| language_folders(&fst)).unwrap_or_default();
     Ok(InputIdentity::new(
         "folder".to_owned(),
         String::from_utf8_lossy(&boot[..6]).into_owned(),
         String::from_utf8_lossy(&boot[0x20..0x20 + title_end]).into_owned(),
         boot[7],
         Some(sha1_hex(&dol)),
+        languages,
     ))
 }
 
@@ -915,26 +1010,64 @@ mod tests {
 
     #[test]
     fn input_identity_messages_and_json() {
-        let other = InputIdentity::new("ISO".into(), "RMCP01".into(), "Mario \"Kart\"\n".into(), 0, None);
+        let other = InputIdentity::new("ISO".into(), "RMCP01".into(), "Mario \"Kart\"\n".into(), 0, None, Vec::new());
         assert!(!other.supported);
         assert_eq!(
             other.to_json(),
             "{\"format\":\"ISO\",\"gameId\":\"RMCP01\",\"title\":\"Mario \\\"Kart\\\"\\u000a\",\"revision\":0,\
-             \"mainDolSha1\":null,\"supported\":false,\"message\":\"This is Mario \\\"Kart\\\"\\u000a (RMCP01), not \
-             Super Mario Galaxy (RMGE01). Nebula supports only the North American release of Super Mario Galaxy.\"}"
+             \"mainDolSha1\":null,\"languages\":[],\"supported\":false,\"message\":\"This is Mario \\\"Kart\\\"\\u000a \
+             (RMCP01), not Super Mario Galaxy (RMGE01). Nebula supports only the North American release of Super Mario \
+             Galaxy.\"}"
         );
+        let us = vec!["UsEnglish".to_owned(), "UsFrench".to_owned(), "UsSpanish".to_owned()];
         let supported = InputIdentity::new(
             "folder".into(),
             RMGE01_GAME_ID.into(),
             "SUPER MARIO GALAXY".into(),
             0,
             Some(RMGE01_DOL_SHA1.into()),
+            us,
         );
         assert!(supported.supported);
-        assert_eq!(supported.message, "Supported: Super Mario Galaxy (USA, RMGE01, revision 0).");
-        assert!(InputIdentity::new("ISO".into(), "RMGP01".into(), "x".into(), 0, None).message.contains("a region"));
-        let revision =
-            InputIdentity::new("ISO".into(), RMGE01_GAME_ID.into(), "x".into(), 1, Some(RMGE01_DOL_SHA1.into()));
+        assert_eq!(supported.message, "Supported: Super Mario Galaxy (USA, RMGE01, revision 0), in English, French and Spanish.");
+        assert!(supported.to_json().contains("\"languages\":[\"UsEnglish\",\"UsFrench\",\"UsSpanish\"]"));
+        let europe: Vec<String> = ["EuEnglish", "EuGerman", "EuFrench"].iter().map(|s| s.to_string()).collect();
+        assert_eq!(
+            InputIdentity::new("ISO".into(), "RMGP01".into(), "x".into(), 1, None, europe).message,
+            "This is Super Mario Galaxy for Europe (RMGP01, revision 1), in English, German and French. Nebula supports \
+             only the North American release, RMGE01."
+        );
+        assert_eq!(
+            InputIdentity::new("ISO".into(), "RMGK01".into(), "x".into(), 0, None, Vec::new()).message,
+            "This is Super Mario Galaxy for Korea (RMGK01, revision 0). Nebula supports only the North American \
+             release, RMGE01."
+        );
+        let revision = InputIdentity::new(
+            "ISO".into(),
+            RMGE01_GAME_ID.into(),
+            "x".into(),
+            1,
+            Some(RMGE01_DOL_SHA1.into()),
+            Vec::new(),
+        );
         assert!(!revision.supported && revision.message.starts_with("This RMGE01 copy is revision 1"));
+    }
+
+    #[test]
+    fn language_folders_are_the_roots_named_as_the_game_names_them() {
+        let table = fst(&[
+            Node::Directory("AudioRes", 1),
+            Node::File("a.bin", 0, 4),
+            Node::Directory("UsEnglish", 2),
+            Node::Directory("EuGerman", 0),
+            Node::File("m.arc", 4, 4),
+            Node::Directory("UsFrench", 0),
+            Node::File("UsSpanish", 8, 4),
+            Node::Directory("Usb", 0),
+            Node::Directory("CnSimpChinese", 0),
+        ]);
+        assert_eq!(language_folders(&table), ["UsEnglish", "UsFrench", "CnSimpChinese"]);
+        assert!(language_folders(&[1, 2, 3]).is_empty());
+        assert!(is_language_folder("TwTradChinese") && !is_language_folder("Us") && !is_language_folder("UsEnglish2"));
     }
 }

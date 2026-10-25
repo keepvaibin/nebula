@@ -3262,6 +3262,23 @@ int main(int argc, char** argv) {
             }
             galaxy::crash::set_session_mods(lines, change_game);
         }
+        {
+            // The disc as the game reads it: its version and its languages (the mods' among them), which the
+            // language setting offers.
+            const std::vector<std::string> languages =
+                gMods != nullptr && !gMods->fst.empty()
+                    ? galaxy::mods::language_folders(gMods->fst)
+                    : galaxy::mods::language_folders(std::span<const std::uint8_t>(gPak.fst, gPak.fst_size));
+            std::string list;
+            for (const std::string& language : languages) list += (list.empty() ? "" : ", ") + language;
+            char text[256];
+            std::snprintf(text, sizeof(text), "%s revision %u: %s", game_id.c_str(), static_cast<unsigned>(gPak.data[7]),
+                          list.empty() ? "no language folders" : list.c_str());
+            log_line("disc:", text);
+#if defined(NEBULA_HOST_RENDERER)
+            galaxy::set_disc_languages(languages);
+#endif
+        }
         if (gMods == nullptr && !settings_folder.empty() && fs::exists(settings_folder / "mods-report.txt", error)) {
             // No mod this start: an earlier start's report must not stand.
             (void)galaxy::io::write_text_file_atomically(settings_folder / "mods-report.txt",

@@ -321,13 +321,41 @@ RuntimeSettings get_runtime_settings() {
 namespace {
 // 0 until the game first asks for its language, then that language's SC code.
 std::atomic<std::uint8_t> s_running_language{0u};
+// A bit for each GameLanguage on the disc (bit `value`); all until set_disc_languages.
+std::atomic<std::uint32_t> s_disc_languages{~0u};
+
+// The North American disc's folder for a language (the native game is RMGE01's).
+const char* disc_folder(GameLanguage language) noexcept {
+    switch (language) {
+    case GameLanguage::French: return "UsFrench";
+    case GameLanguage::Spanish: return "UsSpanish";
+    case GameLanguage::English: break;
+    }
+    return "UsEnglish";
+}
 }  // namespace
+
+void set_disc_languages(std::span<const std::string> folders) noexcept {
+    std::uint32_t bits = 1u << static_cast<unsigned>(GameLanguage::English);  // English whatever (the fallback)
+    for (const GameLanguage language : {GameLanguage::French, GameLanguage::Spanish}) {
+        if (std::find(folders.begin(), folders.end(), disc_folder(language)) != folders.end()) {
+            bits |= 1u << static_cast<unsigned>(language);
+        }
+    }
+    s_disc_languages.store(bits, std::memory_order_release);
+}
+
+bool game_language_on_disc(GameLanguage language) noexcept {
+    return (s_disc_languages.load(std::memory_order_acquire) >> static_cast<unsigned>(language) & 1u) != 0u;
+}
 
 GameLanguage game_language_for_boot() noexcept {
     std::uint8_t running = s_running_language.load(std::memory_order_acquire);
     if (running == 0u) {
         std::uint8_t expected = 0u;
-        const auto chosen = static_cast<std::uint8_t>(get_runtime_settings().language);
+        GameLanguage setting = get_runtime_settings().language;
+        if (!game_language_on_disc(setting)) setting = GameLanguage::English;
+        const auto chosen = static_cast<std::uint8_t>(setting);
         running = s_running_language.compare_exchange_strong(expected, chosen, std::memory_order_acq_rel)
             ? chosen : expected;
     }
