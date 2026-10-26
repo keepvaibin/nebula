@@ -50,7 +50,7 @@ enum SPECIAL_STATUS_FOR_CAMERA { CASE_0, CASE_1 };
 enum PlayerMode {
     /* 0x0 */ PlayerMode_Normal,
     /* 0x1 */ PlayerMode_Invincible,
-    /* 0x2 */ PlayerMode_2,
+    /* 0x2 */ PlayerMode_Fire,
     /* 0x3 */ PlayerMode_Ice,
     /* 0x4 */ PlayerMode_Bee,
     /* 0x5 */ PlayerMode_Hopper,

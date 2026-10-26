@@ -1811,22 +1811,22 @@ void MarioActor::calcAnimInMovement() {
 
         bool val = true;
         switch (mPlayerMode) {
-        case 4:
+        case PlayerMode_Bee:
             val = MR::isOnGameEventFlagBeeMarioAtFirst();
             break;
-        case 6:
+        case PlayerMode_Teresa:
             val = MR::isOnGameEventFlagTeresaMarioAtFirst();
             break;
-        case 5:
+        case PlayerMode_Hopper:
             val = MR::isOnGameEventFlagHopperMarioAtFirst();
             break;
-        case 2:
+        case PlayerMode_Fire:
             val = MR::isOnGameEventFlagFireMarioAtFirst();
             break;
-        case 3:
+        case PlayerMode_Ice:
             val = MR::isOnGameEventFlagIceMarioAtFirst();
             break;
-        case 7:
+        case PlayerMode_Foo:
             val = MR::isOnGameEventFlagFlyingMarioAtFirst();
             break;
         }
@@ -1867,27 +1867,29 @@ void MarioActor::calcAnimInMovement() {
             MR::releaseAnimFrame(this);
             _3DE = 1;
 
+            // The first transformation's explanation, by the mode (the game's jump table, RMGE01 0x805A386C; the
+            // decomp had listed its bodies in code order as cases 1-7, so Ice showed the Spring explanation).
             switch (mPlayerMode) {
-            case 1:
-                MR::explainBeeMarioIfAtFirst();
+            case PlayerMode_Invincible:
+                MR::explainInvincibleMarioIfAtFirst();
                 break;
-            case 2:
-                MR::explainTeresaMarioIfAtFirst();
-                break;
-            case 3:
-                MR::explainHopperMarioIfAtFirst();
-                break;
-            case 4:
+            case PlayerMode_Fire:
                 MR::explainFireMarioIfAtFirst();
                 break;
-            case 5:
+            case PlayerMode_Ice:
                 MR::explainIceMarioIfAtFirst();
                 break;
-            case 6:
-                MR::explainFlyingMarioIfAtFirst();
+            case PlayerMode_Bee:
+                MR::explainBeeMarioIfAtFirst();
                 break;
-            case 7:
-                MR::explainInvincibleMarioIfAtFirst();
+            case PlayerMode_Hopper:
+                MR::explainHopperMarioIfAtFirst();
+                break;
+            case PlayerMode_Teresa:
+                MR::explainTeresaMarioIfAtFirst();
+                break;
+            case PlayerMode_Foo:
+                MR::explainFlyingMarioIfAtFirst();
                 break;
             }
 

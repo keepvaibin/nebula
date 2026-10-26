@@ -759,7 +759,7 @@ namespace MarioAccess {
             getPlayerActor()->setPlayerMode(PlayerMode_Ice, true);
             break;
         case 5:
-            getPlayerActor()->setPlayerMode(PlayerMode_2, true);
+            getPlayerActor()->setPlayerMode(PlayerMode_Fire, true);
             break;
         case 6:
             getPlayerActor()->setPlayerMode(PlayerMode_Foo, true);
