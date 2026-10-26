@@ -553,6 +553,8 @@ enum {
     NEBULA_CONTEXT_TILT_SECTION,          /* 0 none, 1 Mario on a Star Ball, 2 on a Ray: tilt steers */
     NEBULA_CONTEXT_FRAME_GENERATION,      /* each frame: 1 while the game shows play (no menu, window or full-screen
                                              page): DLSS Frame Generation may add frames (NebulaFrameGen) */
+    NEBULA_CONTEXT_CAMERA_WATER,          /* each frame: the camera's depth under water in units, at least 1 (0: out
+                                             of water; MR::isCameraInWater): ray tracing's water medium */
 };
 
 /* Returns NEBULA_GAME_API_VERSION, or 0 if the host's services are too old. */

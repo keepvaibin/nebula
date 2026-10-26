@@ -5371,6 +5371,33 @@ bool GxBackend::rt_water_draw() const noexcept {
            rt_phase_ == static_cast<std::uint8_t>(ScenePhase::AfterIndirect);
 }
 
+// The game's procedural water surfaces (OceanBowl, OceanSphere, OceanRing): direct vertices drawn in the translucent
+// phases with a material the table names water (particles have their own rows), alpha blended, or added from below
+// while the camera is in the water. Water as the models' surfaces are (rt_water_draw needs indexed positions to keep
+// particles out).
+bool GxBackend::rt_ocean_water_draw() const noexcept {
+    if (!rt_water_wanted_ || !scene_phase_ || side_layer_ != kSceneLayer || !renderer_.rt_water_open() ||
+        state_.vertex_desc(0u).position.vcd != VcdType::Direct ||
+        state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) != 0u) {
+        return false;
+    }
+    using motion::ScenePhase;
+    if (rt_phase_ != static_cast<std::uint8_t>(ScenePhase::Xlu) &&
+        rt_phase_ != static_cast<std::uint8_t>(ScenePhase::ListXlu) &&
+        rt_phase_ != static_cast<std::uint8_t>(ScenePhase::AfterIndirect)) {
+        return false;
+    }
+    const BlendMode blend = state_.blend_mode();
+    if (!blend.blend_enable || blend.logic_op_enable || blend.subtract || !blend.color_update ||
+        blend.src_factor != BlendFactor::SrcAlpha ||
+        (blend.dst_factor != BlendFactor::InvSrcAlpha && blend.dst_factor != BlendFactor::One)) {
+        return false;
+    }
+    const RtMaterial* const material = rt_material(current_rt_material_);
+    return material != nullptr && material->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Water) &&
+           !material->particle && !material->helper && !material->waterfall && material->emission == RtEmission::None;
+}
+
 // The material table entry of a draw: its first mapped texture's that has one. Lookup textures
 // (environment, indirect and mask maps, shared by many models) decide only a draw that maps nothing
 // else the table names.
@@ -5868,7 +5895,8 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
                         renderer_.rt_water_open() && scene_phase_ && side_layer_ == kSceneLayer &&
                         (state_.vertex_desc(0u).position.vcd == VcdType::Index8 ||
                          state_.vertex_desc(0u).position.vcd == VcdType::Index16);
-    const bool glow = translucent && !lens && !clear_added && !clear_blended && !metal_coat && !traced &&
+    const bool ocean = translucent && !lens && rt_ocean_water_draw();
+    const bool glow = translucent && !lens && !clear_added && !clear_blended && !metal_coat && !traced && !ocean &&
                       (rt_glow_draw() || rt_sprite_light_draw());
     if (glow && current_rt_material_ == 0u) {
         const unsigned map = ps_key_.stages[0].order & 7u;
@@ -5876,7 +5904,8 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         note_rt_unnamed_glow((state_.bp(static_cast<std::uint8_t>(bp::kTexImage3Base + bank + (map & 3u))) & 0xFFFFFFu)
                              << 5u);
     }
-    bool water = translucent && !lens && !glow && (clear_added || clear_blended || metal_coat || traced || rt_water_draw());
+    bool water =
+        translucent && !lens && !glow && (clear_added || clear_blended || metal_coat || traced || rt_water_draw() || ocean);
     // An opaque late draw the table names water or crystal (ice drawn after the indirect capture with the game's own
     // refraction): a surface of the water pass, its reflections laid over what it drew.
     bool opaque_clear = false;
@@ -5996,6 +6025,13 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     info.channel = state_.xf(xf::kChannelCtrlBase);
     info.ambient = state_.xf(xf::kAmbientColorBase);
     info.material = state_.xf(xf::kMaterialColorBase);
+    {
+        const FogParams fog = state_.fog();
+        info.fog = {fog_param_float_bits(fog.a_raw & 0xFFFFFu),
+                    (fog.b_magnitude_raw & 0xFFFFFFu) | ((fog.b_shift_raw & 0x1Fu) << 24u) |
+                        ((static_cast<std::uint32_t>(ps_key_.fog_type) & 7u) << 29u),
+                    fog_param_float_bits(fog.c_raw), (fog.color_rgb & 0xFFFFFFu) | (fog.projection ? 1u << 24u : 0u)};
+    }
     {
         const XfChannelCtrl color = state_.channel_ctrl(0u);
         info.surface = color.lighting_enable && color.light_mask != 0u ? kRtDrawLit : 0u;

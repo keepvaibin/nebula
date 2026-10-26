@@ -96,6 +96,7 @@ cbuffer RtLight : register(b0)
     uint4 g_engine_size;           // full width, height; half width, height
     uint4 g_engine_info;           // flags (kEngine*), a-trous step, slot, a-trous parity
     float4 g_engine_params;
+    float4 g_engine_water;         // the camera in water (x: 1), its depth (y, eye units): water_medium
 };
 
 // g_flags bit 14: the game's light units (GALAXY_RT_PHYSICAL), as the stage sets them in linear light (white 1):
@@ -138,7 +139,7 @@ RWStructuredBuffer<float4> g_reference : register(u6);
 StructuredBuffer<float4> g_sky_map : register(t22);
 // kPhysicalFlag: per EFB pixel its shading normal (pack_pixel_normal) and the texture's de-lighting there
 // (pack_pixel_delight; 0: none), from EngineGBufferCS, for the composite's per-pixel sun and albedo.
-RWStructuredBuffer<uint2> g_pixels : register(u7);
+RWStructuredBuffer<uint4> g_pixels : register(u7);
 // Physical emitters (kPhysicalFlag, g_tev_info.z triangles): while EmitTriangleCS runs the emitting draws' ranges, then
 // the emitting triangles as float4 elements: 0 the count and total power; at 1 + 4 i v0 and area, e1 and two-sided, e2,
 // radiance (linear) and power; at 1 + 4 kEmitTriangles + i the running power (EmitScanCS).
@@ -165,8 +166,40 @@ static const uint kEmitNamed = 4u;      // the table names this draw's texture
 static const uint kEmitNoLight = 8u;    // never a light
 // g_draws records (SceneRayTracer::draw_colors_): ambient, GX light 0 colour, emission, intensity,
 // roughness and metalness, material colour, flags, relief; GX light 0's eye position (3 floats), its kind
-// (0 none, 1 no facing term, 2 n.l; bits 16-31 a clear solid's index of refraction, rt_engine.hlsl solid_ior).
-static const uint kDrawStride = 48u;
+// (0 none, 1 no facing term, 2 n.l; bits 16-31 a clear solid's index of refraction, rt_engine.hlsl solid_ior); words
+// 12-15 its GX fog (RtDrawInfo::fog; rt_engine.hlsl gx_fog_share).
+static const uint kDrawStride = 64u;
+
+// Light under water: clear ocean water's diffuse attenuation per eye unit (about a centimetre: Mario stands 160 tall),
+// red, green, blue: Jerlov type I, Kd = 0.35, 0.065, 0.019 per metre at 650, 550, 450 nm, halved because the game's
+// water is drawn clearer than the sea. Kd, not the beam attenuation: the light scattered out of the beam still goes
+// down (rt_engine.hlsl water_through).
+static const float3 kWaterAttenuation = float3(0.00175f, 0.000325f, 0.000095f);
+// Water as a medium a ray crosses (the camera in water): its beam attenuation c, the same clear water's 0.36, 0.08,
+// 0.03 per metre halved.
+static const float3 kWaterBeam = float3(0.0018f, 0.0004f, 0.00015f);
+// The water's own light (its path radiance seen sideways) per unit of the light falling on it (a white surface under
+// that light: 1): near the surface the upwelling radiance is one to two orders of magnitude below the downwelling and
+// the horizontal lies between (Mobley, Ocean Optics Web Book, Visualizing Radiances): a seventh of the downwelling,
+// in coastal water's colour, its single-scattering albedo b / c (particles scattering about 0.15, 0.17, 0.19 per metre
+// against an absorption of 0.35, 0.07, 0.08: pure water's, Pope and Fry 1997, with the dissolved organic matter that
+// absorbs blue, Jerlov's coastal types): 0.30, 0.71, 0.70, here as a share of green's.
+static const float3 kWaterLight = float3(0.30f, 0.71f, 0.70f) * (0.15f / 0.71f);
+
+// The light water scatters towards a ray in it, `depth` eye units under its surface: its share of the stage's full
+// light `full` falling on the water, dimmed by the water above. The stage's light, not what the traced scene sees
+// there: the water carries light into its caves as it is lit from above.
+float3 water_medium_light(float3 full, float depth)
+{
+    return kWaterLight * full * exp(-kWaterAttenuation * max(depth, 0.0f));
+}
+
+// Light `radiance` arriving after `distance` eye units of water whose own light is `medium`.
+float3 water_medium(float3 radiance, float distance, float3 medium)
+{
+    const float3 t = exp(-kWaterBeam * max(distance, 0.0f));
+    return radiance * t + medium * (1.0f - t);
+}
 static const uint kDrawTableFoliage = 4u;   // g_draws word 6: alpha-cut foliage cards
 static const uint kDrawTableStar = 8u;      // g_draws word 6: a star's burning surface (the star core)
 // g_draws word 6: a light source the table recolours (`recolour`): its light and its surface in the table's colour (the
@@ -2125,7 +2158,10 @@ struct Surface {
     float3 n;          // shading normal
     float3 ng;         // face normal, towards the camera
     float3 lifted;     // the point lifted off the face
-    float lift;        // how far the shading normals lift it, along the face normal (0: flat)
+    // How far a ray from the drawn point starts off it, along the face normal: the shading normals' lift (Hanika) less
+    // what the drawn point already stands above the face; negative where the drawn point lies under its traced face
+    // (a curved model's inward bend), by that depth and the lift, a start that holds for every ray.
+    float lift;
     uint2 primary;     // the triangle + 1 (0: none), barycentrics (halves)
     // A clear crystal or glass surface (surface class 7) lets the lights behind it through: the star bits inside a
     // crystal light it from within.
@@ -2219,7 +2255,14 @@ Surface primary_surface(int2 q, float3 p)
             s.primary = uint2(tri + 1u, f32tof16(b.x) | (f32tof16(b.y) << 16u));
             s.clear = ((g_surfaces.Load(tri * 16u + 12u) >> 8u) & 15u) == kClearClass;
             smooth_surface(tri, w, v0, v1, v2, s.ng, s.n, s.lifted);
-            s.lift = max(dot(s.lifted - hit, s.ng), 0.0f);
+            // The drawn point against the traced face: Phong tessellation (curved_surfaces.h) draws a curved model
+            // rounded and the scene holds its flat triangles, so where the model bends inwards (a beach, a sea floor,
+            // a dome's rims) the drawn surface lies under its own faces, up to tens of units, and a ray from it met
+            // its own face from below (black blotches of self-shadow); where it bends outwards it stands above them,
+            // as far as the normals' lift reaches or further.
+            const float lift = max(dot(s.lifted - hit, s.ng), 0.0f);
+            const float above = dot(p - hit, s.ng);
+            s.lift = above < 0.0f ? above - lift : max(lift - above, 0.0f);
         }
     }
     return s;
@@ -2231,10 +2274,12 @@ Surface primary_surface(int2 q, float3 p)
 static const uint kMaxCandidates = 64u;
 
 // Whether the sun is seen from `origin` along `direction` (a point inside its disc); the blocker's distance in
-// `blocker` (0: open). `card`: the sample lies on a foliage card, which the cards close beside it do not shade.
-bool sun_visible(float3 origin, float3 direction, bool card, uint salt, out float blocker)
+// `blocker` (0: open), its triangle + 1 in this instance's (0: open) and its instance in `who`. `card`: the sample lies
+// on a foliage card, which the cards close beside it do not shade.
+bool sun_visible_by(float3 origin, float3 direction, bool card, uint salt, out float blocker, out uint2 who)
 {
     blocker = 0.0f;
+    who = uint2(0u, 0u);
     RayDesc ray;
     ray.Origin = origin;
     ray.Direction = direction;
@@ -2275,9 +2320,16 @@ bool sun_visible(float3 origin, float3 direction, bool card, uint salt, out floa
     }
     if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
         blocker = clamp(query.CommittedRayT(), 1e-2f, 6.0e4f);
+        who = uint2(query.CommittedPrimitiveIndex() + 1u, query.CommittedInstanceID());
         return false;
     }
     return true;
+}
+
+bool sun_visible(float3 origin, float3 direction, bool card, uint salt, out float blocker)
+{
+    uint2 who;
+    return sun_visible_by(origin, direction, card, salt, blocker, who);
 }
 
 // Physical emitters (kPhysicalFlag): every triangle of the scene's emitting draws (the material table's light sources:
@@ -3176,13 +3228,16 @@ cbuffer RtComposite : register(b0)
     float4 m_sun;        // towards the traced sun (eye space, traced frame); relief height (eye units)
     float4 m_sun_light;  // its light (rgb)
     uint2 m_target_size; // the traced frame's EFB pixels (m_pixels)
+    float4 m_water;      // the camera in water (x: 1), its depth (y, eye units): water_medium
+    float4 m_water_sky;  // the stage's full light (rgb): what the water scatters
 };
 StructuredBuffer<uint4> m_light : register(t0);
 Texture2D<float> m_efb_depth : register(t1);
 StructuredBuffer<float4> m_reproject : register(t2);
 Texture2D<float4> m_color : register(t3);
-// m_flags bit 3 (physical): the traced frame's per-pixel shading normals and de-lighting (EngineGBufferCS).
-StructuredBuffer<uint2> m_pixels : register(t4);
+// m_flags bit 3 (physical): the traced frame's per-pixel shading normals and de-lighting, and its surface's fog: the
+// share (f16) and the camera's exposure (f16, high half), the colour RGB8 (EngineGBufferCS).
+StructuredBuffer<uint4> m_pixels : register(t4);
 
 // The traced frame's shading normal at its pixel `q`.
 float3 traced_normal(int2 q)
@@ -3422,9 +3477,30 @@ CompositeOut CompositePS(float4 position : SV_Position)
         }
         const int2 at = clamp(traced, int2(0, 0), int2(m_target_size) - 1);
         const uint delit = traced_delight(at);
-        const float3 albedo = srgb_to_linear(color) * (delit != 0u ? exp(-unpack_pixel_shading(delit)) : 1.0f) *
-                              traced_own(at);
-        result.color = float4(linear_to_srgb(albedo * diffuse + specular), 1.0f);
+        // The game's fog over the surface (EngineGBufferCS): the raster blended it into the colour in display space
+        // (8-bit), so it comes out of the colour before the light goes on, and lies over the lit surface as light the
+        // air or water between scatters towards the eye: the fog's colour at the exposure, in the share the game gives
+        // it. Multiplied by the traced light as part of the colour, it went dark with the light (Deep Dark's water).
+        const uint4 fog_word = m_pixels[uint(at.y) * m_target_size.x + uint(at.x)];
+        const float fog = f16tof32(fog_word.z);
+        float3 surface_colour = color;
+        float3 inscatter = float3(0.0f, 0.0f, 0.0f);
+        if (fog > 0.0f) {
+            const float3 fog_colour =
+                float3(float((fog_word.w >> 16u) & 0xFFu), float((fog_word.w >> 8u) & 0xFFu), float(fog_word.w & 0xFFu)) /
+                255.0f;
+            surface_colour = fog < 0.996f ? max((color - fog_colour * fog) / (1.0f - fog), 0.0f) : fog_colour;
+            inscatter = srgb_to_linear(fog_colour) * (f16tof32(fog_word.z >> 16u) * fog);
+        }
+        const float3 albedo = srgb_to_linear(surface_colour) *
+                              (delit != 0u ? exp(-unpack_pixel_shading(delit)) : 1.0f) * traced_own(at);
+        float3 seen = (albedo * diffuse + specular) * (1.0f - fog) + inscatter;
+        // The camera in water: the water between it and the surface (its light at the exposure).
+        if (m_water.x > 0.0f) {
+            seen = water_medium(seen, length(here),
+                                water_medium_light(m_water_sky.rgb, m_water.y) * f16tof32(fog_word.z >> 16u));
+        }
+        result.color = float4(linear_to_srgb(seen), 1.0f);
         return result;
     }
     // Physical (bit 3): the sun turned from each sample's facing to this pixel's own normal (the samples' visibility

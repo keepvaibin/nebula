@@ -427,6 +427,22 @@ void set_frame_generation_running(bool running) noexcept {
 
 bool frame_generation_running() noexcept { return s_frame_generation_running.load(std::memory_order_relaxed); }
 
+namespace {
+std::atomic<float> s_camera_water{-1.0f};
+std::atomic<std::int64_t> s_camera_water_ms{0};
+}  // namespace
+
+void note_camera_water(float depth) noexcept {
+    s_camera_water.store(depth, std::memory_order_relaxed);
+    s_camera_water_ms.store(steady_ms(), std::memory_order_relaxed);
+}
+
+float camera_water_depth() noexcept {
+    const std::int64_t at = s_camera_water_ms.load(std::memory_order_relaxed);
+    return at != 0 && steady_ms() - at < kFrameGenerationReportMs ? s_camera_water.load(std::memory_order_relaxed)
+                                                                   : -1.0f;
+}
+
 void note_frame_generation_allowed(bool allowed) noexcept {
     s_frame_generation_allowed.store(allowed, std::memory_order_relaxed);
     s_frame_generation_report_ms.store(steady_ms(), std::memory_order_relaxed);

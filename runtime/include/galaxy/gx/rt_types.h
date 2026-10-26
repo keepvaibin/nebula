@@ -187,6 +187,10 @@ struct RtDrawInfo {
     // kRtDrawSky, kRtDrawGlow: how the raster blends it: blending (bit 0), the source and destination factors (GX
     // BlendFactor, bits 1-3 and 4-6), subtract (bit 7), colour writes (bit 8), a logic op (bit 9).
     std::uint32_t blend = 0u;
+    // Its GX fog as its pixel shader applies it (ShaderGenerator: BP 0xEE-0xF2 and the key's fog type): A (float
+    // bits), B's magnitude (bits 0-23) | its shift << 24 | the type (FogType) << 29, C (float bits), the colour RGB8
+    // (0xRRGGBB) | orthographic << 24. Type 0: no fog.
+    std::array<std::uint32_t, 4> fog{};
 };
 
 // The scene camera, for rays through EFB pixels and depth reconstruction: GX projection A-D,

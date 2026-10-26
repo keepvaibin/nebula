@@ -58,8 +58,9 @@ struct RtEngineConstants {
     std::uint32_t size[4];     // full width, height; half width, height
     std::uint32_t info[4];     // flags, a-trous step, slot, a-trous parity
     float params[4];
+    float water[4];            // the camera in water (x: 1), its depth (y, eye units): rt_lighting.hlsl water_medium
 };
-static_assert(sizeof(RtEngineConstants) == 176u);
+static_assert(sizeof(RtEngineConstants) == 192u);
 
 class SceneRayTracer {
 public:
@@ -510,8 +511,9 @@ private:
     // ambient and GX light 0 colours (RGBA8), the material table's emission (RGBA8 with its kind)
     // and intensity; roughness and metalness (unorm16 pair, 0xFFFF: the class's), the material colour
     // register (RGBA8), flags (kDrawTableTint), the relief; GX light 0's eye-space position (3 floats) and
-    // its kind (0: none or attenuated, 1: no facing term, 2: n.l) for the day model's game shading.
-    std::vector<std::array<std::uint32_t, 12>> draw_colors_;
+    // its kind (0: none or attenuated, 1: no facing term, 2: n.l) for the day model's game shading; its fog
+    // (RtDrawInfo::fog).
+    std::vector<std::array<std::uint32_t, 16>> draw_colors_;
     // Per draw for high quality's textured hits (rt_reflections.hlsl g_draw_tex): texture view, colour
     // source (bit 0 vertex colour), its colour RGBA8, alpha test (the alpha it passes from in the high 8 bits,
     // the alpha map's view); and its upload.
@@ -644,6 +646,8 @@ private:
         std::array<float, 3> sun_light{};  // its light
         bool sun_shown = false;            // the sky shows it (the game's BrightSun, or the sun its sky map holds)
         bool pixels = false;               // light_pixels_ holds its per-pixel normals (physical)
+        std::array<float, 4> water{};      // the camera in water (1), its depth (RtEngineConstants::water)
+        std::array<float, 3> water_sky{};  // the stage's full light it scatters (the lighting's full_light)
     };
     Microsoft::WRL::ComPtr<ID3D12RootSignature> light_root_;
     bool physical_active_ = false;  // this frame had the game's area light (else it is not traced)
@@ -931,8 +935,8 @@ private:
     static constexpr unsigned kBallReadbacks = 4u;
     // After the balls and the colour: the pixel probe's two records (GALAXY_RT_PROBE: rt_engine.hlsl EngineGBufferCS),
     // the engine reference's comparison (rt_engine.hlsl EngineFinalCS) and a spare.
-    // The probe's records (GALAXY_RT_PROBE: 0, 1, 3), the reference's comparison (2), the light meter's sums (4 to 6).
-    static constexpr unsigned kProbeRecords = 7u;
+    // The probe's records (GALAXY_RT_PROBE: 0, 1, 3, 7), the reference's comparison (2), the light meter's sums (4 to 6).
+    static constexpr unsigned kProbeRecords = 8u;
     static constexpr unsigned kBallReadbackBytes = kStarSlots * 16u + 16u + kProbeRecords * 16u;
     // GALAXY_RT_PROBE=x,y (diagnostics): an EFB pixel whose sample reports, once a second, the draw the camera sees and
     // what stops the sun's centre ray from it (draw record, material table entry, distance, instance).

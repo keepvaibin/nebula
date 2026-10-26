@@ -211,7 +211,38 @@ float footprint_scale()
     return (g_engine_info.x & kEngineNoFootprint) != 0u ? 1.0f : max(float(g_target_size.y) / kFootprintLines, 1.0f);
 }
 
-// The full-resolution G-buffer, and the composite's per-pixel normal and de-lighting (g_pixels).
+// The game's fog over a surface at EFB depth `depth` under its draw's fog words (g_draws words 12-15, RtDrawInfo::fog:
+// A, B's magnitude | its shift << 24 | the type << 29, C, the colour | orthographic << 24): the share of the fog's
+// colour, as the raster's pixel shader computes it from the same depth (ShaderGenerator, after Dolphin's
+// PixelShaderGen), on the 8-bit blend's 1/256 steps. 0: no fog.
+float gx_fog_share(uint4 fog, float depth)
+{
+    const uint type = fog.y >> 29u;
+    if (type == 0u) {
+        return 0.0f;
+    }
+    const uint zc = uint(clamp((1.0f - depth) * 16777216.0f, 0.0f, 16777215.0f));
+    float ze;
+    if ((fog.w & 0x1000000u) == 0u) {
+        ze = asfloat(fog.x) * 16777216.0f / float(max(1u, (fog.y & 0xFFFFFFu) - (zc >> ((fog.y >> 24u) & 31u))));
+    } else {
+        ze = asfloat(fog.x) * float(zc) / 16777216.0f;
+    }
+    float f = saturate(ze - asfloat(fog.z));
+    if (type == 4u) {
+        f = 1.0f - exp2(-8.0f * f);
+    } else if (type == 5u) {
+        f = 1.0f - exp2(-8.0f * f * f);
+    } else if (type == 6u) {
+        f = exp2(-8.0f * (1.0f - f));
+    } else if (type == 7u) {
+        f = 1.0f - f;
+        f = exp2(-8.0f * f * f);
+    }
+    return round(f * 256.0f) / 256.0f;
+}
+
+// The full-resolution G-buffer, and the composite's per-pixel normal, de-lighting and fog (g_pixels).
 [numthreads(8, 8, 1)]
 void EngineGBufferCS(uint3 id : SV_DispatchThreadID)
 {
@@ -227,7 +258,7 @@ void EngineGBufferCS(uint3 id : SV_DispatchThreadID)
     const int2 q = int2(id.xy);
     const uint pixel = id.y * g_target_size.x + id.x;
     float3 p;
-    uint2 packed = uint2(0u, 0u);
+    uint4 packed = uint4(0u, 0u, 0u, 0u);
     uint4 w0 = uint4(0u, 0u, 0u, 0u);
     uint4 w1 = uint4(0u, 0u, 0u, 0u);
     if (pixel_point(q, p) && inside(g_viewport, float2(q) + 0.5f) && -p.z <= g_ambient.w) {
@@ -304,6 +335,13 @@ void EngineGBufferCS(uint3 id : SV_DispatchThreadID)
             const uint record = min(draw, max(g_draw_count, 1u) - 1u) * kDrawStride;
             const uint2 table = g_draws.Load2(record + 8u);
             probe_table = uint2(table.x, tev_glows_at(draw, g_tev_info.x, tri, bary) ? 1u : 0u);
+            // The game's fog over it, for the composite: its share and the camera's exposure, its colour.
+            {
+                const uint4 fog_words = g_draws.Load4(record + 48u);
+                const float fog = gx_fog_share(fog_words, g_efb_depth.Load(int3(q, 0)));
+                packed.z = f32tof16(fog) | (f32tof16(physical_exposure()) << 16u);
+                packed.w = fog > 0.0f ? fog_words.w & 0xFFFFFFu : 0u;
+            }
             // The table's roughness and metalness (unorm16 x 65534; 0xFFFF: no row: a matte non-metal).
             const uint pbr = g_draws.Load(record + 16u);
             s.roughness = (pbr & 0xFFFFu) == 0xFFFFu ? 0.7f : max(float(pbr & 0xFFFFu) / 65534.0f, 0.02f);
@@ -571,11 +609,7 @@ float3 sun_direction_sample(float2 u)
     return sun_direction_spread(u, g_sun.w);
 }
 
-// Light under water (kEngineWaterLight): clear ocean water's diffuse attenuation per eye unit (about a centimetre:
-// Mario stands 160 tall), red, green, blue: Jerlov type I, Kd = 0.35, 0.065, 0.019 per metre at 650, 550, 450 nm,
-// halved because the game's water is drawn clearer than the sea. Kd, not the beam attenuation (c = 0.36, 0.08, 0.03):
-// the light scattered out of the beam still goes down.
-static const float3 kWaterAttenuation = float3(0.00175f, 0.000325f, 0.000095f);
+// Light under water (kEngineWaterLight): kWaterAttenuation (rt_lighting.hlsl).
 // The share of the water's hue shift the light under it keeps (the rest dims it evenly); the sea's full shift turns
 // shallow water teal and its depths cyan-blue.
 static const float kWaterHue = 0.35f;
@@ -1397,6 +1431,17 @@ float3 engine_hit_radiance(Hit h, float3 origin, float3 direction, bool emission
     return albedo * m + (emission_wanted ? emission : float3(0.0f, 0.0f, 0.0f));
 }
 
+// The camera in water (g_engine_water): the light a ray from `origin` that hits a surface brings through the water to
+// it, with the water's own light gained on the way (water_medium). A ray to the sky keeps its light as water_through
+// gave it: the water above's diffuse attenuation already holds what it scatters (its light still goes down).
+float3 engine_water_ray(float3 radiance, Hit h, float3 origin, float3 direction)
+{
+    if (g_engine_water.x <= 0.0f || !h.surface) {
+        return radiance;
+    }
+    return water_medium(radiance, h.t, water_medium_light(g_full_light.rgb, g_engine_water.y));
+}
+
 // ReSTIR DI reservoir of a light sample.
 struct Reservoir {
     LightSample s;
@@ -1511,7 +1556,8 @@ float2 pixel_sample(int2 q, uint frame)
 // smooth, has its faces below the surface those normals describe; a ray the face meets at a grazing angle, from the
 // face, hits the next triangles of the same surface and shades the terminator in steps. Such a ray starts from the
 // point the normals lift the face to (EngineGBufferCS's lift), one the face meets squarely from the face, so contact
-// shadows stay; the bias clears the face itself.
+// shadows stay; the bias clears the face itself. A drawn point under its traced face (a curved model's inward bend,
+// primary_surface: a negative lift) starts every ray above the face.
 static const float kTerminatorCutoff = 0.1f;
 
 float3 surface_start(GSurface s, float3 l)
@@ -1520,7 +1566,7 @@ float3 surface_start(GSurface s, float3 l)
     const float ngl = dot(s.ng, l);
     const float lifted = nl < kTerminatorCutoff ? saturate(2.0f - (ngl + nl) / kTerminatorCutoff)
                                                 : saturate(1.0f - ngl / kTerminatorCutoff);
-    return s.p + s.ng * (s.lift * lifted + 0.2f + abs(s.p.z) * 4e-4f);
+    return s.p + s.ng * ((s.lift < 0.0f ? -s.lift : s.lift * lifted) + 0.2f + abs(s.p.z) * 4e-4f);
 }
 
 // The world size of a pixel at eye depth `z`.
@@ -1666,6 +1712,16 @@ Reservoir direct_reservoir(uint2 id, uint pixel, out float change, out bool surf
         penumbra = sun_visible(surface_start(s, l), l, (s.flags & kGbCard) != 0u, salt, blocker)
                        ? kShadowLit
                        : clamp(0.5f * blocker * spread, kShadowLeast, 0.5f * kShadowLit);
+        // GALAXY_RT_PROBE (diagnostics): what stops the sun's centre ray at the probed pixel, in g_final after the
+        // light meter's records (SceneRayTracer prints [rt-probe-sun]).
+        if (g_probe.z != 0u && all(id == g_probe.xy * g_factor)) {
+            float t;
+            uint2 who;
+            sun_visible_by(start, g_sun.xyz, (s.flags & kGbCard) != 0u, salt, t, who);
+            const uint draw = who.x != 0u && who.y == 0u ? g_surfaces.Load((who.x - 1u) * 16u + 12u) >> 16u : 0xFFFFu;
+            g_final[g_sample_size.x * g_sample_size.y + kStarSlots + 7u] =
+                uint4(who.x, draw | (who.y << 16u), asuint(t), asuint(depth));
+        }
     }
     direct.Store4(pixel * 16u, uint4(0u, 0u, 0u, pack_half2(penumbra, depth)));
     // The lights (emitting triangles, the game's point lights, the star core): candidates from the pixel's light grid
@@ -2219,7 +2275,8 @@ GiReservoir indirect_reservoir(uint2 id, uint index, out bool surface)
     float3 x;
     float3 hn;
     // The emitters' own light reaches this surface by the direct light: not again here.
-    const float3 radiance = safe_light(engine_hit_radiance(h, start, d, false, 0.0f, seed, salt + 3u, x, hn));
+    const float3 radiance =
+        safe_light(engine_water_ray(engine_hit_radiance(h, start, d, false, 0.0f, seed, salt + 3u, x, hn), h, start, d));
     if (!h.surface) {
         // The sky: a point far along the ray stands for its direction.
         x = start + d * 1.0e5f;
@@ -2387,7 +2444,8 @@ void EngineSpecularCS(uint3 id : SV_DispatchThreadID)
         // minifying it sparkled.
         const float footprint = pixel_world_size(s.p.z);
         const float width = footprint + h.t * (footprint / max(length(s.p), 1e-3f) + alpha);
-        const float3 incoming = safe_light(engine_hit_radiance(h, start, l, true, width, seed, salt + 5u, x, hn));
+        const float3 incoming =
+            safe_light(engine_water_ray(engine_hit_radiance(h, start, l, true, width, seed, salt + 5u, x, hn), h, start, l));
         // VNDF sampling's weight: F G2 / G1(v).
         const float nv = max(dot(s.n, v), 1e-4f);
         const float g2_over_g1 = smith_visibility(alpha, nl, nv) * 4.0f * nl * nv / max(smith_g1(alpha, nv), 1e-4f);

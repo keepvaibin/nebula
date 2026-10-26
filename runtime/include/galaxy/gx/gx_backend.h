@@ -812,6 +812,7 @@ private:
     [[nodiscard]] bool rt_glow_draw() const noexcept;
     [[nodiscard]] bool rt_late_draw() const noexcept;
     [[nodiscard]] bool rt_water_draw() const noexcept;
+    [[nodiscard]] bool rt_ocean_water_draw() const noexcept;
     [[nodiscard]] bool rt_sprite_light_draw() const noexcept;
     void note_rt_phase(std::uint8_t phase);
     // The view of a perspective scene draw for ambient occlusion: its projection with the upscaler's jitter, depth

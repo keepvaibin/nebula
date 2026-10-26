@@ -30,6 +30,7 @@
 #include "Game/LiveActor/AllLiveActorGroup.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/LightFunction.hpp"
+#include "Game/Map/WaterAreaHolder.hpp"
 #include "Game/Map/SleepControllerHolder.hpp"
 #include "Game/MapObj/StarPieceDirector.hpp"
 #include "Game/NPC/EventDirector.hpp"
@@ -267,6 +268,11 @@ void GameScene::draw() const {
                             isNerve(GET_NERVE(GameScene, GameSceneScenarioStarter)) ||
                             isNerve(GET_NERVE(GameScene, GameScenePowerStarGet)) ||
                             isNerve(GET_NERVE(GameScene, GameSceneGrandStarGet))));
+    // Where the camera is in water, how deep: ray tracing lights the water it looks through.
+    {
+        const f32 depth = MR::isCameraInWater() ? WaterAreaFunction::getCameraWaterDepth() : -1.0f;
+        __NebulaGameContext(NEBULA_CONTEXT_CAMERA_WATER, depth < 0.0f ? 0 : static_cast< s32 >(depth) + 1);
+    }
     // Hidden test runs (the host's GALAXY_TEST_GALAXY_TOUR and GALAXY_TEST_TELEPORT): through the game's own calls.
     // A star taken in a test waits for play (the galaxy's opening camera and starter end in SceneAction, and would
     // replace the get demo); then what PowerStar::exeStageClearDemo does when the player takes it.

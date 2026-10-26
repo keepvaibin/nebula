@@ -84,6 +84,30 @@ is not traced and shows the game's picture.
   depths cyan-blue), the sun's disc widened 0.5 degrees per metre by forward scattering. The water pass adds caustics,
   shafts and a veil (its colour 40 % toward grey) while the camera is under water. Seen from below, the surface mirrors
   the water under it by the water-to-air Fresnel (n 1.333), all of it past the critical angle (Snell's window).
+- The camera in water (NEBULA_CONTEXT_CAMERA_WATER: the game's WaterAreaFunction::getCameraWaterDepth each frame):
+  what the camera sees, and what a bounce or reflection ray meets in the water (engine_water_ray), is seen through the
+  water between, its beam attenuation c (the same clear water's 0.36, 0.08, 0.03 per metre, halved) with the water's
+  own light added in the same share: a seventh of the stage's full light (near the surface the horizontal radiance lies
+  between the upwelling and the downwelling: Mobley, Ocean Optics Web Book), in coastal water's colour (single-
+  scattering albedo 0.30, 0.71, 0.70: pure water's absorption, Pope and Fry 1997, with the dissolved organic matter of
+  Jerlov's coastal types), dimmed by the water above the camera at Kd. The water carries the stage's light into its
+  caves as it is lit from above. The game's own filter (WaterCameraFilter: red and green lowered with the depth) still
+  follows the composite.
+- Fog: each traced draw's GX fog (type, A, B magnitude and shift, C, colour: the draw table's words 12-15).
+  EngineGBufferCS evaluates the raster's share at the pixel as the hardware does (ze = A 2^24 / (B - z >> shift) in
+  perspective, A z / 2^24 orthographic; f = saturate(ze - C) through the exponential types; 1/256 steps). The composite
+  takes the fog out of the game's colour, (c - fc f) / (1 - f), lights that, and lays the fog over the lit surface in
+  the same share at the camera's exposure: fogged distances keep the game's fog over physical light. Multiplied with
+  the light as part of the colour, Deep Dark's water cave went black with it.
+- Procedural oceans (OceanBowl, OceanSphere, OceanRing: Beach Bowl's sea, Drip Drop's sphere, Sea Slide's ring) are
+  water to the water pass as the models' surfaces are, though drawn with direct vertices (rt_ocean_water_draw): the sun
+  had reached Beach Bowl's sea floor 33 metres down unattenuated.
+- Curved surfaces (Phong tessellation, curved_surfaces.h) are drawn rounded while the scene holds their flat
+  triangles. A pixel's rays start from the drawn point, lifted above its traced face where the drawn surface lies under
+  it (an inward bend: a beach, a sea floor, a dome's rims, by up to tens of units; primary_surface's negative lift), else
+  by the shading normals' lift less what the drawn point already stands above the face (surface_start). From under its
+  face every ray met the surface's own triangle: black blotches of self-shadow on Beach Bowl's sand and sea floor and on
+  Ghostly Galaxy's dome.
 - Water from above (every translucent water the water pass sees: lagoons, seas, the Observatory's moat and the Fountain
   dome's pool) reflects by its Fresnel, F0 0.02: 2 % looking straight down, 6 % at 60 degrees from the normal, 21 % at
   75, 61 % at 85, a mirror at grazing angles; the reflection takes the place of that share of the water's own light
@@ -306,7 +330,8 @@ G-buffer 0.3 ms, DI 1.2 ms, GI 1.5 ms, specular 1.0 ms, denoise 1.0 ms, composit
    error). Good Egg, 4140 paths: -2.5 % bias, 6.8 % mean per-pixel difference. GALAXY_RT_ENGINE_VIEW=8 shows it.
    Diagnostic views: 1 direct, 2 indirect, 3 specular, 7 albedo, 8 reference, 9 / 10 the texture coordinate of the
    table's glowing region (u / v as 16 hues), 11 the sun's filtered visibility, 12 its ray's, 13 the penumbra's radius
-   on screen; GALAXY_RT_PROBE prints [rt-probe-engine] and [rt-probe-uv].
+   on screen; GALAXY_RT_PROBE prints [rt-probe-engine], [rt-probe-uv] and [rt-probe-sun] (what stops the sun's
+   centre ray there: triangle, draw, material, instance, distance, the water above).
 2. Pictures vs the game and the previous build, hidden runs, frozen bins, rt-images.
 3. Temporal stability: frame-to-frame change of a still view against the game's own (port/tools/flicker.py, 60
    consecutive presents, GALAXY_PRESENT_SNAPSHOT_EVERY=1 with _LAST): Observatory plaza b93, 0.16 / 255 more than

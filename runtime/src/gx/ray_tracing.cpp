@@ -132,7 +132,7 @@ struct RtLightConstants {
     float light_fit[4];                   // physical: the camera's exposure, the light fitted to the baked light (1)
     RtEngineConstants engine;             // the ray tracing engine (ray_tracing_engine.cpp)
 };
-static_assert(sizeof(RtLightConstants) == 1392u);
+static_assert(sizeof(RtLightConstants) == 1408u);
 
 // Mirrors cbuffer RtEmit in rt_lighting.hlsl (root constants).
 struct RtEmitConstants {
@@ -266,8 +266,11 @@ struct RtCompositeConstants {
     float sun[4];        // towards the traced sun (eye space, traced frame); relief height (eye units)
     float sun_light[4];  // its light (rgb)
     std::uint32_t target_size[2];   // the traced frame's EFB pixels (its per-pixel normals)
+    std::uint32_t pad[2];
+    float water[4];      // the camera in water (x: 1), its depth (y, eye units)
+    float water_sky[4];  // the stage's full light (rgb, the lighting's full_light): what the water scatters
 };
-static_assert(sizeof(RtCompositeConstants) == 120u);
+static_assert(sizeof(RtCompositeConstants) == 160u);
 
 enum LightParameter : UINT {
     kLightFrame = 0,
@@ -1345,6 +1348,17 @@ void SceneRayTracer::begin_frame(std::uint64_t frame_index) {
             std::memcpy(&region_v, &probe[13], 4u);
             std::fprintf(stderr, "[rt-probe-uv] frame=%llu draw=%u tri=%u region-uv=%.3f,%.3f\n",
                          static_cast<unsigned long long>(taken), probe[14], probe[15], region_u, region_v);
+            // What stops the sun's centre ray there (rt_engine.hlsl EngineDirectCS): its triangle + 1 (0: open), draw
+            // (in instance 0, the scene's), instance, distance, and the water above (water_depth_along).
+            float sun_t = 0.0f;
+            float sun_water = 0.0f;
+            std::memcpy(&sun_t, &probe[30], 4u);
+            std::memcpy(&sun_water, &probe[31], 4u);
+            const std::uint32_t sun_draw = probe[29] & 0xFFFFu;
+            std::fprintf(stderr, "[rt-probe-sun] frame=%llu tri=%u draw=%d material=%d instance=%u t=%.1f water=%.1f\n",
+                         static_cast<unsigned long long>(taken), probe[28],
+                         sun_draw == 0xFFFFu ? -1 : static_cast<int>(sun_draw),
+                         sun_draw == 0xFFFFu ? -1 : material(sun_draw), probe[29] >> 16u, sun_t, sun_water);
             } else
             std::fprintf(stderr,
                          "[rt-probe] frame=%llu pixel=%u,%u seen-tri=%u draw=%d material=%d sun-blocker-tri=%u draw=%d "
@@ -2761,7 +2775,8 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
                                 ((info.surface & kRtDrawUnseen) != 0u ? kDrawTableUnseen : 0u),
                             std::bit_cast<std::uint32_t>(relief), std::bit_cast<std::uint32_t>(info.light[0][0]),
                             std::bit_cast<std::uint32_t>(info.light[0][1]),
-                            std::bit_cast<std::uint32_t>(info.light[0][2]), light_kind});
+                            std::bit_cast<std::uint32_t>(info.light[0][2]), light_kind, info.fog[0], info.fog[1],
+                            info.fog[2], info.fog[3]});
     // Physical: the material texture's de-light map, for opaque surfaces the game lights or bakes (not water, clear
     // crystal or glass, the sky, effects, light sources: their colour is light, not paint over a surface).
     std::uint32_t delight = 0xFFFFFFFFu;
@@ -4051,11 +4066,11 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     c.ambient[2] = glow_boost_;
     c.ambient[3] = sky_distance_;
     // The ray tracing engine (its slot is the next one), with its pixels' buffer (its G-buffer writes the composite's
-    // per-pixel normals and de-lighting there).
+    // per-pixel normals, de-lighting and fog there).
     engine_running_ = false;
     {
         const unsigned next = next_light_slot_;
-        const UINT64 bytes = static_cast<UINT64>(width) * height * 8u;
+        const UINT64 bytes = static_cast<UINT64>(width) * height * 16u;
         if (!light_pixels_[next] || light_pixels_bytes_[next] < bytes) {
             retire(light_pixels_[next]);
             light_pixels_bytes_[next] = 0u;
@@ -4068,6 +4083,10 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         // This trace's lights against the last traced frame's: its reservoirs reach their lights through it.
         light_remap_view_ = light_remap(allocate, allocate_context, c.emit_scene, c.tev_info[2], point_keys.data(),
                                         c.point_count);
+        // The camera in water (the game's report): the water medium it looks through.
+        const float water_depth = camera_water_depth();
+        c.engine.water[0] = water_depth >= 0.0f ? 1.0f : 0.0f;
+        c.engine.water[1] = std::max(water_depth, 0.0f);
         const bool ran = light_pixels_[next] && engine_prepare(width, height, next, c.engine, c.flags);
         light_remap_commit(ran);
         if (!ran) {
@@ -4303,7 +4322,9 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         info.sun_visible[i] = sun_visible_eye_[i];
         info.sun_shown = sun_shown_;
         info.sun_light[i] = c.sun_light[i];
+        info.water_sky[i] = c.full_light[i];
     }
+    std::copy(std::begin(c.engine.water), std::end(c.engine.water), info.water.begin());
     history_camera_ = camera_;
     history_camera_known_ = camera_known_;
     history_projection_ = view_.projection;
@@ -4906,7 +4927,9 @@ void SceneRayTracer::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRI
     for (unsigned i = 0; i < 3u; ++i) {
         c.sun[i] = info.sun[i];
         c.sun_light[i] = info.sun_light[i];
+        c.water_sky[i] = info.water_sky[i];
     }
+    std::copy(info.water.begin(), info.water.end(), c.water);
     c.sun[3] = relief_;
     c.efb_scale = static_cast<float>(std::max(efb_scale, 1u));
     const int timed = begin_pass(list);
