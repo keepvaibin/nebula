@@ -128,6 +128,30 @@ bool values_are_clamped() {
     return ok;
 }
 
+bool identities_by_stage() {
+    std::istringstream file(
+        "hash\tclass\tr\tg\tb\tintensity\tstage\tmaterial\n"
+        "effect\t\t\t\t\t\t\t\n"
+        "effect\temitter+tint\t\t\t\t2\t\tEffect/Fire00\n"
+        "effect\tparticle+emitter+recolour\t1\t0.9\t0.7\t4\tAstroGalaxy\tEffect/CommonGlow00\n");
+    RtMaterialTable table;
+    table.read(file);
+    const std::uint32_t fire = galaxy::gx::rt_material_identity("Effect/Fire00");
+    const std::uint32_t glow = galaxy::gx::rt_material_identity("Effect/CommonGlow00");
+    const RtMaterial* everywhere = table.material(table.identity_index(fire));
+    bool ok = expect(everywhere != nullptr && everywhere->tint && near(everywhere->intensity, 2.0f),
+                     "an identity row without a stage holds everywhere");
+    ok &= expect(table.identity_index(glow) == 0u, "a stage's identity row is not everywhere's");
+    const auto there = table.stage_identities("AstroGalaxy");
+    const RtMaterial* lamp = there.size() == 1u && there[0].first == glow ? table.material(there[0].second) : nullptr;
+    ok &= expect(lamp != nullptr && lamp->recolour && lamp->particle && near(lamp->color[2], 0.7f) &&
+                     near(lamp->intensity, 4.0f),
+                 "the stage's identity row");
+    ok &= expect(table.stage_identities("HeavenlyBeachGalaxy").empty(), "another stage has none");
+    ok &= expect(table.stage_materials("AstroGalaxy").empty(), "an identity row is no texture's stage row");
+    return ok;
+}
+
 bool glow_apart_from_light() {
     std::istringstream file(
         "hash\tclass\tr\tg\tb\tintensity\tglow\n"
@@ -204,6 +228,7 @@ int main() {
     ok &= lights_fill_their_fields();
     ok &= values_are_clamped();
     ok &= glow_apart_from_light();
+    ok &= identities_by_stage();
     ok &= stage_suns();
     if (!ok) {
         return 1;

@@ -117,7 +117,10 @@ public:
     // A row with a `material` ("Model/material": the model's resource name and J3D's material name, models apart by
     // spaces) names those models' material alone (MotionSignal::drawMaterial's identity): its texture's material with
     // that row on top (the Observatory's white star lamps, not every white plastic its texture is on). 0: none.
+    // With a `stage` as well, the row holds on that stage alone (stage_identities).
     [[nodiscard]] std::uint16_t identity_index(std::uint32_t identity) const noexcept;
+    // The identity rows of a stage: per identity, its material index there.
+    [[nodiscard]] std::vector<std::pair<std::uint32_t, std::uint16_t>> stage_identities(std::string_view stage) const;
 
 private:
     struct StageRow {
@@ -125,10 +128,16 @@ private:
         std::uint16_t index;
         RtMaterial material;
     };
+    struct StageIdentity {
+        std::string stage;
+        std::uint32_t identity;
+        std::uint16_t index;
+    };
     std::vector<RtMaterial> materials_;
     std::unordered_map<std::uint64_t, std::uint16_t> by_hash_;
     std::unordered_map<std::uint32_t, std::uint16_t> by_identity_;
     std::vector<StageRow> stage_rows_;
+    std::vector<StageIdentity> stage_identities_;
     // Per model name (lower case) the material indices its rows name.
     std::unordered_map<std::string, std::vector<std::uint16_t>> model_rows_;
     std::size_t skipped_ = 0;
@@ -184,7 +193,8 @@ private:
 // A material's identity: FNV-1a of "model/material" in lower case, the model without its extension
 // (native/petari MotionSignal.cpp hashName).
 [[nodiscard]] std::uint32_t rt_material_identity(std::string_view name) noexcept;
-// The table's material for a material identity (RtMaterialTable::identity_index; 0: none).
+// The table's material for a material identity (RtMaterialTable::identity_index; 0: none), the loaded stage's own
+// row for it first (RtMaterialTable::stage_identities).
 [[nodiscard]] std::uint16_t rt_material_by_identity(std::uint32_t identity) noexcept;
 // The hash of a row keyed `untextured`: on that row's stage, surfaces without texture coordinates (vertex-coloured
 // models such as the Observatory's power cables) take it, since no texture row can name them.

@@ -113,7 +113,10 @@ is not traced and shows the game's picture.
 ## 3. Material identity
 Draws are keyed by J3D material: MotionSignal::drawMaterial marks each J3DMatPacket with FNV-1a("model/material"),
 the model's resource name registered when ResourceHolder loads it. rt-materials.tsv `material` column rows apply to
-those surfaces alone (on top of their texture's row). Texture rows remain for particles and untextured stages.
+those surfaces alone (on top of their texture's row); with a `stage` as well, on that stage alone (the Observatory's
+torches: its CommonGlow00 effect there is a warm lamp, elsewhere a Boo's or a jellyfish's glow; a texture's stage row
+had made every draw of the shared glow texture a lamp there, the Lumas' glows and the star plates' silver among them).
+Texture rows remain for particles and untextured stages.
 Every light source is an identity row with its emitting surface; the game's fake light geometry (halo shells,
 beam cones, lens glows) is `hide` under ray tracing. Row tokens for identities: `own` (the row alone, not on top of
 its texture's), `traced` (clear glass the engine traces, E5b; its game draw, a painted reflection, not shown), `solid`

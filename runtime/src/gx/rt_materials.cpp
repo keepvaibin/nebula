@@ -309,10 +309,15 @@ std::size_t RtMaterialTable::read(std::istream& in) {
             const auto index = static_cast<std::uint16_t>(materials_.size());
             for (const std::string& name : split(identity, ' ')) {
                 if (!name.empty()) {
-                    by_identity_[rt_material_identity(name)] = index;
+                    if (stage.empty()) {
+                        by_identity_[rt_material_identity(name)] = index;
+                    } else {
+                        stage_identities_.push_back({stage, rt_material_identity(name), index});
+                    }
                     if (rt_log_glows()) {
-                        std::fprintf(stderr, "[rt-identity] row %s = %08X -> material %u\n", name.c_str(),
-                                     rt_material_identity(name), static_cast<unsigned>(index));
+                        std::fprintf(stderr, "[rt-identity] row %s = %08X -> material %u%s%s\n", name.c_str(),
+                                     rt_material_identity(name), static_cast<unsigned>(index),
+                                     stage.empty() ? "" : " on ", stage.c_str());
                     }
                 }
             }
@@ -422,6 +427,16 @@ std::vector<std::pair<std::uint16_t, const RtMaterial*>> RtMaterialTable::stage_
     return out;
 }
 
+std::vector<std::pair<std::uint32_t, std::uint16_t>> RtMaterialTable::stage_identities(std::string_view stage) const {
+    std::vector<std::pair<std::uint32_t, std::uint16_t>> out;
+    for (const StageIdentity& row : stage_identities_) {
+        if (row.stage == stage) {
+            out.emplace_back(row.identity, row.index);
+        }
+    }
+    return out;
+}
+
 std::size_t RtStageSunTable::read(std::istream& in) {
     std::string line;
     bool header_read = false;
@@ -520,13 +535,11 @@ std::uint32_t rt_material_identity(std::string_view name) noexcept {
     return hash;
 }
 
-std::uint16_t rt_material_by_identity(std::uint32_t identity) noexcept {
-    return identity != 0u ? table().identity_index(identity) : 0u;
-}
-
 namespace {
 // The loaded stage's own materials (rt_materials_set_stage), by material index.
 std::vector<std::pair<std::uint16_t, const RtMaterial*>> g_stage_materials;
+// Its identity rows: per identity, its material index.
+std::vector<std::pair<std::uint32_t, std::uint16_t>> g_stage_identities;
 // Its untextured surfaces' material (0: none).
 std::uint16_t g_stage_untextured = 0u;
 }  // namespace
@@ -589,6 +602,18 @@ std::uint16_t rt_stage_untextured_material() noexcept {
     return g_stage_untextured;
 }
 
+std::uint16_t rt_material_by_identity(std::uint32_t identity) noexcept {
+    if (identity == 0u) {
+        return 0u;
+    }
+    for (const auto& [own, index] : g_stage_identities) {
+        if (own == identity) {
+            return index;
+        }
+    }
+    return table().identity_index(identity);
+}
+
 namespace {
 std::atomic<std::uint32_t> g_stage_serial{0u};
 }  // namespace
@@ -600,6 +625,7 @@ std::uint32_t rt_materials_stage_serial() noexcept {
 void rt_materials_set_stage(std::string_view stage) {
     g_stage_serial.fetch_add(1u, std::memory_order_relaxed);
     g_stage_materials = table().stage_materials(stage);
+    g_stage_identities = table().stage_identities(stage);
     // Only a stage row names untextured surfaces: elsewhere they stay as the GX state shows them.
     const std::uint16_t untextured = table().index(kRtUntexturedHash);
     g_stage_untextured = 0u;
@@ -608,10 +634,13 @@ void rt_materials_set_stage(std::string_view stage) {
             g_stage_untextured = index;
         }
     }
-    if (!g_stage_materials.empty()) {
+    if (!g_stage_materials.empty() || !g_stage_identities.empty()) {
         std::cerr << "[rt-materials] stage=" << stage << " rows=" << g_stage_materials.size();
         for (const auto& [index, material] : g_stage_materials) {
             std::cerr << " material=" << index;
+        }
+        for (const auto& [identity, index] : g_stage_identities) {
+            std::cerr << " identity=" << std::hex << identity << std::dec << ':' << index;
         }
         std::cerr << '\n';
     }
