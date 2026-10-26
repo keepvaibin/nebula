@@ -118,10 +118,12 @@ is not traced and shows the game's picture.
   and the Twin Falls' sheets map a ripple map and an indirect warp before their fall texture: they were a calm lake on
   its side); FallMask and the Observatory's and Honeyhive's Fall are waterfall rows, and identity rows name the falls'
   back faces. The art paints white water white and clear water in its hue: the colour's whiteness (its least channel
-  over its greatest) is the share of white water, a foam of bubbles and drops lit as a diffuse surface of the colour's
-  brightest channel; the rest is clear water, which passes what lies behind it but for the light its bubbles scatter,
-  in the painted hue: about half through a large fall's sheet (5 cm of water with 2 % of air in 2 mm bubbles:
-  extinction 1.5 x void fraction / radius, 1 - exp(-0.75)). Translucent sheets do this in the raster (the lit
+  over its greatest) is the share of white water, a foam of bubbles and drops; the rest is clear water, which passes
+  what lies behind it but for the light its bubbles scatter: about half through a large fall's sheet (5 cm of water
+  with 2 % of air in 2 mm bubbles: extinction 1.5 x void fraction / radius, 1 - exp(-0.75)). What scatters keeps the
+  painted colour (white bubbles in blue water look pale blue) and is a layer lit from both sides (foam_light,
+  two-stream conservative scattering: about 10 % of air through 20 cm, tau 30, g 0.8: 0.75 of the light on its front
+  reflected, 0.25 of the light on its back passed through; a backlit fall glows). Translucent sheets do this in the raster (the lit
   translucent's falling water flag, tex_dims[7].w, both shader families) under the light at the sheet (waterfall_light:
   last frame's falls along the pixel's ray, the sun behind the sheet's own shadow ray and the light of the surface just
   behind it, else the sky's, through the light texture's spare word). They are the water pass's own class

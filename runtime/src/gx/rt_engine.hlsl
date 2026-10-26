@@ -3289,6 +3289,30 @@ static const float kFallHaze = 0.5f;
 // owner's choice, 26 October 2026).
 static const float kFallRoughness = 0.4f;
 static const float kFallReflectionGain = 1.2f;
+// White water is a scattering layer lit from both sides: what reaches its back diffuses through it (a backlit fall
+// glows). Two-stream conservative scattering (Kubelka-Munk): it reflects x / (1 + x) of the light on its front and
+// passes 1 / (1 + x) of the light on its back, x = (1 - g) tau / 2. Aerated falling water, about 10 % of air in 1 mm
+// bubbles (scattering 1.5 x void fraction / radius, 150 per metre) through a 20 cm sheet: tau 30; bubbles in water
+// scatter forward, g about 0.8: x 3, so 0.75 reflected and 0.25 passed.
+static const float kFoamFront = 0.75f;
+static const float kFoamBack = 0.25f;
+
+// The light white water at eye-space `x` (face normal `ng`, shading normal `n`, both towards the camera) gives off as a
+// white surface would show it (m): the sun on the side it reaches, behind that side's own shadow ray, and the open sky
+// on both sides, each side's light at its share (kFoamFront, kFoamBack).
+float3 foam_light(float3 x, float3 ng, float3 n, uint salt)
+{
+    float3 m = sky_light_colour(kFoamFront * physical_sky_irradiance(n) + kFoamBack * physical_sky_irradiance(-n));
+    const float nl = dot(n, g_sun.xyz);
+    if (any(g_sun_light.rgb > 0.0f) && abs(nl) > 0.0f) {
+        const float side = nl > 0.0f ? 1.0f : -1.0f;
+        float blocker;
+        if (sun_visible(x + ng * (side * (0.2f + abs(x.z) * 4e-4f)), g_sun.xyz, false, salt, blocker)) {
+            m += g_sun_light.rgb * (abs(nl) * (nl > 0.0f ? kFoamFront : kFoamBack));
+        }
+    }
+    return m;
+}
 
 bool fall_draw(uint tri)
 {
@@ -3306,10 +3330,10 @@ float2 water_wall(float c)
 
 // Falling water at `h` along camera ray `dir`. White water, a dense foam of bubbles and drops, is the share of the
 // draw's own colour that is white (its least channel over its greatest: the art paints foam white and clear water in
-// its hue): a diffuse surface of that grey, lit at the sheet by the sun behind its own shadow ray and by the open sky
-// on its facing. The rest is clear water: water's reflection off its turbulent sheet (a rough GGX lobe, the sun's
-// highlight); the light its bubbles scatter (kFallHaze), in its painted hue, lit as the white water is; and what lies
-// behind it, passed at the sheet's T through its thickness (pure water's absorption: its blue-green).
+// its hue); the rest is clear water, of which its bubbles scatter kFallHaze. What scatters is a layer lit from both
+// sides (foam_light) and leaves in the colour the art paints (white bubbles in blue water look pale blue). The clear
+// water reflects off its turbulent sheet (a rough GGX lobe, the sun's highlight) and passes what lies behind it at the
+// sheet's T through its thickness (pure water's absorption: its blue-green).
 ClearLight clear_fall(ClearHit h, float3 dir, uint pixel)
 {
     ClearLight o;
@@ -3335,17 +3359,10 @@ ClearLight clear_fall(ClearHit h, float3 dir, uint pixel)
     }
     const float hi = max(albedo.r, max(albedo.g, albedo.b));
     const float white = hi > 1e-6f ? min(albedo.r, min(albedo.g, albedo.b)) / hi : 1.0f;
-    // The white water's light: the sun on its facing behind its own shadow ray (the sheet casts none: no self-shadow),
-    // and the open sky's.
-    float3 m = sky_light_colour(physical_sky_irradiance(n));
+    // The white water's light (the sheet casts no shadow: none on itself).
+    const float3 m = foam_light(x, ng, n, salt + 5u);
     const float nl_sun = dot(n, g_sun.xyz);
-    if (any(g_sun_light.rgb > 0.0f) && nl_sun > 0.0f) {
-        float blocker;
-        if (sun_visible(start, g_sun.xyz, false, salt + 5u, blocker)) {
-            m += g_sun_light.rgb * nl_sun;
-        }
-    }
-    o.r = (white * hi + (1.0f - white) * kFallHaze * albedo) * m;
+    o.r = albedo * m * (white + (1.0f - white) * kFallHaze);
     // The clear water's reflection: a visible normal, its mirror direction, the light along it; weight R(v.m) G2 / G1.
     const float alpha = kFallRoughness * kFallRoughness;
     float3 reflected = float3(0.0f, 0.0f, 0.0f);
@@ -3556,10 +3573,10 @@ static const float kFallBehind = 300.0f;
 // diffuse surface does, its colour the game's texture (the waterfall's translucent draws, and the spray before it, take
 // this light, LightTexturePS). The falls: the game's translucent ones (last frame's water, kWaterfallFlag, through
 // g_reproject: the sheets stand still). Its opaque sheets the clear pass traces (kDrawTableFall) join the scene only
-// after the frame's lighting: before them the light texture keeps the light of the surface behind. The sun along its
-// centre ray, behind the sheet's own shadow ray (the water casts no shadow, so it never shades itself), and otherwise
-// the light of the surface the pixel shows (`behind`: its sky, bounce and lights, filtered) where that lies within
-// kFallBehind of the sheet and faces the same way, else the open sky's on the sheet's facing.
+// after the frame's lighting: before them the light texture keeps the light of the surface behind. Lit from both sides
+// as a scattering layer (foam_light; the water casts no shadow, so it never shades itself); where the surface the pixel
+// shows lies within kFallBehind of the sheet and faces the same way, its filtered light (`behind`: sky, bounce and
+// lights) stands for the sky's on the sheet's front.
 bool waterfall_light(int2 q, float limit, bool has_behind, float3 behind_n, float3 behind, uint salt, out float3 m)
 {
     m = float3(0.0f, 0.0f, 0.0f);
@@ -3608,22 +3625,17 @@ bool waterfall_light(int2 q, float limit, bool has_behind, float3 behind_n, floa
     }
     n = dot(n, dir) > 0.0f ? -n : n;
     const float3 hit = dir * t;
-    float3 light = float3(0.0f, 0.0f, 0.0f);
-    const float nl = dot(n, g_sun.xyz);
-    if (any(g_sun_light.rgb > 0.0f) && nl > 0.0f) {
-        float blocker;
-        if (sun_visible(hit - dir * (0.2f + t * 4e-4f), g_sun.xyz, false, salt, blocker)) {
-            light += g_sun_light.rgb * nl;
-        }
-    }
+    float3 light = foam_light(hit, n, n, salt);
     const bool near_behind = has_behind && limit - t <= kFallBehind && dot(behind_n, n) > 0.5f;
+    if (near_behind) {
+        light += kFoamFront * (behind - sky_light_colour(physical_sky_irradiance(n)));
+    }
     // GALAXY_RT_PROBE (diagnostics): the sheet at the probed pixel (SceneRayTracer prints [rt-probe-fall]).
     if (g_probe.z != 0u && all(q == int2(g_probe.xy * g_factor))) {
         g_final[g_sample_size.x * g_sample_size.y + kStarSlots + 8u] =
-            uint4(pack_r11g11b10(light), asuint(t), asuint(nl), (near_behind ? 1u : 0u) | 2u);
+            uint4(pack_r11g11b10(light), asuint(t), asuint(dot(n, g_sun.xyz)), (near_behind ? 1u : 0u) | 2u);
     }
-    light += near_behind ? behind : sky_light_colour(physical_sky_irradiance(n));
-    m = light;
+    m = max(light, 0.0f);
     return true;
 }
 

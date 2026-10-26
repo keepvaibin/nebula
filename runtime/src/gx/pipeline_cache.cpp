@@ -1141,7 +1141,7 @@ constexpr std::uint32_t kShaderCacheMagic   = 0x43535847u;  // "GXSC"
 // The version gates generator output, not only the file format: bump it whenever
 // generate_vs or generate_ps emits different HLSL for the same key, or stale DXBC
 // would be served for hash-identical keys.
-constexpr std::uint32_t kShaderCacheVersion = 52u;
+constexpr std::uint32_t kShaderCacheVersion = 53u;
 constexpr std::uint32_t kPsoKeyCacheMagic = 0x43504B47u;  // "GKPC"
 // PSO keys name shader-cache stages, so psos.bin is rebuilt whenever the shader cache
 // version changes; a key whose stages are missing is skipped at prewarm.

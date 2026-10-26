@@ -2726,18 +2726,16 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
             s << ((key.output_flags & 0x80u) != 0u
                       ? "        lin *= min(max(tex[7].Load(int3(lit_at, 0)).rgb, 0.0), 1.15);\n"
                       : "        lin *= max(tex[7].Load(int3(lit_at, 0)).rgb, 0.0);\n");
-            // Falling water (tex_dims[7].w, map 7 being the light texture here): white water over the art's water hue.
-            // The painted colour's whiteness (its least channel over its greatest: 1 white, 0 a pure hue) is the share
-            // of white water, a foam of bubbles and drops, kept as grey at the colour's brightest channel; the hue's
-            // share is clear water, which passes what lies behind it but for what its fine bubbles scatter: about half
-            // the light through a large fall's sheet (rt_engine.hlsl kFallHaze), in the water's colour (the painted
-            // hue). rt_engine.hlsl clear_fall does the same for the game's opaque sheets.
+            // Falling water (tex_dims[7].w, map 7 being the light texture here): the painted colour's whiteness (its
+            // least channel over its greatest: 1 white, 0 a pure hue) is the share of white water, a foam of bubbles and
+            // drops; the rest is clear water, which passes what lies behind it but for what its fine bubbles scatter:
+            // about half through a large fall's sheet (rt_engine.hlsl kFallHaze). What scatters keeps the painted
+            // colour (white bubbles in blue water look pale blue); only the share drawn changes. rt_engine.hlsl
+            // clear_fall does the same for the game's opaque sheets.
             s << "        if (tex_dims[7].w > 0.5) {\n"
                  "            const float fall_hi = max(lin.r, max(lin.g, lin.b));\n"
                  "            const float fall_white = fall_hi > 1e-6 ? min(lin.r, min(lin.g, lin.b)) / fall_hi : 1.0;\n"
-                 "            const float fall_keep = fall_white + (1.0 - fall_white) * 0.5;\n"
-                 "            lin = (fall_white * fall_hi.xxx + (1.0 - fall_white) * 0.5 * lin) / fall_keep;\n"
-                 "            efb_color.a = uint(round(float(efb_color.a) * fall_keep));\n"
+                 "            efb_color.a = uint(round(float(efb_color.a) * (fall_white + (1.0 - fall_white) * 0.5)));\n"
                  "        }\n";
             s << "    }\n";
         }
