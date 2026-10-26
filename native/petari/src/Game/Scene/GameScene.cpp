@@ -17,6 +17,7 @@
 #include "Game/System/GameEventFlagTable.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SequenceUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include <cstdio>
 #include <cstring>
 #include "Game/Screen/NebulaSettingsMenu.hpp"
@@ -374,6 +375,18 @@ void GameScene::draw() const {
                          pBck != nullptr ? MR::getBckRate(pActor) : 0.0f, pBck != nullptr && MR::isBckStopped(pActor) ? 1 : 0,
                          MR::isHiddenModel(pActor) ? 1 : 0, MR::isClipped(pActor) ? 1 : 0,
                          pInfo != nullptr && pInfo->mKeptForLight ? 1 : 0);
+            }
+        } else if (action.kind == NEBULA_TEST_KILL_ACTOR) {
+            // Killed as their defeat ends (LiveActor::kill): what they leave appears, a KuriboChief's key.
+            AllLiveActorGroup* pGroup = MR::getAllLiveActorGroup();
+            for (s32 i = 0; pGroup != nullptr && i < pGroup->getObjNum(); ++i) {
+                LiveActor* pActor = pGroup->getActor(i);
+                if (pActor != nullptr && pActor->mModelManager != nullptr && !MR::isDead(pActor) &&
+                    MR::isEqualStringCase(MR::getModelResName(pActor), action.stage)) {
+                    OSReport("test: kill %s %.0f %.0f %.0f\n", action.stage, pActor->mPosition.x, pActor->mPosition.y,
+                             pActor->mPosition.z);
+                    pActor->kill();
+                }
             }
         } else if (action.kind == NEBULA_TEST_SHAKE_CAMERA) {
             // The shaker keeps its owner only to stop it; nothing stops this one.

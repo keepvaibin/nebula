@@ -2689,6 +2689,8 @@ int svc_hbm(void*, uint32_t what, uint32_t value) {
 //   GALAXY_TEST_EVENTS actors@frame: the live actors with a model, by model name and position (where to teleport),
 //     with the animation they play, and whether they are shown, clipped, or drawn while clipped as shadow casters.
 //   GALAXY_TEST_EVENTS shake@frame: the screen shakes from that frame until the scene ends.
+//   GALAXY_TEST_EVENTS defeat:<model>@frame: the live actors with that model (as actors@ names it) are killed, as their
+//     defeat ends: what they leave appears (KuriboChief, the Gateway's big Goomba: its key).
 //   GALAXY_TEST_SCRIPT_CLOCK=frames: the scripted input (GALAXY_INPUT_*) counts scene frames instead of retraces, so a
 //     run's game frames take the same input whatever its renderer's speed (builds compared frame for frame).
 std::atomic<bool> gTourDone{false};
@@ -2708,6 +2710,7 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
         uint32_t kind;
         uint64_t frame;
         int32_t value;
+        std::string name;  // NEBULA_TEST_KILL_ACTOR's model
     };
     static std::vector<Event> events;
     static uint64_t tour_frames = 1200;
@@ -2757,6 +2760,8 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
                         events.push_back({NEBULA_TEST_SHAKE_CAMERA, frame, 0});
                     } else if (kind == "actors") {
                         events.push_back({NEBULA_TEST_LIST_ACTORS, frame, 0});
+                    } else if (kind.rfind("defeat:", 0) == 0) {
+                        events.push_back({NEBULA_TEST_KILL_ACTOR, frame, 0, kind.substr(7)});
                     } else if (kind == "wait") {
                         events.push_back({0, frame, 0});
                     } else if (kind.rfind("movie", 0) == 0) {
@@ -2872,6 +2877,7 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
         if (frame == event.frame && event.kind != 0) {
             action->kind = event.kind;
             action->scenario = event.value >= 0 ? event.value : (next > 0 ? stops[next - 1].scenario : 1);
+            std::snprintf(action->stage, sizeof(action->stage), "%s", event.name.c_str());
             char text[64];
             std::snprintf(text, sizeof(text), "event %u at frame %llu", event.kind, static_cast<unsigned long long>(frame));
             log_line("test:", text);
