@@ -75,6 +75,7 @@ struct GxLayout {
     }
     VkFormat depth_format = VK_FORMAT_UNDEFINED;
     bool geometry_shaders = false;
+    bool tessellation = false;  // curved surfaces' hull and domain stages
     bool dual_source_blend = false;
     bool logic_op = false;
     bool depth_clamp = false;

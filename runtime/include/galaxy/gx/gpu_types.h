@@ -29,6 +29,7 @@ enum TopologyType : std::uint8_t {
     kTopologyTypePointValue = 1,
     kTopologyTypeLineValue = 2,
     kTopologyTypeTriangleValue = 3,
+    kTopologyTypePatchValue = 4,
 };
 struct VertexView {
     Address BufferLocation = 0;
@@ -50,9 +51,12 @@ struct Rect {
 inline constexpr TopologyType kTopologyTypeTriangle = kTopologyTypeTriangleValue;
 inline constexpr TopologyType kTopologyTypeLine = kTopologyTypeLineValue;
 inline constexpr TopologyType kTopologyTypePoint = kTopologyTypePointValue;
+inline constexpr TopologyType kTopologyTypePatch = kTopologyTypePatchValue;
 inline constexpr Topology kTopologyTriangleList = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 inline constexpr Topology kTopologyLineList = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
 inline constexpr Topology kTopologyPointList = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+// Curved surfaces' triangles as three-point patches (the pipeline's patch control points: 3).
+inline constexpr Topology kTopologyTrianglePatches = VK_PRIMITIVE_TOPOLOGY_PATCH_LIST;
 
 [[nodiscard]] inline VertexView vertex_view(Address address, std::uint32_t size, std::uint32_t stride) noexcept {
     return VertexView{address, size, stride};
@@ -145,9 +149,12 @@ using Rect = D3D12_RECT;
 inline constexpr TopologyType kTopologyTypeTriangle = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 inline constexpr TopologyType kTopologyTypeLine = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
 inline constexpr TopologyType kTopologyTypePoint = D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT;
+inline constexpr TopologyType kTopologyTypePatch = D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH;
 inline constexpr Topology kTopologyTriangleList = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 inline constexpr Topology kTopologyLineList = D3D_PRIMITIVE_TOPOLOGY_LINELIST;
 inline constexpr Topology kTopologyPointList = D3D_PRIMITIVE_TOPOLOGY_POINTLIST;
+// Curved surfaces' triangles as three-point patches.
+inline constexpr Topology kTopologyTrianglePatches = D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
 
 [[nodiscard]] inline VertexView vertex_view(Address address, std::uint32_t size, std::uint32_t stride) noexcept {
     VertexView view{};

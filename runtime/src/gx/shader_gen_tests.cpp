@@ -409,6 +409,28 @@ int main() {
         "gs_5_1",
         "gs_gx_point_expansion");
 
+    // Curved surfaces: every vertex output variant's hull and domain shaders, and curved vertex shaders (one matrix
+    // or the per-vertex palette) for each variant.
+    for (unsigned variant = 0; variant < 4u; ++variant) {
+        char label[64];
+        std::snprintf(label, sizeof(label), "hs_curved_variant_%u", variant);
+        check_compiles(ShaderGenerator::curved_stage_source(variant, false), "hs_5_1", label);
+        std::snprintf(label, sizeof(label), "ds_curved_variant_%u", variant);
+        check_compiles(ShaderGenerator::curved_stage_source(variant, true), "ds_5_1", label);
+        for (const bool palette : {false, true}) {
+            VertexShaderKey k{};
+            std::memset(&k, 0, sizeof(k));
+            k.num_chans = 1;
+            k.flags = static_cast<std::uint8_t>(kVsKeyCurved | 0x02u | (palette ? 0x01u : 0u) |
+                                                ((variant & 1u) != 0u ? kVsKeyPerPixelLighting : 0u) |
+                                                ((variant & 2u) != 0u ? kVsKeyMotion : 0u));
+            k.channel[0] = chan_ctrl(false, true, 0x1, false, 2, 1);
+            k.channel[2] = chan_ctrl(false, true, 0x1, false, 2, 1);
+            std::snprintf(label, sizeof(label), "vs_curved_variant_%u_%s", variant, palette ? "palette" : "inline");
+            run_vs(k, label);
+        }
+    }
+
     // Vertex shaders.
     {   // Minimal: no texgens, one unlit channel.
         VertexShaderKey k{};

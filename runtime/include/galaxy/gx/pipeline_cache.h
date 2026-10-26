@@ -56,14 +56,17 @@
 namespace galaxy::gx {
 
 // The PSO descriptor of a render state. Point and line topologies take the
-// matching geometry shader, triangles none. Public for the WARP tests.
+// matching geometry shader, triangles none, a curved surface's patches its
+// variant's hull and domain shaders. Public for the WARP tests.
 [[nodiscard]] D3D12_GRAPHICS_PIPELINE_STATE_DESC make_gx_pso_desc(
     ID3D12RootSignature* root_signature,
     const RenderStateKey& render_state,
     ID3DBlob* vertex_shader,
     ID3DBlob* pixel_shader,
     ID3DBlob* line_geometry_shader,
-    ID3DBlob* point_geometry_shader);
+    ID3DBlob* point_geometry_shader,
+    ID3DBlob* hull_shader = nullptr,
+    ID3DBlob* domain_shader = nullptr);
 
 // Lock-free multi-producer single-consumer queue (Vyukov intrusive list).
 // Producers: compile workers.  Consumer: the render thread, exclusively.
@@ -276,6 +279,11 @@ private:
     Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature_;
     Microsoft::WRL::ComPtr<ID3DBlob> line_geometry_shader_;
     Microsoft::WRL::ComPtr<ID3DBlob> point_geometry_shader_;
+    // Curved surfaces' hull and domain shaders by vertex output variant (curved_variant).
+    static constexpr unsigned kCurvedVariants = 4u;
+    bool curved_ready_ = false;
+    Microsoft::WRL::ComPtr<ID3DBlob> curved_hull_shaders_[kCurvedVariants];
+    Microsoft::WRL::ComPtr<ID3DBlob> curved_domain_shaders_[kCurvedVariants];
     // CreatePipelineLibrary borrows these bytes until the library is released;
     // declared before it, so the library is destroyed first.
     std::vector<std::uint8_t> pipeline_library_blob_;

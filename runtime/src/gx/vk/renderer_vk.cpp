@@ -493,6 +493,7 @@ bool RendererVk::create_layouts() {
     }
     gx_layout_.depth_format = depth_format_;
     gx_layout_.geometry_shaders = context.geometry_shader();
+    gx_layout_.tessellation = context.tessellation_shader();
     gx_layout_.dual_source_blend = context.dual_source_blend();
     gx_layout_.logic_op = context.logic_op();
     gx_layout_.depth_clamp = context.depth_clamp();

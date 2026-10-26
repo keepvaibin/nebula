@@ -159,6 +159,41 @@ decides metal. Ambient occlusion (`ambient_occlusion.{h,cpp,hlsl}`) runs GTAO on
 when the first translucent phase begins and multiplies the opaque scene's colour; in-between
 frames replay it (`ReplayKind::SceneAo`).
 
+## Curved surfaces
+
+The models are polygons made for a 456-line picture (a warp pipe is a 16-sided cylinder); at
+several times that their outlines show the polygon. CURVED SURFACES (`curved_surfaces` in
+`config.ini`, `GALAXY_CURVED_SURFACES`; offered where the GPU has hull and domain stages) rounds
+them with Phong tessellation (Boubekeur and Alexa 2008).
+
+- **Registration** (`NebulaCurvedSurfaces.cpp`): each J3D model as it loads (`J3DModelLoader`)
+  reads its shapes' display lists into triangles of position and normal indices and passes them
+  with its position array to the host (`services->curved_surface`). The host works out one
+  displacement normal per position (`curved_surfaces.{h,cpp}`: a smooth position whose faces are
+  within 40 degrees of each other and of its normal within 35; a curved crease's own bend; a
+  straight crease or corner none), so every triangle sharing an edge bends it alike (no cracks).
+  A model in which nothing bends is not kept. Models are keyed by the position array's GX address
+  and told from later contents of that memory by a 64-word fingerprint.
+- **Draws**: a perspective scene draw with indexed positions, no NBT, from a registered model, is
+  drawn as patches (`kVsKeyCurved`; `primitive_topology` type 4 with the vertex output variant
+  in bits 4-5). The vertex loader writes each vertex's displacement normal (`GxVertexOut::bend`);
+  the vertex shader turns it into eye space (the cofactor of the position matrix).
+- **Hull stage**: a patch wholly outside the view's side planes or behind the eye, at the most
+  its curve can bulge, gets no triangles; otherwise each edge is cut into
+  `clamp(sqrt(chord_px * angle / 2), 1, 16)` segments (fractional odd, symmetric per edge, so
+  neighbours agree), where `angle` is between its ends' displacement normals: flat edges stay one
+  segment.
+- **Domain stage**: every field is blended barycentrically; the point moves three quarters of the
+  way to the blend of its projections onto the corners' tangent planes (alpha 0.75). The move is
+  applied to the clip position (with the frame's jitter), the per-pixel lighting position and
+  both motion positions (the previous one by the same eye-space move), so DLSS, interpolation
+  and ray tracing see the rounded surface.
+- Uber stand-ins draw the same patches as plain triangles (`flat_render_state`). Vulkan uses the
+  same HLSL stages through glslang (tessellation control and evaluation, lower-left domain
+  origin), where the device has `tessellationShader`.
+- `GALAXY_TEST_CURVED_AB=1` draws flat in frames that end in an odd present, for same-run A/B
+  snapshots.
+
 ## HUD separation and temporal inputs
 
 The game module routes two call sites through the host: `GameScene::draw3D` from

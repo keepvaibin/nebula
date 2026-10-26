@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 30u
+#define NEBULA_GAME_API_VERSION 31u
 
 /* A physical range of the game's memory and where it is in the host process: what the GPU's addresses resolve to. */
 typedef struct NebulaGameMemoryRegion {
@@ -506,6 +506,13 @@ typedef struct NebulaHostServices {
     /* A name for the galaxy select in the game's own words in the played language (UTF-16, NUL-terminated): galaxy
        `index`'s (`star` 0) or its star's. */
     void (*galaxy_select_name)(void* user, uint32_t index, uint32_t star, const uint16_t* name);
+    /* A model the game loaded (J3D), for its curved surfaces (galaxy/gx/curved_surfaces.h): its position array as GX
+       reads it (`array_address` the physical address GXSetArray gives, `array` and `array_bytes` its bytes), its
+       positions and normals decoded (3 floats each), and its triangles, three corners each, a corner a position index
+       then a normal index. */
+    void (*curved_surface)(void* user, uint32_t array_address, const void* array, uint32_t array_bytes,
+                           const float* positions, uint32_t position_count, const float* normals, uint32_t normal_count,
+                           const uint16_t* corners, uint32_t triangle_count);
 } NebulaHostServices;
 
 enum {

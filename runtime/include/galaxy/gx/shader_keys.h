@@ -99,6 +99,19 @@ inline constexpr std::uint8_t kPsKeyPplFiniteLightAttn = 0x08u;
 // pixel key's ind_reserved word carries the material (kEnhanced* below).
 inline constexpr std::uint8_t kVsKeyEnhancedLighting = 0x40u;
 inline constexpr std::uint8_t kPsKeyEnhancedLighting = 0x10u;
+// Curved surfaces (RenderConfig::curved_surfaces, curved_surfaces.h): a perspective scene triangle draw of a model the
+// game registered. The vertex stage also passes the eye-space position and the displacement normal (GxVertexOut::bend);
+// the pipeline adds the Phong tessellation stages and draws three-point patches: RenderStateKey::primitive_topology
+// is kTopologyPatch with the vertex output's variant in its high bits, which picks the hull and domain shaders
+// (ShaderGenerator::curved_stage_source).
+inline constexpr std::uint8_t kVsKeyCurved = 0x80u;
+inline constexpr std::uint8_t kTopologyTypeMask = 0x0Fu;
+inline constexpr std::uint8_t kTopologyPatch = 4u;  // D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH
+inline constexpr std::uint8_t kCurvedPerPixel = 0x10u;  // the per-pixel lighting interpolants
+inline constexpr std::uint8_t kCurvedMotion = 0x20u;    // the motion interpolants
+[[nodiscard]] constexpr unsigned curved_variant(std::uint8_t primitive_topology) noexcept {
+    return (primitive_topology >> 4u) & 3u;
+}
 // PixelShaderKey::ind_reserved under kPsKeyEnhancedLighting: bits 0-7 the
 // texcoords generated from normals (environment maps), bit 8 colour channel 0
 // is lit with a diffuse light function, bit 9 the surface class whose
@@ -177,7 +190,7 @@ struct VertexShaderKey {
                                     // bit2 dual-tex (post-matrix) enable,
                                     // bit3 per-pixel lighting outputs, bit4 motion,
                                     // bit5 finite light attenuation,
-                                    // bit6 enhanced lighting
+                                    // bit6 enhanced lighting, bit7 curved surface
     std::uint8_t texmtx_idx_mask;   // VCD_LO bits 1-8: texgen n has a per-vertex texture
                                     // matrix index (masked to active texgens)
     std::uint32_t texgen[8];        // raw XF 0x1040+n (zeroed past num_texgens)
@@ -208,7 +221,7 @@ struct RenderStateKey {
     std::uint16_t zmode_bits;       // canonicalized BP 0x40
     std::uint8_t cull;              // CullMode
     std::uint8_t pixfmt;            // PeControl pixel format (dst-alpha cap)
-    std::uint8_t primitive_topology; // D3D12_PRIMITIVE_TOPOLOGY_TYPE value
+    std::uint8_t primitive_topology; // D3D12_PRIMITIVE_TOPOLOGY_TYPE value (bits 0-3; kVsKeyCurved: bits 4-5)
     std::uint8_t samples_log2;      // the EFB's variant: bits 0-1 its samples per pixel (MSAA) as a power of
                                     // two (0 for one), bit 2 kEfbVariantHdr
     std::uint8_t reserved[6];
@@ -226,6 +239,15 @@ struct RenderStateKey {
 };
 static_assert(sizeof(RenderStateKey) == 16);
 static_assert(std::has_unique_object_representations_v<RenderStateKey>);
+
+// The render state an uber stand-in draws with: a curved surface's patches as the plain triangles they are (the uber
+// vertex shader writes no curve outputs; GxBackend::draw_topology draws a stand-in's triangles as a list).
+[[nodiscard]] constexpr RenderStateKey flat_render_state(RenderStateKey rs) noexcept {
+    if ((rs.primitive_topology & kTopologyTypeMask) == kTopologyPatch) {
+        rs.primitive_topology = 3u;  // D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE
+    }
+    return rs;
+}
 
 struct PsoKey {
     std::uint64_t vs_hash;

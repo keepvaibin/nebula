@@ -1,4 +1,5 @@
 #include "JSystem/J3DGraphAnimator/J3DJoint.hpp"
+#include "Game/System/NebulaCurvedSurfaces.hpp"
 #include "JSystem/J3DGraphLoader/J3DModelLoader.hpp"
 #include "JSystem/J3DGraphAnimator/J3DModelData.hpp"
 #include "JSystem/J3DGraphBase/J3DMaterial.hpp"
@@ -26,6 +27,14 @@ J3DModelLoader::J3DModelLoader()
     /* empty function */
 }
 
+// Nebula: each model the renderer may round (NebulaCurvedSurfaces).
+static J3DModelData* withCurvedSurfaces(J3DModelData* pModelData) {
+#ifdef TARGET_PC
+    NebulaCurvedSurfaces::registerModel(pModelData);
+#endif
+    return pModelData;
+}
+
 J3DModelData* J3DModelLoaderDataBase::load(void const* i_data, u32 i_flags) {
     if (i_data == NULL) {
         return NULL;
@@ -35,11 +44,11 @@ J3DModelData* J3DModelLoaderDataBase::load(void const* i_data, u32 i_flags) {
     }
     if (*(NEBULA_BE(u32)*)i_data == 'J3D2' && *(NEBULA_BE(u32)*)((uintptr_t)i_data + 4) == 'bmd2') {
         J3DModelLoader_v21 loader;
-        return loader.load(i_data, i_flags);
+        return withCurvedSurfaces(loader.load(i_data, i_flags));
     }
     if (*(NEBULA_BE(u32)*)i_data == 'J3D2' && *(NEBULA_BE(u32)*)((uintptr_t)i_data + 4) == 'bmd3') {
         J3DModelLoader_v26 loader;
-        return loader.load(i_data, i_flags);
+        return withCurvedSurfaces(loader.load(i_data, i_flags));
     }
     return NULL;
 }
@@ -62,7 +71,7 @@ J3DModelData* J3DModelLoaderDataBase::loadBinaryDisplayList(const void* data, u3
     if (reinterpret_cast< const NEBULA_BE(u32)* >(data)[0] == 'J3D2' &&
         (reinterpret_cast< const NEBULA_BE(u32)* >(data)[1] == 'bdl3' || reinterpret_cast< const NEBULA_BE(u32)* >(data)[1] == 'bdl4')) {
         J3DModelLoader_v26 loader;
-        return loader.loadBinaryDisplayList(data, flags);
+        return withCurvedSurfaces(loader.loadBinaryDisplayList(data, flags));
     }
     return NULL;
 }

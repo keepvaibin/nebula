@@ -332,6 +332,13 @@ int main(int argc, char** argv) {
     }
     expect("line gs", ShaderGenerator::line_geometry_shader_source(), ShaderStage::Geometry, gx);
     expect("point gs", ShaderGenerator::point_geometry_shader_source(), ShaderStage::Geometry, gx);
+    // Curved surfaces' hull and domain stages, every vertex output variant.
+    for (unsigned variant = 0; variant < 4u; ++variant) {
+        const std::string hull = ShaderGenerator::curved_stage_source(variant, false);
+        const std::string domain = ShaderGenerator::curved_stage_source(variant, true);
+        expect(("curved hs " + std::to_string(variant)).c_str(), hull, ShaderStage::Hull, gx);
+        expect(("curved ds " + std::to_string(variant)).c_str(), domain, ShaderStage::Domain, gx);
+    }
 
     const ShaderGenerator generator;
     // The forms PipelineCacheVk generates: per-component byte masks always, constant TEV zeros on Qualcomm.

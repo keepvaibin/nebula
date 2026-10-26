@@ -4,6 +4,7 @@
 #include "galaxy/gx/vk/pipeline_cache_vk.h"
 
 #include "galaxy/gx/host_window.h"
+#include "galaxy/gx/render_config.h"
 #include "galaxy/windows_power.h"
 #include "galaxy/gx/vk/shader_compile_vk.h"
 #include "galaxy/gx/vk/vk_context.h"
@@ -317,7 +318,7 @@ constexpr VkVertexInputAttributeDescription kVertexAttributes[] = {
     {8, 0, VK_FORMAT_R32G32_SFLOAT, 72},      {9, 0, VK_FORMAT_R32G32_SFLOAT, 80},
     {10, 0, VK_FORMAT_R32G32_SFLOAT, 88},     {11, 0, VK_FORMAT_R32G32_SFLOAT, 96},
     {12, 0, VK_FORMAT_R32G32_SFLOAT, 104},    {13, 0, VK_FORMAT_R32G32_SFLOAT, 112},
-    {14, 0, VK_FORMAT_R32G32B32A32_UINT, 120},
+    {14, 0, VK_FORMAT_R32G32B32_UINT, 120},    {15, 0, VK_FORMAT_R32G32B32_SFLOAT, 132},
 };
 static_assert(sizeof(GxVertexOut) == 144u);
 
@@ -484,7 +485,7 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
         return VK_NULL_HANDLE;
     }
     const bool geometry = (compat & kCompatNoGeometry) == 0u;
-    VkPipelineShaderStageCreateInfo stages[3]{};
+    VkPipelineShaderStageCreateInfo stages[4]{};
     std::uint32_t stage_count = 0;
     const auto add_stage = [&](VkShaderStageFlagBits stage, VkShaderModule module) {
         VkPipelineShaderStageCreateInfo& info = stages[stage_count++];
@@ -510,6 +511,24 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
             add_stage(VK_SHADER_STAGE_GEOMETRY_BIT, line_gs_);
             expanded = true;
         }
+    }
+    // A curved surface's patches (kVsKeyCurved): its vertex output variant's hull and domain stages. D3D's tessellation
+    // domain has its origin at the lower left; so set, the HLSL stages' triangles keep their winding.
+    VkPipelineTessellationDomainOriginStateCreateInfo domain_origin{
+        VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_DOMAIN_ORIGIN_STATE_CREATE_INFO};
+    domain_origin.domainOrigin = VK_TESSELLATION_DOMAIN_ORIGIN_LOWER_LEFT;
+    VkPipelineTessellationStateCreateInfo tessellation{VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO};
+    tessellation.pNext = &domain_origin;
+    tessellation.patchControlPoints = 3u;
+    const bool curved = (rs.primitive_topology & kTopologyTypeMask) == kTopologyPatch;
+    if (curved) {
+        const unsigned variant = curved_variant(rs.primitive_topology);
+        if (curved_hs_[variant] == VK_NULL_HANDLE || curved_ds_[variant] == VK_NULL_HANDLE) {
+            return VK_NULL_HANDLE;
+        }
+        topology = VK_PRIMITIVE_TOPOLOGY_PATCH_LIST;
+        add_stage(VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT, curved_hs_[variant]);
+        add_stage(VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT, curved_ds_[variant]);
     }
     add_stage(VK_SHADER_STAGE_FRAGMENT_BIT, ps);
 
@@ -648,6 +667,7 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
     info.pStages = stages;
     info.pVertexInputState = &vertex_input;
     info.pInputAssemblyState = &input_assembly;
+    info.pTessellationState = curved ? &tessellation : nullptr;
     info.pViewportState = &viewport;
     info.pRasterizationState = &raster;
     info.pMultisampleState = &multisample;
@@ -998,6 +1018,16 @@ void PipelineCacheVk::compile_uber_shaders() noexcept {
             point_gs_ = module_for(std::string(ShaderGenerator::point_geometry_shader_source()),
                                    vk::ShaderStage::Geometry, false);
         }
+        // Curved surfaces, where the device tessellates: offered once every variant's stages compiled.
+        bool curved = layout_->tessellation;
+        for (unsigned variant = 0; variant < curved_hs_.size() && curved; ++variant) {
+            curved_hs_[variant] =
+                module_for(ShaderGenerator::curved_stage_source(variant, false), vk::ShaderStage::Hull, false);
+            curved_ds_[variant] =
+                module_for(ShaderGenerator::curved_stage_source(variant, true), vk::ShaderStage::Domain, false);
+            curved = curved_hs_[variant] != VK_NULL_HANDLE && curved_ds_[variant] != VK_NULL_HANDLE;
+        }
+        set_curved_surfaces_offered(curved);
         const bool complete = uber_vs_ != VK_NULL_HANDLE &&
             std::all_of(uber_ps_.begin(), uber_ps_.end(), [](VkShaderModule m) { return m != VK_NULL_HANDLE; });
         std::fprintf(stderr, "[uber-pipeline-vk] %s in %llu ms\n", complete ? "shaders ready" : "shader compile failed",
@@ -1331,7 +1361,7 @@ VkPipeline PipelineCacheVk::stand_in(const PsoKey& key, const PixelShaderKey& ps
     }
     ++uber_fallbacks_;
     last_get_used_uber_ = true;
-    return uber_pipeline(key.render_state, uber_ps_variant(ps_key));
+    return uber_pipeline(flat_render_state(key.render_state), uber_ps_variant(ps_key));
 }
 
 void PipelineCacheVk::enqueue(const Entry& entry) {

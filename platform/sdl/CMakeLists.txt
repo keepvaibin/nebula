@@ -70,6 +70,7 @@ add_library(galaxy_gx_vk STATIC
     ${rt}/gx/texture_pack_codecs.cpp
     ${rt}/gx/movie_replacement.cpp
     ${rt}/gx/vertex_loader.cpp
+    ${rt}/gx/curved_surfaces.cpp
     ${rt}/gx/shader_keys.cpp
     ${rt}/gx/efb_copy.cpp
     ${rt}/gx/line_point_raster.cpp

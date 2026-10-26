@@ -357,6 +357,13 @@ static constexpr const char* kMotionInterpolants =
     "    float4   mv_cur    : TEXCOORD12;\n"
     "    float4   mv_prev   : TEXCOORD13;\n";
 
+// Curved surfaces (kVsKeyCurved): the vertex's displacement normal in, and to the hull and domain shaders the
+// eye-space position and the displacement normal turned as normals are; w the clip jitter the draw adds (x, y).
+static constexpr const char* kCurvedInput = "    float3   bend     : BEND;\n";
+static constexpr const char* kCurvedInterpolants =
+    "    float4   curve_pos : TEXCOORD14;\n"
+    "    float4   curve_nrm : TEXCOORD15;\n";
+
 // Interpolated redraw: a sub-frame blends a CPU-written vertex buffer with the
 // matching draw's vertices of the frame before (GxVertexOut, 144-byte stride;
 // the renderer binds them at t1, space1 and the blend at b2). The uber vertex
@@ -1089,6 +1096,162 @@ std::string_view ShaderGenerator::point_geometry_shader_source() noexcept {
         kPointGeometryShader, sizeof(kPointGeometryShader) - 1u};
 }
 
+// Curved surfaces' patch stages. The hull shader passes the vertices through and gives each edge as many segments as
+// keep every segment's arc within a quarter pixel of its chord: an arc of angle a over chord c bulges c tan(a/4) / 2,
+// about c a / 8, so n segments bulge c a / (8 n^2) and n = sqrt(c a / 2) pixels. An edge's count depends only on its
+// two vertices, so the two triangles sharing it split it alike (no cracks). The domain shader blends the three
+// vertices at the point, then moves it three quarters of the way to the blend of its projections onto the corners'
+// tangent planes (Phong tessellation's shape factor), and carries that move into the clip position (with the draw's
+// jitter), the per-pixel lighting position and the motion vectors. Fractional odd steps let a count change smoothly
+// as the camera moves.
+static constexpr const char* kCurvePatch = R"HLSL(
+struct CurvePatch {
+    float edges[3] : SV_TessFactor;
+    float inside   : SV_InsideTessFactor;
+};
+)HLSL";
+
+static constexpr const char* kCurvedHull = R"HLSL(
+float curve_segments(VSOut a, VSOut b) {
+    const float2 half_viewport = 0.5 * line_point_raster.xy;
+    const bool bends = dot(a.curve_nrm.xyz, a.curve_nrm.xyz) > 0.0 && dot(b.curve_nrm.xyz, b.curve_nrm.xyz) > 0.0;
+    if (!bends || a.pos.w <= 0.0 || b.pos.w <= 0.0) {
+        return 1.0;
+    }
+    const float angle = acos(min(abs(dot(a.curve_nrm.xyz, b.curve_nrm.xyz)), 1.0));
+    const float chord = length((a.pos.xy / a.pos.w - b.pos.xy / b.pos.w) * half_viewport);
+    return clamp(sqrt(chord * angle * 0.5), 1.0, 16.0);
+}
+
+// Whether the patch lies wholly past one of the view's side planes or behind the eye, however far its curve bulges:
+// the domain shader moves a point at most three quarters of its distance to the farthest corner, so the eye-space
+// sphere about the corners' centre through the farthest corner, widened by 0.75 of the longest edge, bounds it.
+bool curve_outside(InputPatch<VSOut, 3> p) {
+    const float3 q0 = p[0].curve_pos.xyz;
+    const float3 q1 = p[1].curve_pos.xyz;
+    const float3 q2 = p[2].curve_pos.xyz;
+    const float3 centre = (q0 + q1 + q2) / 3.0;
+    const float edge = sqrt(max(dot(q1 - q0, q1 - q0), max(dot(q2 - q1, q2 - q1), dot(q0 - q2, q0 - q2))));
+    const float radius = sqrt(max(dot(q0 - centre, q0 - centre),
+                                  max(dot(q1 - centre, q1 - centre), dot(q2 - centre, q2 - centre)))) +
+                         0.75 * edge;
+    const float4 planes[5] = {projection[3] - projection[0], projection[3] + projection[0],
+                              projection[3] - projection[1], projection[3] + projection[1], projection[3]};
+    [unroll] for (uint i = 0u; i < 5u; ++i) {
+        if (dot(planes[i].xyz, centre) + planes[i].w + radius * length(planes[i].xyz) < 0.0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+CurvePatch curve_patch(InputPatch<VSOut, 3> p) {
+    CurvePatch c;
+    if (curve_outside(p)) {
+        c.edges[0] = 0.0;
+        c.edges[1] = 0.0;
+        c.edges[2] = 0.0;
+        c.inside = 0.0;
+        return c;
+    }
+    c.edges[0] = curve_segments(p[1], p[2]);
+    c.edges[1] = curve_segments(p[2], p[0]);
+    c.edges[2] = curve_segments(p[0], p[1]);
+    c.inside = max(c.edges[0], max(c.edges[1], c.edges[2]));
+    return c;
+}
+
+[domain("tri")]
+[partitioning("fractional_odd")]
+[outputtopology("triangle_cw")]
+[outputcontrolpoints(3)]
+[patchconstantfunc("curve_patch")]
+[maxtessfactor(16.0)]
+VSOut main(InputPatch<VSOut, 3> p, uint i : SV_OutputControlPointID) {
+    return p[i];
+}
+)HLSL";
+
+static constexpr const char* kCurvedDomain = R"HLSL(
+[domain("tri")]
+DSOut main(CurvePatch c, float3 b : SV_DomainLocation, const OutputPatch<VSOut, 3> p) {
+    DSOut o;
+    o.pos = b.x * p[0].pos + b.y * p[1].pos + b.z * p[2].pos;
+    o.col0 = b.x * p[0].col0 + b.y * p[1].col0 + b.z * p[2].col0;
+    o.col1 = b.x * p[0].col1 + b.y * p[1].col1 + b.z * p[2].col1;
+    [unroll] for (uint i = 0u; i < 8u; ++i) {
+        o.uv[i] = b.x * p[0].uv[i] + b.y * p[1].uv[i] + b.z * p[2].uv[i];
+    }
+CURVE_EXTRA_BLEND
+    const float3 q = b.x * p[0].curve_pos.xyz + b.y * p[1].curve_pos.xyz + b.z * p[2].curve_pos.xyz;
+    float3 phong = float3(0.0, 0.0, 0.0);
+    [unroll] for (uint k = 0u; k < 3u; ++k) {
+        const float3 n = p[k].curve_nrm.xyz;
+        phong += b[k] * (q - dot(q - p[k].curve_pos.xyz, n) * n);
+    }
+    const float3 d = 0.75 * (phong - q);
+    const float4 dc = mul(projection, float4(d, 0.0));
+    const float2 jitter = float2(p[0].curve_pos.w, p[0].curve_nrm.w);
+    o.pos += float4(dc.xy + jitter * dc.w, dc.z, dc.w);
+CURVE_EXTRA_MOVE
+    return o;
+}
+)HLSL";
+
+std::string ShaderGenerator::curved_stage_source(unsigned variant, bool domain) {
+    const bool ppl = (variant & 1u) != 0u;
+    const bool motion = (variant & 2u) != 0u;
+    std::string s = domain ? "// Curved surfaces: domain shader (ShaderGenerator::curved_stage_source).\n"
+                           : "// Curved surfaces: hull shader (ShaderGenerator::curved_stage_source).\n";
+    // The vertex constants to the motion fields, line_point_raster (c65) in the motion variant's skipped rows.
+    std::string members = "    float4   line_point_raster;\n";
+    if (motion) {
+        members += "    float4   curve_skip_[7];\n"
+                   "    float4   motion_prev_proj[2];\n"
+                   "    float4   motion_prev_pos[3];\n"
+                   "    float4   motion_params;\n";
+    }
+    s += insert_before_close(kVsConstantsDef, members.c_str(), false);
+    // VSOut: what the curved vertex shader writes; DSOut: the same less the curve's, as the pixel shader reads it.
+    std::string vs_out = ppl ? kVsStructsPpl : kVsStructs;
+    vs_out = vs_out.substr(vs_out.find("struct VSOut"));
+    if (motion) {
+        vs_out = insert_before_close(vs_out.c_str(), kMotionInterpolants, true);
+    }
+    std::string ds_out = vs_out;
+    ds_out.replace(ds_out.find("VSOut"), 5u, "DSOut");
+    vs_out = insert_before_close(vs_out.c_str(), kCurvedInterpolants, true);
+    s += vs_out + ds_out + kCurvePatch;
+    if (!domain) {
+        return s + kCurvedHull;
+    }
+    std::string stages = kCurvedDomain;
+    std::string blend;
+    std::string move;
+    if (ppl) {
+        blend += "    o.ppl_pos = b.x * p[0].ppl_pos + b.y * p[1].ppl_pos + b.z * p[2].ppl_pos;\n"
+                 "    o.ppl_nrm = b.x * p[0].ppl_nrm + b.y * p[1].ppl_nrm + b.z * p[2].ppl_nrm;\n"
+                 "    o.ppl_vcol0 = b.x * p[0].ppl_vcol0 + b.y * p[1].ppl_vcol0 + b.z * p[2].ppl_vcol0;\n"
+                 "    o.ppl_vcol1 = b.x * p[0].ppl_vcol1 + b.y * p[1].ppl_vcol1 + b.z * p[2].ppl_vcol1;\n";
+        move += "    o.ppl_pos += d;\n";
+    }
+    if (motion) {
+        blend += "    o.mv_cur = b.x * p[0].mv_cur + b.y * p[1].mv_cur + b.z * p[2].mv_cur;\n"
+                 "    o.mv_prev = b.x * p[0].mv_prev + b.y * p[1].mv_prev + b.z * p[2].mv_prev;\n";
+        // The unjittered clip move; the previous frame's position takes the same eye-space move (a few units, against
+        // a frame's turn of the camera).
+        move += "    o.mv_cur += float4(dc.xy - motion_params.xy * dc.w, 0.0, dc.w);\n"
+                "    const float4 pp0 = motion_prev_proj[0];\n"
+                "    o.mv_prev.xy += motion_prev_proj[1].z == 0.0\n"
+                "        ? float2(pp0.x * d.x + pp0.y * d.z, pp0.z * d.y + pp0.w * d.z)\n"
+                "        : float2(pp0.x * d.x, pp0.z * d.y);\n"
+                "    o.mv_prev.w += motion_prev_proj[1].z == 0.0 ? -d.z : 0.0;\n";
+    }
+    stages.replace(stages.find("CURVE_EXTRA_BLEND\n"), 18u, blend);
+    stages.replace(stages.find("CURVE_EXTRA_MOVE\n"), 17u, move);
+    return s + stages;
+}
+
 std::string ShaderGenerator::generate_vs(const VertexShaderKey& key) const {
     std::ostringstream s;
 
@@ -1100,17 +1263,23 @@ std::string ShaderGenerator::generate_vs(const VertexShaderKey& key) const {
     const bool enhanced = (key.flags & kVsKeyEnhancedLighting) != 0u;
     const bool ppl_outputs = ppl || enhanced;
     const bool motion = (key.flags & kVsKeyMotion) != 0u;
+    const bool curved = (key.flags & kVsKeyCurved) != 0u;
     // Physical ray tracing's facing fit (flags bit 6) at the struct's end (c80, uber_constants.h).
     static constexpr const char* kVsDebakeMembers = "    float4   debake_sh[7];\n    float4   debake_peak;\n";
+    std::string structs = ppl_outputs ? kVsStructsPpl : kVsStructs;
     if (motion) {
         s << insert_before_close(kVsConstantsDef, (std::string(kVsMotionConstantMembers) + kVsDebakeMembers).c_str(),
                                  false);
-        s << insert_before_close(ppl_outputs ? kVsStructsPpl : kVsStructs, kMotionInterpolants, true);
+        structs = insert_before_close(structs.c_str(), kMotionInterpolants, true);
     } else {
         s << insert_before_close(kVsConstantsDef,
                                  (std::string("    float4   debake_skip_[15];\n") + kVsDebakeMembers).c_str(), false);
-        s << (ppl_outputs ? kVsStructsPpl : kVsStructs);
     }
+    if (curved) {
+        structs = insert_before_close(structs.c_str(), kCurvedInput, false);
+        structs = insert_before_close(structs.c_str(), kCurvedInterpolants, true);
+    }
+    s << structs;
     s << kVertexBlendDef;
 
     const bool dual_tex = (key.flags & 0x04u) != 0u;
@@ -1519,6 +1688,23 @@ float3 nebula_debake_gain(float3 nrm) {
         }
         }
         s << "    }\n";
+    }
+    if (curved) {
+        // The displacement normal turned as normals are, by the position matrix's cofactors (right under any scale;
+        // its sign does not matter to Phong's planes).
+        const bool palette = (key.flags & 0x01u) != 0u;
+        for (unsigned r = 0; r < 3u; ++r) {
+            emit(s, "    const float3 curve_r%u = %s%u%s.xyz;\n", r,
+                 palette ? "mtx_palette[pn_row + mtx_palette_base + " : "inline_pos_matrix[", r,
+                 palette ? "u]" : "]");
+        }
+        s << "    const float3 curve_n = float3(dot(cross(curve_r1, curve_r2), v.bend),\n"
+             "                                  dot(cross(curve_r2, curve_r0), v.bend),\n"
+             "                                  dot(cross(curve_r0, curve_r1), v.bend));\n"
+             "    const float curve_len2 = dot(curve_n, curve_n);\n";
+        emit(s, "    o.curve_pos = float4(wpos.xyz, %s);\n", motion ? "jitter_ndc.x" : "0.0");
+        emit(s, "    o.curve_nrm = float4(curve_len2 > 0.0 ? curve_n * rsqrt(curve_len2) : curve_n, %s);\n",
+             motion ? "jitter_ndc.y" : "0.0");
     }
     s << "\n    return o;\n}\n";
 

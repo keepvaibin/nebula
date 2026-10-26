@@ -35,6 +35,7 @@
 #include "galaxy/gx/rt_materials.h"
 #include "galaxy/gx/rt_surfaces.h"
 #include "galaxy/gx/texture_sampling.h"
+#include "galaxy/gx/curved_surfaces.h"
 #include "galaxy/gx/uber_constants.h"
 #include "galaxy/gx/uber_shaders.h"
 #include "galaxy/gx/render_config.h"
@@ -4312,6 +4313,7 @@ void GxBackend::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32
     // The J3D material whose shapes draw next: the table's row for it, where it has one, over its texture's.
     if (kind == motion::kMarkerMaterial) {
         rt_material_identity_ = rt_material_by_identity(a);
+        rt_identity_seen_ = a;
         // GALAXY_RT_LOG_GLOWS=1: each identity the first time it is seen, and the row it found.
         if (rt_log_glows()) [[unlikely]] {
             static std::unordered_set<std::uint32_t> logged;
@@ -4355,6 +4357,9 @@ void GxBackend::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32
     }
     // The drawing object for the material census and the named classes: a NameObj's draws follow
     // its marker; emitters and particles are none.
+    if (kind != motion::kMarkerShapePacket && kind != motion::kMarkerMaterial) {
+        rt_identity_seen_ = 0u;
+    }
     if (kind != motion::kMarkerShapePacket && rt_material_identity_ != 0u) {
         // A NameObj's own draws, emitters and particles: no J3D material.
         rt_material_identity_ = 0u;
@@ -9118,6 +9123,10 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             // ray-traced picture is tuned with it, and the menu hides LIGHTING while ray tracing is on.
             const bool enhanced = render.enhanced_lighting && !renderer_.rt_lighting();
             const bool per_pixel = render.per_pixel_lighting || renderer_.rt_lighting();
+            // GALAXY_TEST_CURVED_AB=1: curved surfaces off in frames that end in an odd present (same-run pictures).
+            static const bool curved_ab = read_env_u64("GALAXY_TEST_CURVED_AB", 0u) != 0u;
+            curved_surfaces_ = render.curved_surfaces && curved_surfaces_offered() &&
+                               !(curved_ab && ((g_snapshot_presents + 1u) & 1u) != 0u);
             rt_water_wanted_ = rt_effect_on(render, RtEffect::Water);
             ambient_occlusion_ =
                 render.ambient_occlusion && !renderer_.rt_lighting() && renderer_.ambient_occlusion_ready();
@@ -10340,13 +10349,26 @@ void GxBackend::prune_dirty_texture_binding_tables() {
     dirty_texture_aliases_.clear();
 }
 
+bool GxBackend::curved_draw(std::uint8_t vtxfmt) const {
+    if (!curved_surfaces_ || !scene_phase_ || side_layer_ != kSceneLayer ||
+        state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) != 0u) {
+        return false;
+    }
+    const VertexDescriptor& desc = cached_vertex_layout(vtxfmt).desc;
+    if ((desc.position.vcd != VcdType::Index8 && desc.position.vcd != VcdType::Index16) || desc.normal.count != 0u) {
+        return false;
+    }
+    return curved::find_model(state_.array_base(0u)) != nullptr;
+}
+
 gpu::Pipeline* GxBackend::flush_draw_state(
-    gpu::TopologyType primitive_topology_type) {
+    gpu::TopologyType primitive_topology_type, std::uint8_t vtxfmt) {
     const bool time_detail = frame_time_detail_;
     // Always counted: the denominator of every *_us field.
     ++frame_flush_calls_;
     const auto topology_key =
         static_cast<std::uint8_t>(primitive_topology_type);
+    const bool curved = primitive_topology_type == gpu::kTopologyTypeTriangle && curved_draw(vtxfmt);
     // Consume once, propagating upload invalidation before considering reuse.
     const std::uint32_t dirty = state_.consume_dirty();
     // Matrix words do not affect the shader/render keys, but they invalidate both upload snapshots.
@@ -10373,7 +10395,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         current_ps_constants_ != 0 &&
         (current_texture_map_mask_ == 0u ||
          current_texture_table_.ptr != 0) &&
-        render_state_key_.primitive_topology == topology_key) {
+        curved == current_curved_ && (curved || render_state_key_.primitive_topology == topology_key)) {
         ++frame_pso_route_early_;
         return current_pipeline_;
     }
@@ -10612,9 +10634,15 @@ gpu::Pipeline* GxBackend::flush_draw_state(
     // The EFB's variant (its samples per pixel, MSAA, the output EFB has one; the HDR scene EFB) decides the
     // pipeline's too.
     const std::uint8_t samples_log2 = renderer_.efb_variant();
+    // A curved draw after another keeps its patch topology (its variant is settled below).
+    const bool keep_patch =
+        curved && (render_state_key_.primitive_topology & kTopologyTypeMask) == kTopologyPatch;
     const bool topology_dirty =
-        render_state_key_.primitive_topology != topology_key || render_state_key_.samples_log2 != samples_log2;
-    render_state_key_.primitive_topology = topology_key;
+        (!keep_patch && render_state_key_.primitive_topology != topology_key) ||
+        render_state_key_.samples_log2 != samples_log2;
+    if (!keep_patch) {
+        render_state_key_.primitive_topology = topology_key;
+    }
     render_state_key_.samples_log2 = samples_log2;
     if (renderer_.rt_active()) {
         // Traced geometry: unblended triangles (no logic op) that write colour and depth under a
@@ -10689,9 +10717,25 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         motion_bits_set_ = writer || reactive;
     }
 
+    // Curved surfaces: the vertex stage's curve outputs and the patches of its output variant's hull and domain shaders.
+    bool curved_changed = curved != current_curved_;
+    current_curved_ = curved;
+    if (((vs_key_.flags & kVsKeyCurved) != 0u) != curved) {
+        vs_key_.flags ^= kVsKeyCurved;
+        current_vs_hash_ = vs_key_.hash();
+        curved_changed = true;
+    }
+    if (curved) {
+        const auto patch = static_cast<std::uint8_t>(
+            kTopologyPatch |
+            ((vs_key_.flags & (kVsKeyPerPixelLighting | kVsKeyEnhancedLighting)) != 0u ? kCurvedPerPixel : 0u) |
+            ((vs_key_.flags & kVsKeyMotion) != 0u ? kCurvedMotion : 0u));
+        curved_changed = curved_changed || render_state_key_.primitive_topology != patch;
+        render_state_key_.primitive_topology = patch;
+    }
     if (current_pipeline_ == nullptr || current_pipeline_is_uber_ ||
         tev_dirty || xf_dirty || vcd_dirty || rs_dirty || topology_dirty ||
-        motion_key_changed) {
+        motion_key_changed || curved_changed) {
         const PsoKey pso_key{
             current_vs_hash_,
             current_ps_hash_,
@@ -11168,17 +11212,20 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             }
         }
         ps_c.ztex_params[3] = takes_light ? renderer_.rt_light_texture_scale() : recolour;
-        // GALAXY_RT_LOG_GLOWS=1: each scene draw's material once per phase, glow kind and lighting texture (mat_id.py
-        // names the material).
+        // GALAXY_RT_LOG_GLOWS=1: each scene draw's material once per phase, glow kind, lighting texture and J3D
+        // material identity (mat_id.py names the material, material_names.py --find the identity).
         if (scene_phase_ && rt_log_glows()) [[unlikely]] {
             static std::set<std::uint64_t> logged;
-            const std::uint64_t key = (static_cast<std::uint64_t>(current_rt_material_) << 24u) |
+            const std::uint64_t key = (static_cast<std::uint64_t>(rt_identity_seen_) << 40u) |
+                                      (static_cast<std::uint64_t>(current_rt_material_) << 24u) |
                                       (static_cast<std::uint64_t>(rt_phase_) << 8u) | glow_kind_ |
                                       (ps_c.ztex_params[3] > 0.0f ? 0x80u : 0u);
             if (logged.insert(key).second) {
-                std::fprintf(stderr, "[rt-draw-material] material=%u phase=%u kind=%u gain=%.2f lit-scale=%.3f\n",
+                std::fprintf(stderr,
+                             "[rt-draw-material] material=%u phase=%u kind=%u gain=%.2f lit-scale=%.3f identity=%08X\n",
                              static_cast<unsigned>(current_rt_material_), static_cast<unsigned>(rt_phase_),
-                             static_cast<unsigned>(glow_kind_), ps_c.ztex_params[2], ps_c.ztex_params[3]);
+                             static_cast<unsigned>(glow_kind_), ps_c.ztex_params[2], ps_c.ztex_params[3],
+                             rt_identity_seen_);
             }
         }
         apply_uber_ps_key(ps_key_, ps_c);
@@ -11356,7 +11403,7 @@ bool GxBackend::begin_cached_draw_run(
             frame_flush_timed_calls_,
             frame_flush_total_us_,
             frame_flush_timed_samples_};
-        pso = flush_draw_state(topology_type);
+        pso = flush_draw_state(topology_type, vtxfmt);
     }
     if (pso == nullptr) {
         flush_pending_draw_batch();
@@ -11379,7 +11426,7 @@ bool GxBackend::begin_cached_draw_run(
     cached_draw_run_state_call_.aux_target     = current_pipeline_aux_;
     cached_draw_run_state_call_.replay_record  = current_replay_record_;
     cached_draw_run_state_call_.ps_record      = current_ps_record_;
-    cached_draw_run_state_call_.topology       = topology;
+    cached_draw_run_state_call_.topology       = draw_topology(topology);
     cached_draw_run_state_call_.scissor        = scissor_rect;
     for (unsigned i = 0; i < 6; ++i) {
         cached_draw_run_state_call_.xf_viewport[i] = std::bit_cast<float>(
@@ -12278,7 +12325,7 @@ void GxBackend::on_draw(
             frame_flush_timed_calls_,
             frame_flush_total_us_,
             frame_flush_timed_samples_};
-        pso = flush_draw_state(topology_type);
+        pso = flush_draw_state(topology_type, vtxfmt);
     }
     if (pso == nullptr) {
         flush_pending_draw_batch();
@@ -12316,7 +12363,7 @@ void GxBackend::on_draw(
     state_call.aux_target     = current_pipeline_aux_;
     state_call.replay_record  = current_replay_record_;
     state_call.ps_record      = current_ps_record_;
-    state_call.topology       = topology;
+    state_call.topology       = draw_topology(topology);
     state_call.scissor        = scissor_rect;
     for (unsigned i = 0; i < 6; ++i) {
         state_call.xf_viewport[i] = std::bit_cast<float>(

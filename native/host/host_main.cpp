@@ -40,6 +40,7 @@
 #include "galaxy/wiimote_hid.h"
 #endif
 #include "galaxy/runtime_settings.h"
+#include "galaxy/gx/curved_surfaces.h"
 #include "galaxy/gx/galaxy_select.h"
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx/rt_materials.h"
@@ -1940,6 +1941,33 @@ int svc_galaxy_select_names_wanted(void*) { return 0; }
 void svc_galaxy_select_name(void*, uint32_t, uint32_t, const uint16_t*) {}
 #endif
 
+// A loaded model's triangles: the displacement normals its curved surfaces are rounded with, kept by its position
+// array's address (galaxy/gx/curved_surfaces.h).
+void svc_curved_surface(void*, uint32_t array_address, const void* array, uint32_t array_bytes, const float* positions,
+                        uint32_t position_count, const float* normals, uint32_t normal_count, const uint16_t* corners,
+                        uint32_t triangle_count) {
+#if defined(NEBULA_HOST_RENDERER)
+    namespace curved = galaxy::gx::curved;
+    if (array == nullptr || array_bytes == 0u || positions == nullptr || normals == nullptr || corners == nullptr ||
+        triangle_count == 0u) {
+        return;
+    }
+    std::vector<curved::Vec3> p(position_count);
+    std::vector<curved::Vec3> n(normal_count);
+    std::vector<curved::Corner> c(static_cast<std::size_t>(triangle_count) * 3u);
+    std::memcpy(p.data(), positions, p.size() * sizeof(curved::Vec3));
+    std::memcpy(n.data(), normals, n.size() * sizeof(curved::Vec3));
+    for (std::size_t i = 0; i < c.size(); ++i) {
+        c[i] = curved::Corner{corners[2u * i], corners[2u * i + 1u]};
+    }
+    curved::register_model(array_address, std::span(static_cast<const std::byte*>(array), array_bytes),
+                           curved::displacement_normals(p, n, c));
+#else
+    (void)array_address, (void)array, (void)array_bytes, (void)positions, (void)position_count, (void)normals,
+        (void)normal_count, (void)corners, (void)triangle_count;
+#endif
+}
+
 // The wheel's turn the window gathered since the game last asked.
 int32_t svc_pointer_wheel(void*) {
 #if defined(NEBULA_HOST_RENDERER)
@@ -3434,6 +3462,7 @@ int main(int argc, char** argv) {
     services.galaxy_select_stage = svc_galaxy_select_stage;
     services.galaxy_select_names_wanted = svc_galaxy_select_names_wanted;
     services.galaxy_select_name = svc_galaxy_select_name;
+    services.curved_surface = svc_curved_surface;
     services.gx_stripe_particle = svc_gx_stripe_particle;
     services.disc_fst = svc_disc_fst;
     services.disc_read = svc_disc_read;

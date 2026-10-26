@@ -41,6 +41,10 @@ public:
     [[nodiscard]] static std::string_view line_geometry_shader_source() noexcept;
     [[nodiscard]] static std::string_view point_geometry_shader_source() noexcept;
 
+    // Curved surfaces' hull shader, or with `domain` their domain shader (entry main), Phong tessellation (Boubekeur
+    // and Alexa 2008), for a vertex output variant (curved_variant: kCurvedPerPixel, kCurvedMotion in shader_keys.h).
+    [[nodiscard]] static std::string curved_stage_source(unsigned variant, bool domain);
+
     // Stable human-readable key description, embedded as a comment in generated
     // source and used in pipeline-cache log lines.
     [[nodiscard]] static std::string describe(const PixelShaderKey& key);

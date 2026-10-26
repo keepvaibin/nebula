@@ -13,7 +13,7 @@
 
 namespace galaxy::gx::vk {
 
-enum class ShaderStage { Vertex, Geometry, Fragment, Compute };
+enum class ShaderStage { Vertex, Geometry, Fragment, Compute, Hull, Domain };
 
 // One D3D12 register's Vulkan binding: `reg` as written in the source ("b0", "t0, space1", "s0"); a push-constant
 // block when `push_constant` is set.
@@ -52,8 +52,8 @@ inline constexpr std::uint32_t kCompilerRevision = 6;
 
 // SPIR-V for `entry` of `hlsl`; empty with `error` set when it does not compile. `defines` are NAME=VALUE. Stage
 // inputs and outputs sit at their semantics' locations, so stages and the vertex layout match as D3D12's do by name:
-// vertex attributes POSITION 0, NORMAL 1, TANGENT 2, BINORMAL 3, COLOR0-1 4-5, TEXCOORD0-7 6-13, BLENDINDICES 14;
-// between stages COLOR0-1 0-1 and TEXCOORDn 2+n; pixel outputs SV_TARGETn n.
+// vertex attributes POSITION 0, NORMAL 1, TANGENT 2, BINORMAL 3, COLOR0-1 4-5, TEXCOORD0-7 6-13, BLENDINDICES 14,
+// BEND 15; between stages COLOR0-1 0-1 and TEXCOORDn 2+n; pixel outputs SV_TARGETn n.
 [[nodiscard]] std::vector<std::uint32_t> compile_hlsl(std::string_view hlsl, ShaderStage stage, const char* entry,
                                                       std::initializer_list<const char*> defines, std::string& error,
                                                       CompileOptions options = {});

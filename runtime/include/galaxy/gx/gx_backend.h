@@ -435,7 +435,14 @@ private:
     // matrix ring and refreshes the texture tables of the sampled maps. Returns the draw's pipeline,
     // or nullptr when none is ready (the draw is skipped).
     gpu::Pipeline* flush_draw_state(
-        gpu::TopologyType primitive_topology_type);
+        gpu::TopologyType primitive_topology_type, std::uint8_t vtxfmt);
+    // Whether a triangle draw with vertex format `vtxfmt` is a curved surface (curved_surfaces.h): a perspective scene
+    // draw of a model the game registered, its positions indexed, not bump mapped, while the setting is on.
+    [[nodiscard]] bool curved_draw(std::uint8_t vtxfmt) const;
+    // The topology a draw records: a curved surface's patches while its specialized pipeline draws it.
+    [[nodiscard]] gpu::Topology draw_topology(gpu::Topology topology) const noexcept {
+        return current_curved_ && !current_pipeline_is_uber_ ? gpu::kTopologyTrianglePatches : topology;
+    }
 
     struct PendingDrawBatch {
         bool active = false;
@@ -841,6 +848,8 @@ private:
     // emitter's particles its effect's (motion::kMarkerEffect; 0: none) over the textures'.
     std::uint16_t texture_rt_material_ = 0u;
     std::uint16_t rt_material_identity_ = 0u;
+    // The J3D material identity (FNV-1a "model/material") whose shapes draw now, 0 none (GALAXY_RT_LOG_GLOWS).
+    std::uint32_t rt_identity_seen_ = 0u;
     std::uint16_t rt_effect_material_ = 0u;
     // The traced draws' identity from frame to frame (RtDrawInfo.light_key): the last object, model shape, emitter or
     // particle marker (a particle by its pool node and lifetime), the J3D material's after it, the draws since.
@@ -1674,6 +1683,10 @@ private:
     bool shader_key_hashes_valid_ = false;
     // RenderConfig::per_pixel_lighting, sampled at each frame start.
     bool per_pixel_lighting_ = true;
+    // RenderConfig::curved_surfaces where the renderer tessellates, sampled at each frame start; whether the last
+    // flushed draw is a curved surface (its keys carry kVsKeyCurved and the patch topology).
+    bool curved_surfaces_ = false;
+    bool current_curved_ = false;
     // RenderConfig::enhanced_lighting, sampled at each frame start; the last draw's eligibility and
     // material word (enhanced_lighting.h), kept until its keys or eligibility change.
     bool enhanced_lighting_ = false;

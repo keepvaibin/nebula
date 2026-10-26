@@ -1124,10 +1124,8 @@ HRESULT create_gx_root_signature(
     D3D12_ROOT_SIGNATURE_DESC rsd{};
     rsd.NumParameters = 8;
     rsd.pParameters   = params;
-    rsd.Flags =
-        D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS;
+    // Curved surfaces' hull and domain shaders read the vertex constants (b0).
+    rsd.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
 
     ComPtr<ID3DBlob> blob, err;
     const HRESULT serialize_hr = D3D12SerializeRootSignature(
@@ -4511,10 +4509,13 @@ RtUpload RendererD3D12::rt_allocate(void* renderer, std::size_t bytes, std::size
 // R16/R32 indices in the index ring, VS constants in the constant ring and its palette in the
 // matrix ring. Draws whose data lives elsewhere are not traced.
 void RendererD3D12::rt_note_draw(const DrawCall& call, const RtDrawInfo& info) {
+    // A curved surface's patches are its triangle list (the traced scene takes the flat triangles).
+    const bool triangles = call.topology == D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST ||
+                           call.topology == D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
     if ((info.surface & kRtDrawWater) != 0u && rt_log_glows()) [[unlikely]] {
         static std::uint32_t logged = 0u;
         const std::uint32_t reason = !ray_tracer_.accepts(info) ? 1u : call.index_count < 3u ? 2u
-                                     : call.topology != D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST ? 4u
+                                     : !triangles ? 4u
                                      : call.vertex_view.StrideInBytes != kRtVertexStride ? 8u
                                      : call.vertex_view.SizeInBytes == 0u ? 16u : 32u;
         if ((logged & reason) == 0u) {
@@ -4524,8 +4525,7 @@ void RendererD3D12::rt_note_draw(const DrawCall& call, const RtDrawInfo& info) {
                          call.vertex_view.StrideInBytes, call.index_count);
         }
     }
-    if (!ray_tracer_.accepts(info) || call.index_count < 3u ||
-        call.topology != D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST ||
+    if (!ray_tracer_.accepts(info) || call.index_count < 3u || !triangles ||
         call.vertex_view.StrideInBytes != kRtVertexStride || call.vertex_view.SizeInBytes == 0u) {
         return;
     }

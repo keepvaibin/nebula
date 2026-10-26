@@ -99,6 +99,7 @@ public:
     [[nodiscard]] bool dual_source_blend() const noexcept { return dual_source_blend_; }
     [[nodiscard]] bool logic_op() const noexcept { return logic_op_; }
     [[nodiscard]] bool geometry_shader() const noexcept { return geometry_shader_; }
+    [[nodiscard]] bool tessellation_shader() const noexcept { return tessellation_shader_; }
     [[nodiscard]] bool sampler_anisotropy() const noexcept { return sampler_anisotropy_; }
     // shaderImageGatherExtended: a gather of one chosen channel (FSR 1 EASU's GatherRed/Green/Blue).
     [[nodiscard]] bool gather_extended() const noexcept { return gather_extended_; }
@@ -189,6 +190,7 @@ private:
     bool dual_source_blend_ = false;
     bool logic_op_ = false;
     bool geometry_shader_ = false;
+    bool tessellation_shader_ = false;
     bool sampler_anisotropy_ = false;
     bool gather_extended_ = false;
     bool bc_textures_ = false;

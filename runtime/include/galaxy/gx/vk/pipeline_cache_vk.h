@@ -181,6 +181,9 @@ private:
     std::array<VkShaderModule, kUberPsVariants> uber_ps_{};
     VkShaderModule line_gs_ = VK_NULL_HANDLE;
     VkShaderModule point_gs_ = VK_NULL_HANDLE;
+    // Curved surfaces' hull and domain stages by vertex output variant (curved_variant).
+    std::array<VkShaderModule, 4> curved_hs_{};
+    std::array<VkShaderModule, 4> curved_ds_{};
     std::unordered_map<UberKey, VkPipeline, UberKeyHasher> uber_pipelines_;  // render thread
 
     // Render thread.

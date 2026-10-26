@@ -783,6 +783,7 @@ unsigned pending_settings_changes() {
     changes += d.sharpness != live.sharpness;
     changes += d.anisotropic_filtering != live.anisotropic_filtering;
     changes += d.enhanced_mipmaps != live.enhanced_mipmaps;
+    changes += d.curved_surfaces != live.curved_surfaces;
     changes += lighting_mode(d) != lighting_mode(live);
     changes += d.ambient_occlusion != live.ambient_occlusion;
     changes += d.bloom_mode != live.bloom_mode;
@@ -1165,6 +1166,7 @@ void apply_native_settings_draft() {
     applied.sharpness = next.sharpness;
     applied.anisotropic_filtering = next.anisotropic_filtering;
     applied.enhanced_mipmaps = next.enhanced_mipmaps;
+    applied.curved_surfaces = next.curved_surfaces;
     applied.per_pixel_lighting = next.per_pixel_lighting;
     applied.enhanced_lighting = next.enhanced_lighting;
     applied.ambient_occlusion = next.ambient_occlusion;
@@ -2656,6 +2658,11 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render) {
     rows.push_back({"MIPMAPS", render.enhanced_mipmaps ? "GENERATED" : "ORIGINAL",
                     [](RenderConfig& draft, int) { draft.enhanced_mipmaps = !draft.enhanced_mipmaps; },
                     "GENERATED ADDS SMOOTH DISTANT DETAIL WHERE THE GAME HAS NONE"});
+    if (curved_surfaces_offered()) {
+        rows.push_back({"CURVED SURFACES", render.curved_surfaces ? "ON" : "OFF",
+                        [](RenderConfig& draft, int) { draft.curved_surfaces = !draft.curved_surfaces; },
+                        "ROUNDS THE OUTLINES OF CURVED MODELS"});
+    }
     if (!rt_on) {
         static constexpr const char* kLighting[] = {"PER VERTEX", "PER PIXEL", "ENHANCED"};
         rows.push_back({"LIGHTING", kLighting[lighting_mode(render)],

@@ -6,6 +6,7 @@
 
 #include "galaxy/gx/pipeline_cache.h"
 
+#include "galaxy/gx/render_config.h"
 #include "galaxy/gx/renderer_d3d12.h"
 #include "galaxy/gx/shader_gen.h"
 #include "galaxy/gx/uber_shaders.h"
@@ -123,7 +124,8 @@ constexpr D3D12_INPUT_ELEMENT_DESC kGxInputLayout[] = {
     {"TEXCOORD",     5, DXGI_FORMAT_R32G32_FLOAT,    0, 96, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
     {"TEXCOORD",     6, DXGI_FORMAT_R32G32_FLOAT,    0, 104, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
     {"TEXCOORD",     7, DXGI_FORMAT_R32G32_FLOAT,    0, 112, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-    {"BLENDINDICES", 0, DXGI_FORMAT_R32G32B32A32_UINT, 0, 120, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+    {"BLENDINDICES", 0, DXGI_FORMAT_R32G32B32_UINT, 0, 120, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+    {"BEND",         0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 132, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
 };
 
 // GX BlendFactor -> D3D12, src side (GX factor 2/3 reference the destination).
@@ -239,7 +241,9 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_gx_pso_desc_impl(
     ID3DBlob* vs,
     ID3DBlob* ps,
     ID3DBlob* line_geometry_shader,
-    ID3DBlob* point_geometry_shader) {
+    ID3DBlob* point_geometry_shader,
+    ID3DBlob* hull_shader,
+    ID3DBlob* domain_shader) {
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
     pd.pRootSignature = root_signature;
     pd.VS = {vs->GetBufferPointer(), vs->GetBufferSize()};
@@ -352,7 +356,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_gx_pso_desc_impl(
 
     pd.SampleMask            = UINT_MAX;
     switch (static_cast<D3D12_PRIMITIVE_TOPOLOGY_TYPE>(
-        rs.primitive_topology)) {
+        rs.primitive_topology & kTopologyTypeMask)) {
     case D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT:
         if (point_geometry_shader == nullptr) {
             throw std::invalid_argument(
@@ -378,9 +382,17 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_gx_pso_desc_impl(
         pd.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
         break;
     case D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE:
-        pd.PrimitiveTopologyType =
-            static_cast<D3D12_PRIMITIVE_TOPOLOGY_TYPE>(
-                rs.primitive_topology);
+        pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        break;
+    case D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH:
+        // A curved surface's patches (kVsKeyCurved): the hull and domain shaders of its vertex output's variant.
+        if (hull_shader == nullptr || domain_shader == nullptr) {
+            throw std::invalid_argument(
+                "curved PSO requires the curved hull and domain shaders");
+        }
+        pd.HS = {hull_shader->GetBufferPointer(), hull_shader->GetBufferSize()};
+        pd.DS = {domain_shader->GetBufferPointer(), domain_shader->GetBufferSize()};
+        pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH;
         break;
     default:
         pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
@@ -423,7 +435,9 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> create_gx_pso(
     ID3DBlob* vs,
     ID3DBlob* ps,
     ID3DBlob* line_geometry_shader,
-    ID3DBlob* point_geometry_shader) {
+    ID3DBlob* point_geometry_shader,
+    ID3DBlob* hull_shader,
+    ID3DBlob* domain_shader) {
     const D3D12_GRAPHICS_PIPELINE_STATE_DESC pd =
         make_gx_pso_desc_impl(
             root_signature,
@@ -431,7 +445,9 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> create_gx_pso(
             vs,
             ps,
             line_geometry_shader,
-            point_geometry_shader);
+            point_geometry_shader,
+            hull_shader,
+            domain_shader);
 
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pso;
     const HRESULT hr =
@@ -477,14 +493,18 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_gx_pso_desc(
     ID3DBlob* vertex_shader,
     ID3DBlob* pixel_shader,
     ID3DBlob* line_geometry_shader,
-    ID3DBlob* point_geometry_shader) {
+    ID3DBlob* point_geometry_shader,
+    ID3DBlob* hull_shader,
+    ID3DBlob* domain_shader) {
     return make_gx_pso_desc_impl(
         root_signature,
         render_state,
         vertex_shader,
         pixel_shader,
         line_geometry_shader,
-        point_geometry_shader);
+        point_geometry_shader,
+        hull_shader,
+        domain_shader);
 }
 
 // PsoCompletionQueue: Vyukov MPSC intrusive list with a sentinel node. push() (any thread) swings
@@ -556,6 +576,16 @@ bool PipelineCache::initialize(
     if (!line_geometry_shader_ || !point_geometry_shader_) {
         return false;
     }
+    // Curved surfaces: a hull and domain pair per vertex output variant. Without them the draws stay flat.
+    curved_ready_ = true;
+    for (unsigned variant = 0; variant < kCurvedVariants; ++variant) {
+        curved_hull_shaders_[variant] =
+            compile_shader(ShaderGenerator::curved_stage_source(variant, false), "hs_5_1", "gx_curve_hs");
+        curved_domain_shaders_[variant] =
+            compile_shader(ShaderGenerator::curved_stage_source(variant, true), "ds_5_1", "gx_curve_ds");
+        curved_ready_ = curved_ready_ && curved_hull_shaders_[variant] && curved_domain_shaders_[variant];
+    }
+    set_curved_surfaces_offered(curved_ready_);
 
     stopping_.store(false, std::memory_order_relaxed);
 
@@ -656,6 +686,10 @@ void PipelineCache::shutdown() {
     }
     line_geometry_shader_.Reset();
     point_geometry_shader_.Reset();
+    for (unsigned variant = 0; variant < kCurvedVariants; ++variant) {
+        curved_hull_shaders_[variant].Reset();
+        curved_domain_shaders_[variant].Reset();
+    }
     persisted_pso_keys_.clear();
     warm_pso_keys_.clear();
     // Pending keys are retired only by successful persistence in flush_disk().
@@ -720,7 +754,7 @@ ID3D12PipelineState* PipelineCache::get(
             // instead of waiting for the worker.
             if (uber_enabled_) {
                 if (ID3D12PipelineState* uber = uber_pipeline(
-                        key.render_state, uber_ps_variant(ps_key))) {
+                        flat_render_state(key.render_state), uber_ps_variant(ps_key))) {
                     last_get_used_uber_ = true;
                     ++uber_resolutions_;
                     return uber;
@@ -746,7 +780,7 @@ ID3D12PipelineState* PipelineCache::get(
     // uber PSO for later misses and this one compiles synchronously below.
     if (uber_enabled_) {
         const unsigned variant = uber_ps_variant(ps_key);
-        if (ID3D12PipelineState* uber = uber_pipeline(key.render_state, variant)) {
+        if (ID3D12PipelineState* uber = uber_pipeline(flat_render_state(key.render_state), variant)) {
             enqueue_async_specialization(memoized, ps_key, vs_key);
             last_get_used_uber_ = true;
             ++uber_resolutions_;
@@ -1107,13 +1141,13 @@ constexpr std::uint32_t kShaderCacheMagic   = 0x43535847u;  // "GXSC"
 // The version gates generator output, not only the file format: bump it whenever
 // generate_vs or generate_ps emits different HLSL for the same key, or stale DXBC
 // would be served for hash-identical keys.
-constexpr std::uint32_t kShaderCacheVersion = 48u;
+constexpr std::uint32_t kShaderCacheVersion = 49u;
 constexpr std::uint32_t kPsoKeyCacheMagic = 0x43504B47u;  // "GKPC"
 // PSO keys name shader-cache stages, so psos.bin is rebuilt whenever the shader cache
 // version changes; a key whose stages are missing is skipped at prewarm.
 constexpr std::uint32_t kPsoKeyCacheVersion = 0x100u + kShaderCacheVersion;
 constexpr std::uint32_t kPipelineLibraryMagic = 0x4C505847u; // "GXPL"
-constexpr std::uint32_t kPipelineLibraryVersion = 8u;
+constexpr std::uint32_t kPipelineLibraryVersion = 10u;
 constexpr std::uint64_t kMaxPipelineLibraryBytes = 64ull << 20;
 constexpr std::uint64_t kMaxShaderCacheBytes = 128ull << 20;
 constexpr std::uint32_t kMaxCacheRecords = 65536u;
@@ -1682,13 +1716,22 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineCache::create_or_load_pso(
 #if defined(GALAXY_PIPELINE_CACHE_PERSISTENCE_TEST_IO)
     if (pipeline_test_creator != nullptr) return pipeline_test_creator(key);
 #endif
+    const unsigned curved = curved_variant(key.render_state.primitive_topology);
+    ID3DBlob* const hull = curved_hull_shaders_[curved].Get();
+    ID3DBlob* const domain = curved_domain_shaders_[curved].Get();
+    if ((key.render_state.primitive_topology & kTopologyTypeMask) == kTopologyPatch &&
+        (hull == nullptr || domain == nullptr)) {
+        return nullptr;
+    }
     const D3D12_GRAPHICS_PIPELINE_STATE_DESC pd = make_gx_pso_desc(
         root_signature_.Get(),
         key.render_state,
         vs_blob,
         ps_blob,
         line_geometry_shader_.Get(),
-        point_geometry_shader_.Get());
+        point_geometry_shader_.Get(),
+        hull,
+        domain);
     const std::wstring name = pso_library_name(key);
 
     {
@@ -1713,7 +1756,9 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineCache::create_or_load_pso(
         vs_blob,
         ps_blob,
         line_geometry_shader_.Get(),
-        point_geometry_shader_.Get());
+        point_geometry_shader_.Get(),
+        hull,
+        domain);
     if (!pso) {
         return nullptr;
     }
@@ -2426,7 +2471,7 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineCache::create_uber_pso(
     ID3DBlob* ps = uber_ps_blobs_[variant].Get();
     const D3D12_GRAPHICS_PIPELINE_STATE_DESC pd = make_gx_pso_desc(
         root_signature_.Get(), render_state, vs, ps,
-        line_geometry_shader_.Get(), point_geometry_shader_.Get());
+        line_geometry_shader_.Get(), point_geometry_shader_.Get(), nullptr, nullptr);
     wchar_t name[160]{};
     swprintf_s(name, L"uber_%016llx_%08x_%08x_%02x_%02x_%02x_%u",
         static_cast<unsigned long long>(uber_source_hash_),
@@ -2450,7 +2495,7 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineCache::create_uber_pso(
     }
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pso = create_gx_pso(
         device_.Get(), root_signature_.Get(), render_state, vs, ps,
-        line_geometry_shader_.Get(), point_geometry_shader_.Get());
+        line_geometry_shader_.Get(), point_geometry_shader_.Get(), nullptr, nullptr);
     if (pso) {
         std::lock_guard<std::mutex> lock(pipeline_library_mutex_);
         if (pipeline_library_ && SUCCEEDED(pipeline_library_->StorePipeline(name, pso.Get()))) {

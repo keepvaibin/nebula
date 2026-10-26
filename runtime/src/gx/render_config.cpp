@@ -147,6 +147,7 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
     else if (std::strcmp(key, "anisotropic_filtering") == 0) cfg.anisotropic_filtering = std::clamp(parse_uint(val, cfg.anisotropic_filtering), 1u, 16u);
     else if (std::strcmp(key, "enhanced_mipmaps") == 0) cfg.enhanced_mipmaps = parse_bool(val, cfg.enhanced_mipmaps);
     else if (std::strcmp(key, "per_pixel_lighting") == 0) cfg.per_pixel_lighting = parse_bool(val, cfg.per_pixel_lighting);
+    else if (std::strcmp(key, "curved_surfaces") == 0) cfg.curved_surfaces = parse_bool(val, cfg.curved_surfaces);
     else if (std::strcmp(key, "enhanced_lighting") == 0) cfg.enhanced_lighting = parse_bool(val, cfg.enhanced_lighting);
     else if (std::strcmp(key, "ambient_occlusion") == 0) cfg.ambient_occlusion = parse_bool(val, cfg.ambient_occlusion);
     else if (std::strcmp(key, "bloom_mode") == 0) cfg.bloom_mode = std::min(parse_uint(val, cfg.bloom_mode), kBloomEnhanced);
@@ -260,6 +261,7 @@ static void apply_env_overrides(RenderConfig& cfg) {
     apply_env(cfg, "GALAXY_ANISOTROPIC_FILTERING", "anisotropic_filtering");
     apply_env(cfg, "GALAXY_ENHANCED_MIPMAPS", "enhanced_mipmaps");
     apply_env(cfg, "GALAXY_PER_PIXEL_LIGHTING", "per_pixel_lighting");
+    apply_env(cfg, "GALAXY_CURVED_SURFACES", "curved_surfaces");
     apply_env(cfg, "GALAXY_ENHANCED_LIGHTING", "enhanced_lighting");
     apply_env(cfg, "GALAXY_AMBIENT_OCCLUSION", "ambient_occlusion");
     apply_env(cfg, "GALAXY_BLOOM_MODE", "bloom_mode");
@@ -501,6 +503,18 @@ void set_rt_effect_frame(std::uint64_t frame) noexcept {
     s_rt_effect_frame.store(frame, std::memory_order_relaxed);
 }
 
+namespace {
+std::atomic<bool> s_curved_surfaces_offered{false};
+}  // namespace
+
+void set_curved_surfaces_offered(bool offered) noexcept {
+    s_curved_surfaces_offered.store(offered, std::memory_order_relaxed);
+}
+
+bool curved_surfaces_offered() noexcept {
+    return s_curved_surfaces_offered.load(std::memory_order_relaxed);
+}
+
 void set_render_config(const RenderConfig& cfg) {
     RenderConfig sanitized = cfg;
     clamp_unimplemented_features(sanitized);
@@ -637,6 +651,8 @@ bool save_render_config_to_file() {
              << std::clamp(cfg.anisotropic_filtering, 1u, 16u) << '\n'
              << "enhanced_mipmaps="
              << (cfg.enhanced_mipmaps ? 1u : 0u) << '\n'
+             << "curved_surfaces="
+             << (cfg.curved_surfaces ? 1u : 0u) << '\n'
              << "per_pixel_lighting="
              << (cfg.per_pixel_lighting ? 1u : 0u) << '\n'
              << "enhanced_lighting="

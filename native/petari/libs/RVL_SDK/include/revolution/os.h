@@ -106,6 +106,10 @@ int __NebulaTracedSun(f32* pDirection);
 int __NebulaGalaxySelectStage(u32 index, char* pId, u32 capacity, u32* pStars);
 int __NebulaGalaxySelectNamesWanted(void);
 void __NebulaGalaxySelectName(u32 index, u32 star, const u16* pName);
+// A loaded model's triangles for its curved surfaces (curved_surface in nebula_game_api.h).
+void __NebulaCurvedSurface(u32 arrayAddress, const void* pArray, u32 arrayBytes, const f32* pPositions,
+                           u32 positionCount, const f32* pNormals, u32 normalCount, const u16* pCorners,
+                           u32 triangleCount);
 // A native equivalent of a mod's code patch (NEBULA_PATCH_* in nebula_game_api.h): 1 with `pValue` set (when not
 // null) while an enabled mod carries it, else 0.
 int __NebulaCodePatch(u32 id, u32* pValue);
