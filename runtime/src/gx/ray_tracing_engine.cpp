@@ -14,6 +14,7 @@
 #include "rt_engine_indirect_cs.h"
 #include "rt_engine_indirect_spatial_cs.h"
 #include "rt_engine_light_grid_cs.h"
+#include "rt_engine_cache_cs.h"
 #include "rt_engine_reference_cs.h"
 #include "rt_engine_shadow_blur_cs.h"
 #include "rt_engine_shadow_post_cs.h"
@@ -44,8 +45,10 @@ enum EngineView : std::uint32_t {
     kEvWaterScene = kEvCount, kEvWaterPositions, kEvWaterSurfaces, kEvClearDraws, kEvClear, kEvClearEnd,
     // The raster's motion where the frame has it (kEngineMotion).
     kEvMotion = kEvClearEnd,
+    // The world's radiance cache (rt_engine.hlsl EngineCacheCS).
+    kEvRadianceCache,
 };
-static_assert(kEvMotion < 32u);
+static_assert(kEvRadianceCache < 32u);
 
 // rt_engine.hlsl's light grid: kGridCells^3 cells of kGridSlots slots (a light, its weight).
 constexpr std::uint64_t kEngineGridBytes = 24ull * 24ull * 24ull * 64ull * 8ull;
@@ -72,6 +75,13 @@ constexpr std::uint32_t kEngineClearSolidLeft = 4194304u;
 constexpr std::uint32_t kEngineNoBoiling = 8388608u;
 constexpr std::uint32_t kEngineMotion = 16777216u;
 constexpr std::uint32_t kEngineNoFootprint = 33554432u;
+constexpr std::uint32_t kEngineNoCache = 67108864u;
+constexpr std::uint32_t kEngineNoFirefly = 134217728u;
+constexpr std::uint32_t kEngineNoDiSpatial = 1073741824u;
+constexpr std::uint32_t kEngineGiFull = 2147483648u;
+// rt_engine.hlsl's radiance cache: kCacheEntries x kCacheEntryBytes.
+constexpr std::uint64_t kEngineCacheEntries = 1048576ull;
+constexpr std::uint64_t kEngineCacheBytes = kEngineCacheEntries * 32ull;
 
 float env_value(const char* name, float fallback) {
     char value[32]{};
@@ -115,6 +125,10 @@ bool SceneRayTracer::create_engine_pipelines() {
     engine_boiling_ = env_value("GALAXY_RT_ENGINE_BOILING", 1.0f) != 0.0f;
     engine_footprint_ = env_value("GALAXY_RT_ENGINE_FOOTPRINT", 1.0f) != 0.0f;
     engine_motion_wanted_ = env_value("GALAXY_RT_ENGINE_MOTION", 1.0f) != 0.0f;
+    engine_cache_wanted_ = env_value("GALAXY_RT_ENGINE_CACHE", 1.0f) != 0.0f;
+    engine_firefly_ = env_value("GALAXY_RT_ENGINE_FIREFLY", 1.0f) != 0.0f;
+    engine_di_spatial_ = env_value("GALAXY_RT_ENGINE_DI_SPATIAL", 1.0f) != 0.0f;
+    engine_gi_full_env_ = static_cast<int>(std::clamp(env_value("GALAXY_RT_ENGINE_GI_FULL", -1.0f), -1.0f, 1.0f));
     engine_clear_mode_ = static_cast<std::uint32_t>(std::clamp(env_value("GALAXY_RT_ENGINE_CLEAR", 1.0f), 0.0f, 10.0f));
     engine_clear_wanted_ = engine_clear_mode_ != 0u;
     engine_reference_ = env_value("GALAXY_RT_ENGINE_REFERENCE", 0.0f) != 0.0f;
@@ -135,6 +149,7 @@ bool SceneRayTracer::create_engine_pipelines() {
         compute(g_rt_engine_direct_cs, sizeof(g_rt_engine_direct_cs), engine_direct_pso_) &&
         compute(g_rt_engine_direct_spatial_cs, sizeof(g_rt_engine_direct_spatial_cs), engine_direct_spatial_pso_) &&
         compute(g_rt_engine_light_grid_cs, sizeof(g_rt_engine_light_grid_cs), engine_light_grid_pso_) &&
+        compute(g_rt_engine_cache_cs, sizeof(g_rt_engine_cache_cs), engine_cache_pso_) &&
         compute(g_rt_engine_shadow_blur_cs, sizeof(g_rt_engine_shadow_blur_cs), engine_shadow_blur_pso_) &&
         compute(g_rt_engine_shadow_post_cs, sizeof(g_rt_engine_shadow_post_cs), engine_shadow_post_pso_) &&
         compute(g_rt_engine_shadow_stabilize_cs, sizeof(g_rt_engine_shadow_stabilize_cs),
@@ -200,6 +215,12 @@ bool SceneRayTracer::ensure_engine_buffers(std::uint32_t width, std::uint32_t he
         engine_light_grid_.Reset();
         return false;
     }
+    // The radiance cache (created zeroed: every entry free); without it the hits keep their own samples.
+    if (!engine_radiance_cache_ &&
+        !create_buffer(kEngineCacheBytes, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                       D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, engine_radiance_cache_, L"rt engine radiance cache")) {
+        engine_radiance_cache_.Reset();
+    }
     if (width == engine_width_ && height == engine_height_ && engine_buffers_[0]) {
         return true;
     }
@@ -209,7 +230,10 @@ bool SceneRayTracer::ensure_engine_buffers(std::uint32_t width, std::uint32_t he
     engine_clear_valid_ = {};
     engine_width_ = engine_height_ = 0u;
     const std::uint64_t full = static_cast<std::uint64_t>(width) * height;
-    const std::uint64_t half = static_cast<std::uint64_t>((width + 1u) / 2u) * ((height + 1u) / 2u);
+    // The indirect light's buffers: every pixel at High (GALAXY_RT_ENGINE_GI_FULL=0/1 overrides), else one of each 2 x 2.
+    engine_gi_full_ = engine_gi_full_env_ >= 0 ? engine_gi_full_env_ != 0 : high_quality_;
+    const std::uint64_t half =
+        engine_gi_full_ ? full : static_cast<std::uint64_t>((width + 1u) / 2u) * ((height + 1u) / 2u);
     for (unsigned i = 0; i < kEngineBuffers; ++i) {
         const EngineBufferSpec& spec = kEngineBufferSpecs[i];
         if (!create_buffer((spec.half ? half : full) * spec.bytes, D3D12_HEAP_TYPE_DEFAULT,
@@ -372,7 +396,7 @@ bool SceneRayTracer::engine_prepare(std::uint32_t width, std::uint32_t height, u
     const unsigned cur = engine_parity_;
     const unsigned prev = cur ^ 1u;
     const auto full = static_cast<std::uint64_t>(width) * height;
-    const auto half = static_cast<std::uint64_t>((width + 1u) / 2u) * ((height + 1u) / 2u);
+    const auto half = engine_gi_full_ ? full : static_cast<std::uint64_t>((width + 1u) / 2u) * ((height + 1u) / 2u);
     const auto uav = [&](unsigned buffer) {
         const EngineBufferSpec& spec = kEngineBufferSpecs[buffer];
         return buffer_uav(engine_buffers_[buffer].Get(), (spec.half ? half : full) * spec.bytes);
@@ -416,6 +440,15 @@ bool SceneRayTracer::engine_prepare(std::uint32_t width, std::uint32_t height, u
     std::copy(std::begin(views), std::end(views), c.views);
     // The raster's motion, where the scene wrote it (RendererD3D12 scene_motion_): the histories follow what moved by
     // itself (rt_engine.hlsl engine_history).
+    // The world's radiance cache for the hits' light (rt_engine.hlsl engine_cache_light).
+    bool cache = false;
+    if (engine_cache_wanted_ && engine_radiance_cache_) {
+        const std::uint32_t view = buffer_uav(engine_radiance_cache_.Get(), kEngineCacheBytes);
+        if (view != 0xFFFFFFFFu) {
+            c.views[kEvRadianceCache] = view;
+            cache = true;
+        }
+    }
     bool motion = false;
     if (engine_motion_ != nullptr && engine_motion_wanted_) {
         const std::uint32_t view = texture_srv(engine_motion_);
@@ -439,8 +472,8 @@ bool SceneRayTracer::engine_prepare(std::uint32_t width, std::uint32_t height, u
     }
     c.size[0] = width;
     c.size[1] = height;
-    c.size[2] = (width + 1u) / 2u;
-    c.size[3] = (height + 1u) / 2u;
+    c.size[2] = engine_gi_full_ ? width : (width + 1u) / 2u;
+    c.size[3] = engine_gi_full_ ? height : (height + 1u) / 2u;
     c.info[0] = kEngineOn | (engine_specular_ ? kEngineSpecular : 0u) | (engine_indirect_ ? kEngineIndirect : 0u) |
                 (engine_points_ ? kEnginePoints : 0u) | (engine_clear_mode_ == 2u ? kEngineClearFind : 0u) |
                 (engine_clear_mode_ == 3u ? kEngineClearNoRay : 0u) | (engine_clear_mode_ == 4u ? kEngineClearNoSun : 0u) |
@@ -450,7 +483,10 @@ bool SceneRayTracer::engine_prepare(std::uint32_t width, std::uint32_t height, u
                 (water_light ? kEngineWaterLight : 0u) | (engine_anti_lag_ ? 0u : kEngineNoAntiLag) |
                 (engine_light_history_ ? 0u : kEngineNoLightHistory) |
                 (engine_clear_mode_ == 10u ? kEngineClearSolidLeft : 0u) | (engine_boiling_ ? 0u : kEngineNoBoiling) |
-                (motion ? kEngineMotion : 0u) | (engine_footprint_ ? 0u : kEngineNoFootprint) | (engine_view_ << 4u);
+                (motion ? kEngineMotion : 0u) | (engine_footprint_ ? 0u : kEngineNoFootprint) |
+                (cache ? 0u : kEngineNoCache) | (engine_firefly_ ? 0u : kEngineNoFirefly) |
+                (engine_di_spatial_ ? 0u : kEngineNoDiSpatial) | (engine_gi_full_ ? kEngineGiFull : 0u) |
+                (engine_view_ << 4u);
     c.info[1] = 0u;
     c.info[2] = slot;
     c.info[3] = 0u;
@@ -492,8 +528,8 @@ void SceneRayTracer::trace_engine(ID3D12GraphicsCommandList* list, Allocate allo
                                   D3D12_GPU_VIRTUAL_ADDRESS frame, unsigned slot) {
     const UINT gx = (engine_width_ + 7u) / 8u;
     const UINT gy = (engine_height_ + 7u) / 8u;
-    const UINT hx = ((engine_width_ + 1u) / 2u + 7u) / 8u;
-    const UINT hy = ((engine_height_ + 1u) / 2u + 7u) / 8u;
+    const UINT hx = ((engine_gi_full_ ? engine_width_ : (engine_width_ + 1u) / 2u) + 7u) / 8u;
+    const UINT hy = ((engine_gi_full_ ? engine_height_ : (engine_height_ + 1u) / 2u) + 7u) / 8u;
     const D3D12_RESOURCE_BARRIER barrier = all_uavs();
     to_state(list, engine_slots_[slot].Get(), engine_slot_state_[slot], D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     const auto run = [&](ID3D12PipelineState* pso, UINT x, UINT y, const wchar_t* name) {
@@ -529,6 +565,8 @@ void SceneRayTracer::trace_engine(ID3D12GraphicsCommandList* list, Allocate allo
     end_pass(list, timed, kPassEngineIndirect);
     timed = begin_pass(list);
     run(engine_specular_pso_.Get(), gx, gy, L"engine_specular");
+    // The radiance cache takes the frame's samples of the bounce and reflection hits (read by the next frame's).
+    run(engine_cache_pso_.Get(), static_cast<UINT>((kEngineCacheEntries + 63u) / 64u), 1u, L"engine_cache");
     end_pass(list, timed, kPassEngineSpecular);
     timed = begin_pass(list);
     run(engine_temporal_pso_.Get(), gx, gy, L"engine_temporal");

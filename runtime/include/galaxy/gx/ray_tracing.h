@@ -752,6 +752,15 @@ private:
     // The light grid (rt_engine.hlsl EngineLightGridCS: kGridCells^3 cells x kGridSlots slots x 8 bytes).
     Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_light_grid_pso_;
     Microsoft::WRL::ComPtr<ID3D12Resource> engine_light_grid_;
+    // The world's radiance cache (rt_engine.hlsl EngineCacheCS; GALAXY_RT_ENGINE_CACHE=0: none).
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_cache_pso_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> engine_radiance_cache_;
+    bool engine_cache_wanted_ = true;
+    bool engine_firefly_ = true;  // GALAXY_RT_ENGINE_FIREFLY=0: no firefly clamp on the histories' new samples
+    bool engine_di_spatial_ = true;  // GALAXY_RT_ENGINE_DI_SPATIAL=0: no spatial reuse of the direct light
+    // The indirect light at every pixel (High; the engine's buffers are made for it, ensure_engine_buffers).
+    bool engine_gi_full_ = false;
+    int engine_gi_full_env_ = -1;    // GALAXY_RT_ENGINE_GI_FULL: -1 by quality, 0 half, 1 full
     Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_shadow_blur_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_shadow_post_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_shadow_stabilize_pso_;

@@ -385,7 +385,8 @@ endforeach()
 # The ray tracing engine (runtime/src/gx/rt_engine.hlsl, including rt_lighting.hlsl; shader model 6.6).
 set(galaxy_rt_engine_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/gx/rt_engine.hlsl")
 foreach(galaxy_rt_pass engine_gbuffer_cs:EngineGBufferCS engine_direct_cs:EngineDirectCS
-        engine_light_grid_cs:EngineLightGridCS engine_direct_spatial_cs:EngineDirectSpatialCS
+        engine_light_grid_cs:EngineLightGridCS engine_cache_cs:EngineCacheCS
+        engine_direct_spatial_cs:EngineDirectSpatialCS
         engine_shadow_blur_cs:EngineShadowBlurCS
         engine_shadow_post_cs:EngineShadowPostCS engine_shadow_stabilize_cs:EngineShadowStabilizeCS
         engine_indirect_cs:EngineIndirectCS

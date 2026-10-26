@@ -52,6 +52,8 @@ static const uint kEvClear = 27u;         // per pixel 2 uint4 (EngineClearCS): 
 // The raster's motion (Texture2D<float2>, kEngineMotion): every opaque draw's own motion from this frame's pixel to the
 // last frame's, in render pixels without the jitter (the temporal upscaler's target, DLSS or FSR 3; g_motion_jitter).
 static const uint kEvMotion = 28u;
+// The world's radiance cache (engine_cache_light, EngineCacheCS): kCacheEntries entries of kCacheEntryBytes.
+static const uint kEvRadianceCache = 29u;
 // g_engine_info.y in the clear pass: what the frame has of each kind.
 static const uint kClearHasGlass = 1u;    // the water window's glass (clear_trace)
 static const uint kClearHasSolids = 2u;   // clear solids in the scene (solid_front)
@@ -83,6 +85,11 @@ static const uint kEngineNoLightHistory = 2097152u;  // GALAXY_RT_ENGINE_LIGHT_H
 static const uint kEngineNoBoiling = 8388608u;   // GALAXY_RT_ENGINE_BOILING=0: no boiling filter
 static const uint kEngineMotion = 16777216u;     // the raster's motion this frame (kEvMotion)
 static const uint kEngineNoFootprint = 33554432u;  // GALAXY_RT_ENGINE_FOOTPRINT=0: widths in pixels (kFootprintLines)
+static const uint kEngineNoCache = 67108864u;      // GALAXY_RT_ENGINE_CACHE=0 (or no cache): hits lit by their samples
+static const uint kEngineNoFirefly = 134217728u;   // GALAXY_RT_ENGINE_FIREFLY=0: new samples enter the history whole
+static const uint kEngineNoDiSpatial = 1073741824u;  // GALAXY_RT_ENGINE_DI_SPATIAL=0: no spatial reuse of the direct light
+// The indirect light at every pixel every frame (High; GALAXY_RT_ENGINE_GI_FULL): else one pixel of each 2 x 2 a frame.
+static const uint kEngineGiFull = 2147483648u;
 static const uint kEngineClearSolidLeft = 4194304u;  // GALAXY_RT_ENGINE_CLEAR=10: a clear solid's light still inside
                                                      // when its path's segments ran out (red, x 4), alone
 
@@ -1122,8 +1129,188 @@ float3 engine_light_sample(float3 p, float3 n, float3 origin, uint candidates, i
     return kept_light * (weight_sum / (float(candidates) * kept_target));
 }
 
+// The world's radiance cache (our implementation of path-space filtering, Binder, Fricke and Keller 2019, as NVIDIA's
+// SHaRC and other engines' world-space caches use it). A bounce or reflection ray's hit outside the picture was lit by
+// one light of four candidates behind one shadow ray, one sun ray and one sky ray: in a room lit by a core and many
+// sparks (the Gateway's Grand Star room) nearly all of the floor's light came from those single samples, most of them
+// dark and a few bright, speckle that no filter at the floor makes clean (without the lights' sample at the hits the
+// floor's bounce was smooth and dark). Each hit adds its light to a cell of a hash grid over world space (the picture's
+// own filtered light where the picture shows the hit) and is lit by the cell's light over its samples and its last
+// kCacheFrames frames, times its own albedo. A cell is about kCachePixels wide on the screen at its distance (at
+// kFootprintLines; powers of two from kCacheLeast), one per facing axis, so a wall's two sides and a floor and the wall
+// beside it keep their own light. A cell's light takes over from the hit's once it has kCacheTrusted samples.
+static const uint kCacheEntries = 1048576u;
+// Per entry: key (0: free), the frame it was last used, this frame's sums r g b (x kCacheScale) and samples; its light
+// rg, b (halves) and the samples it stands for (half).
+static const uint kCacheEntryBytes = 32u;
+static const uint kCacheProbes = 8u;
+static const float kCachePixels = 8.0f;
+static const float kCacheLeast = 2.0f;
+static const float kCacheScale = 256.0f;
+static const float kCacheMost = 64.0f;     // a sample's light at most (the sums' range)
+static const float kCacheFrames = 16.0f;
+static const float kCacheTrusted = 8.0f;
+static const uint kCacheIdle = 600u;       // frames unused before an entry is freed
+
+// An eye-space point and normal in world space (g_to_eye's inverse: the adjugate over the determinant).
+float3 engine_world_point(float3 p)
+{
+    const float3 r0 = g_to_eye[0].xyz;
+    const float3 r1 = g_to_eye[1].xyz;
+    const float3 r2 = g_to_eye[2].xyz;
+    const float3 d = p - float3(g_to_eye[0].w, g_to_eye[1].w, g_to_eye[2].w);
+    return (cross(r1, r2) * d.x + cross(r2, r0) * d.y + cross(r0, r1) * d.z) / dot(r0, cross(r1, r2));
+}
+
+float3 engine_world_normal(float3 n)
+{
+    return normalize(g_to_eye[0].xyz * n.x + g_to_eye[1].xyz * n.y + g_to_eye[2].xyz * n.z);
+}
+
+// The cache's entry for the cell of eye-space point `p` facing `n`, claimed when free and `claim` (~0: none within
+// kCacheProbes); `size`: the cell's width (world units).
+uint engine_cache_entry(float3 p, float3 n, bool claim, out float size)
+{
+    size = 0.0f;
+    // No camera this frame (a degenerate world-to-eye): no cell.
+    if (!(abs(dot(g_to_eye[0].xyz, cross(g_to_eye[1].xyz, g_to_eye[2].xyz))) > 1e-12f)) {
+        return ~0u;
+    }
+    const float pixel = length(p) * 2.0f / max(abs(g_viewport.z * g_projection.x), 1e-6f) * footprint_scale();
+    const float level = clamp(ceil(log2(max(pixel * kCachePixels, kCacheLeast) / kCacheLeast)), 0.0f, 15.0f);
+    size = kCacheLeast * exp2(level);
+    const int3 c = int3(floor(engine_world_point(p) / size));
+    const float3 w = engine_world_normal(n);
+    const float3 a = abs(w);
+    const uint axis = a.x >= a.y && a.x >= a.z ? (w.x >= 0.0f ? 0u : 1u)
+                      : a.y >= a.z             ? (w.y >= 0.0f ? 2u : 3u)
+                                               : (w.z >= 0.0f ? 4u : 5u);
+    const uint h = emit_hash(asuint(c.x) ^ emit_hash(asuint(c.y) ^ emit_hash(asuint(c.z) ^
+                                                                                  emit_hash(uint(level) | (axis << 4u)))));
+    const uint key = emit_hash(h ^ 0x9E3779B9u) | 1u;
+    RWByteAddressBuffer cache = engine_buffer(kEvRadianceCache);
+    [loop] for (uint k = 0u; k < kCacheProbes; ++k) {
+        const uint e = (h + k) % kCacheEntries;
+        uint held;
+        if (claim) {
+            cache.InterlockedCompareExchange(e * kCacheEntryBytes, 0u, key, held);
+        } else {
+            held = cache.Load(e * kCacheEntryBytes);
+        }
+        if (held == key || (claim && held == 0u)) {
+            return e;
+        }
+        if (held == 0u) {
+            return ~0u;
+        }
+    }
+    return ~0u;
+}
+
+// Adds a hit's light `m` (eye-space point `p`, normal `n`) to its cell; the cell's light once it has kCacheTrusted
+// samples, else `m`. A reflection's hit (`footprint`: its ray cone's width there; 0: a bounce) narrower than the cell
+// keeps its own light: a sharp reflection would show the cells as blocks.
+float3 engine_cache_light(float3 p, float3 n, float3 m, float footprint)
+{
+    if ((g_engine_info.x & kEngineNoCache) != 0u) {
+        return m;
+    }
+    float size;
+    const uint e = engine_cache_entry(p, n, true, size);
+    if (e == ~0u) {
+        return m;
+    }
+    RWByteAddressBuffer cache = engine_buffer(kEvRadianceCache);
+    const uint at = e * kCacheEntryBytes;
+    const uint3 add = uint3(round(min(max(m, 0.0f), kCacheMost) * kCacheScale));
+    uint unused;
+    cache.InterlockedMax(at + 4u, g_frame, unused);
+    cache.InterlockedAdd(at + 8u, add.r, unused);
+    cache.InterlockedAdd(at + 12u, add.g, unused);
+    cache.InterlockedAdd(at + 16u, add.b, unused);
+    cache.InterlockedAdd(at + 20u, 1u, unused);
+    const uint2 held = cache.Load2(at + 24u);
+    return f16tof32(held.y >> 16u) >= kCacheTrusted && (footprint <= 0.0f || footprint >= size)
+               ? float3(f16tof32(held.x), f16tof32(held.x >> 16u), f16tof32(held.y))
+               : m;
+}
+
+// The light the surface a hit's sky ray meets (`h`, along `direction` from `origin`) sends back: its cell's light times
+// its albedo, no sample of its own. Every further bounce goes through the cache (the cells' light includes it), and
+// the series converges over frames as each bounce takes the albedo; the emitters' light is the hits' own light sample.
+// With one bounce the off-picture hits had only their direct light: an enclosed room's walls lit each other not at all
+// (the Grand Star room 31 to 58 % darker than the converged reference's 8 bounces).
+float3 engine_cache_bounce(Hit h, float3 origin, float3 direction)
+{
+    if ((g_engine_info.x & kEngineNoCache) != 0u) {
+        return float3(0.0f, 0.0f, 0.0f);
+    }
+    float3 albedo;
+    float3 emission;
+    reference_material_cone(h.tri, h.b, kTevNoCone, albedo, emission);
+    if (!any(albedo > 0.0f)) {
+        return float3(0.0f, 0.0f, 0.0f);
+    }
+    const float3 v0 = asfloat(g_positions.Load3(h.tri * 36u));
+    const float3 v1 = asfloat(g_positions.Load3(h.tri * 36u + 12u));
+    const float3 v2 = asfloat(g_positions.Load3(h.tri * 36u + 24u));
+    const float3 face = cross(v1 - v0, v2 - v0);
+    if (dot(face, face) <= 1e-24f) {
+        return float3(0.0f, 0.0f, 0.0f);
+    }
+    float3 ng = normalize(face);
+    ng = dot(ng, direction) > 0.0f ? -ng : ng;
+    const float3 w = float3(1.0f - h.b.x - h.b.y, h.b.x, h.b.y);
+    float3 lifted = v0 * w.x + v1 * w.y + v2 * w.z;
+    float3 n;
+    smooth_surface(h.tri, w, v0, v1, v2, ng, n, lifted);
+    float size;
+    const uint e = engine_cache_entry(lifted, n, false, size);
+    if (e == ~0u) {
+        return float3(0.0f, 0.0f, 0.0f);
+    }
+    const uint2 held = engine_buffer(kEvRadianceCache).Load2(e * kCacheEntryBytes + 24u);
+    return f16tof32(held.y >> 16u) >= kCacheTrusted
+               ? albedo * float3(f16tof32(held.x), f16tof32(held.x >> 16u), f16tof32(held.y))
+               : float3(0.0f, 0.0f, 0.0f);
+}
+
+// The cache's frame: each entry's new samples onto its light (weighted by their count, at least 1 / kCacheFrames of
+// the new: a light that changes is followed within kCacheFrames frames), its sums cleared; an entry unused for
+// kCacheIdle frames is freed.
+[numthreads(64, 1, 1)]
+void EngineCacheCS(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= kCacheEntries || (g_engine_info.x & kEngineNoCache) != 0u) {
+        return;
+    }
+    RWByteAddressBuffer cache = engine_buffer(kEvRadianceCache);
+    const uint at = id.x * kCacheEntryBytes;
+    const uint4 a = cache.Load4(at);
+    if (a.x == 0u) {
+        return;
+    }
+    const uint4 b = cache.Load4(at + 16u);
+    if (g_frame - a.y > kCacheIdle) {
+        cache.Store4(at, uint4(0u, 0u, 0u, 0u));
+        cache.Store4(at + 16u, uint4(0u, 0u, 0u, 0u));
+        return;
+    }
+    if (b.y == 0u) {
+        return;
+    }
+    const float count = float(b.y);
+    const float3 mean = float3(a.z, a.w, b.x) / (kCacheScale * count);
+    const float weight = f16tof32(b.w >> 16u);
+    const float3 light = lerp(float3(f16tof32(b.z), f16tof32(b.z >> 16u), f16tof32(b.w)), mean,
+                              max(count / (weight + count), 1.0f / kCacheFrames));
+    cache.Store4(at + 8u, uint4(0u, 0u, 0u, 0u));
+    cache.Store2(at + 24u, uint2(pack_half2(light.r, light.g), pack_half2(light.b, min(weight + count, 60000.0f))));
+}
+
 // The radiance a hit sends back along -direction: its emission (when `emission`) plus its albedo times its light: the
-// sun behind a shadow ray, the lights by resampled importance behind a shadow ray, the sky along one cosine ray.
+// sun behind a shadow ray, the lights by resampled importance behind a shadow ray, the sky along one cosine ray (or the
+// light of its cell in the world's radiance cache, engine_cache_light).
 // Out: the hit's world-facing normal (for ReSTIR GI).
 float3 engine_hit_radiance(Hit h, float3 origin, float3 direction, bool emission_wanted, float width, inout uint seed,
                            uint salt, out float3 x, out float3 hn)
@@ -1173,7 +1360,10 @@ float3 engine_hit_radiance(Hit h, float3 origin, float3 direction, bool emission
                 const float z = asfloat(f.z);
                 if (f.z != 0u && abs(z - x.z) <= 0.02f * abs(x.z) + 2.0f) {
                     const float3 whole = float3(f16tof32(f.x), f16tof32(f.x >> 16u), f16tof32(f.y));
-                    return albedo * max(whole, 0.0f) / max(physical_exposure(), 1e-4f);
+                    const float3 seen = max(whole, 0.0f) / max(physical_exposure(), 1e-4f);
+                    // The picture's filtered light, the best sample its cell gets.
+                    engine_cache_light(lifted, n, seen, width);
+                    return albedo * seen;
                 }
             }
         }
@@ -1198,8 +1388,11 @@ float3 engine_hit_radiance(Hit h, float3 origin, float3 direction, bool emission
             const Hit sky = engine_trace(start, d, salt + 7u);
             if (!sky.surface && !sky.late) {
                 m += sky_light_colour(physical_sky(d)) * water_through(start, d);
+            } else if (sky.surface) {
+                m += engine_cache_bounce(sky, start, d);
             }
         }
+        m = engine_cache_light(lifted, n, m, width);
     }
     return albedo * m + (emission_wanted ? emission : float3(0.0f, 0.0f, 0.0f));
 }
@@ -1494,8 +1687,15 @@ Reservoir direct_reservoir(uint2 id, uint pixel, out float change, out bool surf
             const float target = light_target(s, l, light);
             reservoir_update(r, l, target, target / chance, 1.0f, seed);
         }
-        // Temporal reuse: the last frame's final reservoir where this surface was, its light as this frame has it
-        // re-weighed here; a light no longer drawn takes its history with it.
+        reservoir_finish(r);
+        // Temporal reuse: the last frame's final reservoir where this surface was, its light as this frame has it, and
+        // this frame's, combined by the generalized balance heuristic (resampled importance sampling with multiple
+        // importance weights over both pixels' targets: Lin et al. 2022, RTXDI's unbiased mode; our own code). Each
+        // sample's weight is its own pixel's share of the targets for it, count-weighted: the last frame's target is
+        // taken at its surface then (its G-buffer, carried into this frame's eye space), with this frame's light.
+        // Combined by 1/M (RTXDI's biased mode) and with an occluded sample's reservoir emptied but counted, the direct
+        // light read 36 % darker than the converged reference in the Observatory's still night (the pixels' candidates
+        // come from different light grid cells, each frame's slots drawn anew; the reuse fed back each frame).
         uint prev_pixel;
         if ((g_engine_info.x & kEngineNoLightHistory) == 0u && engine_reproject(q, s.p, s.n, prev_pixel)) {
             Reservoir previous = reservoir_load(engine_view(kEvDiPrev), prev_pixel);
@@ -1503,6 +1703,10 @@ Reservoir direct_reservoir(uint2 id, uint pixel, out float change, out bool surf
             const bool lit = now != kNoLight && engine_light_at(now, previous.s.uv, previous.s);
             float3 light;
             const float target = lit && previous.W > 0.0f ? light_target(s, previous.s, light) : 0.0f;
+            const int2 was_q = int2(prev_pixel % g_target_size.x, prev_pixel / g_target_size.x);
+            const GSurface was = gb_load(engine_view(kEvGBufferPrev), prev_pixel, g_history_projection, was_q);
+            const float3 was_p = engine_unreproject(was.p);
+            const float3 was_n = engine_unreproject_normal(was.n);
             // The light change (A-SVGF's temporal gradient, Schied, Peters and Dachsbacher 2018, on RTXDI's
             // reservoirs): the last frame's kept sample shaded as this frame has its light, against its shade then;
             // the same light point and weight at the same surface point (that pixel's G-buffer then, carried into
@@ -1510,22 +1714,29 @@ Reservoir direct_reservoir(uint2 id, uint pixel, out float change, out bool surf
             // the difference is the light's alone (gone: 0). Shaded at this pixel's own point instead, the jitter's
             // sub-pixel step and the camera's move read as change every frame: on the Gateway's still ground about
             // 1 % a frame, which held the histories near 10 frames under DLSS (30 without its jitter).
+            float3 unused;
+            const float was_target = lit && previous.W > 0.0f ? engine_light_target(was_p, was_n, previous.s, unused)
+                                                              : 0.0f;
             if (previous.shade > 0.0f) {
-                const int2 was_q = int2(prev_pixel % g_target_size.x, prev_pixel / g_target_size.x);
-                const GSurface was = gb_load(engine_view(kEvGBufferPrev), prev_pixel, g_history_projection, was_q);
-                float3 unused;
-                const float shade_now =
-                    lit && previous.W > 0.0f
-                        ? engine_light_target(engine_unreproject(was.p), engine_unreproject_normal(was.n), previous.s,
-                                              unused) * previous.W
-                        : 0.0f;
+                const float shade_now = was_target * previous.W;
                 change = abs(shade_now - previous.shade) / max(max(shade_now, previous.shade), 1e-6f);
             }
             if (lit) {
-                previous.m = min(previous.m, 20.0f * float(candidates));
-                reservoir_update(r, previous.s, target, target * previous.W * previous.m, previous.m, seed);
+                const float m_c = r.m;
+                const float m_p = min(previous.m, 20.0f * float(candidates));
+                // This frame's sample: its share of the targets for it; the last frame's: its share.
+                const float c_here = r.W > 0.0f ? r.target : 0.0f;
+                const float c_was = r.W > 0.0f ? engine_light_target(was_p, was_n, r.s, unused) : 0.0f;
+                const float c_mis = c_here > 0.0f ? m_c * c_here / (m_c * c_here + m_p * c_was) : 0.0f;
+                const float p_mis = was_target > 0.0f ? m_p * was_target / (m_c * target + m_p * was_target) : 0.0f;
+                Reservoir combined = reservoir_empty();
+                reservoir_update(combined, r.s, c_here, c_mis * c_here * r.W, m_c, seed);
+                reservoir_update(combined, previous.s, target, p_mis * target * previous.W, m_p, seed);
+                combined.W = combined.target > 0.0f ? combined.w_sum / combined.target : 0.0f;
+                r = combined;
             }
         }
+        return r;
     }
     reservoir_finish(r);
     return r;
@@ -1570,16 +1781,28 @@ void EngineDirectSpatialCS(uint3 id : SV_DispatchThreadID)
     }
     uint seed = emit_hash(pixel ^ (g_frame * 0x2545F491u) ^ 0xA511E9B3u);
     const uint salt = pixel * 32u + g_frame * 0x632BE5ABu + 11u;
-    // This pixel's reservoir, then four neighbours within 30 pixels (at kFootprintLines) on the same surface (normal,
-    // depth), each light re-weighed here (biased 1/M combination with geometric checks, RTXDI's default).
+    // This pixel's reservoir and up to four neighbours' within 30 pixels (at kFootprintLines) on the same surface
+    // (normal, depth), combined by the generalized balance heuristic (as the temporal reuse): each sample weighed by its
+    // own pixel's count-weighted share of all of their targets for it.
+    static const uint kSpatialMost = 5u;
+    LightSample samples[kSpatialMost];
+    float3 at_p[kSpatialMost];
+    float3 at_n[kSpatialMost];
+    float weight_w[kSpatialMost];
+    float count[kSpatialMost];
+    uint taken = 0u;
     {
         Reservoir own = reservoir_load(engine_view(kEvDiTemp), pixel);
-        float3 light;
-        const float target =
-            own.W > 0.0f && engine_light_at(own.s.ref, own.s.uv, own.s) ? light_target(s, own.s, light) : 0.0f;
-        reservoir_update(r, own.s, target, target * own.W * own.m, own.m, seed);
+        samples[0] = own.s;
+        const bool lit = own.W > 0.0f && engine_light_at(own.s.ref, own.s.uv, samples[0]);
+        at_p[0] = s.p;
+        at_n[0] = s.n;
+        weight_w[0] = lit ? own.W : 0.0f;
+        count[0] = own.m;
+        taken = 1u;
     }
-    [loop] for (uint k = 0u; k < 4u; ++k) {
+    const uint neighbours = (g_engine_info.x & kEngineNoDiSpatial) != 0u ? 0u : 4u;
+    [loop] for (uint k = 0u; k < neighbours; ++k) {
         const float angle = emit_random(seed) * 2.0f * kPi;
         const float radius = (3.0f + emit_random(seed) * 27.0f) * footprint_scale();
         const int2 o = q + int2(round(float2(cos(angle), sin(angle)) * radius));
@@ -1593,14 +1816,34 @@ void EngineDirectSpatialCS(uint3 id : SV_DispatchThreadID)
             continue;
         }
         Reservoir other = reservoir_load(engine_view(kEvDiTemp), neighbour);
-        float3 light;
-        const float target = other.W > 0.0f && engine_light_at(other.s.ref, other.s.uv, other.s)
-                                 ? light_target(s, other.s, light)
-                                 : 0.0f;
-        reservoir_update(r, other.s, target, target * other.W * other.m, other.m, seed);
+        samples[taken] = other.s;
+        const bool lit = other.W > 0.0f && engine_light_at(other.s.ref, other.s.uv, samples[taken]);
+        at_p[taken] = ns.p;
+        at_n[taken] = ns.n;
+        weight_w[taken] = lit ? other.W : 0.0f;
+        count[taken] = other.m;
+        ++taken;
     }
-    reservoir_finish(r);
-    // The kept light behind its shadow ray; an occluded light keeps its count with no weight (visibility reuse).
+    [loop] for (uint i = 0u; i < taken; ++i) {
+        float target = 0.0f;
+        float w = 0.0f;
+        if (weight_w[i] > 0.0f) {
+            float3 unused;
+            target = engine_light_target(s.p, s.n, samples[i], unused);
+            float own_share = 0.0f;
+            float all_shares = 0.0f;
+            [loop] for (uint j = 0u; j < taken; ++j) {
+                const float share = count[j] * (j == 0u ? target : engine_light_target(at_p[j], at_n[j], samples[i], unused));
+                all_shares += share;
+                own_share = j == i ? share : own_share;
+            }
+            w = all_shares > 0.0f ? own_share / all_shares * target * weight_w[i] : 0.0f;
+        }
+        reservoir_update(r, samples[i], target, w, count[i], seed);
+    }
+    r.W = r.target > 0.0f ? r.w_sum / r.target : 0.0f;
+    // The kept light behind its shadow ray; an occluded sample stays in the reservoir (its light here is none this
+    // frame; emptied but counted, it darkened what the reuse brought next).
     float3 diffuse = float3(0.0f, 0.0f, 0.0f);
     if (r.W > 0.0f) {
         float3 light;
@@ -1608,8 +1851,6 @@ void EngineDirectSpatialCS(uint3 id : SV_DispatchThreadID)
         const float3 start = surface_start(s, normalize(r.s.y - s.p));
         if (engine_visible(start, r.s.y, 0.5f + 0.001f * length(r.s.y - start), salt)) {
             diffuse = light * r.W;
-        } else {
-            r.W = 0.0f;
         }
     }
     r.shade = luminance(safe_light(diffuse));
@@ -1943,8 +2184,17 @@ float gi_target(GSurface s, float3 x, float3 radiance)
 }
 
 // The full-resolution pixel a half-resolution sample traces this frame (one of its 2 x 2, rotating).
+// The indirect light's samples per pixel side: 1 at full resolution, 2 at half (one pixel of each 2 x 2, rotating).
+uint gi_step()
+{
+    return (g_engine_info.x & kEngineGiFull) != 0u ? 1u : 2u;
+}
+
 int2 gi_pixel(uint2 h)
 {
+    if (gi_step() == 1u) {
+        return min(int2(h), int2(g_target_size) - 1);
+    }
     const uint k = (g_frame + h.x * 3u + h.y * 5u) & 3u;
     return min(int2(h * 2u + uint2(k & 1u, k >> 1u)), int2(g_target_size) - 1);
 }
@@ -1983,7 +2233,7 @@ GiReservoir indirect_reservoir(uint2 id, uint index, out bool surface)
     if (engine_reproject(q, s.p, s.n, prev_pixel)) {
         // The last frame's temporal reservoir of the half-resolution sample covering that pixel (not its spatially
         // reused one: reusing that compounds the gain into blobs).
-        const uint2 hp = uint2(prev_pixel % g_target_size.x, prev_pixel / g_target_size.x) / 2u;
+        const uint2 hp = uint2(prev_pixel % g_target_size.x, prev_pixel / g_target_size.x) / gi_step();
         GiReservoir previous = gi_load(engine_view(kEvGiPrev), min(hp.y, half_size.y - 1u) * half_size.x +
                                                                     min(hp.x, half_size.x - 1u));
         // Its radiance is the last frame's: where the light changed it counts as little as the light change leaves it
@@ -2052,7 +2302,7 @@ void EngineIndirectSpatialCS(uint3 id : SV_DispatchThreadID)
     bool reused = false;
     [loop] for (uint k = 0u; k < 3u; ++k) {
         const float angle = emit_random(seed) * 2.0f * kPi;
-        const float radius = (1.0f + emit_random(seed) * 9.0f) * footprint_scale();
+        const float radius = (1.0f + emit_random(seed) * 9.0f) * footprint_scale() * (2.0f / float(gi_step()));
         const int2 ho = int2(id.xy) + int2(round(float2(cos(angle), sin(angle)) * radius));
         if (any(ho < 0) || any(ho >= int2(half_size))) {
             continue;
@@ -2154,6 +2404,12 @@ float3 gi_upsampled(GSurface s, int2 q)
 {
     const uint2 half_size = g_engine_size.zw;
     RWByteAddressBuffer gi = engine_buffer(kEvGiOut);
+    if (gi_step() == 1u) {
+        // At full resolution: the pixel's own.
+        const uint2 v = gi.Load2((uint(q.y) * half_size.x + uint(q.x)) * 8u);
+        return (v.y >> 31u) != 0u ? float3(f16tof32(v.x), f16tof32(v.x >> 16u), f16tof32(v.y & 0xFFFFu))
+                                  : float3(0.0f, 0.0f, 0.0f);
+    }
     const float2 h = (float2(q) + 0.5f) / 2.0f - 0.5f;
     const int2 b = int2(floor(h));
     const float2 f = h - float2(b);
@@ -2233,7 +2489,7 @@ void EngineTemporalCS(uint3 id : SV_DispatchThreadID)
             }
         }
     }
-    {
+    if ((g_engine_info.x & kEngineNoFirefly) == 0u) {
         // Past kFireflyRatio x the brightest neighbour: a small light is found by a few pixels first (4 candidates a
         // frame by power) and spatial reuse spreads it over the next frames. Lowered to the neighbours' level outright,
         // those first finds would never enter the history, and a Luma's or a bulb's light pool would never appear.
