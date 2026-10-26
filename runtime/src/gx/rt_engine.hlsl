@@ -2624,9 +2624,17 @@ float3 clear_wall(ClearHit h, float3 dir, uint pixel, uint layer, out float tran
 // followed inside, each face it reaches sending its transmitted share out (none under total internal reflection) and
 // reflecting the rest on; what each share meets outside; the row's transmittance colour over the path (Beer-Lambert).
 // A crystal mirrors what stands before it mostly from within: light from the front enters, reflects totally at the
-// far facets and leaves towards the camera. Their index: quartz's (ordinary ray, 589 nm), the mineral of the
-// crystals' habit (hexagonal prisms under pyramidal tips: rock crystal); its critical angle is 40.4 degrees.
+// far facets and leaves towards the camera. Each solid's index is its table row's (`ior<n>`), else quartz's (ordinary
+// ray, 589 nm; critical angle 40.4 degrees). Quartz reflects 4.6 % at normal incidence, too little for the crystal
+// cages to mirror what stands by them; their rows take moissanite's (silicon carbide, 2.65: 20.7 % at normal
+// incidence, 23 % at 45 degrees; critical angle 22.2 degrees, so more of the light that enters is held and sent back).
 static const float kSolidIor = 1.544f;
+
+float solid_ior(uint draw)
+{
+    const uint bits = g_draws.Load(draw * kDrawStride + 44u) >> 16u;
+    return bits == 0u ? kSolidIor : 1.0f + float(bits) / 16384.0f;
+}
 // The internal path's segments at most, and the share of the light below which it ends. Total internal reflection
 // can hold a ray inside a prism for many faces (a light pipe): what is still inside when the path ends leaves as the
 // light that left before it did (its shares scaled by the light inside over the light sent, at most kSolidRest times:
@@ -2850,6 +2858,7 @@ ClearLight clear_solid(ClearHit h, float3 dir, uint pixel)
     const uint rough = g_draws.Load(draw * kDrawStride + 16u) & 0xFFFFu;
     const float roughness = rough == 0xFFFFu ? 0.02f : max(float(rough) / 65534.0f, 0.02f);
     const float alpha = roughness * roughness;
+    const float ior = solid_ior(draw);
     const float nv = max(dot(n, v), 1e-4f);
     const float lift = 0.2f + abs(x.z) * 4e-4f;
     const float3 start = x + ng * lift;
@@ -2867,7 +2876,7 @@ ClearLight clear_solid(ClearHit h, float3 dir, uint pixel)
                                         ? (hit.surface ? float3(0.1f, 0.1f, 0.1f) : float3(1.0f, 1.0f, 1.0f))
                                         : safe_light(solid_seen(hit, start, l));
             const float g2_over_g1 = smith_visibility(alpha, nl, nv) * 4.0f * nl * nv / max(smith_g1(alpha, nv), 1e-4f);
-            o.r += incoming * (fresnel_dielectric(dot(v, m), kSolidIor) * g2_over_g1);
+            o.r += incoming * (fresnel_dielectric(dot(v, m), ior) * g2_over_g1);
         }
     }
     // The sun's highlight, its lobe at least the disc wide.
@@ -2880,18 +2889,18 @@ ClearLight clear_solid(ClearHit h, float3 dir, uint pixel)
                         blocker)) {
             const float3 hs = normalize(v + ls);
             const float a = sun_alpha(alpha);
-            o.r += g_sun_light.rgb * (fresnel_dielectric(dot(v, hs), kSolidIor) * ggx_d(a, dot(n, hs)) *
+            o.r += g_sun_light.rgb * (fresnel_dielectric(dot(v, hs), ior) * ggx_d(a, dot(n, hs)) *
                                       smith_visibility(a, nls, nv) * nls * kPi);
         }
     }
     // Inside: refracted at the front face, followed along its internally reflected path; each far face passes its
     // share out (Fresnel from inside; none beyond the critical angle) and reflects the rest on.
-    const float3 entered = refract(dir, n, 1.0f / kSolidIor);
+    const float3 entered = refract(dir, n, 1.0f / ior);
     if (!(dot(entered, entered) > 1e-8f)) {
         return o;
     }
     float3 d = normalize(entered);
-    float3 throughput = (1.0f - fresnel_dielectric(nv, kSolidIor)).xxx;
+    float3 throughput = (1.0f - fresnel_dielectric(nv, ior)).xxx;
     float3 p = x - ng * lift;
     const float3 sigma = solid_absorption(h.tri);
     bool picture = true;
@@ -2916,9 +2925,9 @@ ClearLight clear_solid(ClearHit h, float3 dir, uint pixel)
         float3 fn;
         solid_face(inner.tri, inner.b, d, y, fg, fn);
         const float out_lift = 0.2f + abs(y.z) * 4e-4f;
-        const float fresnel = fresnel_dielectric(dot(-d, fn), 1.0f / kSolidIor);
+        const float fresnel = fresnel_dielectric(dot(-d, fn), 1.0f / ior);
         if (fresnel < 1.0f) {
-            const float3 leaving = refract(d, fn, kSolidIor);
+            const float3 leaving = refract(d, fn, ior);
             if (dot(leaving, leaving) > 1e-8f) {
                 const float3 l = normalize(leaving);
                 const float3 q = y - fg * out_lift;

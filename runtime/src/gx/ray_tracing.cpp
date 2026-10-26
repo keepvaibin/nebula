@@ -2726,7 +2726,13 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
     // GX light 0 as the game lights the draw (not attenuated: a direction from its position).
     const XfChannelCtrl channel = decode_xf_channel_ctrl(info.channel);
     const bool light0 = info.light_index[0] == 0u && (channel.atten_func == 0u || channel.atten_func == 2u);
-    const std::uint32_t light_kind = !light0 ? 0u : channel.diffuse_func == 0u ? 1u : 2u;
+    std::uint32_t light_kind = !light0 ? 0u : channel.diffuse_func == 0u ? 1u : 2u;
+    // A clear solid's index of refraction in the word's upper half (1 + bits / 16384; 0: quartz's, rt_engine.hlsl
+    // solid_ior).
+    if (material != nullptr && material->solid && material->ior >= 1.0f) {
+        light_kind |= static_cast<std::uint32_t>(std::lround(std::min((material->ior - 1.0f) * 16384.0f, 65535.0f)))
+                      << 16u;
+    }
     {
         // High quality's textured hits: the material texture's view, and the colour the texture is
         // multiplied by: the vertices' colour 0 where channel 0 takes its material from them, else the

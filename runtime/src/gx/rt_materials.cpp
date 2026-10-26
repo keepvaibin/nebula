@@ -152,6 +152,11 @@ void apply_class(const std::string& text, RtMaterial& m) {
         else if (token == "painted") m.painted = true;
         else if (token == "traced") m.traced = true;
         else if (token == "solid") m.solid = true;
+        else if (token.rfind("ior", 0) == 0 && token.size() > 3u) {
+            char* end = nullptr;
+            const float v = std::strtof(token.c_str() + 3, &end);
+            if (end != token.c_str() + 3 && std::isfinite(v) && v >= 1.0f && v <= 5.0f) m.ior = v;
+        }
         else if (token == "recolour") m.recolour = true;
         else if (token == "near-glow") m.near_glow = true;
         else if (token == "volume") m.volume = true;

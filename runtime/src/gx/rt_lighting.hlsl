@@ -165,7 +165,7 @@ static const uint kEmitNamed = 4u;      // the table names this draw's texture
 static const uint kEmitNoLight = 8u;    // never a light
 // g_draws records (SceneRayTracer::draw_colors_): ambient, GX light 0 colour, emission, intensity,
 // roughness and metalness, material colour, flags, relief; GX light 0's eye position (3 floats), its kind
-// (0 none, 1 no facing term, 2 n.l).
+// (0 none, 1 no facing term, 2 n.l; bits 16-31 a clear solid's index of refraction, rt_engine.hlsl solid_ior).
 static const uint kDrawStride = 48u;
 static const uint kDrawTableFoliage = 4u;   // g_draws word 6: alpha-cut foliage cards
 static const uint kDrawTableStar = 8u;      // g_draws word 6: a star's burning surface (the star core)

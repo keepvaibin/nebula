@@ -72,6 +72,7 @@ struct RtMaterial {
     bool solid = false;                   // with `traced`: a closed clear solid (a crystal), traced through from the
                                           // scene's own geometry (rt_engine.hlsl clear_solid); color: what it passes
                                           // after `range` world units (0: it absorbs nothing)
+    float ior = 0.0f;                     // a solid's index of refraction (token ior<n>, 1 to 5; 0: quartz's)
     bool seen = false;                    // shows its radiance; its light is the game's point light there
     bool recolour = false;                // a light source's sprite shown in the table's colour (its luminance kept)
     bool near_glow = false;               // a light source only near its glow light (the game's sprite of it)

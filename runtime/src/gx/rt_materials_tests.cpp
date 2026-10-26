@@ -77,12 +77,19 @@ bool lights_fill_their_fields() {
         "hash\tclass\tr\tg\tb\tintensity\trange\tpulse\tcone\n"
         "tex1_32x32_00000000000000b1_14\temitter+tint\t\t\t\t\t\t0.5\t\n"
         "tex1_32x32_00000000000000b2_14\tskip+hide+unlit-only\t\t\t\t\t\t\t\n"
+        "tex1_32x32_00000000000000b5_14\tcrystal+traced+solid+ior2.65\t\t\t\t\t\t\t\n"
+        "tex1_32x32_00000000000000b6_14\tcrystal+traced+solid+ior9\t\t\t\t\t\t\t\n"
         "tex1_256x256_00000000000000b3_14\temitter\t1\t0.95\t0.8\t3\t2500\t\t28\n"
         "tex1_256x256_m_00000000000000b4_14\temissive-area\t1\t0.4\t0.1\t1\t\t\t\n");
     RtMaterialTable table;
     table.read(surfaces);
     table.read(lights);
-    bool ok = expect(table.size() == 4u, "four textures");
+    bool ok = expect(table.size() == 6u, "six textures");
+    const RtMaterial* moissanite = find(table, 0xB5u);
+    ok &= expect(moissanite != nullptr && moissanite->solid && moissanite->traced && near(moissanite->ior, 2.65f),
+                 "a solid's index of refraction");
+    const RtMaterial* beyond = find(table, 0xB6u);
+    ok &= expect(beyond != nullptr && beyond->solid && beyond->ior == 0.0f, "an index past 5 is not taken");
     const RtMaterial* luma = find(table, 0xB1u);
     ok &= expect(luma != nullptr && luma->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Glossy) &&
                      near(luma->roughness, 0.4f) && luma->emission == RtEmission::Point && luma->tint &&
