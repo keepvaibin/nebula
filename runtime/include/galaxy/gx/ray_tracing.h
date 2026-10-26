@@ -1091,6 +1091,10 @@ private:
     std::array<float, 12> picture_camera_{};
     // Their projections (each frame's own jitter).
     std::array<float, 4> history_projection_{};
+    // Physical: the stage's own full light on a surface facing it as the picture shows it (the eye adaptation's
+    // highlight limit, rt_lighting.hlsl SkyStateCS).
+    float physical_highlight_ = 1.0f;
+    float sun_strength_ = 1.25f;  // a stage sun's light over the stage's key (GALAXY_RT_SUN_STRENGTH)
     std::array<float, 2> history_jitter_{};
     std::array<float, 4> picture_projection_{};
     std::uint32_t light_samples_ = 0;

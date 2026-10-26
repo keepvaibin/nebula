@@ -206,6 +206,11 @@ static const uint kAdaptation = kStarColour + 16u;
 // exposure; the stage's own dimness is the static exposure's (physical_exposure).
 static const float kAdaptationReference = 0.2f;
 static const float kAdaptationMost = 4.0f;
+// Highlight priority meters down as well, at most one stop: a view whose brightest tenth of surfaces is lit past what
+// the stage's own light gives a surface facing it (c_exposure_night under physical light: that light as the picture
+// shows it) is exposed for them. Floored at 1, the Observatory's lamp pools on its pale stone ran into the tone curve's
+// shoulder once the direct light was unbiased (adaptation 1.000 there). Day views keep their exposure: their brightest
+// surfaces are those facing the sun, which the limit is.
 // Highlight priority: the metering brightens a view no further than shows the brightest tenth of its surfaces' light at
 // the stage's full light (a camera exposed for its sunlit parts: the sunny-16 rule). Metered on the geometric mean
 // alone, a sunlit view with much shade would push its sunlit ground into the tone curve's shoulder. The light is
@@ -213,6 +218,7 @@ static const float kAdaptationMost = 4.0f;
 static const uint kAdaptationBuckets = 16u;
 static const uint kAdaptationHistogram = kAdaptation + 16u;
 static const float kAdaptationBright = 0.1f;
+static const float kAdaptationLeast = 0.5f;
 // Scene instance masks (ray_tracing.cpp kSceneMask): the frame's geometry. The late geometry (instance 1:
 // drawn after the trace, Rosalina) has no records in g_positions or g_surfaces: shadow, sky and reflection
 // rays meet it as an occluder.
@@ -473,7 +479,8 @@ cbuffer RtCapture : register(b0)
                              // the camera's exposure for the stage's light before the eye's adaptation
     float4 c_projection;
     float4 c_to_world[3];    // eye to world
-    float c_exposure_night;  // ... under a black sky
+    float c_exposure_night;  // ... under a black sky; physical (c_exposure bit 3, SkyStateCS): the stage's own full
+                             // light on a surface facing it, as the picture shows it (the highlight priority's limit)
     float c_daylight;        // the sky's luminance that counts as bright
     uint c_exposure;         // SkyStateCS: 1 the exposure follows the lighting, 2 it starts over at 1
                              // (a new stage) (bits 0-1); GlowBaseCS: bit 0 measure it, bit 2 through the finish's
@@ -789,10 +796,12 @@ void SkyStateCS()
         if ((c_exposure & 3u) == 2u) {
             c_sums.Store2(kAdaptation, uint2(asuint(1.0f), 0u));
         } else if (count * 50u > grid) {
-            // The light the picture shows it at is the camera's exposure (c_exposure_day) times the adaptation.
-            const float highlight = bright > 0.0f ? 1.0f / max(bright * c_exposure_day, 1e-4f) : kAdaptationMost;
-            const float target =
-                clamp(min(kAdaptationReference / max(mean, 1e-4f), highlight), 1.0f, kAdaptationMost);
+            // The light the picture shows it at is the camera's exposure (c_exposure_day) times the adaptation; at most
+            // the stage's own light on a surface facing it (c_exposure_night).
+            const float highlight =
+                bright > 0.0f ? max(c_exposure_night, 1.0f) / max(bright * c_exposure_day, 1e-4f) : kAdaptationMost;
+            const float target = clamp(min(max(kAdaptationReference / max(mean, 1e-4f), 1.0f), highlight),
+                                       kAdaptationLeast, kAdaptationMost);
             const bool known = c_sums.Load(kAdaptation + 4u) != 0u;
             const float current = known ? asfloat(c_sums.Load(kAdaptation)) : target;
             c_sums.Store2(kAdaptation, uint2(asuint(current * pow(target / current, 0.02f)), 1u));

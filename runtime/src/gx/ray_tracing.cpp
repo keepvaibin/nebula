@@ -785,6 +785,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     exposure_ = env_float("GALAXY_RT_EXPOSURE", 1.0f) != 0.0f;
     exposure_day_ = std::clamp(env_float("GALAXY_RT_EXPOSURE_DAY", 1.0f), 0.3f, 1.5f);
     exposure_night_ = std::clamp(env_float("GALAXY_RT_EXPOSURE_NIGHT", 1.0f), 0.3f, 1.5f);
+    sun_strength_ = std::clamp(env_float("GALAXY_RT_SUN_STRENGTH", 1.25f), 0.25f, 4.0f);
     surface_emission_ = std::clamp(env_float("GALAXY_RT_SURFACE_EMISSION", 3.0f), 0.0f, 256.0f);
     {
         char value[96]{};
@@ -3838,6 +3839,8 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
             const float reference = overcast ? overcast_reference : luma(c.sky_radiance) + luma(c.sun_light) * up_key;
             c.light_fit[0] = reference > 1e-4f ? luma(c.full_light) / reference : 0.0f;
             physical_exposure_ = c.light_fit[0];
+            // The brightest the stage's own light makes a surface (its full light, facing it), as the picture shows it.
+            physical_highlight_ = luma(c.full_light) * physical_exposure_;
             // The ambient's fill as the picture shows it (the reflections' sky floor).
             const auto srgb = [](float v) {
                 v = std::clamp(v, 0.0f, 1.0f);
@@ -3860,6 +3863,15 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
                 for (unsigned i = 0; i < 3u; ++i) {
                     c.sun_light[i] = tint > 0.0f ? moon * stage_sun_->color[i] / tint : c.sun_light[i] * moon / full;
                 }
+            } else if (!overcast) {
+                // A sun (the game's or the table's): its light at sun_strength_ x the stage's key (GALAXY_RT_SUN_STRENGTH,
+                // 1.25: a third of a stop), the camera still exposed for the stage's own light, so sunlit ground and walls
+                // show brighter than the game's flat key and the shade stays as it was (owner review, 25 October). The
+                // eye adaptation's highlight limit follows the brighter sun.
+                for (unsigned i = 0; i < 3u; ++i) {
+                    c.sun_light[i] *= sun_strength_;
+                }
+                physical_highlight_ = (luma(c.sky_radiance) + luma(c.sun_light)) * physical_exposure_;
             }
         }
     }
@@ -4430,6 +4442,13 @@ void SceneRayTracer::capture_picture(ID3D12GraphicsCommandList* list, const RtSo
     c.sky_distance = sky_distance_;
     c.exposure_day = exposure_day_;
     c.exposure_night = exposure_night_;
+    // Physical: the eye's adaptation weighs the light as the camera's exposure shows it, and limits the brightest tenth
+    // of the surfaces to the stage's own full light as shown (it had the art exposure, 1, which halved the Observatory's
+    // highlight priority against its 1.9).
+    if (physical_active_ && physical_exposure_ > 0.0f) {
+        c.exposure_day = physical_exposure_;
+        c.exposure_night = physical_highlight_;
+    }
     c.daylight = daylight_;
     c.exposure = (!exposure_ ? 0u : exposure_reset_ ? 2u : 1u) | (physical_active_ ? 8u : 0u);
     if (exposure_reset_) {
