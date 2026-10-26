@@ -935,8 +935,9 @@ private:
     static constexpr unsigned kBallReadbacks = 4u;
     // After the balls and the colour: the pixel probe's two records (GALAXY_RT_PROBE: rt_engine.hlsl EngineGBufferCS),
     // the engine reference's comparison (rt_engine.hlsl EngineFinalCS) and a spare.
-    // The probe's records (GALAXY_RT_PROBE: 0, 1, 3, 7), the reference's comparison (2), the light meter's sums (4 to 6).
-    static constexpr unsigned kProbeRecords = 8u;
+    // The probe's records (GALAXY_RT_PROBE: 0, 1, 3, 7, 8), the reference's comparison (2), the light meter's sums (4 to
+    // 6).
+    static constexpr unsigned kProbeRecords = 9u;
     static constexpr unsigned kBallReadbackBytes = kStarSlots * 16u + 16u + kProbeRecords * 16u;
     // GALAXY_RT_PROBE=x,y (diagnostics): an EFB pixel whose sample reports, once a second, the draw the camera sees and
     // what stops the sun's centre ray from it (draw record, material table entry, distance, instance).
@@ -1277,6 +1278,8 @@ private:
         std::uint64_t glow_draws = 0;
         std::uint64_t glow_triangles = 0;
         std::uint64_t late_triangles = 0;
+        std::uint64_t water_triangles = 0;
+        std::uint64_t water_dropped = 0;   // water draws past kWaterMaxTriangles
         std::array<double, kPassCount> pass_ms{};
         std::array<std::uint64_t, kPassCount> passes{};
         std::uint64_t passes_dropped = 0;

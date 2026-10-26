@@ -3196,6 +3196,10 @@ float4 LightTexturePS(float4 position : SV_Position) : SV_Target0
 {
     const uint2 s = min(uint2(position.xy), t_size - 1u);
     const uint4 v = t_final[s.y * t_size.x + s.x];
+    // Falling water in front of the sample (rt_engine.hlsl waterfall_light): the light at its own sheet, whole.
+    if (v.w != 0u) {
+        return float4(unpack_r11g11b10(v.w) / max(t_full.rgb, 1e-3f), 1.0f);
+    }
     if (asfloat(v.z) == 0.0f) {
         return float4(1.0f, 1.0f, 1.0f, 1.0f);
     }

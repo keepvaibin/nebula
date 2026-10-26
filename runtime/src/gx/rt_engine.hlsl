@@ -3006,7 +3006,8 @@ Hit solid_trace(float3 origin, float3 direction, bool solids, uint salt, out boo
 }
 
 // The nearest clear solid's face along the camera ray between `t_min` and `t_max` (the raster's depth: what the
-// picture shows in front of it hides it).
+// picture shows in front of it hides it), where its draw's alpha test passes (a waterfall's splash cloud is cut out of
+// its sheet's mesh).
 ClearHit solid_front(float3 dir, float t_min, float t_max)
 {
     ClearHit h;
@@ -3030,7 +3031,9 @@ ClearHit solid_front(float3 dir, float t_min, float t_max)
             query.Abort();
             break;
         }
-        if (solid_draw(g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u))) {
+        const uint flags = g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u);
+        if (solid_draw(flags) &&
+            alpha_test(query.CandidatePrimitiveIndex(), flags, dir * query.CandidateTriangleRayT()) != 0) {
             query.CommitNonOpaqueTriangleHit();
         }
     }
@@ -3268,8 +3271,118 @@ ClearLight clear_solid(ClearHit h, float3 dir, uint pixel)
     return o;
 }
 
+// Falling water the clear pass traces (g_draws word 6 with kDrawTableSolid: a `traced solid` waterfall, the game's
+// opaque sheet hidden so the frame shows what lies behind it; its sheet's thickness, eye units, in the word's high half).
+static const uint kDrawTableFall = 2048u;
+// Its sheet's thickness without one in its row: half a metre.
+static const float kFallThickness = 50.0f;
+// Pure water's absorption per eye unit (about a centimetre) at 650, 550 and 450 nm: 0.34, 0.0565 and 0.0092 per metre
+// (Pope and Fry 1997): over half a metre of sheet it passes 84, 97 and 100 %, the clear water's blue-green.
+static const float3 kWaterAbsorption = float3(0.0034f, 0.000565f, 0.000092f);
+// The light its fine bubbles scatter in the clear water: about half through a large fall's sheet, 5 cm of water with 2 %
+// of air in 2 mm bubbles (extinction 1.5 x void fraction / radius, 15 per metre: 1 - exp(-0.75) = 0.53; a few
+// centimetres with 1 % in millimetre bubbles scatter a third). It leaves in the water's colour, which the art paints
+// as the clear water's hue.
+static const float kFallHaze = 0.5f;
+// Its turbulent surface's roughness (rt_reflections.cpp GALAXY_RT_REFLECT_FALLING_WATER: a rough sea's slope spread,
+// Cox and Munk at 10 m/s) and water's reflections at 1.2 x Fresnel (rt_reflections.hlsl kWaterReflectionGain: the
+// owner's choice, 26 October 2026).
+static const float kFallRoughness = 0.4f;
+static const float kFallReflectionGain = 1.2f;
+
+bool fall_draw(uint tri)
+{
+    const uint draw = min(g_surfaces.Load(tri * 16u + 12u) >> 16u, max(g_draw_count, 1u) - 1u);
+    return (g_draws.Load(draw * kDrawStride + 24u) & kDrawTableFall) != 0u;
+}
+
+// A thin sheet of water (n 1.333) at the cosine `c`: what it reflects, the incoherent sum of its two faces' R = 2F / (1 +
+// F), and passes, T = (1 - F) / (1 + F) (glass_wall's Stokes sums).
+float2 water_wall(float c)
+{
+    const float f = fresnel_dielectric(c, 1.333f);
+    return float2(2.0f * f / (1.0f + f), (1.0f - f) / (1.0f + f));
+}
+
+// Falling water at `h` along camera ray `dir`. White water, a dense foam of bubbles and drops, is the share of the
+// draw's own colour that is white (its least channel over its greatest: the art paints foam white and clear water in
+// its hue): a diffuse surface of that grey, lit at the sheet by the sun behind its own shadow ray and by the open sky
+// on its facing. The rest is clear water: water's reflection off its turbulent sheet (a rough GGX lobe, the sun's
+// highlight); the light its bubbles scatter (kFallHaze), in its painted hue, lit as the white water is; and what lies
+// behind it, passed at the sheet's T through its thickness (pure water's absorption: its blue-green).
+ClearLight clear_fall(ClearHit h, float3 dir, uint pixel)
+{
+    ClearLight o;
+    o.r = float3(0.0f, 0.0f, 0.0f);
+    o.t = float3(0.0f, 0.0f, 0.0f);
+    o.source = int2(-1, -1);
+    float3 x;
+    float3 ng;
+    float3 n;
+    solid_face(h.tri, h.b, dir, x, ng, n);
+    const float3 v = -dir;
+    const float nv = max(dot(n, v), 1e-4f);
+    const float3 start = x + ng * (0.2f + abs(x.z) * 4e-4f);
+    uint seed = emit_hash(pixel ^ (g_frame * 0x5BD1E995u) ^ 0x6C8E9CF5u);
+    const uint salt = pixel * 32u + g_frame * 0x632BE5ABu + 43u;
+    float3 albedo;
+    float3 emission;
+    reference_material_cone(h.tri, h.b, tev_cone(h.tri, dir, pixel_world_size(x.z)), albedo, emission);
+    // GALAXY_RT_ENGINE_VIEW=7 (albedo): its own colour as the draw paints it.
+    if (((g_engine_info.x & kEngineView) >> 4u) == 7u) {
+        o.r = albedo / max(physical_exposure(), 1e-6f);
+        return o;
+    }
+    const float hi = max(albedo.r, max(albedo.g, albedo.b));
+    const float white = hi > 1e-6f ? min(albedo.r, min(albedo.g, albedo.b)) / hi : 1.0f;
+    // The white water's light: the sun on its facing behind its own shadow ray (the sheet casts none: no self-shadow),
+    // and the open sky's.
+    float3 m = sky_light_colour(physical_sky_irradiance(n));
+    const float nl_sun = dot(n, g_sun.xyz);
+    if (any(g_sun_light.rgb > 0.0f) && nl_sun > 0.0f) {
+        float blocker;
+        if (sun_visible(start, g_sun.xyz, false, salt + 5u, blocker)) {
+            m += g_sun_light.rgb * nl_sun;
+        }
+    }
+    o.r = (white * hi + (1.0f - white) * kFallHaze * albedo) * m;
+    // The clear water's reflection: a visible normal, its mirror direction, the light along it; weight R(v.m) G2 / G1.
+    const float alpha = kFallRoughness * kFallRoughness;
+    float3 reflected = float3(0.0f, 0.0f, 0.0f);
+    if ((g_engine_info.x & kEngineClearNoRay) == 0u) {
+        const float3 mh = ggx_vndf(n, v, alpha, float2(emit_random(seed), emit_random(seed)));
+        const float3 l = reflect(-v, mh);
+        const float nl = dot(n, l);
+        if (nl > 0.0f && dot(ng, l) > 0.0f) {
+            bool solid;
+            const Hit hit = solid_trace(start, l, false, salt, solid);
+            const float g2_over_g1 = smith_visibility(alpha, nl, nv) * 4.0f * nl * nv / max(smith_g1(alpha, nv), 1e-4f);
+            reflected += safe_light(solid_seen(hit, start, l)) * (water_wall(dot(v, mh)).x * g2_over_g1);
+        }
+    }
+    if (any(g_sun_light.rgb > 0.0f) && (g_engine_info.x & kEngineClearNoSun) == 0u && nl_sun > 0.0f &&
+        dot(ng, g_sun.xyz) > 0.0f) {
+        float blocker;
+        if (sun_visible(start, sun_direction_sample(float2(emit_random(seed), emit_random(seed))), false, salt + 9u,
+                        blocker)) {
+            const float3 hs = normalize(v + g_sun.xyz);
+            const float a = sun_alpha(alpha);
+            reflected += g_sun_light.rgb * (water_wall(dot(v, hs)).x * ggx_d(a, dot(n, hs)) *
+                                            smith_visibility(a, nl_sun, nv) * nl_sun * kPi);
+        }
+    }
+    o.r += reflected * (kFallReflectionGain * (1.0f - white));
+    // What lies behind, through the sheet.
+    const uint draw = min(g_surfaces.Load(h.tri * 16u + 12u) >> 16u, max(g_draw_count, 1u) - 1u);
+    const float reach = float(g_draws.Load(draw * kDrawStride + 24u) >> 16u);
+    const float thickness = (reach > 0.0f ? reach : kFallThickness) / max(nv, 0.2f);
+    o.t = (1.0f - white) * (1.0f - kFallHaze) * water_wall(nv).y * exp(-kWaterAbsorption * thickness);
+    return o;
+}
+
 // Per pixel: the camera ray's first clear surface in front of the scene behind it, and a second behind that (the far
-// wall of a capsule or a bottle, seen through the first), or a clear solid traced through (clear_solid). Their
+// wall of a capsule or a bottle, seen through the first), or a clear solid traced through (clear_solid), or falling
+// water (clear_fall). Their
 // reflections at the camera's exposure and the light they pass, for the composite (rt_lighting.hlsl
 // ClearCompositePS: the picture behind, or the picture a solid refracts, times T plus R).
 [numthreads(8, 8, 1)]
@@ -3300,7 +3413,12 @@ void EngineClearCS(uint3 id : SV_DispatchThreadID)
         if ((front.hit || solid.hit) && (g_engine_info.x & kEngineClearFind) != 0u) {
             result = uint4(pack_half2(0.0f, 0.5f), pack_half2(0.5f, 0.5f), 0u, 1u);
         } else if (!front.hit && solid.hit) {
-            const ClearLight light = clear_solid(solid, dir, pixel);
+            ClearLight light;
+            if (fall_draw(solid.tri)) {
+                light = clear_fall(solid, dir, pixel);
+            } else {
+                light = clear_solid(solid, dir, pixel);
+            }
             float3 r = min(light.r * physical_exposure(), 6.0e4f);
             float3 t = light.t;
             // GALAXY_RT_ENGINE_VIEW=5: the clear surfaces found, magenta.
@@ -3427,6 +3545,88 @@ void EngineReferenceCS(uint3 id : SV_DispatchThreadID)
     sums.Store4(pixel * 16u, asuint(sum));
 }
 
+// Falling water (RtDraw.flags bit 13, kRtDrawWaterfall) among last frame's water surfaces (kEngineWaterLight).
+static const uint kWaterfallFlag = 8192u;
+// How far behind a waterfall's sheet a surface still stands for the light at the sheet: 3 metres.
+static const float kFallBehind = 300.0f;
+
+// The light at falling water in front of pixel `q` along its camera ray, not behind `limit` (eye units along the ray: the
+// surface the pixel shows, or the sky; a fall pours down its cliff within a few units of it): what a white surface
+// there would show (m). White water is a dense foam of bubbles and drops that scatters the light reaching it as a
+// diffuse surface does, its colour the game's texture (the waterfall's translucent draws, and the spray before it, take
+// this light, LightTexturePS). The falls: the game's translucent ones (last frame's water, kWaterfallFlag, through
+// g_reproject: the sheets stand still). Its opaque sheets the clear pass traces (kDrawTableFall) join the scene only
+// after the frame's lighting: before them the light texture keeps the light of the surface behind. The sun along its
+// centre ray, behind the sheet's own shadow ray (the water casts no shadow, so it never shades itself), and otherwise
+// the light of the surface the pixel shows (`behind`: its sky, bounce and lights, filtered) where that lies within
+// kFallBehind of the sheet and faces the same way, else the open sky's on the sheet's facing.
+bool waterfall_light(int2 q, float limit, bool has_behind, float3 behind_n, float3 behind, uint salt, out float3 m)
+{
+    m = float3(0.0f, 0.0f, 0.0f);
+    const float3 dir = normalize(pixel_direction(g_projection, g_viewport, float2(q) + 0.5f));
+    const float reach = limit + max(0.002f * limit, 2.0f);
+    float t = reach;
+    float3 n = float3(0.0f, 0.0f, 0.0f);
+    if ((g_engine_info.x & kEngineWaterLight) != 0u) {
+        const RaytracingAccelerationStructure water = ResourceDescriptorHeap[engine_view(kEvWaterScene)];
+        const ByteAddressBuffer positions = ResourceDescriptorHeap[engine_view(kEvWaterPositions)];
+        const ByteAddressBuffer surfaces = ResourceDescriptorHeap[engine_view(kEvWaterSurfaces)];
+        RayDesc ray;
+        ray.Origin = transform(g_reproject, float3(0.0f, 0.0f, 0.0f));
+        ray.Direction = normalize(rotate3(g_reproject, dir));
+        ray.TMin = g_near;
+        ray.TMax = t;
+        RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+        query.TraceRayInline(water, RAY_FLAG_NONE, 0xFFu, ray);
+        while (query.Proceed()) {
+            if ((surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u) & kWaterfallFlag) != 0u) {
+                query.CommitNonOpaqueTriangleHit();
+            }
+        }
+        if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
+            const uint tri = query.CommittedPrimitiveIndex();
+            const float2 b = query.CommittedTriangleBarycentrics();
+            const float3 v0 = asfloat(positions.Load3(tri * 36u));
+            const float3 v1 = asfloat(positions.Load3(tri * 36u + 12u));
+            const float3 v2 = asfloat(positions.Load3(tri * 36u + 24u));
+            const uint4 record = surfaces.Load4(tri * 16u);
+            float3 face = cross(v1 - v0, v2 - v0);
+            if (record.x != 0u && record.y != 0u && record.z != 0u) {
+                const float3 w = float3(1.0f - b.x - b.y, b.x, b.y);
+                const float3 smooth = unpack_vertex_normal(record.x) * w.x + unpack_vertex_normal(record.y) * w.y +
+                                      unpack_vertex_normal(record.z) * w.z;
+                face = dot(smooth, smooth) > 1e-6f ? smooth : face;
+            }
+            if (dot(face, face) > 1e-24f) {
+                n = engine_unreproject_normal(normalize(face));
+                t = query.CommittedRayT();
+            }
+        }
+    }
+    if (!(t < reach) || !(dot(n, n) > 0.5f)) {
+        return false;
+    }
+    n = dot(n, dir) > 0.0f ? -n : n;
+    const float3 hit = dir * t;
+    float3 light = float3(0.0f, 0.0f, 0.0f);
+    const float nl = dot(n, g_sun.xyz);
+    if (any(g_sun_light.rgb > 0.0f) && nl > 0.0f) {
+        float blocker;
+        if (sun_visible(hit - dir * (0.2f + t * 4e-4f), g_sun.xyz, false, salt, blocker)) {
+            light += g_sun_light.rgb * nl;
+        }
+    }
+    const bool near_behind = has_behind && limit - t <= kFallBehind && dot(behind_n, n) > 0.5f;
+    // GALAXY_RT_PROBE (diagnostics): the sheet at the probed pixel (SceneRayTracer prints [rt-probe-fall]).
+    if (g_probe.z != 0u && all(q == int2(g_probe.xy * g_factor))) {
+        g_final[g_sample_size.x * g_sample_size.y + kStarSlots + 8u] =
+            uint4(pack_r11g11b10(light), asuint(t), asuint(nl), (near_behind ? 1u : 0u) | 2u);
+    }
+    light += near_behind ? behind : sky_light_colour(physical_sky_irradiance(n));
+    m = light;
+    return true;
+}
+
 // The slot's result at the camera's exposure (the composite and the sub-frames read it), and the samples' export in
 // the lighting's own result format (light texture for translucent draws, the eye's adaptation, the reflections).
 [numthreads(8, 8, 1)]
@@ -3444,6 +3644,9 @@ void EngineFinalCS(uint3 id : SV_DispatchThreadID)
     // The whole diffuse light reaching the surface for the samples' readers (the eye's adaptation, the light texture of
     // the translucent draws, the water's reflections), whatever the view and the surface's metalness.
     float3 whole = float3(0.0f, 0.0f, 0.0f);
+    // The surface's light less the sun's (filtered: its sky, bounce and lights), for falling water in front of it.
+    float3 unsunned = float3(0.0f, 0.0f, 0.0f);
+    bool lit_surface = false;
     float z = 0.0f;
     // GALAXY_RT_ENGINE_REFERENCE: the pixel's diffuse light (m) against the reference's (luminance: reference, engine,
     // absolute difference, 1), on the ordinary non-metal surfaces.
@@ -3490,7 +3693,9 @@ void EngineFinalCS(uint3 id : SV_DispatchThreadID)
             const float visible = f16tof32(engine_buffer(kEvShadow).Load(pixel * 4u));
             float3 sun_glint;
             const float3 sun = sun_light(s, pixel, view == 1u || view == 4u ? ray : visible, sun_glint);
-            diffuse = float3(f16tof32(a.x), f16tof32(a.x >> 16u), f16tof32(a.y)) + sun;
+            unsunned = float3(f16tof32(a.x), f16tof32(a.x >> 16u), f16tof32(a.y));
+            lit_surface = true;
+            diffuse = unsunned + sun;
             specular = float3(f16tof32(a.z), f16tof32(a.z >> 16u), f16tof32(a.w)) + sun_glint;
             whole = diffuse * exposure;
             if (g_probe.w != 0u) {
@@ -3644,7 +3849,17 @@ void EngineFinalCS(uint3 id : SV_DispatchThreadID)
         if (all(sp < g_sample_size)) {
             const uint sample = sp.y * g_sample_size.x + sp.x;
             const float3 m = min(safe_light(whole), kMaxPhysicalLight);
-            g_final[sample] = uint4(pack_half2(m.r, m.g), f32tof16(m.b) | (f32tof16(1.0f) << 16u), asuint(z), 0u);
+            // Falling water in front: its own light for the light texture (0: none).
+            if (g_probe.z != 0u && all(q == int2(g_probe.xy * g_factor))) {
+                g_final[g_sample_size.x * g_sample_size.y + kStarSlots + 8u] = uint4(0u, 0u, 0u, 0u);
+            }
+            float3 fall;
+            uint fall_word = 0u;
+            if (waterfall_light(q, s.valid ? length(s.p) : 1.0e5f, lit_surface, s.n, unsunned,
+                                pixel * 32u + g_frame * 0x632BE5ABu + 5u, fall)) {
+                fall_word = max(pack_r11g11b10(min(safe_light(fall * exposure), kMaxPhysicalLight)), 1u);
+            }
+            g_final[sample] = uint4(pack_half2(m.r, m.g), f32tof16(m.b) | (f32tof16(1.0f) << 16u), asuint(z), fall_word);
             g_z[sample] = z;
         }
     }

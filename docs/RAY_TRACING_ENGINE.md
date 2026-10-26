@@ -112,7 +112,30 @@ is not traced and shows the game's picture.
   dome's pool) reflects by its Fresnel, F0 0.02: 2 % looking straight down, 6 % at 60 degrees from the normal, 21 % at
   75, 61 % at 85, a mirror at grazing angles; the reflection takes the place of that share of the water's own light
   (cover 1). F0 0.2-0.5 by quality with cover 0.3-0.6 (builds 55-102) laid a third to a half of the bright
-  surroundings over water seen from above: the near lagoon turned milky (b103).
+  surroundings over water seen from above: the near lagoon turned milky (b103). Water's reflections (from above and
+  falling) are taken at 1.2 x Fresnel: the owner's choice (26 October 2026) over the physical 1.
+- Falling water: a draw that maps a `waterfall` texture is falling water whichever texture comes first (Beach Bowl's
+  and the Twin Falls' sheets map a ripple map and an indirect warp before their fall texture: they were a calm lake on
+  its side); FallMask and the Observatory's and Honeyhive's Fall are waterfall rows, and identity rows name the falls'
+  back faces. The art paints white water white and clear water in its hue: the colour's whiteness (its least channel
+  over its greatest) is the share of white water, a foam of bubbles and drops lit as a diffuse surface of the colour's
+  brightest channel; the rest is clear water, which passes what lies behind it but for the light its bubbles scatter,
+  in the painted hue: about half through a large fall's sheet (5 cm of water with 2 % of air in 2 mm bubbles:
+  extinction 1.5 x void fraction / radius, 1 - exp(-0.75)). Translucent sheets do this in the raster (the lit
+  translucent's falling water flag, tex_dims[7].w, both shader families) under the light at the sheet (waterfall_light:
+  last frame's falls along the pixel's ray, the sun behind the sheet's own shadow ray and the light of the surface just
+  behind it, else the sky's, through the light texture's spare word). They are the water pass's own class
+  (kFallingWater): water's Fresnel off a turbulent sheet (GGX roughness 0.4: a rough sea's slope spread, Cox and Munk
+  at 10 m/s, less what the flow's streaks carry), the streaks moving its reflection and glints down it, and a surface
+  wherever it is not behind the scene (a fall pours down its cliff within a few units of it). The game's opaque sheets
+  (Beach Bowl's falls with their splash cloud, the Twin Falls, Onimasu's stream: `traced solid` identity rows) are
+  hidden, so the frame shows what lies behind, and the clear pass makes them water (clear_fall): the same split from
+  the draw's own TEV colour where its alpha test passes, water's thin-sheet Fresnel (n 1.333) and pure water's
+  absorption over the sheet's thickness (Pope and Fry 1997: 84, 97, 100 % through half a metre; the row's range).
+  They join the traced scene only after the frame's lighting, so what lies in front of them takes the light of the
+  surface behind.
+- Particles are never a water surface: effects drawn with indexed positions (a waterfall's spray, smoke, sparkles,
+  bubbles) had the water pass's body painted over them.
 - Texture de-lighting takes out half of each texel's measured shading (GALAXY_RT_DELIGHT_STRENGTH 0.5) and turns it
   into relief at 0.5 (GALAXY_RT_DELIGHT_RELIEF): Retinex cannot tell painted light from a pattern of one colour.
 - Clear solids (crystal, glass, gems): the pixel is the game's refraction of the lit scene behind, shown at 1 - F
@@ -330,8 +353,11 @@ G-buffer 0.3 ms, DI 1.2 ms, GI 1.5 ms, specular 1.0 ms, denoise 1.0 ms, composit
    error). Good Egg, 4140 paths: -2.5 % bias, 6.8 % mean per-pixel difference. GALAXY_RT_ENGINE_VIEW=8 shows it.
    Diagnostic views: 1 direct, 2 indirect, 3 specular, 7 albedo, 8 reference, 9 / 10 the texture coordinate of the
    table's glowing region (u / v as 16 hues), 11 the sun's filtered visibility, 12 its ray's, 13 the penumbra's radius
-   on screen; GALAXY_RT_PROBE prints [rt-probe-engine], [rt-probe-uv] and [rt-probe-sun] (what stops the sun's
-   centre ray there: triangle, draw, material, instance, distance, the water above).
+   on screen; GALAXY_RT_PROBE prints [rt-probe-engine], [rt-probe-uv], [rt-probe-sun] (what stops the sun's
+   centre ray there: triangle, draw, material, instance, distance, the water above) and [rt-probe-fall] (the light at
+   falling water in front of it). [rt-stats] counts the water window's triangles per scene and the water draws it had
+   no room for; GALAXY_RT_UNTRACED's [rt-untraced] names each draw's material identity and whether the water window was
+   open; water-pass view 2 shows falling water violet; engine view 7 shows a traced fall's own colour.
 2. Pictures vs the game and the previous build, hidden runs, frozen bins, rt-images.
 3. Temporal stability: frame-to-frame change of a still view against the game's own (port/tools/flicker.py, 60
    consecutive presents, GALAXY_PRESENT_SNAPSHOT_EVERY=1 with _LAST): Observatory plaza b93, 0.16 / 255 more than

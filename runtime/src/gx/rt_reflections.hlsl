@@ -201,7 +201,7 @@ cbuffer RtReflect : register(b0)
     float4 g_reproject[3];      // previous samples' eye position from this frame's (3x4 rows)
     float4 g_world_to_eye[3];   // the camera's rotation (rows)
     float4 g_eye_to_world[3];   // its inverse
-    float4 g_class[9];          // per surface class (and bare metal, 8): GGX alpha, strength, F0, metal
+    float4 g_class[10];         // per surface class (bare metal 8, falling water 9): GGX alpha, strength, F0, metal
     float g_range;              // reflection ray length (eye units)
     float g_lobe;               // share of the lobe sampled (1 the whole lobe)
     uint g_history_frames;      // accumulation limit of the widest lobes
@@ -2068,6 +2068,10 @@ static const uint kWaterBelow = 6u;
 static const float kWaterCover = 0.85f;
 // Clear dielectrics (rt_surfaces.h RtSurfaceClass::Crystal): crystals, ice, gems, glass, bubbles.
 static const uint kCrystal = 7u;
+// Falling water (kRtDrawWaterfall): water's Fresnel on a turbulent sheet, no body under it.
+static const uint kFallingWater = 9u;
+// Water's reflections at 1.2 x its Fresnel: the owner's choice (26 October 2026) over the physical 1.
+static const float kWaterReflectionGain = 1.2f;
 
 // The water's luminance around `c` (EFB pixels): four bilinear taps `o` either way (a box about one of the
 // game's own pixels).
@@ -2385,9 +2389,13 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
         const bool opaque_clear = hit_water && (hit_flags & kWaterOpaqueFlag) != 0u &&
                                   abs(floor_distance - water_t) <= max(0.01f * water_t, 8.0f);
         // Mirror glass and a metal coat lie on what they cover (the Observatory fountain's glass over its star plates,
-        // the gold rings' coat over their base): no depth below them, only not behind the scene.
-        const bool lying = hit_water && ((hit_flags & kWaterMirrorFlag) != 0u || ((hit_flags >> 8u) & 15u) == kMetalClass) &&
-                           floor_distance >= water_t - max(0.002f * water_t, 2.0f);
+        // the gold rings' coat over their base), and falling water pours down its cliff within a few units of it: no
+        // depth below them, only not behind the scene.
+        const bool lying =
+            hit_water &&
+            ((hit_flags & kWaterMirrorFlag) != 0u || ((hit_flags >> 8u) & 15u) == kMetalClass ||
+             (hit_flags & kWaterfallFlag) != 0u) &&
+            floor_distance >= water_t - max(0.002f * water_t, 2.0f);
         if (hit_water && (opaque_clear || lying || floor_distance - water_t > max(0.01f * water_t, 8.0f))) {
             water = true;
             const uint tri = water_tri;
@@ -2446,10 +2454,11 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
             }
             g_spread = 0.0f;
             const float3 hit = dir * water_t;
-            // A waterfall is a clear sheet (no lake body under it), its streaks in its normal.
-            const bool fall = (record.w & kWaterfallFlag) != 0u;
-            const uint surface = coat ? kBareMetalClass : crystal || fall ? kCrystal : below ? kWaterBelow : kWaterSurface;
-            float4 params = g_class[coat ? kBareMetalClass : crystal ? kCrystal : kWaterSurface];
+            // A waterfall is a sheet (no lake body under it), its flow's streaks in its normal.
+            const bool fall = (record.w & kWaterfallFlag) != 0u && !crystal && !coat;
+            const uint surface = coat ? kBareMetalClass : crystal ? kCrystal : fall ? kFallingWater
+                                 : below ? kWaterBelow : kWaterSurface;
+            float4 params = g_class[coat ? kBareMetalClass : crystal ? kCrystal : fall ? kFallingWater : kWaterSurface];
             if (mirror) {
                 params.x = min(params.x, 0.02f);
                 params.y = 1.0f;
@@ -2472,13 +2481,13 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
             // Seen from under the water the surface mirrors the water below it (its normal faces the camera, so the
             // mirror ray goes down, never to the bright world above): Snell's window overhead, total internal
             // reflection past it (the composite's water_inside_fresnel). Without it, what stands above the water shows
-            // through the surface as through clear glass. Falling water is turbulent: no mirror image in it; the game's
-            // own streaks and foam stay.
-            if (params.y > 0.0f && emitter < 1.0f && !fall) {
+            // through the surface as through clear glass. Falling water reflects by water's Fresnel off its turbulent
+            // sheet (its rough lobe), the flow's streaks moving the reflection down it (the composite).
+            if (params.y > 0.0f && emitter < 1.0f) {
                 reflected = true;
                 // Water: a mirror (no lobe jitter: the composite's distortion is its roughness).
                 float4 ray_params = params;
-                ray_params.x = crystal || coat ? params.x : 1e-4f;
+                ray_params.x = crystal || coat || fall ? params.x : 1e-4f;
                 // Over at least two of the game's own 640-wide pixels: what the frame shows thinner than that (a
                 // net's cords, a fence's bars) averages out instead of reflecting as specks the waves set moving.
                 g_reflect_blur = crystal || coat ? 0.0f : 2.0f * max(g_viewport.z / 640.0f, 1.0f);
@@ -2496,7 +2505,7 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
                 const float3 glint_origin = hit + ng * (0.2f + abs(hit.z) * 4e-4f);
                 const float3 glints = highlights(id.xy, hit, glint_origin, wave, -dir, params.x, params.z, false) * params.y;
                 g_spread = 0.0f;
-                highlight = min(glints, 1.5f) * (surface == kWaterSurface ? 0.5f : 1.0f);
+                highlight = min(glints, 1.5f) * (surface == kWaterSurface || fall ? 0.5f : 1.0f);
                 // Water mirrors what stands over it in full, and the sky at no more than the water's own
                 // brightness: the sky's hues and clouds read in it, but its light never bleaches the far water.
                 // The scale is the sky's average against the water's colour, so the sky keeps its own detail.
@@ -2905,7 +2914,7 @@ struct CompositeOut
 
 float4 class_params(uint c)
 {
-    const uint4 row = m_class[min(c, kBareMetalClass) >> 1u];
+    const uint4 row = m_class[min(c, kFallingWater) >> 1u];
     const uint2 h = (c & 1u) != 0u ? row.zw : row.xy;
     return float4(f16tof32(h.x), f16tof32(h.x >> 16u), f16tof32(h.y), f16tof32(h.y >> 16u));
 }
@@ -2987,7 +2996,7 @@ Blend blend_samples(float2 pixel, float3 p, bool water)
             nearest = d;
             b.nearest_class = surface_class;
         }
-        if (surface_class <= kBareMetalClass) {
+        if (surface_class <= kFallingWater) {
             // Water seen from below has the water's material.
             const float4 c = class_params(surface_class == kWaterBelow ? kWaterSurface : surface_class);
             // The sample's own lobe and metalness (filter_sample); its strength is in its weight.
@@ -3010,6 +3019,8 @@ Blend blend_samples(float2 pixel, float3 p, bool water)
             // covers what the game drew above the surface).
             if (surface_class == kWaterBelow) {
                 k = water_inside_fresnel(dot(n, v)) * sample_weight;
+            } else if (surface_class == kWaterSurface || surface_class == kFallingWater) {
+                k = min(k * kWaterReflectionGain, sample_weight);
             }
             const float3 light = min(unpack_r11g11b10(sample.x), 1.0f);
             b.sum += light * (k * bw);
@@ -3030,15 +3041,16 @@ Blend blend_samples(float2 pixel, float3 p, bool water)
 }
 
 // Surface classes over the picture: diffuse grey, glossy cyan, metal orange, unlit magenta, water
-// blue, translucent water light blue (from below green), crystal white, bare metal red, untraced black.
+// blue, translucent water light blue (from below green), crystal white, bare metal red, falling water
+// violet, untraced black.
 CompositeOut class_view(uint nearest_class)
 {
-    const float3 colours[10] = {float3(0.3f, 0.3f, 0.3f), float3(0.0f, 0.86f, 1.0f), float3(1.0f, 0.67f, 0.0f),
+    const float3 colours[11] = {float3(0.3f, 0.3f, 0.3f), float3(0.0f, 0.86f, 1.0f), float3(1.0f, 0.67f, 0.0f),
                                 float3(1.0f, 0.0f, 1.0f), float3(0.0f, 0.3f, 1.0f), float3(0.45f, 0.8f, 1.0f),
                                 float3(0.2f, 1.0f, 0.6f), float3(1.0f, 1.0f, 1.0f), float3(1.0f, 0.15f, 0.0f),
-                                float3(0.0f, 0.0f, 0.0f)};
+                                float3(0.55f, 0.35f, 1.0f), float3(0.0f, 0.0f, 0.0f)};
     CompositeOut result;
-    result.add = float4(colours[min(nearest_class, 9u)] * 0.55f, 0.0f);
+    result.add = float4(colours[min(nearest_class, 10u)] * 0.55f, 0.0f);
     result.keep = float4(0.45f, 0.45f, 0.45f, 1.0f);
     return result;
 }
@@ -3234,7 +3246,8 @@ float caustic(float3 floor, float3 surface, float3 plane)
 // Where the waves move the reflected image of water at eye-space `p` (normal `n`, at traced-frame pixel `pixel`):
 // a surface tilted by slope s shows what stands about 150 units over it moved by s times that, projected to the
 // screen, at most 1.2 % of the viewport's height: one smooth, animated wobble at any resolution.
-float2 water_distortion(float3 p, float3 n, float2 pixel)
+// `flow`: falling water, its streaks running down it (wave_slope).
+float2 water_distortion(float3 p, float3 n, float2 pixel, bool flow)
 {
     const uint s0 = m_sample_size.x * m_sample_size.y;
     float4 to_world[3];
@@ -3245,10 +3258,16 @@ float2 water_distortion(float3 p, float3 n, float2 pixel)
     }
     const float frame = float(m_under[s0 + 1u].y);
     const float3 wn = normalize(rotate(to_world, n));
-    const float3 t1 = normalize(abs(wn.y) < 0.9f ? cross(wn, float3(0.0f, 1.0f, 0.0f)) : cross(wn, float3(1.0f, 0.0f, 0.0f)));
-    const float3 t2 = cross(wn, t1);
+    float3 t1 = normalize(abs(wn.y) < 0.9f ? cross(wn, float3(0.0f, 1.0f, 0.0f)) : cross(wn, float3(1.0f, 0.0f, 0.0f)));
+    float3 t2 = cross(wn, t1);
+    // A fall's basis as water_detail's: across it, and down it.
+    const float3 down = float3(0.0f, -1.0f, 0.0f) + wn * wn.y;
+    if (flow && dot(down, down) > 1e-4f) {
+        t2 = normalize(down);
+        t1 = cross(t2, wn);
+    }
     const float3 wp = transform(to_world, p);
-    const float2 slope = wave_slope(float2(dot(wp, t1), dot(wp, t2)), frame, false) * m_water2.x;
+    const float2 slope = wave_slope(float2(dot(wp, t1), dot(wp, t2)), frame, flow) * m_water2.x;
     const float3 shift_world = (slope.x * t1 + slope.y * t2) * 150.0f;
     const float3 shift_eye = float3(dot(float3(to_world[0].x, to_world[1].x, to_world[2].x), shift_world),
                                     dot(float3(to_world[0].y, to_world[1].y, to_world[2].y), shift_world),
@@ -3329,9 +3348,12 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
         discard;
     }
     Blend b = blend_samples(pixel, p, true);
-    // The reflected image where the waves move it (its glints and the surface's normal where they are).
-    if (b.surface > 1e-4f && m_water2.x > 0.0f && b.nearest_class == kWaterSurface) {
-        const float2 moved = pixel + water_distortion(p, normalize(b.normal), pixel);
+    // The reflected image where the waves move it (its glints and the surface's normal where they are); down a fall,
+    // where its streaks move it.
+    if (b.surface > 1e-4f && m_water2.x > 0.0f &&
+        (b.nearest_class == kWaterSurface || b.nearest_class == kFallingWater)) {
+        const float2 moved =
+            pixel + water_distortion(p, normalize(b.normal), pixel, b.nearest_class == kFallingWater);
         const Blend r = blend_samples(moved, p, true);
         if (r.k_sum > 1e-4f && r.weight > 1e-4f) {
             const float scale = b.weight / r.weight;

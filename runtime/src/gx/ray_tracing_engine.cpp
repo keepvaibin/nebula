@@ -457,16 +457,21 @@ bool SceneRayTracer::engine_prepare(std::uint32_t width, std::uint32_t height, u
             motion = true;
         }
     }
-    // Light under water reads the last water pass's surfaces; the next water pass rebuilds them after this trace.
+    // Light under water and the light at falling water read the last water pass's surfaces (their draw flags too); the
+    // next water pass rebuilds them after this trace.
     bool water_light = false;
-    if (water_light_ && water_light_triangles_ != 0u && water_tlas_ && water_positions_ &&
-        water_positions_state_ == D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE) {
+    if (water_light_ && water_light_triangles_ != 0u && water_tlas_ && water_positions_ && water_surfaces_ &&
+        water_positions_state_ == D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE &&
+        water_surfaces_state_ == D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE) {
         const std::uint32_t scene = tlas_view(water_tlas_->GetGPUVirtualAddress());
         const std::uint32_t positions =
             buffer_view(water_positions_.Get(), 0u, static_cast<std::uint64_t>(water_light_triangles_) * 36u);
-        if (scene != 0xFFFFFFFFu && positions != 0xFFFFFFFFu) {
+        const std::uint32_t surfaces =
+            buffer_view(water_surfaces_.Get(), 0u, static_cast<std::uint64_t>(water_light_triangles_) * 16u);
+        if (scene != 0xFFFFFFFFu && positions != 0xFFFFFFFFu && surfaces != 0xFFFFFFFFu) {
             c.views[kEvWaterScene] = scene;
             c.views[kEvWaterPositions] = positions;
+            c.views[kEvWaterSurfaces] = surfaces;
             water_light = true;
         }
     }

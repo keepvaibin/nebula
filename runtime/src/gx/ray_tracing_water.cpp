@@ -265,6 +265,7 @@ int SceneRayTracer::trace_water(ID3D12GraphicsCommandList* list, const RtSources
     }
     // The next trace's light under water reads this water (engine_prepare).
     water_light_triangles_ = water_triangles_;
+    window_.water_triangles += water_triangles_;
     // The opaque scene stays readable from its trace until the next scene's geometry.
     to_state(list, positions_.Get(), positions_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     to_state(list, surfaces_.Get(), surfaces_state_, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);

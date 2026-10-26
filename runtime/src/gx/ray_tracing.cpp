@@ -186,6 +186,9 @@ constexpr std::uint32_t kDrawTableUnseen = 512u;
 // g_draws word 6 (rt_lighting.hlsl kDrawTableSolid): a clear solid the clear pass traces through (the table's `traced
 // solid`, drawn unseen); bits 16-31 its row's range, the world units its colour is the transmittance after.
 constexpr std::uint32_t kDrawTableSolid = 1024u;
+// g_draws word 6 (rt_engine.hlsl kDrawTableFall): with kDrawTableSolid, falling water the clear pass traces (a `traced
+// solid` waterfall: the game's opaque sheet hidden), its sheet's thickness (eye units) in place of a solid's reach.
+constexpr std::uint32_t kDrawTableFall = 2048u;
 constexpr float kDrawGlowScale = 16.0f;
 // AuthoredLight.flags (rt_lighting.hlsl kAuthored*): the colour the draw shows; a spot light.
 constexpr std::uint32_t kAuthoredTint = 1u;
@@ -1359,6 +1362,25 @@ void SceneRayTracer::begin_frame(std::uint64_t frame_index) {
                          static_cast<unsigned long long>(taken), probe[28],
                          sun_draw == 0xFFFFu ? -1 : static_cast<int>(sun_draw),
                          sun_draw == 0xFFFFu ? -1 : material(sun_draw), probe[29] >> 16u, sun_t, sun_water);
+            // Falling water in front there (rt_engine.hlsl waterfall_light): the sun's light on its sheet (m), the
+            // sheet's distance, its cosine to the sun, and whether the surface behind lent its light.
+            if ((probe[35] & 2u) != 0u) {
+                const auto r11 = [](std::uint32_t v, unsigned shift, unsigned mantissa) {
+                    const std::uint32_t bits = (v >> shift) & ((1u << (mantissa + 5u)) - 1u);
+                    const std::uint32_t e = bits >> mantissa;
+                    const std::uint32_t m = bits & ((1u << mantissa) - 1u);
+                    return e == 0u ? std::ldexp(static_cast<float>(m), -14 - static_cast<int>(mantissa))
+                                   : std::ldexp(1.0f + static_cast<float>(m) / static_cast<float>(1u << mantissa),
+                                                static_cast<int>(e) - 15);
+                };
+                float fall_t = 0.0f;
+                float fall_nl = 0.0f;
+                std::memcpy(&fall_t, &probe[33], 4u);
+                std::memcpy(&fall_nl, &probe[34], 4u);
+                std::fprintf(stderr, "[rt-probe-fall] frame=%llu sun=%.3f,%.3f,%.3f t=%.1f sun-cos=%.3f behind=%u\n",
+                             static_cast<unsigned long long>(taken), r11(probe[32], 0u, 6u), r11(probe[32], 11u, 6u),
+                             r11(probe[32], 22u, 5u), fall_t, fall_nl, probe[35] & 1u);
+            }
             } else
             std::fprintf(stderr,
                          "[rt-probe] frame=%llu pixel=%u,%u seen-tri=%u draw=%d material=%d sun-blocker-tri=%u draw=%d "
@@ -1809,7 +1831,7 @@ void SceneRayTracer::report() {
                   "max-triangles=%llu capacity=%u build-ms=%.3f validate-ms=%.3f light-ms=%.3f point-lights=%.2f composites=%llu captures=%llu validated=%llu "
                   "geometry-pixels=%.2f%% match-0.1%%=%.3f%% match-1%%=%.3f%% hit-nearer=%.3f%% hit-farther=%.3f%% "
                   "miss=%.3f%% background-hit=%.3f%% glow-draws=%.1f glow-triangles=%.0f late-triangles=%.0f "
-                  "exposure=%.3f adaptation=%.3f\n",
+                  "water-triangles=%.0f water-dropped=%llu exposure=%.3f adaptation=%.3f\n",
                   static_cast<unsigned long long>(window_.scenes), static_cast<unsigned long long>(window_.skipped),
                   per(static_cast<double>(window_.draws), window_.scenes),
                   per(static_cast<double>(window_.triangles), window_.scenes),
@@ -1823,7 +1845,9 @@ void SceneRayTracer::report() {
                   per(static_cast<double>(window_.glow_draws), window_.captures),
                   per(static_cast<double>(window_.glow_triangles), window_.captures),
                   per(static_cast<double>(window_.late_triangles), window_.scenes),
-                  static_cast<double>(physical_exposure_), static_cast<double>(adaptation_cpu_));
+                  per(static_cast<double>(window_.water_triangles), window_.scenes),
+                  static_cast<unsigned long long>(window_.water_dropped), static_cast<double>(physical_exposure_),
+                  static_cast<double>(adaptation_cpu_));
     std::cerr << line;
     if (delight_pso_) {
         // Texture de-lighting: maps made, maps held and their memory.
@@ -2611,6 +2635,9 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
         return;
     }
     if ((info.surface & kRtDrawWater) != 0u) {
+        if (water_open_ && draw.triangle_count != 0u && water_triangles_ + draw.triangle_count > kWaterMaxTriangles) {
+            ++window_.water_dropped;
+        }
         if (water_open_ && draw.triangle_count != 0u && water_triangles_ + draw.triangle_count <= kWaterMaxTriangles) {
             RtDraw& entry = water_draws_.emplace_back(draw);
             entry.first_triangle = water_triangles_;
@@ -2696,7 +2723,7 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
         }
         // A clear solid the camera's rays pass (the game's draw hidden): the clear pass traces through it.
         if (material->solid && (info.surface & kRtDrawUnseen) != 0u) {
-            flags = (flags & 0xFFFFu) | kDrawTableSolid |
+            flags = (flags & 0xFFFFu) | kDrawTableSolid | (material->waterfall ? kDrawTableFall : 0u) |
                     (static_cast<std::uint32_t>(std::lround(std::clamp(material->range, 0.0f, 65535.0f))) << 16u);
             ++solid_draws_;
         }

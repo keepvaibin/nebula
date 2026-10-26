@@ -5365,6 +5365,11 @@ bool GxBackend::rt_water_draw() const noexcept {
         !renderer_.rt_water_open()) {
         return false;
     }
+    // Particles are never a water surface: effects drawn with indexed positions (a waterfall's spray cloud, smoke,
+    // sparkles, bubbles) had the water pass's body painted over them, washed out.
+    if (const RtMaterial* const material = rt_material(current_rt_material_); material != nullptr && material->particle) {
+        return false;
+    }
     using motion::ScenePhase;
     return rt_phase_ == static_cast<std::uint8_t>(ScenePhase::Xlu) ||
            rt_phase_ == static_cast<std::uint8_t>(ScenePhase::ListXlu) ||
@@ -5400,10 +5405,21 @@ bool GxBackend::rt_ocean_water_draw() const noexcept {
 
 // The material table entry of a draw: its first mapped texture's that has one. Lookup textures
 // (environment, indirect and mask maps, shared by many models) decide only a draw that maps nothing
-// else the table names.
+// else the table names. Falling water decides whatever comes before it: Beach Bowl's and the Twin Falls'
+// waterfalls map a ripple map and an indirect warp ahead of their fall texture.
 std::uint16_t GxBackend::rt_material_of(std::uint32_t map_mask,
                                         const std::array<TextureHandle, kMaxTextureMaps>& handles,
                                         unsigned& map) noexcept {
+    for (unsigned m = 0; m < kMaxTextureMaps; ++m) {
+        if ((map_mask & (1u << m)) == 0u || handles[m].rt_material == 0u) {
+            continue;
+        }
+        const RtMaterial* const material = rt_material(handles[m].rt_material);
+        if (material != nullptr && material->waterfall && !material->helper) {
+            map = m;
+            return handles[m].rt_material;
+        }
+    }
     std::uint16_t lookup = 0u;
     unsigned lookup_map = 0xFFu;
     unsigned first = 0xFFu;
@@ -5724,16 +5740,24 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
             ((ps_key_.flags & 0x02u) != 0u ? 16u : 0u) | (!alpha_test_keeps_all(ps_key_) ? 32u : 0u) |
             (rt_state_eligible_ ? 64u : 0u) | (renderer_.rt_scene_open() ? 128u : 0u);
         static std::unordered_set<std::uint64_t> logged;
+        const bool water_open = renderer_.rt_water_open();
         const std::uint64_t key = static_cast<std::uint64_t>(current_rt_material_) |
                                   (static_cast<std::uint64_t>(rt_phase_) << 16u) |
                                   (static_cast<std::uint64_t>(reasons) << 24u) |
                                   (static_cast<std::uint64_t>(static_cast<unsigned char>(what[0])) << 32u) |
-                                  (static_cast<std::uint64_t>(static_cast<unsigned char>(what[1])) << 40u);
-        if (logged.size() < 8192u && logged.insert(key).second) {
-            std::fprintf(stderr, "[rt-untraced] material=%u phase=%u buffer=%u%s reasons=0x%02X outcome=%s\n",
+                                  (static_cast<std::uint64_t>(static_cast<unsigned char>(what[1])) << 40u) |
+                                  (static_cast<std::uint64_t>(water_open ? 1u : 0u) << 48u);
+        static std::unordered_set<std::uint64_t> identities;
+        const bool new_identity =
+            identities.size() < 65536u &&
+            identities.insert(key ^ (static_cast<std::uint64_t>(rt_identity_seen_) * 0x9E3779B97F4A7C15ull)).second;
+        if (logged.size() < 8192u && (logged.insert(key).second || new_identity)) {
+            std::fprintf(stderr,
+                         "[rt-untraced] material=%u phase=%u buffer=%u%s reasons=0x%02X outcome=%s identity=%08X "
+                         "water-open=%d\n",
                          static_cast<unsigned>(current_rt_material_), static_cast<unsigned>(rt_phase_),
                          static_cast<unsigned>(rt_draw_buffer_ & 0xFFFFu), (rt_draw_buffer_ & 0x10000u) != 0u ? "x" : "o",
-                         reasons, what);
+                         reasons, what, rt_identity_seen_, water_open ? 1 : 0);
         }
     };
     note_scene_ao_view(call);
@@ -11209,8 +11233,9 @@ gpu::Pipeline* GxBackend::flush_draw_state(
     // draw's material table entry does (after the texture binding, which finds it).
     const std::uint32_t enhanced_material_bits =
         (ps_key_.reserved & kPsKeyEnhancedLighting) != 0u ? enhanced_table_material(rt_material(current_rt_material_)) : 0u;
-    // A glow's gain follows its material (a light source's radiance): another material is another gain.
-    const std::uint16_t glow_material = (ps_key_.output_flags & 0x20u) != 0u ? current_rt_material_ : 0u;
+    // A glow's gain follows its material (a light source's radiance): another material is another gain. A lit
+    // translucent's material decides whether it is falling water (its constants' tex_dims[7].w).
+    const std::uint16_t glow_material = (ps_key_.output_flags & 0x60u) != 0u ? current_rt_material_ : 0u;
     if (tev_dirty || tev_c_dirty || tex_dirty || frame_bindings_dirty_ || glow_changed || enhanced_changed ||
         dirty == ~0u || (ps_record_restart_ && history_scene_) || enhanced_material_bits != enhanced_material_bits_ ||
         glow_material != glow_material_) {
@@ -11228,14 +11253,17 @@ gpu::Pipeline* GxBackend::flush_draw_state(
                               : renderer_.rt_physical() ? 1.0f
                                                         : renderer_.rt_glow_exposure(glow_kind_ == 2u);
         // The lighting texture's scale (bit 6); 0 leaves a lit translucent unlit: a table light source (its own light)
-        // or a clear surface (glass, crystal, ice, water: the lit scene shows through it).
+        // or a clear surface (glass, crystal, ice, water: the lit scene shows through it). Falling water is white
+        // water, a foam of bubbles and drops that scatters what reaches it: it takes the light at its own sheet
+        // (rt_engine.hlsl waterfall_light).
         bool takes_light = (ps_key_.output_flags & 0x40u) != 0u;
         float recolour = 0.0f;
         if (const RtMaterial* const m = rt_material(current_rt_material_);
             m != nullptr && (ps_key_.output_flags & 0x60u) != 0u) {
             const bool emits = m->emission != RtEmission::None && !m->no_light && !m->hide;
-            const bool clear = m->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Crystal) ||
-                               m->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Water);
+            const bool clear = (m->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Crystal) ||
+                                m->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Water)) &&
+                               !m->waterfall;
             takes_light = takes_light && !emits && !clear;
             // `recolour`: a light source's sprite in the table's colour rather than the one the game draws its glow
             // in, as RGB8 + 1, negated.
@@ -11248,6 +11276,12 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             }
         }
         ps_c.ztex_params[3] = takes_light ? renderer_.rt_light_texture_scale() : recolour;
+        // Falling water: clear where the art paints its water hue (shader_gen's lit translucent; map 7 is the light
+        // texture there, so its texture dimensions are free).
+        if (const RtMaterial* const m = rt_material(current_rt_material_);
+            takes_light && (ps_key_.output_flags & 0x40u) != 0u && m != nullptr && m->waterfall) {
+            ps_c.tex_dims[7][3] = 1.0f;
+        }
         // GALAXY_RT_LOG_GLOWS=1: each scene draw's material once per phase, glow kind, lighting texture and J3D
         // material identity (mat_id.py names the material, material_names.py --find the identity).
         if (scene_phase_ && rt_log_glows()) [[unlikely]] {

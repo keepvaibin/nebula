@@ -121,7 +121,7 @@ struct RtReflectScene {
 class RtReflections {
 public:
     // Constants of one trace, in an upload allocation the caller makes (256-byte aligned).
-    static constexpr std::size_t kConstantsBytes = 1152u;
+    static constexpr std::size_t kConstantsBytes = 1168u;
     // Results kept for the sub-frames of the game frames being interpolated (the lighting's slots).
     static constexpr unsigned kSlots = 4u;
 
@@ -178,8 +178,9 @@ private:
     static constexpr unsigned kStatsWords = 32u;
     // Trace, composite, water trace, water composite: begin and end each.
     static constexpr unsigned kTimestampsPerSlot = 8u;
-    // Surface classes (rt_surfaces.h) and the reflections' bare metal (rt_reflections.hlsl kBareMetalClass).
-    static constexpr unsigned kClasses = 9u;
+    // Surface classes (rt_surfaces.h), the reflections' bare metal (rt_reflections.hlsl kBareMetalClass) and falling
+    // water (kFallingWater).
+    static constexpr unsigned kClasses = 10u;
     static constexpr unsigned kBareMetalClass = 8u;
     // Class of the translucent water's surface (rt_reflections.hlsl kWaterSurface).
     static constexpr unsigned kWaterClass = 5u;

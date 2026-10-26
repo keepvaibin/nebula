@@ -47,7 +47,7 @@ struct RtReflectConstants {
     float reproject[3][4];
     float world_to_eye[3][4];
     float eye_to_world[3][4];
-    float classes[9][4];
+    float classes[10][4];
     float range;
     float lobe;
     std::uint32_t history_frames;
@@ -109,7 +109,7 @@ struct RtReflectCompositeConstants {
     float near_plane;
     std::uint32_t tile_width;
     float split;
-    std::uint32_t classes[10][2];  // strength, F0, GGX alpha, cover (halves); 9 classes, two per row
+    std::uint32_t classes[10][2];  // strength, F0, GGX alpha, cover (halves); 10 classes, two per row
     float water[4];
     float sun[4];
     float water2[4];   // wave slope, cover, foam, shallow caustics
@@ -302,6 +302,10 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     // dark mirrors of their surroundings. Its rays that leave the scene keep its painted look (ReflectTraceCS,
     // WaterTraceCS), so a strong mirror never shows a dark one of empty space.
     materials_[7] = material("GALAXY_RT_REFLECT_CRYSTAL", {0.05f, 0.35f, 1.0f, 0.0f, 1.0f});
+    // Falling water (kFallingWater): water's Fresnel (F0 0.02) on a turbulent sheet, cover 1. Roughness 0.4 (GGX alpha
+    // 0.16): a rough sea's slopes spread about as far (Cox and Munk 1954 at 10 m/s, sigma 0.23: alpha about 0.3), less
+    // what the flow's streaks carry (rt_reflections.hlsl wave_slope), which move its reflection and glints down it.
+    materials_[9] = material("GALAXY_RT_REFLECT_FALLING_WATER", {0.4f, 0.02f, 1.0f, 0.0f, 1.0f});
     view_ = static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_REFLECT_VIEW", 0.0f), 0.0f, 9.0f));
     history_frames_ =
         static_cast<std::uint32_t>(std::clamp(env_float("GALAXY_RT_REFLECT_HISTORY", 24.0f), 1.0f, 64.0f));

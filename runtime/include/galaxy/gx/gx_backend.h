@@ -1697,7 +1697,8 @@ private:
     std::uint32_t enhanced_ps_flags_ = 0u;
     // The material table bits (enhanced_table_material) the last uploaded PS constants carry.
     std::uint32_t enhanced_material_bits_ = 0u;
-    std::uint16_t glow_material_ = 0u;  // the material whose glow gain the PS constants hold (output_flags bit 5)
+    // The material whose glow gain (output_flags bit 5) or falling water (bit 6) the PS constants hold.
+    std::uint16_t glow_material_ = 0u;
     PsoKey current_pso_key_{};
     bool current_pso_key_valid_ = false;
     gpu::Pipeline* current_pipeline_ = nullptr;

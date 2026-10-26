@@ -666,6 +666,15 @@ PSOut main(PSIn pin) {
             const int2 lit_at = min(int2(pin.pos.xy * ztex_params.w), int2(lit_w, lit_h) - 1);
             const float3 light = max(tex[7].Load(int3(lit_at, 0)).rgb, 0.0);
             lin *= (output_flags & 0x80u) != 0u ? min(light, 1.15) : light;
+            // Falling water (tex_dims[7].w): white water kept as grey, the art's water hue clear but for what its
+            // bubbles scatter, in that hue (ShaderGenerator's lit translucent).
+            if (tex_dims[7].w > 0.5) {
+                const float fall_hi = max(lin.r, max(lin.g, lin.b));
+                const float fall_white = fall_hi > 1e-6 ? min(lin.r, min(lin.g, lin.b)) / fall_hi : 1.0;
+                const float fall_keep = fall_white + (1.0 - fall_white) * 0.5;
+                lin = (fall_white * fall_hi.xxx + (1.0 - fall_white) * 0.5 * lin) / fall_keep;
+                efb_color.a = uint(round(float(efb_color.a) * fall_keep));
+            }
         } else if (ztex_params.w < 0.0) {
             // A light source the table shows in its own colour (`recolour`: RGB8 + 1, negated) keeps its peak, not its
             // luminance: a blue glow's luminance is a fifth of its peak.
