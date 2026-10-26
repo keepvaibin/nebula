@@ -267,8 +267,10 @@ public:
     // it and, if so, the scene's sub-pixel jitter in render pixels (applied to
     // perspective projections).
     [[nodiscard]] bool scene_temporal_begin(float& jitter_x, float& jitter_y);
-    // After a temporal scene_temporal_begin: clears the motion target for
-    // the scene. False when it could not be created (no motion writers).
+    // After scene_temporal_begin, in a temporal scene or one the ray tracing
+    // engine lights (its histories follow moving surfaces by the motion; no
+    // jitter, no upscale): clears the motion target for the scene. False
+    // otherwise or when it could not be created (no motion writers).
     [[nodiscard]] bool begin_motion_scene();
     // GALAXY_MOTION_DEBUG: at the scene's end, replaces the EFB color with
     // the motion field (grey = still; red/green = +x/+y towards the previous
@@ -925,6 +927,8 @@ private:
     std::uint64_t temporal_frame_ = 0;
     bool temporal_history_valid_ = false;
     bool scene_temporal_ = false;
+    // The scene writes the motion target: a temporal scene, or the ray tracing engine's without a temporal upscaler.
+    bool scene_motion_ = false;
     float scene_jitter_[2]{};
     float scene_camera_[3]{1.0f, 100000.0f, 1.0f};
     std::array<float, 12> scene_view_{};

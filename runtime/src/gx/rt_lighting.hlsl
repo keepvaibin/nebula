@@ -72,7 +72,9 @@ cbuffer RtLight : register(b0)
     uint4 g_star_count[2];      // triangle and count in g_positions (0: none)
     uint g_core_point;          // the star core's light among g_points (~0: none)
     float g_sun_cap;            // the night's soft cap on added light where the core's light rules
-    uint2 g_core_pad;
+    // The previous samples' jitter less this frame's (render pixels): the raster's motion is the surface's own, without
+    // the jitter, and the previous samples were taken with theirs (rt_engine.hlsl engine_history).
+    float2 g_motion_jitter;
     float4 g_point_radius[kPointLights / 4u];   // per point light (4 a vector): its emitter's radius
     uint g_reference_bounces;   // the reference's bounces
     float g_reference_exposure; // its exposure over the geometric mean of its light

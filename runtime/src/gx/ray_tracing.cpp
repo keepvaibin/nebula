@@ -116,7 +116,7 @@ struct RtLightConstants {
     std::uint32_t star_count[8];
     std::uint32_t core_point;      // the star core's light among points (~0: none)
     float sun_cap;                 // the soft cap of the night's added light where the core's light dominates
-    std::uint32_t core_pad[2];
+    float motion_jitter[2];        // the previous samples' jitter less this frame's (render pixels, RtView::jitter)
     float point_radius[kRtPointLights];   // per point light: its emitter's radius (its shadows' penumbra)
     std::uint32_t reference_bounces;      // the reference (GALAXY_RT_REFERENCE): its bounces,
     float reference_exposure;             // its exposure over the geometric mean of its light,
@@ -1353,14 +1353,24 @@ void SceneRayTracer::begin_frame(std::uint64_t frame_index) {
                          material(probe[3]), t, static_cast<int>(probe[5]), z, facing);
         }
         // [rt-light-meter]: the means over the meter's disc of the light sources' direct light, the whole diffuse light
-        // and the sun's (m: a white surface under the stage's full light reads 1).
+        // and the sun's (m: a white surface under the stage's full light reads 1), and the diffuse history's length.
         if (light_meter_ && probe[19] != 0u) {
             const double n = static_cast<double>(probe[19]);
             std::fprintf(stderr,
                          "[rt-light-meter] frame=%llu lights=%.4f whole=%.4f sun=%.4f bounce=%.4f filtered=%.4f "
-                         "pixels=%u\n",
+                         "history=%.2f pixels=%u\n",
                          static_cast<unsigned long long>(taken), probe[16] / 256.0 / n, probe[17] / 256.0 / n,
-                         probe[18] / 256.0 / n, probe[20] / 256.0 / n, probe[21] / 256.0 / n, probe[19]);
+                         probe[18] / 256.0 / n, probe[20] / 256.0 / n, probe[21] / 256.0 / n, probe[23] / 16.0 / n,
+                         probe[19]);
+        }
+        // [rt-motion-meter]: where the raster's motion takes the disc's pixels against the camera's reprojection (mean
+        // x, y and distance, render pixels) and the share the histories follow it for (more than half a pixel off).
+        if (light_meter_ && probe[27] != 0u) {
+            const double n = static_cast<double>(probe[27]);
+            std::fprintf(stderr, "[rt-motion-meter] frame=%llu dx=%.3f dy=%.3f distance=%.3f followed=%.3f pixels=%u\n",
+                         static_cast<unsigned long long>(taken), static_cast<std::int32_t>(probe[24]) / 256.0 / n,
+                         static_cast<std::int32_t>(probe[25]) / 256.0 / n, probe[26] / 256.0 / n, probe[22] / n,
+                         probe[27]);
         }
         // The engine's diffuse light against the converged reference ([rt-reference-engine]): the means over the
         // ordinary non-metal surfaces of the reference's, the engine's and their absolute difference (luminance, the
@@ -4013,6 +4023,8 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     std::memcpy(c.picture, to_picture.data(), sizeof(c.picture));
     std::copy(history ? history_projection_.begin() : view_.projection.begin(),
               history ? history_projection_.end() : view_.projection.end(), c.history_projection);
+    c.motion_jitter[0] = history ? history_jitter_[0] - view_.jitter[0] : 0.0f;
+    c.motion_jitter[1] = history ? history_jitter_[1] - view_.jitter[1] : 0.0f;
     std::copy(picture ? picture_projection_.begin() : view_.projection.begin(),
               picture ? picture_projection_.end() : view_.projection.end(), c.picture_projection);
     std::memcpy(c.to_eye, camera_.data(), sizeof(c.to_eye));
@@ -4277,6 +4289,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     history_camera_ = camera_;
     history_camera_known_ = camera_known_;
     history_projection_ = view_.projection;
+    history_jitter_ = view_.jitter;
     light_parity_ = previous;
     history_valid_ = true;
     light_slot_ = static_cast<int>(slot);

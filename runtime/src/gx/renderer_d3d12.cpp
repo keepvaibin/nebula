@@ -4603,13 +4603,27 @@ void RendererD3D12::rt_trace_scene() {
         command_list_->ResourceBarrier(1, &picture_barrier);
     }
     ray_tracer_.set_engine_picture(picture ? efb_color_.Get() : nullptr);
+    // And the raster's motion (every opaque draw of the scene writes its own, scene_motion_): the engine's histories
+    // follow what moved by itself.
+    const bool motion = picture && scene_motion_ && motion_target_ && motion_target_scale_ == efb_scale_;
+    D3D12_RESOURCE_BARRIER motion_barrier = picture_barrier;
+    motion_barrier.Transition.pResource = motion_target_.Get();
+    if (motion) {
+        command_list_->ResourceBarrier(1, &motion_barrier);
+    }
+    ray_tracer_.set_engine_motion(motion ? motion_target_.Get() : nullptr);
     static_cast<void>(ray_tracer_.trace_scene(command_list_.Get(), rt_sources(), &RendererD3D12::rt_allocate, this,
                                               depth ? conv_efb_depth_srv_ : D3D12_GPU_DESCRIPTOR_HANDLE{}, width,
                                               desc.Height));
     ray_tracer_.set_engine_picture(nullptr);
+    ray_tracer_.set_engine_motion(nullptr);
     if (picture) {
         std::swap(picture_barrier.Transition.StateBefore, picture_barrier.Transition.StateAfter);
         command_list_->ResourceBarrier(1, &picture_barrier);
+    }
+    if (motion) {
+        std::swap(motion_barrier.Transition.StateBefore, motion_barrier.Transition.StateAfter);
+        command_list_->ResourceBarrier(1, &motion_barrier);
     }
     // The occlusion multiplies the opaque scene before the translucent phases draw; a recorded
     // log applies it again on each sub-frame's replay.
@@ -6629,7 +6643,7 @@ bool RendererD3D12::take_eval_readback(std::vector<std::uint32_t>& words, float&
 }
 
 bool RendererD3D12::begin_motion_scene() {
-    if (!scene_temporal_ || !ensure_motion_target()) {
+    if (!scene_motion_ || !ensure_motion_target()) {
         return false;
     }
     const float zero[4]{};
@@ -6706,6 +6720,9 @@ bool RendererD3D12::scene_temporal_begin(float& jitter_x, float& jitter_y) {
     jitter_x = 0.0f;
     jitter_y = 0.0f;
     scene_temporal_ = false;
+    // The engine's histories follow what moved by itself through the raster's motion: without a temporal upscaler the
+    // scene still writes it (MSAA is off with ray tracing).
+    scene_motion_ = rt_active() && ray_tracer_.engine_active() && !output_efb_active_;
     const unsigned rw = kEfbWidth * efb_scale_;
     const unsigned ow = temporal_output_w_;
     // The context is replaced only by begin_frame (prepare_temporal_upscaler).
@@ -6721,6 +6738,7 @@ bool RendererD3D12::scene_temporal_begin(float& jitter_x, float& jitter_y) {
         scene_jitter_[0] = 0.0f;
         scene_jitter_[1] = 0.0f;
         scene_temporal_ = true;
+        scene_motion_ = true;
         return true;
     }
     const unsigned phases = std::max(temporal_->jitter_phase_count(rw, ow), 1u);
@@ -6730,6 +6748,7 @@ bool RendererD3D12::scene_temporal_begin(float& jitter_x, float& jitter_y) {
     scene_jitter_[0] = jitter_x;
     scene_jitter_[1] = jitter_y;
     scene_temporal_ = true;
+    scene_motion_ = true;
     return true;
 }
 

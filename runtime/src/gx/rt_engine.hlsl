@@ -49,6 +49,9 @@ static const uint kEvWaterSurfaces = 25u;   // their vertex normals and draw fla
 static const uint kEvClearDraws = 26u;    // per water draw: the table's roughness (unorm16), kClear* flags
 static const uint kEvClear = 27u;         // per pixel 2 uint4 (EngineClearCS): reflection rgb (halves, exposed),
                                           // transmittance r, eye z, present; transmittance g b, the pixel seen through
+// The raster's motion (Texture2D<float2>, kEngineMotion): every opaque draw's own motion from this frame's pixel to the
+// last frame's, in render pixels without the jitter (the temporal upscaler's target, DLSS or FSR 3; g_motion_jitter).
+static const uint kEvMotion = 28u;
 // g_engine_info.y in the clear pass: what the frame has of each kind.
 static const uint kClearHasGlass = 1u;    // the water window's glass (clear_trace)
 static const uint kClearHasSolids = 2u;   // clear solids in the scene (solid_front)
@@ -56,6 +59,7 @@ static const uint kClearHasSolids = 2u;   // clear solids in the scene (solid_fr
 static const uint kEngineSpecular = 2u;   // traced specular
 static const uint kEngineIndirect = 4u;   // traced indirect light
 static const uint kEngineView = 0xF0u;    // GALAXY_RT_ENGINE_VIEW (bits 4-7): 1 direct, 2 indirect, 3 specular, 4 noisy,
+                                          // 15 the raster's motion against the camera's (engine_history),
                                           // 8 the converged reference's diffuse light (GALAXY_RT_ENGINE_REFERENCE),
                                           // 14 the light sources' direct light alone (no sun, no bounce),
                                           // 5 the clear surfaces found (magenta), 6 the clear composite's coverage,
@@ -76,6 +80,9 @@ static const uint kEngineReference = 262144u;   // GALAXY_RT_ENGINE_REFERENCE: t
                                                  // (g_engine_params: x its buffer's view, y paths so far, z bounces)
 static const uint kEngineNoAntiLag = 1048576u;   // GALAXY_RT_ENGINE_ANTILAG=0: the diffuse history without its anti-lag
 static const uint kEngineNoLightHistory = 2097152u;  // GALAXY_RT_ENGINE_LIGHT_HISTORY=0: no temporal light reuse
+static const uint kEngineNoBoiling = 8388608u;   // GALAXY_RT_ENGINE_BOILING=0: no boiling filter
+static const uint kEngineMotion = 16777216u;     // the raster's motion this frame (kEvMotion)
+static const uint kEngineNoFootprint = 33554432u;  // GALAXY_RT_ENGINE_FOOTPRINT=0: widths in pixels (kFootprintLines)
 static const uint kEngineClearSolidLeft = 4194304u;  // GALAXY_RT_ENGINE_CLEAR=10: a clear solid's light still inside
                                                      // when its path's segments ran out (red, x 4), alone
 
@@ -184,6 +191,19 @@ GSurface gb_load(uint view, uint pixel, float4 projection, int2 q)
     return s;
 }
 
+// The picture the engine's reuse and filter widths were set for: 1056 lines (2x the console's EFB). Each pixel takes one
+// sample whatever the resolution, so a width in pixels gathers from a smaller part of the picture as the lines grow:
+// at 6x (2112 lines a 2560 x 1440 window) the denoiser and the reservoirs' spatial reuse took a quarter of the surface
+// they took at 2x, and the light's noise stayed as speckle and boiling blotches (the Gateway's Grand Star room). Every
+// spatial width scales by the picture's lines over these, so a surface is filtered over the same share of the picture
+// at every resolution (at least the 2x widths: fewer lines keep them).
+static const float kFootprintLines = 1056.0f;
+
+float footprint_scale()
+{
+    return (g_engine_info.x & kEngineNoFootprint) != 0u ? 1.0f : max(float(g_target_size.y) / kFootprintLines, 1.0f);
+}
+
 // The full-resolution G-buffer, and the composite's per-pixel normal and de-lighting (g_pixels).
 [numthreads(8, 8, 1)]
 void EngineGBufferCS(uint3 id : SV_DispatchThreadID)
@@ -195,6 +215,7 @@ void EngineGBufferCS(uint3 id : SV_DispatchThreadID)
     if (g_probe.w != 0u && all(id.xy == 0u)) {
         g_final[g_sample_size.x * g_sample_size.y + kStarSlots + 4u] = uint4(0u, 0u, 0u, 0u);
         g_final[g_sample_size.x * g_sample_size.y + kStarSlots + 5u] = uint4(0u, 0u, 0u, 0u);
+        g_final[g_sample_size.x * g_sample_size.y + kStarSlots + 6u] = uint4(0u, 0u, 0u, 0u);
     }
     const int2 q = int2(id.xy);
     const uint pixel = id.y * g_target_size.x + id.x;
@@ -1269,7 +1290,7 @@ float light_target(GSurface s, LightSample l, out float3 light)
 // its a-trous blurred them to blobs.
 static const float kShadowLit = 65504.0f;        // half's largest
 static const float kShadowLeast = 1e-4f;         // a blocker in contact
-static const float kShadowRadiusMost = 32.0f;    // the blur's radius at most (pixels)
+static const float kShadowRadiusMost = 32.0f;    // the blur's radius at most (pixels at kFootprintLines)
 static const uint kShadowTaps = 12u;             // the blur's sparse taps (with a dense 5 x 5)
 static const float kShadowHistoryMost = 7.0f;    // frames
 static const float kShadowHistoryWeight = 5.0f / 6.0f;  // the history's weight at most (5 frames' accumulation)
@@ -1315,20 +1336,72 @@ float pixel_world_size(float z)
     return abs(z) * 2.0f / max(abs(g_viewport.z * g_projection.x), 1e-6f);
 }
 
-// The previous frame's pixel of an eye-space point (full resolution), and whether the surface there is this one (its
-// depth and normal agree: draw indices are positions in each frame's own list, not identities).
-bool engine_reproject(float3 p, float3 n, out uint prev_pixel)
+// Where a pixel's surface was in the last frame, for every history (the denoiser's, the sun shadow's, the reservoirs'
+// temporal reuse): its pixel position there (continuous, pixel centres at .5), and the eye depth and normal the last
+// frame's G-buffer must show at it, how closely (draw indices are positions in each frame's own list, not identities).
+// The camera's motion carries a still surface. A surface that moved by itself (a character's limbs, a bunny's ears, an
+// enemy, a turning platform) is where the raster's motion puts it, where it has one (with a temporal upscaler every
+// opaque draw writes its own): the camera alone sent it to another surface or none, so it kept no history and showed
+// the frame's raw sample every frame (glitter on whatever moves) or took another surface's (light trailing it). Its
+// own motion changes its depth and normal by an amount the motion does not give: they are checked more loosely.
+struct History {
+    float2 a;
+    float z;
+    float tolerance;
+    float3 n;
+    float facing;
+};
+
+bool engine_history(int2 q, float3 p, float3 n, out History h)
 {
-    prev_pixel = 0u;
-    if ((g_flags & 1u) == 0u) {
-        return false;
-    }
     const float3 previous = transform(g_reproject, p);
+    h.a = eye_to_pixel(g_history_projection, g_viewport, previous);
+    h.z = previous.z;
+    h.tolerance = 0.02f * abs(previous.z) + 1.0f;
+    h.n = normalize(rotate3(g_reproject, n));
+    h.facing = 0.9f;
     if (previous.z >= -g_near) {
         return false;
     }
-    const float2 a = eye_to_pixel(g_history_projection, g_viewport, previous);
-    const int2 s = int2(floor(a));
+    if ((g_engine_info.x & kEngineMotion) != 0u) {
+        const Texture2D<float2> motion = ResourceDescriptorHeap[engine_view(kEvMotion)];
+        const float2 moved = float2(q) + 0.5f + motion.Load(int3(q, 0)) + g_motion_jitter;
+        if (distance(moved, h.a) > 0.5f) {
+            h.a = moved;
+            h.tolerance = 0.1f * abs(previous.z) + 2.0f;
+            h.facing = 0.7f;
+        }
+    }
+    return true;
+}
+
+// A point of the previous samples' eye space in this frame's (g_reproject's inverse, the adjugate over the determinant:
+// exact whatever the 3 x 3 holds).
+float3 engine_unreproject(float3 p)
+{
+    const float3 r0 = g_reproject[0].xyz;
+    const float3 r1 = g_reproject[1].xyz;
+    const float3 r2 = g_reproject[2].xyz;
+    const float3 d = p - float3(g_reproject[0].w, g_reproject[1].w, g_reproject[2].w);
+    return (cross(r1, r2) * d.x + cross(r2, r0) * d.y + cross(r0, r1) * d.z) / dot(r0, cross(r1, r2));
+}
+
+// A normal of the previous samples' eye space in this frame's (normals take the inverse's inverse transpose).
+float3 engine_unreproject_normal(float3 n)
+{
+    return normalize(g_reproject[0].xyz * n.x + g_reproject[1].xyz * n.y + g_reproject[2].xyz * n.z);
+}
+
+// The previous frame's pixel of pixel `q`'s surface (eye-space point `p`, normal `n`), and whether the surface there is
+// this one.
+bool engine_reproject(int2 q, float3 p, float3 n, out uint prev_pixel)
+{
+    prev_pixel = 0u;
+    History h;
+    if ((g_flags & 1u) == 0u || !engine_history(q, p, n, h)) {
+        return false;
+    }
+    const int2 s = int2(floor(h.a));
     if (any(s < 0) || any(s >= int2(g_target_size))) {
         return false;
     }
@@ -1339,26 +1412,49 @@ bool engine_reproject(float3 p, float3 n, out uint prev_pixel)
     if (w1.x == 0u) {
         return false;
     }
-    const float z = asfloat(w1.x);
-    const float3 n_prev = normalize(rotate3(g_reproject, n));
-    return abs(z - previous.z) < 0.02f * abs(previous.z) + 1.0f && dot(unpack_normal(w0.x), n_prev) > 0.9f;
+    return abs(asfloat(w1.x) - h.z) < h.tolerance && dot(unpack_normal(w0.x), h.n) > h.facing;
 }
 
-[numthreads(8, 8, 1)]
-void EngineDirectCS(uint3 id : SV_DispatchThreadID)
+// The boiling filter (RTXDI's, ShaderAPI.md RTXDI_BoilingFilter; our implementation of its published idea). A light
+// that matters to a wide stretch of surface but that its candidates rarely find is held by the one reservoir that found
+// it, and temporal and spatial reuse spread it: a bubble of light that appears, grows and fades, light boiling over
+// the surfaces (the Gateway's Grand Star room under its sparks, coloured blotches at every frame). Such a reservoir's
+// weight sum stands far above its neighbours': after temporal reuse a reservoir past kBoilingMultiple times the mean
+// nonzero weight sum of its 8 x 8 thread group is emptied, trading the boiling for a little bias. Strength 0.2, RTXDI's
+// default for both its direct and indirect light: 10 / 0.2 - 9 = 41 times.
+static const uint kBoilingGroup = 64u;
+static const float kBoilingMultiple = 41.0f;
+groupshared float s_boiling[kBoilingGroup];
+
+// Whether a reservoir of weight sum `weight` (0: none) boils in its group. Every thread of the group calls it once (a
+// barrier), its group index `index`.
+bool boiling(uint index, float weight)
 {
-    if (any(id.xy >= g_target_size)) {
-        return;
+    s_boiling[index] = weight;
+    GroupMemoryBarrierWithGroupSync();
+    float sum = 0.0f;
+    float count = 0.0f;
+    [loop] for (uint i = 0u; i < kBoilingGroup; ++i) {
+        const float w = s_boiling[i];
+        sum += w;
+        count += w > 0.0f ? 1.0f : 0.0f;
     }
-    const uint pixel = id.y * g_target_size.x + id.x;
-    const int2 q = int2(id.xy);
+    return count > 0.0f && weight > kBoilingMultiple * sum / count && (g_engine_info.x & kEngineNoBoiling) == 0u;
+}
+
+// The direct light's initial and temporal reservoir of a pixel in range; `change`: its light change, `surface`: a lit
+// surface (else the pixel's records are cleared).
+Reservoir direct_reservoir(uint2 id, uint pixel, out float change, out bool surface)
+{
+    const int2 q = int2(id);
     const GSurface s = gb_load(engine_view(kEvGBuffer), pixel, g_projection, q);
     RWByteAddressBuffer direct = engine_buffer(kEvDirect);
     Reservoir r = reservoir_empty();
-    if (!s.valid || (s.flags & kGbEmitter) != 0u) {
+    change = 0.0f;
+    surface = s.valid && (s.flags & kGbEmitter) == 0u;
+    if (!surface) {
         direct.Store4(pixel * 16u, uint4(0u, 0u, 0u, 0u));
-        reservoir_store(engine_view(kEvDiTemp), pixel, r);
-        return;
+        return r;
     }
     uint seed = emit_hash(pixel ^ (g_frame * 0x9E3779B9u));
     const uint salt = pixel * 32u + g_frame * 0x632BE5ABu;
@@ -1383,7 +1479,6 @@ void EngineDirectCS(uint3 id : SV_DispatchThreadID)
     // cell (engine_light_pick_near).
     const float tris = g_tev_info.z != 0u ? max(emit_element(0u).y, 0.0f) : 0.0f;
     const float spheres = spheres_total();
-    float change = 0.0f;
     // Eight candidates (sixteen at High): with four, a scene of many lamps (the Observatory's star core and its dozens
     // of lamps) leaves the direct light speckled, and the denoiser spreads the speckle into blotches.
     const uint candidates = (g_flags & 1024u) != 0u ? 16u : 8u;
@@ -1402,7 +1497,7 @@ void EngineDirectCS(uint3 id : SV_DispatchThreadID)
         // Temporal reuse: the last frame's final reservoir where this surface was, its light as this frame has it
         // re-weighed here; a light no longer drawn takes its history with it.
         uint prev_pixel;
-        if ((g_engine_info.x & kEngineNoLightHistory) == 0u && engine_reproject(s.p, s.n, prev_pixel)) {
+        if ((g_engine_info.x & kEngineNoLightHistory) == 0u && engine_reproject(q, s.p, s.n, prev_pixel)) {
             Reservoir previous = reservoir_load(engine_view(kEvDiPrev), prev_pixel);
             const uint now = engine_light_remap(previous.s.ref);
             const bool lit = now != kNoLight && engine_light_at(now, previous.s.uv, previous.s);
@@ -1410,9 +1505,20 @@ void EngineDirectCS(uint3 id : SV_DispatchThreadID)
             const float target = lit && previous.W > 0.0f ? light_target(s, previous.s, light) : 0.0f;
             // The light change (A-SVGF's temporal gradient, Schied, Peters and Dachsbacher 2018, on RTXDI's
             // reservoirs): the last frame's kept sample shaded as this frame has its light, against its shade then;
-            // the same light point and weight, so the difference is the light's alone (gone: 0).
+            // the same light point and weight at the same surface point (that pixel's G-buffer then, carried into
+            // this frame's eye space, as A-SVGF shades its gradient samples at the last frame's visibility points), so
+            // the difference is the light's alone (gone: 0). Shaded at this pixel's own point instead, the jitter's
+            // sub-pixel step and the camera's move read as change every frame: on the Gateway's still ground about
+            // 1 % a frame, which held the histories near 10 frames under DLSS (30 without its jitter).
             if (previous.shade > 0.0f) {
-                const float shade_now = target * previous.W;
+                const int2 was_q = int2(prev_pixel % g_target_size.x, prev_pixel / g_target_size.x);
+                const GSurface was = gb_load(engine_view(kEvGBufferPrev), prev_pixel, g_history_projection, was_q);
+                float3 unused;
+                const float shade_now =
+                    lit && previous.W > 0.0f
+                        ? engine_light_target(engine_unreproject(was.p), engine_unreproject_normal(was.n), previous.s,
+                                              unused) * previous.W
+                        : 0.0f;
                 change = abs(shade_now - previous.shade) / max(max(shade_now, previous.shade), 1e-6f);
             }
             if (lit) {
@@ -1422,8 +1528,30 @@ void EngineDirectCS(uint3 id : SV_DispatchThreadID)
         }
     }
     reservoir_finish(r);
+    return r;
+}
+
+[numthreads(8, 8, 1)]
+void EngineDirectCS(uint3 id : SV_DispatchThreadID, uint index : SV_GroupIndex)
+{
+    const bool in_range = all(id.xy < g_target_size);
+    const uint pixel = id.y * g_target_size.x + id.x;
+    float change = 0.0f;
+    bool surface = false;
+    Reservoir r = reservoir_empty();
+    if (in_range) {
+        r = direct_reservoir(id.xy, pixel, change, surface);
+    }
+    if (boiling(index, surface ? r.w_sum : 0.0f)) {
+        r = reservoir_empty();
+    }
+    if (!in_range) {
+        return;
+    }
     reservoir_store(engine_view(kEvDiTemp), pixel, r);
-    direct.Store(pixel * 16u + 8u, pack_half2(change, 0.0f));
+    if (surface) {
+        engine_buffer(kEvDirect).Store(pixel * 16u + 8u, pack_half2(change, 0.0f));
+    }
 }
 
 [numthreads(8, 8, 1)]
@@ -1442,8 +1570,8 @@ void EngineDirectSpatialCS(uint3 id : SV_DispatchThreadID)
     }
     uint seed = emit_hash(pixel ^ (g_frame * 0x2545F491u) ^ 0xA511E9B3u);
     const uint salt = pixel * 32u + g_frame * 0x632BE5ABu + 11u;
-    // This pixel's reservoir, then four neighbours within 30 pixels on the same surface (normal, depth), each
-    // light re-weighed here (biased 1/M combination with geometric checks, RTXDI's default).
+    // This pixel's reservoir, then four neighbours within 30 pixels (at kFootprintLines) on the same surface (normal,
+    // depth), each light re-weighed here (biased 1/M combination with geometric checks, RTXDI's default).
     {
         Reservoir own = reservoir_load(engine_view(kEvDiTemp), pixel);
         float3 light;
@@ -1453,7 +1581,7 @@ void EngineDirectSpatialCS(uint3 id : SV_DispatchThreadID)
     }
     [loop] for (uint k = 0u; k < 4u; ++k) {
         const float angle = emit_random(seed) * 2.0f * kPi;
-        const float radius = 3.0f + emit_random(seed) * 27.0f;
+        const float radius = (3.0f + emit_random(seed) * 27.0f) * footprint_scale();
         const int2 o = q + int2(round(float2(cos(angle), sin(angle)) * radius));
         if (any(o < 0) || any(o >= int2(g_target_size))) {
             continue;
@@ -1504,11 +1632,12 @@ void EngineDirectSpatialCS(uint3 id : SV_DispatchThreadID)
 float light_change(int2 q)
 {
     RWByteAddressBuffer direct = engine_buffer(kEvDirect);
+    const int spread = int(round(footprint_scale()));
     float sum = 0.0f;
     float n = 0.0f;
     [unroll] for (int j = -2; j <= 2; ++j) {
         [unroll] for (int i = -2; i <= 2; ++i) {
-            const int2 o = q + int2(i, j);
+            const int2 o = q + int2(i, j) * spread;
             if (any(o < 0) || any(o >= int2(g_target_size))) {
                 continue;
             }
@@ -1603,7 +1732,7 @@ void shadow_blur(uint2 id, uint stage)
         return;
     }
     penumbra /= penumbra_weight;
-    const float radius = min(penumbra / size, kShadowRadiusMost);
+    const float radius = min(penumbra / size, kShadowRadiusMost * footprint_scale());
     if (!lit && radius <= 2.0f) {
         dst.Store(pixel * 16u, pack_half2(result, penumbra));
         return;
@@ -1691,13 +1820,12 @@ void EngineShadowStabilizeCS(uint3 id : SV_DispatchThreadID)
     m2 /= sum;
     float history = 0.0f;
     float frames = 0.0f;
-    if ((g_flags & 1u) != 0u) {
-        const float3 previous = transform(g_reproject, s.p);
-        if (previous.z < -g_near) {
-            const float2 a = eye_to_pixel(g_history_projection, g_viewport, previous) - 0.5f;
+    History hp;
+    if ((g_flags & 1u) != 0u && engine_history(q, s.p, s.n, hp)) {
+        {
+            const float2 a = hp.a - 0.5f;
             const int2 b = int2(floor(a));
             const float2 f = a - float2(b);
-            const float3 n_prev = normalize(rotate3(g_reproject, s.n));
             RWByteAddressBuffer gb = engine_buffer(kEvGBufferPrev);
             RWByteAddressBuffer prev = engine_buffer(kEvShadowPrev);
             float2 acc = float2(0.0f, 0.0f);
@@ -1710,8 +1838,7 @@ void EngineShadowStabilizeCS(uint3 id : SV_DispatchThreadID)
                 const uint op = uint(o.y) * g_target_size.x + uint(o.x);
                 const uint4 w0 = gb.Load4(op * 32u);
                 const uint w1 = gb.Load(op * 32u + 16u);
-                if (w1 == 0u || abs(asfloat(w1) - previous.z) > 0.02f * abs(previous.z) + 1.0f ||
-                    dot(unpack_normal(w0.x), n_prev) < 0.9f) {
+                if (w1 == 0u || abs(asfloat(w1) - hp.z) > hp.tolerance || dot(unpack_normal(w0.x), hp.n) < hp.facing) {
                     continue;
                 }
                 const float w = ((k & 1u) != 0u ? f.x : 1.0f - f.x) * ((k & 2u) != 0u ? f.y : 1.0f - f.y);
@@ -1822,22 +1949,17 @@ int2 gi_pixel(uint2 h)
     return min(int2(h * 2u + uint2(k & 1u, k >> 1u)), int2(g_target_size) - 1);
 }
 
-[numthreads(8, 8, 1)]
-void EngineIndirectCS(uint3 id : SV_DispatchThreadID)
+// The indirect light's initial and temporal reservoir of a half-resolution sample in range (`surface`: one to light).
+GiReservoir indirect_reservoir(uint2 id, uint index, out bool surface)
 {
     const uint2 half_size = g_engine_size.zw;
-    if (any(id.xy >= half_size)) {
-        return;
-    }
-    const uint index = id.y * half_size.x + id.x;
-    const int2 q = gi_pixel(id.xy);
+    const int2 q = gi_pixel(id);
     const uint pixel = uint(q.y) * g_target_size.x + uint(q.x);
     const GSurface s = gb_load(engine_view(kEvGBuffer), pixel, g_projection, q);
     GiReservoir r = gi_empty();
-    if (!s.valid || (s.flags & kGbEmitter) != 0u || (g_engine_info.x & kEngineIndirect) == 0u) {
-        gi_store(engine_view(kEvGiTemp), index, r);
-        gi_store(engine_view(kEvGi), index, r);
-        return;
+    surface = s.valid && (s.flags & kGbEmitter) == 0u && (g_engine_info.x & kEngineIndirect) != 0u;
+    if (!surface) {
+        return r;
     }
     uint seed = emit_hash(index ^ (g_frame * 0x68E31DA4u) ^ 0x1B56C4E9u);
     const uint salt = index * 32u + g_frame * 0x632BE5ABu + 19u;
@@ -1858,7 +1980,7 @@ void EngineIndirectCS(uint3 id : SV_DispatchThreadID)
     const float target = luminance(radiance) * cos_theta;
     gi_update(r, x, hn, radiance, target, target * kPi / cos_theta, 1.0f, seed);
     uint prev_pixel;
-    if (engine_reproject(s.p, s.n, prev_pixel)) {
+    if (engine_reproject(q, s.p, s.n, prev_pixel)) {
         // The last frame's temporal reservoir of the half-resolution sample covering that pixel (not its spatially
         // reused one: reusing that compounds the gain into blobs).
         const uint2 hp = uint2(prev_pixel % g_target_size.x, prev_pixel / g_target_size.x) / 2u;
@@ -1875,6 +1997,27 @@ void EngineIndirectCS(uint3 id : SV_DispatchThreadID)
         }
     }
     r.W = r.target > 0.0f && r.m > 0.0f ? r.w_sum / (r.m * r.target) : 0.0f;
+    return r;
+}
+
+[numthreads(8, 8, 1)]
+void EngineIndirectCS(uint3 id : SV_DispatchThreadID, uint group_index : SV_GroupIndex)
+{
+    const uint2 half_size = g_engine_size.zw;
+    const bool in_range = all(id.xy < half_size);
+    const uint index = id.y * half_size.x + id.x;
+    bool surface = false;
+    GiReservoir r = gi_empty();
+    if (in_range) {
+        r = indirect_reservoir(id.xy, index, surface);
+    }
+    // The boiling filter, as the direct light's (RTXDI's for ReSTIR GI at the same strength).
+    if (boiling(group_index, surface ? r.w_sum : 0.0f)) {
+        r = gi_empty();
+    }
+    if (!in_range) {
+        return;
+    }
     gi_store(engine_view(kEvGiTemp), index, r);
     gi_store(engine_view(kEvGi), index, r);
 }
@@ -1903,12 +2046,13 @@ void EngineIndirectSpatialCS(uint3 id : SV_DispatchThreadID)
         const float t = own.W > 0.0f ? gi_target(s, own.x, own.radiance) : 0.0f;
         gi_update(r, own.x, own.hn, own.radiance, t, t * own.W * own.m, own.m, seed);
     }
-    // Three neighbours within 10 half-pixels on the same surface; their samples seen from here with the solid angle's
-    // Jacobian (Ouyang et al. 2021, ReSTIR GI), the reused sample's visibility checked before it is kept.
+    // Three neighbours within 10 half-pixels (at kFootprintLines) on the same surface; their samples seen from here with
+    // the solid angle's Jacobian (Ouyang et al. 2021, ReSTIR GI), the reused sample's visibility checked before it is
+    // kept.
     bool reused = false;
     [loop] for (uint k = 0u; k < 3u; ++k) {
         const float angle = emit_random(seed) * 2.0f * kPi;
-        const float radius = 1.0f + emit_random(seed) * 9.0f;
+        const float radius = (1.0f + emit_random(seed) * 9.0f) * footprint_scale();
         const int2 ho = int2(id.xy) + int2(round(float2(cos(angle), sin(angle)) * radius));
         if (any(ho < 0) || any(ho >= int2(half_size))) {
             continue;
@@ -2112,13 +2256,12 @@ void EngineTemporalCS(uint3 id : SV_DispatchThreadID)
     float prev_fast = 0.0f;
     float len_d = 0.0f;
     float len_s = 0.0f;
-    if ((g_flags & 1u) != 0u) {
-        const float3 previous = transform(g_reproject, s.p);
-        if (previous.z < -g_near) {
-            const float2 a = eye_to_pixel(g_history_projection, g_viewport, previous) - 0.5f;
+    History hp;
+    if ((g_flags & 1u) != 0u && engine_history(q, s.p, s.n, hp)) {
+        {
+            const float2 a = hp.a - 0.5f;
             const int2 b = int2(floor(a));
             const float2 f = a - float2(b);
-            const float3 n_prev = normalize(rotate3(g_reproject, s.n));
             RWByteAddressBuffer gb = engine_buffer(kEvGBufferPrev);
             RWByteAddressBuffer pd = engine_buffer(kEvHistDiffusePrev);
             RWByteAddressBuffer ps = engine_buffer(kEvHistSpecularPrev);
@@ -2135,8 +2278,8 @@ void EngineTemporalCS(uint3 id : SV_DispatchThreadID)
                 const uint op = uint(o.y) * g_target_size.x + uint(o.x);
                 const uint4 w0 = gb.Load4(op * 32u);
                 const uint4 w1 = gb.Load4(op * 32u + 16u);
-                if (w1.x == 0u || abs(asfloat(w1.x) - previous.z) > 0.02f * abs(previous.z) + 1.0f ||
-                    dot(unpack_normal(w0.x), n_prev) < 0.9f) {
+                if (w1.x == 0u || abs(asfloat(w1.x) - hp.z) > hp.tolerance ||
+                    dot(unpack_normal(w0.x), hp.n) < hp.facing) {
                     continue;
                 }
                 const float w = ((k & 1u) != 0u ? f.x : 1.0f - f.x) * ((k & 2u) != 0u ? f.y : 1.0f - f.y);
@@ -2989,6 +3132,12 @@ void EngineFinalCS(uint3 id : SV_DispatchThreadID)
     // And this frame's indirect light (unfiltered) and the filtered light less the sun's (the lights' and the bounce's
     // as the history has them).
     float2 meter_split = float2(0.0f, 0.0f);
+    // And, with the raster's motion, where it takes this pixel against the camera's reprojection (pixels: x, y, the
+    // distance; 1) and whether the histories follow it (engine_history: more than half a pixel off).
+    float4 meter_motion = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    float meter_moved = 0.0f;
+    // And the diffuse history's length there (frames: 1 where the surface's history was lost).
+    float meter_history = 0.0f;
     if (s.valid) {
         z = s.p.z;
         if ((s.flags & kGbEmitter) != 0u) {
@@ -3029,6 +3178,14 @@ void EngineFinalCS(uint3 id : SV_DispatchThreadID)
                     meter = float4(luminance(float3(f16tof32(dv.x), f16tof32(dv.x >> 16u), f16tof32(dv.y))),
                                    luminance(diffuse), luminance(sun), 1.0f);
                     meter_split = float2(luminance(gi_upsampled(s, q)), luminance(diffuse - sun));
+                    meter_history = f16tof32(engine_buffer(kEvHistDiffuse).Load(pixel * 16u + 4u) >> 16u);
+                    if ((g_engine_info.x & kEngineMotion) != 0u) {
+                        const Texture2D<float2> motion = ResourceDescriptorHeap[engine_view(kEvMotion)];
+                        const float2 d = float2(q) + 0.5f + motion.Load(int3(q, 0)) + g_motion_jitter -
+                                         eye_to_pixel(g_history_projection, g_viewport, transform(g_reproject, s.p));
+                        meter_motion = float4(d, length(d), 1.0f);
+                        meter_moved = length(d) > 0.5f ? 1.0f : 0.0f;
+                    }
                 }
             }
             if ((g_engine_info.x & kEngineReference) != 0u) {
@@ -3060,6 +3217,20 @@ void EngineFinalCS(uint3 id : SV_DispatchThreadID)
                 const uint4 dv = engine_buffer(kEvDirect).Load4(pixel * 16u);
                 diffuse = float3(f16tof32(dv.x), f16tof32(dv.x >> 16u), f16tof32(dv.y));
                 specular = float3(0.0f, 0.0f, 0.0f);
+            }
+            // View 15: the raster's motion less the camera's (red x, green y; 0.5 none, 8 pixels to full): still
+            // surfaces read 0.5 where the two agree in direction and scale, what moved by itself off it; blue where the
+            // frame has no motion.
+            if (view == 15u) {
+                const float2 camera = eye_to_pixel(g_history_projection, g_viewport, transform(g_reproject, s.p));
+                float3 shown = float3(0.0f, 0.0f, 1.0f);
+                if ((g_engine_info.x & kEngineMotion) != 0u) {
+                    const Texture2D<float2> motion = ResourceDescriptorHeap[engine_view(kEvMotion)];
+                    shown = float3(saturate(0.5f + (float2(q) + 0.5f + motion.Load(int3(q, 0)) + g_motion_jitter - camera) / 16.0f),
+                                   0.0f);
+                }
+                diffuse = float3(0.0f, 0.0f, 0.0f);
+                specular = srgb_to_linear(shown) / max(exposure, 1e-6f);
             }
             // Views 11 to 13: the sun's shadow, unlit (the filtered visibility, its ray's, the penumbra's radius on
             // screen over kShadowRadiusMost; facing away black).
@@ -3105,6 +3276,9 @@ void EngineFinalCS(uint3 id : SV_DispatchThreadID)
         // Summed over the disc (fixed point, 1/256): the meter's record ([rt-light-meter]).
         const float4 total = WaveActiveSum(meter);
         const float2 split = WaveActiveSum(meter_split);
+        const float4 moving = WaveActiveSum(meter_motion);
+        const float moved = WaveActiveSum(meter_moved);
+        const float history = WaveActiveSum(meter_history);
         if (WaveIsFirstLane() && total.w > 0.0f) {
             const uint at = g_sample_size.x * g_sample_size.y + kStarSlots + 4u;
             InterlockedAdd(g_final[at].x, uint(round(total.x * 256.0f)));
@@ -3113,6 +3287,15 @@ void EngineFinalCS(uint3 id : SV_DispatchThreadID)
             InterlockedAdd(g_final[at].w, uint(total.w));
             InterlockedAdd(g_final[at + 1u].x, uint(round(split.x * 256.0f)));
             InterlockedAdd(g_final[at + 1u].y, uint(round(split.y * 256.0f)));
+            InterlockedAdd(g_final[at + 1u].w, uint(round(history * 16.0f)));
+            if (moving.w > 0.0f) {
+                // Signed sums (two's complement).
+                InterlockedAdd(g_final[at + 1u].z, uint(moved));
+                InterlockedAdd(g_final[at + 2u].x, asuint(int(round(moving.x * 256.0f))));
+                InterlockedAdd(g_final[at + 2u].y, asuint(int(round(moving.y * 256.0f))));
+                InterlockedAdd(g_final[at + 2u].z, uint(round(moving.z * 256.0f)));
+                InterlockedAdd(g_final[at + 2u].w, uint(moving.w));
+            }
         }
     }
     if ((g_engine_info.x & kEngineReference) != 0u) {

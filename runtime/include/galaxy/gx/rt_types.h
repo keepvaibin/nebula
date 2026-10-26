@@ -198,6 +198,8 @@ struct RtView {
     std::array<float, 4> viewport{};
     float min_depth = 0.0f;
     float max_depth = 1.0f;
+    // The temporal upscaler's jitter in the projection (render pixels: x right, y down; 0 without it).
+    std::array<float, 2> jitter{};
 };
 
 }  // namespace galaxy::gx

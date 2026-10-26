@@ -2104,6 +2104,7 @@ const uint8_t* svc_disc_dol(void*, size_t* size) {
 }
 
 std::atomic<uint32_t> gRetraces{0};
+std::atomic<uint64_t> gSceneFrames{0};  // svc_test_scene_frame's count (GALAXY_TEST_SCRIPT_CLOCK=frames)
 std::atomic<uint32_t> gXfb{0};
 
 void svc_vi_frame(void*, uint32_t xfb, int black, uint32_t retrace) {
@@ -2391,8 +2392,13 @@ std::atomic<int64_t> gVirtualSampledNs{std::numeric_limits<int64_t>::min() / 2};
 std::atomic<bool> gVirtualReports{true};  // the game takes the stand-in's reports (not a real remote's)
 
 galaxy::input::WiimoteInputSnapshot virtual_snapshot() {
+    static const bool frame_clock = [] {
+        const char* value = std::getenv("GALAXY_TEST_SCRIPT_CLOCK");
+        return value != nullptr && std::strcmp(value, "frames") == 0;
+    }();
     return galaxy::host::native_game_wiimote_snapshot(
-        gRetraces.load(std::memory_order_relaxed), gWpadDpd.load(std::memory_order_relaxed) != 0,
+        frame_clock ? gSceneFrames.load(std::memory_order_relaxed) : gRetraces.load(std::memory_order_relaxed),
+        gWpadDpd.load(std::memory_order_relaxed) != 0,
         gStarPointerMode.load(std::memory_order_relaxed), static_cast<uint8_t>(gTiltSection.load(std::memory_order_relaxed)));
 }
 
@@ -2683,6 +2689,8 @@ int svc_hbm(void*, uint32_t what, uint32_t value) {
 //   GALAXY_TEST_EVENTS actors@frame: the live actors with a model, by model name and position (where to teleport),
 //     with the animation they play, and whether they are shown, clipped, or drawn while clipped as shadow casters.
 //   GALAXY_TEST_EVENTS shake@frame: the screen shakes from that frame until the scene ends.
+//   GALAXY_TEST_SCRIPT_CLOCK=frames: the scripted input (GALAXY_INPUT_*) counts scene frames instead of retraces, so a
+//     run's game frames take the same input whatever its renderer's speed (builds compared frame for frame).
 std::atomic<bool> gTourDone{false};
 
 int svc_test_scene_frame(void*, NebulaTestAction* action) {
@@ -2775,6 +2783,7 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
         }
     }
     ++scene_frames;
+    gSceneFrames.store(scene_frames, std::memory_order_relaxed);
 #if defined(NEBULA_HOST_RENDERER)
     // The settings' galaxy select (ADVANCED page): a travel the player asked for, through the game's own stage change,
     // and the Grand Stars with the Observatory they power.

@@ -241,6 +241,9 @@ public:
         return engine_active() && engine_clear_wanted_ && reflections_active();
     }
     void set_engine_picture(ID3D12Resource* picture) noexcept { engine_picture_ = picture; }
+    // The raster's motion target (current to previous, render pixels) the next trace reads, or none: the renderer
+    // transitions it to NON_PIXEL_SHADER_RESOURCE for the trace.
+    void set_engine_motion(ID3D12Resource* motion) noexcept { engine_motion_ = motion; }
     bool camera_widen(ID3D12GraphicsCommandList* list, D3D12_GPU_DESCRIPTOR_HANDLE picture_table,
                       D3D12_CPU_DESCRIPTOR_HANDLE target, std::uint32_t width, std::uint32_t height);
     bool camera_finish(ID3D12GraphicsCommandList* list, D3D12_GPU_DESCRIPTOR_HANDLE picture_table,
@@ -731,6 +734,10 @@ private:
     bool engine_anti_lag_ = true;   // GALAXY_RT_ENGINE_ANTILAG: the diffuse history's anti-lag
     bool engine_light_history_ = true;   // GALAXY_RT_ENGINE_LIGHT_HISTORY=0: no temporal light reuse
     bool engine_clear_wanted_ = true;  // GALAXY_RT_ENGINE_CLEAR: the clear-surface pass
+    bool engine_boiling_ = true;  // GALAXY_RT_ENGINE_BOILING=0: no boiling filter (rt_engine.hlsl boiling)
+    // GALAXY_RT_ENGINE_FOOTPRINT=0: the filters' and the reuse's widths in pixels whatever the lines (kFootprintLines).
+    bool engine_footprint_ = true;
+    bool engine_motion_wanted_ = true;  // GALAXY_RT_ENGINE_MOTION=0: the histories by the camera's reprojection alone
     std::uint32_t engine_clear_mode_ = 1u;  // GALAXY_RT_ENGINE_CLEAR: 0 off, 1 on, 2-10 diagnostics (rt_engine.hlsl)
     bool engine_fresh_ = true;      // new buffers: no history
     std::uint32_t engine_view_ = 0;  // GALAXY_RT_ENGINE_VIEW (rt_engine.hlsl kEngineView)
@@ -738,6 +745,7 @@ private:
     std::uint32_t engine_height_ = 0;
     unsigned engine_parity_ = 0;
     ID3D12Resource* engine_picture_ = nullptr;
+    ID3D12Resource* engine_motion_ = nullptr;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_gbuffer_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_direct_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_direct_spatial_pso_;
@@ -906,8 +914,8 @@ private:
     static constexpr unsigned kBallReadbacks = 4u;
     // After the balls and the colour: the pixel probe's two records (GALAXY_RT_PROBE: rt_engine.hlsl EngineGBufferCS),
     // the engine reference's comparison (rt_engine.hlsl EngineFinalCS) and a spare.
-    // The probe's records (GALAXY_RT_PROBE: 0, 1, 3), the reference's comparison (2), the light meter's sums (4, 5).
-    static constexpr unsigned kProbeRecords = 6u;
+    // The probe's records (GALAXY_RT_PROBE: 0, 1, 3), the reference's comparison (2), the light meter's sums (4 to 6).
+    static constexpr unsigned kProbeRecords = 7u;
     static constexpr unsigned kBallReadbackBytes = kStarSlots * 16u + 16u + kProbeRecords * 16u;
     // GALAXY_RT_PROBE=x,y (diagnostics): an EFB pixel whose sample reports, once a second, the draw the camera sees and
     // what stops the sun's centre ray from it (draw record, material table entry, distance, instance).
@@ -1074,6 +1082,7 @@ private:
     std::array<float, 12> picture_camera_{};
     // Their projections (each frame's own jitter).
     std::array<float, 4> history_projection_{};
+    std::array<float, 2> history_jitter_{};
     std::array<float, 4> picture_projection_{};
     std::uint32_t light_samples_ = 0;
     std::uint32_t history_width_ = 0;

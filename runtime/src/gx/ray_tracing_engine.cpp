@@ -23,6 +23,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -41,8 +42,10 @@ enum EngineView : std::uint32_t {
     kEvSlot, kEvPicture, kEvShadow, kEvShadowPrev, kEvLightGrid, kEvLightRemap, kEvCount,
     // The clear-surface pass's views (trace_engine_clear) follow the trace's.
     kEvWaterScene = kEvCount, kEvWaterPositions, kEvWaterSurfaces, kEvClearDraws, kEvClear, kEvClearEnd,
+    // The raster's motion where the frame has it (kEngineMotion).
+    kEvMotion = kEvClearEnd,
 };
-static_assert(kEvClearEnd <= 32u);
+static_assert(kEvMotion < 32u);
 
 // rt_engine.hlsl's light grid: kGridCells^3 cells of kGridSlots slots (a light, its weight).
 constexpr std::uint64_t kEngineGridBytes = 24ull * 24ull * 24ull * 64ull * 8ull;
@@ -66,6 +69,9 @@ constexpr std::uint32_t kEngineWaterLight = 524288u;
 constexpr std::uint32_t kEngineNoAntiLag = 1048576u;
 constexpr std::uint32_t kEngineNoLightHistory = 2097152u;
 constexpr std::uint32_t kEngineClearSolidLeft = 4194304u;
+constexpr std::uint32_t kEngineNoBoiling = 8388608u;
+constexpr std::uint32_t kEngineMotion = 16777216u;
+constexpr std::uint32_t kEngineNoFootprint = 33554432u;
 
 float env_value(const char* name, float fallback) {
     char value[32]{};
@@ -106,6 +112,9 @@ bool SceneRayTracer::create_engine_pipelines() {
     engine_bounces_ = env_value("GALAXY_RT_ENGINE_BOUNCES", 1.0f) != 0.0f;
     engine_anti_lag_ = env_value("GALAXY_RT_ENGINE_ANTILAG", 1.0f) != 0.0f;
     engine_light_history_ = env_value("GALAXY_RT_ENGINE_LIGHT_HISTORY", 1.0f) != 0.0f;
+    engine_boiling_ = env_value("GALAXY_RT_ENGINE_BOILING", 1.0f) != 0.0f;
+    engine_footprint_ = env_value("GALAXY_RT_ENGINE_FOOTPRINT", 1.0f) != 0.0f;
+    engine_motion_wanted_ = env_value("GALAXY_RT_ENGINE_MOTION", 1.0f) != 0.0f;
     engine_clear_mode_ = static_cast<std::uint32_t>(std::clamp(env_value("GALAXY_RT_ENGINE_CLEAR", 1.0f), 0.0f, 10.0f));
     engine_clear_wanted_ = engine_clear_mode_ != 0u;
     engine_reference_ = env_value("GALAXY_RT_ENGINE_REFERENCE", 0.0f) != 0.0f;
@@ -405,6 +414,16 @@ bool SceneRayTracer::engine_prepare(std::uint32_t width, std::uint32_t height, u
         }
     }
     std::copy(std::begin(views), std::end(views), c.views);
+    // The raster's motion, where the scene wrote it (RendererD3D12 scene_motion_): the histories follow what moved by
+    // itself (rt_engine.hlsl engine_history).
+    bool motion = false;
+    if (engine_motion_ != nullptr && engine_motion_wanted_) {
+        const std::uint32_t view = texture_srv(engine_motion_);
+        if (view != 0xFFFFFFFFu) {
+            c.views[kEvMotion] = view;
+            motion = true;
+        }
+    }
     // Light under water reads the last water pass's surfaces; the next water pass rebuilds them after this trace.
     bool water_light = false;
     if (water_light_ && water_light_triangles_ != 0u && water_tlas_ && water_positions_ &&
@@ -430,7 +449,8 @@ bool SceneRayTracer::engine_prepare(std::uint32_t width, std::uint32_t height, u
                 (engine_clear_mode_ == 9u ? kEngineClearNoTev : 0u) | (engine_bounces_ ? kEngineBounceCache : 0u) |
                 (water_light ? kEngineWaterLight : 0u) | (engine_anti_lag_ ? 0u : kEngineNoAntiLag) |
                 (engine_light_history_ ? 0u : kEngineNoLightHistory) |
-                (engine_clear_mode_ == 10u ? kEngineClearSolidLeft : 0u) | (engine_view_ << 4u);
+                (engine_clear_mode_ == 10u ? kEngineClearSolidLeft : 0u) | (engine_boiling_ ? 0u : kEngineNoBoiling) |
+                (motion ? kEngineMotion : 0u) | (engine_footprint_ ? 0u : kEngineNoFootprint) | (engine_view_ << 4u);
     c.info[1] = 0u;
     c.info[2] = slot;
     c.info[3] = 0u;
@@ -512,8 +532,8 @@ void SceneRayTracer::trace_engine(ID3D12GraphicsCommandList* list, Allocate allo
     end_pass(list, timed, kPassEngineSpecular);
     timed = begin_pass(list);
     run(engine_temporal_pso_.Get(), gx, gy, L"engine_temporal");
-    // The a-trous iterations (steps 1, 2, 4, 8: A to B, B to A, ...) and the final pass (the result in A), each with
-    // its step in the frame's constants.
+    // The a-trous iterations (steps 1, 2, 4, 8 and on: A to B, B to A, ...) and the final pass, each with its step in
+    // the frame's constants.
     const auto with_info = [&](std::uint32_t step, std::uint32_t parity) {
         const RtUpload upload = allocate(allocate_context, bytes, 256u);
         if (upload.cpu == nullptr) {
@@ -526,14 +546,19 @@ void SceneRayTracer::trace_engine(ID3D12GraphicsCommandList* list, Allocate allo
         list->SetComputeRootConstantBufferView(0u, upload.gpu);
         return true;
     };
-    for (std::uint32_t i = 0; i < 4u; ++i) {
+    // Four at the engine's reference picture (rt_engine.hlsl kFootprintLines, 1056 lines), one more each time the lines
+    // double: the filter's reach stays the same share of the picture (6x at 2560 x 1440: five, steps to 16).
+    const double lines = engine_footprint_ ? std::max(static_cast<double>(engine_height_) / 1056.0, 1.0) : 1.0;
+    const std::uint32_t iterations = 4u + static_cast<std::uint32_t>(std::lround(std::log2(lines)));
+    for (std::uint32_t i = 0; i < iterations; ++i) {
         if (with_info(1u << i, i & 1u)) {
             run(engine_atrous_pso_.Get(), gx, gy, L"engine_atrous");
         }
     }
     end_pass(list, timed, kPassEngineDenoise);
     timed = begin_pass(list);
-    if (with_info(0u, 0u)) {
+    // The result is where the last iteration wrote it (A after an even count, B after an odd one).
+    if (with_info(0u, iterations & 1u)) {
         run(engine_final_pso_.Get(), gx, gy, L"engine_final");
     }
     end_pass(list, timed, kPassEngineFinal);

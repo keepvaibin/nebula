@@ -6173,6 +6173,7 @@ RtView GxBackend::scene_depth_view(const ScaledGxViewport& viewport) const {
         if (width > 0.0f && height > 0.0f) {
             view.projection[1] -= 2.0f * scene_jitter_px_[0] / width;
             view.projection[3] -= -2.0f * scene_jitter_px_[1] / height;
+            view.jitter = {scene_jitter_px_[0], scene_jitter_px_[1]};
         }
     }
     view.z_scale = -projection(4u) * kFarEps;
@@ -6676,9 +6677,11 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
     if (marker == FifoMarker::SceneBegin) {
         temporal_scene_ = renderer_.scene_temporal_begin(
             scene_jitter_px_[0], scene_jitter_px_[1]);
-        motion_scene_ = temporal_scene_ && renderer_.begin_motion_scene();
+        // A temporal scene writes the motion, and so does one the ray tracing engine lights (its histories follow
+        // moving surfaces by it) without a temporal upscaler: unjittered, the transform history behind it.
+        motion_scene_ = renderer_.begin_motion_scene();
         scene_camera_captured_ = false;
-        history_scene_ = temporal_scene_ || interp_recording_;
+        history_scene_ = temporal_scene_ || motion_scene_ || interp_recording_;
         if (interp_recording_) {
             renderer_.note_replay_scene();
             if (!std::exchange(mirror_opened_scene_, false)) {
@@ -6746,7 +6749,7 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
     }
     // Projections take (or drop) the scene jitter, and scene draws switch
     // palette addressing, from the next draw on.
-    if (was_temporal || temporal_scene_ || interp_recording_) {
+    if (was_temporal || was_motion || temporal_scene_ || motion_scene_ || interp_recording_) {
         frame_bindings_dirty_ = true;
     }
     // Motion keys switch on or off: resolve the pipeline again.
