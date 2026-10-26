@@ -2317,8 +2317,17 @@ uint32_t svc_option(void*, uint32_t what) {
 
 void svc_fs_request(void*, const NebulaFsRequest* request, uint32_t slot) {
     gFsOps.fetch_add(1, std::memory_order_relaxed);
+    // GALAXY_TEST_NAND_DELAY_US: a slow drive for saves (each NAND operation takes this long), so the windows that
+    // open and close around a save are exercised as on a busy disk.
+    static const uint32_t test_delay_us = [] {
+        const char* value = std::getenv("GALAXY_TEST_NAND_DELAY_US");
+        return value != nullptr ? static_cast<uint32_t>(std::strtoul(value, nullptr, 10)) : 0u;
+    }();
     const NebulaFsRequest r = *request;
     gFs.post([r, slot] {
+        if (test_delay_us != 0) {
+            std::this_thread::sleep_for(std::chrono::microseconds(test_delay_us));
+        }
         gModule.fs_complete(slot, fs_run(r));
     });
 }
