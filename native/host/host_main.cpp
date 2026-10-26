@@ -2262,6 +2262,12 @@ uint32_t svc_option(void*, uint32_t what) {
 #else
         return 1;
 #endif
+    case NEBULA_OPTION_BLOOM:
+#if defined(NEBULA_HOST_RENDERER)
+        return galaxy::gx::bloom_route();
+#else
+        return 0;
+#endif
     case NEBULA_OPTION_TEST_DUMP_LAYOUTS: {
         static const bool dump = [] {
             const char* value = std::getenv("GALAXY_TEST_DUMP_LAYOUTS");
@@ -3016,7 +3022,6 @@ void apply_shipped_renderer_defaults() {
         {"GALAXY_HIDE_OS_CURSOR", "1"},
         {"GALAXY_MOUSE_IR_CURSOR_POLL", "auto"},
         {"GALAXY_MOUSE_IR_MESSAGE_RECENT_MS", "120"},
-        {"GALAXY_NATIVE_BLOOM_WORKSPACE", "1"},
         {"GALAXY_PE_EVENTS_GPU_FENCE", "1"},
         {"GALAXY_PSO_PREWARM", "1"},
         {"GALAXY_PSO_PREWARM_BLOCKING", "1"},

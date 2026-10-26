@@ -103,6 +103,7 @@ add_library(galaxy_gx_vk STATIC
     ${rt}/gx/vk/renderer_vk_efb.cpp
     ${rt}/gx/vk/renderer_vk_replay.cpp
     ${rt}/gx/vk/post_process_vk.cpp
+    ${rt}/gx/vk/game_bloom_vk.cpp
     ${galaxy_post_embed_cpp}
     ${rt}/frame_cadence_diagnostics.cpp
     ${rt}/runtime_settings.cpp

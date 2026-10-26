@@ -240,6 +240,9 @@ public:
     [[nodiscard]] bool draw_identity_wanted() const noexcept {
         return draw_identity_wanted_.load(std::memory_order_relaxed);
     }
+    [[nodiscard]] unsigned bloom_route() const noexcept {
+        return bloom_route_.load(std::memory_order_relaxed);
+    }
     // Simulation thread: the game camera for the next SceneBegin marker, the player's up in the world
     // (null when unknown), kept in that camera's eye space for the enhanced sky, and the stage being
     // played (null: unknown, an empty name in the marker).
@@ -672,6 +675,9 @@ private:
     bool scene_phase_ = false;
     // Render thread -> simulation thread: emit draw-identity markers.
     std::atomic<bool> draw_identity_wanted_{false};
+    std::atomic<unsigned> bloom_route_{0u};
+    // RenderConfig::rt_water this render chunk: water draws join the traced water (rt_water_draw).
+    bool rt_water_wanted_ = true;
     std::atomic<bool> rt_shadow_casters_wanted_{false};
     // Draw identity (on_host_marker): the key of the marker in force in the
     // open scene and the matrix-write count at it. A transform record's

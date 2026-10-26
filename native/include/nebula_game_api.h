@@ -147,6 +147,10 @@ enum {
                                         before the first scene): LodCtrl's switch distances grow by it */
     NEBULA_OPTION_TEST_LOD,          /* tests (GALAXY_TEST_LOD): 1 every LodCtrl shows its middle model, 2 its low
                                         model, 3 its high and middle models in turn each frame (the switch itself) */
+    NEBULA_OPTION_BLOOM,             /* how BloomEffect and BloomEffectSimple go through the renderer
+                                        (__NebulaGXBloomMarker): 0 not at all (their copy chains, as the console's), 1
+                                        their own chains with the scene they work over kept and restored by it (in the
+                                        EFB's own format), 2 it draws the bloom from their values */
 };
 
 /* game_light: the game's lights, from the objects that own them; `values` per kind. */

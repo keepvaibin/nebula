@@ -119,6 +119,31 @@ static inline void __NebulaGXHostMarker(uint8_t kind, uint16_t aux, uint32_t a, 
     __NebulaGXStore32(p + 8, b);
 }
 
+/* Nonzero while the writer is in the main ring (not a display list). */
+extern uint8_t __NebulaGXLinked;
+
+/* The game's bloom through the renderer (NEBULA_OPTION_BLOOM; galaxy/motion_signals.h kMarkerBloom, its phases and
+   values): a host marker whatever the draw identities, in the main ring only. */
+enum {
+    NEBULA_GX_MARKER_BLOOM = 15,
+    NEBULA_GX_BLOOM_KEEP = 1,
+    NEBULA_GX_BLOOM_NORMAL = 2,
+    NEBULA_GX_BLOOM_SIMPLE = 3,
+    NEBULA_GX_BLOOM_RESTORE = 4,
+};
+
+static inline void __NebulaGXBloomMarker(uint16_t phase, uint32_t a, uint32_t b) {
+    if (__NebulaGXLinked == 0) {
+        return;
+    }
+    uint8_t* const p = __NebulaGXReserve(12);
+    p[0] = 0xF0;
+    p[1] = NEBULA_GX_MARKER_BLOOM;
+    __NebulaGXStore16(p + 2, phase);
+    __NebulaGXStore32(p + 4, a);
+    __NebulaGXStore32(p + 8, b);
+}
+
 /* Indexed load (0x20/0x28/0x30/0x38): the opcode, the index, the address and size word. */
 static inline void __NebulaGXCmdIndexed(uint8_t opcode, uint16_t index, uint16_t addr) {
     uint8_t* const p = __NebulaGXReserve(5);

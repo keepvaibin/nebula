@@ -4,6 +4,14 @@
 #include "Game/Screen/ImageEffectResource.hpp"
 #include "Game/Screen/ImageEffectSystemHolder.hpp"
 #include "Game/Util/DrawUtil.hpp"
+#ifdef TARGET_PC
+#include "Game/Util/Color.hpp"
+#include "Game/Util/SystemUtil.hpp"
+#include <JSystem/JUtility/JUTTexture.hpp>
+#include <nebula_game_api.h>
+#include <nebula_gx_fifo.h>
+#include <revolution/os.h>
+#endif
 
 namespace {
     // static const s32 sLen = _;
@@ -45,12 +53,45 @@ void BloomEffectSimple::draw() const {
         return;
     }
 
+#ifdef TARGET_PC
+    const u32 route = __NebulaGXLinked != 0 ? __NebulaOption(NEBULA_OPTION_BLOOM) : 0;
+    if (route == 2) {
+        // The chain below, drawn by the renderer at the internal resolution (galaxy/gx/game_bloom.h): the threshold,
+        // the channel, the ring's tap weight (blurTexture's), the intensity and the ring's vertical radius per unit;
+        // then the GX state the chain leaves.
+        const u8 alpha = 255.0f * mIntensity * get_10();
+        const u32 tap = static_cast< u8 >(static_cast< s32 >(255.0f * 1.0f / 8));
+        const f32 vertical = MR::isScreen16Per9() ? 1.333f : 1.0f;
+        u32 verticalBits;
+        __builtin_memcpy(&verticalBits, &vertical, sizeof(verticalBits));
+        __NebulaGXBloomMarker(NEBULA_GX_BLOOM_SIMPLE,
+                              mThreshold | static_cast< u32 >(mMaskFilter & 0xFF) << 8 | tap << 16 | static_cast< u32 >(alpha) << 24,
+                              verticalBits);
+        MR::reinitGX();
+        ImageEffectLocalUtil::setupDrawTexture();
+        _28->load(GX_TEXMAP0);
+        GXSetChanMatColor(GX_COLOR0A0, Color8(alpha, alpha, alpha, 255));
+        GXSetChanAmbColor(GX_COLOR0A0, Color8(0, 0, 0, 255));
+        GXSetBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_ONE, GX_LO_CLEAR);
+        return;
+    }
+#endif
+
     CopyFilterNegater copyFilterNegator;
 
     ::TexSpec texSpec;
     texSpec.set(_20, 4, 0, GX_TF_RGB565);
 
-    ImageEffectLocalUtil::capture(texSpec._0, texSpec._4, texSpec._8, texSpec._C, false, 0);
+#ifdef TARGET_PC
+    // The renderer keeps the scene in the EFB's own format: the corner the chain works in is saved as a texture copy,
+    // which cuts the ray tracer's HDR scene at 1 there.
+    if (route != 0) {
+        __NebulaGXBloomMarker(NEBULA_GX_BLOOM_KEEP, 0, 0);
+    } else
+#endif
+    {
+        ImageEffectLocalUtil::capture(texSpec._0, texSpec._4, texSpec._8, texSpec._C, false, 0);
+    }
     ImageEffectLocalUtil::capture(_18, texSpec._4, texSpec._8, GX_TF_RGB565, true, 0);
     MR::reinitGX();
     ImageEffectLocalUtil::setupDrawTexture();
@@ -86,7 +127,15 @@ void BloomEffectSimple::draw() const {
     texSpec.set(_24, 8, 0, GX_TF_RGB565);
     ImageEffectLocalUtil::blurTexture(texSpec._0, texSpec._4, texSpec._8, 8, 0.009f, 1.0f);
     ImageEffectLocalUtil::capture(_28, texSpec._4, texSpec._8, texSpec._C, false, 0);
-    ImageEffectLocalUtil::drawTexture(_20, 4, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
+#ifdef TARGET_PC
+    if (route != 0) {
+        // The kept scene drawn back over the corner the chain worked in (the rest of the frame is unchanged).
+        __NebulaGXBloomMarker(NEBULA_GX_BLOOM_RESTORE, 0, 0);
+    } else
+#endif
+    {
+        ImageEffectLocalUtil::drawTexture(_20, 4, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
+    }
     const u8 alpha = 255.0f * mIntensity * get_10();
     ImageEffectLocalUtil::drawTexture(_28, 1, 0, alpha, ImageEffectLocalUtil::TexDrawType_1);
 }

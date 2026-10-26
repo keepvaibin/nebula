@@ -13,6 +13,11 @@
 #include "revolution/gx/GXStruct.h"
 #include "revolution/gx/GXTev.h"
 #include <JSystem/JUtility/JUTTexture.hpp>
+#ifdef TARGET_PC
+#include <nebula_game_api.h>
+#include <nebula_gx_fifo.h>
+#include <revolution/os.h>
+#endif
 
 namespace {
     struct RadAndOfs {
@@ -38,6 +43,18 @@ namespace {
     // static const f32 sMaskThreshold = _;
     // static const ... sBlurType = _;
     // static const s32 sFadeCounterMax = _;
+
+#ifdef TARGET_PC
+    // How the bloom goes through the renderer (NEBULA_OPTION_BLOOM; galaxy/gx/game_bloom.h): decided at preDraw for
+    // the frame's pair of passes, so a change in between never restores a scene that was not kept.
+    u32 sBloomRoute;
+
+    u32 floatBits(f32 value) {
+        u32 bits;
+        __builtin_memcpy(&bits, &value, sizeof(bits));
+        return bits;
+    }
+#endif
 };  // namespace
 
 BloomEffect::BloomEffect(const char* pName) : ImageEffectBase(pName), _14(255), _18(1.0f / ::sL1RoundPoints), _1C(1.0f / ::sL2RoundPoints), _20(128) {
@@ -73,6 +90,14 @@ void BloomEffect::preDraw() const {
         return;
     }
 
+#ifdef TARGET_PC
+    // The renderer keeps the scene in the EFB's own format: the console's copy below is 8 bits, which cuts the ray
+    // tracer's HDR scene at 1.
+    sBloomRoute = __NebulaGXLinked != 0 ? __NebulaOption(NEBULA_OPTION_BLOOM) : 0;
+    if (sBloomRoute != 0) {
+        __NebulaGXBloomMarker(NEBULA_GX_BLOOM_KEEP, 0, 0);
+    } else
+#endif
     {
         CopyFilterNegater copyFilterNegator;
         ImageEffectLocalUtil::capture(_24, 1, 0, GX_TF_RGBA8, false, 0);
@@ -90,6 +115,30 @@ void BloomEffect::postDraw() const {
     }
 
     GXRenderModeObj* pRenderObj = JUTVideo::getManager()->getRenderMode();
+#ifdef TARGET_PC
+    if (sBloomRoute == 2) {
+        // The chain below, drawn by the renderer at the internal resolution: the threshold, both blurs' tap weights (as
+        // initBlur loads them), the intensity and the rings' horizontal radius per unit; then the GX state the chain
+        // leaves.
+        const u8 intensity = _14 * get_10();
+        const u32 tap1 = static_cast< u8 >(static_cast< s32 >(_18 * 255.0f));
+        const u32 tap2 = static_cast< u8 >(static_cast< s32 >(_1C * 255.0f));
+        __NebulaGXBloomMarker(NEBULA_GX_BLOOM_NORMAL, _20 | tap1 << 8 | tap2 << 16 | static_cast< u32 >(intensity) << 24,
+                              floatBits(1.0f / MR::getAspect()));
+        initDraw();
+        GXSetCopyClear(Color8(0, 0, 0, 0xFF), 0xFFFFFF);
+        GXSetNumTexGens(1);
+        GXSetTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY, GX_FALSE, GX_PTIDENTITY);
+        GXSetNumTevStages(1);
+        GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
+        GXSetTevOp(GX_TEVSTAGE0, GX_MODULATE);
+        _3C->load(GX_TEXMAP0);
+        GXSetChanMatColor(GX_COLOR0A0, Color8(0xFF, 0xFF, 0xFF, 0xFF));
+        GXSetBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_ONE, GX_LO_CLEAR);
+        GXSetCopyFilter(GX_FALSE, pRenderObj->sample_pattern, GX_TRUE, pRenderObj->vfilter);
+        return;
+    }
+#endif
     GXSetCopyFilter(GX_FALSE, pRenderObj->sample_pattern, GX_FALSE, pRenderObj->vfilter);
 
     ImageEffectLocalUtil::capture(_28, 1, 0, GX_TF_RGB565, true, 0);
@@ -126,7 +175,15 @@ void BloomEffect::postDraw() const {
     ImageEffectLocalUtil::capture(_3C, 4, 7, GX_TF_RGB565, false, 0);
     GXSetCopyFilter(GX_FALSE, pRenderObj->sample_pattern, GX_TRUE, pRenderObj->vfilter);
 
-    drawTexture(_24, 1, 0, 0xFF, DrawType_0);
+#ifdef TARGET_PC
+    if (sBloomRoute != 0) {
+        // The scene the renderer kept, drawn back as _24 would be (its RGB; the alpha update is off).
+        __NebulaGXBloomMarker(NEBULA_GX_BLOOM_RESTORE, 0, 0);
+    } else
+#endif
+    {
+        drawTexture(_24, 1, 0, 0xFF, DrawType_0);
+    }
     drawTexture(_3C, 1, 0, 0xFF, DrawType_1);
 }
 

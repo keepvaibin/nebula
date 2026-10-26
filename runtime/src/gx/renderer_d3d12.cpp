@@ -16,6 +16,7 @@
 #include "galaxy/gx/streamline_bridge.h"
 #include "galaxy/gx/texture_cache.h"
 #include "galaxy/gx/uber_constants.h"
+#include "galaxy/motion_signals.h"
 #include "galaxy/runtime_settings.h"
 #include "galaxy/scope_exit.h"
 #include "galaxy/native_host.h"
@@ -2256,6 +2257,9 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
             if (!ambient_occlusion_.initialize(device_.Get())) {
                 std::cerr << "[ambient-occlusion] unavailable\n";
             }
+            if (!game_bloom_.initialize(device_.Get())) {
+                std::cerr << "[bloom] unavailable: the game's own chain\n";
+            }
         }
         boot_step("post-process and ambient occlusion");
 
@@ -2425,6 +2429,7 @@ void RendererD3D12::shutdown() {
     s_blit_root_sig.Reset();
     post_process_.shutdown();
     ambient_occlusion_.shutdown();
+    game_bloom_.shutdown();
     ray_tracer_.shutdown();
     {
         const PlacedTextureAllocator::Stats heap = efb_copy_heap_.stats();
@@ -4224,6 +4229,7 @@ void RendererD3D12::publish_replay_log() {
     std::swap(replay_viewports_, play_viewports_);
     std::swap(replay_clears_, play_clears_);
     std::swap(replay_copies_, play_copies_);
+    std::swap(replay_blooms_, play_blooms_);
     std::swap(replay_textures_, play_textures_);
     play_start_output_active_ = replay_start_output_active_;
 }
@@ -4247,6 +4253,7 @@ bool RendererD3D12::start_replay_playback() {
     std::swap(play_viewports_, run_viewports_);
     std::swap(play_clears_, run_clears_);
     std::swap(play_copies_, run_copies_);
+    std::swap(play_blooms_, run_blooms_);
     std::swap(play_textures_, run_textures_);
     run_start_output_active_ = play_start_output_active_;
     run_segment_ = replay_segment_;
@@ -4451,6 +4458,8 @@ void RendererD3D12::record_stripe_gather() {
 void RendererD3D12::reconcile_ray_tracing() {
     const bool wanted =
         get_render_config().ray_tracing_enabled && host_window::ray_tracing_offered.load(std::memory_order_relaxed);
+    // REFLECTIONS switches live, at a frame's start.
+    ray_tracer_.set_surface_reflections(rt_effect_on(get_render_config(), RtEffect::Reflections));
     // A quality change restarts the tracer (its rays, sample grid and pipelines are chosen when it starts): off this
     // frame, on again the next, as the setting's off and on.
     const bool requality =
@@ -4628,7 +4637,8 @@ void RendererD3D12::rt_trace_scene() {
     // The occlusion multiplies the opaque scene before the translucent phases draw; a recorded
     // log applies it again on each sub-frame's replay.
     const int slot = ray_tracer_.light_slot();
-    if (depth && slot >= 0 && ray_tracer_.reflections_active() && efb_color_ && conv_efb_color_srv_.ptr != 0u) {
+    if (depth && slot >= 0 && ray_tracer_.surface_reflections_active() && efb_color_ &&
+        conv_efb_color_srv_.ptr != 0u) {
         // Reflected light is the opaque scene's colour (the conversion views: colour, then depth).
         D3D12_RESOURCE_BARRIER color = barrier;
         color.Transition.pResource = efb_color_.Get();
@@ -5269,6 +5279,7 @@ void RendererD3D12::begin_replay_record() {
     replay_viewports_.clear();
     replay_clears_.clear();
     replay_copies_.clear();
+    replay_blooms_.clear();
     replay_textures_.clear();
     if (log_start_clear_valid_) {
         log_start_clear_valid_ = false;
@@ -6225,6 +6236,9 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
                 break;
             case ReplayKind::SceneAo:
                 record_scene_ao();
+                break;
+            case ReplayKind::Bloom:
+                record_game_bloom(run_blooms_[op.index]);
                 break;
             case ReplayKind::HdrBegin:
                 record_hdr_begin();
@@ -7294,6 +7308,75 @@ void RendererD3D12::record_scene_ao() {
     static_cast<void>(ambient_occlusion_.record(command_list_.Get(), srv_ring_, in, frame_index_, kFramesInFlight));
     std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
     command_list_->ResourceBarrier(1, &barrier);
+    if (efb_msaa_.samples > 1u) {
+        efb_msaa_.color_dirty = true;
+    }
+    command_list_->SetGraphicsRootSignature(root_signature_.Get());
+    invalidate_gx_bindings();
+    bound_rt_aux_ = 0xFFu;
+}
+
+void RendererD3D12::game_bloom(std::uint16_t phase, std::uint32_t a, std::uint32_t b) {
+    if (!game_bloom_.ready()) {
+        return;
+    }
+    const ReplayBloom bloom{phase, a, b};
+    if (replay_recording_) [[unlikely]] {
+        replay_ops_.push_back({ReplayKind::Bloom, static_cast<std::uint32_t>(replay_blooms_.size())});
+        replay_blooms_.push_back(bloom);
+    }
+    record_game_bloom(bloom);
+}
+
+// The game's bloom on the EFB's single-sample colour (MSAA resolves it first); the composite lands on every sample of
+// a multisampled EFB. The game's frame is its 640 x 456 at the internal scale.
+void RendererD3D12::record_game_bloom(const ReplayBloom& bloom) {
+    if (!efb_color_) {
+        return;
+    }
+    resolve_efb(false, true);
+    const D3D12_RESOURCE_DESC desc = efb_color_->GetDesc();
+    GameBloom::Inputs in{};
+    in.efb = efb_color_.Get();
+    in.rtv = efb_rtv_;
+    in.samples = efb_msaa_.samples;
+    in.hdr = efb_hdr_;
+    in.scale = efb_scale_;
+    in.logical_width = kEfbWidth;
+    in.logical_height = kGameFrameHeight;
+    in.frame_width = std::min(kEfbWidth * efb_scale_, static_cast<unsigned>(desc.Width));
+    in.frame_height = std::min(kGameFrameHeight * efb_scale_, static_cast<unsigned>(desc.Height));
+    if (bloom.phase == motion::kBloomKeep) {
+        static_cast<void>(game_bloom_.keep(command_list_.Get(), in, frame_index_, kFramesInFlight));
+        return;
+    }
+    if (bloom.phase == motion::kBloomRestore) {
+        if (!game_bloom_.restore(command_list_.Get(), srv_ring_, in, frame_index_, kFramesInFlight)) {
+            return;
+        }
+    } else {
+        GameBloom::Params p{};
+        p.threshold = bloom.a & 0xFFu;
+        p.intensity = bloom.a >> 24u;
+        if (bloom.phase == motion::kBloomNormal) {
+            p.kind = GameBloom::Kind::Normal;
+            p.tap1 = (bloom.a >> 8u) & 0xFFu;
+            p.tap2 = (bloom.a >> 16u) & 0xFFu;
+            p.ring_x = std::bit_cast<float>(bloom.b);
+        } else {
+            p.kind = GameBloom::Kind::Simple;
+            p.channel = (bloom.a >> 8u) & 0xFFu;
+            p.tap1 = (bloom.a >> 16u) & 0xFFu;
+            p.ring_y = std::bit_cast<float>(bloom.b);
+        }
+        if (!(p.ring_x > 0.0f && p.ring_x < 16.0f) || !(p.ring_y > 0.0f && p.ring_y < 16.0f)) {
+            p.ring_x = p.ring_y = 1.0f;
+        }
+        p.strength = static_cast<float>(std::min(get_render_config().bloom, kMaxBloom)) / 100.0f;
+        if (!game_bloom_.apply(command_list_.Get(), srv_ring_, in, p, frame_index_, kFramesInFlight)) {
+            return;
+        }
+    }
     if (efb_msaa_.samples > 1u) {
         efb_msaa_.color_dirty = true;
     }

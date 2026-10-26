@@ -291,7 +291,7 @@ int SceneRayTracer::trace_water(ID3D12GraphicsCommandList* list, const RtSources
                   << " forward=" << -m[8] << ',' << -m[9] << ',' << -m[10] << '\n';
     }
     // The engine's glass and crystal (rt_engine.hlsl EngineClearCS); the EFB depth is the table's second view.
-    if (engine_active() && engine_clear_wanted_) {
+    if (engine_clear_active()) {
         D3D12_GPU_DESCRIPTOR_HANDLE depth_table = color_depth_table;
         depth_table.ptr += texture_view_increment_;
         scene.engine_clear = trace_engine_clear(list, allocate, allocate_context, depth_table, slot);

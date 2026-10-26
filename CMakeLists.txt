@@ -267,6 +267,24 @@ foreach(galaxy_ao_pass distance_cs:DepthCS:cs_5_0 occlusion_cs:AoCS:cs_5_0 denoi
     list(APPEND galaxy_ao_headers "${galaxy_ao_header}")
 endforeach()
 
+# The game's bloom (runtime/src/gx/game_bloom.hlsl), compiled by fxc like the post passes.
+set(galaxy_bloom_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/gx/game_bloom.hlsl")
+set(galaxy_bloom_headers "")
+foreach(galaxy_bloom_pass down_cs:DownCS:cs_5_0 box_cs:BoxCS:cs_5_0 blur_cs:BlurCS:cs_5_0
+        composite_vs:CompositeVS:vs_5_0 composite_ps:CompositePS:ps_5_0)
+    string(REPLACE ":" ";" galaxy_bloom_pair "${galaxy_bloom_pass}")
+    list(GET galaxy_bloom_pair 0 galaxy_bloom_name)
+    list(GET galaxy_bloom_pair 1 galaxy_bloom_entry)
+    list(GET galaxy_bloom_pair 2 galaxy_bloom_profile)
+    set(galaxy_bloom_header "${galaxy_post_dir}/bloom_${galaxy_bloom_name}.h")
+    add_custom_command(OUTPUT "${galaxy_bloom_header}"
+        COMMAND "${GALAXY_FXC}" /nologo /T ${galaxy_bloom_profile} /E ${galaxy_bloom_entry} /O3 /Ges
+            /Vn g_bloom_${galaxy_bloom_name} /Fh "${galaxy_bloom_header}" "${galaxy_bloom_hlsl}"
+        DEPENDS "${galaxy_bloom_hlsl}"
+        VERBATIM)
+    list(APPEND galaxy_bloom_headers "${galaxy_bloom_header}")
+endforeach()
+
 # Ray-tracing compute shaders (runtime/src/gx/ray_tracing.hlsl: DXR 1.1 inline ray queries,
 # shader model 6.5) are compiled by the Windows SDK's DXC at build time into signed DXIL headers.
 find_program(GALAXY_DXC dxc
@@ -452,6 +470,8 @@ add_library(galaxy_gx STATIC
     ${galaxy_post_headers}
     runtime/src/gx/ambient_occlusion.cpp
     ${galaxy_ao_headers}
+    runtime/src/gx/game_bloom.cpp
+    ${galaxy_bloom_headers}
     runtime/src/gx/temporal_upscaler.cpp
     runtime/src/gx/ray_tracing.cpp
     runtime/src/gx/game_lights.cpp
@@ -639,6 +659,7 @@ if(NEBULA_VULKAN)
         runtime/src/gx/rt_surfaces.cpp
         runtime/src/gx/uber_shaders.cpp
         ${galaxy_uber_embed_cpp}
+        ${galaxy_post_embed_cpp}
         runtime/src/gx/renderer_common.cpp
         runtime/src/gx/efb_copy.cpp
         runtime/src/gx/render_config.cpp)
@@ -698,6 +719,7 @@ if(NEBULA_VULKAN)
         runtime/src/gx/vk/renderer_vk_efb.cpp
         runtime/src/gx/vk/renderer_vk_replay.cpp
         runtime/src/gx/vk/post_process_vk.cpp
+        runtime/src/gx/vk/game_bloom_vk.cpp
         ${galaxy_post_embed_cpp}
         runtime/src/gx/vk/surface_win32.cpp)
     target_include_directories(galaxy_gx_vk PUBLIC runtime/include)

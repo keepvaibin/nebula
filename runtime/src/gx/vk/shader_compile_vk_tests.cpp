@@ -12,6 +12,7 @@
 #include "galaxy/gx/vk/shader_compile_vk.h"
 
 #include <cstddef>
+#include <utility>
 #include <cstdio>
 #include <map>
 #include <set>
@@ -19,6 +20,11 @@
 
 using namespace galaxy::gx;
 using namespace galaxy::gx::vk;
+
+namespace galaxy::gx {
+// The shader source cmake/post_shader_sources.cmake embeds.
+extern const unsigned char galaxy_post_game_bloom_hlsl[];
+}  // namespace galaxy::gx
 
 namespace {
 
@@ -393,6 +399,24 @@ int main(int argc, char** argv) {
     expect("ui textured ps", ui_textured_quad_pixel_shader_source(), ShaderStage::Fragment, utility);
     expect("ui solid vs", ui_solid_quad_vertex_shader_source(), ShaderStage::Vertex, utility);
     expect("ui solid ps", ui_solid_quad_pixel_shader_source(), ShaderStage::Fragment, utility);
+
+    // The game's bloom (game_bloom_vk.cpp): each pass at its entry point, its work images in their storage format.
+    {
+        static constexpr RegisterBinding kBloom[] = {{"b0", 0, 0, true}, {"t0", 0, 0}, {"t1", 0, 1}, {"t2", 0, 2},
+                                                     {"u0", 0, 3},       {"u1", 0, 4}, {"u2", 0, 5}, {"s0", 1, 0}};
+        const std::string source =
+            annotate(reinterpret_cast<const char*>(galaxy::gx::galaxy_post_game_bloom_hlsl), kBloom);
+        const std::pair<const char*, ShaderStage> passes[] = {
+            {"DownCS", ShaderStage::Compute}, {"BoxCS", ShaderStage::Compute}, {"BlurCS", ShaderStage::Compute},
+            {"CompositeVS", ShaderStage::Vertex}, {"CompositePS", ShaderStage::Fragment}};
+        for (const auto& [entry, stage] : passes) {
+            std::string error;
+            if (compile_hlsl(source, stage, entry, {"BLOOM_STORAGE_FORMAT=1"}, error, {true, false, true}).empty()) {
+                ++failures;
+                std::printf("FAIL bloom %s\n%s\n", entry, error.c_str());
+            }
+        }
+    }
 
     std::printf("%s: %d failure(s)\n", failures == 0 ? "PASS" : "FAIL", failures);
     return failures == 0 ? 0 : 1;

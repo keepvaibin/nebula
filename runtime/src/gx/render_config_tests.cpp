@@ -256,6 +256,30 @@ int main() {
                 "frame-rate caps survive exact float round trips");
         }
         {
+            // The bloom's mode and strength and the ray-traced effects, each away from its default.
+            galaxy::gx::RenderConfig original{};
+            original.bloom_mode = galaxy::gx::kBloomNative;
+            original.bloom = 140u;
+            original.rt_reflections = false;
+            original.rt_lens_bloom = false;
+            original.rt_sun_rays = false;
+            original.rt_water = false;
+            galaxy::gx::set_render_config(original);
+            passed &= expect(galaxy::gx::save_render_config_to_file(), "bloom and effects fixture saves");
+            galaxy::gx::set_render_config(galaxy::gx::RenderConfig{});
+            galaxy::gx::load_render_config_from_file();
+            const auto loaded = galaxy::gx::get_render_config();
+            passed &= expect(loaded.bloom_mode == galaxy::gx::kBloomNative && loaded.bloom == 140u &&
+                                 !loaded.rt_reflections && !loaded.rt_lens_bloom && !loaded.rt_sun_rays &&
+                                 !loaded.rt_water,
+                             "the bloom's mode and strength and the ray-traced effects survive a save");
+            const galaxy::gx::RenderConfig defaults{};
+            passed &= expect(defaults.bloom_mode == galaxy::gx::kBloomEnhanced && defaults.rt_reflections &&
+                                 defaults.rt_lens_bloom &&
+                                 defaults.rt_sun_rays && defaults.rt_water,
+                             "enhanced bloom and every ray-traced effect by default");
+        }
+        {
             std::ofstream file(path, std::ios::binary | std::ios::trunc);
             file << std::string(511u, 'x') << "max_fps=0\n";
         }
@@ -351,7 +375,7 @@ int main() {
     config.ray_tracing_enabled = true;
     config.rt_shadow_quality = 3;
     config.rt_ao_enabled = true;
-    config.rt_reflections = true;
+    config.rt_reflections = false;
     config.swap_chain_frame_latency = 99;
     config.efb_scale = 99;
     galaxy::gx::set_render_config(config);
@@ -369,7 +393,7 @@ int main() {
             sanitized.rt_shadow_quality == 0 &&
             !sanitized.rt_ao_enabled &&
             !sanitized.rt_reflections,
-        "set_render_config keeps ray tracing and clamps the reserved DXR keys off");
+        "set_render_config keeps ray tracing and its reflections choice, and clamps the reserved DXR keys off");
     passed &= expect(
         sanitized.swap_chain_frame_latency == 2,
         "set_render_config clamps swap-chain latency to the frame ring");
@@ -552,7 +576,7 @@ int main() {
         ScopedEnv rt("GALAXY_RAY_TRACING_ENABLED", "1");
         ScopedEnv rt_shadow("GALAXY_RT_SHADOW_QUALITY", "3");
         ScopedEnv rt_ao("GALAXY_RT_AO_ENABLED", "1");
-        ScopedEnv rt_reflect("GALAXY_RT_REFLECTIONS", "1");
+        ScopedEnv rt_reflect("GALAXY_RT_REFLECTIONS", "0");
         galaxy::gx::load_render_config_from_file();
     }
     const galaxy::gx::RenderConfig loaded =
@@ -564,7 +588,7 @@ int main() {
             loaded.rt_shadow_quality == 0 &&
             !loaded.rt_ao_enabled &&
             !loaded.rt_reflections,
-        "file/env render config enables ray tracing but no unimplemented graphics feature");
+        "file/env render config enables ray tracing, takes its reflections choice, and no unimplemented feature");
 
     {
         ScopedEnv lod_bias("GALAXY_TEXTURE_LOD_BIAS", "99");

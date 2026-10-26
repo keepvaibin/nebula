@@ -4891,7 +4891,7 @@ void SceneRayTracer::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRI
     // The engine's result (full resolution, its own record: rt_engine.hlsl EngineFinalCS).
     const bool engine = per_pixel && engine_slot(index, width, height);
     c.flags = (reproject ? 1u : 0u) | (show_lighting_ ? 2u : 0u) | (physical_active_ ? 4u : 0u) |
-              (per_pixel ? 8u : 0u) | (reflections_active() || engine ? 16u : 0u) | (engine ? 32u : 0u);
+              (per_pixel ? 8u : 0u) | (surface_reflections_active() ? 16u : 0u) | (engine ? 32u : 0u);
     if (engine) {
         c.sample_size[0] = width;
         c.sample_size[1] = height;
@@ -5201,7 +5201,7 @@ void SceneRayTracer::trace_reflections(ID3D12GraphicsCommandList* list, Allocate
                                        D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table, std::uint32_t width,
                                        std::uint32_t height) {
     // The engine's specular takes the opaque reflections' place (the water's stay: trace_water).
-    if (!reflections_active() || light_slot_ < 0 || list == nullptr || allocate == nullptr || !tlas_ ||
+    if (!surface_reflections_active() || light_slot_ < 0 || list == nullptr || allocate == nullptr || !tlas_ ||
         !positions_ || !surfaces_ || !light_primary_ ||
         (light_slot_ >= 0 && engine_slot(static_cast<unsigned>(light_slot_), width, height))) {
         return;

@@ -4287,6 +4287,12 @@ std::uint32_t GxBackend::rt_light_key() noexcept {
 
 void GxBackend::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a,
                                std::uint32_t b) {
+    // The game's bloom, drawn by the renderer at this point of the stream (game_bloom.h).
+    if (kind == motion::kMarkerBloom) {
+        flush_pending_draw_batch();
+        renderer_.game_bloom(aux, a, b);
+        return;
+    }
     // The traced draws' identity (rt_light_key): an object, a model's shape, an emitter (its object, then its resource
     // or shape) or a particle (its pool node, its lifetime: the next particle in the node is another) starts it over.
     if (kind == motion::kMarkerNameObj || kind == motion::kMarkerShapePacket || kind == motion::kMarkerEmitter ||
@@ -5350,7 +5356,8 @@ bool GxBackend::rt_sprite_light_draw() const noexcept {
 // effects; begin_rt_batch keeps those of the water class (indirect-textured) and the clear ones
 // (crystals, glass: environment-mapped or named).
 bool GxBackend::rt_water_draw() const noexcept {
-    if (!rt_water_eligible_ || !scene_phase_ || side_layer_ != kSceneLayer || !renderer_.rt_water_open()) {
+    if (!rt_water_wanted_ || !rt_water_eligible_ || !scene_phase_ || side_layer_ != kSceneLayer ||
+        !renderer_.rt_water_open()) {
         return false;
     }
     using motion::ScenePhase;
@@ -9102,15 +9109,21 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         const cadence::ScopedPhaseTimer render_begin_timer{
             cadence_diagnostics_, cadence::TimingPhase::RenderBegin};
         {
+            // GALAXY_TEST_RT_EFFECT_AB: the frame's parity by the present it ends in (the snapshots' numbering, as
+            // GALAXY_RT_AB), set for all its chunks before anything asks rt_effect_on.
+            set_rt_effect_frame(g_snapshot_presents + 1u);
             const RenderConfig render = get_render_config();
             // Under ray-traced lighting the traced light replaces enhanced lighting (de-lit characters relit by
-            // the trace wash out). Per-pixel lighting stays: the ray-traced picture is tuned with it.
+            // the trace wash out), and the draws it does not relight (water, glass) are lit per pixel: the
+            // ray-traced picture is tuned with it, and the menu hides LIGHTING while ray tracing is on.
             const bool enhanced = render.enhanced_lighting && !renderer_.rt_lighting();
+            const bool per_pixel = render.per_pixel_lighting || renderer_.rt_lighting();
+            rt_water_wanted_ = rt_effect_on(render, RtEffect::Water);
             ambient_occlusion_ =
                 render.ambient_occlusion && !renderer_.rt_lighting() && renderer_.ambient_occlusion_ready();
             // A lighting-mode change re-keys every lit draw's pipeline.
-            if (render.per_pixel_lighting != per_pixel_lighting_ || enhanced != enhanced_lighting_) {
-                per_pixel_lighting_ = render.per_pixel_lighting;
+            if (per_pixel != per_pixel_lighting_ || enhanced != enhanced_lighting_) {
+                per_pixel_lighting_ = per_pixel;
                 enhanced_lighting_ = enhanced;
                 shader_key_hashes_valid_ = false;
                 current_pipeline_ = nullptr;
@@ -9141,6 +9154,15 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             if (draw_identity_wanted_.load(std::memory_order_relaxed) != wanted) {
                 draw_identity_wanted_.store(wanted, std::memory_order_relaxed);
             }
+            // How the game's bloom goes through the renderer (NEBULA_OPTION_BLOOM): without the renderer's bloom, not
+            // at all; NATIVE, its own chain over a scene the renderer keeps; ENHANCED, drawn by the renderer.
+            // GALAXY_TEST_BLOOM_ROUTE=0-2 (tests): that route, 0 the console's chain as it is for comparison.
+            static const std::uint64_t test_route = read_env_u64("GALAXY_TEST_BLOOM_ROUTE", 3u);
+            const unsigned route = !renderer_.game_bloom_ready()                          ? 0u
+                                   : test_route <= 2u                                  ? static_cast<unsigned>(test_route)
+                                   : get_render_config().bloom_mode == kBloomEnhanced ? 2u
+                                                                                       : 1u;
+            bloom_route_.store(route, std::memory_order_relaxed);
             // The game draws for traced light: the whole stage at full detail, and out-of-view shadow casters and
             // light sources (NEBULA_OPTION_RT_SHADOW_CASTERS; GALAXY_RT_OFFSCREEN_CASTERS=0: as without it).
             static const bool offscreen_casters = read_env_u64("GALAXY_RT_OFFSCREEN_CASTERS", 1u) != 0u;

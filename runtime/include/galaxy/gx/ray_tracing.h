@@ -189,6 +189,13 @@ public:
     // same slot.
     [[nodiscard]] int light_slot() const noexcept { return light_slot_; }
     [[nodiscard]] bool reflections_active() const noexcept { return lighting_active() && reflections_.ready(); }
+    // The traced reflections on the scene's surfaces: metal and gloss (the engine's specular, or the reflection pass
+    // without the engine), glass and crystal (the clear pass). Off (RenderConfig::rt_reflections), those surfaces show
+    // the game's painted reflections as they do without ray tracing; the water's own pass stays (reflections_active).
+    [[nodiscard]] bool surface_reflections_active() const noexcept {
+        return reflections_active() && surface_reflections_;
+    }
+    void set_surface_reflections(bool on) noexcept { surface_reflections_ = on; }
     // After trace_scene, before composite(): the last traced scene's reflections (rt_reflections.h)
     // from the EFB colour and depth as the opaque scene left them (NON_PIXEL_SHADER_RESOURCE, two
     // consecutive SRVs at `color_depth_table` in the bound heap).
@@ -238,7 +245,7 @@ public:
     // The engine traces the clear surfaces (its clear pass runs with the water window's trace: the table's `traced`
     // glass and solids).
     [[nodiscard]] bool engine_clear_active() const noexcept {
-        return engine_active() && engine_clear_wanted_ && reflections_active();
+        return engine_active() && engine_clear_wanted_ && surface_reflections_active();
     }
     void set_engine_picture(ID3D12Resource* picture) noexcept { engine_picture_ = picture; }
     // The raster's motion target (current to previous, render pixels) the next trace reads, or none: the renderer
@@ -734,6 +741,7 @@ private:
     bool engine_anti_lag_ = true;   // GALAXY_RT_ENGINE_ANTILAG: the diffuse history's anti-lag
     bool engine_light_history_ = true;   // GALAXY_RT_ENGINE_LIGHT_HISTORY=0: no temporal light reuse
     bool engine_clear_wanted_ = true;  // GALAXY_RT_ENGINE_CLEAR: the clear-surface pass
+    bool surface_reflections_ = true;  // RenderConfig::rt_reflections (surface_reflections_active)
     bool engine_boiling_ = true;  // GALAXY_RT_ENGINE_BOILING=0: no boiling filter (rt_engine.hlsl boiling)
     // GALAXY_RT_ENGINE_FOOTPRINT=0: the filters' and the reuse's widths in pixels whatever the lines (kFootprintLines).
     bool engine_footprint_ = true;

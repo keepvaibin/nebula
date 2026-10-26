@@ -63,6 +63,18 @@ inline constexpr std::uint8_t kMarkerEffect = 13u;       // a the emitter's effe
 // aux 1: the draws up to the next one (aux 0) are the traced scene's alone, never drawn to the picture (the player's
 // body in the first-person view, MarioActor::drawTracedBody).
 inline constexpr std::uint8_t kMarkerTraceOnly = 14u;
+// The game's bloom through the renderer (galaxy/gx/game_bloom.h; NEBULA_OPTION_BLOOM), aux the phase: kBloomKeep the
+// scene before the bloom works over it (BloomEffect::preDraw; BloomEffectSimple::draw's start with its own chain);
+// kBloomNormal BloomEffect::postDraw drawn by the renderer, a the threshold, the two blurs' tap weights and the
+// intensity (8 bits each, low first), b the rings' horizontal radius per unit (float bits: 1 / the camera's aspect);
+// kBloomSimple BloomEffectSimple::draw drawn by the renderer, a the threshold, the channel (0 intensity, 1-3 red,
+// green, blue), the tap weight and the intensity, b the ring's vertical radius per unit; kBloomRestore the game's own
+// chain drawing its kept scene back (the kept one instead).
+inline constexpr std::uint8_t kMarkerBloom = 15u;
+inline constexpr std::uint16_t kBloomKeep = 1u;
+inline constexpr std::uint16_t kBloomNormal = 2u;
+inline constexpr std::uint16_t kBloomSimple = 3u;
+inline constexpr std::uint16_t kBloomRestore = 4u;
 
 // Kind 6 flags.
 inline constexpr std::uint16_t kSceneCameraCut = 1u;  // the view jumped since the previous scene

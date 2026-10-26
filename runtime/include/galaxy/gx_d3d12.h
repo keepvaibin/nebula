@@ -118,6 +118,9 @@ void attach_scene_view(const float view[12], const float* up = nullptr, const ch
 // Simulation thread: whether the game keeps drawing clipped actors whose shadows can reach the view (while the ray
 // tracer lights the scene, unless GALAXY_RT_OFFSCREEN_CASTERS=0).
 [[nodiscard]] bool rt_shadow_casters_wanted() noexcept;
+// Simulation thread: how the game's bloom goes through the renderer (NEBULA_OPTION_BLOOM: 0 not at all, 1 its scene
+// kept, 2 drawn by it; galaxy/gx/game_bloom.h).
+[[nodiscard]] unsigned bloom_route() noexcept;
 // Simulation thread (BrightSun::control): the world direction towards the game's visible sun and
 // the distance of its model from the camera. The ray tracer lights the scene from it while updates
 // keep arriving.

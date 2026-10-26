@@ -172,6 +172,14 @@ alpha cards, Dusty Dune's hourglass sand, ran a dispatch past the GPU watchdog);
 A depth clear through a flattened viewport restarts the traced scene only before its trace (Good Egg clears the depth
 late: the restart closed the water window untraced).
 
+Player choices (Graphics, RAY TRACING; `render_config.h` `rt_effect_on`, read each frame): REFLECTIONS (E5 and E5b,
+`SceneRayTracer::surface_reflections_active`; off, the composite keeps each surface's painted reflection in its albedo
+and metals take diffuse light, so they show the game's own reflection, and glass and crystal are the game's draws
+again), WATER REFLECTIONS (the water draws join the water window, `GxBackend::rt_water_draw`; off, the game's water),
+SUN RAYS and LENS BLOOM (E10's shafts and pyramid, independent). There is no switch for the bounce light: E4 also
+carries the sky's light, which needs a fallback before it can be turned off. Tests: GALAXY_TEST_RT_EFFECT_AB turns one
+off in frames that end in an odd present, so at 60 fps consecutive presents of one run show it on and off.
+
 ## 6. Algorithms
 - BRDF: Lambert + GGX (Smith height-correlated visibility, Schlick Fresnel, F0 = lerp(0.04, albedo, metallic)).
 - RIS target: luminance of unshadowed BRDF x Le x G. Candidate pdf: in a light grid cell 1 / (the slot's weight x area),

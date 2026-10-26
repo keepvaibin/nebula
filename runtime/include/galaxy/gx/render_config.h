@@ -21,6 +21,11 @@ namespace galaxy::gx {
 inline constexpr unsigned kMaxEfbScale = 16u;
 inline constexpr float kMinFrameRate = 1.0f;
 inline constexpr float kMaxFrameRate = 1000.0f;
+// The bloom settings' top (percent of the game's and the camera's own strength).
+inline constexpr unsigned kMaxBloom = 200;
+// RenderConfig::bloom_mode.
+inline constexpr unsigned kBloomNative = 0;
+inline constexpr unsigned kBloomEnhanced = 1;
 
 struct RenderConfig {
     // EFB resolution multiplier, 1..kMaxEfbScale (2: 1280x1056, supersampling the game's 640x528). 1 is the Wii's
@@ -69,6 +74,10 @@ struct RenderConfig {
     bool     enhanced_lighting   = false;
     // Ambient occlusion of the 3D scene (ambient_occlusion.h); ray-traced lighting has its own.
     bool     ambient_occlusion   = false;
+    // The game's bloom: kBloomNative its own chain at the console's size, kBloomEnhanced the renderer's at the internal
+    // resolution (game_bloom.h) at `bloom` percent of its strength (0 off, up to kMaxBloom).
+    unsigned bloom_mode          = kBloomEnhanced;
+    unsigned bloom               = 100;
 
     // Match Output: after a resize settles (not during an edge drag), efb_scale becomes the smallest scale whose game
     // picture covers the window; the renderer re-creates its targets once, at a frame boundary. Off by default: the
@@ -107,15 +116,22 @@ struct RenderConfig {
     unsigned sharpness           = 0;
 
     // Ray tracing on adapters with DXR 1.1, shader model 6.5 and dedicated video memory; ignored elsewhere.
-    // rt_shadow_quality, rt_ao_enabled and rt_reflections are not implemented and clamped off.
+    // rt_shadow_quality and rt_ao_enabled are not implemented and clamped off.
     bool     ray_tracing_enabled = false;
     // Ray tracing quality: 0 medium (lighting at a share of the pixels, 2 sky rays, one glow light per
     // sample), 1 high (every pixel up to 4K-class pictures, 4 sky rays, two glow lights, reflections that
     // shade what they hit off screen).
     unsigned rt_quality          = 1;
+    // The ray-traced effects players choose, each read every frame: the reflections on the scene's surfaces (metal,
+    // gloss, glass, crystal; off: the game's painted ones, SceneRayTracer::surface_reflections_active), the camera's
+    // lens bloom and the sun's shafts (ray_tracing_camera.cpp), the traced seas, lakes and pools (their reflections
+    // and refraction; off: the game's own water).
+    bool     rt_reflections      = true;
+    bool     rt_lens_bloom       = true;
+    bool     rt_sun_rays         = true;
+    bool     rt_water            = true;
     unsigned rt_shadow_quality   = 0;   // 0=off, 1=low, 2=medium, 3=high
     bool     rt_ao_enabled       = false;
-    bool     rt_reflections      = false;
 
     // Texture packs (texture_pack.h): replacements from texture_pack_directory() and the mods'
     // textures/ folders. preload loads the whole pack at start instead of each texture at its first
@@ -272,6 +288,14 @@ void note_frame_generation_allowed(bool allowed) noexcept;
     return frame_generation_running() ? 60.0f : cfg.max_fps;
 }
 void set_render_config(const RenderConfig& cfg);
+
+// The ray-traced effects players choose (RenderConfig::rt_reflections, rt_water, rt_sun_rays, rt_lens_bloom), as the
+// frame being drawn takes them. Tests: GALAXY_TEST_RT_EFFECT_AB=reflections|water|sun_rays|lens_bloom turns that one off
+// in frames that end in an odd present (set_rt_effect_frame, the snapshots' numbering): at 60 fps consecutive
+// pictures of one run differ by the effect alone.
+enum class RtEffect : std::uint8_t { Reflections, Water, SunRays, LensBloom };
+[[nodiscard]] bool rt_effect_on(const RenderConfig& cfg, RtEffect effect) noexcept;
+void set_rt_effect_frame(std::uint64_t frame) noexcept;
 
 // The EFB scale config.ini keeps for the next start. The overlay sets it with the live value so config.ini and the
 // running renderer agree.

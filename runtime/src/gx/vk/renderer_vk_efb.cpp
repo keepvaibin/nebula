@@ -7,6 +7,8 @@
 #include "galaxy/content_viewport.h"
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/gx/host_window.h"
+#include "galaxy/gx/render_config.h"
+#include "galaxy/motion_signals.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/gx/gx_state.h"
 #include "galaxy/gx/texture_cache.h"
@@ -582,7 +584,8 @@ VkDescriptorSet RendererVk::allocate_frame_set(VkDescriptorSetLayout layout) {
     if (result == VK_ERROR_OUT_OF_POOL_MEMORY || result == VK_ERROR_FRAGMENTED_POOL) {
         // A frame with more distinct tables than the pool holds: another pool, freed with the slot.
         const VkDescriptorPoolSize sizes[] = {{VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 4096u * 8u},
-                                              {VK_DESCRIPTOR_TYPE_SAMPLER, 256u}};
+                                              {VK_DESCRIPTOR_TYPE_SAMPLER, 256u},
+                                              {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, vk_detail::kPassStorageImages}};
         VkDescriptorPoolCreateInfo pool_info{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
         pool_info.maxSets = 4096u;
         pool_info.poolSizeCount = static_cast<std::uint32_t>(std::size(sizes));
@@ -747,6 +750,65 @@ void RendererVk::record_scene_aa() {
     post_.finish_scene_aa(commands_, ran, color.width, color.height, allocate);
     if (replay_list_ != nullptr && ran != AaRun::kNone) {
         post_.hold_scene_targets(replay_list_->held);
+    }
+    reset_gx_bindings();
+}
+
+// The game's bloom (game_bloom_vk.h) at this point of the stream: the EFB pass ends for the passes that copy or read
+// the scene, and the composite is drawn in it again. The game's frame is its 640 x 456 at the internal scale.
+void RendererVk::game_bloom(std::uint16_t phase, std::uint32_t a, std::uint32_t b) {
+    if (!bloom_.ready()) {
+        return;
+    }
+    const ReplayBloom bloom{phase, a, b};
+    if (logging()) {
+        recording_log_.ops.push_back({ReplayKind::Bloom, static_cast<std::uint32_t>(recording_log_.blooms.size())});
+        recording_log_.blooms.push_back(bloom);
+    }
+    record_game_bloom(bloom);
+}
+
+void RendererVk::record_game_bloom(const ReplayBloom& bloom) {
+    if (!efb_.color) {
+        return;
+    }
+    vk::GameBloomVk::Inputs in{};
+    in.color = efb_.color.get();
+    in.scale = efb_scale_;
+    in.frame_width = std::min(kEfbWidth * efb_scale_, efb_.color->width);
+    in.frame_height = std::min(kGameFrameHeight * efb_scale_, efb_.color->height);
+    const auto allocate = [this](VkDescriptorSetLayout layout) { return allocate_post_set(layout); };
+    end_efb_pass();
+    if (bloom.phase == motion::kBloomKeep) {
+        static_cast<void>(bloom_.keep(commands_, in));
+    } else {
+        vk::GameBloomVk::Params p{};
+        p.threshold = bloom.a & 0xFFu;
+        p.intensity = bloom.a >> 24u;
+        if (bloom.phase == motion::kBloomRestore) {
+            p.kind = vk::GameBloomVk::Kind::Restore;
+        } else if (bloom.phase == motion::kBloomNormal) {
+            p.kind = vk::GameBloomVk::Kind::Normal;
+            p.tap1 = (bloom.a >> 8u) & 0xFFu;
+            p.tap2 = (bloom.a >> 16u) & 0xFFu;
+            p.ring_x = std::bit_cast<float>(bloom.b);
+        } else {
+            p.kind = vk::GameBloomVk::Kind::Simple;
+            p.channel = (bloom.a >> 8u) & 0xFFu;
+            p.tap1 = (bloom.a >> 16u) & 0xFFu;
+            p.ring_y = std::bit_cast<float>(bloom.b);
+        }
+        if (!(p.ring_x > 0.0f && p.ring_x < 16.0f) || !(p.ring_y > 0.0f && p.ring_y < 16.0f)) {
+            p.ring_x = p.ring_y = 1.0f;
+        }
+        p.strength = static_cast<float>(std::min(get_render_config().bloom, kMaxBloom)) / 100.0f;
+        if (bloom_.prepare(commands_, in, p, allocate)) {
+            begin_efb_pass();
+            bloom_.finish(commands_, gx_layout_.pass_for(efb_samples_log2(), false), efb_samples_log2(), allocate);
+        }
+    }
+    if (replay_list_ != nullptr) {
+        bloom_.hold(replay_list_->held);
     }
     reset_gx_bindings();
 }

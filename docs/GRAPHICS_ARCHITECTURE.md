@@ -139,6 +139,16 @@ fails is replaced (SMAA by FXAA).
 Effect copies up to 320x228 (bloom, depth of field, Mario's shadow) are made at the game's own
 resolution, so their blur kernels keep their footprint at any internal scale.
 
+The game's bloom (`BloomEffect`, `BloomEffectSimple`) goes through the renderer by host markers
+(`motion_signals.h` `kMarkerBloom`, `NEBULA_OPTION_BLOOM`). BLOOM NATIVE runs the game's own chain on
+those effect copies, except the scene it works over: the renderer keeps and restores it in the EFB's
+own format (`GameBloom::keep`/`restore`), where the game's 8-bit copy would cut the ray tracer's HDR
+scene at 1. BLOOM ENHANCED is `GameBloom` (`game_bloom.{h,cpp,hlsl}`, `game_bloom_shape.h`;
+`vk/game_bloom_vk.cpp` on Vulkan): the same chain at the internal resolution, the game's threshold over
+its 4x4 pixel footprint, each ring of taps replaced by the Gaussian of the same spread (the game's own
+resampling included, this chain's subtracted), the game's tap weights, clamps and fade, scaled by
+INTENSITY. Interpolated frames replay both (`ReplayKind::Bloom`).
+
 ## Enhanced lighting and ambient occlusion
 
 Enhanced lighting (`enhanced_lighting.h`, `shader_gen.cpp` `kEnhancedLighting`) shades lit and

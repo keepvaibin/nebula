@@ -149,6 +149,8 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
     else if (std::strcmp(key, "per_pixel_lighting") == 0) cfg.per_pixel_lighting = parse_bool(val, cfg.per_pixel_lighting);
     else if (std::strcmp(key, "enhanced_lighting") == 0) cfg.enhanced_lighting = parse_bool(val, cfg.enhanced_lighting);
     else if (std::strcmp(key, "ambient_occlusion") == 0) cfg.ambient_occlusion = parse_bool(val, cfg.ambient_occlusion);
+    else if (std::strcmp(key, "bloom_mode") == 0) cfg.bloom_mode = std::min(parse_uint(val, cfg.bloom_mode), kBloomEnhanced);
+    else if (std::strcmp(key, "bloom") == 0) cfg.bloom = std::min(parse_uint(val, cfg.bloom), kMaxBloom);
     else if (std::strcmp(key, "post_process") == 0) cfg.post_process = parse_bool(val, cfg.post_process);
     else if (std::strcmp(key, "internal_follow_window") == 0) cfg.internal_follow_window = parse_bool(val, cfg.internal_follow_window);
     else if (std::strcmp(key, "gpu_budget") == 0) cfg.gpu_budget = parse_bool(val, cfg.gpu_budget);
@@ -180,9 +182,12 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
         static constexpr const char* kNames[] = {"medium", "high", "low"};
         cfg.rt_quality = parse_choice(val, kNames, cfg.rt_quality);
     }
+    else if (std::strcmp(key, "rt_lens_bloom") == 0) cfg.rt_lens_bloom = parse_bool(val, cfg.rt_lens_bloom);
+    else if (std::strcmp(key, "rt_sun_rays") == 0) cfg.rt_sun_rays = parse_bool(val, cfg.rt_sun_rays);
+    else if (std::strcmp(key, "rt_water") == 0) cfg.rt_water = parse_bool(val, cfg.rt_water);
     else if (std::strcmp(key, "rt_shadow_quality") == 0) cfg.rt_shadow_quality = std::clamp(parse_uint(val, 0), 0u, 3u);
     else if (std::strcmp(key, "rt_ao_enabled")  == 0) cfg.rt_ao_enabled       = parse_bool(val, false);
-    else if (std::strcmp(key, "rt_reflections") == 0) cfg.rt_reflections      = parse_bool(val, false);
+    else if (std::strcmp(key, "rt_reflections") == 0) cfg.rt_reflections      = parse_bool(val, cfg.rt_reflections);
     else if (std::strcmp(key, "texture_packs") == 0) cfg.texture_packs = parse_bool(val, cfg.texture_packs);
     else if (std::strcmp(key, "texture_pack_preload") == 0) cfg.texture_pack_preload = parse_bool(val, cfg.texture_pack_preload);
     else if (std::strcmp(key, "texture_dump") == 0) cfg.texture_dump = parse_bool(val, cfg.texture_dump);
@@ -257,6 +262,8 @@ static void apply_env_overrides(RenderConfig& cfg) {
     apply_env(cfg, "GALAXY_PER_PIXEL_LIGHTING", "per_pixel_lighting");
     apply_env(cfg, "GALAXY_ENHANCED_LIGHTING", "enhanced_lighting");
     apply_env(cfg, "GALAXY_AMBIENT_OCCLUSION", "ambient_occlusion");
+    apply_env(cfg, "GALAXY_BLOOM_MODE", "bloom_mode");
+    apply_env(cfg, "GALAXY_BLOOM", "bloom");
     apply_env(cfg, "GALAXY_POST_PROCESS", "post_process");
     apply_env(cfg, "GALAXY_INTERNAL_FOLLOW_WINDOW", "internal_follow_window");
     apply_env(cfg, "GALAXY_GPU_BUDGET", "gpu_budget");
@@ -272,6 +279,9 @@ static void apply_env_overrides(RenderConfig& cfg) {
     apply_env(cfg, "GALAXY_RAY_TRACING_ENABLED", "ray_tracing_enabled");
     apply_env(cfg, "GALAXY_RT_SHADOW_QUALITY", "rt_shadow_quality");
     apply_env(cfg, "GALAXY_RT_QUALITY", "rt_quality");
+    apply_env(cfg, "GALAXY_RT_LENS_BLOOM", "rt_lens_bloom");
+    apply_env(cfg, "GALAXY_RT_SUN_RAYS", "rt_sun_rays");
+    apply_env(cfg, "GALAXY_RT_WATER", "rt_water");
     apply_env(cfg, "GALAXY_RT_AO_ENABLED", "rt_ao_enabled");
     apply_env(cfg, "GALAXY_RT_REFLECTIONS", "rt_reflections");
     apply_env(cfg, "GALAXY_TEXTURE_PACKS", "texture_packs");
@@ -318,7 +328,6 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.rt_shadow_quality = 0;
     cfg.rt_quality = std::min(cfg.rt_quality, 2u);
     cfg.rt_ao_enabled = false;
-    cfg.rt_reflections = false;
 }
 
 static void sanitize_feature_status(RenderFeatureStatus& status) {
@@ -456,6 +465,40 @@ RenderFeatureStatus make_render_feature_status(
             reason);
     }
     return status;
+}
+
+namespace {
+
+std::atomic<std::uint64_t> s_rt_effect_frame{0};
+
+// GALAXY_TEST_RT_EFFECT_AB's effect; -1 none.
+int rt_effect_ab() {
+    static const int effect = [] {
+        char value[16]{};
+        std::size_t length = 0u;
+        if (getenv_s(&length, value, sizeof(value), "GALAXY_TEST_RT_EFFECT_AB") != 0 || length <= 1u) return -1;
+        static constexpr const char* kNames[] = {"reflections", "water", "sun_rays", "lens_bloom"};
+        for (int i = 0; i < 4; ++i) {
+            if (std::strcmp(value, kNames[i]) == 0) return i;
+        }
+        return -1;
+    }();
+    return effect;
+}
+
+}  // namespace
+
+bool rt_effect_on(const RenderConfig& cfg, RtEffect effect) noexcept {
+    const bool configured = effect == RtEffect::Reflections ? cfg.rt_reflections
+                            : effect == RtEffect::Water     ? cfg.rt_water
+                            : effect == RtEffect::SunRays   ? cfg.rt_sun_rays
+                                                            : cfg.rt_lens_bloom;
+    return configured && !(rt_effect_ab() == static_cast<int>(effect) &&
+                           (s_rt_effect_frame.load(std::memory_order_relaxed) & 1u) != 0u);
+}
+
+void set_rt_effect_frame(std::uint64_t frame) noexcept {
+    s_rt_effect_frame.store(frame, std::memory_order_relaxed);
 }
 
 void set_render_config(const RenderConfig& cfg) {
@@ -600,6 +643,8 @@ bool save_render_config_to_file() {
              << (cfg.enhanced_lighting ? 1u : 0u) << '\n'
              << "ambient_occlusion="
              << (cfg.ambient_occlusion ? 1u : 0u) << '\n'
+             << "bloom_mode=" << std::min(cfg.bloom_mode, kBloomEnhanced) << '\n'
+             << "bloom=" << std::min(cfg.bloom, kMaxBloom) << '\n'
              << "aa=" << cfg.aa_mode << '\n'
              << "smaa_quality=" << cfg.smaa_quality << '\n'
              << "msaa_samples=" << cfg.msaa_samples << '\n'
@@ -620,6 +665,10 @@ bool save_render_config_to_file() {
              << "texture_dump=" << (cfg.texture_dump ? 1u : 0u) << '\n'
              << "texture_pack_budget_mb=" << cfg.texture_pack_budget_mb << '\n'
              << "rt_quality=" << (cfg.rt_quality == 1u ? "high" : cfg.rt_quality == 2u ? "low" : "medium") << '\n'
+             << "rt_reflections=" << (cfg.rt_reflections ? 1u : 0u) << '\n'
+             << "rt_lens_bloom=" << (cfg.rt_lens_bloom ? 1u : 0u) << '\n'
+             << "rt_sun_rays=" << (cfg.rt_sun_rays ? 1u : 0u) << '\n'
+             << "rt_water=" << (cfg.rt_water ? 1u : 0u) << '\n'
              << "window_width=" << cfg.window_width << '\n'
              << "window_height=" << cfg.window_height << '\n'
              << "display_mode=" << cfg.display_mode << '\n'

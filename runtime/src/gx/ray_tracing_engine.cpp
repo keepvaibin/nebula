@@ -474,7 +474,7 @@ bool SceneRayTracer::engine_prepare(std::uint32_t width, std::uint32_t height, u
     c.size[1] = height;
     c.size[2] = engine_gi_full_ ? width : (width + 1u) / 2u;
     c.size[3] = engine_gi_full_ ? height : (height + 1u) / 2u;
-    c.info[0] = kEngineOn | (engine_specular_ ? kEngineSpecular : 0u) | (engine_indirect_ ? kEngineIndirect : 0u) |
+    c.info[0] = kEngineOn | (engine_specular_ && surface_reflections_active() ? kEngineSpecular : 0u) | (engine_indirect_ ? kEngineIndirect : 0u) |
                 (engine_points_ ? kEnginePoints : 0u) | (engine_clear_mode_ == 2u ? kEngineClearFind : 0u) |
                 (engine_clear_mode_ == 3u ? kEngineClearNoRay : 0u) | (engine_clear_mode_ == 4u ? kEngineClearNoSun : 0u) |
                 (engine_clear_mode_ == 5u ? kEngineClearNoBack : 0u) | (engine_clear_mode_ == 6u ? kEngineClearNoShade : 0u) |

@@ -199,10 +199,12 @@ static GXBool sLinked; /* the CPU FIFO is the main FIFO: writes go to the ring *
 /* Host markers (nebula_gx_fifo.h): the renderer wants them (asked at each scene's begin) and the writer is in the main
    ring. */
 uint8_t __NebulaGXMarkers;
+uint8_t __NebulaGXLinked;
 static u8 sMarkersWanted;
 
 static void update_markers(void) {
     __NebulaGXMarkers = (uint8_t)(sLinked && sMarkersWanted);
+    __NebulaGXLinked = (uint8_t)(sLinked != 0);
 }
 /* Where a display list's writes go once it has overflowed (the SDK then reports the wrap and the list as empty);
    larger than any single reservation. */

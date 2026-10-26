@@ -2,6 +2,7 @@
 // SceneRayTracer's camera (rt_camera.hlsl): turns the HDR scene EFB's light into the RGBA8 EFB's picture with bloom
 // and the tone curve. RendererD3D12::begin_hdr_scene / end_hdr_scene swap the EFBs.
 #include "galaxy/gx/ray_tracing.h"
+#include "galaxy/gx/render_config.h"
 
 #include "rt_camera_down_cs.h"
 #include "rt_camera_ps.h"
@@ -231,7 +232,17 @@ bool SceneRayTracer::camera_finish(ID3D12GraphicsCommandList* list, D3D12_GPU_DE
                        : 0u;
     Level levels[kCameraLevels];
     const std::uint32_t count = camera_levels(width, height, levels);
-    if (physical && camera_bloom_ > 0.0f && count != 0u) {
+    // The player's choices (LENS BLOOM, SUN RAYS); the shafts use the pyramid's buffers with or without the bloom.
+    const RenderConfig config = get_render_config();
+    const float bloom = rt_effect_on(config, RtEffect::LensBloom) ? camera_bloom_ : 0.0f;
+    const LightSlot* const slot = light_slot_ >= 0 ? &light_slots_[static_cast<unsigned>(light_slot_)] : nullptr;
+    // The sun's shafts start from the disc the sky shows in front of the camera (sun_visible, on the picture or off
+    // it), not from the light's direction, which may be lifted over the player's horizon.
+    const bool shafts = physical && count != 0u && rt_effect_on(config, RtEffect::SunRays) && slot != nullptr &&
+                        slot->sun_shown &&
+                        camera_shafts_ > 0.0f && slot->sun_visible[2] < -0.05f && slot->width == width &&
+                        slot->height == height;
+    if (physical && count != 0u && (bloom > 0.0f || shafts)) {
         for (unsigned i = 0; i < 2u; ++i) {
             to_state(list, camera_pyramid_[i].Get(), camera_pyramid_states_[i], D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         }
@@ -251,22 +262,20 @@ bool SceneRayTracer::camera_finish(ID3D12GraphicsCommandList* list, D3D12_GPU_DE
             list->ResourceBarrier(1u, &all_uav);
         };
         // Down from the picture; up from the coarsest level (which starts the sum: no coarser one).
-        for (std::uint32_t k = 0; k < count; ++k) {
-            run(camera_down_pso_.Get(), levels[k], k == 0u ? nullptr : &levels[k - 1u]);
+        if (bloom > 0.0f) {
+            for (std::uint32_t k = 0; k < count; ++k) {
+                run(camera_down_pso_.Get(), levels[k], k == 0u ? nullptr : &levels[k - 1u]);
+            }
+            for (std::uint32_t k = count; k-- > 0u;) {
+                run(camera_up_pso_.Get(), levels[k], k + 1u == count ? nullptr : &levels[k + 1u]);
+            }
+            c.levels = count;
+            c.bloom = bloom;
         }
-        for (std::uint32_t k = count; k-- > 0u;) {
-            run(camera_up_pso_.Get(), levels[k], k + 1u == count ? nullptr : &levels[k + 1u]);
-        }
-        c.levels = count;
-        c.bloom = camera_bloom_;
         c.from[0] = levels[0].width;
         c.from[1] = levels[0].height;
-        // The sun's shafts go into the downward pyramid's first texels. They start from the disc the sky shows in front
-        // of the camera (sun_visible, on the picture or off it), not from the light's direction, which may be lifted
-        // over the player's horizon.
-        const LightSlot* const slot = light_slot_ >= 0 ? &light_slots_[static_cast<unsigned>(light_slot_)] : nullptr;
-        if (slot != nullptr && slot->sun_shown && camera_shafts_ > 0.0f && slot->sun_visible[2] < -0.05f &&
-            slot->width == width && slot->height == height) {
+        // The sun's shafts go into the downward pyramid's first texels (free once the bloom is summed).
+        if (shafts) {
             const std::array<float, 4>& pr = slot->view.projection;
             const std::array<float, 4>& vp = slot->view.viewport;
             const std::array<float, 3>& sun = slot->sun_visible;

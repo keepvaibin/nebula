@@ -27,6 +27,7 @@
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx/ui_canvas.h"
 #include "galaxy/gx/upload_ring.h"
+#include "galaxy/gx/vk/game_bloom_vk.h"
 #include "galaxy/gx/vk/post_process_vk.h"
 #include "galaxy/gx/vk/shader_compile_vk.h"
 #include "galaxy/gx/vk/vk_context.h"
@@ -111,6 +112,10 @@ public:
     [[nodiscard]] bool ambient_occlusion_ready() const noexcept { return false; }
     void set_scene_ao_view(const RtView&) noexcept {}
     void record_scene_ao() noexcept {}
+    // The game's bloom through the renderer (galaxy/motion_signals.h kMarkerBloom; game_bloom_vk.h): until its
+    // passes have compiled, the game draws its own chains.
+    [[nodiscard]] bool game_bloom_ready() const noexcept { return bloom_.ready(); }
+    void game_bloom(std::uint16_t phase, std::uint32_t a, std::uint32_t b);
     [[nodiscard]] unsigned replay_reject() const noexcept { return replay_reject_; }
     void reset_subframe_gpu_ema() noexcept { subframe_gpu_ema_ms_ = 0.0; }
     [[nodiscard]] double subframe_gpu_ema_ms() const noexcept { return subframe_gpu_ema_ms_; }
@@ -410,6 +415,7 @@ private:
     [[nodiscard]] VkDescriptorSet allocate_post_set(VkDescriptorSetLayout layout);
     // Presentation post-processing: SMAA or FXAA of the scene, FSR 1 or the box resample, RCAS.
     vk::PostProcessorVk post_;
+    vk::GameBloomVk bloom_;
     void sync_post_process();
     // The picture through the post chain before a turned swap chain's blit (pre-rotated images).
     gpu::TextureRef oriented_;
@@ -631,7 +637,7 @@ private:
     // The log: one game frame's GX work in order (a display copy closes it).
     // OutputEfbBegin: the scene resampled into the output EFB at the op's scale; SwapEfbSets: the EFB and the output
     // EFB trade places.
-    enum class ReplayKind : std::uint8_t { Draw, BindEfb, Clear, Copy, SceneAa, OutputEfbBegin, SwapEfbSets };
+    enum class ReplayKind : std::uint8_t { Draw, BindEfb, Clear, Copy, SceneAa, OutputEfbBegin, SwapEfbSets, Bloom };
     struct ReplayOp {
         ReplayKind kind = ReplayKind::Draw;
         std::uint32_t index = 0;
@@ -657,12 +663,19 @@ private:
         unsigned box_left = 0, box_top = 0;
         VkImageView dest_view = VK_NULL_HANDLE;  // the destination's view as the log's tables name it
     };
+    // The game's bloom marker (its phase and values).
+    struct ReplayBloom {
+        std::uint16_t phase = 0;
+        std::uint32_t a = 0, b = 0;
+    };
+    void record_game_bloom(const ReplayBloom& bloom);
     struct ReplayLog {
         std::vector<ReplayOp> ops;
         std::vector<DrawCall> draws;
         std::vector<ReplayViewport> viewports;
         std::vector<ReplayClear> clears;
         std::vector<ReplayCopy> copies;
+        std::vector<ReplayBloom> blooms;
         // The views of each texture table its draws bound (stand-ins replace copy destinations in them).
         std::unordered_map<std::uint64_t, std::array<VkImageView, kMaxTextureMaps>> tables;
         unsigned segment = 0;

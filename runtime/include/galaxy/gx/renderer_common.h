@@ -31,6 +31,8 @@ inline constexpr unsigned kSamplerHeapSlots = 2048;
 
 inline constexpr unsigned kEfbWidth = 640;
 inline constexpr unsigned kEfbHeight = 528;
+// The game's frame within it (its render mode's EFB height; the display copy's source).
+inline constexpr unsigned kGameFrameHeight = 456;
 
 struct SamplerTableKey {
     std::array<std::uint32_t, 8> samplers{};

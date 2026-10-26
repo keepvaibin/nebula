@@ -31,6 +31,7 @@
 #include "galaxy/gx/interp_gpu.h"
 #include "galaxy/gx/post_process.h"
 #include "galaxy/gx/ambient_occlusion.h"
+#include "galaxy/gx/game_bloom.h"
 #include "galaxy/gx/interp_types.h"
 #include "galaxy/gx/ray_tracing.h"
 #include "galaxy/gx/placed_texture_allocator.h"
@@ -254,6 +255,10 @@ public:
     [[nodiscard]] bool ambient_occlusion_ready() const noexcept { return ambient_occlusion_.ready(); }
     void set_scene_ao_view(const RtView& view) noexcept { scene_ao_view_ = view; }
     void record_scene_ao();
+    // The game's bloom (game_bloom.h) at a kMarkerBloom marker (galaxy/motion_signals.h: `phase` its aux, `a` and `b`
+    // its values); sub-frames replay it.
+    [[nodiscard]] bool game_bloom_ready() const noexcept { return game_bloom_.ready(); }
+    void game_bloom(std::uint16_t phase, std::uint32_t a, std::uint32_t b);
     [[nodiscard]] bool output_efb_active() const noexcept { return output_efb_active_; }
     // Whether the targets for `scale` fit the adapter's video-memory budget
     // next to everything already resident.
@@ -317,7 +322,8 @@ public:
     void rt_set_ab_original(bool original) noexcept { ray_tracer_.set_ab_original(original); }
     void rt_set_scene_untraced(bool untraced) noexcept { ray_tracer_.set_scene_untraced(untraced); }
     void rt_set_presents(std::uint64_t presents) noexcept { ray_tracer_.set_presents(presents); }
-    [[nodiscard]] bool rt_reflections_active() const noexcept { return ray_tracer_.reflections_active(); }
+    // The traced reflections on the scene's surfaces (SceneRayTracer::surface_reflections_active).
+    [[nodiscard]] bool rt_reflections_active() const noexcept { return ray_tracer_.surface_reflections_active(); }
     [[nodiscard]] bool rt_sun_direction(std::array<float, 3>& world) const noexcept {
         return ray_tracer_.sun_direction(world);
     }
@@ -965,8 +971,14 @@ private:
     // RtComposite: the ambient occlusion of ray-tracer result slot `index`.
     enum class ReplayKind : std::uint8_t {
         Draw, BindEfb, Clear, Copy, SwapEfbSets, ClearDepth, RtComposite, RtWater, SceneAa, SceneAo,
-        HdrBegin, HdrEnd
+        HdrBegin, HdrEnd, Bloom
     };
+    // Bloom: a game_bloom marker.
+    struct ReplayBloom {
+        std::uint16_t phase = 0;
+        std::uint32_t a = 0, b = 0;
+    };
+    void record_game_bloom(const ReplayBloom& bloom);
     struct ReplayOp {
         ReplayKind kind = ReplayKind::Draw;
         std::uint32_t index = 0;
@@ -982,6 +994,7 @@ private:
     std::vector<ReplayViewport> replay_viewports_;
     std::vector<ReplayClear> replay_clears_;
     std::vector<ReplayCopy> replay_copies_;
+    std::vector<ReplayBloom> replay_blooms_;
     // The display copy's clear runs after the copy closed the log; the next
     // log starts with it so sub-frames begin from the same EFB as the frame.
     ReplayClear log_start_clear_{};
@@ -994,6 +1007,7 @@ private:
     std::vector<ReplayViewport> play_viewports_;
     std::vector<ReplayClear> play_clears_;
     std::vector<ReplayCopy> play_copies_;
+    std::vector<ReplayBloom> play_blooms_;
     bool play_start_output_active_ = false;
     void publish_replay_log();
     // The log being interpolated (moved from play_* by start_replay_playback),
@@ -1003,6 +1017,7 @@ private:
     std::vector<ReplayViewport> run_viewports_;
     std::vector<ReplayClear> run_clears_;
     std::vector<ReplayCopy> run_copies_;
+    std::vector<ReplayBloom> run_blooms_;
     bool run_start_output_active_ = false;
     bool run_valid_ = false;
     unsigned run_segment_ = 0;
@@ -1399,6 +1414,7 @@ private:
     // not ready.
     PostProcessor post_process_;
     AmbientOcclusion ambient_occlusion_;
+    GameBloom game_bloom_;
     RtView scene_ao_view_{};
     // EFB-copy destination textures (render targets) are placed in shared
     // heaps rather than committed one by one (placed_texture_allocator.h).

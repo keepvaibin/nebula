@@ -3506,7 +3506,9 @@ void EngineFinalCS(uint3 id : SV_DispatchThreadID)
                 diffuse = float3(0.0f, 0.0f, 0.0f);
                 specular = (view == 11u ? visible : view == 12u ? ray : radius).xxx * (0.5f / max(exposure, 1e-6f));
             }
-            diffuse *= (1.0f - s.metallic) * exposure;
+            // A metal reflects all its light: none of it is diffuse. Without traced reflections its colour is the
+            // game's painted reflection (the composite keeps it in the albedo), lit as any surface.
+            diffuse *= ((g_engine_info.x & kEngineSpecular) != 0u ? 1.0f - s.metallic : 1.0f) * exposure;
             specular *= exposure;
             if ((s.flags & kGbGlow) != 0u) {
                 // Its glow over its lit colour, in the colours the game paints it (the picture's: a coin's gold

@@ -96,6 +96,7 @@ VkDescriptorPool vk_detail::create_pool(VkDevice device, std::uint32_t sets, con
         sizes.push_back({VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, counts.dynamic_storage});
     }
     if (counts.storage != 0u) sizes.push_back({VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, counts.storage});
+    if (counts.storage_images != 0u) sizes.push_back({VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, counts.storage_images});
     VkDescriptorPoolCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
     info.maxSets = sets;
     info.poolSizeCount = static_cast<std::uint32_t>(sizes.size());
@@ -181,7 +182,8 @@ bool RendererVk::initialize(int window_width, int window_height, unsigned efb_sc
             frame.uploads = buffers[0];
             frame.commands = buffers[1];
             frame.descriptors =
-                create_pool(device, kFrameSets, {.images = kFrameSets * 8u + 64u, .samplers = kFrameUtilitySamplers});
+                create_pool(device, kFrameSets, {.images = kFrameSets * 8u + 64u, .samplers = kFrameUtilitySamplers,
+                                                 .storage_images = vk_detail::kPassStorageImages});
             VkSemaphoreCreateInfo semaphore_info{VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
             vk::check(vkCreateSemaphore(device, &semaphore_info, nullptr, &frame.acquired), "vkCreateSemaphore");
         }
@@ -213,6 +215,8 @@ bool RendererVk::initialize(int window_width, int window_height, unsigned efb_sc
         }
         std::memset(blend_verdicts_->mapped, 0, blend_verdicts_->size);
         refresh_default_sampler_table();
+        // The game's bloom, compiled on a worker; the game draws its own chains until it is ready.
+        bloom_.initialize();
         // Presentation post-processing, compiled on a worker; the plain blit presents until it is ready.
         const RenderConfig cfg = get_render_config();
         if (cfg.post_process) {
@@ -909,6 +913,7 @@ void RendererVk::shutdown() {
     if (device != VK_NULL_HANDLE) {
         vkDeviceWaitIdle(device);
         post_.shutdown();
+        bloom_.shutdown();
         oriented_.reset();
         release_replay_resources();
         efb_copy_dests_.clear();
@@ -1049,6 +1054,7 @@ void RendererVk::begin_frame(bool) {
     apply_pending_efb_scale();
     update_ring_mode();
     sync_post_process();
+    bloom_.poll_ready();
 
     frame_slot_ = static_cast<unsigned>(frame_index_ % kFramesInFlight);
     Frame& frame = frames_[frame_slot_];

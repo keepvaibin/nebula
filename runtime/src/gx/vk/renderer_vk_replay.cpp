@@ -250,6 +250,7 @@ void RendererVk::ReplayLog::clear() {
     viewports.clear();
     clears.clear();
     copies.clear();
+    blooms.clear();
     tables.clear();
     surround = 0.0f;
     movie = false;
@@ -1099,7 +1100,8 @@ bool RendererVk::record_replay_list(ReplayList& list) {
         vk::check(vkAllocateCommandBuffers(device, &alloc, &list.commands), "replay command buffer");
         // Patched texture tables and the replay's constants sets (constants_set).
         list.descriptors =
-            create_pool(device, kFrameSets, constants_sets(64u, {.images = kFrameSets * 8u}));
+            create_pool(device, kFrameSets,
+                        constants_sets(64u, {.images = kFrameSets * 8u, .storage_images = vk_detail::kPassStorageImages}));
     }
     // The scene EFB's scale (the output EFB's place while the live frame's 2D layer is in it).
     const unsigned scene_scale = output_efb_active_ ? alt_efb_scale_ : efb_scale_;
@@ -1218,6 +1220,9 @@ bool RendererVk::record_replay_list(ReplayList& list) {
         }
         case ReplayKind::SceneAa:
             record_scene_aa();
+            break;
+        case ReplayKind::Bloom:
+            record_game_bloom(run_log_.blooms[op.index]);
             break;
         case ReplayKind::OutputEfbBegin:
             if (!output_efb_active_) {

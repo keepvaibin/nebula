@@ -785,9 +785,15 @@ unsigned pending_settings_changes() {
     changes += d.enhanced_mipmaps != live.enhanced_mipmaps;
     changes += lighting_mode(d) != lighting_mode(live);
     changes += d.ambient_occlusion != live.ambient_occlusion;
+    changes += d.bloom_mode != live.bloom_mode;
+    changes += d.bloom != live.bloom;
     changes += d.hud_output_resolution != live.hud_output_resolution;
     changes += d.ray_tracing_enabled != live.ray_tracing_enabled;
     changes += d.rt_quality != live.rt_quality;
+    changes += d.rt_reflections != live.rt_reflections;
+    changes += d.rt_water != live.rt_water;
+    changes += d.rt_sun_rays != live.rt_sun_rays;
+    changes += d.rt_lens_bloom != live.rt_lens_bloom;
     changes += d.texture_packs != live.texture_packs ||
         (d.texture_packs && d.texture_pack_preload != live.texture_pack_preload);
     changes += d.texture_dump != live.texture_dump;
@@ -1162,9 +1168,15 @@ void apply_native_settings_draft() {
     applied.per_pixel_lighting = next.per_pixel_lighting;
     applied.enhanced_lighting = next.enhanced_lighting;
     applied.ambient_occlusion = next.ambient_occlusion;
+    applied.bloom_mode = next.bloom_mode;
+    applied.bloom = next.bloom;
     applied.hud_output_resolution = next.hud_output_resolution;
     applied.ray_tracing_enabled = next.ray_tracing_enabled;
     applied.rt_quality = next.rt_quality;
+    applied.rt_reflections = next.rt_reflections;
+    applied.rt_water = next.rt_water;
+    applied.rt_sun_rays = next.rt_sun_rays;
+    applied.rt_lens_bloom = next.rt_lens_bloom;
     applied.texture_packs = next.texture_packs;
     applied.texture_pack_preload = next.texture_pack_preload;
     applied.texture_dump = next.texture_dump;
@@ -2438,6 +2450,9 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render) {
     }
     const unsigned internal = std::clamp(render.efb_scale, 1u, settings_scale_cap(render));
     const unsigned render_scale = upscaler_render_scale(render, internal);
+    // Ray tracing replaces MSAA, ambient occlusion and the lighting modes: their rows are hidden while it is on.
+    const bool rt_offered = host_window::ray_tracing_offered.load(std::memory_order_relaxed);
+    const bool rt_on = rt_offered && render.ray_tracing_enabled;
     const bool upscaled = temporal_upscaler(render) != 0u || spatial_quality_mode(render);
     {
         static constexpr const char* kTemporal[] = {"NATIVE AA", "QUALITY", "BALANCED", "PERFORMANCE", "ULTRA PERFORMANCE"};
@@ -2510,11 +2525,10 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render) {
                         },
                         "HIGHER FINDS MORE EDGES"});
     }
-    {
+    if (!rt_on) {
         const unsigned samples = std::bit_floor(std::clamp(render.msaa_samples, 1u, 8u));
         std::string value = samples <= 1u ? "OFF" : std::to_string(samples) + "X";
         if (samples > 1u && (render.upscaler == 2u || render.upscaler == 3u)) value += " (OFF WITH DLSS / FSR 3)";
-        else if (samples > 1u && render.ray_tracing_enabled) value += " (OFF WITH RAY TRACING)";
         rows.push_back({"MSAA", value,
                         [](RenderConfig& draft, int delta) {
                             const unsigned index = static_cast<unsigned>(
@@ -2522,6 +2536,36 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render) {
                             draft.msaa_samples = 1u << settings_step(index, 4u, delta);
                         },
                         "SAMPLES EACH EDGE OF THE 3D SCENE SEVERAL TIMES. COSTS GPU TIME"});
+    }
+
+    if (rt_offered) {
+        rows.push_back({"RAY TRACING", {}, nullptr, {}, true});
+        rows.push_back({"RAY TRACING", render.ray_tracing_enabled ? "ON" : "OFF",
+                        [](RenderConfig& draft, int) { draft.ray_tracing_enabled = !draft.ray_tracing_enabled; },
+                        "TRACED SHADOWS, SKY AND BOUNCE LIGHT, GLOWS THAT LIGHT THE WORLD"});
+    }
+    if (rt_on) {
+        // rt_quality: 0 medium, 1 high, 2 low; a change restarts the ray tracer (RendererD3D12::reconcile_ray_tracing).
+        static constexpr unsigned kOrder[] = {2u, 0u, 1u};
+        static constexpr const char* kNames[] = {"MEDIUM", "HIGH", "LOW"};
+        rows.push_back({"RAY TRACING QUALITY", kNames[std::min(render.rt_quality, 2u)],
+                        [](RenderConfig& draft, int delta) {
+                            const unsigned quality = std::min(draft.rt_quality, 2u);
+                            const unsigned at = quality == 2u ? 0u : quality == 0u ? 1u : 2u;
+                            draft.rt_quality = kOrder[settings_step(at, 3u, delta)];
+                        },
+                        "HIGH: MORE LIGHTS PER PIXEL, FULL-RESOLUTION WATER"});
+        // The effects players choose, each switched live.
+        const auto effect_row = [&](const char* name, bool RenderConfig::*field, const char* help) {
+            rows.push_back({name, render.*field ? "ON" : "OFF",
+                            [field](RenderConfig& draft, int) { draft.*field = !(draft.*field); }, help});
+        };
+        effect_row("REFLECTIONS", &RenderConfig::rt_reflections,
+                   "TRACED REFLECTIONS ON METAL, GLOSSY FLOORS, GLASS AND CRYSTAL");
+        effect_row("WATER REFLECTIONS", &RenderConfig::rt_water,
+                   "TRACED REFLECTIONS AND REFRACTION ON SEAS, LAKES AND POOLS");
+        effect_row("SUN RAYS", &RenderConfig::rt_sun_rays, "SHAFTS OF LIGHT THE AIR SCATTERS AROUND THE SUN");
+        effect_row("LENS BLOOM", &RenderConfig::rt_lens_bloom, "LIGHT THE LENS SCATTERS AROUND EVERY BRIGHT SURFACE");
     }
 
     rows.push_back({"FRAME RATE", {}, nullptr, {}, true});
@@ -2612,7 +2656,7 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render) {
     rows.push_back({"MIPMAPS", render.enhanced_mipmaps ? "GENERATED" : "ORIGINAL",
                     [](RenderConfig& draft, int) { draft.enhanced_mipmaps = !draft.enhanced_mipmaps; },
                     "GENERATED ADDS SMOOTH DISTANT DETAIL WHERE THE GAME HAS NONE"});
-    {
+    if (!rt_on) {
         static constexpr const char* kLighting[] = {"PER VERTEX", "PER PIXEL", "ENHANCED"};
         rows.push_back({"LIGHTING", kLighting[lighting_mode(render)],
                         [](RenderConfig& draft, int delta) {
@@ -2624,30 +2668,37 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render) {
                             ? "HIGHLIGHTS, SOFT SKY LIGHT AND SHINIER METALS FROM THE GAME'S OWN LIGHTS"
                             : "PER PIXEL LIGHTS EVERY PIXEL INSTEAD OF EVERY CORNER"});
     }
-    {
-        std::string value = render.ambient_occlusion ? "ON" : "OFF";
-        if (render.ambient_occlusion && render.ray_tracing_enabled &&
-            host_window::ray_tracing_offered.load(std::memory_order_relaxed)) {
-            value += " (OFF WITH RAY TRACING)";
-        }
-        rows.push_back({"AMBIENT OCCLUSION", value,
+    if (!rt_on) {
+        rows.push_back({"AMBIENT OCCLUSION", render.ambient_occlusion ? "ON" : "OFF",
                         [](RenderConfig& draft, int) { draft.ambient_occlusion = !draft.ambient_occlusion; },
                         "SOFT SHADOWS IN CORNERS, CREASES AND WHERE THINGS MEET THE GROUND"});
     }
-    if (host_window::ray_tracing_offered.load(std::memory_order_relaxed)) {
-        rows.push_back({"RAY TRACING", render.ray_tracing_enabled ? "ON" : "OFF",
-                        [](RenderConfig& draft, int) { draft.ray_tracing_enabled = !draft.ray_tracing_enabled; },
-                        "TRACED SHADOWS, SKY AND BOUNCE LIGHT, GLOWS THAT LIGHT THE WORLD"});
-        // rt_quality: 0 medium, 1 high, 2 low; a change restarts the ray tracer (RendererD3D12::reconcile_ray_tracing).
-        static constexpr unsigned kOrder[] = {2u, 0u, 1u};
-        static constexpr const char* kNames[] = {"MEDIUM", "HIGH", "LOW"};
-        rows.push_back({"RAY TRACING QUALITY", kNames[std::min(render.rt_quality, 2u)],
-                        [](RenderConfig& draft, int delta) {
-                            const unsigned quality = std::min(draft.rt_quality, 2u);
-                            const unsigned at = quality == 2u ? 0u : quality == 0u ? 1u : 2u;
-                            draft.rt_quality = kOrder[settings_step(at, 3u, delta)];
+    {
+        const bool enhanced = render.bloom_mode == kBloomEnhanced;
+        rows.push_back({"BLOOM", enhanced ? "ENHANCED" : "NATIVE",
+                        [](RenderConfig& draft, int) {
+                            draft.bloom_mode = draft.bloom_mode == kBloomEnhanced ? kBloomNative : kBloomEnhanced;
                         },
-                        "HIGH: MORE LIGHTS PER PIXEL, FULL-RESOLUTION WATER"});
+                        enhanced ? "THE GAME'S GLOW REBUILT AT THE FULL RESOLUTION"
+                                 : "THE GAME'S OWN GLOW, AS THE CONSOLE DRAWS IT"});
+        if (enhanced) {
+            // In steps of ten percent; 0 off.
+            const unsigned value = std::min(render.bloom, kMaxBloom);
+            if (value == 0u) {
+                std::snprintf(text, sizeof(text), "OFF");
+            } else {
+                std::snprintf(text, sizeof(text), "%u%%", value);
+            }
+            rows.push_back({"  INTENSITY", text,
+                            [](RenderConfig& draft, int delta) {
+                                draft.bloom = static_cast<unsigned>(std::clamp(
+                                    static_cast<int>(std::min(draft.bloom, kMaxBloom)) + delta * 10, 0,
+                                    static_cast<int>(kMaxBloom)));
+                            },
+                            "THE ENHANCED GLOW'S STRENGTH"});
+            rows.back().slider_steps = static_cast<std::uint16_t>(kMaxBloom / 10u);
+            rows.back().slider_at = static_cast<std::uint16_t>(value / 10u);
+        }
     }
     // Texture packs (the enabled mods') apply with the settings above; the folders of dumped textures and movies.
     rows.push_back({"TEXTURE PACKS", {}, nullptr, {}, true});
