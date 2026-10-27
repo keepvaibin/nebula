@@ -214,11 +214,11 @@ namespace Nebula
     $iconFile = Join-Path $src 'installer\assets\nebula.ico'
     $launcherSources = @(Get-ChildItem (Join-Path $src 'installer\src\Launcher\*.cs') | ForEach-Object FullName)
     $launcher = Join-Path $work 'Nebula.exe'
-    Invoke-Checked $csc (@('/nologo', '/deterministic', '/target:winexe', '/platform:x64', '/optimize+', "/win32manifest:$manifestFile", "/win32icon:$iconFile", "/out:$launcher") + $references + $common +
+    Invoke-Checked $csc (@('/nologo', '/target:winexe', '/platform:x64', '/optimize+', "/win32manifest:$manifestFile", "/win32icon:$iconFile", "/out:$launcher") + $references + $common +
         $launcherSources)
     # Same program; always opens the settings window instead of the game.
     $settingsApp = Join-Path $work 'NebulaSettings.exe'
-    Invoke-Checked $csc (@('/nologo', '/deterministic', '/target:winexe', '/platform:x64', '/optimize+', '/define:NEBULA_SETTINGS_APP', "/win32manifest:$manifestFile", "/win32icon:$iconFile", "/out:$settingsApp") + $references + $common +
+    Invoke-Checked $csc (@('/nologo', '/target:winexe', '/platform:x64', '/optimize+', '/define:NEBULA_SETTINGS_APP', "/win32manifest:$manifestFile", "/win32icon:$iconFile", "/out:$settingsApp") + $references + $common +
         $launcherSources)
 
     $resources = @{
@@ -277,7 +277,7 @@ namespace Nebula
     $setup = Join-Path $OutputDirectory $setupName
     # Every program it carries passes Microsoft Defender first (MpCmdRun, no remediation): a detection stops the release.
     Assert-DefenderClean @($resources.Values | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
-    Invoke-Checked $csc (@('/nologo', '/deterministic', '/target:winexe', '/platform:x64', '/optimize+', "/win32manifest:$manifestFile", "/win32icon:$iconFile", "/out:$setup") + $references + $resourceArgs + $common +
+    Invoke-Checked $csc (@('/nologo', '/target:winexe', '/platform:x64', '/optimize+', "/win32manifest:$manifestFile", "/win32icon:$iconFile", "/out:$setup") + $references + $resourceArgs + $common +
         @(Get-ChildItem (Join-Path $src 'installer\src\Setup\*.cs') | ForEach-Object FullName))
 
     Assert-DefenderClean @($setup)
