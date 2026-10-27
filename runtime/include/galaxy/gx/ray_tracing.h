@@ -983,7 +983,7 @@ private:
     static constexpr unsigned kBallReadbacks = 4u;
     // After the balls and the colour: the probe's records (GALAXY_RT_PROBE: 0, 1, 3, 7, 8), the engine reference's
     // comparison (2), the light meter's sums (4 to 6; the specular history's, 9).
-    static constexpr unsigned kProbeRecords = 10u;
+    static constexpr unsigned kProbeRecords = 11u;
     static constexpr unsigned kBallReadbackBytes = kStarSlots * 16u + 16u + kProbeRecords * 16u;
     // GALAXY_RT_PROBE=x,y (diagnostics): an EFB pixel whose sample reports, once a second, the draw the camera sees and
     // what stops the sun's centre ray from it (draw record, material table entry, distance, instance).

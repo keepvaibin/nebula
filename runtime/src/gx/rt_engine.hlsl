@@ -266,6 +266,7 @@ void EngineGBufferCS(uint3 id : SV_DispatchThreadID)
         g_final[g_sample_size.x * g_sample_size.y + kStarSlots + 5u] = uint4(0u, 0u, 0u, 0u);
         g_final[g_sample_size.x * g_sample_size.y + kStarSlots + 6u] = uint4(0u, 0u, 0u, 0u);
         g_final[g_sample_size.x * g_sample_size.y + kStarSlots + 9u] = uint4(0u, 0u, 0u, 0u);
+        g_final[g_sample_size.x * g_sample_size.y + kStarSlots + 10u] = uint4(0u, 0u, 0u, 0u);
     }
     const int2 q = int2(id.xy);
     const uint pixel = id.y * g_target_size.x + id.x;
@@ -491,6 +492,33 @@ float3 specular_f0(GSurface s)
 {
     const float dielectric = (s.flags & kGbClear) != 0u ? kClearF0 : 0.04f;
     return lerp(dielectric.xxx, s.albedo, s.metallic);
+}
+
+// Rough reflections are not traced. Past this perceptual roughness the GGX lobe spans most of the hemisphere: one ray
+// a pixel meets the sunlit planet one frame and black space the next (the Gateway's turning ring, roughness 0.95: the
+// samples' deviation 3.5 x their mean, the reflection grainy after 30 frames of history and streaked along its turn).
+// Such a lobe gathers what the surface's diffuse light gathers: the filtered light less the sun's (the sun's highlight
+// is the analytic glint) times the split sum's environment BRDF, as Unreal's Lumen takes rough reflections from its
+// diffuse gather past MaxRoughnessToTrace (0.4, fading over 0.1).
+static const float kTracedRoughnessMost = 0.4f;
+static const float kRoughFade = 0.1f;
+
+// How much of a reflection is the diffuse light's (0: traced; 1: none traced).
+float rough_reflection_share(float roughness)
+{
+    return saturate((roughness - kTracedRoughnessMost) / kRoughFade);
+}
+
+// The split sum's environment BRDF, F0 x A + B (Karis 2014, "Physically Based Shading on Mobile": the fit, perceptual
+// roughness).
+float3 env_brdf(float3 f0, float roughness, float nv)
+{
+    const float4 c0 = float4(-1.0f, -0.0275f, -0.572f, 0.022f);
+    const float4 c1 = float4(1.0f, 0.0425f, 1.04f, -0.04f);
+    const float4 r = roughness * c0 + c1;
+    const float a004 = min(r.x * r.x, exp2(-9.28f * nv)) * r.x + r.y;
+    const float2 ab = float2(-1.04f, 1.04f) * a004 + r.zw;
+    return f0 * ab.x + ab.y;
 }
 
 // The GGX lobe's alpha for the sun's highlight: at least the sun's disc (g_sun.w, the tangent of its radius) wide. A
@@ -2590,7 +2618,8 @@ void EngineSpecularCS(uint3 id : SV_DispatchThreadID)
     const int2 q = int2(id.xy);
     const GSurface s = gb_load(engine_view(kEvGBuffer), pixel, g_projection, q);
     RWByteAddressBuffer out_spec = engine_buffer(kEvSpecular);
-    if (!s.valid || (s.flags & kGbEmitter) != 0u || (g_engine_info.x & kEngineSpecular) == 0u) {
+    if (!s.valid || (s.flags & kGbEmitter) != 0u || (g_engine_info.x & kEngineSpecular) == 0u ||
+        rough_reflection_share(s.roughness) >= 1.0f) {
         out_spec.Store2(pixel * 8u, uint2(0u, 0u));
         return;
     }
@@ -4362,6 +4391,9 @@ void EngineFinalCS(uint3 id : SV_DispatchThreadID)
     // And the specular history's length, the share of it reprojected by the reflection's motion (EngineTemporalCS), and
     // the light change the histories take (light_change), 1.
     float4 meter_spec = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    // And the specular samples' relative deviation over the history (its moments), the a-trous's reflection radius
+    // (pixels: the lobe's footprint about the virtual image) and the perceptual roughness, 1.
+    float4 meter_spec_noise = float4(0.0f, 0.0f, 0.0f, 0.0f);
     if (s.valid) {
         z = s.p.z;
         if ((s.flags & kGbEmitter) != 0u) {
@@ -4394,7 +4426,14 @@ void EngineFinalCS(uint3 id : SV_DispatchThreadID)
             unsunned = float3(f16tof32(a.x), f16tof32(a.x >> 16u), f16tof32(a.y));
             lit_surface = true;
             diffuse = unsunned + sun;
-            specular = float3(f16tof32(a.z), f16tof32(a.z >> 16u), f16tof32(a.w)) + sun_glint;
+            specular = float3(f16tof32(a.z), f16tof32(a.z >> 16u), f16tof32(a.w));
+            const float rough = rough_reflection_share(s.roughness);
+            if (rough > 0.0f) {
+                specular = lerp(specular,
+                                unsunned * env_brdf(specular_f0(s), s.roughness, saturate(dot(s.n, normalize(-s.p)))),
+                                rough);
+            }
+            specular += sun_glint;
             whole = diffuse * exposure;
             if (g_probe.w != 0u) {
                 const float2 centre = float2(g_probe.w & 0xFFFu, (g_probe.w >> 12u) & 0xFFFu);
@@ -4407,6 +4446,14 @@ void EngineFinalCS(uint3 id : SV_DispatchThreadID)
                     meter_history = f16tof32(engine_buffer(kEvHistDiffuse).Load(pixel * 16u + 4u) >> 16u);
                     meter_spec = float4(f16tof32(engine_buffer(kEvHistSpecular).Load(pixel * kSpecHistoryBytes + 4u) >> 16u),
                                         spec_history_virtual(pixel), light_change(q).x, 1.0f);
+                    {
+                        const float2 ms = asfloat(engine_buffer(kEvHistSpecular).Load2(pixel * kSpecHistoryBytes + 16u));
+                        const float track = f16tof32(engine_buffer(kEvHistSpecular).Load(pixel * kSpecHistoryBytes + 12u) >> 16u);
+                        const float spec_tan = track * lobe_tan(s.roughness, kLobeShare) / (length(s.p) + track);
+                        meter_spec_noise = float4(min(sqrt(max(ms.y - ms.x * ms.x, 0.0f)) / max(ms.x, 1e-4f), 50.0f),
+                                                  min(spec_tan * abs(s.p.z) / pixel_world_size(s.p.z), 1000.0f),
+                                                  s.roughness, 1.0f);
+                    }
                     if ((g_engine_info.x & kEngineMotion) != 0u) {
                         const Texture2D<float2> motion = ResourceDescriptorHeap[engine_view(kEvMotion)];
                         const float2 d = float2(q) + 0.5f + motion.Load(int3(q, 0)) + g_motion_jitter -
@@ -4529,6 +4576,7 @@ void EngineFinalCS(uint3 id : SV_DispatchThreadID)
         const float moved = WaveActiveSum(meter_moved);
         const float history = WaveActiveSum(meter_history);
         const float4 spec = WaveActiveSum(meter_spec);
+        const float4 spec_noise = WaveActiveSum(meter_spec_noise);
         if (WaveIsFirstLane() && total.w > 0.0f) {
             const uint at = g_sample_size.x * g_sample_size.y + kStarSlots + 4u;
             InterlockedAdd(g_final[at].x, uint(round(total.x * 256.0f)));
@@ -4551,6 +4599,12 @@ void EngineFinalCS(uint3 id : SV_DispatchThreadID)
                 InterlockedAdd(g_final[at + 5u].y, uint(round(spec.y * 256.0f)));
                 InterlockedAdd(g_final[at + 5u].z, uint(round(spec.z * 256.0f)));
                 InterlockedAdd(g_final[at + 5u].w, uint(spec.w));
+            }
+            if (spec_noise.w > 0.0f) {
+                InterlockedAdd(g_final[at + 6u].x, uint(round(spec_noise.x * 256.0f)));
+                InterlockedAdd(g_final[at + 6u].y, uint(round(spec_noise.y * 16.0f)));
+                InterlockedAdd(g_final[at + 6u].z, uint(round(spec_noise.z * 1024.0f)));
+                InterlockedAdd(g_final[at + 6u].w, uint(spec_noise.w));
             }
         }
     }

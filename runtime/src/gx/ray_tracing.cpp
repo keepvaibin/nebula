@@ -1418,6 +1418,14 @@ void SceneRayTracer::begin_frame(std::uint64_t frame_index) {
                          static_cast<unsigned long long>(taken), probe[36] / 16.0 / n, probe[37] / 256.0 / n,
                          probe[38] / 256.0 / n, probe[39]);
         }
+        // [rt-spec-noise]: the means over the meter's disc of the specular samples' relative deviation (their history's
+        // moments), the a-trous's reflection radius (pixels) and the perceptual roughness.
+        if (light_meter_ && probe[43] != 0u) {
+            const double n = static_cast<double>(probe[43]);
+            std::fprintf(stderr, "[rt-spec-noise] frame=%llu deviation=%.3f radius=%.2f roughness=%.3f pixels=%u\n",
+                         static_cast<unsigned long long>(taken), probe[40] / 256.0 / n, probe[41] / 16.0 / n,
+                         probe[42] / 1024.0 / n, probe[43]);
+        }
         // [rt-motion-meter]: where the raster's motion takes the disc's pixels against the camera's reprojection (mean
         // x, y and distance, render pixels) and the share the histories follow it for (more than half a pixel off).
         if (light_meter_ && probe[27] != 0u) {
