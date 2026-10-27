@@ -15,6 +15,8 @@ namespace Nebula.Setup
         ///   [--input PATH] [--root PATH] [--source ZIP|DIR] [--jobs N] [--desktop-shortcut]
         ///   [--unattended] [--remove-user-data] [--accept-build-tools-license]
         /// Nebula-Setup.exe --finish-uninstall PID --root PATH (Integration.FinishUninstall)
+        /// Nebula-Setup.exe --install-dlss (the launcher's DLSS choice: NVIDIA's license and the download;
+        ///   exit code 0 once DLSS is installed)
         /// </summary>
         [STAThread]
         private static int Main(string[] args)
@@ -35,6 +37,14 @@ namespace Nebula.Setup
                 return 0;
             }
             NativeMethods.SetProcessDpiAwarenessContext(new IntPtr(-4));
+            if (options.ContainsKey("install-dlss"))
+            {
+                if (DlssPackage.Installed()) return 0;
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
+                using (var dialog = new DlssInstallDialog(false) { TopMost = true })
+                    return dialog.ShowDialog() == DialogResult.OK && DlssPackage.Installed() ? 0 : 1;
+            }
             if (options.ContainsKey("unattended")) return Unattended(options);
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
