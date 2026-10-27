@@ -1736,6 +1736,16 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
     } else {
         s << kPsConstantsDef;
     }
+    // A clear ice or crystal draw's tint under physical light (GxBackend: ztex_params.w between -1 and 0 the share it
+    // loses; rt_materials.h kRtIceTintKept): a colour of its art (8-bit sRGB over 255) with that share of its chroma
+    // taken, its luminance kept (linear light, Rec. 709). Its rasterized colours take it, and the texels of its maps that
+    // are textures (alpha_refs.z bits 8-15; not the screen captures it shows through it); GxBackend clears its registers.
+    s << "float3 gx_tint_cleared(float3 c, float share) {\n"
+         "    float3 l = saturate(c);\n"
+         "    l = l <= 0.04045 ? l / 12.92 : pow((l + 0.055) / 1.055, 2.4);\n"
+         "    l = lerp(l, dot(l, float3(0.2126, 0.7152, 0.0722)).xxx, share);\n"
+         "    return l <= 0.0031308 ? l * 12.92 : 1.055 * pow(l, 1.0 / 2.4) - 0.055;\n"
+         "}\n";
     if (scalar_masks) {
         s << "int3 gx_u8(int3 v) { return int3(v.x & 255, v.y & 255, v.z & 255); }\n"
              "int4 gx_u8(int4 v) { return int4(v.x & 255, v.y & 255, v.z & 255, v.w & 255); }\n"
@@ -1941,6 +1951,13 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
             s << "    if (enh_on && (uber_ps_header.w & 0x20000u) == 0u) enh_key_highlight(enh, pin.ppl_pos);\n";
         }
     }
+    // A clear ice or crystal draw's tint (gx_tint_cleared): its rasterized colours here, its textures' texels per stage.
+    s << "    const bool tinted = ztex_params.w < 0.0 && ztex_params.w > -1.0;\n"
+         "    const uint tinted_maps = tinted ? (asuint(alpha_refs.z) >> 8u) & 0xFFu : 0u;\n"
+         "    if (tinted) {\n"
+         "        pin.col0.rgb = gx_tint_cleared(pin.col0.rgb, -ztex_params.w);\n"
+         "        pin.col1.rgb = gx_tint_cleared(pin.col1.rgb, -ztex_params.w);\n"
+         "    }\n";
     s << "    int4 tex_color_i = int4(0,0,0,0);\n";
     s << "    int4 last_raw_tex_i = int4(0,0,0,0);\n";
     s << "    int4 ras_color_i = int4(0,0,0,0);\n";
@@ -2196,6 +2213,11 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
                     texmap,
                     tex_swz.c_str());
             }
+            emit(s,
+                 "    if (((tinted_maps >> %uu) & 1u) != 0u) {\n"
+                 "        tex_color_i.rgb = int3(round(gx_tint_cleared(float3(tex_color_i.rgb) / 255.0, -ztex_params.w) * 255.0));\n"
+                 "    }\n",
+                 texmap);
             if (!has_indirect_cmd && ((enh_env >> texcoord) & 1u) != 0u) {
                 // Under ray tracing the game's painted reflection (metals, crystals, sheen) stays as drawn
                 // and the traced reflection screens over it; replacing the map by its mean would flatten
@@ -2760,7 +2782,9 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
             s << "        }\n";
             s << "    }\n";
         }
-        s << "    if (ztex_params.w < 0.0) {\n"
+        // At most -1 a light source shown in the table's colour (`recolour`); between -1 and 0 a clear ice or crystal
+        // draw's tint, cleared from its colour inputs before the TEV (main's start).
+        s << "    if (ztex_params.w <= -1.0) {\n"
              "        const uint code = uint(-ztex_params.w) - 1u;\n"
              "        const float3 c = float3(code & 255u, (code >> 8u) & 255u, (code >> 16u) & 255u) / 255.0;\n"
              "        const float3 hue = c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4);\n"

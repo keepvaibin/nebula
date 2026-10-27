@@ -1719,6 +1719,8 @@ private:
     std::uint32_t enhanced_material_bits_ = 0u;
     // The material whose glow gain (output_flags bit 5) or falling water (bit 6) the PS constants hold.
     std::uint16_t glow_material_ = 0u;
+    // The share of a clear ice or crystal draw's tint the PS constants clear (rt_materials.h kRtIceTintKept; 0 none).
+    float ps_tint_cleared_ = 0.0f;
     PsoKey current_pso_key_{};
     bool current_pso_key_valid_ = false;
     gpu::Pipeline* current_pipeline_ = nullptr;

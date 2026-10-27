@@ -63,6 +63,9 @@ inline constexpr std::uint32_t kRtDrawCard = 1u << 16u;
 // the trace saw rather than a layer over it (rt_reflections.hlsl kWaterOpaqueFlag). Shares the de-lit bit,
 // which water draws never carry.
 inline constexpr std::uint32_t kRtDrawWaterOpaque = 1u << 12u;
+// A water-pass draw only (kRtDrawWater): ice (the material table's `ice`: Freezeflame's rink), reflecting as polished
+// ice rather than water (rt_reflections.hlsl kWaterIceFlag). Shares the no-shadow bit, which water draws never carry.
+inline constexpr std::uint32_t kRtDrawWaterIce = 1u << 15u;
 // RtDrawInfo.surface only: an alpha-tested opaque draw outside the foliage table (wood panels, rocks, bells,
 // Gearmos: tests that cut little or nothing), traced whole; each ray's hit counts where its texture's alpha
 // passes the draw's test (RtDrawInfo.alpha; rt_lighting.hlsl alpha_test). Cards carry the same test.

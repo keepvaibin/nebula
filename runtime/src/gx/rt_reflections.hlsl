@@ -2118,6 +2118,11 @@ static const float kMirrorMetal = 0.75f;
 // RtDraw.flags bit 12 on a water-pass draw (kRtDrawWaterOpaque): an opaque late surface the table names water or
 // crystal, the scene the trace saw (Freezeflame's ice).
 static const uint kWaterOpaqueFlag = 4096u;
+// RtDraw.flags bit 15 on a water-pass draw (kRtDrawWaterIce): ice (the table's `ice`), polished ice rather than water:
+// no waves and no water body, its own class's reflectance (ray_tracing_reflections.cpp materials_[4]: Mario and the
+// aurora read in it; as water, F0 0.02, its reflection was all but gone).
+static const uint kWaterIceFlag = 32768u;
+static const uint kIceClass = 4u;
 
 // Value noise in 3D (hashed lattice corners, smooth interpolation) and its fractal sum.
 float wave_hash(float3 p)
@@ -2438,7 +2443,7 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
                                 unpack_vertex_normal(record.z) * w.z;
                 // The water's normals point out of it: seen from their back, the camera is under it. Mirror glass
                 // has no inside.
-                below = dot(smooth, dir) > 0.0f && (record.w & kWaterMirrorFlag) == 0u &&
+                below = dot(smooth, dir) > 0.0f && (record.w & (kWaterMirrorFlag | kWaterIceFlag)) == 0u &&
                         ((record.w >> 8u) & 15u) != kMetalClass;
                 smooth *= dot(smooth, ng) < 0.0f ? -1.0f : 1.0f;
                 const float smooth_length = length(smooth);
@@ -2453,13 +2458,15 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
             const bool mirror = (record.w & kWaterMirrorFlag) != 0u;
             const bool coat = ((record.w >> 8u) & 15u) == kMetalClass;
             const bool crystal = mirror || ((record.w >> 8u) & 15u) == kCrystal;
+            // Ice: polished, still (no waves, no body), at its own class's reflectance.
+            const bool ice = (record.w & kWaterIceFlag) != 0u && !crystal && !coat;
             // The game's own waves (its wave map, water_wave) bend the reflected ray: read at the pixel's footprint
             // they are smooth from pixel to pixel. Without them the reflection is traced off the calm surface and the
             // composite moves the image with procedural waves (water_distortion): rays bent per pixel by those
             // (up to 17 degrees) would scatter the image into glitter, the more the higher the resolution.
             float3 wave = n;
             bool game_waves = false;
-            if (!crystal && !coat) {
+            if (!crystal && !coat && !ice) {
 #if RT_TEXTURED
                 game_waves = water_wave(tri, b, dir * water_t, n, wave);
 #endif
@@ -2476,10 +2483,11 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
             g_spread = 0.0f;
             const float3 hit = dir * water_t;
             // A waterfall is a sheet (no lake body under it), its flow's streaks in its normal.
-            const bool fall = (record.w & kWaterfallFlag) != 0u && !crystal && !coat;
-            const uint surface = coat ? kBareMetalClass : crystal ? kCrystal : fall ? kFallingWater
+            const bool fall = (record.w & kWaterfallFlag) != 0u && !crystal && !coat && !ice;
+            const uint surface = coat ? kBareMetalClass : crystal ? kCrystal : ice ? kIceClass : fall ? kFallingWater
                                  : below ? kWaterBelow : kWaterSurface;
-            float4 params = g_class[coat ? kBareMetalClass : crystal ? kCrystal : fall ? kFallingWater : kWaterSurface];
+            float4 params = g_class[coat ? kBareMetalClass : crystal ? kCrystal : ice ? kIceClass
+                                    : fall ? kFallingWater : kWaterSurface];
             if (mirror) {
                 params.x = min(params.x, 0.02f);
                 params.y = 1.0f;
@@ -2514,10 +2522,10 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
                 // (Uludag 2014, Hi-Z Screen-Space Cone-Traced Reflections), it is the lobe's mean, steady.
                 float4 ray_params = params;
                 ray_params.x = fall ? params.x : 1e-4f;
-                g_spread = (crystal || coat) && !mirror ? tan(2.0f * atan(params.x * sqrt(3.0f))) : 0.0f;
+                g_spread = (crystal || coat || ice) && !mirror ? tan(2.0f * atan(params.x * sqrt(3.0f))) : 0.0f;
                 // Over at least two of the game's own 640-wide pixels: what the frame shows thinner than that (a
                 // net's cords, a fence's bars) averages out instead of reflecting as specks the waves set moving.
-                g_reflect_blur = crystal || coat ? 0.0f : 2.0f * max(g_viewport.z / 640.0f, 1.0f);
+                g_reflect_blur = crystal || coat || ice ? 0.0f : 2.0f * max(g_viewport.z / 640.0f, 1.0f);
                 const Reflected r = reflect_light(id.xy, dir, game_waves ? wave : n, ng, hit, ray_params, base, false,
                                                   false);
                 g_reflect_blur = 0.0f;
@@ -2529,7 +2537,7 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
                 }
                 // The lights' glints off the waves, their lobe widened by the waves' spread over the pixel (specular
                 // anti-aliasing, highlights), weighted like the reflection.
-                g_spread = crystal || coat ? 0.0f : 2.0f * length(cross(wave, n));
+                g_spread = crystal || coat || ice ? 0.0f : 2.0f * length(cross(wave, n));
                 const float3 glint_origin = hit + ng * (0.2f + abs(hit.z) * 4e-4f);
                 const float3 glints = highlights(id.xy, hit, glint_origin, wave, -dir, params.x, params.z, false) * params.y;
                 g_spread = 0.0f;

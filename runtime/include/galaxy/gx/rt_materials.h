@@ -49,6 +49,16 @@ namespace galaxy::gx {
 
 enum class RtEmission : std::uint8_t { None = 0, Point = 1, Area = 2 };
 
+// The share of their art's tint clear ice and the crystal cages keep under physical ray tracing (the owner, 27 October
+// 2026: ice 20 to 25 % of its blue, crystals 5 to 10 %; never darker). Their tint is in the colours their materials
+// multiply and add (TEV and konst registers, material and vertex colours: Freezeflame's rink filters what shows through
+// it by (0, 40, 65), its sheen by (55, 77, 92)); their textures are grey and what shows through them (the screen
+// capture the ice refracts, its reflection) keeps its own colours. Those colours keep that share of their chroma, their
+// luminance kept: GxBackend clears the registers in a draw's constants, the pixel shaders its rasterized colours
+// (ztex_params.w = kept - 1).
+inline constexpr float kRtIceTintKept = 0.225f;
+inline constexpr float kRtCrystalTintKept = 0.075f;
+
 struct RtMaterial {
     std::uint8_t surface_class = 0xFFu;   // RtSurfaceClass; 0xFF: as the GX state shows it
     RtEmission emission = RtEmission::None;
@@ -66,6 +76,10 @@ struct RtMaterial {
     bool mist = false;                    // an effect's sprites are spray: puffs of drops under the engine, the
                                           // sprites hidden (rt_engine.hlsl MistLightCS)
     bool mirror = false;                  // glass the water pass reflects as a mirror (the Observatory fountain)
+    bool ice = false;                     // ice: clear as glass (its own look as the game draws it, a traced
+                                          // reflection) yet shaded by the traced sun's shadow
+    float tint_kept = 1.0f;               // the share of its art's tint kept under physical light: `ice` and
+                                          // `icetint` kRtIceTintKept, `crystaltint` kRtCrystalTintKept
     bool foliage = false;                 // leaves, grass and flower cards (alpha-cut)
     bool lens = false;                    // a black hole's lens draw: the finish bends light around it
     bool matte = false;                   // foliage, cloth: absorbs light, no highlight or reflection
@@ -78,7 +92,8 @@ struct RtMaterial {
     bool solid = false;                   // with `traced`: a closed clear solid (a crystal), traced through from the
                                           // scene's own geometry (rt_engine.hlsl clear_solid); color: what it passes
                                           // after `range` world units (0: it absorbs nothing)
-    float ior = 0.0f;                     // a solid's index of refraction (token ior<n>, 1 to 5; 0: quartz's)
+    float ior = 0.0f;                     // index of refraction (token ior<n>, 1 to 5; 0: none): a dielectric's
+                                          // reflectance; a solid's refraction (0: quartz's)
     bool seen = false;                    // shows its radiance; its light is the game's point light there
     bool recolour = false;                // a light source's sprite shown in the table's colour (its luminance kept)
     bool near_glow = false;               // a light source only near its glow light (the game's sprite of it)

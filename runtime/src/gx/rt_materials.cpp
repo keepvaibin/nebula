@@ -145,6 +145,10 @@ void apply_class(const std::string& text, RtMaterial& m) {
         else if (token == "hide") m.hide = true;
         else if (token == "unlit-only") m.unlit_only = true;
         else if (token == "particle") m.particle = true;
+        // An ice layer of another class (the rink's additive cracks), a crystal's (a cage's cracks): their tint cleared
+        // as ice's and the crystals', their class kept.
+        else if (token == "icetint") m.tint_kept = std::min(m.tint_kept, kRtIceTintKept);
+        else if (token == "crystaltint") m.tint_kept = std::min(m.tint_kept, kRtCrystalTintKept);
         else if (token == "luminous") m.luminous = true;
         else if (token == "lens") m.lens = true;
         else if (token == "mirror") m.mirror = true;
@@ -185,6 +189,10 @@ void apply_class(const std::string& text, RtMaterial& m) {
         } else if (token == "ice" || token == "water") {
             set(RtSurfaceClass::Water);
             m.relief = 0.0f;
+            m.ice = m.ice || token == "ice";
+            if (token == "ice") {
+                m.tint_kept = std::min(m.tint_kept, kRtIceTintKept);
+            }
         } else if (token == "diffuse" || token == "foliage" || token == "fabric" || token == "skin") {
             set(RtSurfaceClass::Diffuse);
             m.relief = token == "diffuse" ? 1.0f : token == "foliage" ? 0.7f : 0.0f;

@@ -191,6 +191,8 @@ constexpr std::uint32_t kDrawTableSolid = 1024u;
 // g_draws word 6 (rt_engine.hlsl kDrawTableFall): with kDrawTableSolid, falling water the clear pass traces (a `traced
 // solid` waterfall: the game's opaque sheet hidden), its sheet's thickness (eye units) in place of a solid's reach.
 constexpr std::uint32_t kDrawTableFall = 2048u;
+// g_draws word 6 (rt_engine.hlsl kDrawTableIce): ice (the table's `ice`), clear as glass, shaded by the traced sun.
+constexpr std::uint32_t kDrawTableIce = 4096u;
 // g_draws word 6 bits 13-15 (rt_engine.hlsl fall_white): falling water's share of its painted white water drawn, 1 +
 // sixths (0: all of it; the table's `white<n>`, `unpainted`).
 constexpr std::uint32_t kDrawTableWhiteShift = 13u;
@@ -2698,18 +2700,25 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
             entry.flags = (entry.flags & 0xFFFFu) |
                           (static_cast<std::uint32_t>(std::min<std::size_t>(water_draws_.size() - 1u, 0xFFFFu)) << 16u);
             water_triangles_ += draw.triangle_count;
-            // Its clear record: the table's roughness; the engine's glass (glass or crystal, not mirror glass).
+            // Its clear record: the table's roughness; the engine's glass (glass or crystal, not mirror glass); ice
+            // (rt_engine.hlsl kClearIce) and its row's index of refraction ((n - 1) x 4096 in bits 18-31).
             {
                 const RtMaterial* const clear = rt_material(info.rt_material);
                 const auto surface_class = (info.surface >> kRtDrawClassShift) & 15u;
                 const float roughness = clear != nullptr ? clear->roughness : -1.0f;
+                const bool ice = clear != nullptr && clear->ice;
+                const std::uint32_t ior =
+                    ice && clear->ior >= 1.0f
+                        ? static_cast<std::uint32_t>(std::lround(std::clamp((clear->ior - 1.0f) * 4096.0f, 0.0f, 16383.0f)))
+                        : 0u;
                 water_clear_.push_back(
                     (roughness >= 0.0f ? static_cast<std::uint32_t>(std::lround(std::min(roughness, 1.0f) * 65534.0f))
                                        : 0xFFFFu) |
                     (surface_class == static_cast<std::uint32_t>(RtSurfaceClass::Crystal) &&
                              (info.surface & kRtDrawWaterMirror) == 0u
                          ? 0x10000u
-                         : 0u));
+                         : 0u) |
+                    (ice ? 0x20000u : 0u) | (ior << 18u));
             }
             std::array<std::uint32_t, 12> waves{};
             waves[0] = 0xFFFFFFFFu;
@@ -2768,6 +2777,7 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
             ++star_draws_;
         }
         flags = (material->tint ? kDrawTableTint : 0u) | (material->foliage ? kDrawTableFoliage : 0u) |
+                (material->ice ? kDrawTableIce : 0u) |
                 (material->star ? kDrawTableStar : 0u) |
                 ((info.surface & kRtDrawCard) != 0u ? kDrawTableCard : 0u) |
                 (material->mirror ? kDrawTableMirror : 0u) | (material->recolour ? kDrawTableRecolour : 0u) |
@@ -2836,9 +2846,9 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
     // The draw's GX cull mode in bits 4-5 (0 none, 1 front faces culled, 2 back faces, 3 all): the faces the raster
     // can show (rt_lighting.hlsl raster_facing).
     light_kind |= (static_cast<std::uint32_t>(info.cull) & 3u) << 4u;
-    // A clear solid's index of refraction in the word's upper half (1 + bits / 16384; 0: quartz's, rt_engine.hlsl
-    // solid_ior).
-    if (material != nullptr && material->solid && material->ior >= 1.0f) {
+    // The table's index of refraction in the word's upper half (1 + bits / 16384; 0: none): a dielectric's reflectance
+    // (rt_engine.hlsl specular_f0), and a clear solid's refraction (solid_ior; none: quartz's).
+    if (material != nullptr && material->ior >= 1.0f) {
         light_kind |= static_cast<std::uint32_t>(std::lround(std::min((material->ior - 1.0f) * 16384.0f, 65535.0f)))
                       << 16u;
     }

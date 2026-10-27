@@ -136,6 +136,24 @@ std::atomic<unsigned> s_layer_2d_scale{0u};
 // The 3D image's scale as shown, at each scene's begin (scene_display_scale).
 std::atomic<unsigned> s_scene_display_scale{0u};
 
+// A TEV colour register (an 8-bit sRGB colour over 255) with `share` of its chroma taken, its luminance kept (linear
+// light, Rec. 709): a clear ice or crystal draw's tint (rt_materials.h kRtIceTintKept). A signed register outside 0..1
+// (a TEV bias) keeps its value.
+void clear_register_tint(float (&c)[4], float share) noexcept {
+    if (!(c[0] >= 0.0f && c[0] <= 1.0f && c[1] >= 0.0f && c[1] <= 1.0f && c[2] >= 0.0f && c[2] <= 1.0f)) {
+        return;
+    }
+    float lin[3];
+    for (unsigned i = 0; i < 3u; ++i) {
+        lin[i] = c[i] <= 0.04045f ? c[i] / 12.92f : std::pow((c[i] + 0.055f) / 1.055f, 2.4f);
+    }
+    const float y = 0.2126f * lin[0] + 0.7152f * lin[1] + 0.0722f * lin[2];
+    for (unsigned i = 0; i < 3u; ++i) {
+        const float l = lin[i] + (y - lin[i]) * share;
+        c[i] = l <= 0.0031308f ? l * 12.92f : 1.055f * std::pow(l, 1.0f / 2.4f) - 0.055f;
+    }
+}
+
 // True when the alpha test passes every fragment.
 bool alpha_test_keeps_all(const PixelShaderKey& key) noexcept {
     const auto always = static_cast<std::uint8_t>(CompareFunc::Always);
@@ -5690,14 +5708,15 @@ bool GxBackend::rt_hidden_draw() const noexcept {
         (debug_hide_material_phase >= 255u || rt_phase_ == static_cast<std::uint8_t>(debug_hide_material_phase))) {
         return true;
     }
-    // The game's own mirror copies drawn after the trace (Mario's reflection under ice: MarioActor::drawReflectModel in
-    // the indirect phase) carry a mirrored position matrix; under traced reflections they would double what the trace
-    // reflects. GALAXY_RT_KEEP_GAME_MIRRORS=1 keeps them.
+    // The game's own mirror copies drawn in the translucent and image-effect phases (Mario's blended copy under glass)
+    // carry a mirrored position matrix; under traced reflections they would double what the trace reflects.
+    // GALAXY_RT_KEEP_GAME_MIRRORS=1 keeps them. Mario's reflection under ice (MarioActor::drawReflectModel, the
+    // indirect phase) stays: ice reflects at its own Fresnel (n 1.31), 2 % looking down, and a floor's traced mirror
+    // sees only his unlit underside, so under the trace alone he vanished from Freezeflame's rink (the owner, 27
+    // October 2026: ice reflects everything). The opaque phases keep any mirrored geometry the game builds with a
+    // negative scale.
     static const bool keep_mirrors = read_env_u64("GALAXY_RT_KEEP_GAME_MIRRORS", 0u) != 0u;
-    // The translucent and image-effect phases draw such copies too (Mario's blended copy under glass). The opaque
-    // phases keep any mirrored geometry the game builds with a negative scale.
-    const bool mirror_phase = rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::AfterIndirect) ||
-                              rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::Xlu) ||
+    const bool mirror_phase = rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::Xlu) ||
                               rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::ListXlu) ||
                               rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::ImageEffect);
     if (!keep_mirrors && mirror_phase && renderer_.rt_reflections_active()) {
@@ -5938,12 +5957,14 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
             identities.size() < 65536u &&
             identities.insert(key ^ (static_cast<std::uint64_t>(rt_identity_seen_) * 0x9E3779B97F4A7C15ull)).second;
         if (logged.size() < 8192u && (logged.insert(key).second || new_identity)) {
+            const RtMaterial* const logged_material = rt_material(current_rt_material_);
             std::fprintf(stderr,
                          "[rt-untraced] material=%u phase=%u buffer=%u%s reasons=0x%02X outcome=%s identity=%08X "
-                         "water-open=%d\n",
+                         "water-open=%d tint=%.3f\n",
                          static_cast<unsigned>(current_rt_material_), static_cast<unsigned>(rt_phase_),
                          static_cast<unsigned>(rt_draw_buffer_ & 0xFFFFu), (rt_draw_buffer_ & 0x10000u) != 0u ? "x" : "o",
-                         reasons, what, rt_identity_seen_, water_open ? 1 : 0);
+                         reasons, what, rt_identity_seen_, water_open ? 1 : 0,
+                         logged_material != nullptr ? static_cast<double>(logged_material->tint_kept) : 1.0);
         }
     };
     note_scene_ao_view(call);
@@ -6270,6 +6291,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
             info.surface = kRtDrawWater | (static_cast<std::uint32_t>(water_class) << kRtDrawClassShift) |
                            (fall != nullptr && fall->waterfall ? kRtDrawWaterfall : 0u) |
                            (fall != nullptr && fall->mirror ? kRtDrawWaterMirror : 0u) |
+                           (fall != nullptr && fall->ice && !metal_coat ? kRtDrawWaterIce : 0u) |
                            (opaque_clear ? kRtDrawWaterOpaque : 0u);
         } else {
             info.surface |= static_cast<std::uint32_t>(surface.surface_class) << kRtDrawClassShift;
@@ -11537,16 +11559,42 @@ gpu::Pipeline* GxBackend::flush_draw_state(
     // A glow's gain follows its material (a light source's radiance): another material is another gain. A lit
     // translucent's material decides whether it is falling water (its constants' tex_dims[7].w).
     const std::uint16_t glow_material = (ps_key_.output_flags & 0x60u) != 0u ? current_rt_material_ : 0u;
+    // A clear ice or crystal draw under physical light (rt_materials.h kRtIceTintKept): the share of its art's tint it
+    // loses, in its TEV and konst registers here and its rasterized colours in the pixel shader (ztex_params.w).
+    float tint_cleared = 0.0f;
+    if (const RtMaterial* const tinted = rt_material(current_rt_material_);
+        tinted != nullptr && tinted->tint_kept < 1.0f && scene_phase_ && renderer_.rt_physical()) {
+        tint_cleared = 1.0f - std::clamp(tinted->tint_kept, 0.0f, 1.0f);
+    }
     if (tev_dirty || tev_c_dirty || tex_dirty || frame_bindings_dirty_ || glow_changed || enhanced_changed ||
         dirty == ~0u || (ps_record_restart_ && history_scene_) || enhanced_material_bits != enhanced_material_bits_ ||
-        glow_material != glow_material_) {
+        glow_material != glow_material_ || tint_cleared != ps_tint_cleared_) {
         enhanced_material_bits_ = enhanced_material_bits;
         glow_material_ = glow_material;
+        ps_tint_cleared_ = tint_cleared;
         const auto constants_start = time_detail
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
         GxPsConstants ps_c{};
         fill_ps_constants(state_, ps_c);
+        if (tint_cleared > 0.0f) {
+            for (auto& reg : ps_c.tev_regs) {
+                clear_register_tint(reg, tint_cleared);
+            }
+            for (auto& reg : ps_c.konst) {
+                clear_register_tint(reg, tint_cleared);
+            }
+            // Its maps that are textures clear their texels too (a seesaw's blue IceFace01); the screen captures it
+            // shows through it (the ice's and the crystals' refraction, the floors' mirror) keep their colours.
+            // alpha_refs.z bits 8-15, above the alpha test's packed modes.
+            std::uint32_t textures = 0u;
+            for (unsigned m = 0; m < kMaxTextureMaps; ++m) {
+                if ((current_texture_map_mask_ & (1u << m)) != 0u && !current_texture_handles_[m].from_efb_copy) {
+                    textures |= 1u << m;
+                }
+            }
+            ps_c.alpha_refs[2] = std::bit_cast<float>(std::bit_cast<std::uint32_t>(ps_c.alpha_refs[2]) | (textures << 8u));
+        }
         ps_c.ztex_params[1] = 1.0f / static_cast<float>(renderer_.efb_scale());
         // A glow's gain (output_flags bit 5): 1 under physical light (the game's additive effects as it drew them;
         // their light reaches the scene as the engine's emitting geometry), the art model's glow exposure otherwise.
@@ -11577,7 +11625,10 @@ gpu::Pipeline* GxBackend::flush_draw_state(
                                                (byte(m->color[2]) << 16u));
             }
         }
-        ps_c.ztex_params[3] = takes_light ? renderer_.rt_light_texture_scale() : recolour;
+        // Else the tint the draw loses, between -1 and 0 (below any recolour code, which is at most -1). A tinted draw
+        // that takes the light (a translucent of an unclear class) keeps its rasterized colours' tint.
+        ps_c.ztex_params[3] =
+            takes_light ? renderer_.rt_light_texture_scale() : recolour != 0.0f ? recolour : -tint_cleared;
         // A lit translucent's kind (shader_gen; map 7 is the light texture there, so its texture dimensions are free
         // and always set here: fill_ps_constants leaves map 7's texcoord scale, at least 1, in them): 0 an effect or
         // any other translucent, 1 falling water (clear where the art paints its water hue), 2 water, glass or

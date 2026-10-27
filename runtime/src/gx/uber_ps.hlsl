@@ -48,6 +48,18 @@ int4 gx_u8(int4 v) { return v & int4(255,255,255,255); }
 int2 gx_bit0(int2 v) { return v & 1; }
 #endif
 
+// A clear ice or crystal draw's tint under physical light (GxBackend: ztex_params.w between -1 and 0 the share it loses;
+// rt_materials.h kRtIceTintKept): a colour of its art (an 8-bit sRGB value over 255) with that share of its chroma taken,
+// its luminance kept (linear light, Rec. 709). Its rasterized colours take it, and the texels of its maps that are
+// textures (alpha_refs.z bits 8-15; not the screen captures it shows through it); GxBackend clears its registers.
+float3 gx_tint_cleared(float3 c, float share)
+{
+    float3 l = saturate(c);
+    l = l <= 0.04045 ? l / 12.92 : pow((l + 0.055) / 1.055, 2.4);
+    l = lerp(l, dot(l, float3(0.2126, 0.7152, 0.0722)).xxx, share);
+    return l <= 0.0031308 ? l * 12.92 : 1.055 * pow(l, 1.0 / 2.4) - 0.055;
+}
+
 struct PSIn {
     float4   pos      : SV_Position;
     float4   col0     : COLOR0;
@@ -233,6 +245,14 @@ PSOut main(PSIn pin) {
         uvs[u] = pin.uv[u];
     }
 
+    // A clear ice or crystal draw's tint (gx_tint_cleared): its rasterized colours here, its textures' texels per stage.
+    const bool tinted = ztex_params.w < 0.0 && ztex_params.w > -1.0;
+    const uint tinted_maps = tinted ? (asuint(alpha_refs.z) >> 8u) & 0xFFu : 0u;
+    if (tinted) {
+        pin.col0.rgb = gx_tint_cleared(pin.col0.rgb, -ztex_params.w);
+        pin.col1.rgb = gx_tint_cleared(pin.col1.rgb, -ztex_params.w);
+    }
+
     int4 tev_prev_i = int4(round(tev_regs[0] * 255.0));
     int4 tev_c_i[3];
     tev_c_i[0] = int4(round(tev_regs[1] * 255.0));
@@ -411,6 +431,9 @@ PSOut main(PSIn pin) {
             float4 tex_sample = sample_map(texmap, sample_uv);
             last_raw_tex_i = int4(round(saturate(tex_sample) * 255.0));
             tex_color_i = swizzle(last_raw_tex_i, tex_swz);
+            if (((tinted_maps >> texmap) & 1u) != 0u) {
+                tex_color_i.rgb = int3(round(gx_tint_cleared(float3(tex_color_i.rgb) / 255.0, -ztex_params.w) * 255.0));
+            }
         } else if (key_texgens != 0u) {
             tex_color_i = int4(255,255,255,255);
         } else {
@@ -695,7 +718,7 @@ PSOut main(PSIn pin) {
                 efb_color.a = uint(round(float(efb_color.a) * fall_keep));
                 tev_alpha *= fall_keep;
             }
-        } else if (ztex_params.w < 0.0) {
+        } else if (ztex_params.w <= -1.0) {
             // A light source the table shows in its own colour (`recolour`: RGB8 + 1, negated) keeps its peak, not its
             // luminance: a blue glow's luminance is a fifth of its peak.
             const uint code = uint(-ztex_params.w) - 1u;
