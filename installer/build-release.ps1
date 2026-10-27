@@ -40,7 +40,9 @@ $ErrorActionPreference = 'Stop'
 $installer = Split-Path -Parent $PSCommandPath
 $repo = Split-Path -Parent $installer
 if (-not $OutputDirectory) { $OutputDirectory = Join-Path $repo 'dist' }
-$work = Join-Path ([IO.Path]::GetTempPath()) ('nebula-release-' + [Guid]::NewGuid().ToString('N'))
+# The work folder sits outside the user profile: the libraries Setup ships for linking record the paths they were
+# built at, so a folder under %TEMP% would carry the build PC's user name into every release.
+$work = Join-Path ($env:SystemDrive + '\') ('nebula-release-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force $work, $OutputDirectory | Out-Null
 
 # Azure Artifact Signing: SignTool with Microsoft's dlib signs (SHA-256, RFC 3161 timestamp from Microsoft, since the
@@ -188,11 +190,24 @@ BEGIN
 END
 "@, (New-Object Text.UTF8Encoding $false))
     Invoke-Checked rc.exe @('/nologo', "/fo$recompRes", $recompRc)
-    $env:RUSTFLAGS = "-C target-feature=+crt-static -C link-arg=$recompRes"
+    # The build PC's own paths (its user profile, the work folder) never reach the program: Rust records the source
+    # path of every panic site, so the crate registry, the source export and the work folder are renamed in it.
+    # CARGO_ENCODED_RUSTFLAGS (0x1F between flags) keeps paths with spaces whole.
+    $cargoHome = if ($env:CARGO_HOME) { $env:CARGO_HOME } else { Join-Path $env:USERPROFILE '.cargo' }
+    $env:CARGO_ENCODED_RUSTFLAGS = (@('-C', 'target-feature=+crt-static', '-C', "link-arg=$recompRes",
+        "--remap-path-prefix=$cargoHome=cargo", "--remap-path-prefix=$src=nebula", "--remap-path-prefix=$work=build",
+        "--remap-path-prefix=$env:USERPROFILE=home") -join [char]0x1F)
     $env:CARGO_TARGET_DIR = Join-Path $work 'target'
     Push-Location $src
-    try { Invoke-Checked $cargo @('build', '--release', '--locked', '-p', 'nebula-recomp') } finally { Pop-Location; Remove-Item Env:RUSTFLAGS }
+    try { Invoke-Checked $cargo @('build', '--release', '--locked', '-p', 'nebula-recomp') } finally { Pop-Location; Remove-Item Env:CARGO_ENCODED_RUSTFLAGS }
     $recomp = Join-Path $env:CARGO_TARGET_DIR 'release\nebula-recomp.exe'
+    # Nothing of the build PC's user profile is left in what Nebula ships.
+    $profileName = Split-Path -Leaf $env:USERPROFILE
+    $text = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($recomp))
+    if ($text.IndexOf($env:USERPROFILE, [StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+        $text.IndexOf("Users\$profileName", [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+        throw "$recomp still names the build PC's user profile."
+    }
     Invoke-CodeSign @($recomp)
 
     # 3. Prebuilt runtime; the DSP is loaded from RMGE01_dsp.dll, which Setup compiles.
@@ -324,6 +339,15 @@ namespace Nebula
     Invoke-Checked $csc (@('/nologo', '/target:winexe', '/platform:x64', '/optimize+', "/win32manifest:$manifestFile", "/win32icon:$iconFile", "/out:$setup") + $references + $resourceArgs + $common +
         @(Get-ChildItem (Join-Path $src 'installer\src\Setup\*.cs') | ForEach-Object FullName))
     Invoke-CodeSign @($setup)
+    # Setup carries every program as is: none of them names the build PC's user profile.
+    $setupText = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($setup))
+    $setupWide = [Text.Encoding]::Unicode.GetString([IO.File]::ReadAllBytes($setup))
+    foreach ($needle in @($env:USERPROFILE, "Users\$profileName")) {
+        if ($setupText.IndexOf($needle, [StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+            $setupWide.IndexOf($needle, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+            throw "$setup still names the build PC's user profile ($needle)."
+        }
+    }
 
     Assert-DefenderClean @($setup)
 
@@ -352,10 +376,10 @@ namespace Nebula
     Write-Host "Nebula-Setup.exe $setupHash"
 } finally {
     $resolvedWork = [IO.Path]::GetFullPath($work)
-    $resolvedTemp = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\') + '\'
-    if (-not $resolvedWork.StartsWith($resolvedTemp, [StringComparison]::OrdinalIgnoreCase) -or
+    $resolvedRoot = [IO.Path]::GetFullPath($env:SystemDrive + '\')
+    if (-not [string]::Equals((Split-Path -Parent $resolvedWork).TrimEnd('\') + '\', $resolvedRoot, [StringComparison]::OrdinalIgnoreCase) -or
         (Split-Path -Leaf $resolvedWork) -notmatch '^nebula-release-[0-9a-f]{32}$') {
-        throw "Refusing cleanup outside the release's temporary directory."
+        throw "Refusing cleanup outside the release's work folder."
     }
     Remove-Item -LiteralPath $resolvedWork -Recurse -Force -ErrorAction SilentlyContinue
 }
