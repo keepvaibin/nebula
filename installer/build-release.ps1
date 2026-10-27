@@ -7,7 +7,10 @@ Exports the revision with `git archive` and records each file's SHA-256
 (Setup checks the source it installs against it), builds nebula-recomp and the
 runtime from that export, then compiles the launcher and Setup with the
 in-box C# compiler and embeds everything. -SigningKey also writes
-Nebula-Setup.exe.sig for the updater.
+Nebula-Setup.exe.sig for the updater. -CodeSigningMetadata Authenticode-signs
+every program Nebula ships (nebula-recomp, both runtimes, the launcher, Nebula
+Settings and Setup) through Azure Artifact Signing, with Microsoft's timestamp,
+before anything embeds it.
 
 Requirements: Git, Rust (stable, MSVC target) and Visual Studio 2022 with
 the C++ tools. Setup needs none of these.
@@ -21,6 +24,11 @@ param(
     [string]$Repository = 'keepvaibin/nebula',
     [string]$OutputDirectory = '',
     [string]$SigningKey = '',
+    # Azure Artifact Signing's metadata.json (Endpoint, CodeSigningAccountName, CertificateProfileName). SignTool
+    # (Windows SDK 10.0.22621 or later) and the Artifact Signing dlib are found unless given.
+    [string]$CodeSigningMetadata = '',
+    [string]$SignTool = '',
+    [string]$SigningDlib = '',
     # Instruction set of the prebuilt runtime and of the float/DSP libraries that each installed
     # game module links against. BOTH (the default) embeds an SSE2 and an AVX2 build, and Setup
     # installs the AVX2 one on CPUs that support it. AUTO picks AVX2 when the build PC supports it
@@ -34,6 +42,32 @@ $repo = Split-Path -Parent $installer
 if (-not $OutputDirectory) { $OutputDirectory = Join-Path $repo 'dist' }
 $work = Join-Path ([IO.Path]::GetTempPath()) ('nebula-release-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force $work, $OutputDirectory | Out-Null
+
+# Azure Artifact Signing: SignTool with Microsoft's dlib signs (SHA-256, RFC 3161 timestamp from Microsoft, since the
+# certificates live three days) and verifies under the default Authenticode policy. Without metadata, nothing is signed.
+if ($CodeSigningMetadata) {
+    if (-not (Test-Path -LiteralPath $CodeSigningMetadata)) { throw "No Artifact Signing metadata at $CodeSigningMetadata." }
+    if (-not $SignTool) {
+        $SignTool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue |
+            Where-Object { $_.Directory.Parent.Name -match '^\d+\.\d+\.\d+\.\d+$' -and [version]$_.Directory.Parent.Name -ge [version]'10.0.22621.0' } |
+            Sort-Object { [version]$_.Directory.Parent.Name } -Descending | Select-Object -First 1 -ExpandProperty FullName
+    }
+    if (-not $SigningDlib) {
+        $SigningDlib = @($env:ProgramFiles, ${env:ProgramFiles(x86)}, (Join-Path $env:LOCALAPPDATA 'Microsoft')) |
+            ForEach-Object { Get-ChildItem -LiteralPath $_ -Recurse -Depth 6 -Filter 'Azure.CodeSigning.Dlib.dll' -ErrorAction SilentlyContinue } |
+            Where-Object { $_.FullName -match '\\x64\\' } | Select-Object -First 1 -ExpandProperty FullName
+    }
+    if (-not $SignTool -or -not (Test-Path -LiteralPath $SignTool)) { throw 'SignTool from Windows SDK 10.0.22621 or later is required to sign.' }
+    if (-not $SigningDlib -or -not (Test-Path -LiteralPath $SigningDlib)) { throw 'The Artifact Signing dlib (winget install Microsoft.Azure.ArtifactSigningClientTools) is required to sign.' }
+}
+
+function Invoke-CodeSign([string[]]$Files) {
+    if (-not $CodeSigningMetadata) { return }
+    Invoke-Checked $SignTool (@('sign', '/fd', 'SHA256', '/tr', 'http://timestamp.acs.microsoft.com', '/td', 'SHA256',
+        '/dlib', $SigningDlib, '/dmdf', $CodeSigningMetadata) + $Files)
+    Invoke-Checked $SignTool (@('verify', '/pa') + $Files)
+    foreach ($file in $Files) { Write-Host "Signed $(Split-Path -Leaf $file)" }
+}
 
 # Microsoft Defender's verdict on each file (a custom scan without remediation, the current signatures and cloud
 # protection): any detection stops the build with its name.
@@ -159,6 +193,7 @@ END
     Push-Location $src
     try { Invoke-Checked $cargo @('build', '--release', '--locked', '-p', 'nebula-recomp') } finally { Pop-Location; Remove-Item Env:RUSTFLAGS }
     $recomp = Join-Path $env:CARGO_TARGET_DIR 'release\nebula-recomp.exe'
+    Invoke-CodeSign @($recomp)
 
     # 3. Prebuilt runtime; the DSP is loaded from RMGE01_dsp.dll, which Setup compiles.
     # BOTH builds it twice: SSE2 under the plain resource names, AVX2 under
@@ -192,6 +227,7 @@ END
             $runtimeFiles[$prefix + $name] = $file.FullName
         }
         Assert-NoTestHooks $runtimeFiles[$prefix + 'NebulaRuntime.exe']
+        Invoke-CodeSign @($runtimeFiles[$prefix + 'NebulaRuntime.exe'])
     }
     $runtimeIsaPath = Join-Path $work 'runtime-isa.txt'
     [IO.File]::WriteAllText($runtimeIsaPath, ($effectiveIsas -join '+'), (New-Object Text.UTF8Encoding $false))
@@ -227,6 +263,7 @@ namespace Nebula
     $settingsApp = Join-Path $work 'NebulaSettings.exe'
     Invoke-Checked $csc (@('/nologo', '/target:winexe', '/platform:x64', '/optimize+', '/define:NEBULA_SETTINGS_APP', "/win32manifest:$manifestFile", "/win32icon:$iconFile", "/out:$settingsApp") + $references + $common +
         $launcherSources)
+    Invoke-CodeSign @($launcher, $settingsApp)
 
     $resources = @{
         'nebula-recomp.exe' = $recomp; 'Nebula.exe' = $launcher; 'NebulaSettings.exe' = $settingsApp; 'source-manifest.json' = $manifestPath
@@ -286,6 +323,7 @@ namespace Nebula
     Assert-DefenderClean @($resources.Values | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
     Invoke-Checked $csc (@('/nologo', '/target:winexe', '/platform:x64', '/optimize+', "/win32manifest:$manifestFile", "/win32icon:$iconFile", "/out:$setup") + $references + $resourceArgs + $common +
         @(Get-ChildItem (Join-Path $src 'installer\src\Setup\*.cs') | ForEach-Object FullName))
+    Invoke-CodeSign @($setup)
 
     Assert-DefenderClean @($setup)
 
@@ -307,6 +345,7 @@ namespace Nebula
         launcherSha256 = (Get-FileHash -LiteralPath $launcher -Algorithm SHA256).Hash.ToLowerInvariant()
         sourceTreeSha256 = $treeHash; builtUtc = [DateTime]::UtcNow.ToString('o')
         runtimeNativeIsa = ($effectiveIsas -join '+'); requestedNativeIsa = $NativeIsa
+        authenticode = if ($CodeSigningMetadata) { 'Azure Artifact Signing' } else { 'none' }
         rustc = (& (Join-Path (Split-Path $cargo) 'rustc.exe') --version) 2>$null
     }
     [IO.File]::WriteAllText((Join-Path $OutputDirectory 'build-info.json'), ($info | ConvertTo-Json), (New-Object Text.UTF8Encoding $false))
