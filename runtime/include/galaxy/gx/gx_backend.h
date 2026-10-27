@@ -883,6 +883,8 @@ private:
     std::uint64_t interp_shown_serial_ = 0;
     float interp_shown_t_ = 0.0f;
     std::vector<std::int32_t> interp_chain_prev_;
+    // The matched records with the screen layer's unpaired (render_interp_subframe).
+    std::vector<std::int32_t> interp_screen_prev_;
     std::uint64_t interp_chained_sequences_ = 0;  // started from the scene shown last
     std::uint64_t interp_unchained_skips_ = 0;    // a never-shown scene before, not chained
     // The playing scene, classified once per sequence (render_interp_subframe):
