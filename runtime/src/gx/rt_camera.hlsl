@@ -40,7 +40,7 @@ cbuffer RtCamera : register(b0)
     float c_bloom;          // the share of the light the lens scatters
     uint c_flags;
     uint c_levels;          // the pyramid's levels
-    uint c_pad;
+    uint c_subframe;        // a sub-frame's light slot + 1: the shafts' sun turns into its camera (c_reproject); 0 none
     float4 c_sun;           // the visible sun on the picture (pixels), the shafts' strength (0: none), the picture's height
     uint2 c_quarter;        // the shafts' texels (a quarter of the picture's side)
     float c_far;            // the depth of the far plane (sky)
@@ -55,6 +55,8 @@ Texture2D<float> c_depth : register(t1);              // its depth (the conversi
 StructuredBuffer<uint2> c_bloom_in : register(t2);    // the upward pyramid (the finish reads its first level)
 RWStructuredBuffer<uint2> c_down : register(u0);      // the downward pyramid, all levels (half-float RGB)
 RWStructuredBuffer<uint2> c_up : register(u1);        // the upward pyramid
+// Per light slot, a sub-frame's eye space into its traced frame's (3x4 rows; SceneRayTracer::write_reprojection).
+StructuredBuffer<float4> c_reproject : register(t3);
 
 float3 srgb_decode(float3 c)
 {
@@ -155,14 +157,41 @@ void CameraUpCS(uint3 id : SV_DispatchThreadID)
 // texel: no bands), each the sky's light there (sky: the far plane or a backdrop) weighted by its nearness to the sun
 // (forward scattering: a seventh of the picture's height, so the sun's glow scatters, not the stars across the sky),
 // decaying 4% a step. Into the downward pyramid's first texels (free once the bloom is summed).
+//
+// A sub-frame replays its traced frame under its own camera: the sun (eye space of the traced frame) turns into the
+// sub-frame's by the rotation of c_reproject's rows, which map the sub-frame's eye space into the traced frame's (its
+// transpose maps back), and stands where that camera sees it. Behind that camera there are no shafts.
+bool shafts_sun(out float3 sun, out float2 at_pixel)
+{
+    sun = normalize(c_sun_dir.xyz);
+    at_pixel = c_sun.xy;
+    if (c_subframe == 0u) {
+        return true;
+    }
+    const uint row = (c_subframe - 1u) * 3u;
+    sun = normalize(c_reproject[row].xyz * sun.x + c_reproject[row + 1u].xyz * sun.y + c_reproject[row + 2u].xyz * sun.z);
+    if (sun.z >= -0.05f) {
+        return false;
+    }
+    const float2 ndc = float2(c_proj.x * sun.x + c_proj.y * sun.z, c_proj.z * sun.y + c_proj.w * sun.z) / -sun.z;
+    at_pixel = float2(c_viewport.x + (ndc.x + 1.0f) * 0.5f * c_viewport.z, c_viewport.y + (1.0f - ndc.y) * 0.5f * c_viewport.w);
+    return true;
+}
+
 [numthreads(8, 8, 1)]
 void CameraShaftsCS(uint3 id : SV_DispatchThreadID)
 {
     if (any(id.xy >= c_quarter)) {
         return;
     }
+    float3 sun_dir;
+    float2 sun_pixel;
+    if (!shafts_sun(sun_dir, sun_pixel)) {
+        c_down[id.y * c_quarter.x + id.x] = uint2(0u, 0u);
+        return;
+    }
     const float2 pixel = (float2(id.xy) + 0.5f) * 4.0f;
-    const float2 delta = (c_sun.xy - pixel) / 32.0f;
+    const float2 delta = (sun_pixel - pixel) / 32.0f;
     const float reach = 0.14f * c_sun.w;
     float3 sum = float3(0.0f, 0.0f, 0.0f);
     float decay = 1.0f;
@@ -179,7 +208,7 @@ void CameraShaftsCS(uint3 id : SV_DispatchThreadID)
         const float ndc = (depth - c_depth_params.z) / max(c_depth_params.w - c_depth_params.z, 1e-7f);
         const float eye_z = -c_depth_params.y / (ndc + c_depth_params.x);
         if (depth <= c_far + 1e-6f || -eye_z > c_sky_distance) {
-            const float2 off = at - c_sun.xy;
+            const float2 off = at - sun_pixel;
             // Each sample's light is capped at 8 (exposed): 32 jittered steps per quarter texel either land on the
             // sun's few disc pixels or miss them, and the disc's full radiance would draw dotted streaks across the
             // sky.
@@ -197,7 +226,7 @@ void CameraShaftsCS(uint3 id : SV_DispatchThreadID)
     const float3 eye_dir = normalize(float3((ndc.x + c_proj.y) / c_proj.x, (ndc.y + c_proj.w) / c_proj.z, -1.0f));
     const float g = c_sun_dir.w;
     const float phase = pow(1.0f - g, 3.0f) /
-                        pow(max(1.0f + g * g - 2.0f * g * dot(eye_dir, normalize(c_sun_dir.xyz)), 1e-6f), 1.5f);
+                        pow(max(1.0f + g * g - 2.0f * g * dot(eye_dir, sun_dir), 1e-6f), 1.5f);
     const float own = c_depth.Load(int3(clamp(int2(pixel), int2(0, 0), int2(c_size) - 1), 0));
     float air = 1.0f;
     if (own > c_far + 1e-6f) {

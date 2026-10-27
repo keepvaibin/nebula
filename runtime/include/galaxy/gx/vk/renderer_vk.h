@@ -166,7 +166,8 @@ public:
     [[nodiscard]] bool rt_engine() const noexcept { return false; }
     [[nodiscard]] bool rt_engine_clear() const noexcept { return false; }
     [[nodiscard]] bool rt_mist_open() const noexcept { return false; }
-    void rt_note_mist(const float*, float, float) noexcept {}
+    [[nodiscard]] std::int64_t last_present_qpc() const noexcept { return swap_present_qpc_; }
+    void rt_note_mist(const float*, float, float, float) noexcept {}
     [[nodiscard]] bool rt_log_seq() const noexcept { return false; }
     [[nodiscard]] bool rt_scene_untraced() const noexcept { return false; }
     void rt_set_scene_untraced(bool) noexcept {}
@@ -611,6 +612,7 @@ private:
     double display_refresh_hz_ = 0.0;
     std::uint64_t display_refresh_checks_ = 0;
     std::int64_t measured_present_window_qpc_ = 0;
+    std::int64_t swap_present_qpc_ = 0;   // every present's (last_present_qpc)
     std::uint64_t measured_present_count_ = 0;
     std::uint64_t last_frame_slot_wait_us_ = 0;
     std::uint64_t last_begin_reset_us_ = 0;

@@ -55,7 +55,8 @@ static const uint kEvMotion = 28u;
 // The world's radiance cache (engine_cache_light, EngineCacheCS): kCacheEntries entries of kCacheEntryBytes.
 static const uint kEvRadianceCache = 29u;
 // The waterfall mist's pass (MistLightCS, at the scene's end):
-static const uint kEvMistIn = 30u;        // the frame's spray puffs (32 bytes each: eye-space centre, sigma; optical depth)
+static const uint kEvMistIn = 30u;        // the frame's spray puffs (32 bytes each: eye-space centre, sigma; optical depth,
+                                          // brightness)
 static const uint kEvMistOut = 31u;       // their records for the composite (rt_lighting.hlsl kMistHeader)
 // g_engine_info.y in the clear pass: what the frame has of each kind.
 static const uint kClearHasGlass = 1u;    // the water window's glass (clear_trace)
@@ -3768,6 +3769,7 @@ void MistLightCS(uint3 id : SV_DispatchThreadID)
     ByteAddressBuffer puffs = ResourceDescriptorHeap[engine_view(kEvMistIn)];
     const float4 own = asfloat(puffs.Load4(id.x * 32u));
     const float own_depth = asfloat(puffs.Load(id.x * 32u + 16u));
+    const float own_white = asfloat(puffs.Load(id.x * 32u + 20u));
     const float3 c = own.xyz;
     const float sigma = own.w;
     const uint salt = 101u;
@@ -3835,7 +3837,7 @@ void MistLightCS(uint3 id : SV_DispatchThreadID)
     around = min(safe_light(around) * exposure, 6.0e4f);
     const uint at = (kMistHeader + 3u * id.x) * 16u;
     records.Store4(at, asuint(own));
-    records.Store4(at + 16u, uint4(asuint(own_depth), asuint(towards), asuint(below), 0u));
+    records.Store4(at + 16u, uint4(asuint(own_depth), asuint(towards), asuint(below), asuint(own_white)));
     records.Store4(at + 32u, uint4(pack_half2(sun.r, sun.g), pack_half2(sun.b, around.r), pack_half2(around.g, around.b), 0u));
 }
 

@@ -21,6 +21,7 @@
 #include "galaxy/scope_exit.h"
 #include "galaxy/native_host.h"
 #include "galaxy/frame_timeline.h"
+#include "galaxy/windows_power.h"
 
 #pragma warning(push, 0)
 #include <d3d12sdklayers.h>
@@ -1602,7 +1603,7 @@ bool RendererD3D12::efb_scale_fits_memory(unsigned scale) const {
     // tracing the HDR scene EFB's 12 more) and, at most, the XFB pair plus one
     // full-picture copy (12 bytes per pixel of the 640x456 picture). Everything
     // else is independent of the scale.
-    const double efb_bytes = ray_tracer_.ready() ? 20.0 : 8.0;
+    const double efb_bytes = ray_tracer_->ready() ? 20.0 : 8.0;
     const auto scaled_bytes = [efb_bytes](unsigned s) {
         const double area = static_cast<double>(s) * s;
         return area * (static_cast<double>(kEfbWidth) * kEfbHeight * efb_bytes +
@@ -2275,12 +2276,13 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
         }
         if (!srv_ring_.initialize(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, kSrvPerFrame, kInterpSegments, kPersistentSrvDescriptors)) return false;
         {
+            const UINT increment = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
             const DescriptorRing::Table views = srv_ring_.allocate_persistent(kRtTextureViews);
-            ray_tracer_.set_texture_views(views.cpu, srv_ring_.index_of(views.gpu),
-                                          device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV));
+            rt_texture_views_ = {views.cpu, srv_ring_.index_of(views.gpu), increment};
+            ray_tracer_->set_texture_views(rt_texture_views_.cpu, rt_texture_views_.first, rt_texture_views_.increment);
             const DescriptorRing::Table delight = srv_ring_.allocate_persistent(SceneRayTracer::kDelightViews);
-            ray_tracer_.set_delight_views(delight.cpu, srv_ring_.index_of(delight.gpu),
-                                          device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV));
+            rt_delight_views_ = {delight.cpu, srv_ring_.index_of(delight.gpu), increment};
+            ray_tracer_->set_delight_views(rt_delight_views_.cpu, rt_delight_views_.first, rt_delight_views_.increment);
         }
 
         // Conversion sources occupy the descriptor ring's immutable prefix.
@@ -2428,7 +2430,8 @@ void RendererD3D12::shutdown() {
     post_process_.shutdown();
     ambient_occlusion_.shutdown();
     game_bloom_.shutdown();
-    ray_tracer_.shutdown();
+    abandon_ray_tracer_start();
+    ray_tracer_->shutdown();
     {
         const PlacedTextureAllocator::Stats heap = efb_copy_heap_.stats();
         std::cerr << "[efb-copy-heap] heaps=" << heap.heaps << " heap-bytes=" << heap.heap_bytes
@@ -3183,6 +3186,7 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
         streamline::marker(streamline::Marker::kSimulationStart);
         streamline_frame_open_ = true;
     }
+    take_started_ray_tracer();
     apply_pending_efb_scale();
     prepare_temporal_upscaler();
     sync_post_process_settings();
@@ -3363,7 +3367,7 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
         }
     }
 
-    ray_tracer_.begin_frame(frame_index_);
+    ray_tracer_->begin_frame(frame_index_);
 
     const auto reset_start = collect_begin_timing
         ? std::chrono::steady_clock::now()
@@ -3661,6 +3665,7 @@ void RendererD3D12::present_to_swap_chain() {
     {
         LARGE_INTEGER now{};
         QueryPerformanceCounter(&now);
+        swap_present_qpc_ = now.QuadPart;
         ++measured_present_count_;
         if (measured_present_window_qpc_ == 0) {
             measured_present_window_qpc_ = now.QuadPart;
@@ -3864,20 +3869,20 @@ std::uint64_t RendererD3D12::end_frame(
     SubmissionCallback on_submitted,
     void* submission_context) {
     // Ray tracing: this chunk's traced draws read upload rings the next frame begin rewinds.
-    if (ray_tracer_.scene_open()) {
-        ray_tracer_.flush_geometry(command_list_.Get(), rt_sources(), &RendererD3D12::rt_allocate, this);
+    if (ray_tracer_->scene_open()) {
+        ray_tracer_->flush_geometry(command_list_.Get(), rt_sources(), &RendererD3D12::rt_allocate, this);
         bound_pipeline_ = nullptr;
     }
-    if (ray_tracer_.water_open()) {
-        ray_tracer_.flush_water(command_list_.Get(), rt_sources(), &RendererD3D12::rt_allocate, this);
+    if (ray_tracer_->water_open()) {
+        ray_tracer_->flush_water(command_list_.Get(), rt_sources(), &RendererD3D12::rt_allocate, this);
         bound_pipeline_ = nullptr;
     }
-    if (ray_tracer_.late_open()) {
-        ray_tracer_.flush_late(command_list_.Get(), rt_sources(), &RendererD3D12::rt_allocate, this);
+    if (ray_tracer_->late_open()) {
+        ray_tracer_->flush_late(command_list_.Get(), rt_sources(), &RendererD3D12::rt_allocate, this);
         bound_pipeline_ = nullptr;
     }
-    if (ray_tracer_.sky_open()) {
-        ray_tracer_.flush_sky(command_list_.Get(), rt_sources(), &RendererD3D12::rt_allocate, this);
+    if (ray_tracer_->sky_open()) {
+        ray_tracer_->flush_sky(command_list_.Get(), rt_sources(), &RendererD3D12::rt_allocate, this);
         bound_pipeline_ = nullptr;
     }
     if (timestamp_query_heap_ && timestamp_readback_) {
@@ -3912,7 +3917,7 @@ std::uint64_t RendererD3D12::end_frame(
     const std::uint64_t submitted_frame = frame_index_ + 1u;
     const std::uint64_t submitted_fence = ++next_fence_value_;
     fence_values_[frame_slot_] = submitted_fence;
-    ray_tracer_.note_submission(submitted_fence);
+    ray_tracer_->note_submission(submitted_fence);
     if (ring_mode_ == RingMode::Interp) {
         ring_segment_fence_[ring_segment_] = submitted_fence;
     } else if (matrix_segments_ != kFramesInFlight) {
@@ -4479,16 +4484,40 @@ void RendererD3D12::record_stripe_gather() {
     bound_pipeline_ = nullptr;
 }
 
+// A tracer started on a worker takes over at a frame's start (before the EFB follows it: no MSAA under ray tracing),
+// with the inputs the scene gave the one it replaces; one the setting no longer wants, or wants at another quality,
+// is dropped unused.
+void RendererD3D12::take_started_ray_tracer() {
+    if (!rt_starting_.valid() || rt_starting_.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+        return;
+    }
+    std::unique_ptr<SceneRayTracer> started = rt_starting_.get();
+    rt_start_failed_ = started == nullptr;
+    std::cerr << "[rt] started in "
+              << std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - rt_start_time_).count()
+              << " ms on a worker" << (rt_start_failed_ ? " (failed)" : "") << '\n';
+    const RenderConfig config = get_render_config();
+    if (started != nullptr && config.ray_tracing_enabled &&
+        host_window::ray_tracing_offered.load(std::memory_order_relaxed) &&
+        started->quality() == std::min(config.rt_quality, 2u)) {
+        started->adopt_inputs(*ray_tracer_);
+        ray_tracer_ = std::move(started);
+    }
+}
+
 void RendererD3D12::reconcile_ray_tracing() {
     const bool wanted =
         get_render_config().ray_tracing_enabled && host_window::ray_tracing_offered.load(std::memory_order_relaxed);
     // REFLECTIONS switches live, at a frame's start.
-    ray_tracer_.set_surface_reflections(rt_effect_on(get_render_config(), RtEffect::Reflections));
+    ray_tracer_->set_surface_reflections(rt_effect_on(get_render_config(), RtEffect::Reflections));
+    if (rt_starting_.valid()) {
+        return;
+    }
     // A quality change restarts the tracer (its rays, sample grid and pipelines are chosen when it starts): off this
     // frame, on again the next, as the setting's off and on.
     const bool requality =
-        wanted && ray_tracer_.ready() && ray_tracer_.quality() != std::min(get_render_config().rt_quality, 2u);
-    if (!requality && (wanted == ray_tracer_.ready() || (wanted && rt_start_failed_) || !device_)) {
+        wanted && ray_tracer_->ready() && ray_tracer_->quality() != std::min(get_render_config().rt_quality, 2u);
+    if (!requality && (wanted == ray_tracer_->ready() || (wanted && rt_start_failed_) || !device_)) {
         return;
     }
     if (!wanted || requality) {
@@ -4501,16 +4530,48 @@ void RendererD3D12::reconcile_ray_tracing() {
         for (ReplayList& entry : replay_lists_) {
             entry.sequence = 0u;
         }
-        ray_tracer_.shutdown();
+        ray_tracer_->shutdown();
         std::cerr << (requality ? "[rt] quality changed: restarting\n" : "[rt] off\n");
         return;
     }
+    start_ray_tracer();
+}
+
+// Starting a tracer builds its pipelines and buffers (half a second on a warm driver cache, about two on a cold one):
+// on a worker, so turning RAY TRACING on (or starting the game with it) never holds the window; the frames draw
+// without ray tracing until reconcile_ray_tracing takes it over. The device is free-threaded, and the worker touches
+// only its own tracer.
+void RendererD3D12::start_ray_tracer() {
     char value[8]{};
     std::size_t length = 0u;
     const bool validate =
         getenv_s(&length, value, sizeof(value), "GALAXY_RT_VALIDATE") == 0 && length > 1u && value[0] == '1';
-    rt_start_failed_ =
-        !ray_tracer_.initialize(device_.Get(), timestamp_frequency_, validate, kEfbHdrColorFormat, kEfbColorFormat);
+    rt_start_time_ = std::chrono::steady_clock::now();
+    rt_starting_ = std::async(
+        std::launch::async,
+        [device = device_, frequency = timestamp_frequency_, validate, views = rt_texture_views_,
+         delight = rt_delight_views_]() -> std::unique_ptr<SceneRayTracer> {
+            galaxy::host::name_current_thread(L"Nebula RT Start");
+            try {
+                auto tracer = std::make_unique<SceneRayTracer>();
+                tracer->set_texture_views(views.cpu, views.first, views.increment);
+                tracer->set_delight_views(delight.cpu, delight.first, delight.increment);
+                if (!tracer->initialize(device.Get(), frequency, validate, kEfbHdrColorFormat, kEfbColorFormat)) {
+                    return nullptr;
+                }
+                return tracer;
+            } catch (const std::exception& e) {
+                std::cerr << "[rt] start failed: " << e.what() << '\n';
+                return nullptr;
+            }
+        });
+}
+
+void RendererD3D12::abandon_ray_tracer_start() noexcept {
+    if (rt_starting_.valid()) {
+        rt_starting_.wait();
+        rt_starting_ = {};
+    }
 }
 
 RtSources RendererD3D12::rt_sources() const {
@@ -4540,7 +4601,7 @@ void RendererD3D12::rt_note_draw(const DrawCall& call, const RtDrawInfo& info) {
                            call.topology == D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST;
     if ((info.surface & kRtDrawWater) != 0u && rt_log_glows()) [[unlikely]] {
         static std::uint32_t logged = 0u;
-        const std::uint32_t reason = !ray_tracer_.accepts(info) ? 1u : call.index_count < 3u ? 2u
+        const std::uint32_t reason = !ray_tracer_->accepts(info) ? 1u : call.index_count < 3u ? 2u
                                      : !triangles ? 4u
                                      : call.vertex_view.StrideInBytes != kRtVertexStride ? 8u
                                      : call.vertex_view.SizeInBytes == 0u ? 16u : 32u;
@@ -4551,7 +4612,7 @@ void RendererD3D12::rt_note_draw(const DrawCall& call, const RtDrawInfo& info) {
                          call.vertex_view.StrideInBytes, call.index_count);
         }
     }
-    if (!ray_tracer_.accepts(info) || call.index_count < 3u || !triangles ||
+    if (!ray_tracer_->accepts(info) || call.index_count < 3u || !triangles ||
         call.vertex_view.StrideInBytes != kRtVertexStride || call.vertex_view.SizeInBytes == 0u) {
         return;
     }
@@ -4598,21 +4659,21 @@ void RendererD3D12::rt_note_draw(const DrawCall& call, const RtDrawInfo& info) {
         return;
     }
     draw.triangle_count = call.index_count / 3u;
-    ray_tracer_.add_draw(draw, info);
+    ray_tracer_->add_draw(draw, info);
 }
 
 void RendererD3D12::rt_begin_scene() {
     // The scene's texture views take the block of the scene kTextureViewScenes back: its GPU work completes first
     // (submitted game frames ago, normally long done).
-    const std::uint64_t views = ray_tracer_.texture_views_fence();
+    const std::uint64_t views = ray_tracer_->texture_views_fence();
     if (views != 0u && views != ~0ull) {
         wait_for_fence_value(views);
     }
-    ray_tracer_.begin_scene();
+    ray_tracer_->begin_scene();
 }
 
 void RendererD3D12::rt_trace_scene() {
-    if (!ray_tracer_.scene_open()) {
+    if (!ray_tracer_->scene_open()) {
         return;
     }
     const bool depth = efb_depth_ && conv_efb_depth_srv_.ptr != 0u;
@@ -4629,7 +4690,7 @@ void RendererD3D12::rt_trace_scene() {
     const D3D12_RESOURCE_DESC desc = depth ? efb_depth_->GetDesc() : D3D12_RESOURCE_DESC{};
     const auto width = static_cast<std::uint32_t>(desc.Width);
     // The engine's G-buffer reads the EFB's colour (the texels' albedo) during the trace.
-    const bool picture = depth && efb_color_ && ray_tracer_.engine_active();
+    const bool picture = depth && efb_color_ && ray_tracer_->engine_active();
     D3D12_RESOURCE_BARRIER picture_barrier = barrier;
     picture_barrier.Transition.pResource = efb_color_.Get();
     picture_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
@@ -4637,7 +4698,7 @@ void RendererD3D12::rt_trace_scene() {
     if (picture) {
         command_list_->ResourceBarrier(1, &picture_barrier);
     }
-    ray_tracer_.set_engine_picture(picture ? efb_color_.Get() : nullptr);
+    ray_tracer_->set_engine_picture(picture ? efb_color_.Get() : nullptr);
     // And the raster's motion (every opaque draw of the scene writes its own, scene_motion_): the engine's histories
     // follow what moved by itself.
     const bool motion = picture && scene_motion_ && motion_target_ && motion_target_scale_ == efb_scale_;
@@ -4646,12 +4707,12 @@ void RendererD3D12::rt_trace_scene() {
     if (motion) {
         command_list_->ResourceBarrier(1, &motion_barrier);
     }
-    ray_tracer_.set_engine_motion(motion ? motion_target_.Get() : nullptr);
-    static_cast<void>(ray_tracer_.trace_scene(command_list_.Get(), rt_sources(), &RendererD3D12::rt_allocate, this,
+    ray_tracer_->set_engine_motion(motion ? motion_target_.Get() : nullptr);
+    static_cast<void>(ray_tracer_->trace_scene(command_list_.Get(), rt_sources(), &RendererD3D12::rt_allocate, this,
                                               depth ? conv_efb_depth_srv_ : D3D12_GPU_DESCRIPTOR_HANDLE{}, width,
                                               desc.Height));
-    ray_tracer_.set_engine_picture(nullptr);
-    ray_tracer_.set_engine_motion(nullptr);
+    ray_tracer_->set_engine_picture(nullptr);
+    ray_tracer_->set_engine_motion(nullptr);
     if (picture) {
         std::swap(picture_barrier.Transition.StateBefore, picture_barrier.Transition.StateAfter);
         command_list_->ResourceBarrier(1, &picture_barrier);
@@ -4662,8 +4723,8 @@ void RendererD3D12::rt_trace_scene() {
     }
     // The occlusion multiplies the opaque scene before the translucent phases draw; a recorded
     // log applies it again on each sub-frame's replay.
-    const int slot = ray_tracer_.light_slot();
-    if (depth && slot >= 0 && ray_tracer_.surface_reflections_active() && efb_color_ &&
+    const int slot = ray_tracer_->light_slot();
+    if (depth && slot >= 0 && ray_tracer_->surface_reflections_active() && efb_color_ &&
         conv_efb_color_srv_.ptr != 0u) {
         // Reflected light is the opaque scene's colour (the conversion views: colour, then depth).
         D3D12_RESOURCE_BARRIER color = barrier;
@@ -4671,7 +4732,7 @@ void RendererD3D12::rt_trace_scene() {
         color.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
         color.Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
         command_list_->ResourceBarrier(1, &color);
-        ray_tracer_.trace_reflections(command_list_.Get(), &RendererD3D12::rt_allocate, this, conv_efb_color_srv_,
+        ray_tracer_->trace_reflections(command_list_.Get(), &RendererD3D12::rt_allocate, this, conv_efb_color_srv_,
                                       width, desc.Height);
         std::swap(color.Transition.StateBefore, color.Transition.StateAfter);
         command_list_->ResourceBarrier(1, &color);
@@ -4680,9 +4741,9 @@ void RendererD3D12::rt_trace_scene() {
     log_rt_seq("trace");
     if (depth && slot >= 0 && efb_hdr_) {
         game_srv = rt_composite_color();
-        ray_tracer_.composite(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_, game_srv, width,
+        ray_tracer_->composite(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_, game_srv, width,
                               desc.Height, slot, false, efb_scale_);
-        ray_tracer_.write_light_texture(command_list_.Get(), slot);
+        ray_tracer_->write_light_texture(command_list_.Get(), slot);
         if (replay_recording_) {
             replay_ops_.push_back({ReplayKind::RtComposite, static_cast<std::uint32_t>(slot)});
         }
@@ -4695,7 +4756,7 @@ void RendererD3D12::rt_trace_scene() {
     rt_opaque_srv_ = depth && slot >= 0 ? rt_copy_color(rt_opaque_copy_, L"rt opaque scene")
                                         : D3D12_GPU_DESCRIPTOR_HANDLE{};
     // The picture before the translucent phases: what the glows add to it measures their light.
-    if (depth && ray_tracer_.glow_open() && efb_color_ && conv_efb_color_srv_.ptr != 0u) {
+    if (depth && ray_tracer_->glow_open() && efb_color_ && conv_efb_color_srv_.ptr != 0u) {
         D3D12_RESOURCE_BARRIER views[2]{};
         for (D3D12_RESOURCE_BARRIER& view : views) {
             view.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -4707,7 +4768,7 @@ void RendererD3D12::rt_trace_scene() {
         views[1].Transition.pResource = efb_depth_.Get();
         views[1].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
         command_list_->ResourceBarrier(2, views);
-        ray_tracer_.snapshot_glow_base(command_list_.Get(), conv_efb_color_srv_, game_srv, width, desc.Height);
+        ray_tracer_->snapshot_glow_base(command_list_.Get(), conv_efb_color_srv_, game_srv, width, desc.Height);
         for (D3D12_RESOURCE_BARRIER& view : views) {
             std::swap(view.Transition.StateBefore, view.Transition.StateAfter);
         }
@@ -4720,7 +4781,7 @@ void RendererD3D12::rt_trace_scene() {
 }
 
 void RendererD3D12::rt_capture_picture() {
-    if (!ray_tracer_.lighting_active() || !efb_color_ || !efb_depth_ || conv_efb_color_srv_.ptr == 0u) {
+    if (!ray_tracer_->lighting_active() || !efb_color_ || !efb_depth_ || conv_efb_color_srv_.ptr == 0u) {
         return;
     }
     D3D12_RESOURCE_BARRIER barriers[2]{};
@@ -4736,7 +4797,7 @@ void RendererD3D12::rt_capture_picture() {
     command_list_->ResourceBarrier(2, barriers);
     const D3D12_RESOURCE_DESC desc = efb_color_->GetDesc();
     // The conversion views hold the EFB colour, then its depth.
-    ray_tracer_.capture_picture(command_list_.Get(), rt_sources(), &RendererD3D12::rt_allocate, this,
+    ray_tracer_->capture_picture(command_list_.Get(), rt_sources(), &RendererD3D12::rt_allocate, this,
                                 conv_efb_color_srv_, static_cast<std::uint32_t>(desc.Width), desc.Height,
                                 rt_game_picture());
     for (D3D12_RESOURCE_BARRIER& barrier : barriers) {
@@ -4750,7 +4811,7 @@ void RendererD3D12::rt_capture_picture() {
 
 void RendererD3D12::begin_hdr_scene() {
     if (efb_hdr_ || output_efb_active_ || efb_msaa_.samples > 1u || !efb_color_ || !efb_depth_ ||
-        conv_efb_color_srv_.ptr == 0u || !ray_tracer_.ready() || !ray_tracer_.camera_ready()) {
+        conv_efb_color_srv_.ptr == 0u || !ray_tracer_->ready() || !ray_tracer_->camera_ready()) {
         return;
     }
     if (replay_recording_) {
@@ -4763,10 +4824,12 @@ void RendererD3D12::end_hdr_scene() {
     if (!efb_hdr_) {
         return;
     }
+    // The camera takes this frame's light slot, here and in its sub-frames' replay (the tracer has moved on by then).
+    const int slot = ray_tracer_->light_slot();
     if (replay_recording_) {
-        replay_ops_.push_back({ReplayKind::HdrEnd, 0u});
+        replay_ops_.push_back({ReplayKind::HdrEnd, static_cast<std::uint32_t>(slot + 1)});
     }
-    record_hdr_end();
+    record_hdr_end(slot);
 }
 
 // GALAXY_RT_LOG_SEQ=n: logs the ray tracing frame's steps and the EFB colour each meets, renderer frames n to n + 12.
@@ -4778,8 +4841,8 @@ void RendererD3D12::log_rt_seq(const char* step) {
                    ? std::strtoull(value, nullptr, 10)
                    : 0ull;
     }();
-    ray_tracer_.set_log_seq(first != 0u && frame_index_ >= first && frame_index_ <= first + 12u);
-    if (ray_tracer_.log_seq()) {
+    ray_tracer_->set_log_seq(first != 0u && frame_index_ >= first && frame_index_ <= first + 12u);
+    if (ray_tracer_->log_seq()) {
         std::fprintf(stderr, "[rt-seq] frame=%llu %s efb=%p rtv=%llx hdr=%d replay=%d/%d output=%d\n",
                      static_cast<unsigned long long>(frame_index_), step, static_cast<void*>(efb_color_.Get()),
                      static_cast<unsigned long long>(efb_rtv_.ptr), efb_hdr_ ? 1 : 0, replay_recording_ ? 1 : 0,
@@ -4823,7 +4886,7 @@ void RendererD3D12::record_hdr_begin() {
     barriers[2].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
     barriers[2].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
     command_list_->ResourceBarrier(3u, barriers);
-    const bool widened = ray_tracer_.camera_widen(command_list_.Get(), conv_efb_color_srv_, set.rtv,
+    const bool widened = ray_tracer_->camera_widen(command_list_.Get(), conv_efb_color_srv_, set.rtv,
                                                   static_cast<std::uint32_t>(desc.Width), desc.Height);
     command_list_->CopyResource(set.depth.Get(), efb_depth_.Get());
     for (D3D12_RESOURCE_BARRIER& barrier : barriers) {
@@ -4842,7 +4905,7 @@ void RendererD3D12::record_hdr_begin() {
 
 // The camera writes the HDR scene EFB's picture into the RGBA8 EFB (held by the set), its depth is copied back, and
 // the two swap again.
-void RendererD3D12::record_hdr_end() {
+void RendererD3D12::record_hdr_end(int slot) {
     log_rt_seq("hdr-end");
     if (!efb_hdr_) {
         return;
@@ -4867,7 +4930,8 @@ void RendererD3D12::record_hdr_end() {
     barriers[2].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
     barriers[2].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
     command_list_->ResourceBarrier(3u, barriers);
-    ray_tracer_.camera_finish(command_list_.Get(), conv_efb_color_srv_, set.rtv, width, desc.Height);
+    ray_tracer_->camera_finish(command_list_.Get(), conv_efb_color_srv_, set.rtv, width, desc.Height, slot,
+                               replay_playing_);
     command_list_->CopyResource(set.depth.Get(), efb_depth_.Get());
     for (D3D12_RESOURCE_BARRIER& barrier : barriers) {
         std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
@@ -5028,11 +5092,11 @@ D3D12_GPU_DESCRIPTOR_HANDLE RendererD3D12::rt_game_picture() {
 
 void RendererD3D12::rt_trace_water() {
     log_rt_seq("water");
-    if (!ray_tracer_.water_open()) {
+    if (!ray_tracer_->water_open()) {
         return;
     }
     if (!efb_color_ || !efb_depth_ || conv_efb_color_srv_.ptr == 0u || conv_efb_depth_srv_.ptr == 0u) {
-        static_cast<void>(ray_tracer_.trace_water(nullptr, rt_sources(), &RendererD3D12::rt_allocate, this,
+        static_cast<void>(ray_tracer_->trace_water(nullptr, rt_sources(), &RendererD3D12::rt_allocate, this,
                                                   D3D12_GPU_DESCRIPTOR_HANDLE{}, 0u, 0u));
         return;
     }
@@ -5053,13 +5117,13 @@ void RendererD3D12::rt_trace_water() {
     command_list_->ResourceBarrier(2, barriers);
     const D3D12_RESOURCE_DESC desc = efb_color_->GetDesc();
     const auto width = static_cast<std::uint32_t>(desc.Width);
-    const int slot = ray_tracer_.trace_water(command_list_.Get(), rt_sources(), &RendererD3D12::rt_allocate, this,
+    const int slot = ray_tracer_->trace_water(command_list_.Get(), rt_sources(), &RendererD3D12::rt_allocate, this,
                                              conv_efb_color_srv_, width, desc.Height);
     std::swap(barriers[0].Transition.StateBefore, barriers[0].Transition.StateAfter);
     command_list_->ResourceBarrier(1, &barriers[0]);
     if (slot >= 0 && efb_hdr_) {
         const D3D12_GPU_DESCRIPTOR_HANDLE scene = rt_copy_color(rt_water_copy_, L"rt water scene");
-        ray_tracer_.composite_water(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_, width, desc.Height, slot,
+        ray_tracer_->composite_water(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_, width, desc.Height, slot,
                                     false, scene, rt_opaque_srv_, layer_window_ ? rt_layer_table()
                                                                                 : D3D12_GPU_DESCRIPTOR_HANDLE{});
         if (replay_recording_) {
@@ -5070,7 +5134,7 @@ void RendererD3D12::rt_trace_water() {
     std::swap(barriers[1].Transition.StateBefore, barriers[1].Transition.StateAfter);
     command_list_->ResourceBarrier(1, &barriers[1]);
     // The waterfall mist over the water and the glass, under the effects (the window's layer).
-    if (const int mist = ray_tracer_.mist_slot(); mist >= 0 && efb_hdr_) {
+    if (const int mist = ray_tracer_->mist_slot(); mist >= 0 && efb_hdr_) {
         record_rt_mist(mist, false, layer_window_);
         if (replay_recording_) {
             replay_ops_.push_back({ReplayKind::RtMist,
@@ -5098,7 +5162,7 @@ void RendererD3D12::record_rt_water(int slot, bool reproject, bool layer) {
     command_list_->ResourceBarrier(1, &barrier);
     const D3D12_RESOURCE_DESC desc = efb_depth_->GetDesc();
     const D3D12_GPU_DESCRIPTOR_HANDLE scene = rt_copy_color(rt_water_copy_, L"rt water scene");
-    ray_tracer_.composite_water(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_,
+    ray_tracer_->composite_water(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_,
                                 static_cast<std::uint32_t>(desc.Width), desc.Height, slot, reproject, scene,
                                 rt_opaque_srv_, layer ? rt_layer_table() : D3D12_GPU_DESCRIPTOR_HANDLE{});
     std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
@@ -5122,7 +5186,7 @@ void RendererD3D12::record_rt_mist(int slot, bool reproject, bool layer) {
     const D3D12_RESOURCE_DESC desc = efb_depth_->GetDesc();
     // The frame after the water's composites (the water copy's resource, its composites recorded before).
     const D3D12_GPU_DESCRIPTOR_HANDLE scene = rt_copy_color(rt_water_copy_, L"rt water scene");
-    ray_tracer_.composite_mist(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_,
+    ray_tracer_->composite_mist(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_,
                                static_cast<std::uint32_t>(desc.Width), desc.Height, static_cast<unsigned>(slot), reproject,
                                scene, layer ? rt_layer_table() : D3D12_GPU_DESCRIPTOR_HANDLE{});
     std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
@@ -5145,7 +5209,7 @@ void RendererD3D12::record_rt_composite(int slot, bool reproject) {
     barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
     command_list_->ResourceBarrier(1, &barrier);
     const D3D12_RESOURCE_DESC desc = efb_depth_->GetDesc();
-    ray_tracer_.composite(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_, rt_composite_color(),
+    ray_tracer_->composite(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_, rt_composite_color(),
                           static_cast<std::uint32_t>(desc.Width), desc.Height, slot, reproject, efb_scale_);
     std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
     command_list_->ResourceBarrier(1, &barrier);
@@ -5953,7 +6017,7 @@ void RendererD3D12::record_interp_eval(const SubframeTime& time, const Affine34&
     transition_interp_output(D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     transition_blend_verdicts(D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     // The ray-traced occlusion of the replayed frame follows this sub-frame's camera.
-    ray_tracer_.write_reprojection(command_list_.Get(), camera_t);
+    ray_tracer_->write_reprojection(command_list_.Get(), camera_t);
     const bool last = time.t >= 1.0f;
     InterpEvalFrame frame{};
     std::memcpy(frame.camera, camera_t.data(), sizeof(frame.camera));
@@ -6383,7 +6447,7 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
                 record_hdr_begin();
                 break;
             case ReplayKind::HdrEnd:
-                record_hdr_end();
+                record_hdr_end(static_cast<int>(op.index) - 1);
                 break;
             }
         }
@@ -6922,7 +6986,7 @@ bool RendererD3D12::scene_temporal_begin(float& jitter_x, float& jitter_y) {
     scene_temporal_ = false;
     // The engine's histories follow what moved by itself through the raster's motion: without a temporal upscaler the
     // scene still writes it (MSAA is off with ray tracing).
-    scene_motion_ = rt_active() && ray_tracer_.engine_active() && !output_efb_active_;
+    scene_motion_ = rt_active() && ray_tracer_->engine_active() && !output_efb_active_;
     const unsigned rw = kEfbWidth * efb_scale_;
     const unsigned ow = temporal_output_w_;
     // The context is replaced only by begin_frame (prepare_temporal_upscaler).

@@ -5855,8 +5855,11 @@ void GxBackend::note_rt_mist(const DrawCall& call) {
     const float opacity = std::clamp(static_cast<float>(state_.tev_register_values()[1][3]) / 255.0f, 0.0f, 1.0f);
     const RtMaterial* const material = rt_material(current_rt_material_);
     const float depth = material != nullptr && material->intensity > 0.0f ? material->intensity : 2.0f;
+    // Its brightness: the row's colour (white 1).
+    const float white =
+        material != nullptr ? (material->color[0] + material->color[1] + material->color[2]) / 3.0f : 1.0f;
     if (opacity > 1e-3f) {
-        renderer_.rt_note_mist(centre, sigma, depth * opacity);
+        renderer_.rt_note_mist(centre, sigma, depth * opacity, white);
     }
 }
 
@@ -7569,6 +7572,12 @@ double GxBackend::interp_slot_t() const {
                static_cast<double>(frequency) + interp_sequence_.lead;
 }
 
+bool GxBackend::overlay_idle_presents() const noexcept {
+    static const std::int64_t frequency = galaxy::qpc_frequency();
+    return (native_settings_overlay_visible() || home_menu_visible()) && !interp_sequence_.active &&
+           interp_slot_period_qpc_ > 0 && interp_slot_period_qpc_ * 61 < frequency;
+}
+
 std::int64_t GxBackend::interp_remaining_us() const {
     const std::int64_t now = galaxy::qpc_now();
     static const std::int64_t frequency = galaxy::qpc_frequency();
@@ -7716,7 +7725,8 @@ void GxBackend::note_present_vblank(std::int64_t slot) {
 }
 
 // The line: the slot's time and the present's (QPC ticks), the game frame shown (the played log's serial; t
-// between the frame before, 0, and it, 1), and whether it was the game's own frame.
+// between the frame before, 0, and it, 1), whether it was the game's own frame, and the sequence's camera: whether
+// it cut (by the game's flag or the thresholds), how far it moved and turned, and whether it chained past skipped logs.
 void GxBackend::note_interp_timeline(std::int64_t slot, double t, bool real) {
     static std::FILE* const file = [] {
         char path[MAX_PATH]{};
@@ -7726,16 +7736,18 @@ void GxBackend::note_interp_timeline(std::int64_t slot, double t, bool real) {
         }
         std::FILE* opened = nullptr;
         if (fopen_s(&opened, path, "w") == 0 && opened != nullptr) {
-            std::fprintf(opened, "slot_qpc,present_qpc,frame,t,real,frequency\n");
+            std::fprintf(opened, "slot_qpc,present_qpc,frame,t,real,frequency,cut,game_cut,moved,turn,chained\n");
         }
         return opened;
     }();
     if (file == nullptr) {
         return;
     }
-    std::fprintf(file, "%lld,%lld,%llu,%.6f,%d,%lld\n", static_cast<long long>(slot),
+    std::fprintf(file, "%lld,%lld,%llu,%.6f,%d,%lld,%d,%d,%.1f,%.2f,%d\n", static_cast<long long>(slot),
                  static_cast<long long>(galaxy::qpc_now()), static_cast<unsigned long long>(interp_last_played_serial_),
-                 t, real ? 1 : 0, static_cast<long long>(galaxy::qpc_frequency()));
+                 t, real ? 1 : 0, static_cast<long long>(galaxy::qpc_frequency()), interp_camera_.cut ? 1 : 0,
+                 interp_camera_game_cut_ ? 1 : 0, static_cast<double>(interp_camera_.moved),
+                 static_cast<double>(interp_camera_.turn_degrees), interp_sequence_.chained ? 1 : 0);
 }
 
 // A game frame presented while interpolating, without sub-frames: why.
@@ -7994,6 +8006,7 @@ bool GxBackend::render_interp_subframe(float t) {
             interp_camera_.cut = true;
         }
         interp_camera_move_ = interp_camera_.known && !game_cut ? interp_camera_.moved : 0.0f;
+        interp_camera_game_cut_ = game_cut;
         if (interp_camera_.cut) {
             ++interp_camera_cuts_;
             ++(game_cut ? interp_game_cuts_ : interp_threshold_cuts_);
@@ -8456,6 +8469,7 @@ void GxBackend::render_thread_main() {
         FrameChunk chunk;
         bool have_chunk = false;
         bool idle_present = false;
+        bool overlay_idle = false;
         std::uint64_t shutdown_fence = 0;
         {
             std::unique_lock<std::mutex> lock(queue_mutex_);
@@ -8468,11 +8482,32 @@ void GxBackend::render_thread_main() {
                 renderer_.any_async_peek_field_pending();
             // Draining for a stop: queued frames present without sub-frames.
             interp_stopping_ = stop_render_thread_;
+            // A native overlay over a game showing no interpolated frames (the HOME Menu's paused game draws no 3D scene;
+            // interpolation waits while the settings are open): the latest frame again at each display slot, so the
+            // overlay keeps the rate play had instead of the video retrace's 60 Hz.
+            overlay_idle = !stop_render_thread_ && overlay_idle_presents();
+            if (!overlay_idle) {
+                overlay_idle_due_qpc_ = 0;
+            } else if (overlay_idle_due_qpc_ == 0) {
+                overlay_idle_due_qpc_ = galaxy::qpc_now() + interp_slot_period_qpc_;
+            }
             if (interp_sequence_.active && frame_queue_.empty() && !stop_render_thread_) {
                 // Coarse and interruptible to about 1.5 ms before the slot
                 // (the condition variable wakes on the 1 ms scheduler tick),
                 // then a high-resolution timer for the rest.
                 const std::int64_t remaining_us = interp_remaining_us();
+                if (remaining_us > 2000) {
+                    queue_cv_.wait_for(lock, std::chrono::microseconds(remaining_us - 1500), [this] {
+                        return stop_render_thread_ || !frame_queue_.empty();
+                    });
+                } else if (remaining_us > 0) {
+                    lock.unlock();
+                    interp_sleep_us(remaining_us);
+                    lock.lock();
+                }
+            } else if (overlay_idle && frame_queue_.empty()) {
+                static const std::int64_t frequency = galaxy::qpc_frequency();
+                const std::int64_t remaining_us = (overlay_idle_due_qpc_ - galaxy::qpc_now()) * 1'000'000 / frequency;
                 if (remaining_us > 2000) {
                     queue_cv_.wait_for(lock, std::chrono::microseconds(remaining_us - 1500), [this] {
                         return stop_render_thread_ || !frame_queue_.empty();
@@ -8617,6 +8652,23 @@ void GxBackend::render_thread_main() {
                 }
             } else if (idle_present) {
                 present_latest_frame_on_thread();
+            } else if (overlay_idle) {
+                // A due slot presents again the frame last presented (never another: the game's two display copies
+                // may differ, and alternating them would flicker) unless a present of the game's own landed in it.
+                const std::int64_t now = galaxy::qpc_now();
+                if (now >= overlay_idle_due_qpc_) {
+                    if (renderer_.last_present_qpc() < overlay_idle_due_qpc_ - interp_slot_period_qpc_) {
+                        const std::uint32_t shown = last_presented_xfb_addr_.load(std::memory_order_relaxed);
+                        if (shown != 0u) {
+                            present_cached_xfb_on_thread(shown, false, false);
+                        }
+                    }
+                    overlay_idle_due_qpc_ += interp_slot_period_qpc_;
+                    if (now >= overlay_idle_due_qpc_) {
+                        overlay_idle_due_qpc_ += ((now - overlay_idle_due_qpc_) / interp_slot_period_qpc_ + 1) *
+                                                 interp_slot_period_qpc_;
+                    }
+                }
             }
         } catch (...) {
             std::lock_guard<std::mutex> lock(queue_mutex_);

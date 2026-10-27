@@ -50,6 +50,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <future>
+#include <memory>
 #include <optional>
 #include <string>
 #include <span>
@@ -294,64 +295,68 @@ public:
 
     // Ray tracing (galaxy/gx/ray_tracing.h): the 3D scene's opaque draws, noted as they are
     // drawn, become the traced scene when the game's translucent phases begin.
-    [[nodiscard]] bool rt_active() const noexcept { return ray_tracer_.ready(); }
+    [[nodiscard]] bool rt_active() const noexcept { return ray_tracer_->ready(); }
     // Starts or stops the ray tracer at a frame boundary to follow the RAY TRACING setting.
     void reconcile_ray_tracing();
-    [[nodiscard]] bool rt_scene_open() const noexcept { return ray_tracer_.scene_open(); }
-    [[nodiscard]] bool rt_glow_open() const noexcept { return ray_tracer_.glow_open(); }
-    [[nodiscard]] bool rt_water_open() const noexcept { return ray_tracer_.water_open(); }
-    [[nodiscard]] bool rt_late_open() const noexcept { return ray_tracer_.late_open(); }
-    [[nodiscard]] bool rt_sky_open() const noexcept { return ray_tracer_.sky_open(); }
-    void rt_begin_sky() noexcept { ray_tracer_.begin_sky(); }
-    void rt_set_scene_up(const std::array<float, 3>& up) noexcept { ray_tracer_.set_scene_up(up); }
+    [[nodiscard]] bool rt_scene_open() const noexcept { return ray_tracer_->scene_open(); }
+    [[nodiscard]] bool rt_glow_open() const noexcept { return ray_tracer_->glow_open(); }
+    [[nodiscard]] bool rt_water_open() const noexcept { return ray_tracer_->water_open(); }
+    [[nodiscard]] bool rt_late_open() const noexcept { return ray_tracer_->late_open(); }
+    [[nodiscard]] bool rt_sky_open() const noexcept { return ray_tracer_->sky_open(); }
+    void rt_begin_sky() noexcept { ray_tracer_->begin_sky(); }
+    void rt_set_scene_up(const std::array<float, 3>& up) noexcept { ray_tracer_->set_scene_up(up); }
     [[nodiscard]] float rt_glow_exposure(bool model = false) const noexcept {
-        return ray_tracer_.ready() ? ray_tracer_.glow_exposure(model) : 1.0f;
+        return ray_tracer_->ready() ? ray_tracer_->glow_exposure(model) : 1.0f;
     }
     // The last traced scene's lighting as a texture for lit translucents (texture 7).
     [[nodiscard]] bool rt_light_texture_ready() const noexcept {
-        return ray_tracer_.ready() && ray_tracer_.light_texture_ready();
+        return ray_tracer_->ready() && ray_tracer_->light_texture_ready();
     }
-    [[nodiscard]] ID3D12Resource* rt_light_texture() const noexcept { return ray_tracer_.light_texture(); }
+    [[nodiscard]] ID3D12Resource* rt_light_texture() const noexcept { return ray_tracer_->light_texture(); }
     [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE rt_light_texture_srv() const noexcept {
-        return ray_tracer_.light_texture_srv();
+        return ray_tracer_->light_texture_srv();
     }
-    [[nodiscard]] float rt_light_texture_scale() const noexcept { return ray_tracer_.light_texture_scale(); }
+    [[nodiscard]] float rt_light_texture_scale() const noexcept { return ray_tracer_->light_texture_scale(); }
     void rt_begin_scene();
-    void rt_set_view(const RtView& view) noexcept { ray_tracer_.set_view(view); }
-    void rt_set_camera(const std::array<float, 12>* view) noexcept { ray_tracer_.set_camera(view); }
-    [[nodiscard]] bool rt_lighting() const noexcept { return ray_tracer_.lighting_active(); }
-    [[nodiscard]] bool rt_physical() const noexcept { return ray_tracer_.physical_active(); }
+    void rt_set_view(const RtView& view) noexcept { ray_tracer_->set_view(view); }
+    void rt_set_camera(const std::array<float, 12>* view) noexcept { ray_tracer_->set_camera(view); }
+    [[nodiscard]] bool rt_lighting() const noexcept { return ray_tracer_->lighting_active(); }
+    [[nodiscard]] bool rt_physical() const noexcept { return ray_tracer_->physical_active(); }
     // The ray tracing engine runs (its clear-surface pass traces the table's `traced` glass).
-    [[nodiscard]] bool rt_engine() const noexcept { return ray_tracer_.engine_active(); }
-    [[nodiscard]] bool rt_engine_clear() const noexcept { return ray_tracer_.engine_clear_active(); }
+    [[nodiscard]] bool rt_engine() const noexcept { return ray_tracer_->engine_active(); }
+    [[nodiscard]] bool rt_engine_clear() const noexcept { return ray_tracer_->engine_clear_active(); }
+    // When the swap chain last took a present (QPC; 0 none).
+    [[nodiscard]] std::int64_t last_present_qpc() const noexcept { return swap_present_qpc_; }
     // The waterfall mist (SceneRayTracer::mist_open, note_mist): the table's `mist` effects' sprites as puffs of drops.
-    [[nodiscard]] bool rt_mist_open() const noexcept { return ray_tracer_.mist_open(); }
-    void rt_note_mist(const float centre[3], float sigma, float depth) { ray_tracer_.note_mist(centre, sigma, depth); }
-    [[nodiscard]] bool rt_log_seq() const noexcept { return ray_tracer_.log_seq(); }
-    [[nodiscard]] bool rt_ab_original() const noexcept { return ray_tracer_.ab_original(); }
-    [[nodiscard]] bool rt_scene_untraced() const noexcept { return ray_tracer_.scene_untraced(); }
-    void rt_set_ab_original(bool original) noexcept { ray_tracer_.set_ab_original(original); }
-    void rt_set_scene_untraced(bool untraced) noexcept { ray_tracer_.set_scene_untraced(untraced); }
-    void rt_set_presents(std::uint64_t presents) noexcept { ray_tracer_.set_presents(presents); }
-    // The traced reflections on the scene's surfaces (SceneRayTracer::surface_reflections_active).
-    [[nodiscard]] bool rt_reflections_active() const noexcept { return ray_tracer_.surface_reflections_active(); }
-    [[nodiscard]] bool rt_sun_direction(std::array<float, 3>& world) const noexcept {
-        return ray_tracer_.sun_direction(world);
+    [[nodiscard]] bool rt_mist_open() const noexcept { return ray_tracer_->mist_open(); }
+    void rt_note_mist(const float centre[3], float sigma, float depth, float white) {
+        ray_tracer_->note_mist(centre, sigma, depth, white);
     }
-    void rt_hold_sun(bool held) noexcept { ray_tracer_.hold_sun(held); }
+    [[nodiscard]] bool rt_log_seq() const noexcept { return ray_tracer_->log_seq(); }
+    [[nodiscard]] bool rt_ab_original() const noexcept { return ray_tracer_->ab_original(); }
+    [[nodiscard]] bool rt_scene_untraced() const noexcept { return ray_tracer_->scene_untraced(); }
+    void rt_set_ab_original(bool original) noexcept { ray_tracer_->set_ab_original(original); }
+    void rt_set_scene_untraced(bool untraced) noexcept { ray_tracer_->set_scene_untraced(untraced); }
+    void rt_set_presents(std::uint64_t presents) noexcept { ray_tracer_->set_presents(presents); }
+    // The traced reflections on the scene's surfaces (SceneRayTracer::surface_reflections_active).
+    [[nodiscard]] bool rt_reflections_active() const noexcept { return ray_tracer_->surface_reflections_active(); }
+    [[nodiscard]] bool rt_sun_direction(std::array<float, 3>& world) const noexcept {
+        return ray_tracer_->sun_direction(world);
+    }
+    void rt_hold_sun(bool held) noexcept { ray_tracer_->hold_sun(held); }
     void rt_set_key_light(bool valid, const std::array<float, 3>& world, const std::array<float, 3>& color,
                           float strength, bool shown) noexcept {
-        ray_tracer_.set_key_light(valid, world, color, strength, shown);
+        ray_tracer_->set_key_light(valid, world, color, strength, shown);
     }
     [[nodiscard]] bool rt_sky_sun(std::array<float, 3>& world, std::array<float, 3>& color) const noexcept {
-        return ray_tracer_.sky_sun(world, color);
+        return ray_tracer_->sky_sun(world, color);
     }
     [[nodiscard]] bool rt_sky_key(std::array<float, 3>& world, float& strength) const noexcept {
-        return ray_tracer_.sky_key(world, strength);
+        return ray_tracer_->sky_key(world, strength);
     }
-    void rt_reset_sky() noexcept { ray_tracer_.reset_sky(); }
-    void rt_set_stage_sun(const RtStageSun* sun) noexcept { ray_tracer_.set_stage_sun(sun); }
-    [[nodiscard]] const RtStageSun* rt_stage_sun() const noexcept { return ray_tracer_.stage_sun(); }
+    void rt_reset_sky() noexcept { ray_tracer_->reset_sky(); }
+    void rt_set_stage_sun(const RtStageSun* sun) noexcept { ray_tracer_->set_stage_sun(sun); }
+    [[nodiscard]] const RtStageSun* rt_stage_sun() const noexcept { return ray_tracer_->stage_sun(); }
     void rt_note_draw(const DrawCall& call, const RtDrawInfo& info);
     void rt_trace_scene();
     // The scene's end: its finished picture becomes the light the next frame's rays read.
@@ -1071,7 +1076,8 @@ private:
     // The live EFB is an HDR set (swapped with the set that held it).
     bool efb_hdr_ = false;
     void record_hdr_begin();
-    void record_hdr_end();
+    // `slot`: the light slot of the frame the picture shows (the replay's ReplayKind::HdrEnd keeps it, index + 1).
+    void record_hdr_end(int slot);
     // The output-resolution EFB of a sub-frame whose log switches to it.
     EfbTargetSet replay_output_efb_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_output_efb_rtv_heap_;
@@ -1122,9 +1128,24 @@ private:
     D3D12_RESOURCE_STATES blend_verdicts_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> blend_validate_root_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> blend_validate_pso_;
-    SceneRayTracer ray_tracer_;
+    std::unique_ptr<SceneRayTracer> ray_tracer_ = std::make_unique<SceneRayTracer>();
     // The ray tracer could not start on this device: not retried every frame.
     bool rt_start_failed_ = false;
+    // A tracer starting on a worker (start_ray_tracer), and since when: the frames draw without ray tracing meanwhile.
+    std::future<std::unique_ptr<SceneRayTracer>> rt_starting_;
+    std::chrono::steady_clock::time_point rt_start_time_{};
+    // The descriptor tables the tracers write their texture and de-light views into (set at initialize).
+    struct RtViewTable {
+        D3D12_CPU_DESCRIPTOR_HANDLE cpu{};
+        std::uint32_t first = 0u;
+        UINT increment = 0u;
+    };
+    RtViewTable rt_texture_views_{};
+    RtViewTable rt_delight_views_{};
+    void start_ray_tracer();
+    void take_started_ray_tracer();
+    // Waits for a tracer still starting and drops it (the device goes away, or the renderer shuts down).
+    void abandon_ray_tracer_start() noexcept;
     static RtUpload rt_allocate(void* renderer, std::size_t bytes, std::size_t alignment);
     [[nodiscard]] RtSources rt_sources() const;
     // The occlusion of result `slot` onto the EFB colour; `reproject` on a sub-frame's replay.
@@ -1567,6 +1588,7 @@ private:
     LARGE_INTEGER qpc_frequency_{};
     std::int64_t telemetry_window_start_qpc_ = 0;
     std::int64_t last_present_qpc_ = 0;
+    std::int64_t swap_present_qpc_ = 0;   // every present's, telemetry or not (last_present_qpc)
     std::uint64_t telemetry_first_serial_start_ = 0;
     std::uint64_t telemetry_xfb_copy_start_ = 0;
     PresentPacer present_pacer_;

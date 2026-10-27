@@ -31,7 +31,7 @@ struct RtCameraConstants {
     float bloom;
     std::uint32_t flags;
     std::uint32_t levels;
-    std::uint32_t pad;
+    std::uint32_t subframe;     // a sub-frame's light slot + 1 (the shafts' sun turns into its camera); 0 none
     float sun[4];               // the visible sun on the picture (pixels), the shafts' strength, the picture's height
     std::uint32_t quarter[2];   // the shafts' texels
     float far_depth;            // the far plane's depth (sky)
@@ -93,7 +93,8 @@ bool SceneRayTracer::create_camera_pipelines(DXGI_FORMAT scene_format, DXGI_FORM
     D3D12_DESCRIPTOR_RANGE picture{};
     picture.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
     picture.NumDescriptors = 2u;
-    D3D12_ROOT_PARAMETER params[5]{};
+    // A sub-frame's camera rows per light slot (t3: write_reprojection's buffer) for the shafts' sun.
+    D3D12_ROOT_PARAMETER params[6]{};
     params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
     params[0].Constants.Num32BitValues = sizeof(RtCameraConstants) / 4u;
     params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
@@ -104,11 +105,13 @@ bool SceneRayTracer::create_camera_pipelines(DXGI_FORMAT scene_format, DXGI_FORM
     params[3].Descriptor.ShaderRegister = 1u;
     params[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
     params[4].Descriptor.ShaderRegister = 2u;
+    params[5].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    params[5].Descriptor.ShaderRegister = 3u;
     for (auto& param : params) {
         param.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     }
     D3D12_ROOT_SIGNATURE_DESC rsd{};
-    rsd.NumParameters = 5u;
+    rsd.NumParameters = 6u;
     rsd.pParameters = params;
     ComPtr<ID3DBlob> blob;
     ComPtr<ID3DBlob> error;
@@ -180,18 +183,22 @@ void SceneRayTracer::bind_camera(ID3D12GraphicsCommandList* list, bool graphics_
                                  D3D12_GPU_DESCRIPTOR_HANDLE picture_table) {
     const D3D12_GPU_VIRTUAL_ADDRESS down = camera_pyramid_[0]->GetGPUVirtualAddress();
     const D3D12_GPU_VIRTUAL_ADDRESS up = camera_pyramid_[1]->GetGPUVirtualAddress();
+    // A sub-frame's camera rows (read only by a sub-frame's shafts; a stand-in otherwise, never read).
+    const D3D12_GPU_VIRTUAL_ADDRESS rows = reproject_ ? reproject_->GetGPUVirtualAddress() : up;
     if (graphics_root) {
         list->SetGraphicsRootSignature(camera_root_.Get());
         list->SetGraphicsRootDescriptorTable(1u, picture_table);
         list->SetGraphicsRootUnorderedAccessView(2u, down);
         list->SetGraphicsRootUnorderedAccessView(3u, down);
         list->SetGraphicsRootShaderResourceView(4u, up);
+        list->SetGraphicsRootShaderResourceView(5u, rows);
     } else {
         list->SetComputeRootSignature(camera_root_.Get());
         list->SetComputeRootDescriptorTable(1u, picture_table);
         list->SetComputeRootUnorderedAccessView(2u, down);
         list->SetComputeRootUnorderedAccessView(3u, up);
         list->SetComputeRootShaderResourceView(4u, up);
+        list->SetComputeRootShaderResourceView(5u, rows);
     }
 }
 
@@ -218,7 +225,8 @@ bool SceneRayTracer::camera_widen(ID3D12GraphicsCommandList* list, D3D12_GPU_DES
 }
 
 bool SceneRayTracer::camera_finish(ID3D12GraphicsCommandList* list, D3D12_GPU_DESCRIPTOR_HANDLE picture_table,
-                                   D3D12_CPU_DESCRIPTOR_HANDLE target, std::uint32_t width, std::uint32_t height) {
+                                   D3D12_CPU_DESCRIPTOR_HANDLE target, std::uint32_t width, std::uint32_t height,
+                                   int slot_index, bool subframe) {
     if (!camera_ready() || list == nullptr || picture_table.ptr == 0u || width == 0u || height == 0u ||
         !ensure_camera_pyramid(width, height)) {
         return false;
@@ -227,7 +235,12 @@ bool SceneRayTracer::camera_finish(ID3D12GraphicsCommandList* list, D3D12_GPU_DE
     RtCameraConstants c{};
     c.size[0] = width;
     c.size[1] = height;
-    const bool physical = physical_active();
+    // The picture's own frame: its slot (a sub-frame's is a frame the tracer has since moved past; its current one
+    // may belong to the next frame, with another camera, or be none while that frame's scene is open).
+    const LightSlot* const slot = slot_index >= 0 && slot_index < static_cast<int>(kLightSlots)
+                                      ? &light_slots_[static_cast<unsigned>(slot_index)]
+                                      : nullptr;
+    const bool physical = lighting_active() && slot != nullptr && slot->physical;
     c.flags = physical ? kCameraPhysical | (camera_tone_ == 1u ? kCameraAces : camera_tone_ == 2u ? kCameraClip : 0u)
                        : 0u;
     Level levels[kCameraLevels];
@@ -235,7 +248,6 @@ bool SceneRayTracer::camera_finish(ID3D12GraphicsCommandList* list, D3D12_GPU_DE
     // The player's choices (LENS BLOOM, SUN RAYS); the shafts use the pyramid's buffers with or without the bloom.
     const RenderConfig config = get_render_config();
     const float bloom = rt_effect_on(config, RtEffect::LensBloom) ? camera_bloom_ : 0.0f;
-    const LightSlot* const slot = light_slot_ >= 0 ? &light_slots_[static_cast<unsigned>(light_slot_)] : nullptr;
     // The sun's shafts start from the disc the sky shows in front of the camera (sun_visible, on the picture or off
     // it), not from the light's direction, which may be lifted over the player's horizon.
     const bool shafts = physical && count != 0u && rt_effect_on(config, RtEffect::SunRays) && slot != nullptr &&
@@ -297,6 +309,8 @@ bool SceneRayTracer::camera_finish(ID3D12GraphicsCommandList* list, D3D12_GPU_DE
             }
             c.sun[2] = camera_shafts_ * stage;
             c.sun[3] = static_cast<float>(height);
+            // A sub-frame shows its own camera: the shader turns the sun into it (write_reprojection's rows).
+            c.subframe = subframe && reproject_ ? static_cast<std::uint32_t>(slot_index) + 1u : 0u;
             c.quarter[0] = (width + 3u) / 4u;
             c.quarter[1] = (height + 3u) / 4u;
             c.far_depth = slot->view.min_depth;

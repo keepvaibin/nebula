@@ -116,9 +116,11 @@ std::vector<Vec3> displacement_normals(std::span<const Vec3> positions, std::spa
         if (ns.empty()) continue;
         if (std::all_of(ns.begin(), ns.end(), [&](const Vec3& n) { return parallel(ns[0], n); })) {
             // Shape, not shading: a sampled curved surface's faces meet at small angles around each of its points (a
-            // 16-sided pipe's at 22.5 degrees) and its normal stays near them. A box shaded soft, its corner normals
-            // tilted for the look, has faces at right angles there: rounded, it would puff into a pillow.
-            static const float kFaceToFace = std::cos(40.0f * 3.14159265f / 180.0f);
+            // 16-sided pipe's at 22.5 degrees, an octagonal ring's section at 45, a hexagon's at 60) and its normal
+            // stays near them (half that). A box shaded soft, its corner normals tilted for the look, has faces at
+            // right angles there and its normal 45 degrees or more from one of them: rounded, it would puff into a
+            // pillow.
+            static const float kFaceToFace = std::cos(62.0f * 3.14159265f / 180.0f);
             static const float kNormalToFace = std::cos(35.0f * 3.14159265f / 180.0f);
             const std::vector<Vec3>& fs = faces[q];
             bool sampled = true;

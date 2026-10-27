@@ -1113,6 +1113,7 @@ private:
     // the game camera between the scene before and it, every record whose
     // constants change in a sub-frame, and every palette snapshot pair.
     CameraMotion interp_camera_{};
+    bool interp_camera_game_cut_ = false;  // the sequence cut by the game's own camera epoch (timeline)
     float interp_camera_move_ = 0.0f;     // eye movement into the scene before (cut test)
     struct InterpRecordMotion {
         std::uint32_t record = 0;
@@ -1169,6 +1170,11 @@ private:
     // Present slot clock: next slot and slot length (with VSync, on the display's vblanks when they are timed).
     std::int64_t interp_slot_due_qpc_ = 0;
     std::int64_t interp_slot_period_qpc_ = 0;
+    // A native overlay (the HOME Menu, the settings) up while no interpolated frames run, at a display faster than
+    // 60 Hz (the interpolation's slots): the latest frame presents again at each slot without a present of its own
+    // (overlay_idle_due_qpc_: the next; 0 outside).
+    [[nodiscard]] bool overlay_idle_presents() const noexcept;
+    std::int64_t overlay_idle_due_qpc_ = 0;
     // Presents by the vblanks since the one before (0, 1, 2, 3 or more), against the display's vblank grid, and the
     // range of the time from a present's slot (the moment it shows) to the vblank that shows it.
     std::array<std::uint64_t, 4> interp_vblank_steps_{};

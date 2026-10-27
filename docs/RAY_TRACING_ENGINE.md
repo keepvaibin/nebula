@@ -252,9 +252,14 @@ reactive mask; water drawn inside the window (OceanBowl, phase 8) stays out of t
 
 Start: the ray tracer's compute pipelines compile in parallel (pso_jobs.h; the device's pipeline creation is
 free-threaded). On a cold driver cache (each build's first start) they took 26-33 s one after another before the first
-frame, 1.6-1.8 s in parallel.
+frame, 1.6-1.8 s in parallel. A tracer starts on a worker thread (RendererD3D12::start_ray_tracer) while the frames
+draw without ray tracing, and takes over at a frame's start with the inputs the scene gave the one it replaces
+(SceneRayTracer::adopt_inputs): turning ray tracing on never holds the window.
 Sub-frames re-run E8 per sub-frame with reprojection from their traced slot (kLightSlots results kept: diffuse,
-specular, eye z, camera).
+specular, eye z, camera). Their replay is recorded once per sequence, so every pass in it reads its frame's slot,
+never the tracer's current state (the next frame's, or none while its scene is open): the camera (camera_finish) takes
+the slot ReplayKind::HdrEnd keeps and the slot's physical flag, and turns the shafts' sun into the sub-frame's camera
+by write_reprojection's rows.
 
 The water's trace runs renderer frames after the trace (a game frame spans several): the draws' tables (draw table,
 texture table, TEV records) it and the glass pass read are uploaded again into its own frame's ring

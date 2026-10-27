@@ -78,6 +78,10 @@ public:
     bool initialize(ID3D12Device* device, std::uint64_t timestamp_frequency, bool validate,
                     DXGI_FORMAT scene_format, DXGI_FORMAT display_format);
     void shutdown() noexcept;
+    // A tracer started on a worker takes over from `from` (RendererD3D12::reconcile_ray_tracing): the inputs the
+    // renderer and the game set whether or not a tracer runs (its views, the stage's sun, the scene's up, camera and
+    // lights), which a restart keeps (shutdown leaves them).
+    void adopt_inputs(const SceneRayTracer& from) noexcept;
     [[nodiscard]] bool ready() const noexcept { return ready_; }
     // The quality it started with (config rt_quality: 0 medium, 1 high, 2 low).
     [[nodiscard]] unsigned quality() const noexcept { return quality_; }
@@ -231,7 +235,9 @@ public:
     // The camera (ray_tracing_camera.cpp, rt_camera.hlsl). camera_widen: the RGBA8 EFB's picture (`picture_table`:
     // its colour view first, PIXEL_SHADER_RESOURCE) into the HDR scene EFB (`target`) as it is. camera_finish: the
     // HDR scene EFB's light (`picture_table`, NON_PIXEL and PIXEL_SHADER_RESOURCE) through bloom and the tone curve
-    // into the RGBA8 EFB (`target`); without physical light the picture as it is, clamped.
+    // into the RGBA8 EFB (`target`); without physical light the picture as it is, clamped. `slot` is the light slot of
+    // the frame the picture shows (-1: none, not traced), whose light and sun the camera takes: a sub-frame replays a
+    // frame the tracer has moved past. `subframe`: the sun's shafts turn into the sub-frame's camera (write_reprojection).
     [[nodiscard]] bool camera_ready() const noexcept { return camera_pso_ && camera_widen_pso_; }
     // The ray tracing engine (ray_tracing_engine.cpp, rt_engine.hlsl), active under physical, textured lighting.
     // composite_clear: the engine's clear surfaces (rt_engine.hlsl EngineClearCS) of `slot` over the picture
@@ -247,14 +253,14 @@ public:
     }
     // The waterfall mist (rt_engine.hlsl MistLightCS, rt_lighting.hlsl MistCompositePS): the table's `mist` effects'
     // sprites are puffs of drops while the scene's water window is open (mist_open; GALAXY_RT_MIST=0: the sprites as
-    // the game draws them). note_mist: one puff, its eye-space centre, width (sigma) and optical depth through its
-    // centre. mist_slot: the light slot whose puffs the water's trace lit this frame (-1: none). composite_mist: them over
+    // the game draws them). note_mist: one puff, its eye-space centre, width (sigma), optical depth through its centre
+    // and brightness (its row's colour, white 1). mist_slot: the light slot whose puffs the water's trace lit this frame (-1: none). composite_mist: them over
     // the picture (`scene_srv`: its copy after the water's composites; `layer_srv`: the effects layer).
     [[nodiscard]] bool mist_open() const noexcept {
         return mist_wanted_ && water_open_ && engine_active() && surface_reflections_active() && engine_mist_pso_ &&
                mist_composite_pso_;
     }
-    void note_mist(const float centre[3], float sigma, float depth);
+    void note_mist(const float centre[3], float sigma, float depth, float white);
     [[nodiscard]] int mist_slot() const noexcept { return mist_slot_; }
     void composite_mist(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
                         D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width, std::uint32_t height, unsigned slot,
@@ -271,7 +277,8 @@ public:
     bool camera_widen(ID3D12GraphicsCommandList* list, D3D12_GPU_DESCRIPTOR_HANDLE picture_table,
                       D3D12_CPU_DESCRIPTOR_HANDLE target, std::uint32_t width, std::uint32_t height);
     bool camera_finish(ID3D12GraphicsCommandList* list, D3D12_GPU_DESCRIPTOR_HANDLE picture_table,
-                       D3D12_CPU_DESCRIPTOR_HANDLE target, std::uint32_t width, std::uint32_t height);
+                       D3D12_CPU_DESCRIPTOR_HANDLE target, std::uint32_t width, std::uint32_t height, int slot,
+                       bool subframe);
     // Transforms the water draws noted since the last flush (before a render chunk's list closes,
     // as flush_geometry).
     void flush_water(ID3D12GraphicsCommandList* list, const RtSources& sources, Allocate allocate,
@@ -672,6 +679,7 @@ private:
         std::array<float, 3> sun_visible{};  // towards the sun the sky shows (eye space): the shafts' centre
         std::array<float, 3> sun_light{};  // its light
         bool sun_shown = false;            // the sky shows it (the game's BrightSun, or the sun its sky map holds)
+        bool physical = false;             // traced in the stage's light units (physical_active_ then)
         bool pixels = false;               // light_pixels_ holds its per-pixel normals (physical)
         std::array<float, 4> water{};      // the camera in water (1), its depth (RtEngineConstants::water)
         std::array<float, 3> water_sky{};  // the stage's full light it scatters (the lighting's full_light)

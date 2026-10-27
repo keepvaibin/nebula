@@ -1270,6 +1270,7 @@ void RendererVk::present_swapchain_image() {
         vk::check(result, "vkQueuePresentKHR");
     }
     const std::int64_t present_end = galaxy::qpc_now();
+    swap_present_qpc_ = present_end;
     if (trace_present_stats_enabled()) {
         const double present_ms = static_cast<double>(present_end - present_start) * 1000.0 /
             static_cast<double>(galaxy::qpc_frequency());

@@ -3429,8 +3429,9 @@ CompositeOut ClearCompositePS(float4 position : SV_Position)
 // The waterfall mist (rt_engine.hlsl MistLightCS): the spray at the falls' feet as puffs of water drops, each a Gaussian
 // cloud. m_light holds the frame's records: a header of kMistHeader (the puffs' count and the frame; the traced frame's
 // world to eye rows; the world's up; the up in eye space) and three a puff (its eye-space centre and width sigma; its
-// optical depth through its centre, the mist's from it towards the sun and the height of the water's surface under it,
-// -1e30 none; the sun's light it sees and the light reaching it from every direction, exposed, halves).
+// optical depth through its centre, the mist's from it towards the sun, the height of the water's surface under it
+// (-1e30 none) and its brightness (its row's colour); the sun's light it sees and the light reaching it from above,
+// exposed, halves).
 static const uint kMistHeader = 6u;
 static const uint kMistMost = 512u;
 // A dense spray's albedo (water drops absorb almost nothing; its face takes in the light it sends back out): white.
@@ -3556,7 +3557,7 @@ CompositeOut MistCompositePS(float4 position : SV_Position)
         const uint4 l = m_light[r + 2u];
         const float3 sun = float3(f16tof32(l.x), f16tof32(l.x >> 16u), f16tof32(l.y));
         tau += column;
-        light += column * (sun + float3(f16tof32(l.y >> 16u), f16tof32(l.z), f16tof32(l.z >> 16u)));
+        light += column * asfloat(m_light[r + 1u].w) * (sun + float3(f16tof32(l.y >> 16u), f16tof32(l.z), f16tof32(l.z >> 16u)));
         at += column * (o + d * clamp(t, 0.0f, reach));
         width += column * puff.w;
     }

@@ -2882,6 +2882,28 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
     }
 }
 
+void SceneRayTracer::adopt_inputs(const SceneRayTracer& from) noexcept {
+    set_texture_views(from.texture_view_cpu_, from.texture_view_first_, from.texture_view_increment_);
+    set_delight_views(from.delight_view_cpu_, from.delight_view_first_, from.delight_view_increment_);
+    stage_sun_ = from.stage_sun_;
+    scene_up_ = from.scene_up_;
+    scene_untraced_ = from.scene_untraced_;
+    sun_held_ = from.sun_held_;
+    key_valid_ = from.key_valid_;
+    key_shown_ = from.key_shown_;
+    key_direction_ = from.key_direction_;
+    key_color_ = from.key_color_;
+    key_strength_ = from.key_strength_;
+    view_ = from.view_;
+    view_known_ = from.view_known_;
+    camera_ = from.camera_;
+    camera_known_ = from.camera_known_;
+    surface_reflections_ = from.surface_reflections_;
+    presents_ = from.presents_;
+    ab_original_ = ab_ && from.ab_original_;
+    log_seq_ = from.log_seq_;
+}
+
 void SceneRayTracer::set_view(const RtView& view) noexcept {
     view_ = view;
     view_known_ = true;
@@ -4432,6 +4454,7 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
     info.factor = factor;
     info.near_plane = c.near_plane;
     info.pixels = true;
+    info.physical = physical_active_;
     for (unsigned i = 0; i < 3u; ++i) {
         info.sun[i] = c.sun[i];
         info.sun_visible[i] = sun_visible_eye_[i];
@@ -5029,7 +5052,7 @@ void SceneRayTracer::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRI
     const bool per_pixel = info.pixels && light_pixels_[index];
     // The engine's result (full resolution, its own record: rt_engine.hlsl EngineFinalCS).
     const bool engine = per_pixel && engine_slot(index, width, height);
-    c.flags = (reproject ? 1u : 0u) | (show_lighting_ ? 2u : 0u) | (physical_active_ ? 4u : 0u) |
+    c.flags = (reproject ? 1u : 0u) | (show_lighting_ ? 2u : 0u) | (info.physical ? 4u : 0u) |
               (per_pixel ? 8u : 0u) | (surface_reflections_active() ? 16u : 0u) | (engine ? 32u : 0u);
     if (engine) {
         c.sample_size[0] = width;
@@ -5243,12 +5266,13 @@ void SceneRayTracer::bind_engine_end(ID3D12GraphicsCommandList* list, D3D12_GPU_
     list->SetComputeRootUnorderedAccessView(kLightReservoirOut, scratch);
 }
 
-void SceneRayTracer::note_mist(const float centre[3], float sigma, float depth) {
+void SceneRayTracer::note_mist(const float centre[3], float sigma, float depth, float white) {
     if (mist_puffs_.size() >= static_cast<std::size_t>(kMistMost) * 8u || !(sigma > 0.0f) || !(depth > 0.0f) ||
         !std::isfinite(centre[0] + centre[1] + centre[2] + sigma + depth)) {
         return;
     }
-    mist_puffs_.insert(mist_puffs_.end(), {centre[0], centre[1], centre[2], sigma, depth, 0.0f, 0.0f, 0.0f});
+    mist_puffs_.insert(mist_puffs_.end(),
+                       {centre[0], centre[1], centre[2], sigma, depth, std::clamp(white, 0.0f, 1.0f), 0.0f, 0.0f});
 }
 
 void SceneRayTracer::trace_mist(ID3D12GraphicsCommandList* list, Allocate allocate, void* allocate_context,
@@ -5564,7 +5588,10 @@ void SceneRayTracer::write_reprojection(ID3D12GraphicsCommandList* list, const s
     std::memcpy(reproject_mapped_ + offset, rows, sizeof(rows));
     to_state(list, reproject_.Get(), reproject_state_, D3D12_RESOURCE_STATE_COPY_DEST);
     list->CopyBufferRegion(reproject_.Get(), 0u, reproject_upload_.Get(), offset, sizeof(rows));
-    to_state(list, reproject_.Get(), reproject_state_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    // Read by the composites (pixel) and the camera's shafts (compute) of the replay that follows, which is recorded
+    // once for every sub-frame of its sequence and so takes it in this state without a transition of its own.
+    to_state(list, reproject_.Get(), reproject_state_,
+             D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 }
 
 bool SceneRayTracer::fill_constants(const RtSources& sources, Allocate allocate, void* allocate_context,

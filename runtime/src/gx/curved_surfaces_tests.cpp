@@ -125,6 +125,39 @@ int main() {
         passed &= expect(plank_flat, "a soft-shaded plank does not puff into a pillow");
     }
     {
+        // An octagonal prism shaded round (the art's coarse rings and barrels): its side faces at 45 degrees round.
+        constexpr int kSides = 8;
+        std::vector<Vec3> positions;
+        std::vector<Vec3> normals;
+        std::vector<Corner> corners;
+        for (int ring = 0; ring < 2; ++ring) {
+            for (int i = 0; i < kSides; ++i) {
+                const float a = 6.2831853f * static_cast<float>(i) / kSides;
+                positions.push_back({100.0f * std::cos(a), ring == 0 ? 100.0f : 0.0f, 100.0f * std::sin(a)});
+            }
+        }
+        for (int i = 0; i < kSides; ++i) {
+            const float a = 6.2831853f * static_cast<float>(i) / kSides;
+            normals.push_back({std::cos(a), 0.0f, std::sin(a)});
+        }
+        const auto c = [](int pos, int nrm) {
+            return Corner{static_cast<std::uint16_t>(pos), static_cast<std::uint16_t>(nrm)};
+        };
+        for (int i = 0; i < kSides; ++i) {
+            const int j = (i + 1) % kSides;
+            corners.insert(corners.end(), {c(i, i), c(j, j), c(kSides + j, j)});
+            corners.insert(corners.end(), {c(i, i), c(kSides + j, j), c(kSides + i, i)});
+        }
+        const std::vector<Vec3> n = displacement_normals(positions, normals, corners);
+        bool round = n.size() == positions.size();
+        for (int i = 0; i < kSides && round; ++i) {
+            const float a = 6.2831853f * static_cast<float>(i) / kSides;
+            round = std::fabs(n[static_cast<std::size_t>(i)][0] - std::cos(a)) < 1e-3f &&
+                    std::fabs(n[static_cast<std::size_t>(i)][2] - std::sin(a)) < 1e-3f;
+        }
+        passed &= expect(round, "an octagonal prism shaded round rounds");
+    }
+    {
         // A fold: one triangle drawn on both sides (opposite normals, shared positions) bends as a smooth surface.
         const std::vector<Vec3> positions = {{0, 0, 0}, {1, 0, 0}, {0, 1, 0}};
         const std::vector<Vec3> normals = {{0, 0, 1}, {0, 0, -1}};
