@@ -953,6 +953,8 @@ private:
     std::uint64_t interp_late_slots_ = 0;   // slots a stall skipped
     std::uint64_t interp_superseded_ = 0;   // frames replaced before their own slot
     void supersede_interp_sequence();
+    // GALAXY_INTERP_TIMELINE=<file> (test hook): one line per present while interpolating (pacing checks).
+    void note_interp_timeline(std::int64_t slot, double t, bool real);
     void start_interp_sequence(std::uint32_t xfb_addr);
     void select_interp_before();
     // B22: sub-frames per game frame within the GPU budget (interp_gpu_governor).
