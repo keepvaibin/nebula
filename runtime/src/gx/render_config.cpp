@@ -643,4 +643,28 @@ bool save_render_config_to_file() {
     return true;
 }
 
+void record_render_adapter(const wchar_t* description, unsigned vendor_id, unsigned device_id,
+                           bool low_power_preference) noexcept {
+    try {
+        const std::filesystem::path config = config_path();
+        if (config.empty() || description == nullptr) {
+            return;
+        }
+        char name[256]{};
+        WideCharToMultiByte(CP_UTF8, 0, description, -1, name, static_cast<int>(sizeof(name) - 1), nullptr,
+                            nullptr);
+        for (char& c : name) {
+            if (c == '\r' || c == '\n') c = ' ';
+        }
+        std::ostringstream contents;
+        contents.imbue(std::locale::classic());
+        contents << "description=" << name << '\n'
+                 << "vendor_id=" << vendor_id << '\n'
+                 << "device_id=" << device_id << '\n'
+                 << "gpu_preference=" << (low_power_preference ? "low" : "high") << '\n';
+        static_cast<void>(io::write_text_file_atomically(config.parent_path() / L"adapter.ini", contents.str()));
+    } catch (...) {
+    }
+}
+
 }  // namespace galaxy::gx

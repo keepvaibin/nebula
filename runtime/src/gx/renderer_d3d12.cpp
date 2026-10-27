@@ -4831,6 +4831,8 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
         // validity flag as well.
         g_selected_adapter_desc = adapter_desc;
         g_selected_adapter_valid = true;
+        record_render_adapter(adapter_desc.Description, adapter_desc.VendorId, adapter_desc.DeviceId,
+                              adapter_preference() == DXGI_GPU_PREFERENCE_MINIMUM_POWER);
         (void)adapter.As(&adapter3_);
         {
             char narrow[128]{};
@@ -9555,7 +9557,7 @@ void RendererD3D12::record_subframe_upscale(const ReplayList& entry, const Subfr
         const RenderConfig cfg = get_render_config();
         in.frame_ms = static_cast<float>(1000.0 / present_frame_rate(cfg.max_fps, cfg.vsync_interval, display_refresh_hz_));
         in.reset = time.reset || !temporal_history_valid_;
-        upscaled = temporal_->evaluate(in);
+        upscaled = temporal_inputs_match(in) && temporal_->evaluate(in);
         ID3D12DescriptorHeap* heaps[] = {srv_ring_.heap(), sampler_heap_.Get()};
         command_list_->SetDescriptorHeaps(2, heaps);
         command_list_->SetGraphicsRootSignature(root_signature_.Get());
@@ -9750,6 +9752,37 @@ void RendererD3D12::set_scene_camera(float near_plane, float far_plane, float fo
     scene_camera_[2] = fov_y;
 }
 
+// The upscaler's context was created for exactly these sizes and the resources cover them. An
+// internal-resolution change applied between a scene's start and its upscale (a render chunk
+// boundary) would otherwise dispatch past the context's maximum (FidelityFX OUT_OF_RANGE) or
+// outside the resources.
+bool RendererD3D12::temporal_inputs_match(const TemporalUpscaleInputs& in) const {
+    const auto covers = [](ID3D12Resource* resource, unsigned width, unsigned height) {
+        if (resource == nullptr) {
+            return true;
+        }
+        const D3D12_RESOURCE_DESC desc = resource->GetDesc();
+        return desc.Width >= width && desc.Height >= height;
+    };
+    const bool match =
+        in.render_width == temporal_render_w_ && in.render_height == temporal_render_h_ &&
+        in.output_width == temporal_output_w_ && in.output_height == temporal_output_h_ &&
+        covers(in.color, in.render_width, in.render_height) &&
+        covers(in.depth, in.render_width, in.render_height) &&
+        covers(in.motion, in.render_width, in.render_height) &&
+        covers(in.reactive, in.render_width, in.render_height) &&
+        covers(in.output, in.output_width, in.output_height);
+    if (!match) {
+        static std::uint64_t reported = 0u;
+        if (reported++ < 8u) {
+            std::cerr << "[temporal] skipped: " << in.render_width << 'x' << in.render_height << " -> "
+                      << in.output_width << 'x' << in.output_height << " context " << temporal_render_w_ << 'x'
+                      << temporal_render_h_ << " -> " << temporal_output_w_ << 'x' << temporal_output_h_ << '\n';
+        }
+    }
+    return match;
+}
+
 bool RendererD3D12::record_temporal_upscale(unsigned output_scale) {
     if (!scene_temporal_ || !temporal_ || !ensure_motion_target()) {
         return false;
@@ -9772,7 +9805,7 @@ bool RendererD3D12::record_temporal_upscale(unsigned output_scale) {
     in.fov_y = scene_camera_[2];
     in.frame_ms = 1000.0f / 60.0f;
     in.reset = !temporal_history_valid_;
-    const bool recorded = temporal_->evaluate(in);
+    const bool recorded = temporal_inputs_match(in) && temporal_->evaluate(in);
     // The upscaler binds its own heaps, root signature and pipelines.
     ID3D12DescriptorHeap* heaps[] = {srv_ring_.heap(), sampler_heap_.Get()};
     command_list_->SetDescriptorHeaps(2, heaps);
