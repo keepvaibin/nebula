@@ -14,6 +14,7 @@ namespace Nebula.Setup
         /// Nebula-Setup.exe [--update | --apply-update | --uninstall | --rollback]
         ///   [--input PATH] [--root PATH] [--source ZIP|DIR] [--jobs N] [--desktop-shortcut]
         ///   [--unattended] [--remove-user-data] [--accept-build-tools-license]
+        /// Nebula-Setup.exe --finish-uninstall PID --root PATH (Integration.FinishUninstall)
         /// </summary>
         [STAThread]
         private static int Main(string[] args)
@@ -24,8 +25,14 @@ namespace Nebula.Setup
                 string arg = args[i];
                 if (!arg.StartsWith("--")) continue;
                 bool hasValue = i + 1 < args.Length && !args[i + 1].StartsWith("--")
-                    && (arg == "--input" || arg == "--root" || arg == "--source" || arg == "--jobs");
+                    && (arg == "--input" || arg == "--root" || arg == "--source" || arg == "--jobs" || arg == "--finish-uninstall");
                 options[arg.Substring(2)] = hasValue ? args[++i] : "";
+            }
+            if (options.ContainsKey("finish-uninstall") && options.ContainsKey("root"))
+            {
+                int setupProcess;
+                if (int.TryParse(options["finish-uninstall"], out setupProcess)) Integration.FinishUninstall(setupProcess, options["root"]);
+                return 0;
             }
             NativeMethods.SetProcessDpiAwarenessContext(new IntPtr(-4));
             if (options.ContainsKey("unattended")) return Unattended(options);

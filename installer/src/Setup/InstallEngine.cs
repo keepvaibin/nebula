@@ -222,10 +222,10 @@ namespace Nebula.Setup
                 problems.Add("This package's runtime was built for AVX2, which this CPU does not expose. Use a package built with -NativeIsa SSE2, or install on a CPU with AVX2.");
             try
             {
-                string fs = FileUtil.FileSystemName(installRoot);
+                string fs = SystemInfo.FileSystemName(installRoot);
                 if (!string.Equals(fs, "NTFS", StringComparison.OrdinalIgnoreCase))
                     problems.Add("The install folder must be on an NTFS drive (this one is " + fs + ").");
-                long free = FileUtil.FreeBytes(installRoot);
+                long free = SystemInfo.FreeBytes(installRoot);
                 if (free < RequiredFreeBytes)
                     problems.Add("Setup needs " + FileUtil.FormatBytes(RequiredFreeBytes) + " free; the drive has " + FileUtil.FormatBytes(free) + ".");
             }
@@ -248,7 +248,7 @@ namespace Nebula.Setup
 
         public static string LowMemoryWarning()
         {
-            ulong memory = NativeMethods.TotalPhysicalMemory();
+            ulong memory = SystemInfo.TotalPhysicalMemory();
             if (memory >= MinimumMemory) return null;
             return "This PC has " + FileUtil.FormatBytes((long)memory) + " of RAM. Nebula is designed for 8 GB or more.\r\n\r\n" +
                 "Installing with less is experimental: compiling the game takes much longer, and the game may stutter, " +
@@ -260,7 +260,7 @@ namespace Nebula.Setup
         /// <summary>One compiler per thread, limited to about 1 GB of RAM each beyond 3 GB for Windows.</summary>
         public static int DefaultCompileJobs()
         {
-            double gigabytes = NativeMethods.TotalPhysicalMemory() / (double)(1UL << 30);
+            double gigabytes = SystemInfo.TotalPhysicalMemory() / (double)(1UL << 30);
             int byMemory = (int)Math.Floor(gigabytes - 3);
             return Math.Max(1, Math.Min(Math.Min(Environment.ProcessorCount, byMemory), 64));
         }
@@ -272,7 +272,7 @@ namespace Nebula.Setup
             Log("Nebula Setup " + BuildInfo.Version + " (" + BuildInfo.Commit + "), " + request.Mode);
             Log("Install folder: " + layout.Root);
             if (LowMemoryWarning() != null)
-                Log("RAM: " + FileUtil.FormatBytes((long)NativeMethods.TotalPhysicalMemory()) + ", below the 8 GB Nebula is designed for; installing as experimental.");
+                Log("RAM: " + FileUtil.FormatBytes((long)SystemInfo.TotalPhysicalMemory()) + ", below the 8 GB Nebula is designed for; installing as experimental.");
             Directory.CreateDirectory(layout.Root);
             Directory.CreateDirectory(layout.Staging);
             CleanAbandonedStaging();
@@ -802,7 +802,7 @@ namespace Nebula.Setup
 
         private int RunTool(string file, IList<string> arguments, Dictionary<string, string> env, Action<string> onLine)
         {
-            Log("> " + Path.GetFileName(file) + " " + ProcessRunner.JoinArguments(arguments));
+            Log("> " + Path.GetFileName(file) + " " + CommandLine.JoinArguments(arguments));
             using (var runner = new ProcessRunner())
                 return runner.Run(file, arguments, staging, env, onLine, cancel);
         }

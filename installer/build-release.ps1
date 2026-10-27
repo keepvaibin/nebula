@@ -35,6 +35,22 @@ if (-not $OutputDirectory) { $OutputDirectory = Join-Path $repo 'dist' }
 $work = Join-Path ([IO.Path]::GetTempPath()) ('nebula-release-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force $work, $OutputDirectory | Out-Null
 
+# Microsoft Defender's verdict on each file (a custom scan without remediation, the current signatures and cloud
+# protection): any detection stops the build with its name.
+function Assert-DefenderClean([string[]]$Files) {
+    $platform = Get-ChildItem 'C:\ProgramData\Microsoft\Windows Defender\Platform' -Directory -ErrorAction SilentlyContinue |
+        Sort-Object Name -Descending | Select-Object -First 1
+    $scanner = if ($platform) { Join-Path $platform.FullName 'MpCmdRun.exe' } else { Join-Path $env:ProgramFiles 'Windows Defender\MpCmdRun.exe' }
+    if (-not (Test-Path -LiteralPath $scanner)) { throw 'Microsoft Defender (MpCmdRun.exe) is required to build a release.' }
+    foreach ($file in $Files) {
+        $output = & $scanner -Scan -ScanType 3 -File $file -DisableRemediation 2>&1
+        if ($LASTEXITCODE -ne 0 -or -not ($output -match 'found no threats')) {
+            throw ("Microsoft Defender flagged {0}: {1}" -f $file, (($output | Out-String).Trim()))
+        }
+        Write-Host "Defender: no threats in $(Split-Path -Leaf $file)"
+    }
+}
+
 function Invoke-Checked([string]$File, [string[]]$Arguments) {
     & $File @Arguments
     if ($LASTEXITCODE -ne 0) { throw "$File failed with exit code $LASTEXITCODE" }
@@ -86,7 +102,38 @@ try {
     # 2. nebula-recomp from the exported tree, statically linked C runtime.
     $cargo = Join-Path $env:USERPROFILE '.cargo\bin\cargo.exe'
     if (-not (Test-Path $cargo)) { $cargo = 'cargo' }
-    $env:RUSTFLAGS = '-C target-feature=+crt-static'
+    # File details (VERSIONINFO) for nebula-recomp.exe, linked in as a compiled resource: a program without them is
+    # one more trait antivirus models weigh against unknown files.
+    $numericVersion = (($Version -replace '-.*$', '') + '.0.0.0').Split('.')[0..3] -join '.'
+    $recompRc = Join-Path $work 'nebula-recomp.rc'
+    $recompRes = Join-Path $work 'nebula-recomp.res'
+    [IO.File]::WriteAllText($recompRc, @"
+1 ICON "$((Join-Path $src 'installer\assets\nebula.ico').Replace('\', '\\'))"
+1 VERSIONINFO
+FILEVERSION $($numericVersion.Replace('.', ','))
+PRODUCTVERSION $($numericVersion.Replace('.', ','))
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904b0"
+    BEGIN
+      VALUE "CompanyName", "keepvaibin"
+      VALUE "FileDescription", "Nebula game converter (used by Nebula Setup)"
+      VALUE "FileVersion", "$Version"
+      VALUE "LegalCopyright", "Copyright 2026 keepvaibin"
+      VALUE "OriginalFilename", "nebula-recomp.exe"
+      VALUE "ProductName", "Nebula"
+      VALUE "ProductVersion", "$Version"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1200
+  END
+END
+"@, (New-Object Text.UTF8Encoding $false))
+    Invoke-Checked rc.exe @('/nologo', "/fo$recompRes", $recompRc)
+    $env:RUSTFLAGS = "-C target-feature=+crt-static -C link-arg=$recompRes"
     $env:CARGO_TARGET_DIR = Join-Path $work 'target'
     Push-Location $src
     try { Invoke-Checked $cargo @('build', '--release', '--locked', '-p', 'nebula-recomp') } finally { Pop-Location; Remove-Item Env:RUSTFLAGS }
@@ -135,6 +182,7 @@ namespace Nebula
     internal static class BuildInfo
     {
         public const string Version = "$Version";
+        public const string FileVersion = "$numericVersion";
         public const string Commit = "$resolved";
         public const string Repository = "$Repository";
         public const string ReleasePublicKeyXml = "$($publicKey.Replace('"', '\"'))";
@@ -151,11 +199,11 @@ namespace Nebula
     $iconFile = Join-Path $src 'installer\assets\nebula.ico'
     $launcherSources = @(Get-ChildItem (Join-Path $src 'installer\src\Launcher\*.cs') | ForEach-Object FullName)
     $launcher = Join-Path $work 'Nebula.exe'
-    Invoke-Checked $csc (@('/nologo', '/target:winexe', '/platform:x64', '/optimize+', "/win32manifest:$manifestFile", "/win32icon:$iconFile", "/out:$launcher") + $references + $common +
+    Invoke-Checked $csc (@('/nologo', '/deterministic', '/target:winexe', '/platform:x64', '/optimize+', "/win32manifest:$manifestFile", "/win32icon:$iconFile", "/out:$launcher") + $references + $common +
         $launcherSources)
     # Same program; always opens the settings window instead of the game.
     $settingsApp = Join-Path $work 'NebulaSettings.exe'
-    Invoke-Checked $csc (@('/nologo', '/target:winexe', '/platform:x64', '/optimize+', '/define:NEBULA_SETTINGS_APP', "/win32manifest:$manifestFile", "/win32icon:$iconFile", "/out:$settingsApp") + $references + $common +
+    Invoke-Checked $csc (@('/nologo', '/deterministic', '/target:winexe', '/platform:x64', '/optimize+', '/define:NEBULA_SETTINGS_APP', "/win32manifest:$manifestFile", "/win32icon:$iconFile", "/out:$settingsApp") + $references + $common +
         $launcherSources)
 
     $resources = @{
@@ -208,8 +256,12 @@ namespace Nebula
     # assets separate even for those clients.
     $setupName = if ($Version -match '-beta\.') { 'Nebula-Beta-Setup.exe' } else { 'Nebula-Setup.exe' }
     $setup = Join-Path $OutputDirectory $setupName
-    Invoke-Checked $csc (@('/nologo', '/target:winexe', '/platform:x64', '/optimize+', "/win32manifest:$manifestFile", "/win32icon:$iconFile", "/out:$setup") + $references + $resourceArgs + $common +
+    # Every program it carries passes Microsoft Defender first (MpCmdRun, no remediation): a detection stops the release.
+    Assert-DefenderClean @($resources.Values | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
+    Invoke-Checked $csc (@('/nologo', '/deterministic', '/target:winexe', '/platform:x64', '/optimize+', "/win32manifest:$manifestFile", "/win32icon:$iconFile", "/out:$setup") + $references + $resourceArgs + $common +
         @(Get-ChildItem (Join-Path $src 'installer\src\Setup\*.cs') | ForEach-Object FullName))
+
+    Assert-DefenderClean @($setup)
 
     # 5. Signature and checksums.
     $setupHash = (Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash.ToLowerInvariant()

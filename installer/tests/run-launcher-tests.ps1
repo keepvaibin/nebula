@@ -14,6 +14,7 @@ $stub = Join-Path $scratch 'BuildInfo.cs'
 @"
 namespace Nebula { internal static class BuildInfo {
  public const string Version="0.0.0-test";
+ public const string FileVersion="0.0.0.0";
  public const string Commit="test";
  public const string Repository="keepvaibin/nebula";
  public const string ReleasePublicKeyXml="";
