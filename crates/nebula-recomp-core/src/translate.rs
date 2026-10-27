@@ -7676,14 +7676,6 @@ fn emit_direct_guest_call_with_exact_fpu(
         if target == 0x804D_0830 {
             output.push_str(&site_hook_call(pc, "Language", 0));
         }
-        // TalkTextFormer::updateTalking reveals one step of a talk balloon's
-        // (TalkBalloon, former at r31 + 0x24) or Rosalina's storybook text
-        // (RosettaMonologue, former at r30 + 0x24) per frame; the runtime
-        // repeats it for the text speed setting. Movie subtitles keep the
-        // movie's pace.
-        if target == 0x802A_367C && (pc == 0x8029_D1A8 || pc == 0x8028_2B38) {
-            output.push_str(&site_hook_call(pc, "TextStep", u32::from(pc == 0x8028_2B38)));
-        }
         Ok(())
     }
 
@@ -14453,6 +14445,23 @@ mod tests {
         assert!(!lower_instruction_fixture(0x8034_1038, &words).contains(hook));
         words[(0x8034_10AC - 0x8034_103C) / 4] = 0x807F_0030;
         assert!(!lower_instruction_fixture(0x8034_103C, &words).contains(hook));
+    }
+
+    #[test]
+    fn rmge01_text_step_and_language_hooks_follow_each_call_once() {
+        let entries = BTreeMap::from([(0x802A_367C, 0x802A_367C), (0x804D_0830, 0x804D_0830)]);
+        for (target, pc, kind, argument) in [
+            (0x802A_367C, 0x8029_D1A8, "TextStep", 0),
+            (0x802A_367C, 0x8028_2B38, "TextStep", 1),
+            (0x804D_0830, 0x8039_EF78, "Language", 0),
+        ] {
+            let mut out = String::new();
+            emit_direct_guest_call(&mut out, target, pc, Some(&entries)).unwrap();
+            let hook = format!(
+                "galaxy::site_hook(services, context, memory, 0x{pc:08X}u, galaxy::SiteHookKind::{kind}, {argument}u);"
+            );
+            assert_eq!(out.matches(&hook).count(), 1, "{out}");
+        }
     }
 
     #[test]
