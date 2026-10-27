@@ -2947,14 +2947,27 @@ void EngineTemporalCS(uint3 id : SV_DispatchThreadID)
     // Variance from the moments; a short history takes the spatial neighbourhood's instead (SVGF).
     float variance = max(moments.y - moments.x * moments.x, 0.0f);
     if (len_d < 4.0f) {
+        // The spatial variance of the signal filtered, the lights' direct light and the bounce's (outdoors nearly all
+        // of it: the sun's own light joins in EngineFinalCS), over the 3 x 3 of the bounce's own samples. By the direct
+        // light alone a disocclusion's one-sample bounce noise (the ground a running character uncovers) read as none,
+        // and the a-trous's edge-stopping kept its speckle.
+        RWByteAddressBuffer gi = engine_buffer(kEvGiOut);
+        const uint2 half_size = g_engine_size.zw;
+        const int step = int(gi_step());
         float s1 = 0.0f;
         float s2 = 0.0f;
         float n = 0.0f;
         [unroll] for (int j = -1; j <= 1; ++j) {
             [unroll] for (int i = -1; i <= 1; ++i) {
-                const int2 o = clamp(q + int2(i, j), int2(0, 0), int2(g_target_size) - 1);
+                const int2 o = clamp(q + int2(i, j) * step, int2(0, 0), int2(g_target_size) - 1);
                 const uint4 ndv = direct.Load4((uint(o.y) * g_target_size.x + uint(o.x)) * 16u);
-                const float l = luminance(float3(f16tof32(ndv.x), f16tof32(ndv.x >> 16u), f16tof32(ndv.y)));
+                float3 c = float3(f16tof32(ndv.x), f16tof32(ndv.x >> 16u), f16tof32(ndv.y));
+                const int2 h = min(o / step, int2(half_size) - 1);
+                const uint2 v = gi.Load2((uint(h.y) * half_size.x + uint(h.x)) * 8u);
+                if ((v.y >> 31u) != 0u) {
+                    c += float3(f16tof32(v.x), f16tof32(v.x >> 16u), f16tof32(v.y & 0xFFFFu));
+                }
+                const float l = luminance(safe_light(c));
                 s1 += l;
                 s2 += l * l;
                 n += 1.0f;
