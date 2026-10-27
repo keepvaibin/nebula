@@ -6017,8 +6017,22 @@ void RendererD3D12::record_interp_eval(const SubframeTime& time, const Affine34&
                                        const Affine34& camera_prev) {
     transition_interp_output(D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     transition_blend_verdicts(D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    // The ray-traced occlusion of the replayed frame follows this sub-frame's camera.
-    ray_tracer_->write_reprojection(command_list_.Get(), camera_t);
+    // The ray-traced lighting of the replayed frame follows this sub-frame's camera, and the composites rebuild its
+    // points with the view its depth is drawn with: its projection at t with this frame's jitter in it, as
+    // GxBackend::scene_depth_view gives a traced frame's (the draws add the jitter in clip space, x + jx w: the
+    // projection's B becomes B - jx, D becomes D - jy).
+    RtView own_view{};
+    const bool own_known = time.projection_known && time.viewport_width > 0.0f && time.viewport_height > 0.0f;
+    if (own_known) {
+        constexpr float kFarEps = 1.0f - 1e-7f;  // fill_vs_projection's
+        const std::array<float, 6>& p = time.projection;
+        own_view.projection = {p[0], p[1] - 2.0f * time.jitter_x / time.viewport_width, p[2],
+                               p[3] + 2.0f * time.jitter_y / time.viewport_height};
+        own_view.z_scale = -p[4] * kFarEps;
+        own_view.z_offset = -p[5] * kFarEps;
+        own_view.jitter = {time.jitter_x, time.jitter_y};
+    }
+    ray_tracer_->write_reprojection(command_list_.Get(), camera_t, own_known ? &own_view : nullptr);
     const bool last = time.t >= 1.0f;
     InterpEvalFrame frame{};
     std::memcpy(frame.camera, camera_t.data(), sizeof(frame.camera));

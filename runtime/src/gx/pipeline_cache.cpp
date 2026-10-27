@@ -736,6 +736,20 @@ ID3D12PipelineState* PipelineCache::get(
     }
     last_get_used_uber_ = false;
     seen_samples_mask_ |= static_cast<std::uint8_t>(1u << key.render_state.samples_log2);
+    // GALAXY_TEST_UBER_ONLY=1: a draw whose render state has an uber pipeline always draws with it, never with its
+    // specialization: what a draw shows on the frames its specialization compiles, held on every frame.
+    static const bool uber_only = [] {
+        char value[8]{};
+        std::size_t length = 0u;
+        return getenv_s(&length, value, sizeof(value), "GALAXY_TEST_UBER_ONLY") == 0 && length > 1u && value[0] == '1';
+    }();
+    if (uber_only && uber_enabled_) [[unlikely]] {
+        if (ID3D12PipelineState* uber = uber_pipeline(flat_render_state(key.render_state), uber_ps_variant(ps_key))) {
+            last_get_used_uber_ = true;
+            ++uber_resolutions_;
+            return uber;
+        }
+    }
     // One-entry memo of the last resolution. published_ never loses an entry during a session,
     // so a memo hit returns what the map probe would. The hash is compared first; a collision
     // falls through to the full key comparison.

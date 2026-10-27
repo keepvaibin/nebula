@@ -2953,6 +2953,25 @@ struct CompositeOut
     float4 keep : SV_Target1;
 };
 
+// m_reproject after the slots' rows (4 x 3): a sub-frame's own view (SceneRayTracer::write_reprojection): its
+// projection as m_projection's (its jitter in) and its depth's z_scale, z_offset, known.
+static const uint kSubframeView = 12u;
+
+// The view the pixel's own depth was drawn with (projection as m_projection, depth terms as m_depth): a sub-frame's
+// when its point moves to the traced frame (m_flags bit 0), else the traced frame's (rt_lighting.hlsl own_view).
+void own_view(out float4 projection, out float4 depth)
+{
+    projection = m_projection;
+    depth = m_depth;
+    if ((m_flags & 1u) != 0u) {
+        const float4 terms = m_reproject[kSubframeView + 1u];
+        if (terms.z != 0.0f) {
+            projection = m_reproject[kSubframeView];
+            depth = float4(terms.xy, m_depth.zw);
+        }
+    }
+}
+
 float4 class_params(uint c)
 {
     const uint4 row = m_class[min(c, kFallingWater) >> 1u];
@@ -3136,12 +3155,15 @@ bool tiles_reflect(float2 pixel)
 
 CompositeOut ReflectCompositePS(float4 position : SV_Position)
 {
+    float4 own_projection;
+    float4 own_depth;
+    own_view(own_projection, own_depth);
     const float depth = m_efb_depth.Load(int3(int2(position.xy), 0));
-    if (far_plane(m_depth, depth) || !inside(m_viewport, position.xy) || position.x < m_split + 1.0f) {
+    if (far_plane(own_depth, depth) || !inside(m_viewport, position.xy) || position.x < m_split + 1.0f) {
         discard;
     }
-    const float z = depth_to_eye_z(m_depth, depth);
-    float3 p = eye_position(m_projection, m_viewport, position.xy, z);
+    const float z = depth_to_eye_z(own_depth, depth);
+    float3 p = eye_position(own_projection, m_viewport, position.xy, z);
     if ((m_flags & 1u) != 0u) {
         const uint row = m_slot * 3u;
         const float4 rows[3] = {m_reproject[row], m_reproject[row + 1u], m_reproject[row + 2u]};
@@ -3373,7 +3395,10 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
     if (z == 0.0f) {
         discard;
     }
-    const float3 here = eye_position(m_projection, m_viewport, position.xy, z);
+    float4 own_projection;
+    float4 own_depth;
+    own_view(own_projection, own_depth);
+    const float3 here = eye_position(own_projection, m_viewport, position.xy, z);
     float3 p = here;
     if ((m_flags & 1u) != 0u) {
         const uint row = m_slot * 3u;
@@ -3390,7 +3415,8 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
         p = eye_position(m_projection, m_viewport, pixel, z);
     }
     const float depth = m_efb_depth.Load(int3(int2(position.xy), 0));
-    const bool behind = !far_plane(m_depth, depth) && depth_to_eye_z(m_depth, depth) > here.z + abs(here.z) * 0.003f + 1.0f;
+    const bool behind =
+        !far_plane(own_depth, depth) && depth_to_eye_z(own_depth, depth) > here.z + abs(here.z) * 0.003f + 1.0f;
     const uint view = (m_flags >> 1u) & 7u;
     if (view == 3u) {
         CompositeOut found;
@@ -3617,8 +3643,11 @@ CompositeOut UnderwaterPS(float4 position : SV_Position)
     const float3 t2 = cross(world_up, t1);
 
     const float depth = m_efb_depth.Load(int3(int2(position.xy), 0));
-    const bool sky = far_plane(m_depth, depth);
-    float3 p = eye_position(m_projection, m_viewport, position.xy, sky ? -4000.0f : depth_to_eye_z(m_depth, depth));
+    float4 own_projection;
+    float4 own_depth;
+    own_view(own_projection, own_depth);
+    const bool sky = far_plane(own_depth, depth);
+    float3 p = eye_position(own_projection, m_viewport, position.xy, sky ? -4000.0f : depth_to_eye_z(own_depth, depth));
     if ((m_flags & 1u) != 0u) {
         const uint row = m_slot * 3u;
         const float4 rows[3] = {m_reproject[row], m_reproject[row + 1u], m_reproject[row + 2u]};

@@ -818,6 +818,7 @@ private:
     // The view of a perspective scene draw for ambient occlusion: its projection with the upscaler's jitter, depth
     // range and viewport (the ray tracer's RtView).
     [[nodiscard]] RtView scene_depth_view(const ScaledGxViewport& viewport) const;
+    void note_interp_rt_projection();
     void note_scene_ao_view(const DrawCall& call);
     // The scene's occlusion, once, before its first translucent phase (or at its end).
     void apply_scene_ao();
@@ -1053,6 +1054,11 @@ private:
         // The game camera (world to eye) of the scene.
         Affine34 view{};
         bool view_known = false;
+        // The projection the ray tracer took the scene's view from (GX A, B, C, D, E, F without the temporal jitter)
+        // and its viewport's size in EFB pixels: sub-frames interpolate it (SubframeTime::projection).
+        std::array<float, 6> rt_projection{};
+        float rt_viewport[2]{};
+        bool rt_projection_known = false;
         bool valid = false;
         std::uint64_t serial = 0;               // replay serial of its log (0: none)
         // Per record: draw phase and category (galaxy/motion_signals.h).
@@ -1078,6 +1084,7 @@ private:
             palette.clear(); per_vertex.clear(); palette_count = 0; valid = false; serial = 0;
             ps_constants.clear();
             category.clear(); camera_epoch_known = false;
+            rt_projection_known = false;
             layers = {};
         }
     };

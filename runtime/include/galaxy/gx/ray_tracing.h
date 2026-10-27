@@ -214,8 +214,12 @@ public:
     void composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
                    D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, D3D12_GPU_DESCRIPTOR_HANDLE color_srv, std::uint32_t width,
                    std::uint32_t height, int slot, bool reproject, unsigned efb_scale);
-    // Before a sub-frame's replay: its camera (world to eye at t), for the composites it runs.
-    void write_reprojection(ID3D12GraphicsCommandList* list, const std::array<float, 12>& camera_t);
+    // Before a sub-frame's replay: its camera (world to eye at t) and the view its depth is drawn with (`own_view`:
+    // projection with the jitter in and depth terms, as scene_depth_view gives a traced frame's; null: the traced
+    // frame's), for the composites it runs: they rebuild its points with its own view and take them to the traced frame
+    // with the slot's.
+    void write_reprojection(ID3D12GraphicsCommandList* list, const std::array<float, 12>& camera_t,
+                            const RtView* own_view);
     // At the scene's end: its finished picture (EFB colour and depth, NON_PIXEL_SHADER_RESOURCE, two
     // consecutive SRVs at `color_depth_table` in the bound heap) becomes the light the next frame's rays
     // read where they hit, and the glows drawn since the trace become lights (their eye-space triangles,

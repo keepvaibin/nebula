@@ -3289,6 +3289,28 @@ StructuredBuffer<uint4> m_pixels : register(t4);
 Texture2D<float4> m_layer_color : register(t5);
 Texture2D<float4> m_layer_trans : register(t6);
 
+// m_reproject after the slots' rows (4 x 3): a sub-frame's own view (SceneRayTracer::write_reprojection): its
+// projection as m_projection's (its jitter in) and its depth's z_scale, z_offset, known.
+static const uint kSubframeView = 12u;
+
+// The view the pixel's own depth was drawn with (projection as m_projection, depth terms as m_depth): a sub-frame's
+// when its point moves to the traced frame (m_flags bit 0), else the traced frame's. A sub-frame draws with its
+// projection at t and its own jitter; rebuilt with the traced frame's, its points would sit off their surfaces by the
+// difference (the game's camera shake, a zoom, the jitter), far enough on a grazing surface to miss the traced
+// frame's depth there and lose its light.
+void own_view(out float4 projection, out float4 depth)
+{
+    projection = m_projection;
+    depth = m_depth;
+    if ((m_flags & 1u) != 0u) {
+        const float4 terms = m_reproject[kSubframeView + 1u];
+        if (terms.z != 0.0f) {
+            projection = m_reproject[kSubframeView];
+            depth = float4(terms.xy, m_depth.zw);
+        }
+    }
+}
+
 // The frame at pixel `q` without the effects drawn over it (B = (F - L) / T, m_flags bit 6); where they let almost
 // nothing through, the frame as it is.
 float3 frame_behind_effects(int2 q)
@@ -3365,7 +3387,7 @@ float star_mu(float3 p, uint star)
 // Past full brightness it keeps its hue and the excess whitens it a little.
 static const float kStarDetail = 1.0f;
 
-float3 star_surface(int2 c, float z, float mu, float3 color)
+float3 star_surface(int2 c, float z, float mu, float3 color, float4 depth_terms)
 {
     // Its neighbourhood 3 game pixels around at every internal resolution (at a fixed 3 EFB pixels a high internal
     // resolution loses the texture's contrast), on its own surface only (what stands in front, a ring or a
@@ -3377,7 +3399,7 @@ float3 star_surface(int2 c, float z, float mu, float3 color)
     float count = 0.0f;
     [unroll] for (uint k = 0u; k < 8u; ++k) {
         const int2 q = c + ring[k] * r;
-        if (abs(depth_to_eye_z(m_depth, m_efb_depth.Load(int3(q, 0))) - z) < limit) {
+        if (abs(depth_to_eye_z(depth_terms, m_efb_depth.Load(int3(q, 0))) - z) < limit) {
             around += m_color.Load(int3(q, 0)).rgb;
             count += 1.0f;
         }
@@ -3405,11 +3427,14 @@ CompositeOut ClearCompositePS(float4 position : SV_Position)
     }
     int2 traced = c;
     if ((m_flags & 1u) != 0u) {
+        float4 own_projection;
+        float4 own_depth;
+        own_view(own_projection, own_depth);
         const float depth = m_efb_depth.Load(int3(c, 0));
-        const float z = far_plane(m_depth, depth) ? -1.0e5f : depth_to_eye_z(m_depth, depth);
+        const float z = far_plane(own_depth, depth) ? -1.0e5f : depth_to_eye_z(own_depth, depth);
         const uint row = m_slot * 3u;
         const float4 rows[3] = {m_reproject[row], m_reproject[row + 1u], m_reproject[row + 2u]};
-        const float3 p = transform(rows, eye_position(m_projection, m_viewport, position.xy, z));
+        const float3 p = transform(rows, eye_position(own_projection, m_viewport, position.xy, z));
         if (p.z >= -m_near) {
             discard;
         }
@@ -3522,8 +3547,11 @@ CompositeOut MistCompositePS(float4 position : SV_Position)
         discard;
     }
     const float depth = m_efb_depth.Load(int3(q, 0));
-    const bool open = far_plane(m_depth, depth);
-    float3 p = eye_position(m_projection, m_viewport, position.xy, open ? -1.0e5f : depth_to_eye_z(m_depth, depth));
+    float4 own_projection;
+    float4 own_depth;
+    own_view(own_projection, own_depth);
+    const bool open = far_plane(own_depth, depth);
+    float3 p = eye_position(own_projection, m_viewport, position.xy, open ? -1.0e5f : depth_to_eye_z(own_depth, depth));
     float3 o = float3(0.0f, 0.0f, 0.0f);
     if ((m_flags & 1u) != 0u) {
         const uint row = m_slot * 3u;
@@ -3624,13 +3652,18 @@ float4 CompositeVS(uint id : SV_VertexID) : SV_Position
 
 CompositeOut CompositePS(float4 position : SV_Position)
 {
+    // This pixel's own view (a sub-frame's: own_view); the traced frame's projection (m_projection) takes its point
+    // into the traced frame's samples.
+    float4 own_projection;
+    float4 own_depth;
+    own_view(own_projection, own_depth);
     const float depth = m_efb_depth.Load(int3(int2(position.xy), 0));
-    const float z = depth_to_eye_z(m_depth, depth);
+    const float z = depth_to_eye_z(own_depth, depth);
     const float slope = min(abs(ddx(z)) + abs(ddy(z)), abs(z) * 0.05f);
     CompositeOut result;
     const float3 color = m_color.Load(int3(int2(position.xy), 0)).rgb;
     result.color = float4(color, 1.0f);
-    if (far_plane(m_depth, depth) || !inside(m_viewport, position.xy)) {
+    if (far_plane(own_depth, depth) || !inside(m_viewport, position.xy)) {
         if ((m_flags & 2u) != 0u) {
             result.color = float4(0.5f, 0.5f, 0.5f, 1.0f);
             return result;
@@ -3644,7 +3677,7 @@ CompositeOut CompositePS(float4 position : SV_Position)
         result.color = float4(color * 0.3f, 1.0f);
         return result;
     }
-    float3 p = eye_position(m_projection, m_viewport, position.xy, z);
+    float3 p = eye_position(own_projection, m_viewport, position.xy, z);
     const float3 here = p;
     if ((m_flags & 1u) != 0u) {
         const uint row = m_slot * 3u;
@@ -3660,10 +3693,10 @@ CompositeOut CompositePS(float4 position : SV_Position)
     float2 gradient;
     {
         const int2 c = int2(position.xy);
-        const float zr = depth_to_eye_z(m_depth, m_efb_depth.Load(int3(c + int2(1, 0), 0)));
-        const float zl = depth_to_eye_z(m_depth, m_efb_depth.Load(int3(c - int2(1, 0), 0)));
-        const float zd = depth_to_eye_z(m_depth, m_efb_depth.Load(int3(c + int2(0, 1), 0)));
-        const float zu = depth_to_eye_z(m_depth, m_efb_depth.Load(int3(c - int2(0, 1), 0)));
+        const float zr = depth_to_eye_z(own_depth, m_efb_depth.Load(int3(c + int2(1, 0), 0)));
+        const float zl = depth_to_eye_z(own_depth, m_efb_depth.Load(int3(c - int2(1, 0), 0)));
+        const float zd = depth_to_eye_z(own_depth, m_efb_depth.Load(int3(c + int2(0, 1), 0)));
+        const float zu = depth_to_eye_z(own_depth, m_efb_depth.Load(int3(c - int2(0, 1), 0)));
         gradient.x = abs(zr - z) < abs(z - zl) ? zr - z : z - zl;
         gradient.y = abs(zd - z) < abs(z - zu) ? zd - z : z - zu;
         gradient = clamp(gradient, -abs(z) * 0.05f, abs(z) * 0.05f);
@@ -3801,7 +3834,7 @@ CompositeOut CompositePS(float4 position : SV_Position)
     // A star (its mark and slot from the sample on this surface: blending would mix the slots).
     if (nearest_relief < -0.5f && (m_flags & 2u) == 0u) {
         const float mu = star_mu(p, uint(round(-nearest_relief - 1.0f)));
-        result.color = float4(star_surface(int2(position.xy), z, mu, color), 1.0f);
+        result.color = float4(star_surface(int2(position.xy), z, mu, color, own_depth), 1.0f);
         return result;
     }
     if (relief > 1e-3f && m_sun.w > 0.0f) {
@@ -3811,15 +3844,15 @@ CompositeOut CompositePS(float4 position : SV_Position)
         const int2 steps[4] = {int2(1, 0), int2(-1, 0), int2(0, 1), int2(0, -1)};
         [unroll] for (uint k = 0u; k < 4u; ++k) {
             const int2 q = c + steps[k];
-            zs[k] = depth_to_eye_z(m_depth, m_efb_depth.Load(int3(q, 0)));
+            zs[k] = depth_to_eye_z(own_depth, m_efb_depth.Load(int3(q, 0)));
             hs[k] = luminance(m_color.Load(int3(q, 0)).rgb);
         }
         const float limit = abs(z) * 0.01f + 0.5f;
         const bool okx = abs(zs[0] - z) < limit && abs(zs[1] - z) < limit;
         const bool oky = abs(zs[2] - z) < limit && abs(zs[3] - z) < limit;
         if (okx && oky) {
-            const float3 px = eye_position(m_projection, m_viewport, position.xy + float2(1.0f, 0.0f), zs[0]);
-            const float3 py = eye_position(m_projection, m_viewport, position.xy + float2(0.0f, 1.0f), zs[2]);
+            const float3 px = eye_position(own_projection, m_viewport, position.xy + float2(1.0f, 0.0f), zs[0]);
+            const float3 py = eye_position(own_projection, m_viewport, position.xy + float2(0.0f, 1.0f), zs[2]);
             const float3 dpdx = px - here;
             const float3 dpdy = py - here;
             float3 nf = cross(dpdx, dpdy);

@@ -6431,8 +6431,30 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     if (!rt_view_set_) {
         renderer_.rt_set_view(scene_depth_view(viewport));
         rt_view_set_ = true;
+        note_interp_rt_projection();
     }
     return true;
+}
+
+// The recording scene's projection as the ray tracer took its view (scene_depth_view, before the jitter): its
+// sub-frames rebuild their own from it and the scene before's.
+void GxBackend::note_interp_rt_projection() {
+    if (!interp_recording_ || side_layer_ != kSceneLayer ||
+        state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) != 0u) {
+        return;
+    }
+    InterpScene& scene = interp_scenes_[interp_scene_];
+    if (!scene.valid) {
+        return;
+    }
+    for (unsigned i = 0; i < 6u; ++i) {
+        scene.rt_projection[i] = std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + i)));
+    }
+    const float scale = static_cast<float>(renderer_.efb_scale());
+    scene.rt_viewport[0] = 2.0f * std::fabs(std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(xf::kViewportBase)))) * scale;
+    scene.rt_viewport[1] =
+        2.0f * std::fabs(std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(xf::kViewportBase + 1u)))) * scale;
+    scene.rt_projection_known = true;
 }
 
 RtView GxBackend::scene_depth_view(const ScaledGxViewport& viewport) const {
@@ -7342,6 +7364,16 @@ unsigned GxBackend::interp_gpu_governor(double& rate) {
     if (configured == 0u) {
         return configured;
     }
+    // GALAXY_TEST_INTERP_SUBFRAMES=<k>: every sequence takes k sub-frames (at most the configured count), whatever the
+    // GPU's and the cadence's governors would allow: what a capped rate shows, held for a test.
+    static const std::uint64_t forced = read_env_u64("GALAXY_TEST_INTERP_SUBFRAMES", 0u);
+    if (forced != 0u) [[unlikely]] {
+        const auto subframes = static_cast<unsigned>(std::min<std::uint64_t>(forced, configured));
+        if (subframes < configured) {
+            rate = 60.0 * static_cast<double>(subframes + 1u);
+        }
+        return subframes;
+    }
     const unsigned allowed = std::min(configured, interp_cadence_cap_);
     const std::uint64_t serial = interp_sequence_serial_;
     if (serial - interp_gpu_checked_ >= 30u && serial >= interp_gpu_warm_until_) {
@@ -7691,10 +7723,13 @@ void GxBackend::advance_interp_sequence(bool flush) {
             if (snapshot.empty()) {
                 snapshot = present_snapshot_path();  // sub-frames count as presents
             }
+            // GALAXY_TEST_CAPTURE_NO_WAIT=1: a sub-frame is saved only when the last save's readback is done (else
+            // skipped), never waited for: waiting holds the CPU behind the GPU and hides what a race between them shows.
+            static const bool capture_no_wait = read_env_u64("GALAXY_TEST_CAPTURE_NO_WAIT", 0u) != 0u;
             if (!snapshot.empty()) {
                 renderer_.set_debug_capture_paths({}, snapshot);
                 renderer_.set_subframe_capture(true);
-                renderer_.set_capture_waits(true);
+                renderer_.set_capture_waits(!capture_no_wait);
             }
             // GALAXY_INTERP_FORCE_T=<0..1>: every sub-frame at that t (replay checks: 1 must
             // reproduce the frame, 0 the frame before).
@@ -8236,6 +8271,26 @@ bool GxBackend::render_interp_subframe(float t) {
     } else {
         time.reset = true;
         ++interp_history_resets_;
+    }
+    // The projection this frame's scene draws with (the evaluation's: the records' projections interpolated at t, none
+    // across a cut), so the ray tracer's composites rebuild its points from its own depth. The traced frame's projection
+    // differs from it wherever the game moves the projection between frames (a galaxy's opening camera slides its
+    // vertical offset, up to a third of the screen; camera shake is an offset too; a zoom changes its scale) and by the
+    // temporal upscaler's jitter, the renderer's to add.
+    if (scene.rt_projection_known) {
+        time.projection = scene.rt_projection;
+        time.viewport_width = scene.rt_viewport[0];
+        time.viewport_height = scene.rt_viewport[1];
+        time.projection_known = true;
+        if (t < 1.0f && before_valid && before_scene.rt_projection_known && !(interp_camera_.known && interp_camera_.cut)) {
+            for (unsigned i = 0; i < 6u; ++i) {
+                const float a = before_scene.rt_projection[i];
+                const float b = scene.rt_projection[i];
+                if (std::isfinite(a) && std::isfinite(b)) {
+                    time.projection[i] = a + (b - a) * t;
+                }
+            }
+        }
     }
     const Affine34 camera_prev = time.t_prev == t ? camera_t : camera_at(interp_camera_, time.t_prev);
     if (!renderer_.present_replay_subframe(time, camera_t, camera_prev)) {

@@ -6,6 +6,7 @@
 
 #include "galaxy/gx/interp_gpu.h"
 
+#include <array>
 #include <cstdint>
 #include <span>
 
@@ -30,6 +31,14 @@ struct SubframeTime {
     float jitter_x = 0.0f;
     float jitter_y = 0.0f;
     bool reset = false;  // the upscaler's history starts again (cut, gap)
+    // The scene camera's projection this frame draws with, as the game sets it (GX A, B, C, D, E, F, without the
+    // jitter: the two scenes' interpolated at t, as the evaluation interpolates its records'), and the viewport's size
+    // in EFB pixels its jitter is relative to. The renderer adds the jitter; the ray tracer's composites rebuild this
+    // frame's points from its depth with it (projection_known: the scene was traced).
+    std::array<float, 6> projection{};
+    float viewport_width = 0.0f;
+    float viewport_height = 0.0f;
+    bool projection_known = false;
 };
 
 struct CopyRedirectStats {

@@ -5598,25 +5598,40 @@ void SceneRayTracer::trace_reflections(ID3D12GraphicsCommandList* list, Allocate
     reflections_.trace(list, scene, slot, upload.cpu, upload.gpu, color_depth_table);
 }
 
-void SceneRayTracer::write_reprojection(ID3D12GraphicsCommandList* list, const std::array<float, 12>& camera_t) {
+void SceneRayTracer::write_reprojection(ID3D12GraphicsCommandList* list, const std::array<float, 12>& camera_t,
+                                        const RtView* own_view) {
     if (list == nullptr || !lighting_active() || !reproject_ || reproject_mapped_ == nullptr) {
         return;
     }
+    // Per slot the sub-frame's eye space into the traced frame's (3x4 rows), then the sub-frame's own view
+    // (rt_lighting.hlsl and rt_reflections.hlsl kSubframeView: projection A, B, C, D; z_scale, z_offset, known).
+    struct Entry {
+        float rows[kLightSlots][12];
+        float projection[4];
+        float depth[4];
+    };
+    static_assert(kLightSlots * 3u == 12u, "rt_lighting.hlsl and rt_reflections.hlsl kSubframeView");
+    static_assert(sizeof(Entry) <= kReprojectEntryBytes);
+    Entry entry{};
     std::array<float, 12> inverse{};
     const bool invertible = affine_inverse(camera_t, inverse);
-    float rows[kLightSlots][12]{};
     for (unsigned slot = 0; slot < kLightSlots; ++slot) {
         const LightSlot& info = light_slots_[slot];
         const std::array<float, 12> m =
             invertible && info.camera_known ? affine_multiply(info.camera, inverse) : kIdentity34;
-        std::memcpy(rows[slot], m.data(), sizeof(rows[slot]));
+        std::memcpy(entry.rows[slot], m.data(), sizeof(entry.rows[slot]));
     }
-    static_assert(sizeof(rows) <= kReprojectEntryBytes);
+    if (own_view != nullptr) {
+        std::copy(own_view->projection.begin(), own_view->projection.end(), entry.projection);
+        entry.depth[0] = own_view->z_scale;
+        entry.depth[1] = own_view->z_offset;
+        entry.depth[2] = 1.0f;
+    }
     const UINT64 offset = static_cast<UINT64>(reproject_entry_) * kReprojectEntryBytes;
     reproject_entry_ = (reproject_entry_ + 1u) % kReprojectEntries;
-    std::memcpy(reproject_mapped_ + offset, rows, sizeof(rows));
+    std::memcpy(reproject_mapped_ + offset, &entry, sizeof(entry));
     to_state(list, reproject_.Get(), reproject_state_, D3D12_RESOURCE_STATE_COPY_DEST);
-    list->CopyBufferRegion(reproject_.Get(), 0u, reproject_upload_.Get(), offset, sizeof(rows));
+    list->CopyBufferRegion(reproject_.Get(), 0u, reproject_upload_.Get(), offset, sizeof(entry));
     // Read by the composites (pixel) and the camera's shafts (compute) of the replay that follows, which is recorded
     // once for every sub-frame of its sequence and so takes it in this state without a transition of its own.
     to_state(list, reproject_.Get(), reproject_state_,
