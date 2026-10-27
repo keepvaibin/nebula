@@ -28,8 +28,10 @@ namespace detail {
 
 // Decoded vertex: one input layout for every pipeline. uv holds all eight texture coordinates;
 // mtx_indices holds the position/normal matrix index and the eight texture matrix indices
-// that the vertex shader uses to index the XF matrix palette; bend the position's displacement
-// normal for curved surfaces (curved_surfaces.h), zero where it does not bend.
+// that the vertex shader uses to index the XF matrix palette; curve what a curved surface's
+// vertex carries (curved_surfaces.h's Model): its corner's displacement normal and its place's
+// crease normal (both packed, zero for none) and its place with the first crease neighbour
+// (place | neighbour << 16); the second crease neighbour rides in mtx_indices[2]'s high half.
 struct GxVertexOut {
     float position[3];
     float normal[3];
@@ -39,7 +41,7 @@ struct GxVertexOut {
     std::uint32_t color1;           // RGBA8
     float uv[8][2];
     std::uint32_t mtx_indices[3];   // x: pn/tex0-2, y: tex3-6, z: tex7
-    float bend[3];
+    std::uint32_t curve[3];
 };
 static_assert(sizeof(GxVertexOut) == 144, "fixed 144-byte vertex stride");
 static_assert(sizeof(GxVertexOut) % 16u == 0u,

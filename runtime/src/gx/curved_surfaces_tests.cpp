@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Displacement normals and the model registry (curved_surfaces.h) on hand-built meshes.
+// The curved-surface analysis and the model registry (curved_surfaces.h) on hand-built meshes.
 #include "galaxy/gx/curved_surfaces.h"
 
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+#include <map>
 #include <vector>
 
 namespace {
 
 using galaxy::gx::curved::Corner;
+using galaxy::gx::curved::Surface;
 using galaxy::gx::curved::Vec3;
 
 bool expect(bool condition, const char* message) {
@@ -21,18 +23,72 @@ bool expect(bool condition, const char* message) {
 }
 
 float dot(const Vec3& a, const Vec3& b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+Vec3 sub(const Vec3& a, const Vec3& b) { return {a[0] - b[0], a[1] - b[1], a[2] - b[2]}; }
 bool is_zero(const Vec3& a) { return a[0] == 0.0f && a[1] == 0.0f && a[2] == 0.0f; }
+
+Corner c(int position, int normal) {
+    return Corner{static_cast<std::uint16_t>(position), static_cast<std::uint16_t>(normal)};
+}
+
+// The move Phong tessellation gives an edge's midpoint from its two ends' normals (shape factor one half).
+float midpoint_move(const Surface& s, const std::vector<Vec3>& positions, Corner a, Corner b) {
+    using galaxy::gx::curved::edge_normal;
+    const Vec3 e = sub(positions[b.position], positions[a.position]);
+    const Vec3 na = edge_normal(s, a.position, a.normal, b.position);
+    const Vec3 nb = edge_normal(s, b.position, b.normal, a.position);
+    const float ea = dot(e, na);
+    const float eb = dot(e, nb);
+    const Vec3 m{0.125f * (eb * nb[0] - ea * na[0]), 0.125f * (eb * nb[1] - ea * na[1]),
+                 0.125f * (eb * nb[2] - ea * na[2])};
+    return std::sqrt(dot(m, m));
+}
+
+// The largest move of any edge midpoint.
+float largest_move(const Surface& s, const std::vector<Vec3>& positions, const std::vector<Corner>& corners) {
+    float worst = 0.0f;
+    for (std::size_t t = 0; t + 2u < corners.size(); t += 3u) {
+        for (unsigned k = 0; k < 3u; ++k) {
+            worst = std::fmax(worst, midpoint_move(s, positions, corners[t + k], corners[t + (k + 1u) % 3u]));
+        }
+    }
+    return worst;
+}
+
+// Every edge two triangles share takes the same term of the move from each end in both: no cracks.
+bool crack_free(const Surface& s, const std::vector<Vec3>& positions, const std::vector<Corner>& corners) {
+    using galaxy::gx::curved::edge_normal;
+    std::map<std::pair<int, int>, Vec3> seen;
+    for (std::size_t t = 0; t + 2u < corners.size(); t += 3u) {
+        for (unsigned i = 0; i < 3u; ++i) {
+            for (unsigned k = 0; k < 3u; ++k) {
+                if (i == k) continue;
+                const Corner a = corners[t + i];
+                const Corner b = corners[t + k];
+                const Vec3 n = edge_normal(s, a.position, a.normal, b.position);
+                const float h = dot(sub(positions[b.position], positions[a.position]), n);
+                const Vec3 term{h * n[0], h * n[1], h * n[2]};
+                const std::pair<int, int> key{s.place[a.position], s.place[b.position]};
+                const auto [it, added] = seen.try_emplace(key, term);
+                if (!added && std::fabs(it->second[0] - term[0]) + std::fabs(it->second[1] - term[1]) +
+                                      std::fabs(it->second[2] - term[2]) > 1e-4f) {
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
+}
 
 // A warp pipe's end: a 16-sided open cylinder (radius 100, height 100, radial normals) closed on top by a flat cap
 // (normal up) that shares the rim's positions; the side and the cap each have their own normals (a hard rim).
-struct Pipe {
-    std::vector<Vec3> positions;  // 0-15 rim, 16-31 bottom ring, 32 the cap's centre
-    std::vector<Vec3> normals;    // 0-15 radial, 16 up
+struct Mesh {
+    std::vector<Vec3> positions;
+    std::vector<Vec3> normals;
     std::vector<Corner> corners;
 };
 
-Pipe pipe() {
-    Pipe p;
+Mesh pipe() {
+    Mesh p;
     constexpr int kSides = 16;
     for (int ring = 0; ring < 2; ++ring) {
         for (int i = 0; i < kSides; ++i) {
@@ -46,7 +102,6 @@ Pipe pipe() {
         p.normals.push_back({std::cos(a), 0.0f, std::sin(a)});
     }
     p.normals.push_back({0.0f, 1.0f, 0.0f});
-    const auto c = [](int pos, int nrm) { return Corner{static_cast<std::uint16_t>(pos), static_cast<std::uint16_t>(nrm)}; };
     for (int i = 0; i < kSides; ++i) {
         const int j = (i + 1) % kSides;
         // Side quad: rim i, rim j, bottom j, bottom i.
@@ -58,6 +113,31 @@ Pipe pipe() {
     return p;
 }
 
+// A box from (0,0,0) to `size`, each face its own normals, given per corner by `normal_of(position, face)`.
+template <typename NormalOf>
+Mesh box(const Vec3& size, NormalOf normal_of) {
+    Mesh m;
+    for (int i = 0; i < 8; ++i) {
+        m.positions.push_back({(i & 1) ? size[0] : 0.0f, (i & 2) ? size[1] : 0.0f, (i & 4) ? size[2] : 0.0f});
+    }
+    const int faces[6][4] = {{0, 2, 3, 1}, {4, 5, 7, 6}, {0, 4, 6, 2}, {1, 3, 7, 5}, {0, 1, 5, 4}, {2, 6, 7, 3}};
+    for (int f = 0; f < 6; ++f) {
+        int idx[4];
+        for (int k = 0; k < 4; ++k) {
+            idx[k] = static_cast<int>(m.normals.size());
+            m.normals.push_back(normal_of(m.positions[static_cast<std::size_t>(faces[f][k])], f));
+        }
+        m.corners.insert(m.corners.end(), {c(faces[f][0], idx[0]), c(faces[f][1], idx[1]), c(faces[f][2], idx[2])});
+        m.corners.insert(m.corners.end(), {c(faces[f][0], idx[0]), c(faces[f][2], idx[2]), c(faces[f][3], idx[3])});
+    }
+    return m;
+}
+
+Vec3 unit(Vec3 v) {
+    const float l = std::sqrt(dot(v, v));
+    return {v[0] / l, v[1] / l, v[2] / l};
+}
+
 }  // namespace
 
 int main() {
@@ -65,64 +145,101 @@ int main() {
     bool passed = true;
 
     {
-        const Pipe p = pipe();
-        const std::vector<Vec3> n = displacement_normals(p.positions, p.normals, p.corners);
-        bool rim_radial = true;
-        bool bottom_radial = true;
+        const Mesh p = pipe();
+        const Surface s = analyse(p.positions, p.normals, p.corners);
+        bool rim_round = true;
+        bool side_round = true;
+        bool bottom_round = true;
+        bool cap_flat = true;
         for (int i = 0; i < 16; ++i) {
+            const int j = (i + 1) % 16;
             const Vec3& radial = p.normals[static_cast<std::size_t>(i)];
-            // The rim bends in the horizontal plane only (the cap stays flat, its outline rounds).
-            rim_radial &= std::fabs(std::fabs(dot(n[static_cast<std::size_t>(i)], radial)) - 1.0f) < 1e-4f;
-            bottom_radial &= std::fabs(std::fabs(dot(n[16u + static_cast<std::size_t>(i)], radial)) - 1.0f) < 1e-4f;
+            const auto u = static_cast<std::uint16_t>(i);
+            // The rim edge bends by the ring's circle (horizontal, radial); the side by its normal; the cap's own
+            // edges stay in its plane.
+            rim_round &= std::fabs(std::fabs(dot(edge_normal(s, u, u, static_cast<std::uint16_t>(j)), radial)) - 1.0f) < 1e-4f;
+            side_round &= std::fabs(std::fabs(dot(edge_normal(s, u, u, static_cast<std::uint16_t>(16 + i)), radial)) - 1.0f) < 1e-4f;
+            bottom_round &= std::fabs(std::fabs(dot(edge_normal(s, static_cast<std::uint16_t>(16 + i), u,
+                                                                static_cast<std::uint16_t>(16 + j)), radial)) - 1.0f) < 1e-4f;
+            const Vec3 cap = edge_normal(s, u, 16u, 32u);
+            cap_flat &= std::fabs(dot(sub(p.positions[32], p.positions[static_cast<std::size_t>(i)]), cap)) < 1e-3f;
         }
-        passed &= expect(rim_radial, "a pipe's rim takes the ring's bend, horizontal");
-        passed &= expect(bottom_radial, "an open edge of a smooth side keeps its normal");
-        passed &= expect(std::fabs(n[32][1]) > 0.9999f, "the flat cap's centre keeps the cap's normal");
+        passed &= expect(rim_round, "a pipe's rim bends by the ring's circle");
+        passed &= expect(side_round, "a pipe's side bends by its own normal");
+        passed &= expect(bottom_round, "an open edge of a smooth side keeps its normal");
+        passed &= expect(cap_flat, "the flat cap's edges stay in its plane");
+        passed &= expect(crack_free(s, p.positions, p.corners), "a pipe's shared edges bend alike on both sides");
+        // A 16-gon's edge of 39.0 rounds onto its circle: the sagitta 100 (1 - cos(11.25 deg)) = 1.92.
+        const float rim = midpoint_move(s, p.positions, c(0, 0), c(1, 1));
+        passed &= expect(std::fabs(rim - 1.92f) < 0.1f, "a 16-gon's edge rounds onto its circle");
     }
     {
         // A cube: every corner meets three faces (three crease edges): nothing moves.
-        const std::vector<Vec3> positions = {{0, 0, 0}, {1, 0, 0}, {1, 1, 0}, {0, 1, 0},
-                                             {0, 0, 1}, {1, 0, 1}, {1, 1, 1}, {0, 1, 1}};
-        const std::vector<Vec3> normals = {{0, 0, -1}, {0, 0, 1}, {-1, 0, 0}, {1, 0, 0}, {0, -1, 0}, {0, 1, 0}};
-        const auto c = [](int pos, int nrm) { return Corner{static_cast<std::uint16_t>(pos), static_cast<std::uint16_t>(nrm)}; };
-        const int faces[6][4] = {{0, 3, 2, 1}, {4, 5, 6, 7}, {0, 4, 7, 3}, {1, 2, 6, 5}, {0, 1, 5, 4}, {3, 7, 6, 2}};
-        std::vector<Corner> corners;
-        for (int f = 0; f < 6; ++f) {
-            corners.insert(corners.end(), {c(faces[f][0], f), c(faces[f][1], f), c(faces[f][2], f)});
-            corners.insert(corners.end(), {c(faces[f][0], f), c(faces[f][2], f), c(faces[f][3], f)});
-        }
-        const std::vector<Vec3> n = displacement_normals(positions, normals, corners);
-        bool still = true;
-        for (const Vec3& v : n) still &= is_zero(v);
-        passed &= expect(still, "a cube's corners do not move");
-
+        const Mesh m = box({1, 1, 1}, [](const Vec3&, int f) {
+            static const Vec3 n[6] = {{0, 0, -1}, {0, 0, 1}, {-1, 0, 0}, {1, 0, 0}, {0, -1, 0}, {0, 1, 0}};
+            return n[f];
+        });
+        const Surface s = analyse(m.positions, m.normals, m.corners);
+        passed &= expect(largest_move(s, m.positions, m.corners) == 0.0f, "a cube's edges do not move");
+    }
+    {
         // The same box shaded soft: one normal per corner, averaged over its three faces. Still flat.
-        std::vector<Vec3> averaged;
-        for (const Vec3& p : positions) {
-            const float s = 0.57735027f;
-            averaged.push_back({p[0] > 0.5f ? s : -s, p[1] > 0.5f ? s : -s, p[2] > 0.5f ? s : -s});
+        const Mesh m = box({1, 1, 1}, [](const Vec3& p, int) {
+            return unit({p[0] > 0.5f ? 1.0f : -1.0f, p[1] > 0.5f ? 1.0f : -1.0f, p[2] > 0.5f ? 1.0f : -1.0f});
+        });
+        Mesh soft = m;
+        // One normal per corner position, shared by its three faces.
+        for (Corner& corner : soft.corners) corner.normal = corner.position;
+        soft.normals.assign(m.positions.size(), Vec3{});
+        for (std::size_t i = 0; i < m.positions.size(); ++i) {
+            const Vec3& p = m.positions[i];
+            soft.normals[i] = unit({p[0] > 0.5f ? 1.0f : -1.0f, p[1] > 0.5f ? 1.0f : -1.0f, p[2] > 0.5f ? 1.0f : -1.0f});
         }
-        std::vector<Corner> soft = corners;
-        for (Corner& corner : soft) corner.normal = corner.position;
-        const std::vector<Vec3> m = displacement_normals(positions, averaged, soft);
-        bool flat = true;
-        for (const Vec3& v : m) flat &= is_zero(v);
-        passed &= expect(flat, "a box with averaged corner normals does not puff into a pillow");
-
-        // A plank shaded soft: corner normals only 20 degrees off the faces, the faces at right angles. Still flat.
-        std::vector<Vec3> tilted;
-        for (const Vec3& p : positions) {
-            const float t = 0.364f;  // tan 20 degrees
-            const float x = p[0] > 0.5f ? t : -t;
-            const float z = p[2] > 0.5f ? t : -t;
-            const float y = p[1] > 0.5f ? 1.0f : -1.0f;
-            const float l = std::sqrt(x * x + y * y + z * z);
-            tilted.push_back({x / l, y / l, z / l});
+        const Surface s = analyse(soft.positions, soft.normals, soft.corners);
+        passed &= expect(largest_move(s, soft.positions, soft.corners) == 0.0f,
+                         "a box with averaged corner normals does not puff into a pillow");
+    }
+    {
+        // A flat plank face drawn alone, its corner normals splayed 31 degrees for the look (the airship bridge's
+        // planks): shading, not shape. It stays flat.
+        const std::vector<Vec3> positions = {{0, 0, -245}, {0, 0, 245}, {0, 115, -245}, {0, 115, 245}};
+        const std::vector<Vec3> normals = {unit({0.855f, -0.367f, -0.367f}), unit({0.855f, -0.367f, 0.367f}),
+                                           unit({0.855f, 0.367f, -0.367f}), unit({0.855f, 0.367f, 0.367f})};
+        const std::vector<Corner> corners = {c(0, 0), c(1, 1), c(2, 2), c(1, 1), c(3, 3), c(2, 2)};
+        const Surface s = analyse(positions, normals, corners);
+        passed &= expect(largest_move(s, positions, corners) == 0.0f, "a flat face's splayed normals do not dome it");
+    }
+    {
+        // The bridge's plank whole: a 50 x 115 x 490 box with 7-unit 45-degree bevels on its long edges, shaded soft
+        // across them. A broad face beside a narrow bevel is not a curve: nothing domes.
+        std::vector<Vec3> positions;
+        std::vector<Vec3> normals;
+        std::vector<Corner> corners;
+        // The cross-section (x, y), counter-clockwise: an octagon with 7-unit bevels at the corners.
+        const float b = 5.0f;
+        const float xs[8] = {25, 25, 25 - b, -25 + b, -25, -25, -25 + b, 25 - b};
+        const float ys[8] = {b, 115 - b, 115, 115, 115 - b, b, 0, 0};
+        for (int z = 0; z < 2; ++z) {
+            for (int i = 0; i < 8; ++i) positions.push_back({xs[i], ys[i], z == 0 ? -245.0f : 245.0f});
         }
-        const std::vector<Vec3> plank = displacement_normals(positions, tilted, soft);
-        bool plank_flat = true;
-        for (const Vec3& v : plank) plank_flat &= is_zero(v);
-        passed &= expect(plank_flat, "a soft-shaded plank does not puff into a pillow");
+        // Each section vertex's normal: the mean of its two faces' (soft across the bevels).
+        for (int i = 0; i < 8; ++i) {
+            const int prev = (i + 7) % 8;
+            const int next = (i + 1) % 8;
+            const Vec3 e0 = sub(positions[static_cast<std::size_t>(i)], positions[static_cast<std::size_t>(prev)]);
+            const Vec3 e1 = sub(positions[static_cast<std::size_t>(next)], positions[static_cast<std::size_t>(i)]);
+            const Vec3 n0 = unit({e0[1], -e0[0], 0.0f});
+            const Vec3 n1 = unit({e1[1], -e1[0], 0.0f});
+            normals.push_back(unit({n0[0] + n1[0], n0[1] + n1[1], 0.0f}));
+        }
+        for (int i = 0; i < 8; ++i) {
+            const int j = (i + 1) % 8;
+            corners.insert(corners.end(), {c(i, i), c(8 + i, i), c(8 + j, j)});
+            corners.insert(corners.end(), {c(i, i), c(8 + j, j), c(j, j)});
+        }
+        const Surface s = analyse(positions, normals, corners);
+        passed &= expect(largest_move(s, positions, corners) < 0.5f, "a bevelled plank keeps its broad faces flat");
+        passed &= expect(crack_free(s, positions, corners), "a bevelled plank's shared edges bend alike");
     }
     {
         // An octagonal prism shaded round (the art's coarse rings and barrels): its side faces at 45 degrees round.
@@ -140,34 +257,78 @@ int main() {
             const float a = 6.2831853f * static_cast<float>(i) / kSides;
             normals.push_back({std::cos(a), 0.0f, std::sin(a)});
         }
-        const auto c = [](int pos, int nrm) {
-            return Corner{static_cast<std::uint16_t>(pos), static_cast<std::uint16_t>(nrm)};
-        };
         for (int i = 0; i < kSides; ++i) {
             const int j = (i + 1) % kSides;
             corners.insert(corners.end(), {c(i, i), c(j, j), c(kSides + j, j)});
             corners.insert(corners.end(), {c(i, i), c(kSides + j, j), c(kSides + i, i)});
         }
-        const std::vector<Vec3> n = displacement_normals(positions, normals, corners);
-        bool round = n.size() == positions.size();
+        const Surface s = analyse(positions, normals, corners);
+        bool round = true;
         for (int i = 0; i < kSides && round; ++i) {
-            const float a = 6.2831853f * static_cast<float>(i) / kSides;
-            round = std::fabs(n[static_cast<std::size_t>(i)][0] - std::cos(a)) < 1e-3f &&
-                    std::fabs(n[static_cast<std::size_t>(i)][2] - std::sin(a)) < 1e-3f;
+            const auto u = static_cast<std::uint16_t>(i);
+            const Vec3 n = edge_normal(s, u, u, static_cast<std::uint16_t>((i + 1) % kSides));
+            round = std::fabs(dot(n, normals[static_cast<std::size_t>(i)]) - 1.0f) < 1e-4f;
         }
         passed &= expect(round, "an octagonal prism shaded round rounds");
+        // Onto its circle within 11 %: the sagitta 100 (1 - cos(22.5 deg)) = 7.61.
+        const float move = midpoint_move(s, positions, c(0, 0), c(1, 1));
+        passed &= expect(move > 0.85f * 7.61f && move < 7.61f, "an octagon's edge rounds onto its circle");
+    }
+    {
+        // A T-junction on a curved strip: a 16-gon's band split into two rings on one side only, its middle ring's
+        // position lying inside the other side's long edge. Those places stay put; nothing parts.
+        constexpr int kSides = 16;
+        std::vector<Vec3> positions;
+        std::vector<Vec3> normals;
+        std::vector<Corner> corners;
+        for (int ring = 0; ring < 3; ++ring) {
+            for (int i = 0; i < kSides; ++i) {
+                const float a = 6.2831853f * static_cast<float>(i) / kSides;
+                positions.push_back({100.0f * std::cos(a), 50.0f * static_cast<float>(ring), 100.0f * std::sin(a)});
+            }
+        }
+        for (int i = 0; i < kSides; ++i) {
+            const float a = 6.2831853f * static_cast<float>(i) / kSides;
+            normals.push_back({std::cos(a), 0.0f, std::sin(a)});
+        }
+        // Quads 0-7 two rings high (through the middle ring); quads 8-15 one tall quad, except quad 8 whose left
+        // edge (at position 8) runs from ring 0 to ring 2 past position 16 + 8 of its neighbour's middle ring.
+        for (int i = 0; i < kSides; ++i) {
+            const int j = (i + 1) % kSides;
+            if (i < 8) {
+                for (int r = 0; r < 2; ++r) {
+                    const int lo = r * kSides;
+                    const int hi = (r + 1) * kSides;
+                    corners.insert(corners.end(), {c(lo + i, i), c(lo + j, j), c(hi + j, j)});
+                    corners.insert(corners.end(), {c(lo + i, i), c(hi + j, j), c(hi + i, i)});
+                }
+            } else {
+                corners.insert(corners.end(), {c(i, i), c(j, j), c(2 * kSides + j, j)});
+                corners.insert(corners.end(), {c(i, i), c(2 * kSides + j, j), c(2 * kSides + i, i)});
+            }
+        }
+        const Surface s = analyse(positions, normals, corners);
+        // Position 16 + 8 lies inside edge (8, 32 + 8) of quad 8, and 16 + 0 inside (0, 32 + 0) of quad 15: each a
+        // fan of one side only, which shows no curve, so they do not bend; the band between rounds, and nothing
+        // parts.
+        passed &= expect(crack_free(s, positions, corners), "a T-junction's shared edges bend alike");
+        passed &= expect(is_zero(edge_normal(s, 16u + 8u, 8u, 16u + 7u)), "a one-sided fan at a T-junction stays put");
+        const Vec3 n = edge_normal(s, 16u + 4u, 4u, 16u + 5u);
+        passed &= expect(std::fabs(dot(n, normals[4]) - 1.0f) < 1e-4f, "the band beside a T-junction rounds");
     }
     {
         // A fold: one triangle drawn on both sides (opposite normals, shared positions) bends as a smooth surface.
         const std::vector<Vec3> positions = {{0, 0, 0}, {1, 0, 0}, {0, 1, 0}};
         const std::vector<Vec3> normals = {{0, 0, 1}, {0, 0, -1}};
         const std::vector<Corner> corners = {{0, 0}, {1, 0}, {2, 0}, {0, 1}, {2, 1}, {1, 1}};
-        const std::vector<Vec3> n = displacement_normals(positions, normals, corners);
-        passed &= expect(std::fabs(n[0][2]) > 0.9999f, "a fold's sides bend alike");
+        const Surface s = analyse(positions, normals, corners);
+        passed &= expect(std::fabs(edge_normal(s, 0u, 0u, 1u)[2]) > 0.9999f &&
+                             std::fabs(edge_normal(s, 0u, 1u, 1u)[2]) > 0.9999f,
+                         "a fold's sides bend alike");
     }
     {
         // The same pipe with its rim repeated under new indices for the cap: welded by value, the same bends.
-        Pipe p = pipe();
+        Mesh p = pipe();
         const std::size_t first = p.positions.size();
         for (int i = 0; i < 16; ++i) p.positions.push_back(p.positions[static_cast<std::size_t>(i)]);
         for (std::size_t t = 0; t < p.corners.size(); t += 3u) {
@@ -177,35 +338,63 @@ int main() {
                 }
             }
         }
-        const std::vector<Vec3> n = displacement_normals(p.positions, p.normals, p.corners);
+        const Surface s = analyse(p.positions, p.normals, p.corners);
         bool same = true;
         for (int i = 0; i < 16; ++i) {
-            same &= std::fabs(std::fabs(dot(n[static_cast<std::size_t>(i)], n[first + static_cast<std::size_t>(i)])) - 1.0f) < 1e-5f;
+            const auto u = static_cast<std::uint16_t>(i);
+            const auto w = static_cast<std::uint16_t>(first + static_cast<std::size_t>(i));
+            same &= s.place[u] == s.place[w];
+            same &= dot(edge_normal(s, u, 16u, static_cast<std::uint16_t>((i + 1) % 16)),
+                        edge_normal(s, w, 16u, static_cast<std::uint16_t>(first + static_cast<std::size_t>((i + 1) % 16)))) > 0.9999f;
         }
         passed &= expect(same, "positions repeated under another index bend alike");
+        passed &= expect(crack_free(s, p.positions, p.corners), "welded positions' shared edges bend alike");
     }
     {
         const std::vector<Vec3> positions = {{0, 0, 0}, {1, 0, 0}, {0, 1, 0}};
         const std::vector<Vec3> normals = {{0, 0, 1}};
         const std::vector<Corner> corners = {{0, 0}, {1, 0}, {7, 0}};
-        const std::vector<Vec3> n = displacement_normals(positions, normals, corners);
-        passed &= expect(n.size() == 3u && is_zero(n[0]), "a triangle with an index out of range is left out");
+        const Surface s = analyse(positions, normals, corners);
+        passed &= expect(s.place.size() == 3u && !s.bends_anything(), "a triangle with an index out of range is left out");
+    }
+    {
+        // Packed normals: unit vectors within 1e-4, the zero vector as zero, nothing else packing to zero.
+        bool exact = pack_normal({0.0f, 0.0f, 0.0f}) == 0u && is_zero(unpack_normal(0u));
+        for (int i = 0; i < 200 && exact; ++i) {
+            const float a = 0.37f * static_cast<float>(i);
+            const float b = 0.11f * static_cast<float>(i) - 1.0f;
+            const Vec3 n = unit({std::cos(a) * std::cos(b), std::sin(b), std::sin(a) * std::cos(b)});
+            const std::uint32_t packed = pack_normal(n);
+            const Vec3 back = unpack_normal(packed);
+            exact = packed != 0u && dot(back, n) > 1.0f - 1e-6f;
+        }
+        passed &= expect(exact, "normals pack to 32 bits and back");
     }
     {
         clear_models();
         const std::byte a[4] = {std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}};
         const std::byte b[4] = {std::byte{1}, std::byte{2}, std::byte{3}, std::byte{5}};
-        register_model(0x1000u, a, {Vec3{0, 1, 0}});
+        const Mesh p = pipe();
+        const Surface round = analyse(p.positions, p.normals, p.corners);
+        register_model(0x1000u, a, round);
         const auto model = find_model(0x1000u);
         passed &= expect(model != nullptr && model->fingerprint == fingerprint(a) &&
                              model->fingerprint != fingerprint(b),
                          "a registered model is found with its array's fingerprint");
+        passed &= expect(model != nullptr && model->places.size() == p.positions.size() &&
+                             model->bend_of(0u, 0u) == pack_normal(edge_normal(round, 0u, 0u, 16u)) &&
+                             (model->places[0] & 0xFFFFu) == round.place[0],
+                         "a registered model carries each position's place and each corner's bend");
         forget_model(0x1000u, nullptr);
         passed &= expect(find_model(0x1000u) != nullptr, "forgetting another model's entry keeps this one");
         forget_model(0x1000u, model.get());
         passed &= expect(find_model(0x1000u) == nullptr, "a forgotten model is gone");
-        register_model(0x1000u, a, {Vec3{0, 1, 0}});
-        register_model(0x1000u, b, {Vec3{0, 0, 0}});
+        register_model(0x1000u, a, round);
+        const Mesh cube = box({1, 1, 1}, [](const Vec3&, int f) {
+            static const Vec3 n[6] = {{0, 0, -1}, {0, 0, 1}, {-1, 0, 0}, {1, 0, 0}, {0, -1, 0}, {0, 1, 0}};
+            return n[f];
+        });
+        register_model(0x1000u, b, analyse(cube.positions, cube.normals, cube.corners));
         passed &= expect(find_model(0x1000u) == nullptr,
                          "a model in which nothing bends is not kept, and replaces the address's earlier one");
     }

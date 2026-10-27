@@ -10738,7 +10738,10 @@ bool GxBackend::curved_draw(std::uint8_t vtxfmt) const {
         return false;
     }
     const VertexDescriptor& desc = cached_vertex_layout(vtxfmt).desc;
-    if ((desc.position.vcd != VcdType::Index8 && desc.position.vcd != VcdType::Index16) || desc.normal.count != 0u) {
+    // Indexed positions and normals (the analysis knows a model's corners by their indices; a shape without normals
+    // was not part of it), no NBT (bump mapped: none is rounded).
+    if ((desc.position.vcd != VcdType::Index8 && desc.position.vcd != VcdType::Index16) ||
+        (desc.normal.vcd != VcdType::Index8 && desc.normal.vcd != VcdType::Index16) || desc.normal.count != 0u) {
         return false;
     }
     return curved::find_model(state_.array_base(0u)) != nullptr;

@@ -357,12 +357,53 @@ static constexpr const char* kMotionInterpolants =
     "    float4   mv_cur    : TEXCOORD12;\n"
     "    float4   mv_prev   : TEXCOORD13;\n";
 
-// Curved surfaces (kVsKeyCurved): the vertex's displacement normal in, and to the hull and domain shaders the
-// eye-space position and the displacement normal turned as normals are; w the clip jitter the draw adds (x, y).
-static constexpr const char* kCurvedInput = "    float3   bend     : BEND;\n";
+// Curved surfaces (kVsKeyCurved): the vertex's curve data in (GxVertexOut::curve), and to the hull and domain shaders
+// the eye-space position, the displacement normal turned as normals are (w the clip jitter the draw adds, x and y),
+// and the crease normal (turned, packed), the place with its first crease neighbour and the second neighbour.
+static constexpr const char* kCurvedInput = "    uint3    curve    : BEND;\n";
 static constexpr const char* kCurvedInterpolants =
     "    float4   curve_pos : TEXCOORD14;\n"
-    "    float4   curve_nrm : TEXCOORD15;\n";
+    "    float4   curve_nrm : TEXCOORD15;\n"
+    "    uint4    curve_data : TEXCOORD16;\n";
+
+// Curved surfaces' packed normals (curved_surfaces.h's pack_normal): octahedral, two 16-bit halves, zero for none.
+static constexpr const char* kCurveCodec = R"HLSL(
+float3 curve_unpack(uint packed) {
+    if (packed == 0u) {
+        return float3(0.0, 0.0, 0.0);
+    }
+    const float2 p = (float2(float(packed >> 16u), float(packed & 0xFFFFu)) - 32768.0) / 32767.0;
+    float3 n = float3(p, 1.0 - abs(p.x) - abs(p.y));
+    if (n.z < 0.0) {
+        n.xy = (1.0 - abs(p.yx)) * float2(p.x >= 0.0 ? 1.0 : -1.0, p.y >= 0.0 ? 1.0 : -1.0);
+    }
+    return normalize(n);
+}
+uint curve_pack(float3 n) {
+    const float sum = abs(n.x) + abs(n.y) + abs(n.z);
+    if (!(sum > 0.0)) {
+        return 0u;
+    }
+    float2 p = n.xy / sum;
+    if (n.z < 0.0) {
+        p = (1.0 - abs(p.yx)) * float2(p.x >= 0.0 ? 1.0 : -1.0, p.y >= 0.0 ? 1.0 : -1.0);
+    }
+    const uint2 h = uint2(round(clamp(p, -1.0, 1.0) * 32767.0) + 32768.0);
+    return (h.x << 16u) | h.y;
+}
+)HLSL";
+
+// The normal corner `a` bends the edge to corner `b` by (curved_surfaces.h): its place's crease normal when `b` is one
+// of its crease neighbours, else its corner's displacement normal. Both triangles holding an edge pick alike.
+static constexpr const char* kCurveEdgeNormal = R"HLSL(
+float3 curve_edge_normal(VSOut a, VSOut b) {
+    const uint place = b.curve_data.y & 0xFFFFu;
+    if (place != 0xFFFFu && (place == (a.curve_data.y >> 16u) || place == (a.curve_data.z & 0xFFFFu))) {
+        return curve_unpack(a.curve_data.x);
+    }
+    return a.curve_nrm.xyz;
+}
+)HLSL";
 
 // Interpolated redraw: a sub-frame blends a CPU-written vertex buffer with the
 // matching draw's vertices of the frame before (GxVertexOut, 144-byte stride;
@@ -1098,12 +1139,16 @@ std::string_view ShaderGenerator::point_geometry_shader_source() noexcept {
 
 // Curved surfaces' patch stages. The hull shader passes the vertices through and gives each edge as many segments as
 // keep every segment's arc within a quarter pixel of its chord: an arc of angle a over chord c bulges c tan(a/4) / 2,
-// about c a / 8, so n segments bulge c a / (8 n^2) and n = sqrt(c a / 2) pixels. An edge's count depends only on its
-// two vertices, so the two triangles sharing it split it alike (no cracks). The domain shader blends the three
-// vertices at the point, then moves it three quarters of the way to the blend of its projections onto the corners'
-// tangent planes (Phong tessellation's shape factor), and carries that move into the clip position (with the draw's
-// jitter), the per-pixel lighting position and the motion vectors. Fractional odd steps let a count change smoothly
-// as the camera moves.
+// about c a / 8, so n segments bulge c a / (8 n^2) and n = sqrt(c a / 2) pixels, a twice the chord's tilt from the
+// tangent plane at the end that tilts it most. An edge's count depends only on its two vertices, so the two
+// triangles sharing it split it alike (no cracks). The domain shader blends the three vertices at the point, then
+// moves it half way to the blend of its projections onto the corners' tangent planes (Phong tessellation's shape
+// factor, here one half: a sampled circle's edge midpoint then moves c sin(a) / 8 against the circle's
+// c tan(a/4) / 2, onto the circle within 3 % for a 16-gon and 11 % for a hexagon, where three quarters overshoots it
+// by 46 and 33 %). The move is a sum over the triangle's edges, each end projecting by the normal it bends that edge
+// by (curve_edge_normal), so an edge two triangles share moves alike in both. The move goes into the clip position
+// (with the draw's jitter), the per-pixel lighting position and the motion vectors. Fractional odd steps let a count
+// change smoothly as the camera moves.
 static constexpr const char* kCurvePatch = R"HLSL(
 struct CurvePatch {
     float edges[3] : SV_TessFactor;
@@ -1114,11 +1159,17 @@ struct CurvePatch {
 static constexpr const char* kCurvedHull = R"HLSL(
 float curve_segments(VSOut a, VSOut b) {
     const float2 half_viewport = 0.5 * line_point_raster.xy;
-    const bool bends = dot(a.curve_nrm.xyz, a.curve_nrm.xyz) > 0.0 && dot(b.curve_nrm.xyz, b.curve_nrm.xyz) > 0.0;
-    if (!bends || a.pos.w <= 0.0 || b.pos.w <= 0.0) {
+    const float3 edge = b.curve_pos.xyz - a.curve_pos.xyz;
+    const float edge_length = length(edge);
+    if (a.pos.w <= 0.0 || b.pos.w <= 0.0 || !(edge_length > 0.0)) {
         return 1.0;
     }
-    const float angle = acos(min(abs(dot(a.curve_nrm.xyz, b.curve_nrm.xyz)), 1.0));
+    const float3 along = edge / edge_length;
+    const float tilt = max(abs(dot(along, curve_edge_normal(a, b))), abs(dot(along, curve_edge_normal(b, a))));
+    if (!(tilt > 0.0)) {
+        return 1.0;
+    }
+    const float angle = 2.0 * asin(min(tilt, 1.0));
     const float chord = length((a.pos.xy / a.pos.w - b.pos.xy / b.pos.w) * half_viewport);
     return clamp(sqrt(chord * angle * 0.5), 1.0, 16.0);
 }
@@ -1183,13 +1234,17 @@ DSOut main(CurvePatch c, float3 b : SV_DomainLocation, const OutputPatch<VSOut, 
         o.uv[i] = b.x * p[0].uv[i] + b.y * p[1].uv[i] + b.z * p[2].uv[i];
     }
 CURVE_EXTRA_BLEND
-    const float3 q = b.x * p[0].curve_pos.xyz + b.y * p[1].curve_pos.xyz + b.z * p[2].curve_pos.xyz;
-    float3 phong = float3(0.0, 0.0, 0.0);
-    [unroll] for (uint k = 0u; k < 3u; ++k) {
-        const float3 n = p[k].curve_nrm.xyz;
-        phong += b[k] * (q - dot(q - p[k].curve_pos.xyz, n) * n);
+    // Phong's move, edge by edge: -alpha times the sum over edges (i, k) of b_i b_k ((e.n_ik) n_ik - (e.n_ki) n_ki),
+    // e the edge from i to k and n_ik the normal i bends it by.
+    float3 move = float3(0.0, 0.0, 0.0);
+    [unroll] for (uint i = 0u; i < 3u; ++i) {
+        const uint k = (i + 1u) % 3u;
+        const float3 e = p[k].curve_pos.xyz - p[i].curve_pos.xyz;
+        const float3 ni = curve_edge_normal(p[i], p[k]);
+        const float3 nk = curve_edge_normal(p[k], p[i]);
+        move -= b[i] * b[k] * (dot(e, ni) * ni - dot(e, nk) * nk);
     }
-    const float3 d = 0.75 * (phong - q);
+    const float3 d = 0.5 * move;
     const float4 dc = mul(projection, float4(d, 0.0));
     const float2 jitter = float2(p[0].curve_pos.w, p[0].curve_nrm.w);
     o.pos += float4(dc.xy + jitter * dc.w, dc.z, dc.w);
@@ -1221,7 +1276,7 @@ std::string ShaderGenerator::curved_stage_source(unsigned variant, bool domain) 
     std::string ds_out = vs_out;
     ds_out.replace(ds_out.find("VSOut"), 5u, "DSOut");
     vs_out = insert_before_close(vs_out.c_str(), kCurvedInterpolants, true);
-    s += vs_out + ds_out + kCurvePatch;
+    s += vs_out + ds_out + kCurvePatch + kCurveCodec + kCurveEdgeNormal;
     if (!domain) {
         return s + kCurvedHull;
     }
@@ -1280,6 +1335,9 @@ std::string ShaderGenerator::generate_vs(const VertexShaderKey& key) const {
         structs = insert_before_close(structs.c_str(), kCurvedInterpolants, true);
     }
     s << structs;
+    if (curved) {
+        s << kCurveCodec;
+    }
     s << kVertexBlendDef;
 
     const bool dual_tex = (key.flags & 0x04u) != 0u;
@@ -1698,13 +1756,15 @@ float3 nebula_debake_gain(float3 nrm) {
                  palette ? "mtx_palette[pn_row + mtx_palette_base + " : "inline_pos_matrix[", r,
                  palette ? "u]" : "]");
         }
-        s << "    const float3 curve_n = float3(dot(cross(curve_r1, curve_r2), v.bend),\n"
-             "                                  dot(cross(curve_r2, curve_r0), v.bend),\n"
-             "                                  dot(cross(curve_r0, curve_r1), v.bend));\n"
-             "    const float curve_len2 = dot(curve_n, curve_n);\n";
+        s << "    const float3x3 curve_cofactor = float3x3(cross(curve_r1, curve_r2), cross(curve_r2, curve_r0),\n"
+             "                                             cross(curve_r0, curve_r1));\n"
+             "    float3 curve_n = mul(curve_cofactor, curve_unpack(v.curve.x));\n"
+             "    float3 curve_c = mul(curve_cofactor, curve_unpack(v.curve.y));\n"
+             "    curve_n = dot(curve_n, curve_n) > 0.0 ? normalize(curve_n) : curve_n;\n"
+             "    curve_c = dot(curve_c, curve_c) > 0.0 ? normalize(curve_c) : curve_c;\n";
         emit(s, "    o.curve_pos = float4(wpos.xyz, %s);\n", motion ? "jitter_ndc.x" : "0.0");
-        emit(s, "    o.curve_nrm = float4(curve_len2 > 0.0 ? curve_n * rsqrt(curve_len2) : curve_n, %s);\n",
-             motion ? "jitter_ndc.y" : "0.0");
+        emit(s, "    o.curve_nrm = float4(curve_n, %s);\n", motion ? "jitter_ndc.y" : "0.0");
+        s << "    o.curve_data = uint4(curve_pack(curve_c), v.curve.z, v.mtx_idx.z >> 16u, 0u);\n";
     }
     s << "\n    return o;\n}\n";
 

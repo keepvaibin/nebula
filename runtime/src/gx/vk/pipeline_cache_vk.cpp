@@ -319,7 +319,7 @@ constexpr VkVertexInputAttributeDescription kVertexAttributes[] = {
     {8, 0, VK_FORMAT_R32G32_SFLOAT, 72},      {9, 0, VK_FORMAT_R32G32_SFLOAT, 80},
     {10, 0, VK_FORMAT_R32G32_SFLOAT, 88},     {11, 0, VK_FORMAT_R32G32_SFLOAT, 96},
     {12, 0, VK_FORMAT_R32G32_SFLOAT, 104},    {13, 0, VK_FORMAT_R32G32_SFLOAT, 112},
-    {14, 0, VK_FORMAT_R32G32B32_UINT, 120},    {15, 0, VK_FORMAT_R32G32B32_SFLOAT, 132},
+    {14, 0, VK_FORMAT_R32G32B32_UINT, 120},    {15, 0, VK_FORMAT_R32G32B32_UINT, 132},
 };
 static_assert(sizeof(GxVertexOut) == 144u);
 

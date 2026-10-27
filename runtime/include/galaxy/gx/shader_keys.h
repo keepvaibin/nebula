@@ -110,7 +110,8 @@ inline constexpr std::uint8_t kPsKeyPplFiniteLightAttn = 0x08u;
 inline constexpr std::uint8_t kVsKeyEnhancedLighting = 0x40u;
 inline constexpr std::uint8_t kPsKeyEnhancedLighting = 0x10u;
 // Curved surfaces (RenderConfig::curved_surfaces, curved_surfaces.h): a perspective scene triangle draw of a model the
-// game registered. The vertex stage also passes the eye-space position and the displacement normal (GxVertexOut::bend);
+// game registered. The vertex stage also passes the eye-space position, displacement and crease normals and the
+// places that pick one per edge (GxVertexOut::curve);
 // the pipeline adds the Phong tessellation stages and draws three-point patches: RenderStateKey::primitive_topology
 // is kTopologyPatch with the vertex output's variant in its high bits, which picks the hull and domain shaders
 // (ShaderGenerator::curved_stage_source).

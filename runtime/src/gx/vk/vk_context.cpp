@@ -271,11 +271,11 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
     enabled.dualSrcBlend = available.dualSrcBlend;
     enabled.logicOp = available.logicOp;
     enabled.geometryShader = available.geometryShader;
-    // Curved surfaces: the vertex stage's 18 interpolant locations into the hull stage, 16 segments an edge.
+    // Curved surfaces: the vertex stage's 19 interpolant locations into the hull stage, 16 segments an edge.
     const VkPhysicalDeviceLimits& limits = properties_.limits;
     tessellation_shader_ = available.tessellationShader == VK_TRUE && limits.maxTessellationGenerationLevel >= 16u &&
-                           limits.maxVertexOutputComponents >= 72u &&
-                           limits.maxTessellationControlPerVertexInputComponents >= 72u &&
+                           limits.maxVertexOutputComponents >= 76u &&
+                           limits.maxTessellationControlPerVertexInputComponents >= 76u &&
                            limits.maxTessellationEvaluationOutputComponents >= 64u;
     enabled.tessellationShader = tessellation_shader_ ? VK_TRUE : VK_FALSE;
     enabled.samplerAnisotropy = available.samplerAnisotropy;

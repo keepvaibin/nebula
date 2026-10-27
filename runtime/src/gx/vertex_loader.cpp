@@ -699,14 +699,15 @@ PreparedVertexInputs prepare_vertex_inputs(
 
 // The registered model behind an indexed position array, while the array still holds the bytes it was registered
 // with (its memory may since hold another model's: then it is forgotten). Checked through a resolver of its own, so
-// a cached decode depends only on the bytes it read. Not for NBT draws (bump mapped: none is rounded).
+// a cached decode depends only on the bytes it read. Only for indexed normals (the analysis knows the corners by
+// their normal indices) and not for NBT draws (bump mapped: none is rounded).
 void attach_curved_model(
     PreparedVertexInputs& inputs,
     const VertexDescriptor& desc,
     GuestMemory* memory,
     std::size_t fifo_error_offset) {
     if ((desc.position.vcd != VcdType::Index8 && desc.position.vcd != VcdType::Index16) ||
-        normal_has_nbt(desc)) {
+        (desc.normal.vcd != VcdType::Index8 && desc.normal.vcd != VcdType::Index16) || normal_has_nbt(desc)) {
         return;
     }
     const std::uint32_t base = inputs.array_bases[0u];
@@ -775,6 +776,7 @@ void decode_vertex_stream(
         out.mtx_indices[2] = static_cast<std::uint32_t>(texmtx_idx[7]);
 
         std::uint32_t position_index = ~0u;
+        std::uint32_t normal_index = ~0u;
         if (desc.position.vcd == VcdType::Direct) {
             const std::size_t sz = inputs.element_bytes[0u];
             decode_pos(vsrc + off, out, desc.position, desc.byte_dequant);
@@ -830,6 +832,7 @@ void decode_vertex_stream(
                     idx = read_be_u16(vsrc + off);
                     off += 2;
                 }
+                normal_index = idx;
                 const std::uint32_t read_sz = inputs.element_bytes[1u];
                 const std::uint32_t addr = arr_base + idx * arr_stride;
                 const std::byte* ap = array_resolver.resolve(
@@ -882,14 +885,24 @@ void decode_vertex_stream(
             zero_vec3(out.tangent);
             zero_vec3(out.binormal);
         }
-        // A registered model's displacement normal (curved_surfaces.h).
-        if (inputs.curved != nullptr && position_index < inputs.curved->normals.size()) {
-            const curved::Vec3& n = inputs.curved->normals[position_index];
-            out.bend[0] = n[0];
-            out.bend[1] = n[1];
-            out.bend[2] = n[2];
+        // A registered model's curve data (curved_surfaces.h): the corner's displacement normal by its normal index,
+        // its place's crease normal, its place and crease neighbours.
+        if (inputs.curved != nullptr && position_index < inputs.curved->places.size()) {
+            const curved::Model& model = *inputs.curved;
+            out.curve[0] = model.bend_of(position_index, normal_index);
+            out.curve[1] = model.crease[position_index];
+            out.curve[2] = model.places[position_index];
+            out.mtx_indices[2] |= static_cast<std::uint32_t>(model.second[position_index]) << 16u;
+        } else if (inputs.curved != nullptr) {
+            // Outside the registered arrays: no place, no neighbours.
+            out.curve[0] = 0u;
+            out.curve[1] = 0u;
+            out.curve[2] = 0xFFFFFFFFu;
+            out.mtx_indices[2] |= 0xFFFFu << 16u;
         } else {
-            zero_vec3(out.bend);
+            out.curve[0] = 0u;
+            out.curve[1] = 0u;
+            out.curve[2] = 0u;
         }
 
         for (unsigned ci = 0; ci < 2; ++ci) {

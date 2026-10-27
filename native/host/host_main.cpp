@@ -1941,8 +1941,8 @@ int svc_galaxy_select_names_wanted(void*) { return 0; }
 void svc_galaxy_select_name(void*, uint32_t, uint32_t, const uint16_t*) {}
 #endif
 
-// A loaded model's triangles: the displacement normals its curved surfaces are rounded with, kept by its position
-// array's address (galaxy/gx/curved_surfaces.h).
+// A loaded model's triangles: the analysis its curved surfaces are rounded by, kept by its position array's address
+// (galaxy/gx/curved_surfaces.h).
 void svc_curved_surface(void*, uint32_t array_address, const void* array, uint32_t array_bytes, const float* positions,
                         uint32_t position_count, const float* normals, uint32_t normal_count, const uint16_t* corners,
                         uint32_t triangle_count) {
@@ -1961,7 +1961,7 @@ void svc_curved_surface(void*, uint32_t array_address, const void* array, uint32
         c[i] = curved::Corner{corners[2u * i], corners[2u * i + 1u]};
     }
     curved::register_model(array_address, std::span(static_cast<const std::byte*>(array), array_bytes),
-                           curved::displacement_normals(p, n, c));
+                           curved::analyse(p, n, c));
 #else
     (void)array_address, (void)array, (void)array_bytes, (void)positions, (void)position_count, (void)normals,
         (void)normal_count, (void)corners, (void)triangle_count;
