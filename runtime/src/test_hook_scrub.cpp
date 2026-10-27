@@ -22,18 +22,11 @@ bool test_hook_variable(const std::wstring& name) noexcept {
     static constexpr const wchar_t* kPrefixes[] = {
         L"GALAXY_TEST_", L"GALAXY_INPUT_", L"GALAXY_PRESENT_SNAPSHOT_", L"GALAXY_INTERP_SNAPSHOT_",
         L"GALAXY_GX_CAPTURE_"};
-    static constexpr const wchar_t* kNames[] = {
-        L"GALAXY_INTERP_FORCE_T", L"GALAXY_INTERP_COPY_AB", L"GALAXY_DISPLAY_REFRESH_HZ"};
     if (_wcsicmp(name.c_str(), L"GALAXY_INPUT_MODE") == 0) {
         return false;
     }
     for (const wchar_t* prefix : kPrefixes) {
         if (_wcsnicmp(name.c_str(), prefix, std::wcslen(prefix)) == 0) {
-            return true;
-        }
-    }
-    for (const wchar_t* exact : kNames) {
-        if (_wcsicmp(name.c_str(), exact) == 0) {
             return true;
         }
     }

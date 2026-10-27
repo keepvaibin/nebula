@@ -1,5 +1,6 @@
 #include "galaxy/gx/post_process.h"
 #include "galaxy/gx/renderer_d3d12.h"
+#include "galaxy/test_hooks.h"
 
 #include <algorithm>
 #include <bit>
@@ -215,6 +216,10 @@ void set_reason(std::array<char, N>& out, const char* text) noexcept {
 // GALAXY_TEST_POST_FAULT=smaa|selftest|fxaa|targets (comma-separated) makes
 // that step fail, so tests can show each fallback and status text.
 bool test_fault(const char* name) noexcept {
+#if !GALAXY_TEST_HOOKS
+    static_cast<void>(name);
+    return false;
+#else
     char value[64]{};
     std::size_t length = 0;
     if (getenv_s(&length, value, sizeof(value), "GALAXY_TEST_POST_FAULT") != 0 || length <= 1u) {
@@ -227,6 +232,7 @@ bool test_fault(const char* name) noexcept {
         if (starts && ends) return true;
     }
     return false;
+#endif
 }
 
 }  // namespace

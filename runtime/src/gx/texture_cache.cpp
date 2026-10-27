@@ -13,6 +13,7 @@
 #endif
 
 #include "galaxy/gx/texture_cache.h"
+#include "galaxy/test_hooks.h"
 #include "galaxy/gx/dependency_event_capture.h"
 
 #include "galaxy/gx/render_config.h"
@@ -2381,6 +2382,7 @@ TextureHandle TextureCache::get(
     // every newly decoded mip0 as <dir>/tex_<addr>_f<fmt>.ppm (RGB) and
     // .pgm (alpha).  Zero cost unless the env var is set.
     static const std::string tex_dump_dir = [] {
+#if GALAXY_TEST_HOOKS
         char value[MAX_PATH]{};
         std::size_t length = 0;
         if (getenv_s(&length, value, sizeof(value),
@@ -2388,6 +2390,9 @@ TextureHandle TextureCache::get(
             return std::string{};
         }
         return std::string(value);
+#else
+        return std::string{};
+#endif
     }();
     const bool palettized = image.format == TexFormat::C4 ||
         image.format == TexFormat::C8 || image.format == TexFormat::C14X2;

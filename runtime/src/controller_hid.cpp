@@ -1,5 +1,6 @@
 #include "galaxy/controller_hid.h"
 #include "galaxy/content_viewport.h"
+#include "galaxy/test_hooks.h"
 #include "galaxy/rumble.h"
 
 #define WIN32_LEAN_AND_MEAN
@@ -524,6 +525,7 @@ bool rumble_trace_enabled() noexcept {
 RumbleTarget test_rumble_target() noexcept {
     static const RumbleTarget target = [] {
         RumbleTarget parsed{};
+#if GALAXY_TEST_HOOKS
         char value[32]{};
         const DWORD length = GetEnvironmentVariableA("GALAXY_TEST_RUMBLE_TARGET", value, sizeof(value));
         if (length == 0 || length >= sizeof(value) || !rumble_output_disabled()) return parsed;
@@ -536,6 +538,7 @@ RumbleTarget test_rumble_target() noexcept {
         if (kind == "xinput") parsed.kind = RumbleTarget::Kind::XInput;
         else if (kind == "switch") parsed.kind = RumbleTarget::Kind::Switch;
         parsed.slot = static_cast<std::uint8_t>(digit - '0');
+#endif
         return parsed;
     }();
     return target;
@@ -1082,7 +1085,11 @@ std::uint64_t controller_hid_now_us() noexcept {
 
 bool rumble_output_disabled() noexcept {
     // Test sessions (hidden window) and trace sessions never drive a motor.
+#if GALAXY_TEST_HOOKS
     static const bool disabled = env_flag("GALAXY_HIDE_WINDOW") || env_flag("GALAXY_RUMBLE_TRACE");
+#else
+    static const bool disabled = env_flag("GALAXY_RUMBLE_TRACE");
+#endif
     return disabled;
 }
 

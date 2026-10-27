@@ -91,6 +91,7 @@ static_assert(kEfbWidth == 640u && kEfbHeight == 528u);
 
 std::vector<std::uint64_t> read_capture_frame_list() {
     std::vector<std::uint64_t> frames;
+#if GALAXY_TEST_HOOKS
     char list[1024]{};
     std::size_t list_length = 0;
     if (getenv_s(
@@ -125,12 +126,14 @@ std::vector<std::uint64_t> read_capture_frame_list() {
             }
         }
     }
+#endif
 
     std::sort(frames.begin(), frames.end());
     frames.erase(std::unique(frames.begin(), frames.end()), frames.end());
     return frames;
 }
 
+#if GALAXY_TEST_HOOKS
 std::vector<std::uint64_t> read_u64_list_env(const char* env_name) {
     std::vector<std::uint64_t> values;
     char list[1024]{};
@@ -158,20 +161,30 @@ std::vector<std::uint64_t> read_u64_list_env(const char* env_name) {
     values.erase(std::unique(values.begin(), values.end()), values.end());
     return values;
 }
+#endif
 
 bool diagnostic_texture_invalidate_requested(std::uint64_t frame) {
+#if GALAXY_TEST_HOOKS
     static const std::vector<std::uint64_t> frames =
         read_u64_list_env("GALAXY_GX_INVALIDATE_FRAMES");
     return std::binary_search(frames.begin(), frames.end(), frame);
+#else
+    static_cast<void>(frame);
+    return false;
+#endif
 }
 
 const std::string& capture_request_file() {
     static const std::string path = [] {
+#if GALAXY_TEST_HOOKS
         char value[MAX_PATH]{};
         std::size_t length = 0u;
         return getenv_s(&length, value, sizeof(value),
                         "GALAXY_GX_CAPTURE_REQUEST_FILE") == 0 && length > 1u
             ? std::string(value) : std::string{};
+#else
+        return std::string{};
+#endif
     }();
     return path;
 }
@@ -249,6 +262,9 @@ bool capture_frame_requested(std::uint64_t frame) {
     // following the substantial scene chunk otherwise escape its observation.
     // At most eight adjacent renderer chunks, never continuous tracing.
     static const unsigned live_capture_chunks = [] {
+#if !GALAXY_TEST_HOOKS
+        return 1u;
+#else
         char value[16]{};
         std::size_t length = 0u;
         if (getenv_s(&length, value, sizeof(value),
@@ -258,6 +274,7 @@ bool capture_frame_requested(std::uint64_t frame) {
         const auto parsed = std::from_chars(value, value + length - 1u, chunks);
         return parsed.ec == std::errc{} && parsed.ptr == value + length - 1u &&
             chunks >= 1u && chunks <= 8u ? chunks : 1u;
+#endif
     }();
     return (live_capture_frame != 0u && frame >= live_capture_frame &&
             frame - live_capture_frame < live_capture_chunks) ||
@@ -269,9 +286,13 @@ bool capture_frame_requested(std::uint64_t frame) {
 // resource and composite identities without reusing a pending GPU buffer.
 bool capture_owned_xfb_enabled() {
     static const bool enabled = [] {
+#if GALAXY_TEST_HOOKS
         char value[8]{}; std::size_t length = 0u;
         return getenv_s(&length, value, sizeof(value),
             "GALAXY_GX_CAPTURE_OWNED_XFB") == 0 && length > 1u && value[0] == '1';
+#else
+        return false;
+#endif
     }();
     return enabled;
 }
@@ -329,26 +350,36 @@ std::string present_snapshot_path() {
 }
 
 bool capture_present_requested(std::uint64_t request) {
+#if GALAXY_TEST_HOOKS
     static const std::vector<std::uint64_t> requests =
         read_u64_list_env("GALAXY_GX_CAPTURE_PRESENT_REQUESTS");
     return std::binary_search(requests.begin(), requests.end(), request);
+#else
+    static_cast<void>(request);
+    return false;
+#endif
 }
 
 bool capture_frame_list_enabled() {
     if (!capture_request_file().empty()) return true;
     static const bool enabled = [] {
+#if GALAXY_TEST_HOOKS
         char value[1024]{};
         std::size_t length = 0;
         return getenv_s(
                    &length, value, sizeof(value),
                    "GALAXY_GX_CAPTURE_FRAMES") == 0 &&
                length > 1u;
+#else
+        return false;
+#endif
     }();
     return enabled;
 }
 
 bool capture_draw_log_enabled() {
     static const bool enabled = [] {
+#if GALAXY_TEST_HOOKS
         char value[8]{};
         std::size_t length = 0;
         if (getenv_s(
@@ -358,17 +389,24 @@ bool capture_draw_log_enabled() {
             return false;
         }
         return std::strtoull(value, nullptr, 10) != 0u;
+#else
+        return false;
+#endif
     }();
     return enabled;
 }
 
 bool capture_composites_only_enabled() {
     static const bool enabled = [] {
+#if GALAXY_TEST_HOOKS
         char value[8]{};
         std::size_t length = 0;
         return getenv_s(&length, value, sizeof(value),
             "GALAXY_GX_CAPTURE_COMPOSITES_ONLY") == 0 &&
             length > 1u && value[0] == '1';
+#else
+        return false;
+#endif
     }();
     return enabled;
 }
@@ -376,6 +414,7 @@ bool capture_composites_only_enabled() {
 std::string numbered_capture_path(
     const char* env_name,
     std::uint64_t frame) {
+#if GALAXY_TEST_HOOKS
     char value[MAX_PATH]{};
     std::size_t length = 0;
     if (getenv_s(&length, value, sizeof(value), env_name) != 0 ||
@@ -389,13 +428,18 @@ std::string numbered_capture_path(
     const std::string ext = path.extension().string();
     path.replace_filename(stem + suffix + ext);
     return path.string();
+#else
+    static_cast<void>(env_name);
+    static_cast<void>(frame);
+    return {};
+#endif
 }
 
 std::string capture_output_path(const char* env_name, std::uint64_t frame) {
     if (capture_frame_list_enabled()) {
         return numbered_capture_path(env_name, frame);
     }
-
+#if GALAXY_TEST_HOOKS
     char value[MAX_PATH]{};
     std::size_t length = 0;
     if (getenv_s(&length, value, sizeof(value), env_name) != 0 ||
@@ -403,6 +447,9 @@ std::string capture_output_path(const char* env_name, std::uint64_t frame) {
         return {};
     }
     return value;
+#else
+    return {};
+#endif
 }
 
 class PeEventSink final : public FifoSink {
@@ -571,6 +618,7 @@ struct RenderStallInjection {
 const RenderStallInjection& render_stall_injection() {
     static const RenderStallInjection injection = [] {
         RenderStallInjection result{};
+#if GALAXY_TEST_HOOKS
         char value[32]{};
         std::size_t length = 0;
         if (getenv_s(&length, value, sizeof(value), "GALAXY_TEST_RENDER_STALL_MS") != 0 || length <= 1) {
@@ -585,6 +633,7 @@ const RenderStallInjection& render_stall_injection() {
         if (result.every == 0u) {
             result.ms = 0u;
         }
+#endif
         return result;
     }();
     return injection;
@@ -2351,28 +2400,41 @@ struct ScopedFlushTiming {
 
 bool capture_all_textures_enabled() {
     static const bool enabled = [] {
+#if GALAXY_TEST_HOOKS
         char value[16]{};
         std::size_t length = 0;
         return getenv_s(
                    &length, value, sizeof(value),
                    "GALAXY_GX_CAPTURE_TEXTURES") == 0 &&
                length > 1 && value[0] != '0';
+#else
+        return false;
+#endif
     }();
     return enabled;
 }
 
 bool capture_tev_log_enabled(unsigned draw_index) {
+#if GALAXY_TEST_HOOKS
     static const std::uint64_t start = read_env_u64(
         "GALAXY_GX_CAPTURE_TEV_DRAW_START", 2329u);
     static const std::uint64_t end = read_env_u64(
         "GALAXY_GX_CAPTURE_TEV_DRAW_END", 2334u);
     return draw_index >= start && draw_index <= end;
+#else
+    static_cast<void>(draw_index);
+    return false;
+#endif
 }
 
 std::uint32_t capture_texaddr_target() {
+#if GALAXY_TEST_HOOKS
     static const std::uint32_t texaddr = static_cast<std::uint32_t>(
         read_env_u64("GALAXY_GX_CAPTURE_TEV_TEXADDR", 0u));
     return texaddr;
+#else
+    return 0u;
+#endif
 }
 
 bool capture_texaddr_log_enabled(std::uint32_t guest_addr) {
@@ -7670,18 +7732,24 @@ void GxBackend::advance_interp_sequence(bool flush) {
             // GALAXY_INTERP_FORCE_T=<0..1>: every sub-frame at that t (replay checks: 1 must
             // reproduce the frame, 0 the frame before).
             static const double force_t = [] {
+#if GALAXY_TEST_HOOKS
                 char value[32]{};
                 std::size_t length = 0u;
                 return getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_FORCE_T") == 0 && length > 1u
                     ? std::clamp(std::strtod(value, nullptr), 0.0, 1.0) : -1.0;
+#else
+                return -1.0;
+#endif
             }();
             // GALAXY_INTERP_COPY_AB=1: sequences alternate redirected and guarded copies; =3 adds
             // a third with neither (A/B in one run, diagnostics).
+#if GALAXY_TEST_HOOKS
             static const std::uint64_t copy_ab = read_env_u64("GALAXY_INTERP_COPY_AB", 0u);
             if (copy_ab != 0u) {
                 const std::uint64_t phase = interp_sequence_serial_ % (copy_ab == 3u ? 3u : 2u);
                 renderer_.set_subframe_copy_redirect(phase == 0u ? 1 : phase == 1u ? 0 : 2);
             }
+#endif
             const bool presented = render_interp_subframe(static_cast<float>(force_t >= 0.0 ? force_t : t));
             interp_event("sub", interp_last_played_serial_, static_cast<std::uint64_t>(t * 1000.0));
             if (!snapshot.empty()) {
@@ -9727,6 +9795,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     // GALAXY_DIAG_RENDER_BURN_US: busy CPU time per render chunk (diagnostic,
     // emulates a slower render thread), starting GALAXY_DIAG_RENDER_BURN_AFTER_MS
     // after the first render chunk (default 0).
+#if GALAXY_TEST_HOOKS
     {
         const auto read_u64 = [](const char* name) {
             char value[24]{};
@@ -9747,6 +9816,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             }
         }
     }
+#endif
     render_pointer_response_=chunk.pointer_response;
     render_movie_content_=chunk.prerecorded_movie;
     render_safety_surround_=chunk.safety_surround;
@@ -10087,6 +10157,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     // Without `static` it re-entered the CRT environment lock on every frame for a value that cannot
     // change.
     static const unsigned capture_readback_draw_selection = [] {
+#if GALAXY_TEST_HOOKS
         char value[32]{};
         std::size_t length = 0;
         if (getenv_s(
@@ -10096,6 +10167,9 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             return ~0u;
         }
         return static_cast<unsigned>(std::strtoul(value, nullptr, 10));
+#else
+        return ~0u;
+#endif
     }();
     capture_readback_draw_ = capture_readback_draw_selection;
 
@@ -13395,6 +13469,7 @@ void GxBackend::on_draw(
     std::uint8_t vtxfmt,
     FifoCursor& cursor)
 {
+#if GALAXY_TEST_HOOKS
     static const std::uint64_t abort_after_draws =
         read_env_u64("GALAXY_GX_ABORT_AFTER_DRAWS", 0u);
     if (abort_after_draws != 0u &&
@@ -13404,6 +13479,7 @@ void GxBackend::on_draw(
             cursor.command_offset,
             0xFFu);
     }
+#endif
     if (cached_draw_run_active_) {
         on_cached_draw_run_draw(primitive, vtxfmt, cursor);
         return;
@@ -14244,6 +14320,7 @@ void GxBackend::on_efb_copy(std::uint32_t exec_command) {
     }
 
     if (params.copy_to_xfb) {
+#if GALAXY_TEST_HOOKS
         static const bool capture_before_xfb = [] {
             char value[8]{};
             std::size_t length = 0;
@@ -14260,6 +14337,7 @@ void GxBackend::on_efb_copy(std::uint32_t exec_command) {
                       << params.src_width << 'x' << params.src_height
                       << " stride=" << params.dest_stride << " clear=" << params.clear << '\n';
         }
+#endif
         XfbTexture* xfb = efb_copies_.acquire_xfb(params, frame_index_);
         if (xfb != nullptr) {
             const bool capture_owned = capture_owned_xfb_requested(frame_index_ + 1u);
@@ -14319,6 +14397,7 @@ void GxBackend::on_efb_copy(std::uint32_t exec_command) {
             record_monotonic_cadence_sample(xfb_copy_production_cadence_);
         }
     } else {
+#if GALAXY_TEST_HOOKS
         static const bool capture_before_texture =
             read_env_u64("GALAXY_GX_CAPTURE_EFB_BEFORE_TEXTURE_COPY", 0u) == 1u;
         static const std::uint64_t capture_texture_format =
@@ -14343,6 +14422,7 @@ void GxBackend::on_efb_copy(std::uint32_t exec_command) {
                       << " format=" << static_cast<unsigned>(params.target_format)
                       << " clear=" << params.clear << '\n';
         }
+#endif
         ++stat_tex_copies_;
         ++frame_tex_copies_;
         // Depth-source copy when the PE pixel format is Z24 at copy time

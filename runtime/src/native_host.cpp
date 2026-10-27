@@ -1105,6 +1105,40 @@ std::optional<std::filesystem::path> get_env_path(const wchar_t* name) {
     return std::filesystem::path(buffer);
 }
 
+// Test-session features (galaxy/test_hooks.h): the game's audio written to a WAV file (and with _ONLY, no sound
+// device), the hidden test window, and the retired DSP mixer test runs may select. Release runtimes have none.
+std::optional<std::filesystem::path> wav_dump_path() {
+#if GALAXY_TEST_HOOKS
+    return get_env_path(L"GALAXY_AUDIO_WAV_DUMP");
+#else
+    return std::nullopt;
+#endif
+}
+
+bool wav_dump_only() {
+#if GALAXY_TEST_HOOKS
+    return read_env_flag("GALAXY_AUDIO_WAV_DUMP_ONLY", false);
+#else
+    return false;
+#endif
+}
+
+bool hidden_test_window() {
+#if GALAXY_TEST_HOOKS
+    return read_env_flag("GALAXY_HIDE_WINDOW", false);
+#else
+    return false;
+#endif
+}
+
+bool retired_dsp_mixer_allowed_for_tests() {
+#if GALAXY_TEST_HOOKS || defined(GALAXY_TEST_ALLOW_RETIRED_DSP_MIXER)
+    return read_env_flag("GALAXY_ALLOW_RETIRED_DSP_MIXER_FOR_TESTS", false);
+#else
+    return false;
+#endif
+}
+
 bool read_env_flag_uncached(const char* name, bool default_value) {
     char buffer[32]{};
     std::size_t length = 0;
@@ -2969,7 +3003,7 @@ private:
         open_attempted_ = true;
 
         const std::optional<std::filesystem::path> path =
-            get_env_path(L"GALAXY_AUDIO_WAV_DUMP");
+            wav_dump_path();
         if (!path.has_value() || path->empty()) {
             disabled_ = true;
             return false;
@@ -3206,9 +3240,9 @@ public:
             log_drop("unsupported Wii AI PCM sample rate");
             return false;
         }
-        if (read_env_flag("GALAXY_AUDIO_WAV_DUMP_ONLY")) {
+        if (wav_dump_only()) {
             const std::optional<std::filesystem::path> dump_path =
-                get_env_path(L"GALAXY_AUDIO_WAV_DUMP");
+                wav_dump_path();
             if (!dump_path.has_value() || dump_path->empty()) {
                 std::cerr << "[audio] GALAXY_AUDIO_WAV_DUMP_ONLY requires "
                              "GALAXY_AUDIO_WAV_DUMP\n";
@@ -3379,7 +3413,7 @@ public:
             endpoint_unheard_buffers_.fetch_add(1u, std::memory_order_relaxed);
             // Keeps an explicitly requested PCM diagnostic even when the endpoint is absent. This output
             // remains unheard.
-            if (get_env_path(L"GALAXY_AUDIO_WAV_DUMP").has_value()) {
+            if (wav_dump_path().has_value()) {
                 std::vector<std::byte> pcm_le(source.size());
                 if (!native_audio_convert_wii_ai_pcm16(source, pcm_le)) {
                     log_drop("offline audio WAV diagnostic failed");
@@ -4286,7 +4320,7 @@ private:
         // teardown and are counted there.
         if (strict_failure_.load(std::memory_order_acquire)) return false;
         endpoint_unheard_buffers_.fetch_add(1u, std::memory_order_relaxed);
-        if (get_env_path(L"GALAXY_AUDIO_WAV_DUMP").has_value() &&
+        if (wav_dump_path().has_value() &&
             !wav_dump_.append(buffer.bytes, buffer.sample_rate)) {
             log_drop("offline audio WAV diagnostic failed");
             return false;
@@ -7716,6 +7750,7 @@ ULONGLONG mouse_pointer_transient_loss_hold_ms() {
 }
 
 ULONGLONG script_pointer_live_mouse_grace_ms() {
+#if GALAXY_TEST_HOOKS
     const std::optional<std::uint64_t> override_ms =
         read_env_u64_optional("GALAXY_INPUT_SCRIPT_POINTER_LIVE_MOUSE_MS");
     if (!override_ms.has_value()) {
@@ -7723,10 +7758,17 @@ ULONGLONG script_pointer_live_mouse_grace_ms() {
     }
     return static_cast<ULONGLONG>(
         std::min<std::uint64_t>(*override_ms, 5000u));
+#else
+    return 250;
+#endif
 }
 
 bool script_pointer_force_enabled() {
+#if GALAXY_TEST_HOOKS
     return read_env_flag("GALAXY_INPUT_SCRIPT_POINTER_FORCE");
+#else
+    return false;
+#endif
 }
 
 void apply_script_buttons_to_snapshot(
@@ -8622,7 +8664,7 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
     // script acquisition stay intact, but no User32 focus, key or cursor calls are issued on the
     // real-time HID consumer. The wrapper treats GALAXY_HIDE_WINDOW as immutable process policy.
     static const bool host_window_input_enabled =
-        !read_env_flag("GALAXY_HIDE_WINDOW");
+        !hidden_test_window();
     HWND focused_window = nullptr;
     const bool window_focused =
         host_window_input_enabled &&
@@ -11334,7 +11376,7 @@ GuestAddressSpace::GuestAddressSpace(
 #if defined(GALAXY_HAVE_NATIVE_DSP)
 #if defined(GALAXY_TEST_ALLOW_RETIRED_DSP_MIXER)
     const bool allow_retired_dsp_mixer_for_tests =
-        read_env_flag("GALAXY_ALLOW_RETIRED_DSP_MIXER_FOR_TESTS", false);
+        retired_dsp_mixer_allowed_for_tests();
 #else
     constexpr bool allow_retired_dsp_mixer_for_tests = false;
 #endif
@@ -11360,7 +11402,7 @@ GuestAddressSpace::GuestAddressSpace(
 #else
 #if defined(GALAXY_TEST_ALLOW_RETIRED_DSP_MIXER)
     if (!dsp_dusk_hle_enabled_ &&
-        !read_env_flag("GALAXY_ALLOW_RETIRED_DSP_MIXER_FOR_TESTS", false)) {
+        !retired_dsp_mixer_allowed_for_tests()) {
         throw std::runtime_error(
             "runtime was built without generated RMGE01 DSP ucode; native DSP "
             "is required");
@@ -11474,7 +11516,7 @@ bool GuestAddressSpace::prepare_for_process_exit() {
 bool GuestAddressSpace::preinitialize_native_audio() {
     const NativeAudioPreinitializeMode mode = native_audio_preinitialize_mode(
         read_env_flag("GALAXY_AUDIO_DISABLE"),
-        read_env_flag("GALAXY_AUDIO_WAV_DUMP_ONLY"));
+        wav_dump_only());
     if (mode != NativeAudioPreinitializeMode::NativeOutput) {
         const char* const mode_name =
             mode == NativeAudioPreinitializeMode::SkipWavDumpOnly
@@ -18968,7 +19010,7 @@ void GuestAddressSpace::render_dsp_sync_frame(
     throw std::runtime_error(
         "retired high-level DSP mixer is disabled; native DSP is required");
 #else
-    if (!read_env_flag("GALAXY_ALLOW_RETIRED_DSP_MIXER_FOR_TESTS", false)) {
+    if (!retired_dsp_mixer_allowed_for_tests()) {
         throw std::runtime_error(
             "retired high-level DSP mixer is disabled; native DSP is required");
     }
@@ -19234,7 +19276,7 @@ void GuestAddressSpace::queue_pending_dsp_sync_subframe() {
     throw std::runtime_error(
         "retired high-level DSP mixer is disabled; native DSP is required");
 #else
-    if (!read_env_flag("GALAXY_ALLOW_RETIRED_DSP_MIXER_FOR_TESTS", false)) {
+    if (!retired_dsp_mixer_allowed_for_tests()) {
         throw std::runtime_error(
             "retired high-level DSP mixer is disabled; native DSP is required");
     }
@@ -19288,7 +19330,7 @@ void GuestAddressSpace::render_dsp_sync_subframes(
     throw std::runtime_error(
         "retired high-level DSP mixer is disabled; native DSP is required");
 #else
-    if (!read_env_flag("GALAXY_ALLOW_RETIRED_DSP_MIXER_FOR_TESTS", false)) {
+    if (!retired_dsp_mixer_allowed_for_tests()) {
         throw std::runtime_error(
             "retired high-level DSP mixer is disabled; native DSP is required");
     }
@@ -21658,6 +21700,7 @@ void GuestAddressSpace::render_dsp_sync_subframes(
 
     // This whole mixer exists only in the explicitly test-only fallback below. Its opt-in name stays
     // test-scoped, so a Release diagnostic cannot imply that it observes the native DSP coprocessor.
+#if GALAXY_TEST_HOOKS
     const bool trace_audio_events =
         read_env_flag("GALAXY_TEST_TRACE_RETIRED_DSP_AUDIO_EVENTS");
     if (trace_audio_events && first_subframe == 0u) {
@@ -21685,6 +21728,7 @@ void GuestAddressSpace::render_dsp_sync_subframes(
         dsp_audio_event_last_rendered_ = rendered_channels;
         dsp_audio_event_last_adpcm_ = adpcm_channels;
     }
+#endif
 
     if (log_this_frame) {
         std::cout << "[dsp-audio] sync #" << sync_frame_index
