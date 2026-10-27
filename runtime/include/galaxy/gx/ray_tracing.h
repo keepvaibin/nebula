@@ -777,7 +777,7 @@ private:
     bool engine_specular_ = true;   // GALAXY_RT_ENGINE_SPECULAR
     bool engine_points_ = true;     // GALAXY_RT_ENGINE_POINTS: the game's point lights and the star core
     bool engine_bounces_ = true;    // GALAXY_RT_ENGINE_BOUNCES: indirect hits take their cached light (every bounce)
-    bool engine_anti_lag_ = true;   // GALAXY_RT_ENGINE_ANTILAG: the diffuse history's anti-lag
+    bool engine_anti_lag_ = true;   // GALAXY_RT_ENGINE_ANTILAG: the histories' anti-lag
     bool engine_light_history_ = true;   // GALAXY_RT_ENGINE_LIGHT_HISTORY=0: no temporal light reuse
     bool engine_clear_wanted_ = true;  // GALAXY_RT_ENGINE_CLEAR: the clear-surface pass
     bool surface_reflections_ = true;  // RenderConfig::rt_reflections (surface_reflections_active)
@@ -981,11 +981,9 @@ private:
     // kStarSlots balls and the stars' colour over time (rt_lighting.hlsl kStarColour), each with the frame it was
     // taken (+1; 0: free) and whether the colour was copied.
     static constexpr unsigned kBallReadbacks = 4u;
-    // After the balls and the colour: the pixel probe's two records (GALAXY_RT_PROBE: rt_engine.hlsl EngineGBufferCS),
-    // the engine reference's comparison (rt_engine.hlsl EngineFinalCS) and a spare.
-    // The probe's records (GALAXY_RT_PROBE: 0, 1, 3, 7, 8), the reference's comparison (2), the light meter's sums (4 to
-    // 6).
-    static constexpr unsigned kProbeRecords = 9u;
+    // After the balls and the colour: the probe's records (GALAXY_RT_PROBE: 0, 1, 3, 7, 8), the engine reference's
+    // comparison (2), the light meter's sums (4 to 6; the specular history's, 9).
+    static constexpr unsigned kProbeRecords = 10u;
     static constexpr unsigned kBallReadbackBytes = kStarSlots * 16u + 16u + kProbeRecords * 16u;
     // GALAXY_RT_PROBE=x,y (diagnostics): an EFB pixel whose sample reports, once a second, the draw the camera sees and
     // what stops the sun's centre ray from it (draw record, material table entry, distance, instance).

@@ -1410,6 +1410,14 @@ void SceneRayTracer::begin_frame(std::uint64_t frame_index) {
                          probe[18] / 256.0 / n, probe[20] / 256.0 / n, probe[21] / 256.0 / n, probe[23] / 16.0 / n,
                          probe[19]);
         }
+        // [rt-spec-meter]: the means over the meter's disc of the specular history's length (frames), the share of it
+        // reprojected by the reflection's motion, and the light change the histories take.
+        if (light_meter_ && probe[39] != 0u) {
+            const double n = static_cast<double>(probe[39]);
+            std::fprintf(stderr, "[rt-spec-meter] frame=%llu history=%.2f virtual=%.3f change=%.4f pixels=%u\n",
+                         static_cast<unsigned long long>(taken), probe[36] / 16.0 / n, probe[37] / 256.0 / n,
+                         probe[38] / 256.0 / n, probe[39]);
+        }
         // [rt-motion-meter]: where the raster's motion takes the disc's pixels against the camera's reprojection (mean
         // x, y and distance, render pixels) and the share the histories follow it for (more than half a pixel off).
         if (light_meter_ && probe[27] != 0u) {

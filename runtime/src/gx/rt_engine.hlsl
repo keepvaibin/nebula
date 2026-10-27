@@ -32,7 +32,7 @@ static const uint kEvGiOut = 9u;          // per half-pixel uint2: indirect diff
 static const uint kEvSpecular = 10u;      // per pixel uint2: traced specular rgb (halves), hit distance
 static const uint kEvHistDiffuse = 11u;   // per pixel uint4: diffuse rgb, history length (halves); moments 1, 2
 static const uint kEvHistDiffusePrev = 12u;
-static const uint kEvHistSpecular = 13u;
+static const uint kEvHistSpecular = 13u;   // per pixel kSpecHistoryBytes (EngineTemporalCS)
 static const uint kEvHistSpecularPrev = 14u;
 static const uint kEvAtrousA = 15u;       // per pixel uint4: diffuse rgb + variance, specular rgb + variance (halves);
 static const uint kEvAtrousB = 16u;       // before EngineTemporalCS the sun shadow's blurs (x: visibility, penumbra)
@@ -84,7 +84,7 @@ static const uint kEngineBounceCache = 131072u; // GALAXY_RT_ENGINE_BOUNCES (def
 static const uint kEngineWaterLight = 524288u;  // last frame's water (kEvWaterScene, kEvWaterPositions) shades light
 static const uint kEngineReference = 262144u;   // GALAXY_RT_ENGINE_REFERENCE: the converged reference accumulates
                                                  // (g_engine_params: x its buffer's view, y paths so far, z bounces)
-static const uint kEngineNoAntiLag = 1048576u;   // GALAXY_RT_ENGINE_ANTILAG=0: the diffuse history without its anti-lag
+static const uint kEngineNoAntiLag = 1048576u;   // GALAXY_RT_ENGINE_ANTILAG=0: the histories without their anti-lag
 static const uint kEngineNoLightHistory = 2097152u;  // GALAXY_RT_ENGINE_LIGHT_HISTORY=0: no temporal light reuse
 static const uint kEngineNoBoiling = 8388608u;   // GALAXY_RT_ENGINE_BOILING=0: no boiling filter
 static const uint kEngineMotion = 16777216u;     // the raster's motion this frame (kEvMotion)
@@ -123,6 +123,13 @@ float shown_emission(float intensity)
 {
     return intensity < 1.0f ? intensity : min(intensity, kEmitterShown);
 }
+// The specular history's record per pixel (kEvHistSpecular): rgb, history length (halves); the diffuse history's fast
+// luminance (float: its anti-lag); the specular's fast luminance and the reflection's tracking distance (halves); the
+// specular luminance's first two moments (floats); how it was reprojected (kSpecVirtual); a spare.
+static const uint kSpecHistoryBytes = 32u;
+static const uint kSpecVirtual = 1u;   // by the reflection's virtual image (else the surface's motion)
+static const float kSpecHistoryMost = 32.0f;
+
 // A new direct or specular sample is a firefly past this many times its brightest neighbour's (EngineTemporalCS).
 static const float kFireflyRatio = 2.0f;
 // The share of the backdrop's colour (its chroma about its luminance) in the light it sends onto surfaces. A painted
@@ -258,6 +265,7 @@ void EngineGBufferCS(uint3 id : SV_DispatchThreadID)
         g_final[g_sample_size.x * g_sample_size.y + kStarSlots + 4u] = uint4(0u, 0u, 0u, 0u);
         g_final[g_sample_size.x * g_sample_size.y + kStarSlots + 5u] = uint4(0u, 0u, 0u, 0u);
         g_final[g_sample_size.x * g_sample_size.y + kStarSlots + 6u] = uint4(0u, 0u, 0u, 0u);
+        g_final[g_sample_size.x * g_sample_size.y + kStarSlots + 9u] = uint4(0u, 0u, 0u, 0u);
     }
     const int2 q = int2(id.xy);
     const uint pixel = id.y * g_target_size.x + id.x;
@@ -1635,6 +1643,164 @@ float3 engine_unreproject_normal(float3 n)
     return normalize(g_reproject[0].xyz * n.x + g_reproject[1].xyz * n.y + g_reproject[2].xyz * n.z);
 }
 
+// The specular history (EngineTemporalCS; after NVIDIA's ReBLUR, Zhdan, "Fast Denoising with Self-Stabilizing Recurrent
+// Blurs", GTC 2020, and its published NRD shaders; our own code). A reflection moves with what it shows, not with the
+// surface showing it: on the Gateway's turning ring the reflected planet stays still while the gold turns under it, and
+// under a moving camera a mirror's picture moves by its own parallax. Taken where the surface was, the history held
+// another part of the reflection, the clamp to the one-sample neighbours fought it, and the reflection glittered and
+// trailed. Two candidates are taken, where the surface was and where the reflection's virtual image was, each judged by
+// what can be trusted of it, and the one with the longer trusted history kept.
+
+// The tangent of the half-angle of the reflection lobe holding `share` of it at perceptual roughness `roughness`
+// (GGX: a microfacet normal lies within theta of the surface's with probability tan^2 / (alpha^2 + tan^2); with the
+// perceptual roughness in alpha's place, NRD's convention, it spans the reflected lobe, about twice the normals' spread).
+static const float kLobeShare = 0.75f;
+
+float lobe_tan(float roughness, float share)
+{
+    return roughness * sqrt(share / (1.0f - share));
+}
+
+// The share of the way from the normal to the mirror direction at which the GGX lobe peaks (Lagarde and de Rousiers
+// 2014, Moving Frostbite to PBR, listing 22): 1 for a mirror, 0 at roughness 1.
+float dominant_factor(float roughness)
+{
+    const float s = 1.0f - roughness;
+    return s * (sqrt(s) + roughness);
+}
+
+float3 dominant_direction(float3 n, float3 v, float roughness)
+{
+    return normalize(lerp(n, reflect(-v, n), dominant_factor(roughness)));
+}
+
+// The G-buffers' normals carry 16-bit octahedral precision; a smaller angle than this between two of them, or a lobe
+// narrower than it, is the encoding's and the jitter's (radians, 0.5 degrees).
+static const float kNormalTolerance = 0.0087f;
+
+// The surface's curvature about pixel `q` (1 / radius; above 0 convex towards the eye) along the screen direction
+// `along`: the change of the normal to the next pixels across and down over the distance their view rays meet the
+// pixel's tangent plane at, mixed by the direction (NRD's estimate). A neighbour on another surface counts as flat.
+float surface_curvature(GSurface s, int2 q, float2 along)
+{
+    RWByteAddressBuffer gb = engine_buffer(kEvGBuffer);
+    const float2 share = (abs(along) + 1.0f / 256.0f) / (abs(along.x) + abs(along.y) + 2.0f / 256.0f);
+    float3 x = float3(0.0f, 0.0f, 0.0f);
+    float3 n = float3(0.0f, 0.0f, 0.0f);
+    [unroll] for (uint k = 0u; k < 2u; ++k) {
+        const int2 o = min(q + (k == 0u ? int2(1, 0) : int2(0, 1)), int2(g_target_size) - 1);
+        const float3 ray = pixel_direction(g_projection, g_viewport, float2(o) + 0.5f);
+        const float3 on_plane = ray * (dot(s.ng, s.p) / min(dot(s.ng, ray), -1e-4f));
+        const uint op = uint(o.y) * g_target_size.x + uint(o.x);
+        const float z = asfloat(gb.Load(op * 32u + 16u));
+        const bool same = z != 0.0f && abs(z - on_plane.z) < 0.02f * abs(s.p.z) + 1.0f && any(o != q);
+        x += (same ? on_plane : s.p) * share[k];
+        n += (same ? unpack_normal(gb.Load(op * 32u)) : s.n) * share[k];
+    }
+    const float3 edge = x - s.p;
+    const float length2 = dot(edge, edge);
+    return length2 > 1e-8f ? dot(normalize(n) - s.n, edge) / length2 : 0.0f;
+}
+
+// The eye-space point of a reflection's virtual image: from point `p` (normal `n`, towards the eye `v`, perceptual
+// roughness `roughness`) whose reflection meets what it shows `track` away along the lobe's peak, that point mirrored
+// behind the surface, nearer for a convex surface and farther for a concave one by the thin-lens equation of a curved
+// mirror (1 / image + 1 / object = 2 curvature; NRD's GetXvirtual); `image_share`, how far it lies from the surface
+// against the hit (0: on the surface, where the surface's own motion carries it).
+float3 virtual_image(float3 p, float3 n, float3 v, float roughness, float track, float curvature, out float image_share)
+{
+    const float nv = saturate(abs(dot(n, v)));
+    const float f = dominant_factor(roughness);
+    const float3 d = dominant_direction(n, v, roughness);
+    const float object = -track * max(dot(d, n), 1e-3f);
+    float magnification = 1.0f / (2.0f * curvature * object - 1.0f);
+    // Near a convex silhouette, where the image races across the curve, it is held nearer (NRD).
+    magnification /= 1.0f + length(p) * (1.0f - nv) * max(curvature, 0.0f);
+    const float distance = f * track * abs(magnification);
+    image_share = track > 0.0f ? saturate(distance / track) : 0.0f;
+    // Behind the surface (a real image, magnification above 0, in front of it).
+    return p + v * (magnification < 0.0f ? -distance : distance);
+}
+
+// One candidate for the specular history: the last frame's records bilinear about pixel position `a` (continuous, pixel
+// centres at .5) over its taps that show this surface.
+struct SpecHistory {
+    float3 rgb;
+    float len;         // frames
+    float fast;        // luminance over the last kFastHistory frames
+    float track;       // the reflection's tracking distance then
+    float2 moments;    // of luminance
+    float footprint;   // the bilinear weight of the taps kept (1: all four)
+    float3 n;          // their normal, in this frame's eye space
+    float3 p;          // their point, in this frame's eye space
+    float roughness;
+};
+
+// Surface motion's taps (`virtual_motion` false) show the surface where engine_history puts it: its depth and normal
+// there. The virtual image's taps lie on the pixel's tangent plane (their points then, carried into this frame's eye
+// space) and face the same side (ReBLUR's occlusion test; how alike their normals are is the candidate's confidence).
+SpecHistory spec_history(float2 a, GSurface s, History hp, bool virtual_motion)
+{
+    SpecHistory h = (SpecHistory)0;
+    const float2 c = a - 0.5f;
+    const int2 b = int2(floor(c));
+    const float2 f = c - float2(b);
+    RWByteAddressBuffer gb = engine_buffer(kEvGBufferPrev);
+    RWByteAddressBuffer ps = engine_buffer(kEvHistSpecularPrev);
+    const float plane = 0.02f * abs(s.p.z) + 1.0f;
+    float weight = 0.0f;
+    float4 rgb_len = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    [unroll] for (uint k = 0u; k < 4u; ++k) {
+        const int2 o = b + int2(k & 1u, k >> 1u);
+        if (any(o < 0) || any(o >= int2(g_target_size))) {
+            continue;
+        }
+        const uint op = uint(o.y) * g_target_size.x + uint(o.x);
+        const uint4 w0 = gb.Load4(op * 32u);
+        const uint4 w1 = gb.Load4(op * 32u + 16u);
+        if (w1.x == 0u) {
+            continue;
+        }
+        const float z = asfloat(w1.x);
+        const float3 p = engine_unreproject(eye_position(g_history_projection, g_viewport, float2(o) + 0.5f, z));
+        const float3 n = engine_unreproject_normal(unpack_normal(w0.x));
+        if (virtual_motion ? abs(dot(s.ng, p - s.p)) > plane || dot(n, s.n) < 0.0175f
+                           : abs(z - hp.z) > hp.tolerance || dot(unpack_normal(w0.x), hp.n) < hp.facing) {
+            continue;
+        }
+        const float w = ((k & 1u) != 0u ? f.x : 1.0f - f.x) * ((k & 2u) != 0u ? f.y : 1.0f - f.y);
+        const uint4 r0 = ps.Load4(op * kSpecHistoryBytes);
+        const uint4 r1 = ps.Load4(op * kSpecHistoryBytes + 16u);
+        rgb_len += float4(f16tof32(r0.x), f16tof32(r0.x >> 16u), f16tof32(r0.y), f16tof32(r0.y >> 16u)) * w;
+        h.fast += f16tof32(r0.w) * w;
+        h.track += f16tof32(r0.w >> 16u) * w;
+        h.moments += asfloat(r1.xy) * w;
+        h.n += n * w;
+        h.p += p * w;
+        h.roughness += float(w0.z >> 24u) / 255.0f * w;
+        weight += w;
+    }
+    h.footprint = weight;
+    if (weight > 1e-3f) {
+        const float r = 1.0f / weight;
+        h.rgb = rgb_len.rgb * r;
+        h.len = rgb_len.a * r;
+        h.fast *= r;
+        h.track *= r;
+        h.moments *= r;
+        h.n = normalize(h.n);
+        h.p *= r;
+        h.roughness *= r;
+    }
+    return h;
+}
+
+// Whether pixel `pixel`'s specular history was reprojected by the reflection's virtual image (1) or the surface (0).
+float spec_history_virtual(uint pixel)
+{
+    return (engine_buffer(kEvHistSpecular).Load(pixel * kSpecHistoryBytes + 24u) & kSpecVirtual) != 0u ? 1.0f : 0.0f;
+}
+
 // The previous frame's pixel of pixel `q`'s surface (eye-space point `p`, normal `n`), and whether the surface there is
 // this one.
 bool engine_reproject(int2 q, float3 p, float3 n, out uint prev_pixel)
@@ -1929,12 +2095,12 @@ void EngineDirectSpatialCS(uint3 id : SV_DispatchThreadID)
 // change and whether its light is new (EngineDirectCS, EngineDirectSpatialCS). A-SVGF filters its gradients before it
 // takes them as the history's weight (one sample a pixel is noise); the mean of the new lights' flags is their share
 // of the light. The histories weigh this frame (1 - change) / length + change: a light that appears, goes or changes
-// shows at once instead of over the history's half second.
-float light_change(int2 q)
+// shows at once instead of over the history's half second. y: the new lights' share alone.
+float2 light_change(int2 q)
 {
     RWByteAddressBuffer direct = engine_buffer(kEvDirect);
     const int spread = int(round(footprint_scale()));
-    float sum = 0.0f;
+    float2 sum = float2(0.0f, 0.0f);
     float n = 0.0f;
     [unroll] for (int j = -2; j <= 2; ++j) {
         [unroll] for (int i = -2; i <= 2; ++i) {
@@ -1943,11 +2109,11 @@ float light_change(int2 q)
                 continue;
             }
             const uint z = direct.Load((uint(o.y) * g_target_size.x + uint(o.x)) * 16u + 8u);
-            sum += max(f16tof32(z), f16tof32(z >> 16u));
+            sum += float2(max(f16tof32(z), f16tof32(z >> 16u)), f16tof32(z >> 16u));
             n += 1.0f;
         }
     }
-    return n > 0.0f ? saturate(sum / n) : 0.0f;
+    return n > 0.0f ? saturate(sum / n) : float2(0.0f, 0.0f);
 }
 
 // A pixel's sun shadow as a stage of its filter reads it: its visibility and penumbra (eye units; kShadowLit, 0: see
@@ -2299,7 +2465,7 @@ GiReservoir indirect_reservoir(uint2 id, uint index, out bool surface)
                                                                     min(hp.x, half_size.x - 1u));
         // Its radiance is the last frame's: where the light changed it counts as little as the light change leaves it
         // (Remix's validateLightingChange drops such samples outright).
-        previous.m = min(previous.m, 30.0f) * (1.0f - light_change(q));
+        previous.m = min(previous.m, 30.0f) * (1.0f - light_change(q).x);
         if (previous.W > 0.0f) {
             const float t = gi_target(s, previous.x, previous.radiance);
             gi_update(r, previous.x, previous.hn, previous.radiance, t, t * previous.W * previous.m, previous.m, seed);
@@ -2495,14 +2661,14 @@ float3 gi_upsampled(GSurface s, int2 q)
 }
 
 // Temporal accumulation: this frame's diffuse (the lights' direct light and the indirect light; the sun's is
-// EngineFinalCS's) and specular (the traced reflection) onto their reprojected histories (bilinear over the previous
-// pixels on this surface), with the first two moments of luminance for the a-trous's variance. History length at most
-// 32 (diffuse) and 16 (specular); the specular history is clamped to the 3 x 3 neighbourhood's range (ghosting). The
-// diffuse history's anti-lag (after NVIDIA's ReBLUR, our own code): a fast history of its luminance (kFastHistory
-// frames, kept in the specular history's spare word) against the slow one (the first moment); where they part by more
-// than the noise allows (1.5 x the frames' deviation: three of the fast history's), the light changed (a lamp moved, a
-// caster passed) and the history shortens to follow, to kFastHistory frames at most. A 32-frame history alone kept a
-// moving light's pool, and the dark a character leaves in the bounce light, for half a second.
+// EngineFinalCS's) and specular (the traced reflection) onto their reprojected histories, with the first two moments of
+// luminance for the a-trous's variance. The diffuse history (at most 32 frames) is the surface's, bilinear over the
+// previous pixels on this surface; the specular history (at most kSpecHistoryMost) the surface's or the reflection's
+// virtual image's (spec_history). The anti-lag (after NVIDIA's ReBLUR, our own code), for each: a fast history of its
+// luminance (kFastHistory frames) against the slow one (the first moment); where they part by more than the noise
+// allows (1.5 x the frames' deviation: three of the fast history's), the light changed (a lamp moved, a caster passed)
+// and the history shortens to follow, to kFastHistory frames at most. A 32-frame history alone kept a moving light's
+// pool, and the dark a character leaves in the bounce light, for half a second.
 [numthreads(8, 8, 1)]
 void EngineTemporalCS(uint3 id : SV_DispatchThreadID)
 {
@@ -2517,7 +2683,8 @@ void EngineTemporalCS(uint3 id : SV_DispatchThreadID)
     RWByteAddressBuffer out_a = engine_buffer(kEvAtrousA);
     if (!s.valid || (s.flags & kGbEmitter) != 0u) {
         hist_d.Store4(pixel * 16u, uint4(0u, 0u, 0u, 0u));
-        hist_s.Store4(pixel * 16u, uint4(0u, 0u, 0u, 0u));
+        hist_s.Store4(pixel * kSpecHistoryBytes, uint4(0u, 0u, 0u, 0u));
+        hist_s.Store4(pixel * kSpecHistoryBytes + 16u, uint4(0u, 0u, 0u, 0u));
         out_a.Store4(pixel * 16u, uint4(0u, 0u, 0u, 0u));
         return;
     }
@@ -2528,30 +2695,37 @@ void EngineTemporalCS(uint3 id : SV_DispatchThreadID)
     float3 specular = float3(f16tof32(sv.x), f16tof32(sv.x >> 16u), f16tof32(sv.y));
     diffuse = safe_light(diffuse);
     specular = safe_light(specular);
-    // The neighbourhood's specular range (clamping the history), and the brightest of the 8 neighbours' direct light
-    // and specular: a new sample above them is a firefly (one light sample's spike), lowered to them before it enters
-    // the history; otherwise the a-trous's variance spreads it and the history keeps it, growing spikes into blobs.
-    float3 lo = specular;
-    float3 hi = specular;
+    // The brightest of the 8 neighbours' direct light and specular: a new sample above them is a firefly (one light
+    // sample's spike), lowered to them before it enters a history; otherwise the a-trous's variance spreads it and the
+    // history keeps it, growing spikes into blobs. And the 3 x 3's specular luminance moments (a short history's
+    // variance) and its nearest reflection hit, the reflection's tracking distance (NRD's: one sample a pixel scatters
+    // its hits over the lobe; the nearest thing reflected leads the reflection's motion).
     float top_direct = 0.0f;
     float top_specular = 0.0f;
+    float spec_s1 = 0.0f;
+    float spec_s2 = 0.0f;
+    float track = 0.0f;
     [unroll] for (int j = -1; j <= 1; ++j) {
         [unroll] for (int i = -1; i <= 1; ++i) {
             const int2 o = clamp(q + int2(i, j), int2(0, 0), int2(g_target_size) - 1);
             const uint op = uint(o.y) * g_target_size.x + uint(o.x);
             const uint4 ndv = direct.Load4(op * 16u);
             const uint2 nsv = engine_buffer(kEvSpecular).Load2(op * 8u);
-            const float3 ns = safe_light(float3(f16tof32(nsv.x), f16tof32(nsv.x >> 16u), f16tof32(nsv.y)));
-            lo = min(lo, ns);
-            hi = max(hi, ns);
+            const float ls = luminance(safe_light(float3(f16tof32(nsv.x), f16tof32(nsv.x >> 16u), f16tof32(nsv.y))));
+            spec_s1 += ls;
+            spec_s2 += ls * ls;
+            const float t = f16tof32(nsv.y >> 16u);
+            track = t > 0.0f && (track == 0.0f || t < track) ? t : track;
             if (i != 0 || j != 0) {
                 top_direct = max(top_direct, luminance(safe_light(float3(f16tof32(ndv.x), f16tof32(ndv.x >> 16u),
                                                                          f16tof32(ndv.y)))));
-                top_specular = max(top_specular, luminance(ns));
+                top_specular = max(top_specular, ls);
             }
         }
     }
-    if ((g_engine_info.x & kEngineNoFirefly) == 0u) {
+    const bool firefly = (g_engine_info.x & kEngineNoFirefly) == 0u;
+    const bool anti_lag = (g_engine_info.x & kEngineNoAntiLag) == 0u;
+    if (firefly) {
         // Past kFireflyRatio x the brightest neighbour: a small light is found by a few pixels first (4 candidates a
         // frame by power) and spatial reuse spreads it over the next frames. Lowered to the neighbours' level outright,
         // those first finds would never enter the history, and a Luma's or a bulb's light pool would never appear.
@@ -2561,19 +2735,17 @@ void EngineTemporalCS(uint3 id : SV_DispatchThreadID)
         if (l > cap_direct) {
             diffuse -= own_direct * (1.0f - cap_direct / l);
         }
-        const float ls = luminance(specular);
-        const float cap_specular = kFireflyRatio * top_specular;
-        if (ls > cap_specular) {
-            specular *= cap_specular / ls;
-        }
         diffuse = max(diffuse, 0.0f);
     }
     float3 prev_d = float3(0.0f, 0.0f, 0.0f);
-    float3 prev_s = float3(0.0f, 0.0f, 0.0f);
     float2 prev_m = float2(0.0f, 0.0f);
     float prev_fast = 0.0f;
     float len_d = 0.0f;
-    float len_s = 0.0f;
+    float3 prev_s = float3(0.0f, 0.0f, 0.0f);
+    float2 prev_sm = float2(0.0f, 0.0f);
+    float prev_sfast = 0.0f;
+    float prev_len_s = 0.0f;
+    bool virtual_kept = false;
     History hp;
     if ((g_flags & 1u) != 0u && engine_history(q, s.p, s.n, hp)) {
         {
@@ -2585,7 +2757,6 @@ void EngineTemporalCS(uint3 id : SV_DispatchThreadID)
             RWByteAddressBuffer ps = engine_buffer(kEvHistSpecularPrev);
             float weight = 0.0f;
             float4 acc_d = float4(0.0f, 0.0f, 0.0f, 0.0f);
-            float4 acc_s = float4(0.0f, 0.0f, 0.0f, 0.0f);
             float2 acc_m = float2(0.0f, 0.0f);
             float acc_fast = 0.0f;
             [unroll] for (uint k = 0u; k < 4u; ++k) {
@@ -2602,33 +2773,106 @@ void EngineTemporalCS(uint3 id : SV_DispatchThreadID)
                 }
                 const float w = ((k & 1u) != 0u ? f.x : 1.0f - f.x) * ((k & 2u) != 0u ? f.y : 1.0f - f.y);
                 const uint4 hd = pd.Load4(op * 16u);
-                const uint4 hs = ps.Load4(op * 16u);
                 acc_d += float4(f16tof32(hd.x), f16tof32(hd.x >> 16u), f16tof32(hd.y), f16tof32(hd.y >> 16u)) * w;
-                acc_s += float4(f16tof32(hs.x), f16tof32(hs.x >> 16u), f16tof32(hs.y), f16tof32(hs.y >> 16u)) * w;
                 acc_m += asfloat(hd.zw) * w;
-                acc_fast += asfloat(hs.z) * w;
+                acc_fast += asfloat(ps.Load(op * kSpecHistoryBytes + 8u)) * w;
                 weight += w;
             }
             if (weight > 1e-3f) {
                 prev_d = acc_d.rgb / weight;
                 len_d = acc_d.a / weight;
-                prev_s = acc_s.rgb / weight;
-                len_s = acc_s.a / weight;
                 prev_m = acc_m / weight;
                 prev_fast = acc_fast / weight;
             }
         }
+        // The specular history's two candidates (spec_history).
+        const float r = s.roughness;
+        const float3 v = normalize(-s.p);
+        const float nv = saturate(abs(dot(s.n, v)));
+        const float2 here = float2(q) + 0.5f;
+        // Where the camera alone takes the surface; the surface's own motion is the rest (pixels).
+        const float2 camera_at = eye_to_pixel(g_history_projection, g_viewport, transform(g_reproject, s.p));
+        const float2 moved = hp.a - camera_at;
+        // The hit's distance against the picture's size at the surface (NRD's hit distance factor: under 1, the
+        // reflected thing is near the surface and its reflection moves with it).
+        const float hit_factor = saturate(track / (pixel_world_size(s.p.z) * float(min(g_target_size.x, g_target_size.y))));
+        const float3 eye_then = engine_unreproject(float3(0.0f, 0.0f, 0.0f));
+        // Surface motion: it holds this reflection while the lobe's peak, from the surface's point and normal then
+        // towards the eye then, turned less than the lobe's half-angle, narrower at a grazing view and as the history
+        // grows, wider where the hit is near (NRD's surface confidence; the peak's turn, where NRD takes the camera's
+        // parallax alone, also counts the surface's own turning).
+        const SpecHistory sh = spec_history(hp.a, s, hp, false);
+        float conf_s = 0.0f;
+        if (sh.footprint > 1e-3f) {
+            const float3 d_then = dominant_direction(sh.n, normalize(eye_then - sh.p), r);
+            const float turned = acos(saturate(dot(dominant_direction(s.n, v, r), d_then)));
+            const float allowed =
+                max(atan(lobe_tan(r, kLobeShare) * lerp(nv, 1.0f, r) / (1.0f + sh.len) / max(hit_factor, 1e-3f)),
+                    kNormalTolerance);
+            conf_s = pow(saturate(1.0f - turned / allowed), 4.0f);
+            // A rough reflection is the surface's light.
+            conf_s = lerp(conf_s, 1.0f, saturate((r - 0.8f) / 0.1f));
+        }
+        // The reflection's virtual image where it was: carried by the camera, and by the surface's own motion as far as
+        // the image lies on the surface (NRD).
+        SpecHistory vh = (SpecHistory)0;
+        float conf_v = 0.0f;
+        const float curvature = surface_curvature(s, q, camera_at - here);
+        float image_share;
+        const float3 image = virtual_image(s.p, s.n, v, r, track, curvature, image_share);
+        const float3 image_then = transform(g_reproject, image);
+        if (image_then.z < -g_near) {
+            const float2 va = eye_to_pixel(g_history_projection, g_viewport, image_then) + moved * (1.0f - image_share);
+            vh = spec_history(va, s, hp, true);
+            if (vh.footprint > 1e-3f) {
+                // Its normal within the lobe's half-angle of this one (the lobe narrowing as the history grows; a curved
+                // surface bends by its curvature over the way the image moved) and its roughness alike; under a pixel's
+                // move both are the jitter's (NRD).
+                const float travelled = length(va - here);
+                const float jitter = smoothstep(0.0f, 1.0f, travelled);
+                const float lobe = atan(lobe_tan(r, kLobeShare / (1.0f + vh.len)));
+                const float bend =
+                    atan(2.0f * pixel_world_size(s.p.z) * abs(curvature) * max(travelled / max(nv, 0.01f), 1.0f));
+                const float turned = acos(saturate(dot(vh.n, s.n)));
+                const float w_normal = lerp(1.0f, saturate(1.0f - turned / (lobe + bend + kNormalTolerance)), jitter);
+                const float w_rough =
+                    lerp(1.0f, saturate(1.0f - abs(vh.roughness - r) / (r * r * 0.99f + 0.01f)), jitter);
+                // And it showed the same thing: its own virtual image (its point and normal then, towards the eye then,
+                // its tracking distance then) is this one, within half the lobe's spread at the hit and two pixels
+                // there. A thing that moved with the surface (a star bit on the turning ring) or past it shows
+                // elsewhere then, and the history there holds another picture (our own test: a still camera leaves
+                // NRD's parallax test blind to it).
+                float unused;
+                const float3 image_was = virtual_image(vh.p, vh.n, normalize(eye_then - vh.p), vh.roughness, vh.track,
+                                                       curvature, unused);
+                const float spread = 0.5f * min(track, vh.track) * lobe_tan(r, kLobeShare) +
+                                     2.0f * pixel_world_size(min(image.z, -g_near));
+                const float w_image = saturate(1.0f - distance(image, image_was) / spread);
+                conf_v = w_normal * w_rough * w_image;
+            }
+        }
+        // Each candidate's history as far as it is trusted (a history half off the surface counts for less, NRD's
+        // footprint quality), and the reflection's kept where its history is at least as long and the picture moved
+        // at all (NRD's virtual history amount, one or the other).
+        const float len_sm = min(sh.len * lerp(sqrt(sh.footprint), 1.0f, 1.0f / (1.0f + sh.len)), kSpecHistoryMost * conf_s);
+        const float len_vm = min(vh.len * lerp(sqrt(vh.footprint), 1.0f, 1.0f / (1.0f + vh.len)), kSpecHistoryMost * conf_v);
+        const float amount = saturate(1.0f + (len_vm - len_sm) / (1.0f + 0.5f * max(len_vm, len_sm))) *
+                             saturate(length(hp.a - here) / 0.25f);
+        virtual_kept = vh.footprint > 1e-3f && amount >= 0.5f;
+        prev_s = virtual_kept ? vh.rgb : sh.rgb;
+        prev_sm = virtual_kept ? vh.moments : sh.moments;
+        prev_sfast = virtual_kept ? vh.fast : sh.fast;
+        prev_len_s = virtual_kept ? len_vm : len_sm;
     }
     len_d = min(len_d + 1.0f, 32.0f);
-    len_s = min(len_s + 1.0f, 16.0f);
-    // Where the light changed, this frame weighs (1 - change) / length + change (A-SVGF).
-    const float change = light_change(q);
-    len_d = 1.0f / ((1.0f - change) / len_d + change);
-    len_s = 1.0f / ((1.0f - change) / len_s + change);
-    prev_s = clamp(prev_s, lo, hi);
+    // Where the light changed, this frame weighs (1 - change) / length + change (A-SVGF). A reflection takes only the
+    // share of new lights: a light that changes or moves is its anti-lag's to follow, its reflection changing as its
+    // own (by the diffuse light's change the reflections about the turning ring's star bits kept one frame or two).
+    const float2 change = light_change(q);
+    len_d = 1.0f / ((1.0f - change.x) / len_d + change.x);
     const float ld = luminance(diffuse);
     const float fast = lerp(prev_fast, ld, 1.0f / min(len_d, kFastHistory));
-    if (len_d > kFastHistory && (g_engine_info.x & kEngineNoAntiLag) == 0u) {
+    if (len_d > kFastHistory && anti_lag) {
         const float slow = prev_m.x;
         const float allowed = 1.5f * sqrt(max(prev_m.y - slow * slow, 0.0f)) + 0.02f * max(fast, slow) + 1e-4f;
         const float lag = abs(fast - slow);
@@ -2639,7 +2883,38 @@ void EngineTemporalCS(uint3 id : SV_DispatchThreadID)
     const float alpha_d = 1.0f / len_d;
     diffuse = lerp(prev_d, diffuse, alpha_d);
     float2 moments = lerp(prev_m, float2(ld, ld * ld), alpha_d);
+    // Without a history the neighbours are the only measure of a firefly; with one, the history is (below).
+    if (firefly && prev_len_s < 1.0f) {
+        const float ls = luminance(specular);
+        const float cap_specular = kFireflyRatio * top_specular;
+        if (ls > cap_specular) {
+            specular *= cap_specular / ls;
+        }
+    }
+    float len_s = min(prev_len_s + 1.0f, kSpecHistoryMost);
+    len_s = 1.0f / ((1.0f - change.y) / len_s + change.y);
+    const float ls = luminance(specular);
+    const float fast_s = lerp(prev_sfast, ls, 1.0f / min(len_s, kFastHistory));
+    if (len_s > kFastHistory && anti_lag) {
+        const float slow = prev_sm.x;
+        const float allowed = 1.5f * sqrt(max(prev_sm.y - slow * slow, 0.0f)) + 0.02f * max(fast_s, slow) + 1e-4f;
+        const float lag = abs(fast_s - slow);
+        if (lag > allowed) {
+            len_s = max(len_s * (allowed / lag) * (allowed / lag), kFastHistory);
+        }
+    }
+    const float3 history_s = prev_s;
     specular = lerp(prev_s, specular, 1.0f / len_s);
+    const float2 moments_s = lerp(prev_sm, float2(ls, ls * ls), 1.0f / len_s);
+    if (firefly && prev_len_s >= 1.0f) {
+        // The result at most (2 + 38 / (N + 1)) x its history's luminance, the more firmly the longer the history (NRD's
+        // firefly suppressor): one sample's spike off a small bright light enters a converged reflection slowly.
+        const float most = luminance(history_s) * (2.0f + 38.0f / (prev_len_s + 1.0f));
+        const float l = luminance(specular);
+        if (l > most) {
+            specular *= lerp(1.0f, most / l, 3.0f * prev_len_s / (1.0f + 3.0f * prev_len_s));
+        }
+    }
     // Variance from the moments; a short history takes the spatial neighbourhood's instead (SVGF).
     float variance = max(moments.y - moments.x * moments.x, 0.0f);
     if (len_d < 4.0f) {
@@ -2659,9 +2934,19 @@ void EngineTemporalCS(uint3 id : SV_DispatchThreadID)
         s1 /= n;
         variance = max(s2 / n - s1 * s1, variance) * (4.0f / len_d);
     }
-    const float variance_s = max(luminance(hi - lo) * luminance(hi - lo) * 0.25f, 1e-6f);
+    // The specular's: the samples' variance over the history's frames, the noise left in it (the a-trous then blurs a
+    // converged reflection no further than its noise; by the samples' variance alone it blurred every reflection as if
+    // it were one frame's).
+    float variance_s = max(moments_s.y - moments_s.x * moments_s.x, 0.0f);
+    if (len_s < 4.0f) {
+        const float m1 = spec_s1 / 9.0f;
+        variance_s = max(spec_s2 / 9.0f - m1 * m1, variance_s) * (4.0f / len_s);
+    }
+    variance_s = max(variance_s / len_s, 1e-8f);
     hist_d.Store4(pixel * 16u, uint4(pack_half2(diffuse.r, diffuse.g), pack_half2(diffuse.b, len_d), asuint(moments)));
-    hist_s.Store4(pixel * 16u, uint4(pack_half2(specular.r, specular.g), pack_half2(specular.b, len_s), asuint(fast), 0u));
+    hist_s.Store4(pixel * kSpecHistoryBytes, uint4(pack_half2(specular.r, specular.g), pack_half2(specular.b, len_s),
+                                                   asuint(fast), pack_half2(fast_s, min(track, 6.0e4f))));
+    hist_s.Store4(pixel * kSpecHistoryBytes + 16u, uint4(asuint(moments_s), virtual_kept ? kSpecVirtual : 0u, 0u));
     out_a.Store4(pixel * 16u, uint4(pack_half2(diffuse.r, diffuse.g), pack_half2(diffuse.b, variance),
                                     pack_half2(specular.r, specular.g), pack_half2(specular.b, variance_s)));
 }
@@ -2680,9 +2965,9 @@ float depth_gradient(int2 q, float z)
     return max(gx, gy);
 }
 
-// One a-trous iteration (step g_engine_info.y; 5 x 5 B3 spline): weights by the depth plane, the normal (n.n^64), and
-// luminance against the variance (sigma 4 x its square root); the variance filtered with the squared weights. The
-// first iteration's result becomes the history (SVGF).
+// One a-trous iteration (step g_engine_info.y; 5 x 5 B3 spline): weights by the depth plane, the normal, and luminance
+// against the variance (sigma 4 x its square root); the variance filtered with the squared weights. The first
+// iteration's result becomes the history (SVGF).
 [numthreads(8, 8, 1)]
 void EngineAtrousCS(uint3 id : SV_DispatchThreadID)
 {
@@ -2716,14 +3001,19 @@ void EngineAtrousCS(uint3 id : SV_DispatchThreadID)
     float4 sum_s = float4(0.0f, 0.0f, 0.0f, 0.0f);
     float wd_sum = 0.0f;
     float ws_sum = 0.0f;
-    float spec_power = lerp(128.0f, 8.0f, s.roughness);
     // A short diffuse history (a moving character, a disocclusion) borrows from neighbours of less like normals: n.n^2
     // at one frame to n.n^64 from eight. A fixed n.n^64 (or ^8) leaves a moving character's raw indirect noise.
     const float history = f16tof32(engine_buffer(kEvHistDiffuse).Load(pixel * 16u + 4u) >> 16u);
     const float normal_power = lerp(2.0f, 64.0f, saturate((history - 1.0f) / 7.0f));
-    // A reflection spreads no wider than its lobe: a polished surface's (one ray along a near-mirror direction, a sharp
-    // image whose hit lighting alone is noisy) keeps to its pixel, the full filter from roughness 0.3.
-    const float spec_spread = saturate((s.roughness - 0.05f) / 0.25f);
+    // A reflection blurs over its lobe's footprint on screen and no wider (ReBLUR's weights, our own code): the lobe
+    // spreads the reflected thing's distance (the tracking distance, EngineTemporalCS) x its half-angle's tangent about
+    // the virtual image, which the eye sees past the surface; across normals within the lobe's half-angle and like
+    // roughness. Spread by roughness alone (none under 0.05, the whole filter from 0.3), a polished surface kept its
+    // one-sample noise and a glossy one blurred its reflection past its lobe.
+    const float track = f16tof32(engine_buffer(kEvHistSpecular).Load(pixel * kSpecHistoryBytes + 12u) >> 16u);
+    const float spec_tan = track * lobe_tan(s.roughness, kLobeShare) / (length(s.p) + track);
+    const float spec_radius = spec_tan * abs(s.p.z) / pixel_world_size(s.p.z);
+    const float spec_lobe = max(atan(lobe_tan(s.roughness, kLobeShare)), kNormalTolerance);
     [unroll] for (int j = -2; j <= 2; ++j) {
         [unroll] for (int i = -2; i <= 2; ++i) {
             const int2 o = q + int2(i, j) * int(step);
@@ -2743,8 +3033,10 @@ void EngineAtrousCS(uint3 id : SV_DispatchThreadID)
             const float nn = saturate(dot(ns.n, s.n));
             const float wn = pow(nn, normal_power);
             const float wd = h * wz * wn * exp(-abs(luminance(nd) - ld) / sigma_d);
-            const float ws = h * wz * pow(nn, spec_power) * exp(-abs(luminance(nsp) - ls) / sigma_s) *
-                             exp(-abs(ns.roughness - s.roughness) * 8.0f) * (i == 0 && j == 0 ? 1.0f : spec_spread);
+            const float away = length(float2(i, j)) * float(step);
+            const float ws = h * wz * saturate(1.0f - acos(nn) / spec_lobe) * exp(-abs(luminance(nsp) - ls) / sigma_s) *
+                             saturate(1.0f - abs(ns.roughness - s.roughness) / (s.roughness * s.roughness * 0.99f + 0.01f)) *
+                             exp(-away * away / max(spec_radius * spec_radius, 1e-6f));
             sum_d += float4(nd, f16tof32(nc.y >> 16u) * wd) * float4(wd, wd, wd, wd);
             sum_s += float4(nsp, f16tof32(nc.w >> 16u) * ws) * float4(ws, ws, ws, ws);
             wd_sum += wd;
@@ -2761,6 +3053,9 @@ void EngineAtrousCS(uint3 id : SV_DispatchThreadID)
         RWByteAddressBuffer hist_d = engine_buffer(kEvHistDiffuse);
         const uint4 hd = hist_d.Load4(pixel * 16u);
         hist_d.Store4(pixel * 16u, uint4(pack_half2(fd.r, fd.g), (hd.y & 0xFFFF0000u) | f32tof16(fd.b), hd.z, hd.w));
+        RWByteAddressBuffer hist_s = engine_buffer(kEvHistSpecular);
+        const uint hs = hist_s.Load(pixel * kSpecHistoryBytes + 4u);
+        hist_s.Store2(pixel * kSpecHistoryBytes, uint2(pack_half2(fs.r, fs.g), (hs & 0xFFFF0000u) | f32tof16(fs.b)));
     }
 }
 
@@ -4064,6 +4359,9 @@ void EngineFinalCS(uint3 id : SV_DispatchThreadID)
     float meter_moved = 0.0f;
     // And the diffuse history's length there (frames: 1 where the surface's history was lost).
     float meter_history = 0.0f;
+    // And the specular history's length, the share of it reprojected by the reflection's motion (EngineTemporalCS), and
+    // the light change the histories take (light_change), 1.
+    float4 meter_spec = float4(0.0f, 0.0f, 0.0f, 0.0f);
     if (s.valid) {
         z = s.p.z;
         if ((s.flags & kGbEmitter) != 0u) {
@@ -4107,6 +4405,8 @@ void EngineFinalCS(uint3 id : SV_DispatchThreadID)
                                    luminance(diffuse), luminance(sun), 1.0f);
                     meter_split = float2(luminance(gi_upsampled(s, q)), luminance(diffuse - sun));
                     meter_history = f16tof32(engine_buffer(kEvHistDiffuse).Load(pixel * 16u + 4u) >> 16u);
+                    meter_spec = float4(f16tof32(engine_buffer(kEvHistSpecular).Load(pixel * kSpecHistoryBytes + 4u) >> 16u),
+                                        spec_history_virtual(pixel), light_change(q).x, 1.0f);
                     if ((g_engine_info.x & kEngineMotion) != 0u) {
                         const Texture2D<float2> motion = ResourceDescriptorHeap[engine_view(kEvMotion)];
                         const float2 d = float2(q) + 0.5f + motion.Load(int3(q, 0)) + g_motion_jitter -
@@ -4228,6 +4528,7 @@ void EngineFinalCS(uint3 id : SV_DispatchThreadID)
         const float4 moving = WaveActiveSum(meter_motion);
         const float moved = WaveActiveSum(meter_moved);
         const float history = WaveActiveSum(meter_history);
+        const float4 spec = WaveActiveSum(meter_spec);
         if (WaveIsFirstLane() && total.w > 0.0f) {
             const uint at = g_sample_size.x * g_sample_size.y + kStarSlots + 4u;
             InterlockedAdd(g_final[at].x, uint(round(total.x * 256.0f)));
@@ -4244,6 +4545,12 @@ void EngineFinalCS(uint3 id : SV_DispatchThreadID)
                 InterlockedAdd(g_final[at + 2u].y, asuint(int(round(moving.y * 256.0f))));
                 InterlockedAdd(g_final[at + 2u].z, uint(round(moving.z * 256.0f)));
                 InterlockedAdd(g_final[at + 2u].w, uint(moving.w));
+            }
+            if (spec.w > 0.0f) {
+                InterlockedAdd(g_final[at + 5u].x, uint(round(spec.x * 16.0f)));
+                InterlockedAdd(g_final[at + 5u].y, uint(round(spec.y * 256.0f)));
+                InterlockedAdd(g_final[at + 5u].z, uint(round(spec.z * 256.0f)));
+                InterlockedAdd(g_final[at + 5u].w, uint(spec.w));
             }
         }
     }

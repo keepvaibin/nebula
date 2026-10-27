@@ -111,8 +111,8 @@ const SceneRayTracer::EngineBufferSpec SceneRayTracer::kEngineBufferSpecs[kEngin
     {32u, true, L"rt engine gi temp"},      {32u, true, L"rt engine gi 0"},
     {32u, true, L"rt engine gi 1"},         {8u, true, L"rt engine gi out"},
     {8u, false, L"rt engine specular"},     {16u, false, L"rt engine diffuse history 0"},
-    {16u, false, L"rt engine diffuse history 1"}, {16u, false, L"rt engine specular history 0"},
-    {16u, false, L"rt engine specular history 1"}, {16u, false, L"rt engine a-trous a"},
+    {16u, false, L"rt engine diffuse history 1"}, {32u, false, L"rt engine specular history 0"},
+    {32u, false, L"rt engine specular history 1"}, {16u, false, L"rt engine a-trous a"},
     {16u, false, L"rt engine a-trous b"},   {4u, false, L"rt engine shadow 0"},
     {4u, false, L"rt engine shadow 1"},
 };

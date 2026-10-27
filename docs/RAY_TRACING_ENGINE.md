@@ -227,8 +227,8 @@ slot, rewritten each frame: no root-signature limits).
 | E5d | MistLightCS (the water's trace) | per puff | the waterfall mist's puffs (above): the sun's share by 32 shadow rays, the light from above by 16 rays (sky, or the hit lit as the clear pass lights it), the water's surface under it, exposed; MistCompositePS after the water's composites (scissored to the puffs' reach) |
 | E5c | CacheCS | 1M cells | the world's radiance cache (below): each cell's new samples from E4's and E5's hits onto its light |
 | E5b | ClearCS (the water's trace) | full | the water window's glass and crystal by their own geometry (closest-hit traversal of the water acceleration structure): up to two thin walls along the camera ray (front, far side), each R = 2F/(1+F), T = (1-F)/(1+F) of the exact dielectric Fresnel (n 1.5), a traced GGX reflection and the sun's highlight; ClearCompositePS with the water's composite: picture behind x T + R, exposed. A `traced` material's game draw is hidden but still captured. A `traced solid` (the crystal cages: the game draws them as a screen capture bent by an indirect map, which can only show what is behind them on screen) stays in the scene for the other rays and is no camera ray's surface; here it is a closed dielectric (its row's index, `ior<n>`, else quartz's 1.544; the crystal cages take moissanite's 2.65: 20.7 % reflected at normal incidence, where quartz's 4.6 % mirrored almost nothing beside them; RTX Remix's translucent material without thin walls, Whitted's recursion as in Unity HDRP's recursive rendering): the front face's Fresnel reflection and sun highlight, the refracted ray followed inside up to 16 segments, each far face passing its Fresnel share out (none past the critical angle: 40.4 degrees for quartz, 22.2 for moissanite) and reflecting the rest on, what is still inside then leaving as the light that left (total internal reflection holds some rays for many faces: at 8 segments about 1 % of a crystal's light on average, 20 % at worst, was lost), the row's colour as the transmittance after its range (Beer-Lambert); the first share out is the picture where the picture shows what it meets (its pixel kept in the record), the others shaded as the frame lit their hits (g_final) or as a glass reflection's. Records are 32 B: R, T per channel, eye z, the pixel seen through |
-| E6 | DenoiseTemporalCS | full | diffuse (demodulated: the lights' and the bounce; the sun's is E3b's) and specular histories, reprojection by depth / normal / draw id (the raster's motion where a surface moved: below), moments, history length; variance clipping of specular history; anti-lag of the diffuse history (a 4-frame fast history of its luminance against the moments' mean: past 1.5 x the frames' deviation the history shortens, to 4 frames at most); a new sample past twice its brightest neighbour lowered to that (fireflies; lowered to the neighbours themselves, the first pixels to find a small light never entered the history) |
-| E7 | DenoiseAtrousCS x4 + log2(lines / 1056) | full | variance-guided a-trous (steps 1, 2, 4, 8, 16 at 2112 lines): depth plane, normal^p (p 2 at one frame of history to 64 from eight: moving characters), luminance / sqrt(variance); half-res GI joins through a joint bilateral upsample in the first step; a reflection spreads no wider than its lobe (none below roughness 0.05, full from 0.3) |
+| E6 | DenoiseTemporalCS | full | diffuse (demodulated: the lights' and the bounce; the sun's is E3b's) and specular histories with moments and history length. Diffuse: reprojected by depth / normal (the raster's motion where a surface moved: below). Specular: the surface's history or its reflection's virtual image's, each by its confidence (below). Anti-lag of each (a 4-frame fast history of its luminance against the moments' mean: past 1.5 x the frames' deviation the history shortens, to 4 frames at most). A new direct sample past twice its brightest neighbour lowered to that (fireflies; lowered to the neighbours themselves, the first pixels to find a small light never entered the history), a reflection the same without a history and with one at most (2 + 38 / (N + 1)) x its history's luminance (NRD's suppressor) |
+| E7 | DenoiseAtrousCS x4 + log2(lines / 1056) | full | variance-guided a-trous (steps 1, 2, 4, 8, 16 at 2112 lines): depth plane, normal^p (p 2 at one frame of history to 64 from eight: moving characters), luminance / sqrt(variance); half-res GI joins through a joint bilateral upsample in the first step; a reflection within its lobe's footprint on screen, normals within the lobe's half-angle and like roughness, against the variance its history leaves (below); the first step's result is each history |
 | E7b | FinalCS | full | the sun's diffuse and specular light by E3b's visibility (its facing from the disc's centre, the water's tint) onto the a-trous result; the slot's result at the exposure |
 | E8 | CompositePS | full | albedo x diffuse + specular + emission, x exposure, sRGB-encoded into the HDR scene EFB |
 | E9 | The game's additive draws | full | drawn as the game drew them (gain 1): halos, sparks, number plates, flames are display effects; their light reaches the scene as emitting geometry (raised to radiance x exposure, b40-b71, whole halos saturated into white blobs) |
@@ -317,7 +317,8 @@ off in frames that end in an odd present, so at 60 fps consecutive presents of o
   gradient samples at the last frame's visibility points) against the shade the reservoir kept, and
   flags its own kept sample when its light is new (engine_light_existed: the remap's other way). Over a 5 x 5
   neighbourhood the mean of the relative change and of the new flags (the new lights' share of the light) is the light
-  change; the diffuse and specular histories weigh this frame (1 - change) / length + change, and ReSTIR GI's temporal
+  change; the diffuse history weighs this frame (1 - change) / length + change (the specular history the new lights'
+  share alone: below), and ReSTIR GI's temporal
   reservoir keeps (1 - change) of its weight (Remix's validateLightingChange drops such samples). The diffuse
   history's own anti-lag compares a fast and a slow history against their variance, which a flash inflates: after a
   meteor's impact the picture held 0.36 of the full light on the ground 150 frames after the light had gone to 0.01,
@@ -341,11 +342,29 @@ off in frames that end in an odd present, so at 60 fps consecutive presents of o
   reference's 8 bounces. GALAXY_RT_ENGINE_CACHE=0 turns it off.
 - ReSTIR GI: sample = (hit position, hit normal, outgoing radiance); spatial reuse with the solid-angle Jacobian and
   a shadow ray for the reused sample.
-- Denoiser: SVGF (Schied 2017) with ReLAX's history clamping for specular and ReBLUR's fast-history anti-lag for
-  diffuse; history length cap 32 (diffuse), 16 (specular). The sun's shadow apart (E3b, after SIGMA): in the diffuse
-  history (32 frames unclamped) and its a-trous it took half a second to form and to leave, and blurred to blobs.
+- Denoiser: SVGF (Schied 2017) with ReBLUR's fast-history anti-lag for both histories; history length cap 32. The
+  sun's shadow apart (E3b, after SIGMA): in the diffuse history (32 frames unclamped) and its a-trous it took half a
+  second to form and to leave, and blurred to blobs.
+- Specular history (after NVIDIA's ReBLUR, Zhdan's GTC 2020 talk and the NRD shaders; our own code). A reflection
+  moves with what it shows, not with the surface showing it: reprojected by the surface's motion alone and clamped to
+  the 3 x 3 range of one-sample neighbours, a turning or glossy object's reflection glittered and trailed (the
+  Gateway's spinning key). Two candidates: the surface where it was (engine_history), trusted while the GGX lobe's
+  peak from its point and normal then, towards the eye then, turned less than the lobe's half-angle (narrower at a
+  grazing view and as the history grows, wider where the reflected thing is near the surface: a contact reflection
+  moves with it); and the reflection's virtual image (the reflected point mirrored behind the surface along the lobe's
+  peak, at the 3 x 3's nearest hit distance, nearer or farther by the thin-lens equation of the surface's curvature),
+  carried by the camera and by the surface's own motion as far as the image lies on it, its taps on the pixel's
+  tangent plane, trusted while their normal lies within the lobe's half-angle, their roughness is alike, and their own
+  virtual image (their point, normal and hit distance then) is this one within half the lobe's spread there (a thing
+  that moved with the surface, or past it, is elsewhere then). Each history counts for as far as it is trusted (32 x
+  its confidence, less for taps off the surface); the reflection's is kept where it is at least as long and the
+  picture moved (NRD's virtual history amount, one or the other). A light that changes or moves is the anti-lag's to
+  follow in a reflection, a new light shows at once; by the diffuse light's change the reflections next to moving
+  lights kept one frame or two. The a-trous weighs a reflection by the variance its history leaves (the samples'
+  over its length) and spreads it over its lobe's footprint on screen and no wider: the hit distance x the lobe's
+  half-angle tangent seen past the surface from the eye.
 - Russian roulette / clamps: none on the primary estimators; firefly rejection on the history input (a sample past
-  twice its 8 neighbours' brightest lowered to that).
+  twice its 8 neighbours' brightest lowered to that; for a reflection with a history, against the history instead).
 - Footprints: every pixel takes one sample whatever the resolution, so a reach in pixels covers less of a surface as
   the lines grow. The widths were set at 1056 lines (2x); at 6x (2112 lines in a 2560 x 1440 window) the spatial reuse
   and the denoiser gathered from a quarter of the surface they had at 2x, and the light stayed speckled. The direct
