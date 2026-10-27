@@ -27,6 +27,9 @@
 //   unlit-only: only the draws the game does not light emit (a lamp's glass beside its lit housing in one texture).
 //   painted: its brightness changes are the material's own (a face, lettering, a picture), so it is never de-lit
 //   (rt_delight.hlsl).
+//   delight: its texture carries light painted into it (bevel highlights, groove shadows, a metal band's sheen) that the
+//   traced light replaces, so it is de-lit (rt_delight.hlsl). Only these: a texture's own detail (stone, sand, wood
+//   grain, painted tiles) is its colour, and taking it out flattens the texture and turns it into false relief.
 //   traced: a clear surface the engine traces (rt_engine.hlsl EngineClearCS) whose game draw paints a fake
 //   reflection; the draw is hidden under the engine, its geometry still traced.
 //   seen: a light source's surface that shows its radiance while the game's own point light there is its light.
@@ -86,6 +89,7 @@ struct RtMaterial {
     bool sky = false;                     // a sky or backdrop mesh: drawn, never in the traced scene
     bool strip = false;                   // a long emitter (a cable): a light per stretch of it
     bool painted = false;                 // its detail is the material's, not light: never de-lit
+    bool delight = false;                 // its texture carries painted light (`delight`): the only textures de-lit
     bool star = false;                    // a star's burning surface (the star core, the suns): its own colour,
                                           // brighter and more textured (rt_lighting.hlsl CompositePS)
     bool traced = false;                  // a clear surface the engine traces; its game draw not shown

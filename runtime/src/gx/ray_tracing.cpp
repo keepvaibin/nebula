@@ -2881,17 +2881,19 @@ void SceneRayTracer::add_draw(const RtDraw& draw, const RtDrawInfo& info) {
                             std::bit_cast<std::uint32_t>(info.light[0][1]),
                             std::bit_cast<std::uint32_t>(info.light[0][2]), light_kind, info.fog[0], info.fog[1],
                             info.fog[2], info.fog[3]});
-    // Physical: the material texture's de-light map, for opaque surfaces the game lights or bakes (not water, clear
-    // crystal or glass, the sky, effects, light sources: their colour is light, not paint over a surface).
+    // Physical: the de-light map of a material texture the table names as carrying painted light (`delight`), for an
+    // opaque surface the game lights (not water, clear crystal or glass, the sky, effects, light sources: their colour is
+    // light, not paint over a surface). Retinex cannot tell painted light from the texture's own detail of one colour
+    // (stone speckle, sand, wood grain, painted tiles): de-lit by default, every such texture lost its detail and the
+    // relief taken from it shaded each repeat of a tile the same way.
     std::uint32_t delight = 0xFFFFFFFFu;
     {
         const std::uint32_t surface_class = (info.surface & kRtDrawClassMask) >> kRtDrawClassShift;
         const bool paint = surface_class != static_cast<std::uint32_t>(RtSurfaceClass::Water) &&
                            surface_class != static_cast<std::uint32_t>(RtSurfaceClass::Crystal) &&
-                           (material == nullptr ||
-                            (!material->particle && !material->sky && !material->star && !material->lens &&
-                             !material->hide && !material->mirror && !material->helper && !material->painted &&
-                             material->emission == RtEmission::None));
+                           material != nullptr && material->delight && !material->particle && !material->sky &&
+                           !material->star && !material->lens && !material->hide && !material->mirror &&
+                           !material->helper && !material->painted && material->emission == RtEmission::None;
         ++delight_seen_[0];
         if (!paint) {
             ++delight_seen_[1];
