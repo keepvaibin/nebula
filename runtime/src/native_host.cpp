@@ -1,4 +1,5 @@
 #include "galaxy/native_host.h"
+#include "galaxy/test_hooks.h"
 
 #include "galaxy/ai_dma_timing.h"
 #include "galaxy/native_audio_anomaly.h"
@@ -7158,6 +7159,7 @@ std::optional<std::uint64_t> read_env_u64_optional(const char* name) {
     return parsed;
 }
 
+#if GALAXY_TEST_HOOKS
 std::uint64_t parse_script_u64(
     const std::string& field,
     const char* script_name) {
@@ -7169,6 +7171,7 @@ std::uint64_t parse_script_u64(
     }
     return parsed;
 }
+#endif
 
 float parse_script_float(const std::string& field, const char* script_name) {
     if (field.empty()) {
@@ -7250,6 +7253,8 @@ galaxy::input::NativeMousePointerProjection project_client_mouse_pointer(
     });
 }
 
+// Test hooks (galaxy/test_hooks.h): GALAXY_INPUT_REPLAY_LOG replays a recorded input log.
+#if GALAXY_TEST_HOOKS
 std::vector<std::string> split_script_fields(
     const std::string& text,
     char delimiter) {
@@ -7626,6 +7631,11 @@ const NativeInputReplayLog* active_native_input_replay_log() {
     }
     return s_log.get();
 }
+#else
+const NativeInputReplayLog* active_native_input_replay_log() {
+    return nullptr;
+}
+#endif
 
 const NativeInputReplaySample* native_input_replay_sample_for_vi(
     std::uint64_t current_vi) {
@@ -7737,6 +7747,8 @@ void apply_script_buttons_to_snapshot(
     snapshot.nunchuk.z = snapshot.nunchuk.z || script.nunchuk_z;
 }
 
+// Test hooks (galaxy/test_hooks.h): GALAXY_INPUT_* button, stick, shake and pointer scripts.
+#if GALAXY_TEST_HOOKS
 std::string uppercase_ascii(std::string value) {
     for (char& ch : value) {
         ch = static_cast<char>(
@@ -8190,6 +8202,11 @@ NativeInputScriptOverlay build_native_input_script_overlay(
     apply_pointer_script_envs(overlay, current_vi);
     return overlay;
 }
+#else
+NativeInputScriptOverlay build_native_input_script_overlay(std::uint64_t, std::optional<std::uint64_t>) {
+    return {};
+}
+#endif
 
 // In a tilt section (tilt.h) the virtual remote's accelerometer reports the
 // controller's tilt or the stick's; elsewhere it keeps its rest reading. A

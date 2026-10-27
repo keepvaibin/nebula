@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.24)
 project(NebulaRuntime VERSION 1.0.2 LANGUAGES C CXX)
 
+# Test hooks (galaxy/test_hooks.h): scripted input, teleports, galaxy tours, forced faults and picture snapshots.
+# build-release.ps1 turns them off; a release runtime never runs them.
+option(NEBULA_TEST_HOOKS "Build the runtime's test hooks (off for releases)" ON)
+add_compile_definitions(GALAXY_TEST_HOOKS=$<BOOL:${NEBULA_TEST_HOOKS}>)
+
 if(NOT WIN32)
     message(FATAL_ERROR "The first runtime milestone targets Windows x64 only.")
 endif()
@@ -744,6 +749,7 @@ target_compile_features(galaxy_game_asset_extract_tests PRIVATE cxx_std_20)
 
 add_executable(NebulaRuntime
     runtime/src/native_runtime.cpp
+    runtime/src/test_hook_scrub.cpp
     runtime/src/native_thp_video.cpp
     runtime/src/coop_scheduler.cpp
     runtime/src/site_hooks.cpp
@@ -1244,7 +1250,10 @@ galaxy_add_native_test(
     native_input_causality
     galaxy_native_input_causality_tests)
 galaxy_add_native_test(ai_pcm_identity galaxy_ai_pcm_identity_tests)
-galaxy_add_native_test(native_host_loader galaxy_native_host_tests)
+# Its input checks drive the virtual Wii Remote with scripted input and replay logs (test hooks).
+if(NEBULA_TEST_HOOKS)
+    galaxy_add_native_test(native_host_loader galaxy_native_host_tests)
+endif()
 galaxy_add_native_test(
     native_audio_queue_ownership
     galaxy_native_audio_queue_tests)

@@ -51,6 +51,20 @@ function Assert-DefenderClean([string[]]$Files) {
     }
 }
 
+# A release runtime is built without test hooks (CMake NEBULA_TEST_HOOKS=OFF): none of their names may be left in it.
+function Assert-NoTestHooks([string]$File) {
+    $bytes = [IO.File]::ReadAllBytes($File)
+    $ascii = [Text.Encoding]::ASCII.GetString($bytes)
+    $wide = [Text.Encoding]::Unicode.GetString($bytes)
+    $names = @('GALAXY_TEST_TELEPORT', 'GALAXY_TEST_GALAXY_TOUR', 'GALAXY_CRASH_TEST',
+        'GALAXY_INPUT_AUTOPRESS_SCRIPT', 'GALAXY_INPUT_STICK_SCRIPT', 'GALAXY_INPUT_SHAKE_SCRIPT', 'GALAXY_INPUT_REPLAY_LOG',
+        'GALAXY_INPUT_STICK_COMMAND_FILE', 'GALAXY_INPUT_POINTER_X', 'GALAXY_INPUT_AUTOPRESS_A',
+        'GALAXY_PRESENT_SNAPSHOT_DIR', 'GALAXY_INTERP_SNAPSHOT_DIR')
+    $found = @($names | Where-Object { $ascii.Contains($_) -or $wide.Contains($_) })
+    if ($found.Count -ne 0) { throw ("{0} still contains test hooks: {1}" -f $File, ($found -join ', ')) }
+    Write-Host "No test hooks in $(Split-Path -Leaf $File)"
+}
+
 function Invoke-Checked([string]$File, [string[]]$Arguments) {
     & $File @Arguments
     if ($LASTEXITCODE -ne 0) { throw "$File failed with exit code $LASTEXITCODE" }
@@ -148,7 +162,7 @@ END
     $effectiveIsas = @()
     foreach ($isa in $isaBuilds) {
         $rt = Join-Path $work ('runtime-' + $isa.ToLowerInvariant())
-        $configureLog = & cmake @('-S', $src, '-B', $rt, '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release', "-DGALAXY_NATIVE_ISA=$isa", '-DNEBULA_DSP_MODULE=ON', '-DGALAXY_FIDELITYFX_SDK=', '-DGALAXY_WITH_STREAMLINE_BRIDGE=OFF', "-DNEBULA_SOURCE_REVISION=$resolved", "-DNEBULA_SOURCE_REVISION_KIND=$type", "-DNEBULA_SOURCE_GIT_TREE=$gitTree", "-DNEBULA_SOURCE_TREE_SHA256=$treeHash", '-DNEBULA_SOURCE_DIRTY=0') 2>&1
+        $configureLog = & cmake @('-S', $src, '-B', $rt, '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release', "-DGALAXY_NATIVE_ISA=$isa", '-DNEBULA_DSP_MODULE=ON', '-DGALAXY_FIDELITYFX_SDK=', "-DGALAXY_STREAMLINE_SDK=$(Join-Path $src 'third_party\streamline')", '-DNEBULA_TEST_HOOKS=OFF', "-DNEBULA_SOURCE_REVISION=$resolved", "-DNEBULA_SOURCE_REVISION_KIND=$type", "-DNEBULA_SOURCE_GIT_TREE=$gitTree", "-DNEBULA_SOURCE_TREE_SHA256=$treeHash", '-DNEBULA_SOURCE_DIRTY=0') 2>&1
         $configureLog | ForEach-Object { Write-Host $_ }
         if ($LASTEXITCODE -ne 0) { throw "cmake configure failed with exit code $LASTEXITCODE" }
         $effectiveIsa = $null
@@ -170,6 +184,7 @@ END
             if (-not $file) { throw "The runtime build produced no $name" }
             $runtimeFiles[$prefix + $name] = $file.FullName
         }
+        Assert-NoTestHooks $runtimeFiles[$prefix + 'NebulaRuntime.exe']
     }
     $runtimeIsaPath = Join-Path $work 'runtime-isa.txt'
     [IO.File]::WriteAllText($runtimeIsaPath, ($effectiveIsas -join '+'), (New-Object Text.UTF8Encoding $false))
