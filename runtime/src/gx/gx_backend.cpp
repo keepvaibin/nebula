@@ -8760,6 +8760,9 @@ void GxBackend::render_thread_main() {
                     frame_queue_.pop_front();
                     chunk.present_swap_chain = present.present_swap_chain;
                     chunk.displayed_xfb_addr = present.displayed_xfb_addr;
+                    if (interp_recording_) [[unlikely]] {
+                        interp_event("merged-present", present.displayed_xfb_addr, chunk.fifo.size());
+                    }
                 }
                 if (chunk.efb_peek_only) {
                     active_peek = chunk.efb_peek_request;
@@ -10515,6 +10518,12 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
          !skip_duplicate_present && !skip_rate_present);
     if (interp_recording_) {
         note_interp_log_completion();
+        if (chunk.present_swap_chain) {
+            interp_event("chunk-decision", selected_xfb != nullptr ? selected_xfb->copy_serial : 0u,
+                         1u | (duplicate_xfb_present ? 2u : 0u) | (skip_duplicate_present ? 4u : 0u) |
+                             (skip_rate_present ? 8u : 0u) | (present_swap_chain ? 16u : 0u) |
+                             (interp_log_waiting_ ? 32u : 0u) | (capture_backbuffer ? 64u : 0u));
+        }
         static const bool trace_interp = read_env_u64("GALAXY_INTERP_TRACE", 0u) != 0u;
         static std::uint64_t traced = 0u;
         if (trace_interp && (traced++ % 240u) == 0u) {
@@ -10534,9 +10543,11 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         }
         // As on the VI-present path, a present while a completed log waits
         // starts that log's sequence: the VI may still name the previous
-        // XFB (the guest flips at the next retrace).
-        if (interp_log_waiting_ && present_swap_chain && !capture_backbuffer &&
-            renderer_.replay_available()) {
+        // XFB (the guest flips at the next retrace), so a present the
+        // duplicate or rate checks would drop still starts it. Dropping it
+        // skipped the waiting frame when the next one closed first.
+        if (interp_log_waiting_ && chunk.present_swap_chain && selected_xfb != nullptr &&
+            !capture_backbuffer && renderer_.replay_available()) {
             interp_start_pending_ = true;
             present_swap_chain = false;
         } else if (interp_sequence_.active && present_swap_chain) {

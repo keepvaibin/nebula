@@ -302,6 +302,12 @@ void load_render_config_from_file();
 // are real and exposed.
 bool save_render_config_to_file();
 
+// Records the adapter the renderer runs on (adapter.ini beside config.ini) for the launcher,
+// which offers DLSS only on an NVIDIA RTX adapter: description, PCI vendor and device id and
+// the GPU preference the runtime started with (low: integrated first).
+void record_render_adapter(const wchar_t* description, unsigned vendor_id, unsigned device_id,
+                           bool low_power_preference) noexcept;
+
 // When config.ini changed on disk since this process last read or wrote it
 // (Nebula Settings saved it while the game runs), reads it over the live
 // settings, as the in-game menu would apply them, and returns true.

@@ -26,13 +26,68 @@ namespace Nebula.Launcher
         // (DlssPackage); Nebula ships none of them.
         public static string StreamlineDir { get { return DlssPackage.Folder; } }
         public static bool DlssInstalled() { return DlssPackage.Installed(); }
-        // The upscaler setting values offered, in list order. On NVIDIA RTX machines DLSS is
-        // listed before it is downloaded; choosing it offers the download.
+        // The upscaler setting values offered, in list order. DLSS is listed (before it is
+        // downloaded too) when the game runs on an NVIDIA RTX GPU.
         public static List<int> UpscalerChoices()
         {
             var choices = new List<int> { 0, 1 };
-            if (DlssInstalled() || DlssPackage.RtxAdapterPresent()) choices.Add(3);
+            if (DlssAdapter()) choices.Add(3);
             return choices;
+        }
+
+        /// <summary>
+        /// The GPU the game runs on is an NVIDIA RTX GPU. The runtime records its adapter in
+        /// adapter.ini beside config.ini with the GPU preference it started with; a record from
+        /// another preference (another package) or no record yet falls back to this package's
+        /// preference: the integrated GPU never, otherwise any RTX adapter in the machine.
+        /// </summary>
+        public static bool DlssAdapter()
+        {
+            bool lowPower = PackagePrefersIntegratedGpu();
+            string path = Path.Combine(NebulaPaths.DataRoot, "adapter.ini");
+            try
+            {
+                if (File.Exists(path))
+                {
+                    var values = new Dictionary<string, string>();
+                    foreach (string line in File.ReadAllLines(path))
+                    {
+                        int equals = line.IndexOf('=');
+                        if (equals > 0) values[line.Substring(0, equals).Trim()] = line.Substring(equals + 1).Trim();
+                    }
+                    string preference, vendor, description;
+                    if (values.TryGetValue("gpu_preference", out preference) &&
+                        (preference == "low") == lowPower &&
+                        values.TryGetValue("vendor_id", out vendor) && values.TryGetValue("description", out description))
+                    {
+                        return vendor == "4318" && description.IndexOf("RTX", StringComparison.OrdinalIgnoreCase) >= 0;
+                    }
+                }
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+            return !lowPower && DlssPackage.RtxAdapterPresent();
+        }
+
+        /// <summary>runtime-env.json beside the launcher selects the integrated GPU (GALAXY_GPU_PREFERENCE=low).</summary>
+        public static bool PackagePrefersIntegratedGpu()
+        {
+            try
+            {
+                string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "runtime-env.json");
+                if (!File.Exists(path)) return false;
+                foreach (var entry in (System.Collections.IList)Json.ParseAny(File.ReadAllText(path)))
+                {
+                    var pair = entry as Dictionary<string, object>;
+                    if (pair != null && Json.Str(pair, "name") == "GALAXY_GPU_PREFERENCE")
+                        return string.Equals(Json.Str(pair, "value"), "low", StringComparison.OrdinalIgnoreCase);
+                }
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+            catch (ArgumentException) { }
+            catch (InvalidCastException) { }
+            return false;
         }
         public static string UpscalerName(int value)
         {

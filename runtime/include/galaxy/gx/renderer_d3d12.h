@@ -1159,6 +1159,7 @@ private:
     D3D12_RESOURCE_STATES blend_verdicts_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> blend_validate_root_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> blend_validate_pso_;
+    [[nodiscard]] bool temporal_inputs_match(const TemporalUpscaleInputs& in) const;
     D3D12_GPU_VIRTUAL_ADDRESS resident_vertex_base_ = 0;
     std::uint64_t resident_vertex_bytes_ = 0;
     static constexpr std::uint32_t kMaxBlendPairs = 8192u;
