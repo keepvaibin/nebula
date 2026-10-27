@@ -2375,6 +2375,27 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
                 }
             }
         }
+        // Falling water lying on other water within a few units (a fall's ripple ring of foam on the lake at its foot):
+        // the lake is the surface there; the foam stays the game's draw over it, which covers it (the reactive mask).
+        if (hit_water && (g_water_surfaces.Load(water_tri * 16u + 12u) & kWaterfallFlag) != 0u) {
+            RayDesc beyond = ray;
+            beyond.TMin = water_t * 1.0001f + 0.01f;
+            beyond.TMax = water_t + max(0.01f * water_t, 8.0f);
+            RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> lake;
+            lake.TraceRayInline(g_water, RAY_FLAG_NONE, 0xFFu, beyond);
+            while (lake.Proceed()) {
+                const uint tri = lake.CandidatePrimitiveIndex();
+                if ((g_water_surfaces.Load(tri * 16u + 12u) & kWaterfallFlag) == 0u &&
+                    water_faces(tri, lake.CandidateTriangleBarycentrics(), dir)) {
+                    lake.CommitNonOpaqueTriangleHit();
+                }
+            }
+            if (lake.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
+                water_t = lake.CommittedRayT();
+                water_tri = lake.CommittedPrimitiveIndex();
+                water_b = lake.CommittedTriangleBarycentrics();
+            }
+        }
         // A water surface has depth below it: triangles lying on the opaque scene the trace saw
         // (a water volume's floor, seen from inside it) are no surface. An opaque clear surface
         // (kWaterOpaqueFlag: Freezeflame's ice) is that scene itself.
@@ -2898,6 +2919,11 @@ StructuredBuffer<uint4> m_final : register(t0);
 Texture2D<float> m_efb_depth : register(t1);
 StructuredBuffer<float4> m_reproject : register(t2);
 StructuredBuffer<uint> m_tiles : register(t3);
+// m_flags bit 4 (the water composite): the effects layer (RendererD3D12::begin_layer_window), what the game's effects
+// drew over the frame after its translucent lists: their colour, as they blended into the EFB (L), and what of the EFB
+// behind them they let through (T), so the frame here is F = L + T B.
+Texture2D<float4> m_layer_color : register(t7);
+Texture2D<float4> m_layer_trans : register(t8);
 // The picture under the translucent phases (ReflectTraceCS g_under) for the water's refraction.
 StructuredBuffer<uint2> m_under : register(t4);
 // The frame as the game drew it with its water (a copy after the water pass; the water composite only).
@@ -3280,6 +3306,19 @@ float2 water_distortion(float3 p, float3 n, float2 pixel, bool flow)
     return clamp(eye_to_pixel(m_projection, m_viewport, moved) - pixel, -limit, limit);
 }
 
+// The frame at pixel `q` without the effects drawn over it (B = (F - L) / T, m_flags bit 4): the game's water and what
+// lies under it. Where the effects let almost nothing through, the frame as it is (they hide what lies behind).
+float3 scene_at(int2 q)
+{
+    const float3 f = m_scene.Load(int3(q, 0)).rgb;
+    if ((m_flags & 16u) == 0u) {
+        return f;
+    }
+    const float3 l = m_layer_color.Load(int3(q, 0)).rgb;
+    const float3 t = m_layer_trans.Load(int3(q, 0)).rgb;
+    return all(t > 0.02f) ? max((f - l) / t, 0.0f) : f;
+}
+
 // The brightest the game's drawn water may be at `at`: the mean luminance of eight taps two pixels round plus 1.5
 // deviations. Isolated bright texels (the foam flecks of a tiled water texture) shimmer as glitter once the picture
 // moves; a wave or a gradient over a few pixels is within it.
@@ -3289,7 +3328,7 @@ float water_speck_limit(float2 at, float2 lo, float2 hi)
     float sum2 = 0.0f;
     [unroll] for (uint k = 0u; k < 8u; ++k) {
         const float a = float(k) * 0.785398f;
-        const float l = luminance(m_scene.Load(int3(int2(clamp(at + float2(cos(a), sin(a)) * 2.0f, lo, hi)), 0)).rgb);
+        const float l = luminance(scene_at(int2(clamp(at + float2(cos(a), sin(a)) * 2.0f, lo, hi))));
         sum += l;
         sum2 += l * l;
     }
@@ -3468,7 +3507,7 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
             // Where the game drew water at this pixel (its own full-resolution outline: no stair-steps from
             // the half-resolution samples at the shore).
             const int2 own = int2(clamp(position.xy, lo, hi));
-            const float3 drawn = abs(m_scene.Load(int3(own, 0)).rgb - m_opaque.Load(int3(own, 0)).rgb);
+            const float3 drawn = abs(scene_at(own) - m_opaque.Load(int3(own, 0)).rgb);
             edge = smoothstep(0.002f, 0.012f, drawn.r + drawn.g + drawn.b);
             {
                 // The traced water body: the game's drawn water (bright specks held down) with the shallows'
@@ -3476,7 +3515,7 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
                 // water's colour (the drawn colour times 0.3, 0.55, 0.7). The kept share, deep + (1 - deep) T, is
                 // 0.92/0.97/0.99 at path 30, 0.68/0.87/0.94 at 150 and 0.39/0.70/0.83 with no floor found (500).
                 const float3 drawn_water =
-                    water_unspeckled(m_scene.Load(int3(int2(clamp(position.xy, lo, hi)), 0)).rgb,
+                    water_unspeckled(scene_at(int2(clamp(position.xy, lo, hi))),
                                      water_speck_limit(clamp(position.xy, lo, hi), lo, hi));
                 const float3 through = exp(-float3(0.004f, 0.0022f, 0.0016f) * path_c);
                 const float3 deep = drawn_water * float3(0.3f, 0.55f, 0.7f);
@@ -3485,13 +3524,13 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
         } else {
             const float2 centre_at = clamp(position.xy + wobble, lo, hi);
             const float limit = water_speck_limit(centre_at, lo, hi);
-            const float3 centre = water_unspeckled(m_scene.Load(int3(int2(centre_at), 0)).rgb, limit);
+            const float3 centre = water_unspeckled(scene_at(int2(centre_at)), limit);
             water = centre;
             float taps = 1.0f;
             [unroll] for (uint k = 0u; k < 16u; ++k) {
                 const float a = float(k) * 2.39996f;
                 const float2 o = float2(cos(a), sin(a)) * (min(radius, 6.0f) * sqrt((float(k) + 0.5f) / 16.0f)) + wobble;
-                const float3 c = water_unspeckled(m_scene.Load(int3(int2(clamp(position.xy + o, lo, hi)), 0)).rgb, limit);
+                const float3 c = water_unspeckled(scene_at(int2(clamp(position.xy + o, lo, hi))), limit);
                 const float3 d = c - centre;
                 const float w = exp(-dot(d, d) / 0.02f);
                 water += c * w;
@@ -3515,7 +3554,15 @@ CompositeOut WaterCompositePS(float4 position : SV_Position)
     if (b.k_sum < 1e-4f && !any(b.glint > 0.0f) && !any(under_add > 0.0f) && !any(under_keep < 1.0f)) {
         discard;
     }
-    return finish(b, view, under_add, under_keep);
+    CompositeOut result = finish(b, view, under_add, under_keep);
+    // The effects drawn over the water after it (a fall's spray, splashes) stay over it as they blended: with the frame
+    // F = L + T B, the water over B (add + keep B) under them is L + T add + keep (F - L).
+    if ((m_flags & 16u) != 0u && view == 0u) {
+        const float3 l = m_layer_color.Load(int3(int2(position.xy), 0)).rgb;
+        const float3 t = m_layer_trans.Load(int3(int2(position.xy), 0)).rgb;
+        result.add.rgb = t * result.add.rgb + (1.0f - result.keep.rgb) * l;
+    }
+    return result;
 }
 
 // The water pass's state (WaterTraceCS write_underwater_state), after the samples in m_under.

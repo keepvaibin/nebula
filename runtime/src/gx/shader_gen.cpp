@@ -1723,6 +1723,9 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
     const bool ppl_inputs = ppl || enhanced;
     const bool motion = (key.reserved & kPsKeyMotion) != 0u;
     const bool reactive = !motion && (key.reserved & kPsKeyReactive) != 0u;
+    // The effects layer (kPsKeyLayer, a reactive draw): its colour also to targets 2 and 3.
+    const bool layer = reactive && (key.reserved & kPsKeyLayer) != 0u;
+    const char* const layer_fields = layer ? "float4 layer : SV_Target2; float4 trans : SV_Target3; " : "";
     const std::uint32_t enh_env = enhanced ? key.ind_reserved & kEnhancedEnvCoordMask : 0u;
     const bool enh_lit = enhanced && (key.ind_reserved & kEnhancedLit) != 0u;
     const bool scalar_masks = options_.scalar_byte_masks;
@@ -1802,12 +1805,12 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
         s << "PSOutM main(PSIn pin) {\n";
     } else if (reactive && export_depth) {
         s << "struct PSOutZ { float4 color : SV_Target0; "
-             "float reactive : SV_Target1; float depth : SV_Depth; };\n";
+             "float reactive : SV_Target1; " << layer_fields << "float depth : SV_Depth; };\n";
         s << "PSOutZ main(PSIn pin) {\n";
     } else if (reactive) {
         // Blended draws without dual-source alpha (that would take target 1).
         s << "struct PSOutR { float4 color : SV_Target0; "
-             "float reactive : SV_Target1; };\n";
+             "float reactive : SV_Target1; " << layer_fields << "};\n";
         if (early_depth) s << "[earlydepthstencil]\n";
         s << "PSOutR main(PSIn pin) {\n";
     } else if (export_depth && dual_src) {
@@ -2722,21 +2725,39 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
             s << "    if (ztex_params.w > 0.0) {\n";
             s << "        uint lit_w, lit_h;\n";
             s << "        tex[7].GetDimensions(lit_w, lit_h);\n";
-            s << "        const int2 lit_at = min(int2(pin.pos.xy * ztex_params.w), int2(lit_w, lit_h) - 1);\n";
+            // The light texture's thirds (rt_lighting.hlsl LightTexturePS): water and glass (tex_dims[7].w 2) the
+            // surface behind's light, falling water (1-1.5) its own, the rest (the effects) the open air's over water.
+            s << "        const uint lit_third = lit_w / 3u;\n"
+                 "        int2 lit_at = min(int2(pin.pos.xy * ztex_params.w), int2(lit_third, lit_h) - 1);\n"
+                 "        lit_at.x += int(lit_third * (tex_dims[7].w >= 1.5 ? 0u : tex_dims[7].w >= 1.0 ? 2u : 1u));\n";
             s << ((key.output_flags & 0x80u) != 0u
                       ? "        lin *= min(max(tex[7].Load(int3(lit_at, 0)).rgb, 0.0), 1.15);\n"
                       : "        lin *= max(tex[7].Load(int3(lit_at, 0)).rgb, 0.0);\n");
-            // Falling water (tex_dims[7].w, map 7 being the light texture here): the painted colour's whiteness (its
-            // least channel over its greatest: 1 white, 0 a pure hue) is the share of white water, a foam of bubbles and
-            // drops; the rest is clear water, which passes what lies behind it but for what its fine bubbles scatter:
-            // about half through a large fall's sheet (rt_engine.hlsl kFallHaze). What scatters keeps the painted
-            // colour (white bubbles in blue water look pale blue); only the share drawn changes. rt_engine.hlsl
-            // clear_fall does the same for the game's opaque sheets.
-            s << "        if (tex_dims[7].w > 0.5) {\n"
-                 "            const float fall_hi = max(lin.r, max(lin.g, lin.b));\n"
-                 "            const float fall_white = fall_hi > 1e-6 ? min(lin.r, min(lin.g, lin.b)) / fall_hi : 1.0;\n"
-                 "            efb_color.a = uint(round(float(efb_color.a) * (fall_white + (1.0 - fall_white) * 0.5)));\n"
-                 "        }\n";
+            // Falling water (tex_dims[7].w 1 + 0.4 x its aeration, map 7 being the light texture here; xyz the art's
+            // clear water colour, sRGB, white where the table names none): its painted colour lies between that colour
+            // and white, white water (a foam of bubbles and drops, drawn as painted) by how far towards white
+            // (rt_engine.hlsl fall_foam); the rest is clear water, which passes what lies behind it but for the white
+            // its bubbles scatter, its aeration, under the same light. rt_engine.hlsl fall_water does the same for the
+            // game's opaque sheets.
+            s << "        if (abs(tex_dims[7].w - 1.0) < 0.5) {\n"
+                 "            const float3 fall_c = frag.rgb <= 0.04045 ? frag.rgb / 12.92 : pow((frag.rgb + 0.055) / 1.055, 2.4);\n"
+                 "            const float3 fall_s = saturate(tex_dims[7].xyz);\n"
+                 "            const float3 fall_h = fall_s <= 0.04045 ? fall_s / 12.92 : pow((fall_s + 0.055) / 1.055, 2.4);\n"
+                 "            const float3 fall_d = 1.0 - fall_h;\n"
+                 "            const float fall_hi = max(fall_c.r, max(fall_c.g, fall_c.b));\n"
+                 "            const float fall_foam = dot(fall_d, fall_d) > 1e-3 ? saturate(dot(fall_c - fall_h, fall_d) / dot(fall_d, fall_d))\n"
+                 "                                  : (fall_hi > 1e-6 ? min(fall_c.r, min(fall_c.g, fall_c.b)) / fall_hi : 1.0);\n"
+                 "            const float fall_haze = saturate((tex_dims[7].w - 1.0) / 0.4);\n"
+                 "            const float3 fall_l = max(tex[7].Load(int3(lit_at, 0)).rgb, 0.0);\n"
+                 "            const float fall_keep = fall_foam + (1.0 - fall_foam) * fall_haze;\n"
+                 "            if (fall_keep > 1e-4) {\n"
+                 "                lin = (fall_foam * lin + (1.0 - fall_foam) * fall_haze * fall_l) / fall_keep;\n"
+                 "            }\n"
+                 "            efb_color.a = uint(round(float(efb_color.a) * fall_keep));\n";
+            if (dual_src) {
+                s << "            tev_alpha *= fall_keep;\n";
+            }
+            s << "        }\n";
             s << "    }\n";
         }
         s << "    if (ztex_params.w < 0.0) {\n"
@@ -2752,6 +2773,10 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
         s << "    uint dst_alpha6 = uint(round(saturate(alpha_refs.w)"
              " * 255.0)) >> 2;\n";
         s << "    frag.a = float(dst_alpha6) / 63.0;\n";
+    } else if (reactive) {
+        // A blended draw writing the reactive mask blends single-source at the TEV's 8-bit alpha (on an RGBA6 EFB
+        // in place of dual-source blending: GxBackend's motion keys).
+        s << "    frag.a = float(efb_color.a) / 255.0;\n";
     } else {
         s << "    frag.a = float(efb_color.a >> 2) / 63.0;\n";
     }
@@ -2778,13 +2803,28 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
     } else if (reactive && export_depth) {
         s << "    PSOutZ zout;\n";
         s << "    zout.color = frag;\n";
-        s << "    zout.reactive = min(saturate(frag.a), 0.9);\n";
+        s << ((key.output_flags & 0x40u) != 0u
+                  ? "    zout.reactive = tex_dims[7].w > 1.5 ? 0.0 : min(saturate(frag.a), 0.9);\n"
+                  : "    zout.reactive = min(saturate(frag.a), 0.9);\n");
+        if (layer) {
+            s << "    zout.layer = frag;\n"
+                 "    zout.trans = frag;\n";
+        }
         s << "    zout.depth = 1.0 - float(zcoord_i) / 16777216.0;\n";
         s << "    return zout;\n}\n";
     } else if (reactive) {
         s << "    PSOutR rout;\n";
         s << "    rout.color = frag;\n";
-        s << "    rout.reactive = min(saturate(frag.a), 0.9);\n";
+        // A ray-traced scene's water and glass (lit translucent kind 2) cover nothing: the water's and clear
+        // surfaces' composites take the mask as what the frame's effects cover in front of them. Falling water (kind
+        // 1) covers with its white water (its alpha the white share).
+        s << ((key.output_flags & 0x40u) != 0u
+                  ? "    rout.reactive = tex_dims[7].w > 1.5 ? 0.0 : min(saturate(frag.a), 0.9);\n"
+                  : "    rout.reactive = min(saturate(frag.a), 0.9);\n");
+        if (layer) {
+            s << "    rout.layer = frag;\n"
+                 "    rout.trans = frag;\n";
+        }
         s << "    return rout;\n}\n";
     } else if (export_depth) {
         s << "    PSOutZ zout;\n";

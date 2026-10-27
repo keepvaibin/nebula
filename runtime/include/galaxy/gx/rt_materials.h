@@ -59,6 +59,10 @@ struct RtMaterial {
     bool unlit_only = false;              // only unlit draws of the texture emit
     bool particle = false;                // smoke, steam, sparks: never traced geometry or water
     bool waterfall = false;               // falling water: water whose streaks run down it
+    float white = 1.0f;                   // falling water: the share of its painted white water drawn (`white<n>`;
+                                          // `unpainted` 0: clear water throughout; rt_engine.hlsl fall_water)
+    bool mist = false;                    // an effect's sprites are spray: puffs of drops under the engine, the
+                                          // sprites hidden (rt_engine.hlsl MistLightCS)
     bool mirror = false;                  // glass the water pass reflects as a mirror (the Observatory fountain)
     bool foliage = false;                 // leaves, grass and flower cards (alpha-cut)
     bool lens = false;                    // a black hole's lens draw: the finish bends light around it
@@ -84,6 +88,9 @@ struct RtMaterial {
     float color[3] = {1.0f, 1.0f, 1.0f};
     float intensity = 0.0f;               // relative to a Luma
     float range = 0.0f;
+    // Falling water: the share of its clear water's light its bubbles scatter (the table's `aeration`; < 0: the
+    // default, kFallAeration).
+    float aeration = -1.0f;
     float pulse = 0.0f;
     float cone = 0.0f;                    // degrees; 0: a point light
     float glow = -1.0f;                   // < 0: the intensity

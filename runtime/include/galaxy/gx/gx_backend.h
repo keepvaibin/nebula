@@ -831,6 +831,10 @@ private:
     [[nodiscard]] bool rt_hidden_draw() const noexcept;
     // The draw is a clear surface the engine traces (the table's `traced`): not shown, still captured.
     [[nodiscard]] bool rt_traced_clear_draw() const noexcept;
+    // The draw is a sprite of the table's `mist` effects while the ray tracer takes them as puffs (note_rt_mist).
+    [[nodiscard]] bool rt_mist_draw() const noexcept;
+    // Its puff for the ray tracer (SceneRayTracer::note_mist).
+    void note_rt_mist(const DrawCall& call);
     // A traced clear solid's draw (the table's `traced solid`): unseen scene geometry, its game draw hidden.
     [[nodiscard]] bool rt_traced_solid_draw() const noexcept;
     // The current object's name (NameObj::mName) into `out`; its guest address, 0 for none.
@@ -927,6 +931,7 @@ private:
     // Whether a batch starting with `call` is traced geometry; the scene's first one also gives
     // the camera (projection and viewport) for rays through EFB pixels.
     [[nodiscard]] bool begin_rt_batch(const DrawCall& call, RtDrawInfo& info);
+    void exclude_layer_water(DrawCall& call, const RtDrawInfo& info, bool rt);
     // Actor lights (actor_lights.h): the open scene's aim and its serial; the scene's key light in
     // world space (direction towards it), how far the lights are moved to it, its source (1 the
     // game's visible sun, 2 the sun its sky shows, 3 a world-fixed light) and, for 2 and 3, its

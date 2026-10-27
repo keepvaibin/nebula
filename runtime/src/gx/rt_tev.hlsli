@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // A draw's own TEV program at a ray hit: the GX colour and alpha combiners as the uber pixel shader runs them
 // (uber_ps.hlsl, integer arithmetic, Dolphin's formulation), over the hit's texture coordinates, its vertices'
-// colours and the draw's registers. Indirect stages are not evaluated (their stages sample the plain coordinates).
+// colours and the draw's registers. Indirect textures move the stages' coordinates as the raster's do (ShaderGenerator's
+// integer formulation; RtTevIndirect past the stages).
 //
 // The including shader declares, with RT_TEXTURED (shader model 6.6, the descriptor heap):
 //   ByteAddressBuffer g_tev       per draw a 128-byte record (RtTevMaterial, rt_types.h), then the stages
@@ -196,6 +197,98 @@ struct TevPoint {
     float4 vertex1;
 };
 
+// RtTevIndirect (rt_types.h), at `ind_at` past a record's stages: byte offsets of its parts.
+static const uint kTevIndScale = 4u;
+static const uint kTevIndMatrix = 36u;
+static const uint kTevIndCoordSize = 84u;
+
+// An indirect coordinate's GX wrap (ShaderGenerator indirect_wrap_mask): 1/128 texels within 256 >> (wrap - 1) texels;
+// 6 and 7 zero.
+int tev_ind_wrap(int c, uint wrap)
+{
+    return wrap == 0u ? c : wrap >= 6u ? 0 : c & int((256u >> (wrap - 1u)) * 128u - 1u);
+}
+
+// An indirect matrix row at `at`: x, y, z and its shift (int16 pairs).
+int4 tev_ind_row(ByteAddressBuffer tev, uint at)
+{
+    const uint2 w = tev.Load2(at);
+    return int4(asint(w.x << 16u) >> 16, asint(w.x) >> 16, asint(w.y << 16u) >> 16, asint(w.y) >> 16);
+}
+
+// A stage's indirect coordinate op (ShaderGenerator): its coordinates `stage_coord` (1/128 texels of their GX size)
+// moved by its indirect stage's texel through an indirect matrix, wrapped, and added to the previous stage's `tevcoord`
+// or not; its bump alpha (`alphabump`). `count` indirect stages; their texels `ind_tex`.
+int2 tev_indirect_coord(ByteAddressBuffer tev, uint ind_at, uint ind_cmd, int2 stage_coord, int3 ind_tex[4], uint count,
+                        int2 tevcoord, inout int alphabump)
+{
+    int2 trans = int2(0, 0);
+    const uint bt = ind_cmd & 3u;
+    if (ind_cmd != 0u && bt < count) {
+        const uint fmt = (ind_cmd >> 2u) & 3u;
+        const uint bias = (ind_cmd >> 4u) & 7u;
+        const uint bs = (ind_cmd >> 7u) & 3u;
+        const uint mtx = (ind_cmd >> 9u) & 3u;
+        const uint mtx_id = (ind_cmd >> 11u) & 3u;
+        const int3 texel = ind_tex[bt];
+        if (bs != 0u) {
+            const int c = bs == 1u ? texel.x : bs == 2u ? texel.y : texel.z;
+            alphabump = (c << (fmt == 0u ? 0u : 6u - fmt)) & 248;
+        }
+        int3 crd = texel >> (fmt == 0u ? 0u : fmt + 2u);
+        const int add = fmt == 0u ? -128 : 1;
+        crd += int3((bias & 1u) != 0u ? add : 0, (bias & 2u) != 0u ? add : 0, (bias & 4u) != 0u ? add : 0);
+        if (mtx != 0u) {
+            const uint row = ind_at + kTevIndMatrix + (mtx - 1u) * 16u;
+            const int4 s_row = tev_ind_row(tev, row);
+            const int4 t_row = tev_ind_row(tev, row + 8u);
+            if (mtx_id == 0u) {
+                trans = int2(s_row.x * crd.x + s_row.y * crd.y + s_row.z * crd.z,
+                             t_row.x * crd.x + t_row.y * crd.y + t_row.z * crd.z) >> 3;
+            } else if (mtx_id == 1u) {
+                trans = (stage_coord * crd.xx) >> 8;
+            } else if (mtx_id == 2u) {
+                trans = (stage_coord * crd.yy) >> 8;
+            }
+            trans = s_row.w >= 0 ? trans >> s_row.w : trans << (-s_row.w);
+        }
+    }
+    const int2 wrapped = int2(tev_ind_wrap(stage_coord.x, (ind_cmd >> 13u) & 7u),
+                              tev_ind_wrap(stage_coord.y, (ind_cmd >> 16u) & 7u));
+    const int2 c = ((ind_cmd >> 20u) & 1u) != 0u ? tevcoord + wrapped + trans : wrapped + trans;
+    return (c << 8) >> 8;
+}
+
+#if RT_TEXTURED
+// The indirect stages' texels at point `pt` (s, t, u from alpha, blue, green, as the raster reads them; record
+// `record`, its RtTevIndirect at `ind_at`), filtered over `cone` as tev_sample; `count` returns their number.
+void tev_indirect_maps(ByteAddressBuffer tev, uint record, uint header, uint ind_at, TevPoint pt, float cone,
+                       out int3 ind_tex[4], out uint count)
+{
+    ind_tex[0] = int3(0, 0, 0);
+    ind_tex[1] = int3(0, 0, 0);
+    ind_tex[2] = int3(0, 0, 0);
+    ind_tex[3] = int3(0, 0, 0);
+    const uint order = tev.Load(ind_at);
+    count = min((order >> 24u) & 7u, 4u);
+    const uint texgens = header >> 28u;
+    [loop] for (uint i = 0u; i < count; ++i) {
+        const uint map = (order >> (6u * i)) & 7u;
+        const uint coord_raw = (order >> (6u * i + 3u)) & 7u;
+        const uint slot = (header >> (8u + 2u * (coord_raw < texgens ? coord_raw : 0u))) & 1u;
+        const float2 scale = asfloat(tev.Load2(ind_at + kTevIndScale + i * 8u));
+        const uint view = tev.Load(record + 72u + map * 4u);
+        const float2 coords = texgens != 0u ? pt.uv[slot] * scale : float2(0.0f, 0.0f);
+        if (view != 0xFFFFFFFFu && all(abs(coords) < 1.0e4f)) {
+            const Texture2D<float4> ind_map = ResourceDescriptorHeap[NonUniformResourceIndex(view)];
+            // Repeating (GX wrap 1 on both axes).
+            const float4 texel = tev_sample(ind_map, coords, 5u, pt.edge1[slot] * scale, pt.edge2[slot] * scale, cone);
+            ind_tex[i] = int3(round(saturate(texel.abg) * 255.0f));
+        }
+    }
+}
+#endif
+
 // The TEV output of the draw whose record starts at `record` in `tev` (RtTevMaterial, then its stages) at point `pt`
 // (display-encoded RGBA, 0-1), and whether its alpha passes the draw's alpha compare. `mode`: the kTev* flags above.
 // `cone`: the footprint its textures are filtered over (tev_sample; kTevNoCone: none). `delight`: the material
@@ -222,6 +315,13 @@ float4 tev_combine(ByteAddressBuffer tev, uint record, TevPoint pt, uint mode, f
     int4 c2 = tev_register(tev, record, 3u);
     int4 texc = int4(0, 0, 0, 0);
     int4 rasc = int4(0, 0, 0, 0);
+    // Indirect texturing (RtTevStage.pad[1] bit 31): its texels read at the first stage, the coordinates carried from
+    // stage to stage, the bump alpha.
+    const uint ind_at = stage_base + stages * kTevStageBytes;
+    int3 ind_tex[4] = {int3(0, 0, 0), int3(0, 0, 0), int3(0, 0, 0), int3(0, 0, 0)};
+    uint ind_count = 0u;
+    int2 tevcoord = int2(0, 0);
+    int alphabump = 0;
     [loop] for (uint s = 0u; s < stages; ++s) {
         const uint at = stage_base + s * kTevStageBytes;
         const uint4 packed = tev.Load4(at);
@@ -240,17 +340,39 @@ float4 tev_combine(ByteAddressBuffer tev, uint record, TevPoint pt, uint mode, f
         // As the raster: a stage without coordinates (the draw has no texture generators) reads zero, a disabled one
         // white.
         const uint texgens = header >> 28u;
+        const uint stage_word = tev.Load(at + 28u);
+        const uint wrap = stage_word & 0xFu;
+        const uint ind_cmd = (stage_word >> 8u) & 0x1FFFFFu;
+        const uint slot = (header >> (8u + 2u * texcoord)) & 1u;
+#if RT_TEXTURED
+        // Indirect texturing: every stage carries the coordinates (an add-previous stage reads the one before's).
+        if ((stage_word >> 31u) != 0u) {
+            if (s == 0u) {
+                tev_indirect_maps(tev, record, header, ind_at, pt, cone, ind_tex, ind_count);
+            }
+            int2 stage_coord = int2(0, 0);
+            if (texgens != 0u) {
+                const uint size = tev.Load(ind_at + kTevIndCoordSize + (texcoord < texgens ? texcoord : 0u) * 4u);
+                stage_coord = int2(round(pt.uv[slot] * float2((size & 0xFFFFu) + 1u, (size >> 16u) + 1u) * 128.0f));
+            }
+            tevcoord = tev_indirect_coord(tev, ind_at, ind_cmd, stage_coord, ind_tex, ind_count, tevcoord, alphabump);
+        }
+#endif
         if (tex_enable && texgens != 0u) {
             texc = int4(255, 255, 255, 255);
 #if RT_TEXTURED
             const uint view = tev.Load(record + 72u + texmap * 4u);
-            const uint slot = (header >> (8u + 2u * texcoord)) & 1u;
-            const float2 coords = pt.uv[slot] * scale;
+            float2 coords = pt.uv[slot] * scale;
             const float2 d1 = pt.edge1[slot] * scale;
             const float2 d2 = pt.edge2[slot] * scale;
-            const uint wrap = tev.Load(at + 28u);
             if (view != 0xFFFFFFFFu && all(abs(coords) < 1.0e4f)) {
                 const Texture2D<float4> map = ResourceDescriptorHeap[NonUniformResourceIndex(view)];
+                // A stage with an indirect command samples at the moved coordinates (1/128 texels of the map).
+                if (ind_cmd != 0u && (stage_word >> 31u) != 0u) {
+                    uint map_w, map_h, map_levels;
+                    map.GetDimensions(0u, map_w, map_h, map_levels);
+                    coords = float2(tevcoord) / (128.0f * float2(max(map_w, 1u), max(map_h, 1u)));
+                }
                 float4 texel = saturate(tev_sample(map, coords, wrap, d1, d2, cone));
                 // Physical: the material texture's albedo, the light painted into it taken out (its de-light map,
                 // record pad[1]; rt_delight.hlsl).
@@ -279,8 +401,12 @@ float4 tev_combine(ByteAddressBuffer tev, uint record, TevPoint pt, uint mode, f
         } else {
             texc = texgens != 0u ? int4(255, 255, 255, 255) : int4(0, 0, 0, 0);
         }
+        // Channels 5 and 6: the bump alpha, and it normalised (libogc's GX_ALPHA_BUMP, GX_ALPHA_BUMPN).
+        const int bump_n = alphabump | (alphabump >> 5);
         rasc = ras_channel == 0u ? tev_swizzle(ras_in0, ras_swizzle)
                : ras_channel == 1u ? tev_swizzle(ras_in1, ras_swizzle)
+               : ras_channel == 5u ? tev_swizzle(int4(alphabump, alphabump, alphabump, alphabump), ras_swizzle)
+               : ras_channel == 6u ? tev_swizzle(int4(bump_n, bump_n, bump_n, bump_n), ras_swizzle)
                                    : int4(0, 0, 0, 0);
         const int4 kon = tev_konst(tev, record, ksel & 0x1Fu, (ksel >> 5u) & 0x1Fu);
 

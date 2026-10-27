@@ -4,6 +4,7 @@
 // Its buffers stay unordered-access (the slot results excepted) and are reached through views in the scene's
 // descriptor block (rt_engine.hlsl g_engine_views).
 #include "galaxy/gx/ray_tracing.h"
+#include "galaxy/gx/pso_jobs.h"
 
 #include "rt_engine_atrous_cs.h"
 #include "rt_engine_clear_cs.h"
@@ -14,6 +15,7 @@
 #include "rt_engine_indirect_cs.h"
 #include "rt_engine_indirect_spatial_cs.h"
 #include "rt_engine_light_grid_cs.h"
+#include "rt_engine_mist_cs.h"
 #include "rt_engine_cache_cs.h"
 #include "rt_engine_reference_cs.h"
 #include "rt_engine_shadow_blur_cs.h"
@@ -48,7 +50,8 @@ enum EngineView : std::uint32_t {
     // The world's radiance cache (rt_engine.hlsl EngineCacheCS).
     kEvRadianceCache,
 };
-static_assert(kEvRadianceCache < 32u);
+// 30 and 31: the mist's light pass's (ray_tracing.cpp kEvMist*).
+static_assert(kEvRadianceCache < 30u);
 
 // rt_engine.hlsl's light grid: kGridCells^3 cells of kGridSlots slots (a light, its weight).
 constexpr std::uint64_t kEngineGridBytes = 24ull * 24ull * 24ull * 64ull * 8ull;
@@ -132,17 +135,19 @@ bool SceneRayTracer::create_engine_pipelines() {
     engine_clear_mode_ = static_cast<std::uint32_t>(std::clamp(env_value("GALAXY_RT_ENGINE_CLEAR", 1.0f), 0.0f, 10.0f));
     engine_clear_wanted_ = engine_clear_mode_ != 0u;
     engine_reference_ = env_value("GALAXY_RT_ENGINE_REFERENCE", 0.0f) != 0.0f;
+    mist_wanted_ = env_value("GALAXY_RT_MIST", 1.0f) != 0.0f;
+    mist_view_ = static_cast<std::uint32_t>(std::clamp(env_value("GALAXY_RT_MIST_VIEW", 0.0f), 0.0f, 2.0f));
     water_light_ = env_value("GALAXY_RT_WATER_LIGHT", 1.0f) != 0.0f;
     engine_reference_bounces_ =
         static_cast<std::uint32_t>(std::clamp(env_value("GALAXY_RT_ENGINE_REFERENCE_BOUNCES", 8.0f), 0.0f, 32.0f));
     if (!light_textured_ || !light_root_) {
         return false;
     }
+    // Compiled in parallel (pso_jobs.h), joined below.
+    PsoJobs jobs;
     const auto compute = [&](const void* code, std::size_t size, ComPtr<ID3D12PipelineState>& out) {
-        D3D12_COMPUTE_PIPELINE_STATE_DESC desc{};
-        desc.pRootSignature = light_root_.Get();
-        desc.CS = {code, size};
-        return SUCCEEDED(device_->CreateComputePipelineState(&desc, IID_PPV_ARGS(&out)));
+        jobs.compute(device_.Get(), light_root_.Get(), code, size, out);
+        return true;
     };
     const bool ok =
         compute(g_rt_engine_gbuffer_cs, sizeof(g_rt_engine_gbuffer_cs), engine_gbuffer_pso_) &&
@@ -162,8 +167,9 @@ bool SceneRayTracer::create_engine_pipelines() {
         compute(g_rt_engine_atrous_cs, sizeof(g_rt_engine_atrous_cs), engine_atrous_pso_) &&
         compute(g_rt_engine_final_cs, sizeof(g_rt_engine_final_cs), engine_final_pso_) &&
         compute(g_rt_engine_clear_cs, sizeof(g_rt_engine_clear_cs), engine_clear_pso_) &&
+        compute(g_rt_engine_mist_cs, sizeof(g_rt_engine_mist_cs), engine_mist_pso_) &&
         compute(g_rt_engine_reference_cs, sizeof(g_rt_engine_reference_cs), engine_reference_pso_);
-    if (!ok) {
+    if (!ok || jobs.wait() != 0u) {
         std::cerr << "[rt] engine pipelines failed\n";
         return false;
     }

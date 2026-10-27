@@ -307,6 +307,11 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_gx_pso_desc_impl(
             rt.DestBlendAlpha = D3D12_BLEND_ZERO;
             rt.BlendOpAlpha = D3D12_BLEND_OP_ADD;
         }
+        if (bb & kRenderStateZeroAlpha) { // Constant destination alpha 0, drawn single-source.
+            rt.SrcBlendAlpha = D3D12_BLEND_ZERO;
+            rt.DestBlendAlpha = D3D12_BLEND_ZERO;
+            rt.BlendOpAlpha = D3D12_BLEND_OP_ADD;
+        }
     } else if (bb & (1u << 8)) {         // logic_op_enable
         rt.LogicOpEnable = TRUE;
         rt.LogicOp = gx_logic_op((bb >> 9) & 0xFu);
@@ -419,6 +424,25 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_gx_pso_desc_impl(
         mask.DestBlendAlpha = D3D12_BLEND_ONE;
         mask.BlendOpAlpha = D3D12_BLEND_OP_MAX;
         mask.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_RED;
+        // The effects layer: target 2 blends the draw's colour as the EFB does (what it adds over what lies behind),
+        // target 3 takes the EFB's destination factor on its own (what of that it lets through: transmittance).
+        // The backend sets the layer only for single-source blends whose factors never read the EFB.
+        if ((bb & kRenderStateLayerTarget) != 0u) {
+            pd.NumRenderTargets = 4;
+            pd.RTVFormats[2] = kLayerFormat;
+            pd.RTVFormats[3] = kLayerFormat;
+            const D3D12_RENDER_TARGET_BLEND_DESC& efb = pd.BlendState.RenderTarget[0];
+            D3D12_RENDER_TARGET_BLEND_DESC& layer = pd.BlendState.RenderTarget[2];
+            layer = efb;
+            layer.LogicOpEnable = FALSE;
+            layer.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_RED | D3D12_COLOR_WRITE_ENABLE_GREEN |
+                                          D3D12_COLOR_WRITE_ENABLE_BLUE;
+            D3D12_RENDER_TARGET_BLEND_DESC& trans = pd.BlendState.RenderTarget[3];
+            trans = layer;
+            trans.SrcBlend = D3D12_BLEND_ZERO;
+            trans.BlendOp = D3D12_BLEND_OP_ADD;
+            trans.DestBlend = efb.BlendOp == D3D12_BLEND_OP_ADD ? efb.DestBlend : D3D12_BLEND_ONE;
+        }
     }
     pd.DSVFormat             = kEfbDepthFormat;
     pd.SampleDesc.Count      = 1u << (rs.samples_log2 & kEfbVariantSamplesMask);
@@ -1141,7 +1165,7 @@ constexpr std::uint32_t kShaderCacheMagic   = 0x43535847u;  // "GXSC"
 // The version gates generator output, not only the file format: bump it whenever
 // generate_vs or generate_ps emits different HLSL for the same key, or stale DXBC
 // would be served for hash-identical keys.
-constexpr std::uint32_t kShaderCacheVersion = 53u;
+constexpr std::uint32_t kShaderCacheVersion = 61u;
 constexpr std::uint32_t kPsoKeyCacheMagic = 0x43504B47u;  // "GKPC"
 // PSO keys name shader-cache stages, so psos.bin is rebuilt whenever the shader cache
 // version changes; a key whose stages are missing is skipped at prewarm.
@@ -2331,6 +2355,8 @@ void PipelineCache::compile_uber_blobs() noexcept {
             source += uber_ps_variant_export_depth(variant) ? "1\n" : "0\n";
             source += "#define UBER_EARLY_DEPTH ";
             source += uber_ps_variant_early_depth(variant) ? "1\n" : "0\n";
+            source += "#define UBER_LAYER ";
+            source += uber_ps_variant_layer(variant) ? "1\n" : "0\n";
             source += ps_source;
             ps[variant] = compile_shader(source, "ps_5_1", "gx_uber_ps");
             complete = static_cast<bool>(ps[variant]);
@@ -2380,9 +2406,13 @@ ID3D12PipelineState* PipelineCache::uber_pipeline(
     prewarm_uber_for_seen_samples();
     UberPsoKey key{};
     // Uber stand-ins stay single-target: a motion writer drawing with one
-    // leaves its pixels' motion at the cleared zero for those frames.
+    // leaves its pixels' motion at the cleared zero for those frames. An
+    // effects-layer draw keeps its targets (its variant writes them).
     key.render_state.blend_bits =
-        render_state.blend_bits & ~(kRenderStateMotionTarget | kRenderStateReactiveTarget);
+        uber_ps_variant_layer(variant)
+            ? render_state.blend_bits & ~kRenderStateMotionTarget
+            : render_state.blend_bits &
+                  ~(kRenderStateMotionTarget | kRenderStateReactiveTarget | kRenderStateLayerTarget);
     key.render_state.zmode_bits = render_state.zmode_bits;
     key.render_state.cull = render_state.cull;
     key.render_state.pixfmt = render_state.pixfmt;
@@ -2436,7 +2466,7 @@ void PipelineCache::enqueue_uber_prewarm(std::uint8_t samples_log2) {
                          std::uint8_t cull, std::uint8_t pixfmt, std::uint8_t topology) {
         UberPsoKey key{};
         key.render_state.blend_bits =
-            blend_bits & ~(kRenderStateMotionTarget | kRenderStateReactiveTarget);
+            blend_bits & ~(kRenderStateMotionTarget | kRenderStateReactiveTarget | kRenderStateLayerTarget);
         key.render_state.zmode_bits = zmode_bits;
         key.render_state.cull = cull;
         key.render_state.pixfmt = pixfmt;

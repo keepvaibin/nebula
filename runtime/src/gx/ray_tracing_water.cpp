@@ -183,6 +183,13 @@ int SceneRayTracer::trace_water(ID3D12GraphicsCommandList* list, const RtSources
     }
     flush_water(list, sources, allocate, allocate_context);
     water_open_ = false;
+    // The mist drawn in the window (its puffs) is lit at the slot's trace whether or not the frame has water to trace,
+    // over the water once its acceleration structure is built; the EFB depth is the colour and depth table's second
+    // view.
+    D3D12_GPU_DESCRIPTOR_HANDLE mist_depth = color_depth_table;
+    if (mist_depth.ptr != 0u) {
+        mist_depth.ptr += texture_view_increment_;
+    }
     if (log_seq_) {
         std::fprintf(stderr, "[rt-seq] trace_water draws=%zu triangles=%u incomplete=%d\n", water_draws_.size(),
                      water_triangles_, water_incomplete_ ? 1 : 0);
@@ -198,6 +205,7 @@ int SceneRayTracer::trace_water(ID3D12GraphicsCommandList* list, const RtSources
                          color_depth_table.ptr != 0u ? 1 : 0);
         }
         water_light_triangles_ = 0u;
+        trace_mist(list, allocate, allocate_context, mist_depth, false);
         return -1;
     }
     const auto slot = static_cast<unsigned>(light_slot_);
@@ -207,6 +215,7 @@ int SceneRayTracer::trace_water(ID3D12GraphicsCommandList* list, const RtSources
             std::fprintf(stderr, "[rt-seq] trace_water size light=%ux%u efb=%ux%u\n", light.width, light.height, width,
                          height);
         }
+        trace_mist(list, allocate, allocate_context, mist_depth, false);
         return -1;
     }
     ComPtr<ID3D12GraphicsCommandList4> list4;
@@ -263,6 +272,7 @@ int SceneRayTracer::trace_water(ID3D12GraphicsCommandList* list, const RtSources
         barrier = uav(water_tlas_.Get());
         list->ResourceBarrier(1u, &barrier);
     }
+    trace_mist(list, allocate, allocate_context, mist_depth, water);
     // The next trace's light under water reads this water (engine_prepare).
     water_light_triangles_ = water_triangles_;
     window_.water_triangles += water_triangles_;
@@ -313,7 +323,8 @@ int SceneRayTracer::trace_water(ID3D12GraphicsCommandList* list, const RtSources
 void SceneRayTracer::composite_water(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
                                      D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width,
                                      std::uint32_t height, int slot, bool reproject,
-                                     D3D12_GPU_DESCRIPTOR_HANDLE scene_srv, D3D12_GPU_DESCRIPTOR_HANDLE opaque_srv) {
+                                     D3D12_GPU_DESCRIPTOR_HANDLE scene_srv, D3D12_GPU_DESCRIPTOR_HANDLE opaque_srv,
+                                     D3D12_GPU_DESCRIPTOR_HANDLE layer_srv) {
     if (list == nullptr || slot < 0 || slot >= static_cast<int>(kLightSlots) || depth_srv.ptr == 0u ||
         show_lighting_) {
         return;
@@ -323,9 +334,11 @@ void SceneRayTracer::composite_water(ID3D12GraphicsCommandList* list, D3D12_CPU_
     const float split = split_ > 0.0f ? info.view.viewport[0] + split_ * info.view.viewport[2] : -1.0f;
     if (water_traced_[static_cast<unsigned>(slot)]) {
         reflections_.composite_water(list, target, depth_srv, width, height, static_cast<unsigned>(slot),
-                                     reproject ? reproject_->GetGPUVirtualAddress() : 0u, split, scene_srv, opaque_srv);
+                                     reproject ? reproject_->GetGPUVirtualAddress() : 0u, split, scene_srv, opaque_srv,
+                                     layer_srv);
     }
-    composite_clear(list, target, depth_srv, width, height, static_cast<unsigned>(slot), reproject, scene_srv);
+    composite_clear(list, target, depth_srv, width, height, static_cast<unsigned>(slot), reproject, scene_srv,
+                    layer_srv);
 }
 
 }  // namespace galaxy::gx

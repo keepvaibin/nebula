@@ -165,6 +165,8 @@ public:
     [[nodiscard]] bool rt_reflections_active() const noexcept { return false; }
     [[nodiscard]] bool rt_engine() const noexcept { return false; }
     [[nodiscard]] bool rt_engine_clear() const noexcept { return false; }
+    [[nodiscard]] bool rt_mist_open() const noexcept { return false; }
+    void rt_note_mist(const float*, float, float) noexcept {}
     [[nodiscard]] bool rt_log_seq() const noexcept { return false; }
     [[nodiscard]] bool rt_scene_untraced() const noexcept { return false; }
     void rt_set_scene_untraced(bool) noexcept {}

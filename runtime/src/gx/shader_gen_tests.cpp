@@ -1585,6 +1585,8 @@ int main() {
             source += uber_ps_variant_export_depth(variant) ? "1" : "0";
             source += "\n#define UBER_EARLY_DEPTH ";
             source += uber_ps_variant_early_depth(variant) ? "1" : "0";
+            source += "\n#define UBER_LAYER ";
+            source += uber_ps_variant_layer(variant) ? "1" : "0";
             source += "\n";
             source += uber_ps_source();
             const std::string label = "uber_ps_variant_" + std::to_string(variant);
@@ -1606,6 +1608,10 @@ int main() {
         expect_variant(0x03u, 2u);  // late Z texture exports depth
         expect_variant(0x83u, 3u);
         expect_variant(0x02u, 4u);  // early Z texture keeps geometric depth
+        key.reserved = kPsKeyLayer;
+        expect_variant(0x01u, 6u);  // effects layer, late depth
+        expect_variant(0x03u, 7u);  // effects layer, depth export
+        expect_variant(0x00u, 8u);  // effects layer, early depth
     }
 
     if (g_failures == 0) {

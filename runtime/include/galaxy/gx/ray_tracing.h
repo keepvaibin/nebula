@@ -235,14 +235,30 @@ public:
     [[nodiscard]] bool camera_ready() const noexcept { return camera_pso_ && camera_widen_pso_; }
     // The ray tracing engine (ray_tracing_engine.cpp, rt_engine.hlsl), active under physical, textured lighting.
     // composite_clear: the engine's clear surfaces (rt_engine.hlsl EngineClearCS) of `slot` over the picture
-    // (`scene_srv`: its copy at the water's trace), with the water's composite. set_engine_picture: the EFB colour
-    // the next trace reads (NON_PIXEL_SHADER_RESOURCE during it; the renderer transitions it).
+    // (`scene_srv`: its copy at the water's trace; `layer_srv`: the effects layer over it, colour and transmittance),
+    // with the water's composite. set_engine_picture: the EFB colour the next trace reads (NON_PIXEL_SHADER_RESOURCE
+    // during it; the renderer transitions it).
     void composite_clear(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
                          D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width, std::uint32_t height, unsigned slot,
-                         bool reproject, D3D12_GPU_DESCRIPTOR_HANDLE scene_srv);
+                         bool reproject, D3D12_GPU_DESCRIPTOR_HANDLE scene_srv,
+                         D3D12_GPU_DESCRIPTOR_HANDLE layer_srv = {});
     [[nodiscard]] bool engine_active() const noexcept {
         return engine_ready_ && physical_active_ && lighting_active() && light_textured_;
     }
+    // The waterfall mist (rt_engine.hlsl MistLightCS, rt_lighting.hlsl MistCompositePS): the table's `mist` effects'
+    // sprites are puffs of drops while the scene's water window is open (mist_open; GALAXY_RT_MIST=0: the sprites as
+    // the game draws them). note_mist: one puff, its eye-space centre, width (sigma) and optical depth through its
+    // centre. mist_slot: the light slot whose puffs the water's trace lit this frame (-1: none). composite_mist: them over
+    // the picture (`scene_srv`: its copy after the water's composites; `layer_srv`: the effects layer).
+    [[nodiscard]] bool mist_open() const noexcept {
+        return mist_wanted_ && water_open_ && engine_active() && surface_reflections_active() && engine_mist_pso_ &&
+               mist_composite_pso_;
+    }
+    void note_mist(const float centre[3], float sigma, float depth);
+    [[nodiscard]] int mist_slot() const noexcept { return mist_slot_; }
+    void composite_mist(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
+                        D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width, std::uint32_t height, unsigned slot,
+                        bool reproject, D3D12_GPU_DESCRIPTOR_HANDLE scene_srv, D3D12_GPU_DESCRIPTOR_HANDLE layer_srv);
     // The engine traces the clear surfaces (its clear pass runs with the water window's trace: the table's `traced`
     // glass and solids).
     [[nodiscard]] bool engine_clear_active() const noexcept {
@@ -276,11 +292,12 @@ public:
     // Blends the water reflections of `slot` into the EFB colour `target` at the depth `depth_srv`
     // holds (PIXEL_SHADER_RESOURCE); `reproject` as composite(). Leaves its own root signature and
     // pipeline bound.
-    // `scene_srv`: the frame with the game's water drawn (a copy), which the water composite low-passes.
+    // `scene_srv`: the frame with the game's water drawn (a copy), which the water composite low-passes;
+    // `layer_srv`: the effects layer drawn over the water and the clear surfaces (colour and transmittance; 0: none).
     void composite_water(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
                          D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width, std::uint32_t height, int slot,
                          bool reproject, D3D12_GPU_DESCRIPTOR_HANDLE scene_srv = {},
-                         D3D12_GPU_DESCRIPTOR_HANDLE opaque_srv = {});
+                         D3D12_GPU_DESCRIPTOR_HANDLE opaque_srv = {}, D3D12_GPU_DESCRIPTOR_HANDLE layer_srv = {});
     // After the composite (same views): the picture before the translucent phases; with `game_srv`
     // (the composite's source: the game's own opaque picture) the exposure's measurement.
     void snapshot_glow_base(ID3D12GraphicsCommandList* list, D3D12_GPU_DESCRIPTOR_HANDLE color_depth_table,
@@ -364,6 +381,8 @@ private:
         kPassEngineDenoise,     // temporal accumulation and the four a-trous iterations
         kPassEngineFinal,
         kPassEngineClear,       // the glass pass at the water's trace (outside the lighting)
+        kPassEngineMist,        // the mist's light at the water's trace (outside the lighting)
+        kPassMistComposite,     // the mist over the picture
         kPassCount
     };
     struct PassEntry {
@@ -423,6 +442,14 @@ private:
     // (engine_bind_); `depth_table`: the EFB depth's view. False: none this scene.
     bool trace_engine_clear(ID3D12GraphicsCommandList* list, Allocate allocate, void* allocate_context,
                             D3D12_GPU_DESCRIPTOR_HANDLE depth_table, unsigned slot);
+    // The lighting's root as the engine's trace of slot engine_bind_.slot bound it, with the constants at `constants` (a
+    // copy of engine_bind_'s): for the passes at the scene's end (the clear pass, the mist's light).
+    void bind_engine_end(ID3D12GraphicsCommandList* list, D3D12_GPU_VIRTUAL_ADDRESS constants,
+                         D3D12_GPU_DESCRIPTOR_HANDLE depth_table);
+    // The mist's light (rt_engine.hlsl MistLightCS) at the water's trace: this frame's puffs into the light slot's
+    // records; sets mist_slot_. `water`: the water window's acceleration structure holds this frame's water.
+    void trace_mist(ID3D12GraphicsCommandList* list, Allocate allocate, void* allocate_context,
+                    D3D12_GPU_DESCRIPTOR_HANDLE depth_table, bool water);
     // A view of an acceleration structure in the scene's descriptor block.
     std::uint32_t tlas_view(D3D12_GPU_VIRTUAL_ADDRESS tlas);
     std::uint32_t buffer_uav(ID3D12Resource* resource, std::uint64_t bytes);
@@ -811,6 +838,19 @@ private:
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 4> engine_clear_;
     std::array<D3D12_RESOURCE_STATES, 4> engine_clear_state_{};
     std::array<bool, 4> engine_clear_valid_{};
+    // The waterfall mist: GALAXY_RT_MIST; its pipelines; this frame's puffs (8 floats each: eye-space centre, sigma,
+    // optical depth; rt_engine.hlsl kEvMistIn); per light slot their records for the composite (rt_lighting.hlsl
+    // kMistHeader + 3 a puff, uint4); the slot lit this frame.
+    static constexpr std::uint32_t kMistMost = 512u;   // rt_engine.hlsl kMistMost
+    static constexpr std::uint32_t kMistHeader = 6u;   // rt_lighting.hlsl kMistHeader
+    bool mist_wanted_ = true;
+    std::uint32_t mist_view_ = 0u;   // GALAXY_RT_MIST_VIEW: 1 no cut at the water, 2 the water found under the puffs
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_mist_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> mist_composite_pso_;
+    std::vector<float> mist_puffs_;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, 4> mist_records_;
+    std::array<D3D12_RESOURCE_STATES, 4> mist_records_state_{};
+    int mist_slot_ = -1;
     // The slot's water was traced (trace_water; a frame of clear solids alone traces none, and composites none).
     std::array<bool, 4> water_traced_{};
     // The lighting's constants and bindings of the trace the engine ran (slot), for the clear pass at the scene's end.

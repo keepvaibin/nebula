@@ -117,25 +117,53 @@ is not traced and shows the game's picture.
 - Falling water: a draw that maps a `waterfall` texture is falling water whichever texture comes first (Beach Bowl's
   and the Twin Falls' sheets map a ripple map and an indirect warp before their fall texture: they were a calm lake on
   its side); FallMask and the Observatory's and Honeyhive's Fall are waterfall rows, and identity rows name the falls'
-  back faces. The art paints white water white and clear water in its hue: the colour's whiteness (its least channel
-  over its greatest) is the share of white water, a foam of bubbles and drops; the rest is clear water, which passes
-  what lies behind it but for the light its bubbles scatter: about half through a large fall's sheet (5 cm of water
-  with 2 % of air in 2 mm bubbles: extinction 1.5 x void fraction / radius, 1 - exp(-0.75)). What scatters keeps the
-  painted colour (white bubbles in blue water look pale blue) and is a layer lit from both sides (foam_light,
-  two-stream conservative scattering: about 10 % of air through 20 cm, tau 30, g 0.8: 0.75 of the light on its front
-  reflected, 0.25 of the light on its back passed through; a backlit fall glows). Translucent sheets do this in the raster (the lit
-  translucent's falling water flag, tex_dims[7].w, both shader families) under the light at the sheet (waterfall_light:
-  last frame's falls along the pixel's ray, the sun behind the sheet's own shadow ray and the light of the surface just
-  behind it, else the sky's, through the light texture's spare word). They are the water pass's own class
+  back faces. The art paints white water white and clear water in its hue (the row's colour): the painted colour lies
+  between the two, and how far towards white is the share of white water (fall_foam), a foam of bubbles and drops,
+  white at the painted brightness (bubbles scatter every colour alike: the colour less the clear water's hue amplified
+  any departure of the traced TEV colour from the art's line into a hue, the Twin Falls' streaks pink and Beach Bowl's
+  cyan), times the row's `white<n>` (the Twin Falls 0.5, half their painted streaks; `unpainted` 0). The rest is clear
+  water, whose bubbles scatter its `aeration` (the row's; else 0.36; the Twin Falls 0, Beach Bowl 0.2: its glassy lip and
+  its white fall one haze) and which passes what lies behind it. White water is a layer lit from both sides
+  (foam_light, two-stream conservative scattering, g 0.8: its front's light whole, its back's 1 / (1 + (1 - g) tau / 2)
+  with tau the scattering through its own share of a sheet at most 20 cm deep: a backlit fall's thin streaks glow). A
+  sheet is corrugated (fall_ripple: four waves across and along it in world space, flowing down at the water's speed,
+  faded where they are smaller than a pixel); its reflection is water's Fresnel off that surface. Translucent sheets do
+  this in the raster (the lit translucent's falling water flag, tex_dims[7].w: 1 + 0.4 x the aeration, xyz the clear
+  water's colour; both shader families) under the light at the sheet (water_light: the nearest fall along the pixel's
+  ray, lit from both sides; the light texture's third third). They are the water pass's own class
   (kFallingWater): water's Fresnel off a turbulent sheet (GGX roughness 0.4: a rough sea's slope spread, Cox and Munk
   at 10 m/s, less what the flow's streaks carry), the streaks moving its reflection and glints down it, and a surface
   wherever it is not behind the scene (a fall pours down its cliff within a few units of it). The game's opaque sheets
   (Beach Bowl's falls with their splash cloud, the Twin Falls, Onimasu's stream: `traced solid` identity rows) are
   hidden, so the frame shows what lies behind, and the clear pass makes them water (clear_fall): the same split from
-  the draw's own TEV colour where its alpha test passes, water's thin-sheet Fresnel (n 1.333) and pure water's
-  absorption over the sheet's thickness (Pope and Fry 1997: 84, 97, 100 % through half a metre; the row's range).
-  They join the traced scene only after the frame's lighting, so what lies in front of them takes the light of the
-  surface behind.
+  the draw's own TEV colour (its indirect stages evaluated: the Twin Falls' column warps its fall texture through an
+  indirect map) where its alpha test passes, water's thin-sheet Fresnel (n 1.333) and pure water's absorption over the
+  sheet's thickness (Pope and Fry 1997: 84, 97, 100 % through half a metre; the row's range). What they pass is
+  refracted (screen-space, fall_through): the sheet is a thin prism whose thickness slopes with its faces' corrugations
+  (each face its own phases), bending what passes by (n - 1) times that; each wave's bend is held under its fold limit
+  lambda (D + L) / (2 pi D L) (the camera D from the sheet, the surface behind L past it: past it the picture folds into
+  a scramble, a pixel's one sample of it noise); the picture's pixel where the bent ray meets the surface the camera saw
+  behind the fall, unless that pixel shows something in front of the sheet. A clear sheet passed the sky unbent and
+  showed only its edges; through both faces' full slopes (two Snell refractions) it was grain. They join the traced
+  scene only after the frame's lighting, so what lies in front of them takes the light of the surface behind.
+- Waterfall mist (the table's `mist` effects: the spray at the falls' feet, the Twin Falls', Beach Bowl's, Honeyhive's):
+  the game paints its spray as cloud sprites (lobed, opaque, tinted blue). Under the engine each sprite is a puff of
+  drops instead (GxBackend::note_rt_mist): a Gaussian cloud at the sprite's quad centre (its corners through its
+  position matrix), sigma half the quad's half side (the cloud reaches the quad's edges at two sigma), optical depth
+  through its centre its row's `intensity` times the sprite's opacity (TEV register 0's alpha, JPA's particle colour):
+  4 for the cloud sprites (as opaque at the core as the painted cloud), 1.6 for steam, 0.8 for the droplets' dot
+  sprites (over the mist they were white speckle), by each texture's coverage. The sprites are not drawn. MistLightCS
+  lights each puff at the water's trace: the share of the sun it sees (32 shadow rays from fixed points over it, the
+  scene's sun shadow with its clear solids passed: the falls are water) and the light from the sky above it (16 fixed
+  upward rays: the sky's radiance, else the surface met lit as the clear pass lights its hits; the radiance cache's
+  cells come and go between frames and the mist's colour swung with them), every ray's hash salt its own; and the
+  water's surface below it. MistCompositePS integrates the puffs along each camera ray up to the EFB's surface and above
+  the water under each puff (Gaussian columns, erf): what lies behind passes exp(-depth), the mist adds 0.9 x its light
+  (a dense spray is a white cloud whose lit face the eye sees: as white as a surface facing that light) times one minus
+  that. Turbulence: value noise anchored in the world at the mist's mean point along the ray, rising half a metre a
+  second, moves 45 % of its density. It composites after the water and clear composites, under the effects layer (the
+  sparkles stay over it), on sub-frames reprojected (ReplayKind::RtMist). GALAXY_RT_MIST=0: the game's sprites;
+  GALAXY_RT_MIST_VIEW=1 no cut at the water, 2 the water found under the puffs.
 - Particles are never a water surface: effects drawn with indexed positions (a waterfall's spray, smoke, sparkles,
   bubbles) had the water pass's body painted over them.
 - Texture de-lighting takes out half of each texel's measured shading (GALAXY_RT_DELIGHT_STRENGTH 0.5) and turns it
@@ -196,6 +224,7 @@ slot, rewritten each frame: no root-signature limits).
 | E3b | ShadowBlurCS, ShadowPostCS, ShadowStabilizeCS | full | the sun's visibility (after NVIDIA's SIGMA): two blurs, each a dense 5 x 5 estimating the penumbra about the pixel (occluded neighbours', the smaller preferred) and 12 taps on a disc of its radius on screen (at most 32 px at 1056 lines, narrowed on slanted surfaces, turned per frame), on the pixel's plane, a smaller penumbra than the estimate counting less; then a history of at most 7 frames (weight at most 5/6) clamped to the 5 x 5 neighbourhood's mean +- its deviation (x 1 to 3 as the history grows), shortened by how far the clamp moved it. Contact shadows stay sharp, far blockers' soft; a moving caster leaves no trail |
 | E4 | IndirectCS | full at High (GALAXY_RT_ENGINE_GI_FULL), else half (one pixel per 2x2, rotating) | cosine ray; hit: emission + albedo x (sun with a shadow ray + one emitter by RIS with a shadow ray + sky SH), or, where the picture showed the hit when its slot last ran, its whole diffuse light then (a radiance cache: every bounce after the first; GALAXY_RT_ENGINE_BOUNCES); miss: sky radiance. ReSTIR GI temporal reuse and the boiling filter, then spatial reuse (sample point, normal, radiance; within 10 half-pixels at 1056 lines; Jacobian for the spatial, neighbours past tenfold rejected). The temporal reservoirs are the history; the spatial ones live one frame (fed back, their biased gain compounded into white blobs: Beach Bowl, the Garden doorway, b40-b75) |
 | E5 | SpecularCS | full | GGX VNDF ray, hit shaded as E4 (emission, sun, lights by RIS, sky ray) |
+| E5d | MistLightCS (the water's trace) | per puff | the waterfall mist's puffs (above): the sun's share by 32 shadow rays, the light from above by 16 rays (sky, or the hit lit as the clear pass lights it), the water's surface under it, exposed; MistCompositePS after the water's composites (scissored to the puffs' reach) |
 | E5c | CacheCS | 1M cells | the world's radiance cache (below): each cell's new samples from E4's and E5's hits onto its light |
 | E5b | ClearCS (the water's trace) | full | the water window's glass and crystal by their own geometry (closest-hit traversal of the water acceleration structure): up to two thin walls along the camera ray (front, far side), each R = 2F/(1+F), T = (1-F)/(1+F) of the exact dielectric Fresnel (n 1.5), a traced GGX reflection and the sun's highlight; ClearCompositePS with the water's composite: picture behind x T + R, exposed. A `traced` material's game draw is hidden but still captured. A `traced solid` (the crystal cages: the game draws them as a screen capture bent by an indirect map, which can only show what is behind them on screen) stays in the scene for the other rays and is no camera ray's surface; here it is a closed dielectric (its row's index, `ior<n>`, else quartz's 1.544; the crystal cages take moissanite's 2.65: 20.7 % reflected at normal incidence, where quartz's 4.6 % mirrored almost nothing beside them; RTX Remix's translucent material without thin walls, Whitted's recursion as in Unity HDRP's recursive rendering): the front face's Fresnel reflection and sun highlight, the refracted ray followed inside up to 16 segments, each far face passing its Fresnel share out (none past the critical angle: 40.4 degrees for quartz, 22.2 for moissanite) and reflecting the rest on, what is still inside then leaving as the light that left (total internal reflection holds some rays for many faces: at 8 segments about 1 % of a crystal's light on average, 20 % at worst, was lost), the row's colour as the transmittance after its range (Beer-Lambert); the first share out is the picture where the picture shows what it meets (its pixel kept in the record), the others shaded as the frame lit their hits (g_final) or as a glass reflection's. Records are 32 B: R, T per channel, eye z, the pixel seen through |
 | E6 | DenoiseTemporalCS | full | diffuse (demodulated: the lights' and the bounce; the sun's is E3b's) and specular histories, reprojection by depth / normal / draw id (the raster's motion where a surface moved: below), moments, history length; variance clipping of specular history; anti-lag of the diffuse history (a 4-frame fast history of its luminance against the moments' mean: past 1.5 x the frames' deviation the history shortens, to 4 frames at most); a new sample past twice its brightest neighbour lowered to that (fireflies; lowered to the neighbours themselves, the first pixels to find a small light never entered the history) |
@@ -205,7 +234,25 @@ slot, rewritten each frame: no root-signature limits).
 | E9 | The game's additive draws | full | drawn as the game drew them (gain 1): halos, sparks, number plates, flames are display effects; their light reaches the scene as emitting geometry (raised to radiance x exposure, b40-b71, whole halos saturated into white blobs) |
 | E10 | Camera | full | adaptation from the scene's log luminance (up to 4x for dim views; highlight priority both ways, down to half: the brightest tenth of surfaces no brighter than the stage's own light on a surface facing it, as the camera's stage exposure shows it), a stage sun at 1.25 x the stage's key (GALAXY_RT_SUN_STRENGTH) with the camera exposed for the stage's own light, bloom, sun shafts (screen-space radial gather from a visible sun, quarter resolution, weighted by Henyey-Greenstein g 0.76 forward scattering of the pixel's angle from the sun and the air in front of its surface, 1 - exp(-d / sky distance); samples above 8 clamped), tone curve |
 
-Translucent draws after the composite read the diffuse irradiance as the light texture (the existing interface).
+Translucent draws after the composite read the diffuse irradiance as the light texture (the existing interface), in
+thirds (rt_lighting.hlsl LightTexturePS; the draw's tex_dims[7].w picks one): water, glass and crystal the light of the
+surface behind; the effects and every other lit translucent the light in the open air where water lies in front of the
+sample (a spray cloud over a lake took the lake bed's light: grey), else the surface behind's; falling water the light
+at its own sheet. The front records (the open air's and the fall's light per sample) follow the probe records in
+g_final; a sample's .w is 0 (the fall's light there was read as CaptureCS's halo, bloom, since 15ba5e16).
+
+The effects layer: the game's effects (from its ShadowSurface draw type 0x26, the first list after the translucent ones
+in GameScene::draw3D, to the water's trace) draw into two more targets as they blend into the EFB: their colour (L) and
+what of the EFB behind them they let through (T, the blend's destination factor), so the frame is L + T B. The water's
+and the clear surfaces' composites (and the mist's) go under them: B = (F - L) / T, then L + T B'. Before, the
+composites ran after the effects and painted over the spray (the cover mask that was to keep them was empty: the
+game's EFB is RGBA6, so every source-alpha blend was dual-source and wrote no reactive mask). In motion scenes those
+blends are single-source (the destination alpha the game reads is constant 0: kRenderStateZeroAlpha) and write the
+reactive mask; water drawn inside the window (OceanBowl, phase 8) stays out of the layer.
+
+Start: the ray tracer's compute pipelines compile in parallel (pso_jobs.h; the device's pipeline creation is
+free-threaded). On a cold driver cache (each build's first start) they took 26-33 s one after another before the first
+frame, 1.6-1.8 s in parallel.
 Sub-frames re-run E8 per sub-frame with reprojection from their traced slot (kLightSlots results kept: diffuse,
 specular, eye z, camera).
 

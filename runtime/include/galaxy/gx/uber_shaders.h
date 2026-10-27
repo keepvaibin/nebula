@@ -24,25 +24,33 @@ namespace galaxy::gx {
 // Output-signature variants of the uber pixel shader. A key needs exactly one:
 // bit 0 dual-source TEV alpha (SV_Target1), bit 1 depth export (Z texture with
 // late Z), bit 2 early depth test. Depth export never runs with early depth.
-inline constexpr unsigned kUberPsVariants = 6u;
+// Variants 6-8: the effects layer (kPsKeyLayer: reactive mask, layer colour and
+// transmittance, never dual-source), late Z, depth export, early Z.
+inline constexpr unsigned kUberPsVariants = 9u;
 [[nodiscard]] constexpr unsigned uber_ps_variant(const PixelShaderKey& key) noexcept {
     const bool dual_source = (key.flags & 0x80u) != 0u;
     const bool z_texture = (key.flags & 0x02u) != 0u;
     const bool early_depth = (key.flags & 0x01u) == 0u;
     const bool export_depth = z_texture && !early_depth;
+    if ((key.reserved & kPsKeyLayer) != 0u) {
+        return 6u + (early_depth ? 2u : export_depth ? 1u : 0u);
+    }
     if (early_depth) {
         return 4u + (dual_source ? 1u : 0u);
     }
     return (dual_source ? 1u : 0u) + (export_depth ? 2u : 0u);
 }
+[[nodiscard]] constexpr bool uber_ps_variant_layer(unsigned variant) noexcept {
+    return variant >= 6u;
+}
 [[nodiscard]] constexpr bool uber_ps_variant_dual_source(unsigned variant) noexcept {
-    return (variant & 1u) != 0u;
+    return variant < 6u && (variant & 1u) != 0u;
 }
 [[nodiscard]] constexpr bool uber_ps_variant_export_depth(unsigned variant) noexcept {
-    return variant == 2u || variant == 3u;
+    return variant == 2u || variant == 3u || variant == 7u;
 }
 [[nodiscard]] constexpr bool uber_ps_variant_early_depth(unsigned variant) noexcept {
-    return variant >= 4u;
+    return (variant >= 4u && variant < 6u) || variant == 8u;
 }
 
 // The fields of GxPsConstants that specialized shaders bake from the key and

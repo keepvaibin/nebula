@@ -85,6 +85,9 @@ inline constexpr std::uint32_t kRtTriUvStride = 72u;
 // with each stage's coordinate scale (the texture coordinate's GX scale over its map's size), and one record. A stage's
 // pad[0]: 1 on an environment map's stage; pad[1]: its map's addressing (GX wrap s | wrap t << 2).
 inline constexpr unsigned kRtTevMaxStages = 16u;
+// pad[0]: 1 on an environment map's stage. pad[1]: its map's addressing (bits 0-3: s, t), its indirect command
+// (bits 8-28, BP 0x10-0x1F; 0: none) and whether the program moves coordinates by indirect textures (bit 31; then
+// an RtTevIndirect follows the record's stages).
 struct RtTevStage {
     std::uint32_t color_env = 0u;
     std::uint32_t alpha_env = 0u;
@@ -95,6 +98,19 @@ struct RtTevStage {
     std::uint32_t pad[2]{};
 };
 static_assert(sizeof(RtTevStage) == 32u);
+// A program's indirect texturing, past its stages (rt_tev.hlsli): the indirect stages' maps and coordinates (BP 0x27,
+// bits 0-23) and their count (bits 24-26); per indirect stage its coordinates' scale to its map (s, t: the coordinates'
+// GX size over 2^its RAS1_SS shift over the map's size); the three indirect matrices' rows (int16 x | y << 16,
+// z | shift << 16; ShaderGenerator's ind_mtx); per texture coordinate its GX size (s - 1 | t - 1 << 16).
+struct RtTevIndirect {
+    std::uint32_t order = 0u;
+    float scale[8]{};
+    std::uint32_t matrix[12]{};
+    std::uint32_t coord_size[8]{};
+    std::uint32_t pad[3]{};
+};
+inline constexpr unsigned kRtTevIndirectEntries = 4u;
+static_assert(sizeof(RtTevIndirect) == kRtTevIndirectEntries * sizeof(RtTevStage));
 struct RtTevMaterial {
     // Stages (bits 0-4); the vertices' colour 0 / 1 de-baked (bits 5-6); an environment map among its stages (bit 7;
     // RtTevStage.pad[0] 1 on those stages); per texture coordinate 0-7 its slot (bits 8 + 2n); colour 0, alpha 0, colour
@@ -183,6 +199,7 @@ struct RtDrawInfo {
     // Its TEV program for ray hits, and the textures its maps hold.
     RtTevMaterial tev{};
     std::array<RtTevStage, kRtTevMaxStages> tev_stages{};
+    RtTevIndirect tev_indirect{};
     std::array<RtTextureSource, 8> tev_maps{};
     // kRtDrawSky, kRtDrawGlow: how the raster blends it: blending (bit 0), the source and destination factors (GX
     // BlendFactor, bits 1-3 and 4-6), subtract (bit 7), colour writes (bit 8), a logic op (bit 9).

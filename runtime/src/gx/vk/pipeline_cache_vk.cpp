@@ -229,6 +229,7 @@ std::string uber_ps_hlsl(unsigned variant) {
     ps += uber_ps_variant_dual_source(variant) ? "#define UBER_DUAL_SRC 1\n" : "#define UBER_DUAL_SRC 0\n";
     ps += uber_ps_variant_export_depth(variant) ? "#define UBER_EXPORT_DEPTH 1\n" : "#define UBER_EXPORT_DEPTH 0\n";
     ps += uber_ps_variant_early_depth(variant) ? "#define UBER_EARLY_DEPTH 1\n" : "#define UBER_EARLY_DEPTH 0\n";
+    ps += "#define UBER_LAYER 0\n";
     ps += uber_ps_source();
     return ps;
 }
@@ -650,6 +651,11 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
             target.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
             target.alphaBlendOp = VK_BLEND_OP_ADD;
         }
+        if ((bb & kRenderStateZeroAlpha) != 0u) {  // constant destination alpha 0, drawn single-source
+            target.srcAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+            target.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+            target.alphaBlendOp = VK_BLEND_OP_ADD;
+        }
     } else if ((bb & (1u << 8u)) != 0u && layout_->logic_op && (compat & kCompatNoLogicOp) == 0u) {
         blend.logicOpEnable = VK_TRUE;
         blend.logicOp = gx_logic_op((bb >> 9u) & 0xfu);
@@ -1008,9 +1014,12 @@ void PipelineCacheVk::compile_uber_shaders() noexcept {
         const auto start = std::chrono::steady_clock::now();
         const std::string vs(uber_vs_source());
         uber_vs_ = module_for(vs, vk::ShaderStage::Vertex, false);
+        // The effects layer's variants are the ray tracer's (Direct3D 12 only).
         for (unsigned variant = 0; variant < kUberPsVariants; ++variant) {
-            uber_ps_[variant] = module_for(uber_ps_hlsl(variant), vk::ShaderStage::Fragment,
-                                           uber_ps_variant_dual_source(variant));
+            if (!uber_ps_variant_layer(variant)) {
+                uber_ps_[variant] = module_for(uber_ps_hlsl(variant), vk::ShaderStage::Fragment,
+                                               uber_ps_variant_dual_source(variant));
+            }
         }
         if (layout_->geometry_shaders) {
             line_gs_ = module_for(std::string(ShaderGenerator::line_geometry_shader_source()),
@@ -1109,6 +1118,9 @@ std::size_t PipelineCacheVk::build_shader_seed(const std::filesystem::path& keys
     add(std::string(uber_vs_source()), vk::ShaderStage::Vertex, false);
     add(vk::with_point_size(std::string(uber_vs_source())), vk::ShaderStage::Vertex, false);
     for (unsigned variant = 0; variant < kUberPsVariants; ++variant) {
+        if (uber_ps_variant_layer(variant)) {
+            continue;
+        }
         const bool dual = uber_ps_variant_dual_source(variant);
         add(uber_ps_hlsl(variant), vk::ShaderStage::Fragment, dual);
         if (dual) {

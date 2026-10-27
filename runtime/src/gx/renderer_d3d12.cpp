@@ -4043,13 +4043,18 @@ bool RendererD3D12::ensure_motion_target() {
         // may still name them.
         retired_efb_copy_textures_[frame_slot_].push_back(std::move(motion_target_));
         retired_efb_copy_textures_[frame_slot_].push_back(std::move(reactive_target_));
+        retired_efb_copy_textures_[frame_slot_].push_back(std::move(layer_color_));
+        retired_efb_copy_textures_[frame_slot_].push_back(std::move(layer_trans_));
     }
     motion_target_.Reset();
     reactive_target_.Reset();
+    layer_color_.Reset();
+    layer_trans_.Reset();
+    layer_window_ = false;
     motion_target_scale_ = 0u;
     if (!motion_rtv_heap_) {
         D3D12_DESCRIPTOR_HEAP_DESC dhd{};
-        dhd.NumDescriptors = 2;
+        dhd.NumDescriptors = 4;
         dhd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
         d3d_check(device_->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&motion_rtv_heap_)),
                   "motion vector RTV heap");
@@ -4080,11 +4085,32 @@ bool RendererD3D12::ensure_motion_target() {
         motion_target_.Reset();
         return false;
     }
+    rd.Format = kLayerFormat;
+    cv.Format = kLayerFormat;
+    if (FAILED(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_RENDER_TARGET,
+                                                &cv, IID_PPV_ARGS(&layer_color_))) ||
+        FAILED(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_RENDER_TARGET,
+                                                &cv, IID_PPV_ARGS(&layer_trans_)))) {
+        motion_target_.Reset();
+        reactive_target_.Reset();
+        layer_color_.Reset();
+        layer_trans_.Reset();
+        return false;
+    }
+    layer_color_->SetName(L"GX effects layer colour");
+    layer_trans_->SetName(L"GX effects layer transmittance");
+    const UINT rtv_step = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
     motion_rtv_ = motion_rtv_heap_->GetCPUDescriptorHandleForHeapStart();
     reactive_rtv_ = motion_rtv_;
-    reactive_rtv_.ptr += device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    reactive_rtv_.ptr += rtv_step;
+    layer_color_rtv_ = reactive_rtv_;
+    layer_color_rtv_.ptr += rtv_step;
+    layer_trans_rtv_ = layer_color_rtv_;
+    layer_trans_rtv_.ptr += rtv_step;
     device_->CreateRenderTargetView(motion_target_.Get(), nullptr, motion_rtv_);
     device_->CreateRenderTargetView(reactive_target_.Get(), nullptr, reactive_rtv_);
+    device_->CreateRenderTargetView(layer_color_.Get(), nullptr, layer_color_rtv_);
+    device_->CreateRenderTargetView(layer_trans_.Get(), nullptr, layer_trans_rtv_);
     const float zero[4]{};
     command_list_->ClearRenderTargetView(motion_rtv_, zero, 0u, nullptr);
     command_list_->ClearRenderTargetView(reactive_rtv_, zero, 0u, nullptr);
@@ -4910,6 +4936,75 @@ D3D12_GPU_DESCRIPTOR_HANDLE RendererD3D12::rt_copy_color(Microsoft::WRL::ComPtr<
     return table.gpu;
 }
 
+D3D12_GPU_DESCRIPTOR_HANDLE RendererD3D12::rt_layer_table() {
+    if (!layer_color_ || !layer_trans_ || !efb_color_) {
+        return {};
+    }
+    const D3D12_RESOURCE_DESC desc = layer_color_->GetDesc();
+    const D3D12_RESOURCE_DESC efb = efb_color_->GetDesc();
+    if (desc.Width != efb.Width || desc.Height != efb.Height) {
+        return {};
+    }
+    const auto ensure_copy = [&](Microsoft::WRL::ComPtr<ID3D12Resource>& copy, const wchar_t* name) {
+        if (copy && copy->GetDesc().Width == desc.Width && copy->GetDesc().Height == desc.Height) {
+            return true;
+        }
+        if (copy) {
+            wait_for_gpu();
+        }
+        copy.Reset();
+        D3D12_HEAP_PROPERTIES hp{};
+        hp.Type = D3D12_HEAP_TYPE_DEFAULT;
+        D3D12_RESOURCE_DESC rd = desc;
+        rd.Flags = D3D12_RESOURCE_FLAG_NONE;
+        if (FAILED(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd,
+                                                    D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr,
+                                                    IID_PPV_ARGS(&copy)))) {
+            return false;
+        }
+        copy->SetName(name);
+        return true;
+    };
+    if (!ensure_copy(rt_layer_color_copy_, L"rt effects layer colour") ||
+        !ensure_copy(rt_layer_trans_copy_, L"rt effects layer transmittance")) {
+        return {};
+    }
+    D3D12_RESOURCE_BARRIER barriers[4]{};
+    for (D3D12_RESOURCE_BARRIER& barrier : barriers) {
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    }
+    ID3D12Resource* const sources[2]{layer_color_.Get(), layer_trans_.Get()};
+    ID3D12Resource* const copies[2]{rt_layer_color_copy_.Get(), rt_layer_trans_copy_.Get()};
+    for (unsigned k = 0; k < 2u; ++k) {
+        barriers[k].Transition.pResource = sources[k];
+        barriers[k].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        barriers[k].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
+        barriers[2u + k].Transition.pResource = copies[k];
+        barriers[2u + k].Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        barriers[2u + k].Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+    }
+    command_list_->ResourceBarrier(4u, barriers);
+    command_list_->CopyResource(copies[0], sources[0]);
+    command_list_->CopyResource(copies[1], sources[1]);
+    for (D3D12_RESOURCE_BARRIER& barrier : barriers) {
+        std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
+    }
+    command_list_->ResourceBarrier(4u, barriers);
+    const DescriptorRing::Table table = srv_ring_.allocate(2);
+    const UINT step = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    D3D12_SHADER_RESOURCE_VIEW_DESC view{};
+    view.Format = kLayerFormat;
+    view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    view.Texture2D.MipLevels = 1u;
+    D3D12_CPU_DESCRIPTOR_HANDLE at = table.cpu;
+    device_->CreateShaderResourceView(copies[0], &view, at);
+    at.ptr += step;
+    device_->CreateShaderResourceView(copies[1], &view, at);
+    return table.gpu;
+}
+
 // The copy rt_composite_color made of this scene's opaque picture (before the lighting), without a new
 // copy; 0 without one of the EFB's size.
 D3D12_GPU_DESCRIPTOR_HANDLE RendererD3D12::rt_game_picture() {
@@ -4965,20 +5060,32 @@ void RendererD3D12::rt_trace_water() {
     if (slot >= 0 && efb_hdr_) {
         const D3D12_GPU_DESCRIPTOR_HANDLE scene = rt_copy_color(rt_water_copy_, L"rt water scene");
         ray_tracer_.composite_water(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_, width, desc.Height, slot,
-                                    false, scene, rt_opaque_srv_);
+                                    false, scene, rt_opaque_srv_, layer_window_ ? rt_layer_table()
+                                                                                : D3D12_GPU_DESCRIPTOR_HANDLE{});
         if (replay_recording_) {
-            replay_ops_.push_back({ReplayKind::RtWater, static_cast<std::uint32_t>(slot)});
+            replay_ops_.push_back({ReplayKind::RtWater,
+                                   static_cast<std::uint32_t>(slot) | (layer_window_ ? kReplayWaterLayer : 0u)});
         }
     }
     std::swap(barriers[1].Transition.StateBefore, barriers[1].Transition.StateAfter);
     command_list_->ResourceBarrier(1, &barriers[1]);
+    // The waterfall mist over the water and the glass, under the effects (the window's layer).
+    if (const int mist = ray_tracer_.mist_slot(); mist >= 0 && efb_hdr_) {
+        record_rt_mist(mist, false, layer_window_);
+        if (replay_recording_) {
+            replay_ops_.push_back({ReplayKind::RtMist,
+                                   static_cast<std::uint32_t>(mist) | (layer_window_ ? kReplayWaterLayer : 0u)});
+        }
+    }
+    // The effects drawn after the composites are over them.
+    layer_window_ = false;
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
     invalidate_gx_bindings();
     bound_rt_aux_ = 0xFFu;
     bound_pipeline_ = nullptr;
 }
 
-void RendererD3D12::record_rt_water(int slot, bool reproject) {
+void RendererD3D12::record_rt_water(int slot, bool reproject, bool layer) {
     if (!efb_depth_ || conv_efb_depth_srv_.ptr == 0u || !efb_hdr_) {
         return;
     }
@@ -4993,7 +5100,31 @@ void RendererD3D12::record_rt_water(int slot, bool reproject) {
     const D3D12_GPU_DESCRIPTOR_HANDLE scene = rt_copy_color(rt_water_copy_, L"rt water scene");
     ray_tracer_.composite_water(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_,
                                 static_cast<std::uint32_t>(desc.Width), desc.Height, slot, reproject, scene,
-                                rt_opaque_srv_);
+                                rt_opaque_srv_, layer ? rt_layer_table() : D3D12_GPU_DESCRIPTOR_HANDLE{});
+    std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
+    command_list_->ResourceBarrier(1, &barrier);
+    command_list_->SetGraphicsRootSignature(root_signature_.Get());
+    invalidate_gx_bindings();
+    bound_rt_aux_ = 0xFFu;
+}
+
+void RendererD3D12::record_rt_mist(int slot, bool reproject, bool layer) {
+    if (!efb_depth_ || conv_efb_depth_srv_.ptr == 0u || !efb_hdr_) {
+        return;
+    }
+    D3D12_RESOURCE_BARRIER barrier{};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition.pResource = efb_depth_.Get();
+    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    command_list_->ResourceBarrier(1, &barrier);
+    const D3D12_RESOURCE_DESC desc = efb_depth_->GetDesc();
+    // The frame after the water's composites (the water copy's resource, its composites recorded before).
+    const D3D12_GPU_DESCRIPTOR_HANDLE scene = rt_copy_color(rt_water_copy_, L"rt water scene");
+    ray_tracer_.composite_mist(command_list_.Get(), efb_rtv_, conv_efb_depth_srv_,
+                               static_cast<std::uint32_t>(desc.Width), desc.Height, static_cast<unsigned>(slot), reproject,
+                               scene, layer ? rt_layer_table() : D3D12_GPU_DESCRIPTOR_HANDLE{});
     std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
     command_list_->ResourceBarrier(1, &barrier);
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
@@ -6229,7 +6360,15 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
                 record_rt_composite(static_cast<int>(op.index), true);
                 break;
             case ReplayKind::RtWater:
-                record_rt_water(static_cast<int>(op.index), true);
+                record_rt_water(static_cast<int>(op.index & ~kReplayWaterLayer), true,
+                                (op.index & kReplayWaterLayer) != 0u);
+                break;
+            case ReplayKind::RtMist:
+                record_rt_mist(static_cast<int>(op.index & ~kReplayWaterLayer), true,
+                               (op.index & kReplayWaterLayer) != 0u);
+                break;
+            case ReplayKind::LayerBegin:
+                record_layer_begin();
                 break;
             case ReplayKind::SceneAa:
                 record_scene_aa();
@@ -6535,7 +6674,7 @@ bool RendererD3D12::ensure_replay_motion_targets() {
     replay_motion_ = ReplayMotionTargets{};
     if (!replay_motion_rtv_heap_) {
         D3D12_DESCRIPTOR_HEAP_DESC dhd{};
-        dhd.NumDescriptors = 2;
+        dhd.NumDescriptors = 4;
         dhd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
         if (FAILED(device_->CreateDescriptorHeap(&dhd, IID_PPV_ARGS(&replay_motion_rtv_heap_)))) {
             return false;
@@ -6565,13 +6704,31 @@ bool RendererD3D12::ensure_replay_motion_targets() {
         replay_motion_ = ReplayMotionTargets{};
         return false;
     }
+    rd.Format = kLayerFormat;
+    cv.Format = kLayerFormat;
+    if (FAILED(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_RENDER_TARGET,
+                                                &cv, IID_PPV_ARGS(&replay_motion_.layer_color))) ||
+        FAILED(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd, D3D12_RESOURCE_STATE_RENDER_TARGET,
+                                                &cv, IID_PPV_ARGS(&replay_motion_.layer_trans)))) {
+        replay_motion_ = ReplayMotionTargets{};
+        return false;
+    }
     replay_motion_.target->SetName(L"GX sub-frame motion vectors");
     replay_motion_.reactive->SetName(L"GX sub-frame reactive mask");
+    replay_motion_.layer_color->SetName(L"GX sub-frame effects layer colour");
+    replay_motion_.layer_trans->SetName(L"GX sub-frame effects layer transmittance");
+    const UINT rtv_step = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
     replay_motion_.rtv = replay_motion_rtv_heap_->GetCPUDescriptorHandleForHeapStart();
     replay_motion_.reactive_rtv = replay_motion_.rtv;
-    replay_motion_.reactive_rtv.ptr += device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+    replay_motion_.reactive_rtv.ptr += rtv_step;
+    replay_motion_.layer_color_rtv = replay_motion_.reactive_rtv;
+    replay_motion_.layer_color_rtv.ptr += rtv_step;
+    replay_motion_.layer_trans_rtv = replay_motion_.layer_color_rtv;
+    replay_motion_.layer_trans_rtv.ptr += rtv_step;
     device_->CreateRenderTargetView(replay_motion_.target.Get(), nullptr, replay_motion_.rtv);
     device_->CreateRenderTargetView(replay_motion_.reactive.Get(), nullptr, replay_motion_.reactive_rtv);
+    device_->CreateRenderTargetView(replay_motion_.layer_color.Get(), nullptr, replay_motion_.layer_color_rtv);
+    device_->CreateRenderTargetView(replay_motion_.layer_trans.Get(), nullptr, replay_motion_.layer_trans_rtv);
     replay_motion_.scale = efb_scale_;
     return true;
 }
@@ -6579,8 +6736,12 @@ bool RendererD3D12::ensure_replay_motion_targets() {
 void RendererD3D12::swap_motion_targets() {
     std::swap(motion_target_, replay_motion_.target);
     std::swap(reactive_target_, replay_motion_.reactive);
+    std::swap(layer_color_, replay_motion_.layer_color);
+    std::swap(layer_trans_, replay_motion_.layer_trans);
     std::swap(motion_rtv_, replay_motion_.rtv);
     std::swap(reactive_rtv_, replay_motion_.reactive_rtv);
+    std::swap(layer_color_rtv_, replay_motion_.layer_color_rtv);
+    std::swap(layer_trans_rtv_, replay_motion_.layer_trans_rtv);
     bound_rt_aux_ = 0xFFu;
 }
 
@@ -6657,13 +6818,38 @@ bool RendererD3D12::take_eval_readback(std::vector<std::uint32_t>& words, float&
 }
 
 bool RendererD3D12::begin_motion_scene() {
+    reactive_scene_ = false;
+    layer_window_ = false;
     if (!scene_motion_ || !ensure_motion_target()) {
         return false;
     }
     const float zero[4]{};
     command_list_->ClearRenderTargetView(motion_rtv_, zero, 0u, nullptr);
     command_list_->ClearRenderTargetView(reactive_rtv_, zero, 0u, nullptr);
+    reactive_scene_ = true;
     return true;
+}
+
+void RendererD3D12::begin_layer_window() {
+    if (!reactive_scene_ || layer_window_ || !layer_color_ || !layer_trans_) {
+        return;
+    }
+    record_layer_begin();
+    if (replay_recording_) {
+        replay_ops_.push_back({ReplayKind::LayerBegin, 0u});
+    }
+    layer_window_ = true;
+}
+
+// Nothing added yet, everything behind let through.
+void RendererD3D12::record_layer_begin() {
+    if (!layer_color_ || !layer_trans_) {
+        return;
+    }
+    const float zero[4]{};
+    const float one[4]{1.0f, 1.0f, 1.0f, 1.0f};
+    command_list_->ClearRenderTargetView(layer_color_rtv_, zero, 0u, nullptr);
+    command_list_->ClearRenderTargetView(layer_trans_rtv_, one, 0u, nullptr);
 }
 
 // Command lists recorded before this point may name the old context; none is
@@ -7671,7 +7857,10 @@ void RendererD3D12::draw(const DrawCall& call) {
         bound_vertex_blend_valid_ = true;
     }
     if (call.aux_target != bound_rt_aux_) [[unlikely]] {
-        if (call.aux_target != 0u) {
+        if (call.aux_target == 3u) {
+            const D3D12_CPU_DESCRIPTOR_HANDLE targets[4]{efb_rtv_, reactive_rtv_, layer_color_rtv_, layer_trans_rtv_};
+            command_list_->OMSetRenderTargets(4, targets, FALSE, &efb_dsv_);
+        } else if (call.aux_target != 0u) {
             const D3D12_CPU_DESCRIPTOR_HANDLE targets[2]{
                 efb_rtv_, call.aux_target == 1u ? motion_rtv_ : reactive_rtv_};
             command_list_->OMSetRenderTargets(2, targets, FALSE, &efb_dsv_);

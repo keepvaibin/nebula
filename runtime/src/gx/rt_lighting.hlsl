@@ -225,6 +225,9 @@ static const float kNearGlowReach = 1.25f;
 // Stars whose balls StarSphereCS fits (g_star_first): one float4 each (eye-space centre, radius; 0: none)
 // after the samples in the results (g_final, m_light).
 static const uint kStarSlots = 8u;
+// The probe's records after them (SceneRayTracer::kProbeRecords), then per sample the light at the water in front of it
+// (EngineFinalCS: the fall's light, the open air's at the water, r11g11b10 each; 0: none; LightTexturePS).
+static const uint kProbeRecords = 9u;
 // The picture sums (CaptureCS c_sums): per star slot the game's own colour of its samples, r g b n (x 1/255,
 // cleared per capture), then the stars' colour over time, rgb (float) and known (SkyStateCS).
 static const uint kStarSums = 64u;
@@ -3182,23 +3185,33 @@ bool delight_surface(uint tri, float2 b, float3 p, float3 ng, float pixel_width,
 }
 #endif
 
-// The lighting as a texture for the translucent draws after the trace (one texel per sample).
+// The lighting as a texture for the translucent draws after the trace (one texel per sample), in three thirds: the
+// light of the surface behind each sample (water, glass); where water lies in front of that surface, the light in the
+// open air at the water's surface, else the first third's (the effects: spray, splashes, smoke); the light at the falling
+// water in front of the sample, else the second third's (falling water). rt_engine.hlsl water_light.
 
 cbuffer RtLightTexture : register(b0)
 {
     uint2 t_size;
-    uint2 t_pad;
+    uint t_front;    // the records of the light at the water in front of the samples (kProbeRecords)
+    uint t_pad;
     float4 t_full;   // the stage's full light in linear light (physical; else 1)
 };
 StructuredBuffer<uint4> t_final : register(t0);
 
 float4 LightTexturePS(float4 position : SV_Position) : SV_Target0
 {
-    const uint2 s = min(uint2(position.xy), t_size - 1u);
+    const uint third = min(uint(position.x) / t_size.x, 2u);
+    const uint2 s = min(uint2(position.xy) - uint2(third * t_size.x, 0u), t_size - 1u);
     const uint4 v = t_final[s.y * t_size.x + s.x];
-    // Falling water in front of the sample (rt_engine.hlsl waterfall_light): the light at its own sheet, whole.
-    if (v.w != 0u) {
-        return float4(unpack_r11g11b10(v.w) / max(t_full.rgb, 1e-3f), 1.0f);
+    const uint2 front = third != 0u ? t_final[t_front + s.y * t_size.x + s.x].xy : uint2(0u, 0u);
+    // Falling water in front of the sample (rt_engine.hlsl water_light): the light at its own sheet, whole.
+    if (third == 2u && front.x != 0u) {
+        return float4(unpack_r11g11b10(front.x) / max(t_full.rgb, 1e-3f), 1.0f);
+    }
+    // Water in front of it: the light in the open air at the water's surface.
+    if (front.y != 0u) {
+        return float4(unpack_r11g11b10(front.y) / max(t_full.rgb, 1e-3f), 1.0f);
     }
     if (asfloat(v.z) == 0.0f) {
         return float4(1.0f, 1.0f, 1.0f, 1.0f);
@@ -3242,6 +3255,24 @@ Texture2D<float4> m_color : register(t3);
 // m_flags bit 3 (physical): the traced frame's per-pixel shading normals and de-lighting, and its surface's fog: the
 // share (f16) and the camera's exposure (f16, high half), the colour RGB8 (EngineGBufferCS).
 StructuredBuffer<uint4> m_pixels : register(t4);
+// ClearCompositePS, m_flags bit 6: the effects layer (RendererD3D12::begin_layer_window), what the game's effects drew
+// over the frame after its translucent lists: their colour as they blended (L) and what of the EFB behind them they let
+// through (T); the frame is F = L + T B.
+Texture2D<float4> m_layer_color : register(t5);
+Texture2D<float4> m_layer_trans : register(t6);
+
+// The frame at pixel `q` without the effects drawn over it (B = (F - L) / T, m_flags bit 6); where they let almost
+// nothing through, the frame as it is.
+float3 frame_behind_effects(int2 q)
+{
+    const float3 f = m_color.Load(int3(q, 0)).rgb;
+    if ((m_flags & 64u) == 0u) {
+        return f;
+    }
+    const float3 l = m_layer_color.Load(int3(q, 0)).rgb;
+    const float3 t = m_layer_trans.Load(int3(q, 0)).rgb;
+    return all(t > 0.02f) ? max((f - l) / t, 0.0f) : f;
+}
 
 // The traced frame's shading normal at its pixel `q`.
 float3 traced_normal(int2 q)
@@ -3386,7 +3417,173 @@ CompositeOut ClearCompositePS(float4 position : SV_Position)
         seen = clamp(c + int2(e2.y & 0xFFFFu, e2.y >> 16u) - traced, int2(m_viewport.xy),
                      int2(m_viewport.xy + m_viewport.zw) - 1);
     }
-    result.color = float4(linear_to_srgb(srgb_to_linear(m_color.Load(int3(seen, 0)).rgb) * t + r), 1.0f);
+    const float3 shown = srgb_to_linear(frame_behind_effects(seen)) * t + r;
+    result.color = float4(linear_to_srgb(shown), 1.0f);
+    // The effects drawn in front of the glass or the fall after it (a fall's spray) stay over it as they blended.
+    if ((m_flags & 64u) != 0u) {
+        result.color.rgb = m_layer_color.Load(int3(c, 0)).rgb + m_layer_trans.Load(int3(c, 0)).rgb * result.color.rgb;
+    }
+    return result;
+}
+
+// The waterfall mist (rt_engine.hlsl MistLightCS): the spray at the falls' feet as puffs of water drops, each a Gaussian
+// cloud. m_light holds the frame's records: a header of kMistHeader (the puffs' count and the frame; the traced frame's
+// world to eye rows; the world's up; the up in eye space) and three a puff (its eye-space centre and width sigma; its
+// optical depth through its centre, the mist's from it towards the sun and the height of the water's surface under it,
+// -1e30 none; the sun's light it sees and the light reaching it from every direction, exposed, halves).
+static const uint kMistHeader = 6u;
+static const uint kMistMost = 512u;
+// A dense spray's albedo (water drops absorb almost nothing; its face takes in the light it sends back out): white.
+static const float kMistAlbedo = 0.9f;
+// The share of the mist's density its turbulence moves (world-anchored noise; the mean kept).
+static const float kMistNoise = 0.45f;
+// How far the turbulence rises a frame with the spray (eye units at 60 frames a second: half a metre a second).
+static const float kMistRise = 0.8f;
+
+// The standard normal distribution's integral up to `x` (Abramowitz and Stegun 7.1.26 for erf: error under 1.5e-7).
+float mist_phi(float x)
+{
+    const float z = abs(x) * 0.70710678f;
+    const float t = 1.0f / (1.0f + 0.3275911f * z);
+    const float e = 1.0f - ((((1.061405429f * t - 1.453152027f) * t + 1.421413741f) * t - 0.284496736f) * t +
+                            0.254829592f) * t * exp(-z * z);
+    return 0.5f + 0.5f * (x >= 0.0f ? e : -e);
+}
+
+
+// Value noise in [0, 1] at `p` (a smooth lattice of hashed values), and two octaves of it.
+float mist_lattice(int3 c)
+{
+    return float(emit_hash(uint(c.x) * 0x8DA6B343u ^ uint(c.y) * 0xD8163841u ^ uint(c.z) * 0xCB1AB31Fu) >> 8u) *
+           (1.0f / 16777216.0f);
+}
+
+float mist_value_noise(float3 p)
+{
+    const float3 i = floor(p);
+    const float3 f = p - i;
+    const float3 u = f * f * (3.0f - 2.0f * f);
+    const int3 b = int3(i);
+    const float x00 = lerp(mist_lattice(b), mist_lattice(b + int3(1, 0, 0)), u.x);
+    const float x10 = lerp(mist_lattice(b + int3(0, 1, 0)), mist_lattice(b + int3(1, 1, 0)), u.x);
+    const float x01 = lerp(mist_lattice(b + int3(0, 0, 1)), mist_lattice(b + int3(1, 0, 1)), u.x);
+    const float x11 = lerp(mist_lattice(b + int3(0, 1, 1)), mist_lattice(b + int3(1, 1, 1)), u.x);
+    return lerp(lerp(x00, x10, u.y), lerp(x01, x11, u.y), u.z);
+}
+
+float mist_noise(float3 p)
+{
+    return (2.0f * mist_value_noise(p) + mist_value_noise(p * 2.03f + 17.1f)) / 3.0f;
+}
+
+// The mist over the picture: along the camera ray to the scene's surface (the EFB's depth, at the traced frame's
+// camera on sub-frames), every puff's optical depth (a Gaussian cloud's: its column at the ray's distance from its
+// centre, cut to the span before the surface and above the water under it) and the light on it (the sun's it sees and
+// the light from the sky above it): a dense spray is a white cloud, its face as white as a surface facing that light
+// (kMistAlbedo). Turbulence (noise anchored in the world,
+// rising with the spray) thickens and thins it. What lies behind passes exp(-depth), the mist adds its light times 1
+// minus that (the puffs' light averaged by their depth). Under the effects drawn after the translucent lists (the
+// effects layer: the frame is their L + T B), as the clear composite.
+CompositeOut MistCompositePS(float4 position : SV_Position)
+{
+    CompositeOut result;
+    const int2 q = int2(position.xy);
+    const uint count = min(m_light[0].x, kMistMost);
+    if (!inside(m_viewport, position.xy) || count == 0u || m_water.x > 0.5f) {
+        discard;
+    }
+    const float depth = m_efb_depth.Load(int3(q, 0));
+    const bool open = far_plane(m_depth, depth);
+    float3 p = eye_position(m_projection, m_viewport, position.xy, open ? -1.0e5f : depth_to_eye_z(m_depth, depth));
+    float3 o = float3(0.0f, 0.0f, 0.0f);
+    if ((m_flags & 1u) != 0u) {
+        const uint row = m_slot * 3u;
+        const float4 rows[3] = {m_reproject[row], m_reproject[row + 1u], m_reproject[row + 2u]};
+        o = transform(rows, o);
+        p = transform(rows, p);
+    }
+    const float3 d = normalize(p - o);
+    const float reach = open ? 1.0e7f : length(p - o);
+    const float3 up = asfloat(m_light[5]).xyz;
+    const float height = dot(o, up);
+    const float rise = dot(d, up);
+    float tau = 0.0f;
+    float3 light = float3(0.0f, 0.0f, 0.0f);
+    float3 at = float3(0.0f, 0.0f, 0.0f);
+    float width = 0.0f;
+    // GALAXY_RT_MIST_VIEW=1 (m_flags bit 1): no cut at the water; 2 (bit 2): the puffs by the water found under them,
+    // red over their centre, green under it, blue none.
+    float3 found = float3(0.0f, 0.0f, 0.0f);
+    [loop] for (uint i = 0u; i < count; ++i) {
+        const uint r = kMistHeader + 3u * i;
+        const float4 puff = asfloat(m_light[r]);
+        const float3 v = puff.xyz - o;
+        const float t = dot(v, d);
+        const float b2 = max(dot(v, v) - t * t, 0.0f);
+        const float s2 = puff.w * puff.w;
+        if (b2 > 9.0f * s2 || t < -3.0f * puff.w || t - 3.0f * puff.w > reach) {
+            continue;
+        }
+        const float3 depths = asfloat(m_light[r + 1u].xyz);
+        // The span of the ray in front of the surface and above the water under the puff.
+        float first = 0.0f;
+        float last = reach;
+        if ((m_flags & 4u) != 0u) {
+            const float whole = depths.x * exp(-0.5f * b2 / s2);
+            found += whole * (depths.z <= -1.0e29f ? float3(0.0f, 0.0f, 1.0f)
+                              : depths.z > dot(puff.xyz, up) ? float3(1.0f, 0.0f, 0.0f) : float3(0.0f, 1.0f, 0.0f));
+        }
+        if (depths.z > -1.0e29f && (m_flags & 2u) == 0u) {
+            if (abs(rise) > 1e-6f) {
+                const float crossing = (depths.z - height) / rise;
+                if (rise < 0.0f) {
+                    last = min(last, crossing);
+                } else {
+                    first = max(first, crossing);
+                }
+            } else if (height < depths.z) {
+                continue;
+            }
+            if (last <= first) {
+                continue;
+            }
+        }
+        const float column =
+            depths.x * exp(-0.5f * b2 / s2) * (mist_phi((last - t) / puff.w) - mist_phi((first - t) / puff.w));
+        if (column <= 1e-5f) {
+            continue;
+        }
+        const uint4 l = m_light[r + 2u];
+        const float3 sun = float3(f16tof32(l.x), f16tof32(l.x >> 16u), f16tof32(l.y));
+        tau += column;
+        light += column * (sun + float3(f16tof32(l.y >> 16u), f16tof32(l.z), f16tof32(l.z >> 16u)));
+        at += column * (o + d * clamp(t, 0.0f, reach));
+        width += column * puff.w;
+    }
+    if ((m_flags & 4u) != 0u) {
+        if (!any(found > 1e-3f)) {
+            discard;
+        }
+        result.color = float4(linear_to_srgb(saturate(found)), 1.0f);
+        return result;
+    }
+    if (tau <= 1e-4f) {
+        discard;
+    }
+    // The turbulence at the mist's mean point along the ray, in the world (the header's world to eye rows), its cells
+    // 0.7 of the puffs' mean width.
+    const float4 rows[3] = {asfloat(m_light[1]), asfloat(m_light[2]), asfloat(m_light[3])};
+    const float3 e = at / tau - float3(rows[0].w, rows[1].w, rows[2].w);
+    float3 w = e.x * rows[0].xyz + e.y * rows[1].xyz + e.z * rows[2].xyz;
+    w -= asfloat(m_light[4]).xyz * (float(m_light[0].y) * kMistRise);
+    const float n = mist_noise(w / max(0.7f * width / tau, 1.0f));
+    const float thick = tau * (1.0f + kMistNoise * (2.0f * n - 1.0f));
+    const float pass = exp(-thick);
+    const float3 behind = srgb_to_linear(frame_behind_effects(q));
+    result.color = float4(linear_to_srgb(behind * pass + kMistAlbedo * (light / tau) * (1.0f - pass)), 1.0f);
+    if ((m_flags & 64u) != 0u) {
+        result.color.rgb = m_layer_color.Load(int3(q, 0)).rgb + m_layer_trans.Load(int3(q, 0)).rgb * result.color.rgb;
+    }
     return result;
 }
 

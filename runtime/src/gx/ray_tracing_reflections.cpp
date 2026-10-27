@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // RtReflections (rt_reflections.h): the reflection and water passes' pipelines, buffers and dispatches.
 #include "galaxy/gx/rt_reflections.h"
+#include "galaxy/gx/pso_jobs.h"
 #include "galaxy/gx/render_config.h"
 
 #include "rt_reflect_composite_ps.h"
@@ -174,6 +175,7 @@ enum CompositeParameter : UINT {
     kCompositeUnder,
     kCompositeScene,
     kCompositeOpaque,
+    kCompositeLayer,
     kCompositeCount,
 };
 
@@ -506,11 +508,11 @@ bool RtReflections::create_pipelines(DXGI_FORMAT color_format) {
                SUCCEEDED(device_->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(),
                                                       IID_PPV_ARGS(&out)));
     };
+    // Compiled in parallel (pso_jobs.h), joined where their results decide.
+    PsoJobs jobs;
     const auto compute = [&](const void* code, std::size_t bytes, ComPtr<ID3D12PipelineState>& out) {
-        D3D12_COMPUTE_PIPELINE_STATE_DESC desc{};
-        desc.pRootSignature = root_.Get();
-        desc.CS = {code, bytes};
-        return SUCCEEDED(device_->CreateComputePipelineState(&desc, IID_PPV_ARGS(&out)));
+        jobs.compute(device_.Get(), root_.Get(), code, bytes, out);
+        return true;
     };
 
     D3D12_DESCRIPTOR_RANGE sources{};
@@ -591,11 +593,16 @@ bool RtReflections::create_pipelines(DXGI_FORMAT color_format) {
         textured_ = false;
         rsd.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
     }
-    if (textured_ && (!compute(g_rt_reflect_trace_tex_cs, sizeof(g_rt_reflect_trace_tex_cs), trace_pso_) ||
-                      !compute(g_rt_water_trace_tex_cs, sizeof(g_rt_water_trace_tex_cs), water_trace_pso_))) {
-        textured_ = false;
-        rsd.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
-        root_.Reset();
+    if (textured_) {
+        compute(g_rt_reflect_trace_tex_cs, sizeof(g_rt_reflect_trace_tex_cs), trace_pso_);
+        compute(g_rt_water_trace_tex_cs, sizeof(g_rt_water_trace_tex_cs), water_trace_pso_);
+        if (jobs.wait() != 0u) {
+            textured_ = false;
+            rsd.Flags = D3D12_ROOT_SIGNATURE_FLAG_NONE;
+            root_.Reset();
+            trace_pso_.Reset();
+            water_trace_pso_.Reset();
+        }
     }
     std::cerr << "[rt-reflect] textured hits " << (textured_ ? "on" : "off") << '\n';
     if ((!textured_ && !serialize(rsd, root_)) ||
@@ -607,7 +614,7 @@ bool RtReflections::create_pipelines(DXGI_FORMAT color_format) {
         !compute(g_rt_reflect_memory_cs, sizeof(g_rt_reflect_memory_cs), memory_pso_) ||
         !compute(g_rt_reflect_sky_cs, sizeof(g_rt_reflect_sky_cs), sky_pso_) ||
         !compute(g_rt_reflect_draw_clear_cs, sizeof(g_rt_reflect_draw_clear_cs), draw_clear_pso_) ||
-        !compute(g_rt_reflect_draw_cs, sizeof(g_rt_reflect_draw_cs), draw_light_pso_)) {
+        !compute(g_rt_reflect_draw_cs, sizeof(g_rt_reflect_draw_cs), draw_light_pso_) || jobs.wait() != 0u) {
         return false;
     }
 
@@ -640,6 +647,13 @@ bool RtReflections::create_pipelines(DXGI_FORMAT color_format) {
     composite_params[kCompositeOpaque].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     composite_params[kCompositeOpaque].DescriptorTable.NumDescriptorRanges = 1u;
     composite_params[kCompositeOpaque].DescriptorTable.pDescriptorRanges = &opaque_range;
+    // The effects layer's colour and transmittance (t7, t8).
+    D3D12_DESCRIPTOR_RANGE layer_range = scene_range;
+    layer_range.NumDescriptors = 2u;
+    layer_range.BaseShaderRegister = 7u;
+    composite_params[kCompositeLayer].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    composite_params[kCompositeLayer].DescriptorTable.NumDescriptorRanges = 1u;
+    composite_params[kCompositeLayer].DescriptorTable.pDescriptorRanges = &layer_range;
     for (auto& param : composite_params) {
         param.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     }
@@ -1146,7 +1160,7 @@ void RtReflections::draw_composite(ID3D12GraphicsCommandList* list, Pass& pass, 
                                : view_ == 9u ? ((info.serial & 3u) != 0u ? 4u : 0u)
                                : view_ >= 7u ? 4u
                                              : view_ & 3u;
-    c.flags = (reproject != 0u ? 1u : 0u) | (view << 1u);
+    c.flags = (reproject != 0u ? 1u : 0u) | (view << 1u) | (effects_layer_.ptr != 0u ? 16u : 0u);
     c.slot = slot;
     c.tile_width = info.tile_width;
     c.split = split;
@@ -1185,6 +1199,7 @@ void RtReflections::draw_composite(ID3D12GraphicsCommandList* list, Pass& pass, 
     // The water composite reads the frame with the game's water (water_scene_); the others never do.
     list->SetGraphicsRootDescriptorTable(kCompositeScene, water_scene_.ptr != 0u ? water_scene_ : depth_srv);
     list->SetGraphicsRootDescriptorTable(kCompositeOpaque, water_opaque_.ptr != 0u ? water_opaque_ : depth_srv);
+    list->SetGraphicsRootDescriptorTable(kCompositeLayer, effects_layer_.ptr != 0u ? effects_layer_ : depth_srv);
     list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     list->DrawInstanced(3u, 1u, 0u, 0u);
 }
@@ -1238,7 +1253,8 @@ void RtReflections::composite(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIP
 void RtReflections::composite_water(ID3D12GraphicsCommandList* list, D3D12_CPU_DESCRIPTOR_HANDLE target,
                                     D3D12_GPU_DESCRIPTOR_HANDLE depth_srv, std::uint32_t width, std::uint32_t height,
                                     unsigned slot, D3D12_GPU_VIRTUAL_ADDRESS reproject, float split,
-                                    D3D12_GPU_DESCRIPTOR_HANDLE scene_srv, D3D12_GPU_DESCRIPTOR_HANDLE opaque_srv) {
+                                    D3D12_GPU_DESCRIPTOR_HANDLE scene_srv, D3D12_GPU_DESCRIPTOR_HANDLE opaque_srv,
+                                    D3D12_GPU_DESCRIPTOR_HANDLE layer_srv) {
     if (!ready_ || list == nullptr || slot >= kSlots || depth_srv.ptr == 0u) {
         return;
     }
@@ -1260,10 +1276,12 @@ void RtReflections::composite_water(ID3D12GraphicsCommandList* list, D3D12_CPU_D
     }
     water_scene_ = scene_srv;
     water_opaque_ = scene_srv.ptr != 0u ? opaque_srv : D3D12_GPU_DESCRIPTOR_HANDLE{};
+    effects_layer_ = layer_srv;
     draw_composite(list, water_, water_composite_pso_.Get(), target, depth_srv, width, height, slot, info, reproject,
                    split);
     water_scene_ = {};
     water_opaque_ = {};
+    effects_layer_ = {};
     // Under the water (its state from the water pass): caustics and shafts over the whole picture.
     if (caustics_ > 0.0f || shafts_ > 0.0f) {
         list->SetPipelineState(underwater_pso_.Get());

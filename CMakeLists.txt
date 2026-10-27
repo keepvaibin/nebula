@@ -319,7 +319,7 @@ foreach(galaxy_rt_pass capture_cs:CaptureCS:cs_6_5 sky_state_cs:SkyStateCS:cs_6_
         star_sphere_cs:StarSphereCS:cs_6_5 sky_trace_sh_cs:SkyTraceShCS:cs_6_5
         composite_vs:CompositeVS:vs_6_0
         composite_ps:CompositePS:ps_6_0 clear_composite_ps:ClearCompositePS:ps_6_0
-        light_texture_ps:LightTexturePS:ps_6_0)
+        mist_composite_ps:MistCompositePS:ps_6_0 light_texture_ps:LightTexturePS:ps_6_0)
     string(REPLACE ":" ";" galaxy_rt_pair "${galaxy_rt_pass}")
     list(GET galaxy_rt_pair 0 galaxy_rt_name)
     list(GET galaxy_rt_pair 1 galaxy_rt_entry)
@@ -410,7 +410,7 @@ foreach(galaxy_rt_pass engine_gbuffer_cs:EngineGBufferCS engine_direct_cs:Engine
         engine_indirect_cs:EngineIndirectCS
         engine_indirect_spatial_cs:EngineIndirectSpatialCS engine_specular_cs:EngineSpecularCS
         engine_temporal_cs:EngineTemporalCS engine_atrous_cs:EngineAtrousCS engine_final_cs:EngineFinalCS
-        engine_clear_cs:EngineClearCS engine_reference_cs:EngineReferenceCS)
+        engine_clear_cs:EngineClearCS engine_mist_cs:MistLightCS engine_reference_cs:EngineReferenceCS)
     string(REPLACE ":" ";" galaxy_rt_pair "${galaxy_rt_pass}")
     list(GET galaxy_rt_pair 0 galaxy_rt_name)
     list(GET galaxy_rt_pair 1 galaxy_rt_entry)

@@ -4423,6 +4423,14 @@ void GxBackend::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint
         if (aux == motion::kCategoryPhase) {
             note_rt_phase(static_cast<std::uint8_t>(a));
         }
+        // The game's effects begin (its ShadowSurface draw type 0x26, the first list after the translucent ones in
+        // GameScene::draw3D): the effects layer opens while the water's composite is still to come, so that composite
+        // goes under what they draw.
+        if (aux == motion::kCategoryDrawType && (a & 0xFFFFu) == 0x26u && scene_phase_ && motion_scene_ &&
+            renderer_.rt_water_open()) {
+            flush_pending_draw_batch();
+            renderer_.begin_layer_window();
+        }
         if (aux == motion::kCategoryBufferOpa || aux == motion::kCategoryBufferXlu) {
             // The draw buffer (MR::DrawBufferType) the next draws come from (the census, the de-baking).
             rt_draw_buffer_ = (a & 0xFFFFu) | (aux == motion::kCategoryBufferXlu ? 0x10000u : 0u);
@@ -4801,6 +4809,11 @@ void GxBackend::build_rt_tev(RtTevMaterial& tev, RtTevStage* stages_out, float f
         stage.scale_t = static_cast<float>((t_scale & 0xFFFFu) + 1u) / static_cast<float>(std::max<unsigned>(image.height, 1u));
         const TexMode tex_mode = state_.tex_mode(map);
         stage.pad[1] = static_cast<std::uint32_t>(tex_mode.wrap_s) | (static_cast<std::uint32_t>(tex_mode.wrap_t) << 2u);
+        // Its indirect command (the raster's: active with indirect stages and a nonzero command), and whether the
+        // program has indirect stages at all (rt_tev.hlsli carries the coordinates from stage to stage then).
+        if (ps_key_.num_ind_stages != 0u) {
+            stage.pad[1] |= ((ps_key_.ind_cmd[s / 4u][s & 3u] & 0x1FFFFFu) << 8u) | (1u << 31u);
+        }
         // A texture whose coordinates the vertex normals generate: an environment map, the game's painted reflection
         // (pad[0] 1; header bit 7: the draw has one). Under physical light the traced reflection takes its place;
         // GALAXY_RT_PAINTED_REFLECTION=1 keeps them.
@@ -5245,6 +5258,56 @@ void GxBackend::fill_rt_tev(RtDrawInfo& info, float facing) {
             slot1 = coord;
         }
     }
+    // Indirect texturing (RtTevIndirect): its stages' maps and coordinates, their scales and matrices as the raster's
+    // (ShaderGenerator, fill_ps_constants); an indirect map's coordinates take a free slot.
+    info.tev_indirect = {};
+    const unsigned ind_stages = std::min<unsigned>(ps_key_.num_ind_stages, 4u);
+    if (ind_stages != 0u) {
+        RtTevIndirect& ind = info.tev_indirect;
+        ind.order = (ps_key_.ind_ref & 0xFFFFFFu) | (ind_stages << 24u);
+        const auto coord_size = [this](unsigned coord, unsigned axis) {
+            return (state_.bp(static_cast<std::uint8_t>(bp::kTexCoordSizeBase + coord * 2u + axis)) & 0xFFFFu) + 1u;
+        };
+        for (unsigned i = 0; i < ind_stages; ++i) {
+            const unsigned map = (ps_key_.ind_ref >> (6u * i)) & 7u;
+            const unsigned coord_raw = (ps_key_.ind_ref >> (6u * i + 3u)) & 7u;
+            const unsigned coord = coord_raw < texgens ? coord_raw : 0u;
+            const std::uint32_t shifts = ps_key_.ind_scale[i / 2u] >> ((i & 1u) != 0u ? 8u : 0u);
+            const TexImage image = state_.tex_image(map);
+            ind.scale[i * 2u] = static_cast<float>(coord_size(coord, 0u)) /
+                                (std::ldexp(1.0f, static_cast<int>(shifts & 0xFu)) *
+                                 static_cast<float>(std::max<unsigned>(image.width, 1u)));
+            ind.scale[i * 2u + 1u] = static_cast<float>(coord_size(coord, 1u)) /
+                                     (std::ldexp(1.0f, static_cast<int>((shifts >> 4u) & 0xFu)) *
+                                      static_cast<float>(std::max<unsigned>(image.height, 1u)));
+            if (texgens != 0u && slot0 == 0xFFu) {
+                slot0 = coord;
+            } else if (texgens != 0u && coord != slot0 && slot1 == 0xFFu) {
+                slot1 = coord;
+            }
+        }
+        const auto sign11 = [](std::uint32_t value) {
+            value &= 0x7FFu;
+            return (value & 0x400u) != 0u ? static_cast<std::int32_t>(value | ~0x7FFu) : static_cast<std::int32_t>(value);
+        };
+        const auto pack = [](std::int32_t lo, std::int32_t hi) {
+            return (static_cast<std::uint32_t>(lo) & 0xFFFFu) | (static_cast<std::uint32_t>(hi) << 16u);
+        };
+        for (unsigned m = 0; m < 3u; ++m) {
+            const std::uint32_t a = state_.bp(static_cast<std::uint8_t>(bp::kIndMtxBase + m * 3u));
+            const std::uint32_t b = state_.bp(static_cast<std::uint8_t>(bp::kIndMtxBase + m * 3u + 1u));
+            const std::uint32_t c = state_.bp(static_cast<std::uint8_t>(bp::kIndMtxBase + m * 3u + 2u));
+            const std::int32_t shift =
+                17 - static_cast<std::int32_t>(((a >> 22u) & 3u) | (((b >> 22u) & 3u) << 2u) | (((c >> 22u) & 3u) << 4u));
+            ind.matrix[m * 4u] = pack(sign11(a), sign11(b));
+            ind.matrix[m * 4u + 1u] = pack(sign11(c), shift);
+            ind.matrix[m * 4u + 2u] = pack(sign11(a >> 11u), sign11(b >> 11u));
+            ind.matrix[m * 4u + 3u] = pack(sign11(c >> 11u), shift);
+        }
+        for (unsigned t = 0; t < 8u; ++t) {
+            ind.coord_size[t] = (coord_size(t, 0u) - 1u) | ((coord_size(t, 1u) - 1u) << 16u);
+        }
+    }
     info.texgen = slot0;
     info.texgen2 = slot1;
     for (unsigned t = 0; t < 8u; ++t) {
@@ -5575,6 +5638,11 @@ bool GxBackend::rt_hidden_draw() const noexcept {
     if (rt_traced_clear_draw()) {
         return true;
     }
+    // A spray sprite of the table's `mist` effects: a puff of drops the engine lights (note_rt_mist), not the game's
+    // painted cloud.
+    if (rt_mist_draw()) {
+        return true;
+    }
     // The game's own shadows: its shadow lists by their draw type (every drawer the game files there: blob and volume
     // shadows of items, enemies and objects), and the drawers known by name.
     if (rt_fake_shadow_list_ || rt_object_fake_shadow_) {
@@ -5704,7 +5772,100 @@ void GxBackend::note_rt_material() {
     galaxy::gx::note_rt_material(note);
 }
 
+// A water or clear draw the composites replace (Beach Bowl's ocean, drawn after the game's effects) is in no effects
+// layer: the water's composite goes over it as over the game's water before the effects. Its keys were set before its
+// textures named its material (flush_draw_state), so once its batch knows it is water its call takes the same pipeline
+// without the layer.
+void GxBackend::exclude_layer_water(DrawCall& call, const RtDrawInfo& info, bool rt) {
+    if (call.aux_target != 3u || !rt || (info.surface & kRtDrawWater) == 0u) {
+        return;
+    }
+    PixelShaderKey ps = ps_key_;
+    ps.reserved = static_cast<std::uint8_t>(ps.reserved & ~kPsKeyLayer);
+    RenderStateKey rs = render_state_key_;
+    rs.blend_bits &= ~kRenderStateLayerTarget;
+    const PsoKey key{current_vs_hash_, ps.hash(), rs};
+    gpu::Pipeline* const pipeline = pipeline_cache_.get(key, ps, vs_key_);
+    if (pipeline == nullptr) {
+        return;
+    }
+    call.pipeline = pipeline;
+    call.aux_target = pipeline_cache_.last_get_used_uber() ? 0u : 2u;
+}
+
+bool GxBackend::rt_mist_draw() const noexcept {
+    if (current_rt_material_ == 0u || !scene_phase_ || side_layer_ != kSceneLayer || !renderer_.rt_mist_open()) {
+        return false;
+    }
+    const RtMaterial* const material = rt_material(current_rt_material_);
+    return material != nullptr && material->mist;
+}
+
+// A spray sprite (JPA's quad: JPADrawBillboard and its kin, one particle a draw at its own position matrix) as a puff
+// of drops: a Gaussian cloud at the quad's centre (the middle of its corners' eye-space box: a parallelogram's centre),
+// its width sigma half the quad's half side (its corners' farthest from the centre over root 2: the cloud reaches the
+// quad's edges at two sigma), its optical depth through its centre its table row's (`intensity`: a fully opaque
+// sprite's; else 2) times the sprite's opacity (TEV register 0's alpha, the particle's colour JPA sets: its alpha is
+// the texture's times it). A Gaussian cloud of depth tau covers 2 pi sigma^2 Ein(tau), a quarter of pi Ein(tau) of the
+// side squared, as much as the sprite's texture (its mean alpha times the side squared): the cloud textures (mean
+// alpha 0.52) depth 2, the steam's (0.26) 0.8, the droplets' dots (0.14) 0.4. The corners are the draw's vertices in
+// the frame's vertex ring, else JPA's centred quad (JPAResource jpa_pos: +-25 units).
+void GxBackend::note_rt_mist(const DrawCall& call) {
+    const std::uint32_t base = (state_.cp(cp::kMatrixIndexA) & 0x3Fu) * 4u;
+    float m[3][4];
+    for (unsigned r = 0; r < 3u; ++r) {
+        for (unsigned c = 0; c < 4u; ++c) {
+            m[r][c] = std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(base + r * 4u + c)));
+        }
+    }
+    std::array<std::array<float, 3>, 6> corners{{{-25.0f, 25.0f, 0.0f},
+                                                 {25.0f, 25.0f, 0.0f},
+                                                 {25.0f, -25.0f, 0.0f},
+                                                 {-25.0f, -25.0f, 0.0f}}};
+    std::size_t count = 4u;
+    const std::uint32_t vertices = call.vertex_view.SizeInBytes / static_cast<std::uint32_t>(sizeof(GxVertexOut));
+    if (const std::byte* cpu = renderer_.vertex_ring().cpu_at(call.vertex_view.BufferLocation);
+        cpu != nullptr && vertices >= 3u && vertices <= corners.size()) {
+        for (std::uint32_t i = 0; i < vertices; ++i) {
+            GxVertexOut v;
+            std::memcpy(&v, cpu + static_cast<std::size_t>(i) * sizeof(GxVertexOut), sizeof(v));
+            corners[i] = {v.position[0], v.position[1], v.position[2]};
+        }
+        count = vertices;
+    }
+    float lo[3] = {1.0e30f, 1.0e30f, 1.0e30f};
+    float hi[3] = {-1.0e30f, -1.0e30f, -1.0e30f};
+    std::array<std::array<float, 3>, 6> eye{};
+    for (std::size_t i = 0; i < count; ++i) {
+        for (unsigned r = 0; r < 3u; ++r) {
+            eye[i][r] = m[r][0] * corners[i][0] + m[r][1] * corners[i][1] + m[r][2] * corners[i][2] + m[r][3];
+            lo[r] = std::min(lo[r], eye[i][r]);
+            hi[r] = std::max(hi[r], eye[i][r]);
+        }
+    }
+    const float centre[3] = {0.5f * (lo[0] + hi[0]), 0.5f * (lo[1] + hi[1]), 0.5f * (lo[2] + hi[2])};
+    float reach2 = 0.0f;
+    for (std::size_t i = 0; i < count; ++i) {
+        const float dx = eye[i][0] - centre[0];
+        const float dy = eye[i][1] - centre[1];
+        const float dz = eye[i][2] - centre[2];
+        reach2 = std::max(reach2, dx * dx + dy * dy + dz * dz);
+    }
+    const float sigma = 0.5f * std::sqrt(0.5f * reach2);
+    const float opacity = std::clamp(static_cast<float>(state_.tev_register_values()[1][3]) / 255.0f, 0.0f, 1.0f);
+    const RtMaterial* const material = rt_material(current_rt_material_);
+    const float depth = material != nullptr && material->intensity > 0.0f ? material->intensity : 2.0f;
+    if (opacity > 1e-3f) {
+        renderer_.rt_note_mist(centre, sigma, depth * opacity);
+    }
+}
+
 bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
+    // A spray sprite under the engine's mist: its puff, never traced or drawn (rt_hidden_draw).
+    if (rt_mist_draw()) {
+        note_rt_mist(call);
+        return false;
+    }
     // An untextured surface (no texture coordinates) takes its stage's `untextured` row, for this draw only: the
     // texture binding that sets current_rt_material_ runs only when the textures change.
     struct RestoreMaterial {
@@ -10746,32 +10907,81 @@ gpu::Pipeline* GxBackend::flush_draw_state(
     // (blending, logic ops and dual-source alpha cannot share a second
     // target). Keys only change while a motion scene is (or was) active.
     // Blended triangles (no dual-source alpha) write the reactive mask.
+    // The game's scene runs on an RGBA6 EFB (MainLoopFramework::preGX), where every blend that reads the source alpha
+    // is dual-source (needs_dual_src_alpha): it blends at the TEV's 8-bit alpha, not the EFB's 6-bit one, and under
+    // constant destination alpha (GXSetDstAlpha: the translucent lists, Mario, shadows) writes the constant instead.
+    // Dual-source blending binds no second target, so none of those effects wrote the reactive mask (DLSS's, and the
+    // water's and clear surfaces' cover: a fall's spray was painted over). In a temporal scene such a draw blends
+    // single-source instead, at the same 8-bit alpha (ShaderGenerator's reactive variant), and writes the mask; a
+    // constant destination alpha of 0 (every one the game sets) its alpha channel's own blend writes
+    // (kRenderStateZeroAlpha). Another constant stays dual-source.
     bool motion_key_changed = false;
     if (motion_scene_ || motion_bits_set_) [[unlikely]] {
-        const std::uint32_t bb = render_state_key_.blend_bits;
+        const BlendMode blend_mode = state_.blend_mode();
+        const auto src_alpha_factor = [](BlendFactor f) {
+            return static_cast<std::uint32_t>(f) == 4u || static_cast<std::uint32_t>(f) == 5u;
+        };
+        const bool constant_alpha = blend_mode.const_alpha_enable && blend_mode.alpha_update;
+        const bool single_source =
+            blend_mode.blend_enable && !blend_mode.subtract &&
+            (src_alpha_factor(blend_mode.src_factor) || src_alpha_factor(blend_mode.dst_factor)) &&
+            state_.pe_control().pixel_format == 1u && (!constant_alpha || blend_mode.const_alpha == 0u);
+        const std::uint32_t dual_bit = motion_scene_ && single_source ? 0u : (1u << 27);
+        std::uint32_t bb = render_state_key_.blend_bits;
         const bool candidate = motion_scene_ &&
             topology_key == static_cast<std::uint8_t>(gpu::kTopologyTypeTriangle) &&
-            (bb & ((1u << 8) | (1u << 27))) == 0u && (bb & (1u << 25)) != 0u;
+            (bb & ((1u << 8) | dual_bit)) == 0u && (bb & (1u << 25)) != 0u;
         const bool writer = candidate && (bb & 1u) == 0u;
         const bool reactive = candidate && (bb & 1u) != 0u;
+        // Dual-source and constant alpha as the key builders made them, but for a reactive draw drawn single-source.
+        if (single_source) {
+            const bool dual = !reactive;
+            const auto set_bit = [&motion_key_changed](auto& word, auto mask, bool on) {
+                if (((word & mask) != 0u) != on) {
+                    word ^= mask;
+                    motion_key_changed = true;
+                }
+            };
+            set_bit(bb, 1u << 27, dual);
+            set_bit(bb, 1u << 28, constant_alpha && dual);
+            set_bit(bb, kRenderStateZeroAlpha, constant_alpha && !dual);
+            render_state_key_.blend_bits = bb;
+            const std::uint8_t flags = ps_key_.flags;
+            set_bit(ps_key_.flags, std::uint8_t{0x80u}, dual);
+            set_bit(ps_key_.flags, std::uint8_t{0x04u}, constant_alpha && dual);
+            if (ps_key_.flags != flags) {
+                current_ps_hash_ = ps_key_.hash();
+            }
+        }
         if (((vs_key_.flags & kVsKeyMotion) != 0u) != writer) {
             vs_key_.flags ^= kVsKeyMotion;
             current_vs_hash_ = vs_key_.hash();
             motion_key_changed = true;
         }
+        // The effects layer (RendererD3D12::begin_layer_window): a reactive draw (single-source) whose factors never
+        // read the EFB (its colour or, on an EFB with alpha, its alpha) blends the same into the layer's targets.
+        const auto reads_efb = [has_alpha = state_.pe_control().pixel_format == 1u](BlendFactor f, bool source) {
+            const auto v = static_cast<std::uint32_t>(f);
+            return (source && (v == 2u || v == 3u)) || (has_alpha && (v == 6u || v == 7u));
+        };
+        const bool layer = reactive && renderer_.layer_window() &&
+                           (blend_mode.subtract ||
+                            (!reads_efb(blend_mode.src_factor, true) && !reads_efb(blend_mode.dst_factor, false)));
         const std::uint8_t ps_bits =
-            (writer ? kPsKeyMotion : 0u) | (reactive ? kPsKeyReactive : 0u);
-        if ((ps_key_.reserved & (kPsKeyMotion | kPsKeyReactive)) != ps_bits) {
+            (writer ? kPsKeyMotion : 0u) | (reactive ? kPsKeyReactive : 0u) | (layer ? kPsKeyLayer : 0u);
+        if ((ps_key_.reserved & (kPsKeyMotion | kPsKeyReactive | kPsKeyLayer)) != ps_bits) {
             ps_key_.reserved = static_cast<std::uint8_t>(
-                (ps_key_.reserved & ~(kPsKeyMotion | kPsKeyReactive)) | ps_bits);
+                (ps_key_.reserved & ~(kPsKeyMotion | kPsKeyReactive | kPsKeyLayer)) | ps_bits);
             current_ps_hash_ = ps_key_.hash();
             motion_key_changed = true;
         }
         const std::uint32_t rs_bits = (writer ? kRenderStateMotionTarget : 0u) |
-                                      (reactive ? kRenderStateReactiveTarget : 0u);
-        if ((bb & (kRenderStateMotionTarget | kRenderStateReactiveTarget)) != rs_bits) {
-            render_state_key_.blend_bits =
-                (bb & ~(kRenderStateMotionTarget | kRenderStateReactiveTarget)) | rs_bits;
+                                      (reactive ? kRenderStateReactiveTarget : 0u) |
+                                      (layer ? kRenderStateLayerTarget : 0u);
+        constexpr std::uint32_t kTargetBits =
+            kRenderStateMotionTarget | kRenderStateReactiveTarget | kRenderStateLayerTarget;
+        if ((bb & kTargetBits) != rs_bits) {
+            render_state_key_.blend_bits = (bb & ~kTargetBits) | rs_bits;
             motion_key_changed = true;
         }
         motion_bits_set_ = writer || reactive;
@@ -10889,7 +11099,10 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         // why): the draw is skipped.
         return nullptr;
     }
-    current_pipeline_aux_ = current_pipeline_is_uber_ ? 0u
+    // An effects-layer draw binds the reactive mask and the layer's targets, uber stand-in or not (its variant writes
+    // them); other stand-ins stay single-target.
+    current_pipeline_aux_ = (render_state_key_.blend_bits & kRenderStateLayerTarget) != 0u ? 3u
+        : current_pipeline_is_uber_ ? 0u
         : (render_state_key_.blend_bits & kRenderStateMotionTarget) != 0u ? 1u
         : (render_state_key_.blend_bits & kRenderStateReactiveTarget) != 0u ? 2u : 0u;
 
@@ -11255,7 +11468,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         // The lighting texture's scale (bit 6); 0 leaves a lit translucent unlit: a table light source (its own light)
         // or a clear surface (glass, crystal, ice, water: the lit scene shows through it). Falling water is white
         // water, a foam of bubbles and drops that scatters what reaches it: it takes the light at its own sheet
-        // (rt_engine.hlsl waterfall_light).
+        // (rt_engine.hlsl water_light).
         bool takes_light = (ps_key_.output_flags & 0x40u) != 0u;
         float recolour = 0.0f;
         if (const RtMaterial* const m = rt_material(current_rt_material_);
@@ -11276,11 +11489,29 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             }
         }
         ps_c.ztex_params[3] = takes_light ? renderer_.rt_light_texture_scale() : recolour;
-        // Falling water: clear where the art paints its water hue (shader_gen's lit translucent; map 7 is the light
-        // texture there, so its texture dimensions are free).
-        if (const RtMaterial* const m = rt_material(current_rt_material_);
-            takes_light && (ps_key_.output_flags & 0x40u) != 0u && m != nullptr && m->waterfall) {
-            ps_c.tex_dims[7][3] = 1.0f;
+        // A lit translucent's kind (shader_gen; map 7 is the light texture there, so its texture dimensions are free
+        // and always set here: fill_ps_constants leaves map 7's texcoord scale, at least 1, in them): 0 an effect or
+        // any other translucent, 1 falling water (clear where the art paints its water hue), 2 water, glass or
+        // crystal (the water pass's surfaces). Only 0 covers what lies behind for the water's composites (the
+        // reactive mask).
+        if ((ps_key_.output_flags & 0x40u) != 0u) {
+            float kind = 0.0f;
+            if (const RtMaterial* const m = rt_material(current_rt_material_); m != nullptr) {
+                const bool clear_class = m->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Crystal) ||
+                                         m->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Water);
+                // Falling water: kind 1 plus 0.4 x its aeration (the share of its clear water's light its bubbles
+                // scatter: the table's, else rt_engine.hlsl kFallAeration's 0.36), below 1.5.
+                kind = takes_light && m->waterfall ? 1.0f + 0.4f * (m->aeration >= 0.0f ? m->aeration : 0.36f)
+                       : clear_class               ? 2.0f
+                                                   : 0.0f;
+                // Falling water's clear water colour as the art paints it (the table row's; white: none).
+                if (kind < 1.5f && kind >= 1.0f) {
+                    ps_c.tex_dims[7][0] = m->color[0];
+                    ps_c.tex_dims[7][1] = m->color[1];
+                    ps_c.tex_dims[7][2] = m->color[2];
+                }
+            }
+            ps_c.tex_dims[7][3] = kind;
         }
         // GALAXY_RT_LOG_GLOWS=1: each scene draw's material once per phase, glow kind, lighting texture and J3D
         // material identity (mat_id.py names the material, material_names.py --find the identity).
@@ -12153,6 +12384,7 @@ bool GxBackend::on_cached_packet_draw_run(
     pending_draw_batch_.active = true;
     pending_draw_batch_.call = call;
     pending_draw_batch_.rt = begin_rt_batch(call, pending_draw_batch_.rt_info);
+    exclude_layer_water(pending_draw_batch_.call, pending_draw_batch_.rt_info, pending_draw_batch_.rt);
     pending_draw_batch_.hidden = rt_hidden_draw();
     pending_draw_batch_.traced = pending_draw_batch_.hidden && (rt_traced_clear_draw() || rt_trace_only_);
     pending_draw_batch_.debake_model = debake_sample_key_;
@@ -12332,6 +12564,7 @@ void GxBackend::on_cached_draw_run_draw(
     pending_draw_batch_.active = true;
     pending_draw_batch_.call = call;
     pending_draw_batch_.rt = begin_rt_batch(call, pending_draw_batch_.rt_info);
+    exclude_layer_water(pending_draw_batch_.call, pending_draw_batch_.rt_info, pending_draw_batch_.rt);
     pending_draw_batch_.hidden = rt_hidden_draw();
     pending_draw_batch_.traced = pending_draw_batch_.hidden && (rt_traced_clear_draw() || rt_trace_only_);
     pending_draw_batch_.debake_model = debake_sample_key_;
@@ -12584,6 +12817,7 @@ void GxBackend::on_draw(
         pending_draw_batch_.active = true;
         pending_draw_batch_.call = call;
         pending_draw_batch_.rt = begin_rt_batch(call, pending_draw_batch_.rt_info);
+        exclude_layer_water(pending_draw_batch_.call, pending_draw_batch_.rt_info, pending_draw_batch_.rt);
         pending_draw_batch_.hidden = rt_hidden_draw();
         pending_draw_batch_.traced = pending_draw_batch_.hidden && (rt_traced_clear_draw() || rt_trace_only_);
         pending_draw_batch_.debake_model = debake_sample_key_;

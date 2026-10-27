@@ -98,6 +98,9 @@ inline constexpr DXGI_FORMAT kEfbHdrColorFormat = DXGI_FORMAT_R16G16B16A16_FLOAT
 inline constexpr DXGI_FORMAT kMotionVectorFormat = DXGI_FORMAT_R16G16_FLOAT;
 // Reactive mask for temporal upscaling: blended draws' alpha, max-blended.
 inline constexpr DXGI_FORMAT kReactiveMaskFormat = DXGI_FORMAT_R8_UNORM;
+// The effects layer (kRenderStateLayerTarget): its colour (what the effects added, as they blended into the EFB) and
+// transmittance (the product of their destination factors), in the EFB's own encoding.
+inline constexpr DXGI_FORMAT kLayerFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
 inline constexpr DXGI_FORMAT kEfbDepthResourceFormat =
     DXGI_FORMAT_R24G8_TYPELESS;
 inline constexpr DXGI_FORMAT kEfbDepthFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
@@ -277,6 +280,11 @@ public:
     // jitter, no upscale): clears the motion target for the scene. False
     // otherwise or when it could not be created (no motion writers).
     [[nodiscard]] bool begin_motion_scene();
+    // The game's effects begin (the scene's ShadowSurface draw type, after its translucent lists) in a scene whose
+    // blended draws write the reactive mask: the effects layer opens (cleared: nothing added, everything let through)
+    // and its draws record what they blend over the EFB until the water's composite (kRenderStateLayerTarget).
+    void begin_layer_window();
+    [[nodiscard]] bool layer_window() const noexcept { return layer_window_; }
     // GALAXY_MOTION_DEBUG: at the scene's end, replaces the EFB color with
     // the motion field (grey = still; red/green = +x/+y towards the previous
     // position, 8 pixels to full scale).
@@ -316,6 +324,9 @@ public:
     // The ray tracing engine runs (its clear-surface pass traces the table's `traced` glass).
     [[nodiscard]] bool rt_engine() const noexcept { return ray_tracer_.engine_active(); }
     [[nodiscard]] bool rt_engine_clear() const noexcept { return ray_tracer_.engine_clear_active(); }
+    // The waterfall mist (SceneRayTracer::mist_open, note_mist): the table's `mist` effects' sprites as puffs of drops.
+    [[nodiscard]] bool rt_mist_open() const noexcept { return ray_tracer_.mist_open(); }
+    void rt_note_mist(const float centre[3], float sigma, float depth) { ray_tracer_.note_mist(centre, sigma, depth); }
     [[nodiscard]] bool rt_log_seq() const noexcept { return ray_tracer_.log_seq(); }
     [[nodiscard]] bool rt_ab_original() const noexcept { return ray_tracer_.ab_original(); }
     [[nodiscard]] bool rt_scene_untraced() const noexcept { return ray_tracer_.scene_untraced(); }
@@ -971,8 +982,10 @@ private:
     // RtComposite: the ambient occlusion of ray-tracer result slot `index`.
     enum class ReplayKind : std::uint8_t {
         Draw, BindEfb, Clear, Copy, SwapEfbSets, ClearDepth, RtComposite, RtWater, SceneAa, SceneAo,
-        HdrBegin, HdrEnd, Bloom
+        HdrBegin, HdrEnd, Bloom, LayerBegin, RtMist
     };
+    // RtWater's and RtMist's index: the light slot, kReplayWaterLayer when the effects layer was open.
+    static constexpr std::uint32_t kReplayWaterLayer = 0x80000000u;
     // Bloom: a game_bloom marker.
     struct ReplayBloom {
         std::uint16_t phase = 0;
@@ -1125,7 +1138,23 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> rt_water_copy_;   // the frame with the game's water (water composite)
     Microsoft::WRL::ComPtr<ID3D12Resource> rt_opaque_copy_;  // the frame before the translucent phases
     D3D12_GPU_DESCRIPTOR_HANDLE rt_opaque_srv_{};             // its view this frame (0: none)
-    void record_rt_water(int slot, bool reproject);
+    // What the frame's effects drew over the water and the clear surfaces: copies of the effects layer's colour and
+    // transmittance, a table of their two views (0: no layer this scene).
+    D3D12_GPU_DESCRIPTOR_HANDLE rt_layer_table();
+    Microsoft::WRL::ComPtr<ID3D12Resource> rt_layer_color_copy_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> rt_layer_trans_copy_;
+    // The effects layer: its colour (what the effects added, as they blended into the EFB) and transmittance (what of
+    // the EFB behind them they let through), render targets 2 and 3 of a layer draw; whether this scene's is open.
+    Microsoft::WRL::ComPtr<ID3D12Resource> layer_color_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> layer_trans_;
+    D3D12_CPU_DESCRIPTOR_HANDLE layer_color_rtv_{};
+    D3D12_CPU_DESCRIPTOR_HANDLE layer_trans_rtv_{};
+    bool layer_window_ = false;
+    void record_layer_begin();
+    bool reactive_scene_ = false;   // this scene's blended draws write the reactive mask (begin_motion_scene)
+    void record_rt_water(int slot, bool reproject, bool layer);
+    // The waterfall mist of light slot `slot` over the frame (SceneRayTracer::composite_mist), after the water's.
+    void record_rt_mist(int slot, bool reproject, bool layer);
     void log_rt_seq(const char* step);
     [[nodiscard]] bool temporal_inputs_match(const TemporalUpscaleInputs& in) const;
     D3D12_GPU_VIRTUAL_ADDRESS resident_vertex_base_ = 0;
@@ -1231,8 +1260,12 @@ private:
     struct ReplayMotionTargets {
         Microsoft::WRL::ComPtr<ID3D12Resource> target;
         Microsoft::WRL::ComPtr<ID3D12Resource> reactive;
+        Microsoft::WRL::ComPtr<ID3D12Resource> layer_color;
+        Microsoft::WRL::ComPtr<ID3D12Resource> layer_trans;
         D3D12_CPU_DESCRIPTOR_HANDLE rtv{};
         D3D12_CPU_DESCRIPTOR_HANDLE reactive_rtv{};
+        D3D12_CPU_DESCRIPTOR_HANDLE layer_color_rtv{};
+        D3D12_CPU_DESCRIPTOR_HANDLE layer_trans_rtv{};
         unsigned scale = 0;
     };
     ReplayMotionTargets replay_motion_{};
