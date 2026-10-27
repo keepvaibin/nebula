@@ -317,7 +317,12 @@ void OceanSphere::initPoints() {
 
 void OceanSphere::initDisplayList() {
     MR::ProhibitSchedulerAndInterrupts prohibit(false);
+#ifdef TARGET_PC
+    // The face vertices carry their normals too (sendVertex): position, normal, two texture coordinates.
+    u32 sizeFace = ::calcDisplayListSize(mPointCount, 0x28);
+#else
     u32 sizeFace = ::calcDisplayListSize(mPointCount, 0x1C);
+#endif
     mDispListFace = new (0x20) u8[sizeFace];
     DCInvalidateRange(mDispListFace, sizeFace);
     GDLObj obj;
@@ -624,11 +629,22 @@ void OceanSphere::loadMaterialFace() const {
     GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
     GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_POS_XYZ, GX_F32, 0);
     GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX1, GX_POS_XYZ, GX_F32, 0);
+#ifdef TARGET_PC
+    // The sphere's normals with its face (unlit: the picture is unchanged), so ray tracing shades the water as the
+    // sphere it is rather than as its flat triangles.
+    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_NRM, GX_NRM_XYZ, GX_F32, 0);
+#endif
     GXClearVtxDesc();
     GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
+#ifdef TARGET_PC
+    GXSetVtxDesc(GX_VA_NRM, GX_DIRECT);
+#endif
     GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
     GXSetVtxDesc(GX_VA_TEX1, GX_DIRECT);
     GXLoadPosMtxImm(MR::getCameraViewMtx(), 0);
+#ifdef TARGET_PC
+    GXLoadNrmMtxImm(MR::getCameraViewMtx(), 0);
+#endif
     GXSetCurrentMtx(0);
     GXSetNumChans(1);
     GXSetChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
@@ -816,6 +832,16 @@ void OceanSphere::sendVertex(const OceanSpherePoint* pPoint, bool useEnvMap, boo
         GDWrite_f32(posY);
         GDWrite_f32(posZ);
 
+#ifdef TARGET_PC
+        // The face's vertices carry the normal too, between the position and the texture coordinates
+        // (loadMaterialFace).
+        if (!useEnvMap) {
+            GDWrite_f32(pPoint->mNormal.x);
+            GDWrite_f32(pPoint->mNormal.y);
+            GDWrite_f32(pPoint->mNormal.z);
+        }
+#endif
+
         if (useEnvMap) {
             f32 normalX, normalY, normalZ;
             normalX = pPoint->mNormal.x;
@@ -839,6 +865,11 @@ void OceanSphere::sendVertex(const OceanSpherePoint* pPoint, bool useEnvMap, boo
         }
     } else {
         GXPosition3f32(pPoint->mPos.x, pPoint->mPos.y, pPoint->mPos.z);
+#ifdef TARGET_PC
+        if (!useEnvMap) {
+            GXNormal3f32(pPoint->mNormal.x, pPoint->mNormal.y, pPoint->mNormal.z);
+        }
+#endif
 
         if (useEnvMap) {
             GXNormal3f32(pPoint->mNormal.x, pPoint->mNormal.y, pPoint->mNormal.z);
