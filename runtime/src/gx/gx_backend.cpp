@@ -7694,6 +7694,7 @@ void GxBackend::advance_interp_sequence(bool flush) {
             if (presented) {
                 ++interp_presented_;
                 interp_shown_scene_ = static_cast<std::int32_t>(sequence.scene);
+                note_interp_timeline(slot, force_t >= 0.0 ? force_t : t, false);
             } else {
                 ++interp_failed_;
             }
@@ -7708,6 +7709,7 @@ void GxBackend::advance_interp_sequence(bool flush) {
         renderer_.set_capture_waits(!interp_snapshot_path_.empty());
         interp_presenting_real_ = true;
         present_cached_xfb_on_thread(sequence.xfb_addr, false, true);
+        note_interp_timeline(slot, 1.0, true);
         interp_presenting_real_ = false;
         interp_shown_scene_ = static_cast<std::int32_t>(sequence.scene);
         renderer_.set_capture_waits(false);
@@ -7716,6 +7718,39 @@ void GxBackend::advance_interp_sequence(bool flush) {
         report_interp_stats();
         return;
     }
+}
+
+// The line: the slot's time and the present's (QPC ticks), the game frame shown (the played log's serial; t
+// between the frame before, 0, and it, 1), and whether it was the game's own frame.
+void GxBackend::note_interp_timeline(std::int64_t slot, double t, bool real) {
+#if GALAXY_TEST_HOOKS
+    static std::FILE* const file = [] {
+        char path[MAX_PATH]{};
+        std::size_t length = 0u;
+        if (getenv_s(&length, path, sizeof(path), "GALAXY_INTERP_TIMELINE") != 0 || length <= 1u) {
+            return static_cast<std::FILE*>(nullptr);
+        }
+        std::FILE* opened = nullptr;
+        if (fopen_s(&opened, path, "w") == 0 && opened != nullptr) {
+            std::fprintf(opened, "slot_qpc,present_qpc,frame,t,real,frequency\n");
+        }
+        return opened;
+    }();
+    if (file == nullptr) {
+        return;
+    }
+    LARGE_INTEGER now{};
+    QueryPerformanceCounter(&now);
+    LARGE_INTEGER frequency{};
+    QueryPerformanceFrequency(&frequency);
+    std::fprintf(file, "%lld,%lld,%llu,%.6f,%d,%lld\n", static_cast<long long>(slot),
+                 static_cast<long long>(now.QuadPart), static_cast<unsigned long long>(interp_last_played_serial_), t,
+                 real ? 1 : 0, static_cast<long long>(frequency.QuadPart));
+#else
+    static_cast<void>(slot);
+    static_cast<void>(t);
+    static_cast<void>(real);
+#endif
 }
 
 // A game frame presented while interpolating, without sub-frames: why.
