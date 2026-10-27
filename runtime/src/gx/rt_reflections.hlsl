@@ -2506,15 +2506,22 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
             // sheet (its rough lobe), the flow's streaks moving the reflection down it (the composite).
             if (params.y > 0.0f && emitter < 1.0f) {
                 reflected = true;
-                // Water: a mirror (no lobe jitter: the composite's distortion is its roughness).
+                // Water: a mirror (no lobe jitter: the composite's distortion is its roughness). A metal coat and a
+                // crystal too, their lobe the cone the mirror ray reads over (g_spread: the tangent of the reflected
+                // lobe's half-angle, twice the angle holding three quarters of its GGX normals): this pass keeps no
+                // history, and one ray jittered over the lobe a frame was raw noise (the Gateway's turning ring's
+                // coat). Read over the cone's footprint, as screen-space cone tracing prefilters a glossy reflection
+                // (Uludag 2014, Hi-Z Screen-Space Cone-Traced Reflections), it is the lobe's mean, steady.
                 float4 ray_params = params;
-                ray_params.x = crystal || coat || fall ? params.x : 1e-4f;
+                ray_params.x = fall ? params.x : 1e-4f;
+                g_spread = (crystal || coat) && !mirror ? tan(2.0f * atan(params.x * sqrt(3.0f))) : 0.0f;
                 // Over at least two of the game's own 640-wide pixels: what the frame shows thinner than that (a
                 // net's cords, a fence's bars) averages out instead of reflecting as specks the waves set moving.
                 g_reflect_blur = crystal || coat ? 0.0f : 2.0f * max(g_viewport.z / 640.0f, 1.0f);
                 const Reflected r = reflect_light(id.xy, dir, game_waves ? wave : n, ng, hit, ray_params, base, false,
                                                   false);
                 g_reflect_blur = 0.0f;
+                g_spread = 0.0f;
                 light = r.light;
                 // Glass and crystal whose rays leave the scene keep what they drew (never a dark mirror of space).
                 if (surface == kCrystal && !fall && sky_source(r.source)) {

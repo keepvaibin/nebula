@@ -166,7 +166,8 @@ static const uint kEmitNamed = 4u;      // the table names this draw's texture
 static const uint kEmitNoLight = 8u;    // never a light
 // g_draws records (SceneRayTracer::draw_colors_): ambient, GX light 0 colour, emission, intensity,
 // roughness and metalness, material colour, flags, relief; GX light 0's eye position (3 floats), its kind
-// (0 none, 1 no facing term, 2 n.l; bits 16-31 a clear solid's index of refraction, rt_engine.hlsl solid_ior); words
+// (0 none, 1 no facing term, 2 n.l; bits 4-5 the draw's GX cull mode, raster_facing; bits 16-31 a clear solid's index
+// of refraction, rt_engine.hlsl solid_ior); words
 // 12-15 its GX fog (RtDrawInfo::fog; rt_engine.hlsl gx_fog_share).
 static const uint kDrawStride = 64u;
 
@@ -2199,6 +2200,22 @@ void smooth_surface(uint tri, float3 w, float3 v0, float3 v1, float3 v2, float3 
     }
 }
 
+// Whether the raster could have drawn triangle `tri` of draw `draw` at a pixel: the faces its GX cull mode keeps (the
+// draw record's word 11, bits 4-5: 0 none, 1 front faces culled, 2 back faces culled, 3 all). A face is a front face
+// where its winding's normal, cross(e1, e2), points towards the eye, the side a one-sided light source shines to.
+bool raster_facing(uint tri, uint draw)
+{
+    const uint cull = (g_draws.Load(min(draw, max(g_draw_count, 1u) - 1u) * kDrawStride + 44u) >> 4u) & 3u;
+    if (cull == 0u) {
+        return true;
+    }
+    const float3 v0 = asfloat(g_positions.Load3(tri * 36u));
+    const float3 v1 = asfloat(g_positions.Load3(tri * 36u + 12u));
+    const float3 v2 = asfloat(g_positions.Load3(tri * 36u + 24u));
+    const bool front = dot(cross(v1 - v0, v2 - v0), -v0) > 0.0f;
+    return cull == 2u ? front : cull == 1u && !front;
+}
+
 Surface primary_surface(int2 q, float3 p)
 {
     Surface s;
@@ -2209,17 +2226,22 @@ Surface primary_surface(int2 q, float3 p)
     s.primary = uint2(0u, 0u);
     s.clear = false;
     const float span = length(p);
+    // Only the triangles about the raster's depth: the raster drew this surface there, so anything nearer was not
+    // drawn at this pixel (a face the draw's GX cull mode leaves out, the near side of a shell drawn from inside).
+    // Taken from the eye, such a face was committed first and cut the ray short of the drawn surface: the Gateway's
+    // turning ring (its crystal panels drawn as back faces) had no surface under most of its pixels.
+    const float window = span * 0.03f + 8.0f;
     RayDesc ray;
     ray.Origin = float3(0.0f, 0.0f, 0.0f);
     ray.Direction = p / span;
-    ray.TMin = 0.0f;
+    ray.TMin = max(span - window, 0.0f);
     ray.TMax = span * 1.02f + 2.0f;
     RayQuery<RAY_FLAG_FORCE_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
     query.TraceRayInline(g_scene, RAY_FLAG_NONE, kSceneMask, ray);
     // The candidate nearest the raster's depth, whatever its kind: the raster drew a surface there (its alpha test
     // passed), so when no triangle meets the depth closely that one is it. Alpha-tested geometry a few units off the
     // raster's depth (Bowser's Star Reactor's fire-bar balls) would otherwise have no draw at its pixels.
-    float nearest_gap = span * 0.03f + 8.0f;
+    float nearest_gap = window;
     uint nearest_tri = 0u;
     float2 nearest_b = float2(0.0f, 0.0f);
     while (query.Proceed()) {
@@ -2229,13 +2251,19 @@ Surface primary_surface(int2 q, float3 p)
             0u) {
             continue;
         }
+        // A face its draw's cull mode leaves out was not drawn here (a thin model's far side within the window).
+        if (!raster_facing(query.CandidatePrimitiveIndex(), candidate >> 16u)) {
+            continue;
+        }
         const float gap = abs(query.CandidateTriangleRayT() - span);
         if (gap < nearest_gap) {
             nearest_gap = gap;
             nearest_tri = query.CandidatePrimitiveIndex() + 1u;
             nearest_b = query.CandidateTriangleBarycentrics();
         }
-        if (gap <= span * 0.002f + 0.5f || !(traced_card(candidate) || alpha_draw(candidate))) {
+        // Committed only at the raster's depth: a committed hit shortens the ray, and an opaque face a little nearer
+        // (inside the window) would hide the drawn one behind it.
+        if (gap <= span * 0.002f + 0.5f) {
             query.CommitNonOpaqueTriangleHit();
         }
     }
