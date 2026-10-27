@@ -6140,6 +6140,7 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
     apply_pending_resize();
     follow_window_internal_resolution();
     apply_pending_efb_scale();
+    prepare_temporal_upscaler();
     sync_post_process_settings();
     {
         if (temporal_interp_suspended_ && temporal_interp_key() != temporal_interp_key_) {
@@ -7036,8 +7037,10 @@ bool RendererD3D12::ensure_motion_target() {
         return true;
     }
     if (motion_target_) {
-        // An internal-resolution change: frames in flight may still use them.
-        wait_for_gpu();
+        // A render-scale change inside a scene: this frame's command list
+        // may still name them.
+        retired_efb_copy_textures_[frame_slot_].push_back(std::move(motion_target_));
+        retired_efb_copy_textures_[frame_slot_].push_back(std::move(reactive_target_));
     }
     motion_target_.Reset();
     reactive_target_.Reset();
@@ -9681,53 +9684,65 @@ bool RendererD3D12::begin_motion_scene() {
     return true;
 }
 
-bool RendererD3D12::scene_temporal_begin(float& jitter_x, float& jitter_y) {
-    jitter_x = 0.0f;
-    jitter_y = 0.0f;
-    scene_temporal_ = false;
-    if (!temporal_mode() || output_efb_active_) {
-        temporal_.reset();
-        temporal_history_valid_ = false;
-        return false;
-    }
-    temporal_interp_ = ring_mode_ == RingMode::Interp;
+// Command lists recorded before this point may name the old context; none is
+// open, so waiting for the GPU is enough before it goes.
+void RendererD3D12::prepare_temporal_upscaler() {
+    const unsigned render_scale = output_efb_active_ ? alt_efb_.scale : efb_scale_;
     const unsigned output_scale = output_efb_scale_for_window();
-    if (output_scale == 0u || efb_scale_ > output_scale) {
+    if (!temporal_mode() || output_scale == 0u || render_scale > output_scale) {
+        if (temporal_) {
+            wait_for_gpu();
+            temporal_.reset();
+        }
+        temporal_render_w_ = temporal_render_h_ = 0u;
+        temporal_output_w_ = temporal_output_h_ = 0u;
         temporal_history_valid_ = false;
-        return false;
+        return;
     }
-    const unsigned rw = kEfbWidth * efb_scale_;
-    const unsigned rh = kEfbHeight * efb_scale_;
+    const unsigned rw = kEfbWidth * render_scale;
+    const unsigned rh = kEfbHeight * render_scale;
     const unsigned ow = kEfbWidth * output_scale;
     const unsigned oh = kEfbHeight * output_scale;
     const RenderConfig cfg = get_render_config();
     const unsigned kind = cfg.upscaler;
     const unsigned quality = std::min(cfg.temporal_quality, 4u);
-    if (!temporal_ || rw != temporal_render_w_ || rh != temporal_render_h_ ||
-        ow != temporal_output_w_ || oh != temporal_output_h_ || kind != temporal_kind_ ||
-        (kind == 3u && quality != temporal_quality_)) {
-        if (temporal_) {
-            // The old context's resources may still be in use by frames in flight.
-            wait_for_gpu();
-            temporal_.reset();
-        }
-        temporal_ = kind == 3u ? create_dlss_upscaler(rw, rh, ow, oh, quality)
-                               : create_fsr3_upscaler(device_.Get(), rw, rh, ow, oh);
-        temporal_kind_ = kind;
-        temporal_quality_ = quality;
-        temporal_history_valid_ = false;
-        if (!temporal_) {
-            temporal_render_w_ = temporal_render_h_ = 0u;
-            temporal_output_w_ = temporal_output_h_ = 0u;
-            return false;
-        }
-        temporal_render_w_ = rw;
-        temporal_render_h_ = rh;
-        temporal_output_w_ = ow;
-        temporal_output_h_ = oh;
+    // A failed creation is not retried until its sizes or mode change.
+    if (rw == temporal_render_w_ && rh == temporal_render_h_ && ow == temporal_output_w_ &&
+        oh == temporal_output_h_ && kind == temporal_kind_ && (kind != 3u || quality == temporal_quality_)) {
+        return;
+    }
+    if (temporal_) {
+        wait_for_gpu();
+        temporal_.reset();
+    }
+    temporal_kind_ = kind;
+    temporal_quality_ = quality;
+    temporal_history_valid_ = false;
+    temporal_render_w_ = rw;
+    temporal_render_h_ = rh;
+    temporal_output_w_ = ow;
+    temporal_output_h_ = oh;
+    temporal_ = kind == 3u ? create_dlss_upscaler(rw, rh, ow, oh, quality)
+                           : create_fsr3_upscaler(device_.Get(), rw, rh, ow, oh);
+    if (temporal_) {
         std::cout << "[Renderer] " << temporal_->name() << " " << rw << "x" << rh
                   << " -> " << ow << "x" << oh << "\n";
     }
+}
+
+bool RendererD3D12::scene_temporal_begin(float& jitter_x, float& jitter_y) {
+    jitter_x = 0.0f;
+    jitter_y = 0.0f;
+    scene_temporal_ = false;
+    const unsigned rw = kEfbWidth * efb_scale_;
+    const unsigned ow = temporal_output_w_;
+    // The context is replaced only by begin_frame (prepare_temporal_upscaler).
+    if (!temporal_ || !temporal_mode() || output_efb_active_ || rw != temporal_render_w_ ||
+        kEfbHeight * efb_scale_ != temporal_render_h_) {
+        temporal_history_valid_ = false;
+        return false;
+    }
+    temporal_interp_ = ring_mode_ == RingMode::Interp;
     if (temporal_interp_) {
         // Game frames feed the sub-frames: no jitter, and no upscale
         // (begin_output_efb). Each presented frame takes the next phase.
@@ -9846,8 +9861,10 @@ bool RendererD3D12::ensure_output_efb(unsigned scale) {
         return false;
     }
     if (alt_efb_.color) {
-        // A window resize: frames in flight may still read the old views.
-        wait_for_gpu();
+        // A new output scale (window resize or internal resolution): frames in
+        // flight and this frame's command list may still name the old targets.
+        retired_efb_copy_textures_[frame_slot_].push_back(std::move(alt_efb_.color));
+        retired_efb_copy_textures_[frame_slot_].push_back(std::move(alt_efb_.depth));
     }
     alt_efb_.color.Reset();
     alt_efb_.depth.Reset();

@@ -898,6 +898,9 @@ private:
     // Live internal-resolution change, applied between frames by begin_frame
     // when get_render_config().efb_scale differs from the live targets.
     void apply_pending_efb_scale();
+    // Creates, replaces or releases the temporal upscaler for the live render
+    // and output scales, from begin_frame before its command list records.
+    void prepare_temporal_upscaler();
     // With internal_follow_window, re-derive efb_scale from the settled
     // window size (see RenderConfig::internal_follow_window).
     void follow_window_internal_resolution();
