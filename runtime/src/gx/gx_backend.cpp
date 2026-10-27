@@ -11,6 +11,7 @@
 #pragma warning(pop)
 
 #include "galaxy/gx/gx_backend.h"
+#include "galaxy/test_hooks.h"
 #include "galaxy/gx/dependency_draw_memo.h"
 #include "galaxy/gx/dependency_range_memo.h"
 #include "galaxy/gx/dependency_page_mask.h"
@@ -298,6 +299,7 @@ bool capture_pixel_frame_requested(std::uint64_t frame) {
 // back and written to GALAXY_PRESENT_SNAPSHOT_DIR\present_<n>.ppm, limited to
 // presents GALAXY_PRESENT_SNAPSHOT_FIRST..GALAXY_PRESENT_SNAPSHOT_LAST.
 std::string present_snapshot_path() {
+#if GALAXY_TEST_HOOKS
     const auto read_u64 = [](const char* name, std::uint64_t fallback) {
         char value[32]{};
         std::size_t length = 0;
@@ -321,6 +323,9 @@ std::string present_snapshot_path() {
         return {};
     }
     return directory + "\\present_" + std::to_string(presents) + ".ppm";
+#else
+    return {};
+#endif
 }
 
 bool capture_present_requested(std::uint64_t request) {
@@ -7553,6 +7558,7 @@ void GxBackend::supersede_interp_sequence() {
 }
 
 std::string GxBackend::interp_snapshot_path(const char* suffix) const {
+#if GALAXY_TEST_HOOKS
     static const std::string directory = [] {
         char value[MAX_PATH]{};
         std::size_t length = 0;
@@ -7568,6 +7574,10 @@ std::string GxBackend::interp_snapshot_path(const char* suffix) const {
         return {};
     }
     return directory + "\\seq_" + std::to_string(interp_sequence_serial_) + "_" + suffix + ".ppm";
+#else
+    static_cast<void>(suffix);
+    return {};
+#endif
 }
 
 // t of the next slot in the playing sequence (see advance_interp_sequence).

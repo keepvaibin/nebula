@@ -1,5 +1,6 @@
 #include "galaxy/native_api.h"
 #include "galaxy/crash_notes.h"
+#include "galaxy/test_hooks.h"
 #include "nebula_build_identity.h"
 #include "galaxy/ai_dma_timing.h"
 #include "galaxy/checkpoint_gate.h"
@@ -6348,13 +6349,21 @@ bool trace_main_frame_relative_to_mario_control_enabled() {
 }
 
 bool native_input_stick_script_relative_mario_control_enabled() {
+#if GALAXY_TEST_HOOKS
     static std::atomic<std::int8_t> cached{-1};
     return cached_env_gate(cached, "GALAXY_INPUT_STICK_SCRIPT_RELATIVE_MARIO_CONTROL", false);
+#else
+    return false;
+#endif
 }
 
 bool native_input_autopress_script_stop_at_mario_control_enabled() {
+#if GALAXY_TEST_HOOKS
     static std::atomic<std::int8_t> cached{-1};
     return cached_env_gate(cached, "GALAXY_INPUT_AUTOPRESS_SCRIPT_STOP_AT_MARIO_CONTROL", false);
+#else
+    return false;
+#endif
 }
 
 bool native_input_mario_control_marker_enabled() {
@@ -24464,6 +24473,7 @@ bool coop_call_intercept(
 // Test hook: GALAXY_TEST_TELEPORT=x,y,z,frame places Mario with the game's
 // own MR::setPlayerPos once, at that GameScene draw, so a scripted run can
 // start anywhere in a stage.
+#if GALAXY_TEST_HOOKS
 void apply_test_teleport(RuntimeState& state, galaxy::PpcContext* context, galaxy::GuestMemoryV1* memory) {
     struct Teleport {
         float x = 0.0f, y = 0.0f, z = 0.0f;
@@ -24504,6 +24514,9 @@ void apply_test_teleport(RuntimeState& state, galaxy::PpcContext* context, galax
                   << " at scene frame " << teleport.frame << '\n';
     }
 }
+#else
+void apply_test_teleport(RuntimeState&, galaxy::PpcContext*, galaxy::GuestMemoryV1*) {}
+#endif
 
 // Test hook: GALAXY_TEST_GALAXY_TOUR=<file of "Stage scenario" lines> visits
 // those stages in turn with the game's own MR::requestChangeStageInGameMoving
@@ -24511,6 +24524,7 @@ void apply_test_teleport(RuntimeState& state, galaxy::PpcContext* context, galax
 // 1200), so a hidden run can load every galaxy and scenario. The stage name is
 // kept at 0x80002800: low memory between the exception vectors and the OS
 // globals that no game code uses, and the request keeps a pointer to it.
+#if GALAXY_TEST_HOOKS
 void apply_test_galaxy_tour(RuntimeState& state, galaxy::PpcContext* context, galaxy::GuestMemoryV1* memory) {
     struct Tour {
         std::vector<std::pair<std::string, std::uint32_t>> stops;
@@ -24555,6 +24569,9 @@ void apply_test_galaxy_tour(RuntimeState& state, galaxy::PpcContext* context, ga
     call_guest_impl(&state, 0x803F8328u, nullptr, context, memory);
     galaxy::coop::load_thread_registers(saved, *context);
 }
+#else
+void apply_test_galaxy_tour(RuntimeState&, galaxy::PpcContext*, galaxy::GuestMemoryV1*) {}
+#endif
 
 void call_guest_impl_body(
     void* user,
@@ -32921,6 +32938,7 @@ int wmain(int argc, wchar_t** argv) {
     const ScopedTimerResolution timer_resolution;
     // Validation hook for the minidump path: a worker thread faults after boot
     // has installed every handler, like the crash seen on the laptop.
+#if GALAXY_TEST_HOOKS
     if (read_env_flag("GALAXY_CRASH_TEST", false)) {
         std::thread([] {
             galaxy::host::name_current_thread(L"Nebula Crash Test");
@@ -32928,6 +32946,7 @@ int wmain(int argc, wchar_t** argv) {
             *static_cast<volatile int*>(nullptr) = 1;
         }).detach();
     }
+#endif
     configure_runtime_scheduling();
     const ScopedMmcssGamesThread mmcss_games_thread;
     ScopedSimulationCacheAffinity simulation_cache_affinity;
