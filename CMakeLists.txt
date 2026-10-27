@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(NebulaRuntime VERSION 1.0.1 LANGUAGES C CXX)
+project(NebulaRuntime VERSION 1.0.2 LANGUAGES C CXX)
 
 if(NOT WIN32)
     message(FATAL_ERROR "The first runtime milestone targets Windows x64 only.")
