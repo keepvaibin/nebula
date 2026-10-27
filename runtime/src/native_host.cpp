@@ -14814,8 +14814,7 @@ void GuestAddressSpace::complete_ios_request(std::uint32_t physical_request) {
                 result = 0;
             } else {
                 std::cerr << "[ios] WiiConnect24 request 0x" << std::hex << ioctl << std::dec
-                          << " refused: Nebula has no WiiConnect24
-";
+                          << " refused: Nebula has no WiiConnect24\n";
                 result = kIosErrNoEntry;
             }
         } else if (

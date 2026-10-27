@@ -2288,6 +2288,33 @@ bool owned_storage_worker_publication_works() {
     return passed;
 }
 
+// #28: NWC24OpenLib's scheduler requests on /dev/net/kd/request (1 suspend, 2 try to suspend, 3 resume) succeed with
+// result 0 in the reply buffer, as Dolphin's NetKDRequestDevice answers; any other request fails with ENOENT. None
+// ends the game.
+bool native_wc24_requests_work() {
+    constexpr std::uint32_t kRequest = 0x133E4300u;
+    constexpr std::uint32_t kPath = 0x133E4000u;
+    constexpr std::uint32_t kOut = 0x13400000u;
+    auto owner = std::make_unique<galaxy::host::GuestAddressSpace>();
+    auto& memory = *owner;
+    auto* guest = memory.guest_memory();
+    bool passed = true;
+    const std::uint32_t handle = ios_open_path(memory, guest, kRequest, kPath, "/dev/net/kd/request");
+    passed &= expect(handle < 0x80000000u, "/dev/net/kd/request opens");
+    for (const std::uint32_t ioctl : {1u, 2u, 3u}) {
+        memory.write_u32(kOut, 0xDEADBEEFu);
+        ios_ioctl_request(memory, guest, kRequest, handle, ioctl, 0u, 0u, kOut, 0x20u);
+        passed &= expect_ios_reply(memory, guest, kRequest, 0u, 6u, "WiiConnect24 scheduler request succeeds");
+        passed &= expect(memory.read_u32(kOut) == 0u, "WiiConnect24 scheduler request answers result 0");
+        acknowledge_ios_reply(guest);
+    }
+    ios_ioctl_request(memory, guest, kRequest, handle, 7u, 0u, 0u, kOut, 0x20u);
+    passed &= expect_ios_reply(memory, guest, kRequest, static_cast<std::uint32_t>(-6), 6u,
+                               "another WiiConnect24 request fails with ENOENT");
+    acknowledge_ios_reply(guest);
+    return passed;
+}
+
 bool native_async_nand_ownership_works(const std::filesystem::path& shared_test_root) {
     using Access = galaxy::host::NativeNandTestAccess;
     constexpr std::uint32_t kRequest = 0x133E4300u;
@@ -14589,6 +14616,7 @@ int main(int argc, char** argv) {
     passed &= native_ios_anomaly_identity_and_bounds_work();
     passed &= owned_storage_worker_publication_works();
     passed &= native_async_nand_ownership_works(nand_test_root);
+    passed &= native_wc24_requests_work();
     passed &= native_nand_atomic_persistence_works(nand_test_root);
     std::cerr << "[native-host-test] native_nand_exact_current_surface_works\n";
     passed &= native_nand_exact_current_surface_works(nand_test_root);
