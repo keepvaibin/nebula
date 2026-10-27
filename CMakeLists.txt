@@ -13,19 +13,13 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-option(
-    GALAXY_WITH_STREAMLINE_BRIDGE
-    "Build the SDK-backed NVIDIA Streamline bridge. Hidden/off until real bridge sources and SDK deployment are present."
-    OFF
-)
-mark_as_advanced(GALAXY_WITH_STREAMLINE_BRIDGE)
-if(GALAXY_WITH_STREAMLINE_BRIDGE)
-    message(
-        FATAL_ERROR
-        "GALAXY_WITH_STREAMLINE_BRIDGE requires a real SDK-backed Streamline "
-        "bridge target. Do not enable it with stub sources, checked-in SDK "
-        "binaries, or renderer hot-path placeholders."
-    )
+# NVIDIA's runtime binaries (Streamline, DLSS) never enter the source tree or
+# the build: users install them into their own vendor folder.
+file(GLOB_RECURSE GALAXY_VENDOR_BINARIES "${CMAKE_SOURCE_DIR}/runtime/*nvngx*.dll"
+     "${CMAKE_SOURCE_DIR}/runtime/*sl.*.dll" "${CMAKE_SOURCE_DIR}/third_party/*nvngx*.dll"
+     "${CMAKE_SOURCE_DIR}/third_party/*sl.*.dll")
+if(GALAXY_VENDOR_BINARIES)
+    message(FATAL_ERROR "NVIDIA runtime binaries must not be in the source tree: ${GALAXY_VENDOR_BINARIES}")
 endif()
 
 if(MSVC)
@@ -682,7 +676,10 @@ add_library(galaxy_gx STATIC
     runtime/src/gx/post_process.cpp
     ${galaxy_post_headers}
     runtime/src/gx/temporal_upscaler.cpp
+    runtime/src/gx/streamline_bridge.cpp
     runtime/src/gx/transform_history.cpp
+    runtime/src/gx/frame_interpolation.cpp
+    runtime/src/gx/interp_gpu.cpp
     runtime/src/gx/display_modes.cpp
     runtime/src/gx/fifo_parser.cpp
     runtime/src/gx/gx_backend.cpp
@@ -699,6 +696,14 @@ if(GALAXY_FIDELITYFX_SDK)
         "${GALAXY_FIDELITYFX_SDK}/bin/ffx_sdk/ffx_fsr3upscaler_x64.lib"
         "${GALAXY_FIDELITYFX_SDK}/bin/ffx_sdk/ffx_backend_dx12_x64.lib")
     target_compile_definitions(galaxy_gx PRIVATE GALAXY_WITH_FSR3=1)
+endif()
+# NVIDIA Streamline 2.14.1 headers (MIT, third_party/streamline) for DLSS: the
+# runtime loads the signed binaries from the user's vendor folder at run time.
+# Empty builds the runtime without DLSS.
+set(GALAXY_STREAMLINE_SDK "${CMAKE_SOURCE_DIR}/third_party/streamline" CACHE PATH "Streamline SDK 2.14.1 directory (headers in include/)")
+if(GALAXY_STREAMLINE_SDK)
+    target_include_directories(galaxy_gx SYSTEM PRIVATE "${GALAXY_STREAMLINE_SDK}/include")
+    target_compile_definitions(galaxy_gx PRIVATE GALAXY_WITH_STREAMLINE=1)
 endif()
 target_link_libraries(galaxy_gx
     PUBLIC
@@ -1022,6 +1027,17 @@ add_executable(galaxy_transform_history_tests runtime/src/gx/transform_history_t
     runtime/src/gx/transform_history.cpp)
 target_include_directories(galaxy_transform_history_tests PRIVATE runtime/include)
 
+add_executable(galaxy_motion_signals_tests runtime/src/motion_signals_tests.cpp)
+target_include_directories(galaxy_motion_signals_tests PRIVATE runtime/include)
+
+add_executable(galaxy_frame_interpolation_tests runtime/src/gx/frame_interpolation_tests.cpp
+    runtime/src/gx/frame_interpolation.cpp runtime/src/gx/transform_history.cpp)
+target_include_directories(galaxy_frame_interpolation_tests PRIVATE runtime/include)
+
+add_executable(galaxy_interp_gpu_tests runtime/src/gx/interp_gpu_tests.cpp runtime/src/gx/interp_gpu.cpp
+    runtime/src/gx/frame_interpolation.cpp runtime/src/gx/transform_history.cpp)
+target_include_directories(galaxy_interp_gpu_tests PRIVATE runtime/include)
+
 add_executable(galaxy_frame_completion_tests
     runtime/src/gx/frame_completion_tests.cpp)
 target_link_libraries(galaxy_frame_completion_tests PRIVATE galaxy_gx)
@@ -1153,6 +1169,9 @@ if(MSVC)
         galaxy_vertex_loader_tests
         galaxy_render_config_tests
         galaxy_transform_history_tests
+        galaxy_frame_interpolation_tests
+        galaxy_interp_gpu_tests
+        galaxy_motion_signals_tests
         galaxy_frame_completion_tests
         galaxy_window_owner_tests
         galaxy_memory_snapshot_tests
@@ -1241,6 +1260,9 @@ galaxy_add_native_test(dsp_alu_helpers galaxy_dsp_alu_tests)
 galaxy_add_native_test(native_dsp_coprocessor galaxy_native_dsp_tests)
 galaxy_add_native_test(render_config_gates galaxy_render_config_tests)
 galaxy_add_native_test(transform_history_matching galaxy_transform_history_tests)
+galaxy_add_native_test(frame_interpolation_math galaxy_frame_interpolation_tests)
+galaxy_add_native_test(interp_gpu_program galaxy_interp_gpu_tests)
+galaxy_add_native_test(motion_signal_epochs galaxy_motion_signals_tests)
 galaxy_add_native_test(frame_pe_completion galaxy_frame_completion_tests)
 galaxy_add_native_test(native_window_owner galaxy_window_owner_tests)
 set_tests_properties(native_window_owner PROPERTIES TIMEOUT 20)

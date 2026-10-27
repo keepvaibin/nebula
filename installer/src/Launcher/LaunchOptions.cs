@@ -32,6 +32,7 @@ namespace Nebula.Launcher
             }
             var env = start.EnvironmentVariables;
             env["GALAXY_NAND_ROOT"] = saves;
+            env["GALAXY_STREAMLINE_DIR"] = GraphicsSettings.StreamlineDir;
             env["GALAXY_NATIVE_THP_VIDEO_DECODE"] = "1";
             env["GALAXY_DUSK_DSP_HLE"] = "0";
             ApplyRecording(start, recording);

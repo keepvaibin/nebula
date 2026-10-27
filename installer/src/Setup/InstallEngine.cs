@@ -35,6 +35,8 @@ namespace Nebula.Setup
         public string SourceOverride;
         public bool DesktopShortcut;
         public int CompileJobs;
+        /// <summary>Download NVIDIA DLSS into the user data folder (the player accepted NVIDIA's license).</summary>
+        public bool InstallDlss;
     }
 
     /// <summary>Progress reporting from the engine to the UI.</summary>
@@ -62,9 +64,10 @@ namespace Nebula.Setup
         /// compiled objects); an update recompiles installed modules of a lower generation. 2 (1.0.1): the
         /// site hooks of the text speed (TextStep) and language (Language) settings; fused multiply-adds
         /// without the C runtime (a 1.0.0 SSE2 module calls its soft-float fma for every fused guest
-        /// instruction); no LodDistance hook.
+        /// instruction); no LodDistance hook. 3 (1.0.2): the draw identity, motion signal and 2D layer site hooks
+        /// of frame interpolation and DLSS's motion vectors (generator version 20).
         /// </summary>
-        public const int ModuleGeneration = 2;
+        public const int ModuleGeneration = 3;
 
         /// <summary>Installed modules an update must recompile rather than relink.</summary>
         private static bool ModulesNeedRebuild(InstalledInfo current)
@@ -192,6 +195,9 @@ namespace Nebula.Setup
         public string LogPath { get; private set; }
         public string InstalledVersionDir { get; private set; }
         public string ModuleUpdateNotice { get; private set; }
+
+        /// <summary>Why the requested DLSS download failed; null when it succeeded or was not requested.</summary>
+        public string DlssFailure { get; private set; }
         public TimeSpan Elapsed { get { return clock.Elapsed; } }
 
         /// <summary>Everything compiled modules depend on: generator, runtime, toolchain and recipe.</summary>
@@ -282,6 +288,28 @@ namespace Nebula.Setup
             Exception prepareFailure = null;
             var prepareCancel = CancellationTokenSource.CreateLinkedTokenSource(cancel);
             string src = null;
+            // DLSS lives in the user data folder, apart from the version being assembled, and
+            // downloads while the game is built. A failed download does not fail the install.
+            Thread dlss = null;
+            if (request.InstallDlss)
+            {
+                dlss = new Thread(delegate()
+                {
+                    try
+                    {
+                        DlssPackage.Install((done, total) => { if (waitingForDlss) StepProgress(null, total > 0 ? (double)done / total : -1); }, prepareCancel.Token);
+                        Log("NVIDIA DLSS installed in " + DlssPackage.Folder);
+                    }
+                    catch (OperationCanceledException) { }
+                    catch (Exception error)
+                    {
+                        DlssFailure = error.Message;
+                        Log("NVIDIA DLSS download failed: " + error);
+                    }
+                });
+                dlss.IsBackground = true;
+                dlss.Start();
+            }
             try
             {
                 var current = InstalledInfo.Read(layout);
@@ -384,6 +412,13 @@ namespace Nebula.Setup
                     Build(src, gen, app);
                 }
 
+                if (dlss != null && dlss.IsAlive)
+                {
+                    Stage(0.92, 0.02, "Downloading NVIDIA DLSS");
+                    waitingForDlss = true;
+                    while (!dlss.Join(200)) cancel.ThrowIfCancellationRequested();
+                    waitingForDlss = false;
+                }
                 Stage(0.94, 0.02, "Finishing");
                 AssembleApp(app, current);
                 SeedShaderCache();
@@ -402,6 +437,7 @@ namespace Nebula.Setup
             finally
             {
                 if (prepare != null) prepare.Join();
+                if (dlss != null) dlss.Join();
                 prepareCancel.Dispose();
                 try { FileUtil.DeleteTree(staging); } catch (Exception error) { Log("Could not remove staging: " + error.Message); }
                 logFile.Dispose();
@@ -810,7 +846,7 @@ namespace Nebula.Setup
         // ---- progress ------------------------------------------------------------
 
         private string stepText = "";
-        private volatile bool waitingForDownloads;
+        private volatile bool waitingForDownloads, waitingForDlss;
 
         private void Stage(double start, double weight, string text)
         {

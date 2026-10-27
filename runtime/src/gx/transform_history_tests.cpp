@@ -32,6 +32,11 @@ TransformRecord make(std::uint64_t sig, float x, float y, float z) {
     return r;
 }
 
+Affine34 rotation_x(float radians) {
+    const float c = std::cos(radians), s = std::sin(radians);
+    return {1.0f, 0.0f, 0.0f, 0.0f, 0.0f, c, -s, 0.0f, 0.0f, s, c, 0.0f};
+}
+
 Affine34 rotation_y(float radians, float tx, float ty, float tz) {
     const float c = std::cos(radians), s = std::sin(radians);
     return {c, 0.0f, s, tx,
@@ -87,16 +92,60 @@ void test_interpolate() {
     const float sy = std::sqrt(sm[1] * sm[1] + sm[5] * sm[5] + sm[9] * sm[9]);
     check(near(sx, 3.0f, 1e-3f) && near(sy, 1.0f, 1e-3f), "per-axis scale lerps");
     check(near(std::atan2(sm[2], sm[10]), 0.4f, 1e-3f), "rotation slerps under scale");
-    // Shear: element-wise.
+    // Shear: rotation and stretch of the polar decomposition, ends exact.
     Affine34 shear = affine_identity();
     shear[1] = 0.5f;
     const Affine34 lm = affine_interpolate(affine_identity(), shear, 0.5f);
-    check(near(lm[1], 0.25f) && near(lm[0], 1.0f), "shear lerps element-wise");
+    check(lm[1] > 0.2f && lm[1] < 0.3f && std::fabs(lm[0] - 1.0f) < 0.05f, "shear interpolates");
+    const Affine34 shear_end = affine_interpolate(affine_identity(), shear, 1.0f);
+    bool shear_ends = true;
+    for (unsigned i = 0; i < 12u; ++i) shear_ends = shear_ends && near(shear_end[i], shear[i], 1e-4f);
+    check(shear_ends, "shear interpolation ends at its input");
+    // An envelope blend of two joints (a sum of rotations, not orthogonal)
+    // turning keeps its size: no shrink at mid-rotation.
+    Affine34 blend_a{}, blend_b{};
+    for (unsigned i = 0; i < 12u; ++i) {
+        blend_a[i] = 0.5f * rotation_y(0.0f, 0.0f, 0.0f, 0.0f)[i] + 0.5f * rotation_x(0.6f)[i];
+        blend_b[i] = 0.5f * rotation_y(1.0f, 0.0f, 0.0f, 0.0f)[i] + 0.5f * rotation_x(0.6f)[i];
+    }
+    const Affine34 blend_mid = affine_interpolate(blend_a, blend_b, 0.5f);
+    const auto column_length = [](const Affine34& m, unsigned c) {
+        return std::sqrt(m[c] * m[c] + m[4u + c] * m[4u + c] + m[8u + c] * m[8u + c]);
+    };
+    const float size_a = column_length(blend_a, 0u), size_b = column_length(blend_b, 0u);
+    check(column_length(blend_mid, 0u) > std::min(size_a, size_b) - 1e-3f, "a blended joint matrix does not shrink");
     // 180 degree flip stays a rotation (no collapse through the origin).
     const Affine34 flip = rotation_y(3.1415926f, 0.0f, 0.0f, 0.0f);
     const Affine34 half = affine_interpolate(affine_identity(), flip, 0.5f);
     const float len = std::sqrt(half[0] * half[0] + half[4] * half[4] + half[8] * half[8]);
     check(near(len, 1.0f, 1e-3f), "half of a flip keeps unit scale");
+    // Motion plausibility (eye space, one game frame).
+    const Affine34 at_1000 = rotation_y(0.0f, 0.0f, 0.0f, -1000.0f);
+    check(affine_motion_plausible(at_1000, rotation_y(0.1f, 20.0f, 0.0f, -1000.0f)),
+          "a small step and turn is motion");
+    check(!affine_motion_plausible(at_1000, rotation_y(0.0f, 0.0f, 0.0f, -100.0f)),
+          "a jump of 900 units at 1000 is not");
+    check(!affine_motion_plausible(at_1000, rotation_y(2.0f, 0.0f, 0.0f, -1000.0f)),
+          "a turn above 90 degrees is not");
+    Affine34 grown = at_1000;
+    for (unsigned r = 0; r < 3u; ++r) grown[r * 4u + 1u] *= 3.0f;
+    check(!affine_motion_plausible(at_1000, grown), "a 3x scale step is not");
+    check(affine_motion_plausible(affine_identity(), shear), "shear within limits is motion");
+    // One decomposition evaluated at several t (a sequence's sub-frames).
+    AffineMotion m;
+    affine_motion(a, b, m);
+    bool steps = m.rigid;
+    for (const float t : {0.25f, 0.5f, 0.75f}) {
+        const Affine34 at = affine_motion_at(m, t);
+        const Affine34 want = rotation_y(1.5707963f * t, 10.0f * t, 0.0f, -10.0f);
+        for (unsigned i = 0; i < 12u; ++i) steps = steps && near(at[i], want[i], 1e-4f);
+    }
+    check(steps, "one decomposition serves every t");
+    AffineMotion turn, step;
+    affine_motion(at_1000, rotation_y(2.0f, 0.0f, 0.0f, -1000.0f), turn);
+    affine_motion(at_1000, rotation_y(0.1f, 20.0f, 0.0f, -1000.0f), step);
+    check(!affine_motion_plausible(turn) && affine_motion_plausible(step),
+          "plausibility from the decomposition");
 }
 
 void test_matching_reordered() {
@@ -211,6 +260,53 @@ void test_many_records() {
     check(matched == 3000u, "3000 records match their own previous record");
 }
 
+
+TransformRecord identified(std::uint64_t identity, std::uint64_t load_signature) {
+    TransformRecord r = make(1u, 0.0f, 0.0f, -10.0f);
+    r.identity = identity;
+    r.load_signature = load_signature;
+    return r;
+}
+
+TransformRecord particle(std::uint64_t identity, std::uint32_t age) {
+    TransformRecord r = identified(identity, 0u);
+    r.particle = true;
+    r.continuity = age;
+    return r;
+}
+
+void test_identity_load_signature() {
+    TransformHistory h;
+    h.begin_scene(1, nullptr);
+    h.add(identified(0x10u, 0xAAu));
+    h.add(identified(0x11u, 0xBBu));
+    h.begin_scene(2, nullptr);
+    check(h.add(identified(0x10u, 0xAAu)) != nullptr, "same identity and loads match");
+    check(h.add(identified(0x11u, 0xCCu)) == nullptr, "same identity, other loads: no match");
+    check(h.stats().signature_rejected == 1u && h.stats().identity_matched == 1u,
+          "a load-signature reject is counted apart");
+}
+
+void test_particle_continuity() {
+    TransformHistory h;
+    h.begin_scene(1, nullptr);
+    h.add(particle(0x20u, 7u));
+    h.add(particle(0x21u, 7u));
+    h.add(particle(0x22u, 7u));
+    h.add(particle(0x23u, 7u));
+    h.begin_scene(2, nullptr);
+    check(h.add(particle(0x20u, 8u)) != nullptr, "age + 1 continues");
+    check(h.add(particle(0x21u, 7u)) != nullptr, "a paused particle continues");
+    check(h.add(particle(0x22u, 0u)) == nullptr, "age back to 0 is a new particle");
+    check(h.add(particle(0x23u, 9u)) == nullptr, "an age jump is not one frame");
+    const TransformHistoryStats stats = h.stats();
+    check(stats.continuity_rejected == 2u && stats.identity_matched == 2u, "continuity rejects counted");
+    check(stats.particle_age_steps[0] == 1u && stats.particle_age_steps[1] == 1u &&
+              stats.particle_age_steps[2] == 1u && stats.particle_age_steps[3] == 1u &&
+              stats.particle_age_steps[4] == 0u,
+          "age steps histogram");
+}
+
 }  // namespace
 
 int main() {
@@ -221,6 +317,8 @@ int main() {
     test_camera_delta();
     test_reset_and_outside_scene();
     test_many_records();
+    test_identity_load_signature();
+    test_particle_continuity();
     if (failures != 0) {
         std::printf("%d failure(s)\n", failures);
         return 1;

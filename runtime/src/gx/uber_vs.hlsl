@@ -134,7 +134,62 @@ void add_light(uint n, uint ctrl, bool alpha_part, float3 wpos, float3 nrm,
     }
 }
 
-VSOut main(VSIn v) {
+// Interpolated redraw vertex blending (shader_gen.cpp kVertexBlendDef).
+cbuffer GxVertexBlend : register(b2) {
+    uint  vb_mode;   // 0: the draw's own vertices only
+    uint  vb_frame;  // element of the presented frame's values (a zero element in game frames)
+    uint  vb_slot;   // the pair's verdict
+    uint  vb_last;   // the last vertex of the earlier draw
+};
+ByteAddressBuffer vb_prev : register(t1, space1);
+StructuredBuffer<uint4> vb_verdict : register(t2, space1);
+static float vb_t;
+uint vb_color(uint a, uint b) {
+    uint c = 0u;
+    [unroll] for (uint s = 0u; s < 32u; s += 8u) {
+        const float x = float((a >> s) & 0xFFu);
+        const float y = float((b >> s) & 0xFFu);
+        c |= uint(round(lerp(x, y, vb_t))) << s;
+    }
+    return c;
+}
+float vb_coord(float a, float b) {
+    const float d = b - a;
+    const float w = abs(d) > 0.5 ? a + round(d) : a;
+    return abs(b - w) > 0.125 ? b : lerp(w, b, vb_t);
+}
+void vertex_blend(inout VSIn v, uint id) {
+    // Root views have no bounds: every read stays inside its buffer even if
+    // a compiler moves it above the checks.
+    vb_t = asfloat(vb_verdict[min(vb_frame, 8193u)].x);
+    if (vb_mode == 0u || vb_t >= 1.0) {
+        return;
+    }
+    const uint4 verdict = vb_verdict[min(vb_slot, 8191u)];
+    const float worst = asfloat(verdict.z);
+    const float extent = asfloat(verdict.w);
+    if (verdict.y != verdict.x && !(verdict.y == 0u && worst <= 0.25 * extent) &&
+        !(worst <= 0.02 * extent)) {
+        return;
+    }
+    const uint at = min(id, vb_last) * 144u;
+    v.pos = lerp(asfloat(vb_prev.Load3(at)), v.pos, vb_t);
+    const float3 n = lerp(asfloat(vb_prev.Load3(at + 12u)), v.nrm, vb_t);
+    const float nn = dot(n, n);
+    if (nn > 0.0) {
+        v.nrm = n * sqrt(dot(v.nrm, v.nrm) / nn);
+    }
+    const uint2 c = vb_prev.Load2(at + 48u);
+    v.color0 = vb_color(c.x, v.color0);
+    v.color1 = vb_color(c.y, v.color1);
+    [unroll] for (uint i = 0u; i < 8u; ++i) {
+        const float2 uv = asfloat(vb_prev.Load2(at + 56u + 8u * i));
+        v.uv[i] = float2(vb_coord(uv.x, v.uv[i].x), vb_coord(uv.y, v.uv[i].y));
+    }
+}
+
+VSOut main(VSIn v, uint vertex_id : SV_VertexID) {
+    vertex_blend(v, vertex_id);
     const uint key_texgens = uber_vs_header.x;
     const uint key_chans = uber_vs_header.y;
     const uint key_flags = uber_vs_header.z;

@@ -1066,6 +1066,22 @@ public:
     }
     void flush_wgpipe_gather_tail_for_frame();
     bool write_gx_fifo_bytes(std::span<const std::byte> bytes);
+    // Offset in the live GX stream (gx_fifo_data()) that the next guest FIFO
+    // byte will have: appended bytes, staged gather bytes and the markers
+    // waiting to be spliced before them. SIZE_MAX while the gather pipe writes
+    // a display list.
+    [[nodiscard]] std::size_t gx_stream_position() const {
+        if (!wgpipe_feeds_live_fifo()) {
+            return SIZE_MAX;
+        }
+        return gx_fifo_.size() + wgpipe_gather_count_ + 12u * pending_gx_markers_.size();
+    }
+    // A host draw-identity marker (FifoParser op::kHostMarker) at the current
+    // write position of the live GX stream. Inside a partly filled gather
+    // burst it waits for that burst and is spliced in when the burst drains:
+    // the guest FIFO ring and its burst alignment never see it. Dropped while
+    // the gather pipe writes a display list. Returns whether it was queued.
+    bool append_gx_host_marker(const std::array<std::byte, 12>& marker);
 
     // Deterministic guest tick source (60.75 MHz time base). When set, AISCNT
     // (the 48 kHz sample counter) derives from it instead of the host clock, so
@@ -1865,6 +1881,16 @@ private:
     bool cpu_fifo_wrap_{false};
     std::array<std::byte, kWgpipeGatherFastBytes> wgpipe_gather_{};
     std::uint32_t wgpipe_gather_count_{0};
+    // Draw-identity markers waiting for their place in the staged gather
+    // bytes: `at` staged bytes precede each one.
+    struct PendingGxMarker {
+        std::uint32_t at = 0;
+        std::array<std::byte, 12> bytes{};
+    };
+    std::vector<PendingGxMarker> pending_gx_markers_;
+    // Appends the first `count` staged bytes to gx_fifo_ with the pending
+    // markers spliced in; the rest of the markers move to the remaining bytes.
+    void append_staged_bytes_with_markers(std::uint32_t count, bool live_fifo);
     // Cumulative bytes copied out of the emulated CP FIFO ring. A member is used
     // rather than a function-local `static`, so each advance costs one member load
     // and no thread-safe-initialization guard.

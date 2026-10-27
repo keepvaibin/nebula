@@ -147,8 +147,40 @@ frame's draw with the same shader keys and vertex source and writes per-pixel mo
 ## Frame rate
 
 The game renders 60 frames per second. FRAME RATE offers 30 (the newest frame every other display
-frame) and 60. With VSYNC, the sync interval is the refresh rate divided by the frame rate when
+frame), 60, the standard rates above 60 up to the display's refresh rate, and Unlimited (the
+refresh rate). With VSYNC, the sync interval is the refresh rate divided by the frame rate when
 that is an integer from 2 to 4.
 
-Interpolated frames above 60 exist behind `GALAXY_EXPERIMENTAL_INTERPOLATION=1` and are not
-offered in the settings.
+### Interpolated frames
+
+Above 60, the frames between two game frames are replays of the newer frame's command log. Once
+per pair the render thread classifies what moves (transforms decomposed into rotation, stretch
+and translation; matrix palettes; lights; texture matrices; colours) into a small program
+(`interp_gpu.h`); per presented frame a compute pass evaluates it at t into the constants the
+replay reads, and matched draws blend their vertices with the older frame's. The replay's
+command list is recorded once per pair. Two governors keep the game at 60: GPU time per
+presented frame (as many frames as fit in 15 ms) and VIs the game misses.
+
+With a temporal upscaler (DLSS, FSR 3) at rates that are multiples of 60,
+every presented frame, the one at t = 1 included, is a replay with its own jitter phase and
+motion vectors relative to the frame presented before it, upscaled once. When no sub-frame fits
+beside that replay, the game frames take the upscaler at 60.
+
+### Planned: warped frames for low-end GPUs
+
+A replay costs about one game frame of GPU time, so it cannot fit where the game frame already
+takes most of the 16.7 ms (measured: Ryzen 9 9950X3D graphics, 2 CUs, about 7 ms per replay at
+2x; the game itself holds 60). There, sub-frames are to be image warps of the game frames:
+
+- per game frame, in three slots: the scene before the 2D layer (output resolution), the final
+  image, motion vectors and depth (render resolution); the game frame writes motion vectors;
+- per pair: motion vectors dilated to the nearest and the farthest surface of each 3x3;
+- per sub-frame: a fixed-point search q = p - (1 - t) v(q) into the newer scene; a pixel the
+  search misses takes the older scene at p + t v_far; a pixel the 2D layer changed takes the
+  final image unmoved; then the display copy and present;
+- chosen when the GPU governor finds that no replay fits, and for temporal upscaling at rates
+  that are not multiples of 60;
+- cost: one full-screen pass independent of the scene (hypothesis: under 1 ms on that GPU at
+  1280x1056).
+
+Open: particles moved by CPU-written vertices carry no motion vectors in the game frame.

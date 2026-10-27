@@ -77,8 +77,15 @@ public:
         retired_.push_back(Retired{offset, units, serial_});
     }
 
-    // Call once per renderer frame, after the renderer waited for the GPU
-    // fence of the frame slot it is about to reuse.
+    // Retirement depth in advance_frame() calls. Interpolated redraw replays
+    // a game frame's draws until its ring segment comes round again: the
+    // caller then advances once per game frame with the segment count.
+    void set_frames_in_flight(unsigned frames_in_flight) noexcept {
+        frames_in_flight_ = frames_in_flight == 0u ? 1u : frames_in_flight;
+    }
+
+    // Call once per renderer frame (or per game frame, above), after the
+    // renderer waited for the GPU fence of the slot it is about to reuse.
     void advance_frame() {
         ++serial_;
         while (!retired_.empty() &&

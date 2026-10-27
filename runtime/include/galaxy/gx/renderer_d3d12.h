@@ -29,6 +29,7 @@
 #include "galaxy/gx/efb_copy.h"
 #include "galaxy/gx/temporal_upscaler.h"
 #include "galaxy/gx/immutable_upload.h"
+#include "galaxy/gx/interp_gpu.h"
 #include "galaxy/gx/post_process.h"
 #include "galaxy/gx/placed_texture_allocator.h"
 #include "galaxy/gx/gx_bitfields.h"
@@ -58,9 +59,14 @@ class TextureCache;
     std::string& diagnostics) noexcept;
 
 inline constexpr unsigned kFramesInFlight = 2;
-// Ring segments in temporal and interpolation modes (see RendererD3D12::
-// begin_frame): two more than the frames in flight.
+// Matrix-ring segments in temporal mode (see RendererD3D12::begin_frame):
+// two more than the frames in flight.
 inline constexpr unsigned kRingSegments = kFramesInFlight + 2u;
+// Interpolation mode: one segment of every ring, the descriptor ring and the
+// sampler heaps per game frame, for the frame being recorded, the completed
+// log waiting for its present and the log whose sub-frames play. A segment
+// is reused only after its fence (the oldest log is then invalidated).
+inline constexpr unsigned kInterpSegments = 3u;
 inline constexpr unsigned kSamplerHeapSlots = 2048;
 
 namespace detail {
@@ -252,7 +258,18 @@ public:
     [[nodiscard]] std::size_t peak_bytes_per_frame() const {
         return peak_bytes_per_frame_;
     }
+    // The peak since the last call (diagnostics windows).
+    [[nodiscard]] std::size_t take_peak_bytes_per_frame() noexcept {
+        const std::size_t peak = peak_bytes_per_frame_;
+        peak_bytes_per_frame_ = 0u;
+        return peak;
+    }
     [[nodiscard]] std::size_t bytes_per_frame() const { return bytes_per_frame_; }
+    [[nodiscard]] std::size_t total_bytes() const { return bytes_per_frame_ * frames_in_flight_; }
+    // CPU view of a GPU address inside this ring; null outside it.
+    [[nodiscard]] const std::byte* cpu_at(D3D12_GPU_VIRTUAL_ADDRESS va) const {
+        return va >= gpu_base_ && va < gpu_base_ + total_bytes() ? mapped_ + (va - gpu_base_) : nullptr;
+    }
     [[nodiscard]] std::size_t cursor() const { return cursor_; }
 
     [[nodiscard]] ID3D12Resource* resource() const { return buffer_.Get(); }
@@ -370,6 +387,13 @@ struct DrawCall {
     // Interpolated redraw: the scene transform record whose VS constants a
     // sub-frame replaces, -1 for draws outside the 3D scene.
     std::int32_t replay_record = -1;
+    // Sub-frames only: the matching draw's vertices in the frame before,
+    // blended with this draw's (root SRV t1, space1); 0 for none. The pair's
+    // GPU verdict (same geometry or not) is at `blend_slot`.
+    D3D12_GPU_VIRTUAL_ADDRESS blend_vertices = 0;
+    std::uint32_t blend_slot = 0;
+    // Interpolated redraw: the scene's pixel-constant record, -1 for none.
+    std::int32_t ps_record = -1;
 };
 
 class RendererD3D12 {
@@ -428,6 +452,8 @@ public:
     // Temporal upscaling (upscaler mode 2). At the start of the guest's 3D
     // scene: whether the temporal path runs for it and, if so, the scene's
     // sub-pixel jitter in render pixels (applied to perspective projections).
+    // The temporal upscaler (FSR 3) is selected and available.
+    [[nodiscard]] bool temporal_mode() const;
     [[nodiscard]] bool scene_temporal_begin(float& jitter_x, float& jitter_y);
     // After a temporal scene_temporal_begin: clears the motion target for
     // the scene. False when it could not be created (no motion writers).
@@ -452,11 +478,8 @@ public:
 
     // Interpolated redraw (present rates above 60). While recording, a render
     // chunk's EFB operations (draws, EFB bindings, clears, copies, EFB set
-    // swaps) are logged. A sub-frame re-records the log into a continuation
-    // frame: its own command allocator, no ring rewind (it appends to the
-    // recorded frame's segments, which stay alive until the slot is reused),
-    // draws with a record index take that record's interpolated VS constants,
-    // and the display copy lands in a renderer-owned XFB that is presented.
+    // swaps) are logged. The completed log is replayed by the sub-frames of
+    // its sequence (begin_replay_sequence, present_replay_subframe).
     void begin_replay_record();
     void end_replay_record(bool keep);
     [[nodiscard]] bool replay_recording() const noexcept { return replay_recording_; }
@@ -465,34 +488,170 @@ public:
     // when none is ready.
     bool start_replay_playback();
     [[nodiscard]] bool replay_playing() const noexcept { return run_valid_; }
-    // Interpolation mode: present rate above 60, temporal upscaler off,
-    // GALAXY_EXPERIMENTAL_INTERPOLATION=1. Rings then keep one segment per
+    // Replay serial (game frame) of the playing log.
+    [[nodiscard]] std::uint64_t playing_serial() const noexcept { return run_serial_; }
+    // Interpolation mode: present rate above 60, temporal upscaler off, not
+    // GALAXY_INTERPOLATION=0. Rings then keep one segment per
     // game frame (advanced at the first frame after a display copy) and the
     // log spans every render chunk of the game frame up to its display copy.
     [[nodiscard]] bool interpolation_mode() const;
+    // The game-frame ring segment in interpolation mode (resources a log
+    // names must outlive it: it comes round again only after its fence),
+    // ~0u otherwise.
+    [[nodiscard]] unsigned replay_hold_segment() const noexcept {
+        return ring_mode_ == RingMode::Interp ? ring_segment_ : ~0u;
+    }
     // Completed logs, counted; the guest XFB the latest one copied to.
     [[nodiscard]] std::uint64_t replay_serial() const noexcept { return replay_serial_; }
     [[nodiscard]] std::uint32_t replay_xfb_addr() const noexcept { return replay_xfb_addr_; }
     // A 3D scene began inside the log being recorded (one is replayable).
     void note_replay_scene() noexcept { ++replay_scene_count_; }
+    // Why the latest closed log is not replayable: 0 it is, 1 no 3D scene,
+    // 2 more than one.
+    [[nodiscard]] unsigned replay_reject() const noexcept { return replay_reject_; }
     // Last reason a sub-frame was not recorded (diagnostics).
     [[nodiscard]] unsigned replay_failure() const noexcept { return replay_failure_; }
     void note_replay_failure(unsigned reason) noexcept { replay_failure_ = reason; }
     // The next sub-frame's backbuffer is read back to the debug capture path.
     void set_subframe_capture(bool capture) noexcept { subframe_capture_ = capture; }
-    // False (nothing recorded) when the log is gone or has no display copy.
-    // `record_constants[i]` replaces the VS constants of draws of record i.
-    bool present_replay_subframe(std::span<const D3D12_GPU_VIRTUAL_ADDRESS> record_constants);
+    // Captures wait for the previous readback instead of skipping (sequences).
+    void set_capture_waits(bool waits) noexcept { capture_waits_ = waits; }
+    // The playing log's sub-frames. begin_replay_sequence records the replay
+    // once per sequence: draws of moving records read their constants from the
+    // evaluation output (interp_gpu.h), draws matched by prepare_vertex_blend
+    // blend their vertices with the frame before's, and the display copy lands
+    // in a renderer-owned XFB. present_replay_subframe evaluates the sequence's
+    // program at t and executes that replay. False when the log is gone or has
+    // no display copy (the sequence then shows its real frame only).
+    struct ReplaySequence {
+        interp_gpu::Layout layout{};
+        std::span<const std::int32_t> record_vs_slot;       // per scene record, -1 none
+        std::span<const std::int32_t> record_palette_slot;  // per scene record, -1 none
+        std::span<const std::int32_t> ps_slot;              // per pixel-constant record, -1 none
+        std::span<const std::uint32_t> palette_source;      // per palette slot: float4 offset in the matrix ring
+        const interp_gpu::Program* program = nullptr;
+        bool vertex_blend = false;
+    };
+    bool begin_replay_sequence(const ReplaySequence& sequence);
+    // A stripe particle's vertex in the draw logged next (JPA stripes, two
+    // vertices per particle): interpolated per particle between game frames.
+    struct StripeVertex {
+        std::uint32_t vertex = 0;        // in the draw's vertex buffer
+        std::uint32_t particle = 0;      // JPABaseParticle
+        std::uint32_t age_lifetime = 0;  // age << 16 | lifetime
+        std::uint8_t strip = 0;          // JPADrawStripe 0, JPADrawStripeX passes 1-2
+        std::uint8_t side = 0;           // the particle's first or second vertex
+    };
+    void note_stripe_vertices(std::span<const StripeVertex> vertices);
+    // A presented frame of the sequence: t, the t of the frame presented before
+    // it (motion vectors) and its jitter in render pixels (temporal upscaling).
+    struct SubframeTime {
+        float t = 0.0f;
+        float t_prev = 0.0f;
+        float jitter_x = 0.0f;
+        float jitter_y = 0.0f;
+        bool reset = false;   // the upscaler's history starts again (cut, gap)
+    };
+    bool present_replay_subframe(const SubframeTime& time, const Affine34& camera_t, const Affine34& camera_prev);
+    // The temporal upscaler upscales the replays (every presented frame), not the game frames.
+    [[nodiscard]] bool temporal_interpolation() const noexcept { return temporal_interp_; }
+    // GALAXY_INTERP_EVAL_CHECK: the evaluation output of the next sub-frame is
+    // read back; take_eval_readback returns it once complete (empty until then).
+    void request_eval_readback() noexcept { eval_readback_requested_ = true; }
+    [[nodiscard]] bool take_eval_readback(std::vector<std::uint32_t>& words, float& t);
+    // CPU time of begin_replay_sequence and replay recordings since the last
+    // call; sequences begun and replays recorded.
+    void take_sequence_record_ms(double& total_ms, std::uint64_t& samples, std::uint64_t& replays) noexcept {
+        total_ms = std::exchange(sequence_record_ms_, 0.0);
+        samples = std::exchange(sequence_record_samples_, 0u);
+        replays = std::exchange(replay_records_, 0u);
+    }
+    // Once per sequence: pairs each draw of the playing log with the draw of
+    // the log before it that has the same position among its record's draws
+    // (`previous_record[i]`: the record of the scene before matched to record
+    // i, or -1) and as many vertices in a different buffer, so CPU-written
+    // geometry (shadow volumes, particle strips, trails) moves per sub-frame.
+    void prepare_vertex_blend(std::span<const std::int32_t> previous_record);
+    // After prepare_vertex_blend: per pixel-constant record of the playing
+    // log, the record of the log before that its paired draws used (-1 none,
+    // -2 paired draws disagree).
+    [[nodiscard]] std::span<const std::int32_t> ps_record_pairs() const noexcept {
+        return run_ps_previous_;
+    }
+    // The resident decoded-vertex buffer (blend pairs may live in it); 0 for none.
+    void set_resident_vertices(D3D12_GPU_VIRTUAL_ADDRESS base, std::uint64_t bytes) noexcept {
+        resident_vertex_base_ = base;
+        resident_vertex_bytes_ = bytes;
+    }
     // Swap-chain presents per second over the last second (any source).
     [[nodiscard]] double measured_present_hz() const noexcept {
         return measured_present_hz_.load(std::memory_order_relaxed);
     }
     // GPU milliseconds of completed sub-frames since the last call.
+    void take_subframe_path_gpu_ms(std::array<double, 3>& total_ms,
+                                   std::array<std::uint64_t, 3>& samples) noexcept {
+        total_ms = std::exchange(subframe_path_gpu_ms_, {});
+        samples = std::exchange(subframe_path_gpu_samples_, {});
+    }
+    // Smoothed GPU time of one sub-frame (0 until measured), for the budget.
+    [[nodiscard]] double subframe_gpu_ema_ms() const noexcept { return subframe_gpu_ema_ms_; }
+    // The GPU cannot afford a replay per presented frame: the game frames take
+    // the temporal upscaler (60 presents) until the display or upscaler
+    // settings change.
+    void suspend_temporal_interpolation(double ms_per_frame);
+    void reset_subframe_gpu_ema() noexcept { subframe_gpu_ema_ms_ = 0.0; }
+    // GPU milliseconds of completed sub-frames by phase (evaluation, replay,
+    // present) since the last call.
+    [[nodiscard]] std::array<double, 3> take_subframe_phase_ms() noexcept {
+        return std::exchange(subframe_phase_ms_, {});
+    }
     void take_subframe_gpu_ms(double& total_ms, std::uint64_t& samples) noexcept {
         total_ms = subframe_gpu_ms_;
         samples = subframe_gpu_samples_;
         subframe_gpu_ms_ = 0.0;
         subframe_gpu_samples_ = 0u;
+    }
+    // Render-thread milliseconds recording and submitting sub-frames (no
+    // fence, latency or present waits) since the last call.
+    void take_subframe_record_ms(double& total_ms, std::uint64_t& samples) noexcept {
+        total_ms = subframe_record_ms_;
+        samples = subframe_record_samples_;
+        subframe_record_ms_ = 0.0;
+        subframe_record_samples_ = 0u;
+    }
+    // Copy textures saved and restored around sub-frames since the last call.
+    [[nodiscard]] std::uint64_t take_subframe_guarded() noexcept {
+        return std::exchange(subframe_guarded_total_, 0u);
+    }
+    // A texture table the backend just filled while a log records, naming
+    // EFB-copy textures (`copies[m]`, null for other slots). The log keeps CPU
+    // copies of its kReplayTableSlots descriptors (`sources`, valid now) so
+    // sub-frames can point the copy slots elsewhere.
+    static constexpr unsigned kReplayTableSlots = 8u;
+    void note_replay_texture_table(D3D12_GPU_DESCRIPTOR_HANDLE table,
+                                   const D3D12_CPU_DESCRIPTOR_HANDLE* sources,
+                                   ID3D12Resource* const* copies);
+    // Sub-frame copy redirection since the last call: copies written to
+    // redirect targets, tables patched, read-before-write snapshots taken by
+    // real frames, logs that fell back to the guard (a table was not kept).
+    struct CopyRedirectStats {
+        std::uint64_t redirected = 0;
+        std::uint64_t patched_tables = 0;
+        std::uint64_t snapshots = 0;
+        std::uint64_t fallback_logs = 0;
+    };
+    [[nodiscard]] CopyRedirectStats take_copy_redirect_stats() noexcept {
+        return std::exchange(copy_redirect_stats_, CopyRedirectStats{});
+    }
+    // Diagnostics (A/B in one run): 1 redirect, 0 guard, 2 neither for the
+    // next sub-frames; -1 follows GALAXY_INTERP_COPY_REDIRECT.
+    void set_subframe_copy_redirect(int mode) noexcept { subframe_copy_redirect_ = mode; }
+    [[nodiscard]] std::uint64_t take_log_gap_ops() noexcept {
+        return std::exchange(log_gap_ops_, 0u);
+    }
+    // Sub-frame draws drawn with blended vertices since the last call.
+    [[nodiscard]] std::uint64_t take_vertex_blend_draws() noexcept {
+        return std::exchange(vertex_blend_draws_, 0u);
     }
     // The scene camera's clip planes and vertical field of view (radians).
     void set_scene_camera(float near_plane, float far_plane, float fov_y) noexcept;
@@ -515,6 +674,9 @@ public:
         std::uint8_t pixel_format = 0);
 
     void draw(const DrawCall& call);
+    // GALAXY_VALIDATE_DRAW_ADDRESSES=1: logs draws whose GPU addresses lie
+    // outside every buffer the renderer owns (device-removal triage).
+    void check_draw_addresses(const DrawCall& call);
 
     // EFB copy paths (record into the current command list). Both run the
     // conversion blit (intensity / gamma / 3-tap vertical copy filter /
@@ -721,7 +883,6 @@ private:
     bool create_efb_targets(unsigned efb_scale);
     void carry_over_efb_contents();
     [[nodiscard]] unsigned output_efb_scale_for_window() const;
-    [[nodiscard]] bool temporal_mode() const;
     [[nodiscard]] unsigned temporal_render_scale(unsigned output_scale) const;
     [[nodiscard]] bool ensure_motion_target();
     [[nodiscard]] bool record_temporal_upscale(unsigned output_scale);
@@ -832,6 +993,8 @@ private:
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> alt_efb_dsv_heap_;
     bool output_efb_active_ = false;
     std::unique_ptr<TemporalUpscaler> temporal_;
+    unsigned temporal_kind_ = 0;       // upscaler setting it was made for (2 FSR 3, 3 DLSS)
+    unsigned temporal_quality_ = 0;
     unsigned temporal_render_w_ = 0;
     unsigned temporal_render_h_ = 0;
     unsigned temporal_output_w_ = 0;
@@ -876,7 +1039,8 @@ private:
         std::uint32_t index = 0;
     };
     void present_to_swap_chain();
-    void execute_replay_copy(const ReplayCopy& copy);
+    // `target`: write a texture copy (mode 0) there instead of copy.dest.
+    void execute_replay_copy(const ReplayCopy& copy, ID3D12Resource* target = nullptr);
     bool ensure_subframe_resources(unsigned xfb_width, unsigned xfb_height);
     // The log being recorded; a completed log moves to play_* (swapped), so
     // the next game frame records while the previous one is interpolated.
@@ -885,6 +1049,13 @@ private:
     std::vector<ReplayViewport> replay_viewports_;
     std::vector<ReplayClear> replay_clears_;
     std::vector<ReplayCopy> replay_copies_;
+    // The display copy's clear runs after the copy closed the log; the next
+    // log starts with it so sub-frames begin from the same EFB as the frame.
+    ReplayClear log_start_clear_{};
+    bool log_start_clear_valid_ = false;
+    // Draws and texture copies between a log's display copy and the next log
+    // (missing from both logs; expected 0).
+    std::uint64_t log_gap_ops_ = 0;
     std::vector<ReplayOp> play_ops_;
     std::vector<DrawCall> play_draws_;
     std::vector<ReplayViewport> play_viewports_;
@@ -904,9 +1075,10 @@ private:
     unsigned run_segment_ = 0;
     bool replay_recording_ = false;
     bool replay_valid_ = false;
-    bool replay_has_swaps_ = false;
+    unsigned replay_reject_ = 0;
     unsigned replay_failure_ = 0;
     bool subframe_capture_ = false;
+    bool capture_waits_ = false;
     unsigned replay_scene_count_ = 0;
     unsigned replay_segment_ = 0;
     std::uint64_t replay_serial_ = 0;
@@ -917,20 +1089,328 @@ private:
     enum class RingMode : std::uint8_t { Normal, Temporal, Interp };
     RingMode ring_mode_ = RingMode::Normal;
     unsigned ring_segment_ = 0;
-    std::array<std::uint64_t, kRingSegments> ring_segment_fence_{};
+    std::array<std::uint64_t, kInterpSegments> ring_segment_fence_{};
     bool ring_advance_pending_ = true;
     // Sub-frames render into their own EFB so a later frame's partial EFB
     // (its chunks interleave with the sub-frames) stays intact.
     EfbTargetSet replay_efb_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_efb_rtv_heap_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_efb_dsv_heap_;
+    // The output-resolution EFB of a sub-frame whose log switches to it.
+    EfbTargetSet replay_output_efb_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_output_efb_rtv_heap_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_output_efb_dsv_heap_;
+    // persistent_views: the conversion-source views live in the descriptor
+    // ring's persistent prefix (else the caller writes them per use).
+    // unordered_access: the colour target takes compute writes (the temporal
+    // upscaler's output, as the live output EFB).
     bool create_efb_set(EfbTargetSet& set, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& rtv_heap,
-                        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& dsv_heap, unsigned scale);
+                        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& dsv_heap, unsigned scale,
+                        bool persistent_views = true, bool unordered_access = false);
+    void write_efb_set_views(EfbTargetSet& set, const DescriptorRing::Table& table);
     void swap_efb_with(EfbTargetSet& other);
     bool replay_playing_ = false;
     bool replay_start_output_active_ = false;
     unsigned replay_source_slot_ = 0;
     XfbTexture subframe_xfb_{};
+    // EFB-copy textures are shared with the live frames: a later game frame's
+    // chunks may already have rewritten a texture the sub-frame's log copies
+    // to. Such textures are saved to scratch before the sub-frame and restored
+    // after it. copy_writes_: the latest replay serial each copy texture was
+    // written under (Interp mode, real copies only).
+    struct CopyWrite {
+        ID3D12Resource* dest = nullptr;
+        std::uint64_t serial = 0;
+    };
+    std::vector<CopyWrite> copy_writes_;
+    void note_copy_write(ID3D12Resource* dest);
+    std::uint64_t play_serial_ = 0;       // replay serial of the ready log
+    std::uint64_t run_serial_ = 0;        // replay serial of the playing log
+    // The log played before run_* (its vertices stay in its ring segment
+    // until the segment comes round again) and, per run_* draw, its matched
+    // draw's vertices (prepare_vertex_blend; 0 for none).
+    std::vector<DrawCall> prev_run_draws_;
+    std::vector<ReplayCopy> prev_run_copies_;
+    std::uint64_t moving_copies_ = 0;     // paired texture copies whose source moved (prepare_vertex_blend)
+    unsigned prev_run_segment_ = 0;
+    std::uint64_t prev_run_serial_ = 0;
+    bool prev_run_valid_ = false;
+    struct BlendSource {
+        D3D12_GPU_VIRTUAL_ADDRESS vertices = 0;
+        std::uint32_t slot = 0;
+    };
+    std::vector<BlendSource> run_blend_vertices_;
+    std::vector<std::int32_t> run_ps_previous_;
+    // Candidate pairs of the playing log (current offset, previous offset,
+    // vertices, flags: bit 0 current / bit 1 previous in the resident buffer),
+    // checked on the GPU before the sequence's first sub-frame draws: a
+    // verdict per pair (vertices, positions unchanged, largest move, extent).
+    std::vector<std::array<std::uint32_t, 4>> blend_pairs_;
+    bool blend_validate_pending_ = false;
+    bool blend_validate_failed_ = false;
+    Microsoft::WRL::ComPtr<ID3D12Resource> blend_verdicts_;
+    D3D12_RESOURCE_STATES blend_verdicts_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> blend_validate_root_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> blend_validate_pso_;
+    D3D12_GPU_VIRTUAL_ADDRESS resident_vertex_base_ = 0;
+    std::uint64_t resident_vertex_bytes_ = 0;
+    static constexpr std::uint32_t kMaxBlendPairs = 8192u;
+    // Never a pair's verdict (stays zero, which passes): stripe draws, paired
+    // per particle, blend without the geometry check.
+    static constexpr std::uint32_t kStripeVerdict = kMaxBlendPairs - 1u;
+    struct StripeDraw {
+        std::uint32_t draw = 0;   // index in its log's draws
+        std::uint32_t first = 0;  // in its log's stripe vertices
+        std::uint32_t count = 0;
+    };
+    struct StripeLog {
+        std::vector<StripeDraw> draws;
+        std::vector<StripeVertex> vertices;
+        void clear() noexcept {
+            draws.clear();
+            vertices.clear();
+        }
+    };
+    StripeLog replay_stripes_;
+    StripeLog play_stripes_;
+    StripeLog run_stripes_;
+    StripeLog prev_run_stripes_;
+    // The playing sequence's stripe draws: per output vertex the source of its
+    // earlier position (byte offset, buffer: 0 ring, 1 resident), gathered
+    // into stripe_earlier_ before the first sub-frame (kStripeGatherCs).
+    std::vector<std::array<std::uint32_t, 2>> stripe_gather_;
+    std::vector<std::int32_t> stripe_of_draw_;
+    std::vector<std::int32_t> stripe_of_prev_draw_;
+    std::vector<std::pair<std::uint64_t, std::uint32_t>> stripe_keys_;
+    std::vector<std::int32_t> stripe_matched_;  // per vertex of a stripe draw: its earlier vertex, or -1
+    Microsoft::WRL::ComPtr<ID3D12Resource> stripe_earlier_;
+    std::uint64_t stripe_earlier_bytes_ = 0;
+    D3D12_RESOURCE_STATES stripe_earlier_state_ = D3D12_RESOURCE_STATE_COMMON;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> stripe_gather_root_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> stripe_gather_pso_;
+    bool stripe_gather_failed_ = false;
+    bool ensure_stripe_gather(std::uint64_t bytes);
+    void record_stripe_gather();
+    static constexpr std::uint32_t kFrameValuesElement = kMaxBlendPairs;
+    static constexpr std::uint32_t kZeroValuesElement = kMaxBlendPairs + 1u;
+    void ensure_frame_values();
+    bool ensure_blend_validation();
+    void record_blend_validation();
+    std::vector<std::uint32_t> blend_scratch_;
+    std::uint64_t vertex_blend_draws_ = 0;
+    // Sequence replay (begin_replay_sequence) and its evaluation pass. The
+    // replay list is recorded once per sequence and executed by every
+    // sub-frame between a small evaluation list and a small present list.
+    bool ensure_interp_eval();
+    bool ensure_interp_output(std::uint64_t bytes);
+    void record_interp_eval(const SubframeTime& time, const Affine34& camera_t, const Affine34& camera_prev);
+    void transition_interp_output(D3D12_RESOURCE_STATES state);
+    void transition_blend_verdicts(D3D12_RESOURCE_STATES state);
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> interp_eval_root_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> interp_copy_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> interp_eval_pso_;
+    bool interp_eval_failed_ = false;
+    Microsoft::WRL::ComPtr<ID3D12Resource> interp_output_;
+    std::uint64_t interp_output_bytes_ = 0;
+    D3D12_RESOURCE_STATES interp_output_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    struct RetiredResource {
+        Microsoft::WRL::ComPtr<ID3D12Resource> resource;
+        std::uint64_t fence = 0;
+    };
+    std::vector<RetiredResource> interp_retired_;
+    // Inputs of a split replay's temporal upscale (its output switch).
+    struct ReplayUpscale {
+        ID3D12Resource* color = nullptr;
+        ID3D12Resource* depth = nullptr;
+        ID3D12Resource* motion = nullptr;
+        ID3D12Resource* reactive = nullptr;
+        ID3D12Resource* output = nullptr;
+        unsigned render_width = 0;
+        unsigned render_height = 0;
+        unsigned output_width = 0;
+        unsigned output_height = 0;
+        std::uint32_t copy = 0;   // the output switch's copy (resample fallback)
+    };
+    struct ReplayList {
+        Microsoft::WRL::ComPtr<ID3D12CommandAllocator> allocator;
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> list;
+        // Temporal upscaling: the log after its output switch; the switch
+        // itself is recorded per presented frame.
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> list_after;
+        bool split = false;
+        ReplayUpscale upscale{};
+        std::uint64_t fence = 0;        // the last submission that executed it
+        std::uint64_t sequence = 0;     // SequenceState::serial it replays, 0 none
+        bool blend = false;
+        bool redirect = false;
+        std::uint64_t blended_draws = 0;
+        std::uint64_t guarded = 0;
+        unsigned alloc_segment = 0;     // ring segment of its descriptor tables
+        unsigned blend_segment = 0;     // ring segment of the log before's vertices
+    };
+    static constexpr unsigned kReplayLists = 4;
+    std::array<ReplayList, kReplayLists> replay_lists_{};
+    bool record_replay_list(ReplayList& entry);
+    void record_subframe_upscale(const ReplayList& entry, const SubframeTime& time);
+    struct ReplayMotionTargets {
+        Microsoft::WRL::ComPtr<ID3D12Resource> target;
+        Microsoft::WRL::ComPtr<ID3D12Resource> reactive;
+        D3D12_CPU_DESCRIPTOR_HANDLE rtv{};
+        D3D12_CPU_DESCRIPTOR_HANDLE reactive_rtv{};
+        unsigned scale = 0;
+    };
+    ReplayMotionTargets replay_motion_{};
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> replay_motion_rtv_heap_;
+    bool ensure_replay_motion_targets();
+    void swap_motion_targets();
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> subframe_upscale_list_;
+    // GALAXY_INTERP_GPU_PROFILE: timestamps around the copies and clears of a
+    // sampled replay (report_replay_profile).
+    static constexpr std::uint32_t kReplayProfileQueries = 2048u;
+    struct ReplayProfileSegment {
+        std::uint32_t kind = 0;    // 0 draws, 1-3 copy (mode 0 texture, 1 display, 2 output EFB), 4 clear
+        std::uint32_t detail = 0;  // the op's copy or clear index
+    };
+    struct ReplayProfile {
+        Microsoft::WRL::ComPtr<ID3D12QueryHeap> heap;
+        Microsoft::WRL::ComPtr<ID3D12Resource> readback;
+        std::vector<ReplayProfileSegment> segments;
+        const ReplayList* list = nullptr;
+        std::uint64_t fence = 0;
+        bool armed = false;
+    };
+    ReplayProfile replay_profile_{};
+    std::uint64_t replay_profile_recordings_ = 0;
+    bool ensure_replay_profile();
+    void report_replay_profile();
+    std::array<double, 3> subframe_phase_ms_{};  // evaluation, replay, present
+    // The temporal upscaler upscales the sub-frames (and the frame at t = 1)
+    // instead of the game frames (GALAXY_TEMPORAL_INTERPOLATION).
+    bool temporal_interp_ = false;
+    // suspend_temporal_interpolation, and the settings it was decided at.
+    struct TemporalInterpKey {
+        unsigned upscaler = 0;
+        unsigned quality = 0;
+        unsigned efb_scale = 0;
+        unsigned output_scale = 0;
+        float max_fps = 0.0f;
+        unsigned vsync = 0;
+        double refresh_hz = 0.0;
+        friend bool operator==(const TemporalInterpKey&, const TemporalInterpKey&) = default;
+    };
+    [[nodiscard]] TemporalInterpKey temporal_interp_key() const;
+    bool temporal_interp_suspended_ = false;
+    TemporalInterpKey temporal_interp_key_{};
+    std::uint64_t sequence_serial_ = 0;
+    std::uint64_t replay_records_ = 0;
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> subframe_eval_list_;
+    struct SequenceState {
+        bool ready = false;
+        bool first = false;             // the next sub-frame copies the base blocks
+        bool validated = false;         // the blend pairs were checked on the GPU
+        std::uint64_t serial = 0;
+        unsigned output_scale = 0;
+        ReplaySequence overrides{};
+        unsigned alloc_segment = 0;     // ring segment of the sequence's program
+        D3D12_GPU_VIRTUAL_ADDRESS program = 0;
+        std::uint32_t program_bytes = 0;
+        std::uint32_t ops = 0;
+        std::uint32_t copies = 0;
+        std::uint32_t ops_offset = 0;
+        std::uint32_t copies_offset = 0;
+        std::uint32_t payload_offset = 0;
+    };
+    SequenceState sequence_{};
+    std::vector<interp_gpu::Copy> interp_copies_;
+    std::vector<std::uint8_t> interp_copied_;
+    double sequence_record_ms_ = 0.0;
+    std::uint64_t sequence_record_samples_ = 0;
+    bool eval_readback_requested_ = false;
+    Microsoft::WRL::ComPtr<ID3D12Resource> eval_readback_;
+    std::uint64_t eval_readback_fence_ = 0;
+    std::uint64_t eval_readback_bytes_ = 0;
+    float eval_readback_t_ = 0.0f;
+    struct SubframeScratch {
+        Microsoft::WRL::ComPtr<ID3D12Resource> texture;
+        D3D12_RESOURCE_DESC desc{};
+        std::uint64_t used = 0;           // subframe_counter_ of its last use
+    };
+    std::vector<SubframeScratch> subframe_scratch_;
+    std::vector<std::pair<ID3D12Resource*, ID3D12Resource*>> subframe_guarded_;  // dest, scratch
+    std::vector<D3D12_RESOURCE_BARRIER> subframe_barriers_;
+    std::uint64_t subframe_counter_ = 0;
+    std::uint64_t subframe_guarded_total_ = 0;
+    ID3D12Resource* acquire_subframe_scratch(ID3D12Resource* dest);
+    void record_subframe_guard(bool save);
+    // Sub-frame copy redirection (GALAXY_INTERP_COPY_REDIRECT, default on;
+    // 0 falls back to the save/restore guard above). Real frames own the
+    // copy textures. A sub-frame's texture copies land in redirect targets,
+    // and its draws that sample a redirected texture get a table patched in
+    // the current descriptor segment. A copy texture a log samples before
+    // writing it (an earlier frame's capture: feedback blur, camera cover) is
+    // snapshotted by the recording frame, because later real frames rewrite
+    // it while the log's sub-frames still run.
+    struct ReplayTextureTable {
+        std::uint64_t gpu = 0;                      // DrawCall::texture_table
+        std::uint32_t store = 0;                    // first CPU copy in the log's store
+        bool snapshots_checked = false;             // recording: sources handled
+        std::array<ID3D12Resource*, kReplayTableSlots> copies{};  // EFB-copy texture per slot
+    };
+    struct ReplayTextures {
+        std::vector<ReplayTextureTable> tables;
+        std::unordered_map<std::uint64_t, std::uint32_t> by_gpu;
+        // Read-before-write sources and their snapshot (copy_pool_ index).
+        std::vector<std::pair<ID3D12Resource*, std::uint32_t>> snapshots;
+        // Copy destinations the log wrote so far (recording).
+        std::vector<ID3D12Resource*> written;
+        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> store;  // CPU-only
+        D3D12_CPU_DESCRIPTOR_HANDLE store_base{};
+        std::uint32_t store_used = 0;
+        // A table or snapshot could not be kept: sub-frames use the guard.
+        bool incomplete = false;
+        void clear() noexcept {
+            tables.clear();
+            by_gpu.clear();
+            snapshots.clear();
+            written.clear();
+            store_used = 0u;
+            incomplete = false;
+        }
+    };
+    static constexpr std::uint32_t kReplayStoreDescriptors = 16384u;
+    ReplayTextures replay_textures_;
+    ReplayTextures play_textures_;
+    ReplayTextures run_textures_;
+    // Redirect targets (one per destination per sub-frame) and snapshots.
+    struct CopyTexture {
+        Microsoft::WRL::ComPtr<ID3D12Resource> texture;
+        D3D12_RESOURCE_DESC desc{};
+        std::uint32_t srv = 0;                      // slot in copy_srv_heap_
+        std::uint64_t used = 0;                     // target: subframe_counter_ of last use
+        unsigned segment = ~0u;                     // snapshot: owning log's segment (~0u free)
+        bool snapshot = false;
+    };
+    static constexpr std::uint32_t kCopySrvCapacity = 256u;
+    std::vector<CopyTexture> copy_pool_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> copy_srv_heap_;  // CPU-only
+    D3D12_CPU_DESCRIPTOR_HANDLE copy_srv_base_{};
+    std::uint32_t copy_srv_used_ = 0;
+    UINT srv_increment_ = 0;
+    // The playing sub-frame: copy texture -> copy_pool_ index standing in for it,
+    // and tables patched under the current redirections (epoch-tagged).
+    std::unordered_map<ID3D12Resource*, std::uint32_t> redirect_;
+    std::unordered_map<std::uint64_t, std::pair<std::uint64_t, std::uint64_t>> patched_tables_;
+    std::uint64_t redirect_epoch_ = 0;
+    CopyRedirectStats copy_redirect_stats_{};
+    int subframe_copy_redirect_ = -1;
+    [[nodiscard]] static bool copy_redirect_enabled();
+    bool ensure_replay_store(ReplayTextures& log);
+    // -1 when no texture can be made. `snapshot`: owned by the recording log.
+    std::int32_t acquire_copy_texture(ID3D12Resource* like, bool snapshot);
+    [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE copy_texture_srv(std::uint32_t index) const;
+    void take_replay_snapshots(std::uint64_t table);
+    D3D12_GPU_DESCRIPTOR_HANDLE patch_replay_table(D3D12_GPU_DESCRIPTOR_HANDLE table);
+    void release_copy_snapshots(unsigned segment);
     static constexpr unsigned kSubframeAllocators = 4;
     std::array<Microsoft::WRL::ComPtr<ID3D12CommandAllocator>, kSubframeAllocators> subframe_allocators_;
     std::array<std::uint64_t, kSubframeAllocators> subframe_fences_{};
@@ -940,6 +1420,13 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> subframe_readback_;
     double subframe_gpu_ms_ = 0.0;
     std::uint64_t subframe_gpu_samples_ = 0;
+    double subframe_gpu_ema_ms_ = 0.0;
+    // The same by copy path (0: guard, 1: redirected, 2: neither), for A/B runs.
+    std::array<std::uint8_t, kSubframeAllocators> subframe_timestamp_redirect_{};
+    std::array<double, 3> subframe_path_gpu_ms_{};
+    std::array<std::uint64_t, 3> subframe_path_gpu_samples_{};
+    double subframe_record_ms_ = 0.0;
+    std::uint64_t subframe_record_samples_ = 0;
     std::atomic<double> measured_present_hz_{0.0};
     std::int64_t measured_present_window_qpc_ = 0;
     std::uint32_t measured_present_count_ = 0;
@@ -998,18 +1485,18 @@ private:
 
     Microsoft::WRL::ComPtr<ID3D12RootSignature> root_signature_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> sampler_heap_;
-    std::array<Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>, kRingSegments>
+    std::array<Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>, kInterpSegments>
         sampler_heaps_;
     // Sampler heap in use: the frame slot, or the game-frame segment in
     // interpolation mode.
     unsigned sampler_slot_ = 0;
     D3D12_GPU_DESCRIPTOR_HANDLE default_sampler_table_{};
-    std::array<std::uint32_t, kRingSegments> default_sampler_config_keys_{};
-    std::array<bool, kRingSegments> default_sampler_valid_{};
+    std::array<std::uint32_t, kInterpSegments> default_sampler_config_keys_{};
+    std::array<bool, kInterpSegments> default_sampler_valid_{};
     // Each cache describes tables actually written in its physical heap.
     // Configuration invalidation happens only after that slot's fence; tables
     // retained in another heap cannot establish a hit for the active heap.
-    std::array<SamplerTableCache, kRingSegments> sampler_tables_;
+    std::array<SamplerTableCache, kInterpSegments> sampler_tables_;
 
     UploadRing vertex_ring_;
     UploadRing index_ring_;
@@ -1036,6 +1523,9 @@ private:
     D3D12_GPU_DESCRIPTOR_HANDLE bound_texture_table_{};
     D3D12_GPU_DESCRIPTOR_HANDLE bound_sampler_table_{};
     D3D12_GPU_VIRTUAL_ADDRESS bound_matrix_palette_ = 0;
+    D3D12_GPU_VIRTUAL_ADDRESS bound_blend_vertices_ = 0;
+    std::uint32_t bound_blend_slot_ = 0;
+    bool bound_vertex_blend_valid_ = false;
     D3D12_PRIMITIVE_TOPOLOGY bound_topology_ =
         D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
     D3D12_VERTEX_BUFFER_VIEW bound_vertex_view_{};
@@ -1175,6 +1665,8 @@ private:
         std::vector<Microsoft::WRL::ComPtr<ID3D12Resource>>;
     std::array<RetiredResourceList, kFramesInFlight>
         retired_efb_copy_textures_;
+    // Interpolation: copy textures retired during a game-frame ring segment.
+    std::array<RetiredResourceList, kInterpSegments> retired_segment_textures_;
 
     // Conversion blit pipeline (root sig lives in a module static next to
     // the present-blit one) + cached CPU-only descriptors for conversion

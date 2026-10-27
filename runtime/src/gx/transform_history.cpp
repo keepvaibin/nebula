@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/gx/transform_history.h"
 
+#include "galaxy/motion_signals.h"
+
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 namespace galaxy::gx {
 
@@ -65,37 +68,118 @@ void affine_transform_point(const Affine34& m, const float p[3], float out[3]) n
 namespace {
 
 struct Decomposed {
-    float q[4];      // rotation quaternion x, y, z, w
-    float scale[3];  // per-axis (column) scale; scale[0] < 0 for mirrored
+    float q[4];        // rotation quaternion x, y, z, w
+    float stretch[9];  // S, row-major
+    bool mirrored;     // det < 0: S carries the reflection
     bool valid;
 };
 
+// The quaternion of a proper rotation matrix (r[row][col]).
+bool rotation_to_quaternion(const float (&r)[3][3], float (&q)[4]) noexcept;
+
+// Polar decomposition A = R S by the scaled Newton iteration
+// R <- (g R + R^-T / g) / 2, g = |det R|^(-1/3) (Higham); in double. A
+// rotation with per-axis scale (orthogonal columns) takes the direct path.
 Decomposed decompose(const Affine34& m) noexcept {
     Decomposed d{};
-    float col[3][3];
-    for (unsigned c = 0; c < 3u; ++c) {
-        for (unsigned r = 0; r < 3u; ++r) col[c][r] = m[r * 4u + c];
-    }
-    for (unsigned c = 0; c < 3u; ++c) {
-        d.scale[c] = std::sqrt(col[c][0] * col[c][0] + col[c][1] * col[c][1] +
-                               col[c][2] * col[c][2]);
-        if (!(d.scale[c] > 1e-12f)) return d;
-    }
-    const float det = m[0] * (m[5] * m[10] - m[6] * m[9]) -
-                      m[1] * (m[4] * m[10] - m[6] * m[8]) +
-                      m[2] * (m[4] * m[9] - m[5] * m[8]);
-    if (det < 0.0f) d.scale[0] = -d.scale[0];
-    float r[3][3];  // r[row][col]
-    for (unsigned c = 0; c < 3u; ++c) {
-        for (unsigned row = 0; row < 3u; ++row) r[row][c] = col[c][row] / d.scale[c];
-    }
-    // Orthonormal within a small tolerance, else no clean rotation.
-    for (unsigned a = 0; a < 3u; ++a) {
-        for (unsigned b = a + 1u; b < 3u; ++b) {
-            const float dot = r[0][a] * r[0][b] + r[1][a] * r[1][b] + r[2][a] * r[2][b];
-            if (std::fabs(dot) > 2e-3f) return d;
+    {
+        float col[3][3];
+        float scale[3];
+        bool orthogonal = true;
+        for (unsigned c = 0; c < 3u; ++c) {
+            for (unsigned r = 0; r < 3u; ++r) col[c][r] = m[r * 4u + c];
+            scale[c] = std::sqrt(col[c][0] * col[c][0] + col[c][1] * col[c][1] + col[c][2] * col[c][2]);
+            orthogonal = orthogonal && scale[c] > 1e-12f && std::isfinite(scale[c]);
+        }
+        for (unsigned a = 0; a < 3u && orthogonal; ++a) {
+            for (unsigned b = a + 1u; b < 3u; ++b) {
+                const float dot = (col[a][0] * col[b][0] + col[a][1] * col[b][1] + col[a][2] * col[b][2]) /
+                                  (scale[a] * scale[b]);
+                orthogonal = orthogonal && std::fabs(dot) <= 2e-3f;
+            }
+        }
+        if (orthogonal) {
+            const float det = m[0] * (m[5] * m[10] - m[6] * m[9]) - m[1] * (m[4] * m[10] - m[6] * m[8]) +
+                              m[2] * (m[4] * m[9] - m[5] * m[8]);
+            d.mirrored = det < 0.0f;
+            const float s0 = d.mirrored ? -scale[0] : scale[0];
+            float r[3][3];
+            for (unsigned row = 0; row < 3u; ++row) {
+                r[row][0] = col[0][row] / s0;
+                r[row][1] = col[1][row] / scale[1];
+                r[row][2] = col[2][row] / scale[2];
+            }
+            for (float& v : d.stretch) v = 0.0f;
+            d.stretch[0] = s0;
+            d.stretch[4] = scale[1];
+            d.stretch[8] = scale[2];
+            d.valid = rotation_to_quaternion(r, d.q);
+            return d;
         }
     }
+    double a[3][3];
+    for (unsigned r = 0; r < 3u; ++r) {
+        for (unsigned c = 0; c < 3u; ++c) a[r][c] = m[r * 4u + c];
+    }
+    double x[3][3];
+    std::memcpy(x, a, sizeof(x));
+    bool converged = false;
+    for (unsigned iteration = 0; iteration < 32u && !converged; ++iteration) {
+        const double cof[3][3] = {
+            {x[1][1] * x[2][2] - x[1][2] * x[2][1], x[1][2] * x[2][0] - x[1][0] * x[2][2],
+             x[1][0] * x[2][1] - x[1][1] * x[2][0]},
+            {x[0][2] * x[2][1] - x[0][1] * x[2][2], x[0][0] * x[2][2] - x[0][2] * x[2][0],
+             x[0][1] * x[2][0] - x[0][0] * x[2][1]},
+            {x[0][1] * x[1][2] - x[0][2] * x[1][1], x[0][2] * x[1][0] - x[0][0] * x[1][2],
+             x[0][0] * x[1][1] - x[0][1] * x[1][0]}};
+        const double det = x[0][0] * cof[0][0] + x[0][1] * cof[0][1] + x[0][2] * cof[0][2];
+        if (!(std::fabs(det) > 1e-24) || !std::isfinite(det)) {
+            return d;
+        }
+        // (X^-1)^T = cofactor / det.
+        const double g = std::cbrt(1.0 / std::fabs(det));
+        double change = 0.0;
+        for (unsigned r = 0; r < 3u; ++r) {
+            for (unsigned c = 0; c < 3u; ++c) {
+                const double next = 0.5 * (g * x[r][c] + cof[r][c] / (det * g));
+                change = std::max(change, std::fabs(next - x[r][c]));
+                x[r][c] = next;
+            }
+        }
+        converged = change < 1e-10;
+    }
+    if (!converged) {
+        return d;
+    }
+    // S = R^T A.
+    double stretch[3][3];
+    for (unsigned r = 0; r < 3u; ++r) {
+        for (unsigned c = 0; c < 3u; ++c) {
+            stretch[r][c] = x[0][r] * a[0][c] + x[1][r] * a[1][c] + x[2][r] * a[2][c];
+        }
+    }
+    const double det_r = x[0][0] * (x[1][1] * x[2][2] - x[1][2] * x[2][1]) -
+                         x[0][1] * (x[1][0] * x[2][2] - x[1][2] * x[2][0]) +
+                         x[0][2] * (x[1][0] * x[2][1] - x[1][1] * x[2][0]);
+    d.mirrored = det_r < 0.0;
+    if (d.mirrored) {
+        // R = R' D, D = diag(-1, 1, 1): A = R' (D S).
+        for (unsigned r = 0; r < 3u; ++r) x[r][0] = -x[r][0];
+        for (unsigned c = 0; c < 3u; ++c) stretch[0][c] = -stretch[0][c];
+    }
+    for (unsigned r = 0; r < 3u; ++r) {
+        for (unsigned c = 0; c < 3u; ++c) d.stretch[r * 3u + c] = static_cast<float>(stretch[r][c]);
+    }
+    float r[3][3];  // r[row][col]
+    for (unsigned row = 0; row < 3u; ++row) {
+        for (unsigned c = 0; c < 3u; ++c) r[row][c] = static_cast<float>(x[row][c]);
+    }
+    d.valid = rotation_to_quaternion(r, d.q);
+    return d;
+}
+
+bool rotation_to_quaternion(const float (&r)[3][3], float (&q)[4]) noexcept {
+    Decomposed d{};
     const float trace = r[0][0] + r[1][1] + r[2][2];
     if (trace > 0.0f) {
         const float s = 0.5f / std::sqrt(trace + 1.0f);
@@ -122,38 +206,63 @@ Decomposed decompose(const Affine34& m) noexcept {
         d.q[1] = (r[1][2] + r[2][1]) / s;
         d.q[2] = 0.25f * s;
     }
-    d.valid = std::isfinite(d.q[0]) && std::isfinite(d.q[1]) &&
-              std::isfinite(d.q[2]) && std::isfinite(d.q[3]);
-    return d;
+    for (unsigned i = 0; i < 4u; ++i) q[i] = d.q[i];
+    return std::isfinite(q[0]) && std::isfinite(q[1]) && std::isfinite(q[2]) && std::isfinite(q[3]);
 }
 
 }  // namespace
 
-Affine34 affine_interpolate(const Affine34& a, const Affine34& b, float t) noexcept {
-    Affine34 out{};
+void affine_motion(const Affine34& a, const Affine34& b, AffineMotion& out) noexcept {
+    out.a = a;
+    out.b = b;
+    out.rigid = false;
+    out.theta = 0.0f;
+    out.inv_sin_theta = 0.0f;
+    out.cos_turn = 1.0f;
     const Decomposed da = decompose(a);
     const Decomposed db = decompose(b);
-    if (!da.valid || !db.valid || (da.scale[0] < 0.0f) != (db.scale[0] < 0.0f)) {
+    if (!da.valid || !db.valid) {
+        return;
+    }
+    float dot = da.q[0] * db.q[0] + da.q[1] * db.q[1] + da.q[2] * db.q[2] + da.q[3] * db.q[3];
+    out.cos_turn = std::fabs(dot);
+    if (da.mirrored != db.mirrored) {
+        return;
+    }
+    const float sign = dot < 0.0f ? -1.0f : 1.0f;
+    dot *= sign;
+    for (unsigned i = 0; i < 4u; ++i) {
+        out.qa[i] = da.q[i];
+        out.qb[i] = db.q[i] * sign;
+    }
+    for (unsigned i = 0; i < 9u; ++i) {
+        out.stretch_a[i] = da.stretch[i];
+        out.stretch_b[i] = db.stretch[i];
+    }
+    if (dot < 0.9995f) {
+        out.theta = std::acos(std::min(dot, 1.0f));
+        out.inv_sin_theta = 1.0f / std::sin(out.theta);
+    }
+    out.rigid = true;
+}
+
+Affine34 affine_motion_at(const AffineMotion& m, float t) noexcept {
+    Affine34 out{};
+    const Affine34& a = m.a;
+    const Affine34& b = m.b;
+    if (!m.rigid) {
         for (unsigned i = 0; i < 12u; ++i) out[i] = a[i] + (b[i] - a[i]) * t;
         return out;
     }
-    float qb[4]{db.q[0], db.q[1], db.q[2], db.q[3]};
-    float dot = da.q[0] * qb[0] + da.q[1] * qb[1] + da.q[2] * qb[2] + da.q[3] * qb[3];
-    if (dot < 0.0f) {
-        for (float& v : qb) v = -v;
-        dot = -dot;
-    }
     float wa = 1.0f - t, wb = t;
-    if (dot < 0.9995f) {
-        const float theta = std::acos(std::min(dot, 1.0f));
-        const float sin_theta = std::sin(theta);
-        wa = std::sin((1.0f - t) * theta) / sin_theta;
-        wb = std::sin(t * theta) / sin_theta;
+    if (m.theta != 0.0f) {
+        wa = std::sin((1.0f - t) * m.theta) * m.inv_sin_theta;
+        wb = std::sin(t * m.theta) * m.inv_sin_theta;
     }
     float q[4];
     float norm = 0.0f;
     for (unsigned i = 0; i < 4u; ++i) {
-        q[i] = da.q[i] * wa + qb[i] * wb;
+        q[i] = m.qa[i] * wa + m.qb[i] * wb;
         norm += q[i] * q[i];
     }
     norm = 1.0f / std::sqrt(norm);
@@ -163,14 +272,55 @@ Affine34 affine_interpolate(const Affine34& a, const Affine34& b, float t) noexc
         {1.0f - 2.0f * (y * y + z * z), 2.0f * (x * y - z * w), 2.0f * (x * z + y * w)},
         {2.0f * (x * y + z * w), 1.0f - 2.0f * (x * x + z * z), 2.0f * (y * z - x * w)},
         {2.0f * (x * z - y * w), 2.0f * (y * z + x * w), 1.0f - 2.0f * (x * x + y * y)}};
-    for (unsigned c = 0; c < 3u; ++c) {
-        const float s = da.scale[c] + (db.scale[c] - da.scale[c]) * t;
-        for (unsigned r = 0; r < 3u; ++r) out[r * 4u + c] = rot[r][c] * s;
+    float s[9];
+    for (unsigned i = 0; i < 9u; ++i) s[i] = m.stretch_a[i] + (m.stretch_b[i] - m.stretch_a[i]) * t;
+    for (unsigned r = 0; r < 3u; ++r) {
+        for (unsigned c = 0; c < 3u; ++c) {
+            out[r * 4u + c] = rot[r][0] * s[c] + rot[r][1] * s[3u + c] + rot[r][2] * s[6u + c];
+        }
     }
     for (unsigned r = 0; r < 3u; ++r) {
         out[r * 4u + 3u] = a[r * 4u + 3u] + (b[r * 4u + 3u] - a[r * 4u + 3u]) * t;
     }
     return out;
+}
+
+bool affine_motion_plausible(const AffineMotion& m) noexcept {
+    const Affine34& a = m.a;
+    const Affine34& b = m.b;
+    const float ta[3] = {a[3], a[7], a[11]};
+    const float tb[3] = {b[3], b[7], b[11]};
+    float moved = 0.0f, da = 0.0f, db = 0.0f;
+    for (unsigned i = 0; i < 3u; ++i) {
+        moved += (tb[i] - ta[i]) * (tb[i] - ta[i]);
+        da += ta[i] * ta[i];
+        db += tb[i] * tb[i];
+    }
+    const float reach = std::max(std::sqrt(da), std::sqrt(db)) / 3.0f + 30.0f;
+    if (!(moved <= reach * reach)) {
+        return false;
+    }
+    for (unsigned c = 0; c < 3u; ++c) {
+        const float sa = a[c] * a[c] + a[4u + c] * a[4u + c] + a[8u + c] * a[8u + c];
+        const float sb = b[c] * b[c] + b[4u + c] * b[4u + c] + b[8u + c] * b[8u + c];
+        // Squared column norms: a 2x scale change is a 4x ratio.
+        if (sa > 4.0f * sb + 1e-12f || sb > 4.0f * sa + 1e-12f) {
+            return false;
+        }
+    }
+    return m.cos_turn >= 0.70710678f;  // cos(45 deg): a turn above 90 degrees
+}
+
+bool affine_motion_plausible(const Affine34& a, const Affine34& b) noexcept {
+    AffineMotion m;
+    affine_motion(a, b, m);
+    return affine_motion_plausible(m);
+}
+
+Affine34 affine_interpolate(const Affine34& a, const Affine34& b, float t) noexcept {
+    AffineMotion m;
+    affine_motion(a, b, m);
+    return affine_motion_at(m, t);
 }
 
 void TransformHistory::reserve(std::size_t records) {
@@ -182,6 +332,48 @@ void TransformHistory::reserve(std::size_t records) {
     std::size_t table = 64u;
     while (table < records * 2u) table <<= 1u;
     table_.reserve(table);
+    identity_keys_.reserve(table);
+    identity_values_.reserve(table);
+}
+
+void TransformHistory::build_identity_index() {
+    previous_identified_ = false;
+    std::size_t identified = 0u;
+    for (const TransformRecord& record : previous_) {
+        identified += record.identity != 0u ? 1u : 0u;
+    }
+    if (identified == 0u) {
+        return;
+    }
+    std::size_t size = 64u;
+    while (size < identified * 2u) size <<= 1u;
+    identity_keys_.assign(size, 0u);
+    identity_values_.assign(size, -1);
+    identity_mask_ = size - 1u;
+    for (std::size_t n = 0; n < previous_.size(); ++n) {
+        const std::uint64_t key = previous_[n].identity;
+        if (key == 0u) continue;
+        std::size_t slot = static_cast<std::size_t>(key ^ (key >> 31u)) & identity_mask_;
+        while (identity_keys_[slot] != 0u && identity_keys_[slot] != key) {
+            slot = (slot + 1u) & identity_mask_;
+        }
+        if (identity_keys_[slot] == 0u) {
+            identity_keys_[slot] = key;
+            identity_values_[slot] = static_cast<std::int32_t>(n);
+        }
+    }
+    previous_identified_ = true;
+}
+
+std::int32_t TransformHistory::find_identity(std::uint64_t key) const noexcept {
+    std::size_t slot = static_cast<std::size_t>(key ^ (key >> 31u)) & identity_mask_;
+    while (identity_keys_[slot] != 0u) {
+        if (identity_keys_[slot] == key) {
+            return identity_values_[slot];
+        }
+        slot = (slot + 1u) & identity_mask_;
+    }
+    return -1;
 }
 
 void TransformHistory::reset() noexcept {
@@ -196,6 +388,13 @@ void TransformHistory::reset() noexcept {
     camera_known_ = false;
     camera_delta_ = affine_identity();
     matched_ = 0;
+    identified_ = 0;
+    identity_matched_ = 0;
+    identity_rejected_ = 0;
+    signature_rejected_ = 0;
+    continuity_rejected_ = 0;
+    particle_age_steps_ = {};
+    previous_identified_ = false;
 }
 
 void TransformHistory::end_scene() noexcept {
@@ -214,6 +413,7 @@ void TransformHistory::begin_scene(std::uint64_t frame, const Affine34* view) {
         previous_view_known_ = current_view_known_;
         previous_valid_ = true;
         build_previous_index();
+        build_identity_index();
     }
     current_.clear();
     current_match_.clear();
@@ -231,6 +431,12 @@ void TransformHistory::begin_scene(std::uint64_t frame, const Affine34* view) {
         }
     }
     matched_ = 0;
+    identified_ = 0;
+    identity_matched_ = 0;
+    identity_rejected_ = 0;
+    signature_rejected_ = 0;
+    continuity_rejected_ = 0;
+    particle_age_steps_ = {};
     scene_open_ = true;
 }
 
@@ -277,6 +483,36 @@ const TransformRecord* TransformHistory::add(const TransformRecord& record) {
     if (!scene_open_) return nullptr;
     current_.push_back(record);
     std::int32_t best = -1;
+    if (record.identity != 0u) {
+        // The game named this object: the previous record of the same
+        // identity is its previous transform, or there is none.
+        ++identified_;
+        if (previous_valid_ && previous_identified_) {
+            const std::int32_t found = find_identity(record.identity);
+            if (found >= 0) {
+                const TransformRecord& previous = previous_[static_cast<std::size_t>(found)];
+                const bool particle = record.particle && previous.particle;
+                if (particle) {
+                    const std::int64_t step = static_cast<std::int64_t>(record.continuity) -
+                                              static_cast<std::int64_t>(previous.continuity);
+                    ++particle_age_steps_[step < 0 ? 0u : step > 2 ? 4u : static_cast<std::size_t>(step) + 1u];
+                }
+                if (previous.palette != record.palette || previous.layout != record.layout) {
+                    ++identity_rejected_;
+                } else if (previous.load_signature != record.load_signature) {
+                    ++signature_rejected_;
+                } else if (particle && !motion::particle_age_continues(previous.continuity, record.continuity)) {
+                    ++continuity_rejected_;
+                } else {
+                    best = found;
+                    ++matched_;
+                    ++identity_matched_;
+                }
+            }
+        }
+        current_match_.push_back(best);
+        return best >= 0 ? &previous_[static_cast<std::size_t>(best)] : nullptr;
+    }
     if (previous_valid_ && !previous_.empty()) {
         float predicted[3]{record.translation[0], record.translation[1],
                            record.translation[2]};
@@ -333,6 +569,12 @@ TransformHistoryStats TransformHistory::stats() const noexcept {
     s.records = static_cast<std::uint32_t>(current_.size());
     s.matched = matched_;
     s.previous_records = previous_valid_ ? static_cast<std::uint32_t>(previous_.size()) : 0u;
+    s.identified = identified_;
+    s.identity_matched = identity_matched_;
+    s.identity_rejected = identity_rejected_;
+    s.signature_rejected = signature_rejected_;
+    s.continuity_rejected = continuity_rejected_;
+    s.particle_age_steps = particle_age_steps_;
     return s;
 }
 

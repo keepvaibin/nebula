@@ -1332,6 +1332,17 @@ bool resident_vertex_arena_defers_reuse_until_gpu_retirement() {
     if (!expect(arena.free_block_count() == 1u && arena.allocate(50u) == 0u,
                 "adjacent retired blocks must coalesce")) return false;
     if (!expect(arena.allocate(0u) == std::nullopt, "zero-unit allocation accepted")) return false;
+    // Interpolation: one advance per game frame over four ring segments.
+    arena.reset(10u, 2u);
+    const auto held = arena.allocate(10u);
+    arena.set_frames_in_flight(4u);
+    arena.release(*held, 10u);
+    for (int frame = 0; frame < 3; ++frame) {
+        arena.advance_frame();
+        if (!expect(!arena.allocate(1u), "block reused before its segment came round")) return false;
+    }
+    arena.advance_frame();
+    if (!expect(arena.allocate(10u) == 0u, "block not reusable after four game frames")) return false;
     arena.reset(10u, 2u);
     return expect(arena.epoch() != epoch && arena.used_units() == 0u &&
                   arena.retired_block_count() == 0u && arena.allocate(10u) == 0u,

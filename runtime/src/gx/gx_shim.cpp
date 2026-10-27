@@ -76,6 +76,15 @@ void attach_scene_view(const float view[12]) noexcept {
     backend().attach_scene_view(view);
 }
 
+bool draw_identity_wanted() noexcept {
+    return backend().draw_identity_wanted();
+}
+
+void attach_stripe_particle(std::size_t stream_offset, std::uint32_t particle, std::uint32_t age_lifetime,
+                            std::uint8_t strip) {
+    backend().attach_stripe_particle({stream_offset, particle, age_lifetime, strip});
+}
+
 bool capture_pointer_depth(std::span<std::uint32_t> pixels) {
     return backend().capture_pointer_depth(pixels);
 }

@@ -193,7 +193,7 @@ static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
         static constexpr const char* kNames[] = {"low", "medium", "high", "ultra"};
         cfg.smaa_quality = parse_choice(val, kNames, cfg.smaa_quality);
     } else if (std::strcmp(key, "upscaler") == 0) {
-        static constexpr const char* kNames[] = {"bilinear", "fsr", "fsr3"};
+        static constexpr const char* kNames[] = {"bilinear", "fsr", "fsr3", "dlss"};
         cfg.upscaler = parse_choice(val, kNames, cfg.upscaler);
     } else if (std::strcmp(key, "temporal_quality") == 0) {
         static constexpr const char* kNames[] = {
@@ -308,14 +308,14 @@ static void clamp_unimplemented_features(RenderConfig& cfg) {
     cfg.vsync_interval = std::clamp(cfg.vsync_interval, 0u, 2u);
     cfg.swap_chain_frame_latency =
         std::clamp(cfg.swap_chain_frame_latency, 1u, 2u);
-    if (!std::isfinite(cfg.max_fps) || cfg.max_fps < kMinFrameRate || cfg.max_fps > kMaxFrameRate) {
+    if (!std::isfinite(cfg.max_fps) || (cfg.max_fps != 0.0f && cfg.max_fps < kMinFrameRate) || cfg.max_fps > kMaxFrameRate) {
         cfg.max_fps = RenderConfig{}.max_fps;
     }
     cfg.texture_lod_bias = std::min(cfg.texture_lod_bias, 8u);
     cfg.anisotropic_filtering = std::clamp(cfg.anisotropic_filtering, 1u, 16u);
     cfg.aa_mode = std::min(cfg.aa_mode, 3u);
     cfg.smaa_quality = std::min(cfg.smaa_quality, 3u);
-    cfg.upscaler = std::min(cfg.upscaler, 2u);
+    cfg.upscaler = std::min(cfg.upscaler, 3u);
     cfg.temporal_quality = std::min(cfg.temporal_quality, 4u);
     cfg.sharpness = std::min(cfg.sharpness, 100u);
     // Win32 client geometry is signed-int based even though DXGI dimensions

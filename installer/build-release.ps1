@@ -225,8 +225,12 @@ namespace Nebula
         $dspText -notmatch 'kDspGeneratedProbeRequiredCapabilities\s*=\s*kDspGeneratedProbeCapabilitySelectionPublication\s*\|\s*kDspGeneratedProbeCapabilitySelectedChannelBranch\s*;') {
         throw 'Module ABI contract changed; update the installer compatibility contract explicitly.'
     }
+    # A different generation means different game code: Setup recompiles it instead of reusing the installed modules.
+    $generateText = Get-Content -LiteralPath (Join-Path $src 'crates/nebula-recomp-cli/src/generate.rs') -Raw
+    $generation = [regex]::Match($generateText, 'GENERATION_VERSION:\s*u32\s*=\s*(\d+)').Groups[1].Value
+    if (-not $generation) { throw 'GENERATION_VERSION not found in generate.rs.' }
     $compatibilityPath = Join-Path $work 'module-compatibility.json'
-    [ordered]@{nativeAbi=[uint32]$nativeAbi;rsoAbi=[uint32]$rsoAbi;dspProbeVersion=[uint32]$dspVersion;dspCapabilities=3} |
+    [ordered]@{nativeAbi=[uint32]$nativeAbi;rsoAbi=[uint32]$rsoAbi;dspProbeVersion=[uint32]$dspVersion;dspCapabilities=3;generation=[uint32]$generation} |
         ConvertTo-Json | Set-Content -LiteralPath $compatibilityPath -Encoding utf8
     $resources['module-compatibility.json'] = $compatibilityPath
     foreach ($pair in $runtimeFiles.GetEnumerator()) { $resources[$pair.Key] = $pair.Value }

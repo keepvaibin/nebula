@@ -550,6 +550,9 @@ void GxState::load_xf(
     const std::uint32_t* values,
     std::uint16_t count) {
     if (validate_xf_write(op::kLoadXfReg, base, values, count)) {
+        if (track_matrix_loads_ && base < xf::kStatusRegsBase) [[unlikely]] {
+            note_matrix_load(base, count, 0xFFFFFFFFu);
+        }
         apply_validated_xf(base, values, count);
     } else {
         apply_known_xf(base, values, count);
@@ -576,6 +579,7 @@ void GxState::apply_validated_xf(
     // so the only dirty effect is the matrix palette bit. Writes stay sequential because
     // values may alias this bank.
     if (base < xf::kStatusRegsBase) {
+        ++matrix_writes_;
         bool changed = false;
         for (std::uint16_t i = 0; i < count; ++i) {
             const std::uint16_t addr = static_cast<std::uint16_t>(base + i);
@@ -654,12 +658,16 @@ void GxState::apply_validated_xf(
 void GxState::load_xf_indexed(
     std::uint16_t xf_addr,
     const std::uint32_t* values,
-    std::uint16_t count) {
+    std::uint16_t count,
+    std::uint32_t source) {
     // This mutator does not receive the A-D selector. kLoadIndxA identifies the LOAD_INDX
     // opcode family in fatal metadata.
     // Validated with the indexed opcode's failure metadata, then the shared application
     // without a second classification pass.
     if (validate_xf_write(op::kLoadIndxA, xf_addr, values, count)) {
+        if (track_matrix_loads_ && xf_addr < xf::kStatusRegsBase) [[unlikely]] {
+            note_matrix_load(xf_addr, count, source);
+        }
         apply_validated_xf(xf_addr, values, count);
     } else {
         apply_known_xf(xf_addr, values, count);
