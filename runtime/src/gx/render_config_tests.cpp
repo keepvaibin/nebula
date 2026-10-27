@@ -129,8 +129,11 @@ int main() {
         using galaxy::gx::interpolated_frames_per_game_frame;
         if (interpolated_frames_per_game_frame(30.0) != 0u ||
             interpolated_frames_per_game_frame(60.0) != 0u ||
+            interpolated_frames_per_game_frame(61.5) != 1u ||
+            interpolated_frames_per_game_frame(75.0) != 1u ||
+            interpolated_frames_per_game_frame(90.0) != 1u ||
             interpolated_frames_per_game_frame(120.0) != 1u ||
-            interpolated_frames_per_game_frame(144.0) != 1u ||
+            interpolated_frames_per_game_frame(144.0) != 2u ||
             interpolated_frames_per_game_frame(165.0) != 2u ||
             interpolated_frames_per_game_frame(240.0) != 3u ||
             interpolated_frames_per_game_frame(360.0) != 5u ||

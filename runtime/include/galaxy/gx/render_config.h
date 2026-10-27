@@ -174,12 +174,12 @@ inline double present_frame_rate(float max_fps, unsigned vsync_interval, double 
     return rate;
 }
 
-// Interpolated frames presented per game frame at a present rate:
-// round(rate / 60) - 1, none at 60 and below, at most 7.
+// The most interpolated frames one game frame needs at a present rate: ceil(rate / 60) - 1 (75 Hz shows one between
+// most pairs of game frames, 144 Hz two between some), none at 60 and below, at most 7.
 inline unsigned interpolated_frames_per_game_frame(double rate) {
     if (!(rate > 61.0)) return 0u;
-    const double frames = std::floor(rate / 60.0 + 0.5) - 1.0;
-    return static_cast<unsigned>(std::clamp(frames, 0.0, 7.0));
+    const double frames = std::ceil(rate / 60.0 - 1e-3) - 1.0;
+    return static_cast<unsigned>(std::clamp(frames, 1.0, 7.0));
 }
 
 inline constexpr unsigned kDisplayWindowed = 0u;
