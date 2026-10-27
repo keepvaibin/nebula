@@ -994,6 +994,15 @@ private:
     void write_rt_lights(std::uint32_t* palette) noexcept;
     bool scene_3d_recorded_ = false;           // this frame's 3D scene took records
     bool mirror_opened_scene_ = false;         // this frame's InterpScene began at its mirror pass
+    // A run of frames that draw no 3D scene (the pause menu over its captured picture): each is recorded as a screen
+    // layer from its first draw (begin_screen_frame), so its layouts move in sub-frames as a scene's screen layer does.
+    // frame_scene_seen_: a 3D scene began since the last display copy; screen_run_: the frame before drew none;
+    // screen_frame_open_: this frame's screen-only record is open (a 3D scene beginning in it drops the record).
+    bool frame_scene_seen_ = false;
+    bool screen_run_ = false;
+    bool screen_frame_open_ = false;
+    void begin_screen_frame();
+    void cancel_screen_frame();
     std::array<std::uint64_t, 3> layer_serials_{};
     std::array<std::uint64_t, 3> layer_identity_markers_{};
     std::array<bool, 3> layer_identity_{};     // the layer's previous occurrence carried markers

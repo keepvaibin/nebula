@@ -4684,6 +4684,28 @@ void GxBackend::end_side_layer() {
     state_.set_matrix_load_tracking(false);
 }
 
+// A frame of a run that draws no 3D scene, from its first draw: an InterpScene whose whole picture is its screen
+// layer (no camera), matched with the frame before's by the layouts' identities, and a renderer log that counts as
+// the frame's scene.
+void GxBackend::begin_screen_frame() {
+    flush_pending_draw_batch();
+    open_interp_scene();
+    renderer_.note_replay_screen_frame();
+    screen_frame_open_ = true;
+    // begin_side_layer opens a screen layer after a recorded scene: this frame's record stands for one.
+    scene_3d_recorded_ = true;
+    begin_side_layer(kScreenLayer);
+}
+
+// The screen-only record of a frame that drew a 3D scene after all: dropped (no sequence plays from it; the scene's
+// record follows it in the ring).
+void GxBackend::cancel_screen_frame() {
+    end_side_layer();
+    interp_scenes_[interp_scene_].valid = false;
+    renderer_.cancel_replay_screen_frame();
+    screen_frame_open_ = false;
+}
+
 bool GxBackend::rt_geometry_draw() const noexcept {
     if (!(rt_state_eligible_ || rt_card_draw() || rt_alpha_draw()) || !scene_phase_ || side_layer_ != kSceneLayer ||
         !renderer_.rt_scene_open()) {
@@ -6827,6 +6849,12 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
     flush_pending_draw_batch();
     if (marker == FifoMarker::SceneBegin) {
         end_side_layer();
+        // A frame recorded as screen-only (its frame before drew no scene) draws one after all: the scene's record
+        // replaces it.
+        frame_scene_seen_ = true;
+        if (screen_frame_open_) {
+            cancel_screen_frame();
+        }
     }
     scene_phase_ = marker == FifoMarker::SceneBegin;
     if (marker == FifoMarker::SceneBegin) {
@@ -7979,7 +8007,12 @@ bool GxBackend::render_interp_subframe(float t) {
     const std::size_t count = scene.constants.size();
     constexpr std::size_t kWords = kMatrixPaletteWords;
     static_assert(kMatrixPaletteWords == kXfPaletteWords);
-    const bool before_valid = before_scene.valid;
+    // The scene before is the frame presented before this one: a log in between that was not recorded (shown as it
+    // was: two 3D scenes, or the first of a run of frames without one) leaves it older, and sub-frames from it would
+    // step back behind the frame shown last. A chained sequence maps its records through the skipped scenes.
+    const bool before_valid = before_scene.valid &&
+                              (interp_sequence_.chained || before_scene.serial == 0u || scene.serial == 0u ||
+                               before_scene.serial + 1u == scene.serial);
     const auto before_palette = [&](std::int32_t shadow) -> const std::uint32_t* {
         return before_valid && shadow >= 0 && static_cast<std::size_t>(shadow) < before_scene.palette_count
             ? before_scene.palettes.data() + static_cast<std::size_t>(shadow) * kWords
@@ -10639,6 +10672,9 @@ gpu::Pipeline* GxBackend::flush_draw_state(
     const bool time_detail = frame_time_detail_;
     // Always counted: the denominator of every *_us field.
     ++frame_flush_calls_;
+    if (screen_run_ && !frame_scene_seen_ && !screen_frame_open_ && interp_recording_ && !history_scene_) [[unlikely]] {
+        begin_screen_frame();
+    }
     const auto topology_key =
         static_cast<std::uint8_t>(primitive_topology_type);
     const bool curved = primitive_topology_type == gpu::kTopologyTypeTriangle && curved_draw(vtxfmt);
@@ -12905,6 +12941,10 @@ void GxBackend::on_efb_copy(std::uint32_t exec_command) {
         if (xfb != nullptr) {
             end_side_layer();
             mirror_opened_scene_ = false;
+            // The frame ends: the next is recorded as screen-only from its first draw when this one drew no scene.
+            screen_run_ = !frame_scene_seen_;
+            frame_scene_seen_ = false;
+            screen_frame_open_ = false;
             renderer_.copy_efb_to_xfb(params, *xfb);
             // The display copy ends the 2D layer: later work and the next
             // frame use the render-resolution EFB again.

@@ -414,6 +414,10 @@ public:
     [[nodiscard]] std::uint32_t replay_xfb_addr() const noexcept { return replay_xfb_addr_; }
     // A 3D scene began inside the log being recorded (one is replayable).
     void note_replay_scene() noexcept { ++replay_scene_count_; }
+    // The log being recorded is a frame that draws no 3D scene, recorded as its screen layer alone (GxBackend::
+    // begin_screen_frame): replayable without a scene; dropped again when a scene begins in it after all.
+    void note_replay_screen_frame() noexcept { replay_screen_frame_ = true; }
+    void cancel_replay_screen_frame() noexcept { replay_screen_frame_ = false; }
     // Why the latest closed log is not replayable: 0 it is, 1 no 3D scene,
     // 2 more than one.
     [[nodiscard]] unsigned replay_reject() const noexcept { return replay_reject_; }
@@ -1046,6 +1050,7 @@ private:
     bool subframe_capture_ = false;
     bool capture_waits_ = false;
     unsigned replay_scene_count_ = 0;
+    bool replay_screen_frame_ = false;
     unsigned replay_segment_ = 0;
     std::uint64_t replay_serial_ = 0;
     std::uint32_t replay_xfb_addr_ = 0;

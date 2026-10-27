@@ -5468,6 +5468,7 @@ void RendererD3D12::prepare_vertex_blend(std::span<const std::int32_t> previous_
 
 void RendererD3D12::begin_replay_record() {
     replay_scene_count_ = 0u;
+    replay_screen_frame_ = false;
     replay_stripes_.clear();
     replay_ops_.clear();
     replay_draws_.clear();
@@ -8246,12 +8247,12 @@ void RendererD3D12::copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& des
         // next frame starts a new ring segment.
         if (recording) {
             replay_recording_ = false;
-            // One 3D scene. An output-EFB switch (HUD at output resolution)
-            // replays into the sub-frame's private output EFB.
-            replay_valid_ = replay_scene_count_ == 1u;
-            replay_reject_ = replay_scene_count_ == 0u ? 1u
-                : replay_scene_count_ > 1u             ? 2u
-                                                       : 0u;
+            // One 3D scene, or none in a frame recorded as its screen layer alone (the pause menu). An output-EFB
+            // switch (HUD at output resolution) replays into the sub-frame's private output EFB.
+            replay_valid_ = replay_scene_count_ == 1u || (replay_scene_count_ == 0u && replay_screen_frame_);
+            replay_reject_ = replay_valid_                ? 0u
+                : replay_scene_count_ == 0u               ? 1u
+                                                          : 2u;
             if (replay_valid_) {
                 publish_replay_log();
             }

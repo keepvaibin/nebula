@@ -166,6 +166,9 @@ public:
     [[nodiscard]] bool rt_engine() const noexcept { return false; }
     [[nodiscard]] bool rt_engine_clear() const noexcept { return false; }
     [[nodiscard]] bool rt_mist_open() const noexcept { return false; }
+    // The effects layer opens over ray-traced water (RendererD3D12::begin_layer_window), which this renderer has not.
+    void begin_layer_window() noexcept {}
+    [[nodiscard]] bool layer_window() const noexcept { return false; }
     [[nodiscard]] std::int64_t last_present_qpc() const noexcept { return swap_present_qpc_; }
     void rt_note_mist(const float*, float, float, float) noexcept {}
     [[nodiscard]] bool rt_log_seq() const noexcept { return false; }
@@ -255,6 +258,9 @@ public:
     [[nodiscard]] std::uint64_t replay_serial() const noexcept { return replay_serial_; }
     [[nodiscard]] std::uint32_t replay_xfb_addr() const noexcept { return replay_xfb_addr_; }
     void note_replay_scene() noexcept { ++replay_scene_count_; }
+    // As RendererD3D12: a frame that draws no 3D scene, recorded as its screen layer alone.
+    void note_replay_screen_frame() noexcept { replay_screen_frame_ = true; }
+    void cancel_replay_screen_frame() noexcept { replay_screen_frame_ = false; }
     [[nodiscard]] unsigned replay_failure() const noexcept { return replay_failure_; }
     void note_replay_failure(unsigned reason) noexcept { replay_failure_ = reason; }
     void set_subframe_capture(bool capture) noexcept { subframe_capture_ = capture; }
@@ -734,6 +740,7 @@ private:
     bool prev_valid_ = false;
     std::vector<std::uint32_t> pairing_scratch_;
     unsigned replay_scene_count_ = 0;
+    bool replay_screen_frame_ = false;
     unsigned replay_reject_ = 0;
     std::uint64_t replay_serial_ = 0;
     std::uint32_t replay_xfb_addr_ = 0;
