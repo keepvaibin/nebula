@@ -334,6 +334,12 @@ constexpr std::uint32_t kIosErrExists = static_cast<std::uint32_t>(-2);
 constexpr std::uint32_t kIosErrNoEntry = static_cast<std::uint32_t>(-6);
 constexpr const char* kStmImmediatePath = "/dev/stm/immediate";
 constexpr const char* kStmEventHookPath = "/dev/stm/eventhook";
+// WiiConnect24 (mail for the Wii Message Board: the game's letters from Luigi and its play reports). Nebula has no
+// WiiConnect24; its scheduler requests answer as Dolphin answers them (NetKDRequestDevice).
+constexpr const char* kNwc24RequestPath = "/dev/net/kd/request";
+constexpr std::uint32_t kNwc24SuspendScheduler = 0x01u;
+constexpr std::uint32_t kNwc24TrySuspendScheduler = 0x02u;
+constexpr std::uint32_t kNwc24ResumeScheduler = 0x03u;
 constexpr std::uint32_t kStmHotResetIoctl = 0x2001;
 constexpr std::uint32_t kStmReleaseEventHookIoctl = 0x3002;
 constexpr std::uint32_t kStmViDimmingIoctl = 0x5001;
@@ -14744,6 +14750,28 @@ void GuestAddressSpace::complete_ios_request(std::uint32_t physical_request) {
                         << ioctl << " req=0x" << physical_request;
                 throw std::runtime_error(message.str());
             }
+            }
+        } else if (path != ios_paths_.end() && path->second == kNwc24RequestPath) {
+            // The scheduler requests NWC24OpenLib and NWC24CloseLib make succeed with result 0 in the reply buffer; the
+            // library then finds no mail configuration in the NAND and returns its error, which the game takes as a Wii
+            // without WiiConnect24 (no letter is sent). Any other request fails without ending the game.
+            const std::uint32_t ioctl =
+                read_u32(physical_request + kIosRequestArgumentsOffset);
+            const std::uint32_t out_buffer =
+                read_u32(physical_request + kIosRequestArgumentsOffset + 0x0Cu);
+            const std::uint32_t out_length =
+                read_u32(physical_request + kIosRequestArgumentsOffset + 0x10u);
+            if (ioctl == kNwc24SuspendScheduler || ioctl == kNwc24TrySuspendScheduler ||
+                ioctl == kNwc24ResumeScheduler) {
+                if (out_buffer != 0 && out_length >= 4u) {
+                    write_u32(out_buffer, 0);
+                }
+                result = 0;
+            } else {
+                std::cerr << "[ios] WiiConnect24 request 0x" << std::hex << ioctl << std::dec
+                          << " refused: Nebula has no WiiConnect24
+";
+                result = kIosErrNoEntry;
             }
         } else if (
             path != ios_paths_.end() &&
