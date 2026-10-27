@@ -152,6 +152,22 @@ bool identities_by_stage() {
     return ok;
 }
 
+bool luminous_effects() {
+    std::istringstream file(
+        "hash\tclass\n"
+        "00000000000000e1\tparticle+luminous\n"
+        "00000000000000e2\tparticle\n");
+    RtMaterialTable table;
+    table.read(file);
+    const RtMaterial* sparkle = find(table, 0xE1u);
+    const RtMaterial* smoke = find(table, 0xE2u);
+    bool ok = expect(sparkle != nullptr && sparkle->particle && sparkle->luminous &&
+                         sparkle->emission == RtEmission::None,
+                     "a luminous effect is light, not a light source");
+    ok &= expect(smoke != nullptr && smoke->particle && !smoke->luminous, "other effects take the traced light");
+    return ok;
+}
+
 bool glow_apart_from_light() {
     std::istringstream file(
         "hash\tclass\tr\tg\tb\tintensity\tglow\n"
@@ -228,6 +244,7 @@ int main() {
     ok &= lights_fill_their_fields();
     ok &= values_are_clamped();
     ok &= glow_apart_from_light();
+    ok &= luminous_effects();
     ok &= identities_by_stage();
     ok &= stage_suns();
     if (!ok) {

@@ -145,6 +145,7 @@ void apply_class(const std::string& text, RtMaterial& m) {
         else if (token == "hide") m.hide = true;
         else if (token == "unlit-only") m.unlit_only = true;
         else if (token == "particle") m.particle = true;
+        else if (token == "luminous") m.luminous = true;
         else if (token == "lens") m.lens = true;
         else if (token == "mirror") m.mirror = true;
         else if (token == "star") m.star = true;

@@ -11553,10 +11553,11 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         ps_c.ztex_params[2] = (ps_key_.output_flags & 0x20u) == 0u ? 0.0f
                               : renderer_.rt_physical() ? 1.0f
                                                         : renderer_.rt_glow_exposure(glow_kind_ == 2u);
-        // The lighting texture's scale (bit 6); 0 leaves a lit translucent unlit: a table light source (its own light)
-        // or a clear surface (glass, crystal, ice, water: the lit scene shows through it). Falling water is white
-        // water, a foam of bubbles and drops that scatters what reaches it: it takes the light at its own sheet
-        // (rt_engine.hlsl water_light).
+        // The lighting texture's scale (bit 6); 0 leaves a lit translucent unlit: a table light source (its own light),
+        // an effect that is light (`luminous`: sparkles, glows, fire; the game draws them unlit, at the brightness they
+        // shine, and lit by the surface behind them a sparkle grew into a flat orange star) or a clear surface (glass,
+        // crystal, ice, water: the lit scene shows through it). Falling water is white water, a foam of bubbles and
+        // drops that scatters what reaches it: it takes the light at its own sheet (rt_engine.hlsl water_light).
         bool takes_light = (ps_key_.output_flags & 0x40u) != 0u;
         float recolour = 0.0f;
         if (const RtMaterial* const m = rt_material(current_rt_material_);
@@ -11565,7 +11566,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             const bool clear = (m->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Crystal) ||
                                 m->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Water)) &&
                                !m->waterfall;
-            takes_light = takes_light && !emits && !clear;
+            takes_light = takes_light && !emits && !clear && !m->luminous;
             // `recolour`: a light source's sprite in the table's colour rather than the one the game draws its glow
             // in, as RGB8 + 1, negated.
             if (emits && m->recolour) {

@@ -58,6 +58,8 @@ struct RtMaterial {
     bool hide = false;                    // a faked light effect: not drawn under the traced lighting
     bool unlit_only = false;              // only unlit draws of the texture emit
     bool particle = false;                // smoke, steam, sparks: never traced geometry or water
+    bool luminous = false;                // an effect that is light (sparkles, glows, flashes, fire, electricity,
+                                          // beams): drawn as the game draws it, never lit by the traced light
     bool waterfall = false;               // falling water: water whose streaks run down it
     float white = 1.0f;                   // falling water: the share of its painted white water drawn (`white<n>`;
                                           // `unpainted` 0: clear water throughout; rt_engine.hlsl fall_water)
