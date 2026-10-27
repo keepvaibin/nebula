@@ -29,23 +29,6 @@ namespace Nebula.Launcher
             Application.SetCompatibleTextRenderingDefault(false);
             try
             {
-                // The in-game menu runs these: the DLSS download, and a restart once the game has exited.
-                if (args.Length > 0 && string.Equals(args[0], "--install-dlss", StringComparison.OrdinalIgnoreCase))
-                {
-                    if (GraphicsSettings.DlssInstalled()) return 0;
-                    using (var dialog = new DlssInstallDialog(false) { TopMost = true })
-                        return dialog.ShowDialog() == DialogResult.OK ? 0 : 1;
-                }
-                int restartAfter;
-                if (args.Length > 1 && string.Equals(args[0], "--restart-after", StringComparison.OrdinalIgnoreCase) &&
-                    int.TryParse(args[1], out restartAfter))
-                {
-                    WaitForExit(restartAfter);
-                    string restartError = new LaunchSession().TryLaunch();
-                    if (restartError == null) return 0;
-                    MessageBox.Show(restartError, "Nebula", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return 1;
-                }
                 var session = new LaunchSession();
                 if (!OpensSettings(args, session))
                 {
@@ -61,17 +44,6 @@ namespace Nebula.Launcher
                 MessageBox.Show(error.Message, "Nebula", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return 1;
             }
-        }
-
-        private static void WaitForExit(int processId)
-        {
-            try
-            {
-                using (var process = Process.GetProcessById(processId))
-                    process.WaitForExit(60000);
-            }
-            catch (ArgumentException) { }       // already exited
-            catch (InvalidOperationException) { }
         }
 
         internal static bool OpensSettings(string[] args, LaunchSession session)
@@ -455,8 +427,8 @@ namespace Nebula.Launcher
                 RefreshRefreshChoices();
             };
             refresh.SelectedIndexChanged += delegate { if (!loading) RefreshFrameRateChoices(); };
-            // Choosing DLSS before it is downloaded opens the download; closing it without
-            // installing goes back to the previous choice.
+            // Choosing DLSS before it is downloaded runs Nebula Setup's DLSS download (NVIDIA's license
+            // first); closing it without installing goes back to the previous choice.
             int upscalerShown = upscaler.SelectedIndex;
             upscaler.SelectedIndexChanged += delegate
             {
@@ -464,18 +436,61 @@ namespace Nebula.Launcher
                 int index = upscaler.SelectedIndex;
                 if (index >= 0 && upscalerChoices[index] == 3 && !GraphicsSettings.DlssInstalled())
                 {
-                    bool installed;
-                    using (var dialog = new DlssInstallDialog(false)) installed = dialog.ShowDialog(this) == DialogResult.OK;
-                    loading = true;
-                    if (installed) upscaler.Items[index] = GraphicsSettings.UpscalerName(3);
-                    else upscaler.SelectedIndex = upscalerShown;
-                    loading = false;
+                    InstallDlss(index, upscalerShown);
+                    return;
                 }
                 upscalerShown = upscaler.SelectedIndex;
                 dlssQuality.Enabled = upscalerShown >= 0 && upscalerChoices[upscalerShown] == 3;
                 RefreshFrameRateChoices();
             };
+            dlssDone = delegate(int index, int previous, bool installed)
+            {
+                Enabled = true;
+                loading = true;
+                if (installed) upscaler.Items[index] = GraphicsSettings.UpscalerName(3);
+                upscaler.SelectedIndex = installed ? index : previous;
+                loading = false;
+                upscalerShown = upscaler.SelectedIndex;
+                dlssQuality.Enabled = upscalerShown >= 0 && upscalerChoices[upscalerShown] == 3;
+                RefreshFrameRateChoices();
+            };
             UiScale.Apply(this);
+        }
+
+        private Action<int, int, bool> dlssDone;
+
+        // Nebula Setup in the install folder downloads DLSS (Nebula-Setup.exe --install-dlss). Portable
+        // copies have none: DLSS is installed with Nebula Setup.
+        private void InstallDlss(int index, int previous)
+        {
+            string setup = Path.Combine(session.Root, "Nebula-Setup.exe");
+            if (session.Portable || !File.Exists(setup))
+            {
+                MessageBox.Show(this, "NVIDIA DLSS is installed with Nebula Setup.", "Nebula", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                dlssDone(index, previous, false);
+                return;
+            }
+            Process process;
+            try
+            {
+                process = Process.Start(new ProcessStartInfo(setup, "--install-dlss") { WorkingDirectory = session.Root, UseShellExecute = false });
+            }
+            catch (System.ComponentModel.Win32Exception error)
+            {
+                MessageBox.Show(this, "Nebula Setup could not start: " + error.Message, "Nebula", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                dlssDone(index, previous, false);
+                return;
+            }
+            // The form stays responsive (greyed) while Setup's window is open; Exited runs on its thread.
+            Enabled = false;
+            process.SynchronizingObject = this;
+            process.Exited += delegate
+            {
+                bool installed = process.ExitCode == 0 && GraphicsSettings.DlssInstalled();
+                process.Dispose();
+                dlssDone(index, previous, installed);
+            };
+            process.EnableRaisingEvents = true;
         }
 
         // ---- Controls -----------------------------------------------------------

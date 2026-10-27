@@ -93,8 +93,8 @@ License: `third_party/fidelityfx-fsr1/LICENSE.txt`.
 `third_party/streamline/include/` holds unmodified headers from
 <https://github.com/NVIDIA-RTX/Streamline> (tag v2.14.1). Copyright (c) 2022-2023 NVIDIA CORPORATION.
 License: `third_party/streamline/LICENSE.txt`. The Streamline and DLSS binaries are not part of
-Nebula: Setup or the settings download them from NVIDIA's release when the player asks for DLSS and
-accepts the NVIDIA RTX SDKs license.
+Nebula: Nebula Setup downloads them from NVIDIA's release when the player asks for DLSS (in Setup, or
+by choosing DLSS in the settings) and accepts the NVIDIA RTX SDKs license.
 
 ## nod and other Rust crates
 

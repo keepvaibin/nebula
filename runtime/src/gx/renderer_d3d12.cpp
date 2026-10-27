@@ -168,15 +168,6 @@ constexpr bool kStreamlineBuilt = true;
 constexpr bool kStreamlineBuilt = false;
 #endif
 
-// DLSS before it is installed (defined after the adapter selection below).
-bool dlss_offered();
-bool dlss_installed_now();
-bool dlss_hold_back(RenderConfig& applied, const RenderConfig& live);
-bool dlss_prompt_key(WPARAM key, bool was_down);
-void dlss_dismiss_prompt();
-void poll_dlss_download();
-std::string dlss_footer(std::uint64_t now_ms, bool& error);
-
 bool temporal_interpolation_allowed() {
     // A temporal upscaler upscales every presented frame at rates that are
     // multiples of 60. GALAXY_TEMPORAL_INTERPOLATION=0 keeps it at 60
@@ -202,13 +193,13 @@ unsigned temporal_upscaler(const RenderConfig& render) {
 std::vector<unsigned> available_upscalers() {
     std::vector<unsigned> choices{0u, 1u};
     if (fsr3_available()) choices.push_back(2u);
-    if (galaxy::gx::streamline::dlss_supported() || dlss_offered()) choices.push_back(3u);
+    if (galaxy::gx::streamline::dlss_supported()) choices.push_back(3u);
     return choices;
 }
 
 // The quality row serves FSR 3 and DLSS.
 bool temporal_quality_row_shown() {
-    return fsr3_available() || galaxy::gx::streamline::dlss_supported() || dlss_offered();
+    return fsr3_available() || galaxy::gx::streamline::dlss_supported();
 }
 
 std::atomic<bool> s_pointer_focused{false};
@@ -858,7 +849,6 @@ void apply_native_settings_draft() {
     applied.aa_mode = next.aa_mode;
     applied.smaa_quality = next.smaa_quality;
     applied.upscaler = next.upscaler;
-    const bool dlss_asked = dlss_hold_back(applied, live);
     applied.temporal_quality = next.temporal_quality;
     applied.sharpness = next.sharpness;
     applied.anisotropic_filtering = next.anisotropic_filtering;
@@ -879,9 +869,6 @@ void apply_native_settings_draft() {
         s_follow_window_rearm.store(true, std::memory_order_release);
     }
     s_settings_draft = get_render_config();
-    if (dlss_asked) {
-        s_settings_draft.upscaler = 3u;  // the row shows what the question is about
-    }
     if (display_changed) {
         if (!settings_display_confirming()) {
             s_display_confirm_previous = live;
@@ -1298,9 +1285,7 @@ void set_native_settings_visible(bool visible) {
         reset_controls_draft();
     }
     if (!visible) {
-        // Closing discards an unapplied draft, an unconfirmed display and an
-        // unanswered DLSS question.
-        dlss_dismiss_prompt();
+        // Closing discards an unapplied draft and an unconfirmed display.
         revert_display_settings();
         s_settings_draft = get_render_config();
         reset_controls_draft();
@@ -1386,10 +1371,6 @@ bool handle_native_settings_key(WPARAM key, bool was_down, bool from_pad = false
     }
     if (key == galaxy::host::kBindingCaptureKey && !s_native_settings_visible.load(std::memory_order_relaxed)) {
         (void)galaxy::host::take_controller_binding_capture();
-        return true;
-    }
-    if (key != VK_F1 && s_native_settings_visible.load(std::memory_order_relaxed) &&
-        dlss_prompt_key(key, was_down)) {
         return true;
     }
     if (key != VK_F1 && s_native_settings_visible.load(std::memory_order_relaxed) &&
@@ -3448,194 +3429,6 @@ bool g_selected_adapter_valid = false;
     std::size_t unified_default_bytes) {
     return adapter_is_unified_memory() ? unified_default_bytes
                                        : dedicated_default_bytes;
-}
-
-// DLSS before it is installed. On an NVIDIA RTX adapter the UPSCALER row lists
-// DLSS; applying it asks to download it. The launcher next to this runtime
-// (Nebula.exe --install-dlss) shows NVIDIA's license and downloads the files,
-// and the setting is saved so Streamline loads at the next start (it must load
-// before the device exists). Guarded by s_native_settings_mutex.
-enum class DlssOffer : std::uint8_t { None, Ask, Downloading, Ready, Failed };
-DlssOffer s_dlss_offer = DlssOffer::None;
-HANDLE s_dlss_download = nullptr;
-std::atomic<bool> s_dlss_downloading{false};
-bool s_dlss_installed_now = false;
-std::uint64_t s_dlss_failed_until_ms = 0u;
-
-std::wstring launcher_path() {
-    wchar_t path[MAX_PATH]{};
-    const DWORD length = GetModuleFileNameW(nullptr, path, MAX_PATH);
-    if (length == 0u || length >= MAX_PATH) {
-        return {};
-    }
-    std::wstring launcher(path, length);
-    const std::size_t slash = launcher.find_last_of(L"\\/");
-    if (slash == std::wstring::npos) {
-        return {};
-    }
-    launcher.resize(slash + 1u);
-    launcher += L"Nebula.exe";
-    return GetFileAttributesW(launcher.c_str()) == INVALID_FILE_ATTRIBUTES ? std::wstring{} : launcher;
-}
-
-bool streamline_files_present() {
-    const std::wstring interposer = streamline::default_directory() + L"\\sl.interposer.dll";
-    return GetFileAttributesW(interposer.c_str()) != INVALID_FILE_ATTRIBUTES;
-}
-
-bool start_launcher(const std::wstring& arguments, HANDLE* process_out) {
-    const std::wstring launcher = launcher_path();
-    if (launcher.empty()) {
-        return false;
-    }
-    std::wstring command = L"\"" + launcher + L"\" " + arguments;
-    STARTUPINFOW startup{};
-    startup.cb = sizeof(startup);
-    PROCESS_INFORMATION process{};
-    if (!CreateProcessW(launcher.c_str(), command.data(), nullptr, nullptr, FALSE, 0u, nullptr, nullptr,
-                        &startup, &process)) {
-        std::cerr << "[dlss] could not start Nebula.exe: win32=" << GetLastError() << '\n';
-        return false;
-    }
-    // Its window comes to the front over the game.
-    AllowSetForegroundWindow(process.dwProcessId);
-    CloseHandle(process.hThread);
-    if (process_out != nullptr) {
-        *process_out = process.hProcess;
-    } else {
-        CloseHandle(process.hProcess);
-    }
-    return true;
-}
-
-bool dlss_offered() {
-    if (!kStreamlineBuilt || streamline::dlss_supported()) {
-        return false;
-    }
-    if (s_dlss_installed_now) {
-        return true;
-    }
-    static const bool offered = g_selected_adapter_valid && g_selected_adapter_desc.VendorId == 0x10DEu &&
-                                std::wcsstr(g_selected_adapter_desc.Description, L"RTX") != nullptr &&
-                                !streamline_files_present() && !launcher_path().empty();
-    return offered;
-}
-
-bool dlss_installed_now() {
-    return s_dlss_installed_now && !streamline::dlss_supported();
-}
-
-// DLSS chosen before it is installed is not applied: the menu asks to
-// download it. Once downloaded this session it applies and runs after a
-// restart (FSR 1 until then).
-bool dlss_hold_back(RenderConfig& applied, const RenderConfig& live) {
-    if (applied.upscaler != 3u || live.upscaler == 3u || !dlss_offered() || s_dlss_installed_now) {
-        return false;
-    }
-    applied.upscaler = live.upscaler;
-    if (s_dlss_offer != DlssOffer::Downloading) {
-        s_dlss_offer = DlssOffer::Ask;
-    }
-    return true;
-}
-
-void dlss_dismiss_prompt() {
-    if (s_dlss_offer == DlssOffer::Ask || s_dlss_offer == DlssOffer::Ready) {
-        s_dlss_offer = DlssOffer::None;
-    }
-}
-
-void dlss_fail(const char* why) {
-    if (s_settings_draft.upscaler == 3u && !s_dlss_installed_now) {
-        s_settings_draft.upscaler = get_render_config().upscaler;
-    }
-    s_dlss_offer = DlssOffer::Failed;
-    s_dlss_failed_until_ms = GetTickCount64() + 4000u;
-    std::cerr << "[dlss] not installed: " << why << '\n';
-}
-
-// Enter/Y and Esc/B answer the DLSS questions; other keys wait for an answer.
-bool dlss_prompt_key(WPARAM key, bool was_down) {
-    if (s_dlss_offer != DlssOffer::Ask && s_dlss_offer != DlssOffer::Ready) {
-        return false;
-    }
-    if (was_down || (key != VK_RETURN && key != VK_ESCAPE)) {
-        return true;
-    }
-    if (key == VK_ESCAPE) {
-        if (s_dlss_offer == DlssOffer::Ask) {
-            s_settings_draft.upscaler = get_render_config().upscaler;
-        }
-        s_dlss_offer = DlssOffer::None;
-        return true;
-    }
-    if (s_dlss_offer == DlssOffer::Ask) {
-        if (start_launcher(L"--install-dlss", &s_dlss_download)) {
-            s_dlss_downloading.store(true, std::memory_order_release);
-            s_dlss_offer = DlssOffer::Downloading;
-            std::cerr << "[dlss] download started\n";
-        } else {
-            dlss_fail("no launcher");
-        }
-        return true;
-    }
-    // Ready: the launcher starts the game again once this process has exited.
-    s_dlss_offer = DlssOffer::None;
-    if (start_launcher(L"--restart-after " + std::to_wstring(GetCurrentProcessId()), nullptr)) {
-        std::cerr << "[dlss] restarting\n";
-        PostMessageW(reinterpret_cast<HWND>(s_native_settings_window.load(std::memory_order_acquire)),
-                     WM_CLOSE, 0, 0);
-    }
-    return true;
-}
-
-// Render thread, every frame: notices when the download window closes.
-void poll_dlss_download() {
-    if (!s_dlss_downloading.load(std::memory_order_acquire)) {
-        return;
-    }
-    const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
-    if (s_dlss_download == nullptr || WaitForSingleObject(s_dlss_download, 0u) != WAIT_OBJECT_0) {
-        return;
-    }
-    DWORD code = 1u;
-    GetExitCodeProcess(s_dlss_download, &code);
-    CloseHandle(s_dlss_download);
-    s_dlss_download = nullptr;
-    s_dlss_downloading.store(false, std::memory_order_release);
-    if (code != 0u || !streamline_files_present()) {
-        dlss_fail(code == 1u ? "closed" : "download failed");
-        return;
-    }
-    s_dlss_installed_now = true;
-    RenderConfig render = get_render_config();
-    render.upscaler = 3u;
-    set_render_config(render);
-    s_settings_draft.upscaler = 3u;
-    s_native_settings_dirty.store(true, std::memory_order_release);
-    flush_native_settings_if_dirty();
-    s_dlss_offer = DlssOffer::Ready;
-    std::cerr << "[dlss] installed; it starts with the next launch\n";
-}
-
-std::string dlss_footer(std::uint64_t now_ms, bool& error) {
-    switch (s_dlss_offer) {
-    case DlssOffer::Ask:
-        return "DOWNLOAD NVIDIA DLSS (31 MB)? ENTER/Y YES  ESC/B NO";
-    case DlssOffer::Downloading:
-        return "INSTALLING NVIDIA DLSS...";
-    case DlssOffer::Ready:
-        return "DLSS READY. RESTART NOW? ENTER/Y YES  ESC/B LATER";
-    case DlssOffer::Failed:
-        if (now_ms < s_dlss_failed_until_ms) {
-            error = true;
-            return "DLSS WAS NOT INSTALLED";
-        }
-        s_dlss_offer = DlssOffer::None;
-        return {};
-    default:
-        return {};
-    }
 }
 
 }  // namespace
@@ -12229,11 +12022,7 @@ std::string native_settings_row_text(
             static constexpr const char* kUpscalers[] = {"BILINEAR", "FSR 1", "FSR 3", "DLSS"};
             const std::vector<unsigned> choices = available_upscalers();
             const bool offered = std::find(choices.begin(), choices.end(), render.upscaler) != choices.end();
-            std::string upscaler = std::string("UPSCALER: ") + kUpscalers[offered ? std::min(render.upscaler, 3u) : 1u];
-            if (offered && render.upscaler == 3u && !streamline::dlss_supported()) {
-                upscaler += dlss_installed_now() ? " (AFTER RESTART)" : " (DOWNLOAD)";
-            }
-            return upscaler;
+            return std::string("UPSCALER: ") + kUpscalers[offered ? std::min(render.upscaler, 3u) : 1u];
         }
         case 3: {
             static constexpr const char* kTemporal[] = {
@@ -12364,7 +12153,6 @@ std::string native_settings_row_text(
 }
 
 void draw_native_settings_overlay(RendererD3D12& renderer) {
-    poll_dlss_download();
     if (!s_native_settings_visible.load(std::memory_order_relaxed)) {
         return;
     }
@@ -12510,8 +12298,6 @@ void draw_native_settings_overlay(RendererD3D12& renderer) {
     } else if (s_controls_message_until_ms > now_ms) {
         status = s_controls_message;
         status_color = error;
-    } else if (bool dlss_error = false; !(status = dlss_footer(now_ms, dlss_error)).empty()) {
-        status_color = dlss_error ? error : accent;
     } else if (settings_display_confirming()) {
         const std::uint64_t left_ms = s_display_confirm_deadline_ms > now_ms
             ? s_display_confirm_deadline_ms - now_ms : 0u;
